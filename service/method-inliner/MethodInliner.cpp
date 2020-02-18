@@ -325,6 +325,8 @@ void run_inliner(DexStoresVector& stores,
     inliner_config.shrink_other_methods = false;
   }
 
+  inliner_config.unique_inlined_registers = false;
+
   auto methods =
       gather_non_virtual_methods(scope, inliner_config.virtual_inline);
 

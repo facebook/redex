@@ -52,7 +52,7 @@ DexMethod* make_a_method(DexClass* cls, const char* name, int val) {
       DexProto::make_proto(type::_void(), DexTypeList::make_type_list({}));
   auto ref = DexMethod::make_method(
       cls->get_type(), DexString::make_string(name), proto);
-  MethodCreator mc(ref, ACC_PUBLIC);
+  MethodCreator mc(ref, ACC_STATIC | ACC_PUBLIC);
   auto main_block = mc.get_main_block();
   auto loc = mc.make_local(type::_int());
   main_block->load_const(loc, val);
@@ -95,7 +95,7 @@ DexMethod* make_a_method_calls_others(DexClass* cls,
       DexProto::make_proto(type::_void(), DexTypeList::make_type_list({}));
   auto ref = DexMethod::make_method(
       cls->get_type(), DexString::make_string(name), proto);
-  MethodCreator mc(ref, ACC_PUBLIC);
+  MethodCreator mc(ref, ACC_STATIC | ACC_PUBLIC);
   auto main_block = mc.get_main_block();
   for (auto callee : methods) {
     main_block->invoke(callee, {});
@@ -314,4 +314,65 @@ TEST_F(MethodInlineTest, minimal_self_loop_regression) {
   for (auto method : expected_inlined) {
     EXPECT_EQ(inlined.count(method), 1);
   }
+}
+
+TEST_F(MethodInlineTest, non_unique_inlined_registers) {
+  MethodRefCache resolve_cache;
+  auto resolver = [&resolve_cache](DexMethodRef* method, MethodSearch search) {
+    return resolve_method(method, search, resolve_cache);
+  };
+
+  bool intra_dex = false;
+
+  DexStoresVector stores;
+  std::unordered_set<DexMethod*> candidates;
+  std::unordered_set<DexMethod*> expected_inlined;
+  auto foo_cls = create_a_class("Lfoo;");
+  {
+    DexStore store("root");
+    store.add_classes({});
+    store.add_classes({foo_cls});
+    stores.push_back(std::move(store));
+  }
+  DexMethod* foo_main;
+  {
+    auto foo_m1 = make_a_method(foo_cls, "foo_m1", 1);
+    auto foo_m2 = make_a_method(foo_cls, "foo_m2", 2);
+    candidates.insert(foo_m1);
+    candidates.insert(foo_m2);
+    // foo_main calls foo_m1 and foo_m2.
+    foo_main =
+        make_a_method_calls_others(foo_cls, "foo_main", {foo_m1, foo_m2});
+    expected_inlined.insert(foo_m1);
+    expected_inlined.insert(foo_m2);
+  }
+  auto scope = build_class_scope(stores);
+  api::LevelChecker::init(0, scope);
+  inliner::InlinerConfig inliner_config;
+  inliner_config.populate(scope);
+  inliner_config.use_cfg_inliner = true;
+  inliner_config.unique_inlined_registers = false;
+  MultiMethodInliner inliner(scope,
+                             stores,
+                             candidates,
+                             resolver,
+                             inliner_config,
+                             intra_dex ? IntraDex : InterDex);
+  inliner.inline_methods();
+  auto inlined = inliner.get_inlined();
+  EXPECT_EQ(inlined.size(), expected_inlined.size());
+  for (auto method : expected_inlined) {
+    EXPECT_EQ(inlined.count(method), 1);
+  }
+
+  const auto& expected_str = R"(
+    (
+      (const v0 1)
+      (const v0 2)
+      (return-void)
+    )
+  )";
+  auto actual = foo_main->get_code();
+  auto expected = assembler::ircode_from_string(expected_str);
+  EXPECT_CODE_EQ(expected.get(), actual);
 }

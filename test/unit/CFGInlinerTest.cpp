@@ -34,7 +34,8 @@ void test_inliner(const std::string& caller_str,
   callee_code->build_cfg(true);
   auto& callee = callee_code->cfg();
 
-  cfg::CFGInliner::inline_cfg(&caller, get_invoke(&caller), callee);
+  cfg::CFGInliner::inline_cfg(
+      &caller, get_invoke(&caller), callee, caller.get_registers_size());
 
   auto expected_code = assembler::ircode_from_string(expected_str);
 

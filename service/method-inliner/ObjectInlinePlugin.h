@@ -36,7 +36,7 @@ class ObjectInlinePlugin : public CFGInlinerPlugin {
    * insertion site and a home for the final returned value of callee.
    */
 
-  void update_before_reg_remap(ControlFlowGraph* caller,
+  bool update_before_reg_remap(ControlFlowGraph* caller,
                                ControlFlowGraph* callee) override;
   bool update_after_reg_remap(ControlFlowGraph* caller,
                               ControlFlowGraph* callee) override;

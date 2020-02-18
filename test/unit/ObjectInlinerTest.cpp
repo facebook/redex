@@ -31,8 +31,8 @@ cfg::InstructionIterator find_instruction_matching(cfg::ControlFlowGraph* cfg,
       return it;
     }
   }
-  always_assert_log(
-      false, "can't find instruction %s in %s", SHOW(i), SHOW(*cfg));
+  always_assert_log(false, "can't find instruction %s in %s", SHOW(i),
+                    SHOW(*cfg));
 }
 
 IRInstruction* find_put(cfg::ControlFlowGraph* cfg, DexFieldRef* field) {
@@ -105,8 +105,10 @@ void test_object_inliner(
   ObjectInlinePlugin plugin = ObjectInlinePlugin(
       field_map, field_swap_refs, {0}, result_reg, 0, 0, callee_type);
 
-  cfg::CFGInliner::inline_cfg(
-      &caller, find_instruction_matching(&caller, insn), callee, plugin);
+  cfg::CFGInliner::inline_cfg(&caller, find_instruction_matching(&caller, insn),
+                              callee,
+
+                              caller.get_registers_size(), plugin);
 
   auto expected_code = assembler::ircode_from_string(expected_str);
 

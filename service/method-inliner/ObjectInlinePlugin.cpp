@@ -47,12 +47,12 @@ bool ObjectInlinePlugin::remove_inline_site() { return false; }
  * Convert field iputs in caller to moves when object is inlined, according to
  * the analysis data in m_initial_field_sets
  * Save what register a field value is being moved into into m_set_field_sets
- * Can increase the number of registers in caller
  * Does not use callee.
  */
-void ObjectInlinePlugin::update_before_reg_remap(ControlFlowGraph* caller,
+bool ObjectInlinePlugin::update_before_reg_remap(ControlFlowGraph* caller,
                                                  ControlFlowGraph* callee) {
   // Assumes only updating for one object being inlined.
+  bool allocated = false;
   for (auto block : caller->blocks()) {
     for (auto& mie : ir_list::InstructionIterable(block)) {
       IRInstruction* insn = mie.insn;
@@ -79,6 +79,7 @@ void ObjectInlinePlugin::update_before_reg_remap(ControlFlowGraph* caller,
         auto move = new IRInstruction(opcode::iput_to_move(opcode));
         move->set_src(0, current_reg);
         if (final_field == m_set_field_sets.end()) {
+          allocated = true;
           reg_t assign_reg = caller->allocate_temp();
           m_set_field_sets[field] = {
               {{assign_reg, {}}}, field_set_data.set, cic::OneReg};
@@ -96,6 +97,7 @@ void ObjectInlinePlugin::update_before_reg_remap(ControlFlowGraph* caller,
       }
     }
   }
+  return allocated;
 }
 
 /*

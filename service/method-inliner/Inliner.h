@@ -67,11 +67,12 @@ void inline_method(DexMethod* caller,
 
 /*
  * Use the editable CFG instead of IRCode to do the inlining. Return true on
- * success.
+ * success. Registers starting with next_caller_reg must be available
  */
 bool inline_with_cfg(DexMethod* caller_method,
                      DexMethod* callee_method,
-                     IRInstruction* callsite);
+                     IRInstruction* callsite,
+                     size_t next_caller_reg);
 
 } // namespace inliner
 

@@ -617,6 +617,10 @@ void MultiMethodInliner::inline_inlinables(
                    });
 
   std::vector<DexMethod*> inlined_callees;
+  boost::optional<reg_t> cfg_next_caller_reg;
+  if (m_config.use_cfg_inliner && !m_config.unique_inlined_registers) {
+    cfg_next_caller_reg = caller->cfg().get_registers_size();
+  }
   for (const auto& inlinable : ordered_inlinables) {
     auto callee_method = inlinable.first;
     auto callee = callee_method->get_code();
@@ -632,8 +636,11 @@ void MultiMethodInliner::inline_inlinables(
           callee->get_registers_size());
 
     if (m_config.use_cfg_inliner) {
-      bool success = inliner::inline_with_cfg(caller_method, callee_method,
-                                              callsite->insn);
+      if (m_config.unique_inlined_registers) {
+        cfg_next_caller_reg = caller->cfg().get_registers_size();
+      }
+      bool success = inliner::inline_with_cfg(
+          caller_method, callee_method, callsite->insn, *cfg_next_caller_reg);
       if (!success) {
         continue;
       }
@@ -2155,7 +2162,8 @@ void inline_tail_call(DexMethod* caller,
 // return true on successful inlining, false otherwise
 bool inline_with_cfg(DexMethod* caller_method,
                      DexMethod* callee_method,
-                     IRInstruction* callsite) {
+                     IRInstruction* callsite,
+                     size_t next_caller_reg) {
 
   auto caller_code = caller_method->get_code();
   always_assert(caller_code->editable_cfg_built());
@@ -2178,7 +2186,8 @@ bool inline_with_cfg(DexMethod* caller_method,
 
   auto callee_code = callee_method->get_code();
   always_assert(callee_code->editable_cfg_built());
-  cfg::CFGInliner::inline_cfg(&caller_cfg, callsite_it, callee_code->cfg());
+  cfg::CFGInliner::inline_cfg(&caller_cfg, callsite_it, callee_code->cfg(),
+                              next_caller_reg);
 
   return true;
 }

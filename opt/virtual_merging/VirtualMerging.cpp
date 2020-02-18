@@ -562,8 +562,9 @@ void VirtualMerging::merge_methods() {
       cleanup();
 
       overriding_method->get_code()->build_cfg(/* editable */ true);
-      inliner::inline_with_cfg(overridden_method, overriding_method,
-                               invoke_virtual_insn);
+      inliner::inline_with_cfg(
+          overridden_method, overriding_method, invoke_virtual_insn,
+          overridden_method->get_code()->cfg().get_registers_size());
       change_visibility(overriding_method, overridden_method->get_class());
       overriding_method->get_code()->clear_cfg();
 

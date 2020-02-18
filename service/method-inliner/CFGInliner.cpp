@@ -23,14 +23,16 @@ namespace cfg {
  */
 void CFGInliner::inline_cfg(ControlFlowGraph* caller,
                             const InstructionIterator& callsite,
-                            const ControlFlowGraph& callee_orig) {
+                            const ControlFlowGraph& callee_orig,
+                            size_t next_caller_reg) {
   CFGInlinerPlugin base_plugin;
-  inline_cfg(caller, callsite, callee_orig, base_plugin);
+  inline_cfg(caller, callsite, callee_orig, next_caller_reg, base_plugin);
 }
 
 void CFGInliner::inline_cfg(ControlFlowGraph* caller,
                             const InstructionIterator& inline_site,
                             const ControlFlowGraph& callee_orig,
+                            size_t next_caller_reg,
                             CFGInlinerPlugin& plugin) {
   always_assert(&inline_site.cfg() == caller);
 
@@ -83,12 +85,15 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
     }
   }
 
-  plugin.update_before_reg_remap(caller, &callee);
+  if (plugin.update_before_reg_remap(caller, &callee)) {
+    next_caller_reg = caller->get_registers_size();
+  }
 
   // make sure the callee's registers don't overlap with the caller's
   auto callee_regs_size = callee.get_registers_size();
-  auto caller_regs_size = caller->get_registers_size();
-  remap_registers(&callee, caller_regs_size);
+  auto old_caller_regs_size = caller->get_registers_size();
+  always_assert(next_caller_reg <= old_caller_regs_size);
+  remap_registers(&callee, next_caller_reg);
 
   auto alt_srcs = plugin.inline_srcs();
   move_arg_regs(&callee, alt_srcs ? *alt_srcs : inline_site->insn->srcs_vec());
@@ -122,7 +127,10 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
   if (need_reg_size_recompute) {
     caller->recompute_registers_size();
   } else {
-    caller->set_registers_size(caller_regs_size + callee_regs_size);
+    size_t needed_caller_regs_size = next_caller_reg + callee_regs_size;
+    if (needed_caller_regs_size > old_caller_regs_size) {
+      caller->set_registers_size(needed_caller_regs_size);
+    }
   }
 
   TRACE(CFG, 3, "caller after connect %s", SHOW(*caller));
@@ -201,14 +209,14 @@ Block* CFGInliner::maybe_split_block_before(ControlFlowGraph* caller,
  * Change the register numbers to not overlap with caller.
  */
 void CFGInliner::remap_registers(cfg::ControlFlowGraph* callee,
-                                 reg_t caller_regs_size) {
+                                 reg_t next_caller_reg) {
   for (auto& mie : cfg::InstructionIterable(*callee)) {
     auto insn = mie.insn;
     for (reg_t i = 0; i < insn->srcs_size(); ++i) {
-      insn->set_src(i, insn->src(i) + caller_regs_size);
+      insn->set_src(i, insn->src(i) + next_caller_reg);
     }
     if (insn->has_dest()) {
-      insn->set_dest(insn->dest() + caller_regs_size);
+      insn->set_dest(insn->dest() + next_caller_reg);
     }
   }
 }

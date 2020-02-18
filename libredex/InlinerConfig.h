@@ -30,6 +30,7 @@ struct InlinerConfig {
   bool run_local_dce{false};
   bool run_dedup_blocks{false};
   bool shrink_other_methods{true};
+  bool unique_inlined_registers{true};
   bool debug{false};
   std::unordered_set<DexType*> whitelist_no_method_limit;
   // We will populate the information to rstate of classes and methods.
