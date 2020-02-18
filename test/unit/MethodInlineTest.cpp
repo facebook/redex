@@ -63,6 +63,24 @@ DexMethod* make_a_method(DexClass* cls, const char* name, int val) {
 }
 
 /**
+ * Create a method like
+ * void {{name}}() {
+ *   while (true) {}
+ * }
+ */
+DexMethod* make_loopy_method(DexClass* cls, const char* name) {
+  auto proto =
+      DexProto::make_proto(type::_void(), DexTypeList::make_type_list({}));
+  auto ref = DexMethod::make_method(
+      cls->get_type(), DexString::make_string(name), proto);
+  MethodCreator mc(ref, ACC_STATIC | ACC_PUBLIC);
+  auto method = mc.create();
+  method->set_code(assembler::ircode_from_string("((:begin) (goto :begin))"));
+  cls->add_method(method);
+  return method;
+}
+
+/**
  * Create a method calls other methods.
  * void {{name}}() {
  *   other1();
@@ -243,6 +261,50 @@ TEST_F(MethodInlineTest, test_intra_dex_inlining) {
   MultiMethodInliner inliner(scope,
                              stores,
                              canidates,
+                             resolver,
+                             inliner_config,
+                             intra_dex ? IntraDex : InterDex);
+  inliner.inline_methods();
+  auto inlined = inliner.get_inlined();
+  EXPECT_EQ(inlined.size(), expected_inlined.size());
+  for (auto method : expected_inlined) {
+    EXPECT_EQ(inlined.count(method), 1);
+  }
+}
+
+TEST_F(MethodInlineTest, minimal_self_loop_regression) {
+  MethodRefCache resolve_cache;
+  auto resolver = [&resolve_cache](DexMethodRef* method, MethodSearch search) {
+    return resolve_method(method, search, resolve_cache);
+  };
+
+  bool intra_dex = false;
+
+  DexStoresVector stores;
+  std::unordered_set<DexMethod*> candidates;
+  std::unordered_set<DexMethod*> expected_inlined;
+  auto foo_cls = create_a_class("Lfoo;");
+  {
+    DexStore store("root");
+    store.add_classes({});
+    store.add_classes({foo_cls});
+    stores.push_back(std::move(store));
+  }
+  {
+    auto foo_m1 = make_loopy_method(foo_cls, "foo_m1");
+    candidates.insert(foo_m1);
+    // foo_main calls foo_m1.
+    make_a_method_calls_others(foo_cls, "foo_main", {foo_m1});
+    expected_inlined.insert(foo_m1);
+  }
+  auto scope = build_class_scope(stores);
+  api::LevelChecker::init(0, scope);
+  inliner::InlinerConfig inliner_config;
+  inliner_config.populate(scope);
+  inliner_config.use_cfg_inliner = true;
+  MultiMethodInliner inliner(scope,
+                             stores,
+                             candidates,
                              resolver,
                              inliner_config,
                              intra_dex ? IntraDex : InterDex);

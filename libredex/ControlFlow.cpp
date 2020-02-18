@@ -1180,9 +1180,15 @@ uint32_t ControlFlowGraph::sum_opcode_sizes() const {
 boost::sub_range<IRList> ControlFlowGraph::get_param_instructions() const {
   // Find the first block that has instructions
   Block* block = entry_block();
+  std::unordered_set<Block*> visited{block};
   while (block != nullptr &&
          (block->empty() || block->get_first_insn() == block->end())) {
     block = block->goes_to();
+    if (!visited.insert(block).second) {
+      // We found a loop, and no param instructions.
+      block = nullptr;
+      break;
+    }
   }
   if (block == nullptr) {
     // Return an empty sub_range

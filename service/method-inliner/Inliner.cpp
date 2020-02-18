@@ -1059,8 +1059,9 @@ bool MultiMethodInliner::should_inline(const DexMethod* callee) {
 
 size_t MultiMethodInliner::get_callee_insn_size(const DexMethod* callee) {
   if (m_callee_insn_sizes) {
-    auto size = m_callee_insn_sizes->get(callee, 0);
-    if (size != 0) {
+    const auto absent = std::numeric_limits<size_t>::max();
+    auto size = m_callee_insn_sizes->get(callee, absent);
+    if (size != absent) {
       return size;
     }
   }
@@ -1068,7 +1069,6 @@ size_t MultiMethodInliner::get_callee_insn_size(const DexMethod* callee) {
   const IRCode* code = callee->get_code();
   auto size = code->editable_cfg_built() ? code->cfg().sum_opcode_sizes()
                                          : code->sum_opcode_sizes();
-  always_assert(size > 0);
   if (m_callee_insn_sizes) {
     m_callee_insn_sizes->emplace(callee, size);
   }
