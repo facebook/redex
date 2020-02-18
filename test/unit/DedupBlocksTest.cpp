@@ -924,3 +924,86 @@ TEST_F(DedupBlocksTest, respectTypes) {
   auto expected_code = assembler::ircode_from_string(expected_str);
   EXPECT_CODE_EQ(expected_code.get(), method->get_code());
 }
+
+TEST_F(DedupBlocksTest, self_loops_are_alike) {
+  auto input_code = assembler::ircode_from_string(R"(
+    (
+      (:a)
+      (const v0 0)
+      (if-eqz v0 :c)
+
+      (:b)
+      (nop)
+      (goto :b)
+
+      (:c)
+      (nop)
+      (goto :c)
+    )
+  )");
+  auto method = get_fresh_method("self_loops_are_alike");
+  method->set_code(std::move(input_code));
+  auto code = method->get_code();
+
+  run_dedup_blocks();
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (:a)
+      (const v0 0)
+      (if-eqz v0 :c)
+
+      (:b)
+      (:c)
+      (nop)
+      (goto :b)
+    )
+  )");
+
+  EXPECT_CODE_EQ(expected_code.get(), code);
+}
+
+TEST_F(DedupBlocksTest, conditional_self_loops_are_alike) {
+  auto input_code = assembler::ircode_from_string(R"(
+    (
+      (:a)
+      (const v0 0)
+      (const v1 0)
+      (if-eqz v1 :c)
+
+      (:b)
+      (nop)
+      (if-eqz v0 :b)
+      (goto :end)
+
+      (:c)
+      (nop)
+      (if-eqz v0 :c)
+
+      (:end)
+      (return-void)
+    )
+  )");
+  auto method = get_fresh_method("conditional_self_loops_are_alike");
+  method->set_code(std::move(input_code));
+  auto code = method->get_code();
+
+  run_dedup_blocks();
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (:a)
+      (const v0 0)
+      (const v1 0)
+      (if-eqz v1 :c)
+
+      (:b)
+      (:c)
+      (nop)
+      (if-eqz v0 :b)
+      (return-void)
+    )
+  )");
+
+  EXPECT_CODE_EQ(expected_code.get(), code);
+}

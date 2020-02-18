@@ -50,6 +50,7 @@
 #include "Liveness.h"
 #include "ReachingDefinitions.h"
 #include "TypeInference.h"
+#include <boost/functional/hash.hpp>
 
 namespace {
 
@@ -60,22 +61,50 @@ static bool same_code(cfg::Block* b1, cfg::Block* b2) {
   return InstructionIterable(b1).structural_equals(InstructionIterable(b2));
 }
 
-// The blocks must also have the exact same successors
-// (and reached in the same ways)
-static bool same_successors(const cfg::Block* b1, const cfg::Block* b2) {
-  const auto& b1_succs = b1->succs();
-  const auto& b2_succs = b2->succs();
+static bool is_branch_or_goto(const cfg::Edge* edge) {
+  auto type = edge->type();
+  return type == cfg::EDGE_BRANCH || type == cfg::EDGE_GOTO;
+}
+
+static std::vector<cfg::Edge*> get_branch_or_goto_succs(
+    const cfg::Block* block) {
+  std::vector<cfg::Edge*> succs;
+  for (auto edge : block->succs()) {
+    if (is_branch_or_goto(edge)) {
+      succs.push_back(edge);
+    }
+  }
+  return succs;
+}
+
+// The blocks must also have the exact same branch and goto successors.
+static bool same_branch_and_goto_successors(const cfg::Block* b1,
+                                            const cfg::Block* b2) {
+  auto b1_succs = get_branch_or_goto_succs(b1);
+  auto b2_succs = get_branch_or_goto_succs(b2);
   if (b1_succs.size() != b2_succs.size()) {
     return false;
   }
-  for (const cfg::Edge* b1_succ : b1_succs) {
-    const auto& in_b2 = std::find_if(b2_succs.begin(), b2_succs.end(),
-                                     [&b1_succ](const cfg::Edge* e) {
-                                       return e->equals_ignore_source(*b1_succ);
-                                     });
-    if (in_b2 == b2_succs.end()) {
-      // b1 has a succ that b2 doesn't. Note that both the succ blocks and
-      // the edge types have to match
+  typedef std::pair<cfg::EdgeType, cfg::Edge::CaseKey> Key;
+  std::unordered_map<Key, cfg::Block*, boost::hash<Key>> b2_succs_map;
+  for (auto b2_succ : b2_succs) {
+    b2_succs_map.emplace(
+        std::make_pair(b2_succ->type(), b2_succ->case_key().value_or(0)),
+        b2_succ->target());
+  }
+  for (auto b1_succ : b1_succs) {
+    // For successors being the same, we need to find a matching entry for
+    // b1_succ in the b2_succs_map map.
+    auto it = b2_succs_map.find(
+        std::make_pair(b1_succ->type(), b1_succ->case_key().value_or(0)));
+    if (it == b2_succs_map.end()) {
+      return false;
+    }
+    auto b2_succ_target = it->second;
+    // Either targets need to be the same, or both targets must be pointing to
+    // same block (to support deduping of simple self-loops).
+    if (b1_succ->target() != b2_succ_target &&
+        (b1_succ->target() != b1 || b2_succ_target != b2)) {
       return false;
     }
   }
@@ -84,7 +113,7 @@ static bool same_successors(const cfg::Block* b1, const cfg::Block* b2) {
 
 struct SuccBlocksInSameGroup {
   bool operator()(const cfg::Block* a, const cfg::Block* b) const {
-    return same_successors(a, b) && a->same_try(b) &&
+    return same_branch_and_goto_successors(a, b) && a->same_try(b) &&
            a->is_catch() == b->is_catch();
   }
 };
@@ -99,7 +128,7 @@ struct BlockHasher {
   hash_t operator()(cfg::Block* b) const {
     hash_t result = 0;
     for (auto& mie : InstructionIterable(b)) {
-      result ^= mie.insn->hash();
+      result = (result * 7) ^ mie.insn->hash();
     }
     return result;
   }
@@ -116,7 +145,11 @@ struct BlockSuccHasher {
   hash_t operator()(cfg::Block* b) const {
     hash_t result = 0;
     for (const auto& succ : b->succs()) {
-      result ^= succ->target()->id();
+      if (is_branch_or_goto(succ) && b == succ->target()) {
+        result ^= 27277 * (hash_t)succ->type();
+      } else {
+        result ^= succ->target()->id();
+      }
     }
     return result;
   }
@@ -368,8 +401,7 @@ class DedupBlocksImpl {
 
     // Group by successors if blocks share a single successor block.
     for (cfg::Block* block : blocks) {
-      if (has_opcodes(block) &&
-          block->num_opcodes() >= m_config.block_split_min_opcode_count) {
+      if (block->num_opcodes() >= m_config.block_split_min_opcode_count) {
         // Insert into other blocks that share the same successors
         splitGroupMap[block].postfix_blocks.insert(block);
       }
@@ -660,10 +692,6 @@ class DedupBlocksImpl {
   }
 
   static bool is_eligible(cfg::Block* block) {
-    if (!has_opcodes(block)) {
-      return false;
-    }
-
     // We can't split up move-result(-pseudo) instruction pairs
     if (begins_with_move_result(block)) {
       return false;
@@ -676,8 +704,11 @@ class DedupBlocksImpl {
   }
 
   static bool begins_with_move_result(cfg::Block* block) {
-    const auto& first_mie = *block->get_first_insn();
-    auto first_op = first_mie.insn->opcode();
+    const auto first_mie_it = block->get_first_insn();
+    if (first_mie_it == block->end()) {
+      return false;
+    }
+    auto first_op = first_mie_it->insn->opcode();
     return opcode::is_move_result_any(first_op);
   }
 
@@ -867,7 +898,6 @@ class DedupBlocksImpl {
       type_inference.reset(new type_inference::TypeInference(cfg));
       type_inference->run(method);
     }
-    auto& environments = type_inference->get_type_environments();
     if (!liveness_fixpoint_iter) {
       cfg.calculate_exit_block();
       liveness_fixpoint_iter.reset(new LivenessFixpointIterator(cfg));
@@ -883,9 +913,7 @@ class DedupBlocksImpl {
     // corresponds to what will happen when we dedup the blocks.
     boost::optional<type_inference::TypeEnvironment> joined_env;
     for (cfg::Block* block : blocks) {
-      auto first_insn = block->get_first_insn();
-      always_assert(first_insn != block->end());
-      auto& env = environments.at(first_insn->insn);
+      auto env = type_inference->get_entry_state_at(block);
       if (!joined_env) {
         joined_env = env;
       } else {
@@ -899,9 +927,7 @@ class DedupBlocksImpl {
     // TODO: Can we be even more lenient without actually deduping and
     // re-type-inferring?
     for (cfg::Block* block : blocks) {
-      auto first_insn = block->get_first_insn();
-      always_assert(first_insn != block->end());
-      auto& env = environments.at(first_insn->insn);
+      auto env = type_inference->get_entry_state_at(block);
       bool matches = true;
       for (auto reg : live_in_vars.elements()) {
         auto type = joined_env->get_type(reg);
@@ -934,11 +960,6 @@ class DedupBlocksImpl {
       }
     }
     return boost::none;
-  }
-
-  static bool has_opcodes(cfg::Block* block) {
-    const auto& iterable = InstructionIterable(block);
-    return !iterable.empty();
   }
 
   static size_t num_opcodes(cfg::Block* block) {
