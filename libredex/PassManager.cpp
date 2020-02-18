@@ -8,6 +8,7 @@
 #include "PassManager.h"
 
 #include <boost/filesystem.hpp>
+#include <cinttypes>
 #include <cstdio>
 #include <unordered_set>
 
@@ -71,6 +72,29 @@ void run_verifier(const Scope& scope,
     }
   });
 }
+
+struct ScopedVmHWM {
+  explicit ScopedVmHWM(bool enabled, bool reset) : enabled(enabled) {
+    if (enabled) {
+      if (reset) {
+        try_reset_hwm_mem_stat();
+      }
+      before = get_mem_stats().vm_hwm;
+    }
+  }
+
+  void trace_log(const Pass* pass) {
+    if (enabled) {
+      uint64_t after = get_mem_stats().vm_hwm;
+      TRACE(STATS, 1, "VmHWM for %s was %s (%s over start).",
+            pass->name().c_str(), pretty_bytes(after).c_str(),
+            pretty_bytes(after - before).c_str());
+    }
+  }
+
+  uint64_t before;
+  bool enabled;
+};
 
 } // namespace
 
@@ -266,9 +290,14 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
 
   sanitizers::lsan_do_recoverable_leak_check();
 
+  const bool hwm_pass_stats = traceEnabled(STATS, 1);
+  const bool hwm_per_pass =
+      conf.get_json_config().get("mem_stats_per_pass", false);
+
   for (size_t i = 0; i < m_activated_passes.size(); ++i) {
     Pass* pass = m_activated_passes[i];
     TRACE(PM, 1, "Running %s...", pass->name().c_str());
+    ScopedVmHWM vm_hwm{hwm_pass_stats, hwm_per_pass};
     Timer t(pass->name() + " (run)");
     m_current_pass_info = &m_pass_info[i];
 
@@ -281,6 +310,9 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       jemalloc_util::ScopedProfiling malloc_prof(m_malloc_profile_pass == pass);
       pass->run_pass(stores, conf, *this);
     }
+
+    vm_hwm.trace_log(pass);
+
     sanitizers::lsan_do_recoverable_leak_check();
     walk::parallel::code(build_class_scope(stores), [](DexMethod* m,
                                                        IRCode& code) {

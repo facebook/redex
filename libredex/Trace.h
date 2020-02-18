@@ -106,6 +106,7 @@
   TM(SINK)           \
   TM(SPLIT_RES)      \
   TM(STATIC_RELO)    \
+  TM(STATS)          \
   TM(STRBUILD)       \
   TM(STR_CAT)        \
   TM(STR_SIMPLE)     \

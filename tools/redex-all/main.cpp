@@ -1154,9 +1154,11 @@ int main(int argc, char* argv[]) {
   }
 
   TRACE(MAIN, 1, "Done.");
-  TRACE(MAIN, 1, "Memory stats: VmPeak=%s VmHWM=%s",
-        pretty_bytes(vm_stats.vm_peak).c_str(),
-        pretty_bytes(vm_stats.vm_hwm).c_str());
+  if (traceEnabled(MAIN, 1) || traceEnabled(STATS, 1)) {
+    TRACE(STATS, 0, "Memory stats: VmPeak=%s VmHWM=%s",
+          pretty_bytes(vm_stats.vm_peak).c_str(),
+          pretty_bytes(vm_stats.vm_hwm).c_str());
+  }
 
   return 0;
 }

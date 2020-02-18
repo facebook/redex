@@ -194,3 +194,14 @@ VmStats get_mem_stats() {
   }
   return res;
 }
+
+bool try_reset_hwm_mem_stat() {
+  // See http://man7.org/linux/man-pages/man5/proc.5.html for `clear_refs` and
+  // the magic `5`.
+  std::ofstream ifs("/proc/self/clear_refs");
+  if (ifs.fail()) {
+    return false;
+  }
+  ifs << 5;
+  return true;
+}
