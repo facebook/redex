@@ -1,2 +1,2 @@
-Checks: '-*,modernize-make-shared,performance-*,-performance-inefficient-string-concatenation,readability-const-return-type,readability-container-size-empty'
+Checks: '-*,modernize-make-shared,performance-*,-performance-inefficient-string-concatenation,readability-const-return-type,readability-container-size-empty,misc-definitions-in-headers'
 WarningsAsErrors: '*'
