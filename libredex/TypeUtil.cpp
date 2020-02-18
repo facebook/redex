@@ -389,10 +389,6 @@ bool is_uninstantiable_class(DexType* type) {
     return false;
   }
 
-  if (type == java_lang_Void()) {
-    return true;
-  }
-
   auto cls = type_class(type);
   if (cls == nullptr || is_interface(cls) || is_native(cls) ||
       cls->is_external() || !cls->rstate.can_delete()) {

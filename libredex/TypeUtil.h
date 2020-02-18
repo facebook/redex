@@ -225,7 +225,10 @@ bool is_subclass(const DexType* parent, const DexType* child);
 
 /**
  * Whether the given type refers to a proper class that has no ctor,
- * and is not external or native.
+ * and is not external or native. This function only makes a quick determination
+ * without considering whether an interface or abstract class has any
+ * implementations (see the RemoveUninstantiablesPass for a more complete
+ * analysis).
  */
 bool is_uninstantiable_class(DexType* type);
 
