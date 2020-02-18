@@ -10,8 +10,6 @@
 #include <ostream>
 #include <sstream>
 
-#include "DexTypeDomain.h"
-
 std::ostream& operator<<(std::ostream& output, const IRType& type) {
   switch (type) {
   case BOTTOM: {

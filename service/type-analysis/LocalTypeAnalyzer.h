@@ -10,7 +10,7 @@
 #include <boost/optional/optional_io.hpp>
 
 #include "BaseIRAnalyzer.h"
-#include "DexTypeDomain.h"
+#include "DexTypeEnvironment.h"
 #include "InstructionAnalyzer.h"
 
 namespace type_analyzer {

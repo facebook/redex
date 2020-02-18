@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "DexTypeDomain.h"
+#include "DexTypeEnvironment.h"
 
 #include <boost/optional/optional_io.hpp>
 #include <ostream>

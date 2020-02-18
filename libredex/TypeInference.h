@@ -11,7 +11,7 @@
 #include <ostream>
 
 #include "BaseIRAnalyzer.h"
-#include "DexTypeDomain.h"
+#include "DexTypeEnvironment.h"
 #include "FiniteAbstractDomain.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "ReducedProductAbstractDomain.h"
@@ -138,15 +138,25 @@ using namespace ir_analyzer;
 using BasicTypeEnvironment =
     sparta::PatriciaTreeMapAbstractEnvironment<reg_t, TypeDomain>;
 
+/*
+ * Note that we only track the register DexTypeDomain mapping here. We always
+ * take the declared DexType when reading a field. We do not track more precise
+ * DexType for fields for individual intraprocedural analysis.
+ * The reason is that the analysis can be incomplete. A field can potentially
+ * be written by another thread concurrently. That write is visible to the
+ * reads of the method we are analyzing currently. We could lose type
+ * information if we don't consider write from other methods. Therefore, we stay
+ * with the declared field type for local type inference.
+ */
 class TypeEnvironment final
     : public sparta::ReducedProductAbstractDomain<TypeEnvironment,
                                                   BasicTypeEnvironment,
-                                                  DexTypeEnvironment> {
+                                                  RegTypeEnvironment> {
  public:
   using ReducedProductAbstractDomain::ReducedProductAbstractDomain;
 
   static void reduce_product(
-      std::tuple<BasicTypeEnvironment, DexTypeEnvironment>& /* product */) {}
+      std::tuple<BasicTypeEnvironment, RegTypeEnvironment>& /* product */) {}
 
   TypeDomain get_type(reg_t reg) const { return get<0>().get(reg); }
 

@@ -8,7 +8,7 @@
 #pragma once
 
 #include "CallGraph.h"
-#include "DexTypeDomain.h"
+#include "DexTypeEnvironment.h"
 #include "HashedAbstractPartition.h"
 #include "LocalTypeAnalyzer.h"
 #include "WholeProgramState.h"

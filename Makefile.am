@@ -149,7 +149,7 @@ libredex_la_SOURCES = \
 	libredex/DexStats.cpp \
 	libredex/DexStore.cpp \
 	libredex/DexStoreUtil.cpp \
-	libredex/DexTypeDomain.cpp \
+	libredex/DexTypeEnvironment.cpp \
 	libredex/DexUtil.cpp \
 	libredex/DexStoreUtil.cpp \
 	libredex/DuplicateClasses.cpp \

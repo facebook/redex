@@ -9,7 +9,7 @@
 
 #include <boost/optional/optional_io.hpp>
 
-#include "DexTypeDomain.h"
+#include "DexTypeEnvironment.h"
 #include "HashedAbstractPartition.h"
 #include "InstructionAnalyzer.h"
 
