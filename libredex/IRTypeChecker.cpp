@@ -86,16 +86,23 @@ bool check_cast_helper(const DexType* from, const DexType* to) {
 // and `to` are reference types.
 // Took reference from:
 // http://androidxref.com/6.0.1_r10/xref/art/runtime/verifier/reg_type-inl.h#88
-bool check_is_assignable_from(const DexType* from, const DexType* to) {
+//
+// Note: the expectation is that `from` and `to` are reference types, otherwise
+//       the check fails.
+bool check_is_assignable_from(const DexType* from,
+                              const DexType* to,
+                              bool strict) {
   always_assert(from && to);
+
   always_assert_log(!type::is_primitive(from), "%s", SHOW(from));
   TRACE(TYPE, 2, "assign check %s to %s", SHOW(from), SHOW(to));
 
+  if (type::is_primitive(from) || type::is_primitive(to)) {
+    return false; // Expect types be a reference type.
+  }
+
   if (from == to) {
     return true; // Fast path if the two are equal.
-  }
-  if (type::is_primitive(from)) {
-    return false; // Expect rhs to be a reference type.
   }
   if (to == type::java_lang_Object()) {
     return true; // All reference types can be assigned to Object.
@@ -111,6 +118,14 @@ bool check_is_assignable_from(const DexType* from, const DexType* to) {
     auto efrom = type::get_array_element_type(from);
     auto eto = type::get_array_element_type(to);
     return check_cast_helper(efrom, eto);
+  }
+  if (!strict) {
+    // If `to` is an interface, allow any assignment when non-strict.
+    // This behavior is copied from AOSP.
+    auto to_cls = type_class(to);
+    if (to_cls != nullptr && is_interface(to_cls)) {
+      return true;
+    }
   }
   return check_cast_helper(from, to);
 }
@@ -766,7 +781,9 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
     // If the inferred type is a fallback, there's no point performing the
     // accurate type assignment checking.
     if (dtype && !is_inference_fallback_type(*dtype)) {
-      if (!check_is_assignable_from(*dtype, rtype)) {
+      // Return type checking is non-strict: it is allowed to return any
+      // reference type when `rtype` is an interface.
+      if (!check_is_assignable_from(*dtype, rtype, /*strict=*/false)) {
         std::ostringstream out;
         out << "Returning " << dtype << ", but expected from declaration "
             << rtype << std::endl;
