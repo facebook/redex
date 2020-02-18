@@ -1142,7 +1142,7 @@ static size_t get_inlined_cost(const std::vector<cfg::Block*>& blocks,
   auto block = blocks.at(index);
   switch (block->branchingness()) {
   case opcode::Branchingness::BRANCH_GOTO: {
-    auto target = block->goes_to_only_edge();
+    auto target = block->goes_to();
     always_assert(target != nullptr);
     if (index == blocks.size() - 1 || blocks.at(index + 1) != target) {
       // we have a non-fallthrough goto edge
