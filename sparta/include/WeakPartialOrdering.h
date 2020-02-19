@@ -575,8 +575,7 @@ class WpoBuilder final {
     return m_next_dfn;
   }
 
-  void add_node(
-      uint32_t dfn, NodeId ref, Type type, uint32_t size) {
+  void add_node(uint32_t dfn, NodeId ref, Type type, uint32_t size) {
     m_d2i[dfn] = m_next_idx++;
     m_wpo_space.emplace_back(ref, type, size);
   }
