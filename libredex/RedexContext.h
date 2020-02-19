@@ -145,6 +145,13 @@ struct RedexContext {
     return g_redex->s_keep_reasons.at(to_insert.get());
   }
 
+  // Add a lambda to be called when RedexContext is destructed. This is
+  // especially useful for resetting caches/singletons in tests.
+  using Task = std::function<void(void)>;
+  void add_destruction_task(const Task& t) {
+    m_destruction_tasks.push_back(t);
+  }
+
  private:
   struct Strcmp;
   struct TruncatedStringHash;
@@ -230,6 +237,9 @@ struct RedexContext {
                 keep_reason::ReasonPtrHash,
                 keep_reason::ReasonPtrEqual>
       s_keep_reasons;
+
+  // These functions will be called when ~RedexContext() is called
+  std::vector<Task> m_destruction_tasks;
 
   bool m_record_keep_reasons{false};
   bool m_allow_class_duplicates;

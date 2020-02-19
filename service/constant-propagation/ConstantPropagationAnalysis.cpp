@@ -564,6 +564,32 @@ bool InitFieldAnalyzer::analyze_iput(const DexType* class_under_init,
   return false;
 }
 
+boost::optional<EnumFieldAnalyzerState> enum_field_singleton{boost::none};
+const EnumFieldAnalyzerState& EnumFieldAnalyzerState::get() {
+  if (!enum_field_singleton) {
+    // Be careful, there could be a data race here if this is called in parallel
+    enum_field_singleton = EnumFieldAnalyzerState();
+    // In tests, we create and destroy g_redex repeatedly. So we need to reset
+    // the singleton.
+    g_redex->add_destruction_task(
+        []() { enum_field_singleton = boost::none; });
+  }
+  return *enum_field_singleton;
+}
+
+boost::optional<BoxedBooleanAnalyzerState> boxed_boolean_singleton{boost::none};
+const BoxedBooleanAnalyzerState& BoxedBooleanAnalyzerState::get() {
+  if (!boxed_boolean_singleton) {
+    // Be careful, there could be a data race here if this is called in parallel
+    boxed_boolean_singleton = BoxedBooleanAnalyzerState();
+    // In tests, we create and destroy g_redex repeatedly. So we need to reset
+    // the singleton.
+    g_redex->add_destruction_task(
+        []() { boxed_boolean_singleton = boost::none; });
+  }
+  return *boxed_boolean_singleton;
+}
+
 bool EnumFieldAnalyzer::analyze_sget(const EnumFieldAnalyzerState&,
                                      const IRInstruction* insn,
                                      ConstantEnvironment* env) {

@@ -55,8 +55,8 @@ std::unique_ptr<intraprocedural::FixpointIterator> analyze_procedure(
       code.cfg(),
       CombinedAnalyzer(class_under_init,
                        &wps,
-                       EnumFieldAnalyzerState(),
-                       BoxedBooleanAnalyzerState(),
+                       EnumFieldAnalyzerState::get(),
+                       BoxedBooleanAnalyzerState::get(),
                        nullptr,
                        nullptr));
   intra_cp->run(env);
@@ -86,6 +86,10 @@ std::unique_ptr<FixpointIterator> PassImpl::analyze(const Scope& scope) {
     code.build_cfg(/* editable */ false);
     code.cfg().calculate_exit_block();
   });
+  // Initialize the singletons that `analyze_procedure` needs ahead of time to
+  // avoid a data race.
+  static_cast<void>(EnumFieldAnalyzerState::get());
+  static_cast<void>(BoxedBooleanAnalyzerState::get());
   auto fp_iter = std::make_unique<FixpointIterator>(cg, analyze_procedure);
   // Run the bootstrap. All field value and method return values are
   // represented by Top.

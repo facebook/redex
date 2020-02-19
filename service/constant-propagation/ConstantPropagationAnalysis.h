@@ -167,7 +167,12 @@ class InitFieldAnalyzer final
 };
 
 struct EnumFieldAnalyzerState {
+  // Construction of this object is expensive because get_method acquires a
+  // global lock. `get` creates a singleton once and reuses it.
+  static const EnumFieldAnalyzerState& get();
+
   const DexMethod* enum_equals;
+
   EnumFieldAnalyzerState()
       : enum_equals(static_cast<DexMethod*>(DexMethod::get_method(
             "Ljava/lang/Enum;.equals:(Ljava/lang/Object;)Z"))) {
@@ -196,6 +201,10 @@ class EnumFieldAnalyzer final
 };
 
 struct BoxedBooleanAnalyzerState {
+  // Construction of this object is expensive because get_type/field/method
+  // acquires a global lock. `get` creates a singleton once and reuses it.
+  static const BoxedBooleanAnalyzerState& get();
+
   const DexType* boolean_class{DexType::get_type("Ljava/lang/Boolean;")};
   const DexField* boolean_true{static_cast<DexField*>(
       DexField::get_field("Ljava/lang/Boolean;.TRUE:Ljava/lang/Boolean;"))};
