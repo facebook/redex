@@ -110,16 +110,11 @@ TEST(WeakPartialOrderingTest, exampleFromWtoPaper) {
   // node, plain, head, exit, num_succs, num_preds, num_outer_preds
   // Notice that forward edges are not considered.
   Answer lst[] = {
-      {"1", true, false, false, 1, 0, 0},
-      {"2", true, false, false, 1, 1, 0},
-      {"3", false, true, false, 1, 1, 0},
-      {"4", true, false, false, 1, 1, 0},
-      {"5", false, true, false, 1, 1, 0},
-      {"6", true, false, false, 1, 1, 0},
-      {"5", false, false, true, 1, 1, 1},
-      {"7", true, false, false, 1, 1, 0},
-      {"3", false, false, true, 1, 1, 1},
-      {"8", true, false, false, 0, 1, 0},
+      {"1", true, false, false, 1, 0, 0}, {"2", true, false, false, 1, 1, 0},
+      {"3", false, true, false, 1, 1, 0}, {"4", true, false, false, 1, 1, 0},
+      {"5", false, true, false, 1, 1, 0}, {"6", true, false, false, 1, 1, 0},
+      {"5", false, false, true, 1, 1, 1}, {"7", true, false, false, 1, 1, 0},
+      {"3", false, false, true, 1, 1, 1}, {"8", true, false, false, 0, 1, 0},
   };
 
   std::unordered_map<WpoIdx, uint32_t> count(wpo.size());
@@ -279,10 +274,8 @@ TEST(WeakPartialOrderingTest, SingletonSccAtEnd) {
 
     // node, plain, head, exit, num_succs, num_preds, num_outer_preds
     Answer lst[] = {
-        {"1", false, true, false, 1, 0, 0},
-        {"2", false, true, false, 1, 1, 0},
-        {"2", false, false, true, 1, 1, 1},
-        {"1", false, false, true, 1, 1, 0},
+        {"1", false, true, false, 1, 0, 0}, {"2", false, true, false, 1, 1, 0},
+        {"2", false, false, true, 1, 1, 1}, {"1", false, false, true, 1, 1, 0},
         {"3", true, false, false, 0, 1, 0},
     };
 
@@ -448,12 +441,9 @@ TEST(WeakPartialOrderingTest, SccAtEnd) {
 
     // node, plain, head, exit, num_succs, num_preds, num_outer_preds
     Answer lst[] = {
-        {"1", false, true, false, 1, 0, 0},
-        {"2", false, true, false, 1, 1, 0},
-        {"3", true, false, false, 1, 1, 0},
-        {"2", false, false, true, 1, 1, 1},
-        {"1", false, false, true, 1, 1, 0},
-        {"4", true, false, false, 0, 1, 0},
+        {"1", false, true, false, 1, 0, 0}, {"2", false, true, false, 1, 1, 0},
+        {"3", true, false, false, 1, 1, 0}, {"2", false, false, true, 1, 1, 1},
+        {"1", false, false, true, 1, 1, 0}, {"4", true, false, false, 0, 1, 0},
     };
 
     std::unordered_map<WpoIdx, uint32_t> count(wpo.size());
@@ -601,18 +591,12 @@ TEST(WeakPartialOrderingTest, exampleFromWpoPaper) {
 
     // node, plain, head, exit, num_succs, num_preds, num_outer_preds
     Answer lst[] = {
-        {"1", true, false, false, 1, 0, 0},
-        {"2", false, true, false, 2, 1, 0},
-        {"3", false, true, false, 1, 1, 0},
-        {"4", true, false, false, 1, 1, 0},
-        {"3", false, false, true, 1, 1, 1},
-        {"6", false, true, false, 2, 1, 0},
-        {"7", true, false, false, 1, 1, 0},
-        {"9", true, false, false, 1, 1, 0},
-        {"8", true, false, false, 1, 2, 0},
-        {"6", false, false, true, 1, 1, 1},
-        {"5", true, false, false, 1, 2, 0},
-        {"2", false, false, true, 1, 1, 1},
+        {"1", true, false, false, 1, 0, 0},  {"2", false, true, false, 2, 1, 0},
+        {"3", false, true, false, 1, 1, 0},  {"4", true, false, false, 1, 1, 0},
+        {"3", false, false, true, 1, 1, 1},  {"6", false, true, false, 2, 1, 0},
+        {"7", true, false, false, 1, 1, 0},  {"9", true, false, false, 1, 1, 0},
+        {"8", true, false, false, 1, 2, 0},  {"6", false, false, true, 1, 1, 1},
+        {"5", true, false, false, 1, 2, 0},  {"2", false, false, true, 1, 1, 1},
         {"10", true, false, false, 0, 1, 0},
     };
 
@@ -701,14 +685,10 @@ TEST(WeakPartialOrderingTest, exampleFromWpoPaperIrreducible) {
 
     // node, plain, head, exit, num_succs, num_preds, num_outer_preds
     Answer lst[] = {
-        {"1", true, false, false, 2, 0, 0},
-        {"2", false, true, false, 2, 1, 0},
-        {"3", false, true, false, 1, 1, 0},
-        {"5", true, false, false, 1, 1, 0},
-        {"6", true, false, false, 1, 1, 0},
-        {"4", true, false, false, 1, 3, 0},
-        {"3", false, false, true, 1, 1, 2},
-        {"2", false, false, true, 0, 1, 2},
+        {"1", true, false, false, 2, 0, 0}, {"2", false, true, false, 2, 1, 0},
+        {"3", false, true, false, 1, 1, 0}, {"5", true, false, false, 1, 1, 0},
+        {"6", true, false, false, 1, 1, 0}, {"4", true, false, false, 1, 3, 0},
+        {"3", false, false, true, 1, 1, 2}, {"2", false, false, true, 0, 1, 2},
     };
 
     std::unordered_map<WpoIdx, uint32_t> count(wpo.size());
@@ -787,14 +767,10 @@ TEST(WeakPartialOrderingTest, exampleFromWpoPaperIrreducible) {
 
     // node, plain, head, exit, num_succs, num_preds, num_outer_preds
     Answer lst[] = {
-        {"1", true, false, false, 2, 0, 0},
-        {"6", true, false, false, 1, 1, 0},
-        {"2", false, true, false, 2, 2, 0},
-        {"5", true, false, false, 1, 1, 0},
-        {"3", false, true, false, 1, 2, 0},
-        {"4", true, false, false, 1, 1, 0},
-        {"3", false, false, true, 1, 1, 1},
-        {"2", false, false, true, 0, 1, 1},
+        {"1", true, false, false, 2, 0, 0}, {"6", true, false, false, 1, 1, 0},
+        {"2", false, true, false, 2, 2, 0}, {"5", true, false, false, 1, 1, 0},
+        {"3", false, true, false, 1, 2, 0}, {"4", true, false, false, 1, 1, 0},
+        {"3", false, false, true, 1, 1, 1}, {"2", false, false, true, 0, 1, 1},
     };
 
     std::unordered_map<WpoIdx, uint32_t> count(wpo.size());
@@ -990,16 +966,11 @@ TEST(WeakPartialOrderingTest, handlingOuterPreds) {
 
     // node, plain, head, exit, num_succs, num_preds, num_outer_preds
     Answer lst[] = {
-        {"1", true, false, false, 2, 0, 0},
-        {"2", false, true, false, 1, 1, 0},
-        {"3", false, true, false, 1, 1, 0},
-        {"8", true, false, false, 1, 1, 0},
-        {"4", true, false, false, 1, 2, 0},
-        {"5", true, false, false, 1, 1, 0},
-        {"3", false, false, true, 1, 1, 2},
-        {"6", true, false, false, 1, 1, 0},
-        {"2", false, false, true, 1, 1, 2},
-        {"7", true, false, false, 0, 1, 0},
+        {"1", true, false, false, 2, 0, 0}, {"2", false, true, false, 1, 1, 0},
+        {"3", false, true, false, 1, 1, 0}, {"8", true, false, false, 1, 1, 0},
+        {"4", true, false, false, 1, 2, 0}, {"5", true, false, false, 1, 1, 0},
+        {"3", false, false, true, 1, 1, 2}, {"6", true, false, false, 1, 1, 0},
+        {"2", false, false, true, 1, 1, 2}, {"7", true, false, false, 0, 1, 0},
     };
 
     std::unordered_map<WpoIdx, uint32_t> count(wpo.size());
@@ -1071,16 +1042,11 @@ TEST(WeakPartialOrderingTest, handlingOuterPreds) {
 
     // node, plain, head, exit, num_succs, num_preds, num_outer_preds
     Answer lst[] = {
-        {"1", true, false, false, 2, 0, 0},
-        {"2", false, true, false, 1, 1, 0},
-        {"8", true, false, false, 1, 1, 0},
-        {"3", false, true, false, 1, 2, 0},
-        {"4", true, false, false, 1, 1, 0},
-        {"5", true, false, false, 1, 1, 0},
-        {"3", false, false, true, 1, 1, 1},
-        {"6", true, false, false, 1, 1, 0},
-        {"2", false, false, true, 1, 1, 2},
-        {"7", true, false, false, 0, 1, 0},
+        {"1", true, false, false, 2, 0, 0}, {"2", false, true, false, 1, 1, 0},
+        {"8", true, false, false, 1, 1, 0}, {"3", false, true, false, 1, 2, 0},
+        {"4", true, false, false, 1, 1, 0}, {"5", true, false, false, 1, 1, 0},
+        {"3", false, false, true, 1, 1, 1}, {"6", true, false, false, 1, 1, 0},
+        {"2", false, false, true, 1, 1, 2}, {"7", true, false, false, 0, 1, 0},
     };
 
     std::unordered_map<WpoIdx, uint32_t> count(wpo.size());
@@ -1153,16 +1119,11 @@ TEST(WeakPartialOrderingTest, handlingOuterPreds) {
 
     // node, plain, head, exit, num_succs, num_preds, num_outer_preds
     Answer lst[] = {
-        {"1", false, true, false, 2, 0, 0},
-        {"2", false, true, false, 1, 1, 0},
-        {"3", false, true, false, 1, 1, 0},
-        {"8", true, false, false, 1, 1, 0},
-        {"4", true, false, false, 1, 2, 0},
-        {"5", true, false, false, 1, 1, 0},
-        {"3", false, false, true, 1, 1, 2},
-        {"6", true, false, false, 1, 1, 0},
-        {"2", false, false, true, 1, 1, 2},
-        {"7", true, false, false, 1, 1, 0},
+        {"1", false, true, false, 2, 0, 0}, {"2", false, true, false, 1, 1, 0},
+        {"3", false, true, false, 1, 1, 0}, {"8", true, false, false, 1, 1, 0},
+        {"4", true, false, false, 1, 2, 0}, {"5", true, false, false, 1, 1, 0},
+        {"3", false, false, true, 1, 1, 2}, {"6", true, false, false, 1, 1, 0},
+        {"2", false, false, true, 1, 1, 2}, {"7", true, false, false, 1, 1, 0},
         {"1", false, false, true, 0, 1, 0},
     };
 
@@ -1238,18 +1199,12 @@ TEST(WeakPartialOrderingTest, handlingOuterPreds) {
 
     // node, plain, head, exit, num_succs, num_preds, num_outer_preds
     Answer lst[] = {
-        {"0", true, false, false, 1, 0, 0},
-        {"1", false, true, false, 2, 1, 0},
-        {"2", false, true, false, 1, 1, 0},
-        {"3", false, true, false, 1, 1, 0},
-        {"8", true, false, false, 1, 1, 0},
-        {"4", true, false, false, 1, 2, 0},
-        {"5", true, false, false, 1, 1, 0},
-        {"3", false, false, true, 1, 1, 2},
-        {"6", true, false, false, 1, 1, 0},
-        {"2", false, false, true, 1, 1, 2},
-        {"7", true, false, false, 1, 1, 0},
-        {"1", false, false, true, 1, 1, 1},
+        {"0", true, false, false, 1, 0, 0}, {"1", false, true, false, 2, 1, 0},
+        {"2", false, true, false, 1, 1, 0}, {"3", false, true, false, 1, 1, 0},
+        {"8", true, false, false, 1, 1, 0}, {"4", true, false, false, 1, 2, 0},
+        {"5", true, false, false, 1, 1, 0}, {"3", false, false, true, 1, 1, 2},
+        {"6", true, false, false, 1, 1, 0}, {"2", false, false, true, 1, 1, 2},
+        {"7", true, false, false, 1, 1, 0}, {"1", false, false, true, 1, 1, 1},
         {"9", true, false, false, 0, 1, 0},
     };
 
@@ -1322,12 +1277,9 @@ TEST(WeakPartialOrderingTest, handleNestedLoopsWithBranch) {
 
     // node, plain, head, exit, num_succs, num_preds, num_outer_preds
     Answer lst[] = {
-        {"1", false, true, false, 2, 0, 0},
-        {"2", false, true, false, 1, 1, 0},
-        {"3", true, false, false, 1, 1, 0},
-        {"2", false, false, true, 1, 1, 1},
-        {"4", true, false, false, 1, 1, 0},
-        {"5", true, false, false, 1, 2, 0},
+        {"1", false, true, false, 2, 0, 0}, {"2", false, true, false, 1, 1, 0},
+        {"3", true, false, false, 1, 1, 0}, {"2", false, false, true, 1, 1, 1},
+        {"4", true, false, false, 1, 1, 0}, {"5", true, false, false, 1, 2, 0},
         {"1", false, false, true, 0, 1, 0},
     };
 

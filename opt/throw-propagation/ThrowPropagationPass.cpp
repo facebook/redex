@@ -17,10 +17,10 @@
  * In such cases, we insert
  *   new-instance v0, Ljava/lang/RuntimeException;
  *   const-string v1, "Redex: Unreachable code after no-return invoke"
- *   invoke-direct v0, v1, Ljava/lang/RuntimeException;.<init>:(Ljava/lang/String;)V
- *   throw v0
- * after such invocations. The control-flow graph will then remove all no longer
- * reachable instructions and blocks. We run this to a fixed point.
+ *   invoke-direct v0, v1,
+ * Ljava/lang/RuntimeException;.<init>:(Ljava/lang/String;)V throw v0 after such
+ * invocations. The control-flow graph will then remove all no longer reachable
+ * instructions and blocks. We run this to a fixed point.
  *
  * TODO: Run constant-propagation in caller, and then do callsite-specific
  * constant-propagation in callee (similar to what the inliner does); some
