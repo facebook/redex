@@ -7,7 +7,6 @@
 
 #include "Debug.h"
 
-#include <atomic>
 #include <exception>
 #include <fstream>
 #include <iomanip>
@@ -22,12 +21,6 @@
 
 #ifndef _MSC_VER
 #include <execinfo.h>
-#include <unistd.h>
-#endif
-
-#ifdef __linux__
-#include <sys/syscall.h>
-#include <sys/types.h>
 #include <unistd.h>
 #endif
 
@@ -87,11 +80,6 @@ namespace {
 using traced =
     boost::error_info<struct tag_stacktrace, boost::stacktrace::stacktrace>;
 
-#ifdef __linux__
-std::atomic<pid_t> g_aborting{0};
-pid_t get_tid() { return syscall(SYS_gettid); }
-#endif
-
 } // namespace
 
 void assert_fail(const char* expr,
@@ -109,29 +97,8 @@ void assert_fail(const char* expr,
   msg += v_format2string(fmt, ap);
 
   va_end(ap);
-
-  bool do_throw;
-#ifdef __linux__
-  pid_t cur = get_tid();
-  pid_t expected = 0;
-  do_throw = g_aborting.compare_exchange_strong(expected, cur);
-  if (!do_throw) {
-    do_throw = expected == cur;
-  }
-#else
-  do_throw = true;
-#endif
-
-  if (do_throw) {
-    throw boost::enable_error_info(RedexException(type, msg))
-        << traced(boost::stacktrace::stacktrace());
-  }
-
-  // Another thread already threw. Avoid "terminate called recursively."
-  // Infinite loop.
-  for (;;) {
-    sleep(1000);
-  }
+  throw boost::enable_error_info(RedexException(type, msg))
+      << traced(boost::stacktrace::stacktrace());
 }
 
 void print_stack_trace(std::ostream& os, const std::exception& e) {
