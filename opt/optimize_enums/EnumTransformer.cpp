@@ -111,8 +111,7 @@ struct EnumUtil {
   DexType* ILLEGAL_ARG_EXCP_TYPE =
       DexType::make_type("Ljava/lang/IllegalArgumentException;");
 
-  const DexMethodRef* ENUM_ORDINAL_METHOD =
-      DexMethod::make_method("Ljava/lang/Enum;.ordinal:()I");
+  const DexMethodRef* ENUM_ORDINAL_METHOD = method::java_lang_Enum_ordinal();
   const DexMethodRef* ENUM_EQUALS_METHOD =
       DexMethod::make_method("Ljava/lang/Enum;.equals:(Ljava/lang/Object;)Z");
   const DexMethodRef* ENUM_COMPARETO_METHOD =
@@ -121,8 +120,7 @@ struct EnumUtil {
       DexMethod::make_method("Ljava/lang/Enum;.toString:()Ljava/lang/String;");
   const DexMethodRef* ENUM_HASHCODE_METHOD =
       DexMethod::make_method("Ljava/lang/Enum;.hashCode:()I");
-  const DexMethodRef* ENUM_NAME_METHOD =
-      DexMethod::make_method("Ljava/lang/Enum;.name:()Ljava/lang/String;");
+  const DexMethodRef* ENUM_NAME_METHOD = method::java_lang_Enum_name();
   const DexMethodRef* STRING_VALUEOF_METHOD = DexMethod::make_method(
       "Ljava/lang/String;.valueOf:(Ljava/lang/Object;)Ljava/lang/String;");
   const DexMethodRef* STRINGBUILDER_APPEND_OBJ_METHOD = DexMethod::make_method(
@@ -133,14 +131,12 @@ struct EnumUtil {
   DexMethodRef* STRINGBUILDER_APPEND_STR_METHOD = DexMethod::make_method(
       "Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/"
       "StringBuilder;");
-  DexMethodRef* INTEGER_INTVALUE_METHOD =
-      DexMethod::make_method("Ljava/lang/Integer;.intValue:()I");
+  DexMethodRef* INTEGER_INTVALUE_METHOD = method::java_lang_Integer_intValue();
   DexMethodRef* INTEGER_EQUALS_METHOD = DexMethod::make_method(
       "Ljava/lang/Integer;.equals:(Ljava/lang/Object;)Z");
   DexMethodRef* INTEGER_COMPARETO_METHOD = DexMethod::make_method(
       "Ljava/lang/Integer;.compareTo:(Ljava/lang/Integer;)I");
-  DexMethodRef* INTEGER_VALUEOF_METHOD = DexMethod::make_method(
-      "Ljava/lang/Integer;.valueOf:(I)Ljava/lang/Integer;");
+  DexMethodRef* INTEGER_VALUEOF_METHOD = method::java_lang_Integer_valueOf();
   DexMethodRef* RTEXCEPTION_CTOR_METHOD = DexMethod::make_method(
       "Ljava/lang/RuntimeException;.<init>:(Ljava/lang/String;)V");
   DexMethodRef* ILLEGAL_ARG_CONSTRUCT_METHOD = DexMethod::make_method(

@@ -24,7 +24,7 @@ struct InterproceduralConstantPropagationTest : public RedexTest {
  public:
   InterproceduralConstantPropagationTest() {
     // EnumFieldAnalyzer requires that this method exists
-    DexMethod::make_method("Ljava/lang/Enum;.equals:(Ljava/lang/Object;)Z");
+    method::java_lang_Enum_equals();
   }
 };
 
