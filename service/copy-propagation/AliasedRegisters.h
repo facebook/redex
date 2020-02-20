@@ -183,8 +183,7 @@ class AliasedRegisters final : public sparta::AbstractValue<AliasedRegisters> {
  private:
   // An undirected graph where register values are vertices
   // and an edge means they are aliased.
-  // Using a set for the edge container makes sure we can't have parallel edges
-  using Graph = boost::adjacency_list<boost::setS, // out edge container
+  using Graph = boost::adjacency_list<boost::vecS, // out edge container
                                       boost::vecS, // vertex container
                                       boost::undirectedS, // undirected graph
                                       Value>; // node property
