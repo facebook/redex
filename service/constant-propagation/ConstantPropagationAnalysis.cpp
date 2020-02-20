@@ -571,8 +571,7 @@ const EnumFieldAnalyzerState& EnumFieldAnalyzerState::get() {
     enum_field_singleton = EnumFieldAnalyzerState();
     // In tests, we create and destroy g_redex repeatedly. So we need to reset
     // the singleton.
-    g_redex->add_destruction_task(
-        []() { enum_field_singleton = boost::none; });
+    g_redex->add_destruction_task([]() { enum_field_singleton = boost::none; });
   }
   return *enum_field_singleton;
 }
