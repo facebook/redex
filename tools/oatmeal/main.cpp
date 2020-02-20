@@ -209,7 +209,7 @@ Arguments parse_args(int argc, char* argv[]) {
     exit(1);
   }
 
-  if (dex_locations.size() > 0) {
+  if (!dex_locations.empty()) {
     if (dex_locations.size() != dex_files.size()) {
       fprintf(
           stderr,

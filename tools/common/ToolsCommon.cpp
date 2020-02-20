@@ -219,7 +219,7 @@ void load_all_intermediate(const std::string& input_ir_dir,
 
   // load external classes
   Scope external_classes;
-  if ((*entry_data).get("jars", Json::nullValue).size()) {
+  if (!(*entry_data).get("jars", Json::nullValue).empty()) {
     for (const Json::Value& item : (*entry_data)["jars"]) {
       const std::string jar_path = item.asString();
       always_assert(load_jar_file(jar_path.c_str(), &external_classes));

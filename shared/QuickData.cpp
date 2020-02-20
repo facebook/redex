@@ -76,7 +76,7 @@ uint16_t QuickData::get_field_offset(const std::string& dex,
   return 0;
 }
 
-void QuickData::serialize(std::shared_ptr<FILE*> fd) {
+void QuickData::serialize(const std::shared_ptr<FILE*>& fd) {
 
   {
     auto data_fh = FileHandle(*fd);

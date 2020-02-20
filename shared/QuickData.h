@@ -55,7 +55,7 @@ class QuickData {
   uint16_t get_field_offset(const std::string& dex,
                             const uint32_t field_idx) const;
 
-  void serialize(std::shared_ptr<FILE*> fd);
+  void serialize(const std::shared_ptr<FILE*>& fd);
 
  private:
   std::map<std::string, uint32_t> dex_to_field_offset_size;

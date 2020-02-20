@@ -39,6 +39,7 @@
 #include <memory>
 #include <string>
 #include <sys/stat.h>
+#include <utility>
 #include <vector>
 
 #define PACK __attribute__((packed))
@@ -1246,7 +1247,7 @@ class DexFiles {
     for (const auto& file_offset : dex_file_listing.dex_file_offsets()) {
       auto dex_header_buf = buf.slice(file_offset);
       auto dh = DexFileHeader::parse(dex_header_buf);
-      headers_.push_back(std::move(dh));
+      headers_.push_back(dh);
 
       auto dex_buf = buf.slice(file_offset, file_offset + dh.file_size);
       dexes_.push_back(dex_buf);
@@ -1361,7 +1362,7 @@ class OatClasses_064 : public OatClasses {
       FileHandle& cksum_fh) {
     // offsets were already written to the DexFileListing_064.
     for (const auto& file : dex_files) {
-      if (file.class_offsets.size() == 0) {
+      if (file.class_offsets.empty()) {
         continue;
       }
       CHECK(file.class_offsets[0] == cksum_fh.bytes_written());
@@ -2073,7 +2074,7 @@ class OatFile_064 : public OatFile {
               DexFiles dex_files,
               size_t oat_data_offset)
       : header_(h),
-        key_value_store_(kv),
+        key_value_store_(std::move(kv)),
         dex_file_listing_(std::move(dfl)),
         dex_files_(std::move(dex_files)),
         oat_offset_(oat_data_offset) {}
@@ -2201,7 +2202,7 @@ class OatFile_079 : public OatFile {
               DexFiles dex_files,
               size_t oat_data_offset)
       : header_(h),
-        key_value_store_(kv),
+        key_value_store_(std::move(kv)),
         dex_file_listing_(std::move(dfl)),
         dex_files_(std::move(dex_files)),
         oat_offset_(oat_data_offset) {}
@@ -2214,7 +2215,7 @@ class OatFile_079 : public OatFile {
               OatClasses_079 oat_classes,
               size_t oat_data_offset)
       : header_(h),
-        key_value_store_(kv),
+        key_value_store_(std::move(kv)),
         dex_file_listing_(std::move(dfl)),
         dex_files_(std::move(dex_files)),
         lookup_tables_(std::move(lt)),
@@ -2390,7 +2391,7 @@ class OatFile_124 : public OatFile {
               DexFiles dex_files,
               size_t oat_data_offset)
       : header_(h),
-        key_value_store_(kv),
+        key_value_store_(std::move(kv)),
         dex_files_(std::move(dex_files)),
         oat_offset_(oat_data_offset),
         dex_file_listing_(&dfl) {}
@@ -2403,7 +2404,7 @@ class OatFile_124 : public OatFile {
               OatClasses_124 oat_classes,
               size_t oat_data_offset)
       : header_(h),
-        key_value_store_(kv),
+        key_value_store_(std::move(kv)),
         dex_files_(std::move(dex_files)),
         lookup_tables_(std::move(lt)),
         oat_classes_(std::move(oat_classes)),
@@ -2416,7 +2417,7 @@ class OatFile_124 : public OatFile {
               DexFiles dex_files,
               size_t oat_data_offset)
       : header_(h),
-        key_value_store_(kv),
+        key_value_store_(std::move(kv)),
         dex_files_(std::move(dex_files)),
         oat_offset_(oat_data_offset),
         dex_file_listing_(nullptr) {}
@@ -2428,7 +2429,7 @@ class OatFile_124 : public OatFile {
               OatClasses_124 oat_classes,
               size_t oat_data_offset)
       : header_(h),
-        key_value_store_(kv),
+        key_value_store_(std::move(kv)),
         dex_files_(std::move(dex_files)),
         lookup_tables_(std::move(lt)),
         oat_classes_(std::move(oat_classes)),
@@ -2524,7 +2525,7 @@ class OatFile_131 : public OatFile_124 {
               DexFileListing_131 dfl,
               DexFiles dex_files,
               size_t oat_data_offset)
-      : OatFile_124(h, kv, std::move(dex_files), oat_data_offset),
+      : OatFile_124(h, std::move(kv), std::move(dex_files), oat_data_offset),
         dex_file_listing_(std::move(dfl)) {}
 
   OatFile_131(OatHeader h,
@@ -2535,7 +2536,7 @@ class OatFile_131 : public OatFile_124 {
               OatClasses_124 oat_classes,
               size_t oat_data_offset)
       : OatFile_124(h,
-                    kv,
+                    std::move(kv),
                     std::move(dex_files),
                     std::move(lt),
                     std::move(oat_classes),
@@ -2788,7 +2789,7 @@ std::vector<DexFileListing_064::DexFile_064> DexFileListing_064::build(
         // loop.
         num_types,
         std::vector<uint32_t>(num_classes),
-        std::move(classes)));
+        classes));
   }
 
   if (samsung_mode) {
@@ -2835,7 +2836,7 @@ std::vector<DexFileListing_079::DexFile_079> DexFileListing_079::build(
   std::vector<DexFileListing_079::DexFile_079> dex_files;
   dex_files.reserve(dex_input.size());
 
-  for (const auto dex : dex_input) {
+  for (const auto& dex : dex_input) {
     auto dex_offset = next_offset + total_dex_size;
 
     auto dex_fh = FileHandle(fopen(dex.filename.c_str(), "r"));
@@ -2900,7 +2901,7 @@ std::vector<DexFileListing_124::DexFile_124> DexFileListing_124::build(
   std::vector<DexFileListing_124::DexFile_124> dex_files;
   dex_files.reserve(dex_input.size());
 
-  for (const auto dex : dex_input) {
+  for (const auto& dex : dex_input) {
     // We load the dex bytecode in the VDEX file after the header and
     // the checksum for the DEX right after.
     auto dex_offset = sizeof(VdexFileHeader) + sizeof(uint32_t);
@@ -2961,7 +2962,7 @@ std::vector<DexFileListing_131::DexFile_131> DexFileListing_131::build(
   std::vector<DexFileListing_131::DexFile_131> dex_files;
   dex_files.reserve(dex_input.size());
 
-  for (const auto dex : dex_input) {
+  for (const auto& dex : dex_input) {
     // We load the dex bytecode in the VDEX file after the header and
     // the checksum for the DEX right after.
     auto dex_offset = sizeof(VdexFileHeader) + sizeof(uint32_t);
@@ -3396,7 +3397,7 @@ OatFile::Status build_oatfile_after_v124(const std::string& oat_file_name,
   OatFile::Status result = OatFile::Status::BUILD_SUCCESS;
 
   for (const auto& dex : dex_input) {
-    size_t found = dex.filename.find_last_of("/") + 1;
+    size_t found = dex.filename.find_last_of('/') + 1;
     CHECK(found >= 0);
     auto odex_file_name = dex.filename.substr(found);
     odex_file_name.erase(odex_file_name.size() - 3);
@@ -3568,7 +3569,7 @@ OatFile::Status OatFile::build(const std::vector<std::string>& oat_file_names,
     }
   };
 
-  if (oat_file_names.size() == 0) {
+  if (oat_file_names.empty()) {
     fprintf(stderr, "At least one oat file name required\n");
     return Status::BUILD_ARG_ERROR;
   } else if (oat_file_names.size() == 1) {
