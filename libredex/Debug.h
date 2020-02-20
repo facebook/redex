@@ -79,6 +79,10 @@ void print_stack_trace(std::ostream& os, const std::exception& e);
 
 void crash_backtrace_handler(int sig);
 
+// If `block` is true, only a single assert will be logged. All following
+// asserts will sleep forever.
+void block_multi_asserts(bool block);
+
 // Stats from /proc. See http://man7.org/linux/man-pages/man5/proc.5.html.
 struct VmStats {
   uint64_t vm_peak = 0; // "Peak virtual memory size."

@@ -1079,6 +1079,9 @@ int main(int argc, char* argv[]) {
   signal(SIGBUS, crash_backtrace_handler);
 #endif
 
+  // Only log one assert.
+  block_multi_asserts(/*block=*/true);
+
   std::string stats_output_path;
   Json::Value stats;
   {
