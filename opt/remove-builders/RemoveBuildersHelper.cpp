@@ -946,7 +946,8 @@ void FieldsRegs::meet(const FieldsRegs& that) {
 }
 
 bool FieldsRegs::operator==(const FieldsRegs& that) const {
-  return field_to_reg == that.field_to_reg;
+  return field_to_reg == that.field_to_reg &&
+         field_to_iput_insns == that.field_to_iput_insns;
 }
 
 bool FieldsRegs::operator!=(const FieldsRegs& that) const {
