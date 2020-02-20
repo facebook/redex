@@ -203,6 +203,16 @@ class DexType {
     return make_type(DexString::make_string(type_string, utfsize));
   }
 
+  // Always makes a new type that is unique.
+  static DexType* make_unique_type(const std::string& type_name) {
+    auto ret = DexString::make_string(type_name);
+    for (uint32_t i = 0; get_type(ret); i++) {
+      ret = DexString::make_string(type_name.substr(0, type_name.size() - 1) +
+                                   "r$" + std::to_string(i) + ";");
+    }
+    return make_type(ret);
+  }
+
   // Return an existing DexType or nullptr if one does not exist.
   static DexType* get_type(DexString* dstring) {
     return g_redex->get_type(dstring);
