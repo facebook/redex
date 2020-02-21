@@ -87,10 +87,11 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
           stats.max_iterations++;
           TRACE(CSE, 3, "[CSE] processing %s", SHOW(method));
           always_assert(code->editable_cfg_built());
-          CommonSubexpressionElimination cse(&shared_state, code->cfg());
-          bool any_changes = cse.patch(is_static(method), method->get_class(),
-                                       method->get_proto()->get_args(),
-                                       copy_prop_config.max_estimated_registers,
+          CommonSubexpressionElimination cse(
+              &shared_state, code->cfg(), is_static(method),
+              method::is_init(method) || method::is_clinit(method),
+              method->get_class(), method->get_proto()->get_args());
+          bool any_changes = cse.patch(copy_prop_config.max_estimated_registers,
                                        m_runtime_assertions);
           stats += cse.get_stats();
           code->clear_cfg();

@@ -57,12 +57,14 @@ void test(const Scope& scope,
   auto pure_methods = get_pure_methods();
   cse_impl::SharedState shared_state(pure_methods);
   shared_state.init_scope(scope);
-  cse_impl::CommonSubexpressionElimination cse(&shared_state,
-                                               code.get()->cfg());
   bool is_static = true;
+  bool is_init_or_clinit = false;
   DexType* declaring_type = nullptr;
   DexTypeList* args = DexTypeList::make_type_list({});
-  cse.patch(is_static, declaring_type, args, /* max_estimated_registers */ 300);
+  cse_impl::CommonSubexpressionElimination cse(&shared_state, code.get()->cfg(),
+                                               is_static, is_init_or_clinit,
+                                               declaring_type, args);
+  cse.patch(/* max_estimated_registers */ 300);
   code.get()->clear_cfg();
   walk::code(scope, [&](DexMethod*, IRCode& code) { code.clear_cfg(); });
   auto stats = cse.get_stats();

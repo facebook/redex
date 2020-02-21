@@ -96,17 +96,18 @@ class SharedState {
 class CommonSubexpressionElimination {
  public:
   CommonSubexpressionElimination(SharedState* shared_state,
-                                 cfg::ControlFlowGraph&);
+                                 cfg::ControlFlowGraph&,
+                                 bool is_static,
+                                 bool is_init_or_clinit,
+                                 DexType* declaring_type,
+                                 DexTypeList* args);
 
   const Stats& get_stats() const { return m_stats; }
 
   /*
    * Patch code based on analysis results.
    */
-  bool patch(bool is_static,
-             DexType* declaring_type,
-             DexTypeList* args,
-             unsigned int max_estimated_registers,
+  bool patch(unsigned int max_estimated_registers,
              bool runtime_assertions = false);
 
  private:
@@ -122,11 +123,11 @@ class CommonSubexpressionElimination {
   SharedState* m_shared_state;
   cfg::ControlFlowGraph& m_cfg;
   Stats m_stats;
+  bool m_is_static;
+  DexType* m_declaring_type;
+  DexTypeList* m_args;
 
   void insert_runtime_assertions(
-      bool is_static,
-      DexType* declaring_type,
-      DexTypeList* args,
       const std::vector<std::pair<Forward, IRInstruction*>>& to_check);
 };
 

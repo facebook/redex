@@ -740,11 +740,11 @@ void MultiMethodInliner::shrink_method(DexMethod* method) {
       code->build_cfg(/* editable */ true);
     }
 
-    cse_impl::CommonSubexpressionElimination cse(m_cse_shared_state.get(),
-                                                 code->cfg());
-    cse.patch(is_static(method), method->get_class(),
-              method->get_proto()->get_args(),
-              copy_prop_config.max_estimated_registers);
+    cse_impl::CommonSubexpressionElimination cse(
+        m_cse_shared_state.get(), code->cfg(), is_static(method),
+        method::is_init(method) || method::is_clinit(method),
+        method->get_class(), method->get_proto()->get_args());
+    cse.patch(copy_prop_config.max_estimated_registers);
     cse_stats = cse.get_stats();
   }
 

@@ -30,6 +30,11 @@ enum class CseSpecialLocations : uintptr_t {
 union CseLocation {
   explicit CseLocation(const DexField* f) : field(f) {}
   explicit CseLocation(CseSpecialLocations sl) : special_location(sl) {}
+  bool has_field() { return special_location >= CseSpecialLocations::END; }
+  const DexField* get_field() {
+    always_assert(has_field());
+    return field;
+  }
   const DexField* field;
   CseSpecialLocations special_location;
 };

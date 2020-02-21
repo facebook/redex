@@ -101,7 +101,7 @@ using value_id_t = uint64_t;
 constexpr size_t TRACKED_LOCATION_BITS = 42; // leaves 20 bits for running index
 enum ValueIdFlags : value_id_t {
   // lower bits for tracked locations
-  IS_NOT_READ_ONLY_WRITTEN_LOCATION = 0,
+  UNTRACKED = 0,
   IS_FIRST_TRACKED_LOCATION = ((value_id_t)1),
   IS_OTHER_TRACKED_LOCATION = ((value_id_t)1) << TRACKED_LOCATION_BITS,
   IS_ONLY_READ_NOT_WRITTEN_LOCATION = ((value_id_t)1)
@@ -255,8 +255,13 @@ const CseUnorderedLocationSet general_memory_barrier_locations =
 
 class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
  public:
-  Analyzer(SharedState* shared_state, cfg::ControlFlowGraph& cfg)
+  Analyzer(SharedState* shared_state,
+           cfg::ControlFlowGraph& cfg,
+           bool is_method_static,
+           bool is_method_init_or_clinit,
+           DexType* declaring_type)
       : BaseIRAnalyzer(cfg), m_shared_state(shared_state) {
+    // Collect all read locations
     std::unordered_map<CseLocation, size_t, CseLocationHasher>
         read_location_counts;
     for (auto& mie : cfg::InstructionIterable(cfg)) {
@@ -265,18 +270,40 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
       if (location !=
           CseLocation(CseSpecialLocations::GENERAL_MEMORY_BARRIER)) {
         read_location_counts[location]++;
-        m_read_locations.insert(location);
       } else if (is_invoke(insn->opcode()) &&
                  shared_state->has_pure_method(insn)) {
         for (auto l :
              shared_state->get_read_locations_of_conditionally_pure_method(
                  insn->get_method(), insn->opcode())) {
           read_location_counts[l]++;
-          m_read_locations.insert(l);
         }
       }
     }
 
+    // Prune those which are final fields that cannot get mutated in our context
+    for (auto it = read_location_counts.begin();
+         it != read_location_counts.end();) {
+      auto location = it->first;
+      // If we are reading a final field...
+      if (location.has_field() && is_final(location.get_field())) {
+        // ... and we are not analyzing a method that is a corresponding
+        // constructor or static initializer of the declaring type of the
+        // field ...
+        if (!is_method_init_or_clinit ||
+            location.get_field()->get_class() != declaring_type ||
+            is_static(location.get_field()) != is_method_static) {
+          // ... then we don't need track the field as a memory location
+          // (that in turn might get invalidated on general memory barriers).
+          m_tracked_locations.emplace(location, ValueIdFlags::UNTRACKED);
+          it = read_location_counts.erase(it);
+          continue;
+        }
+      }
+      m_read_locations.insert(location);
+      it++;
+    }
+
+    // Collect all relevant written locations
     std::unordered_map<CseLocation, size_t, CseLocationHasher>
         written_location_counts;
     for (auto& mie : cfg::InstructionIterable(cfg)) {
@@ -290,6 +317,7 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
       }
     }
 
+    // Check which locations get written and read (vs. just written)
     std::vector<CseLocation> read_and_written_locations;
     for (auto& p : written_location_counts) {
       always_assert(p.first !=
@@ -297,12 +325,15 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
       if (read_location_counts.count(p.first)) {
         read_and_written_locations.push_back(p.first);
       } else {
-        m_tracked_locations.emplace(
-            p.first, ValueIdFlags::IS_NOT_READ_ONLY_WRITTEN_LOCATION);
+        always_assert(!m_tracked_locations.count(p.first));
+        m_tracked_locations.emplace(p.first, ValueIdFlags::UNTRACKED);
       }
     }
+
+    // Also keep track of locations that get read but not written
     for (auto& p : read_location_counts) {
       if (!written_location_counts.count(p.first)) {
+        always_assert(!m_tracked_locations.count(p.first));
         m_tracked_locations.emplace(
             p.first, ValueIdFlags::IS_ONLY_READ_NOT_WRITTEN_LOCATION);
       }
@@ -1155,9 +1186,19 @@ void SharedState::cleanup() {
 }
 
 CommonSubexpressionElimination::CommonSubexpressionElimination(
-    SharedState* shared_state, cfg::ControlFlowGraph& cfg)
-    : m_shared_state(shared_state), m_cfg(cfg) {
-  Analyzer analyzer(shared_state, cfg);
+    SharedState* shared_state,
+    cfg::ControlFlowGraph& cfg,
+    bool is_static,
+    bool is_init_or_clinit,
+    DexType* declaring_type,
+    DexTypeList* args)
+    : m_shared_state(shared_state),
+      m_cfg(cfg),
+      m_is_static(is_static),
+      m_declaring_type(declaring_type),
+      m_args(args) {
+  Analyzer analyzer(shared_state, cfg, is_static, is_init_or_clinit,
+                    declaring_type);
   m_stats.max_value_ids = analyzer.get_value_ids_size();
   if (analyzer.using_other_tracked_location_bit()) {
     m_stats.methods_using_other_tracked_location_bit = 1;
@@ -1232,10 +1273,7 @@ static IROpcode get_move_opcode(const IRInstruction* earlier_insn) {
   }
 }
 
-bool CommonSubexpressionElimination::patch(bool is_static,
-                                           DexType* declaring_type,
-                                           DexTypeList* args,
-                                           unsigned int max_estimated_registers,
+bool CommonSubexpressionElimination::patch(unsigned int max_estimated_registers,
                                            bool runtime_assertions) {
   if (m_forward.empty()) {
     return false;
@@ -1351,7 +1389,7 @@ bool CommonSubexpressionElimination::patch(bool is_static,
   }
 
   if (runtime_assertions) {
-    insert_runtime_assertions(is_static, declaring_type, args, to_check);
+    insert_runtime_assertions(to_check);
   }
 
   TRACE(CSE, 5, "[CSE] after:\n%s", SHOW(m_cfg));
@@ -1361,9 +1399,6 @@ bool CommonSubexpressionElimination::patch(bool is_static,
 }
 
 void CommonSubexpressionElimination::insert_runtime_assertions(
-    bool is_static,
-    DexType* declaring_type,
-    DexTypeList* args,
     const std::vector<std::pair<Forward, IRInstruction*>>& to_check) {
   // For every instruction that CSE will effectively eliminate, we insert
   // code like the following:
@@ -1408,7 +1443,7 @@ void CommonSubexpressionElimination::insert_runtime_assertions(
   // We need type inference information to generate the right kinds of
   // conditional branches.
   type_inference::TypeInference type_inference(m_cfg);
-  type_inference.run(is_static, declaring_type, args);
+  type_inference.run(m_is_static, m_declaring_type, m_args);
   auto& type_environments = type_inference.get_type_environments();
 
   for (auto& p : to_check) {
