@@ -29,7 +29,11 @@ class CommonSubexpressionEliminationTest : public RedexTest {
 void test(const Scope& scope,
           const std::string& code_str,
           const std::string& expected_str,
-          size_t expected_instructions_eliminated) {
+          size_t expected_instructions_eliminated,
+          bool is_static = true,
+          bool is_init_or_clinit = false,
+          DexType* declaring_type = nullptr,
+          DexTypeList* args = DexTypeList::make_type_list({})) {
   auto field_a = DexField::make_field("LFoo;.a:I")->make_concrete(ACC_PUBLIC);
 
   auto field_b = DexField::make_field("LFoo;.b:I")->make_concrete(ACC_PUBLIC);
@@ -57,10 +61,6 @@ void test(const Scope& scope,
   auto pure_methods = get_pure_methods();
   cse_impl::SharedState shared_state(pure_methods);
   shared_state.init_scope(scope);
-  bool is_static = true;
-  bool is_init_or_clinit = false;
-  DexType* declaring_type = nullptr;
-  DexTypeList* args = DexTypeList::make_type_list({});
   cse_impl::CommonSubexpressionElimination cse(&shared_state, code.get()->cfg(),
                                                is_static, is_init_or_clinit,
                                                declaring_type, args);
@@ -1525,4 +1525,122 @@ TEST_F(CommonSubexpressionEliminationTest,
        code_str,
        expected_str,
        1);
+}
+
+TEST_F(CommonSubexpressionEliminationTest, tracked_final_field_within_clinit) {
+  ClassCreator bar_creator(DexType::make_type("LBar;"));
+  bar_creator.set_super(type::java_lang_Object());
+
+  DexField::make_field("LBar;.x:I")
+      ->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_FINAL);
+
+  auto code_str = R"(
+    (
+      (sget "LBar;.x:I")
+      (move-result-pseudo v0)
+      (invoke-static () "LWhat;.ever:()V")
+      (sget "LBar;.x:I")
+      (move-result-pseudo v0)
+    )
+  )";
+  auto expected_str = code_str;
+  bool is_static = true;
+  bool is_init_or_clinit = true;
+  DexType* declaring_type = bar_creator.create()->get_type();
+  test(Scope{type_class(type::java_lang_Object()), type_class(declaring_type)},
+       code_str, expected_str, 0, is_static, is_init_or_clinit, declaring_type);
+}
+
+TEST_F(CommonSubexpressionEliminationTest,
+       untracked_final_field_outside_clinit) {
+  ClassCreator bar_creator(DexType::make_type("LBar;"));
+  bar_creator.set_super(type::java_lang_Object());
+
+  DexField::make_field("LBar;.x:I")
+      ->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_FINAL);
+
+  auto code_str = R"(
+    (
+      (sget "LBar;.x:I")
+      (move-result-pseudo v0)
+      (invoke-static () "LWhat;.ever:()V")
+      (sget "LBar;.x:I")
+      (move-result-pseudo v0)
+    )
+  )";
+  auto expected_str = R"(
+    (
+      (sget "LBar;.x:I")
+      (move-result-pseudo v0)
+      (move v1 v0)
+      (invoke-static () "LWhat;.ever:()V")
+      (sget "LBar;.x:I")
+      (move-result-pseudo v0)
+      (move v0 v1)
+    )
+  )";
+  bool is_static = true;
+  bool is_init_or_clinit = false;
+  DexType* declaring_type = bar_creator.create()->get_type();
+  test(Scope{type_class(type::java_lang_Object()), type_class(declaring_type)},
+       code_str, expected_str, 1, is_static, is_init_or_clinit, declaring_type);
+}
+
+TEST_F(CommonSubexpressionEliminationTest, tracked_final_field_within_init) {
+  ClassCreator bar_creator(DexType::make_type("LBar;"));
+  bar_creator.set_super(type::java_lang_Object());
+
+  DexField::make_field("LBar;.x:I")->make_concrete(ACC_PUBLIC | ACC_FINAL);
+
+  auto code_str = R"(
+    (
+      (load-param-object v0)
+      (iget v0 "LBar;.x:I")
+      (move-result-pseudo v1)
+      (invoke-static () "LWhat;.ever:()V")
+      (iget v0 "LBar;.x:I")
+      (move-result-pseudo v1)
+    )
+  )";
+  auto expected_str = code_str;
+  bool is_static = false;
+  bool is_init_or_clinit = true;
+  DexType* declaring_type = bar_creator.create()->get_type();
+  test(Scope{type_class(type::java_lang_Object()), type_class(declaring_type)},
+       code_str, expected_str, 0, is_static, is_init_or_clinit, declaring_type);
+}
+
+TEST_F(CommonSubexpressionEliminationTest, untracked_final_field_outside_init) {
+  ClassCreator bar_creator(DexType::make_type("LBar;"));
+  bar_creator.set_super(type::java_lang_Object());
+
+  DexField::make_field("LBar;.x:I")->make_concrete(ACC_PUBLIC | ACC_FINAL);
+
+  auto code_str = R"(
+    (
+      (load-param-object v0)
+      (iget v0 "LBar;.x:I")
+      (move-result-pseudo v1)
+      (invoke-static () "LWhat;.ever:()V")
+      (iget v0 "LBar;.x:I")
+      (move-result-pseudo v1)
+    )
+  )";
+  auto expected_str = R"(
+    (
+      (load-param-object v0)
+      (iget v0 "LBar;.x:I")
+      (move-result-pseudo v1)
+        (move v2 v1)
+      (invoke-static () "LWhat;.ever:()V")
+      (iget v0 "LBar;.x:I")
+      (move-result-pseudo v1)
+      (move v1 v2)
+    )
+  )";
+  bool is_static = false;
+  bool is_init_or_clinit = false;
+  DexType* declaring_type = bar_creator.create()->get_type();
+  test(Scope{type_class(type::java_lang_Object()), type_class(declaring_type)},
+       code_str, expected_str, 1, is_static, is_init_or_clinit, declaring_type);
 }
