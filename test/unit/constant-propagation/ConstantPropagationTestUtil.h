@@ -17,11 +17,11 @@ struct ConstantPropagationTest : public RedexTest {};
 inline void do_const_prop(
     IRCode* code,
     const std::function<void(const IRInstruction*, ConstantEnvironment*)>&
-        insn_analyzer = cp::ConstantPrimitiveAnalyzer()) {
+        insn_analyzer = cp::ConstantPrimitiveAnalyzer(),
+    const cp::Transform::Config& transform_config = cp::Transform::Config()) {
   code->build_cfg(/* editable */ false);
   cp::intraprocedural::FixpointIterator intra_cp(code->cfg(), insn_analyzer);
   intra_cp.run(ConstantEnvironment());
-  cp::Transform::Config transform_config;
   cp::Transform tf(transform_config);
   tf.apply(intra_cp, cp::WholeProgramState(), code);
 }

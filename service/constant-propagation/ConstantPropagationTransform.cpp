@@ -130,19 +130,19 @@ void Transform::simplify_instruction(const ConstantEnvironment& env,
     }
     break;
   }
-  // We currently don't replace move-result opcodes with consts because it's
-  // unlikely that we can get a more compact encoding (move-result can address
-  // 8-bit register operands while taking up just 1 code unit). However it can
-  // be a net win if we can remove the invoke opcodes as well -- we need a
-  // purity analysis for that though.
-  /*
+  // Currently it's default to not replace move-result opcodes with consts
+  // because it's unlikely that we can get a more compact encoding (move-result
+  // can address 8-bit register operands while taking up just 1 code unit).
+  // However it can be a net win if we can remove the invoke opcodes as well --
+  // we need a purity analysis for that though.
   case OPCODE_MOVE_RESULT:
   case OPCODE_MOVE_RESULT_WIDE:
   case OPCODE_MOVE_RESULT_OBJECT: {
-    replace_with_const(it, env);
+    if (m_config.replace_move_result_with_consts) {
+      replace_with_const(env, it);
+    }
     break;
   }
-  */
   case OPCODE_ADD_INT_LIT16:
   case OPCODE_ADD_INT_LIT8:
   case OPCODE_RSUB_INT:

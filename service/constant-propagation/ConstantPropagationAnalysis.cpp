@@ -218,7 +218,7 @@ bool PrimitiveAnalyzer::analyze_default(const IRInstruction* insn,
     TRACE(CONSTP, 5, "Marking value unknown [Reg: %d]", insn->dest());
     env->set(insn->dest(), ConstantValue::top());
   } else if (insn->has_move_result_any()) {
-    TRACE(CONSTP, 5, "Clearing result register");
+    TRACE(CONSTP, 5, "Clearing result register %s", SHOW(insn));
     env->set(RESULT_REGISTER, ConstantValue::top());
   }
   return true;
@@ -704,6 +704,115 @@ bool BoxedBooleanAnalyzer::analyze_invoke(
   }
 }
 
+ImmutableAttributeAnalyzerState::Initializer&
+ImmutableAttributeAnalyzerState::add_initializer(DexMethod* initialize_method,
+                                                 DexMethod* attr) {
+  attribute_methods.insert(attr);
+  auto& initializers = method_initializers[initialize_method];
+  initializers.push_back(Initializer(attr));
+  return initializers.back();
+}
+
+ImmutableAttributeAnalyzerState::ImmutableAttributeAnalyzerState() {
+  // clang-format off
+  // Integer can be initialized throuth
+  //  invoke-static v0 Ljava/lang/Integer;.valueOf:(I)Ljava/lang/Integer;
+  // clang-format on
+  auto integer_valueOf = method::java_lang_Integer_valueOf();
+  auto integer_intValue = method::java_lang_Integer_intValue();
+  // The intValue of integer is initialized through the static invocation.
+  add_initializer(integer_valueOf, integer_intValue)
+      .set_src_id_of_attr(0)
+      .set_obj_to_dest();
+}
+
+bool ImmutableAttributeAnalyzer::analyze_invoke(
+    const ImmutableAttributeAnalyzerState& state,
+    const IRInstruction* insn,
+    ConstantEnvironment* env) {
+  auto method_ref = insn->get_method();
+  DexMethod* method = resolve_method(method_ref, opcode_to_search(insn));
+  if (!method) {
+    // Redex may run without sdk as input, so the method resolving may fail.
+    // Example: Integer.valueOf(I) is an external method.
+    method = static_cast<DexMethod*>(method_ref);
+  }
+  if (state.method_initializers.count(method)) {
+    return analyze_method_initialization(state, insn, env, method);
+  } else if (state.attribute_methods.count(method)) {
+    return analyze_method_attr(state, insn, env, method);
+  }
+  return false;
+}
+
+/**
+ * Propagate method return value if this method is a getter method of an
+ * immutable field of an object. `Integer.intValue()` is a such method.
+ */
+bool ImmutableAttributeAnalyzer::analyze_method_attr(
+    const ImmutableAttributeAnalyzerState& /* unused */,
+    const IRInstruction* insn,
+    ConstantEnvironment* env,
+    DexMethod* method) {
+  if (insn->srcs_size() != 1) {
+    return false;
+  }
+  auto heap_obj = env->get_pointee<ObjectWithImmutAttrDomain>(insn->src(0));
+  if (heap_obj.is_top()) {
+    return false;
+  }
+  auto value = (heap_obj.get_constant())->get_value(method);
+  if (value && !value->is_top()) {
+    if (const auto& string_value = value->maybe_get<StringDomain>()) {
+      env->set(RESULT_REGISTER, *string_value);
+      return true;
+    } else if (const auto& signed_value =
+                   value->maybe_get<SignedConstantDomain>()) {
+      env->set(RESULT_REGISTER, *signed_value);
+      return true;
+    }
+  }
+  return false;
+}
+
+bool ImmutableAttributeAnalyzer::analyze_method_initialization(
+    const ImmutableAttributeAnalyzerState& state,
+    const IRInstruction* insn,
+    ConstantEnvironment* env,
+    DexMethod* method) {
+  auto it = state.method_initializers.find(method);
+  if (it == state.method_initializers.end()) {
+    return false;
+  }
+  ObjectWithImmutAttr heap_obj;
+  // Only support one register for the object, can be easily extended. For
+  // example, virtual method may return `this` pointer, so two registers are
+  // holding the same heap object.
+  reg_t obj_reg;
+  for (auto& initializer : it->second) {
+    obj_reg = initializer.obj_is_dest()
+                  ? RESULT_REGISTER
+                  : insn->src(*initializer.insn_src_id_of_obj);
+    const auto& domain = env->get(insn->src(initializer.insn_src_id_of_attr));
+    if (const auto& signed_value = domain.maybe_get<SignedConstantDomain>()) {
+      if (!signed_value->get_constant()) {
+        continue;
+      }
+      heap_obj.write_value(initializer.attr, *signed_value);
+    } else if (const auto& string_value = domain.maybe_get<StringDomain>()) {
+      if (!string_value->is_value()) {
+        continue;
+      }
+      heap_obj.write_value(initializer.attr, *string_value);
+    }
+  }
+  if (heap_obj.empty()) {
+    return false;
+  }
+  env->new_heap_value(obj_reg, insn, ObjectWithImmutAttrDomain(heap_obj));
+  return true;
+}
+
 void semantically_inline_method(
     IRCode* callee_code,
     const IRInstruction* insn,
@@ -779,9 +888,9 @@ void FixpointIterator::analyze_node(const NodeId& block,
  */
 
 /*
- * If we can determine that a branch is not taken based on the constants in the
- * environment, set the environment to bottom upon entry into the unreachable
- * block.
+ * If we can determine that a branch is not taken based on the constants in
+ * the environment, set the environment to bottom upon entry into the
+ * unreachable block.
  */
 static void analyze_if(const IRInstruction* insn,
                        ConstantEnvironment* env,

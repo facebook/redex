@@ -127,9 +127,10 @@ class LocalArrayAnalyzer final
 };
 
 /*
- * Handle static fields in <clinit> methods. Since class initializers must (in
- * most cases) complete running before any other piece of code can modify these
- * fields, we can treat them as non-escaping while analyzing these methods.
+ * Handle static fields in <clinit> methods. Since class method_initializers
+ * must (in most cases) complete running before any other piece of code can
+ * modify these fields, we can treat them as non-escaping while analyzing these
+ * methods.
  */
 class ClinitFieldAnalyzer final
     : public InstructionAnalyzerBase<ClinitFieldAnalyzer,
@@ -196,6 +197,67 @@ class EnumFieldAnalyzer final
                            const IRInstruction*,
                            ConstantEnvironment*);
   static bool analyze_invoke(const EnumFieldAnalyzerState&,
+                             const IRInstruction*,
+                             ConstantEnvironment*);
+};
+
+/**
+ * Specify how an immutatble field is initialized through function call.
+ * For instance, a boxed integer is usually constructed through
+ * `Integer.valueOf(I)` invocation with a primitive value, the primitive value
+ * can be retrieved through `Integer.intValue()`.
+ */
+struct ImmutableAttributeAnalyzerState {
+  struct Initializer {
+    ImmutableAttr::Attr attr;
+    size_t insn_src_id_of_attr;
+    // The object is passed in as a source register of the method invocation,
+    // like `this` pointer of constructor.
+    boost::optional<size_t> insn_src_id_of_obj = boost::none;
+    // The object is the return value of the method. Example, Integer.valueOf(I)
+    bool obj_is_dest() const { return insn_src_id_of_obj == boost::none; }
+
+    explicit Initializer(DexMethod* method_attr) : attr(method_attr) {}
+    explicit Initializer(DexField* field_attr) : attr(field_attr) {}
+
+    Initializer& set_src_id_of_attr(size_t id) {
+      insn_src_id_of_attr = id;
+      return *this;
+    }
+    Initializer& set_obj_to_dest() {
+      insn_src_id_of_obj = boost::none;
+      return *this;
+    }
+    Initializer& set_src_id_of_obj(size_t id) {
+      insn_src_id_of_obj = id;
+      return *this;
+    }
+  };
+
+  std::unordered_map<DexMethod*, std::vector<Initializer>> method_initializers;
+  std::unordered_set<DexMethod*> attribute_methods;
+
+  ImmutableAttributeAnalyzerState();
+
+  Initializer& add_initializer(DexMethod* initialize_method, DexMethod* attr);
+};
+
+class ImmutableAttributeAnalyzer final
+    : public InstructionAnalyzerBase<ImmutableAttributeAnalyzer,
+                                     ConstantEnvironment,
+                                     ImmutableAttributeAnalyzerState> {
+  static bool analyze_method_initialization(
+      const ImmutableAttributeAnalyzerState&,
+      const IRInstruction*,
+      ConstantEnvironment*,
+      DexMethod* method);
+  static bool analyze_method_attr(const ImmutableAttributeAnalyzerState&,
+                                  const IRInstruction*,
+                                  ConstantEnvironment*,
+                                  DexMethod* method);
+
+ public:
+  static bool analyze_invoke(const ImmutableAttributeAnalyzerState&,
                              const IRInstruction*,
                              ConstantEnvironment*);
 };

@@ -16,6 +16,7 @@
 #include "DisjointUnionAbstractDomain.h"
 #include "HashedAbstractPartition.h"
 #include "ObjectDomain.h"
+#include "ObjectWithImmutAttr.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "PatriciaTreeSetAbstractDomain.h"
 #include "ReducedProductAbstractDomain.h"
@@ -76,9 +77,20 @@ using ConstantPrimitiveArrayDomain = ConstantArrayDomain<SignedConstantDomain>;
 
 using ConstantObjectDomain = ObjectDomain<ConstantValue>;
 
+/**
+ * This domain stores an object with **immutable** attribution on heap. The
+ * attribution must be immutable, for example, final primitive instance fields
+ * or getter methods of such kind of instance fields are immutable. The fields
+ * are never changed after initialization, even though the object may
+ * escape.
+ */
+using ObjectWithImmutAttrDomain =
+    sparta::ConstantAbstractDomain<ObjectWithImmutAttr>;
+
 using HeapValue =
     sparta::DisjointUnionAbstractDomain<ConstantPrimitiveArrayDomain,
-                                        ConstantObjectDomain>;
+                                        ConstantObjectDomain,
+                                        ObjectWithImmutAttrDomain>;
 
 using ConstantHeap = sparta::PatriciaTreeMapAbstractEnvironment<
     AbstractHeapPointer::ConstantType,
