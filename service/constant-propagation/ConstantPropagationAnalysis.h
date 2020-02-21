@@ -236,10 +236,12 @@ struct ImmutableAttributeAnalyzerState {
 
   std::unordered_map<DexMethod*, std::vector<Initializer>> method_initializers;
   std::unordered_set<DexMethod*> attribute_methods;
+  std::unordered_set<DexField*> attribute_fields;
 
   ImmutableAttributeAnalyzerState();
 
   Initializer& add_initializer(DexMethod* initialize_method, DexMethod* attr);
+  Initializer& add_initializer(DexMethod* initialize_method, DexField* attr);
 };
 
 class ImmutableAttributeAnalyzer final
@@ -260,6 +262,9 @@ class ImmutableAttributeAnalyzer final
   static bool analyze_invoke(const ImmutableAttributeAnalyzerState&,
                              const IRInstruction*,
                              ConstantEnvironment*);
+  static bool analyze_iget(const ImmutableAttributeAnalyzerState&,
+                           const IRInstruction* insn,
+                           ConstantEnvironment* env);
 };
 
 struct BoxedBooleanAnalyzerState {

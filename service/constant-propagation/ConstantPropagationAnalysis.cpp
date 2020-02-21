@@ -713,6 +713,15 @@ ImmutableAttributeAnalyzerState::add_initializer(DexMethod* initialize_method,
   return initializers.back();
 }
 
+ImmutableAttributeAnalyzerState::Initializer&
+ImmutableAttributeAnalyzerState::add_initializer(DexMethod* initialize_method,
+                                                 DexField* attr) {
+  attribute_fields.insert(attr);
+  auto& initializers = method_initializers[initialize_method];
+  initializers.push_back(Initializer(attr));
+  return initializers.back();
+}
+
 ImmutableAttributeAnalyzerState::ImmutableAttributeAnalyzerState() {
   // clang-format off
   // Integer can be initialized throuth
@@ -724,6 +733,36 @@ ImmutableAttributeAnalyzerState::ImmutableAttributeAnalyzerState() {
   add_initializer(integer_valueOf, integer_intValue)
       .set_src_id_of_attr(0)
       .set_obj_to_dest();
+}
+
+bool ImmutableAttributeAnalyzer::analyze_iget(
+    const ImmutableAttributeAnalyzerState& state,
+    const IRInstruction* insn,
+    ConstantEnvironment* env) {
+  auto field_ref = insn->get_field();
+  DexField* field = resolve_field(field_ref, FieldSearch::Instance);
+  if (!field) {
+    field = static_cast<DexField*>(field_ref);
+  }
+  if (!state.attribute_fields.count(field)) {
+    return false;
+  }
+  auto heap_obj = env->get_pointee<ObjectWithImmutAttrDomain>(insn->src(0));
+  if (heap_obj.is_top()) {
+    return false;
+  }
+  auto value = heap_obj.get_constant()->get_value(field);
+  if (value && !value->is_top()) {
+    if (const auto& string_value = value->maybe_get<StringDomain>()) {
+      env->set(RESULT_REGISTER, *string_value);
+      return true;
+    } else if (const auto& signed_value =
+                   value->maybe_get<SignedConstantDomain>()) {
+      env->set(RESULT_REGISTER, *signed_value);
+      return true;
+    }
+  }
+  return false;
 }
 
 bool ImmutableAttributeAnalyzer::analyze_invoke(
