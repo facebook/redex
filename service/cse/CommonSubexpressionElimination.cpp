@@ -287,7 +287,8 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
       // If we are reading a final field...
       if (location.has_field() && is_final(location.get_field()) &&
           !root(location.get_field()) && can_rename(location.get_field()) &&
-          can_delete(location.get_field())) {
+          can_delete(location.get_field()) &&
+          !location.get_field()->is_external()) {
         // ... and we are not analyzing a method that is a corresponding
         // constructor or static initializer of the declaring type of the
         // field ...
