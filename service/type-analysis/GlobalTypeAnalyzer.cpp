@@ -45,7 +45,7 @@ void initialize_field_env(const WholeProgramState& wps,
 
   if (traceEnabled(TYPE, 5) && populated) {
     std::ostringstream out;
-    out << env;
+    out << env.get_field_environment();
     TRACE(TYPE, 5, "initialized field env %s", out.str().c_str());
   }
 }

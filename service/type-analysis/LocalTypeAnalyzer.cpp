@@ -25,6 +25,9 @@ bool field_get_helper(std::unordered_set<DexField*>* written_fields,
   }
   if (written_fields->count(field)) {
     env->set(ir_analyzer::RESULT_REGISTER, env->get(field));
+  } else {
+    // Reset RESULT_REGISTER.
+    env->set(ir_analyzer::RESULT_REGISTER, DexTypeDomain::top());
   }
   return true;
 }

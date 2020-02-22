@@ -26,12 +26,11 @@ void set_sfields_in_partition(const DexClass* cls,
   for (auto& field : cls->get_sfields()) {
     auto value = env.get(field);
     if (!value.is_top()) {
-      TRACE(TYPE, 2, "%s has value %s after <clinit> or <init>", SHOW(field),
+      TRACE(TYPE, 2, "%s has value %s after <clinit>", SHOW(field),
             SHOW(value));
       always_assert(field->get_class() == cls->get_type());
     } else {
-      TRACE(TYPE, 2, "%s has unknown value after <clinit> or <init>",
-            SHOW(field));
+      TRACE(TYPE, 2, "%s has unknown value after <clinit>", SHOW(field));
     }
     field_partition->set(field, value);
   }
@@ -85,6 +84,10 @@ void WholeProgramState::collect(const Scope& scope,
   ConcurrentMap<const DexField*, std::vector<DexTypeDomain>> fields_tmp;
   ConcurrentMap<const DexMethod*, std::vector<DexTypeDomain>> methods_tmp;
   walk::parallel::methods(scope, [&](DexMethod* method) {
+    if (method::is_clinit(method)) {
+      // No need to re-analyze clinits.
+      return;
+    }
     IRCode* code = method->get_code();
     if (code == nullptr) {
       return;
