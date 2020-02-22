@@ -103,6 +103,22 @@ class GlobalTypeAnalyzer : public sparta::ParallelMonotonicFixpointIterator<
       ArgumentTypeEnvironment args) const;
 };
 
+class GlobalTypeAnalysis {
+
+ public:
+  GlobalTypeAnalysis() : m_max_global_analysis_iteration(10) {}
+
+  void run(Scope& scope) { analyze(scope); }
+
+  /*
+   * Exposed for testing purposes.
+   */
+  std::unique_ptr<GlobalTypeAnalyzer> analyze(const Scope&);
+
+ private:
+  size_t m_max_global_analysis_iteration{0};
+};
+
 } // namespace global
 
 } // namespace type_analyzer

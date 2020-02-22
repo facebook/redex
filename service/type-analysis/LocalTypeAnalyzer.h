@@ -22,21 +22,29 @@ using namespace ir_analyzer;
 class LocalTypeAnalyzer final
     : public ir_analyzer::BaseIRAnalyzer<DexTypeEnvironment> {
  public:
-  LocalTypeAnalyzer(const cfg::ControlFlowGraph& cfg,
-                    InstructionAnalyzer<DexTypeEnvironment> insn_analyer)
+  LocalTypeAnalyzer(
+      const cfg::ControlFlowGraph& cfg,
+      InstructionAnalyzer<DexTypeEnvironment> insn_analyer,
+      std::unique_ptr<std::unordered_set<DexField*>> written_fields)
       : ir_analyzer::BaseIRAnalyzer<DexTypeEnvironment>(cfg),
-        m_insn_analyzer(std::move(insn_analyer)) {}
+        m_insn_analyzer(std::move(insn_analyer)) {
+    m_written_fields = std::move(written_fields);
+  }
 
   void analyze_instruction(const IRInstruction* insn,
                            DexTypeEnvironment* current_state) const override;
 
  private:
   InstructionAnalyzer<DexTypeEnvironment> m_insn_analyzer;
+  /*
+   * Tracking the fields referenced by the method that have been written to.
+   * It shares the same life time with the LocalTypeAnalyzer.
+   */
+  std::unique_ptr<std::unordered_set<DexField*>> m_written_fields;
 };
 
-class InstructionTypeAnalyzer final
-    : public InstructionAnalyzerBase<InstructionTypeAnalyzer,
-                                     DexTypeEnvironment> {
+class RegisterTypeAnalyzer final
+    : public InstructionAnalyzerBase<RegisterTypeAnalyzer, DexTypeEnvironment> {
  public:
   static bool analyze_move(const IRInstruction* insn, DexTypeEnvironment* env);
 
@@ -54,6 +62,26 @@ class InstructionTypeAnalyzer final
 
   static bool analyze_filled_new_array(const IRInstruction* insn,
                                        DexTypeEnvironment* env);
+};
+
+class FieldTypeAnalyzer final
+    : public InstructionAnalyzerBase<
+          FieldTypeAnalyzer,
+          DexTypeEnvironment,
+          std::unordered_set<DexField*>* /* written fields */> {
+ public:
+  static bool analyze_iget(std::unordered_set<DexField*>* written_fields,
+                           const IRInstruction* insn,
+                           DexTypeEnvironment* env);
+  static bool analyze_iput(std::unordered_set<DexField*>* written_fields,
+                           const IRInstruction* insn,
+                           DexTypeEnvironment* env);
+  static bool analyze_sget(std::unordered_set<DexField*>* written_fields,
+                           const IRInstruction* insn,
+                           DexTypeEnvironment* env);
+  static bool analyze_sput(std::unordered_set<DexField*>* written_fields,
+                           const IRInstruction* insn,
+                           DexTypeEnvironment* env);
 };
 
 } // namespace local

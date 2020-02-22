@@ -7,6 +7,51 @@
 
 #include "GlobalTypeAnalyzer.h"
 
+#include "MethodOverrideGraph.h"
+#include "Resolver.h"
+#include "Walkers.h"
+
+namespace mog = method_override_graph;
+
+using namespace type_analyzer;
+
+namespace {
+
+/*
+ * For fields accessed by the method, populate the FieldTypeEnvironment with the
+ * values from WholeProgramState.
+ */
+void initialize_field_env(const WholeProgramState& wps,
+                          const IRCode* code,
+                          DexTypeEnvironment& env,
+                          std::unordered_set<DexField*>& written_fields) {
+  bool populated = false;
+  for (auto& mie : InstructionIterable(code)) {
+    auto insn = mie.insn;
+    if (!insn->has_field()) {
+      continue;
+    }
+    auto field = resolve_field(insn->get_field());
+    if (field == nullptr) {
+      continue;
+    }
+    auto type = wps.get_field_type(field);
+    if (!type.is_top()) {
+      env.set(field, type);
+      written_fields.insert(field);
+      populated = true;
+    }
+  }
+
+  if (traceEnabled(TYPE, 5) && populated) {
+    std::ostringstream out;
+    out << env;
+    TRACE(TYPE, 5, "initialized field env %s", out.str().c_str());
+  }
+}
+
+} // namespace
+
 namespace type_analyzer {
 
 namespace global {
@@ -81,13 +126,15 @@ GlobalTypeAnalyzer::get_local_analysis(const DexMethod* method) const {
 }
 
 using CombinedAnalyzer =
-    InstructionAnalyzerCombiner<local::InstructionTypeAnalyzer,
-                                WholeProgramAwareAnalyzer>;
+    InstructionAnalyzerCombiner<WholeProgramAwareAnalyzer,
+                                local::RegisterTypeAnalyzer,
+                                local::FieldTypeAnalyzer>;
 
 std::unique_ptr<local::LocalTypeAnalyzer> GlobalTypeAnalyzer::analyze_method(
     const DexMethod* method,
     const WholeProgramState& wps,
     ArgumentTypeEnvironment args) const {
+  TRACE(TYPE, 5, "[global] analyzing %s", SHOW(method));
   always_assert(method->get_code() != nullptr);
   auto& code = *method->get_code();
   // Currently, our callgraph does not include calls to non-devirtualizable
@@ -100,13 +147,55 @@ std::unique_ptr<local::LocalTypeAnalyzer> GlobalTypeAnalyzer::analyze_method(
   }
 
   auto env = env_with_params(&code, args);
-  TRACE(TYPE, 5, "[global] analyzing %s", SHOW(method));
+  auto written_fields = std::make_unique<std::unordered_set<DexField*>>();
+  auto* wf_ptr = written_fields.get();
+  if (!method::is_clinit(method)) {
+    initialize_field_env(wps, &code, env, *written_fields);
+  }
   TRACE(TYPE, 5, "%s", SHOW(code.cfg()));
   auto local_ta = std::make_unique<local::LocalTypeAnalyzer>(
-      code.cfg(), CombinedAnalyzer(nullptr, &wps));
+      code.cfg(),
+      CombinedAnalyzer(&wps, nullptr, wf_ptr),
+      std::move(written_fields));
   local_ta->run(env);
 
   return local_ta;
+}
+
+std::unique_ptr<GlobalTypeAnalyzer> GlobalTypeAnalysis::analyze(
+    const Scope& scope) {
+  call_graph::Graph cg = call_graph::single_callee_graph(scope);
+  // Rebuild all CFGs here -- this should be more efficient than doing them
+  // within FixpointIterator::analyze_node(), since that can get called
+  // multiple times for a given method
+  walk::parallel::code(scope, [](DexMethod*, IRCode& code) {
+    code.build_cfg(/* editable */ false);
+    code.cfg().calculate_exit_block();
+  });
+  // Run the bootstrap. All field value and method return values are
+  // represented by Top.
+  TRACE(TYPE, 2, "[global] Bootstrap run");
+  auto gta = std::make_unique<GlobalTypeAnalyzer>(cg);
+  gta->run({{CURRENT_PARTITION_LABEL, ArgumentTypeEnvironment()}});
+  auto non_true_virtuals = mog::get_non_true_virtuals(scope);
+
+  for (size_t i = 0; i < m_max_global_analysis_iteration; ++i) {
+    // Build an approximation of all the field values and method return values.
+    TRACE(TYPE, 2, "[global] Collecting WholeProgramState");
+    auto wps =
+        std::make_unique<WholeProgramState>(scope, *gta, non_true_virtuals);
+    // If this approximation is not better than the previous one, we are done.
+    if (gta->get_whole_program_state().leq(*wps)) {
+      break;
+    }
+    // Use the refined WholeProgramState to propagate more constants via
+    // the stack and registers.
+    TRACE(TYPE, 2, "[global] Start a new global analysis run");
+    gta->set_whole_program_state(std::move(wps));
+    gta->run({{CURRENT_PARTITION_LABEL, ArgumentTypeEnvironment()}});
+  }
+
+  return gta;
 }
 
 } // namespace global

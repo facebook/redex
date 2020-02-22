@@ -32,7 +32,9 @@ class WholeProgramState {
   // By default, the field and method partitions are initialized to Bottom.
   WholeProgramState() = default;
 
-  WholeProgramState(const Scope&, const global::GlobalTypeAnalyzer&);
+  WholeProgramState(const Scope&,
+                    const global::GlobalTypeAnalyzer&,
+                    const std::unordered_set<DexMethod*>& non_true_virtuals);
 
   void set_to_top() {
     m_field_partition.set_to_top();
@@ -45,19 +47,20 @@ class WholeProgramState {
   }
 
   /*
-   * Returns our best approximation of the field value.
+   * Returns our best approximation of the field type.
    *
    * It will never return Bottom.
    */
   DexTypeDomain get_field_type(const DexField* field) const {
-    if (!m_known_fields.count(field)) {
+    auto domain = m_field_partition.get(field);
+    if (domain.is_bottom()) {
       return DexTypeDomain::top();
     }
-    return m_field_partition.get(field);
+    return domain;
   }
 
   /*
-   * Returns our best static approximation of the return value.
+   * Returns our best static approximation of the return type.
    *
    * This may return Bottom to indicate that a method never returns (i.e. it
    * throws or loops indefinitely).
@@ -75,7 +78,6 @@ class WholeProgramState {
   void collect_field_types(
       const IRInstruction* insn,
       const DexTypeEnvironment& env,
-      const DexType* clinit_cls,
       ConcurrentMap<const DexField*, std::vector<DexTypeDomain>>* field_tmp);
 
   void collect_return_types(
@@ -84,8 +86,7 @@ class WholeProgramState {
       const DexMethod* method,
       ConcurrentMap<const DexMethod*, std::vector<DexTypeDomain>>* method_tmp);
 
-  // Unknown fields and methods will be treated as containing / returning Top.
-  std::unordered_set<const DexField*> m_known_fields;
+  // Unknown methods will be treated as containing / returning Top.
   std::unordered_set<const DexMethod*> m_known_methods;
 
   DexTypeFieldPartition m_field_partition;
@@ -98,14 +99,6 @@ class WholeProgramAwareAnalyzer final
                                      const WholeProgramState*> {
 
  public:
-  static bool analyze_sget(const WholeProgramState* whole_program_state,
-                           const IRInstruction* insn,
-                           DexTypeEnvironment* env);
-
-  static bool analyze_iget(const WholeProgramState* whole_program_state,
-                           const IRInstruction* insn,
-                           DexTypeEnvironment* env);
-
   static bool analyze_invoke(const WholeProgramState* whole_program_state,
                              const IRInstruction* insn,
                              DexTypeEnvironment* env);

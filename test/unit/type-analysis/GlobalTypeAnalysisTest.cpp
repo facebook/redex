@@ -24,7 +24,7 @@ struct GlobalTypeAnalysisTest : public RedexTest {
     creator.set_super(type::java_lang_Object());
 
     auto m_init = assembler::method_from_string(R"(
-      (method (public static) "LO;.<init>:()V"
+      (method (public constructor) "LO;.<init>:()V"
        (
         (return-void)
        )
@@ -150,4 +150,118 @@ TEST_F(GlobalTypeAnalysisTest, ArgumentPassingJoinWithNullTest) {
   EXPECT_TRUE(bar_arg_env.get(0).is_top());
   EXPECT_EQ(bar_arg_env,
             ArgumentTypeEnvironment({{1, get_type_domain("LO;")}}));
+}
+
+TEST_F(GlobalTypeAnalysisTest, ReturnTypeTest) {
+  Scope scope;
+  prepare_scope(scope);
+
+  auto cls_a = DexType::make_type("LA;");
+  ClassCreator creator(cls_a);
+  creator.set_super(type::java_lang_Object());
+
+  auto meth_bar = assembler::method_from_string(R"(
+    (method (public static) "LA;.bar:()LO;"
+     (
+      (new-instance "LO;")
+      (move-result-pseudo-object v1)
+      (invoke-direct (v1) "LO;.<init>:()V")
+      (return-object v1)
+     )
+    )
+  )");
+  creator.add_method(meth_bar);
+
+  auto meth_foo = assembler::method_from_string(R"(
+    (method (public static) "LA;.foo:()V"
+     (
+      (invoke-static () "LA;.bar:()LO;")
+      (move-result-object v0)
+      (return-void)
+     )
+    )
+  )");
+  meth_foo->rstate.set_root();
+  creator.add_method(meth_foo);
+  scope.push_back(creator.create());
+
+  call_graph::Graph cg = call_graph::single_callee_graph(scope);
+  walk::code(scope, [](DexMethod*, IRCode& code) {
+    code.build_cfg(/* editable */ false);
+  });
+
+  GlobalTypeAnalysis analysis;
+  auto gta = analysis.analyze(scope);
+  auto wps = gta->get_whole_program_state();
+  EXPECT_EQ(wps.get_return_type(meth_bar), get_type_domain("LO;"));
+
+  auto lta = gta->get_local_analysis(meth_foo);
+  auto code = meth_foo->get_code();
+  auto bar_exit_env = lta->get_exit_state_at(code->cfg().exit_block());
+  EXPECT_EQ(bar_exit_env.get_reg_environment().get(0), get_type_domain("LO;"));
+}
+
+TEST_F(GlobalTypeAnalysisTest, SimpleFieldTypeTest) {
+  Scope scope;
+  prepare_scope(scope);
+
+  auto cls_a = DexType::make_type("LA;");
+  ClassCreator creator(cls_a);
+  creator.set_super(type::java_lang_Object());
+
+  auto field_1 = DexField::make_field("LA;.f1:LO;")->make_concrete(ACC_PUBLIC);
+  creator.add_field(field_1);
+
+  auto meth_init = assembler::method_from_string(R"(
+    (method (public constructor) "LA;.<init>:()V"
+     (
+      (load-param-object v1) ; 'this' argument
+      (new-instance "LO;")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0) "LO;.<init>:()V")
+      (iput-object v0 v1 "LA;.f1:LO;")
+      (return-void)
+     )
+    )
+  )");
+  creator.add_method(meth_init);
+
+  auto meth_bar = assembler::method_from_string(R"(
+    (method (public) "LA;.bar:()LO;"
+     (
+      (load-param-object v1) ; 'this' argument
+      (iget-object v1 "LA;.f1:LO;")
+      (move-result-pseudo-object v0)
+      (return-object v0)
+     )
+    )
+  )");
+  creator.add_method(meth_bar);
+
+  auto meth_foo = assembler::method_from_string(R"(
+    (method (public static) "LA;.foo:()V"
+     (
+      (new-instance "LA;")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0) "LA;.<init>:()V")
+      (invoke-virtual (v0) "LA;.bar:()LO;")
+      (move-result-object v1)
+      (return-void)
+     )
+    )
+  )");
+  meth_foo->rstate.set_root();
+  creator.add_method(meth_foo);
+  scope.push_back(creator.create());
+
+  call_graph::Graph cg = call_graph::single_callee_graph(scope);
+  walk::code(scope, [](DexMethod*, IRCode& code) {
+    code.build_cfg(/* editable */ false);
+  });
+
+  GlobalTypeAnalysis analysis;
+  auto gta = analysis.analyze(scope);
+  auto wps = gta->get_whole_program_state();
+  EXPECT_EQ(wps.get_field_type(field_1), get_type_domain("LO;"));
+  EXPECT_EQ(wps.get_return_type(meth_bar), get_type_domain("LO;"));
 }

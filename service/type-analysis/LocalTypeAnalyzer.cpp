@@ -10,6 +10,46 @@
 #include <ostream>
 #include <sstream>
 
+#include "Resolver.h"
+
+using namespace type_analyzer;
+
+namespace {
+
+bool field_get_helper(std::unordered_set<DexField*>* written_fields,
+                      const IRInstruction* insn,
+                      DexTypeEnvironment* env) {
+  auto field = resolve_field(insn->get_field());
+  if (field == nullptr) {
+    return false;
+  }
+  if (written_fields->count(field)) {
+    env->set(ir_analyzer::RESULT_REGISTER, env->get(field));
+  }
+  return true;
+}
+
+bool field_put_helper(std::unordered_set<DexField*>* written_fields,
+                      const IRInstruction* insn,
+                      DexTypeEnvironment* env) {
+  auto field = resolve_field(insn->get_field());
+  if (field == nullptr) {
+    return false;
+  }
+  auto temp_type = env->get(field);
+  if (written_fields->count(field)) {
+    // Has either been written to locally or by another method.
+    temp_type.join_with(env->get(insn->src(0)));
+    env->set(field, temp_type);
+  } else {
+    env->set(field, env->get(insn->src(0)));
+    written_fields->insert(field);
+  }
+  return true;
+}
+
+} // namespace
+
 namespace type_analyzer {
 
 namespace local {
@@ -42,8 +82,8 @@ void LocalTypeAnalyzer::analyze_instruction(const IRInstruction* insn,
   }
 }
 
-bool InstructionTypeAnalyzer::analyze_move(const IRInstruction* insn,
-                                           DexTypeEnvironment* env) {
+bool RegisterTypeAnalyzer::analyze_move(const IRInstruction* insn,
+                                        DexTypeEnvironment* env) {
   if (insn->opcode() != OPCODE_MOVE_OBJECT) {
     return false;
   }
@@ -52,8 +92,8 @@ bool InstructionTypeAnalyzer::analyze_move(const IRInstruction* insn,
   return true;
 }
 
-bool InstructionTypeAnalyzer::analyze_move_result(const IRInstruction* insn,
-                                                  DexTypeEnvironment* env) {
+bool RegisterTypeAnalyzer::analyze_move_result(const IRInstruction* insn,
+                                               DexTypeEnvironment* env) {
   if (insn->opcode() != OPCODE_MOVE_RESULT_OBJECT &&
       insn->opcode() != IOPCODE_MOVE_RESULT_PSEUDO_OBJECT) {
     return false;
@@ -62,30 +102,58 @@ bool InstructionTypeAnalyzer::analyze_move_result(const IRInstruction* insn,
   return true;
 }
 
-bool InstructionTypeAnalyzer::analyze_move_exception(const IRInstruction* insn,
-                                                     DexTypeEnvironment* env) {
+bool RegisterTypeAnalyzer::analyze_move_exception(const IRInstruction* insn,
+                                                  DexTypeEnvironment* env) {
   // We don't know where to grab the type of the just-caught exception.
   // Simply set to j.l.Throwable here.
   set_dex_type(env, insn->dest(), type::java_lang_Throwable());
   return true;
 }
 
-bool InstructionTypeAnalyzer::analyze_new_instance(const IRInstruction* insn,
-                                                   DexTypeEnvironment* env) {
-  set_dex_type(env, RESULT_REGISTER, insn->get_type());
-  return true;
-}
-
-bool InstructionTypeAnalyzer::analyze_new_array(const IRInstruction* insn,
+bool RegisterTypeAnalyzer::analyze_new_instance(const IRInstruction* insn,
                                                 DexTypeEnvironment* env) {
   set_dex_type(env, RESULT_REGISTER, insn->get_type());
   return true;
 }
 
-bool InstructionTypeAnalyzer::analyze_filled_new_array(
-    const IRInstruction* insn, DexTypeEnvironment* env) {
+bool RegisterTypeAnalyzer::analyze_new_array(const IRInstruction* insn,
+                                             DexTypeEnvironment* env) {
   set_dex_type(env, RESULT_REGISTER, insn->get_type());
   return true;
+}
+
+bool RegisterTypeAnalyzer::analyze_filled_new_array(const IRInstruction* insn,
+                                                    DexTypeEnvironment* env) {
+  set_dex_type(env, RESULT_REGISTER, insn->get_type());
+  return true;
+}
+
+bool FieldTypeAnalyzer::analyze_iget(
+    std::unordered_set<DexField*>* written_fields,
+    const IRInstruction* insn,
+    DexTypeEnvironment* env) {
+  return field_get_helper(written_fields, insn, env);
+}
+
+bool FieldTypeAnalyzer::analyze_iput(
+    std::unordered_set<DexField*>* written_fields,
+    const IRInstruction* insn,
+    DexTypeEnvironment* env) {
+  return field_put_helper(written_fields, insn, env);
+}
+
+bool FieldTypeAnalyzer::analyze_sget(
+    std::unordered_set<DexField*>* written_fields,
+    const IRInstruction* insn,
+    DexTypeEnvironment* env) {
+  return field_get_helper(written_fields, insn, env);
+}
+
+bool FieldTypeAnalyzer::analyze_sput(
+    std::unordered_set<DexField*>* written_fields,
+    const IRInstruction* insn,
+    DexTypeEnvironment* env) {
+  return field_put_helper(written_fields, insn, env);
 }
 
 } // namespace local
