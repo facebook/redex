@@ -130,7 +130,7 @@ class MaxDepthFunctionAnalyzer : public Intraprocedural {
         m_context(context),
         m_domain(0) {}
 
-  virtual void analyze() override {
+  void analyze() override {
     if (!m_method) {
       return;
     }
@@ -167,7 +167,7 @@ class MaxDepthFunctionAnalyzer : public Intraprocedural {
     }
   }
 
-  virtual void summarize() override {
+  void summarize() override {
     if (!m_method) {
       return;
     }

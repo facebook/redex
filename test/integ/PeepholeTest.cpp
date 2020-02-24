@@ -133,7 +133,7 @@ class PeepholeTest : public ::testing::Test {
     manager.set_testing_mode();
   }
 
-  virtual void SetUp() override {
+  void SetUp() override {
     saved_context = g_redex;
     g_redex = new RedexContext();
     const char* dexfile = std::getenv("dexfile");
@@ -149,7 +149,7 @@ class PeepholeTest : public ::testing::Test {
     ASSERT_NE(nullptr, dex_class);
   }
 
-  virtual void TearDown() override {
+  void TearDown() override {
     delete g_redex;
     g_redex = saved_context;
   }

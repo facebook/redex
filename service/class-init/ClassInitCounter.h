@@ -212,11 +212,11 @@ class ObjectUses : public TrackedUses {
 
   void combine_paths(const TrackedUses& other);
   void merge(const TrackedUses& other);
-  bool consistent_with(const TrackedUses& other);
+  bool consistent_with(const TrackedUses& other) override;
 
   bool same_instr(const ObjectUses& other) const { return m_id == other.m_id; }
 
-  size_t hash() const { return m_id->hash(); }
+  size_t hash() const override { return m_id->hash(); }
   IRInstruction* get_instr() const { return m_id; }
   DexType* get_represents_typ() const { return m_class_used; }
 
@@ -239,8 +239,8 @@ class MergedUses : public TrackedUses {
 
   void combine_paths(const TrackedUses& other);
   void merge(const TrackedUses& other);
-  bool consistent_with(const TrackedUses& other);
-  size_t hash() const;
+  bool consistent_with(const TrackedUses& other) override;
+  size_t hash() const override;
   bool same_instrs(const MergedUses& other) const;
   void set_is_nullable() { m_includes_nullable = true; }
 

@@ -1,2 +1,5 @@
-Checks: '-*,modernize-make-shared,performance-*,-performance-inefficient-string-concatenation,readability-const-return-type,readability-container-size-empty,misc-definitions-in-headers'
+Checks: '-*,modernize-make-shared,performance-*,-performance-inefficient-string-concatenation,readability-const-return-type,readability-container-size-empty,misc-definitions-in-headers,modernize-use-override'
 WarningsAsErrors: '*'
+CheckOptions:
+  - key: modernize-use-override.IgnoreDestructors
+    value: 1
