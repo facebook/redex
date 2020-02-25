@@ -1183,6 +1183,13 @@ std::string show_deobfuscated(const DexFieldRef* ref) {
   return show(ref);
 }
 
+std::string show_deobfuscated_no_cache(const DexMethodRef* ref) {
+  string_builders::StaticStringBuilder<5> b;
+  b << show_deobfuscated(ref->get_class()) << "." << show(ref->get_name())
+    << ":" << show_deobfuscated(ref->get_proto());
+  return b.str();
+}
+
 std::string show_deobfuscated(const DexMethodRef* ref) {
   if (ref->is_def()) {
     const DexMethod* m = static_cast<const DexMethod*>(ref);
@@ -1192,7 +1199,7 @@ std::string show_deobfuscated(const DexMethodRef* ref) {
     }
   }
 
-  return show(ref);
+  return show_deobfuscated_no_cache(ref);
 }
 
 std::string show_deobfuscated(const IRInstruction* insn) {
