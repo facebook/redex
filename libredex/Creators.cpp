@@ -636,7 +636,7 @@ MethodCreator::MethodCreator(DexType* cls,
   }
   method->make_concrete(
       access, !(access & (ACC_STATIC | ACC_PRIVATE | ACC_CONSTRUCTOR)));
-  method->set_deobfuscated_name(show(method));
+  method->set_deobfuscated_name(show_deobfuscated(method));
   method->set_code(std::make_unique<IRCode>(method, 0));
   meth_code = method->get_code();
   if (with_debug_item) {
