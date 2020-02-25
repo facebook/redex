@@ -85,6 +85,22 @@ Scope build_class_scope(const DexStoresVector& stores) {
   return build_class_scope(DexStoreClassesIterator(stores));
 }
 
+Scope build_class_scope_for_select_stores(
+    const DexStoresVector& stores,
+    const std::unordered_set<std::string>& store_names) {
+  Scope v;
+  for (auto const& store : stores) {
+    if (store_names.count(store.get_name())) {
+      for (auto& dex : store.get_dexen()) {
+        for (auto& clazz : dex) {
+          v.push_back(clazz);
+        }
+      }
+    }
+  }
+  return v;
+}
+
 void post_dexen_changes(const Scope& v, DexStoresVector& stores) {
   DexStoreClassesIterator iter(stores);
   post_dexen_changes(v, iter);
