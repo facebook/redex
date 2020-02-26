@@ -12,11 +12,15 @@ class ScopedCommandProfiling final {
  public:
   explicit ScopedCommandProfiling(
       boost::optional<std::string> cmd,
+      boost::optional<std::string> shutdown_cmd = boost::none,
       boost::optional<std::string> post_cmd = boost::none);
 
   ~ScopedCommandProfiling();
 
  private:
   pid_t m_profiler{-1};
+  // Run this shutdown command to end the profiling, instead of SIGINT
+  boost::optional<std::string> m_shutdown_cmd;
+  // After the profiling process has finished, run this command.
   boost::optional<std::string> m_post_cmd;
 };

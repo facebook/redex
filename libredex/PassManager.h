@@ -99,12 +99,17 @@ class PassManager {
 
   struct ProfilerInfo {
     std::string command;
+    boost::optional<std::string> shutdown_cmd;
     boost::optional<std::string> post_cmd;
     const Pass* pass;
     ProfilerInfo(const std::string& command,
+                 const boost::optional<std::string>& shutdown_cmd,
                  const boost::optional<std::string>& post_cmd,
                  const Pass* pass)
-        : command(command), post_cmd(post_cmd), pass(pass) {}
+        : command(command),
+          shutdown_cmd(shutdown_cmd),
+          post_cmd(post_cmd),
+          pass(pass) {}
   };
 
   boost::optional<ProfilerInfo> m_profiler_info;
