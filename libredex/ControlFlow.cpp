@@ -965,6 +965,12 @@ void ControlFlowGraph::remove_empty_blocks() {
         m_entry_block = succ;
       }
     }
+    if (b == m_entry_block) {
+      // Don't delete the entry block. If it was empty and had a successor,
+      // we'd have replaced it just above.
+      ++it;
+      continue;
+    }
 
     for (const auto& mie : *b) {
       if (mie.type == MFLOW_POSITION) {
