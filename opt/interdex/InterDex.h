@@ -31,7 +31,6 @@ class InterDex {
            bool static_prune_classes,
            bool normal_primary_dex,
            bool force_single_dex,
-           bool emit_scroll_set_marker,
            bool emit_canaries,
            bool minimize_cross_dex_refs,
            const CrossDexRefMinimizerConfig& cross_dex_refs_config,
