@@ -355,7 +355,7 @@ void run_inliner(DexStoresVector& stores,
   MultiMethodInliner inliner(scope, stores, methods, resolver, inliner_config,
                              intra_dex ? IntraDex : InterDex,
                              true_virtual_callers, method_profile_stats,
-                             same_method_implementations,
+                             &same_method_implementations,
                              analyze_and_prune_inits);
   inliner.inline_methods();
 

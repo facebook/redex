@@ -90,7 +90,7 @@ MultiMethodInliner::MultiMethodInliner(
     const CalleeCallerInsns& true_virtual_callers,
     const std::unordered_map<const DexMethodRef*, method_profiles::Stats>&
         method_profile_stats,
-    const std::unordered_map<const DexMethod*, size_t>&
+    const std::unordered_map<const DexMethod*, size_t>*
         same_method_implementations,
     bool analyze_and_prune_inits)
     : resolver(std::move(resolve_fn)),
@@ -1324,8 +1324,12 @@ size_t MultiMethodInliner::get_inlined_cost(const DexMethod* callee) {
 
 size_t MultiMethodInliner::get_same_method_implementations(
     const DexMethod* callee) {
-  auto it = m_same_method_implementations.find(callee);
-  if (it != m_same_method_implementations.end()) {
+  if (m_same_method_implementations == nullptr) {
+    return 1;
+  }
+
+  auto it = m_same_method_implementations->find(callee);
+  if (it != m_same_method_implementations->end()) {
     return it->second;
   }
   return 1;

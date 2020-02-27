@@ -127,8 +127,8 @@ class MultiMethodInliner {
       const CalleeCallerInsns& true_virtual_callers = {},
       const std::unordered_map<const DexMethodRef*, method_profiles::Stats>&
           method_profile_stats = {},
-      const std::unordered_map<const DexMethod*, size_t>&
-          same_method_implementations = {},
+      const std::unordered_map<const DexMethod*, size_t>*
+          same_method_implementations = nullptr,
       bool analyze_and_prune_inits = false);
 
   ~MultiMethodInliner() { delayed_invoke_direct_to_static(); }
@@ -561,7 +561,7 @@ class MultiMethodInliner {
 
   // Represents the size of the largest same-method-implementation group that a
   // method belongs in; the default value is 1.
-  const std::unordered_map<const DexMethod*, size_t>&
+  const std::unordered_map<const DexMethod*, size_t>*
       m_same_method_implementations;
 
   const std::unordered_set<DexMethodRef*> m_pure_methods;
