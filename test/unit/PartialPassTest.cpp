@@ -48,8 +48,12 @@ class PartialPassTest : public RedexTest {
 
   DexStoresVector stores;
 
+  std::unique_ptr<ExamplePartialPass> pass;
+
  public:
   PartialPassTest() : root_store("classes"), module_store("module") {}
+
+  void SetUp() override { pass = std::make_unique<ExamplePartialPass>(); }
 
   void setup_stores() {
     // Effectively clear the root store
@@ -92,7 +96,7 @@ class PartialPassTest : public RedexTest {
   void run_passes(const Json::Value& config) {
     setup_stores();
     ConfigFiles conf(config);
-    const auto& passes = PassRegistry::get().get_passes();
+    std::vector<Pass*> passes{pass.get()};
     PassManager manager(passes, config);
     manager.set_testing_mode();
     manager.run_passes(stores, conf);
@@ -101,16 +105,16 @@ class PartialPassTest : public RedexTest {
 
 TEST_F(PartialPassTest, test_run_pass_on_limited_stores) {
   run_passes(build_config(/* run_on_module_only = */ true));
-  EXPECT_TRUE(s_pass.true_after_bind);
-  EXPECT_EQ(1, s_pass.visited_classes.size());
-  EXPECT_TRUE(s_pass.visited_classes.count(class_in_module));
-  EXPECT_FALSE(s_pass.visited_classes.count(class_in_root_store));
+  EXPECT_TRUE(pass->true_after_bind);
+  EXPECT_EQ(1, pass->visited_classes.size());
+  EXPECT_TRUE(pass->visited_classes.count(class_in_module));
+  EXPECT_FALSE(pass->visited_classes.count(class_in_root_store));
 }
 
 TEST_F(PartialPassTest, test_run_pass_on_all_stores) {
   run_passes(build_config(/* run_on_module_only = */ false));
-  EXPECT_TRUE(s_pass.true_after_bind);
-  EXPECT_EQ(2, s_pass.visited_classes.size());
-  EXPECT_TRUE(s_pass.visited_classes.count(class_in_module));
-  EXPECT_TRUE(s_pass.visited_classes.count(class_in_root_store));
+  EXPECT_TRUE(pass->true_after_bind);
+  EXPECT_EQ(2, pass->visited_classes.size());
+  EXPECT_TRUE(pass->visited_classes.count(class_in_module));
+  EXPECT_TRUE(pass->visited_classes.count(class_in_root_store));
 }
