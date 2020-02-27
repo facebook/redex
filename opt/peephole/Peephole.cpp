@@ -1731,14 +1731,18 @@ class alignas(CACHE_LINE_SIZE) PeepholeOptimizer {
     // so they can match on the same pattern without interfering
     for (size_t i = 0; i < m_matchers.size(); ++i) {
       auto& matcher = m_matchers[i];
-      std::vector<ReplacementItem> deletes;
-      std::vector<ReplacementItem> inserts;
 
       const auto& blocks = cfg.blocks();
+      cfg::CFGMutation mutator(cfg);
+
       for (const auto& block : blocks) {
         // Currently, all patterns do not span over multiple basic blocks. So
         // reset all matching states on visiting every basic block.
         matcher.reset();
+
+        // Overlapping matches are not correctly handled by the current
+        // CFGMutation capabilities.
+        std::unordered_set<IRInstruction*> removed_insns;
 
         for (auto& mie : InstructionIterable(block)) {
           if (!matcher.try_match(mie.insn)) {
@@ -1748,43 +1752,40 @@ class alignas(CACHE_LINE_SIZE) PeepholeOptimizer {
           TRACE(PEEPHOLE, 7, "PATTERN %s MATCHED!",
                 matcher.pattern.name.c_str());
 
-          std::vector<IRInstruction*> empty;
-          for (auto insn : matcher.matched_instructions) {
-            if (opcode::is_move_result_pseudo(insn->opcode())) {
-              continue;
+          // Check that the anchor has not been removed by a previous match.
+          if (removed_insns.count(matcher.matched_instructions[0])) {
+            std::cerr << "WARNING: Overlapping peephole match!";
+            matcher.reset();
+            continue;
+          }
+
+          // First insert before, as we need the anchor.
+          {
+            auto it = cfg.find_insn(matcher.matched_instructions[0], block);
+            redex_assert(!it.is_end());
+            auto replace = matcher.get_replacements();
+            for (const auto& r : replace) {
+              TRACE(PEEPHOLE, 8, "-- %s", SHOW(r));
             }
-            deletes.push_back(ReplacementItem(block, insn, empty));
+            mutator.insert_before(it, replace);
+
+            m_stats_inserted += replace.size();
           }
 
-          auto replace = matcher.get_replacements();
-          for (const auto& r : replace) {
-            TRACE(PEEPHOLE, 8, "-- %s", SHOW(r));
+          // Then remove all the matched instructions.
+          for (auto insn : matcher.matched_instructions) {
+            auto it = cfg.find_insn(insn, block);
+            redex_assert(!it.is_end());
+            mutator.remove(it);
           }
-
-          m_stats_inserted += replace.size();
+          removed_insns.insert(matcher.matched_instructions.begin(),
+                               matcher.matched_instructions.end());
           m_stats_removed += matcher.match_index;
-
-          inserts.emplace_back(block, matcher.matched_instructions[0], replace);
           matcher.reset();
         }
       }
 
-      cfg::CFGMutation mutator(cfg);
-
-      for (const auto& insert : inserts) {
-        auto it = cfg.find_insn(insert.insn, insert.block);
-        if (!it.is_end()) {
-          mutator.insert_before(it, insert.replacement);
-        }
-      }
-
-      for (const auto& del : deletes) {
-        auto it = cfg.find_insn(del.insn, del.block);
-        if (!it.is_end()) {
-          mutator.remove(it);
-        }
-      }
-
+      // Apply the mutator.
       mutator.flush();
     }
 
