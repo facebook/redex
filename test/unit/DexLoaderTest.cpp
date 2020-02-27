@@ -47,14 +47,4 @@ TEST_F(DexLoaderTest, align_ptr) {
   EXPECT_EQ(UINTPTR_MAX_ALIGNED, align_ptr(UINTPTR_MAX_ALIGNED - 2, 4));
   EXPECT_EQ(UINTPTR_MAX_ALIGNED, align_ptr(UINTPTR_MAX_ALIGNED - 1, 4));
   EXPECT_EQ(UINTPTR_MAX_ALIGNED, align_ptr(UINTPTR_MAX_ALIGNED - 0, 4));
-
-  // Not sure if it's safe to assume that UINTPTR_MAX will always be
-  // identical to (uintXX_t)(-1) for some integer width XX, and will always
-  // overflow to 0 whenever aligning some address beyond UINTPTR_MAX_ALIGNED.
-  // But on systems where that is indeed the case, we can test for it:
-  if ((uint8_t*)0 == (uint8_t*)(1U + UINTPTR_MAX)) {
-    for (size_t i = 0; i < (UINTPTR_MAX % 4); ++i) {
-      EXPECT_EQ((uint8_t*)0, align_ptr((uint8_t*)(UINTPTR_MAX - i), 4));
-    }
-  }
 }
