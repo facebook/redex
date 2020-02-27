@@ -88,7 +88,8 @@ TEST_F(LocalPointersTest, simple) {
                                    .set_type(DexType::get_type("LFoo;"))))),
                   Pointee(Eq(*(
                       IRInstruction(IOPCODE_LOAD_PARAM_OBJECT).set_dest(0))))));
-  for (auto insn : exit_env.get_pointers(0).elements()) {
+  auto pointers = exit_env.get_pointers(0);
+  for (auto insn : pointers.elements()) {
     if (insn->opcode() == IOPCODE_LOAD_PARAM_OBJECT ||
         insn->opcode() == OPCODE_NEW_INSTANCE) {
       EXPECT_FALSE(exit_env.may_have_escaped(insn));
