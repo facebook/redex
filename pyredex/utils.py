@@ -14,6 +14,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import zipfile
 from os.path import join
 
 
@@ -123,3 +124,8 @@ def argparse_yes_no_flag(parser, flag_name, on_prefix="", off_prefix="no-", **kw
         default=False,
         **kwargs,
     )
+
+
+def unzip_apk(apk, destination_directory):
+    with zipfile.ZipFile(apk) as z:
+        z.extractall(destination_directory)
