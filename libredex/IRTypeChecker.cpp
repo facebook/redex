@@ -554,7 +554,8 @@ Result check_structure(const DexMethod* method, bool check_no_overwrite_this) {
                                 " without appropriate prefix "
                                 "instruction");
     } else if (insn->has_move_result_pseudo() &&
-               (it == code->end() || !is_move_result_pseudo(*std::next(it)))) {
+               (it == code->end() || std::next(it) == code->end() ||
+                !is_move_result_pseudo(*std::next(it)))) {
       return Result::make_error("Did not find move-result-pseudo after " +
                                 show(*it) + " in \n" + show(code));
     }
