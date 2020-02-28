@@ -174,7 +174,7 @@ TEST_F(ConcurrentContainersTest, concurrentMapTest) {
     for (size_t i = 0; i < sample.size(); ++i) {
       std::string s = std::to_string(sample[i]);
       map.update(
-          s, [&s, i](const std::string& key, uint32_t& value, bool key_exists) {
+          s, [&s](const std::string& key, uint32_t& value, bool key_exists) {
             EXPECT_EQ(s, key);
             EXPECT_TRUE(key_exists);
             ++value;

@@ -233,7 +233,10 @@ TEST(ResTable, AppendNewType) {
     values.push_back(val);
   }
 
-  android::ResTable_config config = {sizeof(android::ResTable_config)};
+  // Initializing the ResTable_config is a pain.
+  android::ResTable_config config;
+  memset(&config, 0, sizeof(android::ResTable_config));
+  config.size = sizeof(android::ResTable_config);
 
   android::Vector<android::ResTable_config> config_vec;
   config_vec.push(config);
