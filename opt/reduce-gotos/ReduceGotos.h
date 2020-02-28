@@ -23,6 +23,7 @@ class ReduceGotosPass : public Pass {
     size_t replaced_gotos_with_returns{0};
     size_t removed_trailing_moves{0};
     size_t inverted_conditional_branches{0};
+    size_t replaced_gotos_with_throws{0};
 
     Stats& operator+=(const Stats&);
   };
