@@ -22,17 +22,24 @@ import sys
 import tempfile
 import timeit
 import zipfile
-from os.path import abspath, basename, dirname, isdir, isfile, join
+from os.path import abspath, dirname, isdir, isfile, join
 from pipes import quote
 
 import pyredex.logger as logger
 import pyredex.unpacker as unpacker
 from pyredex.logger import log
 from pyredex.utils import (
+    LibraryManager,
+    UnpackManager,
+    ZipManager,
     abs_glob,
     argparse_yes_no_flag,
+    dex_glob,
+    ensure_libs_dir,
     find_android_build_tools,
+    get_file_ext,
     make_temp_dir,
+    move_dexen_to_directories,
     remove_comments,
     sign_apk,
     with_temp_cleanup,
@@ -55,8 +62,6 @@ def patch_zip_file():
 patch_zip_file()
 
 timer = timeit.default_timer
-
-per_file_compression = {}
 
 
 def pgize(name):
@@ -478,53 +483,6 @@ def run_redex_binary(state, term_handler):
     log("Dex processing finished in {:.2f} seconds".format(timer() - start))
 
 
-def extract_dex_number(dexfilename):
-    m = re.search(r"(classes|.*-)(\d+)", basename(dexfilename))
-    if m is None:
-        raise Exception("Bad secondary dex name: " + dexfilename)
-    return int(m.group(2))
-
-
-def dex_glob(directory):
-    """
-    Return the dexes in a given directory, with the primary dex first.
-    """
-    primary = join(directory, "classes.dex")
-    if not isfile(primary):
-        raise Exception("No primary dex found")
-
-    secondaries = [
-        d for d in glob.glob(join(directory, "*.dex")) if not d.endswith("classes.dex")
-    ]
-    secondaries.sort(key=extract_dex_number)
-
-    return [primary] + secondaries
-
-
-def move_dexen_to_directories(root, dexpaths):
-    """
-    Move each dex file to its own directory within root and return a list of the
-    new paths. Redex will operate on each dex and put the modified dex into the
-    same directory.
-    """
-    res = []
-    for idx, dexpath in enumerate(dexpaths):
-        dexname = basename(dexpath)
-        dirpath = join(root, "dex" + str(idx))
-        os.mkdir(dirpath)
-        shutil.move(dexpath, dirpath)
-        res.append(join(dirpath, dexname))
-
-    return res
-
-
-def unzip_apk(apk, destination_directory):
-    with zipfile.ZipFile(apk) as z:
-        for info in z.infolist():
-            per_file_compression[info.filename] = info.compress_type
-        z.extractall(destination_directory)
-
-
 def zipalign(unaligned_apk_path, output_apk_path, ignore_zipalign, page_align):
     # Align zip and optionally perform good compression.
     try:
@@ -557,8 +515,8 @@ def zipalign(unaligned_apk_path, output_apk_path, ignore_zipalign, page_align):
     os.remove(unaligned_apk_path)
 
 
-def create_output_apk(
-    extracted_apk_dir,
+def align_and_sign_output_apk(
+    unaligned_apk_path,
     output_apk_path,
     sign,
     keystore,
@@ -567,36 +525,6 @@ def create_output_apk(
     ignore_zipalign,
     page_align,
 ):
-
-    # Remove old signature files
-    for f in abs_glob(extracted_apk_dir, "META-INF/*"):
-        cert_path = join(extracted_apk_dir, f)
-        if isfile(cert_path):
-            os.remove(cert_path)
-
-    directory = make_temp_dir(".redex_unaligned", False)
-    unaligned_apk_path = join(directory, "redex-unaligned.apk")
-
-    if isfile(unaligned_apk_path):
-        os.remove(unaligned_apk_path)
-
-    # Create new zip file
-    with zipfile.ZipFile(unaligned_apk_path, "w") as unaligned_apk:
-        # Need sorted output for deterministic zip file. Sorting `dirnames` will
-        # ensure the tree walk order. Sorting `filenames` will ensure the files
-        # inside the tree.
-        # This scheme uses less memory than collecting all files first.
-        for dirpath, dirnames, filenames in os.walk(extracted_apk_dir):
-            dirnames.sort()
-            for filename in sorted(filenames):
-                filepath = join(dirpath, filename)
-                archivepath = filepath[len(extracted_apk_dir) + 1 :]
-                try:
-                    compress = per_file_compression[archivepath]
-                except KeyError:
-                    compress = zipfile.ZIP_DEFLATED
-                unaligned_apk.write(filepath, archivepath, compress_type=compress)
-
     if isfile(output_apk_path):
         os.remove(output_apk_path)
 
@@ -839,57 +767,27 @@ class State(object):
     # launch_redex_binary, finalize_redex
     def __init__(
         self,
-        application_modules,
         args,
         config_dict,
         debugger,
         dex_dir,
         dexen,
-        dex_mode,
         extracted_apk_dir,
-        temporary_libs_dir,
         stop_pass_idx,
+        lib_manager,
+        unpack_manager,
+        zip_manager,
     ):
-        self.application_modules = application_modules
         self.args = args
         self.config_dict = config_dict
         self.debugger = debugger
         self.dex_dir = dex_dir
         self.dexen = dexen
-        self.dex_mode = dex_mode
         self.extracted_apk_dir = extracted_apk_dir
-        self.temporary_libs_dir = temporary_libs_dir
         self.stop_pass_idx = stop_pass_idx
-
-
-def ensure_libs_dir(libs_dir, sub_dir):
-    """Ensures the base libs directory and the sub directory exist. Returns top
-    most dir that was created.
-    """
-    if os.path.exists(libs_dir):
-        os.mkdir(sub_dir)
-        return sub_dir
-    else:
-        os.mkdir(libs_dir)
-        os.mkdir(sub_dir)
-        return libs_dir
-
-
-def get_file_ext(file_name):
-    return os.path.splitext(file_name)[1]
-
-
-def get_dex_file_path(args, extracted_apk_dir):
-    # base on file extension check if input is
-    # an apk file (".apk") or an Android bundle file (".aab")
-    # TODO: support loadable modules (at this point only
-    # very basic support is provided - in case of Android bundles
-    # "regular" apk file content is moved to the "base"
-    # sub-directory of the bundle archive)
-    if get_file_ext(args.input_apk) == ".aab":
-        return join(extracted_apk_dir, "base", "dex")
-    else:
-        return extracted_apk_dir
+        self.lib_manager = lib_manager
+        self.unpack_manager = unpack_manager
+        self.zip_manager = zip_manager
 
 
 def prepare_redex(args):
@@ -964,67 +862,26 @@ def prepare_redex(args):
     if not extracted_apk_dir:
         extracted_apk_dir = make_temp_dir(".redex_extracted_apk", debug_mode)
 
-    log("Extracting apk...")
-    unzip_apk(args.input_apk, extracted_apk_dir)
+    directory = make_temp_dir(".redex_unaligned", False)
+    unaligned_apk_path = join(directory, "redex-unaligned.apk")
+    zip_manager = ZipManager(args.input_apk, extracted_apk_dir, unaligned_apk_path)
+    zip_manager.__enter__()
 
-    dex_file_path = get_dex_file_path(args, extracted_apk_dir)
-
-    dex_mode = unpacker.detect_secondary_dex_mode(dex_file_path)
-    log("Detected dex mode " + str(type(dex_mode).__name__))
     if not dex_dir:
         dex_dir = make_temp_dir(".redex_dexen", debug_mode)
 
-    log("Unpacking dex files")
-    dex_mode.unpackage(dex_file_path, dex_dir)
+    unpack_manager = UnpackManager(
+        args.input_apk,
+        extracted_apk_dir,
+        dex_dir,
+        have_locators=config_dict.get("emit_locator_strings"),
+        debug_mode=debug_mode,
+        fast_repackage=args.dev,
+    )
+    store_files = unpack_manager.__enter__()
 
-    log("Detecting Application Modules")
-    application_modules = unpacker.ApplicationModule.detect(extracted_apk_dir)
-    store_files = []
-    store_metadata_dir = make_temp_dir(".application_module_metadata", debug_mode)
-    for module in application_modules:
-        canary_prefix = module.get_canary_prefix()
-        log(
-            "found module: "
-            + module.get_name()
-            + " "
-            + (canary_prefix if canary_prefix is not None else "(no canary prefix)")
-        )
-        store_path = os.path.join(dex_dir, module.get_name())
-        os.mkdir(store_path)
-        module.unpackage(extracted_apk_dir, store_path)
-        store_metadata = os.path.join(store_metadata_dir, module.get_name() + ".json")
-        module.write_redex_metadata(store_path, store_metadata)
-        store_files.append(store_metadata)
-
-    # Some of the native libraries can be concatenated together into one
-    # xz-compressed file. We need to decompress that file so that we can scan
-    # through it looking for classnames.
-    libs_to_extract = []
-    temporary_libs_dir = None
-    xz_lib_name = "libs.xzs"
-    zstd_lib_name = "libs.zstd"
-    for root, _, filenames in os.walk(extracted_apk_dir):
-        for filename in fnmatch.filter(filenames, xz_lib_name):
-            libs_to_extract.append(join(root, filename))
-        for filename in fnmatch.filter(filenames, zstd_lib_name):
-            fullpath = join(root, filename)
-            # For voltron modules BUCK creates empty zstd files for each module
-            if os.path.getsize(fullpath) > 0:
-                libs_to_extract.append(fullpath)
-    if len(libs_to_extract) > 0:
-        libs_dir = join(extracted_apk_dir, "lib")
-        extracted_dir = join(libs_dir, "__extracted_libs__")
-        # Ensure both directories exist.
-        temporary_libs_dir = ensure_libs_dir(libs_dir, extracted_dir)
-        lib_count = 0
-        for lib_to_extract in libs_to_extract:
-            extract_path = join(extracted_dir, "lib_{}.so".format(lib_count))
-            if lib_to_extract.endswith(xz_lib_name):
-                cmd = "xz -d --stdout {} > {}".format(lib_to_extract, extract_path)
-            else:
-                cmd = "zstd -d {} -o {}".format(lib_to_extract, extract_path)
-            subprocess.check_call(cmd, shell=True)
-            lib_count += 1
+    lib_manager = LibraryManager(extracted_apk_dir)
+    lib_manager.__enter__()
 
     if args.unpack_only:
         print("APK: " + extracted_apk_dir)
@@ -1075,58 +932,29 @@ def prepare_redex(args):
         debugger = None
 
     return State(
-        application_modules=application_modules,
         args=args,
         config_dict=config_dict,
         debugger=debugger,
         dex_dir=dex_dir,
         dexen=dexen,
-        dex_mode=dex_mode,
         extracted_apk_dir=extracted_apk_dir,
-        temporary_libs_dir=temporary_libs_dir,
         stop_pass_idx=stop_pass_idx,
+        lib_manager=lib_manager,
+        unpack_manager=unpack_manager,
+        zip_manager=zip_manager,
     )
 
 
 def finalize_redex(state):
-    # This dir was just here so we could scan it for classnames, but we don't
-    # want to pack it back up into the apk
-    if state.temporary_libs_dir is not None:
-        shutil.rmtree(state.temporary_libs_dir)
+    state.lib_manager.__exit__(*sys.exc_info())
 
     repack_start_time = timer()
 
-    log("Repacking dex files")
-    have_locators = state.config_dict.get("emit_locator_strings")
-    log("Emit Locator Strings: %s" % have_locators)
+    state.unpack_manager.__exit__(*sys.exc_info())
+    state.zip_manager.__exit__(*sys.exc_info())
 
-    state.dex_mode.repackage(
-        get_dex_file_path(state.args, state.extracted_apk_dir),
-        state.dex_dir,
-        have_locators,
-        fast_repackage=state.args.dev,
-    )
-
-    locator_store_id = 1
-    for module in state.application_modules:
-        log(
-            "repacking module: "
-            + module.get_name()
-            + " with id "
-            + str(locator_store_id)
-        )
-        module.repackage(
-            state.extracted_apk_dir,
-            state.dex_dir,
-            have_locators,
-            locator_store_id,
-            fast_repackage=state.args.dev,
-        )
-        locator_store_id = locator_store_id + 1
-
-    log("Creating output apk")
-    create_output_apk(
-        state.extracted_apk_dir,
+    align_and_sign_output_apk(
+        state.zip_manager.output_apk,
         state.args.out,
         state.args.sign,
         state.args.keystore,
@@ -1135,6 +963,7 @@ def finalize_redex(state):
         state.args.ignore_zipalign,
         state.args.page_align_libs,
     )
+
     log(
         "Creating output APK finished in {:.2f} seconds".format(
             timer() - repack_start_time
