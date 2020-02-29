@@ -21,6 +21,7 @@
 #include "DexOutput.h"
 #include "IRCode.h"
 #include "InstructionLowering.h"
+#include "SanitizersConfig.h"
 #include "TestGenerator.h"
 
 namespace fs = boost::filesystem;

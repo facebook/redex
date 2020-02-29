@@ -54,6 +54,7 @@
 #include "ReachableClasses.h"
 #include "RedexContext.h"
 #include "RedexResources.h"
+#include "SanitizersConfig.h"
 #include "Show.h"
 #include "Timer.h"
 #include "ToolsCommon.h"
@@ -1036,40 +1037,6 @@ void dump_class_method_info_map(const std::string& file_path,
 }
 
 } // namespace
-
-// Some defaults for sanitizers. Can be overridden with ASAN_OPTIONS.
-const char* kAsanDefaultOptions =
-    "abort_on_error=1" // Use abort instead of exit, will get stack
-                       // traces for things like ubsan.
-    ":"
-    "check_initialization_order=1"
-    ":"
-    "detect_invalid_pointer_pairs=1"
-    ":"
-    "detect_leaks=0"
-    ":"
-    "detect_stack_use_after_return=1"
-    ":"
-    "print_scariness=1"
-    ":"
-    "print_suppressions=0"
-    ":"
-    "strict_init_order=1";
-
-#if defined(__clang__)
-#define NO_SANITIZE \
-  __attribute__((__no_sanitize__("address", "undefined", "thread")))
-#define VISIBLE \
-  __attribute__((__visibility__("default"))) __attribute__((__used__))
-#else
-#define NO_SANITIZE
-#define VISIBLE
-#endif
-
-extern "C" NO_SANITIZE VISIBLE __attribute__((__weak__)) const char*
-__asan_default_options() {
-  return kAsanDefaultOptions;
-}
 
 int main(int argc, char* argv[]) {
   signal(SIGSEGV, crash_backtrace_handler);
