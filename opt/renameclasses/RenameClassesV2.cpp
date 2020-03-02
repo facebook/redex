@@ -647,11 +647,12 @@ void RenameClassesPassV2::rename_classes(Scope& scope,
     TRACE(RENAME, 2, "'%s' ->  %s (%u)'", oldname->c_str(),
           prefixed_descriptor.c_str(), sequence);
 
-    auto exists = DexString::get_string(prefixed_descriptor);
-    always_assert_log(!exists, "Collision on class %s (%s)", oldname->c_str(),
+    auto dstring = DexString::make_string(prefixed_descriptor);
+
+    always_assert_log(!DexType::get_type(dstring),
+                      "Type name collision detected. %s already exists.",
                       prefixed_descriptor.c_str());
 
-    auto dstring = DexString::make_string(prefixed_descriptor);
     name_mapping.add_type_name(clazz->get_name(), dstring);
     dtype->set_name(dstring);
     std::string old_str(oldname->c_str());

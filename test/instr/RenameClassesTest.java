@@ -42,4 +42,12 @@ public class RenameClassesTest {
       .isEqualTo(
         Utils.demangle("com_facebook_redex_test_instr_RenameClassesTest"));
   }
+
+  @Test
+  public void testDescriptorLikeStrings() {
+    StringBuilder sb = new StringBuilder();
+    sb.append("LX/7K;");
+    sb.append("123");
+    assertThat(sb.toString().length()).isEqualTo(9);
+  }
 }
