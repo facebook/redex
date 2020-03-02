@@ -11,21 +11,12 @@
 
 #include "ControlFlow.h"
 #include "ReachingDefinitions.h"
+#include "ScopedCFG.h"
 #include "Walkers.h"
 
 namespace {
 
 using namespace cfg;
-
-struct EditableCfgRAII {
-  IRCode* code;
-  explicit EditableCfgRAII(IRCode* code) : code(code) {
-    code->build_cfg(/* editable= */ true);
-  }
-  ~EditableCfgRAII() { code->clear_cfg(); }
-
-  ControlFlowGraph& get() { return code->cfg(); }
-};
 
 std::unordered_set<const IRInstruction*> find_sdk_int_sgets(
     const ControlFlowGraph& cfg, const DexFieldRef* sdk_int_field) {
@@ -258,9 +249,9 @@ RemoveApiLevelChecksPass::ApiLevelStats RemoveApiLevelChecksPass::run(
     return ApiLevelStats{};
   }
 
-  EditableCfgRAII cfg(code);
+  cfg::ScopedCFG cfg(code);
 
-  auto sdk_int_sgets = find_sdk_int_sgets(cfg.get(), sdk_int_field);
+  auto sdk_int_sgets = find_sdk_int_sgets(*cfg, sdk_int_field);
   if (sdk_int_sgets.empty()) {
     return ApiLevelStats();
   }
@@ -268,7 +259,7 @@ RemoveApiLevelChecksPass::ApiLevelStats RemoveApiLevelChecksPass::run(
   ApiLevelStats ret;
   ret.num_field_gets = sdk_int_sgets.size();
   ret.num_methods = 1;
-  ret.num_removed = analyze_and_rewrite(cfg.get(), sdk_int_sgets, min_sdk);
+  ret.num_removed = analyze_and_rewrite(*cfg, sdk_int_sgets, min_sdk);
   return ret;
 }
 
