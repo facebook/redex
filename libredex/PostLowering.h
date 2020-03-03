@@ -18,6 +18,7 @@ class PostLowering {
  public:
   static std::unique_ptr<PostLowering> create();
 
+  virtual void sync() = 0;
   virtual void gather_components(std::vector<DexString*>&,
                                  std::vector<DexType*>&,
                                  std::vector<DexFieldRef*>&,

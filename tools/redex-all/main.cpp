@@ -907,6 +907,10 @@ void redex_backend(const std::string& output_dir,
   std::unique_ptr<PostLowering> post_lowering =
       redex_options.redacted ? PostLowering::create() : nullptr;
 
+  if (post_lowering) {
+    post_lowering->sync();
+  }
+
   if (is_iodi(dik)) {
     Timer t("Compute initial IODI metadata");
     iodi_metadata.mark_methods(stores);
