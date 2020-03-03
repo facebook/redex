@@ -5,9 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "ConstantPropagation.h"
-#include "ConstantPropagationImpl.h"
+#include "ConstantPropagationPass.h"
 
+#include "ConstantPropagation.h"
 #include "ConstantPropagationAnalysis.h"
 #include "ConstantPropagationTransform.h"
 #include "Walkers.h"

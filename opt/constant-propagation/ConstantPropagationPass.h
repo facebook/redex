@@ -7,8 +7,8 @@
 
 #pragma once
 
+#include "ConstantPropagation.h"
 #include "ConstantPropagationAnalysis.h"
-#include "ConstantPropagationImpl.h"
 #include "ConstantPropagationTransform.h"
 #include "Pass.h"
 

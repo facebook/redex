@@ -267,7 +267,7 @@ redex_all_SOURCES = \
 	opt/check_breadcrumbs/CheckBreadcrumbs.cpp \
 	opt/check-recursion/CheckRecursion.cpp \
 	opt/class-splitting/ClassSplitting.cpp \
-	opt/constant-propagation/ConstantPropagation.cpp \
+	opt/constant-propagation/ConstantPropagationPass.cpp \
 	opt/constant-propagation/ConstantPropagationRuntimeAssert.cpp \
 	opt/constant-propagation/IPConstantPropagation.cpp \
 	opt/copy-propagation/CopyPropagationPass.cpp \
@@ -369,7 +369,7 @@ redex_all_SOURCES = \
 	service/class-init/ClassInitCounter.cpp \
 	service/constant-propagation/ConstantEnvironment.cpp \
 	service/constant-propagation/ConstantPropagationAnalysis.cpp \
-	service/constant-propagation/ConstantPropagationImpl.cpp \
+	service/constant-propagation/ConstantPropagation.cpp \
 	service/constant-propagation/ConstantPropagationTransform.cpp \
 	service/constant-propagation/ConstantPropagationWholeProgramState.cpp \
 	service/constant-propagation/IPConstantPropagationAnalysis.cpp \
