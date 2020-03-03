@@ -27,6 +27,9 @@ enum class DebugInfoKind : uint32_t {
   // This will cause us to emit just a few debug_info_items per dex, one for
   // each method parameter arity.
   InstructionOffsets,
+  // This will cause us to emit debug info for each instruction as well as
+  // debug info for tracking registers as local variables.
+  BytecodeDebugger,
   Size,
 };
 

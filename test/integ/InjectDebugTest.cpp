@@ -14,6 +14,7 @@
 #include <string>
 
 #include "DexLoader.h"
+#include "DexOutput.h"
 #include "DexStore.h"
 #include "InstructionLowering.h"
 #include "tools/bytecode_debugger/InjectDebug.h"
@@ -186,5 +187,134 @@ TEST_F(InjectDebugTest, TestMultipleFiles) {
   EXPECT_EQ(m_output_dex_paths.size(), 4);
   for (const std::string& out_path : m_output_dex_paths) {
     EXPECT_TRUE(file_exists(out_path));
+  }
+}
+
+// Check that there is one debug position emitted for each instruction
+TEST_F(InjectDebugTest, TestLineDebugInfoCreated) {
+  inject();
+  DexClasses classes = load_classes(m_output_dex_paths[0]);
+
+  for (DexClass* dex_class : classes) {
+    for (DexMethod* dex_method : dex_class->get_dmethods()) {
+      std::vector<DexDebugEntry>& debug_entries =
+          dex_method->get_dex_code()->get_debug_item()->get_entries();
+
+      int debug_entry_idx = 0;
+      int line = dex_method->get_dex_code()->get_debug_item()->get_line_start();
+      int pc = 0;
+      for (DexInstruction* instr :
+           dex_method->get_dex_code()->get_instructions()) {
+        // Find next position entry
+        while (debug_entries[debug_entry_idx].type !=
+               DexDebugEntryType::Position) {
+          ++debug_entry_idx;
+        }
+
+        // Some goto statements do not get their own debug line
+        if (pc != debug_entries[debug_entry_idx].addr &&
+            dex_opcode::is_goto(instr->opcode())) {
+          pc += instr->size();
+          continue;
+        }
+
+        // Check that a debug position entry was emitted at exactly
+        // the PC of the current dex instruction
+        EXPECT_EQ(pc, debug_entries[debug_entry_idx].addr);
+
+        // Check that debug line numbers increment by exactly 1
+        EXPECT_EQ(line, debug_entries[debug_entry_idx].pos->line);
+        pc += instr->size();
+        debug_entry_idx++;
+        line++;
+      }
+    }
+  }
+}
+
+// Check that local variable debug information is emitted for registers used by
+// each instruction
+TEST_F(InjectDebugTest, TestLocalVarDebugInfoCreated) {
+  inject();
+  DexClasses classes = load_classes(m_output_dex_paths[0]);
+
+  for (DexClass* dex_class : classes) {
+    for (DexMethod* dex_method : dex_class->get_dmethods()) {
+      std::vector<DexDebugEntry>& debug_entries =
+          dex_method->get_dex_code()->get_debug_item()->get_entries();
+
+      uint16_t register_size = dex_method->get_dex_code()->get_registers_size();
+      uint16_t local_var_count = 0;
+      // Check that there is at least one local variable entry for each register
+      for (int i = 0; i < debug_entries.size(); ++i) {
+        if (debug_entries[i].type == DexDebugEntryType::Instruction &&
+            debug_entries[i].insn->opcode() ==
+                DexDebugItemOpcodeValues::DBG_START_LOCAL) {
+          local_var_count++;
+          // Check that the format of local variable names is like "v1", "v2"...
+          auto start_local = static_cast<DexDebugOpcodeStartLocal*>(
+              debug_entries[i].insn.get());
+          EXPECT_EQ("v" + std::to_string(debug_entries[i].insn->uvalue()),
+                    start_local->name()->str());
+        }
+      }
+      EXPECT_GE(local_var_count, register_size);
+    }
+  }
+}
+
+// Check that the debug information is exactly correct for a specific class
+TEST_F(InjectDebugTest, TestSpecificMethod) {
+  const std::string CLASS_NAME =
+      "Lcom/facebook/pages/browser/fragment/PagesBrowserFragment;";
+
+  inject();
+  DexClasses classes = load_classes(m_output_dex_paths[0]);
+
+  DexClass* dex_class = nullptr;
+  for (DexClass* class_it : classes) {
+    if (class_it->str() == CLASS_NAME) dex_class = class_it;
+  }
+  EXPECT_NE(dex_class, nullptr);
+
+  for (DexMethod* dex_method : dex_class->get_dmethods()) {
+    DexCode* dex_code = dex_method->get_dex_code();
+    DexDebugItem* debug_item = dex_code->get_debug_item();
+
+    std::vector<DexDebugEntry>& debug_entries = debug_item->get_entries();
+    std::vector<DexInstruction*>& instructions = dex_code->get_instructions();
+
+    auto it = debug_entries.begin();
+
+    // Skip the first position entry (0) - it doesn't map to a dex instruction
+    while (it->type != DexDebugEntryType::Position)
+      ++it;
+
+    for (int i = 0; i < instructions.size(); ++i) {
+      // Look at the following debug entries up until the next position entry
+      // and track which registers were stored as local variables
+      std::vector<reg_t> locals;
+      for (++it; it != debug_entries.end(); ++it) {
+        if (it->type == DexDebugEntryType::Position) break;
+        if (it->insn->opcode() == DexDebugItemOpcodeValues::DBG_START_LOCAL) {
+          locals.push_back(it->insn->uvalue());
+        }
+      }
+      // Confirm that all registers used by the following instruction were
+      // stored as local variables
+      if (instructions[i]->has_dest()) {
+        EXPECT_TRUE(std::find(locals.begin(),
+                              locals.end(),
+                              instructions[i]->dest()) != locals.end());
+      }
+      for (int j = 0; j < instructions[i]->srcs_size(); ++j) {
+        EXPECT_TRUE(std::find(locals.begin(),
+                              locals.end(),
+                              instructions[i]->src(j)) != locals.end());
+      }
+    }
+
+    // Make sure there are no extra trailing debug entries
+    EXPECT_EQ(it, debug_entries.end());
   }
 }

@@ -104,6 +104,23 @@ DexDebugInstruction* DexDebugInstruction::make_instruction(
   };
 }
 
+// Returns a DexDebugInstruction corresponding to emitting a line entry
+// with the given address offset and line offset. Asserts if invalid arguments.
+std::unique_ptr<DexDebugInstruction> DexDebugInstruction::create_line_entry(
+    int8_t line, uint8_t addr) {
+  // These are limits imposed by
+  // https://source.android.com/devices/tech/dalvik/dex-format#opcodes
+  always_assert(line >= -4 && line <= 10);
+  always_assert(addr <= 17);
+  // Below is correct because adjusted_opcode = (addr * 15) + (line + 4), so
+  // line_offset = -4 + (adjusted_opcode % 15) = -4 + line + 4 = line
+  // addr_offset = adjusted_opcode / 15 = addr * 15 / 15 = addr since line + 4
+  // is bounded by 0 and 14 we know (line + 4) / 15 = 0
+  uint8_t opcode = 0xa + (addr * 15) + (line + 4);
+  return std::make_unique<DexDebugInstruction>(
+      static_cast<DexDebugItemOpcode>(opcode));
+}
+
 bool DexDebugInstruction::operator==(const DexDebugInstruction& that) const {
   return m_opcode == that.m_opcode && m_signed == that.m_signed &&
          (m_signed ? m_value == that.m_value : m_uvalue == that.m_uvalue);

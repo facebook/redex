@@ -444,7 +444,13 @@ DexOutput::DexOutput(
     : m_config_files(config_files) {
   m_classes = classes;
   m_iodi_metadata = iodi_metadata;
-  m_output = (uint8_t*)malloc(k_max_dex_size);
+  // Required because the BytecodeDebugger setting creates huge amounts
+  // of debug information (multiple dex debug entries per instruction)
+  if (debug_info_kind == DebugInfoKind::BytecodeDebugger) {
+    m_output = (uint8_t*)malloc(k_max_dex_size * 2);
+  } else {
+    m_output = (uint8_t*)malloc(k_max_dex_size);
+  }
   memset(m_output, 0, k_max_dex_size);
   m_offset = 0;
   m_force_class_data_end_of_file = post_lowering != nullptr;
@@ -1337,23 +1343,6 @@ int emit_debug_info(
              : 0;
 }
 
-// Returns a DexDebugInstruction corresponding to emitting a line entry
-// with the given address offset and line offset. Asserts if invalid arguments.
-inline std::unique_ptr<DexDebugInstruction> create_line_entry(int8_t line,
-                                                              uint8_t addr) {
-  // These are limits imposed by
-  // https://source.android.com/devices/tech/dalvik/dex-format#opcodes
-  always_assert(line >= -4 && line <= 10);
-  always_assert(addr <= 17);
-  // Below is correct because adjusted_opcode = (addr * 15) + (line + 4), so
-  // line_offset = -4 + (adjusted_opcode % 15) = -4 + line + 4 = line
-  // addr_offset = adjusted_opcode / 15 = addr * 15 / 15 = addr since line + 4
-  // is bounded by 0 and 14 we know (line + 4) / 15 = 0
-  uint8_t opcode = 0xa + (addr * 15) + (line + 4);
-  return std::make_unique<DexDebugInstruction>(
-      static_cast<DexDebugItemOpcode>(opcode));
-}
-
 uint32_t emit_instruction_offset_debug_info(
     DexOutputIdx* dodx,
     PositionMapper* pos_mapper,
@@ -1746,11 +1735,11 @@ uint32_t emit_instruction_offset_debug_info(
       std::vector<std::unique_ptr<DexDebugInstruction>> dbgops;
       if (bucket_size > 0) {
         // First emit an entry for pc = 0 -> line = 0
-        dbgops.push_back(create_line_entry(0, 0));
+        dbgops.push_back(DexDebugInstruction::create_line_entry(0, 0));
         // Now emit an entry for each pc thereafter
         // (0x1e increments addr+line by 1)
         for (size_t i = 1; i < bucket_size; i++) {
-          dbgops.push_back(create_line_entry(1, 1));
+          dbgops.push_back(DexDebugInstruction::create_line_entry(1, 1));
         }
       }
       offset +=

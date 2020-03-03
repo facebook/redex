@@ -50,6 +50,8 @@ class DexDebugInstruction : public Gatherable {
   virtual std::unique_ptr<DexDebugInstruction> clone() const {
     return std::make_unique<DexDebugInstruction>(*this);
   }
+  static std::unique_ptr<DexDebugInstruction> create_line_entry(int8_t line,
+                                                                uint8_t addr);
 
   DexDebugItemOpcode opcode() const { return m_opcode; }
 

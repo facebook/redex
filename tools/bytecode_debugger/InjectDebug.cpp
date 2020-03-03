@@ -10,9 +10,12 @@
 #include "DexClass.h"
 #include "DexLoader.h"
 #include "DexOutput.h"
+#include "DexUtil.h"
+#include "IRCode.h"
 #include "InstructionLowering.h"
 #include "RedexContext.h"
 #include "ToolsCommon.h"
+#include "TypeInference.h"
 
 InjectDebug::InjectDebug(const std::string& outdir,
                          const std::vector<std::string>& dex_files)
@@ -29,6 +32,7 @@ InjectDebug::~InjectDebug() {
 
 void InjectDebug::run() {
   load_dex();
+  inject_all();
   write_dex();
 }
 
@@ -41,6 +45,120 @@ void InjectDebug::load_dex() {
   std::vector<dex_stats_t> input_dexes_stats;
   redex::load_classes_from_dexes_and_metadata(m_dex_files, m_stores,
                                               input_totals, input_dexes_stats);
+}
+
+void InjectDebug::inject_register(
+    IRCode* ir_code,
+    const IRList::iterator& ir_it,
+    const type_inference::TypeEnvironment& type_env,
+    reg_t reg) {
+  // Get general type of register (either java object or primitive)
+  DexType* reg_type;
+  if (type_env.get_type(reg).element() == IRType::REFERENCE) {
+    reg_type = type::java_lang_Object();
+  } else {
+    reg_type = type::_int();
+  }
+
+  DexString* reg_string = DexString::make_string("v" + std::to_string(reg));
+  ir_code->insert_before(
+      ir_it,
+      std::make_unique<DexDebugOpcodeStartLocal>(reg, reg_string, reg_type));
+}
+
+void InjectDebug::inject_method(DexMethod* dex_method) {
+  IRCode* ir_code = dex_method->get_code();
+  if (ir_code == nullptr) return;
+
+  DexDebugItem* dbg = ir_code->get_debug_item();
+  if (dbg != nullptr) dbg->get_entries().clear();
+
+  ir_code->build_cfg(false);
+  type_inference::TypeInference type_inf(ir_code->cfg());
+  type_inf.run(dex_method);
+
+  std::unordered_map<const IRInstruction*, type_inference::TypeEnvironment>&
+      type_envs = type_inf.get_type_environments();
+
+  boost::sub_range<IRList> param_instructions =
+      ir_code->get_param_instructions();
+  auto ir_it = param_instructions.begin();
+
+  // Emit local variables for every param
+  for (; ir_it != param_instructions.end(); ++ir_it) {
+    if (ir_it->type == MethodItemType::MFLOW_OPCODE) {
+      type_inf.analyze_instruction(ir_it->insn, &type_envs.at(ir_it->insn));
+      if (ir_it->insn->has_dest()) {
+        inject_register(ir_code, ir_it, type_envs.at(ir_it->insn),
+                        ir_it->insn->dest());
+      }
+    }
+  }
+
+  bool first_instruction = true;
+  for (; ir_it != ir_code->end(); ++ir_it) {
+    switch (ir_it->type) {
+    case MethodItemType::MFLOW_OPCODE: {
+      // TODO: Try inserting MFLOW_POSITION entries below instead of MFLOW_DEBUG
+      // entries for DexDebugInstructions
+      if (first_instruction) {
+        ir_code->insert_before(ir_it,
+                               DexDebugInstruction::create_line_entry(0, 0));
+        first_instruction = false;
+      } else {
+        ir_code->insert_before(ir_it,
+                               DexDebugInstruction::create_line_entry(1, 0));
+      }
+      // Make debugger stop at every instruction, and provide local variables to
+      // debug each instruction's source and destination registers
+      type_inf.analyze_instruction(ir_it->insn, &type_envs.at(ir_it->insn));
+      for (reg_t src_reg : ir_it->insn->srcs_vec()) {
+        inject_register(ir_code, ir_it, type_envs.at(ir_it->insn), src_reg);
+      }
+      if (ir_it->insn->has_dest()) {
+        inject_register(ir_code, ir_it, type_envs.at(ir_it->insn),
+                        ir_it->insn->dest());
+      }
+
+      if (ir_it->insn->has_move_result_pseudo()) {
+        // Must check dest() of next instruction for the result of current instr
+        IRList::iterator next_it = std::next(ir_it);
+        if (next_it->insn->has_dest()) {
+          type_inf.analyze_instruction(next_it->insn,
+                                       &type_envs.at(next_it->insn));
+          inject_register(ir_code, ir_it, type_envs.at(next_it->insn),
+                          next_it->insn->dest());
+        }
+        ++ir_it;
+      }
+      break;
+    }
+    // Remove any previous instances of debug entries
+    case MethodItemType::MFLOW_DEBUG:
+    case MethodItemType::MFLOW_POSITION: {
+      ir_it->type = MethodItemType::MFLOW_FALLTHROUGH;
+      break;
+    }
+    default:
+      break;
+    };
+  }
+}
+
+void InjectDebug::inject_all() {
+  // Use IR instructions to generate dex debug information
+  for (DexStore& store : m_stores) {
+    for (DexClasses& classes : store.get_dexen()) {
+      for (DexClass* dex_class : classes) {
+        for (DexMethod* dex_method : dex_class->get_dmethods()) {
+          inject_method(dex_method);
+        }
+        for (DexMethod* dex_method : dex_class->get_vmethods()) {
+          inject_method(dex_method);
+        }
+      }
+    }
+  }
 }
 
 void InjectDebug::write_dex() {
@@ -58,8 +176,8 @@ void InjectDebug::write_dex() {
                                  false, // normal_primary_dex
                                  store_num,
                                  i, // dex_number,
-                                 DebugInfoKind::NoCustomSymbolication,
-                                 nullptr, // iodi_metadata,
+                                 DebugInfoKind::BytecodeDebugger,
+                                 nullptr, // iodi_metadata
                                  m_conf, // redex options config
                                  pos_mapper.get(), // position_mapper
                                  nullptr, // method_to_id
