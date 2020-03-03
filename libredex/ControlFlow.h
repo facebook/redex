@@ -252,6 +252,10 @@ class Block final {
   // including move-result-pseudo
   bool starts_with_move_result();
 
+  // returns true iff the block starts with the same MethodItemEntries as the
+  // other block.
+  bool begins_with(Block* other);
+
   // If this block has a single outgoing edge and it is a goto, return its
   // target. Otherwise, return nullptr
   Block* goes_to_only_edge() const;

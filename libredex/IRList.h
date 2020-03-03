@@ -31,12 +31,16 @@ struct TryEntry {
       : type(type), catch_start(catch_start) {
     always_assert(catch_start != nullptr);
   }
+
+  bool operator==(const TryEntry& other) const;
 };
 
 struct CatchEntry {
   DexType* catch_type;
   MethodItemEntry* next; // always null for catchall
   CatchEntry(DexType* catch_type) : catch_type(catch_type), next(nullptr) {}
+
+  bool operator==(const CatchEntry& other) const;
 };
 
 /**
@@ -75,6 +79,8 @@ struct BranchTarget {
 
   BranchTarget(MethodItemEntry* src, int32_t case_key)
       : type(BRANCH_MULTI), src(src), case_key(case_key) {}
+
+  bool operator==(const BranchTarget& other) const;
 };
 
 /*
@@ -146,6 +152,12 @@ struct MethodItemEntry {
       : type(MFLOW_DEBUG), dbgop(std::move(dbgop)) {}
   MethodItemEntry(std::unique_ptr<DexPosition> pos)
       : type(MFLOW_POSITION), pos(std::move(pos)) {}
+
+  bool operator==(const MethodItemEntry&) const;
+
+  bool operator!=(const MethodItemEntry& that) const {
+    return !(*this == that);
+  }
 
   MethodItemEntry() : type(MFLOW_FALLTHROUGH) {}
   ~MethodItemEntry();
