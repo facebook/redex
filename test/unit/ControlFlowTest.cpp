@@ -2107,6 +2107,55 @@ TEST_F(ControlFlowTest, replace_if_with_return) {
   EXPECT_CODE_EQ(expected.get(), code.get());
 }
 
+TEST_F(ControlFlowTest, split_block) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (if-eqz v0 :true)
+
+      (const v1 1)
+      (return v1)
+
+      (:true)
+      (const v1 2)
+      (add-int v1 v1 v1)
+      (return v1)
+    )
+  )");
+  code->build_cfg(/* editable */ true);
+
+  auto& cfg = code->cfg();
+
+  EXPECT_EQ(cfg.blocks().size(), 3);
+
+  // Simple split
+  Block* s_block = cfg.blocks().back();
+  EXPECT_EQ(s_block->succs().size(), 0);
+
+  cfg.split_block(s_block->to_cfg_instruction_iterator(*s_block->begin()));
+
+  EXPECT_EQ(cfg.blocks().size(), 4);
+  EXPECT_EQ(s_block->succs().size(), 1);
+  EXPECT_EQ(s_block->preds().size(), 1);
+  EXPECT_EQ(s_block->preds()[0]->src()->begin()->insn->opcode(), OPCODE_CONST);
+
+  // Test split at the end
+  s_block = cfg.blocks().back();
+  cfg.split_block(
+      s_block->to_cfg_instruction_iterator(*std::prev(s_block->end())));
+  EXPECT_EQ(cfg.blocks().size(), 5);
+
+  EXPECT_EQ(s_block->succs().size(), 1);
+  EXPECT_EQ(s_block->begin()->insn->opcode(), OPCODE_ADD_INT);
+  EXPECT_EQ(std::prev(s_block->end())->insn->opcode(), OPCODE_RETURN);
+
+  // Test split_block() throws an instruction when splitting past the last
+  // instruction
+  EXPECT_THROW(
+      cfg.split_block(s_block->to_cfg_instruction_iterator(*s_block->end())),
+      RedexException);
+}
+
 TEST_F(ControlFlowTest, block_begins_with) {
   auto full_code = assembler::ircode_from_string(R"(
     (

@@ -92,4 +92,8 @@ inline bool is_sget(DexOpcode op) {
   return op >= DOPCODE_SGET && op <= DOPCODE_SGET_SHORT;
 }
 
+inline bool is_literal_const(DexOpcode op) {
+  return op >= DOPCODE_CONST_4 && op <= DOPCODE_CONST_WIDE_HIGH16;
+}
+
 } // namespace dex_opcode

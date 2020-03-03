@@ -1091,6 +1091,35 @@ IROpcode move_result_pseudo_for_sget(IROpcode op) {
   }
 }
 
+IROpcode move_result_for_invoke(const DexMethodRef* method) {
+  auto rtype = method->get_proto()->get_rtype();
+  return type::is_wide_type(rtype)
+             ? OPCODE_MOVE_RESULT_WIDE
+             : type::is_object(rtype) ? OPCODE_MOVE_RESULT_OBJECT
+                                      : OPCODE_MOVE_RESULT;
+}
+
+IROpcode invoke_for_method(const DexMethod* method) {
+  always_assert(method->is_def());
+
+  if (is_static(method)) {
+    return OPCODE_INVOKE_STATIC;
+  } else if (is_private(method) || is_constructor(method)) {
+    return OPCODE_INVOKE_DIRECT;
+  } else {
+    always_assert(method->is_virtual());
+    return is_interface(type_class(method->get_class()))
+               ? OPCODE_INVOKE_INTERFACE
+               : OPCODE_INVOKE_VIRTUAL;
+  }
+}
+
+IROpcode return_opcode(const DexType* type) {
+  return type::is_wide_type(type)
+             ? OPCODE_RETURN_WIDE
+             : type::is_object(type) ? OPCODE_RETURN_OBJECT : OPCODE_RETURN;
+}
+
 IROpcode sget_opcode_for_field(const DexField* field) {
   switch (type_to_datatype(field->get_type())) {
   case DataType::Array:
