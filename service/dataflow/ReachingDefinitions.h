@@ -1,10 +1,8 @@
-/**
- * Copyright (c) 2017-present, Facebook, Inc.
- * All rights reserved.
+/*
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #pragma once
@@ -13,46 +11,15 @@
 #include "BaseIRAnalyzer.h"
 #include "ControlFlow.h"
 #include "DexClass.h"
+#include "IROpcode.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "PatriciaTreeSetAbstractDomain.h"
 
 namespace reaching_defs {
 
-using reg_t = ir_analyzer::register_t;
+using Domain = sparta::PatriciaTreeSetAbstractDomain<IRInstruction*>;
 
-class Domain final : public sparta::AbstractDomainReverseAdaptor<
-                         sparta::PatriciaTreeSetAbstractDomain<IRInstruction*>,
-                         Domain> {
- public:
-  using AbstractDomainReverseAdaptor::AbstractDomainReverseAdaptor;
-
-  // Some older compilers complain that the class is not default constructible.
-  // We intended to use the default constructors of the base class (via using
-  // AbstractDomainReverseAdaptor::AbstractDomainReverseAdaptor), but some
-  // compilers fail to catch this. So we insert a redundant '= default'.
-  Domain() = default;
-
-  size_t size() const { return unwrap().size(); }
-
-  const sparta::PatriciaTreeSet<IRInstruction*>& elements() const {
-    return unwrap().elements();
-  }
-};
-
-class Environment final
-    : public sparta::AbstractDomainReverseAdaptor<
-          sparta::PatriciaTreeMapAbstractEnvironment<reg_t, Domain>,
-          Environment> {
- public:
-  using AbstractDomainReverseAdaptor::AbstractDomainReverseAdaptor;
-
-  Domain get(reg_t reg) { return unwrap().get(reg); }
-
-  Environment& set(reg_t reg, const Domain& value) {
-    unwrap().set(reg, value);
-    return *this;
-  }
-};
+using Environment = sparta::PatriciaTreeMapAbstractEnvironment<uint32_t, Domain>;
 
 class FixpointIterator final : public ir_analyzer::BaseIRAnalyzer<Environment> {
  public:
@@ -68,7 +35,7 @@ class FixpointIterator final : public ir_analyzer::BaseIRAnalyzer<Environment> {
   }
 };
 
-class MoveAwareFixpointIterator final
+class MoveAwareFixpointIterator
     : public ir_analyzer::BaseIRAnalyzer<Environment> {
  public:
   explicit MoveAwareFixpointIterator(const cfg::ControlFlowGraph& cfg)
@@ -76,8 +43,14 @@ class MoveAwareFixpointIterator final
 
   void analyze_instruction(IRInstruction* insn,
                            Environment* current_state) const override {
+    constexpr uint32_t RESULT = ir_analyzer::RESULT_REGISTER;
     if (is_move(insn->opcode())) {
       current_state->set(insn->dest(), current_state->get(insn->src(0)));
+    } else if (opcode::is_move_result_any(insn->opcode())) {
+      current_state->set(insn->dest(), current_state->get(RESULT));
+      current_state->set(RESULT, Domain::top());
+    } else if (insn->has_move_result_any()) {
+      current_state->set(RESULT, Domain(const_cast<IRInstruction*>(insn)));
     } else if (insn->has_dest()) {
       current_state->set(insn->dest(),
                          Domain(const_cast<IRInstruction*>(insn)));

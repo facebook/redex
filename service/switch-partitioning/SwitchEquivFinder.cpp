@@ -347,16 +347,14 @@ void SwitchEquivFinder::normalize_extra_loads(
     }
     reaching_defs::Environment defs_in =
         fixpoint_iter.get_entry_state_at(block);
+    if (defs_in.is_bottom()) {
+      continue;
+    }
     for (const auto& mie : InstructionIterable(block)) {
       auto insn = mie.insn;
       for (size_t i = 0; i < insn->srcs_size(); ++i) {
         auto src = insn->src(i);
         auto defs = defs_in.get(src);
-        if (defs.is_top()) {
-          // Probably an unreachable block. Ignore and let the IRTypeChecker
-          // find real problems
-          continue;
-        }
         for (IRInstruction* def : defs.elements()) {
           if (extra_loads.count(def)) {
             used_defs.insert(def);
