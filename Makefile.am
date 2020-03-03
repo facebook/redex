@@ -369,6 +369,7 @@ redex_all_SOURCES = \
 	service/class-init/ClassInitCounter.cpp \
 	service/constant-propagation/ConstantEnvironment.cpp \
 	service/constant-propagation/ConstantPropagationAnalysis.cpp \
+	service/constant-propagation/ConstantPropagationImpl.cpp \
 	service/constant-propagation/ConstantPropagationTransform.cpp \
 	service/constant-propagation/ConstantPropagationWholeProgramState.cpp \
 	service/constant-propagation/IPConstantPropagationAnalysis.cpp \

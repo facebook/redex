@@ -104,8 +104,7 @@ TEST_F(ConstantPropagationTest, constantPropagation) {
     }
   }
 
-  Pass* constp = nullptr;
-  constp = new ConstantPropagationPass();
+  Pass* constp = new ConstantPropagationPass();
   std::vector<Pass*> passes = {constp};
 
   run_passes(passes);

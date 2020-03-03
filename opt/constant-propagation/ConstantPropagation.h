@@ -8,15 +8,12 @@
 #pragma once
 
 #include "ConstantPropagationAnalysis.h"
+#include "ConstantPropagationImpl.h"
 #include "ConstantPropagationTransform.h"
 #include "Pass.h"
 
 class ConstantPropagationPass : public Pass {
  public:
-  struct Config {
-    constant_propagation::Transform::Config transform;
-  };
-
   ConstantPropagationPass() : Pass("ConstantPropagationPass") {}
 
   void bind_config() override {
@@ -31,5 +28,5 @@ class ConstantPropagationPass : public Pass {
                 PassManager& mgr) override;
 
  private:
-  Config m_config;
+  constant_propagation::Config m_config;
 };

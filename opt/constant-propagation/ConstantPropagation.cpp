@@ -6,6 +6,7 @@
  */
 
 #include "ConstantPropagation.h"
+#include "ConstantPropagationImpl.h"
 
 #include "ConstantPropagationAnalysis.h"
 #include "ConstantPropagationTransform.h"
@@ -18,24 +19,8 @@ void ConstantPropagationPass::run_pass(DexStoresVector& stores,
                                        PassManager& mgr) {
   auto scope = build_class_scope(stores);
 
-  auto stats =
-      walk::parallel::methods<Transform::Stats>(scope, [&](DexMethod* method) {
-        if (method->get_code() == nullptr) {
-          return Transform::Stats();
-        }
-
-        TRACE(CONSTP, 2, "Method: %s", SHOW(method));
-        auto& code = *method->get_code();
-        code.build_cfg(/* editable */ false);
-        auto& cfg = code.cfg();
-
-        TRACE(CONSTP, 5, "CFG: %s", SHOW(cfg));
-        intraprocedural::FixpointIterator fp_iter(cfg,
-                                                  ConstantPrimitiveAnalyzer());
-        fp_iter.run(ConstantEnvironment());
-        constant_propagation::Transform tf(m_config.transform);
-        return tf.apply(fp_iter, WholeProgramState(), &code);
-      });
+  ConstantPropagation impl(m_config);
+  auto stats = impl.run(scope);
 
   mgr.incr_metric("num_branch_propagated", stats.branches_removed);
   mgr.incr_metric("num_materialized_consts", stats.materialized_consts);
