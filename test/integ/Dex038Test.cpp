@@ -18,6 +18,7 @@
 #include "InstructionLowering.h"
 #include "PassManager.h"
 #include "RedexContext.h"
+#include "SanitizersConfig.h"
 #include "Walkers.h"
 
 using CallSitePredicate = const std::function<bool(DexCallSite*)>&;

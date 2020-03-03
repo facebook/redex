@@ -17,6 +17,8 @@
 #include "DexOutput.h"
 #include "DexStore.h"
 #include "InstructionLowering.h"
+#include "SanitizersConfig.h"
+
 #include "tools/bytecode_debugger/InjectDebug.h"
 
 #include <boost/filesystem.hpp>
