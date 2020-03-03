@@ -262,7 +262,6 @@ redex_all_SOURCES = \
 	opt/interdex/DexStructure.cpp \
 	opt/interdex/InterDex.cpp \
 	opt/interdex/InterDexPass.cpp \
-	opt/introduce_switch/IntroduceSwitch.cpp \
 	opt/layout-reachability/LayoutReachabilityPass.cpp \
 	opt/local-dce/LocalDce.cpp \
 	opt/merge_interface/MergeInterface.cpp \
