@@ -35,7 +35,7 @@ class InjectDebug {
   void inject_all();
   void write_dex();
 
-  void inject_method(DexMethod* dex_method);
+  void inject_method(DexMethod* dex_method, int* line_start);
   void inject_register(IRCode* ir_code,
                        const IRList::iterator& ir_it,
                        const type_inference::TypeEnvironment& type_env,

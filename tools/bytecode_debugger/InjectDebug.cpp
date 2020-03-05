@@ -66,7 +66,7 @@ void InjectDebug::inject_register(
       std::make_unique<DexDebugOpcodeStartLocal>(reg, reg_string, reg_type));
 }
 
-void InjectDebug::inject_method(DexMethod* dex_method) {
+void InjectDebug::inject_method(DexMethod* dex_method, int* line_start) {
   IRCode* ir_code = dex_method->get_code();
   if (ir_code == nullptr) return;
 
@@ -95,20 +95,14 @@ void InjectDebug::inject_method(DexMethod* dex_method) {
     }
   }
 
-  bool first_instruction = true;
   for (; ir_it != ir_code->end(); ++ir_it) {
     switch (ir_it->type) {
     case MethodItemType::MFLOW_OPCODE: {
-      // TODO: Try inserting MFLOW_POSITION entries below instead of MFLOW_DEBUG
-      // entries for DexDebugInstructions
-      if (first_instruction) {
-        ir_code->insert_before(ir_it,
-                               DexDebugInstruction::create_line_entry(0, 0));
-        first_instruction = false;
-      } else {
-        ir_code->insert_before(ir_it,
-                               DexDebugInstruction::create_line_entry(1, 0));
-      }
+      ir_code->insert_before(
+          ir_it, std::make_unique<DexPosition>(dex_method->get_name(),
+                                               dex_method->get_name(),
+                                               *line_start));
+      ++(*line_start);
       // Make debugger stop at every instruction, and provide local variables to
       // debug each instruction's source and destination registers
       type_inf.analyze_instruction(ir_it->insn, &type_envs.at(ir_it->insn));
@@ -150,11 +144,14 @@ void InjectDebug::inject_all() {
   for (DexStore& store : m_stores) {
     for (DexClasses& classes : store.get_dexen()) {
       for (DexClass* dex_class : classes) {
+        // Line numbers within a single class should be unique so that JDB
+        // can find a unique location with class name and line number
+        int line_start = 0;
         for (DexMethod* dex_method : dex_class->get_dmethods()) {
-          inject_method(dex_method);
+          inject_method(dex_method, &line_start);
         }
         for (DexMethod* dex_method : dex_class->get_vmethods()) {
-          inject_method(dex_method);
+          inject_method(dex_method, &line_start);
         }
       }
     }
@@ -167,7 +164,7 @@ void InjectDebug::write_dex() {
 
   for (size_t store_num = 0; store_num < m_stores.size(); ++store_num) {
     DexStore& store = m_stores[store_num];
-    for (size_t i = 0; i < store.get_dexen().size(); i++) {
+    for (size_t i = 0; i < store.get_dexen().size(); ++i) {
       std::string filename =
           redex::get_dex_output_name(m_conf.get_outdir(), store, i);
       DexOutput dout = DexOutput(filename.c_str(), // filename
@@ -184,7 +181,6 @@ void InjectDebug::write_dex() {
                                  nullptr, // code_debug_lines
                                  nullptr // post_lowering
       );
-
       dout.prepare(SortMode::DEFAULT, {SortMode::DEFAULT}, m_conf,
                    m_stores[0].get_dex_magic());
       dout.write();

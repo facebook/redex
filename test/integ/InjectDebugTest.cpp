@@ -213,10 +213,11 @@ TEST_F(InjectDebugTest, TestLineDebugInfoCreated) {
           ++debug_entry_idx;
         }
 
-        // Some goto statements do not get their own debug line
+        // Debug information is not emitted for some goto instructions
         if (pc != debug_entries[debug_entry_idx].addr &&
             dex_opcode::is_goto(instr->opcode())) {
           pc += instr->size();
+          ++line;
           continue;
         }
 
@@ -227,8 +228,8 @@ TEST_F(InjectDebugTest, TestLineDebugInfoCreated) {
         // Check that debug line numbers increment by exactly 1
         EXPECT_EQ(line, debug_entries[debug_entry_idx].pos->line);
         pc += instr->size();
-        debug_entry_idx++;
-        line++;
+        ++debug_entry_idx;
+        ++line;
       }
     }
   }
@@ -252,7 +253,7 @@ TEST_F(InjectDebugTest, TestLocalVarDebugInfoCreated) {
         if (debug_entries[i].type == DexDebugEntryType::Instruction &&
             debug_entries[i].insn->opcode() ==
                 DexDebugItemOpcodeValues::DBG_START_LOCAL) {
-          local_var_count++;
+          ++local_var_count;
           // Check that the format of local variable names is like "v1", "v2"...
           auto start_local = static_cast<DexDebugOpcodeStartLocal*>(
               debug_entries[i].insn.get());

@@ -1284,10 +1284,10 @@ void DexOutput::generate_annotations() {
 
 namespace {
 struct DebugMetadata {
-  DexDebugItem* dbg;
-  dex_code_item* dci;
-  uint32_t line_start;
-  uint32_t num_params;
+  DexDebugItem* dbg{nullptr};
+  dex_code_item* dci{nullptr};
+  uint32_t line_start{0};
+  uint32_t num_params{0};
   std::vector<std::unique_ptr<DexDebugInstruction>> dbgops;
 };
 
