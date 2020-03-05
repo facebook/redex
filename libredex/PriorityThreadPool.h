@@ -55,7 +55,7 @@ class PriorityThreadPool {
 
   ~PriorityThreadPool() {
     // .join() must be manually called before the executor may be destroyed
-    always_assert(m_pending_work_items.size() == 0);
+    always_assert(m_pending_work_items.empty());
   }
 
   long get_waited_seconds() {
@@ -87,7 +87,7 @@ class PriorityThreadPool {
         auto& queue = p.second;
         highest_priority_f = queue.front();
         queue.pop();
-        if (queue.size() == 0) {
+        if (queue.empty()) {
           auto highest_priority = p.first;
           m_pending_work_items.erase(highest_priority);
         }
@@ -98,7 +98,7 @@ class PriorityThreadPool {
       // Notify when *all* work is done, i.e. nothing is running or pending.
       {
         boost::mutex::scoped_lock lock(m_mutex);
-        if (--m_running_work_items == 0 && m_pending_work_items.size() == 0) {
+        if (--m_running_work_items == 0 && m_pending_work_items.empty()) {
           m_condition.notify_one();
         }
       }
@@ -112,7 +112,7 @@ class PriorityThreadPool {
     {
       // We wait until *all* work is done, i.e. nothing is running or pending.
       boost::mutex::scoped_lock lock(m_mutex);
-      while (m_running_work_items != 0 || m_pending_work_items.size() != 0) {
+      while (m_running_work_items != 0 || !m_pending_work_items.empty()) {
         // We'll wait until the condition variable gets notified. Waiting for
         // that will first release the lock, and re-acquire it after the
         // notification came in.
@@ -121,7 +121,7 @@ class PriorityThreadPool {
     }
     auto end = std::chrono::system_clock::now();
     m_waited_time += end - start;
-    always_assert(m_pending_work_items.size() == 0);
+    always_assert(m_pending_work_items.empty());
   }
 
   void join() {

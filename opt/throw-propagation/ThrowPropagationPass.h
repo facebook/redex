@@ -31,7 +31,7 @@ class ThrowPropagationPass : public Pass {
  public:
   ThrowPropagationPass() : Pass("ThrowPropagationPass") {}
 
-  virtual void bind_config() override;
+  void bind_config() override;
 
   static std::unordered_set<DexMethod*> get_no_return_methods(
       const Config& config, const Scope& scope);

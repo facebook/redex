@@ -28,8 +28,6 @@ class Pass : public Configurable {
     PassRegistry::get().register_pass(this);
   }
 
-  virtual ~Pass() {}
-
   std::string name() const { return m_name; }
 
   std::string get_config_name() override { return name(); };

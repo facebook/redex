@@ -33,7 +33,7 @@ struct ConfigFiles {
   ConfigFiles(const Json::Value& config, const std::string& outdir);
 
   const std::vector<std::string>& get_coldstart_classes() {
-    if (m_coldstart_classes.size() == 0) {
+    if (m_coldstart_classes.empty()) {
       m_coldstart_classes = load_coldstart_classes();
     }
     return m_coldstart_classes;

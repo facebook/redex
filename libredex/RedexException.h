@@ -33,7 +33,7 @@ class RedexException : public std::exception {
                  const std::string& message = "",
                  const std::map<std::string, std::string>& extra_info = {});
 
-  virtual const char* what() const throw();
+  const char* what() const throw() override;
 
  private:
   std::string m_msg;

@@ -78,7 +78,7 @@ class VirtualMergingPass : public Pass {
  public:
   VirtualMergingPass() : Pass("VirtualMergingPass") {}
 
-  virtual void bind_config() override;
+  void bind_config() override;
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:

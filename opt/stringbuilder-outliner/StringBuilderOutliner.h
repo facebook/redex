@@ -266,7 +266,7 @@ class StringBuilderOutlinerPass : public Pass {
          m_config.min_outline_count);
   }
 
-  virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+  void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
   Config m_config;

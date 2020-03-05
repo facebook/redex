@@ -981,11 +981,11 @@ class DexMethod : public DexMethodRef {
     return m_access;
   }
   const ParamAnnotations* get_param_anno() const {
-    if (m_param_anno.size() == 0) return nullptr;
+    if (m_param_anno.empty()) return nullptr;
     return &m_param_anno;
   }
   ParamAnnotations* get_param_anno() {
-    if (m_param_anno.size() == 0) return nullptr;
+    if (m_param_anno.empty()) return nullptr;
     return &m_param_anno;
   }
 
@@ -1176,7 +1176,7 @@ class DexClass {
 
   bool has_ctors() const {
     // TODO: There must be a logarithmic approach to this. dmethods are sorted!
-    return !!get_ctors().size();
+    return !get_ctors().empty();
   }
 
   void add_method(DexMethod* m);

@@ -17,7 +17,7 @@ class BranchPrefixHoistingPass : public Pass {
  public:
   BranchPrefixHoistingPass() : Pass("BranchPrefixHoistingPass") {}
 
-  virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+  void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
   static int process_code(IRCode*);
   static int process_cfg(cfg::ControlFlowGraph&);

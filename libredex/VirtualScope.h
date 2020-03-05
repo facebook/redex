@@ -134,7 +134,7 @@ bool can_rename_scope(const VirtualScope* scope);
  * Return true if a VirtualScope contributes to interface resolution.
  */
 inline bool is_impl_scope(const VirtualScope* scope) {
-  return scope->interfaces.size() > 0;
+  return !scope->interfaces.empty();
 }
 
 /**
