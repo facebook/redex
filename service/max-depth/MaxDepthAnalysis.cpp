@@ -178,7 +178,7 @@ class MaxDepthFunctionAnalyzer : public Intraprocedural {
 // The adaptor supplies the necessary typenames to the analyzer so that template
 // instantiation assembles the different parts. It's also possible to override
 // type aliases in the adaptor base class.
-struct MaxDepthAnalysisAdaptor : public AnalysisAdaptorBase {
+struct MaxDepthAnalysisAdaptor : public BottomUpAnalysisAdaptorBase {
   // This map type is used to hold the summaries
   template <typename K, typename V>
   using Map = PatriciaTreeMapAbstractEnvironment<K, V>;

@@ -42,4 +42,9 @@ struct AnalysisAdaptorBase {
   }
 };
 
+struct BottomUpAnalysisAdaptorBase : public AnalysisAdaptorBase {
+  using CallGraphInterface =
+      sparta::BackwardsFixpointIterationAdaptor<call_graph::GraphInterface>;
+};
+
 } // namespace sparta_interprocedural
