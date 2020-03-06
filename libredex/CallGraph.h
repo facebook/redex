@@ -35,6 +35,8 @@ class Graph;
  */
 Graph single_callee_graph(const Scope&);
 
+Graph complete_call_graph(const Scope&);
+
 struct CallSite {
   const DexMethod* callee;
   IRList::iterator invoke;

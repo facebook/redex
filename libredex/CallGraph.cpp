@@ -67,12 +67,65 @@ class SingleCalleeStrategy final : public BuildStrategy {
   mutable MethodRefCache m_resolved_refs;
 };
 
+class CompleteCallGraphStrategy final : public BuildStrategy {
+ public:
+  explicit CompleteCallGraphStrategy(const Scope& scope)
+      : m_scope(scope), m_method_override_graph(mog::build_graph(scope)) {}
+
+  CallSites get_callsites(const DexMethod* method) const override {
+    CallSites callsites;
+    auto* code = const_cast<IRCode*>(method->get_code());
+    if (code == nullptr) {
+      return callsites;
+    }
+    for (auto& mie : InstructionIterable(code)) {
+      auto insn = mie.insn;
+      if (is_invoke(insn->opcode())) {
+        auto callee = resolve_method(
+            insn->get_method(), opcode_to_search(insn), m_resolved_refs);
+        if (callee == nullptr) {
+          continue;
+        }
+        if (callee->is_concrete()) {
+          callsites.emplace_back(callee, code->iterator_to(mie));
+        }
+        auto overriding =
+            mog::get_overriding_methods(*m_method_override_graph, callee);
+
+        for (auto m : overriding) {
+          callsites.emplace_back(m, code->iterator_to(mie));
+        }
+      }
+    }
+    return callsites;
+  }
+
+  std::vector<const DexMethod*> get_roots() const override {
+    std::vector<const DexMethod*> roots;
+
+    walk::methods(m_scope, [&](DexMethod* method) {
+      if (root(method) || method::is_clinit(method)) {
+        roots.emplace_back(method);
+      }
+    });
+    return roots;
+  }
+
+ private:
+  const Scope& m_scope;
+  mutable MethodRefCache m_resolved_refs;
+  std::unique_ptr<const mog::Graph> m_method_override_graph;
+};
 } // namespace
 
 namespace call_graph {
 
 Graph single_callee_graph(const Scope& scope) {
   return Graph(SingleCalleeStrategy(scope));
+}
+
+Graph complete_call_graph(const Scope& scope) {
+  return Graph(CompleteCallGraphStrategy(scope));
 }
 
 Edge::Edge(NodeId caller, NodeId callee, const IRList::iterator& invoke_it)
