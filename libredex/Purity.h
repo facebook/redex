@@ -118,7 +118,9 @@ enum class MethodOverrideAction {
 // Determine what action to take for a method while traversing a base method
 // and its overriding methods.
 MethodOverrideAction get_base_or_overriding_method_action(
-    const DexMethod* method, bool ignore_methods_with_assumenosideeffects);
+    const DexMethod* method,
+    const std::unordered_set<const DexMethod*>* methods_to_ignore,
+    bool ignore_methods_with_assumenosideeffects);
 
 // Given a (base) method, iterate over all relevant (base + overriding)
 // methods, and run a handler method for each method that should be included
@@ -128,6 +130,7 @@ MethodOverrideAction get_base_or_overriding_method_action(
 bool process_base_and_overriding_methods(
     const method_override_graph::Graph* method_override_graph,
     const DexMethod* method,
+    const std::unordered_set<const DexMethod*>* methods_to_ignore,
     bool ignore_methods_with_assumenosideeffects,
     const std::function<bool(DexMethod*)>& handler_func);
 

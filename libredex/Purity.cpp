@@ -309,7 +309,9 @@ std::unordered_set<DexMethodRef*> get_pure_methods() {
 }
 
 MethodOverrideAction get_base_or_overriding_method_action(
-    const DexMethod* method, bool ignore_methods_with_assumenosideeffects) {
+    const DexMethod* method,
+    const std::unordered_set<const DexMethod*>* methods_to_ignore,
+    bool ignore_methods_with_assumenosideeffects) {
   if (method == nullptr || method::is_clinit(method) ||
       method->rstate.no_optimizations()) {
     return MethodOverrideAction::UNKNOWN;
@@ -321,6 +323,10 @@ MethodOverrideAction get_base_or_overriding_method_action(
     // Proxy.newProxyInstance, that override this method.
     // So we assume the worst.
     return MethodOverrideAction::UNKNOWN;
+  }
+
+  if (methods_to_ignore && methods_to_ignore->count(method)) {
+    return MethodOverrideAction::EXCLUDE;
   }
 
   if (ignore_methods_with_assumenosideeffects && assumenosideeffects(method)) {
@@ -341,33 +347,48 @@ MethodOverrideAction get_base_or_overriding_method_action(
 bool process_base_and_overriding_methods(
     const method_override_graph::Graph* method_override_graph,
     const DexMethod* method,
+    const std::unordered_set<const DexMethod*>* methods_to_ignore,
     bool ignore_methods_with_assumenosideeffects,
     const std::function<bool(DexMethod*)>& handler_func) {
   auto action = get_base_or_overriding_method_action(
-      method, ignore_methods_with_assumenosideeffects);
+      method, methods_to_ignore, ignore_methods_with_assumenosideeffects);
   if (action == MethodOverrideAction::UNKNOWN ||
       (action == MethodOverrideAction::INCLUDE &&
        !handler_func(const_cast<DexMethod*>(method)))) {
     return false;
   }
-  if (method->is_virtual() && !(ignore_methods_with_assumenosideeffects &&
-                                assumenosideeffects(method))) {
-    if (!method_override_graph) {
-      return false;
-    }
-    auto overriding_methods = method_override_graph::get_overriding_methods(
-        *method_override_graph, method);
-    for (auto overriding_method : overriding_methods) {
-      action = get_base_or_overriding_method_action(
-          overriding_method, ignore_methods_with_assumenosideeffects);
-      if (action == MethodOverrideAction::UNKNOWN ||
-          (action == MethodOverrideAction::INCLUDE &&
-           !handler_func(const_cast<DexMethod*>(overriding_method)))) {
-        return false;
-      }
-    }
+  // When the method isn't virtual, there are no overriden methods to consider.
+  if (!method->is_virtual()) {
+    return true;
+  }
+  // But even if there are overriden methods, don't look further when the
+  // method is to be ignored.
+  if (methods_to_ignore && methods_to_ignore->count(method)) {
+    return true;
+  }
+  if (ignore_methods_with_assumenosideeffects && assumenosideeffects(method)) {
+    return true;
   }
 
+  // When we don't have a method-override graph, let's be conservative and give
+  // up.
+  if (!method_override_graph) {
+    return false;
+  }
+
+  // Okay, let's process all overridden methods just like the base method.
+  auto overriding_methods = method_override_graph::get_overriding_methods(
+      *method_override_graph, method);
+  for (auto overriding_method : overriding_methods) {
+    action = get_base_or_overriding_method_action(
+        overriding_method, methods_to_ignore,
+        ignore_methods_with_assumenosideeffects);
+    if (action == MethodOverrideAction::UNKNOWN ||
+        (action == MethodOverrideAction::INCLUDE &&
+         !handler_func(const_cast<DexMethod*>(overriding_method)))) {
+      return false;
+    }
+  }
   return true;
 }
 
@@ -555,11 +576,9 @@ static size_t analyze_read_locations(
   return compute_locations_closure(
       scope, method_override_graph,
       [&](DexMethod* method) -> boost::optional<LocationsAndDependencies> {
-        auto action =
-            pure_methods_closure.count(method)
-                ? MethodOverrideAction::EXCLUDE
-                : get_base_or_overriding_method_action(
-                      method, ignore_methods_with_assumenosideeffects);
+        auto action = get_base_or_overriding_method_action(
+            method, &pure_methods_closure,
+            ignore_methods_with_assumenosideeffects);
 
         if (action == MethodOverrideAction::UNKNOWN) {
           return boost::none;
@@ -567,7 +586,7 @@ static size_t analyze_read_locations(
 
         LocationsAndDependencies lads;
         if (!process_base_and_overriding_methods(
-                method_override_graph, method,
+                method_override_graph, method, &pure_methods_closure,
                 ignore_methods_with_assumenosideeffects,
                 [&](DexMethod* other_method) {
                   if (other_method != method) {
@@ -623,6 +642,7 @@ static size_t analyze_read_locations(
                                                       opcode_to_search(opcode));
                   if (!process_base_and_overriding_methods(
                           method_override_graph, invoke_method,
+                          &pure_methods_closure,
                           ignore_methods_with_assumenosideeffects,
                           [&](DexMethod* other_method) {
                             if (other_method != method) {
@@ -696,7 +716,7 @@ bool has_implementor(const method_override_graph::Graph* method_override_graph,
   }
   bool found_implementor = false;
   if (!process_base_and_overriding_methods(
-          method_override_graph, method,
+          method_override_graph, method, /* methods_to_ignore */ nullptr,
           /* ignore_methods_with_assumenosideeffects */ false, [&](DexMethod*) {
             found_implementor = true;
             return true;

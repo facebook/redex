@@ -83,7 +83,10 @@ class SharedState {
       const IRInstruction* insn, const CseUnorderedLocationSet& read_locations);
   // after init_scope, m_pure_methods will include m_conditionally_pure_methods
   std::unordered_set<DexMethodRef*> m_pure_methods;
+  // methods which never represent barriers
   std::unordered_set<DexMethodRef*> m_safe_methods;
+  // subset of safe methods which are in fact defs
+  std::unordered_set<const DexMethod*> m_safe_method_defs;
   std::unique_ptr<ConcurrentMap<Barrier, size_t, BarrierHasher>> m_barriers;
   std::unordered_map<const DexMethod*, CseUnorderedLocationSet>
       m_method_written_locations;

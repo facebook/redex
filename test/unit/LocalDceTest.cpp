@@ -17,11 +17,16 @@
 #include "Purity.h"
 #include "RedexTest.h"
 #include "ScopeHelper.h"
+#include "VirtualScope.h"
 
 struct LocalDceTryTest : public RedexTest {
   DexMethod* m_method;
 
   LocalDceTryTest() {
+    // Calling get_vmethods under the hood initializes the object-class, which
+    // we need in the tests to create a proper scope
+    get_vmethods(type::java_lang_Object());
+
     auto args = DexTypeList::make_type_list({});
     auto proto = DexProto::make_proto(type::_void(), args);
     m_method =
@@ -495,6 +500,50 @@ TEST_F(LocalDceEnhanceTest, NoImplementorMayAllocateRegistersTest) {
   auto override_graph = method_override_graph::build_graph(scope);
   LocalDce ldce(pure_methods, override_graph.get(),
                 /* may_allocate_registers */ true);
+}
+
+TEST_F(LocalDceTryTest, invoked_static_method_with_pure_external_barrier) {
+  ClassCreator creator(DexType::make_type("LNativeTest;"));
+  creator.set_super(type::java_lang_Object());
+
+  auto native_method =
+      DexMethod::make_method("LNativeTest;.native:()V")
+          ->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_NATIVE, false);
+
+  auto method = DexMethod::make_method("LNativeTest;.test:()V")
+                    ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  method->set_code(assembler::ircode_from_string(R"(
+                    (
+                      (invoke-static () "LNativeTest;.native:()V")
+                      (return-void)
+                    )
+                    )"));
+  creator.add_method(method);
+
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (invoke-static () "LNativeTest;.test:()V")
+      (return-void)
+    )
+  )");
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (return-void)
+    )
+  )");
+
+  Scope scope{type_class(type::java_lang_Object()), creator.create()};
+  std::unordered_set<DexMethodRef*> pure_methods = {native_method};
+  // We are computing other no-side-effects method just like the LocalDcePass
+  // would.
+  auto override_graph = method_override_graph::build_graph(scope);
+  std::unordered_set<const DexMethod*> computed_no_side_effects_methods;
+  compute_no_side_effects_methods(scope, override_graph.get(), pure_methods,
+                                  &computed_no_side_effects_methods);
+  for (auto m : computed_no_side_effects_methods) {
+    pure_methods.insert(const_cast<DexMethod*>(m));
+  }
+  LocalDce ldce(pure_methods);
   IRCode* ircode = code.get();
   ldce.dce(ircode);
   EXPECT_CODE_EQ(ircode, expected_code.get());

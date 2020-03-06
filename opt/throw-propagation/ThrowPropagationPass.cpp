@@ -131,7 +131,7 @@ ThrowPropagationPass::Stats ThrowPropagationPass::run(
       return true;
     };
     if (!process_base_and_overriding_methods(
-            &graph, method,
+            &graph, method, /* methods_to_ignore */ nullptr,
             /* ignore_methods_with_assumenosideeffects */ false,
             check_for_no_return)) {
       return false;

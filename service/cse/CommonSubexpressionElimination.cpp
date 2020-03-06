@@ -925,7 +925,8 @@ void SharedState::init_method_barriers(const Scope& scope) {
       scope, m_method_override_graph.get(),
       [&](DexMethod* method) -> boost::optional<LocationsAndDependencies> {
         auto action = get_base_or_overriding_method_action(
-            method, /* ignore_methods_with_assumenosideeffects */ true);
+            method, &m_safe_method_defs,
+            /* ignore_methods_with_assumenosideeffects */ true);
         if (action == MethodOverrideAction::UNKNOWN) {
           return boost::none;
         }
@@ -955,6 +956,7 @@ void SharedState::init_method_barriers(const Scope& scope) {
 
             if (!process_base_and_overriding_methods(
                     m_method_override_graph.get(), barrier.method,
+                    &m_safe_method_defs,
                     /* ignore_methods_with_assumenosideeffects */ true,
                     [&](DexMethod* other_method) {
                       if (other_method != method) {
@@ -992,6 +994,13 @@ void SharedState::init_scope(const Scope& scope) {
   m_stats.conditionally_pure_methods_iterations = iterations;
   for (auto& p : m_conditionally_pure_methods) {
     m_pure_methods.insert(const_cast<DexMethod*>(p.first));
+  }
+
+  for (auto method_ref : m_safe_methods) {
+    auto method = method_ref->as_def();
+    if (method) {
+      m_safe_method_defs.insert(method);
+    }
   }
 
   init_method_barriers(scope);
@@ -1090,7 +1099,7 @@ CseUnorderedLocationSet SharedState::get_relevant_written_locations(
   DexMethod* method = resolve_method(method_ref, opcode_to_search(insn));
   CseUnorderedLocationSet written_locations;
   if (!process_base_and_overriding_methods(
-          m_method_override_graph.get(), method,
+          m_method_override_graph.get(), method, &m_safe_method_defs,
           /* ignore_methods_with_assumenosideeffects */ true,
           [&](DexMethod* other_method) {
             auto it = m_method_written_locations.find(other_method);
