@@ -63,6 +63,7 @@ class InterproceduralAnalyzer {
   using Map = typename Analysis::template Map<Key, Value>;
 
   using CallGraphInterface = typename Analysis::CallGraphInterface;
+
   using FunctionAnalyzer =
       typename Analysis::template FunctionAnalyzer<Map<Function, Summary>>;
   using CallGraph = typename CallGraphInterface::Graph;
@@ -95,9 +96,11 @@ class InterproceduralAnalyzer {
           m_intraprocedural(intraprocedural),
           m_function_summaries(function_summaries) {}
 
-    virtual void analyze_node(const Function& node,
+    virtual void analyze_node(const typename CallGraphInterface::NodeId& node,
                               CallerContext* current_state) const override {
-      m_intraprocedural(node, this->m_function_summaries, current_state)
+      m_intraprocedural(Analysis::function_by_node_id(node),
+                        this->m_function_summaries,
+                        current_state)
           ->summarize();
     }
 

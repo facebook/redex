@@ -36,6 +36,10 @@ struct AnalysisAdaptorBase {
     // will call it on every top level iteration.
     return call_graph::single_callee_graph(scope);
   }
+
+  static const DexMethod* function_by_node_id(const call_graph::NodeId& node) {
+    return node->method();
+  }
 };
 
 } // namespace sparta_interprocedural

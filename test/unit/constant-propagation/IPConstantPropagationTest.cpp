@@ -337,9 +337,12 @@ TEST_F(InterproceduralConstantPropagationTest, unreachableInvoke) {
   fp_iter.run({{CURRENT_PARTITION_LABEL, ArgumentDomain()}});
 
   // Check m2 is reachable, despite m3 being unreachable
-  EXPECT_EQ(fp_iter.get_entry_state_at(m2).get(CURRENT_PARTITION_LABEL),
-            ArgumentDomain({{0, SignedConstantDomain(0)}}));
-  EXPECT_TRUE(fp_iter.get_entry_state_at(m3).is_bottom());
+  auto& graph = fp_iter.get_call_graph();
+
+  EXPECT_EQ(
+      fp_iter.get_entry_state_at(graph.node(m2)).get(CURRENT_PARTITION_LABEL),
+      ArgumentDomain({{0, SignedConstantDomain(0)}}));
+  EXPECT_TRUE(fp_iter.get_entry_state_at(graph.node(m3)).is_bottom());
 }
 
 struct RuntimeAssertTest : public InterproceduralConstantPropagationTest {

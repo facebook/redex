@@ -7,7 +7,6 @@
 
 #pragma once
 
-#include <boost/functional/hash.hpp>
 #include <unordered_map>
 
 #include "DexClass.h"
@@ -62,59 +61,65 @@ class BuildStrategy {
   virtual CallSites get_callsites(const DexMethod*) const = 0;
 };
 
-class Edge {
- public:
-  Edge(const DexMethod* caller,
-       const DexMethod* callee,
-       const IRList::iterator& invoke_it);
-  IRList::iterator invoke_iterator() const { return m_invoke_it; }
-  const DexMethod* caller() const { return m_caller; }
-  const DexMethod* callee() const { return m_callee; }
-
- private:
-  const DexMethod* m_caller;
-  const DexMethod* m_callee;
-  IRList::iterator m_invoke_it;
-};
-
+class Edge;
+using EdgeId = std::shared_ptr<Edge>;
 using Edges = std::vector<std::shared_ptr<Edge>>;
 
 class Node {
+  enum NodeType {
+    GHOST_ENTRY,
+    GHOST_EXIT,
+    REAL_METHOD,
+  };
+
  public:
-  /* implicit */
-  Node(const DexMethod* m) : m_method(m) {}
+  explicit Node(const DexMethod* m) : m_method(m), m_type(REAL_METHOD) {}
+  explicit Node(NodeType type) : m_method(nullptr), m_type(type) {}
+
   const DexMethod* method() const { return m_method; }
   bool operator==(const Node& that) const { return method() == that.method(); }
   const Edges& callers() const { return m_predecessors; }
   const Edges& callees() const { return m_successors; }
 
+  bool is_entry() { return m_type == GHOST_ENTRY; }
+  bool is_exit() { return m_type == GHOST_EXIT; }
+
  private:
   const DexMethod* m_method;
   Edges m_predecessors;
   Edges m_successors;
+  NodeType m_type;
 
   friend class Graph;
 };
 
-inline size_t hash_value(const Node& node) {
-  return reinterpret_cast<size_t>(node.method());
-}
+using NodeId = std::shared_ptr<Node>;
 
-} // namespace call_graph
+class Edge {
+ public:
+  Edge(NodeId caller, NodeId callee, const IRList::iterator& invoke_it);
+  IRList::iterator invoke_iterator() const { return m_invoke_it; }
+  NodeId caller() const { return m_caller; }
+  NodeId callee() const { return m_callee; }
 
-namespace call_graph {
+ private:
+  NodeId m_caller;
+  NodeId m_callee;
+  IRList::iterator m_invoke_it;
+};
 
 class Graph final {
  public:
   Graph(const BuildStrategy&);
 
-  const Node& entry() const { return m_entry; }
+  NodeId entry() const { return m_entry; }
+  NodeId exit() const { return m_exit; }
 
   bool has_node(const DexMethod* m) const {
     return m_nodes.count(const_cast<DexMethod*>(m)) != 0;
   }
 
-  const Node& node(const DexMethod* m) const {
+  NodeId node(const DexMethod* m) const {
     if (m == nullptr) {
       return m_entry;
     }
@@ -122,35 +127,37 @@ class Graph final {
   }
 
  private:
-  Node& make_node(const DexMethod*);
+  NodeId make_node(const DexMethod*);
 
-  void add_edge(const DexMethod* caller,
-                const DexMethod* callee,
+  void add_edge(const NodeId& caller,
+                const NodeId& callee,
                 const IRList::iterator& invoke_it);
 
-  Node m_entry = Node(nullptr);
-  std::unordered_map<const DexMethod*, Node, boost::hash<Node>> m_nodes;
+  std::shared_ptr<Node> m_entry;
+  std::shared_ptr<Node> m_exit;
+  std::unordered_map<const DexMethod*, NodeId> m_nodes;
 };
 
 // A static-method-only API for use with the monotonic fixpoint iterator.
 class GraphInterface {
  public:
   using Graph = call_graph::Graph;
-  using NodeId = const DexMethod*;
+  using NodeId = std::shared_ptr<Node>;
   using EdgeId = std::shared_ptr<Edge>;
 
-  static NodeId entry(const Graph& graph) { return graph.entry().method(); }
+  static NodeId entry(const Graph& graph) { return graph.entry(); }
+  static NodeId exit(const Graph& graph) { return graph.exit(); }
   static Edges predecessors(const Graph& graph, const NodeId& m) {
-    return graph.node(m).callers();
+    return m->callers();
   }
   static Edges successors(const Graph& graph, const NodeId& m) {
-    return graph.node(m).callees();
+    return m->callees();
   }
   static NodeId source(const Graph& graph, const EdgeId& e) {
-    return graph.node(e->caller()).method();
+    return e->caller();
   }
   static NodeId target(const Graph& graph, const EdgeId& e) {
-    return graph.node(e->callee()).method();
+    return e->callee();
   }
 };
 

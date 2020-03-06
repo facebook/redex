@@ -390,7 +390,7 @@ static void analyze_method_recursive(
     sparta::PatriciaTreeSet<const DexMethodRef*> visiting,
     FixpointIteratorMap* fp_iter_map,
     SummaryCMap* summary_map) {
-  if (summary_map->count(method) != 0 || visiting.contains(method) ||
+  if (!method || summary_map->count(method) != 0 || visiting.contains(method) ||
       method->get_code() == nullptr) {
     return;
   }
@@ -398,9 +398,9 @@ static void analyze_method_recursive(
 
   std::unordered_map<const IRInstruction*, EscapeSummary> invoke_to_summary_map;
   if (call_graph.has_node(method)) {
-    const auto& callee_edges = call_graph.node(method).callees();
+    const auto& callee_edges = call_graph.node(method)->callees();
     for (const auto& edge : callee_edges) {
-      auto* callee = edge->callee();
+      auto* callee = edge->callee()->method();
       analyze_method_recursive(callee, call_graph, visiting, fp_iter_map,
                                summary_map);
       if (summary_map->count(callee) != 0) {

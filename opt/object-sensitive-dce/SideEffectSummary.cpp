@@ -179,17 +179,17 @@ void analyze_method_recursive(const DexMethod* method,
                               const ptrs::FixpointIteratorMap& ptrs_fp_iter_map,
                               PatriciaTreeSet<const DexMethodRef*> visiting,
                               SummaryConcurrentMap* summary_cmap) {
-  if (summary_cmap->count(method) != 0 || visiting.contains(method) ||
-      method->get_code() == nullptr) {
+  if (!method || summary_cmap->count(method) != 0 ||
+      visiting.contains(method) || method->get_code() == nullptr) {
     return;
   }
   visiting.insert(method);
 
   std::unordered_map<const IRInstruction*, Summary> invoke_to_summary_cmap;
   if (call_graph.has_node(method)) {
-    const auto& callee_edges = call_graph.node(method).callees();
+    const auto& callee_edges = call_graph.node(method)->callees();
     for (const auto& edge : callee_edges) {
-      auto* callee = edge->callee();
+      auto* callee = edge->callee()->method();
       analyze_method_recursive(callee, call_graph, ptrs_fp_iter_map, visiting,
                                summary_cmap);
       if (summary_cmap->count(callee) != 0) {

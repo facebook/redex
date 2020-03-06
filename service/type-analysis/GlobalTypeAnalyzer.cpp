@@ -68,8 +68,10 @@ DexTypeEnvironment env_with_params(const IRCode* code,
 }
 
 void GlobalTypeAnalyzer::analyze_node(
-    const DexMethod* const& method,
+    const call_graph::NodeId& node,
     ArgumentTypePartition* current_partition) const {
+  const DexMethod* method = node->method();
+
   if (method == nullptr) {
     return;
   }
@@ -80,9 +82,12 @@ void GlobalTypeAnalyzer::analyze_node(
   auto& cfg = code->cfg();
   auto intra_ta = get_local_analysis(method);
   const auto outgoing_edges =
-      call_graph::GraphInterface::successors(m_call_graph, method);
+      call_graph::GraphInterface::successors(m_call_graph, node);
   std::unordered_set<IRInstruction*> outgoing_insns;
   for (const auto& edge : outgoing_edges) {
+    if (edge->callee() == m_call_graph.exit()) {
+      continue; // ghost edge to the ghost exit node
+    }
     outgoing_insns.emplace(edge->invoke_iterator()->insn);
   }
   for (auto* block : cfg.blocks()) {
@@ -119,7 +124,11 @@ ArgumentTypePartition GlobalTypeAnalyzer::analyze_edge(
 
 std::unique_ptr<local::LocalTypeAnalyzer>
 GlobalTypeAnalyzer::get_local_analysis(const DexMethod* method) const {
-  auto args = this->get_entry_state_at(const_cast<DexMethod*>(method));
+  auto args = ArgumentTypePartition::bottom();
+
+  if (m_call_graph.has_node(method)) {
+    args = this->get_entry_state_at(m_call_graph.node(method));
+  }
   return analyze_method(method,
                         this->get_whole_program_state(),
                         args.get(CURRENT_PARTITION_LABEL));

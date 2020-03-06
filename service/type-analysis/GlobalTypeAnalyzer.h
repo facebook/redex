@@ -73,7 +73,7 @@ class GlobalTypeAnalyzer : public sparta::ParallelMonotonicFixpointIterator<
     m_wps.reset(wps);
   }
 
-  void analyze_node(const DexMethod* const& method,
+  void analyze_node(const call_graph::NodeId& node,
                     ArgumentTypePartition* current_state) const override;
 
   ArgumentTypePartition analyze_edge(
@@ -92,6 +92,8 @@ class GlobalTypeAnalyzer : public sparta::ParallelMonotonicFixpointIterator<
   void set_whole_program_state(std::unique_ptr<WholeProgramState> wps) {
     m_wps = std::move(wps);
   }
+
+  const call_graph::Graph& get_call_graph() { return m_call_graph; }
 
  private:
   std::unique_ptr<const WholeProgramState> m_wps;

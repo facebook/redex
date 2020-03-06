@@ -303,6 +303,11 @@ struct AnalysisAdaptorBase {
     call_graph_cache.emplace(program, std::move(graph));
     return call_graph_cache.at(program);
   }
+
+  static language::Function* function_by_node_id(
+      const typename CallGraphInterface::NodeId& node) {
+    return node;
+  }
 };
 
 std::unordered_map<Program*, CallGraph> AnalysisAdaptorBase::call_graph_cache;

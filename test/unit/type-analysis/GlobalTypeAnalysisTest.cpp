@@ -83,11 +83,14 @@ TEST_F(GlobalTypeAnalysisTest, SimpleArgumentPassingTest) {
   });
   GlobalTypeAnalyzer gta(cg);
   gta.run({{CURRENT_PARTITION_LABEL, ArgumentTypeEnvironment()}});
+
+  auto& graph = gta.get_call_graph();
+
   auto foo_arg_env =
-      gta.get_entry_state_at(meth_foo).get(CURRENT_PARTITION_LABEL);
+      gta.get_entry_state_at(graph.node(meth_foo)).get(CURRENT_PARTITION_LABEL);
   EXPECT_TRUE(foo_arg_env.is_top());
   auto bar_arg_env =
-      gta.get_entry_state_at(meth_bar).get(CURRENT_PARTITION_LABEL);
+      gta.get_entry_state_at(graph.node(meth_bar)).get(CURRENT_PARTITION_LABEL);
   EXPECT_EQ(bar_arg_env,
             ArgumentTypeEnvironment({{0, get_type_domain("LO;")}}));
 }
@@ -142,11 +145,14 @@ TEST_F(GlobalTypeAnalysisTest, ArgumentPassingJoinWithNullTest) {
   });
   GlobalTypeAnalyzer gta(cg);
   gta.run({{CURRENT_PARTITION_LABEL, ArgumentTypeEnvironment()}});
+
+  auto& graph = gta.get_call_graph();
+
   auto foo_arg_env =
-      gta.get_entry_state_at(meth_foo).get(CURRENT_PARTITION_LABEL);
+      gta.get_entry_state_at(graph.node(meth_foo)).get(CURRENT_PARTITION_LABEL);
   EXPECT_TRUE(foo_arg_env.is_top());
   auto bar_arg_env =
-      gta.get_entry_state_at(meth_bar).get(CURRENT_PARTITION_LABEL);
+      gta.get_entry_state_at(graph.node(meth_bar)).get(CURRENT_PARTITION_LABEL);
   EXPECT_TRUE(bar_arg_env.get(0).is_top());
   EXPECT_EQ(bar_arg_env,
             ArgumentTypeEnvironment({{1, get_type_domain("LO;")}}));

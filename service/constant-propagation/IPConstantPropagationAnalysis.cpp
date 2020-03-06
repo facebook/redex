@@ -24,8 +24,9 @@ ConstantEnvironment env_with_params(const IRCode* code,
   return env;
 }
 
-void FixpointIterator::analyze_node(const DexMethod* const& method,
+void FixpointIterator::analyze_node(call_graph::NodeId const& node,
                                     Domain* current_state) const {
+  const DexMethod* method = node->method();
   // The entry node has no associated method.
   if (method == nullptr) {
     return;
@@ -37,9 +38,12 @@ void FixpointIterator::analyze_node(const DexMethod* const& method,
   auto& cfg = code->cfg();
   auto intra_cp = get_intraprocedural_analysis(method);
   const auto outgoing_edges =
-      call_graph::GraphInterface::successors(m_call_graph, method);
+      call_graph::GraphInterface::successors(m_call_graph, node);
   std::unordered_set<IRInstruction*> outgoing_insns;
   for (const auto& edge : outgoing_edges) {
+    if (edge->callee() == m_call_graph.exit()) {
+      continue; // ghost edge to the ghost exit node
+    }
     outgoing_insns.emplace(edge->invoke_iterator()->insn);
   }
   for (auto* block : cfg.blocks()) {
@@ -78,7 +82,12 @@ Domain FixpointIterator::analyze_edge(
 
 std::unique_ptr<intraprocedural::FixpointIterator>
 FixpointIterator::get_intraprocedural_analysis(const DexMethod* method) const {
-  auto args = this->get_entry_state_at(const_cast<DexMethod*>(method));
+  auto args = Domain::bottom();
+
+  if (m_call_graph.has_node(method)) {
+    args = this->get_entry_state_at(m_call_graph.node(method));
+  }
+
   return m_proc_analysis_factory(method,
                                  this->get_whole_program_state(),
                                  args.get(CURRENT_PARTITION_LABEL));
