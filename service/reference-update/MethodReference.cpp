@@ -10,6 +10,25 @@
 #include "Resolver.h"
 #include "Walkers.h"
 
+namespace {
+Scope build_class_scope_excluding_primary_dex(const DexStoresVector& stores) {
+  Scope result;
+  for (const auto& store : stores) {
+    const auto& dexen = store.get_dexen();
+    auto it = dexen.begin();
+    if (store.is_root_store()) {
+      it++;
+    }
+    for (; it != dexen.end(); it++) {
+      for (auto& clazz : *it) {
+        result.push_back(clazz);
+      }
+    }
+  }
+  return result;
+}
+} // namespace
+
 namespace method_reference {
 
 IRInstruction* make_load_const(uint16_t dest, size_t val) {
@@ -141,8 +160,14 @@ CallSites collect_call_refs(const Scope& scope,
 
 int wrap_instance_call_with_static(
     DexStoresVector& stores,
-    const std::unordered_map<DexMethod*, DexMethod*>& methods_replacement) {
-  auto classes = build_class_scope(stores);
+    const std::unordered_map<DexMethod*, DexMethod*>& methods_replacement,
+    bool exclude_primary_dex) {
+  Scope classes;
+  if (!exclude_primary_dex) {
+    classes = build_class_scope(stores);
+  } else {
+    classes = build_class_scope_excluding_primary_dex(stores);
+  }
   std::unordered_set<DexType*> excluded_types;
   for (const auto& pair : methods_replacement) {
     always_assert(!is_static(pair.first));
