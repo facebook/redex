@@ -1,7 +1,7 @@
 sudo: required
 language: cpp
 compiler: gcc-5
-dist: xenial 
+dist: xenial
 
 before_install:
   - sudo apt-get install -y
@@ -23,6 +23,3 @@ before_install:
 
 script:
   - autoreconf -ivf && ./configure CXX='g++-5' && make -j4
-
-notifications:
-  webhooks: https://code.facebook.com/travis/webhook/
