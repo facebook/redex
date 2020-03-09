@@ -29,7 +29,7 @@ using MethodMap = std::map<MethodTuple, DexClass*>;
  * ConfigFiles should be a readonly structure
  */
 struct ConfigFiles {
-  ConfigFiles(const Json::Value& config);
+  explicit ConfigFiles(const Json::Value& config);
   ConfigFiles(const Json::Value& config, const std::string& outdir);
 
   const std::vector<std::string>& get_coldstart_classes() {

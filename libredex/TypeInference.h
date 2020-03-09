@@ -182,7 +182,7 @@ class TypeEnvironment final
 class TypeInference final
     : public ir_analyzer::BaseIRAnalyzer<TypeEnvironment> {
  public:
-  TypeInference(const cfg::ControlFlowGraph& cfg)
+  explicit TypeInference(const cfg::ControlFlowGraph& cfg)
       : ir_analyzer::BaseIRAnalyzer<TypeEnvironment>(cfg), m_cfg(cfg) {}
 
   void run(const DexMethod* dex_method);

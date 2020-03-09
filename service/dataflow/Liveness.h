@@ -16,7 +16,7 @@ using LivenessDomain = sparta::PatriciaTreeSetAbstractDomain<reg_t>;
 class LivenessFixpointIterator final
     : public ir_analyzer::BaseBackwardsIRAnalyzer<LivenessDomain> {
  public:
-  LivenessFixpointIterator(const cfg::ControlFlowGraph& cfg)
+  explicit LivenessFixpointIterator(const cfg::ControlFlowGraph& cfg)
       : ir_analyzer::BaseBackwardsIRAnalyzer<LivenessDomain>(cfg) {}
 
   void analyze_instruction(IRInstruction* insn,

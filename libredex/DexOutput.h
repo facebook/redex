@@ -240,8 +240,8 @@ class GatheredTypes {
   void build_method_map();
 
  public:
-  GatheredTypes(DexClasses* classes,
-                PostLowering const* post_lowering = nullptr);
+  explicit GatheredTypes(DexClasses* classes,
+                         PostLowering const* post_lowering = nullptr);
 
   DexOutputIdx* get_dodx(const uint8_t* base);
   template <class T = decltype(compare_dexstrings)>

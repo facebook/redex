@@ -326,7 +326,7 @@ class Concatenator {
   }
 
  public:
-  Concatenator(const ConcatenatorConfig& config) : m_config(config) {}
+  explicit Concatenator(const ConcatenatorConfig& config) : m_config(config) {}
 
   Stats run(cfg::ControlFlowGraph* cfg,
             DexMethod* method,

@@ -100,7 +100,7 @@ class Transform final {
 class value_to_instruction_visitor final
     : public boost::static_visitor<std::vector<IRInstruction*>> {
  public:
-  value_to_instruction_visitor(const IRInstruction* original)
+  explicit value_to_instruction_visitor(const IRInstruction* original)
       : m_original(original) {}
 
   std::vector<IRInstruction*> operator()(

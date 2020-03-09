@@ -22,9 +22,10 @@
 
 class PassManager {
  public:
-  PassManager(const std::vector<Pass*>& passes,
-              const Json::Value& config = Json::Value(Json::objectValue),
-              const RedexOptions& options = RedexOptions{});
+  explicit PassManager(
+      const std::vector<Pass*>& passes,
+      const Json::Value& config = Json::Value(Json::objectValue),
+      const RedexOptions& options = RedexOptions{});
 
   PassManager(const std::vector<Pass*>& passes,
               std::unique_ptr<keep_rules::ProguardConfiguration> pg_config,

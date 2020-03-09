@@ -65,7 +65,7 @@ class DexInstruction : public Gatherable {
   }
 
  public:
-  DexInstruction(DexOpcode op)
+  explicit DexInstruction(DexOpcode op)
       : Gatherable(), m_opcode(op), m_count(count_from_opcode()) {}
 
   DexInstruction(DexOpcode opcode, uint16_t arg) : DexInstruction(opcode) {
@@ -313,7 +313,7 @@ class DexOpcodeData : public DexInstruction {
     memcpy(m_data, opcodes, count * sizeof(uint16_t));
   }
 
-  DexOpcodeData(const std::vector<uint16_t>& opcodes)
+  explicit DexOpcodeData(const std::vector<uint16_t>& opcodes)
       : DexInstruction(&opcodes[0], 0),
         m_data_count(opcodes.size() - 1),
         m_data(new uint16_t[opcodes.size() - 1]) {

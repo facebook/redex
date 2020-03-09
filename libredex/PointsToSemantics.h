@@ -521,7 +521,7 @@ class PointsToSemantics final {
    * the flag `generate_stubs` is set to true, all methods in the scope are
    * interpreted as stubs.
    */
-  PointsToSemantics(const Scope& scope, bool generate_stubs = false);
+  explicit PointsToSemantics(const Scope& scope, bool generate_stubs = false);
 
   /*
    * The stubs are stored in the specified text file as S-expressions. In case

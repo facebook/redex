@@ -45,7 +45,7 @@ extern "C" bool strcmp_less(const char* str1, const char* str2);
 #endif
 
 struct RedexContext {
-  RedexContext(bool allow_class_duplicates = false);
+  explicit RedexContext(bool allow_class_duplicates = false);
   ~RedexContext();
 
   DexString* make_string(const char* nstr, uint32_t utfsize);

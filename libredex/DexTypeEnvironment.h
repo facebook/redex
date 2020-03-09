@@ -160,8 +160,7 @@ class DexTypeEnvironment final
   // insert a redundant '= default'.
   DexTypeEnvironment() = default;
 
-  explicit DexTypeEnvironment(
-      std::initializer_list<std::pair<reg_t, DexTypeDomain>> l)
+  DexTypeEnvironment(std::initializer_list<std::pair<reg_t, DexTypeDomain>> l)
       : ReducedProductAbstractDomain(
             std::make_tuple(RegTypeEnvironment(l), FieldTypeEnvironment())) {}
 

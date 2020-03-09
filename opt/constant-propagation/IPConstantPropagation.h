@@ -33,7 +33,7 @@ class PassImpl : public Pass {
     RuntimeAssertTransform::Config runtime_assert;
   };
 
-  PassImpl(Config config)
+  explicit PassImpl(Config config)
       : Pass("InterproceduralConstantPropagationPass"),
         m_config(std::move(config)) {}
 

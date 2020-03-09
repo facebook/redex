@@ -40,7 +40,8 @@ class TypeRefUpdater final {
    * trying to update a virtual method that may override any external virtual
    * method.
    */
-  TypeRefUpdater(const std::unordered_map<DexType*, DexType*>& old_to_new);
+  explicit TypeRefUpdater(
+      const std::unordered_map<DexType*, DexType*>& old_to_new);
 
   void update_methods_fields(const Scope& scope);
 

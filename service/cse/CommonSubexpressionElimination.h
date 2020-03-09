@@ -57,7 +57,7 @@ struct BarrierHasher {
 
 class SharedState {
  public:
-  SharedState(const std::unordered_set<DexMethodRef*>& pure_methods);
+  explicit SharedState(const std::unordered_set<DexMethodRef*>& pure_methods);
   void init_scope(const Scope&);
   CseUnorderedLocationSet get_relevant_written_locations(
       const IRInstruction* insn,

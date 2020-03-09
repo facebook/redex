@@ -112,7 +112,7 @@ class Edge {
 
 class Graph final {
  public:
-  Graph(const BuildStrategy&);
+  explicit Graph(const BuildStrategy&);
 
   NodeId entry() const { return m_entry; }
   NodeId exit() const { return m_exit; }

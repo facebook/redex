@@ -26,10 +26,10 @@ class RuntimeAssertTransform {
     DexMethodRef* field_assert_fail_handler{nullptr};
     DexMethodRef* return_value_assert_fail_handler{nullptr};
     Config() = default;
-    Config(const ProguardMap&);
+    explicit Config(const ProguardMap&);
   };
 
-  RuntimeAssertTransform(const Config& config) : m_config(config) {}
+  explicit RuntimeAssertTransform(const Config& config) : m_config(config) {}
 
   void apply(const intraprocedural::FixpointIterator&,
              const WholeProgramState&,

@@ -29,7 +29,7 @@ struct IRInstructionList {
 
   std::vector<std::unique_ptr<IRInstruction>> instructions;
 
-  explicit IRInstructionList(std::initializer_list<IRInstruction*> in) {
+  IRInstructionList(std::initializer_list<IRInstruction*> in) {
     for (IRInstruction* insn : in) {
       instructions.emplace_back(insn); // moves insn into unique_ptr
     }

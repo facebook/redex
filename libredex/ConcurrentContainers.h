@@ -380,10 +380,13 @@ class ConcurrentContainerIterator final {
   using base_iterator = std::conditional_t<std::is_const<Container>::value,
                                            typename Container::const_iterator,
                                            typename Container::iterator>;
+  using const_base_iterator = typename Container::const_iterator;
   using difference_type = std::ptrdiff_t;
   using value_type = typename base_iterator::value_type;
   using pointer = typename base_iterator::pointer;
+  using const_pointer = typename Container::const_iterator::pointer;
   using reference = typename base_iterator::reference;
+  using const_reference = typename Container::const_iterator::reference;
   using iterator_category = std::forward_iterator_tag;
 
   explicit ConcurrentContainerIterator(Container* slots)
@@ -432,12 +435,12 @@ class ConcurrentContainerIterator final {
     return m_position.operator->();
   }
 
-  const reference operator*() const {
+  const_reference operator*() const {
     always_assert(m_position != m_slots[n_slots - 1].end());
     return *m_position;
   }
 
-  const pointer operator->() const {
+  const_pointer operator->() const {
     always_assert(m_position != m_slots[n_slots - 1].end());
     return m_position.operator->();
   }

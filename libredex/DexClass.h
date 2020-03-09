@@ -184,7 +184,7 @@ class DexType {
   DexString* m_name;
 
   // See UNIQUENESS above for the rationale for the private constructor pattern.
-  DexType(DexString* dstring) { m_name = dstring; }
+  explicit DexType(DexString* dstring) { m_name = dstring; }
 
  public:
   // DexType retrieval/creation
@@ -474,7 +474,7 @@ class DexTypeList {
   std::deque<DexType*> m_list;
 
   // See UNIQUENESS above for the rationale for the private constructor pattern.
-  DexTypeList(std::deque<DexType*>&& p) { m_list = std::move(p); }
+  explicit DexTypeList(std::deque<DexType*>&& p) { m_list = std::move(p); }
 
  public:
   std::deque<DexType*>::iterator begin() { return m_list.begin(); }
@@ -1118,7 +1118,7 @@ class DexClass {
   std::vector<DexMethod*> m_dmethods;
   std::vector<DexMethod*> m_vmethods;
 
-  DexClass(const std::string& location) : m_location(location){};
+  explicit DexClass(const std::string& location) : m_location(location){};
   void load_class_annotations(DexIdx* idx, uint32_t anno_off);
   void load_class_data_item(DexIdx* idx,
                             uint32_t cdi_off,

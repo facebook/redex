@@ -33,7 +33,7 @@ using DefSets = boost::disjoint_sets<RankPMap, ParentPMap>;
  */
 class SymRegMapper {
  public:
-  SymRegMapper(bool width_aware) : m_width_aware(width_aware) {}
+  explicit SymRegMapper(bool width_aware) : m_width_aware(width_aware) {}
 
   reg_t make(Def def) {
     if (m_def_to_reg.find(def) == m_def_to_reg.end()) {

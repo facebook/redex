@@ -13,6 +13,7 @@
 #include "DexUtil.h"
 #include "ReachableClasses.h"
 #include <list>
+#include <type_traits>
 
 namespace obfuscate_utils {
 void compute_identifier(int value, std::string* res);
@@ -46,7 +47,8 @@ bool should_rename_elem(const T* member) {
  * vmethods (requires some additional information). Additionally, some record
  * of the old name is necessary to fix up ref opcodes.
  */
-template <class T>
+template <class T,
+          typename std::enable_if<std::is_pointer<T>::value, int>::type = 0>
 class DexNameWrapper {
  protected:
   T dex_elem;
@@ -55,6 +57,8 @@ class DexNameWrapper {
   std::string name{"INVALID_DEFAULT_NAME"};
 
  public:
+  using const_type = typename std::add_const<T>::type;
+
   // Default constructor is only ever used for map template to work correctly
   // we have added asserts to make sure there are no nullptrs returned.
   DexNameWrapper() = default;
@@ -72,7 +76,7 @@ class DexNameWrapper {
     always_assert(dex_elem != nullptr);
     return dex_elem;
   }
-  inline const T get() const {
+  inline const_type get() const {
     always_assert(dex_elem != nullptr);
     return dex_elem;
   }

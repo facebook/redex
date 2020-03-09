@@ -43,8 +43,8 @@ class DexStore {
   bool m_generated = false;
 
  public:
-  DexStore(const DexMetadata& metadata) : m_metadata(metadata){};
-  DexStore(const std::string& name);
+  explicit DexStore(const DexMetadata& metadata) : m_metadata(metadata){};
+  explicit DexStore(const std::string& name);
 
   std::string get_name() const;
   const std::string& get_dex_magic() const { return dex_magic; }
@@ -74,12 +74,12 @@ class DexStoreClassesIterator
   classes_iterator m_current_classes;
 
  public:
-  DexStoreClassesIterator(std::vector<DexStore>& stores)
+  explicit DexStoreClassesIterator(std::vector<DexStore>& stores)
       : m_stores(stores),
         m_current_store(stores.begin()),
         m_current_classes(m_current_store->get_dexen().begin()) {}
 
-  DexStoreClassesIterator(const std::vector<DexStore>& stores)
+  explicit DexStoreClassesIterator(const std::vector<DexStore>& stores)
       : m_stores(const_cast<std::vector<DexStore>&>(stores)),
         m_current_store(m_stores.begin()),
         m_current_classes(m_current_store->get_dexen().begin()) {}

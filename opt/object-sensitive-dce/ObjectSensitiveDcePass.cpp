@@ -42,7 +42,7 @@ namespace uv = used_vars;
 
 class CallGraphStrategy final : public call_graph::BuildStrategy {
  public:
-  CallGraphStrategy(const Scope& scope)
+  explicit CallGraphStrategy(const Scope& scope)
       : m_scope(scope),
         m_non_overridden_virtuals(hier::find_non_overridden_virtuals(scope)) {}
 

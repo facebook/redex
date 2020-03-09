@@ -29,9 +29,10 @@ class RedexException : public std::exception {
   const std::string message;
   const std::map<std::string, std::string> extra_info;
 
-  RedexException(RedexError type_of_error,
-                 const std::string& message = "",
-                 const std::map<std::string, std::string>& extra_info = {});
+  explicit RedexException(
+      RedexError type_of_error,
+      const std::string& message = "",
+      const std::map<std::string, std::string>& extra_info = {});
 
   const char* what() const throw() override;
 

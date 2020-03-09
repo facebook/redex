@@ -45,7 +45,8 @@
  */
 class SwitchMethodPartitioning final {
  public:
-  SwitchMethodPartitioning(IRCode* code, bool verify_default_case = true);
+  explicit SwitchMethodPartitioning(IRCode* code,
+                                    bool verify_default_case = true);
 
   // Each SMP instance is responsible for clearing the CFG of m_code exactly
   // once, so we don't want to have multiple copies of it.

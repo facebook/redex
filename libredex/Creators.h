@@ -384,7 +384,7 @@ struct MethodBlock {
  */
 struct MethodCreator {
  public:
-  MethodCreator(DexMethod* meth);
+  explicit MethodCreator(DexMethod* meth);
   MethodCreator(DexMethodRef* ref,
                 DexAccessFlags access,
                 DexAnnotationSet* anno = nullptr,

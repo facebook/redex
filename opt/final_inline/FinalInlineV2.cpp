@@ -162,7 +162,7 @@ using CombinedInitAnalyzer =
  */
 class encoding_visitor : public boost::static_visitor<DexEncodedValue*> {
  public:
-  encoding_visitor(const DexField* field) : m_field(field) {}
+  explicit encoding_visitor(const DexField* field) : m_field(field) {}
 
   DexEncodedValue* operator()(const SignedConstantDomain& dom) const {
     auto cst = dom.get_constant();

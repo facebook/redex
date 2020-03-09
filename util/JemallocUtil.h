@@ -15,7 +15,7 @@ void disable_profiling();
 
 class ScopedProfiling final {
  public:
-  ScopedProfiling(bool enable) {
+  explicit ScopedProfiling(bool enable) {
     if (enable) {
       fprintf(stderr, "Enabling memory profiling...\n");
       enable_profiling();

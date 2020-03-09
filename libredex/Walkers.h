@@ -31,8 +31,10 @@ template <typename T>
 class CacheAligned {
  public:
   template <typename... Args>
+  // NOLINTNEXTLINE(google-explicit-constructor,hicpp-explicit-conversions)
   CacheAligned(Args&&... args) : m_aligned(std::forward<Args>(args)...) {}
 
+  // NOLINTNEXTLINE(google-explicit-constructor,hicpp-explicit-conversions)
   inline operator T&();
 
  private:

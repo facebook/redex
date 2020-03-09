@@ -168,7 +168,7 @@ using Environment = local_pointers::EnvironmentWithStoreImpl<BuilderStore>;
 
 class FixpointIterator final : public ir_analyzer::BaseIRAnalyzer<Environment> {
  public:
-  FixpointIterator(const cfg::ControlFlowGraph& cfg);
+  explicit FixpointIterator(const cfg::ControlFlowGraph& cfg);
 
   void analyze_instruction(const IRInstruction* insn,
                            Environment* env) const override;
@@ -202,7 +202,7 @@ struct Stats {
 
 class Outliner {
  public:
-  Outliner(Config config = Config());
+  explicit Outliner(Config config = Config());
 
   const Config& get_config() const { return m_config; }
 

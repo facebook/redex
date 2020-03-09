@@ -62,7 +62,7 @@ inline std::vector<int> create_permutation(int num, unsigned int thread_idx) {
 template <class Input>
 class WorkerState {
  public:
-  WorkerState(size_t id) : m_id(id) {}
+  explicit WorkerState(size_t id) : m_id(id) {}
 
   /*
    * Add more items to the queue of the currently-running worker. When a

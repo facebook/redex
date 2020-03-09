@@ -29,7 +29,7 @@ std::unordered_map<const IRInstruction*, ParamIndex> get_load_param_map(
  */
 class ReturnParamResolver {
  public:
-  ReturnParamResolver(const method_override_graph::Graph& graph)
+  explicit ReturnParamResolver(const method_override_graph::Graph& graph)
       : m_graph(graph),
         m_byte_buffer_type(DexType::make_type("Ljava/nio/ByteBuffer;")),
         m_char_buffer_type(DexType::make_type("Ljava/nio/CharBuffer;")),

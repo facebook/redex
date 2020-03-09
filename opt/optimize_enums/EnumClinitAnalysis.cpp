@@ -67,6 +67,7 @@ DexField* get_enum_name_field() {
 }
 
 struct EnumOrdinalAnalyzerState {
+  // NOLINTNEXTLINE(google-explicit-constructor,hicpp-explicit-conversions)
   /* implicit */ EnumOrdinalAnalyzerState(const DexType* clinit_class)
       : clinit_class(clinit_class) {
     auto& fields = type_class(clinit_class)->get_ifields();

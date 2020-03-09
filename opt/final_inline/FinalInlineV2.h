@@ -50,7 +50,7 @@ namespace final_inline {
 
 class class_initialization_cycle : public std::exception {
  public:
-  class_initialization_cycle(const DexClass* cls) {
+  explicit class_initialization_cycle(const DexClass* cls) {
     m_msg = "Found a class initialization cycle involving " + show(cls);
   }
 

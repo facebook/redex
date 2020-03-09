@@ -649,7 +649,7 @@ void DedupStrings::rewrite_const_string_instructions(
 
 class DedupStringsInterDexPlugin : public interdex::InterDexPassPlugin {
  public:
-  DedupStringsInterDexPlugin(size_t max_factory_methods)
+  explicit DedupStringsInterDexPlugin(size_t max_factory_methods)
       : m_max_factory_methods(max_factory_methods) {}
   size_t reserve_mrefs() override {
     // In each, we might introduce as many new method refs are we might add

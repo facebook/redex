@@ -38,7 +38,8 @@ struct TryEntry {
 struct CatchEntry {
   DexType* catch_type;
   MethodItemEntry* next; // always null for catchall
-  CatchEntry(DexType* catch_type) : catch_type(catch_type), next(nullptr) {}
+  explicit CatchEntry(DexType* catch_type)
+      : catch_type(catch_type), next(nullptr) {}
 
   bool operator==(const CatchEntry& other) const;
 };
@@ -75,7 +76,7 @@ struct BranchTarget {
   int32_t case_key;
 
   BranchTarget() = default;
-  BranchTarget(MethodItemEntry* src) : src(src), type(BRANCH_SIMPLE) {}
+  explicit BranchTarget(MethodItemEntry* src) : src(src), type(BRANCH_SIMPLE) {}
 
   BranchTarget(MethodItemEntry* src, int32_t case_key)
       : src(src), type(BRANCH_MULTI), case_key(case_key) {}
@@ -142,15 +143,15 @@ struct MethodItemEntry {
   }
   MethodItemEntry(TryEntryType try_type, MethodItemEntry* catch_start)
       : type(MFLOW_TRY), tentry(new TryEntry(try_type, catch_start)) {}
-  MethodItemEntry(DexType* catch_type)
+  explicit MethodItemEntry(DexType* catch_type)
       : type(MFLOW_CATCH), centry(new CatchEntry(catch_type)) {}
-  MethodItemEntry(BranchTarget* bt) {
+  explicit MethodItemEntry(BranchTarget* bt) {
     this->type = MFLOW_TARGET;
     this->target = bt;
   }
-  MethodItemEntry(std::unique_ptr<DexDebugInstruction> dbgop)
+  explicit MethodItemEntry(std::unique_ptr<DexDebugInstruction> dbgop)
       : type(MFLOW_DEBUG), dbgop(std::move(dbgop)) {}
-  MethodItemEntry(std::unique_ptr<DexPosition> pos)
+  explicit MethodItemEntry(std::unique_ptr<DexPosition> pos)
       : type(MFLOW_POSITION), pos(std::move(pos)) {}
 
   bool operator==(const MethodItemEntry&) const;

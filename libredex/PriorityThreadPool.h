@@ -51,7 +51,7 @@ class PriorityThreadPool {
   }
 
   // Creates an instance with a custom number of threads
-  PriorityThreadPool(int num_threads) { set_num_threads(num_threads); }
+  explicit PriorityThreadPool(int num_threads) { set_num_threads(num_threads); }
 
   ~PriorityThreadPool() {
     // .join() must be manually called before the executor may be destroyed

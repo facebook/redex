@@ -174,7 +174,7 @@ enum Tracked {
 // TrackedUses is the 'abstract' parent class of the domain representation
 class TrackedUses {
  public:
-  TrackedUses(Tracked kind);
+  explicit TrackedUses(Tracked kind);
   virtual ~TrackedUses();
 
   /*
@@ -235,7 +235,7 @@ class MergedUses : public TrackedUses {
  public:
   MergedUses(const ObjectUses&, const ObjectUses&);
   // Creates a merged object where nullable is true
-  MergedUses(const ObjectUses&);
+  explicit MergedUses(const ObjectUses&);
 
   void combine_paths(const TrackedUses& other);
   void merge(const TrackedUses& other);
@@ -378,7 +378,7 @@ class InitLocation final {
                dexclasses_comparator>;
 
  public:
-  InitLocation(DexType* typ) : m_typ(typ) {}
+  explicit InitLocation(DexType* typ) : m_typ(typ) {}
   InitLocation() = default;
   uint32_t get_count() const { return m_count; }
 

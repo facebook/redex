@@ -463,7 +463,7 @@ TEST_F(RemoveUninstantiablesTest, ReplaceAllWithThrow) {
 }
 
 TEST_F(RemoveUninstantiablesTest, RunPass) {
-  DexStoresVector dss{{"test_store"}};
+  DexStoresVector dss{DexStore{"test_store"}};
 
   auto* Foo = def_class("LFoo;", Foo_baz, Foo_qux);
   auto* Bar = def_class("LBar;", Bar_init, Bar_baz, Bar_qux);

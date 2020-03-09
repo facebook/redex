@@ -30,7 +30,7 @@ class DexDebugInstruction : public Gatherable {
   DexDebugItemOpcode m_opcode;
 
  public:
-  DexDebugInstruction(DexDebugItemOpcode op, uint32_t v = DEX_NO_INDEX)
+  explicit DexDebugInstruction(DexDebugItemOpcode op, uint32_t v = DEX_NO_INDEX)
       : Gatherable() {
     m_opcode = op;
     m_uvalue = v;
@@ -77,7 +77,8 @@ class DexDebugOpcodeSetFile : public DexDebugInstruction {
   DexString* m_str;
 
  public:
-  DexDebugOpcodeSetFile(DexString* str) : DexDebugInstruction(DBG_SET_FILE) {
+  explicit DexDebugOpcodeSetFile(DexString* str)
+      : DexDebugInstruction(DBG_SET_FILE) {
     m_str = str;
   }
 

@@ -207,7 +207,7 @@ class ConstAnalyzer final
                                        UInt32ConstantEnvironment> {
 
  public:
-  ConstAnalyzer(const cfg::ControlFlowGraph& cfg)
+  explicit ConstAnalyzer(const cfg::ControlFlowGraph& cfg)
       : MonotonicFixpointIterator(cfg) {
     MonotonicFixpointIterator::run(UInt32ConstantEnvironment::top());
   }

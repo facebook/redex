@@ -183,7 +183,7 @@ using TrackedDomainEnvironment =
 class Analyzer final : public BaseIRAnalyzer<TrackedDomainEnvironment> {
 
  public:
-  Analyzer(cfg::ControlFlowGraph& cfg) : BaseIRAnalyzer(cfg) {
+  explicit Analyzer(cfg::ControlFlowGraph& cfg) : BaseIRAnalyzer(cfg) {
     MonotonicFixpointIterator::run(TrackedDomainEnvironment::top());
   }
 

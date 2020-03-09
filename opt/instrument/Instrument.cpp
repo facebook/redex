@@ -38,7 +38,7 @@ static bool debug = false;
 
 class InstrumentInterDexPlugin : public interdex::InterDexPassPlugin {
  public:
-  InstrumentInterDexPlugin(size_t max_analysis_methods)
+  explicit InstrumentInterDexPlugin(size_t max_analysis_methods)
       : m_max_analysis_methods(max_analysis_methods) {}
 
   void configure(const Scope& scope, ConfigFiles& cfg) override{};

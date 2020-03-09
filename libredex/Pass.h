@@ -24,7 +24,7 @@ class PassManager;
 
 class Pass : public Configurable {
  public:
-  Pass(const std::string& name) : m_name(name) {
+  explicit Pass(const std::string& name) : m_name(name) {
     PassRegistry::get().register_pass(this);
   }
 

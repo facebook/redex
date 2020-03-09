@@ -53,10 +53,10 @@ struct ImmutableAttr {
       const DexMethod* method;
       const void* member; // Debug only.
     };
-    Attr(const DexField* f) : kind(Field), field(f) {
+    explicit Attr(const DexField* f) : kind(Field), field(f) {
       always_assert(!field->is_def() || (!is_static(field) && is_final(field)));
     }
-    Attr(const DexMethod* m) : kind(Method), method(m) {
+    explicit Attr(const DexMethod* m) : kind(Method), method(m) {
       if (method->is_def()) {
         always_assert(!is_static(method) && !is_constructor(method));
       }

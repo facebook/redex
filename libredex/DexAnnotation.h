@@ -60,7 +60,7 @@ class DexEncodedValue : public Gatherable {
   DexEncodedValueTypes m_evtype;
   uint64_t m_value;
 
-  DexEncodedValue(DexEncodedValueTypes type, uint64_t value = 0)
+  explicit DexEncodedValue(DexEncodedValueTypes type, uint64_t value = 0)
       : Gatherable() {
     m_evtype = type;
     m_value = value;
@@ -110,7 +110,8 @@ class DexEncodedValueString : public DexEncodedValue {
   DexString* m_string;
 
  public:
-  DexEncodedValueString(DexString* string) : DexEncodedValue(DEVT_STRING) {
+  explicit DexEncodedValueString(DexString* string)
+      : DexEncodedValue(DEVT_STRING) {
     m_string = string;
   }
 
@@ -138,7 +139,7 @@ class DexEncodedValueType : public DexEncodedValue {
   DexType* m_type;
 
  public:
-  DexEncodedValueType(DexType* type) : DexEncodedValue(DEVT_TYPE) {
+  explicit DexEncodedValueType(DexType* type) : DexEncodedValue(DEVT_TYPE) {
     m_type = type;
   }
 
@@ -196,7 +197,8 @@ class DexEncodedValueMethod : public DexEncodedValue {
   DexMethodRef* m_method;
 
  public:
-  DexEncodedValueMethod(DexMethodRef* method) : DexEncodedValue(DEVT_METHOD) {
+  explicit DexEncodedValueMethod(DexMethodRef* method)
+      : DexEncodedValue(DEVT_METHOD) {
     m_method = method;
   }
 
@@ -303,8 +305,8 @@ class DexEncodedValueArray : public DexEncodedValue {
    * Static values are encoded without a DEVT_ARRAY header byte
    * so we differentiate that here.
    */
-  DexEncodedValueArray(std::deque<DexEncodedValue*>* evalues,
-                       bool static_val = false)
+  explicit DexEncodedValueArray(std::deque<DexEncodedValue*>* evalues,
+                                bool static_val = false)
       : DexEncodedValue(DEVT_ARRAY), m_evalues(evalues) {
     m_static_val = static_val;
   }
