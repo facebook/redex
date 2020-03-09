@@ -1214,11 +1214,9 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
                               PassManager& pm) {
   // TODO(fengliu): We may need change this but leave it here for local test.
   if (m_options.instrumentation_strategy == "methods_replacement") {
-    bool exclude_primary_dex =
-        pm.get_redex_options().is_art_build ? false : true;
     auto num_wrapped_invocations =
         method_reference::wrap_instance_call_with_static(
-            stores, m_options.methods_replacement, exclude_primary_dex);
+            stores, m_options.methods_replacement);
     pm.set_metric("wrapped_invocations", num_wrapped_invocations);
     return;
   }

@@ -73,6 +73,5 @@ CallSites collect_call_refs(const Scope& scope,
  */
 int wrap_instance_call_with_static(
     DexStoresVector& stores,
-    const std::unordered_map<DexMethod*, DexMethod*>& methods_replacement,
-    bool exclude_primary_dex = false);
+    const std::unordered_map<DexMethod*, DexMethod*>& methods_replacement);
 } // namespace method_reference
