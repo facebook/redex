@@ -36,16 +36,15 @@ Serdes get_serdes(const DexClass* cls) {
 DexMethod* get_or_create_clinit(DexClass* cls) {
   using namespace dex_asm;
 
-  auto clinit_name = DexString::make_string("<clinit>");
-  auto clinit_proto =
-      DexProto::make_proto(type::_void(), DexTypeList::make_type_list({}));
-
-  DexMethod* clinit = static_cast<DexMethod*>(
-      DexMethod::get_method(cls->get_type(), clinit_name, clinit_proto));
+  DexMethod* clinit = cls->get_clinit();
 
   if (clinit) {
     return clinit;
   }
+
+  auto clinit_name = DexString::make_string("<clinit>");
+  auto clinit_proto =
+      DexProto::make_proto(type::_void(), DexTypeList::make_type_list({}));
 
   // clinit does not exist, create one
   clinit =
