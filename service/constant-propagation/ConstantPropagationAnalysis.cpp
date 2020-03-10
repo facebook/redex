@@ -1033,10 +1033,23 @@ ConstantEnvironment FixpointIterator::analyze_edge(
   if (is_conditional_branch(op)) {
     analyze_if(insn, &env, edge->type() == cfg::EDGE_BRANCH);
   } else if (is_switch(op)) {
+    auto selector_val = env.get(insn->src(0));
     const auto& case_key = edge->case_key();
     if (case_key) {
-      env.set(insn->src(0),
-              env.get(insn->src(0)).meet(SignedConstantDomain(*case_key)));
+      env.set(insn->src(0), selector_val.meet(SignedConstantDomain(*case_key)));
+    } else if (edge->type() == cfg::EDGE_GOTO) {
+      // We are looking at the fallthrough case. Set env to bottom in case there
+      // is a non-fallthrough edge with a case-key that is equal to the actual
+      // selector value.
+      for (auto succ : edge->src()->succs()) {
+        const auto& succ_case_key = succ->case_key();
+        if (succ_case_key && ConstantValue::apply_visitor(
+                                 runtime_equals_visitor(), selector_val,
+                                 SignedConstantDomain(*succ_case_key))) {
+          env.set_to_bottom();
+          break;
+        }
+      }
     }
   }
   return env;
