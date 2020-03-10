@@ -546,12 +546,81 @@ TEST(ConstantPropagation, ForwardBranchesIf) {
     (
       (load-param v0)
       (if-eqz v0 :L1)
+      (:L1)
+      (return-void)
+    )
+)");
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+}
+
+TEST(ConstantPropagation, ForwardBranchesIfSideEffectFreeComputation) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (if-eqz v0 :L1)
       (const v0 1)
+      (goto :L2)
+      (:L1)
+      (const v0 42)
+      (sub-int v0 v0 v0)
+      (:L2)
+      (if-eqz v0 :L3)
+      (:L4)
       (const v0 0)
       (:L3)
       (return-void)
+    )
+)");
+
+  do_const_prop(code.get(), cp::ConstantPrimitiveAnalyzer(),
+                cp::Transform::Config(),
+                /* editable_cfg */ true);
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (if-eqz v0 :L1)
       (:L1)
+      (return-void)
+    )
+)");
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+}
+
+TEST(ConstantPropagation, ForwardBranchesIfSideEffectingComputation) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (if-eqz v0 :L1)
+      (const v0 1)
+      (goto :L2)
+      (:L1)
+      (const v0 42)
+      (div-int v0 v0)
+      (move-result-pseudo v0) ; thiss instruction isn't supported yet
+      (:L2)
+      (if-eqz v0 :L3)
+      (:L4)
       (const v0 0)
+      (:L3)
+      (return-void)
+    )
+)");
+
+  do_const_prop(code.get(), cp::ConstantPrimitiveAnalyzer(),
+                cp::Transform::Config(),
+                /* editable_cfg */ true);
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (if-eqz v0 :L1)
+      (:L3)
+      (return-void)
+      (:L1)
+      (const v0 42)
+      (div-int v0 v0)
+      (move-result-pseudo v0) ; thiss instruction isn't supported yet
       (goto :L3)
     )
 )");
@@ -600,20 +669,9 @@ TEST(ConstantPropagation, ForwardBranchesSwitch) {
       (if-eqz v0 :L0)
       (load-param v0)
       (if-eqz v0 :L1)
-      (const v0 2)
-      (const v0 2)
-      (:END)
-      (return-void)
-
-      (:L1)
-      (const v0 1)
-      (const v0 1)
-      (goto :END)
-
       (:L0)
-      (const v0 0)
-      (const v0 0)
-      (goto :END)
+      (:L1)
+      (return-void)
     )
 )");
   EXPECT_CODE_EQ(code.get(), expected_code.get());

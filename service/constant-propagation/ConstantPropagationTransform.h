@@ -11,6 +11,7 @@
 #include "ConstantPropagationAnalysis.h"
 #include "ConstantPropagationWholeProgramState.h"
 #include "IRCode.h"
+#include "Liveness.h"
 
 namespace constant_propagation {
 
@@ -94,10 +95,12 @@ class Transform final {
                              cfg::ControlFlowGraph&,
                              cfg::Block*);
 
-  void forward_targets(const intraprocedural::FixpointIterator&,
-                       const ConstantEnvironment&,
-                       cfg::ControlFlowGraph&,
-                       cfg::Block*);
+  void forward_targets(
+      const intraprocedural::FixpointIterator&,
+      const ConstantEnvironment&,
+      cfg::ControlFlowGraph&,
+      cfg::Block*,
+      std::unique_ptr<LivenessFixpointIterator>& liveness_fixpoint_iter);
 
   // Check whether the code can return a value of a unavailable/external type,
   // or a type defined in a store different from the one where the method is

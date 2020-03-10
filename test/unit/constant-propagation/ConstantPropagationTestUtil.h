@@ -21,6 +21,7 @@ inline void do_const_prop(
     const cp::Transform::Config& transform_config = cp::Transform::Config(),
     bool editable_cfg = false) {
   code->build_cfg(editable_cfg);
+  code->cfg().calculate_exit_block();
   cp::intraprocedural::FixpointIterator intra_cp(code->cfg(), insn_analyzer);
   intra_cp.run(ConstantEnvironment());
   cp::Transform tf(transform_config);

@@ -474,7 +474,8 @@ void Transform::forward_targets(
     const intraprocedural::FixpointIterator& intra_cp,
     const ConstantEnvironment& env,
     cfg::ControlFlowGraph& cfg,
-    cfg::Block* block) {
+    cfg::Block* block,
+    std::unique_ptr<LivenessFixpointIterator>& liveness_fixpoint_iter) {
   if (env.is_bottom()) {
     // we found an unreachable block; ignore it
     return;
@@ -485,18 +486,59 @@ void Transform::forward_targets(
     return e->type() == cfg::EDGE_GOTO || e->type() == cfg::EDGE_BRANCH;
   };
 
-  for (auto succ_edge : cfg.get_succ_edges_if(block, is_normal)) {
-    auto succ = succ_edge->target();
+  // Data structure that holds a possible target block, together with a set out
+  // registers that would have been assigned along the way to the target block.
+  struct TargetAndAssignedRegs {
+    cfg::Block* target;
+    std::unordered_set<reg_t> assigned_regs;
+  };
+
+  // Helper function that computs (ordered) list of unconditional target blocks,
+  // together with the sets of assigned registers.
+  auto get_unconditional_targets =
+      [&intra_cp, &cfg, &is_normal,
+       &env](cfg::Edge* succ_edge) -> std::vector<TargetAndAssignedRegs> {
     auto succ_env = intra_cp.analyze_edge(succ_edge, env);
-    std::unordered_set<cfg::Block*> visited{succ};
-    while (!succ_env.is_bottom()) {
-      // TODO: Also allow non-side effecting instructions, in particular
-      // const instructions, that eventually (at the entry of the final block
-      // we arrive at) become dead
-      auto first_insn = succ->get_first_insn();
-      if (first_insn != succ->end() && !is_branch(first_insn->insn->opcode())) {
-        break;
+    if (succ_env.is_bottom()) {
+      return {};
+    }
+
+    std::vector<TargetAndAssignedRegs> unconditional_targets{
+        (TargetAndAssignedRegs){succ_edge->target(), {}}};
+    std::unordered_set<cfg::Block*> visited;
+    while (true) {
+      auto& last_unconditional_target = unconditional_targets.back();
+      auto succ = last_unconditional_target.target;
+      if (!visited.insert(succ).second) {
+        // We found a loop; give up.
+        return {};
       }
+      // We'll have to add to the set of assigned regs, so we make an
+      // intentional copy here
+      auto assigned_regs = last_unconditional_target.assigned_regs;
+      for (auto& mie : *succ) {
+        if (mie.type != MethodItemType::MFLOW_OPCODE) {
+          continue;
+        }
+        auto insn = mie.insn;
+        if (is_branch(insn->opcode())) {
+          continue;
+        }
+        // TODO: Support side-effect-free instruction sequences involving
+        // move-result(-pseudo), similar to what LocalDCE does
+        if (opcode::has_side_effects(insn->opcode()) || !insn->has_dest() ||
+            opcode::is_move_result_any(insn->opcode())) {
+          TRACE(CONSTP, 5, "forward_targets cannot follow %s",
+                SHOW(insn->opcode()));
+          // We stop the analysis here.
+          return unconditional_targets;
+        }
+
+        assigned_regs.insert(insn->dest());
+        intra_cp.analyze_instruction(insn, &succ_env);
+        always_assert(!succ_env.is_bottom());
+      }
+
       boost::optional<std::pair<cfg::Block*, ConstantEnvironment>>
           only_feasible;
       for (auto succ_succ_edge : cfg.get_succ_edges_if(succ, is_normal)) {
@@ -505,27 +547,87 @@ void Transform::forward_targets(
           continue;
         }
         if (only_feasible) {
-          // Found another one that's feasible, so there's an only feasible
-          // successor
-          only_feasible = boost::none;
-          break;
+          // Found another one that's feasible, so there's not just a single
+          // feasible successor. We stop the analysis here.
+          return unconditional_targets;
         }
         only_feasible = std::make_pair(succ_succ_edge->target(), succ_succ_env);
       }
-      if (!only_feasible) {
-        break;
-      }
-      std::tie(succ, succ_env) = *only_feasible;
-      if (!visited.insert(succ).second) {
-        // We found a loop; give up.
-        succ_env = ConstantEnvironment::bottom();
-      }
+      unconditional_targets.push_back(
+          (TargetAndAssignedRegs){only_feasible->first, assigned_regs});
+      succ_env = only_feasible->second;
     }
-    if (!succ_env.is_bottom() && succ != succ_edge->target()) {
-      cfg.set_edge_target(succ_edge, succ);
-      ++m_stats.branches_forwarded;
+  };
+
+  // Helper to check if any assigned register is live at the target block
+  auto is_any_assigned_reg_live_at_target =
+      [&liveness_fixpoint_iter,
+       &cfg](const TargetAndAssignedRegs& unconditional_target) {
+        auto& assigned_regs = unconditional_target.assigned_regs;
+        if (assigned_regs.empty()) {
+          return false;
+        }
+        if (!liveness_fixpoint_iter) {
+          liveness_fixpoint_iter.reset(new LivenessFixpointIterator(cfg));
+          liveness_fixpoint_iter->run(LivenessDomain());
+        }
+        auto live_in_vars = liveness_fixpoint_iter->get_live_in_vars_at(
+            unconditional_target.target);
+        if (live_in_vars.is_bottom()) {
+          // Could happen after having applied other transformations already
+          return true;
+        }
+        always_assert(!live_in_vars.is_top());
+        auto& elements = live_in_vars.elements();
+        return std::find_if(assigned_regs.begin(), assigned_regs.end(),
+                            [&elements](reg_t reg) {
+                              return elements.contains(reg);
+                            }) != assigned_regs.end();
+      };
+
+  // Helper function to find furthest feasible target block for which no
+  // assigned regs are live-in
+  auto get_furthest_target_without_live_assigned_regs =
+      [&is_any_assigned_reg_live_at_target](
+          const std::vector<TargetAndAssignedRegs>& unconditional_targets)
+      -> cfg::Block* {
+    // The first (if any) unconditional target isn't interesting, as that's the
+    // one that's already currently on the cfg edge
+    if (unconditional_targets.size() <= 1) {
+      return nullptr;
     }
+
+    // Find last successor where no assigned reg is live
+    for (int i = unconditional_targets.size() - 1; i >= 1; --i) {
+      auto& unconditional_target = unconditional_targets.at(i);
+      if (is_any_assigned_reg_live_at_target(unconditional_target)) {
+        continue;
+      }
+      TRACE(CONSTP, 2,
+            "forward_targets rewrites target, skipping %zu targets, discharged "
+            "%zu assigned regs",
+            i, unconditional_target.assigned_regs.size());
+      return unconditional_target.target;
+    }
+    return nullptr;
+  };
+
+  // Main loop over, analyzing and potentially rewriting all normal successor
+  // edges to the furthest unconditional feasible target
+  for (auto succ_edge : cfg.get_succ_edges_if(block, is_normal)) {
+    auto unconditional_targets = get_unconditional_targets(succ_edge);
+    auto new_target =
+        get_furthest_target_without_live_assigned_regs(unconditional_targets);
+    if (!new_target) {
+      continue;
+    }
+    // Found (last) successor where no assigned reg is live -- forward to
+    // there
+    cfg.set_edge_target(succ_edge, new_target);
+    ++m_stats.branches_forwarded;
   }
+  // TODO: Forwarding may leave behind trivial conditional branches that can
+  // be folded.
 }
 
 bool Transform::has_problematic_return(cfg::ControlFlowGraph& cfg,
@@ -643,9 +745,10 @@ Transform::Stats Transform::apply(
     return m_stats;
   }
 
+  std::unique_ptr<LivenessFixpointIterator> liveness_fixpoint_iter;
   for (auto block : cfg.blocks()) {
     auto env = intra_cp.get_exit_state_at(block);
-    forward_targets(intra_cp, env, cfg, block);
+    forward_targets(intra_cp, env, cfg, block, liveness_fixpoint_iter);
   }
   return m_stats;
 }

@@ -1293,6 +1293,66 @@ IROpcode invert_conditional_branch(IROpcode op) {
   }
 }
 
+bool has_side_effects(IROpcode opc) {
+  switch (opc) {
+  case OPCODE_RETURN_VOID:
+  case OPCODE_RETURN:
+  case OPCODE_RETURN_WIDE:
+  case OPCODE_RETURN_OBJECT:
+  case OPCODE_MONITOR_ENTER:
+  case OPCODE_MONITOR_EXIT:
+  case OPCODE_FILL_ARRAY_DATA:
+  case OPCODE_THROW:
+  case OPCODE_GOTO:
+  case OPCODE_SWITCH:
+  case OPCODE_IF_EQ:
+  case OPCODE_IF_NE:
+  case OPCODE_IF_LT:
+  case OPCODE_IF_GE:
+  case OPCODE_IF_GT:
+  case OPCODE_IF_LE:
+  case OPCODE_IF_EQZ:
+  case OPCODE_IF_NEZ:
+  case OPCODE_IF_LTZ:
+  case OPCODE_IF_GEZ:
+  case OPCODE_IF_GTZ:
+  case OPCODE_IF_LEZ:
+  case OPCODE_APUT:
+  case OPCODE_APUT_WIDE:
+  case OPCODE_APUT_OBJECT:
+  case OPCODE_APUT_BOOLEAN:
+  case OPCODE_APUT_BYTE:
+  case OPCODE_APUT_CHAR:
+  case OPCODE_APUT_SHORT:
+  case OPCODE_IPUT:
+  case OPCODE_IPUT_WIDE:
+  case OPCODE_IPUT_OBJECT:
+  case OPCODE_IPUT_BOOLEAN:
+  case OPCODE_IPUT_BYTE:
+  case OPCODE_IPUT_CHAR:
+  case OPCODE_IPUT_SHORT:
+  case OPCODE_SPUT:
+  case OPCODE_SPUT_WIDE:
+  case OPCODE_SPUT_OBJECT:
+  case OPCODE_SPUT_BOOLEAN:
+  case OPCODE_SPUT_BYTE:
+  case OPCODE_SPUT_CHAR:
+  case OPCODE_SPUT_SHORT:
+  case OPCODE_INVOKE_VIRTUAL:
+  case OPCODE_INVOKE_SUPER:
+  case OPCODE_INVOKE_DIRECT:
+  case OPCODE_INVOKE_STATIC:
+  case OPCODE_INVOKE_INTERFACE:
+  case IOPCODE_LOAD_PARAM:
+  case IOPCODE_LOAD_PARAM_OBJECT:
+  case IOPCODE_LOAD_PARAM_WIDE:
+    return true;
+  default:
+    return false;
+  }
+  not_reached();
+}
+
 } // namespace opcode
 
 namespace opcode_impl {

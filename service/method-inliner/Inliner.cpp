@@ -730,6 +730,7 @@ void MultiMethodInliner::shrink_method(DexMethod* method) {
     }
     always_assert(!code->editable_cfg_built());
     code->build_cfg(/* editable */ true);
+    code->cfg().calculate_exit_block();
     {
       constant_propagation::intraprocedural::FixpointIterator fp_iter(
           code->cfg(), constant_propagation::ConstantPrimitiveAnalyzer());

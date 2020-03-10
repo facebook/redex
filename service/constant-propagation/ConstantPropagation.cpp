@@ -37,6 +37,7 @@ Transform::Stats ConstantPropagation::run(DexMethod* method,
   if (xstores) {
     always_assert(!code->editable_cfg_built());
     code->build_cfg(/* editable */ true);
+    code->cfg().calculate_exit_block();
     {
       intraprocedural::FixpointIterator fp_iter(code->cfg(),
                                                 ConstantPrimitiveAnalyzer());

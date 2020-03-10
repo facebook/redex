@@ -317,6 +317,12 @@ enum Branchingness {
 
 Branchingness branchingness(IROpcode op);
 
+/*
+ * These instructions have observable side effects so must always be considered
+ * live, regardless of whether their output is consumed by another instruction.
+ */
+bool has_side_effects(IROpcode opc);
+
 } // namespace opcode
 
 /*
