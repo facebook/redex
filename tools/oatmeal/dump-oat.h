@@ -12,6 +12,7 @@
 
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 constexpr uint32_t kOatMagicNum = 0x0a74616F;
@@ -42,7 +43,9 @@ struct DexInput {
 struct OatDexFile {
   OatDexFile() = default;
   OatDexFile(std::string location_, uint32_t file_offset_, uint32_t file_size_)
-      : location(location_), file_offset(file_offset_), file_size(file_size_) {}
+      : location(std::move(location_)),
+        file_offset(file_offset_),
+        file_size(file_size_) {}
 
   std::string location;
   uint32_t file_offset;
