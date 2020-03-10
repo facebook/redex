@@ -16,9 +16,10 @@ void ConstantPropagationPass::run_pass(DexStoresVector& stores,
                                        ConfigFiles&,
                                        PassManager& mgr) {
   auto scope = build_class_scope(stores);
+  XStoreRefs xstores(stores);
 
   ConstantPropagation impl(m_config);
-  auto stats = impl.run(scope);
+  auto stats = impl.run(scope, &xstores);
 
   mgr.incr_metric("num_branches_forwarded", stats.branches_forwarded);
   mgr.incr_metric("num_branch_propagated", stats.branches_removed);

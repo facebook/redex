@@ -736,7 +736,7 @@ void MultiMethodInliner::shrink_method(DexMethod* method) {
       fp_iter.run(ConstantEnvironment());
       constant_propagation::Transform::Config config;
       constant_propagation::Transform tf(config);
-      const_prop_stats += tf.apply(fp_iter, code->cfg());
+      const_prop_stats += tf.apply(fp_iter, code->cfg(), method, &xstores);
     }
   }
 

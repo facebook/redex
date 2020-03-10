@@ -14,7 +14,8 @@
 
 namespace constant_propagation {
 
-Transform::Stats ConstantPropagation::run(DexMethod* method) {
+Transform::Stats ConstantPropagation::run(DexMethod* method,
+                                          XStoreRefs* xstores) {
   if (method->get_code() == nullptr) {
     return Transform::Stats();
   }
@@ -33,21 +34,24 @@ Transform::Stats ConstantPropagation::run(DexMethod* method) {
     local_stats =
         tf.apply_on_uneditable_cfg(fp_iter, WholeProgramState(), code);
   }
-  always_assert(!code->editable_cfg_built());
-  code->build_cfg(/* editable */ true);
-  {
-    intraprocedural::FixpointIterator fp_iter(code->cfg(),
-                                              ConstantPrimitiveAnalyzer());
-    fp_iter.run(ConstantEnvironment());
-    constant_propagation::Transform tf(m_config.transform);
-    local_stats += tf.apply(fp_iter, code->cfg());
+  if (xstores) {
+    always_assert(!code->editable_cfg_built());
+    code->build_cfg(/* editable */ true);
+    {
+      intraprocedural::FixpointIterator fp_iter(code->cfg(),
+                                                ConstantPrimitiveAnalyzer());
+      fp_iter.run(ConstantEnvironment());
+      constant_propagation::Transform tf(m_config.transform);
+      local_stats += tf.apply(fp_iter, code->cfg(), method, xstores);
+    }
+    code->clear_cfg();
   }
-  code->clear_cfg();
   return local_stats;
 }
 
-Transform::Stats ConstantPropagation::run(const Scope& scope) {
+Transform::Stats ConstantPropagation::run(const Scope& scope,
+                                          XStoreRefs* xstores) {
   return walk::parallel::methods<Transform::Stats>(
-      scope, [&](DexMethod* method) { return run(method); });
+      scope, [&](DexMethod* method) { return run(method, xstores); });
 }
 } // namespace constant_propagation

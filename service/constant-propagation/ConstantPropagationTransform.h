@@ -56,7 +56,10 @@ class Transform final {
                                 IRCode*);
 
   // Apply (new) transformations on editable cfg
-  Stats apply(const intraprocedural::FixpointIterator&, cfg::ControlFlowGraph&);
+  Stats apply(const intraprocedural::FixpointIterator&,
+              cfg::ControlFlowGraph&,
+              DexMethod*,
+              XStoreRefs*);
 
  private:
   /*
@@ -95,6 +98,11 @@ class Transform final {
                        const ConstantEnvironment&,
                        cfg::ControlFlowGraph&,
                        cfg::Block*);
+
+  // Check whether the code can return a value of a unavailable/external type,
+  // or a type defined in a store different from the one where the method is
+  // defined in.
+  bool has_problematic_return(cfg::ControlFlowGraph&, DexMethod*, XStoreRefs*);
 
   const Config m_config;
   std::vector<std::pair<IRInstruction*, std::vector<IRInstruction*>>>

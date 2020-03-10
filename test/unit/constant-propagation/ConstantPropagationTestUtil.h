@@ -25,7 +25,7 @@ inline void do_const_prop(
   intra_cp.run(ConstantEnvironment());
   cp::Transform tf(transform_config);
   if (editable_cfg) {
-    tf.apply(intra_cp, code->cfg());
+    tf.apply(intra_cp, code->cfg(), nullptr, nullptr);
     code->clear_cfg();
   } else {
     tf.apply_on_uneditable_cfg(intra_cp, cp::WholeProgramState(), code);

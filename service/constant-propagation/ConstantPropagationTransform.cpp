@@ -7,7 +7,9 @@
 
 #include "ConstantPropagationTransform.h"
 
+#include "ReachingDefinitions.h"
 #include "Transform.h"
+#include "TypeInference.h"
 
 namespace constant_propagation {
 
@@ -526,9 +528,120 @@ void Transform::forward_targets(
   }
 }
 
+bool Transform::has_problematic_return(cfg::ControlFlowGraph& cfg,
+                                       DexMethod* method,
+                                       XStoreRefs* xstores) {
+  // Nothing to check without method information
+  if (!method) {
+    return false;
+  }
+
+  // No return issues when rtype is primitive
+  auto rtype = method->get_proto()->get_rtype();
+  if (type::is_primitive(rtype)) {
+    return false;
+  }
+
+  // No return issues when there are no try/catch blocks
+  auto blocks = cfg.blocks();
+  bool has_catch =
+      std::find_if(blocks.begin(), blocks.end(), [](cfg::Block* block) {
+        return block->is_catch();
+      }) != blocks.end();
+  if (!has_catch) {
+    return false;
+  }
+
+  // For all return instructions, check whether the reaching definitions are of
+  // a type that's unavailable/external, or defined in a different store.
+  auto declaring_class_idx = xstores->get_store_idx(method->get_class());
+  auto is_problematic_return_type = [&](const DexType* t, IRInstruction* insn) {
+    t = type::get_element_type_if_array(t);
+    if (!type_class_internal(t)) {
+      // An unavailable or external class
+      TRACE(CONSTP, 2,
+            "Skipping {%s} because {%s} is unavailable/external in {%s}",
+            SHOW(method), SHOW(t), SHOW(insn));
+      return true;
+    }
+    if (!xstores) {
+      return false;
+    }
+    auto t_idx = xstores->get_store_idx(t);
+    if (t_idx == declaring_class_idx) {
+      return false;
+    }
+    TRACE(CONSTP, 2,
+          "Skipping {%s} because {%s} is from different store (%zu vs %zu) in "
+          "{%s}",
+          SHOW(method), SHOW(t), declaring_class_idx, t_idx, SHOW(insn));
+    return true;
+  };
+  reaching_defs::MoveAwareFixpointIterator fp_iter(cfg);
+  fp_iter.run({});
+  std::unique_ptr<type_inference::TypeInference> ti;
+  for (cfg::Block* block : blocks) {
+    auto env = fp_iter.get_entry_state_at(block);
+    if (env.is_bottom()) {
+      continue;
+    }
+    for (auto& mie : InstructionIterable(block)) {
+      IRInstruction* insn = mie.insn;
+      if (is_return(insn->opcode())) {
+        auto defs = env.get(insn->src(0));
+        always_assert(!defs.is_bottom() && !defs.is_top());
+        for (auto def : defs.elements()) {
+          auto op = def->opcode();
+          if (def->has_type()) {
+            if (is_problematic_return_type(def->get_type(), def)) {
+              return true;
+            }
+          } else if (def->has_method()) {
+            always_assert(is_invoke(op));
+            if (is_problematic_return_type(
+                    def->get_method()->get_proto()->get_rtype(), def)) {
+              return true;
+            }
+          } else if (op == OPCODE_IGET_OBJECT || op == OPCODE_SGET_OBJECT) {
+            if (is_problematic_return_type(def->get_field()->get_type(), def)) {
+              return true;
+            }
+          } else if (op == OPCODE_AGET_OBJECT) {
+            if (!ti) {
+              ti.reset(new type_inference::TypeInference(cfg));
+              ti->run(method);
+            }
+            auto& type_environments = ti->get_type_environments();
+            auto& type_environment = type_environments.at(def);
+            auto dex_type = type_environment.get_dex_type(def->src(1));
+            if (dex_type && type::is_array(*dex_type) &&
+                is_problematic_return_type(
+                    type::get_array_component_type(*dex_type), def)) {
+              return true;
+            }
+          }
+        }
+      }
+      fp_iter.analyze_instruction(insn, &env);
+    }
+  }
+  return false;
+}
+
 Transform::Stats Transform::apply(
     const intraprocedural::FixpointIterator& intra_cp,
-    cfg::ControlFlowGraph& cfg) {
+    cfg::ControlFlowGraph& cfg,
+    DexMethod* method,
+    XStoreRefs* xstores) {
+  // The following is an attempt to avoid creating a control-flow structure that
+  // triggers the Android bug described in T55782799, related to a return
+  // statement in a try region when a type is unavailable/external, possibly
+  // from a different store.
+  // Besides that Android bug, it really shouldn't be necessary to do anything
+  // special about unavailable types or cross-store references here.
+  if (has_problematic_return(cfg, method, xstores)) {
+    return m_stats;
+  }
 
   for (auto block : cfg.blocks()) {
     auto env = intra_cp.get_exit_state_at(block);
