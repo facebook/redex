@@ -187,6 +187,7 @@ std::unique_ptr<GlobalTypeAnalyzer> GlobalTypeAnalysis::analyze(
   auto gta = std::make_unique<GlobalTypeAnalyzer>(cg);
   gta->run({{CURRENT_PARTITION_LABEL, ArgumentTypeEnvironment()}});
   auto non_true_virtuals = mog::get_non_true_virtuals(scope);
+  size_t iteration_cnt = 0;
 
   for (size_t i = 0; i < m_max_global_analysis_iteration; ++i) {
     // Build an approximation of all the field values and method return values.
@@ -202,8 +203,14 @@ std::unique_ptr<GlobalTypeAnalyzer> GlobalTypeAnalysis::analyze(
     TRACE(TYPE, 2, "[global] Start a new global analysis run");
     gta->set_whole_program_state(std::move(wps));
     gta->run({{CURRENT_PARTITION_LABEL, ArgumentTypeEnvironment()}});
+    ++iteration_cnt;
   }
 
+  TRACE(TYPE,
+        1,
+        "[global] Finished in %d global iterations (max %d)",
+        iteration_cnt,
+        m_max_global_analysis_iteration);
   return gta;
 }
 

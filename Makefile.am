@@ -78,6 +78,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/test_cfg \
 	-I$(top_srcdir)/opt/throw-propagation \
 	-I$(top_srcdir)/opt/track_resources \
+	-I$(top_srcdir)/opt/type-analysis \
 	-I$(top_srcdir)/opt/type-erasure \
 	-I$(top_srcdir)/opt/unreferenced_interfaces \
 	-I$(top_srcdir)/opt/unmark_proguard_keep \
@@ -349,6 +350,7 @@ redex_all_SOURCES = \
 	opt/test_cfg/TestCFG.cpp \
 	opt/track_resources/TrackResources.cpp \
 	opt/throw-propagation/ThrowPropagationPass.cpp \
+	opt/type-analysis/GlobalTypeAnalysisPass.cpp \
 	opt/type-erasure/ApproximateShapeMerging.cpp \
 	opt/type-erasure/ClassAssemblingUtils.cpp \
 	opt/type-erasure/MergerType.cpp \

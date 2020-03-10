@@ -108,7 +108,8 @@ class GlobalTypeAnalyzer : public sparta::ParallelMonotonicFixpointIterator<
 class GlobalTypeAnalysis {
 
  public:
-  GlobalTypeAnalysis() : m_max_global_analysis_iteration(10) {}
+  GlobalTypeAnalysis(size_t max_global_analysis_iteration = 10)
+      : m_max_global_analysis_iteration(max_global_analysis_iteration) {}
 
   void run(Scope& scope) { analyze(scope); }
 
@@ -118,7 +119,7 @@ class GlobalTypeAnalysis {
   std::unique_ptr<GlobalTypeAnalyzer> analyze(const Scope&);
 
  private:
-  size_t m_max_global_analysis_iteration{0};
+  size_t m_max_global_analysis_iteration;
 };
 
 } // namespace global
