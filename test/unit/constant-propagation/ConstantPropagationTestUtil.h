@@ -18,10 +18,16 @@ inline void do_const_prop(
     IRCode* code,
     const std::function<void(const IRInstruction*, ConstantEnvironment*)>&
         insn_analyzer = cp::ConstantPrimitiveAnalyzer(),
-    const cp::Transform::Config& transform_config = cp::Transform::Config()) {
-  code->build_cfg(/* editable */ false);
+    const cp::Transform::Config& transform_config = cp::Transform::Config(),
+    bool editable_cfg = false) {
+  code->build_cfg(editable_cfg);
   cp::intraprocedural::FixpointIterator intra_cp(code->cfg(), insn_analyzer);
   intra_cp.run(ConstantEnvironment());
   cp::Transform tf(transform_config);
-  tf.apply(intra_cp, cp::WholeProgramState(), code);
+  if (editable_cfg) {
+    tf.apply(intra_cp, code->cfg());
+    code->clear_cfg();
+  } else {
+    tf.apply_on_uneditable_cfg(intra_cp, cp::WholeProgramState(), code);
+  }
 }

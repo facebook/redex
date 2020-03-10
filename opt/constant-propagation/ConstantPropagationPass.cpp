@@ -8,8 +8,6 @@
 #include "ConstantPropagationPass.h"
 
 #include "ConstantPropagation.h"
-#include "ConstantPropagationAnalysis.h"
-#include "ConstantPropagationTransform.h"
 #include "Walkers.h"
 
 using namespace constant_propagation;
@@ -22,6 +20,7 @@ void ConstantPropagationPass::run_pass(DexStoresVector& stores,
   ConstantPropagation impl(m_config);
   auto stats = impl.run(scope);
 
+  mgr.incr_metric("num_branches_forwarded", stats.branches_forwarded);
   mgr.incr_metric("num_branch_propagated", stats.branches_removed);
   mgr.incr_metric("num_materialized_consts", stats.materialized_consts);
   mgr.incr_metric("num_throws", stats.throws);

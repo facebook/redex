@@ -32,12 +32,14 @@ class Transform final {
 
   struct Stats {
     size_t branches_removed{0};
+    size_t branches_forwarded{0};
     size_t materialized_consts{0};
     size_t added_param_const{0};
     size_t throws{0};
 
     Stats& operator+=(const Stats& that) {
       branches_removed += that.branches_removed;
+      branches_forwarded += that.branches_forwarded;
       materialized_consts += that.materialized_consts;
       added_param_const += that.added_param_const;
       throws += that.throws;
@@ -47,9 +49,14 @@ class Transform final {
 
   explicit Transform(Config config = Config()) : m_config(config) {}
 
-  Stats apply(const intraprocedural::FixpointIterator&,
-              const WholeProgramState&,
-              IRCode*);
+  // Apply transformations on uneditable cfg
+  // TODO: Migrate all to use editable cfg via `apply` method
+  Stats apply_on_uneditable_cfg(const intraprocedural::FixpointIterator&,
+                                const WholeProgramState&,
+                                IRCode*);
+
+  // Apply (new) transformations on editable cfg
+  Stats apply(const intraprocedural::FixpointIterator&, cfg::ControlFlowGraph&);
 
  private:
   /*
@@ -83,6 +90,11 @@ class Transform final {
                              const ConstantEnvironment&,
                              cfg::ControlFlowGraph&,
                              cfg::Block*);
+
+  void forward_targets(const intraprocedural::FixpointIterator&,
+                       const ConstantEnvironment&,
+                       cfg::ControlFlowGraph&,
+                       cfg::Block*);
 
   const Config m_config;
   std::vector<std::pair<IRInstruction*, std::vector<IRInstruction*>>>

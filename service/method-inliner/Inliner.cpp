@@ -719,13 +719,25 @@ void MultiMethodInliner::shrink_method(DexMethod* method) {
     if (!code->cfg_built()) {
       code->build_cfg(/* editable */ false);
     }
-    constant_propagation::intraprocedural::FixpointIterator fp_iter(
-        code->cfg(), constant_propagation::ConstantPrimitiveAnalyzer());
-    fp_iter.run(ConstantEnvironment());
-    constant_propagation::Transform::Config config;
-    constant_propagation::Transform tf(config);
-    const_prop_stats =
-        tf.apply(fp_iter, constant_propagation::WholeProgramState(), code);
+    {
+      constant_propagation::intraprocedural::FixpointIterator fp_iter(
+          code->cfg(), constant_propagation::ConstantPrimitiveAnalyzer());
+      fp_iter.run(ConstantEnvironment());
+      constant_propagation::Transform::Config config;
+      constant_propagation::Transform tf(config);
+      const_prop_stats = tf.apply_on_uneditable_cfg(
+          fp_iter, constant_propagation::WholeProgramState(), code);
+    }
+    always_assert(!code->editable_cfg_built());
+    code->build_cfg(/* editable */ true);
+    {
+      constant_propagation::intraprocedural::FixpointIterator fp_iter(
+          code->cfg(), constant_propagation::ConstantPrimitiveAnalyzer());
+      fp_iter.run(ConstantEnvironment());
+      constant_propagation::Transform::Config config;
+      constant_propagation::Transform tf(config);
+      const_prop_stats += tf.apply(fp_iter, code->cfg());
+    }
   }
 
   // The following default 'features' of copy propagation would only

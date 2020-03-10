@@ -168,7 +168,8 @@ void PassImpl::optimize(const Scope& scope, const FixpointIterator& fp_iter) {
           config.class_under_init =
               method::is_clinit(method) ? method->get_class() : nullptr;
           Transform tf(config);
-          return tf.apply(*intra_cp, fp_iter.get_whole_program_state(), &code);
+          return tf.apply_on_uneditable_cfg(
+              *intra_cp, fp_iter.get_whole_program_state(), &code);
         }
       });
 }
@@ -188,6 +189,7 @@ void PassImpl::run_pass(DexStoresVector& stores,
 
   auto scope = build_class_scope(stores);
   run(scope);
+  mgr.incr_metric("branches_forwarded", m_transform_stats.branches_forwarded);
   mgr.incr_metric("branches_removed", m_transform_stats.branches_removed);
   mgr.incr_metric("materialized_consts", m_transform_stats.materialized_consts);
   mgr.incr_metric("throws", m_transform_stats.throws);

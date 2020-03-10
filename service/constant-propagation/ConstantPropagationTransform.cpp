@@ -440,7 +440,7 @@ void Transform::apply_changes(IRCode* code) {
   }
 }
 
-Transform::Stats Transform::apply(
+Transform::Stats Transform::apply_on_uneditable_cfg(
     const intraprocedural::FixpointIterator& intra_cp,
     const WholeProgramState& wps,
     IRCode* code) {
@@ -465,6 +465,75 @@ Transform::Stats Transform::apply(
     eliminate_dead_branch(intra_cp, env, cfg, block);
   }
   apply_changes(code);
+  return m_stats;
+}
+
+void Transform::forward_targets(
+    const intraprocedural::FixpointIterator& intra_cp,
+    const ConstantEnvironment& env,
+    cfg::ControlFlowGraph& cfg,
+    cfg::Block* block) {
+  if (env.is_bottom()) {
+    // we found an unreachable block; ignore it
+    return;
+  }
+
+  // normal edges are of type goto or branch, not throw or ghost
+  auto is_normal = [](const cfg::Edge* e) {
+    return e->type() == cfg::EDGE_GOTO || e->type() == cfg::EDGE_BRANCH;
+  };
+
+  for (auto succ_edge : cfg.get_succ_edges_if(block, is_normal)) {
+    auto succ = succ_edge->target();
+    auto succ_env = intra_cp.analyze_edge(succ_edge, env);
+    std::unordered_set<cfg::Block*> visited{succ};
+    while (!succ_env.is_bottom()) {
+      // TODO: Also allow non-side effecting instructions, in particular
+      // const instructions, that eventually (at the entry of the final block
+      // we arrive at) become dead
+      auto first_insn = succ->get_first_insn();
+      if (first_insn != succ->end() && !is_branch(first_insn->insn->opcode())) {
+        break;
+      }
+      boost::optional<std::pair<cfg::Block*, ConstantEnvironment>>
+          only_feasible;
+      for (auto succ_succ_edge : cfg.get_succ_edges_if(succ, is_normal)) {
+        auto succ_succ_env = intra_cp.analyze_edge(succ_succ_edge, succ_env);
+        if (succ_succ_env.is_bottom()) {
+          continue;
+        }
+        if (only_feasible) {
+          // Found another one that's feasible, so there's an only feasible
+          // successor
+          only_feasible = boost::none;
+          break;
+        }
+        only_feasible = std::make_pair(succ_succ_edge->target(), succ_succ_env);
+      }
+      if (!only_feasible) {
+        break;
+      }
+      std::tie(succ, succ_env) = *only_feasible;
+      if (!visited.insert(succ).second) {
+        // We found a loop; give up.
+        succ_env = ConstantEnvironment::bottom();
+      }
+    }
+    if (!succ_env.is_bottom() && succ != succ_edge->target()) {
+      cfg.set_edge_target(succ_edge, succ);
+      ++m_stats.branches_forwarded;
+    }
+  }
+}
+
+Transform::Stats Transform::apply(
+    const intraprocedural::FixpointIterator& intra_cp,
+    cfg::ControlFlowGraph& cfg) {
+
+  for (auto block : cfg.blocks()) {
+    auto env = intra_cp.get_exit_state_at(block);
+    forward_targets(intra_cp, env, cfg, block);
+  }
   return m_stats;
 }
 

@@ -277,7 +277,8 @@ cp::WholeProgramState analyze_and_simplify_clinits(const Scope& scope) {
       // remove those sputs.
       cp::Transform::Config transform_config;
       transform_config.class_under_init = cls->get_type();
-      cp::Transform(transform_config).apply(intra_cp, wps, code);
+      cp::Transform(transform_config)
+          .apply_on_uneditable_cfg(intra_cp, wps, code);
       // Delete the instructions rendered dead by the removal of those sputs.
       LocalDce(pure_methods).dce(code);
       // If the clinit is empty now, delete it.
@@ -330,7 +331,8 @@ cp::WholeProgramState analyze_and_simplify_inits(
         // Remove redundant iputs in inits
         cp::Transform::Config transform_config;
         transform_config.class_under_init = cls->get_type();
-        cp::Transform(transform_config).apply(intra_cp, wps, code);
+        cp::Transform(transform_config)
+            .apply_on_uneditable_cfg(intra_cp, wps, code);
         // Delete the instructions rendered dead by the removal of those iputs.
         LocalDce(pure_methods).dce(code);
       }

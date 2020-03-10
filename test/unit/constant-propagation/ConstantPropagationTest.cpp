@@ -519,3 +519,102 @@ TEST(ConstantPropagation, WhiteBox2) {
             SignedConstantDomain(sign_domain::Interval::GEZ));
   EXPECT_EQ(exit_state.get<SignedConstantDomain>(1), SignedConstantDomain(0));
 }
+
+TEST(ConstantPropagation, ForwardBranchesIf) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (if-eqz v0 :L1)
+      (const v0 1)
+      (goto :L2)
+      (:L1)
+      (const v0 0)
+      (:L2)
+      (if-eqz v0 :L3)
+      (:L4)
+      (const v0 0)
+      (:L3)
+      (return-void)
+    )
+)");
+
+  do_const_prop(code.get(), cp::ConstantPrimitiveAnalyzer(),
+                cp::Transform::Config(),
+                /* editable_cfg */ true);
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (if-eqz v0 :L1)
+      (const v0 1)
+      (const v0 0)
+      (:L3)
+      (return-void)
+      (:L1)
+      (const v0 0)
+      (goto :L3)
+    )
+)");
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+}
+
+TEST(ConstantPropagation, ForwardBranchesSwitch) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (if-eqz v0 :L0)
+      (load-param v0)
+      (if-eqz v0 :L1)
+      (const v0 2)
+      (goto :SWITCH)
+      (:L0)
+      (const v0 0)
+      (goto :SWITCH)
+      (:L1)
+      (const v0 1)
+      (goto :SWITCH)
+
+      (:SWITCH)
+      (switch v0 (:S0 :S1))
+      (:FALLTHROUGH)
+      (const v0 2)
+      (goto :END)
+      (:S0 0)
+      (const v0 0)
+      (goto :END)
+      (:S1 1)
+      (const v0 1)
+      (goto :END)
+      (:END)
+      (return-void)
+    )
+)");
+
+  do_const_prop(code.get(), cp::ConstantPrimitiveAnalyzer(),
+                cp::Transform::Config(),
+                /* editable_cfg */ true);
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (if-eqz v0 :L0)
+      (load-param v0)
+      (if-eqz v0 :L1)
+      (const v0 2)
+      (const v0 2)
+      (:END)
+      (return-void)
+
+      (:L1)
+      (const v0 1)
+      (const v0 1)
+      (goto :END)
+
+      (:L0)
+      (const v0 0)
+      (const v0 0)
+      (goto :END)
+    )
+)");
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+}
