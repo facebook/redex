@@ -72,11 +72,10 @@ bool is_inference_fallback_type(const DexType* type) {
 
 /*
  * We might not have the external DexClass to fully determine the hierarchy.
- * Therefore, be more conservative when assigning to external DexType.
+ * Therefore, be more lenient when assigning to or from external DexType.
  */
 bool check_cast_helper(const DexType* from, const DexType* to) {
-  auto to_cls = type_class(to);
-  if (!to_cls || to_cls->is_external()) {
+  if (!type_class_internal(from) || !type_class_internal(to)) {
     return true;
   }
   return type::check_cast(from, to);
