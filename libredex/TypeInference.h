@@ -189,8 +189,22 @@ class TypeInference final
 
   void run(bool is_static, DexType* declaring_type, DexTypeList* args);
 
+  void analyze_node(const cfg::GraphInterface::NodeId& node,
+                    TypeEnvironment* current_state) const override {
+    for (auto& mie : InstructionIterable(node)) {
+      analyze_instruction(mie.insn, current_state, node);
+    }
+  }
+
   void analyze_instruction(const IRInstruction* insn,
-                           TypeEnvironment* current_state) const override;
+                           TypeEnvironment* current_state) const override {
+
+    analyze_instruction(insn, current_state, nullptr);
+  }
+
+  void analyze_instruction(const IRInstruction* insn,
+                           TypeEnvironment* current_state,
+                           const cfg::Block* current_block) const;
 
   void print(std::ostream& output) const;
 

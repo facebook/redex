@@ -7,6 +7,7 @@
 
 #include "TypeInference.h"
 
+#include <numeric>
 #include <ostream>
 #include <sstream>
 
@@ -186,6 +187,35 @@ void refine_comparable(TypeEnvironment* state, reg_t reg1, reg_t reg2) {
   }
 }
 
+template <typename DexTypeIt>
+const DexType* merge_dex_types(const DexTypeIt& begin,
+                               const DexTypeIt& end,
+                               const DexType* default_type) {
+  if (begin == end) {
+    return default_type;
+  }
+
+  return std::accumulate(
+      begin, end, static_cast<const DexType*>(nullptr),
+      [&default_type](const DexType* t1, const DexType* t2) -> const DexType* {
+        if (!t1) {
+          return t2;
+        }
+        if (!t2) {
+          return t1;
+        }
+
+        DexTypeDomain d1(t1);
+        DexTypeDomain d2(t2);
+        d1.join_with(d2);
+
+        auto maybe_dextype = d1.get_dex_type();
+
+        // In case of the join giving up, bail to a default type
+        return maybe_dextype ? *maybe_dextype : default_type;
+      });
+}
+
 TypeDomain TypeInference::refine_type(const TypeDomain& type,
                                       IRType expected,
                                       IRType const_type,
@@ -336,7 +366,8 @@ done:
 // Similarly, the various refine_* functions are used to refine the
 // type of a register depending on the context (e.g., from SCALAR to INT).
 void TypeInference::analyze_instruction(const IRInstruction* insn,
-                                        TypeEnvironment* current_state) const {
+                                        TypeEnvironment* current_state,
+                                        const cfg::Block* current_block) const {
   switch (insn->opcode()) {
   case IOPCODE_LOAD_PARAM:
   case IOPCODE_LOAD_PARAM_OBJECT:
@@ -399,9 +430,48 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
     break;
   }
   case OPCODE_MOVE_EXCEPTION: {
-    // We don't know where to grab the type of the just-caught exception.
-    // Simply set to j.l.Throwable here.
-    set_reference(current_state, insn->dest(), type::java_lang_Throwable());
+    if (!current_block) {
+      // We bail just in case the current block is dangling.
+      TRACE(TYPE, 2,
+            "Warning: Can't infer exception type from unknown catch block.");
+      set_reference(current_state, insn->dest(), type::java_lang_Throwable());
+      break;
+    }
+
+    // The block that contained this instruction must be a catch block.
+    const auto& preds = current_block->preds();
+
+    if (preds.empty()) {
+      // We bail just in case the current block is dangling.
+      TRACE(TYPE, 2,
+            "Warning: Catch block doesn't have at least one predecessor.");
+      set_reference(current_state, insn->dest(), type::java_lang_Throwable());
+      break;
+    }
+
+    std::unordered_set<DexType*> catch_types;
+
+    for (cfg::Edge* edge : preds) {
+      auto* throw_info = edge->throw_info();
+      if (!throw_info) {
+        // Some edges may contain no throw info.
+        continue;
+      }
+
+      DexType* catch_type = throw_info->catch_type;
+      if (catch_type) {
+        catch_types.emplace(catch_type);
+      } else {
+        // catch all
+        catch_types.emplace(type::java_lang_Throwable());
+      }
+    }
+
+    auto merged_catch_type =
+        merge_dex_types(catch_types.begin(), catch_types.end(),
+                        /* default */ type::java_lang_Throwable());
+
+    set_reference(current_state, insn->dest(), merged_catch_type);
     break;
   }
   case OPCODE_RETURN_VOID: {
@@ -1005,7 +1075,7 @@ void TypeInference::populate_type_environments() {
     for (auto& mie : InstructionIterable(block)) {
       IRInstruction* insn = mie.insn;
       m_type_envs.emplace(insn, current_state);
-      analyze_instruction(insn, &current_state);
+      analyze_instruction(insn, &current_state, block);
     }
   }
 }
