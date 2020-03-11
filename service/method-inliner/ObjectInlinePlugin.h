@@ -11,6 +11,8 @@
 #include "ClassInitCounter.h"
 #include "ControlFlow.h"
 
+#include <unordered_map>
+
 #include <boost/optional.hpp>
 
 using namespace cic;
@@ -21,8 +23,7 @@ class ObjectInlinePlugin : public CFGInlinerPlugin {
  public:
   ObjectInlinePlugin(
       const FieldSetMap& field_sets,
-      const std::map<DexFieldRef*, DexFieldRef*, dexfields_comparator>&
-          field_swaps,
+      const std::unordered_map<DexFieldRef*, DexFieldRef*>& field_swaps,
       const std::vector<reg_t>& srcs,
       reg_t value_register,
       boost::optional<reg_t> caller_this,
@@ -51,8 +52,7 @@ class ObjectInlinePlugin : public CFGInlinerPlugin {
   FieldSetMap m_initial_field_sets;
   FieldSetMap m_set_field_sets;
   FieldSetMap m_unaccessed_field_sets;
-  const std::map<DexFieldRef*, DexFieldRef*, dexfields_comparator>
-      m_field_swaps;
+  const std::unordered_map<DexFieldRef*, DexFieldRef*> m_field_swaps;
   std::vector<reg_t> m_srcs;
   reg_t m_value_reg;
   boost::optional<reg_t> m_caller_this_reg;

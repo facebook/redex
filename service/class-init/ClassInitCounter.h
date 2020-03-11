@@ -9,8 +9,11 @@
 
 #include "DexClass.h"
 #include "IRInstruction.h"
-#include <map>
+
+#include <unordered_map>
 #include <unordered_set>
+
+#include <boost/functional/hash.hpp>
 
 /**
  * This analysis identifies class initializations descended from a base type
@@ -62,14 +65,16 @@ enum SourceStatus {
 
 // Todo: switch to a pair of register and instruction
 struct FieldSet {
-  std::map<reg_t, std::set<IRInstruction*>> regs;
+  std::unordered_map<reg_t, std::unordered_set<IRInstruction*>> regs;
   FlowStatus set;
   SourceStatus source;
 };
 
 struct MethodCall {
   FlowStatus call;
-  std::set<std::pair<IRInstruction*, reg_t>> call_sites;
+  std::unordered_set<std::pair<IRInstruction*, reg_t>,
+                     boost::hash<std::pair<IRInstruction*, reg_t>>>
+      call_sites;
 };
 
 /*
@@ -88,10 +93,10 @@ struct MethodCall {
  *   consistent, but Object(i) consistent_with Merged({i, i'})
  */
 
-typedef std::map<DexFieldRef*, FieldSet, dexfields_comparator> FieldSetMap;
-typedef std::map<DexFieldRef*, FlowStatus, dexfields_comparator> FieldReadMap;
-typedef std::map<DexMethodRef*, MethodCall, dexmethods_comparator> CallMap;
-typedef std::map<IRInstruction*, FlowStatus> ArrayWriteMap;
+typedef std::unordered_map<DexFieldRef*, FieldSet> FieldSetMap;
+typedef std::unordered_map<DexFieldRef*, FlowStatus> FieldReadMap;
+typedef std::unordered_map<DexMethodRef*, MethodCall> CallMap;
+typedef std::unordered_map<IRInstruction*, FlowStatus> ArrayWriteMap;
 
 // Tracks a field write either to or using a tracked value
 class FieldWriteRegs final {
@@ -151,7 +156,7 @@ class Escapes final {
   boost::optional<FlowStatus> via_return = {};
   std::vector<std::pair<IRInstruction*, reg_t>> get_escape_instructions();
 
-  std::set<IRInstruction*> return_instrs;
+  std::unordered_set<IRInstruction*> return_instrs;
   ArrayWriteMap via_array_write;
   FieldSetMap via_field_set;
   CallMap via_vmethod_call;
@@ -244,15 +249,15 @@ class MergedUses : public TrackedUses {
   bool same_instrs(const MergedUses& other) const;
   void set_is_nullable() { m_includes_nullable = true; }
 
-  const std::set<IRInstruction*>& get_instrs() const { return m_instrs; }
-  const std::set<DexType*, dextypes_comparator>& get_classes() const {
-    return m_classes;
+  const std::unordered_set<IRInstruction*>& get_instrs() const {
+    return m_instrs;
   }
+  const std::unordered_set<DexType*>& get_classes() const { return m_classes; }
   bool is_nullable() const { return m_includes_nullable; }
 
  private:
-  std::set<IRInstruction*> m_instrs;
-  std::set<DexType*, dextypes_comparator> m_classes;
+  std::unordered_set<IRInstruction*> m_instrs;
+  std::unordered_set<DexType*> m_classes;
   bool m_includes_nullable = false;
 };
 
@@ -369,13 +374,12 @@ class RegisterSet {
  * data on where a class is constructed and how the object is subsequently used
  */
 class InitLocation final {
-  using InitMap =
-      std::map<DexClass*,
-               std::map<DexMethod*,
-                        std::map<IRInstruction*,
-                                 std::vector<std::shared_ptr<ObjectUses>>>,
-                        dexmethods_comparator>,
-               dexclasses_comparator>;
+  using InitMap = std::unordered_map<
+      DexClass*,
+      std::unordered_map<
+          DexMethod*,
+          std::unordered_map<IRInstruction*,
+                             std::vector<std::shared_ptr<ObjectUses>>>>>;
 
  public:
   explicit InitLocation(DexType* typ) : m_typ(typ) {}
@@ -409,15 +413,14 @@ struct RegistersPerBlock {
 
 class ClassInitCounter final {
  public:
-  using TypeToInit = std::map<DexType*, InitLocation, dextypes_comparator>;
+  using TypeToInit = std::unordered_map<DexType*, InitLocation>;
   using MergedUsesMap =
-      std::map<DexType*,
-               std::map<DexMethod*, MergedUsedSet, dexmethods_comparator>,
-               dextypes_comparator>;
+      std::unordered_map<DexType*,
+                         std::unordered_map<DexMethod*, MergedUsedSet>>;
 
   ClassInitCounter(
       DexType* common_parent,
-      const std::set<DexMethodRef*, dexmethods_comparator>& safe_escapes,
+      const std::unordered_set<DexMethodRef*>& safe_escapes,
       const std::unordered_set<DexClass*>& classes,
       boost::optional<DexString*> optional_method_name = boost::none);
 
@@ -453,7 +456,7 @@ class ClassInitCounter final {
   MergedUsesMap m_stored_mergeds;
 
   boost::optional<DexString*> m_optional_method;
-  std::set<DexMethodRef*, dexmethods_comparator> m_safe_escapes;
+  std::unordered_set<DexMethodRef*> m_safe_escapes;
 
   // These registers are the storage for registers during analysis, they
   // are accessed and modified across recursive calls to analyze_block

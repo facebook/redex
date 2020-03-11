@@ -67,7 +67,7 @@ void test_object_inliner(
     field_refs.emplace_back(field_ref);
   }
 
-  std::map<DexFieldRef*, DexFieldRef*, dexfields_comparator> field_swap_refs;
+  std::unordered_map<DexFieldRef*, DexFieldRef*> field_swap_refs;
   for (const auto& field_swap : swap_fields) {
     auto callee_field = DexField::make_field(callee_class + field_swap.first);
     callee_field->make_concrete(ACC_PUBLIC);

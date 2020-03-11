@@ -11,13 +11,14 @@
 #include "ClassInitCounter.h"
 #include "IROpcode.h"
 
+#include <unordered_set>
+
 using namespace cic;
 using namespace cfg;
 
 ObjectInlinePlugin::ObjectInlinePlugin(
     const FieldSetMap& field_sets,
-    const std::map<DexFieldRef*, DexFieldRef*, dexfields_comparator>&
-        field_swaps,
+    const std::unordered_map<DexFieldRef*, DexFieldRef*>& field_swaps,
     const std::vector<reg_t>& srcs,
     reg_t value_register,
     boost::optional<reg_t> caller_this,
@@ -115,8 +116,8 @@ bool ObjectInlinePlugin::update_after_reg_remap(ControlFlowGraph*,
   // load params have been changed to moves
   IRInstruction* original_load_this = callee->entry_block()->begin()->insn;
   reg_t callee_this = original_load_this->dest();
-  std::set<DexFieldRef*, dexfields_comparator> used_fields;
-  std::set<reg_t> this_refs = {callee_this};
+  std::unordered_set<DexFieldRef*> used_fields;
+  std::unordered_set<reg_t> this_refs = {callee_this};
 
   for (auto block : callee->blocks()) {
     IRInstruction* awaiting_dest_instr = nullptr;

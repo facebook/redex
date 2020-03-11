@@ -20,8 +20,8 @@ bool operator==(const FieldSet& a, const FieldSet& b) {
   if (a.set != b.set || a.source != b.source) {
     return false;
   }
-  std::set<IRInstruction*> a_instrs;
-  std::set<IRInstruction*> b_instrs;
+  std::unordered_set<IRInstruction*> a_instrs;
+  std::unordered_set<IRInstruction*> b_instrs;
   for (const auto& a_reg_instr : a.regs) {
     a_instrs.insert(a_reg_instr.second.begin(), a_reg_instr.second.end());
   }
@@ -39,8 +39,8 @@ inline bool operator==(const MethodCall& a, const MethodCall& b) {
   if (a.call != b.call) {
     return false;
   }
-  std::set<IRInstruction*> a_instrs;
-  std::set<IRInstruction*> b_instrs;
+  std::unordered_set<IRInstruction*> a_instrs;
+  std::unordered_set<IRInstruction*> b_instrs;
   for (auto call : a.call_sites) {
     a_instrs.insert(call.first);
   }
@@ -519,7 +519,7 @@ void Escapes::add_dmethod(DexMethodRef* method,
                           IRInstruction* instr) {
   auto exists_check = via_vmethod_call.find(method);
   if (exists_check == via_vmethod_call.end()) {
-    via_vmethod_call[method] = (MethodCall){AllPaths, {{instr, object}}};
+    via_vmethod_call[method] = MethodCall{AllPaths, {{instr, object}}};
   } else {
     via_vmethod_call[method].call_sites.insert({instr, object});
   }
@@ -1106,7 +1106,7 @@ void InitLocation::all_uses_from(DexType* cls,
 
 ClassInitCounter::ClassInitCounter(
     DexType* parent_class,
-    const std::set<DexMethodRef*, dexmethods_comparator>& safe_escapes,
+    const std::unordered_set<DexMethodRef*>& safe_escapes,
     const std::unordered_set<DexClass*>& classes,
     boost::optional<DexString*> optional_method_name)
     : m_optional_method(optional_method_name), m_safe_escapes{safe_escapes} {
