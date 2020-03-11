@@ -52,7 +52,7 @@ class WholeProgramState {
 
   /*
    * Returns our best approximation of the field type.
-   * For unknown fields, we simply return top.
+   * For unknown fields or fields with no type mapping, we simply return top.
    * It will never return Bottom.
    */
   DexTypeDomain get_field_type(const DexField* field) const {
@@ -61,6 +61,7 @@ class WholeProgramState {
     }
     auto domain = m_field_partition.get(field);
     if (domain.is_bottom()) {
+      TRACE(TYPE, 5, "Missing type for field %s", SHOW(field));
       return DexTypeDomain::top();
     }
     return domain;
@@ -69,14 +70,20 @@ class WholeProgramState {
   /*
    * Returns our best static approximation of the return type.
    * For unknown methods, we simply return top.
-   * This may return Bottom to indicate that a method never returns (i.e. it
-   * throws or loops indefinitely).
+   * A method that maps to Bottom indicates that a method never returns (i.e. it
+   * throws or loops indefinitely). However, for now we still return top. We
+   * don't want to propagate Bottom to local analysis.
    */
   DexTypeDomain get_return_type(const DexMethod* method) const {
     if (!m_known_methods.count(method)) {
       return DexTypeDomain::top();
     }
-    return m_method_partition.get(method);
+    auto domain = m_method_partition.get(method);
+    if (domain.is_bottom()) {
+      TRACE(TYPE, 5, "Missing type for method %s", SHOW(method));
+      return DexTypeDomain::top();
+    }
+    return domain;
   }
 
   size_t get_num_resolved_fields() {

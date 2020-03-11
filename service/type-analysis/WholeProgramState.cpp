@@ -162,6 +162,11 @@ void WholeProgramState::collect_field_types(
     return;
   }
   auto type = env.get(insn->src(0));
+  if (traceEnabled(TYPE, 5)) {
+    std::ostringstream ss;
+    ss << type;
+    TRACE(TYPE, 5, "collecting field %s -> %s", SHOW(field), ss.str().c_str());
+  }
   field_tmp->update(field,
                     [type](const DexField*,
                            std::vector<DexTypeDomain>& s,
@@ -273,11 +278,6 @@ bool WholeProgramAwareAnalyzer::analyze_invoke(
     const IRInstruction* insn,
     DexTypeEnvironment* env) {
   if (whole_program_state == nullptr) {
-    return false;
-  }
-  auto op = insn->opcode();
-  if (op != OPCODE_INVOKE_DIRECT && op != OPCODE_INVOKE_STATIC &&
-      op != OPCODE_INVOKE_VIRTUAL) {
     return false;
   }
   auto method = resolve_method(insn->get_method(), opcode_to_search(insn));

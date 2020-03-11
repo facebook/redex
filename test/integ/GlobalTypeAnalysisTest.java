@@ -41,3 +41,29 @@ class TestA {
     return sum;
   }
 }
+
+class TestB {
+
+  public String passNull(String a) { return a; }
+
+  public String passString(String a) { return a + ""; }
+
+  public Class passClass(Class cls) { return cls; }
+
+  public String getStringArrayComponent(String[] sa) { return sa[0]; }
+  public String[] getNestedStringArrayComponent(String[][] nsa) { return nsa[0]; }
+
+  public static void main() {
+    TestB tb = new TestB();
+    String a = null;
+    tb.passNull(a);
+    a = "Yoyo";
+    tb.passString(a);
+    Class cls = String.class;
+    tb.passClass(cls);
+    String[] sa = new String[] {a};
+    tb.getStringArrayComponent(sa);
+    String[][] nsa = new String[][] {sa};
+    tb.getNestedStringArrayComponent(nsa);
+  }
+}

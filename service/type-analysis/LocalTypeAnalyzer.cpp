@@ -41,7 +41,6 @@ bool field_put_helper(std::unordered_set<DexField*>* written_fields,
     env->set(field, temp_type);
   } else {
     env->set(field, env->get(insn->src(0)));
-    written_fields->insert(field);
   }
   return true;
 }
@@ -51,19 +50,6 @@ bool field_put_helper(std::unordered_set<DexField*>* written_fields,
 namespace type_analyzer {
 
 namespace local {
-
-void set_dex_type(DexTypeEnvironment* state,
-                  reg_t reg,
-                  const boost::optional<const DexType*>& dex_type_opt) {
-  const DexTypeDomain dex_type =
-      dex_type_opt ? DexTypeDomain(*dex_type_opt) : DexTypeDomain::top();
-  state->set(reg, dex_type);
-}
-
-boost::optional<const DexType*> get_dex_type(DexTypeEnvironment* state,
-                                             reg_t reg) {
-  return state->get(reg).get_dex_type();
-}
 
 void traceEnvironment(DexTypeEnvironment* env) {
   std::ostringstream out;
@@ -80,13 +66,50 @@ void LocalTypeAnalyzer::analyze_instruction(const IRInstruction* insn,
   }
 }
 
+bool RegisterTypeAnalyzer::analyze_const(const IRInstruction* insn,
+                                         DexTypeEnvironment* env) {
+  if (insn->opcode() != OPCODE_CONST || insn->get_literal() != 0) {
+    return false;
+  }
+  env->set(insn->dest(), DexTypeDomain::top());
+  return true;
+}
+
+bool RegisterTypeAnalyzer::analyze_const_string(const IRInstruction*,
+                                                DexTypeEnvironment* env) {
+  env->set(RESULT_REGISTER, DexTypeDomain(type::java_lang_String()));
+  return true;
+}
+
+bool RegisterTypeAnalyzer::analyze_const_class(const IRInstruction*,
+                                               DexTypeEnvironment* env) {
+  env->set(RESULT_REGISTER, DexTypeDomain(type::java_lang_Class()));
+  return true;
+}
+
+bool RegisterTypeAnalyzer::analyze_aget(const IRInstruction* insn,
+                                        DexTypeEnvironment* env) {
+  if (insn->opcode() != OPCODE_AGET_OBJECT) {
+    return false;
+  }
+  auto array_type = env->get(insn->src(0)).get_dex_type();
+  if (array_type && *array_type) {
+    always_assert_log(
+        type::is_array(*array_type), "Wrong array type %s", SHOW(*array_type));
+    const auto ctype = type::get_array_component_type(*array_type);
+    env->set(RESULT_REGISTER, DexTypeDomain(ctype));
+  } else {
+    env->set(RESULT_REGISTER, DexTypeDomain::top());
+  }
+  return true;
+}
+
 bool RegisterTypeAnalyzer::analyze_move(const IRInstruction* insn,
                                         DexTypeEnvironment* env) {
   if (insn->opcode() != OPCODE_MOVE_OBJECT) {
     return false;
   }
-  const auto& dex_type_opt = get_dex_type(env, insn->src(0));
-  set_dex_type(env, insn->dest(), dex_type_opt);
+  env->set(insn->dest(), env->get(insn->src(0)));
   return true;
 }
 
@@ -96,7 +119,7 @@ bool RegisterTypeAnalyzer::analyze_move_result(const IRInstruction* insn,
       insn->opcode() != IOPCODE_MOVE_RESULT_PSEUDO_OBJECT) {
     return false;
   }
-  set_dex_type(env, insn->dest(), get_dex_type(env, RESULT_REGISTER));
+  env->set(insn->dest(), env->get(RESULT_REGISTER));
   return true;
 }
 
@@ -104,25 +127,25 @@ bool RegisterTypeAnalyzer::analyze_move_exception(const IRInstruction* insn,
                                                   DexTypeEnvironment* env) {
   // We don't know where to grab the type of the just-caught exception.
   // Simply set to j.l.Throwable here.
-  set_dex_type(env, insn->dest(), type::java_lang_Throwable());
+  env->set(insn->dest(), DexTypeDomain(type::java_lang_Throwable()));
   return true;
 }
 
 bool RegisterTypeAnalyzer::analyze_new_instance(const IRInstruction* insn,
                                                 DexTypeEnvironment* env) {
-  set_dex_type(env, RESULT_REGISTER, insn->get_type());
+  env->set(RESULT_REGISTER, DexTypeDomain(insn->get_type()));
   return true;
 }
 
 bool RegisterTypeAnalyzer::analyze_new_array(const IRInstruction* insn,
                                              DexTypeEnvironment* env) {
-  set_dex_type(env, RESULT_REGISTER, insn->get_type());
+  env->set(RESULT_REGISTER, DexTypeDomain(insn->get_type()));
   return true;
 }
 
 bool RegisterTypeAnalyzer::analyze_filled_new_array(const IRInstruction* insn,
                                                     DexTypeEnvironment* env) {
-  set_dex_type(env, RESULT_REGISTER, insn->get_type());
+  env->set(RESULT_REGISTER, DexTypeDomain(insn->get_type()));
   return true;
 }
 

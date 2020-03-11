@@ -36,9 +36,11 @@ void initialize_field_env(const WholeProgramState& wps,
       continue;
     }
     auto type = wps.get_field_type(field);
-    env.set(field, type);
-    written_fields.insert(field);
-    populated = true;
+    if (!type.is_top()) {
+      env.set(field, type);
+      written_fields.insert(field);
+      populated = true;
+    }
   }
 
   if (traceEnabled(TYPE, 5) && populated) {
@@ -49,7 +51,7 @@ void initialize_field_env(const WholeProgramState& wps,
 }
 
 void trace_whole_program_state(WholeProgramState& wps) {
-  if (traceEnabled(TYPE, 5)) {
+  if (traceEnabled(TYPE, 10)) {
     std::ostringstream out;
     out << wps;
     TRACE(TYPE, 5, "[wps] aggregated whole program state");

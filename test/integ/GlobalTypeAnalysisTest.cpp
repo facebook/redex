@@ -35,14 +35,18 @@ class GlobalTypeAnalysisTest : public RedexIntegrationTest {
   DexMethod* get_method(const std::string& name,
                         const std::string& params,
                         const std::string& rtype) {
-    std::string full_name = "Lcom/facebook/redextest/" + name + ":(" + params +
-                            ")Lcom/facebook/redextest/" + rtype + ";";
+    std::string full_name =
+        "Lcom/facebook/redextest/" + name + ":(" + params + ")" + rtype;
     return DexMethod::get_method(full_name)->as_def();
   }
 
   DexTypeDomain get_type_domain(const std::string& type_name) {
     std::string full_name = "Lcom/facebook/redextest/" + type_name + ";";
     return DexTypeDomain(DexType::make_type(DexString::make_string(full_name)));
+  }
+
+  DexTypeDomain get_type_domain_simple(const std::string& type_name) {
+    return DexTypeDomain(DexType::make_type(DexString::make_string(type_name)));
   }
 };
 
@@ -58,8 +62,9 @@ TEST_F(GlobalTypeAnalysisTest, ReturnTypeTest) {
   EXPECT_EQ(wps.get_return_type(meth_get_subone), get_type_domain("SubOne"));
   auto meth_get_subtwo = get_method("TestA;.getSubTwo", "Base");
   EXPECT_EQ(wps.get_return_type(meth_get_subtwo), get_type_domain("SubTwo"));
-  auto meth_passthrough =
-      get_method("TestA;.passThrough", "Lcom/facebook/redextest/Base;", "Base");
+  auto meth_passthrough = get_method("TestA;.passThrough",
+                                     "Lcom/facebook/redextest/Base;",
+                                     "Lcom/facebook/redextest/Base;");
   EXPECT_EQ(wps.get_return_type(meth_passthrough), get_type_domain("SubTwo"));
 
   auto meth_foo = get_method("TestA;.foo:()I");
@@ -70,4 +75,40 @@ TEST_F(GlobalTypeAnalysisTest, ReturnTypeTest) {
             get_type_domain("SubOne"));
   EXPECT_EQ(foo_exit_env.get_reg_environment().get(2),
             get_type_domain("SubTwo"));
+}
+
+TEST_F(GlobalTypeAnalysisTest, ConstsAndAGETTest) {
+  auto scope = build_class_scope(stores);
+  set_root_method("Lcom/facebook/redextest/TestB;.main:()V");
+
+  GlobalTypeAnalysis analysis;
+  auto gta = analysis.analyze(scope);
+  auto wps = gta->get_whole_program_state();
+
+  auto meth_pass_null =
+      get_method("TestB;.passNull", "Ljava/lang/String;", "Ljava/lang/String;");
+  EXPECT_EQ(wps.get_return_type(meth_pass_null), DexTypeDomain::top());
+
+  auto meth_pass_string = get_method(
+      "TestB;.passString", "Ljava/lang/String;", "Ljava/lang/String;");
+  EXPECT_EQ(wps.get_return_type(meth_pass_string),
+            get_type_domain_simple("Ljava/lang/String;"));
+
+  auto meth_pass_class =
+      get_method("TestB;.passClass", "Ljava/lang/Class;", "Ljava/lang/Class;");
+  EXPECT_EQ(wps.get_return_type(meth_pass_class),
+            get_type_domain_simple("Ljava/lang/Class;"));
+
+  auto meth_array_comp = get_method("TestB;.getStringArrayComponent",
+                                    "[Ljava/lang/String;",
+                                    "Ljava/lang/String;");
+  EXPECT_EQ(wps.get_return_type(meth_array_comp),
+            get_type_domain_simple("Ljava/lang/String;"));
+
+  auto meth_nested_array_comp =
+      get_method("TestB;.getNestedStringArrayComponent",
+                 "[[Ljava/lang/String;",
+                 "[Ljava/lang/String;");
+  EXPECT_EQ(wps.get_return_type(meth_nested_array_comp),
+            get_type_domain_simple("[Ljava/lang/String;"));
 }
