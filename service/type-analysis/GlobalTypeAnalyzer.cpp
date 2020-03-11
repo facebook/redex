@@ -36,11 +36,9 @@ void initialize_field_env(const WholeProgramState& wps,
       continue;
     }
     auto type = wps.get_field_type(field);
-    if (!type.is_top()) {
-      env.set(field, type);
-      written_fields.insert(field);
-      populated = true;
-    }
+    env.set(field, type);
+    written_fields.insert(field);
+    populated = true;
   }
 
   if (traceEnabled(TYPE, 5) && populated) {
@@ -50,12 +48,26 @@ void initialize_field_env(const WholeProgramState& wps,
   }
 }
 
-void trace_whole_program_stats(WholeProgramState& wps) {
+void trace_whole_program_state(WholeProgramState& wps) {
   if (traceEnabled(TYPE, 5)) {
     std::ostringstream out;
     out << wps;
     TRACE(TYPE, 5, "[wps] aggregated whole program state");
     TRACE(TYPE, 5, "%s", out.str().c_str());
+  }
+}
+
+void trace_whole_program_state_diff(const WholeProgramState& old_wps,
+                                    const WholeProgramState& new_wps) {
+  if (traceEnabled(TYPE, 3)) {
+    TRACE(TYPE,
+          3,
+          "[wps] field partition diff\n%s",
+          old_wps.print_field_partition_diff(new_wps).c_str());
+    TRACE(TYPE,
+          3,
+          "[wps] method partition diff\n%s",
+          old_wps.print_method_partition_diff(new_wps).c_str());
   }
 }
 
@@ -203,8 +215,9 @@ std::unique_ptr<GlobalTypeAnalyzer> GlobalTypeAnalysis::analyze(
     TRACE(TYPE, 2, "[global] Collecting WholeProgramState");
     auto wps =
         std::make_unique<WholeProgramState>(scope, *gta, non_true_virtuals);
-    trace_whole_program_stats(*wps);
+    trace_whole_program_state(*wps);
     trace_stats(*wps);
+    trace_whole_program_state_diff(gta->get_whole_program_state(), *wps);
     // If this approximation is not better than the previous one, we are done.
     if (gta->get_whole_program_state().leq(*wps)) {
       break;

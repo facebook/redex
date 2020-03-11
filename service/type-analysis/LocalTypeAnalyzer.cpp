@@ -23,13 +23,7 @@ bool field_get_helper(std::unordered_set<DexField*>* written_fields,
   if (field == nullptr || !type::is_object(field->get_type())) {
     return false;
   }
-  if (written_fields->count(field)) {
-    env->set(ir_analyzer::RESULT_REGISTER, env->get(field));
-  } else {
-    // For unwritten field, fall back to the declared type.
-    auto type = field->get_type();
-    env->set(ir_analyzer::RESULT_REGISTER, DexTypeDomain(type));
-  }
+  env->set(ir_analyzer::RESULT_REGISTER, env->get(field));
   return true;
 }
 
@@ -40,9 +34,9 @@ bool field_put_helper(std::unordered_set<DexField*>* written_fields,
   if (field == nullptr || !type::is_object(field->get_type())) {
     return false;
   }
-  auto temp_type = env->get(field);
   if (written_fields->count(field)) {
     // Has either been written to locally or by another method.
+    auto temp_type = env->get(field);
     temp_type.join_with(env->get(insn->src(0)));
     env->set(field, temp_type);
   } else {

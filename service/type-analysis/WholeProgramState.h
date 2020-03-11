@@ -99,6 +99,11 @@ class WholeProgramState {
     return cnt;
   }
 
+  // For debugging
+  std::string print_field_partition_diff(const WholeProgramState& other) const;
+
+  std::string print_method_partition_diff(const WholeProgramState& other) const;
+
   friend std::ostream& operator<<(std::ostream& out,
                                   const WholeProgramState& wps) {
     out << wps.m_field_partition << std::endl;
