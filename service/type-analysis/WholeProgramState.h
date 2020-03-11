@@ -13,6 +13,10 @@
 #include "HashedAbstractPartition.h"
 #include "InstructionAnalyzer.h"
 
+std::ostream& operator<<(std::ostream& out, const DexField* field);
+
+std::ostream& operator<<(std::ostream& out, const DexMethod* method);
+
 namespace type_analyzer {
 
 namespace global {
@@ -48,10 +52,13 @@ class WholeProgramState {
 
   /*
    * Returns our best approximation of the field type.
-   *
+   * For unknown fields, we simply return top.
    * It will never return Bottom.
    */
   DexTypeDomain get_field_type(const DexField* field) const {
+    if (!m_known_fields.count(field)) {
+      return DexTypeDomain::top();
+    }
     auto domain = m_field_partition.get(field);
     if (domain.is_bottom()) {
       return DexTypeDomain::top();
@@ -61,7 +68,7 @@ class WholeProgramState {
 
   /*
    * Returns our best static approximation of the return type.
-   *
+   * For unknown methods, we simply return top.
    * This may return Bottom to indicate that a method never returns (i.e. it
    * throws or loops indefinitely).
    */
@@ -70,6 +77,33 @@ class WholeProgramState {
       return DexTypeDomain::top();
     }
     return m_method_partition.get(method);
+  }
+
+  size_t get_num_resolved_fields() {
+    size_t cnt = 0;
+    for (auto& pair : m_field_partition.bindings()) {
+      if (!pair.second.is_top()) {
+        ++cnt;
+      }
+    }
+    return cnt;
+  }
+
+  size_t get_num_resolved_methods() {
+    size_t cnt = 0;
+    for (auto& pair : m_method_partition.bindings()) {
+      if (!pair.second.is_top()) {
+        ++cnt;
+      }
+    }
+    return cnt;
+  }
+
+  friend std::ostream& operator<<(std::ostream& out,
+                                  const WholeProgramState& wps) {
+    out << wps.m_field_partition << std::endl;
+    out << wps.m_method_partition;
+    return out;
   }
 
  private:
@@ -86,6 +120,11 @@ class WholeProgramState {
       const DexMethod* method,
       ConcurrentMap<const DexMethod*, std::vector<DexTypeDomain>>* method_tmp);
 
+  // Track the set of fields that we can correctly analyze.
+  // The unknown fields can be written to by non-dex code or through reflection.
+  // We currently do not have the infrastructure to analyze these cases
+  // correctly.
+  std::unordered_set<const DexField*> m_known_fields;
   // Unknown methods will be treated as containing / returning Top.
   std::unordered_set<const DexMethod*> m_known_methods;
 
@@ -103,4 +142,5 @@ class WholeProgramAwareAnalyzer final
                              const IRInstruction* insn,
                              DexTypeEnvironment* env);
 };
+
 } // namespace type_analyzer

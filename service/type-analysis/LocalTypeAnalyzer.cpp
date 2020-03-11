@@ -20,14 +20,15 @@ bool field_get_helper(std::unordered_set<DexField*>* written_fields,
                       const IRInstruction* insn,
                       DexTypeEnvironment* env) {
   auto field = resolve_field(insn->get_field());
-  if (field == nullptr) {
+  if (field == nullptr || !type::is_object(field->get_type())) {
     return false;
   }
   if (written_fields->count(field)) {
     env->set(ir_analyzer::RESULT_REGISTER, env->get(field));
   } else {
-    // Reset RESULT_REGISTER.
-    env->set(ir_analyzer::RESULT_REGISTER, DexTypeDomain::top());
+    // For unwritten field, fall back to the declared type.
+    auto type = field->get_type();
+    env->set(ir_analyzer::RESULT_REGISTER, DexTypeDomain(type));
   }
   return true;
 }
@@ -36,7 +37,7 @@ bool field_put_helper(std::unordered_set<DexField*>* written_fields,
                       const IRInstruction* insn,
                       DexTypeEnvironment* env) {
   auto field = resolve_field(insn->get_field());
-  if (field == nullptr) {
+  if (field == nullptr || !type::is_object(field->get_type())) {
     return false;
   }
   auto temp_type = env->get(field);
@@ -78,7 +79,7 @@ void traceEnvironment(DexTypeEnvironment* env) {
 
 void LocalTypeAnalyzer::analyze_instruction(const IRInstruction* insn,
                                             DexTypeEnvironment* env) const {
-  TRACE(TYPE, 5, "Analyzing instruction: %s", SHOW(insn));
+  TRACE(TYPE, 9, "Analyzing instruction: %s", SHOW(insn));
   m_insn_analyzer(insn, env);
   if (traceEnabled(TYPE, 9)) {
     traceEnvironment(env);

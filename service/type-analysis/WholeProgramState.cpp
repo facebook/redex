@@ -14,6 +14,16 @@
 
 using namespace type_analyzer;
 
+std::ostream& operator<<(std::ostream& out, const DexField* field) {
+  out << SHOW(field);
+  return out;
+}
+
+std::ostream& operator<<(std::ostream& out, const DexMethod* method) {
+  out << SHOW(method);
+  return out;
+}
+
 namespace {
 
 void set_sfields_in_partition(const DexClass* cls,
@@ -52,6 +62,11 @@ void analyze_clinits(const Scope& scope,
   }
 }
 
+bool returns_reference(const DexMethod* method) {
+  auto rtype = method->get_proto()->get_rtype();
+  return type::is_object(rtype);
+}
+
 } // namespace
 
 namespace type_analyzer {
@@ -60,16 +75,31 @@ WholeProgramState::WholeProgramState(
     const Scope& scope,
     const global::GlobalTypeAnalyzer& gta,
     const std::unordered_set<DexMethod*>& non_true_virtuals) {
-  // TODO: Exclude fields that we cannot correctly infer their type?
+  // Exclude fields we cannot correctly analyze.
+  walk::fields(scope, [&](DexField* field) {
+    if (!type::is_object(field->get_type())) {
+      return;
+    }
+    // We assume that a field we cannot delete is marked by a Proguard keep rule
+    // or an annotation. The reason behind is that the field is referenced by
+    // non-dex code.
+    if (!can_delete(field)) {
+      return;
+    }
+    m_known_fields.emplace(field);
+  });
 
+  // TODO: revisit this for multiple callee call graph.
   // Put non-root non true virtual methods in known methods.
   for (const auto& non_true_virtual : non_true_virtuals) {
-    if (!root(non_true_virtual) && non_true_virtual->get_code()) {
+    if (!root(non_true_virtual) && non_true_virtual->get_code() &&
+        returns_reference(non_true_virtual)) {
       m_known_methods.emplace(non_true_virtual);
     }
   }
   walk::code(scope, [&](DexMethod* method, const IRCode&) {
-    if (!method->is_virtual() && method->get_code()) {
+    if (!method->is_virtual() && method->get_code() &&
+        returns_reference(method)) {
       // Put non virtual methods in known methods.
       m_known_methods.emplace(method);
     }
@@ -128,7 +158,7 @@ void WholeProgramState::collect_field_types(
     return;
   }
   auto field = resolve_field(insn->get_field());
-  if (!field) {
+  if (!field || !type::is_object(field->get_type())) {
     return;
   }
   auto type = env.get(insn->src(0));
@@ -147,7 +177,7 @@ void WholeProgramState::collect_return_types(
   if (!is_return(op)) {
     return;
   }
-  if (op == OPCODE_RETURN_VOID) {
+  if (!returns_reference(method)) {
     // We must set the binding to Top here to record the fact that this method
     // does indeed return -- even though `void` is not actually a return type,
     // this tells us that the code following any invoke of this method is
@@ -182,13 +212,14 @@ bool WholeProgramAwareAnalyzer::analyze_invoke(
   if (method == nullptr) {
     return false;
   }
+  if (!returns_reference(method)) {
+    // Reset RESULT_REGISTER
+    env->set(ir_analyzer::RESULT_REGISTER, DexTypeDomain::top());
+    return false;
+  }
   auto type = whole_program_state->get_return_type(method);
   if (type.is_top()) {
-    if (!method->get_proto()->is_void()) {
-      // Reset RESULT_REGISTER, so the previous result would not get picked up
-      // by the following move-result by accident.
-      env->set(ir_analyzer::RESULT_REGISTER, type);
-    }
+    env->set(ir_analyzer::RESULT_REGISTER, DexTypeDomain::top());
     return false;
   }
   env->set(ir_analyzer::RESULT_REGISTER, type);

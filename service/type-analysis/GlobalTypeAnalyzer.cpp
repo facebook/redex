@@ -32,7 +32,7 @@ void initialize_field_env(const WholeProgramState& wps,
       continue;
     }
     auto field = resolve_field(insn->get_field());
-    if (field == nullptr) {
+    if (field == nullptr || !type::is_object(field->get_type())) {
       continue;
     }
     auto type = wps.get_field_type(field);
@@ -47,6 +47,15 @@ void initialize_field_env(const WholeProgramState& wps,
     std::ostringstream out;
     out << env.get_field_environment();
     TRACE(TYPE, 5, "initialized field env %s", out.str().c_str());
+  }
+}
+
+void trace_whole_program_stats(WholeProgramState& wps) {
+  if (traceEnabled(TYPE, 5)) {
+    std::ostringstream out;
+    out << wps;
+    TRACE(TYPE, 5, "[wps] aggregated whole program state");
+    TRACE(TYPE, 5, "%s", out.str().c_str());
   }
 }
 
@@ -152,7 +161,7 @@ std::unique_ptr<local::LocalTypeAnalyzer> GlobalTypeAnalyzer::analyze_method(
   if (args.is_bottom()) {
     args.set_to_top();
   } else if (!args.is_top()) {
-    TRACE(TYPE, 3, "Have args for %s: %s", SHOW(method), SHOW(args));
+    TRACE(TYPE, 5, "Have args for %s: %s", SHOW(method), SHOW(args));
   }
 
   auto env = env_with_params(&code, args);
@@ -194,6 +203,8 @@ std::unique_ptr<GlobalTypeAnalyzer> GlobalTypeAnalysis::analyze(
     TRACE(TYPE, 2, "[global] Collecting WholeProgramState");
     auto wps =
         std::make_unique<WholeProgramState>(scope, *gta, non_true_virtuals);
+    trace_whole_program_stats(*wps);
+    trace_stats(*wps);
     // If this approximation is not better than the previous one, we are done.
     if (gta->get_whole_program_state().leq(*wps)) {
       break;
@@ -212,6 +223,17 @@ std::unique_ptr<GlobalTypeAnalyzer> GlobalTypeAnalysis::analyze(
         iteration_cnt,
         m_max_global_analysis_iteration);
   return gta;
+}
+
+void GlobalTypeAnalysis::trace_stats(WholeProgramState& wps) {
+  if (!traceEnabled(TYPE, 2)) {
+    return;
+  }
+  TRACE(TYPE,
+        2,
+        "[global] wps stats: fields resolved %d; methods resolved %d",
+        wps.get_num_resolved_fields(),
+        wps.get_num_resolved_methods());
 }
 
 } // namespace global
