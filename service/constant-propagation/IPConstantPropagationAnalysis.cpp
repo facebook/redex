@@ -17,9 +17,12 @@ namespace interprocedural {
 ConstantEnvironment env_with_params(bool is_static,
                                     const IRCode* code,
                                     const ArgumentDomain& args) {
+  boost::sub_range<IRList> param_instruction =
+      code->editable_cfg_built() ? code->cfg().get_param_instructions()
+                                 : code->get_param_instructions();
   size_t idx{0};
   ConstantEnvironment env;
-  for (auto& mie : InstructionIterable(code->get_param_instructions())) {
+  for (auto& mie : InstructionIterable(param_instruction)) {
     auto value = args.get(idx);
     if (idx == 0 && !is_static) {
       value = value.meet(SignedConstantDomain(sign_domain::Interval::NEZ));

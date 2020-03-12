@@ -232,7 +232,9 @@ void change_visibility(IRCode* code, DexType* scope) {
       if (current_method != nullptr && current_method->is_concrete() &&
           (scope == nullptr || current_method->get_class() != scope)) {
         set_public(current_method);
-        set_public(type_class(current_method->get_class()));
+        cls = type_class(current_method->get_class());
+        always_assert(cls != nullptr);
+        set_public(cls);
         // FIXME no point in rewriting opcodes in the method
         insn->set_method(current_method);
       }
