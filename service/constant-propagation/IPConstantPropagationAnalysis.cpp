@@ -48,6 +48,7 @@ void FixpointIterator::analyze_node(call_graph::NodeId const& node,
   }
   for (auto* block : cfg.blocks()) {
     auto state = intra_cp->get_entry_state_at(block);
+    auto last_insn = block->get_last_insn();
     for (auto& mie : InstructionIterable(block)) {
       auto* insn = mie.insn;
       auto op = insn->opcode();
@@ -60,7 +61,7 @@ void FixpointIterator::analyze_node(call_graph::NodeId const& node,
           current_state->set(insn, out_args);
         }
       }
-      intra_cp->analyze_instruction(insn, &state);
+      intra_cp->analyze_instruction(insn, &state, insn == last_insn->insn);
     }
   }
 }

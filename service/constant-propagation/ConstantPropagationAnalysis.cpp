@@ -128,6 +128,52 @@ static ConstantValue meet(const ConstantValue& left,
 
 namespace constant_propagation {
 
+boost::optional<size_t> get_dereferenced_object_src_index(
+    const IRInstruction* insn) {
+  switch (insn->opcode()) {
+  case OPCODE_MONITOR_ENTER:
+  case OPCODE_MONITOR_EXIT:
+  case OPCODE_AGET:
+  case OPCODE_AGET_BYTE:
+  case OPCODE_AGET_CHAR:
+  case OPCODE_AGET_WIDE:
+  case OPCODE_AGET_SHORT:
+  case OPCODE_AGET_OBJECT:
+  case OPCODE_AGET_BOOLEAN:
+  case OPCODE_IGET:
+  case OPCODE_IGET_BYTE:
+  case OPCODE_IGET_CHAR:
+  case OPCODE_IGET_WIDE:
+  case OPCODE_IGET_SHORT:
+  case OPCODE_IGET_OBJECT:
+  case OPCODE_IGET_BOOLEAN:
+  case OPCODE_ARRAY_LENGTH:
+  case OPCODE_FILL_ARRAY_DATA:
+  case OPCODE_INVOKE_SUPER:
+  case OPCODE_INVOKE_INTERFACE:
+  case OPCODE_INVOKE_VIRTUAL:
+  case OPCODE_INVOKE_DIRECT:
+    return 0;
+  case OPCODE_APUT:
+  case OPCODE_APUT_BYTE:
+  case OPCODE_APUT_CHAR:
+  case OPCODE_APUT_WIDE:
+  case OPCODE_APUT_SHORT:
+  case OPCODE_APUT_OBJECT:
+  case OPCODE_APUT_BOOLEAN:
+  case OPCODE_IPUT:
+  case OPCODE_IPUT_BYTE:
+  case OPCODE_IPUT_CHAR:
+  case OPCODE_IPUT_WIDE:
+  case OPCODE_IPUT_SHORT:
+  case OPCODE_IPUT_OBJECT:
+  case OPCODE_IPUT_BOOLEAN:
+    return 1;
+  default:
+    return boost::none;
+  }
+}
+
 static void set_escaped(reg_t reg, ConstantEnvironment* env) {
   if (auto ptr_opt = env->get(reg).maybe_get<AbstractHeapPointer>()) {
     if (auto ptr_value = ptr_opt->get_constant()) {
@@ -787,10 +833,11 @@ bool ImmutableAttributeAnalyzer::analyze_iget(
     return false;
   }
   auto heap_obj = env->get_pointee<ObjectWithImmutAttrDomain>(insn->src(0));
-  if (heap_obj.is_top()) {
+  auto c = heap_obj.get_constant();
+  if (!c) {
     return false;
   }
-  auto value = heap_obj.get_constant()->get_value(field);
+  auto value = c->get_value(field);
   if (value && !value->is_top()) {
     if (const auto& string_value = value->maybe_get<StringDomain>()) {
       env->set(RESULT_REGISTER, *string_value);
@@ -836,10 +883,11 @@ bool ImmutableAttributeAnalyzer::analyze_method_attr(
     return false;
   }
   auto heap_obj = env->get_pointee<ObjectWithImmutAttrDomain>(insn->src(0));
-  if (heap_obj.is_top()) {
+  auto c = heap_obj.get_constant();
+  if (!c) {
     return false;
   }
-  auto value = (heap_obj.get_constant())->get_value(method);
+  auto value = c->get_value(method);
   if (value && !value->is_top()) {
     if (const auto& string_value = value->maybe_get<StringDomain>()) {
       env->set(RESULT_REGISTER, *string_value);
@@ -928,9 +976,10 @@ ReturnState collect_return_state(
   auto return_state = ReturnState::bottom();
   for (cfg::Block* b : cfg.blocks()) {
     auto env = fp_iter.get_entry_state_at(b);
+    auto last_insn = b->get_last_insn();
     for (auto& mie : InstructionIterable(b)) {
       auto* insn = mie.insn;
-      fp_iter.analyze_instruction(insn, &env);
+      fp_iter.analyze_instruction(insn, &env, insn == last_insn->insn);
       if (is_return(insn->opcode())) {
         if (insn->opcode() != OPCODE_RETURN_VOID) {
           return_state.join_with(
@@ -948,16 +997,41 @@ ReturnState collect_return_state(
 namespace intraprocedural {
 
 void FixpointIterator::analyze_instruction(const IRInstruction* insn,
-                                           ConstantEnvironment* env) const {
+                                           ConstantEnvironment* env,
+                                           bool is_last) const {
   TRACE(CONSTP, 5, "Analyzing instruction: %s", SHOW(insn));
   m_insn_analyzer(insn, env);
+  if (!is_last) {
+    analyze_instruction_no_throw(insn, env);
+  }
+}
+
+void FixpointIterator::analyze_instruction_no_throw(
+    const IRInstruction* insn, ConstantEnvironment* current_state) const {
+  auto src_index = get_dereferenced_object_src_index(insn);
+  if (!src_index) {
+    return;
+  }
+  if (insn->has_dest()) {
+    auto dest = insn->dest();
+    if ((dest == *src_index) ||
+        (insn->dest_is_wide() && dest + 1 == *src_index)) {
+      return;
+    }
+  }
+  auto src = insn->src(*src_index);
+  auto value = current_state->get(src);
+  current_state->set(
+      src, meet(value, SignedConstantDomain(sign_domain::Interval::NEZ)));
 }
 
 void FixpointIterator::analyze_node(const NodeId& block,
                                     ConstantEnvironment* state_at_entry) const {
   TRACE(CONSTP, 5, "Analyzing block: %d", block->id());
+  auto last_insn = block->get_last_insn();
   for (auto& mie : InstructionIterable(block)) {
-    analyze_instruction(mie.insn, state_at_entry);
+    auto insn = mie.insn;
+    analyze_instruction(insn, state_at_entry, insn == last_insn->insn);
   }
 }
 
@@ -1091,6 +1165,8 @@ ConstantEnvironment FixpointIterator::analyze_edge(
         }
       }
     }
+  } else if (edge->type() != cfg::EDGE_THROW) {
+    analyze_instruction_no_throw(insn, &env);
   }
   return env;
 }

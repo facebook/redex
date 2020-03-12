@@ -37,7 +37,11 @@ class FixpointIterator final
       const ConstantEnvironment& exit_state_at_source) const override;
 
   void analyze_instruction(const IRInstruction* insn,
-                           ConstantEnvironment* current_state) const;
+                           ConstantEnvironment* current_state,
+                           bool is_last) const;
+
+  void analyze_instruction_no_throw(const IRInstruction* insn,
+                                    ConstantEnvironment* current_state) const;
 
   void analyze_node(const NodeId& block,
                     ConstantEnvironment* state_at_entry) const override;
@@ -413,5 +417,11 @@ void semantically_inline_method(
  */
 ReturnState collect_return_state(IRCode* code,
                                  const intraprocedural::FixpointIterator&);
+
+/*
+ * Get source argument index, if any, which is getting dereferenced by an
+ * instruction. A null object would cause an exception to be thrown.
+ */
+boost::optional<size_t> get_dereferenced_object_src_index(const IRInstruction*);
 
 } // namespace constant_propagation

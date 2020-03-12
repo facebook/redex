@@ -333,55 +333,12 @@ bool Transform::replace_with_throw(const ConstantEnvironment& env,
                                    IRCode* code,
                                    boost::optional<int32_t>* temp_reg) {
   auto* insn = it->insn;
-  auto opcode = insn->opcode();
-  size_t src_index;
-  switch (opcode) {
-  case OPCODE_MONITOR_ENTER:
-  case OPCODE_MONITOR_EXIT:
-  case OPCODE_AGET:
-  case OPCODE_AGET_BYTE:
-  case OPCODE_AGET_CHAR:
-  case OPCODE_AGET_WIDE:
-  case OPCODE_AGET_SHORT:
-  case OPCODE_AGET_OBJECT:
-  case OPCODE_AGET_BOOLEAN:
-  case OPCODE_IGET:
-  case OPCODE_IGET_BYTE:
-  case OPCODE_IGET_CHAR:
-  case OPCODE_IGET_WIDE:
-  case OPCODE_IGET_SHORT:
-  case OPCODE_IGET_OBJECT:
-  case OPCODE_IGET_BOOLEAN:
-  case OPCODE_ARRAY_LENGTH:
-  case OPCODE_FILL_ARRAY_DATA:
-  case OPCODE_INVOKE_SUPER:
-  case OPCODE_INVOKE_INTERFACE:
-  case OPCODE_INVOKE_VIRTUAL:
-  case OPCODE_INVOKE_DIRECT:
-    src_index = 0;
-    break;
-  case OPCODE_APUT:
-  case OPCODE_APUT_BYTE:
-  case OPCODE_APUT_CHAR:
-  case OPCODE_APUT_WIDE:
-  case OPCODE_APUT_SHORT:
-  case OPCODE_APUT_OBJECT:
-  case OPCODE_APUT_BOOLEAN:
-  case OPCODE_IPUT:
-  case OPCODE_IPUT_BYTE:
-  case OPCODE_IPUT_CHAR:
-  case OPCODE_IPUT_WIDE:
-  case OPCODE_IPUT_SHORT:
-  case OPCODE_IPUT_OBJECT:
-  case OPCODE_IPUT_BOOLEAN:
-    src_index = 1;
-    break;
-  default: {
+  auto dereferenced_object_src_index = get_dereferenced_object_src_index(insn);
+  if (!dereferenced_object_src_index) {
     return false;
   }
-  }
 
-  auto reg = insn->src(src_index);
+  auto reg = insn->src(*dereferenced_object_src_index);
   auto value = env.get(reg).maybe_get<SignedConstantDomain>();
   std::vector<IRInstruction*> new_insns;
   if (!value || !value->get_constant() || *value->get_constant() != 0) {
@@ -455,12 +412,14 @@ Transform::Stats Transform::apply_on_uneditable_cfg(
     if (env.is_bottom()) {
       continue;
     }
+    auto last_insn = block->get_last_insn();
     for (auto& mie : InstructionIterable(block)) {
       auto it = code->iterator_to(mie);
       bool any_changes = eliminate_redundant_put(env, wps, it) ||
                          replace_with_throw(env, it, code, &temp_reg);
-      intra_cp.analyze_instruction(mie.insn, &env);
-      if (!any_changes && !m_redundant_move_results.count(mie.insn)) {
+      auto* insn = mie.insn;
+      intra_cp.analyze_instruction(insn, &env, insn == last_insn->insn);
+      if (!any_changes && !m_redundant_move_results.count(insn)) {
         simplify_instruction(env, wps, code->iterator_to(mie));
       }
     }
@@ -516,10 +475,8 @@ void Transform::forward_targets(
       // We'll have to add to the set of assigned regs, so we make an
       // intentional copy here
       auto assigned_regs = last_unconditional_target.assigned_regs;
-      for (auto& mie : *succ) {
-        if (mie.type != MethodItemType::MFLOW_OPCODE) {
-          continue;
-        }
+      auto last_insn = succ->get_last_insn();
+      for (auto& mie : InstructionIterable(succ)) {
         auto insn = mie.insn;
         if (is_branch(insn->opcode())) {
           continue;
@@ -535,7 +492,7 @@ void Transform::forward_targets(
         }
 
         assigned_regs.insert(insn->dest());
-        intra_cp.analyze_instruction(insn, &succ_env);
+        intra_cp.analyze_instruction(insn, &succ_env, insn == last_insn->insn);
         always_assert(!succ_env.is_bottom());
       }
 

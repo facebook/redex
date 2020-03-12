@@ -263,9 +263,10 @@ EnumAttributes analyze_enum_clinit(const DexClass* cls) {
   auto return_env = ConstantEnvironment::bottom();
   for (cfg::Block* b : cfg.blocks()) {
     auto env = fp_iter->get_entry_state_at(b);
+    auto last_insn = b->get_last_insn();
     for (auto& mie : InstructionIterable(b)) {
       auto* insn = mie.insn;
-      fp_iter->analyze_instruction(insn, &env);
+      fp_iter->analyze_instruction(insn, &env, insn == last_insn->insn);
       if (is_return(insn->opcode())) {
         return_env.join_with(env);
       }

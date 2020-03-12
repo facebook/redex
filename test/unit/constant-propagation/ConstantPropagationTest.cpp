@@ -39,6 +39,72 @@ TEST(ConstantPropagation, ArrayLengthNonNegative) {
             assembler::to_s_expr(expected_code.get()));
 }
 
+TEST(ConstantPropagation, DereferenceWithoutThrowBlock) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+      (array-length v0)
+      (move-result-pseudo v1)
+      (if-eqz v0 :next)
+      (:next)
+      (return-void)
+    )
+)");
+
+  do_const_prop(code.get());
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+      (array-length v0)
+      (move-result-pseudo v1)
+      (return-void)
+    )
+)");
+
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
+}
+
+TEST(ConstantPropagation, DereferenceWithThrowBlock) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+      (.try_start a)
+      (array-length v0)
+      (move-result-pseudo v1)
+      (.try_end a)
+      (if-eqz v0 :next1)
+      (:next1)
+      (return-void)
+      (.catch (a))
+      (if-eqz v0 :next2)
+      (:next2)
+      (return-void)
+    )
+)");
+
+  do_const_prop(code.get());
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+      (.try_start a)
+      (array-length v0)
+      (move-result-pseudo v1)
+      (.try_end a)
+      (return-void)
+      (.catch (a))
+      (if-eqz v0 :next2)
+      (:next2)
+      (return-void)
+    )
+)");
+
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
+}
+
 TEST(ConstantPropagation, JumpToImmediateNext) {
   auto code = assembler::ircode_from_string(R"(
     (

@@ -139,9 +139,9 @@ TEST_F(OptimizeEnumsTest, if_chain) {
 
   auto code = assembler::ircode_from_string(R"(
     (
+      (load-param-object v1)
       (sget-object "LFoo;.table:[LBar;")
       (move-result-pseudo v0)
-      (const v1 0)
       (invoke-virtual (v1) "LEnum;.ordinal:()I")
       (move-result v1)
       (aget v0 v1)
@@ -523,9 +523,9 @@ TEST_F(OptimizeEnumsTest, goto_default) {
 
   auto code = assembler::ircode_from_string(R"(
     (
+      (load-param-object v1)
       (sget-object "LFoo;.table:[LBar;")
       (move-result-pseudo v0)
-      (const v1 0)
       (invoke-virtual (v1) "LEnum;.ordinal:()I")
       (move-result v1)
       (aget v0 v1)

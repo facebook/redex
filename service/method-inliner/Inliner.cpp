@@ -470,6 +470,7 @@ MultiMethodInliner::get_invoke_constant_arguments(
       // we found an unreachable block; ignore invoke instructions in it
       continue;
     }
+    auto last_insn = block->get_last_insn();
     for (auto& mie : InstructionIterable(block)) {
       auto insn = mie.insn;
       if (is_invoke(insn->opcode())) {
@@ -486,7 +487,11 @@ MultiMethodInliner::get_invoke_constant_arguments(
                                                      constant_arguments);
         }
       }
-      intra_cp.analyze_instruction(insn, &env);
+      intra_cp.analyze_instruction(insn, &env, insn == last_insn->insn);
+      if (env.is_bottom()) {
+        // Can happen in the absence of throw edges when dereferencing null
+        break;
+      }
     }
   }
 
