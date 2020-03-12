@@ -12,6 +12,33 @@
 #include "ConstantPropagationTestUtil.h"
 #include "IRAssembler.h"
 
+TEST(ConstantPropagation, ArrayLengthNonNegative) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+      (array-length v0)
+      (move-result-pseudo v0)
+      (if-ltz v0 :next)
+      (:next)
+      (return-void)
+    )
+)");
+
+  do_const_prop(code.get());
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+      (array-length v0)
+      (move-result-pseudo v0)
+      (return-void)
+    )
+)");
+
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
+}
+
 TEST(ConstantPropagation, JumpToImmediateNext) {
   auto code = assembler::ircode_from_string(R"(
     (

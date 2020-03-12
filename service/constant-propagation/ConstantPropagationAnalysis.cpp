@@ -217,6 +217,10 @@ bool PrimitiveAnalyzer::analyze_default(const IRInstruction* insn,
     env->set(insn->dest(), SignedConstantDomain(sign_domain::Interval::NEZ));
     return true;
   }
+  case OPCODE_ARRAY_LENGTH: {
+    env->set(RESULT_REGISTER, SignedConstantDomain(sign_domain::Interval::GEZ));
+    return true;
+  }
   default:
     break;
   }
