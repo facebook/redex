@@ -43,7 +43,7 @@ std::unique_ptr<intraprocedural::FixpointIterator> analyze_procedure(
     TRACE(ICONSTP, 3, "Have args for %s: %s", SHOW(method), SHOW(args));
   }
 
-  auto env = env_with_params(&code, args);
+  auto env = env_with_params(is_static(method), &code, args);
   DexType* class_under_init{nullptr};
   if (method::is_clinit(method)) {
     class_under_init = method->get_class();

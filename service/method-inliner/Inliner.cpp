@@ -462,7 +462,9 @@ MultiMethodInliner::get_invoke_constant_arguments(
   auto& cfg = code->cfg();
   constant_propagation::intraprocedural::FixpointIterator intra_cp(
       cfg, constant_propagation::ConstantPrimitiveAnalyzer());
-  intra_cp.run(ConstantEnvironment());
+  auto initial_env = constant_propagation::interprocedural::env_with_params(
+      is_static(caller), code, ConstantArguments());
+  intra_cp.run(initial_env);
   for (const auto& block : cfg.blocks()) {
     auto env = intra_cp.get_entry_state_at(block);
     if (env.is_bottom()) {
@@ -1199,7 +1201,9 @@ struct InlinedCostAndDeadBlocks {
  * arguments, if any
  */
 static InlinedCostAndDeadBlocks get_inlined_cost(
-    const IRCode* code, const ConstantArguments* constant_arguments = nullptr) {
+    bool is_static,
+    const IRCode* code,
+    const ConstantArguments* constant_arguments = nullptr) {
   auto& cfg = code->cfg();
   std::unique_ptr<constant_propagation::intraprocedural::FixpointIterator>
       intra_cp;
@@ -1208,7 +1212,7 @@ static InlinedCostAndDeadBlocks get_inlined_cost(
         cfg, constant_propagation::ConstantPrimitiveAnalyzer()));
     ConstantEnvironment initial_env =
         constant_propagation::interprocedural::env_with_params(
-            code, *constant_arguments);
+            is_static, code, *constant_arguments);
     intra_cp->run(initial_env);
   }
 
@@ -1271,7 +1275,8 @@ size_t MultiMethodInliner::get_inlined_cost(const DexMethod* callee) {
 
   std::atomic<size_t> callees_analyzed{0};
   std::atomic<size_t> callees_unreachable_blocks{0};
-  std::atomic<size_t> inlined_cost{::get_inlined_cost(callee->get_code()).cost};
+  std::atomic<size_t> inlined_cost{
+      ::get_inlined_cost(is_static(callee), callee->get_code()).cost};
   auto callee_constant_arguments_it = m_callee_constant_arguments.find(callee);
   if (callee_constant_arguments_it != m_callee_constant_arguments.end() &&
       inlined_cost <= MAX_COST_FOR_CONSTANT_PROPAGATION) {
@@ -1281,7 +1286,8 @@ size_t MultiMethodInliner::get_inlined_cost(const DexMethod* callee) {
       const auto& constant_arguments = cao.first;
       const auto count = cao.second;
       TRACE(INLINE, 5, "[too_many_callers] get_inlined_cost %s", SHOW(callee));
-      auto res = ::get_inlined_cost(callee->get_code(), &constant_arguments);
+      auto res = ::get_inlined_cost(is_static(callee), callee->get_code(),
+                                    &constant_arguments);
       TRACE(INLINE, 4,
             "[too_many_callers] get_inlined_cost with %zu constant invoke "
             "params %s @ %s: cost %zu (dead blocks: %zu)",

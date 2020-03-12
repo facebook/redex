@@ -14,12 +14,18 @@ namespace interprocedural {
 /*
  * Return an environment populated with parameter values.
  */
-ConstantEnvironment env_with_params(const IRCode* code,
+ConstantEnvironment env_with_params(bool is_static,
+                                    const IRCode* code,
                                     const ArgumentDomain& args) {
   size_t idx{0};
   ConstantEnvironment env;
   for (auto& mie : InstructionIterable(code->get_param_instructions())) {
-    env.set(mie.insn->dest(), args.get(idx++));
+    auto value = args.get(idx);
+    if (idx == 0 && !is_static) {
+      value = value.meet(SignedConstantDomain(sign_domain::Interval::NEZ));
+    }
+    env.set(mie.insn->dest(), value);
+    idx++;
   }
   return env;
 }

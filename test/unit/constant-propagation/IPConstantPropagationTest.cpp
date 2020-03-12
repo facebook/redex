@@ -327,7 +327,7 @@ TEST_F(InterproceduralConstantPropagationTest, unreachableInvoke) {
          const WholeProgramState&,
          const ArgumentDomain& args) {
         auto& code = *method->get_code();
-        auto env = env_with_params(&code, args);
+        auto env = env_with_params(is_static(method), &code, args);
         auto intra_cp = std::make_unique<intraprocedural::FixpointIterator>(
             code.cfg(), ConstantPrimitiveAnalyzer());
         intra_cp->run(env);

@@ -51,7 +51,8 @@ constexpr IRInstruction* CURRENT_PARTITION_LABEL = nullptr;
 /*
  * Return an environment populated with parameter values.
  */
-ConstantEnvironment env_with_params(const IRCode* code,
+ConstantEnvironment env_with_params(bool is_static,
+                                    const IRCode* code,
                                     const ArgumentDomain& args);
 
 using ProcedureAnalysisFactory =
