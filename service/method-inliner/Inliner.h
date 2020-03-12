@@ -529,6 +529,8 @@ class MultiMethodInliner {
 
     // statistics that may be incremented concurrently
     std::atomic<size_t> calls_inlined{0};
+    std::atomic<size_t> calls_not_inlinable{0};
+    std::atomic<size_t> calls_not_inlined{0};
     std::atomic<size_t> not_found{0};
     std::atomic<size_t> blacklisted{0};
     std::atomic<size_t> throws{0};

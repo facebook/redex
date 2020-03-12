@@ -424,6 +424,9 @@ void run_inliner(DexStoresVector& stores,
   mgr.incr_metric("caller_too_large", inliner.get_info().caller_too_large);
   mgr.incr_metric("inlined_init_count", inlined_init_count);
   mgr.incr_metric("calls_inlined", inliner.get_info().calls_inlined);
+  mgr.incr_metric("calls_not_inlinable",
+                  inliner.get_info().calls_not_inlinable);
+  mgr.incr_metric("calls_not_inlined", inliner.get_info().calls_not_inlined);
   mgr.incr_metric("methods_removed", deleted);
   mgr.incr_metric("escaped_virtual", inliner.get_info().escaped_virtual);
   mgr.incr_metric("unresolved_methods", inliner.get_info().unresolved_methods);

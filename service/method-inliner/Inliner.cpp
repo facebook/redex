@@ -628,6 +628,7 @@ void MultiMethodInliner::inline_inlinables(
   if (m_config.use_cfg_inliner && !m_config.unique_inlined_registers) {
     cfg_next_caller_reg = caller->cfg().get_registers_size();
   }
+  size_t calls_not_inlinable{0}, calls_not_inlined{0};
   for (const auto& inlinable : ordered_inlinables) {
     auto callee_method = inlinable.first;
     auto callee = callee_method->get_code();
@@ -635,6 +636,7 @@ void MultiMethodInliner::inline_inlinables(
 
     if (!is_inlinable(caller_method, callee_method, callsite->insn,
                       estimated_insn_size)) {
+      calls_not_inlinable++;
       continue;
     }
 
@@ -649,6 +651,7 @@ void MultiMethodInliner::inline_inlinables(
       bool success = inliner::inline_with_cfg(
           caller_method, callee_method, callsite->insn, *cfg_next_caller_reg);
       if (!success) {
+        calls_not_inlined++;
         continue;
       }
     } else {
@@ -687,6 +690,8 @@ void MultiMethodInliner::inline_inlinables(
   }
 
   info.calls_inlined += inlined_callees.size();
+  info.calls_not_inlinable += calls_not_inlinable;
+  info.calls_not_inlined += calls_not_inlined;
 }
 
 void MultiMethodInliner::async_prioritized_method_execute(
