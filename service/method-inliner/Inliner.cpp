@@ -38,10 +38,6 @@ namespace {
 
 // The following costs are in terms of code-units (2 bytes).
 
-// Inlining methods that belong to different classes might lead to worse
-// cross-dex-ref minimization results. We account for this.
-const size_t COST_INTER_DEX_SOME_CALLERS_DIFFERENT_CLASSES = 2;
-
 // Typical overhead of calling a method with a result. This isn't just the
 // overhead of the invoke instruction itself, but possibly some setup and
 // consumption of result.
@@ -283,10 +279,17 @@ void MultiMethodInliner::inline_methods() {
   // be inlined, it's code will no longer change. So we can cache...
   // - its size
   // - its set of type refs
+  // - its set of method refs
+  // - whether all callers are in the same class, and are called from how many
+  //   classes
   m_callee_insn_sizes =
       std::make_unique<ConcurrentMap<const DexMethod*, size_t>>();
   m_callee_type_refs = std::make_unique<
       ConcurrentMap<const DexMethod*, std::vector<DexType*>>>();
+  m_callee_method_refs =
+      std::make_unique<ConcurrentMap<const DexMethod*, size_t>>();
+  m_callee_caller_refs =
+      std::make_unique<ConcurrentMap<const DexMethod*, CalleeCallerRefs>>();
 
   // Instead of changing visibility as we inline, blocking other work on the
   // critical path, we do it all in parallel at the end.
@@ -570,7 +573,7 @@ void MultiMethodInliner::inline_callees(
           }
         }
 
-        inlinables.push_back((Inlinable){callee, it, optional});
+        inlinables.push_back((Inlinable){callee, it, insn, optional});
         if (++found == max) {
           return editable_cfg_adapter::LOOP_BREAK;
         }
@@ -602,7 +605,7 @@ void MultiMethodInliner::inline_callees(
             return editable_cfg_adapter::LOOP_CONTINUE;
           }
           always_assert(callee->is_concrete());
-          inlinables.push_back((Inlinable){callee, it});
+          inlinables.push_back((Inlinable){callee, it, insn});
         }
         return editable_cfg_adapter::LOOP_CONTINUE;
       });
@@ -667,13 +670,17 @@ void MultiMethodInliner::inline_inlinables(
   for (const auto& inlinable : ordered_inlinables) {
     auto callee_method = inlinable.callee;
     auto callee = callee_method->get_code();
-    auto callsite = inlinable.iterator;
+    auto callsite_insn = inlinable.insn;
 
-    if (!is_inlinable(caller_method, callee_method, callsite->insn,
-                      estimated_insn_size)) {
+    std::vector<DexMethod*> make_static;
+    if (!is_inlinable(caller_method, callee_method, callsite_insn,
+                      estimated_insn_size, &make_static)) {
       calls_not_inlinable++;
       continue;
     }
+    // Only now, when are about actually inline the method, we'll record
+    // the fact that we'll have to make some methods static.
+    make_static_inlinable(make_static);
 
     TRACE(MMINL, 4, "inline %s (%d) in %s (%d)", SHOW(callee),
           caller->get_registers_size(), SHOW(caller),
@@ -684,7 +691,7 @@ void MultiMethodInliner::inline_inlinables(
         cfg_next_caller_reg = caller->cfg().get_registers_size();
       }
       bool success = inliner::inline_with_cfg(
-          caller_method, callee_method, callsite->insn, *cfg_next_caller_reg);
+          caller_method, callee_method, callsite_insn, *cfg_next_caller_reg);
       if (!success) {
         calls_not_inlined++;
         continue;
@@ -693,8 +700,10 @@ void MultiMethodInliner::inline_inlinables(
       // Logging before the call to inline_method to get the most relevant line
       // number near callsite before callsite gets replaced. Should be ok as
       // inline_method does not fail to inline.
-      log_opt(INLINED, caller_method, callsite->insn);
+      log_opt(INLINED, caller_method, callsite_insn);
 
+      auto callsite = inlinable.iterator;
+      always_assert(callsite->insn == callsite_insn);
       inliner::inline_method_unsafe(caller, callee, callsite);
     }
     TRACE(INL, 2, "caller: %s\tcallee: %s", SHOW(caller), SHOW(callee));
@@ -725,8 +734,12 @@ void MultiMethodInliner::inline_inlinables(
   }
 
   info.calls_inlined += inlined_callees.size();
-  info.calls_not_inlinable += calls_not_inlinable;
-  info.calls_not_inlined += calls_not_inlined;
+  if (calls_not_inlinable) {
+    info.calls_not_inlinable += calls_not_inlinable;
+  }
+  if (calls_not_inlined) {
+    info.calls_not_inlined += calls_not_inlined;
+  }
 }
 
 void MultiMethodInliner::async_prioritized_method_execute(
@@ -875,10 +888,16 @@ void MultiMethodInliner::postprocess_method(DexMethod* method) {
   // - m_should_inline,
   // - m_callee_insn_sizes, and
   // - m_callee_type_refs
+  // - m_callee_caller_refs
+  // - m_callee_method_refs
   // caches.
   if (should_inline(method)) {
     get_callee_insn_size(method);
     get_callee_type_refs(method);
+    if (m_mode != IntraDex && !is_private(method) &&
+        !get_callee_caller_refs(method).same_class) {
+      get_callee_method_refs(method);
+    }
   }
 
   auto& callers = m_async_callee_callers.at(method);
@@ -943,10 +962,11 @@ void MultiMethodInliner::decrement_delayed_shrinking_callee_wait_counts(
 /**
  * Defines the set of rules that determine whether a function is inlinable.
  */
-bool MultiMethodInliner::is_inlinable(DexMethod* caller,
-                                      DexMethod* callee,
+bool MultiMethodInliner::is_inlinable(const DexMethod* caller,
+                                      const DexMethod* callee,
                                       const IRInstruction* insn,
-                                      size_t estimated_insn_size) {
+                                      size_t estimated_insn_size,
+                                      std::vector<DexMethod*>* make_static) {
   // don't inline cross store references
   if (cross_store_reference(caller, callee)) {
     if (insn) {
@@ -972,8 +992,7 @@ bool MultiMethodInliner::is_inlinable(DexMethod* caller,
     }
     return false;
   }
-  std::vector<DexMethod*> make_static;
-  if (cannot_inline_opcodes(caller, callee, insn, &make_static)) {
+  if (cannot_inline_opcodes(caller, callee, insn, make_static)) {
     return false;
   }
   if (!callee->rstate.force_inline()) {
@@ -1011,15 +1030,14 @@ bool MultiMethodInliner::is_inlinable(DexMethod* caller,
     }
   }
 
-  if (!make_static.empty()) {
-    // Only now, when we'll indicate that the method inlinable, we'll record
-    // the fact that we'll have to make some methods static.
-    for (auto method : make_static) {
-      m_delayed_make_static.insert(method);
-    }
-  }
-
   return true;
+}
+
+void MultiMethodInliner::make_static_inlinable(
+    std::vector<DexMethod*>& make_static) {
+  for (auto method : make_static) {
+    m_delayed_make_static.insert(method);
+  }
 }
 
 /**
@@ -1452,28 +1470,20 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
 
   size_t inlined_cost = get_inlined_cost(callee);
 
-  if (m_mode != IntraDex) {
-    bool have_all_callers_same_class;
-    auto opt_have_all_callers_same_class =
-        m_callers_in_same_class.get(callee, boost::none);
-    if (opt_have_all_callers_same_class) {
-      have_all_callers_same_class = *opt_have_all_callers_same_class;
+  boost::optional<CalleeCallerRefs> callee_caller_refs;
+  size_t cross_dex_penalty{0};
+  if (m_mode != IntraDex && !is_private(callee)) {
+    callee_caller_refs = get_callee_caller_refs(callee);
+    if (callee_caller_refs->same_class) {
+      callee_caller_refs = boost::none;
     } else {
-      auto callee_class = callee->get_class();
-      have_all_callers_same_class = true;
-      for (auto caller : callers) {
-        if (caller->get_class() != callee_class) {
-          have_all_callers_same_class = false;
-          break;
-        }
-      }
-      m_callers_in_same_class.emplace(callee, have_all_callers_same_class);
-    }
-
-    if (!have_all_callers_same_class) {
       // Inlining methods into different classes might lead to worse
       // cross-dex-ref minimization results.
-      inlined_cost += COST_INTER_DEX_SOME_CALLERS_DIFFERENT_CLASSES;
+      cross_dex_penalty = get_callee_method_refs(callee);
+      if (callee_caller_refs->classes > 1) {
+        cross_dex_penalty++;
+      }
+      inlined_cost += cross_dex_penalty;
     }
   }
 
@@ -1500,6 +1510,8 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
     return false;
   }
 
+  std::unordered_set<DexMethod*> callers_set(callers.begin(), callers.end());
+
   // Can we inline the init-callee into all callers?
   // If not, then we can give up, as there's no point in making the case that
   // we can eliminate the callee method based on pervasive inlining.
@@ -1508,8 +1520,6 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
       return true;
     }
     if (!can_inline_init(callee)) {
-      std::unordered_set<DexMethod*> callers_set(callers.begin(),
-                                                 callers.end());
       for (auto caller : callers_set) {
         if (!method::is_init(caller) ||
             caller->get_class() != callee->get_class() ||
@@ -1524,6 +1534,8 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
   }
 
   if (m_config.multiple_callers) {
+    size_t classes = callee_caller_refs ? callee_caller_refs->classes : 0;
+
     // The cost of keeping a method amounts of somewhat fixed metadata overhead,
     // plus the method body, which we approximate with the inlined cost.
     size_t method_cost = COST_METHOD + get_inlined_cost(callee);
@@ -1532,8 +1544,22 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
     // If we inline invocations to this method everywhere, we could delete the
     // method. Is this worth it, given the number of callsites and costs
     // involved?
-    return inlined_cost * caller_count >
-           invoke_cost * caller_count + methods_cost;
+    if ((inlined_cost - cross_dex_penalty) * caller_count +
+            classes * cross_dex_penalty >
+        invoke_cost * caller_count + methods_cost) {
+      return true;
+    }
+
+    // We can't eliminate the method entirely if it's not inlinable
+    for (auto caller : callers_set) {
+      if (!is_inlinable(caller, callee, /* insn */ nullptr,
+                        /* estimated_insn_size */ 0,
+                        /* make_static */ nullptr)) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   return true;
@@ -1557,10 +1583,11 @@ bool MultiMethodInliner::should_inline_optional(
   }
   auto inlined_cost = it->second;
 
-  if (m_mode != IntraDex && caller->get_class() != callee->get_class()) {
+  if (m_mode != IntraDex && !is_private(callee) &&
+      caller->get_class() != callee->get_class()) {
     // Inlining methods into different classes might lead to worse
     // cross-dex-ref minimization results.
-    inlined_cost += COST_INTER_DEX_SOME_CALLERS_DIFFERENT_CLASSES;
+    inlined_cost += 1 + get_callee_method_refs(callee);
   }
 
   size_t invoke_cost = get_invoke_cost(callee);
@@ -1710,7 +1737,9 @@ bool MultiMethodInliner::create_vmethod(IRInstruction* insn,
       return false;
     }
     if (can_rename(method)) {
-      make_static->push_back(method);
+      if (make_static) {
+        make_static->push_back(method);
+      }
     } else {
       info.need_vmethod++;
       return true;
@@ -1863,6 +1892,62 @@ std::vector<DexType*> MultiMethodInliner::get_callee_type_refs(
     m_callee_type_refs->emplace(callee, type_refs);
   }
   return type_refs;
+}
+
+size_t MultiMethodInliner::get_callee_method_refs(const DexMethod* callee) {
+  if (m_callee_method_refs) {
+    auto absent = std::numeric_limits<size_t>::max();
+    auto cached = m_callee_method_refs->get(callee, absent);
+    if (cached != absent) {
+      return cached;
+    }
+  }
+
+  std::unordered_set<DexMethodRef*> method_refs_set;
+  editable_cfg_adapter::iterate(
+      callee->get_code(), [&](const MethodItemEntry& mie) {
+        auto insn = mie.insn;
+        if (insn->has_method()) {
+          auto method = insn->get_method();
+          auto cls = type_class_internal(method->get_class());
+          if (cls) {
+            method_refs_set.insert(method);
+          }
+        }
+        return editable_cfg_adapter::LOOP_CONTINUE;
+      });
+
+  if (m_callee_method_refs) {
+    m_callee_method_refs->emplace(callee, method_refs_set.size());
+  }
+  return method_refs_set.size();
+}
+
+CalleeCallerRefs MultiMethodInliner::get_callee_caller_refs(
+    const DexMethod* callee) {
+  if (m_callee_caller_refs) {
+    CalleeCallerRefs absent = {false, std::numeric_limits<size_t>::max()};
+    auto cached = m_callee_caller_refs->get(callee, absent);
+    if (cached.classes != absent.classes) {
+      return cached;
+    }
+  }
+
+  const auto& callers = callee_caller.at(callee);
+  std::unordered_set<DexType*> caller_classes;
+  for (auto caller : callers) {
+    caller_classes.insert(caller->get_class());
+  }
+  auto callee_class = callee->get_class();
+  CalleeCallerRefs callee_caller_refs{
+      /* same_class */ caller_classes.size() == 1 &&
+          *caller_classes.begin() == callee_class,
+      caller_classes.size()};
+
+  if (m_callee_caller_refs) {
+    m_callee_caller_refs->emplace(callee, callee_caller_refs);
+  }
+  return callee_caller_refs;
 }
 
 bool MultiMethodInliner::cross_store_reference(const DexMethod* caller,

@@ -380,10 +380,10 @@ void VirtualMerging::merge_methods() {
           is_abstract(overridden_method)
               ? 64 // we'll need some extra instruction; 64 is conservative
               : overridden_method->get_code()->sum_opcode_sizes();
-      if (!m_inliner->is_inlinable(overridden_method,
-                                   overriding_method,
+      std::vector<DexMethod*> make_static;
+      if (!m_inliner->is_inlinable(overridden_method, overriding_method,
                                    nullptr /* invoke_virtual_insn */,
-                                   estimated_insn_size)) {
+                                   estimated_insn_size, &make_static)) {
         TRACE(VM,
               3,
               "[VM] Cannot inline %s into %s",
@@ -392,6 +392,7 @@ void VirtualMerging::merge_methods() {
         m_stats.uninlinable_methods++;
         continue;
       }
+      m_inliner->make_static_inlinable(make_static);
       TRACE(VM,
             4,
             "[VM] Merging %s into %s",

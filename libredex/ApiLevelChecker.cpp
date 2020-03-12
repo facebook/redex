@@ -48,10 +48,15 @@ void LevelChecker::init(int32_t min_level, const Scope& scope) {
   propagate_levels(scope);
 }
 
-int32_t LevelChecker::get_method_level(DexMethod* method) {
+int32_t LevelChecker::get_method_level(const DexMethod* method) {
   always_assert_log(s_has_been_init, "must call init first");
   int32_t method_level = method->rstate.get_api_level();
   if (method_level == -1) {
+    // We need to initialize the API level. Note that there might be a race,
+    // and multiple threads might be initializing the same methods (and class).
+    // However, they will arrive at the same conclusion, and no shared data
+    // structures are mutated along the way that are not thread-safe.
+
     // must have been created later on by Redex
     DexClass* cls = type_class(method->get_class());
     int32_t class_level = cls->rstate.get_api_level();
@@ -60,7 +65,7 @@ int32_t LevelChecker::get_method_level(DexMethod* method) {
       init_class(cls);
     }
 
-    init_method(method);
+    init_method(const_cast<DexMethod*>(method));
     method_level = method->rstate.get_api_level();
   }
 

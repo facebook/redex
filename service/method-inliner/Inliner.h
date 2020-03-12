@@ -104,7 +104,13 @@ using ConstantArgumentsOccurrences = std::pair<ConstantArguments, size_t>;
 struct Inlinable {
   DexMethod* callee;
   IRList::iterator iterator;
+  IRInstruction* insn;
   bool optional{true};
+};
+
+struct CalleeCallerRefs {
+  bool same_class;
+  size_t classes;
 };
 
 /**
@@ -173,10 +179,13 @@ class MultiMethodInliner {
    * The predicates below define the constraints for inlining.
    * Providing an instrucion is optional, and only used for logging.
    */
-  bool is_inlinable(DexMethod* caller,
-                    DexMethod* callee,
+  bool is_inlinable(const DexMethod* caller,
+                    const DexMethod* callee,
                     const IRInstruction* insn,
-                    size_t estimated_insn_size);
+                    size_t estimated_insn_size,
+                    std::vector<DexMethod*>* make_static);
+
+  void make_static_inlinable(std::vector<DexMethod*>& make_static);
 
   ConcurrentSet<DexMethod*>& get_delayed_make_static() {
     return m_delayed_make_static;
@@ -336,6 +345,16 @@ class MultiMethodInliner {
   std::vector<DexType*> get_callee_type_refs(const DexMethod* callee);
 
   /**
+   * Gets the number of (internal) referenced methods in a callee.
+   */
+  size_t get_callee_method_refs(const DexMethod* callee);
+
+  /**
+   * Computes information about callers of a method.
+   */
+  CalleeCallerRefs get_callee_caller_refs(const DexMethod* callee);
+
+  /**
    * We want to avoid inlining a large method with many callers as that would
    * bloat the bytecode.
    */
@@ -481,10 +500,6 @@ class MultiMethodInliner {
   mutable ConcurrentMap<const IRInstruction*, ConstantArguments>
       m_call_constant_arguments;
 
-  // Cache of whether all callers of a callee are in the same class.
-  mutable ConcurrentMap<const DexMethod*, boost::optional<bool>>
-      m_callers_in_same_class;
-
   // Priority thread pool to handle parallel processing of methods, either
   // shrinking initially / after inlining into them, or even to inline in
   // parallel. By default, parallelism is disabled num_threads = 0).
@@ -536,6 +551,13 @@ class MultiMethodInliner {
   // Optional cache for get_callee_type_refs function
   std::unique_ptr<ConcurrentMap<const DexMethod*, std::vector<DexType*>>>
       m_callee_type_refs;
+
+  // Optional cache for get_callee_caller_res function
+  std::unique_ptr<ConcurrentMap<const DexMethod*, CalleeCallerRefs>>
+      m_callee_caller_refs;
+
+  // Optional cache for get_callee_method_refs function
+  std::unique_ptr<ConcurrentMap<const DexMethod*, size_t>> m_callee_method_refs;
 
   // Cache of whether a constructor can be unconditionally inlined.
   mutable ConcurrentMap<const DexMethod*, boost::optional<bool>>
