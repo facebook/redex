@@ -658,9 +658,9 @@ TEST(ConstantPropagation, ForwardBranchesSwitch) {
   auto code = assembler::ircode_from_string(R"(
     (
       (load-param v0)
+      (load-param v1)
       (if-eqz v0 :L0)
-      (load-param v0)
-      (if-eqz v0 :L1)
+      (if-eqz v1 :L1)
       (const v0 2)
       (goto :SWITCH)
       (:L0)
@@ -693,9 +693,9 @@ TEST(ConstantPropagation, ForwardBranchesSwitch) {
   auto expected_code = assembler::ircode_from_string(R"(
     (
       (load-param v0)
+      (load-param v1)
       (if-eqz v0 :L0)
-      (load-param v0)
-      (if-eqz v0 :L1)
+      (if-eqz v1 :L1)
       (:L0)
       (:L1)
       (return-void)

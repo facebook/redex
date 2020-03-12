@@ -96,6 +96,34 @@ void analyze_compare(const IRInstruction* insn, ConstantEnvironment* env) {
   }
 }
 
+// TODO: Instead of this custom meet function, the ConstantValue should get a
+// custom meet AND JOIN that knows about the relationship of NEZ and certain
+// non-null custom object domains.
+static ConstantValue meet(const ConstantValue& left,
+                          const ConstantValue& right) {
+  auto is_nez = [](const ConstantValue& value) {
+    auto signed_value = value.maybe_get<SignedConstantDomain>();
+    return signed_value &&
+           signed_value->interval() == sign_domain::Interval::NEZ;
+  };
+  auto is_not_null = [](const ConstantValue& value) {
+    return !value.is_top() && !value.is_bottom() &&
+           !value.maybe_get<SignedConstantDomain>();
+  };
+  // Non-null objects of custom object domains are compatible with NEZ, and
+  // more specific.
+  if (is_nez(left) && is_not_null(right)) {
+    return right;
+  }
+  if (is_nez(right) && is_not_null(left)) {
+    return left;
+  }
+  // Non-null objects of different custom object domains can never alias, so
+  // they meet at bottom, which is the default meet implementation for
+  // disjoint domains.
+  return left.meet(right);
+}
+
 } // namespace
 
 namespace constant_propagation {
@@ -937,6 +965,27 @@ void FixpointIterator::analyze_node(const NodeId& block,
  * Helpers for CFG edge analysis
  */
 
+struct IfZeroMeetWith {
+  sign_domain::Interval right_zero_meet_interval;
+  boost::optional<sign_domain::Interval> left_zero_meet_interval{boost::none};
+};
+
+static const std::unordered_map<IROpcode, IfZeroMeetWith> if_zero_meet_with{
+    {OPCODE_IF_EQZ, {sign_domain::Interval::EQZ}},
+    {OPCODE_IF_NEZ, {sign_domain::Interval::NEZ}},
+    {OPCODE_IF_LTZ, {sign_domain::Interval::LTZ}},
+    {OPCODE_IF_GTZ, {sign_domain::Interval::GTZ}},
+    {OPCODE_IF_LEZ, {sign_domain::Interval::LEZ}},
+    {OPCODE_IF_GEZ, {sign_domain::Interval::GEZ}},
+
+    {OPCODE_IF_EQ, {sign_domain::Interval::EQZ, sign_domain::Interval::EQZ}},
+    {OPCODE_IF_NE, {sign_domain::Interval::NEZ, sign_domain::Interval::NEZ}},
+    {OPCODE_IF_LT, {sign_domain::Interval::LTZ, sign_domain::Interval::GTZ}},
+    {OPCODE_IF_GT, {sign_domain::Interval::GTZ, sign_domain::Interval::LTZ}},
+    {OPCODE_IF_LE, {sign_domain::Interval::LEZ, sign_domain::Interval::GEZ}},
+    {OPCODE_IF_GE, {sign_domain::Interval::GEZ, sign_domain::Interval::LEZ}},
+};
+
 /*
  * If we can determine that a branch is not taken based on the constants in
  * the environment, set the environment to bottom upon entry into the
@@ -952,29 +1001,29 @@ static void analyze_if(const IRInstruction* insn,
   // "true" case of the if-* opcode
   auto op = !is_true_branch ? opcode::invert_conditional_branch(insn->opcode())
                             : insn->opcode();
-
   auto left = env->get(insn->src(0));
   auto right =
       insn->srcs_size() > 1 ? env->get(insn->src(1)) : SignedConstantDomain(0);
+  const IfZeroMeetWith& izmw = if_zero_meet_with.at(op);
+  if (right == SignedConstantDomain(0)) {
+    env->set(insn->src(0),
+             meet(left, SignedConstantDomain(izmw.right_zero_meet_interval)));
+    return;
+  }
+  if (left == SignedConstantDomain(0)) {
+    env->set(insn->src(1),
+             meet(right, SignedConstantDomain(*izmw.left_zero_meet_interval)));
+    return;
+  }
 
   switch (op) {
   case OPCODE_IF_EQ: {
-    auto refined_value = left.meet(right);
+    auto refined_value = meet(left, right);
     env->set(insn->src(0), refined_value);
     env->set(insn->src(1), refined_value);
     break;
   }
-  case OPCODE_IF_EQZ: {
-    auto value = env->get(insn->src(0)).maybe_get<SignedConstantDomain>();
-    if (value && value->interval() == sign_domain::Interval::NEZ) {
-      env->set_to_bottom();
-      break;
-    }
-    env->set(insn->src(0), left.meet(SignedConstantDomain(0)));
-    break;
-  }
-  case OPCODE_IF_NE:
-  case OPCODE_IF_NEZ: {
+  case OPCODE_IF_NE: {
     if (ConstantValue::apply_visitor(runtime_equals_visitor(), left, right)) {
       env->set_to_bottom();
     }
@@ -986,31 +1035,10 @@ static void analyze_if(const IRInstruction* insn,
     }
     break;
   }
-  case OPCODE_IF_LTZ: {
-    env->set(insn->src(0),
-             left.meet(SignedConstantDomain(sign_domain::Interval::LTZ)));
-    break;
-  }
   case OPCODE_IF_GT: {
     if (ConstantValue::apply_visitor(runtime_leq_visitor(), left, right)) {
       env->set_to_bottom();
     }
-    break;
-  }
-  case OPCODE_IF_GTZ: {
-    env->set(insn->src(0),
-             left.meet(SignedConstantDomain(sign_domain::Interval::GTZ)));
-    break;
-  }
-  case OPCODE_IF_GE: {
-    if (ConstantValue::apply_visitor(runtime_lt_visitor(), left, right)) {
-      env->set_to_bottom();
-    }
-    break;
-  }
-  case OPCODE_IF_GEZ: {
-    env->set(insn->src(0),
-             left.meet(SignedConstantDomain(sign_domain::Interval::GEZ)));
     break;
   }
   case OPCODE_IF_LE: {
@@ -1019,9 +1047,10 @@ static void analyze_if(const IRInstruction* insn,
     }
     break;
   }
-  case OPCODE_IF_LEZ: {
-    env->set(insn->src(0),
-             left.meet(SignedConstantDomain(sign_domain::Interval::LEZ)));
+  case OPCODE_IF_GE: {
+    if (ConstantValue::apply_visitor(runtime_lt_visitor(), left, right)) {
+      env->set_to_bottom();
+    }
     break;
   }
   default: {

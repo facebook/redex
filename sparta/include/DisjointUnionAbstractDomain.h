@@ -148,6 +148,16 @@ class DisjointUnionAbstractDomain final
     return *dom;
   }
 
+  /*
+   * Return a numeric index representing the current type, if any.
+   */
+  boost::optional<int> which() const {
+    if (is_top() || is_bottom()) {
+      return boost::none;
+    }
+    return m_variant.which();
+  }
+
   template <typename Visitor>
   static typename Visitor::result_type apply_visitor(
       const Visitor& visitor,
