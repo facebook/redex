@@ -207,15 +207,22 @@ bool PrimitiveAnalyzer::analyze_default(const IRInstruction* insn,
   switch (insn->opcode()) {
   case OPCODE_NEW_ARRAY:
   case OPCODE_FILLED_NEW_ARRAY:
-  case OPCODE_NEW_INSTANCE: {
+  case OPCODE_NEW_INSTANCE:
+  case OPCODE_CONST_STRING:
+  case OPCODE_CONST_CLASS: {
     env->set(RESULT_REGISTER, SignedConstantDomain(sign_domain::Interval::NEZ));
+    return true;
+  }
+  case OPCODE_MOVE_EXCEPTION: {
+    env->set(insn->dest(), SignedConstantDomain(sign_domain::Interval::NEZ));
     return true;
   }
   default:
     break;
   }
   if (insn->has_dest()) {
-    TRACE(CONSTP, 5, "Marking value unknown [Reg: %d]", insn->dest());
+    TRACE(CONSTP, 5, "Marking value unknown [Reg: %d] %s", insn->dest(),
+          SHOW(insn));
     env->set(insn->dest(), ConstantValue::top());
   } else if (insn->has_move_result_any()) {
     TRACE(CONSTP, 5, "Clearing result register %s", SHOW(insn));
