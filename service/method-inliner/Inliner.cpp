@@ -280,9 +280,13 @@ void MultiMethodInliner::inline_methods() {
       m_config.debug ? 1 : redex_parallel::default_num_threads());
 
   // The order in which we inline is such that once a callee is considered to
-  // be inlined, it's code will no longer change. So we can cache its size.
+  // be inlined, it's code will no longer change. So we can cache...
+  // - its size
+  // - its set of type refs
   m_callee_insn_sizes =
       std::make_unique<ConcurrentMap<const DexMethod*, size_t>>();
+  m_callee_type_refs = std::make_unique<
+      ConcurrentMap<const DexMethod*, std::vector<DexType*>>>();
 
   // Instead of changing visibility as we inline, blocking other work on the
   // critical path, we do it all in parallel at the end.
@@ -867,9 +871,14 @@ void MultiMethodInliner::postprocess_method(DexMethod* method) {
     return;
   }
 
-  // This pre-populates the m_should_inline and m_callee_insn_sizes caches.
+  // This pre-populates the
+  // - m_should_inline,
+  // - m_callee_insn_sizes, and
+  // - m_callee_type_refs
+  // caches.
   if (should_inline(method)) {
     get_callee_insn_size(method);
+    get_callee_type_refs(method);
   }
 
   auto& callers = m_async_callee_callers.at(method);
@@ -1806,55 +1815,68 @@ bool MultiMethodInliner::check_android_os_version(IRInstruction* insn) {
   return false;
 }
 
-bool MultiMethodInliner::cross_store_reference(const DexMethod* caller,
-                                               const DexMethod* callee) {
-  size_t store_idx = xstores.get_store_idx(caller->get_class());
-  bool has_cross_store_ref = false;
+std::vector<DexType*> MultiMethodInliner::get_callee_type_refs(
+    const DexMethod* callee) {
+  if (m_callee_type_refs) {
+    auto absent = std::vector<DexType*>{nullptr};
+    auto cached = m_callee_type_refs->get(callee, absent);
+    if (cached != absent) {
+      return cached;
+    }
+  }
+
+  std::unordered_set<DexType*> type_refs_set;
   editable_cfg_adapter::iterate(
       callee->get_code(), [&](const MethodItemEntry& mie) {
         auto insn = mie.insn;
         if (insn->has_type()) {
-          if (xstores.illegal_ref(store_idx, insn->get_type())) {
-            info.cross_store++;
-            has_cross_store_ref = true;
-            return editable_cfg_adapter::LOOP_BREAK;
-          }
+          type_refs_set.insert(insn->get_type());
         } else if (insn->has_method()) {
           auto meth = insn->get_method();
-          if (xstores.illegal_ref(store_idx, meth->get_class())) {
-            info.cross_store++;
-            has_cross_store_ref = true;
-            return editable_cfg_adapter::LOOP_BREAK;
-          }
+          type_refs_set.insert(meth->get_class());
           auto proto = meth->get_proto();
-          if (xstores.illegal_ref(store_idx, proto->get_rtype())) {
-            info.cross_store++;
-            has_cross_store_ref = true;
-            return editable_cfg_adapter::LOOP_BREAK;
-          }
+          type_refs_set.insert(proto->get_rtype());
           auto args = proto->get_args();
-          if (args == nullptr) {
-            return editable_cfg_adapter::LOOP_CONTINUE;
-          }
-          for (const auto& arg : args->get_type_list()) {
-            if (xstores.illegal_ref(store_idx, arg)) {
-              info.cross_store++;
-              has_cross_store_ref = true;
-              return editable_cfg_adapter::LOOP_BREAK;
+          if (args != nullptr) {
+            for (const auto& arg : args->get_type_list()) {
+              type_refs_set.insert(arg);
             }
           }
         } else if (insn->has_field()) {
           auto field = insn->get_field();
-          if (xstores.illegal_ref(store_idx, field->get_class()) ||
-              xstores.illegal_ref(store_idx, field->get_type())) {
-            info.cross_store++;
-            has_cross_store_ref = true;
-            return editable_cfg_adapter::LOOP_BREAK;
-          }
+          type_refs_set.insert(field->get_class());
+          type_refs_set.insert(field->get_type());
         }
         return editable_cfg_adapter::LOOP_CONTINUE;
       });
-  return has_cross_store_ref;
+
+  std::vector<DexType*> type_refs;
+  for (auto type : type_refs_set) {
+    // filter out what xstores.illegal_ref(...) doesn't care about
+    if (type_class_internal(type) == nullptr) {
+      continue;
+    }
+    type_refs.push_back(type);
+  }
+
+  if (m_callee_type_refs) {
+    m_callee_type_refs->emplace(callee, type_refs);
+  }
+  return type_refs;
+}
+
+bool MultiMethodInliner::cross_store_reference(const DexMethod* caller,
+                                               const DexMethod* callee) {
+  auto callee_type_refs = get_callee_type_refs(callee);
+  size_t store_idx = xstores.get_store_idx(caller->get_class());
+  for (auto type : callee_type_refs) {
+    if (xstores.illegal_ref(store_idx, type)) {
+      info.cross_store++;
+      return true;
+    }
+  }
+
+  return false;
 }
 
 void MultiMethodInliner::delayed_change_visibilities() {

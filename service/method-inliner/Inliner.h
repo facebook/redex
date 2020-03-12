@@ -331,6 +331,11 @@ class MultiMethodInliner {
   size_t get_callee_insn_size(const DexMethod* callee);
 
   /**
+   * Gets the set of referenced types in a callee.
+   */
+  std::vector<DexType*> get_callee_type_refs(const DexMethod* callee);
+
+  /**
    * We want to avoid inlining a large method with many callers as that would
    * bloat the bytecode.
    */
@@ -527,6 +532,10 @@ class MultiMethodInliner {
 
   // Optional cache for get_callee_insn_size function
   std::unique_ptr<ConcurrentMap<const DexMethod*, size_t>> m_callee_insn_sizes;
+
+  // Optional cache for get_callee_type_refs function
+  std::unique_ptr<ConcurrentMap<const DexMethod*, std::vector<DexType*>>>
+      m_callee_type_refs;
 
   // Cache of whether a constructor can be unconditionally inlined.
   mutable ConcurrentMap<const DexMethod*, boost::optional<bool>>
