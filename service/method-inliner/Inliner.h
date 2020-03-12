@@ -101,6 +101,12 @@ struct InvokeConstantArgumentsAndDeadBlocks {
 
 using ConstantArgumentsOccurrences = std::pair<ConstantArguments, size_t>;
 
+struct Inlinable {
+  DexMethod* callee;
+  IRList::iterator iterator;
+  bool optional{true};
+};
+
 /**
  * Helper class to inline a set of candidates.
  * Take a set of candidates and a scope and walk all instructions in scope
@@ -152,7 +158,8 @@ class MultiMethodInliner {
    * Inline callees in the caller if is_inlinable below returns true.
    */
   void inline_callees(DexMethod* caller,
-                      const std::vector<DexMethod*>& callees);
+                      const std::vector<DexMethod*>& callees,
+                      const std::vector<DexMethod*>& optional_callees = {});
 
   /**
    * Inline callees in the given instructions in the caller, if is_inlinable
@@ -196,9 +203,8 @@ class MultiMethodInliner {
       CallerNonrecursiveCalleesByStackDepth*
           caller_nonrecursive_callees_by_stack_depth);
 
-  void inline_inlinables(
-      DexMethod* caller,
-      const std::vector<std::pair<DexMethod*, IRList::iterator>>& inlinables);
+  void inline_inlinables(DexMethod* caller,
+                         const std::vector<Inlinable>& inlinables);
 
   /**
    * Return true if the method is related to enum (java.lang.Enum and derived).
@@ -304,6 +310,13 @@ class MultiMethodInliner {
    * directly.
    */
   bool should_inline(const DexMethod* callee);
+
+  /**
+   * Whether it's beneficial to inline the callee at a particular callsite.
+   */
+  bool should_inline_optional(DexMethod* caller,
+                              const IRInstruction* invoke_insn,
+                              DexMethod* callee);
 
   /**
    * should_inline_fast will return true for a subset of methods compared to
@@ -443,12 +456,25 @@ class MultiMethodInliner {
   mutable ConcurrentMap<const DexMethod*, boost::optional<size_t>>
       m_inlined_costs;
 
+  // Cache of the inlined costs of each method and each constant-arguments key
+  // after all its eligible callsites have been inlined.
+  mutable ConcurrentMap<
+      const DexMethod*,
+      std::shared_ptr<std::unordered_map<std::string, size_t>>>
+      m_inlined_costs_keyed;
+
   /**
    * For all (reachable) invoked methods, list of constant arguments
    */
   mutable std::unordered_map<const DexMethod*,
                              std::vector<ConstantArgumentsOccurrences>>
       m_callee_constant_arguments;
+
+  /**
+   * For all (reachable) invoke instructions, constant arguments
+   */
+  mutable ConcurrentMap<const IRInstruction*, ConstantArguments>
+      m_call_constant_arguments;
 
   // Cache of whether all callers of a callee are in the same class.
   mutable ConcurrentMap<const DexMethod*, boost::optional<bool>>

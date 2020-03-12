@@ -198,19 +198,25 @@ static std::string get_key(const ConstantArguments& constant_arguments) {
   if (constant_arguments.is_top()) {
     return "";
   }
-  std::ostringstream oss;
-  bool first = true;
+  // We'll normalize the order by putting things into a std::map
+  std::map<reg_t, SignedConstantDomain> bindings;
   for (auto& p : constant_arguments.bindings()) {
-    if (first) {
-      first = false;
-    } else {
+    always_assert(!p.second.is_top());
+    if (const auto& signed_value = p.second.maybe_get<SignedConstantDomain>()) {
+      bindings.emplace(p.first, *signed_value);
+    }
+  }
+  std::ostringstream oss;
+  for (auto& p : bindings) {
+    if (p.first != bindings.begin()->first) {
       oss << ",";
     }
     oss << p.first << ":";
-    // TODO: Is it worthwhile to distinguish other domain cases?
-    auto c = p.second.maybe_get<SignedConstantDomain>();
-    if (c && c->get_constant()) {
-      oss << *c->get_constant();
+    auto& d = p.second;
+    if (d.get_constant()) {
+      oss << *d.get_constant();
+    } else {
+      oss << d.interval();
     }
   }
   return oss.str();
@@ -244,6 +250,7 @@ void MultiMethodInliner::compute_callee_constant_arguments() {
                 ci.constant_arguments.emplace(key, constant_arguments);
                 ++ci.occurrences[key];
               });
+          m_call_constant_arguments.emplace(insn, constant_arguments);
         }
         info.constant_invoke_callers_analyzed++;
         info.constant_invoke_callers_unreachable_blocks += res->dead_blocks;
@@ -437,15 +444,18 @@ void MultiMethodInliner::caller_inline(
     DexMethod* caller, const std::vector<DexMethod*>& nonrecursive_callees) {
   // We select callees to inline into this caller
   std::vector<DexMethod*> selected_callees;
+  std::vector<DexMethod*> optional_selected_callees;
   selected_callees.reserve(nonrecursive_callees.size());
   for (auto callee : nonrecursive_callees) {
     if (should_inline(callee)) {
       selected_callees.push_back(callee);
+    } else {
+      optional_selected_callees.push_back(callee);
     }
   }
 
-  if (!selected_callees.empty()) {
-    inline_callees(caller, selected_callees);
+  if (!selected_callees.empty() || !optional_selected_callees.empty()) {
+    inline_callees(caller, selected_callees, optional_selected_callees);
   }
 }
 
@@ -480,7 +490,7 @@ MultiMethodInliner::get_invoke_constant_arguments(
         if (callees_set.count(callee)) {
           ConstantArguments constant_arguments;
           const auto& srcs = insn->srcs();
-          for (size_t i = 0; i < srcs.size(); ++i) {
+          for (size_t i = is_static(callee) ? 0 : 1; i < srcs.size(); ++i) {
             auto val = env.get(srcs[i]);
             always_assert(!val.is_bottom());
             constant_arguments.set(i, val);
@@ -501,12 +511,15 @@ MultiMethodInliner::get_invoke_constant_arguments(
 }
 
 void MultiMethodInliner::inline_callees(
-    DexMethod* caller, const std::vector<DexMethod*>& callees) {
+    DexMethod* caller,
+    const std::vector<DexMethod*>& callees,
+    const std::vector<DexMethod*>& optional_callees) {
   size_t found = 0;
 
   // walk the caller opcodes collecting all candidates to inline
   // Build a callee to opcode map
-  std::vector<std::pair<DexMethod*, IRList::iterator>> inlinables;
+  std::vector<Inlinable> inlinables;
+  auto max = callees.size() + optional_callees.size();
   editable_cfg_adapter::iterate_with_iterator(
       caller->get_code(), [&](const IRList::iterator& it) {
         auto insn = it->insn;
@@ -522,9 +535,20 @@ void MultiMethodInliner::inline_callees(
         if (callee == nullptr) {
           return editable_cfg_adapter::LOOP_CONTINUE;
         }
+        bool optional{false};
         if (std::find(callees.begin(), callees.end(), callee) ==
             callees.end()) {
-          return editable_cfg_adapter::LOOP_CONTINUE;
+          // If a callee wasn't in the list of general callees, that means that
+          // it's not beneficial on average (across all callsites) to inline the
+          // callee. However, let's see if it's beneficial for this particular
+          // callsite, taking into account constant-arguments (if any).
+          if (std::find(optional_callees.begin(), optional_callees.end(),
+                        callee) != optional_callees.end() &&
+              should_inline_optional(caller, insn, callee)) {
+            optional = true;
+          } else {
+            return editable_cfg_adapter::LOOP_CONTINUE;
+          }
         }
         always_assert(callee->is_concrete());
         if (m_analyze_and_prune_inits && method::is_init(callee)) {
@@ -541,16 +565,16 @@ void MultiMethodInliner::inline_callees(
             }
           }
         }
-        found++;
-        inlinables.emplace_back(callee, it);
-        if (found == callees.size()) {
+
+        inlinables.push_back((Inlinable){callee, it, optional});
+        if (++found == max) {
           return editable_cfg_adapter::LOOP_BREAK;
         }
         return editable_cfg_adapter::LOOP_CONTINUE;
       });
-  if (found != callees.size()) {
-    always_assert(found <= callees.size());
-    info.not_found += callees.size() - found;
+  if (found != max) {
+    always_assert(found <= max);
+    info.not_found += max - found;
   }
 
   if (!inlinables.empty()) {
@@ -560,7 +584,7 @@ void MultiMethodInliner::inline_callees(
 
 void MultiMethodInliner::inline_callees(
     DexMethod* caller, const std::unordered_set<IRInstruction*>& insns) {
-  std::vector<std::pair<DexMethod*, IRList::iterator>> inlinables;
+  std::vector<Inlinable> inlinables;
   editable_cfg_adapter::iterate_with_iterator(
       caller->get_code(), [&](const IRList::iterator& it) {
         auto insn = it->insn;
@@ -574,7 +598,7 @@ void MultiMethodInliner::inline_callees(
             return editable_cfg_adapter::LOOP_CONTINUE;
           }
           always_assert(callee->is_concrete());
-          inlinables.emplace_back(callee, it);
+          inlinables.push_back((Inlinable){callee, it});
         }
         return editable_cfg_adapter::LOOP_CONTINUE;
       });
@@ -589,8 +613,7 @@ bool MultiMethodInliner::inline_inlinables_need_deconstruct(DexMethod* method) {
 }
 
 void MultiMethodInliner::inline_inlinables(
-    DexMethod* caller_method,
-    const std::vector<std::pair<DexMethod*, IRList::iterator>>& inlinables) {
+    DexMethod* caller_method, const std::vector<Inlinable>& inlinables) {
 
   auto caller = caller_method->get_code();
   std::unordered_set<IRCode*> need_deconstruct;
@@ -598,7 +621,7 @@ void MultiMethodInliner::inline_inlinables(
     need_deconstruct.reserve(1 + inlinables.size());
     need_deconstruct.insert(caller);
     for (const auto& inlinable : inlinables) {
-      need_deconstruct.insert(inlinable.first->get_code());
+      need_deconstruct.insert(inlinable.callee->get_code());
     }
     for (auto code : need_deconstruct) {
       always_assert(!code->editable_cfg_built());
@@ -613,14 +636,22 @@ void MultiMethodInliner::inline_inlinables(
 
   // Prefer inlining smaller methods first, so that we are less likely to hit
   // overall size limit.
-  std::vector<std::pair<DexMethod*, IRList::iterator>> ordered_inlinables(
-      inlinables.begin(), inlinables.end());
+  std::vector<Inlinable> ordered_inlinables(inlinables.begin(),
+                                            inlinables.end());
 
   std::stable_sort(ordered_inlinables.begin(), ordered_inlinables.end(),
-                   [this](const std::pair<DexMethod*, IRList::iterator>& a,
-                          const std::pair<DexMethod*, IRList::iterator>& b) {
-                     return get_callee_insn_size(a.first) <
-                            get_callee_insn_size(b.first);
+                   [&](const Inlinable& a, const Inlinable& b) {
+                     // First, prefer non-optional inlinables, as they were
+                     // (potentially) selected with a global cost model, taking
+                     // into account the savings achieved when eliminating all
+                     // calls
+                     if (a.optional != b.optional) {
+                       return a.optional < b.optional;
+                     }
+                     // Second, prefer smaller methods, to avoid hitting size
+                     // limits too soon
+                     return get_callee_insn_size(a.callee) <
+                            get_callee_insn_size(b.callee);
                    });
 
   std::vector<DexMethod*> inlined_callees;
@@ -630,9 +661,9 @@ void MultiMethodInliner::inline_inlinables(
   }
   size_t calls_not_inlinable{0}, calls_not_inlined{0};
   for (const auto& inlinable : ordered_inlinables) {
-    auto callee_method = inlinable.first;
+    auto callee_method = inlinable.callee;
     auto callee = callee_method->get_code();
-    auto callsite = inlinable.second;
+    auto callsite = inlinable.iterator;
 
     if (!is_inlinable(caller_method, callee_method, callsite->insn,
                       estimated_insn_size)) {
@@ -1123,6 +1154,14 @@ static size_t get_inlined_regs_cost(size_t regs) {
   return cost;
 }
 
+static size_t get_invoke_cost(const DexMethod* callee) {
+  size_t invoke_cost = callee->get_proto()->is_void()
+                           ? COST_INVOKE_WITHOUT_RESULT
+                           : COST_INVOKE_WITH_RESULT;
+  invoke_cost += get_inlined_regs_cost(callee->get_proto()->get_args()->size());
+  return invoke_cost;
+}
+
 /*
  * Try to estimate number of code units (2 bytes each) of an instruction.
  * - Ignore internal opcodes because they do not take up any space in the
@@ -1210,16 +1249,6 @@ static InlinedCostAndDeadBlocks get_inlined_cost(
     const IRCode* code,
     const ConstantArguments* constant_arguments = nullptr) {
   auto& cfg = code->cfg();
-  std::unique_ptr<constant_propagation::intraprocedural::FixpointIterator>
-      intra_cp;
-  if (constant_arguments) {
-    intra_cp.reset(new constant_propagation::intraprocedural::FixpointIterator(
-        cfg, constant_propagation::ConstantPrimitiveAnalyzer()));
-    ConstantEnvironment initial_env =
-        constant_propagation::interprocedural::env_with_params(
-            is_static, code, *constant_arguments);
-    intra_cp->run(initial_env);
-  }
 
   size_t cost{0};
   // For each unreachable block, we'll give a small discount to
@@ -1229,6 +1258,18 @@ static InlinedCostAndDeadBlocks get_inlined_cost(
   size_t dead_blocks{0};
   size_t returns{0};
   if (code->editable_cfg_built()) {
+    std::unique_ptr<constant_propagation::intraprocedural::FixpointIterator>
+        intra_cp;
+    if (constant_arguments && !constant_arguments->is_top()) {
+      intra_cp.reset(
+          new constant_propagation::intraprocedural::FixpointIterator(
+              cfg, constant_propagation::ConstantPrimitiveAnalyzer()));
+      ConstantEnvironment initial_env =
+          constant_propagation::interprocedural::env_with_params(
+              is_static, code, *constant_arguments);
+      intra_cp->run(initial_env);
+    }
+
     const auto blocks = code->cfg().blocks();
     for (size_t i = 0; i < blocks.size(); ++i) {
       auto block = blocks.at(i);
@@ -1238,6 +1279,8 @@ static InlinedCostAndDeadBlocks get_inlined_cost(
           const auto& pred_env = intra_cp->get_entry_state_at(edge->src());
           if (!pred_env.is_bottom() && edge->type() == cfg::EDGE_BRANCH) {
             // A conditional branch instruction is going to disppear
+            // TODO: Simulate backwards LocalDCE run to find what instructions
+            // actually remain live
             conditional_branch_cost_discount += 1;
           }
         }
@@ -1282,6 +1325,7 @@ size_t MultiMethodInliner::get_inlined_cost(const DexMethod* callee) {
   std::atomic<size_t> callees_unreachable_blocks{0};
   std::atomic<size_t> inlined_cost{
       ::get_inlined_cost(is_static(callee), callee->get_code()).cost};
+  ConcurrentMap<std::string, size_t> inlined_costs_keyed;
   auto callee_constant_arguments_it = m_callee_constant_arguments.find(callee);
   if (callee_constant_arguments_it != m_callee_constant_arguments.end() &&
       inlined_cost <= MAX_COST_FOR_CONSTANT_PROPAGATION) {
@@ -1302,6 +1346,7 @@ size_t MultiMethodInliner::get_inlined_cost(const DexMethod* callee) {
       callees_unreachable_blocks += res.dead_blocks * count;
       inlined_cost += res.cost * count;
       callees_analyzed += count;
+      inlined_costs_keyed.emplace(get_key(constant_arguments), res.cost);
     };
 
     if (callee_constant_arguments.size() > 1 &&
@@ -1329,6 +1374,9 @@ size_t MultiMethodInliner::get_inlined_cost(const DexMethod* callee) {
 
     always_assert(callees_analyzed > 0);
     inlined_cost = inlined_cost / callees_analyzed;
+    m_inlined_costs_keyed.emplace(
+        callee, new std::unordered_map<std::string, size_t>(
+                    inlined_costs_keyed.begin(), inlined_costs_keyed.end()));
   }
   TRACE(INLINE, 4, "[too_many_callers] get_inlined_cost %s: %u", SHOW(callee),
         (size_t)inlined_cost);
@@ -1422,10 +1470,7 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
 
   // 2. Determine costs of keeping the invoke instruction
 
-  size_t invoke_cost = callee->get_proto()->is_void()
-                           ? COST_INVOKE_WITHOUT_RESULT
-                           : COST_INVOKE_WITH_RESULT;
-  invoke_cost += get_inlined_regs_cost(callee->get_proto()->get_args()->size());
+  size_t invoke_cost = get_invoke_cost(callee);
   TRACE(INLINE, 3,
         "[too_many_callers] %u calls to %s; cost: inlined %u, invoke %u",
         caller_count, SHOW(callee), inlined_cost, invoke_cost);
@@ -1480,6 +1525,38 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
     // involved?
     return inlined_cost * caller_count >
            invoke_cost * caller_count + methods_cost;
+  }
+
+  return true;
+}
+
+bool MultiMethodInliner::should_inline_optional(
+    DexMethod* caller, const IRInstruction* invoke_insn, DexMethod* callee) {
+  if (!m_call_constant_arguments.count_unsafe(invoke_insn)) {
+    return false;
+  }
+  auto& constant_arguments = m_call_constant_arguments.at_unsafe(invoke_insn);
+  auto opt_inlined_costs_keyed = m_inlined_costs_keyed.get(
+      callee, std::shared_ptr<std::unordered_map<std::string, size_t>>());
+  if (!opt_inlined_costs_keyed) {
+    return false;
+  }
+  auto key = get_key(constant_arguments);
+  auto it = opt_inlined_costs_keyed->find(key);
+  if (it == opt_inlined_costs_keyed->end()) {
+    return false;
+  }
+  auto inlined_cost = it->second;
+
+  if (m_mode != IntraDex && caller->get_class() != callee->get_class()) {
+    // Inlining methods into different classes might lead to worse
+    // cross-dex-ref minimization results.
+    inlined_cost += COST_INTER_DEX_SOME_CALLERS_DIFFERENT_CLASSES;
+  }
+
+  size_t invoke_cost = get_invoke_cost(callee);
+  if (inlined_cost > invoke_cost) {
+    return false;
   }
 
   return true;
