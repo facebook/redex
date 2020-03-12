@@ -1320,6 +1320,7 @@ cfg::InstructionIterator ControlFlowGraph::move_result_of(
  */
 void ControlFlowGraph::deep_copy(ControlFlowGraph* new_cfg) const {
   always_assert(editable());
+  new_cfg->clear();
   new_cfg->m_editable = true;
   new_cfg->set_registers_size(this->get_registers_size());
 
@@ -1766,16 +1767,7 @@ std::vector<Block*> ControlFlowGraph::blocks_reverse_post_deprecated() const {
   return postorder;
 }
 
-ControlFlowGraph::~ControlFlowGraph() {
-  for (const auto& entry : m_blocks) {
-    Block* b = entry.second;
-    delete b;
-  }
-
-  for (Edge* e : m_edges) {
-    delete e;
-  }
-}
+ControlFlowGraph::~ControlFlowGraph() { free_all_blocks_and_edges(); }
 
 Block* ControlFlowGraph::create_block() {
   size_t id = next_block_id();
@@ -1952,6 +1944,31 @@ void ControlFlowGraph::delete_edges_between(Block* p, Block* s) {
 void ControlFlowGraph::remove_edge(Edge* edge, bool cleanup) {
   remove_edge_if(edge->src(), edge->target(),
                  [edge](const Edge* e) { return edge == e; }, cleanup);
+}
+
+void ControlFlowGraph::free_all_blocks_and_edges() {
+  for (const auto& entry : m_blocks) {
+    Block* b = entry.second;
+    delete b;
+  }
+
+  for (Edge* e : m_edges) {
+    delete e;
+  }
+}
+
+void ControlFlowGraph::clear() {
+  free_all_blocks_and_edges();
+
+  m_blocks.clear();
+  m_edges.clear();
+
+  m_registers_size = 0;
+
+  m_entry_block = nullptr;
+  m_exit_block = nullptr;
+
+  m_editable = true;
 }
 
 // After `edges` have been removed from the graph,

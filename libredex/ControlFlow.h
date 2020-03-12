@@ -752,7 +752,7 @@ class ControlFlowGraph {
   cfg::InstructionIterator move_result_of(const cfg::InstructionIterator& it);
 
   /*
-   * fill `new_cfg` with a copy of `this`
+   * clear and fill `new_cfg` with a copy of `this`.
    */
   void deep_copy(ControlFlowGraph* new_cfg) const;
 
@@ -845,6 +845,12 @@ class ControlFlowGraph {
   // Assert if there are edges that are never a predecessor or successor of a
   // block
   void no_unreferenced_edges() const;
+
+  // Remove all edges and blocks of the CFG, free the memory and
+  // set all fields to their defaults.
+  // NOTE: this will result in an empty CFG, same as if the default
+  // constructor has been called.
+  void clear();
 
   template <class ForwardIt>
   bool insert(const InstructionIterator& position,
@@ -983,6 +989,9 @@ class ControlFlowGraph {
   //      match the edge state. For example, delete branch/switch with only one
   //      outgoing edge instructions.
   void cleanup_deleted_edges(const EdgeSet& edges);
+
+  // free all allocated memory of the CFG
+  void free_all_blocks_and_edges();
 
   // Move edge between new_source and new_target.
   // If either new_source or new_target is null, don't change that field of the

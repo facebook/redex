@@ -1038,6 +1038,47 @@ TEST_F(ControlFlowTest, deep_copy3) {
   EXPECT_TRUE(orig_iterable.structural_equals(copy_iterable));
 }
 
+TEST_F(ControlFlowTest, deep_copy_into_existing_cfg) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (if-eqz v0 :thr)
+      (return-void)
+      (:thr)
+      (throw v0)
+    )
+)");
+
+  auto copy_code = assembler::ircode_from_string(R"(
+    (
+      (const v0 10)
+
+      (:loop)
+      (if-eqz v0 :end)
+      (invoke-static (v0) "LCls;.foo:(I)I")
+      (move-result v1)
+      (add-int v0 v0 v1)
+      (goto :loop)
+
+      (:end)
+      (return-void)
+    )
+)");
+
+  code->build_cfg(/* editable */ true);
+  auto& orig = code->cfg();
+
+  copy_code->build_cfg(/* editable */ true);
+  auto& copy = copy_code->cfg();
+
+  orig.deep_copy(&copy);
+
+  code->clear_cfg();
+  copy_code->clear_cfg();
+
+  EXPECT_CODE_EQ(code.get(), copy_code.get());
+}
+
 TEST_F(ControlFlowTest, line_numbers) {
 
   DexMethod* m = DexMethod::make_method("LFoo;.m:()V")
