@@ -31,14 +31,14 @@ struct Stats {
 
 class DedupBlocks {
  public:
-  DedupBlocks(const Config& config, DexMethod* method);
+  DedupBlocks(const Config* config, DexMethod* method);
 
   const Stats& get_stats() const { return m_stats; }
 
   void run();
 
  private:
-  const Config& m_config;
+  const Config* m_config;
   DexMethod* m_method;
   Stats m_stats;
 };

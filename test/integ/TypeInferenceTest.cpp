@@ -76,7 +76,8 @@ TEST_F(TypeInferenceTest, test_dedup_blocks_exception_type) {
 
   using namespace dedup_blocks_impl;
 
-  DedupBlocks db(Config(), method);
+  Config empty_config;
+  DedupBlocks db(&empty_config, method);
   db.run();
 
   type_inference::TypeInference inference(cfg);

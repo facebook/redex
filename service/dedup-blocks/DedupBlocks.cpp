@@ -190,19 +190,21 @@ namespace dedup_blocks_impl {
 
 class DedupBlocksImpl {
  public:
-  DedupBlocksImpl(const Config& config, Stats& stats)
-      : m_config(config), m_stats(stats) {}
+  DedupBlocksImpl(const Config* config, Stats& stats)
+      : m_config(config), m_stats(stats) {
+    always_assert(m_config);
+  }
 
   // Dedup blocks that are exactly the same
   bool dedup(DexMethod* method, cfg::ControlFlowGraph& cfg) {
     Duplicates dups = collect_duplicates(method, cfg);
     if (!dups.empty()) {
-      if (m_config.debug) {
+      if (m_config->debug) {
         check_inits(cfg);
       }
       record_stats(dups);
       deduplicate(dups, cfg);
-      if (m_config.debug) {
+      if (m_config->debug) {
         check_inits(cfg);
       }
       return true;
@@ -224,11 +226,11 @@ class DedupBlocksImpl {
   void split_postfix(DexMethod* method, cfg::ControlFlowGraph& cfg) {
     PostfixSplitGroupMap dups = collect_postfix_duplicates(method, cfg);
     if (!dups.empty()) {
-      if (m_config.debug) {
+      if (m_config->debug) {
         check_inits(cfg);
       }
       split_postfix_blocks(dups, cfg);
-      if (m_config.debug) {
+      if (m_config->debug) {
         check_inits(cfg);
       }
     }
@@ -257,7 +259,7 @@ class DedupBlocksImpl {
                                                   PostfixSplitGroup,
                                                   BlockSuccHasher,
                                                   SuccBlocksInSameGroup>;
-  const Config& m_config;
+  const Config* m_config;
   Stats& m_stats;
 
   // Find blocks with the same exact code
@@ -401,7 +403,7 @@ class DedupBlocksImpl {
 
     // Group by successors if blocks share a single successor block.
     for (cfg::Block* block : blocks) {
-      if (block->num_opcodes() >= m_config.block_split_min_opcode_count) {
+      if (block->num_opcodes() >= m_config->block_split_min_opcode_count) {
         // Insert into other blocks that share the same successors
         splitGroupMap[block].postfix_blocks.insert(block);
       }
@@ -531,7 +533,7 @@ class DedupBlocksImpl {
         size_t cur_saved_insn =
             cur_insn_index * (majority_count_group.blocks.size() - 1);
         if (cur_saved_insn > best_saved_insn &&
-            cur_insn_index >= m_config.block_split_min_opcode_count) {
+            cur_insn_index >= m_config->block_split_min_opcode_count) {
           // Save it
           best_saved_insn = cur_saved_insn;
           best_insn_count = cur_insn_index;
@@ -986,14 +988,16 @@ class DedupBlocksImpl {
   }
 };
 
-DedupBlocks::DedupBlocks(const Config& config, DexMethod* method)
-    : m_config(config), m_method(method) {}
+DedupBlocks::DedupBlocks(const Config* config, DexMethod* method)
+    : m_config(config), m_method(method) {
+  always_assert(m_config);
+}
 
 void DedupBlocks::run() {
   DedupBlocksImpl impl(m_config, m_stats);
   auto& cfg = m_method->get_code()->cfg();
   do {
-    if (m_config.split_postfix) {
+    if (m_config->split_postfix) {
       impl.split_postfix(m_method, cfg);
     }
   } while (impl.dedup(m_method, cfg));

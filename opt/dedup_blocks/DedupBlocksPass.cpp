@@ -36,7 +36,7 @@ void DedupBlocksPass::run_pass(DexStoresVector& stores,
         TRACE(DEDUP_BLOCKS, 5, "[dedup blocks] method %s before:\n%s",
               SHOW(method), SHOW(cfg));
 
-        dedup_blocks_impl::DedupBlocks impl(m_config, method);
+        dedup_blocks_impl::DedupBlocks impl(&m_config, method);
         impl.run();
 
         code->clear_cfg();

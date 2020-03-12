@@ -784,7 +784,7 @@ void MultiMethodInliner::shrink_method(DexMethod* method) {
     }
 
     dedup_blocks_impl::Config config;
-    dedup_blocks_impl::DedupBlocks dedup_blocks(config, method);
+    dedup_blocks_impl::DedupBlocks dedup_blocks(&config, method);
     dedup_blocks.run();
     dedup_blocks_stats = dedup_blocks.get_stats();
   }
