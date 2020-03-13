@@ -19,7 +19,7 @@ struct Plugin {
 template <class T>
 class PluginEntry : public Plugin {
  public:
-  typedef std::function<T*()> Creator;
+  using Creator = std::function<T*()>;
   void register_plugin(const std::string& plugin_name, Creator&& creator) {
     if (m_creators.count(plugin_name) != 0) {
       // TODO: Make this an error once all existing configurations have been

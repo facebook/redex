@@ -26,13 +26,13 @@ using facebook::Locator;
 class DexCallSite;
 class DexMethodHandle;
 
-typedef std::unordered_map<DexString*, uint32_t> dexstring_to_idx;
-typedef std::unordered_map<DexType*, uint16_t> dextype_to_idx;
-typedef std::unordered_map<DexProto*, uint32_t> dexproto_to_idx;
-typedef std::unordered_map<DexFieldRef*, uint32_t> dexfield_to_idx;
-typedef std::unordered_map<DexMethodRef*, uint32_t> dexmethod_to_idx;
-typedef std::unordered_map<DexCallSite*, uint32_t> dexcallsite_to_idx;
-typedef std::unordered_map<DexMethodHandle*, uint32_t> dexmethodhandle_to_idx;
+using dexstring_to_idx = std::unordered_map<DexString*, uint32_t>;
+using dextype_to_idx = std::unordered_map<DexType*, uint16_t>;
+using dexproto_to_idx = std::unordered_map<DexProto*, uint32_t>;
+using dexfield_to_idx = std::unordered_map<DexFieldRef*, uint32_t>;
+using dexmethod_to_idx = std::unordered_map<DexMethodRef*, uint32_t>;
+using dexcallsite_to_idx = std::unordered_map<DexCallSite*, uint32_t>;
+using dexmethodhandle_to_idx = std::unordered_map<DexMethodHandle*, uint32_t>;
 
 using LocatorIndex = std::unordered_map<DexString*, Locator>;
 LocatorIndex make_locator_index(DexStoresVector& stores);
@@ -140,15 +140,15 @@ dex_stats_t write_classes_to_dex(
     const std::string& dex_magic,
     PostLowering const* post_lowering = nullptr);
 
-typedef bool (*cmp_dstring)(const DexString*, const DexString*);
-typedef bool (*cmp_dtype)(const DexType*, const DexType*);
-typedef bool (*cmp_dproto)(const DexProto*, const DexProto*);
-typedef bool (*cmp_dfield)(const DexFieldRef*, const DexFieldRef*);
-typedef bool (*cmp_dmethod)(const DexMethodRef*, const DexMethodRef*);
-typedef bool (*cmp_dtypelist)(const DexTypeList*, const DexTypeList*);
-typedef bool (*cmp_callsite)(const DexCallSite*, const DexCallSite*);
-typedef bool (*cmp_methodhandle)(const DexMethodHandle*,
-                                 const DexMethodHandle*);
+using cmp_dstring = bool (*)(const DexString*, const DexString*);
+using cmp_dtype = bool (*)(const DexType*, const DexType*);
+using cmp_dproto = bool (*)(const DexProto*, const DexProto*);
+using cmp_dfield = bool (*)(const DexFieldRef*, const DexFieldRef*);
+using cmp_dmethod = bool (*)(const DexMethodRef*, const DexMethodRef*);
+using cmp_dtypelist = bool (*)(const DexTypeList*, const DexTypeList*);
+using cmp_callsite = bool (*)(const DexCallSite*, const DexCallSite*);
+using cmp_methodhandle = bool (*)(const DexMethodHandle*,
+                                  const DexMethodHandle*);
 
 inline bool compare_dexcallsites(const DexCallSite* a, const DexCallSite* b) {
   if (a == nullptr) {
@@ -273,10 +273,10 @@ std::vector<DexString*> GatheredTypes::get_dexstring_emitlist(T cmp) {
   return strlist;
 }
 
-typedef std::map<DexAnnotation*, uint32_t> annomap_t;
-typedef std::map<DexAnnotationSet*, uint32_t> asetmap_t;
-typedef std::map<ParamAnnotations*, uint32_t> xrefmap_t;
-typedef std::map<DexAnnotationDirectory*, uint32_t> adirmap_t;
+using annomap_t = std::map<DexAnnotation*, uint32_t>;
+using asetmap_t = std::map<DexAnnotationSet*, uint32_t>;
+using xrefmap_t = std::map<ParamAnnotations*, uint32_t>;
+using adirmap_t = std::map<DexAnnotationDirectory*, uint32_t>;
 
 struct CodeItemEmit {
   DexMethod* method;

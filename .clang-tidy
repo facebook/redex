@@ -1,4 +1,4 @@
-Checks: '-*,modernize-make-shared,performance-*,-performance-inefficient-string-concatenation,readability-const-return-type,readability-container-size-empty,misc-definitions-in-headers,modernize-use-override,google-explicit-constructor,hicpp-explicit-conversions,readability-redundant-*,llvm-namespace-comment'
+Checks: '-*,modernize-make-shared,performance-*,-performance-inefficient-string-concatenation,readability-const-return-type,readability-container-size-empty,misc-definitions-in-headers,modernize-use-override,google-explicit-constructor,hicpp-explicit-conversions,readability-redundant-*,llvm-namespace-comment,modernize-use-using'
 WarningsAsErrors: '*'
 CheckOptions:
   - key: modernize-use-override.IgnoreDestructors

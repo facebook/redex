@@ -93,10 +93,10 @@ struct MethodCall {
  *   consistent, but Object(i) consistent_with Merged({i, i'})
  */
 
-typedef std::unordered_map<DexFieldRef*, FieldSet> FieldSetMap;
-typedef std::unordered_map<DexFieldRef*, FlowStatus> FieldReadMap;
-typedef std::unordered_map<DexMethodRef*, MethodCall> CallMap;
-typedef std::unordered_map<IRInstruction*, FlowStatus> ArrayWriteMap;
+using FieldSetMap = std::unordered_map<DexFieldRef*, FieldSet>;
+using FieldReadMap = std::unordered_map<DexFieldRef*, FlowStatus>;
+using CallMap = std::unordered_map<DexMethodRef*, MethodCall>;
+using ArrayWriteMap = std::unordered_map<IRInstruction*, FlowStatus>;
 
 // Tracks a field write either to or using a tracked value
 class FieldWriteRegs final {
@@ -292,17 +292,14 @@ class TrackedComparer {
   }
 };
 
-typedef std::
-    unordered_set<std::shared_ptr<ObjectUses>, TrackedHasher, TrackedComparer>
-        ObjectUsedSet;
+using ObjectUsedSet = std::
+    unordered_set<std::shared_ptr<ObjectUses>, TrackedHasher, TrackedComparer>;
 
-typedef std::
-    unordered_set<std::shared_ptr<MergedUses>, TrackedHasher, TrackedComparer>
-        MergedUsedSet;
+using MergedUsedSet = std::
+    unordered_set<std::shared_ptr<MergedUses>, TrackedHasher, TrackedComparer>;
 
-typedef std::
-    unordered_set<std::shared_ptr<TrackedUses>, TrackedHasher, TrackedComparer>
-        UsedSet;
+using UsedSet = std::
+    unordered_set<std::shared_ptr<TrackedUses>, TrackedHasher, TrackedComparer>;
 
 // Represents the registers across a method and a set of all Uses encountered
 // during the execution, so that over writing a tracked value does not cause us

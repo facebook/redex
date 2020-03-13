@@ -13,8 +13,8 @@
 
 class CommentFilter {
  public:
-  typedef char char_type;
-  typedef boost::iostreams::input_filter_tag category;
+  using char_type = char;
+  using category = boost::iostreams::input_filter_tag;
 
   template <typename Source>
   int get(Source& src) {

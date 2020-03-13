@@ -184,7 +184,7 @@ bool ObjectInlinePlugin::update_after_reg_remap(ControlFlowGraph*,
       block->remove_insn(it);
     }
   }
-  for (auto fs : m_set_field_sets) {
+  for (const auto& fs : m_set_field_sets) {
     if (used_fields.count(fs.first) == 0) {
       m_unaccessed_field_sets.insert(fs);
     }

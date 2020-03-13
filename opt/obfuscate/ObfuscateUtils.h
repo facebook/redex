@@ -21,9 +21,9 @@ void compute_identifier(int value, std::string* res);
 
 // Type for the map of descriptor -> [newname -> oldname]
 // This map is used for reverse lookup to find naming collisions
-typedef std::unordered_map<std::string,
-                           std::unordered_map<std::string, std::string>>
-    NameMapping;
+using NameMapping =
+    std::unordered_map<std::string,
+                       std::unordered_map<std::string, std::string>>;
 
 // Renames a field in the Dex
 void rename_field(DexField* field, const std::string& new_name);
@@ -652,11 +652,11 @@ class DexElemManager {
   }
 };
 
-typedef DexElemManager<DexField*, DexFieldRef*, DexFieldSpec, DexType*>
-    DexFieldManager;
+using DexFieldManager =
+    DexElemManager<DexField*, DexFieldRef*, DexFieldSpec, DexType*>;
 DexFieldManager new_dex_field_manager();
-typedef DexElemManager<DexMethod*, DexMethodRef*, DexMethodSpec, DexProto*>
-    DexMethodManager;
+using DexMethodManager =
+    DexElemManager<DexMethod*, DexMethodRef*, DexMethodSpec, DexProto*>;
 DexMethodManager new_dex_method_manager();
 
 // Look at a list of members and check if there is a renamable member
@@ -685,7 +685,7 @@ class RenamingContext {
   virtual bool can_rename_elem(T elem) const { return can_rename(elem); }
 };
 
-typedef RenamingContext<DexField*> FieldRenamingContext;
+using FieldRenamingContext = RenamingContext<DexField*>;
 
 // Method renaming context is special because we have to make sure we don't
 // rename <init> or <clinit> ever regardless of configs

@@ -246,15 +246,14 @@ class Configurable {
     return t;
   }
 
-  typedef std::function<void(
-      const std::string& param_name,
-      const std::string& param_doc,
-      const bool param_is_required,
-      const bindflags_t param_bindflags,
-      const Configurable::ReflectionParam::Type param_type_tag,
-      const std::tuple<std::string, Configurable::Reflection>& param_type,
-      const Json::Value)>
-      ReflectorFunc;
+  using ReflectorFunc = std::function<void(
+      const std::string&,
+      const std::string&,
+      const bool,
+      const bindflags_t,
+      const Configurable::ReflectionParam::Type,
+      const std::tuple<std::string, Configurable::Reflection>&,
+      const Json::Value)>;
 
   template <typename T>
   struct DefaultValueType {

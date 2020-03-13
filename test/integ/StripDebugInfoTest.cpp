@@ -32,8 +32,8 @@ pass.
 
 namespace {
 
-typedef std::function<void(const MethodItemEntry& mei)> MethodItemCallback;
-typedef std::function<void(const DexClasses& classes)> DexClassesCallback;
+using MethodItemCallback = std::function<void(const MethodItemEntry&)>;
+using DexClassesCallback = std::function<void(const DexClasses&)>;
 
 } // anonymous namespace
 
