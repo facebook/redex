@@ -77,6 +77,11 @@ class LevelChecker {
                                       anno->type() == s_requires_api_new ||
                                       anno->type() == s_target_api)) {
         const auto& elems = anno->anno_elems();
+        // xxx: @androidx.annotation.RequiresApi() can not be compiled by javac,
+        // it should have argument. But we get such annotation after running R8.
+        if (elems.empty()) {
+          return -1;
+        }
         always_assert(elems.size() == 1);
         const DexAnnotationElement& api_elem = elems[0];
         always_assert(api_elem.string == DexString::get_string("api") ||
