@@ -7,6 +7,8 @@
 
 #include "CallGraph.h"
 
+#include <utility>
+
 #include "MethodOverrideGraph.h"
 #include "Walkers.h"
 
@@ -129,7 +131,9 @@ Graph complete_call_graph(const Scope& scope) {
 }
 
 Edge::Edge(NodeId caller, NodeId callee, const IRList::iterator& invoke_it)
-    : m_caller(caller), m_callee(callee), m_invoke_it(invoke_it) {}
+    : m_caller(std::move(caller)),
+      m_callee(std::move(callee)),
+      m_invoke_it(invoke_it) {}
 
 Graph::Graph(const BuildStrategy& strat)
     : m_entry(std::make_shared<Node>(Node::GHOST_ENTRY)),

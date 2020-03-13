@@ -101,20 +101,13 @@ struct AbstractObject final : public sparta::AbstractValue<AbstractObject> {
   AbstractObject() = default;
 
   explicit AbstractObject(DexString* s)
-      : obj_kind(STRING),
-        dex_type(nullptr),
-        dex_string(s),
-        potential_dex_types() {}
+      : obj_kind(STRING), dex_type(nullptr), dex_string(s) {}
 
   explicit AbstractObject(int64_t i)
-      : obj_kind(INT),
-        dex_type(nullptr),
-        dex_string(nullptr),
-        dex_int(i),
-        potential_dex_types() {}
+      : obj_kind(INT), dex_type(nullptr), dex_string(nullptr), dex_int(i) {}
 
   AbstractObject(AbstractObjectKind k, DexType* t)
-      : obj_kind(k), dex_type(t), dex_string(nullptr), potential_dex_types() {
+      : obj_kind(k), dex_type(t), dex_string(nullptr) {
     always_assert(k == OBJECT || k == CLASS);
   }
 
@@ -129,7 +122,7 @@ struct AbstractObject final : public sparta::AbstractValue<AbstractObject> {
   }
 
   AbstractObject(AbstractObjectKind k, DexType* t, DexString* s)
-      : obj_kind(k), dex_type(t), dex_string(s), potential_dex_types() {
+      : obj_kind(k), dex_type(t), dex_string(s) {
     always_assert(k == FIELD || k == METHOD);
   }
 
@@ -147,8 +140,7 @@ struct AbstractObject final : public sparta::AbstractValue<AbstractObject> {
   AbstractObject(AbstractObjectKind k, AbstractHeapAddress addr)
       : obj_kind(k),
         dex_type(DexType::make_type("[Ljava/lang/Class;")),
-        dex_string(nullptr),
-        potential_dex_types() {
+        dex_string(nullptr) {
     heap_address = addr;
     always_assert(k == OBJECT);
   }

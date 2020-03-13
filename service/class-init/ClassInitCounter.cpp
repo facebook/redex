@@ -1134,7 +1134,6 @@ void ClassInitCounter::find_children(
       m_type_to_inits.insert({type, InitLocation(type)});
     }
   }
-  return;
 }
 
 void ClassInitCounter::analyze_block(DexClass* container,

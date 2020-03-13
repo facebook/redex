@@ -433,7 +433,7 @@ void RenameClassesPassV2::eval_classes(Scope& scope,
   auto dont_rename_native_bindings = build_dont_rename_native_bindings(scope);
   auto dont_rename_annotated = build_dont_rename_annotated();
 
-  std::string norule = "";
+  std::string norule;
 
   for (auto clazz : scope) {
     // Short circuit force renames

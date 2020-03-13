@@ -108,7 +108,7 @@ using RefsMap =
 // Uncomment and use this as a prefix for virtual method
 // names for debugging
 // const std::string prefix = __Redex__";
-const std::string prefix = "";
+const std::string prefix;
 
 DexString* get_name(int seed) {
   std::string name;

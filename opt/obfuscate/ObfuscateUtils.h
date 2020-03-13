@@ -253,7 +253,7 @@ class NameGenerator {
   std::unordered_set<std::string>& used_ids;
   // Gets the next name that is not in the used_ids set
   std::string next_name() {
-    std::string res = "";
+    std::string res;
     do {
       res.clear();
       obfuscate_utils::compute_identifier(ctr++, &res);

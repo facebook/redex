@@ -27,7 +27,7 @@ namespace {
  */
 std::string get_simple_deobfuscated_name(DexType* type) {
   auto* cls = type_class(type);
-  std::string full_name = "";
+  std::string full_name;
   if (cls) {
     full_name = cls->get_deobfuscated_name();
   }

@@ -37,7 +37,7 @@ void test(const Scope& scope,
       ThrowPropagationPass::get_no_return_methods(config, scope);
   auto override_graph = method_override_graph::build_graph(scope);
   ThrowPropagationPass::run(
-      config, no_return_methods, *override_graph.get(), code.get());
+      config, no_return_methods, *override_graph, code.get());
 
   EXPECT_CODE_EQ(code.get(), expected.get());
 };

@@ -373,7 +373,6 @@ bool is_access_flag_set(const DexAccessFlags accessFlags,
 void set_access_flag(DexAccessFlags& accessFlags,
                      const DexAccessFlags settingFlag) {
   accessFlags = accessFlags | settingFlag;
-  return;
 }
 
 bool parse_access_flags(std::vector<unique_ptr<Token>>::iterator* it,
@@ -620,7 +619,6 @@ void parse_member_specification(std::vector<unique_ptr<Token>>::iterator* it,
   } else {
     class_spec->fieldSpecifications.push_back(member_specification);
   }
-  return;
 }
 
 void parse_member_specifications(std::vector<unique_ptr<Token>>::iterator* it,

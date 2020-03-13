@@ -25,11 +25,10 @@ void test(const std::string& code_str,
   auto code = assembler::ircode_from_string(code_str);
   auto expected = assembler::ircode_from_string(expected_str);
 
-  code.get()->build_cfg(/* editable */ true);
-  ReduceArrayLiterals ral(
-      code.get()->cfg(), max_filled_elements, min_sdk, arch);
+  code->build_cfg(/* editable */ true);
+  ReduceArrayLiterals ral(code->cfg(), max_filled_elements, min_sdk, arch);
   ral.patch();
-  code.get()->clear_cfg();
+  code->clear_cfg();
   auto stats = ral.get_stats();
 
   // printf("ACTUAL CODE: \n %s\n", assembler::to_string(code.get()).c_str());

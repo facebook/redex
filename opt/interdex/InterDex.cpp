@@ -776,7 +776,6 @@ void InterDex::run_in_force_single_dex_mode() {
   TRACE(IDEX, 7, "IDEX: force_single_dex dex number: %d",
         m_dexes_structure.get_num_dexes());
   print_stats(&m_dexes_structure);
-  return;
 }
 
 void InterDex::run() {

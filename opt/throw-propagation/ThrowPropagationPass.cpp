@@ -340,7 +340,7 @@ void ThrowPropagationPass::run_pass(DexStoresVector& stores,
             return {};
           }
 
-          return run(m_config, no_return_methods, *override_graph.get(), code);
+          return run(m_config, no_return_methods, *override_graph, code);
         });
     if (last_stats.throws_inserted == 0) {
       break;

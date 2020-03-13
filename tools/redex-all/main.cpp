@@ -811,8 +811,7 @@ void redex_frontend(ConfigFiles& conf, /* input */
       TRACE(MAIN, 1, "LIBRARY JAR: %s", library_jar.c_str());
       if (!load_jar_file(library_jar.c_str(), &external_classes)) {
         // Try again with the basedir
-        std::string basedir_path =
-            pg_config.basedirectory + "/" + library_jar.c_str();
+        std::string basedir_path = pg_config.basedirectory + "/" + library_jar;
         if (!load_jar_file(basedir_path.c_str())) {
           std::cerr << "error: library jar could not be loaded: " << library_jar
                     << std::endl;

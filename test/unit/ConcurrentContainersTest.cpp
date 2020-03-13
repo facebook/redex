@@ -25,8 +25,7 @@ constexpr size_t kSampleSize = 1000;
 class ConcurrentContainersTest : public ::testing::Test {
  protected:
   ConcurrentContainersTest()
-      : m_rd_device(),
-        m_generator(m_rd_device()),
+      : m_generator(std::random_device()()),
         m_size(kSampleSize),
         m_elem_dist(0, 1000000000),
         m_data(generate_random_data()),
@@ -81,7 +80,6 @@ class ConcurrentContainersTest : public ::testing::Test {
     run_on_samples(m_subset_samples, operation);
   }
 
-  std::random_device m_rd_device;
   std::mt19937 m_generator;
   uint32_t m_size;
   std::uniform_int_distribution<uint32_t> m_elem_dist;

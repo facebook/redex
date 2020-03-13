@@ -134,7 +134,6 @@ std::string show_deobfuscated(const IRInstruction*);
 std::string show_deobfuscated(const DexEncodedValue*);
 std::string show_deobfuscated(const DexTypeList*);
 std::string show_deobfuscated(const DexProto*);
-std::string show_deobfuscated(const DexType*);
 std::string show_deobfuscated(const DexCallSite*);
 std::string show_deobfuscated(const DexMethodHandle*);
 

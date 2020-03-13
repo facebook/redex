@@ -629,7 +629,7 @@ std::vector<DexMethod*> get_all_methods(DexClass* klass) {
 // the CFG did not change.
 MethodCFGStream::MethodCFGStream(DexMethod* m) : m_method(m) {
   m_orig_name = vshow(m, false);
-  print_compilation_header(m_ss, m_orig_name.c_str(), m_orig_name.c_str());
+  print_compilation_header(m_ss, m_orig_name, m_orig_name);
 }
 
 void MethodCFGStream::add_pass(const std::string& pass_name,

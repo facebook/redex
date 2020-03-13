@@ -52,7 +52,7 @@ class DexInstruction : public Gatherable {
   // count, we'll have to add a assert here.
   // Holds formats:
   // 10x 11x 11n 12x 22x 21s 21h 31i 32x 51l
-  DexInstruction(const uint16_t* opcodes, int count) : Gatherable() {
+  DexInstruction(const uint16_t* opcodes, int count) {
     always_assert_log(count <= MAX_ARG_COUNT,
                       "arg count %d exceeded the limit of %d",
                       count,
@@ -66,7 +66,7 @@ class DexInstruction : public Gatherable {
 
  public:
   explicit DexInstruction(DexOpcode op)
-      : Gatherable(), m_opcode(op), m_count(count_from_opcode()) {}
+      : m_opcode(op), m_count(count_from_opcode()) {}
 
   DexInstruction(DexOpcode opcode, uint16_t arg) : DexInstruction(opcode) {
     redex_assert(m_count == 1);

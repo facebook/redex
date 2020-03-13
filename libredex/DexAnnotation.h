@@ -61,10 +61,7 @@ class DexEncodedValue : public Gatherable {
   uint64_t m_value;
 
   explicit DexEncodedValue(DexEncodedValueTypes type, uint64_t value = 0)
-      : Gatherable() {
-    m_evtype = type;
-    m_value = value;
-  }
+      : m_evtype(type), m_value(value) {}
 
  public:
   DexEncodedValueTypes evtype() const { return m_evtype; }
@@ -412,7 +409,7 @@ class DexAnnotation : public Gatherable {
 
  public:
   DexAnnotation(DexType* type, DexAnnotationVisibility viz)
-      : Gatherable(), m_type(type), m_viz(viz) {}
+      : m_type(type), m_viz(viz) {}
 
   static DexAnnotation* get_annotation(DexIdx* idx, uint32_t anno_off);
   void gather_types(std::vector<DexType*>& ltype) const override;
@@ -436,7 +433,7 @@ class DexAnnotationSet : public Gatherable {
   std::vector<DexAnnotation*> m_annotations;
 
  public:
-  DexAnnotationSet() : Gatherable() {}
+  DexAnnotationSet() = default;
   DexAnnotationSet(const DexAnnotationSet& that) {
     for (const auto& anno : that.m_annotations) {
       m_annotations.push_back(new DexAnnotation(*anno));

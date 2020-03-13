@@ -1801,8 +1801,7 @@ class alignas(CACHE_LINE_SIZE) PeepholeOptimizer {
           m_stats_inserted - m_stats_removed);
     int num_patterns_matched = 0;
     for (size_t i = 0; i < m_matchers.size(); ++i) {
-      num_patterns_matched +=
-          m_mgr.get_metric(m_matchers[i].pattern.name.c_str());
+      num_patterns_matched += m_mgr.get_metric(m_matchers[i].pattern.name);
     }
     TRACE(PEEPHOLE, 1, "%lu patterns matched and replaced",
           num_patterns_matched);
@@ -1813,7 +1812,7 @@ class alignas(CACHE_LINE_SIZE) PeepholeOptimizer {
             5,
             "%s: %d",
             current_pattern_name.c_str(),
-            m_mgr.get_metric(current_pattern_name.c_str()));
+            m_mgr.get_metric(current_pattern_name));
     }
   }
 
@@ -1825,7 +1824,7 @@ class alignas(CACHE_LINE_SIZE) PeepholeOptimizer {
 
   void incr_all_metrics() {
     for (size_t i = 0; i < m_matchers.size(); i++) {
-      m_mgr.incr_metric(m_matchers[i].pattern.name.c_str(), m_stats[i]);
+      m_mgr.incr_metric(m_matchers[i].pattern.name, m_stats[i]);
     }
   }
 };

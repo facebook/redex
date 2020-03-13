@@ -63,8 +63,8 @@ TEST(StrcmpLessTest, Test8) {
 }
 
 TEST(StrcmpLessTest, Test9) {
-  std::string str1 = "";
-  std::string str2 = "";
+  std::string str1;
+  std::string str2;
   const int min_str_len = 1;
   const int max_str_len = 100;
   const int loop_iter = 10000;
@@ -87,8 +87,8 @@ TEST(StrcmpLessTest, Test9) {
 
 // str1 == str2
 TEST(StrcmpLessTest, Test10) {
-  std::string str1 = "";
-  std::string str2 = "";
+  std::string str1;
+  std::string str2;
   const int min_str_len = 1;
   const int max_str_len = 100;
   const int loop_iter = 10000;
@@ -107,8 +107,8 @@ TEST(StrcmpLessTest, Test10) {
 
 // str1 < str2
 TEST(StrcmpLessTest, Test11) {
-  std::string str1 = "";
-  std::string str2 = "";
+  std::string str1;
+  std::string str2;
   const int min_str_len = 1;
   const int max_str_len = 100;
   const int loop_iter = 10000;
@@ -131,8 +131,8 @@ TEST(StrcmpLessTest, Test11) {
 
 // str1 > str2
 TEST(StrcmpLessTest, Test12) {
-  std::string str1 = "";
-  std::string str2 = "";
+  std::string str1;
+  std::string str2;
   const int min_str_len = 1;
   const int max_str_len = 100;
   const int loop_iter = 10000;

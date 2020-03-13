@@ -297,7 +297,6 @@ int DexDebugItem::encode(
   encdata = write_uleb128(encdata, num_params);
   for (uint32_t i = 0; i < num_params; ++i) {
     encdata = write_uleb128p1(encdata, DEX_NO_INDEX);
-    continue;
   }
   for (auto& dbgop : dbgops) {
     dbgop->encode(dodx, encdata);

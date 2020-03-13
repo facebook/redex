@@ -31,17 +31,10 @@ class DexDebugInstruction : public Gatherable {
 
  public:
   explicit DexDebugInstruction(DexDebugItemOpcode op, uint32_t v = DEX_NO_INDEX)
-      : Gatherable() {
-    m_opcode = op;
-    m_uvalue = v;
-    m_signed = false;
-  }
+      : m_uvalue(v), m_signed(false), m_opcode(op) {}
 
-  DexDebugInstruction(DexDebugItemOpcode op, int32_t v) : Gatherable() {
-    m_opcode = op;
-    m_value = v;
-    m_signed = true;
-  }
+  DexDebugInstruction(DexDebugItemOpcode op, int32_t v)
+      : m_value(v), m_signed(true), m_opcode(op) {}
 
  public:
   virtual void encode(DexOutputIdx* dodx, uint8_t*& encdata);

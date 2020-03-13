@@ -109,11 +109,11 @@ struct ConfigFiles {
       m_inliner_config = std::make_unique<inliner::InlinerConfig>();
       load_inliner_config(m_inliner_config.get());
     }
-    return *m_inliner_config.get();
+    return *m_inliner_config;
   }
 
   boost::optional<std::string> get_android_sdk_api_file(int32_t api_level) {
-    std::string api_file = "";
+    std::string api_file;
     switch (api_level) {
     case 21:
       m_json.get("android_sdk_api_21_file", "", api_file);
@@ -146,7 +146,7 @@ struct ConfigFiles {
     }
 
     always_assert(min_sdk_api == m_min_sdk_api_level);
-    return *m_android_min_sdk_api.get();
+    return *m_android_min_sdk_api;
   }
 
   /**

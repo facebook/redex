@@ -880,7 +880,7 @@ class OptimizeEnums {
 
       if (!type && !m_pg_map.empty()) {
         const std::string& obfuscated_name =
-            m_pg_map.translate_class(class_name.c_str());
+            m_pg_map.translate_class(class_name);
 
         // Get type associated type from the obfuscated class name.
         if (!obfuscated_name.empty()) {

@@ -26,7 +26,7 @@ struct AnalysisImpl : SingleImplAnalysis {
   AnalysisImpl(const Scope& scope,
                const ProguardMap& pg_map,
                const DexStoresVector& stores)
-      : SingleImplAnalysis(), scope(scope), pg_map(pg_map), xstores(stores) {}
+      : scope(scope), pg_map(pg_map), xstores(stores) {}
 
   void create_single_impl(const TypeMap& single_impl,
                           const TypeSet& intfs,

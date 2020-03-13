@@ -19,7 +19,7 @@ struct MethodMergerTest : RedexTest {
   DexClass* m_cls;
   Scope scope;
 
-  MethodMergerTest() : RedexTest() {
+  MethodMergerTest() {
     ClassCreator cc(DexType::make_type("Lfoo;"));
     cc.set_super(type::java_lang_Object());
     m_cls = cc.create();

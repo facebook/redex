@@ -53,7 +53,7 @@ void test(const Scope& scope,
   auto code = assembler::ircode_from_string(code_str);
   auto expected = assembler::ircode_from_string(expected_str);
 
-  code.get()->build_cfg(/* editable */ true);
+  code->build_cfg(/* editable */ true);
   walk::code(scope, [&](DexMethod*, IRCode& code) {
     code.build_cfg(/* editable */ true);
   });
@@ -61,11 +61,11 @@ void test(const Scope& scope,
   auto pure_methods = get_pure_methods();
   cse_impl::SharedState shared_state(pure_methods);
   shared_state.init_scope(scope);
-  cse_impl::CommonSubexpressionElimination cse(&shared_state, code.get()->cfg(),
+  cse_impl::CommonSubexpressionElimination cse(&shared_state, code->cfg(),
                                                is_static, is_init_or_clinit,
                                                declaring_type, args);
   cse.patch(/* max_estimated_registers */ 300);
-  code.get()->clear_cfg();
+  code->clear_cfg();
   walk::code(scope, [&](DexMethod*, IRCode& code) { code.clear_cfg(); });
   auto stats = cse.get_stats();
 

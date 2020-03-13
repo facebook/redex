@@ -414,8 +414,6 @@ void max_mergeable_greedy(const JsonWrapper& specs,
     shape_merge_graph_file = outdir + "/" + shape_merge_graph_file;
     write_shape_graph(shape_merge_graph_file, merge_map, num_mergeables);
   }
-
-  return;
 }
 
 /**

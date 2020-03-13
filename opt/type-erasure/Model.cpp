@@ -1478,22 +1478,20 @@ Model Model::build_model(const Scope& scope,
 }
 
 void Model::update_redex_stats(PassManager& mgr) const {
-  mgr.incr_metric((m_spec.class_name_prefix + "_all_types").c_str(),
-                  m_metric.all_types);
-  mgr.incr_metric((m_spec.class_name_prefix + "_non_mergeables").c_str(),
+  mgr.incr_metric(m_spec.class_name_prefix + "_all_types", m_metric.all_types);
+  mgr.incr_metric(m_spec.class_name_prefix + "_non_mergeables",
                   m_metric.non_mergeables);
-  mgr.incr_metric((m_spec.class_name_prefix + "_excluded_types").c_str(),
+  mgr.incr_metric(m_spec.class_name_prefix + "_excluded_types",
                   m_metric.excluded);
-  mgr.incr_metric((m_spec.class_name_prefix + "_dropped_types").c_str(),
+  mgr.incr_metric(m_spec.class_name_prefix + "_dropped_types",
                   m_metric.dropped);
 
   if (!m_spec.approximate_shape_merging.isNull()) {
-    mgr.incr_metric(
-        (m_spec.class_name_prefix + "_approx_shapes_merged").c_str(),
-        m_approx_stats.shapes_merged);
-    mgr.incr_metric((m_spec.class_name_prefix + "_approx_mergeables").c_str(),
+    mgr.incr_metric(m_spec.class_name_prefix + "_approx_shapes_merged",
+                    m_approx_stats.shapes_merged);
+    mgr.incr_metric(m_spec.class_name_prefix + "_approx_mergeables",
                     m_approx_stats.mergeables);
-    mgr.incr_metric((m_spec.class_name_prefix + "_approx_fields_added").c_str(),
+    mgr.incr_metric(m_spec.class_name_prefix + "_approx_fields_added",
                     m_approx_stats.fields_added);
   }
 }
