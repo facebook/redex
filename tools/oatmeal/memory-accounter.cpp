@@ -46,7 +46,7 @@ class MemoryAccounterImpl : public MemoryAccounter {
   UNCOPYABLE(MemoryAccounterImpl);
   MOVABLE(MemoryAccounterImpl);
 
-  MemoryAccounterImpl(ConstBuffer buf) : buf_(buf) {
+  explicit MemoryAccounterImpl(ConstBuffer buf) : buf_(buf) {
     // mark end to avoid special case in print.
     consumed_ranges_.emplace_back(buf_.len, buf_.len);
   }
@@ -139,7 +139,9 @@ class MultiBufferMemoryAccounter : public MemoryAccounter {
   MOVABLE(MultiBufferMemoryAccounter);
   UNCOPYABLE(MultiBufferMemoryAccounter);
 
-  MultiBufferMemoryAccounter(ConstBuffer buf) { accounters_.emplace_back(buf); }
+  explicit MultiBufferMemoryAccounter(ConstBuffer buf) {
+    accounters_.emplace_back(buf);
+  }
 
   void print() override;
 

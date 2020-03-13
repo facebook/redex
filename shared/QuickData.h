@@ -44,7 +44,7 @@ class QuickData {
 
  public:
   // Read Mode
-  QuickData(const char* location);
+  explicit QuickData(const char* location);
 
   // Write Mode
   QuickData() = default;
