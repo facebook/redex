@@ -17,12 +17,12 @@
 
 namespace ir_meta_io {
 class IRMetaIO;
-}
+} // namespace ir_meta_io
 
 namespace keep_rules {
 namespace impl {
 class KeepState;
-}
+} // namespace impl
 } // namespace keep_rules
 
 class ReferencedState {

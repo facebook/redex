@@ -33,7 +33,7 @@ struct DontRenameReason {
 
 namespace rewriter {
 class TypeStringMap;
-}
+} // namespace rewriter
 
 class RenameClassesPassV2 : public Pass {
  public:

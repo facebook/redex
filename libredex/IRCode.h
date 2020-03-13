@@ -20,7 +20,7 @@
 
 namespace cfg {
 class ControlFlowGraph;
-}
+} // namespace cfg
 
 // TODO(jezng): IRCode currently contains too many methods that shouldn't
 // belong there... I'm going to move them out soon
