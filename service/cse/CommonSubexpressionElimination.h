@@ -9,6 +9,7 @@
 
 #include "ConcurrentContainers.h"
 #include "MethodOverrideGraph.h"
+#include "PatriciaTreeSet.h"
 #include "Purity.h"
 
 namespace cse_impl {
@@ -118,11 +119,13 @@ class CommonSubexpressionElimination {
   // earlier instruction can be forwarded to replace the result of another
   // (later) instruction.
   struct Forward {
-    const IRInstruction* earlier_insn;
+    // Index into m_earlier_insns
+    size_t earlier_insns_index;
     IRInstruction* insn;
   };
   std::vector<Forward> m_forward;
-  std::unordered_set<const IRInstruction*> m_earlier_insns;
+  // List of unique sets of earlier instructions to be forwarded
+  std::vector<sparta::PatriciaTreeSet<const IRInstruction*>> m_earlier_insns;
   SharedState* m_shared_state;
   cfg::ControlFlowGraph& m_cfg;
   Stats m_stats;

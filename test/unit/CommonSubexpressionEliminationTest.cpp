@@ -1644,3 +1644,60 @@ TEST_F(CommonSubexpressionEliminationTest, untracked_final_field_outside_init) {
   test(Scope{type_class(type::java_lang_Object()), type_class(declaring_type)},
        code_str, expected_str, 1, is_static, is_init_or_clinit, declaring_type);
 }
+
+TEST_F(CommonSubexpressionEliminationTest, phi_node) {
+  auto code_str = R"(
+    (
+      (load-param v0)
+      (const v1 1)
+      (const v2 2)
+      (if-eqz v0 :L1)
+      (add-int v3 v1 v2)
+      (:L2)
+      (add-int v5 v1 v2)
+      (return v5)
+      (:L1)
+      (add-int v4 v1 v2)
+      (goto :L2)
+    )
+  )";
+  auto expected_str = R"(
+    (
+      (load-param v0)
+      (const v1 1)
+      (const v2 2)
+      (if-eqz v0 :L1)
+      (add-int v3 v1 v2)
+      (move v6 v3)
+      (:L2)
+      (add-int v5 v1 v2)
+      (move v5 v6)
+      (return v5)
+      (:L1)
+      (add-int v4 v1 v2)
+      (move v6 v4)
+      (goto :L2)
+    )
+  )";
+  test(Scope{type_class(type::java_lang_Object())}, code_str, expected_str, 1);
+}
+
+TEST_F(CommonSubexpressionEliminationTest, no_phi_node) {
+  auto code_str = R"(
+    (
+      (load-param v0)
+      (const v1 1)
+      (const v2 2)
+      (if-eqz v0 :L1)
+      (add-int v3 v1 v2)
+      (:L2)
+      (add-int v5 v1 v2)
+      (return v5)
+      (:L1)
+      (sub-int v4 v1 v2)
+      (goto :L2)
+    )
+  )";
+  auto expected_str = code_str;
+  test(Scope{type_class(type::java_lang_Object())}, code_str, expected_str, 0);
+}

@@ -47,12 +47,6 @@
  *   register as it was *before* the instruction). This recovers the tracking
  *   of merged or havoced registers, in a way that's similar to phi-nodes, but
  *   lazy.
- *
- * Future work:
- * - Implement proper phi-nodes, tracking merged values as early as possible,
- *   instead of just tracking on first use after value went to 'top'. Not sure
- *   if there are tangible benefits.
- *
  */
 
 #include "CommonSubexpressionElimination.h"
@@ -66,6 +60,7 @@
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
+#include "PatriciaTreeSetAbstractDomain.h"
 #include "ReducedProductAbstractDomain.h"
 #include "Resolver.h"
 #include "TypeInference.h"
@@ -157,11 +152,12 @@ bool operator==(const IRValue& a, const IRValue& b) {
   return a.opcode == b.opcode && a.srcs == b.srcs && a.literal == b.literal;
 }
 
-using IRInstructionDomain =
-    sparta::ConstantAbstractDomain<const IRInstruction*>;
+using IRInstructionsDomain =
+    sparta::PatriciaTreeSetAbstractDomain<const IRInstruction*>;
 using ValueIdDomain = sparta::ConstantAbstractDomain<value_id_t>;
 using DefEnvironment =
-    sparta::PatriciaTreeMapAbstractEnvironment<value_id_t, IRInstructionDomain>;
+    sparta::PatriciaTreeMapAbstractEnvironment<value_id_t,
+                                               IRInstructionsDomain>;
 using RefEnvironment =
     sparta::PatriciaTreeMapAbstractEnvironment<reg_t, ValueIdDomain>;
 
@@ -264,7 +260,7 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
     // Collect all read locations
     std::unordered_map<CseLocation, size_t, CseLocationHasher>
         read_location_counts;
-    for (auto& mie : cfg::InstructionIterable(cfg)) {
+    for (const auto& mie : cfg::InstructionIterable(cfg)) {
       auto insn = mie.insn;
       auto location = get_read_location(insn);
       if (location !=
@@ -309,7 +305,7 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
     // Collect all relevant written locations
     std::unordered_map<CseLocation, size_t, CseLocationHasher>
         written_location_counts;
-    for (auto& mie : cfg::InstructionIterable(cfg)) {
+    for (const auto& mie : cfg::InstructionIterable(cfg)) {
       auto locations = shared_state->get_relevant_written_locations(
           mie.insn, nullptr /* exact_virtual_scope */, m_read_locations);
       if (!locations.count(
@@ -322,7 +318,7 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
 
     // Check which locations get written and read (vs. just written)
     std::vector<CseLocation> read_and_written_locations;
-    for (auto& p : written_location_counts) {
+    for (const auto& p : written_location_counts) {
       always_assert(p.first !=
                     CseLocation(CseSpecialLocations::GENERAL_MEMORY_BARRIER));
       if (read_location_counts.count(p.first)) {
@@ -334,7 +330,7 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
     }
 
     // Also keep track of locations that get read but not written
-    for (auto& p : read_location_counts) {
+    for (const auto& p : read_location_counts) {
       if (!written_location_counts.count(p.first)) {
         always_assert(!m_tracked_locations.count(p.first));
         m_tracked_locations.emplace(
@@ -437,9 +433,9 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
         auto c = domain.get_constant();
         if (c) {
           auto value_id = *c;
-          if (!current_state->get_def_env().get(value_id).get_constant()) {
+          if (current_state->get_def_env().get(value_id).is_top()) {
             current_state->mutate_def_env([&](DefEnvironment* env) {
-              env->set(value_id, IRInstructionDomain(insn));
+              env->set(value_id, IRInstructionsDomain(insn));
             });
           }
         }
@@ -510,9 +506,8 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
                           const IRValue& value,
                           CseEnvironment* current_state) const {
     auto value_id = *get_value_id(value);
-    auto insn_domain = IRInstructionDomain(insn);
-    current_state->mutate_def_env([value_id, insn_domain](DefEnvironment* env) {
-      env->set(value_id, insn_domain);
+    current_state->mutate_def_env([value_id, insn](DefEnvironment* env) {
+      env->set(value_id, IRInstructionsDomain(insn));
     });
   }
 
@@ -655,7 +650,7 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
     }
     if (!new_pre_state_src_values.empty()) {
       current_state->mutate_ref_env([&](RefEnvironment* env) {
-        for (auto& p : new_pre_state_src_values) {
+        for (const auto& p : new_pre_state_src_values) {
           env->set(p.first, ValueIdDomain(p.second));
         }
       });
@@ -935,7 +930,7 @@ void SharedState::init_method_barriers(const Scope& scope) {
           return lads;
         }
         auto code = method->get_code();
-        for (auto& mie : cfg::InstructionIterable(code->cfg())) {
+        for (const auto& mie : cfg::InstructionIterable(code->cfg())) {
           auto* insn = mie.insn;
           if (may_be_barrier(insn, nullptr /* exact_virtual_scope */)) {
             auto barrier = make_barrier(insn);
@@ -975,7 +970,7 @@ void SharedState::init_method_barriers(const Scope& scope) {
   m_stats.method_barriers_iterations = iterations;
   m_stats.method_barriers = m_method_written_locations.size();
 
-  for (auto& p : m_method_written_locations) {
+  for (const auto& p : m_method_written_locations) {
     auto method = p.first;
     auto& written_locations = p.second;
     TRACE(CSE, 4, "[CSE] inferred barrier for %s: %s", SHOW(method),
@@ -992,7 +987,7 @@ void SharedState::init_scope(const Scope& scope) {
       &m_conditionally_pure_methods);
   m_stats.conditionally_pure_methods = m_conditionally_pure_methods.size();
   m_stats.conditionally_pure_methods_iterations = iterations;
-  for (auto& p : m_conditionally_pure_methods) {
+  for (const auto& p : m_conditionally_pure_methods) {
     m_pure_methods.insert(const_cast<DexMethod*>(p.first));
   }
 
@@ -1184,7 +1179,7 @@ void SharedState::cleanup() {
          const std::pair<Barrier, size_t>& b) { return b.second < a.second; });
 
   TRACE(CSE, 2, "most common barriers:");
-  for (auto& p : ordered_barriers) {
+  for (const auto& p : ordered_barriers) {
     auto& b = p.first;
     auto c = p.second;
     if (is_invoke(b.opcode)) {
@@ -1216,6 +1211,34 @@ CommonSubexpressionElimination::CommonSubexpressionElimination(
     m_stats.methods_using_other_tracked_location_bit = 1;
   }
 
+  // We need some helper state/functions to build the list m_earlier_insns
+  // of unique earlier-instruction sets. To make that deterministic, we use
+  // instruction ids that represent the position of an instruction in the cfg.
+  std::unordered_map<const IRInstruction*, size_t> insn_ids;
+  for (const auto& mie : InstructionIterable(cfg)) {
+    insn_ids.emplace(mie.insn, insn_ids.size());
+  }
+  std::unordered_map<std::vector<size_t>, size_t,
+                     boost::hash<std::vector<size_t>>>
+      insns_ids;
+  auto get_earlier_insns_index =
+      [&](const PatriciaTreeSet<const IRInstruction*>& insns) {
+        std::vector<size_t> ordered_ids;
+        for (auto insn : insns) {
+          ordered_ids.push_back(insn_ids.at(insn));
+        }
+        std::sort(ordered_ids.begin(), ordered_ids.end());
+        auto it = insns_ids.find(ordered_ids);
+        if (it != insns_ids.end()) {
+          return it->second;
+        }
+        auto index = insns_ids.size();
+        always_assert(m_earlier_insns.size() == index);
+        insns_ids.emplace(ordered_ids, index);
+        m_earlier_insns.push_back(insns);
+        return index;
+      };
+
   // identify all instruction pairs where the result of the first instruction
   // can be forwarded to the second
 
@@ -1224,7 +1247,7 @@ CommonSubexpressionElimination::CommonSubexpressionElimination(
     if (env.is_bottom()) {
       continue;
     }
-    for (auto& mie : InstructionIterable(block)) {
+    for (const auto& mie : InstructionIterable(block)) {
       IRInstruction* insn = mie.insn;
       analyzer.analyze_instruction(insn, &env);
       auto opcode = insn->opcode();
@@ -1237,28 +1260,34 @@ CommonSubexpressionElimination::CommonSubexpressionElimination(
       }
       auto value_id = *ref_c;
       always_assert(!analyzer.is_pre_state_src(value_id));
-      auto def_c = env.get_def_env().get(value_id).get_constant();
-      if (!def_c) {
+      auto defs = env.get_def_env().get(value_id);
+      always_assert(!defs.is_top() && !defs.is_bottom());
+      auto earlier_insns = defs.elements();
+      if (earlier_insns.contains(insn)) {
         continue;
       }
-      const IRInstruction* earlier_insn = *def_c;
-      if (earlier_insn == insn) {
-        continue;
+      bool skip{false};
+      for (auto earlier_insn : earlier_insns) {
+        auto earlier_opcode = earlier_insn->opcode();
+        if (opcode::is_load_param(earlier_opcode)) {
+          skip = true;
+          break;
+        }
+        if (opcode::is_cmp(opcode) || opcode::is_cmp(earlier_opcode)) {
+          // See T46241704. We never de-duplicate cmp instructions due to an
+          // apparent bug in various Dalvik (and ART?) versions. Also see this
+          // documentation in the r8 source code:
+          // https://r8.googlesource.com/r8/+/2638db4d3465d785a6a740cf09969cab96099cff/src/main/java/com/android/tools/r8/utils/InternalOptions.java#604
+          skip = true;
+          break;
+        }
       }
-      auto earlier_opcode = earlier_insn->opcode();
-      if (opcode::is_load_param(earlier_opcode)) {
-        continue;
-      }
-      if (opcode::is_cmp(opcode) || opcode::is_cmp(earlier_opcode)) {
-        // See T46241704. We never de-duplicate cmp instructions due to an
-        // apparent bug in various Dalvik (and ART?) versions. Also see this
-        // documentation in the r8 source code:
-        // https://r8.googlesource.com/r8/+/2638db4d3465d785a6a740cf09969cab96099cff/src/main/java/com/android/tools/r8/utils/InternalOptions.java#604
+      if (skip) {
         continue;
       }
 
-      m_forward.emplace_back((Forward){earlier_insn, insn});
-      m_earlier_insns.insert(earlier_insn);
+      auto earlier_insns_index = get_earlier_insns_index(earlier_insns);
+      m_forward.push_back({earlier_insns_index, insn});
     }
   }
 }
@@ -1292,13 +1321,13 @@ bool CommonSubexpressionElimination::patch(unsigned int max_estimated_registers,
   }
 
   unsigned int max_dest = 0;
-  for (auto& mie : cfg::InstructionIterable(m_cfg)) {
+  for (const auto& mie : cfg::InstructionIterable(m_cfg)) {
     if (mie.insn->has_dest() && mie.insn->dest() > max_dest) {
       max_dest = mie.insn->dest();
     }
   };
-  for (auto earlier_insn : m_earlier_insns) {
-    IROpcode move_opcode = get_move_opcode(earlier_insn);
+  for (const auto& earlier_insns : m_earlier_insns) {
+    IROpcode move_opcode = get_move_opcode(*earlier_insns.begin());
     max_dest += (move_opcode == OPCODE_MOVE_WIDE) ? 2 : 1;
   }
   if (max_dest > max_estimated_registers) {
@@ -1310,30 +1339,38 @@ bool CommonSubexpressionElimination::patch(unsigned int max_estimated_registers,
 
   // gather relevant instructions, and allocate temp registers
 
-  std::unordered_map<const IRInstruction*, std::pair<IROpcode, reg_t>> temps;
-  std::unordered_set<const IRInstruction*> insns;
-  for (auto& f : m_forward) {
-    const IRInstruction* earlier_insn = f.earlier_insn;
-    if (!temps.count(earlier_insn)) {
-      IROpcode move_opcode = get_move_opcode(earlier_insn);
-      if (earlier_insn->has_dest()) {
-        m_stats.results_captured++;
-      } else if (earlier_insn->opcode() == OPCODE_NEW_ARRAY) {
-        m_stats.array_lengths_captured++;
-      } else {
-        always_assert(is_aput(earlier_insn->opcode()) ||
-                      is_iput(earlier_insn->opcode()) ||
-                      is_sput(earlier_insn->opcode()));
-        m_stats.stores_captured++;
-      }
-      reg_t temp_reg = move_opcode == OPCODE_MOVE_WIDE
-                           ? m_cfg.allocate_wide_temp()
-                           : m_cfg.allocate_temp();
-      temps.emplace(earlier_insn, std::make_pair(move_opcode, temp_reg));
-      insns.insert(earlier_insn);
+  // We'll allocate one temp per "earlier_insns_index".
+  // TODO: Do better, use less. A subset and its superset can share a temp.
+  std::unordered_map<size_t, std::pair<IROpcode, reg_t>> temps;
+  // We also remember for which instructions we'll need an iterator, as we'll
+  // want to insert something after them.
+  std::unordered_set<const IRInstruction*> iterator_insns;
+  std::unordered_set<const IRInstruction*> combined_earlier_insns;
+  for (const auto& f : m_forward) {
+    iterator_insns.insert(f.insn);
+    if (temps.count(f.earlier_insns_index)) {
+      continue;
     }
-
-    insns.insert(f.insn);
+    auto& earlier_insns = m_earlier_insns.at(f.earlier_insns_index);
+    combined_earlier_insns.insert(earlier_insns.begin(), earlier_insns.end());
+    IROpcode move_opcode = get_move_opcode(*earlier_insns.begin());
+    reg_t temp_reg = move_opcode == OPCODE_MOVE_WIDE
+                         ? m_cfg.allocate_wide_temp()
+                         : m_cfg.allocate_temp();
+    temps.emplace(f.earlier_insns_index, std::make_pair(move_opcode, temp_reg));
+  }
+  for (auto earlier_insn : combined_earlier_insns) {
+    iterator_insns.insert(earlier_insn);
+    if (earlier_insn->has_dest()) {
+      m_stats.results_captured++;
+    } else if (earlier_insn->opcode() == OPCODE_NEW_ARRAY) {
+      m_stats.array_lengths_captured++;
+    } else {
+      always_assert(is_aput(earlier_insn->opcode()) ||
+                    is_iput(earlier_insn->opcode()) ||
+                    is_sput(earlier_insn->opcode()));
+      m_stats.stores_captured++;
+    }
   }
 
   // find all iterators in one sweep
@@ -1342,7 +1379,7 @@ bool CommonSubexpressionElimination::patch(unsigned int max_estimated_registers,
   auto iterable = cfg::InstructionIterable(m_cfg);
   for (auto it = iterable.begin(); it != iterable.end(); ++it) {
     auto* insn = it->insn;
-    if (insns.count(insn)) {
+    if (iterator_insns.count(insn)) {
       iterators.emplace(insn, it);
     }
   }
@@ -1350,9 +1387,9 @@ bool CommonSubexpressionElimination::patch(unsigned int max_estimated_registers,
   // insert moves to use the forwarded value
 
   std::vector<std::pair<Forward, IRInstruction*>> to_check;
-  for (auto& f : m_forward) {
-    const IRInstruction* earlier_insn = f.earlier_insn;
-    auto& q = temps.at(earlier_insn);
+  for (const auto& f : m_forward) {
+    auto& earlier_insns = m_earlier_insns.at(f.earlier_insns_index);
+    auto& q = temps.at(f.earlier_insns_index);
     IROpcode move_opcode = q.first;
     reg_t temp_reg = q.second;
     IRInstruction* insn = f.insn;
@@ -1365,8 +1402,10 @@ bool CommonSubexpressionElimination::patch(unsigned int max_estimated_registers,
       to_check.emplace_back(f, move_insn);
     }
 
-    TRACE(CSE, 4, "[CSE] forwarding %s to %s via v%u", SHOW(earlier_insn),
-          SHOW(insn), temp_reg);
+    for (auto earlier_insn : earlier_insns) {
+      TRACE(CSE, 4, "[CSE] forwarding %s to %s via v%u", SHOW(earlier_insn),
+            SHOW(insn), temp_reg);
+    }
 
     if (opcode::is_move_result_any(insn->opcode())) {
       insn = m_cfg.primary_instruction_of_move_result(it)->insn;
@@ -1380,23 +1419,25 @@ bool CommonSubexpressionElimination::patch(unsigned int max_estimated_registers,
 
   // insert moves to define the forwarded value
 
-  for (auto& r : temps) {
-    const IRInstruction* earlier_insn = r.first;
+  for (const auto& r : temps) {
+    size_t earlier_insns_index = r.first;
     IROpcode move_opcode = r.second.first;
     reg_t temp_reg = r.second.second;
-
-    auto& it = iterators.at(const_cast<IRInstruction*>(earlier_insn));
-    IRInstruction* move_insn = new IRInstruction(move_opcode);
-    auto src_reg =
-        earlier_insn->has_dest() ? earlier_insn->dest() : earlier_insn->src(0);
-    move_insn->set_src(0, src_reg)->set_dest(temp_reg);
-    if (earlier_insn->opcode() == OPCODE_NEW_ARRAY) {
-      // we need to capture the array-length register of a new-array instruction
-      // *before* the instruction, as the dest of the instruction may overwrite
-      // the incoming array length value
-      m_cfg.insert_before(it, move_insn);
-    } else {
-      m_cfg.insert_after(it, move_insn);
+    auto& earlier_insns = m_earlier_insns.at(earlier_insns_index);
+    for (auto earlier_insn : earlier_insns) {
+      auto& it = iterators.at(const_cast<IRInstruction*>(earlier_insn));
+      IRInstruction* move_insn = new IRInstruction(move_opcode);
+      auto src_reg = earlier_insn->has_dest() ? earlier_insn->dest()
+                                              : earlier_insn->src(0);
+      move_insn->set_src(0, src_reg)->set_dest(temp_reg);
+      if (earlier_insn->opcode() == OPCODE_NEW_ARRAY) {
+        // we need to capture the array-length register of a new-array
+        // instruction *before* the instruction, as the dest of the instruction
+        // may overwrite the incoming array length value
+        m_cfg.insert_before(it, move_insn);
+      } else {
+        m_cfg.insert_after(it, move_insn);
+      }
     }
   }
 
@@ -1458,70 +1499,73 @@ void CommonSubexpressionElimination::insert_runtime_assertions(
   type_inference.run(m_is_static, m_declaring_type, m_args);
   auto& type_environments = type_inference.get_type_environments();
 
-  for (auto& p : to_check) {
+  for (const auto& p : to_check) {
     auto& f = p.first;
-    const IRInstruction* earlier_insn = f.earlier_insn;
-    IRInstruction* insn = f.insn;
-    auto move_insn = p.second;
+    auto& earlier_insns = m_earlier_insns.at(f.earlier_insns_index);
+    for (auto earlier_insn : earlier_insns) {
+      IRInstruction* insn = f.insn;
+      auto move_insn = p.second;
 
-    auto& type_environment = type_environments.at(insn);
-    auto temp = move_insn->src(0);
-    auto type = type_environment.get_type(temp);
-    always_assert(!type.is_top());
-    always_assert(!type.is_bottom());
-    TRACE(CSE, 6, "[CSE] to check: %s => %s - r%u: %s", SHOW(earlier_insn),
-          SHOW(insn), temp, SHOW(type.element()));
-    always_assert(type.element() != CONST2);
-    always_assert(type.element() != LONG2);
-    always_assert(type.element() != DOUBLE2);
-    always_assert(type.element() != SCALAR2);
-    if (type.element() != ZERO && type.element() != CONST &&
-        type.element() != INT && type.element() != REFERENCE &&
-        type.element() != LONG1) {
-      // TODO: Handle floats and doubles via Float.floatToIntBits and
-      // Double.doubleToLongBits to deal with NaN.
-      // TODO: Improve TypeInference so that we never have to deal with
-      // SCALAR* values where we don't know if it's a int/float or long/double.
-      continue;
-    }
+      auto& type_environment = type_environments.at(insn);
+      auto temp = move_insn->src(0);
+      auto type = type_environment.get_type(temp);
+      always_assert(!type.is_top());
+      always_assert(!type.is_bottom());
+      TRACE(CSE, 6, "[CSE] to check: %s => %s - r%u: %s", SHOW(earlier_insn),
+            SHOW(insn), temp, SHOW(type.element()));
+      always_assert(type.element() != CONST2);
+      always_assert(type.element() != LONG2);
+      always_assert(type.element() != DOUBLE2);
+      always_assert(type.element() != SCALAR2);
+      if (type.element() != ZERO && type.element() != CONST &&
+          type.element() != INT && type.element() != REFERENCE &&
+          type.element() != LONG1) {
+        // TODO: Handle floats and doubles via Float.floatToIntBits and
+        // Double.doubleToLongBits to deal with NaN.
+        // TODO: Improve TypeInference so that we never have to deal with
+        // SCALAR* values where we don't know if it's a int/float or
+        // long/double.
+        continue;
+      }
 
-    auto it = m_cfg.find_insn(insn);
-    auto old_block = it.block();
-    auto new_block = m_cfg.split_block(it);
-    outgoing_throws.emplace(new_block, outgoing_throws.at(old_block));
+      auto it = m_cfg.find_insn(insn);
+      auto old_block = it.block();
+      auto new_block = m_cfg.split_block(it);
+      outgoing_throws.emplace(new_block, outgoing_throws.at(old_block));
 
-    auto throw_block = m_cfg.create_block();
-    auto null_reg = m_cfg.allocate_temp();
-    IRInstruction* const_insn = new IRInstruction(OPCODE_CONST);
-    const_insn->set_literal(0);
-    const_insn->set_dest(null_reg);
-    throw_block->push_back(const_insn);
-    IRInstruction* throw_insn = new IRInstruction(OPCODE_THROW);
-    throw_insn->set_src(0, null_reg);
-    throw_block->push_back(throw_insn);
+      auto throw_block = m_cfg.create_block();
+      auto null_reg = m_cfg.allocate_temp();
+      IRInstruction* const_insn = new IRInstruction(OPCODE_CONST);
+      const_insn->set_literal(0);
+      const_insn->set_dest(null_reg);
+      throw_block->push_back(const_insn);
+      IRInstruction* throw_insn = new IRInstruction(OPCODE_THROW);
+      throw_insn->set_src(0, null_reg);
+      throw_block->push_back(throw_insn);
 
-    for (auto e : outgoing_throws.at(old_block)) {
-      auto throw_info = e->throw_info();
-      m_cfg.add_edge(throw_block, e->target(), throw_info->catch_type,
-                     throw_info->index);
-    }
+      for (auto e : outgoing_throws.at(old_block)) {
+        auto throw_info = e->throw_info();
+        m_cfg.add_edge(throw_block, e->target(), throw_info->catch_type,
+                       throw_info->index);
+      }
 
-    if (type.element() == LONG1) {
-      auto cmp_reg = m_cfg.allocate_temp();
-      IRInstruction* cmp_insn = new IRInstruction(OPCODE_CMP_LONG);
-      cmp_insn->set_dest(cmp_reg);
-      cmp_insn->set_src(0, move_insn->dest());
-      cmp_insn->set_src(1, move_insn->src(0));
-      old_block->push_back(cmp_insn);
+      if (type.element() == LONG1) {
+        auto cmp_reg = m_cfg.allocate_temp();
+        IRInstruction* cmp_insn = new IRInstruction(OPCODE_CMP_LONG);
+        cmp_insn->set_dest(cmp_reg);
+        cmp_insn->set_src(0, move_insn->dest());
+        cmp_insn->set_src(1, move_insn->src(0));
+        old_block->push_back(cmp_insn);
 
-      IRInstruction* if_insn = new IRInstruction(OPCODE_IF_NEZ);
-      if_insn->set_src(0, cmp_reg);
-      m_cfg.create_branch(old_block, if_insn, new_block, throw_block);
-    } else {
-      IRInstruction* if_insn = new IRInstruction(OPCODE_IF_NE);
-      if_insn->set_src(0, move_insn->dest());
-      if_insn->set_src(1, move_insn->src(0));
-      m_cfg.create_branch(old_block, if_insn, new_block, throw_block);
+        IRInstruction* if_insn = new IRInstruction(OPCODE_IF_NEZ);
+        if_insn->set_src(0, cmp_reg);
+        m_cfg.create_branch(old_block, if_insn, new_block, throw_block);
+      } else {
+        IRInstruction* if_insn = new IRInstruction(OPCODE_IF_NE);
+        if_insn->set_src(0, move_insn->dest());
+        if_insn->set_src(1, move_insn->src(0));
+        m_cfg.create_branch(old_block, if_insn, new_block, throw_block);
+      }
     }
   }
 }
@@ -1534,7 +1578,7 @@ Stats& Stats::operator+=(const Stats& that) {
   max_value_ids = std::max(max_value_ids, that.max_value_ids);
   methods_using_other_tracked_location_bit +=
       that.methods_using_other_tracked_location_bit;
-  for (auto& p : that.eliminated_opcodes) {
+  for (const auto& p : that.eliminated_opcodes) {
     eliminated_opcodes[p.first] += p.second;
   }
   skipped_due_to_too_many_registers += that.skipped_due_to_too_many_registers;
