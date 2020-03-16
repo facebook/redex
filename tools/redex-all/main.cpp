@@ -32,6 +32,7 @@
 #include <boost/program_options.hpp>
 #include <json/json.h>
 
+#include "ABExperimentContext.h"
 #include "CommentFilter.h"
 #include "Debug.h"
 #include "DexClass.h"
@@ -1091,6 +1092,11 @@ int main(int argc, char* argv[]) {
     auto const& passes = PassRegistry::get().get_passes();
     PassManager manager(passes, std::move(pg_config), args.config,
                         args.redex_options);
+
+    if (manager.get_redex_options().is_art_build) {
+      ab_test::ABExperimentContext::force_preferred_mode();
+    }
+
     {
       Timer t("Running optimization passes");
       manager.run_passes(stores, conf);
