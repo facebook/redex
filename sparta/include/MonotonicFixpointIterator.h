@@ -358,7 +358,6 @@ class ParallelMonotonicFixpointIterator
   using EdgeId = typename GraphInterface::EdgeId;
   using Context =
       fp_impl::MonotonicFixpointIteratorContext<NodeId, Domain, NodeHash>;
-  using WPOWorkQueue = SpartaWorkQueue<uint32_t>;
   using WPOWorkerState = SpartaWorkerState<uint32_t>;
 
   ParallelMonotonicFixpointIterator(
@@ -419,7 +418,7 @@ class ParallelMonotonicFixpointIterator
     auto entry_idx = m_wpo.get_entry();
     assert(m_wpo.get_num_preds(entry_idx) == 0);
     // Prepare work queue.
-    WPOWorkQueue wq(
+    auto wq = sparta::work_queue<uint32_t>(
         [&context, &entry_idx, this](WPOWorkerState* worker_state,
                                      uint32_t wpo_idx) {
           std::atomic<uint32_t>& current_counter =

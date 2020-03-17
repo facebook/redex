@@ -19,7 +19,7 @@ constexpr unsigned int NUM_INTS = 1000;
 //==========
 
 TEST(SpartaWorkQueueTest, EmptyQueue) {
-  auto wq = sparta::WorkQueue_foreach<std::string>(
+  auto wq = sparta::work_queue<std::string>(
       [](std::string /* unused */) { return 0; });
   wq.run_all();
 }
@@ -27,7 +27,7 @@ TEST(SpartaWorkQueueTest, EmptyQueue) {
 TEST(SpartaWorkQueueTest, foreachTest) {
   std::array<int, NUM_INTS> array = {0};
 
-  auto wq = sparta::WorkQueue_foreach<int*>([](int* a) { (*a)++; });
+  auto wq = sparta::work_queue<int*>([](int* a) { (*a)++; });
 
   for (int idx = 0; idx < NUM_INTS; ++idx) {
     wq.add_item(&array[idx]);
@@ -41,7 +41,7 @@ TEST(SpartaWorkQueueTest, foreachTest) {
 TEST(SpartaWorkQueueTest, singleThreadTest) {
   std::array<int, NUM_INTS> array = {0};
 
-  auto wq = sparta::WorkQueue_foreach<int*>([](int* a) { (*a)++; }, 1);
+  auto wq = sparta::work_queue<int*>([](int* a) { (*a)++; }, 1);
 
   for (int idx = 0; idx < NUM_INTS; ++idx) {
     wq.add_item(&array[idx]);
@@ -55,7 +55,7 @@ TEST(SpartaWorkQueueTest, singleThreadTest) {
 TEST(SpartaWorkQueueTest, startFromOneTest) {
   std::array<int, NUM_INTS> array = {0};
 
-  auto wq = sparta::WorkQueue_foreach<int*>([](int* a) { (*a)++; }, 1);
+  auto wq = sparta::work_queue<int*>([](int* a) { (*a)++; }, 1);
 
   for (int idx = 0; idx < NUM_INTS; ++idx) {
     wq.add_item(&array[idx]);
@@ -70,7 +70,7 @@ TEST(SpartaWorkQueueTest, startFromOneTest) {
 TEST(SpartaWorkQueueTest, checkDynamicallyAddingTasks) {
   constexpr size_t num_threads{3};
   std::atomic<int> result{0};
-  sparta::SpartaWorkQueue<int> wq(
+  auto wq = sparta::work_queue<int>(
       [&](sparta::SpartaWorkerState<int>* worker_state, int a) {
         if (a > 0) {
           worker_state->push_task(a - 1);
