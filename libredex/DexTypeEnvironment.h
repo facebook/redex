@@ -13,6 +13,7 @@
 
 #include "AbstractDomain.h"
 #include "DexUtil.h"
+#include "FiniteAbstractDomain.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "ReducedProductAbstractDomain.h"
 
@@ -33,11 +34,28 @@ class DexTypeValue final : public sparta::AbstractValue<DexTypeValue> {
 
   explicit DexTypeValue(const DexType* dex_type) : m_dex_type(dex_type) {}
 
-  void clear() override {}
+  void clear() override { m_dex_type = nullptr; }
 
   sparta::AbstractValueKind kind() const override {
     return sparta::AbstractValueKind::Value;
   }
+
+  /*
+   * None means there's no type value. It can be used to denote a null in Java
+   * or the type of an uninitialized Java field. It is conceptually similar to
+   * Bottom but not an actual Bottom in an AbstractDomain.
+   *
+   * The reason we need this special case is because in Sparta, we cannot assign
+   * a Bottom to an Environment or a ReduceProductAbstractDomain. Doing so will
+   * mark the entire thing as Bottom. A Bottom environment or domain carries a
+   * different meaning in the analysis. Therefore, we need something that is not
+   * a Bottom to denote an empty or uninitialized DexType value.
+   *
+   * It is not necessarily the case in a different DexTypeDomain implementation.
+   * If we as an alternative model the DexTypeDomain as a set of DexTypes, we
+   * can use an empty set to denote a none.
+   */
+  bool is_none() const { return m_dex_type == nullptr; }
 
   bool leq(const DexTypeValue& other) const override { return equals(other); }
 
@@ -55,6 +73,7 @@ class DexTypeValue final : public sparta::AbstractValue<DexTypeValue> {
     if (equals(other)) {
       return sparta::AbstractValueKind::Value;
     }
+    clear();
     return sparta::AbstractValueKind::Bottom;
   }
 
@@ -68,8 +87,46 @@ class DexTypeValue final : public sparta::AbstractValue<DexTypeValue> {
   const DexType* m_dex_type;
 };
 
+enum Nullness {
+  BOTTOM,
+  IS_NULL,
+  NOT_NULL,
+  TOP // Nullable
+};
+
+using NullnessLattice = sparta::BitVectorLattice<Nullness, 4, std::hash<int>>;
+
+/*
+ *         TOP (Nullable)
+ *        /      \
+ *      NULL    NOT_NULL
+ *        \      /
+ *         BOTTOM
+ */
+extern NullnessLattice lattice;
+
 } // namespace dtv_impl
 
+/*
+ * Nullness domain
+ *
+ * We can use the nullness domain to track the nullness of a given reference
+ * type value.
+ */
+using NullnessDomain =
+    sparta::FiniteAbstractDomain<dtv_impl::Nullness,
+                                 dtv_impl::NullnessLattice,
+                                 dtv_impl::NullnessLattice::Encoding,
+                                 &dtv_impl::lattice>;
+
+std::ostream& operator<<(std::ostream& output,
+                         const dtv_impl::Nullness& nullness);
+
+/*
+ *
+ * DexType domain
+ *
+ */
 class DexTypeDomain final
     : public sparta::AbstractDomainScaffolding<dtv_impl::DexTypeValue,
                                                DexTypeDomain> {
@@ -99,6 +156,13 @@ class DexTypeDomain final
     return DexTypeDomain(sparta::AbstractValueKind::Top);
   }
 
+  static DexTypeDomain none() { return DexTypeDomain(nullptr); }
+
+  bool is_none() {
+    return this->kind() == sparta::AbstractValueKind::Value &&
+           this->get_value()->is_none();
+  }
+
   friend std::ostream& operator<<(std::ostream& out, const DexTypeDomain& x) {
     using namespace sparta;
     switch (x.kind()) {
@@ -121,6 +185,49 @@ class DexTypeDomain final
 };
 
 std::ostream& operator<<(std::ostream& output, const DexType* dex_type);
+
+/*
+ *
+ * NullnessDomain X DexTypeDomain
+ *
+ */
+class NullableDexTypeDomain
+    : public sparta::ReducedProductAbstractDomain<NullableDexTypeDomain,
+                                                  NullnessDomain,
+                                                  DexTypeDomain> {
+ public:
+  using ReducedProductAbstractDomain::ReducedProductAbstractDomain;
+
+  // Some older compilers complain that the class is not default constructible.
+  // We intended to use the default constructors of the base class (via the
+  // `using` declaration above), but some compilers fail to catch this. So we
+  // insert a redundant '= default'.
+  NullableDexTypeDomain() = default;
+
+  explicit NullableDexTypeDomain(const DexType* dex_type)
+      : ReducedProductAbstractDomain(std::make_tuple(
+            NullnessDomain(dtv_impl::NOT_NULL), DexTypeDomain(dex_type))) {}
+
+  static void reduce_product(
+      std::tuple<NullnessDomain, DexTypeDomain>& /* product */) {}
+
+  static NullableDexTypeDomain null() {
+    return NullableDexTypeDomain(dtv_impl::IS_NULL);
+  }
+
+  bool is_null() const { return get<0>().element() == dtv_impl::IS_NULL; }
+
+  bool is_not_null() const { return get<0>().element() == dtv_impl::NOT_NULL; }
+
+  bool is_nullable() const { return get<0>().is_top(); }
+
+  DexTypeDomain dex_type() const { return get<1>(); }
+
+ private:
+  explicit NullableDexTypeDomain(const dtv_impl::Nullness nullness)
+      : ReducedProductAbstractDomain(
+            std::make_tuple(NullnessDomain(nullness), DexTypeDomain::none())) {}
+};
 
 /*
  * We model the register to DexTypeDomain mapping using an Environment. A write

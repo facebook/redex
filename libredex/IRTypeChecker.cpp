@@ -92,9 +92,7 @@ bool check_is_assignable_from(const DexType* from,
                               const DexType* to,
                               bool strict) {
   always_assert(from && to);
-
   always_assert_log(!type::is_primitive(from), "%s", SHOW(from));
-  TRACE(TYPE, 2, "assign check %s to %s", SHOW(from), SHOW(to));
 
   if (type::is_primitive(from) || type::is_primitive(to)) {
     return false; // Expect types be a reference type.

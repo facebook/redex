@@ -93,3 +93,57 @@ TEST_F(DexTypeEnvironmentTest, FieldEnvTest) {
   EXPECT_EQ(env.get(f1), DexTypeDomain(m_type_b));
   EXPECT_EQ(env.get(f2), DexTypeDomain(m_type_a));
 }
+
+TEST_F(DexTypeEnvironmentTest, NullableDexTypeDomainTest) {
+  auto null1 = NullableDexTypeDomain::null();
+  EXPECT_FALSE(null1.is_bottom());
+  EXPECT_FALSE(null1.is_top());
+  EXPECT_TRUE(null1.dex_type().is_none());
+
+  auto type_a = NullableDexTypeDomain(m_type_a);
+  null1.join_with(type_a);
+  EXPECT_FALSE(null1.is_null());
+  EXPECT_FALSE(null1.is_not_null());
+  EXPECT_TRUE(null1.is_nullable());
+  EXPECT_NE(null1, NullableDexTypeDomain(m_type_a));
+  EXPECT_EQ(null1.dex_type(), DexTypeDomain(m_type_a));
+  EXPECT_EQ(type_a, NullableDexTypeDomain(m_type_a));
+  EXPECT_FALSE(null1.dex_type().is_none());
+  EXPECT_FALSE(type_a.dex_type().is_none());
+
+  type_a = NullableDexTypeDomain(m_type_a);
+  null1 = NullableDexTypeDomain::null();
+  type_a.join_with(null1);
+  EXPECT_FALSE(type_a.is_null());
+  EXPECT_FALSE(type_a.is_not_null());
+  EXPECT_TRUE(type_a.is_nullable());
+  EXPECT_NE(type_a, NullableDexTypeDomain(m_type_a));
+  EXPECT_EQ(type_a.dex_type(), DexTypeDomain(m_type_a));
+  EXPECT_EQ(null1, NullableDexTypeDomain::null());
+  EXPECT_FALSE(type_a.dex_type().is_none());
+  EXPECT_TRUE(null1.dex_type().is_none());
+
+  auto top1 = NullableDexTypeDomain::top();
+  auto top2 = NullableDexTypeDomain::top();
+  top1.join_with(top2);
+  EXPECT_TRUE(top1.is_top());
+  EXPECT_TRUE(top2.is_top());
+  EXPECT_FALSE(top1.dex_type().is_none());
+  EXPECT_FALSE(top2.dex_type().is_none());
+
+  top1 = NullableDexTypeDomain::top();
+  auto bottom = NullableDexTypeDomain::bottom();
+  top1.join_with(bottom);
+  EXPECT_TRUE(top1.is_top());
+  EXPECT_TRUE(bottom.is_bottom());
+  EXPECT_FALSE(top1.dex_type().is_none());
+  EXPECT_FALSE(bottom.dex_type().is_none());
+
+  bottom = NullableDexTypeDomain::bottom();
+  top1 = NullableDexTypeDomain::top();
+  bottom.join_with(top1);
+  EXPECT_TRUE(bottom.is_top());
+  EXPECT_TRUE(top1.is_top());
+  EXPECT_FALSE(bottom.dex_type().is_none());
+  EXPECT_FALSE(top1.dex_type().is_none());
+}

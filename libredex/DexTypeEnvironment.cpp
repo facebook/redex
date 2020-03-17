@@ -12,6 +12,10 @@
 
 namespace dtv_impl {
 
+NullnessLattice lattice(
+    {BOTTOM, IS_NULL, NOT_NULL, TOP},
+    {{BOTTOM, IS_NULL}, {BOTTOM, NOT_NULL}, {IS_NULL, TOP}, {NOT_NULL, TOP}});
+
 // Is `left` a subset of `right`
 bool is_subset(DexTypeList* left, DexTypeList* right) {
   std::unordered_set<DexType*> rset(right->begin(), right->end());
@@ -34,6 +38,12 @@ bool are_interfaces_mergeable_to(const DexClass* left, const DexClass* right) {
 
 sparta::AbstractValueKind DexTypeValue::join_with(const DexTypeValue& other) {
   if (equals(other)) {
+    return kind();
+  }
+  if (is_none()) {
+    m_dex_type = other.get_dex_type();
+    return sparta::AbstractValueKind::Value;
+  } else if (other.is_none()) {
     return sparta::AbstractValueKind::Value;
   }
 
@@ -41,22 +51,22 @@ sparta::AbstractValueKind DexTypeValue::join_with(const DexTypeValue& other) {
       const_cast<const DexClass*>(type_class(get_dex_type()));
   const DexClass* other_cls =
       const_cast<const DexClass*>(type_class(other.get_dex_type()));
-  // External classes. Cannot perform subclass check.
+  // External classes/missing class definition. Fall back to top.
   if (!this_cls || !other_cls) {
-    m_dex_type = nullptr;
+    clear();
     return sparta::AbstractValueKind::Top;
   }
 
   // Direct subclass relation.
   if (type::is_subclass(get_dex_type(), other.get_dex_type())) {
     if (!are_interfaces_mergeable_to(other_cls, this_cls)) {
-      m_dex_type = nullptr;
+      clear();
       return sparta::AbstractValueKind::Top;
     }
     return sparta::AbstractValueKind::Value;
   } else if (type::is_subclass(other.get_dex_type(), get_dex_type())) {
     if (!are_interfaces_mergeable_to(this_cls, other_cls)) {
-      m_dex_type = nullptr;
+      clear();
       return sparta::AbstractValueKind::Top;
     }
     m_dex_type = other.get_dex_type();
@@ -69,19 +79,19 @@ sparta::AbstractValueKind DexTypeValue::join_with(const DexTypeValue& other) {
   auto this_super_cls = type_class(this_super);
   auto other_super_cls = type_class(other_super);
   if (!this_super_cls || !other_super_cls) {
-    m_dex_type = nullptr;
+    clear();
     return sparta::AbstractValueKind::Top;
   }
   if (this_super && type::is_subclass(this_super, other.get_dex_type())) {
     if (!are_interfaces_mergeable_to(other_cls, this_super_cls)) {
-      m_dex_type = nullptr;
+      clear();
       return sparta::AbstractValueKind::Top;
     }
     m_dex_type = this_super;
     return sparta::AbstractValueKind::Value;
   } else if (other_super && type::is_subclass(other_super, get_dex_type())) {
     if (!are_interfaces_mergeable_to(this_cls, other_super_cls)) {
-      m_dex_type = nullptr;
+      clear();
       return sparta::AbstractValueKind::Top;
     }
     m_dex_type = other_super;
@@ -89,11 +99,34 @@ sparta::AbstractValueKind DexTypeValue::join_with(const DexTypeValue& other) {
   }
 
   // Give up. Rewrite to top.
-  m_dex_type = nullptr;
+  clear();
   return sparta::AbstractValueKind::Top;
 }
 
 } // namespace  dtv_impl
+
+std::ostream& operator<<(std::ostream& output,
+                         const dtv_impl::Nullness& nullness) {
+  switch (nullness) {
+  case dtv_impl::BOTTOM: {
+    output << "BOTTOM";
+    break;
+  }
+  case dtv_impl::IS_NULL: {
+    output << "NULL";
+    break;
+  }
+  case dtv_impl::NOT_NULL: {
+    output << "NOT_NULL";
+    break;
+  }
+  case dtv_impl::TOP: {
+    output << "NULLABLE";
+    break;
+  }
+  }
+  return output;
+}
 
 std::ostream& operator<<(std::ostream& output, const DexType* dex_type) {
   output << show(dex_type);
