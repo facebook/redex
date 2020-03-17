@@ -17,6 +17,8 @@
 #include <random>
 #include <thread>
 
+#include "Arity.h"
+
 namespace sparta {
 
 namespace parallel {
@@ -52,16 +54,27 @@ inline std::vector<unsigned int> create_permutation(unsigned int num,
   return attempts;
 }
 
+struct StateCounters {
+  std::atomic_uint num_non_empty;
+  std::atomic_uint num_running;
+
+  StateCounters() : num_non_empty(0), num_running(0) {}
+  StateCounters(StateCounters&& other)
+      : num_non_empty(other.num_non_empty.load()),
+        num_running(other.num_running.load()) {}
+  StateCounters(const StateCounters&) = delete;
+};
+
 } // namespace workqueue_impl
 
-template <class Input>
+template <class Input, typename Executor>
 class SpartaWorkQueue;
 
 template <class Input>
 class SpartaWorkerState final {
  public:
-  SpartaWorkerState(size_t id, SpartaWorkQueue<Input>* wq)
-      : m_id(id), m_owner_wq(wq) {}
+  SpartaWorkerState(size_t id, workqueue_impl::StateCounters* sc)
+      : m_id(id), m_state_counters(sc) {}
 
   /*
    * Add more items to the queue of the currently-running worker. When a
@@ -71,7 +84,7 @@ class SpartaWorkerState final {
   void push_task(Input task) {
     std::lock_guard<std::mutex> guard(m_queue_mtx);
     if (m_queue.empty()) {
-      ++m_owner_wq->m_num_non_empty;
+      ++m_state_counters->num_non_empty;
     }
     m_queue.push(task);
   }
@@ -80,10 +93,10 @@ class SpartaWorkerState final {
 
   void set_running(bool running) {
     if (m_running && !running) {
-      assert(m_owner_wq->m_num_running > 0);
-      --m_owner_wq->m_num_running;
+      assert(m_state_counters->num_running > 0);
+      --m_state_counters->num_running;
     } else if (!m_running && running) {
-      ++m_owner_wq->m_num_running;
+      ++m_state_counters->num_running;
     }
     m_running = running;
   };
@@ -94,8 +107,8 @@ class SpartaWorkerState final {
     if (!m_queue.empty()) {
       other->set_running(true);
       if (m_queue.size() == 1) {
-        assert(m_owner_wq->m_num_non_empty > 0);
-        --m_owner_wq->m_num_non_empty;
+        assert(m_state_counters->num_non_empty > 0);
+        --m_state_counters->num_non_empty;
       }
       auto task = std::move(m_queue.front());
       m_queue.pop();
@@ -108,17 +121,17 @@ class SpartaWorkerState final {
   bool m_running{false};
   std::queue<Input> m_queue;
   std::mutex m_queue_mtx;
-  SpartaWorkQueue<Input>* m_owner_wq;
+  workqueue_impl::StateCounters* m_state_counters;
 
-  template <class>
+  template <class, typename>
   friend class SpartaWorkQueue;
 };
 
-template <class Input>
+template <class Input, typename Executor>
 class SpartaWorkQueue {
  private:
-  using NoStateExecutor = std::function<void(Input)>;
-  using Executor = std::function<void(SpartaWorkerState<Input>*, Input)>;
+  // Using templates for Executor to avoid the performance overhead of
+  // std::function
   Executor m_executor;
 
   std::vector<std::unique_ptr<SpartaWorkerState<Input>>> m_states;
@@ -130,13 +143,16 @@ class SpartaWorkQueue {
     m_executor(state, task);
   }
 
-  std::atomic_uint m_num_non_empty{0};
-  std::atomic_uint m_num_running{0};
+  workqueue_impl::StateCounters m_state_counters;
 
  public:
-  SpartaWorkQueue(Executor, unsigned int num_threads);
-  SpartaWorkQueue(NoStateExecutor,
+  SpartaWorkQueue(Executor,
                   unsigned int num_threads = parallel::default_num_threads());
+
+  // copies are not allowed
+  SpartaWorkQueue(const SpartaWorkQueue&) = delete;
+  // moves are allowed
+  SpartaWorkQueue(SpartaWorkQueue&&);
 
   void add_item(Input task);
 
@@ -149,25 +165,27 @@ class SpartaWorkQueue {
   friend class SpartaWorkerState;
 };
 
-template <class Input>
-SpartaWorkQueue<Input>::SpartaWorkQueue(SpartaWorkQueue::Executor executor,
-                                        unsigned int num_threads)
+template <class Input, typename Executor>
+SpartaWorkQueue<Input, Executor>::SpartaWorkQueue(Executor executor,
+                                                  unsigned int num_threads)
     : m_executor(executor), m_num_threads(num_threads) {
   assert(num_threads >= 1);
   for (unsigned int i = 0; i < m_num_threads; ++i) {
-    m_states.emplace_back(std::make_unique<SpartaWorkerState<Input>>(i, this));
+    m_states.emplace_back(
+        std::make_unique<SpartaWorkerState<Input>>(i, &m_state_counters));
   }
 }
 
-template <class Input>
-SpartaWorkQueue<Input>::SpartaWorkQueue(
-    SpartaWorkQueue::NoStateExecutor executor, unsigned int num_threads)
-    : SpartaWorkQueue(
-          [executor](SpartaWorkerState<Input>*, Input a) { executor(a); },
-          num_threads) {}
+template <class Input, typename Executor>
+SpartaWorkQueue<Input, Executor>::SpartaWorkQueue(SpartaWorkQueue&& other)
+    : m_executor(std::move(other.m_executor)),
+      m_states(std::move(other.m_states)),
+      m_num_threads(other.m_num_threads),
+      m_insert_idx(other.m_insert_idx),
+      m_state_counters(std::move(other.m_state_counters)) {}
 
-template <class Input>
-void SpartaWorkQueue<Input>::add_item(Input task) {
+template <class Input, typename Executor>
+void SpartaWorkQueue<Input, Executor>::add_item(Input task) {
   m_insert_idx = (m_insert_idx + 1) % m_num_threads;
   assert(m_insert_idx < m_states.size());
   m_states[m_insert_idx]->m_queue.push(task);
@@ -177,11 +195,11 @@ void SpartaWorkQueue<Input>::add_item(Input task) {
  * Each worker thread pulls from its own queue first, and then once finished
  * looks randomly at other queues to try and steal work.
  */
-template <class Input>
-void SpartaWorkQueue<Input>::run_all() {
+template <class Input, typename Executor>
+void SpartaWorkQueue<Input, Executor>::run_all() {
   std::vector<std::thread> all_threads;
-  m_num_non_empty = 0;
-  m_num_running = 0;
+  m_state_counters.num_non_empty = 0;
+  m_state_counters.num_running = 0;
   auto worker = [&](SpartaWorkerState<Input>* state, size_t state_idx) {
     auto attempts =
         workqueue_impl::create_permutation(m_num_threads, state_idx);
@@ -201,7 +219,8 @@ void SpartaWorkQueue<Input>::run_all() {
       }
       // Let the thread quit if all the threads are not running and there
       // is no task in any queue.
-      if (m_num_running == 0 && m_num_non_empty == 0) {
+      if (m_state_counters.num_running == 0 &&
+          m_state_counters.num_non_empty == 0) {
         return;
       }
     }
@@ -209,7 +228,7 @@ void SpartaWorkQueue<Input>::run_all() {
 
   for (size_t i = 0; i < m_num_threads; ++i) {
     if (!m_states[i]->m_queue.empty()) {
-      ++m_num_non_empty;
+      ++m_state_counters.num_non_empty;
     }
   }
   for (size_t i = 0; i < m_num_threads; ++i) {
@@ -219,6 +238,42 @@ void SpartaWorkQueue<Input>::run_all() {
   for (auto& thread : all_threads) {
     thread.join();
   }
+}
+
+namespace workqueue_impl {
+// Helper classes so the type of Executor can be inferred
+template <typename Input, typename Fn>
+struct NoStateWorkQueueHelper {
+  Fn fn;
+  void operator()(SpartaWorkerState<Input>*, Input a) { fn(a); }
+};
+template <typename Input, typename Fn>
+struct WithStateWorkQueueHelper {
+  Fn fn;
+  void operator()(SpartaWorkerState<Input>* state, Input a) { fn(state, a); }
+};
+} // namespace workqueue_impl
+
+// These functions are the most convenient way to create a SpartaWorkQueue
+template <class Input,
+          typename Fn,
+          typename std::enable_if<Arity<Fn>::value == 1, int>::type = 0>
+SpartaWorkQueue<Input, workqueue_impl::NoStateWorkQueueHelper<Input, Fn>>
+work_queue(const Fn& fn,
+           unsigned int num_threads = parallel::default_num_threads()) {
+  return SpartaWorkQueue<Input,
+                         workqueue_impl::NoStateWorkQueueHelper<Input, Fn>>(
+      workqueue_impl::NoStateWorkQueueHelper<Input, Fn>{fn}, num_threads);
+}
+template <class Input,
+          typename Fn,
+          typename std::enable_if<Arity<Fn>::value == 2, int>::type = 0>
+SpartaWorkQueue<Input, workqueue_impl::WithStateWorkQueueHelper<Input, Fn>>
+work_queue(const Fn& fn,
+           unsigned int num_threads = parallel::default_num_threads()) {
+  return SpartaWorkQueue<Input,
+                         workqueue_impl::WithStateWorkQueueHelper<Input, Fn>>(
+      workqueue_impl::WithStateWorkQueueHelper<Input, Fn>{fn}, num_threads);
 }
 
 } // namespace sparta
