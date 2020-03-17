@@ -123,47 +123,53 @@ std::ostream& operator<<(std::ostream& output,
                          const dtv_impl::Nullness& nullness);
 
 /*
- *
  * DexType domain
  *
+ * Singleton here means that we only track a single DexType value. The join of
+ * two distinct SingletonDexTypeDomain will produce a single DexType value that
+ * is guaranteed to be compatible with the two inputs. This is the most simple
+ * data structure we can use to represent a DexType domain.
  */
-class DexTypeDomain final
+class SingletonDexTypeDomain final
     : public sparta::AbstractDomainScaffolding<dtv_impl::DexTypeValue,
-                                               DexTypeDomain> {
+                                               SingletonDexTypeDomain> {
  public:
-  DexTypeDomain() { this->set_to_top(); }
+  SingletonDexTypeDomain() { this->set_to_top(); }
 
-  explicit DexTypeDomain(const DexType* cst) {
+  explicit SingletonDexTypeDomain(const DexType* cst) {
     this->set_to_value(dtv_impl::DexTypeValue(cst));
   }
 
-  explicit DexTypeDomain(sparta::AbstractValueKind kind)
+  explicit SingletonDexTypeDomain(sparta::AbstractValueKind kind)
       : sparta::AbstractDomainScaffolding<dtv_impl::DexTypeValue,
-                                          DexTypeDomain>(kind) {}
+                                          SingletonDexTypeDomain>(kind) {}
 
   boost::optional<const DexType*> get_dex_type() const {
-    return (this->kind() == sparta::AbstractValueKind::Value)
-               ? boost::optional<const DexType*>(
-                     this->get_value()->get_dex_type())
-               : boost::none;
+    if (this->kind() != sparta::AbstractValueKind::Value || this->is_none()) {
+      return boost::none;
+    }
+    return boost::optional<const DexType*>(this->get_value()->get_dex_type());
   }
 
-  static DexTypeDomain bottom() {
-    return DexTypeDomain(sparta::AbstractValueKind::Bottom);
+  static SingletonDexTypeDomain bottom() {
+    return SingletonDexTypeDomain(sparta::AbstractValueKind::Bottom);
   }
 
-  static DexTypeDomain top() {
-    return DexTypeDomain(sparta::AbstractValueKind::Top);
+  static SingletonDexTypeDomain top() {
+    return SingletonDexTypeDomain(sparta::AbstractValueKind::Top);
   }
 
-  static DexTypeDomain none() { return DexTypeDomain(nullptr); }
+  static SingletonDexTypeDomain none() {
+    return SingletonDexTypeDomain(nullptr);
+  }
 
-  bool is_none() {
+  bool is_none() const {
     return this->kind() == sparta::AbstractValueKind::Value &&
            this->get_value()->is_none();
   }
 
-  friend std::ostream& operator<<(std::ostream& out, const DexTypeDomain& x) {
+  friend std::ostream& operator<<(std::ostream& out,
+                                  const SingletonDexTypeDomain& x) {
     using namespace sparta;
     switch (x.kind()) {
     case AbstractValueKind::Bottom: {
@@ -188,13 +194,13 @@ std::ostream& operator<<(std::ostream& output, const DexType* dex_type);
 
 /*
  *
- * NullnessDomain X DexTypeDomain
+ * NullnessDomain X SingletonDexTypeDomain
  *
  */
-class NullableDexTypeDomain
-    : public sparta::ReducedProductAbstractDomain<NullableDexTypeDomain,
+class DexTypeDomain
+    : public sparta::ReducedProductAbstractDomain<DexTypeDomain,
                                                   NullnessDomain,
-                                                  DexTypeDomain> {
+                                                  SingletonDexTypeDomain> {
  public:
   using ReducedProductAbstractDomain::ReducedProductAbstractDomain;
 
@@ -202,18 +208,17 @@ class NullableDexTypeDomain
   // We intended to use the default constructors of the base class (via the
   // `using` declaration above), but some compilers fail to catch this. So we
   // insert a redundant '= default'.
-  NullableDexTypeDomain() = default;
+  DexTypeDomain() = default;
 
-  explicit NullableDexTypeDomain(const DexType* dex_type)
-      : ReducedProductAbstractDomain(std::make_tuple(
-            NullnessDomain(dtv_impl::NOT_NULL), DexTypeDomain(dex_type))) {}
+  explicit DexTypeDomain(const DexType* dex_type)
+      : ReducedProductAbstractDomain(
+            std::make_tuple(NullnessDomain(dtv_impl::NOT_NULL),
+                            SingletonDexTypeDomain(dex_type))) {}
 
   static void reduce_product(
-      std::tuple<NullnessDomain, DexTypeDomain>& /* product */) {}
+      std::tuple<NullnessDomain, SingletonDexTypeDomain>& /* product */) {}
 
-  static NullableDexTypeDomain null() {
-    return NullableDexTypeDomain(dtv_impl::IS_NULL);
-  }
+  static DexTypeDomain null() { return DexTypeDomain(dtv_impl::IS_NULL); }
 
   bool is_null() const { return get<0>().element() == dtv_impl::IS_NULL; }
 
@@ -221,12 +226,16 @@ class NullableDexTypeDomain
 
   bool is_nullable() const { return get<0>().is_top(); }
 
-  DexTypeDomain dex_type() const { return get<1>(); }
+  SingletonDexTypeDomain get_type_domain() { return get<1>(); }
+
+  boost::optional<const DexType*> get_dex_type() const {
+    return get<1>().get_dex_type();
+  }
 
  private:
-  explicit NullableDexTypeDomain(const dtv_impl::Nullness nullness)
-      : ReducedProductAbstractDomain(
-            std::make_tuple(NullnessDomain(nullness), DexTypeDomain::none())) {}
+  explicit DexTypeDomain(const dtv_impl::Nullness nullness)
+      : ReducedProductAbstractDomain(std::make_tuple(
+            NullnessDomain(nullness), SingletonDexTypeDomain::none())) {}
 };
 
 /*

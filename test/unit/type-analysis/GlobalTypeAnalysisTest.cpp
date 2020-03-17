@@ -41,6 +41,12 @@ struct GlobalTypeAnalysisTest : public RedexTest {
     return DexTypeDomain(DexType::make_type(DexString::make_string(type_name)));
   }
 
+  SingletonDexTypeDomain get_singleton_type_domain(
+      const std::string& type_name) {
+    return SingletonDexTypeDomain(
+        DexType::make_type(DexString::make_string(type_name)));
+  }
+
   DexClass* m_cls_o;
 };
 
@@ -153,9 +159,12 @@ TEST_F(GlobalTypeAnalysisTest, ArgumentPassingJoinWithNullTest) {
   EXPECT_TRUE(foo_arg_env.is_top());
   auto bar_arg_env =
       gta.get_entry_state_at(graph.node(meth_bar)).get(CURRENT_PARTITION_LABEL);
-  EXPECT_TRUE(bar_arg_env.get(0).is_top());
-  EXPECT_EQ(bar_arg_env,
-            ArgumentTypeEnvironment({{1, get_type_domain("LO;")}}));
+  auto arg0 = bar_arg_env.get(0);
+  EXPECT_FALSE(arg0.is_top());
+  EXPECT_EQ(arg0.get_type_domain(), get_singleton_type_domain("LO;"));
+  EXPECT_TRUE(arg0.is_nullable());
+  auto arg1 = bar_arg_env.get(1);
+  EXPECT_EQ(arg1, get_type_domain("LO;"));
 }
 
 TEST_F(GlobalTypeAnalysisTest, ReturnTypeTest) {

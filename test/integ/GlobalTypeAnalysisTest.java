@@ -51,7 +51,9 @@ class TestB {
   public Class passClass(Class cls) { return cls; }
 
   public String getStringArrayComponent(String[] sa) { return sa[0]; }
-  public String[] getNestedStringArrayComponent(String[][] nsa) { return nsa[0]; }
+  public String[] getNestedStringArrayComponent(String[][] nsa) {
+    return nsa[0];
+  }
 
   public static void main() {
     TestB tb = new TestB();
@@ -65,5 +67,38 @@ class TestB {
     tb.getStringArrayComponent(sa);
     String[][] nsa = new String[][] {sa};
     tb.getNestedStringArrayComponent(nsa);
+  }
+}
+
+interface Receiver {
+  void onChange();
+}
+
+class TestC {
+
+  private Receiver mMonitor;
+
+  void change() {
+    if (mMonitor != null) {
+      remove();
+    }
+
+    mMonitor = new Receiver() {
+      @Override
+      public void onChange() {
+        int yo = 1 + 1;
+      }
+    };
+  }
+
+  void remove() {
+    if (mMonitor != null) {
+      mMonitor = null;
+    }
+  }
+
+  static void main() {
+    TestC t = new TestC();
+    t.change();
   }
 }

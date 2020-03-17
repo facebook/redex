@@ -71,7 +71,7 @@ bool RegisterTypeAnalyzer::analyze_const(const IRInstruction* insn,
   if (insn->opcode() != OPCODE_CONST || insn->get_literal() != 0) {
     return false;
   }
-  env->set(insn->dest(), DexTypeDomain::top());
+  env->set(insn->dest(), DexTypeDomain::null());
   return true;
 }
 

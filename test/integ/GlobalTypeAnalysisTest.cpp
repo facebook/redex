@@ -40,6 +40,11 @@ class GlobalTypeAnalysisTest : public RedexIntegrationTest {
     return DexMethod::get_method(full_name)->as_def();
   }
 
+  DexField* get_field(const std::string& name) {
+    std::string full_name = "Lcom/facebook/redextest/" + name;
+    return DexField::get_field(full_name)->as_def();
+  }
+
   DexTypeDomain get_type_domain(const std::string& type_name) {
     std::string full_name = "Lcom/facebook/redextest/" + type_name + ";";
     return DexTypeDomain(DexType::make_type(DexString::make_string(full_name)));
@@ -47,6 +52,11 @@ class GlobalTypeAnalysisTest : public RedexIntegrationTest {
 
   DexTypeDomain get_type_domain_simple(const std::string& type_name) {
     return DexTypeDomain(DexType::make_type(DexString::make_string(type_name)));
+  }
+
+  DexType* get_type(const std::string& type_name) {
+    std::string full_name = "Lcom/facebook/redextest/" + type_name + ";";
+    return DexType::make_type(DexString::make_string(full_name));
   }
 };
 
@@ -87,10 +97,10 @@ TEST_F(GlobalTypeAnalysisTest, ConstsAndAGETTest) {
 
   auto meth_pass_null =
       get_method("TestB;.passNull", "Ljava/lang/String;", "Ljava/lang/String;");
-  EXPECT_EQ(wps.get_return_type(meth_pass_null), DexTypeDomain::top());
+  EXPECT_TRUE(wps.get_return_type(meth_pass_null).is_null());
 
-  auto meth_pass_string = get_method(
-      "TestB;.passString", "Ljava/lang/String;", "Ljava/lang/String;");
+  auto meth_pass_string = get_method("TestB;.passString", "Ljava/lang/String;",
+                                     "Ljava/lang/String;");
   EXPECT_EQ(wps.get_return_type(meth_pass_string),
             get_type_domain_simple("Ljava/lang/String;"));
 
@@ -111,4 +121,25 @@ TEST_F(GlobalTypeAnalysisTest, ConstsAndAGETTest) {
                  "[Ljava/lang/String;");
   EXPECT_EQ(wps.get_return_type(meth_nested_array_comp),
             get_type_domain_simple("[Ljava/lang/String;"));
+}
+
+TEST_F(GlobalTypeAnalysisTest, NullableFieldTypeTest) {
+  auto scope = build_class_scope(stores);
+  set_root_method("Lcom/facebook/redextest/TestC;.main:()V");
+
+  GlobalTypeAnalysis analysis;
+  auto gta = analysis.analyze(scope);
+  auto wps = gta->get_whole_program_state();
+
+  // Field holding the reference to the nullalbe anonymous class
+  auto field_monitor =
+      get_field("TestC;.mMonitor:Lcom/facebook/redextest/Receiver;");
+  EXPECT_EQ(*wps.get_field_type(field_monitor).get_dex_type(),
+            get_type("TestC$1"));
+  EXPECT_TRUE(wps.get_field_type(field_monitor).is_nullable());
+
+  // Field on the anonymous class referencing the outer class
+  auto field_anony =
+      get_field("TestC$1;.this$0:Lcom/facebook/redextest/TestC;");
+  EXPECT_EQ(wps.get_field_type(field_anony), get_type_domain("TestC"));
 }
