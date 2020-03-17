@@ -488,7 +488,8 @@ class ParallelMonotonicFixpointIterator
           }
           return nullptr;
         },
-        m_num_thread);
+        m_num_thread,
+        /*push_tasks_while_running=*/true);
     wq.add_item(m_wpo.get_entry());
     wq.run_all();
   }

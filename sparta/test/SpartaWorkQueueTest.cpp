@@ -77,7 +77,8 @@ TEST(SpartaWorkQueueTest, checkDynamicallyAddingTasks) {
           result += a;
         }
       },
-      num_threads);
+      num_threads,
+      /*push_tasks_while_running=*/true);
   wq.add_item(10);
   wq.run_all();
 
