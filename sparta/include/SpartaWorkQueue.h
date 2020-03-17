@@ -33,9 +33,6 @@ static inline unsigned int default_num_threads() {
 
 namespace workqueue_impl {
 
-static std::atomic_uint num_non_empty{0};
-static std::atomic_uint num_running{0};
-
 /**
  * Creates a random ordering of which threads to visit.  This prevents threads
  * from being prematurely emptied (if everyone targets thread 0, for example)
@@ -58,9 +55,13 @@ inline std::vector<unsigned int> create_permutation(unsigned int num,
 } // namespace workqueue_impl
 
 template <class Input>
-class SpartaWorkerState {
+class SpartaWorkQueue;
+
+template <class Input>
+class SpartaWorkerState final {
  public:
-  SpartaWorkerState(size_t id) : m_id(id) {}
+  SpartaWorkerState(size_t id, SpartaWorkQueue<Input>* wq)
+      : m_id(id), m_owner_wq(wq) {}
 
   /*
    * Add more items to the queue of the currently-running worker. When a
@@ -70,7 +71,7 @@ class SpartaWorkerState {
   void push_task(Input task) {
     std::lock_guard<std::mutex> guard(m_queue_mtx);
     if (m_queue.empty()) {
-      ++workqueue_impl::num_non_empty;
+      ++m_owner_wq->m_num_non_empty;
     }
     m_queue.push(task);
   }
@@ -79,10 +80,10 @@ class SpartaWorkerState {
 
   void set_running(bool running) {
     if (m_running && !running) {
-      assert(workqueue_impl::num_running > 0);
-      --workqueue_impl::num_running;
+      assert(m_owner_wq->m_num_running > 0);
+      --m_owner_wq->m_num_running;
     } else if (!m_running && running) {
-      ++workqueue_impl::num_running;
+      ++m_owner_wq->m_num_running;
     }
     m_running = running;
   };
@@ -93,8 +94,8 @@ class SpartaWorkerState {
     if (!m_queue.empty()) {
       other->set_running(true);
       if (m_queue.size() == 1) {
-        assert(workqueue_impl::num_non_empty > 0);
-        --workqueue_impl::num_non_empty;
+        assert(m_owner_wq->m_num_non_empty > 0);
+        --m_owner_wq->m_num_non_empty;
       }
       auto task = std::move(m_queue.front());
       m_queue.pop();
@@ -107,6 +108,7 @@ class SpartaWorkerState {
   bool m_running{false};
   std::queue<Input> m_queue;
   std::mutex m_queue_mtx;
+  SpartaWorkQueue<Input>* m_owner_wq;
 
   template <class>
   friend class SpartaWorkQueue;
@@ -115,6 +117,7 @@ class SpartaWorkerState {
 template <class Input>
 class SpartaWorkQueue {
  private:
+  using NoStateExecutor = std::function<void(Input)>;
   using Executor = std::function<void(SpartaWorkerState<Input>*, Input)>;
   Executor m_executor;
 
@@ -127,8 +130,13 @@ class SpartaWorkQueue {
     m_executor(state, task);
   }
 
+  std::atomic_uint m_num_non_empty{0};
+  std::atomic_uint m_num_running{0};
+
  public:
   SpartaWorkQueue(Executor, unsigned int num_threads);
+  SpartaWorkQueue(NoStateExecutor,
+                  unsigned int num_threads = parallel::default_num_threads());
 
   void add_item(Input task);
 
@@ -136,6 +144,9 @@ class SpartaWorkQueue {
    * Spawn threads and evaluate function.  This method blocks.
    */
   void run_all();
+
+  template <class>
+  friend class SpartaWorkerState;
 };
 
 template <class Input>
@@ -144,21 +155,16 @@ SpartaWorkQueue<Input>::SpartaWorkQueue(SpartaWorkQueue::Executor executor,
     : m_executor(executor), m_num_threads(num_threads) {
   assert(num_threads >= 1);
   for (unsigned int i = 0; i < m_num_threads; ++i) {
-    m_states.emplace_back(std::make_unique<SpartaWorkerState<Input>>(i));
+    m_states.emplace_back(std::make_unique<SpartaWorkerState<Input>>(i, this));
   }
 }
 
-/**
- * Convenience wrapper for jobs that don't require access to the
- * SpartaWorkerState.
- */
 template <class Input>
-SpartaWorkQueue<Input> WorkQueue_foreach(
-    const std::function<void(Input)>& func,
-    unsigned int num_threads = parallel::default_num_threads()) {
-  return SpartaWorkQueue<Input>(
-      [func](SpartaWorkerState<Input>*, Input a) { func(a); }, num_threads);
-}
+SpartaWorkQueue<Input>::SpartaWorkQueue(
+    SpartaWorkQueue::NoStateExecutor executor, unsigned int num_threads)
+    : SpartaWorkQueue(
+          [executor](SpartaWorkerState<Input>*, Input a) { executor(a); },
+          num_threads) {}
 
 template <class Input>
 void SpartaWorkQueue<Input>::add_item(Input task) {
@@ -174,8 +180,8 @@ void SpartaWorkQueue<Input>::add_item(Input task) {
 template <class Input>
 void SpartaWorkQueue<Input>::run_all() {
   std::vector<std::thread> all_threads;
-  workqueue_impl::num_non_empty = 0;
-  workqueue_impl::num_running = 0;
+  m_num_non_empty = 0;
+  m_num_running = 0;
   auto worker = [&](SpartaWorkerState<Input>* state, size_t state_idx) {
     auto attempts =
         workqueue_impl::create_permutation(m_num_threads, state_idx);
@@ -195,8 +201,7 @@ void SpartaWorkQueue<Input>::run_all() {
       }
       // Let the thread quit if all the threads are not running and there
       // is no task in any queue.
-      if (workqueue_impl::num_running == 0 &&
-          workqueue_impl::num_non_empty == 0) {
+      if (m_num_running == 0 && m_num_non_empty == 0) {
         return;
       }
     }
@@ -204,7 +209,7 @@ void SpartaWorkQueue<Input>::run_all() {
 
   for (size_t i = 0; i < m_num_threads; ++i) {
     if (!m_states[i]->m_queue.empty()) {
-      ++workqueue_impl::num_non_empty;
+      ++m_num_non_empty;
     }
   }
   for (size_t i = 0; i < m_num_threads; ++i) {
