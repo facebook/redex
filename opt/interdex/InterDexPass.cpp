@@ -11,7 +11,7 @@
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "PassManager.h"
-#include "WorkQueue.h"
+#include "SpartaWorkQueue.h"
 
 namespace {
 
@@ -203,7 +203,7 @@ void InterDexPass::run_pass(DexStoresVector& stores,
     return;
   }
 
-  auto wq = workqueue_foreach<DexStore*>([&](DexStore* store) {
+  auto wq = sparta::work_queue<DexStore*>([&](DexStore* store) {
     run_pass_on_nonroot_store(stores, store->get_dexen(), conf, mgr);
   });
   for (auto& store : stores) {

@@ -19,9 +19,9 @@
 #include "ProguardRegex.h"
 #include "ProguardReporting.h"
 #include "ReachableClasses.h"
+#include "SpartaWorkQueue.h"
 #include "StringBuilder.h"
 #include "Timer.h"
-#include "WorkQueue.h"
 
 using namespace keep_rules;
 
@@ -725,7 +725,7 @@ void ProguardMatcher::process_keep(const KeepSpecSet& keep_rules,
   };
 
   // We only parallelize if keep_rule needs to be applied to all classes.
-  auto wq = workqueue_foreach<const KeepSpec*>([&](const KeepSpec* keep_rule) {
+  auto wq = sparta::work_queue<const KeepSpec*>([&](const KeepSpec* keep_rule) {
     RegexMap regex_map;
     ClassMatcher class_match(*keep_rule);
     KeepRuleMatcher rule_matcher(rule_type, *keep_rule, regex_map);

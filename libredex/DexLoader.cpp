@@ -11,9 +11,9 @@
 #include "DexDefs.h"
 #include "DexMethodHandle.h"
 #include "IRCode.h"
+#include "SpartaWorkQueue.h"
 #include "Trace.h"
 #include "Walkers.h"
-#include "WorkQueue.h"
 
 #include <exception>
 #include <stdexcept>
@@ -491,15 +491,16 @@ DexClasses DexLoader::load_dex(const dex_header* dh, dex_stats_t* stats) {
   m_classes = &classes;
 
   auto lwork = new class_load_work[dh->class_defs_size];
-  auto num_threads = redex_parallel::default_num_threads();
+  auto num_threads = sparta::parallel::default_num_threads();
   std::vector<std::vector<std::exception_ptr>> exceptions_vec(num_threads);
-  auto wq = workqueue_foreach<class_load_work*>(
-      [&exceptions_vec](class_load_work* clw) {
+  auto wq = sparta::work_queue<class_load_work*>(
+      [&exceptions_vec](sparta::SpartaWorkerState<class_load_work*>* state,
+                        class_load_work* clw) {
         try {
           clw->dl->load_dex_class(clw->num);
         } catch (const std::exception& exc) {
           TRACE(MAIN, 1, "Worker throw the exception:%s", exc.what());
-          exceptions_vec[redex_parallel::get_worker_id()].emplace_back(
+          exceptions_vec[state->worker_id()].emplace_back(
               std::current_exception());
         }
       },
@@ -534,7 +535,7 @@ DexClasses DexLoader::load_dex(const dex_header* dh, dex_stats_t* stats) {
 }
 
 static void balloon_all(const Scope& scope) {
-  auto wq = workqueue_foreach<DexMethod*>(
+  auto wq = sparta::work_queue<DexMethod*>(
       [](DexMethod* method) { method->balloon(); });
   walk::methods(scope, [&](DexMethod* m) {
     if (m->get_dex_code()) {

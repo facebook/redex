@@ -15,7 +15,8 @@
 #include "KeepReason.h"
 #include "MethodOverrideGraph.h"
 #include "Pass.h"
-#include "WorkQueue.h"
+#include "SpartaWorkQueue.h"
+#include "Thread.h"
 
 namespace reachability {
 
@@ -161,8 +162,7 @@ struct alignas(CACHE_LINE_SIZE) Stats {
   int num_ignore_check_strings;
 };
 
-using MarkWorkQueue = WorkQueue<ReachableObject>;
-using MarkWorkerState = WorkerState<ReachableObject>;
+using MarkWorkerState = sparta::SpartaWorkerState<ReachableObject>;
 
 /*
  * These helper classes compute reachable objects by a DFS+marking algorithm.

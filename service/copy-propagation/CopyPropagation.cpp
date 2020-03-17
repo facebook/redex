@@ -441,7 +441,7 @@ Stats CopyPropagation::run(const Scope& scope) {
 
         return result;
       },
-      m_config.debug ? 1 : redex_parallel::default_num_threads());
+      m_config.debug ? 1 : sparta::parallel::default_num_threads());
 }
 
 Stats CopyPropagation::run(IRCode* code, DexMethod* method) {

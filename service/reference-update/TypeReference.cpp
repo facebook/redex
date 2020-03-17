@@ -314,7 +314,7 @@ void TypeRefUpdater::update_methods_fields(const Scope& scope) {
     }
   });
   {
-    auto wq = workqueue_foreach<DexFieldRef*>(
+    auto wq = sparta::work_queue<DexFieldRef*>(
         [this](DexFieldRef* field) { mangling(field); });
     for (auto field : fields) {
       wq.add_item(field);
@@ -322,7 +322,7 @@ void TypeRefUpdater::update_methods_fields(const Scope& scope) {
     wq.run_all();
   }
   {
-    auto wq = workqueue_foreach<DexMethodRef*>(
+    auto wq = sparta::work_queue<DexMethodRef*>(
         [this](DexMethodRef* method) { mangling(method); });
     for (auto method : methods) {
       wq.add_item(method);

@@ -394,7 +394,7 @@ void StringConcatenatorPass::run_pass(DexStoresVector& stores,
 
         return stats;
       },
-      DEBUG ? 1 : redex_parallel::default_num_threads());
+      DEBUG ? 1 : sparta::parallel::default_num_threads());
 
   for (DexMethod* method : methods_to_remove.get()) {
     // We can delete the method without finding callsites because these are all

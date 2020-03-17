@@ -42,7 +42,7 @@ void DedupBlocksPass::run_pass(DexStoresVector& stores,
         code->clear_cfg();
         return impl.get_stats();
       },
-      m_config.debug ? 1 : redex_parallel::default_num_threads());
+      m_config.debug ? 1 : sparta::parallel::default_num_threads());
 
   report_stats(mgr, stats);
 }

@@ -41,9 +41,9 @@
 #include "Pass.h"
 #include "Resolver.h"
 #include "Sha1.h"
+#include "SpartaWorkQueue.h"
 #include "Trace.h"
 #include "Walkers.h"
-#include "WorkQueue.h"
 
 /*
  * For adler32...
@@ -913,7 +913,7 @@ void DexOutput::generate_class_data_items() {
 
 static void sync_all(const Scope& scope) {
   constexpr bool serial = false; // for debugging
-  auto wq = workqueue_foreach<DexMethod*>([](DexMethod* m) { m->sync(); });
+  auto wq = sparta::work_queue<DexMethod*>([](DexMethod* m) { m->sync(); });
   walk::code(scope,
              [](DexMethod*) { return true; },
              [&](DexMethod* m, IRCode&) {

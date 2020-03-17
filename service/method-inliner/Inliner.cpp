@@ -26,11 +26,11 @@
 #include "OptData.h"
 #include "Purity.h"
 #include "Resolver.h"
+#include "SpartaWorkQueue.h"
 #include "Timer.h"
 #include "Transform.h"
 #include "UnknownVirtuals.h"
 #include "Walkers.h"
-#include "WorkQueue.h"
 
 using namespace opt_metadata;
 
@@ -229,7 +229,7 @@ void MultiMethodInliner::compute_callee_constant_arguments() {
     std::unordered_map<std::string, size_t> occurrences;
   };
   ConcurrentMap<DexMethod*, CalleeInfo> concurrent_callee_constant_arguments;
-  auto wq = workqueue_foreach<DexMethod*>(
+  auto wq = sparta::work_queue<DexMethod*>(
       [&](DexMethod* caller) {
         auto& callees = caller_callee.at(caller);
         auto res = get_invoke_constant_arguments(caller, callees);
@@ -251,7 +251,7 @@ void MultiMethodInliner::compute_callee_constant_arguments() {
         info.constant_invoke_callers_analyzed++;
         info.constant_invoke_callers_unreachable_blocks += res->dead_blocks;
       },
-      redex_parallel::default_num_threads());
+      sparta::parallel::default_num_threads());
   for (auto& p : caller_callee) {
     wq.add_item(p.first);
   };
@@ -273,7 +273,7 @@ void MultiMethodInliner::inline_methods() {
   // Inlining and shrinking initiated from within this method will be done
   // in parallel.
   m_async_method_executor.set_num_threads(
-      m_config.debug ? 1 : redex_parallel::default_num_threads());
+      m_config.debug ? 1 : sparta::parallel::default_num_threads());
 
   // The order in which we inline is such that once a callee is considered to
   // be inlined, it's code will no longer change. So we can cache...
@@ -1384,10 +1384,10 @@ size_t MultiMethodInliner::get_inlined_cost(const DexMethod* callee) {
       // using a single thread pool.
       inlined_cost = 0;
       auto num_threads =
-          std::min(redex_parallel::default_num_threads(),
+          std::min(sparta::parallel::default_num_threads(),
                    (unsigned int)callee_constant_arguments.size());
-      auto wq = workqueue_foreach<ConstantArgumentsOccurrences>(process_key,
-                                                                num_threads);
+      auto wq = sparta::work_queue<ConstantArgumentsOccurrences>(process_key,
+                                                                 num_threads);
       for (auto& p : callee_constant_arguments) {
         wq.add_item(p);
       }

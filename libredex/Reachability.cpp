@@ -514,9 +514,9 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects(
     root_set_marker.mark(scope);
   }
 
-  size_t num_threads = redex_parallel::default_num_threads();
+  size_t num_threads = sparta::parallel::default_num_threads();
   auto stats_arr = std::make_unique<Stats[]>(num_threads);
-  MarkWorkQueue work_queue(
+  auto wq = sparta::work_queue<ReachableObject>(
       [&](MarkWorkerState* worker_state, const ReachableObject& obj) {
         TransitiveClosureMarker transitive_closure_marker(
             ignore_sets, *method_override_graph, record_reachability,
@@ -525,11 +525,12 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects(
         transitive_closure_marker.visit(obj);
         return nullptr;
       },
-      num_threads);
+      num_threads,
+      /*push_tasks_while_running=*/true);
   for (const auto& obj : root_set) {
-    work_queue.add_item(obj);
+    wq.add_item(obj);
   }
-  work_queue.run_all();
+  wq.run_all();
 
   if (num_ignore_check_strings != nullptr) {
     for (size_t i = 0; i < num_threads; ++i) {
