@@ -128,6 +128,11 @@ std::ostream& operator<<(std::ostream& output,
   return output;
 }
 
+std::ostream& operator<<(std::ostream& output, const NullnessDomain& domain) {
+  output << domain.element();
+  return output;
+}
+
 std::ostream& operator<<(std::ostream& output, const DexType* dex_type) {
   output << show(dex_type);
   return output;

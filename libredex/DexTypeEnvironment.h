@@ -122,6 +122,8 @@ using NullnessDomain =
 std::ostream& operator<<(std::ostream& output,
                          const dtv_impl::Nullness& nullness);
 
+std::ostream& operator<<(std::ostream& output, const NullnessDomain& domain);
+
 /*
  * DexType domain
  *
