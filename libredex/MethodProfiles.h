@@ -55,7 +55,7 @@ class MethodProfiles {
 
   bool has_stats() { return !m_method_stats.empty(); }
 
-  const std::unordered_map<DexMethodRef*, Stats>& method_stats() {
+  const std::unordered_map<DexMethodRef*, Stats>& method_stats() const {
     return m_method_stats;
   }
 
