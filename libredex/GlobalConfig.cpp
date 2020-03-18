@@ -62,6 +62,7 @@ void GlobalConfig::bind_config() {
   bind("pure_methods", {}, string_vector_param);
   bind("method_sorting_whitelisted_substrings", {}, string_vector_param);
   bind("prune_unexported_components", {}, string_vector_param);
+  bind("profiled_methods_file", "", string_param);
   bind("coldstart_classes", "", string_param);
   bind("string_sort_mode", "", string_param);
   bind("compute_xml_reachability", false, bool_param);

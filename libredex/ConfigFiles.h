@@ -17,6 +17,7 @@
 #include "DexClass.h"
 #include "InlinerConfig.h"
 #include "JsonWrapper.h"
+#include "MethodProfiles.h"
 #include "ProguardMap.h"
 
 class DexType;
@@ -58,6 +59,11 @@ struct ConfigFiles {
   const std::vector<std::string>& get_class_list(const std::string& name) {
     ensure_class_lists_loaded();
     return m_class_lists.at(name);
+  }
+
+  const method_profiles::MethodProfiles& get_method_profiles() {
+    ensure_agg_method_stats_loaded();
+    return m_method_profiles;
   }
 
   const std::unordered_set<DexType*>& get_no_optimizations_annos();
@@ -143,6 +149,7 @@ struct ConfigFiles {
   std::unordered_map<std::string, std::vector<std::string>> load_class_lists();
   void load_method_to_weight();
   void load_method_sorting_whitelisted_substrings();
+  void ensure_agg_method_stats_loaded();
   void load_inliner_config(inliner::InlinerConfig*);
 
   bool m_load_class_lists_attempted{false};
@@ -154,6 +161,7 @@ struct ConfigFiles {
   std::unordered_map<std::string, unsigned int> m_method_to_weight;
   std::unordered_set<std::string> m_method_sorting_whitelisted_substrings;
   std::string m_printseeds; // Filename to dump computed seeds.
+  method_profiles::MethodProfiles m_method_profiles;
 
   // limits the output instruction size of any DexMethod to 2^n
   // 0 when limit is not present
