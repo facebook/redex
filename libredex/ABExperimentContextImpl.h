@@ -24,10 +24,14 @@ class ABExperimentContextImpl : public ABExperimentContext {
 
   ~ABExperimentContextImpl() override;
 
-  static void initialize_global_mode(
-      ABGlobalMode ab_global_mode = ABGlobalMode::NONE);
+#ifndef AB_REDEX_TEST
+ private:
+#endif
+  static void set_global_mode(ABGlobalMode ab_global_mode = ABGlobalMode::NONE);
 
  private:
+  friend class ABExperimentContext;
+
   DexMethod* m_original_method{nullptr};
   cfg::ControlFlowGraph* m_cfg{nullptr};
   std::unique_ptr<cfg::ControlFlowGraph> m_cloned_cfg{nullptr};

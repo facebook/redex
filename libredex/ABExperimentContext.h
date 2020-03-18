@@ -42,12 +42,21 @@ class ABExperimentContext {
   virtual ~ABExperimentContext() {}
 
   /**
+   * NOTE: this can only be used as long as no ABExperimentContext instance
+   * exists.
+   */
+  static void force_preferred_mode();
+
+#ifndef AB_REDEX_TEST
+ private:
+#endif
+  /**
    * Forces all ABExperimentContext instances to apply changes happening
    * to the CFG when flushing. This should only be used at the beginning of
    * Redex tests, when a pass is being experimented with and its tests need to
    * avoid the control logic.
-   * NOTE: only one of this, force_control_mode and force_preferred_mode can be
-   * used, and only once, before any instance of an experiment has been created.
+   * NOTE: this can only be used as long as no ABExperimentContext instance
+   * exists.
    */
   static void force_test_mode();
 
@@ -59,15 +68,9 @@ class ABExperimentContext {
    * to the CFG is applied. The reason for that is to test the behaviour of the
    * experiment for the CONTROL group (which should be the same as if there was
    * no pass).
-   * NOTE: only one of this, force_test_mode and force_preferred_mode can be
-   * used, and only once, before any instance of an experiment has been created.
+   * NOTE: this can only be used as long as no ABExperimentContext instance
+   * exists.
    */
   static void force_control_mode();
-
-  /**
-   * NOTE: only one of this, force_control_mode and force_test_mode can be
-   * used, and only once, before any instance of an experiment has been created.
-   */
-  static void force_preferred_mode();
 };
 } // namespace ab_test

@@ -52,7 +52,7 @@ TEST_F(ABExperimentContextTest, testCFGConstructorBasicFunctionality) {
 }
 
 TEST_F(ABExperimentContextTest, testTestingMode) {
-  ab_test::ABExperimentContextImpl::initialize_global_mode(
+  ab_test::ABExperimentContextImpl::set_global_mode(
       ab_test::ABGlobalMode::TEST);
   ASSERT_TRUE(classes);
   DexMethod* m =
@@ -76,7 +76,7 @@ TEST_F(ABExperimentContextTest, testTestingMode) {
 }
 
 TEST_F(ABExperimentContextTest, testControlMode) {
-  ab_test::ABExperimentContextImpl::initialize_global_mode(
+  ab_test::ABExperimentContextImpl::set_global_mode(
       ab_test::ABGlobalMode::CONTROL);
   ASSERT_TRUE(classes);
   DexMethod* m =

@@ -11,15 +11,10 @@
 using namespace ab_test;
 
 namespace {
-// True if an ABExperimentContext instance has already been created. Used to
-// make sure AB_GLOBAL_MODE is not modified after such an instance is created
-// to ensure that all instances will use the same global mode.
-static bool AB_INSTANTIATED = false;
-
-// True if the global mode has already been set/used. Used to make sure
-// AB_GLOBAL_MODE is not modified after it has been used to ensure that force_*
-// methods are used at MOST once.
-static bool AB_GLOBAL_INSTANTIATED = false;
+// Counter for the number of existing experiment context instances.
+// Used to make sure the global mode cannot be changed while at least one
+// experiment context instance exists.
+static uint16_t INST_CNT{0};
 
 // Optional global mode, NONE falls back to the preferred_mode of each
 // experiment context instance.
@@ -39,6 +34,7 @@ void ABExperimentContextImpl::flush() {
 
   // Clean up
   m_original_method->get_code()->clear_cfg();
+  --INST_CNT;
 }
 
 ABExperimentContextImpl::ABExperimentContextImpl(
@@ -58,18 +54,15 @@ bool ABExperimentContextImpl::use_test() {
           m_preferred_mode == ABExperimentPreferredMode::PREFER_TEST);
 }
 
-void ABExperimentContextImpl::initialize_global_mode(
-    ABGlobalMode ab_global_mode) {
-  // no change to initial value
-  always_assert(!AB_INSTANTIATED);
-  always_assert(!AB_GLOBAL_INSTANTIATED);
-  AB_GLOBAL_INSTANTIATED = true;
+void ABExperimentContextImpl::set_global_mode(ABGlobalMode ab_global_mode) {
+  // no currently existing instance
+  always_assert(INST_CNT == 0);
   AB_GLOBAL_MODE = ab_global_mode;
 }
 
 void ABExperimentContextImpl::setup_context() {
   always_assert(m_cfg->editable());
-  AB_INSTANTIATED = true;
+  ++INST_CNT;
 
   if (use_test()) {
     return;

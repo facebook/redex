@@ -20,13 +20,13 @@ std::unique_ptr<ABExperimentContext> ABExperimentContext::create(
 }
 
 void ABExperimentContext::force_test_mode() {
-  ABExperimentContextImpl::initialize_global_mode(ABGlobalMode::TEST);
+  ABExperimentContextImpl::set_global_mode(ABGlobalMode::TEST);
 }
 
 void ABExperimentContext::force_control_mode() {
-  ABExperimentContextImpl::initialize_global_mode(ABGlobalMode::CONTROL);
+  ABExperimentContextImpl::set_global_mode(ABGlobalMode::CONTROL);
 }
 
 void ABExperimentContext::force_preferred_mode() {
-  ABExperimentContextImpl::initialize_global_mode();
+  ABExperimentContextImpl::set_global_mode();
 }
