@@ -32,7 +32,15 @@ bool has_non_zero_static_value(DexField* field) {
 class RemoveUnusedFields final {
  public:
   RemoveUnusedFields(const Config& config, const Scope& scope)
-      : m_config(config), m_scope(scope) {
+      : m_config(config),
+        m_scope(scope),
+        m_remove_unread_field_put_types_whitelist(
+            {type::java_lang_String(), type::java_lang_Class(),
+             type::java_lang_Boolean(), type::java_lang_Byte(),
+             type::java_lang_Short(), type::java_lang_Character(),
+             type::java_lang_Integer(), type::java_lang_Long(),
+             type::java_lang_Float(), type::java_lang_Double()}),
+        m_java_lang_Enum(type::java_lang_Enum()) {
     analyze();
     transform();
   }
@@ -57,6 +65,31 @@ class RemoveUnusedFields final {
 
   bool is_whitelisted(DexField* field) const {
     return !m_config.whitelist || m_config.whitelist->count(field) != 0;
+  }
+
+  bool can_remove_unread_field_put(DexField* field) const {
+    auto t = field->get_type();
+    // When no non-null value is ever written to a field, then it can never hold
+    // a non-null reference
+    if (m_zero_written_fields.count(field)) {
+      return true;
+    }
+
+    // Fields of primitive types can never hold on to references
+    if (type::is_primitive(t)) {
+      return true;
+    }
+
+    // Nobody should ever rely on the lifetime of strings, classes, boxed
+    // values, or enum values
+    if (m_remove_unread_field_put_types_whitelist.count(t)) {
+      return true;
+    }
+    if (type::is_subclass(m_java_lang_Enum, t)) {
+      return true;
+    }
+
+    return false;
   }
 
   void analyze() {
@@ -120,8 +153,7 @@ class RemoveUnusedFields final {
         bool replace_insn = false;
         bool remove_insn = false;
         if (m_unread_fields.count(field)) {
-          if (m_config.unsafe || m_zero_written_fields.count(field) ||
-              type::is_primitive(field->get_type())) {
+          if (m_config.unsafe || can_remove_unread_field_put(field)) {
             always_assert(is_iput(insn->opcode()) || is_sput(insn->opcode()));
             TRACE(RMUF, 5, "Removing %s", SHOW(insn));
             remove_insn = true;
@@ -164,6 +196,8 @@ class RemoveUnusedFields final {
   std::unordered_set<const DexField*> m_unread_fields;
   std::unordered_set<const DexField*> m_unwritten_fields;
   std::unordered_set<const DexField*> m_zero_written_fields;
+  std::unordered_set<DexType*> m_remove_unread_field_put_types_whitelist;
+  DexType* m_java_lang_Enum;
 };
 
 } // namespace
