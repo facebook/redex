@@ -12,10 +12,6 @@
 
 namespace dtv_impl {
 
-NullnessLattice lattice(
-    {BOTTOM, IS_NULL, NOT_NULL, TOP},
-    {{BOTTOM, IS_NULL}, {BOTTOM, NOT_NULL}, {IS_NULL, TOP}, {NOT_NULL, TOP}});
-
 // Is `left` a subset of `right`
 bool is_subset(DexTypeList* left, DexTypeList* right) {
   std::unordered_set<DexType*> rset(right->begin(), right->end());
@@ -105,31 +101,31 @@ sparta::AbstractValueKind DexTypeValue::join_with(const DexTypeValue& other) {
 
 } // namespace  dtv_impl
 
-std::ostream& operator<<(std::ostream& output,
-                         const dtv_impl::Nullness& nullness) {
+NullnessLattice lattice({NN_BOTTOM, IS_NULL, NOT_NULL, NN_TOP},
+                        {{NN_BOTTOM, IS_NULL},
+                         {NN_BOTTOM, NOT_NULL},
+                         {IS_NULL, NN_TOP},
+                         {NOT_NULL, NN_TOP}});
+
+std::ostream& operator<<(std::ostream& output, const Nullness& nullness) {
   switch (nullness) {
-  case dtv_impl::BOTTOM: {
+  case NN_BOTTOM: {
     output << "BOTTOM";
     break;
   }
-  case dtv_impl::IS_NULL: {
+  case IS_NULL: {
     output << "NULL";
     break;
   }
-  case dtv_impl::NOT_NULL: {
+  case NOT_NULL: {
     output << "NOT_NULL";
     break;
   }
-  case dtv_impl::TOP: {
+  case NN_TOP: {
     output << "NULLABLE";
     break;
   }
   }
-  return output;
-}
-
-std::ostream& operator<<(std::ostream& output, const NullnessDomain& domain) {
-  output << domain.element();
   return output;
 }
 
