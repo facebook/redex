@@ -689,8 +689,8 @@ void TrackedUses::combine_paths(const TrackedUses& other) {
   safe_escapes.combine_paths(other.safe_escapes);
 }
 
-std::vector<std::pair<IRInstruction*, reg_t>>
-Escapes::get_escape_instructions() {
+std::vector<std::pair<IRInstruction*, reg_t>> Escapes::get_escape_instructions()
+    const {
   std::vector<std::pair<IRInstruction*, reg_t>> escapes;
   if (via_return) {
     for (auto i : return_instrs) {

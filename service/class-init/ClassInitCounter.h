@@ -154,7 +154,7 @@ class Escapes final {
   void merge(const Escapes& other);
 
   boost::optional<FlowStatus> via_return = {};
-  std::vector<std::pair<IRInstruction*, reg_t>> get_escape_instructions();
+  std::vector<std::pair<IRInstruction*, reg_t>> get_escape_instructions() const;
 
   std::unordered_set<IRInstruction*> return_instrs;
   ArrayWriteMap via_array_write;
