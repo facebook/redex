@@ -120,7 +120,7 @@ using NullnessDomain =
                                  &dtv_impl::lattice>;
 
 std::ostream& operator<<(std::ostream& output,
-                         const dtv_impl::Nullness& nullness);
+                         const dtv_impl::Nullness nullness);
 
 std::ostream& operator<<(std::ostream& output, const NullnessDomain& domain);
 
@@ -212,6 +212,10 @@ class DexTypeDomain
   // insert a redundant '= default'.
   DexTypeDomain() = default;
 
+  explicit DexTypeDomain(const dtv_impl::Nullness nullness)
+      : ReducedProductAbstractDomain(std::make_tuple(
+            NullnessDomain(nullness), SingletonDexTypeDomain::none())) {}
+
   explicit DexTypeDomain(const DexType* dex_type)
       : ReducedProductAbstractDomain(
             std::make_tuple(NullnessDomain(dtv_impl::NOT_NULL),
@@ -233,11 +237,6 @@ class DexTypeDomain
   boost::optional<const DexType*> get_dex_type() const {
     return get<1>().get_dex_type();
   }
-
- private:
-  explicit DexTypeDomain(const dtv_impl::Nullness nullness)
-      : ReducedProductAbstractDomain(std::make_tuple(
-            NullnessDomain(nullness), SingletonDexTypeDomain::none())) {}
 };
 
 /*
