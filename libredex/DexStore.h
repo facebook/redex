@@ -158,6 +158,22 @@ class XStoreRefs {
     always_assert_log(false, "type %s not in the current APK", SHOW(type));
   }
 
+  /**
+   * Returns true if the class is in the root store. False if not.
+   *
+   * NOTE: False will be returned also for the cases where the type is not in
+   * the current scope.
+   */
+  bool is_in_root_store(const DexType* type) const {
+    for (size_t store_idx = 0; store_idx < m_root_stores; store_idx++) {
+      if (m_xstores[store_idx].count(type) > 0) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
   const DexStore* get_store(size_t idx) const { return m_stores[idx]; }
 
   const DexStore* get_store(const DexType* type) const {
