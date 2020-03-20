@@ -87,11 +87,13 @@ class DexTypeValue final : public sparta::AbstractValue<DexTypeValue> {
   const DexType* m_dex_type;
 };
 
+} // namespace dtv_impl
+
 enum Nullness {
-  BOTTOM,
+  NN_BOTTOM,
   IS_NULL,
   NOT_NULL,
-  TOP // Nullable
+  NN_TOP // Nullable
 };
 
 using NullnessLattice = sparta::BitVectorLattice<Nullness, 4, std::hash<int>>;
@@ -105,24 +107,18 @@ using NullnessLattice = sparta::BitVectorLattice<Nullness, 4, std::hash<int>>;
  */
 extern NullnessLattice lattice;
 
-} // namespace dtv_impl
-
 /*
  * Nullness domain
  *
  * We can use the nullness domain to track the nullness of a given reference
  * type value.
  */
-using NullnessDomain =
-    sparta::FiniteAbstractDomain<dtv_impl::Nullness,
-                                 dtv_impl::NullnessLattice,
-                                 dtv_impl::NullnessLattice::Encoding,
-                                 &dtv_impl::lattice>;
+using NullnessDomain = sparta::FiniteAbstractDomain<Nullness,
+                                                    NullnessLattice,
+                                                    NullnessLattice::Encoding,
+                                                    &lattice>;
 
-std::ostream& operator<<(std::ostream& output,
-                         const dtv_impl::Nullness& nullness);
-
-std::ostream& operator<<(std::ostream& output, const NullnessDomain& domain);
+std::ostream& operator<<(std::ostream& output, const Nullness& nullness);
 
 /*
  * DexType domain
@@ -213,18 +209,17 @@ class DexTypeDomain
   DexTypeDomain() = default;
 
   explicit DexTypeDomain(const DexType* dex_type)
-      : ReducedProductAbstractDomain(
-            std::make_tuple(NullnessDomain(dtv_impl::NOT_NULL),
-                            SingletonDexTypeDomain(dex_type))) {}
+      : ReducedProductAbstractDomain(std::make_tuple(
+            NullnessDomain(NOT_NULL), SingletonDexTypeDomain(dex_type))) {}
 
   static void reduce_product(
       std::tuple<NullnessDomain, SingletonDexTypeDomain>& /* product */) {}
 
-  static DexTypeDomain null() { return DexTypeDomain(dtv_impl::IS_NULL); }
+  static DexTypeDomain null() { return DexTypeDomain(IS_NULL); }
 
-  bool is_null() const { return get<0>().element() == dtv_impl::IS_NULL; }
+  bool is_null() const { return get<0>().element() == IS_NULL; }
 
-  bool is_not_null() const { return get<0>().element() == dtv_impl::NOT_NULL; }
+  bool is_not_null() const { return get<0>().element() == NOT_NULL; }
 
   bool is_nullable() const { return get<0>().is_top(); }
 
@@ -235,7 +230,7 @@ class DexTypeDomain
   }
 
  private:
-  explicit DexTypeDomain(const dtv_impl::Nullness nullness)
+  explicit DexTypeDomain(const Nullness nullness)
       : ReducedProductAbstractDomain(std::make_tuple(
             NullnessDomain(nullness), SingletonDexTypeDomain::none())) {}
 };
