@@ -24,6 +24,7 @@
   TM(BPH)            \
   TM(BRIDGE)         \
   TM(BUILDERS)       \
+  TM(CLA)            \
   TM(CFG)            \
   TM(CFP)            \
   TM(CIC)            \
