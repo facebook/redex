@@ -610,8 +610,9 @@ void InterDex::init_cross_dex_ref_minimizer_and_relocate_methods() {
   if (m_cross_dex_relocator_config.relocate_static_methods ||
       m_cross_dex_relocator_config.relocate_non_static_direct_methods ||
       m_cross_dex_relocator_config.relocate_virtual_methods) {
-    m_cross_dex_relocator = new CrossDexRelocator(
-        m_cross_dex_relocator_config, m_original_scope, m_dexes_structure);
+    m_cross_dex_relocator =
+        new CrossDexRelocator(m_cross_dex_relocator_config, m_original_scope,
+                              m_xstore_refs, m_dexes_structure);
 
     TRACE(IDEX, 2,
           "[dex ordering] Cross-dex-relocator active, max relocated methods "

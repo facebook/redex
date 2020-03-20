@@ -17,6 +17,8 @@
 #include "InterDexPassPlugin.h"
 #include "MixedModeInfo.h"
 
+class XStoreRefs;
+
 namespace interdex {
 
 class InterDex {
@@ -35,7 +37,8 @@ class InterDex {
            bool minimize_cross_dex_refs,
            const CrossDexRefMinimizerConfig& cross_dex_refs_config,
            const CrossDexRelocatorConfig& cross_dex_relocator_config,
-           size_t reserve_mrefs)
+           size_t reserve_mrefs,
+           const XStoreRefs* xstore_refs)
       : m_dexen(dexen),
         m_apk_manager(apk_manager),
         m_conf(conf),
@@ -52,7 +55,8 @@ class InterDex {
         m_cross_dex_ref_minimizer(cross_dex_refs_config),
         m_cross_dex_relocator_config(cross_dex_relocator_config),
         m_original_scope(original_scope),
-        m_scope(build_class_scope(m_dexen)) {
+        m_scope(build_class_scope(m_dexen)),
+        m_xstore_refs(xstore_refs) {
     m_dexes_structure.set_linear_alloc_limit(linear_alloc_limit);
     m_dexes_structure.set_type_refs_limit(type_refs_limit);
     m_dexes_structure.set_reserve_mrefs(reserve_mrefs);
@@ -161,6 +165,7 @@ class InterDex {
   CrossDexRelocator* m_cross_dex_relocator{nullptr};
   Scope m_scope;
   std::vector<DexType*> m_interdex_types;
+  const XStoreRefs* m_xstore_refs;
 };
 
 } // namespace interdex
