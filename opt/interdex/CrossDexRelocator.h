@@ -15,6 +15,8 @@
 #include "DexStructure.h"
 #include "TypeSystem.h"
 
+class XStoreRefs;
+
 namespace interdex {
 
 struct CrossDexRelocatorStats {
@@ -38,10 +40,12 @@ class CrossDexRelocator {
  public:
   CrossDexRelocator(const CrossDexRelocatorConfig& config,
                     const Scope& original_scope,
+                    const XStoreRefs* xstore_refs,
                     DexesStructure& dexes_structure)
       : m_config(config),
         m_type_system(original_scope),
-        m_dexes_structure(dexes_structure) {}
+        m_dexes_structure(dexes_structure),
+        m_xstore_refs(xstore_refs) {}
 
   // Analyze given class, and relocate eligible methods to separate classes.
   void relocate_methods(DexClass* cls,
@@ -106,6 +110,7 @@ class CrossDexRelocator {
   const CrossDexRelocatorConfig m_config;
   TypeSystem m_type_system;
   DexesStructure& m_dexes_structure;
+  const XStoreRefs* m_xstore_refs;
 };
 
 } // namespace interdex

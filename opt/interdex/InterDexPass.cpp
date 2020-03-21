@@ -101,12 +101,13 @@ void InterDexPass::run_pass(DexStoresVector& stores,
   }
 
   bool force_single_dex = conf.get_json_config().get("force_single_dex", false);
+  XStoreRefs xstore_refs(stores);
   InterDex interdex(original_scope, dexen, mgr.apk_manager(), conf, plugins,
                     m_linear_alloc_limit, m_type_refs_limit, m_static_prune,
                     m_normal_primary_dex, force_single_dex,
                     m_emit_scroll_set_marker, m_emit_canaries,
                     m_minimize_cross_dex_refs, m_minimize_cross_dex_refs_config,
-                    m_cross_dex_relocator_config, reserve_mrefs);
+                    m_cross_dex_relocator_config, reserve_mrefs, &xstore_refs);
 
   if (m_expect_order_list) {
     always_assert_log(
