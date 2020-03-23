@@ -5,6 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <atomic>
+
 #include "RemoveUnusedFields.h"
 
 #include "CFGMutation.h"
@@ -55,6 +57,10 @@ class RemoveUnusedFields final {
 
   const std::unordered_set<const DexField*>& zero_written_fields() const {
     return m_zero_written_fields;
+  }
+
+  size_t unremovable_unread_field_puts() const {
+    return m_unremovable_unread_field_puts;
   }
 
  private:
@@ -136,7 +142,7 @@ class RemoveUnusedFields final {
     TRACE(RMUF, 2, "zero written_fields %u", m_zero_written_fields.size());
   }
 
-  void transform() const {
+  void transform() {
     // Replace reads to unwritten fields with appropriate const-0 instructions,
     // and remove the writes to unread fields.
     walk::parallel::code(m_scope, [&](const DexMethod*, IRCode& code) {
@@ -157,6 +163,8 @@ class RemoveUnusedFields final {
             always_assert(is_iput(insn->opcode()) || is_sput(insn->opcode()));
             TRACE(RMUF, 5, "Removing %s", SHOW(insn));
             remove_insn = true;
+          } else {
+            m_unremovable_unread_field_puts++;
           }
         } else if (m_unwritten_fields.count(field)) {
           always_assert(is_iget(insn->opcode()) || is_sget(insn->opcode()));
@@ -198,6 +206,7 @@ class RemoveUnusedFields final {
   std::unordered_set<const DexField*> m_zero_written_fields;
   std::unordered_set<DexType*> m_remove_unread_field_put_types_whitelist;
   DexType* m_java_lang_Enum;
+  std::atomic<size_t> m_unremovable_unread_field_puts{0};
 };
 
 } // namespace
@@ -211,7 +220,9 @@ void PassImpl::run_pass(DexStoresVector& stores,
   RemoveUnusedFields rmuf(m_config, scope);
   mgr.set_metric("unread_fields", rmuf.unread_fields().size());
   mgr.set_metric("unwritten_fields", rmuf.unwritten_fields().size());
-  mgr.set_metric("zero written_fields", rmuf.zero_written_fields().size());
+  mgr.set_metric("zero_written_fields", rmuf.zero_written_fields().size());
+  mgr.set_metric("unremovable_unread_field_puts",
+                 rmuf.unremovable_unread_field_puts());
 
   if (m_export_removed) {
     std::vector<const DexField*> removed_fields(rmuf.unread_fields().begin(),
