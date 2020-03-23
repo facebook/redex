@@ -1044,21 +1044,35 @@ struct IfZeroMeetWith {
   boost::optional<sign_domain::Interval> left_zero_meet_interval{boost::none};
 };
 
-static const std::unordered_map<IROpcode, IfZeroMeetWith> if_zero_meet_with{
-    {OPCODE_IF_EQZ, {sign_domain::Interval::EQZ}},
-    {OPCODE_IF_NEZ, {sign_domain::Interval::NEZ}},
-    {OPCODE_IF_LTZ, {sign_domain::Interval::LTZ}},
-    {OPCODE_IF_GTZ, {sign_domain::Interval::GTZ}},
-    {OPCODE_IF_LEZ, {sign_domain::Interval::LEZ}},
-    {OPCODE_IF_GEZ, {sign_domain::Interval::GEZ}},
-
-    {OPCODE_IF_EQ, {sign_domain::Interval::EQZ, sign_domain::Interval::EQZ}},
-    {OPCODE_IF_NE, {sign_domain::Interval::NEZ, sign_domain::Interval::NEZ}},
-    {OPCODE_IF_LT, {sign_domain::Interval::LTZ, sign_domain::Interval::GTZ}},
-    {OPCODE_IF_GT, {sign_domain::Interval::GTZ, sign_domain::Interval::LTZ}},
-    {OPCODE_IF_LE, {sign_domain::Interval::LEZ, sign_domain::Interval::GEZ}},
-    {OPCODE_IF_GE, {sign_domain::Interval::GEZ, sign_domain::Interval::LEZ}},
+namespace {
+// Try to work around GCC bug.
+struct IROpcodeHash {
+  inline size_t operator()(const IROpcode& op) const { return (size_t)op; }
 };
+} // namespace
+
+static const std::unordered_map<IROpcode, IfZeroMeetWith, IROpcodeHash>
+    if_zero_meet_with{
+        {OPCODE_IF_EQZ, {sign_domain::Interval::EQZ}},
+        {OPCODE_IF_NEZ, {sign_domain::Interval::NEZ}},
+        {OPCODE_IF_LTZ, {sign_domain::Interval::LTZ}},
+        {OPCODE_IF_GTZ, {sign_domain::Interval::GTZ}},
+        {OPCODE_IF_LEZ, {sign_domain::Interval::LEZ}},
+        {OPCODE_IF_GEZ, {sign_domain::Interval::GEZ}},
+
+        {OPCODE_IF_EQ,
+         {sign_domain::Interval::EQZ, sign_domain::Interval::EQZ}},
+        {OPCODE_IF_NE,
+         {sign_domain::Interval::NEZ, sign_domain::Interval::NEZ}},
+        {OPCODE_IF_LT,
+         {sign_domain::Interval::LTZ, sign_domain::Interval::GTZ}},
+        {OPCODE_IF_GT,
+         {sign_domain::Interval::GTZ, sign_domain::Interval::LTZ}},
+        {OPCODE_IF_LE,
+         {sign_domain::Interval::LEZ, sign_domain::Interval::GEZ}},
+        {OPCODE_IF_GE,
+         {sign_domain::Interval::GEZ, sign_domain::Interval::LEZ}},
+    };
 
 /*
  * If we can determine that a branch is not taken based on the constants in
