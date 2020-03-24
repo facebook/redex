@@ -33,6 +33,7 @@ struct Config {
   bool remove_unread_fields;
   bool remove_unwritten_fields;
   bool remove_zero_written_fields;
+  bool unsafe;
   std::unordered_set<const DexType*> blacklist_types;
   std::unordered_set<const DexType*> blacklist_classes;
   boost::optional<std::unordered_set<DexField*>> whitelist;
@@ -48,6 +49,10 @@ class PassImpl : public Pass {
     bind("remove_zero_written_fields",
          true,
          m_config.remove_zero_written_fields);
+    bind("unsafe", false, m_config.unsafe,
+         "If set, RUF will remove stores to fields that affect object "
+         "lifetimes, observable via weak references, typically used in "
+         "observer patterns.");
     bind("blacklist_types",
          {},
          m_config.blacklist_types,

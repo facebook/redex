@@ -118,9 +118,12 @@ class RemoveUnusedFields final {
         }
         auto field = resolve_field(insn->get_field());
         if (m_unread_fields.count(field)) {
-          always_assert(is_iput(insn->opcode()) || is_sput(insn->opcode()));
-          TRACE(RMUF, 5, "Removing %s", SHOW(insn));
-          to_remove.push_back(insn_it);
+          if (m_config.unsafe || m_zero_written_fields.count(field) ||
+              type::is_primitive(field->get_type())) {
+            always_assert(is_iput(insn->opcode()) || is_sput(insn->opcode()));
+            TRACE(RMUF, 5, "Removing %s", SHOW(insn));
+            to_remove.push_back(insn_it);
+          }
         } else if (m_unwritten_fields.count(field)) {
           always_assert(is_iget(insn->opcode()) || is_sget(insn->opcode()));
           TRACE(RMUF, 5, "Replacing %s with const 0", SHOW(insn));
