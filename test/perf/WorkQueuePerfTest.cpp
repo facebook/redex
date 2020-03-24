@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "SpartaWorkQueue.h"
+#include "WorkQueue.h"
 
 #include <chrono>
 #include <random>
@@ -17,7 +17,7 @@
 
 template <typename T>
 double calculate_speedup(std::vector<int>& wait_times, int num_threads) {
-  auto wq = sparta::work_queue<int>(
+  auto wq = workqueue_foreach<int>(
       [](int a) { std::this_thread::sleep_for(T(a)); }, num_threads);
 
   for (auto& item : wait_times) {

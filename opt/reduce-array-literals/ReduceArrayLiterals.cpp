@@ -677,7 +677,7 @@ void ReduceArrayLiteralsPass::run_pass(DexStoresVector& stores,
         code->clear_cfg();
         return ral.get_stats();
       },
-      m_debug ? 1 : sparta::parallel::default_num_threads());
+      m_debug ? 1 : redex_parallel::default_num_threads());
   mgr.incr_metric(METRIC_FILLED_ARRAYS, stats.filled_arrays);
   mgr.incr_metric(METRIC_FILLED_ARRAY_ELEMENTS, stats.filled_array_elements);
   mgr.incr_metric(METRIC_FILLED_ARRAY_CHUNKS, stats.filled_array_chunks);

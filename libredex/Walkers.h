@@ -12,16 +12,14 @@
 #include <thread>
 #include <vector>
 
-#include "Arity.h"
 #include "ControlFlow.h"
 #include "DexAnnotation.h"
 #include "DexClass.h"
 #include "EditableCfgAdapter.h"
 #include "IRCode.h"
 #include "Match.h"
-#include "SpartaWorkQueue.h"
-#include "Thread.h"
 #include "VirtualScope.h"
+#include "WorkQueue.h"
 
 /**
  * A wrapper around a type which allocates it aligned to the cache line.
@@ -408,6 +406,52 @@ class walk {
    * to create too many tasks on the WorkQueue, paying the overhead for each.
    */
   class parallel {
+   private:
+    // Template helpers to get the array of a function type or similar.
+    template <typename T, bool IS_FUNC>
+    struct GetArity;
+
+    template <typename T>
+    struct GetArity<T, true> {
+      template <typename R>
+      struct get_arity;
+      template <typename R, typename... Args>
+      struct get_arity<R(Args...)>
+          : std::integral_constant<unsigned, sizeof...(Args)> {};
+      template <typename R, typename... Args>
+      struct get_arity<R (*)(Args...)>
+          : std::integral_constant<unsigned, sizeof...(Args)> {};
+      template <typename R, typename C, typename... Args>
+      struct get_arity<R (C::*)(Args...)>
+          : std::integral_constant<unsigned, sizeof...(Args)> {};
+      template <typename R, typename C, typename... Args>
+      struct get_arity<R (C::*)(Args...) const>
+          : std::integral_constant<unsigned, sizeof...(Args)> {};
+      static constexpr unsigned value = get_arity<T>::value;
+    };
+
+    template <typename T>
+    struct GetArity<T, false> {
+      template <typename R>
+      struct get_arity : get_arity<decltype(&R::operator())> {};
+      template <typename R, typename... Args>
+      struct get_arity<R(Args...)>
+          : std::integral_constant<unsigned, sizeof...(Args)> {};
+      template <typename R, typename... Args>
+      struct get_arity<R (*)(Args...)>
+          : std::integral_constant<unsigned, sizeof...(Args)> {};
+      template <typename R, typename C, typename... Args>
+      struct get_arity<R (C::*)(Args...)>
+          : std::integral_constant<unsigned, sizeof...(Args)> {};
+      template <typename R, typename C, typename... Args>
+      struct get_arity<R (C::*)(Args...) const>
+          : std::integral_constant<unsigned, sizeof...(Args)> {};
+      static constexpr unsigned value = get_arity<T>::value;
+    };
+
+    template <typename T>
+    struct Arity : GetArity<T, std::is_function<T>::value> {};
+
    public:
     parallel() = delete;
     ~parallel() = delete;
@@ -419,8 +463,8 @@ class walk {
     static void classes(
         Classes const& classes,
         const WalkerFn& walker,
-        size_t num_threads = sparta::parallel::default_num_threads()) {
-      auto wq = sparta::work_queue<DexClass*>( // over-parallelized maybe
+        size_t num_threads = redex_parallel::default_num_threads()) {
+      auto wq = workqueue_foreach<DexClass*>( // over-parallelized maybe
           [&walker](DexClass* cls) { walker(cls); },
           num_threads);
       run_all(wq, classes);
@@ -432,8 +476,8 @@ class walk {
     static void methods(
         const Classes& classes,
         const WalkerFn& walker,
-        size_t num_threads = sparta::parallel::default_num_threads()) {
-      auto wq = sparta::work_queue<DexClass*>(
+        size_t num_threads = redex_parallel::default_num_threads()) {
+      auto wq = workqueue_foreach<DexClass*>(
           [&walker](DexClass* cls) { walk::iterate_methods(cls, walker); },
           num_threads);
       run_all(wq, classes);
@@ -446,22 +490,22 @@ class walk {
     // without taking a lock.
     //
     // WalkerFn should accept `(DexMethod*, Accumulator&)`.
-    template <class Accumulator,
-              class Reduce = plus_assign<Accumulator>,
-              class Classes,
-              typename WalkerFn,
-              typename std::enable_if<sparta::Arity<WalkerFn>::value == 2,
-                                      int>::type = 0>
+    template <
+        class Accumulator,
+        class Reduce = plus_assign<Accumulator>,
+        class Classes,
+        typename WalkerFn,
+        typename std::enable_if<Arity<WalkerFn>::value == 2, int>::type = 0>
     static Accumulator methods(
         const Classes& classes,
         const WalkerFn& walker,
-        size_t num_threads = sparta::parallel::default_num_threads(),
+        size_t num_threads = redex_parallel::default_num_threads(),
         Accumulator init = Accumulator()) {
       std::vector<CacheAligned<Accumulator>> acc_vec(num_threads, init);
 
-      auto wq = sparta::work_queue<DexClass*>(
-          [&](sparta::SpartaWorkerState<DexClass*>* state, DexClass* cls) {
-            Accumulator& acc = acc_vec[state->worker_id()];
+      auto wq = workqueue_foreach<DexClass*>(
+          [&](DexClass* cls) {
+            Accumulator& acc = acc_vec[redex_parallel::get_worker_id()];
             for (auto dmethod : cls->get_dmethods()) {
               TraceContext context(dmethod->get_deobfuscated_name());
               walker(dmethod, &acc);
@@ -488,16 +532,16 @@ class walk {
     // the walker returns a fresh Accumulator object which gets summed up.
     //
     // WalkerFn should accept a `DexMethod*` and return `Accumulator`.
-    template <class Accumulator,
-              class Reduce = plus_assign<Accumulator>,
-              class Classes,
-              typename WalkerFn,
-              typename std::enable_if<sparta::Arity<WalkerFn>::value == 1,
-                                      int>::type = 0>
+    template <
+        class Accumulator,
+        class Reduce = plus_assign<Accumulator>,
+        class Classes,
+        typename WalkerFn,
+        typename std::enable_if<Arity<WalkerFn>::value == 1, int>::type = 0>
     static Accumulator methods(
         const Classes& classes,
         const WalkerFn& walker,
-        size_t num_threads = sparta::parallel::default_num_threads(),
+        size_t num_threads = redex_parallel::default_num_threads(),
         Accumulator init = Accumulator()) {
       auto reduce = Reduce();
       return methods<Accumulator, Reduce, Classes>(
@@ -516,8 +560,8 @@ class walk {
     static void fields(
         const Classes& classes,
         const WalkerFn& walker,
-        size_t num_threads = sparta::parallel::default_num_threads()) {
-      auto wq = sparta::work_queue<DexClass*>(
+        size_t num_threads = redex_parallel::default_num_threads()) {
+      auto wq = workqueue_foreach<DexClass*>(
           [&walker](DexClass* cls) { walk::iterate_fields(cls, walker); },
           num_threads);
       run_all(wq, classes);
@@ -532,8 +576,8 @@ class walk {
         const Classes& classes,
         const FilterFn& filter,
         const WalkerFn& walker,
-        size_t num_threads = sparta::parallel::default_num_threads()) {
-      auto wq = sparta::work_queue<DexClass*>(
+        size_t num_threads = redex_parallel::default_num_threads()) {
+      auto wq = workqueue_foreach<DexClass*>(
           [&filter, &walker](DexClass* cls) {
             walk::iterate_code(cls, filter, walker);
           },
@@ -546,7 +590,7 @@ class walk {
     static void code(
         const Classes& classes,
         const WalkerFn& walker,
-        size_t num_threads = sparta::parallel::default_num_threads()) {
+        size_t num_threads = redex_parallel::default_num_threads()) {
       walk::parallel::code(classes, all_methods, walker, num_threads);
     }
 
@@ -559,8 +603,8 @@ class walk {
         const Classes& classes,
         const FilterFn& filter,
         const WalkerFn& walker,
-        size_t num_threads = sparta::parallel::default_num_threads()) {
-      auto wq = sparta::work_queue<DexClass*>(
+        size_t num_threads = redex_parallel::default_num_threads()) {
+      auto wq = workqueue_foreach<DexClass*>(
           [&filter, &walker](DexClass* cls) {
             walk::iterate_opcodes(cls, filter, walker);
           },
@@ -573,7 +617,7 @@ class walk {
     static void opcodes(
         const Classes& classes,
         const WalkerFn& walker,
-        size_t num_threads = sparta::parallel::default_num_threads()) {
+        size_t num_threads = redex_parallel::default_num_threads()) {
       walk::parallel::opcodes(classes, all_methods, walker, num_threads);
     }
 
@@ -583,8 +627,8 @@ class walk {
     static void annotations(
         const Classes& classes,
         const WalkerFn& walker,
-        size_t num_threads = sparta::parallel::default_num_threads()) {
-      auto wq = sparta::work_queue<DexClass*>(
+        size_t num_threads = redex_parallel::default_num_threads()) {
+      auto wq = workqueue_foreach<DexClass*>(
           [&walker](DexClass* cls) { walk::iterate_annotations(cls, walker); },
           num_threads);
       run_all(wq, classes);
@@ -602,8 +646,8 @@ class walk {
         const Classes& classes,
         const Predicate& predicate,
         const Walker& walker,
-        size_t num_threads = sparta::parallel::default_num_threads()) {
-      auto wq = sparta::work_queue<DexClass*>(
+        size_t num_threads = redex_parallel::default_num_threads()) {
+      auto wq = workqueue_foreach<DexClass*>(
           [&predicate, &walker](DexClass* cls) {
             walk::iterate_matching(cls, predicate, walker);
           },
@@ -625,8 +669,8 @@ class walk {
         const Classes& classes,
         const Predicate& predicate,
         const WalkerFn& walker,
-        size_t num_threads = sparta::parallel::default_num_threads()) {
-      auto wq = sparta::work_queue<DexClass*>(
+        size_t num_threads = redex_parallel::default_num_threads()) {
+      auto wq = workqueue_foreach<DexClass*>(
           [&predicate, &walker](DexClass* cls) {
             walk::iterate_matching_block(cls, predicate, walker);
           },
@@ -640,8 +684,8 @@ class walk {
     static void virtual_scopes(
         const VirtualScopes& virtual_scopes,
         const WalkerFn& walker,
-        size_t num_threads = sparta::parallel::default_num_threads()) {
-      auto wq = sparta::work_queue<const VirtualScope*>(walker, num_threads);
+        size_t num_threads = redex_parallel::default_num_threads()) {
+      auto wq = workqueue_foreach<const VirtualScope*>(walker, num_threads);
       run_all(wq, virtual_scopes);
     }
 

@@ -10,8 +10,8 @@
 #include "DexUtil.h"
 #include "PatriciaTreeSet.h"
 #include "Resolver.h"
-#include "SpartaWorkQueue.h"
 #include "Walkers.h"
+#include "WorkQueue.h"
 
 using namespace local_pointers;
 
@@ -376,7 +376,7 @@ void FixpointIterator::analyze_instruction(const IRInstruction* insn,
 void FixpointIteratorMapDeleter::operator()(FixpointIteratorMap* map) {
   // Deletion is actually really expensive due to the reference counts of the
   // shared_ptrs in the Patricia trees, so we do it in parallel.
-  auto wq = sparta::work_queue<FixpointIterator*>(
+  auto wq = workqueue_foreach<FixpointIterator*>(
       [](FixpointIterator* fp_iter) { delete fp_iter; });
   for (auto& pair : *map) {
     wq.add_item(pair.second);

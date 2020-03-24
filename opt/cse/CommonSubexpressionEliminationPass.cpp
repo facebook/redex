@@ -120,7 +120,7 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
           }
         }
       },
-      m_debug ? 1 : sparta::parallel::default_num_threads());
+      m_debug ? 1 : redex_parallel::default_num_threads());
   mgr.incr_metric(METRIC_RESULTS_CAPTURED, stats.results_captured);
   mgr.incr_metric(METRIC_STORES_CAPTURED, stats.stores_captured);
   mgr.incr_metric(METRIC_ARRAY_LENGTHS_CAPTURED, stats.array_lengths_captured);

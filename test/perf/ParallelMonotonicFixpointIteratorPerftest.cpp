@@ -236,7 +236,7 @@ int main() {
   double duration1 = std::chrono::duration_cast<std::chrono::microseconds>(
                          single_end - single_start)
                          .count();
-  for (uint32_t i = 1; i <= sparta::parallel::default_num_threads(); ++i) {
+  for (uint32_t i = 1; i <= redex_parallel::default_num_threads(); ++i) {
     printf("%u %lf\n", i, duration1 / calculate_speedup(test, i));
   }
 }
