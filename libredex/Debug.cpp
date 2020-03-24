@@ -84,8 +84,39 @@ std::string format2string(const char* fmt, ...) {
 
 namespace {
 
-using traced =
-    boost::error_info<struct tag_stacktrace, boost::stacktrace::stacktrace>;
+#ifndef _MSC_VER
+
+// To have unified decoding in redex.py, use GNU backtrace here with a helper.
+struct StackTrace {
+  std::array<void*, 256> trace;
+  size_t len;
+
+  StackTrace() { len = backtrace(trace.data(), trace.size()); }
+
+  void print_to_stderr() const {
+    backtrace_symbols_fd(trace.data(), len, STDERR_FILENO);
+  }
+};
+
+using StType = StackTrace;
+
+void print_stack_trace_impl(std::ostream& /* os */, const StackTrace* st) {
+  // Does not support ostream right now.
+  st->print_to_stderr();
+}
+
+#else
+
+// Use boost stacktrace on Windows.
+using StType = boost::stacktrace::stacktrace;
+
+void print_stack_trace_impl(std::ostream& os, const StType* st) {
+  os << *st << std::endl;
+}
+
+#endif
+
+using traced = boost::error_info<struct tag_stacktrace, StType>;
 
 #ifdef __linux__
 std::atomic<pid_t> g_aborting{0};
@@ -129,7 +160,7 @@ void assert_fail(const char* expr,
 
   if (do_throw || !g_block_multi_asserts) {
     throw boost::enable_error_info(RedexException(type, msg))
-        << traced(boost::stacktrace::stacktrace());
+        << traced(StType());
   }
 
   // Another thread already threw. Avoid "terminate called recursively."
@@ -140,9 +171,9 @@ void assert_fail(const char* expr,
 }
 
 void print_stack_trace(std::ostream& os, const std::exception& e) {
-  const boost::stacktrace::stacktrace* st = boost::get_error_info<traced>(e);
+  const StType* st = boost::get_error_info<traced>(e);
   if (st) {
-    os << *st << std::endl;
+    print_stack_trace_impl(os, st);
   }
 }
 
