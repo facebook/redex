@@ -11,11 +11,13 @@
 #include <atomic>
 #include <boost/optional/optional.hpp>
 #include <chrono>
+#include <condition_variable>
 #include <mutex>
 #include <numeric>
 #include <queue>
 #include <random>
 #include <thread>
+#include <utility>
 
 #include "Arity.h"
 
@@ -54,15 +56,56 @@ inline std::vector<unsigned int> create_permutation(unsigned int num,
   return attempts;
 }
 
+class Semaphore {
+ public:
+  explicit Semaphore(size_t initial = 0u) : m_count(initial) {}
+
+  inline void give(size_t n = 1u) {
+    std::unique_lock<std::mutex> lock(m_mtx);
+    m_count += n;
+    if (n == 1) {
+      m_cv.notify_one();
+    } else {
+      m_cv.notify_all(); // A bit suboptimal, but easier than precise counting.
+    }
+  }
+
+  inline void take() {
+    std::unique_lock<std::mutex> lock(m_mtx);
+    while (m_count == 0) {
+      m_cv.wait(lock);
+    }
+    --m_count;
+  }
+
+  inline void take_all() {
+    std::unique_lock<std::mutex> lock(m_mtx);
+    m_count = 0;
+  }
+
+ private:
+  std::mutex m_mtx;
+  std::condition_variable m_cv;
+  size_t m_count;
+};
+
 struct StateCounters {
   std::atomic_uint num_non_empty;
   std::atomic_uint num_running;
+  const unsigned int num_all;
+  // Mutexes aren't move-able.
+  std::unique_ptr<Semaphore> waiter;
 
-  StateCounters() : num_non_empty(0), num_running(0) {}
+  explicit StateCounters(unsigned int num)
+      : num_non_empty(0),
+        num_running(0),
+        num_all(num),
+        waiter(new Semaphore(0)) {}
   StateCounters(StateCounters&& other)
       : num_non_empty(other.num_non_empty.load()),
-        num_running(other.num_running.load()) {}
-  StateCounters(const StateCounters&) = delete;
+        num_running(other.num_running.load()),
+        num_all(other.num_all),
+        waiter(std::move(other.waiter)) {}
 };
 
 } // namespace workqueue_impl
@@ -86,6 +129,9 @@ class SpartaWorkerState final {
     std::lock_guard<std::mutex> guard(m_queue_mtx);
     if (m_queue.empty()) {
       ++m_state_counters->num_non_empty;
+    }
+    if (m_state_counters->num_running < m_state_counters->num_all) {
+      m_state_counters->waiter->give(1u); // May consider waking all.
     }
     m_queue.push(task);
   }
@@ -138,8 +184,8 @@ class SpartaWorkQueue {
   std::vector<std::unique_ptr<SpartaWorkerState<Input>>> m_states;
   const size_t m_num_threads{1};
   size_t m_insert_idx{0};
-  const bool m_can_push_task{false};
   workqueue_impl::StateCounters m_state_counters;
+  const bool m_can_push_task{false};
 
   void consume(SpartaWorkerState<Input>* state, Input task) {
     m_executor(state, task);
@@ -179,6 +225,7 @@ SpartaWorkQueue<Input, Executor>::SpartaWorkQueue(Executor executor,
                                                   bool push_tasks_while_running)
     : m_executor(executor),
       m_num_threads(num_threads),
+      m_state_counters(num_threads),
       m_can_push_task(push_tasks_while_running) {
   assert(num_threads >= 1);
   for (unsigned int i = 0; i < m_num_threads; ++i) {
@@ -203,6 +250,7 @@ void SpartaWorkQueue<Input, Executor>::run_all() {
   std::vector<std::thread> all_threads;
   m_state_counters.num_non_empty = 0;
   m_state_counters.num_running = 0;
+  m_state_counters.waiter->take_all();
   auto worker = [&](SpartaWorkerState<Input>* state, size_t state_idx) {
     auto attempts =
         workqueue_impl::create_permutation(m_num_threads, state_idx);
@@ -217,20 +265,27 @@ void SpartaWorkQueue<Input, Executor>::run_all() {
           break;
         }
       }
-      if (!have_task) {
-        state->set_running(false);
-        if (!m_can_push_task) {
-          // New tasks can't be added. We don't need to wait for the currently
-          // running jobs to finish.
-          return;
-        }
+      if (have_task) {
+        continue;
       }
+
+      state->set_running(false);
+      if (!m_can_push_task) {
+        // New tasks can't be added. We don't need to wait for the currently
+        // running jobs to finish.
+        return;
+      }
+
       // Let the thread quit if all the threads are not running and there
       // is no task in any queue.
       if (m_state_counters.num_running == 0 &&
           m_state_counters.num_non_empty == 0) {
+        // Wake up everyone who might be waiting, so they can quit.
+        m_state_counters.waiter->give(m_state_counters.num_all);
         return;
       }
+
+      m_state_counters.waiter->take(); // Wait for work.
     }
   };
 
