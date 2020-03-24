@@ -18,6 +18,7 @@
 #include "EditableCfgAdapter.h"
 #include "IRCode.h"
 #include "Match.h"
+#include "Thread.h"
 #include "VirtualScope.h"
 #include "WorkQueue.h"
 
@@ -406,53 +407,10 @@ class walk {
    * to create too many tasks on the WorkQueue, paying the overhead for each.
    */
   class parallel {
-   private:
-    // Template helpers to get the array of a function type or similar.
-    template <typename T, bool IS_FUNC>
-    struct GetArity;
-
-    template <typename T>
-    struct GetArity<T, true> {
-      template <typename R>
-      struct get_arity;
-      template <typename R, typename... Args>
-      struct get_arity<R(Args...)>
-          : std::integral_constant<unsigned, sizeof...(Args)> {};
-      template <typename R, typename... Args>
-      struct get_arity<R (*)(Args...)>
-          : std::integral_constant<unsigned, sizeof...(Args)> {};
-      template <typename R, typename C, typename... Args>
-      struct get_arity<R (C::*)(Args...)>
-          : std::integral_constant<unsigned, sizeof...(Args)> {};
-      template <typename R, typename C, typename... Args>
-      struct get_arity<R (C::*)(Args...) const>
-          : std::integral_constant<unsigned, sizeof...(Args)> {};
-      static constexpr unsigned value = get_arity<T>::value;
-    };
-
-    template <typename T>
-    struct GetArity<T, false> {
-      template <typename R>
-      struct get_arity : get_arity<decltype(&R::operator())> {};
-      template <typename R, typename... Args>
-      struct get_arity<R(Args...)>
-          : std::integral_constant<unsigned, sizeof...(Args)> {};
-      template <typename R, typename... Args>
-      struct get_arity<R (*)(Args...)>
-          : std::integral_constant<unsigned, sizeof...(Args)> {};
-      template <typename R, typename C, typename... Args>
-      struct get_arity<R (C::*)(Args...)>
-          : std::integral_constant<unsigned, sizeof...(Args)> {};
-      template <typename R, typename C, typename... Args>
-      struct get_arity<R (C::*)(Args...) const>
-          : std::integral_constant<unsigned, sizeof...(Args)> {};
-      static constexpr unsigned value = get_arity<T>::value;
-    };
-
-    template <typename T>
-    struct Arity : GetArity<T, std::is_function<T>::value> {};
-
    public:
+    template <typename Fn>
+    using Arity = sparta::Arity<Fn>;
+
     parallel() = delete;
     ~parallel() = delete;
 
@@ -504,8 +462,8 @@ class walk {
       std::vector<CacheAligned<Accumulator>> acc_vec(num_threads, init);
 
       auto wq = workqueue_foreach<DexClass*>(
-          [&](DexClass* cls) {
-            Accumulator& acc = acc_vec[redex_parallel::get_worker_id()];
+          [&](sparta::SpartaWorkerState<DexClass*>* state, DexClass* cls) {
+            Accumulator& acc = acc_vec[state->worker_id()];
             for (auto dmethod : cls->get_dmethods()) {
               TraceContext context(dmethod->get_deobfuscated_name());
               walker(dmethod, &acc);

@@ -23,6 +23,7 @@
 #include "IRInstruction.h"
 #include "PassManager.h"
 #include "RedundantCheckCastRemover.h"
+#include "SpartaWorkQueue.h"
 #include "Walkers.h"
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1842,13 +1843,24 @@ void PeepholePass::run_pass(DexStoresVector& stores,
         mgr, pats, config.disabled_peepholes));
   }
 
-  walk::parallel::methods(
-      scope,
-      [&](DexMethod* method) {
-        auto& ph = peephole_optimizers[redex_parallel::get_worker_id()];
-        ph->run_method(method);
+  auto wq = workqueue_foreach<DexClass*>(
+      [&peephole_optimizers](sparta::SpartaWorkerState<DexClass*>* state,
+                             DexClass* cls) {
+        auto& ph = peephole_optimizers[state->worker_id()];
+        for (const auto& m : cls->get_dmethods()) {
+          TraceContext context(m->get_deobfuscated_name());
+          ph->run_method(m);
+        }
+        for (const auto& m : cls->get_vmethods()) {
+          TraceContext context(m->get_deobfuscated_name());
+          ph->run_method(m);
+        }
       },
       num_threads);
+  for (const auto& cls : scope) {
+    wq.add_item(cls);
+  }
+  wq.run_all();
 
   for (size_t i = 0; i < num_threads; ++i) {
     peephole_optimizers[i]->incr_all_metrics();

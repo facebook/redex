@@ -23,7 +23,7 @@
 #include <boost/thread/mutex.hpp>
 
 #include "Debug.h"
-#include "Thread.h"
+#include "SpartaWorkQueue.h"
 
 /*
  * Individual work items are posted with a priority:
@@ -47,7 +47,7 @@ class PriorityThreadPool {
  public:
   // Creates an instance with a default number of threads
   PriorityThreadPool() {
-    set_num_threads(redex_parallel::default_num_threads());
+    set_num_threads(sparta::parallel::default_num_threads());
   }
 
   // Creates an instance with a custom number of threads

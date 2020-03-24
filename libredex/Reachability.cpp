@@ -18,6 +18,7 @@
 #include "Resolver.h"
 #include "Timer.h"
 #include "Walkers.h"
+#include "WorkQueue.h"
 
 using namespace reachability;
 
@@ -516,7 +517,7 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects(
 
   size_t num_threads = redex_parallel::default_num_threads();
   auto stats_arr = std::make_unique<Stats[]>(num_threads);
-  MarkWorkQueue work_queue(
+  auto work_queue = workqueue_foreach<ReachableObject>(
       [&](MarkWorkerState* worker_state, const ReachableObject& obj) {
         TransitiveClosureMarker transitive_closure_marker(
             ignore_sets, *method_override_graph, record_reachability,
@@ -525,7 +526,8 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects(
         transitive_closure_marker.visit(obj);
         return nullptr;
       },
-      num_threads);
+      num_threads,
+      /*push_tasks_while_running=*/true);
   for (const auto& obj : root_set) {
     work_queue.add_item(obj);
   }

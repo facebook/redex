@@ -7,19 +7,5 @@
 
 #pragma once
 
-#include <boost/thread/thread.hpp>
-
 // As far as Intel processors are concerned...
 #define CACHE_LINE_SIZE 64
-
-namespace redex_parallel {
-
-/**
- * Redex uses the number of physical cores.
- */
-inline unsigned int default_num_threads() {
-  unsigned int threads = boost::thread::physical_concurrency();
-  return std::max(1u, threads);
-}
-
-} // namespace redex_parallel

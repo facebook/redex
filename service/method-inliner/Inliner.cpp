@@ -1383,9 +1383,8 @@ size_t MultiMethodInliner::get_inlined_cost(const DexMethod* callee) {
       // parallelization via m_async_method_executor. This should be combined,
       // using a single thread pool.
       inlined_cost = 0;
-      auto num_threads =
-          std::min(redex_parallel::default_num_threads(),
-                   (unsigned int)callee_constant_arguments.size());
+      auto num_threads = std::min(redex_parallel::default_num_threads(),
+                                  callee_constant_arguments.size());
       auto wq = workqueue_foreach<ConstantArgumentsOccurrences>(process_key,
                                                                 num_threads);
       for (auto& p : callee_constant_arguments) {

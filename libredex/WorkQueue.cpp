@@ -7,16 +7,14 @@
 
 #include "WorkQueue.h"
 
-static thread_local int worker_id{redex_parallel::INVALID_ID};
+#include <iostream>
 
-namespace workqueue_impl {
+#include "Debug.h"
 
-void set_worker_id(int id) { worker_id = id; }
+namespace redex_workqueue_impl {
 
-} // namespace workqueue_impl
+void redex_queue_exception_handler(std::exception& e) {
+  print_stack_trace(std::cerr, e);
+}
 
-namespace redex_parallel {
-
-int get_worker_id() { return worker_id; }
-
-} // namespace redex_parallel
+} // namespace redex_workqueue_impl

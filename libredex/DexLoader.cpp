@@ -494,12 +494,13 @@ DexClasses DexLoader::load_dex(const dex_header* dh, dex_stats_t* stats) {
   auto num_threads = redex_parallel::default_num_threads();
   std::vector<std::vector<std::exception_ptr>> exceptions_vec(num_threads);
   auto wq = workqueue_foreach<class_load_work*>(
-      [&exceptions_vec](class_load_work* clw) {
+      [&exceptions_vec](sparta::SpartaWorkerState<class_load_work*>* state,
+                        class_load_work* clw) {
         try {
           clw->dl->load_dex_class(clw->num);
         } catch (const std::exception& exc) {
           TRACE(MAIN, 1, "Worker throw the exception:%s", exc.what());
-          exceptions_vec[redex_parallel::get_worker_id()].emplace_back(
+          exceptions_vec[state->worker_id()].emplace_back(
               std::current_exception());
         }
       },
