@@ -1402,7 +1402,7 @@ size_t MultiMethodInliner::get_inlined_cost(const DexMethod* callee) {
     always_assert(callees_analyzed > 0);
     inlined_cost = inlined_cost / callees_analyzed;
     m_inlined_costs_keyed.emplace(
-        callee, new std::unordered_map<std::string, size_t>(
+        callee, std::make_shared<std::unordered_map<std::string, size_t>>(
                     inlined_costs_keyed.begin(), inlined_costs_keyed.end()));
   }
   TRACE(INLINE, 4, "[too_many_callers] get_inlined_cost %s: %u", SHOW(callee),
