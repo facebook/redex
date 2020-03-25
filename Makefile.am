@@ -187,6 +187,7 @@ libredex_la_SOURCES = \
 	libredex/MonitorCount.cpp \
 	libredex/Mutators.cpp \
 	libredex/NoOptimizationsMatcher.cpp \
+	libredex/NullnessDomain.cpp \
 	libredex/OptData.cpp \
 	libredex/Pass.cpp \
 	libredex/PassManager.cpp \
