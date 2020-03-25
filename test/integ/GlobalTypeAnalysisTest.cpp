@@ -143,3 +143,34 @@ TEST_F(GlobalTypeAnalysisTest, NullableFieldTypeTest) {
       get_field("TestC$1;.this$0:Lcom/facebook/redextest/TestC;");
   EXPECT_EQ(wps.get_field_type(field_anony), get_type_domain("TestC"));
 }
+
+TEST_F(GlobalTypeAnalysisTest, TrueVirtualFieldTypeTest) {
+  auto scope = build_class_scope(stores);
+  set_root_method("Lcom/facebook/redextest/TestD;.main:()V");
+
+  GlobalTypeAnalysis analysis;
+  auto gta = analysis.analyze(scope);
+  auto wps = gta->get_whole_program_state();
+
+  // The field written by true virtuals is conservatively joined to top.
+  auto field_val =
+      get_field("TestD$State;.mVal:Lcom/facebook/redextest/TestD$Base;");
+  EXPECT_TRUE(wps.get_field_type(field_val).is_top());
+
+  // Confirm null assignment propagates in the base method.
+  auto meth_bupdate = get_method("TestD$Base;.update",
+                                 "Lcom/facebook/redextest/TestD$State;", "V");
+  auto lta = gta->get_local_analysis(meth_bupdate);
+  auto code = meth_bupdate->get_code();
+  auto bupdate_exit_env = lta->get_exit_state_at(code->cfg().exit_block());
+  EXPECT_TRUE(
+      bupdate_exit_env.get_field_environment().get(field_val).is_null());
+
+  // Confirm top propagates in the sub method.
+  auto meth_supdate = get_method("TestD$Sub;.update",
+                                 "Lcom/facebook/redextest/TestD$State;", "V");
+  lta = gta->get_local_analysis(meth_supdate);
+  code = meth_supdate->get_code();
+  auto supdate_exit_env = lta->get_exit_state_at(code->cfg().exit_block());
+  EXPECT_TRUE(supdate_exit_env.get_field_environment().get(field_val).is_top());
+}
