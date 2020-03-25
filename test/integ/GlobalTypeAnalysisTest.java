@@ -12,11 +12,17 @@ class Base {
 }
 
 class SubOne extends Base {
-  int getVal() { return 1; }
+  @Override
+  int getVal() {
+    return 1;
+  }
 }
 
 class SubTwo extends Base {
-  int getVal() { return 2; }
+  @Override
+  int getVal() {
+    return 2;
+  }
 }
 
 class TestA {
@@ -100,5 +106,27 @@ class TestC {
   static void main() {
     TestC t = new TestC();
     t.change();
+  }
+}
+
+class TestD {
+
+  static class State { Base mVal; }
+
+  static class Base {
+    void update(State s) { s.mVal = null; }
+  }
+
+  static class Sub extends Base {
+    @Override
+    void update(State s) {
+      s.mVal = this;
+    }
+  }
+
+  static void main() {
+    State s = new State();
+    Base b = new Sub();
+    b.update(s);
   }
 }
