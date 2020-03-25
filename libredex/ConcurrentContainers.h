@@ -216,7 +216,10 @@ class ConcurrentMapContainer
     return this->get_container(slot).at(key);
   }
 
-  Value get(const Key& key, Value default_value) {
+  /*
+   * This operation is always thread-safe.
+   */
+  Value get(const Key& key, Value default_value) const {
     size_t slot = Hash()(key) % n_slots;
     boost::lock_guard<boost::mutex> lock(this->get_lock(slot));
     const auto& map = this->get_container(slot);
