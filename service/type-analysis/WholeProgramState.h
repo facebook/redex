@@ -25,6 +25,8 @@ class GlobalTypeAnalyzer;
 
 } // namespace global
 
+using namespace type_env;
+
 using DexTypeFieldPartition =
     sparta::HashedAbstractPartition<const DexField*, DexTypeDomain>;
 

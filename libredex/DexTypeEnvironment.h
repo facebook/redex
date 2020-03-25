@@ -89,11 +89,13 @@ class DexTypeValue final : public sparta::AbstractValue<DexTypeValue> {
 
 } // namespace dtv_impl
 
+namespace type_env {
+
 enum Nullness {
-  NN_BOTTOM,
+  BOTTOM,
   IS_NULL,
   NOT_NULL,
-  NN_TOP // Nullable
+  TOP // Nullable
 };
 
 using NullnessLattice = sparta::BitVectorLattice<Nullness, 4, std::hash<int>>;
@@ -324,3 +326,5 @@ class DexTypeEnvironment final
         [](FieldTypeEnvironment* env) { env->set_to_bottom(); });
   }
 };
+
+} // namespace type_env

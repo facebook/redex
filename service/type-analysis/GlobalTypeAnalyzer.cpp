@@ -174,8 +174,10 @@ std::unique_ptr<local::LocalTypeAnalyzer> GlobalTypeAnalyzer::analyze_method(
   // reachable.
   if (args.is_bottom()) {
     args.set_to_top();
-  } else if (!args.is_top()) {
-    TRACE(TYPE, 5, "Have args for %s: %s", SHOW(method), SHOW(args));
+  } else if (!args.is_top() && traceEnabled(TYPE, 5)) {
+    std::ostringstream out;
+    out << args;
+    TRACE(TYPE, 5, "Have args for %s: %s", SHOW(method), out.str().c_str());
   }
 
   auto env = env_with_params(&code, args);

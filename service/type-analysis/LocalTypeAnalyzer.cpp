@@ -13,6 +13,7 @@
 #include "Resolver.h"
 
 using namespace type_analyzer;
+using namespace type_env;
 
 namespace {
 

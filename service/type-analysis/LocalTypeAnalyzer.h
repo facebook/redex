@@ -18,6 +18,7 @@ namespace type_analyzer {
 namespace local {
 
 using namespace ir_analyzer;
+using namespace type_env;
 
 class LocalTypeAnalyzer final
     : public ir_analyzer::BaseIRAnalyzer<DexTypeEnvironment> {

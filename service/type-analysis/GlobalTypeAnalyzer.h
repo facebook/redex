@@ -30,7 +30,8 @@ namespace global {
 using param_index_t = uint16_t;
 
 using ArgumentTypeEnvironment =
-    sparta::PatriciaTreeMapAbstractEnvironment<param_index_t, DexTypeDomain>;
+    sparta::PatriciaTreeMapAbstractEnvironment<param_index_t,
+                                               type_env::DexTypeDomain>;
 
 /*
  * This map is an abstraction of the execution paths starting from the entry

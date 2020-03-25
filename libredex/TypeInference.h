@@ -148,15 +148,16 @@ using BasicTypeEnvironment =
  * information if we don't consider write from other methods. Therefore, we stay
  * with the declared field type for local type inference.
  */
-class TypeEnvironment final
-    : public sparta::ReducedProductAbstractDomain<TypeEnvironment,
-                                                  BasicTypeEnvironment,
-                                                  RegTypeEnvironment> {
+class TypeEnvironment final : public sparta::ReducedProductAbstractDomain<
+                                  TypeEnvironment,
+                                  BasicTypeEnvironment,
+                                  type_env::RegTypeEnvironment> {
  public:
   using ReducedProductAbstractDomain::ReducedProductAbstractDomain;
 
   static void reduce_product(
-      std::tuple<BasicTypeEnvironment, RegTypeEnvironment>& /* product */) {}
+      std::tuple<BasicTypeEnvironment,
+                 type_env::RegTypeEnvironment>& /* product */) {}
 
   TypeDomain get_type(reg_t reg) const { return get<0>().get(reg); }
 
@@ -174,7 +175,7 @@ class TypeEnvironment final
     return get<1>().get(reg).get_dex_type();
   }
 
-  void set_concrete_type(reg_t reg, const DexTypeDomain& dex_type) {
+  void set_concrete_type(reg_t reg, const type_env::DexTypeDomain& dex_type) {
     apply<1>([=](auto env) { env->set(reg, dex_type); }, true);
   }
 };

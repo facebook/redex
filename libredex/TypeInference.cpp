@@ -118,8 +118,9 @@ void set_reference(TypeEnvironment* state,
                    reg_t reg,
                    const boost::optional<const DexType*>& dex_type_opt) {
   state->set_type(reg, TypeDomain(REFERENCE));
-  const DexTypeDomain dex_type =
-      dex_type_opt ? DexTypeDomain(*dex_type_opt) : DexTypeDomain::top();
+  const type_env::DexTypeDomain dex_type =
+      dex_type_opt ? type_env::DexTypeDomain(*dex_type_opt)
+                   : type_env::DexTypeDomain::top();
   state->set_concrete_type(reg, dex_type);
 }
 
@@ -205,8 +206,8 @@ const DexType* merge_dex_types(const DexTypeIt& begin,
           return t1;
         }
 
-        DexTypeDomain d1(t1);
-        DexTypeDomain d2(t2);
+        type_env::DexTypeDomain d1(t1);
+        type_env::DexTypeDomain d2(t2);
         d1.join_with(d2);
 
         auto maybe_dextype = d1.get_dex_type();
@@ -491,7 +492,8 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
   }
   case OPCODE_CONST: {
     if (insn->get_literal() == 0) {
-      current_state->set_concrete_type(insn->dest(), DexTypeDomain::top());
+      current_state->set_concrete_type(insn->dest(),
+                                       type_env::DexTypeDomain::top());
       set_type(current_state, insn->dest(), TypeDomain(ZERO));
     } else {
       set_type(current_state, insn->dest(), TypeDomain(CONST));
