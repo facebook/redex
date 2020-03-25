@@ -70,7 +70,28 @@ using Instructions = std::vector<const IRInstruction*>;
 using MethodInsns =
     std::map<const DexMethod*, Instructions, dexmethods_comparator>;
 
-size_t illegal_elements(const MethodInsns& method_to_insns,
+const DexType* get_type_from_insn(const IRInstruction* insn) {
+  auto op = insn->opcode();
+  if (is_invoke(op)) {
+    return insn->get_method()->get_class();
+  }
+  if (is_ifield_op(op) || is_sfield_op(op)) {
+    return insn->get_field()->get_class();
+  }
+  return insn->get_type();
+}
+
+std::string get_store_name(const XStoreRefs& xstores, const DexType* t) {
+  std::string base_name = xstores.get_store(t)->get_name();
+  size_t idx = xstores.get_store_idx(t);
+  if (idx > 0) {
+    base_name += std::to_string(idx);
+  }
+  return base_name;
+}
+
+size_t illegal_elements(const XStoreRefs& xstores,
+                        const MethodInsns& method_to_insns,
                         const char* msj,
                         std::ostringstream& ss) {
   size_t num_illegal_cross_store_refs = 0;
@@ -78,10 +99,13 @@ size_t illegal_elements(const MethodInsns& method_to_insns,
     const auto method = pair.first;
     const auto& insns = pair.second;
     ss << "Illegal " << msj << " in method " << method->get_deobfuscated_name()
+       << " (" << get_store_name(xstores, method->get_class()) << ")"
        << std::endl;
     num_illegal_cross_store_refs += insns.size();
     for (const auto insn : insns) {
-      ss << "\t" << show_deobfuscated(insn) << std::endl;
+      ss << "\t" << show_deobfuscated(insn) << " ("
+         << get_store_name(xstores, get_type_from_insn(insn)) << ")"
+         << std::endl;
     }
   }
 
@@ -218,21 +242,22 @@ void Breadcrumbs::report_illegal_refs(bool fail_if_illegal_refs,
     num_illegal_fields += fields.size();
 
     ss << "Illegal fields in class "
-       << type_class(type)->get_deobfuscated_name() << std::endl;
-    ;
+       << type_class(type)->get_deobfuscated_name() << " ("
+       << get_store_name(m_xstores, type) << ")" << std::endl;
     for (const auto field : fields) {
-      ss << "\t" << field->get_deobfuscated_name() << std::endl;
+      ss << "\t" << field->get_deobfuscated_name() << " ("
+         << get_store_name(m_xstores, field->get_type()) << ")" << std::endl;
     }
   }
 
   size_t num_illegal_type_refs =
-      illegal_elements(m_illegal_type, "type refs", ss);
+      illegal_elements(m_xstores, m_illegal_type, "type refs", ss);
   size_t num_illegal_field_type_refs =
-      illegal_elements(m_illegal_field_type, "field type refs", ss);
+      illegal_elements(m_xstores, m_illegal_field_type, "field type refs", ss);
   size_t num_illegal_field_cls =
-      illegal_elements(m_illegal_field_cls, "field class refs", ss);
+      illegal_elements(m_xstores, m_illegal_field_cls, "field class refs", ss);
   size_t num_illegal_method_calls =
-      illegal_elements(m_illegal_method_call, "method call", ss);
+      illegal_elements(m_xstores, m_illegal_method_call, "method call", ss);
 
   size_t num_illegal_cross_store_refs =
       num_illegal_fields + num_illegal_type_refs + num_illegal_field_cls +
