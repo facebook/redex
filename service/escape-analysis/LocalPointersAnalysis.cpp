@@ -252,7 +252,7 @@ static void analyze_dest(const IRInstruction* insn,
   // as escaping pointers, it would bloat the size of our abstract domain and
   // incur a runtime performance tax.
   if (dest_may_be_pointer(insn)) {
-    env->set_may_escape_pointer(dest, insn);
+    env->set_may_escape_pointer(dest, insn, insn);
   } else {
     env->set_pointers(dest, PointerSet::top());
   }
@@ -262,7 +262,7 @@ void analyze_invoke_with_summary(const EscapeSummary& summary,
                                  const IRInstruction* insn,
                                  Environment* env) {
   for (auto src_idx : summary.escaping_parameters) {
-    env->set_may_escape(insn->src(src_idx));
+    env->set_may_escape(insn->src(src_idx), insn);
   }
 
   switch (summary.returned_parameters.kind()) {
@@ -296,14 +296,14 @@ void analyze_generic_invoke(const IRInstruction* insn,
                             EnvironmentWithStore* env) {
   size_t idx{0};
   if (insn->opcode() != OPCODE_INVOKE_STATIC) {
-    env->set_may_escape(insn->src(0));
+    env->set_may_escape(insn->src(0), insn);
     ++idx;
   }
   const auto& arg_types =
       insn->get_method()->get_proto()->get_args()->get_type_list();
   for (const auto* arg : arg_types) {
     if (!type::is_primitive(arg)) {
-      env->set_may_escape(insn->src(idx));
+      env->set_may_escape(insn->src(idx), insn);
     }
     ++idx;
   }
@@ -321,12 +321,12 @@ void escape_heap_referenced_objects(const IRInstruction* insn,
   // written to them must be treated as escaping.
   if (op == OPCODE_APUT_OBJECT || op == OPCODE_SPUT_OBJECT ||
       op == OPCODE_IPUT_OBJECT) {
-    env->set_may_escape(insn->src(0));
+    env->set_may_escape(insn->src(0), insn);
   } else if (op == OPCODE_FILLED_NEW_ARRAY &&
              !type::is_primitive(
                  type::get_array_component_type(insn->get_type()))) {
     for (size_t i = 0; i < insn->srcs_size(); ++i) {
-      env->set_may_escape(insn->src(i));
+      env->set_may_escape(insn->src(i), insn);
     }
   }
 }
@@ -368,7 +368,7 @@ void FixpointIterator::analyze_instruction(const IRInstruction* insn,
   } else {
     default_instruction_handler(insn, env);
     if (m_escape_check_cast && op == OPCODE_CHECK_CAST) {
-      env->set_may_escape(insn->src(0));
+      env->set_may_escape(insn->src(0), insn);
     }
   }
 }

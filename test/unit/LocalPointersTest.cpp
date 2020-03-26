@@ -32,7 +32,7 @@ TEST_F(LocalPointersTest, domainOperations) {
 
   env1.set_fresh_pointer(0, insn1);
   env2.set_fresh_pointer(0, insn1);
-  env2.set_may_escape(0);
+  env2.set_may_escape(0, nullptr);
 
   env1.set_fresh_pointer(1, insn1);
   env2.set_fresh_pointer(1, insn2);

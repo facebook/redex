@@ -67,14 +67,19 @@ class EnvironmentWithStore {
 
   virtual void set_fresh_pointer(reg_t reg, const IRInstruction* pointer) = 0;
 
+  /*
+   * Indicate that the blamed instruction may cause the pointer which is held
+   * in the given register to escape.
+   */
   virtual void set_may_escape_pointer(reg_t reg,
-                                      const IRInstruction* pointer) = 0;
+                                      const IRInstruction* pointer,
+                                      const IRInstruction* blame) = 0;
 
   /*
-   * Consider all pointers that may be contained in this register to point to
-   * escaping values.
+   * Consider all pointers that may be contained in this register to have been
+   * escaped by the blamed instruction.
    */
-  virtual void set_may_escape(reg_t reg) = 0;
+  virtual void set_may_escape(reg_t reg, const IRInstruction* blame) = 0;
 };
 
 template <class Store>
@@ -120,11 +125,13 @@ class EnvironmentWithStoreImpl final
   }
 
   void set_may_escape_pointer(reg_t reg,
-                              const IRInstruction* pointer) override {
+                              const IRInstruction* pointer,
+                              const IRInstruction* blame) override {
     set_pointers(reg, PointerSet(pointer));
     if (!is_always_escaping(pointer)) {
-      Base::template apply<1>(
-          [&](StoreDomain* store) { Store::set_may_escape(pointer, store); });
+      Base::template apply<1>([&](StoreDomain* store) {
+        Store::set_may_escape(pointer, blame, store);
+      });
     }
   }
 
@@ -141,12 +148,13 @@ class EnvironmentWithStoreImpl final
     });
   }
 
-  void set_may_escape(reg_t reg) override {
-    update_store(reg, [](const IRInstruction* pointer, StoreDomain* store) {
-      if (!is_always_escaping(pointer)) {
-        Store::set_may_escape(pointer, store);
-      }
-    });
+  void set_may_escape(reg_t reg, const IRInstruction* blame) override {
+    update_store(reg,
+                 [blame](const IRInstruction* pointer, StoreDomain* store) {
+                   if (!is_always_escaping(pointer)) {
+                     Store::set_may_escape(pointer, blame, store);
+                   }
+                 });
   }
 
  private:
@@ -210,7 +218,9 @@ class MayEscapeStore {
  public:
   using Domain = PointerSet;
 
-  static void set_may_escape(const IRInstruction* ptr, Domain* dom) {
+  static void set_may_escape(const IRInstruction* ptr,
+                             const IRInstruction* /* blame */,
+                             Domain* dom) {
     dom->add(ptr);
   }
 

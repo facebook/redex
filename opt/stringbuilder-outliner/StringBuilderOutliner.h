@@ -151,7 +151,9 @@ class BuilderStore {
       sparta::PatriciaTreeMapAbstractEnvironment<const IRInstruction*,
                                                  BuilderDomain>;
 
-  static void set_may_escape(const IRInstruction* ptr, Domain* dom) {
+  static void set_may_escape(const IRInstruction* ptr,
+                             const IRInstruction* /* blame */,
+                             Domain* dom) {
     dom->set(ptr, BuilderDomain::top());
   }
 
