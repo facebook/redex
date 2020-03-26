@@ -498,6 +498,8 @@ TEST_F(PostVerify, inlineAcrossCallerNoApi) {
   ASSERT_NE(nullptr, cls);
   auto m = find_vmethod_named(*cls, "callSpecificApi");
   ASSERT_NE(nullptr, m);
+  EXPECT_EQ(nullptr,
+            find_invoke(m, DOPCODE_INVOKE_STATIC, "shouldInlineMinSdk"));
   EXPECT_NE(nullptr, find_invoke(m, DOPCODE_INVOKE_STATIC, "useApi"));
   EXPECT_NE(nullptr,
             find_invoke(m, DOPCODE_INVOKE_STATIC, "shouldNotInlineOutOfClass"));

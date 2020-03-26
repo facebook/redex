@@ -381,8 +381,12 @@ public class MethodInlineTest {
 
   @Test
   public void callSpecificApi() {
+    // Should be inlined
+    int i = NeedsAndroidJB.shouldInlineMinSdk();
+    assertThat(i == 1);
+
     // Should not be inlined
-    int i = NeedsAndroidN.useApi();
+    i = NeedsAndroidN.useApi();
     assertThat(i == 1);
 
     // Should not be inlined
@@ -400,6 +404,14 @@ public class MethodInlineTest {
     // Should be inlined
     i = NeedsAndroidN.doesntActuallyNeedN();
     assertThat(i == 0);
+  }
+
+  @TargetApi(16)  // The minSdkVersion in the manifest
+  private static class NeedsAndroidJB {
+    @androidx.annotation.RequiresApi(api = 16)
+    public static int shouldInlineMinSdk() {
+      return 1;
+    }
   }
 
   private static class NeedsAndroidN {
