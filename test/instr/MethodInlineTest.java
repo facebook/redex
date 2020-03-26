@@ -383,27 +383,27 @@ public class MethodInlineTest {
   public void callSpecificApi() {
     // Should be inlined
     int i = NeedsAndroidJB.shouldInlineMinSdk();
-    assertThat(i == 1);
+    assertThat(i).isEqualTo(1);
 
     // Should not be inlined
     i = NeedsAndroidN.useApi();
-    assertThat(i == 1);
+    assertThat(i).isEqualTo(1);
 
     // Should not be inlined
     i = NeedsAndroidO.shouldNotInlineOutOfClass();
-    assertThat(i == 0);
+    assertThat(i).isEqualTo(0);
 
     // Should not be inlined
     i = NeedsAndroidO.shouldInlineNintoO();
-    assertThat(i == 1);
+    assertThat(i).isEqualTo(1);
 
     // Should not be inlined
     i = NeedsAndroidN.shouldNotInlineOintoN();
-    assertThat(i == 1);
+    assertThat(i).isEqualTo(0);
 
     // Should be inlined
     i = NeedsAndroidN.doesntActuallyNeedN();
-    assertThat(i == 0);
+    assertThat(i).isEqualTo(0);
   }
 
   @TargetApi(16)  // The minSdkVersion in the manifest

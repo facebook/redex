@@ -168,7 +168,7 @@ public class RemoveInterfaceTest {
   @Test
   public void testUnremovableInterface() {
     UnremovableModel r = new UnremovableModel();
-    assertThat(r instanceof UnremovableInterface);
+    assertThat(r instanceof UnremovableInterface).isTrue();
     assertThat(r.getInt()).isEqualTo(46);
     assertThat(r.getStr()).isEqualTo("Unremovable");
   }
