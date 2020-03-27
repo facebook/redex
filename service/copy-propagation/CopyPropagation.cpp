@@ -494,6 +494,8 @@ Stats CopyPropagation::run(IRCode* code, DexMethod* method) {
     });
   }
 
+  code->clear_cfg();
+
   stats.moves_eliminated += deletes.size();
   for (auto insn : deletes) {
     code->remove_opcode(insn);
