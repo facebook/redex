@@ -7,7 +7,9 @@
 
 #pragma once
 
+#include "GlobalTypeAnalyzer.h"
 #include "Pass.h"
+#include "TypeAnalysisTransform.h"
 
 /*
  * A dummy pass that runs the global type analysis only without actually
@@ -15,16 +17,23 @@
  */
 class GlobalTypeAnalysisPass : public Pass {
  public:
-  GlobalTypeAnalysisPass() : Pass("GlobalTypeAnalysisPass") {}
+  explicit GlobalTypeAnalysisPass(type_analyzer::Transform::Config config)
+      : Pass("GlobalTypeAnalysisPass"), m_config(config) {}
+
+  GlobalTypeAnalysisPass()
+      : GlobalTypeAnalysisPass(type_analyzer::Transform::Config()) {}
 
   void bind_config() override {
     bind("max_global_analysis_iteration", size_t(100),
-         m_max_global_analysis_iteration,
+         m_config.max_global_analysis_iteration,
          "Maximum number of global iterations the analysis runs");
   }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+  void optimize(const Scope& scope,
+                const type_analyzer::global::GlobalTypeAnalyzer& gta);
 
  private:
-  size_t m_max_global_analysis_iteration;
+  type_analyzer::Transform::Stats m_transform_stats;
+  type_analyzer::Transform::Config m_config;
 };

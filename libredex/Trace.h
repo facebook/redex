@@ -137,7 +137,8 @@
   TM(MODULARITY)     \
   TM(VM)             \
   TM(POST_LOWERING)  \
-  TM(LOOP)
+  TM(LOOP)           \
+  TM(TYPE_TRANSFORM)
 
 enum TraceModule : int {
 #define TM(x) x,
