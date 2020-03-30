@@ -218,6 +218,7 @@ void handle_invoke_init(
  *   4. Mergeable class is deletable.
  *   5. Both classes are not in STRICT don't merge state, and mergeable is not
  *      in any don't merge state.
+ *   6. Classes are not throwable.
  */
 void collect_can_merge(
     const Scope& scope,
@@ -225,15 +226,19 @@ void collect_can_merge(
     const std::unordered_map<const DexType*, DontMergeState>& dont_merge_status,
     std::unordered_map<DexClass*, DexClass*>* mergeable_to_merger) {
   ClassHierarchy ch = build_type_hierarchy(scope);
+  auto throwables = get_all_children(ch, type::java_lang_Throwable());
   for (DexClass* cls : scope) {
     if (cls && !cls->is_external() && !is_interface(cls) && can_delete(cls) &&
-        can_rename(cls)) {
+        can_rename(cls) && !throwables.count(cls->get_type())) {
       DexType* cls_type = cls->get_type();
-      const auto& children_types = get_children(ch, cls->get_type());
+      const auto& children_types = get_children(ch, cls_type);
       if (children_types.size() != 1) {
         continue;
       }
       const DexType* child_type = *children_types.begin();
+      if (throwables.count(child_type)) {
+        continue;
+      }
       if (!get_children(ch, child_type).empty()) {
         // TODO(suree404): we are skipping pairs that child class still have
         // their subclasses, but we might still be able to optimize this case.
