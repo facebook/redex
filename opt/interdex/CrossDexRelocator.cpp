@@ -31,9 +31,32 @@ void CrossDexRelocator::gather_possibly_relocatable_methods(
       m_config.relocate_non_static_direct_methods;
   bool relocate_virtual_methods = m_config.relocate_virtual_methods;
 
-  auto can_relocate_common = [](DexMethod* m) {
-    return m->is_concrete() && m->get_code() && can_rename_DEPRECATED(m) &&
+  size_t store_idx = m_xstore_refs == nullptr
+                         ? 0
+                         : m_xstore_refs->get_store_idx(cls->get_type());
+  auto can_relocate_common = [&](DexMethod* m) {
+    bool basic_constraints =
+        m->is_concrete() && m->get_code() && can_rename_DEPRECATED(m) &&
            !root(m) && !m->rstate.no_optimizations() && no_invoke_super(m);
+    if (!basic_constraints) {
+      return false;
+    }
+
+    if (m_xstore_refs == nullptr) {
+      return true;
+    }
+
+    // Also do not relocate if any type mentioned in the code is missing or
+    // in another store.
+    std::vector<DexType*> types;
+    m->gather_types(types);
+    for (const auto* t : types) {
+      if (m_xstore_refs->illegal_ref(store_idx, t)) {
+        return false;
+      }
+    }
+
+    return true;
   };
 
   if (relocate_static_methods || relocate_non_static_direct_methods) {
