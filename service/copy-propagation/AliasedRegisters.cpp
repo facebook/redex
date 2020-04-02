@@ -150,8 +150,8 @@ bool AliasedRegisters::are_aliases(const Value& r1, const Value& r2) const {
 //   move v0, v2
 //
 // `max_addressable` is useful for instructions that can only address up to v15
-Register AliasedRegisters::get_representative(
-    const Value& orig, const boost::optional<Register>& max_addressable) const {
+reg_t AliasedRegisters::get_representative(
+    const Value& orig, const boost::optional<reg_t>& max_addressable) const {
   always_assert(orig.is_register());
 
   // if r is not in the graph, then it has no representative

@@ -25,8 +25,7 @@
 
 namespace aliased_registers {
 
-using Register = uint32_t;
-const Register RESULT_REGISTER = std::numeric_limits<Register>::max() - 1;
+const reg_t RESULT_REGISTER = std::numeric_limits<reg_t>::max() - 1;
 
 class Value {
  public:
@@ -46,7 +45,7 @@ class Value {
   constant_uses::TypeDemand m_type_demand;
 
   union {
-    Register m_reg;
+    reg_t m_reg;
     int64_t m_literal;
     DexString* m_str;
     DexType* m_type;
@@ -55,7 +54,7 @@ class Value {
   };
 
   // hide these constuctors in favor of the named version below
-  explicit Value(Kind k, Register r) {
+  explicit Value(Kind k, reg_t r) {
     always_assert(k == Kind::REGISTER);
     m_kind = k;
     m_reg = r;
@@ -73,7 +72,7 @@ class Value {
   }
 
  public:
-  static Value create_register(Register r) { return Value{Kind::REGISTER, r}; }
+  static Value create_register(reg_t r) { return Value{Kind::REGISTER, r}; }
 
   static Value create_literal(int64_t l, constant_uses::TypeDemand td) {
     return Value{Kind::CONST_LITERAL, l, td};
@@ -136,7 +135,7 @@ class Value {
 
   bool is_register() const { return m_kind == Kind::REGISTER; }
 
-  Register reg() const {
+  reg_t reg() const {
     always_assert(m_kind == Kind::REGISTER);
     return m_reg;
   }
@@ -158,9 +157,9 @@ class AliasedRegisters final : public sparta::AbstractValue<AliasedRegisters> {
   bool are_aliases(const Value& r1, const Value& r2) const;
 
   // Each alias group has one representative register
-  Register get_representative(
+  reg_t get_representative(
       const Value& r,
-      const boost::optional<Register>& max_addressable = boost::none) const;
+      const boost::optional<reg_t>& max_addressable = boost::none) const;
 
   // ---- extends AbstractValue ----
 

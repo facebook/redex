@@ -214,15 +214,15 @@ class AliasFixpointIterator final
         // http://androidxref.com/6.0.0_r5/xref/art/runtime/verifier/register_line.h#325
         !is_monitor(op)) {
       for (size_t i = 0; i < insn->srcs_size(); ++i) {
-        Register r = insn->src(i);
-        Register rep = get_rep(r, aliases, get_max_addressable(insn, i));
+        reg_t r = insn->src(i);
+        reg_t rep = get_rep(r, aliases, get_max_addressable(insn, i));
         if (rep != r) {
           // Make sure the upper half of the wide pair is also aliased.
           if (insn->src_is_wide(i)) {
 
             // We don't give a `max_addressable` register to get_rep() because
             // the upper half of a register is never addressed in IR
-            Register upper = get_rep(r + 1, aliases, boost::none);
+            reg_t upper = get_rep(r + 1, aliases, boost::none);
 
             if (upper != rep + 1) {
               continue;
@@ -235,11 +235,11 @@ class AliasFixpointIterator final
     }
   }
 
-  Register get_rep(Register orig,
-                   AliasedRegisters& aliases,
-                   const boost::optional<Register>& max_addressable) const {
+  reg_t get_rep(reg_t orig,
+                AliasedRegisters& aliases,
+                const boost::optional<reg_t>& max_addressable) const {
     auto val = Value::create_register(orig);
-    Register rep = aliases.get_representative(val, max_addressable);
+    reg_t rep = aliases.get_representative(val, max_addressable);
     if (rep < RESULT_REGISTER) {
       return rep;
     }
@@ -248,12 +248,12 @@ class AliasFixpointIterator final
 
   // return the highest allowed source register for this instruction.
   // `none` means no limit.
-  Register get_max_addressable(IRInstruction* insn, size_t src_index) const {
+  reg_t get_max_addressable(IRInstruction* insn, size_t src_index) const {
     IROpcode op = insn->opcode();
     auto src_bit_width =
         dex_opcode::src_bit_width(opcode::to_dex_opcode(op), src_index);
     // 2 ** width - 1
-    Register max_addressable_reg = (1 << src_bit_width) - 1;
+    reg_t max_addressable_reg = (1 << src_bit_width) - 1;
     if (m_config.regalloc_has_run) {
       // We have to be careful not to create an instruction like this
       //
