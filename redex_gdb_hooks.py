@@ -111,8 +111,9 @@ pretty_printers_dict = {
     "const DexTypeList *": ShowDeref("DexTypeList"),
     "IRInstruction *": ShowDeref("IRInstruction"),
     "const IRInstruction *": ShowDeref("IRInstruction"),
-    "IRCode *": ShowDeref("IRCode"),
-    "const IRCode *": ShowDeref("IRCode"),
+    # TODO printing IRCode seems to crash gdb
+    # "IRCode *": ShowDeref("IRCode"),
+    # "const IRCode *": ShowDeref("IRCode"),
     "IRList *": ShowDeref("IRList"),
     "const IRList *": ShowDeref("IRList"),
     "IROpcode": Show("IROpcode"),
