@@ -133,3 +133,71 @@ std::ostream& operator<<(std::ostream& output, const DexType* dex_type) {
   output << show(dex_type);
   return output;
 }
+
+namespace {
+
+DexTypeValueKind convert_kind(sparta::AbstractValueKind kind) {
+  switch (kind) {
+  case sparta::AbstractValueKind::Bottom: {
+    return DexTypeValueKind::Bottom;
+  }
+  case sparta::AbstractValueKind::Top: {
+    return DexTypeValueKind::Top;
+  }
+  case sparta::AbstractValueKind::Value: {
+    return DexTypeValueKind::SingleValue;
+  }
+  }
+  always_assert_log(false, "Unexpected AbstractValueKind!");
+}
+
+} // namespace
+
+void SmallSetDexTypeDomain::join_with(const SmallSetDexTypeDomain& other) {
+  if (is_top() || other.is_bottom()) {
+    return;
+  }
+  if (other.is_top()) {
+    set_to_top();
+    return;
+  }
+  if (is_bottom()) {
+    m_kind = other.m_kind;
+    m_single_type = other.m_single_type;
+    m_types = other.m_types;
+    return;
+  }
+  if (is_set_value() && other.is_set_value()) {
+    m_types.union_with(other.m_types);
+    if (m_types.size() > MAX_SET_SIZE) {
+      m_single_type = merge_to_single_val(m_types);
+      m_types.clear();
+      m_kind = DexTypeValueKind::SingleValue;
+    }
+    return;
+  }
+  // At least one is single value. Fall back both to single value and do join on
+  // two single values.
+  dtv_impl::DexTypeValue l, r;
+  if (is_single_value()) {
+    l = m_single_type;
+    r = merge_to_single_val(other.m_types);
+  }
+  if (other.is_single_value()) {
+    l = merge_to_single_val(m_types);
+    r = other.m_single_type;
+  }
+  m_single_type = l;
+  m_types.clear();
+  m_kind = convert_kind(m_single_type.join_with(r));
+}
+
+dtv_impl::DexTypeValue SmallSetDexTypeDomain::merge_to_single_val(
+    const sparta::PatriciaTreeSet<const DexType*>& types) {
+  dtv_impl::DexTypeValue single_type = dtv_impl::DexTypeValue(nullptr);
+  for (const auto type : types) {
+    auto type_val = dtv_impl::DexTypeValue(type);
+    single_type.join_with(type_val);
+  }
+  return single_type;
+}

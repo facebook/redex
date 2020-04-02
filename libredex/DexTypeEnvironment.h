@@ -15,6 +15,7 @@
 #include "DexUtil.h"
 #include "FiniteAbstractDomain.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
+#include "PatriciaTreeSet.h"
 #include "ReducedProductAbstractDomain.h"
 
 namespace dtv_impl {
@@ -192,6 +193,120 @@ std::ostream& operator<<(std::ostream& output, const DexType* dex_type);
 
 /*
  *
+ * Small Set DexTypeDomain
+ *
+ */
+enum class DexTypeValueKind { Bottom, SetValue, SingleValue, Top };
+
+constexpr size_t MAX_SET_SIZE = 4;
+
+class SmallSetDexTypeDomain final
+    : public sparta::AbstractDomain<SmallSetDexTypeDomain> {
+ public:
+  SmallSetDexTypeDomain() : m_kind(DexTypeValueKind::Top) {}
+
+  explicit SmallSetDexTypeDomain(const DexType* type) {
+    m_types.insert(type);
+    m_kind = DexTypeValueKind::SetValue;
+  }
+
+  bool is_bottom() const override { return m_kind == DexTypeValueKind::Bottom; }
+
+  bool is_set_value() const { return m_kind == DexTypeValueKind::SetValue; }
+
+  bool is_single_value() const {
+    return m_kind == DexTypeValueKind::SingleValue;
+  }
+
+  bool is_top() const override { return m_kind == DexTypeValueKind::Top; }
+
+  void set_to_bottom() override {
+    m_kind = DexTypeValueKind::Bottom;
+    m_types.clear();
+  }
+
+  void set_to_top() override {
+    m_kind = DexTypeValueKind::Top;
+    m_types.clear();
+  }
+
+  boost::optional<const DexType*> get_single_type() const {
+    if (this->kind() != DexTypeValueKind::SingleValue ||
+        m_single_type.get_dex_type() == nullptr) {
+      return boost::none;
+    }
+    return boost::optional<const DexType*>(m_single_type.get_dex_type());
+  }
+
+  sparta::PatriciaTreeSet<const DexType*> get_types() const { return m_types; }
+
+  DexTypeValueKind kind() const { return m_kind; }
+
+  bool leq(const SmallSetDexTypeDomain& other) const override {
+    if (is_bottom()) {
+      return true;
+    }
+    if (other.is_bottom()) {
+      return false;
+    }
+    if (other.is_top()) {
+      return true;
+    }
+    if (is_top()) {
+      return false;
+    }
+    if (other.is_single_value()) {
+      return is_set_value();
+    }
+    if (is_single_value()) {
+      // We don't do more precise comparison between single values.
+      return other.is_single_value();
+    }
+    always_assert(this->is_set_value() && other.is_set_value());
+    return m_types.is_subset_of(other.m_types);
+  }
+
+  bool equals(const SmallSetDexTypeDomain& other) const override {
+    if (is_bottom()) {
+      return other.is_bottom();
+    }
+    if (is_top()) {
+      return other.is_top();
+    }
+    if (is_single_value() && other.is_single_value()) {
+      return m_single_type.equals(other.m_single_type);
+    }
+    if (is_single_value() || other.is_single_value()) {
+      return false;
+    }
+    return m_types.equals(other.m_types);
+  }
+
+  void join_with(const SmallSetDexTypeDomain& other) override;
+
+  void widen_with(const SmallSetDexTypeDomain& other) override {
+    join_with(other);
+  }
+
+  void meet_with(const SmallSetDexTypeDomain& /* other */) override {
+    throw std::runtime_error("meet_with not implemented!");
+  }
+
+  void narrow_with(const SmallSetDexTypeDomain& /* other */) override {
+    throw std::runtime_error("narrow_with not implemented!");
+  }
+
+ private:
+  dtv_impl::DexTypeValue merge_to_single_val(
+      const sparta::PatriciaTreeSet<const DexType*>& types);
+
+  dtv_impl::DexTypeValue m_single_type;
+  sparta::PatriciaTreeSet<const DexType*> m_types;
+  DexTypeValueKind m_kind;
+};
+
+/*
+ *
  * NullnessDomain X SingletonDexTypeDomain
  *
  */
@@ -202,10 +317,10 @@ class DexTypeDomain
  public:
   using ReducedProductAbstractDomain::ReducedProductAbstractDomain;
 
-  // Some older compilers complain that the class is not default constructible.
-  // We intended to use the default constructors of the base class (via the
-  // `using` declaration above), but some compilers fail to catch this. So we
-  // insert a redundant '= default'.
+  // Some older compilers complain that the class is not default
+  // constructible. We intended to use the default constructors of the base
+  // class (via the `using` declaration above), but some compilers fail to
+  // catch this. So we insert a redundant '= default'.
   DexTypeDomain() = default;
 
   explicit DexTypeDomain(const DexType* dex_type)
@@ -236,23 +351,24 @@ class DexTypeDomain
 };
 
 /*
- * We model the register to DexTypeDomain mapping using an Environment. A write
- * to a register always overwrites the existing mapping.
+ * We model the register to DexTypeDomain mapping using an Environment. A
+ * write to a register always overwrites the existing mapping.
  */
 using RegTypeEnvironment =
     sparta::PatriciaTreeMapAbstractEnvironment<reg_t, DexTypeDomain>;
 
 /*
- * We model the field to DexTypeDomain mapping using an Environment. But we need
- * to handle the initial write to a field correctly. We should overwrite the
- * default top value of a field upon the 1st write. The subsequent writes to the
- * same field always require a join with the existing type mapping to preserve
- * all the type information.
+ * We model the field to DexTypeDomain mapping using an Environment. But we
+ * need to handle the initial write to a field correctly. We should overwrite
+ * the default top value of a field upon the 1st write. The subsequent writes
+ * to the same field always require a join with the existing type mapping to
+ * preserve all the type information.
  *
  * Note that at method level, this field type mapping can still be incomplete.
  * We need to join all the mappings from the analysis for all methods globally
  * to make sure that we don't lose any type information for a given field.
- * However, we can always fall back to the declared type, which is still sound.
+ * However, we can always fall back to the declared type, which is still
+ * sound.
  */
 using FieldTypeEnvironment =
     sparta::PatriciaTreeMapAbstractEnvironment<const DexField*, DexTypeDomain>;
@@ -267,10 +383,10 @@ class DexTypeEnvironment final
  public:
   using ReducedProductAbstractDomain::ReducedProductAbstractDomain;
 
-  // Some older compilers complain that the class is not default constructible.
-  // We intended to use the default constructors of the base class (via the
-  // `using` declaration above), but some compilers fail to catch this. So we
-  // insert a redundant '= default'.
+  // Some older compilers complain that the class is not default
+  // constructible. We intended to use the default constructors of the base
+  // class (via the `using` declaration above), but some compilers fail to
+  // catch this. So we insert a redundant '= default'.
   DexTypeEnvironment() = default;
 
   DexTypeEnvironment(std::initializer_list<std::pair<reg_t, DexTypeDomain>> l)
