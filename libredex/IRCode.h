@@ -254,12 +254,12 @@ class IRCode {
    * Returns an estimated of the number of 2-byte code units needed to encode
    * all the instructions.
    */
-  size_t sum_opcode_sizes() const { return m_ir_list->sum_opcode_sizes(); }
+  size_t sum_opcode_sizes() const;
 
   /*
    * Returns the number of instructions.
    */
-  size_t count_opcodes() const { return m_ir_list->count_opcodes(); }
+  size_t count_opcodes() const;
 
   void sanity_check() const { m_ir_list->sanity_check(); }
 

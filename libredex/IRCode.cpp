@@ -1099,3 +1099,24 @@ void IRCode::gather_methodhandles(
     m_ir_list->gather_methodhandles(lmethodhandle);
   }
 }
+
+/*
+ * Returns an estimated of the number of 2-byte code units needed to encode
+ * all the instructions.
+ */
+size_t IRCode::sum_opcode_sizes() const {
+  if (editable_cfg_built()) {
+    return m_cfg->sum_opcode_sizes();
+  }
+  return m_ir_list->sum_opcode_sizes();
+}
+
+/*
+ * Returns the number of instructions.
+ */
+size_t IRCode::count_opcodes() const {
+  if (editable_cfg_built()) {
+    return m_cfg->num_opcodes();
+  }
+  return m_ir_list->count_opcodes();
+}
