@@ -94,21 +94,15 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
           bool any_changes = cse.patch(copy_prop_config.max_estimated_registers,
                                        m_runtime_assertions);
           stats += cse.get_stats();
-          code->clear_cfg();
 
           if (!any_changes) {
+            code->clear_cfg();
             return stats;
           }
-
-          // TODO: CopyPropagation will separately construct
-          // an editable cfg. Don't do that, and fully convert that passes
-          // to be cfg-based.
 
           copy_propagation_impl::CopyPropagation copy_propagation(
               copy_prop_config);
           copy_propagation.run(code, method);
-
-          code->build_cfg(/* editable */ true);
 
           auto local_dce = LocalDce(shared_state.get_pure_methods(),
                                     shared_state.get_method_override_graph(),

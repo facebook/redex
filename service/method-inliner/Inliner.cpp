@@ -822,10 +822,6 @@ void MultiMethodInliner::shrink_method(DexMethod* method) {
   }
 
   if (m_config.run_copy_prop) {
-    if (code->editable_cfg_built()) {
-      code->clear_cfg();
-    }
-
     copy_propagation_impl::Config config;
     copy_propagation_impl::CopyPropagation copy_propagation(config);
     copy_prop_stats = copy_propagation.run(code, method);

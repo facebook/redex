@@ -10,6 +10,7 @@
 #include <boost/optional.hpp>
 
 #include "AliasedRegisters.h"
+#include "CFGMutation.h"
 #include "ConstantUses.h"
 #include "ControlFlow.h"
 #include "DexUtil.h"
@@ -18,6 +19,7 @@
 #include "IRTypeChecker.h"
 #include "MonotonicFixpointIterator.h"
 #include "Resolver.h"
+#include "ScopedCFG.h"
 #include "Walkers.h"
 
 using namespace sparta;
@@ -115,39 +117,42 @@ class AliasFixpointIterator final
   // An instruction can be removed if we know the source and destination are
   // aliases.
   //
-  // if deletes is not null, this time is for real.
-  // fill the `deletes` vector with redundant instructions
-  // if deletes is null, analyze only. Make no changes to the code.
-  void run_on_block(cfg::Block* block,
-                    AliasedRegisters& aliases,
-                    std::unordered_set<IRInstruction*>* deletes) const {
+  // if `mutation` is not null, this time is for real.
+  // fill the `mutation` object with redundant instructions
+  // if `mutation` is null, analyze only. Make no changes to the code.
+  size_t run_on_block(cfg::Block* block,
+                      AliasedRegisters& aliases,
+                      cfg::CFGMutation* mutation) const {
 
+    size_t moves_eliminated = 0;
     const auto& iterable = InstructionIterable(block);
     for (auto it = iterable.begin(); it != iterable.end(); ++it) {
       auto insn = it->insn;
       auto op = insn->opcode();
 
-      if (m_config.replace_with_representative && deletes != nullptr) {
+      if (m_config.replace_with_representative && mutation != nullptr) {
         replace_with_representative(insn, aliases);
       }
 
       const RegisterPair& src = get_src_value(insn);
-      const RegisterPair& dst = get_dest_reg(it, iterable.end());
+      const RegisterPair& dst = get_dest_reg(block, it);
 
       if (!src.lower.is_none() && !dst.lower.is_none()) {
         if (aliases.are_aliases(dst.lower, src.lower) &&
             (dst.upper == src.upper || // Don't ask `aliases` about Value::none
              aliases.are_aliases(dst.upper, src.upper))) {
           // insn is a no-op. Delete it.
-          if (deletes != nullptr) {
+          if (mutation != nullptr) {
+            ++moves_eliminated;
+            auto cfg_it = block->to_cfg_instruction_iterator(it);
             if (opcode::is_move_result_pseudo(op)) {
               // WARNING: This assumes that the primary instruction of a
               // move-result-pseudo has no side effects.
-              deletes->insert(
-                  ir_list::primary_instruction_of_move_result_pseudo(
-                      it.unwrap()));
+              const auto& primary =
+                  m_cfg.primary_instruction_of_move_result(cfg_it);
+              mutation->remove(primary);
             } else {
-              deletes->insert(insn);
+              mutation->remove(cfg_it);
             }
           }
         } else {
@@ -176,6 +181,7 @@ class AliasFixpointIterator final
         }
       }
     }
+    return moves_eliminated;
   }
 
   // Each group of aliases has one representative register.
@@ -272,19 +278,19 @@ class AliasFixpointIterator final
   // ALL destinations must be returned by this method (unlike get_src_value) if
   // we miss a destination register, we'll fail to clobber it and think we know
   // that a register holds a stale value.
-  RegisterPair get_dest_reg(const ir_list::InstructionIterator& it,
-                            const ir_list::InstructionIterator& end) const {
+  RegisterPair get_dest_reg(cfg::Block* block,
+                            const ir_list::InstructionIterator& it) const {
     IRInstruction* insn = it->insn;
     RegisterPair dest;
 
-    if (is_invoke(insn->opcode()) || insn->has_move_result_pseudo()) {
+    if (insn->has_move_result_any()) {
       dest.lower = Value::create_register(RESULT_REGISTER);
 
       // It's easier to check the following move-result for the width of the
       // RESULT_REGISTER
-      auto next = std::next(it);
-      if (next != end && opcode::is_move_result_any(next->insn->opcode()) &&
-          next->insn->dest_is_wide()) {
+      auto cfg_it = block->to_cfg_instruction_iterator(it);
+      auto move_result = m_cfg.move_result_of(cfg_it);
+      if (!move_result.is_end() && move_result->insn->dest_is_wide()) {
         dest.upper = Value::create_register(RESULT_REGISTER + 1);
       }
     } else if (insn->has_dest()) {
@@ -445,13 +451,14 @@ Stats CopyPropagation::run(const Scope& scope) {
 }
 
 Stats CopyPropagation::run(IRCode* code, DexMethod* method) {
+  cfg::ScopedCFG cfg(code);
   // XXX HACK! Since this pass runs after RegAlloc, we need to avoid remapping
   // registers that belong to /range instructions. The easiest way to find out
   // which instructions are in this category is by temporarily denormalizing
   // the registers.
   std::unordered_set<const IRInstruction*> range_set;
   reg_t max_dest = 0;
-  for (auto& mie : InstructionIterable(code)) {
+  for (auto& mie : InstructionIterable(*cfg)) {
     auto* insn = mie.insn;
     if (opcode::has_range_form(insn->opcode())) {
       insn->denormalize_registers();
@@ -479,27 +486,20 @@ Stats CopyPropagation::run(IRCode* code, DexMethod* method) {
     return stats;
   }
 
-  std::unordered_set<IRInstruction*> deletes;
-  code->build_cfg(/* editable */ false);
-  const auto& blocks = code->cfg().blocks();
-
-  AliasFixpointIterator fixpoint(
-      code->cfg(), method, m_config, range_set, stats);
-
+  AliasFixpointIterator fixpoint(*cfg, method, m_config, range_set, stats);
   fixpoint.run(AliasDomain());
-  for (auto block : blocks) {
+
+  cfg::CFGMutation mutation{*cfg};
+  for (auto block : cfg->blocks()) {
     AliasDomain domain = fixpoint.get_entry_state_at(block);
-    domain.update([&fixpoint, block, &deletes](AliasedRegisters& aliases) {
-      fixpoint.run_on_block(block, aliases, &deletes);
-    });
+    domain.update(
+        [&fixpoint, block, &mutation, &stats](AliasedRegisters& aliases) {
+          stats.moves_eliminated +=
+              fixpoint.run_on_block(block, aliases, &mutation);
+        });
   }
 
-  code->clear_cfg();
-
-  stats.moves_eliminated += deletes.size();
-  for (auto insn : deletes) {
-    code->remove_opcode(insn);
-  }
+  mutation.flush();
   return stats;
 }
 
