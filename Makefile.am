@@ -70,6 +70,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/make-public \
 	-I$(top_srcdir)/opt/methodinline \
 	-I$(top_srcdir)/opt/singleimpl \
+	-I$(top_srcdir)/opt/split_huge_switches \
 	-I$(top_srcdir)/opt/static-sink \
 	-I$(top_srcdir)/opt/staticrelo \
 	-I$(top_srcdir)/opt/string_concatenator \
@@ -344,6 +345,7 @@ redex_all_SOURCES = \
 	opt/singleimpl/SingleImplOptimize.cpp \
 	opt/singleimpl/SingleImplStats.cpp \
 	opt/simplify_cfg/SimplifyCFG.cpp \
+	opt/split_huge_switches/SplitHugeSwitchPass.cpp \
 	opt/staticrelo/StaticReloV2.cpp \
 	opt/string_concatenator/StringConcatenator.cpp \
 	opt/stringbuilder-outliner/StringBuilderOutliner.cpp \
