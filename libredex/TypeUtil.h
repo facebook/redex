@@ -8,6 +8,7 @@
 #pragma once
 
 #include "DexClass.h"
+#include "WellKnownTypes.h"
 
 /**
  * Basic datatypes used by bytecode.
@@ -28,51 +29,12 @@ enum class DataType : uint8_t {
 
 namespace type {
 
-DexType* _void();
+#define DECLARE_TYPE(name, _) DexType* name();
 
-DexType* _byte();
-
-DexType* _char();
-
-DexType* _short();
-
-DexType* _int();
-
-DexType* _long();
-
-DexType* _boolean();
-
-DexType* _float();
-
-DexType* _double();
-
-DexType* java_lang_String();
-
-DexType* java_lang_Class();
-
-DexType* java_lang_Enum();
-
-DexType* java_lang_Object();
-
-DexType* java_lang_Void();
-
-DexType* java_lang_Throwable();
-
-DexType* java_lang_Boolean();
-
-DexType* java_lang_Byte();
-
-DexType* java_lang_Short();
-
-DexType* java_lang_Character();
-
-DexType* java_lang_Integer();
-
-DexType* java_lang_Long();
-
-DexType* java_lang_Float();
-
-DexType* java_lang_Double();
+#define FOR_EACH DECLARE_TYPE
+WELL_KNOWN_TYPES
+#undef FOR_EACH
+#undef DECLARE_TYPE
 
 /**
  * Return true if the type is a primitive.

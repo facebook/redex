@@ -21,6 +21,7 @@
 
 #include "ConcurrentContainers.h"
 #include "DexMemberRefs.h"
+#include "FrequentlyUsedPointersCache.h"
 #include "KeepReason.h"
 
 class DexCallSite;
@@ -150,6 +151,8 @@ struct RedexContext {
   using Task = std::function<void(void)>;
   void add_destruction_task(const Task& t) { m_destruction_tasks.push_back(t); }
 
+  FrequentlyUsedPointers pointers_cache() { return m_pointers_cache; }
+
  private:
   struct Strcmp;
   struct TruncatedStringHash;
@@ -241,6 +244,8 @@ struct RedexContext {
 
   bool m_record_keep_reasons{false};
   bool m_allow_class_duplicates;
+
+  FrequentlyUsedPointers m_pointers_cache;
 };
 
 // One or more exceptions

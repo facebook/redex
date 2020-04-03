@@ -160,6 +160,7 @@ libredex_la_SOURCES = \
 	libredex/EditableCfgAdapter.cpp \
 	libredex/FieldOpTracker.cpp \
 	libredex/FrameworkApi.cpp \
+	libredex/FrequentlyUsedPointersCache.cpp \
 	libredex/GlobalConfig.cpp \
 	libredex/GraphVisualizer.cpp \
 	libredex/HierarchyUtil.cpp \

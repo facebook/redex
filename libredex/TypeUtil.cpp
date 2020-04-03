@@ -7,61 +7,16 @@
 
 #include "TypeUtil.h"
 
+#include "RedexContext.h"
+
 namespace type {
 
-DexType* _void() { return DexType::make_type("V"); }
+#define DEFINE_CACHED_TYPE(func_name, _) \
+  DexType* func_name() { return g_redex->pointers_cache().func_name(); }
 
-DexType* _byte() { return DexType::make_type("B"); }
-
-DexType* _char() { return DexType::make_type("C"); }
-
-DexType* _short() { return DexType::make_type("S"); }
-
-DexType* _int() { return DexType::make_type("I"); }
-
-DexType* _long() { return DexType::make_type("J"); }
-
-DexType* _boolean() { return DexType::make_type("Z"); }
-
-DexType* _float() { return DexType::make_type("F"); }
-
-DexType* _double() { return DexType::make_type("D"); }
-
-DexType* java_lang_String() { return DexType::make_type("Ljava/lang/String;"); }
-
-DexType* java_lang_Class() { return DexType::make_type("Ljava/lang/Class;"); }
-
-DexType* java_lang_Enum() { return DexType::make_type("Ljava/lang/Enum;"); }
-
-DexType* java_lang_Object() { return DexType::make_type("Ljava/lang/Object;"); }
-
-DexType* java_lang_Void() { return DexType::make_type("Ljava/lang/Void;"); }
-
-DexType* java_lang_Throwable() {
-  return DexType::make_type("Ljava/lang/Throwable;");
-}
-
-DexType* java_lang_Boolean() {
-  return DexType::make_type("Ljava/lang/Boolean;");
-}
-
-DexType* java_lang_Byte() { return DexType::make_type("Ljava/lang/Byte;"); }
-
-DexType* java_lang_Short() { return DexType::make_type("Ljava/lang/Short;"); }
-
-DexType* java_lang_Character() {
-  return DexType::make_type("Ljava/lang/Character;");
-}
-
-DexType* java_lang_Integer() {
-  return DexType::make_type("Ljava/lang/Integer;");
-}
-
-DexType* java_lang_Long() { return DexType::make_type("Ljava/lang/Long;"); }
-
-DexType* java_lang_Float() { return DexType::make_type("Ljava/lang/Float;"); }
-
-DexType* java_lang_Double() { return DexType::make_type("Ljava/lang/Double;"); }
+#define FOR_EACH DEFINE_CACHED_TYPE
+WELL_KNOWN_TYPES
+#undef FOR_EACH
 
 bool is_primitive(const DexType* type) {
   auto* const name = type->get_name()->c_str();
