@@ -17,6 +17,7 @@
 
 #include "HashedSetAbstractDomain.h"
 #include "Thread.h"
+#include "WorkQueue.h"
 
 using namespace sparta;
 
