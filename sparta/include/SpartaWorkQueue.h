@@ -301,6 +301,10 @@ void SpartaWorkQueue<Input, Executor>::run_all() {
   for (auto& thread : all_threads) {
     thread.join();
   }
+
+  for (size_t i = 0; i < m_num_threads; ++i) {
+    assert(m_states[i]->m_queue.empty());
+  }
 }
 
 namespace workqueue_impl {
