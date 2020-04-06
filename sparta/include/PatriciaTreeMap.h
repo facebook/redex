@@ -137,7 +137,8 @@ struct SimpleValue {
  * default value, which is never explicitly represented in the map. When using
  * Patricia tree maps with AbstractDomain values, this allows us to better
  * optimize operations like meet, join, and leq. It also makes it easy for us to
- * save space by implicitly mapping all unbound keys to Top.
+ * save space by implicitly mapping all unbound keys to the default value. As a
+ * consequence, the default value must be either Top or Bottom.
  *
  * Value is a structure that should contain the following components:
  *
@@ -548,40 +549,74 @@ inline const typename Value::type* find_value(
   }
 }
 
+/* Assumes Value::default_value() is either Top or Bottom */
 template <typename IntegerType, typename Value>
 inline bool leq(const std::shared_ptr<PatriciaTree<IntegerType, Value>>& s,
                 const std::shared_ptr<PatriciaTree<IntegerType, Value>>& t) {
+
+  RUNTIME_CHECK(Value::default_value().is_top() ||
+                    Value::default_value().is_bottom(),
+                undefined_operation());
+
   if (s == t) {
     // This condition allows the leq operation to run in sublinear time when
     // comparing Patricia trees that share some structure.
     return true;
   }
   if (s == nullptr) {
-    return !Value::default_value().is_top();
+    return Value::default_value().is_bottom();
   }
   if (t == nullptr) {
     return Value::default_value().is_top();
   }
   if (s->is_leaf()) {
-    if (t->is_branch()) {
-      return !Value::default_value().is_top();
-    }
     const auto& s_leaf =
         std::static_pointer_cast<PatriciaTreeLeaf<IntegerType, Value>>(s);
+
+    if (t->is_branch()) {
+      // t has at least one non-default binding that s doesn't have.
+      if (Value::default_value().is_top()) {
+        // The non-default binding in t can never be <= Top.
+        return false;
+      }
+
+      // Otherwise, find if t contains s.
+      // The missing bindings in s are bound to Bottom in this case. Even if we
+      // know t contains strictly more bindings than s, they all satisfy the leq
+      // condition. For each key k in t but not in s, s[k] == Bottom <= t[k]
+      // always hold.
+      auto* t_value = find_value(s_leaf->key(), t);
+      if (t_value == nullptr) {
+        // Always false if default_value is Bottom, which we already assume.
+        return false;
+      }
+      return Value::leq(s_leaf->value(), *t_value);
+    }
+
+    // Both nodes are leaves. s leq to t iff
+    // key(s) == key(t) && value(s) <= value(t).
     const auto& t_leaf =
         std::static_pointer_cast<PatriciaTreeLeaf<IntegerType, Value>>(t);
     return s_leaf->key() == t_leaf->key() &&
            Value::leq(s_leaf->value(), t_leaf->value());
-  }
-  if (t->is_leaf()) {
-    const auto& leaf =
-        std::static_pointer_cast<PatriciaTreeLeaf<IntegerType, Value>>(t);
-    auto* s_value = find_value(leaf->key(), s);
-    if (s_value == nullptr) {
-      return Value::leq(Value::default_value(), leaf->value());
+  } else if (t->is_leaf()) {
+    // s has at least one non-default binding that t doesn't have.
+    if (Value::default_value().is_bottom()) {
+      // There exists a key such that s[key] != Bottom and t[key] == Bottom.
+      return false;
     }
-    return Value::leq(*s_value, leaf->value());
+
+    const auto& t_leaf =
+        std::static_pointer_cast<PatriciaTreeLeaf<IntegerType, Value>>(t);
+    auto* s_value = find_value(t_leaf->key(), s);
+    if (s_value == nullptr) {
+      // Always false if default_value is Top, which we already assume.
+      return false;
+    }
+    return Value::leq(*s_value, t_leaf->value());
   }
+
+  // Neither s nor t is a leaf.
   const auto& s_branch =
       std::static_pointer_cast<PatriciaTreeBranch<IntegerType, Value>>(s);
   const auto& t_branch =
@@ -602,7 +637,7 @@ inline bool leq(const std::shared_ptr<PatriciaTree<IntegerType, Value>>& s,
   }
   // Otherwise, the tree t contains bindings to (non-default) values that are
   // not bound in s (and therefore implicitly bound to the default value).
-  return !Value::default_value().is_top();
+  return Value::default_value().is_bottom();
 }
 
 // A Patricia tree is a canonical representation of the set of keys it contains.
@@ -870,7 +905,7 @@ inline std::shared_ptr<PatriciaTree<IntegerType, Value>> combine_leaf(
   return leaf;
 }
 
-// Create a new leaf with a Top value and combine :value into it.
+// Create a new leaf with the default value and combine :value into it.
 template <typename IntegerType, typename Value>
 inline std::shared_ptr<PatriciaTree<IntegerType, Value>> combine_new_leaf(
     const ptmap_impl::CombiningFunction<typename Value::type>& combine,
@@ -930,7 +965,7 @@ inline std::shared_ptr<PatriciaTree<IntegerType, Value>> intersect(
     //
     // The subtrees don't have overlapping explicit values, but the combining
     // function will still be called to merge the elements in one tree with the
-    // implicit Top values in the other.
+    // implicit default values in the other.
     return merge<IntegerType, Value>(
         [](const typename Value::type& x, const typename Value::type& y) ->
         typename Value::type {
