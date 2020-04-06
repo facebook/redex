@@ -38,6 +38,66 @@ AbstractDomainPropertyTest<Partition>::non_extremal_values() {
   return {p1, p2};
 }
 
+TEST(PatriciaTreeMapAbstractPartitionTest, basicPartialOrders) {
+  {
+    Partition p1;
+    EXPECT_TRUE(p1.leq(p1));
+  }
+
+  {
+    Partition p1;
+    Partition p2;
+    EXPECT_TRUE(p1.leq(p2));
+    EXPECT_TRUE(p2.leq(p1));
+  }
+
+  {
+    Partition p1({{1, Domain({"a"})}});
+    Partition p2({{1, Domain({"a"})}});
+    EXPECT_TRUE(p1.leq(p2));
+    EXPECT_TRUE(p2.leq(p1));
+  }
+
+  {
+    Partition p1({{2, Domain({"a"})}, {3, Domain({"a"})}});
+    Partition p2({{2, Domain({"a"})}, {3, Domain({"a"})}});
+    EXPECT_TRUE(p1.leq(p2));
+    EXPECT_TRUE(p2.leq(p1));
+  }
+
+  {
+    Partition p1;
+    Partition p2({{1, Domain({"a"})}});
+    Partition p3({{2, Domain({"a"})}, {3, Domain({"a"})}});
+    EXPECT_TRUE(p1.leq(p2));
+    EXPECT_FALSE(p2.leq(p1));
+    EXPECT_TRUE(p1.leq(p3));
+    EXPECT_FALSE(p3.leq(p1));
+  }
+
+  {
+    Partition p1({{1, Domain({"a"})}});
+    Partition p2({{1, Domain({"a"})}, {2, Domain({"a"})}});
+    Partition p3({{2, Domain({"a"})}, {3, Domain({"a"})}});
+    EXPECT_TRUE(p1.leq(p2));
+    EXPECT_FALSE(p2.leq(p1));
+    EXPECT_FALSE(p1.leq(p3));
+    EXPECT_FALSE(p3.leq(p1));
+  }
+
+  {
+    Partition p1;
+    p1.set_to_bottom();
+    p1.set(1, Domain({"a"}));
+    p1.set(2, Domain({"a"}));
+    Partition p2;
+    p2.set_to_bottom();
+    p2.set(1, Domain({"a"}));
+    EXPECT_FALSE(p1.leq(p2));
+    EXPECT_TRUE(p2.leq(p1));
+  }
+}
+
 TEST(PatriciaTreeMapAbstractPartitionTest, latticeOperations) {
   Partition p1({{1, Domain({"a", "b"})},
                 {2, Domain("c")},
