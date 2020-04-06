@@ -32,6 +32,7 @@ from pyredex.utils import (
     LibraryManager,
     UnpackManager,
     ZipManager,
+    ZipReset,
     abs_glob,
     argparse_yes_no_flag,
     dex_glob,
@@ -518,6 +519,7 @@ def zipalign(unaligned_apk_path, output_apk_path, ignore_zipalign, page_align):
 def align_and_sign_output_apk(
     unaligned_apk_path,
     output_apk_path,
+    reset_timestamps,
     sign,
     keystore,
     key_alias,
@@ -535,6 +537,9 @@ def align_and_sign_output_apk(
             raise
 
     zipalign(unaligned_apk_path, output_apk_path, ignore_zipalign, page_align)
+
+    if reset_timestamps:
+        ZipReset.reset_file(output_apk_path)
 
     # Add new signature
     if sign:
@@ -759,6 +764,12 @@ Given an APK, produce a better APK!
 
     parser.add_argument("--cmd-prefix", type=str, help="Prefix redex-all with")
 
+    parser.add_argument(
+        "--reset-zip-timestamps",
+        action="store_true",
+        help="Reset zip timestamps for deterministic output",
+    )
+
     return parser
 
 
@@ -956,6 +967,8 @@ def finalize_redex(state):
     align_and_sign_output_apk(
         state.zip_manager.output_apk,
         state.args.out,
+        # In dev mode, reset timestamps.
+        state.args.reset_zip_timestamps or state.args.dev,
         state.args.sign,
         state.args.keystore,
         state.args.keyalias,

@@ -9,6 +9,7 @@ import distutils.version
 import errno
 import fnmatch
 import glob
+import mmap
 import os
 import re
 import shutil
@@ -387,3 +388,93 @@ class LibraryManager:
         # want to pack it back up into the apk
         if self.temporary_libs_dir is not None:
             shutil.rmtree(self.temporary_libs_dir)
+
+
+# Utility class to reset zip entry timestamps on-the-fly without repackaging.
+# Is restricted to single-archive 32-bit zips (like APKs).
+class ZipReset:
+    @staticmethod
+    def reset_array_like(inout, size, date=(1980, 1, 1, 0, 0, 0)):
+        eocd_len = 22
+        eocd_signature = b"\x50\x4b\x05\x06"
+        max_comment_len = 65535
+        max_eocd_search = max_comment_len + eocd_len
+        lfh_signature = b"\x50\x4b\x03\x04"
+        cde_signature = b"\x50\x4b\x01\x02"
+        cde_len = 46
+        time_code = date[3] << 11 | date[4] << 5 | date[5]
+        date_code = (date[0] - 1980) << 9 | date[1] << 5 | date[2]
+
+        def short_le(start):
+            return int.from_bytes(inout[start : start + 2], byteorder="little")
+
+        def long_le(start):
+            return int.from_bytes(inout[start : start + 4], byteorder="little")
+
+        def put_short_le(start, val):
+            inout[start : start + 2] = val.to_bytes(2, byteorder="little")
+
+        def find_eocd_index(len):
+            from_index = len - max_eocd_search if len > max_eocd_search else 0
+            for i in range(len - 3, from_index - 1, -1):
+                if inout[i : i + 4] == eocd_signature:
+                    return i
+            return None
+
+        def rewrite_entry(index):
+            # CDE first.
+            assert (
+                inout[index : index + 4] == cde_signature
+            ), "Did not find CDE signature"
+            file_name_len = short_le(index + 28)
+            extra_len = short_le(index + 30)
+            file_comment_len = short_le(index + 32)
+            lfh_index = long_le(index + 42)
+            # LFH now.
+            assert (
+                inout[lfh_index : lfh_index + 4] == lfh_signature
+            ), "Did not find LFH signature"
+
+            # Update times.
+            put_short_le(index + 12, time_code)
+            put_short_le(index + 14, date_code)
+            put_short_le(lfh_index + 10, time_code)
+            put_short_le(lfh_index + 12, date_code)
+
+            return index + cde_len + file_name_len + extra_len + file_comment_len
+
+        assert size >= eocd_len, "File too small to be a zip"
+        eocd_index = find_eocd_index(size)
+        assert eocd_index is not None, "Dit not find EOCD"
+        assert eocd_index + eocd_len <= size, "EOCD truncated?"
+
+        disk_num = short_le(eocd_index + 4)
+        disk_w_cd = short_le(eocd_index + 6)
+        num_entries = short_le(eocd_index + 8)
+        total_entries = short_le(eocd_index + 10)
+        cd_offset = long_le(eocd_index + 16)
+
+        assert (
+            disk_num == 0 and disk_w_cd == 0 and num_entries == total_entries
+        ), "Archive span unsupported"
+
+        index = cd_offset
+        for _i in range(0, total_entries):
+            index = rewrite_entry(index)
+
+        assert index == eocd_index, "Failed to reach EOCD again"
+
+    @staticmethod
+    def reset_file_into_bytes(filename, date=(1980, 1, 1, 0, 0, 0)):
+        with open(filename, "rb") as f:
+            data = bytearray(f.read())
+        ZipReset.reset_array_like(data, len(data), date)
+        return data
+
+    @staticmethod
+    def reset_file(filename, date=(1980, 1, 1, 0, 0, 0)):
+        with open(filename, "r+b") as f:
+            with mmap.mmap(f.fileno(), 0) as map:
+                ZipReset.reset_array_like(map, map.size(), date)
+                map.flush()
+            os.fsync(f.fileno())
