@@ -1239,7 +1239,8 @@ void ClassInitCounter::analyze_block(
     } else if (is_new_instance(opcode)) {
       DexType* typ = i->get_type();
       registers.clear(ir_analyzer::RESULT_REGISTER);
-      if (type_to_inits.count(typ) != 0) {
+      if ((tracked_set.empty() || tracked_set.count(i) != 0) &&
+          (type_to_inits.count(typ) != 0)) {
         TRACE(CIC, 5, "Adding an init for type %s", SHOW(typ));
         std::shared_ptr<ObjectUses> use = type_to_inits[typ].add_init(
             container, method, i, block_id, instruction_count);
@@ -1278,7 +1279,8 @@ void ClassInitCounter::analyze_block(
       registers.clear(ir_analyzer::RESULT_REGISTER);
       if (m_optional_method && curr_method->get_name() == m_optional_method) {
         auto ret_typ = curr_method->get_proto()->get_rtype();
-        if (type_to_inits.count(ret_typ) != 0) {
+        if ((tracked_set.empty() || tracked_set.count(i) != 0) &&
+            type_to_inits.count(ret_typ) != 0) {
           std::shared_ptr<ObjectUses> use = type_to_inits[ret_typ].add_init(
               container, method, i, block_id, instruction_count);
           registers.insert(ir_analyzer::RESULT_REGISTER, use);
