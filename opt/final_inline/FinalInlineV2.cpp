@@ -23,6 +23,7 @@
 #include "Purity.h"
 #include "Resolver.h"
 #include "TypeSystem.h"
+#include "TypeUtil.h"
 #include "Walkers.h"
 
 /*
@@ -176,10 +177,17 @@ class encoding_visitor : public boost::static_visitor<DexEncodedValue*> {
 
   DexEncodedValue* operator()(const StringDomain& dom) const {
     auto cst = dom.get_constant();
-    if (!cst) {
+
+    // Older DalvikVM handles only two types of classes:
+    // https://android.googlesource.com/platform/dalvik.git/+/android-4.3_r3/vm/oo/Class.cpp#3846
+    // Without this checking, we may mistakenly accept a "const-string" and
+    // "sput-object Ljava/lang/CharSequence;" pair. Such pair can cause a
+    // libdvm.so abort with "Bogus static initialization".
+    if (cst && m_field->get_type() == type::java_lang_String()) {
+      return new DexEncodedValueString(const_cast<DexString*>(*cst));
+    } else {
       return nullptr;
     }
-    return new DexEncodedValueString(const_cast<DexString*>(*cst));
   }
 
   template <typename Domain>
