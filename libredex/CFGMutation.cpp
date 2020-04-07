@@ -19,7 +19,7 @@ void CFGMutation::clear() {
 
 void CFGMutation::flush() {
   auto ii = InstructionIterable(m_cfg);
-  for (auto it = ii.begin(); !it.is_end();) {
+  for (auto it = ii.begin(); !m_changes.empty() && !it.is_end();) {
     auto c = m_changes.find(it->insn);
     if (c == m_changes.end()) {
       // No change anchored at this instruction.
