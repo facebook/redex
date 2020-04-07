@@ -41,10 +41,10 @@ inline bool operator==(const MethodCall& a, const MethodCall& b) {
   }
   std::unordered_set<IRInstruction*> a_instrs;
   std::unordered_set<IRInstruction*> b_instrs;
-  for (auto call : a.call_sites) {
+  for (const auto& call : a.call_sites) {
     a_instrs.insert(call.first);
   }
-  for (auto call : b.call_sites) {
+  for (const auto& call : b.call_sites) {
     b_instrs.insert(call.first);
   }
   return a_instrs == b_instrs;
@@ -92,7 +92,7 @@ std::string show(const FieldSetMap& fields_writes) {
 std::string show(const FieldReads& field_reads) {
   std::stringstream out;
   out << "[";
-  for (auto field_read : field_reads.get_fields()) {
+  for (const auto& field_read : field_reads.get_fields()) {
     out << "{\"field_read\" : \"" << field_read.first->get_name()->str()
         << "\"flow\" :\"" << show(field_read.second) << "\"},";
   }
@@ -121,7 +121,7 @@ std::string show(const Escapes& escapes) {
       << "\", "
       << "\"via_array_write\" : "
       << (escapes.via_array_write.empty() ? "\"none\"," : "[");
-  for (auto i_flow : escapes.via_array_write) {
+  for (const auto& i_flow : escapes.via_array_write) {
     out << "\"" << show(i_flow.second) << "\",";
   }
   out << (escapes.via_array_write.empty() ? "" : "],")
@@ -246,7 +246,7 @@ std::vector<DexFieldRef*> get_keys(const FieldSetMap& m) {
 
 std::vector<DexFieldRef*> get_keys(const FieldReadMap& m) {
   std::vector<DexFieldRef*> m_keys = {};
-  for (auto f : m) {
+  for (const auto& f : m) {
     m_keys.emplace_back(f.first);
   }
   return m_keys;
@@ -264,7 +264,7 @@ FieldSet path_combine(const FieldSet& main, const FieldSet& other) {
   auto combined_regs = main.regs;
   for (const auto& o_reg : other.regs) {
     auto& reg = combined_regs[o_reg.first];
-    for (auto o_instr : o_reg.second) {
+    for (const auto& o_instr : o_reg.second) {
       reg.insert(o_instr);
     }
   }
@@ -278,7 +278,7 @@ FieldSet merge(const FieldSet& main, const FieldSet& other) {
   if (other.regs != main.regs) {
     for (const auto& o_reg : other.regs) {
       auto reg = merged_regs[o_reg.first];
-      for (auto o_instr : o_reg.second) {
+      for (const auto& o_instr : o_reg.second) {
         reg.insert(o_instr);
       }
     }
@@ -302,7 +302,7 @@ MethodCall path_combine(const MethodCall& main, const MethodCall& other) {
 
 void FieldWriteRegs::combine_paths(const FieldWriteRegs& other) {
   std::vector<DexFieldRef*> m_keys = get_keys(m_fields);
-  for (auto field : m_keys) {
+  for (const auto& field : m_keys) {
     auto field_data = m_fields.find(field);
     auto other_field = other.m_fields.find(field);
     if (other_field == other.m_fields.end()) {
@@ -328,7 +328,7 @@ void FieldWriteRegs::merge(const FieldWriteRegs& other) {
     return;
   }
   std::vector<DexFieldRef*> m_keys = get_keys(m_fields);
-  for (auto field : m_keys) {
+  for (const auto& field : m_keys) {
     auto field_data = m_fields.find(field);
     auto other_field = other.m_fields.find(field);
     if (other_field == other.m_fields.end()) {
@@ -376,7 +376,7 @@ void FieldReads::add_field(DexFieldRef* field) {
 
 // Fields that don't match are inconsistent but ok to have more or less fields
 bool FieldReads::consistent_with(const FieldReads& other) {
-  for (auto read : m_fields) {
+  for (const auto& read : m_fields) {
     auto o_read = other.m_fields.find(read.first);
     if (o_read == other.m_fields.end()) {
       continue;
@@ -393,12 +393,12 @@ void FieldReads::combine_paths(const FieldReads& other) {
     return;
   }
   auto keys = get_keys(m_fields);
-  for (auto key : keys) {
+  for (const auto& key : keys) {
     if (other.m_fields.count(key) == 0) {
       m_fields[key] = Conditional;
     }
   }
-  for (auto o_read : other.m_fields) {
+  for (const auto& o_read : other.m_fields) {
     auto read = m_fields.find(o_read.first);
     if (read == m_fields.end()) {
       m_fields[o_read.first] = Conditional;
@@ -411,7 +411,7 @@ void FieldReads::merge(const FieldReads& other) {
     return;
   }
   // Outer path flow holds over inner path flow, so just don't lose any
-  for (auto o_read : other.m_fields) {
+  for (const auto& o_read : other.m_fields) {
     if (m_fields.count(o_read.first) == 0) {
       m_fields[o_read.first] = o_read.second;
     }
@@ -428,7 +428,7 @@ void MethodCalls::combine_paths(const MethodCalls& other) {
     return;
   }
   std::vector<DexMethodRef*> m_keys = get_keys(m_calls);
-  for (auto call : m_keys) {
+  for (const auto& call : m_keys) {
     auto call_data = m_calls.find(call);
     auto other_call = other.m_calls.find(call);
     if (other_call == other.m_calls.end()) {
@@ -455,14 +455,14 @@ void MethodCalls::merge(const MethodCalls& other) {
     return;
   }
   std::vector<DexMethodRef*> m_keys = get_keys(m_calls);
-  for (auto call : m_keys) {
+  for (const auto& call : m_keys) {
     auto call_data = m_calls.find(call);
     auto other_call = other.m_calls.find(call);
     if (other_call == other.m_calls.end()) {
       continue;
     }
     if (other_call->second != call_data->second) {
-      for (auto o_call_site : other_call->second.call_sites) {
+      for (const auto& o_call_site : other_call->second.call_sites) {
         call_data->second.call_sites.insert(o_call_site);
       }
     }
@@ -575,7 +575,7 @@ void Escapes::combine_paths(const Escapes& other) {
     via_return =
         path_combine(via_return ? via_return.value() : Conditional,
                      other.via_return ? other.via_return.value() : Conditional);
-    for (auto o_instr : other.return_instrs) {
+    for (const auto& o_instr : other.return_instrs) {
       return_instrs.insert(o_instr);
     }
   }
@@ -650,10 +650,10 @@ void Escapes::merge(const Escapes& other) {
   if (!via_return && other.via_return) {
     via_return = other.via_return;
   }
-  for (auto insn : other.return_instrs) {
+  for (auto* insn : other.return_instrs) {
     return_instrs.insert(insn);
   }
-  for (auto i_flow : other.via_array_write) {
+  for (const auto& i_flow : other.via_array_write) {
     if (via_array_write.count(i_flow.first) == 0) {
       via_array_write[i_flow.first] = i_flow.second;
     }
@@ -706,12 +706,12 @@ std::vector<std::pair<IRInstruction*, reg_t>> Escapes::get_escape_instructions()
   }
 
   for (const auto& v_call : via_vmethod_call) {
-    for (auto i_reg : v_call.second.call_sites) {
+    for (const auto i_reg : v_call.second.call_sites) {
       escapes.emplace_back(i_reg);
     }
   }
   for (const auto& s_call : via_smethod_call) {
-    for (auto i_reg : s_call.second.call_sites) {
+    for (const auto i_reg : s_call.second.call_sites) {
       escapes.emplace_back(i_reg);
     }
   }
@@ -1261,7 +1261,7 @@ void ClassInitCounter::analyze_block(DexClass* container,
         registers.get(srcs[0])->escapes.add_array(i);
       }
     } else if (is_filled_new_array(opcode)) {
-      for (auto src : srcs) {
+      for (const auto src : srcs) {
         if (!registers.is_empty(src)) {
           registers.get(src)->escapes.add_array(i);
         }
@@ -1277,7 +1277,7 @@ void ClassInitCounter::analyze_block(DexClass* container,
           registers.insert(ir_analyzer::RESULT_REGISTER, use);
         }
       }
-      for (auto src : srcs) {
+      for (const auto src : srcs) {
         if (!registers.is_empty(src)) {
           if (m_safe_escapes.find(curr_method) == m_safe_escapes.end()) {
             registers.get(src)->escapes.add_smethod(curr_method, src, i);
@@ -1293,7 +1293,7 @@ void ClassInitCounter::analyze_block(DexClass* container,
         registers.get(target_reg)
             ->method_calls.add_call(curr_method, target_reg, i);
       }
-      for (auto src : srcs) {
+      for (const auto src : srcs) {
         if (src != target_reg && !registers.is_empty(src)) {
           if (m_safe_escapes.find(curr_method) == m_safe_escapes.end()) {
             registers.get(src)->escapes.add_dmethod(curr_method, src, i);
@@ -1347,7 +1347,7 @@ void ClassInitCounter::analyze_block(DexClass* container,
   // Book keeping to differentiate first path from an empty registerset
   bool walked_one_path = false;
 
-  for (auto edge : block->succs()) {
+  for (auto* edge : block->succs()) {
     cfg::Block* next = edge->target();
     TRACE(CIC, 8, "making call from %zu to block %zu", block->id(), next->id());
     analyze_block(container, method, block, next);
@@ -1430,7 +1430,7 @@ std::pair<ObjectUsedSet, MergedUsedSet> ClassInitCounter::all_uses_from(
   }
 
   ObjectUsedSet object_set;
-  for (auto& typ_init : m_type_to_inits) {
+  for (const auto& typ_init : m_type_to_inits) {
     typ_init.second.all_uses_from(container, method, object_set);
   }
 
