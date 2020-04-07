@@ -148,12 +148,7 @@ class Analyzer final : public BaseIRAnalyzer<IRInstructionConstantEnvironment> {
     }
 
     case OPCODE_CHECK_CAST: {
-      DexType* type = insn->get_type();
-      if (m_types.count(type) > 0) {
-        current_state->set(RESULT_REGISTER, current_state->get(insn->src(0)));
-      } else {
-        default_case();
-      }
+      current_state->set(RESULT_REGISTER, current_state->get(insn->src(0)));
       break;
     }
 
