@@ -13,6 +13,7 @@
 #include "BaseIRAnalyzer.h"
 #include "ControlFlow.h"
 #include "IRCode.h"
+#include "ScopedCFG.h"
 
 using namespace cic;
 
@@ -1376,23 +1377,21 @@ void ClassInitCounter::inits_any_children(DexClass* container,
     return;
   }
 
-  instructions->build_cfg(true);
-  const cfg::ControlFlowGraph& graph = instructions->cfg();
+  cfg::ScopedCFG graph(instructions);
 
-  if (graph.blocks().size() > 9000) {
+  if (graph->blocks().size() > 9000) {
     TRACE(CIC, 4, "Skipping analysis for method %s.%s",
           container->get_name()->c_str(), method->get_name()->c_str());
-    instructions->clear_cfg();
     return;
   }
 
-  cfg::Block* block = graph.entry_block();
+  cfg::Block* block = graph->entry_block();
   visited_blocks =
       std::unordered_map<cfg::Block*, std::shared_ptr<RegistersPerBlock>>();
 
   TRACE(CIC, 5, "starting analysis for method %s.%s with %zu blocks\n",
         container->get_name()->c_str(), method->get_name()->c_str(),
-        graph.num_blocks());
+        graph->num_blocks());
 
   analyze_block(container, method, nullptr, block);
   auto& merged_set = m_stored_mergeds[container->get_type()][method];
@@ -1413,8 +1412,6 @@ void ClassInitCounter::inits_any_children(DexClass* container,
           std::make_shared<MergedUses>(static_cast<MergedUses&>(*use)));
     }
   }
-
-  instructions->clear_cfg();
 }
 
 std::pair<ObjectUsedSet, MergedUsedSet> ClassInitCounter::all_uses_from(
