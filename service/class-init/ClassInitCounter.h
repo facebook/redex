@@ -432,7 +432,14 @@ class InitLocation final {
   const InitMap& get_inits() const { return m_inits; }
 
   // Puts all uses from cls.method into provided set
-  void all_uses_from(DexType* cls, DexMethod* method, ObjectUsedSet& set) const;
+  void all_uses_from(DexClass* cls,
+                     DexMethod* method,
+                     ObjectUsedSet& set) const;
+
+  // If this init has data from this `method`, reset to empty.
+  // This ensures when a method is going to be re-analyzed that all data
+  // is accurate.
+  void reset_uses_from(DexClass* cls, DexMethod* method);
 
   DexType* m_typ = nullptr;
 
@@ -462,6 +469,11 @@ class ClassInitCounter final {
 
   const TypeToInit& type_to_inits() const { return m_type_to_inits; }
   const MergedUsesMap& merged_uses() const { return m_stored_mergeds; }
+
+  // Calculate the uses for the specified method.
+  // If this method has already been analyzed, discard that analysis result
+  // and build fresh data.
+  void find_uses_within(DexClass* container, DexMethod* method);
 
   // Reports all object uses and merged uses within the specified method.
   std::pair<ObjectUsedSet, MergedUsedSet> all_uses_from(DexType*, DexMethod*);

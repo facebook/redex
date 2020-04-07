@@ -1116,10 +1116,13 @@ void InitLocation::update_object(DexClass* container,
       std::make_shared<ObjectUses>(obj)};
 }
 
-void InitLocation::all_uses_from(DexType* cls,
+void InitLocation::reset_uses_from(DexClass* cls_impl, DexMethod* method) {
+  m_inits[cls_impl].erase(method);
+}
+
+void InitLocation::all_uses_from(DexClass* cls_impl,
                                  DexMethod* method,
                                  ObjectUsedSet& set) const {
-  DexClass* cls_impl = type_class(cls);
   const auto methods = m_inits.find(cls_impl);
   if (methods == m_inits.end()) {
     return;
@@ -1147,10 +1150,10 @@ ClassInitCounter::ClassInitCounter(
         SHOW(parent_class));
   for (DexClass* current : classes) {
     for (DexMethod* method : current->get_vmethods()) {
-      inits_any_children(current, method);
+      find_uses_within(current, method);
     }
     for (DexMethod* method : current->get_dmethods()) {
-      inits_any_children(current, method);
+      find_uses_within(current, method);
     }
   }
 }
@@ -1370,8 +1373,13 @@ void ClassInitCounter::analyze_block(DexClass* container,
   visited_blocks[block]->final_result_registers.value().merge_effects(paths);
 }
 
-void ClassInitCounter::inits_any_children(DexClass* container,
-                                          DexMethod* method) {
+void ClassInitCounter::find_uses_within(DexClass* container,
+                                        DexMethod* method) {
+  for (auto& t_init : m_type_to_inits) {
+    t_init.second.reset_uses_from(container, method);
+  }
+  m_stored_mergeds[container->get_type()].erase(method);
+
   IRCode* instructions = method->get_code();
   if (instructions == nullptr) {
     return;
@@ -1428,7 +1436,7 @@ std::pair<ObjectUsedSet, MergedUsedSet> ClassInitCounter::all_uses_from(
 
   ObjectUsedSet object_set;
   for (const auto& typ_init : m_type_to_inits) {
-    typ_init.second.all_uses_from(container, method, object_set);
+    typ_init.second.all_uses_from(type_class(container), method, object_set);
   }
 
   return std::make_pair(object_set, merged_set);
