@@ -121,6 +121,12 @@ class ReachableObjects {
     return m_marked_fields.count_unsafe(field);
   }
 
+  size_t num_marked_classes() const { return m_marked_classes.size(); }
+
+  size_t num_marked_fields() const { return m_marked_fields.size(); }
+
+  size_t num_marked_methods() const { return m_marked_methods.size(); }
+
  private:
   template <class Seed>
   void record_is_seed(Seed* seed);
