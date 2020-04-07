@@ -55,6 +55,16 @@ bool has_sget(const DexClasses& classes,
   return false;
 }
 
+DexEncodedValue* get_encoded_value(const DexClasses& classes,
+                                   const char* class_name,
+                                   const char* field_name) {
+  auto cls = find_class_named(classes, class_name);
+  EXPECT_NE(nullptr, cls);
+  DexField* f = find_field_named(*cls, field_name);
+  EXPECT_NE(nullptr, f);
+  return f->get_static_value();
+}
+
 TEST_F(PreVerify, ReplaceEncodableClinit) {
   // Encodable isn't here because we don't care if starts out with a <clinit> or
   // not. We only care that it's gone after FinalInlineV2
@@ -75,6 +85,10 @@ TEST_F(PostVerify, ReplaceEncodableClinit) {
 
   EXPECT_TRUE(class_clinit_exist(classes, "Lredex/UnEncodable;"));
   EXPECT_TRUE(class_clinit_exist(classes, "Lredex/HasCharSequence;"));
+  auto* value =
+      get_encoded_value(classes, "Lredex/HasCharSequence;", "S_CHARSEQ");
+
+  EXPECT_EQ(DEVT_NULL, value->evtype());
 
   EXPECT_FALSE(
       has_sget(classes, "Lredex/FinalInlineV2Test;", "testFinalInline"));
