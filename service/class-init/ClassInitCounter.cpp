@@ -1168,10 +1168,13 @@ void ClassInitCounter::find_children(
   }
 }
 
-void ClassInitCounter::analyze_block(DexClass* container,
-                                     DexMethod* method,
-                                     cfg::Block* prev_block,
-                                     cfg::Block* block) {
+void ClassInitCounter::analyze_block(
+    DexClass* container,
+    DexMethod* method,
+    TypeToInit& type_to_inits,
+    std::unordered_set<IRInstruction*>& tracked_set,
+    cfg::Block* prev_block,
+    cfg::Block* block) {
   bool first_visit = true;
 
   if (visited_blocks.count(prev_block) && visited_blocks.count(block)) {
@@ -1236,9 +1239,9 @@ void ClassInitCounter::analyze_block(DexClass* container,
     } else if (is_new_instance(opcode)) {
       DexType* typ = i->get_type();
       registers.clear(ir_analyzer::RESULT_REGISTER);
-      if (m_type_to_inits.count(typ) != 0) {
+      if (type_to_inits.count(typ) != 0) {
         TRACE(CIC, 5, "Adding an init for type %s", SHOW(typ));
-        std::shared_ptr<ObjectUses> use = m_type_to_inits[typ].add_init(
+        std::shared_ptr<ObjectUses> use = type_to_inits[typ].add_init(
             container, method, i, block_id, instruction_count);
         registers.insert(ir_analyzer::RESULT_REGISTER, use);
       }
@@ -1275,8 +1278,8 @@ void ClassInitCounter::analyze_block(DexClass* container,
       registers.clear(ir_analyzer::RESULT_REGISTER);
       if (m_optional_method && curr_method->get_name() == m_optional_method) {
         auto ret_typ = curr_method->get_proto()->get_rtype();
-        if (m_type_to_inits.count(ret_typ) != 0) {
-          std::shared_ptr<ObjectUses> use = m_type_to_inits[ret_typ].add_init(
+        if (type_to_inits.count(ret_typ) != 0) {
+          std::shared_ptr<ObjectUses> use = type_to_inits[ret_typ].add_init(
               container, method, i, block_id, instruction_count);
           registers.insert(ir_analyzer::RESULT_REGISTER, use);
         }
@@ -1354,7 +1357,7 @@ void ClassInitCounter::analyze_block(DexClass* container,
   for (auto* edge : block->succs()) {
     cfg::Block* next = edge->target();
     TRACE(CIC, 8, "making call from %zu to block %zu", block->id(), next->id());
-    analyze_block(container, method, block, next);
+    analyze_block(container, method, type_to_inits, tracked_set, block, next);
     assert(visited_blocks[next]->final_result_registers);
 
     TRACE(CIC, 8, "Combining paths after looking at block %zu from %zu",
@@ -1401,7 +1404,9 @@ void ClassInitCounter::find_uses_within(DexClass* container,
         container->get_name()->c_str(), method->get_name()->c_str(),
         graph->num_blocks());
 
-  analyze_block(container, method, nullptr, block);
+  std::unordered_set<IRInstruction*> empty;
+  analyze_block(container, method, m_type_to_inits, empty, nullptr, block);
+
   auto& merged_set = m_stored_mergeds[container->get_type()][method];
   // This loop collects the results of all ObjectUses and MergedUses encountered
   // in the forwards analysis, which has been merged bottom up to coalesce the

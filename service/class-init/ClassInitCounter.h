@@ -496,6 +496,8 @@ class ClassInitCounter final {
   // Walks block by block the method code that might instantiate a tracked type
   void analyze_block(DexClass* container,
                      DexMethod* method,
+                     TypeToInit& populating_inits,
+                     std::unordered_set<IRInstruction*>& tracked_instructions,
                      cfg::Block* prev_block,
                      cfg::Block* block);
 
