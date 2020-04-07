@@ -176,6 +176,36 @@ enum Tracked {
   Merged,
 };
 
+// This structure captures IRInstruction identity that persists across
+// builds, using the block ID and instruction order within a block as
+// these are consistent across builds.
+// Note, they are not necessarily consistent across optimization order
+struct InstructionPOIdentity {
+  IRInstruction* insn;
+  uint32_t block_id;
+  uint32_t instruction_count;
+  InstructionPOIdentity(IRInstruction* insn, uint32_t b_id, uint32_t i_count)
+      : insn(insn), block_id(b_id), instruction_count(i_count) {}
+  inline bool operator==(const InstructionPOIdentity& other) const {
+    return block_id == other.block_id &&
+           instruction_count == other.instruction_count;
+  }
+};
+
+inline bool operator<(const InstructionPOIdentity& l,
+                      const InstructionPOIdentity& r) {
+  return l.block_id < r.block_id || (l.block_id == r.block_id &&
+                                     l.instruction_count < r.instruction_count);
+}
+
+class InstructionPOComparer {
+ public:
+  bool operator()(const std::shared_ptr<InstructionPOIdentity>& l,
+                  const std::shared_ptr<InstructionPOIdentity>& r) const {
+    return *l < *r;
+  }
+};
+
 // TrackedUses is the 'abstract' parent class of the domain representation
 class TrackedUses {
  public:
@@ -212,23 +242,33 @@ class TrackedUses {
 class ObjectUses : public TrackedUses {
   // m_id is the instruction creating the Tracked, of class m_class_used
  public:
-  explicit ObjectUses(DexType* typ, IRInstruction* instr)
-      : TrackedUses(Object), m_id(instr), m_class_used(typ) {}
+  explicit ObjectUses(DexType* typ,
+                      IRInstruction* instr,
+                      uint32_t t_block_id,
+                      uint32_t t_instruction_count)
+      : TrackedUses(Object),
+        m_ir(std::make_shared<InstructionPOIdentity>(
+            instr, t_block_id, t_instruction_count)),
+        m_class_used(typ) {}
 
   void combine_paths(const TrackedUses& other);
   void merge(const TrackedUses& other);
   bool consistent_with(const TrackedUses& other) override;
 
-  bool same_instr(const ObjectUses& other) const { return m_id == other.m_id; }
+  bool equal(const ObjectUses& other) const { return m_ir == other.m_ir; }
+  bool less(const ObjectUses& other) const { return m_ir < other.m_ir; }
 
-  size_t hash() const override { return m_id->hash(); }
-  IRInstruction* get_instr() const { return m_id; }
+  size_t hash() const override { return m_ir->insn->hash(); }
+  IRInstruction* get_instr() const { return m_ir->insn; }
+  std::shared_ptr<InstructionPOIdentity> get_po_identity() const {
+    return m_ir;
+  }
   DexType* get_represents_typ() const { return m_class_used; }
 
   FlowStatus created_flow = AllPaths;
 
  private:
-  IRInstruction* m_id;
+  std::shared_ptr<InstructionPOIdentity> m_ir;
   DexType* m_class_used;
 };
 
@@ -246,17 +286,19 @@ class MergedUses : public TrackedUses {
   void merge(const TrackedUses& other);
   bool consistent_with(const TrackedUses& other) override;
   size_t hash() const override;
-  bool same_instrs(const MergedUses& other) const;
+  bool equal(const MergedUses& other) const;
+  bool less(const MergedUses& other) const;
   void set_is_nullable() { m_includes_nullable = true; }
 
-  const std::unordered_set<IRInstruction*>& get_instrs() const {
-    return m_instrs;
-  }
+  const std::unordered_set<IRInstruction*>& get_instrs() const;
+  bool contains_instr(const std::shared_ptr<InstructionPOIdentity>&) const;
   const std::unordered_set<DexType*>& get_classes() const { return m_classes; }
+  bool contains_type(DexType*) const;
   bool is_nullable() const { return m_includes_nullable; }
 
  private:
-  std::unordered_set<IRInstruction*> m_instrs;
+  std::set<std::shared_ptr<InstructionPOIdentity>, InstructionPOComparer>
+      m_instrs;
   std::unordered_set<DexType*> m_classes;
   bool m_includes_nullable = false;
 };
@@ -272,34 +314,29 @@ class TrackedComparer {
  public:
   bool operator()(const std::shared_ptr<TrackedUses>& l,
                   const std::shared_ptr<TrackedUses>& r) const {
-    if (!l && !r) {
-      return true;
-    }
     if (!l || !r) {
       return false;
     }
+    // We decree a non-merged object as < a merged one
     if (l->m_tracked_kind != r->m_tracked_kind) {
-      return false;
+      return l->m_tracked_kind == Object;
     }
     if (l->m_tracked_kind == Merged) {
-      return reinterpret_cast<MergedUses*>(&*l)->same_instrs(
+      return reinterpret_cast<MergedUses*>(&*l)->less(
           reinterpret_cast<MergedUses&>(*r));
     } else {
       // Has to be ObjectUses
-      return reinterpret_cast<ObjectUses*>(&*l)->same_instr(
+      return reinterpret_cast<ObjectUses*>(&*l)->less(
           reinterpret_cast<ObjectUses&>(*r));
     }
   }
 };
 
-using ObjectUsedSet = std::
-    unordered_set<std::shared_ptr<ObjectUses>, TrackedHasher, TrackedComparer>;
+using ObjectUsedSet = std::set<std::shared_ptr<ObjectUses>, TrackedComparer>;
 
-using MergedUsedSet = std::
-    unordered_set<std::shared_ptr<MergedUses>, TrackedHasher, TrackedComparer>;
+using MergedUsedSet = std::set<std::shared_ptr<MergedUses>, TrackedComparer>;
 
-using UsedSet = std::
-    unordered_set<std::shared_ptr<TrackedUses>, TrackedHasher, TrackedComparer>;
+using UsedSet = std::set<std::shared_ptr<TrackedUses>, TrackedComparer>;
 
 // Represents the registers across a method and a set of all Uses encountered
 // during the execution, so that over writing a tracked value does not cause us
@@ -386,7 +423,9 @@ class InitLocation final {
   // adds the data structure for this initialization, returning a ref to it
   std::shared_ptr<ObjectUses> add_init(DexClass* container,
                                        DexMethod* caller,
-                                       IRInstruction* instr);
+                                       IRInstruction* instr,
+                                       uint32_t block_id,
+                                       uint32_t instruction_count);
   void update_object(DexClass* container,
                      DexMethod* caller,
                      const ObjectUses& obj);

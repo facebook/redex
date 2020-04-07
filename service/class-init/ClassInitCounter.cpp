@@ -749,43 +749,50 @@ void ObjectUses::merge(const TrackedUses& other) {
 bool ObjectUses::consistent_with(const TrackedUses& other_tracked) {
   if (other_tracked.m_tracked_kind == Object) {
     auto other = reinterpret_cast<const ObjectUses&>(other_tracked);
-    return other.m_id == m_id && m_class_used == other.m_class_used;
+    return other.m_ir == m_ir && m_class_used == other.m_class_used;
   } else {
     auto other_merged = reinterpret_cast<const MergedUses&>(other_tracked);
-    if (other_merged.get_instrs().count(m_id) == 0 ||
-        other_merged.get_classes().count(m_class_used) == 0) {
-      return false;
-    }
-    return true;
+    return other_merged.contains_instr(m_ir) &&
+           other_merged.contains_type(m_class_used);
   }
 }
 
 MergedUses::MergedUses(const ObjectUses& older, const ObjectUses& newer)
     : TrackedUses(Merged) {
-  m_instrs = {older.get_instr(), newer.get_instr()};
+  m_instrs.insert(older.get_po_identity());
+  m_instrs.insert(newer.get_po_identity());
   m_classes.insert(older.get_represents_typ());
   m_classes.insert(newer.get_represents_typ());
 }
 
 MergedUses::MergedUses(const ObjectUses& other) : TrackedUses(Merged) {
-  m_instrs.insert(other.get_instr());
+  m_instrs.insert(other.get_po_identity());
   m_classes.insert(other.get_represents_typ());
   m_includes_nullable = true;
+}
+
+bool MergedUses::contains_instr(
+    const std::shared_ptr<InstructionPOIdentity>& i) const {
+  return m_instrs.count(i) == 0;
+}
+
+bool MergedUses::contains_type(DexType* c) const {
+  return m_classes.count(c) == 0;
 }
 
 void MergedUses::combine_paths(const TrackedUses& other) {
   if (other.m_tracked_kind == Object) {
     auto obj_use_other = reinterpret_cast<const ObjectUses&>(other);
-    m_instrs.insert(obj_use_other.get_instr());
+    m_instrs.insert(obj_use_other.get_po_identity());
     m_classes.insert(obj_use_other.get_represents_typ());
   } else {
     auto merged_use_other = reinterpret_cast<const MergedUses&>(other);
     m_includes_nullable =
         merged_use_other.m_includes_nullable || m_includes_nullable;
-    for (auto i : merged_use_other.get_instrs()) {
+    for (const auto& i : merged_use_other.m_instrs) {
       m_instrs.insert(i);
     }
-    for (auto c : merged_use_other.get_classes()) {
+    for (auto* c : merged_use_other.m_classes) {
       m_classes.insert(c);
     }
   }
@@ -796,8 +803,8 @@ void MergedUses::merge(const TrackedUses& other) {
   if (other.m_tracked_kind == Object) {
     auto obj_use_other = reinterpret_cast<const ObjectUses&>(other);
     m_classes.insert(obj_use_other.get_represents_typ());
-    if (m_instrs.count(obj_use_other.get_instr()) == 0) {
-      m_instrs.insert(obj_use_other.get_instr());
+    if (!contains_instr(obj_use_other.get_po_identity())) {
+      m_instrs.insert(obj_use_other.get_po_identity());
       // A merge between an ObjectUse and a MergedUse from a
       // new instruction always implies different paths were taken to here
       TrackedUses::combine_paths(other);
@@ -808,15 +815,15 @@ void MergedUses::merge(const TrackedUses& other) {
     }
   } else {
     auto merged_use_other = reinterpret_cast<const MergedUses&>(other);
-    for (auto c : merged_use_other.get_classes()) {
+    for (auto* c : merged_use_other.m_classes) {
       m_classes.insert(c);
     }
     m_includes_nullable =
         merged_use_other.m_includes_nullable || m_includes_nullable;
-    std::vector<IRInstruction*> intersection;
+    std::vector<std::shared_ptr<InstructionPOIdentity>> intersection;
     std::set_intersection(
-        m_instrs.begin(), m_instrs.end(), merged_use_other.get_instrs().begin(),
-        merged_use_other.get_instrs().end(), std::back_inserter(intersection));
+        m_instrs.begin(), m_instrs.end(), merged_use_other.m_instrs.begin(),
+        merged_use_other.m_instrs.end(), std::back_inserter(intersection));
 
     if (!intersection.empty()) {
       // We have come from some of the same instructions, so merge without paths
@@ -825,7 +832,7 @@ void MergedUses::merge(const TrackedUses& other) {
       // We're joining two paths
       TrackedUses::combine_paths(other);
     }
-    for (auto i : merged_use_other.get_instrs()) {
+    for (const auto& i : merged_use_other.m_instrs) {
       m_instrs.insert(i);
     }
   }
@@ -835,40 +842,58 @@ bool MergedUses::consistent_with(const TrackedUses& other_tracked) {
   // May want to subset check the members
   if (other_tracked.m_tracked_kind == Object) {
     auto other = reinterpret_cast<const ObjectUses&>(other_tracked);
-    if (m_instrs.count(other.get_instr()) == 0) {
-      return false;
-    }
-    return true;
+    return contains_instr(other.get_po_identity());
   } else {
     auto other_merged = reinterpret_cast<const MergedUses&>(other_tracked);
-    std::vector<IRInstruction*> intersection;
+    std::vector<std::shared_ptr<InstructionPOIdentity>> intersection;
     std::set_intersection(
-        m_instrs.begin(), m_instrs.end(), other_merged.get_instrs().begin(),
-        other_merged.get_instrs().end(), std::back_inserter(intersection));
+        m_instrs.begin(), m_instrs.end(), other_merged.m_instrs.begin(),
+        other_merged.m_instrs.end(), std::back_inserter(intersection));
 
     // If our instructions are overlapping, we're consistent
     return !intersection.empty();
   }
 }
 
-bool MergedUses::same_instrs(const MergedUses& other) const {
-  for (auto i : m_instrs) {
-    if (other.get_instrs().count(i) == 0) {
+bool MergedUses::equal(const MergedUses& other) const {
+  for (const auto& i : m_instrs) {
+    if (!other.contains_instr(i)) {
       return false;
     }
   }
-  for (auto i : other.get_instrs()) {
-    if (m_instrs.count(i) == 0) {
+  for (const auto& i : other.m_instrs) {
+    if (!contains_instr(i)) {
       return false;
     }
   }
   return true;
 }
 
+bool MergedUses::less(const MergedUses& other) const {
+  auto m_iterator = m_instrs.begin();
+  auto o_iterator = other.m_instrs.begin();
+  for (; m_iterator != m_instrs.end(); m_iterator++) {
+    for (; o_iterator != other.m_instrs.end(); o_iterator++) {
+      if (m_iterator == m_instrs.end()) {
+        return false;
+      }
+      if (*m_iterator < *o_iterator) {
+        return true;
+      } else if (*m_iterator == *o_iterator) {
+        m_iterator++;
+        continue;
+      }
+      return false;
+    }
+    return false;
+  }
+  return false;
+}
+
 size_t MergedUses::hash() const {
   size_t result;
-  for (auto i : m_instrs) {
-    result = result ^ i->hash();
+  for (const auto& i : m_instrs) {
+    result = result ^ i->insn->hash();
   }
   return result;
 }
@@ -1067,7 +1092,9 @@ void RegisterSet::merge_registers(const RegisterSet& comes_after,
 
 std::shared_ptr<ObjectUses> InitLocation::add_init(DexClass* container,
                                                    DexMethod* caller,
-                                                   IRInstruction* instr) {
+                                                   IRInstruction* instr,
+                                                   uint32_t block_id,
+                                                   uint32_t instruction_count) {
   if (m_inits[container][caller].count(instr) == 0) {
     // We've not seen this instruction initializing our class before
     // So increase count of the number of initializations
@@ -1075,7 +1102,8 @@ std::shared_ptr<ObjectUses> InitLocation::add_init(DexClass* container,
   }
   TRACE(CIC, 8, "Adding init to %s, from instruction %s", SHOW(m_typ),
         SHOW(instr));
-  auto usage = std::make_shared<ObjectUses>(m_typ, instr);
+  auto usage =
+      std::make_shared<ObjectUses>(m_typ, instr, block_id, instruction_count);
   m_inits[container][caller][instr].emplace_back(usage);
   return usage;
 }
@@ -1175,6 +1203,8 @@ void ClassInitCounter::analyze_block(DexClass* container,
   }
 
   RegisterSet registers = visited_blocks[block]->input_registers;
+  uint32_t block_id = block->id();
+  uint32_t instruction_count = 0;
 
   for (const auto& instr : InstructionIterable(block)) {
     auto i = instr.insn;
@@ -1204,8 +1234,8 @@ void ClassInitCounter::analyze_block(DexClass* container,
       registers.clear(ir_analyzer::RESULT_REGISTER);
       if (m_type_to_inits.count(typ) != 0) {
         TRACE(CIC, 5, "Adding an init for type %s", SHOW(typ));
-        std::shared_ptr<ObjectUses> use =
-            m_type_to_inits[typ].add_init(container, method, i);
+        std::shared_ptr<ObjectUses> use = m_type_to_inits[typ].add_init(
+            container, method, i, block_id, instruction_count);
         registers.insert(ir_analyzer::RESULT_REGISTER, use);
       }
     } else if (is_iput(opcode)) {
@@ -1242,8 +1272,8 @@ void ClassInitCounter::analyze_block(DexClass* container,
       if (m_optional_method && curr_method->get_name() == m_optional_method) {
         auto ret_typ = curr_method->get_proto()->get_rtype();
         if (m_type_to_inits.count(ret_typ) != 0) {
-          std::shared_ptr<ObjectUses> use =
-              m_type_to_inits[ret_typ].add_init(container, method, i);
+          std::shared_ptr<ObjectUses> use = m_type_to_inits[ret_typ].add_init(
+              container, method, i, block_id, instruction_count);
           registers.insert(ir_analyzer::RESULT_REGISTER, use);
         }
       }
@@ -1281,11 +1311,12 @@ void ClassInitCounter::analyze_block(DexClass* container,
     if (clear_dest) {
       registers.clear(dest);
     }
+    instruction_count++;
   }
 
   if (!first_visit) {
     TRACE(CIC, 8, "Not our first visit to %zu, check for different blocks",
-          block->id());
+          block_id);
     bool same_block =
         visited_blocks[block]->basic_block_registers.consistent_with(registers);
     if (same_block && visited_blocks[block]->final_result_registers) {
