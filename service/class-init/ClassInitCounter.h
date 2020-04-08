@@ -430,6 +430,7 @@ class InitLocation final {
                      DexMethod* caller,
                      const ObjectUses& obj);
   const InitMap& get_inits() const { return m_inits; }
+  InitMap& get_inits() { return m_inits; }
 
   // Puts all uses from cls.method into provided set
   void all_uses_from(DexClass* cls,
@@ -470,6 +471,11 @@ class ClassInitCounter final {
   const TypeToInit& type_to_inits() const { return m_type_to_inits; }
   const MergedUsesMap& merged_uses() const { return m_stored_mergeds; }
 
+  // Run analysis only for a use at one instruction being tracked
+  std::pair<ObjectUsedSet, MergedUsedSet> find_uses_of(IRInstruction* origin,
+                                                       DexType* typ,
+                                                       DexMethod* method);
+
   // Calculate the uses for the specified method.
   // If this method has already been analyzed, discard that analysis result
   // and build fresh data.
@@ -482,6 +488,20 @@ class ClassInitCounter final {
   std::string debug_show_table();
 
  private:
+  void drive_analysis(
+      // Class of the method to be analyzed, key for storing data structure
+      DexClass* container,
+      // Method that will be analyzed, by extracting code and CFG,
+      // type_class(method->get_type()) == container
+      DexMethod* method,
+      // Name of the calling public method, for trace reports
+      const std::string& analysis,
+      // Potentially empty set of instructions to start tracking from
+      // If empty, tracks all new_instance or method calls as set in ctor
+      const std::unordered_set<IRInstruction*>& tracking,
+      // Reference to data structure to store results in
+      TypeToInit& type_to_init);
+
   // Identifies and stores in type_to_inits all classes that extend parent
   void find_children(DexType* parent,
                      const std::unordered_set<DexClass*>& classes);
@@ -494,12 +514,13 @@ class ClassInitCounter final {
   void inits_any_children(DexClass* container, DexMethod* method);
 
   // Walks block by block the method code that might instantiate a tracked type
-  void analyze_block(DexClass* container,
-                     DexMethod* method,
-                     TypeToInit& populating_inits,
-                     std::unordered_set<IRInstruction*>& tracked_instructions,
-                     cfg::Block* prev_block,
-                     cfg::Block* block);
+  void analyze_block(
+      DexClass* container,
+      DexMethod* method,
+      TypeToInit& populating_inits,
+      const std::unordered_set<IRInstruction*>& tracked_instructions,
+      cfg::Block* prev_block,
+      cfg::Block* block);
 
   TypeToInit m_type_to_inits;
 

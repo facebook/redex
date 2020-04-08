@@ -1172,7 +1172,7 @@ void ClassInitCounter::analyze_block(
     DexClass* container,
     DexMethod* method,
     TypeToInit& type_to_inits,
-    std::unordered_set<IRInstruction*>& tracked_set,
+    const std::unordered_set<IRInstruction*>& tracked_set,
     cfg::Block* prev_block,
     cfg::Block* block) {
   bool first_visit = true;
@@ -1378,36 +1378,40 @@ void ClassInitCounter::analyze_block(
   visited_blocks[block]->final_result_registers.value().merge_effects(paths);
 }
 
-void ClassInitCounter::find_uses_within(DexClass* container,
-                                        DexMethod* method) {
-  for (auto& t_init : m_type_to_inits) {
-    t_init.second.reset_uses_from(container, method);
-  }
-  m_stored_mergeds[container->get_type()].erase(method);
+std::pair<ObjectUsedSet, MergedUsedSet> ClassInitCounter::find_uses_of(
+    IRInstruction* origin, DexType* typ, DexMethod* method) {
+  TypeToInit init_storage;
+  init_storage.insert({typ, InitLocation(typ)});
+  std::unordered_set<IRInstruction*> tracked{origin};
+  DexClass* container = type_class(method->get_class());
 
+  drive_analysis(container, method, "find_uses_of", tracked, init_storage);
+
+  ObjectUsedSet use;
+  use.insert(init_storage[typ].get_inits()[container][method][origin][0]);
+  return {use, MergedUsedSet()};
+}
+
+void ClassInitCounter::drive_analysis(
+    DexClass* container,
+    DexMethod* method,
+    const std::string& analysis,
+    const std::unordered_set<IRInstruction*>& tracking,
+    TypeToInit& type_to_inits) {
   IRCode* instructions = method->get_code();
   if (instructions == nullptr) {
     return;
   }
-
   cfg::ScopedCFG graph(instructions);
-
-  if (graph->blocks().size() > 9000) {
-    TRACE(CIC, 4, "Skipping analysis for method %s.%s",
-          container->get_name()->c_str(), method->get_name()->c_str());
-    return;
-  }
 
   cfg::Block* block = graph->entry_block();
   visited_blocks =
       std::unordered_map<cfg::Block*, std::shared_ptr<RegistersPerBlock>>();
 
-  TRACE(CIC, 5, "starting analysis for method %s.%s with %zu blocks\n",
-        container->get_name()->c_str(), method->get_name()->c_str(),
-        graph->num_blocks());
+  TRACE(CIC, 5, "starting %s analysis for method %s.%s with %zu blocks\n",
+        analysis.c_str(), SHOW(container), SHOW(method), graph->num_blocks());
 
-  std::unordered_set<IRInstruction*> empty;
-  analyze_block(container, method, m_type_to_inits, empty, nullptr, block);
+  analyze_block(container, method, type_to_inits, tracking, nullptr, block);
 
   auto& merged_set = m_stored_mergeds[container->get_type()][method];
   // This loop collects the results of all ObjectUses and MergedUses encountered
@@ -1420,13 +1424,23 @@ void ClassInitCounter::find_uses_within(DexClass* container,
   for (const auto& use :
        visited_blocks[block]->final_result_registers.value().m_all_uses) {
     if (use->m_tracked_kind == Object) {
-      m_type_to_inits[static_cast<ObjectUses&>(*use).get_represents_typ()]
+      type_to_inits[static_cast<ObjectUses&>(*use).get_represents_typ()]
           .update_object(container, method, static_cast<ObjectUses&>(*use));
     } else {
       merged_set.insert(
           std::make_shared<MergedUses>(static_cast<MergedUses&>(*use)));
     }
   }
+}
+
+void ClassInitCounter::find_uses_within(DexClass* container,
+                                        DexMethod* method) {
+  for (auto& t_init : m_type_to_inits) {
+    t_init.second.reset_uses_from(container, method);
+  }
+  m_stored_mergeds[container->get_type()].erase(method);
+  std::unordered_set<IRInstruction*> empty;
+  drive_analysis(container, method, "find_uses_within", empty, m_type_to_inits);
 }
 
 std::pair<ObjectUsedSet, MergedUsedSet> ClassInitCounter::all_uses_from(
