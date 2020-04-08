@@ -281,7 +281,9 @@ EnumAttributes analyze_enum_clinit(const DexClass* cls) {
   EnumAttributes attributes;
   for (auto& pair : return_env.get_field_environment().bindings()) {
     auto* enum_sfield = pair.first;
-    if (enum_sfield->get_class() != cls->get_type()) {
+    if (enum_sfield->get_class() != cls->get_type() ||
+        !check_required_access_flags(optimize_enums::enum_field_access(),
+                                     enum_sfield->get_access())) {
       continue;
     }
     auto heap_ptr = pair.second.maybe_get<AbstractHeapPointer>();

@@ -97,8 +97,6 @@ struct EnumUtil {
   const DexString* VALUES_METHOD_STR = DexString::make_string("values");
   const DexString* VALUEOF_METHOD_STR = DexString::make_string("valueOf");
 
-  const DexString* VALUES_FIELD_STR = DexString::make_string("$VALUES");
-
   const DexType* ENUM_TYPE = type::java_lang_Enum();
   DexType* INT_TYPE = type::_int();
   DexType* INTEGER_TYPE = type::java_lang_Integer();
@@ -1477,13 +1475,33 @@ class EnumTransformer final {
   }
 
   /**
-   * Erase the put instructions that write enum values and synthetic $VALUES
-   * array, then erase the dead instructions.
+   * Erase enum construction code. Erase the put instructions that write enum
+   * values and synthetic $VALUES array, then erase the dead instructions.
+   *
+   * The code before the transformation:
+   *
+   * new-instance v0 LCandidateEnum;
+   * invoke-direct v0 v1 v2 Ljava/lang/Enum;.<init>:(Ljava/lang/String;I)V
+   * sput-object v0 LCandidateEnum;.f:LCandidateEnum;
+   * ... // maybe more objects construction.
+   * sput-object v3 LCandidateEnum;.$VALUES:[LCandidateEnum;
+   * ... // register v0 may be used.
+   *
+   * The code after the transformation:
+   *
+   * // Deleted. new-instance v0 LCandidateEnum;
+   * // Deleted. invoke-direct v0 v1 v2
+   * Ljava/lang/Enum;.<init>:(Ljava/lang/String;I)V
+   * // Deleted. sput-object v0 LCandidateEnum;.f:LCandidateEnum;
+   * sget-object v0 LCandidateEnum;.f:LCandidateEnum;
+   * ... // maybe more objects construction.
+   * // Deleted. sput-object v3 LCandidateEnum;.$VALUES:[LCandidateEnum;
+   * ... // register v0 may be used.
    */
-  void clean_clinit(const EnumConstantsMap& enum_constants,
-                    DexClass* enum_cls,
-                    DexMethod* clinit,
-                    DexField* values_field) {
+  static void clean_clinit(const EnumConstantsMap& enum_constants,
+                           DexClass* enum_cls,
+                           DexMethod* clinit,
+                           DexField* values_field) {
     auto code = clinit->get_code();
     auto ctors = enum_cls->get_ctors();
     always_assert(ctors.size() == 1);
@@ -1498,9 +1516,14 @@ class EnumTransformer final {
       auto insn = it->insn;
       if (is_sput(insn->opcode())) {
         auto field = resolve_field(insn->get_field());
-        if (field && (enum_constants.count(field) || field == values_field)) {
+        if (field && enum_constants.count(field)) {
+          code->insert_before(it, dasm(OPCODE_SGET_OBJECT, field));
+          code->insert_before(
+              it,
+              dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {{VREG, insn->src(0)}}));
           it = code->erase(it);
-          continue;
+        } else if (field == values_field) {
+          it = code->erase(it);
         }
       } else if (is_invoke_direct(insn->opcode()) &&
                  insn->get_method() == ctor) {
@@ -1520,6 +1543,12 @@ class EnumTransformer final {
     code->clear_cfg();
     for (const auto& insn : dead_instructions) {
       code->remove_opcode(insn);
+    }
+    // Assert no instruction about the $VALUES field.
+    for (auto& mie : InstructionIterable(code)) {
+      auto insn = mie.insn;
+      always_assert_log(!insn->has_field() || insn->get_field() != values_field,
+                        "%s can not be deleted", SHOW(insn));
     }
   }
 
