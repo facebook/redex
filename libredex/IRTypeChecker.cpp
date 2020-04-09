@@ -56,18 +56,12 @@ void check_type_match(reg_t reg, IRType actual, IRType expected) {
 }
 
 /*
- * If the inferred type is Ljava/lang/Object;, it's a fall back from a
- * conflicting join. There's no point performing more precise type checking
- * since we don't know about its type.
- * If the inferred type is Ljava/lang/Throwable;, it comes from MOVE_EXCEPTION.
- * Since we don't model exception handler here, there's no way for us to know
- * the precise exception type. We approximate all exception type to
- * Ljava/lang/Throwable;. Therefore, it is not feasible to check type assignment
- * on exception types.
+ * There are cases where we cannot precisely infer the exception type for
+ * MOVE_EXCEPTION. In these cases, we use Ljava/lang/Throwable; as a fallback
+ * type.
  */
 bool is_inference_fallback_type(const DexType* type) {
-  return type == type::java_lang_Object() ||
-         type == type::java_lang_Throwable();
+  return type == type::java_lang_Throwable();
 }
 
 /*
