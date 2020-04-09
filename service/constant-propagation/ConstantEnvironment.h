@@ -291,3 +291,8 @@ class ReturnState : public sparta::ReducedProductAbstractDomain<ReturnState,
 
   ConstantHeap get_heap() { return ReducedProductAbstractDomain::get<1>(); }
 };
+
+// TODO: Instead of this custom meet function, the ConstantValue should get a
+// custom meet AND JOIN that knows about the relationship of NEZ and certain
+// non-null custom object domains.
+ConstantValue meet(const ConstantValue& left, const ConstantValue& right);

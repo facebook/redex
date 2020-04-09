@@ -96,34 +96,6 @@ void analyze_compare(const IRInstruction* insn, ConstantEnvironment* env) {
   }
 }
 
-// TODO: Instead of this custom meet function, the ConstantValue should get a
-// custom meet AND JOIN that knows about the relationship of NEZ and certain
-// non-null custom object domains.
-static ConstantValue meet(const ConstantValue& left,
-                          const ConstantValue& right) {
-  auto is_nez = [](const ConstantValue& value) {
-    auto signed_value = value.maybe_get<SignedConstantDomain>();
-    return signed_value &&
-           signed_value->interval() == sign_domain::Interval::NEZ;
-  };
-  auto is_not_null = [](const ConstantValue& value) {
-    return !value.is_top() && !value.is_bottom() &&
-           !value.maybe_get<SignedConstantDomain>();
-  };
-  // Non-null objects of custom object domains are compatible with NEZ, and
-  // more specific.
-  if (is_nez(left) && is_not_null(right)) {
-    return right;
-  }
-  if (is_nez(right) && is_not_null(left)) {
-    return left;
-  }
-  // Non-null objects of different custom object domains can never alias, so
-  // they meet at bottom, which is the default meet implementation for
-  // disjoint domains.
-  return left.meet(right);
-}
-
 } // namespace
 
 namespace constant_propagation {
