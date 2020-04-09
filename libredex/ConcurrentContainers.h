@@ -149,6 +149,15 @@ class ConcurrentContainer {
     return m_slots[i].size();
   }
 
+  /*
+   * WARNING: Only use with unsafe functions, or risk deadlock or undefined
+   * behavior!
+   */
+  boost::mutex& get_lock(const Key& key) const {
+    size_t slot = Hash()(key) % n_slots;
+    return get_lock(slot);
+  }
+
  protected:
   // Only derived classes may be instantiated or copied.
   ConcurrentContainer() = default;
@@ -292,10 +301,24 @@ class ConcurrentMapContainer
    * doesn't exist, it is created. The third argument of the updater function is
    * a Boolean flag denoting whether the entry exists or not.
    */
-  void update(const Key& key,
-              const std::function<void(const Key&, Value&, bool)>& updater) {
+  template <
+      typename UpdateFn = const std::function<void(const Key&, Value&, bool)>&>
+  void update(const Key& key, UpdateFn updater) {
     size_t slot = Hash()(key) % n_slots;
     boost::lock_guard<boost::mutex> lock(this->get_lock(slot));
+    auto& map = this->get_container(slot);
+    auto it = map.find(key);
+    if (it == map.end()) {
+      updater(key, map[key], false);
+    } else {
+      updater(it->first, it->second, true);
+    }
+  }
+
+  template <
+      typename UpdateFn = const std::function<void(const Key&, Value&, bool)>&>
+  void update_unsafe(const Key& key, UpdateFn updater) {
+    size_t slot = Hash()(key) % n_slots;
     auto& map = this->get_container(slot);
     auto it = map.find(key);
     if (it == map.end()) {

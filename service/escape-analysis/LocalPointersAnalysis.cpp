@@ -414,8 +414,20 @@ static void analyze_method_recursive(
   auto& cfg = code->cfg();
   auto fp_iter = new FixpointIterator(cfg, std::move(invoke_to_summary_map));
   fp_iter->run(Environment());
-  fp_iter_map->emplace(method, fp_iter);
-  summary_map->emplace(method, get_escape_summary(*fp_iter, *code));
+
+  // The following updates form a critical section.
+  {
+    boost::lock_guard<boost::mutex> lock(fp_iter_map->get_lock(method));
+    fp_iter_map->update_unsafe(method,
+                               [&](auto, FixpointIterator*& v, bool exists) {
+                                 redex_assert(!(exists ^ (v != nullptr)));
+                                 delete v;
+                                 v = fp_iter;
+                               });
+    summary_map->update(method, [&](auto, EscapeSummary& v, bool) {
+      v = get_escape_summary(*fp_iter, *code);
+    });
+  }
 }
 
 FixpointIteratorMapPtr analyze_scope(const Scope& scope,
