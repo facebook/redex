@@ -41,6 +41,7 @@
 #include "IRCode.h"
 #include "Purity.h"
 #include "Resolver.h"
+#include "ScopedCFG.h"
 #include "Trace.h"
 #include "Walkers.h"
 
@@ -100,11 +101,7 @@ ThrowPropagationPass::Stats ThrowPropagationPass::run(
     const method_override_graph::Graph& graph,
     IRCode* code) {
   ThrowPropagationPass::Stats stats;
-  bool editable_cfg_built = code->editable_cfg_built();
-  if (!editable_cfg_built) {
-    code->build_cfg(/* editable */ true);
-  }
-  auto& cfg = code->cfg();
+  cfg::ScopedCFG cfg(code);
   auto is_no_return_invoke = [&](IRInstruction* insn) {
     if (!is_invoke(insn->opcode())) {
       return false;
@@ -197,7 +194,7 @@ ThrowPropagationPass::Stats ThrowPropagationPass::run(
       auto next_it = next_ii.begin();
       cfg::InstructionIterator next_cfg_it =
           next_it == next_ii.end()
-              ? InstructionIterable(cfg).end()
+              ? InstructionIterable(*cfg).end()
               : next_block->to_cfg_instruction_iterator(next_it);
       if (will_throw_or_not_terminate(next_block, next_cfg_it)) {
         // There's already code in place that will immediately and
@@ -218,9 +215,9 @@ ThrowPropagationPass::Stats ThrowPropagationPass::run(
         // As above, nothing to do, since an exception will be thrown anyway.
         return false;
       }
-      always_assert(cfg.get_succ_edge_of_type(block, cfg::EDGE_THROW) ==
+      always_assert(cfg->get_succ_edge_of_type(block, cfg::EDGE_THROW) ==
                     nullptr);
-      cfg.split_block(cfg_it);
+      cfg->split_block(cfg_it);
       always_assert(insn == block->get_last_insn()->insn);
     }
     return true;
@@ -232,11 +229,11 @@ ThrowPropagationPass::Stats ThrowPropagationPass::run(
       message += SHOW(insn);
     }
     if (!regs) {
-      regs = std::make_pair(cfg.allocate_temp(), cfg.allocate_temp());
+      regs = std::make_pair(cfg->allocate_temp(), cfg->allocate_temp());
     }
     auto exception_reg = regs->first;
     auto string_reg = regs->second;
-    cfg::Block* new_block = cfg.create_block();
+    cfg::Block* new_block = cfg->create_block();
     std::vector<IRInstruction*> insns;
     auto new_instance_insn = new IRInstruction(OPCODE_NEW_INSTANCE);
     auto exception_type = DexType::get_type("Ljava/lang/RuntimeException;");
@@ -271,13 +268,13 @@ ThrowPropagationPass::Stats ThrowPropagationPass::run(
     throw_insn->set_src(0, exception_reg);
     insns.push_back(throw_insn);
     new_block->push_back(insns);
-    cfg.copy_succ_edges_of_type(block, new_block, cfg::EDGE_THROW);
-    auto existing_goto_edge = cfg.get_succ_edge_of_type(block, cfg::EDGE_GOTO);
+    cfg->copy_succ_edges_of_type(block, new_block, cfg::EDGE_THROW);
+    auto existing_goto_edge = cfg->get_succ_edge_of_type(block, cfg::EDGE_GOTO);
     always_assert(existing_goto_edge != nullptr);
-    cfg.set_edge_target(existing_goto_edge, new_block);
+    cfg->set_edge_target(existing_goto_edge, new_block);
     stats.throws_inserted++;
   };
-  for (auto block : cfg.blocks()) {
+  for (auto block : cfg->blocks()) {
     auto ii = InstructionIterable(block);
     for (auto it = ii.begin(); it != ii.end(); it++) {
       auto insn = it->insn;
@@ -297,13 +294,10 @@ ThrowPropagationPass::Stats ThrowPropagationPass::run(
   }
 
   if (stats.throws_inserted > 0) {
-    stats.unreachable_instruction_count += cfg.remove_unreachable_blocks();
-    cfg.recompute_registers_size();
+    stats.unreachable_instruction_count += cfg->remove_unreachable_blocks();
+    cfg->recompute_registers_size();
   }
 
-  if (!editable_cfg_built) {
-    code->clear_cfg();
-  }
   return stats;
 }
 
