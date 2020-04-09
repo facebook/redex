@@ -77,6 +77,8 @@ struct ComponentTagInfo {
   ComponentTag tag;
   std::string classname;
   BooleanXMLAttribute is_exported;
+  std::string permission;
+  std::string protection_level;
   // Not defined on <provider>
   bool has_intent_filters{false};
   // Only defined on <provider>
@@ -84,8 +86,14 @@ struct ComponentTagInfo {
 
   ComponentTagInfo(ComponentTag tag,
                    const std::string& classname,
-                   BooleanXMLAttribute is_exported)
-      : tag(tag), classname(classname), is_exported(is_exported) {}
+                   BooleanXMLAttribute is_exported,
+                   std::string permission,
+                   std::string protection_level)
+      : tag(tag),
+        classname(classname),
+        is_exported(is_exported),
+        permission(permission),
+        protection_level(protection_level) {}
 };
 
 struct ManifestClassInfo {

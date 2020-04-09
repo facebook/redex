@@ -361,6 +361,8 @@ ManifestClassInfo extract_classes_from_manifest(
   // Attributes
   android::String16 authorities("authorities");
   android::String16 exported("exported");
+  android::String16 protection_level("protectionLevel");
+  android::String16 permission("permission");
   android::String16 name("name");
   android::String16 target_activity("targetActivity");
 
@@ -397,6 +399,11 @@ ManifestClassInfo extract_classes_from_manifest(
         always_assert(classname.size());
 
         bool has_exported_attribute = has_bool_attribute(parser, exported);
+        android::Res_value ignore_output;
+        bool has_permission_attribute =
+            has_raw_attribute_value(parser, permission, ignore_output);
+        bool has_protection_level_attribute =
+            has_raw_attribute_value(parser, protection_level, ignore_output);
         bool is_exported = get_bool_attribute_value(parser, exported,
                                                     /* default_value */ false);
 
@@ -410,10 +417,21 @@ ManifestClassInfo extract_classes_from_manifest(
         } else {
           export_attribute = BooleanXMLAttribute::Undefined;
         }
+        std::string permission_attribute;
+        std::string protection_level_attribute;
+        if (has_permission_attribute) {
+          permission_attribute = get_string_attribute_value(parser, permission);
+        }
+        if (has_protection_level_attribute) {
+          protection_level_attribute =
+              get_string_attribute_value(parser, protection_level);
+        }
 
         ComponentTagInfo tag_info(string_to_tag.at(tag),
                                   dotname_to_dexname(classname),
-                                  export_attribute);
+                                  export_attribute,
+                                  permission_attribute,
+                                  protection_level_attribute);
 
         if (tag == provider) {
           std::string text = get_string_attribute_value(parser, authorities);
