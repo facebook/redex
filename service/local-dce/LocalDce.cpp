@@ -21,6 +21,7 @@
 #include "MethodOverrideGraph.h"
 #include "Purity.h"
 #include "Resolver.h"
+#include "ScopedCFG.h"
 #include "Transform.h"
 #include "TypeSystem.h"
 #include "Walkers.h"
@@ -66,13 +67,9 @@ void update_liveness(const IRInstruction* inst,
 ////////////////////////////////////////////////////////////////////////////////
 
 void LocalDce::dce(IRCode* code) {
-  bool editable_cfg_built = code->editable_cfg_built();
-  if (!editable_cfg_built) {
-    code->build_cfg(/* editable */ true);
-  }
-  auto& cfg = code->cfg();
-  const auto& blocks = graph::postorder_sort<cfg::GraphInterface>(cfg);
-  auto regs = cfg.get_registers_size();
+  cfg::ScopedCFG cfg(code);
+  const auto& blocks = graph::postorder_sort<cfg::GraphInterface>(*cfg);
+  auto regs = cfg->get_registers_size();
   std::unordered_map<cfg::BlockId, boost::dynamic_bitset<>> liveness;
   for (cfg::Block* b : blocks) {
     liveness.emplace(b->id(), boost::dynamic_bitset<>(regs + 1));
@@ -80,7 +77,7 @@ void LocalDce::dce(IRCode* code) {
   bool changed;
   std::vector<std::pair<cfg::Block*, IRList::iterator>> dead_instructions;
 
-  TRACE(DCE, 5, "%s", SHOW(cfg));
+  TRACE(DCE, 5, "%s", SHOW(*cfg));
 
   // Iterate liveness analysis to a fixed point.
   do {
@@ -111,7 +108,7 @@ void LocalDce::dce(IRCode* code) {
         if (it->type != MFLOW_OPCODE) {
           continue;
         }
-        bool required = is_required(cfg, b, it->insn, bliveness);
+        bool required = is_required(*cfg, b, it->insn, bliveness);
         if (required) {
           update_liveness(it->insn, bliveness);
         } else {
@@ -158,9 +155,9 @@ void LocalDce::dce(IRCode* code) {
     }
   }
   if (!npe_instructions.empty()) {
-    auto null_reg = cfg.allocate_temp();
+    auto null_reg = cfg->allocate_temp();
     for (auto pair : npe_instructions) {
-      auto it = cfg.find_insn(pair.first, pair.second);
+      auto it = cfg->find_insn(pair.first, pair.second);
       if (it.is_end()) {
         // can happen if we replaced an earlier invocation with throw null.
         continue;
@@ -172,22 +169,18 @@ void LocalDce::dce(IRCode* code) {
       auto throw_insn = new IRInstruction(OPCODE_THROW);
       throw_insn->set_src(0, null_reg);
       insns.push_back(throw_insn);
-      cfg.replace_insns(it, insns);
+      cfg->replace_insns(it, insns);
     }
   }
-  auto unreachable_insn_count = cfg.remove_unreachable_blocks();
-  cfg.recompute_registers_size();
+  auto unreachable_insn_count = cfg->remove_unreachable_blocks();
+  cfg->recompute_registers_size();
 
   m_stats.npe_instruction_count += npe_instructions.size();
   m_stats.dead_instruction_count += dead_instructions.size();
   m_stats.unreachable_instruction_count += unreachable_insn_count;
 
   TRACE(DCE, 5, "=== Post-DCE CFG ===");
-  TRACE(DCE, 5, "%s", SHOW(cfg));
-
-  if (!editable_cfg_built) {
-    code->clear_cfg();
-  }
+  TRACE(DCE, 5, "%s", SHOW(*cfg));
 }
 
 /*
