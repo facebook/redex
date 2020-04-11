@@ -30,10 +30,12 @@ class GlobalTypeAnalysisPass : public Pass {
   }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
-  void optimize(const Scope& scope,
-                const type_analyzer::global::GlobalTypeAnalyzer& gta);
+  void optimize(
+      const Scope& scope,
+      const type_analyzer::global::GlobalTypeAnalyzer& gta,
+      const type_analyzer::Transform::NullAssertionSet& null_assertion_set,
+      PassManager& mgr);
 
  private:
-  type_analyzer::Transform::Stats m_transform_stats;
   type_analyzer::Transform::Config m_config;
 };

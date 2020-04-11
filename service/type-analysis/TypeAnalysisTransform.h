@@ -21,6 +21,7 @@ namespace type_analyzer {
  */
 class Transform final {
  public:
+  using NullAssertionSet = std::unordered_set<DexMethodRef*>;
   struct Config {
     size_t max_global_analysis_iteration{0};
     bool remove_dead_null_check_insn{true};
@@ -34,23 +35,25 @@ class Transform final {
       null_check_insn_removed += that.null_check_insn_removed;
       return *this;
     }
+
+    void report(PassManager& mgr) const {
+      mgr.incr_metric("null_check_insn_removed", null_check_insn_removed);
+      TRACE(TYPE_TRANSFORM, 2, "TypeAnalysisTransform Stats:");
+      TRACE(TYPE_TRANSFORM,
+            2,
+            "TypeAnalysisTransform insns removed = %u",
+            null_check_insn_removed);
+    }
   };
 
   explicit Transform(Config config = Config()) : m_config(config) {}
-
-  Stats apply(const type_analyzer::local::LocalTypeAnalyzer& lta, IRCode* code);
+  Stats apply(const type_analyzer::local::LocalTypeAnalyzer& lta,
+              IRCode* code,
+              const NullAssertionSet& null_assertion_set);
+  static void setup(NullAssertionSet& null_assertion_set);
 
  private:
-  /*
-   * The methods in this class queue up their transformations. After they are
-   * all done, the apply_changes() method does the actual modification of the
-   * IRCode.
-   */
-  void apply_changes(IRCode*);
-
   const Config m_config;
-  std::vector<IRList::iterator> m_deletes;
-  Stats m_stats;
 };
 
 } // namespace type_analyzer

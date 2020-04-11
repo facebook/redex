@@ -72,10 +72,12 @@ struct TypeAnalysisTransformTest : public RedexTest {
             return type_analyzer::Transform::Stats();
           }
 
+          type_analyzer::Transform::NullAssertionSet null_assertion_set;
+          Transform::setup(null_assertion_set);
           auto lta = gta->get_local_analysis(method);
           auto& code = *method->get_code();
           Transform tf(config);
-          return tf.apply(*lta, &code);
+          return tf.apply(*lta, &code, null_assertion_set);
         });
   }
 
