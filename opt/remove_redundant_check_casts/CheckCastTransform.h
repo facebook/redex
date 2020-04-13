@@ -19,6 +19,7 @@ namespace impl {
 struct Stats {
   size_t removed_casts{0};
   size_t replaced_casts{0};
+  size_t weakened_casts{0};
   Stats& operator+=(const Stats&);
 };
 

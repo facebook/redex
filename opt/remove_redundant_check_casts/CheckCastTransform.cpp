@@ -20,13 +20,19 @@ Stats apply(DexMethod* method, const CheckCastReplacements& casts) {
   auto& cfg = method->get_code()->cfg();
   for (const auto& cast : casts) {
     auto it = cfg.find_insn(cast.insn, cast.block);
-    boost::optional<IRInstruction*> replacement = cast.replacement;
-    if (replacement) {
-      cfg.replace_insn(it, *replacement);
+    boost::optional<IRInstruction*> replacement_insn = cast.replacement_insn;
+    if (replacement_insn) {
+      cfg.replace_insn(it, *replacement_insn);
       stats.replaced_casts++;
     } else {
-      cfg.remove_insn(it);
-      stats.removed_casts++;
+      boost::optional<DexType*> replacement_type = cast.replacement_type;
+      if (replacement_type) {
+        cast.insn->set_type(*replacement_type);
+        stats.weakened_casts++;
+      } else {
+        cfg.remove_insn(it);
+        stats.removed_casts++;
+      }
     }
   }
 
@@ -36,6 +42,7 @@ Stats apply(DexMethod* method, const CheckCastReplacements& casts) {
 Stats& Stats::operator+=(const Stats& that) {
   removed_casts += that.removed_casts;
   replaced_casts += that.replaced_casts;
+  weakened_casts += that.weakened_casts;
   return *this;
 }
 
