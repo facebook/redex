@@ -331,7 +331,10 @@ DexType* CheckCastAnalysis::weaken_to_demand(IRInstruction* insn,
 
 CheckCastAnalysis::CheckCastAnalysis(const CheckCastConfig& config,
                                      DexMethod* method)
-    : m_method(method) {
+    : m_class_cast_exception_type(
+          DexType::make_type("Ljava/lang/ClassCastException;")),
+      m_method(method) {
+  always_assert(m_class_cast_exception_type);
   if (!method || !method->get_code()) {
     return;
   }
@@ -398,7 +401,9 @@ CheckCastReplacements CheckCastAnalysis::collect_redundant_checks_replacement()
     cfg::Block* block = it.block();
     IRInstruction* insn = it->insn;
     always_assert(insn->opcode() == OPCODE_CHECK_CAST);
-    auto check_type = weaken_to_demand(insn, insn->get_type());
+    auto check_type = can_catch_class_cast_exception(block)
+                          ? insn->get_type()
+                          : weaken_to_demand(insn, insn->get_type());
     if (is_check_cast_redundant(insn, check_type)) {
       auto src = insn->src(0);
       auto move = m_method->get_code()->cfg().move_result_of(it);
@@ -461,6 +466,21 @@ type_inference::TypeInference* CheckCastAnalysis::get_type_inference() const {
     m_type_inference->run(m_method);
   }
   return m_type_inference.get();
+}
+
+bool CheckCastAnalysis::can_catch_class_cast_exception(
+    cfg::Block* block) const {
+  for (auto edge : block->succs()) {
+    if (edge->type() != cfg::EDGE_THROW) {
+      continue;
+    }
+    auto catch_type = edge->throw_info()->catch_type;
+    if (!catch_type ||
+        type::is_subclass(catch_type, m_class_cast_exception_type)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 } // namespace impl

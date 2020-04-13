@@ -49,7 +49,9 @@ class CheckCastAnalysis {
   DexType* weaken_to_demand(IRInstruction* insn, DexType* type) const;
   bool is_check_cast_redundant(IRInstruction* insn, DexType* check_type) const;
   type_inference::TypeInference* get_type_inference() const;
+  bool can_catch_class_cast_exception(cfg::Block* block) const;
 
+  DexType* m_class_cast_exception_type;
   DexMethod* m_method;
   using InstructionTypeDemands =
       std::unordered_map<IRInstruction*, std::unordered_set<DexType*>>;
