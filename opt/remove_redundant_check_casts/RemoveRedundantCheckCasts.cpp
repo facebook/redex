@@ -16,7 +16,7 @@
 namespace check_casts {
 
 impl::Stats remove_redundant_check_casts(DexMethod* method) {
-  if (!method || !method->get_code()) {
+  if (!method || !method->get_code() || method->rstate.no_optimizations()) {
     return impl::Stats{};
   }
 
