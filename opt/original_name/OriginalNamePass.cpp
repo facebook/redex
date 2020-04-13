@@ -59,7 +59,7 @@ void OriginalNamePass::run_pass(DexStoresVector& stores,
   DexType* string_type = type::java_lang_String();
   for (const auto& it : to_annotate) {
     const DexType* cls_type = it.first;
-    if (strncmp("LX/", cls_type->get_name()->c_str(), 2) != 0) {
+    if (strncmp("LX/", cls_type->get_name()->c_str(), 3) != 0) {
       continue;
     }
 
