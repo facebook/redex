@@ -264,3 +264,129 @@ TEST_F(CheckCastAnalysisTest, weaken) {
   EXPECT_EQ(*it->replacement_type, b_type);
   method->get_code()->clear_cfg();
 }
+
+TEST_F(CheckCastAnalysisTest, weaken_interface_to_interface) {
+  auto i_type = DexType::make_type("LI;");
+  ClassCreator i_creator(i_type);
+  i_creator.set_access(ACC_INTERFACE | ACC_ABSTRACT);
+  i_creator.set_super(type::java_lang_Object());
+  auto j_type = DexType::make_type("LJ;");
+  ClassCreator j_creator(j_type);
+  j_creator.set_access(ACC_INTERFACE | ACC_ABSTRACT);
+  j_creator.set_super(type::java_lang_Object());
+  j_creator.add_interface(i_type);
+  auto k_type = DexType::make_type("LK;");
+  ClassCreator k_creator(k_type);
+  k_creator.set_access(ACC_INTERFACE | ACC_ABSTRACT);
+  k_creator.set_super(type::java_lang_Object());
+  k_creator.add_interface(i_type);
+  i_creator.create();
+  j_creator.create();
+  k_creator.create();
+
+  auto method = assembler::method_from_string(R"(
+    (method (public) "LFoo;.bar:(LI;)LJ;"
+      (
+        (load-param-object v0)
+        (load-param-object v1)
+        (check-cast v1 "LK;")
+        (move-result-pseudo-object v0)
+        (return-object v0)
+      )
+    )
+  )");
+  method->get_code()->build_cfg(true);
+  check_casts::CheckCastConfig config;
+  check_casts::impl::CheckCastAnalysis analysis(config, method);
+  auto replacements = analysis.collect_redundant_checks_replacement();
+
+  EXPECT_EQ(replacements.size(), 1);
+  auto it = replacements.begin();
+  auto insn = it->insn;
+  EXPECT_EQ(insn->opcode(), OPCODE_CHECK_CAST);
+  EXPECT_EQ(insn->get_type()->get_name()->str(), "LK;");
+  EXPECT_EQ(it->replacement_insn, boost::none);
+  EXPECT_NE(it->replacement_type, boost::none);
+  EXPECT_EQ(*it->replacement_type, j_type);
+  method->get_code()->clear_cfg();
+}
+
+TEST_F(CheckCastAnalysisTest, weaken_replace_class_to_interface) {
+  auto i_type = DexType::make_type("LI;");
+  ClassCreator i_creator(i_type);
+  i_creator.set_access(ACC_INTERFACE | ACC_ABSTRACT);
+  i_creator.set_super(type::java_lang_Object());
+
+  auto a_type = DexType::make_type("LA;");
+  auto b_type = DexType::make_type("LB;");
+  ClassCreator a_creator(a_type);
+  a_creator.set_super(type::java_lang_Object());
+  a_creator.add_interface(i_type);
+  ClassCreator b_creator(b_type);
+  b_creator.set_super(a_type);
+  b_creator.add_interface(i_type);
+  i_creator.create();
+  a_creator.create();
+  b_creator.create();
+
+  auto method = assembler::method_from_string(R"(
+    (method (public) "LFoo;.bar:(LA;)LI;"
+      (
+        (load-param-object v0)
+        (load-param-object v1)
+        (check-cast v1 "LB;")
+        (move-result-pseudo-object v0)
+        (return-object v0)
+      )
+    )
+  )");
+  method->get_code()->build_cfg(true);
+  check_casts::CheckCastConfig config;
+  check_casts::impl::CheckCastAnalysis analysis(config, method);
+  auto replacements = analysis.collect_redundant_checks_replacement();
+
+  EXPECT_EQ(replacements.size(), 1);
+  auto it = replacements.begin();
+  auto insn = it->insn;
+  EXPECT_EQ(insn->opcode(), OPCODE_CHECK_CAST);
+  EXPECT_EQ(insn->get_type()->get_name()->str(), "LB;");
+  EXPECT_NE(it->replacement_insn, boost::none);
+  EXPECT_EQ(it->replacement_type, boost::none);
+  method->get_code()->clear_cfg();
+}
+
+TEST_F(CheckCastAnalysisTest, do_not_weaken_class_to_interface) {
+  auto i_type = DexType::make_type("LI;");
+  ClassCreator i_creator(i_type);
+  i_creator.set_access(ACC_INTERFACE | ACC_ABSTRACT);
+  i_creator.set_super(type::java_lang_Object());
+
+  auto a_type = DexType::make_type("LA;");
+  auto b_type = DexType::make_type("LB;");
+  ClassCreator a_creator(a_type);
+  a_creator.set_super(type::java_lang_Object());
+  ClassCreator b_creator(b_type);
+  b_creator.set_super(a_type);
+  b_creator.add_interface(i_type);
+  i_creator.create();
+  a_creator.create();
+  b_creator.create();
+
+  auto method = assembler::method_from_string(R"(
+    (method (public) "LFoo;.bar:(LA;)LI;"
+      (
+        (load-param-object v0)
+        (load-param-object v1)
+        (check-cast v1 "LB;")
+        (move-result-pseudo-object v0)
+        (return-object v0)
+      )
+    )
+  )");
+  method->get_code()->build_cfg(true);
+  check_casts::CheckCastConfig config;
+  check_casts::impl::CheckCastAnalysis analysis(config, method);
+  auto replacements = analysis.collect_redundant_checks_replacement();
+
+  EXPECT_EQ(replacements.size(), 0);
+}

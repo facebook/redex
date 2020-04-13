@@ -273,8 +273,15 @@ DexType* CheckCastAnalysis::get_type_demand(IRInstruction* insn,
   }
 }
 
+// This function is conservative and returns false if type_class is missing.
+// A type is "interfacy" if its an interface, or an array of an interface
+static bool is_not_interfacy(DexType* type) {
+  auto cls = type_class(type::get_element_type_if_array(type));
+  return cls && !is_interface(cls);
+}
+
 // Weakens the given type in a way that's aware of the check-cast relationship
-// of arrays. (However, it does not consider interfaces.)
+// of arrays. (However, it does not consider interfaces in a special way.)
 static DexType* weaken_type(DexType* type) {
   if (type::is_array(type)) {
     auto element_type = type::get_array_element_type(type);
@@ -292,8 +299,8 @@ static DexType* weaken_type(DexType* type) {
   return cls->get_super_class();
 }
 
-DexType* CheckCastAnalysis::weaken_to_demand(IRInstruction* insn,
-                                             DexType* type) const {
+DexType* CheckCastAnalysis::weaken_to_demand(
+    IRInstruction* insn, DexType* type, bool weaken_to_not_interfacy) const {
   if (!m_insn_demands) {
     // Weakening is disabled.
     return type;
@@ -303,10 +310,25 @@ DexType* CheckCastAnalysis::weaken_to_demand(IRInstruction* insn,
     return type::java_lang_Object();
   }
   auto& demands = it->second;
-  if (demands.count(nullptr)) {
-    return type;
+  always_assert(!demands.empty());
+  if (demands.size() == 1) {
+    auto weakened_type = *demands.begin();
+    // Nullptr indicates that the type demand could not be computed exactly, and
+    // no weakening should take place.
+    if (weakened_type == nullptr) {
+      return type;
+    }
+    if (weakened_type == type::java_lang_Enum()) {
+      // TODO: Weaking across enums is technically correct, but exposes a
+      // limitation in the EnumTransformer, so we just don't do it for now
+      return type;
+    }
+    // Note that this singleton-demand may be an interface
+    if (!weaken_to_not_interfacy || is_not_interfacy(weakened_type)) {
+      return weakened_type;
+    }
   }
-
+  always_assert(!demands.count(nullptr));
   auto meets_demands = [&](DexType* t) {
     for (auto d : demands) {
       if (!type::check_cast(t, d)) {
@@ -392,6 +414,60 @@ CheckCastAnalysis::CheckCastAnalysis(const CheckCastConfig& config,
       reaching_definitions.analyze_instruction(insn, &env);
     }
   }
+
+  // Simplify demands
+  for (auto& p : *m_insn_demands) {
+    auto& demands = p.second;
+    if (demands.count(nullptr)) {
+      // no need to keep around anything else
+      for (auto it = demands.begin(); it != demands.end();) {
+        if (*it) {
+          it = demands.erase(it);
+        } else {
+          ++it;
+        }
+      }
+      always_assert(demands.count(nullptr));
+      always_assert(demands.size() == 1);
+      continue;
+    }
+    // Remove weakened types.
+    std::unordered_set<DexType*> weakened_types;
+    std::queue<DexType*> queue;
+    auto enqueue_weakened_types = [&queue](DexType* type) {
+      auto weakened_type = weaken_type(type);
+      if (weakened_type) {
+        queue.push(weakened_type);
+      }
+      // We also handle interface hierarchies here.
+      auto cls = type_class(type);
+      if (cls) {
+        for (auto interface : cls->get_interfaces()->get_type_list()) {
+          queue.push(interface);
+        }
+      }
+    };
+    for (auto demand : demands) {
+      enqueue_weakened_types(demand);
+    }
+    while (!queue.empty()) {
+      auto weakened_type = queue.front();
+      queue.pop();
+      if (weakened_types.insert(weakened_type).second) {
+        enqueue_weakened_types(weakened_type);
+      }
+    }
+    for (auto weakened_type : weakened_types) {
+      if (demands.erase(weakened_type)) {
+        // Double check that the just erased demand was indeed redundant
+        always_assert(
+            std::find_if(demands.begin(), demands.end(), [&](DexType* demand) {
+              return !weakened_types.count(demand) &&
+                     type::check_cast(demand, weakened_type);
+            }) != demands.end());
+      }
+    }
+  }
 }
 
 CheckCastReplacements CheckCastAnalysis::collect_redundant_checks_replacement()
@@ -401,9 +477,11 @@ CheckCastReplacements CheckCastAnalysis::collect_redundant_checks_replacement()
     cfg::Block* block = it.block();
     IRInstruction* insn = it->insn;
     always_assert(insn->opcode() == OPCODE_CHECK_CAST);
-    auto check_type = can_catch_class_cast_exception(block)
-                          ? insn->get_type()
-                          : weaken_to_demand(insn, insn->get_type());
+    auto check_type = insn->get_type();
+    if (!can_catch_class_cast_exception(block)) {
+      check_type = weaken_to_demand(insn, check_type,
+                                    /* weaken_to_not_interfacy */ false);
+    }
     if (is_check_cast_redundant(insn, check_type)) {
       auto src = insn->src(0);
       auto move = m_method->get_code()->cfg().move_result_of(it);
@@ -426,8 +504,17 @@ CheckCastReplacements CheckCastAnalysis::collect_redundant_checks_replacement()
             boost::none);
       }
     } else if (check_type != insn->get_type()) {
-      redundant_check_casts.emplace_back(block, insn, boost::none,
-                                         boost::optional<DexType*>(check_type));
+      // We don't want to weaken a class to an interface for performance reason.
+      // Re-compute the weakened type in that case, excluding interfaces.
+      if (is_not_interfacy(insn->get_type()) && !is_not_interfacy(check_type)) {
+        check_type = weaken_to_demand(insn, insn->get_type(),
+                                      /* weaken_to_not_interfacy */ true);
+        always_assert(is_not_interfacy(check_type));
+      }
+      if (check_type != insn->get_type()) {
+        redundant_check_casts.emplace_back(
+            block, insn, boost::none, boost::optional<DexType*>(check_type));
+      }
     }
   }
 

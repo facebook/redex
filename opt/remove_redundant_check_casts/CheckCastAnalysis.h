@@ -46,7 +46,9 @@ class CheckCastAnalysis {
 
  private:
   DexType* get_type_demand(IRInstruction* insn, size_t src_index) const;
-  DexType* weaken_to_demand(IRInstruction* insn, DexType* type) const;
+  DexType* weaken_to_demand(IRInstruction* insn,
+                            DexType* type,
+                            bool weaken_to_not_interfacy) const;
   bool is_check_cast_redundant(IRInstruction* insn, DexType* check_type) const;
   type_inference::TypeInference* get_type_inference() const;
   bool can_catch_class_cast_exception(cfg::Block* block) const;
