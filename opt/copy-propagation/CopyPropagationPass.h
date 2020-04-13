@@ -41,7 +41,6 @@ class CopyPropagationPass : public Pass {
     bind("wide_registers", true, m_config.wide_registers);
     bind("static_finals", true, m_config.static_finals);
     bind("debug", false, m_config.debug);
-    bind("max_estimated_registers", {3000}, m_config.max_estimated_registers);
   }
 
   copy_propagation_impl::Config m_config;

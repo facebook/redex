@@ -88,8 +88,6 @@ constexpr const char* METRIC_CONDITIONALLY_PURE_METHODS =
     "num_conditionally_pure_methods";
 constexpr const char* METRIC_CONDITIONALLY_PURE_METHODS_ITERATIONS =
     "num_conditionally_pure_methods_iterations";
-constexpr const char* METRIC_SKIPPED_DUE_TO_TOO_MANY_REGISTERS =
-    "num_skipped_due_to_too_many_registers";
 constexpr const char* METRIC_MAX_ITERATIONS = "num_max_iterations";
 
 using value_id_t = uint64_t;
@@ -1314,8 +1312,7 @@ static IROpcode get_move_opcode(const IRInstruction* earlier_insn) {
   }
 }
 
-bool CommonSubexpressionElimination::patch(unsigned int max_estimated_registers,
-                                           bool runtime_assertions) {
+bool CommonSubexpressionElimination::patch(bool runtime_assertions) {
   if (m_forward.empty()) {
     return false;
   }
@@ -1329,10 +1326,6 @@ bool CommonSubexpressionElimination::patch(unsigned int max_estimated_registers,
   for (const auto& earlier_insns : m_earlier_insns) {
     IROpcode move_opcode = get_move_opcode(*earlier_insns.begin());
     max_dest += (move_opcode == OPCODE_MOVE_WIDE) ? 2 : 1;
-  }
-  if (max_dest > max_estimated_registers) {
-    m_stats.skipped_due_to_too_many_registers += m_forward.size();
-    return false;
   }
 
   TRACE(CSE, 5, "[CSE] before:\n%s", SHOW(m_cfg));
@@ -1581,7 +1574,6 @@ Stats& Stats::operator+=(const Stats& that) {
   for (const auto& p : that.eliminated_opcodes) {
     eliminated_opcodes[p.first] += p.second;
   }
-  skipped_due_to_too_many_registers += that.skipped_due_to_too_many_registers;
   max_iterations = std::max(max_iterations, that.max_iterations);
   return *this;
 }

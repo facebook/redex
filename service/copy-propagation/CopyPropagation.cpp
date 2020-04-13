@@ -410,7 +410,6 @@ namespace copy_propagation_impl {
 Stats& Stats::operator+=(const Stats& that) {
   moves_eliminated += that.moves_eliminated;
   replaced_sources += that.replaced_sources;
-  skipped_due_to_too_many_registers += that.skipped_due_to_too_many_registers;
   type_inferences += that.type_inferences;
   return *this;
 }
@@ -473,19 +472,6 @@ Stats CopyPropagation::run(IRCode* code, DexMethod* method) {
   }
 
   Stats stats;
-  // We compute an approximation of the number of needed registers above.
-  // We do that instead of using code->get_registers_size() below because
-  // that information may be stale and incorrect.
-  if (max_dest > m_config.max_estimated_registers) {
-    TRACE(RME,
-          2,
-          "[RME] Skipping {%s} - too many registers: %u.",
-          SHOW(method),
-          (unsigned)max_dest);
-    ++stats.skipped_due_to_too_many_registers;
-    return stats;
-  }
-
   AliasFixpointIterator fixpoint(*cfg, method, m_config, range_set, stats);
   fixpoint.run(AliasDomain());
 

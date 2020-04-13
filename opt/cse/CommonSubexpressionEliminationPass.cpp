@@ -35,8 +35,6 @@ constexpr const char* METRIC_CONDITIONALLY_PURE_METHODS =
     "num_conditionally_pure_methods";
 constexpr const char* METRIC_CONDITIONALLY_PURE_METHODS_ITERATIONS =
     "num_conditionally_pure_methods_iterations";
-constexpr const char* METRIC_SKIPPED_DUE_TO_TOO_MANY_REGISTERS =
-    "num_skipped_due_to_too_many_registers";
 constexpr const char* METRIC_MAX_ITERATIONS = "num_max_iterations";
 
 } // namespace
@@ -91,8 +89,7 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
               &shared_state, code->cfg(), is_static(method),
               method::is_init(method) || method::is_clinit(method),
               method->get_class(), method->get_proto()->get_args());
-          bool any_changes = cse.patch(copy_prop_config.max_estimated_registers,
-                                       m_runtime_assertions);
+          bool any_changes = cse.patch(m_runtime_assertions);
           stats += cse.get_stats();
 
           if (!any_changes) {
@@ -136,8 +133,6 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
     name += SHOW(static_cast<IROpcode>(p.first));
     mgr.incr_metric(name, p.second);
   }
-  mgr.incr_metric(METRIC_SKIPPED_DUE_TO_TOO_MANY_REGISTERS,
-                  stats.skipped_due_to_too_many_registers);
   mgr.incr_metric(METRIC_MAX_ITERATIONS, stats.max_iterations);
 
   shared_state.cleanup();

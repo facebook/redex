@@ -23,7 +23,6 @@ struct Stats {
   size_t methods_using_other_tracked_location_bit{0};
   // keys are IROpcode encoded as uint16_t, to make OSS build happy
   std::unordered_map<uint16_t, size_t> eliminated_opcodes;
-  size_t skipped_due_to_too_many_registers{0};
   size_t max_iterations{0};
 
   Stats& operator+=(const Stats&);
@@ -111,8 +110,7 @@ class CommonSubexpressionElimination {
   /*
    * Patch code based on analysis results.
    */
-  bool patch(unsigned int max_estimated_registers,
-             bool runtime_assertions = false);
+  bool patch(bool runtime_assertions = false);
 
  private:
   // CSE is finding instances where the result (in the dest register) of an

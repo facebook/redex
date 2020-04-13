@@ -33,8 +33,6 @@ void CopyPropagationPass::run_pass(DexStoresVector& stores,
   mgr.incr_metric("redundant_moves_eliminated", stats.moves_eliminated);
   mgr.incr_metric("source_regs_replaced_with_representative",
                   stats.replaced_sources);
-  mgr.incr_metric("methods_skipped_due_to_too_many_registers",
-                  stats.skipped_due_to_too_many_registers);
   mgr.incr_metric("method_type_inferences", stats.type_inferences);
   TRACE(RME,
         1,
@@ -44,10 +42,6 @@ void CopyPropagationPass::run_pass(DexStoresVector& stores,
         1,
         "%d source registers replaced with representative",
         mgr.get_metric("source_regs_replaced_with_representative"));
-  TRACE(RME,
-        1,
-        "%d methods skipped due to too many registers",
-        mgr.get_metric("methods_skipped_due_to_too_many_registers"));
   TRACE(RME,
         1,
         "%d methods had type inference computed",

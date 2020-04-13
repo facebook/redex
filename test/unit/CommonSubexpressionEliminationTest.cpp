@@ -64,7 +64,7 @@ void test(const Scope& scope,
   cse_impl::CommonSubexpressionElimination cse(&shared_state, code->cfg(),
                                                is_static, is_init_or_clinit,
                                                declaring_type, args);
-  cse.patch(/* max_estimated_registers */ 300);
+  cse.patch();
   code->clear_cfg();
   walk::code(scope, [&](DexMethod*, IRCode& code) { code.clear_cfg(); });
   auto stats = cse.get_stats();
