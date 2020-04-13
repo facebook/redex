@@ -290,26 +290,6 @@ TEST(AliasedRegistersTest, AbstractValueEqualsAndClear) {
   EXPECT_FALSE(a.equals(b));
 }
 
-TEST(AliasedRegistersTest, AbstractValueMeet) {
-  AliasedRegisters a;
-  AliasedRegisters b;
-
-  a.move(zero, one);
-  b.move(two, one);
-
-  a.meet_with(b);
-
-  EXPECT_TRUE(a.are_aliases(zero, one));
-  EXPECT_TRUE(a.are_aliases(two, one));
-  EXPECT_TRUE(a.are_aliases(zero, two));
-  EXPECT_FALSE(a.are_aliases(zero, three));
-
-  EXPECT_FALSE(b.are_aliases(zero, one));
-  EXPECT_TRUE(b.are_aliases(one, two));
-  EXPECT_FALSE(b.are_aliases(zero, two));
-  EXPECT_FALSE(b.are_aliases(zero, three));
-}
-
 TEST(AliasedRegistersTest, AbstractValueJoinNone) {
   AliasedRegisters a;
   AliasedRegisters b;
