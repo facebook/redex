@@ -85,6 +85,30 @@ TEST_F(CheckCastAnalysisTest, parameter) {
   method->get_code()->clear_cfg();
 }
 
+TEST_F(CheckCastAnalysisTest, array_parameter) {
+  auto method = assembler::method_from_string(R"(
+    (method (public) "LFoo;.bar:([LBar;)V"
+      (
+        (load-param-object v0)
+        (load-param-object v1)
+        (check-cast v1 "Ljava/lang/Object;")
+        (move-result-pseudo-object v0)
+      )
+    )
+  )");
+  method->get_code()->build_cfg(true);
+  check_casts::impl::CheckCastAnalysis analysis(method);
+  auto replacements = analysis.collect_redundant_checks_replacement();
+
+  EXPECT_EQ(replacements.size(), 1);
+  auto it = replacements.begin();
+  auto insn = it->insn;
+  EXPECT_EQ(insn->opcode(), OPCODE_CHECK_CAST);
+  EXPECT_EQ(insn->get_type()->get_name()->str(), "Ljava/lang/Object;");
+  EXPECT_NE(it->replacement, boost::none);
+  method->get_code()->clear_cfg();
+}
+
 TEST_F(CheckCastAnalysisTest, this_parameter) {
   auto method = assembler::method_from_string(R"(
     (method (public) "LFoo;.bar:(LBar;)V"

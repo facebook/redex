@@ -132,6 +132,17 @@ char type_shorty(const DexType* type) {
 
 bool check_cast(const DexType* type, const DexType* base_type) {
   if (type == base_type) return true;
+  if (type != nullptr && is_array(type)) {
+    if (base_type != nullptr && is_array(base_type)) {
+      auto element_type = get_array_element_type(type);
+      auto element_base_type = get_array_element_type(base_type);
+      if (!is_primitive(element_type) && !is_primitive(element_base_type) &&
+          check_cast(element_type, element_base_type)) {
+        return true;
+      }
+    }
+    return base_type == java_lang_Object();
+  }
   const auto cls = type_class(type);
   if (cls == nullptr) return false;
   if (check_cast(cls->get_super_class(), base_type)) return true;
