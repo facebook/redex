@@ -17,6 +17,7 @@
 #pragma GCC diagnostic pop
 #endif
 #include <boost/optional.hpp>
+#include <boost/range/algorithm.hpp>
 #include <boost/range/iterator_range.hpp>
 #include <limits>
 #include <numeric>
@@ -238,22 +239,9 @@ vertex_t AliasedRegisters::find_new_root(vertex_t old_root) const {
   const auto& in_begin = in_adj.first;
   const auto& in_end = in_adj.second;
   always_assert_log(in_begin != in_end, "%s", dump().c_str());
-  // We can't use std::min_element because the compiler on macosx doesn't think
-  // that boost::inv_adjacency_iterator is a ForwardIterator, even though it
-  // should be.
-  auto it = in_begin;
-  vertex_t lowest = *it;
-  Value lowest_val = m_graph[lowest];
-  ++it;
-  for (; it != in_end; ++it) {
-    vertex_t v = *it;
-    const Value& val = m_graph[v];
-    if (val < lowest_val) {
-      lowest = v;
-      lowest_val = val;
-    }
-  }
-  return lowest;
+  return *boost::range::min_element(in_adj, [this](vertex_t v1, vertex_t v2) {
+    return m_graph[v1] < m_graph[v2];
+  });
 }
 
 // Return a representative for this register.
