@@ -140,7 +140,7 @@ void RemoveUnreachablePass::write_out_removed_symbols(
   TRACE(RMU, 4, "Writing %d removed symbols to %s", removed_symbols.size(),
         filepath.c_str());
   struct StringPtrComparator {
-    bool operator()(const std::string* s1, const std::string* s2) {
+    bool operator()(const std::string* s1, const std::string* s2) const {
       return *s1 < *s2;
     }
   };
