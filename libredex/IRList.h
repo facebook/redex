@@ -432,13 +432,22 @@ class InstructionIteratorImpl {
       ++m_it;
     }
   }
+  /*
+   * If m_it doesn't point to an MIE of type MFLOW_OPCODE, decrement it until
+   * it does. Otherwise do nothing.
+   */
+  void to_prev_instruction() {
+    while (m_it->type != MFLOW_OPCODE) {
+      --m_it;
+    }
+  }
 
  public:
   using difference_type = long;
   using value_type = Mie&;
   using pointer = Mie*;
   using reference = Mie&;
-  using iterator_category = std::forward_iterator_tag;
+  using iterator_category = std::bidirectional_iterator_tag;
 
   InstructionIteratorImpl() {}
   InstructionIteratorImpl(Iterator it, Iterator end) : m_it(it), m_end(end) {
@@ -454,6 +463,18 @@ class InstructionIteratorImpl {
   InstructionIteratorImpl operator++(int) {
     auto rv = *this;
     ++(*this);
+    return rv;
+  }
+
+  InstructionIteratorImpl& operator--() {
+    --m_it;
+    to_prev_instruction();
+    return *this;
+  }
+
+  InstructionIteratorImpl operator--(int) {
+    auto rv = *this;
+    --(*this);
     return rv;
   }
 

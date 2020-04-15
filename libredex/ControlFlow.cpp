@@ -1285,15 +1285,11 @@ cfg::InstructionIterator ControlFlowGraph::primary_instruction_of_move_result(
     always_assert(insn->has_move_result_any());
     return res;
   } else {
-    auto res = it.unwrap();
-    do {
-      res = std::prev(res);
-      // skip over non-opcodes (in particular, trivial fallthrough branch
-      // targets)
-    } while (res->type != MFLOW_OPCODE);
+    auto res = std::prev(it);
+    always_assert(res.block() == it.block());
     auto insn = res->insn;
     always_assert(insn->has_move_result_any());
-    return block->to_cfg_instruction_iterator(res);
+    return res;
   }
 }
 

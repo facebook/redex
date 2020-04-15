@@ -278,6 +278,37 @@ TEST_F(ControlFlowTest, iterate2) {
   TRACE(CFG, 1, SHOW(code->cfg()));
 }
 
+TEST_F(ControlFlowTest, iterate3) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (load-param v0)
+
+     (:loop)
+     (const v1 0)
+     (if-gez v0 :if-true-label)
+     (goto :loop) ; this goto is removed
+
+     (:if-true-label)
+     (return-void)
+    )
+)");
+  code->build_cfg(/* editable */ true);
+  // Check that ++ and -- agree
+  auto iterable = cfg::InstructionIterable(code->cfg());
+  std::stack<cfg::InstructionIterator> iterators;
+  for (auto it = iterable.end(); it != iterable.begin(); --it) {
+    iterators.push(it);
+  }
+  iterators.push(iterable.begin());
+  for (auto it = iterable.begin(); it != iterable.end(); ++it) {
+    EXPECT_EQ(it, iterators.top());
+    iterators.pop();
+  }
+  EXPECT_EQ(iterable.end(), iterators.top());
+  iterators.pop();
+  EXPECT_TRUE(iterators.empty());
+}
+
 // C++14 Null Forward Iterators
 // Make sure the default constructed InstructionIterator compares equal
 // to other default constructed InstructionIterator

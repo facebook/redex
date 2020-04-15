@@ -1046,6 +1046,7 @@ class InstructionIteratorImpl {
       conditional<is_const, const MethodItemEntry, MethodItemEntry>::type;
   using Iterator = typename std::
       conditional<is_const, IRList::const_iterator, IRList::iterator>::type;
+  using IRListInstructionIterable = ir_list::InstructionIterableImpl<is_const>;
 
   // Use a pointer so that we can be copy constructible
   Cfg* m_cfg;
@@ -1085,7 +1086,7 @@ class InstructionIteratorImpl {
   using difference_type = long;
   using value_type = Mie&;
   using pointer = Mie*;
-  using iterator_category = std::forward_iterator_tag;
+  using iterator_category = std::bidirectional_iterator_tag;
 
   // TODO: Is it possible to recover a valid state of iterators into the CFG
   // after an insertion operation?
@@ -1104,8 +1105,7 @@ class InstructionIteratorImpl {
     if (is_begin) {
       m_block = m_cfg->m_blocks.begin();
       if (m_block != m_cfg->m_blocks.end()) {
-        auto iterable =
-            ir_list::InstructionIterableImpl<is_const>(m_block->second);
+        auto iterable = IRListInstructionIterable(m_block->second);
         m_it = iterable.begin();
         if (m_it == iterable.end()) {
           to_next_block();
@@ -1129,6 +1129,24 @@ class InstructionIteratorImpl {
     return result;
   }
 
+  InstructionIteratorImpl<is_const>& operator--() {
+    assert_not_begin();
+    // as long as we are at the beginning of the current block, keep going back
+    // to the end of the previous block
+    while (m_block == m_cfg->m_blocks.end() ||
+           m_it == IRListInstructionIterable(m_block->second).begin()) {
+      m_it = IRListInstructionIterable((--m_block)->second).end();
+    }
+    --m_it;
+    return *this;
+  }
+
+  InstructionIteratorImpl<is_const> operator--(int) {
+    auto result = *this;
+    --(*this);
+    return result;
+  }
+
   reference operator*() const {
     assert_not_end();
     return *m_it;
@@ -1142,6 +1160,14 @@ class InstructionIteratorImpl {
 
   bool operator!=(const InstructionIteratorImpl& other) const {
     return !(*this == other);
+  }
+
+  void assert_not_begin() const {
+    if (!ControlFlowGraph::DEBUG) {
+      return;
+    }
+    auto begin = InstructionIteratorImpl<is_const>(*m_cfg, true);
+    always_assert_log(*this != begin, "%s", SHOW(*m_cfg));
   }
 
   void assert_not_end() const {
