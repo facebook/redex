@@ -68,6 +68,10 @@ class ReferencedState {
     bool m_dont_inline : 1;
     bool m_force_inline : 1;
 
+    // This is set by the ImmutableGetters pass. It indicates that a method
+    // is pure.
+    bool m_immutable_getter : 1;
+
     InnerStruct() {
       // Initializers in bit fields are C++20...
       m_by_string = false;
@@ -89,6 +93,8 @@ class ReferencedState {
 
       m_dont_inline = false;
       m_force_inline = false;
+
+      m_immutable_getter = false;
     }
   } inner_struct;
 
@@ -154,6 +160,9 @@ class ReferencedState {
           this->inner_struct.m_dont_inline | other.inner_struct.m_dont_inline;
       this->inner_struct.m_force_inline =
           this->inner_struct.m_force_inline & other.inner_struct.m_force_inline;
+      this->inner_struct.m_immutable_getter =
+          this->inner_struct.m_immutable_getter &
+          other.inner_struct.m_immutable_getter;
     }
   }
 
@@ -301,6 +310,9 @@ class ReferencedState {
   void set_force_inline() { inner_struct.m_force_inline = true; }
   bool dont_inline() const { return inner_struct.m_dont_inline; }
   void set_dont_inline() { inner_struct.m_dont_inline = true; }
+
+  bool immutable_getter() const { return inner_struct.m_immutable_getter; }
+  void set_immutable_getter() { inner_struct.m_immutable_getter = true; }
 
  private:
   // Does any keep rule (whether -keep or -keepnames) match this DexMember?

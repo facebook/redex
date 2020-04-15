@@ -893,15 +893,6 @@ SharedState::SharedState(const std::unordered_set<DexMethodRef*>& pure_methods)
     m_safe_methods.insert(method_ref);
   }
 
-  // Check that we don't have abstract or interface methods
-  for (DexMethodRef* method_ref : m_safe_methods) {
-    auto method = method_ref->as_def();
-    if (method) {
-      always_assert(!is_interface(type_class(method_ref->get_class())));
-      always_assert(!is_abstract(method));
-    }
-  }
-
   if (traceEnabled(CSE, 2)) {
     m_barriers.reset(new ConcurrentMap<Barrier, size_t, BarrierHasher>());
   }
@@ -1073,6 +1064,10 @@ bool SharedState::is_invoke_safe(const IRInstruction* insn,
     if (type == exact_virtual_scope) {
       return true;
     }
+  }
+
+  if (opcode == OPCODE_INVOKE_INTERFACE && m_safe_methods.count(method)) {
+    return true;
   }
 
   return false;

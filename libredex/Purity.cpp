@@ -308,6 +308,16 @@ std::unordered_set<DexMethodRef*> get_pure_methods() {
   return pure_methods;
 }
 
+std::unordered_set<DexMethod*> get_immutable_getters(const Scope& scope) {
+  std::unordered_set<DexMethod*> immutable_getters;
+  walk::methods(scope, [&](DexMethod* method) {
+    if (method->rstate.immutable_getter()) {
+      immutable_getters.insert(method);
+    }
+  });
+  return immutable_getters;
+}
+
 MethodOverrideAction get_base_or_overriding_method_action(
     const DexMethod* method,
     const std::unordered_set<const DexMethod*>* methods_to_ignore,
