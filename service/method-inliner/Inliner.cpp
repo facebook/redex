@@ -88,7 +88,8 @@ MultiMethodInliner::MultiMethodInliner(
         method_profile_stats,
     const std::unordered_map<const DexMethod*, size_t>*
         same_method_implementations,
-    bool analyze_and_prune_inits)
+    bool analyze_and_prune_inits,
+    const std::unordered_set<DexMethodRef*>& configured_pure_methods)
     : resolver(std::move(resolve_fn)),
       xstores(stores),
       m_scope(scope),
@@ -179,9 +180,32 @@ MultiMethodInliner::MultiMethodInliner(
                         m_config.run_copy_prop || m_config.run_local_dce ||
                         m_config.run_dedup_blocks;
 
-  if (config.run_cse) {
-    m_cse_shared_state =
-        std::make_unique<cse_impl::SharedState>(m_pure_methods);
+  if (m_config.run_cse || m_config.run_local_dce) {
+    m_pure_methods.insert(configured_pure_methods.begin(),
+                          configured_pure_methods.end());
+    auto immutable_getters = get_immutable_getters(m_scope);
+    m_pure_methods.insert(immutable_getters.begin(), immutable_getters.end());
+    if (m_config.run_cse) {
+      m_cse_shared_state =
+          std::make_unique<cse_impl::SharedState>(m_pure_methods);
+    }
+    if (m_config.run_local_dce) {
+      std::unique_ptr<const method_override_graph::Graph> owned_override_graph;
+      const method_override_graph::Graph* override_graph;
+      if (m_config.run_cse) {
+        override_graph = m_cse_shared_state->get_method_override_graph();
+      } else {
+        owned_override_graph = method_override_graph::build_graph(scope);
+        override_graph = owned_override_graph.get();
+      }
+      std::unordered_set<const DexMethod*> computed_no_side_effects_methods;
+      auto computed_no_side_effects_methods_iterations =
+          compute_no_side_effects_methods(scope, override_graph, m_pure_methods,
+                                          &computed_no_side_effects_methods);
+      for (auto m : computed_no_side_effects_methods) {
+        m_pure_methods.insert(const_cast<DexMethod*>(m));
+      }
+    }
   }
 }
 

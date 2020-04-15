@@ -356,7 +356,7 @@ void run_inliner(DexStoresVector& stores,
                              intra_dex ? IntraDex : InterDex,
                              true_virtual_callers, method_profile_stats,
                              &same_method_implementations,
-                             analyze_and_prune_inits);
+                             analyze_and_prune_inits, conf.get_pure_methods());
   inliner.inline_methods();
 
   if (inliner_config.use_cfg_inliner) {

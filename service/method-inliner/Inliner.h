@@ -141,7 +141,8 @@ class MultiMethodInliner {
           method_profile_stats = {},
       const std::unordered_map<const DexMethod*, size_t>*
           same_method_implementations = nullptr,
-      bool analyze_and_prune_inits = false);
+      bool analyze_and_prune_inits = false,
+      const std::unordered_set<DexMethodRef*>& configured_pure_methods = {});
 
   ~MultiMethodInliner() { delayed_invoke_direct_to_static(); }
 
@@ -623,7 +624,7 @@ class MultiMethodInliner {
   const std::unordered_map<const DexMethod*, size_t>*
       m_same_method_implementations;
 
-  const std::unordered_set<DexMethodRef*> m_pure_methods;
+  std::unordered_set<DexMethodRef*> m_pure_methods;
 
   // Whether to do some deep analysis to determine if constructor candidates
   // can be safely inlined, and don't inline them otherwise.
