@@ -33,6 +33,14 @@ class Intraprocedural {
   virtual ~Intraprocedural() {}
 };
 
+class AbstractRegistry {
+ public:
+  virtual bool has_update() const = 0;
+  virtual void materialize_update() = 0;
+
+  virtual ~AbstractRegistry() {}
+};
+
 // Typical Usage:
 
 // struct IRAdaptor /* defined for the IR */ {
@@ -43,8 +51,7 @@ class Intraprocedural {
 // };
 
 // struct Analysis : public IRAdaptor {
-//   type Map (may need to be thread-safe for parallel fixpoints),
-//   type FunctionSummary (funtion properties that maybe retrived at callsite),
+//   type Registry (Function Summaries)
 //   type FunctionAnalyzer (A class that extends `Intraprocedural`),
 //   type Callsite (Calling context),
 //   type MonotonicFixpointIterator (Choice of `MonotonicFixpointIterator`s),
@@ -55,26 +62,19 @@ class InterproceduralAnalyzer {
  public:
   using Function = typename Analysis::Function;
   using Program = typename Analysis::Program;
-  using Summary = typename Analysis::FunctionSummary;
-
-  // Map type that accepts 2 type arguments, namely need to support
-  // Map<Function, Summary>
-  template <typename Key, typename Value>
-  using Map = typename Analysis::template Map<Key, Value>;
+  using Registry = typename Analysis::Registry;
 
   using CallGraphInterface = typename Analysis::CallGraphInterface;
 
-  using FunctionAnalyzer =
-      typename Analysis::template FunctionAnalyzer<Map<Function, Summary>>;
+  using FunctionAnalyzer = typename Analysis::FunctionAnalyzer;
   using CallGraph = typename CallGraphInterface::Graph;
   using Callsite = typename Analysis::Callsite;
   using CallerContext = typename Callsite::Domain;
 
   using IntraFn = std::function<std::shared_ptr<FunctionAnalyzer>(
-      const Function&, Map<Function, Summary>*, CallerContext*)>;
+      const Function&, Registry*, CallerContext*)>;
 
-  // The summary map key doesn't have to be Function
-  Map<Function, Summary> function_summaries;
+  Registry registry;
 
   class CallGraphFixpointIterator final
       : public Analysis::template FixpointIteratorBase<
@@ -82,25 +82,23 @@ class InterproceduralAnalyzer {
             typename Callsite::Domain> {
    private:
     IntraFn m_intraprocedural;
-    Map<Function, Summary>* m_function_summaries;
+    Registry* m_registry;
 
    public:
     static CallerContext initial_domain() { return CallerContext(); }
 
-    explicit CallGraphFixpointIterator(
-        const CallGraph& graph,
-        Map<Function, Summary>* function_summaries,
-        const IntraFn& intraprocedural)
+    explicit CallGraphFixpointIterator(const CallGraph& graph,
+                                       Registry* registry,
+                                       const IntraFn& intraprocedural)
         : Analysis::template FixpointIteratorBase<CallGraphInterface,
                                                   CallerContext>(graph),
           m_intraprocedural(intraprocedural),
-          m_function_summaries(function_summaries) {}
+          m_registry(registry) {}
 
     virtual void analyze_node(const typename CallGraphInterface::NodeId& node,
                               CallerContext* current_state) const override {
-      m_intraprocedural(Analysis::function_by_node_id(node),
-                        this->m_function_summaries,
-                        current_state)
+      m_intraprocedural(
+          Analysis::function_by_node_id(node), this->m_registry, current_state)
           ->summarize();
     }
 
@@ -114,10 +112,8 @@ class InterproceduralAnalyzer {
   };
 
   virtual ~InterproceduralAnalyzer() {
-    // perform static assertions here.
-    static_assert(std::is_base_of<AbstractDomain<Map<Function, Summary>>,
-                                  Map<Function, Summary>>::value,
-                  "Function summary registry should be an abstract domain");
+    static_assert(std::is_base_of<AbstractRegistry, Registry>::value,
+                  "Registry must inherit from sparta::AbstractRegistry");
 
     static_assert(std::is_base_of<Intraprocedural, FunctionAnalyzer>::value,
                   "FunctionAnalyzer must inherit from sparta::Intraprocedural");
@@ -132,24 +128,23 @@ class InterproceduralAnalyzer {
 
   virtual std::shared_ptr<CallGraphFixpointIterator> run() {
     // keep a copy of old function summaries, do fixpoint on this level.
-    Map<Function, Summary> new_summary = function_summaries;
 
     std::shared_ptr<CallGraphFixpointIterator> fp = nullptr;
 
     for (int iteration = 0; iteration < m_max_iteration; iteration++) {
-      auto callgraph = Analysis::call_graph_of(m_program, &function_summaries);
+      auto callgraph = Analysis::call_graph_of(m_program, &this->registry);
 
       // TODO: remove or abstract logging
       std::cerr << "Iteration " << iteration + 1 << std::endl;
 
       fp = std::make_shared<CallGraphFixpointIterator>(
           callgraph,
-          &new_summary,
+          &this->registry,
           [this](const Function& func,
-                 Map<Function, Summary>* summaries,
+                 Registry* reg,
                  CallerContext* context) -> std::shared_ptr<FunctionAnalyzer> {
             // intraprocedural part
-            return this->run_on_function(func, summaries, context);
+            return this->run_on_function(func, reg, context);
           });
 
       // TODO: double check this, I think it actually makes sense to join
@@ -157,11 +152,8 @@ class InterproceduralAnalyzer {
       // the next iteration.
       fp->run(CallGraphFixpointIterator::initial_domain());
 
-      if (new_summary.leq(this->function_summaries) &&
-          new_summary != this->function_summaries) {
-        // FIXME: This assignment *might* be expensive. However, the good thing
-        // is that allocation doesn't always have to happen here.
-        function_summaries = new_summary;
+      if (this->registry.has_update()) {
+        this->registry.materialize_update();
       } else {
         std::cerr << "Global fixpoint reached after " << iteration + 1
                   << " iterations." << std::endl;
@@ -173,12 +165,9 @@ class InterproceduralAnalyzer {
   }
 
   virtual std::shared_ptr<FunctionAnalyzer> run_on_function(
-      const Function& function,
-      Map<Function, Summary>* summaries,
-      CallerContext* context) {
+      const Function& function, Registry* reg, CallerContext* context) {
 
-    auto analyzer =
-        std::make_shared<FunctionAnalyzer>(function, summaries, context);
+    auto analyzer = std::make_shared<FunctionAnalyzer>(function, reg, context);
 
     analyzer->analyze();
     return analyzer;

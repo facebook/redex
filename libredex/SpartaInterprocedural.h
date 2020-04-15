@@ -28,9 +28,9 @@ struct AnalysisAdaptorBase {
   // The summary argument is unused in the adaptor base. Only certain
   // analyses will require this argument, in which case this function
   // should be *overriden* in the derived class.
-  template <typename FunctionSummaries>
+  template <typename Registry>
   static call_graph::Graph call_graph_of(const Scope& scope,
-                                         FunctionSummaries* /*summaries*/) {
+                                         Registry* /*reg*/) {
     // TODO: build method override graph and merge them together?
     // TODO: build once and cache it in the memory because the framework
     // will call it on every top level iteration.
@@ -45,6 +45,54 @@ struct AnalysisAdaptorBase {
 struct BottomUpAnalysisAdaptorBase : public AnalysisAdaptorBase {
   using CallGraphInterface =
       sparta::BackwardsFixpointIterationAdaptor<call_graph::GraphInterface>;
+};
+
+template <typename Summary>
+class MethodSummaryRegistry : public sparta::AbstractRegistry {
+ private:
+  ConcurrentMap<const DexMethod*, Summary> m_map;
+  bool m_has_update = false;
+
+ public:
+  bool has_update() const override { return m_has_update; }
+  void materialize_update() override { m_has_update = false; }
+
+  Summary get(const DexMethod* method, Summary default_value) const {
+    return m_map.get(method, default_value);
+  }
+
+  // returns true if the entry exists.
+  bool update(const DexMethod* method,
+              std::function<Summary(const Summary&)> updater) {
+    bool entry_exists;
+    m_map.update(method, [&](const DexMethod*, Summary& value, bool exists) {
+      entry_exists = exists;
+      value = updater(value);
+    });
+    m_has_update = true; // benign race conditions as long as materialize_update
+                         // is not called during update.
+    return entry_exists;
+  }
+
+  // `updater` returns true if a change is made in the entry
+  void maybe_update(const DexMethod* method,
+                    std::function<bool(Summary&)> updater) {
+    bool changed = false;
+    m_map.update(method,
+                 [&](const DexMethod*, Summary& value, bool /* exists */) {
+                   changed = updater(value);
+                 });
+
+    if (changed) {
+      m_has_update = true; // benign race conditions as long as
+                           // materialize_update is not called during update.
+    }
+  }
+
+  // Not thread-safe
+  const ConcurrentMap<const DexMethod*, Summary>& get_map() const {
+    return m_map;
+  }
 };
 
 } // namespace sparta_interprocedural

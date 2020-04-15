@@ -581,13 +581,29 @@ class FunctionFixpoint final : public sparta::MonotonicFixpointIterator<
   }
 };
 
-struct PurityAnalysisAdaptor : public language::AnalysisAdaptorBase {
-  template <typename K, typename V>
-  using Map = sparta::PatriciaTreeMapAbstractEnvironment<K, V>;
-  using FunctionSummary = Summary;
+class AnalysisRegistry : public sparta::AbstractRegistry {
+ private:
+  sparta::PatriciaTreeMapAbstractEnvironment<language::Function*, Summary>
+      m_env;
+  bool m_has_update = false;
 
-  template <typename Summaries>
-  using FunctionAnalyzer = SimpleFunctionAnalyzer<Summaries>;
+ public:
+  bool has_update() const override { return m_has_update; }
+
+  void materialize_update() override { m_has_update = false; }
+
+  void update(language::Function* func,
+              std::function<Summary(const Summary&)> update) {
+    m_env.update(func, update);
+    m_has_update = true;
+  }
+
+  Summary get(language::Function* func) { return m_env.get(func); }
+};
+
+struct PurityAnalysisAdaptor : public language::AnalysisAdaptorBase {
+  using Registry = AnalysisRegistry;
+  using FunctionAnalyzer = SimpleFunctionAnalyzer<Registry>;
   using Callsite = Callsite;
 
   // Optional: override call graph level fixpoint iterator type
@@ -657,26 +673,26 @@ void test1() {
   purity_interprocedural::Analysis inter(&prog, 20 /* max iteration */);
   inter.run();
 
-  ASSERT_TRUE(inter.function_summaries.get(&fun1).is_value());
-  EXPECT_TRUE(inter.function_summaries.get(&fun1).pure());
+  ASSERT_TRUE(inter.registry.get(&fun1).is_value());
+  EXPECT_TRUE(inter.registry.get(&fun1).pure());
 
-  ASSERT_TRUE(inter.function_summaries.get(&fun3).is_value());
-  EXPECT_TRUE(inter.function_summaries.get(&fun3).pure());
+  ASSERT_TRUE(inter.registry.get(&fun3).is_value());
+  EXPECT_TRUE(inter.registry.get(&fun3).pure());
 
-  ASSERT_TRUE(inter.function_summaries.get(&mainfun).is_value());
-  EXPECT_FALSE(inter.function_summaries.get(&mainfun).pure());
+  ASSERT_TRUE(inter.registry.get(&mainfun).is_value());
+  EXPECT_FALSE(inter.registry.get(&mainfun).pure());
 
-  ASSERT_TRUE(inter.function_summaries.get(&fun2).is_value());
-  EXPECT_FALSE(inter.function_summaries.get(&fun2).pure());
+  ASSERT_TRUE(inter.registry.get(&fun2).is_value());
+  EXPECT_FALSE(inter.registry.get(&fun2).pure());
 
-  ASSERT_TRUE(inter.function_summaries.get(&fun4).is_value());
-  EXPECT_FALSE(inter.function_summaries.get(&fun4).pure());
+  ASSERT_TRUE(inter.registry.get(&fun4).is_value());
+  EXPECT_FALSE(inter.registry.get(&fun4).pure());
 
   // 5 and 6 are recursive, this analysis did not handle this case
-  EXPECT_TRUE(inter.function_summaries.get(&fun5).is_top());
-  EXPECT_TRUE(inter.function_summaries.get(&fun6).is_top());
+  EXPECT_TRUE(inter.registry.get(&fun5).is_top());
+  EXPECT_TRUE(inter.registry.get(&fun6).is_top());
   // 7 is unreached
-  EXPECT_TRUE(inter.function_summaries.get(&fun7).is_top());
+  EXPECT_TRUE(inter.registry.get(&fun7).is_top());
 }
 
 TEST(AnalyzerTest, test1) { test1(); }

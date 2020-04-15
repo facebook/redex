@@ -156,7 +156,7 @@ class MaxDepthFunctionAnalyzer : public Intraprocedural {
     auto callee = insn->get_method();
     auto callee_method = resolve_method(callee, opcode_to_search(insn));
     if (callee_method) {
-      auto summary = m_summaries->get(callee_method);
+      auto summary = m_summaries->get(callee_method, DepthDomain::top());
       if (summary.is_value()) {
         m_domain.join_with(DepthDomain(summary.depth() + 1u));
       } else {
@@ -179,13 +179,11 @@ class MaxDepthFunctionAnalyzer : public Intraprocedural {
 // instantiation assembles the different parts. It's also possible to override
 // type aliases in the adaptor base class.
 struct MaxDepthAnalysisAdaptor : public BottomUpAnalysisAdaptorBase {
-  // This map type is used to hold the summaries
-  template <typename K, typename V>
-  using Map = PatriciaTreeMapAbstractEnvironment<K, V>;
+  // Registry is used to hold the summaries.
+  using Registry = MethodSummaryRegistry<DepthDomain>;
   using FunctionSummary = DepthDomain;
 
-  template <typename Summaries>
-  using FunctionAnalyzer = MaxDepthFunctionAnalyzer<Summaries>;
+  using FunctionAnalyzer = MaxDepthFunctionAnalyzer<Registry>;
   using Callsite = Caller;
 };
 
@@ -200,11 +198,8 @@ std::unordered_map<const DexMethod*, int> analyze(const Scope& scope,
   auto analysis = Analysis(scope, max_iteration);
   analysis.run();
   std::unordered_map<const DexMethod*, int> results;
-  if (analysis.function_summaries.is_top()) {
-    // nothing is in there.
-    return results;
-  }
-  for (const auto& entry : analysis.function_summaries.bindings()) {
+
+  for (const auto& entry : analysis.registry.get_map()) {
     if (entry.second.is_value()) {
       results[entry.first] = entry.second.depth();
     }
