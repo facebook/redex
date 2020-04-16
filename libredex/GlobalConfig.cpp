@@ -26,6 +26,12 @@ void InlinerConfig::bind_config() {
   bind("black_list", {}, m_black_list);
   bind("black_list", {}, m_black_list);
   bind("caller_black_list", {}, m_caller_black_list);
+  bind("intradex_white_list", {}, m_intradex_white_list,
+       "The purpose of this white-list is to remove black-list entries when "
+       "inlining after the InterDex pass has run. (This reduces the impact of "
+       "black-list entries that avoid inlining conditional control-flow and "
+       "catchers that cause issues with the SwitchMethodPartitioning analysis "
+       "that tends to be used by passes that run before or during InterDex.)");
 }
 
 void OptDecisionsConfig::bind_config() {

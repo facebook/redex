@@ -39,6 +39,7 @@ struct InlinerConfig {
   // Prefixes of classes not to inline from / into
   std::vector<std::string> m_black_list;
   std::vector<std::string> m_caller_black_list;
+  std::vector<std::string> m_intradex_white_list;
 
   /**
    * 1. Populate m_black_list m_caller_black_list to black_list and
@@ -58,10 +59,19 @@ struct InlinerConfig {
     return caller_black_list;
   }
 
+  void apply_intradex_white_list() {
+    always_assert_log(m_populated, "Should populate whitelist\n");
+    for (auto type : intradex_white_list) {
+      black_list.erase(type);
+      caller_black_list.erase(type);
+    }
+  }
+
  private:
   bool m_populated{false};
   // The populated black lists.
   std::unordered_set<DexType*> black_list;
   std::unordered_set<DexType*> caller_black_list;
+  std::unordered_set<DexType*> intradex_white_list;
 };
 } // namespace inliner

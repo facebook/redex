@@ -310,6 +310,9 @@ void run_inliner(DexStoresVector& stores,
   CalleeCallerInsns true_virtual_callers;
   // Gather all inlinable candidates.
   auto inliner_config = conf.get_inliner_config();
+  if (intra_dex) {
+    inliner_config.apply_intradex_white_list();
+  }
 
   using MethodStats =
       const std::unordered_map<const DexMethodRef*, method_profiles::Stats>;

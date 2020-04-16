@@ -229,6 +229,7 @@ void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
   jw.get("debug", false, inliner_config->debug);
   jw.get("black_list", {}, inliner_config->m_black_list);
   jw.get("caller_black_list", {}, inliner_config->m_caller_black_list);
+  jw.get("intradex_white_list", {}, inliner_config->m_intradex_white_list);
 
   std::vector<std::string> no_inline_annos;
   jw.get("no_inline_annos", {}, no_inline_annos);
