@@ -38,15 +38,15 @@ class PassManager {
     size_t repeat; // zero-based
     size_t total_repeat;
     std::string name;
-    std::unordered_map<std::string, int> metrics;
+    std::unordered_map<std::string, int64_t> metrics;
     JsonWrapper config;
     boost::optional<hashing::DexHash> hash;
   };
 
   void run_passes(DexStoresVector&, ConfigFiles&);
-  void incr_metric(const std::string& key, int value);
-  void set_metric(const std::string& key, int value);
-  int get_metric(const std::string& key);
+  void incr_metric(const std::string& key, int64_t value);
+  void set_metric(const std::string& key, int64_t value);
+  int64_t get_metric(const std::string& key);
   const std::vector<PassManager::PassInfo>& get_pass_info() const;
   boost::optional<hashing::DexHash> get_initial_hash() const {
     return m_initial_hash;
@@ -54,7 +54,7 @@ class PassManager {
   const RedexOptions& get_redex_options() const { return m_redex_options; }
 
   // A temporary hack to return the interdex metrics. Will be removed later.
-  const std::unordered_map<std::string, int>& get_interdex_metrics();
+  const std::unordered_map<std::string, int64_t>& get_interdex_metrics();
 
   keep_rules::ProguardConfiguration& get_proguard_config() {
     return *m_pg_config;

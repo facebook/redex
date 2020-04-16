@@ -398,17 +398,17 @@ Pass* PassManager::find_pass(const std::string& pass_name) const {
   return pass_it != m_activated_passes.end() ? *pass_it : nullptr;
 }
 
-void PassManager::incr_metric(const std::string& key, int value) {
+void PassManager::incr_metric(const std::string& key, int64_t value) {
   always_assert_log(m_current_pass_info != nullptr, "No current pass!");
   (m_current_pass_info->metrics)[key] += value;
 }
 
-void PassManager::set_metric(const std::string& key, int value) {
+void PassManager::set_metric(const std::string& key, int64_t value) {
   always_assert_log(m_current_pass_info != nullptr, "No current pass!");
   (m_current_pass_info->metrics)[key] = value;
 }
 
-int PassManager::get_metric(const std::string& key) {
+int64_t PassManager::get_metric(const std::string& key) {
   return (m_current_pass_info->metrics)[key];
 }
 
@@ -416,13 +416,13 @@ const std::vector<PassManager::PassInfo>& PassManager::get_pass_info() const {
   return m_pass_info;
 }
 
-const std::unordered_map<std::string, int>&
+const std::unordered_map<std::string, int64_t>&
 PassManager::get_interdex_metrics() {
   for (const auto& pass_info : m_pass_info) {
     if (pass_info.pass->name() == "InterDexPass") {
       return pass_info.metrics;
     }
   }
-  static std::unordered_map<std::string, int> empty;
+  static std::unordered_map<std::string, int64_t> empty;
   return empty;
 }
