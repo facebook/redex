@@ -405,3 +405,27 @@ uint64_t IRInstruction::hash() const {
 
   return result;
 }
+
+void IRInstruction::gather_types(std::vector<DexType*>& ltype) const {
+  switch (opcode::ref(opcode())) {
+  case opcode::Ref::None:
+  case opcode::Ref::String:
+  case opcode::Ref::Literal:
+  case opcode::Ref::Data:
+  case opcode::Ref::CallSite:
+  case opcode::Ref::MethodHandle:
+    break;
+
+  case opcode::Ref::Type:
+    ltype.push_back(m_type);
+    break;
+
+  case opcode::Ref::Field:
+    m_field->gather_types_shallow(ltype);
+    break;
+
+  case opcode::Ref::Method:
+    m_method->gather_types_shallow(ltype);
+    break;
+  }
+}
