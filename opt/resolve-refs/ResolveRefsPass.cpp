@@ -267,7 +267,8 @@ RefStats ResolveRefsPass::refine_virtual_callsites(DexMethod* method,
       continue;
     }
 
-    auto callee = resolve_method(insn->get_method(), opcode_to_search(insn));
+    auto mref = insn->get_method();
+    auto callee = resolve_method(mref, opcode_to_search(insn));
     if (!callee) {
       continue;
     }
@@ -292,6 +293,9 @@ RefStats ResolveRefsPass::refine_virtual_callsites(DexMethod* method,
     if (!def_cls) {
       continue;
     }
+    if (mref == def_meth) {
+      continue;
+    }
     // Stop if the resolve_to_external config is False.
     if (!m_resolve_to_external && def_cls->is_external()) {
       TRACE(RESO, 4, "Bailed on external %s", SHOW(def_meth));
@@ -301,8 +305,9 @@ RefStats ResolveRefsPass::refine_virtual_callsites(DexMethod* method,
       TRACE(RESO, 4, "Bailed on mismatch with min_sdk %s", SHOW(def_meth));
       continue;
     }
+    TRACE(RESO, 2, "Resolving %s\n\t=>%s", SHOW(mref), SHOW(def_meth));
     insn->set_method(def_meth);
-    if (is_invoke_interface(opcode)) {
+    if (is_invoke_interface(opcode) && !is_interface(def_cls)) {
       insn->set_opcode(OPCODE_INVOKE_VIRTUAL);
       stats.num_invoke_interface_replaced++;
     } else {
