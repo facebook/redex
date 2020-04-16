@@ -602,7 +602,7 @@ Json::Value get_pass_stats(const PassManager& mgr) {
     }
     Json::Value pass;
     for (const auto& pass_metric : pass_info.metrics) {
-      pass[pass_metric.first] = pass_metric.second;
+      pass[pass_metric.first] = (Json::Int64)pass_metric.second;
     }
     all[pass_info.name] = pass;
   }
