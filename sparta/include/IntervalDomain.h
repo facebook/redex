@@ -250,14 +250,16 @@ inline std::ostream& operator<<(std::ostream& o,
   if (i.lower_bound() == sparta::IntervalDomain<Num>::MIN) {
     o << "-inf";
   } else {
-    o << i.lower_bound();
+    // Unary plus promotes types narrower than `int` to be at least `int`
+    // avoiding the ostream interpreting them as characters.
+    o << +i.lower_bound();
   }
 
   o << ", ";
   if (i.upper_bound() == sparta::IntervalDomain<Num>::MAX) {
     o << "+inf";
   } else {
-    o << i.upper_bound();
+    o << +i.upper_bound();
   }
 
   return o << "]";
