@@ -23,7 +23,7 @@ class Transform final {
  public:
   using NullAssertionSet = std::unordered_set<DexMethodRef*>;
   struct Config {
-    size_t max_global_analysis_iteration{0};
+    size_t max_global_analysis_iteration{10};
     bool remove_dead_null_check_insn{true};
     Config() {}
   };
@@ -53,7 +53,10 @@ class Transform final {
   static void setup(NullAssertionSet& null_assertion_set);
 
  private:
+  void apply_changes(IRCode*);
+
   const Config m_config;
+  std::vector<IRList::iterator> m_deletes;
 };
 
 } // namespace type_analyzer
