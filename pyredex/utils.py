@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # Copyright (c) Facebook, Inc. and its affiliates.
 #
 # This source code is licensed under the MIT license found in the
@@ -42,6 +41,16 @@ def remove_temp_dirs():
     global temp_dirs
     for directory in temp_dirs:
         shutil.rmtree(directory)
+
+
+def with_temp_cleanup(fn, always_clean=False):
+    success = always_clean
+    try:
+        fn()
+        success = True
+    finally:
+        if success:
+            remove_temp_dirs()
 
 
 def find_android_build_tools():

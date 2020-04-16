@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -11,13 +11,13 @@
 
 #include "Creators.h"
 #include "DexStoreUtil.h"
-#include "TypeUtil.h"
+#include "DexUtil.h"
 #include "Model.h"
 
 namespace {
 
 void patch_iget_for_int_like_types(DexMethod* meth,
-                                   IRList::iterator it,
+                                   const IRList::iterator& it,
                                    IRInstruction* convert) {
   auto insn = it->insn;
   auto move_result_it = std::next(it);
@@ -109,7 +109,7 @@ DexType* create_empty_base_type(const ModelSpec& spec,
   auto base_type = DexType::make_type(
       DexString::make_string("L" + spec.class_name_prefix + "EmptyBase;"));
   auto base_class = create_class(base_type,
-                                 get_object_type(),
+                                 type::java_lang_Object(),
                                  get_merger_package_name(interface_root),
                                  std::vector<DexField*>(),
                                  TypeSet(),
@@ -131,7 +131,7 @@ DexType* create_empty_base_type(const ModelSpec& spec,
     // Add an empty base class to qualified implementors
     auto impl_cls = type_class(impl_type);
     if (ifcs.size() == 1 && impl_cls &&
-        impl_cls->get_super_class() == get_object_type() &&
+        impl_cls->get_super_class() == type::java_lang_Object() &&
         !is_in_non_root_store(impl_type, stores, xstores,
                               spec.include_primary_dex)) {
       change_super_class(impl_cls, base_type);
@@ -147,7 +147,7 @@ DexType* create_empty_base_type(const ModelSpec& spec,
 DexClass* create_class(const DexType* type,
                        const DexType* super_type,
                        const std::string& pkg_name,
-                       std::vector<DexField*> fields,
+                       const std::vector<DexField*>& fields,
                        const TypeSet& interfaces,
                        bool with_default_ctor,
                        DexAccessFlags access) {
@@ -204,21 +204,21 @@ std::vector<DexField*> create_merger_fields(
   for (const auto f : mergeable_fields) {
     auto type = f->get_type();
     std::string name;
-    if (type == get_byte_type() || type == get_char_type() ||
-        type == get_short_type() || type == get_int_type()) {
-      type = get_int_type();
+    if (type == type::_byte() || type == type::_char() ||
+        type == type::_short() || type == type::_int()) {
+      type = type::_int();
       name = "i";
-    } else if (type == get_boolean_type()) {
-      type = get_boolean_type();
+    } else if (type == type::_boolean()) {
+      type = type::_boolean();
       name = "z";
-    } else if (type == get_long_type()) {
-      type = get_long_type();
+    } else if (type == type::_long()) {
+      type = type::_long();
       name = "j";
-    } else if (type == get_float_type()) {
-      type = get_float_type();
+    } else if (type == type::_float()) {
+      type = type::_float();
       name = "f";
-    } else if (type == get_double_type()) {
-      type = get_double_type();
+    } else if (type == type::_double()) {
+      type = type::_double();
       name = "d";
     } else {
       static DexType* string_type = DexType::make_type("Ljava/lang/String;");
@@ -226,9 +226,9 @@ std::vector<DexField*> create_merger_fields(
         type = string_type;
         name = "s";
       } else {
-        char t = type_shorty(type);
+        char t = type::type_shorty(type);
         always_assert(t == 'L' || t == '[');
-        type = get_object_type();
+        type = type::java_lang_Object();
         name = "l";
       }
     }
@@ -272,7 +272,7 @@ DexClass* create_merger_class(const DexType* type,
     auto type_tag_field =
         DexField::make_field(
             type, DexString::make_string(INTERNAL_TYPE_TAG_FIELD_NAME),
-            get_int_type())
+            type::_int())
             ->make_concrete(ACC_PUBLIC | ACC_FINAL);
     fields.push_back(type_tag_field);
   }
@@ -288,7 +288,7 @@ DexClass* create_merger_class(const DexType* type,
   return cls;
 }
 
-void patch_iput(IRList::iterator it) {
+void patch_iput(const IRList::iterator& it) {
   auto insn = it->insn;
   const auto op = insn->opcode();
   always_assert(is_iput(op));
@@ -304,7 +304,7 @@ void patch_iput(IRList::iterator it) {
 };
 
 void patch_iget(DexMethod* meth,
-                IRList::iterator it,
+                const IRList::iterator& it,
                 DexType* original_field_type) {
   auto insn = it->insn;
   const auto op = insn->opcode();
@@ -317,19 +317,19 @@ void patch_iget(DexMethod* meth,
     break;
   }
   case OPCODE_IGET_BYTE: {
-    always_assert(original_field_type == get_byte_type());
+    always_assert(original_field_type == type::_byte());
     auto int_to_byte = new IRInstruction(OPCODE_INT_TO_BYTE);
     patch_iget_for_int_like_types(meth, it, int_to_byte);
     break;
   }
   case OPCODE_IGET_CHAR: {
-    always_assert(original_field_type == get_char_type());
+    always_assert(original_field_type == type::_char());
     auto int_to_char = new IRInstruction(OPCODE_INT_TO_CHAR);
     patch_iget_for_int_like_types(meth, it, int_to_char);
     break;
   }
   case OPCODE_IGET_SHORT: {
-    always_assert(original_field_type == get_short_type());
+    always_assert(original_field_type == type::_short());
     auto int_to_short = new IRInstruction(OPCODE_INT_TO_SHORT);
     patch_iget_for_int_like_types(meth, it, int_to_short);
     break;

@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -15,6 +15,8 @@ void dump_types(ddump_data* rd);
 void dump_protos(ddump_data* rd, bool print_headers);
 void dump_fields(ddump_data* rd, bool print_headers);
 void dump_methods(ddump_data* rd, bool print_headers);
+void dump_methodhandles(ddump_data* rd, bool print_headers);
+void dump_callsites(ddump_data* rd, bool print_headers);
 void dump_clsdefs(ddump_data* rd, bool print_headers);
 void dump_clsdata(ddump_data* rd, bool print_headers);
 void dump_code(ddump_data* rd);

@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -109,13 +109,17 @@ class WholeProgramState {
   void collect(const Scope& scope,
                const interprocedural::FixpointIterator& fp_iter);
 
-  void collect_field_values(const IRInstruction* insn,
-                            const ConstantEnvironment& env,
-                            const DexType* clinit_cls);
+  void collect_field_values(
+      const IRInstruction* insn,
+      const ConstantEnvironment& env,
+      const DexType* clinit_cls,
+      ConcurrentMap<const DexField*, std::vector<ConstantValue>>* field_tmp);
 
-  void collect_return_values(const IRInstruction* insn,
-                             const ConstantEnvironment& env,
-                             const DexMethod* method);
+  void collect_return_values(
+      const IRInstruction* insn,
+      const ConstantEnvironment& env,
+      const DexMethod* method,
+      ConcurrentMap<const DexMethod*, std::vector<ConstantValue>>* method_tmp);
 
   // Unknown fields and methods will be treated as containing / returning Top.
   std::unordered_set<const DexField*> m_known_fields;

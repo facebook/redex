@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -23,14 +23,14 @@ struct TypeReferenceTest : public RedexTest {
   TypeReferenceTest() {
     auto type = DexType::make_type("Lcom/TestClass;");
     ClassCreator creator(type);
-    creator.set_super(get_object_type());
+    creator.set_super(type::java_lang_Object());
     m_class = creator.create();
     m_scope.push_back(m_class);
 
     // E; => I
-    m_old_to_new.emplace(get_enum_type(), get_int_type());
+    m_old_to_new.emplace(type::java_lang_Enum(), type::_int());
     // C => Object;
-    m_old_to_new.emplace(get_char_type(), get_object_type());
+    m_old_to_new.emplace(type::_char(), type::java_lang_Object());
   }
 
   ~TypeReferenceTest() {}
@@ -56,50 +56,56 @@ TEST_F(TypeReferenceTest, get_new_proto) {
   auto empty_list = DexTypeList::make_type_list({});
 
   // ()V => ()V
-  auto proto = DexProto::make_proto(get_void_type(), empty_list);
-  check_proto_update(proto, get_void_type(), empty_list);
+  auto proto = DexProto::make_proto(type::_void(), empty_list);
+  check_proto_update(proto, type::_void(), empty_list);
 
   // ()E; => ()I
-  proto = DexProto::make_proto(get_enum_type(), empty_list);
-  check_proto_update(proto, get_int_type(), empty_list);
+  proto = DexProto::make_proto(type::java_lang_Enum(), empty_list);
+  check_proto_update(proto, type::_int(), empty_list);
 
   // (CI)V => (Object;I)V
   proto = DexProto::make_proto(
-      get_void_type(),
-      DexTypeList::make_type_list({get_char_type(), get_int_type()}));
+      type::_void(),
+      DexTypeList::make_type_list({type::_char(), type::_int()}));
   check_proto_update(
       proto,
-      get_void_type(),
-      DexTypeList::make_type_list({get_object_type(), get_int_type()}));
+      type::_void(),
+      DexTypeList::make_type_list({type::java_lang_Object(), type::_int()}));
 
   // ()[C => ()[Object;
-  proto = DexProto::make_proto(make_array_type(get_char_type()), empty_list);
-  check_proto_update(proto, get_object_type(), empty_list);
+  proto =
+      DexProto::make_proto(type::make_array_type(type::_char()), empty_list);
+  check_proto_update(proto, type::java_lang_Object(), empty_list);
 
   // ()[[E; => ()[[I
   proto = DexProto::make_proto(
-      make_array_type(make_array_type(get_enum_type())), empty_list);
-  check_proto_update(proto, make_array_type(make_array_type(get_int_type())),
+      type::make_array_type(type::make_array_type(type::java_lang_Enum())),
+      empty_list);
+  check_proto_update(proto,
+                     type::make_array_type(type::make_array_type(type::_int())),
                      empty_list);
 }
 
 TEST_F(TypeReferenceTest, update_field_type_references) {
-  auto f_b = make_a_field("f_b", get_byte_type());
-  auto f_i = make_a_field("f_i", get_int_type());
-  auto f_e0 = make_a_field("f_e0", get_enum_type());
-  auto f_e1 = make_a_field("f_e1", make_array_type(get_enum_type()));
-  auto f_e3 = make_a_field("f_e3", make_array_type(make_array_type(
-                                       make_array_type(get_enum_type()))));
+  auto f_b = make_a_field("f_b", type::_byte());
+  auto f_i = make_a_field("f_i", type::_int());
+  auto f_e0 = make_a_field("f_e0", type::java_lang_Enum());
+  auto f_e1 =
+      make_a_field("f_e1", type::make_array_type(type::java_lang_Enum()));
+  auto f_e3 = make_a_field("f_e3",
+                           type::make_array_type(type::make_array_type(
+                               type::make_array_type(type::java_lang_Enum()))));
   update_field_type_references(m_scope, m_old_to_new);
   // f:B => f:B
-  EXPECT_EQ(f_b->get_type(), get_byte_type());
+  EXPECT_EQ(f_b->get_type(), type::_byte());
   // f:I => f:I
-  EXPECT_EQ(f_i->get_type(), get_int_type());
+  EXPECT_EQ(f_i->get_type(), type::_int());
   // f:E; => f:I
-  EXPECT_EQ(f_e0->get_type(), get_int_type());
+  EXPECT_EQ(f_e0->get_type(), type::_int());
   // f:[E; => f:[I
-  EXPECT_EQ(f_e1->get_type(), make_array_type(get_int_type()));
+  EXPECT_EQ(f_e1->get_type(), type::make_array_type(type::_int()));
   // f:[[[E; => f:[[[I
   EXPECT_EQ(f_e3->get_type(),
-            make_array_type(make_array_type(make_array_type(get_int_type()))));
+            type::make_array_type(
+                type::make_array_type(type::make_array_type(type::_int()))));
 }

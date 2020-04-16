@@ -1,12 +1,12 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <gtest/gtest.h>
 #include <boost/thread/thread.hpp>
+#include <gtest/gtest.h>
 #include <vector>
 
 #include "Trace.h"
@@ -14,9 +14,7 @@
 constexpr size_t NUM_THREADS = 10;
 constexpr size_t NUM_ITERS = 1'000;
 
-TEST(TraceMultithreadingTest, singleThread) {
-  TRACE(TIME, 1, "Test output!");
-}
+TEST(TraceMultithreadingTest, singleThread) { TRACE(TIME, 1, "Test output!"); }
 
 TEST(TraceMultithreadingTest, multipleThreadsOnePrint) {
   std::vector<boost::thread> threads;

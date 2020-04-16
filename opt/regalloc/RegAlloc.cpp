@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -9,8 +9,10 @@
 
 #include <boost/functional/hash.hpp>
 
+#include "Debug.h"
 #include "DexUtil.h"
 #include "GraphColoring.h"
+#include "IRAssembler.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "LiveRange.h"
@@ -22,10 +24,12 @@
 
 namespace regalloc {
 
-graph_coloring::Allocator::Stats RegAllocPass::allocate(
+using Stats = graph_coloring::Allocator::Stats;
+
+Stats RegAllocPass::allocate(
     const graph_coloring::Allocator::Config& allocator_config, DexMethod* m) {
   if (m->get_code() == nullptr) {
-    return graph_coloring::Allocator::Stats();
+    return Stats();
   }
   auto& code = *m->get_code();
   TRACE(REG, 5, "regs:%d code:\n%s", code.get_registers_size(), SHOW(&code));
@@ -39,9 +43,20 @@ graph_coloring::Allocator::Stats RegAllocPass::allocate(
     TRACE(REG, 5, "After alloc: regs:%d code:\n%s", code.get_registers_size(),
           SHOW(&code));
     return allocator.get_stats();
-  } catch (std::exception&) {
-    fprintf(stderr, "Failed to allocate %s\n", SHOW(m));
-    fprintf(stderr, "%s\n", SHOW(code.cfg()));
+  } catch (const std::exception& e) {
+    std::cerr << "Failed to allocate " << SHOW(m) << ": " << e.what()
+              << std::endl;
+    print_stack_trace(std::cerr, e);
+
+    std::string cfg_tmp;
+    if (code.cfg_built()) {
+      cfg_tmp = SHOW(code.cfg());
+      code.clear_cfg();
+    }
+    std::cerr << "As s-expr: " << std::endl
+              << assembler::to_s_expr(&code) << std::endl;
+    std::cerr << "As CFG: " << std::endl << cfg_tmp << std::endl;
+
     throw;
   }
 }
@@ -55,17 +70,9 @@ void RegAllocPass::run_pass(DexStoresVector& stores,
   allocator_config.no_overwrite_this =
       mgr.get_redex_options().no_overwrite_this();
 
-  using Output = graph_coloring::Allocator::Stats;
   auto scope = build_class_scope(stores);
-  auto stats = walk::parallel::reduce_methods<Output>(
-      scope,
-      [&](DexMethod* m) { // mapper
-        return allocate(allocator_config, m);
-      },
-      [](Output a, Output b) { // reducer
-        a.accumulate(b);
-        return a;
-      });
+  auto stats = walk::parallel::methods<Stats>(
+      scope, [&](DexMethod* m) { return allocate(allocator_config, m); });
 
   TRACE(REG, 1, "Total reiteration count: %lu", stats.reiteration_count);
   TRACE(REG, 1, "Total Params spilled early: %lu", stats.params_spill_early);

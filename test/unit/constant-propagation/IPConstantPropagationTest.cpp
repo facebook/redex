@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -35,7 +35,7 @@ TEST_F(InterproceduralConstantPropagationTest, constantArgument) {
   Scope scope;
   auto cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
-  creator.set_super(get_object_type());
+  creator.set_super(type::java_lang_Object());
 
   auto m1 = assembler::method_from_string(R"(
     (method (public) "LFoo;.bar:()V"
@@ -90,7 +90,7 @@ TEST_F(InterproceduralConstantPropagationTest, constantTwoArgument) {
   Scope scope;
   auto cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
-  creator.set_super(get_object_type());
+  creator.set_super(type::java_lang_Object());
 
   auto m1 = assembler::method_from_string(R"(
     (method (public) "LFoo;.bar:()V"
@@ -152,7 +152,7 @@ TEST_F(InterproceduralConstantPropagationTest, nonConstantArgument) {
   Scope scope;
   auto cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
-  creator.set_super(get_object_type());
+  creator.set_super(type::java_lang_Object());
 
   auto m1 = assembler::method_from_string(R"(
     (method (public) "LFoo;.foo:()V"
@@ -210,7 +210,7 @@ TEST_F(InterproceduralConstantPropagationTest, argumentsGreaterThanZero) {
   Scope scope;
   auto cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
-  creator.set_super(get_object_type());
+  creator.set_super(type::java_lang_Object());
 
   auto m1 = assembler::method_from_string(R"(
     (method (public) "LFoo;.bar:()V"
@@ -277,7 +277,7 @@ TEST_F(InterproceduralConstantPropagationTest, unreachableInvoke) {
   Scope scope;
   auto cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
-  creator.set_super(get_object_type());
+  creator.set_super(type::java_lang_Object());
 
   auto m1 = assembler::method_from_string(R"(
     (method (public static) "LFoo;.bar:()V"
@@ -325,7 +325,7 @@ TEST_F(InterproceduralConstantPropagationTest, unreachableInvoke) {
       cg,
       [](const DexMethod* method,
          const WholeProgramState&,
-         ArgumentDomain args) {
+         const ArgumentDomain& args) {
         auto& code = *method->get_code();
         auto env = env_with_params(&code, args);
         auto intra_cp = std::make_unique<intraprocedural::FixpointIterator>(
@@ -519,7 +519,7 @@ TEST_F(RuntimeAssertTest, RuntimeAssertCheckVirtualMethod) {
 TEST_F(RuntimeAssertTest, RuntimeAssertField) {
   auto cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
-  creator.set_super(get_object_type());
+  creator.set_super(type::java_lang_Object());
 
   // We must create a field def and attach it to the DexClass instance (instead
   // of just creating an unattached field ref) so that when IPC calls
@@ -565,7 +565,7 @@ TEST_F(RuntimeAssertTest, RuntimeAssertField) {
 TEST_F(RuntimeAssertTest, RuntimeAssertConstantReturnValue) {
   auto cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
-  creator.set_super(get_object_type());
+  creator.set_super(type::java_lang_Object());
 
   auto method = assembler::method_from_string(R"(
     (method (public static) "LFoo;.bar:()V"
@@ -613,7 +613,7 @@ TEST_F(RuntimeAssertTest, RuntimeAssertConstantReturnValue) {
 TEST_F(RuntimeAssertTest, RuntimeAssertNeverReturnsVoid) {
   auto cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
-  creator.set_super(get_object_type());
+  creator.set_super(type::java_lang_Object());
 
   auto method = assembler::method_from_string(R"(
     (method (public static) "LFoo;.bar:()V"
@@ -656,7 +656,7 @@ TEST_F(RuntimeAssertTest, RuntimeAssertNeverReturnsVoid) {
 TEST_F(RuntimeAssertTest, RuntimeAssertNeverReturnsConstant) {
   auto cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
-  creator.set_super(get_object_type());
+  creator.set_super(type::java_lang_Object());
 
   auto method = assembler::method_from_string(R"(
     (method (public static) "LFoo;.bar:()V"
@@ -701,7 +701,7 @@ TEST_F(RuntimeAssertTest, RuntimeAssertNeverReturnsConstant) {
 TEST_F(InterproceduralConstantPropagationTest, constantField) {
   auto cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
-  creator.set_super(get_object_type());
+  creator.set_super(type::java_lang_Object());
 
   auto field = DexField::make_field("LFoo;.qux:I")
                    ->make_concrete(ACC_PUBLIC | ACC_STATIC,
@@ -760,7 +760,7 @@ TEST_F(InterproceduralConstantPropagationTest, constantField) {
 TEST_F(InterproceduralConstantPropagationTest, nonConstantField) {
   auto cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
-  creator.set_super(get_object_type());
+  creator.set_super(type::java_lang_Object());
 
   auto field = DexField::make_field("LFoo;.qux:I")
                    ->make_concrete(ACC_PUBLIC | ACC_STATIC,
@@ -811,7 +811,7 @@ TEST_F(InterproceduralConstantPropagationTest, nonConstantField) {
 TEST_F(InterproceduralConstantPropagationTest, nonConstantFieldDueToKeep) {
   auto cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
-  creator.set_super(get_object_type());
+  creator.set_super(type::java_lang_Object());
 
   auto field = DexField::make_field("LFoo;.qux:I")
                    ->make_concrete(ACC_PUBLIC | ACC_STATIC,
@@ -865,7 +865,7 @@ TEST_F(InterproceduralConstantPropagationTest, nonConstantFieldDueToKeep) {
 TEST_F(InterproceduralConstantPropagationTest, constantFieldAfterClinit) {
   auto cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
-  creator.set_super(get_object_type());
+  creator.set_super(type::java_lang_Object());
 
   auto field_qux = DexField::make_field("LFoo;.qux:I")
                        ->make_concrete(ACC_PUBLIC | ACC_STATIC,
@@ -953,7 +953,7 @@ TEST_F(InterproceduralConstantPropagationTest,
        nonConstantFieldDueToInvokeInClinit) {
   auto cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
-  creator.set_super(get_object_type());
+  creator.set_super(type::java_lang_Object());
 
   auto field_qux = DexField::make_field("LFoo;.qux:I")
                        ->make_concrete(ACC_PUBLIC | ACC_STATIC,
@@ -1020,7 +1020,7 @@ TEST_F(InterproceduralConstantPropagationTest,
 TEST_F(InterproceduralConstantPropagationTest, constantReturnValue) {
   auto cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
-  creator.set_super(get_object_type());
+  creator.set_super(type::java_lang_Object());
 
   auto m1 = assembler::method_from_string(R"(
     (method (public static) "LFoo;.bar:()V"
@@ -1072,7 +1072,8 @@ TEST_F(InterproceduralConstantPropagationTest, constantReturnValue) {
 TEST_F(InterproceduralConstantPropagationTest, VirtualMethodReturnValue) {
   auto cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
-  creator.set_super(get_object_type());
+  creator.set_super(type::java_lang_Object());
+  creator.set_access(creator.get_access() | ACC_NATIVE);
 
   auto m1 = assembler::method_from_string(R"(
     (method (public static) "LFoo;.bar:(LFoo;)V"
@@ -1124,7 +1125,8 @@ TEST_F(InterproceduralConstantPropagationTest, VirtualMethodReturnValue) {
 TEST_F(InterproceduralConstantPropagationTest, RootVirtualMethodReturnValue) {
   auto cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
-  creator.set_super(get_object_type());
+  creator.set_super(type::java_lang_Object());
+  creator.set_access(creator.get_access() | ACC_NATIVE);
 
   auto m1 = assembler::method_from_string(R"(
     (method (public static) "LFoo;.bar:(LFoo;)V"
@@ -1178,11 +1180,13 @@ TEST_F(InterproceduralConstantPropagationTest,
        OverrideVirtualMethodReturnValue) {
   auto cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
-  creator.set_super(get_object_type());
+  creator.set_super(type::java_lang_Object());
+  creator.set_access(creator.get_access() | ACC_NATIVE);
 
   auto cls_child_ty = DexType::make_type("LBoo;");
   ClassCreator child_creator(cls_child_ty);
   child_creator.set_super(cls_ty);
+  child_creator.set_access(child_creator.get_access() | ACC_NATIVE);
 
   auto m1 = assembler::method_from_string(R"(
     (method (public static) "LFoo;.bar:(LFoo;)V"
@@ -1239,7 +1243,7 @@ TEST_F(InterproceduralConstantPropagationTest,
 TEST_F(InterproceduralConstantPropagationTest, neverReturns) {
   auto cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
-  creator.set_super(get_object_type());
+  creator.set_super(type::java_lang_Object());
 
   auto method = assembler::method_from_string(R"(
     (method (public static) "LFoo;.bar:(I)V"
@@ -1308,7 +1312,7 @@ TEST_F(InterproceduralConstantPropagationTest, neverReturns) {
 TEST_F(InterproceduralConstantPropagationTest, whiteBoxReturnValues) {
   auto cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
-  creator.set_super(get_object_type());
+  creator.set_super(type::java_lang_Object());
 
   auto returns_void = assembler::method_from_string(R"(
     (method (public static) "LFoo;.returnsVoid:()V"

@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -16,7 +16,8 @@ namespace {
 
 constexpr uint64_t MAX_NUM_CONST_VALUE = 10;
 
-std::vector<IRInstruction*> make_string_const(uint16_t dest, std::string val) {
+std::vector<IRInstruction*> make_string_const(reg_t dest,
+                                              const std::string& val) {
   std::vector<IRInstruction*> res;
   IRInstruction* load = new IRInstruction(OPCODE_CONST_STRING);
   load->set_string(DexString::make_string(val));
@@ -31,9 +32,9 @@ std::vector<IRInstruction*> make_string_const(uint16_t dest, std::string val) {
 } // namespace
 
 ConstantValue::ConstantValue(const TypeTags* type_tags,
-                             const std::string kind_str,
-                             const std::string val_str,
-                             const uint16_t param_reg)
+                             const std::string& kind_str,
+                             const std::string& val_str,
+                             reg_t param_reg)
     : m_param_reg(param_reg) {
   if (kind_str == "I") {
     m_kind = ConstantKind::INT;
@@ -54,10 +55,8 @@ ConstantValue::ConstantValue(const TypeTags* type_tags,
             "const value: unable to find type %s",
             val_str.c_str());
     } else {
-      TRACE(METH_DEDUP,
-            9,
-            "const value: no type tag found %s",
-            val_str.c_str());
+      TRACE(
+          METH_DEDUP, 9, "const value: no type tag found %s", val_str.c_str());
     }
     // Cannot find type or not type tag.
     m_kind = ConstantKind::INVALID;
@@ -104,7 +103,7 @@ ConstantValue::collect_constant_loads_in(const IRCode* code) {
   return res;
 }
 
-std::vector<IRInstruction*> ConstantValue::make_load_const(uint16_t const_reg) {
+std::vector<IRInstruction*> ConstantValue::make_load_const(reg_t const_reg) {
   always_assert(is_valid());
 
   if (is_int_value()) {
@@ -118,8 +117,8 @@ std::vector<IRInstruction*> ConstantValue::make_load_const(uint16_t const_reg) {
 }
 
 ConstantValues::ConstantValues(const TypeTags* type_tags,
-                               const std::string kinds_str,
-                               const std::string vals_str,
+                               const std::string& kinds_str,
+                               const std::string& vals_str,
                                const size_t stud_method_threshold,
                                IRCode* code)
     : m_stub_method_threshold(stud_method_threshold) {
@@ -194,7 +193,7 @@ ConstantValues::collect_constant_loads(const IRCode* code) {
 }
 
 std::vector<IRInstruction*> ConstantValues::make_const_loads(
-    std::vector<uint16_t>& const_regs) {
+    std::vector<reg_t>& const_regs) {
   always_assert(const_regs.size() == size());
   std::vector<IRInstruction*> res;
   size_t reg_idx = 0;
@@ -262,7 +261,7 @@ DexMethod* ConstantValues::create_stub_method(DexMethod* callee) {
   mb->invoke(callee, args);
 
   DexType* ret_type = callee->get_proto()->get_rtype();
-  if (ret_type == get_void_type()) {
+  if (ret_type == type::_void()) {
     mb->ret_void();
   } else {
     auto ret_loc = mc->make_local(ret_type);
@@ -273,7 +272,7 @@ DexMethod* ConstantValues::create_stub_method(DexMethod* callee) {
   auto stub = mc->create();
   // Propogate deobfuscated name
   auto orig_name = callee->get_deobfuscated_name();
-  auto pos = orig_name.find(":");
+  auto pos = orig_name.find(':');
   always_assert(pos != std::string::npos);
   auto new_name =
       orig_name.substr(0, pos) + "$stub" + ":" + show_deobfuscated(stub_proto);

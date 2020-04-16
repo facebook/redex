@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -109,8 +109,8 @@ size_t trim_shapes(MergerType::ShapeCollector& shapes, size_t min_count) {
   std::vector<MergerType::Shape> shapes_to_remove;
   for (const auto& shape_it : shapes) {
     if (shape_it.second.types.size() >= min_count) {
-      TRACE(TERA, 7, "Keep shape %s (%ld)",
-            shape_it.first.to_string().c_str(), shape_it.second.types.size());
+      TRACE(TERA, 7, "Keep shape %s (%ld)", shape_it.first.to_string().c_str(),
+            shape_it.second.types.size());
       continue;
     }
     shapes_to_remove.push_back(shape_it.first);
@@ -230,15 +230,10 @@ void exclude_reference_to_android_sdk(const Json::Value& json_val,
 
     return current_excluded;
   };
-  auto excluded_by_android_sdk_ref =
-      walk::parallel::reduce_methods<std::unordered_set<const DexType*>>(
-          mergeable_classes,
-          scanner,
-          [](std::unordered_set<const DexType*> left,
-             const std::unordered_set<const DexType*> right) {
-            left.insert(right.begin(), right.end());
-            return left;
-          });
+  auto excluded_by_android_sdk_ref = walk::parallel::methods<
+      std::unordered_set<const DexType*>,
+      MergeContainers<std::unordered_set<const DexType*>>>(mergeable_classes,
+                                                           scanner);
   for (const auto excluded : excluded_by_android_sdk_ref) {
     non_mergeables.insert(excluded);
   }
@@ -300,7 +295,7 @@ void Model::build_hierarchy(const TypeSet& roots) {
     }
     const auto cls = type_class(type);
     const auto super = cls->get_super_class();
-    redex_assert(super != nullptr && super != get_object_type());
+    redex_assert(super != nullptr && super != type::java_lang_Object());
     m_hierarchy[super].insert(type);
     m_parents[type] = super;
   }
@@ -552,7 +547,7 @@ bool Model::is_excluded(const DexType* type) const {
 void Model::find_non_mergeables(const Scope& scope, const TypeSet& generated) {
   for (const auto& type : m_types) {
     const auto& cls = type_class(type);
-    if (!can_delete_DEPRECATED(cls)) {
+    if (!can_delete(cls)) {
       m_non_mergeables.insert(type);
       TRACE(TERA, 5, "Cannot delete %s", SHOW(type));
     }
@@ -600,7 +595,7 @@ void Model::find_non_mergeables(const Scope& scope, const TypeSet& generated) {
         continue;
       }
 
-      const auto& type = get_element_type_if_array(insn->get_type());
+      const auto& type = type::get_element_type_if_array(insn->get_type());
       if (const_types.count(type) > 0) {
         current_non_mergeables.insert(type);
       }
@@ -609,25 +604,23 @@ void Model::find_non_mergeables(const Scope& scope, const TypeSet& generated) {
     return current_non_mergeables;
   };
 
-  TypeSet non_mergeables_opcode = walk::parallel::reduce_methods<TypeSet>(
-      scope, patcher, [](TypeSet left, const TypeSet right) {
-        left.insert(right.begin(), right.end());
-        return left;
-      });
+  TypeSet non_mergeables_opcode =
+      walk::parallel::methods<TypeSet, MergeContainers<TypeSet>>(scope,
+                                                                 patcher);
 
   m_non_mergeables.insert(non_mergeables_opcode.begin(),
                           non_mergeables_opcode.end());
 
   TRACE(TERA, 4, "Non mergeables (opcodes) %ld", m_non_mergeables.size());
 
-  static DexType* string_type = get_string_type();
+  static DexType* string_type = type::java_lang_String();
 
   if (!m_spec.merge_types_with_static_fields) {
     walk::fields(scope, [&](DexField* field) {
       if (generated.count(field->get_class()) > 0) {
         if (is_static(field)) {
-          auto rtype = get_element_type_if_array(field->get_type());
-          if (!is_primitive(rtype) && rtype != string_type) {
+          auto rtype = type::get_element_type_if_array(field->get_type());
+          if (!type::is_primitive(rtype) && rtype != string_type) {
             // If the type is either non-primitive or a list of
             // non-primitive types (excluding Strings), then exclude it as
             // we might change the initialization order.
@@ -731,11 +724,11 @@ void Model::shape_merger(const MergerType& merger,
     MergerType::Shape shape{0, 0, 0, 0, 0, 0, 0};
     for (const auto& field : cls->get_ifields()) {
       const auto field_type = field->get_type();
-      if (field_type == get_string_type()) {
+      if (field_type == type::java_lang_String()) {
         shape.string_fields++;
         continue;
       }
-      switch (type_shorty(field_type)) {
+      switch (type::type_shorty(field_type)) {
       case 'L':
       case '[':
         shape.reference_fields++;
@@ -875,37 +868,39 @@ DexType* check_current_instance(const TypeSet& types, IRInstruction* insn) {
   return type;
 }
 
-std::unordered_map<DexType*, std::unordered_set<DexType*>> get_type_usages(
+ConcurrentMap<DexType*, std::unordered_set<DexType*>> get_type_usages(
     const TypeSet& types, const Scope& scope) {
-  std::unordered_map<DexType*, std::unordered_set<DexType*>> res;
+  ConcurrentMap<DexType*, std::unordered_set<DexType*>> res;
 
-  walk::opcodes(
-      scope, [](DexMethod*) { return true; },
-      [&](DexMethod* method, IRInstruction* insn) {
-        auto current_instance = check_current_instance(types, insn);
-        if (current_instance) {
-          res[current_instance].emplace(method->get_class());
+  walk::parallel::opcodes(scope, [&](DexMethod* method, IRInstruction* insn) {
+    auto cls = method->get_class();
+    const auto& updater =
+        [&cls](DexType* /* key */, std::unordered_set<DexType*>& set,
+               bool /* already_exists */) { set.emplace(cls); };
+
+    auto current_instance = check_current_instance(types, insn);
+    if (current_instance) {
+      res.update(current_instance, updater);
+    }
+
+    if (insn->has_method()) {
+      auto callee = resolve_method(insn->get_method(), opcode_to_search(insn));
+      if (!callee) {
+        return;
+      }
+      auto proto = callee->get_proto();
+      auto rtype = proto->get_rtype();
+      if (rtype && types.count(rtype)) {
+        res.update(rtype, updater);
+      }
+
+      for (const auto& type : proto->get_args()->get_type_list()) {
+        if (type && types.count(type)) {
+          res.update(type, updater);
         }
-
-        if (insn->has_method()) {
-          auto callee =
-              resolve_method(insn->get_method(), opcode_to_search(insn));
-          if (!callee) {
-            return;
-          }
-          auto proto = callee->get_proto();
-          auto rtype = proto->get_rtype();
-          if (rtype && types.count(rtype)) {
-            res[rtype].emplace(method->get_class());
-          }
-
-          for (const auto& type : proto->get_args()->get_type_list()) {
-            if (type && types.count(type)) {
-              res[type].emplace(method->get_class());
-            }
-          }
-        }
-      });
+      }
+    }
+  });
 
   return res;
 }
@@ -928,7 +923,7 @@ size_t get_interdex_group(
 } // namespace
 
 std::vector<TypeSet> Model::group_per_interdex_set(const TypeSet& types) {
-  auto type_to_usages = get_type_usages(types, m_scope);
+  const auto& type_to_usages = get_type_usages(types, m_scope);
   std::vector<TypeSet> new_groups(s_num_interdex_groups);
   for (const auto& pair : type_to_usages) {
     auto index = get_interdex_group(pair.second, s_cls_to_interdex_group,
@@ -1088,15 +1083,19 @@ void Model::collect_methods() {
             "%ld dmethods in %s",
             cls->get_dmethods().size(),
             SHOW(cls->get_type()));
+      bool has_ctor = false;
       for (const auto& method : cls->get_dmethods()) {
+        if (method::is_init(method)) {
+          has_ctor = true;
+        }
         merger.dmethods.emplace_back(method);
+      }
+      if (!has_ctor) {
+        TRACE(TERA, 2, "[TERA] No ctor found for mergeable %s", SHOW(type));
       }
 
       const auto& virt_scopes = m_type_system.get_class_scopes().get(type);
-      TRACE(TERA,
-            8,
-            "%ld virtual scopes in %s",
-            virt_scopes.size(),
+      TRACE(TERA, 8, "%ld virtual scopes in %s", virt_scopes.size(),
             SHOW(type));
       for (const auto& virt_scope : virt_scopes) {
 
@@ -1191,7 +1190,7 @@ void Model::add_interface_scope(MergerType& merger,
   always_assert(intf_scope.methods.size() > 0);
   const auto& vmethod = intf_scope.methods[0];
   for (auto& intf_meths : merger.intfs_methods) {
-    if (signatures_match(intf_meths.methods[0], vmethod.first)) {
+    if (method::signatures_match(intf_meths.methods[0], vmethod.first)) {
       insert(intf_meths);
       return;
     }
@@ -1457,9 +1456,9 @@ void Model::update_model(Model& model) {
   model.shape_model();
   TRACE(TERA, 3, "Model:\n%s\nShape Model done", model.print().c_str());
 
-  TRACE(TERA, 2, "Final Model");
+  TRACE(TERA, 3, "Final Model");
   model.collect_methods();
-  TRACE(TERA, 2, "Model:\n%s\nFinal Model done", model.print().c_str());
+  TRACE(TERA, 3, "Model:\n%s\nFinal Model done", model.print().c_str());
 }
 
 Model Model::build_model(const Scope& scope,

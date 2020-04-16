@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -71,9 +71,10 @@ bool is_aligned(uint32_t in) {
 template <typename T>
 inline T roundUpToPowerOfTwo(T in) {
   static_assert(std::is_unsigned<T>::value, "Only support unsigned types.");
-  return (sizeof(T) == sizeof(uint32_t)) ?
-    (1u << (std::numeric_limits<T>::digits - __builtin_clz (in - 1))) :
-    (1Lu << (std::numeric_limits<T>::digits - __builtin_clzll (in - 1)));
+  return (sizeof(T) == sizeof(uint32_t))
+             ? (1u << (std::numeric_limits<T>::digits - __builtin_clz(in - 1)))
+             : (1Lu
+                << (std::numeric_limits<T>::digits - __builtin_clzll(in - 1)));
 }
 
 template <typename T>
@@ -145,7 +146,7 @@ struct WritableBuffer {
   }
 
   void operator<<(const char* to_write) {
-    operator<<(const_cast<char *>(to_write));
+    operator<<(const_cast<char*>(to_write));
   }
 
   void operator<<(const uint16_t* to_write) {
@@ -154,9 +155,7 @@ struct WritableBuffer {
     operator<<(char_write + 1);
   }
 
-  void operator<<(const uint16_t to_write) {
-    operator<<(&to_write);
-  }
+  void operator<<(const uint16_t to_write) { operator<<(&to_write); }
 
   void print(size_t size) {
     size_t start = (current >= size) ? current - size : 0;

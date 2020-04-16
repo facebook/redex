@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -235,13 +235,19 @@ void DexStructure::add_class_no_checks(const MethodRefs& clazz_mrefs,
  * in the dex?
  */
 void DexStructure::check_refs_count() {
+  if (!traceEnabled(IDEX, 4)) {
+    return;
+  }
+
   std::vector<DexMethodRef*> mrefs;
   for (DexClass* cls : m_classes) {
     cls->gather_methods(mrefs);
   }
   std::unordered_set<DexMethodRef*> mrefs_set(mrefs.begin(), mrefs.end());
   if (mrefs_set.size() > m_mrefs.size()) {
-    for (DexMethodRef* mr : mrefs_set) {
+    std::vector<DexMethodRef*> mrefs_vec(mrefs_set.begin(), mrefs_set.end());
+    std::sort(mrefs_vec.begin(), mrefs_vec.end(), compare_dexmethods);
+    for (DexMethodRef* mr : mrefs_vec) {
       if (!m_mrefs.count(mr)) {
         TRACE(IDEX, 4, "WARNING: Could not find %s in predicted mrefs set",
               SHOW(mr));
@@ -255,7 +261,9 @@ void DexStructure::check_refs_count() {
   }
   std::unordered_set<DexFieldRef*> frefs_set(frefs.begin(), frefs.end());
   if (frefs_set.size() > m_frefs.size()) {
-    for (auto* fr : frefs_set) {
+    std::vector<DexFieldRef*> frefs_vec(frefs_set.begin(), frefs_set.end());
+    std::sort(frefs_vec.begin(), frefs_vec.end(), compare_dexfields);
+    for (auto* fr : frefs_vec) {
       if (!m_frefs.count(fr)) {
         TRACE(IDEX, 4, "WARNING: Could not find %s in predicted frefs set",
               SHOW(fr));

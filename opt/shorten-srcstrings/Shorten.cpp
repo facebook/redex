@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -10,9 +10,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string>
-#include <vector>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 #include "Debug.h"
 #include "DexClass.h"
@@ -61,8 +61,9 @@ DexString* get_suitable_string(std::unordered_set<DexString*>& set,
   return nullptr;
 }
 
-static void strip_src_strings(
-  DexStoresVector& stores, const char* map_path, PassManager& mgr) {
+static void strip_src_strings(DexStoresVector& stores,
+                              const char* map_path,
+                              PassManager& mgr) {
   size_t shortened = 0;
   size_t string_savings = 0;
   std::unordered_map<DexString*, std::vector<DexString*>> global_src_strings;
@@ -118,7 +119,7 @@ static void strip_src_strings(
   }
 
   TRACE(SHORTEN, 1, "src strings shortened %ld, %lu bytes saved", shortened,
-      string_savings);
+        string_savings);
 
   mgr.incr_metric(METRIC_SHORTENED_STRINGS, shortened);
   mgr.incr_metric(METRIC_BYTES_SAVED, string_savings);
@@ -130,7 +131,7 @@ static void strip_src_strings(
     return;
   }
 
-  for (auto it : global_src_strings) {
+  for (const auto& it : global_src_strings) {
     auto desc_vector = it.second;
     sort_unique(desc_vector);
     fprintf(fd, "%s ->", it.first->c_str());

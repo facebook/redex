@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "DedupBlocks.h"
 #include "Pass.h"
 
 class DedupBlocksPass : public Pass {
@@ -18,18 +19,13 @@ class DedupBlocksPass : public Pass {
   void bind_config() override {
     bind("method_black_list", {}, m_config.method_black_list);
     bind("block_split_min_opcode_count",
-         Config::DEFAULT_BLOCK_SPLIT_MIN_OPCODE_COUNT,
+         dedup_blocks_impl::Config::DEFAULT_BLOCK_SPLIT_MIN_OPCODE_COUNT,
          m_config.block_split_min_opcode_count);
     bind("split_postfix", true, m_config.split_postfix);
     bind("debug", false, m_config.debug);
   }
 
-  struct Config {
-    std::unordered_set<DexMethod*> method_black_list;
-    static const unsigned int DEFAULT_BLOCK_SPLIT_MIN_OPCODE_COUNT = 3;
-    unsigned int block_split_min_opcode_count =
-        DEFAULT_BLOCK_SPLIT_MIN_OPCODE_COUNT;
-    bool split_postfix = true;
-    bool debug = false;
-  } m_config;
+ private:
+  void report_stats(PassManager& mgr, const dedup_blocks_impl::Stats& stats);
+  dedup_blocks_impl::Config m_config;
 };

@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -22,14 +22,14 @@
 class SwitchEquivFinder final {
  public:
   using KeyToCase = std::map<boost::optional<int32_t>, cfg::Block*>;
-  using InstructionSet = std::map<uint16_t, IRInstruction*>;
+  using InstructionSet = std::map<reg_t, IRInstruction*>;
   using ExtraLoads = std::unordered_map<cfg::Block*, InstructionSet>;
 
-  static bool has_src(IRInstruction* insn, uint16_t reg);
+  static bool has_src(IRInstruction* insn, reg_t reg);
 
   SwitchEquivFinder(cfg::ControlFlowGraph* cfg,
                     const cfg::InstructionIterator& root_branch,
-                    uint16_t switching_reg,
+                    reg_t switching_reg,
                     uint32_t leaf_duplication_threshold = 0);
 
   SwitchEquivFinder() = delete;
@@ -47,9 +47,9 @@ class SwitchEquivFinder final {
 
  private:
   std::vector<cfg::Edge*> find_leaves();
-  void normalize_extra_loads(std::unordered_set<cfg::Block*> non_leaves);
+  void normalize_extra_loads(const std::unordered_set<cfg::Block*>& non_leaves);
   bool move_edges(
-      const std::vector<std::pair<cfg::Edge*, cfg::Block*>> edges_to_move);
+      const std::vector<std::pair<cfg::Edge*, cfg::Block*>>& edges_to_move);
   void find_case_keys(const std::vector<cfg::Edge*>& leaves);
 
   cfg::ControlFlowGraph* m_cfg;
@@ -57,7 +57,7 @@ class SwitchEquivFinder final {
   const cfg::InstructionIterator& m_root_branch;
   // The register that holds the value that we're "switching" on, even if this
   // is an if-else chain and not a switch statement
-  uint16_t m_switching_reg;
+  reg_t m_switching_reg;
   // When D8 converts a switch statement into an if-else chain (and constant
   // loads are lifted), then a case block may be deduplicated. The deduplicated
   // case block can have multiple incoming edges with different program states

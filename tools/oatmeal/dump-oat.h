@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -7,8 +7,8 @@
 
 #pragma once
 
-#include "OatmealUtil.h"
 #include "DexDefs.h"
+#include "OatmealUtil.h"
 
 #include <memory>
 #include <string>
@@ -130,15 +130,12 @@ struct ArchStrings {
   const char* s;
 };
 
-constexpr ArchStrings arch_strings[] = {{InstructionSet::kNone, "NONE"},
-                                        {InstructionSet::kArm, "arm"},
-                                        {InstructionSet::kArm64, "arm64"},
-                                        {InstructionSet::kThumb2, "thumb2"},
-                                        {InstructionSet::kX86, "x86"},
-                                        {InstructionSet::kX86_64, "x86_64"},
-                                        {InstructionSet::kMips, "mips"},
-                                        {InstructionSet::kMips64, "mips64"},
-                                        {InstructionSet::kMax, nullptr}};
+constexpr ArchStrings arch_strings[] = {
+    {InstructionSet::kNone, "NONE"},   {InstructionSet::kArm, "arm"},
+    {InstructionSet::kArm64, "arm64"}, {InstructionSet::kThumb2, "thumb2"},
+    {InstructionSet::kX86, "x86"},     {InstructionSet::kX86_64, "x86_64"},
+    {InstructionSet::kMips, "mips"},   {InstructionSet::kMips64, "mips64"},
+    {InstructionSet::kMax, nullptr}};
 
 inline const char* instruction_set_str(InstructionSet isa) {
   int i = 0;

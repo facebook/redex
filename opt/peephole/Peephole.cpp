@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -12,8 +12,10 @@
 #include <numeric>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
+#include "CFGMutation.h"
 #include "ControlFlow.h"
 #include "DexClass.h"
 #include "DexInstruction.h"
@@ -109,6 +111,8 @@ enum class Literal {
   HashCode_String_A,
   // Directive: Convert mul/div to shl/shr with log2 of the literal argument.
   Mul_Div_To_Shift_Log2,
+  // Explicit 0.
+  Zero,
 };
 
 enum class String {
@@ -265,7 +269,7 @@ struct Matcher {
   size_t match_index;
   std::vector<IRInstruction*> matched_instructions;
 
-  std::unordered_map<Register, uint16_t, EnumClassHash> matched_regs;
+  std::unordered_map<Register, reg_t, EnumClassHash> matched_regs;
   std::unordered_map<String, DexString*, EnumClassHash> matched_strings;
   std::unordered_map<Literal, int64_t, EnumClassHash> matched_literals;
   std::unordered_map<Type, DexType*, EnumClassHash> matched_types;
@@ -286,7 +290,7 @@ struct Matcher {
   // It updates the matching state for the given instruction. Returns true if
   // insn matches to the last 'match' pattern.
   bool try_match(IRInstruction* insn) {
-    auto match_reg = [&](Register pattern_reg, uint16_t insn_reg) {
+    auto match_reg = [&](Register pattern_reg, reg_t insn_reg) {
       // This register has been observed already. Check whether they are same.
       if (matched_regs.find(pattern_reg) != end(matched_regs)) {
         return matched_regs.at(pattern_reg) == insn_reg;
@@ -495,6 +499,7 @@ struct Matcher {
     case OPCODE_AGET_SHORT:
     case OPCODE_AGET_WIDE:
     case OPCODE_AGET_OBJECT:
+    case OPCODE_THROW:
       redex_assert(replace.kind == DexPattern::Kind::none);
       return new IRInstruction(static_cast<IROpcode>(opcode));
     }
@@ -628,7 +633,7 @@ struct Matcher {
         }
         case String::Type_A_get_simple_name: {
           DexType* a = matched_types.at(Type::A);
-          std::string simple = get_simple_name(a);
+          std::string simple = type::get_simple_name(a);
           replace->set_string(DexString::make_string(simple));
           break;
         }
@@ -667,10 +672,10 @@ struct Matcher {
           replace->set_literal(static_cast<uint64_t>(log2(a)));
           break;
         }
-        default:
-          always_assert_log(false, "Unexpected literal directive 0x%x",
-                            replace_info.literal);
+        case Literal::Zero: {
+          replace->set_literal(0);
           break;
+        }
         }
       } else if (replace_info.kind == DexPattern::Kind::type) {
         switch (replace_info.type) {
@@ -843,8 +848,8 @@ DexPattern move_object(Register dest, Register src) {
   return {{OPCODE_MOVE_OBJECT}, {src}, {dest}};
 };
 
-static const std::vector<Pattern>& get_string_patterns() {
-  static const std::vector<Pattern> kStringPatterns = {
+std::vector<Pattern> get_string_patterns() {
+  return {
       // It coalesces init(void) and append(string) into init(string).
       // new StringBuilder().append("...") = new StringBuilder("...")
       {"Coalesce_InitVoid_AppendString",
@@ -1219,7 +1224,6 @@ static const std::vector<Pattern>& get_string_patterns() {
         const_string(String::double_A_to_string),
         move_result_pseudo_object(Register::B)}},
   };
-  return kStringPatterns;
 }
 
 // clang-format on
@@ -1228,16 +1232,13 @@ DexPattern move_ops(Register dest, Register src) {
   return {{OPCODE_MOVE, OPCODE_MOVE_OBJECT}, {src}, {dest}};
 };
 
-const std::vector<Pattern>& get_nop_patterns() {
-  static const std::vector<Pattern> kNopPatterns = {
-      // Remove redundant move and move_object instructions,
-      // e.g. move v0, v0
-      {"Remove_Redundant_Move", {move_ops(Register::A, Register::A)}, {}},
-  };
-  return kNopPatterns;
+std::vector<Pattern> get_nop_patterns() {
+  // Remove redundant move and move_object instructions,
+  // e.g. move v0, v0
+  return {{"Remove_Redundant_Move", {move_ops(Register::A, Register::A)}, {}}};
 }
 
-static bool second_get_non_volatile(const Matcher& m) {
+bool second_get_non_volatile(const Matcher& m) {
   if (m.matched_instructions.size() < 2) {
     return false;
   }
@@ -1326,107 +1327,102 @@ std::vector<DexPattern> aput_aget_x_patterns(
           move_pseudo_func(Register::A)};
 }
 
-const std::vector<Pattern>& get_aputaget_patterns() {
-  static const auto* kAputAgetPatterns = new std::vector<Pattern>(
-      {{"Replace_AputAget",
-        aput_aget_x_patterns(OPCODE_APUT, OPCODE_AGET, move_result_pseudo),
-        aput_x_patterns(OPCODE_APUT)},
-       {"Replace_AputAgetWide",
-        aput_aget_x_patterns(OPCODE_APUT_WIDE, OPCODE_AGET_WIDE,
-                             move_result_pseudo_wide),
-        aput_x_patterns(OPCODE_APUT_WIDE)},
-       {"Replace_AputAgetObject",
-        aput_aget_x_patterns(OPCODE_APUT_OBJECT, OPCODE_AGET_OBJECT,
-                             move_result_pseudo_object),
-        aput_x_patterns(OPCODE_APUT_OBJECT)},
-       {"Replace_AputAgetShort",
-        aput_aget_x_patterns(OPCODE_APUT_SHORT, OPCODE_AGET_SHORT,
-                             move_result_pseudo),
-        aput_x_patterns(OPCODE_APUT_SHORT)},
-       {"Replace_AputAgetChar",
-        aput_aget_x_patterns(OPCODE_APUT_CHAR, OPCODE_AGET_CHAR,
-                             move_result_pseudo),
-        aput_x_patterns(OPCODE_APUT_CHAR)},
-       {"Replace_AputAgetByte",
-        aput_aget_x_patterns(OPCODE_APUT_BYTE, OPCODE_AGET_BYTE,
-                             move_result_pseudo),
-        aput_x_patterns(OPCODE_APUT_BYTE)},
-       {"Replace_AputAgetBoolean",
-        aput_aget_x_patterns(OPCODE_APUT_BOOLEAN, OPCODE_AGET_BOOLEAN,
-                             move_result_pseudo),
-        aput_x_patterns(OPCODE_APUT_BOOLEAN)}});
-  return *kAputAgetPatterns;
+std::vector<Pattern> get_aputaget_patterns() {
+  return {{{"Replace_AputAget",
+            aput_aget_x_patterns(OPCODE_APUT, OPCODE_AGET, move_result_pseudo),
+            aput_x_patterns(OPCODE_APUT)},
+           {"Replace_AputAgetWide",
+            aput_aget_x_patterns(OPCODE_APUT_WIDE, OPCODE_AGET_WIDE,
+                                 move_result_pseudo_wide),
+            aput_x_patterns(OPCODE_APUT_WIDE)},
+           {"Replace_AputAgetObject",
+            aput_aget_x_patterns(OPCODE_APUT_OBJECT, OPCODE_AGET_OBJECT,
+                                 move_result_pseudo_object),
+            aput_x_patterns(OPCODE_APUT_OBJECT)},
+           {"Replace_AputAgetShort",
+            aput_aget_x_patterns(OPCODE_APUT_SHORT, OPCODE_AGET_SHORT,
+                                 move_result_pseudo),
+            aput_x_patterns(OPCODE_APUT_SHORT)},
+           {"Replace_AputAgetChar",
+            aput_aget_x_patterns(OPCODE_APUT_CHAR, OPCODE_AGET_CHAR,
+                                 move_result_pseudo),
+            aput_x_patterns(OPCODE_APUT_CHAR)},
+           {"Replace_AputAgetByte",
+            aput_aget_x_patterns(OPCODE_APUT_BYTE, OPCODE_AGET_BYTE,
+                                 move_result_pseudo),
+            aput_x_patterns(OPCODE_APUT_BYTE)},
+           {"Replace_AputAgetBoolean",
+            aput_aget_x_patterns(OPCODE_APUT_BOOLEAN, OPCODE_AGET_BOOLEAN,
+                                 move_result_pseudo),
+            aput_x_patterns(OPCODE_APUT_BOOLEAN)}}};
 }
 
 // The following patterns match the case when the destination register of
 // the put instruction is the same as the destination register of the get
 // instruction.
-const std::vector<Pattern>& get_putget_same_reg_patterns() {
-  static const auto* kPutGetPatterns = new std::vector<Pattern>(
-      {{"Replace_PutGet",
-        put_get_x_patterns(OPCODE_IPUT, OPCODE_IGET, move_result_pseudo),
-        put_x_patterns(OPCODE_IPUT), second_get_non_volatile},
-       {"Replace_PutGetWide",
-        put_get_x_patterns(OPCODE_IPUT_WIDE, OPCODE_IGET_WIDE,
-                           move_result_pseudo_wide),
-        put_x_patterns(OPCODE_IPUT_WIDE), second_get_non_volatile},
-       {"Replace_PutGetObject",
-        put_get_x_patterns(OPCODE_IPUT_OBJECT, OPCODE_IGET_OBJECT,
-                           move_result_pseudo_object),
-        put_x_patterns(OPCODE_IPUT_OBJECT), second_get_non_volatile},
-       {"Replace_PutGetShort",
-        put_get_x_patterns(OPCODE_IPUT_SHORT, OPCODE_IGET_SHORT,
-                           move_result_pseudo),
-        put_x_patterns(OPCODE_IPUT_SHORT), second_get_non_volatile},
-       {"Replace_PutGetChar",
-        put_get_x_patterns(OPCODE_IPUT_CHAR, OPCODE_IGET_CHAR,
-                           move_result_pseudo),
-        put_x_patterns(OPCODE_IPUT_CHAR), second_get_non_volatile},
-       {"Replace_PutGetByte",
-        put_get_x_patterns(OPCODE_IPUT_BYTE, OPCODE_IGET_BYTE,
-                           move_result_pseudo),
-        put_x_patterns(OPCODE_IPUT_BYTE), second_get_non_volatile},
-       {"Replace_PutGetBoolean",
-        put_get_x_patterns(OPCODE_IPUT_BOOLEAN, OPCODE_IGET_BOOLEAN,
-                           move_result_pseudo),
-        put_x_patterns(OPCODE_IPUT_BOOLEAN), second_get_non_volatile},
-       {"Replace_StaticPutGet",
-        put_get_x_patterns(OPCODE_SPUT, OPCODE_SGET, move_result_pseudo),
-        put_x_patterns(OPCODE_SPUT), second_get_non_volatile},
-       {"Replace_StaticPutGetWide",
-        put_get_x_patterns(OPCODE_SPUT_WIDE, OPCODE_SGET_WIDE,
-                           move_result_pseudo_wide),
-        put_x_patterns(OPCODE_SPUT_WIDE), second_get_non_volatile},
-       {"Replace_StaticPutGetObject",
-        put_get_x_patterns(OPCODE_SPUT_OBJECT, OPCODE_SGET_OBJECT,
-                           move_result_pseudo_object),
-        put_x_patterns(OPCODE_SPUT_OBJECT), second_get_non_volatile},
-       {"Replace_StaticPutGetShort",
-        put_get_x_patterns(OPCODE_SPUT_SHORT, OPCODE_SGET_SHORT,
-                           move_result_pseudo),
-        put_x_patterns(OPCODE_SPUT_SHORT), second_get_non_volatile},
-       {"Replace_StaticPutGetChar",
-        put_get_x_patterns(OPCODE_SPUT_CHAR, OPCODE_SGET_CHAR,
-                           move_result_pseudo),
-        put_x_patterns(OPCODE_SPUT_CHAR), second_get_non_volatile},
-       {"Replace_StaticPutGetByte",
-        put_get_x_patterns(OPCODE_SPUT_BYTE, OPCODE_SGET_BYTE,
-                           move_result_pseudo),
-        put_x_patterns(OPCODE_SPUT_BYTE), second_get_non_volatile},
-       {"Replace_StaticPutGetBoolean",
-        put_get_x_patterns(OPCODE_SPUT_BOOLEAN, OPCODE_SGET_BOOLEAN,
-                           move_result_pseudo),
-        put_x_patterns(OPCODE_SPUT_BOOLEAN), second_get_non_volatile}});
-
-  return *kPutGetPatterns;
+std::vector<Pattern> get_putget_same_reg_patterns() {
+  return {{{"Replace_PutGet",
+            put_get_x_patterns(OPCODE_IPUT, OPCODE_IGET, move_result_pseudo),
+            put_x_patterns(OPCODE_IPUT), second_get_non_volatile},
+           {"Replace_PutGetWide",
+            put_get_x_patterns(OPCODE_IPUT_WIDE, OPCODE_IGET_WIDE,
+                               move_result_pseudo_wide),
+            put_x_patterns(OPCODE_IPUT_WIDE), second_get_non_volatile},
+           {"Replace_PutGetObject",
+            put_get_x_patterns(OPCODE_IPUT_OBJECT, OPCODE_IGET_OBJECT,
+                               move_result_pseudo_object),
+            put_x_patterns(OPCODE_IPUT_OBJECT), second_get_non_volatile},
+           {"Replace_PutGetShort",
+            put_get_x_patterns(OPCODE_IPUT_SHORT, OPCODE_IGET_SHORT,
+                               move_result_pseudo),
+            put_x_patterns(OPCODE_IPUT_SHORT), second_get_non_volatile},
+           {"Replace_PutGetChar",
+            put_get_x_patterns(OPCODE_IPUT_CHAR, OPCODE_IGET_CHAR,
+                               move_result_pseudo),
+            put_x_patterns(OPCODE_IPUT_CHAR), second_get_non_volatile},
+           {"Replace_PutGetByte",
+            put_get_x_patterns(OPCODE_IPUT_BYTE, OPCODE_IGET_BYTE,
+                               move_result_pseudo),
+            put_x_patterns(OPCODE_IPUT_BYTE), second_get_non_volatile},
+           {"Replace_PutGetBoolean",
+            put_get_x_patterns(OPCODE_IPUT_BOOLEAN, OPCODE_IGET_BOOLEAN,
+                               move_result_pseudo),
+            put_x_patterns(OPCODE_IPUT_BOOLEAN), second_get_non_volatile},
+           {"Replace_StaticPutGet",
+            put_get_x_patterns(OPCODE_SPUT, OPCODE_SGET, move_result_pseudo),
+            put_x_patterns(OPCODE_SPUT), second_get_non_volatile},
+           {"Replace_StaticPutGetWide",
+            put_get_x_patterns(OPCODE_SPUT_WIDE, OPCODE_SGET_WIDE,
+                               move_result_pseudo_wide),
+            put_x_patterns(OPCODE_SPUT_WIDE), second_get_non_volatile},
+           {"Replace_StaticPutGetObject",
+            put_get_x_patterns(OPCODE_SPUT_OBJECT, OPCODE_SGET_OBJECT,
+                               move_result_pseudo_object),
+            put_x_patterns(OPCODE_SPUT_OBJECT), second_get_non_volatile},
+           {"Replace_StaticPutGetShort",
+            put_get_x_patterns(OPCODE_SPUT_SHORT, OPCODE_SGET_SHORT,
+                               move_result_pseudo),
+            put_x_patterns(OPCODE_SPUT_SHORT), second_get_non_volatile},
+           {"Replace_StaticPutGetChar",
+            put_get_x_patterns(OPCODE_SPUT_CHAR, OPCODE_SGET_CHAR,
+                               move_result_pseudo),
+            put_x_patterns(OPCODE_SPUT_CHAR), second_get_non_volatile},
+           {"Replace_StaticPutGetByte",
+            put_get_x_patterns(OPCODE_SPUT_BYTE, OPCODE_SGET_BYTE,
+                               move_result_pseudo),
+            put_x_patterns(OPCODE_SPUT_BYTE), second_get_non_volatile},
+           {"Replace_StaticPutGetBoolean",
+            put_get_x_patterns(OPCODE_SPUT_BOOLEAN, OPCODE_SGET_BOOLEAN,
+                               move_result_pseudo),
+            put_x_patterns(OPCODE_SPUT_BOOLEAN), second_get_non_volatile}}};
 }
 
 // The following patterns match the case when the source register of the put
 // instruction is different from the destination register of the get
 // instruction.  put_move_x_patterns replaces the put/get/move-pseudo sequence
 // with the put instruction followed by a move instruction.
-const std::vector<Pattern>& get_putget_diff_reg_patterns() {
-  static const auto* kPutGetPatterns = new std::vector<Pattern>(
+std::vector<Pattern> get_putget_diff_reg_patterns() {
+  return {
       {{"Replace_PutGetDiffSrcDest",
         put_get_x_patterns(OPCODE_IPUT, OPCODE_IGET, move_result_pseudo, false),
         put_move_x_patterns(OPCODE_IPUT, OPCODE_MOVE), second_get_non_volatile},
@@ -1492,20 +1488,18 @@ const std::vector<Pattern>& get_putget_diff_reg_patterns() {
         put_get_x_patterns(OPCODE_SPUT_BOOLEAN, OPCODE_SGET_BOOLEAN,
                            move_result_pseudo, false),
         put_move_x_patterns(OPCODE_SPUT_BOOLEAN, OPCODE_MOVE),
-        second_get_non_volatile}});
-
-  return *kPutGetPatterns;
+        second_get_non_volatile}}};
 }
 
 template <int64_t VALUE>
-static bool first_instruction_literal_is(const Matcher& m) {
+bool first_instruction_literal_is(const Matcher& m) {
   if (m.matched_instructions.empty()) {
     return false;
   }
   return m.matched_instructions.front()->get_literal() == VALUE;
 }
 
-static bool first_instruction_literal_is_power_of_two(const Matcher& m) {
+bool first_instruction_literal_is_power_of_two(const Matcher& m) {
   if (m.matched_instructions.empty()) {
     return false;
   }
@@ -1537,64 +1531,61 @@ DexPattern add_lit(Register src, Register dst) {
   return {{OPCODE_ADD_INT_LIT8, OPCODE_ADD_INT_LIT16}, {src}, {dst}};
 }
 
-const std::vector<Pattern>& get_arith_patterns() {
-  static const std::vector<Pattern> kArithPatterns = {
-      // Replace *1 with move
-      {"Arith_MulLit_Pos1",
-       {mul_lit(Register::A, Register::B)},
-       {// x = y * 1 -> x = y
-        {{OPCODE_MOVE}, {Register::A}, {Register::B}}},
-       first_instruction_literal_is<1>},
+std::vector<Pattern> get_arith_patterns() {
+  return {// Replace *1 with move
+          {"Arith_MulLit_Pos1",
+           {mul_lit(Register::A, Register::B)},
+           {// x = y * 1 -> x = y
+            {{OPCODE_MOVE}, {Register::A}, {Register::B}}},
+           first_instruction_literal_is<1>},
 
-      // Replace /1 with move
-      {"Arith_DivLit_Pos1",
-       {div_lit(Register::A, Register::B)},
-       {// x = y * 1 -> x = y
-        {{OPCODE_MOVE}, {Register::A}, {Register::B}}},
-       first_instruction_literal_is<1>},
+          // Replace /1 with move
+          {"Arith_DivLit_Pos1",
+           {div_lit(Register::A, Register::B)},
+           {// x = y * 1 -> x = y
+            {{OPCODE_MOVE}, {Register::A}, {Register::B}}},
+           first_instruction_literal_is<1>},
 
-      // Replace multiplies by -1 with negation
-      {"Arith_MulLit_Neg1",
-       {mul_lit(Register::A, Register::B)},
-       {// Eliminates the literal-carrying halfword
-        {{OPCODE_NEG_INT}, {Register::A}, {Register::B}}},
-       first_instruction_literal_is<-1>},
+          // Replace multiplies by -1 with negation
+          {"Arith_MulLit_Neg1",
+           {mul_lit(Register::A, Register::B)},
+           {// Eliminates the literal-carrying halfword
+            {{OPCODE_NEG_INT}, {Register::A}, {Register::B}}},
+           first_instruction_literal_is<-1>},
 
-      // Replace divides by -1 with negation
-      {"Arith_DivLit_Neg1",
-       {div_lit(Register::A, Register::B)},
-       {// Eliminates the literal-carrying halfword
-        {{OPCODE_NEG_INT}, {Register::A}, {Register::B}}},
-       first_instruction_literal_is<-1>},
+          // Replace divides by -1 with negation
+          {"Arith_DivLit_Neg1",
+           {div_lit(Register::A, Register::B)},
+           {// Eliminates the literal-carrying halfword
+            {{OPCODE_NEG_INT}, {Register::A}, {Register::B}}},
+           first_instruction_literal_is<-1>},
 
-      // Replace +0 with moves
-      {"Arith_AddLit_0",
-       {add_lit(Register::A, Register::B)},
-       {// Eliminates the literal-carrying halfword
-        {{OPCODE_MOVE}, {Register::A}, {Register::B}}},
-       first_instruction_literal_is<0>},
+          // Replace +0 with moves
+          {"Arith_AddLit_0",
+           {add_lit(Register::A, Register::B)},
+           {// Eliminates the literal-carrying halfword
+            {{OPCODE_MOVE}, {Register::A}, {Register::B}}},
+           first_instruction_literal_is<0>},
 
-      // Replace mul 2^n with shl n
-      {"Arith_MulLit_Power2",
-       {mul_literal_kind(Register::A, Register::B,
-                         Literal::Mul_Div_To_Shift_Log2)},
-       {{{OPCODE_SHL_INT_LIT8},
-         {Register::A},
-         {Register::B},
-         Literal::Mul_Div_To_Shift_Log2}},
-       first_instruction_literal_is_power_of_two},
+          // Replace mul 2^n with shl n
+          {"Arith_MulLit_Power2",
+           {mul_literal_kind(Register::A, Register::B,
+                             Literal::Mul_Div_To_Shift_Log2)},
+           {{{OPCODE_SHL_INT_LIT8},
+             {Register::A},
+             {Register::B},
+             Literal::Mul_Div_To_Shift_Log2}},
+           first_instruction_literal_is_power_of_two},
 
-      // Replace div 2^n with shr n
-      {"Arith_DivLit_Power2",
-       {div_literal_kind(Register::A, Register::B,
-                         Literal::Mul_Div_To_Shift_Log2)},
-       {{{OPCODE_SHR_INT_LIT8},
-         {Register::A},
-         {Register::B},
-         Literal::Mul_Div_To_Shift_Log2}},
-       first_instruction_literal_is_power_of_two},
-  };
-  return kArithPatterns;
+          // Replace div 2^n with shr n
+          {"Arith_DivLit_Power2",
+           {div_literal_kind(Register::A, Register::B,
+                             Literal::Mul_Div_To_Shift_Log2)},
+           {{{OPCODE_SHR_INT_LIT8},
+             {Register::A},
+             {Register::B},
+             Literal::Mul_Div_To_Shift_Log2}},
+           first_instruction_literal_is_power_of_two}};
 }
 
 // clang-format off
@@ -1615,8 +1606,8 @@ DexPattern const_class(Type type) {
   return {{OPCODE_CONST_CLASS}, {}, {}, type};
 };
 
-const std::vector<Pattern>& get_func_patterns() {
-  static const std::vector<Pattern> kFuncPatterns = {
+std::vector<Pattern> get_func_patterns() {
+  return {
       {"Remove_LangClass_GetSimpleName",
        {const_class(Type::A),
         move_result_pseudo_object(Register::A),
@@ -1627,22 +1618,57 @@ const std::vector<Pattern>& get_func_patterns() {
         const_string(String::Type_A_get_simple_name),
         move_result_pseudo_object(Register::B)}},
   };
-  return kFuncPatterns;
+}
+
+const DexPattern new_instance(Type type) {
+  return {{OPCODE_NEW_INSTANCE}, {}, {}, type};
+};
+
+const DexPattern invoke_npe_init(Register r) {
+  return {{OPCODE_INVOKE_DIRECT},
+          {r},
+          {},
+          DexMethod::make_method(
+              "Ljava/lang/NullPointerException;", "<init>", "V", {})};
+}
+
+const DexPattern throw_exception(Register r) {
+  return {{OPCODE_THROW},
+          {r},
+          {}};
+}
+
+std::vector<Pattern> get_throw_empty_npe_patterns() {
+  return {
+      {"Simplify_throw_new_NullPointerException",
+       {new_instance(Type::A),
+        move_result_pseudo_object(Register::A),
+        invoke_npe_init(Register::A),
+        throw_exception(Register::A)},
+       {const_integer(Register::A, Literal::Zero), // Null.
+        throw_exception(Register::A)},
+       [](const Matcher& m) {
+         // Check new-instance type..
+         if (!m.matched_instructions.empty()) {
+           DexType* type = m.matched_instructions.front()->get_type();
+           return type == DexType::make_type("Ljava/lang/NullPointerException;");
+         }
+         return true;  // Let it pass.
+       }},
+  };
 }
 
 // clang-format on
 
-const std::vector<std::vector<Pattern>>& get_all_patterns() {
-  static const std::vector<std::vector<Pattern>>& kAllPatterns = {
-      get_string_patterns(),
-      get_arith_patterns(),
-      get_func_patterns(),
-      get_nop_patterns(),
-      get_putget_same_reg_patterns(),
-      get_putget_diff_reg_patterns(),
-      get_aputaget_patterns()};
-
-  return kAllPatterns;
+const std::vector<std::vector<Pattern>> get_all_patterns() {
+  return {get_string_patterns(),
+          get_arith_patterns(),
+          get_func_patterns(),
+          get_nop_patterns(),
+          get_putget_same_reg_patterns(),
+          get_putget_diff_reg_patterns(),
+          get_aputaget_patterns(),
+          get_throw_empty_npe_patterns()};
 }
 
 } // namespace patterns
@@ -1662,11 +1688,23 @@ class alignas(CACHE_LINE_SIZE) PeepholeOptimizer {
   int m_stats_removed = 0;
   int m_stats_inserted = 0;
 
+  struct ReplacementItem {
+    cfg::Block* block;
+    IRInstruction* insn;
+    std::vector<IRInstruction*> replacement;
+
+    ReplacementItem(cfg::Block* block,
+                    IRInstruction* insn,
+                    std::vector<IRInstruction*> replacement)
+        : block(block), insn(insn), replacement(std::move(replacement)) {}
+  };
+
  public:
   explicit PeepholeOptimizer(PassManager& mgr,
+                             const std::vector<std::vector<Pattern>>& patterns,
                              const std::vector<std::string>& disabled_peepholes)
       : m_mgr(mgr) {
-    for (const auto& pattern_list : patterns::get_all_patterns()) {
+    for (const auto& pattern_list : patterns) {
       for (const Pattern& pattern : pattern_list) {
         if (!contains(disabled_peepholes, pattern.name)) {
           m_matchers.emplace_back(pattern);
@@ -1686,33 +1724,36 @@ class alignas(CACHE_LINE_SIZE) PeepholeOptimizer {
 
   void peephole(DexMethod* method) {
     auto code = method->get_code();
-    code->build_cfg(/* editable */ false);
+    code->build_cfg(/* editable */ true);
+    auto& cfg = code->cfg();
 
     // do optimizations one at a time
     // so they can match on the same pattern without interfering
     for (size_t i = 0; i < m_matchers.size(); ++i) {
       auto& matcher = m_matchers[i];
-      std::vector<IRInstruction*> deletes;
-      std::vector<std::pair<IRInstruction*, std::vector<IRInstruction*>>>
-          inserts;
-      const auto& blocks = code->cfg().blocks();
+      std::vector<ReplacementItem> deletes;
+      std::vector<ReplacementItem> inserts;
+
+      const auto& blocks = cfg.blocks();
       for (const auto& block : blocks) {
         // Currently, all patterns do not span over multiple basic blocks. So
         // reset all matching states on visiting every basic block.
         matcher.reset();
 
-        for (auto& mei : InstructionIterable(block)) {
-          if (!matcher.try_match(mei.insn)) {
+        for (auto& mie : InstructionIterable(block)) {
+          if (!matcher.try_match(mie.insn)) {
             continue;
           }
           m_stats.at(i)++;
           TRACE(PEEPHOLE, 7, "PATTERN %s MATCHED!",
                 matcher.pattern.name.c_str());
+
+          std::vector<IRInstruction*> empty;
           for (auto insn : matcher.matched_instructions) {
             if (opcode::is_move_result_pseudo(insn->opcode())) {
               continue;
             }
-            deletes.push_back(insn);
+            deletes.push_back(ReplacementItem(block, insn, empty));
           }
 
           auto replace = matcher.get_replacements();
@@ -1723,19 +1764,31 @@ class alignas(CACHE_LINE_SIZE) PeepholeOptimizer {
           m_stats_inserted += replace.size();
           m_stats_removed += matcher.match_index;
 
-          inserts.emplace_back(mei.insn, replace);
+          inserts.emplace_back(block, matcher.matched_instructions[0], replace);
           matcher.reset();
         }
       }
 
-      for (auto& pair : inserts) {
-        std::vector<IRInstruction*> vec{begin(pair.second), end(pair.second)};
-        code->insert_after(pair.first, vec);
+      cfg::CFGMutation mutator(cfg);
+
+      for (const auto& insert : inserts) {
+        auto it = cfg.find_insn(insert.insn, insert.block);
+        if (!it.is_end()) {
+          mutator.insert_before(it, insert.replacement);
+        }
       }
-      for (auto& insn : deletes) {
-        code->remove_opcode(insn);
+
+      for (const auto& del : deletes) {
+        auto it = cfg.find_insn(del.insn, del.block);
+        if (!it.is_end()) {
+          mutator.remove(it);
+        }
       }
+
+      mutator.flush();
     }
+
+    code->clear_cfg();
   }
 
   void print_stats() {
@@ -1783,9 +1836,10 @@ void PeepholePass::run_pass(DexStoresVector& stores,
   auto scope = build_class_scope(stores);
   auto num_threads = redex_parallel::default_num_threads();
   std::vector<std::unique_ptr<PeepholeOptimizer>> peephole_optimizers;
+  const std::vector<std::vector<Pattern>> pats = patterns::get_all_patterns();
   for (size_t i = 0; i < num_threads; ++i) {
-    peephole_optimizers.emplace_back(
-        std::make_unique<PeepholeOptimizer>(mgr, config.disabled_peepholes));
+    peephole_optimizers.emplace_back(std::make_unique<PeepholeOptimizer>(
+        mgr, pats, config.disabled_peepholes));
   }
 
   walk::parallel::methods(

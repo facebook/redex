@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -72,8 +72,8 @@ class CallGraphStrategy final : public call_graph::BuildStrategy {
   // which means that the dead code removal will not optimize them fully. I'm
   // not sure why these "unreachable" methods are not ultimately removed by RMU,
   // but as it stands, properly optimizing them is a size win for us.
-  std::vector<DexMethod*> get_roots() const override {
-    std::vector<DexMethod*> roots;
+  std::vector<const DexMethod*> get_roots() const override {
+    std::vector<const DexMethod*> roots;
 
     walk::code(m_scope, [&](DexMethod* method, IRCode& code) {
       roots.emplace_back(method);
@@ -140,9 +140,8 @@ void ObjectSensitiveDcePass::run_pass(DexStoresVector& stores,
   side_effects::analyze_scope(scope, call_graph, *ptrs_fp_iter_map,
                               &effect_summaries);
 
-  auto removed = walk::parallel::reduce_methods<size_t>(
-      scope,
-      [&](DexMethod* method) -> size_t {
+  auto removed =
+      walk::parallel::methods<size_t>(scope, [&](DexMethod* method) -> size_t {
         if (method->rstate.no_optimizations()) {
           return 0;
         }
@@ -161,7 +160,7 @@ void ObjectSensitiveDcePass::run_pass(DexStoresVector& stores,
         TRACE(OSDCE, 5, "Before:\n%s", SHOW(code->cfg()));
         auto dead_instructions =
             used_vars::get_dead_instructions(*code, used_vars_fp_iter);
-        for (auto dead : dead_instructions) {
+        for (const auto& dead : dead_instructions) {
           // This logging is useful for quantifying what gets removed. E.g. to
           // see all the removed callsites: grep "^DEAD.*INVOKE[^ ]*" log |
           // grep " L.*$" -Po | sort | uniq -c
@@ -171,8 +170,7 @@ void ObjectSensitiveDcePass::run_pass(DexStoresVector& stores,
         transform::remove_unreachable_blocks(code);
         TRACE(OSDCE, 5, "After:\n%s", SHOW(&code));
         return dead_instructions.size();
-      },
-      std::plus<size_t>());
+      });
   mgr.set_metric("removed_instructions", removed);
 }
 

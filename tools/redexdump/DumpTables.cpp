@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -13,9 +13,9 @@
 #include "utils/Unicode.h"
 
 #include <sstream>
-#include <vector>
 #include <string.h>
 #include <string>
+#include <vector>
 
 /**
  * Return a proto string in the form
@@ -281,12 +281,17 @@ class DexDebugInstructionReader {
   virtual void handle_advance_line(DexDebugItemOpcode op, int32_t arg) {
     return handle_default(op);
   }
-  virtual void handle_start_local(DexDebugItemOpcode op, uint32_t arg1,
-      uint32_t arg2, uint32_t arg3) {
+  virtual void handle_start_local(DexDebugItemOpcode op,
+                                  uint32_t arg1,
+                                  uint32_t arg2,
+                                  uint32_t arg3) {
     return handle_default(op);
   }
-  virtual void handle_start_local_extended(DexDebugItemOpcode op, uint32_t arg1,
-      uint32_t arg2, uint32_t arg3, uint32_t arg4) {
+  virtual void handle_start_local_extended(DexDebugItemOpcode op,
+                                           uint32_t arg1,
+                                           uint32_t arg2,
+                                           uint32_t arg3,
+                                           uint32_t arg4) {
     return handle_default(op);
   }
   virtual void handle_end_local(DexDebugItemOpcode op, uint32_t arg1) {
@@ -305,6 +310,7 @@ class DexDebugInstructionReader {
     return handle_default(op);
   }
   virtual void handle_default(DexDebugItemOpcode op) = 0;
+
  public:
   virtual ~DexDebugInstructionReader() {}
 
@@ -444,13 +450,13 @@ static const char string_data_header[] = "u16len [contents]";
 static void dump_string_data_item(const uint8_t** pos_inout) {
   const uint8_t* pos = *pos_inout;
   uint32_t utf16_code_point_count = read_uleb128(&pos); // Not byte count!
-  size_t utf8_length = strlen((char*) pos);
+  size_t utf8_length = strlen((char*)pos);
   std::string cleansed_data;
   const char* string_to_print;
   if (raw) { // Output whatever bytes we have
-    string_to_print = (char*) pos;
+    string_to_print = (char*)pos;
   } else if (escape) { // Escape non-printable characters.
-    cleansed_data.reserve(utf8_length);  // Avoid some reallocation.
+    cleansed_data.reserve(utf8_length); // Avoid some reallocation.
     for (size_t i = 0; i < utf8_length; i++) {
       if (isprint(pos[i])) {
         cleansed_data.push_back(pos[i]);
@@ -463,7 +469,7 @@ static void dump_string_data_item(const uint8_t** pos_inout) {
     string_to_print = cleansed_data.c_str();
   } else { // Translate to UTF-8; strip control characters
     std::vector<char32_t> code_points;
-    const char* enc_pos = (char*) pos;
+    const char* enc_pos = (char*)pos;
     uint32_t cp;
     while ((cp = mutf8_next_code_point(enc_pos))) {
       if (cp < ' ' || cp == 255 /* DEL */) {
@@ -471,8 +477,8 @@ static void dump_string_data_item(const uint8_t** pos_inout) {
       }
       code_points.push_back(cp);
     }
-    ssize_t nr_utf8_bytes = utf32_to_utf8_length(
-      &code_points[0], code_points.size());
+    ssize_t nr_utf8_bytes =
+        utf32_to_utf8_length(&code_points[0], code_points.size());
     if (nr_utf8_bytes < 0 && utf8_length == 0) {
       cleansed_data = "";
     } else if (nr_utf8_bytes < 0) {
@@ -483,7 +489,7 @@ static void dump_string_data_item(const uint8_t** pos_inout) {
     }
     string_to_print = cleansed_data.c_str();
   }
-  redump("%03u [%s]\n", (unsigned) utf16_code_point_count, string_to_print);
+  redump("%03u [%s]\n", (unsigned)utf16_code_point_count, string_to_print);
   *pos_inout = pos + utf8_length + 1;
 }
 
@@ -502,8 +508,7 @@ void dump_stringdata(ddump_data* rd, bool print_headers) {
   // in the string data section is a ULEB128 length followed by a
   // NUL-terminated modified-UTF-8 encoded string.
 
-  const uint8_t* str_data_ptr =
-    (uint8_t*) (rd->dexmmap) + string_data->offset;
+  const uint8_t* str_data_ptr = (uint8_t*)(rd->dexmmap) + string_data->offset;
   for (uint32_t i = 0; i < string_data->size; ++i) {
     dump_string_data_item(&str_data_ptr);
   }
@@ -521,7 +526,7 @@ void dump_strings(ddump_data* rd, bool print_headers) {
   uint32_t tmp_str_id_off = 0;
   for (uint32_t i = 0; i < size; ++i) {
     const uint8_t* str_data_ptr = (uint8_t*)(rd->dexmmap) + tmp_str_id_off;
-    length += strlen((char*) str_data_ptr);
+    length += strlen((char*)str_data_ptr);
     tmp_str_id_off += 4;
   }
 
@@ -621,6 +626,58 @@ void dump_clsdata(ddump_data* rd, bool print_headers) {
   }
 }
 
+void dump_callsites(ddump_data* rd, bool print_headers) {
+  auto map = rd->dexmmap + rd->dexh->map_off;
+  const dex_map_list* map_list = reinterpret_cast<const dex_map_list*>(map);
+  const dex_callsite_id* callsites = nullptr;
+  int count = 0;
+  for (uint32_t i = 0; i < map_list->size; i++) {
+    const auto& item = map_list->items[i];
+    if (item.type == TYPE_CALL_SITE_ID_ITEM) {
+      count = item.size;
+      callsites = reinterpret_cast<dex_callsite_id*>(rd->dexmmap + item.offset);
+    }
+  }
+
+  // TODO(T58569493) - emit full call site info
+  if (print_headers) {
+    redump("\nCALL SITE TABLE: %d\n", count);
+    for (int i = 0; i < count; ++i) {
+      const uint8_t* ptr =
+          reinterpret_cast<uint8_t*>(rd->dexmmap + callsites[i].callsite_off);
+      redump("[%0x] offset:0x%0x %s\n", i, callsites[i].callsite_off,
+             format_callsite(rd, &ptr).c_str());
+    }
+  }
+}
+
+void dump_methodhandles(ddump_data* rd, bool print_headers) {
+  auto map = rd->dexmmap + rd->dexh->map_off;
+  const dex_map_list* map_list = reinterpret_cast<const dex_map_list*>(map);
+  const dex_methodhandle_id* methodhandles = nullptr;
+  int count = 0;
+  for (uint32_t i = 0; i < map_list->size; i++) {
+    const auto& item = map_list->items[i];
+    if (item.type == TYPE_METHOD_HANDLE_ITEM) {
+      count = item.size;
+      methodhandles =
+          reinterpret_cast<dex_methodhandle_id*>(rd->dexmmap + item.offset);
+    }
+  }
+
+  // TODO(T58569493) - emit full method handle info
+  if (print_headers) {
+    redump("\nMETHOD HANDLE TABLE: %d\n", count);
+    for (int i = 0; i < count; ++i) {
+      redump("[0x%x] field_or_method_id:0x%x type:%s\n", i,
+             methodhandles[i].field_or_method_id,
+             format_method_handle_type(
+                 (MethodHandleType)methodhandles[i].method_handle_type)
+                 .c_str());
+    }
+  }
+}
+
 static void dump_code_items(ddump_data* rd,
                             dex_code_item* code_items,
                             uint32_t size) {
@@ -715,8 +772,8 @@ static void dump_class_annotations(ddump_data* rd, dex_class_def* df) {
           dex_string_by_type_idx(rd, rd->dex_method_ids[midx].classidx);
       const char* mname =
           dex_string_by_idx(rd, rd->dex_method_ids[midx].nameidx);
-      redump(
-          "    Method '%s', Type '%s' Parameter Annotations:\n", mtype, mname);
+      redump("    Method '%s', Type '%s' Parameter Annotations:\n", mtype,
+             mname);
       int param = 0;
       while (asrefsize--) {
         uint32_t aoff = *asref++;

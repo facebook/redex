@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -32,22 +32,9 @@ constexpr const char* METRIC_METHODS_WHICH_RETURN_PARAMETER_ITERATIONS =
     "num_methods_which_return_parameters_iterations";
 constexpr const ParamIndex WIDE_HIGH = 1 << 31;
 
-IROpcode move_result_to_move(IROpcode op) {
-  switch (op) {
-  case OPCODE_MOVE_RESULT:
-    return OPCODE_MOVE;
-  case OPCODE_MOVE_RESULT_OBJECT:
-    return OPCODE_MOVE_OBJECT;
-  case OPCODE_MOVE_RESULT_WIDE:
-    return OPCODE_MOVE_WIDE;
-  default:
-    always_assert(false);
-  }
-}
-
-void patch_move_result_to_move(IRInstruction* move_result_inst, uint16_t reg) {
+void patch_move_result_to_move(IRInstruction* move_result_inst, reg_t reg) {
   const auto op = move_result_inst->opcode();
-  move_result_inst->set_opcode(move_result_to_move(op));
+  move_result_inst->set_opcode(opcode::move_result_to_move(op));
   move_result_inst->set_srcs_size(1);
   move_result_inst->set_src(0, reg);
 }
@@ -62,7 +49,6 @@ const DexType* get_param_type(bool is_static,
   return args[param_index];
 }
 
-using register_t = ir_analyzer::register_t;
 using namespace ir_analyzer;
 
 using ParamDomain = sparta::ConstantAbstractDomain<ParamIndex>;
@@ -72,17 +58,17 @@ using ParamDomain = sparta::ConstantAbstractDomain<ParamIndex>;
  * keeps track of the param index.
  **/
 using ParamDomainEnvironment =
-    sparta::PatriciaTreeMapAbstractEnvironment<register_t, ParamDomain>;
+    sparta::PatriciaTreeMapAbstractEnvironment<reg_t, ParamDomain>;
 
 // We use this special register to denote the value that is being returned.
-register_t RETURN_VALUE = RESULT_REGISTER - 1;
+reg_t RETURN_VALUE = RESULT_REGISTER - 1;
 
-bool isNotHigh(ParamDomain domain) {
+bool isNotHigh(const ParamDomain& domain) {
   auto const constant = domain.get_constant();
   return !constant || (((*constant) & WIDE_HIGH) == 0);
 }
 
-ParamDomain makeHigh(ParamDomain domain) {
+ParamDomain makeHigh(const ParamDomain& domain) {
   always_assert(isNotHigh(domain));
   auto const constant = domain.get_constant();
   return constant ? ParamDomain((*constant) | WIDE_HIGH) : domain;
@@ -103,7 +89,7 @@ class Analyzer final : public BaseIRAnalyzer<ParamDomainEnvironment> {
   }
 
   void analyze_instruction(
-      IRInstruction* insn,
+      const IRInstruction* insn,
       ParamDomainEnvironment* current_state) const override {
 
     // While the special registers RESULT_REGISTER and RETURN_VALUE do not
@@ -111,7 +97,7 @@ class Analyzer final : public BaseIRAnalyzer<ParamDomainEnvironment> {
     // other registers should be accessed through the following two helper
     // functions to ensure that wide values are properly handled.
 
-    const auto get_current_state_at = [&](register_t reg, bool wide) {
+    const auto get_current_state_at = [&](reg_t reg, bool wide) {
       const auto low = current_state->get(reg);
       if (!wide) {
         return isNotHigh(low) ? low : ParamDomain::top();
@@ -121,8 +107,8 @@ class Analyzer final : public BaseIRAnalyzer<ParamDomainEnvironment> {
                                                        : ParamDomain::top();
     };
 
-    const auto set_current_state_at = [&](register_t reg, bool wide,
-                                          ParamDomain value) {
+    const auto set_current_state_at = [&](reg_t reg, bool wide,
+                                          const ParamDomain& value) {
       always_assert(isNotHigh(value));
       current_state->set(reg, value);
       if (wide) {
@@ -257,7 +243,7 @@ const std::unordered_map<const IRInstruction*, ParamIndex> get_load_param_map(
 }
 
 const boost::optional<ParamIndex> ReturnParamResolver::get_return_param_index(
-    IRInstruction* insn,
+    const IRInstruction* insn,
     const std::unordered_map<const DexMethod*, ParamIndex>&
         methods_which_return_parameter,
     MethodRefCache& resolved_refs) const {
@@ -295,6 +281,15 @@ const boost::optional<ParamIndex> ReturnParamResolver::get_return_param_index(
   if (opcode == OPCODE_INVOKE_VIRTUAL || opcode == OPCODE_INVOKE_INTERFACE) {
     always_assert(callee->is_virtual());
     // Make sure all implementations of this method have the same param index
+
+    if (opcode == OPCODE_INVOKE_INTERFACE &&
+        (root(callee) || !can_rename(callee))) {
+      // We cannot rule out that there are dynamically added classes, created
+      // via Proxy.newProxyInstance, that override this method.
+      // So we assume the worst.
+      return boost::none;
+    }
+
     const auto overriding_methods =
         method_override_graph::get_overriding_methods(m_graph, callee);
     for (auto* overriding : overriding_methods) {
@@ -449,7 +444,7 @@ void ResultPropagation::patch(PassManager& mgr, IRCode* code) {
       const auto param_type =
           get_param_type(is_static, insn->get_method(), *param_index);
       const auto rtype = insn->get_method()->get_proto()->get_rtype();
-      if (!check_cast(param_type, rtype)) {
+      if (!type::check_cast(param_type, rtype)) {
         ++m_stats.unverifiable_move_results;
         continue;
       }
@@ -479,9 +474,8 @@ void ResultPropagationPass::run_pass(DexStoresVector& stores,
   const auto methods_which_return_parameter =
       find_methods_which_return_parameter(mgr, scope, resolver);
 
-  const auto stats = walk::parallel::reduce_methods<ResultPropagation::Stats>(
-      scope,
-      [&](DexMethod* m) {
+  const auto stats = walk::parallel::methods<ResultPropagation::Stats>(
+      scope, [&](DexMethod* m) {
         const auto code = m->get_code();
         if (code == nullptr) {
           return ResultPropagation::Stats();
@@ -490,12 +484,6 @@ void ResultPropagationPass::run_pass(DexStoresVector& stores,
         ResultPropagation rp(methods_which_return_parameter, resolver);
         rp.patch(mgr, code);
         return rp.get_stats();
-      },
-      [](ResultPropagation::Stats a, ResultPropagation::Stats b) {
-        a.erased_move_results += b.erased_move_results;
-        a.patched_move_results += b.patched_move_results;
-        a.unverifiable_move_results += b.unverifiable_move_results;
-        return a;
       });
   mgr.incr_metric(METRIC_METHODS_WHICH_RETURN_PARAMETER,
                   methods_which_return_parameter.size());
@@ -510,6 +498,8 @@ void ResultPropagationPass::run_pass(DexStoresVector& stores,
         methods_which_return_parameter.size(), stats.erased_move_results,
         stats.patched_move_results, stats.unverifiable_move_results);
 }
+
+using ParamIndexMap = std::unordered_map<const DexMethod*, ParamIndex>;
 
 const std::unordered_map<const DexMethod*, ParamIndex>
 ResultPropagationPass::find_methods_which_return_parameter(
@@ -533,10 +523,8 @@ ResultPropagationPass::find_methods_which_return_parameter(
   while (true) {
     mgr.incr_metric(METRIC_METHODS_WHICH_RETURN_PARAMETER_ITERATIONS, 1);
     const auto next_methods_which_return_parameter =
-        walk::parallel::reduce_methods<
-            std::unordered_map<const DexMethod*, ParamIndex>>(
-            scope,
-            [&](DexMethod* method) {
+        walk::parallel::methods<ParamIndexMap, MergeContainers<ParamIndexMap>>(
+            scope, [&](DexMethod* method) {
               std::unordered_map<const DexMethod*, ParamIndex> res;
 
               const auto code = method->get_code();
@@ -566,11 +554,6 @@ ResultPropagationPass::find_methods_which_return_parameter(
               }
 
               return res;
-            },
-            [](std::unordered_map<const DexMethod*, ParamIndex> a,
-               std::unordered_map<const DexMethod*, ParamIndex> b) {
-              a.insert(b.begin(), b.end());
-              return a;
             });
 
     if (next_methods_which_return_parameter.size() ==

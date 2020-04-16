@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -19,7 +19,6 @@
 #include "Resolver.h"
 #include "SingleImpl.h"
 #include "SingleImplDefs.h"
-#include "SingleImplUtil.h"
 #include "Trace.h"
 #include "Walkers.h"
 
@@ -62,11 +61,11 @@ struct AnalysisImpl : SingleImplAnalysis {
  * Return nullptr otherwise.
  */
 DexType* AnalysisImpl::get_and_check_single_impl(DexType* type) {
-  if (exists(single_impls, type)) {
+  if (single_impls.count(type)) {
     return type;
   }
-  if (is_array(type)) {
-    auto element_type = get_array_element_type(type);
+  if (type::is_array(type)) {
+    auto element_type = type::get_array_element_type(type);
     redex_assert(element_type);
     const auto sit = single_impls.find(element_type);
     if (sit != single_impls.end()) {
@@ -118,7 +117,7 @@ void AnalysisImpl::filter_list(const std::vector<std::string>& list,
     return false;
   };
 
-  for (const auto intf_it : single_impls) {
+  for (const auto& intf_it : single_impls) {
     const auto intf = intf_it.first;
     const auto intf_cls = type_class(intf);
     const std::string& intf_name = intf_cls->get_deobfuscated_name();
@@ -130,7 +129,7 @@ void AnalysisImpl::filter_list(const std::vector<std::string>& list,
 }
 
 void AnalysisImpl::filter_proguard_special_interface() {
-  for (const auto intf_it : single_impls) {
+  for (const auto& intf_it : single_impls) {
     const auto intf = intf_it.first;
     const auto intf_cls = type_class(intf);
     const std::string& intf_name = intf_cls->get_deobfuscated_name();
@@ -179,8 +178,8 @@ void AnalysisImpl::filter_single_impl(const SingleImplConfig& config) {
  * Do not optimize DoNotStrip interfaces.
  */
 void AnalysisImpl::filter_do_not_strip() {
-  for (const auto intf_it : single_impls) {
-    if (!can_delete_DEPRECATED(type_class(intf_it.first))) {
+  for (const auto& intf_it : single_impls) {
+    if (!can_delete(type_class(intf_it.first))) {
       escape_interface(intf_it.first, DO_NOT_STRIP);
     }
   }
@@ -228,7 +227,7 @@ void AnalysisImpl::collect_children(const TypeSet& intfs) {
  */
 void AnalysisImpl::check_impl_hierarchy() {
   for (auto& intf_it : single_impls) {
-    if (!has_hierarchy_in_scope(type_class(intf_it.second.cls))) {
+    if (!klass::has_hierarchy_in_scope(type_class(intf_it.second.cls))) {
       escape_interface(intf_it.first, IMPL_PARENT_ESCAPED);
     }
   }

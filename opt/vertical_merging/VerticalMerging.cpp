@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -104,7 +104,7 @@ void get_call_to_super(
           resolve_method(insn_method, MethodSearch::Any);
       if (insn_method_def &&
           insn_method_def->get_class() == mergeable->get_type()) {
-        if (is_init(insn_method_def)) {
+        if (method::is_init(insn_method_def)) {
           (*init_callers)[insn_method_def].emplace(method->get_code());
           TRACE(VMERGE,
                 5,
@@ -288,16 +288,17 @@ void record_code_reference(
             // We don't want to merge class if either merger or
             // mergeable was ever accessed in instance_of to prevent
             // semantic error.
-            record_dont_merge_state(get_element_type_if_array(insn->get_type()),
-                                    STRICT,
-                                    dont_merge_status);
+            record_dont_merge_state(
+                type::get_element_type_if_array(insn->get_type()),
+                STRICT,
+                dont_merge_status);
             return;
           }
         } else if (insn->has_field()) {
           DexField* field = resolve_field(insn->get_field());
           if (field != nullptr) {
             if (field->get_class() != insn->get_field()->get_class() ||
-                !can_rename_DEPRECATED(field)) {
+                !can_rename(field)) {
               // If a field reference need to be resolved, don't merge as
               // renaming it might cause problems.
               // If a field that can't be renamed is being referenced. Don't
@@ -305,13 +306,13 @@ void record_code_reference(
               // if having collision.
               // TODO(suree404): can improve.
               record_dont_merge_state(
-                  get_element_type_if_array(field->get_class()),
+                  type::get_element_type_if_array(field->get_class()),
                   CONDITIONAL,
                   dont_merge_status);
             }
           } else {
             record_dont_merge_state(
-                get_element_type_if_array(insn->get_field()->get_class()),
+                type::get_element_type_if_array(insn->get_field()->get_class()),
                 CONDITIONAL,
                 dont_merge_status);
           }
@@ -339,7 +340,7 @@ void record_code_reference(
               DexClass* callee_class = type_class(callee->get_class());
               if (callee_class && is_abstract(callee_class)) {
                 record_dont_merge_state(
-                    get_element_type_if_array(callee->get_class()),
+                    type::get_element_type_if_array(callee->get_class()),
                     CONDITIONAL,
                     dont_merge_status);
               }
@@ -361,7 +362,8 @@ void record_code_reference(
         }
 
         for (auto type_to_check : types_to_check) {
-          const DexType* self_type = get_element_type_if_array(type_to_check);
+          const DexType* self_type =
+              type::get_element_type_if_array(type_to_check);
           DexClass* cls = type_class(self_type);
           if (cls && !is_abstract(cls)) {
             // If a type is referenced and not a abstract type then
@@ -389,7 +391,7 @@ void record_method_signature(
       record_dont_merge_state(type, CONDITIONAL, dont_merge_status);
     } else {
       DexClass* cls = type_class(type);
-      if (cls && (!is_abstract(cls) || !can_rename_DEPRECATED(method))) {
+      if (cls && (!is_abstract(cls) || !can_rename(method))) {
         // If a type is referenced and not a abstract type then add it to
         // don't use this type as mergeable.
         record_dont_merge_state(type, CONDITIONAL, dont_merge_status);
@@ -398,11 +400,11 @@ void record_method_signature(
   };
   walk::methods(scope, [&](DexMethod* method) {
     DexProto* proto = method->get_proto();
-    const DexType* rtype = get_element_type_if_array(proto->get_rtype());
+    const DexType* rtype = type::get_element_type_if_array(proto->get_rtype());
     check_method_sig(rtype, method);
     DexTypeList* args = proto->get_args();
     for (const DexType* it : args->get_type_list()) {
-      const DexType* extracted_type = get_element_type_if_array(it);
+      const DexType* extracted_type = type::get_element_type_if_array(it);
       check_method_sig(extracted_type, method);
     }
   });
@@ -424,7 +426,7 @@ void record_black_list(
               "%s | %s | %u",
               SHOW(cls),
               cls->rstate.str().c_str(),
-              can_delete_DEPRECATED(cls));
+              can_delete(cls));
         record_dont_merge_state(cls->get_type(), STRICT, dont_merge_status);
         return;
       }
@@ -457,7 +459,7 @@ void record_field_reference(
     const Scope& scope,
     std::unordered_map<const DexType*, DontMergeState>* dont_merge_status) {
   walk::fields(scope, [&](DexField* field) {
-    if (!can_rename_DEPRECATED(field)) {
+    if (!can_rename(field)) {
       record_dont_merge_state(field->get_type(), CONDITIONAL,
                               dont_merge_status);
     }
@@ -515,13 +517,13 @@ void update_references(const Scope& scope,
         if (insn->has_type()) {
           auto ref_type = insn->get_type();
           DexType* type =
-              const_cast<DexType*>(get_element_type_if_array(ref_type));
+              const_cast<DexType*>(type::get_element_type_if_array(ref_type));
           if (update_map.count(type) == 0) {
             return;
           }
           auto merger_type = update_map.at(type);
-          if (is_array(ref_type)) {
-            auto array_merger_type = make_array_type(merger_type);
+          if (type::is_array(ref_type)) {
+            auto array_merger_type = type::make_array_type(merger_type);
             insn->set_type(array_merger_type);
           } else {
             insn->set_type(const_cast<DexType*>(merger_type));
@@ -690,7 +692,7 @@ void VerticalMergingPass::move_methods(
         } else {
           if (referenced_methods.count(method)) {
             // Static or direct method. Safe to move
-            always_assert(can_rename_DEPRECATED(method));
+            always_assert(can_rename(method));
             from_cls->remove_method(method);
             DexMethodSpec spec;
             spec.cls = target_cls_type;

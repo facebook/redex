@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -74,7 +74,7 @@ void RemoveUnreachablePass::run_pass(DexStoresVector& stores,
 }
 
 void RemoveUnreachablePass::write_out_removed_symbols(
-    const std::string filepath,
+    const std::string& filepath,
     const ConcurrentSet<std::string>& removed_symbols) {
   std::fstream out(filepath, std::ios_base::app);
   if (!out.is_open()) {

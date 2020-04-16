@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -22,7 +22,7 @@ std::string find_or_same(
   return it->second;
 }
 
-std::string convert_scalar_type(std::string type) {
+std::string convert_scalar_type(const std::string& type) {
   static const std::unordered_map<std::string, std::string> prim_map = {
       {"void", "V"},  {"boolean", "Z"}, {"byte", "B"},
       {"short", "S"}, {"char", "C"},    {"int", "I"},
@@ -55,7 +55,7 @@ std::string convert_method(const std::string& cls,
 }
 
 std::string translate_type(const std::string& type, const ProguardMap& pm) {
-  auto base_start = type.find_first_not_of("[");
+  auto base_start = type.find_first_not_of('[');
   auto array_prefix = type.substr(0, base_start);
   auto base_type = type.substr(base_start);
   array_prefix += pm.translate_class(base_type);
@@ -346,13 +346,17 @@ namespace pg_impl {
 DexString* file_name_from_method_string(const DexString* method) {
   const auto& s = method->str();
   auto end = s.rfind(";.");
-  auto innercls_pos = s.rfind("$", end);
+  auto innercls_pos = s.rfind('$', end);
   if (innercls_pos != std::string::npos) {
     end = innercls_pos;
   }
-  auto start = s.rfind("/", end);
-  always_assert(start != std::string::npos && end != std::string::npos);
-  ++start; // Skip over the "/"
+  always_assert(end != std::string::npos);
+  auto start = s.rfind('/', end);
+  if (start != std::string::npos) {
+    ++start; // Skip over the "/"
+  } else {
+    start = 1; // Skip over the "L"
+  }
   return DexString::make_string(s.substr(start, end - start) + ".java");
 }
 

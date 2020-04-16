@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -84,7 +84,7 @@ void DexClassHasher::hash(const IRInstruction* insn) {
 
   auto old_hash = m_hash;
   m_hash = 0;
-  hash(insn->srcs());
+  hash(insn->srcs_vec());
   if (insn->has_dest()) {
     hash(insn->dest());
   }
@@ -101,6 +101,10 @@ void DexClassHasher::hash(const IRInstruction* insn) {
     hash(insn->get_field());
   } else if (insn->has_method()) {
     hash(insn->get_method());
+  } else if (insn->has_callsite()) {
+    hash(insn->get_callsite());
+  } else if (insn->has_methodhandle()) {
+    hash(insn->get_methodhandle());
   } else if (insn->has_data()) {
     auto data = insn->get_data();
     hash(data->data_size());

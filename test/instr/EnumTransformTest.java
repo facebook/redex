@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -20,7 +20,7 @@ import static org.fest.assertions.api.Assertions.assertThat;
 // POSTCHECK: (PUBLIC, STATIC, FINAL) f1:java.lang.Integer
 // POSTCHECK: (PUBLIC, STATIC, FINAL) f2:java.lang.Integer
 // POSTCHECK: (PUBLIC, STATIC, FINAL) f3:java.lang.Integer
-// POSTCHECK: (PUBLIC, STATIC, FINAL) f4:java.lang.Integer
+// POSTCHECK-NOT: (PUBLIC, STATIC, FINAL) f4:java.lang.Integer
 
 // This enum class contains some user defined static methods and it's never
 // being casted to other types. It will be transformed to a class with only
@@ -68,11 +68,11 @@ enum SCORE {
     return null;
   }
 
+  private SCORE instance_direct() { return this; }
+
   // Virtual methods are safe.
   // POSTCHECK-DAG: method: direct redex.SCORE.is_max$REDEX${{.*}}:(java.lang.Integer)boolean
-  public boolean is_max() {
-    return this == THREE;
-  }
+  public boolean is_max() { return instance_direct() == THREE; }
 
   // POSTCHECK-DAG: method: direct redex.SCORE.toString$REDEX${{.*}}:(java.lang.Integer)java.lang.String
   public String toString() {
@@ -124,7 +124,9 @@ class C extends B {
 enum PURE_SCORE {
   ONE,
   TWO,
-  THREE;
+  THREE,
+  FOUR,
+  FIVE;
 }
 
 /* Some enums that are unsafe to be transformed. */
@@ -373,6 +375,15 @@ public class EnumTransformTest {
   public void test_pure_score() {
     PURE_SCORE a = PURE_SCORE.ONE;
     assertThat(a.ordinal()).isEqualTo(PURE_SCORE.ONE.ordinal());
+    PURE_SCORE five = PURE_SCORE.FIVE;
+    PURE_SCORE five_2 = PURE_SCORE.FIVE;
+    assertThat(five.ordinal()).isEqualTo(five_2.ordinal());
+    switch (five) {
+      case FIVE:
+        break;
+      default:
+        assertThat(true).isEqualTo(false);
+    }
   }
 
   @Test

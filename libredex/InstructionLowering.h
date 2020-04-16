@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -16,9 +16,11 @@ namespace instruction_lowering {
 struct Stats {
   size_t to_2addr{0};
   size_t move_for_check_cast{0};
-  void accumulate(const Stats& that) {
+
+  Stats& operator+=(const Stats& that) {
     to_2addr += that.to_2addr;
     move_for_check_cast += that.move_for_check_cast;
+    return *this;
   }
 };
 

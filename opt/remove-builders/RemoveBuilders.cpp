@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -47,9 +47,9 @@ bool this_arg_escapes(DexMethod* method, bool enable_buildee_constr_change) {
   auto regs_size = code->get_registers_size();
   auto this_cls = method->get_class();
   code->build_cfg(/* editable */ false);
-  const auto& blocks = code->cfg().blocks_reverse_post();
+  const auto& blocks = code->cfg().blocks_reverse_post_deprecated();
   std::function<void(IRList::iterator, TaintedRegs*)> trans =
-      [&](IRList::iterator it, TaintedRegs* tregs) {
+      [&](const IRList::iterator& it, TaintedRegs* tregs) {
         auto* insn = it->insn;
         if (insn == this_insn) {
           tregs->m_reg_set[insn->dest()] = 1;
@@ -214,7 +214,7 @@ bool RemoveBuildersPass::escapes_stack(DexType* builder, DexMethod* method) {
 
   auto code = method->get_code();
   code->build_cfg(/* editable */ false);
-  const auto& blocks = code->cfg().blocks_reverse_post();
+  const auto& blocks = code->cfg().blocks_reverse_post_deprecated();
   auto regs_size = method->get_code()->get_registers_size();
   auto taint_map = get_tainted_regs(regs_size, blocks, builder);
   return tainted_reg_escapes(
@@ -235,7 +235,7 @@ void RemoveBuildersPass::run_pass(DexStoresVector& stores,
   // Initialize couters.
   b_counter = {0, 0, 0, 0};
 
-  auto obj_type = get_object_type();
+  auto obj_type = type::java_lang_Object();
   auto scope = build_class_scope(stores);
   for (DexClass* cls : scope) {
     if (is_annotation(cls) || is_interface(cls) ||

@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -24,11 +24,11 @@ struct CallCounter {
   uint32_t supers{0};
   uint32_t directs{0};
 
-  static CallCounter plus(CallCounter a, CallCounter b) {
-    a.virtuals += b.virtuals;
-    a.supers += b.supers;
-    a.directs += b.directs;
-    return a;
+  CallCounter& operator+=(const CallCounter& that) {
+    virtuals += that.virtuals;
+    supers += that.supers;
+    directs += that.directs;
+    return *this;
   }
 };
 
@@ -90,13 +90,7 @@ void fix_call_sites(const std::vector<DexClass*>& scope,
     return call_counter;
   };
 
-  CallCounter call_counter = walk::parallel::reduce_methods<CallCounter, Scope>(
-      scope, fixer, [](CallCounter a, CallCounter b) -> CallCounter {
-        a.virtuals += b.virtuals;
-        a.supers += b.supers;
-        a.directs += b.directs;
-        return a;
-      });
+  CallCounter call_counter = walk::parallel::methods<CallCounter>(scope, fixer);
 
   metrics.num_virtual_calls += call_counter.virtuals;
   metrics.num_super_calls += call_counter.supers;
@@ -167,7 +161,7 @@ std::vector<DexMethod*> get_devirtualizable_dmethods(
       continue;
     }
     for (auto m : cls->get_dmethods()) {
-      if (is_any_init(m) || is_static(m)) {
+      if (method::is_any_init(m) || is_static(m)) {
         continue;
       }
       ret.push_back(m);

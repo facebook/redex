@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -16,12 +16,15 @@ struct HeadType {
 };
 
 // Check if all template parameters are true.
-// See https://stackoverflow.com/questions/28253399/check-traits-for-all-variadic-template-arguments/28253503#28253503
-template <bool...> struct bool_pack;
+// See
+// https://stackoverflow.com/questions/28253399/check-traits-for-all-variadic-template-arguments/28253503#28253503
+template <bool...>
+struct bool_pack;
 template <bool... v>
 using all_true = std::is_same<bool_pack<true, v...>, bool_pack<v..., true>>;
 
-template <typename...> struct contains;
+template <typename...>
+struct contains;
 
 template <typename T>
 struct contains<T> : std::false_type {};

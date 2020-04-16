@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -177,7 +177,7 @@ void TypeSystem::make_instanceof_interfaces_table() {
     if (parent_cls != nullptr) continue;
     no_parents.emplace_back(parent);
   }
-  no_parents.emplace_back(get_object_type());
+  no_parents.emplace_back(type::java_lang_Object());
   for (const auto& root : no_parents) {
     make_instanceof_table(m_instanceof_table, hierarchy, root);
   }

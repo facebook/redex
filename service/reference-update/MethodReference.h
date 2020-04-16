@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -11,8 +11,7 @@
 
 #include "DexClass.h"
 #include "DexStore.h"
-
-using MethodOrderedSet = std::set<DexMethod*, dexmethods_comparator>;
+#include "IRInstruction.h"
 
 namespace method_reference {
 
@@ -47,11 +46,11 @@ struct NewCallee {
   }
 };
 
-IRInstruction* make_load_const(uint16_t dest, size_t val);
+IRInstruction* make_load_const(reg_t dest, size_t val);
 
 IRInstruction* make_invoke(DexMethod* callee,
                            IROpcode opcode,
-                           std::vector<uint16_t> args);
+                           std::vector<reg_t> args);
 
 /**
  * A callsite consists of a caller, a callee and the instruction.
@@ -64,8 +63,10 @@ void update_call_refs_simple(
     const Scope& scope,
     const std::unordered_map<DexMethod*, DexMethod*>& old_to_new_callee);
 
-CallSites collect_call_refs(const Scope& scope,
-                            const MethodOrderedSet& callees);
+// Allowed types: * std::set<DexMethod*, dexmethods_comparator>
+//                * std::unordered_set<DexMethod*>
+template <typename T>
+CallSites collect_call_refs(const Scope& scope, const T& callees);
 
 /**
  * Replace instance method call with static method call.

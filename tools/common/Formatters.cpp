@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -9,9 +9,9 @@
 
 #include "DexEncoding.h"
 
+#include <iomanip>
 #include <ios>
 #include <sstream>
-#include <iomanip>
 
 struct type_to_string {
   uint16_t type;
@@ -20,27 +20,27 @@ struct type_to_string {
 
 #define GMAP_TYPE(NAME) \
   { NAME, #NAME }
-type_to_string GMapTypes[] = {
-  GMAP_TYPE(TYPE_HEADER_ITEM),
-  GMAP_TYPE(TYPE_STRING_ID_ITEM),
-  GMAP_TYPE(TYPE_TYPE_ID_ITEM),
-  GMAP_TYPE(TYPE_PROTO_ID_ITEM),
-  GMAP_TYPE(TYPE_FIELD_ID_ITEM),
-  GMAP_TYPE(TYPE_METHOD_ID_ITEM),
-  GMAP_TYPE(TYPE_CLASS_DEF_ITEM),
-  GMAP_TYPE(TYPE_MAP_LIST),
-  GMAP_TYPE(TYPE_TYPE_LIST),
-  GMAP_TYPE(TYPE_ANNOTATION_SET_REF_LIST),
-  GMAP_TYPE(TYPE_ANNOTATION_SET_ITEM),
-  GMAP_TYPE(TYPE_CLASS_DATA_ITEM),
-  GMAP_TYPE(TYPE_CODE_ITEM),
-  GMAP_TYPE(TYPE_STRING_DATA_ITEM),
-  GMAP_TYPE(TYPE_DEBUG_INFO_ITEM),
-  GMAP_TYPE(TYPE_ANNOTATION_ITEM),
-  GMAP_TYPE(TYPE_ENCODED_ARRAY_ITEM),
-  GMAP_TYPE(TYPE_ANNOTATIONS_DIR_ITEM),
-  {0, nullptr}
-};
+type_to_string GMapTypes[] = {GMAP_TYPE(TYPE_HEADER_ITEM),
+                              GMAP_TYPE(TYPE_STRING_ID_ITEM),
+                              GMAP_TYPE(TYPE_TYPE_ID_ITEM),
+                              GMAP_TYPE(TYPE_PROTO_ID_ITEM),
+                              GMAP_TYPE(TYPE_FIELD_ID_ITEM),
+                              GMAP_TYPE(TYPE_METHOD_ID_ITEM),
+                              GMAP_TYPE(TYPE_CLASS_DEF_ITEM),
+                              GMAP_TYPE(TYPE_MAP_LIST),
+                              GMAP_TYPE(TYPE_TYPE_LIST),
+                              GMAP_TYPE(TYPE_ANNOTATION_SET_REF_LIST),
+                              GMAP_TYPE(TYPE_ANNOTATION_SET_ITEM),
+                              GMAP_TYPE(TYPE_CLASS_DATA_ITEM),
+                              GMAP_TYPE(TYPE_CODE_ITEM),
+                              GMAP_TYPE(TYPE_STRING_DATA_ITEM),
+                              GMAP_TYPE(TYPE_DEBUG_INFO_ITEM),
+                              GMAP_TYPE(TYPE_ANNOTATION_ITEM),
+                              GMAP_TYPE(TYPE_ENCODED_ARRAY_ITEM),
+                              GMAP_TYPE(TYPE_ANNOTATIONS_DIR_ITEM),
+                              GMAP_TYPE(TYPE_CALL_SITE_ID_ITEM),
+                              GMAP_TYPE(TYPE_METHOD_HANDLE_ITEM),
+                              {0, nullptr}};
 
 /* nullptr terminated structure for looking up the name
  * of a map section. Think of it like ELF sections, but
@@ -103,6 +103,10 @@ const char* value_to_string(uint8_t value) {
     return "FLOAT";
   case 0x11:
     return "DOUBLE";
+  case 0x15:
+    return "METHOD_TYPE";
+  case 0x16:
+    return "METHOD_HANDLE";
   case 0x17:
     return "STRING";
   case 0x18:
@@ -145,6 +149,8 @@ const char* check_size(uint8_t value_type, uint8_t value_arg) {
     break;
   case 0x04:
   case 0x10:
+  case 0x15:
+  case 0x16:
   case 0x17:
   case 0x18:
   case 0x19:
@@ -159,7 +165,7 @@ const char* check_size(uint8_t value_type, uint8_t value_arg) {
   }
   return (value_arg < valid_size) ? s_empty_string : s_invalid_size;
 }
-}
+} // namespace
 
 std::string format_encoded_value(ddump_data* rd, const uint8_t** _aitem) {
   std::ostringstream ss;
@@ -175,6 +181,7 @@ std::string format_encoded_value(ddump_data* rd, const uint8_t** _aitem) {
   case 0x06:
   case 0x10:
   case 0x11:
+  case 0x16:
   case 0x19:
   case 0x1a:
   case 0x1b: {
@@ -185,6 +192,29 @@ std::string format_encoded_value(ddump_data* rd, const uint8_t** _aitem) {
          << uint32_t(*aitem++);
     }
     ss << "]";
+    break;
+  }
+  case 0x15: {
+    char* rtype = nullptr;
+    uint32_t protoidx = uint32_t(*aitem++);
+    dex_proto_id* proto = rd->dex_proto_ids + protoidx;
+    if (proto->rtypeidx) rtype = dex_string_by_type_idx(rd, proto->rtypeidx);
+    ss << "[METHOD_TYPE " << rtype << "(";
+    if (proto->param_off) {
+      uint32_t* tl = (uint32_t*)(rd->dexmmap + proto->param_off);
+      int count = (int)*tl++;
+      uint16_t* types = (uint16_t*)tl;
+      for (int i = 0; i < count; i++) {
+        char* strtype = dex_string_by_type_idx(rd, *types++);
+        if (i == 0) {
+          ss << strtype;
+        } else {
+          ss << " " << strtype;
+        }
+      }
+    }
+    ss << ")]";
+
     break;
   }
   case 0x18: {
@@ -231,6 +261,17 @@ std::string format_encoded_value(ddump_data* rd, const uint8_t** _aitem) {
     ss << "[UNKNOWN_VALUE]";
   };
   *_aitem = aitem;
+  return ss.str();
+}
+
+std::string format_callsite(ddump_data* rd, const uint8_t** _aitem) {
+  std::ostringstream ss;
+  const uint8_t* aitem = *_aitem;
+  uint32_t size = read_uleb128(&aitem);
+  ss << " args: " << size;
+  ss << " method: " << format_encoded_value(rd, &aitem);
+  ss << " name: " << format_encoded_value(rd, &aitem);
+  ss << " type: " << format_encoded_value(rd, &aitem);
   return ss.str();
 }
 
@@ -291,4 +332,24 @@ std::string format_method(ddump_data* rd, int idx) {
   if (method->nameidx) name = dex_string_by_idx(rd, method->nameidx);
   ss << "name: " << name << "\n";
   return ss.str();
+}
+
+#define MHT_CASE(x) \
+  case x:           \
+    return #x;
+
+std::string format_method_handle_type(MethodHandleType type) {
+  switch (type) {
+    MHT_CASE(METHOD_HANDLE_TYPE_STATIC_PUT)
+    MHT_CASE(METHOD_HANDLE_TYPE_STATIC_GET)
+    MHT_CASE(METHOD_HANDLE_TYPE_INSTANCE_PUT)
+    MHT_CASE(METHOD_HANDLE_TYPE_INSTANCE_GET)
+    MHT_CASE(METHOD_HANDLE_TYPE_INVOKE_STATIC)
+    MHT_CASE(METHOD_HANDLE_TYPE_INVOKE_INSTANCE)
+    MHT_CASE(METHOD_HANDLE_TYPE_INVOKE_CONSTRUCTOR)
+    MHT_CASE(METHOD_HANDLE_TYPE_INVOKE_DIRECT)
+    MHT_CASE(METHOD_HANDLE_TYPE_INVOKE_INTERFACE)
+  default:
+    return "INVALID METHOD HANDLE TYPE";
+  }
 }

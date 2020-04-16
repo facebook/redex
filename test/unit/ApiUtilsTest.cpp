@@ -17,7 +17,7 @@ namespace {
 
 std::vector<DexClass*> create_scope(bool add_parent) {
   std::vector<DexClass*> scope = create_empty_scope();
-  auto obj_t = get_object_type();
+  auto obj_t = type::java_lang_Object();
 
   auto a_t = DexType::make_type("Landroidx/ArrayMap;");
   auto a_cls = create_internal_class(a_t, obj_t, {});
@@ -50,7 +50,7 @@ std::vector<DexClass*> create_scope(bool add_parent) {
 }
 
 void add_usage(Scope* scope, DexMethodRef* mref) {
-  auto obj_t = get_object_type();
+  auto obj_t = type::java_lang_Object();
   auto new_t = DexType::make_type("LUsage;");
   auto new_cls = create_internal_class(new_t, obj_t, {});
   scope->push_back(new_cls);
@@ -148,7 +148,7 @@ TEST(ApiUtilsTest, testEasyInput_MethodMissingButNotTruePrivate) {
   Scope scope = create_scope(false);
 
   auto void_args = DexTypeList::make_type_list({});
-  auto void_object = DexProto::make_proto(get_object_type(), void_args);
+  auto void_object = DexProto::make_proto(type::java_lang_Object(), void_args);
 
   auto a_release = DexType::make_type("Landroidx/ArrayMap;");
   auto method = static_cast<DexMethod*>(DexMethod::make_method(
@@ -178,7 +178,7 @@ TEST(ApiUtilsTest, testEasyInput_MethodMissing) {
   Scope scope = create_scope(false);
 
   auto void_args = DexTypeList::make_type_list({});
-  auto void_object = DexProto::make_proto(get_object_type(), void_args);
+  auto void_object = DexProto::make_proto(type::java_lang_Object(), void_args);
 
   auto a_release = DexType::make_type("Landroidx/ArrayMap;");
   auto method = static_cast<DexMethod*>(DexMethod::make_method(
@@ -227,7 +227,9 @@ TEST(ApiUtilsTest, testHasMethod) {
   EXPECT_TRUE(api.has_method("clearFocus", void_empty, ACC_PUBLIC));
   EXPECT_FALSE(api.has_method("joJo", void_empty, ACC_PUBLIC));
 
-  auto sdk = api_utils.get_android_sdk();
+  auto api_file =
+      boost::optional<std::string>(std::getenv("api_utils_easy_input_path"));
+  api::AndroidSDK sdk(api_file);
   auto method = static_cast<DexMethod*>(DexMethod::make_method(
       android_view, DexString::make_string("clearFocus"), void_empty));
   method->set_access(ACC_PUBLIC);

@@ -1,3 +1,8 @@
+# Copyright (c) Facebook, Inc. and its affiliates.
+#
+# This source code is licensed under the MIT license found in the
+# LICENSE file in the root directory of this source tree.
+
 function(print_dirs var name)
     foreach (path ${var})
         message(STATUS "${name}: " ${path})
@@ -20,11 +25,11 @@ macro(set_common_cxx_flags_for_redex)
             set(CMAKE_EXE_LINKER_FLAGS "-static-libgcc -static-libstdc++")
         endif ()
 
-        set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -Wall")
+        set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -Wall -pthread")
         set(COMMON_CXX_FLAGS_NODBG, "-O3")
-        set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} ${COMMON_CXX_FLAGS_NODBG}")
-        set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} ${COMMON_CXX_FLAGS_NODBG}")
-        set(CMAKE_CXX_FLAGS_MINSIZEREL "${CMAKE_CXX_FLAGS_MINSIZEREL} ${COMMON_CXX_FLAGS_NODBG}")
+        set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} ${COMMON_CXX_FLAGS_NODBG} -pthread")
+        set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} ${COMMON_CXX_FLAGS_NODBG} -pthread")
+        set(CMAKE_CXX_FLAGS_MINSIZEREL "${CMAKE_CXX_FLAGS_MINSIZEREL} ${COMMON_CXX_FLAGS_NODBG} -pthread")
     endif ()
 endmacro()
 
@@ -38,7 +43,7 @@ macro(add_dependent_packages_for_redex)
         set(Boost_USE_MULTITHREADED ON)
     endif()
 
-    find_package(Boost 1.56.0 REQUIRED COMPONENTS system regex filesystem program_options iostreams thread)
+    find_package(Boost 1.71.0 REQUIRED COMPONENTS system regex filesystem program_options iostreams thread)
     print_dirs("${Boost_INCLUDE_DIRS}" "Boost_INCLUDE_DIRS")
     print_dirs("${Boost_LIBRARIES}" "Boost_LIBRARIES")
 

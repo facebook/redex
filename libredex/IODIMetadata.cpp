@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -61,6 +61,8 @@ void IODIMetadata::mark_methods(DexStoresVector& scope) {
   }
   for (auto it = m_iodi_methods.begin(); it != m_iodi_methods.end();) {
     if (it->second == nullptr) {
+      TRACE(IODI, 3, "[IODI] Method cannot use IODI due to name collisions: %s",
+            it->first.c_str());
       it = m_iodi_methods.erase(it);
     } else {
       it++;
@@ -87,7 +89,7 @@ bool IODIMetadata::can_safely_use_iodi(const DexMethod* method) const {
   {
     auto iter = m_method_to_name.find(method);
     if (iter == m_method_to_name.end()) {
-      TRACE(IODI, 3, "[IODI] Warning: didn't find %s in pretty map in %s",
+      TRACE(IODI, 4, "[IODI] Warning: didn't find %s in pretty map in %s",
             SHOW(method), __PRETTY_FUNCTION__);
       auto cls = type_class(method->get_class());
       always_assert(cls);

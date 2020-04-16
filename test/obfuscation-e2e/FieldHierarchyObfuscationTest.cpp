@@ -1,17 +1,17 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <array>
 #include <cstdint>
 #include <cstdlib>
 #include <gtest/gtest.h>
 #include <iostream>
 #include <memory>
 #include <string>
-#include <array>
 
 #include "DexClass.h"
 #include "DexInstruction.h"
@@ -25,18 +25,17 @@
 #include "ReachableClasses.h"
 #include "RedexTest.h"
 
-template<std::size_t SIZE>
-void testClass(
-    ProguardObfuscationTest* tester,
-    const std::string& class_name,
-    const std::array<std::string, SIZE>& fields) {
+template <std::size_t SIZE>
+void testClass(ProguardObfuscationTest* tester,
+               const std::string& class_name,
+               const std::array<std::string, SIZE>& fields) {
   auto clazz = tester->find_class_named(class_name);
   ASSERT_NE(nullptr, clazz) << class_name << " not found.";
 
-  for (const std::string &fieldName : fields) {
-    ASSERT_FALSE(tester->field_found(
-        clazz->get_ifields(),
-        class_name + fieldName)) << class_name + fieldName << " not obfuscated";
+  for (const std::string& fieldName : fields) {
+    ASSERT_FALSE(
+        tester->field_found(clazz->get_ifields(), class_name + fieldName))
+        << class_name + fieldName << " not obfuscated";
   }
 }
 
@@ -54,42 +53,27 @@ TEST_F(FieldHierarchyObfuscationTest, obfuscation) {
 
   ProguardObfuscationTest tester(dexfile, mapping_file);
   ASSERT_TRUE(tester.configure_proguard(configuration_file))
-    << "Proguard configuration failed";
+      << "Proguard configuration failed";
 
   const std::array<std::string, 3> implOneFields = {
-    ".pubImplOneInt:I",
-    ".pubImplOneString:Ljava/lang/String;",
-    ".pubImplOneStringList:Ljava/util/List;"};
+      ".pubImplOneInt:I", ".pubImplOneString:Ljava/lang/String;",
+      ".pubImplOneStringList:Ljava/util/List;"};
   const std::array<std::string, 4> theSuperFields = {
-    ".pubSuperField:I",
-    ".pubStaticSuper:I",
-    ".pubStaticSuper2:I",
-    ".privSuperField:I" };
+      ".pubSuperField:I", ".pubStaticSuper:I", ".pubStaticSuper2:I",
+      ".privSuperField:I"};
   const std::array<std::string, 3> subFields = {
-    ".pubSubField:I",
-    ".pubStaticSub:I",
-    ".privSubField:I" };
-  const std::array<std::string, 2> subImplFields = {
-    ".pubSubImplField:I",
-    ".privSubImplField:I" };
+      ".pubSubField:I", ".pubStaticSub:I", ".privSubField:I"};
+  const std::array<std::string, 2> subImplFields = {".pubSubImplField:I",
+                                                    ".privSubImplField:I"};
   const std::array<std::string, 3> subSubFields = {
-    ".pubSubsubField:I",
-    ".privSubsubField:I",
-    ".privSuperField:I" };
+      ".pubSubsubField:I", ".privSubsubField:I", ".privSuperField:I"};
 
-  testClass(&tester,
-    "Lcom/facebook/redex/test/proguard/ImplOne;",
-    implOneFields);
-  testClass(&tester,
-    "Lcom/facebook/redex/test/proguard/TheSuper;",
-    theSuperFields);
-  testClass(&tester,
-    "Lcom/facebook/redex/test/proguard/Sub;",
-    subFields);
-  testClass(&tester,
-    "Lcom/facebook/redex/test/proguard/SubImpl;",
-    subImplFields);
-  testClass(&tester,
-    "Lcom/facebook/redex/test/proguard/SubSub;",
-    subSubFields);
+  testClass(
+      &tester, "Lcom/facebook/redex/test/proguard/ImplOne;", implOneFields);
+  testClass(
+      &tester, "Lcom/facebook/redex/test/proguard/TheSuper;", theSuperFields);
+  testClass(&tester, "Lcom/facebook/redex/test/proguard/Sub;", subFields);
+  testClass(
+      &tester, "Lcom/facebook/redex/test/proguard/SubImpl;", subImplFields);
+  testClass(&tester, "Lcom/facebook/redex/test/proguard/SubSub;", subSubFields);
 }

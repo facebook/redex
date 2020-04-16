@@ -69,6 +69,8 @@ On your computer:
  You'll note that many of the classes list are actually classes provided by the system and not from your app.
  This is ok, since the Interdex Pass will ignore any entries for which it cannot find the corresponding classes to in the apk.
 
+ Note: you must have ```enum34``` installed for the script to work.
+
 # Usage
 
 To enable the Interdex pass for you application, add the following to your config file:

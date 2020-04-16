@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -115,7 +115,7 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
         ++m_stats.relocation_classes;
         ClassCreator cc(target_type);
         cc.set_access(ACC_PUBLIC | ACC_FINAL);
-        cc.set_super(get_object_type());
+        cc.set_super(type::java_lang_Object());
         DexClass* target_cls = cc.create();
         target_cls->rstate.set_generated();
         target_class_info.target_cls = target_cls;
@@ -278,12 +278,12 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
 
   bool can_relocate(const DexMethod* m) {
     if (!m->is_concrete() || m->is_external() || !m->get_code() ||
-        !can_rename_DEPRECATED(m) || root(m) || m->rstate.no_optimizations() ||
+        !can_rename(m) || root(m) || m->rstate.no_optimizations() ||
         !gather_invoked_methods_that_prevent_relocation(m) ||
-        !no_invoke_super(m) || m->rstate.is_generated()) {
+        !method::no_invoke_super(m) || m->rstate.is_generated()) {
       return false;
     }
-    return is_static(m) && !is_clinit(m);
+    return is_static(m) && !method::is_clinit(m);
   };
 
   PassManager& m_mgr;

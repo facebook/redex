@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -24,7 +24,7 @@ class BranchPrefixHoistingPass : public Pass {
   static int process_hoisting_for_block(cfg::Block*, cfg::ControlFlowGraph&);
 
   static bool has_side_effect_on_vregs(const IRInstruction&,
-                                       const std::unordered_set<uint16_t>&);
+                                       const std::unordered_set<reg_t>&);
 
   static boost::optional<IRInstruction> get_next_common_insn(
       std::vector<IRList::iterator>, const std::vector<cfg::Block*>&, int);
@@ -42,7 +42,7 @@ class BranchPrefixHoistingPass : public Pass {
 
   static std::vector<IRInstruction> get_insns_to_hoist(
       const std::vector<cfg::Block*>& succ_blocks,
-      const std::unordered_set<uint16_t>& crit_regs);
+      const std::unordered_set<reg_t>& crit_regs);
 
   static void skip_pos_debug(IRList::iterator& it, const IRList::iterator& end);
 };

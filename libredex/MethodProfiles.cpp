@@ -18,13 +18,16 @@ using namespace method_profiles;
 
 extern int errno;
 
+// Methods that appear in less than this percent of traces will be excluded
+constexpr double MINIMUM_APPEAR_PERCENT = 80.0;
+
 bool MethodProfiles::parse_stats_file(const std::string& csv_filename) {
-  Timer t("Parsing agg_method_stats_file");
   TRACE(METH_PROF, 3, "input csv filename: %s", csv_filename.c_str());
   if (csv_filename == "") {
     TRACE(METH_PROF, 2, "No csv file given");
     return false;
   }
+  Timer t("Parsing agg_method_stats_file");
 
   auto cleanup = [](FILE* fp, char* line = nullptr) {
     if (fp) {
@@ -138,7 +141,7 @@ bool MethodProfiles::parse_line(char* line, bool first) {
   if (!success) {
     return false;
   }
-  if (ref != nullptr) {
+  if (ref != nullptr && stats.appear_percent >= MINIMUM_APPEAR_PERCENT) {
     TRACE(METH_PROF, 4, "%s -> {%f, %f, %f, %u}", SHOW(ref),
           stats.appear_percent, stats.call_count, stats.order_percent,
           stats.min_api_level);

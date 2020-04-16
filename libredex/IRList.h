@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -68,17 +68,17 @@ enum BranchTargetType {
 };
 
 struct BranchTarget {
-  BranchTargetType type;
   MethodItemEntry* src;
+  BranchTargetType type;
 
   // The key that a value must match to take this case in a switch statement.
   int32_t case_key;
 
   BranchTarget() = default;
-  BranchTarget(MethodItemEntry* src) : type(BRANCH_SIMPLE), src(src) {}
+  BranchTarget(MethodItemEntry* src) : src(src), type(BRANCH_SIMPLE) {}
 
   BranchTarget(MethodItemEntry* src, int32_t case_key)
-      : type(BRANCH_MULTI), src(src), case_key(case_key) {}
+      : src(src), type(BRANCH_MULTI), case_key(case_key) {}
 
   bool operator==(const BranchTarget& other) const;
 };
@@ -176,6 +176,8 @@ struct MethodItemEntry {
   void gather_types(std::vector<DexType*>& ltype) const;
   void gather_fields(std::vector<DexFieldRef*>& lfield) const;
   void gather_methods(std::vector<DexMethodRef*>& lmethod) const;
+  void gather_callsites(std::vector<DexCallSite*>& lcallsite) const;
+  void gather_methodhandles(std::vector<DexMethodHandle*>& lmethodhandle) const;
 
   opcode::Branchingness branchingness() const;
 };
@@ -227,15 +229,15 @@ class IRList {
   using difference_type = IntrusiveList::difference_type;
 
   IRList::iterator main_block();
-  IRList::iterator make_if_block(IRList::iterator cur,
+  IRList::iterator make_if_block(const IRList::iterator& cur,
                                  IRInstruction* insn,
                                  IRList::iterator* if_block);
-  IRList::iterator make_if_else_block(IRList::iterator cur,
+  IRList::iterator make_if_else_block(const IRList::iterator& cur,
                                       IRInstruction* insn,
                                       IRList::iterator* if_block,
                                       IRList::iterator* else_block);
   IRList::iterator make_switch_block(
-      IRList::iterator cur,
+      const IRList::iterator& cur,
       IRInstruction* insn,
       IRList::iterator* default_block,
       std::map<SwitchIndices, IRList::iterator>& cases);
@@ -243,12 +245,25 @@ class IRList {
   size_t size() const { return m_list.size(); }
   bool empty() const { return m_list.empty(); }
 
+  /*
+   * Removes a subset of MFLOW_DEBUG instructions.
+   */
+  void cleanup_debug();
+
+  /*
+   * Removes a subset of MFLOW_DEBUG instructions. valid_regs
+   * is an accumulator set of registers used by either DBG_START_LOCAL
+   * or DBG_START_LOCAL_EXTENDED. The DBG_END_LOCAL and DBG_RESTART_LOCAL
+   * instructions are erased, unless valid_regs contains the registers they use.
+   */
+  void cleanup_debug(std::unordered_set<reg_t>& valid_regs);
+
   /* Passes memory ownership of "from" to callee.  It will delete it. */
   void replace_opcode(IRInstruction* from, IRInstruction* to);
 
   /* Passes memory ownership of "from" to callee.  It will delete it. */
   void replace_opcode(IRInstruction* to_delete,
-                      std::vector<IRInstruction*> replacements);
+                      const std::vector<IRInstruction*>& replacements);
 
   /*
    * Does exactly what it says and you SHOULD be afraid. This is mainly useful
@@ -325,8 +340,6 @@ class IRList {
    * all the instructions.
    */
   size_t sum_opcode_sizes() const;
-  size_t sum_non_internal_opcode_sizes() const;
-  size_t sum_dex_opcode_sizes() const;
 
   /*
    * Returns the number of instructions.
@@ -371,6 +384,8 @@ class IRList {
   void gather_types(std::vector<DexType*>& ltype) const;
   void gather_fields(std::vector<DexFieldRef*>& lfield) const;
   void gather_methods(std::vector<DexMethodRef*>& lmethod) const;
+  void gather_callsites(std::vector<DexCallSite*>& lcallsite) const;
+  void gather_methodhandles(std::vector<DexMethodHandle*>& lmethodhandle) const;
 
   IRList::iterator erase(IRList::iterator it) { return m_list.erase(it); }
   IRList::iterator erase_and_dispose(IRList::iterator it) {

@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -7,6 +7,7 @@
 
 #include "RemoveUnusedFields.h"
 
+#include "CFGMutation.h"
 #include "DexClass.h"
 #include "FieldOpTracker.h"
 #include "IRCode.h"
@@ -19,8 +20,8 @@ namespace {
 
 bool can_remove(DexField* field) {
   // XXX(jezng): why is can_rename not a subset of can_delete?
-  return field != nullptr && !field->is_external() &&
-         can_delete_DEPRECATED(field) && can_rename_DEPRECATED(field);
+  return field != nullptr && !field->is_external() && can_delete(field) &&
+         can_rename(field);
 }
 
 bool has_non_zero_static_value(DexField* field) {
@@ -84,7 +85,7 @@ class RemoveUnusedFields final {
     if (m_remove_unread_field_put_types_whitelist.count(t)) {
       return true;
     }
-    if (is_subclass(m_java_lang_Enum, t)) {
+    if (type::is_subclass(m_java_lang_Enum, t)) {
       return true;
     }
 
@@ -140,9 +141,8 @@ class RemoveUnusedFields final {
     // and remove the writes to unread fields.
     walk::parallel::code(m_scope, [&](const DexMethod*, IRCode& code) {
       auto& cfg = code.cfg();
+      cfg::CFGMutation m(cfg);
       auto iterable = cfg::InstructionIterable(cfg);
-      std::vector<cfg::InstructionIterator> to_replace;
-      std::vector<cfg::InstructionIterator> to_remove;
       for (auto insn_it = iterable.begin(); insn_it != iterable.end();
            ++insn_it) {
         auto* insn = insn_it->insn;
@@ -150,38 +150,43 @@ class RemoveUnusedFields final {
           continue;
         }
         auto field = resolve_field(insn->get_field());
+        bool replace_insn = false;
+        bool remove_insn = false;
         if (m_unread_fields.count(field)) {
           if (m_config.unsafe || can_remove_unread_field_put(field)) {
             always_assert(is_iput(insn->opcode()) || is_sput(insn->opcode()));
             TRACE(RMUF, 5, "Removing %s", SHOW(insn));
-            to_remove.push_back(insn_it);
+            remove_insn = true;
           }
         } else if (m_unwritten_fields.count(field)) {
           always_assert(is_iget(insn->opcode()) || is_sget(insn->opcode()));
           TRACE(RMUF, 5, "Replacing %s with const 0", SHOW(insn));
-          to_replace.push_back(insn_it);
+          replace_insn = true;
         } else if (m_zero_written_fields.count(field)) {
           if (is_iput(insn->opcode()) || is_sput(insn->opcode())) {
             TRACE(RMUF, 5, "Removing %s", SHOW(insn));
-            to_remove.push_back(insn_it);
+            remove_insn = true;
           } else {
             always_assert(is_iget(insn->opcode()) || is_sget(insn->opcode()));
             TRACE(RMUF, 5, "Replacing %s with const 0", SHOW(insn));
-            to_replace.push_back(insn_it);
+            replace_insn = true;
           }
         }
+        if (replace_insn) {
+          auto move_result = cfg.move_result_of(insn_it);
+          if (move_result.is_end()) {
+            continue;
+          }
+          auto write_insn = move_result->insn;
+          IRInstruction* const0 = new IRInstruction(
+              write_insn->dest_is_wide() ? OPCODE_CONST_WIDE : OPCODE_CONST);
+          const0->set_dest(write_insn->dest())->set_literal(0);
+          m.replace(insn_it, {const0});
+        } else if (remove_insn) {
+          m.remove(insn_it);
+        }
       }
-      for (auto insn_it : to_replace) {
-        auto move_result = cfg.move_result_of(insn_it)->insn;
-        IRInstruction* const0 = new IRInstruction(
-            move_result->dest_is_wide() ? OPCODE_CONST_WIDE : OPCODE_CONST);
-        const0->set_dest(move_result->dest())->set_literal(0);
-        auto invalidated = cfg.replace_insn(insn_it, const0);
-        always_assert(!invalidated);
-      }
-      for (auto insn_it : to_remove) {
-        cfg.remove_insn(insn_it);
-      }
+      m.flush();
       code.clear_cfg();
     });
   }

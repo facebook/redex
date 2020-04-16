@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -7,6 +7,7 @@
 
 #include "TypeInference.h"
 
+#include <numeric>
 #include <ostream>
 #include <sstream>
 
@@ -95,28 +96,28 @@ TypeLattice type_lattice(
      {LONG2, SCALAR2},  {DOUBLE2, SCALAR2}, {REFERENCE, TOP},
      {SCALAR, TOP},     {SCALAR1, TOP},     {SCALAR2, TOP}});
 
-void set_type(TypeEnvironment* state, register_t reg, const TypeDomain& type) {
+void set_type(TypeEnvironment* state, reg_t reg, const TypeDomain& type) {
   state->set_type(reg, type);
 }
 
-void set_integer(TypeEnvironment* state, register_t reg) {
+void set_integer(TypeEnvironment* state, reg_t reg) {
   state->set_type(reg, TypeDomain(INT));
 }
 
-void set_float(TypeEnvironment* state, register_t reg) {
+void set_float(TypeEnvironment* state, reg_t reg) {
   state->set_type(reg, TypeDomain(FLOAT));
 }
 
-void set_scalar(TypeEnvironment* state, register_t reg) {
+void set_scalar(TypeEnvironment* state, reg_t reg) {
   state->set_type(reg, TypeDomain(SCALAR));
 }
 
-void set_reference(TypeEnvironment* state, register_t reg) {
+void set_reference(TypeEnvironment* state, reg_t reg) {
   state->set_type(reg, TypeDomain(REFERENCE));
 }
 
 void set_reference(TypeEnvironment* state,
-                   register_t reg,
+                   reg_t reg,
                    const boost::optional<const DexType*>& dex_type_opt) {
   state->set_type(reg, TypeDomain(REFERENCE));
   const DexTypeDomain dex_type =
@@ -124,17 +125,17 @@ void set_reference(TypeEnvironment* state,
   state->set_concrete_type(reg, dex_type);
 }
 
-void set_long(TypeEnvironment* state, register_t reg) {
+void set_long(TypeEnvironment* state, reg_t reg) {
   state->set_type(reg, TypeDomain(LONG1));
   state->set_type(reg + 1, TypeDomain(LONG2));
 }
 
-void set_double(TypeEnvironment* state, register_t reg) {
+void set_double(TypeEnvironment* state, reg_t reg) {
   state->set_type(reg, TypeDomain(DOUBLE1));
   state->set_type(reg + 1, TypeDomain(DOUBLE2));
 }
 
-void set_wide_scalar(TypeEnvironment* state, register_t reg) {
+void set_wide_scalar(TypeEnvironment* state, reg_t reg) {
   state->set_type(reg, TypeDomain(SCALAR1));
   state->set_type(reg + 1, TypeDomain(SCALAR2));
 }
@@ -142,7 +143,7 @@ void set_wide_scalar(TypeEnvironment* state, register_t reg) {
 // This is used for the operand of a comparison operation with zero. The
 // complexity here is that this operation may be performed on either an
 // integer or a reference.
-void refine_comparable_with_zero(TypeEnvironment* state, register_t reg) {
+void refine_comparable_with_zero(TypeEnvironment* state, reg_t reg) {
   if (state->is_bottom()) {
     // There's nothing to do for unreachable code.
     return;
@@ -165,9 +166,7 @@ void refine_comparable_with_zero(TypeEnvironment* state, register_t reg) {
 // This is used for the operands of a comparison operation between two
 // registers. The complexity here is that this operation may be performed on
 // either two integers or two references.
-void refine_comparable(TypeEnvironment* state,
-                       register_t reg1,
-                       register_t reg2) {
+void refine_comparable(TypeEnvironment* state, reg_t reg1, reg_t reg2) {
   if (state->is_bottom()) {
     // There's nothing to do for unreachable code.
     return;
@@ -190,6 +189,35 @@ void refine_comparable(TypeEnvironment* state,
   }
 }
 
+template <typename DexTypeIt>
+const DexType* merge_dex_types(const DexTypeIt& begin,
+                               const DexTypeIt& end,
+                               const DexType* default_type) {
+  if (begin == end) {
+    return default_type;
+  }
+
+  return std::accumulate(
+      begin, end, static_cast<const DexType*>(nullptr),
+      [&default_type](const DexType* t1, const DexType* t2) -> const DexType* {
+        if (!t1) {
+          return t2;
+        }
+        if (!t2) {
+          return t1;
+        }
+
+        DexTypeDomain d1(t1);
+        DexTypeDomain d2(t2);
+        d1.join_with(d2);
+
+        auto maybe_dextype = d1.get_dex_type();
+
+        // In case of the join giving up, bail to a default type
+        return maybe_dextype ? *maybe_dextype : default_type;
+      });
+}
+
 TypeDomain TypeInference::refine_type(const TypeDomain& type,
                                       IRType expected,
                                       IRType const_type,
@@ -206,7 +234,7 @@ TypeDomain TypeInference::refine_type(const TypeDomain& type,
 }
 
 void TypeInference::refine_type(TypeEnvironment* state,
-                                register_t reg,
+                                reg_t reg,
                                 IRType expected) const {
   state->update_type(reg, [this, expected](const TypeDomain& type) {
     return refine_type(type, expected, /* const_type */ CONST,
@@ -215,7 +243,7 @@ void TypeInference::refine_type(TypeEnvironment* state,
 }
 
 void TypeInference::refine_wide_type(TypeEnvironment* state,
-                                     register_t reg,
+                                     reg_t reg,
                                      IRType expected1,
                                      IRType expected2) const {
   state->update_type(reg, [this, expected1](const TypeDomain& type) {
@@ -232,46 +260,42 @@ void TypeInference::refine_wide_type(TypeEnvironment* state,
   });
 }
 
-void TypeInference::refine_reference(TypeEnvironment* state,
-                                     register_t reg) const {
+void TypeInference::refine_reference(TypeEnvironment* state, reg_t reg) const {
   refine_type(state,
               reg,
               /* expected */ REFERENCE);
 }
 
-void TypeInference::refine_scalar(TypeEnvironment* state,
-                                  register_t reg) const {
+void TypeInference::refine_scalar(TypeEnvironment* state, reg_t reg) const {
   refine_type(state,
               reg,
               /* expected */ SCALAR);
 }
 
-void TypeInference::refine_integer(TypeEnvironment* state,
-                                   register_t reg) const {
+void TypeInference::refine_integer(TypeEnvironment* state, reg_t reg) const {
   refine_type(state, reg, /* expected */ INT);
 }
 
-void TypeInference::refine_float(TypeEnvironment* state, register_t reg) const {
+void TypeInference::refine_float(TypeEnvironment* state, reg_t reg) const {
   refine_type(state, reg, /* expected */ FLOAT);
 }
 
 void TypeInference::refine_wide_scalar(TypeEnvironment* state,
-                                       register_t reg) const {
+                                       reg_t reg) const {
   refine_wide_type(state, reg, /* expected1 */ SCALAR1,
                    /* expected2 */ SCALAR2);
 }
 
-void TypeInference::refine_long(TypeEnvironment* state, register_t reg) const {
+void TypeInference::refine_long(TypeEnvironment* state, reg_t reg) const {
   refine_wide_type(state, reg, /* expected1 */ LONG1, /* expected2 */ LONG2);
 }
 
-void TypeInference::refine_double(TypeEnvironment* state,
-                                  register_t reg) const {
+void TypeInference::refine_double(TypeEnvironment* state, reg_t reg) const {
   refine_wide_type(state, reg, /* expected1 */ DOUBLE1,
                    /* expected2 */ DOUBLE2);
 }
 
-void TypeInference::run(DexMethod* dex_method) {
+void TypeInference::run(const DexMethod* dex_method) {
   run(is_static(dex_method), dex_method->get_class(),
       dex_method->get_proto()->get_args());
 }
@@ -309,7 +333,7 @@ void TypeInference::run(bool is_static,
     }
     case IOPCODE_LOAD_PARAM: {
       always_assert(sig_it != signature.end());
-      if (is_float(*sig_it++)) {
+      if (type::is_float(*sig_it++)) {
         set_float(&init_state, insn->dest());
       } else {
         set_integer(&init_state, insn->dest());
@@ -318,7 +342,7 @@ void TypeInference::run(bool is_static,
     }
     case IOPCODE_LOAD_PARAM_WIDE: {
       always_assert(sig_it != signature.end());
-      if (is_double(*sig_it++)) {
+      if (type::is_double(*sig_it++)) {
         set_double(&init_state, insn->dest());
       } else {
         set_long(&init_state, insn->dest());
@@ -343,8 +367,9 @@ done:
 //
 // Similarly, the various refine_* functions are used to refine the
 // type of a register depending on the context (e.g., from SCALAR to INT).
-void TypeInference::analyze_instruction(IRInstruction* insn,
-                                        TypeEnvironment* current_state) const {
+void TypeInference::analyze_instruction(const IRInstruction* insn,
+                                        TypeEnvironment* current_state,
+                                        const cfg::Block* current_block) const {
   switch (insn->opcode()) {
   case IOPCODE_LOAD_PARAM:
   case IOPCODE_LOAD_PARAM_OBJECT:
@@ -407,9 +432,48 @@ void TypeInference::analyze_instruction(IRInstruction* insn,
     break;
   }
   case OPCODE_MOVE_EXCEPTION: {
-    // We don't know where to grab the type of the just-caught exception.
-    // Simply set to j.l.Throwable here.
-    set_reference(current_state, insn->dest(), get_throwable_type());
+    if (!current_block) {
+      // We bail just in case the current block is dangling.
+      TRACE(TYPE, 2,
+            "Warning: Can't infer exception type from unknown catch block.");
+      set_reference(current_state, insn->dest(), type::java_lang_Throwable());
+      break;
+    }
+
+    // The block that contained this instruction must be a catch block.
+    const auto& preds = current_block->preds();
+
+    if (preds.empty()) {
+      // We bail just in case the current block is dangling.
+      TRACE(TYPE, 2,
+            "Warning: Catch block doesn't have at least one predecessor.");
+      set_reference(current_state, insn->dest(), type::java_lang_Throwable());
+      break;
+    }
+
+    std::unordered_set<DexType*> catch_types;
+
+    for (cfg::Edge* edge : preds) {
+      auto* throw_info = edge->throw_info();
+      if (!throw_info) {
+        // Some edges may contain no throw info.
+        continue;
+      }
+
+      DexType* catch_type = throw_info->catch_type;
+      if (catch_type) {
+        catch_types.emplace(catch_type);
+      } else {
+        // catch all
+        catch_types.emplace(type::java_lang_Throwable());
+      }
+    }
+
+    auto merged_catch_type =
+        merge_dex_types(catch_types.begin(), catch_types.end(),
+                        /* default */ type::java_lang_Throwable());
+
+    set_reference(current_state, insn->dest(), merged_catch_type);
     break;
   }
   case OPCODE_RETURN_VOID: {
@@ -442,11 +506,11 @@ void TypeInference::analyze_instruction(IRInstruction* insn,
     break;
   }
   case OPCODE_CONST_STRING: {
-    set_reference(current_state, RESULT_REGISTER, get_string_type());
+    set_reference(current_state, RESULT_REGISTER, type::java_lang_String());
     break;
   }
   case OPCODE_CONST_CLASS: {
-    set_reference(current_state, RESULT_REGISTER, get_class_type());
+    set_reference(current_state, RESULT_REGISTER, type::java_lang_Class());
     break;
   }
   case OPCODE_MONITOR_ENTER:
@@ -475,11 +539,12 @@ void TypeInference::analyze_instruction(IRInstruction* insn,
     break;
   }
   case OPCODE_FILLED_NEW_ARRAY: {
-    const DexType* element_type = get_array_component_type(insn->get_type());
+    const DexType* element_type =
+        type::get_array_component_type(insn->get_type());
     // We assume that structural constraints on the bytecode are satisfied,
     // i.e., the type is indeed an array type.
     always_assert(element_type != nullptr);
-    bool is_array_of_references = is_object(element_type);
+    bool is_array_of_references = type::is_object(element_type);
     for (size_t i = 0; i < insn->srcs_size(); ++i) {
       if (is_array_of_references) {
         refine_reference(current_state, insn->src(i));
@@ -574,8 +639,8 @@ void TypeInference::analyze_instruction(IRInstruction* insn,
     refine_reference(current_state, insn->src(0));
     refine_integer(current_state, insn->src(1));
     const auto dex_type_opt = current_state->get_dex_type(insn->src(0));
-    if (dex_type_opt && *dex_type_opt && is_array(*dex_type_opt)) {
-      const auto etype = get_array_component_type(*dex_type_opt);
+    if (dex_type_opt && *dex_type_opt && type::is_array(*dex_type_opt)) {
+      const auto etype = type::get_array_component_type(*dex_type_opt);
       set_reference(current_state, RESULT_REGISTER, etype);
     } else {
       set_reference(current_state, RESULT_REGISTER);
@@ -612,7 +677,7 @@ void TypeInference::analyze_instruction(IRInstruction* insn,
   case OPCODE_IGET: {
     refine_reference(current_state, insn->src(0));
     const DexType* type = insn->get_field()->get_type();
-    if (is_float(type)) {
+    if (type::is_float(type)) {
       set_float(current_state, RESULT_REGISTER);
     } else {
       set_integer(current_state, RESULT_REGISTER);
@@ -630,7 +695,7 @@ void TypeInference::analyze_instruction(IRInstruction* insn,
   case OPCODE_IGET_WIDE: {
     refine_reference(current_state, insn->src(0));
     const DexType* type = insn->get_field()->get_type();
-    if (is_double(type)) {
+    if (type::is_double(type)) {
       set_double(current_state, RESULT_REGISTER);
     } else {
       set_long(current_state, RESULT_REGISTER);
@@ -646,7 +711,7 @@ void TypeInference::analyze_instruction(IRInstruction* insn,
   }
   case OPCODE_IPUT: {
     const DexType* type = insn->get_field()->get_type();
-    if (is_float(type)) {
+    if (type::is_float(type)) {
       refine_float(current_state, insn->src(0));
     } else {
       refine_integer(current_state, insn->src(0));
@@ -674,7 +739,7 @@ void TypeInference::analyze_instruction(IRInstruction* insn,
   }
   case OPCODE_SGET: {
     DexType* type = insn->get_field()->get_type();
-    if (is_float(type)) {
+    if (type::is_float(type)) {
       set_float(current_state, RESULT_REGISTER);
     } else {
       set_integer(current_state, RESULT_REGISTER);
@@ -690,7 +755,7 @@ void TypeInference::analyze_instruction(IRInstruction* insn,
   }
   case OPCODE_SGET_WIDE: {
     DexType* type = insn->get_field()->get_type();
-    if (is_double(type)) {
+    if (type::is_double(type)) {
       set_double(current_state, RESULT_REGISTER);
     } else {
       set_long(current_state, RESULT_REGISTER);
@@ -705,7 +770,7 @@ void TypeInference::analyze_instruction(IRInstruction* insn,
   }
   case OPCODE_SPUT: {
     const DexType* type = insn->get_field()->get_type();
-    if (is_float(type)) {
+    if (type::is_float(type)) {
       refine_float(current_state, insn->src(0));
     } else {
       refine_integer(current_state, insn->src(0));
@@ -727,6 +792,14 @@ void TypeInference::analyze_instruction(IRInstruction* insn,
     refine_reference(current_state, insn->src(0));
     break;
   }
+  case OPCODE_INVOKE_CUSTOM:
+  case OPCODE_INVOKE_POLYMORPHIC: {
+    // TODO(T59277083)
+    always_assert_log(false,
+                      "TypeInference::analyze_instruction does not support "
+                      "invoke-custom and invoke-polymorphic yet");
+    break;
+  }
   case OPCODE_INVOKE_VIRTUAL:
   case OPCODE_INVOKE_SUPER:
   case OPCODE_INVOKE_DIRECT:
@@ -746,46 +819,46 @@ void TypeInference::analyze_instruction(IRInstruction* insn,
       refine_reference(current_state, insn->src(src_idx++));
     }
     for (DexType* arg_type : arg_types) {
-      if (is_object(arg_type)) {
+      if (type::is_object(arg_type)) {
         refine_reference(current_state, insn->src(src_idx++));
         continue;
       }
-      if (is_integer(arg_type)) {
+      if (type::is_integer(arg_type)) {
         refine_integer(current_state, insn->src(src_idx++));
         continue;
       }
-      if (is_long(arg_type)) {
+      if (type::is_long(arg_type)) {
         refine_long(current_state, insn->src(src_idx++));
         continue;
       }
-      if (is_float(arg_type)) {
+      if (type::is_float(arg_type)) {
         refine_float(current_state, insn->src(src_idx++));
         continue;
       }
-      always_assert(is_double(arg_type));
+      always_assert(type::is_double(arg_type));
       refine_double(current_state, insn->src(src_idx++));
     }
     DexType* return_type = dex_method->get_proto()->get_rtype();
-    if (is_void(return_type)) {
+    if (type::is_void(return_type)) {
       break;
     }
-    if (is_object(return_type)) {
+    if (type::is_object(return_type)) {
       set_reference(current_state, RESULT_REGISTER, return_type);
       break;
     }
-    if (is_integer(return_type)) {
+    if (type::is_integer(return_type)) {
       set_integer(current_state, RESULT_REGISTER);
       break;
     }
-    if (is_long(return_type)) {
+    if (type::is_long(return_type)) {
       set_long(current_state, RESULT_REGISTER);
       break;
     }
-    if (is_float(return_type)) {
+    if (type::is_float(return_type)) {
       set_float(current_state, RESULT_REGISTER);
       break;
     }
-    always_assert(is_double(return_type));
+    always_assert(type::is_double(return_type));
     set_double(current_state, RESULT_REGISTER);
     break;
   }
@@ -1004,7 +1077,7 @@ void TypeInference::populate_type_environments() {
     for (auto& mie : InstructionIterable(block)) {
       IRInstruction* insn = mie.insn;
       m_type_envs.emplace(insn, current_state);
-      analyze_instruction(insn, &current_state);
+      analyze_instruction(insn, &current_state, block);
     }
   }
 }

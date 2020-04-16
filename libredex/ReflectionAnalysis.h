@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -190,7 +190,7 @@ using ReflectionAbstractObject =
     std::pair<AbstractObject, boost::optional<ClassObjectSource>>;
 
 using ReflectionSites = std::vector<
-    std::pair<IRInstruction*, std::map<register_t, ReflectionAbstractObject>>>;
+    std::pair<IRInstruction*, std::map<reg_t, ReflectionAbstractObject>>>;
 
 class ReflectionAnalysis final {
  public:
@@ -230,9 +230,9 @@ class ReflectionAnalysis final {
   std::unique_ptr<impl::Analyzer> m_analyzer;
 
   void get_reflection_site(
-      const register_t reg,
+      const reg_t reg,
       IRInstruction* insn,
-      std::map<register_t, ReflectionAbstractObject>* abstract_objects) const;
+      std::map<reg_t, ReflectionAbstractObject>* abstract_objects) const;
 };
 
 } // namespace reflection

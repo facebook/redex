@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -13,13 +13,10 @@
 
 namespace ir_analyzer {
 
-using register_t = uint32_t;
-
 // We use this special register to denote the result of a method invocation or a
 // filled-array creation. If the result is a wide value, RESULT_REGISTER + 1
 // holds the second component of the result.
-constexpr register_t RESULT_REGISTER =
-    std::numeric_limits<register_t>::max() - 1;
+constexpr reg_t RESULT_REGISTER = std::numeric_limits<reg_t>::max() - 1;
 
 template <typename Domain>
 class BaseIRAnalyzer
@@ -42,7 +39,7 @@ class BaseIRAnalyzer
     return exit_state_at_source;
   }
 
-  virtual void analyze_instruction(IRInstruction* insn,
+  virtual void analyze_instruction(const IRInstruction* insn,
                                    Domain* current_state) const = 0;
 };
 

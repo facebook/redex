@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -69,7 +69,7 @@ DexMethod* materialized_dispatch(DexType* owner, MethodCreator* mc) {
  * 0011: return v0
  */
 DexMethod* generate_dispatch(const DexType* base_type,
-                             const std::vector<DexMethod*> targets,
+                             const std::vector<DexMethod*>& targets,
                              const DexMethod* intf_method,
                              const bool keep_debug_info,
                              DexType* dispatch_anno) {
@@ -92,7 +92,7 @@ DexMethod* generate_dispatch(const DexType* base_type,
                         ACC_STATIC | ACC_PUBLIC, anno_set, keep_debug_info);
   // Variable setup
   auto self_loc = mc->get_local(0);
-  auto type_test_loc = mc->make_local(get_boolean_type());
+  auto type_test_loc = mc->make_local(type::_boolean());
   auto ret_loc = new_proto->is_void() ? mc->get_local(0) // not used
                                       : mc->make_local(new_proto->get_rtype());
   std::vector<Location> args = get_args_for(new_proto, mc);
@@ -193,7 +193,7 @@ const DexType* get_replacement_type(const TypeSystem& type_system,
     return root;
   }
   TRACE(RM_INTF, 9, "Replacing %s with java.lang.Object;", SHOW(to_remove));
-  return get_object_type();
+  return type::java_lang_Object();
 }
 
 /**
@@ -230,7 +230,7 @@ void remove_interface_references(
       return;
     }
     const auto ref_type = insn->get_type();
-    auto type = get_element_type_if_array(ref_type);
+    auto type = type::get_element_type_if_array(ref_type);
     if (interfaces.count(type) == 0) {
       return;
     }
@@ -241,8 +241,8 @@ void remove_interface_references(
     }
     always_assert(type_class(type));
     auto new_type = get_replacement_type(type_system, type, root);
-    if (is_array(ref_type)) {
-      const auto array_merger_type = make_array_type(new_type);
+    if (type::is_array(ref_type)) {
+      const auto array_merger_type = type::make_array_type(new_type);
       insn->set_type(array_merger_type);
       TRACE(RM_INTF,
             9,
@@ -283,7 +283,7 @@ size_t exclude_unremovables(const Scope& scope,
   // They are not the focus of this pass. We should address them elsewhere.
   std::vector<const DexType*> intf_list(candidates.begin(), candidates.end());
   for (auto intf : intf_list) {
-    auto impls = type_system.get_implementors(intf);
+    const auto& impls = type_system.get_implementors(intf);
     if (impls.size() <= 1) {
       TRACE(RM_INTF, 5, "Excluding %s with impls of size %d", SHOW(intf),
             impls.size());
@@ -315,7 +315,7 @@ size_t exclude_unremovables(const Scope& scope,
       if (!insn->has_type() || insn->get_type() == nullptr) {
         continue;
       }
-      auto type = get_element_type_if_array(insn->get_type());
+      auto type = type::get_element_type_if_array(insn->get_type());
       if (candidates.count(type) == 0) {
         continue;
       }
@@ -329,15 +329,9 @@ size_t exclude_unremovables(const Scope& scope,
     return current_excluded;
   };
 
-  auto excluded_by_opcode =
-      walk::parallel::reduce_methods<std::unordered_set<const DexType*>>(
-          scope,
-          patcher,
-          [](std::unordered_set<const DexType*> left,
-             const std::unordered_set<const DexType*> right) {
-            left.insert(right.begin(), right.end());
-            return left;
-          });
+  auto excluded_by_opcode = walk::parallel::methods<
+      std::unordered_set<const DexType*>,
+      MergeContainers<std::unordered_set<const DexType*>>>(scope, patcher);
 
   for (const auto type : excluded_by_opcode) {
     candidates.erase(type);
@@ -470,7 +464,7 @@ TypeSet RemoveInterfacePass::remove_leaf_interfaces(
   std::unordered_map<DexMethod*, DexMethod*> intf_meth_to_dispatch;
   for (const auto intf : leaf_interfaces) {
     TRACE(RM_INTF, 5, "Found leaf interface %s", SHOW(intf));
-    auto implementors = type_system.get_implementors(intf);
+    const auto& implementors = type_system.get_implementors(intf);
     auto intf_methods = type_class(intf)->get_vmethods();
     for (const auto meth : intf_methods) {
       TRACE(RM_INTF, 5, "Finding virt scope for %s", SHOW(meth));

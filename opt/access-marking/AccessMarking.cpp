@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -95,7 +95,8 @@ std::unordered_set<DexMethod*> find_private_methods(
   for (auto it = candidates.begin(); it != candidates.end();) {
     auto* m = *it;
     TRACE(ACCESS, 3, "Considering for privatization: %s", SHOW(m));
-    if (is_clinit(m) || !can_rename(m) || is_abstract(m) || is_private(m)) {
+    if (method::is_clinit(m) || !can_rename(m) || is_abstract(m) ||
+        is_private(m)) {
       it = candidates.erase(it);
     } else {
       ++it;

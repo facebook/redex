@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -23,6 +23,8 @@ class ReduceGotosPass : public Pass {
     size_t replaced_gotos_with_returns{0};
     size_t removed_trailing_moves{0};
     size_t inverted_conditional_branches{0};
+
+    Stats& operator+=(const Stats&);
   };
 
   ReduceGotosPass() : Pass("ReduceGotosPass") {}
@@ -34,5 +36,5 @@ class ReduceGotosPass : public Pass {
   static void process_code_ifs(cfg::ControlFlowGraph&, Stats&);
 
  private:
-  static void shift_registers(cfg::ControlFlowGraph* cfg, uint16_t* reg);
+  static void shift_registers(cfg::ControlFlowGraph* cfg, uint32_t* reg);
 };

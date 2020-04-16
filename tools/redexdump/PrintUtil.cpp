@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -6,8 +6,8 @@
  */
 
 #include "PrintUtil.h"
-#include <stdio.h>
 #include <cstdarg>
+#include <stdio.h>
 
 bool clean = false;
 bool raw = false;

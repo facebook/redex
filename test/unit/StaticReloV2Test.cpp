@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -22,12 +22,12 @@ struct StaticReloV2Test : public RedexTest {
 
   StaticReloV2Test() : RedexTest() {
     m_proto =
-        DexProto::make_proto(get_void_type(), DexTypeList::make_type_list({}));
+        DexProto::make_proto(type::_void(), DexTypeList::make_type_list({}));
   }
 
   DexClass* create_class(const char* class_name) {
     ClassCreator cc(DexType::make_type(class_name));
-    cc.set_super(get_object_type());
+    cc.set_super(type::java_lang_Object());
     return cc.create();
   }
 

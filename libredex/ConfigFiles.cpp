@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -214,12 +214,19 @@ void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
   jw.get("enforce_method_size_limit",
          true,
          inliner_config->enforce_method_size_limit);
+  jw.get("use_constant_propagation_for_callee_size", true,
+         inliner_config->use_constant_propagation_for_callee_size);
   jw.get("use_cfg_inliner", true, inliner_config->use_cfg_inliner);
   jw.get("multiple_callers", false, inliner_config->multiple_callers);
   jw.get("inline_small_non_deletables",
          true,
          inliner_config->inline_small_non_deletables);
-
+  jw.get("run_const_prop", false, inliner_config->run_const_prop);
+  jw.get("run_cse", false, inliner_config->run_cse);
+  jw.get("run_copy_prop", false, inliner_config->run_copy_prop);
+  jw.get("run_local_dce", false, inliner_config->run_local_dce);
+  jw.get("run_dedup_blocks", false, inliner_config->run_dedup_blocks);
+  jw.get("debug", false, inliner_config->debug);
   jw.get("black_list", {}, inliner_config->m_black_list);
   jw.get("caller_black_list", {}, inliner_config->m_caller_black_list);
 

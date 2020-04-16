@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -6,6 +6,11 @@
  */
 
 #pragma once
+
+#include <cstdint>
+#include <unordered_set>
+
+class DexType;
 
 /**
  * This struct is populated by information from the config file.

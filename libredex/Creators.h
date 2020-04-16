@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -39,7 +39,7 @@ struct Location {
   bool is_wide() const { return loc_size(type) == 2; }
 
   bool is_ref() const {
-    char t = type_shorty(type);
+    char t = type::type_shorty(type);
     return t == 'L' || t == '[';
   }
 
@@ -54,7 +54,7 @@ struct Location {
   int get_reg() const { return reg; }
 
   static Location& empty() {
-    static Location empty_loc(get_void_type(), 0);
+    static Location empty_loc(type::_void(), 0);
     return empty_loc;
   }
 
@@ -63,16 +63,16 @@ struct Location {
    * Size of this location.
    */
   static uint16_t loc_size(DexType* type) {
-    char t = type_shorty(type);
-    always_assert(type != get_void_type());
+    char t = type::type_shorty(type);
+    always_assert(type != type::_void());
     return t == 'J' || t == 'D' ? 2 : 1;
   }
 
  private:
-  Location(DexType* t, int pos) : type(t), reg(pos) {}
+  Location(DexType* t, reg_t pos) : type(t), reg(pos) {}
 
   DexType* type;
-  uint16_t reg;
+  reg_t reg;
 
   friend struct MethodBlock;
   friend struct MethodCreator;
@@ -344,7 +344,7 @@ struct MethodBlock {
                          std::map<SwitchIndices, MethodBlock*>& cases);
 
  private:
-  MethodBlock(IRList::iterator iterator, MethodCreator* creator);
+  MethodBlock(const IRList::iterator& iterator, MethodCreator* creator);
 
   //
   // Helpers
@@ -456,14 +456,15 @@ struct MethodCreator {
 
   void load_locals(DexMethod* meth);
 
-  Location make_local_at(DexType* type, int i) {
+  Location make_local_at(DexType* type, reg_t i) {
     always_assert(i < meth_code->get_registers_size());
     Location local{type, i};
     locals.push_back(std::move(local));
     return locals.back();
   }
 
-  IRList::iterator push_instruction(IRList::iterator curr, IRInstruction* insn);
+  IRList::iterator push_instruction(const IRList::iterator& curr,
+                                    IRInstruction* insn);
   IRList::iterator make_if_block(IRList::iterator curr,
                                  IRInstruction* insn,
                                  IRList::iterator* false_block);
@@ -568,7 +569,7 @@ struct ClassCreator {
   DexClass* create() {
     always_assert_log(m_cls->m_self, "Self cannot be null in a DexClass");
     if (m_cls->m_super_class == NULL) {
-      if (m_cls->m_self != get_object_type()) {
+      if (m_cls->m_self != type::java_lang_Object()) {
         always_assert_log(m_cls->m_super_class, "No supertype found for %s",
                           SHOW(m_cls->m_self));
       }

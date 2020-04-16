@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -21,7 +21,7 @@ struct EnumTest : public ConstantPropagationTest {
   static DexClass* create_enum() {
     auto cls_ty = DexType::make_type("LFoo;");
     ClassCreator creator(cls_ty);
-    creator.set_super(get_enum_type());
+    creator.set_super(type::java_lang_Enum());
     creator.set_access(ACC_PUBLIC | ACC_FINAL | ACC_ENUM);
 
     auto enum_x = static_cast<DexField*>(DexField::make_field("LFoo;.X:I"));

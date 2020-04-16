@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -22,7 +22,15 @@ struct InlinerConfig {
   bool enforce_method_size_limit{true};
   bool multiple_callers{false};
   bool inline_small_non_deletables{true};
+  bool use_constant_propagation_for_callee_size{true};
   bool use_cfg_inliner{false};
+  bool run_const_prop{false};
+  bool run_cse{false};
+  bool run_copy_prop{false};
+  bool run_local_dce{false};
+  bool run_dedup_blocks{false};
+  bool shrink_other_methods{true};
+  bool debug{false};
   std::unordered_set<DexType*> whitelist_no_method_limit;
   // We will populate the information to rstate of classes and methods.
   std::unordered_set<DexType*> m_no_inline_annos;

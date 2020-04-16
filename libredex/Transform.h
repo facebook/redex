@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -16,7 +16,7 @@
 
 namespace transform {
 
-using RegMap = std::unordered_map<uint16_t, uint16_t>;
+using RegMap = std::unordered_map<reg_t, reg_t>;
 
 void remap_registers(IRCode*, const RegMap&);
 void remap_registers(IRInstruction* insn, const RegMap& reg_map);

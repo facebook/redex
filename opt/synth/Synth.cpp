@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -80,12 +80,12 @@ DexField* trivial_get_field_wrapper(DexMethod* m) {
   if (!is_iget(it->insn->opcode())) return nullptr;
 
   auto iget = it->insn;
-  uint16_t iget_dest = ir_list::move_result_pseudo_of(it.unwrap())->dest();
+  reg_t iget_dest = ir_list::move_result_pseudo_of(it.unwrap())->dest();
   std::advance(it, 2);
 
   if (!is_return_value(it->insn->opcode())) return nullptr;
 
-  uint16_t ret_reg = it->insn->src(0);
+  reg_t ret_reg = it->insn->src(0);
   if (ret_reg != iget_dest) return nullptr;
   ++it;
 
@@ -121,12 +121,12 @@ DexField* trivial_get_static_field_wrapper(DexMethod* m) {
   if (!is_sget(it->insn->opcode())) return nullptr;
 
   auto sget = it->insn;
-  uint16_t sget_dest = ir_list::move_result_pseudo_of(it.unwrap())->dest();
+  reg_t sget_dest = ir_list::move_result_pseudo_of(it.unwrap())->dest();
   std::advance(it, 2);
 
   if (!is_return_value(it->insn->opcode())) return nullptr;
 
-  uint16_t ret_reg = it->insn->src(0);
+  reg_t ret_reg = it->insn->src(0);
   if (ret_reg != sget_dest) return nullptr;
   ++it;
 
@@ -238,7 +238,7 @@ DexMethod* trivial_ctor_wrapper(DexMethod* m) {
   if (it->insn->opcode() != OPCODE_RETURN_VOID) return nullptr;
   auto method = invoke->get_method();
   if (!method->is_concrete() ||
-      !is_constructor(static_cast<DexMethod*>(method))) {
+      !method::is_constructor(static_cast<DexMethod*>(method))) {
     return nullptr;
   }
   return static_cast<DexMethod*>(method);
@@ -299,7 +299,7 @@ WrapperMethods analyze(const ClassHierarchy& ch,
       if (dmethod->rstate.dont_inline()) continue;
       // constructors are special and all we can remove are synthetic ones
       if (synthConfig.remove_constructors && is_synthetic(dmethod) &&
-          is_constructor(dmethod)) {
+          method::is_constructor(dmethod)) {
         auto ctor = trivial_ctor_wrapper(dmethod);
         if (ctor) {
           TRACE(SYNT, 2, "Trivial constructor wrapper: %s", SHOW(dmethod));
@@ -308,7 +308,7 @@ WrapperMethods analyze(const ClassHierarchy& ch,
         }
         continue;
       }
-      if (is_constructor(dmethod)) continue;
+      if (method::is_constructor(dmethod)) continue;
 
       if (is_static_synthetic(dmethod)) {
         auto field = trivial_get_field_wrapper(dmethod);
@@ -363,9 +363,9 @@ WrapperMethods analyze(const ClassHierarchy& ch,
   return ssms;
 }
 
-IRInstruction* make_iget(DexField* field, uint16_t src) {
+IRInstruction* make_iget(DexField* field, reg_t src) {
   auto const opcode = [&]() {
-    switch (type_to_datatype(field->get_type())) {
+    switch (type::to_datatype(field->get_type())) {
     case DataType::Array:
     case DataType::Object:
       return OPCODE_IGET_OBJECT;
@@ -397,19 +397,6 @@ IRInstruction* make_sget(DexField* field) {
   return (new IRInstruction(opcode))->set_field(field);
 }
 
-IROpcode move_result_to_pseudo(IROpcode op) {
-  switch (op) {
-  case OPCODE_MOVE_RESULT:
-    return IOPCODE_MOVE_RESULT_PSEUDO;
-  case OPCODE_MOVE_RESULT_OBJECT:
-    return IOPCODE_MOVE_RESULT_PSEUDO_OBJECT;
-  case OPCODE_MOVE_RESULT_WIDE:
-    return IOPCODE_MOVE_RESULT_PSEUDO_WIDE;
-  default:
-    always_assert(false);
-  }
-}
-
 void replace_getter_wrapper(IRCode* transform,
                             IRInstruction* insn,
                             IRInstruction* move_result,
@@ -422,7 +409,7 @@ void replace_getter_wrapper(IRCode* transform,
       is_static(field) ? make_sget(field) : make_iget(field, insn->src(0));
   TRACE(SYNT, 2, "Created instruction: %s", SHOW(new_get));
   auto move_result_pseudo =
-      (new IRInstruction(move_result_to_pseudo(move_result->opcode())))
+      (new IRInstruction(opcode::move_result_to_pseudo(move_result->opcode())))
           ->set_dest(move_result->dest());
 
   transform->replace_opcode(insn, {new_get, move_result_pseudo});
@@ -471,7 +458,7 @@ bool can_update_wrappee(const ClassHierarchy& ch,
                                  true /* check_direct */)) {
       return false;
     }
-    return can_delete_DEPRECATED(wrapper);
+    return can_delete(wrapper);
   }
   return true;
 }
@@ -700,7 +687,7 @@ void remove_dead_methods(WrapperMethods& ssms,
       TRACE(SYNT, 2, "Retaining method: %s", SHOW(meth));
       return;
     }
-    if (!can_delete_DEPRECATED(meth)) {
+    if (!can_delete(meth)) {
       TRACE(SYNT, 2, "Do not strip: %s", SHOW(meth));
       return;
     }

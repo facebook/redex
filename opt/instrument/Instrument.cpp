@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -134,7 +134,8 @@ std::unordered_map<int, DexMethod*> find_and_verify_analysis_method(
 
 // Find if the current insertion point lies within a try_start - try_end block.
 // If it does, return its corresponding catch block.
-MethodItemEntry* find_try_block(IRCode* code, IRList::iterator insert_point) {
+MethodItemEntry* find_try_block(IRCode* code,
+                                const IRList::iterator& insert_point) {
   for (auto mie_try = insert_point; mie_try != code->begin(); --mie_try) {
     if (mie_try->type == MFLOW_TRY && mie_try->tentry->type == TRY_END) {
       return nullptr;
@@ -147,7 +148,7 @@ MethodItemEntry* find_try_block(IRCode* code, IRList::iterator insert_point) {
 }
 
 void insert_try_start_instr(IRCode* code,
-                            IRList::iterator insert_point,
+                            const IRList::iterator& insert_point,
                             MethodItemEntry* catch_block) {
   if (catch_block) {
     auto try_start = new MethodItemEntry(TRY_START, catch_block);
@@ -156,7 +157,7 @@ void insert_try_start_instr(IRCode* code,
 }
 
 void insert_try_end_instr(IRCode* code,
-                          IRList::iterator insert_point,
+                          const IRList::iterator& insert_point,
                           MethodItemEntry* catch_block) {
   if (catch_block) {
     auto try_end = new MethodItemEntry(TRY_END, catch_block);
@@ -165,7 +166,7 @@ void insert_try_end_instr(IRCode* code,
 }
 
 void insert_invoke_instr(IRCode* code,
-                         IRList::iterator insert_point,
+                         const IRList::iterator& insert_point,
                          IRInstruction* method_id_inst,
                          IRInstruction* invoke_inst) {
   // When inserting an INVOKE instruction within a try_catch block, in
@@ -223,8 +224,8 @@ void insert_invoke_instr(IRCode* code,
 void insert_invoke_static_array_arg(IRCode* code,
                                     size_t method_id,
                                     DexMethod* method_onMethodExit,
-                                    const std::vector<uint16_t>& reg_bb_vector,
-                                    IRList::iterator insert_point) {
+                                    const std::vector<reg_t>& reg_bb_vector,
+                                    const IRList::iterator& insert_point) {
   // If num_vectors >5, create array of all bit vectors. Add as argument to
   // invoke call.
   size_t num_vectors = reg_bb_vector.size();
@@ -235,7 +236,7 @@ void insert_invoke_static_array_arg(IRCode* code,
   array_size_inst->set_dest(array_dest);
 
   IRInstruction* new_array_insn = new IRInstruction(OPCODE_NEW_ARRAY);
-  new_array_insn->set_type(make_array_type(get_short_type()));
+  new_array_insn->set_type(type::make_array_type(type::_short()));
   new_array_insn->set_srcs_size(1);
   new_array_insn->set_src(0, array_dest);
 
@@ -255,7 +256,7 @@ void insert_invoke_static_array_arg(IRCode* code,
   // Set of instructions to add bit vectors to newly created array.
   std::vector<IRInstruction*> index_inst(num_vectors);
   std::vector<IRInstruction*> aput_inst(num_vectors);
-  std::vector<uint16_t> index_reg(num_vectors);
+  std::vector<reg_t> index_reg(num_vectors);
 
   catch_block = find_try_block(code, insert_point);
 
@@ -298,7 +299,7 @@ void insert_invoke_static_array_arg(IRCode* code,
 void insert_invoke_static_call_bb(IRCode* code,
                                   size_t method_id,
                                   DexMethod* method_onMethodExit,
-                                  const std::vector<uint16_t>& reg_bb_vector) {
+                                  const std::vector<reg_t>& reg_bb_vector) {
   for (auto mie = code->begin(); mie != code->end(); ++mie) {
     if (mie->type == MFLOW_OPCODE &&
         (mie->insn->opcode() == OPCODE_RETURN ||
@@ -387,7 +388,7 @@ int instrument_onBasicBlockBegin(
 
   // Add <num_vectors> shorts to the beginning to method. These will be used as
   // basic block 16-bit vectors.
-  std::vector<uint16_t> reg_bb_vector(num_vectors);
+  std::vector<reg_t> reg_bb_vector(num_vectors);
   std::vector<IRInstruction*> const_inst_int(num_vectors);
   for (size_t reg_index = 0; reg_index < num_vectors; ++reg_index) {
     const_inst_int.at(reg_index) = new IRInstruction(OPCODE_CONST);
@@ -819,9 +820,9 @@ std::vector<DexFieldRef*> patch_sharded_arrays(DexClass* cls,
           return;
         }
 
-        const uint16_t vX = insts[1]->dest();
-        const uint16_t vY = code->allocate_temp();
-        const uint16_t vN = code->allocate_temp();
+        const reg_t vX = insts[1]->dest();
+        const reg_t vY = code->allocate_temp();
+        const reg_t vN = code->allocate_temp();
         for (size_t i = num_shards; i >= 1; --i) {
           code->insert_after(
               insts[2],
@@ -894,8 +895,7 @@ void do_simple_method_tracing(DexClass* analysis_cls,
       return 0;
     }
 
-    const size_t sum_opcode_sizes =
-        method->get_code()->sum_non_internal_opcode_sizes();
+    const size_t sum_opcode_sizes = method->get_code()->sum_opcode_sizes();
     total_size += sum_opcode_sizes;
 
     // Excluding analysis methods myselves.

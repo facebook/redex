@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -51,8 +51,8 @@ class FinalInlineImpl {
 
   std::unordered_set<DexField*> get_called_field_defs(const Scope& scope) {
     std::vector<DexFieldRef*> field_refs;
-    walk::methods(scope,
-                 [&](DexMethod* method) { method->gather_fields(field_refs); });
+    walk::methods(
+        scope, [&](DexMethod* method) { method->gather_fields(field_refs); });
     sort_unique(field_refs);
     /* Okay, now we have a complete list of field refs
      * for this particular dex.  Map to the def actually invoked.
@@ -97,7 +97,7 @@ class FinalInlineImpl {
       if (is_cls_blacklisted(clazz)) {
         continue;
       }
-      bool found = can_delete_DEPRECATED(clazz);
+      bool found = can_delete(clazz);
       if (!found) {
         auto name = clazz->get_name()->c_str();
         for (const auto& name_prefix : m_config.remove_class_members) {
@@ -116,8 +116,9 @@ class FinalInlineImpl {
         if (keep_member(m_config.keep_class_members, sfield)) continue;
         if ((sfield->get_access() & aflags) != aflags) continue;
         auto value = sfield->get_static_value();
-        if (value == nullptr && !is_primitive(sfield->get_type())) continue;
-        if (!found && !can_delete_DEPRECATED(sfield)) continue;
+        if (value == nullptr && !type::is_primitive(sfield->get_type()))
+          continue;
+        if (!found && !can_delete(sfield)) continue;
 
         moveable_fields.push_back(sfield);
         smallscope.push_back(clazz);
@@ -199,7 +200,7 @@ class FinalInlineImpl {
       return;
     }
     always_assert_log(
-        is_static(clinit) && is_constructor(clinit),
+        is_static(clinit) && method::is_constructor(clinit),
         "static constructor doesn't have the proper access bits set\n");
     for (auto& mie : InstructionIterable(clinit->get_code())) {
       auto opcode = mie.insn;
@@ -231,7 +232,7 @@ class FinalInlineImpl {
           continue;
         }
         auto value = sfield->get_static_value();
-        if (value == nullptr && !is_primitive(sfield->get_type())) {
+        if (value == nullptr && !type::is_primitive(sfield->get_type())) {
           continue;
         }
         if (value != nullptr && !value->is_evtype_primitive()) {
@@ -241,9 +242,8 @@ class FinalInlineImpl {
       }
     }
 
-    return walk::parallel::reduce_methods<size_t, Scope>(
-        m_full_scope,
-        [&inline_field, this](DexMethod* m) -> size_t {
+    return walk::parallel::methods<size_t>(
+        m_full_scope, [&inline_field, this](DexMethod* m) -> size_t {
           auto* code = m->get_code();
           if (!code) {
             return 0;
@@ -261,7 +261,7 @@ class FinalInlineImpl {
             if (!validate_sget(m, insn)) continue;
             rewrites.push_back(it.unwrap());
           }
-          for (auto it : rewrites) {
+          for (const auto& it : rewrites) {
             auto* insn = it->insn;
             auto dest = ir_list::move_result_pseudo_of(it)->dest();
             auto field = resolve_field(insn->get_field(), FieldSearch::Static);
@@ -276,8 +276,7 @@ class FinalInlineImpl {
             code->remove_opcode(it);
           }
           return rewrites.size();
-        },
-        [](size_t a, size_t b) { return a + b; });
+        });
   }
 
   /*
@@ -438,7 +437,7 @@ class FinalInlineImpl {
   // breaking future instructions that rely on the value of the source
   // register.  Yes, this means we're N^2 in theory, but hopefully in
   // practice we don't approach that.
-  bool reg_reused(uint16_t reg,
+  bool reg_reused(reg_t reg,
                   const ir_list::InstructionIterator& it,
                   const ir_list::InstructionIterator& end) {
     for (auto jt = std::next(it, 2); jt != end; ++jt) {
@@ -526,10 +525,8 @@ class FinalInlineImpl {
         TRACE(FINALINLINE, 2, "Resolved field %s", SHOW(dep.field));
       }
     }
-    TRACE(FINALINLINE,
-          1,
-          "Resolved %lu static finals via const prop",
-          nresolved);
+    TRACE(
+        FINALINLINE, 1, "Resolved %lu static finals via const prop", nresolved);
     return nresolved;
   }
 

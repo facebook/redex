@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -36,16 +36,18 @@ class ConstantValue {
   // INVALID:
   //        Whenever the annotated value cannot be processed. For instance, the
   //        emitted Type cannot be found or is not merged.
-  enum ConstantKind { INT, TYPE, STRING, INVALID };
+  //
+  // Note: must be an enum class to not shadow TYPE used in Trace.
+  enum class ConstantKind { INT, TYPE, STRING, INVALID };
 
  public:
   // The insn and the dest. OPCODE_CONST_STRING does not have a dest in itself.
-  using ConstantLoad = std::pair<IRInstruction*, uint16_t>;
+  using ConstantLoad = std::pair<IRInstruction*, reg_t>;
 
   ConstantValue(const TypeTags* type_tags,
-                const std::string kind_str,
-                const std::string val_str,
-                const uint16_t param_reg);
+                const std::string& kind_str,
+                const std::string& val_str,
+                reg_t param_reg);
 
   bool is_int_value() const {
     return m_kind == ConstantKind::INT || m_kind == ConstantKind::TYPE;
@@ -64,17 +66,17 @@ class ConstantValue {
   }
   DexType* get_constant_type() const {
     if (is_int_value()) {
-      return get_int_type();
+      return type::_int();
     } else {
-      return get_string_type();
+      return type::java_lang_String();
     }
   }
 
   std::vector<ConstantLoad> collect_constant_loads_in(const IRCode* code);
 
-  std::vector<IRInstruction*> make_load_const(uint16_t const_reg);
+  std::vector<IRInstruction*> make_load_const(reg_t const_reg);
 
-  uint16_t get_param_reg() const { return m_param_reg; }
+  reg_t get_param_reg() const { return m_param_reg; }
 
   std::string to_str() const {
     std::ostringstream ss;
@@ -93,7 +95,7 @@ class ConstantValue {
   int64_t m_int_val;
   std::string m_str_val;
   // The allocated param reg holding the original value of the constant.
-  uint16_t m_param_reg;
+  reg_t m_param_reg;
 };
 
 class ConstantValues {
@@ -103,8 +105,8 @@ class ConstantValues {
 
  public:
   ConstantValues(const TypeTags* type_tags,
-                 const std::string kinds_str,
-                 const std::string vals_str,
+                 const std::string& kinds_str,
+                 const std::string& vals_str,
                  const size_t stud_method_threshold,
                  IRCode* code);
 
@@ -125,8 +127,7 @@ class ConstantValues {
     return res;
   }
 
-  std::vector<IRInstruction*> make_const_loads(
-      std::vector<uint16_t>& const_regs);
+  std::vector<IRInstruction*> make_const_loads(std::vector<reg_t>& const_regs);
 
   size_t size() const {
     size_t res = 0;

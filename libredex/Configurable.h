@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -12,6 +12,7 @@
 #include <iostream>
 #include <map>
 #include <string>
+#include <type_traits>
 #include <unordered_set>
 #include <vector>
 
@@ -254,6 +255,14 @@ class Configurable {
       const Json::Value)>
       ReflectorFunc;
 
+  template <typename T>
+  struct DefaultValueType {
+    using type = typename std::conditional<std::is_pointer<T>::value ||
+                                               std::is_arithmetic<T>::value,
+                                           T,
+                                           const T&>::type;
+  };
+
   /**
    * Default behavior for all parameter reflections. this template
    * handles the case for composites (e.g. all Configurables). Primitives
@@ -266,7 +275,7 @@ class Configurable {
                const bool param_is_required,
                const bindflags_t param_bindflags,
                T& param,
-               T default_value) {
+               typename DefaultValueType<T>::type default_val) {
     static_assert(
         std::is_base_of<Configurable, T>::value,
         "T must be a supported primitive or derive from Configurable");
@@ -353,16 +362,15 @@ class Configurable {
 
 // Specializations for primitives
 
-#define DEFINE_CONFIGURABLE_PRIMITIVE(type)                         \
-  template <>                                                       \
-  type Configurable::as<type>(const Json::Value& value,             \
-                              bindflags_t bindflags);               \
-  template <>                                                       \
-  void Configurable::reflect(                                       \
-      ReflectorFunc& reflector, const std::string& param_name,      \
-      const std::string& param_doc, const bool param_is_required,   \
-      const Configurable::bindflags_t param_bindflags, type& param, \
-      type default_value);
+#define DEFINE_CONFIGURABLE_PRIMITIVE(T)                                  \
+  template <>                                                             \
+  T Configurable::as<T>(const Json::Value& value, bindflags_t bindflags); \
+  template <>                                                             \
+  void Configurable::reflect<T>(                                          \
+      ReflectorFunc & reflector, const std::string& param_name,           \
+      const std::string& param_doc, const bool param_is_required,         \
+      const Configurable::bindflags_t param_bindflags, T& param,          \
+      typename DefaultValueType<T>::type default_value);
 
 DEFINE_CONFIGURABLE_PRIMITIVE(float)
 DEFINE_CONFIGURABLE_PRIMITIVE(bool)
@@ -384,6 +392,7 @@ DEFINE_CONFIGURABLE_PRIMITIVE(std::vector<std::string>)
 DEFINE_CONFIGURABLE_PRIMITIVE(std::vector<unsigned int>)
 DEFINE_CONFIGURABLE_PRIMITIVE(std::unordered_set<std::string>)
 DEFINE_CONFIGURABLE_PRIMITIVE(std::vector<DexType*>)
+DEFINE_CONFIGURABLE_PRIMITIVE(std::vector<DexMethod*>)
 DEFINE_CONFIGURABLE_PRIMITIVE(std::unordered_set<DexType*>)
 DEFINE_CONFIGURABLE_PRIMITIVE(std::unordered_set<const DexType*>)
 DEFINE_CONFIGURABLE_PRIMITIVE(std::unordered_set<DexClass*>)

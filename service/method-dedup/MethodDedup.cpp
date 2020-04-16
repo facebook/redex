@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -120,7 +120,9 @@ size_t dedup_methods_helper(
   for (auto& group : grouped_methods) {
     auto replacement = *group.begin();
     for (auto m : group) {
-      duplicates_to_replacement[m] = replacement;
+      if (m != replacement) {
+        duplicates_to_replacement[m] = replacement;
+      }
       // Update dedup map
       if (new_to_old == boost::none) {
         continue;
@@ -161,10 +163,8 @@ size_t dedup_methods(
   size_t total_dedup_count = 0;
   auto to_dedup_temp = to_dedup;
   while (true) {
-    TRACE(METH_DEDUP,
-          8,
-          "dedup: static|non_virt input %d",
-          to_dedup_temp.size());
+    TRACE(
+        METH_DEDUP, 8, "dedup: static|non_virt input %d", to_dedup_temp.size());
     size_t dedup_count =
         dedup_methods_helper(scope, to_dedup_temp, replacements, new_to_old);
     total_dedup_count += dedup_count;

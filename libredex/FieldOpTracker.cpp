@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -20,16 +20,15 @@
 namespace field_op_tracker {
 
 bool is_own_init(DexField* field, const DexMethod* method) {
-  return (is_clinit(method) || is_init(method)) &&
+  return (method::is_clinit(method) || method::is_init(method)) &&
          method->get_class() == field->get_class();
 }
 
-using register_t = ir_analyzer::register_t;
 using namespace ir_analyzer;
 
 using IsZeroDomain = sparta::ConstantAbstractDomain<bool>;
 using IsZeroEnvironment =
-    sparta::PatriciaTreeMapAbstractEnvironment<register_t, IsZeroDomain>;
+    sparta::PatriciaTreeMapAbstractEnvironment<reg_t, IsZeroDomain>;
 
 class IsZeroAnalyzer final : public BaseIRAnalyzer<IsZeroEnvironment> {
 
@@ -41,7 +40,7 @@ class IsZeroAnalyzer final : public BaseIRAnalyzer<IsZeroEnvironment> {
     MonotonicFixpointIterator::run(IsZeroEnvironment::top());
   }
 
-  void analyze_instruction(IRInstruction* insn,
+  void analyze_instruction(const IRInstruction* insn,
                            IsZeroEnvironment* current_state) const override {
 
     auto op = insn->opcode();

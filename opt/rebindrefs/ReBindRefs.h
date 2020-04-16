@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -8,6 +8,8 @@
 #pragma once
 
 #include "Pass.h"
+
+#include "ApiLevelsUtils.h"
 
 /**
  * A method reference encoded in an invoke-virtual/interface instruction can be
@@ -33,10 +35,16 @@ class ReBindRefsPass : public Pass {
   void bind_config() override {
     // Allowing resolving method ref to an external one.
     bind("rebind_to_external", false, m_rebind_to_external);
+    bind("excluded_externals", {}, m_excluded_externals,
+         "Externals types/prefixes excluded from reference rebinding");
   }
+
+  void eval_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
   bool m_rebind_to_external;
+  std::vector<std::string> m_excluded_externals;
+  const api::AndroidSDK* m_min_sdk_api;
 };

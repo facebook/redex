@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -23,6 +23,7 @@
 #include "DexMemberRefs.h"
 #include "KeepReason.h"
 
+class DexCallSite;
 class DexDebugInstruction;
 class DexString;
 class DexType;
@@ -30,6 +31,7 @@ class DexFieldRef;
 class DexTypeList;
 class DexProto;
 class DexMethodRef;
+class DexMethodHandle;
 class DexClass;
 struct DexFieldSpec;
 struct DexDebugEntry;
@@ -92,6 +94,9 @@ struct RedexContext {
   DexMethodRef* get_method(const DexType* type,
                            const DexString* name,
                            const DexProto* proto);
+
+  DexMethodHandle* make_methodhandle();
+  DexMethodHandle* get_methodhandle();
 
   void erase_method(DexMethodRef*);
   void mutate_method(DexMethodRef* method,
@@ -233,8 +238,9 @@ struct RedexContext {
 // One or more exceptions
 class aggregate_exception : public std::exception {
  public:
-  explicit aggregate_exception(const std::vector<std::exception_ptr>& exns)
-      : m_exceptions(exns) {}
+  template <class T>
+  explicit aggregate_exception(T container)
+      : m_exceptions(container.begin(), container.end()) {}
 
   // We do not really want to have this called directly
   const char* what() const throw() override { return "one or more exception"; }

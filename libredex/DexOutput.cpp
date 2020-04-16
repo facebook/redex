@@ -31,7 +31,9 @@
 #endif
 
 #include "Debug.h"
+#include "DexCallSite.h"
 #include "DexClass.h"
+#include "DexMethodHandle.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
 #include "IODIMetadata.h"
@@ -114,6 +116,14 @@ std::vector<DexString*> GatheredTypes::keep_cls_strings_together_emitlist() {
       CustomSort<DexString, cmp_dstring>(m_cls_strings, compare_dexstrings));
 }
 
+std::vector<DexMethodHandle*> GatheredTypes::get_dexmethodhandle_emitlist() {
+  return m_lmethodhandle;
+}
+
+std::vector<DexCallSite*> GatheredTypes::get_dexcallsite_emitlist() {
+  return m_lcallsite;
+}
+
 std::vector<DexMethod*> GatheredTypes::get_dexmethod_emitlist() {
   std::vector<DexMethod*> methlist;
   for (auto cls : *m_classes) {
@@ -148,18 +158,21 @@ void GatheredTypes::sort_dexmethod_emitlist_cls_order(
 
 void GatheredTypes::sort_dexmethod_emitlist_profiled_order(
     std::vector<DexMethod*>& lmeth) {
+  std::unordered_map<DexMethod*, unsigned int> cache;
+  cache.reserve(lmeth.size());
   std::stable_sort(
       lmeth.begin(),
       lmeth.end(),
       dexmethods_profiled_comparator(&m_method_to_weight,
-                                     &m_method_sorting_whitelisted_substrings));
+                                     &m_method_sorting_whitelisted_substrings,
+                                     &cache));
 }
 
 void GatheredTypes::sort_dexmethod_emitlist_clinit_order(
     std::vector<DexMethod*>& lmeth) {
   std::stable_sort(lmeth.begin(), lmeth.end(),
                    [](const DexMethod* a, const DexMethod* b) {
-                     if (is_clinit(a) && !is_clinit(b)) {
+                     if (method::is_clinit(a) && !method::is_clinit(b)) {
                        return true;
                      } else {
                        return false;
@@ -184,7 +197,10 @@ DexOutputIdx* GatheredTypes::get_dodx(const uint8_t* base) {
   dexfield_to_idx* field = get_field_index();
   dexmethod_to_idx* method = get_method_index();
   std::vector<DexTypeList*>* typelist = get_typelist_list(proto);
-  return new DexOutputIdx(string, type, proto, field, method, typelist, base);
+  dexcallsite_to_idx* callsite = get_callsite_index();
+  dexmethodhandle_to_idx* methodhandle = get_methodhandle_index();
+  return new DexOutputIdx(string, type, proto, field, method, typelist,
+                          callsite, methodhandle, base);
 }
 
 dexstring_to_idx* GatheredTypes::get_string_index(cmp_dstring cmp) {
@@ -232,6 +248,16 @@ dexproto_to_idx* GatheredTypes::get_proto_index(cmp_dproto cmp) {
   for (auto const& m : m_lmethod) {
     protos.push_back(m->get_proto());
   }
+  for (auto const& c : m_lcallsite) {
+    protos.push_back(c->method_type());
+    for (auto arg : c->args()) {
+      // n.b. how deep could this recursion go? what if there was a method
+      // handle here?
+      if (arg->evtype() == DEVT_METHOD_TYPE) {
+        protos.push_back(((DexEncodedValueMethodType*)arg)->proto());
+      }
+    }
+  }
   std::sort(protos.begin(), protos.end());
   protos.erase(std::unique(protos.begin(), protos.end()), protos.end());
   std::sort(protos.begin(), protos.end(), cmp);
@@ -265,6 +291,27 @@ std::vector<DexTypeList*>* GatheredTypes::get_typelist_list(
   return typel;
 }
 
+dexcallsite_to_idx* GatheredTypes::get_callsite_index(cmp_callsite cmp) {
+  std::sort(m_lcallsite.begin(), m_lcallsite.end(), cmp);
+  dexcallsite_to_idx* csidx = new dexcallsite_to_idx();
+  uint32_t idx = 0;
+  for (auto it = m_lcallsite.begin(); it != m_lcallsite.end(); it++) {
+    csidx->insert(std::make_pair(*it, idx++));
+  }
+  return csidx;
+}
+
+dexmethodhandle_to_idx* GatheredTypes::get_methodhandle_index(
+    cmp_methodhandle cmp) {
+  std::sort(m_lmethodhandle.begin(), m_lmethodhandle.end(), cmp);
+  dexmethodhandle_to_idx* mhidx = new dexmethodhandle_to_idx();
+  uint32_t idx = 0;
+  for (auto it = m_lmethodhandle.begin(); it != m_lmethodhandle.end(); it++) {
+    mhidx->insert(std::make_pair(*it, idx++));
+  }
+  return mhidx;
+}
+
 void GatheredTypes::build_cls_load_map() {
   unsigned int index = 0;
   int type_strings = 0;
@@ -285,7 +332,7 @@ void GatheredTypes::build_cls_load_map() {
     // now add in any strings found in <clinit>
     // since they are likely to be accessed during class load
     for (const auto& m : cls->get_dmethods()) {
-      if (is_clinit(m)) {
+      if (method::is_clinit(m)) {
         std::vector<DexString*> method_strings;
         m->gather_strings(method_strings);
         for (const auto& s : method_strings) {
@@ -351,12 +398,17 @@ void GatheredTypes::build_method_map() {
 }
 
 void GatheredTypes::gather_components(PostLowering const* post_lowering) {
-  ::gather_components(m_lstring, m_ltype, m_lfield, m_lmethod, *m_classes);
+  ::gather_components(m_lstring, m_ltype, m_lfield, m_lmethod, m_lcallsite,
+                      m_lmethodhandle, *m_classes);
   if (post_lowering) {
+    // TODO(T59333341) - need to consider how dex038 works with ditto post
+    // lowering
     post_lowering->gather_components(m_lstring,
                                      m_ltype,
                                      m_lfield,
                                      m_lmethod,
+                                     m_lcallsite,
+                                     m_lmethodhandle,
                                      m_additional_ltypelists,
                                      *m_classes);
   }
@@ -431,6 +483,10 @@ void DexOutput::insert_map_item(uint16_t maptype,
   m_map_items.emplace_back(item);
 
   switch (maptype) {
+  case TYPE_HEADER_ITEM:
+    m_stats.header_item_count += size;
+    m_stats.header_item_bytes += bytes;
+    break;
   case TYPE_STRING_ID_ITEM:
     m_stats.string_id_count += size;
     m_stats.string_id_bytes += bytes;
@@ -481,7 +537,7 @@ void DexOutput::insert_map_item(uint16_t maptype,
     break;
   case TYPE_CLASS_DATA_ITEM:
     m_stats.class_data_count += size;
-    m_stats.class_data_count += bytes;
+    m_stats.class_data_bytes += bytes;
     break;
   case TYPE_CODE_ITEM:
     m_stats.code_count += size;
@@ -748,7 +804,6 @@ void DexOutput::generate_typelist_data() {
 
 void DexOutput::generate_proto_data() {
   auto protoids = (dex_proto_id*)(m_output + hdr.proto_ids_off);
-
   for (auto& it : dodx->proto_to_idx()) {
     auto proto = it.first;
     auto idx = it.second;
@@ -925,11 +980,50 @@ void DexOutput::generate_code_items(const std::vector<SortMode>& mode) {
     m_method_bytecode_offsets.emplace_back(meth->get_name()->c_str(), m_offset);
     m_code_item_emits.emplace_back(meth, code,
                                    (dex_code_item*)(m_output + m_offset));
+    auto insns_size = ((const dex_code_item*)(m_output + m_offset))->insns_size;
     m_offset += size;
     m_stats.num_instructions += code->get_instructions().size();
+    m_stats.instruction_bytes += insns_size * 2;
   }
   insert_map_item(TYPE_CODE_ITEM, (uint32_t)m_code_item_emits.size(), ci_start,
                   m_offset - ci_start);
+}
+
+void DexOutput::generate_callsite_data() {
+  uint32_t offset =
+      hdr.class_defs_off + hdr.class_defs_size * sizeof(dex_class_def);
+
+  auto callsites = m_gtypes->get_dexcallsite_emitlist();
+  dex_callsite_id* dexcallsites = (dex_callsite_id*)(m_output + offset);
+  for (uint32_t i = 0; i < callsites.size(); i++) {
+    m_stats.num_callsites++;
+    DexCallSite* callsite = callsites.at(i);
+    dexcallsites[i].callsite_off = m_call_site_items[callsite];
+  }
+}
+
+void DexOutput::generate_methodhandle_data() {
+  uint32_t total_callsite_size = dodx->callsitesize() * sizeof(dex_callsite_id);
+  uint32_t offset = hdr.class_defs_off +
+                    hdr.class_defs_size * sizeof(dex_class_def) +
+                    total_callsite_size;
+  dex_methodhandle_id* dexmethodhandles =
+      (dex_methodhandle_id*)(m_output + offset);
+  for (auto it : dodx->methodhandle_to_idx()) {
+    m_stats.num_methodhandles++;
+    DexMethodHandle* methodhandle = it.first;
+    uint32_t idx = it.second;
+    dexmethodhandles[idx].method_handle_type = methodhandle->type();
+    if (DexMethodHandle::isInvokeType(methodhandle->type())) {
+      dexmethodhandles[idx].field_or_method_id =
+          dodx->methodidx(methodhandle->methodref());
+    } else {
+      dexmethodhandles[idx].field_or_method_id =
+          dodx->fieldidx(methodhandle->fieldref());
+    }
+    dexmethodhandles[idx].unused1 = 0;
+    dexmethodhandles[idx].unused2 = 0;
+  }
 }
 
 void DexOutput::check_method_instruction_size_limit(const ConfigFiles& conf,
@@ -977,7 +1071,26 @@ void DexOutput::generate_static_values() {
       m_stats.num_static_values++;
     }
   }
-  if (m_static_values.size()) {
+  {
+    auto callsites = m_gtypes->get_dexcallsite_emitlist();
+    for (uint32_t i = 0; i < callsites.size(); i++) {
+      auto callsite = callsites[i];
+      auto eva = callsite->as_encoded_value_array();
+      uint32_t offset = 0;
+      if (enc_arrays.count(eva)) {
+        offset = m_call_site_items[callsite] = enc_arrays.at(eva);
+      } else {
+        uint8_t* output = m_output + m_offset;
+        uint8_t* outputsv = output;
+        eva.encode(dodx, output);
+        enc_arrays.emplace(std::move(eva), m_offset);
+        offset = m_call_site_items[callsite] = m_offset;
+        m_offset += output - outputsv;
+        m_stats.num_static_values++;
+      }
+    }
+  }
+  if (m_static_values.size() || m_call_site_items.size()) {
     insert_map_item(TYPE_ENCODED_ARRAY_ITEM, (uint32_t)enc_arrays.size(),
                     sv_start, m_offset - sv_start);
   }
@@ -1645,6 +1758,9 @@ uint32_t emit_instruction_offset_debug_info(
       *dbgcount += 1;
     }
   }
+  auto post_iodi_offset = offset;
+  TRACE(IODI, 2, "[IODI] IODI programs took up %d bytes\n",
+        post_iodi_offset - initial_offset);
   // 3)
   auto size_offset_end = param_size_to_oset.end();
   for (auto& it : code_items) {
@@ -1681,6 +1797,8 @@ uint32_t emit_instruction_offset_debug_info(
       *dbgcount += 1;
     }
   }
+  TRACE(IODI, 2, "[IODI] Non-IODI programs took up %d bytes\n",
+        offset - post_iodi_offset);
   // Return how much data we've encoded
   return offset - initial_offset;
 }
@@ -1830,6 +1948,18 @@ void DexOutput::init_header_offsets(const std::string& dex_magic) {
                   total_class_size);
 
   m_offset += total_class_size;
+
+  uint32_t total_callsite_size = dodx->callsitesize() * sizeof(dex_callsite_id);
+  insert_map_item(TYPE_CALL_SITE_ID_ITEM, (uint32_t)dodx->callsitesize(),
+                  m_offset, total_callsite_size);
+  m_offset += total_callsite_size;
+
+  uint32_t total_methodhandle_size =
+      dodx->methodhandlesize() * sizeof(dex_methodhandle_id);
+  insert_map_item(TYPE_METHOD_HANDLE_ITEM, (uint32_t)dodx->methodhandlesize(),
+                  m_offset, total_methodhandle_size);
+  m_offset += total_methodhandle_size;
+
   hdr.data_off = m_offset;
   /* Todo... */
   hdr.map_off = 0;
@@ -2041,7 +2171,7 @@ void write_pg_mapping(const std::string& filename, DexClasses* classes) {
 
   auto deobf_type = [&](DexType* type) {
     if (type) {
-      if (is_array(type)) {
+      if (type::is_array(type)) {
         auto* type_str = type->c_str();
         int dim = 0;
         while (type_str[dim] == '[') {
@@ -2052,7 +2182,7 @@ void write_pg_mapping(const std::string& filename, DexClasses* classes) {
         std::string result;
         if (inner_cls) {
           result = java_names::internal_to_external(deobf_class(inner_cls));
-        } else if (inner_type && is_primitive(inner_type)) {
+        } else if (inner_type && type::is_primitive(inner_type)) {
           result = deobf_primitive(type_str[dim]);
         } else {
           result = java_names::internal_to_external(&type_str[dim]);
@@ -2065,7 +2195,7 @@ void write_pg_mapping(const std::string& filename, DexClasses* classes) {
         DexClass* cls = type_class(type);
         if (cls) {
           return java_names::internal_to_external(deobf_class(cls));
-        } else if (is_primitive(type)) {
+        } else if (type::is_primitive(type)) {
           return std::string(deobf_primitive(type->c_str()[0]));
         } else {
           return java_names::internal_to_external(type->c_str());
@@ -2077,7 +2207,9 @@ void write_pg_mapping(const std::string& filename, DexClasses* classes) {
 
   auto deobf_meth = [&](DexMethod* method) {
     if (method) {
+      /* clang-format off */
       // Example: 672:672:boolean customShouldDelayInitMessage(android.os.Handler,android.os.Message)
+      /* clang-format on */
       auto* proto = method->get_proto();
       std::ostringstream ss;
       auto* code = method->get_dex_code();
@@ -2227,6 +2359,8 @@ void DexOutput::prepare(SortMode string_mode,
   generate_field_data();
   generate_method_data();
   generate_class_data();
+  generate_callsite_data();
+  generate_methodhandle_data();
   generate_annotations();
   generate_debug_items();
   if (m_force_class_data_end_of_file) {
@@ -2369,7 +2503,7 @@ dex_stats_t write_classes_to_dex(
   if (sort_bytecode_cfg.isString()) {
     code_sort_mode.push_back(make_sort_bytecode(sort_bytecode_cfg.asString()));
   } else if (sort_bytecode_cfg.isArray()) {
-    for (auto val : sort_bytecode_cfg) {
+    for (const auto& val : sort_bytecode_cfg) {
       code_sort_mode.push_back(make_sort_bytecode(val.asString()));
     }
   }
@@ -2415,8 +2549,8 @@ LocatorIndex make_locator_index(DexStoresVector& stores) {
         uint32_t global_clsnr = Locator::decodeGlobalClassIndex(cstr);
         if (global_clsnr != Locator::invalid_global_class_index) {
           TRACE(LOC, 3,
-                "%s (%u, %u, %u) needs no locator; global class index=%u",
-                cstr, strnr, dexnr, clsnr, global_clsnr);
+                "%s (%u, %u, %u) needs no locator; global class index=%u", cstr,
+                strnr, dexnr, clsnr, global_clsnr);
           // This prefix is followed by the global class index; this case
           // doesn't need a locator.
           continue;

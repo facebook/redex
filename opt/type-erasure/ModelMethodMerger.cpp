@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -75,8 +75,8 @@ void replace_method_args_head(DexMethod* meth, DexType* new_head) {
                true /* update deobfuscated name */);
 }
 
-void fix_visibility_helper(DexMethod* method,
-                           MethodOrderedSet& vmethods_created) {
+template <typename T>
+void fix_visibility_helper(DexMethod* method, T& vmethods_created) {
   // Fix non-static non-ctor private callees
   for (auto& mie : InstructionIterable(method->get_code())) {
     auto insn = mie.insn;
@@ -85,8 +85,8 @@ void fix_visibility_helper(DexMethod* method,
       continue;
     }
     auto callee = resolve_method(insn->get_method(), MethodSearch::Direct);
-    if (callee == nullptr || !callee->is_concrete() || is_any_init(callee) ||
-        is_public(callee)) {
+    if (callee == nullptr || !callee->is_concrete() ||
+        method::is_any_init(callee) || is_public(callee)) {
       continue;
     }
     always_assert(is_private(callee));
@@ -111,7 +111,7 @@ boost::optional<size_t> get_ctor_type_tag_param_idx(
   auto type_list = ctor_proto->get_args()->get_type_list();
   size_t idx = 0;
   for (auto type : type_list) {
-    if (type == get_int_type()) {
+    if (type == type::_int()) {
       always_assert_log(!type_tag_param_idx,
                         "More than one potential type tag param found!");
       type_tag_param_idx = boost::optional<size_t>(idx);
@@ -180,7 +180,8 @@ static void find_common_ctor_invocations(
     auto meth = resolve_method(last_non_goto_insn->insn->get_method(),
                                MethodSearch::Direct);
     // Make sure we found the same init method
-    if (!meth || !is_init(meth) || (common_ctor && common_ctor != meth)) {
+    if (!meth || !method::is_init(meth) ||
+        (common_ctor && common_ctor != meth)) {
       invocations.clear();
       return;
     }
@@ -216,7 +217,8 @@ void MethodStats::add(const MethodOrderedSet& methods) {
   }
 }
 
-void MethodStats::print(const std::string model_name, uint32_t num_mergeables) {
+void MethodStats::print(const std::string& model_name,
+                        uint32_t num_mergeables) {
   if (!traceEnabled(TERA, 8)) {
     return;
   }
@@ -228,7 +230,7 @@ void MethodStats::print(const std::string model_name, uint32_t num_mergeables) {
   for (auto& mm : merged_methods) {
     TRACE(TERA, 8, " %4d %s", mm.count, mm.name.c_str());
     if (mm.count > 1) {
-      for (auto sample : mm.samples) {
+      for (const auto& sample : mm.samples) {
         TRACE(TERA, 9, "%s", sample.c_str());
       }
     }
@@ -261,9 +263,9 @@ ModelMethodMerger::ModelMethodMerger(
     std::vector<DexMethod*> ctors;
     std::vector<DexMethod*> non_ctors;
     for (const auto m : merger->dmethods) {
-      if (is_init(m)) {
+      if (method::is_init(m)) {
         ctors.push_back(m);
-      } else if (!is_clinit(m)) {
+      } else if (!method::is_clinit(m)) {
         non_ctors.push_back(m);
       }
     }
@@ -276,7 +278,7 @@ ModelMethodMerger::ModelMethodMerger(
 }
 
 void ModelMethodMerger::fix_visibility() {
-  MethodOrderedSet vmethods_created;
+  std::unordered_set<DexMethod*> vmethods_created;
   for (const auto& pair : m_merger_ctors) {
     const std::vector<DexMethod*>& ctors = pair.second;
     for (DexMethod* m : ctors) {
@@ -289,7 +291,7 @@ void ModelMethodMerger::fix_visibility() {
       fix_visibility_helper(m, vmethods_created);
     }
   }
-  for (auto pair : m_merger_non_vmethods) {
+  for (const auto& pair : m_merger_non_vmethods) {
     auto non_vmethods = pair.second;
     for (auto m : non_vmethods) {
       fix_visibility_helper(m, vmethods_created);
@@ -308,7 +310,7 @@ void ModelMethodMerger::fix_visibility() {
     }
   }
   // Promote privatized non-static non-ctor methods back to be public virtual.
-  for (auto pair : m_merger_non_ctors) {
+  for (const auto& pair : m_merger_non_ctors) {
     auto non_ctors = pair.second;
     for (const auto m : non_ctors) {
       if (is_private(m) && !is_static(m)) {
@@ -332,7 +334,7 @@ void ModelMethodMerger::fix_visibility() {
 }
 
 std::vector<IRInstruction*> ModelMethodMerger::make_string_const(
-    uint16_t dest, std::string val) {
+    reg_t dest, const std::string& val) {
   std::vector<IRInstruction*> res;
   IRInstruction* load = new IRInstruction(OPCODE_CONST_STRING);
   load->set_string(DexString::make_string(val));
@@ -344,8 +346,8 @@ std::vector<IRInstruction*> ModelMethodMerger::make_string_const(
   return res;
 }
 
-std::vector<IRInstruction*> ModelMethodMerger::make_check_cast(
-    DexType* type, uint16_t src_dest) {
+std::vector<IRInstruction*> ModelMethodMerger::make_check_cast(DexType* type,
+                                                               reg_t src_dest) {
   auto check_cast = new IRInstruction(OPCODE_CHECK_CAST);
   check_cast->set_type(type)->set_src(0, src_dest);
   auto move_result_pseudo =
@@ -355,7 +357,7 @@ std::vector<IRInstruction*> ModelMethodMerger::make_check_cast(
 }
 
 dispatch::DispatchMethod ModelMethodMerger::create_dispatch_method(
-    const dispatch::Spec spec, const std::vector<DexMethod*>& targets) {
+    const dispatch::Spec& spec, const std::vector<DexMethod*>& targets) {
   always_assert(targets.size());
   TRACE(TERA,
         5,
@@ -404,7 +406,7 @@ DexType* ModelMethodMerger::get_merger_type(DexType* mergeable) {
 
 DexMethod* ModelMethodMerger::create_instantiation_factory(
     DexType* owner_type,
-    std::string name,
+    const std::string& name,
     DexProto* proto,
     const DexAccessFlags access,
     DexMethod* ctor) {
@@ -482,7 +484,7 @@ void ModelMethodMerger::sink_common_ctor_to_return_block(DexMethod* dispatch) {
   //                                       INVOKE_DIRECT v7, v8
   //
   // Redundent moves should be cleaned up by opt passes like copy propagation.
-  std::vector<uint16_t> new_srcs;
+  std::vector<reg_t> new_srcs;
   auto param_insns =
       InstructionIterable(common_ctor->get_code()->get_param_instructions());
   auto param_it = param_insns.begin(), param_end = param_insns.end();
@@ -494,7 +496,7 @@ void ModelMethodMerger::sink_common_ctor_to_return_block(DexMethod* dispatch) {
     }
   }
 
-  for (auto invocation : invocations) {
+  for (const auto& invocation : invocations) {
     param_it = param_insns.begin();
     for (size_t i = 0; i < invocation->insn->srcs_size(); ++i, ++param_it) {
       always_assert(param_it != param_end);
@@ -540,7 +542,7 @@ void ModelMethodMerger::inline_dispatch_entries(DexMethod* dispatch) {
   for (auto& pair : callsites) {
     auto callee_code = pair.first;
     auto& call_pos = pair.second;
-    inliner::inline_method(dispatch_code, callee_code, call_pos);
+    inliner::inline_method(dispatch, callee_code, call_pos);
   }
   TRACE(TERA,
         9,
@@ -682,8 +684,8 @@ void ModelMethodMerger::merge_ctors() {
       }
 
       // Create dispatch.
-      auto dispatch_arg_list = type_reference::append_and_make(
-          ctor_proto->get_args(), get_int_type());
+      auto dispatch_arg_list =
+          type_reference::append_and_make(ctor_proto->get_args(), type::_int());
       auto dispatch_proto =
           pass_type_tag_param
               ? DexProto::make_proto(ctor_proto->get_rtype(), dispatch_arg_list)
@@ -754,8 +756,8 @@ void ModelMethodMerger::merge_ctors() {
   // Update call sites
   //////////////////////////////////////////
   auto call_sites = method_reference::collect_call_refs(m_scope, ctor_set);
-  update_call_refs(
-      call_sites, type_tags, old_to_new_callee, pass_type_tag_param);
+  update_call_refs(call_sites, type_tags, old_to_new_callee,
+                   pass_type_tag_param);
 }
 
 void ModelMethodMerger::dedup_non_ctor_non_virt_methods() {

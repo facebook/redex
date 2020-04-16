@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -15,15 +15,9 @@ class RemoveUnreachablePass : public Pass {
   RemoveUnreachablePass() : Pass("RemoveUnreachablePass") {}
 
   void bind_config() override {
-    bind("ignore_string_literals",
-         {},
-         m_ignore_sets.string_literals);
-    bind("ignore_string_literal_annos",
-         {},
-         m_ignore_sets.string_literal_annos);
-    bind("ignore_system_annos",
-         {},
-         m_ignore_sets.system_annos);
+    bind("ignore_string_literals", {}, m_ignore_sets.string_literals);
+    bind("ignore_string_literal_annos", {}, m_ignore_sets.string_literal_annos);
+    bind("ignore_system_annos", {}, m_ignore_sets.system_annos);
     bind("keep_class_in_string", true, m_ignore_sets.keep_class_in_string);
     bind("emit_graph_on_run", boost::optional<uint32_t>{}, m_emit_graph_on_run);
     after_configuration([this] {
@@ -37,7 +31,7 @@ class RemoveUnreachablePass : public Pass {
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
   void write_out_removed_symbols(
-      const std::string filepath,
+      const std::string& filepath,
       const ConcurrentSet<std::string>& removed_symbols);
 
  private:

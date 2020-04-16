@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -133,14 +133,13 @@ using TypeDomain = sparta::FiniteAbstractDomain<IRType,
                                                 TypeLattice::Encoding,
                                                 &type_lattice>;
 
-using register_t = ir_analyzer::register_t;
 using namespace ir_analyzer;
 
 using BasicTypeEnvironment =
-    sparta::PatriciaTreeMapAbstractEnvironment<register_t, TypeDomain>;
+    sparta::PatriciaTreeMapAbstractEnvironment<reg_t, TypeDomain>;
 
 using DexTypeEnvironment =
-    sparta::PatriciaTreeMapAbstractEnvironment<register_t, DexTypeDomain>;
+    sparta::PatriciaTreeMapAbstractEnvironment<reg_t, DexTypeDomain>;
 
 class TypeEnvironment final
     : public sparta::ReducedProductAbstractDomain<TypeEnvironment,
@@ -152,23 +151,23 @@ class TypeEnvironment final
   static void reduce_product(
       std::tuple<BasicTypeEnvironment, DexTypeEnvironment>& /* product */) {}
 
-  TypeDomain get_type(register_t reg) const { return get<0>().get(reg); }
+  TypeDomain get_type(reg_t reg) const { return get<0>().get(reg); }
 
-  void set_type(register_t reg, const TypeDomain type) {
+  void set_type(reg_t reg, const TypeDomain type) {
     apply<0>([=](auto env) { env->set(reg, type); }, true);
   }
 
   void update_type(
-      register_t reg,
+      reg_t reg,
       const std::function<TypeDomain(const TypeDomain&)>& operation) {
     apply<0>([=](auto env) { env->update(reg, operation); }, true);
   }
 
-  boost::optional<const DexType*> get_dex_type(register_t reg) const {
+  boost::optional<const DexType*> get_dex_type(reg_t reg) const {
     return get<1>().get(reg).get_dex_type();
   }
 
-  void set_concrete_type(register_t reg, const DexTypeDomain& dex_type) {
+  void set_concrete_type(reg_t reg, const DexTypeDomain& dex_type) {
     apply<1>([=](auto env) { env->set(reg, dex_type); }, true);
   }
 };
@@ -179,18 +178,33 @@ class TypeInference final
   TypeInference(const cfg::ControlFlowGraph& cfg)
       : ir_analyzer::BaseIRAnalyzer<TypeEnvironment>(cfg), m_cfg(cfg) {}
 
-  void run(DexMethod* dex_method);
+  void run(const DexMethod* dex_method);
 
   void run(bool is_static, DexType* declaring_type, DexTypeList* args);
 
-  void analyze_instruction(IRInstruction* insn,
-                           TypeEnvironment* current_state) const override;
+  void analyze_node(const cfg::GraphInterface::NodeId& node,
+                    TypeEnvironment* current_state) const override {
+    for (auto& mie : InstructionIterable(node)) {
+      analyze_instruction(mie.insn, current_state, node);
+    }
+  }
+
+  void analyze_instruction(const IRInstruction* insn,
+                           TypeEnvironment* current_state) const override {
+
+    analyze_instruction(insn, current_state, nullptr);
+  }
+
+  void analyze_instruction(const IRInstruction* insn,
+                           TypeEnvironment* current_state,
+                           const cfg::Block* current_block) const;
 
   void print(std::ostream& output) const;
 
   void traceState(TypeEnvironment* state) const;
 
-  std::unordered_map<IRInstruction*, TypeEnvironment>& get_type_environments() {
+  std::unordered_map<const IRInstruction*, TypeEnvironment>&
+  get_type_environments() {
     return m_type_envs;
   }
 
@@ -198,26 +212,24 @@ class TypeInference final
   void populate_type_environments();
 
   const cfg::ControlFlowGraph& m_cfg;
-  std::unordered_map<IRInstruction*, TypeEnvironment> m_type_envs;
+  std::unordered_map<const IRInstruction*, TypeEnvironment> m_type_envs;
 
   TypeDomain refine_type(const TypeDomain& type,
                          IRType expected,
                          IRType const_type,
                          IRType scalar_type) const;
-  void refine_type(TypeEnvironment* state,
-                   register_t reg,
-                   IRType expected) const;
+  void refine_type(TypeEnvironment* state, reg_t reg, IRType expected) const;
   void refine_wide_type(TypeEnvironment* state,
-                        register_t reg,
+                        reg_t reg,
                         IRType expected1,
                         IRType expected2) const;
-  void refine_reference(TypeEnvironment* state, register_t reg) const;
-  void refine_scalar(TypeEnvironment* state, register_t reg) const;
-  void refine_integer(TypeEnvironment* state, register_t reg) const;
-  void refine_float(TypeEnvironment* state, register_t reg) const;
-  void refine_wide_scalar(TypeEnvironment* state, register_t reg) const;
-  void refine_long(TypeEnvironment* state, register_t reg) const;
-  void refine_double(TypeEnvironment* state, register_t reg) const;
+  void refine_reference(TypeEnvironment* state, reg_t reg) const;
+  void refine_scalar(TypeEnvironment* state, reg_t reg) const;
+  void refine_integer(TypeEnvironment* state, reg_t reg) const;
+  void refine_float(TypeEnvironment* state, reg_t reg) const;
+  void refine_wide_scalar(TypeEnvironment* state, reg_t reg) const;
+  void refine_long(TypeEnvironment* state, reg_t reg) const;
+  void refine_double(TypeEnvironment* state, reg_t reg) const;
 };
 
 } // namespace type_inference

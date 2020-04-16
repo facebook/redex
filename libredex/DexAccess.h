@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -10,6 +10,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <vector>
 
 // clang-format off
 #define ACCESSFLAGS                         \
@@ -78,16 +79,6 @@ ACCESSFLAGS
 const DexAccessFlags VISIBILITY_MASK =
     static_cast<DexAccessFlags>(ACC_PUBLIC | ACC_PRIVATE | ACC_PROTECTED);
 
-inline bool is_package_protected(DexAccessFlags flags) {
-  return (flags & (DexAccessFlags::ACC_PRIVATE | DexAccessFlags::ACC_PUBLIC)) ==
-         0;
-}
-
-template <class DexMember>
-bool is_package_protected(DexMember* m) {
-  return is_package_protected(m->get_access());
-}
-
 inline bool is_package_private(DexAccessFlags flags) {
   return (flags & VISIBILITY_MASK) == 0;
 }
@@ -96,6 +87,26 @@ template <class DexMember>
 bool is_package_private(DexMember* m) {
   return is_package_private(m->get_access());
 }
+
+class DexClass;
+using DexClasses = std::vector<DexClass*>;
+
+/**
+ * Loosen those access modifiers of a class that do not require a corresponding
+ * change in opcodes. 0. Direct instance methods will not be changed so we don't
+ * need update opcodes.
+ * 1. Make the class public.
+ * 2. Make protected and package-private virtual methods public.
+ * 3. Make constructors and static methods public.
+ * 4. Make all fields public.
+ */
+void loosen_access_modifier(DexClass* clazz);
+
+/*
+ * Loosen access modifier of classes and @InnerClass annotations without needing
+ * change opcodes.
+ */
+void loosen_access_modifier(const DexClasses& clazz);
 
 template <class DexMember>
 void set_public(DexMember* m) {

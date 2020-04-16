@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -36,8 +36,8 @@ void CrossDexRelocator::gather_possibly_relocatable_methods(
                          : m_xstore_refs->get_store_idx(cls->get_type());
   auto can_relocate_common = [&](DexMethod* m) {
     bool basic_constraints =
-        m->is_concrete() && m->get_code() && can_rename_DEPRECATED(m) &&
-           !root(m) && !m->rstate.no_optimizations() && no_invoke_super(m);
+        m->is_concrete() && m->get_code() && can_rename(m) && !root(m) &&
+        !m->rstate.no_optimizations() && method::no_invoke_super(m);
     if (!basic_constraints) {
       return false;
     }
@@ -63,7 +63,7 @@ void CrossDexRelocator::gather_possibly_relocatable_methods(
     for (DexMethod* m : cls->get_dmethods()) {
       if (((relocate_static_methods && is_static(m)) ||
            (relocate_non_static_direct_methods && !is_static(m) &&
-            !is_init(m))) &&
+            !method::is_init(m))) &&
           can_relocate_common(m)) {
         possibly_relocatable_methods.push_back(m);
       }
@@ -183,7 +183,7 @@ void CrossDexRelocator::relocate_methods(
         DexType* new_type = DexType::make_type(new_type_name.c_str());
         ClassCreator cc(new_type);
         cc.set_access(ACC_PUBLIC | ACC_FINAL);
-        cc.set_super(get_object_type());
+        cc.set_super(type::java_lang_Object());
         DexClass* relocated_cls = cc.create();
         relocated_cls->rstate.set_generated();
 

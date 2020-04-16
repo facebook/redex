@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -80,7 +80,7 @@ struct EnumOrdinalAnalyzerState {
 
   const DexField* enum_name_field{get_enum_name_field()};
 
-  const DexType* enum_type{get_enum_type()};
+  const DexType* enum_type{type::java_lang_Enum()};
 
   // The Enum class whose <clinit> we are currently analyzing.
   const DexType* clinit_class;
@@ -167,7 +167,8 @@ class EnumOrdinalAnalyzer
       env->set_object_field(insn->src(0), state.enum_name_field, name);
       env->set_object_field(insn->src(0), state.enum_ordinal_field, ordinal);
       return true;
-    } else if (is_init(method) && method->get_class() == state.clinit_class) {
+    } else if (method::is_init(method) &&
+               method->get_class() == state.clinit_class) {
       // TODO(fengliu) : Analyze enums with an instance string field.
       cp::semantically_inline_method(
           method->get_code(),
@@ -305,7 +306,7 @@ EnumAttributes analyze_enum_clinit(const DexClass* cls) {
     for (auto* enum_ifield : cls->get_ifields()) {
       auto env_value = ptr.get(enum_ifield);
       if (env_value.is_bottom()) {
-        if (enum_ifield->get_type() == get_string_type()) {
+        if (enum_ifield->get_type() == type::java_lang_String()) {
           attributes.m_field_map[enum_ifield][*ordinal_value].string_value =
               nullptr;
         } else {
@@ -314,7 +315,7 @@ EnumAttributes analyze_enum_clinit(const DexClass* cls) {
         }
         continue;
       }
-      if (enum_ifield->get_type() == get_string_type()) {
+      if (enum_ifield->get_type() == type::java_lang_String()) {
         if (auto string_ptr = env_value.maybe_get<SignedConstantDomain>()) {
           if (auto string_ptr_value = string_ptr->get_constant()) {
             always_assert(*string_ptr_value == 0);

@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -15,7 +15,7 @@ using namespace reflection;
 
 std::string to_string(const ReflectionSites& reflection_sites) {
   std::ostringstream out;
-  for (const auto it : reflection_sites) {
+  for (const auto& it : reflection_sites) {
     out << SHOW(it.first) << " {";
     for (auto iit = it.second.begin(); iit != it.second.end(); ++iit) {
       out << iit->first << ", " << iit->second;

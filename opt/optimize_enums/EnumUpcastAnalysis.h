@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -10,8 +10,8 @@
 
 #include "BaseIRAnalyzer.h"
 #include "ControlFlow.h"
-#include "EnumConfig.h"
 #include "DexUtil.h"
+#include "EnumConfig.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "PatriciaTreeSetAbstractDomain.h"
 
@@ -28,13 +28,11 @@ bool is_enum_valueof(const DexMethodRef* method);
  */
 bool is_enum_values(const DexMethodRef* method);
 
-using Register = ir_analyzer::register_t;
-
 // Store possible types for a register although we only care about Object, Enum
 // and Enum's subtypes.
 using EnumTypes = sparta::PatriciaTreeSetAbstractDomain<DexType*>;
 using EnumTypeEnvironment =
-    sparta::PatriciaTreeMapAbstractEnvironment<Register, EnumTypes>;
+    sparta::PatriciaTreeMapAbstractEnvironment<reg_t, EnumTypes>;
 
 class EnumFixpointIterator final
     : public ir_analyzer::BaseIRAnalyzer<EnumTypeEnvironment> {
@@ -44,7 +42,7 @@ class EnumFixpointIterator final
       : ir_analyzer::BaseIRAnalyzer<EnumTypeEnvironment>(cfg),
         m_config(config) {}
 
-  void analyze_instruction(IRInstruction* insn,
+  void analyze_instruction(const IRInstruction* insn,
                            EnumTypeEnvironment* env) const override;
 
   static EnumTypeEnvironment gen_env(const DexMethod* method);
@@ -52,8 +50,8 @@ class EnumFixpointIterator final
  private:
   const Config& m_config;
 
-  const DexType* ENUM_TYPE = get_enum_type();
-  const DexType* OBJECT_TYPE = get_object_type();
+  const DexType* ENUM_TYPE = type::java_lang_Enum();
+  const DexType* OBJECT_TYPE = type::java_lang_Object();
 };
 
 void reject_unsafe_enums(const std::vector<DexClass*>& classes, Config* config);

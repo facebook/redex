@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -18,10 +18,10 @@ MethodCreator make_method_creator() {
 
   MethodCreator mc(DexType::make_type("Lfoo;"),
                    DexString::make_string("bar"),
-                   DexProto::make_proto(get_void_type(),
+                   DexProto::make_proto(type::_void(),
 
                                         DexTypeList::make_type_list(
-                                            {get_int_type(), get_long_type()})),
+                                            {type::_int(), type::_long()})),
                    ACC_PUBLIC);
   return mc;
 }
@@ -46,7 +46,7 @@ TEST_F(CreatorsTest, Alloc) {
 
 TEST_F(CreatorsTest, MakeSwitchMultiIndices) {
   auto mc = make_method_creator();
-  auto idx_loc = mc.make_local(get_int_type());
+  auto idx_loc = mc.make_local(type::_int());
   auto param_loc = mc.get_local(1);
   auto mb = mc.get_main_block();
   mb->load_const(idx_loc, 1);
@@ -63,7 +63,7 @@ TEST_F(CreatorsTest, MakeSwitchMultiIndices) {
   auto def_block = mb->switch_op(idx_loc, cases);
   def_block->init_loc(param_loc);
 
-  for (auto it : cases) {
+  for (const auto& it : cases) {
     auto idx = it.first;
     auto case_block = cases[idx];
     ASSERT_TRUE(idx.size());
@@ -119,7 +119,7 @@ TEST_F(CreatorsTest, MakeSwitchMultiIndices) {
 TEST_F(CreatorsTest, ClassCreator) {
   std::string foo("Lfoo;");
   ClassCreator cc(DexType::make_type(foo.c_str()));
-  cc.set_super(get_object_type());
+  cc.set_super(type::java_lang_Object());
   auto cls = cc.create();
   std::string bar("Lbar;");
   cls->set_deobfuscated_name(bar);

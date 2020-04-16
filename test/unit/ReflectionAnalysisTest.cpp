@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -32,9 +32,9 @@ class ReflectionAnalysisTest : public RedexTest {
 
   ReflectionAnalysisTest() {
     auto args = DexTypeList::make_type_list({
-        get_object_type() // v5
+        type::java_lang_Object() // v5
     });
-    auto proto = DexProto::make_proto(get_void_type(), args);
+    auto proto = DexProto::make_proto(type::_void(), args);
     m_method = DexMethod::make_method(DexType::make_type("Lbar;"),
                                       DexString::make_string("testMethod"),
                                       proto)
@@ -52,7 +52,7 @@ class ReflectionAnalysisTest : public RedexTest {
 
   std::string to_string(const ReflectionSites& reflection_sites) {
     std::ostringstream out;
-    for (const auto it : reflection_sites) {
+    for (const auto& it : reflection_sites) {
       out << SHOW(it.first) << " {";
       for (auto iit = it.second.begin(); iit != it.second.end(); ++iit) {
         out << iit->first << ", " << iit->second;

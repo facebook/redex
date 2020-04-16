@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -17,8 +17,6 @@ using namespace sparta;
 namespace ptrs = local_pointers;
 
 namespace {
-
-using reg_t = uint32_t;
 
 using ParamInstructionMap =
     std::unordered_map<const IRInstruction*, param_idx_t>;
@@ -159,8 +157,7 @@ class SummaryBuilder final {
           summary->modified_params.emplace(m_param_insn_map.at(insn));
         }
       } else {
-        TRACE(OSDCE, 3, "Escaping write to value allocated by %s",
-              SHOW(insn));
+        TRACE(OSDCE, 3, "Escaping write to value allocated by %s", SHOW(insn));
         summary->effects |= EFF_WRITE_MAY_ESCAPE;
       }
     }

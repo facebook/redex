@@ -124,6 +124,9 @@ ssize_t VectorImpl::insertArrayAt(const void* array, size_t index, size_t length
 {
     if (index > size())
         return BAD_INDEX;
+    if (!length) {
+      return index;
+    }
     void* where = _grow(index, length);
     if (where) {
         _do_copy(where, array, length);
@@ -338,8 +341,10 @@ ssize_t VectorImpl::setCapacity(size_t new_capacity)
     SharedBuffer* sb = SharedBuffer::alloc(new_capacity * mItemSize);
     if (sb) {
         void* array = sb->data();
-        _do_copy(array, mStorage, size());
-        release_storage();
+        if (mStorage) {
+            _do_copy(array, mStorage, size());
+            release_storage();
+        }
         mStorage = const_cast<void*>(array);
     } else {
         return NO_MEMORY;
@@ -638,4 +643,3 @@ ssize_t SortedVectorImpl::remove(const void* item)
 /*****************************************************************************/
 
 }; // namespace android
-

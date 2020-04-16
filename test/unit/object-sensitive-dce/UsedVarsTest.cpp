@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -42,7 +42,7 @@ std::unique_ptr<uv::FixpointIterator> analyze(
 }
 
 void optimize(const uv::FixpointIterator& fp_iter, IRCode* code) {
-  for (auto it : uv::get_dead_instructions(*code, fp_iter)) {
+  for (const auto& it : uv::get_dead_instructions(*code, fp_iter)) {
     code->remove_opcode(it);
   }
 }
@@ -52,7 +52,7 @@ void optimize(const uv::FixpointIterator& fp_iter, IRCode* code) {
 // method to reside in a class hierarchy in order to work correctly.
 DexClass* create_simple_class(const std::string& name) {
   ClassCreator cc(DexType::make_type(name.c_str()));
-  cc.set_super(get_object_type());
+  cc.set_super(type::java_lang_Object());
   auto* ctor = DexMethod::make_method(name + ".<init>:()V")
                    ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
   cc.add_method(ctor);
@@ -125,7 +125,7 @@ TEST_F(UsedVarsTest, join) {
   ptrs::InvokeToSummaryMap invoke_to_esc_summary_map;
   for (auto& mie : InstructionIterable(*code)) {
     auto insn = mie.insn;
-    if (is_invoke(insn->opcode()) && is_init(insn->get_method())) {
+    if (is_invoke(insn->opcode()) && method::is_init(insn->get_method())) {
       invoke_to_eff_summary_map.emplace(insn, side_effects::Summary({0}));
       invoke_to_esc_summary_map.emplace(insn, ptrs::EscapeSummary{});
     }
@@ -180,7 +180,7 @@ TEST_F(UsedVarsTest, noDeleteInit) {
   ptrs::InvokeToSummaryMap invoke_to_esc_summary_map;
   for (auto& mie : InstructionIterable(*code)) {
     auto insn = mie.insn;
-    if (is_invoke(insn->opcode()) && is_init(insn->get_method())) {
+    if (is_invoke(insn->opcode()) && method::is_init(insn->get_method())) {
       invoke_to_eff_summary_map.emplace(insn, side_effects::Summary({0}));
       invoke_to_esc_summary_map.emplace(insn, ptrs::EscapeSummary{});
     }
@@ -213,7 +213,7 @@ TEST_F(UsedVarsTest, noDeleteAliasedInit) {
   ptrs::InvokeToSummaryMap invoke_to_esc_summary_map;
   for (auto& mie : InstructionIterable(*code)) {
     auto insn = mie.insn;
-    if (is_invoke(insn->opcode()) && is_init(insn->get_method())) {
+    if (is_invoke(insn->opcode()) && method::is_init(insn->get_method())) {
       invoke_to_eff_summary_map.emplace(insn, side_effects::Summary({0}));
       invoke_to_esc_summary_map.emplace(insn, ptrs::EscapeSummary{});
     }
@@ -257,7 +257,7 @@ TEST_F(UsedVarsTest, noDeleteInitForUnreadObject) {
     auto insn = mie.insn;
     if (is_invoke(insn->opcode())) {
       auto method = insn->get_method();
-      if (is_init(method)) {
+      if (method::is_init(method)) {
         invoke_to_eff_summary_map.emplace(insn, side_effects::Summary({0}));
         invoke_to_esc_summary_map.emplace(insn, ptrs::EscapeSummary{});
       } else if (method->get_name()->str() == "nosideeffects") {

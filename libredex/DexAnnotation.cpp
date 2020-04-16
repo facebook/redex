@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -11,6 +11,11 @@
 #include "DexIdx.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
+
+void DexEncodedValueMethodType::gather_strings(
+    std::vector<DexString*>& lstring) const {
+  m_proto->gather_strings(lstring);
+}
 
 void DexEncodedValueString::gather_strings(
     std::vector<DexString*>& lstring) const {
@@ -29,6 +34,21 @@ void DexEncodedValueField::gather_fields(
 void DexEncodedValueMethod::gather_methods(
     std::vector<DexMethodRef*>& lmethod) const {
   lmethod.push_back(m_method);
+}
+
+void DexEncodedValueMethodHandle::gather_methods(
+    std::vector<DexMethodRef*>& lmethod) const {
+  m_methodhandle->gather_methods(lmethod);
+}
+
+void DexEncodedValueMethodHandle::gather_fields(
+    std::vector<DexFieldRef*>& lfield) const {
+  m_methodhandle->gather_fields(lfield);
+}
+
+void DexEncodedValueMethodHandle::gather_methodhandles(
+    std::vector<DexMethodHandle*>& lmethodhandle) const {
+  lmethodhandle.push_back(m_methodhandle);
 }
 
 void DexEncodedValueArray::gather_strings(
@@ -280,6 +300,17 @@ void DexEncodedValueMethod::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
   type_encoder(encdata, m_evtype, midx);
 }
 
+void DexEncodedValueMethodType::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
+  uint32_t pidx = dodx->protoidx(m_proto);
+  type_encoder(encdata, m_evtype, pidx);
+}
+
+void DexEncodedValueMethodHandle::encode(DexOutputIdx* dodx,
+                                         uint8_t*& encdata) {
+  uint32_t mhidx = dodx->methodhandleidx(m_methodhandle);
+  type_encoder(encdata, m_evtype, mhidx);
+}
+
 void DexEncodedValueArray::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
   /*
    * Static values are implied to be DEVT_ARRAY, and thus don't
@@ -371,21 +402,21 @@ bool DexEncodedValue::is_wide() const {
 }
 
 DexEncodedValue* DexEncodedValue::zero_for_type(DexType* type) {
-  if (type == get_byte_type()) {
+  if (type == type::_byte()) {
     return new DexEncodedValue(DEVT_BYTE, 0);
-  } else if (type == get_char_type()) {
+  } else if (type == type::_char()) {
     return new DexEncodedValue(DEVT_CHAR, 0);
-  } else if (type == get_short_type()) {
+  } else if (type == type::_short()) {
     return new DexEncodedValue(DEVT_SHORT, 0);
-  } else if (type == get_int_type()) {
+  } else if (type == type::_int()) {
     return new DexEncodedValue(DEVT_INT, 0);
-  } else if (type == get_long_type()) {
+  } else if (type == type::_long()) {
     return new DexEncodedValue(DEVT_LONG, 0);
-  } else if (type == get_float_type()) {
+  } else if (type == type::_float()) {
     return new DexEncodedValue(DEVT_FLOAT, 0);
-  } else if (type == get_double_type()) {
+  } else if (type == type::_double()) {
     return new DexEncodedValue(DEVT_DOUBLE, 0);
-  } else if (type == get_boolean_type()) {
+  } else if (type == type::_boolean()) {
     return new DexEncodedValueBit(DEVT_BOOLEAN, false);
   } else {
     // not a primitive
@@ -421,6 +452,17 @@ DexEncodedValue* DexEncodedValue::get_encoded_value(DexIdx* idx,
                  << ((7 - evarg) * 8);
     return new DexEncodedValue(evt, v);
   }
+  case DEVT_METHOD_TYPE: {
+    uint32_t evidx = (uint32_t)read_evarg(encdata, evarg);
+    DexProto* evproto = idx->get_protoidx(evidx);
+    return new DexEncodedValueMethodType(evproto);
+  }
+  case DEVT_METHOD_HANDLE: {
+    uint32_t evidx = (uint32_t)read_evarg(encdata, evarg);
+    DexMethodHandle* evmethodhandle = idx->get_methodhandleidx(evidx);
+    return new DexEncodedValueMethodHandle(evmethodhandle);
+  }
+
   case DEVT_NULL:
     return new DexEncodedValueBit(evt, false);
   case DEVT_BOOLEAN:
@@ -546,7 +588,9 @@ void DexAnnotationDirectory::calc_internals() {
       }
     }
   }
-  m_viz = (double)cntviz / m_anno_count;
+  if (m_anno_count != 0) {
+    m_viz = (double)cntviz / m_anno_count;
+  }
 }
 
 bool method_annotation_compare(std::pair<DexMethod*, DexAnnotationSet*> a,

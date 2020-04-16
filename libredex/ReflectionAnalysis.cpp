@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -274,7 +274,6 @@ sparta::AbstractValueKind AbstractObject::meet_with(
 
 namespace impl {
 
-using register_t = ir_analyzer::register_t;
 using namespace ir_analyzer;
 
 class AbstractObjectDomain final
@@ -300,10 +299,10 @@ using ClassObjectSourceDomain =
     sparta::ConstantAbstractDomain<ClassObjectSource>;
 
 using BasicAbstractObjectEnvironment =
-    PatriciaTreeMapAbstractEnvironment<register_t, AbstractObjectDomain>;
+    PatriciaTreeMapAbstractEnvironment<reg_t, AbstractObjectDomain>;
 
 using ClassObjectSourceEnvironment =
-    PatriciaTreeMapAbstractEnvironment<register_t, ClassObjectSourceDomain>;
+    PatriciaTreeMapAbstractEnvironment<reg_t, ClassObjectSourceDomain>;
 
 using HeapClassArrayEnvironment = PatriciaTreeMapAbstractEnvironment<
     AbstractHeapAddress,
@@ -322,26 +321,26 @@ class AbstractObjectEnvironment final
                  ClassObjectSourceEnvironment,
                  HeapClassArrayEnvironment>& /* product */) {}
 
-  const AbstractObjectDomain get_abstract_obj(register_t reg) const {
+  const AbstractObjectDomain get_abstract_obj(reg_t reg) const {
     return get<0>().get(reg);
   }
 
-  void set_abstract_obj(register_t reg, const AbstractObjectDomain aobj) {
+  void set_abstract_obj(reg_t reg, const AbstractObjectDomain aobj) {
     apply<0>([=](auto env) { env->set(reg, aobj); }, true);
   }
 
   void update_abstract_obj(
-      register_t reg,
+      reg_t reg,
       const std::function<AbstractObjectDomain(const AbstractObjectDomain&)>&
           operation) {
     apply<0>([=](auto env) { env->update(reg, operation); }, true);
   }
 
-  const ClassObjectSourceDomain get_class_source(register_t reg) const {
+  const ClassObjectSourceDomain get_class_source(reg_t reg) const {
     return get<1>().get(reg);
   }
 
-  void set_class_source(register_t reg, const ClassObjectSourceDomain cls_src) {
+  void set_class_source(reg_t reg, const ClassObjectSourceDomain cls_src) {
     apply<1>([=](auto env) { env->set(reg, cls_src); }, true);
   }
 
@@ -422,7 +421,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
   }
 
   void analyze_instruction(
-      IRInstruction* insn,
+      const IRInstruction* insn,
       AbstractObjectEnvironment* current_state) const override {
     switch (insn->opcode()) {
     case IOPCODE_LOAD_PARAM:
@@ -519,8 +518,8 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
           current_state->get_abstract_obj(insn->src(0)).get_object();
       if (array_object) {
         auto type = array_object->dex_type;
-        if (type && is_array(type)) {
-          const auto etype = get_array_component_type(type);
+        if (type && type::is_array(type)) {
+          const auto etype = type::get_array_component_type(type);
           update_non_string_input(current_state, insn, etype);
           break;
         }
@@ -598,8 +597,8 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
     }
     case OPCODE_NEW_ARRAY: {
       auto array_type = insn->get_type();
-      always_assert(is_array(array_type));
-      auto component_type = get_array_component_type(array_type);
+      always_assert(type::is_array(array_type));
+      auto component_type = type::get_array_component_type(array_type);
       if (component_type ==
           DexType::make_type(DexString::make_string("Ljava/lang/Class;"))) {
         const auto aobj =
@@ -626,8 +625,8 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
     }
     case OPCODE_FILLED_NEW_ARRAY: {
       auto array_type = insn->get_type();
-      always_assert(is_array(array_type));
-      auto component_type = get_array_component_type(array_type);
+      always_assert(type::is_array(array_type));
+      auto component_type = type::get_array_component_type(array_type);
       AbstractObject aobj(AbstractObjectKind::OBJECT, insn->get_type());
       if (component_type == DexType::make_type("Ljava/lang/Class;")) {
         auto arg_count = insn->srcs_size();
@@ -729,11 +728,11 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
   std::unordered_map<IRInstruction*, AbstractObjectEnvironment> m_environments;
 
   void update_non_string_input(AbstractObjectEnvironment* current_state,
-                               IRInstruction* insn,
+                               const IRInstruction* insn,
                                DexType* type) const {
     auto dest_reg =
         insn->has_move_result_any() ? RESULT_REGISTER : insn->dest();
-    if (type == get_class_type()) {
+    if (type == type::java_lang_Class()) {
       // We don't have precise type information to which the Class obj refers
       // to.
       current_state->set_abstract_obj(dest_reg,
@@ -776,18 +775,19 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
   }
 
   void update_return_object_and_invalidate_heap_args(
-      AbstractObjectEnvironment* current_state, IRInstruction* insn) const {
+      AbstractObjectEnvironment* current_state,
+      const IRInstruction* insn) const {
 
     invalidate_argument_heap_objects(current_state, insn);
     DexMethodRef* callee = insn->get_method();
     DexType* return_type = callee->get_proto()->get_rtype();
-    if (is_void(return_type) || !is_object(return_type)) {
+    if (type::is_void(return_type) || !type::is_object(return_type)) {
       return;
     }
     update_non_string_input(current_state, insn, return_type);
   }
 
-  void default_semantics(IRInstruction* insn,
+  void default_semantics(const IRInstruction* insn,
                          AbstractObjectEnvironment* current_state) const {
     // For instructions that are transparent for this analysis, we just need
     // to clobber the destination registers in the abstract environment. Note
@@ -812,8 +812,8 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
   }
 
   DexString* get_dex_string_from_insn(AbstractObjectEnvironment* current_state,
-                                      IRInstruction* insn,
-                                      register_t reg) const {
+                                      const IRInstruction* insn,
+                                      reg_t reg) const {
     auto element_name =
         current_state->get_abstract_obj(insn->src(reg)).get_object();
     if (element_name && element_name->obj_kind == STRING) {
@@ -832,7 +832,8 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
   }
 
   void invalidate_argument_heap_objects(
-      AbstractObjectEnvironment* current_state, IRInstruction* insn) const {
+      AbstractObjectEnvironment* current_state,
+      const IRInstruction* insn) const {
 
     if (!insn->has_method() ||
         is_method_known_to_preserve_args(insn->get_method())) {
@@ -852,7 +853,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
     }
   }
 
-  void process_virtual_call(IRInstruction* insn,
+  void process_virtual_call(const IRInstruction* insn,
                             const AbstractObject& receiver,
                             AbstractObjectEnvironment* current_state) const {
     DexMethodRef* callee = insn->get_method();
@@ -879,8 +880,8 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
       if (callee == m_get_class) {
         current_state->set_abstract_obj(
             RESULT_REGISTER,
-            AbstractObjectDomain(
-                AbstractObject(AbstractObjectKind::CLASS, get_string_type())));
+            AbstractObjectDomain(AbstractObject(AbstractObjectKind::CLASS,
+                                                type::java_lang_String())));
         current_state->set_class_source(
             RESULT_REGISTER,
             ClassObjectSourceDomain(ClassObjectSource::REFLECTION));
@@ -1067,9 +1068,9 @@ ReflectionAnalysis::ReflectionAnalysis(DexMethod* dex_method)
 }
 
 void ReflectionAnalysis::get_reflection_site(
-    const register_t reg,
+    const reg_t reg,
     IRInstruction* insn,
-    std::map<register_t, ReflectionAbstractObject>* abstract_objects) const {
+    std::map<reg_t, ReflectionAbstractObject>* abstract_objects) const {
   auto aobj = m_analyzer->get_abstract_object(reg, insn);
   if (!aobj) {
     return;
@@ -1106,7 +1107,7 @@ const ReflectionSites ReflectionAnalysis::get_reflection_sites() const {
   auto reg_size = code->get_registers_size();
   for (auto& mie : InstructionIterable(code)) {
     IRInstruction* insn = mie.insn;
-    std::map<register_t, ReflectionAbstractObject> abstract_objects;
+    std::map<reg_t, ReflectionAbstractObject> abstract_objects;
     for (size_t i = 0; i < reg_size; i++) {
       get_reflection_site(i, insn, &abstract_objects);
     }

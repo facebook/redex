@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -193,8 +193,8 @@ void CrossDexRefMinimizer::insert(DexClass* cls) {
     // - and those which appear extremely frequently (and are therefore likely
     //   to be referenced by every dex anyway)
     bool skipping = ref_count == 1 || frequency > (1.0 / 8);
-    TRACE(IDEX, 6, "[dex ordering] %zu/%zu = %lf %s", ref_count,
-          max_ref_count, frequency, skipping ? "(skipping)" : "");
+    TRACE(IDEX, 6, "[dex ordering] %zu/%zu = %lf %s", ref_count, max_ref_count,
+          frequency, skipping ? "(skipping)" : "");
     if (!skipping) {
       refs.emplace_back(ref, item_weight);
       refs_weight += item_weight;
@@ -408,9 +408,8 @@ void CrossDexRefMinimizer::erase(DexClass* cls, bool emitted, bool reset) {
     }
   }
   if (emitted) {
-    TRACE(IDEX, 4, "[dex ordering] %u + %u = %u applied refs",
-          old_applied_refs, m_applied_refs.size() - old_applied_refs,
-          m_applied_refs.size());
+    TRACE(IDEX, 4, "[dex ordering] %u + %u = %u applied refs", old_applied_refs,
+          m_applied_refs.size() - old_applied_refs, m_applied_refs.size());
   }
   reprioritize(affected_classes);
 }

@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -94,6 +94,7 @@ class InterDex {
   DexClassesVector take_outdex() { return std::move(m_outdex); }
 
   void run();
+  void run_on_nonroot_store();
   void add_dexes_from_store(const DexStore& store);
   void cleanup(const Scope& final_scope);
   const std::vector<DexType*>& get_interdex_types() const {

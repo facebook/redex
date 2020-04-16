@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -110,7 +110,7 @@ class DelSuper {
     return true;
   }
 
-  bool are_opcs_equal(const std::vector<IRInstruction*> insns,
+  bool are_opcs_equal(const std::vector<IRInstruction*>& insns,
                       const IROpcode* opcs,
                       size_t opcs_len) {
     if (insns.size() != opcs_len) return false;

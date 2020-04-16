@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -93,7 +93,7 @@ std::unordered_set<DexClass*> find_unrefenced_coldstart_classes(
     for (const auto& cls : scope) {
       // Make sure we don't drop classes which might be
       // called from native code.
-      if (!can_rename_DEPRECATED(cls)) {
+      if (!can_rename(cls)) {
         cold_cold_references.insert(cls->get_type());
       }
     }
@@ -112,8 +112,7 @@ std::unordered_set<DexClass*> find_unrefenced_coldstart_classes(
 
     Scope output_scope;
     for (auto& cls : coldstart_classes) {
-      if (can_rename_DEPRECATED(type_class(cls)) &&
-          cold_cold_references.count(cls) == 0) {      
+      if (can_rename(type_class(cls)) && cold_cold_references.count(cls) == 0) {
         new_no_ref++;
         unreferenced_classes.insert(type_class(cls));
       } else {
@@ -219,7 +218,8 @@ namespace interdex {
 bool InterDex::should_skip_class_due_to_plugin(DexClass* clazz) {
   for (const auto& plugin : m_plugins) {
     if (plugin->should_skip_class(clazz)) {
-      TRACE(IDEX, 4, "IDEX: Skipping class :: %s", SHOW(clazz));
+      TRACE(IDEX, 4, "IDEX: Skipping class from %s :: %s",
+            plugin->name().c_str(), SHOW(clazz));
       return true;
     }
   }
@@ -236,8 +236,8 @@ void InterDex::add_to_scope(DexClass* cls) {
 bool InterDex::should_not_relocate_methods_of_class(const DexClass* clazz) {
   for (const auto& plugin : m_plugins) {
     if (plugin->should_not_relocate_methods_of_class(clazz)) {
-      TRACE(IDEX, 4, "IDEX: Not relocating methods of class :: %s",
-            SHOW(clazz));
+      TRACE(IDEX, 4, "IDEX: Not relocating methods of class from %s :: %s",
+            plugin->name().c_str(), SHOW(clazz));
       return true;
     }
   }
@@ -781,6 +781,7 @@ void InterDex::run_in_force_single_dex_mode() {
 }
 
 void InterDex::run() {
+  TRACE(IDEX, 2, "IDEX: Running on root store");
   if (m_force_single_dex) {
     run_in_force_single_dex_mode();
     return;
@@ -813,9 +814,10 @@ void InterDex::run() {
   // Add whatever leftovers there are from plugins.
   for (const auto& plugin : m_plugins) {
     auto add_classes = plugin->leftover_classes();
+    std::string name = plugin->name();
     for (DexClass* add_class : add_classes) {
-      TRACE(IDEX, 4, "IDEX: Emitting plugin generated leftover class :: %s",
-            SHOW(add_class));
+      TRACE(IDEX, 4, "IDEX: Emitting %s-plugin generated leftover class :: %s",
+            name.c_str(), SHOW(add_class));
       emit_class(dex_info, add_class, /* check_if_skip */ false,
                  /* perf_sensitive */ false);
     }
@@ -848,6 +850,21 @@ void InterDex::run() {
                         m_dexes_structure.get_num_dexes() < MAX_DEX_NUM,
                     "Bailing, max dex number surpassed %d\n",
                     m_dexes_structure.get_num_dexes());
+
+  print_stats(&m_dexes_structure);
+}
+
+void InterDex::run_on_nonroot_store() {
+  TRACE(IDEX, 2, "IDEX: Running on non-root store");
+  for (DexClass* cls : m_original_scope) {
+    emit_class(EMPTY_DEX_INFO, cls, /* check_if_skip */ false,
+               /* perf_sensitive */ false);
+  }
+
+  // Emit what is left, if any.
+  if (m_dexes_structure.get_current_dex_classes().size()) {
+    flush_out_dex(EMPTY_DEX_INFO);
+  }
 
   print_stats(&m_dexes_structure);
 }
@@ -899,7 +916,7 @@ void InterDex::flush_out_dex(DexInfo& dex_info) {
     if (!canary_cls) {
       ClassCreator cc(canary_type);
       cc.set_access(ACC_PUBLIC | ACC_INTERFACE | ACC_ABSTRACT);
-      cc.set_super(get_object_type());
+      cc.set_super(type::java_lang_Object());
       canary_cls = cc.create();
       // Don't rename the Canary we've created
       canary_cls->rstate.set_keepnames();
@@ -916,8 +933,8 @@ void InterDex::flush_out_dex(DexInfo& dex_info) {
                    squashed_classes.end());
     auto add_classes = plugin->additional_classes(m_outdex, classes);
     for (auto add_class : add_classes) {
-      TRACE(IDEX, 4, "IDEX: Emitting plugin-generated class :: %s",
-            SHOW(add_class));
+      TRACE(IDEX, 4, "IDEX: Emitting %s-plugin-generated class :: %s",
+            plugin->name().c_str(), SHOW(add_class));
       m_dexes_structure.add_class_no_checks(add_class);
     }
   }

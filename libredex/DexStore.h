@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -43,7 +43,7 @@ class DexStore {
 
  public:
   DexStore(const DexMetadata metadata) : m_metadata(metadata){};
-  DexStore(const std::string name);
+  DexStore(const std::string& name);
 
   std::string get_name() const;
   const std::string& get_dex_magic() const { return dex_magic; }

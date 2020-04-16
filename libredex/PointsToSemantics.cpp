@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -83,6 +83,8 @@ std::ostream& operator<<(std::ostream& o, const PointsToVariable& v) {
 
 namespace pts_impl {
 
+/* clang-format off */
+
 #define OP_STRING_TABLE                 \
   {                                     \
     OP_STRING(PTS_CONST_STRING),        \
@@ -116,6 +118,8 @@ std::unordered_map<PointsToOperationKind, std::string, std::hash<int>>
 std::unordered_map<std::string, PointsToOperationKind> string_to_op_table =
     OP_STRING_TABLE;
 #undef OP_STRING
+
+/* clang-format on */
 
 s_expr op_kind_to_s_expr(PointsToOperationKind kind) {
   auto it = op_to_string_table.find(kind);
@@ -165,9 +169,7 @@ boost::optional<DexMethodRef*> s_expr_to_dex_method(const s_expr& e) {
   std::string name_str;
   std::string rtype_str;
   s_expr signature;
-  if (!s_patn({s_patn(&type_str),
-               s_patn(&name_str),
-               s_patn(&rtype_str),
+  if (!s_patn({s_patn(&type_str), s_patn(&name_str), s_patn(&rtype_str),
                s_patn({}, signature)})
            .match_with(e)) {
     return {};
@@ -620,7 +622,9 @@ std::ostream& operator<<(std::ostream& o, const PointsToAction& a) {
         o << "I";
         break;
       }
-      default: { always_assert(false); }
+      default: {
+        always_assert(false);
+      }
       }
       o << "}";
     }
@@ -723,15 +727,14 @@ namespace pts_impl {
 
 using namespace std::placeholders;
 
-using register_t = ir_analyzer::register_t;
 using namespace ir_analyzer;
 
 // We represent an anchor by a pointer to the corresponding instruction. An
 // empty anchor set is semantically equivalent to the `null` reference.
-using AnchorDomain = PatriciaTreeSetAbstractDomain<IRInstruction*>;
+using AnchorDomain = PatriciaTreeSetAbstractDomain<const IRInstruction*>;
 
 using AnchorEnvironment =
-    PatriciaTreeMapAbstractEnvironment<register_t, AnchorDomain>;
+    PatriciaTreeMapAbstractEnvironment<reg_t, AnchorDomain>;
 
 class AnchorPropagation final : public BaseIRAnalyzer<AnchorEnvironment> {
  public:
@@ -743,7 +746,7 @@ class AnchorPropagation final : public BaseIRAnalyzer<AnchorEnvironment> {
         m_code(code),
         m_this_anchor(nullptr) {}
 
-  void analyze_instruction(IRInstruction* insn,
+  void analyze_instruction(const IRInstruction* insn,
                            AnchorEnvironment* current_state) const override {
     switch (insn->opcode()) {
     case IOPCODE_LOAD_PARAM_OBJECT: {
@@ -782,7 +785,7 @@ class AnchorPropagation final : public BaseIRAnalyzer<AnchorEnvironment> {
     case OPCODE_INVOKE_DIRECT:
     case OPCODE_INVOKE_INTERFACE: {
       DexMethodRef* dex_method = insn->get_method();
-      if (is_object(dex_method->get_proto()->get_rtype())) {
+      if (type::is_object(dex_method->get_proto()->get_rtype())) {
         // We attach an anchor to a method invocation only if the method returns
         // an object.
         current_state->set(RESULT_REGISTER, AnchorDomain(insn));
@@ -808,7 +811,7 @@ class AnchorPropagation final : public BaseIRAnalyzer<AnchorEnvironment> {
 
   void run() { MonotonicFixpointIterator::run(initial_environment()); }
 
-  bool is_this_anchor(IRInstruction* insn) const {
+  bool is_this_anchor(const IRInstruction* insn) const {
     return insn == m_this_anchor;
   }
 
@@ -970,9 +973,11 @@ class PointsToActionGenerator final {
     case OPCODE_INVOKE_SUPER:
     case OPCODE_INVOKE_DIRECT:
     case OPCODE_INVOKE_INTERFACE: {
-      return is_object(insn->get_method()->get_proto()->get_rtype());
+      return type::is_object(insn->get_method()->get_proto()->get_rtype());
     }
-    default: { return false; }
+    default: {
+      return false;
+    }
     }
   }
 
@@ -1010,7 +1015,7 @@ class PointsToActionGenerator final {
     }
     case OPCODE_NEW_INSTANCE: {
       DexType* dex_type = insn->get_type();
-      if (m_type_system.is_subtype(m_utils.get_throwable_type(), dex_type)) {
+      if (m_type_system.is_subtype(type::java_lang_Throwable(), dex_type)) {
         // If the object created is an exception (i.e., its type inherits from
         // java.lang.Throwable), we use PTS_GET_EXCEPTION. In our semantic
         // model, the exact identity of an exception is abstracted away for
@@ -1030,8 +1035,9 @@ class PointsToActionGenerator final {
           PointsToOperation(PTS_NEW_OBJECT, insn->get_type()),
           get_variable_from_anchor(insn)));
       if (insn->opcode() == OPCODE_FILLED_NEW_ARRAY) {
-        const DexType* element_type = get_array_element_type(insn->get_type());
-        if (!is_object(element_type)) {
+        const DexType* element_type =
+            type::get_array_element_type(insn->get_type());
+        if (!type::is_object(element_type)) {
           break;
         }
         auto lhs =
@@ -1148,7 +1154,7 @@ class PointsToActionGenerator final {
 
     // Allocate a variable for the returned object if any.
     boost::optional<PointsToVariable> dest;
-    if (is_object(insn->get_method()->get_proto()->get_rtype())) {
+    if (type::is_object(insn->get_method()->get_proto()->get_rtype())) {
       dest = {get_variable_from_anchor(insn)};
     }
 
@@ -1164,10 +1170,9 @@ class PointsToActionGenerator final {
     // Process the arguments of the method invocation.
     int32_t arg_pos = 0;
     for (DexType* dex_type : signature) {
-      if (is_object(dex_type)) {
-        args.push_back(
-            {arg_pos,
-             get_variable_from_anchor_set(state.get(insn->src(src_idx++)))});
+      if (type::is_object(dex_type)) {
+        args.push_back({arg_pos, get_variable_from_anchor_set(
+                                     state.get(insn->src(src_idx++)))});
       } else {
         // We skip this argument.
         ++src_idx;
@@ -1211,7 +1216,7 @@ class PointsToActionGenerator final {
         args));
   }
 
-  PointsToVariable get_variable_from_anchor(IRInstruction* insn) {
+  PointsToVariable get_variable_from_anchor(const IRInstruction* insn) {
     if (m_analysis->is_this_anchor(insn)) {
       return PointsToVariable::this_variable();
     }
@@ -1243,7 +1248,7 @@ class PointsToActionGenerator final {
     }
     // Otherwise, we need a disjunction.
     PointsToVariableSet ptv_set;
-    for (IRInstruction* insn : anchors) {
+    for (const IRInstruction* insn : anchors) {
       ptv_set.insert(get_variable_from_anchor(insn));
     }
     auto it = m_anchor_sets.find(ptv_set);
@@ -1267,7 +1272,7 @@ class PointsToActionGenerator final {
   std::unique_ptr<AnchorPropagation> m_analysis;
   // We assign each anchor a points-to variable. This map keeps track of the
   // naming.
-  std::unordered_map<IRInstruction*, PointsToVariable> m_anchors;
+  std::unordered_map<const IRInstruction*, PointsToVariable> m_anchors;
   // A table that keeps track of all disjunctions already created, so that we
   // only generate one disjuction per anchor set.
   std::unordered_map<PointsToVariableSet,
@@ -1422,6 +1427,8 @@ class Shrinker final {
   VariableSet m_vars_to_keep;
 };
 
+/* clang-format off */
+
 #define KIND_STRING_TABLE         \
   {                               \
     KIND_STRING(PTS_APK),         \
@@ -1439,6 +1446,8 @@ std::unordered_map<MethodKind, std::string, std::hash<int>>
 std::unordered_map<std::string, MethodKind> string_to_method_kind_table =
     KIND_STRING_TABLE;
 #undef KIND_STRING
+
+/* clang-format on */
 
 s_expr method_kind_to_s_expr(MethodKind kind) {
   auto it = method_kind_to_string_table.find(kind);
@@ -1476,10 +1485,9 @@ s_expr PointsToMethodSemantics::to_s_expr() const {
                  m_points_to_actions.end(),
                  std::back_inserter(actions),
                  [](const PointsToAction& a) { return a.to_s_expr(); });
-  return s_expr({dex_method_to_s_expr(m_dex_method),
-                 method_kind_to_s_expr(m_kind),
-                 s_expr(static_cast<int32_t>(m_variable_counter)),
-                 s_expr(actions)});
+  return s_expr(
+      {dex_method_to_s_expr(m_dex_method), method_kind_to_s_expr(m_kind),
+       s_expr(static_cast<int32_t>(m_variable_counter)), s_expr(actions)});
 }
 
 boost::optional<PointsToMethodSemantics> PointsToMethodSemantics::from_s_expr(
@@ -1489,9 +1497,7 @@ boost::optional<PointsToMethodSemantics> PointsToMethodSemantics::from_s_expr(
   std::string kind_str;
   int32_t var_counter;
   s_expr actions_expr;
-  if (!s_patn({s_patn(dex_method_expr),
-               s_patn(&kind_str),
-               s_patn(&var_counter),
+  if (!s_patn({s_patn(dex_method_expr), s_patn(&kind_str), s_patn(&var_counter),
                s_patn({}, actions_expr)})
            .match_with(e)) {
     return {};

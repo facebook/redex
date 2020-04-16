@@ -58,7 +58,7 @@ class InterDexTest : public RedexIntegrationTest {
   }
 
   std::string make_betmap_file(const std::string& tmp,
-                               const std::vector<std::string> betamap) {
+                               const std::vector<std::string>& betamap) {
     std::ofstream betamap_out;
     std::string path = tmp + "/classes.txt";
     betamap_out.open(path.c_str(), std::ios::out);

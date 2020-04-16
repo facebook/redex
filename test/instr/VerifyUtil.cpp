@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -112,7 +112,7 @@ ResourceFiles decode_resource_paths(const char* location, const char* suffix) {
   std::istringstream input;
   input.str(location);
   for (std::string file_path; std::getline(input, file_path, ':');) {
-    auto pos = file_path.rfind("/");
+    auto pos = file_path.rfind('/');
     always_assert(pos >= 0 && pos + 1 < file_path.length());
     auto directory = file_path.substr(0, pos);
     if (boost::algorithm::ends_with(directory, suffix)) {
@@ -141,9 +141,9 @@ void verify_type_erased(const DexClass* cls, size_t num_dmethods) {
   auto dmethods = cls->get_dmethods();
   ASSERT_EQ(dmethods.size(), num_dmethods);
   for (auto m : dmethods) {
-    ASSERT_FALSE(is_init(m));
+    ASSERT_FALSE(method::is_init(m));
     ASSERT_NE(m->c_str(), "<init>");
   }
-  auto vmethods = cls->get_vmethods();
+  const auto& vmethods = cls->get_vmethods();
   ASSERT_TRUE(vmethods.empty());
 }

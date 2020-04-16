@@ -15,7 +15,7 @@
         </intent-filter>
       </activity>
 
-      <activity android:name="test4" android:exported="true"></activity>
+      <activity android:name="test4" android:exported="false"></activity>
 
       <provider android:name="com.example.x.Foo"
                 android:authorities="com.example.x.Foo;com.example.y.Bar"/>

@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -122,7 +122,7 @@ int main(int argc, char* argv[]) {
   args.redex_options.deserialize(entry_data);
 
   Json::Value config_data = process_entry_data(entry_data, args);
-  ConfigFiles conf(std::move(config_data), args.output_ir_dir);
+  ConfigFiles conf(config_data, args.output_ir_dir);
 
   const auto& passes = PassRegistry::get().get_passes();
   PassManager manager(passes, config_data, args.redex_options);

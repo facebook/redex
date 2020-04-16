@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -14,6 +14,9 @@ class DexString;
 class DexType;
 class DexFieldRef;
 class DexMethodRef;
+class DexCallSite;
+class DexProto;
+class DexMethodHandle;
 
 class Gatherable {
  protected:
@@ -26,4 +29,7 @@ class Gatherable {
   virtual void gather_types(std::vector<DexType*>& ltype) const {}
   virtual void gather_fields(std::vector<DexFieldRef*>& lfield) const {}
   virtual void gather_methods(std::vector<DexMethodRef*>& lmethod) const {}
+  virtual void gather_callsites(std::vector<DexCallSite*>& lcallsite) const {}
+  virtual void gather_methodhandles(
+      std::vector<DexMethodHandle*>& lmethodhandle) const {}
 };

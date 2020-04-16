@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -30,7 +30,7 @@ bool is_identifier_character(char ch) {
          ch == '!' || ch == '?' || ch == '%';
 }
 
-bool is_identifier(string ident) {
+bool is_identifier(const string& ident) {
   for (const char& ch : ident) {
     if (!is_identifier_character(ch)) {
       return false;

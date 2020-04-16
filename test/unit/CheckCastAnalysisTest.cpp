@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -24,15 +24,17 @@ TEST_F(CheckCastAnalysisTest, simple_string) {
       )
     )
   )");
+  method->get_code()->build_cfg(true);
   check_casts::impl::CheckCastAnalysis analysis(method);
   auto replacements = analysis.collect_redundant_checks_replacement();
 
   EXPECT_EQ(replacements.size(), 1);
   auto it = replacements.begin();
-  auto insn = it->first->insn;
+  auto insn = it->insn;
   EXPECT_EQ(insn->opcode(), OPCODE_CHECK_CAST);
   EXPECT_EQ(insn->get_type()->get_name()->str(), "Ljava/lang/String;");
-  EXPECT_EQ(it->second, boost::none);
+  EXPECT_EQ(it->replacement, boost::none);
+  method->get_code()->clear_cfg();
 }
 
 TEST_F(CheckCastAnalysisTest, new_instance) {
@@ -46,15 +48,17 @@ TEST_F(CheckCastAnalysisTest, new_instance) {
       )
     )
   )");
+  method->get_code()->build_cfg(true);
   check_casts::impl::CheckCastAnalysis analysis(method);
   auto replacements = analysis.collect_redundant_checks_replacement();
 
   EXPECT_EQ(replacements.size(), 1);
   auto it = replacements.begin();
-  auto insn = it->first->insn;
+  auto insn = it->insn;
   EXPECT_EQ(insn->opcode(), OPCODE_CHECK_CAST);
   EXPECT_EQ(insn->get_type()->get_name()->str(), "LFoo;");
-  EXPECT_EQ(it->second, boost::none);
+  EXPECT_EQ(it->replacement, boost::none);
+  method->get_code()->clear_cfg();
 }
 
 TEST_F(CheckCastAnalysisTest, parameter) {
@@ -68,15 +72,17 @@ TEST_F(CheckCastAnalysisTest, parameter) {
       )
     )
   )");
+  method->get_code()->build_cfg(true);
   check_casts::impl::CheckCastAnalysis analysis(method);
   auto replacements = analysis.collect_redundant_checks_replacement();
 
   EXPECT_EQ(replacements.size(), 1);
   auto it = replacements.begin();
-  auto insn = it->first->insn;
+  auto insn = it->insn;
   EXPECT_EQ(insn->opcode(), OPCODE_CHECK_CAST);
   EXPECT_EQ(insn->get_type()->get_name()->str(), "LBar;");
-  EXPECT_NE(it->second, boost::none);
+  EXPECT_NE(it->replacement, boost::none);
+  method->get_code()->clear_cfg();
 }
 
 TEST_F(CheckCastAnalysisTest, this_parameter) {
@@ -90,18 +96,21 @@ TEST_F(CheckCastAnalysisTest, this_parameter) {
       )
     )
   )");
+  method->get_code()->build_cfg(true);
   check_casts::impl::CheckCastAnalysis analysis(method);
   auto replacements = analysis.collect_redundant_checks_replacement();
 
   EXPECT_EQ(replacements.size(), 1);
   auto it = replacements.begin();
-  auto insn = it->first->insn;
+  auto insn = it->insn;
   EXPECT_EQ(insn->opcode(), OPCODE_CHECK_CAST);
   EXPECT_EQ(insn->get_type()->get_name()->str(), "LFoo;");
-  EXPECT_EQ(it->second, boost::none);
+  EXPECT_EQ(it->replacement, boost::none);
+  method->get_code()->clear_cfg();
 }
 
 TEST_F(CheckCastAnalysisTest, get_field) {
+
   auto method = assembler::method_from_string(R"(
     (method (public) "LFoo;.bar:()V"
       (
@@ -112,13 +121,15 @@ TEST_F(CheckCastAnalysisTest, get_field) {
       )
     )
   )");
+  method->get_code()->build_cfg(true);
   check_casts::impl::CheckCastAnalysis analysis(method);
   auto replacements = analysis.collect_redundant_checks_replacement();
 
   EXPECT_EQ(replacements.size(), 1);
   auto it = replacements.begin();
-  auto insn = it->first->insn;
+  auto insn = it->insn;
   EXPECT_EQ(insn->opcode(), OPCODE_CHECK_CAST);
   EXPECT_EQ(insn->get_type()->get_name()->str(), "LBar;");
-  EXPECT_NE(it->second, boost::none);
+  EXPECT_NE(it->replacement, boost::none);
+  method->get_code()->clear_cfg();
 }

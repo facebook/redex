@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -115,6 +115,6 @@ TEST_F(PostVerify, FactoryCastInvokeVirtual) {
                                  sub1_cls->get_type()));
   ASSERT_NE(nullptr, find_invoke(m, DOPCODE_INVOKE_VIRTUAL, "foo",
                                  sub2_cls->get_type()));
-  ASSERT_EQ(nullptr, find_invoke(m, DOPCODE_INVOKE_VIRTUAL, "foo",
+  ASSERT_NE(nullptr, find_invoke(m, DOPCODE_INVOKE_VIRTUAL, "foo",
                                  sub3_cls->get_type()));
 }

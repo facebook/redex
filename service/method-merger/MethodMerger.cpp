@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -33,7 +33,7 @@ std::vector<DexMethod*> get_direct_instance_methods(
     const std::vector<DexMethod*>& dmethods) {
   std::vector<DexMethod*> methods;
   for (auto method : dmethods) {
-    if (is_static(method) || is_constructor(method)) {
+    if (is_static(method) || method::is_constructor(method)) {
       continue;
     }
     methods.push_back(method);
@@ -41,9 +41,9 @@ std::vector<DexMethod*> get_direct_instance_methods(
   return methods;
 }
 
-MethodOrderedSet methodgroups_to_methodset(
+std::unordered_set<DexMethod*> methodgroups_to_methodset(
     const method_merger::MethodGroups& method_groups) {
-  MethodOrderedSet method_set;
+  std::unordered_set<DexMethod*> method_set;
   for (auto& methods : method_groups) {
     method_set.insert(methods.begin(), methods.end());
   }
@@ -117,7 +117,7 @@ void generate_dispatches(
   for (auto method : methods) {
     // Use dispatch::may_be_dispatch(method) to heuristically exclude large
     // dispatches.
-    if (!root(method) && can_rename_DEPRECATED(method) &&
+    if (!root(method) && can_rename(method) &&
         !ref_counter.too_less_callers(method) &&
         !dispatch::may_be_dispatch(method)) {
       proto_to_methods[method->get_proto()].insert(method);
@@ -204,8 +204,8 @@ Stats merge_methods_within_class(const DexClasses& classes,
     std::for_each(non_virtuals.begin(), non_virtuals.end(),
                   [&methods](DexMethod* method) {
                     auto type = method->get_class();
-                    if (!methods.count(type) ||
-                        !can_rename_DEPRECATED(method) || root(method)) {
+                    if (!methods.count(type) || !can_rename(method) ||
+                        root(method)) {
                       return;
                     }
                     methods[type].push_back(method);

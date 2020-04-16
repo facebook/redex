@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -17,7 +17,7 @@
 
 namespace regalloc {
 
-using reg_t = uint16_t;
+using vreg_t = uint16_t;
 
 RangeSet init_range_set(IRCode*);
 
@@ -29,7 +29,7 @@ struct SpillPlan {
   // coloring. Since different opcodes can address different maximum operand
   // sizes, we don't have to spill at every instruction -- just the ones that
   // have a maximum lower than our mapping.
-  std::unordered_map<reg_t, reg_t> global_spills;
+  std::unordered_map<reg_t, vreg_t> global_spills;
 
   // Spills for param-related symbolic registers
   std::unordered_set<reg_t> param_spills;
@@ -58,7 +58,7 @@ struct RegisterTransform {
   // The size of the register frame. Note that we cannot simply walk the values
   // in the map to determine this; the size of the frame must be >= to the
   // largest virtual register in the map + its width.
-  uint16_t size{0};
+  vreg_t size{0};
 };
 
 /*
@@ -98,7 +98,7 @@ class Allocator {
              split_moves;
     }
     size_t net_moves() const { return moves_inserted() - moves_coalesced; }
-    void accumulate(const Stats&);
+    Stats& operator+=(const Stats&);
   };
 
   Allocator() = default; // use default config

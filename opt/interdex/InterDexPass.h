@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -75,6 +75,11 @@ class InterDexPass : public Pass {
                         DexClassesVector&,
                         ConfigFiles&,
                         PassManager&);
+
+  void run_pass_on_nonroot_store(DexStoresVector&,
+                                 DexClassesVector&,
+                                 ConfigFiles&,
+                                 PassManager&);
 };
 
 } // namespace interdex

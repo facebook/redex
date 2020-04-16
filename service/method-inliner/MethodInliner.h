@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -16,6 +16,7 @@ namespace inliner {
  */
 void run_inliner(DexStoresVector& stores,
                  PassManager& mgr,
-                 const InlinerConfig& inliner_config,
-                 bool intra_dex = false);
+                 ConfigFiles& inliner_config,
+                 bool intra_dex = false,
+                 bool use_method_profiles = false);
 } // namespace inliner

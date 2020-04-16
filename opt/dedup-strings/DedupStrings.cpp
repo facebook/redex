@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -38,6 +38,8 @@ constexpr const char* METRIC_DEXES_WITHOUT_HOST = "num_dexes_without_host";
 constexpr const char* METRIC_EXCLUDED_DUPLICATE_NON_LOAD_STRINGS =
     "num_excluded_duplicate_non_load_strings";
 constexpr const char* METRIC_FACTORY_METHODS = "num_factory_methods";
+constexpr const char* METRIC_EXCLUDED_OUT_OF_FACTORY_METHODS_STRINGS =
+    "num_excluded_out_of_factory_methods_strings";
 
 } // namespace
 
@@ -102,7 +104,7 @@ std::vector<DexClass*> DedupStrings::get_host_classes(DexClassesVector& dexen) {
         // We do not want to trigger a clinit.
         continue;
       }
-      if (cls->get_super_class() != get_object_type() ||
+      if (cls->get_super_class() != type::java_lang_Object() ||
           cls->get_interfaces()->get_type_list().size() > 0) {
         // Classes that derived from another class, or implement interfaces,
         // may trigger additional class loads, which is undesirable, or even
@@ -117,7 +119,7 @@ std::vector<DexClass*> DedupStrings::get_host_classes(DexClassesVector& dexen) {
       }
       auto has_non_trivial_type = [](DexField* f) -> bool {
         auto t = f->get_type();
-        return !is_primitive(t) && t != get_object_type();
+        return !type::is_primitive(t) && t != type::java_lang_Object();
       };
       auto& ifields = cls->get_ifields();
       auto& sfields = cls->get_ifields();
@@ -213,16 +215,16 @@ DexMethod* DedupStrings::make_const_string_loader_method(
     DexClass* host_cls, const std::vector<DexString*>& strings) {
   // Here we build the string factory method with a big switch statement.
   always_assert(strings.size() > 0);
-  const auto string_type = get_string_type();
+  const auto string_type = type::java_lang_String();
   const auto proto = DexProto::make_proto(
-      string_type, DexTypeList::make_type_list({get_int_type()}));
+      string_type, DexTypeList::make_type_list({type::_int()}));
   MethodCreator method_creator(host_cls->get_type(),
                                DexString::make_string("$const$string"),
                                proto,
                                ACC_PUBLIC | ACC_STATIC);
   redex_assert(strings.size() > 0);
   auto id_arg = method_creator.get_local(0);
-  auto res_var = method_creator.make_local(get_string_type());
+  auto res_var = method_creator.make_local(type::java_lang_String());
   auto main_block = method_creator.get_main_block();
 
   if (strings.size() == 1) {
@@ -258,7 +260,10 @@ void DedupStrings::gather_non_load_strings(
   std::vector<DexType*> ltype;
   std::vector<DexFieldRef*> lfield;
   std::vector<DexMethodRef*> lmethod;
-  gather_components(lstring, ltype, lfield, lmethod, classes,
+  std::vector<DexCallSite*> lcallsite;
+  std::vector<DexMethodHandle*> lmethodhandle;
+  gather_components(lstring, ltype, lfield, lmethod, lcallsite, lmethodhandle,
+                    classes,
                     /* exclude_loads */ true);
 
   strings->insert(lstring.begin(), lstring.end());
@@ -337,12 +342,19 @@ DedupStrings::get_strings_to_dedup(
   // factory methods, and where to put to the factory method
   std::vector<DexString*> strings_in_dexes[dexen.size()];
   std::unordered_set<size_t> hosting_dexnrs;
-  for (const auto& p : occurrences) {
-    // We are going to look at the situation of a particular string here
+  std::vector<DexString*> ordered_strings;
+  ordered_strings.reserve(occurrences.size());
+  for (auto& p : occurrences) {
     const auto& m = p.second;
     always_assert(m.size() >= 1);
     if (m.size() == 1) continue;
-    const auto s = p.first;
+    ordered_strings.push_back(p.first);
+  }
+  std::sort(ordered_strings.begin(), ordered_strings.end(), compare_dexstrings);
+  for (DexString* s : ordered_strings) {
+    // We are going to look at the situation of a particular string here
+    const auto& m = occurrences.at_unsafe(s);
+    always_assert(m.size() > 1);
     const auto entry_size = s->get_entry_size();
     const auto get_size_reduction = [entry_size, non_load_strings](
                                         DexString* str, size_t dexnr,
@@ -392,6 +404,7 @@ DedupStrings::get_strings_to_dedup(
               "[dedup strings] non perf sensitive string: {%s} dex #%u cannot "
               "be used as dedup strings max factory methods limit reached",
               SHOW(s), dexnr);
+        ++m_stats.excluded_out_of_factory_methods_strings;
         continue;
       }
 
@@ -419,8 +432,7 @@ DedupStrings::get_strings_to_dedup(
     // We have a zero max_cost if and only if we didn't find any suitable
     // hosting_dexnr
     if (!host_info) {
-      TRACE(DS, 3,
-            "[dedup strings] non perf sensitive string: {%s} - no host",
+      TRACE(DS, 3, "[dedup strings] non perf sensitive string: {%s} - no host",
             SHOW(s));
       continue;
     }
@@ -529,10 +541,9 @@ DedupStrings::get_strings_to_dedup(
       auto const s = strings[i];
       auto& info = strings_to_dedup[s];
 
-      TRACE(
-          DS, 2,
-          "[dedup strings] hosting dex %u index %u dup-loads %u string {%s}",
-          dexnr, i, info.duplicate_string_loads, SHOW(s));
+      TRACE(DS, 2,
+            "[dedup strings] hosting dex %u index %u dup-loads %u string {%s}",
+            dexnr, i, info.duplicate_string_loads, SHOW(s));
 
       redex_assert(info.index == 0xFFFFFFFF);
       redex_assert(info.const_string_method == nullptr);
@@ -568,7 +579,7 @@ void DedupStrings::rewrite_const_string_instructions(
         // First, we collect all const-string instructions that we want to
         // rewrite
         const auto ii = InstructionIterable(code);
-        std::vector<std::pair<IRInstruction*, uint16_t>> const_strings;
+        std::vector<std::pair<IRInstruction*, reg_t>> const_strings;
         for (auto it = ii.begin(); it != ii.end(); it++) {
           // do we have a sequence of const-string + move-pseudo-result
           // instruction?
@@ -708,15 +719,18 @@ void DedupStringsPass::run_pass(DexStoresVector& stores,
   mgr.incr_metric(METRIC_EXCLUDED_DUPLICATE_NON_LOAD_STRINGS,
                   stats.excluded_duplicate_non_load_strings);
   mgr.incr_metric(METRIC_FACTORY_METHODS, stats.factory_methods);
+  mgr.incr_metric(METRIC_EXCLUDED_OUT_OF_FACTORY_METHODS_STRINGS,
+                  stats.excluded_out_of_factory_methods_strings);
   TRACE(DS, 1,
         "[dedup strings] duplicate strings: %u, size: %u, loads: %u; "
         "expected size reduction: %u; "
         "dexes without host: %u; "
-        "excluded duplicate non-load strings: %u; factory methods: %u",
+        "excluded duplicate non-load strings: %u; factory methods: %u; "
+        "excluded out of factory methods strings: %u",
         stats.duplicate_strings, stats.duplicate_strings_size,
         stats.duplicate_string_loads, stats.expected_size_reduction,
         stats.dexes_without_host_cls, stats.excluded_duplicate_non_load_strings,
-        stats.factory_methods);
+        stats.factory_methods, stats.excluded_out_of_factory_methods_strings);
 }
 
 static DedupStringsPass s_pass;

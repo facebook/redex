@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -7,9 +7,9 @@
 
 #pragma once
 
-#include <stdlib.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "Util.h"
 
@@ -25,39 +25,56 @@
 
 #define DEX_HEADER_DEXMAGIC_V35 "dex\n035"
 #define DEX_HEADER_DEXMAGIC_V37 "dex\n037"
+#define DEX_HEADER_DEXMAGIC_V38 "dex\n038"
+#define DEX_HEADER_DEXMAGIC_V39 "dex\n039"
+
 #define ENDIAN_CONSTANT (0x12345678)
+#define REVERSE_ENDIAN_CONSTANT (0x78563412)
 
 /* clang-format off */
-#define TYPE_HEADER_ITEM             (0x0000)
-#define TYPE_STRING_ID_ITEM          (0x0001)
-#define TYPE_TYPE_ID_ITEM            (0x0002)
-#define TYPE_PROTO_ID_ITEM           (0x0003)
-#define TYPE_FIELD_ID_ITEM           (0x0004)
-#define TYPE_METHOD_ID_ITEM          (0x0005)
-#define TYPE_CLASS_DEF_ITEM          (0x0006)
-#define TYPE_CALL_SITE_ID_ITEM       (0x0007)
-#define TYPE_METHOD_HANDLE_ITEM      (0x0008)
-#define TYPE_MAP_LIST                (0x1000)
-#define TYPE_TYPE_LIST               (0x1001)
-#define TYPE_ANNOTATION_SET_REF_LIST (0x1002)
-#define TYPE_ANNOTATION_SET_ITEM     (0x1003)
-#define TYPE_CLASS_DATA_ITEM         (0x2000)
-#define TYPE_CODE_ITEM               (0x2001)
-#define TYPE_STRING_DATA_ITEM        (0x2002)
-#define TYPE_DEBUG_INFO_ITEM         (0x2003)
-#define TYPE_ANNOTATION_ITEM         (0x2004)
-#define TYPE_ENCODED_ARRAY_ITEM      (0x2005)
-#define TYPE_ANNOTATIONS_DIR_ITEM    (0x2006)
+#define TYPE_HEADER_ITEM               (0x0000)
+#define TYPE_STRING_ID_ITEM            (0x0001)
+#define TYPE_TYPE_ID_ITEM              (0x0002)
+#define TYPE_PROTO_ID_ITEM             (0x0003)
+#define TYPE_FIELD_ID_ITEM             (0x0004)
+#define TYPE_METHOD_ID_ITEM            (0x0005)
+#define TYPE_CLASS_DEF_ITEM            (0x0006)
+#define TYPE_CALL_SITE_ID_ITEM         (0x0007)
+#define TYPE_METHOD_HANDLE_ITEM        (0x0008)
+#define TYPE_MAP_LIST                  (0x1000)
+#define TYPE_TYPE_LIST                 (0x1001)
+#define TYPE_ANNOTATION_SET_REF_LIST   (0x1002)
+#define TYPE_ANNOTATION_SET_ITEM       (0x1003)
+#define TYPE_CLASS_DATA_ITEM           (0x2000)
+#define TYPE_CODE_ITEM                 (0x2001)
+#define TYPE_STRING_DATA_ITEM          (0x2002)
+#define TYPE_DEBUG_INFO_ITEM           (0x2003)
+#define TYPE_ANNOTATION_ITEM           (0x2004)
+#define TYPE_ENCODED_ARRAY_ITEM        (0x2005)
+#define TYPE_ANNOTATIONS_DIR_ITEM      (0x2006)
+#define TYPE_HIDDENAPI_CLASS_DATA_ITEM (0xF000)
 
-#define METHOD_HANDLE_TYPE_STATIC_PUT         (0x00)
-#define METHOD_HANDLE_TYPE_STATIC_GET         (0x00)
-#define METHOD_HANDLE_TYPE_INSTANCE_PUT       (0x00)
-#define METHOD_HANDLE_TYPE_INSTANCE_GET       (0x00)
-#define METHOD_HANDLE_TYPE_INVOKE_STATIC      (0x00)
-#define METHOD_HANDLE_TYPE_INVOKE_INSTANCE    (0x00)
-#define METHOD_HANDLE_TYPE_INVOKE_CONSTRUCTOR (0x00)
-#define METHOD_HANDLE_TYPE_INVOKE_DIRECT      (0x00)
-#define METHOD_HANDLE_TYPE_INVOKE_INTERFACE   (0x00)
+enum MethodHandleType {
+  // Method handle is a static field setter (accessor)
+  METHOD_HANDLE_TYPE_STATIC_PUT = 0x00,
+  // Method handle is a static field getter (accessor)
+  METHOD_HANDLE_TYPE_STATIC_GET = 0x01,
+  // Method handle is an instance field setter (accessor)
+  METHOD_HANDLE_TYPE_INSTANCE_PUT = 0x02,
+  // Method handle is an instance field getter (accessor)
+  METHOD_HANDLE_TYPE_INSTANCE_GET = 0x03,
+  // Method handle is a static method invoker
+  METHOD_HANDLE_TYPE_INVOKE_STATIC = 0x04,
+  // Method handle is an instance method invoker
+  METHOD_HANDLE_TYPE_INVOKE_INSTANCE = 0x05,
+  // Method handle is a constructor method invoker
+  METHOD_HANDLE_TYPE_INVOKE_CONSTRUCTOR = 0x06,
+  // Method handle is a direct method invoker
+  METHOD_HANDLE_TYPE_INVOKE_DIRECT = 0x07,
+  // Method handle is an interface method invoker
+  METHOD_HANDLE_TYPE_INVOKE_INTERFACE = 0x08 
+};
+
 /* clang-format on */
 
 #define type_id_item uint32_t
@@ -68,6 +85,7 @@
  * we do on this has to do with making sure we're working on a non-opt
  * dex.  See link to Dalvik Executable Format above.
  */
+
 PACKED(struct dex_header {
   char magic[8];
   uint32_t checksum;
@@ -94,13 +112,9 @@ PACKED(struct dex_header {
   uint32_t data_off;
 });
 
-PACKED(struct dex_string_id {
-  uint32_t offset;
-});
+PACKED(struct dex_string_id { uint32_t offset; });
 
-PACKED(struct dex_type_id {
-  uint32_t string_idx;
-});
+PACKED(struct dex_type_id { uint32_t string_idx; });
 
 PACKED(struct dex_map_item {
   uint16_t type;
@@ -144,13 +158,13 @@ PACKED(struct dex_proto_id {
   uint32_t param_off;
 });
 
-PACKED(struct dex_call_site_id_item { uint32_t call_site_off; });
+PACKED(struct dex_callsite_id { uint32_t callsite_off; });
 
-PACKED(struct dex_method_handle_item {
+PACKED(struct dex_methodhandle_id {
   uint16_t method_handle_type;
-  uint16_t unused_a;
+  uint16_t unused1;
   uint16_t field_or_method_id;
-  uint16_t unused_b;
+  uint16_t unused2;
 });
 
 PACKED(struct dex_field_annotation {
@@ -196,6 +210,7 @@ PACKED(struct dex_annotations_directory_item {
   uint32_t parameters_size;
 });
 
+/* clang-format off */
 using DexDebugItemOpcode = uint8_t;
 enum DexDebugItemOpcodeValues : uint8_t {
   DBG_END_SEQUENCE         = 0x00,
@@ -209,6 +224,7 @@ enum DexDebugItemOpcodeValues : uint8_t {
   DBG_SET_EPILOGUE_BEGIN   = 0x08,
   DBG_SET_FILE             = 0x09
 };
+/* clang-format on */
 
 constexpr int32_t DBG_FIRST_SPECIAL = 0x0a;
 constexpr int32_t DBG_LAST_SPECIAL = 0xff;

@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -20,6 +20,7 @@
 #include "DexLoader.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
+#include "GraphVisualizer.h"
 #include "IRCode.h"
 #include "IRTypeChecker.h"
 #include "InstructionLowering.h"
@@ -29,6 +30,7 @@
 #include "ProguardPrintConfiguration.h"
 #include "ProguardReporting.h"
 #include "ReachableClasses.h"
+#include "Sanitizers.h"
 #include "Timer.h"
 #include "Walkers.h"
 
@@ -36,10 +38,38 @@ namespace {
 
 const std::string PASS_ORDER_KEY = "pass_order";
 
+constexpr const char* CFG_DUMP_BASE_NAME = "redex-cfg-dumps.cfg";
+
 std::string get_apk_dir(const Json::Value& config) {
   auto apkdir = config["apk_dir"].asString();
   apkdir.erase(std::remove(apkdir.begin(), apkdir.end(), '"'), apkdir.end());
   return apkdir;
+}
+
+// TODO(fengliu): Kill the `validate_access` flag.
+void run_verifier(const Scope& scope,
+                  bool verify_moves,
+                  bool check_no_overwrite_this,
+                  bool validate_access) {
+  TRACE(PM, 1, "Running IRTypeChecker...");
+  Timer t("IRTypeChecker");
+  walk::parallel::methods(scope, [=](DexMethod* dex_method) {
+    IRTypeChecker checker(dex_method, validate_access);
+    if (verify_moves) {
+      checker.verify_moves();
+    }
+    if (check_no_overwrite_this) {
+      checker.check_no_overwrite_this();
+    }
+    checker.run();
+    if (checker.fail()) {
+      std::string msg = checker.what();
+      fprintf(stderr, "ABORT! Inconsistency found in Dex code for %s.\n %s\n",
+              SHOW(dex_method), msg.c_str());
+      fprintf(stderr, "Code:\n%s\n", SHOW(dex_method->get_code()));
+      exit(EXIT_FAILURE);
+    }
+  });
 }
 
 } // namespace
@@ -70,7 +100,11 @@ PassManager::PassManager(
     // nonexistent passes are caught as early as possible
     auto pass = find_pass(getenv("PROFILE_PASS"));
     always_assert(pass != nullptr);
-    m_profiler_info = ProfilerInfo(getenv("PROFILE_COMMAND"), pass);
+    boost::optional<std::string> post_cmd = boost::none;
+    if (getenv("PROFILE_POST_COMMAND")) {
+      post_cmd = std::string(getenv("PROFILE_POST_COMMAND"));
+    }
+    m_profiler_info = ProfilerInfo(getenv("PROFILE_COMMAND"), post_cmd, pass);
     fprintf(stderr, "Will run profiler for %s\n", pass->name().c_str());
   }
   if (getenv("MALLOC_PROFILE_PASS")) {
@@ -138,30 +172,6 @@ hashing::DexHash PassManager::run_hasher(const char* pass_name,
   return hash;
 }
 
-void PassManager::run_type_checker(const Scope& scope,
-                                   bool verify_moves,
-                                   bool check_no_overwrite_this) {
-  TRACE(PM, 1, "Running IRTypeChecker...");
-  Timer t("IRTypeChecker");
-  walk::parallel::methods(scope, [=](DexMethod* dex_method) {
-    IRTypeChecker checker(dex_method);
-    if (verify_moves) {
-      checker.verify_moves();
-    }
-    if (check_no_overwrite_this) {
-      checker.check_no_overwrite_this();
-    }
-    checker.run();
-    if (checker.fail()) {
-      std::string msg = checker.what();
-      fprintf(stderr, "ABORT! Inconsistency found in Dex code for %s.\n %s\n",
-              SHOW(dex_method), msg.c_str());
-      fprintf(stderr, "Code:\n%s\n", SHOW(dex_method->get_code()));
-      exit(EXIT_FAILURE);
-    }
-  });
-}
-
 void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   DexStoreClassesIterator it(stores);
   Scope scope = build_class_scope(it);
@@ -205,6 +215,8 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   // Load configurations regarding the scope.
   conf.load(scope);
 
+  sanitizers::lsan_do_recoverable_leak_check();
+
   // TODO(fengliu) : Remove Pass::eval_pass API
   for (size_t i = 0; i < m_activated_passes.size(); ++i) {
     Pass* pass = m_activated_passes[i];
@@ -243,6 +255,17 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
         boost::optional<hashing::DexHash>(this->run_hasher(nullptr, scope));
   }
 
+  // CFG visualizer infra. Dump all given classes.
+  visualizer::Classes class_cfgs(
+      conf.metafile(CFG_DUMP_BASE_NAME),
+      conf.get_json_config().get("write_cfg_each_pass", false));
+  class_cfgs.add_all(
+      conf.get_json_config().get("dump_cfg_classes", std::string("")));
+  constexpr visualizer::Options VISUALIZER_PASS_OPTIONS = (visualizer::Options)(
+      visualizer::Options::SKIP_NO_CHANGE | visualizer::Options::FORCE_CFG);
+
+  sanitizers::lsan_do_recoverable_leak_check();
+
   for (size_t i = 0; i < m_activated_passes.size(); ++i) {
     Pass* pass = m_activated_passes[i];
     TRACE(PM, 1, "Running %s...", pass->name().c_str());
@@ -250,13 +273,15 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
     m_current_pass_info = &m_pass_info[i];
 
     {
+      bool run_profiler = m_profiler_info && m_profiler_info->pass == pass;
       ScopedCommandProfiling cmd_prof(
-          m_profiler_info && m_profiler_info->pass == pass
-              ? boost::make_optional(m_profiler_info->command)
-              : boost::none);
+          run_profiler ? boost::make_optional(m_profiler_info->command)
+                       : boost::none,
+          run_profiler ? m_profiler_info->post_cmd : boost::none);
       jemalloc_util::ScopedProfiling malloc_prof(m_malloc_profile_pass == pass);
       pass->run_pass(stores, conf, *this);
     }
+    sanitizers::lsan_do_recoverable_leak_check();
     walk::parallel::code(build_class_scope(stores), [](DexMethod* m,
                                                        IRCode& code) {
       // Ensure that pass authors deconstructed the editable CFG at the end of
@@ -264,6 +289,8 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       // IRCode form
       always_assert_log(!code.editable_cfg_built(), "%s has a cfg!", SHOW(m));
     });
+
+    class_cfgs.add_pass(pass->name(), VISUALIZER_PASS_OPTIONS);
 
     bool run_hasher = run_hasher_after_each_pass;
     bool run_type_checker = run_type_checker_after_each_pass ||
@@ -278,8 +305,9 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       if (run_type_checker) {
         // It's OK to overwrite the `this` register if we are not yet at the
         // output phase -- the register allocator can fix it up later.
-        this->run_type_checker(scope, verify_moves,
-                               /* check_no_overwrite_this */ false);
+        run_verifier(scope, verify_moves,
+                     /* check_no_overwrite_this */ false,
+                     /* validate_access */ false);
       }
     }
     m_current_pass_info = nullptr;
@@ -287,8 +315,11 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
 
   // Always run the type checker before generating the optimized dex code.
   scope = build_class_scope(it);
-  run_type_checker(scope, verify_moves,
-                   get_redex_options().no_overwrite_this());
+  run_verifier(scope, verify_moves, get_redex_options().no_overwrite_this(),
+               /* validate_access */ true);
+
+  class_cfgs.add_pass("After all passes");
+  class_cfgs.write();
 
   if (!conf.get_printseeds().empty()) {
     Timer t("Writing outgoing classes to file " + conf.get_printseeds() +
@@ -298,6 +329,8 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
     std::ofstream outgoing(conf.get_printseeds() + ".outgoing");
     redex::print_classes(outgoing, conf.get_proguard_map(), scope);
   }
+
+  sanitizers::lsan_do_recoverable_leak_check();
 }
 
 void PassManager::activate_pass(const char* name, const Json::Value& conf) {
@@ -305,7 +338,7 @@ void PassManager::activate_pass(const char* name, const Json::Value& conf) {
 
   // Names may or may not have a "#<id>" suffix to indicate their order in the
   // pass list, which needs to be removed for matching.
-  std::string pass_name = name_str.substr(0, name_str.find("#"));
+  std::string pass_name = name_str.substr(0, name_str.find('#'));
   for (auto pass : m_registered_passes) {
     if (pass_name == pass->name()) {
       m_activated_passes.push_back(pass);

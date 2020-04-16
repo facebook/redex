@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -23,7 +23,6 @@ static auto mallctl =
 #else
 MallctlFn mallctl = nullptr;
 #endif
-
 }
 
 namespace {

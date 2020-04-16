@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -12,8 +12,7 @@
 void IntraDexInlinePass::run_pass(DexStoresVector& stores,
                                   ConfigFiles& conf,
                                   PassManager& mgr) {
-  inliner::run_inliner(
-      stores, mgr, conf.get_inliner_config(), /* intra_dex */ true);
+  inliner::run_inliner(stores, mgr, conf, /* intra_dex */ true);
 }
 
 static IntraDexInlinePass s_pass;

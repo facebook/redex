@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -32,7 +32,9 @@ class DexInstruction : public Gatherable {
     REF_STRING,
     REF_TYPE,
     REF_FIELD,
-    REF_METHOD
+    REF_METHOD,
+    REF_CALLSITE,
+    REF_METHODHANDLE,
   } m_ref_type{REF_NONE};
 
  private:
@@ -96,6 +98,8 @@ class DexInstruction : public Gatherable {
   bool has_type() const { return m_ref_type == REF_TYPE; }
   bool has_field() const { return m_ref_type == REF_FIELD; }
   bool has_method() const { return m_ref_type == REF_METHOD; }
+  bool has_callsite() const { return m_ref_type == REF_CALLSITE; }
+  bool has_methodhandle() const { return m_ref_type == REF_METHODHANDLE; }
 
   bool has_range() const { return dex_opcode::has_range(opcode()); }
   bool has_literal() const { return dex_opcode::has_literal(opcode()); }
@@ -232,6 +236,64 @@ class DexOpcodeMethod : public DexInstruction {
   void set_method(DexMethodRef* method) { m_method = method; }
 };
 
+class DexOpcodeCallSite : public DexInstruction {
+ private:
+  DexCallSite* m_callsite;
+
+ public:
+  uint16_t size() const override;
+  void encode(DexOutputIdx* dodx, uint16_t*& insns) override;
+  void gather_callsites(std::vector<DexCallSite*>& lcallsite) const override;
+  void gather_strings(std::vector<DexString*>& lstring) const override;
+  void gather_methodhandles(
+      std::vector<DexMethodHandle*>& lmethodhandle) const override;
+  void gather_methods(std::vector<DexMethodRef*>& lmethod) const override;
+  void gather_fields(std::vector<DexFieldRef*>& lfield) const override;
+  DexOpcodeCallSite* clone() const override {
+    return new DexOpcodeCallSite(*this);
+  }
+
+  DexOpcodeCallSite(DexOpcode opcode, DexCallSite* callsite, uint16_t arg = 0)
+      : DexInstruction(opcode, arg) {
+    m_callsite = callsite;
+    m_ref_type = REF_CALLSITE;
+  }
+
+  DexCallSite* get_callsite() const { return m_callsite; }
+
+  void set_callsite(DexCallSite* callsite) { m_callsite = callsite; }
+};
+
+class DexOpcodeMethodHandle : public DexInstruction {
+ private:
+  DexMethodHandle* m_methodhandle;
+
+ public:
+  uint16_t size() const override;
+  void encode(DexOutputIdx* dodx, uint16_t*& insns) override;
+  void gather_methodhandles(
+      std::vector<DexMethodHandle*>& lmethodhandle) const override;
+  void gather_methods(std::vector<DexMethodRef*>& lmethod) const override;
+  void gather_fields(std::vector<DexFieldRef*>& lfield) const override;
+  DexOpcodeMethodHandle* clone() const override {
+    return new DexOpcodeMethodHandle(*this);
+  }
+
+  DexOpcodeMethodHandle(DexOpcode opcode,
+                        DexMethodHandle* methodhandle,
+                        uint16_t arg = 0)
+      : DexInstruction(opcode, arg) {
+    m_methodhandle = methodhandle;
+    m_ref_type = REF_METHODHANDLE;
+  }
+
+  DexMethodHandle* get_methodhandle() const { return m_methodhandle; }
+
+  void set_methodhandle(DexMethodHandle* methodhandle) {
+    m_methodhandle = methodhandle;
+  }
+};
+
 class DexOpcodeData : public DexInstruction {
  private:
   uint16_t m_data_count;
@@ -274,9 +336,9 @@ class DexOpcodeData : public DexInstruction {
 
   ~DexOpcodeData() override { delete[] m_data; }
 
-  const uint16_t* data() { return m_data; }
+  const uint16_t* data() const { return m_data; }
   // This size refers to just the length of the data array
-  const uint16_t data_size() { return m_data_count; }
+  uint16_t data_size() const { return m_data_count; }
 };
 
 // helper function to create fill-array-data-payload according to
@@ -363,6 +425,10 @@ inline bool is_invoke(IROpcode op) {
 
 inline bool is_invoke_virtual(IROpcode op) {
   return op == OPCODE_INVOKE_VIRTUAL;
+}
+
+inline bool is_invoke_interface(IROpcode op) {
+  return op == OPCODE_INVOKE_INTERFACE;
 }
 
 inline bool is_invoke_super(IROpcode op) { return op == OPCODE_INVOKE_SUPER; }

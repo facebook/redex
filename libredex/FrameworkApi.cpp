@@ -1,0 +1,112 @@
+/*
+ * Copyright (c) Facebook, Inc. and its affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+#include "FrameworkApi.h"
+
+#include <boost/algorithm/string.hpp>
+#include <fstream>
+
+namespace api {
+
+bool FrameworkAPI::has_method(const std::string& simple_deobfuscated_name,
+                              DexProto* meth_proto,
+                              DexAccessFlags meth_access_flags,
+                              bool relax_access_flags_matching) const {
+  for (const MRefInfo& mref_info : mrefs_info) {
+    auto* mref = mref_info.mref;
+    if (mref->get_proto() != meth_proto ||
+        mref->get_name()->str() != simple_deobfuscated_name) {
+      continue;
+    }
+
+    // We also need to check the access flags.
+    // NOTE: We accept cases where the methods are not declared final.
+    if (meth_access_flags == mref_info.access_flags ||
+        (meth_access_flags & ~ACC_FINAL) == mref_info.access_flags) {
+      return true;
+    }
+    // There are mismatches on the higher bits of the access flags on some
+    // methods between the API file generated using dex.py and what we have in
+    // Redex, even if they are the 'same' method.
+    // In the method presence check, we relax the matching to only
+    // the last 4 bits that includes PUBLIC, PRIVATE, PROTECTED and STATIC.
+    if (relax_access_flags_matching) {
+      auto masked_info_access = 0xF & mref_info.access_flags;
+      auto masked_meth_access = 0xF & meth_access_flags;
+      if (masked_info_access == masked_meth_access) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * File format:
+ *  <framework_cls> <super_cls> <num_methods> <num_fields>
+ *      M <method0>
+ *      M <method1>
+ *      ...
+ *      F <field0>
+ *      F <field1>
+ *      ...
+ */
+
+void AndroidSDK::load_framework_classes() {
+
+  std::ifstream infile(m_sdk_api_file.c_str());
+  assert_log(infile, "Failed to open framework api file: %s\n",
+             m_sdk_api_file.c_str());
+
+  std::string framework_cls_str;
+  std::string super_cls_str;
+  std::string class_name;
+  uint32_t num_methods;
+  uint32_t num_fields;
+  uint32_t access_flags;
+
+  while (infile >> framework_cls_str >> access_flags >> super_cls_str >>
+         num_methods >> num_fields) {
+    FrameworkAPI framework_api;
+    framework_api.cls = DexType::make_type(framework_cls_str.c_str());
+    always_assert_log(m_framework_classes.count(framework_api.cls) == 0,
+                      "Duplicated class name!");
+    framework_api.super_cls = DexType::make_type(super_cls_str.c_str());
+    framework_api.access_flags = DexAccessFlags(access_flags);
+
+    while (num_methods-- > 0) {
+      std::string method_str;
+      std::string tag;
+      uint32_t m_access_flags;
+
+      infile >> tag >> method_str >> m_access_flags;
+
+      always_assert(tag == "M");
+      DexMethodRef* mref = DexMethod::make_method(method_str);
+      framework_api.mrefs_info.emplace_back(mref,
+                                            DexAccessFlags(m_access_flags));
+    }
+
+    while (num_fields-- > 0) {
+      std::string field_str;
+      std::string tag;
+      uint32_t f_access_flags;
+
+      infile >> tag >> field_str >> f_access_flags;
+
+      always_assert(tag == "F");
+      DexFieldRef* fref = DexField::make_field(field_str);
+      framework_api.frefs_info.emplace_back(fref,
+                                            DexAccessFlags(f_access_flags));
+    }
+
+    auto& map_entry = m_framework_classes[framework_api.cls];
+    map_entry = std::move(framework_api);
+  }
+}
+
+} // namespace api

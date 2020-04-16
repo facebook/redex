@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -6,8 +6,10 @@
  */
 
 #include "EnumConfig.h"
+
 #include "LocalPointersAnalysis.h"
 #include "Walkers.h"
+#include <utility>
 
 namespace ptrs = local_pointers;
 
@@ -15,12 +17,14 @@ namespace {
 // The structure is used for hardcoding external method param summaries.
 struct ExternalMethodData {
   std::string method_name;
-  boost::optional<uint16_t> returned_param;
-  std::initializer_list<uint16_t> safe_params;
+  boost::optional<reg_t> returned_param;
+  std::vector<reg_t> safe_params;
   ExternalMethodData(std::string name,
-                     boost::optional<uint16_t> returned,
-                     std::initializer_list<uint16_t> params)
-      : method_name(name), returned_param(returned), safe_params(params) {}
+                     boost::optional<reg_t> returned,
+                     std::initializer_list<reg_t> params)
+      : method_name(std::move(name)),
+        returned_param(returned),
+        safe_params(params) {}
 };
 /**
  * Hardcode some empirical summaries for some external methods.
@@ -76,13 +80,10 @@ void ParamSummary::print(const DexMethodRef* method) const {
 }
 
 /**
- * Return true if a static method signature contains java.lang.Object type.
+ * Return true if a method signature contains java.lang.Object type.
  */
 bool params_contain_object_type(const DexMethod* method,
                                 const DexType* object_type) {
-  if (!is_static(method) || !method->get_code()) {
-    return false;
-  }
   auto args = method->get_proto()->get_args();
   for (auto arg : *args) {
     if (arg == object_type) {
@@ -133,7 +134,11 @@ ParamSummary calculate_param_summary(DexMethod* method,
   }
   // Non-escaping java.lang.Object params are stored in safe_params.
   auto arg_it = args->begin();
-  for (uint32_t index = 0; arg_it != args->end(); ++arg_it, ++index) {
+  uint32_t index = 0;
+  if (!is_static(method)) {
+    index = 1;
+  }
+  for (; arg_it != args->end(); ++arg_it, ++index) {
     if (!escaping_params.count(index) && (*arg_it == object_type)) {
       summary.safe_params.insert(index);
     }
@@ -145,12 +150,19 @@ ParamSummary calculate_param_summary(DexMethod* method,
  * Calculate escape summaries for static methods whose arguments contain
  * java.lang.Object type. Then convert the escape summaries to param summaries.
  */
-void calculate_param_summaries(Scope& scope, SummaryMap* param_summary_map) {
-  auto object_type = get_object_type();
+void calculate_param_summaries(
+    const Scope& scope,
+    const method_override_graph::Graph& override_graph,
+    SummaryMap* param_summary_map) {
+  auto object_type = type::java_lang_Object();
   walk::parallel::code(
       scope,
-      [object_type](DexMethod* method) {
-        return params_contain_object_type(method, object_type);
+      [object_type, &override_graph](DexMethod* method) {
+        return method->get_code() &&
+               !method_override_graph::is_true_virtual(override_graph,
+                                                       method) &&
+
+               params_contain_object_type(method, object_type);
       },
       [object_type, param_summary_map](DexMethod* method, IRCode&) {
         auto summary = calculate_param_summary(method, object_type);

@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -21,17 +21,17 @@ struct MethodMergerTest : RedexTest {
 
   MethodMergerTest() : RedexTest() {
     ClassCreator cc(DexType::make_type("Lfoo;"));
-    cc.set_super(get_object_type());
+    cc.set_super(type::java_lang_Object());
     m_cls = cc.create();
     scope.push_back(m_cls);
   }
 
-  DexMethod* create_a_simple_method(std::string full_descriptor,
+  DexMethod* create_a_simple_method(const std::string& full_descriptor,
                                     DexAccessFlags access,
                                     int ret_value) {
     auto ref = DexMethod::make_method(full_descriptor);
     MethodCreator mc(ref, access);
-    auto res_loc = mc.make_local(get_int_type());
+    auto res_loc = mc.make_local(type::_int());
     auto main_block = mc.get_main_block();
     main_block->load_const(res_loc, ret_value);
     main_block->ret(res_loc);
@@ -55,7 +55,7 @@ TEST_F(MethodMergerTest, merge_methods_within_class) {
   {
     // method6's proto is different and it calls 0-5 methods.
     MethodCreator mc(DexMethod::make_method("Lfoo;.method_6:()V"), access);
-    auto loc = mc.make_local(get_int_type());
+    auto loc = mc.make_local(type::_int());
     auto main_block = mc.get_main_block();
     main_block->load_const(loc, 0);
     // At least two callsites for each methods.

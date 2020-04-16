@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -20,6 +20,7 @@ class OptimizeEnumsPass : public Pass {
 
  private:
   int m_max_enum_size;
+  std::vector<DexType*> m_enum_to_integer_whitelist;
 };
 
 } // namespace optimize_enums

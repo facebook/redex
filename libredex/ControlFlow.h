@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -197,6 +197,9 @@ class Block final {
       : m_id(id), m_parent(parent) {}
 
   ~Block() { m_entries.clear_and_dispose(); }
+  // This is different from the destructor. It also frees MethodItemEntry
+  // payload that is not deleted on MIE deletion.
+  void free();
 
   // copy constructor
   Block(const Block& b, MethodItemEntryCloner* cloner);
@@ -230,7 +233,25 @@ class Block final {
 
   void remove_insn(const InstructionIterator& it);
   void remove_insn(const ir_list::InstructionIterator& it);
+
+  // Will remove the first entry after it containing an MFLOW_OPCODE,
+  // leaving the intervening instructions unmodified. If a non-MFLOW_OPCODE
+  // instruction is to be removed, remove_mie should be used instead.
   void remove_insn(const IRList::iterator& it);
+
+  void remove_mie(const IRList::iterator& it);
+
+  // Removes a subset of MFLOW_DEBUG instructions from the block. valid_regs
+  // is an accumulator set of registers used by either DBG_START_LOCAL
+  // or DBG_START_LOCAL_EXTENDED. The DBG_END_LOCAL and DBG_RESTART_LOCAL
+  // instructions are erased, unless valid_regs contains the registers they use.
+  // Note: When iterating (WTO order) over the blocks of a CFG, if this method
+  // is to be applied for each block, then the valid_regs accumulator should be
+  // sequentially passed to each of the blocks to incorporate the "global"
+  // information of the CFG. That is, if a block is an ancestor of another,
+  // then the valid registers that the ancestor block defines should be
+  // acknowledged by the descendant block.
+  void cleanup_debug(std::unordered_set<reg_t>& valid_regs);
 
   opcode::Branchingness branchingness();
 
@@ -251,6 +272,8 @@ class Block final {
 
   // including move-result-pseudo
   bool starts_with_move_result();
+
+  bool contains_opcode(IROpcode opcode);
 
   // returns true iff the block starts with the same MethodItemEntries as the
   // other block.
@@ -355,7 +378,7 @@ class ControlFlowGraph {
    * if editable is false, changes to the CFG aren't reflected in the output dex
    * instructions.
    */
-  ControlFlowGraph(IRList* ir, uint16_t registers_size, bool editable = true);
+  ControlFlowGraph(IRList* ir, reg_t registers_size, bool editable = true);
   ~ControlFlowGraph();
 
   /*
@@ -378,10 +401,12 @@ class ControlFlowGraph {
 
   // Return vector of blocks in reverse post order (RPO). If there is a path
   // from Block A to Block B, then A appears before B in this vector.
-  std::vector<Block*> blocks_reverse_post() const;
-  // Return vector of blocks in post order (PO). If there is a path
-  // from Block A to Block B, then A appears after B in this vector.
-  std::vector<Block*> blocks_post() const;
+  //
+  //
+  // DEPRECATED: Use graph::postorder_sort instead, which is faster. The only
+  // functional difference is that the new version doesn't include unreachable
+  // blocks in the sorted output.
+  std::vector<Block*> blocks_reverse_post_deprecated() const;
 
   Block* create_block();
 
@@ -429,8 +454,15 @@ class ControlFlowGraph {
     e->target()->m_preds.emplace_back(e);
   }
 
+  // copies all edges from one block to another
+  void copy_succ_edges(Block* from, Block* to);
+
   // copies all edges of a certain type from one block to another
-  void copy_succ_edges(Block* from, Block* to, EdgeType type);
+  void copy_succ_edges_of_type(Block* from, Block* to, EdgeType type);
+
+  // copes all edges that match the predicate from one block to another
+  template <typename EdgePredicate>
+  void copy_succ_edges_if(Block* from, Block* to, EdgePredicate edge_predicate);
 
   using EdgeSet = std::unordered_set<Edge*>;
 
@@ -534,8 +566,8 @@ class ControlFlowGraph {
    * The existing block will become the predecessor. All code after `it` will be
    * moved into the new block (the successor). Return the (new) successor.
    */
-   Block* split_block(const cfg::InstructionIterator& it);
-   Block* split_block(Block* block, const IRList::iterator& it);
+  Block* split_block(const cfg::InstructionIterator& it);
+  Block* split_block(Block* block, const IRList::iterator& it);
 
   // Merge `succ` into `pred` and delete `succ`
   //
@@ -654,15 +686,6 @@ class ControlFlowGraph {
    */
   std::ostream& write_dot_format(std::ostream&) const;
 
-  // Find a common dominator block that is closest to both block.
-  Block* idom_intersect(
-      const std::unordered_map<Block*, DominatorInfo>& postorder_dominator,
-      Block* block1,
-      Block* block2) const;
-
-  // Finding immediate dominator for each blocks in ControlFlowGraph.
-  std::unordered_map<Block*, DominatorInfo> immediate_dominators() const;
-
   // Do writes to this CFG propagate back to IR and Dex code?
   bool editable() const { return m_editable; }
 
@@ -693,17 +716,17 @@ class ControlFlowGraph {
 
   uint32_t sum_opcode_sizes() const;
 
-  uint16_t allocate_temp() { return m_registers_size++; }
+  reg_t allocate_temp() { return m_registers_size++; }
 
-  uint16_t allocate_wide_temp() {
-    uint16_t new_reg = m_registers_size;
+  reg_t allocate_wide_temp() {
+    reg_t new_reg = m_registers_size;
     m_registers_size += 2;
     return new_reg;
   }
 
-  uint16_t get_registers_size() const { return m_registers_size; }
+  reg_t get_registers_size() const { return m_registers_size; }
 
-  void set_registers_size(uint16_t sz) { m_registers_size = sz; }
+  void set_registers_size(reg_t sz) { m_registers_size = sz; }
 
   // Find the highest register in use and set m_registers_size
   //
@@ -713,13 +736,15 @@ class ControlFlowGraph {
   void recompute_registers_size();
 
   // by default, start at the entry block
-  boost::sub_range<IRList> get_param_instructions();
+  boost::sub_range<IRList> get_param_instructions() const;
 
   void gather_catch_types(std::vector<DexType*>& types) const;
   void gather_strings(std::vector<DexString*>& strings) const;
   void gather_types(std::vector<DexType*>& types) const;
   void gather_fields(std::vector<DexFieldRef*>& fields) const;
   void gather_methods(std::vector<DexMethodRef*>& methods) const;
+  void gather_callsites(std::vector<DexCallSite*>& callsites) const;
+  void gather_methodhandles(std::vector<DexMethodHandle*>& methodhandles) const;
 
   cfg::InstructionIterator primary_instruction_of_move_result(
       const cfg::InstructionIterator& it);
@@ -809,16 +834,6 @@ class ControlFlowGraph {
   // Materialize TRY_STARTs, TRY_ENDs, and MFLOW_CATCHes
   // Used while turning back into a linear representation.
   void insert_try_catch_markers(const std::vector<Block*>& ordering);
-
-  // Follow the catch entry linked list starting at `first_mie` and
-  // make sure the throw edges (pointed to by `it`) agree with the linked list.
-  // Used while turning back into a linear representation.
-  bool catch_entries_equivalent_to_throw_edges(
-      MethodItemEntry* first_mie,
-      std::vector<Edge*>::iterator it,
-      std::vector<Edge*>::iterator end,
-      const std::unordered_map<MethodItemEntry*, Block*>&
-          catch_to_containing_block);
 
   // remove blocks with no entries
   void remove_empty_blocks();
@@ -974,7 +989,7 @@ class ControlFlowGraph {
   // edge
   void move_edge(Edge* edge, Block* new_source, Block* new_target);
 
-  uint16_t compute_registers_size() const;
+  reg_t compute_registers_size() const;
 
   // Return the next unused block identifier
   BlockId next_block_id() const;
@@ -985,7 +1000,7 @@ class ControlFlowGraph {
   Blocks m_blocks;
   EdgeSet m_edges;
 
-  uint16_t m_registers_size{0};
+  reg_t m_registers_size{0};
   Block* m_entry_block{nullptr};
   Block* m_exit_block{nullptr};
   bool m_editable{true};
@@ -1238,7 +1253,7 @@ bool ControlFlowGraph::insert(const InstructionIterator& position,
                             SHOW(existing_last->insn), b->id(), SHOW(*this));
           Block* new_block = create_block();
           if (opcode::may_throw(op)) {
-            copy_succ_edges(b, new_block, EDGE_THROW);
+            copy_succ_edges_of_type(b, new_block, EDGE_THROW);
           }
           const auto& existing_goto_edge = get_succ_edge_of_type(b, EDGE_GOTO);
           set_edge_source(existing_goto_edge, new_block);
@@ -1255,14 +1270,20 @@ bool ControlFlowGraph::insert(const InstructionIterator& position,
                       "create_branch() instead");
 
     IRList::iterator new_inserted_it = b->m_entries.insert_before(pos, insn);
-
     if (is_throw(op) || is_return(op)) {
-      // Throw and return end the block, we must remove all code after them.
-      always_assert(std::next(insns_it) == end_index);
+      // Stop adding instructions when we understand that op
+      // is the end of the block.
+      insns_it = std::prev(end_index);
+      std::unordered_set<DexPosition*> dangling;
       for (auto it = pos; it != b->m_entries.end();) {
+        if (it->type == MFLOW_POSITION) {
+          dangling.insert(it->pos.get());
+        }
         it = b->m_entries.erase_and_dispose(it);
         invalidated_its = true;
       }
+      remove_dangling_parents(dangling);
+
       if (is_return(op)) {
         // This block now ends in a return, it must have no successors.
         delete_succ_edge_if(
@@ -1298,7 +1319,7 @@ bool ControlFlowGraph::insert(const InstructionIterator& position,
       if (!succ->empty()) {
         // Copy the outgoing throw edges of the new block back into the original
         // block
-        copy_succ_edges(succ, b, EDGE_THROW);
+        copy_succ_edges_of_type(succ, b, EDGE_THROW);
       }
 
       // Continue inserting in the successor block.

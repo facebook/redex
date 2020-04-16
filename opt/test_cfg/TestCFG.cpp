@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -21,8 +21,9 @@ void TestCFGPass::run_pass(DexStoresVector& stores,
                            ConfigFiles& /* unused */,
                            PassManager& mgr) {
   const auto& scope = build_class_scope(stores);
-  DexMethod* example = nullptr; //static_cast<DexMethod*>(DexMethod::get_method());
-  //always_assert(example != nullptr && example->is_def());
+  DexMethod* example =
+      nullptr; // static_cast<DexMethod*>(DexMethod::get_method());
+  // always_assert(example != nullptr && example->is_def());
   walk::code(scope, [example](DexMethod* m, IRCode& code) {
     if (example != nullptr && m != example) {
       return;

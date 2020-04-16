@@ -1,7 +1,9 @@
-// Copyright 2004-present Facebook. All Rights Reserved.
-
-// This source code is licensed under the MIT license found in the
-// LICENSE file in the root directory of this source tree.
+/*
+ * Copyright (c) Facebook, Inc. and its affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
 
 #include "DexClass.h"
 #include "IRAssembler.h"
@@ -36,7 +38,7 @@ TEST_F(DexClassTest, testUniqueMethodName) {
 TEST_F(DexClassTest, testUniqueFieldName) {
   auto class_type = DexType::make_type(DexString::make_string("LFoo;"));
   ClassCreator class_creator(class_type);
-  class_creator.set_super(get_object_type());
+  class_creator.set_super(type::java_lang_Object());
   class_creator.create();
   auto type = DexType::make_type("LFoo;");
   DexString* newname = DexField::get_unique_name(

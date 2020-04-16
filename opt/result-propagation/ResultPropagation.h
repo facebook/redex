@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -52,7 +52,7 @@ class ReturnParamResolver {
    * it will always return one of its incoming sources.
    */
   const boost::optional<ParamIndex> get_return_param_index(
-      IRInstruction* insn,
+      const IRInstruction* insn,
       const std::unordered_map<const DexMethod*, ParamIndex>&
           methods_which_return_parameter,
       MethodRefCache& resolved_refs) const;
@@ -95,6 +95,13 @@ class ResultPropagation {
     size_t erased_move_results{0};
     size_t patched_move_results{0};
     size_t unverifiable_move_results{0};
+
+    Stats& operator+=(const Stats& that) {
+      erased_move_results += that.erased_move_results;
+      patched_move_results += that.patched_move_results;
+      unverifiable_move_results += that.unverifiable_move_results;
+      return *this;
+    }
   };
 
   ResultPropagation(const std::unordered_map<const DexMethod*, ParamIndex>&

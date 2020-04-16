@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -18,9 +18,8 @@ void ConstantPropagationPass::run_pass(DexStoresVector& stores,
                                        PassManager& mgr) {
   auto scope = build_class_scope(stores);
 
-  auto stats = walk::parallel::reduce_methods<Transform::Stats>(
-      scope,
-      [&](DexMethod* method) {
+  auto stats =
+      walk::parallel::methods<Transform::Stats>(scope, [&](DexMethod* method) {
         if (method->get_code() == nullptr) {
           return Transform::Stats();
         }
@@ -36,20 +35,18 @@ void ConstantPropagationPass::run_pass(DexStoresVector& stores,
         fp_iter.run(ConstantEnvironment());
         constant_propagation::Transform tf(m_config.transform);
         return tf.apply(fp_iter, WholeProgramState(), &code);
-      },
-
-      [](Transform::Stats a, Transform::Stats b) { // reducer
-        return a + b;
       });
 
   mgr.incr_metric("num_branch_propagated", stats.branches_removed);
   mgr.incr_metric("num_materialized_consts", stats.materialized_consts);
+  mgr.incr_metric("num_throws", stats.throws);
 
   TRACE(CONSTP, 1, "num_branch_propagated: %d", stats.branches_removed);
   TRACE(CONSTP,
         1,
         "num_moves_replaced_by_const_loads: %d",
         stats.materialized_consts);
+  TRACE(CONSTP, 1, "num_throws: %d", stats.throws);
 }
 
 static ConstantPropagationPass s_pass;

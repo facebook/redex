@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -84,10 +84,6 @@ class PassManager {
 
   hashing::DexHash run_hasher(const char* name, const Scope& scope);
 
-  static void run_type_checker(const Scope& scope,
-                               bool verify_moves,
-                               bool check_no_overwrite_this);
-
   ApkManager m_apk_mgr;
   std::vector<Pass*> m_registered_passes;
   std::vector<Pass*> m_activated_passes;
@@ -103,9 +99,12 @@ class PassManager {
 
   struct ProfilerInfo {
     std::string command;
+    boost::optional<std::string> post_cmd;
     const Pass* pass;
-    ProfilerInfo(const std::string& command, const Pass* pass)
-        : command(command), pass(pass) {}
+    ProfilerInfo(const std::string& command,
+                 const boost::optional<std::string>& post_cmd,
+                 const Pass* pass)
+        : command(command), post_cmd(post_cmd), pass(pass) {}
   };
 
   boost::optional<ProfilerInfo> m_profiler_info;

@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -13,6 +13,7 @@
 #include "ControlFlow.h"
 #include "DexClass.h"
 #include "DexUtil.h"
+#include "GraphUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "IROpcode.h"
@@ -51,7 +52,7 @@ constexpr const char* METRIC_INSTRUCTIONS_HOISTED = "num_instructions_hoisted";
 } // namespace
 
 bool BranchPrefixHoistingPass::has_side_effect_on_vregs(
-    const IRInstruction& insn, const std::unordered_set<uint16_t>& vregs) {
+    const IRInstruction& insn, const std::unordered_set<reg_t>& vregs) {
   if (!insn.has_dest()) {
     // insn has no destination, can not have a side effect
     return false; // we need to return here, otherwise dest() will throw
@@ -149,8 +150,8 @@ int BranchPrefixHoistingPass::process_hoisting_for_block(
     return 0;
   }
   IRInstruction* last_insn = last_insn_it->insn;
-  std::unordered_set<uint16_t> crit_regs(last_insn->srcs().begin(),
-                                         last_insn->srcs().end());
+  const auto& srcs = last_insn->srcs();
+  std::unordered_set<reg_t> crit_regs(srcs.begin(), srcs.end());
 
   std::vector<cfg::Block*> succ_blocks = get_succ_blocks(block);
 
@@ -183,7 +184,7 @@ void BranchPrefixHoistingPass::skip_pos_debug(IRList::iterator& it,
 
 std::vector<IRInstruction> BranchPrefixHoistingPass::get_insns_to_hoist(
     const std::vector<cfg::Block*>& succ_blocks,
-    const std::unordered_set<uint16_t>& crit_regs) {
+    const std::unordered_set<reg_t>& crit_regs) {
   // get iterators that points to the beginning of each block
   std::vector<IRList::iterator> block_iters;
   block_iters.reserve(succ_blocks.size());
@@ -271,7 +272,7 @@ void BranchPrefixHoistingPass::hoist_insns_for_block(
     auto to_remove =
         ir_list::InstructionIterator(succ_block->begin(), succ_block->end());
 
-    for (auto insn : insns_to_hoist) {
+    for (const auto& insn : insns_to_hoist) {
       if (opcode::is_move_result_any(insn.opcode())) {
         // move result pseudo gets removed along with its associating insn
         continue;
@@ -298,7 +299,8 @@ int BranchPrefixHoistingPass::process_cfg(cfg::ControlFlowGraph& cfg) {
   bool performed_transformation = false;
   do {
     performed_transformation = false;
-    const std::vector<cfg::Block*>& blocks = cfg.blocks_post();
+    const std::vector<cfg::Block*>& blocks =
+        graph::postorder_sort<cfg::GraphInterface>(cfg);
     // iterate from the back, may get to the optimal state quicker
     for (auto block : blocks) {
       // when we are processing hoist for one block, other blocks may be changed
@@ -318,9 +320,8 @@ void BranchPrefixHoistingPass::run_pass(DexStoresVector& stores,
                                         PassManager& mgr) {
   auto scope = build_class_scope(stores);
 
-  int total_insns_hoisted = walk::parallel::reduce_methods<int>(
-      scope,
-      [](DexMethod* method) -> int {
+  int total_insns_hoisted =
+      walk::parallel::methods<int>(scope, [](DexMethod* method) -> int {
         const auto code = method->get_code();
         if (!code) {
           return 0;
@@ -333,8 +334,7 @@ void BranchPrefixHoistingPass::run_pass(DexStoresVector& stores,
                 insns_hoisted, SHOW(method));
         }
         return insns_hoisted;
-      },
-      [](int a, int b) { return a + b; });
+      });
 
   mgr.incr_metric(METRIC_INSTRUCTIONS_HOISTED, total_insns_hoisted);
 }

@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -9,6 +9,7 @@
 
 #include <sstream>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include <boost/functional/hash.hpp>
@@ -144,31 +145,30 @@ class AbstractAccessPathDomain final
 
 using namespace std::placeholders;
 
-using register_t = ir_analyzer::register_t;
 using namespace ir_analyzer;
 
 // Used for new-instance handling. Shouldn't collide with anything.
-register_t UNKNOWN_REGISTER = RESULT_REGISTER - 1;
+reg_t UNKNOWN_REGISTER = RESULT_REGISTER - 1;
 
 using AbstractAccessPathEnvironment =
-    PatriciaTreeMapAbstractEnvironment<register_t, AbstractAccessPathDomain>;
+    PatriciaTreeMapAbstractEnvironment<reg_t, AbstractAccessPathDomain>;
 
 class Analyzer final : public BaseIRAnalyzer<AbstractAccessPathEnvironment> {
  public:
   Analyzer(const cfg::ControlFlowGraph& cfg,
            std::function<bool(DexMethodRef*)> is_immutable_getter,
-           const std::unordered_set<uint16_t> allowed_locals)
+           const std::unordered_set<reg_t>& allowed_locals)
       : BaseIRAnalyzer<AbstractAccessPathEnvironment>(cfg),
         m_cfg(cfg),
-        m_is_immutable_getter(is_immutable_getter),
+        m_is_immutable_getter(std::move(is_immutable_getter)),
         m_allowed_locals(allowed_locals) {}
 
-  bool is_local_analyzable(uint16_t reg) const {
+  bool is_local_analyzable(reg_t reg) const {
     return m_allowed_locals.count(reg) > 0;
   }
 
   void analyze_instruction(
-      IRInstruction* insn,
+      const IRInstruction* insn,
       AbstractAccessPathEnvironment* current_state) const override {
     switch (insn->opcode()) {
     case IOPCODE_LOAD_PARAM_OBJECT:
@@ -247,8 +247,8 @@ class Analyzer final : public BaseIRAnalyzer<AbstractAccessPathEnvironment> {
       // This analysis is only concerned with instance methods (i.e. not static)
       DexMethodRef* dex_method = insn->get_method();
       auto proto = dex_method->get_proto();
-      auto supported_return_type =
-          is_object(proto->get_rtype()) || is_primitive(proto->get_rtype());
+      auto supported_return_type = type::is_object(proto->get_rtype()) ||
+                                   type::is_primitive(proto->get_rtype());
       if (supported_return_type && proto->get_args()->size() == 0 &&
           m_is_immutable_getter(dex_method)) {
         // Note that a getter takes no arguments.
@@ -336,7 +336,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractAccessPathEnvironment> {
       const AbstractAccessPathEnvironment& env) {
     BindingSnapshot ret;
     if (env.kind() == AbstractValueKind::Value) {
-      auto bindings = env.bindings();
+      const auto& bindings = env.bindings();
       for (auto it = bindings.begin(); it != bindings.end(); ++it) {
         auto domain = it->second;
         if (domain.access_path()) {
@@ -369,7 +369,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractAccessPathEnvironment> {
   std::function<bool(DexMethodRef*)> m_is_immutable_getter;
   std::unordered_map<IRInstruction*, AbstractAccessPathEnvironment>
       m_environments;
-  const std::unordered_set<uint16_t> m_allowed_locals;
+  const std::unordered_set<reg_t> m_allowed_locals;
 };
 
 } // namespace isa_impl
@@ -380,8 +380,8 @@ ImmutableSubcomponentAnalyzer::~ImmutableSubcomponentAnalyzer() {}
 // analysis. For example, a register that is a dest exactly once can be
 // considered an AccessPath, much like param registers (this should not break
 // existing AccessPath comparison/equality checks).
-std::unordered_set<uint16_t> compute_unambiguous_registers(IRCode* code) {
-  std::unordered_map<uint16_t, size_t> dest_freq;
+std::unordered_set<reg_t> compute_unambiguous_registers(IRCode* code) {
+  std::unordered_map<reg_t, size_t> dest_freq;
   for (const auto& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
     if (insn->has_dest()) {
@@ -389,7 +389,7 @@ std::unordered_set<uint16_t> compute_unambiguous_registers(IRCode* code) {
       dest_freq[dest] = dest_freq[dest] + 1;
     }
   }
-  std::unordered_set<uint16_t> unambiguous;
+  std::unordered_set<reg_t> unambiguous;
   for (const auto& pair : dest_freq) {
     if (pair.second == 1) {
       unambiguous.emplace(pair.first);
@@ -400,7 +400,7 @@ std::unordered_set<uint16_t> compute_unambiguous_registers(IRCode* code) {
 
 ImmutableSubcomponentAnalyzer::ImmutableSubcomponentAnalyzer(
     DexMethod* dex_method,
-    std::function<bool(DexMethodRef*)> is_immutable_getter) {
+    const std::function<bool(DexMethodRef*)>& is_immutable_getter) {
   IRCode* code = dex_method->get_code();
   if (code == nullptr) {
     return;
@@ -408,8 +408,7 @@ ImmutableSubcomponentAnalyzer::ImmutableSubcomponentAnalyzer(
   code->build_cfg(/* editable */ false);
   cfg::ControlFlowGraph& cfg = code->cfg();
   cfg.calculate_exit_block();
-  std::unordered_set<uint16_t> unambiguous =
-      compute_unambiguous_registers(code);
+  std::unordered_set<reg_t> unambiguous = compute_unambiguous_registers(code);
   m_analyzer = std::make_unique<isa_impl::Analyzer>(
       cfg, is_immutable_getter, unambiguous);
 

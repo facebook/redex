@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -115,8 +115,10 @@ void MethodItemEntry::gather_methods(
     std::vector<DexMethodRef*>& lmethod) const {
   switch (type) {
   case MFLOW_TRY:
-    break;
   case MFLOW_CATCH:
+  case MFLOW_POSITION:
+  case MFLOW_FALLTHROUGH:
+  case MFLOW_TARGET:
     break;
   case MFLOW_OPCODE:
     insn->gather_methods(lmethod);
@@ -124,10 +126,50 @@ void MethodItemEntry::gather_methods(
   case MFLOW_DEX_OPCODE:
     dex_insn->gather_methods(lmethod);
     break;
+  case MFLOW_DEBUG:
+    dbgop->gather_methods(lmethod);
+    break;
+  }
+}
+
+void MethodItemEntry::gather_callsites(
+    std::vector<DexCallSite*>& lcallsite) const {
+  switch (type) {
+  case MFLOW_TRY:
+  case MFLOW_CATCH:
+  case MFLOW_POSITION:
+  case MFLOW_FALLTHROUGH:
+  case MFLOW_TARGET:
+    break;
+  case MFLOW_OPCODE:
+    insn->gather_callsites(lcallsite);
+    break;
+  case MFLOW_DEX_OPCODE:
+    dex_insn->gather_callsites(lcallsite);
+    break;
+  case MFLOW_DEBUG:
+    dbgop->gather_callsites(lcallsite);
+    break;
+  }
+}
+
+void MethodItemEntry::gather_methodhandles(
+    std::vector<DexMethodHandle*>& lmethodhandle) const {
+  switch (type) {
+  case MFLOW_TRY:
+    break;
+  case MFLOW_CATCH:
+    break;
+  case MFLOW_OPCODE:
+    insn->gather_methodhandles(lmethodhandle);
+    break;
+  case MFLOW_DEX_OPCODE:
+    dex_insn->gather_methodhandles(lmethodhandle);
+    break;
   case MFLOW_TARGET:
     break;
   case MFLOW_DEBUG:
-    dbgop->gather_methods(lmethod);
+    dbgop->gather_methodhandles(lmethodhandle);
     break;
   case MFLOW_POSITION:
     break;
@@ -285,8 +327,45 @@ bool MethodItemEntry::operator==(const MethodItemEntry& that) const {
   not_reached();
 }
 
+// TODO: T62185151 - better way of applying this on CFGs
+void IRList::cleanup_debug(std::unordered_set<reg_t>& valid_regs) {
+  auto it = m_list.begin();
+  while (it != m_list.end()) {
+    auto next = std::next(it);
+    if (it->type == MFLOW_DEBUG) {
+      switch (it->dbgop->opcode()) {
+      case DBG_SET_PROLOGUE_END:
+        this->erase_and_dispose(it);
+        break;
+      case DBG_START_LOCAL:
+      case DBG_START_LOCAL_EXTENDED: {
+        auto reg = it->dbgop->uvalue();
+        valid_regs.insert(reg);
+        break;
+      }
+      case DBG_END_LOCAL:
+      case DBG_RESTART_LOCAL: {
+        auto reg = it->dbgop->uvalue();
+        if (valid_regs.find(reg) == valid_regs.end()) {
+          this->erase_and_dispose(it);
+        }
+        break;
+      }
+      default:
+        break;
+      }
+    }
+    it = next;
+  }
+}
+
+void IRList::cleanup_debug() {
+  std::unordered_set<reg_t> valid_regs;
+  cleanup_debug(valid_regs);
+}
+
 void IRList::replace_opcode(IRInstruction* to_delete,
-                            std::vector<IRInstruction*> replacements) {
+                            const std::vector<IRInstruction*>& replacements) {
   auto it = m_list.begin();
   for (; it != m_list.end(); it++) {
     if (it->type == MFLOW_OPCODE && it->insn == to_delete) {
@@ -425,29 +504,6 @@ size_t IRList::sum_opcode_sizes() const {
   for (const auto& mie : m_list) {
     if (mie.type == MFLOW_OPCODE) {
       size += mie.insn->size();
-    }
-  }
-  return size;
-}
-
-// TODO(jhendrick): Keep naming consistent with "count_opcodes" in handling
-// internal opcodes.
-size_t IRList::sum_non_internal_opcode_sizes() const {
-  size_t size{0};
-  for (const auto& mie : m_list) {
-    if (mie.type == MFLOW_OPCODE && !opcode::is_internal(mie.insn->opcode())) {
-      size += mie.insn->size();
-    }
-  }
-  return size;
-}
-
-size_t IRList::sum_dex_opcode_sizes() const {
-  size_t size{0};
-  for (const auto& mie : m_list) {
-    if (mie.type == MFLOW_DEX_OPCODE &&
-        !dex_opcode::is_fopcode(mie.dex_insn->opcode())) {
-      size += mie.dex_insn->size();
     }
   }
   return size;
@@ -628,11 +684,24 @@ void IRList::gather_methods(std::vector<DexMethodRef*>& lmethod) const {
   }
 }
 
+void IRList::gather_callsites(std::vector<DexCallSite*>& lcallsite) const {
+  for (auto& mie : m_list) {
+    mie.gather_callsites(lcallsite);
+  }
+}
+
+void IRList::gather_methodhandles(
+    std::vector<DexMethodHandle*>& lmethodhandle) const {
+  for (auto& mie : m_list) {
+    mie.gather_methodhandles(lmethodhandle);
+  }
+}
+
 IRList::iterator IRList::main_block() {
   return std::prev(get_param_instructions().end());
 }
 
-IRList::iterator IRList::make_if_block(IRList::iterator cur,
+IRList::iterator IRList::make_if_block(const IRList::iterator& cur,
                                        IRInstruction* insn,
                                        IRList::iterator* false_block) {
   auto if_entry = new MethodItemEntry(insn);
@@ -642,7 +711,7 @@ IRList::iterator IRList::make_if_block(IRList::iterator cur,
   return m_list.insert(m_list.end(), *bentry);
 }
 
-IRList::iterator IRList::make_if_else_block(IRList::iterator cur,
+IRList::iterator IRList::make_if_else_block(const IRList::iterator& cur,
                                             IRInstruction* insn,
                                             IRList::iterator* false_block,
                                             IRList::iterator* true_block) {
@@ -668,7 +737,7 @@ IRList::iterator IRList::make_if_else_block(IRList::iterator cur,
 }
 
 IRList::iterator IRList::make_switch_block(
-    IRList::iterator cur,
+    const IRList::iterator& cur,
     IRInstruction* insn,
     IRList::iterator* default_block,
     std::map<SwitchIndices, IRList::iterator>& cases) {

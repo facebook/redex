@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -18,15 +18,13 @@ namespace optimize_enums {
 
 namespace impl {
 
-using register_t = ir_analyzer::register_t;
-
 using DexFieldConstantDomain = ConstantAbstractDomain<DexField*>;
 
 /**
  * For each register keep track of the field it holds.
  */
 using DexFieldConstantEnvironment =
-    PatriciaTreeMapAbstractEnvironment<register_t, DexFieldConstantDomain>;
+    PatriciaTreeMapAbstractEnvironment<reg_t, DexFieldConstantDomain>;
 
 namespace {
 
@@ -63,7 +61,7 @@ class FieldAnalyzer final
     setup_ordinal_method();
   }
 
-  void analyze_instruction(IRInstruction* insn,
+  void analyze_instruction(const IRInstruction* insn,
                            DexFieldConstantEnvironment* env) const override {
     auto op = insn->opcode();
 
@@ -166,7 +164,7 @@ class FieldAnalyzer final
     auto enum_type = DexType::get_type(ENUM_TYPE);
     auto ordinal_str = DexString::get_string(ORDINAL_METHOD_NAME);
     auto proto =
-        DexProto::get_proto(get_int_type(), DexTypeList::make_type_list({}));
+        DexProto::get_proto(type::_int(), DexTypeList::make_type_list({}));
 
     auto method_ref = DexMethod::get_method(enum_type, ordinal_str, proto);
     m_ordinal_method = resolve_method(method_ref, MethodSearch::Virtual);
@@ -183,7 +181,7 @@ using UInt32ConstantDomain = ConstantAbstractDomain<uint32_t>;
  * For each register keep track of the literal it holds.
  */
 using UInt32ConstantEnvironment =
-    PatriciaTreeMapAbstractEnvironment<register_t, UInt32ConstantDomain>;
+    PatriciaTreeMapAbstractEnvironment<reg_t, UInt32ConstantDomain>;
 
 namespace {
 

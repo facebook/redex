@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -25,8 +25,10 @@
   file_ptr += 2;
 
 namespace {
-using InsnWalkerFn = const std::function<void(DexOpcode, const uint16_t* const ptr)>&;
-using CodeItemWalkerFn = const std::function<void(const uint8_t* const code_item)>&;
+using InsnWalkerFn =
+    const std::function<void(DexOpcode, const uint16_t* const ptr)>&;
+using CodeItemWalkerFn =
+    const std::function<void(const uint8_t* const code_item)>&;
 
 void make_instruction(const uint16_t** insns_ptr,
                       const QuickData* quick_data,
@@ -36,6 +38,8 @@ void make_instruction(const uint16_t** insns_ptr,
   auto& insns = *insns_ptr;
   auto fopcode = static_cast<DexOpcode>(*insns++);
   DexOpcode opcode = static_cast<DexOpcode>(fopcode & 0xff);
+
+  // clang-format off
 
 #ifdef DEBUG_LOG
   printf("Processing FOPCODE::OPCODE: %04x :: %02x :: %s\n",
@@ -157,7 +161,7 @@ void make_instruction(const uint16_t** insns_ptr,
     if (quick_data_off > 0) {
       quick_fopcode = (fopcode & 0xff00) | (quicken(opcode) & 0x00ff);
       quick_arg = quick_data_off;
-      #ifdef DEBUG_LOG
+#ifdef DEBUG_LOG
       printf("QUICKEN: [%s] %s :: %02x->%02x :: %02x->%02x\n",
         (*dex).c_str(),
         print(opcode).c_str(),
@@ -165,11 +169,11 @@ void make_instruction(const uint16_t** insns_ptr,
         quick_fopcode,
         fidx,
         quick_arg);
-      #endif
+#endif
     } else {
-      #ifdef DEBUG_LOG
+#ifdef DEBUG_LOG
       printf("No quick mapping for: [%s]:%u\n", (*dex).c_str(), fidx);
-      #endif
+#endif
     }
 
       WRITE16_TO_BUFFER(out_buffer, quick_fopcode, file_ptr)
@@ -274,6 +278,7 @@ void make_instruction(const uint16_t** insns_ptr,
     fprintf(stderr, "Unknown opcode %02x\n", opcode);
     // return nullptr;
   }
+  // clang-format on
 }
 
 /*
@@ -355,37 +360,38 @@ void load_code_item(uint8_t* const code_item,
   }
 }
 
-void process_instruction(
-    const uint16_t** insns_ptr,
-    InsnWalkerFn walker) {
+void process_instruction(const uint16_t** insns_ptr, InsnWalkerFn walker) {
   auto& insns = *insns_ptr;
   auto fopcode = static_cast<DexOpcode>(*insns);
   DexOpcode opcode = static_cast<DexOpcode>(fopcode & 0xff);
-
-  #ifdef DEBUG_LOG
-  printf("Processing FOPCODE::OPCODE: %04x :: %02x :: %s\n", fopcode, opcode, print(opcode).c_str());
-  #endif
+  // clang-format off
+#ifdef DEBUG_LOG
+  printf("Processing FOPCODE::OPCODE: %04x :: %02x :: %s\n",
+         fopcode,
+         opcode,
+         print(opcode).c_str());
+#endif
 
   switch (opcode) {
   case DOPCODE_NOP: {
-    #ifdef DEBUG_LOG
+#ifdef DEBUG_LOG
     printf("Processing FOPCODE: %s\n", print(fopcode).c_str());
-    #endif
+#endif
     if (fopcode == FOPCODE_PACKED_SWITCH) {
-      size_t count = (*(insns+1)) * 2 + 4;
+      size_t count = (*(insns + 1)) * 2 + 4;
       for (size_t i = 0; i < count; i++) {
         insns++;
       }
       return;
     } else if (fopcode == FOPCODE_SPARSE_SWITCH) {
-      size_t count = (*(insns+1)) * 4 + 2;
+      size_t count = (*(insns + 1)) * 4 + 2;
       for (size_t i = 0; i < count; i++) {
         insns++;
       }
       return;
     } else if (fopcode == FOPCODE_FILLED_ARRAY) {
-      uint16_t ewidth = *(insns+1);
-      uint32_t size = *(reinterpret_cast<const uint32_t*>(insns+2));
+      uint16_t ewidth = *(insns + 1);
+      uint32_t size = *(reinterpret_cast<const uint32_t*>(insns + 2));
       size_t count = (ewidth * size + 1) / 2 + 4;
       for (size_t i = 0; i < count; i++) {
         insns++;
@@ -398,19 +404,20 @@ void process_instruction(
   SWITCH_FORMAT_RETURN_VOID_NO_BARRIER {
     walker(opcode, insns++);
 
-    #ifdef DEBUG_LOG
+#ifdef DEBUG_LOG
     printf("Walking OPCODE: %02x :: %s\n", opcode, print(opcode).c_str());
-    #endif
+#endif
     break;
   }
 
   SWITCH_FORMAT_20 {
     walker(opcode, insns++);
 
-    #ifdef DEBUG_LOG
+#ifdef DEBUG_LOG
     uint16_t arg = *insns;
-    printf("Walking OPCODE: %02x %02x :: %s\n", opcode, arg, print(opcode).c_str());
-    #endif
+    printf("Walking OPCODE: %02x %02x :: %s\n",
+           opcode, arg, print(opcode).c_str());
+#endif
 
     insns++;
     break;
@@ -419,11 +426,12 @@ void process_instruction(
   SWITCH_FORMAT_30 {
     walker(opcode, insns++);
 
-    #ifdef DEBUG_LOG
+#ifdef DEBUG_LOG
     uint16_t arg_low = *insns;
     uint16_t arg_high = *(insns+1);
-    printf("Walking OPCODE: %02x %02x%02x :: %s\n", opcode, arg_low, arg_high, print(opcode).c_str());
-    #endif
+    printf("Walking OPCODE: %02x %02x%02x :: %s\n",
+           opcode, arg_low, arg_high, print(opcode).c_str());
+#endif
 
     insns+=2;
     break;
@@ -432,13 +440,14 @@ void process_instruction(
   SWITCH_FORMAT_50 {
     walker(opcode, insns++);
 
-    #ifdef DEBUG_LOG
+#ifdef DEBUG_LOG
     uint16_t arg_0 = *insns;
     uint16_t arg_1 = *(insns+1);
     uint16_t arg_2 = *(insns+2);
     uint16_t arg_3 = *(insns+3);
-    printf("Walking OPCODE: %02x %02x%02x%02x%02x :: %s\n", opcode, arg_0, arg_1, arg_2, arg_3, print(opcode).c_str());
-    #endif
+    printf("Walking OPCODE: %02x %02x%02x%02x%02x :: %s\n",
+           opcode, arg_0, arg_1, arg_2, arg_3, print(opcode).c_str());
+#endif
 
     insns+=4;
     break;
@@ -448,10 +457,11 @@ void process_instruction(
   SWITCH_FORMAT_QUICK_FIELD_REF {
     walker(opcode, insns++);
 
-    #ifdef DEBUG_LOG
+#ifdef DEBUG_LOG
     uint16_t fidx = *insns;
-    printf("Walking OPCODE: %02x %02x :: %s\n", fopcode, fidx, print(opcode).c_str());
-    #endif
+    printf("Walking OPCODE: %02x %02x :: %s\n",
+           fopcode, fidx, print(opcode).c_str());
+#endif
 
     insns++;
     break;
@@ -461,11 +471,12 @@ void process_instruction(
   SWITCH_FORMAT_QUICK_METHOD_REF {
     walker(opcode, insns++);
 
-    #ifdef DEBUG_LOG
+#ifdef DEBUG_LOG
     uint16_t midx = *insns;
     uint16_t arg = *(insns+1);
-    printf("Walking OPCODE: %02x %02x %02x :: %s\n", fopcode, midx, arg, print(opcode).c_str());
-    #endif
+    printf("Walking OPCODE: %02x %02x %02x :: %s\n",
+           fopcode, midx, arg, print(opcode).c_str());
+#endif
 
     insns+=2;
     break;
@@ -474,10 +485,11 @@ void process_instruction(
   SWITCH_FORMAT_CONST_STRING {
     walker(opcode, insns++);
 
-    #ifdef DEBUG_LOG
+#ifdef DEBUG_LOG
     uint16_t sidx = *insns;
-    printf("Walking OPCODE: %02x %02x :: %s\n", fopcode, sidx, print(opcode).c_str());
-    #endif
+    printf("Walking OPCODE: %02x %02x :: %s\n",
+           fopcode, sidx, print(opcode).c_str());
+#endif
 
     insns++;
     break;
@@ -486,12 +498,13 @@ void process_instruction(
   SWITCH_FORMAT_CONST_STRING_JUMBO {
     walker(opcode, insns++);
 
-    #ifdef DEBUG_LOG
+#ifdef DEBUG_LOG
     uint16_t sidx_partial_low = *insns;
     uint16_t sidx_partial_high = *(insns+1);
     uint32_t sidx = sidx_partial_high << 16 | sidx_partial_low;
-    printf("Walking OPCODE: %02x %04x :: %s\n", fopcode, sidx, print(opcode).c_str());
-    #endif
+    printf("Walking OPCODE: %02x %04x :: %s\n",
+           fopcode, sidx, print(opcode).c_str());
+#endif
 
     insns+=2;
     break;
@@ -500,10 +513,11 @@ void process_instruction(
   SWITCH_FORMAT_TYPE_REF {
     walker(opcode, insns++);
 
-    #ifdef DEBUG_LOG
+#ifdef DEBUG_LOG
     uint16_t tidx = *insns;
-    printf("Walking OPCODE: %02x %02x :: %s\n", fopcode, tidx, print(opcode).c_str());
-    #endif
+    printf("Walking OPCODE: %02x %02x :: %s\n",
+           fopcode, tidx, print(opcode).c_str());
+#endif
 
     insns++;
     break;
@@ -512,11 +526,12 @@ void process_instruction(
   SWITCH_FORMAT_FILL_ARRAY {
     walker(opcode, insns++);
 
-    #ifdef DEBUG_LOG
+#ifdef DEBUG_LOG
     uint16_t tidx = *insns;
     uint16_t arg = *(insns+1);
-    printf("Walking OPCODE: %02x %02x %02x :: %s\n", fopcode, tidx, arg, print(opcode).c_str());
-    #endif
+    printf("Walking OPCODE: %02x %02x %02x :: %s\n",
+           fopcode, tidx, arg, print(opcode).c_str());
+#endif
 
     insns+=2;
     break;
@@ -525,23 +540,23 @@ void process_instruction(
     fprintf(stderr, "Unknown opcode %02x\n", opcode);
     // return nullptr;
   }
+  // clang-format on
 }
 
 /*
  * See code_item in Dex spec.
  */
-void process_code_item(
-    const uint8_t* code_item,
-    InsnWalkerFn walker) {
+void process_code_item(const uint8_t* code_item, InsnWalkerFn walker) {
   const dex_code_item* code = reinterpret_cast<const dex_code_item*>(code_item);
-  uint8_t* const dex_code_item_end = reinterpret_cast<uint8_t* const>(const_cast<dex_code_item*>(code + 1));
-  #ifdef DEBUG_LOG
+  uint8_t* const dex_code_item_end =
+      reinterpret_cast<uint8_t* const>(const_cast<dex_code_item*>(code + 1));
+#ifdef DEBUG_LOG
   printf("method: %p, %u, %u, %u\n",
          (void*)code_item,
          code->registers_size,
          code->ins_size,
          code->outs_size);
-  #endif
+#endif
   const uint16_t* cdata = reinterpret_cast<const uint16_t*>(dex_code_item_end);
   if (code->insns_size) {
     const uint16_t* const end = cdata + code->insns_size;
@@ -574,8 +589,8 @@ void quicken_dex(const char* location,
       exit(1);
     }
     size_t length = sbuf.st_size;
-    map.reset(MappedFile::mmap_file(
-        length, PROT_READ, MAP_PRIVATE, fileno(fd), location, &error_msg));
+    map.reset(MappedFile::mmap_file(length, PROT_READ, MAP_PRIVATE, fileno(fd),
+                                    location, &error_msg));
     if (map.get() == nullptr) {
       CHECK(!error_msg.empty());
       return;
@@ -645,8 +660,8 @@ void quicken_dex(const char* location,
         printf("==================\n");
         printf("Code item offset: %zu\n", i);
 #endif
-        load_code_item(
-            map->begin() + i, quick_data, &canary_name, i, out_buffer);
+        load_code_item(map->begin() + i, quick_data, &canary_name, i,
+                       out_buffer);
       } else {
         out_buffer << reinterpret_cast<char*>(map->begin() + i);
       }
@@ -656,14 +671,16 @@ void quicken_dex(const char* location,
 
 void print_dex_opcodes(const uint8_t* begin, const size_t size) {
   stream::stream_dex(
-    begin,
-    size,
-    [](DexOpcode opcode, const uint16_t* const insn) {
-      switch (opcode) {
+      begin,
+      size,
+      [](DexOpcode opcode, const uint16_t* const insn) {
+        // clang-format off
+        switch (opcode) {
         case DOPCODE_NOP:
         SWITCH_FORMAT_10
         SWITCH_FORMAT_RETURN_VOID_NO_BARRIER {
-          printf("OPCODE: %02x :: %s :: %04x\n", opcode, ::print(opcode).c_str(), *insn);
+          printf("OPCODE: %02x :: %s :: %04x\n", opcode,
+                 ::print(opcode).c_str(), *insn);
           break;
         }
 
@@ -672,7 +689,8 @@ void print_dex_opcodes(const uint8_t* begin, const size_t size) {
         SWITCH_FORMAT_QUICK_FIELD_REF
         SWITCH_FORMAT_CONST_STRING
         SWITCH_FORMAT_TYPE_REF {
-          printf("OPCODE: %02x :: %s :: %04x%04x\n", opcode, ::print(opcode).c_str(), *insn, *(insn + 1));
+          printf("OPCODE: %02x :: %s :: %04x%04x\n", opcode,
+                 ::print(opcode).c_str(), *insn, *(insn + 1));
           break;
         }
 
@@ -681,67 +699,73 @@ void print_dex_opcodes(const uint8_t* begin, const size_t size) {
         SWITCH_FORMAT_QUICK_METHOD_REF
         SWITCH_FORMAT_CONST_STRING_JUMBO
         SWITCH_FORMAT_FILL_ARRAY {
-          printf("OPCODE: %02x :: %s :: %04x%04x%04x\n", opcode, ::print(opcode).c_str(), *insn, *(insn + 1), *(insn + 2));
+          printf("OPCODE: %02x :: %s :: %04x%04x%04x\n", opcode,
+                 ::print(opcode).c_str(), *insn, *(insn + 1), *(insn + 2));
           break;
         }
 
         SWITCH_FORMAT_50 {
-          printf("OPCODE: %02x :: %s :: %04x%04x%04x%04x%04x\n", opcode, ::print(opcode).c_str(), *insn, *(insn + 1), *(insn + 2), *(insn + 3), *(insn + 4));
+          printf("OPCODE: %02x :: %s :: %04x%04x%04x%04x%04x\n", opcode,
+                 ::print(opcode).c_str(), *insn, *(insn + 1), *(insn + 2),
+                 *(insn + 3), *(insn + 4));
           break;
         }
 
-        default:
+        default: {
           fprintf(stderr, "Unknown opcode %02x\n", opcode);
-      }
-    },
-    [](const uint8_t* const insn) {
-    });
+        }
+        }
+        // clang-format on
+      },
+      [](const uint8_t* const insn) {});
 }
 
-
-void stream::stream_dex(const uint8_t* begin, const size_t size, InsnWalkerFn insn_walker, CodeItemWalkerFn code_item_walker) {
+void stream::stream_dex(const uint8_t* begin,
+                        const size_t size,
+                        InsnWalkerFn insn_walker,
+                        CodeItemWalkerFn code_item_walker) {
   auto dh = reinterpret_cast<const dex_header*>(begin);
   auto class_defs_off = dh->class_defs_off;
   std::unordered_map<uint32_t, uint32_t> code_item_offset;
   {
     std::string canary_name;
     for (size_t i = 0; i < size; i++) {
-      if (i >= class_defs_off
-          && i < class_defs_off + dh->class_defs_size * sizeof(dex_class_def)
-          && (i - class_defs_off) % sizeof(dex_class_def) == 0) {
+      if (i >= class_defs_off &&
+          i < class_defs_off + dh->class_defs_size * sizeof(dex_class_def) &&
+          (i - class_defs_off) % sizeof(dex_class_def) == 0) {
         const dex_class_def* cdef =
             reinterpret_cast<const dex_class_def*>(begin + i);
 
-        const uint32_t* class_desc =
-              reinterpret_cast<const uint32_t*>(
-                begin + dh->type_ids_off + cdef->typeidx * sizeof(type_id_item));
-        const uint32_t* class_string_desc =reinterpret_cast<const uint32_t*>(
-            begin + dh->string_ids_off + (*class_desc) * sizeof(string_id_item));
-        std::string class_name = read_string(reinterpret_cast<const uint8_t*>(begin + (*class_string_desc)));
+        const uint32_t* class_desc = reinterpret_cast<const uint32_t*>(
+            begin + dh->type_ids_off + cdef->typeidx * sizeof(type_id_item));
+        const uint32_t* class_string_desc = reinterpret_cast<const uint32_t*>(
+            begin + dh->string_ids_off +
+            (*class_desc) * sizeof(string_id_item));
+        std::string class_name = read_string(
+            reinterpret_cast<const uint8_t*>(begin + (*class_string_desc)));
 
-        #ifdef DEBUG_LOG
+#ifdef DEBUG_LOG
         printf("==================\n");
         printf("Class begins at %p\n", (void*)cdef);
         printf("Class data offset: %u\n", cdef->class_data_offset);
         printf("Class: %s\n", class_name.c_str());
-        #endif
+#endif
 
         std::size_t found = class_name.find("Canary");
         if (found != std::string::npos) {
-          #ifdef DEBUG_LOG
+#ifdef DEBUG_LOG
           printf("Found Canary Class: %s\n", class_name.c_str());
-          #endif
+#endif
           canary_name = std::move(class_name);
         }
 
-        load_class_data_item(begin + cdef->class_data_offset,
-                             code_item_offset);
+        load_class_data_item(begin + cdef->class_data_offset, code_item_offset);
       }
       if (code_item_offset.count(i) != 0) {
-        #ifdef DEBUG_LOG
+#ifdef DEBUG_LOG
         printf("==================\n");
         printf("Code item offset: %zu\n", i);
-        #endif
+#endif
         code_item_walker(begin + i);
         process_code_item(begin + i, insn_walker);
       }

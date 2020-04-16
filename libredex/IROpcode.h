@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -25,6 +25,8 @@ enum class Ref {
   Type,
   Field,
   Method,
+  CallSite,
+  MethodHandle,
   Data,
 };
 
@@ -124,6 +126,8 @@ enum class Ref {
   OP(INVOKE_DIRECT     , Ref::Method, "invoke-direct") \
   OP(INVOKE_STATIC     , Ref::Method, "invoke-static") \
   OP(INVOKE_INTERFACE  , Ref::Method, "invoke-interface") \
+  OP(INVOKE_POLYMORPHIC, Ref::MethodHandle, "invoke-polymorphic") \
+  OP(INVOKE_CUSTOM     , Ref::CallSite, "invoke-custom") \
   OP(NEG_INT           , Ref::None, "neg-int") \
   OP(NOT_INT           , Ref::None, "not-int") \
   OP(NEG_LONG          , Ref::None, "neg-long") \
@@ -274,6 +278,10 @@ bool is_cmp(IROpcode opcode);
 
 IROpcode load_param_to_move(IROpcode);
 
+IROpcode iget_to_move(IROpcode);
+
+IROpcode iput_to_move(IROpcode);
+
 IROpcode invert_conditional_branch(IROpcode op);
 
 IROpcode move_result_pseudo_for_iget(IROpcode op);
@@ -285,6 +293,16 @@ IROpcode move_result_for_invoke(const DexMethodRef* method);
 IROpcode invoke_for_method(const DexMethod* method);
 
 IROpcode return_opcode(const DexType* type);
+
+IROpcode load_opcode(const DexType* type);
+
+IROpcode move_result_to_move(IROpcode);
+
+IROpcode return_to_move(IROpcode);
+
+IROpcode move_result_to_pseudo(IROpcode op);
+
+IROpcode pseudo_to_move_result(IROpcode op);
 
 IROpcode sget_opcode_for_field(const DexField* field);
 

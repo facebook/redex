@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -20,8 +20,6 @@
  */
 
 namespace live_range {
-
-using reg_t = uint16_t;
 
 // Every IRInstruction has at most one def, so we can represent defs by
 // instructions

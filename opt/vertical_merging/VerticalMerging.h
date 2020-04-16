@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -25,9 +25,7 @@
 class VerticalMergingPass : public Pass {
  public:
   VerticalMergingPass() : Pass("VerticalMergingPass") {}
-  virtual void bind_config() override {
-    bind("blacklist", {}, m_blacklist);
-  }
+  virtual void bind_config() override { bind("blacklist", {}, m_blacklist); }
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:

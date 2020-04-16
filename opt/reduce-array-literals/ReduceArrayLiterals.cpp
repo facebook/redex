@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -61,10 +61,10 @@ struct TrackedValue {
     uint32_t length; // for kind == NewArray
   };
   // The following are only used for kind == NewArray
-  IRInstruction* new_array_insn;
+  const IRInstruction* new_array_insn;
   uint32_t aput_insns_size{0};
-  PatriciaTreeMap<uint32_t, IRInstruction*> aput_insns{};
-  PatriciaTreeSet<IRInstruction*> aput_insns_range{};
+  PatriciaTreeMap<uint32_t, const IRInstruction*> aput_insns{};
+  PatriciaTreeSet<const IRInstruction*> aput_insns_range{};
 };
 
 struct TrackedValueHasher {
@@ -82,7 +82,7 @@ struct TrackedValueHasher {
   }
 };
 
-bool operator==(const TrackedValue& a, const TrackedValue b) {
+bool operator==(const TrackedValue& a, const TrackedValue& b) {
   if (a.kind != b.kind) {
     return false;
   }
@@ -104,14 +104,14 @@ TrackedValue make_other() {
   return (TrackedValue){TrackedValueKind::Other, {0}, nullptr};
 }
 
-TrackedValue make_literal(IRInstruction* instr) {
+TrackedValue make_literal(const IRInstruction* instr) {
   always_assert(instr->opcode() == OPCODE_CONST);
   always_assert(instr->has_literal());
   return (TrackedValue){
       TrackedValueKind::Literal, {(int32_t)instr->get_literal()}, nullptr};
 }
 
-TrackedValue make_array(int32_t length, IRInstruction* instr) {
+TrackedValue make_array(int32_t length, const IRInstruction* instr) {
   always_assert(length >= 0);
   always_assert(instr->opcode() == OPCODE_NEW_ARRAY);
   return (TrackedValue){TrackedValueKind::NewArray, {length}, instr};
@@ -139,7 +139,9 @@ bool is_array_literal(const TrackedValue& tv) {
   return is_new_array(tv) && (int64_t)tv.aput_insns_size == tv.length;
 }
 
-bool add_element(TrackedValue& array, int64_t index, IRInstruction* aput_insn) {
+bool add_element(TrackedValue& array,
+                 int64_t index,
+                 const IRInstruction* aput_insn) {
   always_assert(is_new_array(array));
   always_assert(is_next_index(array, index));
   always_assert(!is_array_literal(array));
@@ -153,31 +155,30 @@ bool add_element(TrackedValue& array, int64_t index, IRInstruction* aput_insn) {
   return true;
 }
 
-std::vector<IRInstruction*> get_aput_insns(const TrackedValue& array) {
+std::vector<const IRInstruction*> get_aput_insns(const TrackedValue& array) {
   always_assert(is_array_literal(array));
-  std::vector<IRInstruction*> aput_insns;
+  std::vector<const IRInstruction*> aput_insns;
   aput_insns.reserve(array.length);
   for (uint32_t i = 0; i < array.length; i++) {
-    IRInstruction* aput_insn = array.aput_insns.at(i);
+    const IRInstruction* aput_insn = array.aput_insns.at(i);
     always_assert(aput_insn != nullptr);
     aput_insns.push_back(aput_insn);
   }
   return aput_insns;
 }
 
-using register_t = ir_analyzer::register_t;
 using namespace ir_analyzer;
 
 using TrackedDomain =
     sparta::HashedSetAbstractDomain<TrackedValue, TrackedValueHasher>;
 using EscapedArrayDomain =
-    sparta::ConstantAbstractDomain<std::vector<IRInstruction*>>;
+    sparta::ConstantAbstractDomain<std::vector<const IRInstruction*>>;
 
 /**
  * For each register that holds a relevant value, keep track of it.
  **/
 using TrackedDomainEnvironment =
-    sparta::PatriciaTreeMapAbstractEnvironment<register_t, TrackedDomain>;
+    sparta::PatriciaTreeMapAbstractEnvironment<reg_t, TrackedDomain>;
 
 class Analyzer final : public BaseIRAnalyzer<TrackedDomainEnvironment> {
 
@@ -187,11 +188,11 @@ class Analyzer final : public BaseIRAnalyzer<TrackedDomainEnvironment> {
   }
 
   void analyze_instruction(
-      IRInstruction* insn,
+      const IRInstruction* insn,
       TrackedDomainEnvironment* current_state) const override {
 
-    const auto set_current_state_at = [&](register_t reg, bool wide,
-                                          TrackedDomain value) {
+    const auto set_current_state_at = [&](reg_t reg, bool wide,
+                                          const TrackedDomain& value) {
       current_state->set(reg, value);
       if (wide) {
         current_state->set(reg + 1, TrackedDomain::top());
@@ -290,8 +291,7 @@ class Analyzer final : public BaseIRAnalyzer<TrackedDomainEnvironment> {
       if (array && is_new_array(*array) && !is_array_literal(*array) && index &&
           is_literal(*index)) {
         int64_t index_literal = get_literal(*index);
-        TRACE(RAL, 4, "[RAL]    index %ld of %u", index_literal,
-              array->length);
+        TRACE(RAL, 4, "[RAL]    index %ld of %u", index_literal, array->length);
         if (is_next_index(*array, index_literal)) {
           TRACE(RAL, 4, "[RAL]    is next");
           TrackedValue new_array = *array;
@@ -325,9 +325,10 @@ class Analyzer final : public BaseIRAnalyzer<TrackedDomainEnvironment> {
     }
   }
 
-  std::unordered_map<IRInstruction*, std::vector<IRInstruction*>>
+  std::unordered_map<const IRInstruction*, std::vector<const IRInstruction*>>
   get_array_literals() {
-    std::unordered_map<IRInstruction*, std::vector<IRInstruction*>> result;
+    std::unordered_map<const IRInstruction*, std::vector<const IRInstruction*>>
+        result;
     for (auto& p : m_escaped_arrays) {
       auto constant = p.second.get_constant();
       if (constant) {
@@ -338,7 +339,7 @@ class Analyzer final : public BaseIRAnalyzer<TrackedDomainEnvironment> {
   }
 
  private:
-  mutable std::unordered_map<IRInstruction*, EscapedArrayDomain>
+  mutable std::unordered_map<const IRInstruction*, EscapedArrayDomain>
       m_escaped_arrays;
 };
 
@@ -381,15 +382,15 @@ ReduceArrayLiterals::ReduceArrayLiterals(cfg::ControlFlowGraph& cfg,
 
 void ReduceArrayLiterals::patch() {
   for (auto& p : m_array_literals) {
-    IRInstruction* new_array_insn = p.first;
-    std::vector<IRInstruction*>& aput_insns = p.second;
+    const IRInstruction* new_array_insn = p.first;
+    std::vector<const IRInstruction*>& aput_insns = p.second;
     if (aput_insns.size() == 0) {
       // Really no point of doing anything with these
       continue;
     }
 
     auto type = new_array_insn->get_type();
-    auto element_type = get_array_component_type(type);
+    auto element_type = type::get_array_component_type(type);
 
     if (m_min_sdk < 24) {
       // See T45708995.
@@ -416,14 +417,14 @@ void ReduceArrayLiterals::patch() {
       continue;
     }
 
-    if (is_wide_type(element_type)) {
+    if (type::is_wide_type(element_type)) {
       // TODO: Consider using an annotation-based scheme.
       m_stats.remaining_wide_arrays++;
       m_stats.remaining_wide_array_elements += aput_insns.size();
       continue;
     }
 
-    if (m_min_sdk < 21 && is_array(element_type)) {
+    if (m_min_sdk < 21 && type::is_array(element_type)) {
       // The Dalvik verifier had a bug for this case:
       // It retrieves the "element class" to check if the elements are of the
       // right type:
@@ -438,7 +439,7 @@ void ReduceArrayLiterals::patch() {
 
     if (m_min_sdk < 19 &&
         (m_arch == Architecture::UNKNOWN || m_arch == Architecture::X86) &&
-        !is_primitive(element_type)) {
+        !type::is_primitive(element_type)) {
       // Before Kitkat, the Dalvik x86-atom backend had a bug for this case.
       // https://android.googlesource.com/platform/dalvik/+/ics-mr0/vm/mterp/out/InterpAsm-x86-atom.S#25106
       m_stats.remaining_buggy_arrays++;
@@ -446,7 +447,7 @@ void ReduceArrayLiterals::patch() {
       continue;
     }
 
-    if (is_primitive(element_type) && element_type != get_int_type()) {
+    if (type::is_primitive(element_type) && element_type != type::_int()) {
       // Somewhat surprising random implementation limitation in all known
       // ART versions:
       // https://android.googlesource.com/platform/art/+/400455c23d6a9a849d090b9e60ff53c4422e461b/runtime/interpreter/interpreter_common.cc#189
@@ -463,13 +464,13 @@ void ReduceArrayLiterals::patch() {
 }
 
 void ReduceArrayLiterals::patch_new_array(
-    IRInstruction* new_array_insn,
-    const std::vector<IRInstruction*>& aput_insns) {
+    const IRInstruction* new_array_insn,
+    const std::vector<const IRInstruction*>& aput_insns) {
   auto type = new_array_insn->get_type();
 
   // prepare for chunking, if needed
 
-  boost::optional<uint16_t> chunk_dest;
+  boost::optional<reg_t> chunk_dest;
   if (aput_insns.size() > m_max_filled_elements) {
     // we are going to chunk
     chunk_dest = m_cfg.allocate_temp();
@@ -483,9 +484,12 @@ void ReduceArrayLiterals::patch_new_array(
 
   // remove new-array instruction
 
-  auto it = m_cfg.find_insn(new_array_insn);
+  auto it = m_cfg.find_insn(const_cast<IRInstruction*>(new_array_insn));
   always_assert(new_array_insn->opcode() == OPCODE_NEW_ARRAY);
   auto move_result_it = m_cfg.move_result_of(it);
+  if (move_result_it.is_end()) {
+    return;
+  }
   always_assert(move_result_it->insn->opcode() ==
                 IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
   auto overall_dest = move_result_it->insn->dest();
@@ -497,7 +501,7 @@ void ReduceArrayLiterals::patch_new_array(
   // aput values. Note that we cannot share these registers across different
   // new-array optimizations, as they may have overlapping scopes. Most of these
   // temporary registers will get optimized away by later optimization passes.
-  std::vector<uint16_t> temp_regs;
+  std::vector<reg_t> temp_regs;
   for (size_t chunk_start = 0; chunk_start < aput_insns.size();) {
     auto chunk_size = patch_new_array_chunk(
         type, chunk_start, aput_insns, chunk_dest, overall_dest, &temp_regs);
@@ -508,10 +512,10 @@ void ReduceArrayLiterals::patch_new_array(
 size_t ReduceArrayLiterals::patch_new_array_chunk(
     DexType* type,
     size_t chunk_start,
-    const std::vector<IRInstruction*>& aput_insns,
-    boost::optional<uint16_t> chunk_dest,
-    uint16_t overall_dest,
-    std::vector<uint16_t>* temp_regs) {
+    const std::vector<const IRInstruction*>& aput_insns,
+    boost::optional<reg_t> chunk_dest,
+    reg_t overall_dest,
+    std::vector<reg_t>* temp_regs) {
 
   size_t chunk_size =
       std::min(aput_insns.size() - chunk_start, m_max_filled_elements);
@@ -522,7 +526,8 @@ size_t ReduceArrayLiterals::patch_new_array_chunk(
   //   filled-new-array t0, ..., tn, type
   //   move-result      c
 
-  IRInstruction* last_aput_insn = aput_insns[chunk_end - 1];
+  IRInstruction* last_aput_insn =
+      const_cast<IRInstruction*>(aput_insns[chunk_end - 1]);
   auto it = m_cfg.find_insn(last_aput_insn);
 
   std::vector<IRInstruction*> new_insns;
@@ -581,9 +586,9 @@ size_t ReduceArrayLiterals::patch_new_array_chunk(
 
   // find iterators corresponding to the aput instructions
 
-  std::unordered_set<IRInstruction*> aput_insns_set(aput_insns.begin(),
-                                                    aput_insns.end());
-  std::unordered_map<IRInstruction*, cfg::InstructionIterator>
+  std::unordered_set<const IRInstruction*> aput_insns_set(aput_insns.begin(),
+                                                          aput_insns.end());
+  std::unordered_map<const IRInstruction*, cfg::InstructionIterator>
       aput_insns_iterators;
   auto iterable = cfg::InstructionIterable(m_cfg);
   for (auto insn_it = iterable.begin(); insn_it != iterable.end(); ++insn_it) {
@@ -596,12 +601,12 @@ size_t ReduceArrayLiterals::patch_new_array_chunk(
   // replace aput instructions with moves to temporary regs used by
   // filled-new-array instruction (see above)
 
-  auto move_op = is_primitive(get_array_component_type(type))
+  auto move_op = type::is_primitive(type::get_array_component_type(type))
                      ? OPCODE_MOVE
                      : OPCODE_MOVE_OBJECT;
 
   for (size_t index = chunk_start; index < chunk_end; index++) {
-    IRInstruction* aput_insn = aput_insns[index];
+    const IRInstruction* aput_insn = aput_insns[index];
     always_assert(is_aput(aput_insn->opcode()));
     always_assert(aput_insn->src(1) == overall_dest);
     it = aput_insns_iterators.at(aput_insn);
@@ -657,7 +662,7 @@ void ReduceArrayLiteralsPass::run_pass(DexStoresVector& stores,
 
   const auto scope = build_class_scope(stores);
 
-  const auto stats = walk::parallel::reduce_methods<ReduceArrayLiterals::Stats>(
+  const auto stats = walk::parallel::methods<ReduceArrayLiterals::Stats>(
       scope,
       [&](DexMethod* m) {
         const auto code = m->get_code();
@@ -672,20 +677,6 @@ void ReduceArrayLiteralsPass::run_pass(DexStoresVector& stores,
         code->clear_cfg();
         return ral.get_stats();
       },
-      [](ReduceArrayLiterals::Stats a, ReduceArrayLiterals::Stats b) {
-        a.filled_arrays += b.filled_arrays;
-        a.filled_array_elements += b.filled_array_elements;
-        a.filled_array_chunks += b.filled_array_chunks;
-        a.remaining_wide_arrays += b.remaining_wide_arrays;
-        a.remaining_wide_array_elements += b.remaining_wide_array_elements;
-        a.remaining_unimplemented_arrays += b.remaining_unimplemented_arrays;
-        a.remaining_unimplemented_array_elements +=
-            b.remaining_unimplemented_array_elements;
-        a.remaining_buggy_arrays += b.remaining_buggy_arrays;
-        a.remaining_buggy_array_elements += b.remaining_buggy_array_elements;
-        return a;
-      },
-      ReduceArrayLiterals::Stats{},
       m_debug ? 1 : redex_parallel::default_num_threads());
   mgr.incr_metric(METRIC_FILLED_ARRAYS, stats.filled_arrays);
   mgr.incr_metric(METRIC_FILLED_ARRAY_ELEMENTS, stats.filled_array_elements);
@@ -700,6 +691,21 @@ void ReduceArrayLiteralsPass::run_pass(DexStoresVector& stores,
   mgr.incr_metric(METRIC_REMAINING_BUGGY_ARRAYS, stats.remaining_buggy_arrays);
   mgr.incr_metric(METRIC_REMAINING_BUGGY_ARRAY_ELEMENTS,
                   stats.remaining_buggy_array_elements);
+}
+
+ReduceArrayLiterals::Stats& ReduceArrayLiterals::Stats::operator+=(
+    const ReduceArrayLiterals::Stats& that) {
+  filled_arrays += that.filled_arrays;
+  filled_array_elements += that.filled_array_elements;
+  filled_array_chunks += that.filled_array_chunks;
+  remaining_wide_arrays += that.remaining_wide_arrays;
+  remaining_wide_array_elements += that.remaining_wide_array_elements;
+  remaining_unimplemented_arrays += that.remaining_unimplemented_arrays;
+  remaining_unimplemented_array_elements +=
+      that.remaining_unimplemented_array_elements;
+  remaining_buggy_arrays += that.remaining_buggy_arrays;
+  remaining_buggy_array_elements += that.remaining_buggy_array_elements;
+  return *this;
 }
 
 static ReduceArrayLiteralsPass s_pass;

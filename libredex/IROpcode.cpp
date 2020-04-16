@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -444,6 +444,10 @@ IROpcode from_dex_opcode(DexOpcode op) {
     return OPCODE_INVOKE_STATIC;
   case DOPCODE_INVOKE_INTERFACE:
     return OPCODE_INVOKE_INTERFACE;
+  case DOPCODE_INVOKE_POLYMORPHIC:
+    return OPCODE_INVOKE_POLYMORPHIC;
+  case DOPCODE_INVOKE_CUSTOM:
+    return OPCODE_INVOKE_CUSTOM;
   case DOPCODE_INVOKE_VIRTUAL_RANGE:
     return OPCODE_INVOKE_VIRTUAL;
   case DOPCODE_INVOKE_SUPER_RANGE:
@@ -454,6 +458,10 @@ IROpcode from_dex_opcode(DexOpcode op) {
     return OPCODE_INVOKE_STATIC;
   case DOPCODE_INVOKE_INTERFACE_RANGE:
     return OPCODE_INVOKE_INTERFACE;
+  case DOPCODE_INVOKE_CUSTOM_RANGE:
+    return OPCODE_INVOKE_CUSTOM;
+  case DOPCODE_INVOKE_POLYMORPHIC_RANGE:
+    return OPCODE_INVOKE_POLYMORPHIC;
   case DOPCODE_CONST_STRING:
   case DOPCODE_CONST_STRING_JUMBO:
     return OPCODE_CONST_STRING;
@@ -811,6 +819,10 @@ DexOpcode to_dex_opcode(IROpcode op) {
     return DOPCODE_INVOKE_STATIC;
   case OPCODE_INVOKE_INTERFACE:
     return DOPCODE_INVOKE_INTERFACE;
+  case OPCODE_INVOKE_CUSTOM:
+    return DOPCODE_INVOKE_CUSTOM;
+  case OPCODE_INVOKE_POLYMORPHIC:
+    return DOPCODE_INVOKE_POLYMORPHIC;
   case OPCODE_CONST_STRING:
     return DOPCODE_CONST_STRING;
   case OPCODE_CONST_CLASS:
@@ -843,6 +855,10 @@ DexOpcode range_version(IROpcode op) {
     return DOPCODE_INVOKE_VIRTUAL_RANGE;
   case OPCODE_INVOKE_INTERFACE:
     return DOPCODE_INVOKE_INTERFACE_RANGE;
+  case OPCODE_INVOKE_CUSTOM:
+    return DOPCODE_INVOKE_CUSTOM_RANGE;
+  case OPCODE_INVOKE_POLYMORPHIC:
+    return DOPCODE_INVOKE_POLYMORPHIC_RANGE;
   case OPCODE_FILLED_NEW_ARRAY:
     return DOPCODE_FILLED_NEW_ARRAY_RANGE;
   default:
@@ -857,6 +873,8 @@ bool has_variable_srcs_size(IROpcode op) {
   case OPCODE_INVOKE_SUPER:
   case OPCODE_INVOKE_STATIC:
   case OPCODE_INVOKE_INTERFACE:
+  case OPCODE_INVOKE_CUSTOM:
+  case OPCODE_INVOKE_POLYMORPHIC:
   case OPCODE_FILLED_NEW_ARRAY:
     return true;
   default:
@@ -923,6 +941,8 @@ bool may_throw(IROpcode op) {
   case OPCODE_INVOKE_DIRECT:
   case OPCODE_INVOKE_STATIC:
   case OPCODE_INVOKE_INTERFACE:
+  case OPCODE_INVOKE_CUSTOM:
+  case OPCODE_INVOKE_POLYMORPHIC:
   case OPCODE_DIV_INT:
   case OPCODE_REM_INT:
   case OPCODE_DIV_LONG:
@@ -979,6 +999,8 @@ bool has_range_form(IROpcode op) {
   case OPCODE_INVOKE_SUPER:
   case OPCODE_INVOKE_VIRTUAL:
   case OPCODE_INVOKE_INTERFACE:
+  case OPCODE_INVOKE_CUSTOM:
+  case OPCODE_INVOKE_POLYMORPHIC:
   case OPCODE_FILLED_NEW_ARRAY:
     return true;
   default:
@@ -1057,6 +1079,42 @@ IROpcode load_param_to_move(IROpcode op) {
   }
 }
 
+IROpcode iput_to_move(IROpcode op) {
+  switch (op) {
+  case OPCODE_IPUT:
+  case OPCODE_IPUT_BOOLEAN:
+  case OPCODE_IPUT_BYTE:
+  case OPCODE_IPUT_CHAR:
+  case OPCODE_IPUT_SHORT:
+    return OPCODE_MOVE;
+  case OPCODE_IPUT_OBJECT:
+    return OPCODE_MOVE_OBJECT;
+  case OPCODE_IPUT_WIDE:
+    return OPCODE_MOVE_WIDE;
+  default:
+    always_assert_log(false, "Expected iput, got %s", SHOW(op));
+    not_reached();
+  }
+}
+
+IROpcode iget_to_move(IROpcode op) {
+  switch (op) {
+  case OPCODE_IGET:
+  case OPCODE_IGET_BOOLEAN:
+  case OPCODE_IGET_BYTE:
+  case OPCODE_IGET_CHAR:
+  case OPCODE_IGET_SHORT:
+    return OPCODE_MOVE;
+  case OPCODE_IGET_OBJECT:
+    return OPCODE_MOVE_OBJECT;
+  case OPCODE_IGET_WIDE:
+    return OPCODE_MOVE_WIDE;
+  default:
+    always_assert_log(false, "Expected iget, got %s", SHOW(op));
+    not_reached();
+  }
+}
+
 IROpcode move_result_pseudo_for_iget(IROpcode op) {
   switch (op) {
   case OPCODE_IGET_BOOLEAN:
@@ -1120,8 +1178,67 @@ IROpcode return_opcode(const DexType* type) {
              : type::is_object(type) ? OPCODE_RETURN_OBJECT : OPCODE_RETURN;
 }
 
+IROpcode load_opcode(const DexType* type) {
+  return type::is_wide_type(type)
+             ? IOPCODE_LOAD_PARAM_WIDE
+             : type::is_object(type) ? IOPCODE_LOAD_PARAM_OBJECT
+                                     : IOPCODE_LOAD_PARAM;
+}
+
+IROpcode move_result_to_move(IROpcode op) {
+  switch (op) {
+  case OPCODE_MOVE_RESULT:
+    return OPCODE_MOVE;
+  case OPCODE_MOVE_RESULT_OBJECT:
+    return OPCODE_MOVE_OBJECT;
+  case OPCODE_MOVE_RESULT_WIDE:
+    return OPCODE_MOVE_WIDE;
+  default:
+    always_assert(false);
+  }
+}
+
+IROpcode return_to_move(IROpcode op) {
+  switch (op) {
+  case OPCODE_RETURN:
+    return OPCODE_MOVE;
+  case OPCODE_RETURN_WIDE:
+    return OPCODE_MOVE_WIDE;
+  case OPCODE_RETURN_OBJECT:
+    return OPCODE_MOVE_OBJECT;
+  default:
+    always_assert(false);
+  }
+}
+
+IROpcode move_result_to_pseudo(IROpcode op) {
+  switch (op) {
+  case OPCODE_MOVE_RESULT:
+    return IOPCODE_MOVE_RESULT_PSEUDO;
+  case OPCODE_MOVE_RESULT_OBJECT:
+    return IOPCODE_MOVE_RESULT_PSEUDO_OBJECT;
+  case OPCODE_MOVE_RESULT_WIDE:
+    return IOPCODE_MOVE_RESULT_PSEUDO_WIDE;
+  default:
+    always_assert(false);
+  }
+}
+
+IROpcode pseudo_to_move_result(IROpcode op) {
+  switch (op) {
+  case IOPCODE_MOVE_RESULT_PSEUDO:
+    return OPCODE_MOVE_RESULT;
+  case IOPCODE_MOVE_RESULT_PSEUDO_OBJECT:
+    return OPCODE_MOVE_RESULT_OBJECT;
+  case IOPCODE_MOVE_RESULT_PSEUDO_WIDE:
+    return OPCODE_MOVE_RESULT_WIDE;
+  default:
+    always_assert(false);
+  }
+}
+
 IROpcode sget_opcode_for_field(const DexField* field) {
-  switch (type_to_datatype(field->get_type())) {
+  switch (type::to_datatype(field->get_type())) {
   case DataType::Array:
   case DataType::Object:
     return OPCODE_SGET_OBJECT;
@@ -1140,9 +1257,9 @@ IROpcode sget_opcode_for_field(const DexField* field) {
   case DataType::Double:
     return OPCODE_SGET_WIDE;
   case DataType::Void:
-  default:
-    assert(false);
+    break;
   }
+  always_assert(false);
 }
 
 IROpcode invert_conditional_branch(IROpcode op) {
@@ -1458,6 +1575,8 @@ bool dest_is_object(IROpcode op) {
   case OPCODE_INVOKE_DIRECT:
   case OPCODE_INVOKE_STATIC:
   case OPCODE_INVOKE_INTERFACE:
+  case OPCODE_INVOKE_CUSTOM:
+  case OPCODE_INVOKE_POLYMORPHIC:
     always_assert_log(false, "No dest");
     not_reached();
   case OPCODE_CONST_STRING:

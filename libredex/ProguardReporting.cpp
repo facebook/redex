@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -10,7 +10,7 @@
 #include "ReachableClasses.h"
 
 std::string extract_suffix(std::string class_name) {
-  auto i = class_name.find_last_of(".");
+  auto i = class_name.find_last_of('.');
   if (i == std::string::npos) {
     // This is a class name with no package prefix.
     return class_name;
@@ -58,9 +58,9 @@ std::string type_descriptor_to_java(const std::string& descriptor) {
   exit(2);
 }
 
-std::string extract_member_name(std::string qualified) {
-  auto dot = qualified.find(".");
-  auto colon = qualified.find(":");
+std::string extract_member_name(const std::string& qualified) {
+  auto dot = qualified.find('.');
+  auto colon = qualified.find(':');
   return qualified.substr(dot + 1, colon - dot - 1);
 }
 
@@ -75,7 +75,7 @@ std::string deobfuscate_type_descriptor(const ProguardMap& pg_map,
   size_t i = 0;
   while (i < desc.size()) {
     if (desc[i] == 'L') {
-      auto colon = desc.find(";");
+      auto colon = desc.find(';');
       redex_assert(colon != std::string::npos);
       auto class_type = desc.substr(i, colon + 1);
       auto deob_class = pg_map.deobfuscate_class(class_type);
@@ -125,12 +125,12 @@ void redex::print_method(std::ostream& output,
   std::string method_name = extract_member_name(method->get_name()->c_str());
   // Record if this is a constructor to supress return value printing
   // before the method name.
-  bool is_constructor = is_init(method);
+  bool is_constructor = method::is_init(method);
   if (is_constructor) {
     method_name = extract_suffix(class_name);
     is_constructor = true;
   } else {
-    auto deob = method->get_deobfuscated_name();
+    const auto& deob = method->get_deobfuscated_name();
     if (deob.empty()) {
       std::cerr << "WARNING: method has no deobfu: " << method_name
                 << std::endl;
@@ -165,7 +165,6 @@ void redex::print_field(std::ostream& output,
                         const ProguardMap& pg_map,
                         const std::string& class_name,
                         const DexField* field) {
-  auto field_name = field->get_deobfuscated_name();
   auto field_type = field->get_type()->get_name()->c_str();
   std::string deobfu_field_type =
       deobfuscate_type_descriptor(pg_map, field_type);

@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -17,7 +17,8 @@ struct BoxedBooleanTest : public ConstantPropagationTest {
  public:
   BoxedBooleanTest() {
     ClassCreator creator(DexType::make_type("Ljava/lang/Boolean;"));
-    creator.set_super(get_object_type());
+    creator.set_super(type::java_lang_Object());
+    creator.set_external();
 
     auto boolean_true =
         DexField::make_field("Ljava/lang/Boolean;.TRUE:Ljava/lang/Boolean")

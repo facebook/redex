@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -23,8 +23,8 @@ TEST(ProguardLexerTest, empty) {
 
 // Parse a few tokens.
 TEST(ProguardLexerTest, assortment) {
-  // The ss stream below should result in the vector of tokens in the expected variable
-  // that occurs below this. Please keep ss and expected in sync.
+  // The ss stream below should result in the vector of tokens in the expected
+  // variable that occurs below this. Please keep ss and expected in sync.
   std::stringstream ss(
       "{ } ( ) ; : ! , / class public final abstract interface\n"
       "enum extends implements private protected static\n"

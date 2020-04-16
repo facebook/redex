@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -7,9 +7,9 @@
 
 #pragma once
 
-#include <stdint.h>
-#include "DexDefs.h"
 #include "DexAccess.h"
+#include "DexDefs.h"
+#include <stdint.h>
 
 typedef uint32_t symdstr; // Offset into symtool string table.
 

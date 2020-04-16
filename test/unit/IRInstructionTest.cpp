@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -99,13 +99,18 @@ TEST_F(IRInstructionTest, RoundTrip) {
     method->set_dex_code(std::make_unique<DexCode>());
     method->get_dex_code()->get_instructions().push_back(insn);
     method->get_dex_code()->set_registers_size(0xff);
+
+    // Create a copy of insn because balloon frees the DexInstructions
+    auto copy = insn->clone();
+    insn = nullptr;
+
     method->balloon();
     instruction_lowering::lower(method);
     method->sync();
-    EXPECT_EQ(*method->get_dex_code()->get_instructions().at(0), *insn)
+    EXPECT_EQ(*method->get_dex_code()->get_instructions().at(0), *copy)
         << "at " << show(op);
 
-    delete insn;
+    delete copy;
   }
 }
 
@@ -211,7 +216,7 @@ TEST_F(IRInstructionTest, SelectCheckCast) {
   method->make_concrete(ACC_STATIC, 0);
   method->set_code(std::make_unique<IRCode>(method, 0));
   auto code = method->get_code();
-  code->push_back(dasm(OPCODE_CHECK_CAST, get_object_type(), {1_v}));
+  code->push_back(dasm(OPCODE_CHECK_CAST, type::java_lang_Object(), {1_v}));
   code->push_back(dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {0_v}));
   instruction_lowering::lower(method);
 
@@ -222,7 +227,7 @@ TEST_F(IRInstructionTest, SelectCheckCast) {
       *(new DexInstruction(DOPCODE_MOVE_OBJECT))->set_dest(0)->set_src(0, 1));
   ++it;
   EXPECT_EQ(*it->dex_insn,
-            *(new DexOpcodeType(DOPCODE_CHECK_CAST, get_object_type()))
+            *(new DexOpcodeType(DOPCODE_CHECK_CAST, type::java_lang_Object()))
                  ->set_src(0, 0));
 }
 

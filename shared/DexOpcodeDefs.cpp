@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -11,23 +11,27 @@
 #include <stdexcept>
 
 std::string print(DexOpcode opcode) {
-   switch (opcode) {
- #define OP(op, code, fmt, literal) \
-   case DOPCODE_##op:               \
-     return #literal;
-     DOPS
-     QDOPS
- #undef OP
-   case FOPCODE_PACKED_SWITCH:
-     return "PACKED_SWITCH_DATA";
-   case FOPCODE_SPARSE_SWITCH:
-     return "SPARSE_SWITCH_DATA";
-   case FOPCODE_FILLED_ARRAY:
-     return "FILLED_ARRAY_DATA";
-   default:
-     return "NO_VALID_OPCODE";
-   }
- }
+  /* clang-format off */
+
+  switch (opcode) {
+#define OP(op, code, fmt, literal) \
+  case DOPCODE_##op:               \
+    return #literal;
+    DOPS QDOPS
+#undef OP
+
+  case FOPCODE_PACKED_SWITCH:
+    return "PACKED_SWITCH_DATA";
+  case FOPCODE_SPARSE_SWITCH:
+    return "SPARSE_SWITCH_DATA";
+  case FOPCODE_FILLED_ARRAY:
+    return "FILLED_ARRAY_DATA";
+  default:
+    return "NO_VALID_OPCODE";
+  }
+
+  /* clang-format on */
+}
 
 DexOpcode quicken(DexOpcode opcode) {
   switch (opcode) {

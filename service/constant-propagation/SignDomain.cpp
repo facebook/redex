@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -67,7 +67,7 @@ std::ostream& operator<<(std::ostream& os, Interval interval) {
   }
 }
 
-std::ostream& operator<<(std::ostream& os, Domain domain) {
+std::ostream& operator<<(std::ostream& os, const Domain& domain) {
   os << domain.element();
   return os;
 }

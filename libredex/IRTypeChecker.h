@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -23,7 +23,6 @@
  */
 class IRTypeChecker final {
 
-  using register_t = ir_analyzer::register_t;
   using TypeEnvironment = type_inference::TypeEnvironment;
 
  public:
@@ -33,7 +32,7 @@ class IRTypeChecker final {
   // definition must be located after the definition of TypeInference.
   ~IRTypeChecker();
 
-  explicit IRTypeChecker(DexMethod* dex_method);
+  explicit IRTypeChecker(DexMethod* dex_method, bool validate_access = false);
 
   IRTypeChecker(const IRTypeChecker&) = delete;
 
@@ -103,9 +102,10 @@ class IRTypeChecker final {
    * we will get INT and not REFERENCE, which would be the type of v0 _after_
    * the instruction has been executed.
    */
-  IRType get_type(IRInstruction* insn, uint16_t reg) const;
+  IRType get_type(IRInstruction* insn, reg_t reg) const;
 
-  const DexType* get_dex_type(IRInstruction* insn, uint16_t reg) const;
+  const boost::optional<const DexType*> get_dex_type(IRInstruction* insn,
+                                                     reg_t reg) const;
 
  private:
   void check_completion() const {
@@ -115,15 +115,16 @@ class IRTypeChecker final {
   }
 
   void assume_scalar(TypeEnvironment* state,
-                     register_t reg,
+                     reg_t reg,
                      bool in_move = false) const;
   void assume_reference(TypeEnvironment* state,
-                        register_t reg,
+                        reg_t reg,
                         bool in_move = false) const;
   void check_instruction(IRInstruction* insn,
                          TypeEnvironment* current_state) const;
 
   DexMethod* m_dex_method;
+  const bool m_validate_access;
   bool m_complete;
   bool m_verify_moves;
   bool m_check_no_overwrite_this;

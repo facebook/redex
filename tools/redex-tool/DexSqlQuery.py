@@ -1,29 +1,27 @@
 #!/usr/bin/env python3
-
 # Copyright (c) Facebook, Inc. and its affiliates.
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-from __future__ import unicode_literals
+from __future__ import absolute_import, division, print_function, unicode_literals
+
+import re
+import readline
 import sqlite3
 import sys
-import readline
 from os.path import expanduser
-import re
+
 
 PAT_ANON_CLASS = re.compile(".*\$[0-9]+;")
 
 HISTORY_FILE = expanduser("~/.dexsql.history")
 
 OPCODES = dict()
-OPCODES[0x1a] = "const-string"
-OPCODES[0x1b] = "const-string/jumbo"
-OPCODES[0x1c] = "const-class"
-OPCODES[0x1f] = "check-cast"
+OPCODES[0x1A] = "const-string"
+OPCODES[0x1B] = "const-string/jumbo"
+OPCODES[0x1C] = "const-class"
+OPCODES[0x1F] = "check-cast"
 OPCODES[0x20] = "instance-of"
 OPCODES[0x22] = "new-instance"
 OPCODES[0x52] = "iget"
@@ -34,12 +32,12 @@ OPCODES[0x56] = "iget-byte"
 OPCODES[0x57] = "iget-char"
 OPCODES[0x58] = "iget-short"
 OPCODES[0x59] = "iput"
-OPCODES[0x5a] = "iput/wide"
-OPCODES[0x5b] = "iput-object"
-OPCODES[0x5c] = "iput-boolean"
-OPCODES[0x5d] = "iput-byte"
-OPCODES[0x5e] = "iput-char"
-OPCODES[0x5f] = "iput-short"
+OPCODES[0x5A] = "iput/wide"
+OPCODES[0x5B] = "iput-object"
+OPCODES[0x5C] = "iput-boolean"
+OPCODES[0x5D] = "iput-byte"
+OPCODES[0x5E] = "iput-char"
+OPCODES[0x5F] = "iput-short"
 OPCODES[0x60] = "sget"
 OPCODES[0x61] = "sget/wide"
 OPCODES[0x62] = "sget-object"
@@ -50,12 +48,12 @@ OPCODES[0x66] = "sget-short"
 OPCODES[0x67] = "sput"
 OPCODES[0x68] = "sput/wide"
 OPCODES[0x69] = "sput-object"
-OPCODES[0x6a] = "sput-boolean"
-OPCODES[0x6b] = "sput-byte"
-OPCODES[0x6c] = "sput-char"
-OPCODES[0x6d] = "sput-short"
-OPCODES[0x6e] = "invoke-virtual"
-OPCODES[0x6f] = "invoke-super"
+OPCODES[0x6A] = "sput-boolean"
+OPCODES[0x6B] = "sput-byte"
+OPCODES[0x6C] = "sput-char"
+OPCODES[0x6D] = "sput-short"
+OPCODES[0x6E] = "invoke-virtual"
+OPCODES[0x6F] = "invoke-super"
 OPCODES[0x70] = "invoke-direct"
 OPCODES[0x71] = "invoke-static"
 OPCODES[0x72] = "invoke-interface"
@@ -68,72 +66,89 @@ OPCODES[0x78] = "invoke-interface/range"
 # operates on classes.name column
 # return the first n levels of the package: PKG("com/foo/bar", 2) => "com/foo"
 def udf_pkg_2arg(text, n):
-    groups = text.split('/')
-    if (n >= (len(groups) - 1)):
+    groups = text.split("/")
+    if n >= (len(groups) - 1):
         n = len(groups) - 1
-    return '/'.join(groups[:n])
+    return "/".join(groups[:n])
+
 
 def udf_pkg_1arg(text):
     return udf_pkg_2arg(text, 9999)
+
 
 # operates on access column
 def udf_is_interface(access):
     return access & 0x00000200
 
+
 # operates on access column
 def udf_is_static(access):
     return access & 0x00000008
+
 
 # operates on access column
 def udf_is_final(access):
     return access & 0x00000010
 
+
 # operates on access column
 def udf_is_native(access):
     return access & 0x00000100
+
 
 # operates on access column
 def udf_is_abstract(access):
     return access & 0x00000400
 
+
 # operates on access column
 def udf_is_synthetic(access):
     return access & 0x00001000
+
 
 # operates on access column
 def udf_is_annotation(access):
     return access & 0x00002000
 
+
 # operates on access column
 def udf_is_enum(access):
     return access & 0x00004000
+
 
 # operates on access column
 def udf_is_constructor(access):
     return access & 0x00010000
 
+
 # operates on dex column
 def udf_is_voltron_dex(dex_id):
     return not dex_id.startswith("dex/")
+
 
 # operates on classes.name
 def udf_is_inner_class(name):
     return "$" in name
 
+
 # operates on classes.name
 def udf_is_anon_class(name):
     return PAT_ANON_CLASS.match(name) is not None
+
 
 # convert a numerical opcode to its name
 def udf_opcode(opcode):
     return OPCODES.get(opcode, opcode)
 
+
 # operates on dex column
 def udf_is_coldstart(dex_id):
     return dex_id == "dex/0" or dex_id == "dex/1" or dex_id == "dex/2"
 
+
 def udf_is_default_ctor(name):
-    return name == ';.<init>:()V'
+    return name == ";.<init>:()V"
+
 
 # operates on fields.name
 class AggregateFieldShape:
@@ -141,7 +156,7 @@ class AggregateFieldShape:
         self.shape = dict()
 
     def step(self, value):
-        element = value[value.index(':') + 1]
+        element = value[value.index(":") + 1]
         self.shape[element] = self.shape[element] + 1 if element in self.shape else 1
 
     def finalize(self):
@@ -170,7 +185,7 @@ conn.create_aggregate("FIELD_SHAPE", 1, AggregateFieldShape)
 
 cursor = conn.cursor()
 
-open(HISTORY_FILE, 'a')
+open(HISTORY_FILE, "a")
 readline.read_history_file(HISTORY_FILE)
 readline.set_history_length(1000)
 while True:

@@ -1,5 +1,4 @@
-
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -15,6 +14,7 @@
 #include <random>
 #include <string>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include <boost/thread/thread.hpp>
@@ -60,7 +60,7 @@ class ConcurrentContainersTest : public ::testing::Test {
 
   void run_on_samples(
       const std::vector<uint32_t> samples[],
-      std::function<void(const std::vector<uint32_t>&)> operation) {
+      const std::function<void(const std::vector<uint32_t>&)>& operation) {
     std::vector<boost::thread> threads;
     for (size_t t = 0; t < kThreads; ++t) {
       const auto& sample = samples[t];
@@ -72,12 +72,12 @@ class ConcurrentContainersTest : public ::testing::Test {
   }
 
   void run_on_samples(
-      std::function<void(const std::vector<uint32_t>&)> operation) {
+      const std::function<void(const std::vector<uint32_t>&)>& operation) {
     run_on_samples(m_samples, operation);
   }
 
   void run_on_subset_samples(
-      std::function<void(const std::vector<uint32_t>&)> operation) {
+      const std::function<void(const std::vector<uint32_t>&)>& operation) {
     run_on_samples(m_subset_samples, operation);
   }
 

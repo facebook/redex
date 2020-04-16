@@ -9,6 +9,23 @@
 
 #include "DexClass.h"
 
+/**
+ * Basic datatypes used by bytecode.
+ */
+enum class DataType : uint8_t {
+  Void,
+  Boolean,
+  Byte,
+  Short,
+  Char,
+  Int,
+  Long,
+  Float,
+  Double,
+  Object,
+  Array
+};
+
 namespace type {
 
 DexType* _void();
@@ -36,6 +53,8 @@ DexType* java_lang_Class();
 DexType* java_lang_Enum();
 
 DexType* java_lang_Object();
+
+DexType* java_lang_Void();
 
 DexType* java_lang_Throwable();
 
@@ -90,6 +109,10 @@ bool is_float(const DexType* type);
 bool is_double(const DexType* type);
 
 bool is_void(const DexType* type);
+
+bool is_java_lang_object_array(const DexType* type);
+
+bool is_reference_array(const DexType* type);
 
 /*
  * Return the shorty char for this type.
@@ -175,5 +198,35 @@ DexType* make_array_type(const DexType* type);
  * Return the array type of a given type in specified level.
  */
 DexType* make_array_type(const DexType* type, uint32_t level);
+
+/**
+ * Returns the corresponding wrapper type of primitive types
+ * e.g.
+ *   I -> Ljava/lang/Integer;
+ *   Z -> Ljava/lang/Boolean;
+ *   ... etc.
+ * returns nullptr if argument `type` is not a primitive type or is void
+ */
+DexType* get_boxed_reference_type(const DexType* type);
+
+DexMethodRef* get_unboxing_method_for_type(const DexType* type);
+DexMethodRef* get_value_of_method_for_type(const DexType* type);
+
+/**
+ * Return the basic datatype of given DexType.
+ */
+DataType to_datatype(const DexType* t);
+
+/**
+ * Subclass check. Copied from VirtualScope.
+ * We can make this much faster in time.
+ */
+bool is_subclass(const DexType* parent, const DexType* child);
+
+/**
+ * Whether the given type refers to a proper class that has no ctor,
+ * and is not external or native.
+ */
+bool is_uninstantiable_class(DexType* type);
 
 }; // namespace type

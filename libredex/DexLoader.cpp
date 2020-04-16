@@ -1,15 +1,15 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <boost/iostreams/device/mapped_file.hpp>
-
 #include "DexAccess.h"
+#include "DexCallSite.h"
 #include "DexDefs.h"
 #include "DexLoader.h"
+#include "DexMethodHandle.h"
 #include "IRCode.h"
 #include "Trace.h"
 #include "Walkers.h"
@@ -19,43 +19,37 @@
 #include <stdexcept>
 #include <vector>
 
-class DexLoader {
-  DexIdx* m_idx;
-  const dex_class_def* m_class_defs;
-  DexClasses* m_classes;
-  boost::iostreams::mapped_file m_file;
-  std::string m_dex_location;
-
- public:
-  explicit DexLoader(const char* location)
-      : m_idx(nullptr), m_dex_location(location) {}
-  ~DexLoader() {
-    if (m_idx) delete m_idx;
-    if (m_file.is_open()) m_file.close();
-  }
-  const dex_header* get_dex_header(const char* location);
-  DexClasses load_dex(const char* location,
-                      dex_stats_t* stats,
-                      bool support_dex_v37);
-  DexClasses load_dex(const dex_header* hdr, dex_stats_t* stats);
-  void load_dex_class(int num);
-  void gather_input_stats(dex_stats_t* stats, const dex_header* dh);
-};
+DexLoader::DexLoader(const char* location)
+    : m_idx(nullptr),
+      m_file(new boost::iostreams::mapped_file()),
+      m_dex_location(location) {}
 
 static void validate_dex_header(const dex_header* dh,
                                 size_t dexsize,
-                                bool support_dex_v37) {
-  if (support_dex_v37) {
-    // support_dex_v37 flag enables parsing v37 dex, but does not disable
-    // parsing v35 dex.
-    if (memcmp(dh->magic, DEX_HEADER_DEXMAGIC_V37, sizeof(dh->magic)) &&
-        memcmp(dh->magic, DEX_HEADER_DEXMAGIC_V35, sizeof(dh->magic))) {
-      always_assert_log(false, "Bad v35 or v37 dex magic %s\n", dh->magic);
-    }
-  } else {
-    if (memcmp(dh->magic, DEX_HEADER_DEXMAGIC_V35, sizeof(dh->magic))) {
-      always_assert_log(false, "Bad v35 dex magic %s\n", dh->magic);
-    }
+                                int support_dex_version) {
+  bool supported = false;
+  switch (support_dex_version) {
+  case 38:
+    supported = supported ||
+                !memcmp(dh->magic, DEX_HEADER_DEXMAGIC_V38, sizeof(dh->magic));
+    /* intentional fallthrough to also check for v37 */
+  case 37:
+    supported = supported ||
+                !memcmp(dh->magic, DEX_HEADER_DEXMAGIC_V37, sizeof(dh->magic));
+    /* intentional fallthrough to also check for v35 */
+  case 35:
+    supported = supported ||
+                !memcmp(dh->magic, DEX_HEADER_DEXMAGIC_V35, sizeof(dh->magic));
+    break;
+  default:
+    always_assert_log(
+        false, "Unrecognized support_dex_version %d\n", support_dex_version);
+  }
+  if (!supported) {
+    always_assert_log(false,
+                      "Bad dex magic %s for support_dex_version %d\n",
+                      dh->magic,
+                      support_dex_version);
   }
   always_assert_log(
       dh->file_size == dexsize,
@@ -73,39 +67,6 @@ struct class_load_work {
   int num;
 };
 
-static std::vector<std::exception_ptr> class_work(class_load_work* clw) {
-  try {
-    clw->dl->load_dex_class(clw->num);
-    return {}; // no exception
-  } catch (const std::exception& exc) {
-    TRACE(MAIN, 1, "Worker throw the exception:%s", exc.what());
-
-    return {std::current_exception()};
-  }
-}
-
-static std::vector<std::exception_ptr> exc_reducer(
-    const std::vector<std::exception_ptr>& v1,
-    const std::vector<std::exception_ptr>& v2) {
-  if (v1.empty()) {
-    return v2;
-  } else if (v2.empty()) {
-    return v1;
-  } else {
-    std::vector<std::exception_ptr> result(v1);
-    result.insert(result.end(), v2.begin(), v2.end());
-    return result;
-  }
-}
-
-const uint8_t* align_ptr(const uint8_t* ptr, size_t alignment) {
-  if ((size_t)ptr % alignment != 0) {
-    return ptr + (alignment - ((size_t)ptr % alignment));
-  } else {
-    return ptr;
-  }
-}
-
 void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
   if (!stats) {
     return;
@@ -117,11 +78,15 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
   stats->num_strings += dh->string_ids_size;
   stats->num_protos += dh->proto_ids_size;
   stats->num_bytes += dh->file_size;
+  // T58562665: TODO - actually update states for callsites/methodhandles
+  stats->num_callsites += 0;
+  stats->num_methodhandles += 0;
 
   std::unordered_set<DexEncodedValueArray, boost::hash<DexEncodedValueArray>>
       enc_arrays;
   std::set<DexTypeList*, dextypelists_comparator> type_lists;
   std::unordered_set<uint32_t> anno_offsets;
+
   for (uint32_t cidx = 0; cidx < dh->class_defs_size; ++cidx) {
     auto* clz = m_classes->at(cidx);
     if (clz == nullptr) {
@@ -168,7 +133,7 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
     std::unique_ptr<DexEncodedValueArray> deva(clz->get_static_values());
     if (deva) {
       if (!enc_arrays.count(*deva)) {
-        enc_arrays.emplace(std::move(*deva.release()));
+        enc_arrays.emplace(std::move(*deva.get()));
         stats->num_static_values++;
       }
     }
@@ -202,7 +167,9 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
   }
 
   const dex_map_list* map_list =
-      reinterpret_cast<const dex_map_list*>(m_file.const_data() + dh->map_off);
+      reinterpret_cast<const dex_map_list*>(m_file->const_data() + dh->map_off);
+  bool header_seen = false;
+  uint32_t header_index = 0;
   for (uint32_t i = 0; i < map_list->size; i++) {
     const auto& item = map_list->items[i];
 
@@ -210,6 +177,22 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
     const uint8_t* initial_encdata = encdata;
 
     switch (item.type) {
+    case TYPE_HEADER_ITEM:
+      always_assert_log(
+          !header_seen,
+          "Expected header_item to be unique in the map_list, "
+          "but encountered one at index i=%u and another at index j=%u.",
+          header_index,
+          i);
+      header_seen = true;
+      header_index = i;
+      always_assert_log(1 == item.size,
+                        "Expected count of header_items in the map_list to be "
+                        "exactly 1, but got ct=%u.",
+                        item.size);
+      stats->header_item_count += item.size;
+      stats->header_item_bytes += item.size * sizeof(dex_header);
+      break;
     case TYPE_STRING_ID_ITEM:
       stats->string_id_count += item.size;
       stats->string_id_bytes += item.size * sizeof(dex_string_id);
@@ -236,11 +219,11 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
       break;
     case TYPE_CALL_SITE_ID_ITEM:
       stats->call_site_id_count += item.size;
-      stats->call_site_id_bytes += item.size * sizeof(dex_call_site_id_item);
+      stats->call_site_id_bytes += item.size * sizeof(dex_callsite_id);
       break;
     case TYPE_METHOD_HANDLE_ITEM:
       stats->method_handle_count += item.size;
-      stats->method_handle_bytes += item.size * sizeof(dex_method_handle_item);
+      stats->method_handle_bytes += item.size * sizeof(dex_methodhandle_id);
       break;
     case TYPE_MAP_LIST:
       stats->map_list_count += item.size;
@@ -346,6 +329,7 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
           }
         }
       }
+      stats->code_bytes += encdata - initial_encdata;
       break;
     case TYPE_STRING_DATA_ITEM:
       stats->string_data_count += item.size;
@@ -363,26 +347,6 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
       }
 
       stats->string_data_bytes += encdata - initial_encdata;
-      break;
-    case TYPE_ANNOTATIONS_DIR_ITEM:
-      stats->annotations_directory_count += item.size;
-
-      for (uint32_t j = 0; j < item.size; ++j) {
-        encdata = align_ptr(encdata, 4);
-
-        dex_annotations_directory_item* annotations_directory_item =
-            (dex_annotations_directory_item*)encdata;
-        encdata += sizeof(dex_annotations_directory_item);
-
-        encdata += sizeof(dex_field_annotation) *
-                   annotations_directory_item->fields_size;
-        encdata += sizeof(dex_method_annotation) *
-                   annotations_directory_item->methods_size;
-        encdata += sizeof(dex_parameter_annotation) *
-                   annotations_directory_item->parameters_size;
-      }
-
-      stats->annotations_directory_count += encdata - initial_encdata;
       break;
     case TYPE_DEBUG_INFO_ITEM:
       stats->num_dbg_items += item.size;
@@ -450,13 +414,47 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
       }
       stats->dbg_total_size += encdata - initial_encdata;
       break;
+    case TYPE_ANNOTATION_ITEM:
+      // TBD!
+      break;
+    case TYPE_ENCODED_ARRAY_ITEM:
+      // TBD!
+      break;
+    case TYPE_ANNOTATIONS_DIR_ITEM:
+      stats->annotations_directory_count += item.size;
+
+      for (uint32_t j = 0; j < item.size; ++j) {
+        encdata = align_ptr(encdata, 4);
+        dex_annotations_directory_item* annotations_directory_item =
+            (dex_annotations_directory_item*)encdata;
+
+        encdata += sizeof(dex_annotations_directory_item);
+        encdata += sizeof(dex_field_annotation) *
+                   annotations_directory_item->fields_size;
+        encdata += sizeof(dex_method_annotation) *
+                   annotations_directory_item->methods_size;
+        encdata += sizeof(dex_parameter_annotation) *
+                   annotations_directory_item->parameters_size;
+      }
+
+      stats->annotations_directory_bytes += encdata - initial_encdata;
+      break;
+    case TYPE_HIDDENAPI_CLASS_DATA_ITEM:
+      // No stats gathered.
+      break;
+    default:
+      fprintf(
+          stderr,
+          "warning: map_list item at index i=%u is of unknown type T=0x%04hX\n",
+          i,
+          item.type);
     }
   }
 }
 
 void DexLoader::load_dex_class(int num) {
   const dex_class_def* cdef = m_class_defs + num;
-  DexClass* dc = DexClass::create(m_idx, cdef, m_dex_location);
+  DexClass* dc = DexClass::create(m_idx.get(), cdef, m_dex_location);
   // We may be inserting a nullptr here. Need to remove them later
   //
   // We're inserting nullptr because we can't mess up the indices of the other
@@ -465,19 +463,19 @@ void DexLoader::load_dex_class(int num) {
 }
 
 const dex_header* DexLoader::get_dex_header(const char* location) {
-  m_file.open(location, boost::iostreams::mapped_file::readonly);
-  if (!m_file.is_open()) {
+  m_file->open(location, boost::iostreams::mapped_file::readonly);
+  if (!m_file->is_open()) {
     fprintf(stderr, "error: cannot create memory-mapped file: %s\n", location);
     exit(EXIT_FAILURE);
   }
-  return reinterpret_cast<const dex_header*>(m_file.const_data());
+  return reinterpret_cast<const dex_header*>(m_file->const_data());
 }
 
 DexClasses DexLoader::load_dex(const char* location,
                                dex_stats_t* stats,
-                               bool support_dex_v37) {
+                               int support_dex_version) {
   const dex_header* dh = get_dex_header(location);
-  validate_dex_header(dh, m_file.size(), support_dex_v37);
+  validate_dex_header(dh, m_file->size(), support_dex_version);
   return load_dex(dh, stats);
 }
 
@@ -485,7 +483,7 @@ DexClasses DexLoader::load_dex(const dex_header* dh, dex_stats_t* stats) {
   if (dh->class_defs_size == 0) {
     return DexClasses(0);
   }
-  m_idx = new DexIdx(dh);
+  m_idx = std::make_unique<DexIdx>(dh);
   auto off = (uint64_t)dh->class_defs_off;
   m_class_defs =
       reinterpret_cast<const dex_class_def*>((const uint8_t*)dh + off);
@@ -493,20 +491,35 @@ DexClasses DexLoader::load_dex(const dex_header* dh, dex_stats_t* stats) {
   m_classes = &classes;
 
   auto lwork = new class_load_work[dh->class_defs_size];
-  auto wq =
-      workqueue_mapreduce<class_load_work*, std::vector<std::exception_ptr>>(
-          class_work, exc_reducer);
+  auto num_threads = redex_parallel::default_num_threads();
+  std::vector<std::vector<std::exception_ptr>> exceptions_vec(num_threads);
+  auto wq = workqueue_foreach<class_load_work*>(
+      [&exceptions_vec](class_load_work* clw) {
+        try {
+          clw->dl->load_dex_class(clw->num);
+        } catch (const std::exception& exc) {
+          TRACE(MAIN, 1, "Worker throw the exception:%s", exc.what());
+          exceptions_vec[redex_parallel::get_worker_id()].emplace_back(
+              std::current_exception());
+        }
+      },
+      num_threads);
   for (uint32_t i = 0; i < dh->class_defs_size; i++) {
     lwork[i].dl = this;
     lwork[i].num = i;
     wq.add_item(&lwork[i]);
   }
-  const auto exceptions = wq.run_all();
+  wq.run_all();
   delete[] lwork;
 
-  if (!exceptions.empty()) {
+  std::vector<std::exception_ptr> all_exceptions;
+  for (auto& exceptions : exceptions_vec) {
+    all_exceptions.insert(
+        all_exceptions.end(), exceptions.begin(), exceptions.end());
+  }
+  if (!all_exceptions.empty()) {
     // At least one of the workers raised an exception
-    aggregate_exception ae(exceptions);
+    aggregate_exception ae(all_exceptions);
     throw ae;
   }
 
@@ -534,18 +547,18 @@ static void balloon_all(const Scope& scope) {
 
 DexClasses load_classes_from_dex(const char* location,
                                  bool balloon,
-                                 bool support_dex_v37) {
+                                 int support_dex_version) {
   dex_stats_t stats;
-  return load_classes_from_dex(location, &stats, balloon, support_dex_v37);
+  return load_classes_from_dex(location, &stats, balloon, support_dex_version);
 }
 
 DexClasses load_classes_from_dex(const char* location,
                                  dex_stats_t* stats,
                                  bool balloon,
-                                 bool support_dex_v37) {
+                                 int support_dex_version) {
   TRACE(MAIN, 1, "Loading classes from dex from %s", location);
   DexLoader dl(location);
-  auto classes = dl.load_dex(location, stats, support_dex_v37);
+  auto classes = dl.load_dex(location, stats, support_dex_version);
   if (balloon) {
     balloon_all(classes);
   }

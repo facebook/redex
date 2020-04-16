@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -10,14 +10,24 @@
 #include <boost/optional.hpp>
 #include <vector>
 
-#include "IRCode.h"
+#include "ControlFlow.h"
 
 namespace check_casts {
 
 namespace impl {
 
-using CheckCastReplacements =
-    std::vector<std::pair<MethodItemEntry*, boost::optional<IRInstruction*>>>;
+struct CheckCastReplacementItem {
+  cfg::Block* block;
+  IRInstruction* insn;
+  boost::optional<IRInstruction*> replacement;
+
+  CheckCastReplacementItem(cfg::Block* block,
+                           IRInstruction* insn,
+                           boost::optional<IRInstruction*> replacement)
+      : block(block), insn(insn), replacement(replacement) {}
+};
+
+using CheckCastReplacements = std::vector<CheckCastReplacementItem>;
 
 class CheckCastAnalysis {
 

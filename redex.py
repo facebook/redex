@@ -1,24 +1,25 @@
 #!/usr/bin/env python3
-
 # Copyright (c) Facebook, Inc. and its affiliates.
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
 import argparse
+import enum
 import errno
 import fnmatch
 import glob
 import itertools
 import json
 import os
+import platform
 import re
 import shutil
+import signal
 import struct
 import subprocess
 import sys
 import tempfile
-import time
 import timeit
 import zipfile
 from os.path import abspath, basename, dirname, isdir, isfile, join
@@ -32,8 +33,8 @@ from pyredex.utils import (
     find_android_build_tools,
     make_temp_dir,
     remove_comments,
-    remove_temp_dirs,
     sign_apk,
+    with_temp_cleanup,
 )
 
 
@@ -61,37 +62,56 @@ def pgize(name):
     return name.strip()[1:][:-1].replace("/", ".")
 
 
-def write_debugger_commands(args):
+def dbg_prefix(dbg, src_root=None):
+    """Return a debugger command prefix.
+
+    `dbg` is either "gdb" or "lldb", indicating which debugger to invoke.
+    `src_root` is an optional parameter that indicates the root directory that
+        all references to source files in debug information is relative to.
+
+    Returns a list of strings, which when prefixed onto a shell command
+        invocation will run that shell command under the debugger.
     """
-    Write out a shell script that allows us to rerun redex-all under gdb.
+    assert dbg in ["gdb", "lldb"]
+
+    cmd = [dbg]
+    if src_root is not None:
+        if dbg == "gdb":
+            cmd += ["-ex", quote("directory %s" % src_root)]
+        elif dbg == "lldb":
+            cmd += ["-o", quote('settings set target.source-map "." "%s"' % src_root)]
+
+    DBG_END = {"gdb": "--args", "lldb": "--"}
+    cmd.append(DBG_END[dbg])
+
+    return cmd
+
+
+def write_debugger_command(dbg, src_root, args):
+    """Write out a shell script that allows us to rerun redex-all under a debugger.
+
+    The choice of debugger is governed by `dbg` which can be either "gdb" or "lldb".
     """
-    fd, gdb_script_name = tempfile.mkstemp(suffix=".sh", prefix="redex-gdb-")
+    fd, script_name = tempfile.mkstemp(suffix=".sh", prefix="redex-{}-".format(dbg))
+
+    # Parametrise redex binary.
+    args = [quote(a) for a in args]
+    redex_binary = args[0]
+    args[0] = '"$REDEX_BINARY"'
+
     with os.fdopen(fd, "w") as f:
-        f.write("cd %s\n" % quote(os.getcwd()))
-        f.write("gdb --args ")
-        f.write(" ".join(map(quote, args)))
+        f.write("#! /usr/bin/env bash\n")
+        f.write('REDEX_BINARY="${REDEX_BINARY:-%s}"\n' % redex_binary)
+        f.write("cd %s || exit\n" % quote(os.getcwd()))
+        f.write(" ".join(dbg_prefix(dbg, src_root)))
+        f.write(" ")
+        f.write(" ".join(args))
         os.fchmod(fd, 0o775)
 
-    fd, lldb_script_name = tempfile.mkstemp(suffix=".sh", prefix="redex-lldb-")
-    with os.fdopen(fd, "w") as f:
-        f.write("cd %s\n" % quote(os.getcwd()))
-        f.write("lldb -- ")
-        f.write(" ".join(map(quote, args)))
-        os.fchmod(fd, 0o775)
-
-    return {"gdb_script_name": gdb_script_name, "lldb_script_name": lldb_script_name}
+    return script_name
 
 
 def add_extra_environment_args(env):
-    # If we're running with ASAN, we'll want these flags, if we're not, they do
-    # nothing
-    if "ASAN_OPTIONS" not in env:  # don't overwrite user specified options
-        # We ignore leaks because they are high volume and low danger (for a
-        # short running program like redex).
-        # We don't detect container overflow because it finds bugs in our
-        # libraries (namely jsoncpp and boost).
-        env["ASAN_OPTIONS"] = "detect_leaks=0:detect_container_overflow=0"
-
     # If we haven't set MALLOC_CONF but we have requested to profile the memory
     # of a specific pass, set some reasonable defaults
     if "MALLOC_PROFILE_PASS" in env and "MALLOC_CONF" not in env:
@@ -189,17 +209,89 @@ def maybe_addr2line(lines):
 
 def run_and_stream_stderr(args, env, pass_fds):
     proc = subprocess.Popen(args, env=env, pass_fds=pass_fds, stderr=subprocess.PIPE)
-    err_out = []
-    # Copy and stash the output.
-    for line in proc.stderr:
-        str_line = line.decode(sys.stdout.encoding)
-        sys.stderr.write(str_line)
-        err_out.append(str_line)
-        if len(err_out) > 1000:
-            err_out = err_out[100:]
-    returncode = proc.wait()
 
-    return (returncode, err_out)
+    def stream_and_return():
+        err_out = []
+        # Copy and stash the output.
+        for line in proc.stderr:
+            try:
+                str_line = line.decode(sys.stdout.encoding)
+            except UnicodeDecodeError:
+                str_line = "<UnicodeDecodeError>\n"
+            sys.stderr.write(str_line)
+            err_out.append(str_line)
+            if len(err_out) > 1000:
+                err_out = err_out[100:]
+
+        returncode = proc.wait()
+
+        return (returncode, err_out)
+
+    return (proc, stream_and_return)
+
+
+# Signal handlers.
+# A SIGINT handler gives the process some time to wait for redex to terminate
+# and symbolize a backtrace. The SIGINT handler uninstalls itself so that a
+# second SIGINT really kills redex.py and install a SIGALRM handler. The SIGALRM
+# handler either sends a SIGINT to redex, waits some more, or terminates
+# redex.py.
+class RedexState(enum.Enum):
+    UNSTARTED = 1
+    STARTED = 2
+    POSTPROCESSING = 3
+    FINISHED = 4
+
+
+class SigIntHandler:
+    def __init__(self):
+        self._old_handler = None
+        self._state = RedexState.UNSTARTED
+        self._proc = None
+
+    def install(self):
+        # On Linux, support ctrl-c.
+        # Note: must be on the main thread. Add checks. Portability is an issue.
+        if platform.system() != "Linux":
+            return
+
+        self._old_handler = signal.getsignal(signal.SIGINT)
+        signal.signal(signal.SIGINT, self._sigint_handler)
+
+    def uninstall(self):
+        if self._old_handler is not None:
+            signal.signal(signal.SIGINT, self._old_handler)
+
+    def set_state(self, new_state):
+        self._state = new_state
+
+    def set_proc(self, new_proc):
+        self._proc = new_proc
+
+    def _sigalrm_handler(self, _signum, _frame):
+        signal.signal(signal.SIGALRM, signal.SIG_DFL)
+        if self._state == RedexState.STARTED:
+            # Send SIGINT in case redex-all was not in the same process
+            # group and wait some more.
+            self._proc.send_signal(signal.SIGINT)
+            signal.alarm(3)
+            return
+        if self._state == RedexState.POSTPROCESSING:
+            # Maybe symbolization took a while. Give it some more time.
+            signal.alarm(3)
+            return
+        # Kill ourselves.
+        os.kill(os.getpid(), signal.SIGINT)
+
+    def _sigint_handler(self, _signum, _frame):
+        signal.signal(signal.SIGINT, self._old_handler)
+        if self._state == RedexState.UNSTARTED or self._state == RedexState.FINISHED:
+            os.kill(os.getpid(), signal.SIGINT)
+
+        # This is the first SIGINT, schedule some waiting period. redex-all is
+        # likely in the same process group and already got a SIGINT delivered.
+        signal.signal(signal.SIGALRM, self._sigalrm_handler)
+        signal.alarm(3)
 
 
 def run_redex_binary(state):
@@ -273,15 +365,15 @@ def run_redex_binary(state):
             state.args.output_ir,
         ]
 
-    if state.debugger == "lldb":
-        args = ["lldb", "--"] + args
-    elif state.debugger == "gdb":
-        args = ["gdb", "--args"] + args
-
+    prefix = (
+        dbg_prefix(state.debugger, state.args.debug_source_root)
+        if state.debugger is not None
+        else []
+    )
     start = timer()
 
     if state.args.debug:
-        print("cd %s && %s" % (os.getcwd(), " ".join(map(quote, args))))
+        print("cd %s && %s" % (os.getcwd(), " ".join(prefix + map(quote, args))))
         sys.exit()
 
     env = logger.setup_trace_for_child(os.environ)
@@ -289,35 +381,53 @@ def run_redex_binary(state):
 
     add_extra_environment_args(env)
 
-    # Our CI system occasionally fails because it is trying to write the
-    # redex-all binary when this tries to run.  This shouldn't happen, and
-    # might be caused by a JVM bug.  Anyways, let's retry and hope it stops.
-    for i in range(5):
+    def run():
+        sigint_handler = SigIntHandler()
+        sigint_handler.install()
+
         try:
-            returncode, err_out = run_and_stream_stderr(
-                args, env, (logger.trace_fp.fileno(),)
+            proc, handler = run_and_stream_stderr(
+                prefix + args, env, (logger.trace_fp.fileno(),)
             )
+            sigint_handler.set_proc(proc)
+            sigint_handler.set_state(RedexState.STARTED)
+
+            returncode, err_out = handler()
+
+            sigint_handler.set_state(RedexState.POSTPROCESSING)
+
             if returncode != 0:
                 # Check for crash traces.
                 maybe_addr2line(err_out)
 
-                script_filenames = write_debugger_commands(args)
-                raise RuntimeError(
-                    ("redex-all crashed with exit code %s! " % returncode)
-                    + (
-                        "You can re-run it "
-                        "under gdb by running %(gdb_script_name)s or under lldb "
-                        "by running %(lldb_script_name)s"
-                    )
-                    % script_filenames
+                gdb_script_name = write_debugger_command(
+                    "gdb", state.args.debug_source_root, args
                 )
-            break
+                lldb_script_name = write_debugger_command(
+                    "lldb", state.args.debug_source_root, args
+                )
+                raise RuntimeError(
+                    (
+                        "redex-all crashed with exit code {}! You can re-run it "
+                        + "under gdb by running {} or under lldb by running {}"
+                    ).format(returncode, gdb_script_name, lldb_script_name)
+                )
+            return True
         except OSError as err:
             if err.errno == errno.ETXTBSY:
-                if i < 4:
-                    time.sleep(5)
-                    continue
+                return False
             raise err
+        finally:
+            sigint_handler.set_state(RedexState.FINISHED)
+            sigint_handler.uninstall()
+
+    # Our CI system occasionally fails because it is trying to write the
+    # redex-all binary when this tries to run.  This shouldn't happen, and
+    # might be caused by a JVM bug.  Anyways, let's retry and hope it stops.
+    for _ in range(5):
+        if run():
+            break
+
     log("Dex processing finished in {:.2f} seconds".format(timer() - start))
 
 
@@ -656,6 +766,20 @@ Given an APK, produce a better APK!
         default="",
         help="Stop before stop_pass and dump intermediate dex and IR meta data to output_ir folder",
     )
+
+    parser.add_argument(
+        "--debug-source-root",
+        default=None,
+        nargs="?",
+        help="Root directory that all references to source files in debug information is given relative to.",
+    )
+
+    parser.add_argument(
+        "--always-clean-up",
+        action="store_true",
+        help="Clean up temporaries even under failure",
+    )
+
     return parser
 
 
@@ -859,7 +983,7 @@ def prepare_redex(args):
     # Move each dex to a separate temporary directory to be operated by
     # redex.
     dexen = move_dexen_to_directories(dex_dir, dex_glob(dex_dir))
-    for store in store_files:
+    for store in sorted(store_files):
         dexen.append(store)
     log("Unpacking APK finished in {:.2f} seconds".format(timer() - unpack_start_time))
 
@@ -987,7 +1111,6 @@ def run_redex(args):
         sys.exit()
 
     finalize_redex(state)
-    remove_temp_dirs()
 
 
 if __name__ == "__main__":
@@ -1002,4 +1125,4 @@ if __name__ == "__main__":
         pass
     args = arg_parser(**keys).parse_args()
     validate_args(args)
-    run_redex(args)
+    with_temp_cleanup(lambda: run_redex(args), args.always_clean_up)

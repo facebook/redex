@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -228,7 +228,7 @@ std::unordered_set<const DexFieldRef*> gather_read_static_fields(
 }
 
 void encode_values(DexClass* cls,
-                   FieldEnvironment field_env,
+                   const FieldEnvironment& field_env,
                    const std::unordered_set<const DexFieldRef*>& blacklist) {
   for (auto* field : cls->get_sfields()) {
     if (blacklist.count(field)) {
@@ -289,7 +289,7 @@ cp::WholeProgramState analyze_and_simplify_clinits(const Scope& scope) {
       // Delete the instructions rendered dead by the removal of those sputs.
       LocalDce(pure_methods).dce(code);
       // If the clinit is empty now, delete it.
-      if (is_trivial_clinit(clinit)) {
+      if (method::is_trivial_clinit(clinit)) {
         cls->remove_method(clinit);
       }
     }
@@ -495,7 +495,7 @@ bool get_ifields_read(
   }
   visited->emplace(method);
   if (method != nullptr) {
-    if (is_init(method) && parent_intf_set.count(method->get_class())) {
+    if (method::is_init(method) && parent_intf_set.count(method->get_class())) {
       // For call on its parent's ctor, no need to proceed.
       return true;
     }
@@ -654,8 +654,8 @@ cp::EligibleIfields gather_ifield_candidates(
   walk::fields(scope, [&](DexField* field) {
     // Collect non-final instance field candidates that are non external,
     // and can be deleted.
-    if (is_static(field) || field->is_external() ||
-        !can_delete_DEPRECATED(field) || is_volatile(field)) {
+    if (is_static(field) || field->is_external() || !can_delete(field) ||
+        is_volatile(field)) {
       return;
     }
     if (is_final(field)) {
@@ -678,8 +678,8 @@ cp::EligibleIfields gather_ifield_candidates(
       auto op = insn->opcode();
       if (is_iput(op)) {
         auto field = resolve_field(insn->get_field(), FieldSearch::Instance);
-        if (field == nullptr ||
-            (is_init(method) && method->get_class() == field->get_class())) {
+        if (field == nullptr || (method::is_init(method) &&
+                                 method->get_class() == field->get_class())) {
           // If couldn't resolve the field, or this method is this field's
           // class's init function, move on.
           continue;
@@ -718,7 +718,7 @@ size_t inline_final_gets(
     cp::FieldType field_type) {
   size_t inlined_count{0};
   walk::code(scope, [&](const DexMethod* method, IRCode& code) {
-    if (field_type == cp::FieldType::STATIC && is_clinit(method)) {
+    if (field_type == cp::FieldType::STATIC && method::is_clinit(method)) {
       return;
     }
     std::vector<std::pair<IRInstruction*, std::vector<IRInstruction*>>>
@@ -732,7 +732,7 @@ size_t inline_final_gets(
         if (field == nullptr || black_list_types.count(field->get_class())) {
           continue;
         }
-        if (field_type == cp::FieldType::INSTANCE && is_init(method) &&
+        if (field_type == cp::FieldType::INSTANCE && method::is_init(method) &&
             method->get_class() == field->get_class()) {
           // Don't propagate a field's value in ctors of its class with value
           // after ctor finished.
@@ -758,7 +758,7 @@ size_t inline_final_gets(
 
 } // namespace
 
-size_t FinalInlinePassV2::run(const Scope& scope, Config config) {
+size_t FinalInlinePassV2::run(const Scope& scope, const Config& config) {
   try {
     auto wps = final_inline::analyze_and_simplify_clinits(scope);
     return inline_final_gets(scope, wps, config.black_list_types,
@@ -772,7 +772,7 @@ size_t FinalInlinePassV2::run(const Scope& scope, Config config) {
 size_t FinalInlinePassV2::run_inline_ifields(
     const Scope& scope,
     const cp::EligibleIfields& eligible_ifields,
-    Config config) {
+    const Config& config) {
   auto wps = final_inline::analyze_and_simplify_inits(scope, eligible_ifields);
   return inline_final_gets(scope, wps, config.black_list_types,
                            cp::FieldType::INSTANCE);

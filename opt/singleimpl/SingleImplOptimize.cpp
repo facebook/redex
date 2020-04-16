@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -21,7 +21,6 @@
 #include "Resolver.h"
 #include "SingleImpl.h"
 #include "SingleImplDefs.h"
-#include "SingleImplUtil.h"
 #include "Trace.h"
 #include "TypeReference.h"
 #include "Walkers.h"
@@ -270,7 +269,7 @@ void OptimizationImpl::set_method_defs(const DexType* intf,
  */
 void OptimizationImpl::set_method_refs(const DexType* intf,
                                        const SingleImplData& data) {
-  for (auto mrefit : data.methodrefs) {
+  for (const auto& mrefit : data.methodrefs) {
     auto method = mrefit.first;
     TRACE(INTF, 3, "(MREF) update ref %s", SHOW(method));
     // next 2 lines will generate no new proto or method when the ref matches
@@ -518,21 +517,21 @@ void OptimizationImpl::rename_possible_collisions(const DexType* intf,
 
   TRACE(INTF, 9, "Changing name related to %s", SHOW(intf));
   for (const auto& meth : data.methoddefs) {
-    if (!can_rename_DEPRECATED(meth)) {
+    if (!can_rename(meth)) {
       TRACE(INTF, 9, "Changing name but cannot rename %s, give up", SHOW(meth));
       return;
     }
   }
 
   for (const auto& meth : data.methoddefs) {
-    if (is_constructor(meth)) continue;
+    if (method::is_constructor(meth)) continue;
     auto name = type_reference::new_name(meth);
     TRACE(INTF, 9, "Changing def name for %s to %s", SHOW(meth), SHOW(name));
     rename(meth, name);
   }
   for (const auto& refs_it : data.methodrefs) {
     if (refs_it.first->is_def()) continue;
-    always_assert(!is_init(refs_it.first));
+    always_assert(!method::is_init(refs_it.first));
     auto name = type_reference::new_name(refs_it.first);
     TRACE(INTF, 9, "Changing ref name for %s to %s", SHOW(refs_it.first),
           SHOW(name));

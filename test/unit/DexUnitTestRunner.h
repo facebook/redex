@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -33,11 +33,11 @@ class DexUnitTestRunner {
   DexClass* create_class(std::string name) {
     auto type = DexType::make_type(DexString::make_string(name));
     ClassCreator creator(type);
-    creator.set_super(get_object_type());
+    creator.set_super(type::java_lang_Object());
     auto cls = creator.create();
     auto clinit_name = DexString::make_string("<clinit>");
     auto void_args = DexTypeList::make_type_list({});
-    auto void_void = DexProto::make_proto(get_void_type(), void_args);
+    auto void_void = DexProto::make_proto(type::_void(), void_args);
     auto clinit = static_cast<DexMethod*>(
         DexMethod::make_method(type, clinit_name, void_void));
     clinit->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_CONSTRUCTOR, false);

@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -21,6 +21,7 @@
 #include "IRInstruction.h"
 #include "Inliner.h"
 #include "MethodOverrideGraph.h"
+#include "MethodProfiles.h"
 #include "ReachableClasses.h"
 #include "Resolver.h"
 #include "Walkers.h"
@@ -28,47 +29,6 @@
 namespace mog = method_override_graph;
 
 namespace {
-
-static bool can_inline_init(DexMethod* caller, IRCode& code) {
-  always_assert(is_init(caller));
-  // Check that there is no call to a super constructor, and no assignments to
-  // (non-inherited) instance fields before constructor call.
-  // (There not being such a super call implies that there must be a call to
-  // another constructor in the same class, unless the method doesn't return;
-  // calls to other constructors in the same class are inlinable.)
-  // The check doesn't take into account data-flow, i.e. whether the super
-  // constructor call and the field assignments are actually on the incoming
-  // receiver object. In that sense, this function is overly conservative, and
-  // there is room for futher improvement.
-  DexType* declaring_type = caller->get_class();
-  DexType* super_type = type_class(declaring_type)->get_super_class();
-  for (auto& mie : InstructionIterable(code)) {
-    IRInstruction* insn = mie.insn;
-    auto opcode = insn->opcode();
-
-    // give up if there's an assignment to a field of the declaring class
-    if (is_iput(opcode) && insn->get_field()->get_class() == declaring_type) {
-      return false;
-    }
-
-    // give up if there's a call to a constructor of the super class
-    if (opcode != OPCODE_INVOKE_DIRECT) {
-      continue;
-    }
-    DexMethod* callee =
-        resolve_method(insn->get_method(), MethodSearch::Direct);
-    if (callee == nullptr) {
-      return false;
-    }
-    if (!is_init(callee)) {
-      continue;
-    }
-    if (callee->get_class() == super_type) {
-      return false;
-    }
-  }
-  return true;
-}
 
 /**
  * Collect all non virtual methods and make all small methods candidates
@@ -100,9 +60,9 @@ std::unordered_set<DexMethod*> gather_non_virtual_methods(Scope& scope,
 
     direct_methods++;
     if (code == nullptr) direct_no_code++;
-    if (is_constructor(method)) {
+    if (method::is_constructor(method)) {
       (is_static(method)) ? clinit++ : init++;
-      if (is_clinit(method) || !can_inline_init(method, *code)) {
+      if (method::is_clinit(method)) {
         dont_inline = true;
       }
     } else {
@@ -152,15 +112,24 @@ std::unordered_set<DexMethod*> gather_non_virtual_methods(Scope& scope,
  */
 std::unordered_map<const DexMethod*, DexMethod*> get_same_implementation_map(
     const Scope& scope,
-    std::unique_ptr<const mog::Graph>& method_override_graph) {
+    const mog::Graph& method_override_graph,
+    std::unordered_map<const DexMethod*, size_t>* same_method_implementations) {
   std::unordered_map<const DexMethod*, DexMethod*> method_to_implementations;
   walk::methods(scope, [&](DexMethod* method) {
     if (method->is_external() || root(method) || !method->is_virtual() ||
         (!method->get_code() && !is_abstract(method))) {
       return;
     }
+    // Why can_rename? To mirror what VirtualRenamer looks at.
+    if (is_interface(type_class(method->get_class())) &&
+        (root(method) || !can_rename(method))) {
+      // We cannot rule out that there are dynamically added classes, possibly
+      // even created at runtime via Proxy.newProxyInstance, that override this
+      // method. So we assume the worst.
+      return;
+    }
     const auto& overriding_methods =
-        mog::get_overriding_methods(*method_override_graph, method);
+        mog::get_overriding_methods(method_override_graph, method);
     if (overriding_methods.size() == 0) {
       return;
     }
@@ -170,9 +139,9 @@ std::unordered_map<const DexMethod*, DexMethod*> get_same_implementation_map(
       if (is_abstract(overriding_method)) {
         continue;
       }
-      if (!overriding_method->get_code()) {
+      if (!overriding_method->get_code() || root(overriding_method)) {
         // If the method is not abstract method and it doesn't have
-        // implementation, we bail out.
+        // implementation or is root, we bail out.
         return;
       }
       filtered_methods.emplace(overriding_method);
@@ -193,9 +162,18 @@ std::unordered_map<const DexMethod*, DexMethod*> get_same_implementation_map(
     };
     if (std::all_of(std::next(filtered_methods.begin()), filtered_methods.end(),
                     compare_method_ir)) {
-      method_to_implementations[method] = comparing_method;
+      auto update_method_to_implementations =
+          [&](const DexMethod* method_to_update,
+              DexMethod* representative_method) {
+            method_to_implementations[method_to_update] = representative_method;
+            if (filtered_methods.size() > 1) {
+              auto& count = (*same_method_implementations)[method_to_update];
+              count = std::max(count, filtered_methods.size());
+            }
+          };
+      update_method_to_implementations(method, comparing_method);
       for (auto overriding_method : overriding_methods) {
-        method_to_implementations[overriding_method] = comparing_method;
+        update_method_to_implementations(overriding_method, comparing_method);
       }
     }
   });
@@ -212,13 +190,15 @@ using CallerInsns =
  * We are currently ruling out candidates that access field/methods or
  * return an object type.
  */
-void gather_true_virtual_methods(const Scope& scope,
-                                 CalleeCallerInsns* true_virtual_callers,
-                                 std::unordered_set<DexMethod*>* methods) {
+void gather_true_virtual_methods(
+    const Scope& scope,
+    CalleeCallerInsns* true_virtual_callers,
+    std::unordered_set<DexMethod*>* methods,
+    std::unordered_map<const DexMethod*, size_t>* same_method_implementations) {
   auto method_override_graph = mog::build_graph(scope);
   auto non_virtual = mog::get_non_true_virtuals(*method_override_graph, scope);
-  auto same_implementation_map =
-      get_same_implementation_map(scope, method_override_graph);
+  auto same_implementation_map = get_same_implementation_map(
+      scope, *method_override_graph, same_method_implementations);
   std::unordered_set<DexMethod*> non_virtual_set{non_virtual.begin(),
                                                  non_virtual.end()};
   // Add mapping from callee to monomorphic callsites.
@@ -297,8 +277,8 @@ void gather_true_virtual_methods(const Scope& scope,
     always_assert(callee->get_code());
     // Not considering candidates that accessed type in their method body
     // or returning a non primitive type.
-    if (!is_primitive(
-            get_element_type_if_array(callee->get_proto()->get_rtype()))) {
+    if (!type::is_primitive(type::get_element_type_if_array(
+            callee->get_proto()->get_rtype()))) {
       return;
     }
     for (auto& mie : InstructionIterable(callee->get_code())) {
@@ -317,8 +297,9 @@ void gather_true_virtual_methods(const Scope& scope,
 namespace inliner {
 void run_inliner(DexStoresVector& stores,
                  PassManager& mgr,
-                 const InlinerConfig& inliner_config,
-                 bool intra_dex /*false*/) {
+                 ConfigFiles& conf,
+                 bool intra_dex /* false */,
+                 bool use_method_profiles /* false */) {
   if (mgr.no_proguard_rules()) {
     TRACE(INLINE, 1,
           "MethodInlinePass not run because no ProGuard configuration was "
@@ -328,11 +309,34 @@ void run_inliner(DexStoresVector& stores,
   auto scope = build_class_scope(stores);
   CalleeCallerInsns true_virtual_callers;
   // Gather all inlinable candidates.
+  auto inliner_config = conf.get_inliner_config();
+
+  using MethodStats =
+      const std::unordered_map<const DexMethodRef*, method_profiles::Stats>;
+  MethodStats method_profile_stats =
+      use_method_profiles ? conf.get_method_profiles().method_stats()
+                          : MethodStats{};
+  if (use_method_profiles && method_profile_stats.empty()) {
+    // PerfMethodInline is enabled, but there are no profiles available. Bail,
+    // don't run a regular inline pass.
+    return;
+  }
+  if (use_method_profiles) {
+    inliner_config.shrink_other_methods = false;
+  }
+
   auto methods =
       gather_non_virtual_methods(scope, inliner_config.virtual_inline);
 
+  // The methods list computed above includes all constructors, regardless of
+  // whether it's safe to inline them or not. We'll let the inliner decide
+  // what to do with constructors.
+  bool analyze_and_prune_inits = true;
+
+  std::unordered_map<const DexMethod*, size_t> same_method_implementations;
   if (inliner_config.virtual_inline && inliner_config.true_virtual_inline) {
-    gather_true_virtual_methods(scope, &true_virtual_callers, &methods);
+    gather_true_virtual_methods(scope, &true_virtual_callers, &methods,
+                                &same_method_implementations);
   }
   // keep a map from refs to defs or nullptr if no method was found
   MethodRefCache resolved_refs;
@@ -348,7 +352,9 @@ void run_inliner(DexStoresVector& stores,
   // inline candidates
   MultiMethodInliner inliner(scope, stores, methods, resolver, inliner_config,
                              intra_dex ? IntraDex : InterDex,
-                             true_virtual_callers);
+                             true_virtual_callers, method_profile_stats,
+                             same_method_implementations,
+                             analyze_and_prune_inits);
   inliner.inline_methods();
 
   if (inliner_config.use_cfg_inliner) {
@@ -359,6 +365,12 @@ void run_inliner(DexStoresVector& stores,
   // delete all methods that can be deleted
   auto inlined = inliner.get_inlined();
   size_t inlined_count = inlined.size();
+  size_t inlined_init_count = 0;
+  for (DexMethod* m : inlined) {
+    if (method::is_init(m)) {
+      inlined_init_count++;
+    }
+  }
 
   // Do not erase true virtual methods that are inlined because we are only
   // inlining callsites that are monomorphic, for polymorphic callsite we
@@ -368,33 +380,83 @@ void run_inliner(DexStoresVector& stores,
   for (const auto& pair : true_virtual_callers) {
     inlined.erase(pair.first);
   }
-  size_t deleted = delete_methods(scope, inlined, resolver);
+  ConcurrentSet<DexMethod*>& delayed_make_static =
+      inliner.get_delayed_make_static();
+  size_t deleted =
+      delete_methods(scope, inlined, delayed_make_static, resolver);
 
   TRACE(INLINE, 3, "recursive %ld", inliner.get_info().recursive);
-  TRACE(INLINE, 3, "blacklisted meths %ld", inliner.get_info().blacklisted);
-  TRACE(INLINE, 3, "virtualizing methods %ld", inliner.get_info().need_vmethod);
-  TRACE(INLINE, 3, "invoke super %ld", inliner.get_info().invoke_super);
-  TRACE(INLINE, 3, "override inputs %ld", inliner.get_info().write_over_ins);
-  TRACE(INLINE, 3, "escaped virtual %ld", inliner.get_info().escaped_virtual);
+  TRACE(INLINE, 3, "max_call_stack_depth %ld",
+        inliner.get_info().max_call_stack_depth);
+  TRACE(INLINE, 3, "waited seconds %ld", inliner.get_info().waited_seconds);
+  TRACE(INLINE, 3, "blacklisted meths %ld",
+        (size_t)inliner.get_info().blacklisted);
+  TRACE(INLINE, 3, "virtualizing methods %ld",
+        (size_t)inliner.get_info().need_vmethod);
+  TRACE(INLINE, 3, "invoke super %ld", (size_t)inliner.get_info().invoke_super);
+  TRACE(INLINE, 3, "escaped virtual %ld",
+        (size_t)inliner.get_info().escaped_virtual);
   TRACE(INLINE, 3, "known non public virtual %ld",
-        inliner.get_info().non_pub_virtual);
-  TRACE(INLINE, 3, "non public ctor %ld", inliner.get_info().non_pub_ctor);
-  TRACE(INLINE, 3, "unknown field %ld", inliner.get_info().escaped_field);
-  TRACE(INLINE, 3, "non public field %ld", inliner.get_info().non_pub_field);
-  TRACE(INLINE, 3, "throws %ld", inliner.get_info().throws);
-  TRACE(INLINE, 3, "multiple returns %ld", inliner.get_info().multi_ret);
+        (size_t)inliner.get_info().non_pub_virtual);
+  TRACE(INLINE, 3, "non public ctor %ld",
+        (size_t)inliner.get_info().non_pub_ctor);
+  TRACE(INLINE, 3, "unknown field %ld",
+        (size_t)inliner.get_info().escaped_field);
+  TRACE(INLINE, 3, "non public field %ld",
+        (size_t)inliner.get_info().non_pub_field);
+  TRACE(INLINE, 3, "throws %ld", (size_t)inliner.get_info().throws);
+  TRACE(INLINE, 3, "multiple returns %ld",
+        (size_t)inliner.get_info().multi_ret);
   TRACE(INLINE, 3, "references cross stores %ld",
-        inliner.get_info().cross_store);
-  TRACE(INLINE, 3, "not found %ld", inliner.get_info().not_found);
-  TRACE(INLINE, 3, "caller too large %ld", inliner.get_info().caller_too_large);
+        (size_t)inliner.get_info().cross_store);
+  TRACE(INLINE, 3, "not found %ld", (size_t)inliner.get_info().not_found);
+  TRACE(INLINE, 3, "caller too large %ld",
+        (size_t)inliner.get_info().caller_too_large);
+  TRACE(INLINE, 3, "inlined ctors %zu", inlined_init_count);
   TRACE(INLINE, 1, "%ld inlined calls over %ld methods and %ld methods removed",
-        inliner.get_info().calls_inlined, inlined_count, deleted);
+        (size_t)inliner.get_info().calls_inlined, inlined_count, deleted);
 
+  mgr.incr_metric("recursive", inliner.get_info().recursive);
+  mgr.incr_metric("max_call_stack_depth",
+                  inliner.get_info().max_call_stack_depth);
+  mgr.incr_metric("caller_too_large", inliner.get_info().caller_too_large);
+  mgr.incr_metric("inlined_init_count", inlined_init_count);
   mgr.incr_metric("calls_inlined", inliner.get_info().calls_inlined);
   mgr.incr_metric("methods_removed", deleted);
   mgr.incr_metric("escaped_virtual", inliner.get_info().escaped_virtual);
   mgr.incr_metric("unresolved_methods", inliner.get_info().unresolved_methods);
   mgr.incr_metric("known_public_methods",
                   inliner.get_info().known_public_methods);
+  mgr.incr_metric("constant_invoke_callers_analyzed",
+                  inliner.get_info().constant_invoke_callers_analyzed);
+  mgr.incr_metric(
+      "constant_invoke_callers_unreachable_blocks",
+      inliner.get_info().constant_invoke_callers_unreachable_blocks);
+  mgr.incr_metric("constant_invoke_callees_analyzed",
+                  inliner.get_info().constant_invoke_callees_analyzed);
+  mgr.incr_metric(
+      "constant_invoke_callees_unreachable_blocks",
+      inliner.get_info().constant_invoke_callees_unreachable_blocks);
+  mgr.incr_metric("critical_path_length",
+                  inliner.get_info().critical_path_length);
+  mgr.incr_metric("methods_shrunk", inliner.get_methods_shrunk());
+  mgr.incr_metric("callers", inliner.get_callers());
+  mgr.incr_metric("delayed_shrinking_callees",
+                  inliner.get_delayed_shrinking_callees());
+  mgr.incr_metric("instructions_eliminated_const_prop",
+                  inliner.get_const_prop_stats().branches_removed +
+                      inliner.get_const_prop_stats().materialized_consts +
+                      inliner.get_const_prop_stats().added_param_const +
+                      inliner.get_const_prop_stats().throws);
+  mgr.incr_metric("instructions_eliminated_cse",
+                  inliner.get_cse_stats().instructions_eliminated);
+  mgr.incr_metric("instructions_eliminated_copy_prop",
+                  inliner.get_copy_prop_stats().moves_eliminated);
+  mgr.incr_metric(
+      "instructions_eliminated_localdce",
+      inliner.get_local_dce_stats().dead_instruction_count +
+          inliner.get_local_dce_stats().unreachable_instruction_count);
+  mgr.incr_metric("blocks_eliminated_by_dedup_blocks",
+                  inliner.get_dedup_blocks_stats().blocks_removed);
 }
 } // namespace inliner

@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -483,8 +483,8 @@ std::string DexMethod::get_simple_deobfuscated_name() const {
     // This comes up for redex-created methods.
     return std::string(c_str());
   }
-  auto dot_pos = full_name.find(".");
-  auto colon_pos = full_name.find(":");
+  auto dot_pos = full_name.find('.');
+  auto colon_pos = full_name.find(':');
   if (dot_pos == std::string::npos || colon_pos == std::string::npos) {
     return full_name;
   }
@@ -726,9 +726,10 @@ void DexClass::load_class_data_item(DexIdx* idx,
   }
 
   std::unordered_set<DexMethod*> method_pointer_cache;
+  method_pointer_cache.reserve(dmethod_count + vmethod_count);
 
-  ndex = 0;
-  for (uint32_t i = 0; i < dmethod_count; i++) {
+  auto process_method = [this, &encd, &idx, &method_pointer_cache](
+                            uint32_t& ndex, bool is_virtual) {
     ndex += read_uleb128(&encd);
     auto access_flags = (DexAccessFlags)read_uleb128(&encd);
     uint32_t code_off = read_uleb128(&encd);
@@ -738,33 +739,27 @@ void DexClass::load_class_data_item(DexIdx* idx,
     if (dc && dc->get_debug_item()) {
       dc->get_debug_item()->bind_positions(dm, m_source_file);
     }
-    dm->make_concrete(access_flags, std::move(dc), false);
+    dm->make_concrete(access_flags, std::move(dc), is_virtual);
 
-    assert_or_throw(
-        method_pointer_cache.count(dm) == 0, RedexError::DUPLICATE_METHODS,
-        "Found duplicate methods in the same class.", {{"method", SHOW(dm)}});
+    const auto& pair = method_pointer_cache.insert(dm);
+    bool insertion_happened = pair.second;
+    always_assert_type_log(insertion_happened, RedexError::DUPLICATE_METHODS,
+                           "Found duplicate methods in the same class. %s",
+                           SHOW(dm));
 
-    method_pointer_cache.insert(dm);
+    return dm;
+  };
+
+  m_dmethods.reserve(dmethod_count);
+  ndex = 0;
+  for (uint32_t i = 0; i < dmethod_count; i++) {
+    DexMethod* dm = process_method(ndex, false);
     m_dmethods.push_back(dm);
   }
+  m_vmethods.reserve(vmethod_count);
   ndex = 0;
   for (uint32_t i = 0; i < vmethod_count; i++) {
-    ndex += read_uleb128(&encd);
-    auto access_flags = (DexAccessFlags)read_uleb128(&encd);
-    uint32_t code_off = read_uleb128(&encd);
-    // Find method in method index, returns same pointer for same method.
-    DexMethod* dm = static_cast<DexMethod*>(idx->get_methodidx(ndex));
-    auto dc = DexCode::get_dex_code(idx, code_off);
-    if (dc && dc->get_debug_item()) {
-      dc->get_debug_item()->bind_positions(dm, m_source_file);
-    }
-    dm->make_concrete(access_flags, std::move(dc), true);
-
-    assert_or_throw(
-        method_pointer_cache.count(dm) == 0, RedexError::DUPLICATE_METHODS,
-        "Found duplicate methods in the same class.", {{"method", SHOW(dm)}});
-
-    method_pointer_cache.insert(dm);
+    DexMethod* dm = process_method(ndex, true);
     m_vmethods.push_back(dm);
   }
 }
@@ -1063,8 +1058,7 @@ DexClass::DexClass(DexIdx* idx,
       m_anno(nullptr),
       m_external(false),
       m_perf_sensitive(false),
-      m_location(location) {
-}
+      m_location(location) {}
 
 void DexTypeList::gather_types(std::vector<DexType*>& ltype) const {
   for (auto const& type : m_list) {
@@ -1074,10 +1068,10 @@ void DexTypeList::gather_types(std::vector<DexType*>& ltype) const {
 
 static DexString* make_shorty(const DexType* rtype, const DexTypeList* args) {
   std::string s;
-  s.push_back(type_shorty(rtype));
+  s.push_back(type::type_shorty(rtype));
   if (args != nullptr) {
     for (auto arg : args->get_type_list()) {
-      s.push_back(type_shorty(arg));
+      s.push_back(type::type_shorty(arg));
     }
   }
   return DexString::make_string(s);
@@ -1105,11 +1099,9 @@ void DexProto::gather_strings(std::vector<DexString*>& lstring) const {
 
 void DexClass::gather_types(std::vector<DexType*>& ltype) const {
   for (auto const& m : m_dmethods) {
-    m->gather_types_shallow(ltype);
     m->gather_types(ltype);
   }
   for (auto const& m : m_vmethods) {
-    m->gather_types_shallow(ltype);
     m->gather_types(ltype);
   }
   for (auto const& f : m_sfields) {
@@ -1227,6 +1219,25 @@ DexMethod* DexClass::find_method_from_simple_deobfuscated_name(
   return nullptr;
 }
 
+void DexClass::gather_callsites(std::vector<DexCallSite*>& lcallsite) const {
+  for (auto const& m : m_dmethods) {
+    m->gather_callsites(lcallsite);
+  }
+  for (auto const& m : m_vmethods) {
+    m->gather_callsites(lcallsite);
+  }
+}
+
+void DexClass::gather_methodhandles(
+    std::vector<DexMethodHandle*>& lmethodhandle) const {
+  for (auto const& m : m_dmethods) {
+    m->gather_methodhandles(lmethodhandle);
+  }
+  for (auto const& m : m_vmethods) {
+    m->gather_methodhandles(lmethodhandle);
+  }
+}
+
 void DexFieldRef::gather_types_shallow(std::vector<DexType*>& ltype) const {
   ltype.push_back(m_spec.cls);
   ltype.push_back(m_spec.type);
@@ -1258,7 +1269,7 @@ void DexField::gather_methods(std::vector<DexMethodRef*>& lmethod) const {
 }
 
 void DexMethod::gather_types(std::vector<DexType*>& ltype) const {
-  // We handle m_spec.cls and proto in the first-layer gather.
+  gather_types_shallow(ltype); // Handle DexMethodRef parts.
   if (m_code) m_code->gather_types(ltype);
   if (m_anno) m_anno->gather_types(ltype);
   auto param_anno = get_param_anno();
@@ -1270,6 +1281,16 @@ void DexMethod::gather_types(std::vector<DexType*>& ltype) const {
   }
 }
 
+void DexMethod::gather_callsites(std::vector<DexCallSite*>& lcallsite) const {
+  // We handle m_spec.cls and proto in the first-layer gather.
+  if (m_code) m_code->gather_callsites(lcallsite);
+}
+
+void DexMethod::gather_methodhandles(
+    std::vector<DexMethodHandle*>& lmethodhandle) const {
+  // We handle m_spec.cls and proto in the first-layer gather.
+  if (m_code) m_code->gather_methodhandles(lmethodhandle);
+}
 void DexMethod::gather_strings(std::vector<DexString*>& lstring,
                                bool exclude_loads) const {
   // We handle m_name and proto in the first-layer gather.
@@ -1358,12 +1379,12 @@ DexProto* DexType::get_non_overlapping_proto(DexString* method_name,
   for (auto t : type_list) {
     new_arg_list.push_back(t);
   }
-  new_arg_list.push_back(get_int_type());
+  new_arg_list.push_back(type::_int());
   DexTypeList* new_args = DexTypeList::make_type_list(std::move(new_arg_list));
   DexProto* new_proto = DexProto::make_proto(rtype, new_args);
   methodref_in_context = DexMethod::get_method(this, method_name, new_proto);
   while (methodref_in_context) {
-    new_arg_list.push_back(get_int_type());
+    new_arg_list.push_back(type::_int());
     new_args = DexTypeList::make_type_list(std::move(new_arg_list));
     new_proto = DexProto::make_proto(rtype, new_args);
     methodref_in_context = DexMethod::get_method(this, method_name, new_proto);
@@ -1391,6 +1412,8 @@ void IRInstruction::gather_types(std::vector<DexType*>& ltype) const {
   case opcode::Ref::String:
   case opcode::Ref::Literal:
   case opcode::Ref::Data:
+  case opcode::Ref::CallSite:
+  case opcode::Ref::MethodHandle:
     break;
 
   case opcode::Ref::Type:
@@ -1411,6 +1434,8 @@ void gather_components(std::vector<DexString*>& lstring,
                        std::vector<DexType*>& ltype,
                        std::vector<DexFieldRef*>& lfield,
                        std::vector<DexMethodRef*>& lmethod,
+                       std::vector<DexCallSite*>& lcallsite,
+                       std::vector<DexMethodHandle*>& lmethodhandle,
                        const DexClasses& classes,
                        bool exclude_loads) {
   // Gather references reachable from each class.
@@ -1419,11 +1444,15 @@ void gather_components(std::vector<DexString*>& lstring,
     cls->gather_types(ltype);
     cls->gather_fields(lfield);
     cls->gather_methods(lmethod);
+    cls->gather_callsites(lcallsite);
+    cls->gather_methodhandles(lmethodhandle);
   }
 
   // Remove duplicates to speed up the later loops.
   sort_unique(lstring);
   sort_unique(ltype);
+  sort_unique(lmethodhandle);
+  sort_unique(lcallsite);
 
   // Gather types and strings needed for field and method refs.
   sort_unique(lmethod);

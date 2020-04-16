@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -12,6 +12,8 @@
 #include "Timer.h"
 
 namespace {
+
+static const TypeSet empty_set{};
 
 inline bool match(const DexString* name,
                   const DexProto* proto,
@@ -50,7 +52,7 @@ void build_class_hierarchy(ClassHierarchy& hierarchy, const DexClass* cls) {
   if (super != nullptr) {
     hierarchy[super].insert(type);
   } else {
-    always_assert_log(cls->get_type() == get_object_type(),
+    always_assert_log(cls->get_type() == type::java_lang_Object(),
                       SHOW(cls->get_type()));
   }
 }
@@ -128,6 +130,12 @@ InterfaceMap build_interface_map(const ClassHierarchy& hierarchy) {
     build_interface_map(interfaces, hierarchy, cls, implementors);
   }
   return interfaces;
+}
+
+const TypeSet& get_children(const ClassHierarchy& hierarchy,
+                            const DexType* type) {
+  const auto& it = hierarchy.find(type);
+  return it != hierarchy.end() ? it->second : empty_set;
 }
 
 void get_all_children(const ClassHierarchy& hierarchy,

@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -289,7 +289,7 @@ TEST_F(PreVerify, PrivatesUsedArgs) {
   bool three_args_method = false;
 
   for (auto dmethod : dmethods) {
-    if (!is_constructor(dmethod)) {
+    if (!method::is_constructor(dmethod)) {
       auto num_args = dmethod->get_proto()->get_args()->get_type_list().size();
       if (num_args == 2) {
         two_args_method = true;
@@ -318,7 +318,7 @@ TEST_F(PostVerify, PrivatesUsedArgs) {
 
   std::vector<DexMethod*> overloaded_methods;
   for (auto dmethod : dmethods) {
-    if (!is_constructor(dmethod)) {
+    if (!method::is_constructor(dmethod)) {
       auto num_args = dmethod->get_proto()->get_args()->get_type_list().size();
       EXPECT_EQ(num_args, 2);
       overloaded_methods.emplace_back(dmethod);

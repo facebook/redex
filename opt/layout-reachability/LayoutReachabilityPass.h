@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -11,7 +11,7 @@
 #include "PassManager.h"
 
 class LayoutReachabilityPass : Pass {
-public:
+ public:
   LayoutReachabilityPass() : Pass("LayoutReachabilityPass") {}
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;

@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -9,6 +9,7 @@
 
 #include <gtest/gtest.h>
 #include <iterator>
+#include <utility>
 
 #include "ControlFlow.h"
 #include "DexAsm.h"
@@ -22,12 +23,13 @@ namespace {
 
 using namespace check_casts;
 
-void run_passes(std::vector<Pass*> passes, std::vector<DexClass*> classes) {
+void run_passes(const std::vector<Pass*>& passes,
+                std::vector<DexClass*> classes) {
   std::vector<DexStore> stores;
   DexMetadata dm;
   dm.set_id("classes");
   DexStore store(dm);
-  store.add_classes(classes);
+  store.add_classes(std::move(classes));
   stores.emplace_back(std::move(store));
   PassManager manager(passes);
   manager.set_testing_mode();
@@ -56,25 +58,25 @@ struct RemoveRedundantCheckCastsTest : public RedexTest {
     std::vector<DexType*> no_interfaces;
 
     DexType* i_c_type = DexType::make_type("I_C;");
-    DexClass* i_c_cls = create_class(i_c_type, get_object_type(), no_interfaces,
-                                     ACC_PUBLIC | ACC_INTERFACE);
+    DexClass* i_c_cls = create_class(i_c_type, type::java_lang_Object(),
+                                     no_interfaces, ACC_PUBLIC | ACC_INTERFACE);
     m_classes.push_back(i_c_cls);
 
     std::vector<DexType*> c_interfaces{i_c_type};
     DexType* c_type = DexType::make_type("C;");
-    DexClass* c_cls =
-        create_class(c_type, get_object_type(), c_interfaces, ACC_PUBLIC);
+    DexClass* c_cls = create_class(c_type, type::java_lang_Object(),
+                                   c_interfaces, ACC_PUBLIC);
     m_classes.push_back(c_cls);
 
     DexType* i_b0_type = DexType::make_type("I_B0;");
     DexClass* i_b0_cls =
-        create_class(i_b0_type, get_object_type(), no_interfaces,
+        create_class(i_b0_type, type::java_lang_Object(), no_interfaces,
                      ACC_PUBLIC | ACC_INTERFACE);
     m_classes.push_back(i_b0_cls);
 
     DexType* i_b1_type = DexType::make_type("I_B1;");
     DexClass* i_b1_cls =
-        create_class(i_b1_type, get_object_type(), no_interfaces,
+        create_class(i_b1_type, type::java_lang_Object(), no_interfaces,
                      ACC_PUBLIC | ACC_INTERFACE);
     m_classes.push_back(i_b1_cls);
 
@@ -84,8 +86,8 @@ struct RemoveRedundantCheckCastsTest : public RedexTest {
     m_classes.push_back(b_cls);
 
     DexType* i_a_type = DexType::make_type("I_A;");
-    DexClass* i_a_cls = create_class(i_a_type, get_object_type(), no_interfaces,
-                                     ACC_PUBLIC | ACC_INTERFACE);
+    DexClass* i_a_cls = create_class(i_a_type, type::java_lang_Object(),
+                                     no_interfaces, ACC_PUBLIC | ACC_INTERFACE);
     m_classes.push_back(i_a_cls);
 
     std::vector<DexType*> a_interfaces{i_a_type};
@@ -97,7 +99,8 @@ struct RemoveRedundantCheckCastsTest : public RedexTest {
   void add_testing_class() {
     std::vector<DexType*> no_interfaces;
     DexType* type = DexType::make_type("testClass");
-    m_cls = create_class(type, get_object_type(), no_interfaces, ACC_PUBLIC);
+    m_cls =
+        create_class(type, type::java_lang_Object(), no_interfaces, ACC_PUBLIC);
     m_classes.push_back(m_cls);
   }
 
@@ -106,7 +109,7 @@ struct RemoveRedundantCheckCastsTest : public RedexTest {
     add_testing_class();
 
     m_args = DexTypeList::make_type_list({});
-    m_proto = DexProto::make_proto(get_void_type(), m_args);
+    m_proto = DexProto::make_proto(type::_void(), m_args);
   }
 
   DexMethod* create_empty_method(const std::string& name) {
@@ -137,6 +140,7 @@ TEST_F(RemoveRedundantCheckCastsTest, simplestCase) {
     (
       (new-instance "C;")
       (move-result-pseudo-object v0)
+      (invoke-direct (v0) "C;.<init>:()V")
       (check-cast v0 "C;")
       (move-result-pseudo-object v0)
     )
@@ -151,6 +155,7 @@ TEST_F(RemoveRedundantCheckCastsTest, simplestCase) {
     (
       (new-instance "C;")
       (move-result-pseudo-object v0)
+      (invoke-direct (v0) "C;.<init>:()V")
     )
   )";
   auto expected_code = assembler::ircode_from_string(expected_str);
@@ -191,6 +196,7 @@ TEST_F(RemoveRedundantCheckCastsTest, parentCheckCast) {
     (
       (new-instance "A;")
       (move-result-pseudo-object v0)
+      (invoke-direct (v0) "A;.<init>:()V")
       (check-cast v0 "B;")
       (move-result-pseudo-object v0)
     )
@@ -205,6 +211,7 @@ TEST_F(RemoveRedundantCheckCastsTest, parentCheckCast) {
     (
       (new-instance "A;")
       (move-result-pseudo-object v0)
+      (invoke-direct (v0) "A;.<init>:()V")
     )
   )";
   auto expected_code = assembler::ircode_from_string(expected_str);
@@ -219,6 +226,7 @@ TEST_F(RemoveRedundantCheckCastsTest, skipParentCheckCast) {
     (
       (new-instance "A;")
       (move-result-pseudo-object v0)
+      (invoke-direct (v0) "A;.<init>:()V")
       (check-cast v0 "C;")
       (move-result-pseudo-object v0)
     )
@@ -233,6 +241,7 @@ TEST_F(RemoveRedundantCheckCastsTest, skipParentCheckCast) {
     (
       (new-instance "A;")
       (move-result-pseudo-object v0)
+      (invoke-direct (v0) "A;.<init>:()V")
     )
   )";
   auto expected_code = assembler::ircode_from_string(expected_str);
@@ -247,6 +256,7 @@ TEST_F(RemoveRedundantCheckCastsTest, subclassCheckCast) {
     (
       (new-instance "C;")
       (move-result-pseudo-object v0)
+      (invoke-direct (v0) "C;.<init>:()V")
       (check-cast v0 "B;")
       (move-result-pseudo-object v0)
     )
@@ -261,6 +271,7 @@ TEST_F(RemoveRedundantCheckCastsTest, subclassCheckCast) {
     (
       (new-instance "C;")
       (move-result-pseudo-object v0)
+      (invoke-direct (v0) "C;.<init>:()V")
       (check-cast v0 "B;")
       (move-result-pseudo-object v0)
     )
@@ -277,6 +288,7 @@ TEST_F(RemoveRedundantCheckCastsTest, directInterfaceCheckCast_WithMove) {
     (
       (new-instance "B;")
       (move-result-pseudo-object v0)
+      (invoke-direct (v0) "B;.<init>:()V")
       (check-cast v0 "I_B0;")
       (move-result-pseudo-object v1)
     )
@@ -291,6 +303,7 @@ TEST_F(RemoveRedundantCheckCastsTest, directInterfaceCheckCast_WithMove) {
     (
       (new-instance "B;")
       (move-result-pseudo-object v0)
+      (invoke-direct (v0) "B;.<init>:()V")
       (move-object v1 v0)
     )
   )";
@@ -306,6 +319,7 @@ TEST_F(RemoveRedundantCheckCastsTest, parentInterfaceCheckCast_WithMove) {
     (
       (new-instance "B;")
       (move-result-pseudo-object v0)
+      (invoke-direct (v0) "B;.<init>:()V")
       (check-cast v0 "I_C;")
       (move-result-pseudo-object v1)
     )
@@ -320,6 +334,7 @@ TEST_F(RemoveRedundantCheckCastsTest, parentInterfaceCheckCast_WithMove) {
     (
       (new-instance "B;")
       (move-result-pseudo-object v0)
+      (invoke-direct (v0) "B;.<init>:()V")
       (move-object v1 v0)
     )
   )";
@@ -339,15 +354,18 @@ TEST_F(RemoveRedundantCheckCastsTest, sameTypeInterfaceCheckCast) {
       (if-eqz v0 :lb0)
       (new-instance "B;")
       (move-result-pseudo-object v1)
+      (invoke-direct (v1) "B;.<init>:()V")
       (goto :lb1)
 
       (:lb0)
       (new-instance "B;")
       (move-result-pseudo-object v1)
+      (invoke-direct (v1) "B;.<init>:()V")
 
       (:lb1)
       (check-cast v1 "I_C;")
       (move-result-pseudo-object v1)
+      (return-void)
     )
   )";
 
@@ -361,16 +379,17 @@ TEST_F(RemoveRedundantCheckCastsTest, sameTypeInterfaceCheckCast) {
       (const v1 0)
       (const v0 0)
 
-      (if-eqz v0 :lb0)
+      (if-eqz v0 :lb1)
       (new-instance "B;")
       (move-result-pseudo-object v1)
-      (goto :lb1)
-
+      (invoke-direct (v1) "B;.<init>:()V")
       (:lb0)
+      (return-void)
+      (:lb1)
       (new-instance "B;")
       (move-result-pseudo-object v1)
-
-      (:lb1)
+      (invoke-direct (v1) "B;.<init>:()V")
+      (goto :lb0)
     )
   )";
   auto expected_code = assembler::ircode_from_string(expected_str);
@@ -389,15 +408,18 @@ TEST_F(RemoveRedundantCheckCastsTest, differentTypeInterfaceCheckCast) {
       (if-eqz v0 :lb0)
       (new-instance "B;")
       (move-result-pseudo-object v1)
+      (invoke-direct (v1) "B;.<init>:()V")
       (goto :lb1)
 
       (:lb0)
       (new-instance "A;")
       (move-result-pseudo-object v1)
+      (invoke-direct (v1) "A;.<init>:()V")
 
       (:lb1)
       (check-cast v1 "I_C;")
       (move-result-pseudo-object v1)
+      (return-void)
     )
   )";
 
@@ -411,16 +433,19 @@ TEST_F(RemoveRedundantCheckCastsTest, differentTypeInterfaceCheckCast) {
       (const v1 0)
       (const v0 0)
 
-      (if-eqz v0 :lb0)
+      (if-eqz v0 :lb1)
       (new-instance "B;")
       (move-result-pseudo-object v1)
-      (goto :lb1)
-
+      (invoke-direct (v1) "B;.<init>:()V")
       (:lb0)
+      (check-cast v1 "I_C;")
+      (move-result-pseudo-object v1)
+      (return-void)
+      (:lb1)
       (new-instance "A;")
       (move-result-pseudo-object v1)
-
-      (:lb1)
+      (invoke-direct (v1) "A;.<init>:()V")
+      (goto :lb0)
     )
   )";
   auto expected_code = assembler::ircode_from_string(expected_str);

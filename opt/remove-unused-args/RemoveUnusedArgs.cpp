@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -116,7 +116,7 @@ std::deque<uint16_t> RemoveArgs::compute_live_args(
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
   LivenessFixpointIterator fixpoint_iter(cfg);
-  fixpoint_iter.run(LivenessDomain(code->get_registers_size()));
+  fixpoint_iter.run(LivenessDomain());
   auto entry_block = cfg.entry_block();
 
   std::deque<uint16_t> live_arg_idxs;
@@ -197,7 +197,7 @@ bool RemoveArgs::update_method_signature(
   auto live_args = get_live_arg_type_list(method, live_arg_idxs);
   auto live_args_list = DexTypeList::make_type_list(std::move(live_args));
   DexType* rtype =
-      remove_result ? get_void_type() : method->get_proto()->get_rtype();
+      remove_result ? type::_void() : method->get_proto()->get_rtype();
   auto updated_proto = DexProto::make_proto(rtype, live_args_list);
   always_assert(updated_proto != method->get_proto());
 
@@ -205,7 +205,7 @@ bool RemoveArgs::update_method_signature(
       method->get_class(), method->get_name(), updated_proto);
   if (colliding_mref) {
     auto colliding_method = colliding_mref->as_def();
-    if (colliding_method && is_constructor(colliding_method)) {
+    if (colliding_method && method::is_constructor(colliding_method)) {
       // We can't rename constructors, so we give up on removing args.
       return false;
     }
@@ -266,7 +266,7 @@ RemoveArgs::MethodStats RemoveArgs::update_meths_with_unused_args_or_results() {
       return;
     }
 
-    if (!can_rename_DEPRECATED(method)) {
+    if (!can_rename(method)) {
       // Nothing to do if ProGuard says we can't change the method args.
       TRACE(ARGS,
             5,
@@ -401,9 +401,8 @@ size_t RemoveArgs::update_callsite(IRInstruction* instr) {
  */
 size_t RemoveArgs::update_callsites() {
   // Walk through all methods to look for and edit callsites.
-  return walk::parallel::reduce_methods<size_t>(
-      m_scope,
-      [&](DexMethod* method) -> size_t {
+  return walk::parallel::methods<size_t>(
+      m_scope, [&](DexMethod* method) -> size_t {
         auto code = method->get_code();
         if (code == nullptr) {
           return 0;
@@ -420,8 +419,7 @@ size_t RemoveArgs::update_callsites() {
           }
         }
         return callsite_args_removed;
-      },
-      [](size_t a, size_t b) { return a + b; });
+      });
 }
 
 void RemoveUnusedArgsPass::run_pass(DexStoresVector& stores,

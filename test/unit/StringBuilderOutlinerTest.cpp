@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -123,7 +123,7 @@ class StringBuilderOutlinerTest : public RedexTest {
         fp_iter, invoke_to_eff_summary_map, cfg);
     used_vars_fp_iter.run(uv::UsedVarsSet());
 
-    for (auto it : uv::get_dead_instructions(*code, used_vars_fp_iter)) {
+    for (const auto& it : uv::get_dead_instructions(*code, used_vars_fp_iter)) {
       code->remove_opcode(it);
     }
   }

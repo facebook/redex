@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -25,6 +25,7 @@ class DedupStrings {
     size_t expected_size_reduction{0};
     size_t dexes_without_host_cls{0};
     size_t factory_methods{0};
+    size_t excluded_out_of_factory_methods_strings{0};
   };
 
   DedupStrings(

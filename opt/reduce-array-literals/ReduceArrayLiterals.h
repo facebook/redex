@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -22,6 +22,8 @@ class ReduceArrayLiterals {
     size_t remaining_unimplemented_array_elements{0};
     size_t remaining_buggy_arrays{0};
     size_t remaining_buggy_array_elements{0};
+
+    Stats& operator+=(const Stats&);
   };
 
   ReduceArrayLiterals(cfg::ControlFlowGraph&,
@@ -37,20 +39,22 @@ class ReduceArrayLiterals {
   void patch();
 
  private:
-  void patch_new_array(IRInstruction* new_array_insn,
-                       const std::vector<IRInstruction*>& aput_insns);
-  size_t patch_new_array_chunk(DexType* type,
-                               size_t chunk_start,
-                               const std::vector<IRInstruction*>& aput_insns,
-                               boost::optional<uint16_t> chunk_dest,
-                               uint16_t overall_dest,
-                               std::vector<uint16_t>* temp_regs);
+  void patch_new_array(const IRInstruction* new_array_insn,
+                       const std::vector<const IRInstruction*>& aput_insns);
+  size_t patch_new_array_chunk(
+      DexType* type,
+      size_t chunk_start,
+      const std::vector<const IRInstruction*>& aput_insns,
+      boost::optional<reg_t> chunk_dest,
+      reg_t overall_dest,
+      std::vector<reg_t>* temp_regs);
   cfg::ControlFlowGraph& m_cfg;
   size_t m_max_filled_elements;
   int32_t m_min_sdk;
-  std::vector<uint16_t> m_local_temp_regs;
+  std::vector<reg_t> m_local_temp_regs;
   Stats m_stats;
-  std::vector<std::pair<IRInstruction*, std::vector<IRInstruction*>>>
+  std::vector<
+      std::pair<const IRInstruction*, std::vector<const IRInstruction*>>>
       m_array_literals;
   Architecture m_arch;
 };

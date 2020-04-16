@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -8,8 +8,8 @@
 #include "CheckBreadcrumbs.h"
 
 #include <algorithm>
-#include <unordered_set>
 #include <sstream>
+#include <unordered_set>
 
 #include "DexAccess.h"
 #include "DexClass.h"
@@ -67,7 +67,8 @@ bool class_contains(const DexMethod* method) {
 using Fields = std::vector<const DexField*>;
 using Methods = std::vector<const DexMethod*>;
 using Instructions = std::vector<const IRInstruction*>;
-using MethodInsns = std::map<const DexMethod*, Instructions, dexmethods_comparator>;
+using MethodInsns =
+    std::map<const DexMethod*, Instructions, dexmethods_comparator>;
 
 const DexType* get_type_from_insn(const IRInstruction* insn) {
   auto op = insn->opcode();
@@ -113,7 +114,9 @@ size_t illegal_elements(const XStoreRefs& xstores,
 
 } // namespace
 
-Breadcrumbs::Breadcrumbs(const Scope& scope, DexStoresVector& stores, bool reject_illegal_refs_root_store)
+Breadcrumbs::Breadcrumbs(const Scope& scope,
+                         DexStoresVector& stores,
+                         bool reject_illegal_refs_root_store)
     : m_scope(scope),
       m_xstores(stores),
       m_reject_illegal_refs_root_store(reject_illegal_refs_root_store) {
@@ -338,7 +341,7 @@ bool Breadcrumbs::is_illegal_cross_store(const DexType* caller,
  * null if the type reference is defined or external.
  */
 const DexType* Breadcrumbs::check_type(const DexType* type) {
-  auto type_ref = get_element_type_if_array(type);
+  auto type_ref = type::get_element_type_if_array(type);
   const auto& cls = type_class(type_ref);
   if (cls == nullptr) return nullptr;
   if (cls->is_external()) return nullptr;

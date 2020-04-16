@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -11,14 +11,14 @@
 
 namespace regalloc {
 
-constexpr reg_t REG_MAX = std::numeric_limits<reg_t>::max();
+constexpr vreg_t REG_MAX = std::numeric_limits<vreg_t>::max();
 
-reg_t VirtualRegistersFile::alloc(size_t width) {
+vreg_t VirtualRegistersFile::alloc(size_t width) {
   auto next_free = m_free.find_first();
   // find `width` consecutive bits in m_free that are set
 outer:
   while (next_free != boost::dynamic_bitset<>::npos) {
-    for (reg_t i = 1; i < width; ++i) {
+    for (vreg_t i = 1; i < width; ++i) {
       if (!m_free[next_free + i]) {
         next_free = m_free.find_next(next_free + i);
         goto outer;
@@ -37,7 +37,7 @@ outer:
  * Finds the last sequence of consecutive free registers that reaches the end
  * of the register file, and returns the first register of that range.
  */
-reg_t VirtualRegistersFile::find_free_range_at_end() const {
+vreg_t VirtualRegistersFile::find_free_range_at_end() const {
   for (int i = m_free.size() - 1; i >= 0; --i) {
     if (!m_free[i]) {
       return i + 1;
@@ -46,7 +46,7 @@ reg_t VirtualRegistersFile::find_free_range_at_end() const {
   return 0;
 }
 
-void VirtualRegistersFile::alloc_at(reg_t pos, size_t width) {
+void VirtualRegistersFile::alloc_at(vreg_t pos, size_t width) {
   if (m_free.size() < pos + width) {
     m_free.resize(std::max(m_free.size(), pos + width), /* value */ 1);
     always_assert(m_free.size() <= REG_MAX);
@@ -56,13 +56,13 @@ void VirtualRegistersFile::alloc_at(reg_t pos, size_t width) {
   }
 }
 
-void VirtualRegistersFile::free(reg_t n, size_t width) {
+void VirtualRegistersFile::free(vreg_t n, size_t width) {
   for (size_t i = 0; i < width; ++i) {
     m_free.set(n + i);
   }
 }
 
-bool VirtualRegistersFile::is_free(reg_t pos, size_t width) const {
+bool VirtualRegistersFile::is_free(vreg_t pos, size_t width) const {
   for (size_t i = pos; i < std::min(m_free.size(), pos + width); ++i) {
     if (!m_free[i]) {
       return false;
@@ -73,7 +73,7 @@ bool VirtualRegistersFile::is_free(reg_t pos, size_t width) const {
 
 std::ostream& operator<<(std::ostream& o,
                          const VirtualRegistersFile& vreg_file) {
-  for (reg_t i = 0; i < vreg_file.m_free.size(); ++i) {
+  for (vreg_t i = 0; i < vreg_file.m_free.size(); ++i) {
     if (i > 0) {
       o << " ";
     }

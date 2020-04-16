@@ -5,6 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#pragma once
+
 #include "DexClass.h"
 
 namespace method_profiles {
@@ -51,16 +53,16 @@ class MethodProfiles {
     return success;
   }
 
-  bool is_initialized() { return m_initialized; }
+  bool is_initialized() const { return m_initialized; }
 
-  bool has_stats() { return !m_method_stats.empty(); }
+  bool has_stats() const { return !m_method_stats.empty(); }
 
-  const std::unordered_map<DexMethodRef*, Stats>& method_stats() const {
+  const std::unordered_map<const DexMethodRef*, Stats>& method_stats() const {
     return m_method_stats;
   }
 
  private:
-  std::unordered_map<DexMethodRef*, Stats> m_method_stats;
+  std::unordered_map<const DexMethodRef*, Stats> m_method_stats;
   bool m_initialized{false};
   // Read a "simple" csv file (no quoted commas or extra spaces) and populate
   // m_method_stats

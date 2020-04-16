@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -28,7 +28,8 @@ namespace {
 const std::string TRACKED_RESOURCES_FILE_NAME =
     "redex-tracked-coldstart-resources.txt";
 
-std::unordered_set<std::string> build_cls_set(const std::vector<std::string>& cls_list) {
+std::unordered_set<std::string> build_cls_set(
+    const std::vector<std::string>& cls_list) {
   std::unordered_set<std::string> cls_set;
   for (auto& cls : cls_list) {
     cls_set.emplace(cls);
@@ -36,7 +37,8 @@ std::unordered_set<std::string> build_cls_set(const std::vector<std::string>& cl
   return cls_set;
 }
 
-void write_found_fields(std::string path, std::unordered_set<DexField*>& recorded_fields) {
+void write_found_fields(const std::string& path,
+                        std::unordered_set<DexField*>& recorded_fields) {
   if (!path.empty()) {
     TRACE(TRACKRESOURCES, 1, "Writing tracked fields to %s", path.c_str());
     FILE* fd = fopen(path.c_str(), "w");
@@ -44,19 +46,18 @@ void write_found_fields(std::string path, std::unordered_set<DexField*>& recorde
       perror("Error writing tracked fields file");
       return;
     }
-    for (const auto &it : recorded_fields) {
+    for (const auto& it : recorded_fields) {
       TRACE(TRACKRESOURCES, 4, "recording %s -> %s",
-          SHOW(it->get_class()->get_name()),
-          SHOW(it->get_name()));
-      fprintf(fd, "%s -> %s\n",
-          SHOW(it->get_class()->get_name()),
-          SHOW(it->get_name()));
+            SHOW(it->get_class()->get_name()), SHOW(it->get_name()));
+      fprintf(fd, "%s -> %s\n", SHOW(it->get_class()->get_name()),
+              SHOW(it->get_name()));
     }
     fclose(fd);
   }
 }
 
-void check_if_tracked_sget(DexMethod* src_method,
+void check_if_tracked_sget(
+    DexMethod* src_method,
     DexField* target_field,
     std::unordered_set<std::string>& src_set,
     std::unordered_set<DexClass*>& classes_to_track,
@@ -65,15 +66,17 @@ void check_if_tracked_sget(DexMethod* src_method,
     std::unordered_set<DexField*>& recorded_fields) {
   auto src_cls_name = src_method->get_class()->get_name()->c_str();
   auto target_cls = type_class(target_field->get_class());
-  if ((src_set.empty() || src_set.count(src_cls_name))
-    && classes_to_track.count(target_cls)
-    && !recorded_fields.count(target_field)) {
+  if ((src_set.empty() || src_set.count(src_cls_name)) &&
+      classes_to_track.count(target_cls) &&
+      !recorded_fields.count(target_field)) {
     always_assert_log(target_field->is_concrete(), "Must be a concrete field");
-    if (is_primitive(target_field->get_type())) {
+    if (type::is_primitive(target_field->get_type())) {
       auto value = target_field->get_static_value();
-      TRACE(TRACKRESOURCES, 3, "value %d, sget to %s from %s", value, SHOW(target_field), SHOW(src_method));
+      TRACE(TRACKRESOURCES, 3, "value %d, sget to %s from %s", value,
+            SHOW(target_field), SHOW(src_method));
     } else {
-      TRACE(TRACKRESOURCES, 3, "(non-primitive) sget to %s from %s", SHOW(target_field), SHOW(src_method));
+      TRACE(TRACKRESOURCES, 3, "(non-primitive) sget to %s from %s",
+            SHOW(target_field), SHOW(src_method));
     }
     num_field_references++;
     recorded_fields.emplace(target_field);
@@ -81,7 +84,7 @@ void check_if_tracked_sget(DexMethod* src_method,
   }
 }
 
-}
+} // namespace
 
 void TrackResourcesPass::find_accessed_fields(
     Scope& fullscope,
@@ -103,39 +106,37 @@ void TrackResourcesPass::find_accessed_fields(
       inline_field.emplace(sfield);
     }
   }
-  walk::opcodes(
-      fullscope,
-      [](DexMethod* method) { return true; },
-      [&](DexMethod* method, IRInstruction* insn) {
-        if (insn->has_field() && is_sfield_op(insn->opcode())) {
-          auto field = resolve_field(insn->get_field(), FieldSearch::Static);
-          if (field == nullptr || !field->is_concrete()) return;
-          if (inline_field.count(field) == 0) return;
-          check_if_tracked_sget(
-            method,
-            field,
-            classes_to_search,
-            classes_to_track,
-            num_field_references,
-            per_cls_refs,
-            recorded_fields);
-        }
-      });
-  TRACE(TRACKRESOURCES, 1,
-      "found %d total sgets to tracked classes", num_field_references);
+  walk::opcodes(fullscope,
+                [](DexMethod* method) { return true; },
+                [&](DexMethod* method, IRInstruction* insn) {
+                  if (insn->has_field() && is_sfield_op(insn->opcode())) {
+                    auto field =
+                        resolve_field(insn->get_field(), FieldSearch::Static);
+                    if (field == nullptr || !field->is_concrete()) return;
+                    if (inline_field.count(field) == 0) return;
+                    check_if_tracked_sget(method,
+                                          field,
+                                          classes_to_search,
+                                          classes_to_track,
+                                          num_field_references,
+                                          per_cls_refs,
+                                          recorded_fields);
+                  }
+                });
+  TRACE(TRACKRESOURCES, 1, "found %d total sgets to tracked classes",
+        num_field_references);
   for (auto& it : per_cls_refs) {
-    TRACE(TRACKRESOURCES, 3,
-        "%d sgets to %s ", it.second, SHOW(it.first->get_name()));
+    TRACE(TRACKRESOURCES, 3, "%d sgets to %s ", it.second,
+          SHOW(it.first->get_name()));
   }
 }
 
 std::unordered_set<DexClass*> TrackResourcesPass::build_tracked_cls_set(
-    const std::vector<std::string>& cls_suffixes,
-    const ProguardMap& pg_map) {
+    const std::vector<std::string>& cls_suffixes, const ProguardMap& pg_map) {
   std::unordered_set<DexClass*> tracked_classes;
   for (auto& s : cls_suffixes) {
     tracked_classes.emplace(
-      type_class(DexType::get_type(pg_map.translate_class(s).c_str())));
+        type_class(DexType::get_type(pg_map.translate_class(s).c_str())));
   }
   return tracked_classes;
 }

@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -48,14 +48,14 @@ using LabelDefs = std::unordered_map<std::string, MethodItemEntry*>;
 using LabelRefs =
     std::unordered_map<const IRInstruction*, std::vector<std::string>>;
 
-uint16_t reg_from_str(const std::string& reg_str) {
+reg_t reg_from_str(const std::string& reg_str) {
   always_assert(reg_str.at(0) == 'v');
-  uint16_t reg;
-  sscanf(&reg_str.c_str()[1], "%hu", &reg);
+  reg_t reg;
+  sscanf(&reg_str.c_str()[1], "%u", &reg);
   return reg;
 }
 
-std::string reg_to_str(uint16_t reg) { return "v" + std::to_string(reg); }
+std::string reg_to_str(reg_t reg) { return "v" + std::to_string(reg); }
 
 s_expr to_s_expr(const IRInstruction* insn, const LabelRefs& label_refs) {
   auto op = insn->opcode();
@@ -95,6 +95,12 @@ s_expr to_s_expr(const IRInstruction* insn, const LabelRefs& label_refs) {
     break;
   case opcode::Ref::Type:
     s_exprs.emplace_back(insn->get_type()->get_name()->str());
+    break;
+  case opcode::Ref::CallSite:
+    s_exprs.emplace_back(show(insn->get_callsite()));
+    break;
+  case opcode::Ref::MethodHandle:
+    s_exprs.emplace_back(show(insn->get_methodhandle()));
     break;
   }
 
@@ -242,6 +248,14 @@ std::unique_ptr<IRInstruction> instruction_from_s_expr(
         .must_match(tail, "Expecting type specifier for " + opcode_str);
     DexType* ty = DexType::make_type(type_str.c_str());
     insn->set_type(ty);
+    break;
+  }
+  case opcode::Ref::CallSite: {
+    always_assert_log(false, "callsites currently unsupported in s-exprs");
+    break;
+  }
+  case opcode::Ref::MethodHandle: {
+    always_assert_log(false, "methodhandles currently unsupported in s-exprs");
     break;
   }
   }
@@ -406,7 +420,7 @@ std::unique_ptr<DexPosition> position_from_s_expr(
  */
 void handle_labels(IRCode* code,
                    const LabelDefs& label_defs,
-                   const LabelRefs label_refs) {
+                   const LabelRefs& label_refs) {
   for (auto& mie : InstructionIterable(code)) {
     auto* insn = mie.insn;
     if (label_refs.count(insn)) {
@@ -691,16 +705,15 @@ s_expr to_s_expr(const IRCode* code) {
   return s_expr(exprs);
 }
 
-static boost::optional<uint16_t> largest_reg_operand(
-    const IRInstruction* insn) {
-  boost::optional<uint16_t> max_reg;
+static boost::optional<reg_t> largest_reg_operand(const IRInstruction* insn) {
+  boost::optional<reg_t> max_reg;
   if (insn->has_dest()) {
     max_reg = insn->dest();
   }
   for (size_t i = 0; i < insn->srcs_size(); ++i) {
     // boost::none is the smallest element of the ordering.
     // It's smaller than any uint16_t.
-    max_reg = std::max(max_reg, boost::optional<uint16_t>(insn->src(i)));
+    max_reg = std::max(max_reg, boost::make_optional(insn->src(i)));
   }
   return max_reg;
 }
@@ -712,7 +725,7 @@ std::unique_ptr<IRCode> ircode_from_s_expr(const s_expr& e) {
   always_assert_log(insns_expr.size() > 0, "Empty instruction list?! %s");
   LabelDefs label_defs;
   LabelRefs label_refs;
-  boost::optional<uint16_t> max_reg;
+  boost::optional<reg_t> max_reg;
   std::unordered_map<std::string, DexPosition*> positions;
 
   // map from catch name to catch marker pointer
@@ -728,7 +741,7 @@ std::unique_ptr<IRCode> ircode_from_s_expr(const s_expr& e) {
         // check if keyword also has dbg label
         if (keyword != ".pos") {
           // get dbg label found after colon in keyword string
-          auto key = keyword.substr(keyword.find(":") + 1);
+          auto key = keyword.substr(keyword.find(':') + 1);
           // insert pos into positions map using dbg label as key
           positions[key] = pos.get();
         }
@@ -888,7 +901,7 @@ DexMethod* class_with_method(const std::string& class_name,
                              const std::string& method_instructions) {
   auto class_type = DexType::make_type(DexString::make_string(class_name));
   ClassCreator class_creator(class_type);
-  class_creator.set_super(get_object_type());
+  class_creator.set_super(type::java_lang_Object());
   auto method = assembler::method_from_string(method_instructions);
   class_creator.add_method(method);
   class_creator.create();
@@ -899,7 +912,7 @@ DexClass* class_with_methods(const std::string& class_name,
                              const std::vector<DexMethod*>& methods) {
   auto class_type = DexType::make_type(DexString::make_string(class_name));
   ClassCreator class_creator(class_type);
-  class_creator.set_super(get_object_type());
+  class_creator.set_super(type::java_lang_Object());
   for (const auto& method : methods) {
     class_creator.add_method(method);
   }

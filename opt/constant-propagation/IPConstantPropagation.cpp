@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -45,7 +45,7 @@ std::unique_ptr<intraprocedural::FixpointIterator> analyze_procedure(
 
   auto env = env_with_params(&code, args);
   DexType* class_under_init{nullptr};
-  if (is_clinit(method)) {
+  if (method::is_clinit(method)) {
     class_under_init = method->get_class();
     set_encoded_values(type_class(class_under_init), &env);
   }
@@ -119,7 +119,7 @@ void PassImpl::compute_analysis_stats(const WholeProgramState& wps) {
       }
       // Since a boolean value can only have 1 and 0 as values, "GEZ" tells us
       // nothing useful about this field.
-      if (is_boolean(field->get_type()) &&
+      if (type::is_boolean(field->get_type()) &&
           value.equals(SignedConstantDomain(sign_domain::Interval::GEZ))) {
         continue;
       }
@@ -133,7 +133,7 @@ void PassImpl::compute_analysis_stats(const WholeProgramState& wps) {
       if (value.is_top()) {
         continue;
       }
-      if (is_boolean(method->get_proto()->get_rtype()) &&
+      if (type::is_boolean(method->get_proto()->get_rtype()) &&
           value.equals(SignedConstantDomain(sign_domain::Interval::GEZ))) {
         continue;
       }
@@ -147,9 +147,8 @@ void PassImpl::compute_analysis_stats(const WholeProgramState& wps) {
  * that analyze() obtained.
  */
 void PassImpl::optimize(const Scope& scope, const FixpointIterator& fp_iter) {
-  m_transform_stats = walk::parallel::reduce_methods<Transform::Stats>(
-      scope,
-      [&](DexMethod* method) {
+  m_transform_stats =
+      walk::parallel::methods<Transform::Stats>(scope, [&](DexMethod* method) {
         if (method->get_code() == nullptr) {
           return Transform::Stats();
         }
@@ -163,13 +162,10 @@ void PassImpl::optimize(const Scope& scope, const FixpointIterator& fp_iter) {
         } else {
           Transform::Config config(m_config.transform);
           config.class_under_init =
-              is_clinit(method) ? method->get_class() : nullptr;
+              method::is_clinit(method) ? method->get_class() : nullptr;
           Transform tf(config);
           return tf.apply(*intra_cp, fp_iter.get_whole_program_state(), &code);
         }
-      },
-      [](Transform::Stats a, Transform::Stats b) { // reducer
-        return a + b;
       });
 }
 
@@ -190,6 +186,7 @@ void PassImpl::run_pass(DexStoresVector& stores,
   run(scope);
   mgr.incr_metric("branches_removed", m_transform_stats.branches_removed);
   mgr.incr_metric("materialized_consts", m_transform_stats.materialized_consts);
+  mgr.incr_metric("throws", m_transform_stats.throws);
   mgr.incr_metric("added_param_const", m_transform_stats.added_param_const);
   mgr.incr_metric("constant_fields", m_stats.constant_fields);
   mgr.incr_metric("constant_methods", m_stats.constant_methods);

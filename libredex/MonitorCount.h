@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -41,7 +41,7 @@ class Analyzer : public ir_analyzer::BaseIRAnalyzer<MonitorCountDomain> {
  public:
   using ir_analyzer::BaseIRAnalyzer<MonitorCountDomain>::BaseIRAnalyzer;
 
-  void analyze_instruction(IRInstruction* insn,
+  void analyze_instruction(const IRInstruction* insn,
                            MonitorCountDomain* current) const override;
 };
 

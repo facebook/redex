@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -12,302 +12,12 @@
 #include <unordered_set>
 #include <vector>
 
+#include "ClassUtil.h"
 #include "DexClass.h"
 #include "IRInstruction.h"
+#include "MethodUtil.h"
 #include "PassManager.h"
 #include "TypeUtil.h"
-
-using TypeVector = std::vector<const DexType*>;
-
-/**
- * Return the DexType for java.lang.Object.
- */
-DexType* get_object_type();
-
-/**
- * Return the DexType for a void (V) type.
- */
-DexType* get_void_type();
-
-/**
- * Return the DexType for a byte (B) type.
- */
-DexType* get_byte_type();
-
-/**
- * Return the DexType for a char (C) type.
- */
-DexType* get_char_type();
-
-/**
- * Return the DexType for a short (S) type.
- */
-DexType* get_short_type();
-
-/**
- * Return the DexType for an int (I) type.
- */
-DexType* get_int_type();
-
-/**
- * Return the DexType for a long (J) type.
- */
-DexType* get_long_type();
-
-/**
- * Return the DexType for a boolean (Z) type.
- */
-DexType* get_boolean_type();
-
-/**
- * Return the DexType for a float (F) type.
- */
-DexType* get_float_type();
-
-/**
- * Return the DexType for a double (D) type.
- */
-DexType* get_double_type();
-
-/**
- * Return the DexType for an java.lang.String type.
- */
-DexType* get_string_type();
-
-/**
- * Return the DexType for an java.lang.Class type.
- */
-DexType* get_class_type();
-
-/**
- * Return the DexType for an java.lang.Enum type.
- */
-DexType* get_enum_type();
-
-/**
- * Return the DexType for an java.lang.Integer type.
- */
-DexType* get_integer_type();
-
-struct ClassSerdes {
-  std::vector<DexType*> serdes;
-
-  ClassSerdes(DexType* deser,
-              DexType* flatbuf_deser,
-              DexType* ser,
-              DexType* flatbuf_ser)
-      : serdes{deser, flatbuf_deser, ser, flatbuf_ser} {}
-
-  std::vector<DexType*> get_all_serdes() { return serdes; }
-
-  DexType* get_deser() { return serdes[0]; }
-  DexType* get_flatbuf_deser() { return serdes[1]; }
-  DexType* get_ser() { return serdes[2]; }
-  DexType* get_flatbuf_ser() { return serdes[3]; }
-};
-
-/**
- * Looks for a <clinit> method for the given class, creates a new one if it
- * does not exist
- */
-DexMethod* get_or_create_clinit(DexClass* cls);
-
-/**
- * Return possible deserializer and serializer classes of the given class
- * 'class$Deserializer;', 'class_Deserializer;', 'class$Serializer;',
- * 'class_Serializer;'
- */
-ClassSerdes get_class_serdes(const DexClass* cls);
-
-/**
- * Return the DexType for an java.lang.Throwable type.
- */
-DexType* get_throwable_type();
-
-/**
- * Return the simple name w/o the package name and the ending ';' for a valid
- * DexType. E.g., 'Lcom/facebook/Simple;' -> 'Simple'.
- */
-std::string get_simple_name(const DexType* type);
-
-/**
- * Return true if the type is a primitive.
- */
-bool is_primitive(const DexType* type);
-
-/**
- * Return true if the type is either a long or a double
- */
-bool is_wide_type(const DexType* type);
-
-/**
- * Return true if method signatures (name and proto) match.
- */
-inline bool signatures_match(const DexMethodRef* a, const DexMethodRef* b) {
-  return a->get_name() == b->get_name() && a->get_proto() == b->get_proto();
-}
-
-/*
- * Return the shorty char for this type.
- * int -> I
- * bool -> Z
- * ... primitive etc.
- * any reference -> L
- */
-char type_shorty(const DexType* type);
-
-/**
- * Returns the corresponding wrapper type of primitive types
- * e.g.
- *   I -> Ljava/lang/Integer;
- *   Z -> Ljava/lang/Boolean;
- *   ... etc.
- * returns nullptr if argument `type` is not a primitive type or is void
- */
-DexType* get_boxed_reference_type(const DexType* type);
-
-/**
- * Return true if the parent chain leads to known classes.
- * False if one of the parent is in a scope unknown to redex.
- */
-bool has_hierarchy_in_scope(DexClass* cls);
-
-/**
- * Return true if the clinit is Trivial.
- * A trivial clinit should only contain a return-void instruction.
- */
-bool is_trivial_clinit(const DexMethod* method);
-
-/**
- * Basic datatypes used by bytecode.
- */
-enum class DataType : uint8_t {
-  Void,
-  Boolean,
-  Byte,
-  Short,
-  Char,
-  Int,
-  Long,
-  Float,
-  Double,
-  Object,
-  Array
-};
-
-/**
- * Return the basic datatype of given DexType.
- */
-DataType type_to_datatype(const DexType* t);
-
-/**
- * Check whether a type can be cast to another type.
- * That is, if 'base_type' is an ancestor or an interface implemented by 'type'.
- * However the check is only within classes known to the app. So
- * you may effectively get false for a check_cast that would succeed at
- * runtime. Otherwise 'true' implies the type can cast.
- */
-bool check_cast(const DexType* type, const DexType* base_type);
-
-/**
- * Return true if the type is an array type.
- */
-bool is_array(const DexType* type);
-
-/**
- * Return true if the type is an object type (array types included).
- */
-bool is_object(const DexType* type);
-
-/**
- * Return true if the type is a primitive type that fits within a 32-bit
- * register, i.e., boolean, byte, char, short or int.
- */
-bool is_integer(const DexType* type);
-
-bool is_boolean(const DexType* type);
-
-bool is_long(const DexType* type);
-
-bool is_float(const DexType* type);
-
-bool is_double(const DexType* type);
-
-bool is_void(const DexType* type);
-
-/**
- * Return the level of the array type, that is the number of '[' in the array.
- * int[] => [I
- * int[][] => [[I
- * etc.
- */
-uint32_t get_array_level(const DexType* type);
-
-/**
- * The component type of an array is the type of the values contained in the
- * array. E.g.:
- *
- * [LFoo; -> LFoo;
- * [[LFoo; -> [LFoo;
- */
-DexType* get_array_component_type(const DexType*);
-
-/**
- * An array's component type may also be an array. Recursively unwrapping these
- * array types will give us the element type. E.g.:
- *
- * [LFoo; -> LFoo;
- * [[LFoo; -> LFoo;
- *
- * If the input argument is not an array type, this returns null.
- *
- * The terms "component type" and "element type" are defined in the JLS:
- * https://docs.oracle.com/javase/specs/jls/se7/html/jls-10.html
- */
-DexType* get_array_element_type(const DexType*);
-
-/**
- * Return the element type of a given array type or the type itself if it's not
- * an array.
- *
- * Examples:
- *   [java.lang.String -> java.lang.String
- *   java.lang.Integer -> java.lang.Integer
- */
-const DexType* get_element_type_if_array(const DexType*);
-
-/**
- * Return the (level 1) array type of a given type.
- */
-DexType* make_array_type(const DexType*);
-
-/**
- * Return the array type of a given type in specified level.
- */
-DexType* make_array_type(const DexType*, uint32_t level);
-
-/**
- * True if the method is a constructor (matches the "<init>" name)
- */
-bool is_init(const DexMethodRef* method);
-
-/**
- * True if the method is a static constructor (matches the "<clinit>" name)
- */
-bool is_clinit(const DexMethodRef* method);
-
-/**
- * Whether the method is a ctor or static ctor.
- */
-inline bool is_any_init(const DexMethodRef* method) {
-  return is_init(method) || is_clinit(method);
-}
-
-/**
- * Subclass check. Copied from VirtualScope.
- * We can make this much faster in time.
- */
-bool is_subclass(const DexType* parent, const DexType* child);
 
 /**
  * Change the visibility of members accessed in a method.
@@ -316,6 +26,8 @@ bool is_subclass(const DexType* parent, const DexType* child);
  * and walks the inheritance hierarchy as needed.)
  */
 void change_visibility(DexMethod* method, DexType* scope = nullptr);
+
+void change_visibility(IRCode* code, DexType* scope = nullptr);
 
 /**
  * NOTE: Only relocates the method. Doesn't check the correctness here,
@@ -333,13 +45,6 @@ void relocate_method(DexMethod* method, DexType* to_type);
 bool gather_invoked_methods_that_prevent_relocation(
     const DexMethod* method,
     std::unordered_set<DexMethodRef*>* methods_preventing_relocation = nullptr);
-
-/**
- * Check that the method contains no invoke-super instruction; this is a
- * requirement to relocate a method outside of its original inheritance
- * hierarchy.
- */
-bool no_invoke_super(const DexMethod* method);
 
 /**
  * Relocates the method only if
@@ -430,7 +135,7 @@ void load_root_dexen(DexStore& store,
                      const std::string& dexen_dir_str,
                      bool balloon = false,
                      bool verbose = true,
-                     bool support_dex_v37 = false);
+                     int support_dex_version = 35);
 
 /**
  * Creates a generated store based on the given classes.
@@ -441,14 +146,6 @@ void load_root_dexen(DexStore& store,
 void create_store(const std::string& store_name,
                   DexStoresVector& stores,
                   DexClasses classes);
-
-/*
- * This exists because in the absence of a register allocator, we need each
- * transformation to keep the ins registers at the end of the frame. Once the
- * register allocator is switched on this function should no longer have many
- * use cases.
- */
-size_t sum_param_sizes(const IRCode*);
 
 /**
  * Determine if the given dex item has the given annotation
@@ -479,99 +176,6 @@ bool has_anno(const T* t, const std::unordered_set<DexType*>& anno_types) {
   }
   return false;
 }
-
-bool references_external(DexMethodRef* mref);
-
-struct dex_stats_t {
-  int num_types = 0;
-  int num_classes = 0;
-  int num_methods = 0;
-  int num_method_refs = 0;
-  int num_fields = 0;
-  int num_field_refs = 0;
-  int num_strings = 0;
-  int num_protos = 0;
-  int num_static_values = 0;
-  int num_annotations = 0;
-  int num_type_lists = 0;
-  int num_bytes = 0;
-  int num_instructions = 0;
-
-  int num_unique_strings = 0;
-  int num_unique_types = 0;
-  int num_unique_protos = 0;
-  int num_unique_method_refs = 0;
-  int num_unique_field_refs = 0;
-
-  int strings_total_size = 0;
-  int types_total_size = 0;
-  int protos_total_size = 0;
-  int method_refs_total_size = 0;
-  int field_refs_total_size = 0;
-
-  int num_dbg_items = 0;
-  int dbg_total_size = 0;
-
-  /* Stats collected from the Map List section of a Dex. */
-  int string_id_count = 0;
-  int string_id_bytes = 0;
-
-  int type_id_count = 0;
-  int type_id_bytes = 0;
-
-  int proto_id_count = 0;
-  int proto_id_bytes = 0;
-
-  int field_id_count = 0;
-  int field_id_bytes = 0;
-
-  int method_id_count = 0;
-  int method_id_bytes = 0;
-
-  int class_def_count = 0;
-  int class_def_bytes = 0;
-
-  int call_site_id_count = 0;
-  int call_site_id_bytes = 0;
-
-  int method_handle_count = 0;
-  int method_handle_bytes = 0;
-
-  int map_list_count = 0;
-  int map_list_bytes = 0;
-
-  int type_list_count = 0;
-  int type_list_bytes = 0;
-
-  int annotation_set_ref_list_count = 0;
-  int annotation_set_ref_list_bytes = 0;
-
-  int annotation_set_count = 0;
-  int annotation_set_bytes = 0;
-
-  int class_data_count = 0;
-  int class_data_bytes = 0;
-
-  int code_count = 0;
-  int code_bytes = 0;
-
-  int string_data_count = 0;
-  int string_data_bytes = 0;
-
-  int debug_info_count = 0;
-  int debug_info_bytes = 0;
-
-  int annotation_count = 0;
-  int annotation_bytes = 0;
-
-  int encoded_array_count = 0;
-  int encoded_array_bytes = 0;
-
-  int annotations_directory_count = 0;
-  int annotations_directory_bytes = 0;
-};
-
-dex_stats_t& operator+=(dex_stats_t& lhs, const dex_stats_t& rhs);
 
 namespace java_names {
 

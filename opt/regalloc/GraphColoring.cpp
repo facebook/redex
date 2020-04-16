@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -14,6 +14,7 @@
 #include "ControlFlow.h"
 #include "Debug.h"
 #include "DexUtil.h"
+#include "Dominators.h"
 #include "IRCode.h"
 #include "Show.h"
 #include "Transform.h"
@@ -80,7 +81,7 @@ static size_t sum_src_sizes(const IRInstruction* insn) {
   }
   auto& types = insn->get_method()->get_proto()->get_args()->get_type_list();
   for (auto* type : types) {
-    size += is_wide_type(type) ? 2 : 1;
+    size += type::is_wide_type(type) ? 2 : 1;
   }
   return size;
 }
@@ -132,7 +133,7 @@ constexpr int INVALID_SCORE = std::numeric_limits<int>::max();
  * If :reg is mapped to something other than :vreg, then we'll need to insert a
  * move instruction to remap :reg.
  */
-bool needs_remap(const transform::RegMap& reg_map, reg_t reg, reg_t vreg) {
+bool needs_remap(const transform::RegMap& reg_map, reg_t reg, vreg_t vreg) {
   return reg_map.find(reg) != reg_map.end() && reg_map.at(reg) != vreg;
 }
 
@@ -143,7 +144,7 @@ bool needs_remap(const transform::RegMap& reg_map, reg_t reg, reg_t vreg) {
 int score_range_fit(
     const interference::Graph& ig,
     const std::vector<reg_t>& range_regs,
-    reg_t range_base,
+    vreg_t range_base,
     const std::unordered_map<reg_t, VirtualRegistersFile>& vreg_files,
     const transform::RegMap& reg_map) {
   int score{0};
@@ -169,16 +170,16 @@ int score_range_fit(
  * Searches between :range_base_start and :range_base_end, and returns the
  * range_base with the best score.
  */
-reg_t find_best_range_fit(
+vreg_t find_best_range_fit(
     const interference::Graph& ig,
     const std::vector<reg_t>& range_regs,
-    reg_t range_base_start,
-    reg_t range_base_end,
+    vreg_t range_base_start,
+    vreg_t range_base_end,
     const std::unordered_map<reg_t, VirtualRegistersFile>& vreg_files,
     const transform::RegMap& reg_map) {
   int min_score{INVALID_SCORE};
-  reg_t range_base = 0;
-  for (reg_t i = range_base_start; i <= range_base_end; ++i) {
+  vreg_t range_base = 0;
+  for (vreg_t i = range_base_start; i <= range_base_end; ++i) {
     auto score = score_range_fit(ig, range_regs, i, vreg_files, reg_map);
     if (score < min_score) {
       min_score = score;
@@ -199,7 +200,7 @@ reg_t find_best_range_fit(
 void fit_range_instruction(
     const interference::Graph& ig,
     const IRInstruction* insn,
-    reg_t range_base,
+    vreg_t range_base,
     const std::unordered_map<reg_t, VirtualRegistersFile>& vreg_files,
     RegisterTransform* reg_transform,
     SpillPlan* spills) {
@@ -229,7 +230,7 @@ void fit_range_instruction(
 void fit_params(
     const interference::Graph& ig,
     const boost::sub_range<IRList>& param_insns,
-    reg_t params_base,
+    vreg_t params_base,
     const std::unordered_map<reg_t, VirtualRegistersFile>& vreg_files,
     RegisterTransform* reg_transform,
     SpillPlan* spills) {
@@ -264,7 +265,7 @@ std::string show(const SpillPlan& spill_plan) {
     ss << reg << "\n";
   }
   ss << "Range spills:\n";
-  for (auto pair : spill_plan.range_spills) {
+  for (const auto& pair : spill_plan.range_spills) {
     auto* insn = pair.first;
     ss << show(insn) << ": ";
     for (auto idx : pair.second) {
@@ -278,7 +279,7 @@ std::string show(const SpillPlan& spill_plan) {
 std::string show(const SplitPlan& split_plan) {
   std::ostringstream ss;
   ss << "split_around:\n";
-  for (auto pair : split_plan.split_around) {
+  for (const auto& pair : split_plan.split_around) {
     ss << pair.first << ": ";
     for (auto reg : pair.second) {
       ss << reg << " ";
@@ -305,7 +306,7 @@ std::string show(const RegisterTransform& reg_transform) {
 
 } // namespace
 
-void Allocator::Stats::accumulate(const Allocator::Stats& that) {
+Allocator::Stats& Allocator::Stats::operator+=(const Allocator::Stats& that) {
   reiteration_count += that.reiteration_count;
   param_spill_moves += that.param_spill_moves;
   range_spill_moves += that.range_spill_moves;
@@ -313,6 +314,7 @@ void Allocator::Stats::accumulate(const Allocator::Stats& that) {
   split_moves += that.split_moves;
   moves_coalesced += that.moves_coalesced;
   params_spill_early += that.params_spill_early;
+  return *this;
 }
 
 static bool has_2addr_form(IROpcode op) {
@@ -355,7 +357,7 @@ bool Allocator::coalesce(interference::Graph* ig, IRCode* code) {
   Rank rank_map;
   Parent parent_map;
   RegisterAliasSets aliases((RankPMap(rank_map)), (ParentPMap(parent_map)));
-  for (size_t i = 0; i < code->get_registers_size(); ++i) {
+  for (reg_t i = 0; i < code->get_registers_size(); ++i) {
     aliases.make_set(i);
   }
 
@@ -403,7 +405,7 @@ bool Allocator::coalesce(interference::Graph* ig, IRCode* code) {
   }
 
   transform::RegMap reg_map;
-  for (auto i = 0; i < code->get_registers_size(); ++i) {
+  for (reg_t i = 0; i < code->get_registers_size(); ++i) {
     reg_map.emplace(i, aliases.find_set(i));
   }
   transform::remap_registers(code, reg_map);
@@ -529,7 +531,7 @@ void Allocator::select(const IRCode* code,
                        std::stack<reg_t>* select_stack,
                        RegisterTransform* reg_transform,
                        SpillPlan* spill_plan) {
-  reg_t vregs_size = reg_transform->size;
+  vreg_t vregs_size = reg_transform->size;
   while (!select_stack->empty()) {
     auto reg = select_stack->top();
     select_stack->pop();
@@ -564,7 +566,7 @@ bool should_convert_to_range(const interference::Graph& ig,
   if (!opcode::has_range_form(insn->opcode())) {
     return false;
   }
-  constexpr reg_t NON_RANGE_MAX_VREG = 15;
+  constexpr vreg_t NON_RANGE_MAX_VREG = 15;
   bool has_wide{false};
   bool has_spill{false};
   std::unordered_set<reg_t> src_reg_set;
@@ -587,7 +589,7 @@ bool should_convert_to_range(const interference::Graph& ig,
   }
 
   auto& liveness = ig.get_liveness(insn);
-  reg_t low_regs_occupied{0};
+  vreg_t low_regs_occupied{0};
   for (auto reg : liveness.elements()) {
     auto& node = ig.get_node(reg);
     if (node.max_vreg() > NON_RANGE_MAX_VREG || src_reg_set.count(reg)) {
@@ -636,12 +638,9 @@ void Allocator::select_ranges(const IRCode* code,
       vreg_files.emplace(src, vreg_file);
     }
 
-    reg_t range_base = find_best_range_fit(ig,
-                                           insn->srcs(),
-                                           0,
-                                           reg_transform->size,
-                                           vreg_files,
-                                           reg_transform->map);
+    vreg_t range_base =
+        find_best_range_fit(ig, insn->srcs_vec(), 0, reg_transform->size,
+                            vreg_files, reg_transform->map);
     fit_range_instruction(ig, insn, range_base, vreg_files, reg_transform,
                           spill_plan);
   }
@@ -672,12 +671,9 @@ void Allocator::select_params(const DexMethod* method,
 
   auto min_param_reg =
       reg_transform->size < params_size ? 0 : reg_transform->size - params_size;
-  auto params_base = find_best_range_fit(ig,
-                                         param_regs,
-                                         min_param_reg,
-                                         reg_transform->size,
-                                         vreg_files,
-                                         reg_transform->map);
+  auto params_base =
+      find_best_range_fit(ig, param_regs, min_param_reg, reg_transform->size,
+                          vreg_files, reg_transform->map);
   fit_params(ig, param_insns, params_base, vreg_files, reg_transform,
              spill_plan);
 }
@@ -734,12 +730,12 @@ void Allocator::find_split(const interference::Graph& ig,
       ++spill_it;
       continue;
     }
-    reg_t best_vreg = 0;
+    vreg_t best_vreg = 0;
     bool split_found = false;
     bool split_around_name = false;
     // Find all the vregs assigned to reg's neighbors.
     // Key is vreg, value is a set of registers that are mapped to this vreg.
-    std::unordered_map<reg_t, std::unordered_set<reg_t>> mapped_neighbors;
+    std::unordered_map<vreg_t, std::unordered_set<vreg_t>> mapped_neighbors;
     auto& node = ig.get_node(reg);
     for (auto adj : node.adjacent()) {
       auto it = reg_map.find(adj);
@@ -749,7 +745,7 @@ void Allocator::find_split(const interference::Graph& ig,
     }
     auto max_reg_bound = ig.get_node(reg).max_vreg();
     // For each vreg(color).
-    for (auto vreg_assigned : mapped_neighbors) {
+    for (const auto& vreg_assigned : mapped_neighbors) {
       // We only want to check neighbors that has vreg assigned that
       // can be used by the reg.
       if (vreg_assigned.first > max_reg_bound) {
@@ -852,7 +848,7 @@ std::unordered_map<reg_t, IRList::iterator> Allocator::find_param_splits(
 
   auto& cfg = code->cfg();
   cfg::Block* start_block = cfg.entry_block();
-  auto postorder_dominator = cfg.immediate_dominators();
+  auto doms = dominators::SimpleFastDominators<cfg::GraphInterface>(cfg);
   for (auto param : params) {
     auto block_uses = find_first_uses(param, start_block);
     // Since this function only gets called for param regs that need to be
@@ -864,7 +860,7 @@ std::unordered_map<reg_t, IRList::iterator> Allocator::find_param_splits(
       // insert a load at its end.
       cfg::Block* idom = block_uses[0];
       for (size_t index = 1; index < block_uses.size(); ++index) {
-        idom = cfg.idom_intersect(postorder_dominator, idom, block_uses[index]);
+        idom = doms.intersect(idom, block_uses[index]);
       }
       TRACE(REG, 5, "Inserting param load of v%u in B%u", param, idom->id());
       // We need to check insn before end of block to make sure we didn't
@@ -919,7 +915,7 @@ void Allocator::split_params(const interference::Graph& ig,
     }
   }
   // Insert the loads
-  for (auto param_pair : load_locations) {
+  for (const auto& param_pair : load_locations) {
     auto dest = param_pair.first;
     auto first_use_it = param_pair.second;
     code->insert_before(
@@ -1135,6 +1131,7 @@ void Allocator::allocate(DexMethod* method) {
 
     TRACE(REG, 5, "Transform before range alloc:\n%s", SHOW(reg_transform));
     choose_range_promotions(code, ig, spill_plan, &range_set);
+    range_set.prioritize();
     select_ranges(code, ig, range_set, &reg_transform, &spill_plan);
     // Select registers for symregs that can be addressed using all 16 bits.
     // These symregs are typically generated during the spilling and splitting

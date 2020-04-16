@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -51,7 +51,7 @@ struct Info {
   boost::optional<cfg::InstructionIterator> invoke;
   boost::optional<cfg::InstructionIterator> aget;
   boost::optional<cfg::InstructionIterator> branch;
-  boost::optional<uint16_t> reg;
+  boost::optional<reg_t> reg;
 
   bool operator==(const Info& other) const {
     return array_field == other.array_field && invoke == other.invoke &&
@@ -95,7 +95,7 @@ class Iterator final
   std::vector<Info> collect() const;
 
  private:
-  void analyze_insn(cfg::InstructionIterator it, Environment* env) const;
+  void analyze_insn(const cfg::InstructionIterator& it, Environment* env) const;
   cfg::ControlFlowGraph* m_cfg;
 };
 

@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -19,7 +19,7 @@
 #include <utility>
 
 #include "DexClass.h"
-#include "TypeUtil.h"
+#include "DexUtil.h"
 #include "EditableCfgAdapter.h"
 #include "IRCode.h"
 #include "OptDataDefs.h"
@@ -327,7 +327,7 @@ void OptDataMapper::serialize_messages_helper(
     const auto& message = reason_msg_pair.second;
     Json::Value msg_pair;
     msg_pair["reason_code"] = reason;
-    msg_pair["message"] = std::move(message);
+    msg_pair["message"] = message;
     arr->append(msg_pair);
   }
 }
@@ -356,11 +356,12 @@ void OptDataMapper::serialize_opt_nopt_helper(
   }
 }
 
-void OptDataMapper::serialize_class(std::shared_ptr<ClassOptData> cls_opt_data,
-                                    size_t cls_id,
-                                    Json::Value* arr,
-                                    Json::Value* opt_arr,
-                                    Json::Value* nopt_arr) {
+void OptDataMapper::serialize_class(
+    const std::shared_ptr<ClassOptData>& cls_opt_data,
+    size_t cls_id,
+    Json::Value* arr,
+    Json::Value* opt_arr,
+    Json::Value* nopt_arr) {
   const auto& name = get_deobfuscated_name_substr(cls_opt_data->m_cls);
   Json::Value cls_data;
   cls_data["id"] = (uint)cls_id;
@@ -374,7 +375,7 @@ void OptDataMapper::serialize_class(std::shared_ptr<ClassOptData> cls_opt_data,
 }
 
 void OptDataMapper::serialize_method(
-    std::shared_ptr<MethodOptData> meth_opt_data,
+    const std::shared_ptr<MethodOptData>& meth_opt_data,
     size_t cls_id,
     size_t meth_id,
     Json::Value* arr,
@@ -394,12 +395,13 @@ void OptDataMapper::serialize_method(
                             meth_id, opt_arr, nopt_arr);
 }
 
-void OptDataMapper::serialize_insn(std::shared_ptr<InsnOptData> insn_opt_data,
-                                   size_t meth_id,
-                                   size_t insn_id,
-                                   Json::Value* arr,
-                                   Json::Value* opt_arr,
-                                   Json::Value* nopt_arr) {
+void OptDataMapper::serialize_insn(
+    const std::shared_ptr<InsnOptData>& insn_opt_data,
+    size_t meth_id,
+    size_t insn_id,
+    Json::Value* arr,
+    Json::Value* opt_arr,
+    Json::Value* nopt_arr) {
   Json::Value insn_data;
   insn_data["id"] = (uint)insn_id;
   insn_data["meth_id"] = (uint)meth_id;
@@ -453,7 +455,8 @@ void OptDataMapper::init_nopt_messages() {
       {INL_MULTIPLE_RETURNS,
        "Didn''t inline: callee has multiple return points"},
       {INL_TOO_MANY_CALLERS,
-       "Didn''t inline: this method has too many callers"}};
+       "Didn''t inline: this method has too many callers"},
+      {INL_DO_NOT_INLINE, "Didn''t inline: the callee should not be inlined"}};
   m_nopt_msg_map = std::move(nopt_msg_map);
 }
 

@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -14,13 +14,10 @@
 #include "Creators.h"
 #include "DexAsm.h"
 #include "DexClass.h"
-#include "Liveness.h"
 #include "Pass.h"
 #include "Walkers.h"
 
 using namespace stringbuilder_outliner;
-
-using reg_t = uint32_t;
 
 constexpr auto RESULT_REGISTER = ir_analyzer::RESULT_REGISTER;
 
@@ -36,13 +33,13 @@ FixpointIterator::FixpointIterator(const cfg::ControlFlowGraph& cfg)
   always_assert(m_stringbuilder_init_with_string != nullptr);
   always_assert(m_append_str != nullptr);
 
-  m_immutable_types.emplace(get_boolean_type());
-  m_immutable_types.emplace(get_char_type());
-  m_immutable_types.emplace(get_double_type());
-  m_immutable_types.emplace(get_float_type());
-  m_immutable_types.emplace(get_int_type());
-  m_immutable_types.emplace(get_long_type());
-  m_immutable_types.emplace(get_string_type());
+  m_immutable_types.emplace(type::_boolean());
+  m_immutable_types.emplace(type::_char());
+  m_immutable_types.emplace(type::_double());
+  m_immutable_types.emplace(type::_float());
+  m_immutable_types.emplace(type::_int());
+  m_immutable_types.emplace(type::_long());
+  m_immutable_types.emplace(type::java_lang_String());
 }
 
 /*
@@ -72,7 +69,7 @@ bool FixpointIterator::is_eligible_append(const DexMethodRef* method) const {
          m_immutable_types.count(type_list->at(0));
 }
 
-void FixpointIterator::analyze_instruction(IRInstruction* insn,
+void FixpointIterator::analyze_instruction(const IRInstruction* insn,
                                            Environment* env) const {
   namespace ptrs = local_pointers;
 
@@ -233,7 +230,7 @@ void Outliner::create_outline_helpers(DexStoresVector* stores) {
   auto string_ty = DexType::make_type("Ljava/lang/String;");
 
   ClassCreator cc(outline_helper_cls);
-  cc.set_super(get_object_type());
+  cc.set_super(type::java_lang_Object());
   bool did_create_helper{false};
   for (const auto& p : m_outline_typelists) {
     const auto* typelist = p.first;
@@ -317,9 +314,9 @@ std::unique_ptr<IRCode> Outliner::create_outline_helper_code(
 }
 
 static IROpcode move_for_type(const DexType* ty) {
-  if (!is_primitive(ty)) {
+  if (!type::is_primitive(ty)) {
     return OPCODE_MOVE_OBJECT;
-  } else if (is_wide_type(ty)) {
+  } else if (type::is_wide_type(ty)) {
     return OPCODE_MOVE_WIDE;
   } else {
     return OPCODE_MOVE;
@@ -392,8 +389,8 @@ void Outliner::transform(IRCode* code) {
         reg = insns_to_insert.at(insn)->dest();
       } else {
         auto ty = insn->get_method()->get_proto()->get_args()->at(0);
-        reg = is_wide_type(ty) ? code->allocate_wide_temp()
-                               : code->allocate_temp();
+        reg = type::is_wide_type(ty) ? code->allocate_wide_temp()
+                                     : code->allocate_temp();
         auto move = (new IRInstruction(move_for_type(ty)))
                         ->set_src(0, insn->src(1))
                         ->set_dest(reg);

@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -19,7 +19,7 @@ using namespace hierarchy_util;
 TEST_F(RedexTest, findNonOverriddenVirtuals) {
   // Begin creation of APK-internal class mock
   ClassCreator cc(DexType::make_type("LFoo;"));
-  cc.set_super(get_object_type());
+  cc.set_super(type::java_lang_Object());
 
   auto final_method =
       DexMethod::make_method("LFoo;.final:()V")
@@ -35,7 +35,7 @@ TEST_F(RedexTest, findNonOverriddenVirtuals) {
 
   // Begin creation of external class mock
   ClassCreator ext_cc(DexType::make_type("LExternal;"));
-  ext_cc.set_super(get_object_type());
+  ext_cc.set_super(type::java_lang_Object());
   ext_cc.set_external();
 
   auto ext_final_method =

@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -14,5 +14,4 @@ class BridgePass : public Pass {
   BridgePass() : Pass("BridgePass") {}
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
-
 };

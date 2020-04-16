@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -45,6 +45,9 @@ int get_int_attribute_or_default_value(const android::ResXMLTree& parser,
                                        const android::String16& attribute_name,
                                        int32_t default_value);
 
+bool has_bool_attribute(const android::ResXMLTree& parser,
+                        const android::String16& attribute_name);
+
 bool get_bool_attribute_value(const android::ResXMLTree& parser,
                               const android::String16& attribute_name,
                               bool default_value);
@@ -61,10 +64,19 @@ enum class ComponentTag {
   Service,
 };
 
+/**
+ * Indicate the value of the "exported" attribute of a component.
+ */
+enum class BooleanXMLAttribute {
+  True,
+  False,
+  Undefined,
+};
+
 struct ComponentTagInfo {
   ComponentTag tag;
   std::string classname;
-  bool is_exported;
+  BooleanXMLAttribute is_exported;
   // Not defined on <provider>
   bool has_intent_filters{false};
   // Only defined on <provider>
@@ -72,7 +84,7 @@ struct ComponentTagInfo {
 
   ComponentTagInfo(ComponentTag tag,
                    const std::string& classname,
-                   bool is_exported)
+                   BooleanXMLAttribute is_exported)
       : tag(tag), classname(classname), is_exported(is_exported) {}
 };
 

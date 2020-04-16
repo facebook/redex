@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -11,7 +11,7 @@
 #include "ControlFlow.h"
 #include "PatriciaTreeSetAbstractDomain.h"
 
-using LivenessDomain = sparta::PatriciaTreeSetAbstractDomain<uint16_t>;
+using LivenessDomain = sparta::PatriciaTreeSetAbstractDomain<reg_t>;
 
 class LivenessFixpointIterator final
     : public ir_analyzer::BaseBackwardsIRAnalyzer<LivenessDomain> {

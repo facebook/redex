@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -70,7 +70,7 @@ IRInstruction* find_synchronized_throw_outside_catch_all(const IRCode& code) {
   return nullptr;
 }
 
-void Analyzer::analyze_instruction(IRInstruction* insn,
+void Analyzer::analyze_instruction(const IRInstruction* insn,
                                    MonitorCountDomain* current) const {
   if (!current->is_value()) {
     return;

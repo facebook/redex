@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -38,6 +38,9 @@ class ConstantUses {
   // Given a const or const-wide instruction, compute the combination type
   // demand across all execution paths.
   TypeDemand get_constant_type_demand(IRInstruction*) const;
+
+  // Whether type inference information was required to be computed.
+  bool has_type_inference() const;
 
  private:
   static TypeDemand get_type_demand(DexType* type);

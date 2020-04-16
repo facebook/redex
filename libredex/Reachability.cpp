@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -31,12 +31,12 @@ static ReachableObject SEED_SINGLETON{};
 DexMethod* resolve(const DexMethodRef* method, const DexClass* cls) {
   if (!cls) return nullptr;
   for (auto const& m : cls->get_vmethods()) {
-    if (signatures_match(method, m)) {
+    if (method::signatures_match(method, m)) {
       return m;
     }
   }
   for (auto const& m : cls->get_dmethods()) {
-    if (signatures_match(method, m)) {
+    if (method::signatures_match(method, m)) {
       return m;
     }
   }
@@ -59,6 +59,8 @@ DexMethod* resolve(const DexMethodRef* method, const DexClass* cls) {
 } // namespace
 
 namespace reachability {
+
+DexMethodRef* TransitiveClosureMarker::s_class_forname = nullptr;
 
 std::ostream& operator<<(std::ostream& os, const ReachableObject& obj) {
   switch (obj.type) {
@@ -233,7 +235,7 @@ void TransitiveClosureMarker::push(const Parent* parent,
 
 template <class Parent>
 void TransitiveClosureMarker::push(const Parent* parent, const DexType* type) {
-  type = get_element_type_if_array(type);
+  type = type::get_element_type_if_array(type);
   push(parent, type_class(type));
 }
 
@@ -322,12 +324,12 @@ References TransitiveClosureMarker::gather(const DexField* field) const {
 
 bool TransitiveClosureMarker::has_class_forname(DexMethod* meth) {
   auto code = meth->get_code();
-  if (!code || !m_class_forname) {
+  if (!code || !s_class_forname) {
     return false;
   }
   for (auto& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
-    if (insn->has_method() && insn->get_method() == m_class_forname) {
+    if (insn->has_method() && insn->get_method() == s_class_forname) {
       return true;
     }
   }
@@ -388,9 +390,9 @@ void TransitiveClosureMarker::push_typelike_strings(
 void TransitiveClosureMarker::visit_cls(const DexClass* cls) {
   TRACE(REACH, 4, "Visiting class: %s", SHOW(cls));
   for (auto& m : cls->get_dmethods()) {
-    if (is_clinit(m)) {
+    if (method::is_clinit(m)) {
       push(cls, m);
-    } else if (is_init(m)) {
+    } else if (method::is_init(m)) {
       // Push the parameterless constructor, in case it's constructed via
       // .class or Class.forName()
       if (m->get_proto()->get_args()->get_type_list().size() == 0) {
@@ -523,7 +525,6 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects(
         transitive_closure_marker.visit(obj);
         return nullptr;
       },
-      [](std::nullptr_t, std::nullptr_t) { return nullptr; },
       num_threads);
   for (const auto& obj : root_set) {
     work_queue.add_item(obj);
@@ -677,6 +678,31 @@ void write_reachable_object(std::ostream& os, const ReachableObject& obj) {
 } // namespace
 
 void dump_graph(std::ostream& os, const ReachableObjectGraph& retainers_of) {
+  auto compare = [](const ReachableObject& lhs, const ReachableObject& rhs) {
+    if (lhs.type != rhs.type) {
+      return lhs.type < rhs.type;
+    }
+    switch (lhs.type) {
+    case ReachableObjectType::CLASS:
+      return compare_dexclasses(lhs.cls, rhs.cls);
+    case ReachableObjectType::FIELD:
+      return compare_dexfields(lhs.field, rhs.field);
+    case ReachableObjectType::METHOD:
+      return compare_dexmethods(lhs.method, rhs.method);
+
+    case ReachableObjectType::ANNO:
+    case ReachableObjectType::SEED: {
+      // Pretty terrible, optimize.
+      std::ostringstream oss1;
+      oss1 << lhs;
+      std::ostringstream oss2;
+      oss2 << rhs;
+      return oss1.str() < oss2.str();
+    }
+    }
+    __builtin_unreachable();
+  };
+
   bs::write_header(os, /* version */ 1);
   bs::GraphWriter<ReachableObject, ReachableObjectHash> gw(
       write_reachable_object,
@@ -686,9 +712,16 @@ void dump_graph(std::ostream& os, const ReachableObjectGraph& retainers_of) {
         }
         const auto& preds = retainers_of.at(obj);
         std::vector<ReachableObject> preds_vec(preds.begin(), preds.end());
+        // Gotta sort the reachables or the output is nondeterministic.
+        std::sort(preds_vec.begin(), preds_vec.end(), compare);
         return preds_vec;
       });
-  gw.write(os, boost::adaptors::keys(retainers_of));
+
+  // Gotta sort the keys or the output is nondeterministic.
+  auto key_adaptor = boost::adaptors::keys(retainers_of);
+  std::vector<ReachableObject> keys(key_adaptor.begin(), key_adaptor.end());
+  std::sort(keys.begin(), keys.end(), compare);
+  gw.write(os, keys);
 }
 
 template void TransitiveClosureMarker::push<DexClass>(const DexClass* parent,

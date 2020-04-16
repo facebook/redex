@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -14,8 +14,6 @@
 #include "Resolver.h"
 #include "TypeReference.h"
 #include "TypeTags.h"
-
-using MethodOrderedSet = std::set<DexMethod*, dexmethods_comparator>;
 
 namespace {
 
@@ -44,9 +42,6 @@ bool overlaps_with_an_existing_virtual_scope(DexType* type,
 
 } // namespace
 
-using MethodToConstants =
-    std::map<DexMethod*, ConstantValues, dexmethods_comparator>;
-
 const DexType* s_method_meta_anno;
 
 ConstantLifting::ConstantLifting() : m_num_const_lifted_methods(0) {
@@ -69,8 +64,8 @@ std::vector<DexMethod*> ConstantLifting::lift_constants_from(
     const TypeTags* type_tags,
     const std::vector<DexMethod*>& methods,
     const size_t stud_method_threshold) {
-  MethodOrderedSet lifted;
-  MethodToConstants lifted_constants;
+  std::unordered_set<DexMethod*> lifted;
+  std::unordered_map<DexMethod*, ConstantValues> lifted_constants;
   for (auto method : methods) {
     always_assert(has_anno(method, s_method_meta_anno));
     auto kinds_str = parse_str_anno_value(method, s_method_meta_anno,
@@ -181,7 +176,7 @@ std::vector<DexMethod*> ConstantLifting::lift_constants_from(
     auto code = meth->get_code();
     if (const_vals.needs_stub()) {
       // Insert const load
-      std::vector<uint16_t> args;
+      std::vector<reg_t> args;
       for (size_t i = 0; i < insn->srcs_size(); i++) {
         args.push_back(insn->src(i));
       }
@@ -193,13 +188,13 @@ std::vector<DexMethod*> ConstantLifting::lift_constants_from(
       stub_methods.push_back(stub);
     } else {
       // Make const load
-      std::vector<uint16_t> const_regs;
+      std::vector<reg_t> const_regs;
       for (size_t i = 0; i < const_vals.size(); ++i) {
         const_regs.push_back(code->allocate_temp());
       }
       auto const_loads_and_invoke = const_vals.make_const_loads(const_regs);
       // Insert const load
-      std::vector<uint16_t> args;
+      std::vector<reg_t> args;
       for (size_t i = 0; i < insn->srcs_size(); i++) {
         args.push_back(insn->src(i));
       }
@@ -210,10 +205,7 @@ std::vector<DexMethod*> ConstantLifting::lift_constants_from(
       // remove original call.
       code->remove_opcode(insn);
     }
-    TRACE(METH_DEDUP,
-          9,
-          " patched call site in %s\n%s",
-          SHOW(meth),
+    TRACE(METH_DEDUP, 9, " patched call site in %s\n%s", SHOW(meth),
           SHOW(code));
   }
 

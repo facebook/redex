@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -161,7 +161,7 @@ DexClass* create_class(DexType* type,
 }
 
 DexClass* create_class_A() {
-  auto int_t = get_int_type();
+  auto int_t = type::_int();
   auto a_t = DexType::make_type("LA;");
 
   std::vector<DexField*> a_fields{
@@ -178,7 +178,8 @@ DexClass* create_class_A() {
   auto a_pri_fun = DexMethod::make_method("LA;", "a_pri_fun", "V", {})
                        ->make_concrete(ACC_PRIVATE | ACC_STATIC, false);
   std::vector<DexMethod*> a_methods{a_pub_fun, a_pro_fun, a_pri_fun};
-  return create_class(a_t, get_object_type(), a_methods, a_fields, ACC_PUBLIC);
+  return create_class(
+      a_t, type::java_lang_Object(), a_methods, a_fields, ACC_PUBLIC);
 }
 
 DexClass* create_class_B(DexType* super) {

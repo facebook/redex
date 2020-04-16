@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -7,15 +7,19 @@
 
 #include "Show.h"
 
+#include <iomanip>
+
 #include <boost/io/detail/quoted_manip.hpp>
 
 #include "ControlFlow.h"
 #include "Creators.h"
 #include "DexAnnotation.h"
+#include "DexCallSite.h"
 #include "DexClass.h"
 #include "DexDebugInstruction.h"
 #include "DexIdx.h"
 #include "DexInstruction.h"
+#include "DexMethodHandle.h"
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "IROpcode.h"
@@ -566,7 +570,8 @@ std::string show_insn(const IRInstruction* insn, bool deobfuscated) {
     ss << boost::io::quoted(show(insn->get_string()));
     break;
   case opcode::Ref::Type:
-    ss << show(insn->get_type());
+    ss << (deobfuscated ? show_deobfuscated(insn->get_type())
+                        : show(insn->get_type()));
     break;
   case opcode::Ref::Field:
     if (deobfuscated) {
@@ -587,6 +592,20 @@ std::string show_insn(const IRInstruction* insn, bool deobfuscated) {
     break;
   case opcode::Ref::Data:
     ss << "<data>"; // TODO: print something more informative
+    break;
+  case opcode::Ref::CallSite:
+    if (deobfuscated) {
+      ss << show_deobfuscated(insn->get_callsite());
+    } else {
+      ss << show(insn->get_callsite());
+    }
+    break;
+  case opcode::Ref::MethodHandle:
+    if (deobfuscated) {
+      ss << show_deobfuscated(insn->get_methodhandle());
+    } else {
+      ss << show(insn->get_methodhandle());
+    }
     break;
   }
   return ss.str();
@@ -1046,6 +1065,26 @@ std::ostream& operator<<(std::ostream& o, const MethodItemEntry& mie) {
   return o;
 }
 
+std::ostream& operator<<(std::ostream& o, const DexMethodHandle& mh) {
+  o << "[" << &mh << "] ";
+  o << "METHODHANDLE: TYPE=" << show(mh.type());
+  o << " FIELD_OR_METHOD_ID=";
+  if (DexMethodHandle::isInvokeType(mh.type())) {
+    o << show(mh.methodref());
+  } else {
+    o << show(mh.fieldref());
+  }
+  return o;
+}
+
+std::ostream& operator<<(std::ostream& o, const DexCallSite& cs) {
+  o << "[" << &cs << "] ";
+  o << "CALLSITE: METHODHANDLE=" << show(cs.method_handle());
+  o << " METHODNAME=" << show(cs.method_name());
+  o << " METHODTYPE=" << show(cs.method_type());
+  return o;
+}
+
 std::string show(const IRList* ir) {
   std::string ret;
   for (auto const& mei : *ir) {
@@ -1169,6 +1208,9 @@ std::string show_deobfuscated(const DexClass* cls) {
   if (!cls) {
     return "";
   }
+  if (cls->get_deobfuscated_name().empty()) {
+    return cls->get_name() ? cls->get_name()->str() : show(cls);
+  }
   return cls->get_deobfuscated_name();
 }
 
@@ -1255,4 +1297,53 @@ std::string show_deobfuscated(const DexProto* p) {
   b << "(" << show_deobfuscated(p->get_args()) << ")"
     << show_deobfuscated(p->get_rtype());
   return b.str();
+}
+
+std::string show_deobfuscated(const DexCallSite* callsite) {
+  if (!callsite) {
+    return "";
+  }
+  // TODO(T58570881) - actually deobfuscate
+  return SHOW(callsite);
+}
+
+std::string show_deobfuscated(const DexMethodHandle* methodhandle) {
+  if (!methodhandle) {
+    return "";
+  }
+  // TODO(T58570881) - actually deobfuscate
+  return SHOW(methodhandle);
+}
+
+std::string pretty_bytes(uint64_t val) {
+  size_t divisions = 0;
+  double d_val = val;
+  while (d_val > 1024 && divisions < 3) {
+    d_val /= 1024;
+    ++divisions;
+  }
+
+  const char* modifier;
+  switch (divisions) {
+  case 0:
+    modifier = "";
+    break;
+  case 1:
+    modifier = "k";
+    break;
+  case 2:
+    modifier = "M";
+    break;
+  case 3:
+    modifier = "G";
+    break;
+  default:
+    modifier = "Error";
+    break;
+  }
+
+  std::ostringstream oss;
+  oss << std::setiosflags(std::ios::fixed) << std::setprecision(2) << d_val
+      << " " << modifier << "B";
+  return oss.str();
 }

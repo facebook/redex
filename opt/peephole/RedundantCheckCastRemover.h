@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -7,9 +7,9 @@
 
 #pragma once
 
-#include <vector>
 #include "DexClass.h"
 #include "PassManager.h"
+#include <vector>
 
 class RedundantCheckCastRemover {
  public:

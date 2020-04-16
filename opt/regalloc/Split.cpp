@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -70,8 +70,8 @@ void calc_split_costs(const LivenessFixpointIterator& fixpoint_iter,
 
 IRInstruction* gen_load_for_split(
     const Graph& ig,
-    reg_t l,
-    std::unordered_map<reg_t, reg_t>* load_store_reg,
+    vreg_t l,
+    std::unordered_map<vreg_t, vreg_t>* load_store_reg,
     IRCode* code) {
   auto load_reg_it = load_store_reg->find(l);
   if (load_reg_it == load_store_reg->end()) {
@@ -85,8 +85,8 @@ IRInstruction* gen_load_for_split(
 
 IRInstruction* gen_store_for_split(
     const Graph& ig,
-    reg_t l,
-    std::unordered_map<reg_t, reg_t>* load_store_reg,
+    vreg_t l,
+    std::unordered_map<vreg_t, vreg_t>* load_store_reg,
     IRCode* code) {
   auto store_reg_it = load_store_reg->find(l);
   if (store_reg_it == load_store_reg->end()) {
@@ -98,11 +98,12 @@ IRInstruction* gen_store_for_split(
   }
 }
 
-void store_info_for_branch(const std::pair<cfg::Block*, cfg::Block*>& block_edge,
-                           cfg::Block* s,
-                           IRInstruction* mov,
-                           MethodItemEntry* pred_branch,
-                           BlockLoadInfo* block_load_info) {
+void store_info_for_branch(
+    const std::pair<cfg::Block*, cfg::Block*>& block_edge,
+    cfg::Block* s,
+    IRInstruction* mov,
+    MethodItemEntry* pred_branch,
+    BlockLoadInfo* block_load_info) {
   block_load_info->mode_and_insn[block_edge].add_insn_mode(mov, BRANCH);
   MethodItemEntry* succ_target = nullptr;
   for (auto find_target_it = s->begin(); find_target_it != s->end();
@@ -140,7 +141,7 @@ size_t split_for_block(const SplitPlan& split_plan,
                        const LivenessFixpointIterator& fixpoint_iter,
                        const Graph& ig,
                        cfg::Block* block,
-                       std::unordered_map<reg_t, reg_t>* load_store_reg,
+                       std::unordered_map<vreg_t, vreg_t>* load_store_reg,
                        IRCode* code,
                        BlockLoadInfo* block_load_info) {
   size_t split_move = 0;
@@ -169,7 +170,8 @@ size_t split_for_block(const SplitPlan& split_plan,
         bool can_insert_directly =
             split_costs.death_at_other(reg).at(succ->target()) ==
             succ->target()->preds().size();
-        if ((succ->type() == cfg::EDGE_GOTO || succ->type() == cfg::EDGE_BRANCH) &&
+        if ((succ->type() == cfg::EDGE_GOTO ||
+             succ->type() == cfg::EDGE_BRANCH) &&
             can_insert_directly) {
           // Use other_loaded_regs to make sure we don't load a register
           // several times in the same place.
@@ -192,7 +194,8 @@ size_t split_for_block(const SplitPlan& split_plan,
           continue;
         }
 
-        auto block_edge = std::pair<cfg::Block*, cfg::Block*>(block, succ->target());
+        auto block_edge =
+            std::pair<cfg::Block*, cfg::Block*>(block, succ->target());
         auto lastmei = block->rbegin();
         // Because in find_split we limited the try-catch edge to only deal
         // with catch block where reg died on all the exception edge toward it.
@@ -240,7 +243,7 @@ size_t split_for_define(const SplitPlan& split_plan,
                         const IRInstruction* insn,
                         const LivenessDomain& live_out,
                         IRCode* code,
-                        std::unordered_map<reg_t, reg_t>* load_store_reg,
+                        std::unordered_map<vreg_t, vreg_t>* load_store_reg,
                         IRList::iterator it) {
   size_t split_move = 0;
   if (insn->has_dest()) {
@@ -288,7 +291,7 @@ size_t split_for_last_use(const SplitPlan& split_plan,
                           const LivenessDomain& live_out,
                           cfg::Block* block,
                           IRCode* code,
-                          std::unordered_map<reg_t, reg_t>* load_store_reg,
+                          std::unordered_map<vreg_t, vreg_t>* load_store_reg,
                           IRList::reverse_iterator& it,
                           BlockLoadInfo* block_load_info) {
   size_t split_move = 0;
@@ -318,7 +321,8 @@ size_t split_for_last_use(const SplitPlan& split_plan,
           for (auto& succ : block->succs()) {
             IRInstruction* mov =
                 gen_load_for_split(ig, l, load_store_reg, code);
-            auto block_edge = std::pair<cfg::Block*, cfg::Block*>(block, succ->target());
+            auto block_edge =
+                std::pair<cfg::Block*, cfg::Block*>(block, succ->target());
             if (succ->type() == cfg::EDGE_BRANCH) {
               // Branches, need to change target.
               store_info_for_branch(block_edge,
@@ -441,7 +445,7 @@ size_t split(const LivenessFixpointIterator& fixpoint_iter,
              IRCode* code) {
   // Keep track of which reg is stored or loaded to which temp
   // so that we can get the right reg loaded or stored.
-  std::unordered_map<reg_t, reg_t> load_store_reg;
+  std::unordered_map<vreg_t, vreg_t> load_store_reg;
   BlockLoadInfo block_load_info;
   size_t split_move = 0;
   auto& cfg = code->cfg();

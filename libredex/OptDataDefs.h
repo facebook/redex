@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -39,6 +39,7 @@ enum NoptReason : int {
   INL_UNKNOWN_FIELD,
   INL_MULTIPLE_RETURNS,
   INL_TOO_MANY_CALLERS,
+  INL_DO_NOT_INLINE,
 
   // NOPT reason count
   N_NOPT_REASONS,

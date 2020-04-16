@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -214,7 +214,7 @@ void VirtualMerging::compute_mergeable_pairs_by_virtual_scopes() {
           auto method = p.first;
           methods.push_back(method);
           types_to_methods.emplace(method->get_class(), method);
-          if (!can_rename_DEPRECATED(method) || root(method) ||
+          if (!can_rename(method) || root(method) ||
               method->rstate.no_optimizations()) {
             // If we find any method in this virtual scope which we shouldn't
             // touch, we exclude the entire virtual scope.
@@ -426,12 +426,13 @@ void VirtualMerging::merge_methods() {
         overridden_code->push_back(load_param_insn);
         param_regs.push_back(load_param_insn->dest());
         for (auto t : proto->get_args()->get_type_list()) {
-          if (is_wide_type(t)) {
+          if (type::is_wide_type(t)) {
             load_param_insn = new IRInstruction(IOPCODE_LOAD_PARAM_WIDE);
             load_param_insn->set_dest(overridden_code->allocate_wide_temp());
           } else {
-            load_param_insn = new IRInstruction(
-                is_object(t) ? IOPCODE_LOAD_PARAM_OBJECT : IOPCODE_LOAD_PARAM);
+            load_param_insn =
+                new IRInstruction(type::is_object(t) ? IOPCODE_LOAD_PARAM_OBJECT
+                                                     : IOPCODE_LOAD_PARAM);
             load_param_insn->set_dest(overridden_code->allocate_temp());
           }
           overridden_code->push_back(load_param_insn);
@@ -439,14 +440,14 @@ void VirtualMerging::merge_methods() {
         }
         // we'll define helper functions in a way that lets them mutate the new
         // IRCode
-        push_insn = [&](IRInstruction* insn) {
+        push_insn = [=](IRInstruction* insn) {
           overridden_code->push_back(insn);
         };
-        allocate_temp = [&]() { return overridden_code->allocate_temp(); };
-        allocate_wide_temp = [&]() {
+        allocate_temp = [=]() { return overridden_code->allocate_temp(); };
+        allocate_wide_temp = [=]() {
           return overridden_code->allocate_wide_temp();
         };
-        cleanup = [&]() { overridden_code->build_cfg(/* editable */ true); };
+        cleanup = [=]() { overridden_code->build_cfg(/* editable */ true); };
       } else {
         // We are dealing with a non-abstract method. In this case, we'll first
         // insert an if-instruction to decide whether to run the overriding
@@ -508,12 +509,11 @@ void VirtualMerging::merge_methods() {
               /* true */);
         }
         // we'll define helper functions in a way that lets them mutate the cfg
-        push_insn = [&](IRInstruction* insn) { new_block->push_back(insn); };
-        allocate_temp = [&]() { return overridden_cfg.allocate_temp(); };
-        allocate_wide_temp = [&]() {
-          return overridden_cfg.allocate_wide_temp();
-        };
-        cleanup = [&]() {};
+        push_insn = [=](IRInstruction* insn) { new_block->push_back(insn); };
+        auto* cfg_ptr = &overridden_cfg;
+        allocate_temp = [=]() { return cfg_ptr->allocate_temp(); };
+        allocate_wide_temp = [=]() { return cfg_ptr->allocate_wide_temp(); };
+        cleanup = []() {};
       }
       always_assert(1 + proto->get_args()->get_type_list().size() ==
                     param_regs.size());
@@ -546,19 +546,14 @@ void VirtualMerging::merge_methods() {
       } else {
         // move-result result_temp
         auto rtype = proto->get_rtype();
-        auto op = is_wide_type(rtype)
-                      ? OPCODE_MOVE_RESULT_WIDE
-                      : is_object(rtype) ? OPCODE_MOVE_RESULT_OBJECT
-                                         : OPCODE_MOVE_RESULT;
+        auto op = opcode::move_result_for_invoke(overriding_method);
         auto move_result_insn = new IRInstruction(op);
         auto result_temp = op == OPCODE_MOVE_RESULT_WIDE ? allocate_wide_temp()
                                                          : allocate_temp();
         move_result_insn->set_dest(result_temp);
         push_insn(move_result_insn);
         // return result_temp
-        op = is_wide_type(rtype)
-                 ? OPCODE_RETURN_WIDE
-                 : is_object(rtype) ? OPCODE_RETURN_OBJECT : OPCODE_RETURN;
+        op = opcode::return_opcode(rtype);
         auto return_insn = new IRInstruction(op);
         return_insn->set_src(0, result_temp);
         push_insn(return_insn);

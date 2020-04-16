@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -227,7 +227,8 @@ inline std::string encode_utf8_char_to_mutf8_string(const int32_t ival) {
   int idx = 0;
   if (size == 1) {
     if (ival > 0x7F) {
-      throw std::invalid_argument("Invalid utf8_char for encoding to mutf8 string");
+      throw std::invalid_argument(
+          "Invalid utf8_char for encoding to mutf8 string");
     }
     if (ival == 0x00) { // \u0000 in 2 bytes
       buf[idx++] = 0xC0;

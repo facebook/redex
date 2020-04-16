@@ -1,24 +1,15 @@
-#!/usr/bin/env python
-
+#!/usr/bin/env python3
 # Copyright (c) Facebook, Inc. and its affiliates.
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
-
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-from __future__ import unicode_literals
 
 import argparse
 import json
 import subprocess
 
 
-SPECIAL_PASSES = [
-    'ReBindRefsPass',
-    'InterDexPass',
-]
+SPECIAL_PASSES = ["ReBindRefsPass", "InterDexPass"]
 
 
 def filter_special(passes):
@@ -49,9 +40,9 @@ def bisect(passes, config, config_path, cmd):
     while l < u - 1:
         m = (l + u) / 2
         testpasses = slice_passes(passes, l, m)
-        print('Testing passes: ' + str(testpasses))
-        config['redex']['passes'] = testpasses
-        with open(config_path, 'w') as config_file:
+        print("Testing passes: " + str(testpasses))
+        config["redex"]["passes"] = testpasses
+        with open(config_path, "w") as config_file:
             json.dump(config, config_file)
         ret = subprocess.call(cmd, shell=True)
         if ret == 0:
@@ -61,19 +52,19 @@ def bisect(passes, config, config_path, cmd):
     return filter_special(slice_passes(passes, l, u))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--cmd', required=True, help='Command to run')
-    parser.add_argument('--config', required=True, help='Config file to bisect')
+    parser.add_argument("--cmd", required=True, help="Command to run")
+    parser.add_argument("--config", required=True, help="Config file to bisect")
     args = parser.parse_args()
 
-    with open(args.config, 'r') as config_file:
+    with open(args.config, "r") as config_file:
         contents = config_file.read()
     config = json.loads(contents)
 
     try:
-        bad_passes = bisect(config['redex']['passes'], config, args.config, args.cmd)
-        print('FAILING PASSES:' + str(bad_passes))
+        bad_passes = bisect(config["redex"]["passes"], config, args.config, args.cmd)
+        print("FAILING PASSES:" + str(bad_passes))
     finally:
-        with open(args.config, 'w') as config_file:
+        with open(args.config, "w") as config_file:
             config_file.write(contents)

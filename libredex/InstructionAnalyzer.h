@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -21,6 +21,7 @@
  * the InstructionAnalyzerCombiner.
  */
 
+/* clang-format off */
 // Opcodes are grouped on the basis that most analyses will want to handle all
 // opcodes in a given group similarly.
 #define OPCODE_GROUPS \
@@ -56,6 +57,8 @@
   X(unop)             \
   X(binop)            \
   X(binop_lit)
+
+/* clang-format on */
 
 /*
  * A sub-analyzer is simply a description of how to mutate an Environment given
@@ -375,6 +378,8 @@ class InstructionAnalyzerCombiner final {
     case OPCODE_INVOKE_SUPER:
     case OPCODE_INVOKE_DIRECT:
     case OPCODE_INVOKE_STATIC:
+    case OPCODE_INVOKE_POLYMORPHIC:
+    case OPCODE_INVOKE_CUSTOM:
     case OPCODE_INVOKE_INTERFACE:
       return analyze_invoke(std::index_sequence_for<Analyzers...>{}, insn, env);
     case OPCODE_CHECK_CAST:

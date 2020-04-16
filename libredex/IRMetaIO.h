@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -29,7 +29,6 @@ class IRMetaIO {
   template <typename T>
   static bool is_default_meta(const T* obj) {
     return obj->get_deobfuscated_name() == show(obj) &&
-           !obj->rstate.inner_struct.m_by_type &&
            !obj->rstate.inner_struct.m_by_string &&
            !obj->rstate.inner_struct.m_by_resources &&
            !obj->rstate.inner_struct.m_is_serde &&

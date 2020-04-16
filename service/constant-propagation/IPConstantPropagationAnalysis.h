@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -64,13 +64,13 @@ using ProcedureAnalysisFactory =
  * The intraprocedural propagation logic is delegated to the
  * ProcedureAnalysisFactory.
  */
-class FixpointIterator
-    : public sparta::MonotonicFixpointIterator<call_graph::GraphInterface,
-                                               Domain> {
+class FixpointIterator : public sparta::ParallelMonotonicFixpointIterator<
+                             call_graph::GraphInterface,
+                             Domain> {
  public:
   FixpointIterator(const call_graph::Graph& call_graph,
                    const ProcedureAnalysisFactory& proc_analysis_factory)
-      : MonotonicFixpointIterator(call_graph),
+      : ParallelMonotonicFixpointIterator(call_graph),
         m_proc_analysis_factory(proc_analysis_factory),
         m_call_graph(call_graph) {
     auto wps = new WholeProgramState();
@@ -78,7 +78,7 @@ class FixpointIterator
     m_wps.reset(wps);
   }
 
-  void analyze_node(DexMethod* const& method,
+  void analyze_node(const DexMethod* const& method,
                     Domain* current_state) const override;
 
   Domain analyze_edge(const std::shared_ptr<call_graph::Edge>& edge,

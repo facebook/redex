@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -41,7 +41,8 @@ void test_inliner(const std::string& caller_str,
   const std::string& final_cfg = show(caller);
   caller_code->clear_cfg();
   EXPECT_EQ(assembler::to_string(expected_code.get()),
-            assembler::to_string(caller_code.get())) << final_cfg;
+            assembler::to_string(caller_code.get()))
+      << final_cfg;
 }
 
 class CFGInlinerTest : public RedexTest {};
@@ -783,6 +784,41 @@ TEST_F(CFGInlinerTest, inf_loop) {
     (
       (:lbl)
       (goto :lbl)
+    )
+  )";
+  test_inliner(caller_str, callee_str, expected_str);
+}
+
+TEST_F(CFGInlinerTest, cleanup_debug) {
+  const auto caller_str = R"(
+    (
+      (const v0 0)
+      (invoke-static (v0) "LCls;.foo:(I)V")
+      (return-void)
+    )
+  )";
+  const auto callee_str = R"(
+    (
+      (load-param v0)
+      (.dbg DBG_SET_PROLOGUE_END)
+      (.dbg DBG_START_LOCAL_EXTENDED 4 "will_not_be_removed" "Ljava/lang/Objects;" "sig")
+      (.dbg DBG_START_LOCAL 5 "will_not_be_removed" "Ljava/lang/Objects;")
+      (const v1 1)
+      (.dbg DBG_END_LOCAL 3)
+      (.dbg DBG_END_LOCAL 4)
+      (.dbg DBG_RESTART_LOCAL 6)
+      (return-void)
+    )
+  )";
+  const auto expected_str = R"(
+    (
+      (const v0 0)
+      (move v1 v0)
+      (.dbg DBG_START_LOCAL_EXTENDED 4 "will_not_be_removed" "Ljava/lang/Objects;" "sig")
+      (.dbg DBG_START_LOCAL 5 "will_not_be_removed" "Ljava/lang/Objects;")
+      (const v2 1)
+      (.dbg DBG_END_LOCAL 4)
+      (return-void)
     )
   )";
   test_inliner(caller_str, callee_str, expected_str);

@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -6,13 +6,13 @@
  */
 
 #include "RedexDump.h"
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
 #include <getopt.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
-#include "PrintUtil.h"
 #include "Formatters.h"
+#include "PrintUtil.h"
 
 static const char ddump_usage_string[] =
     "ReDex, DEX Dump tool\n"
@@ -34,6 +34,8 @@ static const char ddump_usage_string[] =
     "-p, --proto: print items in the proto id section\n"
     "-f, --field: print items in the field id section\n"
     "-m, --meth: print items in the method id section\n"
+    "-h, --methodhandle: print items in the methodhandle section\n"
+    "-k, --callsite: print items in the callsite section\n"
     "-c, --clsdef: print items in the class def id section\n"
     "-C, --clsdata: print items in the class data section\n"
     "-x, --code: print items in the code data section\n"
@@ -45,8 +47,7 @@ static const char ddump_usage_string[] =
     "printing options:\n"
     "--clean: suppress indices and offsets\n"
     "--no-headers: suppress headers\n"
-    "--raw: print all bytes, even control characters\n"
-  ;
+    "--raw: print all bytes, even control characters\n";
 
 int main(int argc, char* argv[]) {
 
@@ -57,6 +58,8 @@ int main(int argc, char* argv[]) {
   bool proto = false;
   bool field = false;
   bool meth = false;
+  bool methodhandle = false;
+  bool callsite = false;
   bool clsdef = false;
   bool clsdata = false;
   bool code = false;
@@ -68,34 +71,32 @@ int main(int argc, char* argv[]) {
 
   char c;
   static const struct option options[] = {
-    { "all", no_argument, nullptr, 'a' },
-    { "string", no_argument, nullptr, 's' },
-    { "stringdata", no_argument, nullptr, 'S' },
-    { "type", no_argument, nullptr, 't' },
-    { "proto", no_argument, nullptr, 'p' },
-    { "field", no_argument, nullptr, 'f' },
-    { "meth", no_argument, nullptr, 'm' },
-    { "clsdef", no_argument, nullptr, 'c' },
-    { "clsdata", no_argument, nullptr, 'C' },
-    { "code", no_argument, nullptr, 'x' },
-    { "enarr", no_argument, nullptr, 'e' },
-    { "anno", no_argument, nullptr, 'A' },
-    { "debug", no_argument, nullptr, 'd' },
-    { "ddebug", required_argument, nullptr, 'D' },
-    { "clean", no_argument, (int*)&clean, 1 },
-    { "raw", no_argument, (int*)&raw, 1 },
-    { "escape", no_argument, (int*)&escape, 1 },
-    { "no-headers", no_argument, &no_headers, 1 },
-    { "help", no_argument, nullptr, 'h' },
-    { nullptr, 0, nullptr, 0 },
+      {"all", no_argument, nullptr, 'a'},
+      {"string", no_argument, nullptr, 's'},
+      {"stringdata", no_argument, nullptr, 'S'},
+      {"type", no_argument, nullptr, 't'},
+      {"proto", no_argument, nullptr, 'p'},
+      {"field", no_argument, nullptr, 'f'},
+      {"meth", no_argument, nullptr, 'm'},
+      {"callsite", no_argument, nullptr, 'k'},
+      {"methodhandle", no_argument, nullptr, 'H'},
+      {"clsdef", no_argument, nullptr, 'c'},
+      {"clsdata", no_argument, nullptr, 'C'},
+      {"code", no_argument, nullptr, 'x'},
+      {"enarr", no_argument, nullptr, 'e'},
+      {"anno", no_argument, nullptr, 'A'},
+      {"debug", no_argument, nullptr, 'd'},
+      {"ddebug", required_argument, nullptr, 'D'},
+      {"clean", no_argument, (int*)&clean, 1},
+      {"raw", no_argument, (int*)&raw, 1},
+      {"escape", no_argument, (int*)&escape, 1},
+      {"no-headers", no_argument, &no_headers, 1},
+      {"help", no_argument, nullptr, 'h'},
+      {nullptr, 0, nullptr, 0},
   };
 
-  while ((c = getopt_long(
-            argc,
-            argv,
-            "asStpfmcCxeAdDh",
-            &options[0],
-            nullptr)) != -1) {
+  while ((c = getopt_long(argc, argv, "asStpfmcCxeAdDh", &options[0],
+                          nullptr)) != -1) {
     switch (c) {
       case 'a':
         all = true;
@@ -117,6 +118,12 @@ int main(int argc, char* argv[]) {
         break;
       case 'm':
         meth = true;
+        break;
+      case 'H':
+        methodhandle = true;
+        break;
+      case 'k':
+        callsite = true;
         break;
       case 'c':
         clsdef = true;
@@ -182,6 +189,12 @@ int main(int argc, char* argv[]) {
     if (meth || all) {
       dump_methods(&rd, !no_headers);
     }
+    if (methodhandle || all) {
+      dump_methodhandles(&rd, !no_headers);
+    }
+    if (callsite || all) {
+      dump_callsites(&rd, !no_headers);
+    }
     if (clsdef || all) {
       dump_clsdefs(&rd, !no_headers);
     }
@@ -197,6 +210,7 @@ int main(int argc, char* argv[]) {
     if (anno || all) {
       dump_anno(&rd);
     }
+
     if (redexdump_debug || all) {
       dump_debug(&rd);
     }

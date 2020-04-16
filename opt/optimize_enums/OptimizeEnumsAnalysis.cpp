@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -49,7 +49,7 @@ class Analyzer final : public ir_analyzer::BaseIRAnalyzer<ConstantEnvironment> {
     MonotonicFixpointIterator::run(ConstantEnvironment::top());
   }
 
-  void analyze_instruction(IRInstruction* insn,
+  void analyze_instruction(const IRInstruction* insn,
                            ConstantEnvironment* env) const override {
     auto op = insn->opcode();
 
@@ -108,7 +108,7 @@ class Analyzer final : public ir_analyzer::BaseIRAnalyzer<ConstantEnvironment> {
         break;
       }
 
-      if (is_init(invoked) &&
+      if (method::is_init(invoked) &&
           invoked->get_class() == m_current_enum->get_type()) {
         // We keep track of the ordinal value of the newly created instance
         // in the register that holds the instance.

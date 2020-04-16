@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -22,7 +22,7 @@ std::unique_ptr<ReachableObjectGraph> generate_graph() {
   auto seed = ReachableObject();
 
   ClassCreator cc(DexType::make_type("LFoo;"));
-  cc.set_super(get_object_type());
+  cc.set_super(type::java_lang_Object());
   auto cls = ReachableObject(cc.create());
 
   auto field = ReachableObject(DexField::make_field("LFoo;.field1:I"));

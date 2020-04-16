@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -50,14 +50,14 @@ void scope_info(const ClassScopes& class_scopes) {
         easy_scopes[scope_meth_count]++;
       });
 
-  const auto scope_count = [](std::map<int, int> map) {
+  const auto scope_count = [](const std::map<int, int>& map) {
     size_t c = 0;
     for (const auto& it : map) {
       c += it.second;
     }
     return c;
   };
-  const auto method_count = [](std::map<int, int> map) {
+  const auto method_count = [](const std::map<int, int>& map) {
     size_t c = 0;
     for (const auto& it : map) {
       c += (it.first * it.second);
@@ -181,7 +181,7 @@ struct VirtualRenamer {
   int rename_scope_ref(DexMethod* meth, DexString* name);
   int rename_scope(const VirtualScope* scope, DexString* name);
 
-  DexString* get_unescaped_name(std::vector<const VirtualScope*> scopes,
+  DexString* get_unescaped_name(const std::vector<const VirtualScope*>& scopes,
                                 int& seed) const;
   DexString* get_unescaped_name(const VirtualScope* scope, int& seed) const;
   bool usable_name(DexString* name, const VirtualScope* scope) const;
@@ -310,7 +310,7 @@ DexString* VirtualRenamer::get_unescaped_name(const VirtualScope* scope,
  * * Update 'seed' *
  */
 DexString* VirtualRenamer::get_unescaped_name(
-    std::vector<const VirtualScope*> scopes, int& seed) const {
+    const std::vector<const VirtualScope*>& scopes, int& seed) const {
   // advance seed as necessary, skipping over dmethods
   for (const auto& scope : scopes) {
     seed = std::max(seed, get_next_virtualscope_seeds(scope));
@@ -366,7 +366,7 @@ int VirtualRenamer::rename_interface_scopes(int& seed) {
           redex_assert(type_class(intf) != nullptr);
           const auto meth = find_method(type_class(intf), name, proto);
           redex_assert(meth != nullptr);
-          if (!can_rename_DEPRECATED(meth)) {
+          if (!can_rename(meth)) {
             TRACE(OBFUSCATE, 5, "Cannot rename %s", SHOW(meth));
             return;
           }
@@ -545,7 +545,7 @@ size_t rename_virtuals(
                     next_dmethod_seeds);
 
   // rename virtual only first
-  const auto obj_t = get_object_type();
+  const auto obj_t = type::java_lang_Object();
   int seed = 0;
   size_t renamed = vr.rename_virtual_scopes(obj_t, seed);
   TRACE(OBFUSCATE, 2, "Virtual renamed: %ld", renamed);

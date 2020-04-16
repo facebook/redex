@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -31,7 +31,7 @@ Scope build_class_scope_excluding_primary_dex(const DexStoresVector& stores) {
 
 namespace method_reference {
 
-IRInstruction* make_load_const(uint16_t dest, size_t val) {
+IRInstruction* make_load_const(reg_t dest, size_t val) {
   auto load = new IRInstruction(OPCODE_CONST);
   load->set_dest(dest);
   load->set_literal(static_cast<int32_t>(val));
@@ -40,7 +40,7 @@ IRInstruction* make_load_const(uint16_t dest, size_t val) {
 
 IRInstruction* make_invoke(DexMethod* callee,
                            IROpcode opcode,
-                           std::vector<uint16_t> args) {
+                           std::vector<reg_t> args) {
   always_assert(callee->is_def() && is_public(callee));
   auto invoke = (new IRInstruction(opcode))->set_method(callee);
   invoke->set_srcs_size(args.size());
@@ -51,7 +51,7 @@ IRInstruction* make_invoke(DexMethod* callee,
 }
 
 void patch_callsite(const CallSite& callsite, const NewCallee& new_callee) {
-  if (is_static(new_callee.method) || is_any_init(new_callee.method) ||
+  if (is_static(new_callee.method) || method::is_any_init(new_callee.method) ||
       new_callee.method->is_virtual()) {
     set_public(new_callee.method);
   }
@@ -85,6 +85,10 @@ void patch_callsite(const CallSite& callsite, const NewCallee& new_callee) {
 void update_call_refs_simple(
     const Scope& scope,
     const std::unordered_map<DexMethod*, DexMethod*>& old_to_new_callee) {
+  if (old_to_new_callee.empty()) {
+    return;
+  }
+
   auto patcher = [&](DexMethod* meth, IRCode& code) {
     for (auto& mie : InstructionIterable(code)) {
       auto insn = mie.insn;
@@ -117,8 +121,8 @@ void update_call_refs_simple(
   walk::parallel::code(scope, patcher);
 }
 
-CallSites collect_call_refs(const Scope& scope,
-                            const MethodOrderedSet& callees) {
+template <typename T>
+CallSites collect_call_refs(const Scope& scope, const T& callees) {
   if (callees.empty()) {
     CallSites empty;
     return empty;
@@ -150,13 +154,22 @@ CallSites collect_call_refs(const Scope& scope,
     return call_sites;
   };
 
-  CallSites call_sites = walk::parallel::reduce_methods<CallSites>(
-      scope, patcher, [](CallSites left, CallSites right) {
-        left.insert(left.end(), right.begin(), right.end());
-        return left;
-      });
+  struct Append {
+    void operator()(const CallSites& addend, CallSites* accumulator) {
+      accumulator->insert(accumulator->end(), addend.begin(), addend.end());
+    }
+  };
+
+  CallSites call_sites =
+      walk::parallel::methods<CallSites, Append>(scope, patcher);
   return call_sites;
 }
+
+using MethodOrderedSet = std::set<DexMethod*, dexmethods_comparator>;
+template CallSites collect_call_refs<MethodOrderedSet>(
+    const Scope& scope, const MethodOrderedSet& callees);
+template CallSites collect_call_refs<std::unordered_set<DexMethod*>>(
+    const Scope& scope, const std::unordered_set<DexMethod*>& callees);
 
 int wrap_instance_call_with_static(
     DexStoresVector& stores,

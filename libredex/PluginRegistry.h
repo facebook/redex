@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -37,15 +37,18 @@ class PluginEntry : public Plugin {
   }
   std::unique_ptr<T> create(const std::string& plugin_name) {
     if (m_creators.count(plugin_name)) {
-      return std::unique_ptr<T>(m_creators[plugin_name]());
+      auto plugin = std::unique_ptr<T>(m_creators[plugin_name]());
+      if (plugin) {
+        plugin->set_name(plugin_name);
+      }
+      return plugin;
     }
     return nullptr;
   }
   std::vector<std::unique_ptr<T>> create_plugins() {
     std::vector<std::unique_ptr<T>> res;
     for (const auto& name : m_ordered_creator_names) {
-      Creator& creator = m_creators.at(name);
-      res.emplace_back(std::unique_ptr<T>(creator()));
+      res.emplace_back(std::move(create(name)));
     }
     return res;
   }

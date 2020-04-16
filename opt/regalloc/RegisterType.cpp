@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -25,11 +25,8 @@ namespace register_type_impl {
  *           \    |   /
  *            CONFLICT
  */
-Lattice lattice({RegisterType::CONFLICT,
-                 RegisterType::ZERO,
-                 RegisterType::NORMAL,
-                 RegisterType::WIDE,
-                 RegisterType::OBJECT,
+Lattice lattice({RegisterType::CONFLICT, RegisterType::ZERO,
+                 RegisterType::NORMAL, RegisterType::WIDE, RegisterType::OBJECT,
                  RegisterType::UNKNOWN},
                 {{RegisterType::CONFLICT, RegisterType::OBJECT},
                  {RegisterType::CONFLICT, RegisterType::NORMAL},
@@ -60,7 +57,7 @@ static IROpcode move_op_for_type(RegisterType type) {
   not_reached();
 }
 
-IRInstruction* gen_move(RegisterType type, reg_t dest, reg_t src) {
+IRInstruction* gen_move(RegisterType type, vreg_t dest, vreg_t src) {
   auto insn = new IRInstruction(move_op_for_type(type));
   insn->set_dest(dest);
   insn->set_src(0, src);
@@ -293,6 +290,8 @@ RegisterType dest_reg_type(const IRInstruction* insn) {
   case OPCODE_INVOKE_DIRECT:
   case OPCODE_INVOKE_STATIC:
   case OPCODE_INVOKE_INTERFACE:
+  case OPCODE_INVOKE_CUSTOM:
+  case OPCODE_INVOKE_POLYMORPHIC:
     always_assert_log(false, "No dest");
     not_reached();
   case OPCODE_CONST_STRING:
@@ -322,11 +321,15 @@ RegisterType dest_reg_type(const IRInstruction* insn) {
   }
 }
 
-static RegisterType invoke_src_type(const IRInstruction* insn, reg_t i) {
+static RegisterType invoke_src_type(const IRInstruction* insn, vreg_t i) {
   auto* method = insn->get_method();
   // non-static invokes have an implicit `this` arg that is not reflected in
   // the method proto.
-  if (insn->opcode() != OPCODE_INVOKE_STATIC) {
+  //
+  // TODO(T59333250): WHAT ABOUT invoke-custom and invoke-polymorphic
+  if (insn->opcode() != OPCODE_INVOKE_CUSTOM &&
+      insn->opcode() != OPCODE_INVOKE_POLYMORPHIC &&
+      insn->opcode() != OPCODE_INVOKE_STATIC) {
     if (i == 0) {
       return RegisterType::OBJECT;
     } else {
@@ -338,16 +341,16 @@ static RegisterType invoke_src_type(const IRInstruction* insn, reg_t i) {
   const auto& types = method->get_proto()->get_args()->get_type_list();
   always_assert_log(types.size() > i, "Invalid invoke insn %s\n", SHOW(insn));
   auto* type = types.at(i);
-  if (is_wide_type(type)) {
+  if (type::is_wide_type(type)) {
     return RegisterType::WIDE;
-  } else if (is_primitive(types.at(i))) {
+  } else if (type::is_primitive(types.at(i))) {
     return RegisterType::NORMAL;
   } else {
     return RegisterType::OBJECT;
   }
 }
 
-RegisterType src_reg_type(const IRInstruction* insn, reg_t i) {
+RegisterType src_reg_type(const IRInstruction* insn, vreg_t i) {
   auto op = insn->opcode();
   switch (op) {
   case OPCODE_NOP:
@@ -564,6 +567,8 @@ RegisterType src_reg_type(const IRInstruction* insn, reg_t i) {
   case OPCODE_INVOKE_DIRECT:
   case OPCODE_INVOKE_STATIC:
   case OPCODE_INVOKE_INTERFACE:
+  case OPCODE_INVOKE_CUSTOM:
+  case OPCODE_INVOKE_POLYMORPHIC:
     return invoke_src_type(insn, i);
   case OPCODE_CONST_STRING:
   case OPCODE_CONST_CLASS:
@@ -578,7 +583,7 @@ RegisterType src_reg_type(const IRInstruction* insn, reg_t i) {
   case OPCODE_NEW_ARRAY:
     return RegisterType::NORMAL;
   case OPCODE_FILLED_NEW_ARRAY:
-    return is_primitive(get_array_component_type(insn->get_type()))
+    return type::is_primitive(type::get_array_component_type(insn->get_type()))
                ? RegisterType::NORMAL
                : RegisterType::OBJECT;
   case IOPCODE_LOAD_PARAM:

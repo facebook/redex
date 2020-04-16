@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -15,31 +15,27 @@
 #include <cstring>
 
 static const unsigned char PADDING[128] = {
-  0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-};
+    0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0,    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0,    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0,    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0,    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0,    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 /*
  * Encodes input (unsigned int) into output (unsigned char). Assumes len is a
  * multiple of 4.
  */
-static void sha_encode32(
-    unsigned char* output,
-    unsigned int* input,
-    unsigned int len) {
+static void sha_encode32(unsigned char* output,
+                         unsigned int* input,
+                         unsigned int len) {
   unsigned int i, j;
 
   for (i = 0, j = 0; j < len; i++, j += 4) {
-    output[j] = (unsigned char) ((input[i] >> 24) & 0xff);
-    output[j + 1] = (unsigned char) ((input[i] >> 16) & 0xff);
-    output[j + 2] = (unsigned char) ((input[i] >> 8) & 0xff);
-    output[j + 3] = (unsigned char) (input[i] & 0xff);
+    output[j] = (unsigned char)((input[i] >> 24) & 0xff);
+    output[j + 1] = (unsigned char)((input[i] >> 16) & 0xff);
+    output[j + 2] = (unsigned char)((input[i] >> 8) & 0xff);
+    output[j + 3] = (unsigned char)(input[i] & 0xff);
   }
 }
 
@@ -47,17 +43,15 @@ static void sha_encode32(
  * Decodes input (unsigned char) into output (unsigned int). Assumes len is a
  * multiple of 4.
  */
-static void sha_decode32(
-    unsigned int* output,
-    const unsigned char* input,
-    unsigned int len) {
+static void sha_decode32(unsigned int* output,
+                         const unsigned char* input,
+                         unsigned int len) {
   unsigned int i, j;
 
   for (i = 0, j = 0; j < len; i++, j += 4)
-    output[i] = ((unsigned int) input[j + 3]) |
-      (((unsigned int) input[j + 2]) << 8) |
-      (((unsigned int) input[j + 1]) << 16) |
-      (((unsigned int) input[j]) << 24);
+    output[i] =
+        ((unsigned int)input[j + 3]) | (((unsigned int)input[j + 2]) << 8) |
+        (((unsigned int)input[j + 1]) << 16) | (((unsigned int)input[j]) << 24);
 }
 
 /* F, G, H and I are basic SHA1 functions.
@@ -69,134 +63,138 @@ static void sha_decode32(
 
 /* ROTATE_LEFT rotates x left n bits.
  */
-#define ROTATE_LEFT(x, n) (((x) << (n)) | ((x) >> (32-(n))))
+#define ROTATE_LEFT(x, n) (((x) << (n)) | ((x) >> (32 - (n))))
 
 /* W[i]
  */
-#define W(i) ( tmp=x[(i-3)&15]^x[(i-8)&15]^x[(i-14)&15]^x[i&15],        \
-               (x[i&15]=ROTATE_LEFT(tmp, 1)) )
+#define W(i)                                                               \
+  (tmp = x[(i - 3) & 15] ^ x[(i - 8) & 15] ^ x[(i - 14) & 15] ^ x[i & 15], \
+   (x[i & 15] = ROTATE_LEFT(tmp, 1)))
 
 /* FF, GG, HH, and II transformations for rounds 1, 2, 3, and 4.
  */
-#define FF(a, b, c, d, e, w) {                                          \
-    (e) += F ((b), (c), (d)) + (w) + (unsigned int)(0x5A827999);        \
-    (e) += ROTATE_LEFT ((a), 5);                                        \
-    (b) = ROTATE_LEFT((b), 30);                                         \
+#define FF(a, b, c, d, e, w)                                    \
+  {                                                             \
+    (e) += F((b), (c), (d)) + (w) + (unsigned int)(0x5A827999); \
+    (e) += ROTATE_LEFT((a), 5);                                 \
+    (b) = ROTATE_LEFT((b), 30);                                 \
   }
-#define GG(a, b, c, d, e, w) {                                          \
-    (e) += G ((b), (c), (d)) + (w) + (unsigned int)(0x6ED9EBA1);        \
-    (e) += ROTATE_LEFT ((a), 5);                                        \
-    (b) = ROTATE_LEFT((b), 30);                                         \
+#define GG(a, b, c, d, e, w)                                    \
+  {                                                             \
+    (e) += G((b), (c), (d)) + (w) + (unsigned int)(0x6ED9EBA1); \
+    (e) += ROTATE_LEFT((a), 5);                                 \
+    (b) = ROTATE_LEFT((b), 30);                                 \
   }
-#define HH(a, b, c, d, e, w) {                                          \
-    (e) += H ((b), (c), (d)) + (w) + (unsigned int)(0x8F1BBCDC);        \
-    (e) += ROTATE_LEFT ((a), 5);                                        \
-    (b) = ROTATE_LEFT((b), 30);                                         \
+#define HH(a, b, c, d, e, w)                                    \
+  {                                                             \
+    (e) += H((b), (c), (d)) + (w) + (unsigned int)(0x8F1BBCDC); \
+    (e) += ROTATE_LEFT((a), 5);                                 \
+    (b) = ROTATE_LEFT((b), 30);                                 \
   }
-#define II(a, b, c, d, e, w) {                                          \
-    (e) += I ((b), (c), (d)) + (w) + (unsigned int)(0xCA62C1D6);        \
-    (e) += ROTATE_LEFT ((a), 5);                                        \
-    (b) = ROTATE_LEFT((b), 30);                                         \
+#define II(a, b, c, d, e, w)                                    \
+  {                                                             \
+    (e) += I((b), (c), (d)) + (w) + (unsigned int)(0xCA62C1D6); \
+    (e) += ROTATE_LEFT((a), 5);                                 \
+    (b) = ROTATE_LEFT((b), 30);                                 \
   }
 
 /*
  * SHA1 basic transformation. Transforms state based on block.
  */
-static void sha1_transform(
-    unsigned int state[5],
-    const unsigned char block[64]) {
+static void sha1_transform(unsigned int state[5],
+                           const unsigned char block[64]) {
   unsigned int a = state[0], b = state[1], c = state[2];
   unsigned int d = state[3], e = state[4], x[16], tmp;
 
   sha_decode32(x, block, 64);
 
   /* Round 1 */
-  FF(a, b, c, d, e, x[0]);   /* 1 */
-  FF(e, a, b, c, d, x[1]);   /* 2 */
-  FF(d, e, a, b, c, x[2]);   /* 3 */
-  FF(c, d, e, a, b, x[3]);   /* 4 */
-  FF(b, c, d, e, a, x[4]);   /* 5 */
-  FF(a, b, c, d, e, x[5]);   /* 6 */
-  FF(e, a, b, c, d, x[6]);   /* 7 */
-  FF(d, e, a, b, c, x[7]);   /* 8 */
-  FF(c, d, e, a, b, x[8]);   /* 9 */
-  FF(b, c, d, e, a, x[9]);   /* 10 */
-  FF(a, b, c, d, e, x[10]);  /* 11 */
-  FF(e, a, b, c, d, x[11]);  /* 12 */
-  FF(d, e, a, b, c, x[12]);  /* 13 */
-  FF(c, d, e, a, b, x[13]);  /* 14 */
-  FF(b, c, d, e, a, x[14]);  /* 15 */
-  FF(a, b, c, d, e, x[15]);  /* 16 */
-  FF(e, a, b, c, d, W(16));  /* 17 */
-  FF(d, e, a, b, c, W(17));  /* 18 */
-  FF(c, d, e, a, b, W(18));  /* 19 */
-  FF(b, c, d, e, a, W(19));  /* 20 */
+  FF(a, b, c, d, e, x[0]); /* 1 */
+  FF(e, a, b, c, d, x[1]); /* 2 */
+  FF(d, e, a, b, c, x[2]); /* 3 */
+  FF(c, d, e, a, b, x[3]); /* 4 */
+  FF(b, c, d, e, a, x[4]); /* 5 */
+  FF(a, b, c, d, e, x[5]); /* 6 */
+  FF(e, a, b, c, d, x[6]); /* 7 */
+  FF(d, e, a, b, c, x[7]); /* 8 */
+  FF(c, d, e, a, b, x[8]); /* 9 */
+  FF(b, c, d, e, a, x[9]); /* 10 */
+  FF(a, b, c, d, e, x[10]); /* 11 */
+  FF(e, a, b, c, d, x[11]); /* 12 */
+  FF(d, e, a, b, c, x[12]); /* 13 */
+  FF(c, d, e, a, b, x[13]); /* 14 */
+  FF(b, c, d, e, a, x[14]); /* 15 */
+  FF(a, b, c, d, e, x[15]); /* 16 */
+  FF(e, a, b, c, d, W(16)); /* 17 */
+  FF(d, e, a, b, c, W(17)); /* 18 */
+  FF(c, d, e, a, b, W(18)); /* 19 */
+  FF(b, c, d, e, a, W(19)); /* 20 */
 
   /* Round 2 */
-  GG(a, b, c, d, e, W(20));  /* 21 */
-  GG(e, a, b, c, d, W(21));  /* 22 */
-  GG(d, e, a, b, c, W(22));  /* 23 */
-  GG(c, d, e, a, b, W(23));  /* 24 */
-  GG(b, c, d, e, a, W(24));  /* 25 */
-  GG(a, b, c, d, e, W(25));  /* 26 */
-  GG(e, a, b, c, d, W(26));  /* 27 */
-  GG(d, e, a, b, c, W(27));  /* 28 */
-  GG(c, d, e, a, b, W(28));  /* 29 */
-  GG(b, c, d, e, a, W(29));  /* 30 */
-  GG(a, b, c, d, e, W(30));  /* 31 */
-  GG(e, a, b, c, d, W(31));  /* 32 */
-  GG(d, e, a, b, c, W(32));  /* 33 */
-  GG(c, d, e, a, b, W(33));  /* 34 */
-  GG(b, c, d, e, a, W(34));  /* 35 */
-  GG(a, b, c, d, e, W(35));  /* 36 */
-  GG(e, a, b, c, d, W(36));  /* 37 */
-  GG(d, e, a, b, c, W(37));  /* 38 */
-  GG(c, d, e, a, b, W(38));  /* 39 */
-  GG(b, c, d, e, a, W(39));  /* 40 */
+  GG(a, b, c, d, e, W(20)); /* 21 */
+  GG(e, a, b, c, d, W(21)); /* 22 */
+  GG(d, e, a, b, c, W(22)); /* 23 */
+  GG(c, d, e, a, b, W(23)); /* 24 */
+  GG(b, c, d, e, a, W(24)); /* 25 */
+  GG(a, b, c, d, e, W(25)); /* 26 */
+  GG(e, a, b, c, d, W(26)); /* 27 */
+  GG(d, e, a, b, c, W(27)); /* 28 */
+  GG(c, d, e, a, b, W(28)); /* 29 */
+  GG(b, c, d, e, a, W(29)); /* 30 */
+  GG(a, b, c, d, e, W(30)); /* 31 */
+  GG(e, a, b, c, d, W(31)); /* 32 */
+  GG(d, e, a, b, c, W(32)); /* 33 */
+  GG(c, d, e, a, b, W(33)); /* 34 */
+  GG(b, c, d, e, a, W(34)); /* 35 */
+  GG(a, b, c, d, e, W(35)); /* 36 */
+  GG(e, a, b, c, d, W(36)); /* 37 */
+  GG(d, e, a, b, c, W(37)); /* 38 */
+  GG(c, d, e, a, b, W(38)); /* 39 */
+  GG(b, c, d, e, a, W(39)); /* 40 */
 
   /* Round 3 */
-  HH(a, b, c, d, e, W(40));  /* 41 */
-  HH(e, a, b, c, d, W(41));  /* 42 */
-  HH(d, e, a, b, c, W(42));  /* 43 */
-  HH(c, d, e, a, b, W(43));  /* 44 */
-  HH(b, c, d, e, a, W(44));  /* 45 */
-  HH(a, b, c, d, e, W(45));  /* 46 */
-  HH(e, a, b, c, d, W(46));  /* 47 */
-  HH(d, e, a, b, c, W(47));  /* 48 */
-  HH(c, d, e, a, b, W(48));  /* 49 */
-  HH(b, c, d, e, a, W(49));  /* 50 */
-  HH(a, b, c, d, e, W(50));  /* 51 */
-  HH(e, a, b, c, d, W(51));  /* 52 */
-  HH(d, e, a, b, c, W(52));  /* 53 */
-  HH(c, d, e, a, b, W(53));  /* 54 */
-  HH(b, c, d, e, a, W(54));  /* 55 */
-  HH(a, b, c, d, e, W(55));  /* 56 */
-  HH(e, a, b, c, d, W(56));  /* 57 */
-  HH(d, e, a, b, c, W(57));  /* 58 */
-  HH(c, d, e, a, b, W(58));  /* 59 */
-  HH(b, c, d, e, a, W(59));  /* 60 */
+  HH(a, b, c, d, e, W(40)); /* 41 */
+  HH(e, a, b, c, d, W(41)); /* 42 */
+  HH(d, e, a, b, c, W(42)); /* 43 */
+  HH(c, d, e, a, b, W(43)); /* 44 */
+  HH(b, c, d, e, a, W(44)); /* 45 */
+  HH(a, b, c, d, e, W(45)); /* 46 */
+  HH(e, a, b, c, d, W(46)); /* 47 */
+  HH(d, e, a, b, c, W(47)); /* 48 */
+  HH(c, d, e, a, b, W(48)); /* 49 */
+  HH(b, c, d, e, a, W(49)); /* 50 */
+  HH(a, b, c, d, e, W(50)); /* 51 */
+  HH(e, a, b, c, d, W(51)); /* 52 */
+  HH(d, e, a, b, c, W(52)); /* 53 */
+  HH(c, d, e, a, b, W(53)); /* 54 */
+  HH(b, c, d, e, a, W(54)); /* 55 */
+  HH(a, b, c, d, e, W(55)); /* 56 */
+  HH(e, a, b, c, d, W(56)); /* 57 */
+  HH(d, e, a, b, c, W(57)); /* 58 */
+  HH(c, d, e, a, b, W(58)); /* 59 */
+  HH(b, c, d, e, a, W(59)); /* 60 */
 
   /* Round 4 */
-  II(a, b, c, d, e, W(60));  /* 61 */
-  II(e, a, b, c, d, W(61));  /* 62 */
-  II(d, e, a, b, c, W(62));  /* 63 */
-  II(c, d, e, a, b, W(63));  /* 64 */
-  II(b, c, d, e, a, W(64));  /* 65 */
-  II(a, b, c, d, e, W(65));  /* 66 */
-  II(e, a, b, c, d, W(66));  /* 67 */
-  II(d, e, a, b, c, W(67));  /* 68 */
-  II(c, d, e, a, b, W(68));  /* 69 */
-  II(b, c, d, e, a, W(69));  /* 70 */
-  II(a, b, c, d, e, W(70));  /* 71 */
-  II(e, a, b, c, d, W(71));  /* 72 */
-  II(d, e, a, b, c, W(72));  /* 73 */
-  II(c, d, e, a, b, W(73));  /* 74 */
-  II(b, c, d, e, a, W(74));  /* 75 */
-  II(a, b, c, d, e, W(75));  /* 76 */
-  II(e, a, b, c, d, W(76));  /* 77 */
-  II(d, e, a, b, c, W(77));  /* 78 */
-  II(c, d, e, a, b, W(78));  /* 79 */
-  II(b, c, d, e, a, W(79));  /* 80 */
+  II(a, b, c, d, e, W(60)); /* 61 */
+  II(e, a, b, c, d, W(61)); /* 62 */
+  II(d, e, a, b, c, W(62)); /* 63 */
+  II(c, d, e, a, b, W(63)); /* 64 */
+  II(b, c, d, e, a, W(64)); /* 65 */
+  II(a, b, c, d, e, W(65)); /* 66 */
+  II(e, a, b, c, d, W(66)); /* 67 */
+  II(d, e, a, b, c, W(67)); /* 68 */
+  II(c, d, e, a, b, W(68)); /* 69 */
+  II(b, c, d, e, a, W(69)); /* 70 */
+  II(a, b, c, d, e, W(70)); /* 71 */
+  II(e, a, b, c, d, W(71)); /* 72 */
+  II(d, e, a, b, c, W(72)); /* 73 */
+  II(c, d, e, a, b, W(73)); /* 74 */
+  II(b, c, d, e, a, W(74)); /* 75 */
+  II(a, b, c, d, e, W(75)); /* 76 */
+  II(e, a, b, c, d, W(76)); /* 77 */
+  II(d, e, a, b, c, W(77)); /* 78 */
+  II(c, d, e, a, b, W(78)); /* 79 */
+  II(b, c, d, e, a, W(79)); /* 80 */
 
   state[0] += a;
   state[1] += b;
@@ -205,7 +203,7 @@ static void sha1_transform(
   state[4] += e;
 
   /* Zeroize sensitive information. */
-  memset((unsigned char*) x, 0, sizeof(x));
+  memset((unsigned char*)x, 0, sizeof(x));
 }
 
 /*
@@ -225,28 +223,27 @@ void sha1_init(Sha1Context* context) {
  * SHA1 block update operation. Continues an SHA1 message-digest operation,
  * processing another message block, and updating the context.
  */
-void sha1_update(
-    Sha1Context* context,
-    const unsigned char* input,
-    unsigned int inputLen) {
+void sha1_update(Sha1Context* context,
+                 const unsigned char* input,
+                 unsigned int inputLen) {
   unsigned int i, index, partLen;
 
   /* Compute number of bytes mod 64 */
-  index = (unsigned int) ((context->count[0] >> 3) & 0x3F);
+  index = (unsigned int)((context->count[0] >> 3) & 0x3F);
 
   /* Update number of bits */
-  if ((context->count[0] += ((unsigned int) inputLen << 3))
-      < ((unsigned int) inputLen << 3)) {
+  if ((context->count[0] += ((unsigned int)inputLen << 3)) <
+      ((unsigned int)inputLen << 3)) {
     context->count[1]++;
   }
-  context->count[1] += ((unsigned int) inputLen >> 29);
+  context->count[1] += ((unsigned int)inputLen >> 29);
 
   partLen = 64 - index;
 
   /* Transform as many times as possible.
    */
   if (inputLen >= partLen) {
-    memcpy((unsigned char*) & context->buffer[index], (unsigned char*) input,
+    memcpy((unsigned char*)&context->buffer[index], (unsigned char*)input,
            partLen);
     sha1_transform(context->state, context->buffer);
 
@@ -258,8 +255,8 @@ void sha1_update(
     i = 0;
 
   /* Buffer remaining input */
-  memcpy((unsigned char*) & context->buffer[index],
-         (unsigned char*) & input[i], inputLen - i);
+  memcpy((unsigned char*)&context->buffer[index], (unsigned char*)&input[i],
+         inputLen - i);
 }
 
 /*
@@ -282,7 +279,7 @@ void sha1_final(unsigned char* digest, Sha1Context* context) {
 
   /* Pad out to 56 mod 64.
    */
-  index = (unsigned int) ((context->count[0] >> 3) & 0x3f);
+  index = (unsigned int)((context->count[0] >> 3) & 0x3f);
   padLen = (index < 56) ? (56 - index) : (120 - index);
   sha1_update(context, PADDING, padLen);
 
@@ -294,5 +291,5 @@ void sha1_final(unsigned char* digest, Sha1Context* context) {
 
   /* Zeroize sensitive information.
    */
-  memset((unsigned char*) context, 0, sizeof(*context));
+  memset((unsigned char*)context, 0, sizeof(*context));
 }

@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -56,8 +56,8 @@ void OriginalNamePass::run_pass(DexStoresVector& stores,
   std::unordered_map<const DexType*, std::string> to_annotate;
   build_hierarchies(mgr, ch, scope, &to_annotate);
   DexString* field_name = DexString::make_string(redex_field_name);
-  DexType* string_type = get_string_type();
-  for (auto it : to_annotate) {
+  DexType* string_type = type::java_lang_String();
+  for (const auto& it : to_annotate) {
     const DexType* cls_type = it.first;
     if (strncmp("LX/", cls_type->get_name()->c_str(), 2) != 0) {
       continue;

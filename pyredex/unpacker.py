@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # Copyright (c) Facebook, Inc. and its affiliates.
 #
 # This source code is licensed under the MIT license found in the
@@ -113,11 +112,7 @@ class ApplicationModule(object):
         fast_repackage,
     ):
         self.dex_mode.repackage(
-            extracted_apk_dir,
-            dex_dir,
-            have_locators,
-            locator_store_id,
-            fast_repackage,
+            extracted_apk_dir, dex_dir, have_locators, locator_store_id, fast_repackage
         )
 
 
@@ -179,13 +174,7 @@ class BaseDexMode(object):
         if os.path.exists(primary_dex):
             shutil.move(primary_dex, dex_dir)
 
-    def repackage(
-        self,
-        extracted_apk_dir,
-        dex_dir,
-        have_locators,
-        fast_repackage,
-    ):
+    def repackage(self, extracted_apk_dir, dex_dir, have_locators, fast_repackage):
         primary_dex = join(dex_dir, self._dex_prefix + ".dex")
         if os.path.exists(primary_dex):
             shutil.move(primary_dex, extracted_apk_dir)
@@ -242,11 +231,7 @@ class Api21DexMode(BaseDexMode):
         fast_repackage=False,
     ):
         BaseDexMode.repackage(
-            self,
-            extracted_apk_dir,
-            dex_dir,
-            have_locators,
-            fast_repackage,
+            self, extracted_apk_dir, dex_dir, have_locators, fast_repackage
         )
         metadata_dir = join(extracted_apk_dir, self._secondary_dir)
 
@@ -347,11 +332,7 @@ class SubdirDexMode(BaseDexMode):
         fast_repackage=False,
     ):
         BaseDexMode.repackage(
-            self,
-            extracted_apk_dir,
-            dex_dir,
-            have_locators,
-            fast_repackage,
+            self, extracted_apk_dir, dex_dir, have_locators, fast_repackage
         )
 
         metadata = DexMetadata(
@@ -501,11 +482,7 @@ class XZSDexMode(BaseDexMode):
         fast_repackage=False,
     ):
         BaseDexMode.repackage(
-            self,
-            extracted_apk_dir,
-            dex_dir,
-            have_locators,
-            fast_repackage,
+            self, extracted_apk_dir, dex_dir, have_locators, fast_repackage
         )
 
         dex_sizes = {}

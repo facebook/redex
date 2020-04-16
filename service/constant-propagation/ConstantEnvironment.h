@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -26,8 +26,6 @@
  *   - Constant array values, referenced by registers that point into the heap
  *   - Constant primitive values stored in fields
  */
-
-using reg_t = uint32_t;
 
 constexpr reg_t RESULT_REGISTER = std::numeric_limits<reg_t>::max();
 

@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -10,9 +10,11 @@
 #include <boost/optional.hpp>
 
 #include "ClassHierarchy.h"
+#include "ConcurrentContainers.h"
 #include "DexClass.h"
 
 using TypeSet = std::set<const DexType*, dextypes_comparator>;
+using UnorderedTypeSet = std::unordered_set<const DexType*>;
 
 namespace type_reference {
 
@@ -50,16 +52,19 @@ class TypeRefUpdater final {
    * ...
    */
   DexType* try_convert_to_new_type(DexType* type);
+
   /**
    * Change a field to new type if its original type is a candidate.
    * Return true if the field is updated.
    */
   bool mangling(DexFieldRef* field);
+
   /**
    * Change proto of a method if its proto contains any candidate.
    */
   bool mangling(DexMethodRef* method);
 
+  ConcurrentMap<DexMethod*, DexProto*> m_inits;
   const std::unordered_map<DexType*, DexType*>& m_old_to_new;
 };
 
@@ -73,7 +78,8 @@ DexString* new_name(const DexFieldRef* field);
 // A helper to stringify method signature for the method dedup mapping file.
 std::string get_method_signature(const DexMethod* method);
 
-bool proto_has_reference_to(const DexProto* proto, const TypeSet& targets);
+bool proto_has_reference_to(const DexProto* proto,
+                            const UnorderedTypeSet& targets);
 
 /**
  * Get a new proto by updating the type references on the proto from an old type

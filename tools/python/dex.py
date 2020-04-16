@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # Copyright (c) Facebook, Inc. and its affiliates.
 #
 # This source code is licensed under the MIT license found in the
@@ -9,6 +8,7 @@
 import bisect
 import copy
 import enum
+import io
 import numbers
 import operator
 import optparse
@@ -16,6 +16,7 @@ import os
 import re
 import string
 import sys
+import zipfile
 from io import BytesIO
 
 import file_extract
@@ -246,7 +247,7 @@ class encoded_field(AutoParser):
             items[i].field_idx += items[i - 1].field_idx
 
     @classmethod
-    def get_table_header(self):
+    def get_table_header(cls):
         return "FIELD FLAGS\n"
 
     def get_dump_flat(self):
@@ -277,7 +278,7 @@ class encoded_method(AutoParser):
             items[i].method_idx += items[i - 1].method_idx
 
     @classmethod
-    def get_table_header(self):
+    def get_table_header(cls):
         return "METHOD FLAGS\n"
 
     def get_dump_flat(self):
@@ -368,7 +369,7 @@ class class_def_item(AutoParser):
         self.interface_ids = None
 
     @classmethod
-    def get_table_header(self):
+    def get_table_header(cls):
         return (
             "CLASS      ACCESS     SUPERCLASS INTERFACES SOURCE"
             "     ANNOTATION CLASS_DATA STATIC_VALUES\n"
@@ -513,20 +514,28 @@ class DBG(enum.IntEnum):
 
     @classmethod
     def _missing_(cls, value):
+        val = value
         if isinstance(value, file_extract.FileExtract):
-            return cls(value.get_uint8())
-        elif DBG.is_special_opcode(value):
-            return value
-        else:
+            val = value.get_uint8()
+        try:
+            return cls(val)
+        except ValueError:
             return super()._missing_(value)
 
     def dump(self, prefix=None, f=sys.stdout, print_name=True, parent_path=None):
         f.write(self.name)
 
 
+def decode_DBG_or_val(value):
+    val = value
+    if isinstance(value, file_extract.FileExtract):
+        val = value.get_uint8()
+    return val if DBG.is_special_opcode(val) else DBG(val)
+
+
 class debug_info_op(AutoParser):
     items = [
-        {"class": DBG, "name": "op"},
+        {"decode": decode_DBG_or_val, "name": "op"},
         {
             "switch": "op",
             "cases": {
@@ -944,7 +953,7 @@ class field_id_item(AutoParser):
         AutoParser.__init__(self, self.items, data, context)
 
     @classmethod
-    def get_table_header(self):
+    def get_table_header(cls):
         return "CLASS  TYPE   NAME\n"
 
     def get_dump_flat(self):
@@ -1066,7 +1075,7 @@ class method_id_item(AutoParser):
         AutoParser.__init__(self, self.items, data, context)
 
     @classmethod
-    def get_table_header(self):
+    def get_table_header(cls):
         return "CLASS  PROTO  NAME\n"
 
     def get_dump_flat(self):
@@ -1093,7 +1102,7 @@ class proto_id_item(AutoParser):
         return True
 
     @classmethod
-    def get_table_header(self):
+    def get_table_header(cls):
         return "SHORTY_IDX RETURN     PARAMETERS\n"
 
     def get_parameters(self):
@@ -1197,6 +1206,13 @@ class DexMethod:
         self.insns = None
         self.name_in_file = None
         self.name = None
+
+    def get_signature(self):
+        class_name = self.get_class().get_name()
+        method_name = self.get_name()
+        proto = self.get_pretty_proto()
+
+        return class_name + "." + method_name + ":" + proto
 
     def get_qualified_name(self):
         class_name = self.get_class().get_name()
@@ -1334,6 +1350,15 @@ class DexMethod:
     def is_synthetic(self):
         return bool(self.encoded_method.get_access_flags() & AccessFlags.SYNTHETIC)
 
+    def is_public(self):
+        return bool(self.encoded_method.access_flags & AccessFlags.PUBLIC)
+
+    def is_private(self):
+        return bool(self.encoded_method.access_flags & AccessFlags.PRIVATE)
+
+    def is_protected(self):
+        return bool(self.encoded_method.access_flags & AccessFlags.PROTECTED)
+
     def dump(self, options, f=sys.stdout):
         dex = self.get_dex()
         method_id = dex.get_method_id(self.encoded_method.method_idx)
@@ -1396,6 +1421,9 @@ class DexMethod:
         if debug_info:
             return debug_info.check_encoding(self)
 
+    def get_raw_access_flags(self):
+        return str(self.encoded_method.access_flags)
+
     def get_line_number(self):
         debug_info = self.get_debug_info()
         if debug_info:
@@ -1410,6 +1438,7 @@ class DexClass:
         self.dex = dex
         self.class_def = class_def
         self.methods = None
+        self.fields = None
         self.mangled = None
         self.demangled = None
         self.method_mapping = None
@@ -1478,10 +1507,20 @@ class DexClass:
     def is_abstract(self):
         return bool(self.class_def.get_access_flags() & AccessFlags.ABSTRACT)
 
+    def is_public(self):
+        return bool(self.class_def.access_flags & AccessFlags.PUBLIC)
+
+    def is_private(self):
+        return bool(self.class_def.access_flags & AccessFlags.PRIVATE)
+
+    def is_protected(self):
+        return bool(self.class_def.access_flags & AccessFlags.PROTECTED)
+
     def get_mangled_name(self):
         if self.mangled is None:
             dex = self.get_dex()
             self.mangled = dex.get_typename(self.class_def.class_idx)
+
         return self.mangled
 
     def get_name(self):
@@ -1508,6 +1547,19 @@ class DexClass:
             )
         return self.methods
 
+    def get_fields(self):
+        if self.fields is None:
+            self.fields = []
+            for encoded_field in self.class_def.class_data.static_fields:
+                self.fields.append(DexField(self, encoded_field, False))
+            for encoded_field in self.class_def.class_data.instance_fields:
+                self.fields.append(DexField(self, encoded_field, True))
+
+        return self.fields
+
+    def get_super_cls_name(self):
+        return self.get_dex().get_typename(self.class_def.superclass_idx)
+
     def get_method_mapping(self):
         if self.method_mapping is None:
             self.method_mapping = {}
@@ -1529,6 +1581,9 @@ class DexClass:
                 insert_method(encoded_method, True)
         return self.method_mapping
 
+    def get_raw_access_flags(self):
+        return str(self.class_def.access_flags)
+
     def find_method(self, method_name, proto):
         methods = self.get_method_mapping()
         if method_name not in methods:
@@ -1545,6 +1600,75 @@ class DexClass:
         if len(method_line_numbers) == 0:
             return 0
         return min(method_line_numbers)
+
+
+class DexField:
+    """Encapsulates a field within a DEX file."""
+
+    def __init__(self, dex_class, encoded_field, is_instance_field):
+        self.dex_class = dex_class
+        self.encoded_field = encoded_field
+        self.field_id = None
+        self.name_in_file = None
+        self.name = None
+        self.is_instance_field = is_instance_field
+
+    def get_signature(self):
+        class_name = self.get_class().get_name()
+        field_name = self.get_name_in_file()
+        field_type = self.get_type()
+
+        return class_name + "." + field_name + ":" + field_type
+
+    def get_type(self):
+        return self.get_dex().get_typename(self.get_field_id().type_idx)
+
+    def get_field_id(self):
+        """Get the field_id for this field."""
+        if self.field_id is None:
+            self.field_id = self.get_dex().get_field_id(self.encoded_field.field_idx)
+        return self.field_id
+
+    def get_field_index(self):
+        """Get the method index into the method_ids array in the DEX file."""
+        return self.encoded_field.field_idx
+
+    def get_dex(self):
+        return self.dex_class.get_dex()
+
+    def get_name_in_file(self):
+        """Returns the name of the field as it is known in the current DEX
+        file (no proguard remapping)"""
+        if self.name_in_file is None:
+            self.name_in_file = self.get_dex().get_string(self.get_field_id().name_idx)
+        return self.name_in_file
+
+    def get_name(self):
+        if self.name is None:
+            cls_mangled = self.get_class().get_mangled_name()
+            name_in_file = self.get_name_in_file()
+            if cls_mangled and name_in_file:
+                self.name = self.get_dex().demangle_class_method_name(
+                    cls_mangled, name_in_file
+                )
+                if self.name is None:
+                    self.name = name_in_file
+        return self.name
+
+    def get_class(self):
+        return self.dex_class
+
+    def is_public(self):
+        return bool(self.encoded_field.access_flags & AccessFlags.PUBLIC)
+
+    def is_private(self):
+        return bool(self.encoded_field.access_flags & AccessFlags.PRIVATE)
+
+    def is_protected(self):
+        return bool(self.encoded_field.access_flags & AccessFlags.PROTECTED)
+
+    def get_raw_access_flags(self):
+        return str(self.encoded_field.access_flags)
 
 
 def demangle_classname(mangled):
@@ -1568,12 +1692,17 @@ def mangle_classname(demangled):
 class File:
     """Represents a DEX (Dalvik Executable) file"""
 
-    def __init__(self, path, proguard_path):
+    def __init__(
+        self, path, file_like=None, proguard_path=None, use_bytecode_format=False
+    ):
         self.path = path
         self.proguard = None
         if proguard_path and os.path.exists(proguard_path):
             self.proguard = Progard(proguard_path)
-        self.data = file_extract.FileExtract(open(self.path, "rb"), "=", 4)
+        if file_like is None:
+            file_like = open(path, "rb")
+        self.use_bytecode_format = use_bytecode_format
+        self.data = file_extract.FileExtract(file_like, "=", 4)
         self.header = header_item(self.data)
         self.map_list = None
         self.string_ids = None
@@ -1675,6 +1804,9 @@ class File:
 
     def get_typename(self, type_id):
         raw_typename = self.get_raw_typename(type_id)
+        if self.use_bytecode_format:
+            return raw_typename
+
         if raw_typename is None:
             return None
         array_level = 0
@@ -1759,6 +1891,19 @@ class File:
                 self.field_ids.append(field_id_item(self.data, self))
             self.data.pop_offset_and_seek()
         return self.field_ids
+
+    def get_field_id(self, field_ref):
+        field_ids = self.get_field_ids()
+        if field_ids:
+            if isinstance(field_ref, encoded_field):
+                if field_ref.field_idx < len(field_ids):
+                    return field_ids[field_ref.field_id]
+            elif isinstance(field_ref, numbers.Integral):
+                if field_ref < len(field_ids):
+                    return field_ids[field_ref]
+            else:
+                raise ValueError("invalid field_ref type %s" % (type(field_ref)))
+        return None
 
     def get_method_ids(self):
         if self.method_ids is None:
@@ -2094,6 +2239,50 @@ class File:
             for item in debug_info_items:
                 item.dump_debug_info(f=f)
             f.write("Total TYPE_DEBUG_INFO_ITEM size: {}\n\n".format(size))
+
+    def dump_structure(self, options, f=sys.stdout):
+        public_only = options.public_only
+        classes = self.get_classes()
+        for cls in classes:
+            if public_only and not cls.is_public():
+                continue
+
+            methods = cls.get_methods()
+            method_signature_to_access = {}
+            for method in methods:
+                if public_only and not method.is_public():
+                    continue
+                method_signature_to_access[
+                    method.get_signature()
+                ] = method.get_raw_access_flags()
+
+            fields = cls.get_fields()
+            field_signature_to_access = {}
+            for field in fields:
+                if public_only and not field.is_public():
+                    continue
+                field_signature_to_access[
+                    field.get_signature()
+                ] = field.get_raw_access_flags()
+
+            f.write(
+                "%s %s %s %d %d\n"
+                % (
+                    cls.get_name(),
+                    cls.get_raw_access_flags(),
+                    cls.get_super_cls_name(),
+                    len(method_signature_to_access),
+                    len(field_signature_to_access),
+                )
+            )
+
+            for meth_signature, meth_access_flags in method_signature_to_access.items():
+                f.write("    M %s %s\n" % (meth_signature, meth_access_flags))
+            for (
+                field_signature,
+                field_access_flags,
+            ) in field_signature_to_access.items():
+                f.write("    F %s %s\n" % (field_signature, field_access_flags))
 
     def dump(self, options, f=sys.stdout):
         self.dump_header(options, f)
@@ -4404,6 +4593,26 @@ def main():
         help="Dump the DEX opcode counts",
         default=False,
     )
+    parser.add_option(
+        "--use-bytecode-format",
+        action="store_true",
+        dest="use_bytecode_format",
+        help="When passed, switch from java to bytecode format.",
+    )
+    parser.add_option(
+        "--public-only",
+        action="store_true",
+        dest="public_only",
+        help="Only dump classes / methods / fields that are public",
+        default=False,
+    )
+    parser.add_option(
+        "--dump-structure",
+        action="store_true",
+        dest="dump_structure",
+        help="Dumps just the names of all classes / methods / fields",
+        default=False,
+    )
     (options, files) = parser.parse_args()
 
     total_code_bytes_inefficiently_encoded = 0
@@ -4420,15 +4629,59 @@ def main():
         print("No input files. {}".format(usage))
         return
 
-    for path in files:
-        if os.path.splitext(path)[1] == ".apk":
-            print("error: dex.py operates on dex files, please unpack your apk")
-            return
+    def generate_dex_objects(files):
+        for path in files:
+            base = os.path.basename(path)
+            ext = os.path.splitext(path)[1]
 
+            def handle_zip(zip_file, path, name):
+                # Naive implementation uses ZipFile entries which are file-like:
+                #   info = zip_file.getinfo(name)
+                #   return (path, info.file_size, file.open(info))
+                # Problem is that performance is abysmal. So we unpack into
+                # memory.
+                info = zip_file.getinfo(name)
+                data = zip_file.read(info)
+                return (path, info.file_size, io.BytesIO(data))
+
+            # Special handling for direct zip access.
+            if "!" in base and ext == ".dex":
+                zip_path = os.path.join(os.path.dirname(path), base[0 : base.find("!")])
+                name = base[base.find("!") + 1 :]
+                file = zipfile.ZipFile(zip_path, "r")
+                names = set(file.namelist())
+                if name not in names:
+                    print("%s does not contain %s" % (zip_path, name))
+                    break
+                yield handle_zip(file, path, name)
+                continue
+
+            if ext == ".dex":
+                # Plain dex file, open as file.
+                yield (path, os.path.getsize(path), open(path, "rb"))
+                continue
+
+            if ext == ".apk" or ext == ".jar" or ext == ".zip":
+                file = zipfile.ZipFile(path, "r")
+                names = set(file.namelist())
+                if "classes.dex" not in names:
+                    print("%s does not contain classes.dex" % path)
+                    break
+                yield handle_zip(file, path + "!classes.dex", "classes.dex")
+                for i in range(2, 100000):
+                    name = "classes%d.dex" % i
+                    if name not in names:
+                        break
+                    yield handle_zip(file, path + "!" + name, name)
+                continue
+
+            print("error: dex.py does not know how to handle %s" % path)
+            break
+
+    for path, file_size, file_like in generate_dex_objects(files):
         print("Dex file: %s" % (path))
-        file_size = os.path.getsize(path)
         total_file_size += file_size
-        dex = File(path, options.proguard)
+        dex = File(path, file_like, options.proguard, options.use_bytecode_format)
         if options.class_filter:
             dex_class = dex.find_class(options.class_filter)
             if dex_class:
@@ -4477,6 +4730,8 @@ def main():
             dex.dump_code(options)
         if options.dump_code_items:
             dex.dump_code_items(options)
+        if options.dump_structure:
+            dex.dump_structure(options)
         if (
             options.dump_stats
             or options.check_encoding
@@ -4497,7 +4752,6 @@ def main():
             for cls in classes:
                 methods = cls.get_methods()
                 for method in methods:
-                    method.dump(options, f=sys.stdout)
                     opcodes_bytes_size = method.get_code_byte_size()
                     file_opcodes_byte_size += opcodes_bytes_size
                     total_opcode_byte_size += opcodes_bytes_size

@@ -6,6 +6,8 @@
  *;
 }
 
+-keep @com.facebook.redextest.DoNotStrip class *
+
 # Don't muck with test infra
 
 -keep class org.fest.** { *; }

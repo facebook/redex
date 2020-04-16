@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -43,7 +43,7 @@ using Domain = sparta::
 
 std::ostream& operator<<(std::ostream&, Interval);
 
-std::ostream& operator<<(std::ostream&, Domain);
+std::ostream& operator<<(std::ostream&, const Domain&);
 
 Domain from_int(int64_t);
 

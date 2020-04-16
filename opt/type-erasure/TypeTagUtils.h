@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -18,4 +18,4 @@ namespace type_tag_utils {
  */
 boost::optional<uint32_t> parse_model_type_tag(const DexClass*);
 
-} //namespace type_tag_utils
+} // namespace type_tag_utils

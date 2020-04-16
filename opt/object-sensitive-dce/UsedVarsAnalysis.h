@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -13,8 +13,6 @@
 #include "ReducedProductAbstractDomain.h"
 #include "Resolver.h"
 #include "SideEffectSummary.h"
-
-using reg_t = ir_analyzer::register_t;
 
 namespace used_vars {
 

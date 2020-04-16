@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -16,7 +16,7 @@
  * "EBase"
  */
 std::string get_root_type_name_tag(const DexType* root_type) {
-  auto root_type_name = get_simple_name(root_type);
+  auto root_type_name = type::get_simple_name(root_type);
   std::ostringstream root_name_tag;
   std::string::reverse_iterator rit = root_type_name.rbegin();
   // Scan the string from back to front.

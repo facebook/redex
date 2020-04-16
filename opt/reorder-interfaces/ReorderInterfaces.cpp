@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -56,10 +56,10 @@ class ReorderInterfacesImpl {
 void ReorderInterfacesImpl::run() {
   // Check out each instruction and process if it is a function invoke
   walk::opcodes(m_scope,
-               [](DexMethod*) { return true; },
-               [this](DexMethod* /* unused */, IRInstruction* insn) {
-                 compute_call_frequencies(insn);
-               });
+                [](DexMethod*) { return true; },
+                [this](DexMethod* /* unused */, IRInstruction* insn) {
+                  compute_call_frequencies(insn);
+                });
 
   // Now that we have the invoke frequencies for each Interface,
   // reorder the list of Interfaces for each Class.
@@ -157,7 +157,7 @@ void ReorderInterfacesImpl::reorder_interfaces() {
     reorder_interfaces_for_class(cls);
   }
 }
-}
+} // namespace
 
 /**
  * Compute the number of function invocations for each Interface and

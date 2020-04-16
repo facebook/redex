@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -436,10 +436,10 @@ TEST_F(ConfigurableTest, MapBindings) {
     arr.append("foo");
     arr.append("bar");
     arr.append("baz");
-    map["key"] = std::move(arr);
+    map["key"] = arr;
 
     Json::Value json;
-    json["map_of_vector_of_strings_param"] = std::move(map);
+    json["map_of_vector_of_strings_param"] = map;
     MapBindings m;
     m.parse_config(JsonWrapper(json));
     EXPECT_EQ(1, m.m_map_of_vector_strings.size());
@@ -458,7 +458,7 @@ TEST_F(ConfigurableTest, MapBindings) {
     map["Ltype1;.foo:()V"] = "Ltype3;.foo:()V";
 
     Json::Value json;
-    json["map_of_methods_param"] = std::move(map);
+    json["map_of_methods_param"] = map;
     MapBindings m;
     m.parse_config(JsonWrapper(json));
     EXPECT_EQ(1, m.m_map_of_methods.size());

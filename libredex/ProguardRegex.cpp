@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -15,7 +15,7 @@ namespace proguard_parser {
 
 // Convert a ProGuard member regex to a boost::regex
 // Example: "alpha*beta?gamma" -> "alpha.*beta.gamma"
-std::string form_member_regex(std::string proguard_regex) {
+std::string form_member_regex(const std::string& proguard_regex) {
   // An empty string matches against any member name.
   if (proguard_regex.empty()) {
     return ".*";
@@ -48,17 +48,21 @@ std::string form_member_regex(std::string proguard_regex) {
 // Example: "Lalpha?beta;" -> "Lalpha[^\\/\\[]beta;"
 // Example: "Lalpha/*/beta;" -> "Lalpha\\/(?:[^\\/\\[]*)\\/beta;"
 // Example: "Lalpha/**/beta;" ->  "Lalpha\\/(?:[^\\[]*)\\/beta;"
-std::string form_type_regex(std::string proguard_regex) {
+
+namespace {
+const std::string L_STAR_REGEX = "L**;";
+} // namespace
+
+std::string form_type_regex(const std::string& proguard_regex) {
   if (proguard_regex.empty()) {
     return ".*";
   }
-  if (proguard_regex == "L*;") {
-    proguard_regex = "L**;";
-  }
+  const std::string& regex =
+      proguard_regex == "L*;" ? L_STAR_REGEX : proguard_regex;
   std::string r;
-  r.reserve(2 * proguard_regex.size());
-  for (size_t i = 0; i < proguard_regex.size(); i++) {
-    const char ch = proguard_regex[i];
+  r.reserve(2 * regex.size());
+  for (size_t i = 0; i < regex.size(); i++) {
+    const char ch = regex[i];
     // Convert % to a match against primvitive types without
     // creating a capture group.
     if (ch == '%') {
@@ -95,9 +99,8 @@ std::string form_type_regex(std::string proguard_regex) {
       continue;
     }
     if (ch == '*') {
-      if ((i != proguard_regex.size() - 1) && (proguard_regex[i + 1] == '*')) {
-        if ((i != proguard_regex.size() - 2) &&
-            (proguard_regex[i + 2] == '*')) {
+      if ((i != regex.size() - 1) && (regex[i + 1] == '*')) {
+        if ((i != regex.size() - 2) && (regex[i + 2] == '*')) {
           // ***: Match any single type i.e. a primitive type or a class type.
           r += "\\[*(?:(?:B|S|I|J|Z|F|D|C|V)|L.*;)";
           i = i + 2;
@@ -115,9 +118,8 @@ std::string form_type_regex(std::string proguard_regex) {
       continue;
     }
     if (ch == '.') {
-      if ((i != proguard_regex.size() - 1) && (proguard_regex[i + 1] == '.')) {
-        if ((i != proguard_regex.size() - 2) &&
-            (proguard_regex[i + 2] == '.')) {
+      if ((i != regex.size() - 1) && (regex[i + 1] == '.')) {
+        if ((i != regex.size() - 2) && (regex[i + 2] == '.')) {
           // ...: Match any sequence of types.
           r += "(?:\\[*(?:(?:B|S|I|J|Z|F|D|C)|L.*;))*";
           i = i + 2;
@@ -130,9 +132,35 @@ std::string form_type_regex(std::string proguard_regex) {
   return r;
 }
 
+// Return true if `proguard_regex` has any characters in it that would require
+// the use of regex. Return false if simple string equality would work
+bool has_special_char(const std::string& proguard_regex) {
+  for (const char ch : proguard_regex) {
+    switch (ch) {
+    case '.':
+    case '|':
+    case '*':
+    case '?':
+    case '+':
+    case '(':
+    case ')':
+    case '{':
+    case '}':
+    case '[':
+    case ']':
+    case '^':
+    case '$':
+    case '\\':
+    case '%':
+      return true;
+    }
+  }
+  return false;
+}
+
 // Convert a ProGuard Java type type which may use wildcards to
 // an internal JVM type descriptor with the wildcards preserved.
-std::string convert_wildcard_type(std::string typ) {
+std::string convert_wildcard_type(const std::string& typ) {
   redex_assert(!typ.empty());
   const std::string& desc = convert_type(typ);
   // Fix up the descriptor to move Ls that occur before wildcards.

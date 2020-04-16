@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -9,6 +9,7 @@
 #include <gtest/gtest.h>
 
 #include <unordered_map>
+#include <utility>
 
 #include "Creators.h"
 #include "DexAnnotation.h"
@@ -59,11 +60,11 @@ struct ConstPropTest : public RedexTest {
 
   void expect_empty_clinit(DexClass* clazz) {
     auto clinit = clazz->get_clinit();
-    ASSERT_NE(clinit, nullptr) << "Class " << clazz->c_str()
-                               << " missing clinit";
+    ASSERT_NE(clinit, nullptr)
+        << "Class " << clazz->c_str() << " missing clinit";
     auto code = clinit->get_code();
-    EXPECT_EQ(code->count_opcodes(), 0) << "Class " << clazz->c_str()
-                                        << " has non-empty clinit";
+    EXPECT_EQ(code->count_opcodes(), 0)
+        << "Class " << clazz->c_str() << " has non-empty clinit";
   }
 
   void expect_field_eq(DexClass* clazz,
@@ -73,8 +74,8 @@ struct ConstPropTest : public RedexTest {
     auto field_name = DexString::make_string(name);
     auto field =
         resolve_field(clazz->get_type(), field_name, type, FieldSearch::Static);
-    ASSERT_NE(field, nullptr) << "Failed resolving field " << name
-                              << " in class " << clazz->c_str();
+    ASSERT_NE(field, nullptr)
+        << "Failed resolving field " << name << " in class " << clazz->c_str();
     auto val = field->get_static_value();
     ASSERT_NE(val, nullptr) << "Failed getting static value for field "
                             << field->c_str() << " in class " << clazz->c_str();
@@ -111,11 +112,11 @@ DexEncodedValue* make_ev(DexType* type, boost::any val) {
 DexClass* create_class(const std::string& name) {
   auto type = DexType::make_type(DexString::make_string(name));
   ClassCreator creator(type);
-  creator.set_super(get_object_type());
+  creator.set_super(type::java_lang_Object());
   auto cls = creator.create();
   auto clinit_name = DexString::make_string("<clinit>");
   auto void_args = DexTypeList::make_type_list({});
-  auto void_void = DexProto::make_proto(get_void_type(), void_args);
+  auto void_void = DexProto::make_proto(type::_void(), void_args);
   auto clinit = static_cast<DexMethod*>(
       DexMethod::make_method(type, clinit_name, void_void));
   clinit->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_CONSTRUCTOR, false);
@@ -131,9 +132,9 @@ DexField* add_concrete_field(DexClass* cls,
                              boost::any val) {
   auto container = cls->get_type();
   auto field_name = DexString::make_string(name);
-  auto field = static_cast<DexField*>(
-      DexField::make_field(container, field_name, type));
-  auto ev = make_ev(type, val);
+  auto field =
+      static_cast<DexField*>(DexField::make_field(container, field_name, type));
+  auto ev = make_ev(type, std::move(val));
   field->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_FINAL, ev);
   cls->add_field(field);
   return field;
@@ -191,7 +192,7 @@ TEST_F(ConstPropTest, simplePropagate) {
       {"byte", m_byte_type, static_cast<uint64_t>('b')},
       {"char", m_char_type, static_cast<uint64_t>('c')},
       {"short", m_short_type, static_cast<uint64_t>(256)}};
-  for (auto test_case : test_cases) {
+  for (const auto& test_case : test_cases) {
     auto parent = create_class("Lcom/redex/Parent_" + test_case.name + ";");
     auto parent_field =
         add_concrete_field(parent, "CONST", test_case.type, test_case.value);
@@ -240,11 +241,12 @@ TEST_F(ConstPropTest, simplePropagateMultiField) {
       {"CONST_CHAR", m_char_type, static_cast<uint64_t>('c')},
       {"CONST_SHORT", m_short_type, static_cast<uint64_t>(555)},
       {"CONST_LONG", m_long_type, static_cast<uint64_t>(0x1000200030004000)},
-      {"CONST_DOUBLE", m_double_type, static_cast<uint64_t>(1.0000000000000002)},
+      {"CONST_DOUBLE", m_double_type,
+       static_cast<uint64_t>(1.0000000000000002)},
       {"CONST_STRING", m_string_type, DexString::make_string("foo")}};
   auto parent = create_class("Lcom/redex/Parent;");
   auto child = create_class("Lcom/redex/Child;");
-  for (auto fd : field_descs) {
+  for (const auto& fd : field_descs) {
     auto parent_field = add_concrete_field(parent, fd.name, fd.type, fd.value);
     add_dependent_field(child, fd.name, parent_field);
   }
@@ -253,7 +255,7 @@ TEST_F(ConstPropTest, simplePropagateMultiField) {
       classes, /*string*/ true, /*wide*/ true);
 
   expect_empty_clinit(child);
-  for (auto fd : field_descs) {
+  for (const auto& fd : field_descs) {
     expect_field_eq(child, fd.name, fd.type, fd.value);
   }
 }
@@ -288,7 +290,7 @@ TEST_F(ConstPropTest, simplePropagateMultiFieldNoWide) {
       {"CONST_STRING", m_string_type, DexString::make_string("foo")}};
   auto parent = create_class("Lcom/redex/Parent;");
   auto child = create_class("Lcom/redex/Child;");
-  for (auto fd : field_descs) {
+  for (const auto& fd : field_descs) {
     auto parent_field = add_concrete_field(parent, fd.name, fd.type, fd.value);
     add_dependent_field(child, fd.name, parent_field);
   }
@@ -297,7 +299,7 @@ TEST_F(ConstPropTest, simplePropagateMultiFieldNoWide) {
       classes, /*string*/ true, /*wide*/ false);
 
   expect_empty_clinit(child);
-  for (auto fd : field_descs) {
+  for (const auto& fd : field_descs) {
     expect_field_eq(child, fd.name, fd.type, fd.value);
   }
 }
@@ -344,12 +346,13 @@ TEST_F(ConstPropTest, multiLevelPropagate) {
       {"CONST_CHAR", m_char_type, static_cast<uint64_t>('c')},
       {"CONST_SHORT", m_short_type, static_cast<uint64_t>(555)},
       {"CONST_LONG", m_long_type, static_cast<uint64_t>(0x1000200030004000)},
-      {"CONST_DOUBLE", m_double_type, static_cast<uint64_t>(1.0000000000000002)},
+      {"CONST_DOUBLE", m_double_type,
+       static_cast<uint64_t>(1.0000000000000002)},
       {"CONST_STRING", m_string_type, DexString::make_string("foo")}};
   auto parent = create_class("Lcom/redex/Parent;");
   auto child = create_class("Lcom/redex/Child;");
   auto grandchild = create_class("Lcom/redex/GrandChild;");
-  for (auto fd : field_descs) {
+  for (const auto& fd : field_descs) {
     auto parent_field = add_concrete_field(parent, fd.name, fd.type, fd.value);
     auto child_field = add_dependent_field(child, fd.name, parent_field);
     add_dependent_field(grandchild, fd.name, child_field);
@@ -362,7 +365,7 @@ TEST_F(ConstPropTest, multiLevelPropagate) {
   std::vector<DexClass*> descendants = {child, grandchild};
   for (auto clazz : descendants) {
     expect_empty_clinit(clazz);
-    for (auto fd : field_descs) {
+    for (const auto& fd : field_descs) {
       expect_field_eq(clazz, fd.name, fd.type, fd.value);
     }
   }
@@ -494,7 +497,7 @@ TEST_F(ConstPropTest, ClinitWithGoto) {
 
   auto type = DexType::make_type(DexString::make_string("LFoo;"));
   ClassCreator creator(type);
-  creator.set_super(get_object_type());
+  creator.set_super(type::java_lang_Object());
   auto foo = creator.create();
 
   auto field = static_cast<DexField*>(DexField::make_field("LFoo;.bar:I"));

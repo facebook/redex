@@ -1,9 +1,10 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
+
 #include <fstream>
 #include <iostream>
 #include <json/json.h>
@@ -13,7 +14,7 @@
 
 constexpr const char* ROOT_STORE_NAME = "classes";
 
-DexStore::DexStore(const std::string name) { m_metadata.set_id(name); }
+DexStore::DexStore(const std::string& name) { m_metadata.set_id(name); }
 
 std::string DexStore::get_name() const { return m_metadata.get_id(); }
 
@@ -50,10 +51,10 @@ void DexMetadata::parse(const std::string& path) {
   Json::Value store;
   input >> store;
   id = store["id"].asString();
-  for (auto dep : store["requires"]) {
+  for (const auto& dep : store["requires"]) {
     dependencies.push_back(dep.asString());
   }
-  for (auto file : store["files"]) {
+  for (const auto& file : store["files"]) {
     files.push_back(file.asString());
   }
 }

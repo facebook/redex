@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -225,7 +225,7 @@ void check_load_params(DexMethod* method) {
   auto& args_list = method->get_proto()->get_args()->get_type_list();
   auto it = param_ops.begin();
   auto end = param_ops.end();
-  uint16_t next_ins = it->insn->dest();
+  reg_t next_ins = it->insn->dest();
   if (!is_static(method)) {
     auto op = it->insn->opcode();
     always_assert(op == IOPCODE_LOAD_PARAM_OBJECT);
@@ -240,13 +240,8 @@ void check_load_params(DexMethod* method) {
     // TODO: have load param opcodes store the actual type of the param and
     // check that they match the method prototype here
     always_assert(args_it != args_list.end());
-    if (is_wide_type(*args_it)) {
-      always_assert(op == IOPCODE_LOAD_PARAM_WIDE);
-    } else if (is_primitive(*args_it)) {
-      always_assert(op == IOPCODE_LOAD_PARAM);
-    } else {
-      always_assert(op == IOPCODE_LOAD_PARAM_OBJECT);
-    }
+    auto expected_op = opcode::load_opcode(*args_it);
+    always_assert(op == expected_op);
     ++args_it;
     next_ins += it->insn->dest_is_wide() ? 2 : 1;
   }
@@ -291,6 +286,10 @@ DexInstruction* create_dex_instruction(const IRInstruction* insn) {
     return new DexOpcodeField(op, insn->get_field());
   case opcode::Ref::Method:
     return new DexOpcodeMethod(op, insn->get_method());
+  case opcode::Ref::CallSite:
+    return new DexOpcodeCallSite(op, insn->get_callsite());
+  case opcode::Ref::MethodHandle:
+    return new DexOpcodeMethodHandle(op, insn->get_methodhandle());
   }
 }
 
@@ -298,7 +297,7 @@ DexInstruction* create_dex_instruction(const IRInstruction* insn) {
 // instructions in isolation -- it only removes them when the caller calls it
 // with the associated 'primary' prefix instruction -- so we use this function
 // specifically for this purpose.
-void remove_move_result_pseudo(IRList::iterator it) {
+void remove_move_result_pseudo(const IRList::iterator& it) {
   always_assert(opcode::is_move_result_pseudo(it->insn->opcode()));
   delete it->insn;
   it->insn = nullptr;
@@ -491,20 +490,13 @@ Stats lower(DexMethod* method, bool lower_with_cfg) {
 
 Stats run(DexStoresVector& stores, bool lower_with_cfg) {
   auto scope = build_class_scope(stores);
-  return walk::parallel::reduce_methods<Stats>(
-      scope,
-      [lower_with_cfg](DexMethod* m) {
-        Stats stats;
-        if (m->get_code() == nullptr) {
-          return stats;
-        }
-        stats.accumulate(lower(m, lower_with_cfg));
-        return stats;
-      },
-      [](Stats a, Stats b) {
-        a.accumulate(b);
-        return a;
-      });
+  return walk::parallel::methods<Stats>(scope, [lower_with_cfg](DexMethod* m) {
+    Stats stats;
+    if (m->get_code() == nullptr) {
+      return stats;
+    }
+    return lower(m, lower_with_cfg);
+  });
 }
 
 // Computes number of entries needed for a packed switch, accounting for any

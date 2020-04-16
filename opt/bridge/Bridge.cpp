@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -77,7 +77,7 @@ DexMethodRef* match_pattern(DexMethod* bridge) {
 }
 
 bool is_optimization_candidate(DexMethod* bridge, DexMethod* bridgee) {
-  if (!can_delete_DEPRECATED(bridgee)) {
+  if (!can_delete(bridgee)) {
     TRACE(BRIDGE, 5, "Cannot delete bridgee! bridge: %s\n bridgee: %s",
           SHOW(bridge), SHOW(bridgee));
     return false;
@@ -111,7 +111,7 @@ bool signature_matches(DexMethod* a, DexMethod* b) {
 bool has_bridgelike_access(DexMethod* m) {
   return m->is_virtual() &&
          (is_bridge(m) ||
-          (is_synthetic(m) && !is_static(m) && !is_constructor(m)));
+          (is_synthetic(m) && !is_static(m) && !method::is_constructor(m)));
 }
 
 void do_inlining(DexMethod* bridge, DexMethod* bridgee) {

@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -86,10 +86,25 @@ ConstantUses::ConstantUses(const cfg::ControlFlowGraph& cfg, DexMethod* method)
             auto def_opcode = def->opcode();
             if (def_opcode == OPCODE_CONST || def_opcode == OPCODE_CONST_WIDE) {
               m_constant_uses[def].emplace_back(insn, src_index);
+              // So there's an instruction that uses a const value.
+              // For some uses, get_type_demand(IRInstruction*, size_t) will
+              // need to know type inference information on operands.
+              // The following switch logic needs to be kept in sync with that
+              // actual usage of type inference information.
               auto opcode = insn->opcode();
-              if (src_index == 0 &&
-                  (opcode == OPCODE_APUT || OPCODE_APUT_WIDE)) {
+              switch (opcode) {
+              case OPCODE_APUT:
+              case OPCODE_APUT_WIDE:
+                if (src_index == 0) {
+                  need_type_inference = true;
+                }
+                break;
+              case OPCODE_IF_EQ:
+              case OPCODE_IF_NE:
                 need_type_inference = true;
+                break;
+              default:
+                break;
               }
             }
           }
@@ -277,7 +292,7 @@ TypeDemand ConstantUses::get_type_demand(IRInstruction* insn,
     return TypeDemand::Int;
 
   case OPCODE_FILLED_NEW_ARRAY: {
-    DexType* component_type = get_array_component_type(insn->get_type());
+    DexType* component_type = type::get_array_component_type(insn->get_type());
     return get_type_demand(component_type);
   }
   case OPCODE_CMPL_FLOAT:
@@ -402,9 +417,9 @@ TypeDemand ConstantUses::get_type_demand(IRInstruction* insn,
         auto dex_type = type_environment.get_dex_type(insn->src(1));
         TRACE(CU, 3, "[CU] aput(-wide) instruction array type: %s",
               dex_type ? SHOW(dex_type) : "(unknown dex type)");
-        if (dex_type && is_array(*dex_type)) {
+        if (dex_type && type::is_array(*dex_type)) {
           auto type_demand =
-              get_type_demand(get_array_component_type(*dex_type));
+              get_type_demand(type::get_array_component_type(*dex_type));
           always_assert(insn->opcode() != OPCODE_APUT ||
                         (type_demand == TypeDemand::Error ||
                          type_demand == TypeDemand::Int ||
@@ -474,7 +489,15 @@ TypeDemand ConstantUses::get_type_demand(IRInstruction* insn,
     }
     return get_type_demand(arg_types.at(src_index));
   }
+  case OPCODE_INVOKE_CUSTOM:
+  case OPCODE_INVOKE_POLYMORPHIC:
+    always_assert_log(
+        false,
+        "Unsupported instruction {%s} in ConstantUses::get_type_demand\n",
+        SHOW(insn));
   }
 }
+
+bool ConstantUses::has_type_inference() const { return !!m_type_inference; }
 
 } // namespace constant_uses

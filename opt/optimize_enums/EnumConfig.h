@@ -1,13 +1,14 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
+
 #pragma once
 
 #include "ConcurrentContainers.h"
-#include "DexClass.h"
+#include "MethodOverrideGraph.h"
 
 namespace optimize_enums {
 /**
@@ -36,10 +37,20 @@ struct Config {
    * than max_enum_size values before the transformation.
    */
   uint32_t max_enum_size;
+  /**
+   * Will try to optimize the enums in the whitelist without considering
+   * reference equality of the enum objects.
+   */
+  std::unordered_set<DexType*> breaking_reference_equality_whitelist;
   SummaryMap param_summary_map;
   ConcurrentSet<DexType*> candidate_enums;
 
   explicit Config(uint32_t max_size) : max_enum_size(max_size) {}
+
+  explicit Config(uint32_t max_size, const std::vector<DexType*>& whitelist)
+      : max_enum_size(max_size),
+        breaking_reference_equality_whitelist(whitelist.begin(),
+                                              whitelist.end()) {}
 };
 
 bool params_contain_object_type(const DexMethod* method,
@@ -52,5 +63,8 @@ bool params_contain_object_type(const DexMethod* method,
 ParamSummary calculate_param_summary(DexMethod* method,
                                      const DexType* object_type);
 
-void calculate_param_summaries(Scope& scope, SummaryMap* param_summary_map);
+void calculate_param_summaries(
+    const Scope& scope,
+    const method_override_graph::Graph& override_graph,
+    SummaryMap* param_summary_map);
 } // namespace optimize_enums

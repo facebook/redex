@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -23,7 +23,7 @@ class SwitchDispatchTest : public RedexTest {};
 
 TEST_F(SwitchDispatchTest, create_simple_dispatch) {
   ClassCreator cc(DexType::make_type("Lfoo;"));
-  cc.set_super(get_object_type());
+  cc.set_super(type::java_lang_Object());
   cc.create();
   { // static methods
     DexAccessFlags access = ACC_STATIC;

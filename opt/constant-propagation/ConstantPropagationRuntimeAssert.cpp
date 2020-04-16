@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -56,10 +56,11 @@ static IROpcode opcode_for_interval(const sign_domain::Interval intv) {
  *
  * Returns an iterator to the if-* opcode.
  */
-static IRList::iterator insert_if_opcode_check(IRCode* code,
-                                               IRList::iterator it,
-                                               reg_t reg_to_check,
-                                               SignedConstantDomain scd) {
+static IRList::iterator insert_if_opcode_check(
+    IRCode* code,
+    IRList::iterator it,
+    reg_t reg_to_check,
+    const SignedConstantDomain& scd) {
   always_assert(!scd.is_top() && !scd.is_bottom());
   const auto& cst = scd.get_constant();
   if (cst) {
@@ -120,7 +121,8 @@ ir_list::InstructionIterator RuntimeAssertTransform::insert_field_assert(
   if (field == nullptr) {
     return it;
   }
-  if (!(is_integer(field->get_type()) || is_object(field->get_type()))) {
+  if (!(type::is_integer(field->get_type()) ||
+        type::is_object(field->get_type()))) {
     return it;
   }
   auto scd = wps.get_field_value(field).maybe_get<SignedConstantDomain>();
@@ -207,7 +209,7 @@ ir_list::InstructionIterator RuntimeAssertTransform::insert_return_value_assert(
   }
   auto reg = it->insn->dest();
   auto ret_type = callee->get_proto()->get_rtype();
-  if (!(is_integer(ret_type) || is_object(ret_type))) {
+  if (!(type::is_integer(ret_type) || type::is_object(ret_type))) {
     return it;
   }
   auto scd = cst.maybe_get<SignedConstantDomain>();
@@ -234,7 +236,7 @@ ir_list::InstructionIterator RuntimeAssertTransform::insert_return_value_assert(
  */
 void RuntimeAssertTransform::insert_param_asserts(
     const ConstantEnvironment& env, DexMethod* method) {
-  auto args = env.get_register_environment();
+  const auto& args = env.get_register_environment();
   if (!args.is_value()) {
     return;
   }
@@ -253,7 +255,7 @@ void RuntimeAssertTransform::insert_param_asserts(
   for (uint32_t i = 0; i < arg_types.size(); ++i, ++insn_it) {
     auto* arg_type = arg_types.at(i);
     // We don't currently support floating-point or long types...
-    if (!(is_integer(arg_type) || is_object(arg_type))) {
+    if (!(type::is_integer(arg_type) || type::is_object(arg_type))) {
       continue;
     }
     auto reg = insn_it->insn->dest();

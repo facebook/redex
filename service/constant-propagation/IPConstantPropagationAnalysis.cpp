@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -24,7 +24,7 @@ ConstantEnvironment env_with_params(const IRCode* code,
   return env;
 }
 
-void FixpointIterator::analyze_node(DexMethod* const& method,
+void FixpointIterator::analyze_node(const DexMethod* const& method,
                                     Domain* current_state) const {
   // The entry node has no associated method.
   if (method == nullptr) {
@@ -39,7 +39,7 @@ void FixpointIterator::analyze_node(DexMethod* const& method,
   const auto outgoing_edges =
       call_graph::GraphInterface::successors(m_call_graph, method);
   std::unordered_set<IRInstruction*> outgoing_insns;
-  for (const auto edge : outgoing_edges) {
+  for (const auto& edge : outgoing_edges) {
     outgoing_insns.emplace(edge->invoke_iterator()->insn);
   }
   for (auto* block : cfg.blocks()) {
@@ -94,9 +94,9 @@ void set_encoded_values(const DexClass* cls, ConstantEnvironment* env) {
     auto value = sfield->get_static_value();
     if (value == nullptr || value->evtype() == DEVT_NULL) {
       env->set(sfield, SignedConstantDomain(0));
-    } else if (is_primitive(sfield->get_type())) {
+    } else if (type::is_primitive(sfield->get_type())) {
       env->set(sfield, SignedConstantDomain(value->value()));
-    } else if (sfield->get_type() == get_string_type() &&
+    } else if (sfield->get_type() == type::java_lang_String() &&
                value->evtype() == DEVT_STRING) {
       env->set(
           sfield,

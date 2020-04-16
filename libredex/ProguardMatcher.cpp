@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -111,7 +111,7 @@ struct ClassMatcher {
 
   bool type_and_annotation_match(const DexClass* cls) const {
     if (cls == nullptr) return false;
-    if (cls->get_type() == get_object_type()) return false;
+    if (cls->get_type() == type::java_lang_Object()) return false;
     // First check to see if an annotation type needs to be matched.
     if (m_extends_anno) {
       if (!match_annotation_rx(cls, *m_extends_anno)) {
@@ -151,7 +151,7 @@ struct ClassMatcher {
     always_assert(cls != nullptr);
     // Do any of the classes and interfaces above match?
     auto super_type = cls->get_super_class();
-    if (super_type && super_type != get_object_type()) {
+    if (super_type && super_type != type::java_lang_Object()) {
       auto super_class = type_class(super_type);
       if (super_class) {
         if (type_and_annotation_match(super_class) ||
@@ -226,6 +226,11 @@ class KeepRuleMatcher {
         m_keep_rule(keep_rule),
         m_regex_map(regex_map) {}
 
+  ~KeepRuleMatcher() {
+    TRACE(PGR, 3, "%s matched %lu classes and %lu members",
+          show_keep(m_keep_rule).c_str(), m_class_matches, m_member_matches);
+  }
+
   void keep_processor(DexClass*);
 
   void mark_class_and_members_for_keep(DexClass* cls);
@@ -289,6 +294,8 @@ class KeepRuleMatcher {
   }
 
  private:
+  size_t m_member_matches{0};
+  size_t m_class_matches{0};
   RuleType m_rule_type;
   const KeepSpec& m_keep_rule;
   RegexMap& m_regex_map;
@@ -338,24 +345,24 @@ void apply_keep_modifiers(const KeepSpec& k, DexMember* member) {
   // programmers must fix the rules. Instead, we pick a conservative choice:
   // don't shrink or don't obfuscate.
   if (k.allowshrinking) {
-    if (!has_keep(member)) {
-      member->rstate.set_allowshrinking();
+    if (!impl::KeepState::has_keep(member)) {
+      impl::KeepState::set_allowshrinking(member);
     } else {
       // We already observed a keep rule for this member. So, even if another
       // "-keep,allowshrinking" tries to set allowshrinking, we must ignore it.
     }
   } else {
     // Otherwise reset it: don't allow shrinking.
-    member->rstate.unset_allowshrinking();
+    impl::KeepState::unset_allowshrinking(member);
   }
   // The same case: unsetting allowobfuscation has a priority.
   if (k.allowobfuscation) {
-    if (!has_keep(member) &&
+    if (!impl::KeepState::has_keep(member) &&
         strcmp(member->get_name()->c_str(), "<init>") != 0) {
-      member->rstate.set_allowobfuscation();
+      impl::KeepState::set_allowobfuscation(member);
     }
   } else {
-    member->rstate.unset_allowobfuscation();
+    impl::KeepState::unset_allowobfuscation(member);
   }
 }
 
@@ -366,12 +373,20 @@ bool KeepRuleMatcher::has_annotation(const DexMember* member,
   if (annos == nullptr) {
     return false;
   }
-  auto annotation_regex = proguard_parser::form_type_regex(annotation);
-  const boost::regex& annotation_matcher = register_matcher(annotation_regex);
-  for (const auto& anno : annos->get_annotations()) {
-    if (boost::regex_match(get_deobfuscated_name(anno->type()),
-                           annotation_matcher)) {
-      return true;
+  if (!proguard_parser::has_special_char(annotation)) {
+    for (const auto& anno : annos->get_annotations()) {
+      if (get_deobfuscated_name(anno->type()) == annotation) {
+        return true;
+      }
+    }
+  } else {
+    auto annotation_regex = proguard_parser::form_type_regex(annotation);
+    const boost::regex& annotation_matcher = register_matcher(annotation_regex);
+    for (const auto& anno : annos->get_annotations()) {
+      if (boost::regex_match(get_deobfuscated_name(anno->type()),
+                             annotation_matcher)) {
+        return true;
+      }
     }
   }
   return false;
@@ -387,7 +402,8 @@ std::string extract_field_name(std::string qualified_fieldname) {
   return qualified_fieldname.substr(p + 2);
 }
 
-std::string extract_method_name_and_type(std::string qualified_fieldname) {
+std::string extract_method_name_and_type(
+    const std::string& qualified_fieldname) {
   auto p = qualified_fieldname.find(";.");
   return qualified_fieldname.substr(p + 2);
 }
@@ -603,7 +619,8 @@ void KeepRuleMatcher::mark_class_and_members_for_keep(DexClass* cls) {
   }
   if (m_keep_rule.mark_classes || m_keep_rule.mark_conditionally) {
     apply_keep_modifiers(m_keep_rule, cls);
-    cls->rstate.set_has_keep(&m_keep_rule);
+    impl::KeepState::set_has_keep(cls, &m_keep_rule);
+    ++m_class_matches;
     if (cls->rstate.report_whyareyoukeeping()) {
       TRACE(PGR, 2, "whyareyoukeeping Class %s kept by %s",
             java_names::internal_to_external(cls->get_deobfuscated_name())
@@ -649,7 +666,8 @@ void KeepRuleMatcher::apply_rule(DexMember* member) {
     member->rstate.set_whyareyoukeeping();
     break;
   case RuleType::KEEP: {
-    member->rstate.set_has_keep(&m_keep_rule);
+    impl::KeepState::set_has_keep(member, &m_keep_rule);
+    ++m_member_matches;
     if (member->rstate.report_whyareyoukeeping()) {
       TRACE(PGR, 2, "whyareyoukeeping %s kept by %s", SHOW(member),
             show_keep(m_keep_rule).c_str());
@@ -694,16 +712,14 @@ void ProguardMatcher::process_keep(const KeepSpecSet& keep_rules,
                                    bool process_external) {
   Timer t("Process keep for " + to_string(rule_type));
 
-  auto process_single_keep = [rule_type, process_external](
-                                 ClassMatcher& class_match,
-                                 const KeepSpec& keep_rule, DexClass* cls,
-                                 RegexMap& regex_map) {
+  auto process_single_keep = [process_external](ClassMatcher& class_match,
+                                                KeepRuleMatcher& rule_matcher,
+                                                DexClass* cls) {
     // Skip external classes.
     if (cls == nullptr || (!process_external && cls->is_external())) {
       return;
     }
     if (class_match.match(cls)) {
-      KeepRuleMatcher rule_matcher(rule_type, keep_rule, regex_map);
       rule_matcher.keep_processor(cls);
     }
   };
@@ -712,13 +728,14 @@ void ProguardMatcher::process_keep(const KeepSpecSet& keep_rules,
   auto wq = workqueue_foreach<const KeepSpec*>([&](const KeepSpec* keep_rule) {
     RegexMap regex_map;
     ClassMatcher class_match(*keep_rule);
+    KeepRuleMatcher rule_matcher(rule_type, *keep_rule, regex_map);
 
     for (const auto& cls : m_classes) {
-      process_single_keep(class_match, *keep_rule, cls, regex_map);
+      process_single_keep(class_match, rule_matcher, cls);
     }
     if (process_external) {
       for (const auto& cls : m_external_classes) {
-        process_single_keep(class_match, *keep_rule, cls, regex_map);
+        process_single_keep(class_match, rule_matcher, cls);
       }
     }
   });
@@ -732,7 +749,8 @@ void ProguardMatcher::process_keep(const KeepSpecSet& keep_rules,
     const auto& className = keep_rule.class_spec.className;
     if (!classname_contains_wildcard(className)) {
       DexClass* cls = find_single_class(className);
-      process_single_keep(class_match, keep_rule, cls, regex_map);
+      KeepRuleMatcher rule_matcher(rule_type, keep_rule, regex_map);
+      process_single_keep(class_match, rule_matcher, cls);
       continue;
     }
 
@@ -742,11 +760,11 @@ void ProguardMatcher::process_keep(const KeepSpecSet& keep_rules,
         !classname_contains_wildcard(extendsClassName)) {
       DexClass* super = find_single_class(extendsClassName);
       if (super != nullptr) {
+        KeepRuleMatcher rule_matcher(rule_type, keep_rule, regex_map);
         auto children = get_all_children(m_hierarchy, super->get_type());
-        process_single_keep(class_match, keep_rule, super, regex_map);
+        process_single_keep(class_match, rule_matcher, super);
         for (auto const* type : children) {
-          process_single_keep(class_match, keep_rule, type_class(type),
-                              regex_map);
+          process_single_keep(class_match, rule_matcher, type_class(type));
         }
       }
       continue;
@@ -774,7 +792,7 @@ void ProguardMatcher::process_proguard_rules(
 void ProguardMatcher::mark_all_annotation_classes_as_keep() {
   for (auto cls : m_classes) {
     if (is_annotation(cls)) {
-      cls->rstate.set_has_keep(keep_reason::ANNO);
+      impl::KeepState::set_has_keep(cls, keep_reason::ANNO);
       if (cls->rstate.report_whyareyoukeeping()) {
         TRACE(PGR,
               2,

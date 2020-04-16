@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -6,8 +6,8 @@
  */
 
 #include <queue>
-#include <vector>
 #include <unordered_map>
+#include <vector>
 
 #include "ControlFlow.h"
 #include "IRCode.h"
@@ -32,9 +32,8 @@ bool is_throw_block(const DexMethod* meth, cfg::Block* block) {
       if (block->succs().size() > 0) {
         for (const auto& succ : block->succs()) {
           if (!succ->target()->is_catch()) {
-            always_assert_log(false,
-                "throw block with successors in %s",
-                SHOW(meth));
+            always_assert_log(false, "throw block with successors in %s",
+                              SHOW(meth));
           }
         }
       }
@@ -81,8 +80,8 @@ void print_blocks_by_size(const LogicalBlock& throwing_blocks) {
   }
   for (int i = 0; i < MAX_COUNT; i++) {
     if (block_insn_count[i] > 0) {
-      fprintf(stderr, "%d blocks with %d instructions\n",
-          block_insn_count[i], i + 1);
+      fprintf(stderr, "%d blocks with %d instructions\n", block_insn_count[i],
+              i + 1);
     }
   }
 }
@@ -92,10 +91,9 @@ void print_blocks_by_size(const LogicalBlock& throwing_blocks) {
  * This should basically merge all blocks that are part of the same
  * throw path.
  */
-void walk_predecessors(
-    cfg::Block* block,
-    std::vector<cfg::Block*>& throw_code,
-    std::unordered_set<cfg::Block*>& left_blocks) {
+void walk_predecessors(cfg::Block* block,
+                       std::vector<cfg::Block*>& throw_code,
+                       std::unordered_set<cfg::Block*>& left_blocks) {
   throw_code.emplace_back(block);
   const auto& preds = block->preds();
   for (const auto& pred_edge : preds) {
@@ -111,8 +109,7 @@ void walk_predecessors(
  * Collect all the blocks leading to a throw and contributing to the
  * throw only.
  */
-void collect_throwing_blocks(
-    DexMethod* meth, LogicalBlock& throwing_blocks) {
+void collect_throwing_blocks(DexMethod* meth, LogicalBlock& throwing_blocks) {
   const auto& blocks = meth->get_code()->cfg().blocks();
   std::queue<cfg::Block*> blocks_to_visit;
   std::unordered_set<cfg::Block*> no_throw_blocks;
@@ -176,36 +173,35 @@ void collect_throwing_blocks(
  */
 void find_throwing_block(const Scope& scope) {
   LogicalBlock throwing_blocks;
-  walk::code(scope,
-      [&](DexMethod* meth, IRCode& code) {
-        code.build_cfg(/* editable */ false);
-        const auto& cfg = code.cfg();
-        for (const auto& block : cfg.blocks()) {
-          if (is_throw_block(meth, block)) {
-            // do the analysis to find the blocks contributing to the throw
-            collect_throwing_blocks(meth, throwing_blocks);
-          }
-        }
-      });
+  walk::code(scope, [&](DexMethod* meth, IRCode& code) {
+    code.build_cfg(/* editable */ false);
+    const auto& cfg = code.cfg();
+    for (const auto& block : cfg.blocks()) {
+      if (is_throw_block(meth, block)) {
+        // do the analysis to find the blocks contributing to the throw
+        collect_throwing_blocks(meth, throwing_blocks);
+      }
+    }
+  });
   fprintf(stderr, "throwing blocks %ld\n", throwing_blocks.size());
   print_blocks_by_size(throwing_blocks);
 }
 
-}
+} // namespace
 
 class AnalyzeThrows : public Tool {
  public:
-  AnalyzeThrows() : Tool("analyze-throws", "analyze blocks ending with throws") {}
+  AnalyzeThrows()
+      : Tool("analyze-throws", "analyze blocks ending with throws") {}
 
   void add_options(po::options_description& options) const override {
     add_standard_options(options);
   }
 
   void run(const po::variables_map& options) override {
-    auto stores = init(
-      options["jars"].as<std::string>(),
-      options["apkdir"].as<std::string>(),
-      options["dexendir"].as<std::string>());
+    auto stores = init(options["jars"].as<std::string>(),
+                       options["apkdir"].as<std::string>(),
+                       options["dexendir"].as<std::string>());
     const auto& scope = build_class_scope(stores);
     find_throwing_block(scope);
   }

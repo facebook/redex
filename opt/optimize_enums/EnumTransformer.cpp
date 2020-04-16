@@ -1,9 +1,10 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
+
 #include "EnumTransformer.h"
 
 #include "Creators.h"
@@ -34,6 +35,8 @@
  *                    Ljava/lang/Integer;.equals:(Object)Z
  *  -- sget-object LCandidateEnum;.f:LCandidateEnum; =>
  *                 LEnumUtils;.f?:Ljava/lang/Integer;
+ *       or construct a new integer if the enum is allowed to be optimized
+ *       unsafely.
  *  -- invoke-virtual LCandidateEnum;.name:()String =>
  *                    LCandidateEnum;.redex$OE$name:(Integer)String
  *  -- invoke-virtual LCandidateEnum;.hashCode:()I =>
@@ -48,10 +51,11 @@
  *  -- invoke-virtual LCandidateEnum;.toString:()String =>
  *                    LCandidateEnum;.redex$OE$name:(Integer)String
  *
- *  We also make all virtual methods static and keep them in their original
- * class while also changing their invocations to static.
- * 3. Clean the static fileds of candidate enums and update these enum classes
- * to inherit Object instead of Enum.
+ *  We also make all virtual methods and instance direct methods to be static
+ * and keep them in their original class while also changing their invocations
+ * to static.
+ * 3. Clean up the static fields of candidate enums and update these enum
+ * classes to inherit java.lang.Object instead of java.lang.Enum.
  * 4. Update specs of methods and fields based on name mangling.
  */
 
@@ -72,8 +76,9 @@ struct EnumUtil {
   // later.
   ConcurrentSet<DexMethodRef*> m_substitute_methods;
 
-  // Store virtual methods of candidate enums that will be made static later.
-  ConcurrentSet<DexMethod*> m_virtual_methods;
+  // Store virtual and direct methods of candidate enums that will be
+  // made static later.
+  ConcurrentSet<DexMethod*> m_instance_methods;
 
   // Store methods for getting instance fields to be generated later.
   ConcurrentMap<DexFieldRef*, DexMethodRef*> m_get_instance_field_methods;
@@ -94,11 +99,11 @@ struct EnumUtil {
 
   const DexString* VALUES_FIELD_STR = DexString::make_string("$VALUES");
 
-  const DexType* ENUM_TYPE = get_enum_type();
-  DexType* INT_TYPE = get_int_type();
-  DexType* INTEGER_TYPE = get_integer_type();
-  DexType* OBJECT_TYPE = get_object_type();
-  DexType* STRING_TYPE = get_string_type();
+  const DexType* ENUM_TYPE = type::java_lang_Enum();
+  DexType* INT_TYPE = type::_int();
+  DexType* INTEGER_TYPE = type::java_lang_Integer();
+  DexType* OBJECT_TYPE = type::java_lang_Object();
+  DexType* STRING_TYPE = type::java_lang_String();
   DexType* SERIALIZABLE_TYPE = DexType::make_type("Ljava/io/Serializable;");
   DexType* COMPARABLE_TYPE = DexType::make_type("Ljava/lang/Comparable;");
   DexType* RTEXCEPTION_TYPE =
@@ -146,9 +151,15 @@ struct EnumUtil {
   explicit EnumUtil(const Config& config) : m_config(config) {}
 
   void create_util_class(DexStoresVector* stores, uint32_t fields_count) {
-    DexClass* cls = make_enumutils_class(fields_count);
+    uint32_t fields_in_primary = std::min(fields_count, m_config.max_enum_size);
+    DexClass* cls = make_enumutils_class(fields_in_primary);
     auto& dexen = (*stores)[0].get_dexen()[0];
     dexen.push_back(cls);
+  }
+
+  bool is_super_type_of_candidate_enum(DexType* type) {
+    return type == ENUM_TYPE || type == OBJECT_TYPE ||
+           type == SERIALIZABLE_TYPE || type == COMPARABLE_TYPE;
   }
 
   /**
@@ -161,13 +172,13 @@ struct EnumUtil {
    */
   DexType* try_convert_to_int_type(const EnumAttributeMap& enum_attributes_map,
                                    DexType* type) const {
-    uint32_t level = get_array_level(type);
+    uint32_t level = type::get_array_level(type);
     DexType* elem_type = type;
     if (level) {
-      elem_type = get_array_element_type(type);
+      elem_type = type::get_array_element_type(type);
     }
     if (enum_attributes_map.count(elem_type)) {
-      return level ? make_array_type(INTEGER_TYPE, level) : INTEGER_TYPE;
+      return level ? type::make_array_type(INTEGER_TYPE, level) : INTEGER_TYPE;
     }
     return nullptr;
   }
@@ -217,7 +228,7 @@ struct EnumUtil {
     } else {
       auto method = resolve_method(method_ref, MethodSearch::Virtual);
       always_assert(method);
-      m_virtual_methods.insert(method);
+      m_instance_methods.insert(method);
       return method_ref;
     }
   }
@@ -308,7 +319,7 @@ struct EnumUtil {
       return cache.at(cls);
     }
     for (auto vmethod : cls->get_vmethods()) {
-      if (signatures_match(vmethod, ENUM_TOSTRING_METHOD)) {
+      if (method::signatures_match(vmethod, ENUM_TOSTRING_METHOD)) {
         cache.insert(std::make_pair(cls, vmethod));
         return vmethod;
       }
@@ -331,7 +342,7 @@ struct EnumUtil {
     type = DexType::make_type(name.c_str());
     ClassCreator cc(type);
     cc.set_access(ACC_PUBLIC | ACC_FINAL);
-    cc.set_super(get_object_type());
+    cc.set_super(type::java_lang_Object());
     DexClass* cls = cc.create();
     cls->rstate.set_generated();
 
@@ -346,7 +357,7 @@ struct EnumUtil {
     clinit_code->push_back(dasm(OPCODE_SPUT_OBJECT, values_field, {2_v}));
     clinit_code->push_back(dasm(OPCODE_RETURN_VOID));
 
-    m_values_method_ref = make_values_method(cls, values_field);
+    m_values_method_ref = make_values_method(cls, values_field, fields_count);
 
     return cls;
   }
@@ -357,7 +368,7 @@ struct EnumUtil {
   DexFieldRef* make_values_field(DexClass* cls) {
     auto name = DexString::make_string("$VALUES");
     auto field = DexField::make_field(cls->get_type(), name,
-                                      make_array_type(INTEGER_TYPE))
+                                      type::make_array_type(INTEGER_TYPE))
                      ->make_concrete(ACC_PRIVATE | ACC_FINAL | ACC_STATIC);
     cls->add_field(field);
     return (DexFieldRef*)field;
@@ -384,7 +395,7 @@ struct EnumUtil {
    */
   DexMethod* make_clinit_method(DexClass* cls, uint32_t fields_count) {
     auto proto =
-        DexProto::make_proto(get_void_type(), DexTypeList::make_type_list({}));
+        DexProto::make_proto(type::_void(), DexTypeList::make_type_list({}));
     DexMethod* method =
         DexMethod::make_method(cls->get_type(), CLINIT_METHOD_STR, proto)
             ->make_concrete(ACC_STATIC | ACC_CONSTRUCTOR, false);
@@ -397,7 +408,7 @@ struct EnumUtil {
     // new-array v2, v2, [Integer
     code->push_back(dasm(OPCODE_CONST, {2_v, {LITERAL, fields_count}}));
     code->push_back(
-        dasm(OPCODE_NEW_ARRAY, make_array_type(INTEGER_TYPE), {2_v}));
+        dasm(OPCODE_NEW_ARRAY, type::make_array_type(INTEGER_TYPE), {2_v}));
     code->push_back(dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {2_v}));
     code->set_registers_size(3);
     return method;
@@ -405,36 +416,90 @@ struct EnumUtil {
 
   /**
    * LEnumUtils;.values:(I)[Ljava/lang/Integer;
+   *
+   * We construct an array field at class loading time, which stores some of the
+   * integers. Copy part of the array if the required integers are in the array,
+   * otherwise copy all of them and construct more. The following comments are
+   * the basic blocks of this method.
+   *
+   * res = new Integer[count]
+   * if count <= VALUES.length
+   *   : small_argument_block
+   *   copy_size = count
+   *   goto :copy_array_block
+   * else
+   *   : large_argument_block
+   *   copy_size = VALUES.length
+   *   id = copy_size
+   *   goto :integers_block
+   *   : integers_block
+   *   if id < count
+   *     : one_integer_block
+   *     res[id] = Integer.valueOf(id)
+   *     id = id + 1
+   *     goto :integers_block
+   *   else
+   *     goto :copy_array_block
+   * : copy_array_block
+   * System.arraycopy(VALUES, 0, res, 0, copy_size);
+   * return res
    */
-  DexMethodRef* make_values_method(DexClass* cls, DexFieldRef* values_field) {
+  DexMethodRef* make_values_method(DexClass* cls,
+                                   DexFieldRef* values_field,
+                                   uint32_t total_integer_fields) {
     DexString* name = DexString::make_string("values");
-    DexProto* proto =
-        DexProto::make_proto(make_array_type(INTEGER_TYPE),
-                             DexTypeList::make_type_list({get_int_type()}));
+    auto integer_array_type = type::make_array_type(INTEGER_TYPE);
+    DexProto* proto = DexProto::make_proto(
+        integer_array_type, DexTypeList::make_type_list({type::_int()}));
     DexMethod* method = DexMethod::make_method(cls->get_type(), name, proto)
                             ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
-    method->set_code(std::make_unique<IRCode>());
+    method->set_code(std::make_unique<IRCode>(method, 0));
     cls->add_method(method);
     method->set_deobfuscated_name(show(method));
     auto code = method->get_code();
+    code->build_cfg();
+    auto& cfg = code->cfg();
+    auto entry = cfg.entry_block();
+    auto small_argument_block = cfg.create_block();
+    auto large_argument_block = cfg.create_block();
+    auto one_integer_block = cfg.create_block();
+    auto integers_block = cfg.create_block();
+    auto copy_array_block = cfg.create_block();
+    cfg.add_edge(small_argument_block, copy_array_block, cfg::EDGE_GOTO);
+    cfg.add_edge(large_argument_block, integers_block, cfg::EDGE_GOTO);
+    cfg.add_edge(one_integer_block, integers_block, cfg::EDGE_GOTO);
 
-    auto sub_array_method = DexMethod::make_method(
-        "Ljava/util/Arrays;.copyOfRange:([Ljava/lang/Object;II)[Ljava/lang/"
-        "Object;");
+    entry->push_back(
+        {dasm(OPCODE_NEW_ARRAY, integer_array_type, {0_v}),
+         dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {1_v}),
+         dasm(OPCODE_CONST, {2_v, {LITERAL, total_integer_fields}})});
+    cfg.create_branch(entry, dasm(OPCODE_IF_LE, {0_v, 2_v}),
+                      large_argument_block, small_argument_block);
 
-    code->push_back(dasm(IOPCODE_LOAD_PARAM, {1_v}));
-    code->push_back(dasm(OPCODE_SGET_OBJECT, values_field));
-    code->push_back(dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {0_v}));
-    code->push_back(dasm(OPCODE_CONST, {2_v, 0_L}));
-    code->push_back(
-        dasm(OPCODE_INVOKE_STATIC, sub_array_method, {0_v, 2_v, 1_v}));
-    code->push_back(dasm(OPCODE_MOVE_RESULT_OBJECT, {0_v}));
-    code->push_back(
-        dasm(OPCODE_CHECK_CAST, make_array_type(INTEGER_TYPE), {0_v}));
-    code->push_back(dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {0_v}));
-    code->push_back(dasm(OPCODE_RETURN_OBJECT, {0_v}));
-    code->set_registers_size(3);
+    small_argument_block->push_back(dasm(OPCODE_MOVE, {4_v, 0_v}));
 
+    large_argument_block->push_back(
+        {dasm(OPCODE_MOVE, {4_v, 2_v}), dasm(OPCODE_MOVE, {5_v, 2_v})});
+    cfg.create_branch(integers_block, dasm(OPCODE_IF_LT, {5_v, 0_v}),
+                      copy_array_block, one_integer_block);
+
+    one_integer_block->push_back(
+        {dasm(OPCODE_INVOKE_STATIC, INTEGER_VALUEOF_METHOD, {5_v}),
+         dasm(OPCODE_MOVE_RESULT_OBJECT, {6_v}),
+         dasm(OPCODE_APUT_OBJECT, {6_v, 1_v, 5_v}),
+         dasm(OPCODE_ADD_INT_LIT8, {5_v, 5_v, 1_L})});
+
+    auto copy_array_method = DexMethod::make_method(
+        "Ljava/lang/System;.arraycopy:(Ljava/lang/Object;ILjava/lang/"
+        "Object;II)V");
+    copy_array_block->push_back({dasm(OPCODE_SGET_OBJECT, values_field),
+                                 dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {7_v}),
+                                 dasm(OPCODE_CONST, {8_v, 0_L}),
+                                 dasm(OPCODE_INVOKE_STATIC, copy_array_method,
+                                      {7_v, 8_v, 1_v, 8_v, 4_v}),
+                                 dasm(OPCODE_RETURN_OBJECT, {1_v})});
+    cfg.recompute_registers_size();
+    code->clear_cfg();
     return (DexMethodRef*)method;
   }
 };
@@ -446,20 +511,21 @@ struct InsnReplacement {
   InsnReplacement(cfg::ControlFlowGraph& cfg,
                   cfg::Block* block,
                   MethodItemEntry* mie,
-                  IRInstruction* new_insn,
-                  boost::optional<IROpcode> opcode = boost::none)
+                  IRInstruction* new_insn)
       : original_insn(block->to_cfg_instruction_iterator(*mie)),
         replacements{new_insn} {
-    push_back_move_result(cfg, mie, opcode);
+    push_back_move_result(cfg, new_insn);
   }
   InsnReplacement(cfg::ControlFlowGraph& cfg,
                   cfg::Block* block,
                   MethodItemEntry* mie,
-                  std::vector<IRInstruction*>& new_insns,
-                  boost::optional<IROpcode> opcode = boost::none)
+                  std::vector<IRInstruction*>& new_insns)
       : original_insn(block->to_cfg_instruction_iterator(*mie)),
         replacements(std::move(new_insns)) {
-    push_back_move_result(cfg, mie, opcode);
+    if (!replacements.empty()) {
+      auto new_insn = *replacements.rbegin();
+      push_back_move_result(cfg, new_insn);
+    }
   }
 
  private:
@@ -469,14 +535,22 @@ struct InsnReplacement {
    * because the original one will be removed.
    */
   void push_back_move_result(cfg::ControlFlowGraph& cfg,
-                             MethodItemEntry* mie,
-                             boost::optional<IROpcode> opcode) {
-    always_assert(mie->insn->has_move_result_any());
-    auto move_insn_it = cfg.move_result_of(original_insn);
-    if (!move_insn_it.is_end()) {
-      auto& move_insn = move_insn_it.unwrap()->insn;
-      replacements.push_back(dasm(opcode ? *opcode : move_insn->opcode(),
-                                  {{VREG, move_insn->dest()}}));
+                             IRInstruction* new_insn) {
+    auto org_move_insn_it = cfg.move_result_of(original_insn);
+    if (!org_move_insn_it.is_end()) {
+      auto& org_move_insn = org_move_insn_it.unwrap()->insn;
+      auto& org_insn = original_insn.unwrap()->insn;
+      auto org_op = org_move_insn->opcode();
+
+      auto dest = org_move_insn->dest();
+      IROpcode new_op = org_op;
+      if (org_insn->has_move_result() && new_insn->has_move_result_pseudo()) {
+        new_op = opcode::move_result_to_pseudo(org_op);
+      } else if (org_insn->has_move_result_pseudo() &&
+                 new_insn->has_move_result()) {
+        new_op = opcode::pseudo_to_move_result(org_op);
+      }
+      replacements.push_back(dasm(new_op, {{VREG, dest}}));
     }
   }
 };
@@ -545,22 +619,32 @@ class CodeTransformer final {
       break;
     case OPCODE_INVOKE_VIRTUAL: {
       auto method = insn->get_method();
-      if (signatures_match(method, m_enum_util->ENUM_ORDINAL_METHOD)) {
+      if (method::signatures_match(method, m_enum_util->ENUM_ORDINAL_METHOD)) {
         update_invoke_virtual(env, cfg, block, mie,
                               m_enum_util->INTEGER_INTVALUE_METHOD);
-      } else if (signatures_match(method, m_enum_util->ENUM_EQUALS_METHOD)) {
+      } else if (method::signatures_match(method,
+                                          m_enum_util->ENUM_EQUALS_METHOD)) {
         update_invoke_virtual(env, cfg, block, mie,
                               m_enum_util->INTEGER_EQUALS_METHOD);
-      } else if (signatures_match(method, m_enum_util->ENUM_COMPARETO_METHOD)) {
+      } else if (method::signatures_match(method,
+                                          m_enum_util->ENUM_COMPARETO_METHOD)) {
         update_invoke_virtual(env, cfg, block, mie,
                               m_enum_util->INTEGER_COMPARETO_METHOD);
-      } else if (signatures_match(method, m_enum_util->ENUM_NAME_METHOD)) {
+      } else if (method::signatures_match(method,
+                                          m_enum_util->ENUM_NAME_METHOD)) {
         update_invoke_name(env, cfg, block, mie);
-      } else if (signatures_match(method, m_enum_util->ENUM_HASHCODE_METHOD)) {
+      } else if (method::signatures_match(method,
+                                          m_enum_util->ENUM_HASHCODE_METHOD)) {
         update_invoke_hashcode(env, cfg, block, mie);
       } else if (method == m_enum_util->STRINGBUILDER_APPEND_OBJ_METHOD) {
         update_invoke_stringbuilder_append(env, cfg, block, mie);
       } else {
+        update_invoke_user_method(env, cfg, block, mie);
+      }
+    } break;
+    case OPCODE_INVOKE_DIRECT: {
+      auto method = insn->get_method();
+      if (!method::is_init(method)) {
         update_invoke_user_method(env, cfg, block, mie);
       }
     } break;
@@ -614,13 +698,16 @@ class CodeTransformer final {
    * If the field is a candidate enum field,
    * sget-object LCandidateEnum;.f:LCandidateEnum; =>
    *   sget-object LEnumUtils;.f?:Integer
+   * or
+   *   const v_ordinal #??
+   *   invoke-static v_ordinal Integer.valueOf:(I)Integer
    */
   void update_sget_object(const optimize_enums::EnumTypeEnvironment& env,
                           cfg::ControlFlowGraph& cfg,
                           cfg::Block* block,
                           MethodItemEntry* mie) {
     auto insn = mie->insn;
-    auto field = static_cast<DexField*>(insn->get_field());
+    auto field = insn->get_field();
     if (!m_enum_attributes_map.count(field->get_type())) {
       return;
     }
@@ -629,9 +716,24 @@ class CodeTransformer final {
     if (!constants.count(field)) {
       return;
     }
-    auto new_field = m_enum_util->m_fields.at(constants.at(field).ordinal);
-    auto new_insn = dasm(OPCODE_SGET_OBJECT, new_field);
-    m_replacements.push_back(InsnReplacement(cfg, block, mie, new_insn));
+    uint32_t ordinal = constants.at(field).ordinal;
+    if (ordinal < m_enum_util->m_config.max_enum_size) {
+      auto new_field = m_enum_util->m_fields.at(constants.at(field).ordinal);
+      auto new_insn = dasm(OPCODE_SGET_OBJECT, new_field);
+      m_replacements.push_back(InsnReplacement(cfg, block, mie, new_insn));
+    } else {
+      always_assert(
+          m_enum_util->m_config.breaking_reference_equality_whitelist.count(
+              field->get_type()));
+      auto ordinal_reg = allocate_temp();
+      std::vector<IRInstruction*> new_insns;
+      new_insns.push_back(
+          dasm(OPCODE_CONST, {{VREG, ordinal_reg}, {LITERAL, ordinal}}));
+      new_insns.push_back(dasm(OPCODE_INVOKE_STATIC,
+                               m_enum_util->INTEGER_VALUEOF_METHOD,
+                               {{VREG, ordinal_reg}}));
+      m_replacements.push_back(InsnReplacement(cfg, block, mie, new_insns));
+    }
   }
 
   /**
@@ -650,26 +752,15 @@ class CodeTransformer final {
     auto insn = mie->insn;
     auto ifield = insn->get_field();
     auto enum_type = ifield->get_class();
-    if (m_enum_attributes_map.count(enum_type)) {
-      auto vObj = insn->src(0);
-      auto get_ifield_method =
-          m_enum_util->add_get_ifield_method(enum_type, ifield);
-      IROpcode opcode;
-      switch (insn->opcode()) {
-      case OPCODE_IGET_WIDE:
-        opcode = OPCODE_MOVE_RESULT_WIDE;
-        break;
-      case OPCODE_IGET_OBJECT:
-        opcode = OPCODE_MOVE_RESULT_OBJECT;
-        break;
-      default:
-        opcode = OPCODE_MOVE_RESULT;
-      }
-      m_replacements.push_back(InsnReplacement(
-          cfg, block, mie,
-          dasm(OPCODE_INVOKE_STATIC, get_ifield_method, {{VREG, vObj}}),
-          opcode));
+    if (!m_enum_attributes_map.count(enum_type)) {
+      return;
     }
+    auto vObj = insn->src(0);
+    auto get_ifield_method =
+        m_enum_util->add_get_ifield_method(enum_type, ifield);
+    m_replacements.push_back(InsnReplacement(
+        cfg, block, mie,
+        dasm(OPCODE_INVOKE_STATIC, get_ifield_method, {{VREG, vObj}})));
   }
 
   /**
@@ -688,7 +779,6 @@ class CodeTransformer final {
     auto attributes_it = m_enum_attributes_map.find(container);
     if (attributes_it != m_enum_attributes_map.end()) {
       auto reg = allocate_temp();
-      auto cls = type_class(container);
       uint64_t enum_size = attributes_it->second.m_constants_map.size();
       always_assert(enum_size);
       std::vector<IRInstruction*> new_insns;
@@ -735,21 +825,12 @@ class CodeTransformer final {
                           MethodItemEntry* mie) {
     auto insn = mie->insn;
     auto container = insn->get_method()->get_class();
-    if (container != m_enum_util->OBJECT_TYPE &&
-        container != m_enum_util->ENUM_TYPE &&
-        !m_enum_attributes_map.count(container)) {
-      return;
-    }
-    DexType* candidate_type =
-        extract_candidate_enum_type(env.get(insn->src(0)));
-    if (m_enum_attributes_map.count(container)) {
-      always_assert(candidate_type == nullptr || candidate_type == container);
-      candidate_type = container;
-    } else if (!candidate_type) {
+    auto reg = insn->src(0);
+    auto candidate_type = infer_candidate_type(env.get(reg), container);
+    if (!candidate_type) {
       return;
     }
     auto helper_method = m_enum_util->add_substitute_of_name(candidate_type);
-    auto reg = insn->src(0);
     m_replacements.push_back(InsnReplacement(
         cfg, block, mie,
         dasm(OPCODE_INVOKE_STATIC, helper_method, {{VREG, reg}})));
@@ -766,17 +847,9 @@ class CodeTransformer final {
                               MethodItemEntry* mie) {
     auto insn = mie->insn;
     auto container = insn->get_method()->get_class();
-    if (container != m_enum_util->OBJECT_TYPE &&
-        container != m_enum_util->ENUM_TYPE &&
-        m_enum_attributes_map.count(container) == 0) {
-      return;
-    }
     auto src_reg = insn->src(0);
-    DexType* candidate_type = extract_candidate_enum_type(env.get(src_reg));
-    if (m_enum_attributes_map.count(container)) {
-      always_assert(candidate_type == nullptr || candidate_type == container);
-      candidate_type = container;
-    } else if (!candidate_type) {
+    auto candidate_type = infer_candidate_type(env.get(src_reg), container);
+    if (!candidate_type) {
       return;
     }
     auto helper_method =
@@ -862,16 +935,9 @@ class CodeTransformer final {
                              DexMethodRef* integer_meth) {
     auto insn = mie->insn;
     auto container = insn->get_method()->get_class();
-    if (container != m_enum_util->OBJECT_TYPE &&
-        container != m_enum_util->ENUM_TYPE &&
-        !m_enum_attributes_map.count(container)) {
-      return;
-    }
-    auto this_types = env.get(insn->src(0));
-    DexType* candidate_type = extract_candidate_enum_type(this_types);
-    if (m_enum_attributes_map.count(container)) {
-      always_assert(candidate_type == nullptr || candidate_type == container);
-    } else if (!candidate_type) {
+    auto src_reg = insn->src(0);
+    auto candidate_type = infer_candidate_type(env.get(src_reg), container);
+    if (!candidate_type) {
       return;
     }
     auto new_insn = new IRInstruction(OPCODE_INVOKE_VIRTUAL);
@@ -883,7 +949,7 @@ class CodeTransformer final {
   }
 
   /**
-   * If this is an invocation of a user-defined virtual method on a
+   * If this is an invocation of a user-defined virtual or direct method on a
    * CandidateEnum, then we make that method static. If that method is
    * toString(), then we call one of the appropriate methods Enum.name()
    * or CandidateEnum.toString(). Otherwise we do nothing.
@@ -895,33 +961,64 @@ class CodeTransformer final {
     auto insn = mie->insn;
     auto method_ref = insn->get_method();
     auto container_type = method_ref->get_class();
-    if (!m_enum_attributes_map.count(container_type)) {
-      if (container_type != m_enum_util->OBJECT_TYPE &&
-          container_type != m_enum_util->ENUM_TYPE &&
-          container_type != m_enum_util->SERIALIZABLE_TYPE &&
-          container_type != m_enum_util->COMPARABLE_TYPE) {
-        return;
-      }
-      container_type = extract_candidate_enum_type(env.get(insn->src(0)));
-      if (!m_enum_attributes_map.count(container_type)) {
-        return;
-      }
+    auto candidate_type =
+        infer_candidate_type(env.get(insn->src(0)), container_type);
+    if (!candidate_type) {
+      return;
     }
 
     // If this is toString() and there is no CandidateEnum.toString(), then we
     // call Enum.name() instead.
-    if (signatures_match(method_ref, m_enum_util->ENUM_TOSTRING_METHOD) &&
+    if (method::signatures_match(method_ref,
+                                 m_enum_util->ENUM_TOSTRING_METHOD) &&
         m_enum_util->get_user_defined_tostring_method(
-            type_class(container_type)) == nullptr) {
+            type_class(candidate_type)) == nullptr) {
       update_invoke_name(env, cfg, block, mie);
     } else {
-      auto method = resolve_method(method_ref, MethodSearch::Virtual);
+      auto method = resolve_method(method_ref, opcode_to_search(insn));
       always_assert(method);
-      m_enum_util->m_virtual_methods.insert(method);
+      m_enum_util->m_instance_methods.insert(method);
       auto new_insn = (new IRInstruction(*insn))
                           ->set_opcode(OPCODE_INVOKE_STATIC)
                           ->set_method(method);
       m_replacements.push_back(InsnReplacement(cfg, block, mie, new_insn));
+    }
+  }
+
+  /**
+   * Infer a candidate type from an instruction like
+   * `invoke-virtual vReg, Target.method()`
+   *
+   * Return a candidate type if we can get only one, return null if all these
+   * types are not related to our candidate types. Bail out if the type are
+   * mixed (our analysis part should have excluded this case).
+   */
+  DexType* infer_candidate_type(const EnumTypes& reg_types,
+                                DexType* target_type) {
+    DexType* candidate_type = nullptr;
+    if (m_enum_attributes_map.count(target_type)) {
+      candidate_type = target_type;
+    } else if (!m_enum_util->is_super_type_of_candidate_enum(target_type)) {
+      return nullptr;
+    }
+    auto type_set = reg_types.elements();
+    if (type_set.empty()) {
+      // Register holds null value, we infer the type in instruction.
+      return candidate_type;
+    } else if (candidate_type) {
+      always_assert_log(type_set.size() == 1 &&
+                            *type_set.begin() == candidate_type,
+                        "%s != %s", SHOW(type_set), SHOW(candidate_type));
+      return candidate_type;
+    } else if (type_set.size() == 1) {
+      candidate_type = *type_set.begin();
+      return m_enum_attributes_map.count(candidate_type) ? candidate_type
+                                                         : nullptr;
+    } else {
+      for (auto t : type_set) {
+        always_assert_log(!m_enum_attributes_map.count(t), "%s\n", SHOW(t));
+      }
+      return nullptr;
     }
   }
 
@@ -932,30 +1029,14 @@ class CodeTransformer final {
    * or assertion failure when the types are mixed.
    */
   DexType* extract_candidate_enum_type(const EnumTypes& types) {
-    auto type_set = types.elements();
-    if (std::all_of(type_set.begin(), type_set.end(), [this](DexType* t) {
-          return !m_enum_attributes_map.count(t);
-        })) {
-      return nullptr;
-    }
-    DexType* ret = nullptr;
-
-    for (auto t : type_set) {
-      if (m_enum_attributes_map.count(t)) {
-        always_assert_log(ret == nullptr,
-                          "Multiple candidate enums %s and %s\n", SHOW(t),
-                          SHOW(ret));
-        ret = t;
-      }
-    }
-    return ret;
+    return infer_candidate_type(types, m_enum_util->OBJECT_TYPE);
   }
 
   DexType* try_convert_to_int_type(DexType* type) {
     return m_enum_util->try_convert_to_int_type(m_enum_attributes_map, type);
   }
 
-  inline uint16_t allocate_temp() {
+  inline reg_t allocate_temp() {
     return m_method->get_code()->cfg().allocate_temp();
   }
 
@@ -986,16 +1067,24 @@ class EnumTransformer final {
         TRACE(ENUM, 2, "\tCannot analyze enum %s : ord %lu sfields %lu",
               SHOW(enum_cls), num_enum_constants,
               enum_cls->get_sfields().size());
+        continue;
       } else if (num_enum_constants > config.max_enum_size) {
-        TRACE(ENUM, 2, "\tSkip %s %lu values", SHOW(enum_cls),
-              num_enum_constants);
-      } else {
-        m_int_objs = std::max<uint32_t>(m_int_objs, num_enum_constants);
-        m_enum_objs += num_enum_constants;
-        m_enum_attributes_map.emplace(*it, attributes);
-        clean_generated_methods_fields(enum_cls);
-        opt_metadata::log_opt(ENUM_OPTIMIZED, enum_cls);
+        if (!config.breaking_reference_equality_whitelist.count(*it)) {
+          TRACE(ENUM, 2, "\tSkip %s %lu values", SHOW(enum_cls),
+                num_enum_constants);
+          continue;
+        } else {
+          TRACE(ENUM, 2,
+                "\tOptimimze %s (%lu values) but object equality is not "
+                "guaranteed",
+                SHOW(enum_cls), num_enum_constants);
+        }
       }
+      m_int_objs = std::max<uint32_t>(m_int_objs, num_enum_constants);
+      m_enum_objs += num_enum_constants;
+      m_enum_attributes_map.emplace(*it, attributes);
+      clean_generated_methods_fields(enum_cls);
+      opt_metadata::log_opt(ENUM_OPTIMIZED, enum_cls);
     }
     m_enum_util->create_util_class(stores, m_int_objs);
   }
@@ -1013,7 +1102,6 @@ class EnumTransformer final {
             return false;
           }
           std::vector<DexType*> types;
-          method->gather_types_shallow(types);
           method->gather_types(types);
           return std::any_of(types.begin(), types.end(), [this](DexType* type) {
             return (bool)try_convert_to_int_type(type);
@@ -1025,11 +1113,13 @@ class EnumTransformer final {
           code_updater.run();
         });
     create_substitute_methods(m_enum_util->m_substitute_methods);
-    std::set<DexMethod*, dexmethods_comparator> virtual_methods(
-        m_enum_util->m_virtual_methods.begin(),
-        m_enum_util->m_virtual_methods.end());
-    for (auto vmethod : virtual_methods) {
-      mutators::make_static(vmethod);
+    std::vector<DexMethod*> instance_methods(
+        m_enum_util->m_instance_methods.begin(),
+        m_enum_util->m_instance_methods.end());
+    std::sort(instance_methods.begin(), instance_methods.end(),
+              dexmethods_comparator());
+    for (auto method : instance_methods) {
+      mutators::make_static(method);
     }
     std::map<DexFieldRef*, DexMethodRef*, dexfields_comparator> field_to_method(
         m_enum_util->m_get_instance_field_methods.begin(),
@@ -1312,7 +1402,7 @@ class EnumTransformer final {
       auto ordinal = pair.first;
       auto block = cfg.create_block();
       cases.emplace_back(ordinal, block);
-      if (ifield_type == get_string_type()) {
+      if (ifield_type == type::java_lang_String()) {
         const DexString* value = pair.second.string_value;
         if (value) {
           block->push_back(
@@ -1326,7 +1416,7 @@ class EnumTransformer final {
         }
       } else {
         int64_t value = pair.second.primitive_value;
-        if (is_wide_type(ifield_type)) {
+        if (type::is_wide_type(ifield_type)) {
           block->push_back({dasm(OPCODE_CONST_WIDE, {1_v, {LITERAL, value}}),
                             dasm(OPCODE_RETURN_WIDE, {1_v})});
         } else {
@@ -1375,7 +1465,7 @@ class EnumTransformer final {
     // Delete <init>, values() and valueOf(String) methods, and clean <clinit>.
     for (auto mit = dmethods.begin(); mit != dmethods.end();) {
       auto method = *mit;
-      if (is_clinit(method)) {
+      if (method::is_clinit(method)) {
         clean_clinit(enum_constants, enum_cls, method, values_field);
         if (empty(method->get_code())) {
           mit = dmethods.erase(mit);
@@ -1432,7 +1522,7 @@ class EnumTransformer final {
     uv_fpiter.run(used_vars::UsedVarsSet());
     auto dead_instructions = used_vars::get_dead_instructions(*code, uv_fpiter);
     code->clear_cfg();
-    for (auto insn : dead_instructions) {
+    for (const auto& insn : dead_instructions) {
       code->remove_opcode(insn);
     }
   }

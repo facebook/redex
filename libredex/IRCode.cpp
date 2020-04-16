@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -26,6 +26,13 @@
 #include "InstructionLowering.h"
 #include "Transform.h"
 #include "Util.h"
+
+#if defined(__clang__)
+#define NO_SIGNED_INT_OVERFLOW \
+  __attribute__((no_sanitize("signed-integer-overflow")))
+#else
+#define NO_SIGNED_INT_OVERFLOW
+#endif
 
 namespace {
 
@@ -192,8 +199,7 @@ static void shard_multi_target(IRList* ir,
     for (int i = 0; i < entries; i++) {
       uint32_t targetaddr = base + read_int32(data);
       auto target = bm.by<Addr>().at(targetaddr);
-      insert_multi_branch_target(ir, case_key, target, src);
-      case_key++;
+      insert_multi_branch_target(ir, case_key + i, target, src);
     }
   } else if (ftype == FOPCODE_SPARSE_SWITCH) {
     const uint16_t* tdata = data + 2 * entries; // entries are 32b
@@ -324,12 +330,13 @@ void generate_load_params(const DexMethod* method,
   for (DexType* arg : args) {
     IROpcode op;
     auto prev_reg = param_reg;
-    if (is_wide_type(arg)) {
+    if (type::is_wide_type(arg)) {
       param_reg += 2;
       op = IOPCODE_LOAD_PARAM_WIDE;
     } else {
       param_reg += 1;
-      op = is_primitive(arg) ? IOPCODE_LOAD_PARAM : IOPCODE_LOAD_PARAM_OBJECT;
+      op = type::is_primitive(arg) ? IOPCODE_LOAD_PARAM
+                                   : IOPCODE_LOAD_PARAM_OBJECT;
     }
     auto insn = new IRInstruction(op);
     insn->set_dest(prev_reg);
@@ -394,6 +401,12 @@ void translate_dex_to_ir(
     } else if (dex_insn->has_method()) {
       insn->set_method(
           static_cast<const DexOpcodeMethod*>(dex_insn)->get_method());
+    } else if (dex_insn->has_callsite()) {
+      insn->set_callsite(
+          static_cast<const DexOpcodeCallSite*>(dex_insn)->get_callsite());
+    } else if (dex_insn->has_methodhandle()) {
+      insn->set_methodhandle(static_cast<const DexOpcodeMethodHandle*>(dex_insn)
+                                 ->get_methodhandle());
     } else if (dex_opcode::has_literal(dex_op)) {
       insn->set_literal(dex_insn->get_literal());
     } else if (op == OPCODE_FILL_ARRAY_DATA) {
@@ -402,6 +415,7 @@ void translate_dex_to_ir(
 
     insn->normalize_registers();
 
+    delete it->dex_insn;
     it->type = MFLOW_OPCODE;
     it->insn = insn;
     if (move_result_pseudo != nullptr) {
@@ -578,6 +592,8 @@ IRCode::IRCode(const IRCode& code) {
   }
 }
 
+void IRCode::cleanup_debug() { m_ir_list->cleanup_debug(); }
+
 void IRCode::build_cfg(bool editable) {
   clear_cfg();
   m_cfg = std::make_unique<cfg::ControlFlowGraph>(
@@ -591,6 +607,10 @@ void IRCode::clear_cfg() {
 
   if (m_cfg->editable()) {
     m_registers_size = m_cfg->get_registers_size();
+    if (m_ir_list != nullptr) {
+      m_ir_list->clear_and_dispose();
+      delete m_ir_list;
+    }
     m_ir_list = m_cfg->linearize();
   }
 
@@ -644,7 +664,7 @@ void calculate_ins_size(const DexMethod* method, DexCode* dex_code) {
     ++ins_size;
   }
   for (auto arg : args_list) {
-    if (is_wide_type(arg)) {
+    if (type::is_wide_type(arg)) {
       ins_size += 2;
     } else {
       ++ins_size;
@@ -774,8 +794,10 @@ std::unique_ptr<DexCode> IRCode::sync(const DexMethod* method) {
     dex_code->set_debug_item(std::move(m_dbg));
     while (try_sync(dex_code.get()) == false)
       ;
-  } catch (std::exception&) {
-    fprintf(stderr, "Failed to sync %s\n%s\n", SHOW(method), SHOW(this));
+  } catch (const std::exception& e) {
+    std::cerr << "Failed to sync " << SHOW(method) << std::endl
+              << SHOW(this) << std::endl;
+    print_stack_trace(std::cerr, e);
     throw;
   }
   return dex_code;
@@ -924,6 +946,7 @@ bool IRCode::try_sync(DexCode* code) {
       packed_payload[1] = size;
       uint32_t* psdata = (uint32_t*)&packed_payload[2];
       int32_t next_key = *psdata++ = targets.front()->case_key;
+      redex_assert(targets.front()->case_key <= targets.back()->case_key);
       for (BranchTarget* target : targets) {
         // Fill in holes with relative offsets that are falling through to the
         // instruction after the switch instruction
@@ -931,7 +954,8 @@ bool IRCode::try_sync(DexCode* code) {
           *psdata++ = 3; // packed-switch statement is three code units
         }
         *psdata++ = multi_targets[target] - entry_to_addr.at(multiopcode);
-        ++next_key;
+        auto update_next = [&]() NO_SIGNED_INT_OVERFLOW { ++next_key; };
+        update_next();
       }
       // Emit align nop
       if (addr & 1) {
@@ -1050,5 +1074,22 @@ void IRCode::gather_methods(std::vector<DexMethodRef*>& lmethod) const {
     m_cfg->gather_methods(lmethod);
   } else {
     m_ir_list->gather_methods(lmethod);
+  }
+}
+
+void IRCode::gather_callsites(std::vector<DexCallSite*>& lcallsite) const {
+  if (editable_cfg_built()) {
+    m_cfg->gather_callsites(lcallsite);
+  } else {
+    m_ir_list->gather_callsites(lcallsite);
+  }
+}
+
+void IRCode::gather_methodhandles(
+    std::vector<DexMethodHandle*>& lmethodhandle) const {
+  if (editable_cfg_built()) {
+    m_cfg->gather_methodhandles(lmethodhandle);
+  } else {
+    m_ir_list->gather_methodhandles(lmethodhandle);
   }
 }

@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -42,7 +42,7 @@ class IRCode {
   IRList* m_ir_list;
   std::unique_ptr<cfg::ControlFlowGraph> m_cfg;
 
-  uint16_t m_registers_size{0};
+  reg_t m_registers_size{0};
   // TODO(jezng): we shouldn't be storing / exposing the DexDebugItem... just
   // exposing the param names should be enough
   std::unique_ptr<DexDebugItem> m_dbg;
@@ -102,14 +102,16 @@ class IRCode {
     return m_ir_list->structural_equals(*other.m_ir_list, instruction_equals);
   }
 
-  uint16_t get_registers_size() const { return m_registers_size; }
+  void cleanup_debug();
 
-  void set_registers_size(uint16_t sz) { m_registers_size = sz; }
+  reg_t get_registers_size() const { return m_registers_size; }
 
-  uint16_t allocate_temp() { return m_registers_size++; }
+  void set_registers_size(reg_t sz) { m_registers_size = sz; }
 
-  uint16_t allocate_wide_temp() {
-    uint16_t new_reg = m_registers_size;
+  reg_t allocate_temp() { return m_registers_size++; }
+
+  reg_t allocate_wide_temp() {
+    reg_t new_reg = m_registers_size;
     m_registers_size += 2;
     return new_reg;
   }
@@ -136,6 +138,8 @@ class IRCode {
   void gather_types(std::vector<DexType*>& ltype) const;
   void gather_fields(std::vector<DexFieldRef*>& lfield) const;
   void gather_methods(std::vector<DexMethodRef*>& lmethod) const;
+  void gather_callsites(std::vector<DexCallSite*>& lcallsite) const;
+  void gather_methodhandles(std::vector<DexMethodHandle*>& lmethodhandle) const;
 
   /* Return the control flow graph of this method as a vector of blocks. */
   cfg::ControlFlowGraph& cfg() { return *m_cfg; }
@@ -251,12 +255,6 @@ class IRCode {
    * all the instructions.
    */
   size_t sum_opcode_sizes() const { return m_ir_list->sum_opcode_sizes(); }
-  size_t sum_non_internal_opcode_sizes() const {
-    return m_ir_list->sum_non_internal_opcode_sizes();
-  }
-  size_t sum_dex_opcode_sizes() const {
-    return m_ir_list->sum_dex_opcode_sizes();
-  }
 
   /*
    * Returns the number of instructions.

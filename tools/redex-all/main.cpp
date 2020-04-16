@@ -10,6 +10,7 @@
 #include <fstream>
 #include <iostream>
 #include <memory>
+#include <regex>
 #include <set>
 #include <streambuf>
 #include <string>
@@ -53,6 +54,7 @@
 #include "ReachableClasses.h"
 #include "RedexContext.h"
 #include "RedexResources.h"
+#include "Show.h"
 #include "Timer.h"
 #include "ToolsCommon.h"
 #include "Walkers.h"
@@ -346,8 +348,7 @@ Arguments parse_args(int argc, char* argv[]) {
       pass_configs[static_cast<int>(i)] = reflect_config(pass->reflect());
     }
     reflected_config["passes"] = pass_configs;
-    Json::StyledStreamWriter writer;
-    writer.write(std::cout, reflected_config);
+    std::cout << reflected_config << std::flush;
     exit(EXIT_SUCCESS);
   }
 
@@ -484,9 +485,9 @@ Arguments parse_args(int argc, char* argv[]) {
     if (passes_list.size() > (size_t)idx) {
       passes_list.resize(idx);
     }
-    if (idx == 0 || passes_list[idx - 1].asString() != "RegAllocPass") {
-      passes_list.append("RegAllocPass");
-    }
+    // Append the two passes when `--stop-pass` is enabled.
+    passes_list.append("MakePublicPass");
+    passes_list.append("RegAllocPass");
     if (args.out_dir.empty() || !redex::dir_is_writable(args.out_dir)) {
       std::cerr << "output-ir is empty or not writable" << std::endl;
       exit(EXIT_FAILURE);
@@ -545,6 +546,10 @@ Json::Value get_stats(const dex_stats_t& stats) {
   val["num_dbg_items"] = stats.num_dbg_items;
   val["dbg_total_size"] = stats.dbg_total_size;
 
+  val["instruction_bytes"] = stats.instruction_bytes;
+
+  val["header_item_count"] = stats.header_item_count;
+  val["header_item_bytes"] = stats.header_item_bytes;
   val["string_id_count"] = stats.string_id_count;
   val["string_id_bytes"] = stats.string_id_bytes;
   val["type_id_count"] = stats.type_id_count;
@@ -643,7 +648,7 @@ Json::Value get_detailed_stats(const std::vector<dex_stats_t>& dexes_stats) {
 
 Json::Value get_times() {
   Json::Value list(Json::arrayValue);
-  for (auto t : Timer::get_times()) {
+  for (const auto& t : Timer::get_times()) {
     Json::Value element;
     element[t.first] = std::round(t.second * 10) / 10.0;
     list.append(element);
@@ -882,8 +887,7 @@ void redex_frontend(ConfigFiles& conf, /* input */
   {
     Timer t("Initializing reachable classes");
     // init reachable will change rstate of classes, methods and fields
-    init_reachable_classes(scope, json_config,
-                           conf.get_no_optimizations_annos());
+    init_reachable_classes(scope, json_config);
   }
 }
 
@@ -992,10 +996,9 @@ void redex_backend(const std::string& output_dir,
       auto opt_decisions_output_path = conf.metafile(OPT_DECISIONS);
       auto opt_data =
           opt_metadata::OptDataMapper::get_instance().serialize_sql();
-      Json::StyledStreamWriter writer;
       {
         std::ofstream opt_data_out(opt_decisions_output_path);
-        writer.write(opt_data_out, opt_data);
+        opt_data_out << opt_data;
       }
     }
   }
@@ -1018,7 +1021,7 @@ void redex_backend(const std::string& output_dir,
   }
 }
 
-void dump_class_method_info_map(const std::string file_path,
+void dump_class_method_info_map(const std::string& file_path,
                                 DexStoresVector& stores) {
   std::ofstream ofs(file_path, std::ofstream::out | std::ofstream::trunc);
 
@@ -1084,9 +1087,44 @@ void dump_class_method_info_map(const std::string file_path,
 
 } // namespace
 
+// Some defaults for sanitizers. Can be overridden with ASAN_OPTIONS.
+const char* kAsanDefaultOptions =
+    "abort_on_error=1" // Use abort instead of exit, will get stack
+                       // traces for things like ubsan.
+    ":"
+    "check_initialization_order=1"
+    ":"
+    "detect_invalid_pointer_pairs=1"
+    ":"
+    "detect_leaks=0"
+    ":"
+    "detect_stack_use_after_return=1"
+    ":"
+    "print_scariness=1"
+    ":"
+    "print_suppressions=0"
+    ":"
+    "strict_init_order=1";
+
+#if defined(__clang__)
+#define NO_SANITIZE \
+  __attribute__((__no_sanitize__("address", "undefined", "thread")))
+#define VISIBLE \
+  __attribute__((__visibility__("default"))) __attribute__((__used__))
+#else
+#define NO_SANITIZE
+#define VISIBLE
+#endif
+
+extern "C" NO_SANITIZE VISIBLE __attribute__((__weak__)) const char*
+__asan_default_options() {
+  return kAsanDefaultOptions;
+}
+
 int main(int argc, char* argv[]) {
   signal(SIGSEGV, crash_backtrace_handler);
   signal(SIGABRT, crash_backtrace_handler);
+  signal(SIGINT, crash_backtrace_handler);
 #ifndef _MSC_VER
   signal(SIGBUS, crash_backtrace_handler);
 #endif
@@ -1156,12 +1194,19 @@ int main(int argc, char* argv[]) {
   }
   // now that all the timers are done running, we can collect the data
   stats["output_stats"]["time_stats"] = get_times();
-  Json::StyledStreamWriter writer;
+  auto vm_stats = get_mem_stats();
+  stats["output_stats"]["mem_stats"]["vm_peak"] =
+      (Json::UInt64)vm_stats.vm_peak;
+  stats["output_stats"]["mem_stats"]["vm_hwm"] = (Json::UInt64)vm_stats.vm_peak;
   {
     std::ofstream out(stats_output_path);
-    writer.write(out, stats);
+    out << stats;
   }
 
   TRACE(MAIN, 1, "Done.");
+  TRACE(MAIN, 1, "Memory stats: VmPeak=%s VmHWM=%s",
+        pretty_bytes(vm_stats.vm_peak).c_str(),
+        pretty_bytes(vm_stats.vm_hwm).c_str());
+
   return 0;
 }

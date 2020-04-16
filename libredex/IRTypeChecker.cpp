@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -7,18 +7,18 @@
 
 #include "IRTypeChecker.h"
 
+#include <boost/optional/optional.hpp>
+
 #include "DexUtil.h"
 #include "Match.h"
 #include "Resolver.h"
 #include "Show.h"
-#include "TypeUtil.h"
 
 using namespace sparta;
 using namespace type_inference;
 
 namespace {
 
-using register_t = ir_analyzer::register_t;
 using namespace ir_analyzer;
 
 // We abort the type checking process at the first error encountered.
@@ -28,7 +28,7 @@ class TypeCheckingException final : public std::runtime_error {
       : std::runtime_error(what_arg) {}
 };
 
-std::ostringstream& print_register(std::ostringstream& out, register_t reg) {
+std::ostringstream& print_register(std::ostringstream& out, reg_t reg) {
   if (reg == RESULT_REGISTER) {
     out << "result";
   } else {
@@ -37,7 +37,7 @@ std::ostringstream& print_register(std::ostringstream& out, register_t reg) {
   return out;
 }
 
-void check_type_match(register_t reg, IRType actual, IRType expected) {
+void check_type_match(reg_t reg, IRType actual, IRType expected) {
   if (actual == BOTTOM) {
     // There's nothing to do for unreachable code.
     return;
@@ -55,7 +55,67 @@ void check_type_match(register_t reg, IRType actual, IRType expected) {
   }
 }
 
-void check_wide_type_match(register_t reg,
+/*
+ * If the inferred type is Ljava/lang/Object;, it's a fall back from a
+ * conflicting join. There's no point performing more precise type checking
+ * since we don't know about its type.
+ * If the inferred type is Ljava/lang/Throwable;, it comes from MOVE_EXCEPTION.
+ * Since we don't model exception handler here, there's no way for us to know
+ * the precise exception type. We approximate all exception type to
+ * Ljava/lang/Throwable;. Therefore, it is not feasible to check type assignment
+ * on exception types.
+ */
+bool is_inference_fallback_type(const DexType* type) {
+  return type == type::java_lang_Object() ||
+         type == type::java_lang_Throwable();
+}
+
+/*
+ * We might not have the external DexClass to fully determine the hierarchy.
+ * Therefore, be more conservative when assigning to external DexType.
+ */
+bool check_cast_helper(const DexType* from, const DexType* to) {
+  auto to_cls = type_class(to);
+  if (!to_cls || to_cls->is_external()) {
+    return true;
+  }
+  return type::check_cast(from, to);
+}
+
+// Type assignment check between two reference types. We assume that both `from`
+// and `to` are reference types.
+// Took reference from:
+// http://androidxref.com/6.0.1_r10/xref/art/runtime/verifier/reg_type-inl.h#88
+bool check_is_assignable_from(const DexType* from, const DexType* to) {
+  always_assert(from && to);
+  always_assert_log(!type::is_primitive(from), "%s", SHOW(from));
+  TRACE(TYPE, 2, "assign check %s to %s", SHOW(from), SHOW(to));
+
+  if (from == to) {
+    return true; // Fast path if the two are equal.
+  }
+  if (type::is_primitive(from)) {
+    return false; // Expect rhs to be a reference type.
+  }
+  if (to == type::java_lang_Object()) {
+    return true; // All reference types can be assigned to Object.
+  }
+  if (type::is_java_lang_object_array(to)) {
+    // All reference arrays may be assigned to Object[]
+    return type::is_reference_array(from);
+  }
+  if (type::is_array(from) && type::is_array(to)) {
+    if (type::get_array_level(from) != type::get_array_level(to)) {
+      return false;
+    }
+    auto efrom = type::get_array_element_type(from);
+    auto eto = type::get_array_element_type(to);
+    return check_cast_helper(efrom, eto);
+  }
+  return check_cast_helper(from, to);
+}
+
+void check_wide_type_match(reg_t reg,
                            IRType actual1,
                            IRType actual2,
                            IRType expected1,
@@ -81,7 +141,7 @@ void check_wide_type_match(register_t reg,
 }
 
 void assume_type(TypeEnvironment* state,
-                 register_t reg,
+                 reg_t reg,
                  IRType expected,
                  bool ignore_top = false) {
   if (state->is_bottom()) {
@@ -96,7 +156,7 @@ void assume_type(TypeEnvironment* state,
 }
 
 void assume_wide_type(TypeEnvironment* state,
-                      register_t reg,
+                      reg_t reg,
                       IRType expected1,
                       IRType expected2) {
   if (state->is_bottom()) {
@@ -115,7 +175,7 @@ void assume_wide_type(TypeEnvironment* state,
 // This is used for the operand of a comparison operation with zero. The
 // complexity here is that this operation may be performed on either an
 // integer or a reference.
-void assume_comparable_with_zero(TypeEnvironment* state, register_t reg) {
+void assume_comparable_with_zero(TypeEnvironment* state, reg_t reg) {
   if (state->is_bottom()) {
     // There's nothing to do for unreachable code.
     return;
@@ -139,9 +199,7 @@ void assume_comparable_with_zero(TypeEnvironment* state, register_t reg) {
 // This is used for the operands of a comparison operation between two
 // registers. The complexity here is that this operation may be performed on
 // either two integers or two references.
-void assume_comparable(TypeEnvironment* state,
-                       register_t reg1,
-                       register_t reg2) {
+void assume_comparable(TypeEnvironment* state, reg_t reg1, reg_t reg2) {
   if (state->is_bottom()) {
     // There's nothing to do for unreachable code.
     return;
@@ -165,24 +223,24 @@ void assume_comparable(TypeEnvironment* state,
   }
 }
 
-void assume_integer(TypeEnvironment* state, register_t reg) {
+void assume_integer(TypeEnvironment* state, reg_t reg) {
   assume_type(state, reg, /* expected */ INT);
 }
 
-void assume_float(TypeEnvironment* state, register_t reg) {
+void assume_float(TypeEnvironment* state, reg_t reg) {
   assume_type(state, reg, /* expected */ FLOAT);
 }
 
-void assume_long(TypeEnvironment* state, register_t reg) {
+void assume_long(TypeEnvironment* state, reg_t reg) {
   assume_wide_type(state, reg, /* expected1 */ LONG1, /* expected2 */ LONG2);
 }
 
-void assume_double(TypeEnvironment* state, register_t reg) {
+void assume_double(TypeEnvironment* state, reg_t reg) {
   assume_wide_type(
       state, reg, /* expected1 */ DOUBLE1, /* expected2 */ DOUBLE2);
 }
 
-void assume_wide_scalar(TypeEnvironment* state, register_t reg) {
+void assume_wide_scalar(TypeEnvironment* state, reg_t reg) {
   assume_wide_type(
       state, reg, /* expected1 */ SCALAR1, /* expected2 */ SCALAR2);
 }
@@ -218,6 +276,206 @@ static bool has_move_result_pseudo(const MethodItemEntry& mie) {
 static bool is_move_result_pseudo(const MethodItemEntry& mie) {
   return mie.type == MFLOW_OPCODE &&
          opcode::is_move_result_pseudo(mie.insn->opcode());
+}
+
+Result check_load_params(const DexMethod* method) {
+  bool is_static_method = is_static(method);
+  const auto& signature = method->get_proto()->get_args()->get_type_list();
+  auto sig_it = signature.begin();
+  size_t load_insns_cnt = 0;
+
+  auto handle_instance =
+      [&](IRInstruction* insn) -> boost::optional<std::string> {
+    // Must be a param-object.
+    if (insn->opcode() != IOPCODE_LOAD_PARAM_OBJECT) {
+      return std::string(
+                 "First parameter must be loaded with load-param-object: ") +
+             show(insn);
+    }
+    return boost::none;
+  };
+  auto handle_other = [&](IRInstruction* insn) -> boost::optional<std::string> {
+    if (sig_it == signature.end()) {
+      return std::string("Not enough argument types for ") + show(insn);
+    }
+    bool ok = false;
+    switch (insn->opcode()) {
+    case IOPCODE_LOAD_PARAM_OBJECT:
+      ok = type::is_object(*sig_it);
+      break;
+    case IOPCODE_LOAD_PARAM:
+      ok = type::is_primitive(*sig_it) && !type::is_wide_type(*sig_it);
+      break;
+    case IOPCODE_LOAD_PARAM_WIDE:
+      ok = type::is_primitive(*sig_it) && type::is_wide_type(*sig_it);
+      break;
+    default:
+      always_assert(false);
+    }
+    if (!ok) {
+      return std::string("Incompatible load-param ") + show(insn) + " for " +
+             type::type_shorty(*sig_it);
+    }
+    ++sig_it;
+    return boost::none;
+  };
+
+  bool non_load_param_seen = false;
+  using handler_t = std::function<boost::optional<std::string>(IRInstruction*)>;
+  handler_t handler =
+      is_static_method ? handler_t(handle_other) : handler_t(handle_instance);
+
+  for (const auto& mie :
+       InstructionIterable(method->get_code()->cfg().entry_block())) {
+    IRInstruction* insn = mie.insn;
+    if (!opcode::is_load_param(insn->opcode())) {
+      non_load_param_seen = true;
+      continue;
+    }
+    ++load_insns_cnt;
+    if (non_load_param_seen) {
+      return Result::make_error("Saw non-load-param instruction before " +
+                                show(insn));
+    }
+    auto res = handler(insn);
+    if (res) {
+      return Result::make_error(res.get());
+    }
+    // Instance methods have an extra 'load-param' at the beginning for the
+    // instance object.
+    // Once we've checked that, though, the rest is the same so move on to
+    // using 'handle_other' in all cases.
+    handler = handler_t(handle_other);
+  }
+
+  size_t expected_load_params_cnt =
+      method->get_proto()->get_args()->size() + !is_static_method;
+  if (load_insns_cnt != expected_load_params_cnt) {
+    return Result::make_error(
+        "Number of existing load-param instructions (" + show(load_insns_cnt) +
+        ") is lower than expected (" + show(expected_load_params_cnt) + ")");
+  }
+
+  return Result::Ok();
+}
+
+// Every variable created by a new-instance call should be initialized by a
+// proper invoke-direct <init>. Here, we perform simple check to find some
+// missing calls resulting in use of uninitialized variables. We correctly track
+// variables in a basic block, the most common form of allocation+init.
+Result check_uninitialized(const DexMethod* method) {
+  auto* code = method->get_code();
+  std::map<uint16_t, IRInstruction*> uninitialized_regs;
+  std::map<IRInstruction*, std::set<uint16_t>> uninitialized_regs_rev;
+  auto remove_from_uninitialized_list = [&](uint16_t reg) {
+    auto it = uninitialized_regs.find(reg);
+    if (it != uninitialized_regs.end()) {
+      uninitialized_regs_rev[it->second].erase(reg);
+      uninitialized_regs.erase(reg);
+    }
+  };
+
+  for (auto it = code->begin(); it != code->end(); ++it) {
+    if (it->type != MFLOW_OPCODE) {
+      continue;
+    }
+    auto* insn = it->insn;
+    auto op = insn->opcode();
+
+    if (op == OPCODE_NEW_INSTANCE) {
+      ++it;
+      while (it != code->end() && it->type != MFLOW_OPCODE)
+        ++it;
+      if (it == code->end() ||
+          it->insn->opcode() != IOPCODE_MOVE_RESULT_PSEUDO_OBJECT) {
+        auto prev = it;
+        prev--;
+        return Result::make_error("No opcode-move-result after new-instance " +
+                                  show(*prev) + " in \n" + show(code->cfg()));
+      }
+
+      auto reg_dest = it->insn->dest();
+      remove_from_uninitialized_list(reg_dest);
+
+      uninitialized_regs[reg_dest] = insn;
+      uninitialized_regs_rev[insn].insert(reg_dest);
+      continue;
+    }
+
+    if (is_move(op) && !opcode::is_move_result_any(op)) {
+      assert(insn->srcs().size() > 0);
+      auto src = insn->srcs()[0];
+      auto dest = insn->dest();
+      if (src == dest) continue;
+
+      auto it_src = uninitialized_regs.find(src);
+      // We no longer care about the old dest
+      remove_from_uninitialized_list(dest);
+      // But if src was uninitialized, dest is now too
+      if (it_src != uninitialized_regs.end()) {
+        uninitialized_regs[dest] = it_src->second;
+        uninitialized_regs_rev[it_src->second].insert(dest);
+      }
+      continue;
+    }
+
+    auto create_error = [&](const IRInstruction* instruction,
+                            const IRCode* code) {
+      return Result::make_error("Use of uninitialized variable " +
+                                show(instruction) + " detected at " +
+                                show(*it) + " in \n" + show(code->cfg()));
+    };
+
+    if (op == OPCODE_INVOKE_DIRECT) {
+      auto const& sources = insn->srcs();
+      auto object = sources[0];
+
+      auto object_it = uninitialized_regs.find(object);
+      if (object_it != uninitialized_regs.end()) {
+        auto* object_ir = object_it->second;
+        if (insn->get_method()->get_name()->str() != "<init>") {
+          return create_error(object_ir, code);
+        }
+        if (insn->get_method()->get_class()->str() !=
+            object_ir->get_type()->str()) {
+          return Result::make_error("Variable " + show(object_ir) +
+                                    "initialized with the wrong type at " +
+                                    show(*it) + " in \n" + show(code->cfg()));
+        }
+        for (auto reg : uninitialized_regs_rev[object_ir]) {
+          uninitialized_regs.erase(reg);
+        }
+        uninitialized_regs_rev.erase(object_ir);
+      }
+
+      for (unsigned int i = 1; i < sources.size(); i++) {
+        auto u_it = uninitialized_regs.find(sources[i]);
+        if (u_it != uninitialized_regs.end())
+          return create_error(u_it->second, code);
+      }
+      continue;
+    }
+
+    auto const& sources = insn->srcs();
+    for (auto reg : sources) {
+      auto u_it = uninitialized_regs.find(reg);
+      if (u_it != uninitialized_regs.end())
+        return create_error(u_it->second, code);
+    }
+
+    if (insn->has_dest()) remove_from_uninitialized_list(insn->dest());
+
+    // We clear the structures after any branch, this doesn't cover all the
+    // possible issues, but is simple
+    auto branchingness = opcode::branchingness(op);
+    if (op == OPCODE_THROW ||
+        (branchingness != opcode::Branchingness::BRANCH_NONE &&
+         branchingness != opcode::Branchingness::BRANCH_THROW)) {
+      uninitialized_regs.clear();
+      uninitialized_regs_rev.clear();
+    }
+  }
+  return Result::Ok();
 }
 
 /*
@@ -286,7 +544,7 @@ Result check_structure(const DexMethod* method, bool check_no_overwrite_this) {
                                 show(*it) + " in \n" + show(code));
     }
   }
-  return Result::Ok();
+  return check_uninitialized(method);
 }
 
 /**
@@ -319,24 +577,34 @@ void validate_access(const DexMethod* accessor, const DexMember* accessee) {
       return;
     }
   }
+
   std::ostringstream out;
   out << "\nillegal access to "
       << (is_private(accessee)
               ? "private "
               : (is_package_private(accessee) ? "package-private "
                                               : "protected "))
-      << show(accessee) << "\n from " << show(accessor);
-  // TODO(fengliu): Throw exception instead of log to stderr.
-  TRACE(TYPE, 2, out.str().c_str());
-  // throw TypeCheckingException(out.str());
+      << show_deobfuscated(accessee) << "\n from "
+      << show_deobfuscated(accessor);
+
+  // If the accessee is external, we don't report the error, just log it.
+  // TODO(fengliu): We should enforce the correctness when visiting external dex
+  // members.
+  if (accessee->is_external()) {
+    TRACE(TYPE, 2, out.str().c_str());
+    return;
+  }
+
+  throw TypeCheckingException(out.str());
 }
 
 } // namespace
 
 IRTypeChecker::~IRTypeChecker() {}
 
-IRTypeChecker::IRTypeChecker(DexMethod* dex_method)
+IRTypeChecker::IRTypeChecker(DexMethod* dex_method, bool validate_access)
     : m_dex_method(dex_method),
+      m_validate_access(validate_access),
       m_complete(false),
       m_verify_moves(false),
       m_check_no_overwrite_this(false),
@@ -357,6 +625,7 @@ void IRTypeChecker::run() {
     return;
   }
 
+  code->build_cfg(/* editable */ false);
   auto result = check_structure(m_dex_method, m_check_no_overwrite_this);
   if (result != Result::Ok()) {
     m_complete = true;
@@ -366,8 +635,17 @@ void IRTypeChecker::run() {
   }
 
   // We then infer types for all the registers used in the method.
-  code->build_cfg(/* editable */ false);
   const cfg::ControlFlowGraph& cfg = code->cfg();
+
+  // Check that the load-params match the signature.
+  auto params_result = check_load_params(m_dex_method);
+  if (params_result != Result::Ok()) {
+    m_complete = true;
+    m_good = false;
+    m_what = params_result.error_message();
+    return;
+  }
+
   m_type_inference = std::make_unique<TypeInference>(cfg);
   m_type_inference->run(m_dex_method);
 
@@ -401,7 +679,7 @@ void IRTypeChecker::run() {
 }
 
 void IRTypeChecker::assume_scalar(TypeEnvironment* state,
-                                  register_t reg,
+                                  reg_t reg,
                                   bool in_move) const {
   assume_type(state,
               reg,
@@ -410,7 +688,7 @@ void IRTypeChecker::assume_scalar(TypeEnvironment* state,
 }
 
 void IRTypeChecker::assume_reference(TypeEnvironment* state,
-                                     register_t reg,
+                                     reg_t reg,
                                      bool in_move) const {
   assume_type(state,
               reg,
@@ -483,6 +761,18 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
   }
   case OPCODE_RETURN_OBJECT: {
     assume_reference(current_state, insn->src(0));
+    auto dtype = current_state->get_dex_type(insn->src(0));
+    auto rtype = m_dex_method->get_proto()->get_rtype();
+    // If the inferred type is a fallback, there's no point performing the
+    // accurate type assignment checking.
+    if (dtype && !is_inference_fallback_type(*dtype)) {
+      if (!check_is_assignable_from(*dtype, rtype)) {
+        std::ostringstream out;
+        out << "Returning " << dtype << ", but expected from declaration "
+            << rtype << std::endl;
+        throw TypeCheckingException(out.str());
+      }
+    }
     break;
   }
   case OPCODE_CONST: {
@@ -519,11 +809,12 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
     break;
   }
   case OPCODE_FILLED_NEW_ARRAY: {
-    const DexType* element_type = get_array_component_type(insn->get_type());
+    const DexType* element_type =
+        type::get_array_component_type(insn->get_type());
     // We assume that structural constraints on the bytecode are satisfied,
     // i.e., the type is indeed an array type.
     always_assert(element_type != nullptr);
-    bool is_array_of_references = is_object(element_type);
+    bool is_array_of_references = type::is_object(element_type);
     for (size_t i = 0; i < insn->srcs_size(); ++i) {
       if (is_array_of_references) {
         assume_reference(current_state, insn->src(i));
@@ -661,7 +952,7 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
   }
   case OPCODE_IPUT: {
     const DexType* type = insn->get_field()->get_type();
-    if (is_float(type)) {
+    if (type::is_float(type)) {
       assume_float(current_state, insn->src(0));
     } else {
       assume_integer(current_state, insn->src(0));
@@ -704,7 +995,7 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
   }
   case OPCODE_SPUT: {
     const DexType* type = insn->get_field()->get_type();
-    if (is_float(type)) {
+    if (type::is_float(type)) {
       assume_float(current_state, insn->src(0));
     } else {
       assume_integer(current_state, insn->src(0));
@@ -726,6 +1017,8 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
     assume_reference(current_state, insn->src(0));
     break;
   }
+  case OPCODE_INVOKE_CUSTOM:
+  case OPCODE_INVOKE_POLYMORPHIC:
   case OPCODE_INVOKE_VIRTUAL:
   case OPCODE_INVOKE_SUPER:
   case OPCODE_INVOKE_DIRECT:
@@ -750,27 +1043,29 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
       assume_reference(current_state, insn->src(src_idx++));
     }
     for (DexType* arg_type : arg_types) {
-      if (is_object(arg_type)) {
+      if (type::is_object(arg_type)) {
         assume_reference(current_state, insn->src(src_idx++));
         continue;
       }
-      if (is_integer(arg_type)) {
+      if (type::is_integer(arg_type)) {
         assume_integer(current_state, insn->src(src_idx++));
         continue;
       }
-      if (is_long(arg_type)) {
+      if (type::is_long(arg_type)) {
         assume_long(current_state, insn->src(src_idx++));
         continue;
       }
-      if (is_float(arg_type)) {
+      if (type::is_float(arg_type)) {
         assume_float(current_state, insn->src(src_idx++));
         continue;
       }
-      always_assert(is_double(arg_type));
+      always_assert(type::is_double(arg_type));
       assume_double(current_state, insn->src(src_idx++));
     }
-    auto resolved = resolve_method(dex_method, opcode_to_search(insn));
-    validate_access(m_dex_method, resolved);
+    if (m_validate_access) {
+      auto resolved = resolve_method(dex_method, opcode_to_search(insn));
+      validate_access(m_dex_method, resolved);
+    }
     break;
   }
   case OPCODE_NEG_INT:
@@ -931,7 +1226,7 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
     break;
   }
   }
-  if (insn->has_field()) {
+  if (insn->has_field() && m_validate_access) {
     auto search = is_sfield_op(insn->opcode()) ? FieldSearch::Static
                                                : FieldSearch::Instance;
     auto resolved = resolve_field(insn->get_field(), search);
@@ -939,7 +1234,7 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
   }
 }
 
-IRType IRTypeChecker::get_type(IRInstruction* insn, uint16_t reg) const {
+IRType IRTypeChecker::get_type(IRInstruction* insn, reg_t reg) const {
   check_completion();
   auto& type_envs = m_type_inference->get_type_environments();
   auto it = type_envs.find(insn);
@@ -951,8 +1246,8 @@ IRType IRTypeChecker::get_type(IRInstruction* insn, uint16_t reg) const {
   return it->second.get_type(reg).element();
 }
 
-const DexType* IRTypeChecker::get_dex_type(IRInstruction* insn,
-                                           uint16_t reg) const {
+const boost::optional<const DexType*> IRTypeChecker::get_dex_type(
+    IRInstruction* insn, reg_t reg) const {
   check_completion();
   auto& type_envs = m_type_inference->get_type_environments();
   auto it = type_envs.find(insn);
@@ -961,7 +1256,7 @@ const DexType* IRTypeChecker::get_dex_type(IRInstruction* insn,
     // unreachable code and return BOTTOM.
     return nullptr;
   }
-  return *it->second.get_dex_type(reg);
+  return it->second.get_dex_type(reg);
 }
 
 std::ostream& operator<<(std::ostream& output, const IRTypeChecker& checker) {

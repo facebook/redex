@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -12,10 +12,7 @@
 #include "DexClass.h"
 #include "DexUtil.h"
 
-void init_reachable_classes(
-    const Scope& scope,
-    const JsonWrapper& config,
-    const std::unordered_set<DexType*>& no_optimizations_anno);
+void init_reachable_classes(const Scope& scope, const JsonWrapper& config);
 
 void recompute_reachable_from_xml_layouts(const Scope& scope,
                                           const std::string& apk_dir);
@@ -41,38 +38,13 @@ inline bool can_rename_if_also_renaming_xml(DexMember* member) {
 }
 
 template <class DexMember>
-inline bool can_delete_DEPRECATED(DexMember* member) {
-  return member->rstate.can_delete_DEPRECATED();
-}
-
-template <class DexMember>
-inline bool can_rename_DEPRECATED(DexMember* member) {
-  return member->rstate.can_rename_DEPRECATED();
-}
-
-template <class DexMember>
 inline bool is_serde(DexMember* member) {
   return member->rstate.is_serde();
 }
 
 template <class DexMember>
-inline bool has_keep(DexMember* member) {
-  return member->rstate.has_keep();
-}
-
-template <class DexMember>
 inline bool marked_by_string(DexMember* member) {
   return member->rstate.is_referenced_by_string();
-}
-
-template <class DexMember>
-inline bool allowshrinking(DexMember* member) {
-  return member->rstate.allowshrinking();
-}
-
-template <class DexMember>
-inline bool allowobfuscation(DexMember* member) {
-  return member->rstate.allowobfuscation();
 }
 
 template <class DexMember>
