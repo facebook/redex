@@ -40,6 +40,15 @@ struct DexTypeEnvironmentTest : public RedexTest {
    *  / \  \  \  \
    * p  q  r  s  t
    *
+   *
+   *  Ljava/lang/Object;
+   *  |
+   *  Base
+   *  |         \
+   *  Sub1(If1) Sub2(If2)
+   *  |           \
+   *  Sub3(If1)   Sub4(If1, If2)
+   *
    */
   DexTypeEnvironmentTest() {
     // Synthesizing Ljava/lang/Object;
@@ -115,6 +124,39 @@ struct DexTypeEnvironmentTest : public RedexTest {
     creator = ClassCreator(m_type_u);
     creator.set_super(type::java_lang_Object());
     creator.create();
+
+    m_type_base = DexType::make_type("Base");
+    creator = ClassCreator(m_type_base);
+    creator.set_super(type::java_lang_Object());
+    creator.create();
+
+    m_type_if1 = DexType::make_type("If1");
+    m_type_if2 = DexType::make_type("If2");
+
+    m_type_sub1 = DexType::make_type("Sub1");
+    creator = ClassCreator(m_type_sub1);
+    creator.set_super(m_type_base);
+    creator.add_interface(m_type_if1);
+    creator.create();
+
+    m_type_sub2 = DexType::make_type("Sub2");
+    creator = ClassCreator(m_type_sub2);
+    creator.set_super(m_type_base);
+    creator.add_interface(m_type_if2);
+    creator.create();
+
+    m_type_sub3 = DexType::make_type("Sub3");
+    creator = ClassCreator(m_type_sub3);
+    creator.set_super(m_type_sub1);
+    creator.add_interface(m_type_if1);
+    creator.create();
+
+    m_type_sub4 = DexType::make_type("Sub4");
+    creator = ClassCreator(m_type_sub4);
+    creator.set_super(m_type_sub2);
+    creator.add_interface(m_type_if1);
+    creator.add_interface(m_type_if2);
+    creator.create();
   }
 
   TypeSet get_type_set(std::initializer_list<DexType*> l) {
@@ -142,6 +184,14 @@ struct DexTypeEnvironmentTest : public RedexTest {
   DexType* m_type_s;
   DexType* m_type_t;
   DexType* m_type_u;
+
+  DexType* m_type_base;
+  DexType* m_type_sub1;
+  DexType* m_type_sub2;
+  DexType* m_type_sub3;
+  DexType* m_type_sub4;
+  DexType* m_type_if1;
+  DexType* m_type_if2;
 };
 
 TEST_F(DexTypeEnvironmentTest, BasicTest) {
@@ -252,8 +302,63 @@ TEST_F(DexTypeEnvironmentTest, JoinWithTest) {
   domain_b = DexTypeDomain(m_type_b);
   auto domain_i = DexTypeDomain(m_type_i);
   domain_b.join_with(domain_i);
-  EXPECT_TRUE(domain_b.get_type_domain().is_top());
+  EXPECT_EQ(domain_b, DexTypeDomain(type::java_lang_Object()));
+  EXPECT_FALSE(domain_b.get_type_domain().is_top());
   EXPECT_FALSE(domain_i.get_type_domain().is_top());
+
+  domain_b = DexTypeDomain(m_type_b);
+  domain_i.join_with(domain_b);
+  EXPECT_EQ(domain_i, DexTypeDomain(type::java_lang_Object()));
+  EXPECT_FALSE(domain_b.get_type_domain().is_top());
+  EXPECT_FALSE(domain_i.get_type_domain().is_top());
+}
+
+TEST_F(DexTypeEnvironmentTest, InterfaceJoinTest) {
+  auto sub1 = SingletonDexTypeDomain(m_type_sub1);
+  auto sub2 = SingletonDexTypeDomain(m_type_sub2);
+  sub1.join_with(sub2);
+  EXPECT_TRUE(sub1.is_top());
+  EXPECT_FALSE(sub2.is_top());
+
+  sub1 = SingletonDexTypeDomain(m_type_sub1);
+  sub2.join_with(sub1);
+  EXPECT_TRUE(sub2.is_top());
+  EXPECT_FALSE(sub1.is_top());
+
+  sub1 = SingletonDexTypeDomain(m_type_sub1);
+  auto sub3 = SingletonDexTypeDomain(m_type_sub3);
+  sub1.join_with(sub3);
+  EXPECT_EQ(sub1, SingletonDexTypeDomain(m_type_sub1));
+  EXPECT_FALSE(sub1.is_top());
+  EXPECT_FALSE(sub3.is_top());
+
+  sub1 = SingletonDexTypeDomain(m_type_sub1);
+  sub3.join_with(sub1);
+  EXPECT_EQ(sub3, SingletonDexTypeDomain(m_type_sub1));
+  EXPECT_FALSE(sub3.is_top());
+  EXPECT_FALSE(sub1.is_top());
+
+  sub2 = SingletonDexTypeDomain(m_type_sub2);
+  auto sub4 = SingletonDexTypeDomain(m_type_sub4);
+  sub2.join_with(sub4);
+  EXPECT_TRUE(sub2.is_top());
+  EXPECT_FALSE(sub4.is_top());
+
+  sub2 = SingletonDexTypeDomain(m_type_sub2);
+  sub4.join_with(sub2);
+  EXPECT_TRUE(sub4.is_top());
+  EXPECT_FALSE(sub2.is_top());
+
+  auto base = SingletonDexTypeDomain(m_type_base);
+  sub4 = SingletonDexTypeDomain(m_type_sub4);
+  base.join_with(sub4);
+  EXPECT_TRUE(base.is_top());
+  EXPECT_FALSE(sub4.is_top());
+
+  base = SingletonDexTypeDomain(m_type_base);
+  sub4.join_with(base);
+  EXPECT_TRUE(sub4.is_top());
+  EXPECT_FALSE(base.is_top());
 }
 
 TEST_F(DexTypeEnvironmentTest, NullableDexTypeDomainTest) {

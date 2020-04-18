@@ -96,22 +96,27 @@ TypeLattice type_lattice(
 
 void set_type(TypeEnvironment* state, reg_t reg, const TypeDomain& type) {
   state->set_type(reg, type);
+  state->reset_dex_type(reg);
 }
 
 void set_integer(TypeEnvironment* state, reg_t reg) {
   state->set_type(reg, TypeDomain(INT));
+  state->reset_dex_type(reg);
 }
 
 void set_float(TypeEnvironment* state, reg_t reg) {
   state->set_type(reg, TypeDomain(FLOAT));
+  state->reset_dex_type(reg);
 }
 
 void set_scalar(TypeEnvironment* state, reg_t reg) {
   state->set_type(reg, TypeDomain(SCALAR));
+  state->reset_dex_type(reg);
 }
 
 void set_reference(TypeEnvironment* state, reg_t reg) {
   state->set_type(reg, TypeDomain(REFERENCE));
+  state->reset_dex_type(reg);
 }
 
 void set_reference(TypeEnvironment* state,
@@ -120,22 +125,35 @@ void set_reference(TypeEnvironment* state,
   state->set_type(reg, TypeDomain(REFERENCE));
   const DexTypeDomain dex_type =
       dex_type_opt ? DexTypeDomain(*dex_type_opt) : DexTypeDomain::top();
-  state->set_concrete_type(reg, dex_type);
+  state->set_dex_type(reg, dex_type);
+}
+
+void set_reference(TypeEnvironment* state,
+                   reg_t reg,
+                   const DexTypeDomain& dex_type) {
+  state->set_type(reg, TypeDomain(REFERENCE));
+  state->set_dex_type(reg, dex_type);
 }
 
 void set_long(TypeEnvironment* state, reg_t reg) {
   state->set_type(reg, TypeDomain(LONG1));
   state->set_type(reg + 1, TypeDomain(LONG2));
+  state->reset_dex_type(reg);
+  state->reset_dex_type(reg + 1);
 }
 
 void set_double(TypeEnvironment* state, reg_t reg) {
   state->set_type(reg, TypeDomain(DOUBLE1));
   state->set_type(reg + 1, TypeDomain(DOUBLE2));
+  state->reset_dex_type(reg);
+  state->reset_dex_type(reg + 1);
 }
 
 void set_wide_scalar(TypeEnvironment* state, reg_t reg) {
   state->set_type(reg, TypeDomain(SCALAR1));
   state->set_type(reg + 1, TypeDomain(SCALAR2));
+  state->reset_dex_type(reg);
+  state->reset_dex_type(reg + 1);
 }
 
 // This is used for the operand of a comparison operation with zero. The
@@ -388,8 +406,8 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
   case OPCODE_MOVE_OBJECT: {
     refine_reference(current_state, insn->src(0));
     if (current_state->get_type(insn->src(0)) == TypeDomain(REFERENCE)) {
-      const auto& dex_type_opt = current_state->get_dex_type(insn->src(0));
-      set_reference(current_state, insn->dest(), dex_type_opt);
+      const auto dex_type = current_state->get_type_domain(insn->src(0));
+      set_reference(current_state, insn->dest(), dex_type);
     } else {
       set_type(current_state, insn->dest(),
                current_state->get_type(insn->src(0)));
@@ -416,7 +434,7 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
     refine_reference(current_state, RESULT_REGISTER);
     set_reference(current_state,
                   insn->dest(),
-                  current_state->get_dex_type(RESULT_REGISTER));
+                  current_state->get_type_domain(RESULT_REGISTER));
     break;
   }
   case IOPCODE_MOVE_RESULT_PSEUDO_WIDE:
@@ -491,7 +509,7 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
   }
   case OPCODE_CONST: {
     if (insn->get_literal() == 0) {
-      current_state->set_concrete_type(insn->dest(), DexTypeDomain::top());
+      current_state->set_dex_type(insn->dest(), DexTypeDomain::top());
       set_type(current_state, insn->dest(), TypeDomain(ZERO));
     } else {
       set_type(current_state, insn->dest(), TypeDomain(CONST));

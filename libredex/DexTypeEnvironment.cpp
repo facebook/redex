@@ -32,6 +32,28 @@ bool are_interfaces_mergeable_to(const DexClass* left, const DexClass* right) {
   return is_subset(left->get_interfaces(), right->get_interfaces());
 }
 
+/*
+ * Try to find type on `l`'s parent chain that is also a parent of `r`.
+ */
+const DexType* find_common_parent(const DexType* l, const DexType* r) {
+  always_assert(l && r);
+  if (l == r) {
+    return l;
+  }
+  auto parent = l;
+  while (parent) {
+    if (type::is_subclass(parent, r)) {
+      return parent;
+    }
+    auto parent_cls = type_class(parent);
+    if (!parent_cls) {
+      break;
+    }
+    parent = parent_cls->get_super_class();
+  }
+  return nullptr;
+}
+
 sparta::AbstractValueKind DexTypeValue::join_with(const DexTypeValue& other) {
   if (equals(other)) {
     return kind();
@@ -53,45 +75,14 @@ sparta::AbstractValueKind DexTypeValue::join_with(const DexTypeValue& other) {
     return sparta::AbstractValueKind::Top;
   }
 
-  // Direct subclass relation.
-  if (type::is_subclass(get_dex_type(), other.get_dex_type())) {
-    if (!are_interfaces_mergeable_to(other_cls, this_cls)) {
-      clear();
-      return sparta::AbstractValueKind::Top;
+  auto parent = find_common_parent(get_dex_type(), other.get_dex_type());
+  auto parent_cls = type_class(parent);
+  if (parent && parent_cls) {
+    if (are_interfaces_mergeable_to(this_cls, parent_cls) &&
+        are_interfaces_mergeable_to(other_cls, parent_cls)) {
+      m_dex_type = parent;
+      return sparta::AbstractValueKind::Value;
     }
-    return sparta::AbstractValueKind::Value;
-  } else if (type::is_subclass(other.get_dex_type(), get_dex_type())) {
-    if (!are_interfaces_mergeable_to(this_cls, other_cls)) {
-      clear();
-      return sparta::AbstractValueKind::Top;
-    }
-    m_dex_type = other.get_dex_type();
-    return sparta::AbstractValueKind::Value;
-  }
-
-  // Share common base type simple scenario.
-  auto this_super = this_cls->get_super_class();
-  auto other_super = other_cls->get_super_class();
-  auto this_super_cls = type_class(this_super);
-  auto other_super_cls = type_class(other_super);
-  if (!this_super_cls || !other_super_cls) {
-    clear();
-    return sparta::AbstractValueKind::Top;
-  }
-  if (this_super && type::is_subclass(this_super, other.get_dex_type())) {
-    if (!are_interfaces_mergeable_to(other_cls, this_super_cls)) {
-      clear();
-      return sparta::AbstractValueKind::Top;
-    }
-    m_dex_type = this_super;
-    return sparta::AbstractValueKind::Value;
-  } else if (other_super && type::is_subclass(other_super, get_dex_type())) {
-    if (!are_interfaces_mergeable_to(this_cls, other_super_cls)) {
-      clear();
-      return sparta::AbstractValueKind::Top;
-    }
-    m_dex_type = other_super;
-    return sparta::AbstractValueKind::Value;
   }
 
   // Give up. Rewrite to top.

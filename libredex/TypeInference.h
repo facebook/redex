@@ -174,9 +174,13 @@ class TypeEnvironment final
     return get<1>().get(reg).get_dex_type();
   }
 
-  void set_concrete_type(reg_t reg, const DexTypeDomain& dex_type) {
+  DexTypeDomain get_type_domain(reg_t reg) const { return get<1>().get(reg); }
+
+  void set_dex_type(reg_t reg, const DexTypeDomain& dex_type) {
     apply<1>([=](auto env) { env->set(reg, dex_type); }, true);
   }
+
+  void reset_dex_type(reg_t reg) { get<1>().get(reg).set_to_top(); }
 };
 
 class TypeInference final

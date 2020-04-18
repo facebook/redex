@@ -678,10 +678,10 @@ void IRTypeChecker::run() {
   }
   m_complete = true;
 
-  if (traceEnabled(TYPE, 5)) {
+  if (traceEnabled(TYPE, 9)) {
     std::ostringstream out;
     m_type_inference->print(out);
-    TRACE(TYPE, 5, "%s", out.str().c_str());
+    TRACE(TYPE, 9, "%s", out.str().c_str());
   }
 }
 
