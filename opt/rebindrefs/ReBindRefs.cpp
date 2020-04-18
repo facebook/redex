@@ -36,6 +36,18 @@ bool is_array_clone(DexMethodRef* mref, DexType* mtype) {
          !type::is_primitive(type::get_array_element_type(mtype));
 }
 
+inline bool match(const DexString* name,
+                  const DexProto* proto,
+                  const DexMethod* cls_meth) {
+  return name == cls_meth->get_name() && proto == cls_meth->get_proto();
+}
+
+// Only looking at the public, protected and private bits.
+template <typename DexMember>
+DexAccessFlags get_visibility(const DexMember* member) {
+  return member->get_access() & VISIBILITY_MASK;
+}
+
 struct Rebinder {
  private:
   template <typename T>
@@ -139,27 +151,37 @@ struct Rebinder {
    * Java allows relaxing visibility down the hierarchy chain so while
    * rebinding we don't want to bind to a method up the hierarchy that would
    * not be visible.
-   * Walk up the hierarchy chain as long as the method is public.
+   * Walk up the hierarchy chain as long as the method is visible.
    */
   DexMethod* bind_to_visible_ancestor(const DexClass* cls,
                                       const DexString* name,
                                       const DexProto* proto) {
-    DexMethod* top_impl = nullptr;
+    auto leaf_impl = resolve_virtual(cls, name, proto);
+    if (!leaf_impl) {
+      return nullptr;
+    }
+    auto leaf_vis = get_visibility(leaf_impl);
+    if (is_package_private(leaf_vis)) {
+      return leaf_impl;
+    }
+    DexMethod* top_impl = leaf_impl;
+    // The resolved leaf impl can only be PUBLIC or PROTECTED at this point.
     while (cls) {
       for (const auto& cls_meth : cls->get_vmethods()) {
-        if (name == cls_meth->get_name() && proto == cls_meth->get_proto()) {
-          auto curr_vis = cls_meth->get_access() & VISIBILITY_MASK;
-          auto curr_cls_vis = cls->get_access() & VISIBILITY_MASK;
-          if (curr_vis != ACC_PUBLIC || curr_cls_vis != ACC_PUBLIC) {
-            return top_impl != nullptr ? top_impl : cls_meth;
+        if (match(name, proto, cls_meth)) {
+          auto curr_vis = get_visibility(cls_meth);
+          auto curr_cls_vis = get_visibility(cls);
+          if (is_private(curr_vis) || is_package_private(curr_vis) ||
+              !is_public(curr_cls_vis)) {
+            return top_impl;
           }
-          if (top_impl != nullptr) {
-            auto top_vis = top_impl->get_access() & VISIBILITY_MASK;
-            auto top_cls_vis = type_class(top_impl->get_class())->get_access() &
-                               VISIBILITY_MASK;
-            if (top_vis != curr_vis || top_cls_vis != curr_cls_vis) {
-              return top_impl;
-            }
+          bool is_external = cls->is_external() || cls_meth->is_external();
+          if (is_external && !is_public(curr_vis)) {
+            return top_impl;
+          }
+          // We can only rebind PUBLIC to PUBLIC or PROTECTED to PROTECTED here.
+          if (leaf_vis != curr_vis) {
+            return top_impl;
           }
           top_impl = cls_meth;
           break;
