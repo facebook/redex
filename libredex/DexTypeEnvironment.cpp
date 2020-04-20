@@ -109,7 +109,7 @@ std::ostream& operator<<(std::ostream& output, const Nullness& nullness) {
     break;
   }
   case NOT_NULL: {
-    output << "NOT_NULL";
+    output << "NOTNULL";
     break;
   }
   case NN_TOP: {
@@ -125,24 +125,31 @@ std::ostream& operator<<(std::ostream& output, const DexType* dex_type) {
   return output;
 }
 
-namespace {
-
-DexTypeValueKind convert_kind(sparta::AbstractValueKind kind) {
-  switch (kind) {
-  case sparta::AbstractValueKind::Bottom: {
-    return DexTypeValueKind::Bottom;
+bool SmallSetDexTypeDomain::leq(const SmallSetDexTypeDomain& other) const {
+  if (is_bottom()) {
+    return true;
   }
-  case sparta::AbstractValueKind::Top: {
-    return DexTypeValueKind::Top;
+  if (other.is_bottom()) {
+    return false;
   }
-  case sparta::AbstractValueKind::Value: {
-    return DexTypeValueKind::SingleValue;
+  if (other.is_top()) {
+    return true;
   }
+  if (is_top()) {
+    return false;
   }
-  always_assert_log(false, "Unexpected AbstractValueKind!");
+  return m_types.is_subset_of(other.m_types);
 }
 
-} // namespace
+bool SmallSetDexTypeDomain::equals(const SmallSetDexTypeDomain& other) const {
+  if (is_bottom()) {
+    return other.is_bottom();
+  }
+  if (is_top()) {
+    return other.is_top();
+  }
+  return m_types.equals(other.m_types);
+}
 
 void SmallSetDexTypeDomain::join_with(const SmallSetDexTypeDomain& other) {
   if (is_top() || other.is_bottom()) {
@@ -154,41 +161,40 @@ void SmallSetDexTypeDomain::join_with(const SmallSetDexTypeDomain& other) {
   }
   if (is_bottom()) {
     m_kind = other.m_kind;
-    m_single_type = other.m_single_type;
     m_types = other.m_types;
     return;
   }
-  if (is_set_value() && other.is_set_value()) {
-    m_types.union_with(other.m_types);
-    if (m_types.size() > MAX_SET_SIZE) {
-      m_single_type = merge_to_single_val(m_types);
-      m_types.clear();
-      m_kind = DexTypeValueKind::SingleValue;
-    }
-    return;
+  m_types.union_with(other.m_types);
+  if (m_types.size() > MAX_SET_SIZE) {
+    set_to_top();
   }
-  // At least one is single value. Fall back both to single value and do join on
-  // two single values.
-  dtv_impl::DexTypeValue l, r;
-  if (is_single_value()) {
-    l = m_single_type;
-    r = merge_to_single_val(other.m_types);
-  }
-  if (other.is_single_value()) {
-    l = merge_to_single_val(m_types);
-    r = other.m_single_type;
-  }
-  m_single_type = l;
-  m_types.clear();
-  m_kind = convert_kind(m_single_type.join_with(r));
 }
 
-dtv_impl::DexTypeValue SmallSetDexTypeDomain::merge_to_single_val(
-    const sparta::PatriciaTreeSet<const DexType*>& types) {
-  dtv_impl::DexTypeValue single_type = dtv_impl::DexTypeValue(nullptr);
-  for (const auto type : types) {
-    auto type_val = dtv_impl::DexTypeValue(type);
-    single_type.join_with(type_val);
+std::ostream& operator<<(std::ostream& out, const SmallSetDexTypeDomain& x) {
+  using namespace sparta;
+  switch (x.kind()) {
+  case sparta::AbstractValueKind::Bottom: {
+    out << "_|_";
+    break;
   }
-  return single_type;
+  case sparta::AbstractValueKind::Top: {
+    out << "T";
+    break;
+  }
+  case sparta::AbstractValueKind::Value: {
+    out << x.get_types();
+    break;
+  }
+  }
+  return out;
+}
+
+void DexTypeDomain::join_with(const DexTypeDomain& other) {
+  sparta::ReducedProductAbstractDomain<DexTypeDomain,
+                                       NullnessDomain,
+                                       SingletonDexTypeDomain,
+                                       SmallSetDexTypeDomain>::join_with(other);
+  if (get<1>().is_top()) {
+    apply<2>([](SmallSetDexTypeDomain* domain) { domain->set_to_top(); });
+  }
 }

@@ -218,11 +218,13 @@ TEST_F(DexTypeEnvironmentTest, RegisterEnvTest) {
 
   auto a_join_b = DexTypeDomain(m_type_a);
   a_join_b.join_with(env.get(v1));
-  EXPECT_EQ(a_join_b, DexTypeDomain(m_type_a));
+  EXPECT_EQ(a_join_b.get_single_domain(), SingletonDexTypeDomain(m_type_a));
+  EXPECT_EQ(a_join_b.get_type_set(), get_type_set({m_type_a, m_type_b}));
 
   auto b_join_a = DexTypeDomain(m_type_b);
   b_join_a.join_with(env.get(v0));
-  EXPECT_EQ(b_join_a, DexTypeDomain(m_type_a));
+  EXPECT_EQ(b_join_a.get_single_domain(), SingletonDexTypeDomain(m_type_a));
+  EXPECT_EQ(b_join_a.get_type_set(), get_type_set({m_type_a, m_type_b}));
 }
 
 TEST_F(DexTypeEnvironmentTest, FieldEnvTest) {
@@ -241,13 +243,15 @@ TEST_F(DexTypeEnvironmentTest, FieldEnvTest) {
 
   auto a_join_b = env.get(f2);
   a_join_b.join_with(env.get(f1));
-  EXPECT_EQ(a_join_b, DexTypeDomain(m_type_a));
+  EXPECT_EQ(a_join_b.get_single_domain(), SingletonDexTypeDomain(m_type_a));
+  EXPECT_EQ(a_join_b.get_type_set(), get_type_set({m_type_a, m_type_b}));
   EXPECT_EQ(env.get(f1), DexTypeDomain(m_type_b));
   EXPECT_EQ(env.get(f2), DexTypeDomain(m_type_a));
 
   auto b_join_a = env.get(f1);
   b_join_a.join_with(env.get(f2));
-  EXPECT_EQ(b_join_a, DexTypeDomain(m_type_a));
+  EXPECT_EQ(b_join_a.get_single_domain(), SingletonDexTypeDomain(m_type_a));
+  EXPECT_EQ(b_join_a.get_type_set(), get_type_set({m_type_a, m_type_b}));
   EXPECT_EQ(env.get(f1), DexTypeDomain(m_type_b));
   EXPECT_EQ(env.get(f2), DexTypeDomain(m_type_a));
 }
@@ -256,22 +260,26 @@ TEST_F(DexTypeEnvironmentTest, JoinWithTest) {
   auto domain_b = DexTypeDomain(m_type_b);
   auto domain_c = DexTypeDomain(m_type_c);
   domain_b.join_with(domain_c);
-  EXPECT_EQ(domain_b, DexTypeDomain(m_type_a));
+  EXPECT_EQ(domain_b.get_single_domain(), SingletonDexTypeDomain(m_type_a));
+  EXPECT_EQ(domain_b.get_type_set(), get_type_set({m_type_b, m_type_c}));
 
   domain_b = DexTypeDomain(m_type_b);
   auto domain_d = DexTypeDomain(m_type_d);
   domain_b.join_with(domain_d);
-  EXPECT_EQ(domain_b, DexTypeDomain(m_type_a));
+  EXPECT_EQ(domain_b.get_single_domain(), SingletonDexTypeDomain(m_type_a));
+  EXPECT_EQ(domain_b.get_type_set(), get_type_set({m_type_b, m_type_d}));
 
   domain_b = DexTypeDomain(m_type_b);
   auto domain_e = DexTypeDomain(m_type_e);
   domain_b.join_with(domain_e);
-  EXPECT_EQ(domain_b, DexTypeDomain(m_type_a));
+  EXPECT_EQ(domain_b.get_single_domain(), SingletonDexTypeDomain(m_type_a));
+  EXPECT_EQ(domain_b.get_type_set(), get_type_set({m_type_b, m_type_e}));
 
   auto domain_a = DexTypeDomain(m_type_a);
   domain_e = DexTypeDomain(m_type_e);
   domain_a.join_with(domain_e);
-  EXPECT_EQ(domain_a, DexTypeDomain(m_type_a));
+  EXPECT_EQ(domain_a.get_single_domain(), SingletonDexTypeDomain(m_type_a));
+  EXPECT_EQ(domain_a.get_type_set(), get_type_set({m_type_a, m_type_e}));
 
   auto top1 = DexTypeDomain::top();
   auto top2 = DexTypeDomain::top();
@@ -282,35 +290,47 @@ TEST_F(DexTypeEnvironmentTest, JoinWithTest) {
   domain_a = DexTypeDomain(m_type_a);
   auto domain_h = DexTypeDomain(m_type_h);
   domain_a.join_with(domain_h);
-  EXPECT_EQ(domain_a, DexTypeDomain(type::java_lang_Object()));
+  EXPECT_EQ(domain_a.get_single_domain(),
+            SingletonDexTypeDomain(type::java_lang_Object()));
+  EXPECT_EQ(domain_a.get_type_set(), get_type_set({m_type_a, m_type_h}));
 
   domain_b = DexTypeDomain(m_type_b);
   domain_h = DexTypeDomain(m_type_h);
   domain_b.join_with(domain_h);
-  EXPECT_EQ(domain_b, DexTypeDomain(type::java_lang_Object()));
+  EXPECT_EQ(domain_b.get_single_domain(),
+            SingletonDexTypeDomain(type::java_lang_Object()));
+  EXPECT_EQ(domain_b.get_type_set(), get_type_set({m_type_b, m_type_h}));
 
   domain_d = DexTypeDomain(m_type_d);
   domain_h = DexTypeDomain(m_type_h);
   domain_d.join_with(domain_h);
-  EXPECT_EQ(domain_d, DexTypeDomain(type::java_lang_Object()));
+  EXPECT_EQ(domain_d.get_single_domain(),
+            SingletonDexTypeDomain(type::java_lang_Object()));
+  EXPECT_EQ(domain_d.get_type_set(), get_type_set({m_type_d, m_type_h}));
 
   domain_e = DexTypeDomain(m_type_e);
   domain_h = DexTypeDomain(m_type_h);
   domain_e.join_with(domain_h);
-  EXPECT_EQ(domain_e, DexTypeDomain(type::java_lang_Object()));
+  EXPECT_EQ(domain_e.get_single_domain(),
+            SingletonDexTypeDomain(type::java_lang_Object()));
+  EXPECT_EQ(domain_e.get_type_set(), get_type_set({m_type_e, m_type_h}));
 
   domain_b = DexTypeDomain(m_type_b);
   auto domain_i = DexTypeDomain(m_type_i);
   domain_b.join_with(domain_i);
-  EXPECT_EQ(domain_b, DexTypeDomain(type::java_lang_Object()));
-  EXPECT_FALSE(domain_b.get_type_domain().is_top());
-  EXPECT_FALSE(domain_i.get_type_domain().is_top());
+  EXPECT_EQ(domain_b.get_single_domain(),
+            SingletonDexTypeDomain(type::java_lang_Object()));
+  EXPECT_EQ(domain_b.get_type_set(), get_type_set({m_type_b, m_type_i}));
+  EXPECT_FALSE(domain_b.get_single_domain().is_top());
+  EXPECT_FALSE(domain_i.get_single_domain().is_top());
 
   domain_b = DexTypeDomain(m_type_b);
   domain_i.join_with(domain_b);
-  EXPECT_EQ(domain_i, DexTypeDomain(type::java_lang_Object()));
-  EXPECT_FALSE(domain_b.get_type_domain().is_top());
-  EXPECT_FALSE(domain_i.get_type_domain().is_top());
+  EXPECT_EQ(domain_i.get_single_domain(),
+            SingletonDexTypeDomain(type::java_lang_Object()));
+  EXPECT_EQ(domain_i.get_type_set(), get_type_set({m_type_b, m_type_i}));
+  EXPECT_FALSE(domain_b.get_single_domain().is_top());
+  EXPECT_FALSE(domain_i.get_single_domain().is_top());
 }
 
 TEST_F(DexTypeEnvironmentTest, InterfaceJoinTest) {
@@ -365,7 +385,7 @@ TEST_F(DexTypeEnvironmentTest, NullableDexTypeDomainTest) {
   auto null1 = DexTypeDomain::null();
   EXPECT_FALSE(null1.is_bottom());
   EXPECT_FALSE(null1.is_top());
-  EXPECT_TRUE(null1.get_type_domain().is_none());
+  EXPECT_TRUE(null1.get_single_domain().is_none());
 
   auto type_a = DexTypeDomain(m_type_a);
   null1.join_with(type_a);
@@ -375,8 +395,8 @@ TEST_F(DexTypeEnvironmentTest, NullableDexTypeDomainTest) {
   EXPECT_NE(null1, DexTypeDomain(m_type_a));
   EXPECT_EQ(*null1.get_dex_type(), m_type_a);
   EXPECT_EQ(type_a, DexTypeDomain(m_type_a));
-  EXPECT_FALSE(null1.get_type_domain().is_none());
-  EXPECT_FALSE(type_a.get_type_domain().is_none());
+  EXPECT_FALSE(null1.get_single_domain().is_none());
+  EXPECT_FALSE(type_a.get_single_domain().is_none());
 
   type_a = DexTypeDomain(m_type_a);
   null1 = DexTypeDomain::null();
@@ -387,32 +407,32 @@ TEST_F(DexTypeEnvironmentTest, NullableDexTypeDomainTest) {
   EXPECT_NE(type_a, DexTypeDomain(m_type_a));
   EXPECT_EQ(*type_a.get_dex_type(), m_type_a);
   EXPECT_EQ(null1, DexTypeDomain::null());
-  EXPECT_FALSE(type_a.get_type_domain().is_none());
-  EXPECT_TRUE(null1.get_type_domain().is_none());
+  EXPECT_FALSE(type_a.get_single_domain().is_none());
+  EXPECT_TRUE(null1.get_single_domain().is_none());
 
   auto top1 = DexTypeDomain::top();
   auto top2 = DexTypeDomain::top();
   top1.join_with(top2);
   EXPECT_TRUE(top1.is_top());
   EXPECT_TRUE(top2.is_top());
-  EXPECT_FALSE(top1.get_type_domain().is_none());
-  EXPECT_FALSE(top2.get_type_domain().is_none());
+  EXPECT_FALSE(top1.get_single_domain().is_none());
+  EXPECT_FALSE(top2.get_single_domain().is_none());
 
   top1 = DexTypeDomain::top();
   auto bottom = DexTypeDomain::bottom();
   top1.join_with(bottom);
   EXPECT_TRUE(top1.is_top());
   EXPECT_TRUE(bottom.is_bottom());
-  EXPECT_FALSE(top1.get_type_domain().is_none());
-  EXPECT_FALSE(bottom.get_type_domain().is_none());
+  EXPECT_FALSE(top1.get_single_domain().is_none());
+  EXPECT_FALSE(bottom.get_single_domain().is_none());
 
   bottom = DexTypeDomain::bottom();
   top1 = DexTypeDomain::top();
   bottom.join_with(top1);
   EXPECT_TRUE(bottom.is_top());
   EXPECT_TRUE(top1.is_top());
-  EXPECT_FALSE(bottom.get_type_domain().is_none());
-  EXPECT_FALSE(top1.get_type_domain().is_none());
+  EXPECT_FALSE(bottom.get_single_domain().is_none());
+  EXPECT_FALSE(top1.get_single_domain().is_none());
 }
 
 TEST_F(DexTypeEnvironmentTest, SmallSetDexTypeDomainDeepHierarchyTest) {
@@ -420,70 +440,48 @@ TEST_F(DexTypeEnvironmentTest, SmallSetDexTypeDomainDeepHierarchyTest) {
   auto domain_b = SmallSetDexTypeDomain(m_type_b);
   auto domain_c = SmallSetDexTypeDomain(m_type_c);
   domain_b.join_with(domain_c);
-  EXPECT_TRUE(domain_b.is_set_value());
   EXPECT_FALSE(domain_b.is_top());
   EXPECT_FALSE(domain_b.is_bottom());
-  EXPECT_FALSE(domain_b.is_single_value());
   EXPECT_EQ(domain_b.get_types(), get_type_set({m_type_b, m_type_c}));
-  EXPECT_TRUE(domain_c.is_set_value());
   EXPECT_FALSE(domain_c.is_top());
   EXPECT_FALSE(domain_c.is_bottom());
-  EXPECT_FALSE(domain_c.is_single_value());
 
   // 2 join with 1
   auto domain_d = SmallSetDexTypeDomain(m_type_d);
   domain_b.join_with(domain_d);
-  EXPECT_TRUE(domain_b.is_set_value());
   EXPECT_FALSE(domain_b.is_top());
   EXPECT_FALSE(domain_b.is_bottom());
-  EXPECT_FALSE(domain_b.is_single_value());
   EXPECT_EQ(domain_b.get_types(), get_type_set({m_type_b, m_type_c, m_type_d}));
-  EXPECT_TRUE(domain_d.is_set_value());
   EXPECT_FALSE(domain_d.is_top());
   EXPECT_FALSE(domain_d.is_bottom());
-  EXPECT_FALSE(domain_d.is_single_value());
 
   // 3 join with 1
   auto domain_e = SmallSetDexTypeDomain(m_type_e);
   domain_b.join_with(domain_e);
-  EXPECT_TRUE(domain_b.is_set_value());
   EXPECT_FALSE(domain_b.is_top());
   EXPECT_FALSE(domain_b.is_bottom());
-  EXPECT_FALSE(domain_b.is_single_value());
   EXPECT_EQ(domain_b.get_types(),
             get_type_set({m_type_b, m_type_c, m_type_d, m_type_e}));
-  EXPECT_TRUE(domain_e.is_set_value());
   EXPECT_FALSE(domain_e.is_top());
   EXPECT_FALSE(domain_e.is_bottom());
-  EXPECT_FALSE(domain_e.is_single_value());
 
-  // 4 join with 1 => single type
+  // 4 => top
   auto domain_a = SmallSetDexTypeDomain(m_type_a);
   domain_b.join_with(domain_a);
-  EXPECT_FALSE(domain_b.is_set_value());
-  EXPECT_FALSE(domain_b.is_top());
+  EXPECT_TRUE(domain_b.is_top());
   EXPECT_FALSE(domain_b.is_bottom());
-  EXPECT_TRUE(domain_b.is_single_value());
-  EXPECT_EQ(*domain_b.get_single_type(), m_type_a);
-  EXPECT_TRUE(domain_b.get_types().empty());
-  EXPECT_TRUE(domain_a.is_set_value());
   EXPECT_FALSE(domain_a.is_top());
   EXPECT_FALSE(domain_a.is_bottom());
-  EXPECT_FALSE(domain_a.is_single_value());
 
   // top and bottom
   domain_b.set_to_top();
   EXPECT_TRUE(domain_b.is_top());
   EXPECT_FALSE(domain_b.is_bottom());
-  EXPECT_FALSE(domain_b.is_set_value());
-  EXPECT_FALSE(domain_b.is_single_value());
   EXPECT_TRUE(domain_c.leq(domain_b));
   EXPECT_TRUE(SmallSetDexTypeDomain::bottom().leq(domain_b));
   domain_b.set_to_bottom();
   EXPECT_TRUE(domain_b.is_bottom());
   EXPECT_FALSE(domain_b.is_top());
-  EXPECT_FALSE(domain_b.is_set_value());
-  EXPECT_FALSE(domain_b.is_single_value());
   EXPECT_TRUE(domain_b.leq(SmallSetDexTypeDomain::top()));
 
   // leq and equals
@@ -520,7 +518,6 @@ TEST_F(DexTypeEnvironmentTest, SmallSetDexTypeDomainDeepHierarchyTest) {
   EXPECT_FALSE(domain_set2.equals(domain_set1));
 
   domain_set1.join_with(domain_a);
-  EXPECT_TRUE(domain_set1.is_single_value());
   EXPECT_TRUE(domain_c.leq(domain_set1));
   EXPECT_FALSE(domain_set1.leq(domain_c));
   EXPECT_TRUE(domain_set2.leq(domain_set1));
@@ -542,8 +539,6 @@ TEST_F(DexTypeEnvironmentTest, SmallSetDexTypeDomainDeepHierarchyTest) {
   domain_set2.join_with(domain_d);
   domain_set2.join_with(domain_e);
   domain_set2.join_with(domain_a);
-  EXPECT_TRUE(domain_set1.is_single_value());
-  EXPECT_TRUE(domain_set2.is_single_value());
   EXPECT_TRUE(domain_set1.equals(domain_set2));
   EXPECT_TRUE(domain_set2.equals(domain_set1));
 }
@@ -552,61 +547,44 @@ TEST_F(DexTypeEnvironmentTest, SmallSetDexTypeDomainFlatHierarchyTest) {
   auto domain_p = SmallSetDexTypeDomain(m_type_p);
   auto domain_q = SmallSetDexTypeDomain(m_type_q);
   domain_p.join_with(domain_q);
-  EXPECT_TRUE(domain_p.is_set_value());
   EXPECT_FALSE(domain_p.is_top());
   EXPECT_FALSE(domain_p.is_bottom());
-  EXPECT_FALSE(domain_p.is_single_value());
   EXPECT_EQ(domain_p.get_types(), get_type_set({m_type_p, m_type_q}));
 
   auto domain_r = SmallSetDexTypeDomain(m_type_r);
   domain_p.join_with(domain_r);
-  EXPECT_TRUE(domain_p.is_set_value());
   EXPECT_FALSE(domain_p.is_top());
   EXPECT_FALSE(domain_p.is_bottom());
-  EXPECT_FALSE(domain_p.is_single_value());
   EXPECT_EQ(domain_p.get_types(), get_type_set({m_type_p, m_type_q, m_type_r}));
 
   auto domain_s = SmallSetDexTypeDomain(m_type_s);
   domain_p.join_with(domain_s);
-  EXPECT_TRUE(domain_p.is_set_value());
   EXPECT_FALSE(domain_p.is_top());
   EXPECT_FALSE(domain_p.is_bottom());
-  EXPECT_FALSE(domain_p.is_single_value());
   EXPECT_EQ(domain_p.get_types(),
             get_type_set({m_type_p, m_type_q, m_type_r, m_type_s}));
 
   auto domain_t = SmallSetDexTypeDomain(m_type_t);
   domain_p.join_with(domain_t);
-  EXPECT_FALSE(domain_p.is_set_value());
-  EXPECT_FALSE(domain_p.is_top());
+  EXPECT_TRUE(domain_p.is_top());
   EXPECT_FALSE(domain_p.is_bottom());
-  EXPECT_TRUE(domain_p.is_single_value());
-  EXPECT_EQ(*domain_p.get_single_type(), m_type_o);
 
-  // set join with single value => single value
+  // set join with top => top
   auto domain_u = SmallSetDexTypeDomain(m_type_u);
-  auto domain_single = domain_p;
-  EXPECT_TRUE(domain_single.is_single_value());
-  domain_single.join_with(domain_u);
-  EXPECT_FALSE(domain_single.is_set_value());
-  EXPECT_FALSE(domain_single.is_top());
-  EXPECT_FALSE(domain_single.is_bottom());
-  EXPECT_TRUE(domain_single.is_single_value());
-  EXPECT_EQ(*domain_single.get_single_type(), type::java_lang_Object());
-  EXPECT_TRUE(domain_u.is_set_value());
+  auto domain_top = domain_p;
+  EXPECT_TRUE(domain_top.is_top());
+  domain_top.join_with(domain_u);
+  EXPECT_TRUE(domain_top.is_top());
+  EXPECT_FALSE(domain_top.is_bottom());
   EXPECT_FALSE(domain_u.is_top());
   EXPECT_FALSE(domain_u.is_bottom());
-  EXPECT_FALSE(domain_u.is_single_value());
   EXPECT_EQ(domain_u.get_types(), get_type_set({m_type_u}));
 
-  domain_single = domain_p;
-  EXPECT_TRUE(domain_single.is_single_value());
-  domain_u.join_with(domain_single);
-  EXPECT_FALSE(domain_u.is_set_value());
-  EXPECT_FALSE(domain_u.is_top());
+  domain_top = domain_p;
+  EXPECT_TRUE(domain_top.is_top());
+  domain_u.join_with(domain_top);
+  EXPECT_TRUE(domain_u.is_top());
   EXPECT_FALSE(domain_u.is_bottom());
-  EXPECT_TRUE(domain_u.is_single_value());
-  EXPECT_EQ(*domain_u.get_single_type(), type::java_lang_Object());
 }
 
 TEST_F(DexTypeEnvironmentTest, SmallSetDexTypeDomainMixedHierarchyTest) {
@@ -615,16 +593,40 @@ TEST_F(DexTypeEnvironmentTest, SmallSetDexTypeDomainMixedHierarchyTest) {
   auto domain_r = SmallSetDexTypeDomain(m_type_r);
   domain_p.join_with(domain_q);
   domain_p.join_with(domain_r);
-  EXPECT_TRUE(domain_p.is_set_value());
   EXPECT_EQ(domain_p.get_types(), get_type_set({m_type_p, m_type_q, m_type_r}));
 
   auto domain_h = SmallSetDexTypeDomain(m_type_h);
   auto domain_i = SmallSetDexTypeDomain(m_type_i);
   domain_p.join_with(domain_h);
-  EXPECT_TRUE(domain_p.is_set_value());
   EXPECT_EQ(domain_p.get_types(),
             get_type_set({m_type_p, m_type_q, m_type_r, m_type_h}));
   domain_p.join_with(domain_i);
-  EXPECT_TRUE(domain_p.is_single_value());
-  EXPECT_EQ(*domain_p.get_single_type(), type::java_lang_Object());
+  EXPECT_TRUE(domain_p.is_top());
+}
+
+TEST_F(DexTypeEnvironmentTest, DexTypeDomainReduceProductTest) {
+  auto domain = DexTypeDomain(type::java_lang_Object());
+  domain.join_with(
+      DexTypeDomain(type::make_array_type(type::java_lang_String())));
+  EXPECT_TRUE(domain.get_single_domain().is_top());
+  EXPECT_TRUE(domain.get_set_domain().is_top());
+
+  auto domain_p = DexTypeDomain(m_type_p);
+  domain_p.join_with(DexTypeDomain(m_type_q));
+  domain_p.join_with(DexTypeDomain(m_type_r));
+  domain_p.join_with(DexTypeDomain(m_type_s));
+  domain_p.join_with(DexTypeDomain(m_type_t));
+  EXPECT_FALSE(domain_p.get_single_domain().is_top());
+  EXPECT_TRUE(domain_p.get_set_domain().is_top());
+
+  domain_p = DexTypeDomain(m_type_p);
+  auto domain_q = DexTypeDomain(m_type_q);
+  domain_q.join_with(DexTypeDomain(m_type_r));
+  domain_q.join_with(DexTypeDomain(m_type_s));
+  domain_q.join_with(DexTypeDomain(m_type_t));
+  EXPECT_FALSE(domain_q.get_single_domain().is_top());
+  EXPECT_FALSE(domain_q.get_set_domain().is_top());
+  domain_p.join_with(domain_q);
+  EXPECT_FALSE(domain_p.get_single_domain().is_top());
+  EXPECT_TRUE(domain_p.get_set_domain().is_top());
 }

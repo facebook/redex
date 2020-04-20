@@ -34,7 +34,7 @@ std::ostream& operator<<(std::ostream& output, const IRType& type) {
     break;
   }
   case REFERENCE: {
-    output << "REFERENCE";
+    output << "REF";
     break;
   }
   case INT: {

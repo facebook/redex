@@ -161,7 +161,7 @@ TEST_F(GlobalTypeAnalysisTest, ArgumentPassingJoinWithNullTest) {
       gta.get_entry_state_at(graph.node(meth_bar)).get(CURRENT_PARTITION_LABEL);
   auto arg0 = bar_arg_env.get(0);
   EXPECT_FALSE(arg0.is_top());
-  EXPECT_EQ(arg0.get_type_domain(), get_singleton_type_domain("LO;"));
+  EXPECT_EQ(arg0.get_single_domain(), get_singleton_type_domain("LO;"));
   EXPECT_TRUE(arg0.is_nullable());
   auto arg1 = bar_arg_env.get(1);
   EXPECT_EQ(arg1, get_type_domain("LO;"));

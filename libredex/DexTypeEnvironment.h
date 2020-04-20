@@ -196,91 +196,46 @@ std::ostream& operator<<(std::ostream& output, const DexType* dex_type);
  * Small Set DexTypeDomain
  *
  */
-enum class DexTypeValueKind { Bottom, SetValue, SingleValue, Top };
-
 constexpr size_t MAX_SET_SIZE = 4;
 
 class SmallSetDexTypeDomain final
     : public sparta::AbstractDomain<SmallSetDexTypeDomain> {
  public:
-  SmallSetDexTypeDomain() : m_kind(DexTypeValueKind::Top) {}
+  SmallSetDexTypeDomain() : m_kind(sparta::AbstractValueKind::Value) {}
 
   explicit SmallSetDexTypeDomain(const DexType* type) {
     m_types.insert(type);
-    m_kind = DexTypeValueKind::SetValue;
+    m_kind = sparta::AbstractValueKind::Value;
   }
 
-  bool is_bottom() const override { return m_kind == DexTypeValueKind::Bottom; }
-
-  bool is_set_value() const { return m_kind == DexTypeValueKind::SetValue; }
-
-  bool is_single_value() const {
-    return m_kind == DexTypeValueKind::SingleValue;
+  bool is_bottom() const override {
+    return m_kind == sparta::AbstractValueKind::Bottom;
   }
 
-  bool is_top() const override { return m_kind == DexTypeValueKind::Top; }
+  bool is_top() const override {
+    return m_kind == sparta::AbstractValueKind::Top;
+  }
 
   void set_to_bottom() override {
-    m_kind = DexTypeValueKind::Bottom;
+    m_kind = sparta::AbstractValueKind::Bottom;
     m_types.clear();
   }
 
   void set_to_top() override {
-    m_kind = DexTypeValueKind::Top;
+    m_kind = sparta::AbstractValueKind::Top;
     m_types.clear();
   }
 
-  boost::optional<const DexType*> get_single_type() const {
-    if (this->kind() != DexTypeValueKind::SingleValue ||
-        m_single_type.get_dex_type() == nullptr) {
-      return boost::none;
-    }
-    return boost::optional<const DexType*>(m_single_type.get_dex_type());
+  sparta::AbstractValueKind kind() const { return m_kind; }
+
+  sparta::PatriciaTreeSet<const DexType*> get_types() const {
+    always_assert(!is_top());
+    return m_types;
   }
 
-  sparta::PatriciaTreeSet<const DexType*> get_types() const { return m_types; }
+  bool leq(const SmallSetDexTypeDomain& other) const override;
 
-  DexTypeValueKind kind() const { return m_kind; }
-
-  bool leq(const SmallSetDexTypeDomain& other) const override {
-    if (is_bottom()) {
-      return true;
-    }
-    if (other.is_bottom()) {
-      return false;
-    }
-    if (other.is_top()) {
-      return true;
-    }
-    if (is_top()) {
-      return false;
-    }
-    if (other.is_single_value()) {
-      return is_set_value();
-    }
-    if (is_single_value()) {
-      // We don't do more precise comparison between single values.
-      return other.is_single_value();
-    }
-    always_assert(this->is_set_value() && other.is_set_value());
-    return m_types.is_subset_of(other.m_types);
-  }
-
-  bool equals(const SmallSetDexTypeDomain& other) const override {
-    if (is_bottom()) {
-      return other.is_bottom();
-    }
-    if (is_top()) {
-      return other.is_top();
-    }
-    if (is_single_value() && other.is_single_value()) {
-      return m_single_type.equals(other.m_single_type);
-    }
-    if (is_single_value() || other.is_single_value()) {
-      return false;
-    }
-    return m_types.equals(other.m_types);
-  }
+  bool equals(const SmallSetDexTypeDomain& other) const override;
 
   void join_with(const SmallSetDexTypeDomain& other) override;
 
@@ -296,13 +251,12 @@ class SmallSetDexTypeDomain final
     throw std::runtime_error("narrow_with not implemented!");
   }
 
- private:
-  dtv_impl::DexTypeValue merge_to_single_val(
-      const sparta::PatriciaTreeSet<const DexType*>& types);
+  friend std::ostream& operator<<(std::ostream& out,
+                                  const SmallSetDexTypeDomain& x);
 
-  dtv_impl::DexTypeValue m_single_type;
+ private:
   sparta::PatriciaTreeSet<const DexType*> m_types;
-  DexTypeValueKind m_kind;
+  sparta::AbstractValueKind m_kind;
 };
 
 /*
@@ -313,7 +267,8 @@ class SmallSetDexTypeDomain final
 class DexTypeDomain
     : public sparta::ReducedProductAbstractDomain<DexTypeDomain,
                                                   NullnessDomain,
-                                                  SingletonDexTypeDomain> {
+                                                  SingletonDexTypeDomain,
+                                                  SmallSetDexTypeDomain> {
  public:
   using ReducedProductAbstractDomain::ReducedProductAbstractDomain;
 
@@ -324,11 +279,18 @@ class DexTypeDomain
   DexTypeDomain() = default;
 
   explicit DexTypeDomain(const DexType* dex_type)
-      : ReducedProductAbstractDomain(std::make_tuple(
-            NullnessDomain(NOT_NULL), SingletonDexTypeDomain(dex_type))) {}
+      : ReducedProductAbstractDomain(
+            std::make_tuple(NullnessDomain(NOT_NULL),
+                            SingletonDexTypeDomain(dex_type),
+                            SmallSetDexTypeDomain(dex_type))) {}
 
   static void reduce_product(
-      std::tuple<NullnessDomain, SingletonDexTypeDomain>& /* product */) {}
+      std::tuple<NullnessDomain, SingletonDexTypeDomain, SmallSetDexTypeDomain>&
+          product) {
+    if (std::get<1>(product).is_top()) {
+      std::get<2>(product).set_to_top();
+    }
+  }
 
   static DexTypeDomain null() { return DexTypeDomain(IS_NULL); }
 
@@ -338,16 +300,26 @@ class DexTypeDomain
 
   bool is_nullable() const { return get<0>().is_top(); }
 
-  SingletonDexTypeDomain get_type_domain() { return get<1>(); }
+  SingletonDexTypeDomain get_single_domain() { return get<1>(); }
 
   boost::optional<const DexType*> get_dex_type() const {
     return get<1>().get_dex_type();
   }
 
+  SmallSetDexTypeDomain get_set_domain() { return get<2>(); }
+
+  sparta::PatriciaTreeSet<const DexType*> get_type_set() {
+    return get<2>().get_types();
+  }
+
+  void join_with(const DexTypeDomain& other) override;
+
  private:
   explicit DexTypeDomain(const Nullness nullness)
-      : ReducedProductAbstractDomain(std::make_tuple(
-            NullnessDomain(nullness), SingletonDexTypeDomain::none())) {}
+      : ReducedProductAbstractDomain(
+            std::make_tuple(NullnessDomain(nullness),
+                            SingletonDexTypeDomain::none(),
+                            SmallSetDexTypeDomain())) {}
 };
 
 /*
