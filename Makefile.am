@@ -164,7 +164,6 @@ libredex_la_SOURCES = \
 	libredex/GlobalConfig.cpp \
 	libredex/GraphVisualizer.cpp \
 	libredex/HierarchyUtil.cpp \
-	libredex/ImmutableSubcomponentAnalyzer.cpp \
 	libredex/InitCollisionFinder.cpp \
 	libredex/InlineForSpeed.cpp \
 	libredex/InlinerConfig.cpp \
