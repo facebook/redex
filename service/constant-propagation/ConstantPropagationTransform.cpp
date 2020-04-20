@@ -20,11 +20,13 @@ namespace constant_propagation {
  * register.
  */
 void Transform::replace_with_const(const ConstantEnvironment& env,
-                                   const IRList::iterator& it) {
+                                   const IRList::iterator& it,
+                                   const XStoreRefs* xstores,
+                                   const DexType* declaring_type) {
   auto* insn = it->insn;
   auto value = env.get(insn->dest());
-  auto replacement =
-      ConstantValue::apply_visitor(value_to_instruction_visitor(insn), value);
+  auto replacement = ConstantValue::apply_visitor(
+      value_to_instruction_visitor(insn, xstores, declaring_type), value);
   if (replacement.empty()) {
     return;
   }
@@ -42,11 +44,13 @@ void Transform::replace_with_const(const ConstantEnvironment& env,
  * removing not used arguments.
  */
 void Transform::generate_const_param(const ConstantEnvironment& env,
-                                     const IRList::iterator& it) {
+                                     const IRList::iterator& it,
+                                     const XStoreRefs* xstores,
+                                     const DexType* declaring_type) {
   auto* insn = it->insn;
   auto value = env.get(insn->dest());
-  auto replacement =
-      ConstantValue::apply_visitor(value_to_instruction_visitor(insn), value);
+  auto replacement = ConstantValue::apply_visitor(
+      value_to_instruction_visitor(insn, xstores, declaring_type), value);
   if (replacement.empty()) {
     return;
   }
@@ -105,19 +109,21 @@ bool Transform::eliminate_redundant_put(const ConstantEnvironment& env,
 
 void Transform::simplify_instruction(const ConstantEnvironment& env,
                                      const WholeProgramState& wps,
-                                     const IRList::iterator& it) {
+                                     const IRList::iterator& it,
+                                     const XStoreRefs* xstores,
+                                     const DexType* declaring_type) {
   auto* insn = it->insn;
   switch (insn->opcode()) {
   case IOPCODE_LOAD_PARAM:
   case IOPCODE_LOAD_PARAM_OBJECT:
   case IOPCODE_LOAD_PARAM_WIDE: {
-    generate_const_param(env, it);
+    generate_const_param(env, it, xstores, declaring_type);
     break;
   }
   case OPCODE_MOVE:
   case OPCODE_MOVE_WIDE:
     if (m_config.replace_moves_with_consts) {
-      replace_with_const(env, it);
+      replace_with_const(env, it, xstores, declaring_type);
     }
     break;
   case IOPCODE_MOVE_RESULT_PSEUDO:
@@ -128,7 +134,7 @@ void Transform::simplify_instruction(const ConstantEnvironment& env,
     if (is_sget(op) || is_iget(op) || is_aget(op) || is_div_int_lit(op) ||
         is_rem_int_lit(op) || is_instance_of(op) || is_rem_int_or_long(op) ||
         is_div_int_or_long(op)) {
-      replace_with_const(env, it);
+      replace_with_const(env, it, xstores, declaring_type);
     }
     break;
   }
@@ -141,7 +147,7 @@ void Transform::simplify_instruction(const ConstantEnvironment& env,
   case OPCODE_MOVE_RESULT_WIDE:
   case OPCODE_MOVE_RESULT_OBJECT: {
     if (m_config.replace_move_result_with_consts) {
-      replace_with_const(env, it);
+      replace_with_const(env, it, xstores, declaring_type);
     }
     break;
   }
@@ -172,7 +178,7 @@ void Transform::simplify_instruction(const ConstantEnvironment& env,
   case OPCODE_AND_LONG:
   case OPCODE_OR_LONG:
   case OPCODE_XOR_LONG: {
-    replace_with_const(env, it);
+    replace_with_const(env, it, xstores, declaring_type);
     break;
   }
 
@@ -402,7 +408,9 @@ void Transform::apply_changes(IRCode* code) {
 Transform::Stats Transform::apply_on_uneditable_cfg(
     const intraprocedural::FixpointIterator& intra_cp,
     const WholeProgramState& wps,
-    IRCode* code) {
+    IRCode* code,
+    const XStoreRefs* xstores,
+    const DexType* declaring_type) {
   auto& cfg = code->cfg();
   boost::optional<int32_t> temp_reg;
   for (const auto& block : cfg.blocks()) {
@@ -420,7 +428,8 @@ Transform::Stats Transform::apply_on_uneditable_cfg(
       auto* insn = mie.insn;
       intra_cp.analyze_instruction(insn, &env, insn == last_insn->insn);
       if (!any_changes && !m_redundant_move_results.count(insn)) {
-        simplify_instruction(env, wps, code->iterator_to(mie));
+        simplify_instruction(env, wps, code->iterator_to(mie), xstores,
+                             declaring_type);
       }
     }
     eliminate_dead_branch(intra_cp, env, cfg, block);

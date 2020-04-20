@@ -48,6 +48,9 @@ using StringSetDomain = sparta::PatriciaTreeSetAbstractDomain<const DexString*>;
 
 using StringDomain = sparta::ConstantAbstractDomain<const DexString*>;
 
+using ConstantClassObjectDomain =
+    sparta::ConstantAbstractDomain<const DexType*>;
+
 /*
  * This represents a new-instance or new-array instruction.
  */
@@ -56,11 +59,13 @@ using AbstractHeapPointer =
 
 // TODO: Refactor so that we don't have to list every single possible
 // sub-Domain here.
-using ConstantValue = sparta::DisjointUnionAbstractDomain<SignedConstantDomain,
-                                                          SingletonObjectDomain,
-                                                          StringSetDomain,
-                                                          StringDomain,
-                                                          AbstractHeapPointer>;
+using ConstantValue =
+    sparta::DisjointUnionAbstractDomain<SignedConstantDomain,
+                                        SingletonObjectDomain,
+                                        StringSetDomain,
+                                        StringDomain,
+                                        ConstantClassObjectDomain,
+                                        AbstractHeapPointer>;
 
 // For storing non-escaping static and instance fields.
 using FieldEnvironment =

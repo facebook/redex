@@ -28,6 +28,12 @@ struct InterproceduralConstantPropagationTest : public RedexTest {
   }
 };
 
+static DexStoresVector make_simple_stores(const Scope& scope) {
+  auto store = DexStore("store");
+  store.add_classes(scope);
+  return DexStoresVector({store});
+}
+
 TEST_F(InterproceduralConstantPropagationTest, constantArgument) {
   // Let bar() be the only method calling baz(I)V, passing it a constant
   // argument. baz() should be optimized for that constant argument.
@@ -66,7 +72,7 @@ TEST_F(InterproceduralConstantPropagationTest, constantArgument) {
 
   auto cls = creator.create();
   scope.push_back(cls);
-  InterproceduralConstantPropagationPass().run(scope);
+  InterproceduralConstantPropagationPass().run(make_simple_stores(scope));
 
   auto expected_code2 = assembler::ircode_from_string(R"(
     (
@@ -76,6 +82,126 @@ TEST_F(InterproceduralConstantPropagationTest, constantArgument) {
      (goto :label)
      (const v0 0)
      (:label)
+     (return-void)
+    )
+  )");
+
+  EXPECT_CODE_EQ(m2->get_code(), expected_code2.get());
+}
+
+TEST_F(InterproceduralConstantPropagationTest, constantArgumentClass) {
+  // Let bar() be the only method calling baz(...)V, passing it a constant
+  // argument. baz() should be optimized for that constant argument,
+  // which happens to be a type.
+
+  Scope scope;
+  auto cls_ty = DexType::make_type("LFoo;");
+  ClassCreator creator(cls_ty);
+  creator.set_super(type::java_lang_Object());
+
+  auto m1 = assembler::method_from_string(R"(
+    (method (public) "LFoo;.bar:()V"
+     (
+      (load-param v0) ; the `this` argument
+      (const-class "LFoo;")
+      (move-result-pseudo-object v1)
+      (invoke-direct (v0 v1) "LFoo;.baz:(Ljava/lang/Class;)V")
+      (return-void)
+     )
+    )
+  )");
+  m1->rstate.set_root();
+  creator.add_method(m1);
+
+  auto m2 = assembler::method_from_string(R"(
+    (method (private) "LFoo;.baz:(Ljava/lang/Class;)V"
+     (
+      (load-param v0) ; the `this` argument
+      (load-param-object v1)
+      (if-eqz v1 :label)
+      (const v0 0)
+      (:label)
+      (return-void)
+     )
+    )
+  )");
+  creator.add_method(m2);
+
+  auto cls = creator.create();
+  scope.push_back(cls);
+  InterproceduralConstantPropagationPass().run(make_simple_stores(scope));
+
+  auto expected_code2 = assembler::ircode_from_string(R"(
+    (
+     (load-param v0)
+     (load-param-object v1)
+     (const-class "LFoo;")
+     (move-result-pseudo-object v1)
+     (const v0 0)
+     (return-void)
+    )
+  )");
+
+  EXPECT_CODE_EQ(m2->get_code(), expected_code2.get());
+}
+
+TEST_F(InterproceduralConstantPropagationTest, constantArgumentClassXStore) {
+  // Let bar() be the only method calling baz(...)V, passing it a constant
+  // argument. However, that argument is a type defined in a different storre
+  // than baz, so the type reference should not be embedded into baz(). Still,
+  // the knowledge that the type value is not zero will be used to optimize the
+  // conditional branching in baz.
+
+  auto cls_ty = DexType::make_type("LFoo;");
+  ClassCreator creator(cls_ty);
+  creator.set_super(type::java_lang_Object());
+
+  auto m1 = assembler::method_from_string(R"(
+    (method (public) "LFoo;.bar:()V"
+     (
+      (load-param v0) ; the `this` argument
+      (const-class "LBar;")
+      (move-result-pseudo-object v1)
+      (invoke-direct (v0 v1) "LFoo;.baz:(Ljava/lang/Class;)V")
+      (return-void)
+     )
+    )
+  )");
+  m1->rstate.set_root();
+  creator.add_method(m1);
+
+  auto m2 = assembler::method_from_string(R"(
+    (method (private) "LFoo;.baz:(Ljava/lang/Class;)V"
+     (
+      (load-param v0) ; the `this` argument
+      (load-param-object v1)
+      (if-eqz v1 :label)
+      (const v0 0)
+      (:label)
+      (return-void)
+     )
+    )
+  )");
+  creator.add_method(m2);
+
+  auto cls = creator.create();
+  auto store1 = DexStore("store1");
+  store1.add_classes({cls});
+
+  auto cls_ty2 = DexType::make_type("LBar;");
+  ClassCreator creator2(cls_ty2);
+  creator2.set_super(type::java_lang_Object());
+  auto cls2 = creator2.create();
+  auto store2 = DexStore("store2");
+  store2.add_classes({cls2});
+  DexStoresVector stores({store1, store2});
+  InterproceduralConstantPropagationPass().run(stores);
+
+  auto expected_code2 = assembler::ircode_from_string(R"(
+    (
+     (load-param v0)
+     (load-param-object v1)
+     (const v0 0)
      (return-void)
     )
   )");
@@ -124,7 +250,7 @@ TEST_F(InterproceduralConstantPropagationTest, constantTwoArgument) {
 
   auto cls = creator.create();
   scope.push_back(cls);
-  InterproceduralConstantPropagationPass().run(scope);
+  InterproceduralConstantPropagationPass().run(make_simple_stores(scope));
 
   auto expected_code2 = assembler::ircode_from_string(R"(
     (
@@ -199,7 +325,7 @@ TEST_F(InterproceduralConstantPropagationTest, nonConstantArgument) {
 
   // m3's code should be unchanged since it cannot be optimized
   auto expected = assembler::to_s_expr(m3->get_code());
-  InterproceduralConstantPropagationPass().run(scope);
+  InterproceduralConstantPropagationPass().run(make_simple_stores(scope));
   EXPECT_EQ(assembler::to_s_expr(m3->get_code()), expected);
 }
 
@@ -254,7 +380,7 @@ TEST_F(InterproceduralConstantPropagationTest, argumentsGreaterThanZero) {
 
   auto cls = creator.create();
   scope.push_back(cls);
-  InterproceduralConstantPropagationPass().run(scope);
+  InterproceduralConstantPropagationPass().run(make_simple_stores(scope));
 
   auto expected_code3 = assembler::ircode_from_string(R"(
     (
@@ -544,7 +670,8 @@ TEST_F(RuntimeAssertTest, RuntimeAssertField) {
   creator.add_method(method);
 
   Scope scope{creator.create()};
-  InterproceduralConstantPropagationPass(m_config).run(scope);
+  InterproceduralConstantPropagationPass(m_config).run(
+      make_simple_stores(scope));
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
@@ -592,7 +719,8 @@ TEST_F(RuntimeAssertTest, RuntimeAssertConstantReturnValue) {
   creator.add_method(constant_return_method);
 
   Scope scope{creator.create()};
-  InterproceduralConstantPropagationPass(m_config).run(scope);
+  InterproceduralConstantPropagationPass(m_config).run(
+      make_simple_stores(scope));
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
@@ -639,7 +767,8 @@ TEST_F(RuntimeAssertTest, RuntimeAssertNeverReturnsVoid) {
   creator.add_method(never_returns);
 
   Scope scope{creator.create()};
-  InterproceduralConstantPropagationPass(m_config).run(scope);
+  InterproceduralConstantPropagationPass(m_config).run(
+      make_simple_stores(scope));
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
@@ -683,7 +812,8 @@ TEST_F(RuntimeAssertTest, RuntimeAssertNeverReturnsConstant) {
   creator.add_method(never_returns);
 
   Scope scope{creator.create()};
-  InterproceduralConstantPropagationPass(m_config).run(scope);
+  InterproceduralConstantPropagationPass(m_config).run(
+      make_simple_stores(scope));
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
@@ -745,7 +875,7 @@ TEST_F(InterproceduralConstantPropagationTest, constantField) {
 
   InterproceduralConstantPropagationPass::Config config;
   config.max_heap_analysis_iterations = 1;
-  InterproceduralConstantPropagationPass(config).run(scope);
+  InterproceduralConstantPropagationPass(config).run(make_simple_stores(scope));
 
   auto expected_code2 = assembler::ircode_from_string(R"(
     (
@@ -806,7 +936,7 @@ TEST_F(InterproceduralConstantPropagationTest, nonConstantField) {
 
   InterproceduralConstantPropagationPass::Config config;
   config.max_heap_analysis_iterations = 1;
-  InterproceduralConstantPropagationPass(config).run(scope);
+  InterproceduralConstantPropagationPass(config).run(make_simple_stores(scope));
 
   EXPECT_EQ(assembler::to_s_expr(m2->get_code()), expected);
 }
@@ -860,7 +990,7 @@ TEST_F(InterproceduralConstantPropagationTest, nonConstantFieldDueToKeep) {
 
   InterproceduralConstantPropagationPass::Config config;
   config.max_heap_analysis_iterations = 1;
-  InterproceduralConstantPropagationPass(config).run(scope);
+  InterproceduralConstantPropagationPass(config).run(make_simple_stores(scope));
 
   EXPECT_EQ(assembler::to_s_expr(m2->get_code()), expected);
 }
@@ -927,7 +1057,7 @@ TEST_F(InterproceduralConstantPropagationTest, constantFieldAfterClinit) {
   EXPECT_EQ(wps.get_field_value(field_qux), SignedConstantDomain(0));
   EXPECT_EQ(wps.get_field_value(field_corge), SignedConstantDomain(1));
 
-  InterproceduralConstantPropagationPass(config).run(scope);
+  InterproceduralConstantPropagationPass(config).run(make_simple_stores(scope));
 
   auto expected_clinit_code = assembler::ircode_from_string(R"(
      (
@@ -1016,7 +1146,7 @@ TEST_F(InterproceduralConstantPropagationTest,
   auto& wps = fp_iter->get_whole_program_state();
   EXPECT_EQ(wps.get_field_value(field_qux), ConstantValue::top());
 
-  InterproceduralConstantPropagationPass(config).run(scope);
+  InterproceduralConstantPropagationPass(config).run(make_simple_stores(scope));
   EXPECT_EQ(assembler::to_s_expr(m->get_code()), expected);
 }
 
@@ -1056,7 +1186,7 @@ TEST_F(InterproceduralConstantPropagationTest, constantReturnValue) {
 
   InterproceduralConstantPropagationPass::Config config;
   config.max_heap_analysis_iterations = 1;
-  InterproceduralConstantPropagationPass(config).run(scope);
+  InterproceduralConstantPropagationPass(config).run(make_simple_stores(scope));
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
@@ -1121,7 +1251,7 @@ TEST_F(InterproceduralConstantPropagationTest, VirtualMethodReturnValue) {
 
   InterproceduralConstantPropagationPass::Config config;
   config.max_heap_analysis_iterations = 1;
-  InterproceduralConstantPropagationPass(config).run(scope);
+  InterproceduralConstantPropagationPass(config).run(make_simple_stores(scope));
   EXPECT_CODE_EQ(m1->get_code(), expected_code.get());
 }
 
@@ -1175,7 +1305,7 @@ TEST_F(InterproceduralConstantPropagationTest, RootVirtualMethodReturnValue) {
 
   InterproceduralConstantPropagationPass::Config config;
   config.max_heap_analysis_iterations = 1;
-  InterproceduralConstantPropagationPass(config).run(scope);
+  InterproceduralConstantPropagationPass(config).run(make_simple_stores(scope));
   EXPECT_CODE_EQ(m1->get_code(), expected_code.get());
 }
 
@@ -1239,7 +1369,7 @@ TEST_F(InterproceduralConstantPropagationTest,
 
   InterproceduralConstantPropagationPass::Config config;
   config.max_heap_analysis_iterations = 1;
-  InterproceduralConstantPropagationPass(config).run(scope);
+  InterproceduralConstantPropagationPass(config).run(make_simple_stores(scope));
   EXPECT_EQ(assembler::to_s_expr(m1->get_code()), expected);
 }
 
@@ -1288,7 +1418,7 @@ TEST_F(InterproceduralConstantPropagationTest, neverReturns) {
 
   InterproceduralConstantPropagationPass::Config config;
   config.max_heap_analysis_iterations = 1;
-  InterproceduralConstantPropagationPass(config).run(scope);
+  InterproceduralConstantPropagationPass(config).run(make_simple_stores(scope));
 
   auto expected_code = assembler::ircode_from_string(R"(
     (

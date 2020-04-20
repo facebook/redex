@@ -31,8 +31,8 @@ Transform::Stats ConstantPropagation::run(DexMethod* method,
                                               ConstantPrimitiveAnalyzer());
     fp_iter.run(ConstantEnvironment());
     constant_propagation::Transform tf(m_config.transform);
-    local_stats =
-        tf.apply_on_uneditable_cfg(fp_iter, WholeProgramState(), code);
+    local_stats = tf.apply_on_uneditable_cfg(
+        fp_iter, WholeProgramState(), code, xstores, method->get_class());
   }
   if (xstores) {
     always_assert(!code->editable_cfg_built());

@@ -54,7 +54,9 @@ class Transform final {
   // TODO: Migrate all to use editable cfg via `apply` method
   Stats apply_on_uneditable_cfg(const intraprocedural::FixpointIterator&,
                                 const WholeProgramState&,
-                                IRCode*);
+                                IRCode*,
+                                const XStoreRefs*,
+                                const DexType*);
 
   // Apply (new) transformations on editable cfg
   Stats apply(const intraprocedural::FixpointIterator&,
@@ -72,11 +74,18 @@ class Transform final {
 
   void simplify_instruction(const ConstantEnvironment&,
                             const WholeProgramState& wps,
-                            const IRList::iterator&);
+                            const IRList::iterator&,
+                            const XStoreRefs*,
+                            const DexType*);
 
-  void replace_with_const(const ConstantEnvironment&, const IRList::iterator&);
+  void replace_with_const(const ConstantEnvironment&,
+                          const IRList::iterator&,
+                          const XStoreRefs*,
+                          const DexType*);
   void generate_const_param(const ConstantEnvironment&,
-                            const IRList::iterator&);
+                            const IRList::iterator&,
+                            const XStoreRefs*,
+                            const DexType*);
 
   bool eliminate_redundant_put(const ConstantEnvironment&,
                                const WholeProgramState& wps,
@@ -123,8 +132,12 @@ class Transform final {
 class value_to_instruction_visitor final
     : public boost::static_visitor<std::vector<IRInstruction*>> {
  public:
-  explicit value_to_instruction_visitor(const IRInstruction* original)
-      : m_original(original) {}
+  explicit value_to_instruction_visitor(const IRInstruction* original,
+                                        const XStoreRefs* xstores,
+                                        const DexType* declaring_type)
+      : m_original(original),
+        m_xstores(xstores),
+        m_declaring_type(declaring_type) {}
 
   std::vector<IRInstruction*> operator()(
       const SignedConstantDomain& dom) const {
@@ -150,6 +163,22 @@ class value_to_instruction_visitor final
                       ->set_dest(m_original->dest())};
   }
 
+  std::vector<IRInstruction*> operator()(
+      const ConstantClassObjectDomain& dom) const {
+    auto cst = dom.get_constant();
+    if (!cst) {
+      return {};
+    }
+    auto type = const_cast<DexType*>(*cst);
+    if (!m_xstores || m_xstores->illegal_ref(m_declaring_type, type)) {
+      return {};
+    }
+    IRInstruction* insn = new IRInstruction(OPCODE_CONST_CLASS);
+    insn->set_type(type);
+    return {insn, (new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT))
+                      ->set_dest(m_original->dest())};
+  }
+
   template <typename Domain>
   std::vector<IRInstruction*> operator()(const Domain& dom) const {
     return {};
@@ -157,6 +186,8 @@ class value_to_instruction_visitor final
 
  private:
   const IRInstruction* m_original;
+  const XStoreRefs* m_xstores;
+  const DexType* m_declaring_type;
 };
 
 } // namespace constant_propagation

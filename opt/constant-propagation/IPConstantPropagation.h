@@ -64,7 +64,7 @@ class PassImpl : public Pass {
    * tests. run() is a more direct way to call this pass. The caller is
    * responsible for picking the right Config settings.
    */
-  void run(Scope&);
+  void run(const DexStoresVector& stores);
 
   /*
    * Exposed for testing purposes.
@@ -74,7 +74,9 @@ class PassImpl : public Pass {
  private:
   void compute_analysis_stats(const WholeProgramState&);
 
-  void optimize(const Scope&, const FixpointIterator&);
+  void optimize(const Scope&,
+                const XStoreRefs& xstores,
+                const FixpointIterator&);
 
   struct Stats {
     size_t constant_fields{0};

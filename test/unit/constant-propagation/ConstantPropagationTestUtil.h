@@ -29,6 +29,7 @@ inline void do_const_prop(
     tf.apply(intra_cp, code->cfg(), nullptr, nullptr);
     code->clear_cfg();
   } else {
-    tf.apply_on_uneditable_cfg(intra_cp, cp::WholeProgramState(), code);
+    tf.apply_on_uneditable_cfg(
+        intra_cp, cp::WholeProgramState(), code, nullptr, nullptr);
   }
 }

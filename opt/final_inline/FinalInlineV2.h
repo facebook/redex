@@ -35,9 +35,12 @@ class FinalInlinePassV2 : public Pass {
          "field read in methods invoked by <init>");
   }
 
-  static size_t run(const Scope&, const Config& config = Config());
+  static size_t run(const Scope&,
+                    const XStoreRefs*,
+                    const Config& config = Config());
   static size_t run_inline_ifields(
       const Scope&,
+      const XStoreRefs*,
       const constant_propagation::EligibleIfields& eligible_ifields,
       const Config& config = Config());
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
@@ -61,6 +64,6 @@ class class_initialization_cycle : public std::exception {
 };
 
 constant_propagation::WholeProgramState analyze_and_simplify_clinits(
-    const Scope& scope);
+    const Scope& scope, const XStoreRefs* xstores);
 
 } // namespace final_inline

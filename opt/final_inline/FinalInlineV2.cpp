@@ -150,12 +150,14 @@ using CombinedAnalyzer =
     InstructionAnalyzerCombiner<cp::ClinitFieldAnalyzer,
                                 cp::WholeProgramAwareAnalyzer,
                                 cp::StringAnalyzer,
+                                cp::ConstantClassObjectAnalyzer,
                                 cp::PrimitiveAnalyzer>;
 
 using CombinedInitAnalyzer =
     InstructionAnalyzerCombiner<cp::InitFieldAnalyzer,
                                 cp::WholeProgramAwareAnalyzer,
                                 cp::StringAnalyzer,
+                                cp::ConstantClassObjectAnalyzer,
                                 cp::PrimitiveAnalyzer>;
 /*
  * Converts a ConstantValue into its equivalent encoded_value. Returns null if
@@ -163,7 +165,10 @@ using CombinedInitAnalyzer =
  */
 class encoding_visitor : public boost::static_visitor<DexEncodedValue*> {
  public:
-  explicit encoding_visitor(const DexField* field) : m_field(field) {}
+  explicit encoding_visitor(const DexField* field,
+                            const XStoreRefs* xstores,
+                            const DexType* declaring_type)
+      : m_field(field), m_xstores(xstores), m_declaring_type(declaring_type) {}
 
   DexEncodedValue* operator()(const SignedConstantDomain& dom) const {
     auto cst = dom.get_constant();
@@ -190,6 +195,22 @@ class encoding_visitor : public boost::static_visitor<DexEncodedValue*> {
     }
   }
 
+  DexEncodedValue* operator()(const ConstantClassObjectDomain& dom) const {
+    auto cst = dom.get_constant();
+    if (!cst) {
+      return nullptr;
+    }
+    if (m_field->get_type() != type::java_lang_Class()) {
+      // See above: There's a limitation in older DalvikVMs
+      return nullptr;
+    }
+    auto type = const_cast<DexType*>(*cst);
+    if (!m_xstores || m_xstores->illegal_ref(m_declaring_type, type)) {
+      return nullptr;
+    }
+    return new DexEncodedValueType(type);
+  }
+
   template <typename Domain>
   DexEncodedValue* operator()(const Domain&) const {
     return nullptr;
@@ -197,6 +218,8 @@ class encoding_visitor : public boost::static_visitor<DexEncodedValue*> {
 
  private:
   const DexField* m_field;
+  const XStoreRefs* m_xstores;
+  const DexType* m_declaring_type;
 };
 
 /*
@@ -229,14 +252,15 @@ std::unordered_set<const DexFieldRef*> gather_read_static_fields(
 
 void encode_values(DexClass* cls,
                    const FieldEnvironment& field_env,
-                   const std::unordered_set<const DexFieldRef*>& blacklist) {
+                   const std::unordered_set<const DexFieldRef*>& blacklist,
+                   const XStoreRefs* xstores) {
   for (auto* field : cls->get_sfields()) {
     if (blacklist.count(field)) {
       continue;
     }
     auto value = field_env.get(field);
-    auto encoded_value =
-        ConstantValue::apply_visitor(encoding_visitor(field), value);
+    auto encoded_value = ConstantValue::apply_visitor(
+        encoding_visitor(field, xstores, cls->get_type()), value);
     if (encoded_value == nullptr) {
       continue;
     }
@@ -257,7 +281,8 @@ namespace final_inline {
  * Additionally, for static final fields, this method collects and returns them
  * as part of the WholeProgramState object.
  */
-cp::WholeProgramState analyze_and_simplify_clinits(const Scope& scope) {
+cp::WholeProgramState analyze_and_simplify_clinits(const Scope& scope,
+                                                   const XStoreRefs* xstores) {
   const std::unordered_set<DexMethodRef*> pure_methods = get_pure_methods();
   cp::WholeProgramState wps;
   for (DexClass* cls : reverse_tsort_by_clinit_deps(scope)) {
@@ -270,13 +295,14 @@ cp::WholeProgramState analyze_and_simplify_clinits(const Scope& scope) {
       auto& cfg = code->cfg();
       cfg.calculate_exit_block();
       cp::intraprocedural::FixpointIterator intra_cp(
-          cfg, CombinedAnalyzer(cls->get_type(), &wps, nullptr, nullptr));
+          cfg,
+          CombinedAnalyzer(cls->get_type(), &wps, nullptr, nullptr, nullptr));
       intra_cp.run(env);
       env = intra_cp.get_exit_state_at(cfg.exit_block());
 
       // Generate the new encoded_values and re-run the analysis.
       encode_values(cls, env.get_field_environment(),
-                    gather_read_static_fields(cls));
+                    gather_read_static_fields(cls), xstores);
       auto fresh_env = ConstantEnvironment();
       cp::set_encoded_values(cls, &fresh_env);
       intra_cp.run(fresh_env);
@@ -286,7 +312,8 @@ cp::WholeProgramState analyze_and_simplify_clinits(const Scope& scope) {
       cp::Transform::Config transform_config;
       transform_config.class_under_init = cls->get_type();
       cp::Transform(transform_config)
-          .apply_on_uneditable_cfg(intra_cp, wps, code);
+          .apply_on_uneditable_cfg(intra_cp, wps, code, xstores,
+                                   cls->get_type());
       // Delete the instructions rendered dead by the removal of those sputs.
       LocalDce(pure_methods).dce(code);
       // If the clinit is empty now, delete it.
@@ -311,7 +338,9 @@ cp::WholeProgramState analyze_and_simplify_clinits(const Scope& scope) {
  * we are only considering class with only one <init>.
  */
 cp::WholeProgramState analyze_and_simplify_inits(
-    const Scope& scope, const cp::EligibleIfields& eligible_ifields) {
+    const Scope& scope,
+    const XStoreRefs* xstores,
+    const cp::EligibleIfields& eligible_ifields) {
   const std::unordered_set<DexMethodRef*> pure_methods = get_pure_methods();
   cp::WholeProgramState wps;
   for (DexClass* cls : reverse_tsort_by_init_deps(scope)) {
@@ -332,7 +361,8 @@ cp::WholeProgramState analyze_and_simplify_inits(
         auto& cfg = code->cfg();
         cfg.calculate_exit_block();
         cp::intraprocedural::FixpointIterator intra_cp(
-            cfg, CombinedInitAnalyzer(cls->get_type(), &wps, nullptr, nullptr));
+            cfg, CombinedInitAnalyzer(cls->get_type(), &wps, nullptr, nullptr,
+                                      nullptr));
         intra_cp.run(env);
         env = intra_cp.get_exit_state_at(cfg.exit_block());
 
@@ -340,7 +370,8 @@ cp::WholeProgramState analyze_and_simplify_inits(
         cp::Transform::Config transform_config;
         transform_config.class_under_init = cls->get_type();
         cp::Transform(transform_config)
-            .apply_on_uneditable_cfg(intra_cp, wps, code);
+            .apply_on_uneditable_cfg(intra_cp, wps, code, xstores,
+                                     cls->get_type());
         // Delete the instructions rendered dead by the removal of those iputs.
         LocalDce(pure_methods).dce(code);
       }
@@ -715,6 +746,7 @@ cp::EligibleIfields gather_ifield_candidates(
 
 size_t inline_final_gets(
     const Scope& scope,
+    const XStoreRefs* xstores,
     const cp::WholeProgramState& wps,
     const std::unordered_set<const DexType*>& black_list_types,
     cp::FieldType field_type) {
@@ -741,8 +773,9 @@ size_t inline_final_gets(
           continue;
         }
         auto replacement = ConstantValue::apply_visitor(
-            cp::value_to_instruction_visitor(
-                ir_list::move_result_pseudo_of(it)),
+            cp::value_to_instruction_visitor(ir_list::move_result_pseudo_of(it),
+                                             xstores,
+                                             method->get_class()),
             wps.get_field_value(field));
         if (replacement.empty()) {
           continue;
@@ -760,10 +793,12 @@ size_t inline_final_gets(
 
 } // namespace
 
-size_t FinalInlinePassV2::run(const Scope& scope, const Config& config) {
+size_t FinalInlinePassV2::run(const Scope& scope,
+                              const XStoreRefs* xstores,
+                              const Config& config) {
   try {
-    auto wps = final_inline::analyze_and_simplify_clinits(scope);
-    return inline_final_gets(scope, wps, config.black_list_types,
+    auto wps = final_inline::analyze_and_simplify_clinits(scope, xstores);
+    return inline_final_gets(scope, xstores, wps, config.black_list_types,
                              cp::FieldType::STATIC);
   } catch (final_inline::class_initialization_cycle& e) {
     std::cerr << e.what();
@@ -773,10 +808,12 @@ size_t FinalInlinePassV2::run(const Scope& scope, const Config& config) {
 
 size_t FinalInlinePassV2::run_inline_ifields(
     const Scope& scope,
+    const XStoreRefs* xstores,
     const cp::EligibleIfields& eligible_ifields,
     const Config& config) {
-  auto wps = final_inline::analyze_and_simplify_inits(scope, eligible_ifields);
-  return inline_final_gets(scope, wps, config.black_list_types,
+  auto wps = final_inline::analyze_and_simplify_inits(scope, xstores,
+                                                      eligible_ifields);
+  return inline_final_gets(scope, xstores, wps, config.black_list_types,
                            cp::FieldType::INSTANCE);
 }
 
@@ -791,13 +828,14 @@ void FinalInlinePassV2::run_pass(DexStoresVector& stores,
     return;
   }
   auto scope = build_class_scope(stores);
-  auto inlined_sfields_count = run(scope, m_config);
+  XStoreRefs xstores(stores);
+  auto inlined_sfields_count = run(scope, &xstores, m_config);
   size_t inlined_ifields_count{0};
   if (m_config.inline_instance_field) {
     cp::EligibleIfields eligible_ifields =
         gather_ifield_candidates(scope, m_config.whitelist_method_names);
     inlined_ifields_count =
-        run_inline_ifields(scope, eligible_ifields, m_config);
+        run_inline_ifields(scope, &xstores, eligible_ifields, m_config);
   }
   mgr.incr_metric("num_static_finals_inlined", inlined_sfields_count);
   mgr.incr_metric("num_instance_finals_inlined", inlined_ifields_count);

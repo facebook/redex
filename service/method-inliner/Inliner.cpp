@@ -810,7 +810,8 @@ void MultiMethodInliner::shrink_method(DexMethod* method) {
       constant_propagation::Transform::Config config;
       constant_propagation::Transform tf(config);
       const_prop_stats = tf.apply_on_uneditable_cfg(
-          fp_iter, constant_propagation::WholeProgramState(), code);
+          fp_iter, constant_propagation::WholeProgramState(), code, &xstores,
+          method->get_class());
     }
     always_assert(!code->editable_cfg_built());
     code->build_cfg(/* editable */ true);

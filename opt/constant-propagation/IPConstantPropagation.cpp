@@ -21,12 +21,14 @@ namespace constant_propagation {
 
 namespace interprocedural {
 
-using CombinedAnalyzer = InstructionAnalyzerCombiner<ClinitFieldAnalyzer,
-                                                     WholeProgramAwareAnalyzer,
-                                                     EnumFieldAnalyzer,
-                                                     BoxedBooleanAnalyzer,
-                                                     StringAnalyzer,
-                                                     PrimitiveAnalyzer>;
+using CombinedAnalyzer =
+    InstructionAnalyzerCombiner<ClinitFieldAnalyzer,
+                                WholeProgramAwareAnalyzer,
+                                EnumFieldAnalyzer,
+                                BoxedBooleanAnalyzer,
+                                StringAnalyzer,
+                                ConstantClassObjectAnalyzer,
+                                PrimitiveAnalyzer>;
 
 std::unique_ptr<intraprocedural::FixpointIterator> analyze_procedure(
     const DexMethod* method,
@@ -57,6 +59,7 @@ std::unique_ptr<intraprocedural::FixpointIterator> analyze_procedure(
                        &wps,
                        EnumFieldAnalyzerState::get(),
                        BoxedBooleanAnalyzerState::get(),
+                       nullptr,
                        nullptr,
                        nullptr));
   intra_cp->run(env);
@@ -150,7 +153,9 @@ void PassImpl::compute_analysis_stats(const WholeProgramState& wps) {
  * Transform all methods using the information about constant method arguments
  * that analyze() obtained.
  */
-void PassImpl::optimize(const Scope& scope, const FixpointIterator& fp_iter) {
+void PassImpl::optimize(const Scope& scope,
+                        const XStoreRefs& xstores,
+                        const FixpointIterator& fp_iter) {
   m_transform_stats =
       walk::parallel::methods<Transform::Stats>(scope, [&](DexMethod* method) {
         if (method->get_code() == nullptr) {
@@ -168,15 +173,20 @@ void PassImpl::optimize(const Scope& scope, const FixpointIterator& fp_iter) {
           config.class_under_init =
               method::is_clinit(method) ? method->get_class() : nullptr;
           Transform tf(config);
-          return tf.apply_on_uneditable_cfg(
-              *intra_cp, fp_iter.get_whole_program_state(), &code);
+          return tf.apply_on_uneditable_cfg(*intra_cp,
+                                            fp_iter.get_whole_program_state(),
+                                            &code,
+                                            &xstores,
+                                            method->get_class());
         }
       });
 }
 
-void PassImpl::run(Scope& scope) {
+void PassImpl::run(const DexStoresVector& stores) {
+  auto scope = build_class_scope(stores);
+  XStoreRefs xstores(stores);
   auto fp_iter = analyze(scope);
-  optimize(scope, *fp_iter);
+  optimize(scope, xstores, *fp_iter);
 }
 
 void PassImpl::run_pass(DexStoresVector& stores,
@@ -187,8 +197,7 @@ void PassImpl::run_pass(DexStoresVector& stores,
         RuntimeAssertTransform::Config(config.get_proguard_map());
   }
 
-  auto scope = build_class_scope(stores);
-  run(scope);
+  run(stores);
   mgr.incr_metric("branches_forwarded", m_transform_stats.branches_forwarded);
   mgr.incr_metric("branches_removed", m_transform_stats.branches_removed);
   mgr.incr_metric("materialized_consts", m_transform_stats.materialized_consts);

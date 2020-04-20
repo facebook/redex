@@ -311,6 +311,17 @@ class StringAnalyzer
   }
 };
 
+class ConstantClassObjectAnalyzer
+    : public InstructionAnalyzerBase<ConstantClassObjectAnalyzer,
+                                     ConstantEnvironment> {
+ public:
+  static bool analyze_const_class(const IRInstruction* insn,
+                                  ConstantEnvironment* env) {
+    env->set(RESULT_REGISTER, ConstantClassObjectDomain(insn->get_type()));
+    return true;
+  }
+};
+
 /*
  * Utility methods.
  */
@@ -338,11 +349,12 @@ class runtime_equals_visitor : public boost::static_visitor<bool> {
 
   // SingletonObjectDomain and StringDomains are equal iff their respective
   // constants are equal.
-  template <
-      typename Constant,
-      typename = typename std::enable_if_t<
-          template_util::contains<Constant, const DexField*, const DexString*>::
-              value>>
+  template <typename Constant,
+            typename = typename std::enable_if_t<
+                template_util::contains<Constant,
+                                        const DexField*,
+                                        const DexString*,
+                                        const DexType*>::value>>
   bool operator()(const sparta::ConstantAbstractDomain<Constant>& d1,
                   const sparta::ConstantAbstractDomain<Constant>& d2) const {
     if (!(d1.is_value() && d2.is_value())) {

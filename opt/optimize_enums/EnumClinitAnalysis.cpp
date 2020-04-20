@@ -92,10 +92,12 @@ struct EnumOrdinalAnalyzerState {
 
 class EnumOrdinalAnalyzer;
 
-using CombinedAnalyzer = InstructionAnalyzerCombiner<EnumOrdinalAnalyzer,
-                                                     cp::HeapEscapeAnalyzer,
-                                                     cp::StringAnalyzer,
-                                                     cp::PrimitiveAnalyzer>;
+using CombinedAnalyzer =
+    InstructionAnalyzerCombiner<EnumOrdinalAnalyzer,
+                                cp::HeapEscapeAnalyzer,
+                                cp::StringAnalyzer,
+                                cp::ConstantClassObjectAnalyzer,
+                                cp::PrimitiveAnalyzer>;
 
 class EnumOrdinalAnalyzer
     : public InstructionAnalyzerBase<EnumOrdinalAnalyzer,
@@ -174,7 +176,7 @@ class EnumOrdinalAnalyzer
       cp::semantically_inline_method(
           method->get_code(),
           insn,
-          CombinedAnalyzer(state, nullptr, nullptr, nullptr),
+          CombinedAnalyzer(state, nullptr, nullptr, nullptr, nullptr),
           env);
       return true;
     }
@@ -253,7 +255,8 @@ EnumAttributes analyze_enum_clinit(const DexClass* cls) {
   code->build_cfg(/* editable */ false);
   auto& cfg = code->cfg();
   auto fp_iter = std::make_unique<cp::intraprocedural::FixpointIterator>(
-      cfg, CombinedAnalyzer(cls->get_type(), nullptr, nullptr, nullptr));
+      cfg,
+      CombinedAnalyzer(cls->get_type(), nullptr, nullptr, nullptr, nullptr));
   fp_iter->run(ConstantEnvironment());
 
   // XXX we can't use collect_return_state below because it doesn't capture the

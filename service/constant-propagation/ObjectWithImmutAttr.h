@@ -17,11 +17,15 @@ class DexField;
 class DexMethod;
 
 using StringDomain = sparta::ConstantAbstractDomain<const DexString*>;
+using ConstantClassObjectDomain =
+    sparta::ConstantAbstractDomain<const DexType*>;
 using AbstractHeapPointer =
     sparta::ConstantAbstractDomain<const IRInstruction*>;
-using AttrDomain = sparta::DisjointUnionAbstractDomain<SignedConstantDomain,
-                                                       StringDomain,
-                                                       AbstractHeapPointer>;
+using AttrDomain =
+    sparta::DisjointUnionAbstractDomain<SignedConstantDomain,
+                                        StringDomain,
+                                        ConstantClassObjectDomain,
+                                        AbstractHeapPointer>;
 
 /**
  * Object with immutable primitive attributes.
@@ -71,6 +75,9 @@ struct ImmutableAttr {
       : attr(attr), value(value) {}
 
   ImmutableAttr(const Attr& attr, const StringDomain& value)
+      : attr(attr), value(value) {}
+
+  ImmutableAttr(const Attr& attr, const ConstantClassObjectDomain& value)
       : attr(attr), value(value) {}
 };
 
