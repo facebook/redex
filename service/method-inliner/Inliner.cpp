@@ -728,7 +728,7 @@ void MultiMethodInliner::inline_inlinables(
 
       auto callsite = inlinable.iterator;
       always_assert(callsite->insn == callsite_insn);
-      inliner::inline_method_unsafe(caller, callee, callsite);
+      inliner::inline_method_unsafe(caller_method, caller, callee, callsite);
     }
     TRACE(INL, 2, "caller: %s\tcallee: %s", SHOW(caller), SHOW(callee));
     estimated_insn_size += get_callee_insn_size(callee_method);
@@ -2257,14 +2257,31 @@ void inline_method(DexMethod* caller,
                    IRCode* callee_code,
                    const IRList::iterator& pos) {
   change_visibility(callee_code, caller->get_class());
-  inline_method_unsafe(caller->get_code(), callee_code, pos);
+  inline_method_unsafe(caller, caller->get_code(), callee_code, pos);
 }
 
-void inline_method_unsafe(IRCode* caller_code,
+void inline_method_unsafe(const DexMethod* caller_method,
+                          IRCode* caller_code,
                           IRCode* callee_code,
                           const IRList::iterator& pos) {
   TRACE(INL, 5, "caller code:\n%s", SHOW(caller_code));
   TRACE(INL, 5, "callee code:\n%s", SHOW(callee_code));
+
+  if (caller_code->get_debug_item() == nullptr && caller_method != nullptr) {
+    // Create an empty item so that debug info of inlinee does not get lost.
+    caller_code->set_debug_item(std::make_unique<DexDebugItem>());
+    // Create a fake position.
+    auto it = caller_code->main_block();
+    if (it != caller_code->end()) {
+      caller_code->insert_after(
+          caller_code->main_block(),
+          *(new MethodItemEntry(
+              DexPosition::make_synthetic_entry_position(caller_method))));
+    } else {
+      caller_code->push_back(*(new MethodItemEntry(
+          DexPosition::make_synthetic_entry_position(caller_method))));
+    }
+  }
 
   auto callee_reg_map = gen_callee_reg_map(caller_code, callee_code, pos);
 
@@ -2396,6 +2413,23 @@ void inline_tail_call(DexMethod* caller,
   }
 }
 
+namespace impl {
+
+struct BlockAccessor {
+  static void push_dex_pos(cfg::Block* b,
+                           std::unique_ptr<DexPosition> dex_pos) {
+    auto it = b->get_first_non_param_loading_insn();
+    auto mie = new MethodItemEntry(std::move(dex_pos));
+    if (it == b->end()) {
+      b->m_entries.push_back(*mie);
+    } else {
+      b->m_entries.insert_before(it, *mie);
+    }
+  }
+};
+
+} // namespace impl
+
 // return true on successful inlining, false otherwise
 bool inline_with_cfg(DexMethod* caller_method,
                      DexMethod* callee_method,
@@ -2414,6 +2448,15 @@ bool inline_with_cfg(DexMethod* caller_method,
     // This could have happened if a previous inlining caused a block to be
     // unreachable, and that block was deleted when the CFG was simplified.
     return false;
+  }
+
+  if (caller_code->get_debug_item() == nullptr) {
+    // Create an empty item so that debug info of inlinee does not get lost.
+    caller_code->set_debug_item(std::make_unique<DexDebugItem>());
+    // Create a fake position.
+    impl::BlockAccessor::push_dex_pos(
+        caller_cfg.entry_block(),
+        DexPosition::make_synthetic_entry_position(caller_method));
   }
 
   // Logging before the call to inline_cfg to get the most relevant line

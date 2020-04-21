@@ -59,6 +59,12 @@
  * TODO?: make MethodItemEntry's fields private?
  */
 
+namespace inliner {
+namespace impl {
+struct BlockAccessor;
+} // namespace impl
+} // namespace inliner
+
 namespace cfg {
 
 enum EdgeType {
@@ -337,6 +343,7 @@ class Block final {
   friend class CFGInliner;
   friend class InstructionIteratorImpl<false>;
   friend class InstructionIteratorImpl<true>;
+  friend struct ::inliner::impl::BlockAccessor;
 
   // return an iterator to the conditional branch (including switch) in this
   // block. If there is no such instruction, return end()

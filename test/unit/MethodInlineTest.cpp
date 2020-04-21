@@ -28,7 +28,8 @@ void test_inliner(const std::string& caller_str,
       caller->begin(), caller->end(), [](const MethodItemEntry& mie) {
         return mie.type == MFLOW_OPCODE && is_invoke(mie.insn->opcode());
       });
-  inliner::inline_method_unsafe(caller.get(), callee.get(), callsite);
+  inliner::inline_method_unsafe(
+      /*caller_method=*/nullptr, caller.get(), callee.get(), callsite);
 
   auto expected = assembler::ircode_from_string(expected_str);
 
@@ -199,7 +200,10 @@ TEST_F(MethodInlineTest, insertMoves) {
   callee_code->push_back(dasm(OPCODE_RETURN_VOID));
 
   inliner::inline_method_unsafe(
-      caller->get_code(), callee->get_code(), invoke_it);
+      /*caller_method=*/nullptr,
+      caller->get_code(),
+      callee->get_code(),
+      invoke_it);
 
   auto it = InstructionIterable(caller_code).begin();
   EXPECT_EQ(*it->insn, *dasm(OPCODE_CONST, {1_v, 1_L}));
@@ -424,10 +428,12 @@ TEST_F(MethodInlineTest, non_unique_inlined_registers) {
     EXPECT_EQ(inlined.count(method), 1);
   }
 
+  // Note: the position in the middle is an artifact and may get cleaned up.
   const auto& expected_str = R"(
     (
       (const v0 1)
       (const v0 2)
+      (.pos:dbg_0 "Lfoo;.foo_main:()V" UnknownSource 0)
       (return-void)
     )
   )";
@@ -497,6 +503,7 @@ TEST_F(MethodInlineTest, inline_beneficial_on_average_after_constant_prop) {
 
   const auto& expected_str = R"(
     (
+      (.pos:dbg_0 "Lfoo;.foo_main:()V" UnknownSource 0)
       (return-void)
     )
   )";
@@ -568,6 +575,7 @@ TEST_F(MethodInlineTest,
 
   const auto& expected_str = R"(
     (
+      (.pos:dbg_0 "Lfoo;.foo_main:()V" UnknownSource 0)
       (const v0 0)
       (invoke-static (v0) "Lfoo;.check:(I)V")
       (const v0 0)
