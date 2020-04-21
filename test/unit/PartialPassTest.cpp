@@ -41,53 +41,49 @@ static ExamplePartialPass s_pass;
 class PartialPassTest : public RedexTest {
  protected:
   DexStore root_store;
-  DexStore module_store;
 
-  DexClass* class_in_root_store;
-  DexClass* class_in_module;
+  DexClass* class_out_of_package;
+  DexClass* class_in_package;
 
   DexStoresVector stores;
 
   std::unique_ptr<ExamplePartialPass> pass;
 
  public:
-  PartialPassTest() : root_store("classes"), module_store("module") {}
+  PartialPassTest() : root_store("classes") {}
 
   void SetUp() override { pass = std::make_unique<ExamplePartialPass>(); }
 
   void setup_stores() {
     // Effectively clear the root store
     root_store = DexStore("classes");
-    auto class_in_root_store_type = DexType::make_type("LClassInRootStore;");
-    ClassCreator class_in_root_store_creator(class_in_root_store_type);
-    class_in_root_store_creator.set_access(ACC_PUBLIC | ACC_FINAL);
-    class_in_root_store_creator.set_super(type::java_lang_Object());
-    class_in_root_store = class_in_root_store_creator.create();
-    DexClasses dex_in_root_store{class_in_root_store};
-    root_store.add_classes(std::move(dex_in_root_store));
 
-    // Effectively clear the module store
-    module_store = DexStore("module");
-    auto class_in_module_type = DexType::make_type("LClassInModule;");
-    ClassCreator class_in_module_creator(class_in_module_type);
-    class_in_module_creator.set_access(ACC_PUBLIC | ACC_FINAL);
-    class_in_module_creator.set_super(type::java_lang_Object());
-    class_in_module = class_in_module_creator.create();
-    DexClasses dex_in_module{class_in_module};
-    module_store.add_classes(std::move(dex_in_module));
+    auto class_out_of_package_type = DexType::make_type("LTopLevelClass;");
+    ClassCreator class_out_of_package_creator(class_out_of_package_type);
+    class_out_of_package_creator.set_access(ACC_PUBLIC | ACC_FINAL);
+    class_out_of_package_creator.set_super(type::java_lang_Object());
+    class_out_of_package = class_out_of_package_creator.create();
 
-    stores = {root_store, module_store};
+    auto class_in_package_type = DexType::make_type("Lcom/facebook/PkgClass;");
+    ClassCreator class_in_package_creator(class_in_package_type);
+    class_in_package_creator.set_access(ACC_PUBLIC | ACC_FINAL);
+    class_in_package_creator.set_super(type::java_lang_Object());
+    class_in_package = class_in_package_creator.create();
+    DexClasses dex{class_out_of_package, class_in_package};
+    root_store.add_classes(std::move(dex));
+
+    stores = {root_store};
   }
 
-  Json::Value build_config(bool run_on_module_only) {
+  Json::Value build_config(bool run_on_package_only) {
     Json::Value config(Json::objectValue);
     config["redex"] = Json::objectValue;
     config["redex"]["passes"] = Json::arrayValue;
     config["redex"]["passes"].append("ExamplePartialPass");
     config["ExamplePartialPass"] = Json::objectValue;
-    if (run_on_module_only) {
-      config["ExamplePartialPass"]["run_on_stores"] = Json::arrayValue;
-      config["ExamplePartialPass"]["run_on_stores"].append("module");
+    if (run_on_package_only) {
+      config["ExamplePartialPass"]["run_on_packages"] = Json::arrayValue;
+      config["ExamplePartialPass"]["run_on_packages"].append("Lcom/facebook/");
     }
     config["ExamplePartialPass"]["true_after_bind"] = true;
     return config;
@@ -103,18 +99,18 @@ class PartialPassTest : public RedexTest {
   }
 };
 
-TEST_F(PartialPassTest, test_run_pass_on_limited_stores) {
-  run_passes(build_config(/* run_on_module_only = */ true));
+TEST_F(PartialPassTest, test_run_pass_in_select_package) {
+  run_passes(build_config(/* run_on_package_only = */ true));
   EXPECT_TRUE(pass->true_after_bind);
   EXPECT_EQ(1, pass->visited_classes.size());
-  EXPECT_TRUE(pass->visited_classes.count(class_in_module));
-  EXPECT_FALSE(pass->visited_classes.count(class_in_root_store));
+  EXPECT_TRUE(pass->visited_classes.count(class_in_package));
+  EXPECT_FALSE(pass->visited_classes.count(class_out_of_package));
 }
 
-TEST_F(PartialPassTest, test_run_pass_on_all_stores) {
-  run_passes(build_config(/* run_on_module_only = */ false));
+TEST_F(PartialPassTest, test_run_pass_on_all_classes) {
+  run_passes(build_config(/* run_on_package_only = */ false));
   EXPECT_TRUE(pass->true_after_bind);
   EXPECT_EQ(2, pass->visited_classes.size());
-  EXPECT_TRUE(pass->visited_classes.count(class_in_module));
-  EXPECT_TRUE(pass->visited_classes.count(class_in_root_store));
+  EXPECT_TRUE(pass->visited_classes.count(class_in_package));
+  EXPECT_TRUE(pass->visited_classes.count(class_out_of_package));
 }

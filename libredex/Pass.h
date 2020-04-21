@@ -53,18 +53,19 @@ class Pass : public Configurable {
 
 /**
  * In certain cases, a pass will need to operate on a fragment of code (e.g. a
- * DexStore), either without requiring knowledge from the other DexStores or not
- * committing any changes. PartialPasses will be added a `run_on_stores` config
- * option automatically and this base class takes care of building class scopes
- * based on known DexStore names. If the `run_on_stores` config is an empty set
- * of DexStore names, the pass will operate on the entire program.
+ * package or a class prefix), either without requiring knowledge from the other
+ * packages or not committing any changes. PartialPasses will be added a
+ * `run_on_packages` config option automatically and this base class takes care
+ * of building class scopes based on known DexStore names. If the
+ * `run_on_packages` config is an empty set of class prefixes, the pass will
+ * operate on the entire program.
  */
 
 class PartialPass : public Pass {
  public:
   explicit PartialPass(const ::std::string& name) : Pass(name) {}
   void bind_config() final {
-    bind("run_on_stores", {}, m_select_stores);
+    bind("run_on_packages", {}, m_select_packages);
     bind_partial_pass_config();
   }
   virtual void bind_partial_pass_config() {}
@@ -79,9 +80,8 @@ class PartialPass : public Pass {
                                 PassManager& mgr) = 0;
 
  protected:
-  Scope build_class_scope_with_select_stores_config(
-      const DexStoresVector& stores);
+  Scope build_class_scope_with_packages_config(const DexStoresVector& stores);
 
  private:
-  std::unordered_set<std::string> m_select_stores;
+  std::unordered_set<std::string> m_select_packages;
 };

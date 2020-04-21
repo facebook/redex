@@ -102,9 +102,9 @@ Scope build_class_scope(const T& dexen) {
 };
 Scope build_class_scope(const DexStoresVector& stores);
 
-Scope build_class_scope_for_select_stores(
+Scope build_class_scope_for_packages(
     const DexStoresVector& stores,
-    const std::unordered_set<std::string>& store_names);
+    const std::unordered_set<std::string>& package_names);
 
 /**
  * Posts the changes made to the Scope& object to the

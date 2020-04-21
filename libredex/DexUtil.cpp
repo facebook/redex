@@ -7,6 +7,7 @@
 
 #include "DexUtil.h"
 
+#include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/regex.hpp>
 #include <deque>
@@ -85,14 +86,30 @@ Scope build_class_scope(const DexStoresVector& stores) {
   return build_class_scope(DexStoreClassesIterator(stores));
 }
 
-Scope build_class_scope_for_select_stores(
+template <typename PrefixIt>
+bool starts_with_any_prefix(const std::string& str,
+                            const PrefixIt& begin,
+                            const PrefixIt& end) {
+  auto it = begin;
+  while (it != end) {
+    if (boost::algorithm::starts_with(str, *it)) {
+      return true;
+    }
+    it++;
+  }
+  return false;
+}
+
+Scope build_class_scope_for_packages(
     const DexStoresVector& stores,
-    const std::unordered_set<std::string>& store_names) {
+    const std::unordered_set<std::string>& package_names) {
   Scope v;
   for (auto const& store : stores) {
-    if (store_names.count(store.get_name())) {
-      for (auto& dex : store.get_dexen()) {
-        for (auto& clazz : dex) {
+    for (auto& dex : store.get_dexen()) {
+      for (auto& clazz : dex) {
+        if (starts_with_any_prefix(clazz->get_deobfuscated_name(),
+                                   package_names.begin(),
+                                   package_names.end())) {
           v.push_back(clazz);
         }
       }
