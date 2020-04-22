@@ -409,11 +409,26 @@ bool TypeRefUpdater::mangling(DexMethodRef* method) {
   }
   DexProto* new_proto = DexProto::make_proto(
       rtype, DexTypeList::make_type_list(std::move(new_args)));
-  // TODO(fengliu) : This is not the right fix.
-  if (method::is_init(method) && method->is_def()) {
-    // Don't check for init collisions here, since mangling() can execute in a
-    // parallel context.
-    m_inits.emplace(method->as_def(), new_proto);
+  if (method::is_init(method)) {
+    // Handle <init> method definitions separately because their names must be
+    // "<init>"
+    if (method->is_def()) {
+      // Don't check for init collisions here, since mangling() can execute in a
+      // parallel context.
+      m_inits.emplace(method->as_def(), new_proto);
+    } else {
+      // TODO(fengliu): Work on D19340102 to figure out these cases.
+      TRACE(REFU,
+            2,
+            "[Warning] Method ref %s has no definition but has internal type "
+            "reference in its signature",
+            SHOW(method));
+      DexMethodSpec spec;
+      spec.proto = new_proto;
+      method->change(spec,
+                     false /* rename on collision */,
+                     true /* update deobfuscated name */);
+    }
   } else {
     DexMethodSpec spec;
     spec.proto = new_proto;
