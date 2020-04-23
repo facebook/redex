@@ -299,9 +299,10 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
 
   sanitizers::lsan_do_recoverable_leak_check();
 
-  const bool hwm_pass_stats = traceEnabled(STATS, 1);
+  const bool hwm_pass_stats =
+      traceEnabled(STATS, 1) || conf.get_json_config().get("mem_stats", true);
   const bool hwm_per_pass =
-      conf.get_json_config().get("mem_stats_per_pass", false);
+      conf.get_json_config().get("mem_stats_per_pass", true);
 
   for (size_t i = 0; i < m_activated_passes.size(); ++i) {
     Pass* pass = m_activated_passes[i];
