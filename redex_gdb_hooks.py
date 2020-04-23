@@ -22,7 +22,7 @@ class CallableBase(object):
             prncmd = 'call printf ("%s", "{0}\\n")'.format(
                 res.rstrip().replace('"', "")
             )
-            gdb.execute(prncmd, False, False)
+            gdb.execute(prncmd, False, True)
             return ""
         except:
             return ""
@@ -137,5 +137,34 @@ def register_pretty_printer(obj):
     obj.pretty_printers.insert(0, lookup_function)
 
 
-register_pretty_printer(gdb.current_objfile())
+def get_gdb_val_for_str(arg):
+    val = gdb.lookup_symbol(arg)
+    if not (val[0] is None):
+        frame = gdb.selected_frame()
+        return val[0].value(frame)
+    val = gdb.lookup_global_symbol(arg)
+    if not (val is None):
+        return val.value()
+    val = gdb.lookup_static_symbol(arg)
+    if not (val is None):
+        return val.value()
+    return None
+
+
+class pp(gdb.Command):
+    def __init__(self):
+        gdb.Command.__init__(self, "pp", gdb.COMMAND_DATA, gdb.COMPLETE_SYMBOL, True)
+
+    def invoke(self, arg, from_tty):
+        val = get_gdb_val_for_str(arg)
+        printer = lookup_function(val)
+        if printer is None:
+            print('No symbol "{0}" in current context'.format(arg))
+            return
+        printer.to_string()
+
+
+pp()
+# register_pretty_printer(gdb.current_objfile())
 print("Redex pretty printers added.")
+print("Use custom command pp to print Redex symbols")
