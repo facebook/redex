@@ -83,9 +83,13 @@ struct ScopedVmHWM {
     }
   }
 
-  void trace_log(const Pass* pass) {
+  void trace_log(PassManager* mgr, const Pass* pass) {
     if (enabled) {
       uint64_t after = get_mem_stats().vm_hwm;
+      if (mgr != nullptr) {
+        mgr->set_metric("vm_hwm_after", after);
+        mgr->set_metric("vm_hwm_delta", after - before);
+      }
       TRACE(STATS, 1, "VmHWM for %s was %s (%s over start).",
             pass->name().c_str(), pretty_bytes(after).c_str(),
             pretty_bytes(after - before).c_str());
@@ -317,7 +321,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       pass->run_pass(stores, conf, *this);
     }
 
-    vm_hwm.trace_log(pass);
+    vm_hwm.trace_log(this, pass);
 
     sanitizers::lsan_do_recoverable_leak_check();
     walk::parallel::code(build_class_scope(stores), [](DexMethod* m,
