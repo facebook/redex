@@ -13,6 +13,7 @@
 #include "ConstructorParams.h"
 #include "Creators.h"
 #include "IRAssembler.h"
+#include "JarLoader.h"
 
 using ImmutableAnalyzer =
     InstructionAnalyzerCombiner<cp::StringAnalyzer,
@@ -22,6 +23,7 @@ using ImmutableAnalyzer =
 struct ImmutableTest : public ConstantPropagationTest {
  public:
   ImmutableTest() {
+    always_assert(load_class_file(std::getenv("enum_class_file")));
     m_config.replace_move_result_with_consts = true;
     m_analyzer = ImmutableAnalyzer(
         nullptr, cp::ImmutableAttributeAnalyzerState(), nullptr);
@@ -166,4 +168,40 @@ TEST_F(ImmutableTest, enum_constructor) {
   cp::ImmutableAttributeAnalyzerState analyzer_state;
   cp::immutable_state::analyze_constructors({foo_cls}, &analyzer_state);
   EXPECT_EQ(analyzer_state.method_initializers.count(method), 1);
+
+  // Enum immutable attributes 'name' and 'ordinal' can be propagated.
+  auto code = assembler::ircode_from_string(R"(
+  (
+    (const v0 0)
+    (const-string "A")
+    (move-result-pseudo-object v1)
+    (new-instance "LFoo;")
+    (move-result-pseudo-object v2)
+    (invoke-direct (v2 v1 v0) "LFoo;.<init>:(Ljava/lang/String;I)V")
+    (invoke-virtual (v2) "LFoo;.name:()Ljava/lang/String;")
+    (move-result-object v3)
+    (invoke-virtual (v2) "LFoo;.ordinal:()I")
+    (move-result-object v4)
+  )
+  )");
+  do_const_prop(code.get(),
+                ImmutableAnalyzer(nullptr, analyzer_state, nullptr),
+                m_config);
+
+  auto expected_code = assembler::ircode_from_string(R"(
+  (
+    (const v0 0)
+    (const-string "A")
+    (move-result-pseudo-object v1)
+    (new-instance "LFoo;")
+    (move-result-pseudo-object v2)
+    (invoke-direct (v2 v1 v0) "LFoo;.<init>:(Ljava/lang/String;I)V")
+    (invoke-virtual (v2) "LFoo;.name:()Ljava/lang/String;")
+    (const-string "A")
+    (move-result-pseudo-object v3)
+    (invoke-virtual (v2) "LFoo;.ordinal:()I")
+    (const v4 0)
+  )
+  )");
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
 }

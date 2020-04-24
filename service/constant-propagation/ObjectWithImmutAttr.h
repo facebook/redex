@@ -19,13 +19,10 @@ class DexMethod;
 using StringDomain = sparta::ConstantAbstractDomain<const DexString*>;
 using ConstantClassObjectDomain =
     sparta::ConstantAbstractDomain<const DexType*>;
-using AbstractHeapPointer =
-    sparta::ConstantAbstractDomain<const IRInstruction*>;
 using AttrDomain =
     sparta::DisjointUnionAbstractDomain<SignedConstantDomain,
                                         StringDomain,
-                                        ConstantClassObjectDomain,
-                                        AbstractHeapPointer>;
+                                        ConstantClassObjectDomain>;
 
 /**
  * Object with immutable primitive attributes.
