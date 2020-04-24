@@ -54,6 +54,34 @@ TEST_F(ImmutableTest, integer) {
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
+TEST_F(ImmutableTest, integer_meets) {
+  std::string code_str = R"(
+    (
+      (load-param v2)
+      (load-param v3)
+
+      (if-nez v2 :if-true-label)
+      (const v1 100)
+      (invoke-static (v1) "Ljava/lang/Integer;.valueOf:(I)Ljava/lang/Integer;")
+      (move-result v0)
+      (goto :end)
+
+      (:if-true-label)
+      (invoke-static (v2) "Ljava/lang/Integer;.valueOf:(I)Ljava/lang/Integer;")
+      (move-result v0)
+
+      (:end)
+      (invoke-virtual (v0) "Ljava/lang/Integer;.intValue:()I")
+      (move-result v0)
+    )
+  )";
+  auto code = assembler::ircode_from_string(code_str);
+
+  do_const_prop(code.get(), m_analyzer, m_config);
+  auto expected_code = assembler::ircode_from_string(code_str);
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+}
+
 /**
  * Java class `Data` has two immutable fields, one is non-private field `id`,
  * another one is a hidden field and we visit it through a function call.

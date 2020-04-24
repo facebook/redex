@@ -51,6 +51,15 @@ using StringDomain = sparta::ConstantAbstractDomain<const DexString*>;
 using ConstantClassObjectDomain =
     sparta::ConstantAbstractDomain<const DexType*>;
 
+/**
+ * This domain stores an object with **immutable** attributes. The
+ * attributes must be immutable, for example, final primitive instance fields
+ * that are never changed after initialization, regardless of whether the object
+ * may escape.
+ */
+using ObjectWithImmutAttrDomain =
+    sparta::ConstantAbstractDomain<std::shared_ptr<ObjectWithImmutAttr>>;
+
 /*
  * This represents a new-instance or new-array instruction.
  */
@@ -65,6 +74,7 @@ using ConstantValue =
                                         StringSetDomain,
                                         StringDomain,
                                         ConstantClassObjectDomain,
+                                        ObjectWithImmutAttrDomain,
                                         AbstractHeapPointer>;
 
 // For storing non-escaping static and instance fields.
@@ -76,26 +86,17 @@ using ConstantRegisterEnvironment =
 
 /*****************************************************************************
  * Heap values.
+ * ConstantPropagationPass and IPCP do not support heap stores properly. Use
+ * LocalPointersAnalysis for local mutable objects analysis.
  *****************************************************************************/
 
 using ConstantPrimitiveArrayDomain = ConstantArrayDomain<SignedConstantDomain>;
 
 using ConstantObjectDomain = ObjectDomain<ConstantValue>;
 
-/**
- * This domain stores an object with **immutable** attribution on heap. The
- * attribution must be immutable, for example, final primitive instance fields
- * or getter methods of such kind of instance fields are immutable. The fields
- * are never changed after initialization, even though the object may
- * escape.
- */
-using ObjectWithImmutAttrDomain =
-    sparta::ConstantAbstractDomain<ObjectWithImmutAttr>;
-
 using HeapValue =
     sparta::DisjointUnionAbstractDomain<ConstantPrimitiveArrayDomain,
-                                        ConstantObjectDomain,
-                                        ObjectWithImmutAttrDomain>;
+                                        ConstantObjectDomain>;
 
 using ConstantHeap = sparta::PatriciaTreeMapAbstractEnvironment<
     AbstractHeapPointer::ConstantType,

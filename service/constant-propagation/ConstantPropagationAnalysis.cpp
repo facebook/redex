@@ -804,24 +804,23 @@ bool ImmutableAttributeAnalyzer::analyze_iget(
   if (!state.attribute_fields.count(field)) {
     return false;
   }
-  auto heap_obj = env->get_pointee<ObjectWithImmutAttrDomain>(insn->src(0));
-  auto c = heap_obj.get_constant();
-  if (!c) {
+  auto this_domain = env->get(insn->src(0));
+  if (this_domain.is_top() || this_domain.is_bottom()) {
     return false;
   }
-  auto value = c->get_value(field);
-  if (value && !value->is_top()) {
-    if (const auto& string_value = value->maybe_get<StringDomain>()) {
-      env->set(RESULT_REGISTER, *string_value);
-      return true;
-    } else if (const auto& type_value =
-                   value->maybe_get<ConstantClassObjectDomain>()) {
-      env->set(RESULT_REGISTER, *type_value);
-      return true;
-    } else if (const auto& signed_value =
-                   value->maybe_get<SignedConstantDomain>()) {
-      env->set(RESULT_REGISTER, *signed_value);
-      return true;
+  if (const auto& obj_or_none =
+          this_domain.maybe_get<ObjectWithImmutAttrDomain>()) {
+    auto object = *obj_or_none->get_constant();
+    auto value = object->get_value(field);
+    if (value && !value->is_top()) {
+      if (const auto& string_value = value->maybe_get<StringDomain>()) {
+        env->set(RESULT_REGISTER, *string_value);
+        return true;
+      } else if (const auto& signed_value =
+                     value->maybe_get<SignedConstantDomain>()) {
+        env->set(RESULT_REGISTER, *signed_value);
+        return true;
+      }
     }
   }
   return false;
@@ -858,24 +857,23 @@ bool ImmutableAttributeAnalyzer::analyze_method_attr(
   if (insn->srcs_size() != 1) {
     return false;
   }
-  auto heap_obj = env->get_pointee<ObjectWithImmutAttrDomain>(insn->src(0));
-  auto c = heap_obj.get_constant();
-  if (!c) {
+  auto this_domain = env->get(insn->src(0));
+  if (this_domain.is_top() || this_domain.is_bottom()) {
     return false;
   }
-  auto value = c->get_value(method);
-  if (value && !value->is_top()) {
-    if (const auto& string_value = value->maybe_get<StringDomain>()) {
-      env->set(RESULT_REGISTER, *string_value);
-      return true;
-    } else if (const auto& type_value =
-                   value->maybe_get<ConstantClassObjectDomain>()) {
-      env->set(RESULT_REGISTER, *type_value);
-      return true;
-    } else if (const auto& signed_value =
-                   value->maybe_get<SignedConstantDomain>()) {
-      env->set(RESULT_REGISTER, *signed_value);
-      return true;
+  if (const auto& obj_or_none =
+          this_domain.maybe_get<ObjectWithImmutAttrDomain>()) {
+    auto object = *obj_or_none->get_constant();
+    auto value = object->get_value(method);
+    if (value && !value->is_top()) {
+      if (const auto& string_value = value->maybe_get<StringDomain>()) {
+        env->set(RESULT_REGISTER, *string_value);
+        return true;
+      } else if (const auto& signed_value =
+                     value->maybe_get<SignedConstantDomain>()) {
+        env->set(RESULT_REGISTER, *signed_value);
+        return true;
+      }
     }
   }
   return false;
@@ -890,7 +888,8 @@ bool ImmutableAttributeAnalyzer::analyze_method_initialization(
   if (it == state.method_initializers.end()) {
     return false;
   }
-  ObjectWithImmutAttr heap_obj;
+  std::shared_ptr<ObjectWithImmutAttr> object =
+      std::make_shared<ObjectWithImmutAttr>();
   // Only support one register for the object, can be easily extended. For
   // example, virtual method may return `this` pointer, so two registers are
   // holding the same heap object.
@@ -904,24 +903,24 @@ bool ImmutableAttributeAnalyzer::analyze_method_initialization(
       if (!signed_value->get_constant()) {
         continue;
       }
-      heap_obj.write_value(initializer.attr, *signed_value);
+      object->write_value(initializer.attr, *signed_value);
     } else if (const auto& string_value = domain.maybe_get<StringDomain>()) {
       if (!string_value->is_value()) {
         continue;
       }
-      heap_obj.write_value(initializer.attr, *string_value);
+      object->write_value(initializer.attr, *string_value);
     } else if (const auto& type_value =
                    domain.maybe_get<ConstantClassObjectDomain>()) {
       if (!type_value->is_value()) {
         continue;
       }
-      heap_obj.write_value(initializer.attr, *type_value);
+      object->write_value(initializer.attr, *type_value);
     }
   }
-  if (heap_obj.empty()) {
+  if (object->empty()) {
     return false;
   }
-  env->new_heap_value(obj_reg, insn, ObjectWithImmutAttrDomain(heap_obj));
+  env->set(obj_reg, ObjectWithImmutAttrDomain(object));
   return true;
 }
 
