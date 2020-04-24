@@ -14,6 +14,8 @@
 using namespace type_analyzer;
 using namespace type_analyzer::global;
 
+using TypeSet = sparta::PatriciaTreeSet<const DexType*>;
+
 class GlobalTypeAnalysisTest : public RedexIntegrationTest {
  protected:
   void set_root_method(const std::string& full_name) {
@@ -57,6 +59,14 @@ class GlobalTypeAnalysisTest : public RedexIntegrationTest {
   DexType* get_type(const std::string& type_name) {
     std::string full_name = "Lcom/facebook/redextest/" + type_name + ";";
     return DexType::make_type(DexString::make_string(full_name));
+  }
+
+  TypeSet get_type_set(std::initializer_list<DexType*> l) {
+    TypeSet s;
+    for (const auto elem : l) {
+      s.insert(const_cast<const DexType*>(elem));
+    }
+    return s;
   }
 };
 
@@ -173,4 +183,24 @@ TEST_F(GlobalTypeAnalysisTest, TrueVirtualFieldTypeTest) {
   code = meth_supdate->get_code();
   auto supdate_exit_env = lta->get_exit_state_at(code->cfg().exit_block());
   EXPECT_TRUE(supdate_exit_env.get_field_environment().get(field_val).is_top());
+}
+
+TEST_F(GlobalTypeAnalysisTest, SmallSetDexTypeDomainTest) {
+  auto scope = build_class_scope(stores);
+  set_root_method("Lcom/facebook/redextest/TestE;.main:()V");
+
+  GlobalTypeAnalysis analysis;
+  auto gta = analysis.analyze(scope);
+  auto wps = gta->get_whole_program_state();
+
+  auto meth_ret_subs = get_method("TestE;.returnSubTypes", "I",
+                                  "Lcom/facebook/redextest/TestE$Base;");
+  auto rtype = wps.get_return_type(meth_ret_subs);
+  EXPECT_TRUE(rtype.is_nullable());
+  auto single_domain = rtype.get_single_domain();
+  EXPECT_EQ(single_domain, SingletonDexTypeDomain(get_type("TestE$Base")));
+  auto set_domain = rtype.get_set_domain();
+  EXPECT_EQ(set_domain.get_types(),
+            get_type_set({get_type("TestE$SubOne"), get_type("TestE$SubTwo"),
+                          get_type("TestE$SubThree")}));
 }

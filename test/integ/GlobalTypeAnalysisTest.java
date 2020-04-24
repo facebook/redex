@@ -130,3 +130,40 @@ class TestD {
     b.update(s);
   }
 }
+
+class TestE {
+
+  static class Base {
+    int foo() { return 0; }
+  }
+
+  static class SubOne extends Base {
+    int foo() { return 1; }
+  }
+
+  static class SubTwo extends Base {
+    int foo() { return 2; }
+  }
+
+  static class SubThree extends Base {
+    int foo() { return 3; }
+  }
+
+  Base returnSubTypes(int arg) {
+    Base b = null;
+    if (arg == 1) {
+      b = new SubOne();
+    } else if (arg == 2) {
+      b = new SubTwo();
+    } else if (arg == 3) {
+      b = new SubThree();
+    }
+    return b;
+  }
+
+  static void main() {
+    TestE t = new TestE();
+    Base b = t.returnSubTypes(2);
+    b.foo();
+  }
+}
