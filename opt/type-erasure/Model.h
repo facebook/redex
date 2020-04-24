@@ -112,9 +112,6 @@ struct ModelSpec {
   std::unordered_set<DexType*> gen_types;
   // set of annotations marking generated code
   std::unordered_set<DexType*> gen_annos;
-  // whether to perform type erasure per dex. If set to true, this would be
-  // handled at InterDex level, thorough TypeErasureInterDexPlugin.
-  bool dex_sharding{false};
   // Group splitting. This is looser than the per dex split and takes into
   // account the interdex order (if any provided).
   InterDexGroupingType merge_per_interdex_set{InterDexGroupingType::DISABLED};
@@ -238,8 +235,6 @@ class Model {
     return m_spec.class_name_prefix;
   }
 
-  bool is_dex_sharding_enabled() const { return m_spec.dex_sharding; }
-
   bool is_merge_per_interdex_set_enabled() const {
     return m_spec.merge_per_interdex_set != InterDexGroupingType::DISABLED;
   }
@@ -331,11 +326,6 @@ class Model {
 
   static size_t s_shape_count;
 
-  // Used to differentiate between mergers generated per dex.
-  // This won't actually be the dex #, but will represent the
-  // # of dexes we generated mergers for.
-  static size_t s_dex_count;
-
   // Number of merger types created with the same shape per model.
   std::map<MergerType::Shape, size_t, MergerType::ShapeComp> m_shape_to_count;
 
@@ -385,7 +375,6 @@ class Model {
       const MergerType::Shape& shape,
       const TypeSet& group_key,
       const TypeSet& group_values,
-      const boost::optional<size_t>& dex_num,
       const boost::optional<size_t>& interdex_subgroup_idx,
       const boost::optional<size_t>& subgroup_idx);
   void create_mergers_helper(
@@ -393,7 +382,6 @@ class Model {
       const MergerType::Shape& shape,
       const TypeSet& group_key,
       const TypeSet& group_values,
-      const boost::optional<size_t>& dex_num,
       const boost::optional<size_t>& interdex_subgroup_idx,
       const boost::optional<size_t>& max_mergeables_count,
       size_t min_mergeables_count);

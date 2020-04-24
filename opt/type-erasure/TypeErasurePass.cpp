@@ -13,7 +13,6 @@
 #include "Model.h"
 #include "ModelMerger.h"
 #include "PluginRegistry.h"
-#include "TypeErasureInterDexPlugin.h"
 
 namespace {
 
@@ -228,7 +227,6 @@ void TypeErasurePass::bind_config() {
         load_types(gen_anno_names, model.gen_annos);
       }
       model_spec.get("include_primary_dex", false, model.include_primary_dex);
-      model_spec.get("dex_sharding", false, model.dex_sharding);
 
       std::string merge_per_interdex_set;
       model_spec.get("merge_per_interdex_set", "disabled",
@@ -239,9 +237,6 @@ void TypeErasurePass::bind_config() {
       always_assert_log(!model.merge_per_interdex_set ||
                             (model.type_tag_config != TypeTagConfig::NONE),
                         "Cannot group when type tag is not needed.");
-      always_assert_log(!model.dex_sharding || !model.merge_per_interdex_set,
-                        "Cannot have both dex sharding and group sharding "
-                        "enabled!");
 
       size_t max_count;
       model_spec.get("max_count", 0, max_count);
@@ -269,16 +264,7 @@ void TypeErasurePass::bind_config() {
         continue;
       }
 
-      if (model.dex_sharding) {
-        if (!model.enabled) {
-          TRACE(TERA, 3, "Per dex Type Erased model not enabled. Skipping %s",
-                model.name.c_str());
-        } else {
-          m_dex_sharding_model_specs.emplace_back(std::move(model));
-        }
-      } else {
-        m_model_specs.emplace_back(std::move(model));
-      }
+      m_model_specs.emplace_back(std::move(model));
     }
 
     TRACE(TERA, 1, "[TERA] valid model specs %ld", m_model_specs.size());
@@ -294,18 +280,6 @@ void TypeErasurePass::run_pass(DexStoresVector& stores,
   // Type mapping file
   ModelMerger::s_mapping_file = conf.metafile(m_merged_type_mapping_file);
   Model::s_outdir = conf.get_outdir();
-
-  // Setup Interdex plugin if any models.
-  if (!m_dex_sharding_model_specs.empty()) {
-    interdex::InterDexRegistry* registry =
-        static_cast<interdex::InterDexRegistry*>(
-            PluginRegistry::get().pass_registry(interdex::INTERDEX_PASS_NAME));
-    std::function<interdex::InterDexPassPlugin*()> fn =
-        [&]() -> interdex::InterDexPassPlugin* {
-      return new TypeErasureInterDexPlugin(m_dex_sharding_model_specs, mgr);
-    };
-    registry->register_plugin("TYPE_ERASURE_PLUGIN", std::move(fn));
-  }
 
   if (m_model_specs.empty()) {
     return;

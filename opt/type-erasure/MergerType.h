@@ -87,7 +87,6 @@ struct MergerType {
         const DexType* root_type,
         const std::string& name,
         size_t count,
-        const boost::optional<size_t>& dex_num = boost::none,
         const boost::optional<size_t>& interdex_subgroup_idx = boost::none,
         const boost::optional<size_t>& subgroup_idx = boost::none) const;
 

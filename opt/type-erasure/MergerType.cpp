@@ -55,15 +55,11 @@ std::string MergerType::Shape::build_type_name(
     const DexType* root_type,
     const std::string& name,
     size_t count,
-    const boost::optional<size_t>& dex_num,
     const boost::optional<size_t>& interdex_subgroup_idx,
     const boost::optional<size_t>& subgroup_idx) const {
   auto root_name_tag = get_root_type_name_tag(root_type);
   std::ostringstream ss;
   ss << "L" << prefix << root_name_tag << name;
-  if (dex_num != boost::none) {
-    ss << dex_num.get() << "_";
-  }
   ss << count << "S" << string_fields << reference_fields << bool_fields
      << int_fields << long_fields << double_fields << float_fields;
 

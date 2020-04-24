@@ -364,7 +364,6 @@ redex_all_SOURCES = \
 	opt/type-erasure/ModelMethodMerger.cpp \
 	opt/type-erasure/Model.cpp \
 	opt/type-erasure/ModelMerger.cpp \
-	opt/type-erasure/TypeErasureInterDexPlugin.cpp \
 	opt/type-erasure/TypeErasurePass.cpp \
 	opt/type-erasure/TypeTagUtils.cpp \
 	opt/unreferenced_interfaces/UnreferencedInterfaces.cpp \

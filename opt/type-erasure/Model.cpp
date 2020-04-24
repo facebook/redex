@@ -23,7 +23,6 @@
 #include "Walkers.h"
 
 size_t Model::s_shape_count = 0;
-size_t Model::s_dex_count = 0;
 size_t Model::s_num_interdex_groups = 0;
 std::unordered_map<DexType*, size_t> Model::s_cls_to_interdex_group;
 
@@ -449,13 +448,12 @@ MergerType& Model::create_merger_helper(
     const MergerType::Shape& shape,
     const TypeSet& group_key,
     const TypeSet& group_values,
-    const boost::optional<size_t>& dex_num,
     const boost::optional<size_t>& interdex_subgroup_idx,
     const boost::optional<size_t>& subgroup_idx) {
   size_t group_count = m_shape_to_count[shape]++;
   std::string name = shape.build_type_name(
       m_spec.class_name_prefix, merger_type, std::string("Shape"), group_count,
-      dex_num, interdex_subgroup_idx, subgroup_idx);
+      interdex_subgroup_idx, subgroup_idx);
   const auto& shape_type = DexType::make_type(name.c_str());
   TRACE(TERA, 7, "Build shape type %s", SHOW(shape_type));
   auto& merger_shape = create_merger_shape(shape_type, shape, merger_type,
@@ -471,7 +469,6 @@ void Model::create_mergers_helper(
     const MergerType::Shape& shape,
     const TypeSet& group_key,
     const TypeSet& group_values,
-    const boost::optional<size_t>& dex_num,
     const boost::optional<size_t>& interdex_subgroup_idx,
     const boost::optional<size_t>& max_mergeables_count,
     size_t min_mergeables_count) {
@@ -488,7 +485,7 @@ void Model::create_mergers_helper(
             remaining_mergeable_cnt - *max_mergeables_count > 1) ||
            std::next(it) == group_values.end()) &&
           curr_group.size() >= min_mergeables_count) {
-        create_merger_helper(merger_type, shape, group_key, curr_group, dex_num,
+        create_merger_helper(merger_type, shape, group_key, curr_group,
                              interdex_subgroup_idx,
                              boost::optional<size_t>(subgroup_cnt++));
         remaining_mergeable_cnt -= curr_group.size();
@@ -497,7 +494,7 @@ void Model::create_mergers_helper(
     }
     always_assert(curr_group.empty());
   } else if (group_size >= min_mergeables_count) {
-    create_merger_helper(merger_type, shape, group_key, group_values, dex_num,
+    create_merger_helper(merger_type, shape, group_key, group_values,
                          interdex_subgroup_idx, boost::none);
   }
 }
@@ -981,10 +978,6 @@ void Model::flatten_shapes(const MergerType& merger,
                 return left_group.size() > right_group.size();
               });
 
-    boost::optional<size_t> dex_num = is_dex_sharding_enabled()
-                                          ? boost::optional<size_t>(s_dex_count)
-                                          : boost::none;
-
     bool merge_per_interdex_set = is_merge_per_interdex_set_enabled();
 
     for (const TypeSet* group_key : group_keys) {
@@ -999,20 +992,14 @@ void Model::flatten_shapes(const MergerType& merger,
           }
 
           create_mergers_helper(merger.type, *shape, *group_key,
-                                new_groups[gindex], boost::none, gindex,
-                                m_spec.max_count, m_spec.min_count);
+                                new_groups[gindex], gindex, m_spec.max_count,
+                                m_spec.min_count);
         }
       } else {
         create_mergers_helper(merger.type, *shape, *group_key, group_values,
-                              dex_num, boost::none, m_spec.max_count,
-                              m_spec.min_count);
+                              boost::none, m_spec.max_count, m_spec.min_count);
       }
     }
-  }
-
-  if (is_dex_sharding_enabled()) {
-    // Account for the current dex we generated shapes for.
-    s_dex_count++;
   }
 }
 
