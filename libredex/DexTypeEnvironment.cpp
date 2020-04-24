@@ -92,34 +92,6 @@ sparta::AbstractValueKind DexTypeValue::join_with(const DexTypeValue& other) {
 
 } // namespace  dtv_impl
 
-NullnessLattice lattice({NN_BOTTOM, IS_NULL, NOT_NULL, NN_TOP},
-                        {{NN_BOTTOM, IS_NULL},
-                         {NN_BOTTOM, NOT_NULL},
-                         {IS_NULL, NN_TOP},
-                         {NOT_NULL, NN_TOP}});
-
-std::ostream& operator<<(std::ostream& output, const Nullness& nullness) {
-  switch (nullness) {
-  case NN_BOTTOM: {
-    output << "BOTTOM";
-    break;
-  }
-  case IS_NULL: {
-    output << "NULL";
-    break;
-  }
-  case NOT_NULL: {
-    output << "NOTNULL";
-    break;
-  }
-  case NN_TOP: {
-    output << "NULLABLE";
-    break;
-  }
-  }
-  return output;
-}
-
 std::ostream& operator<<(std::ostream& output, const DexType* dex_type) {
   output << show(dex_type);
   return output;
