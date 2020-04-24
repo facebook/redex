@@ -286,7 +286,7 @@ TEST_F(IRTypeCheckerTest, referenceFromInteger) {
       checker.what(),
       MatchesRegex(
           "^Type error in method testMethod at instruction 'AGET v0, v5' "
-          "@ 0x[0-9a-f]+ for register v0: expected type REFERENCE, but found "
+          "@ 0x[0-9a-f]+ for register v0: expected type REF, but found "
           "INT instead"));
 }
 
@@ -326,7 +326,7 @@ TEST_F(IRTypeCheckerTest, uninitializedRegister) {
       MatchesRegex(
           "^Type error in method testMethod at instruction 'INVOKE_VIRTUAL v0, "
           "Lbar;\\.foo:\\(\\)V' @ 0x[0-9a-f]+ for register v0: expected "
-          "type REFERENCE, but found TOP instead"));
+          "type REF, but found TOP instead"));
 }
 
 TEST_F(IRTypeCheckerTest, undefinedRegister) {
@@ -358,7 +358,7 @@ TEST_F(IRTypeCheckerTest, undefinedRegister) {
       MatchesRegex(
           "^Type error in method testMethod at instruction 'INVOKE_VIRTUAL v0, "
           "Lbar;\\.foo:\\(\\)V' @ 0x[0-9a-f]+ for register v0: expected "
-          "type REFERENCE, but found TOP instead"));
+          "type REF, but found TOP instead"));
 }
 
 TEST_F(IRTypeCheckerTest, signatureMismatch) {
@@ -470,7 +470,7 @@ TEST_F(IRTypeCheckerTest, verifyMoves) {
       MatchesRegex(
           "^Type error in method testMethod at instruction "
           "'MOVE_OBJECT v1, v0' @ 0x[0-9a-f]+ for register v0: expected type "
-          "REFERENCE, but found TOP instead"));
+          "REF, but found TOP instead"));
 }
 
 TEST_F(IRTypeCheckerTest, exceptionHandler) {
