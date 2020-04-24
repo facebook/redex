@@ -779,6 +779,13 @@ ImmutableAttributeAnalyzerState::add_initializer(DexMethod* initialize_method,
   return initializers.back();
 }
 
+ImmutableAttributeAnalyzerState::Initializer&
+ImmutableAttributeAnalyzerState::add_initializer(
+    DexMethod* initialize_method, const ImmutableAttr::Attr& attr) {
+  return attr.is_field() ? add_initializer(initialize_method, attr.field)
+                         : add_initializer(initialize_method, attr.method);
+}
+
 ImmutableAttributeAnalyzerState::ImmutableAttributeAnalyzerState() {
   // clang-format off
   // Integer can be initialized throuth

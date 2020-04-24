@@ -10,6 +10,7 @@
 #include <gtest/gtest.h>
 
 #include "ConstantPropagationTestUtil.h"
+#include "ConstructorParams.h"
 #include "Creators.h"
 #include "IRAssembler.h"
 
@@ -142,4 +143,27 @@ TEST_F(ImmutableTest, object) {
     )
   )");
   EXPECT_CODE_EQ(code.get(), expected_code.get());
+}
+
+TEST_F(ImmutableTest, enum_constructor) {
+  auto method = assembler::method_from_string(R"(
+    (method (private constructor) "LFoo;.<init>:(Ljava/lang/String;I)V"
+    (
+      (load-param-object v0)
+      (load-param-object v1)
+      (load-param v2)
+      (invoke-direct (v0 v1 v2) "Ljava/lang/Enum;.<init>:(Ljava/lang/String;I)V")
+      (return-void)
+    )
+    )
+  )");
+  method->get_code()->build_cfg(false);
+  auto creator = ClassCreator(method->get_class());
+  creator.set_super(type::java_lang_Enum());
+  creator.set_access(ACC_PUBLIC | ACC_ENUM);
+  creator.add_method(method);
+  auto foo_cls = creator.create();
+  cp::ImmutableAttributeAnalyzerState analyzer_state;
+  cp::immutable_state::analyze_constructors({foo_cls}, &analyzer_state);
+  EXPECT_EQ(analyzer_state.method_initializers.count(method), 1);
 }

@@ -53,14 +53,14 @@ struct ImmutableAttr {
   struct Attr {
     enum Kind { Method, Field } kind;
     union {
-      const DexField* field;
-      const DexMethod* method;
-      const void* member; // Debug only.
+      DexField* field;
+      DexMethod* method;
+      void* member; // Debug only.
     };
-    explicit Attr(const DexField* f) : kind(Field), field(f) {
+    explicit Attr(DexField* f) : kind(Field), field(f) {
       always_assert(!field->is_def() || (!is_static(field) && is_final(field)));
     }
-    explicit Attr(const DexMethod* m) : kind(Method), method(m) {
+    explicit Attr(DexMethod* m) : kind(Method), method(m) {
       if (method->is_def()) {
         always_assert(!is_static(method) && !is_constructor(method));
       }

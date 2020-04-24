@@ -246,6 +246,8 @@ struct ImmutableAttributeAnalyzerState {
 
   Initializer& add_initializer(DexMethod* initialize_method, DexMethod* attr);
   Initializer& add_initializer(DexMethod* initialize_method, DexField* attr);
+  Initializer& add_initializer(DexMethod* initialize_method,
+                               const ImmutableAttr::Attr& attr);
 };
 
 class ImmutableAttributeAnalyzer final
