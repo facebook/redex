@@ -176,9 +176,9 @@ struct SafeMethod {
  * destination register, and it is the value in that register that could be
  * escaped.  This is tested lazily (i.e. only if the instruction is reached).
  *
- * Methods identified by `safe_methods` are assumed not to escape any of their
- * parameters or their return value.  For all other methods we assume the
- * complement -- they may escape any of their parameters or their return value.
+ * Only methods identified by `safe_methods` are assumed not to escape any of
+ * their parameters.  Similarly, only invokes identified as allocators are
+ * assumed not to escape their return values.
  *
  * Returns a mapping from allocating instructions to an instance of
  * `BlameDomain` which conveys two kinds of information about potential escapes

@@ -41,10 +41,18 @@ void FixpointIterator::analyze_instruction(const IRInstruction* insn,
   auto op = insn->opcode();
   if (op == OPCODE_RETURN_OBJECT) {
     env->set_may_escape(insn->src(0), insn);
+  } else if (is_invoke(op)) {
+    if (!is_safe_method(insn->get_method())) {
+      escape_invoke_params(insn, env);
+    }
+
+    if (is_allocator(insn)) {
+      env->set_fresh_pointer(dest(insn), insn);
+    } else {
+      escape_dest(insn, RESULT_REGISTER, env);
+    }
   } else if (is_allocator(insn)) {
     env->set_fresh_pointer(dest(insn), insn);
-  } else if (is_invoke(op) && is_safe_method(insn->get_method())) {
-    /* do nothing */
   } else {
     default_instruction_handler(insn, env);
   }

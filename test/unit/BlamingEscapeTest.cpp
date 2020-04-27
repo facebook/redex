@@ -205,32 +205,34 @@ TEST_F(BlamingEscapeTest, filteredAllocators) {
 
 TEST_F(BlamingEscapeTest, safeMethods) {
   auto* const init = DexString::make_string("<init>");
-  auto* const Foo_baz = DexMethod::make_method("LFoo;.baz:(LFoo;)V");
+  auto* const Bar_safe = DexMethod::make_method("LBar;.safe:(LBar;)LBar;");
 
   auto code = assembler::ircode_from_string(R"((
     (new-instance "LFoo;")
     (move-result-pseudo-object v0)
-    (invoke-direct (v0) "LFoo;.<init>:(LFoo;)V")
+    (invoke-direct (v0) "LFoo;.<init>:()V")
 
     (new-instance "LBar;")
     (move-result-pseudo-object v1)
-    (invoke-direct (v1) "LBar;.<init>:()V")
+    (invoke-direct (v1 v0) "LBar;.<init>:(LFoo;)V")
 
-    (invoke-static (v0) "LFoo;.baz:(LFoo;)V")
+    ;; not allocator, not safe
+    (invoke-static (v1) "LBar.unsafe:(LBar;)LBar;")
+    (move-result-pseudo-object v2)
 
-    (iput-object v0 v1 "LBar;.foo:LFoo;")
+    ;; allocator, not safe
+    (invoke-static (v2) "LBar;.unsafe:(LBar;)LBar;")
+    (move-result-pseudo-object v3)
 
-    (iget-object v1 "LBar;.foo:LFoo;")
-    (move-result-pseudo v2)
+    ;; not allocator, safe
+    (invoke-static (v3) "LBar;.safe:(LBar;)LBar;")
+    (move-result-pseudo-object v4)
 
-    (sput-object v1 "LFoo;.bar:LBar;")
+    ;; allocator, safe
+    (invoke-static (v4) "LBar;.safe:(LBar;)LBar;")
+    (move-result-pseudo-object v5)
 
-    (invoke-virtual (v1 v0) "LBar;.qux:(LFoo;)V")
-
-    (const v3 42)
-    (invoke-static (v3) "LFoo;.quz:(I)V")
-
-    (return-void)
+    (return-object v5)
   ))");
 
   auto ii = InstructionIterable(code.get());
@@ -239,23 +241,34 @@ TEST_F(BlamingEscapeTest, safeMethods) {
   auto* const new_Foo = insns[0].insn;
   auto* const new_Bar = insns[3].insn;
 
-  auto* const iput = insns[7].insn;
-  auto* const sput = insns[10].insn;
-  auto* const vcall = insns[11].insn;
+  auto* const Bar_v2 = insns[6].insn;
+  auto* const Bar_v3 = insns[8].insn;
+  auto* const Bar_v4 = insns[10].insn;
+  auto* const Bar_v5 = insns[12].insn;
+  auto* const ret = insns[14].insn;
 
   cfg::ScopedCFG cfg(code.get());
-  auto escapes =
-      ptrs::analyze_escapes(*cfg, {new_Foo, new_Bar}, {Foo_baz, init});
+  auto escapes = ptrs::analyze_escapes(
+      *cfg, /* allocators */ {new_Foo, new_Bar, Bar_v3, Bar_v5},
+      /* safe_methods */ {init, Bar_safe});
 
-  EXPECT_EQ(escapes.size(), 2);
+  EXPECT_EQ(escapes.size(), 4);
 
   EXPECT_ESCAPES(/* ESCAPES */ escapes.get(new_Foo),
-                 /* COUNT */ ptrs::CountDomain::finite(2, 2),
-                 /* BLAMED */ iput, vcall);
+                 /* COUNT */ ptrs::CountDomain::finite(0, 0),
+                 /* BLAMED */);
 
   EXPECT_ESCAPES(/* ESCAPES */ escapes.get(new_Bar),
-                 /* COUNT */ ptrs::CountDomain::finite(2, 2),
-                 /* BLAMED */ sput, vcall);
+                 /* COUNT */ ptrs::CountDomain::finite(1, 1),
+                 /* BLAMED */ Bar_v2);
+
+  EXPECT_ESCAPES(/* ESCAPES */ escapes.get(Bar_v3),
+                 /* COUNT */ ptrs::CountDomain::finite(0, 0),
+                 /* BLAMED */);
+
+  EXPECT_ESCAPES(/* ESCAPES */ escapes.get(Bar_v5),
+                 /* COUNT */ ptrs::CountDomain::finite(1, 1),
+                 /* BLAMED */ ret);
 }
 
 TEST_F(BlamingEscapeTest, notReachable) {
