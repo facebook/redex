@@ -203,6 +203,61 @@ TEST_F(BlamingEscapeTest, filteredAllocators) {
                  /* BLAMED */ scall, iput, vcall);
 }
 
+TEST_F(BlamingEscapeTest, safeMethods) {
+  auto* const init = DexString::make_string("<init>");
+  auto* const Foo_baz = DexMethod::make_method("LFoo;.baz:(LFoo;)V");
+
+  auto code = assembler::ircode_from_string(R"((
+    (new-instance "LFoo;")
+    (move-result-pseudo-object v0)
+    (invoke-direct (v0) "LFoo;.<init>:(LFoo;)V")
+
+    (new-instance "LBar;")
+    (move-result-pseudo-object v1)
+    (invoke-direct (v1) "LBar;.<init>:()V")
+
+    (invoke-static (v0) "LFoo;.baz:(LFoo;)V")
+
+    (iput-object v0 v1 "LBar;.foo:LFoo;")
+
+    (iget-object v1 "LBar;.foo:LFoo;")
+    (move-result-pseudo v2)
+
+    (sput-object v1 "LFoo;.bar:LBar;")
+
+    (invoke-virtual (v1 v0) "LBar;.qux:(LFoo;)V")
+
+    (const v3 42)
+    (invoke-static (v3) "LFoo;.quz:(I)V")
+
+    (return-void)
+  ))");
+
+  auto ii = InstructionIterable(code.get());
+  std::vector<MethodItemEntry> insns{ii.begin(), ii.end()};
+
+  auto* const new_Foo = insns[0].insn;
+  auto* const new_Bar = insns[3].insn;
+
+  auto* const iput = insns[7].insn;
+  auto* const sput = insns[10].insn;
+  auto* const vcall = insns[11].insn;
+
+  cfg::ScopedCFG cfg(code.get());
+  auto escapes =
+      ptrs::analyze_escapes(*cfg, {new_Foo, new_Bar}, {Foo_baz, init});
+
+  EXPECT_EQ(escapes.size(), 2);
+
+  EXPECT_ESCAPES(/* ESCAPES */ escapes.get(new_Foo),
+                 /* COUNT */ ptrs::CountDomain::finite(2, 2),
+                 /* BLAMED */ iput, vcall);
+
+  EXPECT_ESCAPES(/* ESCAPES */ escapes.get(new_Bar),
+                 /* COUNT */ ptrs::CountDomain::finite(2, 2),
+                 /* BLAMED */ sput, vcall);
+}
+
 TEST_F(BlamingEscapeTest, notReachable) {
   auto code = assembler::ircode_from_string(R"((
     (new-instance "LFoo;")

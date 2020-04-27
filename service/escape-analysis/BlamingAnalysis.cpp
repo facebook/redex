@@ -26,9 +26,13 @@ namespace blaming {
 
 FixpointIterator::FixpointIterator(
     const cfg::ControlFlowGraph& cfg,
-    std::unordered_set<const IRInstruction*> allocators)
+    std::unordered_set<const IRInstruction*> allocators,
+    std::unordered_set<DexMethodRef*> safe_method_refs,
+    std::unordered_set<DexString*> safe_method_names)
     : ir_analyzer::BaseIRAnalyzer<Environment>(cfg),
-      m_allocators(std::move(allocators)) {}
+      m_allocators(std::move(allocators)),
+      m_safe_method_refs(std::move(safe_method_refs)),
+      m_safe_method_names(std::move(safe_method_names)) {}
 
 void FixpointIterator::analyze_instruction(const IRInstruction* insn,
                                            Environment* env) const {
@@ -39,6 +43,8 @@ void FixpointIterator::analyze_instruction(const IRInstruction* insn,
     env->set_may_escape(insn->src(0), insn);
   } else if (is_allocator(insn)) {
     env->set_fresh_pointer(dest(insn), insn);
+  } else if (is_invoke(op) && is_safe_method(insn->get_method())) {
+    /* do nothing */
   } else {
     default_instruction_handler(insn, env);
   }
@@ -46,12 +52,31 @@ void FixpointIterator::analyze_instruction(const IRInstruction* insn,
 
 BlameStore::Domain analyze_escapes(
     cfg::ControlFlowGraph& cfg,
-    std::unordered_set<const IRInstruction*> allocators) {
+    std::unordered_set<const IRInstruction*> allocators,
+    std::initializer_list<SafeMethod> safe_methods) {
+
+  std::unordered_set<DexMethodRef*> safe_method_refs;
+  std::unordered_set<DexString*> safe_method_names;
+  for (const auto& safe : safe_methods) {
+    switch (safe.type) {
+    case SafeMethod::ByRef:
+      safe_method_refs.insert(safe.method_ref);
+      break;
+    case SafeMethod::ByName:
+      safe_method_names.insert(safe.method_name);
+      break;
+    default:
+      always_assert_log(false, "Safe: unknown type");
+    }
+  }
+
   if (!cfg.exit_block()) {
     cfg.calculate_exit_block();
   }
 
-  blaming::FixpointIterator fp{cfg, std::move(allocators)};
+  blaming::FixpointIterator fp{cfg, std::move(allocators),
+                               std::move(safe_method_refs),
+                               std::move(safe_method_names)};
   fp.run({});
 
   return fp.get_exit_state_at(cfg.exit_block()).get_store();

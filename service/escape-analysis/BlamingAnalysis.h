@@ -9,6 +9,7 @@
 
 #include <unordered_set>
 
+#include "DexClass.h"
 #include "IRInstruction.h"
 #include "IntervalDomain.h"
 #include "LocalPointersAnalysis.h"
@@ -121,9 +122,10 @@ using Environment = EnvironmentWithStoreImpl<BlameStore>;
 
 class FixpointIterator final : public ir_analyzer::BaseIRAnalyzer<Environment> {
  public:
-  explicit FixpointIterator(
-      const cfg::ControlFlowGraph& cfg,
-      std::unordered_set<const IRInstruction*> allocators);
+  explicit FixpointIterator(const cfg::ControlFlowGraph& cfg,
+                            std::unordered_set<const IRInstruction*> allocators,
+                            std::unordered_set<DexMethodRef*> safe_method_refs,
+                            std::unordered_set<DexString*> safe_method_names);
 
   void analyze_instruction(const IRInstruction* insn,
                            Environment* env) const override;
@@ -132,8 +134,35 @@ class FixpointIterator final : public ir_analyzer::BaseIRAnalyzer<Environment> {
   // The instructions whose results we track for escapes.
   std::unordered_set<const IRInstruction*> m_allocators;
 
+  // Methods that are assumed not to escape any of their parameters.
+  std::unordered_set<DexMethodRef*> m_safe_method_refs;
+
+  // Methods that are assumed not to escape any of their parameters, identified
+  // by their names.
+  std::unordered_set<DexString*> m_safe_method_names;
+
   /* Returns true if and only if `insn` is considered an allocator */
   bool is_allocator(const IRInstruction* insn) const;
+
+  /* Returns true if and only if `method` is assumed to be safe. */
+  bool is_safe_method(DexMethodRef* method) const;
+};
+
+/* A method that should be treated as safe */
+struct SafeMethod {
+  // NOLINTNEXTLINE
+  /* implicit */ SafeMethod(DexMethodRef* method_ref)
+      : type(SafeMethod::ByRef), method_ref(method_ref) {}
+
+  // NOLINTNEXTLINE
+  /* implicit */ SafeMethod(DexString* method_name)
+      : type(SafeMethod::ByName), method_name(method_name) {}
+
+  enum { ByRef, ByName } type;
+  union {
+    DexMethodRef* method_ref;
+    DexString* method_name;
+  };
 };
 
 /*
@@ -146,6 +175,10 @@ class FixpointIterator final : public ir_analyzer::BaseIRAnalyzer<Environment> {
  * The analysis assumes that all instructions in `allocators` have a
  * destination register, and it is the value in that register that could be
  * escaped.  This is tested lazily (i.e. only if the instruction is reached).
+ *
+ * Methods identified by `safe_methods` are assumed not to escape any of their
+ * parameters or their return value.  For all other methods we assume the
+ * complement -- they may escape any of their parameters or their return value.
  *
  * Returns a mapping from allocating instructions to an instance of
  * `BlameDomain` which conveys two kinds of information about potential escapes
@@ -161,10 +194,16 @@ class FixpointIterator final : public ir_analyzer::BaseIRAnalyzer<Environment> {
  */
 BlameStore::Domain analyze_escapes(
     cfg::ControlFlowGraph& cfg,
-    std::unordered_set<const IRInstruction*> allocators);
+    std::unordered_set<const IRInstruction*> allocators,
+    std::initializer_list<SafeMethod> safe_methods = {});
 
 inline bool FixpointIterator::is_allocator(const IRInstruction* insn) const {
   return m_allocators.count(insn);
+}
+
+inline bool FixpointIterator::is_safe_method(DexMethodRef* method) const {
+  return method != nullptr && (m_safe_method_refs.count(method) ||
+                               m_safe_method_names.count(method->get_name()));
 }
 
 } // namespace blaming
