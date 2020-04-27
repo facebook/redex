@@ -390,6 +390,7 @@ redex_all_SOURCES = \
 	service/dataflow/LiveRange.cpp \
 	service/dataflow/ConstantUses.cpp \
 	service/dedup-blocks/DedupBlocks.cpp \
+	service/escape-analysis/BlamingAnalysis.cpp \
 	service/escape-analysis/LocalPointersAnalysis.cpp \
 	service/local-dce/LocalDce.cpp \
 	service/loop-info/LoopInfo.cpp \
