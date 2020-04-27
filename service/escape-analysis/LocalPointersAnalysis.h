@@ -95,7 +95,10 @@ class EnvironmentWithStoreImpl final
       sparta::ReducedProductAbstractDomain<EnvironmentWithStoreImpl<Store>,
                                            PointerEnvironment,
                                            StoreDomain>;
-  using typename Base::ReducedProductAbstractDomain;
+
+  EnvironmentWithStoreImpl() = default;
+  EnvironmentWithStoreImpl(PointerEnvironment pe, StoreDomain sd)
+      : Base({std::move(pe), std::move(sd)}) {}
 
   static void reduce_product(
       const std::tuple<PointerEnvironment, StoreDomain>&) {}
