@@ -271,8 +271,19 @@ class FixpointIterator final : public ir_analyzer::BaseIRAnalyzer<Environment> {
   const bool m_escape_check_cast;
 };
 
+/*
+ * If `insn` creates a pointer, mark it as escaped, otherwise clear the contents
+ * of `dest`.  `dest` is assumed to be the destination for `insn` -- either the
+ * result register, or the instruction's own register field.
+ */
+void escape_dest(const IRInstruction* insn,
+                 reg_t dest,
+                 EnvironmentWithStore* env);
+
 void escape_heap_referenced_objects(const IRInstruction* insn,
                                     EnvironmentWithStore* env);
+
+void escape_invoke_params(const IRInstruction* insn, EnvironmentWithStore* env);
 
 void default_instruction_handler(const IRInstruction* insn,
                                  EnvironmentWithStore* env);

@@ -245,19 +245,6 @@ bool dest_may_be_pointer(const IRInstruction* insn) {
   }
 }
 
-static void analyze_dest(const IRInstruction* insn,
-                         reg_t dest,
-                         EnvironmentWithStore* env) {
-  // While the analysis would still work if we treated all non-pointer-values
-  // as escaping pointers, it would bloat the size of our abstract domain and
-  // incur a runtime performance tax.
-  if (dest_may_be_pointer(insn)) {
-    env->set_may_escape_pointer(dest, insn, insn);
-  } else {
-    env->set_pointers(dest, PointerSet::top());
-  }
-}
-
 void analyze_invoke_with_summary(const EscapeSummary& summary,
                                  const IRInstruction* insn,
                                  Environment* env) {
@@ -283,7 +270,7 @@ void analyze_invoke_with_summary(const EscapeSummary& summary,
     // We are intentionally handling Bottom by setting the result register to
     // Top. This is a loss of precision but it makes it easier to implement
     // dead code elimination. See UsedVarsTest_noReturn for details.
-    analyze_dest(insn, RESULT_REGISTER, env);
+    escape_dest(insn, RESULT_REGISTER, env);
     break;
   }
   }
@@ -294,20 +281,8 @@ void analyze_invoke_with_summary(const EscapeSummary& summary,
  */
 void analyze_generic_invoke(const IRInstruction* insn,
                             EnvironmentWithStore* env) {
-  size_t idx{0};
-  if (insn->opcode() != OPCODE_INVOKE_STATIC) {
-    env->set_may_escape(insn->src(0), insn);
-    ++idx;
-  }
-  const auto& arg_types =
-      insn->get_method()->get_proto()->get_args()->get_type_list();
-  for (const auto* arg : arg_types) {
-    if (!type::is_primitive(arg)) {
-      env->set_may_escape(insn->src(idx), insn);
-    }
-    ++idx;
-  }
-  analyze_dest(insn, RESULT_REGISTER, env);
+  escape_invoke_params(insn, env);
+  escape_dest(insn, RESULT_REGISTER, env);
 }
 
 } // namespace
@@ -331,6 +306,36 @@ void escape_heap_referenced_objects(const IRInstruction* insn,
   }
 }
 
+void escape_dest(const IRInstruction* insn,
+                 reg_t dest,
+                 EnvironmentWithStore* env) {
+  // While the analysis would still work if we treated all non-pointer-values
+  // as escaping pointers, it would bloat the size of our abstract domain and
+  // incur a runtime performance tax.
+  if (dest_may_be_pointer(insn)) {
+    env->set_may_escape_pointer(dest, insn, insn);
+  } else {
+    env->set_pointers(dest, PointerSet::top());
+  }
+}
+
+void escape_invoke_params(const IRInstruction* insn,
+                          EnvironmentWithStore* env) {
+  size_t idx{0};
+  if (insn->opcode() != OPCODE_INVOKE_STATIC) {
+    env->set_may_escape(insn->src(0), insn);
+    ++idx;
+  }
+  const auto& arg_types =
+      insn->get_method()->get_proto()->get_args()->get_type_list();
+  for (const auto* arg : arg_types) {
+    if (!type::is_primitive(arg)) {
+      env->set_may_escape(insn->src(idx), insn);
+    }
+    ++idx;
+  }
+}
+
 void default_instruction_handler(const IRInstruction* insn,
                                  EnvironmentWithStore* env) {
   auto op = insn->opcode();
@@ -343,9 +348,9 @@ void default_instruction_handler(const IRInstruction* insn,
   } else if (opcode::is_move_result_any(op)) {
     env->set_pointers(insn->dest(), env->get_pointers(RESULT_REGISTER));
   } else if (insn->has_dest()) {
-    analyze_dest(insn, insn->dest(), env);
+    escape_dest(insn, insn->dest(), env);
   } else if (insn->has_move_result_any()) {
-    analyze_dest(insn, RESULT_REGISTER, env);
+    escape_dest(insn, RESULT_REGISTER, env);
   }
 }
 
