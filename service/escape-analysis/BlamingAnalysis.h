@@ -12,6 +12,7 @@
 #include "DexClass.h"
 #include "IRInstruction.h"
 #include "IntervalDomain.h"
+#include "LiftedDomain.h"
 #include "LocalPointersAnalysis.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "PatriciaTreeSetAbstractDomain.h"
@@ -72,15 +73,6 @@ class BlameDomain final
 
   static void reduce_product(std::tuple<CountDomain, InstructionSet>&) {}
 
-  const CountDomain& escape_counts() const { return Base::template get<0>(); }
-
-  const InstructionSet& to_blame() const { return Base::template get<1>(); }
-
-  bool may_multi_escape() const {
-    const auto& count = escape_counts();
-    return !count.is_bottom() && count.upper_bound() > 1;
-  }
-
   void add(const IRInstruction* blamed) {
     Base::template apply<0>([](CountDomain* count) { *count += 1; });
     Base::template apply<1>(
@@ -94,23 +86,29 @@ class BlameDomain final
  */
 class BlameStore {
  public:
+  using Value = sparta::LiftedDomain<BlameDomain>;
+
   /* Model of: Value -> (Nat x {Instruction}) */
   using Domain =
-      sparta::PatriciaTreeMapAbstractEnvironment<const IRInstruction*,
-                                                 BlameDomain>;
+      sparta::PatriciaTreeMapAbstractEnvironment<const IRInstruction*, Value>;
 
   static void set_may_escape(const IRInstruction* ptr,
                              const IRInstruction* blamed,
                              Domain* dom) {
-    dom->update(ptr, [blamed](const BlameDomain& bdom) {
-      auto cpy = bdom;
-      cpy.add(blamed);
+    dom->update(ptr, [blamed](const Value& val) {
+      if (val.lowered().is_bottom()) {
+        // Cannot escape an unallocated value.
+        return Value::bottom();
+      }
+
+      auto cpy = val;
+      cpy.lowered().add(blamed);
       return cpy;
     });
   }
 
   static void set_fresh(const IRInstruction* ptr, Domain* dom) {
-    dom->set(ptr, BlameDomain({CountDomain::finite(0, 0), InstructionSet()}));
+    dom->set(ptr, Value::lifted(BlameDomain({CountDomain::finite(0, 0), {}})));
   }
 
   static bool may_have_escaped(const Domain& dom, const IRInstruction* ptr) {
@@ -166,8 +164,73 @@ struct SafeMethod {
 };
 
 /*
+ * A facade over BlameStore::Domain to simplify querying the results of the
+ * analysis.  Interface exposes a mapping from allocating instructions to
+ * a value that summarises the analysis' findings for that allocator (see
+ * BlameMap::Value).
+ */
+class BlameMap {
+ public:
+  class Value {
+   public:
+    explicit Value(BlameStore::Value value) : m_value(std::move(value)) {}
+
+    /* Whether or not the allocator was reached by the analysis */
+    bool allocated() const {
+      return !m_value.is_bottom() && !m_value.lowered().is_bottom();
+    }
+
+    /*
+     * The upper and lower-bounds on the number of times allocations from this
+     * site could have escaped, assuming the allocator was reached.
+     */
+    const CountDomain& escape_counts() const {
+      assert(allocated() && "Only allocated values can escape");
+      return m_value.lowered().get<0>();
+    }
+
+    /*
+     * The set of instructions to blame for escapes of values allocated from
+     * this site, assuming the allocator was reached.
+     */
+    const InstructionSet& to_blame() const {
+      assert(allocated() && "Only allocated values can escape");
+      return m_value.lowered().get<1>();
+    }
+
+    /*
+     * True if and only if it is possible for values from this allocation site
+     * to escape multiple times during one trace of execution.  Only a valid
+     * question to ask for reached allocators.
+     */
+    bool may_multi_escape() const {
+      const auto& count = escape_counts();
+      return !count.is_bottom() && count.upper_bound() > 1;
+    }
+
+   private:
+    const BlameStore::Value m_value;
+  };
+
+  explicit BlameMap(BlameStore::Domain domain) : m_domain(std::move(domain)) {}
+
+  size_t size() const { return m_domain.size(); }
+
+  /*
+   * Returns results of analysis for the allocation site `alloc`.  Requests for
+   * the results of allocation sites that were not tracked or reached by the
+   * analysis will both result in a result that indicates no allocations
+   * occurred.
+   */
+  Value get(IRInstruction* alloc) const { return Value{m_domain.get(alloc)}; }
+
+ private:
+  BlameStore::Domain m_domain;
+};
+
+/*
  * Analyse the escapes of objects in `cfg` allocated by the `allocator`
- * instructions, which are themselves assumed to be in `cfg`.
+ * instructions.
  *
  * The analysis requires that the ControlFlowGraph it is given has a unique
  * exit block and will introduce one if one does not already exist.
@@ -180,22 +243,19 @@ struct SafeMethod {
  * their parameters.  Similarly, only invokes identified as allocators are
  * assumed not to escape their return values.
  *
- * Returns a mapping from allocating instructions to an instance of
- * `BlameDomain` which conveys two kinds of information about potential escapes
- * for instances allocated by that instruction:
+ * Returns a mapping from allocating instructions to the following information:
  *
- *  - The set of instructions that could potentially be blamed for the escape.
- *  - An approximation (as an interval) of the number of times an instance
- *    could escape on any given trace through the CFG.
- *
- * An instruction in `allocators` will only appear as a key in the output if it
- * is reachable in `cfg`.
+ *  - Whether it was reached by the analysis.
+ *  - The set of instructions that could potentially escape its values, assuming
+ *    it was reached.
+ *  - An approximation (as an interval) of the number of times one of its
+ *    instances could escape on any given trace through the CFG, assuming it
+ *    was reached.
  *
  */
-BlameStore::Domain analyze_escapes(
-    cfg::ControlFlowGraph& cfg,
-    std::unordered_set<const IRInstruction*> allocators,
-    std::initializer_list<SafeMethod> safe_methods = {});
+BlameMap analyze_escapes(cfg::ControlFlowGraph& cfg,
+                         std::unordered_set<const IRInstruction*> allocators,
+                         std::initializer_list<SafeMethod> safe_methods = {});
 
 inline bool FixpointIterator::is_allocator(const IRInstruction* insn) const {
   return m_allocators.count(insn);

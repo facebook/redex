@@ -24,6 +24,9 @@ namespace {
 #define EXPECT_ESCAPES(ESCAPES, COUNT, /* BLAMED */...)                    \
   do {                                                                     \
     const auto _escapes = (ESCAPES);                                       \
+                                                                           \
+    ASSERT_TRUE(_escapes.allocated());                                     \
+                                                                           \
     const auto& _counts = _escapes.escape_counts();                        \
     const auto& _blamed = _escapes.to_blame();                             \
                                                                            \
@@ -114,6 +117,102 @@ TEST_F(BlamingEscapeTest, escapeThroughMove) {
   EXPECT_ESCAPES(/* ESCAPES */ escapes.get(new_Foo),
                  /* COUNT */ ptrs::CountDomain::finite(2, 2),
                  /* BLAMED */ init, ret);
+}
+
+TEST_F(BlamingEscapeTest, potentiallyNull) {
+  auto code = assembler::ircode_from_string(R"((
+    (load-param v0)
+    (if-nez v0 :else)
+      (const v1 0)
+    (goto :end)
+    (:else)
+      (new-instance "LFoo;")
+      (move-result-pseudo-object v1)
+      (invoke-direct (v1) "LFoo;.<init>:()V")
+    (:end)
+    (return-object v1)
+  ))");
+
+  auto ii = InstructionIterable(code.get());
+  std::vector<MethodItemEntry> insns{ii.begin(), ii.end()};
+
+  auto* const new_Foo = insns[4].insn;
+  auto* const init = insns[6].insn;
+  auto* const ret = insns[insns.size() - 1].insn;
+
+  cfg::ScopedCFG cfg(code.get());
+  auto escapes = ptrs::analyze_escapes(*cfg, {new_Foo});
+
+  EXPECT_EQ(escapes.size(), 1);
+
+  EXPECT_ESCAPES(/* ESCAPES */ escapes.get(new_Foo),
+                 /* COUNT */ ptrs::CountDomain::finite(2, 2),
+                 /* BLAMED */ init, ret);
+}
+
+TEST_F(BlamingEscapeTest, mergedEscape) {
+  auto code = assembler::ircode_from_string(R"((
+    (load-param v0)
+    (if-nez v0 :else)
+      (new-instance "LFoo;")
+      (move-result-pseudo-object v1)
+      (invoke-direct (v1) "LFoo;.<init>:()V")
+    (goto :end)
+    (:else)
+      (new-instance "LFoo;")
+      (move-result-pseudo-object v1)
+      (invoke-direct (v1) "LFoo;.<init>:()V")
+    (:end)
+    (return-object v1)
+  ))");
+
+  auto ii = InstructionIterable(code.get());
+  std::vector<MethodItemEntry> insns{ii.begin(), ii.end()};
+
+  auto* const new_Foo_then = insns[2].insn;
+  auto* const init_then = insns[4].insn;
+  auto* const new_Foo_else = insns[6].insn;
+  auto* const init_else = insns[8].insn;
+  auto* const ret = insns[insns.size() - 1].insn;
+
+  cfg::ScopedCFG cfg(code.get());
+  auto escapes = ptrs::analyze_escapes(*cfg, {new_Foo_then, new_Foo_else});
+
+  EXPECT_EQ(escapes.size(), 2);
+
+  EXPECT_ESCAPES(/* ESCAPES */ escapes.get(new_Foo_then),
+                 /* COUNT */ ptrs::CountDomain::finite(2, 2),
+                 /* BLAMED */ init_then, ret);
+
+  EXPECT_ESCAPES(/* ESCAPES */ escapes.get(new_Foo_else),
+                 /* COUNT */ ptrs::CountDomain::finite(2, 2),
+                 /* BLAMED */ init_else, ret);
+}
+
+TEST_F(BlamingEscapeTest, createAndEscapeInLoop) {
+  auto code = assembler::ircode_from_string(R"((
+    (:loop)
+      (new-instance "LFoo;")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0) "LFoo;.<init>:()V")
+    (goto :loop)
+    (return-void)
+  ))");
+
+  auto ii = InstructionIterable(code.get());
+  std::vector<MethodItemEntry> insns{ii.begin(), ii.end()};
+
+  auto* const new_Foo = insns[0].insn;
+  auto* const init = insns[2].insn;
+
+  cfg::ScopedCFG cfg(code.get());
+  auto escapes = ptrs::analyze_escapes(*cfg, {new_Foo});
+
+  EXPECT_EQ(escapes.size(), 1);
+
+  EXPECT_ESCAPES(/* ESCAPES */ escapes.get(new_Foo),
+                 /* COUNT */ ptrs::CountDomain::finite(1, 1),
+                 /* BLAMED */ init);
 }
 
 TEST_F(BlamingEscapeTest, escapeInLoopAndAfter) {

@@ -58,10 +58,9 @@ void FixpointIterator::analyze_instruction(const IRInstruction* insn,
   }
 }
 
-BlameStore::Domain analyze_escapes(
-    cfg::ControlFlowGraph& cfg,
-    std::unordered_set<const IRInstruction*> allocators,
-    std::initializer_list<SafeMethod> safe_methods) {
+BlameMap analyze_escapes(cfg::ControlFlowGraph& cfg,
+                         std::unordered_set<const IRInstruction*> allocators,
+                         std::initializer_list<SafeMethod> safe_methods) {
 
   std::unordered_set<DexMethodRef*> safe_method_refs;
   std::unordered_set<DexString*> safe_method_names;
@@ -82,12 +81,18 @@ BlameStore::Domain analyze_escapes(
     cfg.calculate_exit_block();
   }
 
+  BlameStore::Domain store;
+  for (auto* alloc : allocators) {
+    store.set(alloc, BlameStore::Value::lifted(BlameDomain::bottom()));
+  }
+
   blaming::FixpointIterator fp{cfg, std::move(allocators),
                                std::move(safe_method_refs),
                                std::move(safe_method_names)};
-  fp.run({});
 
-  return fp.get_exit_state_at(cfg.exit_block()).get_store();
+  fp.run({{}, std::move(store)});
+
+  return BlameMap{fp.get_exit_state_at(cfg.exit_block()).get_store()};
 }
 
 } // namespace blaming
