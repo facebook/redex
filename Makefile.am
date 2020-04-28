@@ -184,6 +184,7 @@ libredex_la_SOURCES = \
 	libredex/Mutators.cpp \
 	libredex/NoOptimizationsMatcher.cpp \
 	libredex/OptData.cpp \
+	libredex/Pass.cpp \
 	libredex/PassManager.cpp \
 	libredex/PassRegistry.cpp \
 	libredex/PluginRegistry.cpp \
