@@ -1226,9 +1226,9 @@ void ClassInitCounter::analyze_block(
 
     if (opcode::is_move_result(opcode) ||
         opcode::is_move_result_pseudo(opcode)) {
-      if (!registers.is_empty(ir_analyzer::RESULT_REGISTER)) {
-        registers.insert(dest, registers.get(ir_analyzer::RESULT_REGISTER));
-        registers.clear(ir_analyzer::RESULT_REGISTER);
+      if (!registers.is_empty(RESULT_REGISTER)) {
+        registers.insert(dest, registers.get(RESULT_REGISTER));
+        registers.clear(RESULT_REGISTER);
         clear_dest = false;
       }
     } else if (is_move(opcode)) {
@@ -1238,13 +1238,13 @@ void ClassInitCounter::analyze_block(
       }
     } else if (is_new_instance(opcode)) {
       DexType* typ = i->get_type();
-      registers.clear(ir_analyzer::RESULT_REGISTER);
+      registers.clear(RESULT_REGISTER);
       if ((tracked_set.empty() || tracked_set.count(i) != 0) &&
           (type_to_inits.count(typ) != 0)) {
         TRACE(CIC, 5, "Adding an init for type %s", SHOW(typ));
         std::shared_ptr<ObjectUses> use = type_to_inits[typ].add_init(
             container, method, i, block_id, instruction_count);
-        registers.insert(ir_analyzer::RESULT_REGISTER, use);
+        registers.insert(RESULT_REGISTER, use);
       }
     } else if (is_iput(opcode)) {
       auto field = i->get_field();
@@ -1258,7 +1258,7 @@ void ClassInitCounter::analyze_block(
       if (!registers.is_empty(srcs[0])) {
         registers.get(srcs[0])->fields_read.add_field(i->get_field());
       }
-      registers.clear(ir_analyzer::RESULT_REGISTER);
+      registers.clear(RESULT_REGISTER);
     } else if (is_sput(opcode)) {
       auto field = i->get_field();
       if (!registers.is_empty(srcs[0])) {
@@ -1276,14 +1276,14 @@ void ClassInitCounter::analyze_block(
       }
     } else if (is_invoke_static(opcode)) {
       auto curr_method = i->get_method();
-      registers.clear(ir_analyzer::RESULT_REGISTER);
+      registers.clear(RESULT_REGISTER);
       if (m_optional_method && curr_method->get_name() == m_optional_method) {
         auto ret_typ = curr_method->get_proto()->get_rtype();
         if ((tracked_set.empty() || tracked_set.count(i) != 0) &&
             type_to_inits.count(ret_typ) != 0) {
           std::shared_ptr<ObjectUses> use = type_to_inits[ret_typ].add_init(
               container, method, i, block_id, instruction_count);
-          registers.insert(ir_analyzer::RESULT_REGISTER, use);
+          registers.insert(RESULT_REGISTER, use);
         }
       }
       for (const auto src : srcs) {
@@ -1311,7 +1311,7 @@ void ClassInitCounter::analyze_block(
           }
         }
       }
-      registers.clear(ir_analyzer::RESULT_REGISTER);
+      registers.clear(RESULT_REGISTER);
     } else if (is_return_value(opcode)) {
       if (srcs.size() == 1 && !(registers.is_empty(srcs[0]))) {
         registers.get(srcs[0])->escapes.add_return(i);

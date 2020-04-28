@@ -97,7 +97,6 @@ class InitFixpointIterator final
 
   void analyze_instruction(const IRInstruction* insn,
                            Environment* env) const override {
-    constexpr reg_t RESULT_REGISTER = ir_analyzer::RESULT_REGISTER;
     auto opcode = insn->opcode();
     if (opcode::is_load_param(opcode)) {
       return;

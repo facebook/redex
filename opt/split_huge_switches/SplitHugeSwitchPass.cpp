@@ -114,13 +114,13 @@ class MoveResultAwareFixpointIterator final
   void analyze_instruction(
       const IRInstruction* insn,
       reaching_defs::Environment* current_state) const override {
-    constexpr reg_t RESULT = ir_analyzer::RESULT_REGISTER;
     if (opcode::is_move_result_any(insn->opcode())) {
-      current_state->set(insn->dest(), current_state->get(RESULT));
-      current_state->set(RESULT, reaching_defs::Domain::top());
+      current_state->set(insn->dest(), current_state->get(RESULT_REGISTER));
+      current_state->set(RESULT_REGISTER, reaching_defs::Domain::top());
     } else if (insn->has_move_result_any()) {
       current_state->set(
-          RESULT, reaching_defs::Domain(const_cast<IRInstruction*>(insn)));
+          RESULT_REGISTER,
+          reaching_defs::Domain(const_cast<IRInstruction*>(insn)));
     } else if (insn->has_dest()) {
       current_state->set(
           insn->dest(),

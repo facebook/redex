@@ -286,11 +286,11 @@ bool WholeProgramAwareAnalyzer::analyze_invoke(
   }
   if (!returns_reference(method)) {
     // Reset RESULT_REGISTER
-    env->set(ir_analyzer::RESULT_REGISTER, DexTypeDomain::top());
+    env->set(RESULT_REGISTER, DexTypeDomain::top());
     return false;
   }
   auto type = whole_program_state->get_return_type(method);
-  env->set(ir_analyzer::RESULT_REGISTER, type);
+  env->set(RESULT_REGISTER, type);
   return true;
 }
 

@@ -29,8 +29,6 @@
  *   - Constant primitive values stored in fields
  */
 
-constexpr reg_t RESULT_REGISTER = std::numeric_limits<reg_t>::max();
-
 /*****************************************************************************
  * Abstract stack / environment values.
  *****************************************************************************/

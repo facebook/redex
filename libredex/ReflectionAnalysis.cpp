@@ -1111,7 +1111,7 @@ ReflectionSites ReflectionAnalysis::get_reflection_sites() const {
     for (size_t i = 0; i < reg_size; i++) {
       get_reflection_site(i, insn, &abstract_objects);
     }
-    get_reflection_site(impl::RESULT_REGISTER, insn, &abstract_objects);
+    get_reflection_site(RESULT_REGISTER, insn, &abstract_objects);
 
     if (!abstract_objects.empty()) {
       reflection_sites.push_back(std::make_pair(insn, abstract_objects));
@@ -1136,7 +1136,7 @@ boost::optional<std::vector<DexType*>> ReflectionAnalysis::get_method_params(
       !opcode::is_move_result(move_result_insn->opcode())) {
     return boost::none;
   }
-  auto arg_param = get_abstract_object(impl::RESULT_REGISTER, move_result_insn);
+  auto arg_param = get_abstract_object(RESULT_REGISTER, move_result_insn);
   if (!arg_param ||
       arg_param->obj_kind != reflection::AbstractObjectKind::METHOD) {
     return boost::none;

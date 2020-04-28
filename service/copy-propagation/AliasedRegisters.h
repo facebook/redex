@@ -25,8 +25,6 @@
 
 namespace aliased_registers {
 
-const reg_t RESULT_REGISTER = std::numeric_limits<reg_t>::max() - 1;
-
 class Value {
  public:
   enum class Kind : uint8_t {

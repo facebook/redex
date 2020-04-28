@@ -23,7 +23,7 @@ bool field_get_helper(std::unordered_set<DexField*>* written_fields,
   if (field == nullptr || !type::is_object(field->get_type())) {
     return false;
   }
-  env->set(ir_analyzer::RESULT_REGISTER, env->get(field));
+  env->set(RESULT_REGISTER, env->get(field));
   return true;
 }
 

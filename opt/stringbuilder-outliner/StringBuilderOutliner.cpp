@@ -19,8 +19,6 @@
 
 using namespace stringbuilder_outliner;
 
-constexpr auto RESULT_REGISTER = ir_analyzer::RESULT_REGISTER;
-
 FixpointIterator::FixpointIterator(const cfg::ControlFlowGraph& cfg)
     : ir_analyzer::BaseIRAnalyzer<Environment>(cfg),
       m_stringbuilder(DexType::get_type("Ljava/lang/StringBuilder;")),

@@ -13,11 +13,6 @@
 
 namespace ir_analyzer {
 
-// We use this special register to denote the result of a method invocation or a
-// filled-array creation. If the result is a wide value, RESULT_REGISTER + 1
-// holds the second component of the result.
-constexpr reg_t RESULT_REGISTER = std::numeric_limits<reg_t>::max() - 1;
-
 template <typename Domain>
 class BaseIRAnalyzer
     : public sparta::MonotonicFixpointIterator<cfg::GraphInterface, Domain> {
