@@ -180,9 +180,7 @@ class TypeEnvironment final
     apply<1>([=](auto env) { env->set(reg, dex_type); }, true);
   }
 
-  void reset_dex_type(reg_t reg) {
-    apply<1>([=](auto env) { env->set(reg, DexTypeDomain::top()); }, true);
-  }
+  void reset_dex_type(reg_t reg) { get<1>().get(reg).set_to_top(); }
 };
 
 class TypeInference final

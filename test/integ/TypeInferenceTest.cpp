@@ -29,14 +29,6 @@ struct TypeInferenceTest : public RedexIntegrationTest {
         "lang/Throwable;)V");
     always_assert(m_what_is_this);
   }
-
-  cfg::ControlFlowGraph& get_cfg(DexMethod* method) {
-    auto code = method->get_code();
-    code->build_cfg(/* editable */ false);
-    auto& cfg = code->cfg();
-    cfg.calculate_exit_block();
-    return cfg;
-  }
 };
 
 TEST_F(TypeInferenceTest, test_move_exception_type) {
@@ -106,96 +98,4 @@ TEST_F(TypeInferenceTest, test_dedup_blocks_exception_type) {
 
   // Do not fail silently.
   EXPECT_EQ(1, insn_found);
-}
-
-TEST_F(TypeInferenceTest, test_join_with_null) {
-  auto scope = build_class_scope(stores);
-  auto method1 = DexMethod::get_method(
-                     "Lcom/facebook/redextest/"
-                     "TypeInferenceTest;.testJoinWithNull1:()Lcom/facebook/"
-                     "redextest/Base;")
-                     ->as_def();
-  auto& cfg1 = get_cfg(method1);
-
-  type_inference::TypeInference inference1(cfg1);
-  inference1.run(method1);
-  auto exit_block = cfg1.exit_block();
-  auto exit_env = inference1.get_exit_state_at(exit_block);
-
-  for (auto& mie : InstructionIterable(exit_block)) {
-    auto insn = mie.insn;
-    if (!is_return(insn->opcode())) {
-      continue;
-    }
-    auto ret_type = exit_env.get_type_domain(insn->src(0));
-    EXPECT_EQ(*ret_type.get_dex_type(),
-              DexType::get_type("Lcom/facebook/redextest/Base;"));
-    EXPECT_TRUE(ret_type.is_nullable());
-  }
-
-  auto method2 = DexMethod::get_method(
-                     "Lcom/facebook/redextest/"
-                     "TypeInferenceTest;.testJoinWithNull2:()Lcom/facebook/"
-                     "redextest/Base;")
-                     ->as_def();
-  auto& cfg2 = get_cfg(method2);
-
-  type_inference::TypeInference inference2(cfg2);
-  inference2.run(method2);
-  exit_block = cfg2.exit_block();
-  exit_env = inference2.get_exit_state_at(exit_block);
-
-  for (auto& mie : InstructionIterable(exit_block)) {
-    auto insn = mie.insn;
-    if (!is_return(insn->opcode())) {
-      continue;
-    }
-    auto ret_type = exit_env.get_type_domain(insn->src(0));
-    EXPECT_EQ(*ret_type.get_dex_type(),
-              DexType::get_type("Lcom/facebook/redextest/Base;"));
-    EXPECT_TRUE(ret_type.is_nullable());
-  }
-
-  auto method3 = DexMethod::get_method(
-                     "Lcom/facebook/redextest/"
-                     "TypeInferenceTest;.testJoinWithNull3:()Lcom/facebook/"
-                     "redextest/Base;")
-                     ->as_def();
-  auto& cfg3 = get_cfg(method3);
-
-  type_inference::TypeInference inference3(cfg3);
-  inference3.run(method3);
-  exit_block = cfg3.exit_block();
-  exit_env = inference3.get_exit_state_at(exit_block);
-
-  for (auto& mie : InstructionIterable(exit_block)) {
-    auto insn = mie.insn;
-    if (!is_return(insn->opcode())) {
-      continue;
-    }
-    auto ret_type = exit_env.get_type_domain(insn->src(0));
-    EXPECT_FALSE(ret_type.get_dex_type());
-    EXPECT_TRUE(ret_type.is_null());
-  }
-
-  auto method4 = DexMethod::get_method(
-                     "Lcom/facebook/redextest/"
-                     "TypeInferenceTest;.testJoinWithNull4:()I")
-                     ->as_def();
-  auto& cfg4 = get_cfg(method4);
-
-  type_inference::TypeInference inference4(cfg4);
-  inference4.run(method4);
-  exit_block = cfg4.exit_block();
-  exit_env = inference4.get_exit_state_at(exit_block);
-
-  for (auto& mie : InstructionIterable(exit_block)) {
-    auto insn = mie.insn;
-    if (!is_return(insn->opcode())) {
-      continue;
-    }
-    EXPECT_EQ(exit_env.get_type(insn->src(0)), type_inference::TypeDomain(INT));
-    auto ret_type = exit_env.get_type_domain(insn->src(0));
-    EXPECT_TRUE(ret_type.is_top());
-  }
 }
