@@ -96,7 +96,6 @@ TypeLattice type_lattice(
 
 void set_type(TypeEnvironment* state, reg_t reg, const TypeDomain& type) {
   state->set_type(reg, type);
-  state->reset_dex_type(reg);
 }
 
 void set_integer(TypeEnvironment* state, reg_t reg) {
@@ -111,11 +110,6 @@ void set_float(TypeEnvironment* state, reg_t reg) {
 
 void set_scalar(TypeEnvironment* state, reg_t reg) {
   state->set_type(reg, TypeDomain(SCALAR));
-  state->reset_dex_type(reg);
-}
-
-void set_reference(TypeEnvironment* state, reg_t reg) {
-  state->set_type(reg, TypeDomain(REFERENCE));
   state->reset_dex_type(reg);
 }
 
@@ -286,29 +280,38 @@ void TypeInference::refine_scalar(TypeEnvironment* state, reg_t reg) const {
   refine_type(state,
               reg,
               /* expected */ SCALAR);
+  state->reset_dex_type(reg);
 }
 
 void TypeInference::refine_integer(TypeEnvironment* state, reg_t reg) const {
   refine_type(state, reg, /* expected */ INT);
+  state->reset_dex_type(reg);
 }
 
 void TypeInference::refine_float(TypeEnvironment* state, reg_t reg) const {
   refine_type(state, reg, /* expected */ FLOAT);
+  state->reset_dex_type(reg);
 }
 
 void TypeInference::refine_wide_scalar(TypeEnvironment* state,
                                        reg_t reg) const {
   refine_wide_type(state, reg, /* expected1 */ SCALAR1,
                    /* expected2 */ SCALAR2);
+  state->reset_dex_type(reg);
+  state->reset_dex_type(reg + 1);
 }
 
 void TypeInference::refine_long(TypeEnvironment* state, reg_t reg) const {
   refine_wide_type(state, reg, /* expected1 */ LONG1, /* expected2 */ LONG2);
+  state->reset_dex_type(reg);
+  state->reset_dex_type(reg + 1);
 }
 
 void TypeInference::refine_double(TypeEnvironment* state, reg_t reg) const {
   refine_wide_type(state, reg, /* expected1 */ DOUBLE1,
                    /* expected2 */ DOUBLE2);
+  state->reset_dex_type(reg);
+  state->reset_dex_type(reg + 1);
 }
 
 void TypeInference::run(const DexMethod* dex_method) {
@@ -509,7 +512,7 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
   }
   case OPCODE_CONST: {
     if (insn->get_literal() == 0) {
-      current_state->set_dex_type(insn->dest(), DexTypeDomain::top());
+      current_state->set_dex_type(insn->dest(), DexTypeDomain::null());
       set_type(current_state, insn->dest(), TypeDomain(ZERO));
     } else {
       set_type(current_state, insn->dest(), TypeDomain(CONST));
@@ -659,7 +662,7 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
       const auto etype = type::get_array_component_type(*dex_type_opt);
       set_reference(current_state, RESULT_REGISTER, etype);
     } else {
-      set_reference(current_state, RESULT_REGISTER);
+      set_reference(current_state, RESULT_REGISTER, DexTypeDomain::top());
     }
     break;
   }
