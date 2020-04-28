@@ -43,6 +43,7 @@
 #include "VirtualMerging.h"
 
 #include "ControlFlow.h"
+#include "CppUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "Resolver.h"
@@ -289,33 +290,33 @@ void VirtualMerging::compute_mergeable_pairs_by_virtual_scopes() {
         // can later be processed sequentially --- first inlining pairs that
         // appear in deeper portions of the type hierarchy
         std::vector<std::pair<DexMethod*, DexMethod*>> mergeable_pairs;
-        std::function<void(const DexType*)> visit;
         std::unordered_set<const DexType*> visited;
-        visit = [&](const DexType* t) {
-          if (visited.count(t)) {
-            return;
-          }
-          visited.insert(t);
+        self_recursive_fn(
+            [&](auto self, const DexType* t) {
+              if (visited.count(t)) {
+                return;
+              }
+              visited.insert(t);
 
-          auto subtypes_it = subtypes.find(t);
-          if (subtypes_it != subtypes.end()) {
-            for (auto subtype : subtypes_it->second) {
-              visit(subtype);
-            }
-          }
-          auto overriding_method_it = types_to_methods.find(t);
-          if (overriding_method_it == types_to_methods.end()) {
-            return;
-          }
-          auto overridden_method_it =
-              mergeable_pairs_map.find(overriding_method_it->second);
-          if (overridden_method_it == mergeable_pairs_map.end()) {
-            return;
-          }
-          mergeable_pairs.emplace_back(overridden_method_it->second,
-                                       overriding_method_it->second);
-        };
-        visit(virtual_scope->type);
+              auto subtypes_it = subtypes.find(t);
+              if (subtypes_it != subtypes.end()) {
+                for (auto subtype : subtypes_it->second) {
+                  self(self, subtype);
+                }
+              }
+              auto overriding_method_it = types_to_methods.find(t);
+              if (overriding_method_it == types_to_methods.end()) {
+                return;
+              }
+              auto overridden_method_it =
+                  mergeable_pairs_map.find(overriding_method_it->second);
+              if (overridden_method_it == mergeable_pairs_map.end()) {
+                return;
+              }
+              mergeable_pairs.emplace_back(overridden_method_it->second,
+                                           overriding_method_it->second);
+            },
+            virtual_scope->type);
         always_assert(mergeable_pairs_map.size() == mergeable_pairs.size());
         always_assert(stats.overriding_methods ==
                       mergeable_pairs.size() + stats.cross_store_refs +

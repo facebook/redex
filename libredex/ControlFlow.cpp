@@ -13,6 +13,7 @@
 #include <stack>
 #include <utility>
 
+#include "CppUtil.h"
 #include "DexUtil.h"
 #include "GraphUtil.h"
 #include "Transform.h"
@@ -1686,42 +1687,38 @@ MethodItemEntry* ControlFlowGraph::create_catch(
   // throw edge indices.
   //
   // We stop early if we find find an equivalent linked list of catch entries
-  auto add_catch = [this, &throws_end, catch_to_containing_block](
-                       const EdgeVector::iterator& it) -> MethodItemEntry* {
-    auto add_catch_impl = [this, &throws_end, catch_to_containing_block](
-                              const EdgeVector::iterator& it,
-                              const auto& lambda_ref) -> MethodItemEntry* {
-      if (it == throws_end) {
-        return nullptr;
-      }
-      auto edge = *it;
-      auto catch_block = edge->target();
-      for (auto& mie : *catch_block) {
-        // Is there already a catch here that's equivalent to the catch we would
-        // create?
-        if (mie.type == MFLOW_CATCH &&
-            catch_entries_equivalent_to_throw_edges(
-                this, &mie, it, throws_end, *catch_to_containing_block)) {
-          // The linked list of catch entries starting at `mie` is equivalent to
-          // the rest of `throws` from `it` to `end`. So we don't need to create
-          // another one, use the existing list.
-          return &mie;
+  return self_recursive_fn(
+      [this, &throws_end, catch_to_containing_block](
+          auto self, const EdgeVector::iterator& it) -> MethodItemEntry* {
+        if (it == throws_end) {
+          return nullptr;
         }
-      }
-      // We recurse and find the next catch before creating this catch because
-      // otherwise, we could create a cycle of the catch entries.
-      MethodItemEntry* next = lambda_ref(std::next(it), lambda_ref);
+        auto edge = *it;
+        auto catch_block = edge->target();
+        for (auto& mie : *catch_block) {
+          // Is there already a catch here that's equivalent to the catch we
+          // would create?
+          if (mie.type == MFLOW_CATCH &&
+              catch_entries_equivalent_to_throw_edges(
+                  this, &mie, it, throws_end, *catch_to_containing_block)) {
+            // The linked list of catch entries starting at `mie` is equivalent
+            // to the rest of `throws` from `it` to `end`. So we don't need to
+            // create another one, use the existing list.
+            return &mie;
+          }
+        }
+        // We recurse and find the next catch before creating this catch because
+        // otherwise, we could create a cycle of the catch entries.
+        MethodItemEntry* next = self(self, std::next(it));
 
-      // create a new catch entry and insert it into the bytecode
-      auto new_catch = new MethodItemEntry(edge->m_throw_info->catch_type);
-      new_catch->centry->next = next;
-      catch_block->m_entries.push_front(*new_catch);
-      catch_to_containing_block->emplace(new_catch, catch_block);
-      return new_catch;
-    };
-    return add_catch_impl(it, add_catch_impl);
-  };
-  return add_catch(throws.begin());
+        // create a new catch entry and insert it into the bytecode
+        auto new_catch = new MethodItemEntry(edge->m_throw_info->catch_type);
+        new_catch->centry->next = next;
+        catch_block->m_entries.push_front(*new_catch);
+        catch_to_containing_block->emplace(new_catch, catch_block);
+        return new_catch;
+      },
+      throws.begin());
 }
 
 std::vector<Block*> ControlFlowGraph::blocks() const {
