@@ -127,6 +127,9 @@ struct ConfigFiles {
     case 26:
       m_json.get("android_sdk_api_26_file", "", api_file);
       break;
+    case 28:
+      m_json.get("android_sdk_api_28_file", "", api_file);
+      break;
     default:
       break;
     }
