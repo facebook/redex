@@ -167,3 +167,20 @@ class TestE {
     b.foo();
   }
 }
+
+class TestF {
+
+  int foo() {
+    int a = 1;
+    int b = 2;
+    for (int i = 0; i < 5; i++) {
+      b += 1;
+    }
+    return a;
+  }
+
+  static void main() {
+    TestF t = new TestF();
+    t.foo();
+  }
+}

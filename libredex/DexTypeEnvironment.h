@@ -234,11 +234,16 @@ class SmallSetDexTypeDomain final
  */
 class DexTypeDomain
     : public sparta::ReducedProductAbstractDomain<DexTypeDomain,
-                                                  NullnessDomain,
+                                                  ConstNullnessDomain,
                                                   SingletonDexTypeDomain,
                                                   SmallSetDexTypeDomain> {
  public:
   using ReducedProductAbstractDomain::ReducedProductAbstractDomain;
+
+  using BaseType = sparta::ReducedProductAbstractDomain<DexTypeDomain,
+                                                        ConstNullnessDomain,
+                                                        SingletonDexTypeDomain,
+                                                        SmallSetDexTypeDomain>;
 
   // Some older compilers complain that the class is not default
   // constructible. We intended to use the default constructors of the base
@@ -246,15 +251,21 @@ class DexTypeDomain
   // catch this. So we insert a redundant '= default'.
   DexTypeDomain() = default;
 
+  explicit DexTypeDomain(int64_t v)
+      : ReducedProductAbstractDomain(std::make_tuple(ConstNullnessDomain(v),
+                                                     SingletonDexTypeDomain(),
+                                                     SmallSetDexTypeDomain())) {
+  }
+
   explicit DexTypeDomain(const DexType* dex_type)
       : ReducedProductAbstractDomain(
-            std::make_tuple(NullnessDomain(NOT_NULL),
+            std::make_tuple(ConstNullnessDomain(NOT_NULL),
                             SingletonDexTypeDomain(dex_type),
                             SmallSetDexTypeDomain(dex_type))) {}
 
-  static void reduce_product(
-      std::tuple<NullnessDomain, SingletonDexTypeDomain, SmallSetDexTypeDomain>&
-          product) {
+  static void reduce_product(std::tuple<ConstNullnessDomain,
+                                        SingletonDexTypeDomain,
+                                        SmallSetDexTypeDomain>& product) {
     if (std::get<1>(product).is_top()) {
       std::get<2>(product).set_to_top();
     }
@@ -262,11 +273,17 @@ class DexTypeDomain
 
   static DexTypeDomain null() { return DexTypeDomain(IS_NULL); }
 
-  bool is_null() const { return get<0>().element() == IS_NULL; }
+  bool is_null() const { return get<0>().get_nullness().element() == IS_NULL; }
 
-  bool is_not_null() const { return get<0>().element() == NOT_NULL; }
+  bool is_not_null() const {
+    return get<0>().get_nullness().element() == NOT_NULL;
+  }
 
-  bool is_nullable() const { return get<0>().is_top(); }
+  bool is_nullable() const { return get<0>().get_nullness().is_top(); }
+
+  boost::optional<ConstantDomain::ConstantType> get_constant() const {
+    return get<0>().const_domain().get_constant();
+  }
 
   SingletonDexTypeDomain get_single_domain() { return get<1>(); }
 
@@ -285,7 +302,7 @@ class DexTypeDomain
  private:
   explicit DexTypeDomain(const Nullness nullness)
       : ReducedProductAbstractDomain(
-            std::make_tuple(NullnessDomain(nullness),
+            std::make_tuple(ConstNullnessDomain(nullness),
                             SingletonDexTypeDomain::none(),
                             SmallSetDexTypeDomain())) {}
 };

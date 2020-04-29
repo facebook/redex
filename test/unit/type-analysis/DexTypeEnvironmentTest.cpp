@@ -633,3 +633,19 @@ TEST_F(DexTypeEnvironmentTest, DexTypeDomainReduceProductTest) {
   EXPECT_FALSE(domain_c1.get_single_domain().is_top());
   EXPECT_TRUE(domain_c1.get_set_domain().is_top());
 }
+
+TEST_F(DexTypeEnvironmentTest, ConstNullnessDomainTest) {
+  auto c1 = DexTypeDomain(1);
+  EXPECT_FALSE(c1.is_top());
+  EXPECT_EQ(*c1.get_constant(), 1);
+
+  auto nl = DexTypeDomain::null();
+  EXPECT_FALSE(nl.is_top());
+  EXPECT_TRUE(nl.is_null());
+
+  c1.join_with(nl);
+  EXPECT_TRUE(c1.is_top());
+  EXPECT_TRUE(c1.get<0>().const_domain().is_top());
+  EXPECT_TRUE(c1.get<0>().get_nullness().is_top());
+  EXPECT_TRUE(c1.is_nullable());
+}

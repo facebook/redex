@@ -68,10 +68,14 @@ void LocalTypeAnalyzer::analyze_instruction(const IRInstruction* insn,
 
 bool RegisterTypeAnalyzer::analyze_const(const IRInstruction* insn,
                                          DexTypeEnvironment* env) {
-  if (insn->opcode() != OPCODE_CONST || insn->get_literal() != 0) {
+  if (insn->opcode() != OPCODE_CONST) {
     return false;
   }
-  env->set(insn->dest(), DexTypeDomain::null());
+  if (insn->get_literal() == 0) {
+    env->set(insn->dest(), DexTypeDomain::null());
+  } else {
+    env->set(insn->dest(), DexTypeDomain(insn->get_literal()));
+  }
   return true;
 }
 
@@ -106,9 +110,6 @@ bool RegisterTypeAnalyzer::analyze_aget(const IRInstruction* insn,
 
 bool RegisterTypeAnalyzer::analyze_move(const IRInstruction* insn,
                                         DexTypeEnvironment* env) {
-  if (insn->opcode() != OPCODE_MOVE_OBJECT) {
-    return false;
-  }
   env->set(insn->dest(), env->get(insn->src(0)));
   return true;
 }

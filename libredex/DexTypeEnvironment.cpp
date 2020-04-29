@@ -182,10 +182,7 @@ std::ostream& operator<<(std::ostream& out, const SmallSetDexTypeDomain& x) {
 }
 
 void DexTypeDomain::join_with(const DexTypeDomain& other) {
-  sparta::ReducedProductAbstractDomain<DexTypeDomain,
-                                       NullnessDomain,
-                                       SingletonDexTypeDomain,
-                                       SmallSetDexTypeDomain>::join_with(other);
+  BaseType::join_with(other);
   if (get<1>().is_top()) {
     apply<2>([](SmallSetDexTypeDomain* domain) { domain->set_to_top(); });
   }

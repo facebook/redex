@@ -204,3 +204,19 @@ TEST_F(GlobalTypeAnalysisTest, SmallSetDexTypeDomainTest) {
             get_type_set({get_type("TestE$SubOne"), get_type("TestE$SubTwo"),
                           get_type("TestE$SubThree")}));
 }
+
+TEST_F(GlobalTypeAnalysisTest, ConstNullnessDomainTest) {
+  auto scope = build_class_scope(stores);
+  set_root_method("Lcom/facebook/redextest/TestF;.main:()V");
+
+  GlobalTypeAnalysis analysis;
+  auto gta = analysis.analyze(scope);
+  auto wps = gta->get_whole_program_state();
+  auto meth_foo = get_method("TestF;.foo", "", "I");
+  auto lta = gta->get_local_analysis(meth_foo);
+  auto code = meth_foo->get_code();
+  auto foo_exit_env = lta->get_exit_state_at(code->cfg().exit_block());
+  EXPECT_FALSE(foo_exit_env.get_reg_environment().get(0).is_top());
+  EXPECT_EQ(*foo_exit_env.get_reg_environment().get(0).get_constant(), 1);
+  EXPECT_TRUE(foo_exit_env.get_reg_environment().get(0).is_not_null());
+}
