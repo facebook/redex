@@ -62,6 +62,12 @@ class ConstNullnessDomain
  public:
   using ReducedProductAbstractDomain::ReducedProductAbstractDomain;
 
+  // Some older compilers complain that the class is not default
+  // constructible. We intended to use the default constructors of the base
+  // class (via the `using` declaration above), but some compilers fail to
+  // catch this. So we insert a redundant '= default'.
+  ConstNullnessDomain() = default;
+
   explicit ConstNullnessDomain(Nullness nullness)
       : ConstNullnessDomain(
             std::make_tuple(ConstantDomain(0), NullnessDomain(nullness))) {}
