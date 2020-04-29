@@ -35,6 +35,19 @@ struct IRTypeCheckerConfig : public Configurable {
   bool check_no_overwrite_this;
 };
 
+struct HasherConfig : public Configurable {
+ public:
+  void bind_config() override;
+  std::string get_config_name() override { return "HasherConfig"; }
+  std::string get_config_doc() override {
+    return "This configuration is used to direct Redex to hash the contents of "
+           "the dex"
+           "after various stages of optimization to find non-determinism.";
+  }
+
+  bool run_after_each_pass;
+};
+
 struct OptDecisionsConfig : public Configurable {
  public:
   void bind_config() override;

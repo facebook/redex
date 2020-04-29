@@ -46,9 +46,14 @@ void IRTypeCheckerConfig::bind_config() {
   bind("check_no_overwrite_this", {}, check_no_overwrite_this);
 }
 
+void HasherConfig::bind_config() {
+  bind("run_after_each_pass", {}, run_after_each_pass);
+}
+
 void GlobalConfig::bind_config() {
   OptDecisionsConfig opt_decisions_param;
   IRTypeCheckerConfig ir_type_checker_param;
+  HasherConfig hasher_param;
   InlinerConfig inliner_param;
   bool bool_param;
   std::string string_param;
@@ -71,6 +76,7 @@ void GlobalConfig::bind_config() {
   bind("inliner", InlinerConfig(), inliner_param);
   bind("instruction_size_bitwidth_limit", 0u, uint32_param);
   bind("ir_type_checker", IRTypeCheckerConfig(), ir_type_checker_param);
+  bind("hasher", HasherConfig(), hasher_param);
   bind("json_serde_supercls", {}, string_vector_param);
   bind("keep_all_annotation_classes", true, bool_param);
   bind("keep_methods", {}, string_vector_param);
