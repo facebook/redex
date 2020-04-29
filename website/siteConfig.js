@@ -9,6 +9,10 @@
 // site configuration options.
 
 const siteConfig = {
+  algolia: {
+    apiKey: '7ef33486bb9b0c17ed9a5dedb0da8e36',
+    indexName: 'fbredex',
+  },
   title: 'Redex', // Title for your website.
   tagline: 'An Android Bytecode Optimizer',
   url: 'https://fbredex.com',
