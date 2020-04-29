@@ -83,7 +83,7 @@ BlameMap analyze_escapes(cfg::ControlFlowGraph& cfg,
 
   BlameStore::Domain store;
   for (auto* alloc : allocators) {
-    store.set(alloc, BlameStore::Value::lifted(BlameDomain::bottom()));
+    store.set(alloc, BlameStore::unallocated());
   }
 
   blaming::FixpointIterator fp{cfg, std::move(allocators),

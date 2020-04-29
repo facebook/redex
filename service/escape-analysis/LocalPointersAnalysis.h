@@ -98,7 +98,7 @@ class EnvironmentWithStoreImpl final
 
   EnvironmentWithStoreImpl() = default;
   EnvironmentWithStoreImpl(PointerEnvironment pe, StoreDomain sd)
-      : Base({std::move(pe), std::move(sd)}) {}
+      : Base(std::make_tuple(std::move(pe), std::move(sd))) {}
 
   static void reduce_product(
       const std::tuple<PointerEnvironment, StoreDomain>&) {}

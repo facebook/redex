@@ -108,11 +108,18 @@ class BlameStore {
   }
 
   static void set_fresh(const IRInstruction* ptr, Domain* dom) {
-    dom->set(ptr, Value::lifted(BlameDomain({CountDomain::finite(0, 0), {}})));
+    dom->set(ptr, allocated());
   }
 
   static bool may_have_escaped(const Domain& dom, const IRInstruction* ptr) {
     return !dom.get(ptr).is_bottom();
+  }
+
+  static Value unallocated() { return Value::lifted(BlameDomain::bottom()); }
+
+  static Value allocated() {
+    auto parts = std::make_tuple(CountDomain::finite(0, 0), InstructionSet());
+    return Value::lifted(BlameDomain(std::move(parts)));
   }
 };
 
