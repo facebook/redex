@@ -111,8 +111,9 @@ class BlameStore {
     dom->set(ptr, allocated());
   }
 
-  static bool may_have_escaped(const Domain& dom, const IRInstruction* ptr) {
-    return !dom.get(ptr).is_bottom();
+  static bool may_have_escaped(const Domain&, const IRInstruction*) {
+    // Unimplemented
+    not_reached();
   }
 
   static Value unallocated() { return Value::lifted(BlameDomain::bottom()); }
