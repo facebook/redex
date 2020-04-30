@@ -161,11 +161,11 @@ struct Rebinder {
       return nullptr;
     }
     auto leaf_vis = get_visibility(leaf_impl);
-    if (is_package_private(leaf_vis)) {
+    if (!is_public(leaf_vis)) {
       return leaf_impl;
     }
     DexMethod* top_impl = leaf_impl;
-    // The resolved leaf impl can only be PUBLIC or PROTECTED at this point.
+    // The resolved leaf impl can only be PUBLIC at this point.
     while (cls) {
       for (const auto& cls_meth : cls->get_vmethods()) {
         if (match(name, proto, cls_meth)) {
@@ -179,7 +179,7 @@ struct Rebinder {
           if (is_external && !is_public(curr_vis)) {
             return top_impl;
           }
-          // We can only rebind PUBLIC to PUBLIC or PROTECTED to PROTECTED here.
+          // We can only rebind PUBLIC to PUBLIC here.
           if (leaf_vis != curr_vis) {
             return top_impl;
           }
