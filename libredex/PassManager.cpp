@@ -10,6 +10,7 @@
 #include <boost/filesystem.hpp>
 #include <cinttypes>
 #include <cstdio>
+#include <typeinfo>
 #include <unordered_set>
 
 #include "ApiLevelChecker.h"
@@ -209,6 +210,9 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   DexStoreClassesIterator it(stores);
   Scope scope = build_class_scope(it);
 
+  // Clear stale data. Make sure we start fresh.
+  m_preserved_analysis_passes.clear();
+
   {
     Timer t("API Level Checker");
     api::LevelChecker::init(m_redex_options.min_sdk, scope);
@@ -306,6 +310,16 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
 
   for (size_t i = 0; i < m_activated_passes.size(); ++i) {
     Pass* pass = m_activated_passes[i];
+    AnalysisUsage analysis_usage;
+    pass->set_analysis_usage(analysis_usage);
+
+    for (const auto& analysis_id : analysis_usage.get_required_passes()) {
+      always_assert_log(
+          m_preserved_analysis_passes.count(analysis_id),
+          "%s requires analysis results from %s, but it's not available.",
+          pass->name().c_str(), analysis_id.c_str());
+    }
+
     TRACE(PM, 1, "Running %s...", pass->name().c_str());
     ScopedVmHWM vm_hwm{hwm_pass_stats, hwm_per_pass};
     Timer t(pass->name() + " (run)");
@@ -353,6 +367,20 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
                      /* validate_access */ false);
       }
     }
+
+    if (!analysis_usage.get_preserve_status()) {
+      // Invalidate existing preserved analyses.
+      for (auto entry : m_preserved_analysis_passes) {
+        entry.second->destroy_analysis_result();
+      }
+      m_preserved_analysis_passes.clear();
+    }
+
+    if (pass->is_analysis_pass()) {
+      // If the pass is an analysis pass, preserve it.
+      m_preserved_analysis_passes.emplace(typeid(*pass).name(), pass);
+    }
+
     m_current_pass_info = nullptr;
   }
 

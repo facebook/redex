@@ -16,6 +16,7 @@
 #include <boost/optional.hpp>
 #include <json/json.h>
 #include <string>
+#include <typeinfo>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -76,6 +77,15 @@ class PassManager {
 
   bool regalloc_has_run() { return m_regalloc_has_run; }
 
+  template <typename PassType>
+  PassType* get_preserved_analysis() const {
+    auto pass = m_preserved_analysis_passes.find(typeid(PassType).name());
+    if (pass != m_preserved_analysis_passes.end()) {
+      return dynamic_cast<PassType*>(pass->second);
+    }
+    return nullptr;
+  }
+
  private:
   void activate_pass(const char* name, const Json::Value& cfg);
 
@@ -88,6 +98,7 @@ class PassManager {
   ApkManager m_apk_mgr;
   std::vector<Pass*> m_registered_passes;
   std::vector<Pass*> m_activated_passes;
+  std::unordered_map<AnalysisID, Pass*> m_preserved_analysis_passes;
 
   // Per-pass information and metrics
   std::vector<PassManager::PassInfo> m_pass_info;

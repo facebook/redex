@@ -14,6 +14,7 @@
 #include <string>
 #include <vector>
 
+#include "AnalysisUsage.h"
 #include "ConfigFiles.h"
 #include "Configurable.h"
 #include "DexClass.h"
@@ -24,13 +25,23 @@ class PassManager;
 
 class Pass : public Configurable {
  public:
-  explicit Pass(const std::string& name) : m_name(name) {
+  enum Kind {
+    TRANSFORMATION,
+    ANALYSIS,
+  };
+
+  explicit Pass(const std::string& name, Kind kind = TRANSFORMATION)
+      : m_name(name), m_kind(kind) {
     PassRegistry::get().register_pass(this);
   }
 
   std::string name() const { return m_name; }
 
   std::string get_config_name() override { return name(); };
+
+  bool is_analysis_pass() const { return m_kind == ANALYSIS; }
+
+  virtual void destroy_analysis_result() {}
 
   /**
    * All passes' eval_pass are run, and then all passes' run_pass are run. This
@@ -47,8 +58,22 @@ class Pass : public Configurable {
                         ConfigFiles& conf,
                         PassManager& mgr) = 0;
 
+  virtual void set_analysis_usage(AnalysisUsage& analysis_usage) const {
+    switch (m_kind) {
+    case TRANSFORMATION:
+      analysis_usage.set_preserve_none();
+      break;
+    case ANALYSIS:
+      analysis_usage.set_preserve_all();
+      break;
+    default:
+      not_reached();
+    }
+  }
+
  private:
   std::string m_name;
+  Kind m_kind;
 };
 
 /**
