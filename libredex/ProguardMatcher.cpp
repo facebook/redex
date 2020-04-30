@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <boost/regex.hpp>
 #include <iostream>
+#include <mutex>
 #include <thread>
 
 #include "ClassHierarchy.h"
@@ -712,14 +713,24 @@ void ProguardMatcher::process_keep(const KeepSpecSet& keep_rules,
                                    bool process_external) {
   Timer t("Process keep for " + to_string(rule_type));
 
-  auto process_single_keep = [process_external](ClassMatcher& class_match,
-                                                KeepRuleMatcher& rule_matcher,
-                                                DexClass* cls) {
+  // Classes are aligned by 8. Shard size should be (co-)prime for good
+  // distribution.
+  constexpr size_t LOCKS = 1039u;
+  std::array<std::mutex, LOCKS> locks;
+  auto get_lock = [&locks](const DexClass* cls) -> std::mutex& {
+    return locks[reinterpret_cast<uintptr_t>(cls) % LOCKS];
+  };
+
+  auto process_single_keep = [process_external,
+                              &get_lock](ClassMatcher& class_match,
+                                         KeepRuleMatcher& rule_matcher,
+                                         DexClass* cls) {
     // Skip external classes.
     if (cls == nullptr || (!process_external && cls->is_external())) {
       return;
     }
     if (class_match.match(cls)) {
+      std::unique_lock<std::mutex> lock(get_lock(cls));
       rule_matcher.keep_processor(cls);
     }
   };
