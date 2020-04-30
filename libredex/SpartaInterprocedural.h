@@ -16,7 +16,7 @@ namespace sparta_interprocedural {
 
 struct AnalysisAdaptorBase {
   using Function = const DexMethod*;
-  using Program = const Scope&;
+  using Program = Scope;
   using CallGraphInterface = call_graph::GraphInterface;
 
   // Uses the serial fixpoint iterator by default. The user can override this

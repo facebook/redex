@@ -191,20 +191,18 @@ using Analysis = InterproceduralAnalyzer<MaxDepthAnalysisAdaptor>;
 
 } // namespace
 
-namespace max_depth {
-
-std::unordered_map<const DexMethod*, int> analyze(const Scope& scope,
-                                                  unsigned max_iteration) {
-  auto analysis = Analysis(scope, max_iteration);
+void MaxDepthAnalysisPass::run_pass(DexStoresVector& stores,
+                                    ConfigFiles& /* conf */,
+                                    PassManager& /* pm */) {
+  auto analysis = Analysis(build_class_scope(stores), m_max_iteration);
   analysis.run();
-  std::unordered_map<const DexMethod*, int> results;
+  m_result = std::make_shared<std::unordered_map<const DexMethod*, int>>();
 
   for (const auto& entry : analysis.registry.get_map()) {
     if (entry.second.is_value()) {
-      results[entry.first] = entry.second.depth();
+      (*m_result)[entry.first] = entry.second.depth();
     }
   }
-  return results;
 }
 
-} // namespace max_depth
+static MaxDepthAnalysisPass s_pass;

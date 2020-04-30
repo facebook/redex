@@ -9,6 +9,7 @@ AM_CXXFLAGS = --std=gnu++14 -O3 -Wall -g
 # Include paths
 #
 AM_CPPFLAGS = \
+	-I$(top_srcdir)/analysis/max-depth \
 	-I$(top_srcdir)/liblocator \
 	-I$(top_srcdir)/libredex \
 	-I$(top_srcdir)/libresource \
@@ -98,7 +99,6 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/service/dedup-blocks \
 	-I$(top_srcdir)/service/escape-analysis \
 	-I$(top_srcdir)/service/local-dce \
-	-I$(top_srcdir)/service/max-depth \
 	-I$(top_srcdir)/service/method-dedup \
 	-I$(top_srcdir)/service/method-inliner \
 	-I$(top_srcdir)/service/method-merger \
@@ -259,6 +259,7 @@ bin_PROGRAMS = redexdump
 noinst_PROGRAMS = redex-all
 
 redex_all_SOURCES = \
+	analysis/max-depth/MaxDepthAnalysis.cpp \
 	libredex/DexAsm.cpp \
 	opt/access-marking/AccessMarking.cpp \
 	opt/add_redex_txt_to_apk/AddRedexTxtToApk.cpp \
@@ -394,7 +395,6 @@ redex_all_SOURCES = \
 	service/escape-analysis/LocalPointersAnalysis.cpp \
 	service/local-dce/LocalDce.cpp \
 	service/loop-info/LoopInfo.cpp \
-	service/max-depth/MaxDepthAnalysis.cpp \
 	service/method-dedup/ConstantLifting.cpp \
 	service/method-dedup/ConstantValue.cpp \
 	service/method-dedup/MethodDedup.cpp \
