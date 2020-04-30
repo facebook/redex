@@ -35,7 +35,7 @@ struct VirtualMergingStats {
 class VirtualMerging {
  public:
   VirtualMerging(DexStoresVector&, const inliner::InlinerConfig&, size_t);
-  void run();
+  void run(const method_profiles::MethodProfiles&);
   const VirtualMergingStats& get_stats() { return m_stats; }
 
  private:
@@ -58,14 +58,15 @@ class VirtualMerging {
   ConcurrentMap<const VirtualScope*, std::unordered_set<const DexMethod*>>
       m_mergeable_scope_methods;
 
-  void compute_mergeable_pairs_by_virtual_scopes();
+  void compute_mergeable_pairs_by_virtual_scopes(
+      const method_profiles::MethodProfiles&);
   std::map<const VirtualScope*,
-           std::vector<std::pair<DexMethod*, DexMethod*>>,
+           std::vector<std::pair<const DexMethod*, const DexMethod*>>,
            virtualscopes_comparator>
       m_mergeable_pairs_by_virtual_scopes;
 
   void merge_methods();
-  std::unordered_map<DexClass*, std::vector<DexMethod*>>
+  std::unordered_map<DexClass*, std::vector<const DexMethod*>>
       m_virtual_methods_to_remove;
   std::unordered_map<DexMethod*, DexMethod*> m_virtual_methods_to_remap;
 

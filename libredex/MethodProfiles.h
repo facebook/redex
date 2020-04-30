@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include <boost/optional.hpp>
+
 #include "DexClass.h"
 
 namespace method_profiles {
@@ -53,12 +55,29 @@ class MethodProfiles {
     return success;
   }
 
+  // For testing purposes.
+  static MethodProfiles initialize(
+      std::unordered_map<const DexMethodRef*, Stats> data) {
+    MethodProfiles ret{};
+    ret.m_initialized = true;
+    ret.m_method_stats = std::move(data);
+    return ret;
+  }
+
   bool is_initialized() const { return m_initialized; }
 
   bool has_stats() const { return !m_method_stats.empty(); }
 
   const std::unordered_map<const DexMethodRef*, Stats>& method_stats() const {
     return m_method_stats;
+  }
+
+  boost::optional<Stats> get_method_stat(const DexMethodRef* m) const {
+    auto it = m_method_stats.find(m);
+    if (it == m_method_stats.end()) {
+      return boost::none;
+    }
+    return it->second;
   }
 
  private:
