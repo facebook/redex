@@ -10,6 +10,7 @@
 #include "ConstantAbstractDomain.h"
 #include "DexUtil.h"
 #include "FiniteAbstractDomain.h"
+#include "PatriciaTreeMapAbstractEnvironment.h"
 #include "ReducedProductAbstractDomain.h"
 
 enum Nullness {
@@ -90,4 +91,87 @@ class ConstNullnessDomain
   }
 
   NullnessDomain get_nullness() const { return get<1>(); }
+};
+
+class ArrayNullnessDomain final
+    : public sparta::ReducedProductAbstractDomain<
+          ArrayNullnessDomain,
+          NullnessDomain /* nullness of the array object */,
+          sparta::ConstantAbstractDomain<uint32_t> /* array length */,
+          sparta::PatriciaTreeMapAbstractEnvironment<
+              uint32_t,
+              NullnessDomain> /* array elements */> {
+
+ public:
+  using ArrayLengthDomain = sparta::ConstantAbstractDomain<uint32_t>;
+  using ElementsNullness =
+      sparta::PatriciaTreeMapAbstractEnvironment<uint32_t, NullnessDomain>;
+  using BaseType = sparta::ReducedProductAbstractDomain<ArrayNullnessDomain,
+                                                        NullnessDomain,
+                                                        ArrayLengthDomain,
+                                                        ElementsNullness>;
+  using ReducedProductAbstractDomain::ReducedProductAbstractDomain;
+
+  // Some older compilers complain that the class is not default constructible.
+  // We intended to use the default constructors of the base class (via the
+  // `using` declaration above), but some compilers fail to catch this. So we
+  // insert a redundant '= default'.
+  ArrayNullnessDomain() = default;
+
+  static void reduce_product(
+      std::tuple<NullnessDomain, ArrayLengthDomain, ElementsNullness>&
+          product) {
+    if (std::get<1>(product).is_top()) {
+      std::get<2>(product).set_to_top();
+    }
+  }
+
+  explicit ArrayNullnessDomain(uint32_t length)
+      : ReducedProductAbstractDomain(std::make_tuple(NullnessDomain(NOT_NULL),
+                                                     ArrayLengthDomain(length),
+                                                     ElementsNullness())) {
+    mutate_elements([length](ElementsNullness* elements) {
+      for (size_t i = 0; i < length; ++i) {
+        elements->set(i, NullnessDomain(IS_NULL));
+      }
+    });
+    reduce();
+  }
+
+  NullnessDomain get_nullness() const { return get<0>(); }
+
+  boost::optional<uint32_t> get_length() const {
+    return get<1>().get_constant();
+  }
+
+  ElementsNullness get_elements() const { return get<2>(); }
+
+  NullnessDomain get_element(uint32_t idx) const {
+    return get_elements().get(idx);
+  }
+
+  ArrayNullnessDomain& set_element(uint32_t idx, const NullnessDomain& domain) {
+    if (is_top() || is_bottom()) {
+      return *this;
+    }
+    return this->mutate_elements(
+        [&](ElementsNullness* elements) { elements->set(idx, domain); });
+  }
+
+  void join_with(const ArrayNullnessDomain& other) override {
+    BaseType::join_with(other);
+    reduce();
+  }
+
+  void widen_with(const ArrayNullnessDomain& other) override {
+    BaseType::widen_with(other);
+    reduce();
+  }
+
+ private:
+  ArrayNullnessDomain& mutate_elements(
+      std::function<void(ElementsNullness*)> f) {
+    this->template apply<2>(std::move(f));
+    return *this;
+  }
 };

@@ -649,3 +649,30 @@ TEST_F(DexTypeEnvironmentTest, ConstNullnessDomainTest) {
   EXPECT_TRUE(c1.get<0>().get_nullness().is_top());
   EXPECT_TRUE(c1.is_nullable());
 }
+
+TEST_F(DexTypeEnvironmentTest, ArrayNullnessDomainTest) {
+  auto a1 = ArrayNullnessDomain(1);
+  EXPECT_FALSE(a1.is_top());
+  EXPECT_FALSE(a1.is_bottom());
+  EXPECT_FALSE(a1.get_nullness().is_top());
+  EXPECT_EQ(a1.get_nullness(), NullnessDomain(NOT_NULL));
+  EXPECT_EQ(*a1.get_length(), 1);
+  EXPECT_EQ(a1.get_element(0), NullnessDomain(IS_NULL));
+  EXPECT_TRUE(a1.get_element(1).is_top());
+
+  auto a2 = ArrayNullnessDomain(2);
+  EXPECT_FALSE(a2.is_top());
+  EXPECT_FALSE(a2.is_bottom());
+  EXPECT_EQ(a2.get_nullness(), NullnessDomain(NOT_NULL));
+  EXPECT_EQ(*a2.get_length(), 2);
+  EXPECT_EQ(a2.get_element(0), NullnessDomain(IS_NULL));
+  EXPECT_EQ(a2.get_element(1), NullnessDomain(IS_NULL));
+
+  a1.join_with(a2);
+  EXPECT_FALSE(a1.is_top());
+  EXPECT_FALSE(a1.is_bottom());
+  EXPECT_EQ(a1.get_nullness(), NullnessDomain(NOT_NULL));
+  EXPECT_TRUE(a1.get<1>().is_top());
+  EXPECT_TRUE(a1.get_element(0).is_top());
+  EXPECT_TRUE(a1.get_element(1).is_top());
+}
