@@ -148,6 +148,14 @@ class DisjointUnionAbstractDomain final
     return *dom;
   }
 
+  template <typename Domain>
+  void apply(std::function<void(Domain*)> operation) {
+    auto* dom = boost::get<Domain>(&m_variant);
+    if (dom) {
+      operation(dom);
+    }
+  }
+
   /*
    * Return a numeric index representing the current type, if any.
    */
