@@ -230,7 +230,9 @@ class BlameMap {
    * analysis will both result in a result that indicates no allocations
    * occurred.
    */
-  Value get(IRInstruction* alloc) const { return Value{m_domain.get(alloc)}; }
+  Value get(const IRInstruction* alloc) const {
+    return Value{m_domain.get(alloc)};
+  }
 
  private:
   BlameStore::Domain m_domain;
