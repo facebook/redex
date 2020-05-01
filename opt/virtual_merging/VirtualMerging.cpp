@@ -657,6 +657,13 @@ void VirtualMergingPass::bind_config() {
 void VirtualMergingPass::run_pass(DexStoresVector& stores,
                                   ConfigFiles& conf,
                                   PassManager& mgr) {
+  if (mgr.get_redex_options().instrument_pass_enabled) {
+    TRACE(VM,
+          1,
+          "Skipping VirtualMergingPass because Instrumentation is enabled");
+    return;
+  }
+
   const auto& inliner_config = conf.get_inliner_config();
   VirtualMerging vm(stores, inliner_config,
                     m_max_overriding_method_instructions);
