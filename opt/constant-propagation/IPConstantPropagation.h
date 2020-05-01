@@ -69,14 +69,16 @@ class PassImpl : public Pass {
   /*
    * Exposed for testing purposes.
    */
-  std::unique_ptr<FixpointIterator> analyze(const Scope&);
+  std::unique_ptr<FixpointIterator> analyze(
+      const Scope&, const ImmutableAttributeAnalyzerState*);
 
  private:
   void compute_analysis_stats(const WholeProgramState&);
 
   void optimize(const Scope&,
                 const XStoreRefs& xstores,
-                const FixpointIterator&);
+                const FixpointIterator&,
+                const ImmutableAttributeAnalyzerState*);
 
   struct Stats {
     size_t constant_fields{0};

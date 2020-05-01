@@ -28,6 +28,10 @@ class Transform final {
     bool replace_move_result_with_consts{false};
     bool remove_dead_switch{true};
     const DexType* class_under_init{nullptr};
+    // These methods are known pure, we can replace their results with constant
+    // value.
+    const ConcurrentSet<DexMethod*>* getter_methods_for_immutable_fields{
+        nullptr};
     Config() {}
   };
 

@@ -765,18 +765,30 @@ ImmutableAttributeAnalyzerState::Initializer&
 ImmutableAttributeAnalyzerState::add_initializer(DexMethod* initialize_method,
                                                  DexMethod* attr) {
   attribute_methods.insert(attr);
-  auto& initializers = method_initializers[initialize_method];
-  initializers.push_back(Initializer(attr));
-  return initializers.back();
+  ImmutableAttributeAnalyzerState::Initializer* new_initializer = nullptr;
+  method_initializers.update(
+      initialize_method,
+      [&](DexMethod*, std::vector<Initializer>& initializers, bool) {
+        initializers.push_back(Initializer(attr));
+        new_initializer = &initializers.back();
+      });
+  redex_assert(new_initializer);
+  return *new_initializer;
 }
 
 ImmutableAttributeAnalyzerState::Initializer&
 ImmutableAttributeAnalyzerState::add_initializer(DexMethod* initialize_method,
                                                  DexField* attr) {
   attribute_fields.insert(attr);
-  auto& initializers = method_initializers[initialize_method];
-  initializers.push_back(Initializer(attr));
-  return initializers.back();
+  ImmutableAttributeAnalyzerState::Initializer* new_initializer = nullptr;
+  method_initializers.update(
+      initialize_method,
+      [&](DexMethod*, std::vector<Initializer>& initializers, bool) {
+        initializers.push_back(Initializer(attr));
+        new_initializer = &initializers.back();
+      });
+  redex_assert(new_initializer);
+  return *new_initializer;
 }
 
 ImmutableAttributeAnalyzerState::Initializer&
@@ -791,16 +803,26 @@ ImmutableAttributeAnalyzerState::ImmutableAttributeAnalyzerState() {
   // Integer can be initialized throuth
   //  invoke-static v0 Ljava/lang/Integer;.valueOf:(I)Ljava/lang/Integer;
   // clang-format on
-  auto integer_valueOf = method::java_lang_Integer_valueOf();
-  auto integer_intValue = method::java_lang_Integer_intValue();
-  // The intValue of integer is initialized through the static invocation.
-  add_initializer(integer_valueOf, integer_intValue)
-      .set_src_id_of_attr(0)
-      .set_obj_to_dest();
+  // Other boxed types are similar.
+  std::array<DexType*, 8> boxed_types = {
+      type::java_lang_Boolean(), type::java_lang_Byte(),
+      type::java_lang_Short(),   type::java_lang_Character(),
+      type::java_lang_Integer(), type::java_lang_Long(),
+      type::java_lang_Float(),   type::java_lang_Double()};
+  for (auto type : boxed_types) {
+    auto valueOf = type::get_value_of_method_for_type(type);
+    auto getter_method = type::get_unboxing_method_for_type(type);
+    if (valueOf && getter_method && valueOf->is_def() &&
+        getter_method->is_def()) {
+      add_initializer(valueOf->as_def(), getter_method->as_def())
+          .set_src_id_of_attr(0)
+          .set_obj_to_dest();
+    }
+  }
 }
 
 bool ImmutableAttributeAnalyzer::analyze_iget(
-    const ImmutableAttributeAnalyzerState& state,
+    const ImmutableAttributeAnalyzerState* state,
     const IRInstruction* insn,
     ConstantEnvironment* env) {
   auto field_ref = insn->get_field();
@@ -808,7 +830,7 @@ bool ImmutableAttributeAnalyzer::analyze_iget(
   if (!field) {
     field = static_cast<DexField*>(field_ref);
   }
-  if (!state.attribute_fields.count(field)) {
+  if (!state->attribute_fields.count(field)) {
     return false;
   }
   auto this_domain = env->get(insn->src(0));
@@ -834,7 +856,7 @@ bool ImmutableAttributeAnalyzer::analyze_iget(
 }
 
 bool ImmutableAttributeAnalyzer::analyze_invoke(
-    const ImmutableAttributeAnalyzerState& state,
+    const ImmutableAttributeAnalyzerState* state,
     const IRInstruction* insn,
     ConstantEnvironment* env) {
   auto method_ref = insn->get_method();
@@ -844,9 +866,9 @@ bool ImmutableAttributeAnalyzer::analyze_invoke(
     // Example: Integer.valueOf(I) is an external method.
     method = static_cast<DexMethod*>(method_ref);
   }
-  if (state.method_initializers.count(method)) {
+  if (state->method_initializers.count(method)) {
     return analyze_method_initialization(state, insn, env, method);
-  } else if (state.attribute_methods.count(method)) {
+  } else if (state->attribute_methods.count(method)) {
     return analyze_method_attr(state, insn, env, method);
   }
   return false;
@@ -857,7 +879,7 @@ bool ImmutableAttributeAnalyzer::analyze_invoke(
  * immutable field of an object. `Integer.intValue()` is a such method.
  */
 bool ImmutableAttributeAnalyzer::analyze_method_attr(
-    const ImmutableAttributeAnalyzerState& /* unused */,
+    const ImmutableAttributeAnalyzerState* /* unused */,
     const IRInstruction* insn,
     ConstantEnvironment* env,
     DexMethod* method) {
@@ -887,12 +909,12 @@ bool ImmutableAttributeAnalyzer::analyze_method_attr(
 }
 
 bool ImmutableAttributeAnalyzer::analyze_method_initialization(
-    const ImmutableAttributeAnalyzerState& state,
+    const ImmutableAttributeAnalyzerState* state,
     const IRInstruction* insn,
     ConstantEnvironment* env,
     DexMethod* method) {
-  auto it = state.method_initializers.find(method);
-  if (it == state.method_initializers.end()) {
+  auto it = state->method_initializers.find(method);
+  if (it == state->method_initializers.end()) {
     return false;
   }
   std::shared_ptr<ObjectWithImmutAttr> object =

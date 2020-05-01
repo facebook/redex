@@ -26,6 +26,8 @@ struct InterproceduralConstantPropagationTest : public RedexTest {
     // EnumFieldAnalyzer requires that this method exists
     method::java_lang_Enum_equals();
   }
+
+  ImmutableAttributeAnalyzerState m_immut_analyzer_state;
 };
 
 static DexStoresVector make_simple_stores(const Scope& scope) {
@@ -1052,7 +1054,8 @@ TEST_F(InterproceduralConstantPropagationTest, constantFieldAfterClinit) {
   InterproceduralConstantPropagationPass::Config config;
   config.max_heap_analysis_iterations = 2;
 
-  auto fp_iter = InterproceduralConstantPropagationPass(config).analyze(scope);
+  auto fp_iter = InterproceduralConstantPropagationPass(config).analyze(
+      scope, &m_immut_analyzer_state);
   auto& wps = fp_iter->get_whole_program_state();
   EXPECT_EQ(wps.get_field_value(field_qux), SignedConstantDomain(0));
   EXPECT_EQ(wps.get_field_value(field_corge), SignedConstantDomain(1));
@@ -1142,7 +1145,8 @@ TEST_F(InterproceduralConstantPropagationTest,
   InterproceduralConstantPropagationPass::Config config;
   config.max_heap_analysis_iterations = 1;
 
-  auto fp_iter = InterproceduralConstantPropagationPass(config).analyze(scope);
+  auto fp_iter = InterproceduralConstantPropagationPass(config).analyze(
+      scope, &m_immut_analyzer_state);
   auto& wps = fp_iter->get_whole_program_state();
   EXPECT_EQ(wps.get_field_value(field_qux), ConstantValue::top());
 
@@ -1487,7 +1491,8 @@ TEST_F(InterproceduralConstantPropagationTest, whiteBoxReturnValues) {
 
   InterproceduralConstantPropagationPass::Config config;
   config.max_heap_analysis_iterations = 1;
-  auto fp_iter = InterproceduralConstantPropagationPass(config).analyze(scope);
+  auto fp_iter = InterproceduralConstantPropagationPass(config).analyze(
+      scope, &m_immut_analyzer_state);
   auto& wps = fp_iter->get_whole_program_state();
 
   // Make sure we mark methods that have a reachable return-void statement as

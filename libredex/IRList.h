@@ -571,6 +571,8 @@ class ConstInstructionIterable : public InstructionIterableImpl<true> {
 
 IRInstruction* primary_instruction_of_move_result_pseudo(IRList::iterator it);
 
+IRInstruction* primary_instruction_of_move_result(IRList::iterator it);
+
 IRInstruction* move_result_pseudo_of(IRList::iterator it);
 
 } // namespace ir_list

@@ -238,9 +238,9 @@ struct ImmutableAttributeAnalyzerState {
     }
   };
 
-  std::unordered_map<DexMethod*, std::vector<Initializer>> method_initializers;
-  std::unordered_set<DexMethod*> attribute_methods;
-  std::unordered_set<DexField*> attribute_fields;
+  ConcurrentMap<DexMethod*, std::vector<Initializer>> method_initializers;
+  ConcurrentSet<DexMethod*> attribute_methods;
+  ConcurrentSet<DexField*> attribute_fields;
 
   ImmutableAttributeAnalyzerState();
 
@@ -253,22 +253,22 @@ struct ImmutableAttributeAnalyzerState {
 class ImmutableAttributeAnalyzer final
     : public InstructionAnalyzerBase<ImmutableAttributeAnalyzer,
                                      ConstantEnvironment,
-                                     ImmutableAttributeAnalyzerState> {
+                                     ImmutableAttributeAnalyzerState*> {
   static bool analyze_method_initialization(
-      const ImmutableAttributeAnalyzerState&,
+      const ImmutableAttributeAnalyzerState*,
       const IRInstruction*,
       ConstantEnvironment*,
       DexMethod* method);
-  static bool analyze_method_attr(const ImmutableAttributeAnalyzerState&,
+  static bool analyze_method_attr(const ImmutableAttributeAnalyzerState*,
                                   const IRInstruction*,
                                   ConstantEnvironment*,
                                   DexMethod* method);
 
  public:
-  static bool analyze_invoke(const ImmutableAttributeAnalyzerState&,
+  static bool analyze_invoke(const ImmutableAttributeAnalyzerState*,
                              const IRInstruction*,
                              ConstantEnvironment*);
-  static bool analyze_iget(const ImmutableAttributeAnalyzerState&,
+  static bool analyze_iget(const ImmutableAttributeAnalyzerState*,
                            const IRInstruction* insn,
                            ConstantEnvironment* env);
 };

@@ -10,6 +10,7 @@
 #include "ConstantEnvironment.h"
 #include "ConstantPropagationAnalysis.h"
 #include "ConstantPropagationTransform.h"
+#include "ConstructorParams.h"
 #include "IPConstantPropagationAnalysis.h"
 #include "MethodOverrideGraph.h"
 #include "Timer.h"
@@ -23,6 +24,7 @@ namespace interprocedural {
 
 using CombinedAnalyzer =
     InstructionAnalyzerCombiner<ClinitFieldAnalyzer,
+                                ImmutableAttributeAnalyzer,
                                 WholeProgramAwareAnalyzer,
                                 EnumFieldAnalyzer,
                                 BoxedBooleanAnalyzer,
@@ -30,42 +32,55 @@ using CombinedAnalyzer =
                                 ConstantClassObjectAnalyzer,
                                 PrimitiveAnalyzer>;
 
-std::unique_ptr<intraprocedural::FixpointIterator> analyze_procedure(
-    const DexMethod* method,
-    const WholeProgramState& wps,
-    ArgumentDomain args) {
-  always_assert(method->get_code() != nullptr);
-  auto& code = *method->get_code();
-  // Currently, our callgraph does not include calls to non-devirtualizable
-  // virtual methods. So those methods may appear unreachable despite being
-  // reachable.
-  if (args.is_bottom()) {
-    args.set_to_top();
-  } else if (!args.is_top()) {
-    TRACE(ICONSTP, 3, "Have args for %s: %s", SHOW(method), SHOW(args));
+class AnalyzerGenerator {
+  const ImmutableAttributeAnalyzerState* m_immut_analyzer_state;
+
+ public:
+  explicit AnalyzerGenerator(
+      const ImmutableAttributeAnalyzerState* immut_analyzer_state)
+      : m_immut_analyzer_state(immut_analyzer_state) {
+    // Initialize the singletons that `operator()` needs ahead of time to
+    // avoid a data race.
+    static_cast<void>(EnumFieldAnalyzerState::get());
+    static_cast<void>(BoxedBooleanAnalyzerState::get());
   }
 
-  auto env = env_with_params(is_static(method), &code, args);
-  DexType* class_under_init{nullptr};
-  if (method::is_clinit(method)) {
-    class_under_init = method->get_class();
-    set_encoded_values(type_class(class_under_init), &env);
+  std::unique_ptr<intraprocedural::FixpointIterator> operator()(
+      const DexMethod* method,
+      const WholeProgramState& wps,
+      ArgumentDomain args) {
+    always_assert(method->get_code() != nullptr);
+    auto& code = *method->get_code();
+    // Currently, our callgraph does not include calls to non-devirtualizable
+    // virtual methods. So those methods may appear unreachable despite being
+    // reachable.
+    if (args.is_bottom()) {
+      args.set_to_top();
+    } else if (!args.is_top()) {
+      TRACE(ICONSTP, 3, "Have args for %s: %s", SHOW(method), SHOW(args));
+    }
+
+    auto env = env_with_params(is_static(method), &code, args);
+    DexType* class_under_init{nullptr};
+    if (method::is_clinit(method)) {
+      class_under_init = method->get_class();
+      set_encoded_values(type_class(class_under_init), &env);
+    }
+    TRACE(ICONSTP, 5, "%s", SHOW(code.cfg()));
+
+    auto intra_cp = std::make_unique<intraprocedural::FixpointIterator>(
+        code.cfg(),
+        CombinedAnalyzer(class_under_init,
+                         const_cast<ImmutableAttributeAnalyzerState*>(
+                             m_immut_analyzer_state),
+                         &wps, EnumFieldAnalyzerState::get(),
+                         BoxedBooleanAnalyzerState::get(), nullptr, nullptr,
+                         nullptr));
+    intra_cp->run(env);
+
+    return intra_cp;
   }
-  TRACE(ICONSTP, 5, "%s", SHOW(code.cfg()));
-
-  auto intra_cp = std::make_unique<intraprocedural::FixpointIterator>(
-      code.cfg(),
-      CombinedAnalyzer(class_under_init,
-                       &wps,
-                       EnumFieldAnalyzerState::get(),
-                       BoxedBooleanAnalyzerState::get(),
-                       nullptr,
-                       nullptr,
-                       nullptr));
-  intra_cp->run(env);
-
-  return intra_cp;
-}
+};
 
 /*
  * This algorithm is based off the approach in this paper[1]. We start off by
@@ -80,20 +95,12 @@ std::unique_ptr<intraprocedural::FixpointIterator> analyze_procedure(
  *      Large Embedded C Programs.
  *      https://ntrs.nasa.gov/search.jsp?R=20040081118
  */
-std::unique_ptr<FixpointIterator> PassImpl::analyze(const Scope& scope) {
+std::unique_ptr<FixpointIterator> PassImpl::analyze(
+    const Scope& scope,
+    const ImmutableAttributeAnalyzerState* immut_analyzer_state) {
   call_graph::Graph cg = call_graph::single_callee_graph(scope);
-  // Rebuild all CFGs here -- this should be more efficient than doing them
-  // within FixpointIterator::analyze_node(), since that can get called
-  // multiple times for a given method
-  walk::parallel::code(scope, [](DexMethod*, IRCode& code) {
-    code.build_cfg(/* editable */ false);
-    code.cfg().calculate_exit_block();
-  });
-  // Initialize the singletons that `analyze_procedure` needs ahead of time to
-  // avoid a data race.
-  static_cast<void>(EnumFieldAnalyzerState::get());
-  static_cast<void>(BoxedBooleanAnalyzerState::get());
-  auto fp_iter = std::make_unique<FixpointIterator>(cg, analyze_procedure);
+  auto fp_iter = std::make_unique<FixpointIterator>(
+      cg, AnalyzerGenerator(immut_analyzer_state));
   // Run the bootstrap. All field value and method return values are
   // represented by Top.
   fp_iter->run({{CURRENT_PARTITION_LABEL, ArgumentDomain()}});
@@ -153,9 +160,11 @@ void PassImpl::compute_analysis_stats(const WholeProgramState& wps) {
  * Transform all methods using the information about constant method arguments
  * that analyze() obtained.
  */
-void PassImpl::optimize(const Scope& scope,
-                        const XStoreRefs& xstores,
-                        const FixpointIterator& fp_iter) {
+void PassImpl::optimize(
+    const Scope& scope,
+    const XStoreRefs& xstores,
+    const FixpointIterator& fp_iter,
+    const ImmutableAttributeAnalyzerState* immut_analyzer_state) {
   m_transform_stats =
       walk::parallel::methods<Transform::Stats>(scope, [&](DexMethod* method) {
         if (method->get_code() == nullptr) {
@@ -172,6 +181,8 @@ void PassImpl::optimize(const Scope& scope,
           Transform::Config config(m_config.transform);
           config.class_under_init =
               method::is_clinit(method) ? method->get_class() : nullptr;
+          config.getter_methods_for_immutable_fields =
+              &immut_analyzer_state->attribute_methods;
           Transform tf(config);
           return tf.apply_on_uneditable_cfg(*intra_cp,
                                             fp_iter.get_whole_program_state(),
@@ -185,8 +196,19 @@ void PassImpl::optimize(const Scope& scope,
 void PassImpl::run(const DexStoresVector& stores) {
   auto scope = build_class_scope(stores);
   XStoreRefs xstores(stores);
-  auto fp_iter = analyze(scope);
-  optimize(scope, xstores, *fp_iter);
+  // Rebuild all CFGs here -- this should be more efficient than doing them
+  // within FixpointIterator::analyze_node(), since that can get called
+  // multiple times for a given method
+  walk::parallel::code(scope, [](DexMethod*, IRCode& code) {
+    code.build_cfg(/* editable */ false);
+    code.cfg().calculate_exit_block();
+  });
+  // Hold the analyzer state of ImmutableAttributeAnalyzer.
+  std::unique_ptr<ImmutableAttributeAnalyzerState> immut_analyzer_state =
+      std::make_unique<ImmutableAttributeAnalyzerState>();
+  immutable_state::analyze_constructors(scope, immut_analyzer_state.get());
+  auto fp_iter = analyze(scope, immut_analyzer_state.get());
+  optimize(scope, xstores, *fp_iter, immut_analyzer_state.get());
 }
 
 void PassImpl::run_pass(DexStoresVector& stores,

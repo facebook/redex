@@ -25,10 +25,16 @@ struct ImmutableTest : public ConstantPropagationTest {
   ImmutableTest() {
     always_assert(load_class_file(std::getenv("enum_class_file")));
     m_config.replace_move_result_with_consts = true;
-    m_analyzer = ImmutableAnalyzer(
-        nullptr, cp::ImmutableAttributeAnalyzerState(), nullptr);
+    auto integer_valueOf = method::java_lang_Integer_valueOf();
+    auto integer_intValue = method::java_lang_Integer_intValue();
+    // The intValue of integer is initialized through the static invocation.
+    m_immut_analyzer_state.add_initializer(integer_valueOf, integer_intValue)
+        .set_src_id_of_attr(0)
+        .set_obj_to_dest();
+    m_analyzer = ImmutableAnalyzer(nullptr, &m_immut_analyzer_state, nullptr);
   }
 
+  cp::ImmutableAttributeAnalyzerState m_immut_analyzer_state;
   ImmutableAnalyzer m_analyzer;
   cp::Transform::Config m_config;
 };
@@ -127,7 +133,7 @@ TEST_F(ImmutableTest, object) {
         .set_src_id_of_obj(0);
   }
   do_const_prop(code.get(),
-                ImmutableAnalyzer(nullptr, analyzer_state, nullptr),
+                ImmutableAnalyzer(nullptr, &analyzer_state, nullptr),
                 m_config);
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -185,7 +191,7 @@ TEST_F(ImmutableTest, enum_constructor) {
   )
   )");
   do_const_prop(code.get(),
-                ImmutableAnalyzer(nullptr, analyzer_state, nullptr),
+                ImmutableAnalyzer(nullptr, &analyzer_state, nullptr),
                 m_config);
 
   auto expected_code = assembler::ircode_from_string(R"(

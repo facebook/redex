@@ -117,7 +117,8 @@ class InitFixpointIterator final
         env->set(field, env->get(insn->src(0)));
       }
       return;
-    } else if (is_invoke_direct(opcode)) {
+    } else if (is_invoke_direct(opcode) &&
+               method::is_init(insn->get_method())) {
       // Another construction invocation on `this` pointer.
       const auto& obj_domain = env->get(insn->src(0));
       if (obj_domain.is_value() && *obj_domain.get_constant() == 0) {
@@ -129,6 +130,8 @@ class InitFixpointIterator final
           env->set(RESULT_REGISTER, ParamIdxDomain::top());
           return;
         }
+        boost::lock_guard<boost::mutex> lock(
+            m_state.method_initializers.get_lock(method));
         auto it = m_state.method_initializers.find(method);
         if (it != m_state.method_initializers.end()) {
           for (auto& initializer : it->second) {
@@ -218,7 +221,6 @@ namespace constant_propagation {
 namespace immutable_state {
 void analyze_constructors(const Scope& scope,
                           ImmutableAttributeAnalyzerState* state) {
-  std::mutex state_mutex;
   // java.lang.Enum is the super class of enums, `Enum.<init>(String, int)`
   // invocation is to initialize `ordinal` and `name` fields. Given this input,
   // the analysis part learns about the invisible fields initialization when
@@ -233,11 +235,13 @@ void analyze_constructors(const Scope& scope,
                         method::java_lang_Enum_ordinal())
       .set_src_id_of_obj(0)
       .set_src_id_of_attr(2);
-  walk::parallel::classes(scope, [&state_mutex, state](DexClass* cls) {
+  auto java_lang_String = type::java_lang_String();
+  walk::parallel::classes(scope, [state, java_lang_String](DexClass* cls) {
     std::unordered_set<DexField*> fields;
     for (auto ifield : cls->get_ifields()) {
       if (is_final(ifield) && !root(ifield) &&
-          type::is_primitive(ifield->get_type())) {
+          (type::is_primitive(ifield->get_type()) ||
+           ifield->get_type() == java_lang_String)) {
         fields.insert(ifield);
       }
     }
@@ -247,10 +251,11 @@ void analyze_constructors(const Scope& scope,
     auto ctors = cls->get_ctors();
     for (auto ctor : ctors) {
       for (const auto& pair : analyze_initializer(ctor, *state, fields)) {
-        std::lock_guard<std::mutex> lock(state_mutex);
-        state->add_initializer(ctor, pair.first)
+        auto& attr = pair.first;
+        auto attr_param_idx = pair.second;
+        state->add_initializer(ctor, attr)
             .set_src_id_of_obj(0)
-            .set_src_id_of_attr(pair.second);
+            .set_src_id_of_attr(attr_param_idx);
       }
     }
   });

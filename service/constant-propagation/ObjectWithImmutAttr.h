@@ -95,14 +95,16 @@ struct ObjectWithImmutAttr {
       if (attr.member != att.attr.member) {
         continue;
       }
-      always_assert_log(
-          false, "%s is written before, is it real final attribute?", [&att]() {
-            if (att.attr.is_method()) {
-              return SHOW(att.attr.method);
-            } else {
-              return SHOW(att.attr.field);
-            }
-          }());
+      always_assert_log(false,
+                        "%s is written before, is it real final attribute?",
+                        [&att]() {
+                          if (att.attr.is_method()) {
+                            return show(att.attr.method);
+                          } else {
+                            return show(att.attr.field);
+                          }
+                        }()
+                            .c_str());
     }
 #endif
     attributes.push_back(ImmutableAttr(attr, value));

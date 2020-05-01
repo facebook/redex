@@ -774,6 +774,16 @@ IRInstruction* primary_instruction_of_move_result_pseudo(IRList::iterator it) {
   return it->insn;
 }
 
+IRInstruction* primary_instruction_of_move_result(IRList::iterator it) {
+  // There may be debug info between primary insn and move-result*?
+  do {
+    --it;
+  } while (it->type != MFLOW_OPCODE);
+  always_assert_log(it->insn->has_move_result(),
+                    "%s does not have a move result", SHOW(*it));
+  return it->insn;
+}
+
 IRInstruction* move_result_pseudo_of(IRList::iterator it) {
   ++it;
   always_assert(it->type == MFLOW_OPCODE &&

@@ -148,6 +148,15 @@ void Transform::simplify_instruction(const ConstantEnvironment& env,
   case OPCODE_MOVE_RESULT_OBJECT: {
     if (m_config.replace_move_result_with_consts) {
       replace_with_const(env, it, xstores, declaring_type);
+    } else if (m_config.getter_methods_for_immutable_fields) {
+      auto primary_insn = ir_list::primary_instruction_of_move_result(it);
+      if (is_invoke_virtual(primary_insn->opcode())) {
+        auto invoked =
+            resolve_method(primary_insn->get_method(), MethodSearch::Virtual);
+        if (m_config.getter_methods_for_immutable_fields->count(invoked)) {
+          replace_with_const(env, it, xstores, declaring_type);
+        }
+      }
     }
     break;
   }
