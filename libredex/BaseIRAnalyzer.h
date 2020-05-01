@@ -24,7 +24,7 @@ class BaseIRAnalyzer
             cfg, cfg.blocks().size()) {}
 
   void analyze_node(const NodeId& node, Domain* current_state) const override {
-    for (auto& mie : InstructionIterable(node)) {
+    for (auto& mie : ir_list::InstructionIterable(node)) {
       analyze_instruction(mie.insn, current_state);
     }
   }
