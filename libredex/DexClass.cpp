@@ -1049,15 +1049,15 @@ DexClass* DexClass::create(DexIdx* idx,
 DexClass::DexClass(DexIdx* idx,
                    const dex_class_def* cdef,
                    const std::string& location)
-    : m_access_flags((DexAccessFlags)cdef->access_flags),
-      m_super_class(idx->get_typeidx(cdef->super_idx)),
+    : m_super_class(idx->get_typeidx(cdef->super_idx)),
       m_self(idx->get_typeidx(cdef->typeidx)),
       m_interfaces(idx->get_type_list(cdef->interfaces_off)),
       m_source_file(idx->get_nullable_stringidx(cdef->source_file_idx)),
       m_anno(nullptr),
+      m_location(location),
+      m_access_flags((DexAccessFlags)cdef->access_flags),
       m_external(false),
-      m_perf_sensitive(false),
-      m_location(location) {}
+      m_perf_sensitive(false) {}
 
 void DexTypeList::gather_types(std::vector<DexType*>& ltype) const {
   for (auto const& type : m_list) {

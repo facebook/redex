@@ -1103,20 +1103,20 @@ using dexcode_to_offset = std::unordered_map<DexCode*, uint32_t>;
 
 class DexClass {
  private:
-  DexAccessFlags m_access_flags;
   DexType* m_super_class;
   DexType* m_self;
   DexTypeList* m_interfaces;
   DexString* m_source_file;
   DexAnnotationSet* m_anno;
-  bool m_external;
-  bool m_perf_sensitive;
   std::string m_deobfuscated_name;
   const std::string m_location; // TODO: string interning
   std::vector<DexField*> m_sfields;
   std::vector<DexField*> m_ifields;
   std::vector<DexMethod*> m_dmethods;
   std::vector<DexMethod*> m_vmethods;
+  DexAccessFlags m_access_flags;
+  bool m_external;
+  bool m_perf_sensitive;
 
   explicit DexClass(const std::string& location) : m_location(location){};
   void load_class_annotations(DexIdx* idx, uint32_t anno_off);
