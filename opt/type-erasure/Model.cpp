@@ -448,8 +448,8 @@ MergerType& Model::create_merger_helper(
     const MergerType::Shape& shape,
     const TypeSet& group_key,
     const TypeSet& group_values,
-    const boost::optional<size_t>& interdex_subgroup_idx,
-    const boost::optional<size_t>& subgroup_idx) {
+    const boost::optional<InterdexSubgroupIdx>& interdex_subgroup_idx,
+    const boost::optional<InterdexSubgroupIdx>& subgroup_idx) {
   size_t group_count = m_shape_to_count[shape]++;
   std::string name = shape.build_type_name(
       m_spec.class_name_prefix, merger_type, std::string("Shape"), group_count,
@@ -469,14 +469,14 @@ void Model::create_mergers_helper(
     const MergerType::Shape& shape,
     const TypeSet& group_key,
     const TypeSet& group_values,
-    const boost::optional<size_t>& interdex_subgroup_idx,
+    const boost::optional<InterdexSubgroupIdx>& interdex_subgroup_idx,
     const boost::optional<size_t>& max_mergeables_count,
     size_t min_mergeables_count) {
   size_t group_size = group_values.size();
 
   if (max_mergeables_count && group_size > *max_mergeables_count) {
     TypeSet curr_group;
-    size_t subgroup_cnt = 0;
+    InterdexSubgroupIdx subgroup_cnt = 0;
     size_t remaining_mergeable_cnt = group_size;
     for (auto it = group_values.begin(); it != group_values.end(); ++it) {
       auto mergeable = *it;
@@ -485,9 +485,9 @@ void Model::create_mergers_helper(
             remaining_mergeable_cnt - *max_mergeables_count > 1) ||
            std::next(it) == group_values.end()) &&
           curr_group.size() >= min_mergeables_count) {
-        create_merger_helper(merger_type, shape, group_key, curr_group,
-                             interdex_subgroup_idx,
-                             boost::optional<size_t>(subgroup_cnt++));
+        create_merger_helper(
+            merger_type, shape, group_key, curr_group, interdex_subgroup_idx,
+            boost::optional<InterdexSubgroupIdx>(subgroup_cnt++));
         remaining_mergeable_cnt -= curr_group.size();
         curr_group.clear();
       }
@@ -985,7 +985,10 @@ void Model::flatten_shapes(const MergerType& merger,
       if (merge_per_interdex_set && s_num_interdex_groups > 1) {
         auto new_groups = group_per_interdex_set(group_values);
 
-        for (size_t gindex = 0; gindex < new_groups.size(); gindex++) {
+        always_assert(new_groups.size() <
+                      std::numeric_limits<InterdexSubgroupIdx>::max());
+        for (InterdexSubgroupIdx gindex = 0; gindex < new_groups.size();
+             gindex++) {
           if (new_groups[gindex].empty() ||
               new_groups[gindex].size() < m_spec.min_count) {
             continue;

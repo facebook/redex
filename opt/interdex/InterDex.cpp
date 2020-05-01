@@ -485,10 +485,11 @@ std::vector<std::vector<DexType*>> get_extra_classes_per_interdex_group(
     const Scope& scope) {
   std::vector<std::vector<DexType*>> res(MAX_DEX_NUM);
 
-  size_t num_interdex_groups = 0;
+  InterdexSubgroupIdx num_interdex_groups = 0;
   walk::classes(scope, [&](const DexClass* cls) {
     if (cls->rstate.has_interdex_subgroup()) {
-      size_t interdex_subgroup = cls->rstate.get_interdex_subgroup();
+      InterdexSubgroupIdx interdex_subgroup =
+          cls->rstate.get_interdex_subgroup();
       res[interdex_subgroup].push_back(cls->get_type());
       num_interdex_groups =
           std::max(num_interdex_groups, interdex_subgroup + 1);

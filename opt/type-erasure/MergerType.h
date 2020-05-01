@@ -87,8 +87,10 @@ struct MergerType {
         const DexType* root_type,
         const std::string& name,
         size_t count,
-        const boost::optional<size_t>& interdex_subgroup_idx = boost::none,
-        const boost::optional<size_t>& subgroup_idx = boost::none) const;
+        const boost::optional<InterdexSubgroupIdx>& interdex_subgroup_idx =
+            boost::none,
+        const boost::optional<InterdexSubgroupIdx>& subgroup_idx =
+            boost::none) const;
 
     /**
      * Returns if this shape includes another shape
@@ -224,7 +226,7 @@ struct MergerType {
   // Check InterfaceMethod above for details.
   std::vector<InterfaceMethod> intfs_methods;
   // InterDex subgroup id, if any.
-  boost::optional<size_t> interdex_subgroup;
+  boost::optional<InterdexSubgroupIdx> interdex_subgroup;
 
   /**
    * Return whether this MergerType is a shape or not.

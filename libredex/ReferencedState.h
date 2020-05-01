@@ -25,6 +25,8 @@ class KeepState;
 } // namespace impl
 } // namespace keep_rules
 
+using InterdexSubgroupIdx = uint32_t;
+
 class ReferencedState {
  private:
   struct InnerStruct {
@@ -100,7 +102,7 @@ class ReferencedState {
 
   // InterDex subgroup, if any.
   // NOTE: Will be set ONLY for generated classes.
-  boost::optional<size_t> m_interdex_subgroup{boost::none};
+  boost::optional<InterdexSubgroupIdx> m_interdex_subgroup{boost::none};
 
   // Going through hoops here to reduce the size of ReferencedState while
   // keeping memory requirements still small in non-default case.
@@ -286,10 +288,13 @@ class ReferencedState {
 
   void set_whyareyoukeeping() { inner_struct.m_whyareyoukeeping = true; }
 
-  void set_interdex_subgroup(const boost::optional<size_t>& interdex_subgroup) {
+  void set_interdex_subgroup(
+      const boost::optional<InterdexSubgroupIdx>& interdex_subgroup) {
     m_interdex_subgroup = interdex_subgroup;
   }
-  size_t get_interdex_subgroup() const { return m_interdex_subgroup.get(); }
+  InterdexSubgroupIdx get_interdex_subgroup() const {
+    return m_interdex_subgroup.get();
+  }
   bool has_interdex_subgroup() const {
     return m_interdex_subgroup != boost::none;
   }

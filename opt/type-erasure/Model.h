@@ -375,14 +375,14 @@ class Model {
       const MergerType::Shape& shape,
       const TypeSet& group_key,
       const TypeSet& group_values,
-      const boost::optional<size_t>& interdex_subgroup_idx,
-      const boost::optional<size_t>& subgroup_idx);
+      const boost::optional<InterdexSubgroupIdx>& interdex_subgroup_idx,
+      const boost::optional<InterdexSubgroupIdx>& subgroup_idx);
   void create_mergers_helper(
       const DexType* merger_type,
       const MergerType::Shape& shape,
       const TypeSet& group_key,
       const TypeSet& group_values,
-      const boost::optional<size_t>& interdex_subgroup_idx,
+      const boost::optional<InterdexSubgroupIdx>& interdex_subgroup_idx,
       const boost::optional<size_t>& max_mergeables_count,
       size_t min_mergeables_count);
 
