@@ -1043,9 +1043,9 @@ class ControlFlowGraph {
   Blocks m_blocks;
   EdgeSet m_edges;
 
-  reg_t m_registers_size{0};
   Block* m_entry_block{nullptr};
   Block* m_exit_block{nullptr};
+  reg_t m_registers_size{0};
   bool m_editable{true};
 };
 
