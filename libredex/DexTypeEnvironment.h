@@ -234,16 +234,17 @@ class SmallSetDexTypeDomain final
  */
 class DexTypeDomain
     : public sparta::ReducedProductAbstractDomain<DexTypeDomain,
-                                                  ConstNullnessDomain,
+                                                  ArrayConstNullnessDomain,
                                                   SingletonDexTypeDomain,
                                                   SmallSetDexTypeDomain> {
  public:
   using ReducedProductAbstractDomain::ReducedProductAbstractDomain;
 
-  using BaseType = sparta::ReducedProductAbstractDomain<DexTypeDomain,
-                                                        ConstNullnessDomain,
-                                                        SingletonDexTypeDomain,
-                                                        SmallSetDexTypeDomain>;
+  using BaseType =
+      sparta::ReducedProductAbstractDomain<DexTypeDomain,
+                                           ArrayConstNullnessDomain,
+                                           SingletonDexTypeDomain,
+                                           SmallSetDexTypeDomain>;
 
   // Some older compilers complain that the class is not default
   // constructible. We intended to use the default constructors of the base
@@ -257,13 +258,25 @@ class DexTypeDomain
                                                      SmallSetDexTypeDomain())) {
   }
 
+  explicit DexTypeDomain(const DexType* array_type, uint32_t array_length)
+      : ReducedProductAbstractDomain(
+            std::make_tuple(ArrayNullnessDomain(array_length),
+                            SingletonDexTypeDomain(array_type),
+                            SmallSetDexTypeDomain(array_type))) {}
+
   explicit DexTypeDomain(const DexType* dex_type)
       : ReducedProductAbstractDomain(
             std::make_tuple(ConstNullnessDomain(NOT_NULL),
                             SingletonDexTypeDomain(dex_type),
                             SmallSetDexTypeDomain(dex_type))) {}
 
-  static void reduce_product(std::tuple<ConstNullnessDomain,
+  explicit DexTypeDomain(const DexType* dex_type, const Nullness nullness)
+      : ReducedProductAbstractDomain(
+            std::make_tuple(ConstNullnessDomain(nullness),
+                            SingletonDexTypeDomain(dex_type),
+                            SmallSetDexTypeDomain(dex_type))) {}
+
+  static void reduce_product(std::tuple<ArrayConstNullnessDomain,
                                         SingletonDexTypeDomain,
                                         SmallSetDexTypeDomain>& product) {
     if (std::get<1>(product).is_top()) {
@@ -273,16 +286,62 @@ class DexTypeDomain
 
   static DexTypeDomain null() { return DexTypeDomain(IS_NULL); }
 
-  bool is_null() const { return get<0>().get_nullness().element() == IS_NULL; }
-
-  bool is_not_null() const {
-    return get<0>().get_nullness().element() == NOT_NULL;
+  ConstNullnessDomain get_const_nullness() const {
+    return get<0>().get<ConstNullnessDomain>();
   }
 
-  bool is_nullable() const { return get<0>().get_nullness().is_top(); }
+  NullnessDomain get_nullness() const {
+    auto domain = get<0>();
+    if (domain.which() == 0) {
+      return domain.get<ConstNullnessDomain>().get_nullness();
+    } else {
+      return domain.get<ArrayNullnessDomain>().get_nullness();
+    }
+  }
+
+  bool is_null() const {
+    return get_const_nullness().get_nullness().element() == IS_NULL;
+  }
+
+  bool is_not_null() const {
+    return get_const_nullness().get_nullness().element() == NOT_NULL;
+  }
+
+  bool is_nullable() const {
+    return get_const_nullness().get_nullness().is_top();
+  }
 
   boost::optional<ConstantDomain::ConstantType> get_constant() const {
-    return get<0>().const_domain().get_constant();
+    return get_const_nullness().const_domain().get_constant();
+  }
+
+  ArrayNullnessDomain get_array_nullness() const {
+    return get<0>().get<ArrayNullnessDomain>();
+  }
+
+  NullnessDomain get_array_element_nullness(
+      boost::optional<int64_t> idx) const {
+    if (!ArrayNullnessDomain::is_valid_array_idx(idx)) {
+      return NullnessDomain::top();
+    }
+    return get_array_nullness().get_element(*idx);
+  }
+
+  void set_array_element_nullness(boost::optional<int64_t> idx,
+                                  const NullnessDomain& nullness) {
+    if (!ArrayNullnessDomain::is_valid_array_idx(idx)) {
+      apply<0>([&](ArrayConstNullnessDomain* d) {
+        d->apply<ArrayNullnessDomain>([&](ArrayNullnessDomain* array_nullness) {
+          array_nullness->reset_elements();
+        });
+      });
+      return;
+    }
+    apply<0>([&](ArrayConstNullnessDomain* d) {
+      d->apply<ArrayNullnessDomain>([&](ArrayNullnessDomain* array_nullness) {
+        array_nullness->set_element(*idx, nullness);
+      });
+    });
   }
 
   SingletonDexTypeDomain get_single_domain() { return get<1>(); }

@@ -157,6 +157,8 @@ struct DexTypeEnvironmentTest : public RedexTest {
     creator.add_interface(m_type_if1);
     creator.add_interface(m_type_if2);
     creator.create();
+
+    m_string_array = DexType::make_type("[Ljava/lang/String;");
   }
 
   TypeSet get_type_set(std::initializer_list<DexType*> l) {
@@ -192,6 +194,8 @@ struct DexTypeEnvironmentTest : public RedexTest {
   DexType* m_type_sub4;
   DexType* m_type_if1;
   DexType* m_type_if2;
+
+  DexType* m_string_array;
 };
 
 TEST_F(DexTypeEnvironmentTest, BasicTest) {
@@ -645,8 +649,8 @@ TEST_F(DexTypeEnvironmentTest, ConstNullnessDomainTest) {
 
   c1.join_with(nl);
   EXPECT_TRUE(c1.is_top());
-  EXPECT_TRUE(c1.get<0>().const_domain().is_top());
-  EXPECT_TRUE(c1.get<0>().get_nullness().is_top());
+  EXPECT_TRUE(c1.get_const_nullness().const_domain().is_top());
+  EXPECT_TRUE(c1.get_const_nullness().get_nullness().is_top());
   EXPECT_TRUE(c1.is_nullable());
 }
 
@@ -657,7 +661,7 @@ TEST_F(DexTypeEnvironmentTest, ArrayNullnessDomainTest) {
   EXPECT_FALSE(a1.get_nullness().is_top());
   EXPECT_EQ(a1.get_nullness(), NullnessDomain(NOT_NULL));
   EXPECT_EQ(*a1.get_length(), 1);
-  EXPECT_EQ(a1.get_element(0), NullnessDomain(IS_NULL));
+  EXPECT_EQ(a1.get_element(0), NullnessDomain(UNINITIALIZED));
   EXPECT_TRUE(a1.get_element(1).is_top());
 
   auto a2 = ArrayNullnessDomain(2);
@@ -665,8 +669,8 @@ TEST_F(DexTypeEnvironmentTest, ArrayNullnessDomainTest) {
   EXPECT_FALSE(a2.is_bottom());
   EXPECT_EQ(a2.get_nullness(), NullnessDomain(NOT_NULL));
   EXPECT_EQ(*a2.get_length(), 2);
-  EXPECT_EQ(a2.get_element(0), NullnessDomain(IS_NULL));
-  EXPECT_EQ(a2.get_element(1), NullnessDomain(IS_NULL));
+  EXPECT_EQ(a2.get_element(0), NullnessDomain(UNINITIALIZED));
+  EXPECT_EQ(a2.get_element(1), NullnessDomain(UNINITIALIZED));
 
   a1.join_with(a2);
   EXPECT_FALSE(a1.is_top());
@@ -675,4 +679,43 @@ TEST_F(DexTypeEnvironmentTest, ArrayNullnessDomainTest) {
   EXPECT_TRUE(a1.get<1>().is_top());
   EXPECT_TRUE(a1.get_element(0).is_top());
   EXPECT_TRUE(a1.get_element(1).is_top());
+}
+
+TEST_F(DexTypeEnvironmentTest, ArrayConstNullnessDomain) {
+  auto array1 = DexTypeDomain(m_string_array, 1);
+  EXPECT_EQ(array1.get_array_nullness().get_nullness(),
+            NullnessDomain(NOT_NULL));
+  EXPECT_EQ(*array1.get_array_nullness().get_length(), 1);
+  EXPECT_EQ(array1.get_array_element_nullness(0),
+            NullnessDomain(UNINITIALIZED));
+
+  array1.set_array_element_nullness(0, NullnessDomain(NOT_NULL));
+  EXPECT_EQ(array1.get_array_element_nullness(0), NullnessDomain(NOT_NULL));
+  EXPECT_TRUE(array1.get_array_element_nullness(1).is_top());
+
+  array1.set_array_element_nullness(1, NullnessDomain(NOT_NULL));
+  EXPECT_TRUE(array1.get_array_element_nullness(1).is_top());
+
+  EXPECT_TRUE(array1.get_array_element_nullness(-1).is_top());
+  array1.set_array_element_nullness(-1, NullnessDomain(NOT_NULL));
+  EXPECT_TRUE(array1.get_array_nullness().get_elements().is_top());
+
+  auto array2 = DexTypeDomain(m_string_array, 2);
+  EXPECT_EQ(array2.get_array_nullness().get_nullness(),
+            NullnessDomain(NOT_NULL));
+  EXPECT_EQ(*array2.get_array_nullness().get_length(), 2);
+  EXPECT_EQ(array2.get_array_element_nullness(0),
+            NullnessDomain(UNINITIALIZED));
+  EXPECT_EQ(array2.get_array_element_nullness(1),
+            NullnessDomain(UNINITIALIZED));
+  array2.set_array_element_nullness(0, NullnessDomain(NOT_NULL));
+  array2.set_array_element_nullness(1, NullnessDomain(NOT_NULL));
+  EXPECT_EQ(array2.get_array_element_nullness(0), NullnessDomain(NOT_NULL));
+  EXPECT_EQ(array2.get_array_element_nullness(1), NullnessDomain(NOT_NULL));
+
+  array1.join_with(array2);
+  EXPECT_EQ(array2.get_array_nullness().get_nullness(),
+            NullnessDomain(NOT_NULL));
+  EXPECT_TRUE(array1.get_array_nullness().get<1>().is_top());
+  EXPECT_TRUE(array1.get_array_nullness().get_elements().is_top());
 }

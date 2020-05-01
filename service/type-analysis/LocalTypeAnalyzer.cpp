@@ -97,11 +97,46 @@ bool RegisterTypeAnalyzer::analyze_aget(const IRInstruction* insn,
     return false;
   }
   auto array_type = env->get(insn->src(0)).get_dex_type();
-  if (array_type && *array_type) {
-    always_assert_log(
-        type::is_array(*array_type), "Wrong array type %s", SHOW(*array_type));
-    const auto ctype = type::get_array_component_type(*array_type);
-    env->set(RESULT_REGISTER, DexTypeDomain(ctype));
+  if (!array_type || !*array_type) {
+    env->set(RESULT_REGISTER, DexTypeDomain::top());
+    return true;
+  }
+
+  always_assert_log(
+      type::is_array(*array_type), "Wrong array type %s", SHOW(*array_type));
+  auto idx_opt = env->get(insn->src(1)).get_constant();
+  auto nullness = env->get(insn->src(0)).get_array_element_nullness(idx_opt);
+  const auto ctype = type::get_array_component_type(*array_type);
+  env->set(RESULT_REGISTER, DexTypeDomain(ctype, nullness.element()));
+  return true;
+}
+
+/*
+ * Only populating array nullness since we don't model array element types.
+ */
+bool RegisterTypeAnalyzer::analyze_aput(const IRInstruction* insn,
+                                        DexTypeEnvironment* env) {
+  if (insn->opcode() != OPCODE_APUT_OBJECT) {
+    return false;
+  }
+  boost::optional<int64_t> idx_opt = env->get(insn->src(2)).get_constant();
+  auto nullness = env->get(insn->src(0)).get_nullness();
+  env->mutate_reg_environment([&](RegTypeEnvironment* env) {
+    auto array_reg = insn->src(1);
+    env->update(array_reg, [&](const DexTypeDomain& domain) {
+      auto copy = domain;
+      copy.set_array_element_nullness(idx_opt, nullness);
+      return copy;
+    });
+  });
+  return true;
+}
+
+bool RegisterTypeAnalyzer::analyze_array_length(const IRInstruction* insn,
+                                                DexTypeEnvironment* env) {
+  auto array_length = env->get(insn->src(0)).get_array_nullness().get_length();
+  if (array_length) {
+    env->set(RESULT_REGISTER, DexTypeDomain(*array_length));
   } else {
     env->set(RESULT_REGISTER, DexTypeDomain::top());
   }
@@ -116,10 +151,6 @@ bool RegisterTypeAnalyzer::analyze_move(const IRInstruction* insn,
 
 bool RegisterTypeAnalyzer::analyze_move_result(const IRInstruction* insn,
                                                DexTypeEnvironment* env) {
-  if (insn->opcode() != OPCODE_MOVE_RESULT_OBJECT &&
-      insn->opcode() != IOPCODE_MOVE_RESULT_PSEUDO_OBJECT) {
-    return false;
-  }
   env->set(insn->dest(), env->get(RESULT_REGISTER));
   return true;
 }
@@ -140,13 +171,18 @@ bool RegisterTypeAnalyzer::analyze_new_instance(const IRInstruction* insn,
 
 bool RegisterTypeAnalyzer::analyze_new_array(const IRInstruction* insn,
                                              DexTypeEnvironment* env) {
-  env->set(RESULT_REGISTER, DexTypeDomain(insn->get_type()));
+  auto length_opt = env->get(insn->src(0)).get_constant();
+  // If length is missing, fall back to size of 0.
+  uint32_t length =
+      ArrayNullnessDomain::is_valid_array_size(length_opt) ? *length_opt : 0;
+  env->set(RESULT_REGISTER, DexTypeDomain(insn->get_type(), length));
   return true;
 }
 
 bool RegisterTypeAnalyzer::analyze_filled_new_array(const IRInstruction* insn,
                                                     DexTypeEnvironment* env) {
-  env->set(RESULT_REGISTER, DexTypeDomain(insn->get_type()));
+  // TODO(zwei): proper array nullness domain population.
+  env->set(RESULT_REGISTER, DexTypeDomain(insn->get_type(), 0));
   return true;
 }
 

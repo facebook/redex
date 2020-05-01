@@ -9,24 +9,29 @@
 
 #include "ConstantAbstractDomain.h"
 #include "DexUtil.h"
+#include "DisjointUnionAbstractDomain.h"
 #include "FiniteAbstractDomain.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "ReducedProductAbstractDomain.h"
 
 enum Nullness {
   NN_BOTTOM,
+  UNINITIALIZED, // The elements of a newly allocated array is not NULL or
+                 // NOT_NULL
   IS_NULL,
   NOT_NULL,
   NN_TOP // Nullable
 };
 
-using NullnessLattice = sparta::BitVectorLattice<Nullness, 4, std::hash<int>>;
+using NullnessLattice = sparta::BitVectorLattice<Nullness, 5, std::hash<int>>;
 
 /*
  *         TOP (Nullable)
  *        /      \
  *      NULL    NOT_NULL
  *        \      /
+ *      UNINITIALIZED
+ *           |
  *         BOTTOM
  */
 extern NullnessLattice lattice;
@@ -93,6 +98,12 @@ class ConstNullnessDomain
   NullnessDomain get_nullness() const { return get<1>(); }
 };
 
+/*
+ * Reference:
+ * http://hg.openjdk.java.net/jdk7/jdk7/jdk/rev/ec45423a4700#l5.12
+ */
+constexpr int64_t JAVA_ARRAY_SIZE_MAX = std::numeric_limits<int32_t>::max() - 8;
+
 class ArrayNullnessDomain final
     : public sparta::ReducedProductAbstractDomain<
           ArrayNullnessDomain,
@@ -132,7 +143,7 @@ class ArrayNullnessDomain final
                                                      ElementsNullness())) {
     mutate_elements([length](ElementsNullness* elements) {
       for (size_t i = 0; i < length; ++i) {
-        elements->set(i, NullnessDomain(IS_NULL));
+        elements->set(i, NullnessDomain(UNINITIALIZED));
       }
     });
     reduce();
@@ -146,6 +157,10 @@ class ArrayNullnessDomain final
 
   ElementsNullness get_elements() const { return get<2>(); }
 
+  void reset_elements() {
+    apply<2>([](auto elements) { elements->set_to_top(); });
+  }
+
   NullnessDomain get_element(uint32_t idx) const {
     return get_elements().get(idx);
   }
@@ -154,8 +169,13 @@ class ArrayNullnessDomain final
     if (is_top() || is_bottom()) {
       return *this;
     }
-    return this->mutate_elements(
-        [&](ElementsNullness* elements) { elements->set(idx, domain); });
+    auto length = get_length();
+    if (!length || idx >= *length) {
+      return *this;
+    }
+    return this->mutate_elements([idx, domain](ElementsNullness* elements) {
+      elements->set(idx, domain);
+    });
   }
 
   void join_with(const ArrayNullnessDomain& other) override {
@@ -168,6 +188,14 @@ class ArrayNullnessDomain final
     reduce();
   }
 
+  static bool is_valid_array_size(boost::optional<int64_t>& val) {
+    return val && *val >= 0 && *val <= JAVA_ARRAY_SIZE_MAX;
+  }
+
+  static bool is_valid_array_idx(boost::optional<int64_t>& val) {
+    return val && *val >= 0 && *val < JAVA_ARRAY_SIZE_MAX;
+  }
+
  private:
   ArrayNullnessDomain& mutate_elements(
       std::function<void(ElementsNullness*)> f) {
@@ -175,3 +203,7 @@ class ArrayNullnessDomain final
     return *this;
   }
 };
+
+using ArrayConstNullnessDomain =
+    sparta::DisjointUnionAbstractDomain<ConstNullnessDomain,
+                                        ArrayNullnessDomain>;

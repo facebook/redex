@@ -220,3 +220,17 @@ TEST_F(GlobalTypeAnalysisTest, ConstNullnessDomainTest) {
   EXPECT_EQ(*foo_exit_env.get_reg_environment().get(0).get_constant(), 1);
   EXPECT_TRUE(foo_exit_env.get_reg_environment().get(0).is_not_null());
 }
+
+TEST_F(GlobalTypeAnalysisTest, ArrayConstNullnessDomainTest) {
+  auto scope = build_class_scope(stores);
+  set_root_method("Lcom/facebook/redextest/TestG;.main:()V");
+
+  GlobalTypeAnalysis analysis;
+  auto gta = analysis.analyze(scope);
+  auto wps = gta->get_whole_program_state();
+  auto meth_foo =
+      get_method("TestG;.foo", "", "Lcom/facebook/redextest/TestG$Base;");
+  auto rtype = wps.get_return_type(meth_foo);
+  EXPECT_FALSE(rtype.is_top());
+  EXPECT_TRUE(rtype.is_not_null());
+}

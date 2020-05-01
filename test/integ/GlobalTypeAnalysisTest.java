@@ -27,13 +27,9 @@ class SubTwo extends Base {
 
 class TestA {
 
-  public Base getSubOne() {
-    return new SubOne();
-  }
+  public Base getSubOne() { return new SubOne(); }
 
-  public Base getSubTwo() {
-    return new SubTwo();
-  }
+  public Base getSubTwo() { return new SubTwo(); }
 
   public Base passThrough(Base b) {
     int two = 1 + 1;
@@ -181,6 +177,25 @@ class TestF {
 
   static void main() {
     TestF t = new TestF();
+    t.foo();
+  }
+}
+
+class TestG {
+
+  static class Base {}
+
+  Base foo() {
+    Base b = new Base();
+    Base[] ba = new Base[2];
+    for (int i = 0; i < ba.length; i++) {
+      ba[i] = b;
+    }
+    return ba[0];
+  }
+
+  static void main() {
+    TestG t = new TestG();
     t.foo();
   }
 }
