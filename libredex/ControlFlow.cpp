@@ -454,7 +454,7 @@ std::vector<Edge*> Block::get_outgoing_throws_in_order() const {
   std::vector<Edge*> result =
       m_parent->get_succ_edges_of_type(this, EDGE_THROW);
   std::sort(result.begin(), result.end(), [](const Edge* e1, const Edge* e2) {
-    return e1->m_throw_info->index < e2->m_throw_info->index;
+    return e1->throw_info()->index < e2->throw_info()->index;
   });
   return result;
 }
@@ -1102,7 +1102,7 @@ void ControlFlowGraph::sanity_check() const {
       Edge* e = *it;
       if (!last) {
         always_assert_log(
-            e->m_throw_info->catch_type != nullptr,
+            e->throw_info()->catch_type != nullptr,
             "Can't have a catchall (%d -> %d) that isn't last. %s",
             e->src()->id(), e->target()->id(), SHOW(*this));
       }
@@ -1367,8 +1367,8 @@ void ControlFlowGraph::deep_copy(ControlFlowGraph* new_cfg) const {
 
   // patch the block pointers in the edges to their new cfg counterparts
   for (Edge* e : new_cfg->m_edges) {
-    e->m_src = new_cfg->m_blocks.at(e->m_src->id());
-    e->m_target = new_cfg->m_blocks.at(e->m_target->id());
+    e->set_src(new_cfg->m_blocks.at(e->src()->id()));
+    e->set_target(new_cfg->m_blocks.at(e->target()->id()));
   }
 
   // update the entry and exit block pointers to their new cfg counterparts
@@ -1538,8 +1538,8 @@ void ControlFlowGraph::insert_branches_and_targets(
         auto& branch_mie = *branch_it;
 
         BranchTarget* bt =
-            edge->m_case_key != boost::none
-                ? new BranchTarget(&branch_mie, *edge->m_case_key)
+            edge->case_key() != boost::none
+                ? new BranchTarget(&branch_mie, *edge->case_key())
                 : new BranchTarget(&branch_mie);
         auto target_mie = new MethodItemEntry(bt);
         edge->target()->m_entries.push_front(*target_mie);
@@ -1678,7 +1678,7 @@ MethodItemEntry* ControlFlowGraph::create_catch(
   }
 
   std::sort(throws.begin(), throws.end(), [](const Edge* e1, const Edge* e2) {
-    return e1->m_throw_info->index < e2->m_throw_info->index;
+    return e1->throw_info()->index < e2->throw_info()->index;
   });
   const auto& throws_end = throws.end();
 
@@ -1712,7 +1712,7 @@ MethodItemEntry* ControlFlowGraph::create_catch(
         MethodItemEntry* next = self(self, std::next(it));
 
         // create a new catch entry and insert it into the bytecode
-        auto new_catch = new MethodItemEntry(edge->m_throw_info->catch_type);
+        auto new_catch = new MethodItemEntry(edge->throw_info()->catch_type);
         new_catch->centry->next = next;
         catch_block->m_entries.push_front(*new_catch);
         catch_to_containing_block->emplace(new_catch, catch_block);
@@ -1986,7 +1986,9 @@ void ControlFlowGraph::cleanup_deleted_edges(const EdgeSet& edges) {
       if ((is_conditional_branch(op) || is_switch(op)) &&
           remaining_forward_edges.size() == 1) {
         pred_block->m_entries.erase_and_dispose(last_it);
-        remaining_forward_edges.at(0)->m_type = EDGE_GOTO;
+        Edge* fwd_edge = remaining_forward_edges[0];
+        fwd_edge->set_type(EDGE_GOTO);
+        fwd_edge->set_case_key(boost::none);
       }
     }
   }
@@ -2115,10 +2117,10 @@ void ControlFlowGraph::move_edge(Edge* edge,
   remove_edge(edge, /* cleanup */ false);
 
   if (new_source != nullptr) {
-    edge->m_src = new_source;
+    edge->set_src(new_source);
   }
   if (new_target != nullptr) {
-    edge->m_target = new_target;
+    edge->set_target(new_target);
   }
 
   edge->src()->m_succs.push_back(edge);
@@ -2138,7 +2140,7 @@ bool ControlFlowGraph::blocks_are_in_same_try(const Block* b1,
     auto e1 = *it1;
     auto e2 = *it2;
     if (e1->target() != e2->target() ||
-        e1->m_throw_info->catch_type != e2->m_throw_info->catch_type) {
+        e1->throw_info()->catch_type != e2->throw_info()->catch_type) {
       return false;
     }
   }
@@ -2298,7 +2300,7 @@ void ControlFlowGraph::copy_succ_edges_if(Block* from,
 
   for (auto e : edges) {
     Edge* copy = new Edge(*e);
-    copy->m_src = to;
+    copy->set_src(to);
     add_edge(copy);
   }
 }

@@ -67,7 +67,7 @@ struct BlockAccessor;
 
 namespace cfg {
 
-enum EdgeType {
+enum EdgeType : uint8_t {
   // The false branch of an if statement, default of a switch, or unconditional
   // goto
   EDGE_GOTO,
@@ -104,50 +104,54 @@ struct ThrowInfo {
 class Edge final {
  public:
   using CaseKey = int32_t;
+  using MaybeCaseKey = boost::optional<CaseKey>;
 
  private:
   Block* m_src;
   Block* m_target;
+  union {
+    // If `m_type` is EDGE_THROW then this union points to a ThrowInfo
+    // Edge owns this ThrowInfo and is responsible for deleting it.
+    ThrowInfo* m_throw_info;
+    // If `m_type` is not EDGE_THROW then this union is an optional case key.
+    // If this edge is a non-default outgoing edge of a OPCODE_SWITCH, then
+    // this is not `boost::none`.
+    MaybeCaseKey m_case_key;
+  };
   EdgeType m_type;
-
-  // If this branch is a non-default case of a switch statement, this is the
-  // index of the corresponding case block.
-  boost::optional<CaseKey> m_case_key;
-
-  std::unique_ptr<ThrowInfo> m_throw_info{nullptr};
-
-  friend class Block;
-  friend class ControlFlowGraph;
-  friend class CFGInliner;
 
  public:
   Edge(Block* src, Block* target, EdgeType type)
-      : m_src(src), m_target(target), m_type(type) {
+      : m_src(src), m_target(target), m_case_key(boost::none), m_type(type) {
     always_assert_log(m_type != EDGE_THROW,
                       "Need a catch type and index to create a THROW edge");
   }
   Edge(Block* src, Block* target, CaseKey case_key)
       : m_src(src),
         m_target(target),
-        m_type(EDGE_BRANCH),
-        m_case_key(case_key) {}
+        m_case_key(case_key),
+        m_type(EDGE_BRANCH) {}
   Edge(Block* src, Block* target, DexType* catch_type, uint32_t index)
       : m_src(src),
         m_target(target),
-        m_type(EDGE_THROW),
-        m_throw_info(std::make_unique<ThrowInfo>(catch_type, index)) {}
+        m_throw_info(new ThrowInfo(catch_type, index)),
+        m_type(EDGE_THROW) {}
 
   /*
    * Copy constructor.
    * Notice that this shallowly copies the block pointers!
    */
-  Edge(const Edge& e)
-      : m_src(e.m_src),
-        m_target(e.m_target),
-        m_type(e.m_type),
-        m_case_key(e.m_case_key) {
-    if (e.m_throw_info) {
-      m_throw_info = std::make_unique<ThrowInfo>(*e.m_throw_info);
+  Edge(const Edge& e) : m_src(e.m_src), m_target(e.m_target), m_type(e.m_type) {
+    if (m_type == EDGE_THROW) {
+      m_throw_info = new ThrowInfo(*e.throw_info());
+    } else {
+      m_case_key = e.case_key();
+    }
+  }
+
+  ~Edge() {
+    if (m_type == EDGE_THROW) {
+      delete m_throw_info;
     }
   }
 
@@ -167,18 +171,41 @@ class Edge final {
   }
 
   bool equals_ignore_source_and_target(const Edge& that) const {
-    return m_type == that.m_type &&
-           ((m_throw_info == nullptr && that.m_throw_info == nullptr) ||
-            *m_throw_info == *that.m_throw_info) &&
-           m_case_key == that.m_case_key;
+    if (m_type != that.m_type) {
+      return false;
+    } else if (m_type == EDGE_THROW) {
+      return (throw_info() == nullptr && that.throw_info() == nullptr) ||
+             *throw_info() == *that.throw_info();
+    } else {
+      return case_key() == that.case_key();
+    }
   }
 
+  // getters
   Block* src() const { return m_src; }
   Block* target() const { return m_target; }
   EdgeType type() const { return m_type; }
-  ThrowInfo* throw_info() const { return m_throw_info.get(); }
-  const boost::optional<CaseKey>& case_key() const { return m_case_key; }
-  void set_case_key(boost::optional<CaseKey> k) { m_case_key = k; }
+  ThrowInfo* throw_info() const {
+    always_assert(m_type == EDGE_THROW);
+    return m_throw_info;
+  }
+  const MaybeCaseKey& case_key() const {
+    always_assert(m_type != EDGE_THROW);
+    return m_case_key;
+  }
+
+  // setters
+  void set_case_key(const MaybeCaseKey& k) {
+    always_assert(m_type != EDGE_THROW);
+    m_case_key = k;
+  }
+  void set_src(Block* b) { m_src = b; }
+  void set_target(Block* b) { m_target = b; }
+  void set_type(EdgeType new_type) {
+    always_assert_log(!(m_type == EDGE_THROW ^ new_type == EDGE_THROW),
+                      "Can't convert to or from throw edge");
+    m_type = new_type;
+  }
 };
 
 std::ostream& operator<<(std::ostream& os, const Edge& e);

@@ -473,13 +473,11 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
     std::unordered_set<DexType*> catch_types;
 
     for (cfg::Edge* edge : preds) {
-      auto* throw_info = edge->throw_info();
-      if (!throw_info) {
-        // Some edges may contain no throw info.
+      if (edge->type() != cfg::EDGE_THROW) {
         continue;
       }
 
-      DexType* catch_type = throw_info->catch_type;
+      DexType* catch_type = edge->throw_info()->catch_type;
       if (catch_type) {
         catch_types.emplace(catch_type);
       } else {

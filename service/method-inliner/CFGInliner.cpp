@@ -399,7 +399,7 @@ void CFGInliner::add_callee_throws_to_caller(
         auto index = starting_index;
         for (Edge* caller_catch : caller_catches) {
           cfg->add_edge(callee_block, caller_catch->target(),
-                        caller_catch->m_throw_info->catch_type, index);
+                        caller_catch->throw_info()->catch_type, index);
           ++index;
         }
       };
@@ -420,14 +420,14 @@ void CFGInliner::add_callee_throws_to_caller(
           add_throw_edges(callee_block, /* starting_index */ 0);
         }
       }
-    } else if (existing_throws.back()->m_throw_info->catch_type != nullptr) {
+    } else if (existing_throws.back()->throw_info()->catch_type != nullptr) {
       // Blocks that throw already
       //   * Instructions that can throw that were already in a try region with
       //   catch blocks
       //   * But don't add to the end of a throw list if there's a catchall
       //   already
       add_throw_edges(callee_block,
-                      existing_throws.back()->m_throw_info->index + 1);
+                      existing_throws.back()->throw_info()->index + 1);
     }
   }
 }
