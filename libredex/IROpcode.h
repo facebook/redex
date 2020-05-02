@@ -276,6 +276,8 @@ bool is_commutative(IROpcode opcode);
 
 bool is_cmp(IROpcode opcode);
 
+bool is_binop64(IROpcode op);
+
 IROpcode load_param_to_move(IROpcode);
 
 IROpcode iget_to_move(IROpcode);

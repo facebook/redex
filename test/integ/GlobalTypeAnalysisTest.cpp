@@ -233,4 +233,10 @@ TEST_F(GlobalTypeAnalysisTest, ArrayConstNullnessDomainTest) {
   auto rtype = wps.get_return_type(meth_foo);
   EXPECT_FALSE(rtype.is_top());
   EXPECT_TRUE(rtype.is_not_null());
+
+  auto meth_bar =
+      get_method("TestG;.bar", "", "Lcom/facebook/redextest/TestG$Base;");
+  rtype = wps.get_return_type(meth_bar);
+  EXPECT_FALSE(rtype.is_top());
+  EXPECT_TRUE(rtype.is_not_null());
 }

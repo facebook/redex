@@ -1065,6 +1065,53 @@ bool is_cmp(IROpcode opcode) {
   return opcode >= OPCODE_CMPL_FLOAT && opcode <= OPCODE_CMP_LONG;
 }
 
+bool is_binop64(IROpcode op) {
+  switch (op) {
+  case OPCODE_ADD_INT:
+  case OPCODE_SUB_INT:
+  case OPCODE_MUL_INT:
+  case OPCODE_DIV_INT:
+  case OPCODE_REM_INT:
+  case OPCODE_AND_INT:
+  case OPCODE_OR_INT:
+  case OPCODE_XOR_INT:
+  case OPCODE_SHL_INT:
+  case OPCODE_SHR_INT:
+  case OPCODE_USHR_INT:
+  case OPCODE_ADD_FLOAT:
+  case OPCODE_SUB_FLOAT:
+  case OPCODE_MUL_FLOAT:
+  case OPCODE_DIV_FLOAT:
+  case OPCODE_REM_FLOAT: {
+    return false;
+    break;
+  }
+  case OPCODE_ADD_LONG:
+  case OPCODE_SUB_LONG:
+  case OPCODE_MUL_LONG:
+  case OPCODE_DIV_LONG:
+  case OPCODE_REM_LONG:
+  case OPCODE_AND_LONG:
+  case OPCODE_OR_LONG:
+  case OPCODE_XOR_LONG:
+  case OPCODE_SHL_LONG:
+  case OPCODE_SHR_LONG:
+  case OPCODE_USHR_LONG:
+  case OPCODE_ADD_DOUBLE:
+  case OPCODE_SUB_DOUBLE:
+  case OPCODE_MUL_DOUBLE:
+  case OPCODE_DIV_DOUBLE:
+  case OPCODE_REM_DOUBLE: {
+    return true;
+    break;
+  }
+  default: {
+    always_assert_log(false, "Unexpected opcode: %s\n", SHOW(op));
+    break;
+  }
+  }
+}
+
 IROpcode load_param_to_move(IROpcode op) {
   switch (op) {
   case IOPCODE_LOAD_PARAM:

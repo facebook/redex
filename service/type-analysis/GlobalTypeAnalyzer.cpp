@@ -159,8 +159,8 @@ GlobalTypeAnalyzer::get_local_analysis(const DexMethod* method) const {
 
 using CombinedAnalyzer =
     InstructionAnalyzerCombiner<WholeProgramAwareAnalyzer,
-                                local::RegisterTypeAnalyzer,
-                                local::FieldTypeAnalyzer>;
+                                local::FieldTypeAnalyzer,
+                                local::RegisterTypeAnalyzer>;
 
 std::unique_ptr<local::LocalTypeAnalyzer> GlobalTypeAnalyzer::analyze_method(
     const DexMethod* method,
@@ -187,7 +187,7 @@ std::unique_ptr<local::LocalTypeAnalyzer> GlobalTypeAnalyzer::analyze_method(
   TRACE(TYPE, 5, "%s", SHOW(code.cfg()));
   auto local_ta = std::make_unique<local::LocalTypeAnalyzer>(
       code.cfg(),
-      CombinedAnalyzer(&wps, nullptr, wf_ptr),
+      CombinedAnalyzer(&wps, wf_ptr, nullptr),
       std::move(written_fields));
   local_ta->run(env);
 

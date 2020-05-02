@@ -48,7 +48,7 @@ class TestB {
 
   public String passNull(String a) { return a; }
 
-  public String passString(String a) { return a + ""; }
+  public String passString(String a) { return a; }
 
   public Class passClass(Class cls) { return cls; }
 
@@ -194,8 +194,18 @@ class TestG {
     return ba[0];
   }
 
+  Base bar() {
+    Base b = new Base();
+    Base[] ba = new Base[2];
+    int i = 0;
+    ba[i] = b;
+    ba[++i] = b;
+    return ba[1];
+  }
+
   static void main() {
     TestG t = new TestG();
     t.foo();
+    t.bar();
   }
 }

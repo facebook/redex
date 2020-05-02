@@ -46,6 +46,9 @@ class LocalTypeAnalyzer final
 class RegisterTypeAnalyzer final
     : public InstructionAnalyzerBase<RegisterTypeAnalyzer, DexTypeEnvironment> {
  public:
+  static bool analyze_default(const IRInstruction* insn,
+                              DexTypeEnvironment* env);
+
   static bool analyze_const(const IRInstruction* insn, DexTypeEnvironment* env);
 
   static bool analyze_const_string(const IRInstruction*,
@@ -60,6 +63,11 @@ class RegisterTypeAnalyzer final
 
   static bool analyze_array_length(const IRInstruction* insn,
                                    DexTypeEnvironment* env);
+
+  static bool analyze_binop_lit(const IRInstruction* insn,
+                                DexTypeEnvironment* env);
+
+  static bool analyze_binop(const IRInstruction* insn, DexTypeEnvironment* env);
 
   static bool analyze_move(const IRInstruction* insn, DexTypeEnvironment* env);
 

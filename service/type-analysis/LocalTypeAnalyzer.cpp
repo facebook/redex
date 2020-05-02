@@ -66,6 +66,22 @@ void LocalTypeAnalyzer::analyze_instruction(const IRInstruction* insn,
   }
 }
 
+bool RegisterTypeAnalyzer::analyze_default(const IRInstruction* insn,
+                                           DexTypeEnvironment* env) {
+  if (opcode::is_load_param(insn->opcode())) {
+    return true;
+  }
+  if (insn->has_dest()) {
+    env->set(insn->dest(), DexTypeDomain::top());
+    if (insn->dest_is_wide()) {
+      env->set(insn->dest() + 1, DexTypeDomain::top());
+    }
+  } else if (insn->has_move_result_any()) {
+    env->set(RESULT_REGISTER, DexTypeDomain::top());
+  }
+  return true;
+}
+
 bool RegisterTypeAnalyzer::analyze_const(const IRInstruction* insn,
                                          DexTypeEnvironment* env) {
   if (insn->opcode() != OPCODE_CONST) {
@@ -140,6 +156,169 @@ bool RegisterTypeAnalyzer::analyze_array_length(const IRInstruction* insn,
   } else {
     env->set(RESULT_REGISTER, DexTypeDomain::top());
   }
+  return true;
+}
+
+bool RegisterTypeAnalyzer::analyze_binop_lit(const IRInstruction* insn,
+                                             DexTypeEnvironment* env) {
+  auto op = insn->opcode();
+  int32_t lit = insn->get_literal();
+  auto int_val = env->get(insn->src(0)).get_constant();
+  boost::optional<int64_t> result = boost::none;
+
+  if (!int_val) {
+    return analyze_default(insn, env);
+  }
+
+  bool use_result_reg = false;
+  switch (op) {
+  case OPCODE_ADD_INT_LIT16:
+  case OPCODE_ADD_INT_LIT8: {
+    result = (*int_val) + lit;
+    break;
+  }
+  case OPCODE_RSUB_INT:
+  case OPCODE_RSUB_INT_LIT8: {
+    result = lit - (*int_val);
+    break;
+  }
+  case OPCODE_MUL_INT_LIT16:
+  case OPCODE_MUL_INT_LIT8: {
+    result = (*int_val) * lit;
+    break;
+  }
+  case OPCODE_DIV_INT_LIT16:
+  case OPCODE_DIV_INT_LIT8: {
+    if (lit != 0) {
+      result = (*int_val) / lit;
+    }
+    use_result_reg = true;
+    break;
+  }
+  case OPCODE_REM_INT_LIT16:
+  case OPCODE_REM_INT_LIT8: {
+    if (lit != 0) {
+      result = (*int_val) % lit;
+    }
+    use_result_reg = true;
+    break;
+  }
+  case OPCODE_AND_INT_LIT16:
+  case OPCODE_AND_INT_LIT8: {
+    result = (*int_val) & lit;
+    break;
+  }
+  case OPCODE_OR_INT_LIT16:
+  case OPCODE_OR_INT_LIT8: {
+    result = (*int_val) | lit;
+    break;
+  }
+  case OPCODE_XOR_INT_LIT16:
+  case OPCODE_XOR_INT_LIT8: {
+    result = (*int_val) ^ lit;
+    break;
+  }
+  // as in https://source.android.com/devices/tech/dalvik/dalvik-bytecode
+  // the following operations have the second operand masked.
+  case OPCODE_SHL_INT_LIT8: {
+    uint32_t ucst = *int_val;
+    uint32_t uresult = ucst << (lit & 0x1f);
+    result = (int32_t)uresult;
+    break;
+  }
+  case OPCODE_SHR_INT_LIT8: {
+    result = (*int_val) >> (lit & 0x1f);
+    break;
+  }
+  case OPCODE_USHR_INT_LIT8: {
+    uint32_t ucst = *int_val;
+    // defined in dalvik spec
+    result = ucst >> (lit & 0x1f);
+    break;
+  }
+  default:
+    break;
+  }
+  auto res_dom = DexTypeDomain::top();
+  if (result != boost::none) {
+    int32_t result32 = (int32_t)(*result & 0xFFFFFFFF);
+    res_dom = DexTypeDomain(result32);
+  }
+  env->set(use_result_reg ? RESULT_REGISTER : insn->dest(), res_dom);
+  return true;
+}
+
+bool RegisterTypeAnalyzer::analyze_binop(const IRInstruction* insn,
+                                         DexTypeEnvironment* env) {
+  auto op = insn->opcode();
+  auto int_left = env->get(insn->src(0)).get_constant();
+  auto int_right = env->get(insn->src(1)).get_constant();
+  if (!int_left || !int_right) {
+    return analyze_default(insn, env);
+  }
+
+  boost::optional<int64_t> result = boost::none;
+  bool use_result_reg = false;
+  switch (op) {
+  case OPCODE_ADD_INT:
+  case OPCODE_ADD_LONG: {
+    result = (*int_left) + (*int_right);
+    break;
+  }
+  case OPCODE_SUB_INT:
+  case OPCODE_SUB_LONG: {
+    result = (*int_left) - (*int_right);
+    break;
+  }
+  case OPCODE_MUL_INT:
+  case OPCODE_MUL_LONG: {
+    result = (*int_left) * (*int_right);
+    break;
+  }
+  case OPCODE_DIV_INT:
+  case OPCODE_DIV_LONG: {
+    if ((*int_right) != 0) {
+      result = (*int_left) / (*int_right);
+    }
+    use_result_reg = true;
+    break;
+  }
+  case OPCODE_REM_INT:
+  case OPCODE_REM_LONG: {
+    if ((*int_right) != 0) {
+      result = (*int_left) % (*int_right);
+    }
+    use_result_reg = true;
+    break;
+  }
+  case OPCODE_AND_INT:
+  case OPCODE_AND_LONG: {
+    result = (*int_left) & (*int_right);
+    break;
+  }
+  case OPCODE_OR_INT:
+  case OPCODE_OR_LONG: {
+    result = (*int_left) | (*int_right);
+    break;
+  }
+  case OPCODE_XOR_INT:
+  case OPCODE_XOR_LONG: {
+    result = (*int_left) ^ (*int_right);
+    break;
+  }
+  default:
+    return analyze_default(insn, env);
+  }
+  auto res_dom = DexTypeDomain::top();
+  if (result != boost::none) {
+    if (opcode::is_binop64(op)) {
+      res_dom = DexTypeDomain(*result);
+    } else {
+      int32_t result32 = (int32_t)(*result & 0xFFFFFFFF);
+      res_dom = DexTypeDomain(result32);
+    }
+  }
+  env->set(use_result_reg ? RESULT_REGISTER : insn->dest(), res_dom);
   return true;
 }
 
