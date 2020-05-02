@@ -649,8 +649,8 @@ TEST_F(DexTypeEnvironmentTest, ConstNullnessDomainTest) {
 
   c1.join_with(nl);
   EXPECT_TRUE(c1.is_top());
-  EXPECT_TRUE(c1.get_const_nullness().const_domain().is_top());
-  EXPECT_TRUE(c1.get_const_nullness().get_nullness().is_top());
+  EXPECT_TRUE(c1.get<0>().get<ConstNullnessDomain>().const_domain().is_top());
+  EXPECT_TRUE(c1.get_nullness().is_top());
   EXPECT_TRUE(c1.is_nullable());
 }
 
@@ -718,4 +718,17 @@ TEST_F(DexTypeEnvironmentTest, ArrayConstNullnessDomain) {
             NullnessDomain(NOT_NULL));
   EXPECT_TRUE(array1.get_array_nullness().get<1>().is_top());
   EXPECT_TRUE(array1.get_array_nullness().get_elements().is_top());
+
+  // DisjoinUnion crossing access
+  EXPECT_FALSE(DexTypeDomain::top().get_constant());
+  EXPECT_EQ(*DexTypeDomain::null().get_constant(), 0);
+  EXPECT_FALSE(DexTypeDomain(m_string_array, 3).get_constant());
+  EXPECT_FALSE(DexTypeDomain(m_string_array).get_constant());
+
+  EXPECT_TRUE(DexTypeDomain::top().get_array_nullness().is_top());
+  EXPECT_TRUE(DexTypeDomain::null().get_array_nullness().is_top());
+  EXPECT_FALSE(DexTypeDomain(m_string_array, 3).get_array_nullness().is_top());
+  EXPECT_FALSE(
+      DexTypeDomain(m_string_array, 3).get_array_nullness().is_bottom());
+  EXPECT_TRUE(DexTypeDomain(m_string_array).get_array_nullness().is_top());
 }

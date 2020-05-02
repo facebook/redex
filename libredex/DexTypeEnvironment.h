@@ -286,10 +286,6 @@ class DexTypeDomain
 
   static DexTypeDomain null() { return DexTypeDomain(IS_NULL); }
 
-  ConstNullnessDomain get_const_nullness() const {
-    return get<0>().get<ConstNullnessDomain>();
-  }
-
   NullnessDomain get_nullness() const {
     auto domain = get<0>();
     if (domain.which() == 0) {
@@ -299,24 +295,24 @@ class DexTypeDomain
     }
   }
 
-  bool is_null() const {
-    return get_const_nullness().get_nullness().element() == IS_NULL;
-  }
+  bool is_null() const { return get_nullness().element() == IS_NULL; }
 
-  bool is_not_null() const {
-    return get_const_nullness().get_nullness().element() == NOT_NULL;
-  }
+  bool is_not_null() const { return get_nullness().element() == NOT_NULL; }
 
-  bool is_nullable() const {
-    return get_const_nullness().get_nullness().is_top();
-  }
+  bool is_nullable() const { return get_nullness().is_top(); }
 
   boost::optional<ConstantDomain::ConstantType> get_constant() const {
-    return get_const_nullness().const_domain().get_constant();
+    if (auto const_nullness = get<0>().maybe_get<ConstNullnessDomain>()) {
+      return const_nullness->const_domain().get_constant();
+    }
+    return boost::none;
   }
 
   ArrayNullnessDomain get_array_nullness() const {
-    return get<0>().get<ArrayNullnessDomain>();
+    if (auto array_nullness = get<0>().maybe_get<ArrayNullnessDomain>()) {
+      return *array_nullness;
+    }
+    return ArrayNullnessDomain::top();
   }
 
   NullnessDomain get_array_element_nullness(

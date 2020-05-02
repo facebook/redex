@@ -75,14 +75,13 @@ class ConstNullnessDomain
   ConstNullnessDomain() = default;
 
   explicit ConstNullnessDomain(Nullness nullness)
-      : ConstNullnessDomain(
-            std::make_tuple(ConstantDomain(0), NullnessDomain(nullness))) {}
+      : ConstNullnessDomain(std::make_tuple(
+            nullness == IS_NULL ? ConstantDomain(0) : ConstantDomain::top(),
+            NullnessDomain(nullness))) {}
 
   explicit ConstNullnessDomain(int64_t v)
       : ConstNullnessDomain(std::make_tuple(
-            ConstantDomain(v), NullnessDomain(v == 0 ? IS_NULL : NOT_NULL))) {
-    always_assert(v != 0);
-  }
+            ConstantDomain(v), NullnessDomain(v == 0 ? IS_NULL : NOT_NULL))) {}
 
   ConstNullnessDomain null() { return ConstNullnessDomain(IS_NULL); }
 

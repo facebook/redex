@@ -150,8 +150,12 @@ bool RegisterTypeAnalyzer::analyze_aput(const IRInstruction* insn,
 
 bool RegisterTypeAnalyzer::analyze_array_length(const IRInstruction* insn,
                                                 DexTypeEnvironment* env) {
-  auto array_length = env->get(insn->src(0)).get_array_nullness().get_length();
-  if (array_length) {
+  auto array_nullness = env->get(insn->src(0)).get_array_nullness();
+  if (array_nullness.is_top()) {
+    env->set(RESULT_REGISTER, DexTypeDomain::top());
+    return true;
+  }
+  if (auto array_length = array_nullness.get_length()) {
     env->set(RESULT_REGISTER, DexTypeDomain(*array_length));
   } else {
     env->set(RESULT_REGISTER, DexTypeDomain::top());
@@ -351,10 +355,12 @@ bool RegisterTypeAnalyzer::analyze_new_instance(const IRInstruction* insn,
 bool RegisterTypeAnalyzer::analyze_new_array(const IRInstruction* insn,
                                              DexTypeEnvironment* env) {
   auto length_opt = env->get(insn->src(0)).get_constant();
-  // If length is missing, fall back to size of 0.
-  uint32_t length =
-      ArrayNullnessDomain::is_valid_array_size(length_opt) ? *length_opt : 0;
-  env->set(RESULT_REGISTER, DexTypeDomain(insn->get_type(), length));
+  // If length is missing, drop array nullness.
+  if (!ArrayNullnessDomain::is_valid_array_size(length_opt)) {
+    env->set(RESULT_REGISTER, DexTypeDomain(insn->get_type()));
+  } else {
+    env->set(RESULT_REGISTER, DexTypeDomain(insn->get_type(), *length_opt));
+  }
   return true;
 }
 
