@@ -888,6 +888,7 @@ def prepare_redex(args):
         have_locators=config_dict.get("emit_locator_strings"),
         debug_mode=debug_mode,
         fast_repackage=args.dev,
+        reset_timestamps=args.reset_zip_timestamps or args.dev,
     )
     store_files = unpack_manager.__enter__()
 

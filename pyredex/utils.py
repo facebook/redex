@@ -259,6 +259,7 @@ class UnpackManager:
         have_locators=False,
         debug_mode=False,
         fast_repackage=False,
+        reset_timestamps=True,
     ):
         self.input_apk = input_apk
         self.extracted_apk_dir = extracted_apk_dir
@@ -266,6 +267,7 @@ class UnpackManager:
         self.have_locators = have_locators
         self.debug_mode = debug_mode
         self.fast_repackage = fast_repackage
+        self.reset_timestamps = reset_timestamps or debug_mode
 
     def __enter__(self):
         dex_file_path = self.get_dex_file_path(self.input_apk, self.extracted_apk_dir)
@@ -310,6 +312,7 @@ class UnpackManager:
             self.dex_dir,
             self.have_locators,
             fast_repackage=self.fast_repackage,
+            reset_timestamps=self.reset_timestamps,
         )
 
         locator_store_id = 1
@@ -326,6 +329,7 @@ class UnpackManager:
                 self.have_locators,
                 locator_store_id,
                 fast_repackage=self.fast_repackage,
+                reset_timestamps=self.reset_timestamps,
             )
             locator_store_id = locator_store_id + 1
 
