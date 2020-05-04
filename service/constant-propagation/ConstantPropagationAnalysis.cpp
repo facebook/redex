@@ -96,6 +96,9 @@ void analyze_compare(const IRInstruction* insn, ConstantEnvironment* env) {
   }
 }
 
+bool is_zero(boost::optional<SignedConstantDomain> src) {
+  return src && src->get_constant() && *(src->get_constant()) == 0;
+}
 } // namespace
 
 namespace constant_propagation {
@@ -289,10 +292,20 @@ bool PrimitiveAnalyzer::analyze_const(const IRInstruction* insn,
   return true;
 }
 
+bool PrimitiveAnalyzer::analyze_check_cast(const IRInstruction* insn,
+                                           ConstantEnvironment* env) {
+  auto src = env->get(insn->src(0)).maybe_get<SignedConstantDomain>();
+  if (is_zero(src)) {
+    env->set(RESULT_REGISTER, SignedConstantDomain(0));
+    return true;
+  }
+  return analyze_default(insn, env);
+}
+
 bool PrimitiveAnalyzer::analyze_instance_of(const IRInstruction* insn,
                                             ConstantEnvironment* env) {
   auto src = env->get(insn->src(0)).maybe_get<SignedConstantDomain>();
-  if (src && src->get_constant() && *(src->get_constant()) == 0) {
+  if (is_zero(src)) {
     env->set(RESULT_REGISTER, SignedConstantDomain(0));
     return true;
   }

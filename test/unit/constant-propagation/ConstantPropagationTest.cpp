@@ -105,6 +105,40 @@ TEST(ConstantPropagation, DereferenceWithThrowBlock) {
             assembler::to_s_expr(expected_code.get()));
 }
 
+TEST_F(ConstantPropagationTest, NullCheckCastYieldsNull) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (const v0 0)
+     (check-cast v0 "LFoo;")
+     (move-result-pseudo v1)
+     (if-eqz v1 :next)
+     (const v2 1)
+     (goto :end)
+     (:next)
+     (const v2 2)
+     (:end)
+     (return-void)
+    )
+)");
+
+  do_const_prop(code.get());
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (const v1 0)
+      (goto :next)
+      (const v2 1)
+      (goto :end)
+      (:next)
+      (const v2 2)
+      (:end)
+      (return-void)
+    )
+)");
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+}
+
 TEST(ConstantPropagation, JumpToImmediateNext) {
   auto code = assembler::ircode_from_string(R"(
     (

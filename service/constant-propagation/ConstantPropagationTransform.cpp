@@ -133,7 +133,7 @@ void Transform::simplify_instruction(const ConstantEnvironment& env,
     auto op = primary_insn->opcode();
     if (is_sget(op) || is_iget(op) || is_aget(op) || is_div_int_lit(op) ||
         is_rem_int_lit(op) || is_instance_of(op) || is_rem_int_or_long(op) ||
-        is_div_int_or_long(op)) {
+        is_div_int_or_long(op) || is_check_cast(op)) {
       replace_with_const(env, it, xstores, declaring_type);
     }
     break;

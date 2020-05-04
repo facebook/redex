@@ -80,6 +80,9 @@ class PrimitiveAnalyzer final
   static bool analyze_binop(const IRInstruction* insn,
                             ConstantEnvironment* env);
 
+  static bool analyze_check_cast(const IRInstruction* insn,
+                                 ConstantEnvironment* env);
+
   static bool analyze_instance_of(const IRInstruction* insn,
                                   ConstantEnvironment* env);
 };

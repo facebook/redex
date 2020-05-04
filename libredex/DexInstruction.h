@@ -522,3 +522,5 @@ inline bool is_div_int_or_long(IROpcode op) {
 inline bool is_rem_int_or_long(IROpcode op) {
   return op == OPCODE_REM_INT || op == OPCODE_REM_LONG;
 }
+
+inline bool is_check_cast(IROpcode op) { return op == OPCODE_CHECK_CAST; }
