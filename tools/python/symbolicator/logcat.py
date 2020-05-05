@@ -24,7 +24,7 @@ class LogcatSymbolicator(object):
     def class_replacer(self, matchobj):
         m = matchobj.group(0)
         if m in self.symbol_maps.class_map:
-            return self.symbol_maps.class_map[m]
+            return self.symbol_maps.class_map[m].origin_class
         return m
 
     def line_replacer(self, matchobj):
