@@ -569,11 +569,14 @@ match_t<T, std::tuple<match_t<DexAnnotation, P>>> any_annos(
           predicate};
 }
 
-/** Match which checks for membership of T in container C via C::find(T) */
+/**
+ * Match which checks for membership of T in container C via C::find(T)
+ * Does not take ownership of the container.
+ */
 template <typename T, typename C>
-match_t<T, std::tuple<C>> in(const C& c) {
-  return {[](const T* t, const C& c) {
-            return c.find(const_cast<T*>(t)) != c.end();
+match_t<T, std::tuple<const C*>> in(const C* c) {
+  return {[](const T* t, const C* const& c) {
+            return c->find(const_cast<T*>(t)) != c->end();
           },
           c};
 }
