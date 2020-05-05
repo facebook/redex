@@ -18,6 +18,12 @@ void PerfMethodInlinePass::run_pass(DexStoresVector& stores,
           "Skipping PerfMethodInlinePass because Instrumentation is enabled");
     return;
   }
+  if (!mgr.get_redex_options().enable_pgi) {
+    TRACE(METH_PROF,
+          1,
+          "Skipping PerfMethodInlinePass on ART builds");
+    return;
+  }
   inliner::run_inliner(
       stores, mgr, conf, /* intra_dex */ true, /* use_method_profiles */ true);
 }
