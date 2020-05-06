@@ -8,6 +8,7 @@
 #include "IPReflectionAnalysis.h"
 
 #include "AbstractDomain.h"
+#include "CallGraph.h"
 #include "MethodOverrideGraph.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "PatriciaTreeMapAbstractPartition.h"
@@ -23,6 +24,20 @@ struct Caller {
   // A map from callee to its calling context.
   using Domain = PatriciaTreeMapAbstractPartition<const DexMethod*,
                                                   reflection::CallingContext>;
+
+  Domain analyze_edge(const std::shared_ptr<call_graph::Edge>& edge,
+                      const Domain& original) {
+    auto callee = edge->callee()->method();
+    if (!callee) {
+      return Domain::bottom();
+    }
+
+    Domain retval;
+    retval.update(callee, [&](const reflection::CallingContext&) {
+      return original.get(callee);
+    });
+    return retval;
+  }
 };
 
 struct FunctionSummary : public AbstractDomain<FunctionSummary> {
