@@ -19,6 +19,61 @@
 
 namespace sparta {
 
+// To achieve a high level of metaprogramming, we use a little C++ trick to
+// check for existence of a member function. This is implemented with SFINAE.
+//
+// More details:
+// https://en.wikibooks.org/wiki/More_C%2B%2B_Idioms/Member_Detector
+// https://stackoverflow.com/questions/257288/templated-check-for-the-existence-of-a-class-member-function
+
+#define HAS_MEM_FUNC(func, name)                                \
+  template <typename T, typename Sign>                          \
+  struct name {                                                 \
+    typedef char yes[1];                                        \
+    typedef char no[2];                                         \
+    template <typename U, U>                                    \
+    struct type_check;                                          \
+    template <typename _1>                                      \
+    static yes& chk(type_check<Sign, &_1::func>*);              \
+    template <typename>                                         \
+    static no& chk(...);                                        \
+    static bool const value = sizeof(chk<T>(0)) == sizeof(yes); \
+  }
+
+template <bool C, typename T = void>
+struct enable_if {
+  typedef T type;
+};
+
+template <typename T>
+struct enable_if<false, T> {};
+
+HAS_MEM_FUNC(analyze_edge, has_analyze_edge);
+
+// The compiler is going to optionally enable either of the following
+template <typename Callsite, typename Edge, typename Domain>
+typename enable_if<
+    has_analyze_edge<Callsite,
+                     Domain (Callsite::*)(const Edge&, const Domain&)>::value,
+    Domain>::type
+optionally_analyze_edge_if_exist(Callsite*,
+                                 const Edge& edge,
+                                 const Domain& domain) {
+  static Callsite c2;
+  return c2.analyze_edge(edge, domain);
+}
+
+template <typename Callsite, typename Edge, typename Domain>
+typename enable_if<
+    !has_analyze_edge<Callsite,
+                      Domain (Callsite::*)(const Edge&, const Domain&)>::value,
+    Domain>::type
+optionally_analyze_edge_if_exist(Callsite* c,
+                                 const Edge&,
+                                 const Domain& domain) {
+  return domain;
+}
+
 // Function level analyzer need to extend this class. This class supports the
 // static assertion in the InterproceduralAnalyzer. This choice is made so that
 // the compiler will throw reasonable errors when the provided function
@@ -56,6 +111,11 @@ class AbstractRegistry {
 //   type Callsite (Calling context),
 //   type MonotonicFixpointIterator (Choice of `MonotonicFixpointIterator`s),
 // };
+
+// struct Callsite {
+//  type Domain
+//  analyze_edge (optional)
+// }
 
 template <typename Analysis, typename Metadata = void>
 class InterproceduralAnalyzer {
@@ -103,11 +163,12 @@ class InterproceduralAnalyzer {
     }
 
     CallerContext analyze_edge(
-        const typename CallGraphInterface::EdgeId&,
+        const typename CallGraphInterface::EdgeId& edge,
         const CallerContext& exit_state_at_source) const override {
-      // TODO: Edges have no semantic transformers attached by default. Optional
-      // callback?
-      return exit_state_at_source;
+      return optionally_analyze_edge_if_exist<
+          Callsite,
+          typename CallGraphInterface::EdgeId,
+          CallerContext>(nullptr, edge, exit_state_at_source);
     }
   };
 

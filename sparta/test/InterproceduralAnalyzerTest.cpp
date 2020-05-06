@@ -390,6 +390,11 @@ using PurityDomain = sparta::
 struct Callsite {
   // TODO: This can be a Reduced Product with the current calling context?
   using Domain = sparta::HashedSetAbstractDomain<language::Function*>;
+
+  Domain analyze_edge(const language::CallGraph::EdgeId&,
+                      const Domain& domain) {
+    return domain;
+  }
 };
 
 template <typename FunctionSummaries>
