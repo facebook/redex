@@ -40,9 +40,8 @@ struct Caller {
   }
 };
 
-struct FunctionSummary : public AbstractDomain<FunctionSummary> {
-  explicit FunctionSummary()
-      : m_return(reflection::AbstractObjectDomain::bottom()) {}
+struct Summary : public AbstractDomain<Summary> {
+  explicit Summary() : m_return(reflection::AbstractObjectDomain::bottom()) {}
 
   bool is_bottom() const override {
     return m_kind == sparta::AbstractValueKind::Bottom;
@@ -54,7 +53,7 @@ struct FunctionSummary : public AbstractDomain<FunctionSummary> {
     return m_kind == sparta::AbstractValueKind::Top;
   }
 
-  bool leq(const FunctionSummary& other) const override {
+  bool leq(const Summary& other) const override {
     if (is_bottom()) {
       return true;
     } else if (m_kind == sparta::AbstractValueKind::Value) {
@@ -64,7 +63,7 @@ struct FunctionSummary : public AbstractDomain<FunctionSummary> {
     }
   }
 
-  bool equals(const FunctionSummary& other) const override {
+  bool equals(const Summary& other) const override {
     if (m_kind != other.m_kind) {
       return false;
     } else {
@@ -101,19 +100,19 @@ struct FunctionSummary : public AbstractDomain<FunctionSummary> {
 
   void set_to_top() override { m_kind = sparta::AbstractValueKind::Top; }
 
-  void join_with(const FunctionSummary& /* other */) override {
+  void join_with(const Summary& /* other */) override {
     throw std::runtime_error("join_with not implemented!");
   }
 
-  void widen_with(const FunctionSummary& /* other */) override {
+  void widen_with(const Summary& /* other */) override {
     throw std::runtime_error("widen_with not implemented!");
   }
 
-  void meet_with(const FunctionSummary& /* other */) override {
+  void meet_with(const Summary& /* other */) override {
     throw std::runtime_error("meet_with not implemented!");
   }
 
-  void narrow_with(const FunctionSummary& /* other */) override {
+  void narrow_with(const Summary& /* other */) override {
     throw std::runtime_error("narrow_with not implemented!");
   }
 
@@ -138,7 +137,7 @@ class ReflectionAnalyzer : public Intraprocedural {
   const DexMethod* m_method;
   FunctionSummaries* m_summaries;
   CallerContext* m_context;
-  FunctionSummary m_summary;
+  Summary m_summary;
   Metadata* m_metadata;
 
  public:
@@ -158,16 +157,15 @@ class ReflectionAnalyzer : public Intraprocedural {
 
     reflection::SummaryQueryFn query_fn =
         [&](const DexMethod* callee) -> reflection::AbstractObjectDomain {
-      auto ret =
-          m_summaries->get(callee, FunctionSummary::top()).get_return_value();
+      auto ret = m_summaries->get(callee, Summary::top()).get_return_value();
 
       std::unordered_set<const DexMethod*> overriding_methods =
           mog::get_overriding_methods(*(m_metadata->method_override_graph),
                                       callee);
 
       for (const DexMethod* method : overriding_methods) {
-        ret.join_with(m_summaries->get(method, FunctionSummary::top())
-                          .get_return_value());
+        ret.join_with(
+            m_summaries->get(method, Summary::top()).get_return_value());
       }
       return ret;
     };
@@ -219,7 +217,7 @@ class ReflectionAnalyzer : public Intraprocedural {
     if (!m_method) {
       return;
     }
-    m_summaries->maybe_update(m_method, [&](FunctionSummary& old) {
+    m_summaries->maybe_update(m_method, [&](Summary& old) {
       if (old == m_summary) {
         // no change will be made
         return false;
@@ -231,8 +229,8 @@ class ReflectionAnalyzer : public Intraprocedural {
 };
 
 struct ReflectionAnalysisAdaptor : public AnalysisAdaptorBase {
-  using Registry = MethodSummaryRegistry<FunctionSummary>;
-  using FunctionSummary = FunctionSummary;
+  using Registry = MethodSummaryRegistry<Summary>;
+  using FunctionSummary = Summary;
   using FunctionAnalyzer = ReflectionAnalyzer<Registry>;
 
   template <typename GraphInterface, typename Domain>
