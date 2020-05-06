@@ -405,7 +405,8 @@ class SimpleFunctionAnalyzer : public sparta::Intraprocedural {
  public:
   SimpleFunctionAnalyzer(language::Function* fun,
                          FunctionSummaries* summaries,
-                         CallerContext* context)
+                         CallerContext* context,
+                         void* /* metadata */)
       : m_fun(fun),
         m_cfg(language::build_cfg(m_fun)),
         m_summaries(summaries),
@@ -493,7 +494,8 @@ class FunctionFixpoint final : public sparta::MonotonicFixpointIterator<
  public:
   explicit FunctionFixpoint(const language::FunctionId& function,
                             FunctionSummaries* summaries,
-                            CallerContext* context)
+                            CallerContext* context,
+                            void* /* metadata */)
       : MonotonicFixpointIterator(language::build_cfg(function)),
         m_function(function),
         m_summaries(summaries),
