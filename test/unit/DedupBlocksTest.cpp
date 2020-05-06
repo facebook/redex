@@ -51,7 +51,7 @@ struct DedupBlocksTest : public RedexTest {
   DedupBlocksTest() {
     m_args = DexTypeList::make_type_list({});
     m_proto = DexProto::make_proto(type::_void(), m_args);
-    m_type = DexType::make_type("testClass");
+    m_type = DexType::make_type("LTestClass");
 
     m_creator = new ClassCreator(m_type);
     m_creator->set_super(type::java_lang_Object());
@@ -653,15 +653,15 @@ TEST_F(DedupBlocksTest, blockWithNewInstanceAndConstroctor) {
       (if-eqz v0 :c)
 
       (:b)
-      (new-instance "testClass")
+      (new-instance "LTestClass")
       (move-result-pseudo-object v0)
-      (invoke-direct (v0 v1) "testClass.<init>:(I)V")
+      (invoke-direct (v0 v1) "LTestClass.<init>:(I)V")
       (throw v0)
 
       (:c)
-      (new-instance "testClass")
+      (new-instance "LTestClass")
       (move-result-pseudo-object v0)
-      (invoke-direct (v0 v1) "testClass.<init>:(I)V")
+      (invoke-direct (v0 v1) "LTestClass.<init>:(I)V")
       (throw v0)
     )
   )");
@@ -680,9 +680,9 @@ TEST_F(DedupBlocksTest, blockWithNewInstanceAndConstroctor) {
 
       (:b)
       (:c)
-      (new-instance "testClass")
+      (new-instance "LTestClass")
       (move-result-pseudo-object v0)
-      (invoke-direct (v0 v1) "testClass.<init>:(I)V")
+      (invoke-direct (v0 v1) "LTestClass.<init>:(I)V")
       (throw v0)
     )
   )");
@@ -705,22 +705,22 @@ TEST_F(DedupBlocksTest, constructsObjectFromAnotherBlock) {
       (if-eqz v0 :d)
 
       (:b)
-      (new-instance "testClass")
+      (new-instance "LTestClass")
       (move-result-pseudo-object v0)
 
       (:c)
       (const v1 1)
-      (invoke-direct (v0 v1) "testClass.<init>:(I)V")
+      (invoke-direct (v0 v1) "LTestClass.<init>:(I)V")
       (throw v0)
 
       (:d)
-      (new-instance "testClass")
+      (new-instance "LTestClass")
       (move-result-pseudo-object v0)
       (const v1 2)
 
       (:e)
       (const v1 1)
-      (invoke-direct (v0 v1) "testClass.<init>:(I)V")
+      (invoke-direct (v0 v1) "LTestClass.<init>:(I)V")
       (throw v0)
     )
   )";
@@ -743,24 +743,24 @@ TEST_F(DedupBlocksTest, constructsObjectFromAnotherBlockViaMove) {
       (if-eqz v0 :d)
 
       (:b)
-      (new-instance "testClass")
+      (new-instance "LTestClass")
       (move-result-pseudo-object v2)
 
       (:c)
       (move-object v0 v2)
       (const v1 1)
-      (invoke-direct (v0 v1) "testClass.<init>:(I)V")
+      (invoke-direct (v0 v1) "LTestClass.<init>:(I)V")
       (throw v0)
 
       (:d)
-      (new-instance "testClass")
+      (new-instance "LTestClass")
       (move-result-pseudo-object v2)
       (const v1 2)
 
       (:e)
       (move-object v0 v2)
       (const v1 1)
-      (invoke-direct (v0 v1) "testClass.<init>:(I)V")
+      (invoke-direct (v0 v1) "LTestClass.<init>:(I)V")
       (throw v0)
     )
   )";
@@ -777,18 +777,18 @@ TEST_F(DedupBlocksTest, dedupCatchBlocks) {
   std::string str_code = R"(
     (
       (.try_start t_0)
-      (new-instance "testClass")
+      (new-instance "LTestClass")
       (move-result-pseudo-object v0)
-      (invoke-direct (v0) "testClass.<init>:()V")
+      (invoke-direct (v0) "LTestClass.<init>:()V")
       (.try_end t_0)
 
       (.try_start t_2)
-      (iget v0 "testClass;.a:I")
+      (iget v0 "LTestClass;.a:I")
       (move-result-pseudo v2)
       (.try_end t_2)
 
       (.try_start t_1)
-      (iget v0 "testClass;.b:I")
+      (iget v0 "LTestClass;.b:I")
       (move-result-pseudo v3)
       (.try_end t_1)
 
@@ -818,18 +818,18 @@ TEST_F(DedupBlocksTest, dedupCatchBlocks) {
   std::string expect_str = R"(
     (
       (.try_start t_0)
-      (new-instance "testClass")
+      (new-instance "LTestClass")
       (move-result-pseudo-object v0)
-      (invoke-direct (v0) "testClass.<init>:()V")
+      (invoke-direct (v0) "LTestClass.<init>:()V")
       (.try_end t_0)
 
       (.try_start t_2)
-      (iget v0 "testClass;.a:I")
+      (iget v0 "LTestClass;.a:I")
       (move-result-pseudo v2)
       (.try_end t_2)
 
       (.try_start t_0)
-      (iget v0 "testClass;.b:I")
+      (iget v0 "LTestClass;.b:I")
       (move-result-pseudo v3)
       (.try_end t_0)
 
@@ -856,9 +856,9 @@ TEST_F(DedupBlocksTest, dontDedupCatchBlockAndNonCatchBlock) {
   std::string str_code = R"(
     (
       (.try_start t_0)
-      (new-instance "testClass")
+      (new-instance "LTestClass")
       (move-result-pseudo-object v0)
-      (invoke-direct (v0) "testClass.<init>:()V")
+      (invoke-direct (v0) "LTestClass.<init>:()V")
       (.try_end t_0)
 
       (if-eqz v0 :block_no_catch)

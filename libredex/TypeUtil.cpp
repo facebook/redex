@@ -34,6 +34,8 @@ bool is_primitive(const DexType* type) {
   case 'L':
   case '[':
     return false;
+  default:
+    always_assert_log(false, "unexpected leading character in type: %s", name);
   }
   not_reached();
 }
