@@ -787,6 +787,18 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
   std::unordered_map<IRInstruction*, AbstractObjectEnvironment> m_environments;
   mutable AbstractObjectDomain m_return_value;
   SummaryQueryFn* m_summary_query_fn;
+  const std::map<const DexFieldRef*, DexType*, dexfields_comparator>
+      m_primitive_field_to_type = {
+          {type::pseudo::Void_TYPE(), type::_void()},
+          {type::pseudo::Boolean_TYPE(), type::_boolean()},
+          {type::pseudo::Byte_TYPE(), type::_byte()},
+          {type::pseudo::Character_TYPE(), type::_char()},
+          {type::pseudo::Short_TYPE(), type::_short()},
+          {type::pseudo::Integer_TYPE(), type::_int()},
+          {type::pseudo::Long_TYPE(), type::_long()},
+          {type::pseudo::Float_TYPE(), type::_float()},
+          {type::pseudo::Double_TYPE(), type::_double()},
+      };
 
   void update_non_string_input(AbstractObjectEnvironment* current_state,
                                const IRInstruction* insn,
@@ -809,26 +821,9 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
   }
 
   DexType* check_primitive_type_class(const DexFieldRef* field) const {
-    std::map<const DexFieldRef*, DexType*, dexfields_comparator> field_to_type{
-        {DexField::make_field("Ljava/lang/Boolean;.TYPE:Ljava/lang/Class;"),
-         DexType::make_type("Z")},
-        {DexField::make_field("Ljava/lang/Byte;.TYPE:Ljava/lang/Class;"),
-         DexType::make_type("B")},
-        {DexField::make_field("Ljava/lang/Character;.TYPE:Ljava/lang/Class;"),
-         DexType::make_type("C")},
-        {DexField::make_field("Ljava/lang/Short;.TYPE:Ljava/lang/Class;"),
-         DexType::make_type("S")},
-        {DexField::make_field("Ljava/lang/Integer;.TYPE:Ljava/lang/Class;"),
-         DexType::make_type("I")},
-        {DexField::make_field("Ljava/lang/Long;.TYPE:Ljava/lang/Class;"),
-         DexType::make_type("J")},
-        {DexField::make_field("Ljava/lang/Float;.TYPE:Ljava/lang/Class;"),
-         DexType::make_type("F")},
-        {DexField::make_field("Ljava/lang/Double;.TYPE:Ljava/lang/Class;"),
-         DexType::make_type("D")},
-    };
-    auto type = field_to_type.find(field);
-    if (type != field_to_type.end()) {
+
+    auto type = m_primitive_field_to_type.find(field);
+    if (type != m_primitive_field_to_type.end()) {
       return type->second;
     } else {
       return nullptr;

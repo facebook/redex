@@ -32,3 +32,14 @@
   FOR_EACH(java_lang_Long, "Ljava/lang/Long;")           \
   FOR_EACH(java_lang_Float, "Ljava/lang/Float;")         \
   FOR_EACH(java_lang_Double, "Ljava/lang/Double;")
+
+#define PRIMITIVE_PSEUDO_TYPE_FIELDS                                       \
+  FOR_EACH(Void_TYPE, "Ljava/lang/Void;.TYPE:Ljava/lang/Class;")           \
+  FOR_EACH(Byte_TYPE, "Ljava/lang/Byte;.TYPE:Ljava/lang/Class;")           \
+  FOR_EACH(Character_TYPE, "Ljava/lang/Character;.TYPE:Ljava/lang/Class;") \
+  FOR_EACH(Short_TYPE, "Ljava/lang/Short;.TYPE:Ljava/lang/Class;")         \
+  FOR_EACH(Integer_TYPE, "Ljava/lang/Integer;.TYPE:Ljava/lang/Class;")     \
+  FOR_EACH(Long_TYPE, "Ljava/lang/Long;.TYPE:Ljava/lang/Class;")           \
+  FOR_EACH(Boolean_TYPE, "Ljava/lang/Boolean;.TYPE:Ljava/lang/Class;")     \
+  FOR_EACH(Float_TYPE, "Ljava/lang/Float;.TYPE:Ljava/lang/Class;")         \
+  FOR_EACH(Double_TYPE, "Ljava/lang/Double;.TYPE:Ljava/lang/Class;")

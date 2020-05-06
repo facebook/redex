@@ -12,11 +12,24 @@
 namespace type {
 
 #define DEFINE_CACHED_TYPE(func_name, _) \
-  DexType* func_name() { return g_redex->pointers_cache().func_name(); }
+  DexType* func_name() { return g_redex->pointers_cache().type_##func_name(); }
 
 #define FOR_EACH DEFINE_CACHED_TYPE
 WELL_KNOWN_TYPES
 #undef FOR_EACH
+
+namespace pseudo {
+
+#define DEFINE_CACHED_PSEUDO_TYPE(func_name, _)           \
+  DexFieldRef* func_name() {                              \
+    return g_redex->pointers_cache().field_##func_name(); \
+  }
+
+#define FOR_EACH DEFINE_CACHED_PSEUDO_TYPE
+PRIMITIVE_PSEUDO_TYPE_FIELDS
+#undef FOR_EACH
+
+} // namespace pseudo
 
 bool is_primitive(const DexType* type) {
   auto* const name = type->get_name()->c_str();

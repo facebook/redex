@@ -36,6 +36,14 @@ WELL_KNOWN_TYPES
 #undef FOR_EACH
 #undef DECLARE_TYPE
 
+namespace pseudo {
+#define DECLARE_PSEUDO_TYPE_FIELD(name, _) DexFieldRef* name();
+
+#define FOR_EACH DECLARE_PSEUDO_TYPE_FIELD
+PRIMITIVE_PSEUDO_TYPE_FIELDS
+#undef FOR_EACH
+} // namespace pseudo
+
 /**
  * Return true if the type is a primitive.
  */
