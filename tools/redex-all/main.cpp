@@ -264,7 +264,7 @@ Arguments parse_args(int argc, char* argv[]) {
       "If specified, states that the current build is art specific.\n");
   od.add_options()(
       "enable-pgi",
-      po::bool_switch(&args.redex_options.is_art_build)->default_value(false),
+      po::bool_switch(&args.redex_options.enable_pgi)->default_value(false),
       "If not specified, Profile Guided Inlining will not be run.\n");
   od.add_options()(
       "disable-dex-hasher",
