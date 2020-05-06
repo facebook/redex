@@ -9,6 +9,7 @@
 
 #include <iostream>
 
+#include <boost/optional.hpp>
 #include <functional>
 #include <memory>
 #include <type_traits>
@@ -191,30 +192,33 @@ class InterproceduralAnalyzer {
         m_max_iteration(max_iteration),
         m_metadata(metadata) {}
 
-  virtual std::shared_ptr<CallGraphFixpointIterator> run() {
+  virtual std::shared_ptr<CallGraphFixpointIterator> run(
+      bool rebuild_callgraph_on_each_iteration = false) {
     // keep a copy of old function summaries, do fixpoint on this level.
 
     std::shared_ptr<CallGraphFixpointIterator> fp = nullptr;
+    boost::optional<CallGraph> callgraph = boost::none;
 
     for (int iteration = 0; iteration < m_max_iteration; iteration++) {
-      auto callgraph = Analysis::call_graph_of(m_program, &this->registry);
-
       // TODO: remove or abstract logging
       std::cerr << "Iteration " << iteration + 1 << std::endl;
+      if (!callgraph || rebuild_callgraph_on_each_iteration) {
+        callgraph = Analysis::call_graph_of(m_program, &this->registry);
+      }
 
-      fp = std::make_shared<CallGraphFixpointIterator>(
-          callgraph,
-          &this->registry,
-          [this](const Function& func,
-                 Registry* reg,
-                 CallerContext* context) -> std::shared_ptr<FunctionAnalyzer> {
-            // intraprocedural part
-            return this->run_on_function(func, reg, context);
-          });
+      if (!fp || rebuild_callgraph_on_each_iteration) {
+        // If the callgraph requires to be rebuilt, we need to rebuild the
+        // iterator as well as weak partial ordering should be updated.
+        fp = std::make_shared<CallGraphFixpointIterator>(
+            *callgraph,
+            &this->registry,
+            [this](const Function& func, Registry* reg, CallerContext* context)
+                -> std::shared_ptr<FunctionAnalyzer> {
+              // intraprocedural part
+              return this->run_on_function(func, reg, context);
+            });
+      }
 
-      // TODO: double check this, I think it actually makes sense to join
-      // the caller context domains then use it as the initial domain for
-      // the next iteration.
       fp->run(CallGraphFixpointIterator::initial_domain());
 
       if (this->registry.has_update()) {
