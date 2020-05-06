@@ -16,6 +16,7 @@
 #include "AbstractDomain.h"
 #include "ConstantAbstractDomain.h"
 #include "DexClass.h"
+#include "DexUtil.h"
 #include "IRInstruction.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "PatriciaTreeMapAbstractPartition.h"
@@ -225,6 +226,86 @@ using CallingContextMap =
 
 using SummaryQueryFn = std::function<AbstractObjectDomain(const DexMethod*)>;
 
+struct MetadataCache {
+  DexMethodRef* const get_class{DexMethod::make_method(
+      "Ljava/lang/Object;", "getClass", {}, "Ljava/lang/Class;")};
+  DexMethodRef* const get_method{
+      DexMethod::make_method("Ljava/lang/Class;",
+                             "getMethod",
+                             {"Ljava/lang/String;", "[Ljava/lang/Class;"},
+                             "Ljava/lang/reflect/Method;")};
+  DexMethodRef* const get_declared_method{
+      DexMethod::make_method("Ljava/lang/Class;",
+                             "getDeclaredMethod",
+                             {"Ljava/lang/String;", "[Ljava/lang/Class;"},
+                             "Ljava/lang/reflect/Method;")};
+  DexMethodRef* const get_methods{DexMethod::make_method(
+      "Ljava/lang/Class;", "getMethods", {}, "[Ljava/lang/reflect/Method;")};
+  DexMethodRef* const get_declared_methods{
+      DexMethod::make_method("Ljava/lang/Class;",
+                             "getDeclaredMethods",
+                             {},
+                             "[Ljava/lang/reflect/Method;")};
+  DexMethodRef* const get_constructor{
+      DexMethod::make_method("Ljava/lang/Class;",
+                             "getConstructor",
+                             {"[Ljava/lang/Class;"},
+                             "Ljava/lang/reflect/Constructor;")};
+  DexMethodRef* const get_declared_constructor{
+      DexMethod::make_method("Ljava/lang/Class;",
+                             "getDeclaredConstructor",
+                             {"[Ljava/lang/Class;"},
+                             "Ljava/lang/reflect/Constructor;")};
+  DexMethodRef* const get_constructors{
+      DexMethod::make_method("Ljava/lang/Class;",
+                             "getConstructors",
+                             {},
+                             "[Ljava/lang/reflect/Constructor;")};
+  DexMethodRef* const get_declared_constructors{
+      DexMethod::make_method("Ljava/lang/Class;",
+                             "getDeclaredConstructors",
+                             {},
+                             "[Ljava/lang/reflect/Constructor;")};
+  DexMethodRef* const get_field{
+      DexMethod::make_method("Ljava/lang/Class;",
+                             "getField",
+                             {"Ljava/lang/String;"},
+                             "Ljava/lang/reflect/Field;")};
+  DexMethodRef* const get_declared_field{
+      DexMethod::make_method("Ljava/lang/Class;",
+                             "getDeclaredField",
+                             {"Ljava/lang/String;"},
+                             "Ljava/lang/reflect/Field;")};
+  DexMethodRef* const get_fields{DexMethod::make_method(
+      "Ljava/lang/Class;", "getFields", {}, "[Ljava/lang/reflect/Field;")};
+  DexMethodRef* const get_declared_fields{
+      DexMethod::make_method("Ljava/lang/Class;",
+                             "getDeclaredFields",
+                             {},
+                             "[Ljava/lang/reflect/Field;")};
+  DexMethodRef* const get_method_name{DexMethod::make_method(
+      "Ljava/lang/reflect/Method;", "getName", {}, "Ljava/lang/String;")};
+  DexMethodRef* const get_field_name{DexMethod::make_method(
+      "Ljava/lang/reflect/Field;", "getName", {}, "Ljava/lang/String;")};
+  DexMethodRef* const for_name{DexMethod::make_method("Ljava/lang/Class;",
+                                                      "forName",
+                                                      {"Ljava/lang/String;"},
+                                                      "Ljava/lang/Class;")};
+
+  const std::map<const DexFieldRef*, DexType*, dexfields_comparator>
+      primitive_field_to_type = {
+          {type::pseudo::Void_TYPE(), type::_void()},
+          {type::pseudo::Boolean_TYPE(), type::_boolean()},
+          {type::pseudo::Byte_TYPE(), type::_byte()},
+          {type::pseudo::Character_TYPE(), type::_char()},
+          {type::pseudo::Short_TYPE(), type::_short()},
+          {type::pseudo::Integer_TYPE(), type::_int()},
+          {type::pseudo::Long_TYPE(), type::_long()},
+          {type::pseudo::Float_TYPE(), type::_float()},
+          {type::pseudo::Double_TYPE(), type::_double()},
+  };
+};
+
 class ReflectionAnalysis final {
  public:
   // If we don't declare a destructor for this class, a default destructor will
@@ -236,7 +317,8 @@ class ReflectionAnalysis final {
 
   explicit ReflectionAnalysis(DexMethod* dex_method,
                               CallingContext* context = nullptr,
-                              SummaryQueryFn* summary_query_fn = nullptr);
+                              SummaryQueryFn* summary_query_fn = nullptr,
+                              const MetadataCache* cache = nullptr);
 
   ReflectionSites get_reflection_sites() const;
 
@@ -267,6 +349,7 @@ class ReflectionAnalysis final {
  private:
   const DexMethod* m_dex_method;
   std::unique_ptr<impl::Analyzer> m_analyzer;
+  MetadataCache* m_fallback_cache = nullptr;
 
   void get_reflection_site(
       const reg_t reg,

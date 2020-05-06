@@ -181,6 +181,8 @@ void analyze_reflection(const Scope& scope) {
     }
   };
 
+  reflection::MetadataCache refl_metadata_cache;
+
   walk::code(scope, [&](DexMethod* method, IRCode& code) {
     std::unique_ptr<ReflectionAnalysis> analysis = nullptr;
     for (auto& mie : InstructionIterable(code)) {
@@ -208,7 +210,11 @@ void analyze_reflection(const Scope& scope) {
       // on the method. So, we wait until we're sure we need it.
       // We use a unique_ptr so that we'll still only have one per method.
       if (!analysis) {
-        analysis = std::make_unique<ReflectionAnalysis>(method);
+        analysis = std::make_unique<ReflectionAnalysis>(
+            /* dex_method */ method,
+            /* context (interprocedural only) */ nullptr,
+            /* summary_query_fn (interprocedural only) */ nullptr,
+            /* metadata_cache */ &refl_metadata_cache);
       }
 
       auto arg_cls = analysis->get_abstract_object(insn->src(0), insn);

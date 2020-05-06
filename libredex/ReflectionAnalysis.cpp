@@ -14,7 +14,6 @@
 
 #include "BaseIRAnalyzer.h"
 #include "ControlFlow.h"
-#include "DexUtil.h"
 #include "FiniteAbstractDomain.h"
 #include "HashedSetAbstractDomain.h"
 #include "IRCode.h"
@@ -378,8 +377,12 @@ class AbstractObjectEnvironment final
 class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
  public:
   explicit Analyzer(const cfg::ControlFlowGraph& cfg,
-                    SummaryQueryFn* summary_query_fn)
-      : BaseIRAnalyzer(cfg), m_cfg(cfg), m_summary_query_fn(summary_query_fn) {}
+                    SummaryQueryFn* summary_query_fn,
+                    const MetadataCache* cache)
+      : BaseIRAnalyzer(cfg),
+        m_cfg(cfg),
+        m_summary_query_fn(summary_query_fn),
+        m_cache(cache) {}
 
   void run(DexMethod* dex_method, CallingContext* context) {
     // We need to compute the initial environment by assigning the parameter
@@ -644,8 +647,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
       auto array_type = insn->get_type();
       always_assert(type::is_array(array_type));
       auto component_type = type::get_array_component_type(array_type);
-      if (component_type ==
-          DexType::make_type(DexString::make_string("Ljava/lang/Class;"))) {
+      if (component_type == type::java_lang_Class()) {
         const auto aobj =
             current_state->get_abstract_obj(insn->src(0)).get_object();
 
@@ -673,7 +675,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
       always_assert(type::is_array(array_type));
       auto component_type = type::get_array_component_type(array_type);
       AbstractObject aobj(AbstractObjectKind::OBJECT, insn->get_type());
-      if (component_type == DexType::make_type("Ljava/lang/Class;")) {
+      if (component_type == type::java_lang_Class()) {
         auto arg_count = insn->srcs_size();
         std::vector<DexType*> known_types;
         known_types.reserve(arg_count);
@@ -710,7 +712,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
       break;
     }
     case OPCODE_INVOKE_STATIC: {
-      if (insn->get_method() == m_for_name) {
+      if (insn->get_method() == m_cache->for_name) {
         auto class_name =
             current_state->get_abstract_obj(insn->src(0)).get_object();
         if (class_name && class_name->obj_kind == STRING) {
@@ -787,18 +789,8 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
   std::unordered_map<IRInstruction*, AbstractObjectEnvironment> m_environments;
   mutable AbstractObjectDomain m_return_value;
   SummaryQueryFn* m_summary_query_fn;
-  const std::map<const DexFieldRef*, DexType*, dexfields_comparator>
-      m_primitive_field_to_type = {
-          {type::pseudo::Void_TYPE(), type::_void()},
-          {type::pseudo::Boolean_TYPE(), type::_boolean()},
-          {type::pseudo::Byte_TYPE(), type::_byte()},
-          {type::pseudo::Character_TYPE(), type::_char()},
-          {type::pseudo::Short_TYPE(), type::_short()},
-          {type::pseudo::Integer_TYPE(), type::_int()},
-          {type::pseudo::Long_TYPE(), type::_long()},
-          {type::pseudo::Float_TYPE(), type::_float()},
-          {type::pseudo::Double_TYPE(), type::_double()},
-      };
+
+  const MetadataCache* m_cache;
 
   void update_non_string_input(AbstractObjectEnvironment* current_state,
                                const IRInstruction* insn,
@@ -822,8 +814,8 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
 
   DexType* check_primitive_type_class(const DexFieldRef* field) const {
 
-    auto type = m_primitive_field_to_type.find(field);
-    if (type != m_primitive_field_to_type.end()) {
+    auto type = m_cache->primitive_field_to_type.find(field);
+    if (type != m_cache->primitive_field_to_type.end()) {
       return type->second;
     } else {
       return nullptr;
@@ -886,8 +878,8 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
 
   bool is_method_known_to_preserve_args(DexMethodRef* method) const {
     const std::set<DexMethodRef*, dexmethods_comparator> known_methods{
-        m_get_method,
-        m_get_declared_method,
+        m_cache->get_method,
+        m_cache->get_declared_method,
     };
     return known_methods.count(method);
   }
@@ -925,7 +917,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
       break;
     }
     case OBJECT: {
-      if (callee == m_get_class) {
+      if (callee == m_cache->get_class) {
         current_state->set_abstract_obj(
             RESULT_REGISTER,
             AbstractObjectDomain(AbstractObject(AbstractObjectKind::CLASS,
@@ -939,7 +931,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
       break;
     }
     case STRING: {
-      if (callee == m_get_class) {
+      if (callee == m_cache->get_class) {
         current_state->set_abstract_obj(
             RESULT_REGISTER,
             AbstractObjectDomain(AbstractObject(AbstractObjectKind::CLASS,
@@ -955,7 +947,8 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
       AbstractObjectKind element_kind;
       DexString* element_name = nullptr;
       boost::optional<std::vector<DexType*>> method_param_types = boost::none;
-      if (callee == m_get_method || callee == m_get_declared_method) {
+      if (callee == m_cache->get_method ||
+          callee == m_cache->get_declared_method) {
         element_kind = METHOD;
         element_name = get_dex_string_from_insn(current_state, insn, 1);
         auto arr_reg = insn->src(2); // holds java.lang.Class array
@@ -968,8 +961,8 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
             method_param_types = *maybe_array;
           }
         }
-      } else if (callee == m_get_constructor ||
-                 callee == m_get_declared_constructor) {
+      } else if (callee == m_cache->get_constructor ||
+                 callee == m_cache->get_declared_constructor) {
         element_kind = METHOD;
         element_name = DexString::get_string("<init>");
         auto arr_reg = insn->src(1);
@@ -982,17 +975,20 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
             method_param_types = *maybe_array;
           }
         }
-      } else if (callee == m_get_field || callee == m_get_declared_field) {
+      } else if (callee == m_cache->get_field ||
+                 callee == m_cache->get_declared_field) {
         element_kind = FIELD;
         element_name = get_dex_string_from_insn(current_state, insn, 1);
-      } else if (callee == m_get_fields || callee == m_get_declared_fields) {
+      } else if (callee == m_cache->get_fields ||
+                 callee == m_cache->get_declared_fields) {
         element_kind = FIELD;
         element_name = DexString::get_string("");
-      } else if (callee == m_get_methods || callee == m_get_declared_methods) {
+      } else if (callee == m_cache->get_methods ||
+                 callee == m_cache->get_declared_methods) {
         element_kind = METHOD;
         element_name = DexString::get_string("");
-      } else if (callee == m_get_constructors ||
-                 callee == m_get_declared_constructors) {
+      } else if (callee == m_cache->get_constructors ||
+                 callee == m_cache->get_declared_constructors) {
         element_kind = METHOD;
         element_name = DexString::get_string("<init>");
       }
@@ -1012,8 +1008,8 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
     }
     case FIELD:
     case METHOD: {
-      if ((receiver.obj_kind == FIELD && callee == m_get_field_name) ||
-          (receiver.obj_kind == METHOD && callee == m_get_method_name)) {
+      if ((receiver.obj_kind == FIELD && callee == m_cache->get_field_name) ||
+          (receiver.obj_kind == METHOD && callee == m_cache->get_method_name)) {
         current_state->set_abstract_obj(
             RESULT_REGISTER,
             AbstractObjectDomain(AbstractObject(receiver.dex_string)));
@@ -1045,80 +1041,21 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
       }
     }
   }
-
-  DexMethodRef* m_get_class{DexMethod::make_method(
-      "Ljava/lang/Object;", "getClass", {}, "Ljava/lang/Class;")};
-  DexMethodRef* m_get_method{
-      DexMethod::make_method("Ljava/lang/Class;",
-                             "getMethod",
-                             {"Ljava/lang/String;", "[Ljava/lang/Class;"},
-                             "Ljava/lang/reflect/Method;")};
-  DexMethodRef* m_get_declared_method{
-      DexMethod::make_method("Ljava/lang/Class;",
-                             "getDeclaredMethod",
-                             {"Ljava/lang/String;", "[Ljava/lang/Class;"},
-                             "Ljava/lang/reflect/Method;")};
-  DexMethodRef* m_get_methods{DexMethod::make_method(
-      "Ljava/lang/Class;", "getMethods", {}, "[Ljava/lang/reflect/Method;")};
-  DexMethodRef* m_get_declared_methods{
-      DexMethod::make_method("Ljava/lang/Class;",
-                             "getDeclaredMethods",
-                             {},
-                             "[Ljava/lang/reflect/Method;")};
-  DexMethodRef* m_get_constructor{
-      DexMethod::make_method("Ljava/lang/Class;",
-                             "getConstructor",
-                             {"[Ljava/lang/Class;"},
-                             "Ljava/lang/reflect/Constructor;")};
-  DexMethodRef* m_get_declared_constructor{
-      DexMethod::make_method("Ljava/lang/Class;",
-                             "getDeclaredConstructor",
-                             {"[Ljava/lang/Class;"},
-                             "Ljava/lang/reflect/Constructor;")};
-  DexMethodRef* m_get_constructors{
-      DexMethod::make_method("Ljava/lang/Class;",
-                             "getConstructors",
-                             {},
-                             "[Ljava/lang/reflect/Constructor;")};
-  DexMethodRef* m_get_declared_constructors{
-      DexMethod::make_method("Ljava/lang/Class;",
-                             "getDeclaredConstructors",
-                             {},
-                             "[Ljava/lang/reflect/Constructor;")};
-  DexMethodRef* m_get_field{
-      DexMethod::make_method("Ljava/lang/Class;",
-                             "getField",
-                             {"Ljava/lang/String;"},
-                             "Ljava/lang/reflect/Field;")};
-  DexMethodRef* m_get_declared_field{
-      DexMethod::make_method("Ljava/lang/Class;",
-                             "getDeclaredField",
-                             {"Ljava/lang/String;"},
-                             "Ljava/lang/reflect/Field;")};
-  DexMethodRef* m_get_fields{DexMethod::make_method(
-      "Ljava/lang/Class;", "getFields", {}, "[Ljava/lang/reflect/Field;")};
-  DexMethodRef* m_get_declared_fields{
-      DexMethod::make_method("Ljava/lang/Class;",
-                             "getDeclaredFields",
-                             {},
-                             "[Ljava/lang/reflect/Field;")};
-  DexMethodRef* m_get_method_name{DexMethod::make_method(
-      "Ljava/lang/reflect/Method;", "getName", {}, "Ljava/lang/String;")};
-  DexMethodRef* m_get_field_name{DexMethod::make_method(
-      "Ljava/lang/reflect/Field;", "getName", {}, "Ljava/lang/String;")};
-  DexMethodRef* m_for_name{DexMethod::make_method("Ljava/lang/Class;",
-                                                  "forName",
-                                                  {"Ljava/lang/String;"},
-                                                  "Ljava/lang/Class;")};
 };
 
 } // namespace impl
 
-ReflectionAnalysis::~ReflectionAnalysis() {}
+ReflectionAnalysis::~ReflectionAnalysis() {
+  if (m_fallback_cache) {
+    delete m_fallback_cache;
+    m_fallback_cache = nullptr;
+  }
+}
 
 ReflectionAnalysis::ReflectionAnalysis(DexMethod* dex_method,
                                        CallingContext* context,
-                                       SummaryQueryFn* summary_query_fn)
+                                       SummaryQueryFn* summary_query_fn,
+                                       const MetadataCache* cache)
     : m_dex_method(dex_method) {
   always_assert(dex_method != nullptr);
   IRCode* code = dex_method->get_code();
@@ -1128,7 +1065,11 @@ ReflectionAnalysis::ReflectionAnalysis(DexMethod* dex_method,
   code->build_cfg(/* editable */ false);
   cfg::ControlFlowGraph& cfg = code->cfg();
   cfg.calculate_exit_block();
-  m_analyzer = std::make_unique<impl::Analyzer>(cfg, summary_query_fn);
+  if (!cache) {
+    m_fallback_cache = new MetadataCache;
+    cache = m_fallback_cache;
+  }
+  m_analyzer = std::make_unique<impl::Analyzer>(cfg, summary_query_fn, cache);
   m_analyzer->run(dex_method, context);
 }
 

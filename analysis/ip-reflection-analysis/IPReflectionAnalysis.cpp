@@ -127,6 +127,8 @@ namespace mog = method_override_graph;
 
 struct Metadata {
   std::unique_ptr<const mog::Graph> method_override_graph;
+  // For speeding up reflection analysis
+  reflection::MetadataCache refl_meta_cache;
 };
 
 template <typename FunctionSummaries>
@@ -172,7 +174,9 @@ class ReflectionAnalyzer : public Intraprocedural {
 
     auto context = m_context->get(m_method);
     reflection::ReflectionAnalysis analysis(const_cast<DexMethod*>(m_method),
-                                            &context, &query_fn);
+                                            &context,
+                                            &query_fn,
+                                            &m_metadata->refl_meta_cache);
 
     m_summary.set_value(analysis.get_return_value());
     m_summary.set_reflection_sites(std::move(analysis.get_reflection_sites()));
