@@ -17,6 +17,8 @@
 #include "ConstantAbstractDomain.h"
 #include "DexClass.h"
 #include "IRInstruction.h"
+#include "PatriciaTreeMapAbstractEnvironment.h"
+#include "PatriciaTreeMapAbstractPartition.h"
 
 namespace reflection {
 
@@ -179,6 +181,25 @@ struct AbstractObject final : public sparta::AbstractValue<AbstractObject> {
   }
 };
 
+class AbstractObjectDomain final
+    : public sparta::AbstractDomainScaffolding<AbstractObject,
+                                               AbstractObjectDomain> {
+ public:
+  AbstractObjectDomain() { this->set_to_top(); }
+  explicit AbstractObjectDomain(AbstractObject obj) {
+    this->set_to_value(AbstractObject(std::move(obj)));
+  }
+  explicit AbstractObjectDomain(sparta::AbstractValueKind kind)
+      : sparta::AbstractDomainScaffolding<AbstractObject, AbstractObjectDomain>(
+            kind) {}
+
+  boost::optional<AbstractObject> get_object() const {
+    return (this->kind() == sparta::AbstractValueKind::Value)
+               ? boost::optional<AbstractObject>(*this->get_value())
+               : boost::none;
+  }
+};
+
 bool operator==(const AbstractObject& x, const AbstractObject& y);
 
 bool operator!=(const AbstractObject& x, const AbstractObject& y);
@@ -191,6 +212,19 @@ using ReflectionAbstractObject =
 using ReflectionSites = std::vector<
     std::pair<IRInstruction*, std::map<reg_t, ReflectionAbstractObject>>>;
 
+using param_index_t = uint16_t;
+
+using CallingContext =
+    sparta::PatriciaTreeMapAbstractPartition<param_index_t,
+                                             AbstractObjectDomain>;
+
+// Maps from callsite instruction to the corresponding calling context.
+using CallingContextMap =
+    sparta::PatriciaTreeMapAbstractEnvironment<const IRInstruction*,
+                                               CallingContext>;
+
+using SummaryQueryFn = std::function<AbstractObjectDomain(const DexMethod*)>;
+
 class ReflectionAnalysis final {
  public:
   // If we don't declare a destructor for this class, a default destructor will
@@ -200,9 +234,13 @@ class ReflectionAnalysis final {
   // sra_impl::Analyzer.
   ~ReflectionAnalysis();
 
-  explicit ReflectionAnalysis(DexMethod* dex_method);
+  explicit ReflectionAnalysis(DexMethod* dex_method,
+                              CallingContext* context = nullptr,
+                              SummaryQueryFn* summary_query_fn = nullptr);
 
   ReflectionSites get_reflection_sites() const;
+
+  AbstractObjectDomain get_return_value() const;
 
   /**
    * Return a parameter type array for this invoke method instruction.
@@ -223,6 +261,8 @@ class ReflectionAnalysis final {
 
   boost::optional<ClassObjectSource> get_class_source(
       size_t reg, IRInstruction* insn) const;
+
+  CallingContextMap get_calling_context_partition() const;
 
  private:
   const DexMethod* m_dex_method;

@@ -10,6 +10,7 @@ AM_CXXFLAGS = --std=gnu++14 -O3 -Wall -g
 #
 AM_CPPFLAGS = \
 	-I$(top_srcdir)/analysis/max-depth \
+	-I$(top_srcdir)/analysis/ip-reflection-analysis \
 	-I$(top_srcdir)/liblocator \
 	-I$(top_srcdir)/libredex \
 	-I$(top_srcdir)/libresource \
@@ -260,6 +261,7 @@ noinst_PROGRAMS = redex-all
 
 redex_all_SOURCES = \
 	analysis/max-depth/MaxDepthAnalysis.cpp \
+	analysis/ip-reflection-analysis/IPReflectionAnalysis.cpp \
 	libredex/DexAsm.cpp \
 	opt/access-marking/AccessMarking.cpp \
 	opt/add_redex_txt_to_apk/AddRedexTxtToApk.cpp \

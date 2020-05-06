@@ -16,11 +16,13 @@
 #include "ControlFlow.h"
 #include "DexUtil.h"
 #include "FiniteAbstractDomain.h"
+#include "HashedSetAbstractDomain.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "IROpcode.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "ReducedProductAbstractDomain.h"
+#include "Resolver.h"
 #include "Show.h"
 
 using namespace sparta;
@@ -276,25 +278,6 @@ namespace impl {
 
 using namespace ir_analyzer;
 
-class AbstractObjectDomain final
-    : public sparta::AbstractDomainScaffolding<AbstractObject,
-                                               AbstractObjectDomain> {
- public:
-  AbstractObjectDomain() { this->set_to_top(); }
-  explicit AbstractObjectDomain(AbstractObject obj) {
-    this->set_to_value(AbstractObject(std::move(obj)));
-  }
-  explicit AbstractObjectDomain(sparta::AbstractValueKind kind)
-      : sparta::AbstractDomainScaffolding<AbstractObject, AbstractObjectDomain>(
-            kind) {}
-
-  boost::optional<AbstractObject> get_object() const {
-    return (this->kind() == sparta::AbstractValueKind::Value)
-               ? boost::optional<AbstractObject>(*this->get_value())
-               : boost::none;
-  }
-};
-
 using ClassObjectSourceDomain =
     sparta::ConstantAbstractDomain<ClassObjectSource>;
 
@@ -308,18 +291,23 @@ using HeapClassArrayEnvironment = PatriciaTreeMapAbstractEnvironment<
     AbstractHeapAddress,
     ConstantAbstractDomain<std::vector<DexType*>>>;
 
+using ReturnValueDomain = AbstractObjectDomain;
+
 class AbstractObjectEnvironment final
     : public ReducedProductAbstractDomain<AbstractObjectEnvironment,
                                           BasicAbstractObjectEnvironment,
                                           ClassObjectSourceEnvironment,
-                                          HeapClassArrayEnvironment> {
+                                          HeapClassArrayEnvironment,
+                                          ReturnValueDomain,
+                                          CallingContextMap> {
  public:
   using ReducedProductAbstractDomain::ReducedProductAbstractDomain;
 
-  static void reduce_product(
-      std::tuple<BasicAbstractObjectEnvironment,
-                 ClassObjectSourceEnvironment,
-                 HeapClassArrayEnvironment>& /* product */) {}
+  static void reduce_product(std::tuple<BasicAbstractObjectEnvironment,
+                                        ClassObjectSourceEnvironment,
+                                        HeapClassArrayEnvironment,
+                                        ReturnValueDomain,
+                                        CallingContextMap>& /* product */) {}
 
   AbstractObjectDomain get_abstract_obj(reg_t reg) const {
     return get<0>().get(reg);
@@ -360,14 +348,28 @@ class AbstractObjectEnvironment final
     domain.set_to_top();
     set_heap_class_array(addr, domain);
   }
+
+  ReturnValueDomain get_return_value() const { return get<3>(); }
+
+  void join_return_value(const ReturnValueDomain& domain) {
+    apply<3>([=](auto original) { original->join_with(domain); }, true);
+  }
+
+  CallingContextMap get_calling_context_partition() const { return get<4>(); }
+
+  void set_calling_context(const IRInstruction* insn,
+                           const CallingContext& context) {
+    apply<4>([=](auto partition) { partition->set(insn, context); }, true);
+  }
 };
 
 class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
  public:
-  explicit Analyzer(const cfg::ControlFlowGraph& cfg)
-      : BaseIRAnalyzer(cfg), m_cfg(cfg) {}
+  explicit Analyzer(const cfg::ControlFlowGraph& cfg,
+                    SummaryQueryFn* summary_query_fn)
+      : BaseIRAnalyzer(cfg), m_cfg(cfg), m_summary_query_fn(summary_query_fn) {}
 
-  void run(DexMethod* dex_method) {
+  void run(DexMethod* dex_method, CallingContext* context) {
     // We need to compute the initial environment by assigning the parameter
     // registers their correct abstract object derived from the method's
     // signature. The IOPCODE_LOAD_PARAM_* instructions are pseudo-operations
@@ -379,32 +381,43 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
     // type being String. Also for CLASSes, the exact Java type they refer to is
     // not available here.
     auto init_state = AbstractObjectEnvironment::top();
+    m_return_value.set_to_bottom();
     const auto& signature =
         dex_method->get_proto()->get_args()->get_type_list();
     auto sig_it = signature.begin();
-    bool first_param = true;
+    param_index_t param_position = 0;
     // By construction, the IOPCODE_LOAD_PARAM_* instructions are located at the
     // beginning of the entry block of the CFG.
     for (const auto& mie : InstructionIterable(m_cfg.entry_block())) {
       IRInstruction* insn = mie.insn;
       switch (insn->opcode()) {
       case IOPCODE_LOAD_PARAM_OBJECT: {
-        if (first_param && !is_static(dex_method)) {
+        if (param_position == 0 && !is_static(dex_method)) {
           // If the method is not static, the first parameter corresponds to
           // `this`.
-          first_param = false;
           update_non_string_input(&init_state, insn, dex_method->get_class());
         } else {
           // This is a regular parameter of the method.
+          AbstractObjectDomain param_abstract_obj;
+
           DexType* type = *sig_it;
           always_assert(sig_it++ != signature.end());
-          update_non_string_input(&init_state, insn, type);
+          if (context && (param_abstract_obj = context->get(param_position),
+                          param_abstract_obj.is_value())) {
+            // Parameter domain is provided with the calling context.
+            init_state.set_abstract_obj(insn->dest(),
+                                        context->get(param_position));
+          } else {
+            update_non_string_input(&init_state, insn, type);
+          }
         }
+        param_position++;
         break;
       }
       case IOPCODE_LOAD_PARAM:
       case IOPCODE_LOAD_PARAM_WIDE: {
         default_semantics(insn, &init_state);
+        param_position++;
         break;
       }
       default: {
@@ -423,6 +436,26 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
   void analyze_instruction(
       const IRInstruction* insn,
       AbstractObjectEnvironment* current_state) const override {
+    AbstractObjectDomain callee_return;
+    callee_return.set_to_bottom();
+    if (is_invoke(insn->opcode())) {
+      CallingContext cc;
+      auto srcs = insn->srcs();
+      for (param_index_t i = 0; i < srcs.size(); i++) {
+        reg_t src = insn->src(i);
+        auto aobj = current_state->get_abstract_obj(src);
+        cc.set(i, aobj);
+      }
+      if (!cc.is_bottom()) {
+        current_state->set_calling_context(insn, cc);
+      }
+
+      if (m_summary_query_fn) {
+        callee_return = (*m_summary_query_fn)(
+            resolve_method(insn->get_method(), opcode_to_search(insn)));
+      }
+    }
+
     switch (insn->opcode()) {
     case IOPCODE_LOAD_PARAM:
     case IOPCODE_LOAD_PARAM_OBJECT:
@@ -506,8 +539,8 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
           obj->potential_dex_types.insert(dex_type);
           current_state->set_abstract_obj(
               insn->src(0),
-              AbstractObjectDomain(AbstractObject(
-                  obj->obj_kind, obj->dex_type, obj->potential_dex_types)));
+              AbstractObjectDomain(AbstractObject(obj->obj_kind, obj->dex_type,
+                                                  obj->potential_dex_types)));
         }
       }
 
@@ -657,10 +690,11 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
       auto receiver =
           current_state->get_abstract_obj(insn->src(0)).get_object();
       if (!receiver) {
-        update_return_object_and_invalidate_heap_args(current_state, insn);
+        update_return_object_and_invalidate_heap_args(current_state, insn,
+                                                      callee_return);
         break;
       }
-      process_virtual_call(insn, *receiver, current_state);
+      process_virtual_call(insn, *receiver, current_state, callee_return);
       break;
     }
     case OPCODE_INVOKE_STATIC: {
@@ -690,13 +724,20 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
           break;
         }
       }
-      update_return_object_and_invalidate_heap_args(current_state, insn);
+      update_return_object_and_invalidate_heap_args(current_state, insn,
+                                                    callee_return);
       break;
     }
     case OPCODE_INVOKE_INTERFACE:
     case OPCODE_INVOKE_SUPER:
     case OPCODE_INVOKE_DIRECT: {
-      update_return_object_and_invalidate_heap_args(current_state, insn);
+      update_return_object_and_invalidate_heap_args(current_state, insn,
+                                                    callee_return);
+      break;
+    }
+    case OPCODE_RETURN_OBJECT: {
+      this->m_return_value.join_with(
+          current_state->get_abstract_obj(insn->src(0)));
       break;
     }
     default: {
@@ -723,9 +764,17 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
     return it->second.get_class_source(reg).get_constant();
   }
 
+  AbstractObjectDomain get_return_value() const { return m_return_value; }
+
+  AbstractObjectEnvironment get_exit_state() const {
+    return get_exit_state_at(m_cfg.exit_block());
+  }
+
  private:
   const cfg::ControlFlowGraph& m_cfg;
   std::unordered_map<IRInstruction*, AbstractObjectEnvironment> m_environments;
+  mutable AbstractObjectDomain m_return_value;
+  SummaryQueryFn* m_summary_query_fn;
 
   void update_non_string_input(AbstractObjectEnvironment* current_state,
                                const IRInstruction* insn,
@@ -776,7 +825,8 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
 
   void update_return_object_and_invalidate_heap_args(
       AbstractObjectEnvironment* current_state,
-      const IRInstruction* insn) const {
+      const IRInstruction* insn,
+      const AbstractObjectDomain& callee_return) const {
 
     invalidate_argument_heap_objects(current_state, insn);
     DexMethodRef* callee = insn->get_method();
@@ -784,7 +834,11 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
     if (type::is_void(return_type) || !type::is_object(return_type)) {
       return;
     }
-    update_non_string_input(current_state, insn, return_type);
+    if (callee_return.is_value()) {
+      current_state->set_abstract_obj(RESULT_REGISTER, callee_return);
+    } else {
+      update_non_string_input(current_state, insn, return_type);
+    }
   }
 
   void default_semantics(const IRInstruction* insn,
@@ -855,7 +909,8 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
 
   void process_virtual_call(const IRInstruction* insn,
                             const AbstractObject& receiver,
-                            AbstractObjectEnvironment* current_state) const {
+                            AbstractObjectEnvironment* current_state,
+                            const AbstractObjectDomain& callee_return) const {
     DexMethodRef* callee = insn->get_method();
     switch (receiver.obj_kind) {
     case INT: {
@@ -960,7 +1015,8 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
       break;
     }
     }
-    update_return_object_and_invalidate_heap_args(current_state, insn);
+    update_return_object_and_invalidate_heap_args(current_state, insn,
+                                                  callee_return);
   }
 
   // After the fixpoint iteration completes, we replay the analysis on all
@@ -1053,7 +1109,9 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
 
 ReflectionAnalysis::~ReflectionAnalysis() {}
 
-ReflectionAnalysis::ReflectionAnalysis(DexMethod* dex_method)
+ReflectionAnalysis::ReflectionAnalysis(DexMethod* dex_method,
+                                       CallingContext* context,
+                                       SummaryQueryFn* summary_query_fn)
     : m_dex_method(dex_method) {
   always_assert(dex_method != nullptr);
   IRCode* code = dex_method->get_code();
@@ -1063,8 +1121,8 @@ ReflectionAnalysis::ReflectionAnalysis(DexMethod* dex_method)
   code->build_cfg(/* editable */ false);
   cfg::ControlFlowGraph& cfg = code->cfg();
   cfg.calculate_exit_block();
-  m_analyzer = std::make_unique<impl::Analyzer>(cfg);
-  m_analyzer->run(dex_method);
+  m_analyzer = std::make_unique<impl::Analyzer>(cfg, summary_query_fn);
+  m_analyzer->run(dex_method, context);
 }
 
 void ReflectionAnalysis::get_reflection_site(
@@ -1120,6 +1178,14 @@ ReflectionSites ReflectionAnalysis::get_reflection_sites() const {
   return reflection_sites;
 }
 
+AbstractObjectDomain ReflectionAnalysis::get_return_value() const {
+  if (!m_analyzer) {
+    // Method has no code, or is a native method.
+    return AbstractObjectDomain::top();
+  }
+  return m_analyzer->get_return_value();
+}
+
 boost::optional<std::vector<DexType*>> ReflectionAnalysis::get_method_params(
     IRInstruction* invoke_insn) const {
   auto code = m_dex_method->get_code();
@@ -1154,6 +1220,13 @@ boost::optional<AbstractObject> ReflectionAnalysis::get_abstract_object(
     return boost::none;
   }
   return m_analyzer->get_abstract_object(reg, insn);
+}
+
+CallingContextMap ReflectionAnalysis::get_calling_context_partition() const {
+  if (m_analyzer == nullptr) {
+    return CallingContextMap::top();
+  }
+  return this->m_analyzer->get_exit_state().get_calling_context_partition();
 }
 
 } // namespace reflection
