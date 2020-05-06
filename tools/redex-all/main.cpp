@@ -794,14 +794,14 @@ void redex_frontend(ConfigFiles& conf, /* input */
   const JsonWrapper& json_config = conf.get_json_config();
   dup_classes::read_dup_class_whitelist(json_config);
 
-  {
+  run_rethrow_first_aggregate([&]() {
     Timer t("Load classes from dexes");
     dex_stats_t input_totals;
     std::vector<dex_stats_t> input_dexes_stats;
     redex::load_classes_from_dexes_and_metadata(
         args.dex_files, stores, input_totals, input_dexes_stats);
     stats["input_stats"] = get_input_stats(input_totals, input_dexes_stats);
-  }
+  });
 
   Scope external_classes;
   args.entry_data["jars"] = Json::arrayValue;
