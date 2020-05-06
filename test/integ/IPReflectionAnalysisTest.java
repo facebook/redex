@@ -63,3 +63,39 @@ public class IPReflectionAnalysisTest {
     return Class.forName(getClassName());
   }
 }
+
+class Base {
+  Class reflBaseClass() throws Exception {
+    return Class.forName("com.facebook.redextest.IPReflectionAnalysisTest");
+  }
+
+  Class reflString(String cls) throws Exception {
+    return Class.forName(cls);
+  }
+}
+
+class Extended extends Base {
+  Class reflBaseClass() throws Exception {
+    return Class.forName("com.facebook.redextest.IPReflectionAnalysisTest");
+  }
+
+  Class reflString(String cls) throws Exception {
+    return Class.forName(cls);
+  }
+
+  Class callsReflBaseClass() throws Exception {
+    return reflBaseClass();
+  }
+
+  Class callsReflString() throws Exception {
+    // tests virtual callsites
+    return reflString("com.facebook.redextest.IPReflectionAnalysisTest");
+  }
+}
+
+class ExtendedExtended extends Extended {
+  Class callsReflString() throws Exception {
+    // tests virtual callsites
+    return reflString("com.facebook.redextest.IPReflectionAnalysisTest");
+  }
+}

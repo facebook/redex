@@ -280,6 +280,9 @@ std::ostream& operator<<(std::ostream& out,
                          const reflection::AbstractObject& x);
 
 std::ostream& operator<<(std::ostream& out,
+                         const reflection::AbstractObjectDomain& x);
+
+std::ostream& operator<<(std::ostream& out,
                          const reflection::ClassObjectSource& cls_src);
 
 std::ostream& operator<<(std::ostream& out,

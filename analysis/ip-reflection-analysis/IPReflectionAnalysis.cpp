@@ -8,6 +8,7 @@
 #include "IPReflectionAnalysis.h"
 
 #include "AbstractDomain.h"
+#include "MethodOverrideGraph.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "PatriciaTreeMapAbstractPartition.h"
 #include "Resolver.h"
@@ -65,7 +66,15 @@ struct FunctionSummary : public AbstractDomain<FunctionSummary> {
     m_return = std::move(retval);
   }
 
-  reflection::AbstractObjectDomain get_return_value() { return m_return; }
+  reflection::AbstractObjectDomain get_return_value() {
+    if (is_top()) {
+      return reflection::AbstractObjectDomain::top();
+    }
+    if (is_bottom()) {
+      return reflection::AbstractObjectDomain::bottom();
+    }
+    return m_return;
+  }
 
   void set_reflection_sites(reflection::ReflectionSites sites) {
     m_reflection_sites = std::move(sites);
@@ -99,6 +108,12 @@ struct FunctionSummary : public AbstractDomain<FunctionSummary> {
   reflection::ReflectionSites m_reflection_sites;
 };
 
+namespace mog = method_override_graph;
+
+struct Metadata {
+  std::unique_ptr<const mog::Graph> method_override_graph;
+};
+
 template <typename FunctionSummaries>
 class ReflectionAnalyzer : public Intraprocedural {
  private:
@@ -107,13 +122,17 @@ class ReflectionAnalyzer : public Intraprocedural {
   FunctionSummaries* m_summaries;
   CallerContext* m_context;
   FunctionSummary m_summary;
+  Metadata* m_metadata;
 
  public:
   ReflectionAnalyzer(const DexMethod* method,
                      FunctionSummaries* summaries,
                      CallerContext* context,
-                     void* /* metadata */)
-      : m_method(method), m_summaries(summaries), m_context(context) {}
+                     Metadata* metadata)
+      : m_method(method),
+        m_summaries(summaries),
+        m_context(context),
+        m_metadata(metadata) {}
 
   void analyze() override {
     if (!m_method) {
@@ -122,14 +141,18 @@ class ReflectionAnalyzer : public Intraprocedural {
 
     reflection::SummaryQueryFn query_fn =
         [&](const DexMethod* callee) -> reflection::AbstractObjectDomain {
-      auto summary = m_summaries->get(callee, FunctionSummary::top());
-      if (summary.is_value()) {
-        return summary.get_return_value();
-      } else if (summary.is_top()) {
-        return reflection::AbstractObjectDomain::top();
-      } else {
-        return reflection::AbstractObjectDomain::bottom();
+      auto ret =
+          m_summaries->get(callee, FunctionSummary::top()).get_return_value();
+
+      std::unordered_set<const DexMethod*> overriding_methods =
+          mog::get_overriding_methods(*(m_metadata->method_override_graph),
+                                      callee);
+
+      for (const DexMethod* method : overriding_methods) {
+        ret.join_with(m_summaries->get(method, FunctionSummary::top())
+                          .get_return_value());
       }
+      return ret;
     };
 
     auto context = m_context->get(m_method);
@@ -148,14 +171,26 @@ class ReflectionAnalyzer : public Intraprocedural {
         always_assert(is_invoke(op));
         DexMethod* callee =
             resolve_method(insn->get_method(), opcode_to_search(op));
-        if (is_invoke_static(op) || is_invoke_direct(op) ||
-            is_invoke_super(op)) {
+
+        m_context->update(
+            callee, [&](const reflection::CallingContext& original_context) {
+              return calling_context.join(original_context);
+            });
+
+        std::unordered_set<const DexMethod*> overriding_methods;
+        if (is_invoke_virtual(op)) {
+          overriding_methods = mog::get_overriding_methods(
+              *(m_metadata->method_override_graph), callee);
+        } else if (is_invoke_interface(op)) {
+          overriding_methods = mog::get_overriding_methods(
+              *(m_metadata->method_override_graph), callee, true);
+        }
+
+        for (const DexMethod* method : overriding_methods) {
           m_context->update(
-              callee, [&](const reflection::CallingContext& original_context) {
+              method, [&](const reflection::CallingContext& original_context) {
                 return calling_context.join(original_context);
               });
-        } else if (is_invoke_virtual(op) || is_invoke_interface(op)) {
-          // TODO: Handle virtual calls
         }
       }
     }
@@ -183,14 +218,18 @@ struct ReflectionAnalysisAdaptor : public AnalysisAdaptorBase {
   using Callsite = Caller;
 };
 
-using Analysis = InterproceduralAnalyzer<ReflectionAnalysisAdaptor>;
+using Analysis = InterproceduralAnalyzer<ReflectionAnalysisAdaptor, Metadata>;
 
 } // namespace
 
 void IPReflectionAnalysisPass::run_pass(DexStoresVector& stores,
                                         ConfigFiles& /* conf */,
                                         PassManager& /* pm */) {
-  auto analysis = Analysis(build_class_scope(stores), m_max_iteration);
+
+  Scope scope = build_class_scope(stores);
+  Metadata metadata;
+  metadata.method_override_graph = mog::build_graph(scope);
+  auto analysis = Analysis(scope, m_max_iteration, &metadata);
   analysis.run();
   auto summaries = analysis.registry.get_map();
   m_result = std::make_shared<Result>();

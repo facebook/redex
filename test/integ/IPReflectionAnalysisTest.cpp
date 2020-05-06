@@ -119,6 +119,23 @@ TEST_F(IPReflectionAnalysisTest, test_results) {
        "IPReflectionAnalysisTest;.callsReflMethodWithInputString:()Ljava/lang/"
        "reflect/Method;",
        2},
+      {"Lcom/facebook/redextest/Base;.reflBaseClass:()Ljava/lang/Class;", 2},
+      {"Lcom/facebook/redextest/Base;.reflString:(Ljava/lang/String;)Ljava/"
+       "lang/Class;",
+       0},
+      {"Lcom/facebook/redextest/Extended;.reflBaseClass:()Ljava/lang/Class;",
+       2},
+      {"Lcom/facebook/redextest/Extended;.reflString:(Ljava/lang/String;)Ljava/"
+       "lang/Class;",
+       2},
+      {"Lcom/facebook/redextest/Extended;.callsReflBaseClass:()Ljava/lang/"
+       "Class;",
+       2},
+      {"Lcom/facebook/redextest/Extended;.callsReflString:()Ljava/lang/Class;",
+       2},
+      {"Lcom/facebook/redextest/ExtendedExtended;.callsReflString:()Ljava/lang/"
+       "Class;",
+       2},
   };
 
   for (const auto& entry : expected_entries) {

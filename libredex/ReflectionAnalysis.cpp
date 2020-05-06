@@ -94,6 +94,18 @@ std::ostream& operator<<(std::ostream& out,
 }
 
 std::ostream& operator<<(std::ostream& out,
+                         const reflection::AbstractObjectDomain& x) {
+  if (x.is_top()) {
+    out << "TOP";
+  } else if (x.is_bottom()) {
+    out << "BOTTOM";
+  } else {
+    out << *(x.get_object());
+  }
+  return out;
+}
+
+std::ostream& operator<<(std::ostream& out,
                          const reflection::ClassObjectSource& cls_src) {
   switch (cls_src) {
   case reflection::NON_REFLECTION: {
