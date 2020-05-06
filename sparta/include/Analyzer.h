@@ -57,7 +57,7 @@ class AbstractRegistry {
 //   type MonotonicFixpointIterator (Choice of `MonotonicFixpointIterator`s),
 // };
 
-template <typename Analysis>
+template <typename Analysis, typename Metadata = void>
 class InterproceduralAnalyzer {
  public:
   using Function = typename Analysis::Function;
@@ -123,8 +123,12 @@ class InterproceduralAnalyzer {
         "Callsite::Domain must inherit from sparta::AbstractDomain");
   }
 
-  InterproceduralAnalyzer(Program program, int max_iteration)
-      : m_program(std::move(program)), m_max_iteration(max_iteration) {}
+  InterproceduralAnalyzer(Program program,
+                          int max_iteration,
+                          Metadata* metadata = nullptr)
+      : m_program(std::move(program)),
+        m_max_iteration(max_iteration),
+        m_metadata(metadata) {}
 
   virtual std::shared_ptr<CallGraphFixpointIterator> run() {
     // keep a copy of old function summaries, do fixpoint on this level.
@@ -167,7 +171,8 @@ class InterproceduralAnalyzer {
   virtual std::shared_ptr<FunctionAnalyzer> run_on_function(
       const Function& function, Registry* reg, CallerContext* context) {
 
-    auto analyzer = std::make_shared<FunctionAnalyzer>(function, reg, context);
+    auto analyzer =
+        std::make_shared<FunctionAnalyzer>(function, reg, context, m_metadata);
 
     analyzer->analyze();
     return analyzer;
@@ -176,6 +181,7 @@ class InterproceduralAnalyzer {
  private:
   Program m_program;
   int m_max_iteration;
+  Metadata* m_metadata;
 };
 
 } // namespace sparta

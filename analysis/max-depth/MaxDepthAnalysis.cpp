@@ -124,7 +124,8 @@ class MaxDepthFunctionAnalyzer : public Intraprocedural {
  public:
   MaxDepthFunctionAnalyzer(const DexMethod* method,
                            FunctionSummaries* summaries,
-                           CallerContext* context)
+                           CallerContext* context,
+                           void* /* metadata */)
       : m_method(method),
         m_summaries(summaries),
         m_context(context),
