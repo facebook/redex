@@ -69,6 +69,23 @@ bool is_inference_fallback_type(const DexType* type) {
  * Therefore, be more lenient when assigning from or to external DexType.
  */
 bool check_cast_helper(const DexType* from, const DexType* to) {
+  // We can always cast to Object
+  if (to == type::java_lang_Object()) {
+    return true;
+  }
+  // TODO(T66567547) - this check and sanity-checks-within-the-check should
+  // be redundant, but it's already caught one problem that caused it to
+  // returnd different results. Letting this soak for a while and will remove
+  // it once I'm confident there are no more lurking gremlins.
+  //
+  // We can never cast from Object to anything besides Object
+  if (from == type::java_lang_Object() && from != to) {
+    always_assert(type_class_internal(from));
+    always_assert(type_class_internal(to));
+    always_assert(!type::check_cast(from, to));
+    return false;
+  }
+  // If we have any external types (aside from Object), allow it
   if (!type_class_internal(from) || !type_class_internal(to)) {
     return true;
   }
@@ -703,6 +720,22 @@ void IRTypeChecker::assume_reference(TypeEnvironment* state,
               /* ignore_top */ in_move && !m_verify_moves);
 }
 
+void IRTypeChecker::assume_assignable(boost::optional<const DexType*> from,
+                                      DexType* to) const {
+  // There are some cases in type inference where we have to give up
+  // and claim we don't know anything about a dex type. See
+  // IRTypeCheckerTest.joinCommonBaseWithConflictingInterface, for
+  // example - the last invoke of 'base.foo()' after the blocks join -
+  // we no longer know anything about the type of the reference. It's
+  // in such a case as that that we have to bail out here when the from
+  // optional is empty.
+  if (from && !check_is_assignable_from(*from, to, false)) {
+    std::ostringstream out;
+    out << ": " << *from << " is not assignable to " << to << std::endl;
+    throw TypeCheckingException(out.str());
+  }
+}
+
 // This method performs type checking only: the type environment is not updated
 // and the source registers of the instruction are checked against their
 // expected types.
@@ -1049,7 +1082,10 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
     if (insn->opcode() != OPCODE_INVOKE_STATIC) {
       // The first argument is a reference to the object instance on which the
       // method is invoked.
-      assume_reference(current_state, insn->src(src_idx++));
+      auto src = insn->src(src_idx++);
+      assume_reference(current_state, src);
+      assume_assignable(current_state->get_dex_type(src),
+                        dex_method->get_class());
     }
     for (DexType* arg_type : arg_types) {
       if (type::is_object(arg_type)) {
