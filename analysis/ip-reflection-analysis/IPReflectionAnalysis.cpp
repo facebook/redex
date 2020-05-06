@@ -215,6 +215,11 @@ struct ReflectionAnalysisAdaptor : public AnalysisAdaptorBase {
   using Registry = MethodSummaryRegistry<FunctionSummary>;
   using FunctionSummary = FunctionSummary;
   using FunctionAnalyzer = ReflectionAnalyzer<Registry>;
+
+  template <typename GraphInterface, typename Domain>
+  using FixpointIteratorBase =
+      sparta::ParallelMonotonicFixpointIterator<GraphInterface, Domain>;
+
   using Callsite = Caller;
 };
 
