@@ -12,12 +12,12 @@
 bool is_outlined_class(DexClass* cls);
 
 struct InstructionSequenceOutlinerConfig {
-  size_t min_insns_size;
-  size_t max_insns_size;
-  bool use_method_to_weight;
-  bool reuse_outlined_methods_across_dexes;
-  size_t max_outlined_methods_per_class;
-  size_t threshold;
+  size_t min_insns_size{3};
+  size_t max_insns_size{77};
+  bool use_method_to_weight{true};
+  bool reuse_outlined_methods_across_dexes{true};
+  size_t max_outlined_methods_per_class{100};
+  size_t threshold{10};
 };
 
 class InstructionSequenceOutliner : public Pass {

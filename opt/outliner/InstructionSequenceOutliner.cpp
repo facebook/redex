@@ -2344,22 +2344,25 @@ bool is_outlined_class(DexClass* cls) {
 }
 
 void InstructionSequenceOutliner::bind_config() {
-  bind("max_insns_size", MIN_INSNS_SIZE, m_config.min_insns_size,
+  bind("max_insns_size", m_config.min_insns_size, m_config.min_insns_size,
        "Minimum number of instructions to be outlined in a sequence");
-  bind("max_insns_size", (size_t)77, m_config.max_insns_size,
+  bind("max_insns_size", m_config.max_insns_size, m_config.max_insns_size,
        "Maximum number of instructions to be outlined in a sequence");
-  bind("use_method_to_weight", true, m_config.use_method_to_weight,
+  bind("use_method_to_weight", m_config.use_method_to_weight,
+       m_config.use_method_to_weight,
        "Whether to use provided method-to-weight configuration data to "
        "determine if a method should not be outlined from");
-  bind("reuse_outlined_methods_across_dexes", true,
+  bind("reuse_outlined_methods_across_dexes",
+       m_config.reuse_outlined_methods_across_dexes,
        m_config.reuse_outlined_methods_across_dexes,
        "Whether to allow reusing outlined methods across dexes within the same "
        "store");
-  bind("max_outlined_methods_per_class", (size_t)100,
+  bind("max_outlined_methods_per_class",
+       m_config.max_outlined_methods_per_class,
        m_config.max_outlined_methods_per_class,
        "Maximum number of outlined methods per generated helper class; "
        "indirectly drives number of needed helper classes");
-  bind("threshold", (size_t)10, m_config.threshold,
+  bind("threshold", m_config.threshold, m_config.threshold,
        "Minimum number of code units saved before a particular code sequence "
        "is outlined anywhere");
   always_assert(m_config.min_insns_size >= MIN_INSNS_SIZE);
