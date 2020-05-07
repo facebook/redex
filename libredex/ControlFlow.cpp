@@ -71,16 +71,6 @@ bool ends_with_may_throw(cfg::Block* p) {
   return false;
 }
 
-bool cannot_throw(cfg::Block* b) {
-  for (const auto& mie : InstructionIterable(b)) {
-    auto op = mie.insn->opcode();
-    if (opcode::can_throw(op)) {
-      return false;
-    }
-  }
-  return true;
-}
-
 /*
  * Return true if the block does not contain anything we need.
  */
@@ -448,6 +438,15 @@ Block* Block::goes_to_only_edge() const {
     }
   }
   return nullptr;
+}
+
+bool Block::cannot_throw() const {
+  for (auto& mie : ir_list::ConstInstructionIterable(this)) {
+    if (opcode::can_throw(mie.insn->opcode())) {
+      return false;
+    }
+  }
+  return true;
 }
 
 std::vector<Edge*> Block::get_outgoing_throws_in_order() const {
@@ -1630,7 +1629,7 @@ void ControlFlowGraph::insert_try_catch_markers(
     Block* b = *it;
     MethodItemEntry* new_catch = create_catch(b, &catch_to_containing_block);
 
-    if (new_catch == nullptr && cannot_throw(b) && !b->is_catch()) {
+    if (new_catch == nullptr && b->cannot_throw() && !b->is_catch()) {
       // Generate fewer try regions by merging blocks that cannot throw into the
       // previous try region.
       //

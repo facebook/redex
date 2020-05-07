@@ -319,6 +319,9 @@ class Block final {
   // Otherwise, return nullptr
   Block* goes_to() const;
 
+  // If this block contains no instructions that can throw.
+  bool cannot_throw() const;
+
   // TODO?: Should we just always store the throws in index order?
   std::vector<Edge*> get_outgoing_throws_in_order() const;
 

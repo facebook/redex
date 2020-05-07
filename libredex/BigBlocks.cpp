@@ -9,8 +9,10 @@
 
 namespace {
 
-static bool has_only_simple_goto_pred_with_same_try(cfg::ControlFlowGraph& cfg,
-                                                    cfg::Block* block) {
+static bool is_big_block_successor(cfg::ControlFlowGraph& cfg,
+                                   cfg::Block* block) {
+  // A big block successor is a block that...
+  // 1. has only a single GOTO predecessor which has no outgoing BRANCH
   auto& pred_edges = block->preds();
   if (pred_edges.size() != 1) {
     return false;
@@ -20,8 +22,14 @@ static bool has_only_simple_goto_pred_with_same_try(cfg::ControlFlowGraph& cfg,
     return false;
   }
   auto pred_block = pred_edge->src();
-  return pred_block->same_try(block) &&
-         !cfg.get_succ_edge_of_type(pred_block, cfg::EDGE_BRANCH);
+  if (cfg.get_succ_edge_of_type(pred_block, cfg::EDGE_BRANCH)) {
+    return false;
+  }
+
+  // 2. Shares the same try(ies) with its predecessor, or
+  //    cannot throw (as may happen in particular in a block that ends with a
+  //    conditional branch or return).
+  return pred_block->same_try(block) || block->cannot_throw();
 }
 
 } // namespace
@@ -40,8 +48,7 @@ InstructionIterator& InstructionIterator::operator++() {
   }
   while (true) {
     auto next_block = block->goes_to();
-    if (!next_block ||
-        !has_only_simple_goto_pred_with_same_try(m_it.cfg(), next_block)) {
+    if (!next_block || !is_big_block_successor(m_it.cfg(), next_block)) {
       auto ii = ir_list::InstructionIterable(block);
       m_it = block->to_cfg_instruction_iterator(ii.end());
       return *this;
@@ -76,14 +83,14 @@ InstructionIterator InstructionIterable::end() const {
 std::vector<BigBlock> get_big_blocks(cfg::ControlFlowGraph& cfg) {
   std::vector<BigBlock> res;
   for (auto block : cfg.blocks()) {
-    if (has_only_simple_goto_pred_with_same_try(cfg, block)) {
+    if (is_big_block_successor(cfg, block)) {
       continue;
     }
     std::vector<cfg::Block*> blocks;
     do {
       blocks.push_back(block);
       block = block->goes_to();
-    } while (block && has_only_simple_goto_pred_with_same_try(cfg, block));
+    } while (block && is_big_block_successor(cfg, block));
     res.emplace_back(std::move(blocks));
   }
   return res;

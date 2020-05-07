@@ -239,6 +239,62 @@ class InstructionSequenceOutlinerTest {
       }
     }
 
+    public int big_block_can_end_with_no_tries1(int x) {
+      try {
+        // outlining potentially starts here
+        println("big_block_can_end_with_no_tries", "b", "c");
+        x+=1;
+        x+=2;
+        x+=3;
+        x+=4;
+        x+=5;
+        x+=6;
+        x+=7;
+        x+=8;
+        x+=9;
+        x+=10;
+        x+=11;
+        x+=12;
+        x+=13;
+        x+=14;
+        x+=15;
+        x+=16;
+        x+=17;
+        x+=18;
+        return /* outlining ends here */ x;
+      } catch (Exception e) {
+        return 1;
+      }
+    }
+
+    public int big_block_can_end_with_no_tries2(int x) {
+      try {
+        // outlining potentially starts here
+        println("big_block_can_end_with_no_tries", "b", "c");
+        x+=1;
+        x+=2;
+        x+=3;
+        x+=4;
+        x+=5;
+        x+=6;
+        x+=7;
+        x+=8;
+        x+=9;
+        x+=10;
+        x+=11;
+        x+=12;
+        x+=13;
+        x+=14;
+        x+=15;
+        x+=16;
+        x+=17;
+        x+=18;
+        return /* outlining ends here */ x;
+      } catch (Exception e) {
+        return 2;
+      }
+    }
+
     public int two_out_regs(int x, int y) {
       x += y; y += x;
       x += y; y += x;

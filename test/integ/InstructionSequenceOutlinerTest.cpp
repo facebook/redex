@@ -10,6 +10,7 @@
 #include "ControlFlow.h"
 #include "DexInstruction.h"
 #include "DexUtil.h"
+#include "LocalDcePass.h"
 #include "IRCode.h"
 #include "RedexTest.h"
 #include "ScopedCFG.h"
@@ -332,6 +333,40 @@ TEST_F(InstructionSequenceOutlinerTest, defined_reg_escapes_to_catch) {
     cfg::ScopedCFG scoped_cfg(m->get_code());
     auto outlined_method = find_invoked_method(*scoped_cfg, "$outline");
     EXPECT_EQ(outlined_method, nullptr);
+  }
+}
+
+TEST_F(InstructionSequenceOutlinerTest, big_block_can_end_with_no_tries) {
+  // Test that a sequence becomes beneficial to outline because a big block can
+  // have throwing code followed by non-throwing code.
+  std::vector<DexMethod*> big_block_can_end_with_no_tries_methods;
+  DexMethodRef* println_method;
+  for (const auto& cls : *classes) {
+    for (const auto& m : cls->get_vmethods()) {
+      if (m->get_name()->str().find("big_block_can_end_with_no_tries") !=
+          std::string::npos) {
+        cfg::ScopedCFG scoped_cfg(m->get_code());
+        println_method = find_invoked_method(*scoped_cfg, "println");
+        big_block_can_end_with_no_tries_methods.push_back(m);
+      }
+    }
+  }
+  EXPECT_EQ(big_block_can_end_with_no_tries_methods.size(), 2);
+  EXPECT_NE(println_method, nullptr);
+
+  std::vector<Pass*> passes = {
+      new LocalDcePass(),
+      new InstructionSequenceOutliner(),
+  };
+
+  run_passes(passes);
+
+  for (auto m : big_block_can_end_with_no_tries_methods) {
+    cfg::ScopedCFG scoped_cfg(m->get_code());
+    auto outlined_method = find_invoked_method(*scoped_cfg, "$outline");
+    EXPECT_NE(outlined_method, nullptr);
+    auto println_method_invokes = count_invokes(*scoped_cfg, println_method);
+    EXPECT_EQ(println_method_invokes, 0);
   }
 }
 
