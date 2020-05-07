@@ -398,6 +398,53 @@ class ConcurrentSet final
   }
 };
 
+/**
+ * A concurrent set that only accept insertions.
+ *
+ * This allows accessing constant references on elements safely.
+ */
+template <typename Key,
+          typename Hash = std::hash<Key>,
+          typename Equal = std::equal_to<Key>,
+          size_t n_slots = 31>
+class InsertOnlyConcurrentSet final
+    : public ConcurrentContainer<std::unordered_set<Key, Hash, Equal>,
+                                 Key,
+                                 Hash,
+                                 n_slots> {
+ public:
+  InsertOnlyConcurrentSet() = default;
+
+  InsertOnlyConcurrentSet(const InsertOnlyConcurrentSet& set)
+      : ConcurrentContainer<std::unordered_set<Key, Hash, Equal>,
+                            Key,
+                            Hash,
+                            n_slots>(set) {}
+
+  InsertOnlyConcurrentSet(InsertOnlyConcurrentSet&& set) noexcept
+      : ConcurrentContainer<std::unordered_set<Key, Hash, Equal>,
+                            Key,
+                            Hash,
+                            n_slots>(std::move(set)) {}
+
+  /*
+   * Returns a pair consisting of a reference on the inserted element (or the
+   * element that prevented the insertion) and a boolean denoting whether the
+   * insertion took place. This operation is always thread-safe.
+   */
+  std::pair<const Key&, bool> insert(const Key& key) {
+    size_t slot = Hash()(key) % n_slots;
+    boost::lock_guard<boost::mutex> lock(this->get_lock(slot));
+    auto& set = this->get_container(slot);
+    // `std::unordered_set::insert` does not invalidate references,
+    // thus it is safe to return a reference on the object.
+    auto result = set.insert(key);
+    return {*result.first, result.second};
+  }
+
+  size_t erase(const Key& key) = delete;
+};
+
 namespace cc_impl {
 
 template <typename Container, size_t n_slots>

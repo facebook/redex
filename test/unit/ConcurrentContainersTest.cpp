@@ -30,7 +30,8 @@ class ConcurrentContainersTest : public ::testing::Test {
         m_elem_dist(0, 1000000000),
         m_data(generate_random_data()),
         m_subset_data(generate_random_subset(m_data)),
-        m_data_set(m_data.begin(), m_data.end()) {
+        m_data_set(m_data.begin(), m_data.end()),
+        m_subset_data_set(m_subset_data.begin(), m_subset_data.end()) {
     for (size_t t = 0; t < kThreads; ++t) {
       for (size_t i = t; i < m_data.size(); i += kThreads) {
         m_samples[t].push_back(m_data[i]);
@@ -86,6 +87,7 @@ class ConcurrentContainersTest : public ::testing::Test {
   std::vector<uint32_t> m_data;
   std::vector<uint32_t> m_subset_data;
   std::unordered_set<uint32_t> m_data_set;
+  std::unordered_set<uint32_t> m_subset_data_set;
   std::vector<uint32_t> m_samples[kThreads];
   std::vector<uint32_t> m_subset_samples[kThreads];
 };
@@ -142,6 +144,73 @@ TEST_F(ConcurrentContainersTest, concurrentSetTest) {
   EXPECT_EQ(3, set.size());
   set.clear();
   EXPECT_EQ(0, set.size());
+}
+
+TEST_F(ConcurrentContainersTest, insertOnlyConcurrentSetTest) {
+  InsertOnlyConcurrentSet<uint32_t> set;
+
+  run_on_subset_samples([&set](const std::vector<uint32_t>& sample) {
+    for (size_t i = 0; i < sample.size(); ++i) {
+      set.insert(sample[i]);
+      EXPECT_EQ(1, set.count(sample[i]));
+    }
+  });
+  auto check_initial_values =
+      [&](const InsertOnlyConcurrentSet<uint32_t>& set) {
+        EXPECT_EQ(m_subset_data_set.size(), set.size());
+        for (uint32_t x : m_subset_data) {
+          EXPECT_EQ(1, set.count(x));
+          EXPECT_NE(set.end(), set.find(x));
+        }
+      };
+  check_initial_values(set);
+
+  auto copy = set;
+
+  run_on_samples([&set](const std::vector<uint32_t>& sample) {
+    for (size_t i = 0; i < sample.size(); ++i) {
+      set.insert(sample[i]);
+      EXPECT_EQ(1, set.count(sample[i]));
+    }
+  });
+
+  for (uint32_t x : m_data) {
+    EXPECT_EQ(1, set.count(x));
+    EXPECT_NE(set.end(), set.find(x));
+  }
+
+  // Check that copy is unchanged.
+  check_initial_values(copy);
+
+  auto moved = std::move(copy);
+  check_initial_values(moved);
+
+  // Check that pointers/references are stable.
+  struct Pair {
+    const uint32_t* p;
+    uint32_t x;
+  };
+  std::vector<Pair> pointers;
+
+  for (uint32_t x : m_subset_data) {
+    const uint32_t* p = &moved.insert(x).first;
+    EXPECT_EQ(*p, x);
+    pointers.push_back(Pair{p, x});
+  }
+  EXPECT_EQ(m_subset_data_set.size(), moved.size());
+
+  run_on_samples([&moved](const std::vector<uint32_t>& sample) {
+    for (size_t i = 0; i < sample.size(); ++i) {
+      moved.insert(sample[i]);
+      EXPECT_EQ(1, moved.count(sample[i]));
+    }
+  });
+  EXPECT_EQ(m_data_set.size(), moved.size());
+
+  for (const auto& pair : pointers) {
+    EXPECT_EQ(*pair.p, pair.x);
+    EXPECT_EQ(pair.p, &moved.insert(pair.x).first);
+  }
 }
 
 TEST_F(ConcurrentContainersTest, concurrentMapTest) {
