@@ -130,6 +130,75 @@ TEST_F(InstructionSequenceOutlinerTest, twice) {
   }
 }
 
+TEST_F(InstructionSequenceOutlinerTest, in_try) {
+  // Testing that we can outlined across a big block (consisting of several
+  // individual blocks) surrounded by a try-catch.
+  std::vector<DexMethod*> in_try_methods;
+  DexMethodRef* println_method = nullptr;
+  for (const auto& cls : *classes) {
+    for (const auto& m : cls->get_vmethods()) {
+      if (m->get_name()->str() == "in_try") {
+        cfg::ScopedCFG scoped_cfg(m->get_code());
+        println_method = find_invoked_method(*scoped_cfg, "println");
+        EXPECT_EQ(count_invokes(*scoped_cfg, println_method), 5);
+        in_try_methods.push_back(m);
+      }
+    }
+  }
+  EXPECT_NE(println_method, nullptr);
+  EXPECT_EQ(in_try_methods.size(), 1);
+
+  std::vector<Pass*> passes = {
+      new InstructionSequenceOutliner(),
+  };
+
+  run_passes(passes);
+
+  for (auto m : in_try_methods) {
+    cfg::ScopedCFG scoped_cfg(m->get_code());
+    EXPECT_EQ(count_invokes(*scoped_cfg, println_method), 0);
+    auto outlined_method = find_invoked_method(*scoped_cfg, "$outline");
+    EXPECT_NE(outlined_method, nullptr);
+    EXPECT_EQ(count_invokes(*scoped_cfg, outlined_method), 1);
+  }
+}
+
+TEST_F(InstructionSequenceOutlinerTest, in_try_ineligible_) {
+  // Big blocks don't kick in when...
+  // - there are different catches
+  //   (in_try_ineligible_due_to_different_catches), or
+  // - there is a conditional branch
+  //   (in_try_ineligible_due_to_conditional_branch)
+  std::vector<DexMethod*> in_try_ineligible_methods;
+  DexMethodRef* println_method = nullptr;
+  for (const auto& cls : *classes) {
+    for (const auto& m : cls->get_vmethods()) {
+      if (m->get_name()->str().find("in_try_ineligible_") !=
+          std::string::npos) {
+        cfg::ScopedCFG scoped_cfg(m->get_code());
+        println_method = find_invoked_method(*scoped_cfg, "println");
+        EXPECT_EQ(count_invokes(*scoped_cfg, println_method), 5);
+        in_try_ineligible_methods.push_back(m);
+      }
+    }
+  }
+  EXPECT_NE(println_method, nullptr);
+  EXPECT_EQ(in_try_ineligible_methods.size(), 2);
+
+  std::vector<Pass*> passes = {
+      new InstructionSequenceOutliner(),
+  };
+
+  run_passes(passes);
+
+  for (auto m : in_try_ineligible_methods) {
+    cfg::ScopedCFG scoped_cfg(m->get_code());
+    EXPECT_EQ(count_invokes(*scoped_cfg, println_method), 5);
+    auto outlined_method = find_invoked_method(*scoped_cfg, "$outline");
+    EXPECT_EQ(outlined_method, nullptr);
+  }
+}
+
 TEST_F(InstructionSequenceOutlinerTest, param) {
   // Testing outlining of code into a method that takes a parameter
   std::vector<DexMethod*> param_methods;

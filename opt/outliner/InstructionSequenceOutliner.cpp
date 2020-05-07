@@ -61,6 +61,7 @@
 #include <vector>
 
 #include "ApiLevelChecker.h"
+#include "BigBlocks.h"
 #include "CFGMutation.h"
 #include "Creators.h"
 #include "DexClass.h"
@@ -1246,25 +1247,33 @@ static MethodCandidateSequences find_method_candidate_sequences(
     return type_inference.get_type_environments();
   });
   size_t insn_idx{0};
-  for (auto block : cfg.blocks()) {
+  // We are visiting the instructions in this method in "big block" chunks:
+  // - The big blocks cover all blocks.
+  // - It is safe to do so as they all share the same throw-edges, and any
+  //   outlined method invocation will be placed in the first block of the big
+  //   block, with the appropriate throw edges.
+  for (auto& big_block : big_blocks::get_big_blocks(cfg)) {
     Lazy<std::unordered_map<IRInstruction*, LivenessDomain>> live_outs(
-        [&fixpoint_iter, block]() {
+        [&fixpoint_iter, &big_block]() {
           std::unordered_map<IRInstruction*, LivenessDomain> res;
-          auto live_out = fixpoint_iter.get_live_out_vars_at(block);
-          for (auto it = block->rbegin(); it != block->rend(); ++it) {
-            if (it->type != MFLOW_OPCODE) {
-              continue;
+          for (auto block : big_block.get_blocks()) {
+            auto live_out = fixpoint_iter.get_live_out_vars_at(block);
+            for (auto it = block->rbegin(); it != block->rend(); ++it) {
+              if (it->type != MFLOW_OPCODE) {
+                continue;
+              }
+              res.emplace(it->insn, live_out);
+              fixpoint_iter.analyze_instruction(it->insn, &live_out);
             }
-            res.emplace(it->insn, live_out);
-            fixpoint_iter.analyze_instruction(it->insn, &live_out);
           }
           return res;
         });
 
     // Variables that flow into throw block, if any
-    Lazy<LivenessDomain> throw_live_out([&cfg, &fixpoint_iter, block]() {
+    Lazy<LivenessDomain> throw_live_out([&cfg, &fixpoint_iter, &big_block]() {
       auto res = LivenessDomain::bottom();
-      for (auto e : cfg.get_succ_edges_of_type(block, cfg::EDGE_THROW)) {
+      for (auto e : cfg.get_succ_edges_of_type(big_block.get_blocks().front(),
+                                               cfg::EDGE_THROW)) {
         res.join_with(fixpoint_iter.get_live_in_vars_at(e->target()));
       }
       return res;
@@ -1272,8 +1281,8 @@ static MethodCandidateSequences find_method_candidate_sequences(
 
     std::list<PartialCandidateSequence> partial_candidate_sequences;
     boost::optional<IROpcode> prev_opcode;
-    auto ii = InstructionIterable(block);
     CandidateInstructionCoresBuilder cores_builder;
+    auto ii = big_blocks::InstructionIterable(big_block);
     for (auto it = ii.begin(), end = ii.end(); it != end;
          prev_opcode = it->insn->opcode(), it++) {
       auto insn = it->insn;
@@ -1313,8 +1322,7 @@ static MethodCandidateSequences find_method_candidate_sequences(
       // We cannot consider partial candidate sequences when they are missing
       // their move-result piece
       if (insn->has_move_result_any() &&
-          !cfg.move_result_of(block->to_cfg_instruction_iterator(it))
-               .is_end()) {
+          !cfg.move_result_of(it.unwrap()).is_end()) {
         continue;
       }
 
@@ -1409,8 +1417,8 @@ static MethodCandidateSequences find_method_candidate_sequences(
         auto first_insn_idx = insn_idx - pcs.insns.size();
         if (cmls.empty() ||
             cmls.back().first_insn_idx + pcs.insns.size() <= first_insn_idx) {
-          cmls.push_back((CandidateMethodLocation){pcs.insns.front(), block,
-                                                   first_insn_idx});
+          cmls.push_back((CandidateMethodLocation){pcs.insns.front(),
+                                                   it.block(), first_insn_idx});
         }
       }
     }
@@ -1516,9 +1524,9 @@ static void get_recurring_cores(
         code.build_cfg(/* editable */ true);
         code.cfg().calculate_exit_block();
         auto& cfg = code.cfg();
-        for (auto block : cfg.blocks()) {
+        for (auto& big_block : big_blocks::get_big_blocks(cfg)) {
           CandidateInstructionCoresBuilder cores_builder;
-          for (auto& mie : InstructionIterable(block)) {
+          for (auto& mie : big_blocks::InstructionIterable(big_block)) {
             auto insn = mie.insn;
             if (!can_outline_insn(insn)) {
               cores_builder.clear();
@@ -1846,7 +1854,7 @@ static void rewrite_sequence_at_location(DexMethod* outlined_method,
   std::vector<reg_t> arg_regs;
   boost::optional<reg_t> res_reg;
   boost::optional<reg_t> highest_mapped_arg_reg;
-  auto it = first_insn_it;
+  auto it = big_blocks::InstructionIterator(first_insn_it);
   for (size_t insn_idx = 0; insn_idx < cs.insns.size(); insn_idx++, it++) {
     auto& ci = cs.insns.at(insn_idx);
     always_assert(it->insn->opcode() == ci.core.opcode);
@@ -1862,7 +1870,7 @@ static void rewrite_sequence_at_location(DexMethod* outlined_method,
       res_reg = it->insn->dest();
     }
     if (!opcode::is_move_result_any(it->insn->opcode())) {
-      cfg_mutation.remove(it);
+      cfg_mutation.remove(it.unwrap());
     }
   }
   // Generate and insert invocation instructions

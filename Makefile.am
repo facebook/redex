@@ -127,6 +127,7 @@ libredex_la_SOURCES = \
 	libredex/AnnoUtils.cpp \
 	libredex/ApiLevelChecker.cpp \
 	libredex/ApkManager.cpp \
+	libredex/BigBlocks.cpp \
 	libredex/CFGMutation.cpp \
 	libredex/CallGraph.cpp \
 	libredex/ClassHierarchy.cpp \

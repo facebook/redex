@@ -49,6 +49,39 @@ class InstructionSequenceOutlinerTest {
       distraction2();
     }
 
+    public void in_try() {
+      try {
+        println("a", "b", "c");
+        println("d", "e", "f");
+        println("g", "h", "i");
+        println("j", "k", "l");
+        println("m", "n", "o");
+      } catch (Exception e) {}
+    }
+
+    public void in_try_ineligible_due_to_different_catches() {
+      try {
+        println("a", "b", "c");
+        println("d", "e", "f");
+        println("g", "h", "i");
+      } catch (Exception e) {}
+      try {
+        println("j", "k", "l");
+        println("m", "n", "o");
+      } catch (Exception e) {}
+    }
+
+    public void in_try_ineligible_due_to_conditional_branch(boolean b) {
+      try {
+        println("a", "b", "c");
+        println("d", "e", "f");
+        println("g", "h", "i");
+        if (b) return;
+        println("j", "k", "l");
+        println("m", "n", "o");
+      } catch (Exception e) {}
+    }
+
     public void twice1() {
       println("a", "b", "c");
       println("d", "e", "f");
