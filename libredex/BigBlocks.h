@@ -18,6 +18,31 @@
 
 namespace big_blocks {
 
+class Iterator {
+ private:
+  cfg::Block* m_block{nullptr};
+  IRList::iterator m_it;
+  void adjust_block();
+
+ public:
+  using value_type = IRList::iterator::value_type;
+  using difference_type = IRList::iterator::difference_type;
+  using pointer = IRList::iterator::pointer;
+  using reference = IRList::iterator::reference;
+  using iterator_category = std::input_iterator_tag;
+
+  explicit Iterator(cfg::Block* block, const IRList::iterator& it);
+  const IRList::iterator& unwrap() const { return m_it; }
+  reference operator*() const { return *m_it; }
+  pointer operator->() const { return &(this->operator*()); }
+  bool operator==(const Iterator& other) const {
+    return m_block == other.m_block && (!m_block || m_it == other.m_it);
+  }
+  bool operator!=(Iterator& other) const { return !(*this == other); }
+  Iterator operator++(int);
+  Iterator& operator++();
+};
+
 class InstructionIterator {
  private:
   cfg::InstructionIterator m_it;
@@ -60,6 +85,7 @@ struct InstructionIterable {
   const BigBlock& m_big_block;
 
  public:
+  using iterator = InstructionIterator;
   explicit InstructionIterable(const BigBlock& big_block)
       : m_big_block(big_block) {}
   InstructionIterator begin() const;

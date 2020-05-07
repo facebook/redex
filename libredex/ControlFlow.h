@@ -238,6 +238,10 @@ class Block final {
   Block(const Block& b, MethodItemEntryCloner* cloner);
 
   BlockId id() const { return m_id; }
+  ControlFlowGraph& cfg() const {
+    always_assert(m_parent != nullptr);
+    return *m_parent;
+  }
   const std::vector<Edge*>& preds() const { return m_preds; }
   const std::vector<Edge*>& succs() const { return m_succs; }
 

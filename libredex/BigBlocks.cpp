@@ -9,8 +9,7 @@
 
 namespace {
 
-static bool is_big_block_successor(cfg::ControlFlowGraph& cfg,
-                                   cfg::Block* block) {
+static bool is_big_block_successor(cfg::Block* block) {
   // A big block successor is a block that...
   // 1. has only a single GOTO predecessor which has no outgoing BRANCH
   auto& pred_edges = block->preds();
@@ -22,7 +21,7 @@ static bool is_big_block_successor(cfg::ControlFlowGraph& cfg,
     return false;
   }
   auto pred_block = pred_edge->src();
-  if (cfg.get_succ_edge_of_type(pred_block, cfg::EDGE_BRANCH)) {
+  if (block->cfg().get_succ_edge_of_type(pred_block, cfg::EDGE_BRANCH)) {
     return false;
   }
 
@@ -36,6 +35,36 @@ static bool is_big_block_successor(cfg::ControlFlowGraph& cfg,
 
 namespace big_blocks {
 
+void Iterator::adjust_block() {
+  while (m_block && m_it == m_block->end()) {
+    m_block = m_block->goes_to();
+    if (m_block && is_big_block_successor(m_block)) {
+      m_it = m_block->begin();
+    } else {
+      m_block = nullptr;
+    }
+  }
+}
+
+Iterator::Iterator(cfg::Block* block, const IRList::iterator& it)
+    : m_block(block), m_it(it) {
+  adjust_block();
+}
+
+Iterator Iterator::operator++(int) {
+  Iterator ret(*this);
+  ++*this;
+  return ret;
+}
+
+Iterator& Iterator::operator++() {
+  always_assert(m_block != nullptr);
+  always_assert(m_it != m_block->end());
+  m_it++;
+  adjust_block();
+  return *this;
+}
+
 InstructionIterator InstructionIterator::operator++(int) {
   InstructionIterator ret(*this);
   ++*this;
@@ -48,7 +77,7 @@ InstructionIterator& InstructionIterator::operator++() {
   }
   while (true) {
     auto next_block = block->goes_to();
-    if (!next_block || !is_big_block_successor(m_it.cfg(), next_block)) {
+    if (!next_block || !is_big_block_successor(next_block)) {
       auto ii = ir_list::InstructionIterable(block);
       m_it = block->to_cfg_instruction_iterator(ii.end());
       return *this;
@@ -83,14 +112,14 @@ InstructionIterator InstructionIterable::end() const {
 std::vector<BigBlock> get_big_blocks(cfg::ControlFlowGraph& cfg) {
   std::vector<BigBlock> res;
   for (auto block : cfg.blocks()) {
-    if (is_big_block_successor(cfg, block)) {
+    if (is_big_block_successor(block)) {
       continue;
     }
     std::vector<cfg::Block*> blocks;
     do {
       blocks.push_back(block);
       block = block->goes_to();
-    } while (block && is_big_block_successor(cfg, block));
+    } while (block && is_big_block_successor(block));
     res.emplace_back(std::move(blocks));
   }
   return res;

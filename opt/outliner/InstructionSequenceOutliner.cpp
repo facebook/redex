@@ -1746,12 +1746,75 @@ class OutlinedMethodCreator {
   MethodNameGenerator& m_method_name_generator;
   size_t m_outlined_methods{0};
   size_t m_outlined_method_instructions{0};
+  size_t m_outlined_method_positions{0};
+
+  // The "best" representative set of debug position is that which provides
+  // most detail, i.e. has the highest number of unique debug positions
+  std::unique_ptr<std::deque<DexPosition*>> get_best_outlined_dbg_positions(
+      const CandidateSequence& cs, const CandidateInfo& ci) {
+    std::unique_ptr<std::deque<DexPosition*>> res;
+    size_t best_unique_positions{0};
+    for (auto& p : ci.methods) {
+      auto method = p.first;
+      auto& cfg = method->get_code()->cfg();
+      for (auto& cml : p.second) {
+        auto insn_it = cfg.find_insn(cml.first_insn, cml.hint_block);
+        if (insn_it.is_end()) {
+          // Shouldn't happen, but we are not going to fight that here.
+          continue;
+        }
+        auto dbg_pos = cfg.get_dbg_pos(insn_it);
+        if (!dbg_pos) {
+          continue;
+        }
+        std::vector<DexPosition*> positions;
+        std::unordered_set<DexPosition*> unique_positions;
+        auto it = big_blocks::Iterator(insn_it.block(), insn_it.unwrap());
+        for (auto& csi : cs.insns) {
+          positions.push_back(dbg_pos);
+          unique_positions.insert(dbg_pos);
+          for (; it->type == MFLOW_POSITION || it->type == MFLOW_DEBUG; it++) {
+            if (it->type == MFLOW_POSITION) {
+              dbg_pos = it->pos.get();
+            }
+          }
+          always_assert(it->type == MFLOW_OPCODE);
+          always_assert(it->insn->opcode() == csi.core.opcode);
+          it++;
+        }
+        if (unique_positions.size() > best_unique_positions) {
+          res = std::make_unique<std::deque<DexPosition*>>(positions.begin(),
+                                                           positions.end());
+          best_unique_positions = unique_positions.size();
+          if (best_unique_positions == cs.insns.size()) {
+            break;
+          }
+        }
+      }
+    }
+    return res;
+  }
 
   // Construct an IRCode datastructure from a candidate sequence.
-  std::unique_ptr<IRCode> get_outlined_code(DexMethod* outlined_method,
-                                            const CandidateSequence& cs) {
+  std::unique_ptr<IRCode> get_outlined_code(
+      DexMethod* outlined_method,
+      const CandidateSequence& cs,
+      const std::unique_ptr<std::deque<DexPosition*>>& dbg_positions) {
     auto code = std::make_unique<IRCode>(outlined_method, cs.temp_regs);
+    DexPosition* last_dbg_pos{nullptr};
     for (auto& ci : cs.insns) {
+      if (dbg_positions) {
+        DexPosition* dbg_pos = dbg_positions->front();
+        dbg_positions->pop_front();
+        if (dbg_pos != last_dbg_pos &&
+            !opcode::is_move_result_pseudo(ci.core.opcode)) {
+          auto cloned_dbg_pos = std::make_unique<DexPosition>(*dbg_pos);
+          cloned_dbg_pos->parent = nullptr;
+          code->push_back(std::move(cloned_dbg_pos));
+          last_dbg_pos = dbg_pos;
+          m_outlined_method_positions++;
+        }
+      }
       auto insn = new IRInstruction(ci.core.opcode);
       insn->set_srcs_size(ci.srcs.size());
       for (size_t i = 0; i < ci.srcs.size(); i++) {
@@ -1802,6 +1865,7 @@ class OutlinedMethodCreator {
 
   // Obtain outlined method for a sequence.
   DexMethod* create_outlined_method(const CandidateSequence& cs,
+                                    const CandidateInfo& ci,
                                     DexType* host_class) {
     auto name = m_method_name_generator.get_name(host_class, cs);
     std::deque<DexType*> arg_types;
@@ -1813,7 +1877,9 @@ class OutlinedMethodCreator {
     auto proto = DexProto::make_proto(rtype, type_list);
     auto outlined_method = DexMethod::make_method(host_class, name, proto)
                                ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
-    outlined_method->set_code(get_outlined_code(outlined_method, cs));
+    auto dbg_positions = get_best_outlined_dbg_positions(cs, ci);
+    outlined_method->set_code(
+        get_outlined_code(outlined_method, cs, dbg_positions));
     outlined_method->set_deobfuscated_name(show(outlined_method));
     outlined_method->rstate.set_dont_inline();
     change_visibility(outlined_method->get_code(), host_class);
@@ -1828,10 +1894,13 @@ class OutlinedMethodCreator {
     m_mgr.incr_metric("num_outlined_methods", m_outlined_methods);
     m_mgr.incr_metric("num_outlined_method_instructions",
                       m_outlined_method_instructions);
-    TRACE(
-        ISO, 2,
-        "[invoke sequence outliner] %zu outlined methods with %zu instructions",
-        m_outlined_methods, m_outlined_method_instructions);
+    m_mgr.incr_metric("num_outlined_method_positions",
+                      m_outlined_method_positions);
+    TRACE(ISO, 2,
+          "[invoke sequence outliner] %zu outlined methods with %zu "
+          "instructions and %zu positions",
+          m_outlined_methods, m_outlined_method_instructions,
+          m_outlined_method_positions);
   }
 };
 
@@ -2174,7 +2243,7 @@ bool outline_candidate(const CandidateSequence& cs,
       host_class_selector->create_next_outlined_class();
     }
     outlined_method =
-        outlined_method_creator->create_outlined_method(cs, host_class);
+        outlined_method_creator->create_outlined_method(cs, ci, host_class);
   }
   dex_state->insert_type_refs(type_refs_to_insert);
   for (auto& p : ci.methods) {
