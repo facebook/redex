@@ -21,6 +21,7 @@
 #include "DexClass.h"
 #include "DexStore.h"
 #include "IPConstantPropagationAnalysis.h"
+#include "InlineForSpeed.h"
 #include "IRCode.h"
 #include "LocalDce.h"
 #include "MethodProfiles.h"
@@ -145,7 +146,7 @@ class MultiMethodInliner {
     return res;
   }
 
-  bool for_speed() const { return !m_hot_methods.empty(); }
+  bool for_speed() const { return m_inline_for_speed.enabled(); }
 
   /**
    * Inline callees in the caller if is_inlinable below returns true.
@@ -556,7 +557,7 @@ class MultiMethodInliner {
 
   const MultiMethodInlinerMode m_mode;
 
-  const std::unordered_set<const DexMethodRef*> m_hot_methods;
+  const InlineForSpeed m_inline_for_speed;
 
   // Represents the size of the largest same-method-implementation group that a
   // method belongs in; the default value is 1.

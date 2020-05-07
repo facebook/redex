@@ -14,8 +14,6 @@
 
 #include <queue>
 
-namespace inline_for_speed {
-
 using namespace method_profiles;
 
 std::unordered_set<const DexMethodRef*> compute_hot_methods(
@@ -58,40 +56,63 @@ std::unordered_set<const DexMethodRef*> compute_hot_methods(
   return result;
 }
 
-bool should_inline(const DexMethod* caller_method,
-                   const DexMethod* callee_method,
-                   const std::unordered_set<const DexMethodRef*>& hot_methods) {
-  if (hot_methods.empty()) {
+InlineForSpeed::InlineForSpeed(
+    const std::unordered_map<const DexMethodRef*, method_profiles::Stats>&
+        method_profile_stats)
+    : m_method_profile_stats(method_profile_stats),
+      m_hot_methods(compute_hot_methods(m_method_profile_stats)) {}
+
+bool InlineForSpeed::enabled() const { return !m_hot_methods.empty(); }
+
+bool InlineForSpeed::should_inline(const DexMethod* caller_method,
+                                   const DexMethod* callee_method) const {
+  if (m_hot_methods.empty()) {
     return false;
   }
 
-  if (!(hot_methods.count(caller_method) && hot_methods.count(callee_method))) {
+  if (!(m_hot_methods.count(caller_method) &&
+        m_hot_methods.count(callee_method))) {
     return false;
   }
 
   auto callee_insns = callee_method->get_code()->cfg().num_opcodes();
   auto caller_insns = caller_method->get_code()->cfg().num_opcodes();
+  auto caller_hits = m_method_profile_stats.at(caller_method).call_count;
+  auto callee_hits = m_method_profile_stats.at(callee_method).call_count;
+
+  TRACE_NO_LINE(METH_PROF,
+                5,
+                "%s, %s, %u, %u, ",
+                SHOW(caller_method),
+                SHOW(callee_method),
+                caller_insns,
+                callee_insns,
+                caller_hits,
+                callee_hits);
+
   constexpr double FUDGE_FACTOR = 0.8; // lowering usually increases # insns
   constexpr size_t ON_DEVICE_COMPILE_MAX = 10000 * FUDGE_FACTOR; // instructions
   if (caller_insns < ON_DEVICE_COMPILE_MAX &&
       caller_insns + callee_insns >= ON_DEVICE_COMPILE_MAX) {
     // Don't push any methods over the on-device compilation limit
+    TRACE(METH_PROF, 5, "%d, %s", 0, "ONDEVICE");
     return false;
   }
 
-  auto caller_class = type_class(caller_method->get_class());
-  auto callee_class = type_class(callee_method->get_class());
-  if (callee_class != nullptr && callee_class != caller_class) {
-    auto callee_clinit = callee_class->get_clinit();
-    if (callee_clinit != nullptr && callee_clinit->get_code() != nullptr &&
-        callee_clinit->get_code()->cfg().num_opcodes() > 0) {
-      // Exclude callees with a nontrivial clinit into another class.
-      // To avoid a CNF. Maybe our inlining caused a clinit to not get called?
-      return false;
-    }
+  double CALLER_BARELY_HOT = 100.0;
+  double CALLEE_BARELY_HOT = 200.0;
+  if (caller_insns > 12 && callee_insns > 8 &&
+      m_method_profile_stats.at(caller_method).call_count < CALLER_BARELY_HOT &&
+      m_method_profile_stats.at(callee_method).call_count < CALLEE_BARELY_HOT) {
+    TRACE(METH_PROF, 5, "%d, %s", 0, "BARELYHOT");
+    return false;
   }
 
+  if (caller_insns > 160) {
+    TRACE(METH_PROF, 5, "%d, %s", 0, "BIGCALLER");
+    return false;
+  }
+
+  TRACE(METH_PROF, 5, "%d, %s", 1, "");
   return true;
 }
-
-} // namespace inline_for_speed

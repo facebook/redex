@@ -10,15 +10,19 @@
 #include "DexClass.h"
 #include "MethodProfiles.h"
 
-namespace inline_for_speed {
+class InlineForSpeed final {
+ public:
+  explicit InlineForSpeed(
+      const std::unordered_map<const DexMethodRef*, method_profiles::Stats>&
+          method_profile_stats);
+  bool should_inline(
+      const DexMethod* caller_method,
+      const DexMethod* callee_method) const;
 
-using namespace method_profiles;
+  bool enabled() const;
 
-std::unordered_set<const DexMethodRef*> compute_hot_methods(
-    const std::unordered_map<const DexMethodRef*, Stats>& method_profile_stats);
-
-bool should_inline(const DexMethod* caller_method,
-                   const DexMethod* callee_method,
-                   const std::unordered_set<const DexMethodRef*>& hot_methods);
-
-} // namespace inline_for_speed
+ private:
+  const std::unordered_map<const DexMethodRef*, method_profiles::Stats>&
+      m_method_profile_stats;
+  std::unordered_set<const DexMethodRef*> m_hot_methods;
+};

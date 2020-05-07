@@ -98,8 +98,7 @@ MultiMethodInliner::MultiMethodInliner(
       m_scope(scope),
       m_config(config),
       m_mode(mode),
-      m_hot_methods(
-          inline_for_speed::compute_hot_methods(method_profile_stats)),
+      m_inline_for_speed(method_profile_stats),
       m_same_method_implementations(same_method_implementations),
       m_pure_methods(get_pure_methods()),
       m_analyze_and_prune_inits(analyze_and_prune_inits) {
@@ -417,8 +416,7 @@ size_t MultiMethodInliner::compute_caller_nonrecursive_callees_by_stack_depth(
 
     if (!for_speed()) {
       nonrecursive_callees.push_back(callee);
-    } else if (inline_for_speed::should_inline(caller, callee, m_hot_methods)) {
-      TRACE(METH_PROF, 3, "%s, %s", SHOW(caller), SHOW(callee));
+    } else if (m_inline_for_speed.should_inline(caller, callee)) {
       nonrecursive_callees.push_back(callee);
     }
 
