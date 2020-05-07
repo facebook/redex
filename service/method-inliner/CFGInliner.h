@@ -134,11 +134,6 @@ class CFGInliner {
    * Return the equivalent move opcode for the given return opcode
    */
   static IROpcode return_to_move(IROpcode op);
-
-  /*
-   * Find the first debug position preceding the callsite
-   */
-  static DexPosition* get_dbg_pos(const cfg::InstructionIterator& callsite);
 };
 
 /*

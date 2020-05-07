@@ -800,6 +800,11 @@ class ControlFlowGraph {
   // choose an order of blocks for output
   std::vector<Block*> order();
 
+  /*
+   * Find the first debug position preceding an instruction
+   */
+  DexPosition* get_dbg_pos(const cfg::InstructionIterator& it);
+
  private:
   using BranchToTargets =
       std::unordered_map<MethodItemEntry*, std::vector<Block*>>;

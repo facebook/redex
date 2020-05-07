@@ -59,7 +59,7 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
 
   // Find the closest dbg position for the inline site, if split before
   DexPosition* inline_site_dbg_pos =
-      inline_after ? nullptr : get_dbg_pos(inline_site);
+      inline_after ? nullptr : inline_site.cfg().get_dbg_pos(inline_site);
 
   // make the invoke last of its block or first based on inline_after
   Block* split_on_inline = inline_after
@@ -69,8 +69,9 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
         SHOW(*caller));
 
   // Find the closest dbg position for the inline site, if split after
-  inline_site_dbg_pos =
-      inline_after ? get_dbg_pos(inline_site) : inline_site_dbg_pos;
+  inline_site_dbg_pos = inline_after
+                            ? inline_site.cfg().get_dbg_pos(inline_site)
+                            : inline_site_dbg_pos;
 
   if (inline_site_dbg_pos) {
     set_dbg_pos_parents(&callee, inline_site_dbg_pos);
@@ -463,58 +464,6 @@ IROpcode CFGInliner::return_to_move(IROpcode op) {
     always_assert_log(false, "Expected return op, got %s", SHOW(op));
     not_reached();
   }
-}
-
-DexPosition* CFGInliner::get_dbg_pos(const cfg::InstructionIterator& callsite) {
-  auto search_block = [](Block* b,
-                         IRList::iterator in_block_it) -> DexPosition* {
-    // Search for an MFLOW_POSITION preceding this instruction within the
-    // same block
-    while (in_block_it->type != MFLOW_POSITION && in_block_it != b->begin()) {
-      --in_block_it;
-    }
-    return in_block_it->type == MFLOW_POSITION ? in_block_it->pos.get()
-                                               : nullptr;
-  };
-  auto result = search_block(callsite.block(), callsite.unwrap());
-  if (result != nullptr) {
-    return result;
-  }
-
-  // TODO: Positions should be connected to instructions rather than preceding
-  // them in the flow of instructions. Having the positions depend on the order
-  // of instructions is a very linear way to encode the information which isn't
-  // very amenable to the editable CFG.
-
-  // while there's a single predecessor, follow that edge
-  const auto& cfg = callsite.cfg();
-  std::unordered_set<Block*> visited;
-  std::function<DexPosition*(Block*)> check_prev_block;
-  check_prev_block = [&cfg, &visited, &check_prev_block,
-                      &search_block](Block* b) -> DexPosition* {
-    // Check for an infinite loop
-    const auto& pair = visited.insert(b);
-    bool already_there = !pair.second;
-    if (already_there) {
-      return nullptr;
-    }
-
-    const auto& reverse_gotos = cfg.get_pred_edges_of_type(b, EDGE_GOTO);
-    if (b->preds().size() == 1 && !reverse_gotos.empty()) {
-      Block* prev_block = reverse_gotos[0]->src();
-      if (!prev_block->empty()) {
-        auto result = search_block(prev_block, std::prev(prev_block->end()));
-        if (result != nullptr) {
-          return result;
-        }
-      }
-      // Didn't find any MFLOW_POSITIONs in `prev_block`, keep going.
-      return check_prev_block(prev_block);
-    }
-    // This block has no solo predecessors anymore. Nowhere left to search.
-    return nullptr;
-  };
-  return check_prev_block(callsite.block());
 }
 
 } // namespace cfg
