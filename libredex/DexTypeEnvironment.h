@@ -253,10 +253,10 @@ class DexTypeDomain
   DexTypeDomain() = default;
 
   explicit DexTypeDomain(int64_t v)
-      : ReducedProductAbstractDomain(std::make_tuple(ConstNullnessDomain(v),
-                                                     SingletonDexTypeDomain(),
-                                                     SmallSetDexTypeDomain())) {
-  }
+      : ReducedProductAbstractDomain(
+            std::make_tuple(ConstNullnessDomain(v),
+                            SingletonDexTypeDomain(),
+                            SmallSetDexTypeDomain::top())) {}
 
   explicit DexTypeDomain(const DexType* array_type, uint32_t array_length)
       : ReducedProductAbstractDomain(
@@ -278,10 +278,7 @@ class DexTypeDomain
 
   static void reduce_product(std::tuple<ArrayConstNullnessDomain,
                                         SingletonDexTypeDomain,
-                                        SmallSetDexTypeDomain>& product) {
-    if (std::get<1>(product).is_top()) {
-      std::get<2>(product).set_to_top();
-    }
+                                        SmallSetDexTypeDomain>& /* product */) {
   }
 
   static DexTypeDomain null() { return DexTypeDomain(IS_NULL); }
@@ -351,8 +348,6 @@ class DexTypeDomain
   sparta::PatriciaTreeSet<const DexType*> get_type_set() {
     return get<2>().get_types();
   }
-
-  void join_with(const DexTypeDomain& other) override;
 
  private:
   explicit DexTypeDomain(const Nullness nullness)

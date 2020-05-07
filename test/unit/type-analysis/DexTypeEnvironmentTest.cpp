@@ -616,7 +616,10 @@ TEST_F(DexTypeEnvironmentTest, DexTypeDomainReduceProductTest) {
   domain.join_with(
       DexTypeDomain(type::make_array_type(type::java_lang_String())));
   EXPECT_TRUE(domain.get_single_domain().is_top());
-  EXPECT_TRUE(domain.get_set_domain().is_top());
+  EXPECT_FALSE(domain.get_set_domain().is_top());
+  EXPECT_EQ(domain.get_type_set(),
+            get_type_set({type::java_lang_Object(),
+                          type::make_array_type(type::java_lang_String())}));
 
   auto domain_c1 = DexTypeDomain(m_type_c1);
   domain_c1.join_with(DexTypeDomain(m_type_c2));

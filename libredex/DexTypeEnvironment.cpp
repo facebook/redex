@@ -180,10 +180,3 @@ std::ostream& operator<<(std::ostream& out, const SmallSetDexTypeDomain& x) {
   }
   return out;
 }
-
-void DexTypeDomain::join_with(const DexTypeDomain& other) {
-  BaseType::join_with(other);
-  if (get<1>().is_top()) {
-    apply<2>([](SmallSetDexTypeDomain* domain) { domain->set_to_top(); });
-  }
-}
