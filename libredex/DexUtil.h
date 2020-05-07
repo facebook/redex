@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "ClassUtil.h"
+#include "Debug.h"
 #include "DexClass.h"
 #include "IRInstruction.h"
 #include "MethodUtil.h"
@@ -183,18 +184,137 @@ bool has_anno(const T* t, const std::unordered_set<DexType*>& anno_types) {
 
 namespace java_names {
 
+inline boost::optional<std::string> primitive_desc_to_name(char desc) {
+  const static std::unordered_map<char, std::string> conversion_table{
+      {'V', "void"},    {'B', "byte"},  {'C', "char"},
+      {'S', "short"},   {'I', "int"},   {'J', "long"},
+      {'Z', "boolean"}, {'F', "float"}, {'D', "double"},
+  };
+  auto it = conversion_table.find(desc);
+  if (it != conversion_table.end()) {
+    return it->second;
+  } else {
+    return boost::none;
+  }
+}
+
+inline boost::optional<char> primitive_name_to_desc(const std::string& name) {
+  const static std::unordered_map<std::string, char> conversion_table{
+      {"void", 'V'},    {"byte", 'B'},  {"char", 'C'},
+      {"short", 'S'},   {"int", 'I'},   {"long", 'J'},
+      {"boolean", 'Z'}, {"float", 'F'}, {"double", 'D'},
+  };
+  auto it = conversion_table.find(name);
+  if (it != conversion_table.end()) {
+    return it->second;
+  } else {
+    return boost::none;
+  }
+}
+
 // Example: "Ljava/lang/String;" --> "java.lang.String"
+// Example: "[Ljava/lang/String;" --> "[Ljava.lang.String;"
+// Example: "I" --> "int"
+// Example: "[I" --> "[I"
 inline std::string internal_to_external(const std::string& internal_name) {
-  auto external_name = internal_name.substr(1, internal_name.size() - 2);
-  std::replace(external_name.begin(), external_name.end(), '/', '.');
-  return external_name;
+  int array_level = std::count(internal_name.begin(), internal_name.end(), '[');
+
+  std::string component_name = internal_name.substr(array_level);
+
+  char type = component_name.at(0);
+  if (type == 'L') {
+    // For arrays, we need to preserve the semicolon at the end of the name
+    auto external_name = component_name.substr(
+        1, component_name.size() - (array_level == 0 ? 2 : 1));
+    std::replace(external_name.begin(), external_name.end(), '/', '.');
+    std::string array_prefix;
+    array_prefix.reserve(array_level);
+    for (int i = 0; i < array_level; i++) {
+      array_prefix += '[';
+    }
+    if (array_level != 0) {
+      array_prefix += "L"; // external only uses 'L' for arrays
+    }
+    return array_prefix + external_name;
+  } else if (array_level) {
+    // If the type is an array of primitives, the external format is the same
+    // as internal.
+    return internal_name;
+  } else {
+    auto maybe_external_name = primitive_desc_to_name(type);
+    always_assert_log(
+        maybe_external_name, "%s is not a valid primitive type.", type);
+    return *maybe_external_name;
+  }
 }
 
 // Example: "java.lang.String" --> "Ljava/lang/String;"
+// Example: "[Ljava.lang.String;" --> "[Ljava/lang/String;"
+// Example: "int" --> "I"
+// Example: "[I" --> "[I"
+// Example: "I" --> "LI;"
+// Example: "[LI;" --> "[LI;"
 inline std::string external_to_internal(const std::string& external_name) {
-  auto internal_name = "L" + external_name + ";";
-  std::replace(internal_name.begin(), internal_name.end(), '.', '/');
-  return internal_name;
+  // Primitive types (not including their arrays) are special notations
+  auto maybe_primitive_name = primitive_name_to_desc(external_name);
+  if (maybe_primitive_name) {
+    return std::string(1, *maybe_primitive_name);
+  }
+
+  int array_level = std::count(external_name.begin(), external_name.end(), '[');
+  std::string component_external_name = external_name.substr(array_level);
+  /**
+   * Note: "I" is a perfectly valid external name denoting a class of "LI;"
+   * while "int" is the external name for int type. However, "[I" is an array of
+   * int. For an array of "I", you need to use "[LI;"
+   */
+  if (array_level != 0 && component_external_name.size() == 1) {
+    // It must be an array of primitives. The internal name is the same as the
+    // external name.
+    return external_name;
+  }
+
+  std::string component_internal_name = component_external_name;
+  if (array_level == 0) {
+    component_internal_name = "L" + component_internal_name;
+  }
+
+  std::replace(
+      component_internal_name.begin(), component_internal_name.end(), '.', '/');
+  if (component_external_name[component_external_name.size() - 1] != ';') {
+    component_internal_name += ";";
+  }
+  std::string array_prefix;
+  array_prefix.reserve(array_level);
+  for (int i = 0; i < array_level; i++) {
+    array_prefix += '[';
+  }
+  return array_prefix + component_internal_name;
+}
+
+// Example: "Ljava/lang/String;" --> "String"
+// Example: "[Ljava/lang/String;" --> "String[]"
+// Example: "I" --> "int"
+// Example: "[I" --> "int[]"
+inline std::string internal_to_simple(const std::string& internal_name) {
+  int array_level = std::count(internal_name.begin(), internal_name.end(), '[');
+  std::string component_name = internal_name.substr(array_level);
+  std::string component_external_name = internal_to_external(component_name);
+  std::size_t last_dot = component_external_name.rfind('.');
+  std::string component_simple_name;
+  if (last_dot == std::string::npos) {
+    // No dot was found, the name is already simple.
+    component_simple_name = component_external_name;
+  } else {
+    component_simple_name = component_external_name.substr(last_dot + 1);
+  }
+  // append a pair of [] for each array level.
+  std::string array_suffix;
+  array_suffix.reserve(2 * array_level);
+  for (int i = 0; i < array_level; i++) {
+    array_suffix += "[]";
+  }
+  return component_simple_name + array_suffix;
 }
 
 inline std::string package_name(const std::string& type_name) {

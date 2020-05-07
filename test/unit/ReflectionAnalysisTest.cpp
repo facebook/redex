@@ -119,7 +119,7 @@ TEST_F(ReflectionAnalysisTest, getClassOnParam) {
 TEST_F(ReflectionAnalysisTest, classForName) {
   auto insns = assembler::ircode_from_string(R"(
     (
-      (const-string "LFoo;")
+      (const-string "Foo")
       (move-result-pseudo-object v1)
       (invoke-static (v1) "Ljava/lang/Class;.forName:(Ljava/lang/String;)Ljava/lang/Class;")
       (move-result-object v0)
@@ -129,7 +129,7 @@ TEST_F(ReflectionAnalysisTest, classForName) {
   ReflectionAnalysis analysis(m_method);
   EXPECT_TRUE(analysis.has_found_reflection());
   EXPECT_EQ(to_string(analysis.get_reflection_sites()),
-            "MOVE_RESULT_OBJECT v0 {4294967294, CLASS{LLFoo;;}(REFLECTION)}\n");
+            "MOVE_RESULT_OBJECT v0 {4294967294, CLASS{LFoo;}(REFLECTION)}\n");
 }
 
 TEST_F(ReflectionAnalysisTest, getClassOnField) {

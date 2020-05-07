@@ -29,3 +29,48 @@ TEST_F(DexUtilTest, test_reference_type_wrappers) {
   EXPECT_EQ(type::get_boxed_reference_type(DexType::make_type("D")),
             DexType::make_type("Ljava/lang/Double;"));
 }
+
+TEST_F(DexUtilTest, test_java_name_internal_to_external) {
+  using namespace java_names;
+  EXPECT_EQ("java.lang.String", internal_to_external("Ljava/lang/String;"));
+  EXPECT_EQ("[Ljava.lang.String;", internal_to_external("[Ljava/lang/String;"));
+  EXPECT_EQ("[[Ljava.lang.String;",
+            internal_to_external("[[Ljava/lang/String;"));
+  EXPECT_EQ("int", internal_to_external("I"));
+  EXPECT_EQ("[I", internal_to_external("[I"));
+  EXPECT_EQ("[[I", internal_to_external("[[I"));
+  EXPECT_EQ("MyClass", internal_to_external("LMyClass;"));
+  EXPECT_EQ("[LMyClass;", internal_to_external("[LMyClass;"));
+  EXPECT_EQ("[[LMyClass;", internal_to_external("[[LMyClass;"));
+}
+
+TEST_F(DexUtilTest, test_java_name_external_to_internal) {
+  using namespace java_names;
+  EXPECT_EQ("Ljava/lang/String;", external_to_internal("java.lang.String"));
+  EXPECT_EQ("[Ljava/lang/String;", external_to_internal("[Ljava.lang.String;"));
+  EXPECT_EQ("[[Ljava/lang/String;",
+            external_to_internal("[[Ljava.lang.String;"));
+
+  EXPECT_EQ("I", external_to_internal("int"));
+  EXPECT_EQ("LI;", external_to_internal("I"));
+  EXPECT_EQ("[I", external_to_internal("[I"));
+  EXPECT_EQ("[[I", external_to_internal("[[I"));
+  EXPECT_EQ("[[LI;", external_to_internal("[[LI;"));
+
+  EXPECT_EQ("LMyClass;", external_to_internal("MyClass"));
+  EXPECT_EQ("[LMyClass;", external_to_internal("[LMyClass;"));
+  EXPECT_EQ("[[LMyClass;", external_to_internal("[[LMyClass;"));
+}
+
+TEST_F(DexUtilTest, test_java_name_internal_to_simple) {
+  using namespace java_names;
+  EXPECT_EQ("String", internal_to_simple("Ljava/lang/String;"));
+  EXPECT_EQ("String[]", internal_to_simple("[Ljava/lang/String;"));
+  EXPECT_EQ("String[][]", internal_to_simple("[[Ljava/lang/String;"));
+  EXPECT_EQ("int", internal_to_simple("I"));
+  EXPECT_EQ("int[]", internal_to_simple("[I"));
+  EXPECT_EQ("int[][]", internal_to_simple("[[I"));
+  EXPECT_EQ("MyClass", internal_to_simple("LMyClass;"));
+  EXPECT_EQ("MyClass[]", internal_to_simple("[LMyClass;"));
+  EXPECT_EQ("MyClass[][]", internal_to_simple("[[LMyClass;"));
+}
