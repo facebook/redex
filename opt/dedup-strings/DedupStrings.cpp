@@ -15,6 +15,7 @@
 #include "DexClass.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
+#include "InstructionSequenceOutliner.h"
 #include "Walkers.h"
 #include "locator.h"
 
@@ -91,6 +92,10 @@ std::vector<DexClass*> DedupStrings::get_host_classes(DexClassesVector& dexen) {
     DexClass* host_cls = nullptr;
     size_t min_size = std::numeric_limits<size_t>::max();
     for (auto cls : classes) {
+      if (is_outlined_class(cls)) {
+        host_cls = cls;
+        break;
+      }
       if (!is_public(cls) || cls->is_external() || is_interface(cls)) {
         // We cannot add anything to non-public, external, or interface classes.
         continue;

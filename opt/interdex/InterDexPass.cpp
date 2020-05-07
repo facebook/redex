@@ -100,6 +100,7 @@ void InterDexPass::run_pass(DexStoresVector& stores,
     plugin->configure(original_scope, conf);
     reserve_mrefs += plugin->reserve_mrefs();
   }
+  mgr.set_metric(METRIC_RESERVED_MREFS, reserve_mrefs);
 
   bool force_single_dex = conf.get_json_config().get("force_single_dex", false);
   XStoreRefs xstore_refs(stores);

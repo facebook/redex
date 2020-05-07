@@ -42,6 +42,8 @@ constexpr const char* METRIC_RELOCATED_NON_STATIC_DIRECT_METHODS =
 constexpr const char* METRIC_RELOCATED_VIRTUAL_METHODS =
     "num_relocated_virtual_methods";
 
+constexpr const char* METRIC_RESERVED_MREFS = "reserved_mrefs";
+
 class InterDexPass : public Pass {
  public:
   explicit InterDexPass(bool register_plugins = true)

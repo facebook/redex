@@ -58,6 +58,7 @@
   TM(INTRO_SWITCH)   \
   TM(INSTRUMENT)     \
   TM(INTF)           \
+  TM(ISO)            \
   TM(BLD_PATTERN)    \
   TM(LCR_PASS)       \
   TM(LIB)            \

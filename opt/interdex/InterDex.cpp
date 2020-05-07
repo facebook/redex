@@ -127,11 +127,6 @@ std::unordered_set<DexClass*> find_unrefenced_coldstart_classes(
   return unreferenced_classes;
 }
 
-bool is_canary(DexClass* clazz) {
-  const char* cname = clazz->get_type()->get_name()->c_str();
-  return strncmp(cname, CANARY_PREFIX, sizeof(CANARY_PREFIX) - 1) == 0;
-}
-
 void gather_refs(
     const std::vector<std::unique_ptr<interdex::InterDexPassPlugin>>& plugins,
     const interdex::DexInfo& dex_info,
@@ -214,6 +209,11 @@ void do_order_classes(const std::vector<std::string>& coldstart_class_names,
 } // namespace
 
 namespace interdex {
+
+bool is_canary(DexClass* clazz) {
+  const char* cname = clazz->get_type()->get_name()->c_str();
+  return strncmp(cname, CANARY_PREFIX, sizeof(CANARY_PREFIX) - 1) == 0;
+}
 
 bool InterDex::should_skip_class_due_to_plugin(DexClass* clazz) {
   for (const auto& plugin : m_plugins) {
