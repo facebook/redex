@@ -13,12 +13,22 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#include "CheckCastAnalysis.h"
+#include "CheckCastTransform.h"
 #include "ClassHierarchy.h"
+#include "ConstantPropagationAnalysis.h"
+#include "ConstantPropagationTransform.h"
+#include "ConstantPropagationWholeProgramState.h"
 #include "Debug.h"
 #include "DexLoader.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
+#include "IRCode.h"
+#include "IRList.h"
+#include "IRTypeChecker.h"
+#include "LocalDce.h"
 #include "Resolver.h"
+#include "ScopedCFG.h"
 #include "SingleImpl.h"
 #include "SingleImplDefs.h"
 #include "Trace.h"
@@ -162,8 +172,6 @@ bool update_method_proto(const DexType* old_type_ref,
   return true;
 }
 
-} // namespace
-
 struct OptimizationImpl {
   OptimizationImpl(std::unique_ptr<SingleImplAnalysis> analysis,
                    const ClassHierarchy& ch)
@@ -185,6 +193,7 @@ struct OptimizationImpl {
                                   DexMethod* method);
   void set_field_defs(const DexType* intf, const SingleImplData& data);
   void set_field_refs(const DexType* intf, const SingleImplData& data);
+  void fix_instructions(const DexType* intf, const SingleImplData& data);
   void set_method_defs(const DexType* intf, const SingleImplData& data);
   void set_method_refs(const DexType* intf, const SingleImplData& data);
   void rewrite_interface_methods(const DexType* intf,
@@ -192,6 +201,8 @@ struct OptimizationImpl {
   void rewrite_annotations(Scope& scope, const SingleImplConfig& config);
   void rename_possible_collisions(const DexType* intf,
                                   const SingleImplData& data);
+
+  void post_process(const std::unordered_set<DexMethod*>& methods);
 
  private:
   std::unique_ptr<SingleImplAnalysis> single_impls;
@@ -262,6 +273,134 @@ void OptimizationImpl::set_method_defs(const DexType* intf,
     always_assert(update_method_proto(intf, data.cls, method));
     TRACE(INTF, 3, "(MDEF)\t=> %s", SHOW(method));
   }
+}
+
+template <typename T, typename Fn>
+void for_all_methods(const T& methods, Fn fn, bool parallel = true) {
+  if (parallel) {
+    auto wq = workqueue_foreach<DexMethod*>(fn);
+    for (auto* m : methods) {
+      wq.add_item(const_cast<DexMethod*>(m));
+    }
+    wq.run_all();
+  } else {
+    for (auto* m : methods) {
+      fn(const_cast<DexMethod*>(m));
+    }
+  }
+}
+
+// When replacing interfaces with classes, type-correct bytecode may
+// become incorrect. That is due to the relaxed nature of interface
+// assignability: at the bytecode level, any reference can be assigned
+// to an interface-typed entity. Actual checks happen at an eventual
+// `invoke-interface`.
+//
+// Example:
+//   void foo(ISub i) {}
+//   void bar(ISuper i) {
+//     foo(i); // Java source needs cast here.
+//   }
+//
+// This method inserts check-casts for each invoke parameter and
+// field value. Expectation is that unnecessary insertions (e.g.,
+// duplicate check-casts) will be eliminated, for example, in
+// `post_process`.
+void OptimizationImpl::fix_instructions(const DexType* intf,
+                                        const SingleImplData& data) {
+  if (data.referencing_methods.empty()) {
+    return;
+  }
+  std::vector<const DexMethod*> methods;
+  methods.reserve(data.referencing_methods.size());
+  std::transform(data.referencing_methods.begin(),
+                 data.referencing_methods.end(), std::back_inserter(methods),
+                 [](auto& p) { return p.first; });
+  // The typical number of methods is too small, it is actually significant
+  // overhead to spin up pool threads to just let them die.
+  constexpr bool PARALLEL = false;
+  for_all_methods(
+      methods,
+      [&](DexMethod* caller) {
+        std::vector<reg_t> temps; // Cached temps.
+        auto code = caller->get_code();
+        redex_assert(!code->editable_cfg_built());
+
+        for (const auto& insn_it_pair : data.referencing_methods.at(caller)) {
+          auto insn_it = insn_it_pair.second;
+          auto insn = insn_it_pair.first;
+
+          auto temp_it = temps.begin();
+          auto add_check_cast = [&](reg_t reg) {
+            auto check_cast = new IRInstruction(OPCODE_CHECK_CAST);
+            check_cast->set_src(0, reg);
+            check_cast->set_type(data.cls);
+            code->insert_before(insn_it, *new MethodItemEntry(check_cast));
+
+            // See if we need a new temp.
+            reg_t out;
+            if (temp_it == temps.end()) {
+              reg_t new_temp = code->allocate_temp();
+              temps.push_back(new_temp);
+              temp_it = temps.end();
+              out = new_temp;
+            } else {
+              out = *temp_it;
+              temp_it++;
+            }
+
+            auto pseudo_move_result =
+                new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
+            pseudo_move_result->set_dest(out);
+            code->insert_before(insn_it,
+                                *new MethodItemEntry(pseudo_move_result));
+
+            return out;
+          };
+
+          if (is_invoke(insn->opcode())) {
+            // We need check-casts for receiver and parameters, but not
+            // return type.
+
+            auto mref = insn->get_method();
+
+            // Receiver.
+            if (mref->get_class() == intf) {
+              reg_t new_receiver = add_check_cast(insn->src(0));
+              insn->set_src(0, new_receiver);
+            }
+
+            // Parameters.
+            const auto& arg_list =
+                mref->get_proto()->get_args()->get_type_list();
+            size_t idx = insn->opcode() == OPCODE_INVOKE_STATIC ? 0 : 1;
+            for (const auto arg : arg_list) {
+              if (arg != intf) {
+                idx++;
+                continue;
+              }
+
+              reg_t new_param = add_check_cast(insn->src(idx));
+              insn->set_src(idx, new_param);
+              idx++;
+            }
+            continue;
+          }
+
+          if (is_iput(insn->opcode()) || is_sput(insn->opcode())) {
+            // If the field type is the interface, need a check-cast.
+            auto fdef = insn->get_field();
+            if (fdef->get_type() == intf) {
+              reg_t new_param = add_check_cast(insn->src(0));
+              insn->set_src(0, new_param);
+            }
+            continue;
+          }
+
+          // Others do not need fixup.
+        }
+      },
+      PARALLEL);
 }
 
 /**
@@ -544,6 +683,7 @@ void OptimizationImpl::rename_possible_collisions(const DexType* intf,
  */
 void OptimizationImpl::do_optimize(const DexType* intf,
                                    const SingleImplData& data) {
+  fix_instructions(intf, data);
   set_type_refs(intf, data);
   set_field_defs(intf, data);
   set_field_refs(intf, data);
@@ -561,6 +701,7 @@ size_t OptimizationImpl::optimize(Scope& scope,
   TypeList to_optimize;
   single_impls->get_interfaces(to_optimize);
   std::sort(to_optimize.begin(), to_optimize.end(), compare_dextypes);
+  std::unordered_set<DexMethod*> for_post_processing;
   for (auto intf : to_optimize) {
     auto& intf_data = single_impls->get_single_impl_data(intf);
     if (intf_data.is_escaped()) continue;
@@ -571,6 +712,9 @@ size_t OptimizationImpl::optimize(Scope& scope,
       continue;
     }
     do_optimize(intf, intf_data);
+    for (auto& p : intf_data.referencing_methods) {
+      for_post_processing.insert(p.first);
+    }
     optimized.insert(intf);
   }
 
@@ -586,8 +730,32 @@ size_t OptimizationImpl::optimize(Scope& scope,
     rewrite_annotations(scope, config);
   }
 
+  post_process(for_post_processing);
+
   return optimized.size();
 }
+
+void OptimizationImpl::post_process(
+    const std::unordered_set<DexMethod*>& methods) {
+  // The analysis times the number of methods is easily expensive, run in
+  // parallel.
+  for_all_methods(methods,
+                  [](DexMethod* m) {
+                    auto code = m->get_code();
+                    if (code->cfg_built()) {
+                      code->clear_cfg();
+                    }
+                    cfg::ScopedCFG cfg(code);
+                    check_casts::CheckCastConfig config;
+                    check_casts::impl::CheckCastAnalysis analysis(config, m);
+                    auto casts =
+                        analysis.collect_redundant_checks_replacement();
+                    check_casts::impl::apply(m, casts);
+                  },
+                  /*parallel=*/true);
+}
+
+} // namespace
 
 /**
  * Entry point for an optimization pass.

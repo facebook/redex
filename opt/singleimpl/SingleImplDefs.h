@@ -16,6 +16,7 @@
 #include "ClassHierarchy.h"
 #include "DexClass.h"
 #include "IRInstruction.h"
+#include "IRList.h"
 #include "SingleImpl.h"
 
 /**
@@ -117,6 +118,10 @@ struct SingleImplData {
   MethodToOpcodes intf_methodrefs;
   // opcodes to a methodref with the single impl interface in the signature
   MethodToOpcodes methodrefs;
+
+  std::unordered_map<DexMethod*,
+                     std::unordered_map<IRInstruction*, IRList::iterator>>
+      referencing_methods;
 
   bool is_escaped() const { return escape != NO_ESCAPE; }
 };
