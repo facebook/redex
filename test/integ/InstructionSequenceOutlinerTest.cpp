@@ -10,8 +10,8 @@
 #include "ControlFlow.h"
 #include "DexInstruction.h"
 #include "DexUtil.h"
-#include "LocalDcePass.h"
 #include "IRCode.h"
+#include "LocalDcePass.h"
 #include "RedexTest.h"
 #include "ScopedCFG.h"
 
