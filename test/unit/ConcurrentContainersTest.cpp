@@ -161,6 +161,7 @@ TEST_F(ConcurrentContainersTest, insertOnlyConcurrentSetTest) {
         for (uint32_t x : m_subset_data) {
           EXPECT_EQ(1, set.count(x));
           EXPECT_NE(set.end(), set.find(x));
+          EXPECT_NE(nullptr, set.get(x));
         }
       };
   check_initial_values(set);
@@ -177,6 +178,7 @@ TEST_F(ConcurrentContainersTest, insertOnlyConcurrentSetTest) {
   for (uint32_t x : m_data) {
     EXPECT_EQ(1, set.count(x));
     EXPECT_NE(set.end(), set.find(x));
+    EXPECT_NE(nullptr, set.get(x));
   }
 
   // Check that copy is unchanged.
@@ -193,7 +195,7 @@ TEST_F(ConcurrentContainersTest, insertOnlyConcurrentSetTest) {
   std::vector<Pair> pointers;
 
   for (uint32_t x : m_subset_data) {
-    const uint32_t* p = &moved.insert(x).first;
+    const uint32_t* p = moved.insert(x).first;
     EXPECT_EQ(*p, x);
     pointers.push_back(Pair{p, x});
   }
@@ -209,7 +211,8 @@ TEST_F(ConcurrentContainersTest, insertOnlyConcurrentSetTest) {
 
   for (const auto& pair : pointers) {
     EXPECT_EQ(*pair.p, pair.x);
-    EXPECT_EQ(pair.p, &moved.insert(pair.x).first);
+    EXPECT_EQ(pair.p, moved.insert(pair.x).first);
+    EXPECT_EQ(pair.p, moved.get(pair.x));
   }
 }
 

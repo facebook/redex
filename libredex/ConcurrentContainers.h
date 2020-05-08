@@ -428,18 +428,34 @@ class InsertOnlyConcurrentSet final
                             n_slots>(std::move(set)) {}
 
   /*
-   * Returns a pair consisting of a reference on the inserted element (or the
+   * Returns a pair consisting of a pointer on the inserted element (or the
    * element that prevented the insertion) and a boolean denoting whether the
    * insertion took place. This operation is always thread-safe.
    */
-  std::pair<const Key&, bool> insert(const Key& key) {
+  std::pair<const Key*, bool> insert(const Key& key) {
     size_t slot = Hash()(key) % n_slots;
     boost::lock_guard<boost::mutex> lock(this->get_lock(slot));
     auto& set = this->get_container(slot);
     // `std::unordered_set::insert` does not invalidate references,
     // thus it is safe to return a reference on the object.
     auto result = set.insert(key);
-    return {*result.first, result.second};
+    return {&*result.first, result.second};
+  }
+
+  /*
+   * Return a pointer on the element, or `nullptr` if the element is not in the
+   * set. This operation is always thread-safe.
+   */
+  const Key* get(const Key& key) const {
+    size_t slot = Hash()(key) % n_slots;
+    boost::lock_guard<boost::mutex> lock(this->get_lock(slot));
+    const auto& set = this->get_container(slot);
+    auto result = set.find(key);
+    if (result == set.end()) {
+      return nullptr;
+    } else {
+      return &*result;
+    }
   }
 
   size_t erase(const Key& key) = delete;
