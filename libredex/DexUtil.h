@@ -8,6 +8,7 @@
 #pragma once
 
 #include <algorithm>
+#include <boost/algorithm/string/predicate.hpp>
 #include <functional>
 #include <unordered_set>
 #include <vector>
@@ -281,7 +282,7 @@ inline std::string external_to_internal(const std::string& external_name) {
 
   std::replace(
       component_internal_name.begin(), component_internal_name.end(), '.', '/');
-  if (component_external_name[component_external_name.size() - 1] != ';') {
+  if (!boost::algorithm::ends_with(component_internal_name, ";")) {
     component_internal_name += ";";
   }
   std::string array_prefix;

@@ -60,6 +60,8 @@ TEST_F(DexUtilTest, test_java_name_external_to_internal) {
   EXPECT_EQ("LMyClass;", external_to_internal("MyClass"));
   EXPECT_EQ("[LMyClass;", external_to_internal("[LMyClass;"));
   EXPECT_EQ("[[LMyClass;", external_to_internal("[[LMyClass;"));
+  EXPECT_EQ("L;", external_to_internal(""));
+  EXPECT_EQ("[[;", external_to_internal("[["));
 }
 
 TEST_F(DexUtilTest, test_java_name_internal_to_simple) {
