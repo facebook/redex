@@ -209,3 +209,53 @@ class TestG {
     t.bar();
   }
 }
+
+class TestH {
+
+  static class Base {}
+  static class SubOne extends Base {}
+  static class SubTwo extends Base {}
+
+  static final Base BASE = initBase();
+
+  Base mBase;
+
+  static Base initBase() { return new Base(); }
+
+  Base returnSubOne() {
+    mBase = new SubOne();
+    return mBase;
+  }
+
+  Base rereturnSubOne() {
+    return returnSubOne();
+  }
+
+  Base foo() {
+    return rereturnSubOne();
+  }
+
+  Base returnSubTwo() {
+    mBase = new SubTwo();
+    return mBase;
+  }
+
+  Base rereturnSubTwo() {
+    return returnSubTwo();
+  }
+
+  Base bar() {
+    return rereturnSubTwo();
+  }
+
+  Base baz() {
+    return BASE;
+  }
+
+  static void main() {
+    TestH t = new TestH();
+    t.foo();
+    t.bar();
+    t.baz();
+  }
+}

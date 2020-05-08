@@ -23,8 +23,7 @@ namespace {
  */
 void initialize_field_env(const WholeProgramState& wps,
                           const IRCode* code,
-                          DexTypeEnvironment& env,
-                          std::unordered_set<DexField*>& written_fields) {
+                          DexTypeEnvironment& env) {
   bool populated = false;
   for (auto& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
@@ -38,7 +37,6 @@ void initialize_field_env(const WholeProgramState& wps,
     auto type = wps.get_field_type(field);
     if (!type.is_top()) {
       env.set(field, type);
-      written_fields.insert(field);
       populated = true;
     }
   }
@@ -158,7 +156,8 @@ GlobalTypeAnalyzer::get_local_analysis(const DexMethod* method) const {
 }
 
 using CombinedAnalyzer =
-    InstructionAnalyzerCombiner<WholeProgramAwareAnalyzer,
+    InstructionAnalyzerCombiner<local::ClinitFieldAnalyzer,
+                                WholeProgramAwareAnalyzer,
                                 local::FieldTypeAnalyzer,
                                 local::RegisterTypeAnalyzer>;
 
@@ -179,16 +178,15 @@ std::unique_ptr<local::LocalTypeAnalyzer> GlobalTypeAnalyzer::analyze_method(
   }
 
   auto env = env_with_params(&code, args);
-  auto written_fields = std::make_unique<std::unordered_set<DexField*>>();
-  auto* wf_ptr = written_fields.get();
-  if (!method::is_clinit(method)) {
-    initialize_field_env(wps, &code, env, *written_fields);
+  DexType* class_under_init{nullptr};
+  if (method::is_clinit(method)) {
+    class_under_init = method->get_class();
+  } else {
+    initialize_field_env(wps, &code, env);
   }
   TRACE(TYPE, 5, "%s", SHOW(code.cfg()));
   auto local_ta = std::make_unique<local::LocalTypeAnalyzer>(
-      code.cfg(),
-      CombinedAnalyzer(&wps, wf_ptr, nullptr),
-      std::move(written_fields));
+      code.cfg(), CombinedAnalyzer(class_under_init, &wps, nullptr, nullptr));
   local_ta->run(env);
 
   return local_ta;

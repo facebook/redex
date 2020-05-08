@@ -68,6 +68,17 @@ class GlobalTypeAnalysisTest : public RedexIntegrationTest {
     }
     return s;
   }
+
+  SmallSetDexTypeDomain get_small_set_domain(
+      std::initializer_list<const std::string> l) {
+    SmallSetDexTypeDomain s;
+    for (const auto& elem : l) {
+      auto type = get_type(elem);
+      auto domain = SmallSetDexTypeDomain(type);
+      s.join_with(domain);
+    }
+    return s;
+  }
 };
 
 TEST_F(GlobalTypeAnalysisTest, ReturnTypeTest) {
@@ -239,4 +250,60 @@ TEST_F(GlobalTypeAnalysisTest, ArrayConstNullnessDomainTest) {
   rtype = wps.get_return_type(meth_bar);
   EXPECT_FALSE(rtype.is_top());
   EXPECT_TRUE(rtype.is_not_null());
+}
+
+TEST_F(GlobalTypeAnalysisTest, ClinitFieldAnalyzerTest) {
+  auto scope = build_class_scope(stores);
+  set_root_method("Lcom/facebook/redextest/TestH;.main:()V");
+  GlobalTypeAnalysis analysis;
+  auto gta = analysis.analyze(scope);
+  auto wps = gta->get_whole_program_state();
+
+  auto field_sbase =
+      get_field("TestH;.BASE:Lcom/facebook/redextest/TestH$Base;");
+  auto ftype = wps.get_field_type(field_sbase);
+  EXPECT_FALSE(ftype.is_top());
+  EXPECT_TRUE(ftype.is_not_null());
+  EXPECT_EQ(ftype.get_single_domain(),
+            SingletonDexTypeDomain(get_type("TestH$Base")));
+  EXPECT_EQ(ftype.get_set_domain(), get_small_set_domain({"TestH$Base"}));
+
+  auto field_mbase =
+      get_field("TestH;.mBase:Lcom/facebook/redextest/TestH$Base;");
+  ftype = wps.get_field_type(field_mbase);
+  EXPECT_FALSE(ftype.is_top());
+  EXPECT_TRUE(ftype.is_not_null());
+  EXPECT_EQ(ftype.get_single_domain(),
+            SingletonDexTypeDomain(get_type("TestH$Base")));
+  EXPECT_EQ(ftype.get_set_domain(),
+            get_small_set_domain({"TestH$SubOne", "TestH$SubTwo"}));
+
+  auto meth_foo =
+      get_method("TestH;.foo", "", "Lcom/facebook/redextest/TestH$Base;");
+  auto rtype = wps.get_return_type(meth_foo);
+  EXPECT_FALSE(rtype.is_top());
+  EXPECT_TRUE(rtype.is_not_null());
+  EXPECT_EQ(rtype.get_single_domain(),
+            SingletonDexTypeDomain(get_type("TestH$Base")));
+  EXPECT_EQ(rtype.get_set_domain(),
+            get_small_set_domain({"TestH$SubOne", "TestH$SubTwo"}));
+
+  auto meth_bar =
+      get_method("TestH;.bar", "", "Lcom/facebook/redextest/TestH$Base;");
+  rtype = wps.get_return_type(meth_bar);
+  EXPECT_FALSE(rtype.is_top());
+  EXPECT_TRUE(rtype.is_not_null());
+  EXPECT_EQ(rtype.get_single_domain(),
+            SingletonDexTypeDomain(get_type("TestH$Base")));
+  EXPECT_EQ(rtype.get_set_domain(),
+            get_small_set_domain({"TestH$SubOne", "TestH$SubTwo"}));
+
+  auto meth_baz =
+      get_method("TestH;.baz", "", "Lcom/facebook/redextest/TestH$Base;");
+  rtype = wps.get_return_type(meth_baz);
+  EXPECT_FALSE(rtype.is_top());
+  EXPECT_TRUE(rtype.is_not_null());
+  EXPECT_EQ(rtype.get_single_domain(),
+            SingletonDexTypeDomain(get_type("TestH$Base")));
+  EXPECT_EQ(rtype.get_set_domain(), get_small_set_domain({"TestH$Base"}));
 }

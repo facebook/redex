@@ -22,25 +22,16 @@ using namespace ir_analyzer;
 class LocalTypeAnalyzer final
     : public ir_analyzer::BaseIRAnalyzer<DexTypeEnvironment> {
  public:
-  LocalTypeAnalyzer(
-      const cfg::ControlFlowGraph& cfg,
-      InstructionAnalyzer<DexTypeEnvironment> insn_analyer,
-      std::unique_ptr<std::unordered_set<DexField*>> written_fields)
+  LocalTypeAnalyzer(const cfg::ControlFlowGraph& cfg,
+                    InstructionAnalyzer<DexTypeEnvironment> insn_analyer)
       : ir_analyzer::BaseIRAnalyzer<DexTypeEnvironment>(cfg),
-        m_insn_analyzer(std::move(insn_analyer)) {
-    m_written_fields = std::move(written_fields);
-  }
+        m_insn_analyzer(std::move(insn_analyer)) {}
 
   void analyze_instruction(const IRInstruction* insn,
                            DexTypeEnvironment* current_state) const override;
 
  private:
   InstructionAnalyzer<DexTypeEnvironment> m_insn_analyzer;
-  /*
-   * Tracking the fields referenced by the method that have been written to.
-   * It shares the same life time with the LocalTypeAnalyzer.
-   */
-  std::unique_ptr<std::unordered_set<DexField*>> m_written_fields;
 };
 
 class RegisterTypeAnalyzer final
@@ -87,24 +78,52 @@ class RegisterTypeAnalyzer final
                                        DexTypeEnvironment* env);
 };
 
-class FieldTypeAnalyzer final
-    : public InstructionAnalyzerBase<
-          FieldTypeAnalyzer,
-          DexTypeEnvironment,
-          std::unordered_set<DexField*>* /* written fields */> {
+/*
+ * Unlike in other methods where we always propagate field type info from
+ * the WholeProgramState, in <clinit>s, we directly propagate static field type
+ * info through the local FieldTypeEnvironment. This is similar to what we do
+ * for constant values in IPCP.
+ *
+ * The reason is that the <clinit> is the 1st method of the class being executed
+ * after class loading. Therefore, the field 'writes' in the <clinit> happens
+ * before other 'writes' to the same field. In other words, the field type state
+ * of <clinit>s are self-contained. Note that we are limiting ourselves to
+ * static fields belonging to the same class here.
+ *
+ * We don't throw away our results if there're invoke-statics in the <clinit>.
+ * Since the field 'write' in the invoke-static callee will be aggregated in the
+ * final type mapping in WholeProgramState. Before that happens, we do not
+ * propagate incomplete field type info to other methods. As stated above, we
+ * only propagate field type info from WholeProgramState computed in the
+ * previous global iteration.
+ */
+class ClinitFieldAnalyzer final
+    : public InstructionAnalyzerBase<ClinitFieldAnalyzer,
+                                     DexTypeEnvironment,
+                                     DexType* /* class_under_init */> {
  public:
-  static bool analyze_iget(std::unordered_set<DexField*>* written_fields,
+  static bool analyze_sget(const DexType* class_under_init,
                            const IRInstruction* insn,
                            DexTypeEnvironment* env);
-  static bool analyze_iput(std::unordered_set<DexField*>* written_fields,
+
+  static bool analyze_sput(const DexType* class_under_init,
                            const IRInstruction* insn,
                            DexTypeEnvironment* env);
-  static bool analyze_sget(std::unordered_set<DexField*>* written_fields,
-                           const IRInstruction* insn,
-                           DexTypeEnvironment* env);
-  static bool analyze_sput(std::unordered_set<DexField*>* written_fields,
-                           const IRInstruction* insn,
-                           DexTypeEnvironment* env);
+};
+
+/*
+ * We only use FieldTypeAnalyzer to update the local FieldTypeEnvironment. The
+ * purpose is to make the analysis results more accessible. The analyzer does
+ * not actively propagating type info back into the local RegTypeEnvironment.
+ * We only propagate field type info from WholeProgramState to
+ * RegTypeEnvironment except for <clinit>s.
+ */
+class FieldTypeAnalyzer final
+    : public InstructionAnalyzerBase<FieldTypeAnalyzer, DexTypeEnvironment> {
+ public:
+  static bool analyze_iput(const IRInstruction* insn, DexTypeEnvironment* env);
+
+  static bool analyze_sput(const IRInstruction* insn, DexTypeEnvironment* env);
 };
 
 } // namespace local

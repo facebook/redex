@@ -150,6 +150,14 @@ class WholeProgramAwareAnalyzer final
                                      const WholeProgramState*> {
 
  public:
+  static bool analyze_iget(const WholeProgramState* whole_program_state,
+                           const IRInstruction* insn,
+                           DexTypeEnvironment* env);
+
+  static bool analyze_sget(const WholeProgramState* whole_program_state,
+                           const IRInstruction* insn,
+                           DexTypeEnvironment* env);
+
   static bool analyze_invoke(const WholeProgramState* whole_program_state,
                              const IRInstruction* insn,
                              DexTypeEnvironment* env);

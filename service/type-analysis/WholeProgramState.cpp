@@ -67,6 +67,21 @@ bool returns_reference(const DexMethod* method) {
   return type::is_object(rtype);
 }
 
+bool analyze_gets_helper(const WholeProgramState* whole_program_state,
+                         const IRInstruction* insn,
+                         DexTypeEnvironment* env) {
+  auto field = resolve_field(insn->get_field());
+  if (field == nullptr || !type::is_object(field->get_type())) {
+    return false;
+  }
+  auto field_type = whole_program_state->get_field_type(field);
+  if (field_type.is_top()) {
+    return false;
+  }
+  env->set(RESULT_REGISTER, field_type);
+  return true;
+}
+
 } // namespace
 
 namespace type_analyzer {
@@ -271,6 +286,20 @@ std::string WholeProgramState::print_method_partition_diff(
   }
 
   return ss.str();
+}
+
+bool WholeProgramAwareAnalyzer::analyze_iget(
+    const WholeProgramState* whole_program_state,
+    const IRInstruction* insn,
+    DexTypeEnvironment* env) {
+  return analyze_gets_helper(whole_program_state, insn, env);
+}
+
+bool WholeProgramAwareAnalyzer::analyze_sget(
+    const WholeProgramState* whole_program_state,
+    const IRInstruction* insn,
+    DexTypeEnvironment* env) {
+  return analyze_gets_helper(whole_program_state, insn, env);
 }
 
 bool WholeProgramAwareAnalyzer::analyze_invoke(
