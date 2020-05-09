@@ -21,6 +21,23 @@ extern int errno;
 // Methods that appear in less than this percent of traces will be excluded
 constexpr double MINIMUM_APPEAR_PERCENT = 80.0;
 
+const StatsMap& MethodProfiles::method_stats(
+    boost::optional<std::string> interaction_id) const {
+  if (interaction_id != boost::none) {
+    return m_method_stats.at(*interaction_id);
+  }
+  const auto& search1 = m_method_stats.find("");
+  if (search1 != m_method_stats.end()) {
+    return search1->second;
+  }
+  const auto& search2 = m_method_stats.find("ColdStart");
+  if (search2 != m_method_stats.end()) {
+    return search2->second;
+  }
+  static StatsMap empty_map = {};
+  return empty_map;
+}
+
 bool MethodProfiles::parse_stats_file(const std::string& csv_filename) {
   TRACE(METH_PROF, 3, "input csv filename: %s", csv_filename.c_str());
   if (csv_filename == "") {
@@ -67,8 +84,12 @@ bool MethodProfiles::parse_stats_file(const std::string& csv_filename) {
     return false;
   }
 
+  size_t total_rows = 0;
+  for (const auto& pair : m_method_stats) {
+    total_rows += pair.second.size();
+  }
   TRACE(METH_PROF, 1, "MethodProfiles successfully parsed %zu rows",
-        m_method_stats.size());
+        total_rows);
   cleanup(fp, line);
   return true;
 }
@@ -98,6 +119,7 @@ bool MethodProfiles::parse_line(char* line, bool first) {
   };
 
   Stats stats;
+  std::string interaction_id = "";
   DexMethodRef* ref = nullptr;
   auto parse_cell = [&](char* tok, uint32_t i) -> bool {
     switch (i) {
@@ -108,7 +130,7 @@ bool MethodProfiles::parse_line(char* line, bool first) {
     case NAME:
       ref = DexMethod::get_method(tok);
       if (ref == nullptr) {
-        TRACE(METH_PROF, 4, "failed to resolve %s", tok);
+        TRACE(METH_PROF, 6, "failed to resolve %s", tok);
       }
       return true;
     case APPEAR100:
@@ -135,9 +157,9 @@ bool MethodProfiles::parse_line(char* line, bool first) {
       const auto& search = m_optional_columns.find(i);
       if (search != m_optional_columns.end()) {
         if (search->second == "interaction") {
-          stats.interaction_id = tok;
-          if (stats.interaction_id.back() == '\n') {
-            stats.interaction_id.resize(stats.interaction_id.size() - 1);
+          interaction_id = tok;
+          if (interaction_id.back() == '\n') {
+            interaction_id.resize(interaction_id.size() - 1);
           }
           return true;
         }
@@ -152,11 +174,10 @@ bool MethodProfiles::parse_line(char* line, bool first) {
     return false;
   }
   if (ref != nullptr && stats.appear_percent >= MINIMUM_APPEAR_PERCENT) {
-    TRACE(METH_PROF, 6, "%s -> {%f, %f, %f, %s, %u}", SHOW(ref),
-          stats.appear_percent, stats.call_count, stats.order_percent,
-          stats.interaction_id.c_str(),
-          stats.min_api_level);
-    m_method_stats.emplace(ref, stats);
+    TRACE(METH_PROF, 6, "(%s, %s) -> {%f, %f, %f, %u}", SHOW(ref),
+          interaction_id.c_str(), stats.appear_percent, stats.call_count,
+          stats.order_percent, stats.min_api_level);
+    m_method_stats[interaction_id].emplace(ref, stats);
   }
   return true;
 }

@@ -16,53 +16,59 @@
 
 using namespace method_profiles;
 
-std::unordered_set<const DexMethodRef*> compute_hot_methods(
-    const std::unordered_map<const DexMethodRef*, Stats>&
-        method_profile_stats) {
-  if (method_profile_stats.empty()) {
-    return {};
+void InlineForSpeed::compute_hot_methods() {
+  if (!m_method_profiles.has_stats()) {
+    return;
   }
-  // Methods in the top PERCENTILE of call counts will be considered hot.
-  constexpr double PERCENTILE = 0.1;
-  constexpr size_t MIN_SIZE = 1;
-  auto result_size = std::max(
-      MIN_SIZE, static_cast<size_t>(method_profile_stats.size() * PERCENTILE));
-  // Find the lowest score that is in the top PERCENTILE
-  // the "top" of the top_scores is actually the minimum hot score
-  std::priority_queue<double, std::vector<double>, std::greater<double>>
-      high_scores;
-  for (const auto& entry : method_profile_stats) {
-    auto score = entry.second.call_count;
-    if (high_scores.size() < result_size) {
-      high_scores.push(score);
-    } else if (score > high_scores.top()) {
-      high_scores.push(score);
-      high_scores.pop();
+  for (const auto& pair : m_method_profiles.all_interactions()) {
+    const std::string& interaction_id = pair.first;
+    const auto& method_stats = pair.second;
+    // Methods in the top PERCENTILE of call counts will be considered warm/hot.
+    constexpr double WARM_PERCENTILE = 0.25;
+    constexpr double HOT_PERCENTILE = 0.1;
+    // Find the lowest score that is within the given percentile
+    constexpr size_t MIN_SIZE = 1;
+    size_t warm_size = std::max(
+        MIN_SIZE, static_cast<size_t>(method_stats.size() * WARM_PERCENTILE));
+    size_t hot_size = std::max(
+        MIN_SIZE, static_cast<size_t>(method_stats.size() * HOT_PERCENTILE));
+    // the "top" of the queue is actually the minimum warm/hot score
+    using pq =
+        std::priority_queue<double, std::vector<double>, std::greater<double>>;
+    pq warm_scores;
+    pq hot_scores;
+    auto maybe_push = [](pq& q, size_t size, double value) {
+      if (q.size() < size) {
+        q.push(value);
+      } else if (value > q.top()) {
+        q.push(value);
+        q.pop();
+      }
+    };
+    for (const auto& entry : method_stats) {
+      auto score = entry.second.call_count;
+      maybe_push(warm_scores, warm_size, score);
+      maybe_push(hot_scores, hot_size, score);
     }
+    double min_warm_score = std::max(50.0, warm_scores.top());
+    double min_hot_score = std::max(100.0, hot_scores.top());
+    TRACE(METH_PROF,
+          2,
+          "%s min scores = %f, %f",
+          interaction_id.c_str(),
+          min_warm_score,
+          min_hot_score);
+    std::pair<double, double> p(min_warm_score, min_hot_score);
+    m_min_scores.emplace(interaction_id, std::move(p));
   }
-  auto minimum_hot_score = high_scores.top();
-  TRACE(METH_PROF, 2, "minimum hot score = %f", minimum_hot_score);
-
-  // Find all methods with a score higher than the minimum hot score
-  std::unordered_set<const DexMethodRef*> result;
-  result.reserve(result_size);
-  for (const auto& entry : method_profile_stats) {
-    const auto& meth = entry.first;
-    const auto& stats = entry.second;
-    if (stats.call_count >= minimum_hot_score) {
-      result.emplace(meth);
-    }
-  }
-  return result;
 }
 
-InlineForSpeed::InlineForSpeed(
-    const std::unordered_map<const DexMethodRef*, method_profiles::Stats>&
-        method_profile_stats)
-    : m_method_profile_stats(method_profile_stats),
-      m_hot_methods(compute_hot_methods(m_method_profile_stats)) {}
+InlineForSpeed::InlineForSpeed(const MethodProfiles& method_profiles)
+    : m_method_profiles(method_profiles) {
+  compute_hot_methods();
+}
 
-bool InlineForSpeed::enabled() const { return !m_hot_methods.empty(); }
+bool InlineForSpeed::enabled() const { return m_method_profiles.has_stats(); }
 
 bool InlineForSpeed::should_inline(const DexMethod* caller_method,
                                    const DexMethod* callee_method) const {
@@ -70,49 +76,79 @@ bool InlineForSpeed::should_inline(const DexMethod* caller_method,
     return false;
   }
 
-  if (!(m_hot_methods.count(caller_method) &&
-        m_hot_methods.count(callee_method))) {
-    return false;
-  }
-
-  auto callee_insns = callee_method->get_code()->cfg().num_opcodes();
   auto caller_insns = caller_method->get_code()->cfg().num_opcodes();
-  auto caller_hits = m_method_profile_stats.at(caller_method).call_count;
-  auto callee_hits = m_method_profile_stats.at(callee_method).call_count;
-
-  TRACE_NO_LINE(METH_PROF,
-                5,
-                "%s, %s, %u, %u, %f, %f, ",
-                SHOW(caller_method),
-                SHOW(callee_method),
-                caller_insns,
-                callee_insns,
-                caller_hits,
-                callee_hits);
-
-  constexpr double FUDGE_FACTOR = 0.8; // lowering usually increases # insns
-  constexpr size_t ON_DEVICE_COMPILE_MAX = 10000 * FUDGE_FACTOR; // instructions
-  if (caller_insns < ON_DEVICE_COMPILE_MAX &&
-      caller_insns + callee_insns >= ON_DEVICE_COMPILE_MAX) {
-    // Don't push any methods over the on-device compilation limit
-    TRACE(METH_PROF, 5, "%d, %s", 0, "ONDEVICE");
+  // The cost of inlining large methods usually outweighs the benefits
+  constexpr uint32_t MAX_NUM_INSNS = 240;
+  if (caller_insns > MAX_NUM_INSNS) {
+    return false;
+  }
+  auto callee_insns = callee_method->get_code()->cfg().num_opcodes();
+  if (callee_insns > MAX_NUM_INSNS) {
     return false;
   }
 
-  double CALLER_BARELY_HOT = 100.0;
-  double CALLEE_BARELY_HOT = 200.0;
-  if (caller_insns > 12 && callee_insns > 8 &&
-      m_method_profile_stats.at(caller_method).call_count < CALLER_BARELY_HOT &&
-      m_method_profile_stats.at(callee_method).call_count < CALLEE_BARELY_HOT) {
-    TRACE(METH_PROF, 5, "%d, %s", 0, "BARELYHOT");
+  // If the pair is hot under any interaction, inline it.
+  for (const auto& pair : m_method_profiles.all_interactions()) {
+    bool should = should_inline_per_interaction(caller_method,
+                                                callee_method,
+                                                caller_insns,
+                                                callee_insns,
+                                                pair.first,
+                                                pair.second);
+    if (should) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool InlineForSpeed::should_inline_per_interaction(
+    const DexMethod* caller_method,
+    const DexMethod* callee_method,
+    uint32_t caller_insns,
+    uint32_t callee_insns,
+    const std::string& interaction_id,
+    const StatsMap& method_stats) const {
+  const auto& caller_search = method_stats.find(caller_method);
+  if (caller_search == method_stats.end()) {
     return false;
   }
-  uint32_t CALLER_MAX_NUM_INSNS = 160;
-  if (caller_insns > CALLER_MAX_NUM_INSNS) {
-    TRACE(METH_PROF, 5, "%d, %s", 0, "BIGCALLER");
+  const auto& scores = m_min_scores.at(interaction_id);
+  double warm_score = scores.first;
+  double hot_score = scores.second;
+  const auto& caller_stats = caller_search->second;
+  auto caller_hits = caller_stats.call_count;
+  if (caller_hits < warm_score) {
     return false;
   }
 
-  TRACE(METH_PROF, 5, "%d, %s", 1, "");
-  return true;
+  const auto& callee_search = method_stats.find(callee_method);
+  if (callee_search == method_stats.end()) {
+    return false;
+  }
+  const auto& callee_stats = callee_search->second;
+  auto callee_hits = callee_stats.call_count;
+  if (callee_hits < warm_score) {
+    return false;
+  }
+
+  // Smaller methods tend to benefit more from inlining. Allow warm + small
+  // methods, or hot + medium size methods.
+  constexpr uint32_t SMALL_ENOUGH = 20;
+  bool either_small = caller_insns < SMALL_ENOUGH || callee_insns < SMALL_ENOUGH;
+  bool either_hot = caller_hits >= hot_score || callee_hits >= hot_score;
+  bool result = either_small || either_hot;
+  if (result) {
+    TRACE(METH_PROF,
+          5,
+          "%s, %s, %s, %u, %u, %f, %f",
+          SHOW(caller_method),
+          SHOW(callee_method),
+          interaction_id.c_str(),
+          caller_insns,
+          callee_insns,
+          caller_hits,
+          callee_hits);
+  }
+  return result;
 }

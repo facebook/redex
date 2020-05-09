@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include <boost/optional.hpp>
+
 #include "DexClass.h"
 
 namespace method_profiles {
@@ -36,13 +38,12 @@ struct Stats {
   // * 100.0 means the end of the measured period
   double order_percent{0.0}; // avg_rank100
 
-  // These identifiers define groups of methods that were profiled together.
-  // This is an optional column and empty string is the default value.
-  std::string interaction_id{""};
-
   // The minimum API level that this method was observed running on
   uint8_t min_api_level{0}; // min_api_level
 };
+
+using StatsMap = std::unordered_map<const DexMethodRef*, Stats>;
+using AllInteractions = std::map<std::string, StatsMap>;
 
 class MethodProfiles {
  public:
@@ -61,12 +62,22 @@ class MethodProfiles {
 
   bool has_stats() const { return !m_method_stats.empty(); }
 
-  const std::unordered_map<const DexMethodRef*, Stats>& method_stats() const {
+  // Get the method profiles for some interaction. If no argument is given, the
+  // interactions are searched first by the default interaction_id (empty
+  // string), then by the interaction named "ColdStart".
+  //
+  // If no interactions are found. Return an empty map.
+  //
+  // TODO(T66774154): This default argument strategy is error-prone
+  const StatsMap& method_stats(
+      boost::optional<std::string> interaction_id = boost::none) const;
+
+  const AllInteractions& all_interactions() const {
     return m_method_stats;
   }
 
  private:
-  std::unordered_map<const DexMethodRef*, Stats> m_method_stats;
+  AllInteractions m_method_stats;
   bool m_initialized{false};
   // A map from column index to column header
   std::unordered_map<uint32_t, std::string> m_optional_columns;
@@ -74,7 +85,7 @@ class MethodProfiles {
   // Read a "simple" csv file (no quoted commas or extra spaces) and populate
   // m_method_stats
   bool parse_stats_file(const std::string& csv_filename);
-  // Read a line fromt the "simple" csv file and put an entry into
+  // Read a line from the "simple" csv file and put an entry into
   // m_method_stats
   bool parse_line(char* line, bool first);
   // Parse the first line and make sure it matches our expectations

@@ -21,8 +21,8 @@
 #include "DexClass.h"
 #include "DexStore.h"
 #include "IPConstantPropagationAnalysis.h"
-#include "InlineForSpeed.h"
 #include "IRCode.h"
+#include "InlineForSpeed.h"
 #include "LocalDce.h"
 #include "MethodProfiles.h"
 #include "PatriciaTreeSet.h"
@@ -125,8 +125,7 @@ class MultiMethodInliner {
       const inliner::InlinerConfig& config,
       MultiMethodInlinerMode mode = InterDex,
       const CalleeCallerInsns& true_virtual_callers = {},
-      const std::unordered_map<const DexMethodRef*, method_profiles::Stats>&
-          method_profile_stats = {},
+      const method_profiles::MethodProfiles& method_profiless = {},
       const std::unordered_map<const DexMethod*, size_t>&
           same_method_implementations = {},
       bool analyze_and_prune_inits = false);
