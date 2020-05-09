@@ -1081,8 +1081,9 @@ void Model::collect_methods() {
         }
         merger.dmethods.emplace_back(method);
       }
-      always_assert_log(has_ctor, "[TERA] No ctor found for mergeable %s",
-                        SHOW(type));
+      if (!has_ctor) {
+        TRACE(TERA, 2, "[TERA] No ctor found for mergeable %s", SHOW(type));
+      }
 
       const auto& virt_scopes = m_type_system.get_class_scopes().get(type);
       TRACE(TERA, 8, "%ld virtual scopes in %s", virt_scopes.size(),
