@@ -132,7 +132,17 @@ bool MethodProfiles::parse_line(char* line, bool first) {
       stats.min_api_level = parse_byte(tok);
       return true;
     default:
-      std::cerr << "FAILED to parse line. Too many columns\n";
+      const auto& search = m_optional_columns.find(i);
+      if (search != m_optional_columns.end()) {
+        if (search->second == "interaction") {
+          stats.interaction_id = tok;
+          if (stats.interaction_id.back() == '\n') {
+            stats.interaction_id.resize(stats.interaction_id.size() - 1);
+          }
+          return true;
+        }
+      }
+      std::cerr << "FAILED to parse line. Unknown extra column\n";
       return false;
     }
   };
@@ -142,8 +152,9 @@ bool MethodProfiles::parse_line(char* line, bool first) {
     return false;
   }
   if (ref != nullptr && stats.appear_percent >= MINIMUM_APPEAR_PERCENT) {
-    TRACE(METH_PROF, 4, "%s -> {%f, %f, %f, %u}", SHOW(ref),
+    TRACE(METH_PROF, 6, "%s -> {%f, %f, %f, %s, %u}", SHOW(ref),
           stats.appear_percent, stats.call_count, stats.order_percent,
+          stats.interaction_id.c_str(),
           stats.min_api_level);
     m_method_stats.emplace(ref, stats);
   }
@@ -180,7 +191,12 @@ bool MethodProfiles::parse_header(char* line) {
     case MIN_API_LEVEL:
       return check_cell("min_api_level", tok, i);
     default:
-      return check_cell("\n", tok, i);
+      std::string column_name = tok;
+      if (column_name.back() == '\n') {
+        column_name.resize(column_name.size() - 1);
+      }
+      m_optional_columns.emplace(i, column_name);
+      return true;
     }
   };
   return parse_cells(line, parse_cell);

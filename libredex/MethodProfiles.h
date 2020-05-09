@@ -12,7 +12,7 @@
 namespace method_profiles {
 
 // These names (and their order) match the columns of the csv
-enum {
+enum : uint8_t {
   INDEX,
   NAME,
   APPEAR100,
@@ -35,6 +35,10 @@ struct Stats {
   // * 0.0 means the beginning of the measured period
   // * 100.0 means the end of the measured period
   double order_percent{0.0}; // avg_rank100
+
+  // These identifiers define groups of methods that were profiled together.
+  // This is an optional column and empty string is the default value.
+  std::string interaction_id{""};
 
   // The minimum API level that this method was observed running on
   uint8_t min_api_level{0}; // min_api_level
@@ -64,6 +68,9 @@ class MethodProfiles {
  private:
   std::unordered_map<const DexMethodRef*, Stats> m_method_stats;
   bool m_initialized{false};
+  // A map from column index to column header
+  std::unordered_map<uint32_t, std::string> m_optional_columns;
+
   // Read a "simple" csv file (no quoted commas or extra spaces) and populate
   // m_method_stats
   bool parse_stats_file(const std::string& csv_filename);

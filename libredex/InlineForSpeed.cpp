@@ -66,7 +66,7 @@ bool InlineForSpeed::enabled() const { return !m_hot_methods.empty(); }
 
 bool InlineForSpeed::should_inline(const DexMethod* caller_method,
                                    const DexMethod* callee_method) const {
-  if (m_hot_methods.empty()) {
+  if (!enabled()) {
     return false;
   }
 
@@ -82,7 +82,7 @@ bool InlineForSpeed::should_inline(const DexMethod* caller_method,
 
   TRACE_NO_LINE(METH_PROF,
                 5,
-                "%s, %s, %u, %u, ",
+                "%s, %s, %u, %u, %f, %f, ",
                 SHOW(caller_method),
                 SHOW(callee_method),
                 caller_insns,
@@ -107,8 +107,8 @@ bool InlineForSpeed::should_inline(const DexMethod* caller_method,
     TRACE(METH_PROF, 5, "%d, %s", 0, "BARELYHOT");
     return false;
   }
-
-  if (caller_insns > 160) {
+  uint32_t CALLER_MAX_NUM_INSNS = 160;
+  if (caller_insns > CALLER_MAX_NUM_INSNS) {
     TRACE(METH_PROF, 5, "%d, %s", 0, "BIGCALLER");
     return false;
   }
