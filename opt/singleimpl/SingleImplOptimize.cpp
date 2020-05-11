@@ -172,18 +172,20 @@ bool update_method_proto(const DexType* old_type_ref,
   return true;
 }
 
+using CheckCastSet = std::unordered_set<const IRInstruction*>;
+
 struct OptimizationImpl {
   OptimizationImpl(std::unique_ptr<SingleImplAnalysis> analysis,
                    const ClassHierarchy& ch)
       : single_impls(std::move(analysis)), ch(ch) {}
 
-  size_t optimize(Scope& scope, const SingleImplConfig& config);
+  OptimizeStats optimize(Scope& scope, const SingleImplConfig& config);
 
  private:
   EscapeReason can_optimize(const DexType* intf,
                             const SingleImplData& data,
                             bool rename_on_collision);
-  void do_optimize(const DexType* intf, const SingleImplData& data);
+  CheckCastSet do_optimize(const DexType* intf, const SingleImplData& data);
   EscapeReason check_field_collision(const DexType* intf,
                                      const SingleImplData& data);
   EscapeReason check_method_collision(const DexType* intf,
@@ -193,7 +195,8 @@ struct OptimizationImpl {
                                   DexMethod* method);
   void set_field_defs(const DexType* intf, const SingleImplData& data);
   void set_field_refs(const DexType* intf, const SingleImplData& data);
-  void fix_instructions(const DexType* intf, const SingleImplData& data);
+  CheckCastSet fix_instructions(const DexType* intf,
+                                const SingleImplData& data);
   void set_method_defs(const DexType* intf, const SingleImplData& data);
   void set_method_refs(const DexType* intf, const SingleImplData& data);
   void rewrite_interface_methods(const DexType* intf,
@@ -306,10 +309,10 @@ void for_all_methods(const T& methods, Fn fn, bool parallel = true) {
 // field value. Expectation is that unnecessary insertions (e.g.,
 // duplicate check-casts) will be eliminated, for example, in
 // `post_process`.
-void OptimizationImpl::fix_instructions(const DexType* intf,
-                                        const SingleImplData& data) {
+CheckCastSet OptimizationImpl::fix_instructions(const DexType* intf,
+                                                const SingleImplData& data) {
   if (data.referencing_methods.empty()) {
-    return;
+    return {};
   }
   std::vector<const DexMethod*> methods;
   methods.reserve(data.referencing_methods.size());
@@ -319,6 +322,10 @@ void OptimizationImpl::fix_instructions(const DexType* intf,
   // The typical number of methods is too small, it is actually significant
   // overhead to spin up pool threads to just let them die.
   constexpr bool PARALLEL = false;
+
+  std::mutex ret_lock;
+  CheckCastSet ret;
+
   for_all_methods(
       methods,
       [&](DexMethod* caller) {
@@ -336,6 +343,13 @@ void OptimizationImpl::fix_instructions(const DexType* intf,
             check_cast->set_src(0, reg);
             check_cast->set_type(data.cls);
             code->insert_before(insn_it, *new MethodItemEntry(check_cast));
+
+            if (PARALLEL) {
+              std::unique_lock<std::mutex> lock(ret_lock);
+              ret.insert(check_cast);
+            } else {
+              ret.insert(check_cast);
+            }
 
             // See if we need a new temp.
             reg_t out;
@@ -401,6 +415,8 @@ void OptimizationImpl::fix_instructions(const DexType* intf,
         }
       },
       PARALLEL);
+
+  return ret;
 }
 
 /**
@@ -681,9 +697,9 @@ void OptimizationImpl::rename_possible_collisions(const DexType* intf,
 /**
  * Perform the optimization.
  */
-void OptimizationImpl::do_optimize(const DexType* intf,
-                                   const SingleImplData& data) {
-  fix_instructions(intf, data);
+CheckCastSet OptimizationImpl::do_optimize(const DexType* intf,
+                                           const SingleImplData& data) {
+  CheckCastSet ret = fix_instructions(intf, data);
   set_type_refs(intf, data);
   set_field_defs(intf, data);
   set_field_refs(intf, data);
@@ -691,17 +707,19 @@ void OptimizationImpl::do_optimize(const DexType* intf,
   set_method_refs(intf, data);
   rewrite_interface_methods(intf, data);
   remove_interface(intf, data);
+  return ret;
 }
 
 /**
  * Run an optimization step.
  */
-size_t OptimizationImpl::optimize(Scope& scope,
-                                  const SingleImplConfig& config) {
+OptimizeStats OptimizationImpl::optimize(Scope& scope,
+                                         const SingleImplConfig& config) {
   TypeList to_optimize;
   single_impls->get_interfaces(to_optimize);
   std::sort(to_optimize.begin(), to_optimize.end(), compare_dextypes);
   std::unordered_set<DexMethod*> for_post_processing;
+  CheckCastSet inserted_check_casts;
   for (auto intf : to_optimize) {
     auto& intf_data = single_impls->get_single_impl_data(intf);
     if (intf_data.is_escaped()) continue;
@@ -711,7 +729,8 @@ size_t OptimizationImpl::optimize(Scope& scope,
       single_impls->escape_interface(intf, escape);
       continue;
     }
-    do_optimize(intf, intf_data);
+    auto check_casts = do_optimize(intf, intf_data);
+    inserted_check_casts.insert(check_casts.begin(), check_casts.end());
     for (auto& p : intf_data.referencing_methods) {
       for_post_processing.insert(p.first);
     }
@@ -731,8 +750,25 @@ size_t OptimizationImpl::optimize(Scope& scope,
   }
 
   post_process(for_post_processing);
+  std::atomic<size_t> retained{0};
+  {
+    for_all_methods(for_post_processing, [&](const DexMethod* m) {
+      auto code = m->get_code();
+      size_t found = 0;
+      for (const auto& mie : ir_list::ConstInstructionIterable(*code)) {
+        if (inserted_check_casts.count(mie.insn) != 0) {
+          ++found;
+        }
+      }
+      retained += found;
+    });
+  }
 
-  return optimized.size();
+  OptimizeStats ret;
+  ret.removed_interfaces = optimized.size();
+  ret.inserted_check_casts = inserted_check_casts.size();
+  ret.retained_check_casts = retained.load();
+  return ret;
 }
 
 void OptimizationImpl::post_process(
@@ -760,10 +796,10 @@ void OptimizationImpl::post_process(
 /**
  * Entry point for an optimization pass.
  */
-size_t optimize(std::unique_ptr<SingleImplAnalysis> analysis,
-                const ClassHierarchy& ch,
-                Scope& scope,
-                const SingleImplConfig& config) {
+OptimizeStats optimize(std::unique_ptr<SingleImplAnalysis> analysis,
+                       const ClassHierarchy& ch,
+                       Scope& scope,
+                       const SingleImplConfig& config) {
   OptimizationImpl optimizer(std::move(analysis), ch);
   return optimizer.optimize(scope, config);
 }
