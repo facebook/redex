@@ -71,6 +71,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/shorten-srcstrings \
 	-I$(top_srcdir)/opt/make-public \
 	-I$(top_srcdir)/opt/methodinline \
+	-I$(top_srcdir)/opt/outliner \
 	-I$(top_srcdir)/opt/singleimpl \
 	-I$(top_srcdir)/opt/split_huge_switches \
 	-I$(top_srcdir)/opt/static-sink \
