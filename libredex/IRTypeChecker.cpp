@@ -1083,7 +1083,9 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
     }
     for (DexType* arg_type : arg_types) {
       if (type::is_object(arg_type)) {
-        assume_reference(current_state, insn->src(src_idx++));
+        auto src = insn->src(src_idx++);
+        assume_reference(current_state, src);
+        assume_assignable(current_state->get_dex_type(src), arg_type);
         continue;
       }
       if (type::is_integer(arg_type)) {
