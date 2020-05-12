@@ -22,6 +22,7 @@ struct Arguments {
   std::string output_ir_dir;
   std::vector<std::string> pass_names;
   RedexOptions redex_options;
+  std::string config_file;
 };
 
 Arguments parse_args(int argc, char* argv[]) {
@@ -36,6 +37,10 @@ Arguments parse_args(int argc, char* argv[]) {
                      "output dex and IR meta directory");
   desc.add_options()("pass-name,p", po::value<std::vector<std::string>>(),
                      "pass name");
+  desc.add_options()("config,c",
+                     po::value<std::string>(),
+                     "A JSON-formatted config file to replace the one from "
+                     "{input-ir}/entry.json");
 
   po::variables_map vm;
   po::store(po::parse_command_line(argc, argv, desc), vm);
@@ -70,11 +75,21 @@ Arguments parse_args(int argc, char* argv[]) {
     args.pass_names = vm["pass-name"].as<std::vector<std::string>>();
   }
 
+  if (vm.count("config")) {
+    args.config_file = vm["config"].as<std::string>();
+  }
+
   return args;
 }
 
 /**
- * Process entry_data : Load config file and change the passes list
+ * Load config file and change the passes list.
+ * entry_data.json is a json file in the following format:
+ * - apk_dir
+ * - dex_list
+ * - redex_options
+ * - config
+ * - jars
  */
 Json::Value process_entry_data(const Json::Value& entry_data,
                                const Arguments& args) {
@@ -117,6 +132,10 @@ int main(int argc, char* argv[]) {
     auto first_dex_path = boost::filesystem::path(args.input_ir_dir) /
                           entry_data["dex_list"][0]["list"][0].asString();
     stores[0].set_dex_magic(load_dex_magic_from_dex(first_dex_path.c_str()));
+  }
+
+  if (!args.config_file.empty()) {
+    entry_data["config"] = args.config_file;
   }
 
   args.redex_options.deserialize(entry_data);
