@@ -10,15 +10,25 @@
 #include "DexClass.h"
 #include "MethodProfiles.h"
 
-namespace inline_for_speed {
+class InlineForSpeed final {
+ public:
+  explicit InlineForSpeed(
+      const method_profiles::MethodProfiles& method_profiles);
+  bool should_inline(const DexMethod* caller_method,
+                     const DexMethod* callee_method) const;
 
-using namespace method_profiles;
+  bool enabled() const;
 
-std::unordered_set<const DexMethodRef*> compute_hot_methods(
-    const std::unordered_map<const DexMethodRef*, Stats>& method_profile_stats);
+ private:
+  void compute_hot_methods();
+  bool should_inline_per_interaction(
+      const DexMethod* caller_method,
+      const DexMethod* callee_method,
+      uint32_t caller_insns,
+      uint32_t callee_insns,
+      const std::string& interaction_id,
+      const method_profiles::StatsMap& method_stats) const;
 
-bool should_inline(const DexMethod* caller_method,
-                   const DexMethod* callee_method,
-                   const std::unordered_set<const DexMethodRef*>& hot_methods);
-
-} // namespace inline_for_speed
+  const method_profiles::MethodProfiles& m_method_profiles;
+  std::map<std::string, std::pair<double, double>> m_min_scores;
+};

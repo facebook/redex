@@ -14,7 +14,7 @@
 namespace method_profiles {
 
 // These names (and their order) match the columns of the csv
-enum {
+enum : uint8_t {
   INDEX,
   NAME,
   APPEAR100,
@@ -42,6 +42,9 @@ struct Stats {
   uint8_t min_api_level{0}; // min_api_level
 };
 
+using StatsMap = std::unordered_map<const DexMethodRef*, Stats>;
+using AllInteractions = std::map<std::string, StatsMap>;
+
 class MethodProfiles {
  public:
   MethodProfiles() {}
@@ -60,7 +63,7 @@ class MethodProfiles {
       std::unordered_map<const DexMethodRef*, Stats> data) {
     MethodProfiles ret{};
     ret.m_initialized = true;
-    ret.m_method_stats = std::move(data);
+    ret.m_method_stats["ColdStart"] = std::move(data);
     return ret;
   }
 
@@ -68,25 +71,37 @@ class MethodProfiles {
 
   bool has_stats() const { return !m_method_stats.empty(); }
 
-  const std::unordered_map<const DexMethodRef*, Stats>& method_stats() const {
-    return m_method_stats;
-  }
+  // Get the method profiles for some interaction. If no argument is given, the
+  // interactions are searched first by the default interaction_id (empty
+  // string), then by the interaction named "ColdStart".
+  //
+  // If no interactions are found. Return an empty map.
+  //
+  // TODO(T66774154): This default argument strategy is error-prone
+  const StatsMap& method_stats(
+      boost::optional<std::string> interaction_id = boost::none) const;
+
+  const AllInteractions& all_interactions() const { return m_method_stats; }
 
   boost::optional<Stats> get_method_stat(const DexMethodRef* m) const {
-    auto it = m_method_stats.find(m);
-    if (it == m_method_stats.end()) {
+    const auto& cold_start = method_stats();
+    auto it = cold_start.find(m);
+    if (it == cold_start.end()) {
       return boost::none;
     }
     return it->second;
   }
 
  private:
-  std::unordered_map<const DexMethodRef*, Stats> m_method_stats;
+  AllInteractions m_method_stats;
   bool m_initialized{false};
+  // A map from column index to column header
+  std::unordered_map<uint32_t, std::string> m_optional_columns;
+
   // Read a "simple" csv file (no quoted commas or extra spaces) and populate
   // m_method_stats
   bool parse_stats_file(const std::string& csv_filename);
-  // Read a line fromt the "simple" csv file and put an entry into
+  // Read a line from the "simple" csv file and put an entry into
   // m_method_stats
   bool parse_line(char* line, bool first);
   // Parse the first line and make sure it matches our expectations

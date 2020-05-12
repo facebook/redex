@@ -314,12 +314,10 @@ void run_inliner(DexStoresVector& stores,
     inliner_config.apply_intradex_white_list();
   }
 
-  using MethodStats =
-      const std::unordered_map<const DexMethodRef*, method_profiles::Stats>;
-  MethodStats method_profile_stats =
-      use_method_profiles ? conf.get_method_profiles().method_stats()
-                          : MethodStats{};
-  if (use_method_profiles && method_profile_stats.empty()) {
+  method_profiles::MethodProfiles method_profiles =
+      use_method_profiles ? conf.get_method_profiles()
+                          : method_profiles::MethodProfiles{};
+  if (use_method_profiles && !method_profiles.has_stats()) {
     // PerfMethodInline is enabled, but there are no profiles available. Bail,
     // don't run a regular inline pass.
     return;
@@ -357,7 +355,7 @@ void run_inliner(DexStoresVector& stores,
   // inline candidates
   MultiMethodInliner inliner(scope, stores, methods, resolver, inliner_config,
                              intra_dex ? IntraDex : InterDex,
-                             true_virtual_callers, method_profile_stats,
+                             true_virtual_callers, method_profiles,
                              &same_method_implementations,
                              analyze_and_prune_inits, conf.get_pure_methods());
   inliner.inline_methods();

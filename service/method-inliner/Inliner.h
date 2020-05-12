@@ -22,6 +22,7 @@
 #include "DexStore.h"
 #include "IPConstantPropagationAnalysis.h"
 #include "IRCode.h"
+#include "InlineForSpeed.h"
 #include "LocalDce.h"
 #include "MethodProfiles.h"
 #include "PatriciaTreeSet.h"
@@ -141,8 +142,7 @@ class MultiMethodInliner {
       const inliner::InlinerConfig& config,
       MultiMethodInlinerMode mode = InterDex,
       const CalleeCallerInsns& true_virtual_callers = {},
-      const std::unordered_map<const DexMethodRef*, method_profiles::Stats>&
-          method_profile_stats = {},
+      const method_profiles::MethodProfiles& method_profiless = {},
       const std::unordered_map<const DexMethod*, size_t>*
           same_method_implementations = nullptr,
       bool analyze_and_prune_inits = false,
@@ -163,7 +163,7 @@ class MultiMethodInliner {
     return res;
   }
 
-  bool for_speed() const { return !m_hot_methods.empty(); }
+  bool for_speed() const { return m_inline_for_speed.enabled(); }
 
   /**
    * Inline callees in the caller if is_inlinable below returns true.
@@ -621,7 +621,7 @@ class MultiMethodInliner {
 
   const MultiMethodInlinerMode m_mode;
 
-  const std::unordered_set<const DexMethodRef*> m_hot_methods;
+  const InlineForSpeed m_inline_for_speed;
 
   // Represents the size of the largest same-method-implementation group that a
   // method belongs in; the default value is 1.
