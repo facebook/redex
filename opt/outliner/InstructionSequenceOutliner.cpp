@@ -1754,10 +1754,16 @@ class OutlinedMethodCreator {
       const CandidateSequence& cs, const CandidateInfo& ci) {
     std::unique_ptr<std::deque<DexPosition*>> res;
     size_t best_unique_positions{0};
+    std::vector<DexMethod*> ordered_methods;
     for (auto& p : ci.methods) {
-      auto method = p.first;
+      ordered_methods.push_back(p.first);
+    }
+    std::sort(ordered_methods.begin(), ordered_methods.end(),
+              compare_dexmethods);
+    for (auto method : ordered_methods) {
       auto& cfg = method->get_code()->cfg();
-      for (auto& cml : p.second) {
+      auto& cmls = ci.methods.at(method);
+      for (auto& cml : cmls) {
         auto insn_it = cfg.find_insn(cml.first_insn, cml.hint_block);
         if (insn_it.is_end()) {
           // Shouldn't happen, but we are not going to fight that here.
