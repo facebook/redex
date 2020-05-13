@@ -125,7 +125,7 @@ class MultiMethodInliner {
       const inliner::InlinerConfig& config,
       MultiMethodInlinerMode mode = InterDex,
       const CalleeCallerInsns& true_virtual_callers = {},
-      const method_profiles::MethodProfiles& method_profiless = {},
+      const method_profiles::MethodProfiles* method_profiles = nullptr,
       const std::unordered_map<const DexMethod*, size_t>&
           same_method_implementations = {},
       bool analyze_and_prune_inits = false);

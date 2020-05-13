@@ -88,7 +88,7 @@ MultiMethodInliner::MultiMethodInliner(
     const inliner::InlinerConfig& config,
     MultiMethodInlinerMode mode /* default is InterDex */,
     const CalleeCallerInsns& true_virtual_callers,
-    const method_profiles::MethodProfiles& method_profiles,
+    const method_profiles::MethodProfiles* method_profiles,
     const std::unordered_map<const DexMethod*, size_t>&
         same_method_implementations,
     bool analyze_and_prune_inits)

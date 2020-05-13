@@ -13,7 +13,7 @@
 class InlineForSpeed final {
  public:
   explicit InlineForSpeed(
-      const method_profiles::MethodProfiles& method_profiles);
+      const method_profiles::MethodProfiles* method_profiles);
   bool should_inline(const DexMethod* caller_method,
                      const DexMethod* callee_method) const;
 
@@ -29,6 +29,6 @@ class InlineForSpeed final {
       const std::string& interaction_id,
       const method_profiles::StatsMap& method_stats) const;
 
-  const method_profiles::MethodProfiles& m_method_profiles;
+  const method_profiles::MethodProfiles* m_method_profiles;
   std::map<std::string, std::pair<double, double>> m_min_scores;
 };
