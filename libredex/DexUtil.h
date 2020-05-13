@@ -183,6 +183,12 @@ bool has_anno(const T* t, const std::unordered_set<DexType*>& anno_types) {
   return false;
 }
 
+// Check whether the given string is a valid identifier. This does
+// not handle UTF. Checks against the Java bytecode specification,
+// which is a bit more relaxed than Dex's.
+bool is_valid_identifier(const std::string& s, size_t start, size_t len);
+bool is_valid_identifier(const std::string& s);
+
 namespace java_names {
 
 inline boost::optional<std::string> primitive_desc_to_name(char desc) {

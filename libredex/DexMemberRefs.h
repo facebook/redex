@@ -69,6 +69,9 @@ struct MethodDescriptorTokens {
 
 FieldDescriptorTokens parse_field(const std::string&);
 
+// When `kCheckFormat` = true, syntactical issues in the string
+// will lead to asserts, i.e., throws.
+template <bool kCheckFormat = false>
 MethodDescriptorTokens parse_method(const std::string&);
 
 } // namespace dex_member_refs

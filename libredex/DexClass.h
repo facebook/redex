@@ -938,7 +938,11 @@ class DexMethod : public DexMethodRef {
 
   /**
    * Get a method using a full descriptor: Lcls;.name:(args)rtype
+   *
+   * When `kCheckFormat` = true, syntactical issues in the string
+   * will lead to asserts, i.e., throws.
    */
+  template <bool kCheckFormat = false>
   static DexMethodRef* get_method(const std::string&);
 
   /**

@@ -7,6 +7,7 @@
 
 #include "TypeUtil.h"
 
+#include "DexUtil.h"
 #include "RedexContext.h"
 
 namespace type {
@@ -31,9 +32,72 @@ PRIMITIVE_PSEUDO_TYPE_FIELDS
 
 } // namespace pseudo
 
+bool is_valid(const std::string& type) {
+  if (type.empty()) {
+    return false;
+  }
+  size_t non_array_start = 0;
+
+  while (non_array_start < type.length() && type[non_array_start] == '[') {
+    ++non_array_start;
+  }
+  if (non_array_start == type.length()) {
+    return false;
+  }
+
+  switch (type[non_array_start]) {
+  case 'Z':
+  case 'B':
+  case 'S':
+  case 'C':
+  case 'I':
+  case 'J':
+  case 'F':
+  case 'D':
+  case 'V':
+    return non_array_start + 1 == type.length(); // Must be last character
+  case 'L':
+    break;
+  default:
+    return false;
+  }
+
+  // Object type now.
+
+  // Must be at least three characters.
+  if (non_array_start + 3 > type.length()) {
+    return false;
+  }
+
+  // Last one is a semicolon.
+  if (type[type.length() - 1] != ';') {
+    return false;
+  }
+
+  // Scan the identifiers.
+  size_t start = non_array_start + 1;
+  size_t i = start;
+  for (; i != type.length() - 1; ++i) {
+    if (type[i] == '/') {
+      // Found a segment, do a check.
+      if (!is_valid_identifier(type, start, i - start)) {
+        return false;
+      }
+      start = i + 1;
+    }
+  }
+  if (start != i) {
+    // Handle tail.
+    if (!is_valid_identifier(type, start, i - start)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 bool is_primitive(const DexType* type) {
-  auto* const name = type->get_name()->c_str();
-  switch (name[0]) {
+  switch (type->get_name()->str().at(0)) {
   case 'Z':
   case 'B':
   case 'S':
@@ -48,7 +112,9 @@ bool is_primitive(const DexType* type) {
   case '[':
     return false;
   default:
-    always_assert_log(false, "unexpected leading character in type: %s", name);
+    always_assert_log(false,
+                      "unexpected leading character in type: %s",
+                      type->get_name()->c_str());
   }
   not_reached();
 }

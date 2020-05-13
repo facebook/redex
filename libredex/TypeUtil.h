@@ -44,6 +44,10 @@ PRIMITIVE_PSEUDO_TYPE_FIELDS
 #undef FOR_EACH
 } // namespace pseudo
 
+// Do some simple checks to ascertain whether the descriptor looks valid.
+// NOTE: may fail for UTF strings.
+bool is_valid(const std::string& descriptor);
+
 /**
  * Return true if the type is a primitive.
  */

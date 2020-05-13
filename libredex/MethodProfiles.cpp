@@ -128,7 +128,7 @@ bool MethodProfiles::parse_line(char* line, bool first) {
       // the file)
       return true;
     case NAME:
-      ref = DexMethod::get_method(tok);
+      ref = DexMethod::get_method</*kCheckFormat=*/true>(tok);
       if (ref == nullptr) {
         TRACE(METH_PROF, 6, "failed to resolve %s", tok);
       }

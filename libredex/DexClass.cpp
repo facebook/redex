@@ -567,8 +567,9 @@ DexMethod* DexMethod::make_method_from(DexMethod* that,
   return m;
 }
 
+template <bool kCheckFormat>
 DexMethodRef* DexMethod::get_method(const std::string& full_descriptor) {
-  auto mdt = dex_member_refs::parse_method(full_descriptor);
+  auto mdt = dex_member_refs::parse_method<kCheckFormat>(full_descriptor);
   auto cls = DexType::get_type(mdt.cls.c_str());
   auto name = DexString::get_string(mdt.name);
   std::deque<DexType*> args;
@@ -579,6 +580,8 @@ DexMethodRef* DexMethod::get_method(const std::string& full_descriptor) {
   auto rtype = DexType::get_type(mdt.rtype.c_str());
   return DexMethod::get_method(cls, name, DexProto::get_proto(rtype, dtl));
 }
+template DexMethodRef* DexMethod::get_method<false>(const std::string&);
+template DexMethodRef* DexMethod::get_method<true>(const std::string&);
 
 DexMethodRef* DexMethod::make_method(const std::string& full_descriptor) {
   auto mdt = dex_member_refs::parse_method(full_descriptor);
