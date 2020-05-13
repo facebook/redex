@@ -64,10 +64,17 @@ def find_android_build_tools():
     return join(build_tools, version)
 
 
+def find_apksigner():
+    candidate = join(find_android_build_tools(), "apksigner")
+    if os.path.exists(candidate):
+        return candidate
+    return shutil.which("apksigner")
+
+
 def sign_apk(keystore, keypass, keyalias, apk):
     subprocess.check_call(
         [
-            join(find_android_build_tools(), "apksigner"),
+            find_apksigner(),
             "sign",
             "--v1-signing-enabled",
             "--v2-signing-enabled",
