@@ -123,7 +123,9 @@ struct CandidateInstructionCore {
   };
 };
 static size_t hash_value(const CandidateInstructionCore& cic) {
-  return cic.opcode ^ (cic.literal << 8);
+  size_t hash = cic.opcode;
+  boost::hash_combine(hash, cic.literal);
+  return hash;
 }
 // We define "stable hashes" for instruction sequences to create rather unique
 // and stable name string for the outlined methods --- essentially, the outlined

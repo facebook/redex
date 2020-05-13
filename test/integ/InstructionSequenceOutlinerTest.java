@@ -179,7 +179,7 @@ class InstructionSequenceOutlinerTest {
       x+=15;
       x+=16;
       x+=17;
-      x+=18;
+      x+=-1;
       return x /* outlining ends here */;
     }
 
@@ -203,7 +203,7 @@ class InstructionSequenceOutlinerTest {
       x+=15;
       x+=16;
       x+=17;
-      x+=18;
+      x+=-1;
       return x + /* outlining ends here */ extra_var_shifts_all_registers;
     }
 
@@ -229,7 +229,7 @@ class InstructionSequenceOutlinerTest {
         x+=15;
         x+=16;
         x+=17;
-        x+=18;
+        x+=-1;
         // outlining potentially ends here
         // Something that can actually throw
         println("a", "b", "c");
@@ -260,7 +260,7 @@ class InstructionSequenceOutlinerTest {
         x+=15;
         x+=16;
         x+=17;
-        x+=18;
+        x+=-1;
         return /* outlining ends here */ x;
       } catch (Exception e) {
         return 1;
@@ -288,7 +288,7 @@ class InstructionSequenceOutlinerTest {
         x+=15;
         x+=16;
         x+=17;
-        x+=18;
+        x+=-1;
         return /* outlining ends here */ x;
       } catch (Exception e) {
         return 2;
