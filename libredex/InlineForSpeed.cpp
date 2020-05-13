@@ -17,10 +17,10 @@
 using namespace method_profiles;
 
 void InlineForSpeed::compute_hot_methods() {
-  if (!m_method_profiles.has_stats()) {
+  if (m_method_profiles == nullptr || !m_method_profiles->has_stats()) {
     return;
   }
-  for (const auto& pair : m_method_profiles.all_interactions()) {
+  for (const auto& pair : m_method_profiles->all_interactions()) {
     const std::string& interaction_id = pair.first;
     const auto& method_stats = pair.second;
     // Methods in the top PERCENTILE of call counts will be considered warm/hot.
@@ -63,12 +63,14 @@ void InlineForSpeed::compute_hot_methods() {
   }
 }
 
-InlineForSpeed::InlineForSpeed(const MethodProfiles& method_profiles)
+InlineForSpeed::InlineForSpeed(const MethodProfiles* method_profiles)
     : m_method_profiles(method_profiles) {
   compute_hot_methods();
 }
 
-bool InlineForSpeed::enabled() const { return m_method_profiles.has_stats(); }
+bool InlineForSpeed::enabled() const {
+  return m_method_profiles != nullptr && m_method_profiles->has_stats();
+}
 
 bool InlineForSpeed::should_inline(const DexMethod* caller_method,
                                    const DexMethod* callee_method) const {
@@ -88,7 +90,7 @@ bool InlineForSpeed::should_inline(const DexMethod* caller_method,
   }
 
   // If the pair is hot under any interaction, inline it.
-  for (const auto& pair : m_method_profiles.all_interactions()) {
+  for (const auto& pair : m_method_profiles->all_interactions()) {
     bool should = should_inline_per_interaction(caller_method,
                                                 callee_method,
                                                 caller_insns,
