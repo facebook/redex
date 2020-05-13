@@ -22,18 +22,21 @@ extern int errno;
 constexpr double MINIMUM_APPEAR_PERCENT = 80.0;
 
 const StatsMap& MethodProfiles::method_stats(
-    boost::optional<std::string> interaction_id) const {
-  if (interaction_id != boost::none) {
-    return m_method_stats.at(*interaction_id);
-  }
-  const auto& search1 = m_method_stats.find("");
+    const std::string& interaction_id) const {
+  const auto& search1 = m_method_stats.find(interaction_id);
   if (search1 != m_method_stats.end()) {
     return search1->second;
   }
-  const auto& search2 = m_method_stats.find("ColdStart");
-  if (search2 != m_method_stats.end()) {
-    return search2->second;
+  if (interaction_id == COLD_START) {
+    // Originally, the stats file had no interaction_id column and it only
+    // covered coldstart. Search for the default (empty string) for backwards
+    // compatibility when we're searching for coldstart but it's not found.
+    const auto& search2 = m_method_stats.find("");
+    if (search2 != m_method_stats.end()) {
+      return search2->second;
+    }
   }
+
   static StatsMap empty_map = {};
   return empty_map;
 }
