@@ -358,7 +358,8 @@ class MergePairsBuilder {
             t_method = t_method_it->second;
           }
           double acc_call_count = 0;
-          if (auto mstats = profiles.get_method_stat(t_method)) {
+          if (auto mstats = profiles.get_method_stat(
+                  method_profiles::COLD_START, t_method)) {
             acc_call_count = mstats->call_count;
           }
 

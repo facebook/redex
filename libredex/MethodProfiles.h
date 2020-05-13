@@ -44,6 +44,7 @@ struct Stats {
 
 using StatsMap = std::unordered_map<const DexMethodRef*, Stats>;
 using AllInteractions = std::map<std::string, StatsMap>;
+const std::string COLD_START = "ColdStart";
 
 class MethodProfiles {
  public:
@@ -60,10 +61,11 @@ class MethodProfiles {
 
   // For testing purposes.
   static MethodProfiles initialize(
+      const std::string& interaction_id,
       std::unordered_map<const DexMethodRef*, Stats> data) {
     MethodProfiles ret{};
     ret.m_initialized = true;
-    ret.m_method_stats["ColdStart"] = std::move(data);
+    ret.m_method_stats[interaction_id] = std::move(data);
     return ret;
   }
 
@@ -71,22 +73,17 @@ class MethodProfiles {
 
   bool has_stats() const { return !m_method_stats.empty(); }
 
-  // Get the method profiles for some interaction. If no argument is given, the
-  // interactions are searched first by the default interaction_id (empty
-  // string), then by the interaction named "ColdStart".
-  //
-  // If no interactions are found. Return an empty map.
-  //
-  // TODO(T66774154): This default argument strategy is error-prone
-  const StatsMap& method_stats(
-      boost::optional<std::string> interaction_id = boost::none) const;
+  // Get the method profiles for some interaction id.
+  // If no interactions are found by that interaction id, Return an empty map.
+  const StatsMap& method_stats(const std::string& interaction_id) const;
 
   const AllInteractions& all_interactions() const { return m_method_stats; }
 
-  boost::optional<Stats> get_method_stat(const DexMethodRef* m) const {
-    const auto& cold_start = method_stats();
-    auto it = cold_start.find(m);
-    if (it == cold_start.end()) {
+  boost::optional<Stats> get_method_stat(const std::string& interaction_id,
+                                         const DexMethodRef* m) const {
+    const auto& stats = method_stats(interaction_id);
+    auto it = stats.find(m);
+    if (it == stats.end()) {
       return boost::none;
     }
     return it->second;

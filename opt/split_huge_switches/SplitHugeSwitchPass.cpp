@@ -603,7 +603,8 @@ AnalysisData analyze(DexMethod* m,
 
   // Filter out non-hot methods.
   if (method_profiles.has_stats()) {
-    const auto& profile_stats = method_profiles.method_stats();
+    const auto& profile_stats =
+        method_profiles.method_stats(method_profiles::COLD_START);
     if (!profile_stats.count(m) ||
         profile_stats.at(m).call_count < hotness_threshold ||
         hotness_threshold <= 0) {
@@ -702,7 +703,8 @@ Stats run_split_dexes(DexStoresVector& stores,
         std::sort(dex_candidate_methods.begin(),
                   dex_candidate_methods.end(),
                   [&](const AnalysisData& lhs, const AnalysisData& rhs) {
-                    const auto& profile_stats = method_profiles.method_stats();
+                    const auto& profile_stats = method_profiles.method_stats(
+                        method_profiles::COLD_START);
                     double lhs_hotness = profile_stats.at(lhs.m).call_count;
                     double rhs_hotness = profile_stats.at(rhs.m).call_count;
                     // Sort by hotness, descending.
