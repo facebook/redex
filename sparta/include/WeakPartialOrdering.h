@@ -68,12 +68,12 @@ class WpoNode final {
   NodeId m_node;
   Type m_type;
 
+  // Size of maximal SCC with this as its header.
+  uint32_t m_size;
   // Successors of scheduling constraints.
   std::set<WpoIdx> m_successors;
   // Predecessors of scheduling constraints.
   std::set<WpoIdx> m_predecessors;
-  // Size of maximal SCC with this as its header.
-  uint32_t m_size;
   // Number of outer predecessors w.r.t. the component (for exits only).
   std::unordered_map<WpoIdx, uint32_t> m_num_outer_preds;
 
@@ -627,14 +627,14 @@ class WpoBuilder final {
   // A map from node to the head of minimal component that contains it as
   // non-header.
   std::unordered_map<WpoIdx, WpoIdx> m_parent;
+  // Maps DFN to WpoIdx.
+  std::vector<uint32_t> m_d2i;
   // Next DFN to assign.
   uint32_t m_next_dfn;
   // Next post DFN to assign.
   uint32_t m_next_post_dfn;
   // Next WpoIdx to assign.
   uint32_t m_next_idx;
-  // Maps DFN to WpoIdx.
-  std::vector<uint32_t> m_d2i;
   // 'Lift' the scheduling constraints when adding them.
   bool m_lift;
 }; // end class wpo_builder
