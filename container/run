@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# Copyright (c) Facebook, Inc. and its affiliates.
+#
+# This source code is licensed under the MIT license found in the
+# LICENSE file in the root directory of this source tree.
+
+# Usage:
+#
+#   run [OPTIONS] [-- [CMD]]
+#
+# Ensures a Docker image configured with the OSS Redex development environment
+# exists and runs a container with that image and with the redex repo mounted
+# at /redex.
+#
+# Arguments to this script are split on "--" with the first part being passed
+# as options to docker, and the optional second part being used as the
+# command.  See `docker run --help` for details.
+#
+# Like docker's own "run" command, this script will not clean up the created
+# container unless otherwise specified (e.g. using the --rm option).
+
+# Exit on any command failing
+set -e
+
+# Directory the script resides in.
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
+
+# Operate in the root directory of the repo.
+cd "$DIR/.."
+
+# Create an image from the Dockerfile
+docker build  -f "$DIR/Dockerfile" -t 'redex' "$DIR"
+
+# Split command-line arguments before and after the "--".  Arguments before
+# are sent to Docker, arguments after comprise the command.
+ARGS=(); CMD=(); REST=
+for ARG in "$@"; do
+  if [ $REST ]; then
+    CMD+=("$ARG");
+  elif [ "$ARG" == "--" ]; then
+    REST=1
+  else
+    ARGS+=("$ARG")
+  fi
+done
+
+# Run the container
+exec docker run \
+  -v "$DIR/..:/redex" \
+  --entrypoint "/redex/container/entrypoint.sh" \
+  "${ARGS[@]}" redex:latest "${CMD[@]}"
