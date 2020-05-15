@@ -18,9 +18,6 @@ using namespace method_profiles;
 
 extern int errno;
 
-// Methods that appear in less than this percent of traces will be excluded
-constexpr double MINIMUM_APPEAR_PERCENT = 80.0;
-
 const StatsMap& MethodProfiles::method_stats(
     const std::string& interaction_id) const {
   const auto& search1 = m_method_stats.find(interaction_id);
@@ -176,7 +173,7 @@ bool MethodProfiles::parse_line(char* line, bool first) {
   if (!success) {
     return false;
   }
-  if (ref != nullptr && stats.appear_percent >= MINIMUM_APPEAR_PERCENT) {
+  if (ref != nullptr) {
     TRACE(METH_PROF, 6, "(%s, %s) -> {%f, %f, %f, %u}", SHOW(ref),
           interaction_id.c_str(), stats.appear_percent, stats.call_count,
           stats.order_percent, stats.min_api_level);
