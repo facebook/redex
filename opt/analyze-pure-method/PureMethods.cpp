@@ -15,8 +15,6 @@
 
 bool AnalyzePureMethodsPass::analyze_and_check_pure_method_helper(
     IRCode* code) {
-
-  code->build_cfg(/* editable */ false);
   auto& cfg = code->cfg();
 
   // MoveAwareFixpointIterator to see if any object accessed is parameter (OK)
@@ -50,7 +48,12 @@ void AnalyzePureMethodsPass::run_pass(DexStoresVector& stores,
 AnalyzePureMethodsPass::Stats
 AnalyzePureMethodsPass::analyze_and_set_pure_methods(Scope& scope) {
   auto method_override_graph = method_override_graph::build_graph(scope);
-  return walk::parallel::methods<Stats>(scope, [&](DexMethod* method) {
+  // Build all the CFGs
+  walk::parallel::code(scope, [&](DexMethod*, IRCode& code) {
+    code.build_cfg(/* editable */ false);
+  });
+
+  Stats stats = walk::parallel::methods<Stats>(scope, [&](DexMethod* method) {
     Stats stats;
     if (!method->get_code() || method->rstate.no_optimizations() ||
         method->rstate.immutable_getter()) {
@@ -85,6 +88,11 @@ AnalyzePureMethodsPass::analyze_and_set_pure_methods(Scope& scope) {
     method->rstate.set_pure_method();
     return stats;
   });
+
+  // Clear all the CFGs
+  walk::parallel::code(scope,
+                       [&](DexMethod*, IRCode& code) { code.clear_cfg(); });
+  return stats;
 }
 
 void AnalyzePureMethodsPass::Stats::report(PassManager& mgr) const {
