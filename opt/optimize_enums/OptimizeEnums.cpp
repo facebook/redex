@@ -67,7 +67,7 @@ IRInstruction* get_ctor_call(const DexMethod* method,
     }
 
     auto method_inv =
-        resolve_method(insn->get_method(), opcode_to_search(insn));
+        resolve_method(insn->get_method(), opcode_to_search(insn), method);
     if (method_inv == java_enum_ctor) {
       return insn;
     }

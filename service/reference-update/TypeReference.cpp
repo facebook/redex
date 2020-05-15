@@ -67,9 +67,9 @@ void fix_colliding_dmethods(
       if (!insn->has_method()) {
         continue;
       }
-      const auto callee =
-          resolve_method(insn->get_method(),
-                         opcode_to_search(const_cast<IRInstruction*>(insn)));
+      const auto callee = resolve_method(
+          insn->get_method(),
+          opcode_to_search(const_cast<IRInstruction*>(insn)), meth);
       if (callee == nullptr ||
           colliding_methods.find(callee) == colliding_methods.end()) {
         continue;

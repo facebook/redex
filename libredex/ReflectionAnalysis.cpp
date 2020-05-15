@@ -376,15 +376,17 @@ class AbstractObjectEnvironment final
 
 class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
  public:
-  explicit Analyzer(const cfg::ControlFlowGraph& cfg,
+  explicit Analyzer(const DexMethod* dex_method,
+                    const cfg::ControlFlowGraph& cfg,
                     SummaryQueryFn* summary_query_fn,
                     const MetadataCache* cache)
       : BaseIRAnalyzer(cfg),
+        m_dex_method(dex_method),
         m_cfg(cfg),
         m_summary_query_fn(summary_query_fn),
         m_cache(cache) {}
 
-  void run(DexMethod* dex_method, CallingContext* context) {
+  void run(CallingContext* context) {
     // We need to compute the initial environment by assigning the parameter
     // registers their correct abstract object derived from the method's
     // signature. The IOPCODE_LOAD_PARAM_* instructions are pseudo-operations
@@ -398,7 +400,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
     auto init_state = AbstractObjectEnvironment::top();
     m_return_value.set_to_bottom();
     const auto& signature =
-        dex_method->get_proto()->get_args()->get_type_list();
+        m_dex_method->get_proto()->get_args()->get_type_list();
     auto sig_it = signature.begin();
     param_index_t param_position = 0;
     // By construction, the IOPCODE_LOAD_PARAM_* instructions are located at the
@@ -407,10 +409,10 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
       IRInstruction* insn = mie.insn;
       switch (insn->opcode()) {
       case IOPCODE_LOAD_PARAM_OBJECT: {
-        if (param_position == 0 && !is_static(dex_method)) {
+        if (param_position == 0 && !is_static(m_dex_method)) {
           // If the method is not static, the first parameter corresponds to
           // `this`.
-          update_non_string_input(&init_state, insn, dex_method->get_class());
+          update_non_string_input(&init_state, insn, m_dex_method->get_class());
         } else {
           // This is a regular parameter of the method.
           AbstractObjectDomain param_abstract_obj;
@@ -785,6 +787,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
   }
 
  private:
+  const DexMethod* m_dex_method;
   const cfg::ControlFlowGraph& m_cfg;
   std::unordered_map<IRInstruction*, AbstractObjectEnvironment> m_environments;
   mutable AbstractObjectDomain m_return_value;
@@ -1069,8 +1072,9 @@ ReflectionAnalysis::ReflectionAnalysis(DexMethod* dex_method,
     m_fallback_cache = new MetadataCache;
     cache = m_fallback_cache;
   }
-  m_analyzer = std::make_unique<impl::Analyzer>(cfg, summary_query_fn, cache);
-  m_analyzer->run(dex_method, context);
+  m_analyzer = std::make_unique<impl::Analyzer>(dex_method, cfg,
+                                                summary_query_fn, cache);
+  m_analyzer->run(context);
 }
 
 void ReflectionAnalysis::get_reflection_site(

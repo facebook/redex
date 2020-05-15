@@ -34,8 +34,10 @@ class SingleCalleeStrategy final : public BuildStrategy {
     for (auto& mie : InstructionIterable(code)) {
       auto insn = mie.insn;
       if (is_invoke(insn->opcode())) {
-        auto callee = resolve_method(
-            insn->get_method(), opcode_to_search(insn), m_resolved_refs);
+        auto callee = resolve_method(insn->get_method(),
+                                     opcode_to_search(insn),
+                                     m_resolved_refs,
+                                     method);
         if (callee == nullptr || is_definitely_virtual(callee)) {
           continue;
         }
@@ -83,8 +85,10 @@ class CompleteCallGraphStrategy final : public BuildStrategy {
     for (auto& mie : InstructionIterable(code)) {
       auto insn = mie.insn;
       if (is_invoke(insn->opcode())) {
-        auto callee = resolve_method(
-            insn->get_method(), opcode_to_search(insn), m_resolved_refs);
+        auto callee = resolve_method(insn->get_method(),
+                                     opcode_to_search(insn),
+                                     m_resolved_refs,
+                                     method);
         if (callee == nullptr) {
           continue;
         }

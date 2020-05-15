@@ -882,7 +882,8 @@ ConcurrentMap<DexType*, std::unordered_set<DexType*>> get_type_usages(
     }
 
     if (insn->has_method()) {
-      auto callee = resolve_method(insn->get_method(), opcode_to_search(insn));
+      auto callee =
+          resolve_method(insn->get_method(), opcode_to_search(insn), method);
       if (!callee) {
         return;
       }

@@ -437,7 +437,7 @@ void DeadRefs::track_callers(Scope& scope) {
       [&](DexMethod* m, IRInstruction* insn) {
         if (insn->has_method()) {
           auto callee =
-              resolve_method(insn->get_method(), opcode_to_search(insn));
+              resolve_method(insn->get_method(), opcode_to_search(insn), m);
           if (callee == nullptr || !callee->is_concrete()) return;
           to_erase.update(
               callee->get_class(),

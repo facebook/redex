@@ -96,7 +96,7 @@ void update_call_refs_simple(
         continue;
       }
       const auto method =
-          resolve_method(insn->get_method(), opcode_to_search(insn));
+          resolve_method(insn->get_method(), opcode_to_search(insn), meth);
       if (method == nullptr || old_to_new_callee.count(method) == 0) {
         continue;
       }
@@ -140,9 +140,9 @@ CallSites collect_call_refs(const Scope& scope, const T& callees) {
         continue;
       }
 
-      const auto callee =
-          resolve_method(insn->get_method(),
-                         opcode_to_search(const_cast<IRInstruction*>(insn)));
+      const auto callee = resolve_method(
+          insn->get_method(),
+          opcode_to_search(const_cast<IRInstruction*>(insn)), caller);
       if (callee == nullptr || callees.count(callee) == 0) {
         continue;
       }

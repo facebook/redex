@@ -1104,7 +1104,8 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
       assume_double(current_state, insn->src(src_idx++));
     }
     if (m_validate_access) {
-      auto resolved = resolve_method(dex_method, opcode_to_search(insn));
+      auto resolved =
+          resolve_method(dex_method, opcode_to_search(insn), m_dex_method);
       validate_access(m_dex_method, resolved);
     }
     break;

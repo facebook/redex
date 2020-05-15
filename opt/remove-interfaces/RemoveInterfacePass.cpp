@@ -145,12 +145,12 @@ DexMethod* generate_dispatch(const DexType* base_type,
 void update_interface_calls(
     const Scope& scope,
     const std::unordered_map<DexMethod*, DexMethod*>& old_to_new_callee) {
-  auto patcher = [&old_to_new_callee](DexMethod*, IRInstruction* insn) {
+  auto patcher = [&old_to_new_callee](DexMethod* meth, IRInstruction* insn) {
     if (!insn->has_method()) {
       return;
     }
     const auto method =
-        resolve_method(insn->get_method(), opcode_to_search(insn));
+        resolve_method(insn->get_method(), opcode_to_search(insn), meth);
     if (method == nullptr || old_to_new_callee.count(method) == 0) {
       return;
     }

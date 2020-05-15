@@ -1894,7 +1894,7 @@ class OutlinedMethodCreator {
         get_outlined_code(outlined_method, cs, dbg_positions));
     outlined_method->set_deobfuscated_name(show(outlined_method));
     outlined_method->rstate.set_dont_inline();
-    change_visibility(outlined_method->get_code(), host_class);
+    change_visibility(outlined_method->get_code(), host_class, outlined_method);
     type_class(host_class)->add_method(outlined_method);
     TRACE(ISO, 5, "[invoke sequence outliner] outlined to %s\n%s",
           SHOW(outlined_method), SHOW(outlined_method->get_code()));

@@ -2253,7 +2253,7 @@ DexPosition* last_position_before(const IRList::const_iterator& it,
 void inline_method(DexMethod* caller,
                    IRCode* callee_code,
                    const IRList::iterator& pos) {
-  change_visibility(callee_code, caller->get_class());
+  change_visibility(callee_code, caller->get_class(), caller);
   inline_method_unsafe(caller, caller->get_code(), callee_code, pos);
 }
 

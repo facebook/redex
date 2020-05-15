@@ -88,7 +88,8 @@ TEST_F(MethodMergerTest, merge_methods_within_class) {
     if (!insn->has_method()) {
       continue;
     }
-    auto method = resolve_method(insn->get_method(), opcode_to_search(insn));
+    auto method =
+        resolve_method(insn->get_method(), opcode_to_search(insn), method6);
     callees.push_back(method);
   }
   ASSERT_EQ(callees.size(), 12);

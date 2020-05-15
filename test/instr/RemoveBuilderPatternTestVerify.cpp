@@ -60,7 +60,8 @@ TEST_F(PostVerify, RemoveTestBuilderWithStaticField) {
   for (const auto& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
     if (insn->has_method()) {
-      auto method = resolve_method(insn->get_method(), opcode_to_search(insn));
+      auto method = resolve_method(
+          insn->get_method(), opcode_to_search(insn), test_builder_removed);
       if (!method) {
         continue;
       }

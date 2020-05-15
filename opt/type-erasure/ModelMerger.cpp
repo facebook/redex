@@ -115,7 +115,8 @@ void update_code_type_refs(
         if (!type_reference::proto_has_reference_to(proto, mergeables)) {
           continue;
         }
-        const auto meth_def = resolve_method(meth_ref, opcode_to_search(insn));
+        const auto meth_def =
+            resolve_method(meth_ref, opcode_to_search(insn), meth);
         // This is a very tricky case where RebindRefs cannot resolve a
         // MethodRef to MethodDef. It is a invoke-virtual with a MethodRef
         // referencing an interface method implmentation defined in a subclass

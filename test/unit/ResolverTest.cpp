@@ -290,6 +290,10 @@ TEST_F(ResolverTest, ResolveMethod) {
   auto d_method = DexMethod::get_method("D.method:()V");
   EXPECT_TRUE(d_method != nullptr && d_method->is_def());
 
+  auto a_method_def = a_method->as_def();
+  auto b_method_def = b_method->as_def();
+  auto d_method_def = d_method->as_def();
+
   EXPECT_TRUE(resolve_method(a_method, MethodSearch::Direct) == a_method);
   EXPECT_TRUE(resolve_method(a_method, MethodSearch::Static) == a_method);
   EXPECT_TRUE(resolve_method(a_method, MethodSearch::Virtual) == a_method);
@@ -313,6 +317,35 @@ TEST_F(ResolverTest, ResolveMethod) {
   EXPECT_TRUE(resolve_method(d_method, MethodSearch::Virtual) == d_method);
   EXPECT_TRUE(resolve_method(d_method, MethodSearch::Any) == d_method);
   EXPECT_TRUE(resolve_method(d_method, MethodSearch::Interface) == d_method);
+
+  // Super class of A doesn't have such method.
+  EXPECT_TRUE(resolve_method(a_method, MethodSearch::Super, a_method_def) ==
+              nullptr);
+  EXPECT_TRUE(resolve_method(type_class(a_method->get_class()),
+                             a_method->get_name(), a_method->get_proto(),
+                             MethodSearch::Super, a_method_def) == nullptr);
+  // A is an interface, B cannot use invoke-super on method def in A.
+  EXPECT_TRUE(resolve_method(b_method, MethodSearch::Super, b_method_def) ==
+              nullptr);
+  EXPECT_TRUE(resolve_method(type_class(b_method->get_class()),
+                             b_method->get_name(), b_method->get_proto(),
+                             MethodSearch::Super, b_method_def) == nullptr);
+  // Generally class in the method ref doesn't matter.
+  EXPECT_TRUE(resolve_method(a_method, MethodSearch::Super, d_method_def) ==
+              b_method);
+  EXPECT_TRUE(resolve_method(type_class(a_method->get_class()),
+                             a_method->get_name(), a_method->get_proto(),
+                             MethodSearch::Super, d_method_def) == b_method);
+  EXPECT_TRUE(resolve_method(b_method, MethodSearch::Super, d_method_def) ==
+              b_method);
+  EXPECT_TRUE(resolve_method(type_class(b_method->get_class()),
+                             b_method->get_name(), b_method->get_proto(),
+                             MethodSearch::Super, d_method_def) == b_method);
+  EXPECT_TRUE(resolve_method(d_method, MethodSearch::Super, d_method_def) ==
+              b_method);
+  EXPECT_TRUE(resolve_method(type_class(d_method->get_class()),
+                             d_method->get_name(), d_method->get_proto(),
+                             MethodSearch::Super, d_method_def) == b_method);
 
   MethodRefCache ref_cache;
   EXPECT_TRUE(resolve_method(c_method, MethodSearch::Direct, ref_cache) ==

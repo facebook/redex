@@ -187,7 +187,7 @@ class ReflectionAnalyzer : public Intraprocedural {
         auto op = insn->opcode();
         always_assert(is_invoke(op));
         DexMethod* callee =
-            resolve_method(insn->get_method(), opcode_to_search(op));
+            resolve_method(insn->get_method(), opcode_to_search(op), m_method);
 
         m_context->update(
             callee, [&](const reflection::CallingContext& original_context) {

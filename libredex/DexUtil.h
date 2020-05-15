@@ -29,7 +29,9 @@
  */
 void change_visibility(DexMethod* method, DexType* scope = nullptr);
 
-void change_visibility(IRCode* code, DexType* scope = nullptr);
+void change_visibility(IRCode* code,
+                       DexType* scope,
+                       DexMethod* effective_caller_resolved_from);
 
 /**
  * NOTE: Only relocates the method. Doesn't check the correctness here,

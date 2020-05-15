@@ -155,7 +155,8 @@ class MaxDepthFunctionAnalyzer : public Intraprocedural {
 
   void analyze_invoke(IRInstruction* insn) {
     auto callee = insn->get_method();
-    auto callee_method = resolve_method(callee, opcode_to_search(insn));
+    auto callee_method =
+        resolve_method(callee, opcode_to_search(insn), m_method);
     if (callee_method) {
       auto summary = m_summaries->get(callee_method, DepthDomain::top());
       if (summary.is_value()) {

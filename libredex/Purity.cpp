@@ -648,8 +648,8 @@ static size_t analyze_read_locations(
                     lads.locations.insert(location);
                   }
                 } else if (is_invoke(opcode)) {
-                  auto invoke_method = resolve_method(insn->get_method(),
-                                                      opcode_to_search(opcode));
+                  auto invoke_method = resolve_method(
+                      insn->get_method(), opcode_to_search(opcode), method);
                   if (!process_base_and_overriding_methods(
                           method_override_graph, invoke_method,
                           &pure_methods_closure,

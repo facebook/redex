@@ -302,8 +302,8 @@ bool Breadcrumbs::has_illegal_access(const DexMethod* input_method) {
       }
     }
     if (insn->has_method()) {
-      auto res_method =
-          resolve_method(insn->get_method(), opcode_to_search(insn));
+      auto res_method = resolve_method(insn->get_method(),
+                                       opcode_to_search(insn), input_method);
       if (res_method != nullptr) {
         if (!check_method_accessibility(input_method, res_method)) {
           result = true;
@@ -542,7 +542,7 @@ void Breadcrumbs::check_method_opcode(const DexMethod* method,
     m_illegal_method_call[method].emplace_back(insn);
   }
 
-  DexMethod* res_meth = resolve_method(meth, opcode_to_search(insn));
+  DexMethod* res_meth = resolve_method(meth, opcode_to_search(insn), method);
   if (res_meth != nullptr) {
     // a resolved method can only differ in the owner class
     if (res_meth != meth) {

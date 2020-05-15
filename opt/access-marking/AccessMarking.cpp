@@ -112,7 +112,7 @@ std::unordered_set<DexMethod*> find_private_methods(
           return;
         }
         auto callee =
-            resolve_method(inst->get_method(), opcode_to_search(inst));
+            resolve_method(inst->get_method(), opcode_to_search(inst), caller);
         if (callee == nullptr || callee->get_class() == caller->get_class()) {
           return;
         }
@@ -131,7 +131,8 @@ void fix_call_sites_private(const std::vector<DexClass*>& scope,
     for (const MethodItemEntry& mie : InstructionIterable(code)) {
       IRInstruction* insn = mie.insn;
       if (!insn->has_method()) continue;
-      auto callee = resolve_method(insn->get_method(), opcode_to_search(insn));
+      auto callee =
+          resolve_method(insn->get_method(), opcode_to_search(insn), caller);
       // should be safe to read `privates` here because there are no writers
       if (callee != nullptr && privates.count(callee)) {
         insn->set_method(callee);
