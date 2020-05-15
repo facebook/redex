@@ -248,7 +248,8 @@ bool operator==(const CandidateSequence& a, const CandidateSequence& b) {
 }
 
 static CandidateInstructionCore to_core(IRInstruction* insn) {
-  CandidateInstructionCore core{.opcode = insn->opcode()};
+  CandidateInstructionCore core;
+  core.opcode = insn->opcode();
   if (insn->has_method()) {
     core.method = insn->get_method();
   } else if (insn->has_field()) {
@@ -1069,7 +1070,9 @@ static CandidateSequence normalize(DexMethod* method,
   std::unordered_map<reg_t, reg_t> map;
   reg_t next_arg{pcs.temp_regs};
   reg_t next_temp{0};
-  CandidateSequence cs{.size = pcs.size, .temp_regs = pcs.temp_regs};
+  CandidateSequence cs;
+  cs.size = pcs.size;
+  cs.temp_regs = pcs.temp_regs;
   std::vector<reg_t> arg_regs;
   auto normalize_use = [&map, &next_arg, &arg_regs](reg_t reg, bool wide) {
     auto it = map.find(reg);
@@ -1089,7 +1092,8 @@ static CandidateSequence normalize(DexMethod* method,
     return mapped_reg;
   };
   for (auto insn : pcs.insns) {
-    CandidateInstruction ci{.core = to_core(insn)};
+    CandidateInstruction ci;
+    ci.core = to_core(insn);
     for (size_t i = 0; i < insn->srcs_size(); i++) {
       ci.srcs.push_back(normalize_use(insn->src(i), insn->src_is_wide(i)));
     }
