@@ -14,6 +14,7 @@
 #include "ConcurrentContainers.h"
 #include "DexClass.h"
 #include "LocalPointersAnalysis.h"
+#include "ReachingDefinitions.h"
 #include "Resolver.h"
 #include "S_Expression.h"
 
@@ -39,6 +40,9 @@ using param_idx_t = uint16_t;
 
 namespace side_effects {
 
+using ParamInstructionMap =
+    std::unordered_map<const IRInstruction*, param_idx_t>;
+
 enum Effects : size_t {
   EFF_NONE = 0,
   EFF_THROWS = 1,
@@ -55,18 +59,26 @@ struct Summary {
   // effects.
   size_t effects{EFF_NONE};
   std::unordered_set<param_idx_t> modified_params;
+  bool may_read_external{false};
 
   Summary() = default;
 
   Summary(size_t effects,
-          const std::initializer_list<param_idx_t>& modified_params)
-      : effects(effects), modified_params(modified_params) {}
+          const std::initializer_list<param_idx_t>& modified_params,
+          bool may_read_external = false)
+      : effects(effects),
+        modified_params(modified_params),
+        may_read_external(may_read_external) {}
 
   Summary(const std::initializer_list<param_idx_t>& modified_params)
       : modified_params(modified_params) {}
 
+  bool is_pure() {
+    return effects == EFF_NONE && modified_params.empty() && !may_read_external;
+  }
   friend bool operator==(const Summary& a, const Summary& b) {
-    return a.effects == b.effects && a.modified_params == b.modified_params;
+    return a.effects == b.effects && a.modified_params == b.modified_params &&
+           a.may_read_external == b.may_read_external;
   }
 
   static Summary from_s_expr(const sparta::s_expr&);
@@ -77,6 +89,34 @@ sparta::s_expr to_s_expr(const Summary&);
 using SummaryMap = std::unordered_map<const DexMethodRef*, Summary>;
 
 using InvokeToSummaryMap = std::unordered_map<const IRInstruction*, Summary>;
+
+class SummaryBuilder final {
+ public:
+  explicit SummaryBuilder(const InvokeToSummaryMap& invoke_to_summary_cmap,
+                          const local_pointers::FixpointIterator& ptrs_fp_iter,
+                          const IRCode* code,
+                          reaching_defs::MoveAwareFixpointIterator*
+                              reaching_defs_fixpoint_iter = nullptr,
+                          bool analyze_external_reads = false);
+  Summary build();
+
+ private:
+  void analyze_instruction_effects(
+      const local_pointers::Environment& env,
+      const reaching_defs::Environment& reaching_def_env,
+      const IRInstruction* insn,
+      Summary* summary);
+  void classify_heap_write(const local_pointers::Environment& env,
+                           reg_t modified_ptr_reg,
+                           Summary* summary);
+  // Map of load-param instruction -> parameter index
+  ParamInstructionMap m_param_insn_map;
+  const InvokeToSummaryMap& m_invoke_to_summary_cmap;
+  const local_pointers::FixpointIterator& m_ptrs_fp_iter;
+  const IRCode* m_code;
+  const bool m_analyze_external_reads;
+  reaching_defs::MoveAwareFixpointIterator* m_reaching_defs_fixpoint_iter;
+};
 
 // For testing.
 Summary analyze_code(const InvokeToSummaryMap& invoke_to_summary_cmap,

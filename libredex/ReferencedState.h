@@ -74,6 +74,14 @@ class ReferencedState {
     // is pure.
     bool m_immutable_getter : 1;
 
+    // This is set by the AnalyzePureMethodsPass. It indicates that a method
+    // is pure as defined in Purity.h.
+    // *WARNING*
+    // Any optimisation that might alter the semantics in such a way that it is
+    // no longer pure should invalidate this flag. It could also be invalidated
+    // by running AnalyzePureMethodsPass which would recompute it.
+    bool m_pure_method : 1;
+
     InnerStruct() {
       // Initializers in bit fields are C++20...
       m_by_string = false;
@@ -97,6 +105,7 @@ class ReferencedState {
       m_force_inline = false;
 
       m_immutable_getter = false;
+      m_pure_method = false;
     }
   } inner_struct;
 
@@ -162,9 +171,12 @@ class ReferencedState {
           this->inner_struct.m_dont_inline | other.inner_struct.m_dont_inline;
       this->inner_struct.m_force_inline =
           this->inner_struct.m_force_inline & other.inner_struct.m_force_inline;
+
       this->inner_struct.m_immutable_getter =
           this->inner_struct.m_immutable_getter &
           other.inner_struct.m_immutable_getter;
+      this->inner_struct.m_pure_method =
+          this->inner_struct.m_pure_method & other.inner_struct.m_pure_method;
     }
   }
 
@@ -318,6 +330,10 @@ class ReferencedState {
 
   bool immutable_getter() const { return inner_struct.m_immutable_getter; }
   void set_immutable_getter() { inner_struct.m_immutable_getter = true; }
+
+  bool pure_method() const { return inner_struct.m_pure_method; }
+  void set_pure_method() { inner_struct.m_pure_method = true; }
+  void reset_pure_method() { inner_struct.m_pure_method = false; }
 
  private:
   // Does any keep rule (whether -keep or -keepnames) match this DexMember?

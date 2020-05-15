@@ -57,8 +57,8 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
   auto configured_pure_methods = conf.get_pure_methods();
   pure_methods.insert(configured_pure_methods.begin(),
                       configured_pure_methods.end());
-  auto immutable_getters = get_immutable_getters(scope);
-  pure_methods.insert(immutable_getters.begin(), immutable_getters.end());
+  auto rstate_pure_method = get_rstate_pure_methods(scope);
+  pure_methods.insert(rstate_pure_method.begin(), rstate_pure_method.end());
 
   auto shared_state = SharedState(pure_methods);
   shared_state.init_scope(scope);

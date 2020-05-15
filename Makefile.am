@@ -268,6 +268,7 @@ redex_all_SOURCES = \
 	opt/access-marking/AccessMarking.cpp \
 	opt/add_redex_txt_to_apk/AddRedexTxtToApk.cpp \
 	opt/annokill/AnnoKill.cpp \
+	opt/analyze-pure-method/PureMethods.cpp \
 	opt/basic-block/BasicBlockProfile.cpp \
 	opt/builder_pattern/BuilderAnalysis.cpp \
 	opt/builder_pattern/BuilderTransform.cpp \

@@ -49,7 +49,7 @@ TEST_F(SideEffectSummaryTest, pure) {
        (return v0)
       )
     )");
-    EXPECT_EQ(analyze_code_effects(code.get()), Summary(EFF_NONE, {}));
+    EXPECT_EQ(analyze_code_effects(code.get()), Summary(EFF_NONE, {}, true));
   }
 }
 
@@ -90,7 +90,7 @@ TEST_F(SideEffectSummaryTest, locks) {
       (return v1)
     )
   )");
-  EXPECT_EQ(analyze_code_effects(code.get()), Summary(EFF_LOCKS, {}));
+  EXPECT_EQ(analyze_code_effects(code.get()), Summary(EFF_LOCKS, {}, true));
 }
 
 TEST_F(SideEffectSummaryTest, unknownWrite) {
