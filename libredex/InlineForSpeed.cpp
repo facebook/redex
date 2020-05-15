@@ -16,6 +16,8 @@
 
 using namespace method_profiles;
 
+constexpr double MIN_APPEAR_PERCENT = 80.0;
+
 void InlineForSpeed::compute_hot_methods() {
   if (m_method_profiles == nullptr || !m_method_profiles->has_stats()) {
     return;
@@ -23,15 +25,21 @@ void InlineForSpeed::compute_hot_methods() {
   for (const auto& pair : m_method_profiles->all_interactions()) {
     const std::string& interaction_id = pair.first;
     const auto& method_stats = pair.second;
+    size_t popular_set_size = 0;
+    for (const auto& entry : method_stats) {
+      if (entry.second.appear_percent >= MIN_APPEAR_PERCENT) {
+        ++popular_set_size;
+      }
+    }
     // Methods in the top PERCENTILE of call counts will be considered warm/hot.
     constexpr double WARM_PERCENTILE = 0.25;
     constexpr double HOT_PERCENTILE = 0.1;
     // Find the lowest score that is within the given percentile
     constexpr size_t MIN_SIZE = 1;
     size_t warm_size = std::max(
-        MIN_SIZE, static_cast<size_t>(method_stats.size() * WARM_PERCENTILE));
+        MIN_SIZE, static_cast<size_t>(popular_set_size * WARM_PERCENTILE));
     size_t hot_size = std::max(
-        MIN_SIZE, static_cast<size_t>(method_stats.size() * HOT_PERCENTILE));
+        MIN_SIZE, static_cast<size_t>(popular_set_size * HOT_PERCENTILE));
     // the "top" of the queue is actually the minimum warm/hot score
     using pq =
         std::priority_queue<double, std::vector<double>, std::greater<double>>;
@@ -46,9 +54,12 @@ void InlineForSpeed::compute_hot_methods() {
       }
     };
     for (const auto& entry : method_stats) {
-      auto score = entry.second.call_count;
-      maybe_push(warm_scores, warm_size, score);
-      maybe_push(hot_scores, hot_size, score);
+      const auto& stat = entry.second;
+      if (stat.appear_percent >= MIN_APPEAR_PERCENT) {
+        auto score = stat.call_count;
+        maybe_push(warm_scores, warm_size, score);
+        maybe_push(hot_scores, hot_size, score);
+      }
     }
     double min_warm_score = std::max(50.0, warm_scores.top());
     double min_hot_score = std::max(100.0, hot_scores.top());
@@ -120,7 +131,8 @@ bool InlineForSpeed::should_inline_per_interaction(
   double hot_score = scores.second;
   const auto& caller_stats = caller_search->second;
   auto caller_hits = caller_stats.call_count;
-  if (caller_hits < warm_score) {
+  auto caller_appears = caller_stats.appear_percent;
+  if (caller_hits < warm_score || caller_appears < MIN_APPEAR_PERCENT) {
     return false;
   }
 
@@ -130,7 +142,8 @@ bool InlineForSpeed::should_inline_per_interaction(
   }
   const auto& callee_stats = callee_search->second;
   auto callee_hits = callee_stats.call_count;
-  if (callee_hits < warm_score) {
+  auto callee_appears = callee_stats.appear_percent;
+  if (callee_hits < warm_score || callee_appears < MIN_APPEAR_PERCENT) {
     return false;
   }
 
