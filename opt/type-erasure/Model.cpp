@@ -547,6 +547,24 @@ void Model::find_non_mergeables(const Scope& scope, const TypeSet& generated) {
     if (!can_delete(cls)) {
       m_non_mergeables.insert(type);
       TRACE(TERA, 5, "Cannot delete %s", SHOW(type));
+      continue;
+    }
+    // Why uninstantiable classes are not mergeable?
+    // TyepErasure is good at merging virtual methods horizontally by supporting
+    // virtual dispatches. There's no benefit to merge uninstantiable classes
+    // and no proper way to merge uninstatiable and instantiable classes
+    // together. Exclude the uninstantiable classes from TypeErasure and
+    // RemoveUninstantiablesPass should properly handle parts of them.
+    bool has_ctor = false;
+    for (const auto& method : cls->get_dmethods()) {
+      if (is_constructor(method) && method::is_init(method)) {
+        has_ctor = true;
+        break;
+      }
+    }
+    if (!has_ctor) {
+      m_non_mergeables.insert(type);
+      TRACE(TERA, 5, "Has no ctor %s", SHOW(type));
     }
   }
   TRACE(TERA, 4, "Non mergeables (no delete) %ld", m_non_mergeables.size());
