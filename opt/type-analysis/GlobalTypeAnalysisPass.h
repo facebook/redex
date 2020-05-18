@@ -9,6 +9,7 @@
 
 #include "GlobalTypeAnalyzer.h"
 #include "Pass.h"
+#include "TypeAnalysisRuntimeAssert.h"
 #include "TypeAnalysisTransform.h"
 
 /*
@@ -17,16 +18,23 @@
  */
 class GlobalTypeAnalysisPass : public Pass {
  public:
-  explicit GlobalTypeAnalysisPass(type_analyzer::Transform::Config config)
+  struct Config {
+    size_t max_global_analysis_iteration{10};
+    bool insert_runtime_asserts{false};
+    type_analyzer::Transform::Config transform;
+    type_analyzer::RuntimeAssertTransform::Config runtime_assert;
+  };
+
+  explicit GlobalTypeAnalysisPass(Config config)
       : Pass("GlobalTypeAnalysisPass"), m_config(config) {}
 
-  GlobalTypeAnalysisPass()
-      : GlobalTypeAnalysisPass(type_analyzer::Transform::Config()) {}
+  GlobalTypeAnalysisPass() : GlobalTypeAnalysisPass(Config()) {}
 
   void bind_config() override {
     bind("max_global_analysis_iteration", size_t(100),
          m_config.max_global_analysis_iteration,
          "Maximum number of global iterations the analysis runs");
+    bind("insert_runtime_asserts", false, m_config.insert_runtime_asserts);
   }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
@@ -37,5 +45,5 @@ class GlobalTypeAnalysisPass : public Pass {
       PassManager& mgr);
 
  private:
-  type_analyzer::Transform::Config m_config;
+  Config m_config;
 };

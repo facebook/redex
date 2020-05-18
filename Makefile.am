@@ -421,6 +421,7 @@ redex_all_SOURCES = \
 	service/type-analysis/LocalTypeAnalyzer.cpp \
 	service/type-analysis/WholeProgramState.cpp \
 	service/type-analysis/TypeAnalysisTransform.cpp \
+	service/type-analysis/TypeAnalysisRuntimeAssert.cpp \
 	service/type-string-rewriter/TypeStringRewriter.cpp \
 	tools/common/ToolsCommon.cpp \
 	tools/redex-all/main.cpp

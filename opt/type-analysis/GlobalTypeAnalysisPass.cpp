@@ -37,7 +37,14 @@ void GlobalTypeAnalysisPass::optimize(
         }
         auto code = method->get_code();
         auto lta = gta.get_local_analysis(method);
-        Transform tf(m_config);
+
+        if (m_config.insert_runtime_asserts) {
+          RuntimeAssertTransform rat(m_config.runtime_assert);
+          rat.apply(*lta, gta.get_whole_program_state(), method);
+          return Transform::Stats();
+        }
+
+        Transform tf(m_config.transform);
         auto local_stats = tf.apply(*lta, code, null_assertion_set);
         return local_stats;
       });

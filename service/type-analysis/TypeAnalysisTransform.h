@@ -23,7 +23,6 @@ class Transform final {
  public:
   using NullAssertionSet = std::unordered_set<DexMethodRef*>;
   struct Config {
-    size_t max_global_analysis_iteration{10};
     bool remove_dead_null_check_insn{true};
     Config() {}
   };
