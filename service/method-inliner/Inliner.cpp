@@ -823,13 +823,6 @@ void MultiMethodInliner::shrink_method(DexMethod* method) {
     }
   }
 
-  // The following default 'features' of copy propagation would only
-  // interfere with what CSE is trying to do.
-  copy_propagation_impl::Config copy_prop_config;
-  copy_prop_config.eliminate_const_classes = false;
-  copy_prop_config.eliminate_const_strings = false;
-  copy_prop_config.static_finals = false;
-
   if (m_config.run_cse) {
     if (!code->editable_cfg_built()) {
       code->build_cfg(/* editable */ true);
