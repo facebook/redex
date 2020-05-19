@@ -607,7 +607,7 @@ void Transform::forward_targets(
 
 bool Transform::has_problematic_return(cfg::ControlFlowGraph& cfg,
                                        DexMethod* method,
-                                       XStoreRefs* xstores) {
+                                       const XStoreRefs* xstores) {
   // Nothing to check without method information
   if (!method) {
     return false;
@@ -709,7 +709,7 @@ Transform::Stats Transform::apply(
     const intraprocedural::FixpointIterator& intra_cp,
     cfg::ControlFlowGraph& cfg,
     DexMethod* method,
-    XStoreRefs* xstores) {
+    const XStoreRefs* xstores) {
   // The following is an attempt to avoid creating a control-flow structure that
   // triggers the Android bug described in T55782799, related to a return
   // statement in a try region when a type is unavailable/external, possibly

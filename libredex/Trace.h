@@ -46,6 +46,7 @@
   TM(DS)             \
   TM(EMPTY)          \
   TM(ENUM)           \
+  TM(EVALTC)         \
   TM(FINALINLINE)    \
   TM(HASHER)         \
   TM(HOTNESS)        \

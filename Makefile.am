@@ -37,6 +37,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/dedup-strings \
 	-I$(top_srcdir)/opt/delinit \
 	-I$(top_srcdir)/opt/delsuper \
+	-I$(top_srcdir)/opt/evaluate_type_checks \
 	-I$(top_srcdir)/opt/final_inline \
 	-I$(top_srcdir)/opt/instrument \
 	-I$(top_srcdir)/opt/interdex \
@@ -287,6 +288,7 @@ redex_all_SOURCES = \
 	opt/dedup-strings/DedupStrings.cpp \
 	opt/delinit/DelInit.cpp \
 	opt/delsuper/DelSuper.cpp \
+	opt/evaluate_type_checks/EvaluateTypeChecks.cpp \
 	opt/final_inline/FinalInline.cpp \
 	opt/final_inline/FinalInlineV2.cpp \
 	opt/instrument/Instrument.cpp \
