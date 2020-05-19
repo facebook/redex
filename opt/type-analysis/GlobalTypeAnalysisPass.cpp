@@ -15,8 +15,13 @@
 using namespace type_analyzer;
 
 void GlobalTypeAnalysisPass::run_pass(DexStoresVector& stores,
-                                      ConfigFiles& /* conf */,
+                                      ConfigFiles& config,
                                       PassManager& mgr) {
+  if (m_config.insert_runtime_asserts) {
+    m_config.runtime_assert =
+        RuntimeAssertTransform::Config(config.get_proguard_map());
+  }
+
   type_analyzer::Transform::NullAssertionSet null_assertion_set;
   Transform::setup(null_assertion_set);
   Scope scope = build_class_scope(stores);
