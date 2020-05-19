@@ -255,7 +255,6 @@ noinst_PROGRAMS = redex-all
 redex_all_SOURCES = \
 	libredex/DexAsm.cpp \
 	opt/access-marking/AccessMarking.cpp \
-	opt/add_redex_txt_to_apk/AddRedexTxtToApk.cpp \
 	opt/annokill/AnnoKill.cpp \
 	opt/basic-block/BasicBlockProfile.cpp \
 	opt/builder_pattern/BuilderAnalysis.cpp \
