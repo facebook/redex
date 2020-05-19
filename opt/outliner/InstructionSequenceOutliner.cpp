@@ -2429,7 +2429,7 @@ static void clear_cfgs(
 bool is_outlined_class(DexClass* cls) {
   const char* cname = cls->get_type()->get_name()->c_str();
   return strncmp(cname, OUTLINED_CLASS_NAME_PREFIX,
-                 sizeof(OUTLINED_CLASS_NAME_PREFIX) - 1) == 0;
+                 strlen(OUTLINED_CLASS_NAME_PREFIX)) == 0;
 }
 
 void InstructionSequenceOutliner::bind_config() {
