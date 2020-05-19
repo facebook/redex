@@ -68,7 +68,7 @@ void run_verifier(const Scope& scope,
       std::string msg = checker.what();
       fprintf(stderr, "ABORT! Inconsistency found in Dex code for %s.\n %s\n",
               SHOW(dex_method), msg.c_str());
-      fprintf(stderr, "Code:\n%s\n", SHOW(dex_method->get_code()));
+      fprintf(stderr, "Code:\n%s\n", SHOW(dex_method->get_code()->cfg()));
       exit(EXIT_FAILURE);
     }
   });

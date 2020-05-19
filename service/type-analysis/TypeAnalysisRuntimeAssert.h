@@ -55,12 +55,16 @@ class RuntimeAssertTransform {
                                       DexMethod*);
 
  private:
-  ir_list::InstructionIterator insert_field_assert(const WholeProgramState&,
-                                                   IRCode*,
-                                                   ir_list::InstructionIterator,
-                                                   Stats&);
-  ir_list::InstructionIterator insert_return_value_assert(
-      const WholeProgramState&, IRCode*, ir_list::InstructionIterator, Stats&);
+  IRList::iterator insert_field_assert(const WholeProgramState&,
+                                       const DexType*,
+                                       IRCode*,
+                                       IRList::iterator&,
+                                       Stats&);
+  IRList::iterator insert_return_value_assert(const WholeProgramState&,
+                                              const DexType*,
+                                              IRCode*,
+                                              IRList::iterator&,
+                                              Stats&);
 
   Config m_config;
 };
