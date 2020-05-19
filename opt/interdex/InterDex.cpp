@@ -212,7 +212,7 @@ namespace interdex {
 
 bool is_canary(DexClass* clazz) {
   const char* cname = clazz->get_type()->get_name()->c_str();
-  return strncmp(cname, CANARY_PREFIX, sizeof(CANARY_PREFIX) - 1) == 0;
+  return strncmp(cname, CANARY_PREFIX, strlen(CANARY_PREFIX)) == 0;
 }
 
 bool InterDex::should_skip_class_due_to_plugin(DexClass* clazz) {
