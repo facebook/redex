@@ -1227,6 +1227,7 @@ TEST_F(CommonSubexpressionEliminationTest, simple_with_put) {
       (move v1 v3)
     )
   )";
+  test(Scope{type_class(type::java_lang_Object())}, code_str, expected_str, 1);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, array_length) {
