@@ -1185,9 +1185,6 @@ static bool can_outline_opcode(IROpcode opcode) {
 static bool append_to_partial_candidate_sequence(
     IRInstruction* insn, PartialCandidateSequence* pcs) {
   auto opcode = insn->opcode();
-  if (pcs->insns.empty() && opcode::is_move_result_any(opcode)) {
-    return false;
-  }
   if (opcode == OPCODE_INVOKE_DIRECT && method::is_init(insn->get_method())) {
     auto it = pcs->defined_regs.find(insn->src(0));
     if (it == pcs->defined_regs.end() || it->second == RegState::UNKNOWN) {
@@ -1235,6 +1232,145 @@ using MethodCandidateSequences =
     std::unordered_map<CandidateSequence,
                        std::vector<CandidateMethodLocation>,
                        CandidateSequenceHasher>;
+
+// Look for and add entire candidate sequences starting at a
+// particular point in a big block.
+static void add_method_candidate_sequences_at(
+    const InstructionSequenceOutlinerConfig& config,
+    const std::function<bool(const DexType*)>& illegal_ref,
+    DexMethod* method,
+    cfg::ControlFlowGraph& cfg,
+    const CandidateInstructionCoresSet& recurring_cores,
+    LazyUnorderedMap<cfg::Block*,
+                     std::unordered_map<IRInstruction*, LivenessDomain>>&
+        live_outs,
+    LazyUnorderedMap<cfg::Block*, LivenessDomain>& throw_live_out,
+    LazyTypeEnvironments& type_environments,
+    std::unordered_map<IRInstruction*, size_t>& insn_idxes,
+    cfg::Block* big_block_front,
+    big_blocks::InstructionIterator it,
+    const big_blocks::InstructionIterator& end,
+    MethodCandidateSequences* candidate_sequences) {
+  PartialCandidateSequence pcs;
+  boost::optional<IROpcode> prev_opcode;
+  CandidateInstructionCoresBuilder cores_builder;
+  for (; it != end && pcs.insns.size() < config.max_insns_size;
+       prev_opcode = it->insn->opcode(), it++) {
+    auto insn = it->insn;
+    if (!append_to_partial_candidate_sequence(insn, &pcs)) {
+      return;
+    }
+    cores_builder.push_back(insn);
+    if (pcs.insns.size() < MIN_INSNS_SIZE) {
+      continue;
+    }
+    if (cores_builder.has_value() &&
+        !recurring_cores.count(cores_builder.get_value())) {
+      return;
+    }
+    // We cannot consider partial candidate sequences when they are missing
+    // their move-result piece
+    if (insn->has_move_result_any() &&
+        !cfg.move_result_of(it.unwrap()).is_end()) {
+      continue;
+    }
+    // We prefer not to consider sequences ending in const instructions
+    if (insn->opcode() == OPCODE_CONST || insn->opcode() == OPCODE_CONST_WIDE ||
+        (insn->opcode() == IOPCODE_MOVE_RESULT_PSEUDO_OBJECT && prev_opcode &&
+         is_const(*prev_opcode))) {
+      continue;
+    }
+
+    // At this point, we can consider the current sequence for normalization
+    // and outlining, adding it to the set of outlining candidates for this
+    // method
+    if (pcs.insns.size() < config.min_insns_size) {
+      // Sequence is below minimum configured size
+      continue;
+    }
+    if (pcs.size <= COST_INVOKE_WITHOUT_RESULT) {
+      // Sequence is not longer than the replacement invoke instruction
+      // would be
+      continue;
+    }
+    std::vector<std::pair<reg_t, IRInstruction*>> live_out_consts;
+    boost::optional<reg_t> out_reg;
+    bool unsupported_out{false};
+    if (!pcs.defined_regs.empty()) {
+      always_assert(insn == pcs.insns.back());
+      auto block = it.block();
+      auto& live_out = live_outs[block].at(insn);
+      auto big_block_front_throw_live_out = throw_live_out[big_block_front];
+      for (auto& p : pcs.defined_regs) {
+        if (big_block_front_throw_live_out.contains(p.first)) {
+          TRACE(ISO, 4,
+                "[invoke sequence outliner] [bail out] Cannot return "
+                "value that's live-in to a throw edge");
+          unsupported_out = true;
+          break;
+        }
+        if (live_out.contains(p.first)) {
+          if (out_reg) {
+            TRACE(ISO, 4,
+                  "[invoke sequence outliner] [bail out] Cannot have more "
+                  "than one out-reg");
+            unsupported_out = true;
+            break;
+          }
+          if (p.second != RegState::INITIALIZED) {
+            TRACE(ISO, 4,
+                  "[invoke sequence outliner] [bail out] Cannot return "
+                  "uninitialized");
+            unsupported_out = true;
+            break;
+          }
+          out_reg = p.first;
+        }
+      }
+    }
+    if (unsupported_out) {
+      continue;
+    }
+    if (out_reg && pcs.size <= COST_INVOKE_WITH_RESULT) {
+      // Sequence to outlined is not longer than the replacement invoke
+      // instruction would be
+      continue;
+    }
+    auto cs = normalize(method, type_environments, pcs, out_reg);
+    if (std::find(cs.arg_types.begin(), cs.arg_types.end(), nullptr) !=
+        cs.arg_types.end()) {
+      TRACE(ISO, 4,
+            "[invoke sequence outliner] [bail out] Could not infer "
+            "argument type");
+      continue;
+    }
+    if (std::find_if(cs.arg_types.begin(), cs.arg_types.end(), illegal_ref) !=
+        cs.arg_types.end()) {
+      TRACE(ISO, 4,
+            "[invoke sequence outliner] [bail out] Illegal argument type");
+      continue;
+    }
+    if (cs.res && cs.res->type == nullptr) {
+      TRACE(ISO, 4,
+            "[invoke sequence outliner] [bail out] Could not infer "
+            "result type");
+      continue;
+    }
+    if (cs.res && illegal_ref(cs.res->type)) {
+      TRACE(ISO, 4,
+            "[invoke sequence outliner] [bail out] Illegal result type");
+      continue;
+    }
+    auto& cmls = (*candidate_sequences)[cs];
+    auto first_insn_idx = insn_idxes.at(insn) + 1 - pcs.insns.size();
+    if (cmls.empty() ||
+        cmls.back().first_insn_idx + pcs.insns.size() <= first_insn_idx) {
+      cmls.push_back((CandidateMethodLocation){pcs.insns.front(), it.block(),
+                                               first_insn_idx});
+    }
+  }
+}
+
 // For a single method, identify possible beneficial outlinable candidate
 // sequences. For each sequence, gather information about where exactly in the
 // given method it is located.
@@ -1275,158 +1411,32 @@ static MethodCandidateSequences find_method_candidate_sequences(
     type_inference.run(method);
     return type_inference.get_type_environments();
   });
-  size_t insn_idx{0};
+  auto big_blocks = big_blocks::get_big_blocks(cfg);
+  // Along big blocks, we are assigning consecutive indices to instructions.
+  // We'll use this to manage ranges of instructions that need to get
+  // invalidated when overlapping ranges of insturctions are outlined.
+  std::unordered_map<IRInstruction*, size_t> insn_idxes;
+  for (auto& big_block : big_blocks) {
+    for (const auto& mie : big_blocks::InstructionIterable(big_block)) {
+      insn_idxes.emplace(mie.insn, insn_idxes.size());
+    }
+  }
   // We are visiting the instructions in this method in "big block" chunks:
   // - The big blocks cover all blocks.
   // - It is safe to do so as they all share the same throw-edges, and any
   //   outlined method invocation will be placed in the first block of the big
   //   block, with the appropriate throw edges.
-  for (auto& big_block : big_blocks::get_big_blocks(cfg)) {
-    std::list<PartialCandidateSequence> partial_candidate_sequences;
-    boost::optional<IROpcode> prev_opcode;
-    CandidateInstructionCoresBuilder cores_builder;
+  for (auto& big_block : big_blocks) {
     auto ii = big_blocks::InstructionIterable(big_block);
-    for (auto it = ii.begin(), end = ii.end(); it != end;
-         prev_opcode = it->insn->opcode(), it++) {
-      auto insn = it->insn;
-
-      cores_builder.push_back(insn);
-      if (cores_builder.has_value() &&
-          !recurring_cores.count(cores_builder.get_value())) {
-        // Remove all partial candidate sequences that would have the non-
-        // recurring cores in them after the current instruction will have been
-        // processed
-        for (auto pcs_it = partial_candidate_sequences.begin();
-             pcs_it != partial_candidate_sequences.end();) {
-          if (pcs_it->insns.size() < MIN_INSNS_SIZE - 1) {
-            ++pcs_it;
-          } else {
-            pcs_it = partial_candidate_sequences.erase(pcs_it);
-          }
-        }
-      }
-      insn_idx++;
-
-      // Start a new partial candidate sequence
-      partial_candidate_sequences.push_back({});
-
-      // Append current instruction to all partial candidate sequences; prune
-      // those to which cannot be appended.
-      for (auto pcs_it = partial_candidate_sequences.begin();
-           pcs_it != partial_candidate_sequences.end();) {
-        if (pcs_it->insns.size() <= config.max_insns_size - 1 &&
-            append_to_partial_candidate_sequence(insn, &*pcs_it)) {
-          ++pcs_it;
-        } else {
-          pcs_it = partial_candidate_sequences.erase(pcs_it);
-        }
-      }
-
-      // We cannot consider partial candidate sequences when they are missing
-      // their move-result piece
-      if (insn->has_move_result_any() &&
-          !cfg.move_result_of(it.unwrap()).is_end()) {
+    for (auto it = ii.begin(), end = ii.end(); it != end; it++) {
+      if (opcode::is_move_result_any(it->insn->opcode())) {
+        // We cannot start a sequence at a move-result-any instruction
         continue;
       }
-
-      // We prefer not to consider sequences ending in const instructions
-      if (insn->opcode() == OPCODE_CONST ||
-          insn->opcode() == OPCODE_CONST_WIDE ||
-          (insn->opcode() == IOPCODE_MOVE_RESULT_PSEUDO_OBJECT && prev_opcode &&
-           is_const(*prev_opcode))) {
-        continue;
-      }
-
-      // At this point, we can consider all gathered partial candidate
-      // sequences for nprmalization and outlining.
-      // Consider normalizing a partial candidate sequence, and adding it to the
-      // set of outlining candidates for this method
-      for (auto& pcs : partial_candidate_sequences) {
-        if (pcs.insns.size() < config.min_insns_size) {
-          // Sequence is below minimum size
-          continue;
-        }
-        if (pcs.size <= COST_INVOKE_WITHOUT_RESULT) {
-          // Sequence is not longer than the replacement invoke instruction
-          // would be
-          continue;
-        }
-        boost::optional<reg_t> out_reg;
-        bool unsupported_out{false};
-        if (!pcs.defined_regs.empty()) {
-          always_assert(insn == pcs.insns.back());
-          auto block = it.block();
-          auto& live_out = live_outs[block].at(insn);
-          auto first_block = big_block.get_blocks().front();
-          auto first_block_throw_live_out = throw_live_out[first_block];
-          for (auto& p : pcs.defined_regs) {
-            if (first_block_throw_live_out.contains(p.first)) {
-              TRACE(ISO, 4,
-                    "[invoke sequence outliner] [bail out] Cannot return "
-                    "value that's live-out to a throw edge");
-              unsupported_out = true;
-              break;
-            }
-            if (live_out.contains(p.first)) {
-              if (out_reg) {
-                TRACE(ISO, 4,
-                      "[invoke sequence outliner] [bail out] Cannot have more "
-                      "than one out-reg");
-                unsupported_out = true;
-                break;
-              }
-              if (p.second != RegState::INITIALIZED) {
-                TRACE(ISO, 4,
-                      "[invoke sequence outliner] [bail out] Cannot return "
-                      "uninitialized");
-                unsupported_out = true;
-                break;
-              }
-              out_reg = p.first;
-            }
-          }
-        }
-        if (unsupported_out) {
-          continue;
-        }
-        if (out_reg && pcs.size <= COST_INVOKE_WITH_RESULT) {
-          // Sequence to outlined is not longer than the replacement invoke
-          // instruction would be
-          continue;
-        }
-        auto cs = normalize(method, type_environments, pcs, out_reg);
-        if (std::find(cs.arg_types.begin(), cs.arg_types.end(), nullptr) !=
-            cs.arg_types.end()) {
-          TRACE(ISO, 4,
-                "[invoke sequence outliner] [bail out] Could not infer "
-                "argument type");
-          continue;
-        }
-        if (std::find_if(cs.arg_types.begin(), cs.arg_types.end(),
-                         illegal_ref) != cs.arg_types.end()) {
-          TRACE(ISO, 4,
-                "[invoke sequence outliner] [bail out] Illegal argument type");
-          continue;
-        }
-        if (cs.res && cs.res->type == nullptr) {
-          TRACE(ISO, 4,
-                "[invoke sequence outliner] [bail out] Could not infer "
-                "result type");
-          continue;
-        }
-        if (cs.res && illegal_ref(cs.res->type)) {
-          TRACE(ISO, 4,
-                "[invoke sequence outliner] [bail out] Illegal result type");
-          continue;
-        }
-        auto& cmls = candidate_sequences[cs];
-        auto first_insn_idx = insn_idx - pcs.insns.size();
-        if (cmls.empty() ||
-            cmls.back().first_insn_idx + pcs.insns.size() <= first_insn_idx) {
-          cmls.push_back((CandidateMethodLocation){pcs.insns.front(),
-                                                   it.block(), first_insn_idx});
-        }
-      }
+      add_method_candidate_sequences_at(
+          config, illegal_ref, method, cfg, recurring_cores, live_outs,
+          throw_live_out, type_environments, insn_idxes,
+          big_block.get_blocks().front(), it, end, &candidate_sequences);
     }
   }
   return candidate_sequences;
