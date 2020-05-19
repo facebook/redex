@@ -98,7 +98,7 @@ WholeProgramState::WholeProgramState(
     // We assume that a field we cannot delete is marked by a Proguard keep rule
     // or an annotation. The reason behind is that the field is referenced by
     // non-dex code.
-    if (!can_delete(field)) {
+    if (!can_delete(field) || field->is_external() || is_volatile(field)) {
       return;
     }
     m_known_fields.emplace(field);
