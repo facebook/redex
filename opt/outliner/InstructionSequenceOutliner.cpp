@@ -1245,8 +1245,31 @@ static MethodCandidateSequences find_method_candidate_sequences(
     cfg::ControlFlowGraph& cfg,
     const CandidateInstructionCoresSet& recurring_cores) {
   MethodCandidateSequences candidate_sequences;
-  LivenessFixpointIterator fixpoint_iter(cfg);
-  fixpoint_iter.run({});
+  LivenessFixpointIterator liveness_fp_iter(cfg);
+  liveness_fp_iter.run({});
+  LazyUnorderedMap<cfg::Block*,
+                   std::unordered_map<IRInstruction*, LivenessDomain>>
+      live_outs([&liveness_fp_iter](cfg::Block* block) {
+        std::unordered_map<IRInstruction*, LivenessDomain> res;
+        auto live_out = liveness_fp_iter.get_live_out_vars_at(block);
+        for (auto it = block->rbegin(); it != block->rend(); ++it) {
+          if (it->type != MFLOW_OPCODE) {
+            continue;
+          }
+          res.emplace(it->insn, live_out);
+          liveness_fp_iter.analyze_instruction(it->insn, &live_out);
+        }
+        return res;
+      });
+  // Variables that flow into a throw block, if any
+  LazyUnorderedMap<cfg::Block*, LivenessDomain> throw_live_out(
+      [&cfg, &liveness_fp_iter](cfg::Block* block) {
+        auto res = LivenessDomain::bottom();
+        for (auto e : cfg.get_succ_edges_of_type(block, cfg::EDGE_THROW)) {
+          res.join_with(liveness_fp_iter.get_live_in_vars_at(e->target()));
+        }
+        return res;
+      });
   LazyTypeEnvironments type_environments([method, &cfg]() {
     type_inference::TypeInference type_inference(cfg);
     type_inference.run(method);
@@ -1259,32 +1282,6 @@ static MethodCandidateSequences find_method_candidate_sequences(
   //   outlined method invocation will be placed in the first block of the big
   //   block, with the appropriate throw edges.
   for (auto& big_block : big_blocks::get_big_blocks(cfg)) {
-    Lazy<std::unordered_map<IRInstruction*, LivenessDomain>> live_outs(
-        [&fixpoint_iter, &big_block]() {
-          std::unordered_map<IRInstruction*, LivenessDomain> res;
-          for (auto block : big_block.get_blocks()) {
-            auto live_out = fixpoint_iter.get_live_out_vars_at(block);
-            for (auto it = block->rbegin(); it != block->rend(); ++it) {
-              if (it->type != MFLOW_OPCODE) {
-                continue;
-              }
-              res.emplace(it->insn, live_out);
-              fixpoint_iter.analyze_instruction(it->insn, &live_out);
-            }
-          }
-          return res;
-        });
-
-    // Variables that flow into throw block, if any
-    Lazy<LivenessDomain> throw_live_out([&cfg, &fixpoint_iter, &big_block]() {
-      auto res = LivenessDomain::bottom();
-      for (auto e : cfg.get_succ_edges_of_type(big_block.get_blocks().front(),
-                                               cfg::EDGE_THROW)) {
-        res.join_with(fixpoint_iter.get_live_in_vars_at(e->target()));
-      }
-      return res;
-    });
-
     std::list<PartialCandidateSequence> partial_candidate_sequences;
     boost::optional<IROpcode> prev_opcode;
     CandidateInstructionCoresBuilder cores_builder;
@@ -1358,9 +1355,12 @@ static MethodCandidateSequences find_method_candidate_sequences(
         bool unsupported_out{false};
         if (!pcs.defined_regs.empty()) {
           always_assert(insn == pcs.insns.back());
-          auto& live_out = live_outs->at(insn);
+          auto block = it.block();
+          auto& live_out = live_outs[block].at(insn);
+          auto first_block = big_block.get_blocks().front();
+          auto first_block_throw_live_out = throw_live_out[first_block];
           for (auto& p : pcs.defined_regs) {
-            if (throw_live_out->contains(p.first)) {
+            if (first_block_throw_live_out.contains(p.first)) {
               TRACE(ISO, 4,
                     "[invoke sequence outliner] [bail out] Cannot return "
                     "value that's live-out to a throw edge");

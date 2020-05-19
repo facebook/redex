@@ -5,6 +5,12 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#pragma once
+
+#include <functional>
+#include <memory>
+#include <unordered_map>
+
 template <typename T>
 // A convenient helper class for lazy initialization.
 // This class is not thread-safe.
@@ -34,4 +40,31 @@ class Lazy {
       m_creator = std::function<T()>();
     }
   }
+};
+
+template <class Key,
+          class T,
+          class Hash = std::hash<Key>,
+          class KeyEqual = std::equal_to<Key>,
+          class Allocator = std::allocator<std::pair<const Key, T>>>
+// A convenient helper class for lazily initialized maps.
+// This class is not thread-safe.
+class LazyUnorderedMap {
+ public:
+  LazyUnorderedMap() = delete;
+  LazyUnorderedMap(const LazyUnorderedMap&) = delete;
+  LazyUnorderedMap& operator=(const LazyUnorderedMap&) = delete;
+  explicit LazyUnorderedMap(std::function<T(const Key& key)> creator)
+      : m_creator(std::move(creator)) {}
+  T& operator[](const Key key) {
+    auto it = m_map.find(key);
+    if (it == m_map.end()) {
+      it = m_map.emplace(key, m_creator(key)).first;
+    }
+    return it->second;
+  }
+
+ private:
+  std::function<T(const Key& key)> m_creator;
+  std::unordered_map<Key, T, Hash, KeyEqual, Allocator> m_map;
 };
