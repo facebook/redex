@@ -65,22 +65,26 @@ static IRList::iterator insert_throw_error(IRCode* code,
   return it;
 }
 
-void RuntimeAssertTransform::apply(const local::LocalTypeAnalyzer& /* lta */,
-                                   const WholeProgramState& wps,
-                                   DexMethod* method) {
+RuntimeAssertTransform::Stats RuntimeAssertTransform::apply(
+    const local::LocalTypeAnalyzer& /* lta */,
+    const WholeProgramState& wps,
+    DexMethod* method) {
   auto* code = method->get_code();
   always_assert(code != nullptr);
+  RuntimeAssertTransform::Stats stats{};
   auto ii = InstructionIterable(code);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
-    it = insert_field_assert(wps, code, it);
-    it = insert_return_value_assert(wps, code, it);
+    it = insert_field_assert(wps, code, it, stats);
+    it = insert_return_value_assert(wps, code, it, stats);
   }
+  return stats;
 }
 
 ir_list::InstructionIterator RuntimeAssertTransform::insert_field_assert(
     const WholeProgramState& wps,
     IRCode* code,
-    ir_list::InstructionIterator it) {
+    ir_list::InstructionIterator it,
+    Stats& stats) {
   auto* insn = it->insn;
   auto op = insn->opcode();
   if (!is_sget(op) && !is_iget(op)) {
@@ -103,10 +107,11 @@ ir_list::InstructionIterator RuntimeAssertTransform::insert_field_assert(
   fm_it = insert_type_check(code, fm_it, reg_to_check, *dex_type);
   auto check_insn_it = fm_it;
   // Fall through to throw Error
-  fm_it = insert_throw_error(
-      code, fm_it, field, m_config.field_assert_fail_handler);
+  fm_it = insert_throw_error(code, fm_it, field,
+                             m_config.field_assert_fail_handler);
   auto branch_target = new BranchTarget(&*check_insn_it);
   fm_it = code->insert_after(fm_it, branch_target);
+  stats.field_type_check_inserted++;
   it.reset(fm_it);
   return it;
 }
@@ -114,7 +119,8 @@ ir_list::InstructionIterator RuntimeAssertTransform::insert_field_assert(
 ir_list::InstructionIterator RuntimeAssertTransform::insert_return_value_assert(
     const WholeProgramState& wps,
     IRCode* code,
-    ir_list::InstructionIterator it) {
+    ir_list::InstructionIterator it,
+    Stats& stats) {
   auto* insn = it->insn;
   if (!is_invoke(insn->opcode())) {
     return it;
@@ -141,10 +147,11 @@ ir_list::InstructionIterator RuntimeAssertTransform::insert_return_value_assert(
   fm_it = insert_type_check(code, fm_it, reg_to_check, *dex_type);
   auto check_insn_it = fm_it;
   // Fall through to throw Error
-  fm_it = insert_throw_error(
-      code, fm_it, callee, m_config.return_value_assert_fail_handler);
+  fm_it = insert_throw_error(code, fm_it, callee,
+                             m_config.return_value_assert_fail_handler);
   auto branch_target = new BranchTarget(&*check_insn_it);
   fm_it = code->insert_after(fm_it, branch_target);
+  stats.return_type_check_inserted++;
 
   it.reset(fm_it);
   return it;

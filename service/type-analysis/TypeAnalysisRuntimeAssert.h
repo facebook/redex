@@ -23,17 +23,44 @@ class RuntimeAssertTransform {
     explicit Config(const ProguardMap&);
   };
 
+  struct Stats {
+    size_t field_type_check_inserted{0};
+    size_t return_type_check_inserted{0};
+
+    Stats& operator+=(const Stats& that) {
+      field_type_check_inserted += that.field_type_check_inserted;
+      return_type_check_inserted += that.return_type_check_inserted;
+      return *this;
+    }
+
+    void report(PassManager& mgr) const {
+      mgr.incr_metric("field_type_check_inserted", field_type_check_inserted);
+      mgr.incr_metric("return_type_check_inserted", return_type_check_inserted);
+      TRACE(TYPE, 2, "[type-analysis] RuntimeAssert Stats:");
+      TRACE(TYPE,
+            2,
+            "[type-analysis] field_type_check_inserted = %u",
+            field_type_check_inserted);
+      TRACE(TYPE,
+            2,
+            "[type-analysis] return_type_check_inserted = %u",
+            return_type_check_inserted);
+    }
+  };
+
   explicit RuntimeAssertTransform(const Config& config) : m_config(config) {}
 
-  void apply(const local::LocalTypeAnalyzer&,
-             const WholeProgramState&,
-             DexMethod*);
+  RuntimeAssertTransform::Stats apply(const local::LocalTypeAnalyzer&,
+                                      const WholeProgramState&,
+                                      DexMethod*);
 
  private:
-  ir_list::InstructionIterator insert_field_assert(
-      const WholeProgramState&, IRCode*, ir_list::InstructionIterator);
+  ir_list::InstructionIterator insert_field_assert(const WholeProgramState&,
+                                                   IRCode*,
+                                                   ir_list::InstructionIterator,
+                                                   Stats&);
   ir_list::InstructionIterator insert_return_value_assert(
-      const WholeProgramState&, IRCode*, ir_list::InstructionIterator);
+      const WholeProgramState&, IRCode*, ir_list::InstructionIterator, Stats&);
 
   Config m_config;
 };

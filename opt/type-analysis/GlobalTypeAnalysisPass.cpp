@@ -35,24 +35,26 @@ void GlobalTypeAnalysisPass::optimize(
     const type_analyzer::global::GlobalTypeAnalyzer& gta,
     const type_analyzer::Transform::NullAssertionSet& null_assertion_set,
     PassManager& mgr) {
-  auto stats = walk::parallel::methods<type_analyzer::Transform::Stats>(
-      scope, [&](DexMethod* method) {
-        if (method->get_code() == nullptr) {
-          return type_analyzer::Transform::Stats();
-        }
-        auto code = method->get_code();
-        auto lta = gta.get_local_analysis(method);
+  auto stats = walk::parallel::methods<Stats>(scope, [&](DexMethod* method) {
+    if (method->get_code() == nullptr) {
+      return Stats();
+    }
+    auto code = method->get_code();
+    auto lta = gta.get_local_analysis(method);
 
-        if (m_config.insert_runtime_asserts) {
-          RuntimeAssertTransform rat(m_config.runtime_assert);
+    if (m_config.insert_runtime_asserts) {
+      RuntimeAssertTransform rat(m_config.runtime_assert);
+      Stats ra_stats;
+      ra_stats.assert_stats =
           rat.apply(*lta, gta.get_whole_program_state(), method);
-          return Transform::Stats();
-        }
+      return ra_stats;
+    }
 
-        Transform tf(m_config.transform);
-        auto local_stats = tf.apply(*lta, code, null_assertion_set);
-        return local_stats;
-      });
+    Transform tf(m_config.transform);
+    Stats tr_stats;
+    tr_stats.transform_stats = tf.apply(*lta, code, null_assertion_set);
+    return tr_stats;
+  });
   stats.report(mgr);
 }
 

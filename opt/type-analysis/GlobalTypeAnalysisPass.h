@@ -25,6 +25,22 @@ class GlobalTypeAnalysisPass : public Pass {
     type_analyzer::RuntimeAssertTransform::Config runtime_assert;
   };
 
+  struct Stats {
+    type_analyzer::Transform::Stats transform_stats;
+    type_analyzer::RuntimeAssertTransform::Stats assert_stats;
+
+    Stats& operator+=(const Stats& that) {
+      transform_stats += that.transform_stats;
+      assert_stats += that.assert_stats;
+      return *this;
+    }
+
+    void report(PassManager& mgr) const {
+      transform_stats.report(mgr);
+      assert_stats.report(mgr);
+    }
+  };
+
   explicit GlobalTypeAnalysisPass(Config config)
       : Pass("GlobalTypeAnalysisPass"), m_config(config) {}
 
