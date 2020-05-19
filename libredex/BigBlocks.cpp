@@ -9,7 +9,8 @@
 
 namespace {
 
-static bool is_big_block_successor(cfg::Block* block) {
+static bool is_big_block_successor(cfg::Block* block,
+                                   bool ignore_throws = false) {
   // A big block successor is a block that...
   // 1. has only a single GOTO predecessor which has no outgoing BRANCH
   auto& pred_edges = block->preds();
@@ -28,7 +29,7 @@ static bool is_big_block_successor(cfg::Block* block) {
   // 2. Shares the same try(ies) with its predecessor, or
   //    cannot throw (as may happen in particular in a block that ends with a
   //    conditional branch or return).
-  return pred_block->same_try(block) || block->cannot_throw();
+  return ignore_throws || pred_block->same_try(block) || block->cannot_throw();
 }
 
 } // namespace
@@ -38,7 +39,7 @@ namespace big_blocks {
 void Iterator::adjust_block() {
   while (m_block && m_it == m_block->end()) {
     m_block = m_block->goes_to();
-    if (m_block && is_big_block_successor(m_block)) {
+    if (m_block && is_big_block_successor(m_block, m_ignore_throws)) {
       m_it = m_block->begin();
     } else {
       m_block = nullptr;
@@ -46,8 +47,10 @@ void Iterator::adjust_block() {
   }
 }
 
-Iterator::Iterator(cfg::Block* block, const IRList::iterator& it)
-    : m_block(block), m_it(it) {
+Iterator::Iterator(cfg::Block* block,
+                   const IRList::iterator& it,
+                   bool ignore_throws)
+    : m_block(block), m_it(it), m_ignore_throws(ignore_throws) {
   adjust_block();
 }
 
@@ -77,7 +80,7 @@ InstructionIterator& InstructionIterator::operator++() {
   }
   while (true) {
     auto next_block = block->goes_to();
-    if (!next_block || !is_big_block_successor(next_block)) {
+    if (!next_block || !is_big_block_successor(next_block, m_ignore_throws)) {
       auto ii = ir_list::InstructionIterable(block);
       m_it = block->to_cfg_instruction_iterator(ii.end());
       return *this;

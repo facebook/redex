@@ -1781,7 +1781,8 @@ class OutlinedMethodCreator {
         }
         std::vector<DexPosition*> positions;
         std::unordered_set<DexPosition*> unique_positions;
-        auto it = big_blocks::Iterator(insn_it.block(), insn_it.unwrap());
+        auto it = big_blocks::Iterator(insn_it.block(), insn_it.unwrap(),
+                                       /* ignore_throws */ true);
         for (auto& csi : cs.insns) {
           positions.push_back(dbg_pos);
           unique_positions.insert(dbg_pos);
@@ -1935,7 +1936,8 @@ static void rewrite_sequence_at_location(DexMethod* outlined_method,
   std::vector<reg_t> arg_regs;
   boost::optional<reg_t> res_reg;
   boost::optional<reg_t> highest_mapped_arg_reg;
-  auto it = big_blocks::InstructionIterator(first_insn_it);
+  auto it =
+      big_blocks::InstructionIterator(first_insn_it, /* ignore_throws */ true);
   for (size_t insn_idx = 0; insn_idx < cs.insns.size(); insn_idx++, it++) {
     auto& ci = cs.insns.at(insn_idx);
     always_assert(it->insn->opcode() == ci.core.opcode);

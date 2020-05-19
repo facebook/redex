@@ -22,6 +22,7 @@ class Iterator {
  private:
   cfg::Block* m_block{nullptr};
   IRList::iterator m_it;
+  bool m_ignore_throws;
   void adjust_block();
 
  public:
@@ -31,7 +32,9 @@ class Iterator {
   using reference = IRList::iterator::reference;
   using iterator_category = std::input_iterator_tag;
 
-  explicit Iterator(cfg::Block* block, const IRList::iterator& it);
+  Iterator(cfg::Block* block,
+           const IRList::iterator& it,
+           bool ignore_throws = false);
   const IRList::iterator& unwrap() const { return m_it; }
   reference operator*() const { return *m_it; }
   pointer operator->() const { return &(this->operator*()); }
@@ -46,6 +49,7 @@ class Iterator {
 class InstructionIterator {
  private:
   cfg::InstructionIterator m_it;
+  bool m_ignore_throws;
 
  public:
   using value_type = cfg::InstructionIterator::value_type;
@@ -54,7 +58,9 @@ class InstructionIterator {
   using reference = cfg::InstructionIterator::reference;
   using iterator_category = std::input_iterator_tag;
 
-  explicit InstructionIterator(const cfg::InstructionIterator& it) : m_it(it) {}
+  explicit InstructionIterator(const cfg::InstructionIterator& it,
+                               bool ignore_throws = false)
+      : m_it(it), m_ignore_throws(ignore_throws) {}
   const cfg::InstructionIterator& unwrap() const { return m_it; }
   reference operator*() const { return *m_it; }
   pointer operator->() const { return &(this->operator*()); }
