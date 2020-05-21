@@ -24,19 +24,35 @@ class RuntimeAssertTransform {
   };
 
   struct Stats {
+    size_t field_nullness_check_inserted{0};
+    size_t return_nullness_check_inserted{0};
     size_t field_type_check_inserted{0};
     size_t return_type_check_inserted{0};
 
     Stats& operator+=(const Stats& that) {
+      field_nullness_check_inserted += that.field_nullness_check_inserted;
+      return_nullness_check_inserted += that.return_nullness_check_inserted;
       field_type_check_inserted += that.field_type_check_inserted;
       return_type_check_inserted += that.return_type_check_inserted;
       return *this;
     }
 
     void report(PassManager& mgr) const {
+      mgr.incr_metric("field_nullness_check_inserted",
+                      field_nullness_check_inserted);
+      mgr.incr_metric("return_nullness_check_inserted",
+                      return_nullness_check_inserted);
       mgr.incr_metric("field_type_check_inserted", field_type_check_inserted);
       mgr.incr_metric("return_type_check_inserted", return_type_check_inserted);
       TRACE(TYPE, 2, "[type-analysis] RuntimeAssert Stats:");
+      TRACE(TYPE,
+            2,
+            "[type-analysis] field_nullness_check_inserted = %u",
+            field_nullness_check_inserted);
+      TRACE(TYPE,
+            2,
+            "[type-analysis] return_nullness_check_inserted = %u",
+            return_nullness_check_inserted);
       TRACE(TYPE,
             2,
             "[type-analysis] field_type_check_inserted = %u",

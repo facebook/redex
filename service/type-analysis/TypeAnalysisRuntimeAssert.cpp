@@ -29,9 +29,11 @@ RuntimeAssertTransform::Config::Config(const ProguardMap& pg_map) {
 
 static IRList::iterator insert_null_check(IRCode* code,
                                           IRList::iterator it,
-                                          reg_t reg_to_check) {
+                                          reg_t reg_to_check,
+                                          bool branch_on_null = true) {
+  auto opcode = branch_on_null ? OPCODE_IF_EQZ : OPCODE_IF_NEZ;
   it = code->insert_after(
-      it, (new IRInstruction(OPCODE_IF_EQZ))->set_src(0, reg_to_check));
+      it, (new IRInstruction(opcode))->set_src(0, reg_to_check));
   return it;
 }
 
@@ -143,7 +145,43 @@ IRList::iterator RuntimeAssertTransform::insert_field_assert(
   if (!type::is_object(field->get_type())) {
     return it;
   }
-  auto dex_type = wps.get_field_type(field).get_dex_type();
+  auto domain = wps.get_field_type(field);
+  if (domain.is_top()) {
+    return it;
+  }
+  ++it;
+  if (!opcode::is_move_result_pseudo(it->insn->opcode())) {
+    return it;
+  }
+  auto mov_res_it = it;
+  // Nullness check
+  if (domain.is_null()) {
+    auto fm_it = it;
+    auto reg_to_check = fm_it->insn->dest();
+    fm_it = insert_null_check(code, fm_it, reg_to_check);
+    auto null_check_insn_it = fm_it;
+    // Fall through to throw Error
+    fm_it = insert_throw_error(code, fm_it, field,
+                               m_config.field_assert_fail_handler);
+    fm_it = code->insert_after(fm_it, new BranchTarget(&*null_check_insn_it));
+    stats.field_nullness_check_inserted++;
+    // No need to emit type check anymore
+    return fm_it;
+  } else if (domain.is_not_null()) {
+    auto fm_it = it;
+    auto reg_to_check = fm_it->insn->dest();
+    fm_it = insert_null_check(code, fm_it, reg_to_check,
+                              /* branch_on_null */ false);
+    auto null_check_insn_it = fm_it;
+    // Fall through to throw Error
+    fm_it = insert_throw_error(code, fm_it, field,
+                               m_config.field_assert_fail_handler);
+    fm_it = code->insert_after(fm_it, new BranchTarget(&*null_check_insn_it));
+    stats.field_nullness_check_inserted++;
+    it = fm_it;
+  }
+  // Singleton type check
+  auto dex_type = domain.get_dex_type();
   if (!dex_type) {
     return it;
   }
@@ -151,16 +189,22 @@ IRList::iterator RuntimeAssertTransform::insert_field_assert(
     return it;
   }
   auto fm_it = it;
-  auto reg_to_check = ir_list::move_result_pseudo_of(fm_it)->dest();
-  ++fm_it; // skip the move-result-pseudo
-  fm_it = insert_null_check(code, fm_it, reg_to_check);
-  auto null_check_insn_it = fm_it;
+  auto reg_to_check = mov_res_it->insn->dest();
+  auto null_check_insn_it = IRList::iterator();
+  bool skip_null_check = domain.is_not_null();
+  if (!skip_null_check) {
+    // Emit null check if the type check is not preceded by one
+    fm_it = insert_null_check(code, fm_it, reg_to_check);
+    null_check_insn_it = fm_it;
+  }
   fm_it = insert_type_check(code, fm_it, reg_to_check, *dex_type);
   auto type_check_insn_it = fm_it;
   // Fall through to throw Error
   fm_it = insert_throw_error(code, fm_it, field,
                              m_config.field_assert_fail_handler);
-  fm_it = code->insert_after(fm_it, new BranchTarget(&*null_check_insn_it));
+  if (!skip_null_check) {
+    fm_it = code->insert_after(fm_it, new BranchTarget(&*null_check_insn_it));
+  }
   fm_it = code->insert_after(fm_it, new BranchTarget(&*type_check_insn_it));
   stats.field_type_check_inserted++;
   return fm_it;
@@ -184,27 +228,66 @@ IRList::iterator RuntimeAssertTransform::insert_return_value_assert(
   if (!type::is_object(ret_type)) {
     return it;
   }
-  auto dex_type = wps.get_return_type(callee).get_dex_type();
-  if (!dex_type) {
-    return it;
-  }
-  if (!can_access(from, *dex_type)) {
+  auto domain = wps.get_return_type(callee);
+  if (domain.is_top()) {
     return it;
   }
   ++it;
   if (!opcode::is_move_result(it->insn->opcode())) {
     return it;
   }
-  auto reg_to_check = it->insn->dest();
+  auto mov_res_it = it;
+  // Nullness check
+  if (domain.is_null()) {
+    auto fm_it = it;
+    auto reg_to_check = fm_it->insn->dest();
+    fm_it = insert_null_check(code, fm_it, reg_to_check);
+    auto null_check_insn_it = fm_it;
+    // Fall through to throw Error
+    fm_it = insert_throw_error(code, fm_it, callee,
+                               m_config.return_value_assert_fail_handler);
+    fm_it = code->insert_after(fm_it, new BranchTarget(&*null_check_insn_it));
+    stats.return_nullness_check_inserted++;
+    // No need to emit type check anymore
+    return fm_it;
+  } else if (domain.is_not_null()) {
+    auto fm_it = it;
+    auto reg_to_check = fm_it->insn->dest();
+    fm_it = insert_null_check(code, fm_it, reg_to_check,
+                              /* branch_on_null */ false);
+    auto null_check_insn_it = fm_it;
+    // Fall through to throw Error
+    fm_it = insert_throw_error(code, fm_it, callee,
+                               m_config.return_value_assert_fail_handler);
+    fm_it = code->insert_after(fm_it, new BranchTarget(&*null_check_insn_it));
+    stats.return_nullness_check_inserted++;
+    it = fm_it;
+  }
+
+  // Singleton type check
+  auto dex_type = domain.get_dex_type();
+  if (!dex_type) {
+    return it;
+  }
+  if (!can_access(from, *dex_type)) {
+    return it;
+  }
   auto fm_it = it;
-  fm_it = insert_null_check(code, fm_it, reg_to_check);
-  auto null_check_insn_it = fm_it;
+  auto reg_to_check = mov_res_it->insn->dest();
+  auto null_check_insn_it = IRList::iterator();
+  bool skip_null_check = domain.is_not_null();
+  if (!skip_null_check) {
+    fm_it = insert_null_check(code, fm_it, reg_to_check);
+    null_check_insn_it = fm_it;
+  }
   fm_it = insert_type_check(code, fm_it, reg_to_check, *dex_type);
   auto type_check_insn_it = fm_it;
   // Fall through to throw Error
   fm_it = insert_throw_error(code, fm_it, callee,
                              m_config.return_value_assert_fail_handler);
-  fm_it = code->insert_after(fm_it, new BranchTarget(&*null_check_insn_it));
+  if (!skip_null_check) {
+    fm_it = code->insert_after(fm_it, new BranchTarget(&*null_check_insn_it));
+  }
   fm_it = code->insert_after(fm_it, new BranchTarget(&*type_check_insn_it));
   stats.return_type_check_inserted++;
   return fm_it;
