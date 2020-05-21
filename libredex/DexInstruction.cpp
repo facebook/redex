@@ -643,8 +643,8 @@ void DexOpcodeString::gather_strings(std::vector<DexString*>& lstring) const {
 
 uint16_t DexOpcodeString::size() const { return jumbo() ? 3 : 2; }
 
-void DexOpcodeString::encode(DexOutputIdx* dodx, uint16_t*& insns) {
-  encode_opcode(dodx, insns);
+void DexOpcodeString::encode(DexOutputIdx* dodx, uint16_t*& insns) const {
+  encode_opcode(insns);
   uint32_t sidx = dodx->stringidx(m_string);
   uint16_t idx = (uint16_t)sidx;
   if (!jumbo()) {
@@ -668,8 +668,8 @@ void DexOpcodeType::gather_types(std::vector<DexType*>& ltype) const {
   ltype.push_back(m_type);
 }
 
-void DexOpcodeType::encode(DexOutputIdx* dodx, uint16_t*& insns) {
-  encode_opcode(dodx, insns);
+void DexOpcodeType::encode(DexOutputIdx* dodx, uint16_t*& insns) const {
+  encode_opcode(insns);
   uint16_t idx = dodx->typeidx(m_type);
   *insns++ = idx;
   encode_args(insns);
@@ -681,8 +681,8 @@ void DexOpcodeField::gather_fields(std::vector<DexFieldRef*>& lfield) const {
 
 uint16_t DexOpcodeField::size() const { return 2; }
 
-void DexOpcodeField::encode(DexOutputIdx* dodx, uint16_t*& insns) {
-  encode_opcode(dodx, insns);
+void DexOpcodeField::encode(DexOutputIdx* dodx, uint16_t*& insns) const {
+  encode_opcode(insns);
   uint16_t idx = dodx->fieldidx(m_field);
   *insns++ = idx;
 }
@@ -694,8 +694,8 @@ void DexOpcodeMethod::gather_methods(
 
 uint16_t DexOpcodeMethod::size() const { return 3; }
 
-void DexOpcodeMethod::encode(DexOutputIdx* dodx, uint16_t*& insns) {
-  encode_opcode(dodx, insns);
+void DexOpcodeMethod::encode(DexOutputIdx* dodx, uint16_t*& insns) const {
+  encode_opcode(insns);
   uint16_t idx = dodx->methodidx(m_method);
   *insns++ = idx;
   encode_args(insns);
@@ -703,8 +703,8 @@ void DexOpcodeMethod::encode(DexOutputIdx* dodx, uint16_t*& insns) {
 
 uint16_t DexOpcodeCallSite::size() const { return 3; }
 
-void DexOpcodeCallSite::encode(DexOutputIdx* dodx, uint16_t*& insns) {
-  encode_opcode(dodx, insns);
+void DexOpcodeCallSite::encode(DexOutputIdx* dodx, uint16_t*& insns) const {
+  encode_opcode(insns);
   uint16_t idx = dodx->callsiteidx(m_callsite);
   *insns++ = idx;
   encode_args(insns);
@@ -735,8 +735,8 @@ void DexOpcodeCallSite::gather_fields(std::vector<DexFieldRef*>& lfield) const {
 
 uint16_t DexOpcodeMethodHandle::size() const { return 3; }
 
-void DexOpcodeMethodHandle::encode(DexOutputIdx* dodx, uint16_t*& insns) {
-  encode_opcode(dodx, insns);
+void DexOpcodeMethodHandle::encode(DexOutputIdx* dodx, uint16_t*& insns) const {
+  encode_opcode(insns);
   uint16_t idx = dodx->methodhandleidx(m_methodhandle);
   *insns++ = idx;
   encode_args(insns);
@@ -759,14 +759,15 @@ void DexOpcodeMethodHandle::gather_methodhandles(
 
 uint16_t DexOpcodeData::size() const { return m_data_count + 1; }
 
-void DexOpcodeData::encode(DexOutputIdx* dodx, uint16_t*& insns) {
-  encode_opcode(dodx, insns);
+void DexOpcodeData::encode(DexOutputIdx* /* unused */, uint16_t*& insns) const {
+  encode_opcode(insns);
   memcpy(insns, m_data, m_data_count * sizeof(uint16_t));
   insns += m_data_count;
 }
 
-void DexInstruction::encode(DexOutputIdx* dodx, uint16_t*& insns) {
-  encode_opcode(dodx, insns);
+void DexInstruction::encode(DexOutputIdx* /* unused */,
+                            uint16_t*& insns) const {
+  encode_opcode(insns);
   encode_args(insns);
 }
 

@@ -74,22 +74,20 @@ class DexInstruction : public Gatherable {
   }
 
  protected:
-  void encode_args(uint16_t*& insns) {
+  void encode_args(uint16_t*& insns) const {
     for (int i = 0; i < m_count; i++) {
       *insns++ = m_arg[i];
     }
   }
 
-  void encode_opcode(DexOutputIdx* dodx, uint16_t*& insns) {
-    *insns++ = m_opcode;
-  }
+  void encode_opcode(uint16_t*& insns) const { *insns++ = m_opcode; }
 
  public:
   static DexInstruction* make_instruction(DexIdx* idx,
                                           const uint16_t** insns_ptr);
   /* Creates the right subclass of DexInstruction for the given opcode */
   static DexInstruction* make_instruction(DexOpcode);
-  virtual void encode(DexOutputIdx* dodx, uint16_t*& insns);
+  virtual void encode(DexOutputIdx* dodx, uint16_t*& insns) const;
   virtual uint16_t size() const;
   virtual DexInstruction* clone() const { return new DexInstruction(*this); }
   bool operator==(const DexInstruction&) const;
@@ -153,7 +151,7 @@ class DexOpcodeString : public DexInstruction {
 
  public:
   uint16_t size() const override;
-  void encode(DexOutputIdx* dodx, uint16_t*& insns) override;
+  void encode(DexOutputIdx* dodx, uint16_t*& insns) const override;
   void gather_strings(std::vector<DexString*>& lstring) const override;
   DexOpcodeString* clone() const override { return new DexOpcodeString(*this); }
 
@@ -175,7 +173,7 @@ class DexOpcodeType : public DexInstruction {
 
  public:
   uint16_t size() const override;
-  void encode(DexOutputIdx* dodx, uint16_t*& insns) override;
+  void encode(DexOutputIdx* dodx, uint16_t*& insns) const override;
   void gather_types(std::vector<DexType*>& ltype) const override;
   DexOpcodeType* clone() const override { return new DexOpcodeType(*this); }
 
@@ -201,7 +199,7 @@ class DexOpcodeField : public DexInstruction {
 
  public:
   uint16_t size() const override;
-  void encode(DexOutputIdx* dodx, uint16_t*& insns) override;
+  void encode(DexOutputIdx* dodx, uint16_t*& insns) const override;
   void gather_fields(std::vector<DexFieldRef*>& lfield) const override;
   DexOpcodeField* clone() const override { return new DexOpcodeField(*this); }
 
@@ -221,7 +219,7 @@ class DexOpcodeMethod : public DexInstruction {
 
  public:
   uint16_t size() const override;
-  void encode(DexOutputIdx* dodx, uint16_t*& insns) override;
+  void encode(DexOutputIdx* dodx, uint16_t*& insns) const override;
   void gather_methods(std::vector<DexMethodRef*>& lmethod) const override;
   DexOpcodeMethod* clone() const override { return new DexOpcodeMethod(*this); }
 
@@ -242,7 +240,7 @@ class DexOpcodeCallSite : public DexInstruction {
 
  public:
   uint16_t size() const override;
-  void encode(DexOutputIdx* dodx, uint16_t*& insns) override;
+  void encode(DexOutputIdx* dodx, uint16_t*& insns) const override;
   void gather_callsites(std::vector<DexCallSite*>& lcallsite) const override;
   void gather_strings(std::vector<DexString*>& lstring) const override;
   void gather_methodhandles(
@@ -270,7 +268,7 @@ class DexOpcodeMethodHandle : public DexInstruction {
 
  public:
   uint16_t size() const override;
-  void encode(DexOutputIdx* dodx, uint16_t*& insns) override;
+  void encode(DexOutputIdx* dodx, uint16_t*& insns) const override;
   void gather_methodhandles(
       std::vector<DexMethodHandle*>& lmethodhandle) const override;
   void gather_methods(std::vector<DexMethodRef*>& lmethod) const override;
@@ -302,7 +300,7 @@ class DexOpcodeData : public DexInstruction {
  public:
   // This size refers to the whole instruction, not just the data portion
   uint16_t size() const override;
-  void encode(DexOutputIdx* dodx, uint16_t*& insns) override;
+  void encode(DexOutputIdx* dodx, uint16_t*& insns) const override;
   DexOpcodeData* clone() const override { return new DexOpcodeData(*this); }
 
   DexOpcodeData(const uint16_t* opcodes, int count)
