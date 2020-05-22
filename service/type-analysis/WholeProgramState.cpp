@@ -26,45 +26,108 @@ std::ostream& operator<<(std::ostream& out, const DexMethod* method) {
 
 namespace {
 
-void set_sfields_in_partition(const DexClass* cls,
-                              const DexTypeEnvironment& env,
-                              DexTypeFieldPartition* field_partition) {
-  // Note that we *must* iterate over the list of fields in the class and not
-  // the bindings in env here. This ensures that fields whose values are unknown
-  // (and therefore implicitly represented by Top in the env) get correctly
-  // bound to Top in field_partition (which defaults its bindings to Bottom).
-  for (auto& field : cls->get_sfields()) {
-    auto value = env.get(field);
-    if (!value.is_top()) {
-      TRACE(TYPE, 5, "%s has value %s after <clinit>", SHOW(field),
-            SHOW(value));
-      always_assert(field->get_class() == cls->get_type());
-    } else {
-      TRACE(TYPE, 5, "%s has unknown value after <clinit>", SHOW(field));
-    }
-    field_partition->set(field, value);
-  }
-}
-
-void analyze_clinits(const Scope& scope,
-                     const global::GlobalTypeAnalyzer& gta,
-                     DexTypeFieldPartition* field_partition) {
-  for (DexClass* cls : scope) {
-    auto clinit = cls->get_clinit();
-    if (!clinit) {
-      continue;
-    }
-    IRCode* code = clinit->get_code();
-    auto& cfg = code->cfg();
-    auto lta = gta.get_local_analysis(clinit);
-    auto env = lta->get_exit_state_at(cfg.exit_block());
-    set_sfields_in_partition(cls, env, field_partition);
-  }
+bool is_reference(const DexField* field) {
+  return type::is_object(field->get_type());
 }
 
 bool returns_reference(const DexMethod* method) {
   auto rtype = method->get_proto()->get_rtype();
   return type::is_object(rtype);
+}
+
+/*
+ * If a static field is not populated in clinit, it is implicitly null.
+ */
+void set_sfields_in_partition(const DexClass* cls,
+                              const DexTypeEnvironment& env,
+                              DexTypeFieldPartition* field_partition) {
+  for (auto& field : cls->get_sfields()) {
+    if (!is_reference(field)) {
+      continue;
+    }
+    auto domain = env.get(field);
+    if (!domain.is_top()) {
+      TRACE(TYPE, 5, "%s has type %s after <clinit>", SHOW(field),
+            SHOW(domain));
+      always_assert(field->get_class() == cls->get_type());
+    } else {
+      TRACE(TYPE, 5, "%s has null type after <clinit>", SHOW(field));
+      domain = DexTypeDomain::null();
+    }
+    field_partition->set(field, domain);
+  }
+}
+
+/*
+ * If an instance field is not populated in ctor, it is implicitly null.
+ * Note that a class can have multipl ctors. If an instance field is not
+ * initialized in any ctor, it is nullalbe. That's why we need to join the type
+ * mapping across all ctors.
+ */
+void set_ifields_in_partition(const DexClass* cls,
+                              const DexTypeEnvironment& env,
+                              DexTypeFieldPartition* field_partition) {
+  for (auto& field : cls->get_ifields()) {
+    if (!is_reference(field)) {
+      continue;
+    }
+    auto domain = env.get(field);
+    if (!domain.is_top()) {
+      TRACE(TYPE, 5, "%s has type %s after <init>", SHOW(field), SHOW(domain));
+      always_assert(field->get_class() == cls->get_type());
+    } else {
+      TRACE(TYPE, 5, "%s has null type after <init>", SHOW(field));
+      domain = DexTypeDomain::null();
+    }
+    field_partition->update(field, [&domain](auto* current_type) {
+      current_type->join_with(domain);
+    });
+  }
+}
+
+/*
+ * We initialize the type mapping of all fields using the result of the local
+ * FieldTypeEnvironment of clinits and ctors. We do so in order to correctly
+ * initialize the NullnessDomain for fields. A static or instance field is
+ * implicitly null if not initialized with non-null value in clinit or ctor
+ * respectively.
+ *
+ * The implicit null value is not visible to the rest of the program before the
+ * execution of clinit or ctor. That's why we don't want to simply initialize
+ * all fields as null. That way we are overly conservative. A final instance
+ * field that is always initialized in ctors is not nullable to the rest of the
+ * program.
+ *
+ * TODO:
+ * There are exceptions of course. That is before the end of the ctor, our
+ * nullness result is not sound. If a ctor calls another method, that method
+ * could access an uninitialiezd instance field on the class. We don't cover
+ * this case correctly right now.
+ */
+void analyze_clinits_and_ctors(const Scope& scope,
+                               const global::GlobalTypeAnalyzer& gta,
+                               DexTypeFieldPartition* field_partition) {
+  for (DexClass* cls : scope) {
+    auto clinit = cls->get_clinit();
+    if (clinit) {
+      IRCode* code = clinit->get_code();
+      auto& cfg = code->cfg();
+      auto lta = gta.get_local_analysis(clinit);
+      auto env = lta->get_exit_state_at(cfg.exit_block());
+      set_sfields_in_partition(cls, env, field_partition);
+    } else {
+      set_sfields_in_partition(cls, DexTypeEnvironment::top(), field_partition);
+    }
+
+    const auto& ctors = cls->get_ctors();
+    for (auto* ctor : ctors) {
+      IRCode* code = ctor->get_code();
+      auto& cfg = code->cfg();
+      auto lta = gta.get_local_analysis(ctor);
+      auto env = lta->get_exit_state_at(cfg.exit_block());
+      set_ifields_in_partition(cls, env, field_partition);
+    }
+  }
 }
 
 bool analyze_gets_helper(const WholeProgramState* whole_program_state,
@@ -120,7 +183,7 @@ WholeProgramState::WholeProgramState(
     }
   });
 
-  analyze_clinits(scope, gta, &m_field_partition);
+  analyze_clinits_and_ctors(scope, gta, &m_field_partition);
   collect(scope, gta);
 }
 
@@ -129,10 +192,6 @@ void WholeProgramState::collect(const Scope& scope,
   ConcurrentMap<const DexField*, std::vector<DexTypeDomain>> fields_tmp;
   ConcurrentMap<const DexMethod*, std::vector<DexTypeDomain>> methods_tmp;
   walk::parallel::methods(scope, [&](DexMethod* method) {
-    if (method::is_clinit(method)) {
-      // No need to re-analyze clinits.
-      return;
-    }
     IRCode* code = method->get_code();
     if (code == nullptr) {
       return;

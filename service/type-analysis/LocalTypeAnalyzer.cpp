@@ -14,19 +14,6 @@
 
 using namespace type_analyzer;
 
-namespace {
-
-bool field_put_helper(const IRInstruction* insn, DexTypeEnvironment* env) {
-  auto field = resolve_field(insn->get_field());
-  if (field == nullptr || !type::is_object(field->get_type())) {
-    return false;
-  }
-  env->set(field, env->get(insn->src(0)));
-  return true;
-}
-
-} // namespace
-
 namespace type_analyzer {
 
 namespace local {
@@ -351,9 +338,11 @@ bool RegisterTypeAnalyzer::analyze_filled_new_array(const IRInstruction* insn,
   return true;
 }
 
-bool ClinitFieldAnalyzer::analyze_sget(const DexType* class_under_init,
-                                       const IRInstruction* insn,
-                                       DexTypeEnvironment* env) {
+namespace {
+
+bool field_get_helper(const DexType* class_under_init,
+                      const IRInstruction* insn,
+                      DexTypeEnvironment* env) {
   auto field = resolve_field(insn->get_field());
   if (field == nullptr) {
     return false;
@@ -365,9 +354,9 @@ bool ClinitFieldAnalyzer::analyze_sget(const DexType* class_under_init,
   return false;
 }
 
-bool ClinitFieldAnalyzer::analyze_sput(const DexType* class_under_init,
-                                       const IRInstruction* insn,
-                                       DexTypeEnvironment* env) {
+bool field_put_helper(const DexType* class_under_init,
+                      const IRInstruction* insn,
+                      DexTypeEnvironment* env) {
   auto field = resolve_field(insn->get_field());
   if (field == nullptr) {
     return false;
@@ -379,14 +368,30 @@ bool ClinitFieldAnalyzer::analyze_sput(const DexType* class_under_init,
   return false;
 }
 
-bool FieldTypeAnalyzer::analyze_iput(const IRInstruction* insn,
-                                     DexTypeEnvironment* env) {
-  return field_put_helper(insn, env);
+} // namespace
+
+bool ClinitFieldAnalyzer::analyze_sget(const DexType* class_under_init,
+                                       const IRInstruction* insn,
+                                       DexTypeEnvironment* env) {
+  return field_get_helper(class_under_init, insn, env);
 }
 
-bool FieldTypeAnalyzer::analyze_sput(const IRInstruction* insn,
+bool ClinitFieldAnalyzer::analyze_sput(const DexType* class_under_init,
+                                       const IRInstruction* insn,
+                                       DexTypeEnvironment* env) {
+  return field_put_helper(class_under_init, insn, env);
+}
+
+bool CtorFieldAnalyzer::analyze_iget(const DexType* class_under_init,
+                                     const IRInstruction* insn,
                                      DexTypeEnvironment* env) {
-  return field_put_helper(insn, env);
+  return field_get_helper(class_under_init, insn, env);
+}
+
+bool CtorFieldAnalyzer::analyze_iput(const DexType* class_under_init,
+                                     const IRInstruction* insn,
+                                     DexTypeEnvironment* env) {
+  return field_put_helper(class_under_init, insn, env);
 }
 
 } // namespace local

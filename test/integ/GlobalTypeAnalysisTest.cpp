@@ -177,23 +177,6 @@ TEST_F(GlobalTypeAnalysisTest, TrueVirtualFieldTypeTest) {
   auto field_val =
       get_field("TestD$State;.mVal:Lcom/facebook/redextest/TestD$Base;");
   EXPECT_TRUE(wps.get_field_type(field_val).is_top());
-
-  // Confirm null assignment propagates in the base method.
-  auto meth_bupdate = get_method("TestD$Base;.update",
-                                 "Lcom/facebook/redextest/TestD$State;", "V");
-  auto lta = gta->get_local_analysis(meth_bupdate);
-  auto code = meth_bupdate->get_code();
-  auto bupdate_exit_env = lta->get_exit_state_at(code->cfg().exit_block());
-  EXPECT_TRUE(
-      bupdate_exit_env.get_field_environment().get(field_val).is_null());
-
-  // Confirm top propagates in the sub method.
-  auto meth_supdate = get_method("TestD$Sub;.update",
-                                 "Lcom/facebook/redextest/TestD$State;", "V");
-  lta = gta->get_local_analysis(meth_supdate);
-  code = meth_supdate->get_code();
-  auto supdate_exit_env = lta->get_exit_state_at(code->cfg().exit_block());
-  EXPECT_TRUE(supdate_exit_env.get_field_environment().get(field_val).is_top());
 }
 
 TEST_F(GlobalTypeAnalysisTest, SmallSetDexTypeDomainTest) {
@@ -272,7 +255,7 @@ TEST_F(GlobalTypeAnalysisTest, ClinitFieldAnalyzerTest) {
       get_field("TestH;.mBase:Lcom/facebook/redextest/TestH$Base;");
   ftype = wps.get_field_type(field_mbase);
   EXPECT_FALSE(ftype.is_top());
-  EXPECT_TRUE(ftype.is_not_null());
+  EXPECT_TRUE(ftype.is_nullable());
   EXPECT_EQ(ftype.get_single_domain(),
             SingletonDexTypeDomain(get_type("TestH$Base")));
   EXPECT_EQ(ftype.get_set_domain(),
@@ -282,7 +265,7 @@ TEST_F(GlobalTypeAnalysisTest, ClinitFieldAnalyzerTest) {
       get_method("TestH;.foo", "", "Lcom/facebook/redextest/TestH$Base;");
   auto rtype = wps.get_return_type(meth_foo);
   EXPECT_FALSE(rtype.is_top());
-  EXPECT_TRUE(rtype.is_not_null());
+  EXPECT_TRUE(rtype.is_nullable());
   EXPECT_EQ(rtype.get_single_domain(),
             SingletonDexTypeDomain(get_type("TestH$Base")));
   EXPECT_EQ(rtype.get_set_domain(),
@@ -292,7 +275,7 @@ TEST_F(GlobalTypeAnalysisTest, ClinitFieldAnalyzerTest) {
       get_method("TestH;.bar", "", "Lcom/facebook/redextest/TestH$Base;");
   rtype = wps.get_return_type(meth_bar);
   EXPECT_FALSE(rtype.is_top());
-  EXPECT_TRUE(rtype.is_not_null());
+  EXPECT_TRUE(rtype.is_nullable());
   EXPECT_EQ(rtype.get_single_domain(),
             SingletonDexTypeDomain(get_type("TestH$Base")));
   EXPECT_EQ(rtype.get_set_domain(),

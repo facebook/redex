@@ -112,18 +112,24 @@ class ClinitFieldAnalyzer final
 };
 
 /*
- * We only use FieldTypeAnalyzer to update the local FieldTypeEnvironment. The
- * purpose is to make the analysis results more accessible. The analyzer does
- * not actively propagating type info back into the local RegTypeEnvironment.
- * We only propagate field type info from WholeProgramState to
- * RegTypeEnvironment except for <clinit>s.
+ * Similarly CtorFieldAnalyzer populates local FieldTypeEnvironment when
+ * analyzing a ctor. We only do so for instance fields that belong to the class
+ * the ctor is under. When collecting the WholeProgramState, we first collect
+ * the end state of the FieldTypeEnvironment for all ctors. We use that as the
+ * initial type mapping for all instance fields.
  */
-class FieldTypeAnalyzer final
-    : public InstructionAnalyzerBase<FieldTypeAnalyzer, DexTypeEnvironment> {
+class CtorFieldAnalyzer final
+    : public InstructionAnalyzerBase<CtorFieldAnalyzer,
+                                     DexTypeEnvironment,
+                                     DexType* /* class_under_init */> {
  public:
-  static bool analyze_iput(const IRInstruction* insn, DexTypeEnvironment* env);
+  static bool analyze_iget(const DexType* class_under_init,
+                           const IRInstruction* insn,
+                           DexTypeEnvironment* env);
 
-  static bool analyze_sput(const IRInstruction* insn, DexTypeEnvironment* env);
+  static bool analyze_iput(const DexType* class_under_init,
+                           const IRInstruction* insn,
+                           DexTypeEnvironment* env);
 };
 
 } // namespace local

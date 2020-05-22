@@ -74,6 +74,7 @@ class RuntimeAssertTransform {
   IRList::iterator insert_field_assert(const WholeProgramState&,
                                        const DexType*,
                                        IRCode*,
+                                       bool,
                                        IRList::iterator&,
                                        Stats&);
   IRList::iterator insert_return_value_assert(const WholeProgramState&,

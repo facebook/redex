@@ -101,6 +101,7 @@ RuntimeAssertTransform::Stats RuntimeAssertTransform::apply(
   auto* code = method->get_code();
   always_assert(code != nullptr);
   RuntimeAssertTransform::Stats stats{};
+  bool in_clinit_or_init = method::is_clinit(method) && method::is_init(method);
   bool in_try = false;
   for (auto it = code->begin(); it != code->end(); ++it) {
     // Avoid emitting checks in a try section.
@@ -119,7 +120,8 @@ RuntimeAssertTransform::Stats RuntimeAssertTransform::apply(
     }
     if (!in_try) {
       always_assert(it->insn);
-      it = insert_field_assert(wps, method->get_class(), code, it, stats);
+      it = insert_field_assert(wps, method->get_class(), code,
+                               in_clinit_or_init, it, stats);
       it =
           insert_return_value_assert(wps, method->get_class(), code, it, stats);
     }
@@ -131,6 +133,7 @@ IRList::iterator RuntimeAssertTransform::insert_field_assert(
     const WholeProgramState& wps,
     const DexType* from,
     IRCode* code,
+    bool in_clinit_or_init,
     IRList::iterator& it,
     Stats& stats) {
   auto* insn = it->insn;
@@ -155,31 +158,38 @@ IRList::iterator RuntimeAssertTransform::insert_field_assert(
   }
   auto mov_res_it = it;
   // Nullness check
-  if (domain.is_null()) {
-    auto fm_it = it;
-    auto reg_to_check = fm_it->insn->dest();
-    fm_it = insert_null_check(code, fm_it, reg_to_check);
-    auto null_check_insn_it = fm_it;
-    // Fall through to throw Error
-    fm_it = insert_throw_error(code, fm_it, field,
-                               m_config.field_assert_fail_handler);
-    fm_it = code->insert_after(fm_it, new BranchTarget(&*null_check_insn_it));
-    stats.field_nullness_check_inserted++;
-    // No need to emit type check anymore
-    return fm_it;
-  } else if (domain.is_not_null()) {
-    auto fm_it = it;
-    auto reg_to_check = fm_it->insn->dest();
-    fm_it = insert_null_check(code, fm_it, reg_to_check,
-                              /* branch_on_null */ false);
-    auto null_check_insn_it = fm_it;
-    // Fall through to throw Error
-    fm_it = insert_throw_error(code, fm_it, field,
-                               m_config.field_assert_fail_handler);
-    fm_it = code->insert_after(fm_it, new BranchTarget(&*null_check_insn_it));
-    stats.field_nullness_check_inserted++;
-    it = fm_it;
+  // We do not emit null checks for fields in clinits or ctors. Because the
+  // field might not be initialized yet.
+  bool skip_null_check = domain.is_not_null() || in_clinit_or_init;
+
+  if (!skip_null_check) {
+    if (domain.is_null()) {
+      auto fm_it = it;
+      auto reg_to_check = fm_it->insn->dest();
+      fm_it = insert_null_check(code, fm_it, reg_to_check);
+      auto null_check_insn_it = fm_it;
+      // Fall through to throw Error
+      fm_it = insert_throw_error(code, fm_it, field,
+                                 m_config.field_assert_fail_handler);
+      fm_it = code->insert_after(fm_it, new BranchTarget(&*null_check_insn_it));
+      stats.field_nullness_check_inserted++;
+      // No need to emit type check anymore
+      return fm_it;
+    } else if (domain.is_not_null()) {
+      auto fm_it = it;
+      auto reg_to_check = fm_it->insn->dest();
+      fm_it = insert_null_check(code, fm_it, reg_to_check,
+                                /* branch_on_null */ false);
+      auto null_check_insn_it = fm_it;
+      // Fall through to throw Error
+      fm_it = insert_throw_error(code, fm_it, field,
+                                 m_config.field_assert_fail_handler);
+      fm_it = code->insert_after(fm_it, new BranchTarget(&*null_check_insn_it));
+      stats.field_nullness_check_inserted++;
+      it = fm_it;
+    }
   }
+
   // Singleton type check
   auto dex_type = domain.get_dex_type();
   if (!dex_type) {
@@ -191,7 +201,6 @@ IRList::iterator RuntimeAssertTransform::insert_field_assert(
   auto fm_it = it;
   auto reg_to_check = mov_res_it->insn->dest();
   auto null_check_insn_it = IRList::iterator();
-  bool skip_null_check = domain.is_not_null();
   if (!skip_null_check) {
     // Emit null check if the type check is not preceded by one
     fm_it = insert_null_check(code, fm_it, reg_to_check);

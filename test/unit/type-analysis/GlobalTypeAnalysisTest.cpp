@@ -303,7 +303,7 @@ TEST_F(GlobalTypeAnalysisTest, ClinitSimpleTest) {
       (new-instance "LO;")
       (move-result-pseudo-object v0)
       (invoke-direct (v0) "LO;.<init>:()V")
-      (iput-object v0 v1 "LA;.f1:LO;")
+      (sput-object v0 "LA;.f1:LO;")
       (return-void)
      )
     )
@@ -324,7 +324,7 @@ TEST_F(GlobalTypeAnalysisTest, ClinitSimpleTest) {
     (method (public) "LA;.bar:()LO;"
      (
       (load-param-object v1) ; 'this' argument
-      (iget-object v1 "LA;.f1:LO;")
+      (sget-object "LA;.f1:LO;")
       (move-result-pseudo-object v0)
       (return-object v0)
      )
