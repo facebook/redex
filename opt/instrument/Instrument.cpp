@@ -38,7 +38,7 @@ static bool debug = false;
 
 class InstrumentInterDexPlugin : public interdex::InterDexPassPlugin {
  public:
-  InstrumentInterDexPlugin(size_t max_analysis_methods)
+  explicit InstrumentInterDexPlugin(size_t max_analysis_methods)
       : m_max_analysis_methods(max_analysis_methods) {}
 
   void configure(const Scope& scope, ConfigFiles& cfg) override{};
@@ -310,7 +310,7 @@ void insert_invoke_static_call_bb(IRCode* code,
       auto reg_method_id = code->allocate_temp();
       method_id_inst->set_dest(reg_method_id);
 
-      assert(reg_bb_vector.size() != 0);
+      assert(!reg_bb_vector.empty());
       if (reg_bb_vector.size() <= 5) {
         IRInstruction* invoke_inst = new IRInstruction(OPCODE_INVOKE_STATIC);
         // Method to be invoked depends on the number of vectors in current
@@ -534,7 +534,7 @@ void instrument_onMethodBegin(DexMethod* method,
 
 // Find a sequence of opcode that creates a static array. Patch the array size.
 void patch_array_size(DexClass* analysis_cls,
-                      const std::string array_name,
+                      const std::string& array_name,
                       const int array_size) {
   DexMethod* clinit = analysis_cls->get_clinit();
   always_assert(clinit != nullptr);
