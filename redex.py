@@ -11,6 +11,7 @@ import fnmatch
 import glob
 import itertools
 import json
+import logging
 import os
 import platform
 import re
@@ -556,8 +557,10 @@ def copy_file_to_out_dir(tmp, apk_output_path, name, human_name, out_name):
     if os.path.isfile(tmp_path):
         subprocess.check_call(["cp", tmp_path, output_path])
         log("Copying " + human_name + " map to output dir")
+        logging.warning("Copying " + human_name + " map to output_dir: " + output_path)
     else:
         log("Skipping " + human_name + " copy, since no file found to copy")
+        logging.warning("Skipping " + human_name + " copy, since no file found to copy")
 
 
 def copy_all_file_to_out_dir(tmp, apk_output_path, ext, human_name):
