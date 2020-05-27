@@ -277,6 +277,7 @@ redex_all_SOURCES = \
 	opt/final_inline/FinalInline.cpp \
 	opt/final_inline/FinalInlineV2.cpp \
 	opt/instrument/Instrument.cpp \
+	opt/instrument/BlockInstrument.cpp \
 	opt/interdex/CrossDexRefMinimizer.cpp \
 	opt/interdex/CrossDexRelocator.cpp \
 	opt/interdex/DexStructure.cpp \
