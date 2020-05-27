@@ -100,32 +100,29 @@ bool is_included(const DexMethod* method,
   return set.count(method->get_deobfuscated_name());
 }
 
-std::unordered_map<int /* Number of arguments*/, DexMethod*>
-find_analysis_methods(const DexClass& cls, const std::string& name) {
-  std::unordered_map<int, DexMethod*> analysis_method_map;
+std::unordered_map<int, /*num of arguments*/ DexMethod*> build_onMethodExit_map(
+    const DexClass& cls, const std::string& onMethodExit_name) {
+  std::unordered_map<int, DexMethod*> onMethodExit_map;
   for (const auto& dm : cls.get_dmethods()) {
-    if (name == dm->get_name()->c_str()) {
+    if (onMethodExit_name == dm->get_name()->c_str()) {
       auto const v =
           std::next(dm->get_proto()->get_args()->get_type_list().begin(), 1);
       if (*v == DexType::make_type("[S")) {
-        analysis_method_map.emplace(1, dm);
+        // General case: void onMethodExit(int offset, short[] bbVector)
+        onMethodExit_map.emplace(1, dm);
       } else {
-        analysis_method_map.emplace(dm->get_proto()->get_args()->size(), dm);
+        // Specific cases: void onMethodExit(int offset, short vec1, ..., vecN)
+        onMethodExit_map.emplace(dm->get_proto()->get_args()->size(), dm);
       }
     }
   }
-  return analysis_method_map;
-}
 
-std::unordered_map<int, DexMethod*> find_and_verify_analysis_method(
-    const DexClass& cls, const std::string& method_name) {
-  const auto& analysis_method_map = find_analysis_methods(cls, method_name);
-  if (!analysis_method_map.empty()) {
-    return analysis_method_map;
+  if (!onMethodExit_map.empty()) {
+    return onMethodExit_map;
   }
 
-  std::cerr << "[InstrumentPass] error: cannot find " << method_name << " in "
-            << show(cls) << std::endl;
+  std::cerr << "[InstrumentPass] error: cannot find " << onMethodExit_name
+            << " in " << show(cls) << std::endl;
   for (const auto& m : cls.get_dmethods()) {
     std::cerr << " " << show(m) << std::endl;
   }
@@ -173,7 +170,6 @@ void insert_invoke_instr(IRCode* code,
   // order to prevent adding an extra throw edge to the CFG, we split the
   // block into two. We insert a TRY_END instruction before our
   // instrumentation INVOKE call and a TRY_START after.
-
   auto catch_block = find_try_block(code, insert_point);
 
   insert_try_end_instr(code, insert_point, catch_block);
@@ -183,13 +179,12 @@ void insert_invoke_instr(IRCode* code,
 }
 
 // TODO(minjang): We could simply utilize already existing analysis methods
-// instead of making an array. For an instance, to handle 42 bit vecgors, We
+// instead of making an array. For an instance, to handle 42 bit vectors, We
 // could call 8 times of onMethodExitBB(SSSSS) and 1 time of onMethodExitBB(SS).
 //
 // ---
 // When the number of bit vectors for a method is more than 5, they are added to
-// an array and the array is passed to the analysis function onMethodExitBB()
-// along with the method identifier.
+// an array, and the array is passed to onMethodExitBB() along with method id.
 //
 // Algorithm:
 //  Bit vectors: v_0, v_1, v_2, v_3, v_4, v_5
@@ -296,37 +291,39 @@ void insert_invoke_static_array_arg(IRCode* code,
   insert_invoke_instr(code, insert_point, method_id_inst, invoke_inst);
 }
 
-void insert_invoke_static_call_bb(IRCode* code,
-                                  size_t method_id,
-                                  DexMethod* method_onMethodExit,
-                                  const std::vector<reg_t>& reg_bb_vector) {
+void insert_onMethodExit_call(IRCode* code,
+                              size_t method_id,
+                              DexMethod* method_onMethodExit,
+                              const std::vector<reg_t>& reg_bb_vector) {
   for (auto mie = code->begin(); mie != code->end(); ++mie) {
-    if (mie->type == MFLOW_OPCODE &&
-        (mie->insn->opcode() == OPCODE_RETURN ||
-         mie->insn->opcode() == OPCODE_RETURN_OBJECT ||
-         mie->insn->opcode() == OPCODE_RETURN_VOID)) {
-      IRInstruction* method_id_inst = new IRInstruction(OPCODE_CONST);
-      method_id_inst->set_literal(method_id);
-      auto reg_method_id = code->allocate_temp();
-      method_id_inst->set_dest(reg_method_id);
+    if (mie->type != MFLOW_OPCODE ||
+        (mie->insn->opcode() != OPCODE_RETURN &&
+         mie->insn->opcode() != OPCODE_RETURN_OBJECT &&
+         mie->insn->opcode() != OPCODE_RETURN_VOID)) {
+      continue;
+    }
 
-      assert(!reg_bb_vector.empty());
-      if (reg_bb_vector.size() <= 5) {
-        IRInstruction* invoke_inst = new IRInstruction(OPCODE_INVOKE_STATIC);
-        // Method to be invoked depends on the number of vectors in current
-        // method. The '1' is added to count first argument i.e. method_id.
-        invoke_inst->set_method(method_onMethodExit);
-        invoke_inst->set_srcs_size(reg_bb_vector.size() + 1);
-        invoke_inst->set_src(0, reg_method_id);
-        for (size_t reg_index = 0; reg_index < reg_bb_vector.size();
-             ++reg_index) {
-          invoke_inst->set_src(reg_index + 1, reg_bb_vector[reg_index]);
-        }
-        insert_invoke_instr(code, mie, method_id_inst, invoke_inst);
-      } else {
-        insert_invoke_static_array_arg(code, method_id, method_onMethodExit,
-                                       reg_bb_vector, mie);
+    IRInstruction* method_id_inst = new IRInstruction(OPCODE_CONST);
+    method_id_inst->set_literal(method_id);
+    auto reg_method_id = code->allocate_temp();
+    method_id_inst->set_dest(reg_method_id);
+
+    assert(!reg_bb_vector.empty());
+    if (reg_bb_vector.size() <= 5) {
+      IRInstruction* invoke_inst = new IRInstruction(OPCODE_INVOKE_STATIC);
+      // Method to be invoked depends on the number of vectors in current
+      // method. The '1' is added to count first argument i.e. method_id.
+      invoke_inst->set_method(method_onMethodExit);
+      invoke_inst->set_srcs_size(reg_bb_vector.size() + 1);
+      invoke_inst->set_src(0, reg_method_id);
+      for (size_t reg_index = 0; reg_index < reg_bb_vector.size();
+           ++reg_index) {
+        invoke_inst->set_src(reg_index + 1, reg_bb_vector[reg_index]);
       }
+      insert_invoke_instr(code, mie, method_id_inst, invoke_inst);
+    } else {
+      insert_invoke_static_array_arg(code, method_id, method_onMethodExit,
+                                     reg_bb_vector, mie);
     }
   }
 }
@@ -362,70 +359,66 @@ IRList::iterator find_or_insn_insert_point(cfg::Block* block) {
 // used to distinguish multiple bit vectors. The set MSB indicates continuation:
 // read the following vector(s) again until we see the unset MSB. We actually
 // use 15 bits per vector.
-int instrument_onBasicBlockBegin(
+int instrument_basic_blocks(
     IRCode* code,
     DexMethod* method,
-    const std::unordered_map<int, DexMethod*>& method_onMethodExit_map,
+    const std::unordered_map<int, DexMethod*>& onMethodExit_map,
     size_t method_id,
-    int& all_bbs,
+    int& num_all_bbs,
     int& num_blocks_instrumented,
-    int& all_methods_inst,
+    int& num_instrumented_methods,
     std::map<int, std::pair<std::string, int>>& method_id_name_map,
     std::map<size_t, int>& bb_vector_stat) {
   assert(code != nullptr);
 
-  code->build_cfg(/* editable */ false);
+  code->build_cfg(/*editable*/ false);
   const auto& blocks = code->cfg().blocks();
 
-  // It is done this way to avoid using ceil() or double/float casting.
-  // Since we reserve the MSB as the end marker, we divide by 15.
+  // Compute the number of necessary vectors to hold all blocks data. We use
+  // only 15 bits for each vector.
   const size_t num_vectors = (blocks.size() + 15 - 1) / 15;
 
-  TRACE(INSTRUMENT, 7, "[%s] Basic Blocks: %zu, Necessary vectors: %zu",
+  TRACE(INSTRUMENT, 7, "[%s] %zu blocks with %zu 16-bit vectors",
         SHOW(method->get_name()), blocks.size(), num_vectors);
 
-  all_bbs += blocks.size();
+  num_all_bbs += blocks.size();
 
-  // Add <num_vectors> shorts to the beginning to method. These will be used as
-  // basic block 16-bit vectors.
-  std::vector<reg_t> reg_bb_vector(num_vectors);
-  std::vector<IRInstruction*> const_inst_int(num_vectors);
-  for (size_t reg_index = 0; reg_index < num_vectors; ++reg_index) {
-    const_inst_int.at(reg_index) = new IRInstruction(OPCODE_CONST);
-    // The very last bit is for the end marker: the unset bit. Otherwise, set
-    // the MSB to indicate continuation.
-    const_inst_int.at(reg_index)->set_literal(
-        reg_index == num_vectors - 1 ? 0 : -32768);
-    reg_bb_vector.at(reg_index) = code->allocate_temp();
-    const_inst_int.at(reg_index)->set_dest(reg_bb_vector.at(reg_index));
+  // Allocate short[num_vectors] in the entry block.
+  std::vector<reg_t> reg_vectors(num_vectors);
+  std::vector<IRInstruction*> const_insts(num_vectors);
+  for (size_t i = 0; i < num_vectors; ++i) {
+    const_insts.at(i) = new IRInstruction(OPCODE_CONST);
+    // Set the end marker at MSB. 0 at the last vector.
+    const_insts.at(i)->set_literal(i == num_vectors - 1 ? 0 : -32768);
+    reg_vectors.at(i) = code->allocate_temp();
+    const_insts.at(i)->set_dest(reg_vectors.at(i));
   }
 
-  // Before the basic blocks are instrumented, at the method exit points,
-  // we add an INVOKE_STATIC call to send the bit vector to logs. This is done
-  // before actual instrumentation to get the updated CFG after adding edges to
-  // this invoke call. The INVOKE call takes (num_vectors + 1) arguments:
-  // Method ID (actually, the short array offset) and bit vectors * n.
+  // Before instrumenting blocks, we add an INVOKE_STATIC onMethodExit to send
+  // the bit vectors for logging, at the exit point. Note that this may alter
+  // the CFG. So, this needs to be done before actual instrumentation.
+  //
+  // The INVOKE call takes (num_vectors + 1) arguments: Method ID (actually,
+  // the short array offset) and bit vectors * n. If num_vectors > 5, we call
+  // the general version of onMethodExit, onMethodExit(int offset, short[]).
   size_t index_to_method = (num_vectors > 5) ? 1 : num_vectors + 1;
   ++bb_vector_stat[num_vectors];
-  assert(method_onMethodExit_map.count(index_to_method));
-  insert_invoke_static_call_bb(code, method_id,
-                               method_onMethodExit_map.at(index_to_method),
-                               reg_bb_vector);
+  assert(onMethodExit_map.count(index_to_method));
+  insert_onMethodExit_call(code, method_id,
+                           onMethodExit_map.at(index_to_method), reg_vectors);
 
   for (cfg::Block* block : blocks) {
     const size_t block_vector_index = block->id() / 15;
-    // Add instruction to calculate 'basic_block_bit_vector |= 1 << block->id()'
-    // We use OPCODE_OR_INT_LIT16 to prevent inserting an extra CONST
-    // instruction into the bytecode.
+    // Insert 'block_bit_vector |= 1 << block->id()'.
     IRInstruction* or_inst = new IRInstruction(OPCODE_OR_INT_LIT16);
     or_inst->set_literal(static_cast<int16_t>(1ULL << (block->id() % 15)));
-    or_inst->set_src(0, reg_bb_vector.at(block_vector_index));
-    or_inst->set_dest(reg_bb_vector.at(block_vector_index));
+    or_inst->set_src(0, reg_vectors.at(block_vector_index));
+    or_inst->set_dest(reg_vectors.at(block_vector_index));
 
     // Find where to insert the newly created instruction block.
     auto insert_point = find_or_insn_insert_point(block);
 
-    // We do not instrument a Basic block if:
+    // We do not instrument a basic block if:
     // 1. It only has internal or MOVE instructions.
     // 2. BB has no opcodes.
     if (insert_point == block->end() || block->num_opcodes() < 1) {
@@ -453,14 +446,14 @@ int instrument_onBasicBlockBegin(
       });
 
   for (size_t reg_index = 0; reg_index < num_vectors; ++reg_index) {
-    code->insert_before(insert_point_init, const_inst_int.at(reg_index));
+    code->insert_before(insert_point_init, const_insts.at(reg_index));
   }
 
   TRACE(INSTRUMENT, 7, "Id: %zu Method: %s", method_id, SHOW(method_name));
   TRACE(INSTRUMENT, 7, "After Instrumentation Full:\n %s", SHOW(code));
 
   method_id += num_vectors;
-  all_methods_inst++;
+  num_instrumented_methods++;
   return method_id;
 }
 
@@ -637,7 +630,7 @@ void write_basic_block_index_file(
         << std::endl;
   }
   TRACE(INSTRUMENT, 2, "Index file was written to: %s", SHOW(file_name));
-} // namespace
+}
 
 void replace_substr(std::string& data,
                     const std::string& to_find,
@@ -1051,45 +1044,7 @@ void do_simple_method_tracing(DexClass* analysis_cls,
   pm.incr_metric("Excluded", excluded);
 }
 
-// A simple bit-vector basic block instrumentation algorithm
-//
-//  Example) Original CFG
-//   +--------+       +--------+       +--------+
-//   | block0 | ----> | block1 | ----> | block2 |
-//   |        |       |        |       | Return |
-//   +--------+       +--------+       +--------+
-//
-//  Instrumented CFG:
-//   - Initialize bit vector(s) at the beginning
-//   - Set <bb_id>-th bit in the vector using or-lit/16. So, the bit vector is a
-//     short type. We don't use a 32-bit int; no such or-lit/32 instruction.
-//   - Before RETURN, insert INVOKE onMethodExit(method_id, bit_vectors).
-//
-//   +------------------+     +------------------+     +-----------------------+
-//   | * CONST v0, 0    | --> | * OR_LIT16 v0, 2 | --> | * OR_LIT16 v0, 4      |
-//   | * OR_LIT16 v0, 1 |     |   block1         |     |   block2              |
-//   |   block0         |     |                  |     | * CONST v2, method_id |
-//   +------------------+     +------------------+     | * INVOKE v2,v0, ...   |
-//                                                     |   Return              |
-//                                                     +-----------------------+
-//
-void do_basic_block_tracing(DexClass* analysis_cls,
-                            DexStoresVector& stores,
-                            ConfigFiles& cfg,
-                            PassManager& pm,
-                            const InstrumentPass::Options& options) {
-  const auto& method_onMethodExit_map = find_and_verify_analysis_method(
-      *analysis_cls, options.analysis_method_name);
-
-  size_t method_index = 1;
-  int all_bb_nums = 0;
-  int all_methods = 0;
-  int all_bb_inst = 0;
-  int all_method_inst = 0;
-  std::map<int /*id*/, std::pair<std::string, int /*number of BBs*/>>
-      method_id_name_map;
-  auto scope = build_class_scope(stores);
-
+std::unordered_set<std::string> get_cold_start_classes(ConfigFiles& cfg) {
   auto interdex_list = cfg.get_coldstart_classes();
   std::unordered_set<std::string> cold_start_classes;
   std::string dex_end_marker0("LDexEndMarker0;");
@@ -1100,15 +1055,61 @@ void do_basic_block_tracing(DexClass* analysis_cls,
     class_string.back() = '/';
     cold_start_classes.insert(class_string);
   }
+  return cold_start_classes;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// A simple basic block instrumentation algorithm using bit vectors:
+//
+// Original CFG:
+//   +--------+       +--------+       +--------+
+//   | block0 | ----> | block1 | ----> | block2 |
+//   |        |       |        |       | Return |
+//   +--------+       +--------+       +--------+
+//
+// This CFG is instrumented as following:
+//  - Insert instructions to initialize bit vector(s) at the entry block.
+//  - Set <bb_id>-th bit in the vector using or-lit/16. The bit vector is a
+//    short type. There is no such or-lit/32 instruction.
+//  - Before RETURN, insert INVOKE DynamicAnalysis.onMethodExit(method_id,
+//    bit_vectors), where the recorded bit vectors are reported.
+//
+//   +------------------+     +------------------+     +-----------------------+
+//   | * CONST v0, 0    | --> | * OR_LIT16 v0, 2 | --> | * OR_LIT16 v0, 4      |
+//   | * OR_LIT16 v0, 1 |     |   block1         |     |   block2              |
+//   |   block0         |     |                  |     | * CONST v2, method_id |
+//   +------------------+     +------------------+     | * INVOKE v2,v0, ...   |
+//                                                     |   Return              |
+//                                                     +-----------------------+
+//
+////////////////////////////////////////////////////////////////////////////////
+void do_basic_block_tracing(DexClass* analysis_cls,
+                            DexStoresVector& stores,
+                            ConfigFiles& cfg,
+                            PassManager& pm,
+                            const InstrumentPass::Options& options) {
+  const auto& onMethodExit_map =
+      build_onMethodExit_map(*analysis_cls, options.analysis_method_name);
+
+  std::unordered_set<std::string> cold_start_classes =
+      get_cold_start_classes(cfg);
   TRACE(INSTRUMENT, 7, "Number of classes: %d", cold_start_classes.size());
 
-  std::map<size_t /* num_vectors */, int /* count */> bb_vector_stat;
+  size_t method_index = 1;
+  int num_all_bbs = 0;
+  int num_all_methods = 0;
+  int num_instrumented_bbs = 0;
+  int num_instrumented_methods = 0;
+  std::map<int /*id*/, std::pair<std::string /*name*/, int /*num_BBs*/>>
+      method_id_name_map;
+  std::map<size_t /*num_vectors*/, int /*count*/> bb_vector_stat;
+  auto scope = build_class_scope(stores);
   walk::code(scope, [&](DexMethod* method, IRCode& code) {
     if (method == analysis_cls->get_clinit()) {
       return;
     }
-    if (std::any_of(method_onMethodExit_map.begin(),
-                    method_onMethodExit_map.end(),
+    if (std::any_of(onMethodExit_map.begin(),
+                    onMethodExit_map.end(),
                     [&](const auto& e) { return e.second == method; })) {
       return;
     }
@@ -1128,10 +1129,11 @@ void do_basic_block_tracing(DexClass* analysis_cls,
     }
 
     TRACE(INSTRUMENT, 9, "Whitelist: included: %s", SHOW(method));
-    all_methods++;
-    method_index = instrument_onBasicBlockBegin(
-        &code, method, method_onMethodExit_map, method_index, all_bb_nums,
-        all_bb_inst, all_method_inst, method_id_name_map, bb_vector_stat);
+    num_all_methods++;
+    method_index = instrument_basic_blocks(
+        &code, method, onMethodExit_map, method_index, num_all_bbs,
+        num_instrumented_bbs, num_instrumented_methods, method_id_name_map,
+        bb_vector_stat);
   });
   patch_array_size(analysis_cls, "sBasicBlockStats", method_index);
 
@@ -1141,7 +1143,7 @@ void do_basic_block_tracing(DexClass* analysis_cls,
   double cumulative = 0.;
   TRACE(INSTRUMENT, 4, "BB vector stats:");
   for (const auto& p : bb_vector_stat) {
-    double percent = (double)p.second * 100. / (float)all_method_inst;
+    double percent = p.second * 100. / (double)num_instrumented_methods;
     cumulative += percent;
     TRACE(INSTRUMENT, 4, " %3zu bit vectors: %6d (%6.3lf%%, %6.3lf%%)", p.first,
           p.second, percent, cumulative);
@@ -1150,7 +1152,8 @@ void do_basic_block_tracing(DexClass* analysis_cls,
   TRACE(INSTRUMENT, 3,
         "Instrumented %d methods and %d blocks, out of %d methods and %d "
         "blocks",
-        (all_method_inst - 1), all_bb_inst, all_methods, all_bb_nums);
+        (num_instrumented_methods - 1), num_instrumented_bbs, num_all_methods,
+        num_all_bbs);
 }
 
 std::unordered_set<std::string> load_blacklist_file(
@@ -1222,6 +1225,7 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
     pm.set_metric("wrapped_invocations", num_wrapped_invocations);
     return;
   }
+
   if (!cfg.get_json_config().get("instrument_pass_enabled", false) &&
       !pm.get_redex_options().instrument_pass_enabled) {
     TRACE(INSTRUMENT, 1,
