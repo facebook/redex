@@ -176,11 +176,12 @@ TEST_F(ProguardTest, assortment) {
     EXPECT_FALSE(impl::KeepState::allowobfuscation(alpha));
   }
 
-  // Beta is not used so should not have a keep marker.
-  auto beta =
-      find_class_named(classes, "Lcom/facebook/redex/test/proguard/Beta;");
-  ASSERT_NE(nullptr, beta);
-  EXPECT_FALSE(root(beta));
+  { // Beta is not used so should not have a keep marker.
+    auto beta =
+        find_class_named(classes, "Lcom/facebook/redex/test/proguard/Beta;");
+    ASSERT_NE(nullptr, beta);
+    EXPECT_FALSE(root(beta));
+  }
 
   { // Gamma is not used anywhere but the class only is kept by the config.
     auto gamma =
