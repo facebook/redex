@@ -773,6 +773,7 @@ void VirtualMergingPass::bind_config() {
   bind("max_overriding_method_instructions",
        default_max_overriding_method_instructions,
        m_max_overriding_method_instructions);
+  bind("use_profiles", true, m_use_profiles);
 
   after_configuration(
       [this] { always_assert(m_max_overriding_method_instructions >= 0); });
@@ -791,7 +792,8 @@ void VirtualMergingPass::run_pass(DexStoresVector& stores,
   const auto& inliner_config = conf.get_inliner_config();
   VirtualMerging vm(stores, inliner_config,
                     m_max_overriding_method_instructions);
-  vm.run(conf.get_method_profiles());
+  vm.run(m_use_profiles ? conf.get_method_profiles()
+                        : method_profiles::MethodProfiles());
   auto stats = vm.get_stats();
 
   mgr.incr_metric(METRIC_INVOKE_SUPER_METHODS, stats.invoke_super_methods);

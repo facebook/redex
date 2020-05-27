@@ -84,4 +84,5 @@ class VirtualMergingPass : public Pass {
 
  private:
   int64_t m_max_overriding_method_instructions;
+  bool m_use_profiles{true};
 };
