@@ -71,12 +71,11 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
     // be relocated. If so, we make sure that we account for possibly needed
     // extra target classes.
 
-    // We are only going to relocate perf-critical classes, i.e. classes in
-    // cold-start dexes that are not in the primary dex. (Reshuffling methods
-    // in the primary dex may cause issues as it may cause references to
-    // secondary dexes to be inspected by the VM too early.)
-    always_assert(dex_info.coldstart);
-    if (!dex_info.coldstart || dex_info.primary) {
+    // We are only going to relocate perf-critical classes that are not in the
+    // primary dex. (Reshuffling methods in the primary dex may cause issues as
+    // it may cause references to secondary dexes to be inspected by the VM too
+    // early.)
+    if (!cls->is_perf_sensitive() || dex_info.primary) {
       return;
     }
 
