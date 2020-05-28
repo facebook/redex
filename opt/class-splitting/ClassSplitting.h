@@ -18,7 +18,10 @@ struct ClassSplittingConfig {
   bool relocate_static_methods{true};
   bool relocate_non_static_direct_methods{true};
   bool relocate_non_true_virtual_methods{true};
+  bool relocate_true_virtual_methods{true};
   bool run_before_interdex{true};
+  bool trampolines{true};
+  unsigned int trampoline_size_threshold{4};
 };
 
 class ClassSplittingPass : public Pass {
@@ -47,9 +50,19 @@ class ClassSplittingPass : public Pass {
     bind("relocate_non_true_virtual_methods",
          m_config.relocate_non_true_virtual_methods,
          m_config.relocate_non_true_virtual_methods);
+    bind("relocate_true_virtual_methods",
+         m_config.relocate_true_virtual_methods,
+         m_config.relocate_true_virtual_methods);
     bind("run_before_interdex",
          m_config.run_before_interdex,
          m_config.run_before_interdex);
+    bind("trampolines", m_config.trampolines, m_config.trampolines);
+    bind("trampoline_size_threshold", m_config.trampoline_size_threshold,
+         m_config.trampoline_size_threshold);
+    always_assert(!m_config.relocate_true_virtual_methods ||
+                  m_config.trampolines);
+    always_assert(!m_config.trampolines ||
+                  !m_config.combine_target_classes_by_api_level);
   }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
