@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <boost/filesystem.hpp>
 #include <gtest/gtest.h>
 #include <json/json.h>
 

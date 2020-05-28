@@ -17,6 +17,7 @@
 #include "DexOutput.h"
 #include "DexStore.h"
 #include "InstructionLowering.h"
+#include "RedexTestUtils.h"
 #include "SanitizersConfig.h"
 
 #include "tools/bytecode_debugger/InjectDebug.h"
@@ -33,15 +34,15 @@ class InjectDebugTest : public ::testing::Test {
   InjectDebugTest() {
     reset_redex();
     m_test_dex_path = std::getenv("dex");
-    m_tmp_dir = make_tmp_dir();
+    m_tmp_dir = prepare_tmp_dir();
 
     // Always create primary dex file
     m_input_dex_paths.push_back(m_test_dex_path);
-    m_output_dex_paths.push_back(m_tmp_dir + "/classes.dex");
+    m_output_dex_paths.push_back(m_tmp_dir.path + "/classes.dex");
   }
 
   void inject() {
-    InjectDebug inject_debug(m_tmp_dir, m_input_dex_paths);
+    InjectDebug inject_debug(m_tmp_dir.path, m_input_dex_paths);
     inject_debug.run();
   }
 
@@ -50,13 +51,13 @@ class InjectDebugTest : public ::testing::Test {
     std::string name = "classes" + std::to_string(index);
     std::string input_dex_path = create_dir_with_dex(name);
     m_input_dex_paths.push_back(input_dex_path);
-    m_output_dex_paths.push_back(m_tmp_dir + "/" + name + ".dex");
+    m_output_dex_paths.push_back(m_tmp_dir.path + "/" + name + ".dex");
   }
 
   // Application Modules use DexMetadata files (e.g. ApplicationModule.json)
   // that contain a path to an input dex file.
   void create_metadata_dex(const std::string& module_name) {
-    std::string module_dir = m_tmp_dir + "/" + module_name;
+    std::string module_dir = m_tmp_dir.path + "/" + module_name;
     std::string input_dex_path = create_dir_with_dex(module_name);
 
     std::string metadata_path = module_dir + "/" + module_name + ".json";
@@ -69,7 +70,7 @@ class InjectDebugTest : public ::testing::Test {
     metadata_file.close();
 
     m_input_dex_paths.push_back(metadata_path);
-    m_output_dex_paths.push_back(m_tmp_dir + "/" + module_name + "2.dex");
+    m_output_dex_paths.push_back(m_tmp_dir.path + "/" + module_name + "2.dex");
   }
 
   DexClasses load_classes(const std::string& path) {
@@ -99,7 +100,8 @@ class InjectDebugTest : public ::testing::Test {
     return file.good();
   }
 
-  std::string m_test_dex_path, m_tmp_dir;
+  std::string m_test_dex_path;
+  redex::TempDir m_tmp_dir;
   std::vector<std::string> m_input_dex_paths, m_output_dex_paths;
 
  private:
@@ -108,19 +110,16 @@ class InjectDebugTest : public ::testing::Test {
     g_redex = new RedexContext(true);
   }
 
-  std::string make_tmp_dir() {
-    boost::filesystem::path dex_dir = boost::filesystem::temp_directory_path();
-    dex_dir +=
-        boost::filesystem::unique_path("/redex_inject_debug_test%%%%%%%%");
-    boost::filesystem::create_directories(dex_dir);
-    boost::filesystem::path meta_dir(dex_dir.string() + "/meta");
+  static redex::TempDir prepare_tmp_dir() {
+    auto tmp_dir = redex::make_tmp_dir("redex_inject_debug_test%%%%%%%%");
+    boost::filesystem::path meta_dir(tmp_dir.path + "/meta");
     boost::filesystem::create_directories(meta_dir);
-    return dex_dir.string();
+    return tmp_dir;
   }
 
   std::string create_dir_with_dex(const std::string& name) {
-    std::string dex_path = m_tmp_dir + "/" + name + "/" + name + ".dex";
-    boost::filesystem::create_directory(m_tmp_dir + "/" + name);
+    std::string dex_path = m_tmp_dir.path + "/" + name + "/" + name + ".dex";
+    boost::filesystem::create_directory(m_tmp_dir.path + "/" + name);
     copy_file(std::getenv("dex"), dex_path);
     return dex_path;
   }
