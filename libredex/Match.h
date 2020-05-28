@@ -372,6 +372,15 @@ match_t<IRInstruction, std::tuple<match_t<DexType, P>>> opcode_type(
           p};
 }
 
+template <typename P>
+match_t<IRInstruction, std::tuple<match_t<DexString, P>>> opcode_string(
+    const match_t<DexString, P>& p) {
+  return {[](const IRInstruction* insn, const match_t<DexString, P>& p) {
+            return insn->has_string() && p.matches(insn->get_string());
+          },
+          p};
+}
+
 /** Match types which can be assigned to the given type */
 match_t<DexType, std::tuple<const DexType*>> is_assignable_to(
     const DexType* parent);

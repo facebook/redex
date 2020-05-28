@@ -66,6 +66,20 @@ TEST_F(MatchTest, InvokeBasic) {
   EXPECT_EQ(match[0], invoke.get());
 }
 
+TEST_F(MatchTest, opcode_string) {
+  DexString* str = DexString::make_string("foo");
+
+  IRInstruction* load_str = new IRInstruction(OPCODE_CONST_STRING);
+  load_str->set_string(str);
+
+  std::vector<IRInstruction*> input = {load_str};
+  std::vector<IRInstruction*> match;
+
+  m::find_insn_match(input, m::opcode_string(m::ptr_eq(str)), match);
+  EXPECT_EQ(match[0], load_str);
+  delete load_str;
+}
+
 TEST_F(MatchTest, NotAllMatch) {
   DexType* ty = DexType::make_type("Lfoo;");
   DexString* str = DexString::make_string("foo");
