@@ -17,6 +17,7 @@ struct ClassSplittingConfig {
   bool relocate_static_methods{true};
   bool relocate_non_static_direct_methods{true};
   bool relocate_non_true_virtual_methods{true};
+  bool run_before_interdex{true};
 };
 
 class ClassSplittingPass : public Pass {
@@ -42,10 +43,14 @@ class ClassSplittingPass : public Pass {
     bind("relocate_non_true_virtual_methods",
          m_config.relocate_non_true_virtual_methods,
          m_config.relocate_non_true_virtual_methods);
+    bind("run_before_interdex",
+         m_config.run_before_interdex,
+         m_config.run_before_interdex);
   }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
+  void run_before_interdex(DexStoresVector&, ConfigFiles&, PassManager&);
   ClassSplittingConfig m_config;
 };
