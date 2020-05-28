@@ -584,8 +584,14 @@ IRCode::IRCode(DexMethod* method, size_t temp_regs) : m_ir_list(new IRList()) {
 }
 
 IRCode::IRCode(const IRCode& code) {
-  IRList* old_ir_list = code.m_ir_list;
-  m_ir_list = deep_copy_ir_list(old_ir_list);
+  if (code.editable_cfg_built()) {
+    m_ir_list = new IRList(); // Empty.
+    m_cfg = std::make_unique<cfg::ControlFlowGraph>();
+    code.m_cfg->deep_copy(m_cfg.get());
+  } else {
+    IRList* old_ir_list = code.m_ir_list;
+    m_ir_list = deep_copy_ir_list(old_ir_list);
+  }
   m_registers_size = code.m_registers_size;
   if (code.m_dbg) {
     m_dbg = std::make_unique<DexDebugItem>(*code.m_dbg);
