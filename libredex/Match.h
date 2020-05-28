@@ -69,6 +69,18 @@ void find_matches(const std::vector<IRInstruction*>& insns,
   }
 }
 
+// Find all instructions in `insns` that match `p`
+template <typename P>
+void find_insn_match(const std::vector<IRInstruction*>& insns,
+                     const P& p,
+                     std::vector<IRInstruction*>& matches) {
+  for (auto insn : insns) {
+    if (p.matches(insn)) {
+      matches.emplace_back(insn);
+    }
+  }
+}
+
 /** N-ary match template */
 template <typename T,
           typename P = std::tuple<>,
@@ -143,6 +155,15 @@ match_t<T, std::tuple<match_t<T, P0>, match_t<T, P1>>> operator^(
 template <typename T>
 match_t<T, std::tuple<>> any() {
   return {[](const T* t) { return true; }};
+}
+
+/** Compare two T at pointers */
+template <typename T>
+m::match_t<T, std::tuple<const T*>> ptr_eq(const T* expected) {
+  return {[](const T* actual, const T* const& expected) {
+            return actual == expected;
+          },
+          expected};
 }
 
 // N.B. free beer offer to anyone who can get 'named' to work on const char*
@@ -281,6 +302,34 @@ inline match_t<IRInstruction, std::tuple<match_t<IRInstruction>>> invoke() {
   return invoke(any<IRInstruction>());
 };
 
+/** iput flavors */
+template <typename P>
+match_t<IRInstruction, std::tuple<match_t<IRInstruction, P>>> iput(
+    const match_t<IRInstruction, P>& p) {
+  return {[](const IRInstruction* insn, const match_t<IRInstruction, P>& p) {
+            return is_iput(insn->opcode()) && p.matches(insn);
+          },
+          p};
+}
+
+inline match_t<IRInstruction, std::tuple<match_t<IRInstruction>>> iput() {
+  return iput(any<IRInstruction>());
+};
+
+/** iget flavors */
+template <typename P>
+match_t<IRInstruction, std::tuple<match_t<IRInstruction, P>>> iget(
+    const match_t<IRInstruction, P>& p) {
+  return {[](const IRInstruction* insn, const match_t<IRInstruction, P>& p) {
+            return is_iget(insn->opcode()) && p.matches(insn);
+          },
+          p};
+}
+
+inline match_t<IRInstruction, std::tuple<match_t<IRInstruction>>> iget() {
+  return iget(any<IRInstruction>());
+};
+
 /** return-void */
 match_t<IRInstruction> return_void();
 
@@ -300,8 +349,16 @@ template <typename P>
 match_t<IRInstruction, std::tuple<match_t<DexMethodRef, P>>> opcode_method(
     const match_t<DexMethodRef, P>& predicate) {
   return {[](const IRInstruction* insn, const match_t<DexMethodRef, P>& p) {
-            always_assert(insn->has_method());
-            return p.matches(insn->get_method());
+            return insn->has_method() && p.matches(insn->get_method());
+          },
+          predicate};
+}
+
+template <typename P>
+match_t<IRInstruction, std::tuple<match_t<DexFieldRef, P>>> opcode_field(
+    const match_t<DexFieldRef, P>& predicate) {
+  return {[](const IRInstruction* insn, const match_t<DexFieldRef, P>& p) {
+            return insn->has_field() && p.matches(insn->get_field());
           },
           predicate};
 }
@@ -310,7 +367,7 @@ template <typename P>
 match_t<IRInstruction, std::tuple<match_t<DexType, P>>> opcode_type(
     const match_t<DexType, P>& p) {
   return {[](const IRInstruction* insn, const match_t<DexType, P>& p) {
-            return p.matches(insn->get_type());
+            return insn->has_type() && p.matches(insn->get_type());
           },
           p};
 }
@@ -360,6 +417,16 @@ match_t<DexMethod, std::tuple<std::tuple<T...>>> has_opcodes(
             return false;
           },
           t};
+}
+
+/** Match members and check predicate on their type */
+template <typename Member, typename P>
+match_t<Member, std::tuple<match_t<DexType, P>>> member_of(
+    const match_t<DexType, P>& predicate) {
+  return {[](const Member* member, const match_t<DexType, P>& p) {
+            return p.matches(member->get_class());
+          },
+          predicate};
 }
 
 /** Match methods that are default constructors */
