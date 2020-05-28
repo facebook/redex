@@ -118,6 +118,17 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
     prepare(cls, &trefs, should_not_relocate_methods_of_class);
   }
 
+  DexClass* create_target_class(const std::string& target_type_name) {
+    DexType* target_type = DexType::make_type(target_type_name.c_str());
+    ++m_stats.relocation_classes;
+    ClassCreator cc(target_type);
+    cc.set_access(ACC_PUBLIC | ACC_FINAL);
+    cc.set_super(type::java_lang_Object());
+    auto target_cls = cc.create();
+    target_cls->rstate.set_generated();
+    return target_cls;
+  }
+
   void prepare(const DexClass* cls,
                std::vector<DexType*>* trefs,
                bool should_not_relocate_methods_of_class) {
@@ -136,35 +147,45 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
       if (!can_relocate(cls_has_clinit, method, /* log */ true)) {
         return;
       }
+      DexClass* target_cls;
       int api_level = api::LevelChecker::get_method_level(method);
-      TargetClassInfo& target_class_info = m_target_classes[api_level];
-      if (target_class_info.target_cls == nullptr ||
-          (target_class_info.last_source_cls != cls &&
-           target_class_info.size >=
-               m_config.relocated_methods_per_target_class)) {
-        std::stringstream ss;
-        ss << "Lredex/$Relocated" << std::to_string(m_next_target_class_index++)
-           << "ApiLevel" << std::to_string(api_level++) << ";";
-        std::string target_type_name(ss.str());
-        DexType* target_type = DexType::make_type(target_type_name.c_str());
-        ++m_stats.relocation_classes;
-        ClassCreator cc(target_type);
-        cc.set_access(ACC_PUBLIC | ACC_FINAL);
-        cc.set_super(type::java_lang_Object());
-        DexClass* target_cls = cc.create();
-        target_cls->rstate.set_generated();
-        target_class_info.target_cls = target_cls;
-        target_class_info.last_source_cls = cls;
-        target_class_info.size = 0;
+      if (m_config.combine_target_classes_by_api_level) {
+        TargetClassInfo& target_class_info =
+            m_target_classes_by_api_level[api_level];
+        if (target_class_info.target_cls == nullptr ||
+            (target_class_info.last_source_cls != cls &&
+             target_class_info.size >=
+                 m_config.relocated_methods_per_target_class)) {
+          std::stringstream ss;
+          ss << "Lredex/$Relocated"
+             << std::to_string(m_next_target_class_index++) << "ApiLevel"
+             << std::to_string(api_level) << ";";
+          target_cls = create_target_class(ss.str());
+          target_class_info.target_cls = target_cls;
+          target_class_info.last_source_cls = cls;
+          target_class_info.size = 0;
+        } else {
+          target_cls = target_class_info.target_cls;
+        }
+        ++target_class_info.size;
+      } else {
+        auto source_cls = method->get_class();
+        auto it = m_target_classes_by_source_classes.find(source_cls);
+        if (it != m_target_classes_by_source_classes.end()) {
+          target_cls = it->second;
+        } else {
+          auto& source_name = source_cls->str();
+          target_cls = create_target_class(
+              source_name.substr(0, source_name.size() - 1) + "$relocated;");
+          m_target_classes_by_source_classes.emplace(source_cls, target_cls);
+        }
       }
-      ++target_class_info.size;
-      sc.relocatable_methods.insert(
-          {method, {target_class_info.target_cls, api_level}});
+      sc.relocatable_methods.insert({method, {target_cls, api_level}});
       if (trefs != nullptr) {
-        trefs->push_back(target_class_info.target_cls->get_type());
+        trefs->push_back(target_cls->get_type());
       }
       TRACE(CS, 4, "[class splitting] Method {%s} will be relocated to {%s}",
-            SHOW(method), SHOW(target_class_info.target_cls));
+            SHOW(method), SHOW(target_cls));
     };
     auto& dmethods = cls->get_dmethods();
     std::for_each(dmethods.begin(), dmethods.end(), process_method);
@@ -269,7 +290,7 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
           "in this dex.",
           relocated_methods, target_classes.size());
 
-    m_target_classes.clear();
+    m_target_classes_by_api_level.clear();
     m_split_classes.clear();
     return target_classes;
   }
@@ -366,7 +387,8 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
           m_stats.popular_methods, m_stats.non_relocated_methods);
 
     // Releasing memory
-    m_target_classes.clear();
+    m_target_classes_by_api_level.clear();
+    m_target_classes_by_source_classes.clear();
     m_split_classes.clear();
     m_methods_to_relocate.clear();
   }
@@ -389,8 +411,9 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
     size_t size{0}; // number of methods
   };
 
-  std::unordered_map<int32_t, TargetClassInfo> m_target_classes;
+  std::unordered_map<int32_t, TargetClassInfo> m_target_classes_by_api_level;
   size_t m_next_target_class_index{0};
+  std::unordered_map<DexType*, DexClass*> m_target_classes_by_source_classes;
   std::unordered_map<const DexClass*, SplitClass> m_split_classes;
   std::vector<std::pair<DexMethod*, DexClass*>> m_methods_to_relocate;
   ClassSplittingStats m_stats;
