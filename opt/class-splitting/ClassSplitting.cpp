@@ -6,7 +6,7 @@
  */
 
 /*
- * This pass splits out static methods with weight 0
+ * This pass splits out static methods with lass 0
  * in the cold-start dexes.
  * The approach here is a new interdex plugin. This enables...
  * - only treating classes that end up in the non-primary cold-start dexes;
@@ -49,15 +49,28 @@ struct ClassSplittingStats {
 
 class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
  public:
-  ClassSplittingInterDexPlugin(size_t target_class_size_threshold,
-                               PassManager& mgr)
-      : m_target_class_size_threshold(target_class_size_threshold),
-        m_mgr(mgr) {}
+  ClassSplittingInterDexPlugin(
+      const ClassSplittingConfig& config,
+      PassManager& mgr,
+      const method_profiles::MethodProfiles& method_profiles)
+      : m_config(config), m_mgr(mgr), m_method_profiles(method_profiles) {}
 
   void configure(const Scope& scope, ConfigFiles& conf) override {
-    m_method_to_weight = &conf.get_method_to_weight();
-    m_method_sorting_whitelisted_substrings =
-        &conf.get_method_sorting_whitelisted_substrings();
+    if (m_method_profiles.has_stats()) {
+      for (auto& p : m_method_profiles.all_interactions()) {
+        auto& method_stats = p.second;
+        walk::methods(scope, [&](DexMethod* method) {
+          auto it = method_stats.find(method);
+          if (it == method_stats.end()) {
+            return;
+          }
+          if (it->second.appear_percent >=
+              m_config.method_profiles_appear_percent_threshold) {
+            m_sufficiently_popular_methods.insert(method);
+          }
+        });
+      }
+    }
   };
 
   void gather_refs(const interdex::DexInfo& dex_info,
@@ -92,20 +105,15 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
       if (!can_relocate(method)) {
         continue;
       }
-      unsigned int weight =
-          get_method_weight_if_available(method, m_method_to_weight);
-      if (weight == 0) {
-        weight = get_method_weight_override(
-            method, m_method_sorting_whitelisted_substrings);
-      }
-      if (weight > 0) {
+      if (m_sufficiently_popular_methods.count(method)) {
         continue;
       }
       int api_level = api::LevelChecker::get_method_level(method);
       TargetClassInfo& target_class_info = m_target_classes[api_level];
       if (target_class_info.target_cls == nullptr ||
           (target_class_info.last_source_cls != cls &&
-           target_class_info.size >= m_target_class_size_threshold)) {
+           target_class_info.size >=
+               m_config.relocated_methods_per_target_class)) {
         std::stringstream ss;
         ss << "Lredex/$Relocated" << std::to_string(m_next_target_class_index++)
            << "ApiLevel" << std::to_string(api_level++) << ";";
@@ -125,10 +133,8 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
       sc.relocatable_methods.insert(
           {method, {target_class_info.target_cls, api_level}});
       trefs.push_back(target_class_info.target_cls->get_type());
-      TRACE(CS, 4,
-            "[class splitting] Method {%s} with weight %d will be relocated to "
-            "{%s}",
-            SHOW(method), weight, SHOW(target_class_info.target_cls));
+      TRACE(CS, 4, "[class splitting] Method {%s} will be relocated to {%s}",
+            SHOW(method), SHOW(target_class_info.target_cls));
     }
   }
 
@@ -242,11 +248,7 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
   }
 
  private:
-  const std::unordered_map<std::string, unsigned int>* m_method_to_weight{
-      nullptr};
-
-  const std::unordered_set<std::string>*
-      m_method_sorting_whitelisted_substrings{nullptr};
+  std::unordered_set<DexMethod*> m_sufficiently_popular_methods;
 
   struct RelocatableMethodInfo {
     DexClass* target_cls;
@@ -265,7 +267,6 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
 
   std::unordered_map<int32_t, TargetClassInfo> m_target_classes;
   size_t m_next_target_class_index{0};
-  size_t m_target_class_size_threshold;
   std::unordered_map<const DexClass*, SplitClass> m_split_classes;
   std::vector<std::pair<DexMethod*, DexClass*>> m_methods_to_relocate;
   ClassSplittingStats m_stats;
@@ -286,21 +287,23 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
     return is_static(m) && !method::is_clinit(m);
   };
 
+  ClassSplittingConfig m_config;
   PassManager& m_mgr;
+  const method_profiles::MethodProfiles& m_method_profiles;
 };
 
 } // namespace
 
 void ClassSplittingPass::run_pass(DexStoresVector&,
-                                  ConfigFiles&,
+                                  ConfigFiles& conf,
                                   PassManager& mgr) {
   interdex::InterDexRegistry* registry =
       static_cast<interdex::InterDexRegistry*>(
           PluginRegistry::get().pass_registry(interdex::INTERDEX_PASS_NAME));
   std::function<interdex::InterDexPassPlugin*()> fn =
-      [this, &mgr]() -> interdex::InterDexPassPlugin* {
-    return new ClassSplittingInterDexPlugin(
-        m_relocated_methods_per_target_class, mgr);
+      [this, &mgr, &conf]() -> interdex::InterDexPassPlugin* {
+    return new ClassSplittingInterDexPlugin(m_config, mgr,
+                                            conf.get_method_profiles());
   };
   registry->register_plugin("CLASS_SPLITTING_PLUGIN", std::move(fn));
 }
