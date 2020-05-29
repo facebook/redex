@@ -59,6 +59,16 @@ class MethodProfiles {
     return success;
   }
 
+  // For testing purposes.
+  static MethodProfiles initialize(
+      const std::string& interaction_id,
+      std::unordered_map<const DexMethodRef*, Stats> data) {
+    MethodProfiles ret{};
+    ret.m_initialized = true;
+    ret.m_method_stats[interaction_id] = std::move(data);
+    return ret;
+  }
+
   bool is_initialized() const { return m_initialized; }
 
   bool has_stats() const { return !m_method_stats.empty(); }
@@ -69,6 +79,16 @@ class MethodProfiles {
 
   const AllInteractions& all_interactions() const {
     return m_method_stats;
+  }
+
+  boost::optional<Stats> get_method_stat(const std::string& interaction_id,
+                                         const DexMethodRef* m) const {
+    const auto& stats = method_stats(interaction_id);
+    auto it = stats.find(m);
+    if (it == stats.end()) {
+      return boost::none;
+    }
+    return it->second;
   }
 
  private:

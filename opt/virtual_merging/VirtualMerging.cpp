@@ -43,8 +43,10 @@
 #include "VirtualMerging.h"
 
 #include "ControlFlow.h"
+#include "CppUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
+#include "MethodProfiles.h"
 #include "Resolver.h"
 #include "TypeSystem.h"
 #include "Walkers.h"
@@ -188,110 +190,152 @@ void VirtualMerging::compute_mergeable_scope_methods() {
   }
 }
 
-// Part 3: For each virtual scope, identify all pairs of methods where
-//         one can be merged with another. The list of pairs is ordered in
-//         way that it can be later processed sequentially.
-void VirtualMerging::compute_mergeable_pairs_by_virtual_scopes() {
-  struct LocalStats {
-    size_t overriding_methods{0};
-    size_t cross_store_refs{0};
-    size_t cross_dex_refs{0};
-    size_t inconcrete_overridden_methods{0};
-  };
-  ConcurrentMap<const VirtualScope*, LocalStats> local_stats;
-  std::vector<const VirtualScope*> virtual_scopes;
-  for (auto& p : m_mergeable_scope_methods) {
-    virtual_scopes.push_back(p.first);
+namespace {
+
+struct LocalStats {
+  size_t overriding_methods{0};
+  size_t cross_store_refs{0};
+  size_t cross_dex_refs{0};
+  size_t inconcrete_overridden_methods{0};
+};
+
+class MergePairsBuilder {
+  using MergablesMap = std::unordered_map<const DexMethod*, const DexMethod*>;
+
+ public:
+  using PairSeq = std::vector<std::pair<const DexMethod*, const DexMethod*>>;
+
+  explicit MergePairsBuilder(const VirtualScope* virtual_scope)
+      : virtual_scope(virtual_scope) {}
+
+  boost::optional<std::pair<LocalStats, PairSeq>> build(
+      const std::unordered_set<const DexMethod*>& mergeable_methods,
+      const XStoreRefs& xstores,
+      const XDexRefs& xdexes,
+      const method_profiles::MethodProfiles& profiles) {
+    if (!init()) {
+      return boost::none;
+    }
+
+    MergablesMap mergeable_pairs_map =
+        find_overrides(mergeable_methods, xstores, xdexes);
+
+    if (mergeable_pairs_map.empty()) {
+      always_assert(stats.overriding_methods ==
+                    stats.cross_store_refs + stats.cross_dex_refs +
+                        stats.inconcrete_overridden_methods);
+      return std::make_pair(stats, PairSeq{});
+    }
+
+    auto mergeable_pairs =
+        create_merge_pair_sequence(mergeable_pairs_map, profiles);
+    return std::make_pair(stats, mergeable_pairs);
   }
-  ConcurrentMap<const VirtualScope*,
-                std::vector<std::pair<DexMethod*, DexMethod*>>>
-      mergeable_pairs_by_virtual_scopes;
-  walk::parallel::virtual_scopes(
-      virtual_scopes, [&](const VirtualScope* virtual_scope) {
-        std::vector<DexMethod*> methods;
-        std::unordered_map<const DexType*, DexMethod*> types_to_methods;
-        for (auto& p : virtual_scope->methods) {
-          auto method = p.first;
-          methods.push_back(method);
-          types_to_methods.emplace(method->get_class(), method);
-          if (!can_rename(method) || root(method) ||
-              method->rstate.no_optimizations()) {
-            // If we find any method in this virtual scope which we shouldn't
-            // touch, we exclude the entire virtual scope.
-            return;
+
+ private:
+  bool init() {
+    for (auto& p : virtual_scope->methods) {
+      auto method = p.first;
+      methods.push_back(method);
+      types_to_methods.emplace(method->get_class(), method);
+      if (!can_rename(method) || root(method) ||
+          method->rstate.no_optimizations()) {
+        // If we find any method in this virtual scope which we shouldn't
+        // touch, we exclude the entire virtual scope.
+        return false;
+      }
+    }
+    return true;
+  }
+
+  MergablesMap find_overrides(
+      const std::unordered_set<const DexMethod*>& mergeable_methods,
+      const XStoreRefs& xstores,
+      const XDexRefs& xdexes) {
+    MergablesMap mergeable_pairs_map;
+    // sorting to make things deterministic
+    std::sort(methods.begin(), methods.end(), dexmethods_comparator());
+    for (DexMethod* overriding_method : methods) {
+      if (!mergeable_methods.count(overriding_method)) {
+        continue;
+      }
+      stats.overriding_methods++;
+      auto subtype = overriding_method->get_class();
+      always_assert(subtype != virtual_scope->type);
+      auto overriding_cls = type_class(overriding_method->get_class());
+      always_assert(overriding_cls != nullptr);
+      auto supertype = overriding_cls->get_super_class();
+      always_assert(supertype != nullptr);
+
+      auto run_fn = [](auto fn, DexType* start, DexType* trailing,
+                       const DexType* stop) {
+        for (;;) {
+          if (fn(start, trailing)) {
+            return true;
           }
+          if (start == stop) {
+            return false;
+          }
+          trailing = start;
+          start = type_class(start)->get_super_class();
         }
-        // sorting to make things deterministic
-        std::sort(methods.begin(), methods.end(), dexmethods_comparator());
-        const auto& mergeable_methods =
-            m_mergeable_scope_methods.at(virtual_scope);
-        // let's find all mergeable pairs, and record the relevant subtype
-        // structure so that we can visit it later
-        std::unordered_map<const DexType*, std::vector<DexType*>> subtypes;
-        std::unordered_map<DexMethod*, DexMethod*> mergeable_pairs_map;
-        LocalStats stats;
-        for (DexMethod* overriding_method : methods) {
-          if (!mergeable_methods.count(overriding_method)) {
-            continue;
-          }
-          stats.overriding_methods++;
-          auto subtype = overriding_method->get_class();
-          always_assert(subtype != virtual_scope->type);
-          auto overriding_cls = type_class(overriding_method->get_class());
-          always_assert(overriding_cls != nullptr);
-          auto supertype = overriding_cls->get_super_class();
-          always_assert(supertype != nullptr);
-          bool found_potentially_mergeable_pair = false;
-          while (true) {
-            auto it = types_to_methods.find(supertype);
-            if (it != types_to_methods.end() &&
-                !found_potentially_mergeable_pair) {
-              found_potentially_mergeable_pair = true;
-              auto overridden_method = it->second;
-              if (!overridden_method->is_concrete() ||
-                  is_native(overridden_method)) {
-                stats.inconcrete_overridden_methods++;
-              } else if (m_xstores.cross_store_ref(overridden_method,
-                                                   overriding_method)) {
-                stats.cross_store_refs++;
-              } else if (m_xdexes.cross_dex_ref_override(overridden_method,
-                                                         overriding_method) ||
-                         (m_xdexes.num_dexes() > 1 &&
-                          m_xdexes.is_in_primary_dex(overridden_method))) {
-                stats.cross_dex_refs++;
-              } else {
-                always_assert(overriding_method->get_code());
-                always_assert(is_abstract(overridden_method) ||
-                              overridden_method->get_code());
-                mergeable_pairs_map.emplace(overriding_method,
-                                            overridden_method);
-              }
+      };
+
+      run_fn(
+          [this](const DexType* t, DexType* trailing) {
+            subtypes[t].push_back(trailing);
+            return false;
+          },
+          supertype, subtype, virtual_scope->type);
+
+      bool found_override = run_fn(
+          [this, &overriding_method, &mergeable_pairs_map, &xstores,
+           &xdexes](const DexType* t, const DexType*) {
+            auto it = types_to_methods.find(t);
+            if (it == types_to_methods.end()) {
+              return false;
             }
-            subtypes[supertype].push_back(subtype);
-            if (supertype == virtual_scope->type) {
-              break;
+            auto overridden_method = it->second;
+            if (!overridden_method->is_concrete() ||
+                is_native(overridden_method)) {
+              stats.inconcrete_overridden_methods++;
+            } else if (xstores.cross_store_ref(overridden_method,
+                                               overriding_method)) {
+              stats.cross_store_refs++;
+            } else if (xdexes.cross_dex_ref_override(overridden_method,
+                                                     overriding_method) ||
+                       (xdexes.num_dexes() > 1 &&
+                        xdexes.is_in_primary_dex(overridden_method))) {
+              stats.cross_dex_refs++;
+            } else {
+              always_assert(overriding_method->get_code());
+              always_assert(is_abstract(overridden_method) ||
+                            overridden_method->get_code());
+              mergeable_pairs_map.emplace(overriding_method, overridden_method);
             }
-            subtype = supertype;
-            supertype = type_class(subtype)->get_super_class();
-            always_assert(supertype != nullptr);
-          }
-          always_assert(found_potentially_mergeable_pair);
-        }
-        if (!mergeable_pairs_map.size()) {
-          always_assert(stats.overriding_methods ==
-                        stats.cross_store_refs + stats.cross_dex_refs +
-                            stats.inconcrete_overridden_methods);
-          local_stats.emplace(virtual_scope, stats);
-          return;
-        }
-        // we do a depth-first traversal of the subtype structure, adding
-        // mergeable pairs as we find them; this ensures that mergeable pairs
-        // can later be processed sequentially --- first inlining pairs that
-        // appear in deeper portions of the type hierarchy
-        std::vector<std::pair<DexMethod*, DexMethod*>> mergeable_pairs;
-        std::function<void(const DexType*)> visit;
-        std::unordered_set<const DexType*> visited;
-        visit = [&](const DexType* t) {
+            return true;
+          },
+          supertype, subtype, virtual_scope->type);
+      always_assert(found_override);
+    }
+
+    return mergeable_pairs_map;
+  }
+
+  PairSeq create_merge_pair_sequence(
+      const MergablesMap& mergeable_pairs_map,
+      const method_profiles::MethodProfiles& profiles) {
+    // we do a depth-first traversal of the subtype structure, adding
+    // mergeable pairs as we find them; this ensures that mergeable pairs
+    // can later be processed sequentially --- first inlining pairs that
+    // appear in deeper portions of the type hierarchy
+    PairSeq mergeable_pairs;
+    std::unordered_set<const DexType*> visited;
+    std::unordered_map<const DexMethod*,
+                       std::vector<std::pair<const DexMethod*, double>>>
+        override_map;
+    self_recursive_fn(
+        [&](auto self, const DexType* t) {
           if (visited.count(t)) {
             return;
           }
@@ -299,31 +343,109 @@ void VirtualMerging::compute_mergeable_pairs_by_virtual_scopes() {
 
           auto subtypes_it = subtypes.find(t);
           if (subtypes_it != subtypes.end()) {
+            // This is ordered because `methods` was ordered.
             for (auto subtype : subtypes_it->second) {
-              visit(subtype);
+              self(self, subtype);
             }
           }
-          auto overriding_method_it = types_to_methods.find(t);
-          if (overriding_method_it == types_to_methods.end()) {
-            return;
+
+          const DexMethod* t_method;
+          {
+            auto t_method_it = types_to_methods.find(t);
+            if (t_method_it == types_to_methods.end()) {
+              return;
+            }
+            t_method = t_method_it->second;
           }
-          auto overridden_method_it =
-              mergeable_pairs_map.find(overriding_method_it->second);
+          double acc_call_count = 0;
+          if (auto mstats = profiles.get_method_stat(
+                  method_profiles::COLD_START, t_method)) {
+            acc_call_count = mstats->call_count;
+          }
+
+          {
+            // If there are overrides for this type's implementation, order the
+            // overrides by their weight (and otherwise retain the original
+            // order), then insert the overrides into the global merge
+            // structure.
+            auto it = override_map.find(t_method);
+            if (it != override_map.end()) {
+              auto& t_overrides = it->second;
+              redex_assert(!t_overrides.empty());
+              // Use stable sort to retain order if call count is unavailable.
+              // As insertion is pushing to front, sort low to high.
+              std::stable_sort(t_overrides.begin(), t_overrides.end(),
+                               [](const auto& lhs, const auto& rhs) {
+                                 return lhs.second < rhs.second;
+                               });
+              for (const auto& p : t_overrides) {
+                auto assert_it = mergeable_pairs_map.find(p.first);
+                redex_assert(assert_it != mergeable_pairs_map.end() &&
+                             assert_it->second == t_method);
+                mergeable_pairs.emplace_back(t_method, p.first);
+                acc_call_count += p.second;
+              }
+              // Clear the vector. Leave it empty for the assert above
+              // (to ensure things are not handled twice).
+              t_overrides.clear();
+              t_overrides.shrink_to_fit();
+            }
+          }
+
+          auto overridden_method_it = mergeable_pairs_map.find(t_method);
           if (overridden_method_it == mergeable_pairs_map.end()) {
             return;
           }
-          mergeable_pairs.emplace_back(overridden_method_it->second,
-                                       overriding_method_it->second);
-        };
-        visit(virtual_scope->type);
-        always_assert(mergeable_pairs_map.size() == mergeable_pairs.size());
-        always_assert(stats.overriding_methods ==
-                      mergeable_pairs.size() + stats.cross_store_refs +
-                          stats.cross_dex_refs +
-                          stats.inconcrete_overridden_methods);
-        mergeable_pairs_by_virtual_scopes.emplace(virtual_scope,
-                                                  mergeable_pairs);
-        local_stats.emplace(virtual_scope, stats);
+          override_map[overridden_method_it->second].emplace_back(
+              t_method, acc_call_count);
+        },
+        virtual_scope->type);
+    for (const auto& p : override_map) {
+      redex_assert(p.second.empty());
+    }
+    always_assert(mergeable_pairs_map.size() == mergeable_pairs.size());
+    always_assert(stats.overriding_methods ==
+                  mergeable_pairs.size() + stats.cross_store_refs +
+                      stats.cross_dex_refs +
+                      stats.inconcrete_overridden_methods);
+    return mergeable_pairs;
+  }
+
+  const VirtualScope* virtual_scope;
+  std::vector<DexMethod*> methods;
+  std::unordered_map<const DexType*, DexMethod*> types_to_methods;
+  std::unordered_map<const DexType*, std::vector<DexType*>> subtypes;
+  LocalStats stats;
+};
+
+} // namespace
+
+// Part 3: For each virtual scope, identify all pairs of methods where
+//         one can be merged with another. The list of pairs is ordered in
+//         way that it can be later processed sequentially.
+void VirtualMerging::compute_mergeable_pairs_by_virtual_scopes(
+    const method_profiles::MethodProfiles& profiles) {
+  ConcurrentMap<const VirtualScope*, LocalStats> local_stats;
+  std::vector<const VirtualScope*> virtual_scopes;
+  for (auto& p : m_mergeable_scope_methods) {
+    virtual_scopes.push_back(p.first);
+  }
+  ConcurrentMap<const VirtualScope*,
+                std::vector<std::pair<const DexMethod*, const DexMethod*>>>
+      mergeable_pairs_by_virtual_scopes;
+  walk::parallel::virtual_scopes(
+      virtual_scopes, [&](const VirtualScope* virtual_scope) {
+        MergePairsBuilder mpb(virtual_scope);
+        auto res = mpb.build(m_mergeable_scope_methods.at(virtual_scope),
+                             m_xstores, m_xdexes, profiles);
+        if (!res) {
+          return;
+        }
+        local_stats.emplace(virtual_scope, res->first);
+        if (!res->second.empty()) {
+          mergeable_pairs_by_virtual_scopes.emplace(virtual_scope,
+                                                    std::move(res->second));
+        }
       });
 
   m_stats.virtual_scopes_with_mergeable_pairs +=
@@ -363,8 +485,8 @@ void VirtualMerging::merge_methods() {
     auto virtual_scope = p.first;
     const auto& mergeable_pairs = p.second;
     for (auto& q : mergeable_pairs) {
-      auto overridden_method = q.first;
-      auto overriding_method = q.second;
+      auto overridden_method = const_cast<DexMethod*>(q.first);
+      auto overriding_method = const_cast<DexMethod*>(q.second);
 
       if (overriding_method->get_code()->sum_opcode_sizes() >
           m_max_overriding_method_instructions) {
@@ -600,7 +722,7 @@ void VirtualMerging::remove_methods() {
 
   walk::parallel::classes(
       classes_with_virtual_methods_to_remove, [&](DexClass* cls) {
-        for (DexMethod* method : m_virtual_methods_to_remove.at(cls)) {
+        for (auto method : m_virtual_methods_to_remove.at(cls)) {
           cls->remove_method(method);
         }
       });
@@ -624,13 +746,13 @@ void VirtualMerging::remap_invoke_virtuals() {
                           });
 }
 
-void VirtualMerging::run() {
+void VirtualMerging::run(const method_profiles::MethodProfiles& profiles) {
   TRACE(VM, 1, "[VM] Finding unsupported virtual scopes");
   find_unsupported_virtual_scopes();
   TRACE(VM, 1, "[VM] Computing mergeable scope methods");
   compute_mergeable_scope_methods();
   TRACE(VM, 1, "[VM] Computing mergeable pairs by virtual scopes");
-  compute_mergeable_pairs_by_virtual_scopes();
+  compute_mergeable_pairs_by_virtual_scopes(profiles);
   TRACE(VM, 1, "[VM] Merging methods");
   merge_methods();
   TRACE(VM, 1, "[VM] Removing methods");
@@ -649,6 +771,7 @@ void VirtualMergingPass::bind_config() {
   bind("max_overriding_method_instructions",
        default_max_overriding_method_instructions,
        m_max_overriding_method_instructions);
+  bind("use_profiles", false, m_use_profiles);
 
   after_configuration(
       [this] { always_assert(m_max_overriding_method_instructions >= 0); });
@@ -667,7 +790,8 @@ void VirtualMergingPass::run_pass(DexStoresVector& stores,
   const auto& inliner_config = conf.get_inliner_config();
   VirtualMerging vm(stores, inliner_config,
                     m_max_overriding_method_instructions);
-  vm.run();
+  vm.run(m_use_profiles ? conf.get_method_profiles()
+                        : method_profiles::MethodProfiles());
   auto stats = vm.get_stats();
 
   mgr.incr_metric(METRIC_INVOKE_SUPER_METHODS, stats.invoke_super_methods);
