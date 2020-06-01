@@ -137,7 +137,7 @@ TEST_F(EvaluateTypeChecksTest, internal_not_static) {
 
 // Full optimization tests.
 
-TEST_F(EvaluateTypeChecksTest, no_optimize) {
+TEST_F(EvaluateTypeChecksTest, instance_of_no_optimize) {
   auto code = R"(
        (
         (load-param-object v0)
@@ -158,7 +158,7 @@ TEST_F(EvaluateTypeChecksTest, no_optimize) {
   EXPECT_TRUE(run("LTest;", method_str, code, code));
 }
 
-TEST_F(EvaluateTypeChecksTest, optimize_always_fail) {
+TEST_F(EvaluateTypeChecksTest, instance_of_optimize_always_fail) {
   auto code = R"(
        (
         (load-param-object v0)
@@ -174,7 +174,7 @@ TEST_F(EvaluateTypeChecksTest, optimize_always_fail) {
   EXPECT_TRUE(run("LTest;", method_str, code, expected));
 }
 
-TEST_F(EvaluateTypeChecksTest, optimize_always_succeed_nez) {
+TEST_F(EvaluateTypeChecksTest, instance_of_optimize_always_succeed_nez) {
   auto code = R"(
        (
         (load-param-object v0)
@@ -207,7 +207,7 @@ TEST_F(EvaluateTypeChecksTest, optimize_always_succeed_nez) {
   EXPECT_TRUE(run("LTest;", method_str, code, expected));
 }
 
-TEST_F(EvaluateTypeChecksTest, optimize_always_succeed_eqz) {
+TEST_F(EvaluateTypeChecksTest, instance_of_optimize_always_succeed_eqz) {
   auto code = R"(
        (
         (load-param-object v0)
@@ -240,7 +240,7 @@ TEST_F(EvaluateTypeChecksTest, optimize_always_succeed_eqz) {
   EXPECT_TRUE(run("LTest;", method_str, code, expected));
 }
 
-TEST_F(EvaluateTypeChecksTest, optimize_always_succeed_nez_chain) {
+TEST_F(EvaluateTypeChecksTest, instance_of_optimize_always_succeed_nez_chain) {
   auto code = R"(
        (
         (load-param-object v0)
@@ -274,7 +274,8 @@ TEST_F(EvaluateTypeChecksTest, optimize_always_succeed_nez_chain) {
   EXPECT_TRUE(run("LTest;", method_str, code, expected));
 }
 
-TEST_F(EvaluateTypeChecksTest, no_optimize_always_succeed_nez_multi_use) {
+TEST_F(EvaluateTypeChecksTest,
+       instance_of_no_optimize_always_succeed_nez_multi_use) {
   auto code = R"(
        (
         (load-param-object v0)
@@ -298,7 +299,8 @@ TEST_F(EvaluateTypeChecksTest, no_optimize_always_succeed_nez_multi_use) {
   EXPECT_TRUE(run("LTest;", method_str, code, code));
 }
 
-TEST_F(EvaluateTypeChecksTest, no_optimize_always_succeed_nez_no_branch) {
+TEST_F(EvaluateTypeChecksTest,
+       instance_of_no_optimize_always_succeed_nez_no_branch) {
   auto code = R"(
        (
         (load-param-object v0)
@@ -310,4 +312,79 @@ TEST_F(EvaluateTypeChecksTest, no_optimize_always_succeed_nez_no_branch) {
   auto method_str = "method (private static) \"LTest;.test:(LBaz;)I\"";
 
   EXPECT_TRUE(run("LTest;", method_str, code, code));
+}
+
+TEST_F(EvaluateTypeChecksTest, check_cast_no_optimize) {
+  auto code = R"(
+       (
+        (load-param-object v0)
+        (check-cast v0 "LBar;")
+        (move-result-pseudo v0)
+
+        (if-nez v0 :L1)
+        (const v0 0)
+        (return v0)
+
+        (:L1)
+        (const v0 1)
+        (return v0)
+       )
+      )";
+  auto method_str = "method (private static) \"LTest;.test:(LFoo;)I\"";
+
+  EXPECT_TRUE(run("LTest;", method_str, code, code));
+}
+
+TEST_F(EvaluateTypeChecksTest, check_cast_optimize_always_fail) {
+  auto code = R"(
+       (
+        (load-param-object v0)
+        (check-cast v0 "LBar;")
+        (move-result-pseudo v0)
+
+        (if-nez v0 :L1)
+        (const v0 0)
+        (return v0)
+
+        (:L1)
+        (const v0 1)
+        (return v0)
+       )
+      )";
+  auto method_str = "method (private static) \"LTest;.test:(LBaz;)I\"";
+
+  auto expected = "((load-param-object v0) (const v0 0) (return v0))";
+  EXPECT_TRUE(run("LTest;", method_str, code, expected));
+}
+
+TEST_F(EvaluateTypeChecksTest, check_cast_optimize_always_succeed) {
+  auto code = R"(
+       (
+        (load-param-object v0)
+        (check-cast v0 "LFoo;")
+        (move-result-pseudo v0)
+
+        (if-nez v0 :L1)
+        (const v0 0)
+        (return v0)
+
+        (:L1)
+        (const v0 1)
+        (return v0)
+       )
+      )";
+  auto method_str = "method (private static) \"LTest;.test:(LBaz;)I\"";
+
+  auto expected = R"(
+      (
+       (load-param-object v0)
+       (if-nez v0 :L0)
+       (const v0 0)
+       (return v0)
+       (:L0)
+       (const v0 1)
+       (return v0)
+      )
+     )";
+  EXPECT_TRUE(run("LTest;", method_str, code, expected));
 }

@@ -126,6 +126,8 @@ struct RemoveResult {
   }
 };
 
+namespace instance_of {
+
 using DefUses =
     std::unordered_map<IRInstruction*, std::unordered_set<IRInstruction*>>;
 
@@ -259,7 +261,7 @@ void analyze_true_instance_ofs(
   }
 }
 
-RemoveResult analyze_and_evaluate(DexMethod* method) {
+RemoveResult analyze_and_evaluate_instance_of(DexMethod* method) {
   ScopedCFG cfg(method->get_code());
   CFGMutation mutation(*cfg);
 
@@ -351,6 +353,132 @@ RemoveResult analyze_and_evaluate(DexMethod* method) {
   return res;
 }
 
+} // namespace instance_of
+
+namespace check_cast {
+
+void handle_false_case(IRInstruction* insn,
+                       ControlFlowGraph& cfg,
+                       CFGMutation& mutation,
+                       RemoveResult& res) {
+  auto def_it = cfg.find_insn(insn);
+  auto move_it = cfg.move_result_of(def_it);
+  if (move_it.is_end()) { // Should not happen.
+    return;
+  }
+
+  reg_t trg_reg = move_it->insn->dest();
+
+  // Check whether there's already a `const` with the same target just
+  // following. This could be from `RemoveUninstantiables` or previous
+  // runs of this pass.
+  auto follow_it = std::next(move_it);
+  if (!follow_it.is_end()) {
+    if (follow_it->insn->opcode() == OPCODE_CONST &&
+        follow_it->insn->dest() == trg_reg) {
+      return;
+    }
+  }
+
+  // Schedule a bypass.
+  auto set_result = new IRInstruction(OPCODE_CONST);
+  set_result->set_dest(trg_reg);
+  set_result->set_literal(0);
+  mutation.insert_after(move_it, {set_result});
+
+  ++res.overrides;
+  ++res.class_always_fail;
+}
+
+RemoveResult analyze_and_evaluate(DexMethod* method) {
+  ScopedCFG cfg(method->get_code());
+  CFGMutation mutation(*cfg);
+
+  RemoveResult res;
+
+  // Figure out types.
+  {
+    TypeInference type_inf(*cfg);
+    type_inf.run(method);
+
+    auto& type_envs = type_inf.get_type_environments();
+
+    auto get_state = [&type_envs](auto insn) -> const TypeEnvironment* {
+      auto it = type_envs.find(insn);
+      if (it == type_envs.end()) {
+        return nullptr;
+      }
+      return &it->second;
+    };
+
+    for (const MethodItemEntry& mie : cfg::InstructionIterable(*cfg)) {
+      auto insn = mie.insn;
+      if (insn->opcode() != OPCODE_CHECK_CAST) {
+        continue;
+      }
+
+      auto state = get_state(insn);
+      if (state == nullptr) {
+        continue;
+      }
+
+      auto test_type = insn->get_type();
+
+      auto src_type_state = state->get_dex_type(insn->src(0));
+      if (!src_type_state) {
+        continue;
+      }
+
+      auto eval = evaluate_impl(*src_type_state, test_type);
+      if (!eval) {
+        continue;
+      }
+
+      if (traceEnabled(EVALTC, 2)) {
+        std::ostringstream oss;
+        oss << "Found check-cast that can be evaluated: " << show(mie) << '\n';
+
+        oss << "Test type:\n";
+        print_type_chain(oss, test_type, 1);
+        oss << "Source type:\n";
+        print_type_chain(oss, *src_type_state, 1);
+        oss << "Evaluates to:\n " << *eval;
+
+        TRACE(EVALTC, 1, "%s", oss.str().c_str());
+      }
+
+      if (*eval == 0) {
+        handle_false_case(insn, *cfg, mutation, res);
+        continue;
+      }
+      redex_assert(*eval == 1);
+
+      // Successful check, can be eliminated.
+      reg_t src_reg = insn->src(0);
+      auto def_it = cfg->find_insn(insn);
+      auto move_it = cfg->move_result_of(def_it);
+      if (move_it.is_end()) { // Should not happen.
+        continue;
+      }
+      reg_t trg_reg = move_it->insn->dest();
+
+      // Schedule a bypass.
+      auto move_result = new IRInstruction(OPCODE_MOVE_OBJECT);
+      move_result->set_src(0, src_reg);
+      move_result->set_dest(trg_reg);
+      mutation.replace(def_it, {move_result});
+
+      ++res.overrides;
+      ++res.class_always_succeed_or_null_repl;
+    }
+  }
+
+  mutation.flush();
+  return res;
+}
+
+} // namespace check_cast
+
 size_t post_process(DexMethod* method,
                     size_t overrides,
                     const XStoreRefs& xstores) {
@@ -408,6 +536,34 @@ size_t post_process(DexMethod* method,
   return num_insns_before - num_insns_after;
 }
 
+RemoveResult optimize_impl(DexMethod* method,
+                           XStoreRefs& xstores,
+                           bool has_instance_of,
+                           bool has_check_cast) {
+  RemoveResult instance_of_res;
+  if (has_instance_of) {
+    instance_of_res = instance_of::analyze_and_evaluate_instance_of(method);
+
+    if (instance_of_res.overrides != 0) {
+      instance_of_res.insn_delta =
+          post_process(method, instance_of_res.overrides, xstores);
+    }
+  }
+
+  RemoveResult check_cast_res;
+  if (has_check_cast) {
+    check_cast_res = check_cast::analyze_and_evaluate(method);
+
+    if (check_cast_res.overrides != 0) {
+      check_cast_res.insn_delta =
+          post_process(method, check_cast_res.overrides, xstores);
+    }
+  }
+
+  instance_of_res += check_cast_res;
+  return instance_of_res;
+}
+
 } // namespace
 
 boost::optional<int32_t> EvaluateTypeChecksPass::evaluate(
@@ -416,11 +572,7 @@ boost::optional<int32_t> EvaluateTypeChecksPass::evaluate(
 }
 
 void EvaluateTypeChecksPass::optimize(DexMethod* method, XStoreRefs& xstores) {
-  auto local_res = analyze_and_evaluate(method);
-
-  if (local_res.overrides != 0) {
-    local_res.insn_delta = post_process(method, local_res.overrides, xstores);
-  }
+  optimize_impl(method, xstores, true, true);
 }
 
 void EvaluateTypeChecksPass::run_pass(DexStoresVector& stores,
@@ -435,29 +587,31 @@ void EvaluateTypeChecksPass::run_pass(DexStoresVector& stores,
         if (code == nullptr || method->rstate.no_optimizations()) {
           return RemoveResult{};
         }
-        auto has_instance_of = [&code]() {
+        auto has_instance_of_check_cast = [&code]() {
+          std::pair<bool, bool> res;
           for (const auto& mie : *code) {
             if (mie.type != MFLOW_OPCODE) {
               continue;
             }
-            if (mie.insn->opcode() != OPCODE_INSTANCE_OF) {
+            if (mie.insn->opcode() == OPCODE_INSTANCE_OF) {
+              res.first = true;
               continue;
             }
-            return true;
+            if (mie.insn->opcode() == OPCODE_CHECK_CAST) {
+              res.second = true;
+              continue;
+            }
           }
-          return false;
+          return res;
         };
-        if (!has_instance_of()) {
+        auto has_insns = has_instance_of_check_cast();
+        if (!has_insns.first && !has_insns.second) {
           return RemoveResult();
         }
 
-        auto res = analyze_and_evaluate(method);
+        auto res =
+            optimize_impl(method, xstores, has_insns.first, has_insns.second);
         res.methods_w_instanceof = 1;
-
-        if (res.overrides != 0) {
-          res.insn_delta = post_process(method, res.overrides, xstores);
-        }
-
         return res;
       });
 
