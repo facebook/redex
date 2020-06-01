@@ -179,6 +179,7 @@ Json::Value default_config() {
 
 Json::Value reflect_config(const Configurable::Reflection& cr) {
   Json::Value params = Json::arrayValue;
+  Json::Value traits = Json::arrayValue;
   int params_idx = 0;
   for (auto& entry : cr.params) {
     Json::Value param;
@@ -205,10 +206,18 @@ Json::Value reflect_config(const Configurable::Reflection& cr) {
     }
     params[params_idx++] = param;
   }
+  int traits_idx = 0;
+  for (auto& entry : cr.traits) {
+    Json::Value trait;
+    trait["name"] = entry.first;
+    trait["value"] = entry.second.value;
+    traits[traits_idx++] = trait;
+  }
   Json::Value reflected_config;
   reflected_config["name"] = cr.name;
   reflected_config["doc"] = cr.doc;
   reflected_config["params"] = params;
+  reflected_config["traits"] = traits;
   return reflected_config;
 }
 

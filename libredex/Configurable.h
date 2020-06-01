@@ -104,11 +104,13 @@ class Configurable {
   };
 
   struct ReflectionParam;
+  struct ReflectionTrait;
 
   struct Reflection {
     std::string name;
     std::string doc;
     std::map<std::string, ReflectionParam> params;
+    std::map<std::string, ReflectionTrait> traits;
   };
 
   struct ReflectionParam {
@@ -165,6 +167,19 @@ class Configurable {
     Type type;
     std::tuple<std::string, Reflection> variant;
     Json::Value default_value;
+  };
+
+  struct ReflectionTrait {
+    ReflectionTrait() {}
+
+    explicit ReflectionTrait(const std::string& name,
+                             const Json::Value& value) {
+      this->name = name;
+      this->value = value;
+    }
+
+    std::string name;
+    Json::Value value;
   };
 
  public:
@@ -246,7 +261,7 @@ class Configurable {
     return t;
   }
 
-  using ReflectorFunc = std::function<void(
+  using ReflectorParamFunc = std::function<void(
       const std::string&,
       const std::string&,
       const bool,
@@ -254,6 +269,9 @@ class Configurable {
       const Configurable::ReflectionParam::Type,
       const std::tuple<std::string, Configurable::Reflection>&,
       const Json::Value)>;
+
+  using ReflectorTraitFunc =
+      std::function<void(const std::string&, const Json::Value)>;
 
   template <typename T>
   struct DefaultValueType {
@@ -269,7 +287,7 @@ class Configurable {
    * will have specializations provided in Configurable.cpp
    */
   template <typename T>
-  void reflect(ReflectorFunc& reflector,
+  void reflect(ReflectorParamFunc& reflector,
                const std::string& param_name,
                const std::string& param_doc,
                const bool param_is_required,
@@ -285,13 +303,18 @@ class Configurable {
   }
 
   template <typename T>
+  void reflect_trait(ReflectorTraitFunc& reflector_trait,
+                     const std::string& name,
+                     T value);
+
+  template <typename T>
   void bind(const std::string& name,
             T defaultValue,
             T& dest,
             const std::string& doc = default_doc(),
             bindflags_t bindflags = 0) {
     if (m_reflecting) {
-      reflect(m_reflector,
+      reflect(m_param_reflector,
               name,
               doc,
               false /* param_is_required */,
@@ -310,8 +333,8 @@ class Configurable {
                      bindflags_t bindflags = 0) {
     // TODO(T44504176): we could reflect the requiredness here
     if (m_reflecting) {
-      reflect(m_reflector, name, doc, true /* param_is_required */, bindflags,
-              dest, static_cast<T>(0));
+      reflect(m_param_reflector, name, doc, true /* param_is_required */,
+              bindflags, dest, static_cast<T>(0));
     } else {
       parse_required(name, dest, bindflags);
     }
@@ -323,6 +346,13 @@ class Configurable {
             const std::string& doc = default_doc(),
             bindflags_t bindflags = 0) {
     bind(name, std::string(defaultValue), dest, doc, bindflags);
+  }
+
+  template <typename T>
+  void trait(const std::string& name, T value) {
+    if (m_reflecting) {
+      reflect_trait(m_trait_reflector, name, value);
+    }
   }
 
  private:
@@ -356,7 +386,8 @@ class Configurable {
   std::function<void()> m_after_configuration;
   std::function<boost::optional<const Json::Value&>(const std::string& name)>
       m_parser;
-  ReflectorFunc m_reflector;
+  ReflectorParamFunc m_param_reflector;
+  ReflectorTraitFunc m_trait_reflector;
   bool m_reflecting;
 };
 
@@ -367,7 +398,7 @@ class Configurable {
   T Configurable::as<T>(const Json::Value& value, bindflags_t bindflags); \
   template <>                                                             \
   void Configurable::reflect<T>(                                          \
-      ReflectorFunc & reflector, const std::string& param_name,           \
+      ReflectorParamFunc & reflector, const std::string& param_name,      \
       const std::string& param_doc, const bool param_is_required,         \
       const Configurable::bindflags_t param_bindflags, T& param,          \
       typename DefaultValueType<T>::type default_value);
