@@ -21,6 +21,7 @@ class RegAllocPass : public Pass {
   void bind_config() override {
     bool unused;
     bind("live_range_splitting", false, unused);
+    trait(Traits::Pass::atleast, 1);
   }
 
   /*

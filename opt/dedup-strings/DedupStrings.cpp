@@ -683,6 +683,8 @@ void DedupStringsPass::bind_config() {
        m_max_factory_methods);
   bind("use_method_to_weight", false, m_use_method_to_weight);
 
+  trait(Traits::Pass::unique, true);
+
   after_configuration([this] {
     always_assert(m_max_factory_methods > 0);
     interdex::InterDexRegistry* registry =

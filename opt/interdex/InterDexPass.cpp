@@ -83,6 +83,8 @@ void InterDexPass::bind_config() {
   bind("can_touch_coldstart_extended_cls", false,
        m_can_touch_coldstart_extended_cls);
   bind("expect_order_list", false, m_expect_order_list);
+
+  trait(Traits::Pass::unique, true);
 }
 
 void InterDexPass::run_pass(DexStoresVector& stores,

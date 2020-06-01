@@ -1186,6 +1186,7 @@ void InstrumentPass::bind_config() {
   bind("methods_replacement", {}, m_options.methods_replacement,
        "Replacing instance method call with static method call.",
        Configurable::bindflags::methods::error_if_unresolvable);
+  trait(Traits::Pass::unique, true);
 
   after_configuration([this] {
     // Make a small room for additional method refs during InterDex.

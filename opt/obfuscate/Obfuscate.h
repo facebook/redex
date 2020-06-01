@@ -15,6 +15,8 @@ class ObfuscatePass : public Pass {
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
+  void bind_config() final { trait(Traits::Pass::unique, true); }
+
   struct Config {
     bool avoid_colliding_debug_name{false};
   };

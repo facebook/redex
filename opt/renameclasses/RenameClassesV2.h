@@ -52,6 +52,7 @@ class RenameClassesPassV2 : public Pass {
     bind("dont_rename_types_with_reflection", {},
          m_dont_rename_types_with_reflection);
     bind("package_prefix", "", m_package_prefix);
+    trait(Traits::Pass::unique, true);
   }
 
   void eval_pass(DexStoresVector& stores,

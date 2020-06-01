@@ -20,6 +20,7 @@
 #include "DexClass.h"
 #include "DexStore.h"
 #include "PassRegistry.h"
+#include "Traits.h"
 
 class PassManager;
 
