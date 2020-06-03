@@ -23,13 +23,13 @@ class A {
   }
 
   // not referenced
-  public void bor() {
-  }
+  public void bor() {}
 }
 
 class D extends A {
   public int bar() { return 3; }
   public int baz() { return 4; }
+  public void bor() {}
 }
 
 interface I {
@@ -43,14 +43,14 @@ class Super {
 class Sub extends Super implements I {
 }
 
-interface IBadger {
+interface Badger {
   boolean isAwesome();
 }
 
-abstract class Badger implements IBadger {
+abstract class BadgerImpl implements Badger {
 }
 
-class HoneyBadger extends Badger {
+class HoneyBadger extends BadgerImpl {
 
   boolean mIsAwesome;
 
@@ -64,7 +64,7 @@ class HoneyBadger extends Badger {
   }
 }
 
-class HogBadger implements IBadger {
+class HogBadger implements Badger {
   @Override
   public boolean isAwesome() {
     return true;
@@ -77,15 +77,15 @@ class BadgerTester {
   }
 }
 
-interface IParent {
+interface Parent {
   public void go();
 }
 
-interface IChild extends IParent {
+interface Child extends Parent {
 }
 
 class UseIt {
-  public static void go(IChild ic) {
+  public static void go(Child ic) {
     ic.go();
   }
 }
@@ -119,3 +119,16 @@ class UseHasher {
 }
 
 class OnlyInArray {}
+
+public class RemoveUnreachableTest {
+  public void testMethod() {
+    // Inheritance test
+    A d = new D();
+    D d2 = (D) d;
+    d2.bar();
+
+    // Triangle inheritance
+    I i = new Sub();
+    i.wat();
+  }
+}
