@@ -216,6 +216,38 @@ TEST_F(CopyPropagationTest, consts_safe_by_constant_uses) {
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
+TEST_F(CopyPropagationTest, non_zero_constant_cannot_have_object_type_demand) {
+  // if-s on non-zero constants cannot effectively include Object in the
+  // type demand, reducing the type demand to Int, allowing for more
+  // copy-propagation
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (const v0 42)
+      (if-eqz v0 :L1) ; must be int, as it's non-zero
+      (const v0 42)
+      (add-int v1 v0 v0) ; int demand
+      (:L1)
+      (return-void)
+    )
+)");
+  code->set_registers_size(2);
+
+  copy_propagation_impl::Config config;
+  CopyPropagation(config).run(code.get());
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (const v0 42)
+      (if-eqz v0 :L1) ; must be int, as it's non-zero
+      (add-int v1 v0 v0) ; int demand
+      (:L1)
+      (return-void)
+    )
+)");
+
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+}
+
 TEST_F(CopyPropagationTest, consts_safe_by_constant_uses_aput) {
 
   // even with verify-none being disabled, the following is safe

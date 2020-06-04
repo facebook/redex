@@ -146,6 +146,9 @@ TypeDemand ConstantUses::get_constant_type_demand(IRInstruction* insn) const {
         type_demand & Float ? "Float" : "",
         type_demand & Object ? "Object" : "", type_demand & Long ? "Long" : "",
         type_demand & Double ? "Double" : "");
+  if (insn->get_literal() != 0) {
+    type_demand = (TypeDemand)(type_demand & ~TypeDemand::Object);
+  }
   return type_demand;
 }
 
