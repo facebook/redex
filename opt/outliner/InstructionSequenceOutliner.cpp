@@ -1958,7 +1958,116 @@ struct CandidateInfo {
 // We keep track of outlined methods that reside in earlier dexes of the current
 // store
 using ReusableOutlinedMethods =
-    std::unordered_map<Candidate, DexMethod*, CandidateHasher>;
+    std::unordered_map<Candidate, std::vector<DexMethod*>, CandidateHasher>;
+
+std::unordered_set<const DexType*> get_declaring_types(
+    const CandidateInfo& ci) {
+  std::unordered_set<const DexType*> types;
+  for (auto& p : ci.methods) {
+    types.insert(p.first->get_class());
+  }
+  return types;
+}
+
+std::unordered_set<const DexType*> get_referenced_types(const Candidate& c) {
+  std::unordered_set<const DexType*> types;
+  auto insert_internal_type = [&types](const DexType* t) {
+    auto cls = type_class(t);
+    if (cls && !cls->is_external()) {
+      types.insert(t);
+    }
+  };
+  if (c.res_type) {
+    insert_internal_type(c.res_type);
+  }
+  for (auto t : c.arg_types) {
+    insert_internal_type(t);
+  }
+  std::function<void(const CandidateNode& cn)> walk;
+  walk = [&insert_internal_type, &walk](const CandidateNode& cn) {
+    for (auto& csi : cn.insns) {
+      auto& cic = csi.core;
+      switch (opcode::ref(cic.opcode)) {
+      case opcode::Ref::Method:
+        insert_internal_type(cic.method->get_class());
+        break;
+      case opcode::Ref::Field:
+        insert_internal_type(cic.field->get_class());
+        break;
+      case opcode::Ref::Type:
+        insert_internal_type(cic.type);
+        break;
+      default:
+        break;
+      }
+    }
+    for (auto& p : cn.succs) {
+      walk(*p.second);
+    }
+  };
+  walk(c.root);
+  return types;
+}
+
+// Helper function that enables quickly determinining if a class is a common
+// base class of a set of class. This this ends, it builds up a map that
+// includes all transitive super classes associated with a count of how many of
+// the original types share this ancestor. If the count is equal to the number
+// of the original types, then it must be a common base class.
+std::unordered_map<const DexType*, size_t> get_counted_super_classes(
+    const std::unordered_set<const DexType*>& types) {
+  std::unordered_map<const DexType*, size_t> counted_super_classes;
+  for (auto t : types) {
+    do {
+      counted_super_classes[t]++;
+      auto cls = type_class(t);
+      if (!cls) {
+        break;
+      }
+      t = cls->get_super_class();
+    } while (t != nullptr);
+  }
+  return counted_super_classes;
+}
+
+// Finds an outlined method that either resides in an outlined helper class, or
+// a common base class, or is co-located with its references.
+static DexMethod* find_reusable_method(
+    const Candidate& c,
+    const CandidateInfo& ci,
+    const ReusableOutlinedMethods* reusable_outlined_methods) {
+  if (!reusable_outlined_methods) {
+    return nullptr;
+  }
+  auto it = reusable_outlined_methods->find(c);
+  if (it == reusable_outlined_methods->end()) {
+    return nullptr;
+  }
+  auto& methods = it->second;
+  DexMethod* helper_class_method{nullptr};
+  for (auto method : methods) {
+    auto cls = type_class(method->get_class());
+    if (is_outlined_class(cls)) {
+      helper_class_method = method;
+      continue;
+    }
+    auto declaring_types = get_declaring_types(ci);
+    auto counted_super_classes = get_counted_super_classes(declaring_types);
+    auto it2 = counted_super_classes.find(method->get_class());
+    if (it2 != counted_super_classes.end() &&
+        it2->second == declaring_types.size()) {
+      return method;
+    }
+    auto referenced_types = get_referenced_types(c);
+    counted_super_classes = get_counted_super_classes(referenced_types);
+    it2 = counted_super_classes.find(method->get_class());
+    if (it2 != counted_super_classes.end() &&
+        it2->second == referenced_types.size()) {
+      return method;
+    }
+  }
+  return helper_class_method;
+}
 
 static size_t get_savings(
     const InstructionSequenceOutlinerConfig& config,
@@ -1970,7 +2079,7 @@ static size_t get_savings(
       COST_METHOD_METADATA +
       (c.res_type ? COST_INVOKE_WITH_RESULT : COST_INVOKE_WITHOUT_RESULT) *
           ci.count;
-  if (!reusable_outlined_methods || !reusable_outlined_methods->count(c)) {
+  if (find_reusable_method(c, ci, reusable_outlined_methods) == nullptr) {
     outlined_cost += COST_METHOD_BODY + c.size;
   }
 
@@ -2648,20 +2757,10 @@ class HostClassSelector {
     }
 
     // Try to find the first common base class in this dex
-    std::unordered_map<const DexType*, size_t> expanded_types;
-    for (auto t : types) {
-      while (t != nullptr) {
-        expanded_types[t]++;
-        auto cls = type_class(t);
-        if (!cls) {
-          break;
-        }
-        t = cls->get_super_class();
-      }
-    }
+    auto counted_super_classes = get_counted_super_classes(types);
     const DexType* host_class{nullptr};
     boost::optional<size_t> host_class_id;
-    for (auto& p : expanded_types) {
+    for (auto& p : counted_super_classes) {
       if (p.second != types.size()) {
         continue;
       }
@@ -2688,15 +2787,12 @@ class HostClassSelector {
     *not_outlinable = false;
     // When all candidate instances come from methods of a single class, use
     // that type as the host class
-    std::unordered_set<const DexType*> types;
-    for (auto& p : ci.methods) {
-      types.insert(p.first->get_class());
-    }
-    always_assert(!types.empty());
+    auto declaring_types = get_declaring_types(ci);
+    always_assert(!declaring_types.empty());
 
-    auto host_class = get_direct_or_base_class(types);
-    if (types.size() == 1) {
-      auto direct_type = *types.begin();
+    auto host_class = get_direct_or_base_class(declaring_types);
+    if (declaring_types.size() == 1) {
+      auto direct_type = *declaring_types.begin();
       if (host_class == direct_type) {
         m_hosted_direct_count++;
         return host_class;
@@ -2715,52 +2811,17 @@ class HostClassSelector {
       return host_class;
     }
 
-    types.clear();
     // If an outlined code snippet occurs in many unrelated classes, but always
     // references the same types (which share a common base type), then that
     // common base type is a reasonable place where to put the outlined code.
-    auto insert_internal_type = [&types](const DexType* t) {
-      auto cls = type_class(t);
-      if (cls && !cls->is_external()) {
-        types.insert(t);
-      }
-    };
-    if (c.res_type) {
-      insert_internal_type(c.res_type);
-    }
-    for (auto t : c.arg_types) {
-      insert_internal_type(t);
-    }
-    std::function<void(const CandidateNode& cn)> walk;
-    walk = [&insert_internal_type, &walk](const CandidateNode& cn) {
-      for (auto& csi : cn.insns) {
-        auto& cic = csi.core;
-        switch (opcode::ref(cic.opcode)) {
-        case opcode::Ref::Method:
-          insert_internal_type(cic.method->get_class());
-          break;
-        case opcode::Ref::Field:
-          insert_internal_type(cic.field->get_class());
-          break;
-        case opcode::Ref::Type:
-          insert_internal_type(cic.type);
-          break;
-        default:
-          break;
-        }
-      }
-      for (auto& p : cn.succs) {
-        walk(*p.second);
-      }
-    };
-    walk(c.root);
-
-    host_class = get_direct_or_base_class(types, [](const DexType* t) {
-      // We don't want any common base class with a scary clinit
-      auto cl_init = type_class(t)->get_clinit();
-      return !cl_init ||
-             (can_delete(cl_init) && cl_init->rstate.no_optimizations());
-    });
+    auto referenced_types = get_referenced_types(c);
+    host_class =
+        get_direct_or_base_class(referenced_types, [](const DexType* t) {
+          // We don't want any common base class with a scary clinit
+          auto cl_init = type_class(t)->get_clinit();
+          return !cl_init ||
+                 (can_delete(cl_init) && cl_init->rstate.no_optimizations());
+        });
     if (host_class) {
       m_hosted_at_refs_count++;
       return host_class;
@@ -2789,10 +2850,9 @@ bool outline_candidate(const Candidate& c,
   auto rtype = c.res_type ? c.res_type : type::_void();
   type_refs_to_insert.insert(const_cast<DexType*>(rtype));
 
-  bool can_reuse{false};
-  DexMethod* outlined_method;
-  if (reusable_outlined_methods && reusable_outlined_methods->count(c)) {
-    outlined_method = reusable_outlined_methods->at(c);
+  DexMethod* outlined_method{
+      find_reusable_method(c, ci, reusable_outlined_methods)};
+  if (outlined_method) {
     type_refs_to_insert.insert(outlined_method->get_class());
     if (!dex_state->can_insert_type_refs(type_refs_to_insert)) {
       return false;
@@ -2813,7 +2873,6 @@ bool outline_candidate(const Candidate& c,
         host_class = host_class_selector->peek_at_next_outlined_class();
         must_create_next_outlined_class = true;
       }
-      can_reuse = true;
     }
     type_refs_to_insert.insert(host_class);
     if (!dex_state->can_insert_type_refs(type_refs_to_insert)) {
@@ -2824,6 +2883,9 @@ bool outline_candidate(const Candidate& c,
     }
     outlined_method =
         outlined_method_creator->create_outlined_method(c, ci, host_class);
+    if (reusable_outlined_methods) {
+      (*reusable_outlined_methods)[c].push_back(outlined_method);
+    }
   }
   dex_state->insert_type_refs(type_refs_to_insert);
   for (auto& p : ci.methods) {
@@ -2836,11 +2898,6 @@ bool outline_candidate(const Candidate& c,
     }
     TRACE(ISO, 6, "[invoke sequence outliner] after outlined %s from %s\n%s",
           SHOW(outlined_method), SHOW(method), SHOW(cfg));
-  }
-  if (can_reuse && reusable_outlined_methods) {
-    // The newly created outlined method was placed in a new helper class
-    // which should be accessible without problems from later dexes
-    reusable_outlined_methods->emplace(c, outlined_method);
   }
   return true;
 }
