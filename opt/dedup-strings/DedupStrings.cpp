@@ -92,7 +92,7 @@ std::vector<DexClass*> DedupStrings::get_host_classes(DexClassesVector& dexen) {
     DexClass* host_cls = nullptr;
     size_t min_size = std::numeric_limits<size_t>::max();
     for (auto cls : classes) {
-      if (is_outlined_class(cls)) {
+      if (cls->rstate.outlined()) {
         host_cls = cls;
         break;
       }
@@ -163,7 +163,8 @@ std::unordered_set<const DexMethod*> DedupStrings::get_perf_sensitive_methods(
   std::unordered_set<const DexMethod*> perf_sensitive_methods;
   auto has_weight = [&](DexMethod* method) -> bool {
     return !m_use_method_to_weight ||
-           !!get_method_weight_if_available(method, &m_method_to_weight);
+           !!get_method_weight_if_available(method, &m_method_to_weight) ||
+           type_class(method->get_class())->rstate.outlined();
   };
   for (size_t dexnr = 0; dexnr < dexen.size(); dexnr++) {
     auto& classes = dexen[dexnr];

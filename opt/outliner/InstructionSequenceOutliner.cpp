@@ -1147,7 +1147,7 @@ static MethodCandidates find_method_candidates(
 static bool can_outline_from_method(
     DexMethod* method,
     const std::unordered_set<DexMethod*>& sufficiently_hot_methods) {
-  if (method->rstate.no_optimizations()) {
+  if (method->rstate.no_optimizations() || method->rstate.outlined()) {
     return false;
   }
   if (api::LevelChecker::get_method_level(method) !=
@@ -1317,7 +1317,7 @@ static DexMethod* find_reusable_method(
   DexMethod* helper_class_method{nullptr};
   for (auto method : methods) {
     auto cls = type_class(method->get_class());
-    if (is_outlined_class(cls)) {
+    if (cls->rstate.outlined()) {
       helper_class_method = method;
       continue;
     }
@@ -1754,6 +1754,7 @@ class OutlinedMethodCreator {
         get_outlined_code(outlined_method, c, dbg_positions));
     outlined_method->set_deobfuscated_name(show(outlined_method));
     outlined_method->rstate.set_dont_inline();
+    outlined_method->rstate.set_outlined();
     change_visibility(outlined_method->get_code(),
                       const_cast<DexType*>(host_class), outlined_method);
     type_class(host_class)->add_method(outlined_method);
@@ -1942,7 +1943,7 @@ class DexState {
   void insert_outlined_class(DexClass* outlined_cls) {
     auto it = m_dex.begin();
     for (; it != m_dex.end() &&
-           (interdex::is_canary(*it) || is_outlined_class(*it));
+           (interdex::is_canary(*it) || (*it)->rstate.outlined());
          it++) {
     }
     m_dex.insert(it, outlined_cls);
@@ -2026,6 +2027,8 @@ class HostClassSelector {
     cc.set_super(type::java_lang_Object());
     m_outlined_cls = cc.create();
     m_outlined_cls->rstate.set_generated();
+    m_outlined_cls->rstate.set_outlined();
+    m_outlined_cls->set_perf_sensitive(true);
     m_dex_state.insert_outlined_class(m_outlined_cls);
   }
 
@@ -2409,7 +2412,7 @@ void reorder_with_method_profiles(
   std::unordered_set<DexClass*> outlined_classes;
   for (auto& p : newly_outlined_methods) {
     auto cls = type_class(p.first->get_class());
-    if (!is_outlined_class(cls)) {
+    if (!cls->rstate.outlined()) {
       continue;
     }
     outlined_classes.insert(cls);
@@ -2595,12 +2598,6 @@ static void gather_sufficiently_warm_and_hot_methods(
 }
 
 } // namespace
-
-bool is_outlined_class(DexClass* cls) {
-  const char* cname = cls->get_type()->get_name()->c_str();
-  return strncmp(cname, OUTLINED_CLASS_NAME_PREFIX,
-                 strlen(OUTLINED_CLASS_NAME_PREFIX)) == 0;
-}
 
 void InstructionSequenceOutliner::bind_config() {
   bind("max_insns_size", m_config.min_insns_size, m_config.min_insns_size,

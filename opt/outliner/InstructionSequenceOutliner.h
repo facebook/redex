@@ -9,8 +9,6 @@
 
 #include "Pass.h"
 
-bool is_outlined_class(DexClass* cls);
-
 struct InstructionSequenceOutlinerConfig {
   size_t min_insns_size{3};
   size_t max_insns_size{77};

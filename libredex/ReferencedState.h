@@ -82,6 +82,9 @@ class ReferencedState {
     // by running AnalyzePureMethodsPass which would recompute it.
     bool m_pure_method : 1;
 
+    // Whether this member is an outlined class or method.
+    bool m_outlined : 1;
+
     InnerStruct() {
       // Initializers in bit fields are C++20...
       m_by_string = false;
@@ -106,6 +109,7 @@ class ReferencedState {
 
       m_immutable_getter = false;
       m_pure_method = false;
+      m_outlined = false;
     }
   } inner_struct;
 
@@ -177,6 +181,8 @@ class ReferencedState {
           other.inner_struct.m_immutable_getter;
       this->inner_struct.m_pure_method =
           this->inner_struct.m_pure_method & other.inner_struct.m_pure_method;
+      this->inner_struct.m_outlined =
+          this->inner_struct.m_outlined & other.inner_struct.m_outlined;
     }
   }
 
@@ -334,6 +340,10 @@ class ReferencedState {
   bool pure_method() const { return inner_struct.m_pure_method; }
   void set_pure_method() { inner_struct.m_pure_method = true; }
   void reset_pure_method() { inner_struct.m_pure_method = false; }
+
+  bool outlined() const { return inner_struct.m_outlined; }
+  void set_outlined() { inner_struct.m_outlined = true; }
+  void reset_outlined() { inner_struct.m_outlined = false; }
 
  private:
   // Does any keep rule (whether -keep or -keepnames) match this DexMember?
