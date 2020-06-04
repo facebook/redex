@@ -484,4 +484,42 @@ class InstructionSequenceOutlinerTest {
         println("5", "6", "7");
       }
     }
+
+  static class Nested3 {
+    public int I;
+
+    public void colocate_with_refs(Nested3 nested) {
+      nested.I = 42;
+      nested.I = 42;
+      nested.I = 42;
+      nested.I = 42;
+      nested.I = 42;
+      nested.I = 42;
+      nested.I = 42;
+      nested.I = 42;
+      nested.I = 42;
+      nested.I = 42;
+      nested.I = 42;
+      nested.I = 42;
+      nested.I = 42;
+      nested.I = 42;
+    }
+  }
+
+  public void colocate_with_refs(Nested3 nested) {
+    nested.I = 42;
+    nested.I = 42;
+    nested.I = 42;
+    nested.I = 42;
+    nested.I = 42;
+    nested.I = 42;
+    nested.I = 42;
+    nested.I = 42;
+    nested.I = 42;
+    nested.I = 42;
+    nested.I = 42;
+    nested.I = 42;
+    nested.I = 42;
+    nested.I = 42;
+  }
 }

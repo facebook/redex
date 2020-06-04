@@ -615,3 +615,40 @@ TEST_F(InstructionSequenceOutlinerTest, distributed) {
     EXPECT_EQ(count_invokes(*scoped_cfg, println_method), 5);
   }
 }
+
+TEST_F(InstructionSequenceOutlinerTest, colocate_with_refs) {
+  // When an outlinable instruction sequence occurrs in different classes,
+  // but the outlinable instrucitons are all members that share a common
+  // base class, then that base class will host the outlined method.
+  std::vector<DexMethod*> colocate_with_refs_methods;
+  for (const auto& cls : *classes) {
+    for (const auto& m : cls->get_vmethods()) {
+      if (m->get_name()->str() == "colocate_with_refs") {
+        colocate_with_refs_methods.push_back(m);
+      }
+    }
+  }
+  EXPECT_EQ(colocate_with_refs_methods.size(), 2);
+
+  std::vector<Pass*> passes = {
+      new InstructionSequenceOutliner(),
+  };
+
+  run_passes(passes);
+
+  std::vector<DexMethod*> outlined_methods;
+  for (const auto& m : colocate_with_refs_methods) {
+    cfg::ScopedCFG scoped_cfg(m->get_code());
+    auto outlined_method = find_invoked_method(*scoped_cfg, "$outline");
+    EXPECT_NE(outlined_method, nullptr);
+    EXPECT_EQ(count_invokes(*scoped_cfg, outlined_method), 2);
+    outlined_methods.push_back(outlined_method->as_def());
+  }
+  sort_unique(outlined_methods);
+  EXPECT_EQ(outlined_methods.size(), 1);
+  for (auto m : outlined_methods) {
+    EXPECT_EQ(
+        m->get_class()->get_name()->str(),
+        "Lcom/facebook/redextest/InstructionSequenceOutlinerTest$Nested3;");
+  }
+}

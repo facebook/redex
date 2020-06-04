@@ -2128,7 +2128,7 @@ static bool has_non_init_invoke_directs(const Candidate& c) {
 class MethodNameGenerator {
  private:
   PassManager& m_mgr;
-  std::unordered_map<DexType*, std::unordered_map<StableHash, size_t>>
+  std::unordered_map<const DexType*, std::unordered_map<StableHash, size_t>>
       m_unique_method_ids;
   size_t m_max_unique_method_id{0};
 
@@ -2140,7 +2140,7 @@ class MethodNameGenerator {
 
   // Compute the name of the outlined method in a way that tends to be stable
   // across Redex runs.
-  DexString* get_name(DexType* host_class, const Candidate& c) {
+  DexString* get_name(const DexType* host_class, const Candidate& c) {
     StableHash stable_hash = stable_hash_value(c);
     auto unique_method_id = m_unique_method_ids[host_class][stable_hash]++;
     m_max_unique_method_id = std::max(m_max_unique_method_id, unique_method_id);
@@ -2345,7 +2345,7 @@ class OutlinedMethodCreator {
   // Obtain outlined method for a candidate.
   DexMethod* create_outlined_method(const Candidate& c,
                                     const CandidateInfo& ci,
-                                    DexType* host_class) {
+                                    const DexType* host_class) {
     auto name = m_method_name_generator.get_name(host_class, c);
     std::deque<DexType*> arg_types;
     for (auto t : c.arg_types) {
@@ -2354,14 +2354,16 @@ class OutlinedMethodCreator {
     auto rtype = c.res_type ? c.res_type : type::_void();
     auto type_list = DexTypeList::make_type_list(std::move(arg_types));
     auto proto = DexProto::make_proto(rtype, type_list);
-    auto outlined_method = DexMethod::make_method(host_class, name, proto)
-                               ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+    auto outlined_method =
+        DexMethod::make_method(const_cast<DexType*>(host_class), name, proto)
+            ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
     auto dbg_positions = get_best_outlined_dbg_positions(c, ci);
     outlined_method->set_code(
         get_outlined_code(outlined_method, c, dbg_positions));
     outlined_method->set_deobfuscated_name(show(outlined_method));
     outlined_method->rstate.set_dont_inline();
-    change_visibility(outlined_method->get_code(), host_class, outlined_method);
+    change_visibility(outlined_method->get_code(),
+                      const_cast<DexType*>(host_class), outlined_method);
     type_class(host_class)->add_method(outlined_method);
     TRACE(ISO, 5, "[invoke sequence outliner] outlined to %s\n%s",
           SHOW(outlined_method), SHOW(outlined_method->get_code()));
@@ -2470,9 +2472,9 @@ class DexState {
   PassManager& m_mgr;
   DexClasses& m_dex;
   size_t m_dex_id;
-  std::unordered_set<DexType*> m_type_refs;
+  std::unordered_set<const DexType*> m_type_refs;
   size_t m_method_refs_count;
-  std::unordered_map<DexType*, size_t> m_class_ids;
+  std::unordered_map<const DexType*, size_t> m_class_ids;
 
  public:
   DexState() = delete;
@@ -2500,7 +2502,7 @@ class DexState {
 
   size_t get_dex_id() { return m_dex_id; }
 
-  bool can_insert_type_refs(const std::unordered_set<DexType*>& types) {
+  bool can_insert_type_refs(const std::unordered_set<const DexType*>& types) {
     size_t inserted_count{0};
     for (auto t : types) {
       if (!m_type_refs.count(t)) {
@@ -2517,7 +2519,7 @@ class DexState {
     return true;
   }
 
-  void insert_type_refs(const std::unordered_set<DexType*>& types) {
+  void insert_type_refs(const std::unordered_set<const DexType*>& types) {
     always_assert(can_insert_type_refs(types));
     m_type_refs.insert(types.begin(), types.end());
     always_assert(m_type_refs.size() < kMaxTypeRefs);
@@ -2551,7 +2553,7 @@ class DexState {
   // Class ids represent the position of a class in the dex; we use this to
   // determine if class in the dex, which one comes first, when deciding
   // on a host class for an outlined method.
-  boost::optional<size_t> get_class_id(DexType* t) {
+  boost::optional<size_t> get_class_id(const DexType* t) {
     auto it = m_class_ids.find(t);
     return it == m_class_ids.end() ? boost::none
                                    : boost::optional<size_t>(it->second);
@@ -2569,6 +2571,7 @@ class HostClassSelector {
   size_t m_outlined_classes{0};
   size_t m_hosted_direct_count{0};
   size_t m_hosted_base_count{0};
+  size_t m_hosted_at_refs_count{0};
   size_t m_hosted_helper_count{0};
 
  public:
@@ -2582,10 +2585,13 @@ class HostClassSelector {
   ~HostClassSelector() {
     m_mgr.incr_metric("num_hosted_direct_count", m_hosted_direct_count);
     m_mgr.incr_metric("num_hosted_base_count", m_hosted_base_count);
+    m_mgr.incr_metric("num_hosted_at_refs_count", m_hosted_at_refs_count);
     m_mgr.incr_metric("num_hosted_helper_count", m_hosted_helper_count);
     TRACE(ISO, 2,
-          "[invoke sequence outliner] %zu direct, %zu base, %zu helpers hosted",
-          m_hosted_direct_count, m_hosted_base_count, m_hosted_helper_count);
+          "[invoke sequence outliner] %zu direct, %zu base, %zu at refs, %zu "
+          "helpers hosted",
+          m_hosted_direct_count, m_hosted_base_count, m_hosted_at_refs_count,
+          m_hosted_helper_count);
 
     m_mgr.incr_metric("num_outlined_classes", m_outlined_classes);
     TRACE(ISO, 2,
@@ -2625,35 +2631,24 @@ class HostClassSelector {
     m_dex_state.insert_outlined_class(m_outlined_cls);
   }
 
-  DexType* get_direct_or_base_class(const Candidate& c,
-                                    const CandidateInfo& ci,
-                                    bool* not_outlinable) {
-    *not_outlinable = false;
-    // When all candidate instances come from methods of a single class, use
-    // that type as the host class
-    std::unordered_set<DexType*> types;
-    for (auto& p : ci.methods) {
-      types.insert(p.first->get_class());
-    }
-    always_assert(!types.empty());
+  const DexType* get_direct_or_base_class(
+      const std::unordered_set<const DexType*>& types,
+      const std::function<bool(const DexType*)>& predicate =
+          [](const DexType*) { return true; }) {
+    // When there's only one type, try to use that
     if (types.size() == 1) {
       auto direct_type = *types.begin();
-      auto direct_cls = type_class(direct_type);
-      if (direct_cls && can_rename(direct_cls) && can_delete(direct_cls)) {
-        m_hosted_direct_count++;
-        return *types.begin();
-      }
-      if (has_non_init_invoke_directs(c)) {
-        // TODO: Consider making those methods static if they can be renamed,
-        // just like what the inliner does
-        *not_outlinable = true;
-        return (DexType*)nullptr;
+      if (m_dex_state.get_class_id(direct_type) && predicate(direct_type)) {
+        auto direct_cls = type_class(direct_type);
+        always_assert(direct_cls);
+        if (can_rename(direct_cls) && can_delete(direct_cls)) {
+          return direct_type;
+        }
       }
     }
-    always_assert(!has_non_init_invoke_directs(c));
 
-    // When all candidates come from class with a common base type, use that.
-    std::unordered_map<DexType*, size_t> expanded_types;
+    // Try to find the first common base class in this dex
+    std::unordered_map<const DexType*, size_t> expanded_types;
     for (auto t : types) {
       while (t != nullptr) {
         expanded_types[t]++;
@@ -2664,14 +2659,14 @@ class HostClassSelector {
         t = cls->get_super_class();
       }
     }
-    DexType* host_class{nullptr};
+    const DexType* host_class{nullptr};
     boost::optional<size_t> host_class_id;
     for (auto& p : expanded_types) {
       if (p.second != types.size()) {
         continue;
       }
       auto class_id = m_dex_state.get_class_id(p.first);
-      if (!class_id) {
+      if (!class_id || !predicate(p.first)) {
         continue;
       }
       auto cls = type_class(p.first);
@@ -2684,14 +2679,96 @@ class HostClassSelector {
         host_class = p.first;
       }
     }
+    return host_class;
+  }
+
+  const DexType* get_direct_or_base_class(const Candidate& c,
+                                          const CandidateInfo& ci,
+                                          bool* not_outlinable) {
+    *not_outlinable = false;
+    // When all candidate instances come from methods of a single class, use
+    // that type as the host class
+    std::unordered_set<const DexType*> types;
+    for (auto& p : ci.methods) {
+      types.insert(p.first->get_class());
+    }
+    always_assert(!types.empty());
+
+    auto host_class = get_direct_or_base_class(types);
+    if (types.size() == 1) {
+      auto direct_type = *types.begin();
+      if (host_class == direct_type) {
+        m_hosted_direct_count++;
+        return host_class;
+      }
+      if (has_non_init_invoke_directs(c)) {
+        // TODO: Consider making those methods static if they can be renamed,
+        // just like what the inliner does
+        *not_outlinable = true;
+        return nullptr;
+      };
+    }
+    always_assert(!has_non_init_invoke_directs(c));
+
     if (host_class) {
       m_hosted_base_count++;
       return host_class;
     }
 
+    types.clear();
+    // If an outlined code snippet occurs in many unrelated classes, but always
+    // references the same types (which share a common base type), then that
+    // common base type is a reasonable place where to put the outlined code.
+    auto insert_internal_type = [&types](const DexType* t) {
+      auto cls = type_class(t);
+      if (cls && !cls->is_external()) {
+        types.insert(t);
+      }
+    };
+    if (c.res_type) {
+      insert_internal_type(c.res_type);
+    }
+    for (auto t : c.arg_types) {
+      insert_internal_type(t);
+    }
+    std::function<void(const CandidateNode& cn)> walk;
+    walk = [&insert_internal_type, &walk](const CandidateNode& cn) {
+      for (auto& csi : cn.insns) {
+        auto& cic = csi.core;
+        switch (opcode::ref(cic.opcode)) {
+        case opcode::Ref::Method:
+          insert_internal_type(cic.method->get_class());
+          break;
+        case opcode::Ref::Field:
+          insert_internal_type(cic.field->get_class());
+          break;
+        case opcode::Ref::Type:
+          insert_internal_type(cic.type);
+          break;
+        default:
+          break;
+        }
+      }
+      for (auto& p : cn.succs) {
+        walk(*p.second);
+      }
+    };
+    walk(c.root);
+
+    host_class = get_direct_or_base_class(types, [](const DexType* t) {
+      // We don't want any common base class with a scary clinit
+      auto cl_init = type_class(t)->get_clinit();
+      return !cl_init ||
+             (can_delete(cl_init) && cl_init->rstate.no_optimizations());
+    });
+    if (host_class) {
+      m_hosted_at_refs_count++;
+      return host_class;
+    }
+
     // Fallback: put the outlined method in a dedicated helper class.
     m_hosted_helper_count++;
-    return (DexType*)nullptr;
+    return nullptr;
   }
 };
 
@@ -2705,7 +2782,7 @@ bool outline_candidate(const Candidate& c,
   // Before attempting to create or reuse an outlined method that hasn't been
   // referenced in this dex before, we'll make sure that all the involved
   // type refs can be added to the dex. We collect those type refs.
-  std::unordered_set<DexType*> type_refs_to_insert;
+  std::unordered_set<const DexType*> type_refs_to_insert;
   for (auto t : c.arg_types) {
     type_refs_to_insert.insert(const_cast<DexType*>(t));
   }
