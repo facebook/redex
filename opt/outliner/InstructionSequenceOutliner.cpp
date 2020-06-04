@@ -2346,6 +2346,15 @@ static NewlyOutlinedMethods outline(
   return newly_outlined_methods;
 }
 
+size_t count_affected_methods(
+    const NewlyOutlinedMethods& newly_outlined_methods) {
+  std::unordered_set<DexMethod*> methods;
+  for (auto& p : newly_outlined_methods) {
+    methods.insert(p.second.begin(), p.second.end());
+  }
+  return methods.size();
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // reorder_with_method_profiles
 ////////////////////////////////////////////////////////////////////////////////
@@ -2513,16 +2522,19 @@ void reorder_with_method_profiles(
 // clear_cfgs
 ////////////////////////////////////////////////////////////////////////////////
 
-static void clear_cfgs(
+static size_t clear_cfgs(
     const Scope& scope,
     const std::unordered_set<DexMethod*>& sufficiently_hot_methods) {
-  walk::parallel::code(
-      scope, [&sufficiently_hot_methods](DexMethod* method, IRCode& code) {
-        if (!can_outline_from_method(method, sufficiently_hot_methods)) {
-          return;
-        }
-        code.clear_cfg();
-      });
+  std::atomic<size_t> methods{0};
+  walk::parallel::code(scope, [&sufficiently_hot_methods,
+                               &methods](DexMethod* method, IRCode& code) {
+    if (!can_outline_from_method(method, sufficiently_hot_methods)) {
+      return;
+    }
+    code.clear_cfg();
+    methods++;
+  });
+  return (size_t)methods;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -2734,8 +2746,14 @@ void InstructionSequenceOutliner::run_pass(DexStoresVector& stores,
 
       reorder_with_method_profiles(m_config, mgr, dex, methods_global_order,
                                    newly_outlined_methods);
+      auto affected_methods = count_affected_methods(newly_outlined_methods);
 
-      clear_cfgs(dex, sufficiently_hot_methods);
+      auto total_methods = clear_cfgs(dex, sufficiently_hot_methods);
+      if (total_methods > 0) {
+        mgr.incr_metric(std::string("percent_methods_affected_in_Dex") +
+                            std::to_string(dex_id),
+                        affected_methods * 100 / total_methods);
+      }
     }
   }
 }
