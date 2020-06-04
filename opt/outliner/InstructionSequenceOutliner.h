@@ -14,10 +14,15 @@ bool is_outlined_class(DexClass* cls);
 struct InstructionSequenceOutlinerConfig {
   size_t min_insns_size{3};
   size_t max_insns_size{77};
-  bool use_method_to_weight{true};
+  bool use_method_profiles{true};
+  float method_profiles_appear_percent{1};
+  float method_profiles_hot_call_count{10};
+  float method_profiles_warm_call_count{1};
+  bool use_method_to_weight_if_no_method_profiles{true};
+  bool use_perf_sensitive_if_no_method_profiles_or_weight{true};
   bool reuse_outlined_methods_across_dexes{true};
   size_t max_outlined_methods_per_class{100};
-  size_t threshold{10};
+  size_t savings_threshold{10};
 };
 
 class InstructionSequenceOutliner : public Pass {

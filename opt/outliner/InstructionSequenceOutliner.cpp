@@ -883,7 +883,8 @@ static bool explore_candidates_from(
   FOR_EACH(arg_type_illegal)         \
   FOR_EACH(res_type_not_computed)    \
   FOR_EACH(res_type_illegal)         \
-  FOR_EACH(overlap)
+  FOR_EACH(overlap)                  \
+  FOR_EACH(loop)
 
 struct FindCandidatesStats {
 #define FOR_EACH(name) std::atomic<size_t> name{0};
@@ -897,6 +898,8 @@ struct FindCandidatesStats {
 static MethodCandidates find_method_candidates(
     const InstructionSequenceOutlinerConfig& config,
     const std::function<bool(const DexType*)>& illegal_ref,
+    bool skip_loops,
+
     DexMethod* method,
     cfg::ControlFlowGraph& cfg,
     const CandidateInstructionCoresSet& recurring_cores,
@@ -943,6 +946,26 @@ static MethodCandidates find_method_candidates(
       }
     }
     return res;
+  });
+  LazyUnorderedMap<cfg::Block*, bool> is_in_loop([](cfg::Block* block) {
+    std::unordered_set<cfg::Block*> visited;
+    std::queue<cfg::Block*> work_queue;
+    for (auto e : block->succs()) {
+      work_queue.push(e->target());
+    }
+    while (!work_queue.empty()) {
+      auto other_block = work_queue.front();
+      work_queue.pop();
+      if (visited.insert(other_block).second) {
+        if (block == other_block) {
+          return true;
+        }
+        for (auto e : other_block->succs()) {
+          work_queue.push(e->target());
+        }
+      }
+    }
+    return false;
   });
   OutlinerTypeAnalysis type_analysis(method);
   auto big_blocks = big_blocks::get_big_blocks(cfg);
@@ -1063,6 +1086,13 @@ static MethodCandidates find_method_candidates(
             lstats.res_type_illegal++;
             return;
           }
+          if (skip_loops && is_in_loop[first_block]) {
+            // We could bail out on this way earlier, but doing it last gives us
+            // better statistics on what the damage really is
+            TRACE(ISO, 4, "[invoke sequence outliner] [bail out] Loop");
+            lstats.loop++;
+            return;
+          }
           auto& cmls = candidates[c];
           std::map<size_t, size_t> ranges;
           std::function<void(const PartialCandidateNode&)> insert_ranges;
@@ -1116,7 +1146,7 @@ static MethodCandidates find_method_candidates(
 
 static bool can_outline_from_method(
     DexMethod* method,
-    const std::unordered_map<std::string, unsigned int>* method_to_weight) {
+    const std::unordered_set<DexMethod*>& sufficiently_hot_methods) {
   if (method->rstate.no_optimizations()) {
     return false;
   }
@@ -1124,12 +1154,8 @@ static bool can_outline_from_method(
       api::LevelChecker::get_min_level()) {
     return false;
   }
-  if (method_to_weight) {
-    auto cls = type_class(method->get_class());
-    if (cls->is_perf_sensitive() &&
-        get_method_weight_if_available(method, method_to_weight)) {
-      return false;
-    }
+  if (sufficiently_hot_methods.count(method)) {
+    return false;
   }
   return true;
 }
@@ -1140,16 +1166,16 @@ static bool can_outline_from_method(
 static void get_recurring_cores(
     PassManager& mgr,
     const Scope& scope,
-    const std::unordered_map<std::string, unsigned int>* method_to_weight,
+    const std::unordered_set<DexMethod*>& sufficiently_hot_methods,
     const std::function<bool(const DexType*)>& illegal_ref,
     CandidateInstructionCoresSet* recurring_cores) {
   ConcurrentMap<CandidateInstructionCores, size_t,
                 CandidateInstructionCoresHasher>
       concurrent_cores;
   walk::parallel::code(
-      scope, [illegal_ref, method_to_weight,
+      scope, [illegal_ref, &sufficiently_hot_methods,
               &concurrent_cores](DexMethod* method, IRCode& code) {
-        if (!can_outline_from_method(method, method_to_weight)) {
+        if (!can_outline_from_method(method, sufficiently_hot_methods)) {
           return;
         }
         code.build_cfg(/* editable */ true);
@@ -1327,7 +1353,9 @@ static size_t get_savings(
     outlined_cost += COST_METHOD_BODY + c.size;
   }
 
-  return (outlined_cost + config.threshold) < cost ? (cost - outlined_cost) : 0;
+  return (outlined_cost + config.savings_threshold) < cost
+             ? (cost - outlined_cost)
+             : 0;
 }
 
 using CandidateId = uint32_t;
@@ -1339,6 +1367,15 @@ struct CandidateWithInfo {
 // Find beneficial candidates across all methods. Beneficial candidates are
 // those that occur often enough so that there would be a net savings (in terms
 // of code units / bytes) when outlining them.
+//
+// We distinguish three kinds of methods:
+// - "hot" methods are known to get invoked many times, and we do not outline
+//   from them.
+// - "warm" methods are known to get invoked only a few times, and we will not
+//   outline from loops within them.
+// - all other methods are considered to be cold, and every outlining
+//   opportunity in them will be considered.
+//
 // Candidates are identified by numerical candidate ids to make things
 // deterministic (as opposed to a pointer) and provide an efficient
 // identification mechanism.
@@ -1346,7 +1383,8 @@ static void get_beneficial_candidates(
     const InstructionSequenceOutlinerConfig& config,
     PassManager& mgr,
     const Scope& scope,
-    const std::unordered_map<std::string, unsigned int>* method_to_weight,
+    const std::unordered_set<DexMethod*>& sufficiently_warm_methods,
+    const std::unordered_set<DexMethod*>& sufficiently_hot_methods,
     const std::function<bool(const DexType*)>& illegal_ref,
     const CandidateInstructionCoresSet& recurring_cores,
     const ReusableOutlinedMethods* reusable_outlined_methods,
@@ -1356,15 +1394,17 @@ static void get_beneficial_candidates(
   ConcurrentMap<Candidate, CandidateInfo, CandidateHasher>
       concurrent_candidates;
   FindCandidatesStats stats;
-  walk::parallel::code(scope, [&config, method_to_weight, &illegal_ref,
+  walk::parallel::code(scope, [&config, &sufficiently_warm_methods,
+                               &sufficiently_hot_methods, &illegal_ref,
                                &recurring_cores, &concurrent_candidates,
                                &stats](DexMethod* method, IRCode& code) {
-    if (!can_outline_from_method(method, method_to_weight)) {
+    if (!can_outline_from_method(method, sufficiently_hot_methods)) {
       return;
     }
+    bool skip_loops = !!sufficiently_warm_methods.count(method);
     for (auto& p :
-         find_method_candidates(config, illegal_ref, method, code.cfg(),
-                                recurring_cores, &stats)) {
+         find_method_candidates(config, illegal_ref, skip_loops, method,
+                                code.cfg(), recurring_cores, &stats)) {
       std::vector<CandidateMethodLocation>& cmls = p.second;
       concurrent_candidates.update(p.first,
                                    [method, &cmls](const Candidate&,
@@ -2290,14 +2330,95 @@ static void outline(
 
 static void clear_cfgs(
     const Scope& scope,
-    const std::unordered_map<std::string, unsigned int>* method_to_weight) {
+    const std::unordered_set<DexMethod*>& sufficiently_hot_methods) {
   walk::parallel::code(
-      scope, [&method_to_weight](DexMethod* method, IRCode& code) {
-        if (!can_outline_from_method(method, method_to_weight)) {
+      scope, [&sufficiently_hot_methods](DexMethod* method, IRCode& code) {
+        if (!can_outline_from_method(method, sufficiently_hot_methods)) {
           return;
         }
         code.clear_cfg();
       });
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// gather_sufficiently_warm_and_hot_methods
+////////////////////////////////////////////////////////////////////////////////
+
+// We'll look around the provided configuration information to identify hot and
+// warm methods. The preferred way is now to use "method profiles". We look at
+// each interaction. If a method appears in at least 1% of the samples, then...
+// - If the method is invoked at least 10 times on average, we won't outline
+//   from it at all (truly "hot")
+// - If the method is invoked less often ("at least once", otherwise it wouldn't
+//   appear in the method profiles), then we won't outline from any of its loops
+//   ("warm" code)
+//
+// The actual thresholds are configurable.
+//
+// The intention here is to avoid outlining any code snippet that runs many
+// times, in which case the call overhead might become significant. Otherwise,
+// if it is called only rarely (0 to 9 times), then any added CPU overhead might
+// be made up by the I/O savings due to reduced code size.
+//
+// When method profiles are completely unavailable, we can still fall back on
+// method weights to identify war code; if those don't exist, we can use
+// betamaps to identify warm code.
+static void gather_sufficiently_warm_and_hot_methods(
+    const Scope& scope,
+    ConfigFiles& config_files,
+    const InstructionSequenceOutlinerConfig& config,
+    std::unordered_set<DexMethod*>* sufficiently_warm_methods,
+    std::unordered_set<DexMethod*>* sufficiently_hot_methods) {
+  bool has_method_profiles{false};
+  if (config.use_method_profiles) {
+    auto& method_profiles = config_files.get_method_profiles();
+    if (method_profiles.has_stats()) {
+      has_method_profiles = true;
+      for (auto& p : method_profiles.all_interactions()) {
+        auto& method_stats = p.second;
+        walk::methods(scope, [sufficiently_warm_methods,
+                              sufficiently_hot_methods, &method_stats,
+                              &config](DexMethod* method) {
+          auto it = method_stats.find(method);
+          if (it == method_stats.end()) {
+            return;
+          }
+          if (it->second.appear_percent >=
+              config.method_profiles_appear_percent) {
+            if (it->second.call_count > config.method_profiles_hot_call_count) {
+              sufficiently_hot_methods->insert(method);
+            } else if (it->second.call_count >=
+                       config.method_profiles_warm_call_count) {
+              sufficiently_warm_methods->insert(method);
+            }
+          }
+        });
+      }
+    }
+  }
+  bool has_method_weights{false};
+  if (config.use_method_to_weight_if_no_method_profiles &&
+      !has_method_profiles) {
+    auto& method_to_weight = config_files.get_method_to_weight();
+    has_method_weights = !method_to_weight.empty();
+    if (has_method_weights) {
+      walk::methods(scope, [sufficiently_hot_methods,
+                            &method_to_weight](DexMethod* method) {
+        if (get_method_weight_if_available(method, &method_to_weight)) {
+          sufficiently_hot_methods->insert(method);
+        }
+      });
+    }
+  }
+
+  if (config.use_perf_sensitive_if_no_method_profiles_or_weight &&
+      !has_method_profiles && !has_method_weights) {
+    walk::methods(scope, [sufficiently_warm_methods](DexMethod* method) {
+      if (type_class(method->get_class())->is_perf_sensitive()) {
+        sufficiently_warm_methods->insert(method);
+      }
+    });
+  }
 }
 
 } // namespace
@@ -2313,10 +2434,32 @@ void InstructionSequenceOutliner::bind_config() {
        "Minimum number of instructions to be outlined in a sequence");
   bind("max_insns_size", m_config.max_insns_size, m_config.max_insns_size,
        "Maximum number of instructions to be outlined in a sequence");
-  bind("use_method_to_weight", m_config.use_method_to_weight,
-       m_config.use_method_to_weight,
+  bind("use_method_profiles", m_config.use_method_profiles,
+       m_config.use_method_profiles,
+       "Whether to use provided method-profiles configuration data to "
+       "determine if certain code should not be outlined from a method");
+  bind("method_profiles_appear_percent",
+       m_config.method_profiles_appear_percent,
+       m_config.method_profiles_appear_percent,
+       "Cut off when a method in a method profile is deemed relevant");
+  bind("method_profiles_hot_call_count",
+       m_config.method_profiles_hot_call_count,
+       m_config.method_profiles_hot_call_count,
+       "No code is outlined out of hot methods");
+  bind("method_profiles_warm_call_count",
+       m_config.method_profiles_warm_call_count,
+       m_config.method_profiles_warm_call_count,
+       "Loops are not outlined from warm methods");
+  bind("use_method_to_weight_if_no_method_profiles",
+       m_config.use_method_to_weight_if_no_method_profiles,
+       m_config.use_method_to_weight_if_no_method_profiles,
        "Whether to use provided method-to-weight configuration data to "
-       "determine if a method should not be outlined from");
+       "determine if certain code should not be outlined from a method");
+  bind("use_perf_sensitive_if_no_method_profiles_or_weight",
+       m_config.use_perf_sensitive_if_no_method_profiles_or_weight,
+       m_config.use_perf_sensitive_if_no_method_profiles_or_weight,
+       "Whether to use provided betamaps configuration data to "
+       "determine if certain code should not be outlined from a method");
   bind("reuse_outlined_methods_across_dexes",
        m_config.reuse_outlined_methods_across_dexes,
        m_config.reuse_outlined_methods_across_dexes,
@@ -2327,7 +2470,8 @@ void InstructionSequenceOutliner::bind_config() {
        m_config.max_outlined_methods_per_class,
        "Maximum number of outlined methods per generated helper class; "
        "indirectly drives number of needed helper classes");
-  bind("threshold", m_config.threshold, m_config.threshold,
+  bind("savings_threshold", m_config.savings_threshold,
+       m_config.savings_threshold,
        "Minimum number of code units saved before a particular code sequence "
        "is outlined anywhere");
   always_assert(m_config.min_insns_size >= MIN_INSNS_SIZE);
@@ -2338,8 +2482,16 @@ void InstructionSequenceOutliner::bind_config() {
 void InstructionSequenceOutliner::run_pass(DexStoresVector& stores,
                                            ConfigFiles& config,
                                            PassManager& mgr) {
-  const std::unordered_map<std::string, unsigned int>* method_to_weight =
-      m_config.use_method_to_weight ? &config.get_method_to_weight() : nullptr;
+  auto scope = build_class_scope(stores);
+  std::unordered_set<DexMethod*> sufficiently_warm_methods;
+  std::unordered_set<DexMethod*> sufficiently_hot_methods;
+  gather_sufficiently_warm_and_hot_methods(scope, config, m_config,
+                                           &sufficiently_warm_methods,
+                                           &sufficiently_hot_methods);
+  mgr.incr_metric("num_sufficiently_warm_methods",
+                  sufficiently_warm_methods.size());
+  mgr.incr_metric("num_sufficiently_hot_methods",
+                  sufficiently_hot_methods.size());
   XStoreRefs xstores(stores);
   size_t dex_id{0};
   const auto& interdex_metrics = mgr.get_interdex_metrics();
@@ -2379,13 +2531,14 @@ void InstructionSequenceOutliner::run_pass(DexStoresVector& stores,
         return xstores.illegal_ref(store_idx, t);
       };
       CandidateInstructionCoresSet recurring_cores;
-      get_recurring_cores(mgr, dex, method_to_weight, illegal_ref,
+      get_recurring_cores(mgr, dex, sufficiently_hot_methods, illegal_ref,
                           &recurring_cores);
       std::vector<CandidateWithInfo> candidates_with_infos;
       std::unordered_map<DexMethod*, std::unordered_set<CandidateId>>
           candidate_ids_by_methods;
       get_beneficial_candidates(
-          m_config, mgr, dex, method_to_weight, illegal_ref, recurring_cores,
+          m_config, mgr, dex, sufficiently_warm_methods,
+          sufficiently_hot_methods, illegal_ref, recurring_cores,
           reusable_outlined_methods.get(), &candidates_with_infos,
           &candidate_ids_by_methods);
 
@@ -2394,7 +2547,7 @@ void InstructionSequenceOutliner::run_pass(DexStoresVector& stores,
       DexState dex_state(mgr, dex, dex_id++, reserved_mrefs);
       outline(m_config, mgr, dex_state, &candidates_with_infos,
               &candidate_ids_by_methods, reusable_outlined_methods.get());
-      clear_cfgs(dex, method_to_weight);
+      clear_cfgs(dex, sufficiently_hot_methods);
     }
   }
 }
