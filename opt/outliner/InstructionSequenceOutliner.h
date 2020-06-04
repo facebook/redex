@@ -35,4 +35,5 @@ class InstructionSequenceOutliner : public Pass {
 
  private:
   InstructionSequenceOutlinerConfig m_config;
+  size_t m_iteration{0};
 };

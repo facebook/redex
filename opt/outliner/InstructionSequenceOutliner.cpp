@@ -1523,12 +1523,14 @@ class MethodNameGenerator {
   PassManager& m_mgr;
   std::unordered_map<StableHash, size_t> m_unique_method_ids;
   size_t m_max_unique_method_id{0};
+  size_t m_iteration;
 
  public:
   MethodNameGenerator() = delete;
   MethodNameGenerator(const MethodNameGenerator&) = delete;
   MethodNameGenerator& operator=(const MethodNameGenerator&) = delete;
-  explicit MethodNameGenerator(PassManager& mgr) : m_mgr(mgr) {}
+  explicit MethodNameGenerator(PassManager& mgr, size_t iteration)
+      : m_mgr(mgr), m_iteration(iteration) {}
 
   // Compute the name of the outlined method in a way that tends to be stable
   // across Redex runs.
@@ -1537,6 +1539,7 @@ class MethodNameGenerator {
     auto unique_method_id = m_unique_method_ids[stable_hash]++;
     m_max_unique_method_id = std::max(m_max_unique_method_id, unique_method_id);
     std::string name("$outlined$");
+    name += std::to_string(m_iteration) + "$";
     name += std::to_string(stable_hash);
     if (unique_method_id > 0) {
       name += std::string("$") + std::to_string(unique_method_id);
@@ -1972,6 +1975,7 @@ class HostClassSelector {
   size_t m_hosted_base_count{0};
   size_t m_hosted_at_refs_count{0};
   size_t m_hosted_helper_count{0};
+  size_t m_iteration;
 
  public:
   HostClassSelector() = delete;
@@ -1979,8 +1983,12 @@ class HostClassSelector {
   HostClassSelector& operator=(const HostClassSelector&) = delete;
   HostClassSelector(const InstructionSequenceOutlinerConfig& config,
                     PassManager& mgr,
-                    DexState& dex_state)
-      : m_config(config), m_mgr(mgr), m_dex_state(dex_state) {}
+                    DexState& dex_state,
+                    size_t iteration)
+      : m_config(config),
+        m_mgr(mgr),
+        m_dex_state(dex_state),
+        m_iteration(iteration) {}
   ~HostClassSelector() {
     m_mgr.incr_metric("num_hosted_direct_count", m_hosted_direct_count);
     m_mgr.incr_metric("num_hosted_base_count", m_hosted_base_count);
@@ -2010,10 +2018,10 @@ class HostClassSelector {
 
   // Create type that will represent next outlined helper class
   DexType* peek_at_next_outlined_class() {
-    auto name =
-        DexString::make_string(std::string(OUTLINED_CLASS_NAME_PREFIX) +
-                               std::to_string(m_dex_state.get_dex_id()) + "$" +
-                               std::to_string(m_outlined_classes) + ";");
+    auto name = DexString::make_string(
+        std::string(OUTLINED_CLASS_NAME_PREFIX) + std::to_string(m_iteration) +
+        "$" + std::to_string(m_dex_state.get_dex_id()) + "$" +
+        std::to_string(m_outlined_classes) + ";");
     return DexType::make_type(name);
   }
 
@@ -2212,10 +2220,11 @@ static NewlyOutlinedMethods outline(
     std::vector<CandidateWithInfo>* candidates_with_infos,
     std::unordered_map<DexMethod*, std::unordered_set<CandidateId>>*
         candidate_ids_by_methods,
-    ReusableOutlinedMethods* reusable_outlined_methods) {
-  MethodNameGenerator method_name_generator(mgr);
+    ReusableOutlinedMethods* reusable_outlined_methods,
+    size_t iteration) {
+  MethodNameGenerator method_name_generator(mgr, iteration);
   OutlinedMethodCreator outlined_method_creator(mgr, method_name_generator);
-  HostClassSelector host_class_selector(config, mgr, dex_state);
+  HostClassSelector host_class_selector(config, mgr, dex_state, iteration);
   // While we have a set of beneficial candidates, many are overlapping each
   // other. We are using a priority queue to iteratively outline the most
   // beneficial candidate at any point in time, then removing all impacted
@@ -2676,6 +2685,7 @@ void InstructionSequenceOutliner::run_pass(DexStoresVector& stores,
     reusable_outlined_methods = std::make_unique<ReusableOutlinedMethods>();
   }
   boost::optional<size_t> last_store_idx;
+  auto iteration = m_iteration++;
   for (auto& store : stores) {
     for (auto& dex : store.get_dexen()) {
       if (dex.empty()) {
@@ -2719,7 +2729,8 @@ void InstructionSequenceOutliner::run_pass(DexStoresVector& stores,
       DexState dex_state(mgr, dex, dex_id++, reserved_mrefs);
       auto newly_outlined_methods =
           outline(m_config, mgr, dex_state, &candidates_with_infos,
-                  &candidate_ids_by_methods, reusable_outlined_methods.get());
+                  &candidate_ids_by_methods, reusable_outlined_methods.get(),
+                  iteration);
 
       reorder_with_method_profiles(m_config, mgr, dex, methods_global_order,
                                    newly_outlined_methods);

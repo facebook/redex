@@ -85,7 +85,7 @@ public class DisabledLineMapOutliningTest {
       List<StackTraceElement> trace = Arrays.asList(e.getStackTrace());
       assertThat(TraceUtil.traceToString(trace, 3)).isEqualTo(Arrays.asList(
        "com.facebook.redexlinemap.DisabledLineMapOutliningTest.wrapsThrow(DisabledLineMapOutliningTest.java:20)",
-       "com.redex.Outlined$0$0.$outlined$7091297849863854496(Unknown Source)",
+       "com.redex.Outlined$0$0$0.$outlined$0$7091297849863854496(Unknown Source)",
        "com.facebook.redexlinemap.DisabledLineMapOutliningTest.outlinedThrower(DisabledLineMapOutliningTest.java:25)"));
     }
   }
