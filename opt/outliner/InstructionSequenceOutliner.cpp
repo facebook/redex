@@ -1521,8 +1521,7 @@ static bool has_non_init_invoke_directs(const Candidate& c) {
 class MethodNameGenerator {
  private:
   PassManager& m_mgr;
-  std::unordered_map<const DexType*, std::unordered_map<StableHash, size_t>>
-      m_unique_method_ids;
+  std::unordered_map<StableHash, size_t> m_unique_method_ids;
   size_t m_max_unique_method_id{0};
 
  public:
@@ -1533,9 +1532,9 @@ class MethodNameGenerator {
 
   // Compute the name of the outlined method in a way that tends to be stable
   // across Redex runs.
-  DexString* get_name(const DexType* host_class, const Candidate& c) {
+  DexString* get_name(const Candidate& c) {
     StableHash stable_hash = stable_hash_value(c);
-    auto unique_method_id = m_unique_method_ids[host_class][stable_hash]++;
+    auto unique_method_id = m_unique_method_ids[stable_hash]++;
     m_max_unique_method_id = std::max(m_max_unique_method_id, unique_method_id);
     std::string name("$outlined$");
     name += std::to_string(stable_hash);
@@ -1739,7 +1738,7 @@ class OutlinedMethodCreator {
   DexMethod* create_outlined_method(const Candidate& c,
                                     const CandidateInfo& ci,
                                     const DexType* host_class) {
-    auto name = m_method_name_generator.get_name(host_class, c);
+    auto name = m_method_name_generator.get_name(c);
     std::deque<DexType*> arg_types;
     for (auto t : c.arg_types) {
       arg_types.push_back(const_cast<DexType*>(t));
@@ -2123,10 +2122,14 @@ class HostClassSelector {
   }
 };
 
+using NewlyOutlinedMethods =
+    std::unordered_map<DexMethod*, std::vector<DexMethod*>>;
+
 // Outlining all occurrences of a particular candidate.
 bool outline_candidate(const Candidate& c,
                        const CandidateInfo& ci,
                        ReusableOutlinedMethods* reusable_outlined_methods,
+                       NewlyOutlinedMethods* newly_outlined_methods,
                        DexState* dex_state,
                        HostClassSelector* host_class_selector,
                        OutlinedMethodCreator* outlined_method_creator) {
@@ -2176,6 +2179,11 @@ bool outline_candidate(const Candidate& c,
     if (reusable_outlined_methods) {
       (*reusable_outlined_methods)[c].push_back(outlined_method);
     }
+
+    auto& methods = (*newly_outlined_methods)[outlined_method];
+    for (auto& p : ci.methods) {
+      methods.push_back(p.first);
+    }
   }
   dex_state->insert_type_refs(type_refs_to_insert);
   for (auto& p : ci.methods) {
@@ -2194,7 +2202,7 @@ bool outline_candidate(const Candidate& c,
 
 // Perform outlining of most beneficial candidates, while staying within
 // reference limits.
-static void outline(
+static NewlyOutlinedMethods outline(
     const InstructionSequenceOutlinerConfig& config,
     PassManager& mgr,
     DexState& dex_state,
@@ -2241,6 +2249,7 @@ static void outline(
   size_t outlined_count{0};
   size_t outlined_sequences_count{0};
   size_t not_outlined_count{0};
+  NewlyOutlinedMethods newly_outlined_methods;
   while (!pq.empty()) {
     // Make sure beforehand that there's a method ref left for us
     if (!dex_state.can_insert_method_ref()) {
@@ -2261,8 +2270,8 @@ static void outline(
           cwi.info.count, cwi.info.methods.size(), cwi.candidate.size,
           2 * savings);
     if (outline_candidate(cwi.candidate, cwi.info, reusable_outlined_methods,
-                          &dex_state, &host_class_selector,
-                          &outlined_method_creator)) {
+                          &newly_outlined_methods, &dex_state,
+                          &host_class_selector, &outlined_method_creator)) {
       dex_state.insert_method_ref();
     } else {
       TRACE(ISO, 3, "[invoke sequence outliner] could not ouline");
@@ -2322,6 +2331,170 @@ static void outline(
         "[invoke sequence outliner] %zu unique sequences outlined in %zu "
         "places; %zu total savings",
         outlined_sequences_count, outlined_count, total_savings);
+  return newly_outlined_methods;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// reorder_with_method_profiles
+////////////////////////////////////////////////////////////////////////////////
+
+std::unordered_map<const DexMethodRef*, double> get_methods_global_order(
+    ConfigFiles& config_files,
+    const InstructionSequenceOutlinerConfig& config) {
+  if (!config.reorder_with_method_profiles) {
+    return {};
+  }
+  auto& method_profiles = config_files.get_method_profiles();
+  if (!method_profiles.has_stats()) {
+    return {};
+  }
+
+  std::unordered_map<std::string, size_t> interaction_indices;
+  auto register_interaction = [&](const std::string& interaction_id) {
+    return interaction_indices
+        .emplace(interaction_id, interaction_indices.size())
+        .first->second;
+  };
+  // Make sure that the "ColdStart" interaction comes before everything else
+  register_interaction("ColdStart");
+  std::unordered_map<const DexMethodRef*, double> methods_global_order;
+  for (auto& p : method_profiles.all_interactions()) {
+    auto& interaction_id = p.first;
+    auto& method_stats = p.second;
+    auto index = register_interaction(interaction_id);
+    TRACE(ISO, 3,
+          "[instruction sequence outliner] Interaction [%s] gets index %zu",
+          interaction_id.c_str(), index);
+    for (auto& q : method_stats) {
+      auto& global_order = methods_global_order[q.first];
+      global_order =
+          std::min(global_order, index * 100 + q.second.order_percent);
+    }
+  }
+  std::vector<const DexMethodRef*> ordered_methods;
+  ordered_methods.reserve(methods_global_order.size());
+  for (auto& p : methods_global_order) {
+    ordered_methods.push_back(p.first);
+  }
+  std::sort(ordered_methods.begin(), ordered_methods.end(),
+            [&](const DexMethodRef* a, const DexMethodRef* b) {
+              auto a_order = methods_global_order.at(a);
+              auto b_order = methods_global_order.at(b);
+              if (a_order != b_order) {
+                return a_order < b_order;
+              }
+              return compare_dexmethods(a, b);
+            });
+  TRACE(ISO, 4, "[instruction sequence outliner] %zu globally ordered methods",
+        ordered_methods.size());
+  for (auto method : ordered_methods) {
+    TRACE(ISO, 5, "[instruction sequence outliner] [%f] %s",
+          methods_global_order.at(method), SHOW(method));
+  }
+  return methods_global_order;
+}
+
+void reorder_with_method_profiles(
+    const InstructionSequenceOutlinerConfig& config,
+    PassManager& mgr,
+    const Scope& dex,
+    const std::unordered_map<const DexMethodRef*, double>& methods_global_order,
+    const NewlyOutlinedMethods& newly_outlined_methods) {
+  if (methods_global_order.empty()) {
+    return;
+  }
+
+  std::unordered_map<const DexMethod*, double> outlined_methods_global_order;
+  std::vector<DexMethod*> ordered_outlined_methods;
+  std::unordered_set<DexClass*> outlined_classes;
+  for (auto& p : newly_outlined_methods) {
+    auto cls = type_class(p.first->get_class());
+    if (!is_outlined_class(cls)) {
+      continue;
+    }
+    outlined_classes.insert(cls);
+    auto min_order = std::numeric_limits<double>::infinity();
+    for (auto method : p.second) {
+      auto it = methods_global_order.find(method);
+      if (it != methods_global_order.end()) {
+        min_order = std::min(min_order, it->second);
+      }
+    }
+    outlined_methods_global_order.emplace(p.first, min_order);
+    ordered_outlined_methods.push_back(p.first);
+  }
+  std::vector<DexClass*> ordered_outlined_classes;
+  for (auto cls : dex) {
+    if (outlined_classes.count(cls)) {
+      ordered_outlined_classes.push_back(cls);
+      TRACE(ISO, 5,
+            "[instruction sequence outliner] Found outlined class %s with %zu "
+            "methods",
+            SHOW(cls), cls->get_dmethods().size());
+    }
+  }
+  std::sort(ordered_outlined_methods.begin(),
+            ordered_outlined_methods.end(),
+            [&](const DexMethod* a, const DexMethod* b) {
+              auto a_order = outlined_methods_global_order.at(a);
+              auto b_order = outlined_methods_global_order.at(b);
+              if (a_order != b_order) {
+                return a_order < b_order;
+              }
+              // If order is same, prefer smaller methods, as they are likely
+              // invoked more often / have higher invocation cost
+              auto a_size = a->get_code()->sum_opcode_sizes();
+              auto b_size = b->get_code()->sum_opcode_sizes();
+              if (a_size != b_size) {
+                return a_size < b_size;
+              }
+              // Then use the method name (which is essentially a stable hash of
+              // the instructions) as a tie-breaker.
+              if (a->get_name() != b->get_name()) {
+                return compare_dexstrings(a->get_name(), b->get_name());
+              }
+              // Final tie-breaker is full method signature comparison
+              return compare_dexmethods(a, b);
+            });
+  TRACE(ISO, 4,
+        "[instruction sequence outliner] %zu globally ordered outlined methods",
+        ordered_outlined_methods.size());
+  for (auto method : ordered_outlined_methods) {
+    TRACE(ISO, 5, "[instruction sequence outliner] [%f] %s",
+          outlined_methods_global_order.at(method), SHOW(method));
+  }
+  size_t class_index = 0;
+  size_t methods_count = 0;
+  size_t relocated_outlined_methods = 0;
+  auto flush = [&]() {
+    if (methods_count == 0) {
+      return;
+    }
+    auto cls = ordered_outlined_classes.at(class_index);
+    TRACE(ISO, 4,
+          "[instruction sequence outliner] Finished outlined class %s with "
+          "%zu methods",
+          SHOW(cls), cls->get_dmethods().size());
+    class_index++;
+    methods_count = 0;
+  };
+  for (auto method : ordered_outlined_methods) {
+    auto target_class = ordered_outlined_classes.at(class_index);
+    if (method->get_class() != target_class->get_type()) {
+      TRACE(ISO, 4,
+            "[instruction sequence outliner] Relocating outlined method %s "
+            "from %s to %s",
+            SHOW(method->get_name()), SHOW(method->get_class()),
+            SHOW(target_class));
+      relocate_method(method, target_class->get_type());
+      relocated_outlined_methods++;
+    }
+    if (++methods_count == config.max_outlined_methods_per_class) {
+      flush();
+    }
+  }
+  flush();
+  mgr.incr_metric("num_relocated_outlined_methods", relocated_outlined_methods);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -2492,6 +2665,8 @@ void InstructionSequenceOutliner::run_pass(DexStoresVector& stores,
                   sufficiently_warm_methods.size());
   mgr.incr_metric("num_sufficiently_hot_methods",
                   sufficiently_hot_methods.size());
+  auto methods_global_order = get_methods_global_order(config, m_config);
+  mgr.incr_metric("num_ordered_methods", methods_global_order.size());
   XStoreRefs xstores(stores);
   size_t dex_id{0};
   const auto& interdex_metrics = mgr.get_interdex_metrics();
@@ -2545,8 +2720,13 @@ void InstructionSequenceOutliner::run_pass(DexStoresVector& stores,
       // TODO: Merge candidates that are equivalent except that one returns
       // something and the other doesn't.
       DexState dex_state(mgr, dex, dex_id++, reserved_mrefs);
-      outline(m_config, mgr, dex_state, &candidates_with_infos,
-              &candidate_ids_by_methods, reusable_outlined_methods.get());
+      auto newly_outlined_methods =
+          outline(m_config, mgr, dex_state, &candidates_with_infos,
+                  &candidate_ids_by_methods, reusable_outlined_methods.get());
+
+      reorder_with_method_profiles(m_config, mgr, dex, methods_global_order,
+                                   newly_outlined_methods);
+
       clear_cfgs(dex, sufficiently_hot_methods);
     }
   }
