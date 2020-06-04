@@ -115,6 +115,18 @@ struct ConfigFiles {
   boost::optional<std::string> get_android_sdk_api_file(int32_t api_level) {
     std::string api_file;
     switch (api_level) {
+    case 16:
+      m_json.get("android_sdk_api_16_file", "", api_file);
+      break;
+    case 17:
+      m_json.get("android_sdk_api_17_file", "", api_file);
+      break;
+    case 18:
+      m_json.get("android_sdk_api_18_file", "", api_file);
+      break;
+    case 19:
+      m_json.get("android_sdk_api_19_file", "", api_file);
+      break;
     case 21:
       m_json.get("android_sdk_api_21_file", "", api_file);
       break;
@@ -127,8 +139,14 @@ struct ConfigFiles {
     case 26:
       m_json.get("android_sdk_api_26_file", "", api_file);
       break;
+    case 27:
+      m_json.get("android_sdk_api_27_file", "", api_file);
+      break;
     case 28:
       m_json.get("android_sdk_api_28_file", "", api_file);
+      break;
+    case 29:
+      m_json.get("android_sdk_api_29_file", "", api_file);
       break;
     default:
       break;
