@@ -44,6 +44,10 @@ class Iterator {
   bool operator!=(Iterator& other) const { return !(*this == other); }
   Iterator operator++(int);
   Iterator& operator++();
+  cfg::Block* block() const {
+    always_assert(m_block);
+    return m_block;
+  }
 };
 
 class InstructionIterator {
@@ -77,13 +81,23 @@ class InstructionIterator {
 
 struct BigBlock {
  private:
-  std::vector<cfg::Block*> m_blocks;
+  const std::vector<cfg::Block*> m_blocks;
 
  public:
-  explicit BigBlock(const std::vector<cfg::Block*>& blocks)
-      : m_blocks(blocks) {}
+  explicit BigBlock(std::vector<cfg::Block*> blocks)
+      : m_blocks(std::move(blocks)) {
+    always_assert(!m_blocks.empty());
+  }
 
   const std::vector<cfg::Block*>& get_blocks() const { return m_blocks; }
+  cfg::Block* get_first_block() const { return m_blocks.front(); }
+  cfg::Block* get_last_block() const { return m_blocks.back(); }
+  bool same_try(const BigBlock& other) const {
+    return same_try(other.m_blocks.front());
+  }
+  bool same_try(const cfg::Block* other) const {
+    return m_blocks.front()->same_try(other);
+  }
 };
 
 struct InstructionIterable {
@@ -97,6 +111,9 @@ struct InstructionIterable {
   InstructionIterator begin() const;
   InstructionIterator end() const;
 };
+
+// Gets the big block starting from the given block, if any
+boost::optional<BigBlock> get_big_block(cfg::Block* block);
 
 // Each block of the original cfg appears in exactly one big block.
 std::vector<BigBlock> get_big_blocks(cfg::ControlFlowGraph& cfg);

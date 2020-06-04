@@ -333,6 +333,138 @@ class InstructionSequenceOutlinerTest {
       println(t, "k", "l");
     }
 
+    public void cfg_tree1() {
+      int a = 100;
+      int b = 200;
+      int c = 300;
+      int d = 400;
+      int e = 500;
+      if (a == 1) {
+        if (b == 2) {
+          if (c == 3) {
+            if (d == 4) {
+              if (e  == 5) {
+                println("1", "2", "3");
+                return ;
+              } else {
+                println("2", "3", "4");
+                return;
+              }
+            } else {
+              println("3", "4", "5");
+              return;
+            }
+          } else {
+            return;
+          }
+        } else {
+          return;
+        }
+      } else {
+        return;
+      }
+    }
+
+    public void cfg_tree2() {
+      int a = 100;
+      int b = 200;
+      int c = 300;
+      int d = 400;
+      int e = 500;
+      if (a == 1) {
+        if (b == 2) {
+          if (c == 3) {
+            if (d == 4) {
+              if (e == 5) {
+                println("1", "2", "3");
+                return ;
+              } else {
+                println("2", "3", "4");
+                return;
+              }
+            } else {
+              println("3", "4", "5");
+              return;
+            }
+          } else {
+            return;
+          }
+        } else {
+          return;
+        }
+      } else {
+        return;
+      }
+    }
+
+    public void switch1() {
+      int x = 100;
+      switch (x) {
+        case 1:
+          println("1", "2", "3");
+          return;
+        case 2:
+          println("2", "3", "4");
+          return;
+        case 3:
+          println("3", "4", "5");
+          return;
+        case 4:
+          println("4", "5", "6");
+          return;
+      }
+    }
+
+    public void switch2() {
+      int x = 200;
+      switch (x) {
+        case 1:
+          println("1", "2", "3");
+          return;
+        case 2:
+          println("2", "3", "4");
+          return;
+        case 3:
+          println("3", "4", "5");
+          return;
+        case 4:
+          println("4", "5", "6");
+          return;
+      }
+    }
+
+    public int cfg_with_arg_and_res1(int y) {
+      int x = 100;
+      switch (x) {
+        case 1:
+          println("1", "2", "3");
+          return y + 1;
+        case 2:
+          println("2", "3", "4");
+          return y + 2;
+        case 3:
+          println("3", "4", "5");
+          return y + 3;
+      }
+      return y + 5;
+    }
+
+    public int cfg_with_arg_and_res2(int y) {
+      int x = 200;
+      switch (x) {
+        case 1:
+          println("1", "2", "3");
+          return y + 1;
+        case 2:
+          println("2", "3", "4");
+          return y + 2;
+        case 3:
+          println("3", "4", "5");
+          return y + 3;
+      }
+      return y + 5;
+    }
+
     static class Nested1 {
       public static void distributed() {
         println("1", "2", "3");

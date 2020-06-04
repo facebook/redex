@@ -436,6 +436,140 @@ TEST_F(InstructionSequenceOutlinerTest, type_demand) {
   }
 }
 
+TEST_F(InstructionSequenceOutlinerTest, cfg_tree) {
+  // We can outline trees of control-flow. We check this by looking for
+  // all occurrences of the println method invocations to have moved to
+  // the outlined methods
+  std::vector<DexMethod*> cfg_tree_methods;
+  std::unordered_set<DexMethodRef*> println_methods;
+  for (const auto& cls : *classes) {
+    for (const auto& m : cls->get_vmethods()) {
+      if (m->get_name()->str().find("cfg_tree") != std::string::npos) {
+        cfg::ScopedCFG scoped_cfg(m->get_code());
+        auto println_method = find_invoked_method(*scoped_cfg, "println");
+        EXPECT_NE(println_method, nullptr);
+        println_methods.insert(println_method);
+        EXPECT_EQ(count_invokes(*scoped_cfg, println_method), 3);
+        cfg_tree_methods.push_back(m);
+      }
+    }
+  }
+  EXPECT_EQ(cfg_tree_methods.size(), 2);
+  EXPECT_EQ(println_methods.size(), 1);
+  auto println_method = *println_methods.begin();
+
+  std::vector<Pass*> passes = {
+      new InstructionSequenceOutliner(),
+  };
+
+  run_passes(passes);
+
+  std::vector<DexMethod*> outlined_methods;
+  for (auto m : cfg_tree_methods) {
+    cfg::ScopedCFG scoped_cfg(m->get_code());
+    auto outlined_method = find_invoked_method(*scoped_cfg, "$outline");
+    EXPECT_NE(outlined_method, nullptr);
+    EXPECT_EQ(count_invokes(*scoped_cfg, outlined_method), 1);
+    outlined_methods.push_back(outlined_method->as_def());
+  }
+  sort_unique(outlined_methods);
+  EXPECT_EQ(outlined_methods.size(), 1);
+  for (auto m : outlined_methods) {
+    cfg::ScopedCFG scoped_cfg(m->get_code());
+    EXPECT_EQ(count_invokes(*scoped_cfg, println_method), 3);
+  }
+}
+
+TEST_F(InstructionSequenceOutlinerTest, switch) {
+  // We can outline entire switches (just a special case of conditional
+  // control-flow).
+  std::vector<DexMethod*> cfg_tree_methods;
+  std::unordered_set<DexMethodRef*> println_methods;
+  for (const auto& cls : *classes) {
+    for (const auto& m : cls->get_vmethods()) {
+      if (m->get_name()->str().find("switch") != std::string::npos) {
+        cfg::ScopedCFG scoped_cfg(m->get_code());
+        auto println_method = find_invoked_method(*scoped_cfg, "println");
+        EXPECT_NE(println_method, nullptr);
+        println_methods.insert(println_method);
+        EXPECT_EQ(count_invokes(*scoped_cfg, println_method), 4);
+        cfg_tree_methods.push_back(m);
+      }
+    }
+  }
+  EXPECT_EQ(cfg_tree_methods.size(), 2);
+  EXPECT_EQ(println_methods.size(), 1);
+  auto println_method = *println_methods.begin();
+
+  std::vector<Pass*> passes = {
+      new InstructionSequenceOutliner(),
+  };
+
+  run_passes(passes);
+
+  std::vector<DexMethod*> outlined_methods;
+  for (auto m : cfg_tree_methods) {
+    cfg::ScopedCFG scoped_cfg(m->get_code());
+    auto outlined_method = find_invoked_method(*scoped_cfg, "$outline");
+    EXPECT_NE(outlined_method, nullptr);
+    EXPECT_EQ(count_invokes(*scoped_cfg, outlined_method), 1);
+    outlined_methods.push_back(outlined_method->as_def());
+  }
+  sort_unique(outlined_methods);
+  EXPECT_EQ(outlined_methods.size(), 1);
+  for (auto m : outlined_methods) {
+    cfg::ScopedCFG scoped_cfg(m->get_code());
+    EXPECT_EQ(count_invokes(*scoped_cfg, println_method), 4);
+  }
+}
+
+TEST_F(InstructionSequenceOutlinerTest, cfg_with_arg_and_res) {
+  // We can outline conditional controlflow with incoming and outgoing
+  // registers.
+  std::vector<DexMethod*> cfg_tree_methods;
+  std::unordered_set<DexMethodRef*> println_methods;
+  for (const auto& cls : *classes) {
+    for (const auto& m : cls->get_vmethods()) {
+      if (m->get_name()->str().find("cfg_with_arg_and_res") !=
+          std::string::npos) {
+        cfg::ScopedCFG scoped_cfg(m->get_code());
+        auto println_method = find_invoked_method(*scoped_cfg, "println");
+        EXPECT_NE(println_method, nullptr);
+        println_methods.insert(println_method);
+        EXPECT_EQ(count_invokes(*scoped_cfg, println_method), 3);
+        cfg_tree_methods.push_back(m);
+      }
+    }
+  }
+  EXPECT_EQ(cfg_tree_methods.size(), 2);
+  EXPECT_EQ(println_methods.size(), 1);
+  auto println_method = *println_methods.begin();
+
+  std::vector<Pass*> passes = {
+      new InstructionSequenceOutliner(),
+  };
+
+  run_passes(passes);
+
+  std::vector<DexMethod*> outlined_methods;
+  for (auto m : cfg_tree_methods) {
+    cfg::ScopedCFG scoped_cfg(m->get_code());
+    auto outlined_method = find_invoked_method(*scoped_cfg, "$outline");
+    EXPECT_NE(outlined_method, nullptr);
+    EXPECT_EQ(count_invokes(*scoped_cfg, outlined_method), 1);
+    outlined_methods.push_back(outlined_method->as_def());
+  }
+  sort_unique(outlined_methods);
+  EXPECT_EQ(outlined_methods.size(), 1);
+  for (auto m : outlined_methods) {
+    auto proto = m->get_proto();
+    EXPECT_EQ(proto->get_rtype(), type::_int());
+    EXPECT_EQ(proto->get_args()->size(), 2);
+    cfg::ScopedCFG scoped_cfg(m->get_code());
+    EXPECT_EQ(count_invokes(*scoped_cfg, println_method), 3);
+  }
+}
+
 TEST_F(InstructionSequenceOutlinerTest, distributed) {
   // When outlined sequence occur in unrelated classes, the outlined method
   // it put into a generated helper class

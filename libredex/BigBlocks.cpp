@@ -14,7 +14,7 @@ static bool is_big_block_successor(cfg::Block* block,
   // A big block successor is a block that...
   // 1. has only a single GOTO predecessor which has no outgoing BRANCH
   auto& pred_edges = block->preds();
-  if (pred_edges.size() != 1) {
+  if (pred_edges.size() != 1 || block == block->cfg().entry_block()) {
     return false;
   }
   auto pred_edge = pred_edges.front();
@@ -112,18 +112,25 @@ InstructionIterator InstructionIterable::end() const {
       ir_list::InstructionIterable(last_block).end()));
 }
 
+boost::optional<BigBlock> get_big_block(cfg::Block* block) {
+  if (is_big_block_successor(block)) {
+    return boost::none;
+  }
+  std::vector<cfg::Block*> blocks;
+  do {
+    blocks.push_back(block);
+    block = block->goes_to();
+  } while (block && is_big_block_successor(block));
+  return BigBlock(std::move(blocks));
+}
+
 std::vector<BigBlock> get_big_blocks(cfg::ControlFlowGraph& cfg) {
   std::vector<BigBlock> res;
   for (auto block : cfg.blocks()) {
-    if (is_big_block_successor(block)) {
-      continue;
+    auto big_block = get_big_block(block);
+    if (big_block) {
+      res.push_back(*big_block);
     }
-    std::vector<cfg::Block*> blocks;
-    do {
-      blocks.push_back(block);
-      block = block->goes_to();
-    } while (block && is_big_block_successor(block));
-    res.emplace_back(std::move(blocks));
   }
   return res;
 }
