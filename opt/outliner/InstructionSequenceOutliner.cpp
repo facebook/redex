@@ -84,12 +84,16 @@
 #include "Lazy.h"
 #include "Liveness.h"
 #include "MutablePriorityQueue.h"
+#include "OutlinerTypeAnalysis.h"
+#include "PartialCandidates.h"
+#include "ReachingInitializeds.h"
 #include "Resolver.h"
 #include "Trace.h"
-#include "TypeInference.h"
 #include "Walkers.h"
 
 namespace {
+
+using namespace outliner_impl;
 
 constexpr const char* OUTLINED_CLASS_NAME_PREFIX = "Lcom/redex/Outlined$";
 
@@ -278,6 +282,7 @@ static size_t hash_value(const Candidate& c) {
   for (auto arg_type : c.arg_types) {
     boost::hash_combine(hash, (size_t)arg_type);
   }
+  boost::hash_combine(hash, (size_t)c.res_type);
   return hash;
 }
 static StableHash stable_hash_value(const Candidate& c) {
@@ -285,19 +290,22 @@ static StableHash stable_hash_value(const Candidate& c) {
   for (auto t : c.arg_types) {
     stable_hash = stable_hash * 71 + stable_hash_value(show(t));
   }
-  stable_hash = stable_hash * 73 + stable_hash_value(c.root);
+  if (c.res_type) {
+    stable_hash = stable_hash * 73 + stable_hash_value(show(c.res_type));
+  }
+  stable_hash = stable_hash * 79 + stable_hash_value(c.root);
   return stable_hash;
 }
 
 using CandidateHasher = boost::hash<Candidate>;
 bool operator==(const Candidate& a, const Candidate& b) {
-  if (a.arg_types != b.arg_types || a.root != b.root) {
+  if (a.arg_types != b.arg_types || a.root != b.root ||
+      a.res_type != b.res_type) {
     return false;
   }
 
   always_assert(a.size == b.size);
   always_assert(a.temp_regs == b.temp_regs);
-  always_assert(a.res_type == b.res_type);
   return true;
 }
 
@@ -357,784 +365,14 @@ class CandidateInstructionCoresBuilder {
 };
 
 ////////////////////////////////////////////////////////////////////////////////
-// "Partial" candidate sequences
-////////////////////////////////////////////////////////////////////////////////
-
-enum class RegState {
-  // When a value is only assigned along some control-flow paths.
-  CONDITIONAL,
-  // When we don't know whether an incoming object reference has been
-  // initialized (could be addressed by another analysis, but not worth it)
-  UNKNOWN,
-  // A newly created object on which no constructor was invoked yet
-  UNINITIALIZED,
-  // A primitive value, array, or object on which a constructor was invoked
-  INITIALIZED,
-};
-
-struct PartialCandidateNode {
-  std::vector<IRInstruction*> insns;
-  std::unordered_map<reg_t, RegState> defined_regs;
-  std::vector<std::pair<cfg::Edge*, std::shared_ptr<PartialCandidateNode>>>
-      succs;
-};
-
-// A partial candidate is still evolving, and defined against actual
-// instructions that have not been normalized yet.
-struct PartialCandidate {
-  std::unordered_set<reg_t> in_regs;
-  PartialCandidateNode root;
-  // Total number of all instructions
-  size_t insns_size{0};
-  // Approximate number of code units occupied by all instructions
-  size_t size{0};
-  // Number of temporary registers needed hold all the defined regs
-  reg_t temp_regs{0};
-};
-
-////////////////////////////////////////////////////////////////////////////////
 // Normalization of partial candidate sequence to candidate sequence
 ////////////////////////////////////////////////////////////////////////////////
 
-using TypeEnvironments =
-    std::unordered_map<const IRInstruction*, type_inference::TypeEnvironment>;
-using LazyTypeEnvironments = Lazy<TypeEnvironments>;
-
-// Infer type of a register at the beginning of the sequences; only as good
-// as what type inference can give us.
-// The return value nullptr indicates that a type could not be inferred.
-static const DexType* get_initial_type(LazyTypeEnvironments& type_environments,
-                                       const PartialCandidate& pc,
-                                       reg_t reg) {
-  const auto& env = type_environments->at(pc.root.insns.front());
-  switch (env.get_type(reg).element()) {
-  case BOTTOM:
-  case ZERO:
-  case CONST:
-  case CONST1:
-  case SCALAR:
-  case SCALAR1:
-    // Can't figure out exact type
-    return nullptr;
-  case REFERENCE: {
-    auto dex_type = env.get_dex_type(reg);
-    return dex_type ? *dex_type : nullptr;
-  }
-  case INT:
-    // Could actually be boolean, byte, short
-    return nullptr;
-  case FLOAT:
-    return type::_float();
-  case LONG1:
-    return type::_long();
-  case DOUBLE1:
-    return type::_double();
-  default:
-    always_assert(false);
-  }
-}
-
-// Infer type demand of a src register of an instruction somewhere in the
-// sequence.
-// The return value nullptr indicates that the demand could not be determined.
-static const DexType* get_type_demand(DexMethod* method,
-                                      LazyTypeEnvironments& type_environments,
-                                      IRInstruction* insn,
-                                      size_t src_index) {
-  always_assert(src_index < insn->srcs_size());
-  switch (insn->opcode()) {
-  case OPCODE_GOTO:
-  case IOPCODE_LOAD_PARAM:
-  case IOPCODE_LOAD_PARAM_OBJECT:
-  case IOPCODE_LOAD_PARAM_WIDE:
-  case OPCODE_NOP:
-  case IOPCODE_MOVE_RESULT_PSEUDO:
-  case OPCODE_MOVE_RESULT:
-  case IOPCODE_MOVE_RESULT_PSEUDO_OBJECT:
-  case OPCODE_MOVE_RESULT_OBJECT:
-  case IOPCODE_MOVE_RESULT_PSEUDO_WIDE:
-  case OPCODE_MOVE_RESULT_WIDE:
-  case OPCODE_MOVE_EXCEPTION:
-  case OPCODE_RETURN_VOID:
-  case OPCODE_CONST:
-  case OPCODE_CONST_WIDE:
-  case OPCODE_CONST_STRING:
-  case OPCODE_CONST_CLASS:
-  case OPCODE_NEW_INSTANCE:
-  case OPCODE_SGET:
-  case OPCODE_SGET_BOOLEAN:
-  case OPCODE_SGET_BYTE:
-  case OPCODE_SGET_CHAR:
-  case OPCODE_SGET_SHORT:
-  case OPCODE_SGET_WIDE:
-  case OPCODE_SGET_OBJECT:
-    always_assert(false);
-
-  case OPCODE_RETURN:
-  case OPCODE_RETURN_WIDE:
-  case OPCODE_RETURN_OBJECT:
-    always_assert(src_index == 0);
-    return method->get_proto()->get_rtype();
-
-  case OPCODE_MOVE:
-  case OPCODE_MOVE_WIDE:
-  case OPCODE_MOVE_OBJECT:
-    // Handled by caller
-    always_assert(false);
-
-  case OPCODE_MONITOR_ENTER:
-  case OPCODE_MONITOR_EXIT:
-  case OPCODE_CHECK_CAST:
-  case OPCODE_INSTANCE_OF:
-    always_assert(src_index == 0);
-    return type::java_lang_Object();
-
-  case OPCODE_ARRAY_LENGTH:
-  case OPCODE_FILL_ARRAY_DATA: {
-    always_assert(src_index == 0);
-    auto& env = type_environments->at(insn);
-    auto dex_type = env.get_dex_type(insn->src(0));
-    return dex_type ? *dex_type : nullptr;
-  }
-
-  case OPCODE_THROW:
-    always_assert(src_index == 0);
-    return type::java_lang_Throwable();
-
-  case OPCODE_IGET:
-  case OPCODE_IGET_BOOLEAN:
-  case OPCODE_IGET_BYTE:
-  case OPCODE_IGET_CHAR:
-  case OPCODE_IGET_SHORT:
-  case OPCODE_IGET_WIDE:
-  case OPCODE_IGET_OBJECT:
-    always_assert(src_index == 0);
-    return insn->get_field()->get_class();
-
-  case OPCODE_IF_EQ:
-  case OPCODE_IF_NE:
-    always_assert(src_index < 2);
-    // Could be int, float, or object
-    return nullptr;
-
-  case OPCODE_IF_EQZ:
-  case OPCODE_IF_NEZ:
-  case OPCODE_IF_LTZ:
-  case OPCODE_IF_GEZ:
-  case OPCODE_IF_GTZ:
-  case OPCODE_IF_LEZ:
-    always_assert(src_index == 0);
-    // Could be int or object
-    return nullptr;
-
-  case OPCODE_IF_LT:
-  case OPCODE_IF_GE:
-  case OPCODE_IF_GT:
-  case OPCODE_IF_LE:
-  case OPCODE_NEW_ARRAY:
-  case OPCODE_SWITCH:
-  case OPCODE_NEG_INT:
-  case OPCODE_NOT_INT:
-  case OPCODE_INT_TO_BYTE:
-  case OPCODE_INT_TO_CHAR:
-  case OPCODE_INT_TO_SHORT:
-  case OPCODE_INT_TO_LONG:
-  case OPCODE_INT_TO_FLOAT:
-  case OPCODE_INT_TO_DOUBLE:
-  case OPCODE_ADD_INT:
-  case OPCODE_SUB_INT:
-  case OPCODE_MUL_INT:
-  case OPCODE_SHL_INT:
-  case OPCODE_SHR_INT:
-  case OPCODE_USHR_INT:
-  case OPCODE_DIV_INT:
-  case OPCODE_REM_INT:
-  case OPCODE_ADD_INT_LIT16:
-  case OPCODE_RSUB_INT:
-  case OPCODE_MUL_INT_LIT16:
-  case OPCODE_ADD_INT_LIT8:
-  case OPCODE_RSUB_INT_LIT8:
-  case OPCODE_MUL_INT_LIT8:
-  case OPCODE_SHL_INT_LIT8:
-  case OPCODE_SHR_INT_LIT8:
-  case OPCODE_USHR_INT_LIT8:
-  case OPCODE_DIV_INT_LIT16:
-  case OPCODE_REM_INT_LIT16:
-  case OPCODE_DIV_INT_LIT8:
-  case OPCODE_REM_INT_LIT8:
-    always_assert(src_index < 2);
-    return type::_int();
-
-  case OPCODE_AND_INT:
-  case OPCODE_OR_INT:
-  case OPCODE_XOR_INT:
-  case OPCODE_AND_INT_LIT16:
-  case OPCODE_OR_INT_LIT16:
-  case OPCODE_XOR_INT_LIT16:
-  case OPCODE_AND_INT_LIT8:
-  case OPCODE_OR_INT_LIT8:
-  case OPCODE_XOR_INT_LIT8:
-    always_assert(src_index < 2);
-    // TODO: Note that these opcodes can preserve boolean-ness. Needs a
-    // full-blown type checker.
-    return nullptr;
-
-  case OPCODE_FILLED_NEW_ARRAY:
-    return type::get_array_component_type(insn->get_type());
-
-  case OPCODE_CMPL_FLOAT:
-  case OPCODE_CMPG_FLOAT:
-  case OPCODE_NEG_FLOAT:
-  case OPCODE_FLOAT_TO_INT:
-  case OPCODE_FLOAT_TO_LONG:
-  case OPCODE_FLOAT_TO_DOUBLE:
-  case OPCODE_ADD_FLOAT:
-  case OPCODE_SUB_FLOAT:
-  case OPCODE_MUL_FLOAT:
-  case OPCODE_DIV_FLOAT:
-  case OPCODE_REM_FLOAT:
-    always_assert(src_index < 2);
-    return type::_float();
-
-  case OPCODE_CMPL_DOUBLE:
-  case OPCODE_CMPG_DOUBLE:
-  case OPCODE_NEG_DOUBLE:
-  case OPCODE_DOUBLE_TO_INT:
-  case OPCODE_DOUBLE_TO_LONG:
-  case OPCODE_DOUBLE_TO_FLOAT:
-  case OPCODE_ADD_DOUBLE:
-  case OPCODE_SUB_DOUBLE:
-  case OPCODE_MUL_DOUBLE:
-  case OPCODE_DIV_DOUBLE:
-  case OPCODE_REM_DOUBLE:
-    always_assert(src_index < 2);
-    return type::_double();
-
-  case OPCODE_CMP_LONG:
-  case OPCODE_NEG_LONG:
-  case OPCODE_NOT_LONG:
-  case OPCODE_LONG_TO_INT:
-  case OPCODE_LONG_TO_FLOAT:
-  case OPCODE_LONG_TO_DOUBLE:
-  case OPCODE_ADD_LONG:
-  case OPCODE_SUB_LONG:
-  case OPCODE_MUL_LONG:
-  case OPCODE_AND_LONG:
-  case OPCODE_OR_LONG:
-  case OPCODE_XOR_LONG:
-  case OPCODE_DIV_LONG:
-  case OPCODE_REM_LONG:
-    always_assert(src_index < 2);
-    return type::_long();
-
-  case OPCODE_SHL_LONG:
-  case OPCODE_SHR_LONG:
-  case OPCODE_USHR_LONG:
-    if (src_index == 0) return type::_long();
-    always_assert(src_index == 1);
-    return type::_int();
-
-  case OPCODE_AGET:
-  case OPCODE_AGET_BOOLEAN:
-  case OPCODE_AGET_BYTE:
-  case OPCODE_AGET_CHAR:
-  case OPCODE_AGET_SHORT:
-  case OPCODE_AGET_WIDE:
-  case OPCODE_AGET_OBJECT:
-    if (src_index == 0) {
-      auto& env = type_environments->at(insn);
-      auto dex_type = env.get_dex_type(insn->src(0));
-      return dex_type ? *dex_type : nullptr;
-    }
-    always_assert(src_index == 1);
-    return type::_int();
-
-  case OPCODE_APUT:
-  case OPCODE_APUT_BOOLEAN:
-  case OPCODE_APUT_BYTE:
-  case OPCODE_APUT_CHAR:
-  case OPCODE_APUT_SHORT:
-  case OPCODE_APUT_WIDE:
-  case OPCODE_APUT_OBJECT:
-    if (src_index == 1) {
-      auto& env = type_environments->at(insn);
-      auto dex_type = env.get_dex_type(insn->src(1));
-      return dex_type ? *dex_type : nullptr;
-    }
-    if (src_index == 2) return type::_int();
-    always_assert(src_index == 0);
-    switch (insn->opcode()) {
-    case OPCODE_APUT:
-    case OPCODE_APUT_OBJECT:
-    case OPCODE_APUT_WIDE: {
-      auto& env = type_environments->at(insn);
-      auto dex_type = env.get_dex_type(insn->src(1));
-      return (dex_type && type::is_array(*dex_type))
-                 ? type::get_array_component_type(*dex_type)
-                 : nullptr;
-    }
-    case OPCODE_APUT_BOOLEAN:
-      return type::_boolean();
-    case OPCODE_APUT_BYTE:
-      return type::_byte();
-    case OPCODE_APUT_CHAR:
-      return type::_char();
-    case OPCODE_APUT_SHORT:
-      return type::_short();
-    default:
-      always_assert(false);
-    }
-
-  case OPCODE_IPUT:
-  case OPCODE_IPUT_BOOLEAN:
-  case OPCODE_IPUT_BYTE:
-  case OPCODE_IPUT_CHAR:
-  case OPCODE_IPUT_SHORT:
-  case OPCODE_IPUT_WIDE:
-  case OPCODE_IPUT_OBJECT:
-    if (src_index == 1) return insn->get_field()->get_class();
-    always_assert(src_index == 0);
-    return insn->get_field()->get_type();
-
-  case OPCODE_SPUT:
-  case OPCODE_SPUT_BOOLEAN:
-  case OPCODE_SPUT_BYTE:
-  case OPCODE_SPUT_CHAR:
-  case OPCODE_SPUT_SHORT:
-  case OPCODE_SPUT_WIDE:
-  case OPCODE_SPUT_OBJECT:
-    always_assert(src_index == 0);
-    return insn->get_field()->get_type();
-
-  case OPCODE_INVOKE_VIRTUAL:
-  case OPCODE_INVOKE_SUPER:
-  case OPCODE_INVOKE_DIRECT:
-  case OPCODE_INVOKE_STATIC:
-  case OPCODE_INVOKE_INTERFACE: {
-    DexMethodRef* dex_method = insn->get_method();
-    const auto& arg_types =
-        dex_method->get_proto()->get_args()->get_type_list();
-    size_t expected_args =
-        (insn->opcode() != OPCODE_INVOKE_STATIC ? 1 : 0) + arg_types.size();
-    always_assert(insn->srcs_size() == expected_args);
-
-    if (insn->opcode() != OPCODE_INVOKE_STATIC) {
-      // The first argument is a reference to the object instance on which the
-      // method is invoked.
-      if (src_index-- == 0) return dex_method->get_class();
-    }
-    return arg_types.at(src_index);
-  }
-  case OPCODE_INVOKE_CUSTOM:
-  case OPCODE_INVOKE_POLYMORPHIC:
-    always_assert_log(false,
-                      "Unsupported instruction {%s} in "
-                      "get_type_demand\n",
-                      SHOW(insn));
-  }
-}
-
-static bool has_dest(IRInstruction* insn, reg_t reg) {
-  return insn->has_dest() && insn->dest() == reg;
-}
-
-// Infer result type of a register that will (effectively) become the result
-// of an outlined sequence.
-// The return value nullptr indicates that the result type could not be
-// determined.
-static const DexType* get_result_type(LazyTypeEnvironments& type_environments,
-                                      const PartialCandidate& pc,
-                                      const std::vector<IRInstruction*>& insns,
-                                      size_t insn_idx) {
-  auto insn = insns.at(insn_idx);
-restart:
-  switch (insn->opcode()) {
-  case IOPCODE_LOAD_PARAM:
-  case IOPCODE_LOAD_PARAM_OBJECT:
-  case IOPCODE_LOAD_PARAM_WIDE:
-  case OPCODE_CONST_STRING:
-  case OPCODE_CONST_CLASS:
-  case OPCODE_GOTO:
-  case OPCODE_NOP:
-  case OPCODE_RETURN_VOID:
-  case OPCODE_RETURN:
-  case OPCODE_RETURN_WIDE:
-  case OPCODE_RETURN_OBJECT:
-  case OPCODE_NEW_INSTANCE:
-  case OPCODE_SGET:
-  case OPCODE_SGET_BOOLEAN:
-  case OPCODE_SGET_BYTE:
-  case OPCODE_SGET_CHAR:
-  case OPCODE_SGET_SHORT:
-  case OPCODE_SGET_WIDE:
-  case OPCODE_SGET_OBJECT:
-  case OPCODE_MONITOR_ENTER:
-  case OPCODE_MONITOR_EXIT:
-  case OPCODE_ARRAY_LENGTH:
-  case OPCODE_FILL_ARRAY_DATA:
-  case OPCODE_IGET:
-  case OPCODE_IGET_BOOLEAN:
-  case OPCODE_IGET_BYTE:
-  case OPCODE_IGET_CHAR:
-  case OPCODE_IGET_SHORT:
-  case OPCODE_IGET_WIDE:
-  case OPCODE_IGET_OBJECT:
-  case OPCODE_CHECK_CAST:
-  case OPCODE_INSTANCE_OF:
-  case OPCODE_IF_EQ:
-  case OPCODE_IF_NE:
-  case OPCODE_IF_EQZ:
-  case OPCODE_IF_NEZ:
-  case OPCODE_IF_LTZ:
-  case OPCODE_IF_GEZ:
-  case OPCODE_IF_GTZ:
-  case OPCODE_IF_LEZ:
-  case OPCODE_IF_LT:
-  case OPCODE_IF_GE:
-  case OPCODE_IF_GT:
-  case OPCODE_IF_LE:
-  case OPCODE_NEW_ARRAY:
-  case OPCODE_SWITCH:
-  case OPCODE_FILLED_NEW_ARRAY:
-  case OPCODE_AGET:
-  case OPCODE_AGET_BOOLEAN:
-  case OPCODE_AGET_BYTE:
-  case OPCODE_AGET_CHAR:
-  case OPCODE_AGET_SHORT:
-  case OPCODE_AGET_WIDE:
-  case OPCODE_AGET_OBJECT:
-  case OPCODE_APUT:
-  case OPCODE_APUT_BOOLEAN:
-  case OPCODE_APUT_BYTE:
-  case OPCODE_APUT_CHAR:
-  case OPCODE_APUT_SHORT:
-  case OPCODE_APUT_WIDE:
-  case OPCODE_APUT_OBJECT:
-  case OPCODE_IPUT:
-  case OPCODE_IPUT_BOOLEAN:
-  case OPCODE_IPUT_BYTE:
-  case OPCODE_IPUT_CHAR:
-  case OPCODE_IPUT_SHORT:
-  case OPCODE_IPUT_WIDE:
-  case OPCODE_IPUT_OBJECT:
-  case OPCODE_SPUT:
-  case OPCODE_SPUT_BOOLEAN:
-  case OPCODE_SPUT_BYTE:
-  case OPCODE_SPUT_CHAR:
-  case OPCODE_SPUT_SHORT:
-  case OPCODE_SPUT_WIDE:
-  case OPCODE_SPUT_OBJECT:
-  case OPCODE_INVOKE_VIRTUAL:
-  case OPCODE_INVOKE_SUPER:
-  case OPCODE_INVOKE_DIRECT:
-  case OPCODE_INVOKE_STATIC:
-  case OPCODE_INVOKE_INTERFACE:
-  case OPCODE_DIV_INT:
-  case OPCODE_REM_INT:
-  case OPCODE_DIV_LONG:
-  case OPCODE_REM_LONG:
-  case OPCODE_DIV_INT_LIT16:
-  case OPCODE_REM_INT_LIT16:
-  case OPCODE_DIV_INT_LIT8:
-  case OPCODE_REM_INT_LIT8:
-    always_assert(false);
-
-  case IOPCODE_MOVE_RESULT_PSEUDO:
-  case OPCODE_MOVE_RESULT:
-  case IOPCODE_MOVE_RESULT_PSEUDO_OBJECT:
-  case OPCODE_MOVE_RESULT_OBJECT:
-  case IOPCODE_MOVE_RESULT_PSEUDO_WIDE:
-  case OPCODE_MOVE_RESULT_WIDE: {
-    insn = insns.at(insn_idx - 1);
-    always_assert(insn != nullptr && insn->has_move_result_any());
-    switch (insn->opcode()) {
-    case OPCODE_CONST_STRING:
-      return type::java_lang_String();
-    case OPCODE_CONST_CLASS:
-      return type::java_lang_Class();
-    case OPCODE_NEW_INSTANCE:
-    case OPCODE_NEW_ARRAY:
-    case OPCODE_FILLED_NEW_ARRAY:
-    case OPCODE_CHECK_CAST:
-      return insn->get_type();
-    case OPCODE_SGET:
-    case OPCODE_SGET_BOOLEAN:
-    case OPCODE_SGET_BYTE:
-    case OPCODE_SGET_CHAR:
-    case OPCODE_SGET_SHORT:
-    case OPCODE_SGET_WIDE:
-    case OPCODE_SGET_OBJECT:
-    case OPCODE_IGET:
-    case OPCODE_IGET_BOOLEAN:
-    case OPCODE_IGET_BYTE:
-    case OPCODE_IGET_CHAR:
-    case OPCODE_IGET_SHORT:
-    case OPCODE_IGET_WIDE:
-    case OPCODE_IGET_OBJECT:
-      return insn->get_field()->get_type();
-    case OPCODE_ARRAY_LENGTH:
-    case OPCODE_INSTANCE_OF:
-      return type::_int();
-    case OPCODE_AGET_BOOLEAN:
-      return type::_boolean();
-    case OPCODE_AGET_BYTE:
-      return type::_byte();
-    case OPCODE_AGET_CHAR:
-      return type::_char();
-    case OPCODE_AGET_SHORT:
-      return type::_short();
-    case OPCODE_AGET:
-    case OPCODE_AGET_WIDE:
-    case OPCODE_AGET_OBJECT: {
-      auto& env = type_environments->at(insn);
-      auto dex_type = env.get_dex_type(insn->src(0));
-      return (dex_type && type::is_array(*dex_type))
-                 ? type::get_array_component_type(*dex_type)
-                 : nullptr;
-    }
-    case OPCODE_INVOKE_VIRTUAL:
-    case OPCODE_INVOKE_SUPER:
-    case OPCODE_INVOKE_DIRECT:
-    case OPCODE_INVOKE_STATIC:
-    case OPCODE_INVOKE_INTERFACE:
-      return insn->get_method()->get_proto()->get_rtype();
-
-    case OPCODE_DIV_INT:
-    case OPCODE_REM_INT:
-    case OPCODE_DIV_INT_LIT16:
-    case OPCODE_REM_INT_LIT16:
-    case OPCODE_DIV_INT_LIT8:
-    case OPCODE_REM_INT_LIT8:
-      return type::_int();
-    case OPCODE_DIV_LONG:
-    case OPCODE_REM_LONG:
-      return type::_long();
-
-    default:
-      always_assert(false);
-    }
-  }
-
-  case OPCODE_MOVE_EXCEPTION:
-    return type::java_lang_Throwable();
-  case OPCODE_CONST:
-  case OPCODE_CONST_WIDE:
-    return nullptr;
-
-  case OPCODE_MOVE:
-  case OPCODE_MOVE_WIDE:
-  case OPCODE_MOVE_OBJECT: {
-    auto src = insn->src(0);
-    while (insn_idx > 0) {
-      insn = insns.at(--insn_idx);
-      if (has_dest(insn, src)) {
-        goto restart;
-      }
-    }
-    return get_initial_type(type_environments, pc, src);
-  }
-
-  case OPCODE_THROW:
-    return type::java_lang_Throwable();
-
-  case OPCODE_NEG_INT:
-  case OPCODE_NOT_INT:
-  case OPCODE_ADD_INT:
-  case OPCODE_SUB_INT:
-  case OPCODE_MUL_INT:
-  case OPCODE_SHL_INT:
-  case OPCODE_SHR_INT:
-  case OPCODE_USHR_INT:
-  case OPCODE_ADD_INT_LIT16:
-  case OPCODE_RSUB_INT:
-  case OPCODE_MUL_INT_LIT16:
-  case OPCODE_ADD_INT_LIT8:
-  case OPCODE_RSUB_INT_LIT8:
-  case OPCODE_MUL_INT_LIT8:
-  case OPCODE_SHL_INT_LIT8:
-  case OPCODE_SHR_INT_LIT8:
-  case OPCODE_USHR_INT_LIT8:
-  case OPCODE_FLOAT_TO_INT:
-  case OPCODE_DOUBLE_TO_INT:
-  case OPCODE_LONG_TO_INT:
-    return type::_int();
-
-  case OPCODE_AND_INT:
-  case OPCODE_OR_INT:
-  case OPCODE_XOR_INT:
-  case OPCODE_AND_INT_LIT16:
-  case OPCODE_OR_INT_LIT16:
-  case OPCODE_XOR_INT_LIT16:
-  case OPCODE_AND_INT_LIT8:
-  case OPCODE_OR_INT_LIT8:
-  case OPCODE_XOR_INT_LIT8:
-    // TODO: Note that these opcodes can preserve boolean-ness. Needs a
-    // full-blown type checker.
-    return nullptr;
-
-  case OPCODE_INT_TO_BYTE:
-    return type::_byte();
-  case OPCODE_INT_TO_CHAR:
-    return type::_char();
-  case OPCODE_INT_TO_SHORT:
-    return type::_short();
-  case OPCODE_INT_TO_LONG:
-  case OPCODE_FLOAT_TO_LONG:
-  case OPCODE_DOUBLE_TO_LONG:
-  case OPCODE_NEG_LONG:
-  case OPCODE_NOT_LONG:
-  case OPCODE_ADD_LONG:
-  case OPCODE_SUB_LONG:
-  case OPCODE_MUL_LONG:
-  case OPCODE_AND_LONG:
-  case OPCODE_OR_LONG:
-  case OPCODE_XOR_LONG:
-  case OPCODE_SHL_LONG:
-  case OPCODE_SHR_LONG:
-  case OPCODE_USHR_LONG:
-    return type::_long();
-  case OPCODE_INT_TO_FLOAT:
-  case OPCODE_NEG_FLOAT:
-  case OPCODE_ADD_FLOAT:
-  case OPCODE_SUB_FLOAT:
-  case OPCODE_MUL_FLOAT:
-  case OPCODE_DIV_FLOAT:
-  case OPCODE_REM_FLOAT:
-  case OPCODE_DOUBLE_TO_FLOAT:
-  case OPCODE_LONG_TO_FLOAT:
-    return type::_float();
-  case OPCODE_INT_TO_DOUBLE:
-  case OPCODE_FLOAT_TO_DOUBLE:
-  case OPCODE_NEG_DOUBLE:
-  case OPCODE_ADD_DOUBLE:
-  case OPCODE_SUB_DOUBLE:
-  case OPCODE_MUL_DOUBLE:
-  case OPCODE_DIV_DOUBLE:
-  case OPCODE_REM_DOUBLE:
-  case OPCODE_LONG_TO_DOUBLE:
-    return type::_double();
-
-  case OPCODE_CMPL_FLOAT:
-  case OPCODE_CMPG_FLOAT:
-  case OPCODE_CMPL_DOUBLE:
-  case OPCODE_CMPG_DOUBLE:
-  case OPCODE_CMP_LONG:
-    return type::_int();
-
-  case OPCODE_INVOKE_CUSTOM:
-  case OPCODE_INVOKE_POLYMORPHIC:
-    always_assert_log(false,
-                      "Unsupported instruction {%s} in "
-                      "get_result_type\n",
-                      SHOW(insn));
-  }
-}
-
-// Infer type demand imposed on an incoming register across all instructions
-// in the given instruction sequence.
-// The return value nullptr indicates that the demand could not be determined.
-static void get_type_demand_helper(
-    DexMethod* method,
-    LazyTypeEnvironments& type_environments,
-    const PartialCandidateNode& pcn,
-    std::unordered_set<reg_t> regs_to_track,
-    std::unordered_set<const DexType*>* type_demands) {
-  for (size_t insn_idx = 0;
-       insn_idx < pcn.insns.size() && !regs_to_track.empty();
-       insn_idx++) {
-    auto insn = pcn.insns.at(insn_idx);
-    if (is_move(insn->opcode())) {
-      if (regs_to_track.count(insn->src(0))) {
-        regs_to_track.insert(insn->dest());
-      } else {
-        regs_to_track.erase(insn->dest());
-      }
-      if (insn->opcode() == OPCODE_MOVE_WIDE) {
-        regs_to_track.erase(insn->dest() + 1);
-      }
-      continue;
-    }
-    for (size_t i = 0; i < insn->srcs_size(); i++) {
-      if (regs_to_track.count(insn->src(i))) {
-        type_demands->insert(
-            get_type_demand(method, type_environments, insn, i));
-      }
-    }
-    if (insn->has_dest()) {
-      regs_to_track.erase(insn->dest());
-      if (insn->dest_is_wide()) {
-        regs_to_track.erase(insn->dest() + 1);
-      }
-    }
-  }
-  for (auto& p : pcn.succs) {
-    get_type_demand_helper(method, type_environments, *p.second, regs_to_track,
-                           type_demands);
-  }
-}
-
-static const DexType* get_type_demand(DexMethod* method,
-                                      LazyTypeEnvironments& type_environments,
-                                      const PartialCandidate& pc,
-                                      reg_t reg) {
-  std::unordered_set<const DexType*> type_demands;
-  std::unordered_set<reg_t> regs_to_track{reg};
-  get_type_demand_helper(method, type_environments, pc.root, regs_to_track,
-                         &type_demands);
-  if (!type_demands.count(nullptr) && !type_demands.empty()) {
-    if (type_demands.size() > 1) {
-      // Less strict primitive type demands can be removed
-      if (type_demands.count(type::_boolean())) {
-        type_demands.erase(type::_byte());
-        type_demands.erase(type::_short());
-        type_demands.erase(type::_char());
-        type_demands.erase(type::_int());
-      } else if (type_demands.count(type::_byte())) {
-        if (type_demands.count(type::_char())) {
-          type_demands = {type::_int()};
-        } else {
-          type_demands.erase(type::_short());
-          type_demands.erase(type::_int());
-        }
-      } else if (type_demands.count(type::_short())) {
-        if (type_demands.count(type::_char())) {
-          type_demands = {type::_int()};
-        } else {
-          type_demands.erase(type::_int());
-        }
-      } else if (type_demands.count(type::_char())) {
-        type_demands.erase(type::_int());
-      }
-
-      // remove less specific object types
-      for (auto it = type_demands.begin(); it != type_demands.end();) {
-        if (type::is_object(*it) &&
-            std::find_if(type_demands.begin(), type_demands.end(),
-                         [&it](const DexType* t) {
-                           return t != *it && type::is_object(t) &&
-                                  type::check_cast(t, *it);
-                         }) != type_demands.end()) {
-          it = type_demands.erase(it);
-        } else {
-          it++;
-        }
-      }
-
-      // TODO: I saw that most often, when multiple object type demands remain,
-      // they are often even contradictory, and that's because in fact the
-      // value that flows in is a null constant, which is the only feasible
-      // value in those cases. Still, a relatively uncommon occurrence overall.
-    }
-
-    if (type_demands.size() == 1) {
-      return *type_demands.begin();
-    }
-  }
-
-  // No useful type demand from within the given sequence; let's fall back to
-  // what we can get from type inference.
-  return get_initial_type(type_environments, pc, reg);
-}
+using ReachingInitializedsEnvironments =
+    std::unordered_map<const IRInstruction*,
+                       reaching_initializeds::Environment>;
+using LazyReachingInitializedsEnvironments =
+    Lazy<ReachingInitializedsEnvironments>;
 
 static std::vector<cfg::Edge*> get_ordered_goto_and_branch_succs(
     cfg::Block* block) {
@@ -1162,10 +400,10 @@ static CandidateEdgeLabel normalize(cfg::Edge* e) {
 // at zero, and normalized argument registers follow after temporary registers
 // in the order in which they are referenced by the instructions when walking
 // the tree in order.
-static Candidate normalize(DexMethod* method,
-                           LazyTypeEnvironments& type_environments,
-                           const PartialCandidate& pc,
-                           const boost::optional<reg_t>& out_reg) {
+static Candidate normalize(
+    OutlinerTypeAnalysis& type_analysis,
+    const PartialCandidate& pc,
+    const boost::optional<std::pair<reg_t, bool>>& out_reg) {
   std::unordered_map<reg_t, reg_t> map;
   reg_t next_arg{pc.temp_regs};
   reg_t next_temp{0};
@@ -1201,16 +439,15 @@ static Candidate normalize(DexMethod* method,
     return mapped_reg;
   };
   std::function<void(const PartialCandidateNode&, CandidateNode* cn,
-                     std::vector<IRInstruction*> linear_insns)>
+                     IRInstruction* last_out_reg_assignment_insn)>
       walk;
-  std::unordered_set<const DexType*> res_types;
-  walk = [&type_environments, &pc, &map, &normalize_use, &normalize_def,
-          &out_reg, &res_types,
+  std::unordered_set<const IRInstruction*> out_reg_assignment_insns;
+  walk = [&map, &normalize_use, &normalize_def, &out_reg,
+          &out_reg_assignment_insns,
           &walk](const PartialCandidateNode& pcn, CandidateNode* cn,
-                 std::vector<IRInstruction*> linear_insns) {
+                 IRInstruction* last_out_reg_assignment_insn) {
     UndoMap undo_map;
     for (auto insn : pcn.insns) {
-      linear_insns.push_back(insn);
       CandidateInstruction ci;
       ci.core = to_core(insn);
 
@@ -1219,25 +456,20 @@ static Candidate normalize(DexMethod* method,
       }
       if (insn->has_dest()) {
         ci.dest = normalize_def(insn->dest(), insn->dest_is_wide(), &undo_map);
+        if (out_reg && insn->dest() == out_reg->first) {
+          last_out_reg_assignment_insn = insn;
+        }
       }
       cn->insns.push_back(ci);
     }
-    if (pcn.succs.empty()) {
-      if (out_reg) {
-        size_t out_insn_idx{linear_insns.size() - 1};
-        while (!has_dest(linear_insns.at(out_insn_idx), *out_reg)) {
-          out_insn_idx--;
-        }
-        res_types.insert(
-            get_result_type(type_environments, pc, linear_insns, out_insn_idx));
-        cn->res_reg = map.at(*out_reg);
-      }
-    } else {
-      for (auto& p : pcn.succs) {
-        auto succ_cn = std::make_shared<CandidateNode>();
-        cn->succs.emplace_back(normalize(p.first), succ_cn);
-        walk(*p.second, succ_cn.get(), linear_insns);
-      }
+    if (pcn.succs.empty() && out_reg) {
+      out_reg_assignment_insns.insert(last_out_reg_assignment_insn);
+      cn->res_reg = normalize_use(out_reg->first, out_reg->second);
+    }
+    for (auto& p : pcn.succs) {
+      auto succ_cn = std::make_shared<CandidateNode>();
+      cn->succs.emplace_back(normalize(p.first), succ_cn);
+      walk(*p.second, succ_cn.get(), last_out_reg_assignment_insn);
     }
     for (auto& p : undo_map) {
       if (p.second) {
@@ -1247,17 +479,24 @@ static Candidate normalize(DexMethod* method,
       }
     }
   };
-  walk(pc.root, &c.root, {});
+  walk(pc.root, &c.root, nullptr);
   always_assert(next_temp == pc.temp_regs);
+  if (out_reg) {
+    always_assert(!out_reg_assignment_insns.empty());
+    if (out_reg_assignment_insns.count(nullptr)) {
+      // There is a control-flow path where the out-reg is not assigned;
+      // fall-back to type inference at the beginning of the partial candidate.
+      c.res_type = type_analysis.get_inferred_type(pc, out_reg->first);
+    } else {
+      c.res_type = type_analysis.get_result_type(out_reg_assignment_insns);
+    }
+  }
   for (auto reg : arg_regs) {
-    auto type = get_type_demand(method, type_environments, pc, reg);
+    auto type = type_analysis.get_type_demand(
+        pc, reg, out_reg ? boost::optional<reg_t>(out_reg->first) : boost::none,
+        c.res_type);
     c.arg_types.push_back(type);
   }
-  if (out_reg) {
-    always_assert(!res_types.empty());
-    c.res_type = res_types.size() == 1 ? *res_types.begin() : nullptr;
-  }
-
   return c;
 }
 
@@ -1331,18 +570,20 @@ static bool can_outline_opcode(IROpcode opcode) {
 }
 
 // Attempts to append an instruction to a partial candidate sequence. Result
-// indicates whether attempt was successful. If not, then the partial candidate
-// sequence should be abandoned.
-static bool append_to_partial_candidate(IRInstruction* insn,
-                                        PartialCandidate* pc,
-                                        PartialCandidateNode* pcn) {
+// indicates whether attempt was successful. If not, then the partial
+// candidate sequence should be abandoned.
+static bool append_to_partial_candidate(
+    LazyReachingInitializedsEnvironments& reaching_initializeds,
+    IRInstruction* insn,
+    PartialCandidate* pc,
+    PartialCandidateNode* pcn) {
   auto opcode = insn->opcode();
   if (opcode == OPCODE_INVOKE_DIRECT && method::is_init(insn->get_method())) {
     auto it = pcn->defined_regs.find(insn->src(0));
-    if (it == pcn->defined_regs.end() || it->second == RegState::UNKNOWN) {
+    if (it == pcn->defined_regs.end()) {
       return false;
     }
-    it->second = RegState::INITIALIZED;
+    it->second = {/* wide */ false, RegState::INITIALIZED};
   }
   for (size_t i = 0; i < insn->srcs_size(); i++) {
     auto src = insn->src(i);
@@ -1357,19 +598,25 @@ static bool append_to_partial_candidate(IRInstruction* insn,
     }
   }
   if (insn->has_dest()) {
-    RegState reg_state = RegState::INITIALIZED;
+    DefinedReg defined_reg{insn->dest_is_wide(), RegState::INITIALIZED};
     if (insn->opcode() == OPCODE_MOVE_OBJECT) {
       auto it = pcn->defined_regs.find(insn->src(0));
-      reg_state =
-          it == pcn->defined_regs.end() ? RegState::UNKNOWN : it->second;
+      if (it != pcn->defined_regs.end()) {
+        defined_reg = it->second;
+      } else {
+        auto initialized = reaching_initializeds->at(insn).get(insn->src(0));
+        if (!initialized.get_constant() || !*initialized.get_constant()) {
+          return false;
+        }
+      }
     } else if (opcode == IOPCODE_MOVE_RESULT_PSEUDO_OBJECT) {
       always_assert(!pcn->insns.empty());
       auto last_opcode = pcn->insns.back()->opcode();
       if (last_opcode == OPCODE_NEW_INSTANCE) {
-        reg_state = RegState::UNINITIALIZED;
+        defined_reg.state = RegState::UNINITIALIZED;
       }
     }
-    pcn->defined_regs[insn->dest()] = reg_state;
+    pcn->defined_regs[insn->dest()] = defined_reg;
     pc->temp_regs += insn->dest_is_wide() ? 2 : 1;
   }
   pcn->insns.push_back(insn);
@@ -1525,6 +772,7 @@ using ExploredCallback =
 // particular point in a big block.
 // Result indicates whether the big block was successfully explored to the end.
 static bool explore_candidates_from(
+    LazyReachingInitializedsEnvironments& reaching_initializeds,
     const InstructionSequenceOutlinerConfig& config,
     const std::function<bool(const DexType*)>& illegal_ref,
     const CandidateInstructionCoresSet& recurring_cores,
@@ -1551,7 +799,7 @@ static bool explore_candidates_from(
         !recurring_cores.count(cores_builder.get_value())) {
       return false;
     }
-    if (!append_to_partial_candidate(insn, pc, pcn)) {
+    if (!append_to_partial_candidate(reaching_initializeds, insn, pc, pcn)) {
       return false;
     }
     if (is_conditional_branch(insn->opcode()) || is_switch(insn->opcode())) {
@@ -1570,13 +818,13 @@ static bool explore_candidates_from(
       }
       auto block = it.block();
       auto succs = get_ordered_goto_and_branch_succs(block);
-      auto defined_regs = pcn->defined_regs;
+      auto defined_regs_copy = pcn->defined_regs;
       pcn->defined_regs.clear();
       auto next_block = *targets.begin();
       for (auto succ_edge : succs) {
         auto succ_pcn = std::make_shared<PartialCandidateNode>();
         pcn->succs.emplace_back(succ_edge, succ_pcn);
-        succ_pcn->defined_regs = defined_regs;
+        succ_pcn->defined_regs = defined_regs_copy;
         if (succ_edge->target() != next_block) {
           auto succ_big_block = big_blocks::get_big_block(succ_edge->target());
           always_assert(succ_big_block);
@@ -1584,9 +832,9 @@ static bool explore_candidates_from(
           always_assert(
               is_uniquely_reached_via_pred(succ_big_block->get_first_block()));
           auto succ_ii = big_blocks::InstructionIterable(*succ_big_block);
-          if (!explore_candidates_from(config, illegal_ref, recurring_cores, pc,
-                                       succ_pcn.get(), succ_ii.begin(),
-                                       succ_ii.end())) {
+          if (!explore_candidates_from(
+                  reaching_initializeds, config, illegal_ref, recurring_cores,
+                  pc, succ_pcn.get(), succ_ii.begin(), succ_ii.end())) {
             return false;
           }
         }
@@ -1594,15 +842,10 @@ static bool explore_candidates_from(
           auto defined_regs_it = pcn->defined_regs.find(q.first);
           if (defined_regs_it == pcn->defined_regs.end()) {
             pcn->defined_regs.insert(q);
-          } else if (q.second < defined_regs_it->second) {
-            defined_regs_it->second = q.second;
-          }
-        }
-      }
-      for (auto& p : pcn->succs) {
-        for (auto& q : pcn->defined_regs) {
-          if (!p.second->defined_regs.count(q.first)) {
-            q.second = RegState::CONDITIONAL;
+          } else if (q.second.wide != defined_regs_it->second.wide) {
+            defined_regs_it->second.state = RegState::INCONSISTENT;
+          } else if (q.second.state < defined_regs_it->second.state) {
+            defined_regs_it->second.state = q.second.state;
           }
         }
       }
@@ -1632,16 +875,14 @@ static bool explore_candidates_from(
   return true;
 }
 
-#define STATS                                \
-  FOR_EACH(live_out_to_throw_edge)           \
-  FOR_EACH(live_out_multiple)                \
-  FOR_EACH(live_out_initialized_unknown)     \
-  FOR_EACH(live_out_initialized_conditional) \
-  FOR_EACH(live_out_initialized_not)         \
-  FOR_EACH(arg_type_not_computed)            \
-  FOR_EACH(arg_type_illegal)                 \
-  FOR_EACH(res_type_not_computed)            \
-  FOR_EACH(res_type_illegal)                 \
+#define STATS                        \
+  FOR_EACH(live_out_to_throw_edge)   \
+  FOR_EACH(live_out_multiple)        \
+  FOR_EACH(live_out_initialized_not) \
+  FOR_EACH(arg_type_not_computed)    \
+  FOR_EACH(arg_type_illegal)         \
+  FOR_EACH(res_type_not_computed)    \
+  FOR_EACH(res_type_illegal)         \
   FOR_EACH(overlap)
 
 struct FindCandidatesStats {
@@ -1661,19 +902,22 @@ static MethodCandidates find_method_candidates(
     const CandidateInstructionCoresSet& recurring_cores,
     FindCandidatesStats* stats) {
   MethodCandidates candidates;
-  LivenessFixpointIterator liveness_fp_iter(cfg);
-  liveness_fp_iter.run({});
+  Lazy<LivenessFixpointIterator> liveness_fp_iter([&cfg] {
+    auto res = std::make_unique<LivenessFixpointIterator>(cfg);
+    res->run({});
+    return res;
+  });
   LazyUnorderedMap<cfg::Block*,
                    std::unordered_map<IRInstruction*, LivenessDomain>>
       live_outs([&liveness_fp_iter](cfg::Block* block) {
         std::unordered_map<IRInstruction*, LivenessDomain> res;
-        auto live_out = liveness_fp_iter.get_live_out_vars_at(block);
+        auto live_out = liveness_fp_iter->get_live_out_vars_at(block);
         for (auto it = block->rbegin(); it != block->rend(); ++it) {
           if (it->type != MFLOW_OPCODE) {
             continue;
           }
           res.emplace(it->insn, live_out);
-          liveness_fp_iter.analyze_instruction(it->insn, &live_out);
+          liveness_fp_iter->analyze_instruction(it->insn, &live_out);
         }
         return res;
       });
@@ -1682,15 +926,25 @@ static MethodCandidates find_method_candidates(
       [&cfg, &liveness_fp_iter](cfg::Block* block) {
         auto res = LivenessDomain::bottom();
         for (auto e : cfg.get_succ_edges_of_type(block, cfg::EDGE_THROW)) {
-          res.join_with(liveness_fp_iter.get_live_in_vars_at(e->target()));
+          res.join_with(liveness_fp_iter->get_live_in_vars_at(e->target()));
         }
         return res;
       });
-  LazyTypeEnvironments type_environments([method, &cfg]() {
-    type_inference::TypeInference type_inference(cfg);
-    type_inference.run(method);
-    return type_inference.get_type_environments();
+  LazyReachingInitializedsEnvironments reaching_initializeds([method, &cfg]() {
+    reaching_initializeds::FixpointIterator fp_iter(cfg,
+                                                    method::is_init(method));
+    fp_iter.run({});
+    ReachingInitializedsEnvironments res;
+    for (auto block : cfg.blocks()) {
+      auto env = fp_iter.get_entry_state_at(block);
+      for (auto& mie : InstructionIterable(block)) {
+        res[mie.insn] = env;
+        fp_iter.analyze_instruction(mie.insn, &env);
+      }
+    }
+    return res;
   });
+  OutlinerTypeAnalysis type_analysis(method);
   auto big_blocks = big_blocks::get_big_blocks(cfg);
   // Along big blocks, we are assigning consecutive indices to instructions.
   // We'll use this to manage ranges of instructions that need to get
@@ -1736,11 +990,11 @@ static MethodCandidates find_method_candidates(
             return;
           }
           std::vector<std::pair<reg_t, IRInstruction*>> live_out_consts;
-          boost::optional<reg_t> out_reg;
+          boost::optional<std::pair<reg_t, bool>> out_reg;
           if (!pc.root.defined_regs.empty()) {
             LivenessDomain live_out;
             if (next_block) {
-              live_out = liveness_fp_iter.get_live_in_vars_at(next_block);
+              live_out = liveness_fp_iter->get_live_in_vars_at(next_block);
             } else {
               live_out = live_outs[it.block()].at(it->insn);
             }
@@ -1754,6 +1008,7 @@ static MethodCandidates find_method_candidates(
                 return;
               }
               if (live_out.contains(p.first)) {
+                always_assert(p.second.state != RegState::INCONSISTENT);
                 if (out_reg) {
                   TRACE(ISO, 4,
                         "[invoke sequence outliner] [bail out] Cannot have "
@@ -1761,29 +1016,15 @@ static MethodCandidates find_method_candidates(
                   lstats.live_out_multiple++;
                   return;
                 }
-                if (p.second == RegState::UNKNOWN) {
-                  TRACE(ISO, 4,
-                        "[invoke sequence outliner] [bail out] Cannot return "
-                        "object with unknown initialization state");
-                  lstats.live_out_initialized_unknown++;
-                  return;
-                }
-                if (p.second == RegState::CONDITIONAL) {
-                  TRACE(ISO, 4,
-                        "[invoke sequence outliner] [bail out] Cannot return "
-                        "conditionally initialized");
-                  lstats.live_out_initialized_conditional++;
-                  return;
-                }
-                if (p.second == RegState::UNINITIALIZED) {
+                if (p.second.state == RegState::UNINITIALIZED) {
                   TRACE(ISO, 4,
                         "[invoke sequence outliner] [bail out] Cannot return "
                         "uninitialized");
                   lstats.live_out_initialized_not++;
                   return;
                 }
-                always_assert(p.second == RegState::INITIALIZED);
-                out_reg = p.first;
+                always_assert(p.second.state == RegState::INITIALIZED);
+                out_reg = std::make_pair(p.first, p.second.wide);
               }
             }
           }
@@ -1792,7 +1033,7 @@ static MethodCandidates find_method_candidates(
             // instruction would be
             return;
           }
-          auto c = normalize(method, type_environments, pc, out_reg);
+          auto c = normalize(type_analysis, pc, out_reg);
           if (std::find(c.arg_types.begin(), c.arg_types.end(), nullptr) !=
               c.arg_types.end()) {
             TRACE(ISO, 4,
@@ -1844,7 +1085,9 @@ static MethodCandidates find_method_candidates(
             lstats.overlap++;
           } else {
             cmls.push_back((CandidateMethodLocation){
-                pc.root.insns.front(), first_block, out_reg, ranges});
+                pc.root.insns.front(), first_block,
+                out_reg ? boost::optional<reg_t>(out_reg->first) : boost::none,
+                ranges});
           }
         };
     auto ii = big_blocks::InstructionIterable(big_block);
@@ -1854,8 +1097,9 @@ static MethodCandidates find_method_candidates(
         continue;
       }
       PartialCandidate pc;
-      explore_candidates_from(config, illegal_ref, recurring_cores, &pc,
-                              &pc.root, it, end, &explored_callback);
+      explore_candidates_from(reaching_initializeds, config, illegal_ref,
+                              recurring_cores, &pc, &pc.root, it, end,
+                              &explored_callback);
     }
   }
 
@@ -2097,7 +1341,7 @@ struct CandidateWithInfo {
 // of code units / bytes) when outlining them.
 // Candidates are identified by numerical candidate ids to make things
 // deterministic (as opposed to a pointer) and provide an efficient
-// identificiation mechanism.
+// identification mechanism.
 static void get_beneficial_candidates(
     const InstructionSequenceOutlinerConfig& config,
     PassManager& mgr,
@@ -2517,7 +1761,15 @@ static void rewrite_at_location(DexMethod* outlined_method,
   std::function<void(const CandidateNode& cn,
                      big_blocks::InstructionIterator it)>
       walk;
-  walk = [&walk, first_arg_reg, &last_arg_reg, &arg_regs, &cfg_mutation](
+  auto gather_arg_regs = [first_arg_reg, &last_arg_reg,
+                          &arg_regs](reg_t mapped_reg, reg_t reg) {
+    if (mapped_reg >= first_arg_reg &&
+        (!last_arg_reg || mapped_reg > *last_arg_reg)) {
+      last_arg_reg = mapped_reg;
+      arg_regs.push_back(reg);
+    }
+  };
+  walk = [&walk, &gather_arg_regs, &cml, &cfg_mutation](
              const CandidateNode& cn, big_blocks::InstructionIterator it) {
     cfg::Block* last_block{nullptr};
     for (size_t insn_idx = 0; insn_idx < cn.insns.size();
@@ -2525,16 +1777,14 @@ static void rewrite_at_location(DexMethod* outlined_method,
       auto& ci = cn.insns.at(insn_idx);
       always_assert(it->insn->opcode() == ci.core.opcode);
       for (size_t i = 0; i < ci.srcs.size(); i++) {
-        auto mapped_reg = ci.srcs.at(i);
-        if (mapped_reg >= first_arg_reg &&
-            (!last_arg_reg || mapped_reg > *last_arg_reg)) {
-          last_arg_reg = mapped_reg;
-          arg_regs.push_back(it->insn->src(i));
-        }
+        gather_arg_regs(ci.srcs.at(i), it->insn->src(i));
       }
       if (!opcode::is_move_result_any(it->insn->opcode())) {
         cfg_mutation.remove(it.unwrap());
       }
+    }
+    if (cn.succs.empty() && cn.res_reg) {
+      gather_arg_regs(*cn.res_reg, *cml.out_reg);
     }
     if (!cn.succs.empty()) {
       always_assert(last_block != nullptr);
