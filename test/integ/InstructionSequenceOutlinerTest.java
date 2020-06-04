@@ -590,6 +590,38 @@ class InstructionSequenceOutlinerTest {
       return new Base();
     }
 
+    public Object cfg_with_joinable_object_res1() {
+      int x = 500;
+      switch (x) {
+        case 1:
+          println("1", "2", "3");
+          return new Sub1();
+        case 2:
+          println("2", "3", "4");
+          return new Sub2();
+        case 3:
+          println("3", "4", "5");
+          return new Sub3();
+      }
+      return null;
+    }
+
+    public Object cfg_with_joinable_object_res2() {
+      int x = 600;
+      switch (x) {
+        case 1:
+          println("1", "2", "3");
+          return new Sub1();
+        case 2:
+          println("2", "3", "4");
+          return new Sub2();
+        case 3:
+          println("3", "4", "5");
+          return new Sub3();
+      }
+      return null;
+    }
+
     public void cfg_with_object_arg1() {
       int x = 500;
       Sub3 s = new Sub3();

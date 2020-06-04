@@ -7,6 +7,8 @@
 
 #include "OutlinerTypeAnalysis.h"
 
+#include "DexTypeEnvironment.h"
+
 namespace outliner_impl {
 
 OutlinerTypeAnalysis::OutlinerTypeAnalysis(DexMethod* method)
@@ -917,6 +919,27 @@ const DexType* OutlinerTypeAnalysis::get_const_insns_type_demand(
   return narrowed_type_demand;
 }
 
+static const DexType* compute_joined_type(
+    const std::unordered_set<const DexType*>& types) {
+  boost::optional<dtv_impl::DexTypeValue> joined_type_value;
+  for (auto t : types) {
+    if (!type::is_object(t)) {
+      return nullptr;
+    }
+    auto type_value = dtv_impl::DexTypeValue(t);
+    if (joined_type_value) {
+      if (joined_type_value->join_with(type_value) ==
+          sparta::AbstractValueKind::Top) {
+        return nullptr;
+      }
+      always_assert(joined_type_value->get_dex_type());
+    } else {
+      joined_type_value = type_value;
+    }
+  }
+  return joined_type_value ? joined_type_value->get_dex_type() : nullptr;
+}
+
 // Compute the (widened) type of all given definitions.
 const DexType* OutlinerTypeAnalysis::get_type_of_defs(
     const std::vector<const IRInstruction*>& defs) {
@@ -1024,9 +1047,15 @@ const DexType* OutlinerTypeAnalysis::get_type_of_defs(
     }
   }
 
-  if (types.size() != 1) {
+  if (types.size() > 1) {
+    // TODO: Consider folding the above attempts to reduce the types set
+    // into DexTypeValue.
+    return compute_joined_type(types);
+  }
+  if (types.empty()) {
     return nullptr;
   }
+  always_assert(types.size() == 1);
 
   // Give up when we have an incompatible constant.
   // TODO: Do some careful widening.
