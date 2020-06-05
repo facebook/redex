@@ -12,7 +12,7 @@
 #include "ConstantPropagationTestUtil.h"
 #include "IRAssembler.h"
 
-TEST(ConstantPropagation, ArrayLengthNonNegative) {
+TEST_F(ConstantPropagationTest, ArrayLengthNonNegative) {
   auto code = assembler::ircode_from_string(R"(
     (
       (load-param-object v0)
@@ -39,7 +39,7 @@ TEST(ConstantPropagation, ArrayLengthNonNegative) {
             assembler::to_s_expr(expected_code.get()));
 }
 
-TEST(ConstantPropagation, DereferenceWithoutThrowBlock) {
+TEST_F(ConstantPropagationTest, DereferenceWithoutThrowBlock) {
   auto code = assembler::ircode_from_string(R"(
     (
       (load-param-object v0)
@@ -66,7 +66,7 @@ TEST(ConstantPropagation, DereferenceWithoutThrowBlock) {
             assembler::to_s_expr(expected_code.get()));
 }
 
-TEST(ConstantPropagation, DereferenceWithThrowBlock) {
+TEST_F(ConstantPropagationTest, DereferenceWithThrowBlock) {
   auto code = assembler::ircode_from_string(R"(
     (
       (load-param-object v0)
@@ -139,7 +139,7 @@ TEST_F(ConstantPropagationTest, NullCheckCastYieldsNull) {
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
-TEST(ConstantPropagation, JumpToImmediateNext) {
+TEST_F(ConstantPropagationTest, JumpToImmediateNext) {
   auto code = assembler::ircode_from_string(R"(
     (
      (load-param v0)
@@ -206,7 +206,7 @@ TEST_F(ConstantPropagationTest, InstanceOfNull) {
 }
 
 // A typical case where a non-default block is uniquely reachable.
-TEST(ConstantPropagation, Switch1) {
+TEST_F(ConstantPropagationTest, Switch1) {
   auto code = assembler::ircode_from_string(R"(
     (
      (const v0 1)
@@ -248,7 +248,7 @@ TEST(ConstantPropagation, Switch1) {
 }
 
 // Default block also has a unreachable label.
-TEST(ConstantPropagation, Switch2) {
+TEST_F(ConstantPropagationTest, Switch2) {
   auto code = assembler::ircode_from_string(R"(
     (
      (const v0 1)
@@ -292,7 +292,7 @@ TEST(ConstantPropagation, Switch2) {
 }
 
 // Multiple unreachables labels fall into a block
-TEST(ConstantPropagation, Switch3) {
+TEST_F(ConstantPropagationTest, Switch3) {
   auto code = assembler::ircode_from_string(R"(
     (
      (const v0 1)
@@ -335,7 +335,7 @@ TEST(ConstantPropagation, Switch3) {
 }
 
 // When reachable and unreachable fall into a same block
-TEST(ConstantPropagation, Switch4) {
+TEST_F(ConstantPropagationTest, Switch4) {
   auto code = assembler::ircode_from_string(R"(
     (
      (const v0 1)
@@ -379,7 +379,7 @@ TEST(ConstantPropagation, Switch4) {
 
 // Except default block, all are unreachable
 // Switch is just deleted.
-TEST(ConstantPropagation, Switch5) {
+TEST_F(ConstantPropagationTest, Switch5) {
   auto code = assembler::ircode_from_string(R"(
     (
      (const v0 3)
@@ -420,7 +420,7 @@ TEST(ConstantPropagation, Switch5) {
 
 // Except default block with a switch target, all are unreachable.
 // Switch is just deleted.
-TEST(ConstantPropagation, Switch6) {
+TEST_F(ConstantPropagationTest, Switch6) {
   auto code = assembler::ircode_from_string(R"(
     (
      (const v0 2)
@@ -461,7 +461,7 @@ TEST(ConstantPropagation, Switch6) {
 }
 
 // A uniquely non-default case with constant.
-TEST(ConstantPropagation, SwitchOnExactConstant) {
+TEST_F(ConstantPropagationTest, SwitchOnExactConstant) {
   auto code = assembler::ircode_from_string(R"(
     (
       (const v0 1)
@@ -495,7 +495,7 @@ TEST(ConstantPropagation, SwitchOnExactConstant) {
             assembler::to_s_expr(expected_code.get()));
 }
 
-TEST(ConstantPropagation, SwitchOnInterval) {
+TEST_F(ConstantPropagationTest, SwitchOnInterval) {
   auto code = assembler::ircode_from_string(R"(
     (
       (load-param v0)
@@ -522,7 +522,7 @@ TEST(ConstantPropagation, SwitchOnInterval) {
 
 // A uniquely non-default case with non-constant.
 // Do not optimize this since default is reachable.
-TEST(ConstantPropagation, Switch8) {
+TEST_F(ConstantPropagationTest, Switch8) {
   auto code = assembler::ircode_from_string(R"(
     (
       (load-param v0)
@@ -557,7 +557,7 @@ TEST(ConstantPropagation, Switch8) {
 }
 
 // Remove dead switch if no non-default block exists.
-TEST(ConstantPropagation, Switch9) {
+TEST_F(ConstantPropagationTest, Switch9) {
   auto code = assembler::ircode_from_string(R"(
     (
       (load-param v0)
@@ -582,7 +582,7 @@ TEST(ConstantPropagation, Switch9) {
             assembler::to_s_expr(expected_code.get()));
 }
 
-TEST(ConstantPropagation, WhiteBox1) {
+TEST_F(ConstantPropagationTest, WhiteBox1) {
   auto code = assembler::ircode_from_string(R"( (
      (load-param v0)
 
@@ -618,7 +618,7 @@ TEST(ConstantPropagation, WhiteBox1) {
   EXPECT_EQ(exit_state.get<SignedConstantDomain>(3), SignedConstantDomain(0));
 }
 
-TEST(ConstantPropagation, WhiteBox2) {
+TEST_F(ConstantPropagationTest, WhiteBox2) {
   auto code = assembler::ircode_from_string(R"(
     (
      (load-param v0)
@@ -647,7 +647,7 @@ TEST(ConstantPropagation, WhiteBox2) {
   EXPECT_EQ(exit_state.get<SignedConstantDomain>(1), SignedConstantDomain(0));
 }
 
-TEST(ConstantPropagation, ForwardBranchesIf) {
+TEST_F(ConstantPropagationTest, ForwardBranchesIf) {
   auto code = assembler::ircode_from_string(R"(
     (
       (load-param v0)
@@ -680,7 +680,7 @@ TEST(ConstantPropagation, ForwardBranchesIf) {
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
-TEST(ConstantPropagation, ForwardBranchesIfSideEffectFreeComputation) {
+TEST_F(ConstantPropagationTest, ForwardBranchesIfSideEffectFreeComputation) {
   auto code = assembler::ircode_from_string(R"(
     (
       (load-param v0)
@@ -714,7 +714,7 @@ TEST(ConstantPropagation, ForwardBranchesIfSideEffectFreeComputation) {
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
-TEST(ConstantPropagation, ForwardBranchesIfSideEffectingComputation) {
+TEST_F(ConstantPropagationTest, ForwardBranchesIfSideEffectingComputation) {
   auto code = assembler::ircode_from_string(R"(
     (
       (load-param v0)
@@ -754,7 +754,7 @@ TEST(ConstantPropagation, ForwardBranchesIfSideEffectingComputation) {
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
-TEST(ConstantPropagation, ForwardBranchesSwitch) {
+TEST_F(ConstantPropagationTest, ForwardBranchesSwitch) {
   auto code = assembler::ircode_from_string(R"(
     (
       (load-param v0)
@@ -803,3 +803,4 @@ TEST(ConstantPropagation, ForwardBranchesSwitch) {
 )");
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
+
