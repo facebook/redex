@@ -119,6 +119,10 @@ class WholeProgramState {
   }
 
  private:
+  void analyze_clinits_and_ctors(const Scope&,
+                                 const global::GlobalTypeAnalyzer&,
+                                 DexTypeFieldPartition*);
+
   void collect(const Scope& scope, const global::GlobalTypeAnalyzer&);
 
   void collect_field_types(
@@ -131,6 +135,8 @@ class WholeProgramState {
       const DexTypeEnvironment& env,
       const DexMethod* method,
       ConcurrentMap<const DexMethod*, std::vector<DexTypeDomain>>* method_tmp);
+
+  bool is_reachable(const global::GlobalTypeAnalyzer&, const DexMethod*) const;
 
   // Track the set of fields that we can correctly analyze.
   // The unknown fields can be written to by non-dex code or through reflection.

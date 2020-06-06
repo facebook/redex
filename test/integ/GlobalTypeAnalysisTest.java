@@ -227,35 +227,71 @@ class TestH {
     return mBase;
   }
 
-  Base rereturnSubOne() {
-    return returnSubOne();
-  }
+  Base rereturnSubOne() { return returnSubOne(); }
 
-  Base foo() {
-    return rereturnSubOne();
-  }
+  Base foo() { return rereturnSubOne(); }
 
   Base returnSubTwo() {
     mBase = new SubTwo();
     return mBase;
   }
 
-  Base rereturnSubTwo() {
-    return returnSubTwo();
-  }
+  Base rereturnSubTwo() { return returnSubTwo(); }
 
-  Base bar() {
-    return rereturnSubTwo();
-  }
+  Base bar() { return rereturnSubTwo(); }
 
-  Base baz() {
-    return BASE;
-  }
+  Base baz() { return BASE; }
 
   static void main() {
-    TestH t = new TestH();
+    final TestH t = new TestH();
     t.foo();
     t.bar();
     t.baz();
+  }
+}
+
+/*
+ * Nullness inference for ifields on class with multiple ctors
+ */
+class TestI {
+  static class Foo {
+    String yield() { return "foo"; }
+  }
+
+  static class One {
+    final Foo m1;
+    Foo m2;
+
+    One(final Foo f1, final Foo f2) {
+      m1 = f1;
+      m2 = f2;
+    }
+    // Unreachable
+    One(final Foo f1) { m1 = f1; }
+    String yield() { return m1.yield() + m2.yield(); }
+  }
+
+  static class Two {
+    final Foo m1;
+    Foo m2;
+
+    Two(final Foo f1, final Foo f2) {
+      m1 = f1;
+      m2 = f2;
+    }
+    Two(final Foo f1) { m1 = f1; }
+    String yield() { return m1.yield() + m2.yield(); }
+  }
+
+  static void main() {
+    Foo f1 = new Foo();
+    Foo f2 = new Foo();
+    One one = new One(f1, f2);
+    one.yield();
+
+    Two two = new Two(f1, f2);
+    two.yield();
+    two = new Two(f2);
+    two.yield();
   }
 }

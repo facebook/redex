@@ -95,6 +95,8 @@ class GlobalTypeAnalyzer : public sparta::ParallelMonotonicFixpointIterator<
 
   const call_graph::Graph& get_call_graph() { return m_call_graph; }
 
+  bool is_reachable(const DexMethod* method) const;
+
  private:
   std::unique_ptr<const WholeProgramState> m_wps;
   call_graph::Graph m_call_graph;
