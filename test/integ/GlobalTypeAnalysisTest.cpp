@@ -290,38 +290,3 @@ TEST_F(GlobalTypeAnalysisTest, ClinitFieldAnalyzerTest) {
             SingletonDexTypeDomain(get_type("TestH$Base")));
   EXPECT_EQ(rtype.get_set_domain(), get_small_set_domain({"TestH$Base"}));
 }
-
-TEST_F(GlobalTypeAnalysisTest, IFieldsNullnessTest) {
-  auto scope = build_class_scope(stores);
-  set_root_method("Lcom/facebook/redextest/TestI;.main:()V");
-  GlobalTypeAnalysis analysis;
-  auto gta = analysis.analyze(scope);
-  auto wps = gta->get_whole_program_state();
-
-  auto one_m1 = get_field("TestI$One;.m1:Lcom/facebook/redextest/TestI$Foo;");
-  auto ftype = wps.get_field_type(one_m1);
-  EXPECT_FALSE(ftype.is_top());
-  EXPECT_TRUE(ftype.is_not_null());
-  EXPECT_EQ(ftype.get_single_domain(),
-            SingletonDexTypeDomain(get_type("TestI$Foo")));
-  auto one_m2 = get_field("TestI$One;.m2:Lcom/facebook/redextest/TestI$Foo;");
-  ftype = wps.get_field_type(one_m2);
-  EXPECT_FALSE(ftype.is_top());
-  EXPECT_TRUE(ftype.is_not_null());
-  EXPECT_EQ(ftype.get_single_domain(),
-            SingletonDexTypeDomain(get_type("TestI$Foo")));
-
-  auto two_m1 = get_field("TestI$Two;.m1:Lcom/facebook/redextest/TestI$Foo;");
-  ftype = wps.get_field_type(two_m1);
-  EXPECT_FALSE(ftype.is_top());
-  EXPECT_TRUE(ftype.is_not_null());
-  EXPECT_EQ(ftype.get_single_domain(),
-            SingletonDexTypeDomain(get_type("TestI$Foo")));
-
-  auto two_m2 = get_field("TestI$Two;.m2:Lcom/facebook/redextest/TestI$Foo;");
-  ftype = wps.get_field_type(two_m2);
-  EXPECT_FALSE(ftype.is_top());
-  EXPECT_TRUE(ftype.is_nullable());
-  EXPECT_EQ(ftype.get_single_domain(),
-            SingletonDexTypeDomain(get_type("TestI$Foo")));
-}
