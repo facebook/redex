@@ -430,7 +430,16 @@ def run_redex_binary(state, term_handler):
         print("cd %s && %s" % (os.getcwd(), " ".join(prefix + list(map(quote, args)))))
         sys.exit()
 
-    env = logger.setup_trace_for_child(os.environ)
+    env = os.environ.copy()
+    if state.args.quiet:
+        # Remove TRACE if it exists.
+        env.pop("TRACE", None)
+    else:
+        # Check whether TRACE is set. If not, use "TIME:1,PM:1".
+        if "TRACE" not in env:
+            env["TRACE"] = "TIME:1,PM:1"
+
+    env = logger.setup_trace_for_child(env)
     logger.flush()
 
     add_extra_environment_args(env)
@@ -655,7 +664,7 @@ Given an APK, produce a better APK!
         help="Path to proguard mapping.txt for deobfuscating names",
     )
 
-    parser.add_argument("-q", "--printseeds", nargs="?", help="File to print seeds to")
+    parser.add_argument("--printseeds", nargs="?", help="File to print seeds to")
 
     parser.add_argument(
         "--used-js-assets",
@@ -779,6 +788,13 @@ Given an APK, produce a better APK!
         "--reset-zip-timestamps",
         action="store_true",
         help="Reset zip timestamps for deterministic output",
+    )
+
+    parser.add_argument(
+        "-q",
+        "--quiet",
+        action="store_true",
+        help="Do not be verbose, and override TRACE.",
     )
 
     return parser
