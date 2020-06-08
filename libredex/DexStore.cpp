@@ -9,6 +9,7 @@
 #include <iostream>
 #include <json/json.h>
 
+#include "CppUtil.h"
 #include "DexStore.h"
 #include "DexUtil.h"
 
@@ -85,6 +86,18 @@ XStoreRefs::XStoreRefs(const DexStoresVector& stores) {
       }
     }
   }
+}
+
+bool XStoreRefs::illegal_ref_load_types(const DexType* location,
+                                        const DexClass* cls) const {
+  std::unordered_set<DexType*> types;
+  cls->gather_load_types(types);
+  for (auto* t : types) {
+    if (illegal_ref(location, t)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 XDexRefs::XDexRefs(const DexStoresVector& stores) {
