@@ -1277,6 +1277,8 @@ class DexClass {
   void gather_callsites(std::vector<DexCallSite*>& lcallsite) const;
   void gather_methodhandles(std::vector<DexMethodHandle*>& lmethodhandle) const;
 
+  void gather_load_types(std::unordered_set<DexType*>& ltype) const;
+
   // Whether to optimize for perf, instead of space.
   // This bit is only set by the InterDex pass and not available earlier.
   bool is_perf_sensitive() const { return m_perf_sensitive; }
