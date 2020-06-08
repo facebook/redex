@@ -124,6 +124,16 @@ GlobalTypeAnalyzer::get_local_analysis(const DexMethod* method) const {
                         args.get(CURRENT_PARTITION_LABEL));
 }
 
+bool GlobalTypeAnalyzer::is_reachable(const DexMethod* method) const {
+  auto args = ArgumentTypePartition::bottom();
+
+  if (m_call_graph.has_node(method)) {
+    args = this->get_entry_state_at(m_call_graph.node(method));
+  }
+  auto args_domain = args.get(CURRENT_PARTITION_LABEL);
+  return !args_domain.is_bottom();
+}
+
 using CombinedAnalyzer =
     InstructionAnalyzerCombiner<local::ClinitFieldAnalyzer,
                                 WholeProgramAwareAnalyzer,

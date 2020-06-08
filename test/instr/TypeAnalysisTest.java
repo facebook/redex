@@ -52,6 +52,9 @@ public class TypeAnalysisTest {
   Base mNotNull;
   Base mNullable;
 
+  @KeepForRedexTest
+  public TypeAnalysisTest() {}
+
   void setBase(Base b) { mBase = b; }
 
   Base getBase() { return mBase; }

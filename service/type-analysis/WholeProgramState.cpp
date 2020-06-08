@@ -85,51 +85,6 @@ void set_ifields_in_partition(const DexClass* cls,
   }
 }
 
-/*
- * We initialize the type mapping of all fields using the result of the local
- * FieldTypeEnvironment of clinits and ctors. We do so in order to correctly
- * initialize the NullnessDomain for fields. A static or instance field is
- * implicitly null if not initialized with non-null value in clinit or ctor
- * respectively.
- *
- * The implicit null value is not visible to the rest of the program before the
- * execution of clinit or ctor. That's why we don't want to simply initialize
- * all fields as null. That way we are overly conservative. A final instance
- * field that is always initialized in ctors is not nullable to the rest of the
- * program.
- *
- * TODO:
- * There are exceptions of course. That is before the end of the ctor, our
- * nullness result is not sound. If a ctor calls another method, that method
- * could access an uninitialiezd instance field on the class. We don't cover
- * this case correctly right now.
- */
-void analyze_clinits_and_ctors(const Scope& scope,
-                               const global::GlobalTypeAnalyzer& gta,
-                               DexTypeFieldPartition* field_partition) {
-  for (DexClass* cls : scope) {
-    auto clinit = cls->get_clinit();
-    if (clinit) {
-      IRCode* code = clinit->get_code();
-      auto& cfg = code->cfg();
-      auto lta = gta.get_local_analysis(clinit);
-      auto env = lta->get_exit_state_at(cfg.exit_block());
-      set_sfields_in_partition(cls, env, field_partition);
-    } else {
-      set_sfields_in_partition(cls, DexTypeEnvironment::top(), field_partition);
-    }
-
-    const auto& ctors = cls->get_ctors();
-    for (auto* ctor : ctors) {
-      IRCode* code = ctor->get_code();
-      auto& cfg = code->cfg();
-      auto lta = gta.get_local_analysis(ctor);
-      auto env = lta->get_exit_state_at(cfg.exit_block());
-      set_ifields_in_partition(cls, env, field_partition);
-    }
-  }
-}
-
 bool analyze_gets_helper(const WholeProgramState* whole_program_state,
                          const IRInstruction* insn,
                          DexTypeEnvironment* env) {
@@ -170,14 +125,12 @@ WholeProgramState::WholeProgramState(
   // TODO: revisit this for multiple callee call graph.
   // Put non-root non true virtual methods in known methods.
   for (const auto& non_true_virtual : non_true_virtuals) {
-    if (!root(non_true_virtual) && non_true_virtual->get_code() &&
-        returns_reference(non_true_virtual)) {
+    if (!root(non_true_virtual) && non_true_virtual->get_code()) {
       m_known_methods.emplace(non_true_virtual);
     }
   }
   walk::code(scope, [&](DexMethod* method, const IRCode&) {
-    if (!method->is_virtual() && method->get_code() &&
-        returns_reference(method)) {
+    if (!method->is_virtual() && method->get_code()) {
       // Put non virtual methods in known methods.
       m_known_methods.emplace(method);
     }
@@ -187,6 +140,55 @@ WholeProgramState::WholeProgramState(
   collect(scope, gta);
 }
 
+/*
+ * We initialize the type mapping of all fields using the result of the local
+ * FieldTypeEnvironment of clinits and ctors. We do so in order to correctly
+ * initialize the NullnessDomain for fields. A static or instance field is
+ * implicitly null if not initialized with non-null value in clinit or ctor
+ * respectively.
+ *
+ * The implicit null value is not visible to the rest of the program before the
+ * execution of clinit or ctor. That's why we don't want to simply initialize
+ * all fields as null. That way we are overly conservative. A final instance
+ * field that is always initialized in ctors is not nullable to the rest of the
+ * program.
+ *
+ * TODO:
+ * There are exceptions of course. That is before the end of the ctor, our
+ * nullness result is not sound. If a ctor calls another method, that method
+ * could access an uninitialiezd instance field on the class. We don't cover
+ * this case correctly right now.
+ */
+void WholeProgramState::analyze_clinits_and_ctors(
+    const Scope& scope,
+    const global::GlobalTypeAnalyzer& gta,
+    DexTypeFieldPartition* field_partition) {
+  for (DexClass* cls : scope) {
+    auto clinit = cls->get_clinit();
+    if (clinit) {
+      IRCode* code = clinit->get_code();
+      auto& cfg = code->cfg();
+      auto lta = gta.get_local_analysis(clinit);
+      auto env = lta->get_exit_state_at(cfg.exit_block());
+      set_sfields_in_partition(cls, env, field_partition);
+    } else {
+      set_sfields_in_partition(cls, DexTypeEnvironment::top(), field_partition);
+    }
+
+    const auto& ctors = cls->get_ctors();
+    for (auto* ctor : ctors) {
+      if (!is_reachable(gta, ctor)) {
+        continue;
+      }
+      IRCode* code = ctor->get_code();
+      auto& cfg = code->cfg();
+      auto lta = gta.get_local_analysis(ctor);
+      auto env = lta->get_exit_state_at(cfg.exit_block());
+      set_ifields_in_partition(cls, env, field_partition);
+    }
+  }
+}
+
 void WholeProgramState::collect(const Scope& scope,
                                 const global::GlobalTypeAnalyzer& gta) {
   ConcurrentMap<const DexField*, std::vector<DexTypeDomain>> fields_tmp;
@@ -194,6 +196,9 @@ void WholeProgramState::collect(const Scope& scope,
   walk::parallel::methods(scope, [&](DexMethod* method) {
     IRCode* code = method->get_code();
     if (code == nullptr) {
+      return;
+    }
+    if (!is_reachable(gta, method)) {
       return;
     }
     auto& cfg = code->cfg();
@@ -273,6 +278,11 @@ void WholeProgramState::collect_return_types(
                      [type](const DexMethod*,
                             std::vector<DexTypeDomain>& s,
                             bool /* exists */) { s.emplace_back(type); });
+}
+
+bool WholeProgramState::is_reachable(const global::GlobalTypeAnalyzer& gta,
+                                     const DexMethod* method) const {
+  return !m_known_methods.count(method) || gta.is_reachable(method);
 }
 
 std::string WholeProgramState::print_field_partition_diff(
