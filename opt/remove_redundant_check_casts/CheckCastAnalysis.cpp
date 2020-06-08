@@ -507,9 +507,14 @@ CheckCastReplacements CheckCastAnalysis::collect_redundant_checks_replacement()
       // We don't want to weaken a class to an interface for performance reason.
       // Re-compute the weakened type in that case, excluding interfaces.
       if (is_not_interfacy(insn->get_type()) && !is_not_interfacy(check_type)) {
+        auto orig_check_type = check_type;
         check_type = weaken_to_demand(insn, insn->get_type(),
                                       /* weaken_to_not_interfacy */ true);
-        always_assert(is_not_interfacy(check_type));
+        always_assert_log(is_not_interfacy(check_type),
+                          "Weakened type is not interfacy: insn_type=%s "
+                          "orig_check_type=%s -> check_type=%s",
+                          SHOW(insn->get_type()), SHOW(orig_check_type),
+                          SHOW(check_type));
       }
       if (check_type != insn->get_type()) {
         redundant_check_casts.emplace_back(
