@@ -181,7 +181,8 @@ void analyze_reflection(const Scope& scope) {
     }
   };
 
-  walk::code(scope, [&](DexMethod* method, IRCode& code) {
+  std::mutex mutation_mutex;
+  walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
     std::unique_ptr<ReflectionAnalysis> analysis = nullptr;
     for (auto& mie : InstructionIterable(code)) {
       IRInstruction* insn = mie.insn;
@@ -227,6 +228,11 @@ void analyze_reflection(const Scope& scope) {
           refl_type == GET_DECLARED_CONSTRUCTOR) {
         param_types = analysis->get_method_params(insn);
       }
+
+      // Grab a lock before making any changes to avoid race conditions. All
+      // code above is read-only and runs in parallel
+      std::lock_guard<std::mutex> l(mutation_mutex);
+
       TRACE(PGR, 4, "SRA ANALYZE: %s: type:%d %s.%s cls: %d %s %s str: %s",
             insn->get_method()->get_name()->str().c_str(), refl_type,
             method_class_name.c_str(), method_name.c_str(), arg_cls->obj_kind,
