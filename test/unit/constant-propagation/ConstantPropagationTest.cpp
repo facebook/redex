@@ -803,4 +803,3 @@ TEST_F(ConstantPropagationTest, ForwardBranchesSwitch) {
 )");
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
-
