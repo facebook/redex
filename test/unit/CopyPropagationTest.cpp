@@ -94,6 +94,7 @@ TEST_F(CopyPropagationTest, noRemapRange) {
   code->set_registers_size(7);
 
   copy_propagation_impl::Config config;
+  config.regalloc_has_run = true;
   CopyPropagation(config).run(code.get());
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -857,5 +858,39 @@ TEST_F(CopyPropagationTest, instance_of_kills_type_demands) {
     )
 )");
 
+  EXPECT_CODE_EQ(code, expected_code.get());
+}
+
+TEST_F(CopyPropagationTest, ResueConst) {
+  auto method = assembler::method_from_string(R"(
+    (method (public static) "LFoo;.bar:()Ljava/lang/Object;"
+    (
+      (const v2 1)
+      (const v3 1)  ; this can be deleted
+      (const v4 1)  ; this can be deleted
+      (const v5 1)  ; this can be deleted
+      (const v6 1)  ; this can be deleted
+      (invoke-static (v1 v2 v3 v4 v5 v6) "LFoo;.bar:(IIIIII)V")
+    )
+  )
+)");
+
+  auto code = method->get_code();
+  code->set_registers_size(4);
+
+  copy_propagation_impl::Config config;
+  config.regalloc_has_run = false;
+  CopyPropagation(config).run(code, method);
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (const v2 1)
+      (const v3 1)
+      (const v4 1)
+      (const v5 1)
+      (const v6 1)
+      (invoke-static (v1 v2 v2 v2 v2 v2) "LFoo;.bar:(IIIIII)V")
+    )
+)");
   EXPECT_CODE_EQ(code, expected_code.get());
 }

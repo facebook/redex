@@ -213,9 +213,13 @@ class AliasFixpointIterator final
         // the same register:
         // http://androidxref.com/6.0.0_r5/xref/art/runtime/verifier/register_line.h#325
         !is_monitor(op)) {
+      reg_t max_addressable = RESULT_REGISTER;
       for (size_t i = 0; i < insn->srcs_size(); ++i) {
         reg_t r = insn->src(i);
-        reg_t rep = get_rep(r, aliases, get_max_addressable(insn, i));
+        if (m_config.regalloc_has_run) {
+          max_addressable = get_max_addressable(insn, i);
+        }
+        reg_t rep = get_rep(r, aliases, max_addressable);
         if (rep != r) {
           // Make sure the upper half of the wide pair is also aliased.
           if (insn->src_is_wide(i)) {
@@ -456,18 +460,16 @@ Stats CopyPropagation::run(IRCode* code, DexMethod* method) {
   // which instructions are in this category is by temporarily denormalizing
   // the registers.
   std::unordered_set<const IRInstruction*> range_set;
-  reg_t max_dest = 0;
-  for (auto& mie : InstructionIterable(*cfg)) {
-    auto* insn = mie.insn;
-    if (opcode::has_range_form(insn->opcode())) {
-      insn->denormalize_registers();
-      if (needs_range_conversion(insn)) {
-        range_set.emplace(insn);
+  if (m_config.regalloc_has_run) {
+    for (auto& mie : InstructionIterable(*cfg)) {
+      auto* insn = mie.insn;
+      if (opcode::has_range_form(insn->opcode())) {
+        insn->denormalize_registers();
+        if (needs_range_conversion(insn)) {
+          range_set.emplace(insn);
+        }
+        insn->normalize_registers();
       }
-      insn->normalize_registers();
-    }
-    if (insn->has_dest() && insn->dest() > max_dest) {
-      max_dest = insn->dest();
     }
   }
 
