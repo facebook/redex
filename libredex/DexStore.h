@@ -191,6 +191,12 @@ class XStoreRefs {
     return illegal_ref(get_store_idx(location), type);
   }
 
+  // Similar to the above, but correctly checks the class hierarchy. This
+  // may be expensive, and only includes the classes that are guaranteed
+  // to be resolved when the given class is loaded, but not further.
+  bool illegal_ref_load_types(const DexType* location,
+                              const DexClass* cls) const;
+
   /**
    * Verify that a 'type' can be moved in the DexStore identified by
    * 'store_idx'.
