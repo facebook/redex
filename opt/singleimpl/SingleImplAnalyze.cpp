@@ -280,13 +280,23 @@ void AnalysisImpl::escape_with_sfields() {
  */
 void AnalysisImpl::escape_cross_stores() {
   for (auto const& intf_it : single_impls) {
-    // REVIEW: not sure how accurate this is. I mean it is the right check
-    //         if the code was written correctly, that is, if the interface
-    //         itself is not creating a bad cross reference already.
-    //         Good enough for now and possible forever
-    //         (in which case remove this comment)
     if (xstores.illegal_ref(intf_it.first, intf_it.second.cls)) {
       escape_interface(intf_it.first, CROSS_STORES);
+      continue;
+    }
+    // Be conservative: it is possible that the class has cross-store
+    // references itself. Replacing the interface might increase the
+    // chances of that blowing up.
+    auto cls = type_class(intf_it.second.cls);
+    if (cls != nullptr) {
+      if (xstores.illegal_ref_load_types(intf_it.first, cls)) {
+        escape_interface(intf_it.first, CROSS_STORES);
+        std::cerr << "Warning: found " << show(cls)
+                  << " which is by itself not a cross-store violation for "
+                  << show(intf_it.first)
+                  << ", but depends on other types that are!" << std::endl;
+        continue;
+      }
     }
   }
 }
