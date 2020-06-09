@@ -1118,6 +1118,30 @@ void DexClass::gather_types(std::vector<DexType*>& ltype) const {
   if (m_anno) m_anno->gather_types(ltype);
 }
 
+void DexClass::gather_load_types(std::unordered_set<DexType*>& ltype) const {
+  if (is_external()) {
+    return;
+  }
+  if (ltype.count(m_self) != 0) {
+    return;
+  }
+  ltype.emplace(m_self);
+  {
+    auto superclass = type_class_internal(m_super_class);
+    if (superclass != nullptr) {
+      superclass->gather_load_types(ltype);
+    }
+  }
+  if (m_interfaces) {
+    for (auto* itype : *m_interfaces) {
+      auto iclass = type_class_internal(itype);
+      if (iclass != nullptr) {
+        iclass->gather_load_types(ltype);
+      }
+    }
+  }
+}
+
 void DexClass::gather_strings(std::vector<DexString*>& lstring,
                               bool exclude_loads) const {
   for (auto const& m : m_dmethods) {

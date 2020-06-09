@@ -6,8 +6,12 @@
  */
 
 #include "DexClass.h"
+
+#include <boost/optional.hpp>
+
 #include "IRAssembler.h"
 #include "RedexTest.h"
+#include "SimpleClassHierarchy.h"
 
 class DexClassTest : public RedexTest {};
 
@@ -25,12 +29,12 @@ TEST_F(DexClassTest, testUniqueMethodName) {
       type, DexString::make_string("bar"), method->get_proto());
   EXPECT_EQ(newname->str(), "barr$0");
   DexMethod::make_method("LFoo;.barr$0:(I)V");
-  newname = DexMethod::get_unique_name(
-      type, DexString::make_string("bar"), method->get_proto());
+  newname = DexMethod::get_unique_name(type, DexString::make_string("bar"),
+                                       method->get_proto());
   EXPECT_EQ(newname->str(), "barr$1");
 
-  newname = DexMethod::get_unique_name(
-      type, DexString::make_string("baz"), method->get_proto());
+  newname = DexMethod::get_unique_name(type, DexString::make_string("baz"),
+                                       method->get_proto());
   EXPECT_EQ(newname->str(),
             "baz"); // no conflict, expect baz not to be suffixed
 }
@@ -45,11 +49,78 @@ TEST_F(DexClassTest, testUniqueFieldName) {
       type, DexString::make_string("bar"), DexType::make_type("I"));
   EXPECT_EQ(newname->str(), "bar"); // no conflict, should not be renamed
   DexField::make_field("LFoo;.bar:I");
-  newname = DexField::get_unique_name(
-      type, DexString::make_string("bar"), DexType::make_type("I"));
+  newname = DexField::get_unique_name(type, DexString::make_string("bar"),
+                                      DexType::make_type("I"));
   EXPECT_EQ(newname->str(), "barr$0");
   DexField::make_field("LFoo;.barr$0:I");
-  newname = DexField::get_unique_name(
-      type, DexString::make_string("bar"), DexType::make_type("I"));
+  newname = DexField::get_unique_name(type, DexString::make_string("bar"),
+                                      DexType::make_type("I"));
   EXPECT_EQ(newname->str(), "barr$1");
+}
+
+TEST_F(DexClassTest, gather_load_types) {
+  auto helper = redex::test::SimpleClassHierarchy{};
+
+  auto make_expected_type_set = [](std::initializer_list<DexClass*> l) {
+    std::unordered_set<DexType*> ret;
+    for (auto c : l) {
+      ret.emplace(c->get_type());
+    }
+    return ret;
+  };
+
+  // Test that (internal) superclasses and interfaces are in, but
+  // field and method types are not.
+
+  {
+    std::unordered_set<DexType*> types;
+    helper.foo->gather_load_types(types);
+    auto expected = make_expected_type_set({helper.foo});
+    EXPECT_EQ(expected, types);
+  }
+
+  {
+    std::unordered_set<DexType*> types;
+    helper.bar->gather_load_types(types);
+    auto expected = make_expected_type_set({helper.foo, helper.bar});
+    EXPECT_EQ(expected, types);
+  }
+
+  {
+    std::unordered_set<DexType*> types;
+    helper.baz->gather_load_types(types);
+    auto expected =
+        make_expected_type_set({helper.foo, helper.bar, helper.baz});
+    EXPECT_EQ(expected, types);
+  }
+
+  {
+    std::unordered_set<DexType*> types;
+    helper.qux->gather_load_types(types);
+    auto expected = make_expected_type_set(
+        {helper.foo, helper.bar, helper.baz, helper.qux});
+    EXPECT_EQ(expected, types);
+  }
+
+  {
+    std::unordered_set<DexType*> types;
+    helper.iquux->gather_load_types(types);
+    auto expected = make_expected_type_set({helper.iquux});
+    EXPECT_EQ(expected, types);
+  }
+
+  {
+    std::unordered_set<DexType*> types;
+    helper.quuz->gather_load_types(types);
+    auto expected =
+        make_expected_type_set({helper.iquux, helper.foo, helper.quuz});
+    EXPECT_EQ(expected, types);
+  }
+
+  {
+    std::unordered_set<DexType*> types;
+    helper.xyzzy->gather_load_types(types);
+    auto expected = make_expected_type_set({helper.xyzzy});
+    EXPECT_EQ(expected, types);
+  }
 }
