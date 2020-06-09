@@ -6,6 +6,8 @@
  */
 
 #include "ConstantPropagationAnalysis.h"
+
+#include <boost/functional/hash.hpp>
 #include <set>
 
 // Note: MSVC STL doesn't implement std::isnan(Integral arg). We need to provide
@@ -1024,14 +1026,7 @@ struct IfZeroMeetWith {
   boost::optional<sign_domain::Interval> left_zero_meet_interval{boost::none};
 };
 
-namespace {
-// Try to work around GCC bug.
-struct IROpcodeHash {
-  inline size_t operator()(const IROpcode& op) const { return (size_t)op; }
-};
-} // namespace
-
-static const std::unordered_map<IROpcode, IfZeroMeetWith, IROpcodeHash>
+static const std::unordered_map<IROpcode, IfZeroMeetWith, boost::hash<IROpcode>>
     if_zero_meet_with{
         {OPCODE_IF_EQZ, {sign_domain::Interval::EQZ}},
         {OPCODE_IF_NEZ, {sign_domain::Interval::NEZ}},
