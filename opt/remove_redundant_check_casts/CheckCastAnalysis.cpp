@@ -274,7 +274,7 @@ DexType* CheckCastAnalysis::get_type_demand(IRInstruction* insn,
 }
 
 // This function is conservative and returns false if type_class is missing.
-// A type is "interfacy" if its an interface, or an array of an interface
+// A type is "interfacy" if it's an interface, or an array of an interface.
 static bool is_not_interfacy(DexType* type) {
   auto cls = type_class(type::get_element_type_if_array(type));
   return cls && !is_interface(cls);
@@ -507,14 +507,8 @@ CheckCastReplacements CheckCastAnalysis::collect_redundant_checks_replacement()
       // We don't want to weaken a class to an interface for performance reason.
       // Re-compute the weakened type in that case, excluding interfaces.
       if (is_not_interfacy(insn->get_type()) && !is_not_interfacy(check_type)) {
-        auto orig_check_type = check_type;
         check_type = weaken_to_demand(insn, insn->get_type(),
                                       /* weaken_to_not_interfacy */ true);
-        always_assert_log(is_not_interfacy(check_type),
-                          "Weakened type is not interfacy: insn_type=%s "
-                          "orig_check_type=%s -> check_type=%s",
-                          SHOW(insn->get_type()), SHOW(orig_check_type),
-                          SHOW(check_type));
       }
       if (check_type != insn->get_type()) {
         redundant_check_casts.emplace_back(
