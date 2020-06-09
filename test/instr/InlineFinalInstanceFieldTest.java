@@ -22,17 +22,17 @@ class MixedTypeInstance {
   public int m_not_deletable;
   public int m_deletable;
   public MixedTypeInstance() {
+    m_deletable = 0;
     change0();
     m_final_accessed = 2;
     change2();
-    m_final_inlineable = m_final_accessed;
     m_non_final_accessed = 4;
     change4();
     m_non_final_accessed = 5;
     change5();
-    m_non_final_inlineable = m_non_final_accessed;
+    m_final_inlineable = 0;
+    m_non_final_inlineable = 5;
     m_non_final_accessed = 6;
-    m_deletable = 0;
     m_not_deletable = 2;
     m_not_deletable = 0;
   }
@@ -49,7 +49,7 @@ class MixedTypeInstance {
     m_changed_5 = m_non_final_accessed;
   }
   public int return_final_inlineable() {
-    // Should return 2
+    // Should return 0
     return m_final_inlineable;
   }
   public int return_non_final_inlineable() {
@@ -247,8 +247,8 @@ public class InlineFinalInstanceFieldTest {
   @Test
   public void testMixedTypeInstance() {
     MixedTypeInstance a = new MixedTypeInstance();
-    assertThat(a.return_final_inlineable()).isEqualTo(2);
-    assertThat(a.m_final_inlineable).isEqualTo(2);
+    assertThat(a.return_final_inlineable()).isEqualTo(0);
+    assertThat(a.m_final_inlineable).isEqualTo(0);
     assertThat(a.return_non_final_inlineable()).isEqualTo(5);
     assertThat(a.m_non_final_inlineable).isEqualTo(5);
     assertThat(a.m_final_accessed).isEqualTo(2);
@@ -257,7 +257,6 @@ public class InlineFinalInstanceFieldTest {
     assertThat(a.m_changed_2).isEqualTo(2);
     assertThat(a.m_changed_4).isEqualTo(4);
     assertThat(a.m_changed_5).isEqualTo(5);
-    assertThat(a.m_deletable).isEqualTo(0);
     assertThat(a.m_not_deletable).isEqualTo(0);
   }
 

@@ -172,6 +172,10 @@ class InitFieldAnalyzer final
   static bool analyze_iput(const DexType* class_under_init,
                            const IRInstruction* insn,
                            ConstantEnvironment* env);
+
+  static bool analyze_invoke(const DexType* class_under_init,
+                             const IRInstruction* insn,
+                             ConstantEnvironment* env);
 };
 
 struct EnumFieldAnalyzerState {
