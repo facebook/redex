@@ -202,7 +202,7 @@ class Edge final {
   void set_src(Block* b) { m_src = b; }
   void set_target(Block* b) { m_target = b; }
   void set_type(EdgeType new_type) {
-    always_assert_log(!(m_type == EDGE_THROW ^ new_type == EDGE_THROW),
+    always_assert_log(!((m_type == EDGE_THROW) ^ (new_type == EDGE_THROW)),
                       "Can't convert to or from throw edge");
     m_type = new_type;
   }
