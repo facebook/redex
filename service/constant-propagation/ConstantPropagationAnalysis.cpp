@@ -564,6 +564,21 @@ bool InitFieldAnalyzer::analyze_iput(const DexType* class_under_init,
   return false;
 }
 
+bool InitFieldAnalyzer::analyze_invoke(const DexType* class_under_init,
+                                       const IRInstruction* insn,
+                                       ConstantEnvironment* env) {
+  // If the class initializer invokes a method on its own class, that
+  // method can modify the class' fields. We would have to inspect the
+  // method to find out. Here we take the conservative approach of
+  // marking all fields as unknown after the invoke.
+  auto opcode = insn->opcode();
+  if ((opcode == OPCODE_INVOKE_VIRTUAL || opcode == OPCODE_INVOKE_DIRECT) &&
+      class_under_init == insn->get_method()->get_class()) {
+    env->clear_field_environment();
+  }
+  return false;
+}
+
 bool EnumFieldAnalyzer::analyze_sget(const EnumFieldAnalyzerState&,
                                      const IRInstruction* insn,
                                      ConstantEnvironment* env) {
