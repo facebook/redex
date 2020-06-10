@@ -406,6 +406,7 @@ redex_all_SOURCES = \
 	service/method-dedup/ConstantLifting.cpp \
 	service/method-dedup/ConstantValue.cpp \
 	service/method-dedup/MethodDedup.cpp \
+	service/method-dedup/NormalizeConstructor.cpp \
 	service/method-dedup/TypeTags.cpp \
 	service/method-inliner/CFGInliner.cpp \
 	service/method-inliner/ConstructorAnalysis.cpp \
