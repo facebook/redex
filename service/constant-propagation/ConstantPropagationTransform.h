@@ -52,7 +52,9 @@ class Transform final {
     }
   };
 
-  explicit Transform(Config config = Config()) : m_config(config) {}
+  explicit Transform(Config config = Config())
+      : m_config(config),
+        m_kotlin_null_check_assertions(get_kotlin_null_assertions()) {}
 
   // Apply transformations on uneditable cfg
   // TODO: Migrate all to use editable cfg via `apply` method
@@ -94,6 +96,9 @@ class Transform final {
   bool eliminate_redundant_put(const ConstantEnvironment&,
                                const WholeProgramState& wps,
                                const IRList::iterator&);
+  bool eliminate_redundant_null_check(const ConstantEnvironment&,
+                                      const WholeProgramState& wps,
+                                      const IRList::iterator&);
   bool replace_with_throw(const ConstantEnvironment&,
                           const IRList::iterator&,
                           IRCode* code,
@@ -130,6 +135,7 @@ class Transform final {
   std::unordered_set<IRInstruction*> m_redundant_move_results;
   bool m_rebuild_cfg{0};
   Stats m_stats;
+  std::unordered_set<DexMethodRef*> m_kotlin_null_check_assertions;
 };
 
 /*

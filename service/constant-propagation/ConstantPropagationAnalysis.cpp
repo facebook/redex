@@ -105,6 +105,23 @@ bool is_zero(boost::optional<SignedConstantDomain> src) {
 
 namespace constant_propagation {
 
+boost::optional<size_t> get_null_check_object_index(
+    const IRInstruction* insn,
+    const std::unordered_set<DexMethodRef*>& kotlin_null_check_assertions) {
+  switch (insn->opcode()) {
+  case OPCODE_INVOKE_STATIC: {
+    auto method = insn->get_method();
+    if (kotlin_null_check_assertions.count(method)) {
+      return 0;
+    }
+    break;
+  }
+  default:
+    break;
+  }
+  return boost::none;
+}
+
 boost::optional<size_t> get_dereferenced_object_src_index(
     const IRInstruction* insn) {
   switch (insn->opcode()) {
@@ -1006,6 +1023,10 @@ void FixpointIterator::analyze_instruction(const IRInstruction* insn,
 void FixpointIterator::analyze_instruction_no_throw(
     const IRInstruction* insn, ConstantEnvironment* current_state) const {
   auto src_index = get_dereferenced_object_src_index(insn);
+  if (!src_index) {
+    src_index =
+        get_null_check_object_index(insn, m_kotlin_null_check_assertions);
+  }
   if (!src_index) {
     return;
   }

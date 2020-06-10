@@ -12,9 +12,28 @@
 #include "ConstantEnvironment.h"
 #include "IRCode.h"
 #include "InstructionAnalyzer.h"
+#include "KotlinNullCheckMethods.h"
+#include "MethodUtil.h"
 #include "MonotonicFixpointIterator.h"
 
 namespace constant_propagation {
+
+// This returns methods that are used in Kotlin null assertion.
+// These null assertions will take the object that they are checking for
+// nullness as first argument and returns void. The value of the object will
+// not be null beyond this program point in the execution path.
+inline std::unordered_set<DexMethodRef*> get_kotlin_null_assertions() {
+  return {method::kotlin_jvm_internal_Intrinsics_checkParameterIsNotNull(),
+          kotlin_nullcheck_wrapper::
+              kotlin_jvm_internal_Intrinsics_WrCheckParameter(),
+          method::kotlin_jvm_internal_Intrinsics_checExpressionValueIsNotNull(),
+          kotlin_nullcheck_wrapper::
+              kotlin_jvm_internal_Intrinsics_WrCheckExpression()};
+}
+
+boost::optional<size_t> get_null_check_object_index(
+    const IRInstruction* insn,
+    const std::unordered_set<DexMethodRef*>& kotlin_null_check_assertions);
 
 namespace intraprocedural {
 
@@ -30,7 +49,8 @@ class FixpointIterator final
       const cfg::ControlFlowGraph& cfg,
       InstructionAnalyzer<ConstantEnvironment> insn_analyzer)
       : MonotonicFixpointIterator(cfg),
-        m_insn_analyzer(std::move(insn_analyzer)) {}
+        m_insn_analyzer(std::move(insn_analyzer)),
+        m_kotlin_null_check_assertions(get_kotlin_null_assertions()) {}
 
   ConstantEnvironment analyze_edge(
       const EdgeId&,
@@ -48,6 +68,7 @@ class FixpointIterator final
 
  private:
   InstructionAnalyzer<ConstantEnvironment> m_insn_analyzer;
+  std::unordered_set<DexMethodRef*> m_kotlin_null_check_assertions;
 };
 
 } // namespace intraprocedural

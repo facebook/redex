@@ -58,6 +58,28 @@ void Transform::generate_const_param(const ConstantEnvironment& env,
                               replacement.end());
   ++m_stats.added_param_const;
 }
+bool Transform::eliminate_redundant_null_check(
+    const ConstantEnvironment& env,
+    const WholeProgramState& /* unused */,
+    const IRList::iterator& it) {
+  auto* insn = it->insn;
+  switch (insn->opcode()) {
+  case OPCODE_INVOKE_STATIC: {
+    if (auto index =
+            get_null_check_object_index(insn, m_kotlin_null_check_assertions)) {
+      auto val = env.get(insn->src(*index)).maybe_get<SignedConstantDomain>();
+      if (val && val->interval() == sign_domain::Interval::NEZ) {
+        m_deletes.push_back(it);
+        return true;
+      }
+    }
+    break;
+  }
+  default:
+    break;
+  }
+  return false;
+}
 
 bool Transform::eliminate_redundant_put(const ConstantEnvironment& env,
                                         const WholeProgramState& wps,
@@ -433,6 +455,7 @@ Transform::Stats Transform::apply_on_uneditable_cfg(
     for (auto& mie : InstructionIterable(block)) {
       auto it = code->iterator_to(mie);
       bool any_changes = eliminate_redundant_put(env, wps, it) ||
+                         eliminate_redundant_null_check(env, wps, it) ||
                          replace_with_throw(env, it, code, &temp_reg);
       auto* insn = mie.insn;
       intra_cp.analyze_instruction(insn, &env, insn == last_insn->insn);

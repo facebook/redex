@@ -71,4 +71,16 @@ DexMethod* java_lang_Integer_intValue() {
       DexMethod::make_method("Ljava/lang/Integer;.intValue:()I"));
 }
 
+DexMethod* kotlin_jvm_internal_Intrinsics_checkParameterIsNotNull() {
+  return static_cast<DexMethod*>(DexMethod::make_method(
+      "Lkotlin/jvm/internal/Intrinsics;.checkParameterIsNotNull:(Ljava/lang/"
+      "Object;Ljava/lang/String;)V"));
+}
+
+DexMethod* kotlin_jvm_internal_Intrinsics_checExpressionValueIsNotNull() {
+  return static_cast<DexMethod*>(DexMethod::make_method(
+      "Lkotlin/jvm/internal/Intrinsics;.checkExpressionValueIsNotNull:(Ljava/"
+      "lang/Object;Ljava/lang/String;)V"));
+}
+
 }; // namespace method
