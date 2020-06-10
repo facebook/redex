@@ -25,6 +25,13 @@ TEST_F(ConstructorDedupTest, dedup) {
   walk::parallel::methods(scope, [&](DexMethod* method) {
     IRTypeChecker checker(method);
     checker.run();
+    if (checker.fail()) {
+      std::string msg = checker.what();
+      fprintf(stderr, "ABORT! Inconsistency found in Dex code for %s.\n %s\n",
+              SHOW(method), msg.c_str());
+      fprintf(stderr, "Code:\n%s\n", SHOW(method->get_code()->cfg()));
+      exit(EXIT_FAILURE);
+    }
     for (auto& mie : InstructionIterable(method->get_code())) {
       auto insn = mie.insn;
       if (insn->has_method()) {

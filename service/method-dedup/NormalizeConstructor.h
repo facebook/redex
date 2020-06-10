@@ -45,8 +45,7 @@ class DexClass;
 namespace method_dedup {
 
 /**
- * A general method for deduping constructors for each class and fix all the
- * callsite. This is currently only used by test case.
+ * Deduplicate non-root constructors for each class and fix all the callsites.
  */
 uint32_t dedup_constructors(const std::vector<DexClass*>& classes,
                             const std::vector<DexClass*>& scope);

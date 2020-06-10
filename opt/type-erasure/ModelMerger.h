@@ -34,6 +34,10 @@ class ModelMerger {
 
   void update_redex_stats(const std::string& prefix, PassManager& mgr) const;
 
+  void increase_ctor_dedupped_stats(int64_t value) {
+    m_stats.m_num_ctor_dedupped += value;
+  }
+
   static std::string s_mapping_file;
 
  protected:

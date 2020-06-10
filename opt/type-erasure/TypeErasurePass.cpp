@@ -12,6 +12,7 @@
 #include "InterDexPass.h"
 #include "Model.h"
 #include "ModelMerger.h"
+#include "NormalizeConstructor.h"
 #include "PluginRegistry.h"
 
 namespace {
@@ -315,6 +316,8 @@ void TypeErasurePass::erase_model(const ModelSpec& spec,
   auto mm = get_model_merger();
   auto merger_classes =
       mm->merge_model(scope, stores, model, m_max_num_dispatch_target);
+  auto num_dedupped = method_dedup::dedup_constructors(merger_classes, scope);
+  mm->increase_ctor_dedupped_stats(num_dedupped);
   mm->update_redex_stats(spec.class_name_prefix, mgr);
 
   delete mm;
