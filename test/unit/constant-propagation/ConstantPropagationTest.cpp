@@ -22,7 +22,7 @@ TEST_F(ConstantPropagationTest, ArrayLengthNonNegative) {
       (:next)
       (return-void)
     )
-)");
+  )");
 
   do_const_prop(code.get());
 
@@ -33,7 +33,7 @@ TEST_F(ConstantPropagationTest, ArrayLengthNonNegative) {
       (move-result-pseudo v0)
       (return-void)
     )
-)");
+  )");
 
   EXPECT_EQ(assembler::to_s_expr(code.get()),
             assembler::to_s_expr(expected_code.get()));
@@ -49,7 +49,7 @@ TEST_F(ConstantPropagationTest, DereferenceWithoutThrowBlock) {
       (:next)
       (return-void)
     )
-)");
+  )");
 
   do_const_prop(code.get());
 
@@ -60,7 +60,7 @@ TEST_F(ConstantPropagationTest, DereferenceWithoutThrowBlock) {
       (move-result-pseudo v1)
       (return-void)
     )
-)");
+  )");
 
   EXPECT_EQ(assembler::to_s_expr(code.get()),
             assembler::to_s_expr(expected_code.get()));
@@ -82,7 +82,7 @@ TEST_F(ConstantPropagationTest, DereferenceWithThrowBlock) {
       (:next2)
       (return-void)
     )
-)");
+  )");
 
   do_const_prop(code.get());
 
@@ -99,7 +99,7 @@ TEST_F(ConstantPropagationTest, DereferenceWithThrowBlock) {
       (:next2)
       (return-void)
     )
-)");
+  )");
 
   EXPECT_EQ(assembler::to_s_expr(code.get()),
             assembler::to_s_expr(expected_code.get()));
@@ -119,7 +119,7 @@ TEST_F(ConstantPropagationTest, NullCheckCastYieldsNull) {
      (:end)
      (return-void)
     )
-)");
+  )");
 
   do_const_prop(code.get());
 
@@ -135,7 +135,7 @@ TEST_F(ConstantPropagationTest, NullCheckCastYieldsNull) {
       (:end)
       (return-void)
     )
-)");
+  )");
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
@@ -153,7 +153,7 @@ TEST_F(ConstantPropagationTest, JumpToImmediateNext) {
      (:end)
      (return-void)
     )
-)");
+  )");
 
   do_const_prop(code.get());
 
@@ -167,7 +167,7 @@ TEST_F(ConstantPropagationTest, JumpToImmediateNext) {
      (:end)
      (return-void)
     )
-)");
+  )");
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
@@ -185,7 +185,7 @@ TEST_F(ConstantPropagationTest, InstanceOfNull) {
      (:end)
      (return-void)
     )
-)");
+  )");
 
   do_const_prop(code.get());
 
@@ -201,7 +201,7 @@ TEST_F(ConstantPropagationTest, InstanceOfNull) {
       (:end)
       (return-void)
     )
-)");
+  )");
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
@@ -223,7 +223,7 @@ TEST_F(ConstantPropagationTest, Switch1) {
      (return v1)
   )
 
-)");
+  )");
   do_const_prop(code.get());
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -241,7 +241,7 @@ TEST_F(ConstantPropagationTest, Switch1) {
      (const v1 300)
      (return v1)
     )
-)");
+  )");
 
   EXPECT_EQ(assembler::to_s_expr(code.get()),
             assembler::to_s_expr(expected_code.get()));
@@ -267,7 +267,7 @@ TEST_F(ConstantPropagationTest, Switch2) {
      (return v1)
   )
 
-)");
+  )");
   do_const_prop(code.get());
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -285,7 +285,7 @@ TEST_F(ConstantPropagationTest, Switch2) {
      (const v1 300)
      (return v1)
     )
-)");
+  )");
 
   EXPECT_EQ(assembler::to_s_expr(code.get()),
             assembler::to_s_expr(expected_code.get()));
@@ -310,7 +310,7 @@ TEST_F(ConstantPropagationTest, Switch3) {
      (const v1 300)
      (return v1)
     )
-)");
+  )");
   do_const_prop(code.get());
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -328,7 +328,7 @@ TEST_F(ConstantPropagationTest, Switch3) {
      (const v1 300)
      (return v1)
     )
-)");
+  )");
 
   EXPECT_EQ(assembler::to_s_expr(code.get()),
             assembler::to_s_expr(expected_code.get()));
@@ -353,7 +353,7 @@ TEST_F(ConstantPropagationTest, Switch4) {
      (const v1 300)
      (return v1)
     )
-)");
+  )");
   do_const_prop(code.get());
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -371,7 +371,7 @@ TEST_F(ConstantPropagationTest, Switch4) {
      (const v1 300)
      (return v1)
     )
-)");
+  )");
 
   EXPECT_EQ(assembler::to_s_expr(code.get()),
             assembler::to_s_expr(expected_code.get()));
@@ -396,7 +396,7 @@ TEST_F(ConstantPropagationTest, Switch5) {
      (const v1 300)
      (return v1)
     )
-)");
+  )");
   do_const_prop(code.get());
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -412,7 +412,7 @@ TEST_F(ConstantPropagationTest, Switch5) {
      (const v1 300)
      (return v1)
     )
-)");
+  )");
 
   EXPECT_EQ(assembler::to_s_expr(code.get()),
             assembler::to_s_expr(expected_code.get()));
@@ -438,7 +438,7 @@ TEST_F(ConstantPropagationTest, Switch6) {
      (const v1 300)
      (return v1)
     )
-)");
+  )");
   do_const_prop(code.get());
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -454,7 +454,7 @@ TEST_F(ConstantPropagationTest, Switch6) {
      (const v1 300)
      (return v1)
     )
-)");
+  )");
 
   EXPECT_EQ(assembler::to_s_expr(code.get()),
             assembler::to_s_expr(expected_code.get()));
@@ -474,7 +474,7 @@ TEST_F(ConstantPropagationTest, SwitchOnExactConstant) {
       (const v1 200)
       (return v1)
     )
-)");
+  )");
   do_const_prop(code.get());
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -489,7 +489,7 @@ TEST_F(ConstantPropagationTest, SwitchOnExactConstant) {
       (const v1 200)
       (return v1)
     )
-)");
+  )");
 
   EXPECT_EQ(assembler::to_s_expr(code.get()),
             assembler::to_s_expr(expected_code.get()));
@@ -512,7 +512,7 @@ TEST_F(ConstantPropagationTest, SwitchOnInterval) {
       (const v1 200)
       (return v1)
     )
-)");
+  )");
 
   auto original = assembler::to_s_expr(code.get());
   do_const_prop(code.get());
@@ -535,7 +535,7 @@ TEST_F(ConstantPropagationTest, Switch8) {
       (const v1 200)
       (return v1)
     )
-)");
+  )");
   do_const_prop(code.get());
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -550,7 +550,7 @@ TEST_F(ConstantPropagationTest, Switch8) {
       (const v1 200)
       (return v1)
     )
-)");
+  )");
 
   EXPECT_EQ(assembler::to_s_expr(code.get()),
             assembler::to_s_expr(expected_code.get()));
@@ -567,7 +567,7 @@ TEST_F(ConstantPropagationTest, Switch9) {
       (const v1 200)
       (return v1)
     )
-)");
+  )");
   do_const_prop(code.get());
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -576,7 +576,7 @@ TEST_F(ConstantPropagationTest, Switch9) {
       (const v1 200)
       (return v1)
     )
-)");
+  )");
 
   EXPECT_EQ(assembler::to_s_expr(code.get()),
             assembler::to_s_expr(expected_code.get()));
@@ -597,7 +597,7 @@ TEST_F(ConstantPropagationTest, WhiteBox1) {
      (:if-true-label)
      (return-void)
     )
-)");
+  )");
 
   code->build_cfg(/* editable */ false);
   auto& cfg = code->cfg();
@@ -632,7 +632,7 @@ TEST_F(ConstantPropagationTest, WhiteBox2) {
      (:if-true-label)
      (return-void)
     )
-)");
+  )");
 
   code->build_cfg(/* editable */ false);
   auto& cfg = code->cfg();
@@ -663,7 +663,7 @@ TEST_F(ConstantPropagationTest, ForwardBranchesIf) {
       (:L3)
       (return-void)
     )
-)");
+  )");
 
   do_const_prop(code.get(), cp::ConstantPrimitiveAnalyzer(),
                 cp::Transform::Config(),
@@ -676,7 +676,7 @@ TEST_F(ConstantPropagationTest, ForwardBranchesIf) {
       (:L1)
       (return-void)
     )
-)");
+  )");
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
@@ -697,7 +697,7 @@ TEST_F(ConstantPropagationTest, ForwardBranchesIfSideEffectFreeComputation) {
       (:L3)
       (return-void)
     )
-)");
+  )");
 
   do_const_prop(code.get(), cp::ConstantPrimitiveAnalyzer(),
                 cp::Transform::Config(),
@@ -710,7 +710,7 @@ TEST_F(ConstantPropagationTest, ForwardBranchesIfSideEffectFreeComputation) {
       (:L1)
       (return-void)
     )
-)");
+  )");
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
@@ -732,7 +732,7 @@ TEST_F(ConstantPropagationTest, ForwardBranchesIfSideEffectingComputation) {
       (:L3)
       (return-void)
     )
-)");
+  )");
 
   do_const_prop(code.get(), cp::ConstantPrimitiveAnalyzer(),
                 cp::Transform::Config(),
@@ -750,7 +750,7 @@ TEST_F(ConstantPropagationTest, ForwardBranchesIfSideEffectingComputation) {
       (move-result-pseudo v0) ; thiss instruction isn't supported yet
       (goto :L3)
     )
-)");
+  )");
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
@@ -784,7 +784,7 @@ TEST_F(ConstantPropagationTest, ForwardBranchesSwitch) {
       (:END)
       (return-void)
     )
-)");
+  )");
 
   do_const_prop(code.get(), cp::ConstantPrimitiveAnalyzer(),
                 cp::Transform::Config(),
@@ -800,6 +800,60 @@ TEST_F(ConstantPropagationTest, ForwardBranchesSwitch) {
       (:L1)
       (return-void)
     )
-)");
+  )");
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+}
+
+TEST_F(ConstantPropagationTest, RedundantNullCheck) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (load-param v1)
+      (invoke-static (v0) "Lkotlin/jvm/internal/Intrinsics;.$WrCheckParameter:(Ljava/lang/Object;)V")
+      (invoke-static (v1) "Lkotlin/jvm/internal/Intrinsics;.$WrCheckParameter:(Ljava/lang/Object;)V")
+      (invoke-static (v0) "Lkotlin/jvm/internal/Intrinsics;.$WrCheckParameter:(Ljava/lang/Object;)V")
+      (return-void)
+    )
+  )");
+
+  do_const_prop(code.get(), cp::ConstantPrimitiveAnalyzer(),
+                cp::Transform::Config(),
+                /* editable_cfg */ false);
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (load-param v1)
+      (invoke-static (v0) "Lkotlin/jvm/internal/Intrinsics;.$WrCheckParameter:(Ljava/lang/Object;)V")
+      (invoke-static (v1) "Lkotlin/jvm/internal/Intrinsics;.$WrCheckParameter:(Ljava/lang/Object;)V")
+      (return-void)
+    )
+  )");
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+}
+
+TEST_F(ConstantPropagationTest, RedundantNullCheckCmp) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (invoke-static (v0) "Lkotlin/jvm/internal/Intrinsics;.$WrCheckParameter:(Ljava/lang/Object;)V")
+      (if-eqz v0 :L0)
+      (invoke-static (v0) "Lkotlin/jvm/internal/Intrinsics;.$WrCheckParameter:(Ljava/lang/Object;)V")
+      (:L0)
+      (return-void)
+    )
+  )");
+
+  do_const_prop(code.get(), cp::ConstantPrimitiveAnalyzer(),
+                cp::Transform::Config(),
+                /* editable_cfg */ false);
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (invoke-static (v0) "Lkotlin/jvm/internal/Intrinsics;.$WrCheckParameter:(Ljava/lang/Object;)V")
+      (return-void)
+    )
+  )");
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
