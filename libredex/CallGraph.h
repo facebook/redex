@@ -14,6 +14,10 @@
 #include "MonotonicFixpointIterator.h"
 #include "Resolver.h"
 
+namespace method_override_graph {
+class Graph;
+} // namespace method_override_graph
+
 /*
  * Call graph representation that implements the standard graph interface
  * API for use with fixpoint iteration algorithms.
@@ -138,6 +142,32 @@ class Graph final {
   std::shared_ptr<Node> m_entry;
   std::shared_ptr<Node> m_exit;
   std::unordered_map<const DexMethod*, NodeId> m_nodes;
+};
+
+class SingleCalleeStrategy : public BuildStrategy {
+ public:
+  explicit SingleCalleeStrategy(const Scope& scope);
+  CallSites get_callsites(const DexMethod* method) const override;
+  std::vector<const DexMethod*> get_roots() const override;
+
+ protected:
+  bool is_definitely_virtual(DexMethod* method) const;
+
+  const Scope& m_scope;
+  std::unordered_set<DexMethod*> m_non_virtual;
+  mutable MethodRefCache m_resolved_refs;
+};
+
+class CompleteCallGraphStrategy : public BuildStrategy {
+ public:
+  explicit CompleteCallGraphStrategy(const Scope& scope);
+  CallSites get_callsites(const DexMethod* method) const override;
+  std::vector<const DexMethod*> get_roots() const override;
+
+ protected:
+  const Scope& m_scope;
+  mutable MethodRefCache m_resolved_refs;
+  std::unique_ptr<const method_override_graph::Graph> m_method_override_graph;
 };
 
 // A static-method-only API for use with the monotonic fixpoint iterator.
