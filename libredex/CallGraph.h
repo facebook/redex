@@ -193,4 +193,7 @@ class GraphInterface {
   }
 };
 
+std::unordered_set<const DexMethod*> resolve_callees_in_graph(
+    const Graph& graph, const DexMethod* method, const IRInstruction* insn);
+
 } // namespace call_graph

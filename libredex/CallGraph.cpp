@@ -173,4 +173,22 @@ void Graph::add_edge(const NodeId& caller,
   callee->m_predecessors.emplace_back(edge);
 }
 
+std::unordered_set<const DexMethod*> resolve_callees_in_graph(
+    const Graph& graph, const DexMethod* method, const IRInstruction* insn) {
+  std::unordered_set<const DexMethod*> ret;
+  for (const auto& edge_id : graph.node(method)->callees()) {
+    auto it = edge_id->invoke_iterator();
+    if (it != IRList::iterator() && it->insn == insn) {
+      auto callee_node_id = edge_id->callee();
+      if (callee_node_id) {
+        auto callee = callee_node_id->method();
+        if (callee) {
+          ret.emplace(callee);
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 } // namespace call_graph
