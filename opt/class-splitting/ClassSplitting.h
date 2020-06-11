@@ -12,8 +12,6 @@
 struct ClassSplittingConfig {
   bool combine_target_classes_by_api_level{false};
   unsigned int relocated_methods_per_target_class{64};
-  bool use_method_weights{false};
-  bool use_method_profiles{true};
   float method_profiles_appear_percent_threshold{1};
   bool relocate_static_methods{true};
   bool relocate_non_static_direct_methods{true};
@@ -21,7 +19,7 @@ struct ClassSplittingConfig {
   bool relocate_true_virtual_methods{true};
   bool run_before_interdex{true};
   bool trampolines{true};
-  unsigned int trampoline_size_threshold{4};
+  unsigned int trampoline_size_threshold{100};
 };
 
 class ClassSplittingPass : public Pass {
@@ -35,10 +33,6 @@ class ClassSplittingPass : public Pass {
     bind("relocated_methods_per_target_class",
          m_config.relocated_methods_per_target_class,
          m_config.relocated_methods_per_target_class);
-    bind("use_method_weights", m_config.use_method_weights,
-         m_config.use_method_weights);
-    bind("use_method_profiles", m_config.use_method_profiles,
-         m_config.use_method_profiles);
     bind("method_profiles_appear_percent_threshold",
          m_config.method_profiles_appear_percent_threshold,
          m_config.method_profiles_appear_percent_threshold);
