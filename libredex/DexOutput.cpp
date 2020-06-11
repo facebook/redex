@@ -441,8 +441,9 @@ DexOutput::DexOutput(
     PositionMapper* pos_mapper,
     std::unordered_map<DexMethod*, uint64_t>* method_to_id,
     std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
-    PostLowering const* post_lowering)
-    : m_config_files(config_files) {
+    PostLowering const* post_lowering,
+    int min_sdk)
+    : m_config_files(config_files), m_min_sdk(min_sdk) {
   m_classes = classes;
   m_iodi_metadata = iodi_metadata;
   m_output = (uint8_t*)malloc(k_max_dex_size);
@@ -761,13 +762,13 @@ void DexOutput::emit_magic_locators() {
 
 void DexOutput::generate_type_data() {
   always_assert_log(
-      dodx->type_to_idx().size() < kMaxTypeRefs,
+      dodx->type_to_idx().size() < get_max_type_refs(m_min_sdk),
       "Trying to encode too many type refs in dex %lu: %lu (limit: %lu).\n"
       "NOTE: Please check InterDexPass config flags and set: "
       "`type_refs_limit: 32768`",
       m_dex_number,
       dodx->type_to_idx().size(),
-      kMaxTypeRefs);
+      get_max_type_refs(m_min_sdk));
 
   dex_type_id* typeids = (dex_type_id*)(m_output + hdr.type_ids_off);
   for (auto& p : dodx->type_to_idx()) {
@@ -2475,7 +2476,8 @@ dex_stats_t write_classes_to_dex(
     std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
     IODIMetadata* iodi_metadata,
     const std::string& dex_magic,
-    PostLowering const* post_lowering) {
+    PostLowering const* post_lowering,
+    int min_sdk) {
   const JsonWrapper& json_cfg = conf.get_json_config();
   bool force_single_dex = json_cfg.get("force_single_dex", false);
   if (force_single_dex) {
@@ -2508,19 +2510,10 @@ dex_stats_t write_classes_to_dex(
 
   TRACE(OPUT, 2, "[write_classes_to_dex][filename] %s", filename.c_str());
 
-  DexOutput dout = DexOutput(filename.c_str(),
-                             classes,
-                             locator_index,
-                             normal_primary_dex,
-                             store_number,
-                             dex_number,
-                             redex_options.debug_info_kind,
-                             iodi_metadata,
-                             conf,
-                             pos_mapper,
-                             method_to_id,
-                             code_debug_lines,
-                             post_lowering);
+  DexOutput dout = DexOutput(
+      filename.c_str(), classes, locator_index, normal_primary_dex,
+      store_number, dex_number, redex_options.debug_info_kind, iodi_metadata,
+      conf, pos_mapper, method_to_id, code_debug_lines, post_lowering, min_sdk);
 
   dout.prepare(string_sort_mode, code_sort_mode, conf, dex_magic);
   dout.write();

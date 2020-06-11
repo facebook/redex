@@ -138,7 +138,8 @@ dex_stats_t write_classes_to_dex(
     std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
     IODIMetadata* iodi_metadata,
     const std::string& dex_magic,
-    PostLowering const* post_lowering = nullptr);
+    PostLowering const* post_lowering = nullptr,
+    int min_sdk = 0);
 
 typedef bool (*cmp_dstring)(const DexString*, const DexString*);
 typedef bool (*cmp_dtype)(const DexType*, const DexType*);
@@ -322,6 +323,7 @@ class DexOutput {
   const ConfigFiles& m_config_files;
   std::unordered_set<std::string> m_method_sorting_whitelisted_substrings;
   bool m_force_class_data_end_of_file;
+  int m_min_sdk;
 
   void insert_map_item(uint16_t typeidx,
                        uint32_t size,
@@ -384,7 +386,8 @@ class DexOutput {
             std::unordered_map<DexMethod*, uint64_t>* method_to_id,
             std::unordered_map<DexCode*, std::vector<DebugLineItem>>*
                 code_debug_lines,
-            PostLowering const* post_lowering = nullptr);
+            PostLowering const* post_lowering = nullptr,
+            int min_sdk = 0);
   ~DexOutput();
   void prepare(SortMode string_mode,
                const std::vector<SortMode>& code_mode,
