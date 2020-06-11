@@ -23,7 +23,7 @@
  * Change the visibility of members accessed in a method.
  * We make everything public, except if a scope argument is given; then accessed
  * members in the same scope will not be made public (We could be more precise
- * and walks the inheritance hierarchy as needed.)
+ * and walk the inheritance hierarchy as needed.)
  */
 void change_visibility(DexMethod* method, DexType* scope = nullptr);
 
@@ -50,8 +50,20 @@ bool gather_invoked_methods_that_prevent_relocation(
  * Relocates the method only if
  * gather_invoked_methods_that_prevent_relocation returns true.
  * It also updates the visibility of the accessed members.
+ * NOTE: Does not check can_change_visibility_for_relocation.
+ * TODO: Consider integrating the full visibility check in
+ * gather_invoked_methods_that_prevent_relocation.
  */
 bool relocate_method_if_no_changes(DexMethod* method, DexType* to_type);
+
+/**
+ * Checks if visibility can be changed via change_visibility in a way that is
+ * suitable for relocate_method.
+ */
+bool can_change_visibility_for_relocation(const DexMethod* method);
+
+bool can_change_visibility_for_relocation(
+    const IRCode* code);
 
 /**
  * Merge the 2 visibility access flags. Return the most permissive visibility.

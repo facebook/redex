@@ -56,6 +56,10 @@ void CrossDexRelocator::gather_possibly_relocatable_methods(
       }
     }
 
+    if (!can_change_visibility_for_relocation(m)) {
+      return false;
+    }
+
     return true;
   };
 

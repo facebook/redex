@@ -279,6 +279,7 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
     if (!m->is_concrete() || m->is_external() || !m->get_code() ||
         !can_rename(m) || root(m) || m->rstate.no_optimizations() ||
         !gather_invoked_methods_that_prevent_relocation(m) ||
+        !can_change_visibility_for_relocation(m) ||
         !method::no_invoke_super(m) || m->rstate.is_generated()) {
       return false;
     }

@@ -214,11 +214,99 @@ void relocate_method(DexMethod* method, DexType* to_type) {
   to_cls->add_method(method);
 }
 
+bool can_change_visibility_for_relocation(const DexMethod* method) {
+  return can_change_visibility_for_relocation(method->get_code());
+}
+
+bool can_change_visibility_for_relocation(
+    const IRCode* code) {
+  // NODE: Keep in sync with change_visibility
+  always_assert(code != nullptr);
+
+  bool res{true};
+  editable_cfg_adapter::iterate(
+      const_cast<IRCode*>(code),
+      [&res](MethodItemEntry& mie) {
+        auto insn = mie.insn;
+
+        if (insn->has_field()) {
+          auto cls = type_class(insn->get_field()->get_class());
+          if (cls == nullptr || (cls->is_external() && !is_public(cls))) {
+            res = false;
+            return editable_cfg_adapter::LOOP_BREAK;
+          }
+          auto field =
+              resolve_field(insn->get_field(), is_sfield_op(insn->opcode())
+                                                   ? FieldSearch::Static
+                                                   : FieldSearch::Instance);
+          if (field == nullptr || (field->is_external() && !is_public(field))) {
+            res = false;
+            return editable_cfg_adapter::LOOP_BREAK;
+          }
+          cls = type_class(field->get_class());
+          if (cls->is_external() && !is_public(cls)) {
+            res = false;
+            return editable_cfg_adapter::LOOP_BREAK;
+          }
+        } else if (insn->has_method()) {
+          auto cls = type_class(insn->get_method()->get_class());
+          if (cls == nullptr || (cls->is_external() && !is_public(cls))) {
+            res = false;
+            return editable_cfg_adapter::LOOP_BREAK;
+          }
+          auto current_method =
+              resolve_method(insn->get_method(), opcode_to_search(insn));
+          if (current_method == nullptr &&
+              insn->opcode() == OPCODE_INVOKE_VIRTUAL &&
+              unknown_virtuals::is_method_known_to_be_public(
+                  insn->get_method())) {
+            return editable_cfg_adapter::LOOP_CONTINUE;
+          }
+          if (current_method == nullptr ||
+              (current_method->is_external() && !is_public(current_method))) {
+            res = false;
+            return editable_cfg_adapter::LOOP_BREAK;
+          }
+          cls = type_class(current_method->get_class());
+          if (cls->is_external() && !is_public(cls)) {
+            res = false;
+            return editable_cfg_adapter::LOOP_BREAK;
+          }
+        } else if (insn->has_type()) {
+          auto type = insn->get_type();
+          auto cls = type_class(type);
+          if (cls != nullptr && cls->is_external() && !is_public(cls)) {
+            res = false;
+            return editable_cfg_adapter::LOOP_BREAK;
+          }
+        }
+        return editable_cfg_adapter::LOOP_CONTINUE;
+      });
+  if (!res) {
+    return false;
+  }
+
+  std::vector<DexType*> types;
+  if (code->editable_cfg_built()) {
+    code->cfg().gather_catch_types(types);
+  } else {
+    code->gather_catch_types(types);
+  }
+  for (auto type : types) {
+    auto cls = type_class(type);
+    if (cls != nullptr && (cls->is_external() && !is_public(cls))) {
+      return false;
+    }
+  }
+  return true;
+}
+
 void change_visibility(DexMethod* method, DexType* scope) {
   change_visibility(method->get_code(), scope);
 }
 
 void change_visibility(IRCode* code, DexType* scope) {
+  // NOTE: Keep in sync with can_change_visibility_for_relocation
   always_assert(code != nullptr);
 
   editable_cfg_adapter::iterate(code, [scope](MethodItemEntry& mie) {
