@@ -112,6 +112,12 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
       return;
     }
 
+    prepare(cls, &trefs, should_not_relocate_methods_of_class);
+  }
+
+  void prepare(const DexClass* cls,
+               std::vector<DexType*>* trefs,
+               bool should_not_relocate_methods_of_class) {
     // Bail out if we just cannot or should not relocate methods of this class.
     if (!can_relocate(cls) || should_not_relocate_methods_of_class) {
       return;
@@ -152,7 +158,9 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
       ++target_class_info.size;
       sc.relocatable_methods.insert(
           {method, {target_class_info.target_cls, api_level}});
-      trefs.push_back(target_class_info.target_cls->get_type());
+      if (trefs != nullptr) {
+        trefs->push_back(target_class_info.target_cls->get_type());
+      }
       TRACE(CS, 4, "[class splitting] Method {%s} will be relocated to {%s}",
             SHOW(method), SHOW(target_class_info.target_cls));
     };
@@ -409,9 +417,91 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
 
 } // namespace
 
-void ClassSplittingPass::run_pass(DexStoresVector&,
+void ClassSplittingPass::run_before_interdex(DexStoresVector& stores,
+                                             ConfigFiles& conf,
+                                             PassManager& mgr) {
+  // We are going to simulate how the InterDex pass would invoke our plug-in in
+  // a way that can run before the actual InterDex pass. Then, the actual
+  // InterDex pass run can reshuffle the split-off classes across dexes
+  // properly, accounting for all the changes to refs from the beginning.
+  ClassSplittingInterDexPlugin class_splitting_plugin(
+      m_config, mgr, conf.get_method_profiles());
+  auto scope = build_class_scope(stores);
+  class_splitting_plugin.configure(scope, conf);
+  std::unordered_set<DexType*> coldstart_types;
+  for (const auto& str : conf.get_coldstart_classes()) {
+    DexType* type = DexType::get_type(str.c_str());
+    if (type) {
+      coldstart_types.insert(type);
+    }
+  }
+
+  // In a clandestine way, we create instances of all InterDex plugins on the
+  // side in order to check if we should skip a class for some obscure reason.
+  interdex::InterDexRegistry* registry =
+      static_cast<interdex::InterDexRegistry*>(
+          PluginRegistry::get().pass_registry(interdex::INTERDEX_PASS_NAME));
+  auto plugins = registry->create_plugins();
+
+  TRACE(CS, 2,
+        "[class splitting] Operating on %zu cold-start types and %zu plugins",
+        coldstart_types.size(), plugins.size());
+
+  auto should_skip = [&](DexClass* cls) {
+    for (auto& plugin : plugins) {
+      if (plugin->should_skip_class(cls)) {
+        return true;
+      }
+    }
+    return false;
+  };
+  auto should_not_relocate_methods_of_class = [&](DexClass* cls) {
+    for (auto& plugin : plugins) {
+      if (plugin->should_not_relocate_methods_of_class(cls)) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  // We are only going to do perform class-splitting in the first store, as
+  // that's where all the perf-sensitive classes.
+  auto& store = stores.at(0);
+  auto& dexen = store.get_dexen();
+  DexClasses classes;
+  // We skip the first dex, as that's the primary dex, and we won't split
+  // classes in there anyway
+  for (size_t dex_nr = 1; dex_nr < dexen.size(); dex_nr++) {
+    auto& dex = dexen.at(dex_nr);
+    for (auto cls : dex) {
+      if (!coldstart_types.count(cls->get_type()) &&
+          !cls->rstate.has_interdex_subgroup()) {
+        continue;
+      }
+      if (should_skip(cls)) {
+        continue;
+      }
+      classes.push_back(cls);
+      class_splitting_plugin.prepare(cls, nullptr /* trefs */,
+                                     should_not_relocate_methods_of_class(cls));
+    }
+  }
+  auto classes_to_add =
+      class_splitting_plugin.additional_classes(dexen, classes);
+  dexen.push_back(classes_to_add);
+  TRACE(CS, 1, "[class splitting] Added %zu classes", classes_to_add.size());
+  auto final_scope = build_class_scope(stores);
+  class_splitting_plugin.cleanup(final_scope);
+}
+
+void ClassSplittingPass::run_pass(DexStoresVector& stores,
                                   ConfigFiles& conf,
                                   PassManager& mgr) {
+  if (m_config.run_before_interdex) {
+    run_before_interdex(stores, conf, mgr);
+    return;
+  }
+
   interdex::InterDexRegistry* registry =
       static_cast<interdex::InterDexRegistry*>(
           PluginRegistry::get().pass_registry(interdex::INTERDEX_PASS_NAME));
