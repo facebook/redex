@@ -52,16 +52,22 @@ constexpr const char* METRIC_RELOCATED_NON_STATIC_DIRECT_METHODS =
     "num_class_splitting_relocated_non_static_direct_methods";
 constexpr const char* METRIC_RELOCATED_NON_TRUE_VIRTUAL_METHODS =
     "num_class_splitting_relocated_non_true_virtual_methods";
+constexpr const char* METRIC_RELOCATED_TRUE_VIRTUAL_METHODS =
+    "num_class_splitting_relocated_true_virtual_methods";
 constexpr const char* METRIC_NON_RELOCATED_METHODS =
     "num_class_splitting_non_relocated_methods";
 constexpr const char* METRIC_POPULAR_METHODS =
     "num_class_splitting_popular_methods";
+constexpr const char* METRIC_RELOCATED_METHODS =
+    "num_class_splitting_relocated_methods";
+constexpr const char* METRIC_TRAMPOLINES = "num_class_splitting_trampolines";
 
 struct ClassSplittingStats {
   size_t relocation_classes{0};
   size_t relocated_static_methods{0};
   size_t relocated_non_static_direct_methods{0};
   size_t relocated_non_true_virtual_methods{0};
+  size_t relocated_true_virtual_methods{0};
   size_t non_relocated_methods{0};
   size_t popular_methods{0};
 };
@@ -115,7 +121,7 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
       return;
     }
 
-    prepare(cls, &trefs, should_not_relocate_methods_of_class);
+    prepare(cls, &mrefs, &trefs, should_not_relocate_methods_of_class);
   }
 
   DexClass* create_target_class(const std::string& target_type_name) {
@@ -129,7 +135,42 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
     return target_cls;
   }
 
+  DexMethod* create_trampoline_method(DexMethod* method,
+                                      DexClass* target_cls,
+                                      uint32_t api_level) {
+    std::string name = method->get_name()->str();
+    // We are merging two "namespace" here, so we make it clear what kind of
+    // method a trampoline came from. We don't support comining target classes
+    // by api-level here, as we'd have to do more uniquing.
+    always_assert(!m_config.combine_target_classes_by_api_level);
+    if (method->is_virtual()) {
+      name += "$vtramp";
+    } else {
+      name += "$dtramp";
+    }
+    std::deque<DexType*> arg_types;
+    if (!is_static(method)) {
+      arg_types.push_back(method->get_class());
+    }
+    for (auto t : method->get_proto()->get_args()->get_type_list()) {
+      arg_types.push_back(const_cast<DexType*>(t));
+    }
+    auto type_list = DexTypeList::make_type_list(std::move(arg_types));
+    auto proto =
+        DexProto::make_proto(method->get_proto()->get_rtype(), type_list);
+    auto trampoline_target_method =
+        DexMethod::make_method(target_cls->get_type(),
+                               DexString::make_string(name), proto)
+            ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+    trampoline_target_method->set_deobfuscated_name(
+        show(trampoline_target_method));
+    trampoline_target_method->rstate.set_api_level(api_level);
+    target_cls->add_method(trampoline_target_method);
+    return trampoline_target_method;
+  }
+
   void prepare(const DexClass* cls,
+               std::vector<DexMethodRef*>* mrefs,
                std::vector<DexType*>* trefs,
                bool should_not_relocate_methods_of_class) {
     // Bail out if we just cannot or should not relocate methods of this class.
@@ -145,7 +186,12 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
       if (m_sufficiently_popular_methods.count(method)) {
         return;
       }
-      if (!can_relocate(cls_has_clinit, method, /* log */ true)) {
+      bool requires_trampoline{false};
+      if (!can_relocate(cls_has_clinit, method, /* log */ true,
+                        &requires_trampoline)) {
+        return;
+      }
+      if (requires_trampoline && !m_config.trampolines) {
         return;
       }
       DexClass* target_cls;
@@ -181,9 +227,18 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
           m_target_classes_by_source_classes.emplace(source_cls, target_cls);
         }
       }
-      sc.relocatable_methods.insert({method, {target_cls, api_level}});
+      DexMethod* trampoline_target_method = nullptr;
+      if (requires_trampoline) {
+        trampoline_target_method =
+            create_trampoline_method(method, target_cls, api_level);
+      }
+      sc.relocatable_methods.insert(
+          {method, {target_cls, trampoline_target_method, api_level}});
       if (trefs != nullptr) {
         trefs->push_back(target_cls->get_type());
+      }
+      if (mrefs != nullptr && trampoline_target_method != nullptr) {
+        mrefs->push_back(trampoline_target_method);
       }
       TRACE(CS, 4, "[class splitting] Method {%s} will be relocated to {%s}",
             SHOW(method), SHOW(target_cls));
@@ -239,11 +294,23 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
           return;
         }
         const RelocatableMethodInfo& method_info = it->second;
-        if (!can_relocate(cls_has_clinit, method, /* log */ false)) {
+        bool requires_trampoline{false};
+        if (!can_relocate(cls_has_clinit, method, /* log */ false,
+                          &requires_trampoline)) {
           TRACE(CS,
                 4,
                 "[class splitting] Method earlier identified as relocatable is "
                 "not longer relocatable: {%s}",
+                SHOW(method));
+          m_stats.non_relocated_methods++;
+          return;
+        }
+        if (requires_trampoline &&
+            method_info.trampoline_target_method == nullptr) {
+          TRACE(CS,
+                4,
+                "[class splitting] Method earlier identified as not requiring "
+                "a trampoline now requires a trampoline: {%s}",
                 SHOW(method));
           m_stats.non_relocated_methods++;
           return;
@@ -267,14 +334,21 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
         const RelocatableMethodInfo& method_info =
             sc.relocatable_methods.at(method);
 
-        m_methods_to_relocate.emplace_back(method, method_info.target_cls);
+        if (method_info.trampoline_target_method != nullptr) {
+          m_methods_to_trampoline.emplace_back(
+              method, method_info.trampoline_target_method);
+        } else {
+          m_methods_to_relocate.emplace_back(method, method_info.target_cls);
+        }
         ++relocated_methods;
         if (is_static(method)) {
           ++m_stats.relocated_static_methods;
         } else if (!method->is_virtual()) {
           ++m_stats.relocated_non_static_direct_methods;
-        } else {
+        } else if (m_non_true_virtual_methods.count(method)) {
           ++m_stats.relocated_non_true_virtual_methods;
+        } else {
+          ++m_stats.relocated_true_virtual_methods;
         }
 
         TRACE(CS, 3, "[class splitting] Method {%s} relocated to {%s}",
@@ -296,6 +370,60 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
     return target_classes;
   }
 
+  void materialize_trampoline_code(DexMethod* source, DexMethod* target) {
+    // "source" is the original method, still in its original place.
+    // "target" is the new trampoline target method, somewhere far away
+    target->set_code(std::make_unique<IRCode>(*source->get_code()));
+    source->set_code(std::make_unique<IRCode>());
+    auto code = source->get_code();
+    auto invoke_insn = new IRInstruction(OPCODE_INVOKE_STATIC);
+    invoke_insn->set_method(target);
+    auto proto = target->get_proto();
+    auto& type_list = proto->get_args()->get_type_list();
+    invoke_insn->set_srcs_size(type_list.size());
+    for (size_t i = 0; i < type_list.size(); i++) {
+      auto t = type_list.at(i);
+      IRInstruction* load_param_insn;
+      if (type::is_wide_type(t)) {
+        load_param_insn = new IRInstruction(IOPCODE_LOAD_PARAM_WIDE);
+        load_param_insn->set_dest(code->allocate_wide_temp());
+      } else {
+        load_param_insn =
+            new IRInstruction(type::is_object(t) ? IOPCODE_LOAD_PARAM_OBJECT
+                                                 : IOPCODE_LOAD_PARAM);
+        load_param_insn->set_dest(code->allocate_temp());
+      }
+      code->push_back(load_param_insn);
+      invoke_insn->set_src(i, load_param_insn->dest());
+    }
+    code->push_back(invoke_insn);
+    IRInstruction* return_insn;
+    if (proto->get_rtype() != type::_void()) {
+      auto t = proto->get_rtype();
+      IRInstruction* move_result_insn;
+      if (type::is_wide_type(t)) {
+        move_result_insn = new IRInstruction(OPCODE_MOVE_RESULT_WIDE);
+        move_result_insn->set_dest(code->allocate_wide_temp());
+        return_insn = new IRInstruction(OPCODE_RETURN_WIDE);
+      } else {
+        move_result_insn =
+            new IRInstruction(type::is_object(t) ? OPCODE_MOVE_RESULT_OBJECT
+                                                 : OPCODE_MOVE_RESULT);
+        move_result_insn->set_dest(code->allocate_temp());
+        return_insn = new IRInstruction(
+            type::is_object(t) ? OPCODE_RETURN_OBJECT : OPCODE_RETURN);
+      }
+      code->push_back(move_result_insn);
+      return_insn->set_src(0, move_result_insn->dest());
+    } else {
+      return_insn = new IRInstruction(OPCODE_RETURN_VOID);
+    }
+    code->push_back(return_insn);
+    TRACE(CS, 5, "[class splitting] New body for {%s}: \n%s", SHOW(source),
+          SHOW(code));
+    change_visibility(target);
+  }
+
   void cleanup(const Scope& final_scope) override {
     // Here we do the actual relocation.
 
@@ -307,6 +435,7 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
         methods_to_staticize.insert(method);
       }
     }
+
     // We now rewrite all invoke-instructions as needed to reflect the fact that
     // we made some methods static as part of the relocation effort.
     std::unordered_map<IROpcode, std::atomic<size_t>> rewritten_invokes;
@@ -371,6 +500,11 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
     TRACE(CS, 2, "[class splitting] Made {%zu} methods static.",
           methods_to_staticize.size());
 
+    // Part 3: Materialize trampolines
+    for (auto& p : m_methods_to_trampoline) {
+      materialize_trampoline_code(p.first, p.second);
+    }
+
     m_mgr.incr_metric(METRIC_RELOCATION_CLASSES, m_stats.relocation_classes);
     m_mgr.incr_metric(METRIC_RELOCATED_STATIC_METHODS,
                       m_stats.relocated_static_methods);
@@ -378,10 +512,18 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
                       m_stats.relocated_non_static_direct_methods);
     m_mgr.incr_metric(METRIC_RELOCATED_NON_TRUE_VIRTUAL_METHODS,
                       m_stats.relocated_non_true_virtual_methods);
+    m_mgr.incr_metric(METRIC_RELOCATED_TRUE_VIRTUAL_METHODS,
+                      m_stats.relocated_true_virtual_methods);
     m_mgr.incr_metric(METRIC_NON_RELOCATED_METHODS,
                       m_stats.non_relocated_methods);
     m_mgr.incr_metric(METRIC_POPULAR_METHODS, m_stats.popular_methods);
+    m_mgr.incr_metric(METRIC_RELOCATED_METHODS, m_methods_to_relocate.size());
+    m_mgr.incr_metric(METRIC_TRAMPOLINES, m_methods_to_trampoline.size());
 
+    TRACE(CS, 2,
+          "[class splitting] Relocated {%zu} methods and created {%zu} "
+          "trampolines",
+          m_methods_to_relocate.size(), m_methods_to_trampoline.size());
     TRACE(CS, 2,
           "[class splitting] Encountered {%zu} popular and {%zu} non-relocated "
           "methods.",
@@ -392,6 +534,7 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
     m_target_classes_by_source_classes.clear();
     m_split_classes.clear();
     m_methods_to_relocate.clear();
+    m_methods_to_trampoline.clear();
   }
 
  private:
@@ -399,6 +542,7 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
 
   struct RelocatableMethodInfo {
     DexClass* target_cls;
+    DexMethod* trampoline_target_method;
     int32_t api_level;
   };
 
@@ -417,6 +561,7 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
   std::unordered_map<DexType*, DexClass*> m_target_classes_by_source_classes;
   std::unordered_map<const DexClass*, SplitClass> m_split_classes;
   std::vector<std::pair<DexMethod*, DexClass*>> m_methods_to_relocate;
+  std::vector<std::pair<DexMethod*, DexMethod*>> m_methods_to_trampoline;
   ClassSplittingStats m_stats;
   std::unordered_set<DexMethod*> m_non_true_virtual_methods;
 
@@ -424,7 +569,11 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
     return !cls->is_external() && !cls->rstate.is_generated();
   }
 
-  bool can_relocate(bool cls_has_clinit, const DexMethod* m, bool log) {
+  bool can_relocate(bool cls_has_clinit,
+                    const DexMethod* m,
+                    bool log,
+                    bool* requires_trampoline) {
+    *requires_trampoline = false;
     if (!m->is_concrete() || m->is_external() || !m->get_code()) {
       return false;
     }
@@ -432,13 +581,13 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
       if (log) {
         m_mgr.incr_metric("num_class_splitting_limitation_cannot_rename", 1);
       }
-      return false;
+      *requires_trampoline = true;
     }
     if (root(m)) {
       if (log) {
         m_mgr.incr_metric("num_class_splitting_limitation_root", 1);
       }
-      return false;
+      *requires_trampoline = true;
     }
     if (m->rstate.no_optimizations()) {
       if (log) {
@@ -485,16 +634,17 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
               "has_clinit",
               1);
         }
-        return false;
+        *requires_trampoline = true;
       }
       if (method::is_clinit(m)) {
         if (log) {
           m_mgr.incr_metric(
               "num_class_splitting_limitation_static_method_is_clinit", 1);
         }
+        // TODO: Could be done with trampolines if we remove "final" flag from
+        // fields
         return false;
       }
-      return true;
     } else if (!m->is_virtual()) {
       if (!m_config.relocate_non_static_direct_methods) {
         return false;
@@ -504,23 +654,29 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
           m_mgr.incr_metric(
               "num_class_splitting_limitation_static_method_is_clinit", 1);
         }
+        // TODO: Could be done with trampolines if we remove "final" flag from
+        // fields, and carefully deal with super-init calls.
         return false;
       }
-      return true;
-    } else {
-      always_assert(m->is_virtual());
+    } else if (m_non_true_virtual_methods.count(const_cast<DexMethod*>(m))) {
       if (!m_config.relocate_non_true_virtual_methods) {
         return false;
       }
-      if (!m_non_true_virtual_methods.count(const_cast<DexMethod*>(m))) {
-        if (log) {
-          m_mgr.incr_metric(
-              "num_class_splitting_limitation_virtual_method_is_true", 1);
-        }
+    } else {
+      if (!m_config.relocate_true_virtual_methods) {
         return false;
       }
-      return true;
+      *requires_trampoline = true;
     }
+    if (*requires_trampoline && m->get_code()->sum_opcode_sizes() <
+                                    m_config.trampoline_size_threshold) {
+      if (log) {
+        m_mgr.incr_metric(
+            "num_class_splitting_trampoline_size_threshold_not_met", 1);
+      }
+      return false;
+    }
+    return true;
   };
 
   ClassSplittingConfig m_config;
@@ -595,7 +751,8 @@ void ClassSplittingPass::run_before_interdex(DexStoresVector& stores,
         continue;
       }
       classes.push_back(cls);
-      class_splitting_plugin.prepare(cls, nullptr /* trefs */,
+      class_splitting_plugin.prepare(cls, nullptr /* mrefs */,
+                                     nullptr /* trefs */,
                                      should_not_relocate_methods_of_class(cls));
     }
   }
