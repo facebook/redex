@@ -112,13 +112,15 @@ class DexesStructure {
     m_linear_alloc_limit = linear_alloc_limit;
   }
 
-  void set_type_refs_limit(int64_t type_refs_limit) {
-    m_type_refs_limit = type_refs_limit;
+  void set_reserve_trefs(int64_t reserve_trefs) {
+    m_reserve_trefs = reserve_trefs;
   }
 
   void set_reserve_mrefs(size_t reserve_mrefs) {
     m_reserve_mrefs = reserve_mrefs;
   }
+
+  void set_min_sdk(int min_sdk) { m_min_sdk = min_sdk; }
 
   /**
    * Tries to add the class to the current dex. If it can't, it returns false.
@@ -164,8 +166,9 @@ class DexesStructure {
   std::unordered_set<DexClass*> m_classes;
 
   int64_t m_linear_alloc_limit;
-  int64_t m_type_refs_limit;
+  size_t m_reserve_trefs;
   size_t m_reserve_mrefs;
+  int m_min_sdk;
 
   struct DexesInfo {
     size_t num_dexes{0};

@@ -31,7 +31,6 @@ class InterDex {
            ConfigFiles& conf,
            std::vector<std::unique_ptr<InterDexPassPlugin>>& plugins,
            int64_t linear_alloc_limit,
-           int64_t type_refs_limit,
            bool static_prune_classes,
            bool normal_primary_dex,
            bool force_single_dex,
@@ -40,8 +39,10 @@ class InterDex {
            bool minimize_cross_dex_refs,
            const CrossDexRefMinimizerConfig& cross_dex_refs_config,
            const CrossDexRelocatorConfig& cross_dex_relocator_config,
+           size_t reserve_trefs,
            size_t reserve_mrefs,
-           const XStoreRefs* xstore_refs)
+           const XStoreRefs* xstore_refs,
+           int min_sdk)
       : m_dexen(dexen),
         m_apk_manager(apk_manager),
         m_conf(conf),
@@ -61,8 +62,9 @@ class InterDex {
         m_scope(build_class_scope(m_dexen)),
         m_xstore_refs(xstore_refs) {
     m_dexes_structure.set_linear_alloc_limit(linear_alloc_limit);
-    m_dexes_structure.set_type_refs_limit(type_refs_limit);
+    m_dexes_structure.set_reserve_trefs(reserve_trefs);
     m_dexes_structure.set_reserve_mrefs(reserve_mrefs);
+    m_dexes_structure.set_min_sdk(min_sdk);
 
     load_interdex_types();
   }

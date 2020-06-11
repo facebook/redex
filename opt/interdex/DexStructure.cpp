@@ -37,6 +37,9 @@ constexpr unsigned METHOD_SIZE = 52;
 constexpr unsigned INSTANCE_FIELD_SIZE = 16;
 constexpr unsigned MAX_METHOD_REFS = kMaxMethodRefs - 1;
 constexpr unsigned MAX_FIELD_REFS = kMaxFieldRefs - 1;
+inline unsigned MAX_TYPE_REFS(int min_sdk) {
+  return get_max_type_refs(min_sdk) - 1;
+}
 
 bool matches_penalty(const char* str, unsigned* penalty) {
   for (auto const& pattern : PENALTY_PATTERNS) {
@@ -105,7 +108,8 @@ bool DexesStructure::add_class_to_current_dex(const MethodRefs& clazz_mrefs,
 
   if (m_current_dex.add_class_if_fits(
           clazz_mrefs, clazz_frefs, clazz_trefs, m_linear_alloc_limit,
-          MAX_METHOD_REFS - m_reserve_mrefs, m_type_refs_limit, clazz)) {
+          MAX_METHOD_REFS - m_reserve_mrefs,
+          MAX_TYPE_REFS(m_min_sdk) - m_reserve_trefs, clazz)) {
     update_stats(clazz_mrefs, clazz_frefs, clazz);
     m_classes.emplace(clazz);
     return true;

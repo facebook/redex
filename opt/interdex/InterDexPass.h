@@ -42,6 +42,7 @@ constexpr const char* METRIC_RELOCATED_NON_STATIC_DIRECT_METHODS =
 constexpr const char* METRIC_RELOCATED_VIRTUAL_METHODS =
     "num_relocated_virtual_methods";
 
+constexpr const char* METRIC_RESERVED_TREFS = "reserved_trefs";
 constexpr const char* METRIC_RESERVED_MREFS = "reserved_mrefs";
 
 class InterDexPass : public Pass {
@@ -64,7 +65,8 @@ class InterDexPass : public Pass {
   bool m_emit_canaries;
   bool m_normal_primary_dex;
   int64_t m_linear_alloc_limit;
-  int64_t m_type_refs_limit;
+  int64_t m_reserved_trefs;
+  int64_t m_reserved_mrefs;
   bool m_can_touch_coldstart_cls;
   bool m_can_touch_coldstart_extended_cls;
   bool m_emit_scroll_set_marker;
