@@ -54,6 +54,8 @@ constexpr const char* METRIC_RELOCATED_NON_TRUE_VIRTUAL_METHODS =
     "num_class_splitting_relocated_non_true_virtual_methods";
 constexpr const char* METRIC_NON_RELOCATED_METHODS =
     "num_class_splitting_non_relocated_methods";
+constexpr const char* METRIC_POPULAR_METHODS =
+    "num_class_splitting_popular_methods";
 
 struct ClassSplittingStats {
   size_t relocation_classes{0};
@@ -61,6 +63,7 @@ struct ClassSplittingStats {
   size_t relocated_non_static_direct_methods{0};
   size_t relocated_non_true_virtual_methods{0};
   size_t non_relocated_methods{0};
+  size_t popular_methods{0};
 };
 
 class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
@@ -128,10 +131,10 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
     SplitClass& sc = m_split_classes[cls];
     always_assert(sc.relocatable_methods.size() == 0);
     auto process_method = [&](DexMethod* method) {
-      if (!can_relocate(cls_has_clinit, method)) {
+      if (m_sufficiently_popular_methods.count(method)) {
         return;
       }
-      if (m_sufficiently_popular_methods.count(method)) {
+      if (!can_relocate(cls_has_clinit, method, /* log */ true)) {
         return;
       }
       int api_level = api::LevelChecker::get_method_level(method);
@@ -189,9 +192,8 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
         continue;
       }
       const SplitClass& sc = split_classes_it->second;
-      if (sc.relocatable_methods.size() == 0) {
-        continue;
-      }
+      auto& dmethods = cls->get_dmethods();
+      auto& vmethods = cls->get_vmethods();
       if (!can_relocate(cls)) {
         TRACE(CS,
               4,
@@ -206,13 +208,17 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
       // (other InterDex plug-ins might have added or removed or relocated
       // methods).
       auto process_method = [&](DexMethod* method) {
+        if (m_sufficiently_popular_methods.count(method)) {
+          m_stats.popular_methods++;
+          return;
+        }
         auto it = sc.relocatable_methods.find(method);
         if (it == sc.relocatable_methods.end()) {
           m_stats.non_relocated_methods++;
           return;
         }
         const RelocatableMethodInfo& method_info = it->second;
-        if (!can_relocate(cls_has_clinit, method)) {
+        if (!can_relocate(cls_has_clinit, method, /* log */ false)) {
           TRACE(CS,
                 4,
                 "[class splitting] Method earlier identified as relocatable is "
@@ -227,14 +233,13 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
                 "[class splitting] Method {%s} api level changed to {%d} from "
                 "{%d}.",
                 SHOW(method), api_level, method_info.api_level);
+          m_stats.non_relocated_methods++;
           return;
         }
 
         methods_to_relocate.push_back(method);
       };
-      auto& dmethods = cls->get_dmethods();
       std::for_each(dmethods.begin(), dmethods.end(), process_method);
-      auto& vmethods = cls->get_vmethods();
       std::for_each(vmethods.begin(), vmethods.end(), process_method);
 
       for (DexMethod* method : methods_to_relocate) {
@@ -354,6 +359,12 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
                       m_stats.relocated_non_true_virtual_methods);
     m_mgr.incr_metric(METRIC_NON_RELOCATED_METHODS,
                       m_stats.non_relocated_methods);
+    m_mgr.incr_metric(METRIC_POPULAR_METHODS, m_stats.popular_methods);
+
+    TRACE(CS, 2,
+          "[class splitting] Encountered {%zu} popular and {%zu} non-relocated "
+          "methods.",
+          m_stats.popular_methods, m_stats.non_relocated_methods);
 
     // Releasing memory
     m_target_classes.clear();
@@ -390,23 +401,102 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
     return !cls->is_external() && !cls->rstate.is_generated();
   }
 
-  bool can_relocate(bool cls_has_clinit, const DexMethod* m) {
-    if (!m->is_concrete() || m->is_external() || !m->get_code() ||
-        !can_rename(m) || root(m) || m->rstate.no_optimizations() ||
-        !gather_invoked_methods_that_prevent_relocation(m) ||
-        !can_change_visibility_for_relocation(m) ||
-        !method::no_invoke_super(m) || m->rstate.is_generated()) {
+  bool can_relocate(bool cls_has_clinit, const DexMethod* m, bool log) {
+    if (!m->is_concrete() || m->is_external() || !m->get_code()) {
       return false;
     }
-    if (is_static(m)) {
-      return !cls_has_clinit && m_config.relocate_static_methods &&
-             !method::is_clinit(m);
-    } else if (!m->is_virtual()) {
-      return m_config.relocate_non_static_direct_methods && !method::is_init(m);
-    } else if (m_non_true_virtual_methods.count(const_cast<DexMethod*>(m))) {
-      return m_config.relocate_non_true_virtual_methods;
-    } else {
+    if (!can_rename(m)) {
+      if (log) {
+        m_mgr.incr_metric("num_class_splitting_limitation_cannot_rename", 1);
+      }
       return false;
+    }
+    if (root(m)) {
+      if (log) {
+        m_mgr.incr_metric("num_class_splitting_limitation_root", 1);
+      }
+      return false;
+    }
+    if (m->rstate.no_optimizations()) {
+      if (log) {
+        m_mgr.incr_metric("num_class_splitting_limitation_no_optimizations", 1);
+      }
+      return false;
+    }
+    if (!gather_invoked_methods_that_prevent_relocation(m)) {
+      if (log) {
+        m_mgr.incr_metric(
+            "num_class_splitting_limitation_invoked_methods_prevent_relocation",
+            1);
+      }
+      return false;
+    }
+    if (!can_change_visibility_for_relocation(m)) {
+      if (log) {
+        m_mgr.incr_metric(
+            "num_class_splitting_limitation_cannot_change_visibility", 1);
+      }
+      return false;
+    }
+    if (!method::no_invoke_super(m)) {
+      if (log) {
+        m_mgr.incr_metric("num_class_splitting_limitation_invoke_super", 1);
+      }
+      return false;
+    }
+    if (m->rstate.is_generated()) {
+      if (log) {
+        m_mgr.incr_metric("num_class_splitting_limitation_generated", 1);
+      }
+      return false;
+    }
+
+    if (is_static(m)) {
+      if (!m_config.relocate_static_methods) {
+        return false;
+      }
+      if (cls_has_clinit) {
+        if (log) {
+          m_mgr.incr_metric(
+              "num_class_splitting_limitation_static_method_declaring_class_"
+              "has_clinit",
+              1);
+        }
+        return false;
+      }
+      if (method::is_clinit(m)) {
+        if (log) {
+          m_mgr.incr_metric(
+              "num_class_splitting_limitation_static_method_is_clinit", 1);
+        }
+        return false;
+      }
+      return true;
+    } else if (!m->is_virtual()) {
+      if (!m_config.relocate_non_static_direct_methods) {
+        return false;
+      }
+      if (method::is_init(m)) {
+        if (log) {
+          m_mgr.incr_metric(
+              "num_class_splitting_limitation_static_method_is_clinit", 1);
+        }
+        return false;
+      }
+      return true;
+    } else {
+      always_assert(m->is_virtual());
+      if (!m_config.relocate_non_true_virtual_methods) {
+        return false;
+      }
+      if (!m_non_true_virtual_methods.count(const_cast<DexMethod*>(m))) {
+        if (log) {
+          m_mgr.incr_metric(
+              "num_class_splitting_limitation_virtual_method_is_true", 1);
+        }
+        return false;
+      }
+      return true;
     }
   };
 
