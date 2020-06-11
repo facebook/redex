@@ -948,7 +948,8 @@ void redex_backend(const std::string& output_dir,
                                needs_addresses ? &code_debug_lines : nullptr,
                                is_iodi(dik) ? &iodi_metadata : nullptr,
                                stores[0].get_dex_magic(),
-                               post_lowering.get());
+                               post_lowering.get(),
+                               manager.get_redex_options().min_sdk);
 
       output_totals += this_dex_stats;
       output_dexes_stats.push_back(this_dex_stats);

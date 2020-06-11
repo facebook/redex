@@ -1877,6 +1877,7 @@ class DexState {
   std::unordered_set<const DexType*> m_type_refs;
   size_t m_method_refs_count;
   std::unordered_map<const DexType*, size_t> m_class_ids;
+  size_t max_type_refs;
 
  public:
   DexState() = delete;
@@ -1900,6 +1901,8 @@ class DexState {
     walk::classes(dex, [& class_ids = m_class_ids](DexClass* cls) {
       class_ids.emplace(cls->get_type(), class_ids.size());
     });
+
+    max_type_refs = get_max_type_refs(m_mgr.get_redex_options().min_sdk);
   }
 
   size_t get_dex_id() { return m_dex_id; }
@@ -1913,7 +1916,7 @@ class DexState {
     }
     // Yes, looks a bit quirky, but matching what happens elsewhere: The number
     // of type refs must stay *below* the maximum, and must never reach it.
-    if ((m_type_refs.size() + inserted_count) >= kMaxTypeRefs) {
+    if ((m_type_refs.size() + inserted_count) >= max_type_refs) {
       m_mgr.incr_metric("kMaxTypeRefs", 1);
       TRACE(ISO, 2, "[invoke sequence outliner] hit kMaxTypeRefs");
       return false;
@@ -1924,7 +1927,7 @@ class DexState {
   void insert_type_refs(const std::unordered_set<const DexType*>& types) {
     always_assert(can_insert_type_refs(types));
     m_type_refs.insert(types.begin(), types.end());
-    always_assert(m_type_refs.size() < kMaxTypeRefs);
+    always_assert(m_type_refs.size() < max_type_refs);
   }
 
   bool can_insert_method_ref() {
