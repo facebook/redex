@@ -1886,6 +1886,7 @@ class DexState {
   DexState(PassManager& mgr,
            DexClasses& dex,
            size_t dex_id,
+           size_t reserved_trefs,
            size_t reserved_mrefs)
       : m_mgr(mgr), m_dex(dex), m_dex_id(dex_id) {
     std::vector<DexMethodRef*> method_refs;
@@ -1902,7 +1903,8 @@ class DexState {
       class_ids.emplace(cls->get_type(), class_ids.size());
     });
 
-    max_type_refs = get_max_type_refs(m_mgr.get_redex_options().min_sdk);
+    max_type_refs =
+        get_max_type_refs(m_mgr.get_redex_options().min_sdk) - reserved_trefs;
   }
 
   size_t get_dex_id() { return m_dex_id; }
@@ -1914,8 +1916,9 @@ class DexState {
         inserted_count++;
       }
     }
-    // Yes, looks a bit quirky, but matching what happens elsewhere: The number
-    // of type refs must stay *below* the maximum, and must never reach it.
+    // Yes, looks a bit quirky, but matching what happens in
+    // InterDex/DexStructure: The number of type refs must stay *below* the
+    // maximum, and must never reach it.
     if ((m_type_refs.size() + inserted_count) >= max_type_refs) {
       m_mgr.incr_metric("kMaxTypeRefs", 1);
       TRACE(ISO, 2, "[invoke sequence outliner] hit kMaxTypeRefs");
@@ -2693,8 +2696,12 @@ void InstructionSequenceOutliner::run_pass(DexStoresVector& stores,
   const auto& interdex_metrics = mgr.get_interdex_metrics();
   auto it = interdex_metrics.find(interdex::METRIC_RESERVED_MREFS);
   size_t reserved_mrefs = it == interdex_metrics.end() ? 0 : it->second;
-  TRACE(ISO, 2, "[invoke sequence outliner] found %zu reserved mrefs",
-        reserved_mrefs);
+  it = interdex_metrics.find(interdex::METRIC_RESERVED_TREFS);
+  size_t reserved_trefs = it == interdex_metrics.end() ? 0 : it->second;
+  TRACE(
+      ISO, 2,
+      "[invoke sequence outliner] found %zu reserved trefs, %zu reserved mrefs",
+      reserved_trefs, reserved_mrefs);
   std::unique_ptr<ReusableOutlinedMethods> reusable_outlined_methods;
   if (m_config.reuse_outlined_methods_across_dexes) {
     reusable_outlined_methods = std::make_unique<ReusableOutlinedMethods>();
@@ -2741,7 +2748,7 @@ void InstructionSequenceOutliner::run_pass(DexStoresVector& stores,
 
       // TODO: Merge candidates that are equivalent except that one returns
       // something and the other doesn't.
-      DexState dex_state(mgr, dex, dex_id++, reserved_mrefs);
+      DexState dex_state(mgr, dex, dex_id++, reserved_trefs, reserved_mrefs);
       auto newly_outlined_methods =
           outline(m_config, mgr, dex_state, &candidates_with_infos,
                   &candidate_ids_by_methods, reusable_outlined_methods.get(),

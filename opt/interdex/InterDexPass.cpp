@@ -43,11 +43,14 @@ void InterDexPass::bind_config() {
   bind("normal_primary_dex", false, m_normal_primary_dex);
   bind("linear_alloc_limit", {11600 * 1024}, m_linear_alloc_limit);
 
-  // Default to maximum number of type refs per dex, as allowed by Android.
-  // Notes: This flag was added to work around a bug in AOSP described in
-  //        https://phabricator.internmc.facebook.com/P60294798 and for this
-  //        it should be set to 1 << 15.
-  bind("type_refs_limit", {1 << 16}, m_type_refs_limit);
+  bind("reserved_trefs", {0}, m_reserved_trefs,
+       "A relief valve for type refs within each dex in case a legacy "
+       "optimization introduces a new type reference without declaring it "
+       "explicitly to the InterDex pass");
+  bind("reserved_mrefs", {0}, m_reserved_mrefs,
+       "A relief valve for methods refs within each dex in case a legacy "
+       "optimization introduces a new method reference without declaring it "
+       "explicitly to the InterDex pass");
 
   bind("minimize_cross_dex_refs", false, m_minimize_cross_dex_refs);
   bind("minimize_cross_dex_refs_method_ref_weight", {100},
@@ -96,7 +99,9 @@ void InterDexPass::run_pass(DexStoresVector& stores,
       PluginRegistry::get().pass_registry(INTERDEX_PASS_NAME));
 
   auto plugins = registry->create_plugins();
-  size_t reserve_mrefs = 0;
+  size_t reserve_trefs = m_reserved_trefs;
+  mgr.set_metric(METRIC_RESERVED_TREFS, reserve_trefs);
+  size_t reserve_mrefs = m_reserved_mrefs;
   auto original_scope = build_class_scope(stores);
   for (const auto& plugin : plugins) {
     plugin->configure(original_scope, conf);
@@ -107,10 +112,11 @@ void InterDexPass::run_pass(DexStoresVector& stores,
   bool force_single_dex = conf.get_json_config().get("force_single_dex", false);
   XStoreRefs xstore_refs(stores);
   InterDex interdex(original_scope, dexen, mgr.apk_manager(), conf, plugins,
-                    m_linear_alloc_limit, m_type_refs_limit, m_static_prune,
-                    m_normal_primary_dex, force_single_dex, m_emit_canaries,
+                    m_linear_alloc_limit, m_static_prune, m_normal_primary_dex,
+                    force_single_dex, m_emit_canaries,
                     m_minimize_cross_dex_refs, m_minimize_cross_dex_refs_config,
-                    m_cross_dex_relocator_config, reserve_mrefs, &xstore_refs);
+                    m_cross_dex_relocator_config, reserve_trefs, reserve_mrefs,
+                    &xstore_refs, mgr.get_redex_options().min_sdk);
 
   if (m_expect_order_list) {
     always_assert_log(
@@ -175,7 +181,8 @@ void InterDexPass::run_pass_on_nonroot_store(DexStoresVector& stores,
   // Setup default configs for non-root store
   // For now, no plugins configured for non-root stores
   std::vector<std::unique_ptr<InterDexPassPlugin>> plugins;
-  size_t reserve_mrefs = 0;
+  size_t reserve_trefs = m_reserved_trefs;
+  size_t reserve_mrefs = m_reserved_mrefs;
 
   // Cross dex ref minimizers are disabled for non-root stores
   // TODO: Make this logic cleaner when these features get enabled for non-root
@@ -186,11 +193,11 @@ void InterDexPass::run_pass_on_nonroot_store(DexStoresVector& stores,
   // Initialize interdex and run for nonroot store
   XStoreRefs xstore_refs(stores);
   InterDex interdex(original_scope, dexen, mgr.apk_manager(), conf, plugins,
-                    m_linear_alloc_limit, m_type_refs_limit, m_static_prune,
-                    m_normal_primary_dex, false /* force single dex */,
-                    false /* emit canaries */,
+                    m_linear_alloc_limit, m_static_prune, m_normal_primary_dex,
+                    false /* force single dex */, false /* emit canaries */,
                     false /* minimize_cross_dex_refs */, cross_dex_refs_config,
-                    cross_dex_relocator_config, reserve_mrefs, &xstore_refs);
+                    cross_dex_relocator_config, reserve_trefs, reserve_mrefs,
+                    &xstore_refs, mgr.get_redex_options().min_sdk);
 
   interdex.run_on_nonroot_store();
 
