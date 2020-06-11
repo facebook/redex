@@ -51,6 +51,7 @@ class DexStructure {
                          const FieldRefs& clazz_frefs,
                          const TypeRefs& clazz_trefs,
                          size_t linear_alloc_limit,
+                         size_t field_refs_limit,
                          size_t method_refs_limit,
                          size_t type_refs_limit,
                          DexClass* clazz);
@@ -112,6 +113,10 @@ class DexesStructure {
     m_linear_alloc_limit = linear_alloc_limit;
   }
 
+  void set_reserve_frefs(int64_t reserve_frefs) {
+    m_reserve_trefs = reserve_frefs;
+  }
+
   void set_reserve_trefs(int64_t reserve_trefs) {
     m_reserve_trefs = reserve_trefs;
   }
@@ -166,6 +171,7 @@ class DexesStructure {
   std::unordered_set<DexClass*> m_classes;
 
   int64_t m_linear_alloc_limit;
+  size_t m_reserve_frefs;
   size_t m_reserve_trefs;
   size_t m_reserve_mrefs;
   int m_min_sdk;
