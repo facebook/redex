@@ -47,6 +47,14 @@ class InterDexPassPlugin {
                            std::vector<DexClass*>* erased_classes,
                            bool should_not_relocate_methods_of_class) {}
 
+  // In each dex, reserve this many frefs to be potentially added after the
+  // inter-dex pass
+  virtual size_t reserve_frefs() { return 0; }
+
+  // In each dex, reserve this many trefs to be potentially added after the
+  // inter-dex pass
+  virtual size_t reserve_trefs() { return 0; }
+
   // In each dex, reserve this many mrefs to be potentially added after the
   // inter-dex pass
   virtual size_t reserve_mrefs() { return 0; }

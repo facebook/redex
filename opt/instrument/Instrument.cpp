@@ -54,6 +54,16 @@ class InstrumentInterDexPlugin : public interdex::InterDexPassPlugin {
                    std::vector<DexClass*>* erased_classes,
                    bool should_not_relocate_methods_of_class) override {}
 
+  size_t reserve_frefs() override {
+    // We may introduce a new field
+    return 1;
+  }
+
+  size_t reserve_trefs() override {
+    // We introduce a type reference to the analysis class in each dex
+    return 1;
+  }
+
   size_t reserve_mrefs() override {
     // In each dex, we will introduce more method refs from analysis methods.
     // This makes sure that the inter-dex pass keeps space for new method refs.
@@ -588,6 +598,7 @@ std::unordered_set<std::string> load_blacklist_file(
         SHOW(file_name));
   return ret;
 }
+
 } // namespace
 
 // Find a sequence of opcode that creates a static array. Patch the array size.

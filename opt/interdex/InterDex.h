@@ -39,6 +39,7 @@ class InterDex {
            bool minimize_cross_dex_refs,
            const CrossDexRefMinimizerConfig& cross_dex_refs_config,
            const CrossDexRelocatorConfig& cross_dex_relocator_config,
+           size_t reserve_frefs,
            size_t reserve_trefs,
            size_t reserve_mrefs,
            const XStoreRefs* xstore_refs,
@@ -62,6 +63,7 @@ class InterDex {
         m_scope(build_class_scope(m_dexen)),
         m_xstore_refs(xstore_refs) {
     m_dexes_structure.set_linear_alloc_limit(linear_alloc_limit);
+    m_dexes_structure.set_reserve_frefs(reserve_frefs);
     m_dexes_structure.set_reserve_trefs(reserve_trefs);
     m_dexes_structure.set_reserve_mrefs(reserve_mrefs);
     m_dexes_structure.set_min_sdk(min_sdk);
