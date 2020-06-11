@@ -14,6 +14,9 @@ struct ClassSplittingConfig {
   bool use_method_weights{false};
   bool use_method_profiles{true};
   float method_profiles_appear_percent_threshold{1};
+  bool relocate_static_methods{true};
+  bool relocate_non_static_direct_methods{true};
+  bool relocate_non_true_virtual_methods{true};
 };
 
 class ClassSplittingPass : public Pass {
@@ -31,6 +34,14 @@ class ClassSplittingPass : public Pass {
     bind("method_profiles_appear_percent_threshold",
          m_config.method_profiles_appear_percent_threshold,
          m_config.method_profiles_appear_percent_threshold);
+    bind("relocate_static_methods", m_config.relocate_static_methods,
+         m_config.relocate_static_methods);
+    bind("relocate_non_static_direct_methods",
+         m_config.relocate_non_static_direct_methods,
+         m_config.relocate_non_static_direct_methods);
+    bind("relocate_non_true_virtual_methods",
+         m_config.relocate_non_true_virtual_methods,
+         m_config.relocate_non_true_virtual_methods);
   }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;

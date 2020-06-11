@@ -32,19 +32,35 @@
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "InterDexPass.h"
+#include "MethodOverrideGraph.h"
+#include "Mutators.h"
 #include "PluginRegistry.h"
+#include "Resolver.h"
 #include "Walkers.h"
 
 namespace {
 
+constexpr const char* METRIC_STATICIZED_METHODS =
+    "num_class_splitting_staticized_methods";
+constexpr const char* METRIC_REWRITTEN_INVOKES =
+    "num_class_splitting_rewritten_";
 constexpr const char* METRIC_RELOCATION_CLASSES =
     "num_class_splitting_relocation_classes";
 constexpr const char* METRIC_RELOCATED_STATIC_METHODS =
     "num_class_splitting_relocated_static_methods";
+constexpr const char* METRIC_RELOCATED_NON_STATIC_DIRECT_METHODS =
+    "num_class_splitting_relocated_non_static_direct_methods";
+constexpr const char* METRIC_RELOCATED_NON_TRUE_VIRTUAL_METHODS =
+    "num_class_splitting_relocated_non_true_virtual_methods";
+constexpr const char* METRIC_NON_RELOCATED_METHODS =
+    "num_class_splitting_non_relocated_methods";
 
 struct ClassSplittingStats {
   size_t relocation_classes{0};
   size_t relocated_static_methods{0};
+  size_t relocated_non_static_direct_methods{0};
+  size_t relocated_non_true_virtual_methods{0};
+  size_t non_relocated_methods{0};
 };
 
 class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
@@ -70,6 +86,10 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
           }
         });
       }
+    }
+    if (m_config.relocate_non_true_virtual_methods) {
+      m_non_true_virtual_methods =
+          method_override_graph::get_non_true_virtuals(scope);
     }
   };
 
@@ -97,16 +117,16 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
       return;
     }
 
-    always_assert(!cls->rstate.is_generated());
+    auto cls_has_clinit = !!cls->get_clinit();
 
     SplitClass& sc = m_split_classes[cls];
     always_assert(sc.relocatable_methods.size() == 0);
-    for (DexMethod* method : cls->get_dmethods()) {
-      if (!can_relocate(method)) {
-        continue;
+    auto process_method = [&](DexMethod* method) {
+      if (!can_relocate(cls_has_clinit, method)) {
+        return;
       }
       if (m_sufficiently_popular_methods.count(method)) {
-        continue;
+        return;
       }
       int api_level = api::LevelChecker::get_method_level(method);
       TargetClassInfo& target_class_info = m_target_classes[api_level];
@@ -135,7 +155,11 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
       trefs.push_back(target_class_info.target_cls->get_type());
       TRACE(CS, 4, "[class splitting] Method {%s} will be relocated to {%s}",
             SHOW(method), SHOW(target_class_info.target_cls));
-    }
+    };
+    auto& dmethods = cls->get_dmethods();
+    std::for_each(dmethods.begin(), dmethods.end(), process_method);
+    auto& vmethods = cls->get_vmethods();
+    std::for_each(vmethods.begin(), vmethods.end(), process_method);
   }
 
   DexClasses additional_classes(const DexClassesVector& outdex,
@@ -168,23 +192,26 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
               SHOW(cls));
         continue;
       }
+      auto cls_has_clinit = !!cls->get_clinit();
       std::vector<DexMethod*> methods_to_relocate;
       // We iterate over the actually existing set of methods at this time
       // (other InterDex plug-ins might have added or removed or relocated
       // methods).
-      for (DexMethod* method : cls->get_dmethods()) {
+      auto process_method = [&](DexMethod* method) {
         auto it = sc.relocatable_methods.find(method);
         if (it == sc.relocatable_methods.end()) {
-          continue;
+          m_stats.non_relocated_methods++;
+          return;
         }
         const RelocatableMethodInfo& method_info = it->second;
-        if (!can_relocate(method)) {
+        if (!can_relocate(cls_has_clinit, method)) {
           TRACE(CS,
                 4,
                 "[class splitting] Method earlier identified as relocatable is "
                 "not longer relocatable: {%s}",
                 SHOW(method));
-          continue;
+          m_stats.non_relocated_methods++;
+          return;
         }
         int api_level = api::LevelChecker::get_method_level(method);
         if (api_level != method_info.api_level) {
@@ -192,11 +219,15 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
                 "[class splitting] Method {%s} api level changed to {%d} from "
                 "{%d}.",
                 SHOW(method), api_level, method_info.api_level);
-          continue;
+          return;
         }
 
         methods_to_relocate.push_back(method);
-      }
+      };
+      auto& dmethods = cls->get_dmethods();
+      std::for_each(dmethods.begin(), dmethods.end(), process_method);
+      auto& vmethods = cls->get_vmethods();
+      std::for_each(vmethods.begin(), vmethods.end(), process_method);
 
       for (DexMethod* method : methods_to_relocate) {
         const RelocatableMethodInfo& method_info =
@@ -206,6 +237,10 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
         ++relocated_methods;
         if (is_static(method)) {
           ++m_stats.relocated_static_methods;
+        } else if (!method->is_virtual()) {
+          ++m_stats.relocated_non_static_direct_methods;
+        } else {
+          ++m_stats.relocated_non_true_virtual_methods;
         }
 
         TRACE(CS, 3, "[class splitting] Method {%s} relocated to {%s}",
@@ -227,19 +262,90 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
     return target_classes;
   }
 
-  void cleanup(const std::vector<DexClass*>& scope) override {
+  void cleanup(const Scope& final_scope) override {
     // Here we do the actual relocation.
+
+    // Part 1: Upgrade non-static invokes to static invokes
+    std::unordered_set<DexMethod*> methods_to_staticize;
+    for (auto& p : m_methods_to_relocate) {
+      DexMethod* method = p.first;
+      if (!is_static(method)) {
+        methods_to_staticize.insert(method);
+      }
+    }
+    // We now rewrite all invoke-instructions as needed to reflect the fact that
+    // we made some methods static as part of the relocation effort.
+    std::unordered_map<IROpcode, std::atomic<size_t>> rewritten_invokes;
+    for (IROpcode op :
+         {OPCODE_INVOKE_DIRECT, OPCODE_INVOKE_VIRTUAL, OPCODE_INVOKE_SUPER}) {
+      rewritten_invokes[op] = 0;
+    }
+    walk::parallel::opcodes(
+        final_scope, [](DexMethod*) { return true; },
+        [&](DexMethod* method, IRInstruction* insn) {
+          auto op = insn->opcode();
+          switch (op) {
+          case OPCODE_INVOKE_DIRECT:
+          case OPCODE_INVOKE_VIRTUAL:
+          case OPCODE_INVOKE_SUPER: {
+            auto resolved_method = resolve_method(
+                insn->get_method(), opcode_to_search(insn));
+            if (resolved_method &&
+                methods_to_staticize.count(resolved_method)) {
+              insn->set_opcode(OPCODE_INVOKE_STATIC);
+              insn->set_method(resolved_method);
+              rewritten_invokes.at(op)++;
+            }
+            break;
+          }
+          case OPCODE_INVOKE_INTERFACE:
+          case OPCODE_INVOKE_STATIC: {
+            auto resolved_method = resolve_method(
+                insn->get_method(), opcode_to_search(insn));
+            always_assert(!resolved_method ||
+                          !methods_to_staticize.count(resolved_method));
+            break;
+          }
+          default:
+            break;
+          }
+        });
+    TRACE(CS, 2,
+          "[class splitting] Rewrote {%zu} direct, {%zu} virtual, {%zu} super "
+          "invokes.",
+          (size_t)rewritten_invokes.at(OPCODE_INVOKE_DIRECT),
+          (size_t)rewritten_invokes.at(OPCODE_INVOKE_VIRTUAL),
+          (size_t)rewritten_invokes.at(OPCODE_INVOKE_SUPER));
+
+    m_mgr.incr_metric(METRIC_STATICIZED_METHODS, methods_to_staticize.size());
+    for (auto& p : rewritten_invokes) {
+      m_mgr.incr_metric(std::string(METRIC_REWRITTEN_INVOKES) + SHOW(p.first),
+                        (size_t)p.second);
+    }
+
+    // Part 2: Actually relocate and make static
     for (auto& p : m_methods_to_relocate) {
       DexMethod* method = p.first;
       DexClass* target_cls = p.second;
       set_public(method);
+      if (!is_static(method)) {
+        mutators::make_static(method);
+      }
       relocate_method(method, target_cls->get_type());
       change_visibility(method);
     }
+    TRACE(CS, 2, "[class splitting] Made {%zu} methods static.",
+          methods_to_staticize.size());
 
     m_mgr.incr_metric(METRIC_RELOCATION_CLASSES, m_stats.relocation_classes);
     m_mgr.incr_metric(METRIC_RELOCATED_STATIC_METHODS,
                       m_stats.relocated_static_methods);
+    m_mgr.incr_metric(METRIC_RELOCATED_NON_STATIC_DIRECT_METHODS,
+                      m_stats.relocated_non_static_direct_methods);
+    m_mgr.incr_metric(METRIC_RELOCATED_NON_TRUE_VIRTUAL_METHODS,
+                      m_stats.relocated_non_true_virtual_methods);
+    m_mgr.incr_metric(METRIC_NON_RELOCATED_METHODS,
+                      m_stats.non_relocated_methods);
 
     // Releasing memory
     m_target_classes.clear();
@@ -270,13 +376,13 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
   std::unordered_map<const DexClass*, SplitClass> m_split_classes;
   std::vector<std::pair<DexMethod*, DexClass*>> m_methods_to_relocate;
   ClassSplittingStats m_stats;
+  std::unordered_set<DexMethod*> m_non_true_virtual_methods;
 
   bool can_relocate(const DexClass* cls) {
-    return !cls->get_clinit() && !cls->is_external() &&
-           !cls->rstate.is_generated();
+    return !cls->is_external() && !cls->rstate.is_generated();
   }
 
-  bool can_relocate(const DexMethod* m) {
+  bool can_relocate(bool cls_has_clinit, const DexMethod* m) {
     if (!m->is_concrete() || m->is_external() || !m->get_code() ||
         !can_rename(m) || root(m) || m->rstate.no_optimizations() ||
         !gather_invoked_methods_that_prevent_relocation(m) ||
@@ -284,7 +390,16 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
         !method::no_invoke_super(m) || m->rstate.is_generated()) {
       return false;
     }
-    return is_static(m) && !method::is_clinit(m);
+    if (is_static(m)) {
+      return !cls_has_clinit && m_config.relocate_static_methods &&
+             !method::is_clinit(m);
+    } else if (!m->is_virtual()) {
+      return m_config.relocate_non_static_direct_methods && !method::is_init(m);
+    } else if (m_non_true_virtual_methods.count(const_cast<DexMethod*>(m))) {
+      return m_config.relocate_non_true_virtual_methods;
+    } else {
+      return false;
+    }
   };
 
   ClassSplittingConfig m_config;
