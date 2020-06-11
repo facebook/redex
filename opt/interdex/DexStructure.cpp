@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "DexClass.h"
+#include "DexLimits.h"
 #include "Util.h"
 
 namespace {
@@ -34,8 +35,8 @@ constexpr unsigned VTABLE_SLOT_SIZE = 4;
 constexpr unsigned OBJECT_VTABLE = 48;
 constexpr unsigned METHOD_SIZE = 52;
 constexpr unsigned INSTANCE_FIELD_SIZE = 16;
-constexpr unsigned MAX_METHOD_REFS = (1 << 16) - 1;
-constexpr unsigned MAX_FIELD_REFS = (1 << 16) - 1;
+constexpr unsigned MAX_METHOD_REFS = kMaxMethodRefs - 1;
+constexpr unsigned MAX_FIELD_REFS = kMaxFieldRefs - 1;
 
 bool matches_penalty(const char* str, unsigned* penalty) {
   for (auto const& pattern : PENALTY_PATTERNS) {

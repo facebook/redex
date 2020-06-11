@@ -33,6 +33,7 @@
 #include "Debug.h"
 #include "DexCallSite.h"
 #include "DexClass.h"
+#include "DexLimits.h"
 #include "DexMethodHandle.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
@@ -759,10 +760,6 @@ void DexOutput::emit_magic_locators() {
 }
 
 void DexOutput::generate_type_data() {
-  // Check that we don't have more than 2 ^ 15 type refs in one dex.
-  //
-  // NOTE: This is required because of a bug found in Android up to 7.
-  constexpr const size_t kMaxTypeRefs = 1 << 15;
   always_assert_log(
       dodx->type_to_idx().size() < kMaxTypeRefs,
       "Trying to encode too many type refs in dex %lu: %lu (limit: %lu).\n"
@@ -827,8 +824,6 @@ void DexOutput::generate_field_data() {
 }
 
 void DexOutput::generate_method_data() {
-  constexpr size_t kMaxMethodRefs = 64 * 1024;
-  constexpr size_t kMaxFieldRefs = 64 * 1024;
   always_assert_log(
       dodx->method_to_idx().size() <= kMaxMethodRefs,
       "Trying to encode too many method refs in dex %lu: %lu (limit: %lu)",

@@ -21,6 +21,8 @@ class XStoreRefs;
 
 namespace interdex {
 
+bool is_canary(DexClass* clazz);
+
 class InterDex {
  public:
   InterDex(const Scope& original_scope,
