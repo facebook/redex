@@ -106,7 +106,7 @@ const char* const Bar_qux = R"(
 (method (public) "LBar;.qux:()I"
   ((load-param-object v0) ; this
    (iget-object v0 "LBar;.mFoo:LFoo;")
-   (move-result-pseudo v1)
+   (move-result-pseudo-object v1)
    (iput-object v1 v0 "LBar;.mFoo:LFoo;")
    (if-eqz v1 :else)
    (invoke-virtual (v1) "LFoo;.qux:()LFoo;")
@@ -116,7 +116,7 @@ const char* const Bar_qux = R"(
    (return v3)
    (:else)
    (iget-object v1 "LFoo;.mBar:LBar;")
-   (move-result-pseudo v3)
+   (move-result-pseudo-object v3)
    (const v4 0)
    (return v4))
 ))";

@@ -48,31 +48,124 @@ std::string get_apk_dir(const Json::Value& config) {
   return apkdir;
 }
 
-// TODO(fengliu): Kill the `validate_access` flag.
-void run_verifier(const Scope& scope,
-                  bool verify_moves,
-                  bool check_no_overwrite_this,
-                  bool validate_access) {
-  TRACE(PM, 1, "Running IRTypeChecker...");
-  Timer t("IRTypeChecker");
-  walk::parallel::methods(scope, [=](DexMethod* dex_method) {
-    IRTypeChecker checker(dex_method, validate_access);
-    if (verify_moves) {
-      checker.verify_moves();
+struct TypeCheckerConfig {
+  explicit TypeCheckerConfig(const ConfigFiles& conf) {
+    const Json::Value& type_checker_args =
+        conf.get_json_config()["ir_type_checker"];
+    run_type_checker_on_input =
+        type_checker_args.get("run_on_input", true).asBool();
+    run_type_checker_on_input_ignore_access =
+        type_checker_args.get("run_on_input_ignore_access", false).asBool();
+    run_type_checker_after_each_pass =
+        type_checker_args.get("run_after_each_pass", false).asBool();
+    verify_moves = type_checker_args.get("verify_moves", true).asBool();
+    check_no_overwrite_this =
+        type_checker_args.get("check_no_overwrite_this", false).asBool();
+
+    for (auto& trigger_pass : type_checker_args["run_after_passes"]) {
+      type_checker_trigger_passes.insert(trigger_pass.asString());
     }
-    if (check_no_overwrite_this) {
-      checker.check_no_overwrite_this();
+  }
+
+  void on_input(const Scope& scope) {
+    if (!run_type_checker_on_input && !run_type_checker_after_each_pass) {
+      return;
     }
-    checker.run();
-    if (checker.fail()) {
-      std::string msg = checker.what();
-      fprintf(stderr, "ABORT! Inconsistency found in Dex code for %s.\n %s\n",
-              SHOW(dex_method), msg.c_str());
-      fprintf(stderr, "Code:\n%s\n", SHOW(dex_method->get_code()->cfg()));
-      exit(EXIT_FAILURE);
+    auto res = run_verifier(scope, verify_moves,
+                            /* check_no_overwrite_this= */ false,
+                            /* validate_access= */ true,
+                            /* exit_on_fail= */ false);
+    if (!res) {
+      return; // No issues.
     }
-  });
-}
+    if (!run_type_checker_on_input_ignore_access) {
+      std::string msg = *res;
+      msg +=
+          "\n If you are confident that this does not matter (e.g., because "
+          "you are using MakePublicPass), turn off accessibility checking on "
+          "input with `-J ir_type_checker.run_on_input_ignore_access=true`.\n "
+          "You may turn off all input checking with `-J "
+          "ir_type_checker.run_on_input=false`.";
+      fail_error(msg);
+    }
+
+    res = run_verifier(scope, verify_moves,
+                       /* check_no_overwrite_this= */ false,
+                       /* validate_access= */ false,
+                       /* exit_on_fail= */ false);
+    if (!res) {
+      std::cerr << "Warning: input has accessibility issues. Continuing."
+                << std::endl;
+      return; // "No" issues.
+    }
+    std::string msg = *res;
+    msg +=
+        "\n If you are confident that this does not matter, turn off input "
+        "checking with `-J ir_type_checker.run_on_input=false`.";
+    fail_error(msg);
+  }
+
+  bool run_after_pass(const Pass* pass) {
+    return run_type_checker_after_each_pass ||
+           type_checker_trigger_passes.count(pass->name()) > 0;
+  }
+
+  // TODO(fengliu): Kill the `validate_access` flag.
+  static boost::optional<std::string> run_verifier(const Scope& scope,
+                                                   bool verify_moves,
+                                                   bool check_no_overwrite_this,
+                                                   bool validate_access,
+                                                   bool exit_on_fail = true) {
+    TRACE(PM, 1, "Running IRTypeChecker...");
+    Timer t("IRTypeChecker");
+    std::atomic<size_t> errors{0};
+    boost::optional<std::string> first_error_msg;
+    walk::parallel::methods(scope, [&](DexMethod* dex_method) {
+      IRTypeChecker checker(dex_method, validate_access);
+      if (verify_moves) {
+        checker.verify_moves();
+      }
+      if (check_no_overwrite_this) {
+        checker.check_no_overwrite_this();
+      }
+      checker.run();
+      if (checker.fail()) {
+        bool first = errors.fetch_add(1) == 0;
+        if (first) {
+          std::ostringstream oss;
+          oss << "Inconsistency found in Dex code for " << show(dex_method)
+              << std::endl
+              << " " << checker.what() << std::endl
+              << "Code:" << std::endl
+              << show(dex_method->get_code());
+          first_error_msg = oss.str();
+        }
+      }
+    });
+
+    if (errors.load() > 0 && exit_on_fail) {
+      redex_assert(first_error_msg);
+      fail_error(*first_error_msg, errors.load());
+    }
+
+    return first_error_msg;
+  }
+
+  static void fail_error(const std::string& error_msg, size_t errors = 1) {
+    std::cerr << error_msg << std::endl;
+    if (errors > 1) {
+      std::cerr << "(" << (errors - 1) << " more issues!)" << std::endl;
+    }
+    _exit(EXIT_FAILURE);
+  }
+
+  std::unordered_set<std::string> type_checker_trigger_passes;
+  bool run_type_checker_on_input;
+  bool run_type_checker_after_each_pass;
+  bool run_type_checker_on_input_ignore_access;
+  bool verify_moves;
+  bool check_no_overwrite_this;
+};
 
 struct ScopedVmHWM {
   explicit ScopedVmHWM(bool enabled, bool reset) : enabled(enabled) {
@@ -274,18 +367,8 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   }
 
   // Retrieve the type checker's settings.
-  const Json::Value& type_checker_args =
-      conf.get_json_config()["ir_type_checker"];
-  bool run_type_checker_after_each_pass =
-      type_checker_args.get("run_after_each_pass", false).asBool();
-  bool verify_moves = type_checker_args.get("verify_moves", true).asBool();
-  bool check_no_overwrite_this =
-      type_checker_args.get("check_no_overwrite_this", false).asBool();
-  std::unordered_set<std::string> type_checker_trigger_passes;
-
-  for (auto& trigger_pass : type_checker_args["run_after_passes"]) {
-    type_checker_trigger_passes.insert(trigger_pass.asString());
-  }
+  TypeCheckerConfig checker_conf{conf};
+  checker_conf.on_input(scope);
 
   if (run_hasher_after_each_pass) {
     m_initial_hash =
@@ -350,8 +433,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
     class_cfgs.add_pass(pass->name(), VISUALIZER_PASS_OPTIONS);
 
     bool run_hasher = run_hasher_after_each_pass;
-    bool run_type_checker = run_type_checker_after_each_pass ||
-                            type_checker_trigger_passes.count(pass->name()) > 0;
+    bool run_type_checker = checker_conf.run_after_pass(pass);
 
     if (run_hasher || run_type_checker) {
       scope = build_class_scope(it);
@@ -362,9 +444,9 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       if (run_type_checker) {
         // It's OK to overwrite the `this` register if we are not yet at the
         // output phase -- the register allocator can fix it up later.
-        run_verifier(scope, verify_moves,
-                     /* check_no_overwrite_this */ false,
-                     /* validate_access */ false);
+        TypeCheckerConfig::run_verifier(scope, checker_conf.verify_moves,
+                                        /* check_no_overwrite_this */ false,
+                                        /* validate_access */ false);
       }
     }
 
@@ -386,8 +468,9 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
 
   // Always run the type checker before generating the optimized dex code.
   scope = build_class_scope(it);
-  run_verifier(scope, verify_moves, get_redex_options().no_overwrite_this(),
-               /* validate_access */ true);
+  TypeCheckerConfig::run_verifier(scope, checker_conf.verify_moves,
+                                  get_redex_options().no_overwrite_this(),
+                                  /* validate_access */ true);
 
   class_cfgs.add_pass("After all passes");
   class_cfgs.write();
