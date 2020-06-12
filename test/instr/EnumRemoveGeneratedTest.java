@@ -68,28 +68,25 @@ enum UpcastedToSerializable {
   // CHECK: method: direct redex.UpcastedToSerializable.values:()redex.UpcastedToSerializable[]
   Integer otherField;
 }
-// CHECK-LABEL: class: redex.InstanceFieldOfSerializable
+// CHECK-LABEL: class: redex.AsInstanceField
 // CHECK: Superclass: java.lang.Enum
-enum InstanceFieldOfSerializable {
+enum AsInstanceField {
   ONE, TWO;
-  // CHECK: method: direct redex.InstanceFieldOfSerializable.valueOf:(java.lang.String)redex.InstanceFieldOfSerializable
-  // CHECK: method: direct redex.InstanceFieldOfSerializable.values:()redex.InstanceFieldOfSerializable[]
+  // CHECK: method: direct redex.AsInstanceField.valueOf:(java.lang.String)redex.AsInstanceField
+  // CHECK: method: direct redex.AsInstanceField.values:()redex.AsInstanceField[]
   Integer otherField;
 }
 
 public class EnumRemoveGeneratedTest {
   // EventObject implements Serializable.
   class ImplementsSerializable extends EventObject {
-    InstanceFieldOfSerializable field;
+    AsInstanceField field;
     ImplementsSerializable(Object source) { super(source); }
   }
-  class DoesNotImplementSerializable {
-    UsesValuesMethod field0;
-    UsesNothing field1;
-  }
 
-  class CapturingClass {
-      UsesValuesMethod s;
+  static class CapturingClass {
+      static UsesValuesMethod s;
+      static UsesNothing field;
       Object obj;
 
       // `UsesValuesMethod` escapes as original type.
@@ -155,6 +152,6 @@ public class EnumRemoveGeneratedTest {
     assertThat(UsesValuesMethod.ONE.equals(UsesValuesMethod.TWO)).isFalse();
     assertThat(UsesValuesMethod.TWO.name()).isEqualTo("TWO");
     assertThat(UsesValuesMethod.TWO.toString()).isEqualTo("TWO");
-    assertThat(InstanceFieldOfSerializable.ONE.toString()).isEqualTo("ONE");
+    assertThat(AsInstanceField.ONE.toString()).isEqualTo("ONE");
   }
 }
