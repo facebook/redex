@@ -235,6 +235,7 @@ DexMethod* create_dex_method(DexMethod* m, std::unique_ptr<IRCode>&& code) {
 
   auto cloned_method = method_ref->make_concrete(
       m->get_access(), std::move(code), /*is_virtual=*/false);
+  cloned_method->set_deobfuscated_name(show(cloned_method));
 
   cloned_method->rstate.set_dont_inline(); // Don't undo our work.
 
@@ -830,6 +831,11 @@ void SplitHugeSwitchPass::bind_config() {
 void SplitHugeSwitchPass::run_pass(DexStoresVector& stores,
                                    ConfigFiles& conf,
                                    PassManager& mgr) {
+  // Don't run under instrumentation.
+  if (mgr.get_redex_options().instrument_pass_enabled) {
+    return;
+  }
+
   if (m_max_split_methods == 0) {
     mgr.set_metric("max_split_methods_zero", 1);
     return;
