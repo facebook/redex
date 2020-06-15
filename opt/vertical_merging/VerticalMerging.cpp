@@ -31,13 +31,14 @@ void record_dont_merge_state(
     const DexType* type,
     DontMergeState state,
     std::unordered_map<const DexType*, DontMergeState>* dont_merge_status) {
+  auto element_type = type::get_element_type_if_array(type);
   if (state == STRICT) {
-    (*dont_merge_status)[type] = state;
+    (*dont_merge_status)[element_type] = state;
     return;
   }
-  const auto& find = dont_merge_status->find(type);
+  const auto& find = dont_merge_status->find(element_type);
   if (find == dont_merge_status->end() || find->second != STRICT) {
-    (*dont_merge_status)[type] = state;
+    (*dont_merge_status)[element_type] = state;
   }
 }
 
@@ -288,10 +289,8 @@ void record_code_reference(
             // We don't want to merge class if either merger or
             // mergeable was ever accessed in instance_of to prevent
             // semantic error.
-            record_dont_merge_state(
-                type::get_element_type_if_array(insn->get_type()),
-                STRICT,
-                dont_merge_status);
+            record_dont_merge_state(insn->get_type(), STRICT,
+                                    dont_merge_status);
             return;
           }
         } else if (insn->has_field()) {
@@ -305,16 +304,12 @@ void record_code_reference(
               // merge it as we need the field and this field can't be renamed
               // if having collision.
               // TODO(suree404): can improve.
-              record_dont_merge_state(
-                  type::get_element_type_if_array(field->get_class()),
-                  CONDITIONAL,
-                  dont_merge_status);
+              record_dont_merge_state(field->get_class(), CONDITIONAL,
+                                      dont_merge_status);
             }
           } else {
-            record_dont_merge_state(
-                type::get_element_type_if_array(insn->get_field()->get_class()),
-                CONDITIONAL,
-                dont_merge_status);
+            record_dont_merge_state(insn->get_field()->get_class(), CONDITIONAL,
+                                    dont_merge_status);
           }
         } else if (insn->has_method()) {
           DexMethod* callee =
@@ -339,10 +334,8 @@ void record_code_reference(
                 callee->get_class() == insn->get_method()->get_class()) {
               DexClass* callee_class = type_class(callee->get_class());
               if (callee_class && is_abstract(callee_class)) {
-                record_dont_merge_state(
-                    type::get_element_type_if_array(callee->get_class()),
-                    CONDITIONAL,
-                    dont_merge_status);
+                record_dont_merge_state(callee->get_class(), CONDITIONAL,
+                                        dont_merge_status);
               }
             }
             if ((insn->opcode() == OPCODE_INVOKE_STATIC ||
