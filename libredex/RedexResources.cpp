@@ -365,6 +365,7 @@ ManifestClassInfo extract_classes_from_manifest(
   android::String16 permission("permission");
   android::String16 name("name");
   android::String16 target_activity("targetActivity");
+  android::String16 app_component_factory("appComponentFactory");
 
   android::ResXMLTree parser;
   parser.setTo(manifest_contents.data(), manifest_contents.size());
@@ -387,6 +388,12 @@ ManifestClassInfo extract_classes_from_manifest(
         if (!classname.empty()) {
           manifest_classes.application_classes.emplace(
               dotname_to_dexname(classname));
+        }
+        std::string app_factory_cls =
+            get_string_attribute_value(parser, app_component_factory);
+        if (!app_factory_cls.empty()) {
+          manifest_classes.application_classes.emplace(
+              dotname_to_dexname(app_factory_cls));
         }
       } else if (tag == instrumentation) {
         std::string classname = get_string_attribute_value(parser, name);
