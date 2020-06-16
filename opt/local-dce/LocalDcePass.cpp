@@ -33,6 +33,10 @@ constexpr const char* METRIC_NPE_INSTRUCTIONS = "num_npe_instructions";
 constexpr const char* METRIC_DEAD_INSTRUCTIONS = "num_dead_instructions";
 constexpr const char* METRIC_UNREACHABLE_INSTRUCTIONS =
     "num_unreachable_instructions";
+constexpr const char* METRIC_NORMALIZED_NEW_INSTANCES =
+    "num_normalized_new_instances";
+constexpr const char* METRIC_ALIASED_NEW_INSTANCES =
+    "num_aliased_new_instances";
 constexpr const char* METRIC_COMPUTED_NO_SIDE_EFFECTS_METHODS =
     "num_computed_no_side_effects_methods";
 constexpr const char* METRIC_COMPUTED_NO_SIDE_EFFECTS_METHODS_ITERATIONS =
@@ -90,14 +94,20 @@ void LocalDcePass::run_pass(DexStoresVector& stores,
   mgr.incr_metric(METRIC_DEAD_INSTRUCTIONS, stats.dead_instruction_count);
   mgr.incr_metric(METRIC_UNREACHABLE_INSTRUCTIONS,
                   stats.unreachable_instruction_count);
+  mgr.incr_metric(METRIC_NORMALIZED_NEW_INSTANCES,
+                  stats.normalized_new_instances);
+  mgr.incr_metric(METRIC_ALIASED_NEW_INSTANCES, stats.aliased_new_instances);
   mgr.incr_metric(METRIC_COMPUTED_NO_SIDE_EFFECTS_METHODS,
                   computed_no_side_effects_methods.size());
   mgr.incr_metric(METRIC_COMPUTED_NO_SIDE_EFFECTS_METHODS_ITERATIONS,
                   computed_no_side_effects_methods_iterations);
 
-  TRACE(DCE, 1, "instructions removed -- npe: %d, dead: %d, unreachable: %d",
+  TRACE(DCE, 1,
+        "instructions removed -- npe: %zu, dead: %zu, unreachable: %zu; "
+        "normalized %zu new-instance instructions, %zu aliasaed",
         stats.npe_instruction_count, stats.dead_instruction_count,
-        stats.unreachable_instruction_count);
+        stats.unreachable_instruction_count, stats.normalized_new_instances,
+        stats.aliased_new_instances);
 }
 
 static LocalDcePass s_pass;

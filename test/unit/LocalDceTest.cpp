@@ -548,3 +548,83 @@ TEST_F(LocalDceTryTest, invoked_static_method_with_pure_external_barrier) {
   ldce.dce(ircode);
   EXPECT_CODE_EQ(ircode, expected_code.get());
 }
+
+TEST_F(LocalDceTryTest, normalize_new_instances) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (new-instance "Ljava/lang/Object;")
+      (move-result-pseudo-object v0)
+      (new-instance "Ljava/lang/Object;")
+      (move-result-pseudo-object v1)
+      (new-instance "Ljava/lang/Object;")
+      (move-result-pseudo-object v2)
+      (invoke-direct (v0) "Ljava/lang/Object;.<init>:()V")
+      (invoke-direct (v1) "Ljava/lang/Object;.<init>:()V")
+      (invoke-direct (v2) "Ljava/lang/Object;.<init>:()V")
+      (return-void)
+    )
+  )");
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (new-instance "Ljava/lang/Object;")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0) "Ljava/lang/Object;.<init>:()V")
+      (new-instance "Ljava/lang/Object;")
+      (move-result-pseudo-object v1)
+      (invoke-direct (v1) "Ljava/lang/Object;.<init>:()V")
+      (new-instance "Ljava/lang/Object;")
+      (move-result-pseudo-object v2)
+      (invoke-direct (v2) "Ljava/lang/Object;.<init>:()V")
+      (return-void)
+    )
+  )");
+
+  Scope scope{type_class(type::java_lang_Object())};
+  LocalDce ldce({});
+  IRCode* ircode = code.get();
+  ldce.dce(ircode);
+  EXPECT_CODE_EQ(ircode, expected_code.get());
+}
+
+TEST_F(LocalDceTryTest, normalize_new_instances_no_aliases) {
+  // This is currently a limitation of the normalization; could be improved one
+  // day.
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (new-instance "Ljava/lang/Object;")
+      (move-result-pseudo-object v0)
+
+      (new-instance "Ljava/lang/Object;")
+      (move-result-pseudo-object v1)
+      (move-object v3 v1)
+
+      (new-instance "Ljava/lang/Object;")
+      (move-result-pseudo-object v2)
+      (invoke-direct (v0) "Ljava/lang/Object;.<init>:()V")
+      (invoke-direct (v1) "Ljava/lang/Object;.<init>:()V")
+      (invoke-direct (v2) "Ljava/lang/Object;.<init>:()V")
+      (return-object v3)
+    )
+  )");
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (new-instance "Ljava/lang/Object;")
+      (move-result-pseudo-object v1)
+      (move-object v3 v1)
+
+      (new-instance "Ljava/lang/Object;")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0) "Ljava/lang/Object;.<init>:()V")
+      (invoke-direct (v1) "Ljava/lang/Object;.<init>:()V")
+      (new-instance "Ljava/lang/Object;")
+      (move-result-pseudo-object v2)
+      (invoke-direct (v2) "Ljava/lang/Object;.<init>:()V")
+      (return-object v3)
+    )
+  )");
+
+  LocalDce ldce({});
+  IRCode* ircode = code.get();
+  ldce.dce(ircode);
+  EXPECT_CODE_EQ(ircode, expected_code.get());
+}

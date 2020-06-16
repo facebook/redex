@@ -18,11 +18,15 @@ class LocalDce {
     size_t npe_instruction_count{0};
     size_t dead_instruction_count{0};
     size_t unreachable_instruction_count{0};
+    size_t aliased_new_instances{0};
+    size_t normalized_new_instances{0};
 
     Stats& operator+=(const Stats& that) {
       npe_instruction_count += that.npe_instruction_count;
       dead_instruction_count += that.dead_instruction_count;
       unreachable_instruction_count += that.unreachable_instruction_count;
+      aliased_new_instances += that.aliased_new_instances;
+      normalized_new_instances += that.normalized_new_instances;
       return *this;
     }
   };
@@ -76,4 +80,5 @@ class LocalDce {
                    IRInstruction* inst,
                    const boost::dynamic_bitset<>& bliveness);
   bool assumenosideeffects(DexMethodRef* ref, DexMethod* meth);
+  void normalize_new_instances(cfg::ControlFlowGraph& cfg);
 };

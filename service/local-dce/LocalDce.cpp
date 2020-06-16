@@ -12,6 +12,7 @@
 #include <unordered_set>
 #include <vector>
 
+#include "CFGMutation.h"
 #include "ControlFlow.h"
 #include "DexClass.h"
 #include "DexUtil.h"
@@ -20,6 +21,7 @@
 #include "IRInstruction.h"
 #include "MethodOverrideGraph.h"
 #include "Purity.h"
+#include "ReachingDefinitions.h"
 #include "Resolver.h"
 #include "ScopedCFG.h"
 #include "Transform.h"
@@ -68,6 +70,7 @@ void update_liveness(const IRInstruction* inst,
 
 void LocalDce::dce(IRCode* code) {
   cfg::ScopedCFG cfg(code);
+  normalize_new_instances(*cfg);
   const auto& blocks = graph::postorder_sort<cfg::GraphInterface>(*cfg);
   auto regs = cfg->get_registers_size();
   std::unordered_map<cfg::BlockId, boost::dynamic_bitset<>> liveness;
@@ -236,4 +239,89 @@ bool LocalDce::assumenosideeffects(DexMethodRef* ref, DexMethod* meth) {
     return true;
   }
   return m_pure_methods.find(ref) != m_pure_methods.end();
+}
+
+void LocalDce::normalize_new_instances(cfg::ControlFlowGraph& cfg) {
+  // TODO: This normalization optimization doesn't really belong to local-dce,
+  // but it combines nicely as local-dce will clean-up redundant new-instance
+  // instructions and moves afterwards.
+  cfg::CFGMutation mutation(cfg);
+  reaching_defs::MoveAwareFixpointIterator fp_iter(cfg);
+  fp_iter.run({});
+  for (cfg::Block* block : cfg.blocks()) {
+    auto env = fp_iter.get_entry_state_at(block);
+    if (env.is_bottom()) {
+      continue;
+    }
+    auto ii = InstructionIterable(block);
+    for (auto it = ii.begin(), end = ii.end(), last_insn = end; it != end;
+         last_insn = it, fp_iter.analyze_instruction(it->insn, &env), it++) {
+      IRInstruction* insn = it->insn;
+      if (insn->opcode() != OPCODE_INVOKE_DIRECT ||
+          !method::is_init(insn->get_method())) {
+        continue;
+      }
+      auto type = insn->get_method()->get_class();
+      auto reg = insn->src(0);
+      auto defs = env.get(reg);
+      always_assert(!defs.is_top());
+      always_assert(!defs.is_bottom());
+      IRInstruction* old_new_instance_insn{nullptr};
+      for (auto def : defs.elements()) {
+        if (def->opcode() == OPCODE_NEW_INSTANCE) {
+          always_assert(old_new_instance_insn == nullptr);
+          old_new_instance_insn = def;
+          always_assert(def->get_type() == type);
+        }
+      }
+      if (old_new_instance_insn == nullptr) {
+        // base constructor invocation
+        continue;
+      }
+      if (last_insn != end &&
+          last_insn->insn->opcode() == IOPCODE_MOVE_RESULT_PSEUDO_OBJECT &&
+          last_insn->insn->dest() == reg) {
+        auto primary_insn = cfg.primary_instruction_of_move_result(
+            block->to_cfg_instruction_iterator(last_insn));
+        if (primary_insn->insn->opcode() == OPCODE_NEW_INSTANCE) {
+          always_assert(primary_insn->insn->get_type() == type);
+          // already normalized
+          continue;
+        }
+      }
+
+      // Let's detect aliases which might have been created via move-object
+      // instructions.
+      bool aliased{false};
+      for (const auto& pair : env.bindings()) {
+        auto other_defs = pair.second;
+        always_assert(!other_defs.is_top());
+        always_assert(!other_defs.is_bottom());
+        if (other_defs.contains(old_new_instance_insn) && pair.first != reg) {
+          aliased = true;
+          break;
+        }
+      }
+      if (aliased) {
+        // Don't touch this; maybe this will go away after another round of
+        // copy-propagation / local-dce.
+        m_stats.aliased_new_instances++;
+        continue;
+      }
+
+      // We don't bother removing the old new-instance instruction (or other
+      // intermediate move-object instructions) here, as LocalDce will do that
+      // as part of its normal operation.
+      auto new_instance_insn = new IRInstruction(OPCODE_NEW_INSTANCE);
+      new_instance_insn->set_type(type);
+      auto move_result_pseudo_object_insn =
+          new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
+      move_result_pseudo_object_insn->set_dest(reg);
+      mutation.insert_before(
+          block->to_cfg_instruction_iterator(it),
+          {new_instance_insn, move_result_pseudo_object_insn});
+      m_stats.normalized_new_instances++;
+    }
+  }
+  mutation.flush();
 }
