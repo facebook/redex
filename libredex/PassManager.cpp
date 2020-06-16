@@ -57,7 +57,7 @@ struct TypeCheckerConfig {
     run_type_checker_on_input_ignore_access =
         type_checker_args.get("run_on_input_ignore_access", false).asBool();
     run_type_checker_after_each_pass =
-        type_checker_args.get("run_after_each_pass", false).asBool();
+        type_checker_args.get("run_after_each_pass", true).asBool();
     verify_moves = type_checker_args.get("verify_moves", true).asBool();
     check_no_overwrite_this =
         type_checker_args.get("check_no_overwrite_this", false).asBool();
