@@ -894,3 +894,79 @@ TEST_F(CopyPropagationTest, ResueConst) {
 )");
   EXPECT_CODE_EQ(code, expected_code.get());
 }
+
+TEST_F(CopyPropagationTest, lock_canonicalization_none) {
+  auto method = assembler::method_from_string(R"(
+    (method (public static) "LFoo;.bar:()Ljava/lang/Object;"
+     (
+       (const v0 0)
+       (move-object v1 v0)
+       (monitor-enter v1)
+       (monitor-exit v1)
+
+       (const-class "LFoo;")
+       (move-result-pseudo-object v2)
+       (move-object v3 v2)
+       (monitor-enter v3)
+       (monitor-exit v3)
+    )
+  )
+)");
+  auto code = method->get_code();
+  code->set_registers_size(4);
+
+  copy_propagation_impl::Config config;
+  CopyPropagation(config).run(code, method);
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+       (const v0 0)
+       (move-object v1 v0)
+       (monitor-enter v1)
+       (monitor-exit v1)
+
+       (const-class "LFoo;")
+       (move-result-pseudo-object v2)
+       (move-object v3 v2)
+       (monitor-enter v3)
+       (monitor-exit v3)
+    )
+)");
+  EXPECT_CODE_EQ(code, expected_code.get());
+}
+
+TEST_F(CopyPropagationTest, lock_canonicalization) {
+  auto method = assembler::method_from_string(R"(
+    (method (public static) "LFoo;.bar:()Ljava/lang/Object;"
+     (
+       (const v0 0)
+       (move-object v1 v0)
+       (monitor-enter v1)
+       (monitor-exit v1)
+
+       (move-object v1 v0)
+       (monitor-enter v1)
+       (monitor-exit v1)
+    )
+  )
+)");
+  auto code = method->get_code();
+  code->set_registers_size(2);
+
+  copy_propagation_impl::Config config;
+  CopyPropagation(config).run(code, method);
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+       (const v0 0)
+       (move-object v2 v0)
+       (move-object v1 v0)
+       (monitor-enter v2)
+       (monitor-exit v2)
+
+       (monitor-enter v2)
+       (monitor-exit v2)
+    )
+)");
+  EXPECT_CODE_EQ(code, expected_code.get());
+}

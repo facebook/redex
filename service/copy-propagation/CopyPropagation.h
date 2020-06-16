@@ -19,6 +19,7 @@ struct Config {
   bool replace_with_representative{true};
   bool wide_registers{true};
   bool static_finals{true};
+  bool canonicalize_locks{true};
   bool debug{false};
 
   // this is set by PassManager, not by JsonWrapper
@@ -29,6 +30,8 @@ struct Stats {
   size_t moves_eliminated{0};
   size_t replaced_sources{0};
   size_t type_inferences{0};
+  size_t lock_fixups{0};
+  size_t non_singleton_lock_rdefs{0};
 
   Stats() = default;
   Stats(size_t elim, size_t replaced)

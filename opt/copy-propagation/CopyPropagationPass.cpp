@@ -34,6 +34,8 @@ void CopyPropagationPass::run_pass(DexStoresVector& stores,
   mgr.incr_metric("source_regs_replaced_with_representative",
                   stats.replaced_sources);
   mgr.incr_metric("method_type_inferences", stats.type_inferences);
+  mgr.incr_metric("lock_fixups", stats.lock_fixups);
+  mgr.incr_metric("non_singleton_lock_rdefs", stats.non_singleton_lock_rdefs);
   TRACE(RME,
         1,
         "%d redundant moves eliminated",

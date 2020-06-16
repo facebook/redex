@@ -11,6 +11,7 @@
 
 #include "AliasedRegisters.h"
 #include "CFGMutation.h"
+#include "CanonicalizeLocks.h"
 #include "ConstantUses.h"
 #include "ControlFlow.h"
 #include "DexUtil.h"
@@ -415,6 +416,8 @@ Stats& Stats::operator+=(const Stats& that) {
   moves_eliminated += that.moves_eliminated;
   replaced_sources += that.replaced_sources;
   type_inferences += that.type_inferences;
+  lock_fixups += that.lock_fixups;
+  non_singleton_lock_rdefs += that.non_singleton_lock_rdefs;
   return *this;
 }
 
@@ -454,7 +457,15 @@ Stats CopyPropagation::run(const Scope& scope) {
 }
 
 Stats CopyPropagation::run(IRCode* code, DexMethod* method) {
+  Stats stats;
   cfg::ScopedCFG cfg(code);
+
+  if (m_config.canonicalize_locks && !m_config.regalloc_has_run) {
+    auto res = locks::run(*cfg);
+    stats.lock_fixups = res.fixups;
+    stats.non_singleton_lock_rdefs = res.non_singleton_rdefs ? 1 : 0;
+  }
+
   // XXX HACK! Since this pass runs after RegAlloc, we need to avoid remapping
   // registers that belong to /range instructions. The easiest way to find out
   // which instructions are in this category is by temporarily denormalizing
@@ -473,7 +484,6 @@ Stats CopyPropagation::run(IRCode* code, DexMethod* method) {
     }
   }
 
-  Stats stats;
   AliasFixpointIterator fixpoint(*cfg, method, m_config, range_set, stats);
   fixpoint.run(AliasDomain());
 

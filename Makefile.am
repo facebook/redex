@@ -394,6 +394,7 @@ redex_all_SOURCES = \
 	service/constant-propagation/ObjectDomain.cpp \
 	service/constant-propagation/SignDomain.cpp \
 	service/copy-propagation/AliasedRegisters.cpp \
+	service/copy-propagation/CanonicalizeLocks.cpp \
 	service/copy-propagation/CopyPropagation.cpp \
 	service/cse/CommonSubexpressionElimination.cpp \
 	service/dataflow/LiveRange.cpp \
