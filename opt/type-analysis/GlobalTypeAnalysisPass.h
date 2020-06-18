@@ -21,6 +21,7 @@ class GlobalTypeAnalysisPass : public Pass {
   struct Config {
     size_t max_global_analysis_iteration{10};
     bool insert_runtime_asserts{false};
+    bool trace_global_local_diff{false};
     type_analyzer::Transform::Config transform;
     type_analyzer::RuntimeAssertTransform::Config runtime_assert;
   };
@@ -51,6 +52,7 @@ class GlobalTypeAnalysisPass : public Pass {
          m_config.max_global_analysis_iteration,
          "Maximum number of global iterations the analysis runs");
     bind("insert_runtime_asserts", false, m_config.insert_runtime_asserts);
+    bind("trace_global_local_diff", false, m_config.trace_global_local_diff);
     trait(Traits::Pass::unique, true);
   }
 

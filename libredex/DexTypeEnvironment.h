@@ -337,7 +337,7 @@ class DexTypeDomain
     });
   }
 
-  SingletonDexTypeDomain get_single_domain() { return get<1>(); }
+  SingletonDexTypeDomain get_single_domain() const { return get<1>(); }
 
   boost::optional<const DexType*> get_dex_type() const {
     return get<1>().get_dex_type();
