@@ -337,9 +337,19 @@ DexType* CheckCastAnalysis::weaken_to_demand(
     }
     return true;
   };
+  // A function that checks if a given type can be safely used.
+  // In particular, we need to filter out external types that are not already
+  // explicitly mentioned (in the demand set), as they might refer to a type
+  // that's only available on a particular Android platform.
+  auto is_safe = [&](DexType* t) {
+    auto u = type::is_array(t) ? type::get_array_element_type(t) : t;
+    auto cls = type_class(u);
+    return cls && (!cls->is_external() || demands.count(t));
+  };
   while (true) {
     auto weakened_type = weaken_type(type);
-    if (weakened_type == nullptr || !meets_demands(weakened_type)) {
+    if (weakened_type == nullptr || !meets_demands(weakened_type) ||
+        !is_safe(weakened_type)) {
       return type;
     }
     if (weakened_type == type::java_lang_Enum()) {
