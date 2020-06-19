@@ -767,6 +767,11 @@ void ClassSplittingPass::run_before_interdex(DexStoresVector& stores,
 void ClassSplittingPass::run_pass(DexStoresVector& stores,
                                   ConfigFiles& conf,
                                   PassManager& mgr) {
+  TRACE(CS, 1, "[class splitting] Enabled: %d", m_config.enabled);
+  if (!m_config.enabled) {
+    return;
+  }
+
   if (m_config.run_before_interdex) {
     run_before_interdex(stores, conf, mgr);
     return;
