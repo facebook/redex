@@ -244,9 +244,27 @@ PassManager::PassManager(
 
 void PassManager::init(const Json::Value& config) {
   if (config["redex"].isMember("passes")) {
-    auto passes_from_config = config["redex"]["passes"];
-    for (auto& pass : passes_from_config) {
-      activate_pass(pass.asString().c_str(), config);
+    const auto& redex = config["redex"];
+    auto passes_from_config = redex["passes"];
+    for (const auto& pass : passes_from_config) {
+      std::string pass_name = pass.asString();
+
+      // Check whether it is explicitly disabled.
+      auto is_disabled = [&config, &pass_name]() {
+        if (!config.isMember(pass_name)) {
+          return false;
+        }
+        const auto& pass_data = config[pass_name];
+        if (!pass_data.isMember("disabled")) {
+          return false;
+        }
+        return pass_data["disabled"].asBool();
+      };
+      if (is_disabled()) {
+        continue;
+      }
+
+      activate_pass(pass_name, config);
     }
   } else {
     // If config isn't set up, run all registered passes.
@@ -487,23 +505,22 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   sanitizers::lsan_do_recoverable_leak_check();
 }
 
-void PassManager::activate_pass(const char* name, const Json::Value& conf) {
-  std::string name_str(name);
-
+void PassManager::activate_pass(const std::string& name,
+                                const Json::Value& conf) {
   // Names may or may not have a "#<id>" suffix to indicate their order in the
   // pass list, which needs to be removed for matching.
-  std::string pass_name = name_str.substr(0, name_str.find('#'));
+  std::string pass_name = name.substr(0, name.find('#'));
   for (auto pass : m_registered_passes) {
     if (pass_name == pass->name()) {
       m_activated_passes.push_back(pass);
 
       // Retrieving the configuration specific to this particular run
       // of the pass.
-      pass->parse_config(JsonWrapper(conf[name_str]));
+      pass->parse_config(JsonWrapper(conf[name]));
       return;
     }
   }
-  always_assert_log(false, "No pass named %s!", name);
+  always_assert_log(false, "No pass named %s!", name.c_str());
 }
 
 Pass* PassManager::find_pass(const std::string& pass_name) const {
