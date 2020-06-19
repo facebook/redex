@@ -10,6 +10,7 @@
 #include "Pass.h"
 
 struct ClassSplittingConfig {
+  bool enabled{true};
   bool combine_target_classes_by_api_level{false};
   unsigned int relocated_methods_per_target_class{64};
   float method_profiles_appear_percent_threshold{1};
@@ -27,6 +28,7 @@ class ClassSplittingPass : public Pass {
   ClassSplittingPass() : Pass("ClassSplittingPass") {}
 
   void bind_config() override {
+    bind("enabled", m_config.enabled, m_config.enabled);
     bind("combine_target_classes_by_api_level",
          m_config.combine_target_classes_by_api_level,
          m_config.combine_target_classes_by_api_level);
