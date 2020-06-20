@@ -14,7 +14,11 @@ class MySpecialException extends Exception {
 class MySpecialException1 extends MySpecialException {}
 class MySpecialException2 extends MySpecialException {}
 
-class Base {}
+class Base {
+  int foo() { return 42; }
+}
+class Sub1 extends Base {}
+class Sub2 extends Base {}
 
 public class TypeInferenceTest {
   static void whatIsThisThrowable(Throwable t) {}
@@ -72,5 +76,16 @@ public class TypeInferenceTest {
       res += 1;
     }
     return res;
+  }
+
+  static void testSmallSetDomain() {
+    Base b = null;
+    int i = 1 << 2;
+    if (i > 3) {
+      b = new Sub1();
+    } else {
+      b = new Sub2();
+    }
+    b.foo();
   }
 }

@@ -199,3 +199,34 @@ TEST_F(TypeInferenceTest, test_join_with_null) {
     EXPECT_TRUE(ret_type.is_top());
   }
 }
+
+TEST_F(TypeInferenceTest, test_small_set_domain) {
+  auto scope = build_class_scope(stores);
+  auto method = DexMethod::get_method(
+                    "Lcom/facebook/redextest/"
+                    "TypeInferenceTest;.testSmallSetDomain:()V")
+                    ->as_def();
+  auto& cfg = get_cfg(method);
+
+  type_inference::TypeInference inference(cfg);
+  inference.run(method);
+
+  auto exit_block = cfg.exit_block();
+  auto exit_env = inference.get_exit_state_at(exit_block);
+  for (auto& mie : InstructionIterable(exit_block)) {
+    auto insn = mie.insn;
+    if (!is_invoke(insn->opcode())) {
+      continue;
+    }
+    auto ret_type = exit_env.get_type_domain(insn->src(0));
+    EXPECT_TRUE(ret_type.get_dex_type());
+    EXPECT_EQ(*ret_type.get_dex_type(),
+              DexType::get_type("Lcom/facebook/redextest/Base;"));
+    auto type_set = ret_type.get_type_set();
+    EXPECT_EQ(type_set.size(), 2);
+    EXPECT_TRUE(
+        type_set.contains(DexType::get_type("Lcom/facebook/redextest/Sub1;")));
+    EXPECT_TRUE(
+        type_set.contains(DexType::get_type("Lcom/facebook/redextest/Sub2;")));
+  }
+}
