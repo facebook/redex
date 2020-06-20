@@ -344,9 +344,10 @@ void TypeInference::run(bool is_static,
         set_reference(&init_state, insn->dest(), declaring_type);
       } else {
         // This is a regular parameter of the method.
+        always_assert(sig_it != signature.end());
         const DexType* type = *sig_it;
-        always_assert(sig_it++ != signature.end());
         set_reference(&init_state, insn->dest(), type);
+        ++sig_it;
       }
       break;
     }

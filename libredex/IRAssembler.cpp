@@ -722,7 +722,8 @@ static boost::optional<reg_t> largest_reg_operand(const IRInstruction* insn) {
 std::unique_ptr<IRCode> ircode_from_s_expr(const s_expr& e) {
   s_expr insns_expr;
   auto code = std::make_unique<IRCode>();
-  always_assert(s_patn({}, insns_expr).match_with(e));
+  bool matched = s_patn({}, insns_expr).match_with(e);
+  always_assert(matched);
   always_assert_log(insns_expr.size() > 0, "Empty instruction list?! %s");
   LabelDefs label_defs;
   LabelRefs label_refs;

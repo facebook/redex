@@ -273,7 +273,8 @@ void OptimizationImpl::set_method_defs(const DexType* intf,
   for (auto method : data.methoddefs) {
     TRACE(INTF, 3, "(MDEF) %s", SHOW(method));
     TRACE(INTF, 5, "(MDEF) Update method: %s", SHOW(method));
-    always_assert(update_method_proto(intf, data.cls, method));
+    bool res = update_method_proto(intf, data.cls, method);
+    always_assert(res);
     TRACE(INTF, 3, "(MDEF)\t=> %s", SHOW(method));
   }
 }
