@@ -131,7 +131,15 @@ struct DexTypeEnvironmentTest : public RedexTest {
     creator.create();
 
     m_type_if1 = DexType::make_type("If1");
+    creator = ClassCreator(m_type_if1);
+    creator.set_super(type::java_lang_Object());
+    creator.set_access(ACC_PUBLIC | ACC_INTERFACE);
+    creator.create();
     m_type_if2 = DexType::make_type("If2");
+    creator = ClassCreator(m_type_if2);
+    creator.set_super(type::java_lang_Object());
+    creator.set_access(ACC_PUBLIC | ACC_INTERFACE);
+    creator.create();
 
     m_type_sub1 = DexType::make_type("Sub1");
     creator = ClassCreator(m_type_sub1);
@@ -383,6 +391,21 @@ TEST_F(DexTypeEnvironmentTest, InterfaceJoinTest) {
   sub4.join_with(base);
   EXPECT_TRUE(sub4.is_top());
   EXPECT_FALSE(base.is_top());
+}
+
+TEST_F(DexTypeEnvironmentTest, ExtendedInterfaceJoinTest) {
+  auto sub1 = SingletonDexTypeDomain(m_type_sub1);
+  auto if1 = SingletonDexTypeDomain(m_type_if1);
+  sub1.join_with(if1);
+  EXPECT_FALSE(sub1.is_top());
+  EXPECT_EQ(sub1, SingletonDexTypeDomain(m_type_if1));
+  EXPECT_FALSE(if1.is_top());
+
+  sub1 = SingletonDexTypeDomain(m_type_sub1);
+  auto if2 = SingletonDexTypeDomain(m_type_if2);
+  sub1.join_with(if2);
+  EXPECT_TRUE(sub1.is_top());
+  EXPECT_FALSE(if2.is_top());
 }
 
 TEST_F(DexTypeEnvironmentTest, NullableDexTypeDomainTest) {

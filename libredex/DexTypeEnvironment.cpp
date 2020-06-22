@@ -12,6 +12,18 @@
 
 namespace dtv_impl {
 
+bool implements(const DexClass* cls, const DexType* intf) {
+  if (is_interface(cls)) {
+    return false;
+  }
+  for (const auto interface : cls->get_interfaces()->get_type_list()) {
+    if (interface == intf) {
+      return true;
+    }
+  }
+  return false;
+}
+
 // Is `left` a subset of `right`
 bool is_subset(DexTypeList* left, DexTypeList* right) {
   std::unordered_set<DexType*> rset(right->begin(), right->end());
@@ -35,7 +47,7 @@ bool are_interfaces_mergeable_to(const DexClass* left, const DexClass* right) {
 /*
  * Try to find type on `l`'s parent chain that is also a parent of `r`.
  */
-const DexType* find_common_parent(const DexType* l, const DexType* r) {
+const DexType* find_common_super_class(const DexType* l, const DexType* r) {
   always_assert(l && r);
   if (l == r) {
     return l;
@@ -54,6 +66,36 @@ const DexType* find_common_parent(const DexType* l, const DexType* r) {
   return nullptr;
 }
 
+const DexType* find_common_type(const DexType* l, const DexType* r) {
+  const DexClass* l_cls = const_cast<const DexClass*>(type_class(l));
+  const DexClass* r_cls = const_cast<const DexClass*>(type_class(r));
+  if (!l_cls || !r_cls) {
+    return nullptr;
+  }
+
+  // One is interface, and the other implements it.
+  if (is_interface(l_cls) && implements(r_cls, l)) {
+    return l;
+  }
+  if (is_interface(r_cls) && implements(l_cls, r)) {
+    return r;
+  }
+
+  auto parent = find_common_super_class(l, r);
+  auto parent_cls = type_class(parent);
+  if (parent && parent_cls) {
+    if (are_interfaces_mergeable_to(l_cls, parent_cls) &&
+        are_interfaces_mergeable_to(r_cls, parent_cls)) {
+      return parent;
+    }
+  }
+  return nullptr;
+}
+
+/*
+ * We are partially mimicing the Dalvik bytecode structural verifier:
+ * https://android.googlesource.com/platform/dalvik/+/android-cts-4.4_r4/vm/analysis/CodeVerify.cpp#2462
+ */
 sparta::AbstractValueKind DexTypeValue::join_with(const DexTypeValue& other) {
   if (equals(other)) {
     return kind();
@@ -65,24 +107,10 @@ sparta::AbstractValueKind DexTypeValue::join_with(const DexTypeValue& other) {
     return sparta::AbstractValueKind::Value;
   }
 
-  const DexClass* this_cls =
-      const_cast<const DexClass*>(type_class(get_dex_type()));
-  const DexClass* other_cls =
-      const_cast<const DexClass*>(type_class(other.get_dex_type()));
-  // External classes/missing class definition. Fall back to top.
-  if (!this_cls || !other_cls) {
-    clear();
-    return sparta::AbstractValueKind::Top;
-  }
-
-  auto parent = find_common_parent(get_dex_type(), other.get_dex_type());
-  auto parent_cls = type_class(parent);
-  if (parent && parent_cls) {
-    if (are_interfaces_mergeable_to(this_cls, parent_cls) &&
-        are_interfaces_mergeable_to(other_cls, parent_cls)) {
-      m_dex_type = parent;
-      return sparta::AbstractValueKind::Value;
-    }
+  auto common_type = find_common_type(get_dex_type(), other.get_dex_type());
+  if (common_type) {
+    m_dex_type = common_type;
+    return sparta::AbstractValueKind::Value;
   }
 
   // Give up. Rewrite to top.
