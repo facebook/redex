@@ -1074,6 +1074,18 @@ void ControlFlowGraph::sanity_check() const {
       always_assert_log(num_goto_succs < 2, "block %d, %s", b->id(),
                         SHOW(*this));
     }
+
+    // IRInstruction pointers must be unique.
+    std::unordered_set<IRInstruction*> pointer_check;
+    for (const auto& mie : ConstInstructionIterable(*this)) {
+      auto insn = mie.insn;
+      always_assert_log(
+          pointer_check.count(insn) == 0,
+          "IRInstruction pointers must be unqiue. You have inserted the "
+          "following IRInstruction* multiple times:\n >> %s",
+          SHOW(*insn));
+      pointer_check.insert(insn);
+    }
   }
 
   for (const auto& entry : m_blocks) {
