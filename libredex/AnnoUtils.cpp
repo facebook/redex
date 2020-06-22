@@ -47,11 +47,9 @@ const DexEncodedValue* parse_anno_value_helper(const DexAnnotationSet* anno_set,
       return default_value;
     }
   }
-
-  always_assert_log(false,
-                    " Unable to parse annotation value of %s\non %s\n",
-                    elem_str.c_str(),
-                    SHOW(anno_set));
+  not_reached_log("Unable to parse annotation value of %s\non %s\n",
+                  elem_str.c_str(),
+                  SHOW(anno_set));
 }
 
 template <class DexMember>

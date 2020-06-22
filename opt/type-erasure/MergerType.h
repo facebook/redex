@@ -291,8 +291,7 @@ struct MergerType {
     case 'F':
       return start_index_for_float();
     default:
-      always_assert(false);
-      break;
+      not_reached();
     }
   }
 
@@ -317,7 +316,7 @@ struct MergerType {
     } else if (pos >= start_index_for_float() && pos < field_count()) {
       return type::_float();
     } else {
-      always_assert(false);
+      not_reached();
     }
   }
 

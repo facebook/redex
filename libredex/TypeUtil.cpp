@@ -112,11 +112,9 @@ bool is_primitive(const DexType* type) {
   case '[':
     return false;
   default:
-    always_assert_log(false,
-                      "unexpected leading character in type: %s",
-                      type->get_name()->c_str());
+    not_reached_log("unexpected leading character in type: %s",
+                    type->get_name()->c_str());
   }
-  not_reached();
 }
 
 bool is_wide_type(const DexType* type) {

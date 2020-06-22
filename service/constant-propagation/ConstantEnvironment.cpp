@@ -13,7 +13,7 @@ int64_t SignedConstantDomain::max_element() const {
   }
   switch (interval()) {
   case sign_domain::Interval::EMPTY:
-    always_assert_log(false, "Empty interval does not have a max element");
+    not_reached_log("Empty interval does not have a max element");
   case sign_domain::Interval::EQZ:
   case sign_domain::Interval::LEZ:
     return 0;
@@ -35,7 +35,7 @@ int64_t SignedConstantDomain::min_element() const {
   }
   switch (interval()) {
   case sign_domain::Interval::EMPTY:
-    always_assert_log(false, "Empty interval does not have a min element");
+    not_reached_log("Empty interval does not have a min element");
   case sign_domain::Interval::EQZ:
   case sign_domain::Interval::GEZ:
     return 0;

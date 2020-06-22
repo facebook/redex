@@ -142,8 +142,7 @@ DexType* CheckCastAnalysis::get_type_demand(IRInstruction* insn,
   case OPCODE_SPUT_CHAR:
   case OPCODE_SPUT_SHORT:
   case OPCODE_SPUT_WIDE:
-    always_assert(false);
-    return nullptr;
+    not_reached();
 
   case OPCODE_FILLED_NEW_ARRAY:
     return type::get_array_component_type(insn->get_type());
@@ -269,7 +268,7 @@ DexType* CheckCastAnalysis::get_type_demand(IRInstruction* insn,
   }
   case OPCODE_INVOKE_CUSTOM:
   case OPCODE_INVOKE_POLYMORPHIC:
-    always_assert_log(false, "Unsupported instruction {%s}\n", SHOW(insn));
+    not_reached_log("Unsupported instruction {%s}\n", SHOW(insn));
   }
 }
 

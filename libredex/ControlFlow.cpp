@@ -478,12 +478,10 @@ boost::optional<Edge::CaseKey> Block::remove_first_matching_target(
       return result;
     }
   }
-  always_assert_log(false,
-                    "block %d has no targets matching %s:\n%s",
-                    id(),
-                    SHOW(branch->insn),
-                    SHOW(&m_entries));
-  not_reached();
+  not_reached_log("block %d has no targets matching %s:\n%s",
+                  id(),
+                  SHOW(branch->insn),
+                  SHOW(&m_entries));
 }
 
 // These assume that the iterator is inside this block

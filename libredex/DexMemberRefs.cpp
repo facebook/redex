@@ -20,11 +20,12 @@ static size_t expect(const std::string& s,
                      const T& needle,
                      size_t start_pos = 0) {
   auto pos = s.find(needle, start_pos);
-  if (pos == std::string::npos) {
+  auto error_fn = [&]() {
     std::ostringstream ss;
     ss << "Could not find \"" << needle << "\" in \"" << s << "\"";
-    always_assert_log(false, ss.str().c_str());
-  }
+    return ss.str();
+  };
+  always_assert_log(pos != std::string::npos, "%s", error_fn().c_str());
   return pos;
 }
 

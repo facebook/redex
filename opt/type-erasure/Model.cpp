@@ -768,8 +768,7 @@ void Model::shape_merger(const MergerType& merger,
         shape.int_fields++;
         break;
       default:
-        always_assert(false);
-        break;
+        not_reached();
       }
     }
 

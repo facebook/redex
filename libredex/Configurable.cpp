@@ -100,9 +100,8 @@ Configurable::Reflection Configurable::reflect() {
                   param_type));
           break;
         default:
-          always_assert_log(false,
-                            "Invalid Configurable::ReflectionParam::Type: %d",
-                            param_type_tag);
+          not_reached_log("Invalid Configurable::ReflectionParam::Type: %d",
+                          param_type_tag);
           break;
         }
       };

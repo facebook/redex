@@ -1795,7 +1795,7 @@ static void rewrite_at_location(DexMethod* outlined_method,
     // overlapping locations in a method, and overlaps across selected
     // candidates are prevented by meticulously removing remaining overlapping
     // occurrences after processing a candidate.
-    always_assert(false);
+    not_reached();
   }
   cfg::CFGMutation cfg_mutation(cfg);
   const auto first_arg_reg = c.temp_regs;

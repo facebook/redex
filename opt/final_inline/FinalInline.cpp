@@ -171,20 +171,17 @@ class FinalInlineImpl {
   bool validate_sget(DexMethod* context, IRInstruction* opfield) {
     if (check_sget(opfield)) {
       return true;
-    } else {
-      auto field = resolve_field(opfield->get_field(), FieldSearch::Static);
-      always_assert_log(field->is_concrete(), "Must be a concrete field");
-      auto value = field->get_static_value();
-      always_assert_log(
-          false,
-          "Unexpected field type in inline_*sget %s for field %s value %s in "
-          "method %s\n",
-          SHOW(opfield),
-          SHOW(field),
-          value != nullptr ? value->show().c_str() : "('nullptr')",
-          SHOW(context));
-      return false;
     }
+    auto field = resolve_field(opfield->get_field(), FieldSearch::Static);
+    always_assert_log(field->is_concrete(), "Must be a concrete field");
+    auto value = field->get_static_value();
+    not_reached_log(
+        "Unexpected field type in inline_*sget %s for field %s value %s in "
+        "method %s\n",
+        SHOW(opfield),
+        SHOW(field),
+        value != nullptr ? value->show().c_str() : "('nullptr')",
+        SHOW(context));
   }
 
   /*

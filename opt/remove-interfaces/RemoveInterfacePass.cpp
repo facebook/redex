@@ -235,10 +235,8 @@ void remove_interface_references(
       return;
     }
     auto opcode = insn->opcode();
-    if (is_opcode_excluded(opcode)) {
-      always_assert_log(false, "Unexpected opcode %s on %s\n", SHOW(opcode),
-                        SHOW(type));
-    }
+    always_assert_log(!is_opcode_excluded(opcode),
+                      "Unexpected opcode %s on %s\n", SHOW(opcode), SHOW(type));
     always_assert(type_class(type));
     auto new_type = get_replacement_type(type_system, type, root);
     if (type::is_array(ref_type)) {

@@ -22,7 +22,7 @@ static IRInstruction* find_insn(DexMethod* method,
       return mie.insn;
     }
   }
-  always_assert(false);
+  not_reached();
 }
 
 static IRInstruction* find_insn(DexMethod* method,

@@ -31,10 +31,8 @@ bool is_throw_block(const DexMethod* meth, cfg::Block* block) {
       // only have catch successors
       if (!block->succs().empty()) {
         for (const auto& succ : block->succs()) {
-          if (!succ->target()->is_catch()) {
-            always_assert_log(false, "throw block with successors in %s",
-                              SHOW(meth));
-          }
+          always_assert_log(succ->target()->is_catch(),
+                            "throw block with successors in %s", SHOW(meth));
         }
       }
       return true;

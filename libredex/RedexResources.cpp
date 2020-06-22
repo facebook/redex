@@ -322,8 +322,7 @@ bool find_nested_tag(const android::String16& search_tag,
       break;
     }
     case android::ResXMLParser::BAD_DOCUMENT: {
-      always_assert(false);
-      break;
+      not_reached();
     }
     default: {
       break;

@@ -49,8 +49,7 @@ static IROpcode move_op_for_type(RegisterType type) {
     return OPCODE_MOVE_WIDE;
   case RegisterType::UNKNOWN:
   case RegisterType::CONFLICT:
-    always_assert_log(
-        false, "Cannot generate move for register type %s", SHOW(type));
+    not_reached_log("Cannot generate move for register type %s", SHOW(type));
   case RegisterType::SIZE:
     not_reached();
   }
@@ -76,8 +75,7 @@ RegisterType dest_reg_type(const IRInstruction* insn) {
   auto op = insn->opcode();
   switch (op) {
   case OPCODE_NOP:
-    always_assert_log(false, "No dest");
-    not_reached();
+    not_reached_log("No dest");
   case OPCODE_MOVE:
     return RegisterType::NORMAL;
   case OPCODE_MOVE_WIDE:
@@ -95,14 +93,12 @@ RegisterType dest_reg_type(const IRInstruction* insn) {
   case OPCODE_RETURN:
   case OPCODE_RETURN_WIDE:
   case OPCODE_RETURN_OBJECT:
-    always_assert_log(false, "No dest");
-    not_reached();
+    not_reached_log("No dest");
   case OPCODE_MONITOR_ENTER:
   case OPCODE_MONITOR_EXIT:
   case OPCODE_THROW:
   case OPCODE_GOTO:
-    always_assert_log(false, "No dest");
-    not_reached();
+    not_reached_log("No dest");
   case OPCODE_NEG_INT:
   case OPCODE_NOT_INT:
     return RegisterType::NORMAL;
@@ -159,8 +155,7 @@ RegisterType dest_reg_type(const IRInstruction* insn) {
   case OPCODE_IF_GEZ:
   case OPCODE_IF_GTZ:
   case OPCODE_IF_LEZ:
-    always_assert_log(false, "No dest");
-    not_reached();
+    not_reached_log("No dest");
   case OPCODE_AGET:
     return RegisterType::NORMAL;
   case OPCODE_AGET_WIDE:
@@ -179,8 +174,7 @@ RegisterType dest_reg_type(const IRInstruction* insn) {
   case OPCODE_APUT_BYTE:
   case OPCODE_APUT_CHAR:
   case OPCODE_APUT_SHORT:
-    always_assert_log(false, "No dest");
-    not_reached();
+    not_reached_log("No dest");
   case OPCODE_ADD_INT:
   case OPCODE_SUB_INT:
   case OPCODE_MUL_INT:
@@ -241,8 +235,7 @@ RegisterType dest_reg_type(const IRInstruction* insn) {
     return const_dest_type(insn);
   case OPCODE_FILL_ARRAY_DATA:
   case OPCODE_SWITCH:
-    always_assert_log(false, "No dest");
-    not_reached();
+    not_reached_log("No dest");
   case OPCODE_CONST_WIDE:
     return RegisterType::WIDE;
   case OPCODE_IGET:
@@ -263,8 +256,7 @@ RegisterType dest_reg_type(const IRInstruction* insn) {
   case OPCODE_IPUT_BYTE:
   case OPCODE_IPUT_CHAR:
   case OPCODE_IPUT_SHORT:
-    always_assert_log(false, "No dest");
-    not_reached();
+    not_reached_log("No dest");
   case OPCODE_SGET:
     return RegisterType::NORMAL;
   case OPCODE_SGET_WIDE:
@@ -283,8 +275,7 @@ RegisterType dest_reg_type(const IRInstruction* insn) {
   case OPCODE_SPUT_BYTE:
   case OPCODE_SPUT_CHAR:
   case OPCODE_SPUT_SHORT:
-    always_assert_log(false, "No dest");
-    not_reached();
+    not_reached_log("No dest");
   case OPCODE_INVOKE_VIRTUAL:
   case OPCODE_INVOKE_SUPER:
   case OPCODE_INVOKE_DIRECT:
@@ -292,8 +283,7 @@ RegisterType dest_reg_type(const IRInstruction* insn) {
   case OPCODE_INVOKE_INTERFACE:
   case OPCODE_INVOKE_CUSTOM:
   case OPCODE_INVOKE_POLYMORPHIC:
-    always_assert_log(false, "No dest");
-    not_reached();
+    not_reached_log("No dest");
   case OPCODE_CONST_STRING:
   case OPCODE_CONST_CLASS:
   case OPCODE_CHECK_CAST:
@@ -317,7 +307,7 @@ RegisterType dest_reg_type(const IRInstruction* insn) {
   case IOPCODE_MOVE_RESULT_PSEUDO_WIDE:
     return RegisterType::WIDE;
   default:
-    always_assert_log(false, "Unknown opcode %02x\n", op);
+    not_reached_log("Unknown opcode %02x\n", op);
   }
 }
 
@@ -354,8 +344,7 @@ RegisterType src_reg_type(const IRInstruction* insn, vreg_t i) {
   auto op = insn->opcode();
   switch (op) {
   case OPCODE_NOP:
-    always_assert_log(false, "No src");
-    not_reached();
+    not_reached_log("No src");
   case OPCODE_MOVE:
     return RegisterType::NORMAL;
   case OPCODE_MOVE_WIDE:
@@ -367,8 +356,7 @@ RegisterType src_reg_type(const IRInstruction* insn, vreg_t i) {
   case OPCODE_MOVE_RESULT_OBJECT:
   case OPCODE_MOVE_EXCEPTION:
   case OPCODE_RETURN_VOID:
-    always_assert_log(false, "No src");
-    not_reached();
+    not_reached_log("No src");
   case OPCODE_RETURN:
     return RegisterType::NORMAL;
   case OPCODE_RETURN_WIDE:
@@ -380,8 +368,7 @@ RegisterType src_reg_type(const IRInstruction* insn, vreg_t i) {
   case OPCODE_THROW:
     return RegisterType::OBJECT;
   case OPCODE_GOTO:
-    always_assert_log(false, "No src");
-    not_reached();
+    not_reached_log("No src");
   case OPCODE_NEG_INT:
   case OPCODE_NOT_INT:
     return RegisterType::NORMAL;
@@ -513,15 +500,13 @@ RegisterType src_reg_type(const IRInstruction* insn, vreg_t i) {
   case OPCODE_USHR_INT_LIT8:
     return RegisterType::NORMAL;
   case OPCODE_CONST:
-    always_assert_log(false, "No src");
-    not_reached();
+    not_reached_log("No src");
   case OPCODE_FILL_ARRAY_DATA:
     return RegisterType::OBJECT;
   case OPCODE_SWITCH:
     return RegisterType::UNKNOWN;
   case OPCODE_CONST_WIDE:
-    always_assert_log(false, "No src");
-    not_reached();
+    not_reached_log("No src");
   case OPCODE_IGET:
   case OPCODE_IGET_WIDE:
   case OPCODE_IGET_OBJECT:
@@ -549,8 +534,7 @@ RegisterType src_reg_type(const IRInstruction* insn, vreg_t i) {
   case OPCODE_SGET_BYTE:
   case OPCODE_SGET_CHAR:
   case OPCODE_SGET_SHORT:
-    always_assert_log(false, "No src");
-    not_reached();
+    not_reached_log("No src");
   case OPCODE_SPUT:
     return RegisterType::NORMAL;
   case OPCODE_SPUT_WIDE:
@@ -572,14 +556,12 @@ RegisterType src_reg_type(const IRInstruction* insn, vreg_t i) {
     return invoke_src_type(insn, i);
   case OPCODE_CONST_STRING:
   case OPCODE_CONST_CLASS:
-    always_assert_log(false, "No src");
-    not_reached();
+    not_reached_log("No src");
   case OPCODE_CHECK_CAST:
   case OPCODE_INSTANCE_OF:
     return RegisterType::OBJECT;
   case OPCODE_NEW_INSTANCE:
-    always_assert_log(false, "No src");
-    not_reached();
+    not_reached_log("No src");
   case OPCODE_NEW_ARRAY:
     return RegisterType::NORMAL;
   case OPCODE_FILLED_NEW_ARRAY:
@@ -589,14 +571,12 @@ RegisterType src_reg_type(const IRInstruction* insn, vreg_t i) {
   case IOPCODE_LOAD_PARAM:
   case IOPCODE_LOAD_PARAM_OBJECT:
   case IOPCODE_LOAD_PARAM_WIDE:
-    always_assert_log(false, "No src");
-    not_reached();
+    not_reached_log("No src");
   case IOPCODE_MOVE_RESULT_PSEUDO:
   case IOPCODE_MOVE_RESULT_PSEUDO_WIDE:
-    always_assert_log(false, "No src");
-    not_reached();
+    not_reached_log("No src");
   default:
-    always_assert_log(false, "Unknown opcode %02x\n", op);
+    not_reached_log("Unknown opcode %02x\n", op);
   }
 }
 

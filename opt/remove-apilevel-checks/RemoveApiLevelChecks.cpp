@@ -47,7 +47,7 @@ IROpcode get_symmetric_cond(IROpcode op) {
   case OPCODE_IF_LE:
     return OPCODE_IF_GE;
   default:
-    always_assert_log(false, "Invalid conditional opcode %s", SHOW(op));
+    not_reached_log("Invalid conditional opcode %s", SHOW(op));
   }
 }
 

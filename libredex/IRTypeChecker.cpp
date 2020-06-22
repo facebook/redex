@@ -327,7 +327,7 @@ Result check_load_params(const DexMethod* method) {
       ok = type::is_primitive(*sig_it) && type::is_wide_type(*sig_it);
       break;
     default:
-      always_assert(false);
+      not_reached();
     }
     if (!ok) {
       return std::string("Incompatible load-param ") + show(insn) + " for " +

@@ -63,14 +63,14 @@ ConstantValue::ConstantValue(const TypeTags* type_tags,
   } else if (kind_str == "S") {
     m_kind = ConstantKind::STRING;
     m_str_val = val_str;
-  } else if (kind_str.size() > 1) {
+  } else {
+    always_assert_log(
+        kind_str.size() > 1, "Unexpected kind str %s\n", kind_str.c_str());
     TRACE(METH_DEDUP,
           9,
           "const lift: trying to decode more than one kind %s",
           kind_str.c_str());
     m_kind = ConstantKind::INVALID;
-  } else {
-    always_assert_log(false, "Unexpected kind str %s\n", kind_str.c_str());
   }
 }
 

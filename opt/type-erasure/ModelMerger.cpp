@@ -135,9 +135,8 @@ void update_code_type_refs(
                            true /*update_deobfuscated_name*/);
           continue;
         }
-        always_assert_log(false,
-                          "Found mergeable referencing MethodRef %s\n",
-                          SHOW(meth_ref));
+        not_reached_log("Found mergeable referencing MethodRef %s\n",
+                        SHOW(meth_ref));
       }
       ////////////////////////////////////////
       // Update simple type refs

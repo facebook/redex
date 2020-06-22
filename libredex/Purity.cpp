@@ -95,7 +95,7 @@ CseLocation get_read_array_location(IROpcode opcode) {
   case OPCODE_AGET_BOOLEAN:
     return CseLocation(CseSpecialLocations::ARRAY_COMPONENT_TYPE_BOOLEAN);
   default:
-    always_assert(false);
+    not_reached();
   }
 }
 

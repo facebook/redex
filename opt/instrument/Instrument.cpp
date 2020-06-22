@@ -34,7 +34,7 @@
  */
 namespace {
 
-static bool debug = false;
+constexpr bool instr_debug = false;
 
 class InstrumentInterDexPlugin : public interdex::InterDexPassPlugin {
  public:
@@ -521,7 +521,7 @@ void instrument_onMethodBegin(DexMethod* method,
   code->insert_before(code->insert_before(insert_point, invoke_inst),
                       const_inst);
 
-  if (debug) {
+  if (instr_debug) {
     for (auto it = code->begin(); it != code->end(); ++it) {
       if (it == insert_point) {
         TRACE(INSTRUMENT, 9, "<==== insertion");

@@ -187,23 +187,23 @@ Json::Value reflect_config(const Configurable::Reflection& cr) {
     param["doc"] = entry.second.doc;
     param["is_required"] = entry.second.is_required;
     param["bindflags"] = static_cast<Json::UInt64>(entry.second.bindflags);
-    switch (entry.second.type) {
-    case Configurable::ReflectionParam::Type::PRIMITIVE:
-      param["type"] = std::get<Configurable::ReflectionParam::Type::PRIMITIVE>(
-          entry.second.variant);
-      param["default_value"] = entry.second.default_value;
-      break;
-    case Configurable::ReflectionParam::Type::COMPOSITE:
-      param["type"] = reflect_config(
-          std::get<Configurable::ReflectionParam::Type::COMPOSITE>(
-              entry.second.variant));
-      break;
-    default:
-      always_assert_log(false,
-                        "Invalid Configurable::ReflectionParam::Type: %d",
-                        entry.second.type);
-      break;
-    }
+    [&]() {
+      switch (entry.second.type) {
+      case Configurable::ReflectionParam::Type::PRIMITIVE:
+        param["type"] =
+            std::get<Configurable::ReflectionParam::Type::PRIMITIVE>(
+                entry.second.variant);
+        param["default_value"] = entry.second.default_value;
+        return;
+      case Configurable::ReflectionParam::Type::COMPOSITE:
+        param["type"] = reflect_config(
+            std::get<Configurable::ReflectionParam::Type::COMPOSITE>(
+                entry.second.variant));
+        return;
+      }
+      not_reached_log("Invalid Configurable::ReflectionParam::Type: %d",
+                      entry.second.type);
+    }();
     params[params_idx++] = param;
   }
   int traits_idx = 0;

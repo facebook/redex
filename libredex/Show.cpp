@@ -888,8 +888,7 @@ std::string show(IROpcode opcode) {
   case IOPCODE_MOVE_RESULT_PSEUDO_WIDE:
     return "IOPCODE_MOVE_RESULT_PSEUDO_WIDE";
   }
-  always_assert_log(false, "Unknown opcode 0x%x", opcode);
-  return "";
+  not_reached_log("Unknown opcode 0x%x", opcode);
 }
 
 std::string show(DexOpcode opcode) {

@@ -274,7 +274,7 @@ DexType* get_instantiated_type(const IRInstruction* insn) {
   }
 
   default:
-    always_assert_log(false, "Different instantion opcode %s", SHOW(insn));
+    not_reached_log("Different instantion opcode %s", SHOW(insn));
   }
 
   return current_instance;

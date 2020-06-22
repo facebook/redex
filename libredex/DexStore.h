@@ -156,7 +156,7 @@ class XStoreRefs {
     for (size_t store_idx = 0; store_idx < m_xstores.size(); store_idx++) {
       if (m_xstores[store_idx].count(type) > 0) return store_idx;
     }
-    always_assert_log(false, "type %s not in the current APK", SHOW(type));
+    not_reached_log("type %s not in the current APK", SHOW(type));
   }
 
   /**

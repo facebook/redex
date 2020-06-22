@@ -372,14 +372,11 @@ class Configurable {
   template <typename T>
   void parse_required(const std::string& name, T& dest, bindflags_t bindflags) {
     boost::optional<const Json::Value&> value = m_parser(name);
-    if (value) {
-      dest = Configurable::as<T>(*value, bindflags);
-    } else {
-      always_assert_log(false,
-                        "Missing required parameter: %s.%s",
-                        get_config_name().c_str(),
-                        name.c_str());
-    }
+    always_assert_log(value,
+                      "Missing required parameter: %s.%s",
+                      get_config_name().c_str(),
+                      name.c_str());
+    dest = Configurable::as<T>(*value, bindflags);
   }
 
  private:

@@ -68,7 +68,7 @@ struct DepthDomain : public AbstractDomain<DepthDomain> {
     }
   }
 
-  void set_to_bottom() override { always_assert(false); }
+  void set_to_bottom() override { not_reached(); }
   virtual void set_value(unsigned depth) {
     m_kind = sparta::AbstractValueKind::Value;
     m_depth = depth;

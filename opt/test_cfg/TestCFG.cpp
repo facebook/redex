@@ -49,7 +49,7 @@ void TestCFGPass::run_pass(DexStoresVector& stores,
             "Before Code:\n%s\n"
             "After Code:\n%s\n",
             SHOW(m), msg.c_str(), before_code.c_str(), SHOW(&code));
-      always_assert(false);
+      always_assert(checker.good());
     }
   });
 }

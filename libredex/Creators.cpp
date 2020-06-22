@@ -116,8 +116,7 @@ void MethodBlock::iget(DexField* field, Location obj, Location& dst) {
     opcode = OPCODE_IGET_OBJECT;
     break;
   default:
-    always_assert(false);
-    break;
+    not_reached();
   }
   ifield_op(opcode, field, obj, dst);
 }
@@ -152,8 +151,7 @@ void MethodBlock::iput(DexField* field, Location obj, Location src) {
     opcode = OPCODE_IPUT_OBJECT;
     break;
   default:
-    always_assert(false);
-    break;
+    not_reached();
   }
   ifield_op(opcode, field, obj, src);
 }
@@ -211,8 +209,7 @@ void MethodBlock::sget(DexField* field, Location& dst) {
     opcode = OPCODE_SGET_OBJECT;
     break;
   default:
-    always_assert(false);
-    break;
+    not_reached();
   }
   sfield_op(opcode, field, dst);
 }
@@ -247,8 +244,7 @@ void MethodBlock::sput(DexField* field, Location src) {
     opcode = OPCODE_SPUT_OBJECT;
     break;
   default:
-    always_assert(false);
-    break;
+    not_reached();
   }
   sfield_op(opcode, field, src);
 }

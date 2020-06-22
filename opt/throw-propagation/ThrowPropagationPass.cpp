@@ -178,7 +178,7 @@ ThrowPropagationPass::Stats ThrowPropagationPass::run(
         return false;
       }
     }
-    always_assert(false);
+    not_reached();
   };
   // Helper function that checks if there's any point in doing a transformation
   // (not needed if we are already going to throw or not terminate anyway),

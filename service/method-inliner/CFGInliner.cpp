@@ -461,8 +461,7 @@ IROpcode CFGInliner::return_to_move(IROpcode op) {
   case OPCODE_RETURN_OBJECT:
     return OPCODE_MOVE_OBJECT;
   default:
-    always_assert_log(false, "Expected return op, got %s", SHOW(op));
-    not_reached();
+    not_reached_log("Expected return op, got %s", SHOW(op));
   }
 }
 

@@ -61,17 +61,15 @@ reg_t find_determining_reg(
     } else if (left_is_known && !right_is_known) {
       return right_reg;
     } else {
-      always_assert_log(false,
-                        "Could not find determining register (unexpected "
-                        "structure of non-leaf node)\n%s",
-                        SHOW(b));
+      not_reached_log(
+          "Could not find determining register (unexpected structure of "
+          "non-leaf node)\n%s",
+          SHOW(b));
     }
   }
-  always_assert_log(
-      false,
+  not_reached_log(
       "Could not find determining register (unrecognized last instruction)\n%s",
       SHOW(b));
-  not_reached();
 }
 
 } // namespace

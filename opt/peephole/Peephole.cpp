@@ -370,10 +370,10 @@ struct Matcher {
       case DexPattern::Kind::field:
         return match_field(dex_pattern.field, insn->get_field());
       case DexPattern::Kind::copy:
-        always_assert_log(
-            false, "Kind::copy can only be used in replacements. Not matches");
+        not_reached_log(
+            "Kind::copy can only be used in replacements. Not matches");
       }
-      return false;
+      not_reached();
     };
 
     redex_assert(match_index < pattern.match.size());
@@ -420,8 +420,7 @@ struct Matcher {
   // Generate skeleton instruction for the replacement.
   IRInstruction* generate_dex_instruction(const DexPattern& replace) {
     if (replace.opcodes.size() != 1) {
-      always_assert_log(false, "Replacement must have unique opcode");
-      return nullptr;
+      not_reached_log("Replacement must have unique opcode");
     }
 
     const auto opcode = *begin(replace.opcodes);
@@ -505,8 +504,7 @@ struct Matcher {
       return new IRInstruction(static_cast<IROpcode>(opcode));
     }
 
-    always_assert_log(false, "Unhandled opcode: 0x%x", opcode);
-    return nullptr;
+    not_reached_log("Unhandled opcode: 0x%x", opcode);
   }
 
   // After a successful match, get the replacement instructions. We substitute
@@ -639,9 +637,8 @@ struct Matcher {
           break;
         }
         default:
-          always_assert_log(false, "Unexpected string directive: 0x%x",
-                            replace_info.string);
-          break;
+          not_reached_log("Unexpected string directive: 0x%x",
+                          replace_info.string);
         }
       } else if (replace_info.kind == DexPattern::Kind::literal) {
         switch (replace_info.literal) {
@@ -687,9 +684,7 @@ struct Matcher {
           replace->set_type(matched_types.at(Type::B));
           break;
         default:
-          always_assert_log(false, "Unexpected type directive 0x%x",
-                            replace_info.type);
-          break;
+          not_reached_log("Unexpected type directive 0x%x", replace_info.type);
         }
       } else if (replace_info.kind == DexPattern::Kind::field) {
         switch (replace_info.field) {
@@ -699,8 +694,8 @@ struct Matcher {
         case Field::B:
           replace->set_field(matched_fields.at(Field::B));
         default:
-          always_assert_log(false, "Unexpected field directive 0x%x",
-                            replace_info.field);
+          not_reached_log("Unexpected field directive 0x%x",
+                          replace_info.field);
         }
       }
     }
@@ -1263,7 +1258,7 @@ DexPattern put_x_op(IROpcode opcode,
   if (is_sput(opcode)) {
     return {{opcode}, {src}, {}, field};
   }
-  always_assert_log(false, "Not supported IROpcode %s", SHOW(opcode));
+  not_reached_log("Not supported IROpcode %s", SHOW(opcode));
 }
 
 DexPattern get_x_op(IROpcode opcode, Register src, Field field) {
@@ -1273,7 +1268,7 @@ DexPattern get_x_op(IROpcode opcode, Register src, Field field) {
   if (is_sget(opcode)) {
     return {{opcode}, {}, {}, field};
   }
-  always_assert_log(false, "Not supported IROpcode %s", SHOW(opcode));
+  not_reached_log("Not supported IROpcode %s", SHOW(opcode));
 }
 
 std::vector<DexPattern> put_x_patterns(IROpcode put_code) {
@@ -1303,7 +1298,7 @@ DexPattern aput_x_op(IROpcode opcode,
   if (is_aput(opcode)) {
     return {{opcode}, {src, array_register, index_register}, {}};
   }
-  always_assert_log(false, "Not supported IROpcode %s", SHOW(opcode));
+  not_reached_log("Not supported IROpcode %s", SHOW(opcode));
 }
 
 std::vector<DexPattern> aput_x_patterns(IROpcode put_code) {
@@ -1316,7 +1311,7 @@ DexPattern aget_x_op(IROpcode opcode,
   if (is_aget(opcode)) {
     return {{opcode}, {array_register, index_register}, {}};
   }
-  always_assert_log(false, "Not supported IROpcode %s", SHOW(opcode));
+  not_reached_log("Not supported IROpcode %s", SHOW(opcode));
 }
 
 std::vector<DexPattern> aput_aget_x_patterns(

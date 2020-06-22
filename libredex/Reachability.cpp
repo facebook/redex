@@ -220,8 +220,7 @@ void TransitiveClosureMarker::visit(const ReachableObject& obj) {
     break;
   case ReachableObjectType::ANNO:
   case ReachableObjectType::SEED:
-    always_assert_log(false, "Unexpected ReachableObject type");
-    break;
+    not_reached_log("Unexpected ReachableObject type");
   }
 }
 

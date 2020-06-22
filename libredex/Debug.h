@@ -28,6 +28,11 @@ constexpr bool debug =
     redex_assert(false); \
     __assume(false);     \
   } while (true)
+#define not_reached_log(msg, ...)          \
+  do {                                     \
+    assert_log(false, msg, ##__VA_ARGS__); \
+    __assume(false);                       \
+  } while (true)
 
 #define assert_fail_impl(e, type, msg, ...) \
   assert_fail(#e, __FILE__, __LINE__, __func__, type, msg, ##__VA_ARGS__)
@@ -38,6 +43,11 @@ constexpr bool debug =
   do {                       \
     redex_assert(false);     \
     __builtin_unreachable(); \
+  } while (true)
+#define not_reached_log(msg, ...)          \
+  do {                                     \
+    assert_log(false, msg, ##__VA_ARGS__); \
+    __builtin_unreachable();               \
   } while (true)
 
 #define assert_fail_impl(e, type, msg, ...) \

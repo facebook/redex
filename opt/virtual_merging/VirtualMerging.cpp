@@ -693,9 +693,7 @@ void VirtualMerging::merge_methods() {
 
       // Check if everything was inlined.
       for (const auto& mie : cfg::InstructionIterable(overridden_code->cfg())) {
-        if (invoke_virtual_insn == mie.insn) {
-          always_assert(false);
-        }
+        redex_assert(invoke_virtual_insn != mie.insn);
       }
 
       overridden_code->clear_cfg();

@@ -2144,8 +2144,7 @@ const char* deobf_primitive(char type) {
   case 'V':
     return "void";
   default:
-    always_assert_log(false, "Illegal type: %c", type);
-    not_reached();
+    not_reached_log("Illegal type: %c", type);
   }
 }
 

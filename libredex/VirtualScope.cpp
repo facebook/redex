@@ -802,7 +802,7 @@ const VirtualScope& find_virtual_scope(const SignatureMap& sig_map,
     if (scope.type == type::java_lang_Object()) return scope;
     if (type::is_subclass(scope.type, meth_type)) return scope;
   }
-  always_assert_log(false, "unreachable. Scope not found for %s\n", SHOW(meth));
+  not_reached_log("unreachable. Scope not found for %s\n", SHOW(meth));
 }
 
 bool can_rename_scope(const VirtualScope* scope) {

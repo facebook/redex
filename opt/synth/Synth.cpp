@@ -384,7 +384,7 @@ IRInstruction* make_iget(DexField* field, reg_t src) {
     case DataType::Double:
       return OPCODE_IGET_WIDE;
     case DataType::Void:
-      redex_assert(false);
+      not_reached();
     }
     not_reached();
   }();

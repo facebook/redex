@@ -71,7 +71,7 @@ const char* dont_rename_reason_to_metric(DontRenameReasonCode reason) {
   case DontRenameReasonCode::SerdeRelationships:
     return "num_dont_rename_serde_relationships";
   default:
-    always_assert_log(false, "Unexpected DontRenameReasonCode: %d", reason);
+    not_reached_log("Unexpected DontRenameReasonCode: %d", reason);
   }
 }
 

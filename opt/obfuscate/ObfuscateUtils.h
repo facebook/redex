@@ -95,9 +95,9 @@ class DexNameWrapper {
   }
 
   // Meant to be overridden, but we don't want this class to be abstract
-  virtual void mark_unrenamable() { always_assert(false); }
-  virtual void mark_renamable() { always_assert(false); }
-  virtual bool should_rename() { always_assert(false); }
+  virtual void mark_unrenamable() { not_reached(); }
+  virtual void mark_renamable() { not_reached(); }
+  virtual bool should_rename() { not_reached(); }
 
   virtual std::string get_printable() {
     std::ostringstream res;

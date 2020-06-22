@@ -73,7 +73,7 @@ BlameMap analyze_escapes(cfg::ControlFlowGraph& cfg,
       safe_method_names.insert(safe.method_name);
       break;
     default:
-      always_assert_log(false, "Safe: unknown type");
+      not_reached_log("Safe: unknown type");
     }
   }
 

@@ -263,7 +263,7 @@ void CrossDexRelocator::add_to_current_dex(DexClass* cls) {
           --m_stats.relocated_virtual_methods;
           break;
         default:
-          always_assert(false);
+          not_reached();
         }
         re_relocate_method(info, cls);
       }
@@ -285,7 +285,7 @@ void CrossDexRelocator::add_to_current_dex(DexClass* cls) {
     ++m_stats.relocatable_virtual_methods;
     break;
   default:
-    always_assert(false);
+    not_reached();
   }
 
   DexMethod* method = info.method;
@@ -314,7 +314,7 @@ void CrossDexRelocator::add_to_current_dex(DexClass* cls) {
     ++m_stats.relocated_virtual_methods;
     break;
   default:
-    always_assert(false);
+    not_reached();
   }
 
   // For runtime performance reasons, we avoid having just one giant

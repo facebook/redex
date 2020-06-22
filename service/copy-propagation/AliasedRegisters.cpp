@@ -434,7 +434,7 @@ AbstractValueKind AliasedRegisters::widen_with(const AliasedRegisters& other) {
 
 // alias group union
 AbstractValueKind AliasedRegisters::meet_with(const AliasedRegisters& other) {
-  always_assert_log(false, "UNUSED");
+  not_reached_log("UNUSED");
 }
 
 // Alias group intersection.
@@ -675,7 +675,7 @@ bool Value::operator<(const Value& other) const {
   case Kind::STATIC_FINAL_UPPER:
     return compare_dexfields(m_field, other.m_field);
   case Kind::NONE:
-    always_assert_log(false, "can't sort NONEs");
+    not_reached_log("can't sort NONEs");
   }
 }
 

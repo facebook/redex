@@ -520,7 +520,7 @@ void PassManager::activate_pass(const std::string& name,
       return;
     }
   }
-  always_assert_log(false, "No pass named %s!", name.c_str());
+  not_reached_log("No pass named %s!", name.c_str());
 }
 
 Pass* PassManager::find_pass(const std::string& pass_name) const {

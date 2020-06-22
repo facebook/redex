@@ -88,8 +88,8 @@ DebugInfoKind parse_debug_info_kind(const std::string& raw_kind) {
       os << '"' << debug_info_kind_to_string(static_cast<DebugInfoKind>(i))
          << '"';
     }
-    always_assert_log(false, "Unknown debug info kind. Supported kinds are %s",
-                      os.str().c_str());
+    not_reached_log("Unknown debug info kind. Supported kinds are %s",
+                    os.str().c_str());
   }
 }
 
@@ -106,7 +106,7 @@ std::string debug_info_kind_to_string(const DebugInfoKind& kind) {
   case DebugInfoKind::BytecodeDebugger:
     return "bytecode_debugger";
   case DebugInfoKind::Size:
-    always_assert_log(false, "DebugInfoKind::Size should not be used");
+    not_reached_log("DebugInfoKind::Size should not be used");
   }
 }
 

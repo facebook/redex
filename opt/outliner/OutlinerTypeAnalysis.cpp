@@ -86,8 +86,12 @@ const DexType* OutlinerTypeAnalysis::get_inferred_type(
     return type::_long();
   case DOUBLE1:
     return type::_double();
-  default:
-    always_assert(false);
+  case CONST2:
+  case DOUBLE2:
+  case LONG2:
+  case SCALAR2:
+  case TOP:
+    not_reached();
   }
 }
 
@@ -191,7 +195,7 @@ const DexType* OutlinerTypeAnalysis::get_result_type_helper(
   case OPCODE_OR_INT_LIT8:
   case OPCODE_XOR_INT_LIT8:
     // These (must) get a special handling by caller
-    always_assert(false);
+    not_reached();
 
   case IOPCODE_MOVE_RESULT_PSEUDO:
   case OPCODE_MOVE_RESULT:
@@ -203,7 +207,7 @@ const DexType* OutlinerTypeAnalysis::get_result_type_helper(
   case OPCODE_MOVE_WIDE:
   case OPCODE_MOVE_OBJECT:
     // Not supported here
-    always_assert(false);
+    not_reached();
 
   case IOPCODE_LOAD_PARAM:
   case IOPCODE_LOAD_PARAM_OBJECT:
@@ -260,7 +264,7 @@ const DexType* OutlinerTypeAnalysis::get_result_type_helper(
   case OPCODE_SPUT_WIDE:
   case OPCODE_SPUT_OBJECT:
   case OPCODE_THROW:
-    always_assert(false);
+    not_reached();
 
   case OPCODE_MOVE_EXCEPTION:
     return type::java_lang_Throwable();
@@ -390,10 +394,10 @@ const DexType* OutlinerTypeAnalysis::get_result_type_helper(
 
   case OPCODE_INVOKE_CUSTOM:
   case OPCODE_INVOKE_POLYMORPHIC:
-    always_assert_log(false,
-                      "Unsupported instruction {%s} in "
-                      "get_result_type_helper\n",
-                      SHOW(insn));
+    not_reached_log(
+        "Unsupported instruction {%s} in "
+        "get_result_type_helper\n",
+        SHOW(insn));
 
   case OPCODE_DIV_INT:
   case OPCODE_REM_INT:
@@ -464,7 +468,7 @@ const DexType* OutlinerTypeAnalysis::get_type_demand(IRInstruction* insn,
   case OPCODE_SGET_SHORT:
   case OPCODE_SGET_WIDE:
   case OPCODE_SGET_OBJECT:
-    always_assert(false);
+    not_reached();
 
   case OPCODE_RETURN:
   case OPCODE_RETURN_WIDE:
@@ -476,7 +480,7 @@ const DexType* OutlinerTypeAnalysis::get_type_demand(IRInstruction* insn,
   case OPCODE_MOVE_WIDE:
   case OPCODE_MOVE_OBJECT:
     // Handled by caller
-    always_assert(false);
+    not_reached();
 
   case OPCODE_MONITOR_ENTER:
   case OPCODE_MONITOR_EXIT:
@@ -678,7 +682,7 @@ const DexType* OutlinerTypeAnalysis::get_type_demand(IRInstruction* insn,
     case OPCODE_APUT_SHORT:
       return type::_short();
     default:
-      always_assert(false);
+      not_reached();
     }
 
   case OPCODE_IPUT:
@@ -723,10 +727,10 @@ const DexType* OutlinerTypeAnalysis::get_type_demand(IRInstruction* insn,
   }
   case OPCODE_INVOKE_CUSTOM:
   case OPCODE_INVOKE_POLYMORPHIC:
-    always_assert_log(false,
-                      "Unsupported instruction {%s} in "
-                      "get_type_demand\n",
-                      SHOW(insn));
+    not_reached_log(
+        "Unsupported instruction {%s} in "
+        "get_type_demand\n",
+        SHOW(insn));
   }
 }
 

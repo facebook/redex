@@ -165,7 +165,7 @@ void DexClassHasher::hash(const IRCode* c) {
     case MFLOW_FALLTHROUGH:
       break;
     default:
-      always_assert(false);
+      not_reached();
     }
   }
 

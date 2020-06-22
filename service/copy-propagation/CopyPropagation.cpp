@@ -447,7 +447,7 @@ Stats CopyPropagation::run(const Scope& scope) {
                   msg.c_str());
             TRACE(RME, 1, "before code:\n%s", before_code.c_str());
             TRACE(RME, 1, "after  code:\n%s", SHOW(m->get_code()));
-            always_assert(false);
+            always_assert(checker.good());
           }
         }
 

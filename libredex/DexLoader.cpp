@@ -42,15 +42,11 @@ static void validate_dex_header(const dex_header* dh,
                 !memcmp(dh->magic, DEX_HEADER_DEXMAGIC_V35, sizeof(dh->magic));
     break;
   default:
-    always_assert_log(
-        false, "Unrecognized support_dex_version %d\n", support_dex_version);
+    not_reached_log("Unrecognized support_dex_version %d\n",
+                    support_dex_version);
   }
-  if (!supported) {
-    always_assert_log(false,
-                      "Bad dex magic %s for support_dex_version %d\n",
-                      dh->magic,
-                      support_dex_version);
-  }
+  always_assert_log(supported, "Bad dex magic %s for support_dex_version %d\n",
+                    dh->magic, support_dex_version);
   always_assert_log(
       dh->file_size == dexsize,
       "Reported size in header (%z) does not match file size (%u)\n",
@@ -515,8 +511,8 @@ DexClasses DexLoader::load_dex(const dex_header* dh, dex_stats_t* stats) {
 
   std::vector<std::exception_ptr> all_exceptions;
   for (auto& exceptions : exceptions_vec) {
-    all_exceptions.insert(
-        all_exceptions.end(), exceptions.begin(), exceptions.end());
+    all_exceptions.insert(all_exceptions.end(), exceptions.begin(),
+                          exceptions.end());
   }
   if (!all_exceptions.empty()) {
     // At least one of the workers raised an exception

@@ -230,7 +230,7 @@ void type_encoder_fp(uint8_t*& encdata, uint8_t type, uint64_t val) {
     encbytes = 8 - bytes;
     break;
   default:
-    redex_assert(false);
+    not_reached();
   }
   if (val == 0) {
     encbytes = 1;
@@ -512,7 +512,7 @@ DexEncodedValue* DexEncodedValue::get_encoded_value(DexIdx* idx,
     return new DexEncodedValueAnnotation(type, eanno);
   }
   };
-  always_assert_log(false, "Bogus annotation");
+  not_reached_log("Bogus annotation");
 }
 
 DexAnnotation* DexAnnotation::get_annotation(DexIdx* idx, uint32_t anno_off) {

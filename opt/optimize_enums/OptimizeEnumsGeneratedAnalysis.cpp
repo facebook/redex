@@ -80,9 +80,7 @@ class FieldAnalyzer final
     case IOPCODE_LOAD_PARAM:
     case IOPCODE_LOAD_PARAM_WIDE:
     case IOPCODE_LOAD_PARAM_OBJECT: {
-      always_assert_log(false,
-                        "<clinit> is static and doesn't take any arguments");
-      break;
+      not_reached_log("<clinit> is static and doesn't take any arguments");
     }
 
     case OPCODE_MOVE:
@@ -244,9 +242,7 @@ class ConstAnalyzer final
     case IOPCODE_LOAD_PARAM:
     case IOPCODE_LOAD_PARAM_WIDE:
     case IOPCODE_LOAD_PARAM_OBJECT: {
-      always_assert_log(false,
-                        "<clinit> is static and doesn't take any arguments");
-      break;
+      not_reached_log("<clinit> is static and doesn't take any arguments");
     }
 
     case OPCODE_MOVE:

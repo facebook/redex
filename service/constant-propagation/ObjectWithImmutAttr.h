@@ -92,10 +92,7 @@ struct ObjectWithImmutAttr {
   void write_value(const ImmutableAttr::Attr& attr, ValueType value) {
 #ifndef NDEBUG
     for (auto& att : attributes) {
-      if (attr.member != att.attr.member) {
-        continue;
-      }
-      always_assert_log(false,
+      always_assert_log(attr.member != att.attr.member,
                         "%s is written before, is it real final attribute?",
                         [&att]() {
                           if (att.attr.is_method()) {

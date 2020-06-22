@@ -42,11 +42,10 @@ void patch_call_site(DexMethod* callee,
   } else if (is_invoke_super(op)) {
     method_inst->set_opcode(OPCODE_INVOKE_STATIC);
     counter.supers++;
-  } else if (is_invoke_direct(op)) {
+  } else {
+    redex_assert(is_invoke_direct(op));
     method_inst->set_opcode(OPCODE_INVOKE_STATIC);
     counter.directs++;
-  } else {
-    always_assert_log(false, SHOW(op));
   }
 
   method_inst->set_method(callee);

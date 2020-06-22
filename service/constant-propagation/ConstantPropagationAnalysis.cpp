@@ -364,8 +364,7 @@ bool PrimitiveAnalyzer::analyze_cmp(const IRInstruction* insn,
     break;
   }
   default: {
-    always_assert_log(false, "Unexpected opcode: %s\n", SHOW(op));
-    break;
+    not_reached_log("Unexpected opcode: %s\n", SHOW(op));
   }
   }
   return true;
@@ -1153,8 +1152,7 @@ static void analyze_if(const IRInstruction* insn,
     break;
   }
   default: {
-    always_assert_log(false, "expected if-* opcode, got %s", SHOW(insn));
-    not_reached();
+    not_reached_log("expected if-* opcode, got %s", SHOW(insn));
   }
   }
 }

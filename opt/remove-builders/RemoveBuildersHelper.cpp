@@ -148,7 +148,7 @@ void add_instr(IRCode* code,
       return;
     }
   }
-  always_assert_log(false, "insert position not found!");
+  not_reached_log("insert position not found!");
 }
 
 using MoveList = std::unordered_map<const IRInstruction*, IRInstruction*>;
@@ -610,9 +610,8 @@ IROpcode get_iget_type(DexField* field) {
   case DataType::Double:
     return OPCODE_IGET_WIDE;
   case DataType::Void:
-    redex_assert(false);
+    not_reached();
   }
-  not_reached();
 }
 
 /**

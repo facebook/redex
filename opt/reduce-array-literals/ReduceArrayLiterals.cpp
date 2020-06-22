@@ -77,7 +77,7 @@ struct TrackedValueHasher {
     case TrackedValueKind::NewArray:
       return tv.length + (size_t)tv.new_array_insn ^ tv.aput_insns_size;
     default:
-      always_assert(false);
+      not_reached();
     }
   }
 };
@@ -96,7 +96,7 @@ bool operator==(const TrackedValue& a, const TrackedValue& b) {
            a.aput_insns_size == b.aput_insns_size &&
            a.aput_insns == b.aput_insns;
   default:
-    always_assert(false);
+    not_reached();
   }
 }
 

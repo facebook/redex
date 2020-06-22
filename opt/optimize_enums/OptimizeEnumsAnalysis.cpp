@@ -68,9 +68,7 @@ class Analyzer final : public ir_analyzer::BaseIRAnalyzer<ConstantEnvironment> {
     case IOPCODE_LOAD_PARAM:
     case IOPCODE_LOAD_PARAM_WIDE:
     case IOPCODE_LOAD_PARAM_OBJECT: {
-      always_assert_log(false,
-                        "<clinit> is static and doesn't take any arguments");
-      break;
+      not_reached_log("<clinit> is static and doesn't take any arguments");
     }
 
     case OPCODE_CONST:

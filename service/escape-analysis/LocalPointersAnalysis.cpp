@@ -29,8 +29,7 @@ bool dest_may_be_pointer(const IRInstruction* insn) {
   auto op = insn->opcode();
   switch (op) {
   case OPCODE_NOP:
-    always_assert_log(false, "No dest");
-    not_reached();
+    not_reached_log("No dest");
   case OPCODE_MOVE:
   case OPCODE_MOVE_WIDE:
     return false;
@@ -46,14 +45,12 @@ bool dest_may_be_pointer(const IRInstruction* insn) {
   case OPCODE_RETURN:
   case OPCODE_RETURN_WIDE:
   case OPCODE_RETURN_OBJECT:
-    always_assert_log(false, "No dest");
-    not_reached();
+    not_reached_log("No dest");
   case OPCODE_MONITOR_ENTER:
   case OPCODE_MONITOR_EXIT:
   case OPCODE_THROW:
   case OPCODE_GOTO:
-    always_assert_log(false, "No dest");
-    not_reached();
+    not_reached_log("No dest");
   case OPCODE_NEG_INT:
   case OPCODE_NOT_INT:
   case OPCODE_NEG_LONG:
@@ -94,8 +91,7 @@ bool dest_may_be_pointer(const IRInstruction* insn) {
   case OPCODE_IF_GEZ:
   case OPCODE_IF_GTZ:
   case OPCODE_IF_LEZ:
-    always_assert_log(false, "No dest");
-    not_reached();
+    not_reached_log("No dest");
   case OPCODE_AGET:
   case OPCODE_AGET_WIDE:
     return false;
@@ -113,8 +109,7 @@ bool dest_may_be_pointer(const IRInstruction* insn) {
   case OPCODE_APUT_BYTE:
   case OPCODE_APUT_CHAR:
   case OPCODE_APUT_SHORT:
-    always_assert_log(false, "No dest");
-    not_reached();
+    not_reached_log("No dest");
   case OPCODE_ADD_INT:
   case OPCODE_SUB_INT:
   case OPCODE_MUL_INT:
@@ -171,8 +166,7 @@ bool dest_may_be_pointer(const IRInstruction* insn) {
     return insn->get_literal() == 0;
   case OPCODE_FILL_ARRAY_DATA:
   case OPCODE_SWITCH:
-    always_assert_log(false, "No dest");
-    not_reached();
+    not_reached_log("No dest");
   case OPCODE_CONST_WIDE:
   case OPCODE_IGET:
   case OPCODE_IGET_WIDE:
@@ -191,8 +185,7 @@ bool dest_may_be_pointer(const IRInstruction* insn) {
   case OPCODE_IPUT_BYTE:
   case OPCODE_IPUT_CHAR:
   case OPCODE_IPUT_SHORT:
-    always_assert_log(false, "No dest");
-    not_reached();
+    not_reached_log("No dest");
   case OPCODE_SGET:
   case OPCODE_SGET_WIDE:
     return false;
@@ -210,8 +203,7 @@ bool dest_may_be_pointer(const IRInstruction* insn) {
   case OPCODE_SPUT_BYTE:
   case OPCODE_SPUT_CHAR:
   case OPCODE_SPUT_SHORT:
-    always_assert_log(false, "No dest");
-    not_reached();
+    not_reached_log("No dest");
   case OPCODE_INVOKE_VIRTUAL:
   case OPCODE_INVOKE_SUPER:
   case OPCODE_INVOKE_DIRECT:
@@ -241,7 +233,7 @@ bool dest_may_be_pointer(const IRInstruction* insn) {
   case IOPCODE_MOVE_RESULT_PSEUDO_WIDE:
     return false;
   default:
-    always_assert_log(false, "Unknown opcode %02x\n", op);
+    not_reached_log("Unknown opcode %02x\n", op);
   }
 }
 
@@ -597,10 +589,9 @@ EscapeSummary EscapeSummary::from_s_expr(const sparta::s_expr& expr) {
     const auto& s = returned_params_s_expr.get_string();
     if (s == "Top") {
       summary.returned_parameters.set_to_top();
-    } else if (s == "Bottom") {
-      summary.returned_parameters.set_to_bottom();
     } else {
-      always_assert(false);
+      redex_assert(s == "Bottom");
+      summary.returned_parameters.set_to_bottom();
     }
   } else {
     always_assert(returned_params_s_expr.is_list());

@@ -23,14 +23,12 @@ namespace {
 pid_t spawn(const std::string& cmd) {
 #ifdef _POSIX_VERSION
   auto child = fork();
-  if (child == -1) {
-    always_assert_log(false, "Failed to fork");
-    not_reached();
-  } else if (child != 0) {
+  always_assert_log(child != -1, "Failed to fork");
+  if (child != 0) {
     return child;
   } else {
-    execl("/bin/sh", "/bin/sh", "-c", cmd.c_str(), nullptr);
-    always_assert_log(false, "exec of command failed");
+    int ret = execl("/bin/sh", "/bin/sh", "-c", cmd.c_str(), nullptr);
+    always_assert_log(ret != -1, "exec of command failed: %s", strerror(errno));
     not_reached();
   }
 #else

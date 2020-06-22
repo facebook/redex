@@ -511,7 +511,7 @@ size_t get_type_tag_location_for_ctor_and_static(const dispatch::Spec& spec,
     return arg_list->size() - 1;
   }
 
-  always_assert_log(false, "Unexpected dispatch type %d\n", spec.type);
+  not_reached_log("Unexpected dispatch type %d\n", spec.type);
 }
 
 } // namespace

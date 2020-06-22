@@ -623,7 +623,7 @@ std::ostream& operator<<(std::ostream& o, const PointsToAction& a) {
         break;
       }
       default: {
-        always_assert(false);
+        not_reached();
       }
       }
       o << "}";
@@ -848,7 +848,7 @@ class AnchorPropagation final : public BaseIRAnalyzer<AnchorEnvironment> {
         break;
       }
       default: {
-        always_assert_log(false, "Unexpected instruction '%s'\n", SHOW(insn));
+        not_reached_log("Unexpected instruction '%s'\n", SHOW(insn));
       }
       }
       first_param = false;
@@ -1205,7 +1205,7 @@ class PointsToActionGenerator final {
     }
     default: {
       // This function is only called on invoke instructions.
-      always_assert(false);
+      not_reached();
     }
     }
 
@@ -1620,14 +1620,11 @@ void PointsToSemantics::initialize_entry(DexMethod* dex_method) {
   if (dex_method->get_code() == nullptr) {
     if ((access_flags & DexAccessFlags::ACC_ABSTRACT)) {
       kind = PTS_ABSTRACT;
-    } else if ((access_flags & DexAccessFlags::ACC_NATIVE)) {
-      kind = PTS_NATIVE;
     } else {
       // The definition of a method that is neither abstract nor native should
       // always have an associated IRCode component.
-      always_assert_log(false,
-                        "Method %s has no associated code component",
-                        SHOW(dex_method->get_name()));
+      redex_assert(access_flags & DexAccessFlags::ACC_NATIVE);
+      kind = PTS_NATIVE;
     }
   } else {
     kind = default_method_kind();

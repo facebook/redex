@@ -73,7 +73,7 @@ struct Summary : public AbstractDomain<Summary> {
     }
   }
 
-  void set_to_bottom() override { always_assert(false); }
+  void set_to_bottom() override { not_reached(); }
 
   void set_value(reflection::AbstractObjectDomain retval) {
     m_kind = sparta::AbstractValueKind::Value;

@@ -79,7 +79,7 @@ s_expr to_s_expr(const IRInstruction* insn, const LabelRefs& label_refs) {
   case opcode::Ref::None:
     break;
   case opcode::Ref::Data:
-    always_assert_log(false, "Not yet supported");
+    not_reached_log("Not yet supported");
     break;
   case opcode::Ref::Field:
     s_exprs.emplace_back(show(insn->get_field()));
@@ -207,7 +207,7 @@ std::unique_ptr<IRInstruction> instruction_from_s_expr(
   case opcode::Ref::None:
     break;
   case opcode::Ref::Data:
-    always_assert_log(false, "Not yet supported");
+    not_reached_log("Not yet supported");
     break;
   case opcode::Ref::Field: {
     std::string str;
@@ -252,11 +252,11 @@ std::unique_ptr<IRInstruction> instruction_from_s_expr(
     break;
   }
   case opcode::Ref::CallSite: {
-    always_assert_log(false, "callsites currently unsupported in s-exprs");
+    not_reached_log("callsites currently unsupported in s-exprs");
     break;
   }
   case opcode::Ref::MethodHandle: {
-    always_assert_log(false, "methodhandles currently unsupported in s-exprs");
+    not_reached_log("methodhandles currently unsupported in s-exprs");
     break;
   }
   }

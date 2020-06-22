@@ -79,8 +79,7 @@ void assemble(IRInstruction* insn, std::initializer_list<Operand> args) {
       break;
     case VREG:
     default:
-      always_assert_log(false, "Encountered unexpected tag 0x%x", arg->tag);
-      break;
+      not_reached_log("Encountered unexpected tag 0x%x", arg->tag);
     }
     arg = std::next(arg);
   }

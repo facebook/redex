@@ -141,9 +141,8 @@ unsigned DexInstruction::srcs_size() const {
   case FMT_f3rms:
   case FMT_f3rmi:
   case FMT_iopcode:
-    always_assert_log(false, "Unimplemented opcode `%s'", SHOW(this));
+    not_reached_log("Unimplemented opcode `%s'", SHOW(this));
   }
-  not_reached();
 }
 
 uint16_t DexInstruction::dest() const {
@@ -174,9 +173,8 @@ uint16_t DexInstruction::dest() const {
     return m_arg[0];
   default:
     // All other formats do not define a destination register.
-    always_assert_log(false, "Unhandled opcode: %s", SHOW(opcode()));
+    not_reached_log("Unhandled opcode: %s", SHOW(opcode()));
   }
-  not_reached();
 }
 
 DexInstruction* DexInstruction::set_dest(uint16_t vreg) {
@@ -213,9 +211,8 @@ DexInstruction* DexInstruction::set_dest(uint16_t vreg) {
     return this;
   default:
     // All other formats do not define a destination register.
-    always_assert_log(false, "Unhandled opcode: %s", SHOW(this));
+    not_reached_log("Unhandled opcode: %s", SHOW(this));
   }
-  not_reached();
 }
 
 uint16_t DexInstruction::src(int i) const {
@@ -306,11 +303,11 @@ uint16_t DexInstruction::src(int i) const {
     case 6:
       return (m_arg[1] >> 12) & 0xf;
     }
+    not_reached();
   default:
     // All other formats do not define source registers.
-    always_assert_log(false, "Unhandled opcode: %s", SHOW(this));
+    not_reached_log("Unhandled opcode: %s", SHOW(this));
   }
-  not_reached();
 }
 
 DexInstruction* DexInstruction::set_src(int i, uint16_t vreg) {
@@ -442,11 +439,11 @@ DexInstruction* DexInstruction::set_src(int i, uint16_t vreg) {
       m_arg[0] = (m_arg[1] & 0x0fff) | (vreg << 12);
       return this;
     }
+    not_reached();
   default:
     // All other formats do not define source registers.
-    always_assert_log(false, "Unhandled opcode: %s", SHOW(this));
+    not_reached_log("Unhandled opcode: %s", SHOW(this));
   }
-  not_reached();
 }
 
 DexInstruction* DexInstruction::set_srcs(const std::vector<uint16_t>& vregs) {
@@ -487,9 +484,8 @@ int64_t DexInstruction::get_literal() const {
     return signext<64>(literal);
   }
   default:
-    redex_assert(false);
+    not_reached();
   }
-  not_reached();
 }
 
 DexInstruction* DexInstruction::set_literal(int64_t literal) {
@@ -522,9 +518,8 @@ DexInstruction* DexInstruction::set_literal(int64_t literal) {
     m_arg[3] = literal >> 48;
     return this;
   default:
-    redex_assert(false);
+    not_reached();
   }
-  not_reached();
 }
 
 int32_t DexInstruction::offset() const {
@@ -542,9 +537,8 @@ int32_t DexInstruction::offset() const {
     return (int32_t)signext<32>(offset);
   }
   default:
-    redex_assert(false);
+    not_reached();
   }
-  not_reached();
 }
 
 DexInstruction* DexInstruction::set_offset(int32_t offset) {
@@ -572,9 +566,8 @@ DexInstruction* DexInstruction::set_offset(int32_t offset) {
     m_arg[1] = offset >> 16;
     return this;
   default:
-    redex_assert(false);
+    not_reached();
   }
-  not_reached();
 }
 
 uint16_t DexInstruction::range_base() const {

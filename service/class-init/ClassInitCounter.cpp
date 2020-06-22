@@ -728,10 +728,9 @@ void TrackedUses::merge(const TrackedUses& other) {
 }
 
 void ObjectUses::combine_paths(const TrackedUses& other) {
-  if (other.m_tracked_kind == Merged) {
-    always_assert(
-        "ObjectUses cannot be combined with a MergedUses, check logic at call");
-  }
+  always_assert_log(
+      other.m_tracked_kind != Merged,
+      "ObjectUses cannot be combined with a MergedUses, check logic at call");
   TrackedUses::combine_paths(other);
   if (reinterpret_cast<const ObjectUses&>(other).created_flow != AllPaths) {
     created_flow = Conditional;
@@ -739,10 +738,9 @@ void ObjectUses::combine_paths(const TrackedUses& other) {
 }
 
 void ObjectUses::merge(const TrackedUses& other) {
-  if (other.m_tracked_kind == Merged) {
-    always_assert(
-        "ObjectUses cannot be combined with a MergedUses, check logic at call");
-  }
+  always_assert_log(
+      other.m_tracked_kind != Merged,
+      "ObjectUses cannot be combined with a MergedUses, check logic at call");
   // this uses created_flow supercedes ones from program order later uses
   TrackedUses::merge(other);
 }

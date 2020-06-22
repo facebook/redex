@@ -432,15 +432,13 @@ static bool parse_class(uint8_t* buffer,
           uint16_t attribute_name_index = read16(attrPtr);
           uint32_t attribute_length = read32(attrPtr);
           char attribute_name[MAX_CLASS_NAMELEN];
-          if (extract_utf8(cpool, attribute_name_index, attribute_name,
-                           MAX_CLASS_NAMELEN)) {
-            attr_hook(field_or_method, attribute_name, attrPtr);
-          } else {
-            always_assert_log(
-                false,
-                "attribute hook was specified, but failed to load the "
-                "attribute name due to insufficient name buffer");
-          }
+          auto extract_res = extract_utf8(cpool, attribute_name_index,
+                                          attribute_name, MAX_CLASS_NAMELEN);
+          always_assert_log(
+              extract_res,
+              "attribute hook was specified, but failed to load the attribute "
+              "name due to insufficient name buffer");
+          attr_hook(field_or_method, attribute_name, attrPtr);
           attrPtr += attribute_length;
         }
       };
