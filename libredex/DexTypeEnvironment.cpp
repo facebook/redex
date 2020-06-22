@@ -93,7 +93,33 @@ const DexType* find_common_type(const DexType* l, const DexType* r) {
 }
 
 /*
- * We are partially mimicing the Dalvik bytecode structural verifier:
+ * Only covers the simple cases here:
+ * 1. Reference type arrays with the same depth level => common type array with
+ * the same level
+ * 2. If there's primitive array or the levels don't match => Top.
+ */
+const DexType* find_common_array_type(const DexType* l, const DexType* r) {
+  uint32_t l_dim = type::get_array_level(l);
+  uint32_t r_dim = type::get_array_level(r);
+
+  bool has_primitive = false;
+  auto l_elem_type = type::get_array_element_type(l);
+  auto r_elem_type = type::get_array_element_type(r);
+  if (type::is_primitive(l_elem_type) || type::is_primitive(r_elem_type)) {
+    has_primitive = true;
+  }
+  if (!has_primitive && l_dim == r_dim) {
+    auto common_element_type = find_common_type(l_elem_type, r_elem_type);
+    return common_element_type
+               ? type::make_array_type(common_element_type, l_dim)
+               : nullptr;
+  }
+
+  return nullptr;
+}
+
+/*
+ * Partially mimicing the Dalvik bytecode structural verifier:
  * https://android.googlesource.com/platform/dalvik/+/android-cts-4.4_r4/vm/analysis/CodeVerify.cpp#2462
  */
 sparta::AbstractValueKind DexTypeValue::join_with(const DexTypeValue& other) {
@@ -107,10 +133,20 @@ sparta::AbstractValueKind DexTypeValue::join_with(const DexTypeValue& other) {
     return sparta::AbstractValueKind::Value;
   }
 
-  auto common_type = find_common_type(get_dex_type(), other.get_dex_type());
-  if (common_type) {
-    m_dex_type = common_type;
-    return sparta::AbstractValueKind::Value;
+  auto l = get_dex_type();
+  auto r = other.get_dex_type();
+  if (type::is_array(l) && type::is_array(r)) {
+    auto common_array_type = find_common_array_type(l, r);
+    if (common_array_type) {
+      m_dex_type = common_array_type;
+      return sparta::AbstractValueKind::Value;
+    }
+  } else {
+    auto common_type = find_common_type(l, r);
+    if (common_type) {
+      m_dex_type = common_type;
+      return sparta::AbstractValueKind::Value;
+    }
   }
 
   // Give up. Rewrite to top.

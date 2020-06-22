@@ -55,111 +55,111 @@ struct DexTypeEnvironmentTest : public RedexTest {
     ClassCreator creator = ClassCreator(type::java_lang_Object());
     creator.create();
 
-    m_type_a = DexType::make_type("A");
+    m_type_a = DexType::make_type("LA");
     creator = ClassCreator(m_type_a);
     creator.set_super(type::java_lang_Object());
     creator.create();
 
-    m_type_a1 = DexType::make_type("A1");
+    m_type_a1 = DexType::make_type("LA1");
     creator = ClassCreator(m_type_a1);
     creator.set_super(m_type_a);
     creator.create();
 
-    m_type_a2 = DexType::make_type("A2");
+    m_type_a2 = DexType::make_type("LA2");
     creator = ClassCreator(m_type_a2);
     creator.set_super(m_type_a);
     creator.create();
 
-    m_type_a21 = DexType::make_type("A21");
+    m_type_a21 = DexType::make_type("LA21");
     creator = ClassCreator(m_type_a21);
     creator.set_super(m_type_a2);
     creator.create();
 
-    m_type_a211 = DexType::make_type("A211");
+    m_type_a211 = DexType::make_type("LA211");
     creator = ClassCreator(m_type_a211);
     creator.set_super(m_type_a21);
     creator.create();
 
-    m_type_b = DexType::make_type("B");
+    m_type_b = DexType::make_type("LB");
     creator = ClassCreator(m_type_b);
     creator.set_super(type::java_lang_Object());
     creator.create();
 
-    m_type_b1 = DexType::make_type("B1");
+    m_type_b1 = DexType::make_type("LB1");
     creator = ClassCreator(m_type_b1);
     creator.set_super(m_type_b);
     creator.create();
 
-    m_type_c = DexType::make_type("C");
+    m_type_c = DexType::make_type("LC");
     creator = ClassCreator(m_type_c);
     creator.set_super(type::java_lang_Object());
     creator.create();
 
-    m_type_c1 = DexType::make_type("C1");
+    m_type_c1 = DexType::make_type("LC1");
     creator = ClassCreator(m_type_c1);
     creator.set_super(m_type_c);
     creator.create();
 
-    m_type_c2 = DexType::make_type("C2");
+    m_type_c2 = DexType::make_type("LC2");
     creator = ClassCreator(m_type_c2);
     creator.set_super(m_type_c);
     creator.create();
 
-    m_type_c3 = DexType::make_type("C3");
+    m_type_c3 = DexType::make_type("LC3");
     creator = ClassCreator(m_type_c3);
     creator.set_super(m_type_c);
     creator.create();
 
-    m_type_c4 = DexType::make_type("C4");
+    m_type_c4 = DexType::make_type("LC4");
     creator = ClassCreator(m_type_c4);
     creator.set_super(m_type_c);
     creator.create();
 
-    m_type_c5 = DexType::make_type("C5");
+    m_type_c5 = DexType::make_type("LC5");
     creator = ClassCreator(m_type_c5);
     creator.set_super(m_type_c);
     creator.create();
 
-    m_type_d = DexType::make_type("D");
+    m_type_d = DexType::make_type("LD");
     creator = ClassCreator(m_type_d);
     creator.set_super(type::java_lang_Object());
     creator.create();
 
-    m_type_base = DexType::make_type("Base");
+    m_type_base = DexType::make_type("LBase");
     creator = ClassCreator(m_type_base);
     creator.set_super(type::java_lang_Object());
     creator.create();
 
-    m_type_if1 = DexType::make_type("If1");
+    m_type_if1 = DexType::make_type("LIf1");
     creator = ClassCreator(m_type_if1);
     creator.set_super(type::java_lang_Object());
     creator.set_access(ACC_PUBLIC | ACC_INTERFACE);
     creator.create();
-    m_type_if2 = DexType::make_type("If2");
+    m_type_if2 = DexType::make_type("LIf2");
     creator = ClassCreator(m_type_if2);
     creator.set_super(type::java_lang_Object());
     creator.set_access(ACC_PUBLIC | ACC_INTERFACE);
     creator.create();
 
-    m_type_sub1 = DexType::make_type("Sub1");
+    m_type_sub1 = DexType::make_type("LSub1");
     creator = ClassCreator(m_type_sub1);
     creator.set_super(m_type_base);
     creator.add_interface(m_type_if1);
     creator.create();
 
-    m_type_sub2 = DexType::make_type("Sub2");
+    m_type_sub2 = DexType::make_type("LSub2");
     creator = ClassCreator(m_type_sub2);
     creator.set_super(m_type_base);
     creator.add_interface(m_type_if2);
     creator.create();
 
-    m_type_sub3 = DexType::make_type("Sub3");
+    m_type_sub3 = DexType::make_type("LSub3");
     creator = ClassCreator(m_type_sub3);
     creator.set_super(m_type_sub1);
     creator.add_interface(m_type_if1);
     creator.create();
 
-    m_type_sub4 = DexType::make_type("Sub4");
+    m_type_sub4 = DexType::make_type("LSub4");
     creator = ClassCreator(m_type_sub4);
     creator.set_super(m_type_sub2);
     creator.add_interface(m_type_if1);
@@ -167,6 +167,10 @@ struct DexTypeEnvironmentTest : public RedexTest {
     creator.create();
 
     m_string_array = DexType::make_type("[Ljava/lang/String;");
+    m_int_array = type::make_array_type(type::_int());
+    m_sub1_array = type::make_array_type(m_type_sub1);
+    m_sub2_array = type::make_array_type(m_type_sub2);
+    m_sub3_array = type::make_array_type(m_type_sub3);
   }
 
   TypeSet get_type_set(std::initializer_list<DexType*> l) {
@@ -204,6 +208,10 @@ struct DexTypeEnvironmentTest : public RedexTest {
   DexType* m_type_if2;
 
   DexType* m_string_array;
+  DexType* m_int_array;
+  DexType* m_sub1_array;
+  DexType* m_sub2_array;
+  DexType* m_sub3_array;
 };
 
 TEST_F(DexTypeEnvironmentTest, BasicTest) {
@@ -406,6 +414,34 @@ TEST_F(DexTypeEnvironmentTest, ExtendedInterfaceJoinTest) {
   sub1.join_with(if2);
   EXPECT_TRUE(sub1.is_top());
   EXPECT_FALSE(if2.is_top());
+}
+
+TEST_F(DexTypeEnvironmentTest, ArrayJoinTest) {
+  auto sub1_array = SingletonDexTypeDomain(m_sub1_array);
+  auto sub2_array = SingletonDexTypeDomain(m_sub2_array);
+  sub1_array.join_with(sub2_array);
+  EXPECT_TRUE(sub1_array.is_top());
+  EXPECT_FALSE(sub2_array.is_top());
+
+  sub1_array = SingletonDexTypeDomain(m_sub1_array);
+  auto sub3_array = SingletonDexTypeDomain(m_sub3_array);
+  sub1_array.join_with(sub3_array);
+  EXPECT_FALSE(sub1_array.is_top());
+  EXPECT_EQ(sub1_array, SingletonDexTypeDomain(m_sub1_array));
+  EXPECT_FALSE(sub3_array.is_top());
+
+  auto str_array = SingletonDexTypeDomain(m_string_array);
+  auto int_array = SingletonDexTypeDomain(m_int_array);
+  str_array.join_with(int_array);
+  EXPECT_TRUE(str_array.is_top());
+  EXPECT_FALSE(int_array.is_top());
+
+  sub1_array = SingletonDexTypeDomain(m_sub1_array);
+  auto sub3_nested_array =
+      SingletonDexTypeDomain(type::make_array_type(m_type_sub3, 2));
+  sub1_array.join_with(sub3_nested_array);
+  EXPECT_TRUE(sub1_array.is_top());
+  EXPECT_FALSE(sub3_nested_array.is_top());
 }
 
 TEST_F(DexTypeEnvironmentTest, NullableDexTypeDomainTest) {
