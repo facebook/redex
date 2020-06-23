@@ -20,6 +20,17 @@ class Base {
 class Sub1 extends Base {}
 class Sub2 extends Base {}
 
+interface I {
+  int get();
+}
+class C implements I {
+  int getInt() { return 43; }
+  @Override
+  public int get() {
+    return 44;
+  }
+}
+
 public class TypeInferenceTest {
   static void whatIsThisThrowable(Throwable t) {}
 
@@ -87,5 +98,18 @@ public class TypeInferenceTest {
       b = new Sub2();
     }
     b.foo();
+  }
+
+  static I getInterface() { return new C(); }
+
+  static void testJoinWithInterface() {
+    I o = null;
+    int i = 1 << 2;
+    if (i > 3) {
+      o = getInterface();
+    } else {
+      o = new C();
+    }
+    o.get();
   }
 }
