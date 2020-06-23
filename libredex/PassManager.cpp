@@ -68,7 +68,8 @@ struct TypeCheckerConfig {
   }
 
   void on_input(const Scope& scope) {
-    if (!run_type_checker_on_input && !run_type_checker_after_each_pass) {
+    if (!run_type_checker_on_input) {
+      std::cerr << "Note: input type checking is turned off!" << std::endl;
       return;
     }
     auto res = run_verifier(scope, verify_moves,
