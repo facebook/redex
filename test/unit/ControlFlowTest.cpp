@@ -2215,3 +2215,24 @@ TEST_F(ControlFlowTest, get_param_instructions_empty) {
 
   EXPECT_TRUE(cfg.get_param_instructions().empty());
 }
+
+TEST_F(ControlFlowTest, no_crash_on_remove_insn) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (invoke-virtual (v) "LFoo;.bar:()V")
+    )
+  )");
+  code->build_cfg(/* editable */ true);
+  auto& cfg = code->cfg();
+
+  auto it = InstructionIterator{cfg, /*is_begin=*/true};
+  for (; !it.is_end(); ++it) {
+    if (it->insn->opcode() == OPCODE_INVOKE_VIRTUAL) {
+      break;
+    }
+  }
+  ASSERT_FALSE(it.is_end());
+
+  cfg.remove_insn(it); // Should not crash.
+}

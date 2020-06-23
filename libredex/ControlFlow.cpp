@@ -549,27 +549,28 @@ bool Block::push_back(IRInstruction* insn) {
 
 std::ostream& operator<<(std::ostream& os, const Edge& e) {
   switch (e.type()) {
-  case EDGE_GOTO: {
-    os << "goto";
-    break;
-  }
+  case EDGE_GOTO:
+    return os << "goto";
+
   case EDGE_BRANCH: {
     os << "branch";
     const auto& key = e.case_key();
     if (key) {
       os << " " << *key;
     }
+    return os;
+  }
+
+  case EDGE_THROW:
+    return os << "throw";
+
+  case EDGE_GHOST:
+    return os << "ghost";
+
+  case EDGE_TYPE_SIZE:
     break;
   }
-  case EDGE_THROW: {
-    os << "throw";
-    break;
-  }
-  default: {
-    break;
-  }
-  }
-  return os;
+  not_reached();
 }
 
 ControlFlowGraph::ControlFlowGraph(IRList* ir,
@@ -2196,27 +2197,26 @@ void ControlFlowGraph::remove_insn(const InstructionIterator& it) {
   } else if (insn->has_move_result_any()) {
     // delete the move-result(-pseudo) too
     if (insn == last_it->insn) {
-      // The move-result(-pseudo) is in the next (runtime) block.
+      // The move-result(-pseudo) is in the next (runtime) block, if any.
       // We follow the goto edge to the block that should have the
       // move-result(-pseudo).
       //
       // We can't use std::next because that goes to the next block in ID order,
       // which may not be the next runtime block.
       auto move_result_block = block->goes_to();
-      always_assert_log(move_result_block != nullptr,
-                        "Cannot follow goto of B%u in %s", block->id(),
-                        SHOW(*this));
-      auto first_it = move_result_block->get_first_insn();
-      if (first_it != move_result_block->end() &&
-          opcode::is_move_result_any(first_it->insn->opcode())) {
-        // We can safely delete this move-result(-pseudo) because it cannot be
-        // the move-result(-pseudo) of more than one primary instruction. A CFG
-        // with multiple edges to a block beginning with a move-result(-pseudo)
-        // is a malformed CFG.
-        always_assert_log(move_result_block->preds().size() == 1,
-                          "Multiple edges to a move-result-pseudo in %d. %s",
-                          move_result_block->id(), SHOW(*this));
-        move_result_block->m_entries.erase_and_dispose(first_it);
+      if (move_result_block != nullptr) {
+        auto first_it = move_result_block->get_first_insn();
+        if (first_it != move_result_block->end() &&
+            opcode::is_move_result_any(first_it->insn->opcode())) {
+          // We can safely delete this move-result(-pseudo) because it cannot be
+          // the move-result(-pseudo) of more than one primary instruction. A
+          // CFG with multiple edges to a block beginning with a
+          // move-result(-pseudo) is a malformed CFG.
+          always_assert_log(move_result_block->preds().size() == 1,
+                            "Multiple edges to a move-result-pseudo in %d. %s",
+                            move_result_block->id(), SHOW(*this));
+          move_result_block->m_entries.erase_and_dispose(first_it);
+        }
       }
     } else {
       // The move-result(-pseudo) is in the same block as this one.
