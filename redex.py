@@ -250,7 +250,7 @@ def maybe_reprint_error(lines, term_handler):
         return
 
     for line in terminate_lines:
-        print(f"{line}")
+        print("%s" % line)
     print()  # An empty line to separate.
 
 
