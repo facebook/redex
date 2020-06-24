@@ -160,22 +160,42 @@ std::vector<DexClass*> DedupStrings::get_host_classes(DexClassesVector& dexen) {
 
 std::unordered_set<const DexMethod*> DedupStrings::get_perf_sensitive_methods(
     const DexClassesVector& dexen) {
-  std::unordered_set<const DexMethod*> perf_sensitive_methods;
-  auto has_weight = [&](DexMethod* method) -> bool {
-    return !m_use_method_to_weight ||
-           !!get_method_weight_if_available(method, &m_method_to_weight) ||
-           type_class(method->get_class())->rstate.outlined();
+  std::unordered_set<const DexMethodRef*> sufficiently_popular_methods;
+  if (m_method_profiles.has_stats()) {
+    for (auto& p : m_method_profiles.all_interactions()) {
+      auto& method_stats = p.second;
+      for (auto& q : method_stats) {
+        if (q.second.appear_percent >=
+            m_method_profiles_appear_percent_threshold) {
+          sufficiently_popular_methods.insert(q.first);
+        }
+      }
+    }
+  }
+  auto is_perf_sensitive = [&](size_t dexnr, DexClass* cls,
+                               DexMethod* method) -> bool {
+    // All methods in the primary dex 0 must not be touched,
+    // as well as popular methods in classes marked as being perf-sensitive.
+    // We also choose to not dedup strings in cl_inits and outlined methods,
+    // as they either tend to get called during critical initialization code
+    // paths, or often.
+    if (dexnr == 0 || method::is_clinit(method) ||
+        type_class(method->get_class())->rstate.outlined()) {
+      return true;
+    }
+    if (!cls->is_perf_sensitive()) {
+      return false;
+    }
+    return !m_method_profiles.has_stats() ||
+           !sufficiently_popular_methods.count(method);
   };
+  std::unordered_set<const DexMethod*> perf_sensitive_methods;
   for (size_t dexnr = 0; dexnr < dexen.size(); dexnr++) {
     auto& classes = dexen[dexnr];
     for (auto cls : classes) {
       auto process_method = [&](DexMethod* method) {
         if (method->get_code() != nullptr) {
-          // All methods in the primary dex 0 must not be touched,
-          // as well as methods marked as being perf-sensitive
-          bool perf_sensitive =
-              dexnr == 0 || (cls->is_perf_sensitive() && has_weight(method));
-          if (perf_sensitive) {
+          if (is_perf_sensitive(dexnr, cls, method)) {
             perf_sensitive_methods.emplace(method);
             m_stats.perf_sensitive_methods++;
           } else {
@@ -682,7 +702,10 @@ void DedupStringsPass::bind_config() {
       (1 << facebook::Locator::dexnr_bits) - 1;
   bind("max_factory_methods", default_max_factory_methods,
        m_max_factory_methods);
-  bind("use_method_to_weight", false, m_use_method_to_weight);
+  float default_method_profiles_appear_percent_threshold = 1;
+  bind("method_profiles_appear_percent_threshold",
+       default_method_profiles_appear_percent_threshold,
+       m_method_profiles_appear_percent_threshold);
 
   trait(Traits::Pass::unique, true);
 
@@ -702,8 +725,9 @@ void DedupStringsPass::bind_config() {
 void DedupStringsPass::run_pass(DexStoresVector& stores,
                                 ConfigFiles& conf,
                                 PassManager& mgr) {
-  DedupStrings ds(m_max_factory_methods, m_use_method_to_weight,
-                  conf.get_method_to_weight());
+  DedupStrings ds(m_max_factory_methods,
+                  m_method_profiles_appear_percent_threshold,
+                  conf.get_method_profiles());
   ds.run(stores);
   const auto stats = ds.get_stats();
   mgr.incr_metric(METRIC_PERF_SENSITIVE_STRINGS, stats.perf_sensitive_strings);
