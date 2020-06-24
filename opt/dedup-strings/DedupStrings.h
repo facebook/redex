@@ -49,13 +49,12 @@ class DedupStrings {
     DexMethod* const_string_method{nullptr};
   };
 
-  std::vector<DexClass*> get_host_classes(DexClassesVector& dexen);
   std::unordered_map<const DexMethod*, size_t> get_methods_to_dex(
       const DexClassesVector& dexen);
   std::unordered_set<const DexMethod*> get_perf_sensitive_methods(
       const DexClassesVector& dexen);
   DexMethod* make_const_string_loader_method(
-      DexClass* host_cls, const std::vector<DexString*>& strings);
+      DexClasses& dex, size_t dex_id, const std::vector<DexString*>& strings);
   void gather_non_load_strings(DexClasses& classes,
                                std::unordered_set<const DexString*>* strings);
   ConcurrentMap<DexString*, std::unordered_map<size_t, size_t>> get_occurrences(

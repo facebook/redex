@@ -21,6 +21,8 @@
 
 namespace {
 
+constexpr const char* DEDUP_STRINGS_CLASS_NAME_PREFIX = "Lcom/redex/Strings$";
+
 constexpr const char* METRIC_PERF_SENSITIVE_STRINGS =
     "num_perf_sensitive_strings";
 constexpr const char* METRIC_NON_PERF_SENSITIVE_STRINGS =
@@ -81,81 +83,6 @@ void DedupStrings::run(DexStoresVector& stores) {
   // Rewrite const-string instructions
   rewrite_const_string_instructions(scope, methods_to_dex,
                                     perf_sensitive_methods, strings_to_dedup);
-}
-
-std::vector<DexClass*> DedupStrings::get_host_classes(DexClassesVector& dexen) {
-  // For dex, let's find an existing class into which we can add our
-  // $const$string factory method.
-
-  std::vector<DexClass*> host_classes;
-  for (auto& classes : dexen) {
-    DexClass* host_cls = nullptr;
-    size_t min_size = std::numeric_limits<size_t>::max();
-    for (auto cls : classes) {
-      if (cls->rstate.outlined()) {
-        host_cls = cls;
-        break;
-      }
-      if (!is_public(cls) || cls->is_external() || is_interface(cls)) {
-        // We cannot add anything to non-public, external, or interface classes.
-        continue;
-      }
-      if (root(cls)) {
-        // Root classes may participate in reflection, and thus we shouldn't
-        // add anything to them.
-        continue;
-      }
-      if (cls->get_clinit()) {
-        // We do not want to trigger a clinit.
-        continue;
-      }
-      if (cls->get_super_class() != type::java_lang_Object() ||
-          !cls->get_interfaces()->get_type_list().empty()) {
-        // Classes that derived from another class, or implement interfaces,
-        // may trigger additional class loads, which is undesirable, or even
-        // fatal when any of the (framework) classes do not exist on a
-        // particular Android OS version.
-        continue;
-      }
-      const auto* annos = cls->get_anno_set();
-      if (annos && annos->size() > 0) {
-        // Annotations might indicate API-level restrictions.
-        continue;
-      }
-      auto has_non_trivial_type = [](DexField* f) -> bool {
-        auto t = f->get_type();
-        return !type::is_primitive(t) && t != type::java_lang_Object();
-      };
-      auto& ifields = cls->get_ifields();
-      auto& sfields = cls->get_ifields();
-      if (std::any_of(ifields.begin(), ifields.end(), has_non_trivial_type) ||
-          std::any_of(sfields.begin(), sfields.end(), has_non_trivial_type)) {
-        // We don't want classes that have fields of non-trivial types as
-        // such types might get loaded during class initialization.
-        continue;
-      }
-      // Pick "smallest" class according to some metric; to minimize change of
-      // unforeseen interactions, and to make class selection more stable.
-      size_t size = cls->get_vmethods().size() + cls->get_dmethods().size() +
-                    cls->get_sfields().size();
-      if (size < min_size) {
-        min_size = size;
-        host_cls = cls;
-      }
-    }
-
-    if (host_cls) {
-      TRACE(DS, 2, "[dedup strings] host class in dex #%u is {%s}",
-            host_classes.size(), SHOW(host_cls));
-    } else {
-      TRACE(DS, 2, "[dedup strings] no host class in dex #%u",
-            host_classes.size());
-      ++m_stats.dexes_without_host_cls;
-    }
-    host_classes.push_back(host_cls);
-  }
-
-  return host_classes;
 }
 
 std::unordered_set<const DexMethod*> DedupStrings::get_perf_sensitive_methods(
@@ -238,14 +165,31 @@ std::unordered_map<const DexMethod*, size_t> DedupStrings::get_methods_to_dex(
 }
 
 DexMethod* DedupStrings::make_const_string_loader_method(
-    DexClass* host_cls, const std::vector<DexString*>& strings) {
-  // Here we build the string factory method with a big switch statement.
+    DexClasses& dex, size_t dex_id, const std::vector<DexString*>& strings) {
+  // Create a new class to host the string lookup method
+  auto host_cls_name =
+      DexString::make_string(std::string(DEDUP_STRINGS_CLASS_NAME_PREFIX) +
+                             std::to_string(dex_id) + ";");
+  auto host_type = DexType::make_type(host_cls_name);
+  ClassCreator host_cls_creator(host_type);
+  host_cls_creator.set_access(ACC_PUBLIC | ACC_FINAL);
+  host_cls_creator.set_super(type::java_lang_Object());
+  auto host_cls = host_cls_creator.create();
+  host_cls->rstate.set_generated();
+  host_cls->set_perf_sensitive(true);
+  // Insert class at beginning of dex, but after canary class, if any
+  auto dex_it = dex.begin();
+  for (; dex_it != dex.end() && interdex::is_canary(*dex_it); dex_it++) {
+  }
+  dex.insert(dex_it, host_cls);
+
+  // Here we build the string lookup method with a big switch statement.
   always_assert(!strings.empty());
   const auto string_type = type::java_lang_String();
   const auto proto = DexProto::make_proto(
       string_type, DexTypeList::make_type_list({type::_int()}));
   MethodCreator method_creator(host_cls->get_type(),
-                               DexString::make_string("$const$string"),
+                               DexString::make_string("lookup"),
                                proto,
                                ACC_PUBLIC | ACC_STATIC);
   redex_assert(!strings.empty());
@@ -362,8 +306,6 @@ DedupStrings::get_strings_to_dedup(
   std::unordered_map<DexString*, DedupStrings::DedupStringInfo>
       strings_to_dedup;
 
-  const std::vector<DexClass*> host_classes = get_host_classes(dexen);
-
   // Do a cost/benefit analysis to figure out which strings to access via
   // factory methods, and where to put to the factory method
   std::vector<DexString*> strings_in_dexes[dexen.size()];
@@ -411,15 +353,6 @@ DedupStrings::get_strings_to_dedup(
     };
     boost::optional<HostInfo> host_info;
     for (size_t dexnr = 0; dexnr < dexen.size(); ++dexnr) {
-      // We need a host class to host
-      if (!host_classes[dexnr]) {
-        TRACE(DS, 4,
-              "[dedup strings] non perf sensitive string: {%s} dex #%u has no "
-              "host",
-              SHOW(s), dexnr);
-        continue;
-      }
-
       // There's a configurable limit of how many factory methods / hosts we
       // can have in total
       if (hosting_dexnrs.count(dexnr) == 0 &&
@@ -561,7 +494,7 @@ DedupStrings::get_strings_to_dedup(
                 return dexstrings_comparator()(a, b);
               });
     const auto const_string_method =
-        make_const_string_loader_method(host_classes[dexnr], strings);
+        make_const_string_loader_method(dexen.at(dexnr), dexnr, strings);
     always_assert(strings.size() < 0xFFFFFFFF);
     for (uint32_t i = 0; i < strings.size(); i++) {
       auto const s = strings[i];
@@ -673,16 +606,17 @@ void DedupStrings::rewrite_const_string_instructions(
       });
 }
 
+// In each dex, we might introduce as many new method refs and type refs as we
+// might add factory methods. This makes sure that the inter-dex pass keeps
+// space for that many method refs and type refs.
 class DedupStringsInterDexPlugin : public interdex::InterDexPassPlugin {
  public:
   explicit DedupStringsInterDexPlugin(size_t max_factory_methods)
       : m_max_factory_methods(max_factory_methods) {}
-  size_t reserve_mrefs() override {
-    // In each, we might introduce as many new method refs are we might add
-    // factory methods. This makes sure that the inter-dex pass keeps space for
-    // that many method refs.
-    return m_max_factory_methods;
-  }
+
+  size_t reserve_mrefs() override { return m_max_factory_methods; }
+
+  size_t reserve_trefs() override { return m_max_factory_methods; }
 
  private:
   size_t m_max_factory_methods;
