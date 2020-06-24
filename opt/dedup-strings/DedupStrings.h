@@ -28,13 +28,13 @@ class DedupStrings {
     size_t excluded_out_of_factory_methods_strings{0};
   };
 
-  DedupStrings(
-      size_t max_factory_methods,
-      bool use_method_to_weight,
-      const std::unordered_map<std::string, unsigned int>& method_to_weight)
+  DedupStrings(size_t max_factory_methods,
+               float method_profiles_appear_percent_threshold,
+               const method_profiles::MethodProfiles& method_profiles)
       : m_max_factory_methods(max_factory_methods),
-        m_use_method_to_weight(use_method_to_weight),
-        m_method_to_weight(method_to_weight) {}
+        m_method_profiles_appear_percent_threshold(
+            method_profiles_appear_percent_threshold),
+        m_method_profiles(method_profiles) {}
 
   const Stats& get_stats() const { return m_stats; }
 
@@ -49,13 +49,12 @@ class DedupStrings {
     DexMethod* const_string_method{nullptr};
   };
 
-  std::vector<DexClass*> get_host_classes(DexClassesVector& dexen);
   std::unordered_map<const DexMethod*, size_t> get_methods_to_dex(
       const DexClassesVector& dexen);
   std::unordered_set<const DexMethod*> get_perf_sensitive_methods(
       const DexClassesVector& dexen);
   DexMethod* make_const_string_loader_method(
-      DexClass* host_cls, const std::vector<DexString*>& strings);
+      DexClasses& dex, size_t dex_id, const std::vector<DexString*>& strings);
   void gather_non_load_strings(DexClasses& classes,
                                std::unordered_set<const DexString*>* strings);
   ConcurrentMap<DexString*, std::unordered_map<size_t, size_t>> get_occurrences(
@@ -78,8 +77,8 @@ class DedupStrings {
 
   mutable Stats m_stats;
   size_t m_max_factory_methods;
-  bool m_use_method_to_weight;
-  std::unordered_map<std::string, unsigned int> m_method_to_weight;
+  float m_method_profiles_appear_percent_threshold;
+  const method_profiles::MethodProfiles& m_method_profiles;
 };
 
 /**
@@ -155,5 +154,5 @@ class DedupStringsPass : public Pass {
 
  private:
   int64_t m_max_factory_methods;
-  bool m_use_method_to_weight;
+  float m_method_profiles_appear_percent_threshold{1.f};
 };
