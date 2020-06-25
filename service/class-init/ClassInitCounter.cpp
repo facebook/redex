@@ -1115,7 +1115,16 @@ void InitLocation::update_object(DexClass* container,
 }
 
 void InitLocation::reset_uses_from(DexClass* cls_impl, DexMethod* method) {
-  m_inits[cls_impl].erase(method);
+  auto class_seen = m_inits.find(cls_impl);
+  if (class_seen == m_inits.end()) {
+    return;
+  }
+  auto& method_table = class_seen->second;
+  auto method_seen = method_table.find(method);
+  if (method_seen == method_table.end()) {
+    return;
+  }
+  method_table.erase(method);
 }
 
 void InitLocation::all_uses_from(DexClass* cls_impl,
@@ -1433,10 +1442,13 @@ void ClassInitCounter::drive_analysis(
 
 void ClassInitCounter::find_uses_within(DexClass* container,
                                         DexMethod* method) {
+  DexType* container_type = container->get_type();
   for (auto& t_init : m_type_to_inits) {
     t_init.second.reset_uses_from(container, method);
   }
-  m_stored_mergeds[container->get_type()].erase(method);
+  if (m_stored_mergeds.count(container_type) != 0) {
+    m_stored_mergeds[container_type].erase(method);
+  }
   std::unordered_set<IRInstruction*> empty;
   drive_analysis(container, method, "find_uses_within", empty, m_type_to_inits);
 }
