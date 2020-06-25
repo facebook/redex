@@ -312,6 +312,27 @@ boost::optional<ParamIndex> ReturnParamResolver::get_return_param_index(
   return param.get_constant();
 }
 
+bool ReturnParamResolver::returns_compatible_with_receiver(
+    const DexMethodRef* method) const {
+  // Because of covariance and implemented interfaces, we might be looking at a
+  // synthesized bridge method that formally returns something weaker than the
+  // receiver (an implemented interface). Still, the actually returned value can
+  // be substituted by the receiver.
+  auto ctype = method->get_class();
+  auto rtype = method->get_proto()->get_rtype();
+  if (ctype == rtype) {
+    return true;
+  }
+  auto cls = type_class(ctype);
+  if (cls == nullptr) {
+    // Hm, we don't have framework types available.
+    return true;
+  }
+  auto& type_list = cls->get_interfaces()->get_type_list();
+  return std::find(type_list.begin(), type_list.end(), rtype) !=
+         type_list.end();
+}
+
 bool ReturnParamResolver::returns_receiver(const DexMethodRef* method) const {
   // Hard-coded very special knowledge about certain framework methods
 
@@ -324,7 +345,7 @@ bool ReturnParamResolver::returns_receiver(const DexMethodRef* method) const {
       cls == m_string_builder_type || cls == m_string_writer_type ||
       cls == m_writer_type) {
     if (method->get_name() == DexString::make_string("append")) {
-      always_assert(method->get_proto()->get_rtype() == method->get_class());
+      always_assert(returns_compatible_with_receiver(method));
       return true;
     }
   }
@@ -336,7 +357,7 @@ bool ReturnParamResolver::returns_receiver(const DexMethodRef* method) const {
     auto name = method->get_name();
     if (name == DexString::make_string("compact") ||
         name == DexString::make_string("put")) {
-      always_assert(method->get_proto()->get_rtype() == method->get_class());
+      always_assert(returns_compatible_with_receiver(method));
       return true;
     }
   }
@@ -349,7 +370,7 @@ bool ReturnParamResolver::returns_receiver(const DexMethodRef* method) const {
         name == DexString::make_string("putInt") ||
         name == DexString::make_string("putLong") ||
         name == DexString::make_string("putShort")) {
-      always_assert(method->get_proto()->get_rtype() == method->get_class());
+      always_assert(returns_compatible_with_receiver(method));
       return true;
     }
   }
@@ -358,7 +379,7 @@ bool ReturnParamResolver::returns_receiver(const DexMethodRef* method) const {
     auto name = method->get_name();
     if (name == DexString::make_string("format") ||
         name == DexString::make_string("printf")) {
-      always_assert(method->get_proto()->get_rtype() == method->get_class());
+      always_assert(returns_compatible_with_receiver(method));
       return true;
     }
   }
@@ -371,7 +392,7 @@ bool ReturnParamResolver::returns_receiver(const DexMethodRef* method) const {
         name == DexString::make_string("insert") ||
         name == DexString::make_string("replace") ||
         name == DexString::make_string("reverse")) {
-      always_assert(method->get_proto()->get_rtype() == method->get_class());
+      always_assert(returns_compatible_with_receiver(method));
       return true;
     }
   }
