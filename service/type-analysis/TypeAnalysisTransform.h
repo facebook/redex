@@ -23,21 +23,29 @@ class Transform final {
  public:
   using NullAssertionSet = std::unordered_set<DexMethodRef*>;
   struct Config {
+    bool remove_redundant_null_checks{false};
     bool remove_kotlin_null_check_assertions{false};
     Config() {}
   };
 
   struct Stats {
+    size_t null_check_removed{0};
     size_t kotlin_null_check_removed{0};
 
     Stats& operator+=(const Stats& that) {
+      null_check_removed += that.null_check_removed;
       kotlin_null_check_removed += that.kotlin_null_check_removed;
       return *this;
+    }
+
+    bool is_empty() {
+      return null_check_removed == 0 && kotlin_null_check_removed == 0;
     }
 
     void report(PassManager& mgr) const {
       mgr.incr_metric("kotlin_null_check_removed", kotlin_null_check_removed);
       TRACE(TYPE_TRANSFORM, 2, "TypeAnalysisTransform Stats:");
+      TRACE(TYPE_TRANSFORM, 2, " null checks removed = %u", null_check_removed);
       TRACE(TYPE_TRANSFORM,
             2,
             " Kotlin null checks removed = %u",
@@ -47,14 +55,17 @@ class Transform final {
 
   explicit Transform(Config config = Config()) : m_config(config) {}
   Stats apply(const type_analyzer::local::LocalTypeAnalyzer& lta,
-              IRCode* code,
+              DexMethod* method,
               const NullAssertionSet& null_assertion_set);
   static void setup(NullAssertionSet& null_assertion_set);
 
  private:
   void apply_changes(IRCode*);
 
+  bool can_optimize_null_checks(const DexMethod* method);
+
   const Config m_config;
+  std::vector<std::pair<IRInstruction*, IRInstruction*>> m_replacements;
   std::vector<IRList::iterator> m_deletes;
 };
 

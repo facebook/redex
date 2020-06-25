@@ -487,6 +487,20 @@ inline bool is_conditional_branch(IROpcode op) {
   }
 }
 
+inline bool is_testz_branch(IROpcode op) {
+  switch (op) {
+  case OPCODE_IF_EQZ:
+  case OPCODE_IF_NEZ:
+  case OPCODE_IF_LTZ:
+  case OPCODE_IF_GEZ:
+  case OPCODE_IF_GTZ:
+  case OPCODE_IF_LEZ:
+    return true;
+  default:
+    return false;
+  }
+}
+
 inline bool is_goto(IROpcode op) { return op == OPCODE_GOTO; }
 
 inline bool is_switch(IROpcode op) { return op == OPCODE_SWITCH; }

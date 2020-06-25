@@ -9,7 +9,6 @@
 
 #include "ConstantEnvironment.h"
 #include "ConstantPropagationAnalysis.h"
-#include "ConstantPropagationTransform.h"
 #include "ConstructorParams.h"
 #include "IPConstantPropagationAnalysis.h"
 #include "MethodOverrideGraph.h"

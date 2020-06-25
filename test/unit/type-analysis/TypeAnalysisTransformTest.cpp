@@ -78,7 +78,7 @@ struct TypeAnalysisTransformTest : public RedexTest {
           auto lta = gta->get_local_analysis(method);
           auto& code = *method->get_code();
           Transform tf(config);
-          return tf.apply(*lta, &code, null_assertion_set);
+          return tf.apply(*lta, method, null_assertion_set);
         });
   }
 
