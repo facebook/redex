@@ -159,7 +159,7 @@ struct RedexContext {
   // We still need to do hashing in order to shard the keys across the
   // individually-locked std::maps, but it suffices to hash a substring for this
   // purpose.
-  template <typename Value, size_t n_slots = 31>
+  template <typename Value, size_t n_slots = 127>
   using ConcurrentLargeStringMap =
       ConcurrentMapContainer<std::map<const char*, Value, Strcmp>,
                              const char*,
@@ -177,16 +177,18 @@ struct RedexContext {
     }
   };
 
-  // Hash an 8-byte subsequence of a given string, offset by 32 bytes from the
+  // Hash a 32-byte subsequence of a given string, offset by 32 bytes from the
   // start. Dex files tend to contain many strings with the same prefixes,
   // because every class / method under a given package will share the same
   // prefix. The offset ensures that we have more unique subsequences to hash.
   //
-  // XXX(jezng): 32 was picked fairly arbitrarily; testing showed that it was
-  // definitely better than 0, but I did not test any numbers in between.
+  // An offset of 32 and hash prefix length of 32 seemed to perform best on the
+  // typical strings in an android app. It's important to remain within one
+  // cache line (offset + hash_prefix_len <= 64) and hash enough of the string
+  // to minimize the chance of duplicate sections
   struct TruncatedStringHash {
     size_t operator()(const char* s) {
-      constexpr size_t hash_prefix_len = 8;
+      constexpr size_t hash_prefix_len = 32;
       constexpr size_t offset = 32;
       size_t len = strnlen(s, offset + hash_prefix_len);
       size_t start = std::max<int64_t>(0, int64_t(len - hash_prefix_len));
