@@ -215,6 +215,14 @@ std::unordered_set<std::string> extract_js_resources(
   return result;
 }
 
+bool is_binary_xml(const void* data, size_t size) {
+  if (size < sizeof(android::ResChunk_header)) {
+    return false;
+  }
+  return dtohs(((android::ResChunk_header*)data)->type) ==
+         android::RES_XML_TYPE;
+}
+
 std::unordered_set<uint32_t> extract_xml_reference_attributes(
     const std::string& file_contents, const std::string& filename) {
   android::ResXMLTree parser;
@@ -460,8 +468,14 @@ void extract_classes_from_layout(
     std::unordered_set<std::string>& out_classes,
     std::unordered_multimap<std::string, std::string>& out_attributes) {
 
+  auto size = layout_contents.size();
+  auto data = layout_contents.data();
+  if (!is_binary_xml((void*)data, size)) {
+    return;
+  }
+
   android::ResXMLTree parser;
-  parser.setTo(layout_contents.data(), layout_contents.size());
+  parser.setTo(data, size);
 
   android::String16 name("name");
   android::String16 klazz("class");
@@ -950,7 +964,8 @@ void remap_xml_reference_attributes(
   }
 }
 
-std::vector<std::string> find_layout_files(const std::string& apk_directory) {
+std::vector<std::string> find_resource_xml_files(
+    const std::string& apk_directory) {
 
   std::vector<std::string> layout_files;
 
@@ -962,14 +977,13 @@ std::vector<std::string> find_layout_files(const std::string& apk_directory) {
       auto const& entry = *it;
       const path_t& entry_path = entry.path();
 
-      if (is_directory(entry_path) &&
-          starts_with(entry_path.filename().string().c_str(), "layout")) {
+      if (is_directory(entry_path)) {
         for (auto lit = dir_iterator(entry_path); lit != dir_iterator();
              ++lit) {
-          auto const& layout_entry = *lit;
-          const path_t& layout_path = layout_entry.path();
-          if (is_regular_file(layout_path)) {
-            layout_files.push_back(layout_path.string());
+          const path_t& resource_path = lit->path();
+          if (is_regular_file(resource_path) &&
+              ends_with(resource_path.string().c_str(), ".xml")) {
+            layout_files.push_back(resource_path.string());
           }
         }
       }
@@ -993,7 +1007,7 @@ void collect_layout_classes_and_attributes(
     const std::unordered_set<std::string>& attributes_to_read,
     std::unordered_set<std::string>& out_classes,
     std::unordered_multimap<std::string, std::string>& out_attributes) {
-  std::vector<std::string> files = find_layout_files(apk_directory);
+  std::vector<std::string> files = find_resource_xml_files(apk_directory);
   for (const auto& layout_file : files) {
     collect_layout_classes_and_attributes_for_file(
         layout_file, attributes_to_read, out_classes, out_attributes);
