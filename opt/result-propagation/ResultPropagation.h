@@ -68,6 +68,7 @@ class ReturnParamResolver {
 
  private:
   bool returns_receiver(const DexMethodRef* method) const;
+  bool returns_compatible_with_receiver(const DexMethodRef* method) const;
 
   const method_override_graph::Graph& m_graph;
   const DexType* m_byte_buffer_type;

@@ -176,3 +176,16 @@ TEST_F(ResultPropagationTest, return_receiver_of_framework_method) {
   )";
   test_get_return_param_index(code_str, 0);
 }
+
+TEST_F(ResultPropagationTest, return_receiver_of_framework_bridge_method) {
+  const auto& code_str = R"(
+    (
+      (load-param-object v0)
+      (const v1 "foo")
+      (invoke-virtual (v0 v1) "Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/Appendable;")
+      (move-result v2)
+      (return v2)
+    )
+  )";
+  test_get_return_param_index(code_str, 0);
+}
