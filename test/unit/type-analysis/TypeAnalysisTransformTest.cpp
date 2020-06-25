@@ -64,6 +64,7 @@ struct TypeAnalysisTransformTest : public RedexTest {
     auto gta = analysis.analyze(scope);
     auto wps = gta->get_whole_program_state();
     type_analyzer::Transform::Config config;
+    config.remove_kotlin_null_check_assertions = true;
     type_analyzer::Transform::Stats transform_stats;
 
     transform_stats = walk::parallel::methods<type_analyzer::Transform::Stats>(

@@ -23,25 +23,25 @@ class Transform final {
  public:
   using NullAssertionSet = std::unordered_set<DexMethodRef*>;
   struct Config {
-    bool remove_dead_null_check_insn{true};
+    bool remove_kotlin_null_check_assertions{false};
     Config() {}
   };
 
   struct Stats {
-    size_t null_check_insn_removed{0};
+    size_t kotlin_null_check_removed{0};
 
     Stats& operator+=(const Stats& that) {
-      null_check_insn_removed += that.null_check_insn_removed;
+      kotlin_null_check_removed += that.kotlin_null_check_removed;
       return *this;
     }
 
     void report(PassManager& mgr) const {
-      mgr.incr_metric("null_check_insn_removed", null_check_insn_removed);
+      mgr.incr_metric("kotlin_null_check_removed", kotlin_null_check_removed);
       TRACE(TYPE_TRANSFORM, 2, "TypeAnalysisTransform Stats:");
       TRACE(TYPE_TRANSFORM,
             2,
-            "TypeAnalysisTransform insns removed = %u",
-            null_check_insn_removed);
+            " Kotlin null checks removed = %u",
+            kotlin_null_check_removed);
     }
   };
 

@@ -30,7 +30,8 @@ Transform::Stats Transform::apply(
       auto* insn = mie.insn;
       lta.analyze_instruction(insn, &env);
 
-      if (insn->opcode() == OPCODE_INVOKE_STATIC &&
+      if (m_config.remove_kotlin_null_check_assertions &&
+          insn->opcode() == OPCODE_INVOKE_STATIC &&
           null_assertion_set.count(insn->get_method())) {
 
         auto parm = env.get(insn->src(0));
@@ -40,7 +41,7 @@ Transform::Stats Transform::apply(
 
         if (parm.is_not_null()) {
           m_deletes.emplace_back(it);
-          stats.null_check_insn_removed++;
+          stats.kotlin_null_check_removed++;
         }
       }
     }
