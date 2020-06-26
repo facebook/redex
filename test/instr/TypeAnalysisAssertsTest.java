@@ -37,7 +37,7 @@ class SubTwo extends Base {
 }
 
 @KeepForRedexTest
-public class TypeAnalysisTest {
+public class TypeAnalysisAssertsTest {
   static Base sInstance;
 
   Base getInstance() {
@@ -53,7 +53,7 @@ public class TypeAnalysisTest {
   Base mNullable;
 
   @KeepForRedexTest
-  public TypeAnalysisTest() {}
+  public TypeAnalysisAssertsTest() {}
 
   void setBase(Base b) { mBase = b; }
 

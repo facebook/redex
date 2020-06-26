@@ -22,8 +22,8 @@ TEST_F(PreVerify, NoTypeChecks) {
       find_dmethod_named(*assert_handler_cls, "returnValueError");
   ASSERT_NE(nullptr, method_error_m);
 
-  auto test_cls =
-      find_class_named(classes, "Lcom/facebook/redextest/TypeAnalysisTest;");
+  auto test_cls = find_class_named(
+      classes, "Lcom/facebook/redextest/TypeAnalysisAssertsTest;");
   ASSERT_NE(nullptr, test_cls);
   auto test_field_m = find_vmethod_named(*test_cls, "getBase");
   auto test_return_m = find_vmethod_named(*test_cls, "testSetAndGet");
@@ -48,8 +48,8 @@ TEST_F(PostVerify, HasTypeChecks) {
       find_dmethod_named(*assert_handler_cls, "returnValueError");
   ASSERT_NE(nullptr, method_error_m);
 
-  auto test_cls =
-      find_class_named(classes, "Lcom/facebook/redextest/TypeAnalysisTest;");
+  auto test_cls = find_class_named(
+      classes, "Lcom/facebook/redextest/TypeAnalysisAssertsTest;");
   ASSERT_NE(nullptr, test_cls);
   auto test_field_m = find_vmethod_named(*test_cls, "getBase");
   auto test_return_m = find_vmethod_named(*test_cls, "testSetAndGet");
