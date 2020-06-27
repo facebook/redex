@@ -657,6 +657,9 @@ const DexType* OutlinerTypeAnalysis::get_type_demand(IRInstruction* insn,
   case OPCODE_APUT_WIDE:
   case OPCODE_APUT_OBJECT:
     if (src_index == 1) {
+      if (insn->opcode() == OPCODE_APUT_OBJECT) {
+        return DexType::make_type("[Ljava/lang/Object;");
+      }
       auto& env = m_type_environments->at(insn);
       auto dex_type = env.get_dex_type(insn->src(1));
       return dex_type ? *dex_type : nullptr;
@@ -665,7 +668,6 @@ const DexType* OutlinerTypeAnalysis::get_type_demand(IRInstruction* insn,
     always_assert(src_index == 0);
     switch (insn->opcode()) {
     case OPCODE_APUT:
-    case OPCODE_APUT_OBJECT:
     case OPCODE_APUT_WIDE: {
       auto& env = m_type_environments->at(insn);
       auto dex_type = env.get_dex_type(insn->src(1));
@@ -681,6 +683,12 @@ const DexType* OutlinerTypeAnalysis::get_type_demand(IRInstruction* insn,
       return type::_char();
     case OPCODE_APUT_SHORT:
       return type::_short();
+    case OPCODE_APUT_OBJECT:
+      // There seems to be very little static verification for this
+      // instruction, as most is deferred to runtime.
+      // https://android.googlesource.com/platform/dalvik/+/android-cts-4.4_r4/vm/analysis/CodeVerify.cpp#186
+      // So, we can just get away with the following:
+      return type::java_lang_Object();
     default:
       not_reached();
     }

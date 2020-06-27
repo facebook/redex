@@ -428,6 +428,36 @@ TEST_F(OutlinerTypeAnalysisTest, get_type_demand_primitive_narrow) {
   }
 }
 
+TEST_F(OutlinerTypeAnalysisTest, get_type_demand_aput_object) {
+  std::string src = R"(
+      (
+        (load-param-object v0)
+        (load-param-object v1)
+        (const v2 42)
+        (aput-object v0 v1 v2)
+        (return-void)
+      ))";
+  auto code = assembler::ircode_from_string(src);
+  code->build_cfg(true);
+  auto foo_method = DexMethod::make_method(
+                        "LFoo;.foo:(Ljava/lang/String;[Ljava/lang/String;)V")
+                        ->make_concrete(ACC_PUBLIC, std::move(code),
+                                        /*is_virtual=*/false);
+  outliner_impl::OutlinerTypeAnalysis ota(foo_method);
+
+  {
+    auto insn = find_insn(foo_method, OPCODE_APUT_OBJECT);
+    auto root = create_node({insn});
+    auto candidate = create_candidate(root);
+    auto type0 =
+        ota.get_type_demand(candidate, insn->src(0), boost::none, nullptr);
+    auto type1 =
+        ota.get_type_demand(candidate, insn->src(1), boost::none, nullptr);
+    EXPECT_EQ(type0, type::java_lang_Object());
+    EXPECT_EQ(type1, DexType::make_type("[Ljava/lang/Object;"));
+  }
+}
+
 TEST_F(OutlinerTypeAnalysisTest, get_type_demand_inference) {
   ClassCreator i_creator(DexType::make_type("LI;"));
   i_creator.set_access(ACC_INTERFACE | ACC_ABSTRACT);

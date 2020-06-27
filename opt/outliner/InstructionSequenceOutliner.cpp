@@ -2747,7 +2747,7 @@ void InstructionSequenceOutliner::run_pass(DexStoresVector& stores,
           &candidate_ids_by_methods);
 
       // TODO: Merge candidates that are equivalent except that one returns
-      // something and the other doesn't.
+      // something and the other doesn't. Affects around 1.5% of candidates.
       DexState dex_state(mgr, dex, dex_id++, reserved_trefs, reserved_mrefs);
       auto newly_outlined_methods =
           outline(m_config, mgr, dex_state, &candidates_with_infos,
