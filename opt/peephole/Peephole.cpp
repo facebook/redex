@@ -1331,10 +1331,16 @@ std::vector<Pattern> get_aputaget_patterns() {
             aput_aget_x_patterns(OPCODE_APUT_WIDE, OPCODE_AGET_WIDE,
                                  move_result_pseudo_wide),
             aput_x_patterns(OPCODE_APUT_WIDE)},
-           {"Replace_AputAgetObject",
-            aput_aget_x_patterns(OPCODE_APUT_OBJECT, OPCODE_AGET_OBJECT,
-                                 move_result_pseudo_object),
-            aput_x_patterns(OPCODE_APUT_OBJECT)},
+           /* The following is only valid when aput-object would receive values
+              that match the array type. However, this is not statically
+              checked, and other Redex optimizations may violate that
+              assumption.
+
+              {"Replace_AputAgetObject",
+                       aput_aget_x_patterns(OPCODE_APUT_OBJECT,
+                              OPCODE_AGET_OBJECT, move_result_pseudo_object),
+                       aput_x_patterns(OPCODE_APUT_OBJECT)},
+           */
            {"Replace_AputAgetShort",
             aput_aget_x_patterns(OPCODE_APUT_SHORT, OPCODE_AGET_SHORT,
                                  move_result_pseudo),

@@ -973,6 +973,9 @@ TEST(PeepholeTestA, RemoveArrayPutGetWideArray) {
         )
       )");
 }
+
+/* Replace_AputAgetObject is disabled because it makes assumptions that may be
+violated by other Redex passes, and are not checked by anything.
 TEST(PeepholeTestA, RemoveArrayPutGetObjectArray) {
   aputget_peep_hole_test(
       R"(
@@ -1002,6 +1005,7 @@ TEST(PeepholeTestA, RemoveArrayPutGetObjectArray) {
         )
       )");
 }
+*/
 
 TEST(PeepholeTestA, RemoveArrayPutGetNegativeIntByte) {
   // Negative (aput & aget byte)

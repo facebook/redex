@@ -193,28 +193,8 @@ DexType* CheckCastAnalysis::get_type_demand(IRInstruction* insn,
       // There seems to be very little static verification for this
       // instruction, as most is deferred to runtime.
       // https://android.googlesource.com/platform/dalvik/+/android-cts-4.4_r4/vm/analysis/CodeVerify.cpp#186
-      // So, we could just get away with the following:
-      //
-      //   return type::java_lang_Object();
-      //
-      // However, the ReduceArrayLiterals pass that turns (new-array plus)
-      // aput-* instructions into filled-new-array instructions assumes that the
-      // incoming values are compatible with the array type, and the Android
-      // verifier actually checks that. So, instead of doing something more
-      // radical here, we play it very safe and dig out the expected array
-      // component type.
-      //
-      // TODO: Consider doing something more radical, and somehow negotiate with
-      // the ReduceArrayLiterals pass (and possibly other passes) to do the
-      // right thing.
-      auto type_inference = get_type_inference();
-      auto& envs = type_inference->get_type_environments();
-      auto& env = envs.at(insn);
-      auto dex_type = env.get_dex_type(insn->src(1));
-      if (!dex_type || !type::is_array(*dex_type)) {
-        return nullptr;
-      }
-      return type::get_array_component_type(*dex_type);
+      // So, we can just get away with the following:
+      return type::java_lang_Object();
     }
     if (src_index == 1) {
       return DexType::make_type("[Ljava/lang/Object;");

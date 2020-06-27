@@ -220,7 +220,7 @@ CseLocation get_written_array_location(IROpcode opcode) {
   case OPCODE_APUT_BOOLEAN:
     return CseLocation(CseSpecialLocations::ARRAY_COMPONENT_TYPE_BOOLEAN);
   default:
-    not_reached();
+    always_assert(false);
   }
 }
 
@@ -609,6 +609,13 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
         value.field = insn->get_field();
         return value;
       }
+    } else if (insn->opcode() == OPCODE_APUT_OBJECT) {
+      // Skip this case. Statically, the incoming value can be of any object
+      // type, as runtime validation ensures type correctness. Thus, we cannot
+      // propagate an aput-object to an aget-object with a simple move-object.
+      // TODO: Allow this here, but also insert a check-cast instead of a simple
+      // move-object in this case, using type inference on the array argument of
+      // the aget-object instruction.
     } else if (is_aput(insn->opcode())) {
       always_assert(insn->srcs_size() == 3);
       auto src1 = ref_env.get(insn->src(1)).get_constant();

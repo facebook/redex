@@ -1128,6 +1128,23 @@ TEST_F(CommonSubexpressionEliminationTest, aput_related_aget) {
   test(Scope{type_class(type::java_lang_Object())}, code_str, expected_str, 1);
 }
 
+TEST_F(CommonSubexpressionEliminationTest, aput_object_related_aget_object) {
+  // We don't forward aput-object values to aget-object. (In general, a
+  // check-cast instruction needs to get introduced, but that isn't implemented
+  // yet.)
+  auto code_str = R"(
+    (
+      (const v0 0)
+      (const v1 0)
+      (const v2 0)
+      (aput-object v0 v1 v2)
+      (aget-object v1 v2)
+      (move-result-pseudo v0)
+    )
+  )";
+  test(Scope{type_class(type::java_lang_Object())}, code_str, code_str, 0);
+}
+
 TEST_F(CommonSubexpressionEliminationTest, iput_related_iget) {
   auto code_str = R"(
     (
