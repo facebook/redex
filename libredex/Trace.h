@@ -64,6 +64,7 @@
   TM(LCR_PASS)       \
   TM(LIB)            \
   TM(LOC)            \
+  TM(LOCKS)          \
   TM(MAGIC_FIELDS)   \
   TM(MAIN)           \
   TM(MARIANA_TRENCH) \

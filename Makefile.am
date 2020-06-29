@@ -56,6 +56,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/remove-apilevel-checks \
 	-I$(top_srcdir)/opt/remove-builders \
 	-I$(top_srcdir)/opt/remove-interfaces \
+	-I$(top_srcdir)/opt/remove-recursive-locks \
 	-I$(top_srcdir)/opt/remove_redundant_check_casts \
 	-I$(top_srcdir)/opt/remove-uninstantiables \
 	-I$(top_srcdir)/opt/remove-unreachable \
@@ -329,6 +330,7 @@ redex_all_SOURCES = \
 	opt/remove-builders/RemoveBuilders.cpp \
 	opt/remove-builders/RemoveBuildersHelper.cpp \
 	opt/remove-interfaces/RemoveInterfacePass.cpp \
+	opt/remove-recursive-locks/RemoveRecursiveLocks.cpp \
 	opt/remove_redundant_check_casts/CheckCastAnalysis.cpp \
 	opt/remove_redundant_check_casts/CheckCastTransform.cpp \
 	opt/remove_redundant_check_casts/RemoveRedundantCheckCasts.cpp \
