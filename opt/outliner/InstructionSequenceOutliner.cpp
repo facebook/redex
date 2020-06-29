@@ -2767,8 +2767,6 @@ void InstructionSequenceOutliner::run_pass(DexStoresVector& stores,
       }
     }
   }
-
-  config.process_unresolved_method_profile_lines();
 }
 
 static InstructionSequenceOutliner s_pass;

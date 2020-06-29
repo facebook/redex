@@ -389,6 +389,10 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   TypeCheckerConfig checker_conf{conf};
   checker_conf.on_input(scope);
 
+  // Pull on method-profiles, so that they get initialized, and are matched
+  // against the *initial* methods
+  conf.get_method_profiles();
+
   if (run_hasher_after_each_pass) {
     m_initial_hash =
         boost::optional<hashing::DexHash>(this->run_hasher(nullptr, scope));
@@ -483,6 +487,11 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
     }
 
     m_current_pass_info = nullptr;
+
+    // New methods might have been introduced by this pass; process previously
+    // unreolved methods to see if we can match them now (so that future passes
+    // using method profiles benefit)
+    conf.process_unresolved_method_profile_lines();
   }
 
   // Always run the type checker before generating the optimized dex code.
