@@ -2514,6 +2514,7 @@ void reorder_with_method_profiles(
             SHOW(method->get_name()), SHOW(method->get_class()),
             SHOW(target_class));
       relocate_method(method, target_class->get_type());
+      method->set_deobfuscated_name(show(method));
       relocated_outlined_methods++;
     }
     if (++methods_count == config.max_outlined_methods_per_class) {
@@ -2766,6 +2767,8 @@ void InstructionSequenceOutliner::run_pass(DexStoresVector& stores,
       }
     }
   }
+
+  config.process_unresolved_method_profile_lines();
 }
 
 static InstructionSequenceOutliner s_pass;
