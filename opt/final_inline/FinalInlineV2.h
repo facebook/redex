@@ -10,6 +10,7 @@
 #include "ConstantPropagationWholeProgramState.h"
 #include "IRCode.h"
 #include "Pass.h"
+#include "PatriciaTreeSetAbstractDomain.h"
 
 class FinalInlinePassV2 : public Pass {
  public:
@@ -64,6 +65,30 @@ class class_initialization_cycle : public std::exception {
 };
 
 constant_propagation::WholeProgramState analyze_and_simplify_clinits(
-    const Scope& scope, const XStoreRefs* xstores);
+    const Scope& scope,
+    const XStoreRefs* xstores,
+    const std::unordered_set<std::string>& allowed_opaque_callee_names = {});
+
+class StaticFieldReadAnalysis {
+ public:
+  using Result = sparta::PatriciaTreeSetAbstractDomain<const DexFieldRef*>;
+
+  StaticFieldReadAnalysis(
+      const call_graph::Graph& call_graph,
+      const std::unordered_set<std::string>& allowed_opaque_callee_names);
+
+  Result analyze(const DexMethod* method);
+
+ private:
+  const call_graph::Graph& m_graph;
+  std::unordered_map<const DexMethod*, Result> m_summaries;
+  std::unordered_set<const DexMethod*> m_finalized;
+  std::unordered_set<const DexMethodRef*> m_allowed_opaque_callees;
+
+  Result analyze(const DexMethod* method,
+                 std::unordered_set<const DexMethod*>& pending_methods);
+};
+
+call_graph::Graph build_class_init_graph(const Scope& scope);
 
 } // namespace final_inline

@@ -22,6 +22,7 @@
 #include "LocalDce.h"
 #include "Purity.h"
 #include "Resolver.h"
+#include "Timer.h"
 #include "TypeSystem.h"
 #include "TypeUtil.h"
 #include "Walkers.h"
@@ -39,6 +40,8 @@
  */
 
 namespace cp = constant_propagation;
+
+using namespace sparta;
 
 namespace {
 
@@ -222,40 +225,29 @@ class encoding_visitor : public boost::static_visitor<DexEncodedValue*> {
   const DexType* m_declaring_type;
 };
 
-/*
- * If a field is both read and written to in its initializer, then we can
- * update its encoded value with the value at exit only if the reads (sgets) are
- * are dominated by the writes (sputs) -- otherwise we may change program
- * semantics. Checking for dominance takes some work, and static fields are
- * rarely read in their class' <clinit>, so we simply avoid inlining all fields
- * that are read in their class' <clinit>.
- *
- * TODO: We should really transitively analyze all callees for field reads.
- * Right now this just analyzes the sgets directly in the <clinit>.
- */
-std::unordered_set<const DexFieldRef*> gather_read_static_fields(
-    DexClass* cls) {
-  std::unordered_set<const DexFieldRef*> read_fields;
-  auto clinit = cls->get_clinit();
-  for (auto* block : clinit->get_code()->cfg().blocks()) {
-    for (auto& mie : InstructionIterable(block)) {
-      auto insn = mie.insn;
-      if (is_sget(insn->opcode())) {
-        read_fields.emplace(insn->get_field());
-        TRACE(FINALINLINE, 3, "Found static field read in clinit: %s",
-              SHOW(insn->get_field()));
+class ClassInitStrategy final : public call_graph::SingleCalleeStrategy {
+ public:
+  explicit ClassInitStrategy(const Scope& scope)
+      : call_graph::SingleCalleeStrategy(scope) {}
+
+  std::vector<const DexMethod*> get_roots() const override {
+    std::vector<const DexMethod*> roots;
+
+    walk::methods(m_scope, [&](DexMethod* method) {
+      if (method::is_clinit(method)) {
+        roots.emplace_back(method);
       }
-    }
+    });
+    return roots;
   }
-  return read_fields;
-}
+};
 
 void encode_values(DexClass* cls,
                    const FieldEnvironment& field_env,
-                   const std::unordered_set<const DexFieldRef*>& blacklist,
+                   const PatriciaTreeSet<const DexFieldRef*>& blacklist,
                    const XStoreRefs* xstores) {
   for (auto* field : cls->get_sfields()) {
-    if (blacklist.count(field)) {
+    if (blacklist.contains(field)) {
       continue;
     }
     auto value = field_env.get(field);
@@ -274,6 +266,135 @@ void encode_values(DexClass* cls,
 
 namespace final_inline {
 
+call_graph::Graph build_class_init_graph(const Scope& scope) {
+  Timer t("Build class init graph");
+  auto graph = call_graph::Graph(ClassInitStrategy(scope));
+  return graph;
+}
+
+StaticFieldReadAnalysis::StaticFieldReadAnalysis(
+    const call_graph::Graph& call_graph,
+    const std::unordered_set<std::string>& allowed_opaque_callee_names)
+    : m_graph(call_graph) {
+
+  // By default, the analysis gives up when it sees a true virtual callee.
+  // However, we can allow some methods to be treated as if no field is read
+  // from the callees so the analysis gives up less often.
+  for (const auto& name : allowed_opaque_callee_names) {
+    DexMethodRef* callee = DexMethod::get_method(name);
+    always_assert_log(callee, "Method %s does not exist.", name.c_str());
+    m_allowed_opaque_callees.emplace(callee);
+  }
+}
+
+/*
+ * If a field is both read and written to in its initializer, then we can
+ * update its encoded value with the value at exit only if the reads (sgets) are
+ * are dominated by the writes (sputs) -- otherwise we may change program
+ * semantics. Checking for dominance takes some work, and static fields are
+ * rarely read in their class' <clinit>, so we simply avoid inlining all fields
+ * that are read in their class' <clinit>.
+ *
+ * This analysis is an interprocedural analysis that collects all static field
+ * reads from the current method. Technically there are other opcodes that
+ * triggers more <clinit>s, which can also read from a field. To make this fully
+ * sound, we need to account for potential class loads as well.
+ */
+
+StaticFieldReadAnalysis::Result StaticFieldReadAnalysis::analyze(
+    const DexMethod* method) {
+  std::unordered_set<const DexMethod*> pending;
+
+  Result last = Result::bottom();
+  while (true) {
+    Result new_result = analyze(method, pending);
+    if (pending.count(method) == 0 || new_result == last) {
+      pending.erase(method);
+      m_finalized.emplace(method);
+      return new_result;
+    } else {
+      last = new_result;
+    }
+  }
+}
+
+StaticFieldReadAnalysis::Result StaticFieldReadAnalysis::analyze(
+    const DexMethod* method,
+    std::unordered_set<const DexMethod*>& pending_methods) {
+
+  if (!method) {
+    return {};
+  }
+
+  if (m_finalized.count(method)) {
+    return m_summaries.at(method);
+  }
+
+  auto code = method->get_code();
+  if (!code) {
+    return {};
+  }
+
+  Result ret{};
+  for (auto& mie : InstructionIterable(code)) {
+    auto insn = mie.insn;
+    if (is_sget(insn->opcode())) {
+      ret.add(insn->get_field());
+    }
+  }
+
+  pending_methods.emplace(method);
+  m_summaries[method] = ret;
+
+  bool callee_pending = false;
+
+  for (auto& mie : InstructionIterable(code)) {
+    auto insn = mie.insn;
+    if (is_invoke(insn->opcode())) {
+      auto callee_method_def =
+          resolve_method(insn->get_method(), opcode_to_search(insn), method);
+      if (!callee_method_def || callee_method_def->is_external() ||
+          !callee_method_def->is_concrete() ||
+          m_allowed_opaque_callees.count(callee_method_def)) {
+        continue;
+      }
+      auto callees = resolve_callees_in_graph(m_graph, method, insn);
+      if (callees.empty()) {
+        TRACE(FINALINLINE, 2, "%s has opaque callees %s", SHOW(method),
+              SHOW(insn->get_method()));
+        pending_methods.erase(method);
+        ret = Result::top();
+        m_summaries[method] = ret;
+        return ret;
+      }
+
+      for (const DexMethod* callee : callees) {
+        Result callee_result;
+        if (pending_methods.count(callee)) {
+          callee_pending = true;
+          callee_result = m_summaries.at(callee);
+        } else {
+          callee_result = analyze(callee, pending_methods);
+        }
+        ret.join_with(callee_result);
+        if (ret.is_top()) {
+          pending_methods.erase(method);
+          m_summaries[method] = ret;
+          return ret;
+        }
+        if (pending_methods.count(callee)) {
+          callee_pending = true;
+        }
+      }
+    }
+  }
+  if (!callee_pending) {
+    pending_methods.erase(method);
+  }
+  m_summaries[method] = ret;
+  return ret;
+}
+
 /*
  * This method determines the values of the static fields after the <clinit>
  * has finished running and generates their encoded_value equivalents.
@@ -281,10 +402,16 @@ namespace final_inline {
  * Additionally, for static final fields, this method collects and returns them
  * as part of the WholeProgramState object.
  */
-cp::WholeProgramState analyze_and_simplify_clinits(const Scope& scope,
-                                                   const XStoreRefs* xstores) {
+cp::WholeProgramState analyze_and_simplify_clinits(
+    const Scope& scope,
+    const XStoreRefs* xstores,
+    const std::unordered_set<std::string>& allowed_opaque_callee_names) {
   const std::unordered_set<DexMethodRef*> pure_methods = get_pure_methods();
   cp::WholeProgramState wps;
+
+  auto graph = call_graph::Graph(ClassInitStrategy(scope));
+  StaticFieldReadAnalysis analysis(graph, allowed_opaque_callee_names);
+
   for (DexClass* cls : reverse_tsort_by_clinit_deps(scope)) {
     ConstantEnvironment env;
     cp::set_encoded_values(cls, &env);
@@ -301,8 +428,14 @@ cp::WholeProgramState analyze_and_simplify_clinits(const Scope& scope,
       env = intra_cp.get_exit_state_at(cfg.exit_block());
 
       // Generate the new encoded_values and re-run the analysis.
-      encode_values(cls, env.get_field_environment(),
-                    gather_read_static_fields(cls), xstores);
+      StaticFieldReadAnalysis::Result res = analysis.analyze(clinit);
+
+      if (res.is_bottom() || res.is_top()) {
+        TRACE(FINALINLINE, 1, "Skipped encoding for class %s.", SHOW(cls));
+      } else {
+        encode_values(cls, env.get_field_environment(), res.elements(),
+                      xstores);
+      }
       auto fresh_env = ConstantEnvironment();
       cp::set_encoded_values(cls, &fresh_env);
       intra_cp.run(fresh_env);
