@@ -52,7 +52,8 @@ class AndroidSDK {
     }
   }
 
-  std::unordered_map<DexType*, FrameworkAPI> get_framework_classes() {
+  const std::unordered_map<DexType*, FrameworkAPI>& get_framework_classes()
+      const {
     return m_framework_classes;
   }
 
@@ -68,6 +69,8 @@ class AndroidSDK {
                           meth->get_proto(), meth->get_access(),
                           /* relax_access_flags_matching */ true);
   }
+
+  bool has_type(DexType* type) const { return m_framework_classes.count(type); }
 
  private:
   void load_framework_classes();
