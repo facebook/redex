@@ -97,7 +97,14 @@ class AnalyzerGenerator {
 std::unique_ptr<FixpointIterator> PassImpl::analyze(
     const Scope& scope,
     const ImmutableAttributeAnalyzerState* immut_analyzer_state) {
-  call_graph::Graph cg = call_graph::single_callee_graph(scope);
+  call_graph::Graph cg = m_config.use_multiple_callee_callgraph
+                             ? call_graph::multiple_callee_graph(
+                                   scope, m_config.big_override_threshold)
+                             : call_graph::single_callee_graph(scope);
+  auto cg_stats = get_num_nodes_edges(cg);
+  m_stats.callgraph_nodes = cg_stats.num_nodes;
+  m_stats.callgraph_edges = cg_stats.num_edges;
+  m_stats.callgraph_callsites = cg_stats.num_callsites;
   auto fp_iter = std::make_unique<FixpointIterator>(
       cg, AnalyzerGenerator(immut_analyzer_state));
   // Run the bootstrap. All field value and method return values are
@@ -226,6 +233,9 @@ void PassImpl::run_pass(DexStoresVector& stores,
   mgr.incr_metric("added_param_const", m_transform_stats.added_param_const);
   mgr.incr_metric("constant_fields", m_stats.constant_fields);
   mgr.incr_metric("constant_methods", m_stats.constant_methods);
+  mgr.incr_metric("callgraph_edges", m_stats.callgraph_edges);
+  mgr.incr_metric("callgraph_nodes", m_stats.callgraph_nodes);
+  mgr.incr_metric("callgraph_callsites", m_stats.callgraph_callsites);
 }
 
 static PassImpl s_pass;

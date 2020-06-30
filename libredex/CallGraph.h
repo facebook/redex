@@ -39,6 +39,8 @@ class Graph;
  */
 Graph single_callee_graph(const Scope&);
 
+Graph multiple_callee_graph(const Scope&, uint32_t big_override_threshold);
+
 Graph complete_call_graph(const Scope&);
 
 struct CallSite {
@@ -170,6 +172,23 @@ class CompleteCallGraphStrategy : public BuildStrategy {
   std::unique_ptr<const method_override_graph::Graph> m_method_override_graph;
 };
 
+class MultipleCalleeStrategy : public BuildStrategy {
+ public:
+  explicit MultipleCalleeStrategy(const Scope& scope,
+                                  uint32_t big_override_threshold);
+  CallSites get_callsites(const DexMethod* method) const override;
+  std::vector<const DexMethod*> get_roots() const override;
+
+ protected:
+  bool is_definitely_virtual(DexMethod* method) const;
+
+  const Scope& m_scope;
+  std::unordered_set<DexMethod*> m_non_virtual;
+  std::unique_ptr<const method_override_graph::Graph> m_method_override_graph;
+  std::unordered_set<const DexMethod*> m_big_override;
+  mutable MethodRefCache m_resolved_refs;
+};
+
 // A static-method-only API for use with the monotonic fixpoint iterator.
 class GraphInterface {
  public:
@@ -195,5 +214,17 @@ class GraphInterface {
 
 std::unordered_set<const DexMethod*> resolve_callees_in_graph(
     const Graph& graph, const DexMethod* method, const IRInstruction* insn);
+
+struct CallgraphStats {
+  uint32_t num_nodes;
+  uint32_t num_edges;
+  uint32_t num_callsites;
+  CallgraphStats(uint32_t num_nodes, uint32_t num_edges, uint32_t num_callsites)
+      : num_nodes(num_nodes),
+        num_edges(num_edges),
+        num_callsites(num_callsites) {}
+};
+
+CallgraphStats get_num_nodes_edges(const Graph& graph);
 
 } // namespace call_graph

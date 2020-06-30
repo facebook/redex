@@ -22,11 +22,13 @@ class PassImpl : public Pass {
  public:
   struct Config {
     bool include_virtuals{false};
+    bool use_multiple_callee_callgraph{false};
     bool create_runtime_asserts{false};
     // The maximum number of times we will try to refine the WholeProgramState.
     // Setting this to zero means that all field values and return values will
     // be treated as Top.
     uint64_t max_heap_analysis_iterations{0};
+    uint32_t big_override_threshold{5};
     std::unordered_set<const DexType*> field_black_list;
 
     Transform::Config transform;
@@ -45,6 +47,11 @@ class PassImpl : public Pass {
          m_config.transform.replace_moves_with_consts);
     bind("remove_dead_switch", true, m_config.transform.remove_dead_switch);
     bind("include_virtuals", false, m_config.include_virtuals);
+    bind("use_multiple_callee_callgraph",
+         false,
+         m_config.use_multiple_callee_callgraph);
+    bind(
+        "big_override_threshold", UINT32_C(5), m_config.big_override_threshold);
     bind("create_runtime_asserts", false, m_config.create_runtime_asserts);
     bind("max_heap_analysis_iterations",
          UINT64_C(0),
@@ -83,6 +90,9 @@ class PassImpl : public Pass {
   struct Stats {
     size_t constant_fields{0};
     size_t constant_methods{0};
+    size_t callgraph_nodes{0};
+    size_t callgraph_edges{0};
+    size_t callgraph_callsites{0};
   } m_stats;
   Transform::Stats m_transform_stats;
   Config m_config;
