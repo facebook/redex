@@ -76,6 +76,44 @@ class ObjectWithImmutField {
   }
 }
 
+interface TrueVirtualInterface {
+  public int calculate(int input);
+}
+
+class TrueVirtualInterfaceImpl1 implements TrueVirtualInterface {
+  // CHECK: method: virtual redex.TrueVirtualInterfaceImpl1.calculate
+  public int calculate(int input) {
+    // PRECHECK-NOT: const{{.*}} #int 6
+    // POSTCHECK: const{{.*}} #int 6
+    return input * 2;
+    // CHECK: return {{.*}}
+  }
+}
+
+class TrueVirtualInterfaceImpl2 implements TrueVirtualInterface {
+  // CHECK: method: virtual redex.TrueVirtualInterfaceImpl2.calculate
+  public int calculate(int input) {
+    // PRECHECK-NOT: const{{.*}} #int 9
+    // POSTCHECK: const{{.*}} #int 9
+    return input * 3;
+    // CHECK: return {{.*}}
+  }
+}
+
+interface NoChangeNameIntf {
+  public int calculate(int input);
+}
+
+class NoChangeNameIntfImpl implements NoChangeNameIntf {
+  // CHECK: method: virtual redex.NoChangeNameIntfImpl.calculate
+  public int calculate(int input) {
+    // PRECHECK-NOT: const{{.*}} #int 6
+    // POSTCHECK-NOT: const{{.*}} #int 6
+    return input * 2;
+    // CHECK: return {{.*}}
+  }
+}
+
 public class IPConstantPropagationTest {
 
   // CHECK: method: virtual redex.IPConstantPropagationTest.two_ctors
@@ -155,5 +193,17 @@ public class IPConstantPropagationTest {
     assertThat(obj.field).isEqualTo(3);
     // PRECHECK: invoke-virtual {{.*}} redex.ObjectWithImmutField.get_field
     assertThat(obj.get_field()).isEqualTo(3);
+  }
+
+  @Test
+  public void true_virtuals() {
+    TrueVirtualInterface a = new TrueVirtualInterfaceImpl1();
+    assertThat(a.calculate(3)).isEqualTo(6);
+  }
+
+  @Test
+  public void true_virtuals_no_rename() {
+    NoChangeNameIntf a = new NoChangeNameIntfImpl();
+    assertThat(a.calculate(3)).isEqualTo(6);
   }
 }
