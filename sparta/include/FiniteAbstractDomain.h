@@ -393,33 +393,21 @@ class BitVectorSemiLattice final {
   Encoding m_top;
 };
 
-/*
- * We need to switch from one representation to the other (lower or opposite
- * semi-lattice), depending on the operation performed (Meet or Join).
- */
-template <size_t cardinality>
-struct BitVectorEncoding {
-  // The fields must be declared mutable so as to bypass the const qualifiers in
-  // the signature of LatticeEncoding.
-  mutable bool is_lower_semi_lattice;
-  mutable std::bitset<cardinality> bit_vector;
-};
-
 } // namespace fad_impl
 
 /*
- * A lattice maintains two semi-lattices internally and adjusts the
- * representation on the fly depending on the operation performed.
+ * A lattice maintains two semi-lattices internally, always use opposite
+ * semi-lattice representation and calculate corresponding lower semi-lattice
+ * when needed
  */
 template <typename Element,
           size_t cardinality,
           typename Hash = std::hash<Element>,
           typename Equal = std::equal_to<Element>>
 class BitVectorLattice final
-    : public LatticeEncoding<Element,
-                             fad_impl::BitVectorEncoding<cardinality>> {
+    : public LatticeEncoding<Element, std::bitset<cardinality>> {
  public:
-  using Encoding = fad_impl::BitVectorEncoding<cardinality>;
+  using Encoding = std::bitset<cardinality>;
 
   ~BitVectorLattice() {
     // The destructor is the only method that is guaranteed to be created when a
@@ -445,81 +433,57 @@ class BitVectorLattice final
     // In a standard fixpoint computation the Join is by far the dominant
     // operation. Hence, we favor the opposite semi-lattice encoding whenever we
     // construct a domain element.
-    return {/* is_lower_semi_lattice */ false,
-            m_opposite_semi_lattice.encode(element)};
+    return m_opposite_semi_lattice.encode(element);
   }
 
+  // Default use opposite semi-lattice for decoding.
   Element decode(const Encoding& encoding) const override {
-    return encoding.is_lower_semi_lattice
-               ? m_lower_semi_lattice.decode(encoding.bit_vector)
-               : m_opposite_semi_lattice.decode(encoding.bit_vector);
+    return m_opposite_semi_lattice.decode(encoding);
   }
 
-  bool is_bottom(const Encoding& x) const override {
-    return x.is_lower_semi_lattice ? (x.bit_vector.count() == 1)
-                                   : x.bit_vector.all();
+  Element decode_lower(const Encoding& encoding) const {
+    return m_lower_semi_lattice.decode(encoding);
   }
 
-  bool is_top(const Encoding& x) const override {
-    return x.is_lower_semi_lattice ? x.bit_vector.all()
-                                   : (x.bit_vector.count() == 1);
-  }
+  bool is_bottom(const Encoding& x) const override { return x.all(); }
+
+  bool is_top(const Encoding& x) const override { return x.count() == 1; }
 
   bool equals(const Encoding& x, const Encoding& y) const override {
-    // In order to compare two elements, we force them to share the same
-    // encoding.
-    adjust_encoding(x.is_lower_semi_lattice, y);
-    return x.bit_vector == y.bit_vector;
+    return x == y;
   }
 
   bool leq(const Encoding& x, const Encoding& y) const override {
-    // In order to compare two elements, we force them to share the same
-    // encoding.
-    adjust_encoding(x.is_lower_semi_lattice, y);
-    return (x.bit_vector & y.bit_vector) ==
-           (x.is_lower_semi_lattice ? x.bit_vector : y.bit_vector);
+    return (x & y) == y;
   }
 
   Encoding join(const Encoding& x, const Encoding& y) const override {
-    // In order to perform the Join, we need to switch to the opposite
-    // semi-lattice
-    // encoding.
-    adjust_encoding(/* set_to_lower_semi_lattice */ false, x);
-    adjust_encoding(/* set_to_lower_semi_lattice */ false, y);
-    return {/* is_lower_semi_lattice */ false, x.bit_vector & y.bit_vector};
+    return x & y;
   }
 
   Encoding meet(const Encoding& x, const Encoding& y) const override {
-    // In order to perform the Meet, we need to switch to the lower semi-lattice
-    // encoding.
-    adjust_encoding(/* set_to_lower_semi_lattice */ true, x);
-    adjust_encoding(/* set_to_lower_semi_lattice */ true, y);
-    return {/* is_lower_semi_lattice */ true, x.bit_vector & y.bit_vector};
+    // In order to perform the Meet, we need to calculate corresponding lower
+    // semi-lattice encoding, and switch back to opposite semi-lattice encoding
+    // before returning.
+    auto x_lower = get_lower_encoding(x);
+    auto y_lower = get_lower_encoding(y);
+    Encoding lower_encoding = x_lower & y_lower;
+    return get_opposite_encoding(lower_encoding);
   }
 
-  Encoding bottom() const override {
-    return {/* is_lower_semi_lattice */ false,
-            m_opposite_semi_lattice.bottom()};
-  }
+  Encoding bottom() const override { return m_opposite_semi_lattice.bottom(); }
 
-  Encoding top() const override {
-    return {/* is_lower_semi_lattice */ false, m_opposite_semi_lattice.top()};
-  }
+  Encoding top() const override { return m_opposite_semi_lattice.top(); }
 
  private:
-  // This method changes the encoding of an element to the semi-lattice
-  // specified by the first argument.
-  void adjust_encoding(bool set_to_lower_semi_lattice,
-                       const Encoding& x) const {
-    if (x.is_lower_semi_lattice == set_to_lower_semi_lattice) {
-      // The element already has the right encoding.
-      return;
-    }
+  Encoding get_lower_encoding(const Encoding& x) const {
     const Element& element = decode(x);
-    x.is_lower_semi_lattice = set_to_lower_semi_lattice;
-    x.bit_vector = set_to_lower_semi_lattice
-                       ? m_lower_semi_lattice.encode(element)
-                       : m_opposite_semi_lattice.encode(element);
+    return m_lower_semi_lattice.encode(element);
+  }
+
+  Encoding get_opposite_encoding(const Encoding& x) const {
+    const Element& element = decode_lower(x);
+    return m_opposite_semi_lattice.encode(element);
   }
 
   fad_impl::BitVectorSemiLattice<Element,
