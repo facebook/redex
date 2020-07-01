@@ -65,9 +65,52 @@ BranchResult evaluate_branch(IROpcode op, Nullness operand_nullness) {
   return UNKNOWN;
 }
 
+bool is_supported_branch_type(IROpcode op) {
+  return op == OPCODE_IF_EQZ || op == OPCODE_IF_NEZ;
+}
+
 } // namespace
 
 namespace type_analyzer {
+
+/*
+ * The nullness results is only guaranteed to be correct after the execution of
+ * clinit and ctors.
+ * TODO: The complete solution requires some kind of call graph analysis from
+ * the clinit and ctor.
+ */
+bool Transform::can_optimize_null_checks(const DexMethod* method) {
+  return m_config.remove_redundant_null_checks && !method::is_init(method) &&
+         !method::is_clinit(method);
+}
+
+void Transform::remove_redundant_null_checks(const DexTypeEnvironment& env,
+                                             cfg::Block* block,
+                                             Stats& stats) {
+  auto insn_it = block->get_last_insn();
+  if (insn_it == block->end()) {
+    return;
+  }
+  auto last_insn = insn_it->insn;
+  if (!is_testz_branch(last_insn->opcode())) {
+    return;
+  }
+  auto domain = env.get(last_insn->src(0));
+  if (domain.is_bottom() || domain.is_nullable()) {
+    return;
+  }
+  auto result =
+      evaluate_branch(last_insn->opcode(), domain.get_nullness().element());
+  if (result == ALWAYS_TAKEN) {
+    m_replacements.push_back({last_insn, new IRInstruction(OPCODE_GOTO)});
+    stats.null_check_removed++;
+  } else if (result == NEVER_TAKEN) {
+    m_deletes.emplace_back(insn_it);
+    stats.null_check_removed++;
+  } else if (!is_supported_branch_type(last_insn->opcode())) {
+    stats.unsupported_branch++;
+  }
+}
 
 Transform::Stats Transform::apply(
     const type_analyzer::local::LocalTypeAnalyzer& lta,
@@ -75,6 +118,7 @@ Transform::Stats Transform::apply(
     const NullAssertionSet& null_assertion_set) {
   auto code = method->get_code();
   Transform::Stats stats{};
+  bool remove_null_checks = can_optimize_null_checks(method);
   for (const auto& block : code->cfg().blocks()) {
     auto env = lta.get_entry_state_at(block);
     if (env.is_bottom()) {
@@ -101,38 +145,12 @@ Transform::Stats Transform::apply(
       }
     }
 
-    auto insn_it = block->get_last_insn();
-    auto last_insn = insn_it->insn;
-    if (can_optimize_null_checks(method) &&
-        is_testz_branch(last_insn->opcode())) {
-      auto domain = env.get(last_insn->src(0));
-      if (domain.is_bottom() || domain.is_nullable()) {
-        continue;
-      }
-      auto result =
-          evaluate_branch(last_insn->opcode(), domain.get_nullness().element());
-      if (result == ALWAYS_TAKEN) {
-        m_replacements.push_back({last_insn, new IRInstruction(OPCODE_GOTO)});
-        stats.null_check_removed++;
-      } else if (result == NEVER_TAKEN) {
-        m_deletes.emplace_back(insn_it);
-        stats.null_check_removed++;
-      }
+    if (remove_null_checks) {
+      remove_redundant_null_checks(env, block, stats);
     }
   }
   apply_changes(code);
   return stats;
-}
-
-/*
- * The nullness results is only guaranteed to be correct after the execution of
- * clinit and ctors.
- * TODO: The complete solution requires some kind of call graph analysis from
- * the clinit and ctor.
- */
-bool Transform::can_optimize_null_checks(const DexMethod* method) {
-  return m_config.remove_redundant_null_checks && !method::is_init(method) &&
-         !method::is_clinit(method);
 }
 
 void Transform::apply_changes(IRCode* code) {
@@ -145,7 +163,7 @@ void Transform::apply_changes(IRCode* code) {
     }
   }
   for (const auto& it : m_deletes) {
-    TRACE(TYPE_TRANSFORM, 4, "Removing instruction %s", SHOW(it->insn));
+    TRACE(TYPE_TRANSFORM, 9, "Removing instruction %s", SHOW(it->insn));
     code->remove_opcode(it);
   }
 }

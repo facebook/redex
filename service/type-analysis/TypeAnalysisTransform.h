@@ -23,17 +23,19 @@ class Transform final {
  public:
   using NullAssertionSet = std::unordered_set<DexMethodRef*>;
   struct Config {
-    bool remove_redundant_null_checks{false};
+    bool remove_redundant_null_checks{true};
     bool remove_kotlin_null_check_assertions{false};
     Config() {}
   };
 
   struct Stats {
     size_t null_check_removed{0};
+    size_t unsupported_branch{0};
     size_t kotlin_null_check_removed{0};
 
     Stats& operator+=(const Stats& that) {
       null_check_removed += that.null_check_removed;
+      unsupported_branch += that.unsupported_branch;
       kotlin_null_check_removed += that.kotlin_null_check_removed;
       return *this;
     }
@@ -43,9 +45,12 @@ class Transform final {
     }
 
     void report(PassManager& mgr) const {
+      mgr.incr_metric("null_check_removed", null_check_removed);
+      mgr.incr_metric("unsupported_branch", unsupported_branch);
       mgr.incr_metric("kotlin_null_check_removed", kotlin_null_check_removed);
       TRACE(TYPE_TRANSFORM, 2, "TypeAnalysisTransform Stats:");
       TRACE(TYPE_TRANSFORM, 2, " null checks removed = %u", null_check_removed);
+      TRACE(TYPE_TRANSFORM, 2, " unsupported branch = %u", unsupported_branch);
       TRACE(TYPE_TRANSFORM,
             2,
             " Kotlin null checks removed = %u",
@@ -63,6 +68,9 @@ class Transform final {
   void apply_changes(IRCode*);
 
   bool can_optimize_null_checks(const DexMethod* method);
+  void remove_redundant_null_checks(const DexTypeEnvironment& env,
+                                    cfg::Block* block,
+                                    Stats& stats);
 
   const Config m_config;
   std::vector<std::pair<IRInstruction*, IRInstruction*>> m_replacements;
