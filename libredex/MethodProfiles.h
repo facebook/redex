@@ -73,6 +73,18 @@ class MethodProfiles {
 
   bool has_stats() const { return !m_method_stats.empty(); }
 
+  size_t size() const {
+    size_t sum{0};
+    for (auto& p : m_method_stats) {
+      sum += p.second.size();
+    }
+    return sum;
+  }
+
+  size_t unresolved_size() const {
+    return m_unresolved_lines.size();
+  }
+
   // Get the method profiles for some interaction id.
   // If no interactions are found by that interaction id, Return an empty map.
   const StatsMap& method_stats(const std::string& interaction_id) const;

@@ -314,12 +314,15 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
                      /* validate_access */ false);
       }
     }
-    m_current_pass_info = nullptr;
 
     // New methods might have been introduced by this pass; process previously
-    // unreolved methods to see if we can match them now (so that future passes
+    // unresolved methods to see if we can match them now (so that future passes
     // using method profiles benefit)
     conf.process_unresolved_method_profile_lines();
+    set_metric("~result~MethodProfiles~", conf.get_method_profiles().size());
+    set_metric("~result~MethodProfiles~unresolved~", conf.get_method_profiles().unresolved_size());
+
+    m_current_pass_info = nullptr;
   }
 
   // Always run the type checker before generating the optimized dex code.
