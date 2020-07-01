@@ -633,23 +633,27 @@ void init_reachable_classes(const Scope& scope, const JsonWrapper& config) {
 
   std::string apk_dir;
   std::vector<std::string> reflected_package_names;
-  std::vector<std::string> methods;
   std::unordered_set<std::string> prune_unexported_components;
   bool compute_xml_reachability;
   bool analyze_native_lib_reachability;
 
   config.get("apk_dir", "", apk_dir);
   config.get("keep_packages", {}, reflected_package_names);
-  config.get("keep_methods", {}, methods);
   config.get("compute_xml_reachability", true, compute_xml_reachability);
   config.get("prune_unexported_components", {}, prune_unexported_components);
   config.get("analyze_native_lib_reachability", true,
              analyze_native_lib_reachability);
 
-  keep_methods(scope, methods);
+  {
+    Timer t{"Mark keep-methods"};
+    std::vector<std::string> methods;
+    config.get("keep_methods", {}, methods);
+    keep_methods(scope, methods);
+  }
 
   if (apk_dir.size()) {
     if (compute_xml_reachability) {
+      Timer t{"Computing XML reachability"};
       // Classes present in manifest
       analyze_reachable_from_manifest(apk_dir, prune_unexported_components);
       // Classes present in XML layouts
@@ -657,6 +661,7 @@ void init_reachable_classes(const Scope& scope, const JsonWrapper& config) {
     }
 
     if (analyze_native_lib_reachability) {
+      Timer t{"Computing native reachability"};
       // Classnames present in native libraries (lib/*/*.so)
       for (const std::string& classname : get_native_classes(apk_dir)) {
         auto type = DexType::get_type(classname.c_str());
@@ -677,36 +682,46 @@ void init_reachable_classes(const Scope& scope, const JsonWrapper& config) {
     });
   }
 
-  analyze_reflection(scope);
+  {
+    Timer t{"Analyzing reflection"};
+    analyze_reflection(scope);
 
-  std::unordered_set<DexClass*> reflected_package_classes;
-  for (auto clazz : scope) {
-    const char* cname = clazz->get_type()->get_name()->c_str();
-    for (const auto& pkg : reflected_package_names) {
-      if (starts_with(cname, pkg.c_str())) {
+    std::unordered_set<DexClass*> reflected_package_classes;
+    for (auto clazz : scope) {
+      const char* cname = clazz->get_type()->get_name()->c_str();
+      for (const auto& pkg : reflected_package_names) {
+        if (starts_with(cname, pkg.c_str())) {
+          reflected_package_classes.insert(clazz);
+          continue;
+        }
+      }
+    }
+    for (auto clazz : scope) {
+      if (in_reflected_pkg(clazz, reflected_package_classes)) {
         reflected_package_classes.insert(clazz);
-        continue;
+        /* Note:
+         * Some of these are by string, others by type
+         * but we have no way in the config to distinguish
+         * them currently.  So, we mark with the most
+         * conservative sense here.
+         */
+        TRACE(PGR, 3, "reflected_package: %s", SHOW(clazz));
+        mark_reachable_by_classname(clazz);
       }
     }
   }
-  for (auto clazz : scope) {
-    if (in_reflected_pkg(clazz, reflected_package_classes)) {
-      reflected_package_classes.insert(clazz);
-      /* Note:
-       * Some of these are by string, others by type
-       * but we have no way in the config to distinguish
-       * them currently.  So, we mark with the most
-       * conservative sense here.
-       */
-      TRACE(PGR, 3, "reflected_package: %s", SHOW(clazz));
-      mark_reachable_by_classname(clazz);
-    }
-  }
-  analyze_serializable(scope);
 
-  std::vector<std::string> json_serde_supercls;
-  config.get("json_serde_supercls", {}, json_serde_supercls);
-  initialize_reachable_for_json_serde(scope, json_serde_supercls);
+  {
+    Timer t{"Analyzing Serializable"};
+    analyze_serializable(scope);
+  }
+
+  {
+    Timer t{"Initializing for json serde"};
+    std::vector<std::string> json_serde_supercls;
+    config.get("json_serde_supercls", {}, json_serde_supercls);
+    initialize_reachable_for_json_serde(scope, json_serde_supercls);
+  }
 }
 
 void recompute_reachable_from_xml_layouts(const Scope& scope,
