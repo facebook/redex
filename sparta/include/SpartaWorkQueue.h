@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <atomic>
 #include <boost/optional/optional.hpp>
+#include <cassert>
 #include <chrono>
 #include <condition_variable>
 #include <mutex>
