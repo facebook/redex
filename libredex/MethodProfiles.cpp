@@ -88,8 +88,9 @@ bool MethodProfiles::parse_stats_file(const std::string& csv_filename) {
   for (const auto& pair : m_method_stats) {
     total_rows += pair.second.size();
   }
-  TRACE(METH_PROF, 1, "MethodProfiles successfully parsed %zu rows",
-        total_rows);
+  TRACE(METH_PROF, 1,
+        "MethodProfiles successfully parsed %zu rows; %zu unresolved lines",
+        total_rows, m_unresolved_lines.size());
   cleanup(fp, line);
   return true;
 }
@@ -169,6 +170,7 @@ bool MethodProfiles::parse_line(char* line, bool first) {
     }
   };
 
+  std::string copy(line);
   bool success = parse_cells(line, parse_cell);
   if (!success) {
     return false;
@@ -178,8 +180,30 @@ bool MethodProfiles::parse_line(char* line, bool first) {
           interaction_id.c_str(), stats.appear_percent, stats.call_count,
           stats.order_percent, stats.min_api_level);
     m_method_stats[interaction_id].emplace(ref, stats);
+  } else {
+    m_unresolved_lines.push_back(copy);
+    TRACE(METH_PROF, 6, "unresolved: %s", copy.c_str());
   }
   return true;
+}
+
+void MethodProfiles::process_unresolved_lines() {
+  auto unresolved_lines = m_unresolved_lines;
+  m_unresolved_lines.clear();
+  for (auto& line : unresolved_lines) {
+    bool success =
+        parse_line(const_cast<char*>(line.c_str()), /* first */ false);
+    always_assert(success);
+  }
+
+  size_t total_rows = 0;
+  for (const auto& pair : m_method_stats) {
+    total_rows += pair.second.size();
+  }
+  TRACE(METH_PROF, 1,
+        "After processing unresolved lines: MethodProfiles successfully parsed "
+        "%zu rows; %zu unresolved lines",
+        total_rows, m_unresolved_lines.size());
 }
 
 bool MethodProfiles::parse_header(char* line) {

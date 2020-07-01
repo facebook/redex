@@ -91,8 +91,12 @@ class MethodProfiles {
     return it->second;
   }
 
+  // Try to resolve previously unresolved lines
+  void process_unresolved_lines();
+
  private:
   AllInteractions m_method_stats;
+  std::vector<std::string> m_unresolved_lines;
   bool m_initialized{false};
   // A map from column index to column header
   std::unordered_map<uint32_t, std::string> m_optional_columns;

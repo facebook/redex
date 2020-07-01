@@ -67,6 +67,11 @@ struct ConfigFiles {
     return m_method_profiles;
   }
 
+  void process_unresolved_method_profile_lines() {
+    ensure_agg_method_stats_loaded();
+    m_method_profiles.process_unresolved_lines();
+  }
+
   const std::unordered_set<DexType*>& get_no_optimizations_annos();
   const std::unordered_set<DexMethodRef*>& get_pure_methods();
 
