@@ -48,6 +48,8 @@
 #include "Debug.h"
 #include "StringUtil.h"
 
+namespace {
+
 constexpr size_t MIN_CLASSNAME_LENGTH = 10;
 constexpr size_t MAX_CLASSNAME_LENGTH = 500;
 
@@ -62,6 +64,8 @@ std::string convert_from_string16(const android::String16& string16) {
   std::string converted(string8.string());
   return converted;
 }
+
+} // namespace
 
 // Returns the attribute with the given name for the current XML element
 std::string get_string_attribute_value(
@@ -134,6 +138,8 @@ int get_int_attribute_or_default_value(const android::ResXMLTree& parser,
   }
   return default_value;
 }
+
+namespace {
 
 std::string dotname_to_dexname(const std::string& classname) {
   std::string dexname;
@@ -255,6 +261,8 @@ std::unordered_set<uint32_t> extract_xml_reference_attributes(
   return result;
 }
 
+} // namespace
+
 /**
  * Follows the reference links for a resource for all configurations.
  * Outputs all the nodes visited, as well as all the string values seen.
@@ -306,6 +314,7 @@ void walk_references_for_resource(
   }
 }
 
+namespace {
 /*
  * Look for <search_tag> within the descendants of the current node in the XML
  * tree.
@@ -561,6 +570,8 @@ void extract_classes_from_layout(
            type != android::ResXMLParser::END_DOCUMENT);
 }
 
+} // namespace
+
 /*
  * Returns all strings that look like java class names from a native library.
  *
@@ -622,6 +633,7 @@ std::string read_entire_file(const std::string& filename) {
   std::ifstream in(filename, std::ios::in | std::ios::binary);
   std::ostringstream sstr;
   sstr << in.rdbuf();
+  redex_assert(!in.bad());
   return sstr.str();
 }
 
@@ -683,6 +695,8 @@ ManifestClassInfo get_manifest_class_info(const std::string& filename) {
   return classes;
 }
 
+namespace {
+
 std::unordered_set<std::string> get_files_by_suffix(
     const std::string& directory, const std::string& suffix) {
   std::unordered_set<std::string> files;
@@ -709,9 +723,13 @@ std::unordered_set<std::string> get_files_by_suffix(
   return files;
 }
 
+} // namespace
+
 std::unordered_set<std::string> get_xml_files(const std::string& directory) {
   return get_files_by_suffix(directory, ".xml");
 }
+
+namespace {
 
 std::unordered_set<std::string> get_js_files(const std::string& directory) {
   return get_files_by_suffix(directory, ".js");
@@ -796,6 +814,8 @@ std::unordered_set<uint32_t> get_js_resources_by_parsing(
   return get_apk_resources_from_candidates(js_candidate_resources, name_to_ids);
 }
 
+} // namespace
+
 std::unordered_set<uint32_t> get_js_resources(
     const std::string& directory,
     const std::vector<std::string>& js_assets_lists,
@@ -828,6 +848,8 @@ std::unordered_set<uint32_t> get_resources_by_name_prefix(
   return found_resources;
 }
 
+namespace {
+
 void ensure_file_contents(const std::string& file_contents,
                           const std::string& filename) {
   if (file_contents.empty()) {
@@ -835,6 +857,8 @@ void ensure_file_contents(const std::string& file_contents,
     throw std::runtime_error("Unable to read file: " + filename);
   }
 }
+
+} // namespace
 
 bool is_raw_resource(const std::string& filename) {
   return filename.find("/res/raw/") != std::string::npos ||
@@ -851,6 +875,8 @@ std::unordered_set<uint32_t> get_xml_reference_attributes(
   ensure_file_contents(file_contents, filename);
   return extract_xml_reference_attributes(file_contents, filename);
 }
+
+namespace {
 
 bool is_drawable_attribute(android::ResXMLTree& parser, size_t attr_index) {
   size_t name_size;
@@ -874,6 +900,8 @@ bool is_drawable_attribute(android::ResXMLTree& parser, size_t attr_index) {
 
   return false;
 }
+
+} // namespace
 
 int inline_xml_reference_attributes(
     const std::string& filename,
@@ -987,6 +1015,8 @@ void remap_xml_reference_attributes(
   }
 }
 
+namespace {
+
 std::vector<std::string> find_resource_xml_files(
     const std::string& apk_directory) {
 
@@ -1014,6 +1044,8 @@ std::vector<std::string> find_resource_xml_files(
   }
   return layout_files;
 }
+
+} // namespace
 
 void collect_layout_classes_and_attributes_for_file(
     const std::string& file_path,
@@ -1059,6 +1091,8 @@ std::set<std::string> multimap_values_to_set(
   return result;
 }
 
+namespace {
+
 /**
  * Return a list of all the .so files in /lib
  */
@@ -1084,6 +1118,8 @@ std::vector<std::string> find_native_library_files(
   return native_library_files;
 }
 
+} // namespace
+
 /**
  * Return all potential java class names located in native libraries.
  */
@@ -1107,28 +1143,40 @@ void* map_file(const char* path,
                const bool mode_write) {
   *file_descriptor = open(path, mode_write ? O_RDWR : O_RDONLY);
   if (*file_descriptor <= 0) {
-    throw std::runtime_error("Failed to open arsc file");
+    throw std::runtime_error(std::string("Failed to open ") + path + ": " +
+                             strerror(errno));
   }
   struct stat st = {};
   if (fstat(*file_descriptor, &st) == -1) {
+    auto saved_errno = errno;
     close(*file_descriptor);
-    throw std::runtime_error("Failed to get file length");
+    throw std::runtime_error(std::string("Failed to get file length of ") +
+                             path + ": " + strerror(saved_errno));
   }
   *length = static_cast<size_t>(st.st_size);
+  if (*length == 0) {
+    // mmap fails for zero length.
+    return nullptr;
+  }
+
   int flags = PROT_READ;
   if (mode_write) {
     flags |= PROT_WRITE;
   }
   void* fp = mmap(nullptr, *length, flags, MAP_SHARED, *file_descriptor, 0);
   if (fp == MAP_FAILED) {
+    auto saved_errno = errno;
     close(*file_descriptor);
-    throw std::runtime_error("Failed to mmap file");
+    throw std::runtime_error(std::string("Failed to mmap file ") + path + ": " +
+                             strerror(saved_errno));
   }
   return fp;
 }
 
 void unmap_and_close(int file_descriptor, void* file_pointer, size_t length) {
-  munmap(file_pointer, length);
+  if (length > 0) {
+    munmap(file_pointer, length);
+  }
   close(file_descriptor);
 }
 

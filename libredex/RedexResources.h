@@ -105,6 +105,10 @@ struct ManifestClassInfo {
 
 ManifestClassInfo get_manifest_class_info(const std::string& filename);
 
+// For testing only!
+std::unordered_set<std::string> extract_classes_from_native_lib(
+    const std::string& lib_contents);
+
 std::unordered_set<std::string> get_native_classes(
     const std::string& apk_directory);
 
