@@ -159,6 +159,8 @@ struct ModelSpec {
     return type_tag_config == TypeTagConfig::GENERATE ||
            type_tag_config == TypeTagConfig::INPUT_PASS_TYPE_TAG_TO_CTOR;
   }
+
+  boost::optional<size_t> max_num_dispatch_target{boost::none};
 };
 
 /**
@@ -190,8 +192,7 @@ class Model {
   static Model build_model(const Scope& scope,
                            const DexStoresVector& stores,
                            const ModelSpec& spec,
-                           const TypeSystem& type_system,
-                           ConfigFiles& conf);
+                           const TypeSystem& type_system);
   static Model build_model(const Scope& scope,
                            const ModelSpec& spec,
                            const TypeSet& types,
@@ -342,16 +343,14 @@ class Model {
   Model(const Scope& scope,
         const DexStoresVector& stores,
         const ModelSpec& spec,
-        const TypeSystem& type_system,
-        ConfigFiles& conf);
+        const TypeSystem& type_system);
   Model(const Scope& scope,
         const ModelSpec& spec,
         const TypeSystem& type_system,
         const TypeSet& types);
   void init(const Scope& scope,
             const ModelSpec& spec,
-            const TypeSystem& type_system,
-            ConfigFiles* conf = nullptr);
+            const TypeSystem& type_system);
 
   void build_hierarchy(const TypeSet& roots);
   void build_interface_map(const DexType* type, TypeSet implemented);

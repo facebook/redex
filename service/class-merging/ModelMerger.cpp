@@ -508,11 +508,9 @@ void ModelMerger::update_stats(const std::string& model_name,
   m_stats += mm.get_stats();
 }
 
-std::vector<DexClass*> ModelMerger::merge_model(
-    Scope& scope,
-    DexStoresVector& stores,
-    Model& model,
-    boost::optional<size_t> max_num_dispatch_target) {
+std::vector<DexClass*> ModelMerger::merge_model(Scope& scope,
+                                                DexStoresVector& stores,
+                                                Model& model) {
   Timer t("merge_model");
   std::vector<const MergerType*> to_materialize;
   std::vector<DexClass*> merger_classes;
@@ -611,7 +609,7 @@ std::vector<DexClass*> ModelMerger::merge_model(
                        &type_tags,
                        method_debug_map,
                        model.get_model_spec(),
-                       max_num_dispatch_target);
+                       model.get_model_spec().max_num_dispatch_target);
   auto mergeable_to_merger_ctor = mm.merge_methods();
   update_stats(model.get_name(), to_materialize, mm);
 
