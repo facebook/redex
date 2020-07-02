@@ -13,11 +13,12 @@
 
 class OutlinerTypeAnalysisTest : public RedexTest {};
 
-static IRInstruction* find_insn(DexMethod* method,
-                                std::function<bool(IRInstruction*)> predicate,
-                                size_t occurrence = 1) {
+static IRInstruction* find_insn(
+    DexMethod* method,
+    const std::function<bool(IRInstruction*)>& predicate,
+    size_t occurrence = 1) {
   always_assert(occurrence > 0);
-  for (auto mie : InstructionIterable(method->get_code()->cfg())) {
+  for (const auto& mie : InstructionIterable(method->get_code()->cfg())) {
     if (predicate(mie.insn) && --occurrence == 0) {
       return mie.insn;
     }

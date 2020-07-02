@@ -154,7 +154,8 @@ TEST_F(CallGraphTest, test_multiple_callee_graph) {
   auto entry_successors = entry->callees();
   EXPECT_EQ(entry_successors.size(), 8);
   std::vector<const DexMethod*> entry_callees;
-  for (auto succ : entry_successors) {
+  entry_callees.reserve(entry_successors.size());
+  for (const auto& succ : entry_successors) {
     entry_callees.emplace_back(succ->callee()->method());
   }
   EXPECT_THAT(entry_callees,
@@ -169,7 +170,8 @@ TEST_F(CallGraphTest, test_multiple_callee_graph) {
   auto clinit_node = multiple_graph->node(clinit);
   auto clinit_successors = clinit_node->callees();
   std::vector<const DexMethod*> clinit_callees;
-  for (auto succ : clinit_successors) {
+  clinit_callees.reserve(clinit_successors.size());
+  for (const auto& succ : clinit_successors) {
     clinit_callees.emplace_back(succ->callee()->method());
   }
   EXPECT_EQ(clinit_successors.size(), 9);
@@ -186,7 +188,8 @@ TEST_F(CallGraphTest, test_multiple_callee_graph) {
   auto calls_returns_int_node = multiple_graph->node(calls_returns_int);
   auto calls_returns_int_successors = calls_returns_int_node->callees();
   std::vector<const DexMethod*> calls_returns_int_callees;
-  for (auto succ : calls_returns_int_successors) {
+  calls_returns_int_callees.reserve(calls_returns_int_successors.size());
+  for (const auto& succ : calls_returns_int_successors) {
     calls_returns_int_callees.emplace_back(succ->callee()->method());
   }
   EXPECT_EQ(calls_returns_int_successors.size(), 2);

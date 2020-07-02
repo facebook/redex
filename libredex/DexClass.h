@@ -690,7 +690,7 @@ std::vector<std::unique_ptr<DexDebugInstruction>> generate_debug_instructions(
     uint32_t* line_start,
     std::vector<DebugLineItem>* line_info);
 
-typedef std::vector<std::pair<DexType*, uint32_t>> DexCatches;
+using DexCatches = std::vector<std::pair<DexType*, uint32_t>>;
 
 struct DexTryItem {
   uint32_t m_start_addr;

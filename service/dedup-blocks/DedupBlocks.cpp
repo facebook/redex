@@ -85,7 +85,7 @@ static bool same_branch_and_goto_successors(const cfg::Block* b1,
   if (b1_succs.size() != b2_succs.size()) {
     return false;
   }
-  typedef std::pair<cfg::EdgeType, cfg::Edge::CaseKey> Key;
+  using Key = std::pair<cfg::EdgeType, cfg::Edge::CaseKey>;
   std::unordered_map<Key, cfg::Block*, boost::hash<Key>> b2_succs_map;
   for (auto b2_succ : b2_succs) {
     b2_succs_map.emplace(

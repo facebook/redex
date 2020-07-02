@@ -37,7 +37,7 @@ Redex ProGuard rule matcher to make sure the ProGuard rules were properly
 interpreted.
 **/
 
-DexClass* find_class_named(const DexClasses& classes, const std::string name) {
+DexClass* find_class_named(const DexClasses& classes, const std::string& name) {
   auto it =
       std::find_if(classes.begin(), classes.end(), [&name](DexClass* cls) {
         return name == cls->get_deobfuscated_name();

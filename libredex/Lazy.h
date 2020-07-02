@@ -23,6 +23,7 @@ class Lazy {
       : m_creator([creator] { return std::make_unique<T>(creator()); }) {}
   explicit Lazy(const std::function<std::unique_ptr<T>()>& creator)
       : m_creator(creator) {}
+  // NOLINTNEXTLINE(google-explicit-constructor,hicpp-explicit-conversions)
   operator bool() { return !!m_value; }
   T& operator*() {
     init();

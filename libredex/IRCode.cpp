@@ -69,9 +69,8 @@ using namespace boost::bimaps;
 struct Entry {};
 struct Addr {};
 
-typedef bimap<tagged<MethodItemEntry*, Entry>,
-              unordered_set_of<tagged<uint32_t, Addr>>>
-    EntryAddrBiMap;
+using EntryAddrBiMap = bimap<tagged<MethodItemEntry*, Entry>,
+                             unordered_set_of<tagged<uint32_t, Addr>>>;
 
 } // namespace
 

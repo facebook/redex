@@ -14,6 +14,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include "androidfw/ResourceTypes.h"
@@ -92,8 +93,8 @@ struct ComponentTagInfo {
       : tag(tag),
         classname(classname),
         is_exported(is_exported),
-        permission(permission),
-        protection_level(protection_level) {}
+        permission(std::move(permission)),
+        protection_level(std::move(protection_level)) {}
 };
 
 struct ManifestClassInfo {

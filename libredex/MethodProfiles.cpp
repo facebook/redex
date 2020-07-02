@@ -120,7 +120,7 @@ bool MethodProfiles::parse_line(char* line, bool first) {
   };
 
   Stats stats;
-  std::string interaction_id = "";
+  std::string interaction_id;
   DexMethodRef* ref = nullptr;
   auto parse_cell = [&](char* tok, uint32_t i) -> bool {
     switch (i) {
