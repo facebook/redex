@@ -12,7 +12,14 @@
 #include "DexClass.h"
 #include "RedexTest.h"
 
-class ABExperimentContextTest : public RedexIntegrationTest {};
+namespace ab_test {
+
+class ABExperimentContextTest : public RedexIntegrationTest {
+ protected:
+  static void set_global_mode(ABGlobalMode mode) {
+    ABExperimentContextImpl::set_global_mode(mode);
+  }
+};
 
 void change_called_method(DexMethod* m,
                           const std::string& original_method_name,
@@ -52,8 +59,7 @@ TEST_F(ABExperimentContextTest, testCFGConstructorBasicFunctionality) {
 }
 
 TEST_F(ABExperimentContextTest, testTestingMode) {
-  ab_test::ABExperimentContextImpl::set_global_mode(
-      ab_test::ABGlobalMode::TEST);
+  set_global_mode(ABGlobalMode::TEST);
   ASSERT_TRUE(classes);
   DexMethod* m =
       (*classes)[0]->find_method_from_simple_deobfuscated_name("getNum");
@@ -76,8 +82,7 @@ TEST_F(ABExperimentContextTest, testTestingMode) {
 }
 
 TEST_F(ABExperimentContextTest, testControlMode) {
-  ab_test::ABExperimentContextImpl::set_global_mode(
-      ab_test::ABGlobalMode::CONTROL);
+  set_global_mode(ABGlobalMode::CONTROL);
   ASSERT_TRUE(classes);
   DexMethod* m =
       (*classes)[0]->find_method_from_simple_deobfuscated_name("getNum");
@@ -98,3 +103,5 @@ TEST_F(ABExperimentContextTest, testControlMode) {
 
   EXPECT_CODE_EQ(m->get_code(), expected_code.get());
 }
+
+} // namespace ab_test

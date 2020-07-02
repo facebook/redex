@@ -24,13 +24,8 @@ class ABExperimentContextImpl : public ABExperimentContext {
 
   ~ABExperimentContextImpl() override;
 
-#ifndef AB_REDEX_TEST
  private:
-#endif
   static void set_global_mode(ABGlobalMode ab_global_mode = ABGlobalMode::NONE);
-
- private:
-  friend class ABExperimentContext;
 
   DexMethod* m_original_method{nullptr};
   cfg::ControlFlowGraph* m_cfg{nullptr};
@@ -40,5 +35,8 @@ class ABExperimentContextImpl : public ABExperimentContext {
 
   bool use_test();
   void setup_context();
+
+  friend class ABExperimentContext;
+  friend class ABExperimentContextTest;
 };
 } // namespace ab_test

@@ -47,9 +47,7 @@ class ABExperimentContext {
    */
   static void force_preferred_mode();
 
-#ifndef AB_REDEX_TEST
  private:
-#endif
   /**
    * Forces all ABExperimentContext instances to apply changes happening
    * to the CFG when flushing. This should only be used at the beginning of
@@ -72,5 +70,7 @@ class ABExperimentContext {
    * exists.
    */
   static void force_control_mode();
+
+  friend class ABExperimentContextTest;
 };
 } // namespace ab_test
