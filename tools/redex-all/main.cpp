@@ -52,6 +52,7 @@
 #include "ProguardConfiguration.h" // New ProGuard configuration
 #include "ProguardMatcher.h"
 #include "ProguardParser.h" // New ProGuard Parser
+#include "ProguardPrintConfiguration.h" // New ProGuard configuration
 #include "ReachableClasses.h"
 #include "RedexContext.h"
 #include "RedexResources.h"
@@ -856,8 +857,22 @@ void redex_frontend(ConfigFiles& conf, /* input */
     bool keep_all_annotation_classes;
     json_config.get("keep_all_annotation_classes", true,
                     keep_all_annotation_classes);
-    process_proguard_rules(conf.get_proguard_map(), scope, external_classes,
-                           pg_config, keep_all_annotation_classes);
+
+    ConcurrentSet<const keep_rules::KeepSpec*> unused_rules =
+        process_proguard_rules(conf.get_proguard_map(), scope, external_classes,
+                               pg_config, keep_all_annotation_classes);
+    if (unused_rules.size() > 0) {
+      for (const keep_rules::KeepSpec* keep_rule : unused_rules) {
+        fprintf(stderr, "%s not used\n",
+                keep_rules::show_keep(*keep_rule).c_str());
+      }
+      bool unused_rule_abort;
+      conf.get_json_config().get("unused_keep_rule_abort", false,
+                                 unused_rule_abort);
+      if (unused_rule_abort) {
+        exit(1);
+      }
+    }
   }
   {
     Timer t("No Optimizations Rules");
