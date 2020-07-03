@@ -128,17 +128,12 @@ bool MethodProfiles::parse_line(char* line, bool first) {
       // Don't need this raw data. It's an arbitrary index (the line number in
       // the file)
       return true;
-    case NAME: {
-      auto it = name_map.find(tok);
-      if (it != name_map.end()) {
-        tok = (char*)it->second.c_str();
-      }
+    case NAME:
       ref = DexMethod::get_method(tok);
       if (ref == nullptr) {
         TRACE(METH_PROF, 6, "failed to resolve %s", tok);
       }
       return true;
-    }
     case APPEAR100:
       stats.appear_percent = parse_double(tok);
       return true;

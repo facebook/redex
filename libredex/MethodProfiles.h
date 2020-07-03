@@ -106,9 +106,6 @@ class MethodProfiles {
   // Try to resolve previously unresolved lines
   void process_unresolved_lines();
 
-  // TODO: Remove this.
-  std::unordered_map<std::string, std::string> name_map;
-
  private:
   AllInteractions m_method_stats;
   std::vector<std::string> m_unresolved_lines;
