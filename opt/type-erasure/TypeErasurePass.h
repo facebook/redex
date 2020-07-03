@@ -24,18 +24,8 @@ class TypeErasurePass : public Pass {
   void bind_config() override;
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
- protected:
-  virtual ModelMerger* get_model_merger();
-
  private:
   std::string m_merged_type_mapping_file;
   std::vector<ModelSpec> m_model_specs;
   boost::optional<size_t> m_max_num_dispatch_target = boost::none;
-
- private:
-  void erase_model(const ModelSpec& spec,
-                   Scope& scope,
-                   PassManager& mgr,
-                   DexStoresVector& stores,
-                   ConfigFiles& conf);
 };

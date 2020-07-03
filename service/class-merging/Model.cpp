@@ -253,20 +253,18 @@ Model::Model(const Scope& scope,
 Model::Model(const Scope& scope,
              const DexStoresVector& stores,
              const ModelSpec& spec,
-             const TypeSystem& type_system,
-             ConfigFiles& conf)
+             const TypeSystem& type_system)
     : m_spec(spec), m_type_system(type_system), m_scope(scope) {
   for (const auto root : spec.roots) {
     m_type_system.get_all_children(root, m_types);
   }
-  init(scope, spec, type_system, &conf);
+  init(scope, spec, type_system);
   find_non_root_store_mergeables(stores, spec.include_primary_dex);
 }
 
 void Model::init(const Scope& scope,
                  const ModelSpec& spec,
-                 const TypeSystem& type_system,
-                 ConfigFiles* conf) {
+                 const TypeSystem& type_system) {
   build_hierarchy(spec.roots);
   for (const auto root : spec.roots) {
     build_interface_map(root, {});
@@ -1472,12 +1470,11 @@ void Model::update_model(Model& model) {
 Model Model::build_model(const Scope& scope,
                          const DexStoresVector& stores,
                          const ModelSpec& spec,
-                         const TypeSystem& type_system,
-                         ConfigFiles& conf) {
+                         const TypeSystem& type_system) {
   Timer t("build_model");
 
   TRACE(TERA, 3, "Build Model for %s", to_string(spec).c_str());
-  Model model(scope, stores, spec, type_system, conf);
+  Model model(scope, stores, spec, type_system);
   TRACE(TERA, 3, "Model:\n%s\nBuild Model done", model.print().c_str());
 
   update_model(model);

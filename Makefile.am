@@ -96,6 +96,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/virtual_scope \
 	-I$(top_srcdir)/service/api-levels \
 	-I$(top_srcdir)/service/class-init \
+	-I$(top_srcdir)/service/class-merging \
 	-I$(top_srcdir)/service/constant-propagation \
 	-I$(top_srcdir)/service/copy-propagation \
 	-I$(top_srcdir)/service/cse \
@@ -369,14 +370,7 @@ redex_all_SOURCES = \
 	opt/track_resources/TrackResources.cpp \
 	opt/throw-propagation/ThrowPropagationPass.cpp \
 	opt/type-analysis/GlobalTypeAnalysisPass.cpp \
-	opt/type-erasure/ApproximateShapeMerging.cpp \
-	opt/type-erasure/ClassAssemblingUtils.cpp \
-	opt/type-erasure/MergerType.cpp \
-	opt/type-erasure/ModelMethodMerger.cpp \
-	opt/type-erasure/Model.cpp \
-	opt/type-erasure/ModelMerger.cpp \
 	opt/type-erasure/TypeErasurePass.cpp \
-	opt/type-erasure/TypeTagUtils.cpp \
 	opt/unreferenced_interfaces/UnreferencedInterfaces.cpp \
 	opt/unmark_proguard_keep/UnmarkProguardKeep.cpp \
 	opt/up-code-motion/UpCodeMotion.cpp \
@@ -386,6 +380,14 @@ redex_all_SOURCES = \
 	opt/virtual_scope/MethodDevirtualizationPass.cpp \
 	service/api-levels/ApiLevelsUtils.cpp \
 	service/class-init/ClassInitCounter.cpp \
+	service/class-merging/ApproximateShapeMerging.cpp \
+	service/class-merging/ClassAssemblingUtils.cpp \
+	service/class-merging/ClassMerging.cpp \
+	service/class-merging/MergerType.cpp \
+	service/class-merging/ModelMerger.cpp \
+	service/class-merging/ModelMethodMerger.cpp \
+	service/class-merging/Model.cpp \
+	service/class-merging/TypeTagUtils.cpp \
 	service/constant-propagation/ConstantEnvironment.cpp \
 	service/constant-propagation/ConstantPropagationAnalysis.cpp \
 	service/constant-propagation/ConstantPropagation.cpp \

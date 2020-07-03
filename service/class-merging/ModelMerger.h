@@ -26,11 +26,9 @@ class ModelMerger {
  public:
   virtual ~ModelMerger(){};
 
-  std::vector<DexClass*> merge_model(
-      Scope& scope,
-      DexStoresVector& stores,
-      Model& model,
-      boost::optional<size_t> max_num_dispatch_target = boost::none);
+  std::vector<DexClass*> merge_model(Scope& scope,
+                                     DexStoresVector& stores,
+                                     Model& model);
 
   void update_redex_stats(const std::string& prefix, PassManager& mgr) const;
 

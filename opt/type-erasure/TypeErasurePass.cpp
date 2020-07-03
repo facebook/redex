@@ -7,17 +7,10 @@
 
 #include "TypeErasurePass.h"
 
-#include "ClassAssemblingUtils.h"
+#include "ClassMerging.h"
 #include "DexUtil.h"
-#include "InterDexPass.h"
-#include "Model.h"
-#include "ModelMerger.h"
-#include "NormalizeConstructor.h"
-#include "PluginRegistry.h"
 
 namespace {
-
-const std::string TE_MAPPING_FILE_NAME = "redex-type-erasure-mappings.txt";
 
 DexType* get_type(const std::string& type_s) {
   auto type = DexType::get_type(type_s.c_str());
@@ -149,8 +142,6 @@ TypeTagConfig get_type_tag_config(const std::string& type_tag_config) {
 } // namespace
 
 void TypeErasurePass::bind_config() {
-  bind("merged_type_mappings", TE_MAPPING_FILE_NAME,
-       m_merged_type_mapping_file);
   bool process_method_meta;
   bind("process_method_meta", false, process_method_meta);
   int64_t max_num_dispatch_target;
@@ -261,6 +252,8 @@ void TypeErasurePass::bind_config() {
           merge_direct_methods_within_shape;
       model.merge_nonvirt_methods_within_shape =
           merge_nonvirt_methods_within_shape;
+      model.max_num_dispatch_target = m_max_num_dispatch_target;
+
       if (!verify_model_spec(model)) {
         continue;
       }
@@ -272,55 +265,21 @@ void TypeErasurePass::bind_config() {
   });
 }
 
-std::string ModelMerger::s_mapping_file;
-std::string Model::s_outdir;
-
 void TypeErasurePass::run_pass(DexStoresVector& stores,
                                ConfigFiles& conf,
                                PassManager& mgr) {
-  // Type mapping file
-  ModelMerger::s_mapping_file = conf.metafile(m_merged_type_mapping_file);
-  Model::s_outdir = conf.get_outdir();
-
   if (m_model_specs.empty()) {
     return;
   }
+  class_merging::set_up(conf);
   auto scope = build_class_scope(stores);
-  Model::build_interdex_groups(&conf);
   for (ModelSpec& model_spec : m_model_specs) {
     if (!model_spec.enabled) {
       continue;
     }
-    handle_interface_as_root(model_spec, scope, stores);
-    erase_model(model_spec, scope, mgr, stores, conf);
+    class_merging::merge_model(scope, mgr, stores, model_spec);
   }
   post_dexen_changes(scope, stores);
-}
-
-ModelMerger* TypeErasurePass::get_model_merger() { return new ModelMerger; }
-
-void TypeErasurePass::erase_model(const ModelSpec& spec,
-                                  Scope& scope,
-                                  PassManager& mgr,
-                                  DexStoresVector& stores,
-                                  ConfigFiles& conf) {
-  TRACE(TERA, 2, "[TERA] erasing %s model", spec.name.c_str());
-  Timer t("erase_model");
-  for (const auto root : spec.roots) {
-    always_assert(!is_interface(type_class(root)));
-  }
-  TypeSystem type_system(scope);
-  auto model = Model::build_model(scope, stores, spec, type_system, conf);
-  model.update_redex_stats(mgr);
-
-  auto mm = get_model_merger();
-  auto merger_classes =
-      mm->merge_model(scope, stores, model, m_max_num_dispatch_target);
-  auto num_dedupped = method_dedup::dedup_constructors(merger_classes, scope);
-  mm->increase_ctor_dedupped_stats(num_dedupped);
-  mm->update_redex_stats(spec.class_name_prefix, mgr);
-
-  delete mm;
 }
 
 static TypeErasurePass s_pass;
