@@ -15,7 +15,6 @@
 
 #define TMS          \
   TM(ACCESS)         \
-  TM(ADD_REDEX_TXT)  \
   TM(ANNO)           \
   TM(API_UTILS)      \
   TM(ARGS)           \
@@ -31,7 +30,6 @@
   TM(CHECKRECURSION) \
   TM(CIC)            \
   TM(CLA)            \
-  TM(CLP_GQL)        \
   TM(CLP_LITHO)      \
   TM(CONSTP)         \
   TM(CPG)            \
@@ -53,7 +51,6 @@
   TM(FINALINLINE)    \
   TM(GETTER)         \
   TM(HASHER)         \
-  TM(HOTNESS)        \
   TM(ICONSTP)        \
   TM(IDEX)           \
   TM(IFCS_ANALYSIS)  \
@@ -78,7 +75,6 @@
   TM(METH_MERGER)    \
   TM(METH_PROF)      \
   TM(MMINL)          \
-  TM(MMODE)          \
   TM(MODULARITY)     \
   TM(MONITOR)        \
   TM(MORTIROLO)      \
@@ -99,12 +95,9 @@
   TM(QUICK)          \
   TM(RAL)            \
   TM(REACH)          \
-  TM(REACH_DUMP)     \
-  TM(REDEX)          \
   TM(REFL)           \
   TM(REFU)           \
   TM(REG)            \
-  TM(RELO)           \
   TM(RENAME)         \
   TM(RESO)           \
   TM(RG)             \
@@ -117,16 +110,13 @@
   TM(RP)             \
   TM(SDIS)           \
   TM(SHORTEN)        \
-  TM(SINK)           \
   TM(SPLIT_RES)      \
   TM(STATIC_RELO)    \
   TM(STATS)          \
   TM(STRBUILD)       \
   TM(STR_CAT)        \
-  TM(STR_SIMPLE)     \
   TM(SUPER)          \
   TM(SW)             \
-  TM(SWCL)           \
   TM(SWIN)           \
   TM(SWITCH_EQUIV)   \
   TM(SYNT)           \
@@ -138,7 +128,6 @@
   TM(TYPE_TRANSFORM) \
   TM(UCM)            \
   TM(UNREF_INTF)     \
-  TM(UNTF)           \
   TM(VERIFY)         \
   TM(VIRT)           \
   TM(VM)             \
