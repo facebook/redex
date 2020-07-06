@@ -17,6 +17,7 @@
 #include <fcntl.h>
 #include <fstream>
 #include <map>
+#include <mutex>
 #include <sstream>
 #include <string>
 
@@ -47,6 +48,7 @@
 
 #include "Debug.h"
 #include "StringUtil.h"
+#include "WorkQueue.h"
 
 namespace {
 
@@ -54,6 +56,9 @@ constexpr size_t MIN_CLASSNAME_LENGTH = 10;
 constexpr size_t MAX_CLASSNAME_LENGTH = 500;
 
 const uint32_t PACKAGE_RESID_START = 0x7f000000;
+
+constexpr decltype(sparta::parallel::default_num_threads()) kReadNativeThreads =
+    16u;
 
 using path_t = boost::filesystem::path;
 using dir_iterator = boost::filesystem::directory_iterator;
@@ -1017,11 +1022,8 @@ void remap_xml_reference_attributes(
 
 namespace {
 
-std::vector<std::string> find_resource_xml_files(
-    const std::string& apk_directory) {
-
-  std::vector<std::string> layout_files;
-
+template <typename Fn>
+void find_resource_xml_files(const std::string& apk_directory, Fn handler) {
   std::string root = apk_directory + std::string("/res");
   path_t res(root);
 
@@ -1036,13 +1038,12 @@ std::vector<std::string> find_resource_xml_files(
           const path_t& resource_path = lit->path();
           if (is_regular_file(resource_path) &&
               ends_with(resource_path.string().c_str(), ".xml")) {
-            layout_files.push_back(resource_path.string());
+            handler(resource_path.string());
           }
         }
       }
     }
   }
-  return layout_files;
 }
 
 } // namespace
@@ -1062,11 +1063,35 @@ void collect_layout_classes_and_attributes(
     const std::unordered_set<std::string>& attributes_to_read,
     std::unordered_set<std::string>& out_classes,
     std::unordered_multimap<std::string, std::string>& out_attributes) {
-  std::vector<std::string> files = find_resource_xml_files(apk_directory);
-  for (const auto& layout_file : files) {
-    collect_layout_classes_and_attributes_for_file(
-        layout_file, attributes_to_read, out_classes, out_attributes);
-  }
+  std::mutex out_mutex;
+  auto wq = workqueue_foreach<std::string>(
+      [&](sparta::SpartaWorkerState<std::string>* worker_state,
+          const std::string& input) {
+        if (input.empty()) {
+          // Dispatcher, find files and create tasks.
+          find_resource_xml_files(apk_directory, [&](const std::string& file) {
+            worker_state->push_task(file);
+          });
+          return;
+        }
+
+        std::unordered_set<std::string> local_out_classes;
+        std::unordered_multimap<std::string, std::string> local_out_attributes;
+        collect_layout_classes_and_attributes_for_file(
+            input, attributes_to_read, local_out_classes, local_out_attributes);
+        if (!local_out_classes.empty() || !local_out_attributes.empty()) {
+          std::unique_lock<std::mutex> lock(out_mutex);
+          // C++17: use merge to avoid copies.
+          out_classes.insert(local_out_classes.begin(),
+                             local_out_classes.end());
+          out_attributes.insert(local_out_attributes.begin(),
+                                local_out_attributes.end());
+        }
+      },
+      std::min(sparta::parallel::default_num_threads(), kReadNativeThreads),
+      /*push_tasks_while_running=*/true);
+  wq.add_item("");
+  wq.run_all();
 }
 
 std::unordered_set<std::string> get_layout_classes(
@@ -1096,9 +1121,8 @@ namespace {
 /**
  * Return a list of all the .so files in /lib
  */
-std::vector<std::string> find_native_library_files(
-    const std::string& apk_directory) {
-  std::vector<std::string> native_library_files;
+template <typename Fn>
+void find_native_library_files(const std::string& apk_directory, Fn handler) {
   std::string lib_root = apk_directory + std::string("/lib");
   std::string library_extension(".so");
 
@@ -1111,11 +1135,10 @@ std::vector<std::string> find_native_library_files(
       if (is_regular_file(entry_path) &&
           ends_with(entry_path.filename().string().c_str(),
                     library_extension.c_str())) {
-        native_library_files.push_back(entry_path.string());
+        handler(entry_path.string());
       }
     }
   }
-  return native_library_files;
 }
 
 } // namespace
@@ -1125,15 +1148,33 @@ std::vector<std::string> find_native_library_files(
  */
 std::unordered_set<std::string> get_native_classes(
     const std::string& apk_directory) {
-  std::vector<std::string> native_libs =
-      find_native_library_files(apk_directory);
+  std::mutex out_mutex;
   std::unordered_set<std::string> all_classes;
-  for (const auto& native_lib : native_libs) {
-    std::string contents = read_entire_file(native_lib);
-    std::unordered_set<std::string> classes_from_layout =
-        extract_classes_from_native_lib(contents);
-    all_classes.insert(classes_from_layout.begin(), classes_from_layout.end());
-  }
+  auto wq = workqueue_foreach<std::string>(
+      [&](sparta::SpartaWorkerState<std::string>* worker_state,
+          const std::string& input) {
+        if (input.empty()) {
+          // Dispatcher, find files and create tasks.
+          find_native_library_files(
+              apk_directory,
+              [&](const std::string& file) { worker_state->push_task(file); });
+          return;
+        }
+
+        std::string contents = read_entire_file(input);
+        std::unordered_set<std::string> classes_from_native =
+            extract_classes_from_native_lib(contents);
+        if (!classes_from_native.empty()) {
+          std::unique_lock<std::mutex> lock(out_mutex);
+          // C++17: use merge to avoid copies.
+          all_classes.insert(classes_from_native.begin(),
+                             classes_from_native.end());
+        }
+      },
+      std::min(sparta::parallel::default_num_threads(), kReadNativeThreads),
+      /*push_tasks_while_running=*/true);
+  wq.add_item("");
+  wq.run_all();
   return all_classes;
 }
 
