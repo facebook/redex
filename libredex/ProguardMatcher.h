@@ -15,9 +15,10 @@ namespace keep_rules {
 
 using Scope = std::vector<DexClass*>;
 
-void process_proguard_rules(const ProguardMap& pg_map,
-                            const Scope& classes,
-                            const Scope& external_classes,
-                            const ProguardConfiguration& pg_config,
-                            bool keep_all_annotation_classes);
+ConcurrentSet<const KeepSpec*> process_proguard_rules(
+    const ProguardMap& pg_map,
+    const Scope& classes,
+    const Scope& external_classes,
+    const ProguardConfiguration& pg_config,
+    bool keep_all_annotation_classes);
 } // namespace keep_rules

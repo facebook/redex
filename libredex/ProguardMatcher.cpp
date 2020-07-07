@@ -294,6 +294,10 @@ class KeepRuleMatcher {
     return m_regex_map.at(regex);
   }
 
+  bool is_unused() const {
+    return m_class_matches == 0 && m_member_matches == 0;
+  }
+
  private:
   size_t m_member_matches{0};
   size_t m_class_matches{0};
@@ -326,11 +330,16 @@ class ProguardMatcher {
 
   DexClass* find_single_class(const std::string& descriptor) const;
 
+  const ConcurrentSet<const KeepSpec*>& get_unused_rules() const {
+    return m_unused_rules;
+  }
+
  private:
   const ProguardMap& m_pg_map;
   const Scope& m_classes;
   const Scope& m_external_classes;
   ClassHierarchy m_hierarchy;
+  ConcurrentSet<const KeepSpec*> m_unused_rules;
 };
 
 // Updates a class, field or method to add keep modifiers.
@@ -749,6 +758,10 @@ void ProguardMatcher::process_keep(const KeepSpecSet& keep_rules,
         process_single_keep(class_match, rule_matcher, cls);
       }
     }
+
+    if (rule_matcher.is_unused()) {
+      m_unused_rules.insert(keep_rule);
+    }
   });
 
   RegexMap regex_map;
@@ -762,6 +775,9 @@ void ProguardMatcher::process_keep(const KeepSpecSet& keep_rules,
       DexClass* cls = find_single_class(className);
       KeepRuleMatcher rule_matcher(rule_type, keep_rule, regex_map);
       process_single_keep(class_match, rule_matcher, cls);
+      if (rule_matcher.is_unused()) {
+        m_unused_rules.insert(&keep_rule);
+      }
       continue;
     }
 
@@ -776,6 +792,9 @@ void ProguardMatcher::process_keep(const KeepSpecSet& keep_rules,
         process_single_keep(class_match, rule_matcher, super);
         for (auto const* type : children) {
           process_single_keep(class_match, rule_matcher, type_class(type));
+        }
+        if (rule_matcher.is_unused()) {
+          m_unused_rules.insert(&keep_rule);
         }
       }
       continue;
@@ -820,16 +839,18 @@ void ProguardMatcher::mark_all_annotation_classes_as_keep() {
 
 namespace keep_rules {
 
-void process_proguard_rules(const ProguardMap& pg_map,
-                            const Scope& classes,
-                            const Scope& external_classes,
-                            const ProguardConfiguration& pg_config,
-                            bool keep_all_annotation_classes) {
+ConcurrentSet<const KeepSpec*> process_proguard_rules(
+    const ProguardMap& pg_map,
+    const Scope& classes,
+    const Scope& external_classes,
+    const ProguardConfiguration& pg_config,
+    bool keep_all_annotation_classes) {
   ProguardMatcher pg_matcher(pg_map, classes, external_classes);
   pg_matcher.process_proguard_rules(pg_config);
   if (keep_all_annotation_classes) {
     pg_matcher.mark_all_annotation_classes_as_keep();
   }
+  return pg_matcher.get_unused_rules();
 }
 
 } // namespace keep_rules

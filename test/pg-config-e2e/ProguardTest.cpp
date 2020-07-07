@@ -7,6 +7,7 @@
 
 #include <cstdint>
 #include <cstdlib>
+#include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <iostream>
 #include <memory>
@@ -21,6 +22,7 @@
 #include "ProguardMap.h"
 #include "ProguardMatcher.h"
 #include "ProguardParser.h"
+#include "ProguardPrintConfiguration.h" // New ProGuard configuration
 #include "ReachableClasses.h"
 #include "RedexTest.h"
 
@@ -152,8 +154,9 @@ TEST_F(ProguardTest, assortment) {
 
   Scope scope = build_class_scope(dexen);
   apply_deobfuscated_names(dexen, proguard_map);
-  process_proguard_rules(
-      proguard_map, scope, external_classes, pg_config, true);
+  ConcurrentSet<const keep_rules::KeepSpec*> unused_rules =
+      process_proguard_rules(proguard_map, scope, external_classes, pg_config,
+                             true);
 
   // Check the top level Android activity class
   {
@@ -923,5 +926,22 @@ TEST_F(ProguardTest, assortment) {
       ASSERT_NE(nullptr, omega_gamma);
       EXPECT_FALSE(root(omega_gamma));
     }
+  }
+  { // check some keep rules are not used
+    EXPECT_EQ(unused_rules.size(), 4);
+    std::vector<std::string> unused_rule_strings;
+    for (const keep_rules::KeepSpec* keep_rule : unused_rules) {
+      unused_rule_strings.push_back(keep_rules::show_keep(*keep_rule, false));
+    }
+    EXPECT_THAT(
+        unused_rule_strings,
+        ::testing::UnorderedElementsAre(
+            "-keep android.support.test.runner.AndroidJUnitRunner {  (...)V "
+            "<init>(); }",
+            "-keepclassmembers com.facebook.redex.test.proguard.Delta$U { ()V "
+            "logger(); }",
+            "-keepclasseswithmembernames * { native  *(); }",
+            "-keep androidx.test.runner.AndroidJUnitRunner {  (...)V "
+            "<init>(); }"));
   }
 }
