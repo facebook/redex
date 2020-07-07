@@ -887,16 +887,27 @@ void redex_frontend(ConfigFiles& conf, /* input */
         process_proguard_rules(conf.get_proguard_map(), scope, external_classes,
                                pg_config, keep_all_annotation_classes);
     if (unused_rules.size() > 0) {
+      std::vector<std::string> out;
       for (const keep_rules::KeepSpec* keep_rule : unused_rules) {
-        fprintf(stderr, "%s not used\n",
-                keep_rules::show_keep(*keep_rule).c_str());
+        out.push_back(keep_rules::show_keep(*keep_rule));
       }
+      // Make output deterministic
+      std::sort(out.begin(), out.end());
       bool unused_rule_abort;
       conf.get_json_config().get("unused_keep_rule_abort", false,
                                  unused_rule_abort);
       if (unused_rule_abort) {
         exit(1);
+        for (const auto& s : out) {
+          fprintf(stderr, "%s not used\n", s.c_str());
+        }
       }
+      auto fd =
+          fopen(conf.metafile("redex-unused-keep-rules.txt").c_str(), "w");
+      for (const auto& s : out) {
+        fprintf(fd, "%s\n", s.c_str());
+      }
+      fclose(fd);
     }
   }
   {
