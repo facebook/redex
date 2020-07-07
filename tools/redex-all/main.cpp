@@ -1118,6 +1118,12 @@ int main(int argc, char* argv[]) {
     RedexContext::set_record_keep_reasons(
         args.config.get("record_keep_reasons", false).asBool());
 
+    slow_invariants_debug =
+        args.config.get("slow_invariants_debug", false).asBool();
+    if (slow_invariants_debug) {
+      std::cerr << "Slow invariants enabled." << std::endl;
+    }
+
     auto pg_config = std::make_unique<keep_rules::ProguardConfiguration>();
     DexStoresVector stores;
     ConfigFiles conf(args.config, args.out_dir);

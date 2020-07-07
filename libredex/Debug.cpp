@@ -41,6 +41,9 @@
 #include <boost/stacktrace.hpp>
 #pragma GCC diagnostic pop
 
+// By default, run with slow invariant checks in debug mode.
+bool slow_invariants_debug{debug};
+
 namespace {
 void crash_backtrace() {
 #ifndef _MSC_VER

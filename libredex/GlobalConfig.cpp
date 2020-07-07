@@ -103,4 +103,5 @@ void GlobalConfig::bind_config() {
   bind("string_sort_mode", "", string_param);
   bind("write_cfg_each_pass", false, bool_param);
   bind("dump_cfg_classes", "", string_param);
+  bind("slow_invariants_debug", false, bool_param);
 }

@@ -20,6 +20,8 @@ constexpr bool debug =
 #endif // NDEBUG
     ;
 
+extern bool slow_invariants_debug;
+
 #ifdef _MSC_VER
 #define DEBUG_ONLY
 
