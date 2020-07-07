@@ -220,6 +220,17 @@ boost::optional<std::string> Configurable::as<boost::optional<std::string>>(
 }
 
 template <>
+std::vector<Json::Value> Configurable::as<std::vector<Json::Value>>(
+    const Json::Value& value, bindflags_t bindflags) {
+  ASSERT_NO_BINDFLAGS(std::vector<Json::Value>);
+  std::vector<Json::Value> result;
+  for (auto& str : value) {
+    result.emplace_back(str);
+  }
+  return result;
+}
+
+template <>
 std::vector<std::string> Configurable::as<std::vector<std::string>>(
     const Json::Value& value, bindflags_t bindflags) {
   ASSERT_NO_BINDFLAGS(std::vector<std::string>);
@@ -504,6 +515,7 @@ IMPLEMENT_REFLECTOR_EX(unsigned long long, "long")
 IMPLEMENT_REFLECTOR_EX(DexType*, "string")
 IMPLEMENT_REFLECTOR_EX(std::string, "string")
 IMPLEMENT_REFLECTOR_EX(Json::Value, "json")
+IMPLEMENT_REFLECTOR_EX(std::vector<Json::Value>, "list")
 IMPLEMENT_REFLECTOR_EX(boost::optional<std::string>, "string")
 IMPLEMENT_REFLECTOR_EX(std::vector<std::string>, "list")
 IMPLEMENT_REFLECTOR_EX(std::vector<unsigned int>, "list")

@@ -157,8 +157,8 @@ void TypeErasurePass::bind_config() {
        merge_nonvirt_methods_within_shape);
 
   // load model specifications
-  Json::Value models;
-  bind("models", Json::Value(), models);
+  std::vector<Json::Value> models;
+  bind("models", {}, models);
 
   after_configuration([=] {
     if (max_num_dispatch_target > 0) {
@@ -166,12 +166,7 @@ void TypeErasurePass::bind_config() {
           boost::optional<size_t>(static_cast<size_t>(max_num_dispatch_target));
     }
 
-    if (models.isNull()) return;
-    if (!models.isArray()) {
-      fprintf(stderr,
-              "[TERA] Wrong specification: \"models\" is not an array\n");
-      return;
-    }
+    if (models.empty()) return;
 
     // load each model spec for erasure
     for (auto it = models.begin(); it != models.end(); ++it) {
