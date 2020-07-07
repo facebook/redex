@@ -99,6 +99,7 @@
   TM(REFU)           \
   TM(REG)            \
   TM(RENAME)         \
+  TM(RES)            \
   TM(RESO)           \
   TM(RG)             \
   TM(RME)            \
