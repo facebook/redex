@@ -52,6 +52,8 @@
 
 namespace {
 
+constexpr bool DEBUG_RESOURCES = false;
+
 constexpr size_t MIN_CLASSNAME_LENGTH = 10;
 constexpr size_t MAX_CLASSNAME_LENGTH = 500;
 
@@ -1023,7 +1025,9 @@ void remap_xml_reference_attributes(
 namespace {
 
 template <typename Fn>
-void find_resource_xml_files(const std::string& apk_directory, Fn handler) {
+void find_resource_xml_files(const std::string& apk_directory,
+                             const std::vector<std::string>& skip_dirs_prefixes,
+                             Fn handler) {
   std::string root = apk_directory + std::string("/res");
   path_t res(root);
 
@@ -1033,6 +1037,19 @@ void find_resource_xml_files(const std::string& apk_directory, Fn handler) {
       const path_t& entry_path = entry.path();
 
       if (is_directory(entry_path)) {
+        auto matches_prefix = [&skip_dirs_prefixes](const auto& p) {
+          const auto& str = p.string();
+          for (const auto& prefix : skip_dirs_prefixes) {
+            if (str.find(prefix) == 0) {
+              return true;
+            }
+          }
+          return false;
+        };
+        if (matches_prefix(entry_path.filename())) {
+          continue;
+        }
+
         for (auto lit = dir_iterator(entry_path); lit != dir_iterator();
              ++lit) {
           const path_t& resource_path = lit->path();
@@ -1063,35 +1080,68 @@ void collect_layout_classes_and_attributes(
     const std::unordered_set<std::string>& attributes_to_read,
     std::unordered_set<std::string>& out_classes,
     std::unordered_multimap<std::string, std::string>& out_attributes) {
-  std::mutex out_mutex;
-  auto wq = workqueue_foreach<std::string>(
-      [&](sparta::SpartaWorkerState<std::string>* worker_state,
-          const std::string& input) {
-        if (input.empty()) {
-          // Dispatcher, find files and create tasks.
-          find_resource_xml_files(apk_directory, [&](const std::string& file) {
-            worker_state->push_task(file);
-          });
-          return;
-        }
+  auto collect_fn = [&](const std::vector<std::string>& prefixes) {
+    std::mutex out_mutex;
+    auto wq = workqueue_foreach<std::string>(
+        [&](sparta::SpartaWorkerState<std::string>* worker_state,
+            const std::string& input) {
+          if (input.empty()) {
+            // Dispatcher, find files and create tasks.
+            find_resource_xml_files(apk_directory, prefixes,
+                                    [&](const std::string& file) {
+                                      worker_state->push_task(file);
+                                    });
+            return;
+          }
 
-        std::unordered_set<std::string> local_out_classes;
-        std::unordered_multimap<std::string, std::string> local_out_attributes;
-        collect_layout_classes_and_attributes_for_file(
-            input, attributes_to_read, local_out_classes, local_out_attributes);
-        if (!local_out_classes.empty() || !local_out_attributes.empty()) {
-          std::unique_lock<std::mutex> lock(out_mutex);
-          // C++17: use merge to avoid copies.
-          out_classes.insert(local_out_classes.begin(),
-                             local_out_classes.end());
-          out_attributes.insert(local_out_attributes.begin(),
-                                local_out_attributes.end());
-        }
-      },
-      std::min(sparta::parallel::default_num_threads(), kReadNativeThreads),
-      /*push_tasks_while_running=*/true);
-  wq.add_item("");
-  wq.run_all();
+          std::unordered_set<std::string> local_out_classes;
+          std::unordered_multimap<std::string, std::string>
+              local_out_attributes;
+          collect_layout_classes_and_attributes_for_file(
+              input, attributes_to_read, local_out_classes,
+              local_out_attributes);
+          if (!local_out_classes.empty() || !local_out_attributes.empty()) {
+            std::unique_lock<std::mutex> lock(out_mutex);
+            // C++17: use merge to avoid copies.
+            out_classes.insert(local_out_classes.begin(),
+                               local_out_classes.end());
+            out_attributes.insert(local_out_attributes.begin(),
+                                  local_out_attributes.end());
+          }
+        },
+        std::min(sparta::parallel::default_num_threads(), kReadNativeThreads),
+        /*push_tasks_while_running=*/true);
+    wq.add_item("");
+    wq.run_all();
+  };
+
+  collect_fn({
+      // Animations do not have references (that we track).
+      "anim",
+      // Colors do not have references.
+      "color",
+      // There are usually a lot of drawable resources, non of
+      // which contain any code references.
+      "drawable",
+      // Raw would not contain binary XML.
+      "raw",
+  });
+
+  if (DEBUG_RESOURCES) {
+    size_t out_classes_size = out_classes.size();
+    size_t out_attributes_size = out_attributes.size();
+
+    // Comparison is complicated, as out_attributes is a multi-map.
+    // Assume that the inputs were empty, for simplicity.
+    out_classes.clear();
+    out_attributes.clear();
+
+    collect_fn({});
+    size_t new_out_classes_size = out_classes.size();
+    size_t new_out_attributes_size = out_attributes.size();
+    redex_assert(out_classes_size == new_out_classes_size);
+    redex_assert(out_attributes_size == new_out_attributes_size);
+  }
 }
 
 std::unordered_set<std::string> get_layout_classes(
