@@ -48,11 +48,10 @@
 
 #include "Debug.h"
 #include "StringUtil.h"
+#include "Trace.h"
 #include "WorkQueue.h"
 
 namespace {
-
-constexpr bool DEBUG_RESOURCES = false;
 
 constexpr size_t MIN_CLASSNAME_LENGTH = 10;
 constexpr size_t MAX_CLASSNAME_LENGTH = 500;
@@ -1127,7 +1126,9 @@ void collect_layout_classes_and_attributes(
       "raw",
   });
 
-  if (DEBUG_RESOURCES) {
+  if (slow_invariants_debug) {
+    TRACE(RES, 1,
+          "Checking collect_layout_classes_and_attributes filter assumption");
     size_t out_classes_size = out_classes.size();
     size_t out_attributes_size = out_attributes.size();
 
