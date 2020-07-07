@@ -34,6 +34,14 @@ inline bool is_any_init(const DexMethodRef* method) {
 bool is_trivial_clinit(const DexMethod* method);
 
 /**
+ * Return true if change the exeution time of the <clinit> of the cls may change
+ * the program behavior.
+ * TODO: We can assume no side effect for more cases, like if it only accesses
+ * other classes whose <clinit> also has no side effect.
+ */
+bool clinit_may_have_side_effects(const DexClass* cls);
+
+/**
  * Check that the method contains no invoke-super instruction; this is a
  * requirement to relocate a method outside of its original inheritance
  * hierarchy.

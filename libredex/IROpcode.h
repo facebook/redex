@@ -257,6 +257,8 @@ DexOpcode range_version(IROpcode);
 
 bool has_variable_srcs_size(IROpcode op);
 
+inline bool is_const_string(IROpcode op) { return op == OPCODE_CONST_STRING; }
+
 // Internal opcodes cannot be mapped to a corresponding DexOpcode.
 bool is_internal(IROpcode);
 
