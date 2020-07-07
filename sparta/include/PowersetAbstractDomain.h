@@ -48,6 +48,8 @@ class PowersetImplementation : public AbstractValue<Derived> {
   AbstractValueKind narrow_with(const Derived& other) override {
     return this->meet_with(other);
   }
+
+  virtual AbstractValueKind difference_with(const Derived& other) = 0;
 };
 
 /*
@@ -146,6 +148,22 @@ class PowersetAbstractDomain
       Powerset* powerset = this->get_value();
       for (InputIterator it = first; it != last; ++it) {
         powerset->remove(*it);
+      }
+    }
+  }
+
+  void difference_with(const Derived& other) {
+    if (this->is_bottom() || other.is_top()) {
+      this->set_to_bottom();
+    } else if (this->is_top() || other.is_bottom()) {
+      // Note that the difference of top with anything except top is top.
+      return;
+    } else {
+      auto kind = this->get_value()->difference_with(*other.get_value());
+      if (kind == AbstractValueKind::Bottom) {
+        this->set_to_bottom();
+      } else if (kind == AbstractValueKind::Top) {
+        this->set_to_top();
       }
     }
   }

@@ -151,6 +151,17 @@ class SparseSetValue final
     return meet_with(other);
   }
 
+  AbstractValueKind difference_with(const SparseSetValue& other) override {
+    for (auto it = begin(); it != end();) {
+      if (other.contains(*it)) {
+        remove(*it);
+      } else {
+        ++it;
+      }
+    }
+    return AbstractValueKind::Value;
+  }
+
   size_t size() const override { return m_element_num; }
 
   friend std::ostream& operator<<(std::ostream& o,
