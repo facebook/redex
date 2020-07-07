@@ -163,4 +163,40 @@ TEST(SparseSetAbstractDomainTest, destructiveOperations) {
   EXPECT_TRUE(e2.equals(e1));
   EXPECT_FALSE(e2.is_bottom());
   EXPECT_THAT(e2.elements(), ::testing::UnorderedElementsAre(1, 2, 3, 4));
+
+  e1 = Domain::top();
+  e1.difference_with(Domain::bottom());
+  EXPECT_TRUE(e1.is_top());
+  e2 = Domain(16);
+  e2.add(1);
+  e1.difference_with(e2);
+  EXPECT_TRUE(e1.is_top());
+  e1.difference_with(Domain::top());
+  EXPECT_TRUE(e1.is_bottom());
+
+  e1 = Domain::bottom();
+  e1.difference_with(Domain::bottom());
+  EXPECT_TRUE(e1.is_bottom());
+  e1.difference_with(e2);
+  EXPECT_TRUE(e1.is_bottom());
+  e1.difference_with(Domain::top());
+  EXPECT_TRUE(e1.is_bottom());
+
+  e1 = Domain(16);
+  e1.add(1);
+  e1.add(2);
+  e1.add(3);
+  e1.difference_with(Domain::bottom());
+  EXPECT_THAT(e1.elements(), ::testing::UnorderedElementsAre(1, 2, 3));
+  e2 = Domain(16);
+  e2.add(2);
+  e2.add(4);
+  e1.difference_with(e2);
+  EXPECT_THAT(e1.elements(), ::testing::UnorderedElementsAre(1, 3));
+  e2 = Domain(16);
+  e2.add(3);
+  e1.difference_with(e2);
+  EXPECT_THAT(e1.elements(), ::testing::UnorderedElementsAre(1));
+  e1.difference_with(Domain::top());
+  EXPECT_TRUE(e1.is_bottom());
 }

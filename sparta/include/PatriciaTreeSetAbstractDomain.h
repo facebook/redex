@@ -68,6 +68,11 @@ class SetValue final
     return AbstractValueKind::Value;
   }
 
+  AbstractValueKind difference_with(const SetValue& other) override {
+    m_set.difference_with(other.m_set);
+    return AbstractValueKind::Value;
+  }
+
   friend std::ostream& operator<<(std::ostream& o, const SetValue& value) {
     o << "[#" << value.size() << "]";
     o << value.m_set;

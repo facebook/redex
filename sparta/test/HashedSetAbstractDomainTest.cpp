@@ -133,4 +133,30 @@ TEST(HashedSetAbstractDomainTest, destructiveOperations) {
   EXPECT_FALSE(e2.is_bottom());
   EXPECT_THAT(e2.elements(),
               ::testing::UnorderedElementsAre("a", "b", "c", "d"));
+
+  e1 = Domain::top();
+  e1.difference_with(Domain::bottom());
+  EXPECT_TRUE(e1.is_top());
+  e1.difference_with(Domain("a"));
+  EXPECT_TRUE(e1.is_top());
+  e1.difference_with(Domain::top());
+  EXPECT_TRUE(e1.is_bottom());
+
+  e1 = Domain::bottom();
+  e1.difference_with(Domain::bottom());
+  EXPECT_TRUE(e1.is_bottom());
+  e1.difference_with(Domain("a"));
+  EXPECT_TRUE(e1.is_bottom());
+  e1.difference_with(Domain::top());
+  EXPECT_TRUE(e1.is_bottom());
+
+  e1 = Domain({"a", "b", "c"});
+  e1.difference_with(Domain::bottom());
+  EXPECT_THAT(e1.elements(), ::testing::UnorderedElementsAre("a", "b", "c"));
+  e1.difference_with(Domain({"b", "d"}));
+  EXPECT_THAT(e1.elements(), ::testing::UnorderedElementsAre("a", "c"));
+  e1.difference_with(Domain({"c"}));
+  EXPECT_THAT(e1.elements(), ::testing::UnorderedElementsAre("a"));
+  e1.difference_with(Domain::top());
+  EXPECT_TRUE(e1.is_bottom());
 }

@@ -86,6 +86,17 @@ class SetValue final : public PowersetImplementation<
     return AbstractValueKind::Value;
   }
 
+  AbstractValueKind difference_with(const SetValue& other) override {
+    for (auto it = m_set.begin(); it != m_set.end();) {
+      if (other.m_set.count(*it) != 0) {
+        it = m_set.erase(it);
+      } else {
+        ++it;
+      }
+    }
+    return AbstractValueKind::Value;
+  }
+
   friend std::ostream& operator<<(std::ostream& o, const SetValue& value) {
     o << "[#" << value.size() << "]";
     const auto& elements = value.elements();

@@ -172,4 +172,33 @@ TEST_F(PatriciaTreeSetAbstractDomainTest, destructiveOperations) {
   EXPECT_FALSE(e2.is_bottom());
   EXPECT_THAT(this->to_string(e2.elements()),
               ::testing::UnorderedElementsAre("a", "b", "c", "d"));
+
+  e1 = Domain::top();
+  e1.difference_with(Domain::bottom());
+  EXPECT_TRUE(e1.is_top());
+  e1.difference_with(Domain(this->a()));
+  EXPECT_TRUE(e1.is_top());
+  e1.difference_with(Domain::top());
+  EXPECT_TRUE(e1.is_bottom());
+
+  e1 = Domain::bottom();
+  e1.difference_with(Domain::bottom());
+  EXPECT_TRUE(e1.is_bottom());
+  e1.difference_with(Domain(this->a()));
+  EXPECT_TRUE(e1.is_bottom());
+  e1.difference_with(Domain::top());
+  EXPECT_TRUE(e1.is_bottom());
+
+  e1 = Domain({this->a(), this->b(), this->c()});
+  e1.difference_with(Domain::bottom());
+  EXPECT_THAT(this->to_string(e1.elements()),
+              ::testing::UnorderedElementsAre("a", "b", "c"));
+  e1.difference_with(Domain({this->b(), this->d()}));
+  EXPECT_THAT(this->to_string(e1.elements()),
+              ::testing::UnorderedElementsAre("a", "c"));
+  e1.difference_with(Domain({this->c()}));
+  EXPECT_THAT(this->to_string(e1.elements()),
+              ::testing::UnorderedElementsAre("a"));
+  e1.difference_with(Domain::top());
+  EXPECT_TRUE(e1.is_bottom());
 }
