@@ -75,11 +75,6 @@ struct ConfigFiles {
   const std::unordered_set<DexType*>& get_no_optimizations_annos();
   const std::unordered_set<DexMethodRef*>& get_pure_methods();
 
-  const std::unordered_map<std::string, unsigned int>& get_method_to_weight()
-      const {
-    return m_method_to_weight;
-  }
-
   const std::unordered_set<std::string>&
   get_method_sorting_whitelisted_substrings() const {
     return m_method_sorting_whitelisted_substrings;
@@ -165,7 +160,6 @@ struct ConfigFiles {
 
   std::vector<std::string> load_coldstart_classes();
   std::unordered_map<std::string, std::vector<std::string>> load_class_lists();
-  void load_method_to_weight();
   void load_method_sorting_whitelisted_substrings();
   void ensure_agg_method_stats_loaded();
   void load_inliner_config(inliner::InlinerConfig*);
@@ -173,10 +167,8 @@ struct ConfigFiles {
   bool m_load_class_lists_attempted{false};
   ProguardMap m_proguard_map;
   std::string m_coldstart_class_filename;
-  std::string m_profiled_methods_filename;
   std::vector<std::string> m_coldstart_classes;
   std::unordered_map<std::string, std::vector<std::string>> m_class_lists;
-  std::unordered_map<std::string, unsigned int> m_method_to_weight;
   std::unordered_set<std::string> m_method_sorting_whitelisted_substrings;
   std::string m_printseeds; // Filename to dump computed seeds.
   method_profiles::MethodProfiles m_method_profiles;

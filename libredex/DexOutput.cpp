@@ -164,9 +164,10 @@ void GatheredTypes::sort_dexmethod_emitlist_profiled_order(
   std::stable_sort(
       lmeth.begin(),
       lmeth.end(),
-      dexmethods_profiled_comparator(&m_method_to_weight,
-                                     &m_method_sorting_whitelisted_substrings,
-                                     &cache));
+      method_profiles::dexmethods_profiled_comparator(
+          *m_method_profiles,
+          m_method_sorting_whitelisted_substrings,
+          &cache));
 }
 
 void GatheredTypes::sort_dexmethod_emitlist_clinit_order(
@@ -2321,25 +2322,25 @@ void DexOutput::write_symbol_files() {
 }
 
 void GatheredTypes::set_method_sorting_whitelisted_substrings(
-    const std::unordered_set<std::string>& whitelisted_substrings) {
+    const std::unordered_set<std::string>* whitelisted_substrings) {
   m_method_sorting_whitelisted_substrings = whitelisted_substrings;
 }
 
-void GatheredTypes::set_method_to_weight(
-    const std::unordered_map<std::string, unsigned int>& method_to_weight) {
-  m_method_to_weight = method_to_weight;
+void GatheredTypes::set_method_profiles(
+    const method_profiles::MethodProfiles* method_profiles) {
+  m_method_profiles = method_profiles;
 }
 
 void DexOutput::prepare(SortMode string_mode,
                         const std::vector<SortMode>& code_mode,
-                        const ConfigFiles& conf,
+                        ConfigFiles& conf,
                         const std::string& dex_magic) {
 
   if (std::find(code_mode.begin(), code_mode.end(),
                 SortMode::METHOD_PROFILED_ORDER) != code_mode.end()) {
-    m_gtypes->set_method_to_weight(conf.get_method_to_weight());
+    m_gtypes->set_method_profiles(&conf.get_method_profiles());
     m_gtypes->set_method_sorting_whitelisted_substrings(
-        conf.get_method_sorting_whitelisted_substrings());
+        &conf.get_method_sorting_whitelisted_substrings());
   }
 
   fix_jumbos(m_classes, dodx);
@@ -2471,7 +2472,7 @@ dex_stats_t write_classes_to_dex(
     LocatorIndex* locator_index,
     size_t store_number,
     size_t dex_number,
-    const ConfigFiles& conf,
+    ConfigFiles& conf,
     PositionMapper* pos_mapper,
     std::unordered_map<DexMethod*, uint64_t>* method_to_id,
     std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,

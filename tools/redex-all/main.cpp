@@ -928,7 +928,7 @@ void redex_frontend(ConfigFiles& conf, /* input */
  * Post processing steps: write dex and collect stats
  */
 void redex_backend(const std::string& output_dir,
-                   const ConfigFiles& conf,
+                   ConfigFiles& conf,
                    PassManager& manager,
                    DexStoresVector& stores,
                    Json::Value& stats) {

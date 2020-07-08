@@ -140,4 +140,84 @@ class MethodProfiles {
   }
 };
 
+inline unsigned int get_method_weight_if_available(
+    const DexMethod* method,
+    const StatsMap& stats_map) {
+  auto it = stats_map.find(method);
+  if (it != stats_map.end() && it->second.appear_percent >= 95) {
+    return 100;
+  }
+
+  // If the method is not present in profiled order file we'll put it in the
+  // end of the code section
+  return 0;
+}
+
+inline unsigned int get_method_weight_override(
+    const DexMethod* method,
+    const std::unordered_set<std::string>* whitelisted_substrings) {
+  const std::string& deobfname = method->get_deobfuscated_name();
+  for (const std::string& substr : *whitelisted_substrings) {
+    if (deobfname.find(substr) != std::string::npos) {
+      return 100;
+    }
+  }
+
+  return 0;
+}
+
+struct dexmethods_profiled_comparator {
+  const StatsMap& stats_map;
+  const std::unordered_set<std::string>* whitelisted_substrings;
+  // This cache should be a pointer so that copied
+  // comparators can still share the same cache for better performance
+  std::unordered_map<DexMethod*, unsigned int>* cache;
+
+  dexmethods_profiled_comparator(
+      const method_profiles::MethodProfiles& method_profiles,
+      const std::unordered_set<std::string>* whitelisted_substrings_val,
+      std::unordered_map<DexMethod*, unsigned int>* cache)
+      : stats_map(method_profiles.method_stats(COLD_START)),
+        whitelisted_substrings(whitelisted_substrings_val),
+        cache(cache) {
+    always_assert(whitelisted_substrings_val != nullptr);
+    always_assert(cache != nullptr);
+  }
+
+  bool operator()(DexMethod* a, DexMethod* b) {
+    if (a == nullptr) {
+      return b != nullptr;
+    } else if (b == nullptr) {
+      return false;
+    }
+
+    auto get_weight = [this](DexMethod* m) -> unsigned int {
+      const auto& search = cache->find(m);
+      if (search != cache->end()) {
+        return search->second;
+      }
+
+      auto w = get_method_weight_if_available(m, stats_map);
+      if (w == 0) {
+        // For methods not included in the profiled methods file, move them to
+        // the top section anyway if they match one of the whitelisted
+        // substrings.
+        w = get_method_weight_override(m, whitelisted_substrings);
+      }
+
+      cache->emplace(m, w);
+      return w;
+    };
+
+    unsigned int weight_a = get_weight(a);
+    unsigned int weight_b = get_weight(b);
+
+    if (weight_a == weight_b) {
+      return compare_dexmethods(a, b);
+    }
+
+    return weight_a > weight_b;
+  }
+};
+
 } // namespace method_profiles

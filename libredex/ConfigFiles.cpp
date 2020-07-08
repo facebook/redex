@@ -19,8 +19,6 @@ ConfigFiles::ConfigFiles(const Json::Value& config, const std::string& outdir)
     : m_json(config),
       outdir(outdir),
       m_proguard_map(config.get("proguard_map", "").asString()),
-      m_profiled_methods_filename(
-          config.get("profiled_methods_file", "").asString()),
       m_printseeds(config.get("printseeds", "").asString()) {
 
   m_coldstart_class_filename = config.get("coldstart_classes", "").asString();
@@ -29,9 +27,6 @@ ConfigFiles::ConfigFiles(const Json::Value& config, const std::string& outdir)
         config.get("default_coldstart_classes", "").asString();
   }
 
-  if (m_profiled_methods_filename != "") {
-    load_method_to_weight();
-  }
   load_method_sorting_whitelisted_substrings();
   uint32_t instruction_size_bitwidth_limit =
       config.get("instruction_size_bitwidth_limit", 0).asUInt();
@@ -149,27 +144,6 @@ ConfigFiles::load_class_lists() {
   lists["secondary_dex_head.list"] = get_coldstart_classes();
 
   return lists;
-}
-
-void ConfigFiles::load_method_to_weight() {
-  std::ifstream infile(m_profiled_methods_filename.c_str());
-  assert_log(infile, "Can't open method profile file: %s\n",
-             m_profiled_methods_filename.c_str());
-
-  std::string deobfuscated_name;
-  unsigned int weight;
-  TRACE(CUSTOMSORT, 2, "Setting sort start file %s",
-        m_profiled_methods_filename.c_str());
-
-  unsigned int count = 0;
-  while (infile >> deobfuscated_name >> weight) {
-    m_method_to_weight[deobfuscated_name] = weight;
-    count++;
-  }
-
-  assert_log(count > 0, "Method profile file %s didn't contain valid entries\n",
-             m_profiled_methods_filename.c_str());
-  TRACE(CUSTOMSORT, 2, "Preset sort weight count=%d", count);
 }
 
 void ConfigFiles::load_method_sorting_whitelisted_substrings() {
