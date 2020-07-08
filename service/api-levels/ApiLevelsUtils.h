@@ -30,7 +30,8 @@ class ApiLevelsUtils {
     return m_types_to_framework_api;
   }
 
-  std::unordered_map<DexType*, FrameworkAPI> get_framework_classes() {
+  const std::unordered_map<const DexType*, FrameworkAPI>&
+  get_framework_classes() {
     return m_sdk_api.get_framework_classes();
   }
 
@@ -52,7 +53,7 @@ class ApiLevelsUtils {
   void check_and_update_release_to_framework(const Scope& scope);
 
   TypeToFrameworkAPI m_types_to_framework_api;
-  std::unordered_set<DexType*> m_framework_classes;
+  std::unordered_set<const DexType*> m_framework_classes;
   std::string m_framework_api_info_filename;
   uint32_t m_api_level;
   api::AndroidSDK m_sdk_api;

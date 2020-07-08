@@ -45,6 +45,37 @@ bool FrameworkAPI::has_method(const std::string& simple_deobfuscated_name,
   return false;
 }
 
+bool FrameworkAPI::has_field(const std::string& simple_deobfuscated_name,
+                             DexAccessFlags field_access_flags,
+                             bool relax_access_flags_matching) const {
+  for (const FRefInfo& fref_info : frefs_info) {
+    auto* fref = fref_info.fref;
+    if (fref->get_name()->str() != simple_deobfuscated_name) {
+      continue;
+    }
+
+    // We also need to check the access flags.
+    // NOTE: We accept cases where the fields are not declared final.
+    if (field_access_flags == fref_info.access_flags ||
+        (field_access_flags & ~ACC_FINAL) == fref_info.access_flags) {
+      return true;
+    }
+    // There are mismatches on the higher bits of the access flags on some
+    // fields between the API file generated using dex.py and what we have in
+    // Redex, even if they are the 'same' field.
+    // In the field presence check, we relax the matching to only
+    // the last 4 bits that includes PUBLIC, PRIVATE, PROTECTED and STATIC.
+    if (relax_access_flags_matching) {
+      auto masked_info_access = 0xF & fref_info.access_flags;
+      auto masked_field_access = 0xF & field_access_flags;
+      if (masked_info_access == masked_field_access) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 /**
  * File format:
  *  <framework_cls> <super_cls> <num_methods> <num_fields>

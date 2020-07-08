@@ -87,6 +87,7 @@
 #include "OutlinerTypeAnalysis.h"
 #include "PartialCandidates.h"
 #include "ReachingInitializeds.h"
+#include "RefChecker.h"
 #include "Resolver.h"
 #include "Trace.h"
 #include "Walkers.h"
@@ -628,44 +629,31 @@ static bool append_to_partial_candidate(
   return true;
 }
 
-bool legal_refs(const std::function<bool(const DexType*)>& illegal_ref,
-                IRInstruction* insn) {
-  std::vector<DexType*> types;
-  insn->gather_types(types);
-  for (const auto* t : types) {
-    if (illegal_ref(t)) {
-      return false;
-    }
-  }
-  return true;
-}
-
-static bool can_outline_insn(
-    const std::function<bool(const DexType*)>& illegal_ref,
-    IRInstruction* insn) {
+static bool can_outline_insn(const RefChecker& ref_checker,
+                             IRInstruction* insn) {
   if (!can_outline_opcode(insn->opcode())) {
     return false;
   }
   if (insn->has_method()) {
     auto method = resolve_method(insn->get_method(), opcode_to_search(insn));
-    if (method == nullptr) {
+    if (method == nullptr || method != insn->get_method()) {
       return false;
     }
     if (!is_public(method) && method->is_external()) {
       return false;
     }
-    if (!legal_refs(illegal_ref, insn)) {
+    if (!ref_checker.check_method(method)) {
       return false;
     }
   } else if (insn->has_field()) {
     auto field = resolve_field(insn->get_field());
-    if (field == nullptr) {
+    if (field == nullptr || field != insn->get_field()) {
       return false;
     }
     if (!is_public(field) && field->is_external()) {
       return false;
     }
-    if (!legal_refs(illegal_ref, insn)) {
+    if (!ref_checker.check_field(field)) {
       return false;
     }
     if (is_final(field) &&
@@ -678,7 +666,7 @@ static bool can_outline_insn(
       if (!is_public(cls) && cls->is_external()) {
         return false;
       }
-      if (!legal_refs(illegal_ref, insn)) {
+      if (!ref_checker.check_type(insn->get_type())) {
         return false;
       }
     }
@@ -774,7 +762,7 @@ using ExploredCallback =
 static bool explore_candidates_from(
     LazyReachingInitializedsEnvironments& reaching_initializeds,
     const InstructionSequenceOutlinerConfig& config,
-    const std::function<bool(const DexType*)>& illegal_ref,
+    const RefChecker& ref_checker,
     const CandidateInstructionCoresSet& recurring_cores,
     PartialCandidate* pc,
     PartialCandidateNode* pcn,
@@ -791,7 +779,7 @@ static bool explore_candidates_from(
     }
     auto insn = it->insn;
     if (pcn->insns.size() + 1 < MIN_INSNS_SIZE &&
-        !can_outline_insn(illegal_ref, insn)) {
+        !can_outline_insn(ref_checker, insn)) {
       return false;
     }
     cores_builder.push_back(insn);
@@ -833,7 +821,7 @@ static bool explore_candidates_from(
               is_uniquely_reached_via_pred(succ_big_block->get_first_block()));
           auto succ_ii = big_blocks::InstructionIterable(*succ_big_block);
           if (!explore_candidates_from(
-                  reaching_initializeds, config, illegal_ref, recurring_cores,
+                  reaching_initializeds, config, ref_checker, recurring_cores,
                   pc, succ_pcn.get(), succ_ii.begin(), succ_ii.end())) {
             return false;
           }
@@ -897,9 +885,8 @@ struct FindCandidatesStats {
 // given method it is located.
 static MethodCandidates find_method_candidates(
     const InstructionSequenceOutlinerConfig& config,
-    const std::function<bool(const DexType*)>& illegal_ref,
+    const RefChecker& ref_checker,
     bool skip_loops,
-
     DexMethod* method,
     cfg::ControlFlowGraph& cfg,
     const CandidateInstructionCoresSet& recurring_cores,
@@ -1066,7 +1053,9 @@ static MethodCandidates find_method_candidates(
             return;
           }
           if (std::find_if(c.arg_types.begin(), c.arg_types.end(),
-                           illegal_ref) != c.arg_types.end()) {
+                           [&](const DexType* t) {
+                             return !ref_checker.check_type(t);
+                           }) != c.arg_types.end()) {
             TRACE(ISO, 4,
                   "[invoke sequence outliner] [bail out] Illegal argument "
                   "type");
@@ -1080,7 +1069,7 @@ static MethodCandidates find_method_candidates(
             lstats.res_type_not_computed++;
             return;
           }
-          if (out_reg && illegal_ref(c.res_type)) {
+          if (out_reg && !ref_checker.check_type(c.res_type)) {
             TRACE(ISO, 4,
                   "[invoke sequence outliner] [bail out] Illegal result type");
             lstats.res_type_illegal++;
@@ -1127,7 +1116,7 @@ static MethodCandidates find_method_candidates(
         continue;
       }
       PartialCandidate pc;
-      explore_candidates_from(reaching_initializeds, config, illegal_ref,
+      explore_candidates_from(reaching_initializeds, config, ref_checker,
                               recurring_cores, &pc, &pc.root, it, end,
                               &explored_callback);
     }
@@ -1167,13 +1156,13 @@ static void get_recurring_cores(
     PassManager& mgr,
     const Scope& scope,
     const std::unordered_set<DexMethod*>& sufficiently_hot_methods,
-    const std::function<bool(const DexType*)>& illegal_ref,
+    const RefChecker& ref_checker,
     CandidateInstructionCoresSet* recurring_cores) {
   ConcurrentMap<CandidateInstructionCores, size_t,
                 CandidateInstructionCoresHasher>
       concurrent_cores;
   walk::parallel::code(
-      scope, [illegal_ref, &sufficiently_hot_methods,
+      scope, [&ref_checker, &sufficiently_hot_methods,
               &concurrent_cores](DexMethod* method, IRCode& code) {
         if (!can_outline_from_method(method, sufficiently_hot_methods)) {
           return;
@@ -1185,7 +1174,7 @@ static void get_recurring_cores(
           CandidateInstructionCoresBuilder cores_builder;
           for (auto& mie : big_blocks::InstructionIterable(big_block)) {
             auto insn = mie.insn;
-            if (!can_outline_insn(illegal_ref, insn)) {
+            if (!can_outline_insn(ref_checker, insn)) {
               cores_builder.clear();
               continue;
             }
@@ -1385,7 +1374,7 @@ static void get_beneficial_candidates(
     const Scope& scope,
     const std::unordered_set<DexMethod*>& sufficiently_warm_methods,
     const std::unordered_set<DexMethod*>& sufficiently_hot_methods,
-    const std::function<bool(const DexType*)>& illegal_ref,
+    const RefChecker& ref_checker,
     const CandidateInstructionCoresSet& recurring_cores,
     const ReusableOutlinedMethods* reusable_outlined_methods,
     std::vector<CandidateWithInfo>* candidates_with_infos,
@@ -1395,7 +1384,7 @@ static void get_beneficial_candidates(
       concurrent_candidates;
   FindCandidatesStats stats;
   walk::parallel::code(scope, [&config, &sufficiently_warm_methods,
-                               &sufficiently_hot_methods, &illegal_ref,
+                               &sufficiently_hot_methods, &ref_checker,
                                &recurring_cores, &concurrent_candidates,
                                &stats](DexMethod* method, IRCode& code) {
     if (!can_outline_from_method(method, sufficiently_hot_methods)) {
@@ -1403,7 +1392,7 @@ static void get_beneficial_candidates(
     }
     bool skip_loops = !!sufficiently_warm_methods.count(method);
     for (auto& p :
-         find_method_candidates(config, illegal_ref, skip_loops, method,
+         find_method_candidates(config, ref_checker, skip_loops, method,
                                 code.cfg(), recurring_cores, &stats)) {
       std::vector<CandidateMethodLocation>& cmls = p.second;
       concurrent_candidates.update(p.first,
@@ -2680,6 +2669,20 @@ void InstructionSequenceOutliner::bind_config() {
 void InstructionSequenceOutliner::run_pass(DexStoresVector& stores,
                                            ConfigFiles& config,
                                            PassManager& mgr) {
+  int32_t min_sdk = mgr.get_redex_options().min_sdk;
+  mgr.incr_metric("min_sdk", min_sdk);
+  TRACE(ISO, 2, "[invoke sequence outliner] min_sdk: %d", min_sdk);
+  auto min_sdk_api_file = config.get_android_sdk_api_file(min_sdk);
+  const api::AndroidSDK* min_sdk_api{nullptr};
+  if (!min_sdk_api_file) {
+    mgr.incr_metric("min_sdk_no_file", 1);
+    TRACE(ISO, 2,
+          "[invoke sequence outliner] Android SDK API %d file cannot be found.",
+          min_sdk);
+  } else {
+    min_sdk_api = &config.get_android_sdk_api(min_sdk);
+  }
+
   auto scope = build_class_scope(stores);
   std::unordered_set<DexMethod*> sufficiently_warm_methods;
   std::unordered_set<DexMethod*> sufficiently_hot_methods;
@@ -2730,20 +2733,16 @@ void InstructionSequenceOutliner::run_pass(DexStoresVector& stores,
         reusable_outlined_methods->clear();
       }
       last_store_idx = store_idx;
-      auto illegal_ref = [&xstores, store_idx](const DexType* t) {
-        // TODO: Check if references to external classes that only exist
-        // on some Android versions are problematic as well.
-        return xstores.illegal_ref(store_idx, t);
-      };
+      RefChecker ref_checker{&xstores, store_idx, min_sdk_api};
       CandidateInstructionCoresSet recurring_cores;
-      get_recurring_cores(mgr, dex, sufficiently_hot_methods, illegal_ref,
+      get_recurring_cores(mgr, dex, sufficiently_hot_methods, ref_checker,
                           &recurring_cores);
       std::vector<CandidateWithInfo> candidates_with_infos;
       std::unordered_map<DexMethod*, std::unordered_set<CandidateId>>
           candidate_ids_by_methods;
       get_beneficial_candidates(
           m_config, mgr, dex, sufficiently_warm_methods,
-          sufficiently_hot_methods, illegal_ref, recurring_cores,
+          sufficiently_hot_methods, ref_checker, recurring_cores,
           reusable_outlined_methods.get(), &candidates_with_infos,
           &candidate_ids_by_methods);
 

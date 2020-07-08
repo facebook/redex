@@ -221,6 +221,7 @@ libredex_la_SOURCES = \
 	libredex/RedexOptions.cpp \
 	libredex/RedexResources.cpp \
 	libredex/ReflectionAnalysis.cpp \
+	libredex/RefChecker.cpp \
 	libredex/Resolver.cpp \
 	libredex/Show.cpp \
 	libredex/Timer.cpp \
