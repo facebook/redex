@@ -75,15 +75,25 @@ void run_verifier(const Scope& scope,
 static void check_unique_deobfuscated_names(const char* pass_name, const Scope& scope) {
   TRACE(PM, 1, "Running check_unique_deobfuscated_names...");
   Timer t("check_unique_deobfuscated_names");
-  std::unordered_map<std::string, DexMethod*> names;
-  walk::methods(scope, [&names, pass_name](DexMethod* dex_method) {
-    auto it = names.find(dex_method->get_deobfuscated_name());
-    if (it != names.end()) {
+  std::unordered_map<std::string, DexMethod*> method_names;
+  walk::methods(scope, [&method_names, pass_name](DexMethod* dex_method) {
+    auto it = method_names.find(dex_method->get_deobfuscated_name());
+    if (it != method_names.end()) {
       fprintf(stderr, "ABORT! [%s] Duplicate deobfuscated method name: %s\nfor %s\n vs %s\n",
               pass_name, it->first.c_str(), SHOW(dex_method), SHOW(it->second));
       exit(EXIT_FAILURE);
     }
-    names.emplace(dex_method->get_deobfuscated_name(), dex_method);
+    method_names.emplace(dex_method->get_deobfuscated_name(), dex_method);
+  });
+  std::unordered_map<std::string, DexField*> field_names;
+  walk::fields(scope, [&field_names, pass_name](DexField* dex_field) {
+    auto it = field_names.find(dex_field->get_deobfuscated_name());
+    if (it != field_names.end()) {
+      fprintf(stderr, "ABORT! [%s] Duplicate deobfuscated field name: %s\nfor %s\n vs %s\n",
+              pass_name, it->first.c_str(), SHOW(dex_field), SHOW(it->second));
+      exit(EXIT_FAILURE);
+    }
+    field_names.emplace(dex_field->get_deobfuscated_name(), dex_field);
   });
 }
 

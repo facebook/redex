@@ -166,6 +166,7 @@ DexClass* create_class(const DexType* type,
   }
   for (const auto& field : fields) {
     creator.add_field(field);
+    field->set_deobfuscated_name(show_deobfuscated(field));
   }
   auto cls = creator.create();
   // Keeping type-erasure generated classes from being renamed.
