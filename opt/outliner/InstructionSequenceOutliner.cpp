@@ -2118,9 +2118,7 @@ class HostClassSelector {
             return false;
           }
           // We don't want any common base class with a scary clinit
-          auto cl_init = cls->get_clinit();
-          return !cl_init ||
-                 (can_delete(cl_init) && cl_init->rstate.no_optimizations());
+          return !method::clinit_may_have_side_effects(cls);
         });
     if (host_class) {
       m_hosted_at_refs_count++;
