@@ -35,7 +35,8 @@
  *
  * There are some concessions to reduce the potential of negative runtime
  * performance impact:
- * - Performance sensitive methods (those with a weight) are not outlined
+ * - Performance sensitive methods (those that are popular in method-profiles,
+ *   and loopy code in cold-start classes) are not outlined from
  * - Outlining happens per dex to reduce performance impact (but then later
  *   dexes in the same store can point to outlined code in an earlier dex)
  * - Outlined methods are preferably placed in the same class if all outlined
@@ -2558,9 +2559,8 @@ static size_t clear_cfgs(
 // if it is called only rarely (0 to 9 times), then any added CPU overhead might
 // be made up by the I/O savings due to reduced code size.
 //
-// When method profiles are completely unavailable, we can still fall back on
-// method weights to identify war code; if those don't exist, we can use
-// betamaps to identify warm code.
+// When method profiles are completely unavailable, we can use cold-start
+// classes to identify warm code.
 static void gather_sufficiently_warm_and_hot_methods(
     const Scope& scope,
     ConfigFiles& config_files,
@@ -2594,23 +2594,8 @@ static void gather_sufficiently_warm_and_hot_methods(
       }
     }
   }
-  bool has_method_weights{false};
-  if (config.use_method_to_weight_if_no_method_profiles &&
-      !has_method_profiles) {
-    auto& method_to_weight = config_files.get_method_to_weight();
-    has_method_weights = !method_to_weight.empty();
-    if (has_method_weights) {
-      walk::methods(scope, [sufficiently_hot_methods,
-                            &method_to_weight](DexMethod* method) {
-        if (get_method_weight_if_available(method, &method_to_weight)) {
-          sufficiently_hot_methods->insert(method);
-        }
-      });
-    }
-  }
 
-  if (config.use_perf_sensitive_if_no_method_profiles_or_weight &&
-      !has_method_profiles && !has_method_weights) {
+  if (config.use_perf_sensitive_if_no_method_profiles && !has_method_profiles) {
     walk::methods(scope, [sufficiently_warm_methods](DexMethod* method) {
       if (type_class(method->get_class())->is_perf_sensitive()) {
         sufficiently_warm_methods->insert(method);
@@ -2642,15 +2627,10 @@ void InstructionSequenceOutliner::bind_config() {
        m_config.method_profiles_warm_call_count,
        m_config.method_profiles_warm_call_count,
        "Loops are not outlined from warm methods");
-  bind("use_method_to_weight_if_no_method_profiles",
-       m_config.use_method_to_weight_if_no_method_profiles,
-       m_config.use_method_to_weight_if_no_method_profiles,
-       "Whether to use provided method-to-weight configuration data to "
-       "determine if certain code should not be outlined from a method");
-  bind("use_perf_sensitive_if_no_method_profiles_or_weight",
-       m_config.use_perf_sensitive_if_no_method_profiles_or_weight,
-       m_config.use_perf_sensitive_if_no_method_profiles_or_weight,
-       "Whether to use provided betamaps configuration data to "
+  bind("use_perf_sensitive_if_no_method_profiles",
+       m_config.use_perf_sensitive_if_no_method_profiles,
+       m_config.use_perf_sensitive_if_no_method_profiles,
+       "Whether to use provided cold-start configuration data to "
        "determine if certain code should not be outlined from a method");
   bind("reuse_outlined_methods_across_dexes",
        m_config.reuse_outlined_methods_across_dexes,

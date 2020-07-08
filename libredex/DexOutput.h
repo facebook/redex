@@ -132,7 +132,7 @@ dex_stats_t write_classes_to_dex(
     LocatorIndex* locator_index /* nullable */,
     size_t store_number,
     size_t dex_number,
-    const ConfigFiles& conf,
+    ConfigFiles& conf,
     PositionMapper* line_mapper,
     std::unordered_map<DexMethod*, uint64_t>* method_to_id,
     std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
@@ -220,8 +220,9 @@ class GatheredTypes {
   std::unordered_map<const DexString*, unsigned int> m_cls_load_strings;
   std::unordered_map<const DexString*, unsigned int> m_cls_strings;
   std::unordered_map<const DexMethod*, unsigned int> m_methods_in_cls_order;
-  std::unordered_map<std::string, unsigned int> m_method_to_weight;
-  std::unordered_set<std::string> m_method_sorting_whitelisted_substrings;
+  const method_profiles::MethodProfiles* m_method_profiles{nullptr};
+  const std::unordered_set<std::string>*
+      m_method_sorting_whitelisted_substrings{nullptr};
 
   void gather_components(PostLowering const* post_lowering);
   dexstring_to_idx* get_string_index(cmp_dstring cmp = compare_dexstrings);
@@ -260,9 +261,9 @@ class GatheredTypes {
   void sort_dexmethod_emitlist_clinit_order(std::vector<DexMethod*>& lmeth);
   void sort_dexmethod_emitlist_profiled_order(std::vector<DexMethod*>& lmeth);
   void set_method_sorting_whitelisted_substrings(
-      const std::unordered_set<std::string>& whitelisted_substrings);
-  void set_method_to_weight(
-      const std::unordered_map<std::string, unsigned int>& method_to_weight);
+      const std::unordered_set<std::string>* whitelisted_substrings);
+  void set_method_profiles(
+      const method_profiles::MethodProfiles* method_profiles);
 
   std::unordered_set<DexString*> index_type_names();
 };
@@ -321,7 +322,6 @@ class DexOutput {
   LocatorIndex* m_locator_index;
   bool m_normal_primary_dex;
   const ConfigFiles& m_config_files;
-  std::unordered_set<std::string> m_method_sorting_whitelisted_substrings;
   bool m_force_class_data_end_of_file;
   int m_min_sdk;
 
@@ -391,7 +391,7 @@ class DexOutput {
   ~DexOutput();
   void prepare(SortMode string_mode,
                const std::vector<SortMode>& code_mode,
-               const ConfigFiles& conf,
+               ConfigFiles& conf,
                const std::string& dex_magic);
   void write();
   void metrics();

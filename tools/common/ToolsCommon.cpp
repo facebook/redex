@@ -83,7 +83,7 @@ void write_ir_meta(const std::string& output_ir_dir, DexStoresVector& stores) {
  * Development usage only
  */
 void write_intermediate_dex(const RedexOptions& redex_options,
-                            const ConfigFiles& conf,
+                            ConfigFiles& conf,
                             const std::string& output_ir_dir,
                             DexStoresVector& stores,
                             Json::Value& dex_files) {
@@ -193,7 +193,7 @@ Json::Value parse_config(const std::string& config_file) {
 /**
  * Dumping dex, IR meta data and entry file
  */
-void write_all_intermediate(const ConfigFiles& conf,
+void write_all_intermediate(ConfigFiles& conf,
                             const std::string& output_ir_dir,
                             const RedexOptions& redex_options,
                             DexStoresVector& stores,

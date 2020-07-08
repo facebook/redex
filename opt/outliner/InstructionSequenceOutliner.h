@@ -16,8 +16,7 @@ struct InstructionSequenceOutlinerConfig {
   float method_profiles_appear_percent{1};
   float method_profiles_hot_call_count{10};
   float method_profiles_warm_call_count{1};
-  bool use_method_to_weight_if_no_method_profiles{true};
-  bool use_perf_sensitive_if_no_method_profiles_or_weight{true};
+  bool use_perf_sensitive_if_no_method_profiles{true};
   bool reorder_with_method_profiles{true};
   bool reuse_outlined_methods_across_dexes{true};
   size_t max_outlined_methods_per_class{100};

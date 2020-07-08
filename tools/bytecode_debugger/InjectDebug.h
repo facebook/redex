@@ -27,7 +27,7 @@ class InjectDebug {
   void run();
 
  private:
-  const ConfigFiles m_conf;
+  ConfigFiles m_conf;
   const std::vector<std::string> m_dex_files;
   DexStoresVector m_stores;
 

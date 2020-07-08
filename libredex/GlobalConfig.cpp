@@ -104,6 +104,8 @@ void GlobalConfig::bind_config() {
   bind("method_sorting_whitelisted_substrings", {}, string_vector_param);
   bind("no_optimizations_annotations", {}, string_vector_param);
   bind("opt_decisions", OptDecisionsConfig(), opt_decisions_param);
+  // TODO: Remove unused profiled_methods_file option and all build system
+  // references
   bind("profiled_methods_file", "", string_param);
   bind("proguard_map", "", string_param);
   bind("prune_unexported_components", {}, string_vector_param);
