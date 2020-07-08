@@ -196,12 +196,6 @@ void VirtualRenamer::rename(DexMethodRef* meth, DexString* name) {
   spec.cls = meth->get_class();
   spec.name = name;
   spec.proto = meth->get_proto();
-  if (meth->is_concrete()) {
-    auto def = static_cast<DexMethod*>(meth);
-    if (def->get_deobfuscated_name().empty()) {
-      def->set_deobfuscated_name(meth->get_name()->c_str());
-    }
-  }
   if (stack_trace_elements) {
     std::string ste = get_prefix(meth->get_class()) + meth->str();
     auto iter = stack_trace_elements->find(ste);
@@ -215,10 +209,7 @@ void VirtualRenamer::rename(DexMethodRef* meth, DexString* name) {
       }
     }
   }
-  // We should not update deobfuscated name here!
-  meth->change(spec,
-               false /* rename on collision */,
-               false /* update deobfuscated name */);
+  meth->change(spec, false /* rename on collision */);
 
   if (stack_trace_elements) {
     std::string ste = get_prefix(meth->get_class()) + name->str();

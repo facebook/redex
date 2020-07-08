@@ -299,11 +299,8 @@ class DexFieldRef {
   void gather_types_shallow(std::vector<DexType*>& ltype) const;
   void gather_strings_shallow(std::vector<DexString*>& lstring) const;
 
-  void change(const DexFieldSpec& ref,
-              bool rename_on_collision = false,
-              bool update_deobfuscated_name = false) {
-    g_redex->mutate_field(this, ref, rename_on_collision,
-                          update_deobfuscated_name);
+  void change(const DexFieldSpec& ref, bool rename_on_collision = false) {
+    g_redex->mutate_field(this, ref, rename_on_collision);
   }
 
   DexField* make_concrete(DexAccessFlags access_flags,
@@ -840,11 +837,8 @@ class DexMethodRef {
   void gather_types_shallow(std::vector<DexType*>& ltype) const;
   void gather_strings_shallow(std::vector<DexString*>& lstring) const;
 
-  void change(const DexMethodSpec& ref,
-              bool rename_on_collision,
-              bool update_deobfuscated_name) {
-    g_redex->mutate_method(this, ref, rename_on_collision,
-                           update_deobfuscated_name);
+  void change(const DexMethodSpec& ref, bool rename_on_collision) {
+    g_redex->mutate_method(this, ref, rename_on_collision);
   }
 
   DexMethod* make_concrete(DexAccessFlags,
@@ -993,8 +987,6 @@ class DexMethod : public DexMethodRef {
     return &m_param_anno;
   }
 
-  // Note: be careful to maintain 1:1 mapping between name (possibily
-  // obfuscated) and deobfuscated name, when you mutate the method.
   void set_deobfuscated_name(std::string name) {
     m_deobfuscated_name = std::move(name);
   }

@@ -133,6 +133,7 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
     cc.set_super(type::java_lang_Object());
     auto target_cls = cc.create();
     target_cls->rstate.set_generated();
+    target_cls->set_deobfuscated_name(target_type_name);
     return target_cls;
   }
 
@@ -164,7 +165,7 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
                                DexString::make_string(name), proto)
             ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
     trampoline_target_method->set_deobfuscated_name(
-        show(trampoline_target_method));
+        show_deobfuscated(trampoline_target_method));
     trampoline_target_method->rstate.set_api_level(api_level);
     target_cls->add_method(trampoline_target_method);
     return trampoline_target_method;

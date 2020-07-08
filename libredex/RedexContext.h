@@ -78,8 +78,7 @@ struct RedexContext {
   void erase_field(DexFieldRef*);
   void mutate_field(DexFieldRef* field,
                     const DexFieldSpec& ref,
-                    bool rename_on_collision,
-                    bool update_deobfuscated_name);
+                    bool rename_on_collision);
 
   DexTypeList* make_type_list(std::deque<DexType*>&& p);
   DexTypeList* get_type_list(std::deque<DexType*>&& p);
@@ -102,8 +101,7 @@ struct RedexContext {
   void erase_method(DexMethodRef*);
   void mutate_method(DexMethodRef* method,
                      const DexMethodSpec& new_spec,
-                     bool rename_on_collision,
-                     bool update_deobfuscated_name);
+                     bool rename_on_collision);
 
   DexDebugEntry* make_dbg_entry(DexDebugInstruction* opcode);
   DexDebugEntry* make_dbg_entry(DexPosition* pos);

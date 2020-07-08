@@ -167,8 +167,7 @@ bool update_method_proto(const DexType* old_type_ref,
   }
   DexMethodSpec spec;
   spec.proto = proto;
-  method->change(spec, false /* rename on collision */,
-                 true /* update deob name */);
+  method->change(spec, false /* rename on collision */);
   return true;
 }
 
@@ -215,6 +214,7 @@ struct OptimizationImpl {
   // list of optimized types
   std::unordered_set<DexType*> optimized;
   const ClassHierarchy& ch;
+  std::unordered_map<std::string, size_t> deobfuscated_name_counters;
 };
 
 /**
@@ -476,9 +476,12 @@ void OptimizationImpl::rewrite_interface_methods(const DexType* intf,
       // have these zombies lying around.
       new_meth->clear_annotations();
       new_meth->make_non_concrete();
-      auto new_deob_name = impl->get_deobfuscated_name() + "." +
-                           meth->get_simple_deobfuscated_name() + ":" +
-                           show_deobfuscated(meth->get_proto());
+      auto deoob_impl_name = impl->get_deobfuscated_name();
+      auto unique = deobfuscated_name_counters[deoob_impl_name]++;
+      auto new_deob_name = deoob_impl_name + "." +
+                           meth->get_simple_deobfuscated_name() +
+                           "$REDEX_SINGLE_IMPL$" + std::to_string(unique) +
+                           ":" + show_deobfuscated(meth->get_proto());
       new_meth->set_deobfuscated_name(new_deob_name);
       new_meth->rstate = meth->rstate;
       TRACE(INTF, 5, "(MITF) created impl method %s", SHOW(new_meth));
@@ -667,8 +670,7 @@ void OptimizationImpl::rename_possible_collisions(const DexType* intf,
     spec.cls = meth->get_class();
     spec.name = name;
     spec.proto = meth->get_proto();
-    meth->change(spec, false /* rename on collision */,
-                 true /* update deob name */);
+    meth->change(spec, false /* rename on collision */);
   };
 
   TRACE(INTF, 9, "Changing name related to %s", SHOW(intf));

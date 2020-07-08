@@ -395,7 +395,7 @@ struct EnumUtil {
             ->make_concrete(ACC_STATIC | ACC_CONSTRUCTOR, false);
     method->set_code(std::make_unique<IRCode>());
     cls->add_method(method);
-    method->set_deobfuscated_name(show(method));
+    method->set_deobfuscated_name(show_deobfuscated(method));
     auto code = method->get_code();
 
     // const v2, xx
@@ -449,7 +449,7 @@ struct EnumUtil {
                             ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
     method->set_code(std::make_unique<IRCode>(method, 0));
     cls->add_method(method);
-    method->set_deobfuscated_name(show(method));
+    method->set_deobfuscated_name(show_deobfuscated(method));
     auto code = method->get_code();
     code->build_cfg();
     auto& cfg = code->cfg();

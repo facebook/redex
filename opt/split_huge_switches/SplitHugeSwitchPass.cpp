@@ -235,7 +235,7 @@ DexMethod* create_dex_method(DexMethod* m, std::unique_ptr<IRCode>&& code) {
 
   auto cloned_method = method_ref->make_concrete(
       m->get_access(), std::move(code), m->is_virtual());
-  cloned_method->set_deobfuscated_name(show(cloned_method));
+  cloned_method->set_deobfuscated_name(show_deobfuscated(cloned_method));
 
   cloned_method->rstate.set_dont_inline(); // Don't undo our work.
 

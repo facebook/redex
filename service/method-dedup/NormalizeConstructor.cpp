@@ -292,8 +292,7 @@ uint32_t dedup_constructors(const std::vector<DexClass*>& classes,
     auto method = pair.first;
     DexMethodSpec spec;
     spec.proto = pair.second;
-    method->change(spec, /* rename_on_collision */ false,
-                   /* update_deobfuscated_name*/ true);
+    method->change(spec, /* rename_on_collision */ false);
   }
   TRACE(METH_DEDUP, 2, "normalized-deduped constructors %d", old_to_new.size());
   return old_to_new.size();

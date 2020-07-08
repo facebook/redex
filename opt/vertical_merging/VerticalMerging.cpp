@@ -139,11 +139,8 @@ void handle_invoke_super(
     mergeable->remove_method(callee);
     DexMethodSpec spec;
     spec.cls = merger->get_type();
-    callee->change(spec,
-                   true /* rename_on_collision */,
-                   true /* update deobfuscated name */);
+    callee->change(spec, true /* rename_on_collision */);
     merger->add_method(callee);
-    callee->set_deobfuscated_name(show(callee));
     for (auto insn : callee_to_insn.second) {
       if (insn->opcode() == OPCODE_INVOKE_SUPER) {
         insn->set_opcode(OPCODE_INVOKE_VIRTUAL);
@@ -202,11 +199,8 @@ void handle_invoke_init(
     DexMethodSpec spec;
     spec.cls = merger->get_type();
     spec.proto = new_proto;
-    callee->change(spec,
-                   false /* rename_on_collision */,
-                   true /* update deobfuscated name */);
+    callee->change(spec, false /* rename_on_collision */);
     merger->add_method(callee);
-    callee->set_deobfuscated_name(show(callee));
   }
 }
 
@@ -482,7 +476,6 @@ void move_fields(DexClass* from_cls, DexClass* to_cls) {
 
     TRACE(VMERGE, 5, "field after : %s ", SHOW(field));
     to_cls->add_field(field);
-    field->set_deobfuscated_name(show(field));
   };
   auto sfields = from_cls->get_sfields();
   auto ifields = from_cls->get_ifields();
@@ -689,11 +682,8 @@ void VerticalMergingPass::move_methods(
             from_cls->remove_method(method);
             DexMethodSpec spec;
             spec.cls = target_cls_type;
-            method->change(spec,
-                           true /* rename_on_collision */,
-                           true /* update deobfuscated name */);
+            method->change(spec, true /* rename_on_collision */);
             to_cls->add_method(method);
-            method->set_deobfuscated_name(show(method));
           } else {
             // Otherwise we shouldn't care for the method as the method in
             // mergeable should not be referenced.
@@ -718,11 +708,8 @@ void VerticalMergingPass::move_methods(
       from_cls->remove_method(method);
       DexMethodSpec spec;
       spec.cls = target_cls_type;
-      method->change(spec,
-                     false /* rename_on_collision */,
-                     false /* update deobfuscated name */);
+      method->change(spec, false /* rename_on_collision */);
       to_cls->add_method(method);
-      method->set_deobfuscated_name(show(method));
     } else {
       // Subclass is being merged into super class. Just discard methods as
       // they are not being referenced, otherwise they won't be mergeable.

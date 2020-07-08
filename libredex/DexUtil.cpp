@@ -208,9 +208,7 @@ void relocate_method(DexMethod* method, DexType* to_type) {
   from_cls->remove_method(method);
   DexMethodSpec spec;
   spec.cls = to_type;
-  method->change(spec,
-                 true /* rename on collision */,
-                 true /* update deobfuscated name */);
+  method->change(spec, true /* rename on collision */);
   to_cls->add_method(method);
 }
 

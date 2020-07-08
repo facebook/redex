@@ -130,9 +130,7 @@ void update_code_type_refs(
               type_reference::get_new_proto(proto, mergeable_to_merger);
           DexMethodSpec spec;
           spec.proto = new_proto;
-          meth_ref->change(spec,
-                           true /*rename on collision*/,
-                           true /*update_deobfuscated_name*/);
+          meth_ref->change(spec, true /*rename on collision*/);
           continue;
         }
         not_reached_log("Found mergeable referencing MethodRef %s\n",

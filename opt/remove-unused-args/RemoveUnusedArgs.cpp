@@ -230,9 +230,7 @@ bool RemoveArgs::update_method_signature(
   }
 
   DexMethodSpec spec(nullptr, name, updated_proto);
-  method->change(spec,
-                 true /* rename on collision */,
-                 true /* update deobfuscated name */);
+  method->change(spec, true /* rename on collision */);
 
   TRACE(ARGS, 3, "Method signature updated to %s", SHOW(method));
   log_opt(METHOD_PARAMS_REMOVED, method);

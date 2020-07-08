@@ -50,10 +50,17 @@ void HasherConfig::bind_config() {
   bind("run_after_each_pass", {}, run_after_each_pass);
 }
 
+void CheckUniqueDeobfuscatedNamesConfig::bind_config() {
+  bind("run_after_each_pass", run_after_each_pass, run_after_each_pass);
+  bind("run_initially", run_initially, run_initially);
+  bind("run_finally", run_finally, run_finally);
+}
+
 void GlobalConfig::bind_config() {
   OptDecisionsConfig opt_decisions_param;
   IRTypeCheckerConfig ir_type_checker_param;
   HasherConfig hasher_param;
+  CheckUniqueDeobfuscatedNamesConfig check_unique_deobfuscated_names_config;
   InlinerConfig inliner_param;
   bool bool_param;
   std::string string_param;
@@ -86,6 +93,8 @@ void GlobalConfig::bind_config() {
   bind("instruction_size_bitwidth_limit", 0u, uint32_param);
   bind("ir_type_checker", IRTypeCheckerConfig(), ir_type_checker_param);
   bind("hasher", HasherConfig(), hasher_param);
+  bind("check_unique_deobfuscated_names", CheckUniqueDeobfuscatedNamesConfig(),
+       check_unique_deobfuscated_names_config);
   bind("json_serde_supercls", {}, string_vector_param);
   bind("keep_all_annotation_classes", true, bool_param);
   bind("keep_methods", {}, string_vector_param);

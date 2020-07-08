@@ -52,11 +52,7 @@ DexMethod* get_or_create_clinit(DexClass* cls) {
           ->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_CONSTRUCTOR, false);
 
   std::string cls_deobfuscated_name = cls->get_deobfuscated_name();
-  if (!cls_deobfuscated_name.empty()) {
-    // Set deobfuscated name for the just created <clinit> if a deobfuscated
-    // name is present for the class.
-    clinit->set_deobfuscated_name(cls_deobfuscated_name + ".<clinit>:()V");
-  }
+  clinit->set_deobfuscated_name(show_deobfuscated(clinit));
 
   auto ir_code = std::make_unique<IRCode>(clinit, 1);
   ir_code->push_back(dasm(OPCODE_RETURN_VOID));

@@ -40,9 +40,7 @@ void fix_colliding_dmethods(
 
     DexMethodSpec spec;
     spec.proto = new_proto;
-    meth->change(spec,
-                 false /* rename on collision */,
-                 true /* update deobfuscated name */);
+    meth->change(spec, false /* rename on collision */);
     num_additional_args[meth] = arg_count;
 
     auto code = meth->get_code();
@@ -277,8 +275,7 @@ void update_vmethods_group_one_type_ref(const VMethodGroup& group,
           SHOW(method),
           SHOW(spec.name),
           SHOW(spec.proto));
-    method->change(
-        spec, false /* rename on collision */, true /* update deob name */);
+    method->change(spec, false /* rename on collision */);
   }
 }
 } // namespace
@@ -340,9 +337,7 @@ void TypeRefUpdater::update_methods_fields(const Scope& scope) {
             method->get_class(), method->get_name(), new_proto)) {
       DexMethodSpec spec;
       spec.proto = new_proto;
-      method->change(spec,
-                     false /* rename on collision */,
-                     true /* update deobfuscated name */);
+      method->change(spec, false /* rename on collision */);
       TRACE(REFU, 9, "Update ctor %s ", SHOW(method));
     } else {
       colliding_inits.emplace(method->as_def(), new_proto);
@@ -425,18 +420,14 @@ bool TypeRefUpdater::mangling(DexMethodRef* method) {
             SHOW(method));
       DexMethodSpec spec;
       spec.proto = new_proto;
-      method->change(spec,
-                     false /* rename on collision */,
-                     true /* update deobfuscated name */);
+      method->change(spec, false /* rename on collision */);
     }
   } else {
     DexMethodSpec spec;
     spec.proto = new_proto;
     boost::hash_combine(seed, method->str());
     spec.name = gen_new_name(method->str(), seed);
-    method->change(spec,
-                   false /* rename on collision */,
-                   true /* update deobfuscated name */);
+    method->change(spec, false /* rename on collision */);
     TRACE(REFU, 9, "Update method %s ", SHOW(method));
   }
   return true;
@@ -605,9 +596,7 @@ void update_method_signature_type_references(
         TRACE(REFU, 8, "sig: updating direct method %s", SHOW(method));
         DexMethodSpec spec;
         spec.proto = new_proto;
-        method->change(spec,
-                       true /* rename on collision */,
-                       true /* update deobfuscated name */);
+        method->change(spec, true /* rename on collision */);
       } else {
         colliding_directs[method] = new_proto;
       }

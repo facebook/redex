@@ -120,9 +120,7 @@ std::vector<DexMethod*> ConstantLifting::lift_constants_from(
     DexMethodSpec spec;
     spec.name = name;
     spec.proto = new_proto;
-    method->change(spec,
-                   true /* rename on collision */,
-                   true /* update deobfuscated name */);
+    method->change(spec, true /* rename on collision */);
 
     // Insert param load.
     auto code = method->get_code();
