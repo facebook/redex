@@ -67,8 +67,7 @@ void make_static(DexMethod* method, KeepThis keep /* = Yes */) {
     DexMethodSpec spec;
     spec.proto = new_proto;
     method->change(spec,
-                   true /* rename on collision */,
-                   true /* update deobfuscated name */);
+                   true /* rename on collision */);
   } else {
     drop_this(method);
   }
@@ -96,8 +95,7 @@ void make_non_static(DexMethod* method, bool make_virtual) {
   DexMethodSpec spec;
   spec.proto = new_proto;
   method->change(spec,
-                 true /* rename on collision */,
-                 true /* update deobfuscated name */);
+                 true /* rename on collision */);
 
   method->set_access(method->get_access() & ~ACC_STATIC);
 

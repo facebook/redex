@@ -71,8 +71,7 @@ void replace_method_args_head(DexMethod* meth, DexType* new_head) {
       DexProto::make_proto(meth->get_proto()->get_rtype(), new_type_list);
   spec.proto = new_proto;
   meth->change(spec,
-               true /* rename on collision */,
-               true /* update deobfuscated name */);
+               true /* rename on collision */);
 }
 
 template <typename T>

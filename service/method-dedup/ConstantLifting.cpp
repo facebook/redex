@@ -121,8 +121,7 @@ std::vector<DexMethod*> ConstantLifting::lift_constants_from(
     spec.name = name;
     spec.proto = new_proto;
     method->change(spec,
-                   true /* rename on collision */,
-                   true /* update deobfuscated name */);
+                   true /* rename on collision */);
 
     // Insert param load.
     auto code = method->get_code();

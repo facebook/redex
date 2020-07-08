@@ -577,10 +577,8 @@ class DexElemManager {
                   SHOW(elem));
           }
           renamed_elems.insert(elem);
-          // We should not update deobfuscated name here!
           elem->change(ref_getter_fn(wrap->get_name()),
-                       false /* rename on collision */,
-                       false /* update deobfuscated name */);
+                       false /* rename on collision */);
           renamings++;
         }
       }

@@ -72,6 +72,21 @@ void run_verifier(const Scope& scope,
   });
 }
 
+static void check_unique_deobfuscated_names(const char* pass_name, const Scope& scope) {
+  TRACE(PM, 1, "Running check_unique_deobfuscated_names...");
+  Timer t("check_unique_deobfuscated_names");
+  std::unordered_map<std::string, DexMethod*> names;
+  walk::methods(scope, [&names, pass_name](DexMethod* dex_method) {
+    auto it = names.find(dex_method->get_deobfuscated_name());
+    if (it != names.end()) {
+      fprintf(stderr, "ABORT! [%s] Duplicate deobfuscated method name: %s\nfor %s\n vs %s\n",
+              pass_name, it->first.c_str(), SHOW(dex_method), SHOW(it->second));
+      exit(EXIT_FAILURE);
+    }
+    names.emplace(dex_method->get_deobfuscated_name(), dex_method);
+  });
+}
+
 } // namespace
 
 std::unique_ptr<keep_rules::ProguardConfiguration> empty_pg_config() {
@@ -176,6 +191,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   DexStoreClassesIterator it(stores);
   Scope scope = build_class_scope(it);
 
+
   {
     Timer t("API Level Checker");
     api::LevelChecker::init(m_redex_options.min_sdk, scope);
@@ -236,6 +252,16 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
     run_hasher_after_each_pass = false;
   }
 
+  // Retrieve check_unique_deobfuscated_names settings.
+  const Json::Value& check_unique_deobfuscated_names_args =
+      conf.get_json_config()["check_unique_deobfuscated_names"];
+  bool run_check_unique_deobfuscated_names_after_each_pass =
+      check_unique_deobfuscated_names_args.get("run_after_each_pass", false).asBool();
+  bool run_check_unique_deobfuscated_names_initially =
+      check_unique_deobfuscated_names_args.get("run_initially", false).asBool();
+  bool run_check_unique_deobfuscated_names_finally =
+      check_unique_deobfuscated_names_args.get("run_finally", false).asBool();
+
   // Retrieve the type checker's settings.
   const Json::Value& type_checker_args =
       conf.get_json_config()["ir_type_checker"];
@@ -257,6 +283,10 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   if (run_hasher_after_each_pass) {
     m_initial_hash =
         boost::optional<hashing::DexHash>(this->run_hasher(nullptr, scope));
+  }
+
+  if (run_check_unique_deobfuscated_names_initially) {
+    check_unique_deobfuscated_names("<initial>", scope);
   }
 
   // CFG visualizer infra. Dump all given classes.
@@ -300,7 +330,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
     bool run_type_checker = run_type_checker_after_each_pass ||
                             type_checker_trigger_passes.count(pass->name()) > 0;
 
-    if (run_hasher || run_type_checker) {
+    if (run_hasher || run_type_checker || run_check_unique_deobfuscated_names_after_each_pass) {
       scope = build_class_scope(it);
       if (run_hasher) {
         m_current_pass_info->hash = boost::optional<hashing::DexHash>(
@@ -312,6 +342,9 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
         run_verifier(scope, verify_moves,
                      /* check_no_overwrite_this */ false,
                      /* validate_access */ false);
+      }
+      if (run_check_unique_deobfuscated_names_after_each_pass) {
+        check_unique_deobfuscated_names(pass->name().c_str(), scope);
       }
     }
 
@@ -329,6 +362,9 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   scope = build_class_scope(it);
   run_verifier(scope, verify_moves, get_redex_options().no_overwrite_this(),
                /* validate_access */ true);
+  if (run_check_unique_deobfuscated_names_finally) {
+    check_unique_deobfuscated_names("<final>", scope);
+  }
 
   class_cfgs.add_pass("After all passes");
   class_cfgs.write();

@@ -175,8 +175,7 @@ void RedexContext::erase_field(DexFieldRef* field) {
 
 void RedexContext::mutate_field(DexFieldRef* field,
                                 const DexFieldSpec& ref,
-                                bool rename_on_collision,
-                                bool update_deobfuscated_name) {
+                                bool rename_on_collision) {
   std::lock_guard<std::mutex> lock(s_field_lock);
   DexFieldSpec& r = field->m_spec;
   s_field_map.erase(r);
@@ -198,10 +197,6 @@ void RedexContext::mutate_field(DexFieldRef* field,
                     "Another field with the same signature already exists %s",
                     SHOW(s_field_map.at(r)));
   s_field_map.emplace(r, field);
-
-  if (field->is_def() && update_deobfuscated_name) {
-    static_cast<DexField*>(field)->set_deobfuscated_name(show(field));
-  }
 }
 
 DexTypeList* RedexContext::make_type_list(std::deque<DexType*>&& p) {
@@ -278,8 +273,7 @@ void RedexContext::erase_method(DexMethodRef* method) {
 // TODO: Need a better interface.
 void RedexContext::mutate_method(DexMethodRef* method,
                                  const DexMethodSpec& new_spec,
-                                 bool rename_on_collision,
-                                 bool update_deobfuscated_name) {
+                                 bool rename_on_collision) {
   std::lock_guard<std::mutex> lock(s_method_lock);
   DexMethodSpec old_spec = method->m_spec;
   s_method_map.erase(method->m_spec);
@@ -359,16 +353,6 @@ void RedexContext::mutate_method(DexMethodRef* method,
                       SHOW(r.cls), SHOW(r.name), SHOW(r.proto));
   }
   s_method_map.emplace(r, method);
-
-  // We just updated DexMethodSpec, which will update this method's name.
-  // But we also need to update deobfuscated names properly, except for the
-  // cases of ObfuscatePass. Otherwise, there won't be no 1:1 mapping between
-  // obfuscated and deobfuscated names. See D13025081 for more detailed example.
-  if (method->is_def() && update_deobfuscated_name) {
-    // 'show(method)' correctly populates the name as 'show' dynamically builds
-    // the name from its DexMethodSpec. We can safely use here.
-    static_cast<DexMethod*>(method)->set_deobfuscated_name(show(method));
-  }
 }
 
 // Return false on unique classes
