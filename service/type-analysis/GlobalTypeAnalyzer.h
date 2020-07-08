@@ -122,11 +122,16 @@ class GlobalTypeAnalysis {
 
  private:
   size_t m_max_global_analysis_iteration;
+  // Methods reachable from clinit that read static fields and reachable from
+  // ctors that read instance fields.
+  ConcurrentSet<const DexMethod*> m_any_init_reachables;
 
   struct Stats {
     size_t resolved_fields{0};
     size_t resolved_methods{0};
   } m_stats;
+
+  void find_any_init_reachables(const Scope&, const call_graph::Graph&);
 
   void trace_stats(WholeProgramState& wps);
 };

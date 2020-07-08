@@ -153,7 +153,8 @@ void GlobalTypeAnalysisPass::optimize(
 
     Transform tf(m_config.transform);
     Stats tr_stats;
-    tr_stats.transform_stats = tf.apply(*lta, method, null_assertion_set);
+    tr_stats.transform_stats = tf.apply(
+        *lta, gta.get_whole_program_state(), method, null_assertion_set);
     if (!tr_stats.transform_stats.is_empty()) {
       TRACE(TYPE,
             9,

@@ -68,4 +68,32 @@ TEST_F(TypeAnalysisTransformTest, RemoveRedundantNullCheckTest) {
       EXPECT_NE(mie.insn->opcode(), OPCODE_IF_NEZ);
     }
   }
+  {
+    auto meth_check_null_arg =
+        get_method("TestRemoveRedundantNullChecks;.checkEQZInitReachable",
+                   "Lcom/facebook/redextest/Base;", "I");
+    auto code = meth_check_null_arg->get_code();
+    const auto& insns = InstructionIterable(code);
+    bool found_if_eqz = false;
+    for (auto& mie : insns) {
+      if (mie.insn->opcode() == OPCODE_IF_EQZ) {
+        found_if_eqz = true;
+      }
+    }
+    EXPECT_TRUE(found_if_eqz);
+  }
+  {
+    auto meth_check_null_arg = get_method(
+        "TestRemoveRedundantNullChecks;.checkEQZInitReachableGetField", "",
+        "I");
+    auto code = meth_check_null_arg->get_code();
+    const auto& insns = InstructionIterable(code);
+    bool found_if_eqz = false;
+    for (auto& mie : insns) {
+      if (mie.insn->opcode() == OPCODE_IF_EQZ) {
+        found_if_eqz = true;
+      }
+    }
+    EXPECT_TRUE(found_if_eqz);
+  }
 }

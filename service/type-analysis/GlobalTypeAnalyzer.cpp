@@ -7,6 +7,7 @@
 
 #include "GlobalTypeAnalyzer.h"
 
+#include "ConcurrentContainers.h"
 #include "MethodOverrideGraph.h"
 #include "Resolver.h"
 #include "Walkers.h"
@@ -37,6 +38,43 @@ void trace_whole_program_state_diff(const WholeProgramState& old_wps,
           3,
           "[wps] method partition diff\n%s",
           old_wps.print_method_partition_diff(new_wps).c_str());
+  }
+}
+
+void scan_any_init_reachables(const call_graph::Graph& cg,
+                              const DexMethod* method,
+                              ConcurrentSet<const DexMethod*>& reachables) {
+  if (!method || method::is_any_init(method) || reachables.count(method)) {
+    return;
+  }
+  auto code = method->get_code();
+  if (!code) {
+    return;
+  }
+  // We include all methods reachable from clinits and ctors. Even methods don't
+  // access fields can indirectly consume field values through ctor calls.
+  reachables.insert(method);
+  TRACE(TYPE, 5, "[any init reachables] insert %s", SHOW(method));
+  for (auto& mie : InstructionIterable(code)) {
+    auto insn = mie.insn;
+    if (!is_invoke(insn->opcode())) {
+      continue;
+    }
+    auto callee_method_def =
+        resolve_method(insn->get_method(), opcode_to_search(insn), method);
+    if (!callee_method_def || callee_method_def->is_external() ||
+        !callee_method_def->is_concrete()) {
+      continue;
+    }
+    if (!cg.has_node(method)) {
+      TRACE(
+          TYPE, 5, "[any init reachables] missing node in cg %s", SHOW(method));
+      continue;
+    }
+    auto callees = resolve_callees_in_graph(cg, method, insn);
+    for (const DexMethod* callee : callees) {
+      scan_any_init_reachables(cg, callee, reachables);
+    }
   }
 }
 
@@ -171,6 +209,56 @@ std::unique_ptr<local::LocalTypeAnalyzer> GlobalTypeAnalyzer::analyze_method(
   return local_ta;
 }
 
+/*
+ * The nullness analysis has an issue. That is in a method reachable from a
+ * clinit or ctor in the call graph, a read of a field that is not yet
+ * initialized by the 'init' method does not yield the matching nullness result
+ * with the analysis. We will run into errors if we didn't handle this issue.
+ *
+ * The method provides a simple work around. We gather all methods reachable
+ * from a clinit or ctor in the call graph. We put the reachable set into
+ * any_init_reachables. In the transformation step, we do not apply null check
+ * removal to methods in this set. The simple solution does not employ more
+ * complex field value flow analysis, since we don't understand the value of
+ * doing that at this point. But we can extend this solution at a later point.
+ */
+void GlobalTypeAnalysis::find_any_init_reachables(const Scope& scope,
+                                                  const call_graph::Graph& cg) {
+  walk::parallel::methods(scope, [&](DexMethod* method) {
+    if (!method::is_any_init(method)) {
+      return;
+    }
+    if (!method || !method->get_code()) {
+      return;
+    }
+    auto code = method->get_code();
+    for (auto& mie : InstructionIterable(code)) {
+      auto insn = mie.insn;
+      if (!is_invoke(insn->opcode())) {
+        continue;
+      }
+      auto callee_method_def =
+          resolve_method(insn->get_method(), opcode_to_search(insn), method);
+      if (!callee_method_def || callee_method_def->is_external() ||
+          !callee_method_def->is_concrete()) {
+        continue;
+      }
+      if (!cg.has_node(method)) {
+        TRACE(TYPE,
+              5,
+              "[any init reachables] missing node in cg %s",
+              SHOW(method));
+        continue;
+      }
+      auto callees = resolve_callees_in_graph(cg, method, insn);
+      for (const DexMethod* callee : callees) {
+        scan_any_init_reachables(cg, callee, m_any_init_reachables);
+      }
+    }
+  });
+  TRACE(TYPE, 2, "[any init reachables] size %d", m_any_init_reachables.size());
+}
+
 std::unique_ptr<GlobalTypeAnalyzer> GlobalTypeAnalysis::analyze(
     const Scope& scope) {
   call_graph::Graph cg = call_graph::single_callee_graph(scope);
@@ -181,6 +269,8 @@ std::unique_ptr<GlobalTypeAnalyzer> GlobalTypeAnalysis::analyze(
     code.build_cfg(/* editable */ false);
     code.cfg().calculate_exit_block();
   });
+  find_any_init_reachables(scope, cg);
+
   // Run the bootstrap. All field value and method return values are
   // represented by Top.
   TRACE(TYPE, 2, "[global] Bootstrap run");
@@ -192,8 +282,8 @@ std::unique_ptr<GlobalTypeAnalyzer> GlobalTypeAnalysis::analyze(
   for (size_t i = 0; i < m_max_global_analysis_iteration; ++i) {
     // Build an approximation of all the field values and method return values.
     TRACE(TYPE, 2, "[global] Collecting WholeProgramState");
-    auto wps =
-        std::make_unique<WholeProgramState>(scope, *gta, non_true_virtuals);
+    auto wps = std::make_unique<WholeProgramState>(
+        scope, *gta, non_true_virtuals, m_any_init_reachables);
     trace_whole_program_state(*wps);
     trace_stats(*wps);
     trace_whole_program_state_diff(gta->get_whole_program_state(), *wps);

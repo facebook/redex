@@ -79,9 +79,10 @@ namespace type_analyzer {
  * TODO: The complete solution requires some kind of call graph analysis from
  * the clinit and ctor.
  */
-bool Transform::can_optimize_null_checks(const DexMethod* method) {
+bool Transform::can_optimize_null_checks(const WholeProgramState& wps,
+                                         const DexMethod* method) {
   return m_config.remove_redundant_null_checks && !method::is_init(method) &&
-         !method::is_clinit(method);
+         !method::is_clinit(method) && !wps.is_any_init_reachable(method);
 }
 
 void Transform::remove_redundant_null_checks(const DexTypeEnvironment& env,
@@ -114,11 +115,12 @@ void Transform::remove_redundant_null_checks(const DexTypeEnvironment& env,
 
 Transform::Stats Transform::apply(
     const type_analyzer::local::LocalTypeAnalyzer& lta,
+    const WholeProgramState& wps,
     DexMethod* method,
     const NullAssertionSet& null_assertion_set) {
   auto code = method->get_code();
   Transform::Stats stats{};
-  bool remove_null_checks = can_optimize_null_checks(method);
+  bool remove_null_checks = can_optimize_null_checks(wps, method);
   for (const auto& block : code->cfg().blocks()) {
     auto env = lta.get_entry_state_at(block);
     if (env.is_bottom()) {

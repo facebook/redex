@@ -27,6 +27,14 @@ class SubTwo extends Base {
 
 class TestRemoveRedundantNullChecks {
 
+  Base mField1;
+
+  TestRemoveRedundantNullChecks() {
+    int v = checkEQZInitReachable(mField1);
+    v += checkEQZInitReachableGetField();
+    mField1 = new Base();
+  }
+
   public Base getSubOne() { return new SubOne(); }
 
   public Base getSubTwo() { return new SubTwo(); }
@@ -59,6 +67,22 @@ class TestRemoveRedundantNullChecks {
     int i = 0;
     if (b == null) {
       i += b.getVal();
+    }
+    return i;
+  }
+
+  private int checkEQZInitReachable(Base b) {
+    int i = 0;
+    if (b != null) {
+      i += b.getVal();
+    }
+    return i;
+  }
+
+  private int checkEQZInitReachableGetField() {
+    int i = 0;
+    if (this.mField1 != null) {
+      i += this.mField1.getVal();
     }
     return i;
   }

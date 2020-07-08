@@ -38,7 +38,8 @@ class WholeProgramState {
 
   WholeProgramState(const Scope&,
                     const global::GlobalTypeAnalyzer&,
-                    const std::unordered_set<DexMethod*>& non_true_virtuals);
+                    const std::unordered_set<DexMethod*>& non_true_virtuals,
+                    const ConcurrentSet<const DexMethod*>& any_init_reachables);
 
   void set_to_top() {
     m_field_partition.set_to_top();
@@ -106,6 +107,10 @@ class WholeProgramState {
     return cnt;
   }
 
+  bool is_any_init_reachable(const DexMethod* method) const {
+    return m_any_init_reachables.count(method);
+  }
+
   // For debugging
   std::string print_field_partition_diff(const WholeProgramState& other) const;
 
@@ -145,6 +150,9 @@ class WholeProgramState {
   std::unordered_set<const DexField*> m_known_fields;
   // Unknown methods will be treated as containing / returning Top.
   std::unordered_set<const DexMethod*> m_known_methods;
+  // Methods reachable from clinit that read static fields and reachable from
+  // ctors that raed instance fields.
+  ConcurrentSet<const DexMethod*> m_any_init_reachables;
 
   DexTypeFieldPartition m_field_partition;
   DexTypeMethodPartition m_method_partition;

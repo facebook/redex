@@ -60,6 +60,7 @@ class Transform final {
 
   explicit Transform(Config config = Config()) : m_config(config) {}
   Stats apply(const type_analyzer::local::LocalTypeAnalyzer& lta,
+              const WholeProgramState& wps,
               DexMethod* method,
               const NullAssertionSet& null_assertion_set);
   static void setup(NullAssertionSet& null_assertion_set);
@@ -67,12 +68,15 @@ class Transform final {
  private:
   void apply_changes(IRCode*);
 
-  bool can_optimize_null_checks(const DexMethod* method);
+  bool can_optimize_null_checks(const WholeProgramState& wps,
+                                const DexMethod* method);
   void remove_redundant_null_checks(const DexTypeEnvironment& env,
                                     cfg::Block* block,
                                     Stats& stats);
 
   const Config m_config;
+  // A set of methods excluded from null check removal
+  ConcurrentSet<DexMethod*> m_excluded_for_null_check_removal;
   std::vector<std::pair<IRInstruction*, IRInstruction*>> m_replacements;
   std::vector<IRList::iterator> m_deletes;
 };
