@@ -79,6 +79,7 @@ void OriginalNamePass::run_pass(DexStoresVector& stores,
     // them.
     f->rstate.set_root();
     insert_sorted(cls->get_sfields(), f, compare_dexfields);
+    f->set_deobfuscated_name(show_deobfuscated(f));
 
     mgr.incr_metric(METRIC_ORIGINAL_NAME_COUNT, 1);
     mgr.incr_metric(std::string(METRIC_ORIGINAL_NAME_COUNT) + "::" + it.second,

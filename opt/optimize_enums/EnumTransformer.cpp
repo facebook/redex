@@ -365,6 +365,7 @@ struct EnumUtil {
                                       type::make_array_type(INTEGER_TYPE))
                      ->make_concrete(ACC_PRIVATE | ACC_FINAL | ACC_STATIC);
     cls->add_field(field);
+    field->set_deobfuscated_name(show_deobfuscated(field));
     return (DexFieldRef*)field;
   }
 
@@ -376,6 +377,7 @@ struct EnumUtil {
     auto field = DexField::make_field(cls->get_type(), name, INTEGER_TYPE)
                      ->make_concrete(ACC_PUBLIC | ACC_FINAL | ACC_STATIC);
     cls->add_field(field);
+    field->set_deobfuscated_name(show_deobfuscated(field));
     code->push_back(dasm(OPCODE_CONST, {1_v, {LITERAL, value}}));
     code->push_back(dasm(OPCODE_INVOKE_STATIC, INTEGER_VALUEOF_METHOD, {1_v}));
     code->push_back(dasm(OPCODE_MOVE_RESULT_OBJECT, {0_v}));
