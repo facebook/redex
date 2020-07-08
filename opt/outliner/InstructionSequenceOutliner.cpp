@@ -71,7 +71,6 @@
 #include <unordered_set>
 #include <vector>
 
-#include "ApiLevelChecker.h"
 #include "BigBlocks.h"
 #include "CFGMutation.h"
 #include "Creators.h"
@@ -1137,10 +1136,6 @@ static bool can_outline_from_method(
     DexMethod* method,
     const std::unordered_set<DexMethod*>& sufficiently_hot_methods) {
   if (method->rstate.no_optimizations() || method->rstate.outlined()) {
-    return false;
-  }
-  if (api::LevelChecker::get_method_level(method) !=
-      api::LevelChecker::get_min_level()) {
     return false;
   }
   if (sufficiently_hot_methods.count(method)) {
