@@ -32,6 +32,10 @@ TEST_F(ConstructorDedupTest, dedup) {
       fprintf(stderr, "Code:\n%s\n", SHOW(method->get_code()->cfg()));
       exit(EXIT_FAILURE);
     }
+    if (method->str() != "dedup_0") {
+      return;
+    }
+    // All the constructor invocations are calling ctors[0].
     for (auto& mie : InstructionIterable(method->get_code())) {
       auto insn = mie.insn;
       if (insn->has_method()) {

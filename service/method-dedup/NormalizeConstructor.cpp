@@ -118,6 +118,11 @@ boost::optional<ConstructorSummary> summarize_constructor_logic(
   if (used_args.size() != summary.field_id_to_arg_id.size()) {
     return boost::none;
   }
+  if (used_args.size() != method->get_proto()->get_args()->size()) {
+    // Not support methods with unused arguments. We can remove unused arguments
+    // or reordering the instructions first.
+    return boost::none;
+  }
   return summary;
 }
 
