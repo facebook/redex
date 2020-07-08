@@ -425,6 +425,7 @@ constexpr const char* METHOD_MAPPING = "redex-method-id-map.txt";
 constexpr const char* CLASS_MAPPING = "redex-class-id-map.txt";
 constexpr const char* BYTECODE_OFFSET_MAPPING = "redex-bytecode-offset-map.txt";
 constexpr const char* REDEX_PG_MAPPING = "redex-class-rename-map.txt";
+constexpr const char* REDEX_FULL_MAPPING = "redex-full-rename-map.txt";
 } // namespace
 
 DexOutput::DexOutput(
@@ -464,6 +465,7 @@ DexOutput::DexOutput(
   m_method_mapping_filename = config_files.metafile(METHOD_MAPPING);
   m_class_mapping_filename = config_files.metafile(CLASS_MAPPING);
   m_pg_mapping_filename = config_files.metafile(REDEX_PG_MAPPING);
+  m_full_mapping_filename = config_files.metafile(REDEX_FULL_MAPPING);
   m_bytecode_offset_filename = config_files.metafile(BYTECODE_OFFSET_MAPPING);
   m_store_number = store_number;
   m_dex_number = dex_number;
@@ -2279,6 +2281,32 @@ void write_pg_mapping(const std::string& filename, DexClasses* classes) {
   }
 }
 
+void write_full_mapping(const std::string& filename, DexClasses* classes) {
+  if (filename.empty()) return;
+
+  std::ofstream ofs(filename.c_str(), std::ofstream::out | std::ofstream::app);
+  for (auto cls : *classes) {
+    ofs << "type " << cls->get_deobfuscated_name() << " -> " << show(cls)
+        << std::endl;
+    for (auto field : cls->get_ifields()) {
+      ofs << "ifield " << field->get_deobfuscated_name() << " -> "
+          << show(field) << std::endl;
+    }
+    for (auto field : cls->get_sfields()) {
+      ofs << "sfield " << field->get_deobfuscated_name() << " -> "
+          << show(field) << std::endl;
+    }
+    for (auto method : cls->get_dmethods()) {
+      ofs << "dmethod " << method->get_deobfuscated_name() << " -> "
+          << show(method) << std::endl;
+    }
+    for (auto method : cls->get_vmethods()) {
+      ofs << "vmethod " << method->get_deobfuscated_name() << " -> "
+          << show(method) << std::endl;
+    }
+  }
+}
+
 void write_bytecode_offset_mapping(
     const std::string& filename,
     const std::vector<std::pair<std::string, uint32_t>>& method_offsets) {
@@ -2308,6 +2336,7 @@ void DexOutput::write_symbol_files() {
     // XXX: should write_bytecode_offset_mapping be included here too?
   }
   write_pg_mapping(m_pg_mapping_filename, m_classes);
+  write_full_mapping(m_full_mapping_filename, m_classes);
   write_bytecode_offset_mapping(m_bytecode_offset_filename,
                                 m_method_bytecode_offsets);
 }

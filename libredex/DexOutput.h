@@ -309,6 +309,7 @@ class DexOutput {
   std::string m_method_mapping_filename;
   std::string m_class_mapping_filename;
   std::string m_pg_mapping_filename;
+  std::string m_full_mapping_filename;
   std::string m_bytecode_offset_filename;
   std::unordered_map<DexTypeList*, uint32_t> m_tl_emit_offsets;
   std::vector<CodeItemEmit> m_code_item_emits;
