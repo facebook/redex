@@ -1965,6 +1965,7 @@ class HostClassSelector {
   size_t m_hosted_base_count{0};
   size_t m_hosted_at_refs_count{0};
   size_t m_hosted_helper_count{0};
+  int m_min_sdk;
   size_t m_iteration;
 
  public:
@@ -1974,10 +1975,12 @@ class HostClassSelector {
   HostClassSelector(const InstructionSequenceOutlinerConfig& config,
                     PassManager& mgr,
                     DexState& dex_state,
+                    int min_sdk,
                     size_t iteration)
       : m_config(config),
         m_mgr(mgr),
         m_dex_state(dex_state),
+        m_min_sdk(min_sdk),
         m_iteration(iteration) {}
   ~HostClassSelector() {
     m_mgr.incr_metric("num_hosted_direct_count", m_hosted_direct_count);
@@ -2105,10 +2108,17 @@ class HostClassSelector {
     // references the same types (which share a common base type), then that
     // common base type is a reasonable place where to put the outlined code.
     auto referenced_types = get_referenced_types(c);
-    host_class =
-        get_direct_or_base_class(referenced_types, [](const DexType* t) {
+    host_class = get_direct_or_base_class(
+        referenced_types, [min_sdk = m_min_sdk](const DexType* t) {
+          auto cls = type_class(t);
+          // Before Android 7, invoking static methods defined in interfaces was
+          // not supported. See rule A24 in
+          // https://source.android.com/devices/tech/dalvik/constraints
+          if (min_sdk < 24 && is_interface(cls)) {
+            return false;
+          }
           // We don't want any common base class with a scary clinit
-          auto cl_init = type_class(t)->get_clinit();
+          auto cl_init = cls->get_clinit();
           return !cl_init ||
                  (can_delete(cl_init) && cl_init->rstate.no_optimizations());
         });
@@ -2207,6 +2217,7 @@ static NewlyOutlinedMethods outline(
     const InstructionSequenceOutlinerConfig& config,
     PassManager& mgr,
     DexState& dex_state,
+    int min_sdk,
     std::vector<CandidateWithInfo>* candidates_with_infos,
     std::unordered_map<DexMethod*, std::unordered_set<CandidateId>>*
         candidate_ids_by_methods,
@@ -2214,7 +2225,8 @@ static NewlyOutlinedMethods outline(
     size_t iteration) {
   MethodNameGenerator method_name_generator(mgr, iteration);
   OutlinedMethodCreator outlined_method_creator(mgr, method_name_generator);
-  HostClassSelector host_class_selector(config, mgr, dex_state, iteration);
+  HostClassSelector host_class_selector(config, mgr, dex_state, min_sdk,
+                                        iteration);
   // While we have a set of beneficial candidates, many are overlapping each
   // other. We are using a priority queue to iteratively outline the most
   // beneficial candidate at any point in time, then removing all impacted
@@ -2745,7 +2757,7 @@ void InstructionSequenceOutliner::run_pass(DexStoresVector& stores,
       // something and the other doesn't. Affects around 1.5% of candidates.
       DexState dex_state(mgr, dex, dex_id++, reserved_trefs, reserved_mrefs);
       auto newly_outlined_methods =
-          outline(m_config, mgr, dex_state, &candidates_with_infos,
+          outline(m_config, mgr, dex_state, min_sdk, &candidates_with_infos,
                   &candidate_ids_by_methods, reusable_outlined_methods.get(),
                   iteration);
 
