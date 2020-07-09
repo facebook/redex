@@ -440,49 +440,66 @@ void BlockInstrumentHelper::do_basic_block_tracing(
   const auto& onMethodExit_map =
       build_onMethodExit_map(*analysis_cls, options.analysis_method_name);
 
-  std::unordered_set<std::string> cold_start_classes =
-      get_cold_start_classes(cfg);
-  TRACE(INSTRUMENT, 7, "Number of classes: %d", cold_start_classes.size());
+  auto cold_start_classes = get_cold_start_classes(cfg);
+  TRACE(INSTRUMENT, 7, "Cold start classes: %zu", cold_start_classes.size());
 
   size_t method_index = 1;
   int num_all_bbs = 0;
-  int num_all_methods = 0;
   int num_instrumented_bbs = 0;
   int num_instrumented_methods = 0;
+
+  int eligibles = 0;
+  int specials = 0;
+  int picked_by_cs = 0;
+  int picked_by_whitelist = 0;
+  int blacklisted = 0;
+  int rejected = 0;
+  int candidates = 0;
+
   std::map<int /*id*/, std::pair<std::string /*name*/, int /*num_BBs*/>>
       method_id_name_map;
   std::map<size_t /*num_vectors*/, int /*count*/> bb_vector_stat;
   auto scope = build_class_scope(stores);
   walk::code(scope, [&](DexMethod* method, IRCode& code) {
     if (method == analysis_cls->get_clinit()) {
+      specials++;
       return;
     }
     if (std::any_of(onMethodExit_map.begin(),
                     onMethodExit_map.end(),
                     [&](const auto& e) { return e.second == method; })) {
+      specials++;
       return;
     }
 
-    // Basic block tracing assumes whitelist or set of cold start classes.
-    if ((!options.whitelist.empty() &&
-         !InstrumentPass::is_included(method, options.whitelist)) ||
-        (options.only_cold_start_class &&
-         !InstrumentPass::is_included(method, cold_start_classes))) {
-      return;
+    eligibles++;
+    if (!options.whitelist.empty() || options.only_cold_start_class) {
+      if (InstrumentPass::is_included(method, options.whitelist)) {
+        picked_by_whitelist++;
+      } else if (InstrumentPass::is_included(method, cold_start_classes)) {
+        picked_by_cs++;
+      } else {
+        rejected++;
+        return;
+      }
     }
 
     // Blacklist has priority over whitelist or cold start list.
     if (InstrumentPass::is_included(method, options.blacklist)) {
-      TRACE(INSTRUMENT, 9, "Blacklist: excluded: %s", SHOW(method));
+      blacklisted++;
       return;
     }
 
-    TRACE(INSTRUMENT, 9, "Whitelist: included: %s", SHOW(method));
-    num_all_methods++;
-    method_index = instrument_basic_blocks(
-        &code, method, onMethodExit_map, method_index, num_all_bbs,
-        num_instrumented_bbs, num_instrumented_methods, method_id_name_map,
-        bb_vector_stat);
+    candidates++;
+    TRACE(INSTRUMENT, 9, "Candidate: %s", SHOW(method));
+
+    // TODO: next diff will fix it.
+    if (0) {
+      method_index = instrument_basic_blocks(
+          &code, method, onMethodExit_map, method_index, num_all_bbs,
+          num_instrumented_bbs, num_instrumented_methods, method_id_name_map,
+          bb_vector_stat);
+    }
   });
   InstrumentPass::patch_array_size(analysis_cls, "sBasicBlockStats",
                                    method_index);
@@ -499,9 +516,12 @@ void BlockInstrumentHelper::do_basic_block_tracing(
           p.second, percent, cumulative);
   }
 
-  TRACE(INSTRUMENT, 3,
-        "Instrumented %d methods and %d blocks, out of %d methods and %d "
-        "blocks",
-        (num_instrumented_methods - 1), num_instrumented_bbs, num_all_methods,
-        num_all_bbs);
+  TRACE(INSTRUMENT, 4, "Instrumentation candidates selection stats:");
+  TRACE(INSTRUMENT, 4, "- All eligible methods: %d", eligibles);
+  TRACE(INSTRUMENT, 4, "  (Special uninstrumentable methods: %d)", specials);
+  TRACE(INSTRUMENT, 4, "- Not selected: %d", rejected);
+  TRACE(INSTRUMENT, 4, "- Selected by whitelist: %d", picked_by_whitelist);
+  TRACE(INSTRUMENT, 4, "- Selected by cold start set: %d", picked_by_cs);
+  TRACE(INSTRUMENT, 4, "  (But rejected by blacklist: %d)", blacklisted);
+  TRACE(INSTRUMENT, 4, "- Total candidates: %d", candidates);
 }

@@ -708,7 +708,8 @@ void InstrumentPass::bind_config() {
        m_options.metadata_file_name);
   bind("num_stats_per_method", {1}, m_options.num_stats_per_method);
   bind("num_shards", {1}, m_options.num_shards);
-  bind("only_cold_start_class", true, m_options.only_cold_start_class);
+  // Note: only_cold_start_class is only used for block tracing.
+  bind("only_cold_start_class", false, m_options.only_cold_start_class);
   bind("methods_replacement", {}, m_options.methods_replacement,
        "Replacing instance method call with static method call.",
        Configurable::bindflags::methods::error_if_unresolvable);
@@ -735,14 +736,33 @@ void InstrumentPass::bind_config() {
   });
 }
 
-// Check for inclusion in whitelist or blacklist of methods/classes.
+// Check for inclusion in white/black lists of methods/classes. It supports:
+// - "Lcom/fb/foo/" matches "^Lcom/fb/foo/*" or "^Lcom/facebook/debug;"
+// - "Lcom/fb/foo;.bar()V" matches exact full method names.
+// - "Lcom/fb/foo;.bar*" matches method name prefixes.
 bool InstrumentPass::is_included(const DexMethod* method,
                                  const std::unordered_set<std::string>& set) {
-  if (match_class_name(show_deobfuscated(method->get_class()), set)) {
+  if (set.empty()) {
+    return false;
+  }
+
+  // Try to check for method by its full name.
+  const auto& full_method_name = method->get_deobfuscated_name();
+  if (set.count(full_method_name)) {
     return true;
   }
-  // Check for method by its full name.
-  return set.count(method->get_deobfuscated_name());
+
+  // Prefix method name matching.
+  for (const auto& pattern : set) {
+    if (pattern.back() == '*') {
+      if (full_method_name.find(pattern.substr(0, pattern.length() - 1)) !=
+          std::string::npos) {
+        return true;
+      }
+    }
+  }
+
+  return match_class_name(show_deobfuscated(method->get_class()), set);
 }
 
 void InstrumentPass::run_pass(DexStoresVector& stores,
@@ -818,6 +838,7 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
                                                   m_options);
   } else {
     std::cerr << "[InstrumentPass] Unknown instrumentation strategy.\n";
+    exit(1);
   }
 }
 
