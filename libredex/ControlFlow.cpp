@@ -547,6 +547,24 @@ bool Block::push_back(IRInstruction* insn) {
   return m_parent->push_back(this, insn);
 }
 
+bool Block::structural_equals(const Block* other) const {
+  auto iterable1 = ir_list::ConstInstructionIterable(this);
+  auto iterable2 = ir_list::ConstInstructionIterable(other);
+  auto it1 = iterable1.begin();
+  auto it2 = iterable2.begin();
+
+  for (; it1 != iterable1.end() && it2 != iterable2.end(); ++it1, ++it2) {
+    auto& mie1 = *it1;
+    auto& mie2 = *it2;
+
+    if (*mie1.insn != *mie2.insn) {
+      return false;
+    }
+  }
+
+  return it1 == iterable1.end() && it2 == iterable2.end();
+}
+
 std::ostream& operator<<(std::ostream& os, const Edge& e) {
   switch (e.type()) {
   case EDGE_GOTO:

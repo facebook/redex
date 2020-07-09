@@ -25,7 +25,10 @@ std::ostream& operator<<(std::ostream& os, const Block* b) {
 using namespace cfg;
 using namespace dex_asm;
 
-class ControlFlowTest : public RedexTest {};
+class ControlFlowTest : public RedexTest {
+ public:
+  InstructionEquality m_equal = std::equal_to<const IRInstruction&>();
+};
 
 TEST_F(ControlFlowTest, findExitBlocks) {
   {
@@ -993,9 +996,7 @@ TEST_F(ControlFlowTest, deep_copy1) {
   IRList* orig_list = orig.linearize();
   IRList* copy_list = copy.linearize();
 
-  auto orig_iterable = ir_list::InstructionIterable(orig_list);
-  auto copy_iterable = ir_list::InstructionIterable(copy_list);
-  EXPECT_TRUE(orig_iterable.structural_equals(copy_iterable));
+  EXPECT_TRUE(orig_list->structural_equals(*copy_list, m_equal));
 }
 
 TEST_F(ControlFlowTest, deep_copy2) {
@@ -1024,9 +1025,7 @@ TEST_F(ControlFlowTest, deep_copy2) {
   IRList* orig_list = orig.linearize();
   IRList* copy_list = copy.linearize();
 
-  auto orig_iterable = ir_list::InstructionIterable(orig_list);
-  auto copy_iterable = ir_list::InstructionIterable(copy_list);
-  EXPECT_TRUE(orig_iterable.structural_equals(copy_iterable));
+  EXPECT_TRUE(orig_list->structural_equals(*copy_list, m_equal));
 }
 
 TEST_F(ControlFlowTest, deep_copy3) {
@@ -1064,9 +1063,7 @@ TEST_F(ControlFlowTest, deep_copy3) {
   IRList* orig_list = orig.linearize();
   IRList* copy_list = copy.linearize();
 
-  auto orig_iterable = ir_list::InstructionIterable(orig_list);
-  auto copy_iterable = ir_list::InstructionIterable(copy_list);
-  EXPECT_TRUE(orig_iterable.structural_equals(copy_iterable));
+  EXPECT_TRUE(orig_list->structural_equals(*copy_list, m_equal));
 }
 
 TEST_F(ControlFlowTest, deep_copy_into_existing_cfg) {

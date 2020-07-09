@@ -372,6 +372,8 @@ class Block final {
   bool push_back(const std::vector<IRInstruction*>& insns);
   bool push_back(IRInstruction* insn);
 
+  bool structural_equals(const Block* other) const;
+
  private:
   friend class ControlFlowGraph;
   friend class CFGInliner;

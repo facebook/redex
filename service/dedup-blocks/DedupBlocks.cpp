@@ -58,7 +58,7 @@ using hash_t = std::size_t;
 
 // Structural equality of opcodes
 static bool same_code(cfg::Block* b1, cfg::Block* b2) {
-  return InstructionIterable(b1).structural_equals(InstructionIterable(b2));
+  return b1->structural_equals(b2);
 }
 
 static bool is_branch_or_goto(const cfg::Edge* edge) {
