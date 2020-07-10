@@ -17,6 +17,9 @@
 
 namespace {
 
+const std::string REFLECTION_ANALYSIS_RESULT_FILE =
+    "redex-reflection-analysis.txt";
+
 using namespace sparta;
 using namespace sparta_interprocedural;
 
@@ -245,7 +248,7 @@ using Analysis = InterproceduralAnalyzer<ReflectionAnalysisAdaptor, Metadata>;
 } // namespace
 
 void IPReflectionAnalysisPass::run_pass(DexStoresVector& stores,
-                                        ConfigFiles& /* conf */,
+                                        ConfigFiles& conf,
                                         PassManager& /* pm */) {
 
   Scope scope = build_class_scope(stores);
@@ -257,6 +260,17 @@ void IPReflectionAnalysisPass::run_pass(DexStoresVector& stores,
   m_result = std::make_shared<Result>();
   for (const auto& entry : summaries) {
     (*m_result)[entry.first] = entry.second.get_reflection_sites();
+  }
+  if (m_export_results) {
+    std::string results_filename =
+        conf.metafile(REFLECTION_ANALYSIS_RESULT_FILE);
+    std::ofstream file(results_filename);
+
+    for (const auto& entry : *m_result) {
+      if (!entry.second.empty()) {
+        file << show(entry.first) << " -> " << entry.second << std::endl;
+      }
+    }
   }
 }
 

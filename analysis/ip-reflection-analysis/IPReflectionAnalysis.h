@@ -15,7 +15,12 @@ class IPReflectionAnalysisPass : public Pass {
  public:
   IPReflectionAnalysisPass()
       : Pass("IPReflectionAnalysisPass", Pass::ANALYSIS) {}
-  void bind_config() override { bind("max_iteration", 20U, m_max_iteration); }
+  void bind_config() override {
+    bind("max_iteration", 20U, m_max_iteration);
+    bind("export_results", false, m_export_results,
+         "Generate redex-reflection-analysis.txt file containing the analysis "
+         "results.");
+  }
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
   using Result =
@@ -27,5 +32,6 @@ class IPReflectionAnalysisPass : public Pass {
 
  private:
   unsigned m_max_iteration;
+  bool m_export_results;
   std::shared_ptr<Result> m_result;
 };

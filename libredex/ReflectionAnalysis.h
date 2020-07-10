@@ -370,3 +370,6 @@ std::ostream& operator<<(std::ostream& out,
 
 std::ostream& operator<<(std::ostream& out,
                          const reflection::ReflectionAbstractObject& aobj);
+
+std::ostream& operator<<(std::ostream& out,
+                         const reflection::ReflectionSites& sites);

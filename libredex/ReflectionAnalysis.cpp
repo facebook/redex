@@ -80,7 +80,7 @@ std::ostream& operator<<(std::ostream& out,
     if (x.dex_type_array) {
       out << "(";
       for (auto type : *x.dex_type_array) {
-        out << type->str();
+        out << (type ? type->str() : "?");
       }
       out << ")";
     }
@@ -125,6 +125,33 @@ std::ostream& operator<<(std::ostream& out,
   if (aobj.first.obj_kind == reflection::CLASS && aobj.second) {
     out << "(" << *aobj.second << ")";
   }
+  return out;
+}
+
+std::ostream& operator<<(std::ostream& out,
+                         const reflection::ReflectionSites& sites) {
+  out << "[";
+  bool is_first_insn = true;
+  for (const auto& insn_to_env : sites) {
+    if (is_first_insn) {
+      is_first_insn = false;
+    } else {
+      out << ", ";
+    }
+    out << show(insn_to_env.first) << " -> {";
+    bool is_first_reg = true;
+    for (const auto& reg_to_refl_obj : insn_to_env.second) {
+      if (is_first_reg) {
+        is_first_reg = false;
+      } else {
+        out << ", ";
+      }
+      out << "(" << show(reg_to_refl_obj.first) << ", "
+          << reg_to_refl_obj.second << ")";
+    }
+    out << "}";
+  }
+  out << "]";
   return out;
 }
 
