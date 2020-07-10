@@ -184,10 +184,12 @@ CallSites MultipleCalleeStrategy::get_callsites(const DexMethod* method) const {
         if (callee->get_code()) {
           callsites.emplace_back(callee, code->iterator_to(mie));
         }
-        const auto& overriding_methods =
-            mog::get_overriding_methods(*m_method_override_graph, callee);
-        for (auto overriding_method : overriding_methods) {
-          callsites.emplace_back(overriding_method, code->iterator_to(mie));
+        if (insn->opcode() != OPCODE_INVOKE_SUPER) {
+          const auto& overriding_methods =
+              mog::get_overriding_methods(*m_method_override_graph, callee);
+          for (auto overriding_method : overriding_methods) {
+            callsites.emplace_back(overriding_method, code->iterator_to(mie));
+          }
         }
       } else if (callee->is_concrete()) {
         callsites.emplace_back(callee, code->iterator_to(mie));

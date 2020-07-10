@@ -22,6 +22,7 @@ struct CallGraphTest : public RedexIntegrationTest {
   DexMethod* base_returns_int;
   DexMethod* base_foo;
   DexMethod* extended_returns_int;
+  DexMethod* extendedextended_returns_int;
   DexMethod* more_intf_return;
   DexMethod* more_impl1_return;
   DexMethod* more_impl2_return;
@@ -62,6 +63,12 @@ struct CallGraphTest : public RedexIntegrationTest {
         DexMethod::get_method(
             "Lcom/facebook/redextest/Extended;.returnsInt:()I")
             ->as_def();
+
+    extendedextended_returns_int =
+        DexMethod::get_method(
+            "Lcom/facebook/redextest/ExtendedExtended;.returnsInt:()I")
+            ->as_def();
+
     more_intf_return = DexMethod::get_method(
                            "Lcom/facebook/redextest/MoreThan5;.returnNum:()I")
                            ->as_def();
@@ -115,6 +122,21 @@ struct CallGraphTest : public RedexIntegrationTest {
                           "Lcom/facebook/redextest/MoreThan5Impl1;.<init>:()V")
                           ->as_def();
   }
+
+  std::vector<const DexMethod*> get_callees(const call_graph::Graph& graph,
+                                            const DexMethod* method) {
+    return get_callees(graph.node(method));
+  }
+
+  std::vector<const DexMethod*> get_callees(const call_graph::NodeId& node) {
+    auto successors = node->callees();
+    std::vector<const DexMethod*> ret;
+    ret.reserve(successors.size());
+    for (const auto& succ : successors) {
+      ret.emplace_back(succ->callee()->method());
+    }
+    return ret;
+  }
 };
 
 TEST_F(CallGraphTest, test_resolve_static_callees) {
@@ -129,8 +151,7 @@ TEST_F(CallGraphTest, test_resolve_static_callees) {
   ASSERT_NE(invoke_insn, nullptr);
   auto callees = call_graph::resolve_callees_in_graph(
       *complete_graph, clinit, invoke_insn);
-  EXPECT_EQ(callees.size(), 1);
-  EXPECT_EQ(callees.count(base_foo), 1);
+  EXPECT_THAT(callees, ::testing::UnorderedElementsAre(base_foo));
 }
 
 TEST_F(CallGraphTest, test_resolve_virtual_callees) {
@@ -144,20 +165,14 @@ TEST_F(CallGraphTest, test_resolve_virtual_callees) {
   ASSERT_NE(invoke_insn, nullptr);
   auto callees = call_graph::resolve_callees_in_graph(
       *complete_graph, calls_returns_int, invoke_insn);
-  EXPECT_EQ(callees.size(), 2);
-  EXPECT_EQ(callees.count(base_returns_int), 1);
-  EXPECT_EQ(callees.count(extended_returns_int), 1);
+  EXPECT_THAT(callees,
+              ::testing::UnorderedElementsAre(base_returns_int,
+                                              extended_returns_int,
+                                              extendedextended_returns_int));
 }
 
-TEST_F(CallGraphTest, test_multiple_callee_graph) {
-  auto entry = multiple_graph->entry();
-  auto entry_successors = entry->callees();
-  EXPECT_EQ(entry_successors.size(), 8);
-  std::vector<const DexMethod*> entry_callees;
-  entry_callees.reserve(entry_successors.size());
-  for (const auto& succ : entry_successors) {
-    entry_callees.emplace_back(succ->callee()->method());
-  }
+TEST_F(CallGraphTest, test_multiple_callee_graph_entry) {
+  auto entry_callees = get_callees(multiple_graph->entry());
   EXPECT_THAT(entry_callees,
               ::testing::UnorderedElementsAre(clinit,
                                               more_intf_return,
@@ -167,14 +182,10 @@ TEST_F(CallGraphTest, test_multiple_callee_graph) {
                                               more_impl4_return,
                                               more_impl5_return,
                                               more_impl6_return));
-  auto clinit_node = multiple_graph->node(clinit);
-  auto clinit_successors = clinit_node->callees();
-  std::vector<const DexMethod*> clinit_callees;
-  clinit_callees.reserve(clinit_successors.size());
-  for (const auto& succ : clinit_successors) {
-    clinit_callees.emplace_back(succ->callee()->method());
-  }
-  EXPECT_EQ(clinit_successors.size(), 9);
+}
+
+TEST_F(CallGraphTest, test_multiple_callee_graph_clinit) {
+  auto clinit_callees = get_callees(*multiple_graph, clinit);
   EXPECT_THAT(clinit_callees,
               ::testing::UnorderedElementsAre(calls_returns_int,
                                               base_foo,
@@ -185,15 +196,20 @@ TEST_F(CallGraphTest, test_multiple_callee_graph) {
                                               less_impl2_return,
                                               less_impl3_return,
                                               less_impl4_return));
-  auto calls_returns_int_node = multiple_graph->node(calls_returns_int);
-  auto calls_returns_int_successors = calls_returns_int_node->callees();
-  std::vector<const DexMethod*> calls_returns_int_callees;
-  calls_returns_int_callees.reserve(calls_returns_int_successors.size());
-  for (const auto& succ : calls_returns_int_successors) {
-    calls_returns_int_callees.emplace_back(succ->callee()->method());
-  }
-  EXPECT_EQ(calls_returns_int_successors.size(), 2);
-  EXPECT_THAT(
-      calls_returns_int_callees,
-      ::testing::UnorderedElementsAre(base_returns_int, extended_returns_int));
+}
+
+TEST_F(CallGraphTest, test_multiple_callee_graph_calls_returns_int) {
+  auto calls_returns_int_callees =
+      get_callees(*multiple_graph, calls_returns_int);
+  EXPECT_THAT(calls_returns_int_callees,
+              ::testing::UnorderedElementsAre(base_returns_int,
+                                              extended_returns_int,
+                                              extendedextended_returns_int));
+}
+
+TEST_F(CallGraphTest, test_multiple_callee_graph_extended_returns_int) {
+  auto extendedextended_returns_int_callees =
+      get_callees(*multiple_graph, extendedextended_returns_int);
+  EXPECT_THAT(extendedextended_returns_int_callees,
+              ::testing::UnorderedElementsAre(extended_returns_int));
 }

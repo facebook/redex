@@ -40,6 +40,12 @@ class Extended extends Base {
   }
 }
 
+class ExtendedExtended extends Extended {
+  int returnsInt() {
+    return super.returnsInt();
+  }
+}
+
 interface MoreThan5 {
   public int returnNum();
 }
