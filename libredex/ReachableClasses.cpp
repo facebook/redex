@@ -453,8 +453,15 @@ void analyze_reachable_from_manifest(
     prune_unexported_components.emplace(string_to_tag.at(s));
   }
 
-  std::string manifest = apk_dir + std::string("/AndroidManifest.xml");
-  const auto& manifest_class_info = get_manifest_class_info(manifest);
+  auto manifest_class_info = [&apk_dir]() {
+    try {
+      std::string manifest = apk_dir + std::string("/AndroidManifest.xml");
+      return get_manifest_class_info(manifest);
+    } catch (const std::exception& e) {
+      std::cerr << "Error reading manifest: " << e.what() << std::endl;
+      return ManifestClassInfo{};
+    }
+  }();
 
   for (const auto& classname : manifest_class_info.application_classes) {
     mark_manifest_root(classname);
