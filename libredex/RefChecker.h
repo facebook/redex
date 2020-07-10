@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include <boost/optional.hpp>
+
 #include "ConcurrentContainers.h"
 #include "DexClass.h"
 #include "DexStore.h"
@@ -46,17 +48,9 @@ class RefChecker {
   size_t m_store_idx;
   const api::AndroidSDK* m_min_sdk_api;
 
-  enum class MaybeBoolean : uint8_t { FALSE, TRUE, UNKNOWN };
-  static MaybeBoolean to_maybe_boolean(bool value) {
-    return value ? MaybeBoolean::TRUE : MaybeBoolean::FALSE;
-  }
-  static bool from_maybe_boolean(MaybeBoolean maybe_boolean) {
-    always_assert(maybe_boolean != MaybeBoolean::UNKNOWN);
-    return maybe_boolean != MaybeBoolean::FALSE;
-  }
-  mutable ConcurrentMap<const DexType*, MaybeBoolean> m_type_cache;
-  mutable ConcurrentMap<const DexMethod*, MaybeBoolean> m_method_cache;
-  mutable ConcurrentMap<const DexField*, MaybeBoolean> m_field_cache;
+  mutable ConcurrentMap<const DexType*, boost::optional<bool>> m_type_cache;
+  mutable ConcurrentMap<const DexMethod*, boost::optional<bool>> m_method_cache;
+  mutable ConcurrentMap<const DexField*, boost::optional<bool>> m_field_cache;
 
   bool check_type_internal(const DexType* type) const;
 
