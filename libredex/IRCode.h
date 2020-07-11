@@ -91,13 +91,13 @@ class IRCode {
 
   ~IRCode();
 
-  bool structural_equals(const IRCode& other) {
+  bool structural_equals(const IRCode& other) const {
     return m_ir_list->structural_equals(*other.m_ir_list,
                                         std::equal_to<const IRInstruction&>());
   }
 
   bool structural_equals(const IRCode& other,
-                         const InstructionEquality& instruction_equals) {
+                         const InstructionEquality& instruction_equals) const {
     return m_ir_list->structural_equals(*other.m_ir_list, instruction_equals);
   }
 

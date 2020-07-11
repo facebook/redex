@@ -650,6 +650,12 @@ void DexClass::remove_method(const DexMethod* m) {
   redex_assert(erased);
 }
 
+void DexClass::remove_method_definition(DexMethod* m) {
+  remove_method(m);
+  // Virtually delete the definition of the method.
+  m->m_concrete = false;
+}
+
 void DexMethod::become_virtual() {
   redex_assert(!m_virtual);
   auto cls = type_class(m_spec.cls);
@@ -803,6 +809,11 @@ void DexClass::remove_field(const DexField* f) {
     fields.erase(it);
   }
   redex_assert(erase);
+}
+
+void DexClass::remove_field_definition(DexField* f) {
+  remove_field(f);
+  f->m_concrete = false;
 }
 
 void DexClass::sort_fields() {

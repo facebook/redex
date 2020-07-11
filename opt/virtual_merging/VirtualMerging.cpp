@@ -44,6 +44,7 @@
 
 #include "ControlFlow.h"
 #include "CppUtil.h"
+#include "DedupVirtualMethods.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "MethodProfiles.h"
@@ -53,6 +54,8 @@
 
 namespace {
 
+constexpr const char* METRIC_DEDUPPED_VIRTUAL_METHODS =
+    "num_dedupped_virtual_methods";
 constexpr const char* METRIC_INVOKE_SUPER_METHODS = "num_invoke_super_methods";
 constexpr const char* METRIC_INVOKE_SUPER_UNRESOLVED_METHOD_REFS =
     "num_invoke_super_unresolved_methods_refs";
@@ -163,7 +166,7 @@ void VirtualMerging::compute_mergeable_scope_methods() {
     }
 
     if (m_unsupported_virtual_scopes.count(virtual_scope)) {
-      TRACE(VM, 2, "[VM] virtual method {%s} in an unsupported virtual scope",
+      TRACE(VM, 5, "[VM] virtual method {%s} in an unsupported virtual scope",
             SHOW(overriding_method));
       return;
     }
@@ -491,7 +494,7 @@ void VirtualMerging::merge_methods() {
       if (overriding_method->get_code()->sum_opcode_sizes() >
           m_max_overriding_method_instructions) {
         TRACE(VM,
-              2,
+              5,
               "[VM] %s is too large to be merged into %s",
               SHOW(overriding_method),
               SHOW(overridden_method));
@@ -787,6 +790,8 @@ void VirtualMergingPass::run_pass(DexStoresVector& stores,
     return;
   }
 
+  auto dedupped = dedup_vmethods::dedup(stores);
+
   const auto& inliner_config = conf.get_inliner_config();
   VirtualMerging vm(stores, inliner_config,
                     m_max_overriding_method_instructions);
@@ -794,6 +799,7 @@ void VirtualMergingPass::run_pass(DexStoresVector& stores,
                         : method_profiles::MethodProfiles());
   auto stats = vm.get_stats();
 
+  mgr.incr_metric(METRIC_DEDUPPED_VIRTUAL_METHODS, dedupped);
   mgr.incr_metric(METRIC_INVOKE_SUPER_METHODS, stats.invoke_super_methods);
   mgr.incr_metric(METRIC_INVOKE_SUPER_UNRESOLVED_METHOD_REFS,
                   stats.invoke_super_unresolved_method_refs);

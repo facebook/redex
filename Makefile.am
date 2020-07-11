@@ -377,6 +377,7 @@ redex_all_SOURCES = \
 	opt/up-code-motion/UpCodeMotion.cpp \
 	opt/verifier/Verifier.cpp \
 	opt/vertical_merging/VerticalMerging.cpp \
+	opt/virtual_merging/DedupVirtualMethods.cpp.cpp \
 	opt/virtual_merging/VirtualMerging.cpp \
 	opt/virtual_scope/MethodDevirtualizationPass.cpp \
 	service/api-levels/ApiLevelsUtils.cpp \

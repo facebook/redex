@@ -268,6 +268,7 @@ struct dextypes_comparator {
  */
 class DexFieldRef {
   friend struct RedexContext;
+  friend class DexClass;
 
  protected:
   DexFieldSpec m_spec;
@@ -808,6 +809,7 @@ class DexCode {
  */
 class DexMethodRef {
   friend struct RedexContext;
+  friend class DexClass;
 
  protected:
   DexMethodSpec m_spec;
@@ -1178,6 +1180,8 @@ class DexClass {
   void add_method(DexMethod* m);
   // Removes the method from this class
   void remove_method(const DexMethod* m);
+  // Remove the method from the class and delete the definition.
+  void remove_method_definition(DexMethod* m);
   const std::vector<DexField*>& get_sfields() const { return m_sfields; }
   std::vector<DexField*>& get_sfields() {
     redex_assert(!m_external);
@@ -1191,6 +1195,8 @@ class DexClass {
   void add_field(DexField* f);
   // Removes the field from this class
   void remove_field(const DexField* f);
+  // Remove the field from the class and delete the definition.
+  void remove_field_definition(DexField* f);
   DexField* find_field(const char* name, const DexType* field_type) const;
 
   DexAnnotationDirectory* get_annotation_directory();
