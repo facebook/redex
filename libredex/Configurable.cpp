@@ -16,8 +16,9 @@
   }
 
 namespace {
-DexMethod* parse_method(const Json::Value& str,
-                        Configurable::bindflags_t bindflags) {
+
+DexMethodRef* parse_method_ref(const Json::Value& str,
+                               Configurable::bindflags_t bindflags) {
   if (!str.isString()) {
     throw std::runtime_error("Expected string, got:" + str.asString());
   }
@@ -28,18 +29,27 @@ DexMethod* parse_method(const Json::Value& str,
         bindflags & Configurable::bindflags::methods::warn_if_unresolvable,
         "\"%s\" failed to resolve to a known method\n",
         str.asString().c_str());
-  } else {
-    if (!meth->is_def()) {
-      error_or_warn(
-          bindflags & Configurable::bindflags::methods::error_if_not_def,
-          bindflags & Configurable::bindflags::methods::warn_if_not_def,
-          "\"%s\" resolved to a method reference\n", str.asString().c_str());
-    } else {
-      return meth->as_def();
-    }
+    return nullptr;
   }
-  return nullptr;
+  return meth;
 }
+
+DexMethod* parse_method(const Json::Value& str,
+                        Configurable::bindflags_t bindflags) {
+  auto meth_ref = parse_method_ref(str, bindflags);
+  if (meth_ref == nullptr) {
+    return nullptr;
+  }
+  if (!meth_ref->is_def()) {
+    error_or_warn(
+        bindflags & Configurable::bindflags::methods::error_if_not_def,
+        bindflags & Configurable::bindflags::methods::warn_if_not_def,
+        "\"%s\" resolved to a method reference\n", str.asString().c_str());
+    return nullptr;
+  }
+  return meth_ref->as_def();
+}
+
 } // namespace
 
 void Configurable::parse_config(const JsonWrapper& json) {
@@ -397,6 +407,28 @@ std::unordered_set<DexMethod*> Configurable::as<std::unordered_set<DexMethod*>>(
   return result;
 }
 
+using MethRefMap = std::unordered_map<DexMethodRef*, DexMethodRef*>;
+
+template <>
+MethRefMap Configurable::as<MethRefMap>(const Json::Value& value,
+                                        bindflags_t bindflags) {
+  always_assert_log(!(bindflags & ~Configurable::bindflags::methods::mask),
+                    "Only method bindflags may be specified for a "
+                    "std::unordered_map<DexMethod*, DexMethod*>");
+  if (!value.isObject()) {
+    throw std::runtime_error("Expected object, got:" + value.asString());
+  }
+  MethRefMap result;
+  for (auto it = value.begin(); it != value.end(); ++it) {
+    auto k = parse_method_ref(it.key(), bindflags);
+    auto v = parse_method_ref(*it, bindflags);
+    if (k && v) {
+      result[k] = v;
+    }
+  }
+  return result;
+}
+
 template <>
 Configurable::MapOfMethods Configurable::as<Configurable::MapOfMethods>(
     const Json::Value& value, bindflags_t bindflags) {
@@ -528,6 +560,7 @@ IMPLEMENT_REFLECTOR_EX(std::unordered_set<DexClass*>, "set")
 IMPLEMENT_REFLECTOR_EX(std::unordered_set<DexMethod*>, "set")
 IMPLEMENT_REFLECTOR_EX(Configurable::MapOfVectorOfStrings, "dict")
 IMPLEMENT_REFLECTOR_EX(Configurable::MapOfMethods, "dict")
+IMPLEMENT_REFLECTOR_EX(MethRefMap, "dict")
 
 IMPLEMENT_TRAIT_REFLECTOR(bool)
 IMPLEMENT_TRAIT_REFLECTOR(int)

@@ -9,10 +9,10 @@
 
 #include <algorithm>
 #include <functional>
-#include <iostream>
 #include <map>
 #include <string>
 #include <type_traits>
+#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -24,6 +24,7 @@
 
 class DexClass;
 class DexMethod;
+class DexMethodRef;
 class DexType;
 
 // clang-format off
@@ -400,6 +401,7 @@ class Configurable {
       const Configurable::bindflags_t param_bindflags, T& param,          \
       typename DefaultValueType<T>::type default_value);
 
+#define SINGLE_ARG(...) __VA_ARGS__
 DEFINE_CONFIGURABLE_PRIMITIVE(float)
 DEFINE_CONFIGURABLE_PRIMITIVE(bool)
 DEFINE_CONFIGURABLE_PRIMITIVE(int)
@@ -428,5 +430,8 @@ DEFINE_CONFIGURABLE_PRIMITIVE(std::unordered_set<DexClass*>)
 DEFINE_CONFIGURABLE_PRIMITIVE(std::unordered_set<DexMethod*>)
 DEFINE_CONFIGURABLE_PRIMITIVE(Configurable::MapOfMethods)
 DEFINE_CONFIGURABLE_PRIMITIVE(Configurable::MapOfVectorOfStrings)
+DEFINE_CONFIGURABLE_PRIMITIVE(
+    SINGLE_ARG(std::unordered_map<DexMethodRef*, DexMethodRef*>))
+#undef SINGLE_ARG
 
 #undef DEFINE_CONFIGURABLE_PRIMITIVE
