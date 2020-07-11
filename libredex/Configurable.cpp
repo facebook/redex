@@ -7,7 +7,12 @@
 
 #include "Configurable.h"
 
+#include <boost/optional.hpp>
+
 #include "DexClass.h"
+
+template <typename T>
+using optional = boost::optional<T>;
 
 #define error_or_warn(error, warn, msg, ...)         \
   always_assert_log(!(error), msg, ##__VA_ARGS__);   \
@@ -15,10 +20,28 @@
     fprintf(stderr, "WARNING: " msg, ##__VA_ARGS__); \
   }
 
+#define ASSERT_NO_BINDFLAGS(type) \
+  always_assert_log(!bindflags, "No bindflags may be specified for a " #type);
+
 namespace {
 
-DexType* parse_type(const Json::Value& str,
-                    Configurable::bindflags_t bindflags) {
+// NOTE: "Leaf" parse functions return an `optional` return type to allow
+//       unified checking of the value in container parsing, without having
+//       to do tricks like SFINAE to have special handling for pointers
+//       vs empty strings vs empty containers etc.
+
+template <bool kCheckType>
+optional<std::string> parse_str(const Json::Value& str,
+                                Configurable::bindflags_t bindflags) {
+  ASSERT_NO_BINDFLAGS(std::string);
+  if (kCheckType && !str.isString()) {
+    throw std::runtime_error("Expected string, got:" + str.asString());
+  }
+  return str.asString();
+}
+
+optional<DexType*> parse_type(const Json::Value& str,
+                              Configurable::bindflags_t bindflags) {
   assert_log(!(bindflags & ~Configurable::bindflags::types::mask),
              "Only type bindflags may be specified for a DexType*");
   if (!str.isString()) {
@@ -30,12 +53,31 @@ DexType* parse_type(const Json::Value& str,
         bindflags & Configurable::bindflags::types::error_if_unresolvable,
         bindflags & Configurable::bindflags::types::warn_if_unresolvable,
         "\"%s\" failed to resolve to a known type\n", str.asString().c_str());
+    return boost::none;
   }
   return type;
 }
 
-DexMethodRef* parse_method_ref(const Json::Value& str,
-                               Configurable::bindflags_t bindflags) {
+optional<DexClass*> parse_class(const Json::Value& value,
+                                Configurable::bindflags_t bindflags) {
+  auto type_res = parse_type(value, bindflags);
+  auto cls = type_class(type_res ? *type_res : nullptr);
+  if (cls == nullptr) {
+    error_or_warn(
+        bindflags & Configurable::bindflags::classes::error_if_unresolvable,
+        bindflags & Configurable::bindflags::classes::warn_if_unresolvable,
+        "\"%s\" failed to resolve to a known class\n",
+        value.asString().c_str());
+    return boost::none;
+  }
+  return cls;
+}
+
+optional<DexMethodRef*> parse_method_ref(const Json::Value& str,
+                                         Configurable::bindflags_t bindflags) {
+  always_assert_log(!(bindflags & ~Configurable::bindflags::methods::mask),
+                    "Only method bindflags may be specified for a "
+                    "std::unordered_map<DexMethod*, DexMethod*>");
   if (!str.isString()) {
     throw std::runtime_error("Expected string, got:" + str.asString());
   }
@@ -46,25 +88,89 @@ DexMethodRef* parse_method_ref(const Json::Value& str,
         bindflags & Configurable::bindflags::methods::warn_if_unresolvable,
         "\"%s\" failed to resolve to a known method\n",
         str.asString().c_str());
-    return nullptr;
+    return boost::none;
   }
   return meth;
 }
 
-DexMethod* parse_method(const Json::Value& str,
-                        Configurable::bindflags_t bindflags) {
-  auto meth_ref = parse_method_ref(str, bindflags);
-  if (meth_ref == nullptr) {
-    return nullptr;
+optional<DexMethod*> parse_method(const Json::Value& str,
+                                  Configurable::bindflags_t bindflags) {
+  auto meth_ref_opt = parse_method_ref(str, bindflags);
+  if (!meth_ref_opt) {
+    return boost::none;
   }
+  auto meth_ref = *meth_ref_opt;
   if (!meth_ref->is_def()) {
     error_or_warn(
         bindflags & Configurable::bindflags::methods::error_if_not_def,
         bindflags & Configurable::bindflags::methods::warn_if_not_def,
         "\"%s\" resolved to a method reference\n", str.asString().c_str());
-    return nullptr;
+    return boost::none;
   }
   return meth_ref->as_def();
+}
+
+// NOTE: For parsing into containers, `boost::none` values of the parsing
+//       function will be skipped.
+
+// Infer the result of the parsing function.
+template <typename ParseFn>
+using parse_result = typename std::result_of<ParseFn(
+    const Json::Value&, Configurable::bindflags_t)>::type::value_type;
+
+template <typename ParseFn>
+optional<std::vector<parse_result<ParseFn>>> parse_vec(
+    const Json::Value& value,
+    ParseFn parse_fn,
+    Configurable::bindflags_t bindflags) {
+  std::vector<parse_result<ParseFn>> result;
+  for (auto& v : value) {
+    if (auto parsed = parse_fn(v, bindflags)) {
+      result.emplace_back(std::move(*parsed));
+    }
+  }
+  return result;
+}
+
+template <typename ParseFn>
+optional<std::unordered_set<parse_result<ParseFn>>> parse_set(
+    const Json::Value& value,
+    ParseFn parse_fn,
+    Configurable::bindflags_t bindflags) {
+  std::unordered_set<parse_result<ParseFn>> result;
+  for (auto& v : value) {
+    if (auto parsed = parse_fn(v, bindflags)) {
+      result.emplace(std::move(*parsed));
+    }
+  }
+  return result;
+}
+
+template <typename KFn, typename VFn>
+std::unordered_map<parse_result<KFn>, parse_result<VFn>> parse_map(
+    const Json::Value& value,
+    KFn k_parse,
+    Configurable::bindflags_t k_bindflags,
+    VFn v_parse,
+    Configurable::bindflags_t v_bindflags) {
+  if (!value.isObject()) {
+    throw std::runtime_error("Expected object, got:" + value.asString());
+  }
+  std::unordered_map<parse_result<KFn>, parse_result<VFn>> result;
+  for (auto it = value.begin(); it != value.end(); ++it) {
+    auto k = k_parse(it.key(), k_bindflags);
+    auto v = v_parse(*it, v_bindflags);
+    if (k && v) {
+      result.emplace(std::move(*k), std::move(*v));
+    }
+  }
+  return result;
+}
+
+template <bool kCheckType>
+optional<std::vector<std::string>> parse_str_vec(
+    const Json::Value& value, Configurable::bindflags_t bindflags) {
+  return parse_vec(value, parse_str<kCheckType>, bindflags);
 }
 
 } // namespace
@@ -139,9 +245,6 @@ Configurable::Reflection Configurable::reflect() {
   bind_config();
   return cr;
 }
-
-#define ASSERT_NO_BINDFLAGS(type) \
-  always_assert_log(!bindflags, "No bindflags may be specified for a " #type);
 
 template <>
 float Configurable::as<float>(const Json::Value& value, bindflags_t bindflags) {
@@ -226,8 +329,7 @@ bool Configurable::as<bool>(const Json::Value& value, bindflags_t bindflags) {
 template <>
 std::string Configurable::as<std::string>(const Json::Value& value,
                                           bindflags_t bindflags) {
-  ASSERT_NO_BINDFLAGS(std::string);
-  return value.asString();
+  return std::move(*parse_str<false>(value, bindflags));
 }
 
 template <>
@@ -260,12 +362,7 @@ std::vector<Json::Value> Configurable::as<std::vector<Json::Value>>(
 template <>
 std::vector<std::string> Configurable::as<std::vector<std::string>>(
     const Json::Value& value, bindflags_t bindflags) {
-  ASSERT_NO_BINDFLAGS(std::vector<std::string>);
-  std::vector<std::string> result;
-  for (auto& str : value) {
-    result.emplace_back(str.asString());
-  }
-  return result;
+  return std::move(*parse_str_vec<false>(value, bindflags));
 }
 
 template <>
@@ -283,83 +380,46 @@ template <>
 std::unordered_set<std::string>
 Configurable::as<std::unordered_set<std::string>>(const Json::Value& value,
                                                   bindflags_t bindflags) {
-  ASSERT_NO_BINDFLAGS(std::unordered_set<std::string>);
-  std::unordered_set<std::string> result;
-  for (auto& str : value) {
-    result.emplace(str.asString());
-  }
-  return result;
+  return std::move(*parse_set(value, parse_str<false>, bindflags));
 }
 
 template <>
 DexType* Configurable::as<DexType*>(const Json::Value& value,
                                     bindflags_t bindflags) {
-  return parse_type(value, bindflags);
+  if (auto type = parse_type(value, bindflags)) {
+    return *type;
+  }
+  return nullptr;
 }
 
 template <>
 std::vector<DexType*> Configurable::as<std::vector<DexType*>>(
     const Json::Value& value, bindflags_t bindflags) {
-  always_assert_log(!(bindflags & ~Configurable::bindflags::types::mask),
-                    "Only type bindflags may be specified for a "
-                    "std::vector<DexType*>");
-  std::vector<DexType*> result;
-  for (auto& str : value) {
-    auto type = parse_type(str, bindflags);
-    if (type != nullptr) {
-      result.emplace_back(type);
-    }
-  }
-  return result;
+  return std::move(*parse_vec(value, parse_type, bindflags));
 }
 
 template <>
 std::vector<DexMethod*> Configurable::as<std::vector<DexMethod*>>(
     const Json::Value& value, bindflags_t bindflags) {
-  always_assert_log(!(bindflags & ~Configurable::bindflags::types::mask),
-                    "Only method bindflags may be specified for a "
-                    "std::vector<DexMethod*>");
-  std::vector<DexMethod*> result;
-  for (auto& str : value) {
-    if (auto meth = parse_method(str, bindflags)) {
-      result.emplace_back(meth);
-    }
-  }
-  return result;
+  return std::move(*parse_vec(value, parse_method, bindflags));
 }
 
 template <>
 std::unordered_set<DexType*> Configurable::as<std::unordered_set<DexType*>>(
     const Json::Value& value, bindflags_t bindflags) {
-  always_assert_log(!(bindflags & ~Configurable::bindflags::types::mask),
-                    "Only type bindflags may be specified for a "
-                    "std::unordered_set<DexType*>, you specified 0x%08x",
-                    bindflags);
-  std::unordered_set<DexType*> result;
-  for (auto& str : value) {
-    auto type = parse_type(str, bindflags);
-    if (type != nullptr) {
-      result.emplace(type);
-    }
-  }
-  return result;
+  return std::move(*parse_set(value, parse_type, bindflags));
 }
 
 template <>
 std::unordered_set<const DexType*>
 Configurable::as<std::unordered_set<const DexType*>>(const Json::Value& value,
                                                      bindflags_t bindflags) {
-  always_assert_log(!(bindflags & ~Configurable::bindflags::types::mask),
-                    "Only type bindflags may be specified for a "
-                    "std::unordered_set<DexType*>");
-  std::unordered_set<const DexType*> result;
-  for (auto& str : value) {
-    auto type = parse_type(str, bindflags);
-    if (type != nullptr) {
-      result.emplace(type);
-    }
-  }
-  return result;
+  return std::move(*parse_set(value,
+                              [](const Json::Value& v, bindflags_t b) {
+                                return boost::optional<const DexType*>(
+                                    parse_type(v, b));
+                              },
+                              bindflags));
 }
 
 using TypeMap = std::unordered_map<DexType*, DexType*>;
@@ -367,56 +427,19 @@ using TypeMap = std::unordered_map<DexType*, DexType*>;
 template <>
 TypeMap Configurable::as<TypeMap>(const Json::Value& value,
                                   bindflags_t bindflags) {
-  if (!value.isObject()) {
-    throw std::runtime_error("Expected object, got:" + value.asString());
-  }
-  TypeMap result;
-  for (auto it = value.begin(); it != value.end(); ++it) {
-    auto k = parse_type(it.key(), bindflags);
-    auto v = parse_type(*it, bindflags);
-    if (k && v) {
-      result[k] = v;
-    }
-  }
-  return result;
+  return parse_map(value, parse_type, bindflags, parse_type, bindflags);
 }
 
 template <>
 std::unordered_set<DexClass*> Configurable::as<std::unordered_set<DexClass*>>(
     const Json::Value& value, bindflags_t bindflags) {
-  always_assert_log(!(bindflags & ~Configurable::bindflags::classes::mask),
-                    "Only type bindflags may be specified for a "
-                    "std::unordered_set<DexClass*>");
-  std::unordered_set<DexClass*> result;
-  for (auto& str : value) {
-    auto cls =
-        type_class(DexType::get_type(DexString::get_string(str.asString())));
-    if (cls == nullptr) {
-      error_or_warn(
-          bindflags & Configurable::bindflags::classes::error_if_unresolvable,
-          bindflags & Configurable::bindflags::classes::warn_if_unresolvable,
-          "\"%s\" failed to resolve to a known class\n",
-          str.asString().c_str());
-    } else {
-      result.emplace(static_cast<DexClass*>(cls));
-    }
-  }
-  return result;
+  return std::move(*parse_set(value, parse_class, bindflags));
 }
 
 template <>
 std::unordered_set<DexMethod*> Configurable::as<std::unordered_set<DexMethod*>>(
     const Json::Value& value, bindflags_t bindflags) {
-  always_assert_log(!(bindflags & ~Configurable::bindflags::methods::mask),
-                    "Only method bindflags may be specified for a "
-                    "std::unordered_set<DexMethod*>");
-  std::unordered_set<DexMethod*> result;
-  for (auto& str : value) {
-    if (auto meth = parse_method(str, bindflags)) {
-      result.emplace(meth);
-    }
-  }
-  return result;
+  return std::move(*parse_set(value, parse_method, bindflags));
 }
 
 using MethRefMap = std::unordered_map<DexMethodRef*, DexMethodRef*>;
@@ -424,41 +447,14 @@ using MethRefMap = std::unordered_map<DexMethodRef*, DexMethodRef*>;
 template <>
 MethRefMap Configurable::as<MethRefMap>(const Json::Value& value,
                                         bindflags_t bindflags) {
-  always_assert_log(!(bindflags & ~Configurable::bindflags::methods::mask),
-                    "Only method bindflags may be specified for a "
-                    "std::unordered_map<DexMethod*, DexMethod*>");
-  if (!value.isObject()) {
-    throw std::runtime_error("Expected object, got:" + value.asString());
-  }
-  MethRefMap result;
-  for (auto it = value.begin(); it != value.end(); ++it) {
-    auto k = parse_method_ref(it.key(), bindflags);
-    auto v = parse_method_ref(*it, bindflags);
-    if (k && v) {
-      result[k] = v;
-    }
-  }
-  return result;
+  return parse_map(value, parse_method_ref, bindflags, parse_method_ref,
+                   bindflags);
 }
 
 template <>
 Configurable::MapOfMethods Configurable::as<Configurable::MapOfMethods>(
     const Json::Value& value, bindflags_t bindflags) {
-  always_assert_log(!(bindflags & ~Configurable::bindflags::methods::mask),
-                    "Only method bindflags may be specified for a "
-                    "std::unordered_map<DexMethod*, DexMethod*>");
-  if (!value.isObject()) {
-    throw std::runtime_error("Expected object, got:" + value.asString());
-  }
-  MapOfMethods result;
-  for (auto it = value.begin(); it != value.end(); ++it) {
-    auto k = parse_method(it.key(), bindflags);
-    auto v = parse_method(*it, bindflags);
-    if (k && v) {
-      result[k] = v;
-    }
-  }
-  return result;
+  return parse_map(value, parse_method, bindflags, parse_method, bindflags);
 }
 
 template <>
@@ -466,27 +462,8 @@ Configurable::MapOfVectorOfStrings
 Configurable::as<Configurable::MapOfVectorOfStrings>(const Json::Value& value,
                                                      bindflags_t bindflags) {
   ASSERT_NO_BINDFLAGS(Configurable::MapOfVectorOfStrings);
-  if (!value.isObject()) {
-    throw std::runtime_error("expected object, got:" + value.asString());
-  }
-  Configurable::MapOfVectorOfStrings result;
-  for (auto it = value.begin(); it != value.end(); ++it) {
-    auto k = it.key();
-    auto v = *it;
-    if (!k.isString()) {
-      throw std::runtime_error("expected string, got:" + k.asString());
-    }
-    if (!v.isArray()) {
-      throw std::runtime_error("expected array, got:" + v.asString());
-    }
-    for (const auto& el : v) {
-      if (!el.isString()) {
-        throw std::runtime_error("expected string, got:" + el.asString());
-      }
-      result[k.asString()].emplace_back(el.asString());
-    }
-  }
-  return result;
+  return parse_map(value, parse_str<true>, bindflags, parse_str_vec<true>,
+                   bindflags);
 }
 
 template <>
