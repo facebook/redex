@@ -432,6 +432,8 @@ DEFINE_CONFIGURABLE_PRIMITIVE(Configurable::MapOfMethods)
 DEFINE_CONFIGURABLE_PRIMITIVE(Configurable::MapOfVectorOfStrings)
 DEFINE_CONFIGURABLE_PRIMITIVE(
     SINGLE_ARG(std::unordered_map<DexMethodRef*, DexMethodRef*>))
+DEFINE_CONFIGURABLE_PRIMITIVE(
+    SINGLE_ARG(std::unordered_map<DexType*, DexType*>))
 #undef SINGLE_ARG
 
 #undef DEFINE_CONFIGURABLE_PRIMITIVE
