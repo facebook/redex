@@ -1052,12 +1052,14 @@ class PatriciaTreeIterator final {
     return !(*this == other);
   }
 
-  const std::pair<Key, mapped_type>& operator*() {
-    return *reinterpret_cast<std::pair<Key, mapped_type>*>(&m_leaf->m_pair);
+  const std::pair<Key, mapped_type>& operator*() const {
+    return *reinterpret_cast<const std::pair<Key, mapped_type>*>(
+        &m_leaf->m_pair);
   }
 
-  const std::pair<Key, mapped_type>* operator->() {
-    return reinterpret_cast<std::pair<Key, mapped_type>*>(&m_leaf->m_pair);
+  const std::pair<Key, mapped_type>* operator->() const {
+    return reinterpret_cast<const std::pair<Key, mapped_type>*>(
+        &m_leaf->m_pair);
   }
 
  private:
