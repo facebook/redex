@@ -72,6 +72,8 @@
 #include <unordered_set>
 #include <vector>
 
+#include <boost/format.hpp>
+
 #include "BigBlocks.h"
 #include "CFGMutation.h"
 #include "Creators.h"
@@ -1525,7 +1527,7 @@ class MethodNameGenerator {
     m_max_unique_method_id = std::max(m_max_unique_method_id, unique_method_id);
     std::string name("$outlined$");
     name += std::to_string(m_iteration) + "$";
-    name += std::to_string(stable_hash);
+    name += (boost::format("%08x") % stable_hash).str();
     if (unique_method_id > 0) {
       name += std::string("$") + std::to_string(unique_method_id);
       TRACE(ISO, 5,
