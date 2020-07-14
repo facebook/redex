@@ -1226,22 +1226,64 @@ std::unordered_set<const DexType*> get_declaring_types(
   return types;
 }
 
+// Helper function that enables quickly determinining if a class is a common
+// base class of a set of class. To this end, it builds up a map that
+// includes all transitive super classes associated with a count of how many of
+// the original types share this ancestor. If the count is equal to the number
+// of the original types, then it must be a common base class.
+std::unordered_set<const DexType*> get_common_super_classes(
+    const std::unordered_set<const DexType*>& types) {
+  std::unordered_map<const DexType*, size_t> counted_super_classes;
+  std::unordered_set<const DexType*> common_super_classes;
+  for (auto t : types) {
+    do {
+      if (++counted_super_classes[t] == types.size()) {
+        common_super_classes.insert(t);
+      }
+      auto cls = type_class(t);
+      if (!cls) {
+        break;
+      }
+      t = cls->get_super_class();
+    } while (t != nullptr);
+  }
+  return common_super_classes;
+}
+
+std::unordered_set<const DexType*> get_super_classes(
+    const std::unordered_set<const DexType*>& types) {
+  std::unordered_set<const DexType*> super_classes;
+  for (auto t : types) {
+    do {
+      if (!super_classes.insert(t).second) {
+        break;
+      }
+      auto cls = type_class(t);
+      if (!cls) {
+        break;
+      }
+      t = cls->get_super_class();
+    } while (t != nullptr);
+  }
+  return super_classes;
+}
+
+// Given a candidate, find all referenced types which will get get
+// unconditionally initialized when the instructions run. In case of multiple
+// successors, only types in common by all successors are considered. The result
+// may include super types.
 std::unordered_set<const DexType*> get_referenced_types(const Candidate& c) {
-  std::unordered_set<const DexType*> types;
-  auto insert_internal_type = [&types](const DexType* t) {
-    auto cls = type_class(t);
-    if (cls && !cls->is_external()) {
-      types.insert(t);
-    }
-  };
-  if (c.res_type) {
-    insert_internal_type(c.res_type);
-  }
-  for (auto t : c.arg_types) {
-    insert_internal_type(t);
-  }
-  std::function<void(const CandidateNode& cn)> walk;
-  walk = [&insert_internal_type, &walk](const CandidateNode& cn) {
+  std::function<std::unordered_set<const DexType*>(const CandidateNode& cn)>
+      gather_types;
+  gather_types = [&gather_types](const CandidateNode& cn) {
+    std::unordered_set<const DexType*> types;
+    auto insert_internal_type = [&types](const DexType* t) {
+      auto cls = type_class(t);
+      if (cls && !cls->is_external()) {
+        types.insert(t);
+      }
+    };
+
     for (auto& csi : cn.insns) {
       auto& cic = csi.core;
       switch (opcode::ref(cic.opcode)) {
@@ -1252,39 +1294,29 @@ std::unordered_set<const DexType*> get_referenced_types(const Candidate& c) {
         insert_internal_type(cic.field->get_class());
         break;
       case opcode::Ref::Type:
-        insert_internal_type(cic.type);
+        // in particular, let's exclude const-class here, as that doesn't ensure
+        // that the static initializer will run
+        if (cic.opcode == OPCODE_NEW_INSTANCE) {
+          insert_internal_type(cic.type);
+        }
         break;
       default:
         break;
       }
     }
-    for (auto& p : cn.succs) {
-      walk(*p.second);
-    }
-  };
-  walk(c.root);
-  return types;
-}
-
-// Helper function that enables quickly determinining if a class is a common
-// base class of a set of class. This this ends, it builds up a map that
-// includes all transitive super classes associated with a count of how many of
-// the original types share this ancestor. If the count is equal to the number
-// of the original types, then it must be a common base class.
-std::unordered_map<const DexType*, size_t> get_counted_super_classes(
-    const std::unordered_set<const DexType*>& types) {
-  std::unordered_map<const DexType*, size_t> counted_super_classes;
-  for (auto t : types) {
-    do {
-      counted_super_classes[t]++;
-      auto cls = type_class(t);
-      if (!cls) {
-        break;
+    if (!cn.succs.empty()) {
+      std::unordered_map<const DexType*, size_t> successor_types;
+      for (auto& p : cn.succs) {
+        for (auto type : get_super_classes(gather_types(*p.second))) {
+          if (++successor_types[type] == cn.succs.size()) {
+            types.insert(type);
+          }
+        }
       }
-      t = cls->get_super_class();
-    } while (t != nullptr);
-  }
-  return counted_super_classes;
+    }
+    return types;
+  };
+  return gather_types(c.root);
 }
 
 // Finds an outlined method that either resides in an outlined helper class, or
@@ -1309,17 +1341,13 @@ static DexMethod* find_reusable_method(
       continue;
     }
     auto declaring_types = get_declaring_types(ci);
-    auto counted_super_classes = get_counted_super_classes(declaring_types);
-    auto it2 = counted_super_classes.find(method->get_class());
-    if (it2 != counted_super_classes.end() &&
-        it2->second == declaring_types.size()) {
+    auto common_super_classes = get_common_super_classes(declaring_types);
+    if (common_super_classes.count(method->get_class())) {
       return method;
     }
     auto referenced_types = get_referenced_types(c);
-    counted_super_classes = get_counted_super_classes(referenced_types);
-    it2 = counted_super_classes.find(method->get_class());
-    if (it2 != counted_super_classes.end() &&
-        it2->second == referenced_types.size()) {
+    auto super_classes = get_super_classes(referenced_types);
+    if (super_classes.count(method->get_class())) {
       return method;
     }
   }
@@ -2037,9 +2065,18 @@ class HostClassSelector {
   }
 
   const DexType* get_direct_or_base_class(
-      const std::unordered_set<const DexType*>& types,
+      std::unordered_set<const DexType*> types,
+      const std::function<std::unordered_set<const DexType*>(
+          const std::unordered_set<const DexType*>&)>& get_super_classes,
       const std::function<bool(const DexType*)>& predicate =
           [](const DexType*) { return true; }) {
+    // Let's see if we can reduce the set to a most specific sub-type
+    if (types.size() > 1) {
+      for (auto t : get_common_super_classes(types)) {
+        types.erase(t);
+      }
+    }
+
     // When there's only one type, try to use that
     if (types.size() == 1) {
       auto direct_type = *types.begin();
@@ -2052,26 +2089,22 @@ class HostClassSelector {
       }
     }
 
-    // Try to find the first common base class in this dex
-    auto counted_super_classes = get_counted_super_classes(types);
+    // Try to find the first allowable base types
     const DexType* host_class{nullptr};
     boost::optional<size_t> host_class_id;
-    for (auto& p : counted_super_classes) {
-      if (p.second != types.size()) {
+    for (auto type : get_super_classes(types)) {
+      auto class_id = m_dex_state.get_class_id(type);
+      if (!class_id || !predicate(type)) {
         continue;
       }
-      auto class_id = m_dex_state.get_class_id(p.first);
-      if (!class_id || !predicate(p.first)) {
-        continue;
-      }
-      auto cls = type_class(p.first);
+      auto cls = type_class(type);
       if (!cls || !can_rename(cls) || !can_delete(cls)) {
         continue;
       }
       // In particular, use the base type that appears first in this dex.
       if (host_class == nullptr || *host_class_id > *class_id) {
         host_class_id = *class_id;
-        host_class = p.first;
+        host_class = type;
       }
     }
     return host_class;
@@ -2086,7 +2119,8 @@ class HostClassSelector {
     auto declaring_types = get_declaring_types(ci);
     always_assert(!declaring_types.empty());
 
-    auto host_class = get_direct_or_base_class(declaring_types);
+    auto host_class =
+        get_direct_or_base_class(declaring_types, get_common_super_classes);
     if (declaring_types.size() == 1) {
       auto direct_type = *declaring_types.begin();
       if (host_class == direct_type) {
@@ -2108,11 +2142,12 @@ class HostClassSelector {
     }
 
     // If an outlined code snippet occurs in many unrelated classes, but always
-    // references the same types (which share a common base type), then that
+    // references some types that share a common base type, then that
     // common base type is a reasonable place where to put the outlined code.
     auto referenced_types = get_referenced_types(c);
     host_class = get_direct_or_base_class(
-        referenced_types, [min_sdk = m_min_sdk](const DexType* t) {
+        referenced_types, get_super_classes,
+        [min_sdk = m_min_sdk](const DexType* t) {
           auto cls = type_class(t);
           // Before Android 7, invoking static methods defined in interfaces was
           // not supported. See rule A24 in
