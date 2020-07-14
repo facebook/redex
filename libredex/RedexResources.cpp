@@ -59,6 +59,8 @@ constexpr size_t MAX_CLASSNAME_LENGTH = 500;
 
 const uint32_t PACKAGE_RESID_START = 0x7f000000;
 
+constexpr decltype(sparta::parallel::default_num_threads()) kReadXMLThreads =
+    16u;
 constexpr decltype(sparta::parallel::default_num_threads()) kReadNativeThreads =
     16u;
 
@@ -1285,7 +1287,7 @@ void collect_layout_classes_and_attributes(
                                   local_out_attributes.end());
           }
         },
-        std::min(sparta::parallel::default_num_threads(), kReadNativeThreads),
+        std::min(sparta::parallel::default_num_threads(), kReadXMLThreads),
         /*push_tasks_while_running=*/true);
     wq.add_item("");
     wq.run_all();
