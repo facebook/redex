@@ -60,9 +60,9 @@ constexpr size_t MAX_CLASSNAME_LENGTH = 500;
 const uint32_t PACKAGE_RESID_START = 0x7f000000;
 
 constexpr decltype(sparta::parallel::default_num_threads()) kReadXMLThreads =
-    16u;
+    4u;
 constexpr decltype(sparta::parallel::default_num_threads()) kReadNativeThreads =
-    16u;
+    2u;
 
 using path_t = boost::filesystem::path;
 using dir_iterator = boost::filesystem::directory_iterator;
