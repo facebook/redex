@@ -114,7 +114,7 @@ class DexesStructure {
   }
 
   void set_reserve_frefs(int64_t reserve_frefs) {
-    m_reserve_trefs = reserve_frefs;
+    m_reserve_frefs = reserve_frefs;
   }
 
   void set_reserve_trefs(int64_t reserve_trefs) {
