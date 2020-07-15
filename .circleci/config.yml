@@ -1,8 +1,8 @@
+version: 2
+
 # If you only want circle to run on direct commits to master, you can uncomment this out
 # and uncomment the filters: *filter-only-master down below too
 #
-version: 2
-
 aliases:
  - &filter-only-master
    branches:
@@ -19,12 +19,9 @@ jobs:
       CXX: g++-5
     steps:
       - checkout
-      # C++ stuff.
+      # C++ & python3 stuff.
       - run:
-          name: Ensure package DB is up-to-date
-          command: 'sudo apt-get update'
-      - run:
-          name: Installing C++ deps
+          name: Installing build deps
           command: 'sudo apt-get update &&
                     sudo apt-get install -y
                       automake
@@ -40,6 +37,7 @@ jobs:
                       libjemalloc-dev
                       libiberty-dev
                       libjsoncpp-dev
+                      python3
                       wget'
       # Newer Boost.
       - run:
