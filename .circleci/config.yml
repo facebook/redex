@@ -1,22 +1,28 @@
 # If you only want circle to run on direct commits to master, you can uncomment this out
 # and uncomment the filters: *filter-only-master down below too
 #
+version: 2
+
 aliases:
  - &filter-only-master
    branches:
      only:
        - master
 
-version: 2
 jobs:
   build:
     docker:
       - image: circleci/buildpack-deps:xenial
+    # GCC is hungry.
+    resource_class: large
     environment:
       CXX: g++-5
     steps:
       - checkout
       # C++ stuff.
+      - run:
+          name: Ensure package DB is up-to-date
+          command: 'sudo apt-get update'
       - run:
           name: Installing C++ deps
           command: 'sudo apt-get update &&
@@ -48,7 +54,9 @@ jobs:
       # Actual build.
       - run:
           name: Build
-          command: 'make -j'
+          # The old Travis limit. Hopefully ensures GCC does
+          # not die.
+          command: 'make -j4'
 
   deploy-website:
     docker:
