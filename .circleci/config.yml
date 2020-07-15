@@ -19,10 +19,10 @@ jobs:
       # C++ stuff.
       - run:
           name: Ensure package DB is up-to-date
-          command: 'apt-get update'
+          command: 'sudo apt-get update'
       - run:
           name: Installing C++ deps
-          command: 'apt-get update && apt-get install -y
+          command: 'sudo apt-get update && apt-get install -y
                       automake
                       autoconf
                       autoconf-archive
@@ -40,7 +40,7 @@ jobs:
       # Newer Boost.
       - run:
           name: Installing Boost
-          command: 'sudo get_boost.sh'
+          command: 'sudo sh get_boost.sh'
       # Configure.
       - run:
           name: Configure
