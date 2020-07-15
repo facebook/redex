@@ -112,18 +112,15 @@ struct Caller {
 // Core part of the analysis. This analyzer should be similar to an
 // intraprocedural analysis, except that we have access to the summaries and the
 // calling context.
-template <typename FunctionSummaries>
-class MaxDepthFunctionAnalyzer
-    : public Intraprocedural<typename Caller::Domain> {
+template <typename Base>
+class MaxDepthFunctionAnalyzer : public Base {
  private:
   const DexMethod* m_method;
-  FunctionSummaries* m_summaries;
   DepthDomain m_domain;
 
  public:
-  MaxDepthFunctionAnalyzer(const DexMethod* method,
-                           FunctionSummaries* summaries)
-      : m_method(method), m_summaries(summaries), m_domain(0) {}
+  explicit MaxDepthFunctionAnalyzer(const DexMethod* method)
+      : m_method(method), m_domain(0) {}
 
   void analyze() override {
     if (!m_method) {
@@ -152,7 +149,8 @@ class MaxDepthFunctionAnalyzer
     auto callee_method =
         resolve_method(callee, opcode_to_search(insn), m_method);
     if (callee_method) {
-      auto summary = m_summaries->get(callee_method, DepthDomain::top());
+      auto summary =
+          this->get_summaries()->get(callee_method, DepthDomain::top());
       if (summary.is_value()) {
         m_domain.join_with(DepthDomain(summary.depth() + 1u));
       } else {
@@ -167,7 +165,8 @@ class MaxDepthFunctionAnalyzer
     if (!m_method) {
       return;
     }
-    m_summaries->update(m_method, [&](const DepthDomain&) { return m_domain; });
+    this->get_summaries()->update(m_method,
+                                  [&](const DepthDomain&) { return m_domain; });
   }
 };
 
@@ -179,7 +178,8 @@ struct MaxDepthAnalysisAdaptor : public BottomUpAnalysisAdaptorBase {
   using Registry = MethodSummaryRegistry<DepthDomain>;
   using FunctionSummary = DepthDomain;
 
-  using FunctionAnalyzer = MaxDepthFunctionAnalyzer<Registry>;
+  template <typename IntraproceduralBase>
+  using FunctionAnalyzer = MaxDepthFunctionAnalyzer<IntraproceduralBase>;
   using Callsite = Caller;
 };
 

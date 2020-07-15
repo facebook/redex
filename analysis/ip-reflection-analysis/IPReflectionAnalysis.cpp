@@ -135,17 +135,14 @@ struct AnalysisParameters {
 
 using CallerContext = typename Caller::Domain;
 
-template <typename FunctionSummaries>
-class ReflectionAnalyzer
-    : public Intraprocedural<CallerContext, AnalysisParameters> {
+template <typename Base>
+class ReflectionAnalyzer : public Base {
  private:
   const DexMethod* m_method;
-  FunctionSummaries* m_summaries;
   Summary m_summary;
 
  public:
-  ReflectionAnalyzer(const DexMethod* method, FunctionSummaries* summaries)
-      : m_method(method), m_summaries(summaries) {}
+  explicit ReflectionAnalyzer(const DexMethod* method) : m_method(method) {}
 
   void analyze() override {
     if (!m_method) {
@@ -154,7 +151,8 @@ class ReflectionAnalyzer
 
     reflection::SummaryQueryFn query_fn =
         [&](const DexMethod* callee) -> reflection::AbstractObjectDomain {
-      auto ret = m_summaries->get(callee, Summary::top()).get_return_value();
+      auto ret =
+          this->get_summaries()->get(callee, Summary::top()).get_return_value();
 
       std::unordered_set<const DexMethod*> overriding_methods =
           mog::get_overriding_methods(
@@ -162,8 +160,9 @@ class ReflectionAnalyzer
               callee);
 
       for (const DexMethod* method : overriding_methods) {
-        ret.join_with(
-            m_summaries->get(method, Summary::top()).get_return_value());
+        ret.join_with(this->get_summaries()
+                          ->get(method, Summary::top())
+                          .get_return_value());
       }
       return ret;
     };
@@ -219,7 +218,7 @@ class ReflectionAnalyzer
     if (!m_method) {
       return;
     }
-    m_summaries->maybe_update(m_method, [&](Summary& old) {
+    this->get_summaries()->maybe_update(m_method, [&](Summary& old) {
       if (old == m_summary) {
         // no change will be made
         return false;
@@ -233,7 +232,9 @@ class ReflectionAnalyzer
 struct ReflectionAnalysisAdaptor : public AnalysisAdaptorBase {
   using Registry = MethodSummaryRegistry<Summary>;
   using FunctionSummary = Summary;
-  using FunctionAnalyzer = ReflectionAnalyzer<Registry>;
+
+  template <typename IntraproceduralBase>
+  using FunctionAnalyzer = ReflectionAnalyzer<IntraproceduralBase>;
 
   template <typename GraphInterface, typename Domain>
   using FixpointIteratorBase =

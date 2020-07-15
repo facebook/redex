@@ -81,27 +81,38 @@ optionally_analyze_edge_if_exist(Callsite* c,
 // analyzers don't implement the necessary methods. We prefer this over template
 // errors.
 
-template <typename CallerContext, typename AnalysisParameters = void>
+template <typename FunctionSummaries,
+          typename CallerContext,
+          typename CallGraph,
+          typename AnalysisParameters = void>
 class Intraprocedural {
  public:
   virtual void analyze() = 0;
   virtual void summarize() = 0;
   virtual ~Intraprocedural() {}
+  void set_summaries(FunctionSummaries* summaries) {
+    this->m_summaries = summaries;
+  }
   void set_caller_context(CallerContext* context) {
     this->m_caller_context = context;
   }
+  void set_call_graph(const CallGraph* graph) { this->m_call_graph = graph; }
   void set_analysis_parameters(AnalysisParameters* parameters) {
     this->m_analysis_parameters = parameters;
   }
 
  protected:
+  FunctionSummaries* get_summaries() const { return this->m_summaries; }
   CallerContext* get_caller_context() const { return this->m_caller_context; }
+  const CallGraph* get_call_graph() const { return this->m_call_graph; }
   AnalysisParameters* get_analysis_parameters() const {
     return this->m_analysis_parameters;
   }
 
  private:
+  FunctionSummaries* m_summaries;
   CallerContext* m_caller_context;
+  const CallGraph* m_call_graph;
   AnalysisParameters* m_analysis_parameters;
 };
 
@@ -143,10 +154,12 @@ class InterproceduralAnalyzer {
 
   using CallGraphInterface = typename Analysis::CallGraphInterface;
 
-  using FunctionAnalyzer = typename Analysis::FunctionAnalyzer;
   using CallGraph = typename CallGraphInterface::Graph;
   using Callsite = typename Analysis::Callsite;
   using CallerContext = typename Callsite::Domain;
+
+  using FunctionAnalyzer = typename Analysis::template FunctionAnalyzer<
+      Intraprocedural<Registry, CallerContext, CallGraph, AnalysisParameters>>;
 
   using IntraFn = std::function<std::shared_ptr<FunctionAnalyzer>(
       const Function&, Registry*, CallerContext*)>;
@@ -174,8 +187,8 @@ class InterproceduralAnalyzer {
 
     virtual void analyze_node(const typename CallGraphInterface::NodeId& node,
                               CallerContext* current_state) const override {
-      m_intraprocedural(
-          Analysis::function_by_node_id(node), this->m_registry, current_state)
+      m_intraprocedural(Analysis::function_by_node_id(node), this->m_registry,
+                        current_state)
           ->summarize();
     }
 
@@ -183,9 +196,8 @@ class InterproceduralAnalyzer {
         const typename CallGraphInterface::EdgeId& edge,
         const CallerContext& exit_state_at_source) const override {
       return optionally_analyze_edge_if_exist<
-          Callsite,
-          typename CallGraphInterface::EdgeId,
-          CallerContext>(nullptr, edge, exit_state_at_source);
+          Callsite, typename CallGraphInterface::EdgeId, CallerContext>(
+          nullptr, edge, exit_state_at_source);
     }
   };
 
@@ -194,7 +206,8 @@ class InterproceduralAnalyzer {
                   "Registry must inherit from sparta::AbstractRegistry");
 
     static_assert(
-        std::is_base_of<Intraprocedural<CallerContext, AnalysisParameters>,
+        std::is_base_of<Intraprocedural<Registry, CallerContext, CallGraph,
+                                        AnalysisParameters>,
                         FunctionAnalyzer>::value,
         "FunctionAnalyzer must inherit from sparta::Intraprocedural");
 
@@ -230,10 +243,11 @@ class InterproceduralAnalyzer {
         fp = std::make_shared<CallGraphFixpointIterator>(
             *callgraph,
             &this->registry,
-            [this](const Function& func, Registry* reg, CallerContext* context)
-                -> std::shared_ptr<FunctionAnalyzer> {
+            [this, callgraph](
+                const Function& func, Registry* reg,
+                CallerContext* context) -> std::shared_ptr<FunctionAnalyzer> {
               // intraprocedural part
-              return this->run_on_function(func, reg, context);
+              return this->run_on_function(func, reg, context, &*callgraph);
             });
       }
 
@@ -252,10 +266,15 @@ class InterproceduralAnalyzer {
   }
 
   virtual std::shared_ptr<FunctionAnalyzer> run_on_function(
-      const Function& function, Registry* reg, CallerContext* context) {
+      const Function& function,
+      Registry* reg,
+      CallerContext* context,
+      const CallGraph* graph) {
 
-    auto analyzer = std::make_shared<FunctionAnalyzer>(function, reg);
+    auto analyzer = std::make_shared<FunctionAnalyzer>(function);
+    analyzer->set_summaries(reg);
     analyzer->set_caller_context(context);
+    analyzer->set_call_graph(graph);
     analyzer->set_analysis_parameters(m_parameters);
     analyzer->analyze();
     return analyzer;
