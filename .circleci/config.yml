@@ -18,11 +18,9 @@ jobs:
       - checkout
       # C++ stuff.
       - run:
-          name: Ensure package DB is up-to-date
-          command: 'sudo apt-get update'
-      - run:
           name: Installing C++ deps
-          command: 'sudo apt-get update && apt-get install -y
+          command: 'sudo apt-get update &&
+                    sudo apt-get install -y
                       automake
                       autoconf
                       autoconf-archive
