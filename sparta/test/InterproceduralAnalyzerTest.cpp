@@ -396,25 +396,21 @@ struct Callsite {
   }
 };
 
+using CallerContext = typename Callsite::Domain;
+
 template <typename FunctionSummaries>
-class SimpleFunctionAnalyzer : public sparta::Intraprocedural {
+class SimpleFunctionAnalyzer : public sparta::Intraprocedural<CallerContext> {
  private:
-  using CallerContext = typename Callsite::Domain;
   language::Function* m_fun;
   language::ControlFlowGraph m_cfg;
   FunctionSummaries* m_summaries;
-  CallerContext* m_context;
   PurityDomain m_domain;
 
  public:
-  SimpleFunctionAnalyzer(language::Function* fun,
-                         FunctionSummaries* summaries,
-                         CallerContext* context,
-                         void* /* metadata */)
+  SimpleFunctionAnalyzer(language::Function* fun, FunctionSummaries* summaries)
       : m_fun(fun),
         m_cfg(language::build_cfg(m_fun)),
         m_summaries(summaries),
-        m_context(context),
         m_domain(PURE) {
     assert(summaries);
   }
@@ -484,14 +480,11 @@ template <typename FunctionSummaries>
 class FunctionFixpoint final : public sparta::MonotonicFixpointIterator<
                                    language::ControlFlowGraphInterface,
                                    PurityDomain>,
-                               public sparta::Intraprocedural {
+                               public sparta::Intraprocedural<CallerContext> {
 
  private:
-  using CallerContext = typename Callsite::Domain;
-
   language::Function* m_function;
   FunctionSummaries* m_summaries;
-  CallerContext* m_context;
 
   PurityDomain initial_domain() { return PurityDomain(PURE); }
 
@@ -502,8 +495,7 @@ class FunctionFixpoint final : public sparta::MonotonicFixpointIterator<
                             void* /* metadata */)
       : MonotonicFixpointIterator(language::build_cfg(function)),
         m_function(function),
-        m_summaries(summaries),
-        m_context(context) {
+        m_summaries(summaries) {
     assert(summaries);
   }
 
@@ -515,7 +507,7 @@ class FunctionFixpoint final : public sparta::MonotonicFixpointIterator<
     // for the call graph level to reach fixpoint. When necessary, the
     // intraprocedural part should also update context when hitting call
     // edges.
-    m_context->add(m_function);
+    this->get_caller_context()->add(m_function);
   }
 
   virtual void analyze_node(const language::ControlPoint& node,
