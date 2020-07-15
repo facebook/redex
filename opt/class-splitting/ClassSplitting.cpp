@@ -179,7 +179,7 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
     if (!can_relocate(cls) || should_not_relocate_methods_of_class) {
       return;
     }
-    auto cls_has_clinit = !!cls->get_clinit();
+    auto cls_has_problematic_clinit = method::clinit_may_have_side_effects(cls);
 
     SplitClass& sc = m_split_classes[cls];
     always_assert(sc.relocatable_methods.empty());
@@ -188,7 +188,7 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
         return;
       }
       bool requires_trampoline{false};
-      if (!can_relocate(cls_has_clinit, method, /* log */ true,
+      if (!can_relocate(cls_has_problematic_clinit, method, /* log */ true,
                         &requires_trampoline)) {
         return;
       }
@@ -279,7 +279,8 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
               SHOW(cls));
         continue;
       }
-      auto cls_has_clinit = !!cls->get_clinit();
+      auto cls_has_problematic_clinit =
+          method::clinit_may_have_side_effects(cls);
       std::vector<DexMethod*> methods_to_relocate;
       // We iterate over the actually existing set of methods at this time
       // (other InterDex plug-ins might have added or removed or relocated
@@ -296,7 +297,7 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
         }
         const RelocatableMethodInfo& method_info = it->second;
         bool requires_trampoline{false};
-        if (!can_relocate(cls_has_clinit, method, /* log */ false,
+        if (!can_relocate(cls_has_problematic_clinit, method, /* log */ false,
                           &requires_trampoline)) {
           TRACE(CS,
                 4,
@@ -571,7 +572,7 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
     return !cls->is_external() && !cls->rstate.is_generated();
   }
 
-  bool can_relocate(bool cls_has_clinit,
+  bool can_relocate(bool cls_has_problematic_clinit,
                     const DexMethod* m,
                     bool log,
                     bool* requires_trampoline) {
@@ -629,7 +630,7 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
       if (!m_config.relocate_static_methods) {
         return false;
       }
-      if (cls_has_clinit) {
+      if (cls_has_problematic_clinit) {
         if (log) {
           m_mgr.incr_metric(
               "num_class_splitting_limitation_static_method_declaring_class_"
