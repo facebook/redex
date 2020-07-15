@@ -398,22 +398,16 @@ struct Callsite {
 
 using CallerContext = typename Callsite::Domain;
 
-template <typename FunctionSummaries>
-class SimpleFunctionAnalyzer : public sparta::Intraprocedural<CallerContext> {
+template <typename Base>
+class SimpleFunctionAnalyzer : public Base {
  private:
   language::Function* m_fun;
   language::ControlFlowGraph m_cfg;
-  FunctionSummaries* m_summaries;
   PurityDomain m_domain;
 
  public:
-  SimpleFunctionAnalyzer(language::Function* fun, FunctionSummaries* summaries)
-      : m_fun(fun),
-        m_cfg(language::build_cfg(m_fun)),
-        m_summaries(summaries),
-        m_domain(PURE) {
-    assert(summaries);
-  }
+  SimpleFunctionAnalyzer(language::Function* fun)
+      : m_fun(fun), m_cfg(language::build_cfg(m_fun)), m_domain(PURE) {}
 
   virtual void analyze() override {
     for (auto entry : m_cfg.statements()) {
@@ -428,7 +422,7 @@ class SimpleFunctionAnalyzer : public sparta::Intraprocedural<CallerContext> {
           // No action needed if the function is already impure at this control
           // point, otherwise we grab the summary for the callee
           auto func = stmt.callee;
-          auto summary = m_summaries->get(func);
+          auto summary = this->get_summaries()->get(func);
 
           boost::optional<bool> maybe_pure = boost::none;
 
@@ -472,32 +466,24 @@ class SimpleFunctionAnalyzer : public sparta::Intraprocedural<CallerContext> {
         conclusion.set_value(false);
       }
     }
-    m_summaries->update(m_fun, [&](const Summary&) { return conclusion; });
+    this->get_summaries()->update(m_fun,
+                                  [&](const Summary&) { return conclusion; });
   }
 };
 
-template <typename FunctionSummaries>
+template <typename Base>
 class FunctionFixpoint final : public sparta::MonotonicFixpointIterator<
                                    language::ControlFlowGraphInterface,
                                    PurityDomain>,
-                               public sparta::Intraprocedural<CallerContext> {
+                               public Base {
 
  private:
   language::Function* m_function;
-  FunctionSummaries* m_summaries;
-
   PurityDomain initial_domain() { return PurityDomain(PURE); }
 
  public:
-  explicit FunctionFixpoint(const language::FunctionId& function,
-                            FunctionSummaries* summaries,
-                            CallerContext* context,
-                            void* /* metadata */)
-      : MonotonicFixpointIterator(language::build_cfg(function)),
-        m_function(function),
-        m_summaries(summaries) {
-    assert(summaries);
-  }
+  explicit FunctionFixpoint(const language::FunctionId& function)
+      : MonotonicFixpointIterator(language::build_cfg(function)) {}
 
   // Introduced by sparta::Intraprocedural
   virtual void analyze() override {
@@ -523,7 +509,7 @@ class FunctionFixpoint final : public sparta::MonotonicFixpointIterator<
         // No action needed if the function is already impure at this control
         // point, otherwise we grab the summary for the callee
         auto func = stmt.callee;
-        auto summary = m_summaries->get(func);
+        auto summary = this->get_summaries()->get(func);
 
         boost::optional<bool> maybe_pure = boost::none;
 
@@ -575,7 +561,8 @@ class FunctionFixpoint final : public sparta::MonotonicFixpointIterator<
         conclusion.set_value(false);
       }
     }
-    m_summaries->update(m_function, [&](const Summary&) { return conclusion; });
+    this->get_summaries()->update(m_function,
+                                  [&](const Summary&) { return conclusion; });
   }
 };
 
@@ -601,7 +588,9 @@ class AnalysisRegistry : public sparta::AbstractRegistry {
 
 struct PurityAnalysisAdaptor : public language::AnalysisAdaptorBase {
   using Registry = AnalysisRegistry;
-  using FunctionAnalyzer = SimpleFunctionAnalyzer<Registry>;
+
+  template <typename IntraproceduralBase>
+  using FunctionAnalyzer = SimpleFunctionAnalyzer<IntraproceduralBase>;
   using Callsite = Callsite;
 
   // Optional: override call graph level fixpoint iterator type
