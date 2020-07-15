@@ -127,31 +127,25 @@ struct Summary : public AbstractDomain<Summary> {
 
 namespace mog = method_override_graph;
 
-struct Metadata {
+struct AnalysisParameters {
   std::unique_ptr<const mog::Graph> method_override_graph;
   // For speeding up reflection analysis
   reflection::MetadataCache refl_meta_cache;
 };
 
+using CallerContext = typename Caller::Domain;
+
 template <typename FunctionSummaries>
-class ReflectionAnalyzer : public Intraprocedural {
+class ReflectionAnalyzer
+    : public Intraprocedural<CallerContext, AnalysisParameters> {
  private:
-  using CallerContext = typename Caller::Domain;
   const DexMethod* m_method;
   FunctionSummaries* m_summaries;
-  CallerContext* m_context;
   Summary m_summary;
-  Metadata* m_metadata;
 
  public:
-  ReflectionAnalyzer(const DexMethod* method,
-                     FunctionSummaries* summaries,
-                     CallerContext* context,
-                     Metadata* metadata)
-      : m_method(method),
-        m_summaries(summaries),
-        m_context(context),
-        m_metadata(metadata) {}
+  ReflectionAnalyzer(const DexMethod* method, FunctionSummaries* summaries)
+      : m_method(method), m_summaries(summaries) {}
 
   void analyze() override {
     if (!m_method) {
@@ -163,8 +157,9 @@ class ReflectionAnalyzer : public Intraprocedural {
       auto ret = m_summaries->get(callee, Summary::top()).get_return_value();
 
       std::unordered_set<const DexMethod*> overriding_methods =
-          mog::get_overriding_methods(*(m_metadata->method_override_graph),
-                                      callee);
+          mog::get_overriding_methods(
+              *(this->get_analysis_parameters()->method_override_graph),
+              callee);
 
       for (const DexMethod* method : overriding_methods) {
         ret.join_with(
@@ -173,11 +168,12 @@ class ReflectionAnalyzer : public Intraprocedural {
       return ret;
     };
 
-    auto context = m_context->get(m_method);
-    reflection::ReflectionAnalysis analysis(const_cast<DexMethod*>(m_method),
-                                            &context,
-                                            &query_fn,
-                                            &m_metadata->refl_meta_cache);
+    auto context = this->get_caller_context()->get(m_method);
+    reflection::ReflectionAnalysis analysis(
+        const_cast<DexMethod*>(m_method),
+        &context,
+        &query_fn,
+        &this->get_analysis_parameters()->refl_meta_cache);
 
     m_summary.set_value(analysis.get_return_value());
     m_summary.set_reflection_sites(std::move(analysis.get_reflection_sites()));
@@ -192,7 +188,7 @@ class ReflectionAnalyzer : public Intraprocedural {
         DexMethod* callee =
             resolve_method(insn->get_method(), opcode_to_search(op), m_method);
 
-        m_context->update(
+        this->get_caller_context()->update(
             callee, [&](const reflection::CallingContext& original_context) {
               return calling_context.join(original_context);
             });
@@ -200,14 +196,17 @@ class ReflectionAnalyzer : public Intraprocedural {
         std::unordered_set<const DexMethod*> overriding_methods;
         if (is_invoke_virtual(op)) {
           overriding_methods = mog::get_overriding_methods(
-              *(m_metadata->method_override_graph), callee);
+              *(this->get_analysis_parameters()->method_override_graph),
+              callee);
         } else if (is_invoke_interface(op)) {
           overriding_methods = mog::get_overriding_methods(
-              *(m_metadata->method_override_graph), callee, true);
+              *(this->get_analysis_parameters()->method_override_graph),
+              callee,
+              true);
         }
 
         for (const DexMethod* method : overriding_methods) {
-          m_context->update(
+          this->get_caller_context()->update(
               method, [&](const reflection::CallingContext& original_context) {
                 return calling_context.join(original_context);
               });
@@ -243,7 +242,8 @@ struct ReflectionAnalysisAdaptor : public AnalysisAdaptorBase {
   using Callsite = Caller;
 };
 
-using Analysis = InterproceduralAnalyzer<ReflectionAnalysisAdaptor, Metadata>;
+using Analysis =
+    InterproceduralAnalyzer<ReflectionAnalysisAdaptor, AnalysisParameters>;
 
 } // namespace
 
@@ -252,9 +252,9 @@ void IPReflectionAnalysisPass::run_pass(DexStoresVector& stores,
                                         PassManager& /* pm */) {
 
   Scope scope = build_class_scope(stores);
-  Metadata metadata;
-  metadata.method_override_graph = mog::build_graph(scope);
-  auto analysis = Analysis(scope, m_max_iteration, &metadata);
+  AnalysisParameters param;
+  param.method_override_graph = mog::build_graph(scope);
+  auto analysis = Analysis(scope, m_max_iteration, &param);
   analysis.run();
   auto summaries = analysis.registry.get_map();
   m_result = std::make_shared<Result>();

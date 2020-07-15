@@ -113,23 +113,17 @@ struct Caller {
 // intraprocedural analysis, except that we have access to the summaries and the
 // calling context.
 template <typename FunctionSummaries>
-class MaxDepthFunctionAnalyzer : public Intraprocedural {
+class MaxDepthFunctionAnalyzer
+    : public Intraprocedural<typename Caller::Domain> {
  private:
-  using CallerContext = typename Caller::Domain;
   const DexMethod* m_method;
   FunctionSummaries* m_summaries;
-  CallerContext* m_context;
   DepthDomain m_domain;
 
  public:
   MaxDepthFunctionAnalyzer(const DexMethod* method,
-                           FunctionSummaries* summaries,
-                           CallerContext* context,
-                           void* /* metadata */)
-      : m_method(method),
-        m_summaries(summaries),
-        m_context(context),
-        m_domain(0) {}
+                           FunctionSummaries* summaries)
+      : m_method(method), m_summaries(summaries), m_domain(0) {}
 
   void analyze() override {
     if (!m_method) {

@@ -81,12 +81,28 @@ optionally_analyze_edge_if_exist(Callsite* c,
 // analyzers don't implement the necessary methods. We prefer this over template
 // errors.
 
+template <typename CallerContext, typename AnalysisParameters = void>
 class Intraprocedural {
  public:
   virtual void analyze() = 0;
   virtual void summarize() = 0;
-
   virtual ~Intraprocedural() {}
+  void set_caller_context(CallerContext* context) {
+    this->m_caller_context = context;
+  }
+  void set_analysis_parameters(AnalysisParameters* parameters) {
+    this->m_analysis_parameters = parameters;
+  }
+
+ protected:
+  CallerContext* get_caller_context() const { return this->m_caller_context; }
+  AnalysisParameters* get_analysis_parameters() const {
+    return this->m_analysis_parameters;
+  }
+
+ private:
+  CallerContext* m_caller_context;
+  AnalysisParameters* m_analysis_parameters;
 };
 
 class AbstractRegistry {
@@ -118,7 +134,7 @@ class AbstractRegistry {
 //  analyze_edge (optional)
 // }
 
-template <typename Analysis, typename Metadata = void>
+template <typename Analysis, typename AnalysisParameters = void>
 class InterproceduralAnalyzer {
  public:
   using Function = typename Analysis::Function;
@@ -177,8 +193,10 @@ class InterproceduralAnalyzer {
     static_assert(std::is_base_of<AbstractRegistry, Registry>::value,
                   "Registry must inherit from sparta::AbstractRegistry");
 
-    static_assert(std::is_base_of<Intraprocedural, FunctionAnalyzer>::value,
-                  "FunctionAnalyzer must inherit from sparta::Intraprocedural");
+    static_assert(
+        std::is_base_of<Intraprocedural<CallerContext, AnalysisParameters>,
+                        FunctionAnalyzer>::value,
+        "FunctionAnalyzer must inherit from sparta::Intraprocedural");
 
     static_assert(
         std::is_base_of<AbstractDomain<CallerContext>, CallerContext>::value,
@@ -187,10 +205,10 @@ class InterproceduralAnalyzer {
 
   InterproceduralAnalyzer(Program program,
                           int max_iteration,
-                          Metadata* metadata = nullptr)
+                          AnalysisParameters* parameters = nullptr)
       : m_program(std::move(program)),
         m_max_iteration(max_iteration),
-        m_metadata(metadata) {}
+        m_parameters(parameters) {}
 
   virtual std::shared_ptr<CallGraphFixpointIterator> run(
       bool rebuild_callgraph_on_each_iteration = false) {
@@ -236,9 +254,9 @@ class InterproceduralAnalyzer {
   virtual std::shared_ptr<FunctionAnalyzer> run_on_function(
       const Function& function, Registry* reg, CallerContext* context) {
 
-    auto analyzer =
-        std::make_shared<FunctionAnalyzer>(function, reg, context, m_metadata);
-
+    auto analyzer = std::make_shared<FunctionAnalyzer>(function, reg);
+    analyzer->set_caller_context(context);
+    analyzer->set_analysis_parameters(m_parameters);
     analyzer->analyze();
     return analyzer;
   }
@@ -246,7 +264,7 @@ class InterproceduralAnalyzer {
  private:
   Program m_program;
   int m_max_iteration;
-  Metadata* m_metadata;
+  AnalysisParameters* m_parameters;
 };
 
 } // namespace sparta
