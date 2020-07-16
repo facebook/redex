@@ -246,3 +246,124 @@ bool MethodProfiles::parse_header(char* line) {
   };
   return parse_cells(line, parse_cell);
 }
+
+dexmethods_profiled_comparator::dexmethods_profiled_comparator(
+    const method_profiles::MethodProfiles* method_profiles,
+    const std::unordered_set<std::string>* whitelisted_substrings,
+    std::unordered_map<DexMethod*, double>* cache,
+    bool legacy_order)
+    : m_method_profiles(method_profiles),
+      m_whitelisted_substrings(whitelisted_substrings),
+      m_cache(cache),
+      m_legacy_order(legacy_order) {
+  always_assert(m_method_profiles != nullptr);
+  always_assert(m_whitelisted_substrings != nullptr);
+  always_assert(m_cache != nullptr);
+
+  m_coldstart_start_marker = static_cast<DexMethod*>(
+      DexMethod::get_method("Lcom/facebook/common/methodpreloader/primarydeps/"
+                            "StartColdStartMethodPreloaderMethodMarker;"
+                            ".startColdStartMethods:()V"));
+  m_coldstart_end_marker = static_cast<DexMethod*>(
+      DexMethod::get_method("Lcom/facebook/common/methodpreloader/primarydeps/"
+                            "EndColdStartMethodPreloaderMethodMarker;"
+                            ".endColdStartMethods:()V"));
+
+  for (const auto& pair : m_method_profiles->all_interactions()) {
+    std::string interaction_id = pair.first;
+    if (interaction_id.empty()) {
+      // For backwards compatibility. Older versions of the aggregate profiles
+      // only have cold start (and no interaction_id column)
+      interaction_id = COLD_START;
+    }
+    if (!m_legacy_order || interaction_id == COLD_START) {
+      m_interactions.push_back(interaction_id);
+    }
+  }
+  std::sort(m_interactions.begin(), m_interactions.end(),
+            [](const std::string& a, const std::string& b) {
+              if (a == COLD_START && b != COLD_START) {
+                // Cold Start always comes first;
+                return true;
+              }
+              // TODO: use interaction prevalence
+              return a < b;
+            });
+}
+
+double dexmethods_profiled_comparator::get_method_sort_num(
+    const DexMethod* method) {
+  double range_begin = 0.0;
+  for (const auto& interaction_id : m_interactions) {
+    if (interaction_id == COLD_START && m_coldstart_start_marker != nullptr &&
+        m_coldstart_end_marker != nullptr) {
+      if (method == m_coldstart_start_marker) {
+        return range_begin;
+      } else if (method == m_coldstart_end_marker) {
+        return range_begin + RANGE_SIZE;
+      }
+    }
+    const auto& stats_map = m_method_profiles->method_stats(interaction_id);
+    auto it = stats_map.find(method);
+    if (it != stats_map.end()) {
+      const auto& stat = it->second;
+      if (m_legacy_order && stat.appear_percent >= 95.0) {
+        return range_begin + RANGE_SIZE / 2;
+      } else if (!m_legacy_order && stat.appear_percent >= 90.0) {
+        // TODO iterate on this ordering heuristic
+        return range_begin + stat.order_percent * RANGE_SIZE / 100.0;
+      }
+    }
+    range_begin += RANGE_STRIDE;
+  }
+
+  // If the method is not present in profiled order file we'll put it in the
+  // end of the code section
+  return VERY_END;
+}
+
+double dexmethods_profiled_comparator::get_method_sort_num_override(
+    const DexMethod* method) {
+  const std::string& deobfname = method->get_deobfuscated_name();
+  for (const std::string& substr : *m_whitelisted_substrings) {
+    if (deobfname.find(substr) != std::string::npos) {
+      return COLD_START_RANGE_BEGIN + RANGE_SIZE / 2;
+    }
+  }
+  return VERY_END;
+}
+
+bool dexmethods_profiled_comparator::operator()(DexMethod* a, DexMethod* b) {
+  if (a == nullptr) {
+    return b != nullptr;
+  } else if (b == nullptr) {
+    return false;
+  }
+
+  auto get_sort_num = [this](DexMethod* m) -> double {
+    const auto& search = m_cache->find(m);
+    if (search != m_cache->end()) {
+      return search->second;
+    }
+
+    double w = get_method_sort_num(m);
+    if (w == VERY_END) {
+      // For methods not included in the profiled methods file, move them to
+      // the top section anyway if they match one of the whitelisted
+      // substrings.
+      w = get_method_sort_num_override(m);
+    }
+
+    m_cache->emplace(m, w);
+    return w;
+  };
+
+  double sort_num_a = get_sort_num(a);
+  double sort_num_b = get_sort_num(b);
+
+  if (sort_num_a == sort_num_b) {
+    return compare_dexmethods(a, b);
+  }
+
+  return sort_num_a < sort_num_b;
+}

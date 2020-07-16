@@ -159,13 +159,16 @@ void GatheredTypes::sort_dexmethod_emitlist_cls_order(
 
 void GatheredTypes::sort_dexmethod_emitlist_profiled_order(
     std::vector<DexMethod*>& lmeth) {
-  std::unordered_map<DexMethod*, unsigned int> cache;
+  std::unordered_map<DexMethod*, double> cache;
   cache.reserve(lmeth.size());
-  std::stable_sort(
-      lmeth.begin(),
-      lmeth.end(),
-      method_profiles::dexmethods_profiled_comparator(
-          *m_method_profiles, m_method_sorting_whitelisted_substrings, &cache));
+  std::stable_sort(lmeth.begin(),
+                   lmeth.end(),
+                   method_profiles::dexmethods_profiled_comparator(
+                       m_method_profiles,
+                       m_method_sorting_whitelisted_substrings,
+                       &cache,
+                       // TODO: hook this up to a config flag
+                       /*legacy_order=*/true));
 }
 
 void GatheredTypes::sort_dexmethod_emitlist_clinit_order(
