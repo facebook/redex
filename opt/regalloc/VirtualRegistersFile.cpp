@@ -21,7 +21,7 @@ outer:
     for (vreg_t i = 1; i < width; ++i) {
       if (!m_free[next_free + i]) {
         next_free = m_free.find_next(next_free + i);
-        goto outer;
+        goto outer; // NOLINT(hicpp-avoid-goto,cppcoreguidelines-avoid-goto)
       }
     }
     break;

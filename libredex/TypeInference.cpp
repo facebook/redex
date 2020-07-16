@@ -331,9 +331,7 @@ void TypeInference::run(bool is_static,
   const auto& signature = args->get_type_list();
   auto sig_it = signature.begin();
   bool first_param = true;
-  // By construction, the IOPCODE_LOAD_PARAM_* instructions are located at the
-  // beginning of the entry block of the CFG.
-  for (const auto& mie : InstructionIterable(m_cfg.entry_block())) {
+  for (const auto& mie : InstructionIterable(m_cfg.get_param_instructions())) {
     IRInstruction* insn = mie.insn;
     switch (insn->opcode()) {
     case IOPCODE_LOAD_PARAM_OBJECT: {
@@ -369,15 +367,10 @@ void TypeInference::run(bool is_static,
       }
       break;
     }
-    default: {
-      // We've reached the end of the LOAD_PARAM_* instruction block and we
-      // simply exit the loop. Note that premature loop exit is probably the
-      // only legitimate use of goto in C++ code.
-      goto done;
-    }
+    default:
+      not_reached();
     }
   }
-done:
   MonotonicFixpointIterator::run(init_state);
   populate_type_environments();
 }

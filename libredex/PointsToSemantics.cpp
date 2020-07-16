@@ -892,37 +892,32 @@ class PointsToActionGenerator final {
     // the entry block. We need to process them first.
     size_t param_cursor = 0;
     bool first_param = true;
-    for (const MethodItemEntry& mie : *cfg.entry_block()) {
-      if (mie.type == MFLOW_OPCODE) {
-        IRInstruction* insn = mie.insn;
-        switch (insn->opcode()) {
-        case IOPCODE_LOAD_PARAM_OBJECT: {
-          if (first_param && !is_static(m_dex_method)) {
-            // If the method is not static, the first parameter corresponds to
-            // `this`, which is represented using a special points-to variable.
-          } else {
-            m_semantics->add(PointsToAction::load_operation(
-                PointsToOperation(PTS_LOAD_PARAM, param_cursor++),
-                get_variable_from_anchor(insn)));
-          }
-          break;
+    for (const MethodItemEntry& mie :
+         InstructionIterable(cfg.get_param_instructions())) {
+      IRInstruction* insn = mie.insn;
+      switch (insn->opcode()) {
+      case IOPCODE_LOAD_PARAM_OBJECT: {
+        if (first_param && !is_static(m_dex_method)) {
+          // If the method is not static, the first parameter corresponds to
+          // `this`, which is represented using a special points-to variable.
+        } else {
+          m_semantics->add(PointsToAction::load_operation(
+              PointsToOperation(PTS_LOAD_PARAM, param_cursor++),
+              get_variable_from_anchor(insn)));
         }
-        case IOPCODE_LOAD_PARAM:
-        case IOPCODE_LOAD_PARAM_WIDE: {
-          ++param_cursor;
-          break;
-        }
-        default: {
-          // We've reached the end of the LOAD_PARAM_* instruction block and we
-          // simply exit the loop. Note that premature loop exit is probably the
-          // only legitimate use of goto in C++ code.
-          goto done;
-        }
-        }
-        first_param = false;
+        break;
       }
+      case IOPCODE_LOAD_PARAM:
+      case IOPCODE_LOAD_PARAM_WIDE: {
+        ++param_cursor;
+        break;
+      }
+      default:
+        not_reached();
+      }
+      first_param = false;
     }
-  done:
+
     // We go over each IR instruction and generate the corresponding points-to
     // actions.
     for (cfg::Block* block : cfg.blocks()) {

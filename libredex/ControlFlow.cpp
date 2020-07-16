@@ -594,7 +594,9 @@ std::ostream& operator<<(std::ostream& os, const Edge& e) {
 ControlFlowGraph::ControlFlowGraph(IRList* ir,
                                    reg_t registers_size,
                                    bool editable)
-    : m_registers_size(registers_size), m_editable(editable) {
+    : m_orig_list(editable ? nullptr : ir),
+      m_registers_size(registers_size),
+      m_editable(editable) {
   always_assert_log(!ir->empty(), "IRList contains no instructions");
 
   BranchToTargets branch_to_targets;
@@ -1217,6 +1219,10 @@ uint32_t ControlFlowGraph::sum_opcode_sizes() const {
 }
 
 boost::sub_range<IRList> ControlFlowGraph::get_param_instructions() const {
+  if (!m_editable) {
+    return m_orig_list->get_param_instructions();
+  }
+
   // Find the first block that has instructions
   Block* block = entry_block();
   std::unordered_set<Block*> visited{block};

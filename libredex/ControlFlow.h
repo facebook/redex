@@ -1057,6 +1057,7 @@ class ControlFlowGraph {
   Blocks m_blocks;
   EdgeSet m_edges;
 
+  IRList* m_orig_list{nullptr}; // Only set when !m_editable.
   Block* m_entry_block{nullptr};
   Block* m_exit_block{nullptr};
   reg_t m_registers_size{0};

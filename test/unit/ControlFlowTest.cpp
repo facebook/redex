@@ -2190,7 +2190,27 @@ TEST_F(ControlFlowTest, get_param_instructions_basic) {
     )
   )");
 
-  code->build_cfg(/* editable */ true);
+  code->build_cfg(/* editable= */ true);
+  auto& cfg = code->cfg();
+
+  MethodItemEntry* param_insn = &*cfg.entry_block()->begin();
+  auto param_insns_range = cfg.get_param_instructions();
+  EXPECT_FALSE(param_insns_range.empty());
+  EXPECT_EQ(&*param_insns_range.begin(), param_insn);
+  EXPECT_EQ(&*param_insns_range.end(), &*std::next(cfg.entry_block()->begin()));
+}
+
+TEST_F(ControlFlowTest, get_param_instructions_basic_non_editable) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (const-string "one")
+      (move-result-pseudo v0)
+      (return v0)
+    )
+  )");
+
+  code->build_cfg(/* editable= */ false);
   auto& cfg = code->cfg();
 
   MethodItemEntry* param_insn = &*cfg.entry_block()->begin();
@@ -2207,7 +2227,20 @@ TEST_F(ControlFlowTest, get_param_instructions_empty) {
     )
   )");
 
-  code->build_cfg(/* editable */ true);
+  code->build_cfg(/* editable= */ true);
+  auto& cfg = code->cfg();
+
+  EXPECT_TRUE(cfg.get_param_instructions().empty());
+}
+
+TEST_F(ControlFlowTest, get_param_instructions_empty_not_editable) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (.dbg DBG_SET_PROLOGUE_END)
+    )
+  )");
+
+  code->build_cfg(/* editable= */ false);
   auto& cfg = code->cfg();
 
   EXPECT_TRUE(cfg.get_param_instructions().empty());
