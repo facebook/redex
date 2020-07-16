@@ -336,7 +336,6 @@ redex_all_SOURCES = \
 	opt/methodinline/IntraDexInlinePass.cpp \
 	opt/methodinline/MethodInlinePass.cpp \
 	opt/methodinline/PerfMethodInlinePass.cpp \
-	opt/outliner/InstructionSequenceOutliner.cpp \
 	opt/singleimpl/SingleImpl.cpp \
 	opt/singleimpl/SingleImplAnalyze.cpp \
 	opt/singleimpl/SingleImplOptimize.cpp \
