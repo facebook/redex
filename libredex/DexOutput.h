@@ -222,6 +222,7 @@ class GatheredTypes {
   std::unordered_map<const DexMethod*, unsigned int> m_methods_in_cls_order;
   const method_profiles::MethodProfiles* m_method_profiles{nullptr};
   const std::unordered_set<std::string>* m_method_sorting_whitelisted_substrings{nullptr};
+  bool m_legacy_order{true};
 
   void gather_components(PostLowering const* post_lowering);
   dexstring_to_idx* get_string_index(cmp_dstring cmp = compare_dexstrings);
@@ -263,6 +264,7 @@ class GatheredTypes {
       const std::unordered_set<std::string>* whitelisted_substrings);
   void set_method_profiles(
     const method_profiles::MethodProfiles* method_profiles);
+  void set_legacy_order(bool legacy_order);
 
   std::unordered_set<DexString*> index_type_names();
 };

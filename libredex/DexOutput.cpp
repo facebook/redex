@@ -161,15 +161,13 @@ void GatheredTypes::sort_dexmethod_emitlist_profiled_order(
     std::vector<DexMethod*>& lmeth) {
   std::unordered_map<DexMethod*, double> cache;
   cache.reserve(lmeth.size());
-  std::stable_sort(
-      lmeth.begin(),
-      lmeth.end(),
-      method_profiles::dexmethods_profiled_comparator(
-          m_method_profiles,
-          m_method_sorting_whitelisted_substrings,
-          &cache,
-          // TODO: hook this up to a config flag
-          /*legacy_order=*/true));
+  std::stable_sort(lmeth.begin(),
+                   lmeth.end(),
+                   method_profiles::dexmethods_profiled_comparator(
+                       m_method_profiles,
+                       m_method_sorting_whitelisted_substrings,
+                       &cache,
+                       m_legacy_order));
 }
 
 void GatheredTypes::sort_dexmethod_emitlist_clinit_order(
@@ -2362,6 +2360,10 @@ void GatheredTypes::set_method_profiles(
   m_method_profiles = method_profiles;
 }
 
+void GatheredTypes::set_legacy_order(bool legacy_order) {
+  m_legacy_order = legacy_order;
+}
+
 void DexOutput::prepare(SortMode string_mode,
                         const std::vector<SortMode>& code_mode,
                         ConfigFiles& conf,
@@ -2370,6 +2372,8 @@ void DexOutput::prepare(SortMode string_mode,
   if (std::find(code_mode.begin(), code_mode.end(),
                 SortMode::METHOD_PROFILED_ORDER) != code_mode.end()) {
     m_gtypes->set_method_profiles(&conf.get_method_profiles());
+    m_gtypes->set_legacy_order(conf.get_json_config().get(
+        "legacy_profiled_code_item_sort_order", true));
     m_gtypes->set_method_sorting_whitelisted_substrings(
         &conf.get_method_sorting_whitelisted_substrings());
   }
