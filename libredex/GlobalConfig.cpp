@@ -81,6 +81,7 @@ void GlobalConfig::bind_config() {
   bind("android_sdk_api_28_file", "", string_param);
   bind("android_sdk_api_29_file", "", string_param);
   bind("bytecode_sort_mode", {}, string_vector_param);
+  bind("legacy_profiled_code_item_sort_order", true, bool_param);
   bind("coldstart_classes", "", string_param);
   bind("compute_xml_reachability", false, bool_param);
   bind("unused_keep_rule_abort", false, bool_param);
