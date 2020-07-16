@@ -1,3 +1,5 @@
+version: 2
+
 # If you only want circle to run on direct commits to master, you can uncomment this out
 # and uncomment the filters: *filter-only-master down below too
 #
@@ -7,8 +9,39 @@ aliases:
      only:
        - master
 
-version: 2
 jobs:
+  build:
+    docker:
+      - image: circleci/buildpack-deps:xenial
+    # GCC is hungry.
+    resource_class: large
+    # Tell everyone we're using GCC 5.
+    environment:
+      CXX: g++-5
+    steps:
+      - checkout
+
+      # Setup. Includes boost.
+      - run:
+          name: Setup
+          command: |
+            sudo ./setup_oss_toolchain.sh
+
+      # Configure.
+      - run:
+          name: Configure
+          command: |
+            autoreconf -ivf
+            ./configure CXX="g++-5"
+
+      # Actual build.
+      - run:
+          name: Build
+          # The old Travis limit. Hopefully ensures GCC does
+          # not die.
+          command: |
+            make -j4
+
   deploy-website:
     docker:
       # specify the version you desire here
@@ -29,5 +62,7 @@ workflows:
   version: 2
   build_and_deploy:
     jobs:
+      # Note: no filter for 'build' so that pull requests get checked.
+      - build
       - deploy-website:
           filters: *filter-only-master
