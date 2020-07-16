@@ -8,7 +8,10 @@
 # for use with the "run" script, which correctly sets up the volume.
 
 [[ -f "$HOME/.setup_complete" ]] || (
-  /redex/setup_oss_toolchain.sh &&
+  pushd /redex >/dev/null &&
+  ./setup_oss_toolchain.sh &&
+  autoreconf -ivf &&
+  ./configure CXX='g++-5' &&
   touch "$HOME/.setup_complete"
 )
 

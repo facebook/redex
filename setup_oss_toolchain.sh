@@ -10,6 +10,9 @@
 # Exit on any command failing
 set -e
 
+# Root directory of repository
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
+
 apt-get update
 apt-get install -y \
     autoconf \
@@ -29,24 +32,23 @@ apt-get install -y \
     wget \
     zlib1g-dev
 
-# Temporary directory for toolchain artifacts
+# Temporary directory for toolchain sources. Build artifacts will be
+# installed to /usr/local.
 TMP=$(mktemp -d 2>/dev/null)
 trap 'rm -r $TMP' EXIT
-cd "$TMP"
+pushd "$TMP"
+
+# Python 3.6.
 
 wget https://www.python.org/ftp/python/3.6.10/Python-3.6.10.tgz
 tar -xvf Python-3.6.10.tgz
-cd Python-3.6.10
+pushd Python-3.6.10
 
 ./configure
 make && make install
 
-# Root directory of repository
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
+popd
 
-# Get boost in the temp directory
+# Boost.
+
 "$ROOT"/get_boost.sh
-
-cd "$ROOT"
-autoreconf -ivf
-./configure CXX='g++-5'
