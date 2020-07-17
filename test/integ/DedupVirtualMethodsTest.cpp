@@ -28,9 +28,38 @@ VMethodsStats count_methods(const Scope& scope, DexType* annotation) {
   return stats;
 }
 
+std::vector<DexMethod*> annotated_by_publicized(const Scope& scope) {
+  auto publicized_annotation =
+      DexType::get_type("Lcom/facebook/redextest/Publicized;");
+  std::vector<DexMethod*> result;
+  for (auto cls : scope) {
+    for (auto method : cls->get_vmethods()) {
+      if (get_annotation(method, publicized_annotation)) {
+        result.push_back(method);
+      }
+    }
+  }
+  return result;
+}
+
+void check_public(const std::vector<DexMethod*>& methods,
+                  bool should_be_public) {
+  for (auto method : methods) {
+    if (!method->is_def()) {
+      continue;
+    }
+    EXPECT_EQ(is_public(method), should_be_public)
+        << show(method)
+        << (should_be_public ? " should be public" : " should not be public");
+  }
+}
+
 TEST_F(DedupVirtualMethodsTest, dedup) {
   auto scope = build_class_scope(stores);
   auto annotation = DexType::get_type("Lcom/facebook/redextest/Duplication;");
+
+  auto methods_annotated_by_pub = annotated_by_publicized(scope);
+  check_public(methods_annotated_by_pub, false);
 
   auto before_stats = count_methods(scope, annotation);
   auto deduplicated_vmethods = dedup_vmethods::dedup(stores);
@@ -39,4 +68,5 @@ TEST_F(DedupVirtualMethodsTest, dedup) {
   EXPECT_EQ(after_stats.annotated, 0);
   EXPECT_EQ(deduplicated_vmethods, before_stats.annotated);
   EXPECT_EQ(before_stats.total - before_stats.annotated, after_stats.total);
+  check_public(methods_annotated_by_pub, true);
 }

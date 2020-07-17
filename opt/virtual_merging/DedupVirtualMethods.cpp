@@ -62,6 +62,23 @@ void find_duplications(const method_override_graph::Graph* graph,
 }
 
 /**
+ * Make the method and all its overriding methods be public.
+ */
+void publicize_methods(const method_override_graph::Graph* graph,
+                       DexMethod* root_method) {
+  set_public(root_method);
+  for (auto* child : graph->get_node(root_method).children) {
+    if (is_public(child)) {
+      // The children of child should all be public, otherwise the code is
+      // invalid before this transformation.
+      continue;
+    }
+    redex_assert(is_protected(child));
+    publicize_methods(graph, const_cast<DexMethod*>(child));
+  }
+}
+
+/**
  * Deduplicate identical overriding code.
  */
 uint32_t remove_duplicated_vmethods(const Scope& scope) {
@@ -75,12 +92,20 @@ uint32_t remove_duplicated_vmethods(const Scope& scope) {
         // implementations to the abstract class if lots of them are identical.
         continue;
       }
+      if (!is_public_or_protected(method)) {
+        // Note: package-private methods are skipped. Need consider package
+        // names when change the accessibility of them.
+        continue;
+      }
       if (!eligible_code(method->get_code())) {
         continue;
       }
       std::vector<DexMethod*> duplicates;
       find_duplications(graph.get(), method, &duplicates);
       if (!duplicates.empty()) {
+        if (is_protected(method)) {
+          publicize_methods(graph.get(), method);
+        }
         TRACE(VM, 8, "Same as %s", SHOW(method));
         for (auto m : duplicates) {
           TRACE(VM, 8, "\t%s", SHOW(m));
