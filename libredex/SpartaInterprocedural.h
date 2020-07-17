@@ -31,10 +31,8 @@ struct AnalysisAdaptorBase {
   template <typename Registry>
   static call_graph::Graph call_graph_of(const Scope& scope,
                                          Registry* /*reg*/) {
-    // TODO: build method override graph and merge them together?
-    // TODO: build once and cache it in the memory because the framework
-    // will call it on every top level iteration.
-    return call_graph::complete_call_graph(scope);
+    constexpr uint32_t big_override_threshold = 5;
+    return call_graph::multiple_callee_graph(scope, big_override_threshold);
   }
 
   static const DexMethod* function_by_node_id(const call_graph::NodeId& node) {

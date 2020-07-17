@@ -224,7 +224,8 @@ using CallingContextMap =
     sparta::PatriciaTreeMapAbstractEnvironment<const IRInstruction*,
                                                CallingContext>;
 
-using SummaryQueryFn = std::function<AbstractObjectDomain(const DexMethod*)>;
+using SummaryQueryFn =
+    std::function<AbstractObjectDomain(const IRInstruction*)>;
 
 struct MetadataCache {
   DexMethodRef* const get_class{DexMethod::make_method(

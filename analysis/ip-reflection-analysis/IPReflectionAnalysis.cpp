@@ -125,10 +125,7 @@ struct Summary : public AbstractDomain<Summary> {
   reflection::ReflectionSites m_reflection_sites;
 };
 
-namespace mog = method_override_graph;
-
 struct AnalysisParameters {
-  std::unique_ptr<const mog::Graph> method_override_graph;
   // For speeding up reflection analysis
   reflection::MetadataCache refl_meta_cache;
 };
@@ -150,19 +147,17 @@ class ReflectionAnalyzer : public Base {
     }
 
     reflection::SummaryQueryFn query_fn =
-        [&](const DexMethod* callee) -> reflection::AbstractObjectDomain {
-      auto ret =
-          this->get_summaries()->get(callee, Summary::top()).get_return_value();
+        [&](const IRInstruction* insn) -> reflection::AbstractObjectDomain {
+      auto callees = call_graph::resolve_callees_in_graph(
+          *this->get_call_graph(), m_method, insn);
 
-      std::unordered_set<const DexMethod*> overriding_methods =
-          mog::get_overriding_methods(
-              *(this->get_analysis_parameters()->method_override_graph),
-              callee);
-
-      for (const DexMethod* method : overriding_methods) {
-        ret.join_with(this->get_summaries()
+      reflection::AbstractObjectDomain ret =
+          reflection::AbstractObjectDomain::bottom();
+      for (const DexMethod* method : callees) {
+        auto domain = this->get_summaries()
                           ->get(method, Summary::top())
-                          .get_return_value());
+                          .get_return_value();
+        ret.join_with(domain);
       }
       return ret;
     };
@@ -184,27 +179,11 @@ class ReflectionAnalyzer : public Base {
         auto calling_context = entry.second;
         auto op = insn->opcode();
         always_assert(is_invoke(op));
-        DexMethod* callee =
-            resolve_method(insn->get_method(), opcode_to_search(op), m_method);
 
-        this->get_caller_context()->update(
-            callee, [&](const reflection::CallingContext& original_context) {
-              return calling_context.join(original_context);
-            });
+        auto callees = call_graph::resolve_callees_in_graph(
+            *this->get_call_graph(), m_method, insn);
 
-        std::unordered_set<const DexMethod*> overriding_methods;
-        if (is_invoke_virtual(op)) {
-          overriding_methods = mog::get_overriding_methods(
-              *(this->get_analysis_parameters()->method_override_graph),
-              callee);
-        } else if (is_invoke_interface(op)) {
-          overriding_methods = mog::get_overriding_methods(
-              *(this->get_analysis_parameters()->method_override_graph),
-              callee,
-              true);
-        }
-
-        for (const DexMethod* method : overriding_methods) {
+        for (const DexMethod* method : callees) {
           this->get_caller_context()->update(
               method, [&](const reflection::CallingContext& original_context) {
                 return calling_context.join(original_context);
@@ -254,7 +233,6 @@ void IPReflectionAnalysisPass::run_pass(DexStoresVector& stores,
 
   Scope scope = build_class_scope(stores);
   AnalysisParameters param;
-  param.method_override_graph = mog::build_graph(scope);
   auto analysis = Analysis(scope, m_max_iteration, &param);
   analysis.run();
   auto summaries = analysis.registry.get_map();

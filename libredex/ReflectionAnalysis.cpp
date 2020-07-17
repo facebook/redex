@@ -491,8 +491,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
       }
 
       if (m_summary_query_fn) {
-        callee_return = (*m_summary_query_fn)(
-            resolve_method(insn->get_method(), opcode_to_search(insn)));
+        callee_return = (*m_summary_query_fn)(insn);
       }
     }
 
