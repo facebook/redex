@@ -129,6 +129,7 @@
   TM(TYPE_TRANSFORM) \
   TM(UCM)            \
   TM(UNREF_INTF)     \
+  TM(USES_NAMES)     \
   TM(VERIFY)         \
   TM(VIRT)           \
   TM(VM)             \

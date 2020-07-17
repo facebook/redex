@@ -247,6 +247,7 @@ libredex_la_SOURCES = \
 	opt/unreferenced_interfaces/UnreferencedInterfaces.cpp \
 	opt/unmark_proguard_keep/UnmarkProguardKeep.cpp \
 	opt/up-code-motion/UpCodeMotion.cpp \
+	opt/uses-names/UsesNames.cpp \
 	opt/verifier/Verifier.cpp \
 	opt/vertical_merging/VerticalMerging.cpp \
 	opt/virtual_merging/DedupVirtualMethods.cpp \
