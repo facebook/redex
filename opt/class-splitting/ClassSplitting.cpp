@@ -22,6 +22,7 @@
 #include "ClassSplitting.h"
 
 #include <algorithm>
+#include <boost/functional/hash.hpp>
 #include <vector>
 
 #include "ApiLevelChecker.h"
@@ -440,7 +441,8 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
 
     // We now rewrite all invoke-instructions as needed to reflect the fact that
     // we made some methods static as part of the relocation effort.
-    std::unordered_map<IROpcode, std::atomic<size_t>> rewritten_invokes;
+    std::unordered_map<IROpcode, std::atomic<size_t>, boost::hash<IROpcode>>
+        rewritten_invokes;
     for (IROpcode op :
          {OPCODE_INVOKE_DIRECT, OPCODE_INVOKE_VIRTUAL, OPCODE_INVOKE_SUPER}) {
       rewritten_invokes[op] = 0;
