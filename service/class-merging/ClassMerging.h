@@ -11,8 +11,6 @@
 
 namespace class_merging {
 
-void set_up(ConfigFiles& conf);
-
 void merge_model(Scope& scope,
                  ConfigFiles& conf,
                  PassManager& mgr,

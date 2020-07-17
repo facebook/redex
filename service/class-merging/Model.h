@@ -249,7 +249,7 @@ class Model {
 
   void update_redex_stats(PassManager& mgr) const;
 
-  static void build_interdex_groups(ConfigFiles* conf);
+  static void build_interdex_groups(ConfigFiles& conf);
 
   /**
    * Print everything about the model.
@@ -324,8 +324,6 @@ class Model {
 
   const TypeSystem& m_type_system;
 
-  static size_t s_shape_count;
-
   // Number of merger types created with the same shape per model.
   std::map<MergerType::Shape, size_t, MergerType::ShapeComp> m_shape_to_count;
 
@@ -360,8 +358,6 @@ class Model {
   void exclude_types(const std::unordered_set<DexType*>& exclude_types);
   bool is_excluded(const DexType* type) const;
   void find_non_mergeables(const Scope& scope, const TypeSet& generated);
-  void find_non_root_store_mergeables(const DexStoresVector& stores,
-                                      bool include_primary_dex);
 
   // MergerType creator helpers
   MergerType& create_dummy_merger(const DexType* type);

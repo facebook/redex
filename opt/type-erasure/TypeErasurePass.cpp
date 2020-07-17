@@ -266,7 +266,6 @@ void TypeErasurePass::run_pass(DexStoresVector& stores,
   if (m_model_specs.empty()) {
     return;
   }
-  class_merging::set_up(conf);
   auto scope = build_class_scope(stores);
   for (ModelSpec& model_spec : m_model_specs) {
     if (!model_spec.enabled) {

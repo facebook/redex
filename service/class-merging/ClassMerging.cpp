@@ -11,7 +11,7 @@
 #include "ModelMerger.h"
 #include "NormalizeConstructor.h"
 
-namespace class_merging {
+namespace {
 
 bool s_is_initialized = false;
 
@@ -24,15 +24,20 @@ void set_up(ConfigFiles& conf) {
     // Already initialized.
     return;
   }
-  Model::build_interdex_groups(&conf);
+  Model::build_interdex_groups(conf);
   s_is_initialized = true;
 }
+
+} // namespace
+
+namespace class_merging {
 
 void merge_model(Scope& scope,
                  ConfigFiles& conf,
                  PassManager& mgr,
                  DexStoresVector& stores,
                  ModelSpec& spec) {
+  set_up(conf);
   always_assert(s_is_initialized);
   handle_interface_as_root(spec, scope, stores);
   TRACE(TERA, 2, "[TERA] merging %s model", spec.name.c_str());

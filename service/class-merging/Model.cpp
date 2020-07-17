@@ -7,22 +7,12 @@
 
 #include "Model.h"
 
-#include <set>
-#include <sstream>
-
-#include <boost/algorithm/string.hpp>
-#include <boost/algorithm/string/predicate.hpp>
-
 #include "AnnoUtils.h"
 #include "ApproximateShapeMerging.h"
-#include "ClassAssemblingUtils.h"
 #include "DexStoreUtil.h"
-#include "DexUtil.h"
-#include "IRCode.h"
 #include "Resolver.h"
 #include "Walkers.h"
 
-size_t Model::s_shape_count = 0;
 size_t Model::s_num_interdex_groups = 0;
 std::unordered_map<DexType*, size_t> Model::s_cls_to_interdex_group;
 
@@ -265,7 +255,11 @@ Model::Model(const Scope& scope,
     m_type_system.get_all_children(root, m_types);
   }
   init(scope, spec, type_system);
-  find_non_root_store_mergeables(stores, spec.include_primary_dex);
+  auto non_root_store_types =
+      get_non_root_store_types(stores, m_types, spec.include_primary_dex);
+  for (const auto* type : non_root_store_types) {
+    m_non_mergeables.insert(type);
+  }
 }
 
 void Model::init(const Scope& scope,
@@ -335,12 +329,8 @@ MergerType* Model::build_mergers(const DexType* root) {
   return &merger;
 }
 
-void Model::build_interdex_groups(ConfigFiles* conf) {
-  if (!conf) {
-    return;
-  }
-
-  const auto& interdex_order = conf->get_coldstart_classes();
+void Model::build_interdex_groups(ConfigFiles& conf) {
+  const auto& interdex_order = conf.get_coldstart_classes();
   if (interdex_order.empty()) {
     // No grouping based on interdex.
     s_num_interdex_groups = 0;
@@ -662,16 +652,6 @@ void Model::find_non_mergeables(const Scope& scope, const TypeSet& generated) {
 
   m_metric.non_mergeables = m_non_mergeables.size();
   TRACE(TERA, 3, "Non mergeables %ld", m_non_mergeables.size());
-}
-
-void Model::find_non_root_store_mergeables(const DexStoresVector& stores,
-                                           bool include_primary_dex) {
-  std::unordered_set<const DexType*> non_root_store_types =
-      get_non_root_store_types(stores, m_types, include_primary_dex);
-
-  for (const DexType* type : non_root_store_types) {
-    m_non_mergeables.insert(type);
-  }
 }
 
 /**
