@@ -16,6 +16,9 @@ using Shape = MergerType::Shape;
 
 namespace {
 
+const std::string SHAPE_GRAPH_FILE = "approx_shape_graph.dot";
+const std::string SHAPE_MERGE_GRAPH_FILE = "approx_shape_merge_graph_file.dot";
+
 /**
  * A "distance" is defined only between two shapes of which one includes the
  * other. It is the difference of number fields. It is not a distance in a
@@ -226,12 +229,12 @@ void print_edge(const Shape& from_shape,
 }
 
 void write_shape_graph(
+    const ConfigFiles& conf,
     const std::string& graph_file_name,
     const std::unordered_map<Shape, std::unordered_set<Shape>>& pred_map,
     const std::unordered_map<Shape, size_t>& num_mergeables) {
-  TRACE(TERA, 5, "[approx] printing dot graph to: %s.",
-        graph_file_name.c_str());
-  std::ofstream os(graph_file_name, std::ios::app);
+  std::string file_name = conf.metafile(graph_file_name);
+  std::ofstream os(file_name, std::ios::app);
   if (!os.is_open()) {
     TRACE(TERA, 5, "         Cannot open file.");
     return;
@@ -309,15 +312,11 @@ void simple_greedy_approximation(const JsonWrapper& specs,
  * mergeables in that group is maximized.
  */
 void max_mergeable_greedy(const JsonWrapper& specs,
-                          const std::string& outdir,
+                          const ConfigFiles& conf,
                           MergerType::ShapeCollector& shapes,
                           ApproximateStats& stats) {
   size_t max_distance;
   specs.get("distance", 0, max_distance);
-  std::string shape_graph_file;
-  std::string shape_merge_graph_file;
-  specs.get("shape_graph_file", "", shape_graph_file);
-  specs.get("shape_merge_graph_file", "", shape_merge_graph_file);
   size_t max_mergeable_threshold = 0;
   specs.get("max_mergeable_threshold", 0, max_mergeable_threshold);
 
@@ -343,11 +342,7 @@ void max_mergeable_greedy(const JsonWrapper& specs,
     drop_shape_with_many_mergeables(max_mergeable_threshold, shapes, pred_map,
                                     succ_map);
   }
-
-  if (!shape_graph_file.empty()) {
-    shape_graph_file = outdir + "/" + shape_graph_file;
-    write_shape_graph(shape_graph_file, pred_map, num_mergeables);
-  }
+  write_shape_graph(conf, SHAPE_GRAPH_FILE, pred_map, num_mergeables);
 
   // Get a list of target shapes that has predecessors
   std::vector<Shape> target_list;
@@ -410,10 +405,7 @@ void max_mergeable_greedy(const JsonWrapper& specs,
     remove_from_DAG(to_shape, pred_map, succ_map);
   }
 
-  if (!shape_merge_graph_file.empty()) {
-    shape_merge_graph_file = outdir + "/" + shape_merge_graph_file;
-    write_shape_graph(shape_merge_graph_file, merge_map, num_mergeables);
-  }
+  write_shape_graph(conf, SHAPE_MERGE_GRAPH_FILE, merge_map, num_mergeables);
 }
 
 /**
@@ -424,15 +416,11 @@ void max_mergeable_greedy(const JsonWrapper& specs,
  * sorted order, merge a shape to a successor with the most predecessors.
  */
 void max_shape_merged_greedy(const JsonWrapper& specs,
-                             const std::string& outdir,
+                             const ConfigFiles& conf,
                              MergerType::ShapeCollector& shapes,
                              ApproximateStats& stats) {
   size_t max_distance;
   specs.get("distance", 0, max_distance);
-  std::string shape_graph_file;
-  std::string shape_merge_graph_file;
-  specs.get("shape_graph_file", "", shape_graph_file);
-  specs.get("shape_merge_graph_file", "", shape_merge_graph_file);
   size_t max_mergeable_threshold = 0;
   specs.get("max_mergeable_threshold", 0, max_mergeable_threshold);
 
@@ -452,11 +440,7 @@ void max_shape_merged_greedy(const JsonWrapper& specs,
     drop_shape_with_many_mergeables(max_mergeable_threshold, shapes, pred_map,
                                     succ_map);
   }
-
-  if (!shape_graph_file.empty()) {
-    shape_graph_file = outdir + "/" + shape_graph_file;
-    write_shape_graph(shape_graph_file, pred_map, num_mergeables);
-  }
+  write_shape_graph(conf, SHAPE_GRAPH_FILE, pred_map, num_mergeables);
 
   std::vector<Shape> shapes_list;
   for (const auto& shape_it : shapes) {
@@ -511,8 +495,5 @@ void max_shape_merged_greedy(const JsonWrapper& specs,
     }
   }
 
-  if (!shape_merge_graph_file.empty()) {
-    shape_merge_graph_file = outdir + "/" + shape_merge_graph_file;
-    write_shape_graph(shape_merge_graph_file, merge_map, num_mergeables);
-  }
+  write_shape_graph(conf, SHAPE_MERGE_GRAPH_FILE, merge_map, num_mergeables);
 }

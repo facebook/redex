@@ -11,12 +11,7 @@
 #include "ModelMerger.h"
 #include "NormalizeConstructor.h"
 
-std::string ModelMerger::s_mapping_file;
-std::string Model::s_outdir;
-
 namespace class_merging {
-
-const std::string TE_MAPPING_FILE_NAME = "redex-type-erasure-mappings.txt";
 
 bool s_is_initialized = false;
 
@@ -29,13 +24,12 @@ void set_up(ConfigFiles& conf) {
     // Already initialized.
     return;
   }
-  ModelMerger::s_mapping_file = conf.metafile(TE_MAPPING_FILE_NAME);
-  Model::s_outdir = conf.get_outdir();
   Model::build_interdex_groups(&conf);
   s_is_initialized = true;
 }
 
 void merge_model(Scope& scope,
+                 ConfigFiles& conf,
                  PassManager& mgr,
                  DexStoresVector& stores,
                  ModelSpec& spec) {
@@ -47,11 +41,11 @@ void merge_model(Scope& scope,
     always_assert(!is_interface(type_class(root)));
   }
   TypeSystem type_system(scope);
-  auto model = Model::build_model(scope, stores, spec, type_system);
+  auto model = Model::build_model(scope, conf, stores, spec, type_system);
   model.update_redex_stats(mgr);
 
   ModelMerger mm;
-  auto merger_classes = mm.merge_model(scope, stores, model);
+  auto merger_classes = mm.merge_model(scope, stores, conf, model);
   auto num_dedupped = method_dedup::dedup_constructors(merger_classes, scope);
   mm.increase_ctor_dedupped_stats(num_dedupped);
   mm.update_redex_stats(spec.class_name_prefix, mgr);

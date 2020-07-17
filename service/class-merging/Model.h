@@ -190,10 +190,12 @@ class Model {
    * Build a Model given a scope and a specification.
    */
   static Model build_model(const Scope& scope,
+                           const ConfigFiles& conf,
                            const DexStoresVector& stores,
                            const ModelSpec& spec,
                            const TypeSystem& type_system);
   static Model build_model(const Scope& scope,
+                           const ConfigFiles& conf,
                            const ModelSpec& spec,
                            const TypeSet& types,
                            const TypeSystem& type_system);
@@ -246,9 +248,6 @@ class Model {
   bool keep_debug_info() const { return m_spec.keep_debug_info; }
 
   void update_redex_stats(PassManager& mgr) const;
-
-  // output directory
-  static std::string s_outdir;
 
   static void build_interdex_groups(ConfigFiles* conf);
 
@@ -331,6 +330,7 @@ class Model {
   std::map<MergerType::Shape, size_t, MergerType::ShapeComp> m_shape_to_count;
 
   const Scope& m_scope;
+  const ConfigFiles& m_conf;
 
   static std::unordered_map<DexType*, size_t> s_cls_to_interdex_group;
   static size_t s_num_interdex_groups;
@@ -341,10 +341,12 @@ class Model {
    * roots.
    */
   Model(const Scope& scope,
+        const ConfigFiles& conf,
         const DexStoresVector& stores,
         const ModelSpec& spec,
         const TypeSystem& type_system);
   Model(const Scope& scope,
+        const ConfigFiles& conf,
         const ModelSpec& spec,
         const TypeSystem& type_system,
         const TypeSet& types);

@@ -272,7 +272,7 @@ void TypeErasurePass::run_pass(DexStoresVector& stores,
     if (!model_spec.enabled) {
       continue;
     }
-    class_merging::merge_model(scope, mgr, stores, model_spec);
+    class_merging::merge_model(scope, conf, mgr, stores, model_spec);
   }
   post_dexen_changes(scope, stores);
 }

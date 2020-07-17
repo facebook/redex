@@ -33,11 +33,11 @@ void simple_greedy_approximation(const JsonWrapper& specs,
                                  ApproximateStats& stats);
 
 void max_mergeable_greedy(const JsonWrapper& specs,
-                          const std::string& outdir,
+                          const ConfigFiles& conf,
                           MergerType::ShapeCollector& shapes,
                           ApproximateStats& stats);
 
 void max_shape_merged_greedy(const JsonWrapper& specs,
-                             const std::string& outdir,
+                             const ConfigFiles& conf,
                              MergerType::ShapeCollector& shapes,
                              ApproximateStats& stats);

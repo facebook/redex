@@ -243,18 +243,24 @@ void exclude_reference_to_android_sdk(const Json::Value& json_val,
 const TypeSet Model::empty_set = TypeSet();
 
 Model::Model(const Scope& scope,
+             const ConfigFiles& conf,
              const ModelSpec& spec,
              const TypeSystem& type_system,
              const TypeSet& types)
-    : m_spec(spec), m_types(types), m_type_system(type_system), m_scope(scope) {
+    : m_spec(spec),
+      m_types(types),
+      m_type_system(type_system),
+      m_scope(scope),
+      m_conf(conf) {
   init(scope, spec, type_system);
 }
 
 Model::Model(const Scope& scope,
+             const ConfigFiles& conf,
              const DexStoresVector& stores,
              const ModelSpec& spec,
              const TypeSystem& type_system)
-    : m_spec(spec), m_type_system(type_system), m_scope(scope) {
+    : m_spec(spec), m_type_system(type_system), m_scope(scope), m_conf(conf) {
   for (const auto root : spec.roots) {
     m_type_system.get_all_children(root, m_types);
   }
@@ -808,16 +814,13 @@ void Model::approximate_shapes(MergerType::ShapeCollector& shapes) {
     return;
   }
 
-  always_assert(!s_outdir.empty());
-  TRACE(TERA, 3, "[approx] output dir is: %s", s_outdir.c_str());
-
   // Select an approximation algorithm
   if (algo_name == "simple_greedy") {
     simple_greedy_approximation(approx_spec, shapes, m_approx_stats);
   } else if (algo_name == "max_mergeable_greedy") {
-    max_mergeable_greedy(approx_spec, s_outdir, shapes, m_approx_stats);
+    max_mergeable_greedy(approx_spec, m_conf, shapes, m_approx_stats);
   } else if (algo_name == "max_shape_merged_greedy") {
-    max_shape_merged_greedy(approx_spec, s_outdir, shapes, m_approx_stats);
+    max_shape_merged_greedy(approx_spec, m_conf, shapes, m_approx_stats);
   } else {
     TRACE(TERA, 3,
           "[approx] Invalid approximate shape merging spec, skipping...");
@@ -1468,13 +1471,14 @@ void Model::update_model(Model& model) {
 }
 
 Model Model::build_model(const Scope& scope,
+                         const ConfigFiles& conf,
                          const DexStoresVector& stores,
                          const ModelSpec& spec,
                          const TypeSystem& type_system) {
   Timer t("build_model");
 
   TRACE(TERA, 3, "Build Model for %s", to_string(spec).c_str());
-  Model model(scope, stores, spec, type_system);
+  Model model(scope, conf, stores, spec, type_system);
   TRACE(TERA, 3, "Model:\n%s\nBuild Model done", model.print().c_str());
 
   update_model(model);
@@ -1501,13 +1505,14 @@ void Model::update_redex_stats(PassManager& mgr) const {
 }
 
 Model Model::build_model(const Scope& scope,
+                         const ConfigFiles& conf,
                          const ModelSpec& spec,
                          const TypeSet& types,
                          const TypeSystem& type_system) {
   Timer t("build_model");
 
   TRACE(TERA, 3, "Build Model for %s", to_string(spec).c_str());
-  Model model(scope, spec, type_system, types);
+  Model model(scope, conf, spec, type_system, types);
   TRACE(TERA, 3, "Model:\n%s\nBuild Model done", model.print().c_str());
 
   update_model(model);

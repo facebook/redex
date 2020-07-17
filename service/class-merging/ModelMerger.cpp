@@ -24,6 +24,8 @@ namespace {
 using MergedTypeNames = std::unordered_map<std::string, std::string>;
 using CallSites = std::vector<std::pair<DexMethod*, IRInstruction*>>;
 
+const std::string TE_MAPPING_FILE_NAME = "redex-type-erasure-mappings.txt";
+
 TypeTags gen_type_tags(const std::vector<const MergerType*>& mergers) {
   TypeTags res;
   for (auto& merger : mergers) {
@@ -451,9 +453,10 @@ void trim_method_debug_map(
 }
 
 void write_out_type_mapping(
+    const ConfigFiles& conf,
     const std::unordered_map<const DexType*, DexType*>& mergeable_to_merger,
-    const TypeToMethodMap& method_dedup_map,
-    const std::string& mapping_file) {
+    const TypeToMethodMap& method_dedup_map) {
+  std::string mapping_file = conf.metafile(TE_MAPPING_FILE_NAME);
   std::ofstream os(mapping_file, std::ios_base::app);
   if (!os.is_open()) {
     return;
@@ -508,6 +511,7 @@ void ModelMerger::update_stats(const std::string& model_name,
 
 std::vector<DexClass*> ModelMerger::merge_model(Scope& scope,
                                                 DexStoresVector& stores,
+                                                const ConfigFiles& conf,
                                                 Model& model) {
   Timer t("merge_model");
   std::vector<const MergerType*> to_materialize;
@@ -621,7 +625,7 @@ std::vector<DexClass*> ModelMerger::merge_model(Scope& scope,
 
   // Write out mapping files
   auto method_dedup_map = mm.get_method_dedup_map();
-  write_out_type_mapping(mergeable_to_merger, method_dedup_map, s_mapping_file);
+  write_out_type_mapping(conf, mergeable_to_merger, method_dedup_map);
   if (!to_materialize.empty()) {
     post_process(model, type_tags, mergeable_to_merger_ctor);
   }
