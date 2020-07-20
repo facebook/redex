@@ -128,6 +128,7 @@
   TM(SW)             \
   TM(IFCS_ANALYSIS)  \
   TM(UNREF_INTF)     \
+  TM(USES_NAMES)     \
   TM(OPT_STORES)     \
   TM(MEINT)          \
   TM(OPUT)           \

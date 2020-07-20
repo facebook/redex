@@ -68,6 +68,7 @@ class ReferencedState {
     bool m_dont_inline : 1;
     bool m_force_inline : 1;
 
+    bool m_name_used : 1;
     InnerStruct() {
       // Initializers in bit fields are C++20...
       m_by_string = false;
@@ -89,6 +90,8 @@ class ReferencedState {
 
       m_dont_inline = false;
       m_force_inline = false;
+
+      m_name_used = false;
     }
   } inner_struct;
 
@@ -169,7 +172,8 @@ class ReferencedState {
 
   // -keepnames
   bool can_rename() const {
-    return can_rename_if_also_renaming_xml() && !inner_struct.m_by_resources;
+    return can_rename_if_also_renaming_xml() && !inner_struct.m_by_resources &&
+           !inner_struct.m_name_used;
   }
 
   /*
@@ -178,7 +182,8 @@ class ReferencedState {
    * will be responsible for updating the XML resources.
    */
   bool can_rename_if_also_renaming_xml() const {
-    return !inner_struct.m_keep || allowobfuscation();
+    return (!inner_struct.m_name_used && !inner_struct.m_keep) ||
+           allowobfuscation();
   }
 
   bool assumenosideeffects() const {
@@ -301,6 +306,8 @@ class ReferencedState {
   void set_force_inline() { inner_struct.m_force_inline = true; }
   bool dont_inline() const { return inner_struct.m_dont_inline; }
   void set_dont_inline() { inner_struct.m_dont_inline = true; }
+
+  void set_name_used() { inner_struct.m_name_used = true; }
 
  private:
   // Does any keep rule (whether -keep or -keepnames) match this DexMember?
