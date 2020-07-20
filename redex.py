@@ -15,6 +15,7 @@ import logging
 import os
 import platform
 import re
+import shlex
 import shutil
 import signal
 import struct
@@ -1017,6 +1018,9 @@ def finalize_redex(state):
     copy_all_file_to_out_dir(
         meta_file_dir, state.args.out, "*", "all redex generated artifacts"
     )
+    # Write invocation file
+    with open(join(dirname(state.args.out), "redex.py-invocation.txt"), "w") as f:
+        print("%s" % " ".join(map(shlex.quote, sys.argv)), file=f)
 
     copy_all_file_to_out_dir(
         state.dex_dir, state.args.out, "*.dot", "approximate shape graphs"
