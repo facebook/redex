@@ -20,33 +20,35 @@ brew install autoconf automake libtool python3
 brew install boost jsoncpp
 ```
 
-### Ubuntu (64-bit)
+### Ubuntu/Debian (64-bit)
+Base requirements are automake & libtool, GCC >= 5, Python >= 3.6 and Boost >= 1.71.0, as well as
+development versions of `iberty`, `jemalloc`, `jsoncpp`, `lz4`, `lzma`, and `zlib`.
+#### Ubuntu 16.04 - 19.10, Debian 10 Buster
+The minimum supported version is Ubuntu 16.04. The convenience script
+[`setup_oss_toolchain.sh`](https://github.com/facebook/redex/blob/master/setup_oss_toolchain.sh)
+will set up the build environment.
+```
+sudo ./setup_oss_toolchain.sh
+```
+#### Ubuntu 20.04, Debian Bullseye/Testing
+Starting with Ubuntu 20.04, all packages are new enough in the standard repositories. Install
+all required packages with
 ```
 sudo apt-get install \
-    g++ \
-    automake \
     autoconf \
     autoconf-archive \
-    libtool \
+    automake \
+    binutils-dev \
+    g++ \
+    libboost-all-dev \
+    libiberty-dev \
+    libjemalloc-dev \
+    libjsoncpp-dev
     liblz4-dev \
     liblzma-dev \
+    libtool \
     make \
-    zlib1g-dev \
-    binutils-dev \
-    libjemalloc-dev \
-    libiberty-dev \
-    libjsoncpp-dev
-```
-
-Redex requires boost version >= 1.71. The versions in the Ubuntu up to 19.10 repositories are too old.
-This script will install boost for you instead:
-```
-sudo ./get_boost.sh
-```
-
-Proceed installing libboost:
-```
-sudo apt-get install libboost-all-dev
+    zlib1g-dev
 ```
 
 ### Experimental: Windows 10 (64-bit)
@@ -78,10 +80,10 @@ cd redex
 
 Now, build ReDex using autoconf and make.
 ```
-# if you're using gcc, please use gcc-5
-autoreconf -ivf && ./configure && make -j4
+autoreconf -ivf && ./configure && make -j
 sudo make install
 ```
+If you experience out-of-memory errors, reduce Make parallelism, e.g., to `-j4`.
 
 ### Experimental: CMake for Mac, Linux, and Windows
 
@@ -123,11 +125,23 @@ You should see a `redex-all` executable, and the executable should show about 45
 ```
 
 ## Test
+Optionally, you can run our unit test suite.  We use gtest, which is automatically
+downloaded when testing (or by invoking a setup script directly).
 
-Optionally, you can run our unit test suite.  We use gtest, which is downloaded
-via a setup script.
+### Dependencies
+Some ReDex tests require a Java environment and Android compiler tooling. If a JDK and the
+Android SDK are available on the machine, ensure that `javac` and `dx` are available on
+the `PATH`. Otherwise, install those dependencies.
+
+For Ubuntu/Debian, this may for example be done with
 ```
-./test/setup.sh
-cd test
-make check
+sudo apt-get install -y --no-install-recommends dalvik-exchange openjdk-8-jdk-headless
+sudo ln -s /usr/bin/dalvik-exchange /usr/local/bin/dx
 ```
+
+### Execute
+Run tests with
+```
+make -j check
+```
+If you experience out-of-memory errors, reduce Make parallelism, e.g., to `-j4`.
