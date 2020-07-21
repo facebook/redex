@@ -1007,3 +1007,31 @@ TEST_F(DedupBlocksTest, conditional_self_loops_are_alike) {
 
   EXPECT_CODE_EQ(expected_code.get(), code);
 }
+
+TEST_F(DedupBlocksTest, return_if_single) {
+  auto input_code = assembler::ircode_from_string(R"(
+    (
+      (const v0 1)
+      (if-eqz v0 :label)
+      (return-void)
+      (:label)
+      (return-void)
+    )
+  )");
+  auto method = get_fresh_method("conditional_self_loops_are_alike");
+  method->set_code(std::move(input_code));
+  auto code = method->get_code();
+
+  run_dedup_blocks();
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (const v0 1)
+      (if-eqz v0 :label)
+      (:label)
+      (return-void)
+    )
+  )");
+
+  EXPECT_CODE_EQ(expected_code.get(), code);
+}

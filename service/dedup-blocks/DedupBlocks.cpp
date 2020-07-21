@@ -528,11 +528,10 @@ class DedupBlocksImpl {
         }
 
         // Is this the best saving we've seen so far?
-        // Note we only want at least 3 level deep otherwise it is probably not
-        // quite worth it (configurable).
+        // Note we only want at least block_split_min_opcode_count deep (config)
         size_t cur_saved_insn =
             cur_insn_index * (majority_count_group.blocks.size() - 1);
-        if (cur_saved_insn > best_saved_insn &&
+        if (cur_saved_insn >= best_saved_insn &&
             cur_insn_index >= m_config->block_split_min_opcode_count) {
           // Save it
           best_saved_insn = cur_saved_insn;
