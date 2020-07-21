@@ -59,6 +59,11 @@ class RemoveUnusedFields final {
     return m_zero_written_fields;
   }
 
+  const std::unordered_set<const DexField*>& vestigial_objects_written_fields()
+      const {
+    return m_vestigial_objects_written_fields;
+  }
+
   size_t unremovable_unread_field_puts() const {
     return m_unremovable_unread_field_puts;
   }
@@ -95,6 +100,11 @@ class RemoveUnusedFields final {
       return true;
     }
 
+    // We don't have to worry about lifetimes of harmless objects
+    if (m_vestigial_objects_written_fields.count(field)) {
+      return true;
+    }
+
     return false;
   }
 
@@ -107,9 +117,10 @@ class RemoveUnusedFields final {
       code.build_cfg(/* editable = true*/);
     });
 
-    boost::optional<field_op_tracker::NonZeroWrittenFields> non_zero_writes;
-    if (m_config.remove_zero_written_fields) {
-      non_zero_writes = field_op_tracker::analyze_non_zero_writes(m_scope);
+    boost::optional<field_op_tracker::FieldWrites> field_writes;
+    if (m_config.remove_zero_written_fields ||
+        m_config.remove_vestigial_objects_written_fields) {
+      field_writes = field_op_tracker::analyze_writes(m_scope);
     }
 
     for (auto& pair : field_stats) {
@@ -127,11 +138,16 @@ class RemoveUnusedFields final {
           is_whitelisted(field)) {
         if (m_config.remove_unread_fields && stats.reads == 0) {
           m_unread_fields.emplace(field);
+          if (m_config.remove_vestigial_objects_written_fields &&
+              !field_writes->non_vestigial_objects_written_fields.count(
+                  field)) {
+            m_vestigial_objects_written_fields.emplace(field);
+          }
         } else if (m_config.remove_unwritten_fields && stats.writes == 0 &&
                    !has_non_zero_static_value(field)) {
           m_unwritten_fields.emplace(field);
         } else if (m_config.remove_zero_written_fields &&
-                   !non_zero_writes->count(field) &&
+                   !field_writes->non_zero_written_fields.count(field) &&
                    !has_non_zero_static_value(field)) {
           m_zero_written_fields.emplace(field);
         }
@@ -140,6 +156,10 @@ class RemoveUnusedFields final {
     TRACE(RMUF, 2, "unread_fields %u", m_unread_fields.size());
     TRACE(RMUF, 2, "unwritten_fields %u", m_unwritten_fields.size());
     TRACE(RMUF, 2, "zero written_fields %u", m_zero_written_fields.size());
+    TRACE(RMUF,
+          2,
+          "vestigial objects written_fields %u",
+          m_vestigial_objects_written_fields.size());
   }
 
   void transform() {
@@ -204,6 +224,7 @@ class RemoveUnusedFields final {
   std::unordered_set<const DexField*> m_unread_fields;
   std::unordered_set<const DexField*> m_unwritten_fields;
   std::unordered_set<const DexField*> m_zero_written_fields;
+  std::unordered_set<const DexField*> m_vestigial_objects_written_fields;
   std::unordered_set<DexType*> m_remove_unread_field_put_types_whitelist;
   DexType* m_java_lang_Enum;
   std::atomic<size_t> m_unremovable_unread_field_puts{0};
@@ -221,6 +242,8 @@ void PassImpl::run_pass(DexStoresVector& stores,
   mgr.set_metric("unread_fields", rmuf.unread_fields().size());
   mgr.set_metric("unwritten_fields", rmuf.unwritten_fields().size());
   mgr.set_metric("zero_written_fields", rmuf.zero_written_fields().size());
+  mgr.set_metric("vestigial_objects_written_fields",
+                 rmuf.vestigial_objects_written_fields().size());
   mgr.set_metric("unremovable_unread_field_puts",
                  rmuf.unremovable_unread_field_puts());
 

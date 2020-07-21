@@ -60,7 +60,6 @@ libredex_la_SOURCES = \
 	libredex/DexStoreUtil.cpp \
 	libredex/DuplicateClasses.cpp \
 	libredex/EditableCfgAdapter.cpp \
-	libredex/FieldOpTracker.cpp \
 	libredex/FrameworkApi.cpp \
 	libredex/FrequentlyUsedPointersCache.cpp \
 	libredex/GlobalConfig.cpp \
@@ -281,6 +280,7 @@ libredex_la_SOURCES = \
 	service/dedup-blocks/DedupBlocks.cpp \
 	service/escape-analysis/BlamingAnalysis.cpp \
 	service/escape-analysis/LocalPointersAnalysis.cpp \
+	service/field-ops/FieldOpTracker.cpp \
 	service/local-dce/LocalDce.cpp \
 	service/loop-info/LoopInfo.cpp \
 	service/method-dedup/ConstantLifting.cpp \
