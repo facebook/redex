@@ -223,7 +223,7 @@ static DexType* simpleTypeS;
 static DexType* simpleTypeZ;
 static DexType* simpleTypeV;
 
-static void init_basic_types() {
+void init_basic_types() {
   simpleTypeB = DexType::make_type("B");
   simpleTypeC = DexType::make_type("C");
   simpleTypeD = DexType::make_type("D");
@@ -348,10 +348,10 @@ static DexMethod* make_dexmethod(std::vector<cp_entry>& cpool,
   return method;
 }
 
-static bool parse_class(uint8_t* buffer,
-                        Scope* classes,
-                        attribute_hook_t attr_hook,
-                        const std::string& jar_location = "") {
+bool parse_class(uint8_t* buffer,
+                 Scope* classes,
+                 attribute_hook_t attr_hook,
+                 const std::string& jar_location) {
   uint32_t magic = read32(buffer);
   uint16_t vminor DEBUG_ONLY = read16(buffer);
   uint16_t vmajor DEBUG_ONLY = read16(buffer);
@@ -791,11 +791,11 @@ static bool process_jar_entries(const char* location,
   return true;
 }
 
-static bool process_jar(const char* location,
-                        const uint8_t* mapping,
-                        ssize_t size,
-                        Scope* classes,
-                        const attribute_hook_t& attr_hook) {
+bool process_jar(const char* location,
+                 const uint8_t* mapping,
+                 ssize_t size,
+                 Scope* classes,
+                 const attribute_hook_t& attr_hook) {
   pk_cdir_end pce;
   std::vector<jar_entry> files;
   if (!find_central_directory(mapping, size, pce)) return false;
