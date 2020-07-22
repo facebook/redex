@@ -7,3 +7,11 @@ bytecode.  An APK optimized by ReDex should be smaller and faster than its
 source.
 
 Go to https://fbredex.com for full documentation.
+
+## Contributions
+
+See [CONTRIBUTING.md](https://github.com/facebook/redex/blob/master/CONTRIBUTING.md) to understand how to contribute to this project.
+
+## License
+
+The ReDex repository is available under the [MIT License](https://github.com/facebook/redex/blob/master/LICENSE).
