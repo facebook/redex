@@ -8,6 +8,10 @@ aliases:
    branches:
      only:
        - master
+ - &filter-not-gh-pages
+   branches:
+     ignore:
+       - gh-pages
 
 jobs:
   build:
@@ -84,7 +88,8 @@ workflows:
   version: 2
   build_and_deploy:
     jobs:
-      # Note: no filter for 'build' so that pull requests get checked.
-      - build
+      # Note: only filter gh-pages for 'build' so that pull requests/stable get checked.
+      - build:
+          filters: *filter-not-gh-pages
       - deploy-website:
           filters: *filter-only-master
