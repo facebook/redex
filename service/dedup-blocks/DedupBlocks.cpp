@@ -46,6 +46,7 @@
  */
 
 #include "DedupBlocks.h"
+#include "DedupBlockValueNumbering.h"
 
 #include "Liveness.h"
 #include "ReachingDefinitions.h"
@@ -55,11 +56,6 @@
 namespace {
 
 using hash_t = std::size_t;
-
-// Structural equality of opcodes
-static bool same_code(cfg::Block* b1, cfg::Block* b2) {
-  return b1->structural_equals(b2);
-}
 
 static bool is_branch_or_goto(const cfg::Edge* edge) {
   auto type = edge->type();
@@ -118,19 +114,26 @@ struct SuccBlocksInSameGroup {
   }
 };
 
-struct BlocksInSameGroup {
-  bool operator()(cfg::Block* a, cfg::Block* b) const {
-    return SuccBlocksInSameGroup{}(a, b) && same_code(a, b);
+struct BlockAndBlockValuePair {
+  cfg::Block* block;
+  const DedupBlkValueNumbering::BlockValue* block_value;
+};
+
+const cfg::Block& operator*(const BlockAndBlockValuePair& p) {
+  return *p.block;
+}
+
+struct BlockAndBlockValuePairInSameGroup {
+  bool operator()(const BlockAndBlockValuePair& p,
+                  const BlockAndBlockValuePair& q) const {
+    return SuccBlocksInSameGroup{}(p.block, q.block) &&
+           *p.block_value == *q.block_value;
   }
 };
 
-struct BlockHasher {
-  hash_t operator()(cfg::Block* b) const {
-    hash_t result = 0;
-    for (auto& mie : InstructionIterable(b)) {
-      result = (result * 7) ^ mie.insn->hash();
-    }
-    return result;
+struct BlockAndBlockValuePairHasher {
+  hash_t operator()(const BlockAndBlockValuePair& p) const {
+    return DedupBlkValueNumbering::BlockValueHasher()(*p.block_value);
   }
 };
 
@@ -197,7 +200,12 @@ class DedupBlocksImpl {
 
   // Dedup blocks that are exactly the same
   bool dedup(DexMethod* method, cfg::ControlFlowGraph& cfg) {
-    Duplicates dups = collect_duplicates(method, cfg);
+    cfg.calculate_exit_block();
+    LivenessFixpointIterator liveness_fixpoint_iter(cfg);
+    liveness_fixpoint_iter.run({});
+    DedupBlkValueNumbering::BlockValues block_values(liveness_fixpoint_iter);
+    Duplicates dups =
+        collect_duplicates(method, cfg, block_values, liveness_fixpoint_iter);
     if (!dups.empty()) {
       if (m_config->debug) {
         check_inits(cfg);
@@ -245,8 +253,10 @@ class DedupBlocksImpl {
   // Because `BlocksInSameGroup` depends on the CFG, modifications to the CFG
   // invalidate this map.
   using BlockSet = std::set<cfg::Block*, BlockCompare>;
-  using Duplicates =
-      std::unordered_map<cfg::Block*, BlockSet, BlockHasher, BlocksInSameGroup>;
+  using Duplicates = std::unordered_map<BlockAndBlockValuePair,
+                                        BlockSet,
+                                        BlockAndBlockValuePairHasher,
+                                        BlockAndBlockValuePairInSameGroup>;
   struct PostfixSplitGroup {
     BlockSet postfix_blocks;
     std::map<cfg::Block*, IRList::reverse_iterator, BlockCompare>
@@ -263,7 +273,11 @@ class DedupBlocksImpl {
   Stats& m_stats;
 
   // Find blocks with the same exact code
-  Duplicates collect_duplicates(DexMethod* method, cfg::ControlFlowGraph& cfg) {
+  Duplicates collect_duplicates(
+      DexMethod* method,
+      cfg::ControlFlowGraph& cfg,
+      DedupBlkValueNumbering::BlockValues& block_values,
+      LivenessFixpointIterator& liveness_fixpoint_iter) {
     const auto& blocks = cfg.blocks();
     Duplicates duplicates;
 
@@ -279,14 +293,14 @@ class DedupBlocksImpl {
         //       A -> [A]
         //   * after the second iteration (inserted A')
         //       A -> [A, A']
-        duplicates[block].insert(block);
+        auto& dups = duplicates[{block, block_values.get_block_value(block)}];
+        dups.insert(block);
         ++m_stats.eligible_blocks;
       }
     }
 
     std::unique_ptr<reaching_defs::MoveAwareFixpointIterator>
         reaching_defs_fixpoint_iter;
-    std::unique_ptr<LivenessFixpointIterator> liveness_fixpoint_iter;
     std::unique_ptr<type_inference::TypeInference> type_inference;
     remove_if(duplicates, [&](auto& blocks) {
       return is_singleton_or_inconsistent(
@@ -862,7 +876,7 @@ class DedupBlocksImpl {
       cfg::ControlFlowGraph& cfg,
       std::unique_ptr<reaching_defs::MoveAwareFixpointIterator>&
           reaching_defs_fixpoint_iter,
-      std::unique_ptr<LivenessFixpointIterator>& liveness_fixpoint_iter,
+      LivenessFixpointIterator& liveness_fixpoint_iter,
       std::unique_ptr<type_inference::TypeInference>& type_inference) {
     if (blocks.size() <= 1) {
       return true;
@@ -899,13 +913,8 @@ class DedupBlocksImpl {
       type_inference.reset(new type_inference::TypeInference(cfg));
       type_inference->run(method);
     }
-    if (!liveness_fixpoint_iter) {
-      cfg.calculate_exit_block();
-      liveness_fixpoint_iter.reset(new LivenessFixpointIterator(cfg));
-      liveness_fixpoint_iter->run(LivenessDomain());
-    }
     auto live_in_vars =
-        liveness_fixpoint_iter->get_live_in_vars_at(*blocks.begin());
+        liveness_fixpoint_iter.get_live_in_vars_at(*blocks.begin());
     if (!(live_in_vars.is_value())) {
       // should never happen, but we are not going to fight that here
       return true;
@@ -975,7 +984,9 @@ class DedupBlocksImpl {
   static void print_dups(const Duplicates& dups) {
     TRACE(DEDUP_BLOCKS, 4, "duplicate blocks set: {");
     for (const auto& entry : dups) {
-      TRACE(DEDUP_BLOCKS, 4, "  hash = %lu", BlockHasher{}(entry.first));
+      TRACE(
+          DEDUP_BLOCKS, 4, "  hash = %lu",
+          DedupBlkValueNumbering::BlockValueHasher{}(*entry.first.block_value));
       for (cfg::Block* b : entry.second) {
         TRACE(DEDUP_BLOCKS, 4, "    block %d", b->id());
         for (const MethodItemEntry& mie : *b) {

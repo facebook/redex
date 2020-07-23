@@ -235,6 +235,7 @@ TEST_F(DedupBlocksTest, postfixDiscardingOneCase) {
       (goto :C)
 
       (:E)
+      (add-int v0 v0 v0)
       (return-void)
 
       (:C)
@@ -285,6 +286,7 @@ TEST_F(DedupBlocksTest, postfixDiscardingOneCase) {
       (add-int v0 v0 v0)
 
       (:E)
+      (add-int v0 v0 v0)
       (return-void)
 
       (:D)
@@ -520,6 +522,7 @@ TEST_F(DedupBlocksTest, diffSuccessorsNoChange1) {
   auto str = R"(
     (
       (const v0 0)
+      (const v2 3)
       (if-eqz v0 :left)
 
       ; right
@@ -528,6 +531,7 @@ TEST_F(DedupBlocksTest, diffSuccessorsNoChange1) {
       (if-eqz v1 :right2)
 
       (:middle)
+      (add-int v0 v0 v2)
       (return-void)
 
       (:right2)
@@ -542,6 +546,7 @@ TEST_F(DedupBlocksTest, diffSuccessorsNoChange1) {
       (:left2)
       (const v2 2)
       (goto :middle)
+
     )
   )";
 
@@ -561,6 +566,7 @@ TEST_F(DedupBlocksTest, diffSuccessorsNoChange2) {
   auto str = R"(
     (
       (const v0 0)
+      (const v2 3)
       (if-eqz v0 :left)
 
       ; right
@@ -572,6 +578,7 @@ TEST_F(DedupBlocksTest, diffSuccessorsNoChange2) {
       (const v3 3)
 
       (:middle)
+      (add-int v0 v0 v2)
       (return-void)
 
       (:left)
@@ -581,6 +588,7 @@ TEST_F(DedupBlocksTest, diffSuccessorsNoChange2) {
       ; left2
       (const v2 2)
       (goto :middle)
+
     )
   )";
 
@@ -1030,6 +1038,106 @@ TEST_F(DedupBlocksTest, return_if_single) {
       (if-eqz v0 :label)
       (:label)
       (return-void)
+    )
+  )");
+
+  EXPECT_CODE_EQ(expected_code.get(), code);
+}
+
+// Blocks B and C are different only in register allocation.
+TEST_F(DedupBlocksTest, conditional_hashed_alike) {
+  auto input_code = assembler::ircode_from_string(R"(
+    (
+      (:a)
+      (const v0 0)
+      (const v1 0)
+      (const v2 0)
+      (if-eqz v1 :c)
+
+      (:b)
+      (move-exception v3)
+      (monitor-exit  v2)
+      (throw v3)
+      (if-eqz v0 :b)
+      (goto :end)
+
+      (:c)
+      (move-exception v4)
+      (monitor-exit  v2)
+      (throw v4)
+      (if-eqz v0 :c)
+
+      (:end)
+    )
+  )");
+  auto method = get_fresh_method("conditional_hashed_alike");
+  method->set_code(std::move(input_code));
+  auto code = method->get_code();
+
+  run_dedup_blocks();
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (const v1 0)
+      (const v2 0)
+      (if-eqz v1 :c)
+
+      (:c)
+      (move-exception v3)
+      (monitor-exit  v2)
+      (throw v3)
+    )
+  )");
+
+  EXPECT_CODE_EQ(expected_code.get(), code);
+}
+
+// Value for add-int are different so this cannont be deduplicated.
+TEST_F(DedupBlocksTest, conditional_hashed_not_alike) {
+  auto input_code = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (const v1 1)
+      (const v2 2)
+      (if-eqz v0 :b)
+
+      (add-int v0 v1 v0)
+      (goto :end)
+
+      (:b)
+      (add-int v0 v2 v0)
+      (goto :end)
+
+      (add-int v0 v2 v0)
+      (:end)
+      (add-int v0 v2 v0)
+      (return-void)
+    )
+  )");
+
+  auto method = get_fresh_method("conditional_hashed_not_alike");
+  method->set_code(std::move(input_code));
+  auto code = method->get_code();
+
+  run_dedup_blocks();
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (const v1 1)
+      (const v2 2)
+      (if-eqz v0 :b)
+
+      (add-int v0 v1 v0)
+
+      (:end)
+      (add-int v0 v2 v0)
+      (return-void)
+
+      (:b)
+      (add-int v0 v2 v0)
+      (goto :end)
     )
   )");
 
