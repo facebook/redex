@@ -115,19 +115,24 @@ struct Tracer {
 
  private:
   void init_trace_modules(const char* traceenv) {
-    std::unordered_map<std::string, int> module_id_map;
-#define TM(x) module_id_map[#x] = x;
-    TMS
+    std::unordered_map<std::string, int> module_id_map{{
+#define TM(x) {std::string(#x), x},
+        TMS
 #undef TM
-        char* tracespec = strdup(traceenv);
+    }};
+
+    char* tracespec = strdup(traceenv);
     const char* sep = ",: ";
-    const char* tok = strtok(tracespec, sep);
     const char* module = nullptr;
-    while (tok) {
+    for (const char* tok = strtok(tracespec, sep); tok != nullptr;
+         tok = strtok(nullptr, sep)) {
       auto level = strtol(tok, nullptr, 10);
       if (level) {
         if (module) {
           if (module_id_map.count(module) == 0) {
+            if (strcmp(module, "REDEX") == 0) {
+              continue; // Ignore REDEX.
+            }
             fprintf(stderr, "Unknown trace level %s\n", module);
             abort();
           }
@@ -139,7 +144,6 @@ struct Tracer {
       } else {
         module = tok;
       }
-      tok = strtok(nullptr, sep);
     }
     free(tracespec);
   }
