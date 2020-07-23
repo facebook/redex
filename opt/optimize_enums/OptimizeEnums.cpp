@@ -512,7 +512,6 @@ class OptimizeEnums {
    */
   std::vector<DexClass*> collect_generated_classes() {
     std::vector<DexClass*> generated_classes;
-    std::unordered_set<DexClass*> scope_classes(m_scope.begin(), m_scope.end());
 
     // To avoid any cross store references, only accept generated classes
     // that are in the root store (same for the Enums they reference).
