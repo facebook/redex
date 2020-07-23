@@ -8,6 +8,7 @@ COMMON_TEST_INCLUDES = \
 
 COMMON_BASE_TEST_LIBS = \
 	$(top_builddir)/libredex.la \
+	$(top_builddir)/libopt.la \
 	$(BOOST_FILESYSTEM_LIB) \
 	$(BOOST_SYSTEM_LIB) \
 	$(BOOST_REGEX_LIB) \

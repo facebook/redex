@@ -12,14 +12,13 @@ include $(top_srcdir)/Makefile.inc
 #
 AM_CPPFLAGS = $(COMMON_INCLUDES)
 
+noinst_LTLIBRARIES = libredex.la libopt.la
+
 #
 # libredex: the optimizer's guts
 #
-noinst_LTLIBRARIES = libredex.la
 
 libredex_la_SOURCES = \
-	analysis/max-depth/MaxDepthAnalysis.cpp \
-	analysis/ip-reflection-analysis/IPReflectionAnalysis.cpp \
 	liblocator/locator.cpp \
 	libredex/ABExperimentContext.cpp \
 	libredex/ABExperimentContextImpl.cpp \
@@ -140,6 +139,85 @@ libredex_la_SOURCES = \
 	libresource/TypeWrappers.cpp \
 	libresource/Unicode.cpp \
 	libresource/VectorImpl.cpp \
+	service/api-levels/ApiLevelsUtils.cpp \
+	service/class-init/ClassInitCounter.cpp \
+	service/class-merging/ApproximateShapeMerging.cpp \
+	service/class-merging/ClassAssemblingUtils.cpp \
+	service/class-merging/ClassMerging.cpp \
+	service/class-merging/MergerType.cpp \
+	service/class-merging/ModelMerger.cpp \
+	service/class-merging/ModelMethodMerger.cpp \
+	service/class-merging/Model.cpp \
+	service/class-merging/TypeTagUtils.cpp \
+	service/constant-propagation/ConstantEnvironment.cpp \
+	service/constant-propagation/ConstantPropagationAnalysis.cpp \
+	service/constant-propagation/ConstantPropagation.cpp \
+	service/constant-propagation/ConstantPropagationTransform.cpp \
+	service/constant-propagation/ConstantPropagationWholeProgramState.cpp \
+	service/constant-propagation/ConstructorParams.cpp \
+	service/constant-propagation/IPConstantPropagationAnalysis.cpp \
+	service/constant-propagation/ObjectDomain.cpp \
+	service/constant-propagation/SignDomain.cpp \
+	service/copy-propagation/AliasedRegisters.cpp \
+	service/copy-propagation/CanonicalizeLocks.cpp \
+	service/copy-propagation/CopyPropagation.cpp \
+	service/cse/CommonSubexpressionElimination.cpp \
+	service/dataflow/LiveRange.cpp \
+	service/dataflow/ConstantUses.cpp \
+	service/dedup-blocks/DedupBlocks.cpp \
+	service/escape-analysis/BlamingAnalysis.cpp \
+	service/escape-analysis/LocalPointersAnalysis.cpp \
+	service/field-ops/FieldOpTracker.cpp \
+	service/local-dce/LocalDce.cpp \
+	service/loop-info/LoopInfo.cpp \
+	service/method-dedup/ConstantLifting.cpp \
+	service/method-dedup/ConstantValue.cpp \
+	service/method-dedup/MethodDedup.cpp \
+	service/method-dedup/NormalizeConstructor.cpp \
+	service/method-dedup/TypeTags.cpp \
+	service/method-inliner/CFGInliner.cpp \
+	service/method-inliner/ConstructorAnalysis.cpp \
+	service/method-inliner/Deleter.cpp \
+	service/method-inliner/Inliner.cpp \
+	service/method-inliner/MethodInliner.cpp \
+	service/method-inliner/ObjectInlinePlugin.cpp \
+	service/method-merger/MethodMerger.cpp \
+	service/reference-update/MethodReference.cpp \
+	service/reference-update/TypeReference.cpp \
+	service/switch-dispatch/SwitchDispatch.cpp \
+	service/switch-partitioning/SwitchEquivFinder.cpp \
+	service/switch-partitioning/SwitchMethodPartitioning.cpp \
+	service/type-analysis/GlobalTypeAnalyzer.cpp \
+	service/type-analysis/LocalTypeAnalyzer.cpp \
+	service/type-analysis/WholeProgramState.cpp \
+	service/type-analysis/TypeAnalysisTransform.cpp \
+	service/type-analysis/TypeAnalysisRuntimeAssert.cpp \
+	service/type-string-rewriter/TypeStringRewriter.cpp \
+	shared/DexDefs.cpp \
+	shared/file-utils.cpp \
+	util/CommandProfiling.cpp \
+	util/JemallocUtil.cpp \
+	util/Sha1.cpp
+
+libredex_la_LIBADD = \
+	$(BOOST_FILESYSTEM_LIB) \
+	$(BOOST_SYSTEM_LIB) \
+	$(BOOST_REGEX_LIB) \
+	$(BOOST_IOSTREAMS_LIB) \
+	$(BOOST_THREAD_LIB) \
+	-lpthread
+
+#
+# libopt: the optimization passes
+#
+
+# Autoconf + libtool does not handle whole-archive well, and it is not
+# supported on MacOS ("-all_load"). But we would need this for pass
+# registration. Instead, share sources and create libopt for the tests.
+
+libopt_la_SOURCES = \
+	analysis/max-depth/MaxDepthAnalysis.cpp \
+	analysis/ip-reflection-analysis/IPReflectionAnalysis.cpp \
 	opt/access-marking/AccessMarking.cpp \
 	opt/annokill/AnnoKill.cpp \
 	opt/analyze-pure-method/PureMethods.cpp \
@@ -251,68 +329,10 @@ libredex_la_SOURCES = \
 	opt/vertical_merging/VerticalMerging.cpp \
 	opt/virtual_merging/DedupVirtualMethods.cpp \
 	opt/virtual_merging/VirtualMerging.cpp \
-	opt/virtual_scope/MethodDevirtualizationPass.cpp \
-	service/api-levels/ApiLevelsUtils.cpp \
-	service/class-init/ClassInitCounter.cpp \
-	service/class-merging/ApproximateShapeMerging.cpp \
-	service/class-merging/ClassAssemblingUtils.cpp \
-	service/class-merging/ClassMerging.cpp \
-	service/class-merging/MergerType.cpp \
-	service/class-merging/ModelMerger.cpp \
-	service/class-merging/ModelMethodMerger.cpp \
-	service/class-merging/Model.cpp \
-	service/class-merging/TypeTagUtils.cpp \
-	service/constant-propagation/ConstantEnvironment.cpp \
-	service/constant-propagation/ConstantPropagationAnalysis.cpp \
-	service/constant-propagation/ConstantPropagation.cpp \
-	service/constant-propagation/ConstantPropagationTransform.cpp \
-	service/constant-propagation/ConstantPropagationWholeProgramState.cpp \
-	service/constant-propagation/ConstructorParams.cpp \
-	service/constant-propagation/IPConstantPropagationAnalysis.cpp \
-	service/constant-propagation/ObjectDomain.cpp \
-	service/constant-propagation/SignDomain.cpp \
-	service/copy-propagation/AliasedRegisters.cpp \
-	service/copy-propagation/CanonicalizeLocks.cpp \
-	service/copy-propagation/CopyPropagation.cpp \
-	service/cse/CommonSubexpressionElimination.cpp \
-	service/dataflow/LiveRange.cpp \
-	service/dataflow/ConstantUses.cpp \
-	service/dedup-blocks/DedupBlocks.cpp \
-	service/escape-analysis/BlamingAnalysis.cpp \
-	service/escape-analysis/LocalPointersAnalysis.cpp \
-	service/field-ops/FieldOpTracker.cpp \
-	service/local-dce/LocalDce.cpp \
-	service/loop-info/LoopInfo.cpp \
-	service/method-dedup/ConstantLifting.cpp \
-	service/method-dedup/ConstantValue.cpp \
-	service/method-dedup/MethodDedup.cpp \
-	service/method-dedup/NormalizeConstructor.cpp \
-	service/method-dedup/TypeTags.cpp \
-	service/method-inliner/CFGInliner.cpp \
-	service/method-inliner/ConstructorAnalysis.cpp \
-	service/method-inliner/Deleter.cpp \
-	service/method-inliner/Inliner.cpp \
-	service/method-inliner/MethodInliner.cpp \
-	service/method-inliner/ObjectInlinePlugin.cpp \
-	service/method-merger/MethodMerger.cpp \
-	service/reference-update/MethodReference.cpp \
-	service/reference-update/TypeReference.cpp \
-	service/switch-dispatch/SwitchDispatch.cpp \
-	service/switch-partitioning/SwitchEquivFinder.cpp \
-	service/switch-partitioning/SwitchMethodPartitioning.cpp \
-	service/type-analysis/GlobalTypeAnalyzer.cpp \
-	service/type-analysis/LocalTypeAnalyzer.cpp \
-	service/type-analysis/WholeProgramState.cpp \
-	service/type-analysis/TypeAnalysisTransform.cpp \
-	service/type-analysis/TypeAnalysisRuntimeAssert.cpp \
-	service/type-string-rewriter/TypeStringRewriter.cpp \
-	shared/DexDefs.cpp \
-	shared/file-utils.cpp \
-	util/CommandProfiling.cpp \
-	util/JemallocUtil.cpp \
-	util/Sha1.cpp
+	opt/virtual_scope/MethodDevirtualizationPass.cpp
 
-libredex_la_LIBADD = \
+libopt_la_LIBADD = \
+    libredex.la \
 	$(BOOST_FILESYSTEM_LIB) \
 	$(BOOST_SYSTEM_LIB) \
 	$(BOOST_REGEX_LIB) \
@@ -327,8 +347,12 @@ bin_PROGRAMS = redexdump
 noinst_PROGRAMS = redex-all
 
 redex_all_SOURCES = \
+    $(libopt_la_SOURCES) \
 	tools/common/ToolsCommon.cpp \
 	tools/redex-all/main.cpp
+
+# Workaround for not using libopt.
+redex_all_CPPFLAGS = $(AM_CPPFLAGS)
 
 redex_all_LDADD = \
 	libredex.la \
