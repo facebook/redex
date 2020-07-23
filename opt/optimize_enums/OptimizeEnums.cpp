@@ -529,22 +529,16 @@ class OptimizeEnums {
       // and the static initializer (<clinit>)
       if (!sfields.empty() && cls->get_dmethods().size() == 1 &&
           cls->get_vmethods().empty() && cls->get_ifields().empty()) {
+        auto all_sfields_lookup_tables =
+            std::all_of(sfields.begin(), sfields.end(), [](DexField* sfield) {
+              const auto& deobfuscated_name = sfield->get_deobfuscated_name();
+              const auto& name = deobfuscated_name.empty()
+                                     ? sfield->get_name()->str()
+                                     : deobfuscated_name;
+              return name.find("$SwitchMap$") != std::string::npos;
+            });
 
-        bool accept_cls = true;
-        for (auto sfield : sfields) {
-          const std::string& deobfuscated_name =
-              sfield->get_deobfuscated_name();
-          const std::string& sfield_name = deobfuscated_name.empty()
-                                               ? sfield->get_name()->str()
-                                               : deobfuscated_name;
-
-          if (sfield_name.find("$SwitchMap$") == std::string::npos) {
-            accept_cls = false;
-            break;
-          }
-        }
-
-        if (accept_cls) {
+        if (all_sfields_lookup_tables) {
           generated_classes.emplace_back(cls);
         }
       }
