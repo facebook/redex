@@ -148,14 +148,13 @@ OptimizeEnumsAnalysis::OptimizeEnumsAnalysis(
     const DexClass* cls,
     const std::unordered_map<const DexMethod*, uint32_t>& ctor_to_arg_ordinal)
     : m_cls(cls) {
-  auto method = cls->get_clinit();
-  always_assert(method && method->get_code());
+  auto clinit = cls->get_clinit();
+  always_assert(clinit && clinit->get_code());
 
-  auto* code = method->get_code();
-  code->build_cfg(/* editable */ false);
-  cfg::ControlFlowGraph& cfg = code->cfg();
-  cfg.calculate_exit_block();
-  m_analyzer = std::make_unique<impl::Analyzer>(cfg, ctor_to_arg_ordinal, cls);
+  m_clinit_cfg = cfg::ScopedCFG(clinit->get_code());
+  m_clinit_cfg->calculate_exit_block();
+  m_analyzer =
+      std::make_unique<impl::Analyzer>(*m_clinit_cfg, ctor_to_arg_ordinal, cls);
 }
 
 /**
@@ -164,11 +163,7 @@ OptimizeEnumsAnalysis::OptimizeEnumsAnalysis(
  */
 void OptimizeEnumsAnalysis::collect_ordinals(
     std::unordered_map<DexField*, size_t>& enum_field_to_ordinal) {
-
-  auto clinit = m_cls->get_clinit();
-  IRCode* code = clinit->get_code();
-  auto& cfg = code->cfg();
-  auto env = m_analyzer->get_exit_state_at(cfg.exit_block());
+  auto env = m_analyzer->get_exit_state_at(m_clinit_cfg->exit_block());
 
   bool are_all_ordinals_determined = true;
   for (const auto& sfield : m_cls->get_sfields()) {

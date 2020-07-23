@@ -17,6 +17,7 @@
 #include "OptimizeEnumsAnalysis.h"
 #include "OptimizeEnumsGeneratedAnalysis.h"
 #include "Resolver.h"
+#include "ScopedCFG.h"
 #include "SwitchEquivFinder.h"
 #include "Walkers.h"
 
@@ -624,10 +625,10 @@ class OptimizeEnums {
 
     namespace cp = constant_propagation;
     walk::code(m_scope, [&](DexMethod*, IRCode& code) {
-      code.build_cfg(/* editable */ true);
-      auto& cfg = code.cfg();
-      cfg.calculate_exit_block();
-      optimize_enums::Iterator fixpoint(&cfg);
+      cfg::ScopedCFG cfg(&code);
+      cfg->calculate_exit_block();
+
+      optimize_enums::Iterator fixpoint(cfg.get());
       fixpoint.run(optimize_enums::Environment());
       std::unordered_set<IRInstruction*> switches;
       for (const auto& info : fixpoint.collect()) {
@@ -646,7 +647,6 @@ class OptimizeEnums {
         remove_lookup_table_usage(enum_field_to_ordinal, generated_switch_cases,
                                   info);
       }
-      code.clear_cfg();
     });
   }
 
