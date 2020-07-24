@@ -27,20 +27,25 @@ class UsesNamesMarker {
         uses_names_anno(uses_names_anno),
         uses_names_trans_anno(uses_names_trans_anno) {}
 
-  static void mark_uses_names(DexClass* cls) {
-    TRACE(USES_NAMES, 2, "Mark class and member: %s", show(cls).c_str());
+  void mark_uses_names(DexClass* cls) {
+    TRACE(USES_NAMES, 3, "Mark class and member: %s", show(cls).c_str());
     cls->rstate.set_name_used();
+    metrics.used_classes += 1;
     for (DexMethod* dmethod : cls->get_dmethods()) {
       dmethod->rstate.set_name_used();
+      metrics.used_methods += 1;
     }
     for (DexMethod* vmethod : cls->get_vmethods()) {
       vmethod->rstate.set_name_used();
+      metrics.used_methods += 1;
     }
     for (DexField* sfield : cls->get_sfields()) {
       sfield->rstate.set_name_used();
+      metrics.used_fields += 1;
     }
     for (DexField* ifield : cls->get_ifields()) {
       ifield->rstate.set_name_used();
+      metrics.used_fields += 1;
     }
   }
 
@@ -64,6 +69,7 @@ class UsesNamesMarker {
         TRACE(USES_NAMES, 2, "Class not found: %s", show(type).c_str());
         return;
       }
+      metrics.used_classes_by_subclass += 1;
       mark_class_uses_names_recursive(c, transitive);
     }
   }
@@ -78,6 +84,7 @@ class UsesNamesMarker {
               show(field->get_type()).c_str());
         continue;
       }
+      metrics.used_classes_by_field += 1;
       mark_class_uses_names_recursive(c, true);
     }
   }
@@ -131,8 +138,14 @@ class UsesNamesMarker {
           match_uses_names_annotation(annos, uses_names_trans_anno);
 
       if (has_uses_names || has_uses_name_trans) {
-        DexType* matched_anno =
-            has_uses_names ? uses_names_anno : uses_names_trans_anno;
+        DexType* matched_anno;
+        if (has_uses_names) {
+          matched_anno = uses_names_anno;
+          metrics.uses_names_anno += 1;
+        } else {
+          matched_anno = uses_names_trans_anno;
+          metrics.uses_names_trans_anno += 1;
+        }
         TRACE(USES_NAMES,
               2,
               "%s annotation found in method %s",
@@ -155,6 +168,8 @@ class UsesNamesMarker {
     }
   }
 
+  ProcessUsesNamesAnnoPass::Metrics metrics;
+
  private:
   const ClassHierarchy m_ch;
   InterfaceMap m_interface_map;
@@ -165,12 +180,22 @@ class UsesNamesMarker {
 
 void ProcessUsesNamesAnnoPass::run_pass(DexStoresVector& stores,
                                         ConfigFiles& /* conf */,
-                                        PassManager& /* pm */) {
+                                        PassManager& pm) {
   Scope scope = build_class_scope(stores);
   UsesNamesMarker unm(
       m_uses_names_annotation, m_uses_names_trans_annotation, scope);
   walk::parallel::methods(
       scope, [&](DexMethod* meth) { unm.mark_uses_names_for_method(meth); });
+  pm.incr_metric("Total class used", unm.metrics.used_classes);
+  pm.incr_metric("Total class used by transitive to subclass",
+                 unm.metrics.used_classes_by_subclass);
+  pm.incr_metric("Total class used by transitive to field",
+                 unm.metrics.used_classes_by_field);
+  pm.incr_metric("Total fields used", unm.metrics.used_fields);
+  pm.incr_metric("Total methods used", unm.metrics.used_methods);
+  pm.incr_metric("@UsesNames annotation", unm.metrics.uses_names_anno);
+  pm.incr_metric("@UsesNamesTransitive annotation",
+                 unm.metrics.uses_names_trans_anno);
 }
 
 static ProcessUsesNamesAnnoPass s_pass;
