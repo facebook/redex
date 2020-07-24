@@ -308,6 +308,7 @@ class ReferencedState {
   void set_dont_inline() { inner_struct.m_dont_inline = true; }
 
   void set_name_used() { inner_struct.m_name_used = true; }
+  bool name_used() { return inner_struct.m_name_used; }
 
  private:
   // Does any keep rule (whether -keep or -keepnames) match this DexMember?
