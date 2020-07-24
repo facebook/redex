@@ -350,6 +350,7 @@ class ReferencedState {
   void set_outlined() { inner_struct.m_outlined = true; }
   void reset_outlined() { inner_struct.m_outlined = false; }
   void set_name_used() { inner_struct.m_name_used = true; }
+  bool name_used() { return inner_struct.m_name_used; }
 
  private:
   // Does any keep rule (whether -keep or -keepnames) match this DexMember?
