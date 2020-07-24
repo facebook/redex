@@ -11,6 +11,16 @@
 
 class ProcessUsesNamesAnnoPass : public Pass {
  public:
+  struct Metrics {
+    int32_t used_classes{0};
+    int32_t used_classes_by_subclass{0};
+    int32_t used_classes_by_field{0};
+    int32_t used_fields{0};
+    int32_t used_methods{0};
+    int32_t uses_names_anno{0};
+    int32_t uses_names_trans_anno{0};
+  };
+
   ProcessUsesNamesAnnoPass() : Pass("ProcessUsesNamesAnnoPass") {}
 
   void bind_config() override {
