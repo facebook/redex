@@ -25,6 +25,13 @@ enum : uint8_t {
   MIN_API_LEVEL,
 };
 
+enum ParsingMode {
+  // NONE is the initial state. We haven't parsed a header yet
+  NONE,
+  MAIN,
+  METADATA,
+};
+
 struct Stats {
   // The percentage of samples that this method appeared in
   double appear_percent{0.0}; // appear100
@@ -39,7 +46,7 @@ struct Stats {
   double order_percent{0.0}; // avg_rank100
 
   // The minimum API level that this method was observed running on
-  uint8_t min_api_level{0}; // min_api_level
+  int16_t min_api_level{0}; // min_api_level
 };
 
 using StatsMap = std::unordered_map<const DexMethodRef*, Stats>;
@@ -50,13 +57,16 @@ class MethodProfiles {
  public:
   MethodProfiles() {}
 
-  bool initialize(const std::string& csv_filename) {
+  void initialize(const std::vector<std::string>& csv_filenames) {
     m_initialized = true;
-    bool success = parse_stats_file(csv_filename);
-    if (!success) {
-      m_method_stats.clear();
+    for (const std::string& csv_filename : csv_filenames) {
+      m_interaction_id = "";
+      m_mode = NONE;
+      bool success = parse_stats_file(csv_filename);
+      always_assert_log(success,
+                        "Failed to parse %s. See stderr for more details",
+                        csv_filename.c_str());
     }
-    return success;
   }
 
   // For testing purposes.
@@ -81,7 +91,13 @@ class MethodProfiles {
     return sum;
   }
 
-  size_t unresolved_size() const { return m_unresolved_lines.size(); }
+  size_t unresolved_size() const {
+    size_t result = 0;
+    for (const auto& pair : m_unresolved_lines) {
+      result += pair.second.size();
+    }
+    return result;
+  }
 
   // Get the method profiles for some interaction id.
   // If no interactions are found by that interaction id, Return an empty map.
@@ -99,22 +115,41 @@ class MethodProfiles {
     return it->second;
   }
 
+  boost::optional<uint32_t> get_interaction_count(
+      const std::string& interaction_id);
+
   // Try to resolve previously unresolved lines
   void process_unresolved_lines();
 
  private:
   AllInteractions m_method_stats;
-  std::vector<std::string> m_unresolved_lines;
-  bool m_initialized{false};
+  // Resolution may fail because of renaming or generated methods. Store the
+  // unresolved lines here (per interaction) so we can update after passes run
+  // and change the names of methods
+  std::unordered_map<std::string, std::vector<std::string>> m_unresolved_lines;
+  ParsingMode m_mode{NONE};
+  // A map from interaction ID to the number of times that interaction was
+  // triggered. This can be used to compare relative prevalence of different
+  // interactions.
+  std::unordered_map<std::string, uint32_t> m_interaction_counts;
   // A map from column index to column header
   std::unordered_map<uint32_t, std::string> m_optional_columns;
+  // The interaction id from the metadata at the top of the file
+  std::string m_interaction_id;
+  bool m_initialized{false};
 
   // Read a "simple" csv file (no quoted commas or extra spaces) and populate
   // m_method_stats
   bool parse_stats_file(const std::string& csv_filename);
-  // Read a line from the "simple" csv file and put an entry into
-  // m_method_stats
-  bool parse_line(char* line, bool first);
+
+  // Read a line of data (not a header)
+  bool parse_line(char* line);
+  // Read a line from the main section of the aggregated stats file and put an
+  // entry into m_method_stats
+  bool parse_main(char* line);
+  // Read a line of data from the metadata section (at the top of the file)
+  bool parse_metadata(char* line);
+
   // Parse the first line and make sure it matches our expectations
   bool parse_header(char* line);
 
