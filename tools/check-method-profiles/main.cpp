@@ -19,17 +19,14 @@ int main(int argc, char* argv[]) {
     return argc == 1 ? 1 : 0;
   }
 
-  bool fail = false;
+  std::vector<std::string> files;
   for (int i = 1; i < argc; ++i) {
-    std::cout << "Processing " << argv[i] << std::endl;
-    RedexContext rc;
-    g_redex = &rc;
-    method_profiles::MethodProfiles m;
-    if (!m.initialize(argv[i])) {
-      std::cerr << "Failed loading " << argv[i] << std::endl;
-      fail = true;
-    }
-    g_redex = nullptr;
+    files.push_back(argv[i]);
   }
-  exit(fail ? 1 : 0);
+
+  RedexContext rc;
+  g_redex = &rc;
+  method_profiles::MethodProfiles m;
+  m.initialize(files);
+  g_redex = nullptr;
 }
