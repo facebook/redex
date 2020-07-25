@@ -490,8 +490,11 @@ static Candidate normalize(
       // There is a control-flow path where the out-reg is not assigned;
       // fall-back to type inference at the beginning of the partial candidate.
       c.res_type = type_analysis.get_inferred_type(pc, out_reg->first);
-    } else {
-      c.res_type = type_analysis.get_result_type(out_reg_assignment_insns);
+      out_reg_assignment_insns.erase(nullptr);
+    }
+    if (!out_reg_assignment_insns.empty()) {
+      c.res_type =
+          type_analysis.get_result_type(out_reg_assignment_insns, c.res_type);
     }
   }
   for (auto reg : arg_regs) {

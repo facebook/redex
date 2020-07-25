@@ -39,9 +39,11 @@ OutlinerTypeAnalysis::OutlinerTypeAnalysis(DexMethod* method)
       }) {}
 
 const DexType* OutlinerTypeAnalysis::get_result_type(
-    const std::unordered_set<const IRInstruction*>& insns) {
+    const std::unordered_set<const IRInstruction*>& insns,
+    const DexType* optional_extra_type) {
   auto defs = get_defs(insns);
-  return defs ? get_type_of_defs(*defs) : nullptr;
+  return defs ? get_type_of_defs(*defs, optional_extra_type)
+              : optional_extra_type;
 }
 
 const DexType* OutlinerTypeAnalysis::get_type_demand(
@@ -419,7 +421,8 @@ const DexType* OutlinerTypeAnalysis::get_type_of_reaching_defs(
     return nullptr;
   }
   return get_type_of_defs(std::vector<const IRInstruction*>(
-      defs.elements().begin(), defs.elements().end()));
+                              defs.elements().begin(), defs.elements().end()),
+                          /* optional_extra_type */ nullptr);
 }
 
 const DexType* OutlinerTypeAnalysis::get_if_insn_type_demand(
@@ -954,8 +957,12 @@ static const DexType* compute_joined_type(
 
 // Compute the (widened) type of all given definitions.
 const DexType* OutlinerTypeAnalysis::get_type_of_defs(
-    const std::vector<const IRInstruction*>& defs) {
+    const std::vector<const IRInstruction*>& defs,
+    const DexType* optional_extra_type) {
   std::unordered_set<const DexType*> types;
+  if (optional_extra_type != nullptr) {
+    types.insert(optional_extra_type);
+  }
   std::unordered_set<const IRInstruction*> const_insns;
   for (auto def : defs) {
     always_assert(!opcode::is_move(def->opcode()) &&

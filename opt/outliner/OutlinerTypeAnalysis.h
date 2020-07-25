@@ -34,11 +34,12 @@ class OutlinerTypeAnalysis {
   OutlinerTypeAnalysis& operator=(const OutlinerTypeAnalysis&) = delete;
   explicit OutlinerTypeAnalysis(DexMethod* method);
 
-  // Infer permissible result type of a set of instructions with a destination.
-  // The return value nullptr indicates that the result type could not be
-  // determined.
+  // Infer permissible result type of a set of instructions with a destination,
+  // and possibly another incoming type. The return value nullptr indicates that
+  // the result type could not be determined.
   const DexType* get_result_type(
-      const std::unordered_set<const IRInstruction*>& insns);
+      const std::unordered_set<const IRInstruction*>& insns,
+      const DexType* optional_extra_type);
 
   // Infer type demand imposed on a register anywhere in a partial candidate.
   // If there's no useful type demand, we fall back to type inference to see
@@ -86,8 +87,8 @@ class OutlinerTypeAnalysis {
   const DexType* get_const_insns_type_demand(
       const std::unordered_set<const IRInstruction*>& const_insns);
 
-  const DexType* get_type_of_defs(
-      const std::vector<const IRInstruction*>& defs);
+  const DexType* get_type_of_defs(const std::vector<const IRInstruction*>& defs,
+                                  const DexType* optional_extra_type);
 }; // class OutlinerTypeAnalysis
 
 } // namespace outliner_impl
