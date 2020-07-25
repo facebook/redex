@@ -11,7 +11,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "Timer.h"
 #include "Trace.h"
 
 using namespace method_profiles;
@@ -44,7 +43,6 @@ bool MethodProfiles::parse_stats_file(const std::string& csv_filename) {
     TRACE(METH_PROF, 2, "No csv file given");
     return false;
   }
-  Timer t("Parsing agg_method_stats_file");
 
   auto cleanup = [](FILE* fp, char* line = nullptr) {
     if (fp) {
@@ -87,13 +85,9 @@ bool MethodProfiles::parse_stats_file(const std::string& csv_filename) {
     return false;
   }
 
-  size_t total_rows = 0;
-  for (const auto& pair : m_method_stats) {
-    total_rows += pair.second.size();
-  }
   TRACE(METH_PROF, 1,
         "MethodProfiles successfully parsed %zu rows; %zu unresolved lines",
-        total_rows, unresolved_size());
+        size(), unresolved_size());
   cleanup(fp, line);
   return true;
 }
@@ -121,8 +115,8 @@ double parse_double(const char* tok) {
 bool MethodProfiles::parse_metadata(char* line) {
   always_assert(m_mode == METADATA);
   uint32_t interaction_count{0};
-  auto parse_cell = [&](char* tok, uint32_t i) -> bool {
-    switch (i) {
+  auto parse_cell = [&](char* tok, uint32_t col) -> bool {
+    switch (col) {
     case 0:
       m_interaction_id = std::string(tok);
       return true;
@@ -133,8 +127,14 @@ bool MethodProfiles::parse_metadata(char* line) {
       interaction_count = static_cast<uint32_t>(parsed);
       return true;
     }
-    default:
-      return false;
+    default: {
+      auto len = strnlen(tok, 1);
+      bool ok = (len == 0 || (len == 1 && tok[0] == '\n'));
+      if (!ok) {
+        std::cerr << "Unexpected extra value in metadata: " << tok << std::endl;
+      }
+      return ok;
+    }
     }
   };
   bool success = parse_cells(line, parse_cell);
@@ -153,8 +153,8 @@ bool MethodProfiles::parse_main(char* line) {
   Stats stats;
   std::string interaction_id;
   DexMethodRef* ref = nullptr;
-  auto parse_cell = [&](char* tok, uint32_t i) -> bool {
-    switch (i) {
+  auto parse_cell = [&](char* tok, uint32_t col) -> bool {
+    switch (col) {
     case INDEX:
       // Don't need this raw data. It's an arbitrary index (the line number in
       // the file)
@@ -190,7 +190,7 @@ bool MethodProfiles::parse_main(char* line) {
       return true;
     }
     default:
-      const auto& search = m_optional_columns.find(i);
+      const auto& search = m_optional_columns.find(col);
       if (search != m_optional_columns.end()) {
         if (search->second == "interaction") {
           interaction_id = tok;
@@ -239,7 +239,7 @@ bool MethodProfiles::parse_line(char* line) {
 }
 
 boost::optional<uint32_t> MethodProfiles::get_interaction_count(
-    const std::string& interaction_id) {
+    const std::string& interaction_id) const {
   const auto& search = m_interaction_counts.find(interaction_id);
   if (search == m_interaction_counts.end()) {
     return boost::none;
@@ -272,10 +272,10 @@ void MethodProfiles::process_unresolved_lines() {
 bool MethodProfiles::parse_header(char* line) {
   always_assert(m_mode == NONE);
   auto check_cell = [](const char* expected, const char* tok,
-                       uint32_t i) -> bool {
+                       uint32_t col) -> bool {
     const size_t MAX_CELL_LENGTH = 1000;
     if (strncmp(tok, expected, MAX_CELL_LENGTH) != 0) {
-      std::cerr << "Unexpected Header (column " << i << "): " << tok
+      std::cerr << "Unexpected Header (column " << col << "): " << tok
                 << " != " << expected << "\n";
       return false;
     }
@@ -284,14 +284,14 @@ bool MethodProfiles::parse_header(char* line) {
   if (strncmp(line, "interaction", 11) == 0) {
     m_mode = METADATA;
     // Extra metadata at the top of the file that we want to parse
-    auto parse_cell = [&](char* tok, uint32_t i) -> bool {
-      switch (i) {
+    auto parse_cell = [&](char* tok, uint32_t col) -> bool {
+      switch (col) {
       case 0:
-        return check_cell("interaction", tok, i);
+        return check_cell("interaction", tok, col);
       case 1:
-        return check_cell("appear#", tok, i);
+        return check_cell("appear#", tok, col);
       default: {
-        auto len = strnlen(tok, 100);
+        auto len = strnlen(tok, 1);
         bool ok = (len == 0 || (len == 1 && tok[0] == '\n'));
         if (!ok) {
           std::cerr << "Unexpected Metadata Column: " << tok << std::endl;
@@ -303,30 +303,30 @@ bool MethodProfiles::parse_header(char* line) {
     return parse_cells(line, parse_cell);
   } else {
     m_mode = MAIN;
-    auto parse_cell = [&](char* tok, uint32_t i) -> bool {
-      switch (i) {
+    auto parse_cell = [&](char* tok, uint32_t col) -> bool {
+      switch (col) {
       case INDEX:
-        return check_cell("index", tok, i);
+        return check_cell("index", tok, col);
       case NAME:
-        return check_cell("name", tok, i);
+        return check_cell("name", tok, col);
       case APPEAR100:
-        return check_cell("appear100", tok, i);
+        return check_cell("appear100", tok, col);
       case APPEAR_NUMBER:
-        return check_cell("appear#", tok, i);
+        return check_cell("appear#", tok, col);
       case AVG_CALL:
-        return check_cell("avg_call", tok, i);
+        return check_cell("avg_call", tok, col);
       case AVG_ORDER:
-        return check_cell("avg_order", tok, i);
+        return check_cell("avg_order", tok, col);
       case AVG_RANK100:
-        return check_cell("avg_rank100", tok, i);
+        return check_cell("avg_rank100", tok, col);
       case MIN_API_LEVEL:
-        return check_cell("min_api_level", tok, i);
+        return check_cell("min_api_level", tok, col);
       default:
         std::string column_name = tok;
         if (column_name.back() == '\n') {
           column_name.resize(column_name.size() - 1);
         }
-        m_optional_columns.emplace(i, column_name);
+        m_optional_columns.emplace(col, column_name);
         return true;
       }
     };
@@ -368,12 +368,27 @@ dexmethods_profiled_comparator::dexmethods_profiled_comparator(
     }
   }
   std::sort(m_interactions.begin(), m_interactions.end(),
-            [](const std::string& a, const std::string& b) {
+            [this](const std::string& a, const std::string& b) {
               if (a == COLD_START && b != COLD_START) {
                 // Cold Start always comes first;
                 return true;
               }
-              // TODO: use interaction prevalence
+
+              if (a == b) {
+                return false;
+              }
+
+              // Give priority to interactions that happen more often
+              const auto& a_interactions =
+                  m_method_profiles->get_interaction_count(a);
+              const auto& b_interactions =
+                  m_method_profiles->get_interaction_count(b);
+              if (a_interactions != boost::none &&
+                  b_interactions != boost::none) {
+                return *a_interactions > *b_interactions;
+              }
+
+              // fall back to alphabetical
               return a < b;
             });
 }
@@ -396,9 +411,16 @@ double dexmethods_profiled_comparator::get_method_sort_num(
       const auto& stat = it->second;
       if (m_legacy_order && stat.appear_percent >= 95.0) {
         return range_begin + RANGE_SIZE / 2;
-      } else if (!m_legacy_order && stat.appear_percent >= 90.0) {
-        // TODO iterate on this ordering heuristic
-        return range_begin + stat.order_percent * RANGE_SIZE / 100.0;
+      } else if (!m_legacy_order && stat.appear_percent >= 10.0) {
+        // Prefer high appearance percents and low order percents. This
+        // intentionally doesn't strictly order methods by appear_percent then
+        // order_percent, rather both values are used and with greater weight
+        // given to appear_percent.
+        double raw_score =
+            (100.0 - stat.appear_percent) + 0.1 * stat.order_percent;
+        double score = std::min(100.0, std::max(raw_score, 0.0));
+        // Reminder: Lower sort numbers come sooner in the dex file
+        return range_begin + score * RANGE_SIZE / 100.0;
       }
     }
     range_begin += RANGE_STRIDE;

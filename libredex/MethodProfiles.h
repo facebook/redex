@@ -10,6 +10,7 @@
 #include <boost/optional.hpp>
 
 #include "DexClass.h"
+#include "Timer.h"
 
 namespace method_profiles {
 
@@ -59,13 +60,21 @@ class MethodProfiles {
 
   void initialize(const std::vector<std::string>& csv_filenames) {
     m_initialized = true;
+    Timer t("Parsing agg_method_stats_files");
     for (const std::string& csv_filename : csv_filenames) {
       m_interaction_id = "";
       m_mode = NONE;
       bool success = parse_stats_file(csv_filename);
-      always_assert_log(success,
-                        "Failed to parse %s. See stderr for more details",
-                        csv_filename.c_str());
+      if (!success) {
+        TRACE(METH_PROF,
+              1,
+              "WARNING: parsing of %s failed",
+              csv_filename.c_str());
+      }
+      // FIXME re-enable this check
+      // always_assert_log(success,
+      //                   "Failed to parse %s. See stderr for more details",
+      //                   csv_filename.c_str());
     }
   }
 
@@ -116,7 +125,7 @@ class MethodProfiles {
   }
 
   boost::optional<uint32_t> get_interaction_count(
-      const std::string& interaction_id);
+      const std::string& interaction_id) const;
 
   // Try to resolve previously unresolved lines
   void process_unresolved_lines();
@@ -157,15 +166,15 @@ class MethodProfiles {
   bool parse_cells(char* line, const Func& parse_cell) {
     char* save_ptr = nullptr;
     char* tok = line;
-    uint32_t i = 0;
+    uint32_t col = 0;
     // Assuming there are no quoted strings containing commas!
     while ((tok = strtok_r(tok, ",", &save_ptr)) != nullptr) {
-      bool success = parse_cell(tok, i);
+      bool success = parse_cell(tok, col);
       if (!success) {
         return false;
       }
       tok = nullptr;
-      ++i;
+      ++col;
     }
     return true;
   }
