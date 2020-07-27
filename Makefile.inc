@@ -22,6 +22,7 @@ COMMON_INCLUDES = \
 	-I$(top_srcdir)/opt/branch-prefix-hoisting \
 	-I$(top_srcdir)/opt/bridge \
 	-I$(top_srcdir)/opt/check_breadcrumbs \
+	-I$(top_srcdir)/opt/class-merging \
 	-I$(top_srcdir)/opt/class-splitting \
 	-I$(top_srcdir)/opt/constant-propagation \
 	-I$(top_srcdir)/opt/copy-propagation \
@@ -78,7 +79,6 @@ COMMON_INCLUDES = \
 	-I$(top_srcdir)/opt/throw-propagation \
 	-I$(top_srcdir)/opt/track_resources \
 	-I$(top_srcdir)/opt/type-analysis \
-	-I$(top_srcdir)/opt/type-erasure \
 	-I$(top_srcdir)/opt/unreferenced_interfaces \
 	-I$(top_srcdir)/opt/unmark_proguard_keep \
 	-I$(top_srcdir)/opt/unterface \

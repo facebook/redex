@@ -230,6 +230,7 @@ libopt_la_SOURCES = \
 	opt/bridge/Bridge.cpp \
 	opt/check_breadcrumbs/CheckBreadcrumbs.cpp \
 	opt/check-recursion/CheckRecursion.cpp \
+	opt/class-merging/ClassMergingPass.cpp \
 	opt/class-splitting/ClassSplitting.cpp \
 	opt/constant-propagation/ConstantPropagationPass.cpp \
 	opt/constant-propagation/ConstantPropagationRuntimeAssert.cpp \
@@ -321,7 +322,6 @@ libopt_la_SOURCES = \
 	opt/track_resources/TrackResources.cpp \
 	opt/throw-propagation/ThrowPropagationPass.cpp \
 	opt/type-analysis/GlobalTypeAnalysisPass.cpp \
-	opt/type-erasure/TypeErasurePass.cpp \
 	opt/unreferenced_interfaces/UnreferencedInterfaces.cpp \
 	opt/unmark_proguard_keep/UnmarkProguardKeep.cpp \
 	opt/up-code-motion/UpCodeMotion.cpp \

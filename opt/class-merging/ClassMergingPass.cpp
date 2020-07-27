@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "TypeErasurePass.h"
+#include "ClassMergingPass.h"
 
 #include "ClassMerging.h"
 #include "DexUtil.h"
@@ -141,7 +141,7 @@ TypeTagConfig get_type_tag_config(const std::string& type_tag_config) {
 
 } // namespace
 
-void TypeErasurePass::bind_config() {
+void ClassMergingPass::bind_config() {
   bool process_method_meta;
   bind("process_method_meta", false, process_method_meta);
   int64_t max_num_dispatch_target;
@@ -260,9 +260,9 @@ void TypeErasurePass::bind_config() {
   });
 }
 
-void TypeErasurePass::run_pass(DexStoresVector& stores,
-                               ConfigFiles& conf,
-                               PassManager& mgr) {
+void ClassMergingPass::run_pass(DexStoresVector& stores,
+                                ConfigFiles& conf,
+                                PassManager& mgr) {
   if (m_model_specs.empty()) {
     return;
   }
@@ -276,4 +276,4 @@ void TypeErasurePass::run_pass(DexStoresVector& stores,
   post_dexen_changes(scope, stores);
 }
 
-static TypeErasurePass s_pass;
+static ClassMergingPass s_pass;

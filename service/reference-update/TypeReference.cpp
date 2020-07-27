@@ -663,7 +663,7 @@ void update_field_type_references(
         always_assert_log(
             old_to_new.count(type) == 0,
             "Find old type in field reference %s, please make sure that "
-            "ReBindRefsPass is enabled before TypeErasurePass\n",
+            "ReBindRefsPass is enabled before ClassMergingPass\n",
             SHOW(insn));
       }
     }

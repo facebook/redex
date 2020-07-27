@@ -16,10 +16,10 @@
 
 class ModelMerger;
 
-class TypeErasurePass : public Pass {
+class ClassMergingPass : public Pass {
  public:
-  TypeErasurePass() : Pass("TypeErasurePass") {}
-  explicit TypeErasurePass(const char* name) : Pass(name) {}
+  ClassMergingPass() : Pass("ClassMergingPass") {}
+  explicit ClassMergingPass(const char* name) : Pass(name) {}
 
   void bind_config() override;
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
