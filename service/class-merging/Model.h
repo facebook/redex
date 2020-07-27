@@ -115,7 +115,7 @@ struct ModelSpec {
   // Group splitting. This is looser than the per dex split and takes into
   // account the interdex order (if any provided).
   InterDexGroupingType merge_per_interdex_set{InterDexGroupingType::DISABLED};
-  // whether to perform type erasure on the primary dex.
+  // whether to perform class merging on the primary dex.
   bool include_primary_dex{false};
   // Merge static methods within shape.
   bool merge_static_methods_within_shape{false};

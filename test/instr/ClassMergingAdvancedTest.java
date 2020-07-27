@@ -363,7 +363,7 @@ class FieldRefDummy {
   int getA1() { return as[0].getA1(); }
 }
 
-public class TypeErasureAdvancedTest {
+public class ClassMergingAdvancedTest {
 
   @Test
   public void testShapeCreation() {

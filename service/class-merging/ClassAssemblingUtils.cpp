@@ -169,7 +169,7 @@ DexClass* create_class(const DexType* type,
     field->set_deobfuscated_name(show_deobfuscated(field));
   }
   auto cls = creator.create();
-  // Keeping type-erasure generated classes from being renamed.
+  // Keeping class-merging generated classes from being renamed.
   cls->rstate.set_keepnames();
 
   if (!with_default_ctor) {
@@ -359,7 +359,7 @@ void add_class(DexClass* new_cls, Scope& scope, DexStoresVector& stores) {
 }
 
 /**
- * In some limited cases we can do type erasure on an interface when
+ * In some limited cases we can do class merging on an interface when
  * implementors of the interface only implement that interface and have no
  * parent class other than java.lang.Object. We create a base class for those
  * implementors and use the new base class as root, and proceed with type

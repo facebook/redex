@@ -16,7 +16,8 @@ import java.lang.annotation.Target;
 /**
  * Add this annotation to a generated method that is potentially a dedup target.
  *
- * <p>The constant types and values are later on processed by Redex during type erasure.
+ * <p>The constant types and values are later on processed by Redex during class
+ * merging.
  */
 @Target({ElementType.METHOD})
 @Retention(CLASS)

@@ -527,13 +527,13 @@ bool Model::is_excluded(const DexType* type) const {
 }
 
 /**
- * Try to identify types referenced by operations that Type Erasure does not
+ * Try to identify types referenced by operations that Class Merging does not
  * support. Such operations include reflections, instanceof checks on
  * no-type-tag shapes.
  * Ideally, part of the checks we perform below should be enforced at Java
  * source level. That is we should restrict such use cases on the generated Java
  * classes. As a result, we can make those generated classes easier to optimize
- * by Type Erasure.
+ * by Class Merging.
  */
 void Model::find_non_mergeables(const Scope& scope, const TypeSet& generated) {
   for (const auto& type : m_types) {
@@ -547,7 +547,7 @@ void Model::find_non_mergeables(const Scope& scope, const TypeSet& generated) {
     // TyepErasure is good at merging virtual methods horizontally by supporting
     // virtual dispatches. There's no benefit to merge uninstantiable classes
     // and no proper way to merge uninstatiable and instantiable classes
-    // together. Exclude the uninstantiable classes from TypeErasure and
+    // together. Exclude the uninstantiable classes from ClassMerging and
     // RemoveUninstantiablesPass should properly handle parts of them.
     bool has_ctor = false;
     for (const auto& method : cls->get_dmethods()) {

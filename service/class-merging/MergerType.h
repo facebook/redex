@@ -16,7 +16,7 @@ using FieldsMap = std::unordered_map<const DexType*, std::vector<DexField*>>;
 
 /**
  * A type that "represents" a set of other types that can be coalesced.
- * During type erasure a set of mergers are built that will containing
+ * During class merging a set of mergers are built that will containing
  * the set of type that can be merged into one.
  * The merger will also carry all the information needed to generate
  * a proper DexClass and make the proper changes in the code while

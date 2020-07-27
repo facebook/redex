@@ -54,7 +54,7 @@ class Q7 extends SecondBase {
   int getFoo() { return 48; }
 }
 
-public class TypeErasureGroupingTest {
+public class ClassMergingGroupingTest {
 
   @Test
   public void testMergingBase() {

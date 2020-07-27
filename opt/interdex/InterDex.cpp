@@ -283,7 +283,7 @@ bool InterDex::emit_class(DexInfo& dex_info,
     flush_out_dex(dex_info);
 
     // Plugins may maintain internal state after gathering refs, and then they
-    // tend to forget that state after flushing out (type erasure,
+    // tend to forget that state after flushing out (class merging,
     // looking at you). So, let's redo gathering of refs here to give
     // plugins a chance to rebuild their internal state.
     clazz_mrefs.clear();

@@ -160,7 +160,7 @@ class SecondC extends SecondBase {
   int getC() { return 3; }
 }
 
-public class TypeErasureSimpleTest {
+public class ClassMergingSimpleTest {
 
   @Test
   public void testMergingNonVirts() {

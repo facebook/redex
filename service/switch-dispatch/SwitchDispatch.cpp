@@ -28,7 +28,7 @@ constexpr uint64_t MAX_NUM_DISPATCH_TARGET = 500;
  * is too large. See https://code.google.com/p/android/issues/detail?id=66655.
  *
  * Although the limit is only applicable to dex2oat dependent build, we want to
- * avoid that from happening wherever Type Erasure is enabled. Since we want to
+ * avoid that from happening wherever Class Merging is enabled. Since we want to
  * leave some room for accommodating the injected switch dispatch code, the
  * number here is lower than the actual limit.
  */
