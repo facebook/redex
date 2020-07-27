@@ -23,32 +23,14 @@ brew install boost jsoncpp
 ### Ubuntu/Debian (64-bit)
 Base requirements are automake & libtool, GCC >= 5, Python >= 3.6 and Boost >= 1.71.0, as well as
 development versions of `iberty`, `jemalloc`, `jsoncpp`, `lz4`, `lzma`, and `zlib`.
-#### Ubuntu 16.04 - 19.10, Debian 10 Buster
-The minimum supported version is Ubuntu 16.04. The convenience script
-[`setup_oss_toolchain.sh`](https://github.com/facebook/redex/blob/master/setup_oss_toolchain.sh)
-will set up the build environment.
+#### Ubuntu 16.04+, Debian 10(Buster)+
+The minimum supported Ubntu version is 16.04. The minimum supported Debian version is 10.
+
+A [convenience script](https://github.com/facebook/redex/blob/master/setup_oss_toolchain.sh)
+will set up the build environment. This may include downloading Python 3.6 and Boost 1.71.0
+on older OS versions.
 ```
 sudo ./setup_oss_toolchain.sh
-```
-#### Ubuntu 20.04, Debian Bullseye/Testing
-Starting with Ubuntu 20.04, all packages are new enough in the standard repositories. Install
-all required packages with
-```
-sudo apt-get install \
-    autoconf \
-    autoconf-archive \
-    automake \
-    binutils-dev \
-    g++ \
-    libboost-all-dev \
-    libiberty-dev \
-    libjemalloc-dev \
-    libjsoncpp-dev
-    liblz4-dev \
-    liblzma-dev \
-    libtool \
-    make \
-    zlib1g-dev
 ```
 
 ### Experimental: Windows 10 (64-bit)
