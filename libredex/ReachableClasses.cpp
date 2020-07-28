@@ -642,42 +642,28 @@ void analyze_serializable(const Scope& scope) {
  *    section of the config) and classes that extend from them
  *  - Classes reachable from native libraries
  */
-void init_reachable_classes(const Scope& scope, const JsonWrapper& config) {
-
-  std::string apk_dir;
-  std::vector<std::string> reflected_package_names;
-  std::unordered_set<std::string> prune_unexported_components;
-  bool compute_xml_reachability;
-  bool analyze_native_lib_reachability;
-
-  config.get("apk_dir", "", apk_dir);
-  config.get("keep_packages", {}, reflected_package_names);
-
-  config.get("compute_xml_reachability", true, compute_xml_reachability);
-  config.get("prune_unexported_components", {}, prune_unexported_components);
-  config.get("analyze_native_lib_reachability", true,
-             analyze_native_lib_reachability);
-
+void init_reachable_classes(const Scope& scope,
+                            const ReachableClassesConfig& config) {
   {
     Timer t{"Mark keep-methods"};
     std::vector<std::string> methods;
-    config.get("keep_methods", {}, methods);
-    keep_methods(scope, methods);
+    keep_methods(scope, config.keep_methods);
   }
 
-  if (!apk_dir.empty()) {
-    if (compute_xml_reachability) {
+  if (!config.apk_dir.empty()) {
+    if (config.compute_xml_reachability) {
       Timer t{"Computing XML reachability"};
       // Classes present in manifest
-      analyze_reachable_from_manifest(apk_dir, prune_unexported_components);
+      analyze_reachable_from_manifest(config.apk_dir,
+                                      config.prune_unexported_components);
       // Classes present in XML layouts
-      analyze_reachable_from_xml_layouts(scope, apk_dir);
+      analyze_reachable_from_xml_layouts(scope, config.apk_dir);
     }
 
-    if (analyze_native_lib_reachability) {
+    if (config.analyze_native_lib_reachability) {
       Timer t{"Computing native reachability"};
       // Classnames present in native libraries (lib/*/*.so)
-      for (const std::string& classname : get_native_classes(apk_dir)) {
+      for (const std::string& classname : get_native_classes(config.apk_dir)) {
         auto type = DexType::get_type(classname.c_str());
         if (type == nullptr) continue;
         TRACE(PGR, 3, "native_lib: %s", classname.c_str());
@@ -703,7 +689,7 @@ void init_reachable_classes(const Scope& scope, const JsonWrapper& config) {
     std::unordered_set<DexClass*> reflected_package_classes;
     for (auto clazz : scope) {
       const char* cname = clazz->get_type()->get_name()->c_str();
-      for (const auto& pkg : reflected_package_names) {
+      for (const auto& pkg : config.reflected_package_names) {
         if (starts_with(cname, pkg.c_str())) {
           reflected_package_classes.insert(clazz);
           continue;
@@ -732,9 +718,7 @@ void init_reachable_classes(const Scope& scope, const JsonWrapper& config) {
 
   {
     Timer t{"Initializing for json serde"};
-    std::vector<std::string> json_serde_supercls;
-    config.get("json_serde_supercls", {}, json_serde_supercls);
-    initialize_reachable_for_json_serde(scope, json_serde_supercls);
+    initialize_reachable_for_json_serde(scope, config.json_serde_supercls);
   }
 }
 
