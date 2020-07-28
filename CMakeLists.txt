@@ -16,11 +16,20 @@ endif ()
 if(NOT BUILD_TYPE)
     set(BUILD_TYPE Shared)
 endif ()
+if (MINGW)
+    set(BUILD_TYPE Static)
+endif ()
 
 if(BUILD_TYPE STREQUAL Static)
     set(ENABLE_STATIC ON CACHE BOOL "" FORCE)
+    if (MINGW)
+        set(STATIC_LINK_FLAG "-static")
+    else (MINGW)
+        set(STATIC_LINK_FLAG "")
+    endif (MINGW)
 elseif (BUILD_TYPE STREQUAL Shared)
     set(ENABLE_STATIC OFF CACHE BOOL "" FORCE)
+    set(STATIC_LINK_FLAG "")
 endif ()
 
 set_common_cxx_flags_for_redex()
@@ -95,6 +104,12 @@ file(GLOB redex_all_srcs
 
 add_executable(redex-all ${redex_all_srcs})
 
+if (MINGW)
+    set(MINGW_EXTRA_LIBS ws2_32)
+else (MINGW)
+    set(MINGW_EXTRA_LIBS "")
+endif (MINGW)
+
 target_link_libraries(redex-all
         ${Boost_LIBRARIES}
         ${REDEX_JSONCPP_LIBRARY}
@@ -102,6 +117,8 @@ target_link_libraries(redex-all
         ${CMAKE_DL_LIBS}
         redex
         resource
+        ${MINGW_EXTRA_LIBS}
+        ${STATIC_LINK_FLAG}
         )
 
 target_compile_definitions(redex-all PRIVATE)
