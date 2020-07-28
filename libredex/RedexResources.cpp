@@ -50,6 +50,12 @@
 #include "Trace.h"
 #include "WorkQueue.h"
 
+// Workaround for inclusion order, when compiling on Windows (#defines NO_ERROR
+// as 0).
+#ifdef NO_ERROR
+#undef NO_ERROR
+#endif
+
 RedexMappedFile::RedexMappedFile(
     std::unique_ptr<boost::iostreams::mapped_file> file, int fd, bool read_only)
     : file(std::move(file)), fd(fd), read_only(read_only) {}
