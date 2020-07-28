@@ -58,10 +58,10 @@
 <p><code>zipalign</code> is an optimization step that is bundled with the Android SDK.  You
 need to tell redex where to find it.  For example, if you installed the SDK at
 <code>/path/to/android/sdk</code>, try:</p>
-<pre><code class="hljs"><span class="hljs-attribute">ANDROID_SDK</span>=/path/to/android/sdk redex [<span class="hljs-built_in">..</span>. arguments <span class="hljs-built_in">..</span>.]
+<pre><code class="hljs"><span class="hljs-attr">ANDROID_SDK</span>=/path/to/android/sdk redex [... arguments ...]
 </code></pre>
 <p>You can alternatively add <code>zipalign</code> to your PATH, for example:</p>
-<pre><code class="hljs">PATH=<span class="hljs-regexp">/path/</span>to<span class="hljs-regexp">/android/</span>sdk<span class="hljs-regexp">/build-tools/</span>xx.y.zz:<span class="hljs-variable">$PATH</span> redex [... arguments ...]
+<pre><code class="hljs">PATH=<span class="hljs-regexp">/path/to</span><span class="hljs-regexp">/android/sdk</span><span class="hljs-regexp">/build-tools/xx</span>.y.<span class="hljs-symbol">zz:</span>$PATH redex [... arguments ...]
 </code></pre>
 <p>Additionally, it's possible zipalign itself failed. In this case the stderr will be reported to aid debugging (for example, zipalign fails if you provide an output path that already exists).</p>
 <h2><a class="anchor" aria-hidden="true" id="my-app-fails-to-install-with-failure-install_parse_failed_no_certificates"></a><a href="#my-app-fails-to-install-with-failure-install_parse_failed_no_certificates" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>My app fails to install with <code>Failure [INSTALL_PARSE_FAILED_NO_CERTIFICATES]</code></h2>
@@ -70,7 +70,7 @@ using these instructions:
 <a href="https://developer.android.com/tools/publishing/app-signing.html#signing-manually">https://developer.android.com/tools/publishing/app-signing.html#signing-manually</a>.</p>
 <p>You can also tell redex to sign for you.  If you want to sign with the debug
 key, you can simply do:</p>
-<pre><code class="hljs">redex <span class="hljs-params">--sign</span> [ <span class="hljs-string">...</span> arguments <span class="hljs-string">...</span>]
+<pre><code class="hljs"><span class="hljs-attribute">redex</span> --sign<span class="hljs-meta"> [ ... arguments ...]</span>
 </code></pre>
 <p>If you want to sign with your release key, you'll need to provide the
 appropriate args:</p>
@@ -87,11 +87,11 @@ or other complex ways an entity could be reached.</p>
 <p>Annotate any class, method, or field you want to keep with <code>@DoNotStrip</code>, and
 add this to your ProGuard config file (which should be passed to redex.py via
 the <code>--proguard-config</code> flag):</p>
-<pre><code class="hljs"><span class="hljs-comment"># Do not strip classes annotated with @DoNotStrip</span>
--keep @com.path.<span class="hljs-keyword">to</span>.your.DoNotStrip <span class="hljs-class"><span class="hljs-keyword">class</span> *</span>
+<pre><code class="hljs"><span class="hljs-comment"># Do not strip classes annotated with <span class="hljs-doctag">@DoNotStrip</span></span>
+-keep @com.path.to.your.DoNotStrip <span class="hljs-class"><span class="hljs-keyword">class</span> *</span>
 <span class="hljs-comment"># Do not strip annotated fields or methods either</span>
 -keepclassmembers <span class="hljs-class"><span class="hljs-keyword">class</span> * {</span>
-    @com.path.<span class="hljs-keyword">to</span>.your.DoNotStrip *;
+    @com.path.to.your.DoNotStrip *;
 }
 </code></pre>
 <p>and define <code>DoNotStrip</code>:</p>

@@ -92,18 +92,18 @@ to the next difficult.</p>
 <p>Connect your device to your computer, so you can execute adb commands. You need to have root on your device to execute the dump heap command.
 On your computer:</p>
 <p>// get the process if of your app</p>
-<pre><code class="hljs">adb shell ps | grep YOUR_APP_NAME | awk <span class="hljs-comment">'{print $2}' &gt; YOUR_PID ( if you don't have awk, the second value is the pid of your app)</span>
-</code></pre>
+<pre><code class="hljs"><span class="hljs-attribute">adb</span> shell ps | grep YOUR_APP_NAME | awk <span class="hljs-string">'{print <span class="hljs-variable">$2</span>}'</span> &gt; YOUR_PID ( if you don<span class="hljs-string">'t have awk, the second value is the pid of your app)
+</span></code></pre>
 <p>// dump the heap of your app. You WILL NEED ROOT for this step</p>
-<pre><code class="hljs">adb root
-adb <span class="hljs-keyword">shell</span><span class="bash"> am dumpheap YOUR_PID /data/<span class="hljs-built_in">local</span>/tmp/SOMEDUMP.hprof</span>
+<pre><code class="hljs"><span class="hljs-attr">adb</span> <span class="hljs-string">root</span>
+<span class="hljs-attr">adb</span> <span class="hljs-string">shell am dumpheap YOUR_PID /data/local/tmp/SOMEDUMP.hprof</span>
 </code></pre>
 <p>// copy the heap to your host computer</p>
-<pre><code class="hljs">adb pull <span class="hljs-meta-keyword">/data/</span>local<span class="hljs-meta-keyword">/tmp/</span>SOMEDUMP.hprof YOUR_DIR_HERE/.
+<pre><code class="hljs">adb pull /data/<span class="hljs-built_in">local</span>/tmp/SOMEDUMP.hprof YOUR_DIR_HERE/.
 </code></pre>
 <p>// pass the heap dump to the python script for parsing and printing out the class list
 // Note that the script needs python 2</p>
-<pre><code class="hljs">YOUR_PYTHON_2_PATH redex/tools/hprof/dump_classes_from_hprof<span class="hljs-selector-class">.py</span> --hprof YOUR_DIR_HERE/SOMEDUMP<span class="hljs-selector-class">.hprof</span> &gt; list_of_classes<span class="hljs-selector-class">.txt</span>
+<pre><code class="hljs">YOUR_PYTHON_2_PATH redex/tools/hprof/dump_classes_from_hprof.py <span class="hljs-comment">--hprof YOUR_DIR_HERE/SOMEDUMP.hprof &gt; list_of_classes.txt</span>
 </code></pre>
 <p>If everything worked out, list_of_classes.txt will contain a large number of lines of the form foobar.class
 You'll note that many of the classes list are actually classes provided by the system and not from your app.
@@ -127,8 +127,8 @@ that have no references to them from the rest of the set of classes in the pgo l
 <h1><a class="anchor" aria-hidden="true" id="measuring-benefit"></a><a href="#measuring-benefit" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Measuring benefit</h1>
 <ul>
 <li>Install an apk without interdex pass enabled
-<pre><code class="hljs">adb <span class="hljs-keyword">shell</span><span class="bash"> ps | grep YOUR_APP_NAME | awk <span class="hljs-string">'{ print $2 }'</span> &gt; YOUR_PID</span>
-adb <span class="hljs-keyword">shell</span><span class="bash"> dumpsys meminfo YOUR_PID</span>
+<pre><code class="hljs"><span class="hljs-attribute">adb</span> shell ps | grep YOUR_APP_NAME | awk <span class="hljs-string">'{ print <span class="hljs-variable">$2</span> }'</span> &gt; YOUR_PID
+adb shell dumpsys meminfo YOUR_PID
 </code></pre></li>
 <li>Note how much memory your app uses and the .dex mmap row</li>
 <li>Do all the steps described above and rerun redex with the Interdex Pass enabled and using the profiling data you generated</li>

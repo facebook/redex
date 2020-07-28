@@ -86,46 +86,46 @@ a simple Android application which makes use of this class:</p>
 has a method <code>doubleAlpha</code> which accesses a private static field <code>alpha</code> of
 its outer class <code>Alpha</code>. A dump of the Dex bytecode for the <code>Alpha</code> class
 confirms that the <code>alpha</code> field is <code>private</code> and <code>static</code>.</p>
-<pre><code class="hljs">  Static fields     -
-    #0              : (<span class="hljs-keyword">in</span> Lcom/facebook/redex/examples/synth/Alpha;)
+<pre><code class="hljs">  <span class="hljs-keyword">Static</span> fields     -
+    <span class="hljs-comment">#0              : (in Lcom/facebook/redex/examples/synth/Alpha;)</span>
       name          : <span class="hljs-string">'alpha'</span>
-     <span class="hljs-built_in"> type </span>         : <span class="hljs-string">'I'</span>
-      access        : 0x000a (PRIVATE STATIC)
+      type          : <span class="hljs-string">'I'</span>
+      access        : <span class="hljs-number">0x000a</span> (<span class="hljs-keyword">PRIVATE</span> <span class="hljs-keyword">STATIC</span>)
 </code></pre>
 <p>Java compilers will implement accesses] to this field from inner classes
 by generating a synthetic getter method to allow the inner class to access
 the private field of the outer
 class. We can see the automatically generated synthetic method <code>access$000</code>
 if we examine the Dex bytecode for the <code>Alpha</code> class:</p>
-<pre><code class="hljs">Class #<span class="hljs-number">597</span>            -
-  Class descriptor  : <span class="hljs-string">'Lcom/facebook/redex/examples/synth/Alpha;'</span>
-...
-    #<span class="hljs-number">1</span>              : (<span class="hljs-keyword">in</span> Lcom/facebook/redex/examples/synth/Alpha;)
-      name          : <span class="hljs-string">'access$000'</span>
-      type          : <span class="hljs-string">'()I'</span>
-      access        : <span class="hljs-number">0x1008</span> (STATIC SYNTHETIC)
-      code          -
-      registers     : <span class="hljs-number">1</span>
-      ins           : <span class="hljs-number">0</span>
-      outs          : <span class="hljs-number">0</span>
-      insns size    : <span class="hljs-number">3</span> <span class="hljs-number">16</span>-bit code units
-<span class="hljs-number">065f</span>14:                                        |[<span class="hljs-number">065f</span>14] com.facebook.redex.examples.synth.Alpha.access$<span class="hljs-number">000</span>:()I
-<span class="hljs-number">065f</span>24: <span class="hljs-number">6000</span> <span class="hljs-number">070</span>b                              |<span class="hljs-number">0000</span>: sget v0, Lcom/facebook/redex/examples/synth/Alpha;.alpha:I <span class="hljs-comment">// field@0b07</span>
-<span class="hljs-number">065f</span>28: <span class="hljs-number">0f</span>00                                   |<span class="hljs-number">0002</span>: <span class="hljs-keyword">return</span> v0
+<pre><code class="hljs"><span class="hljs-string">Class</span> <span class="hljs-comment">#597            -</span>
+  <span class="hljs-attr">Class descriptor  :</span> <span class="hljs-string">'Lcom/facebook/redex/examples/synth/Alpha;'</span>
+<span class="hljs-string">...</span>
+    <span class="hljs-comment">#1              : (in Lcom/facebook/redex/examples/synth/Alpha;)</span>
+      <span class="hljs-attr">name          :</span> <span class="hljs-string">'access$000'</span>
+      <span class="hljs-attr">type          :</span> <span class="hljs-string">'()I'</span>
+      <span class="hljs-attr">access        :</span> <span class="hljs-number">0x1008</span> <span class="hljs-string">(STATIC</span> <span class="hljs-string">SYNTHETIC)</span>
+      <span class="hljs-string">code</span>          <span class="hljs-bullet">-</span>
+      <span class="hljs-attr">registers     :</span> <span class="hljs-number">1</span>
+      <span class="hljs-attr">ins           :</span> <span class="hljs-number">0</span>
+      <span class="hljs-attr">outs          :</span> <span class="hljs-number">0</span>
+      <span class="hljs-attr">insns size    :</span> <span class="hljs-number">3</span> <span class="hljs-number">16</span><span class="hljs-string">-bit</span> <span class="hljs-string">code</span> <span class="hljs-string">units</span>
+<span class="hljs-attr">065f14:</span>                                        <span class="hljs-string">|[065f14]</span> <span class="hljs-string">com.facebook.redex.examples.synth.Alpha.access$000:()I</span>
+<span class="hljs-attr">065f24:</span> <span class="hljs-number">6000</span> <span class="hljs-string">070b</span>                              <span class="hljs-string">|0000:</span> <span class="hljs-string">sget</span> <span class="hljs-string">v0,</span> <span class="hljs-string">Lcom/facebook/redex/examples/synth/Alpha;.alpha:I</span> <span class="hljs-string">//</span> <span class="hljs-string">field@0b07</span>
+<span class="hljs-attr">065f28:</span> <span class="hljs-string">0f00</span>                                   <span class="hljs-string">|0002:</span> <span class="hljs-string">return</span> <span class="hljs-string">v0</span>
 </code></pre>
 <p>This generated synthetic method can be accessed by the inner class
 which keeps the JVM happy. All it does is to read the state field
 value using an <code>sget</code> instruction and return the read value.
 This synthetic wrapper is used in the implementation of <code>doubleAlpha</code>:</p>
-<pre><code class="hljs">  Virtual methods   -
+<pre><code class="hljs">  <span class="hljs-string">Virtual</span> <span class="hljs-string">methods</span>   <span class="hljs-bullet">-</span>
     <span class="hljs-comment">#0              : (in Lcom/facebook/redex/examples/synth/Alpha$Beta;)</span>
-      name         <span class="hljs-keyword"> :</span> 'doubleAlpha'
-<span class="hljs-keyword">.</span>..
-065ed8:                                        |[065ed8] com.facebook.redex.examples.synth.Alpha.Beta.doubleAlpha:()I
-065ee8: 7100 1118 0000                         |0000:<span class="hljs-built_in"> invoke-static </span>{}, <span class="hljs-class">Lcom/facebook/redex/examples/synth/Alpha;</span>.access$000:()I // method@1811
-065eee: 0a00                                   |0003:<span class="hljs-built_in"> move-result </span>v0
-065ef0: da00 0002                              |0004:<span class="hljs-built_in"> mul-int/lit8 </span>v0, v0, <span class="hljs-comment">#int 2 // #02</span>
-065ef4: 0f00                                   |0006:<span class="hljs-built_in"> return </span>v0
+      <span class="hljs-attr">name          :</span> <span class="hljs-string">'doubleAlpha'</span>
+<span class="hljs-string">...</span>
+<span class="hljs-attr">065ed8:</span>                                        <span class="hljs-string">|[065ed8]</span> <span class="hljs-string">com.facebook.redex.examples.synth.Alpha.Beta.doubleAlpha:()I</span>
+<span class="hljs-attr">065ee8:</span> <span class="hljs-number">7100</span> <span class="hljs-number">1118</span> <span class="hljs-number">0000</span>                         <span class="hljs-string">|0000:</span> <span class="hljs-string">invoke-static</span> <span class="hljs-string">{},</span> <span class="hljs-string">Lcom/facebook/redex/examples/synth/Alpha;.access$000:()I</span> <span class="hljs-string">//</span> <span class="hljs-string">method@1811</span>
+<span class="hljs-attr">065eee:</span> <span class="hljs-string">0a00</span>                                   <span class="hljs-string">|0003:</span> <span class="hljs-string">move-result</span> <span class="hljs-string">v0</span>
+<span class="hljs-attr">065ef0:</span> <span class="hljs-string">da00</span> <span class="hljs-number">0002</span>                              <span class="hljs-string">|0004:</span> <span class="hljs-string">mul-int/lit8</span> <span class="hljs-string">v0,</span> <span class="hljs-string">v0,</span> <span class="hljs-comment">#int 2 // #02</span>
+<span class="hljs-attr">065ef4:</span> <span class="hljs-string">0f00</span>                                   <span class="hljs-string">|0006:</span> <span class="hljs-string">return</span> <span class="hljs-string">v0</span>
 </code></pre>
 <p>For the <code>doubleAlpha</code> method in the inner class <code>Beta</code> to access the
 private static field of the enclosing class an <code>invoke-static</code> call is made
@@ -155,32 +155,32 @@ Android application:</p>
 </code></pre>
 <p>If we examined the Dex bytecode for the call to <code>doubleAlpha</code> we would
 see something like this which shows a virtual call to the <code>doubleAlpha</code> method:</p>
-<pre><code class="hljs">  Direct methods    -
+<pre><code class="hljs">  <span class="hljs-string">Direct</span> <span class="hljs-string">methods</span>    <span class="hljs-bullet">-</span>
     <span class="hljs-comment">#0              : (in Lcom/facebook/redex/examples/synth/MainActivity;)</span>
-      name         <span class="hljs-keyword"> :</span> 'onCreate'
-<span class="hljs-keyword">.</span>..
-065fb6: 6e10 0f18 0100                         |0031:<span class="hljs-built_in"> invoke-virtual </span>{v1}, <span class="hljs-class">Lcom/facebook/redex/examples/synth/Alpha$Beta;</span>.doubleAlpha:()I // method@180f
-<span class="hljs-keyword">.</span>..
+      <span class="hljs-attr">name          :</span> <span class="hljs-string">'onCreate'</span>
+<span class="hljs-string">...</span>
+<span class="hljs-attr">065fb6:</span> <span class="hljs-number">6e10</span> <span class="hljs-string">0f18</span> <span class="hljs-number">0100</span>                         <span class="hljs-string">|0031:</span> <span class="hljs-string">invoke-virtual</span> <span class="hljs-string">{v1},</span> <span class="hljs-string">Lcom/facebook/redex/examples/synth/Alpha$Beta;.doubleAlpha:()I</span> <span class="hljs-string">//</span> <span class="hljs-string">method@180f</span>
+<span class="hljs-string">...</span>
 </code></pre>
 <p>After running Redex the synthetic wrapper method will be removed and
 the code for accessing the <code>alpha</code> static field will be inlined into
 the code for the main activity:</p>
-<pre><code class="hljs">  Direct methods    -
+<pre><code class="hljs">  <span class="hljs-string">Direct</span> <span class="hljs-string">methods</span>    <span class="hljs-bullet">-</span>
     <span class="hljs-comment">#0              : (in Lcom/facebook/redex/examples/synth/MainActivity;)</span>
-      name         <span class="hljs-keyword"> :</span> 'onCreate'
-<span class="hljs-keyword">.</span>..
-07f246: 6005 4d06                              |0031:<span class="hljs-built_in"> sget </span>v5, <span class="hljs-class">Lcom/facebook/redex/examples/synth/Alpha;</span>.alpha:I // field@064d
-07f24a: da05 0502                              |0033:<span class="hljs-built_in"> mul-int/lit8 </span>v5, v5, <span class="hljs-comment">#int 2 // #02</span>
-<span class="hljs-keyword">.</span>..
+      <span class="hljs-attr">name          :</span> <span class="hljs-string">'onCreate'</span>
+<span class="hljs-string">...</span>
+<span class="hljs-attr">07f246:</span> <span class="hljs-number">6005</span> <span class="hljs-string">4d06</span>                              <span class="hljs-string">|0031:</span> <span class="hljs-string">sget</span> <span class="hljs-string">v5,</span> <span class="hljs-string">Lcom/facebook/redex/examples/synth/Alpha;.alpha:I</span> <span class="hljs-string">//</span> <span class="hljs-string">field@064d</span>
+<span class="hljs-attr">07f24a:</span> <span class="hljs-string">da05</span> <span class="hljs-number">0502</span>                              <span class="hljs-string">|0033:</span> <span class="hljs-string">mul-int/lit8</span> <span class="hljs-string">v5,</span> <span class="hljs-string">v5,</span> <span class="hljs-comment">#int 2 // #02</span>
+<span class="hljs-string">...</span>
 
 </code></pre>
 <p>To make the access of the <code>alpha</code> field legal for the Dalvik VM we have
 mutated the access permissions for this field:</p>
-<pre><code class="hljs">  Static fields     -
-    #0              : (<span class="hljs-keyword">in</span> Lcom/facebook/redex/examples/synth/Alpha;)
+<pre><code class="hljs">  <span class="hljs-keyword">Static</span> fields     -
+    <span class="hljs-comment">#0              : (in Lcom/facebook/redex/examples/synth/Alpha;)</span>
       name          : <span class="hljs-string">'alpha'</span>
-     <span class="hljs-built_in"> type </span>         : <span class="hljs-string">'I'</span>
-      access        : 0x0009 (PUBLIC STATIC)
+      type          : <span class="hljs-string">'I'</span>
+      access        : <span class="hljs-number">0x0009</span> (<span class="hljs-keyword">PUBLIC</span> <span class="hljs-keyword">STATIC</span>)
 
 </code></pre>
 <p>Similar optimizations exist for other synthetic wrapper scenarios e.g.
@@ -199,7 +199,7 @@ APK (<code>Build : Generate Signed APK...</code>) to produce the following items
 <p>The environment variable <code>ANDROID_TOOLS</code> should be set to the location
 of your Android SDK tools directory.</p>
 <p>To produce these items:</p>
-<pre><code class="hljs"><span class="hljs-symbol">$</span> make clean <span class="hljs-keyword">all</span>
+<pre><code class="hljs">$ <span class="hljs-built_in">make</span> clean all
 </code></pre>
 </span></div></article></div><div class="docLastUpdate"><em>Last updated on 2019-2-26 by Jez Ng</em></div><div class="docs-prevnext"><a class="docs-prev button" href="/docs/proguard"><span class="arrow-prev">← </span><span class="function-name-prevnext">Using ProGuard Rules with Redex</span></a><a class="docs-next button" href="/docs/docker"><span>Docker Container Deployments</span><span class="arrow-next"> →</span></a></div></div></div><nav class="onPageNav"><ul class="toc-headings"><li><a href="#removing-synthetic-methods-for-accessing-static-fields">Removing synthetic methods for accessing static fields</a></li><li><a href="#example-code">Example Code</a></li></ul></nav></div><footer class="nav-footer" id="footer"><section class="sitemap"><a href="/" class="nav-home"><img src="/img/redex.png" alt="Redex" width="66" height="58"/></a><div class="footerSection"><h5>Docs</h5><a href="
                 /docs/en/installation">Getting Started</a><a href="
