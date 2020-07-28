@@ -710,8 +710,8 @@ void DexOutput::generate_string_data(SortMode mode) {
 }
 
 void DexOutput::emit_magic_locators() {
-  uint global_class_indices_first = Locator::invalid_global_class_index;
-  uint global_class_indices_last = Locator::invalid_global_class_index;
+  uint32_t global_class_indices_first = Locator::invalid_global_class_index;
+  uint32_t global_class_indices_last = Locator::invalid_global_class_index;
 
   // We decode all class names --- to find the first and last renamed one,
   // and also check that all renamed names are indeed in the right place.

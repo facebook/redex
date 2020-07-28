@@ -18,7 +18,7 @@ struct Base : public Configurable {
   int m_int_param;
   float m_float_param;
   bool m_bool_param;
-  uint m_uint_param;
+  unsigned int m_uint_param;
   int64_t m_int64_param;
   uint64_t m_uint64_param;
   std::string m_string_param;

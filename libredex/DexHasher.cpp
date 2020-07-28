@@ -77,7 +77,13 @@ void DexClassHasher::hash(uint64_t value) {
   boost::hash_combine(m_hash, value);
 }
 
-void DexClassHasher::hash(int value) { hash((uint)value); }
+void DexClassHasher::hash(int value) {
+  if (sizeof(int) == 8) {
+    hash((uint64_t)value);
+  } else {
+    hash((uint32_t)value);
+  }
+}
 
 void DexClassHasher::hash(const IRInstruction* insn) {
   hash((uint16_t)insn->opcode());
