@@ -29,6 +29,10 @@
 #include "Timer.h"
 #include "Walkers.h"
 
+#if IS_WINDOWS
+#include <io.h>
+#endif
+
 namespace {
 /**
  * Entry file contains the list of dex files, config file and original command

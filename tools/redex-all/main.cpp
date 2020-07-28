@@ -513,7 +513,13 @@ Arguments parse_args(int argc, char* argv[]) {
   }
 
   std::string metafiles = args.out_dir + "/meta/";
-  int status = mkdir(metafiles.c_str(), 0755);
+  int status = [&metafiles]() -> int {
+#if !IS_WINDOWS
+    return mkdir(metafiles.c_str(), 0755);
+#else
+    return mkdir(metafiles.c_str());
+#endif
+  }();
   if (status != 0 && errno != EEXIST) {
     // Attention: errno may get changed by syscalls or lib functions.
     // Saving before printing is a conventional way of using errno.
