@@ -91,6 +91,7 @@
   TM(PGR)            \
   TM(PM)             \
   TM(POST_LOWERING)  \
+  TM(PROGUARD)       \
   TM(PTA)            \
   TM(QUICK)          \
   TM(RAL)            \

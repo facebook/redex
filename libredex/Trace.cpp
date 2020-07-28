@@ -36,6 +36,8 @@ struct Tracer {
     const char* show_timestamps = getenv("SHOW_TIMESTAMPS");
     const char* show_tracemodule = getenv("SHOW_TRACEMODULE");
     m_method_filter = getenv("TRACE_METHOD_FILTER");
+    // By default enable Proguard warnings.
+    m_traces[PROGUARD] = 1;
     if (!traceenv) {
       return;
     }
@@ -129,7 +131,7 @@ struct Tracer {
     for (const char* tok = strtok(tracespec, sep); tok != nullptr;
          tok = strtok(nullptr, sep)) {
       auto level = strtol(tok, nullptr, 10);
-      if (level) {
+      if (level || strcmp(tok, "0") == 0) {
         if (module) {
           if (module_id_map.count(module) == 0) {
             if (strcmp(module, "REDEX") == 0) {
