@@ -7,6 +7,12 @@
 
 #pragma once
 
+#if defined(_MSC_VER) || defined(__MINGW32__) || defined(__MINGW64__)
+#define IS_WINDOWS 1
+#else
+#define IS_WINDOWS 0
+#endif
+
 #ifndef _MSC_VER
 
 // Move to [[maybe_unused]] when switching to C++17.

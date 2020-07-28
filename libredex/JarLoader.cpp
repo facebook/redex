@@ -12,7 +12,9 @@
 #include <vector>
 #include <zlib.h>
 
-#ifdef _MSC_VER
+#include "Macros.h"
+
+#if IS_WINDOWS
 #include <Winsock2.h>
 #pragma comment(lib, "ws2_32.lib")
 #else

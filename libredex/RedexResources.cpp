@@ -26,7 +26,8 @@
 #include <unordered_set>
 #include <vector>
 
-#ifdef _MSC_VER
+#include "Macros.h"
+#ifdef IS_WINDOWS
 #include "CompatWindows.h"
 #endif
 

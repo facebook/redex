@@ -20,8 +20,17 @@
 #include <stdlib.h>
 #include <string>
 
-#ifndef _MSC_VER
+#include "Macros.h"
+
+#if !IS_WINDOWS
 #include <execinfo.h>
+#include <unistd.h>
+#elif defined(_MSC_VER)
+// Need sleep.
+#include <windows.h>
+#define sleep(x) Sleep(1000 * (x))
+#else
+// Mingw has unistd with sleep.
 #include <unistd.h>
 #endif
 
@@ -46,7 +55,7 @@ bool slow_invariants_debug{debug};
 
 namespace {
 void crash_backtrace() {
-#ifndef _MSC_VER
+#if !IS_WINDOWS
   constexpr int max_bt_frames = 256;
   void* buf[max_bt_frames];
   auto frames = backtrace(buf, max_bt_frames);
@@ -87,7 +96,7 @@ std::string format2string(const char* fmt, ...) {
 
 namespace {
 
-#ifndef _MSC_VER
+#if !IS_WINDOWS
 
 // To have unified decoding in redex.py, use GNU backtrace here with a helper.
 struct StackTrace {

@@ -44,6 +44,7 @@
 #include "IODIMetadata.h"
 #include "InstructionLowering.h"
 #include "JarLoader.h"
+#include "Macros.h"
 #include "MonitorCount.h"
 #include "NoOptimizationsMatcher.h"
 #include "OptData.h"
@@ -1089,7 +1090,7 @@ int main(int argc, char* argv[]) {
   signal(SIGSEGV, crash_backtrace_handler);
   signal(SIGABRT, crash_backtrace_handler);
   signal(SIGINT, crash_backtrace_handler);
-#ifndef _MSC_VER
+#if !IS_WINDOWS
   signal(SIGBUS, crash_backtrace_handler);
 #endif
 

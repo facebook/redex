@@ -19,6 +19,8 @@
 #include <unordered_map>
 #include <utility>
 
+#include "Macros.h"
+
 namespace {
 
 struct Tracer {
@@ -91,7 +93,7 @@ struct Tracer {
     if (m_show_timestamps) {
       auto t = std::time(nullptr);
       struct tm local_tm;
-#ifdef _MSC_VER
+#if IS_WINDOWS
       localtime_s(&local_tm, &t);
 #else
       localtime_r(&t, &local_tm);

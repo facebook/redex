@@ -25,6 +25,7 @@
 #include "IRMetaIO.h"
 #include "InstructionLowering.h"
 #include "JarLoader.h"
+#include "Macros.h"
 #include "Timer.h"
 #include "Walkers.h"
 
@@ -168,7 +169,7 @@ bool dir_is_writable(const std::string& dir) {
   if (!boost::filesystem::is_directory(dir)) {
     return false;
   }
-#ifdef _MSC_VER
+#if IS_WINDOWS
   return _access(dir.c_str(), 2) == 0;
 #else
   return access(dir.c_str(), W_OK) == 0;
