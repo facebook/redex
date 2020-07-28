@@ -10,6 +10,7 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/filesystem.hpp>
+#include <boost/iostreams/device/mapped_file.hpp>
 #include <boost/optional.hpp>
 #include <boost/regex.hpp>
 #include <cstdio>
@@ -20,13 +21,6 @@
 #include <mutex>
 #include <sstream>
 #include <string>
-
-#ifdef _MSC_VER
-#include <mman/sys/mman.h>
-#else
-#include <sys/mman.h>
-#endif
-
 #include <sys/stat.h>
 #include <unordered_map>
 #include <unordered_set>
@@ -34,6 +28,10 @@
 
 #ifdef _MSC_VER
 #include "CompatWindows.h"
+#endif
+
+#ifdef __linux__
+#include <sys/mman.h> // For madvise
 #endif
 
 #include "androidfw/ResourceTypes.h"
@@ -51,6 +49,38 @@
 #include "StringUtil.h"
 #include "Trace.h"
 #include "WorkQueue.h"
+
+RedexMappedFile::RedexMappedFile(
+    std::unique_ptr<boost::iostreams::mapped_file> file, int fd, bool read_only)
+    : file(std::move(file)), fd(fd), read_only(read_only) {}
+
+RedexMappedFile::~RedexMappedFile() {
+  if (fd != -1) {
+    close(fd);
+  }
+}
+
+RedexMappedFile::RedexMappedFile(RedexMappedFile&& other) noexcept {
+  file = std::move(other.file);
+  fd = other.fd;
+  read_only = other.read_only;
+  other.fd = -1;
+}
+
+RedexMappedFile& RedexMappedFile::operator=(RedexMappedFile&& rhs) noexcept {
+  file = std::move(rhs.file);
+  fd = rhs.fd;
+  read_only = rhs.read_only;
+  rhs.fd = -1;
+  return *this;
+}
+
+const char* RedexMappedFile::const_data() const { return file->const_data(); }
+char* RedexMappedFile::data() const {
+  redex_assert(!read_only);
+  return file->data();
+}
+size_t RedexMappedFile::size() const { return file->size(); }
 
 namespace {
 
@@ -159,47 +189,35 @@ static_assert(sizeof(PageSizeReadFileContents) == 4096 || sizeof(void*) != 8,
 
 // Mmap: just map file contents and wrap the mapping, avoiding allocation
 // and explicit I/O.
+//
+// Note: using boost for Windows compat.
 template <int kMadviseFlags>
 struct MmapFileContents final : public BaseFileContents {
-  void* handle = nullptr;
-  size_t size = 0u;
-  int fd = -1;
+  boost::iostreams::mapped_file_source mapped_file{};
 
   explicit MmapFileContents(const std::string& file) {
-    handle = map_file(file.c_str(), &fd, &size, /*mode_write=*/false);
-    if (size > 0) {
-      auto rc = madvise(handle, size, kMadviseFlags);
+    mapped_file.open(file);
+    if (!mapped_file.is_open()) {
+      throw std::runtime_error(std::string("Could not open ") + file);
+    }
+#ifdef __linux__
+    if (mapped_file.size() > 0) {
+      auto rc = madvise(const_cast<char*>(mapped_file.data()),
+                        mapped_file.size(), kMadviseFlags);
       if (rc != 0) {
         TRACE(RES, 1, "madvise(%s): %s", file.c_str(),
               strerror_str(errno).c_str());
       }
     }
-  }
-  ~MmapFileContents() {
-    if (fd != -1) {
-      unmap_and_close(fd, handle, size);
-    }
+#endif
   }
 
-  const char* get_content() const override { return (const char*)handle; }
-  size_t get_content_size() const override { return size; }
+  const char* get_content() const override { return mapped_file.data(); }
+  size_t get_content_size() const override { return mapped_file.size(); }
 
   // Move semantics.
-  MmapFileContents(MmapFileContents&& other) noexcept
-      : handle(other.handle), size(other.size), fd(other.fd) {
-    other.handle = nullptr;
-    other.size = 0u;
-    other.fd = -1;
-  }
-  MmapFileContents& operator=(MmapFileContents&& other) noexcept {
-    handle = other.handle;
-    size = other.size;
-    fd = other.fd;
-    other.handle = nullptr;
-    other.size = 0u;
-    other.fd = -1;
-    return *this;
-  }
+  MmapFileContents(MmapFileContents&& other) = default;
+  MmapFileContents& operator=(MmapFileContents&& other) = default;
 
   // No copy semantics.
   MmapFileContents(const MmapFileContents&) = delete;
@@ -231,7 +249,13 @@ void read_file_with_contents(const std::string& file, Fn fn) {
     fn(content);
   } else {
     close(fd);
-    auto content = MmapFileContents<MADV_SEQUENTIAL | MADV_WILLNEED>(file);
+    constexpr int kAdvFlags =
+#ifdef __linux__
+        MADV_SEQUENTIAL | MADV_WILLNEED;
+#else
+        0;
+#endif
+    auto content = MmapFileContents<kAdvFlags>(file);
     fn(content);
   }
 }
@@ -1410,62 +1434,36 @@ std::unordered_set<std::string> get_native_classes(
   return all_classes;
 }
 
-void* map_file(const char* path,
-               int* file_descriptor,
-               size_t* length,
-               const bool mode_write) {
-  *file_descriptor = open(path, mode_write ? O_RDWR : O_RDONLY);
-  if (*file_descriptor <= 0) {
+RedexMappedFile map_file(const char* path, bool mode_write) {
+  int fd = open(path, mode_write ? O_RDWR : O_RDONLY);
+  if (fd < 0) {
     throw std::runtime_error(std::string("Failed to open ") + path + ": " +
                              strerror_str(errno));
   }
-  struct stat st = {};
-  if (fstat(*file_descriptor, &st) == -1) {
-    auto saved_errno = errno;
-    close(*file_descriptor);
-    throw std::runtime_error(std::string("Failed to get file length of ") +
-                             path + ": " + strerror_str(saved_errno));
-  }
-  *length = static_cast<size_t>(st.st_size);
-  if (*length == 0) {
-    // mmap fails for zero length.
-    return nullptr;
+  auto map = std::make_unique<boost::iostreams::mapped_file>();
+  std::ios_base::openmode mode = (std::ios_base::openmode)(
+      std::ios_base::in | (mode_write ? std::ios_base::out : 0));
+  map->open(path, mode);
+  if (!map->is_open()) {
+    close(fd);
+    throw std::runtime_error(std::string("Could not map ") + path);
   }
 
-  int flags = PROT_READ;
-  if (mode_write) {
-    flags |= PROT_WRITE;
-  }
-  void* fp = mmap(nullptr, *length, flags, MAP_SHARED, *file_descriptor, 0);
-  if (fp == MAP_FAILED) {
-    auto saved_errno = errno;
-    close(*file_descriptor);
-    throw std::runtime_error(std::string("Failed to mmap file ") + path + ": " +
-                             strerror_str(saved_errno));
-  }
-  return fp;
+  return RedexMappedFile(std::move(map), fd, !mode_write);
 }
 
-void unmap_and_close(int file_descriptor, void* file_pointer, size_t length) {
-  if (length > 0) {
-    munmap(file_pointer, length);
-  }
-  close(file_descriptor);
-}
+void unmap_and_close(RedexMappedFile f ATTRIBUTE_UNUSED) {}
 
 size_t write_serialized_data(const android::Vector<char>& cVec,
-                             int file_descriptor,
-                             void* file_pointer,
-                             size_t length) {
+                             RedexMappedFile f) {
   size_t vec_size = cVec.size();
+  size_t f_size = f.size();
   if (vec_size > 0) {
-    memcpy(file_pointer, &(cVec[0]), vec_size);
+    memcpy(f.data(), &(cVec[0]), vec_size);
   }
-
-  munmap(file_pointer, length);
-  ftruncate(file_descriptor, cVec.size());
-  close(file_descriptor);
-  return vec_size > 0 ? vec_size : length;
+  f.file.reset(); // Close the map.
+  ftruncate(f.fd, vec_size);
+  return vec_size > 0 ? vec_size : f_size;
 }
 
 int replace_in_xml_string_pool(
@@ -1569,29 +1567,27 @@ int rename_classes_in_layout(
     const std::map<std::string, std::string>& shortened_names,
     size_t* out_num_renamed,
     ssize_t* out_size_delta) {
-
-  int file_desc;
-  size_t len;
-  auto fp = map_file(file_path.c_str(), &file_desc, &len, true);
+  RedexMappedFile f = map_file(file_path.c_str(), /*mode_write=*/true);
+  size_t len = f.size();
 
   android::Vector<char> serialized;
-  auto status = replace_in_xml_string_pool(fp, len, shortened_names,
+  auto status = replace_in_xml_string_pool(f.data(), f.size(), shortened_names,
                                            &serialized, out_num_renamed);
 
   if (*out_num_renamed == 0 || status != android::OK) {
-    unmap_and_close(file_desc, fp, len);
+    unmap_and_close(std::move(f));
     return status;
   }
 
-  write_serialized_data(serialized, file_desc, fp, len);
+  write_serialized_data(serialized, std::move(f));
   *out_size_delta = serialized.size() - len;
   return android::OK;
 }
 
-ResourcesArscFile::ResourcesArscFile(const std::string& path) {
-  m_arsc_ptr = map_file(path.c_str(), &m_arsc_fd, &m_arsc_len, true);
-
-  int error = res_table.add(m_arsc_ptr, m_arsc_len, /* cookie */ -1,
+ResourcesArscFile::ResourcesArscFile(const std::string& path)
+    : m_f(map_file(path.c_str(), /*mode_write=*/true)) {
+  m_arsc_len = m_f.size();
+  int error = res_table.add(m_f.const_data(), m_f.size(), /* cookie */ -1,
                             /* copyData*/ true);
   always_assert_log(error == 0, "Reading arsc failed with error code: %d",
                     error);
@@ -1610,10 +1606,12 @@ ResourcesArscFile::ResourcesArscFile(const std::string& path) {
   }
 }
 
+size_t ResourcesArscFile::get_length() const { return m_arsc_len; }
+
 size_t ResourcesArscFile::serialize() {
   android::Vector<char> cVec;
   res_table.serialize(cVec, 0);
-  m_arsc_len = write_serialized_data(cVec, m_arsc_fd, m_arsc_ptr, m_arsc_len);
+  m_arsc_len = write_serialized_data(cVec, std::move(m_f));
   m_file_closed = true;
   return m_arsc_len;
 }
@@ -1673,8 +1671,4 @@ std::vector<std::string> ResourcesArscFile::get_resource_strings_by_name(
   return ret;
 }
 
-ResourcesArscFile::~ResourcesArscFile() {
-  if (!m_file_closed) {
-    unmap_and_close(m_arsc_fd, m_arsc_ptr, m_arsc_len);
-  }
-}
+ResourcesArscFile::~ResourcesArscFile() {}
