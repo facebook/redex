@@ -27,6 +27,7 @@ set_common_cxx_flags_for_redex()
 add_dependent_packages_for_redex()
 
 file(GLOB includes
+        "analysis"
         "libredex"
         "service/*"
         "opt/*"
@@ -45,6 +46,10 @@ include_directories(
         ${includes})
 
 file(GLOB_RECURSE redex_srcs
+        "analysis/max-depth/*.cpp"
+        "analysis/max-depth/*.h"
+        "analysis/ip-reflection-analysis/*.cpp"
+        "analysis/ip-reflection-analysis/*.h"
         "libredex/*.cpp"
         "libredex/*.h"
         "service/*.cpp"
@@ -57,8 +62,10 @@ file(GLOB_RECURSE redex_srcs
         "util/JemallocUtil.h"
         "util/Sha1.cpp"
         "util/Sha1.h"
-        "shared/*.cpp"
-        "shared/*.h"
+        "shared/DexDefs.cpp"
+        "shared/DexDefs.h"
+        "shared/file-utils.cpp"
+        "shared/file-utils.h"
         "liblocator/locator.cpp"
         "liblocator/locator.h"
         )
@@ -82,8 +89,8 @@ add_library(resource STATIC ${resource_srcs})
 file(GLOB redex_all_srcs
         "tools/redex-all/*.cpp"
         "tools/redex-all/*.h"
-        "tools/common/*.cpp"
-        "tools/common/*.h"
+        "tools/common/ToolsCommon.cpp"
+        "tools/common/ToolsCommon.h"
         )
 
 add_executable(redex-all ${redex_all_srcs})
