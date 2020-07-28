@@ -7,7 +7,7 @@
 
 #pragma once
 
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) || defined(__MINGW64__) || defined(__MINGW32__)
 
 #include <stdint.h>
 #include <BaseTsd.h>
