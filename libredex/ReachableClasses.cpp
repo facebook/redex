@@ -565,13 +565,13 @@ void initialize_reachable_for_json_serde(
 
 void keep_methods(const Scope& scope, const std::vector<std::string>& ms) {
   std::set<std::string> methods_to_keep(ms.begin(), ms.end());
-  for (auto const& cls : scope) {
-    for (auto& m : cls->get_dmethods()) {
+  for (const auto* cls : scope) {
+    for (auto* m : cls->get_dmethods()) {
       if (methods_to_keep.count(m->get_name()->c_str())) {
         m->rstate.ref_by_string();
       }
     }
-    for (auto& m : cls->get_vmethods()) {
+    for (auto* m : cls->get_vmethods()) {
       if (methods_to_keep.count(m->get_name()->c_str())) {
         m->rstate.ref_by_string();
       }
