@@ -7,6 +7,7 @@
 
 #include "Inliner.h"
 
+#include <cstdint>
 #include <utility>
 
 #include "ApiLevelChecker.h"
@@ -61,7 +62,7 @@ const size_t MIN_COST_FOR_PARALLELIZATION = 1977;
  * This is the maximum size of method that Dex bytecode can encode.
  * The table of instructions is indexed by a 32 bit unsigned integer.
  */
-constexpr uint64_t HARD_MAX_INSTRUCTION_SIZE = 1L << 32;
+constexpr uint64_t HARD_MAX_INSTRUCTION_SIZE = UINT64_C(1) << 32;
 
 /*
  * Some versions of ART (5.0.0 - 5.0.2) will fail to verify a method if it
