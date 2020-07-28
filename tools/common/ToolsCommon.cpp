@@ -145,7 +145,9 @@ void load_intermediate_dex(const std::string& input_ir_dir,
     for (const Json::Value& file_name : store_files["list"]) {
       auto location = boost::filesystem::path(input_ir_dir);
       location /= file_name.asString();
-      DexClasses classes = load_classes_from_dex(location.c_str(), &dex_stats);
+      // `string().c_str()` to get guaranteed `const char*`.
+      DexClasses classes =
+          load_classes_from_dex(location.string().c_str(), &dex_stats);
       stores.back().add_classes(std::move(classes));
     }
   }
