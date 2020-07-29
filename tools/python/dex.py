@@ -1171,6 +1171,7 @@ class Progard:
                             class_dict[new] = old
                     else:
                         (old, new) = line.split(" -> ")
+                        new = new.rstrip(":")
                         # print('class old = "%s"' % (old))
                         # print('class new = "%s"' % (new))
                         class_dict = {}
