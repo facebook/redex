@@ -493,7 +493,9 @@ void extract_classes_from_layout(
       android::String16 tag(parser.getElementName(&len));
       std::string classname = convert_from_string16(tag);
       if (!strcmp(classname.c_str(), "fragment") ||
-          !strcmp(classname.c_str(), "view")) {
+          !strcmp(classname.c_str(), "view") ||
+          !strcmp(classname.c_str(), "dialog") ||
+          !strcmp(classname.c_str(), "activity")) {
         classname = get_string_attribute_value(parser, klazz);
         if (classname.empty()) {
           classname = get_string_attribute_value(parser, name);
