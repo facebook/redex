@@ -130,7 +130,7 @@ on the display of the device:</p>
 <p>You can instruct Redex to prevent a class or interface from begin deleted by providing
 a <a href="http://proguard.sourceforge.net/manual/usage.html#keepoptions">ProGuard</a> rule. In this
 case we want to ensure the <code>Greek</code> interface is not deleted:</p>
-<pre><code class="hljs"><span class="hljs-selector-tag">-keep</span> <span class="hljs-selector-tag">interface</span> <span class="hljs-selector-tag">com</span><span class="hljs-selector-class">.facebook</span><span class="hljs-selector-class">.redex</span><span class="hljs-selector-class">.examples</span><span class="hljs-selector-class">.proguardexample</span><span class="hljs-selector-class">.Greek</span>
+<pre><code class="hljs">-keep<span class="hljs-built_in"> interface </span>com.facebook.redex.examples.proguardexample.Greek
 </code></pre>
 <p>When you run Redex you can specify a single ProGuard file containing simple keep rules for classes
 and interfaces. For example:</p>
