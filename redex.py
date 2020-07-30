@@ -39,11 +39,12 @@ from pyredex.utils import (
     argparse_yes_no_flag,
     dex_glob,
     ensure_libs_dir,
-    find_android_build_tools,
+    find_android_build_tool,
     get_file_ext,
     make_temp_dir,
     move_dexen_to_directories,
     remove_comments,
+    set_android_sdk_path,
     sign_apk,
     with_temp_cleanup,
 )
@@ -500,33 +501,32 @@ def run_redex_binary(state, term_handler):
 
 def zipalign(unaligned_apk_path, output_apk_path, ignore_zipalign, page_align):
     # Align zip and optionally perform good compression.
-    try:
-        zipalign = [join(find_android_build_tools(), "zipalign")]
-    except Exception:
-        # We couldn't find zipalign via ANDROID_SDK.  Try PATH.
-        zipalign = ["zipalign"]
-    args = ["4", unaligned_apk_path, output_apk_path]
+    zipalign = [
+        find_android_build_tool("zipalign"),
+        "4",
+        unaligned_apk_path,
+        output_apk_path,
+    ]
     if page_align:
-        args = ["-p"] + args
-    success = False
+        zipalign.insert(1, "-p")
     try:
-        p = subprocess.Popen(zipalign + args, stderr=subprocess.PIPE)
-        err = p.communicate()[1]
-        if p.returncode != 0:
-            error = err.decode(sys.getfilesystemencoding())
-            print("Failed to execute zipalign, stderr: {}".format(error))
-        else:
-            success = True
+        p = subprocess.Popen(zipalign, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        out, _ = p.communicate()
+        if p.returncode == 0:
+            os.remove(unaligned_apk_path)
+            return
+        out_str = out.decode(sys.getfilesystemencoding())
+        raise RuntimeError("Failed to execute zipalign, output: {}".format(out_str))
     except OSError as e:
         if e.errno == errno.ENOENT:
             print("Couldn't find zipalign. See README.md to resolve this.")
-        else:
-            print("Failed to execute zipalign, strerror: {}".format(e.strerror))
-    finally:
-        if not success:
-            if not ignore_zipalign:
-                raise Exception("Zipalign failed to run")
-            shutil.copy(unaligned_apk_path, output_apk_path)
+        if not ignore_zipalign:
+            raise e
+        shutil.copy(unaligned_apk_path, output_apk_path)
+    except BaseException:
+        if not ignore_zipalign:
+            raise
+        shutil.copy(unaligned_apk_path, output_apk_path)
     os.remove(unaligned_apk_path)
 
 
@@ -798,6 +798,8 @@ Given an APK, produce a better APK!
         help="Do not be verbose, and override TRACE.",
     )
 
+    parser.add_argument("--android-sdk-path", type=str, help="Path to Android SDK")
+
     return parser
 
 
@@ -831,6 +833,9 @@ class State(object):
 
 def prepare_redex(args):
     debug_mode = args.unpack_only or args.debug
+
+    if args.android_sdk_path:
+        set_android_sdk_path(args.android_sdk_path)
 
     # avoid accidentally mixing up file formats since we now support
     # both apk files and Android bundle files

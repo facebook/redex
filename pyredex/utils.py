@@ -23,6 +23,7 @@ import pyredex.unpacker
 from pyredex.logger import log
 
 
+android_sdk_path = None
 temp_dirs = []
 
 
@@ -60,7 +61,13 @@ def with_temp_cleanup(fn, always_clean=False):
             remove_temp_dirs()
 
 
-def find_android_build_tools():
+def set_android_sdk_path(new_path):
+    global android_sdk_path
+    android_sdk_path = new_path
+    log('Setting SDK path to "%s"' % new_path)
+
+
+def find_android_build_tools_env():
     VERSION_REGEXP = r"\d+\.\d+\.\d+$"
     android_home = os.environ["ANDROID_SDK"]
     build_tools = join(android_home, "build-tools")
@@ -71,11 +78,26 @@ def find_android_build_tools():
     return join(build_tools, version)
 
 
+def find_android_build_tools():
+    global android_sdk_path
+    if android_sdk_path:
+        return android_sdk_path
+    android_sdk_path = find_android_build_tools_env()
+    return android_sdk_path
+
+
+def find_android_build_tool(tool):
+    try:
+        candidate = join(find_android_build_tools(), tool)
+        if os.path.exists(candidate):
+            return candidate
+    except BaseException:
+        pass
+    return shutil.which(tool)
+
+
 def find_apksigner():
-    candidate = join(find_android_build_tools(), "apksigner")
-    if os.path.exists(candidate):
-        return candidate
-    return shutil.which("apksigner")
+    return find_android_build_tool("apksigner")
 
 
 def remove_signature_files(extracted_apk_dir):
