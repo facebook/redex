@@ -105,12 +105,13 @@ file(GLOB redex_all_srcs
 add_executable(redex-all ${redex_all_srcs})
 
 if (MINGW)
-    set(MINGW_EXTRA_LIBS ws2_32)
+    set(MINGW_EXTRA_LIBS -Wl,-Bstatic ws2_32)
 else (MINGW)
     set(MINGW_EXTRA_LIBS "")
 endif (MINGW)
 
 target_link_libraries(redex-all
+        ${STATIC_LINK_FLAG}
         ${Boost_LIBRARIES}
         ${REDEX_JSONCPP_LIBRARY}
         ${REDEX_ZLIB_LIBRARY}
@@ -118,7 +119,6 @@ target_link_libraries(redex-all
         redex
         resource
         ${MINGW_EXTRA_LIBS}
-        ${STATIC_LINK_FLAG}
         )
 
 target_compile_definitions(redex-all PRIVATE)
