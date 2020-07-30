@@ -7,6 +7,7 @@
 
 #include "ReachableClasses.h"
 
+#include <boost/filesystem.hpp>
 #include <chrono>
 #include <fstream>
 #include <sstream>
@@ -455,7 +456,8 @@ void analyze_reachable_from_manifest(
 
   auto manifest_class_info = [&apk_dir]() {
     try {
-      std::string manifest = apk_dir + std::string("/AndroidManifest.xml");
+      std::string manifest =
+          (boost::filesystem::path(apk_dir) / "AndroidManifest.xml").string();
       return get_manifest_class_info(manifest);
     } catch (const std::exception& e) {
       std::cerr << "Error reading manifest: " << e.what() << std::endl;
