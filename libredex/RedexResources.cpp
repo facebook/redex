@@ -60,27 +60,25 @@
 #endif
 
 RedexMappedFile::RedexMappedFile(
-    std::unique_ptr<boost::iostreams::mapped_file> file, int fd, bool read_only)
-    : file(std::move(file)), fd(fd), read_only(read_only) {}
+    std::unique_ptr<boost::iostreams::mapped_file> file,
+    std::string filename,
+    bool read_only)
+    : file(std::move(file)),
+      filename(std::move(filename)),
+      read_only(read_only) {}
 
-RedexMappedFile::~RedexMappedFile() {
-  if (fd != -1) {
-    close(fd);
-  }
-}
+RedexMappedFile::~RedexMappedFile() {}
 
 RedexMappedFile::RedexMappedFile(RedexMappedFile&& other) noexcept {
   file = std::move(other.file);
-  fd = other.fd;
+  filename = std::move(other.filename);
   read_only = other.read_only;
-  other.fd = -1;
 }
 
 RedexMappedFile& RedexMappedFile::operator=(RedexMappedFile&& rhs) noexcept {
   file = std::move(rhs.file);
-  fd = rhs.fd;
+  filename = std::move(rhs.filename);
   read_only = rhs.read_only;
-  rhs.fd = -1;
   return *this;
 }
 
@@ -1446,21 +1444,15 @@ std::unordered_set<std::string> get_native_classes(
 }
 
 RedexMappedFile map_file(const char* path, bool mode_write) {
-  int fd = open(path, mode_write ? O_RDWR : O_RDONLY);
-  if (fd < 0) {
-    throw std::runtime_error(std::string("Failed to open ") + path + ": " +
-                             strerror_str(errno));
-  }
   auto map = std::make_unique<boost::iostreams::mapped_file>();
   std::ios_base::openmode mode = (std::ios_base::openmode)(
       std::ios_base::in | (mode_write ? std::ios_base::out : 0));
   map->open(path, mode);
   if (!map->is_open()) {
-    close(fd);
     throw std::runtime_error(std::string("Could not map ") + path);
   }
 
-  return RedexMappedFile(std::move(map), fd, !mode_write);
+  return RedexMappedFile(std::move(map), path, !mode_write);
 }
 
 void unmap_and_close(RedexMappedFile f ATTRIBUTE_UNUSED) {}
@@ -1473,7 +1465,17 @@ size_t write_serialized_data(const android::Vector<char>& cVec,
     memcpy(f.data(), &(cVec[0]), vec_size);
   }
   f.file.reset(); // Close the map.
-  ftruncate(f.fd, vec_size);
+#if IS_WINDOWS
+  int fd;
+  auto open_res =
+      _sopen_s(&fd, f.filename.c_str(), _O_BINARY | _O_RDWR, _SH_DENYRW, 0);
+  redex_assert(open_res == 0);
+  auto trunc_res = _chsize_s(fd, vec_size);
+  _close(fd);
+#else
+  auto trunc_res = truncate(f.filename.c_str(), vec_size);
+#endif
+  redex_assert(trunc_res == 0);
   return vec_size > 0 ? vec_size : f_size;
 }
 

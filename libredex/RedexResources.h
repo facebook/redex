@@ -28,11 +28,11 @@ class mapped_file;
 
 struct RedexMappedFile {
   std::unique_ptr<boost::iostreams::mapped_file> file;
-  int fd;
+  std::string filename;
   bool read_only;
 
   RedexMappedFile(std::unique_ptr<boost::iostreams::mapped_file> in_file,
-                  int in_fd,
+                  std::string in_filename,
                   bool read_only);
   ~RedexMappedFile();
 
