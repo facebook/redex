@@ -194,11 +194,6 @@ class Model {
                            const DexStoresVector& stores,
                            const ModelSpec& spec,
                            const TypeSystem& type_system);
-  static Model build_model(const Scope& scope,
-                           const ConfigFiles& conf,
-                           const ModelSpec& spec,
-                           const TypeSet& types,
-                           const TypeSystem& type_system);
 
   static void update_model(Model& model);
 
@@ -343,11 +338,6 @@ class Model {
         const DexStoresVector& stores,
         const ModelSpec& spec,
         const TypeSystem& type_system);
-  Model(const Scope& scope,
-        const ConfigFiles& conf,
-        const ModelSpec& spec,
-        const TypeSystem& type_system,
-        const TypeSet& types);
   void init(const Scope& scope,
             const ModelSpec& spec,
             const TypeSystem& type_system);

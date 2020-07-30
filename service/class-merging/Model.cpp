@@ -234,19 +234,6 @@ const TypeSet Model::empty_set = TypeSet();
 
 Model::Model(const Scope& scope,
              const ConfigFiles& conf,
-             const ModelSpec& spec,
-             const TypeSystem& type_system,
-             const TypeSet& types)
-    : m_spec(spec),
-      m_types(types),
-      m_type_system(type_system),
-      m_scope(scope),
-      m_conf(conf) {
-  init(scope, spec, type_system);
-}
-
-Model::Model(const Scope& scope,
-             const ConfigFiles& conf,
              const DexStoresVector& stores,
              const ModelSpec& spec,
              const TypeSystem& type_system)
@@ -1482,21 +1469,6 @@ void Model::update_redex_stats(PassManager& mgr) const {
     mgr.incr_metric(m_spec.class_name_prefix + "_approx_fields_added",
                     m_approx_stats.fields_added);
   }
-}
-
-Model Model::build_model(const Scope& scope,
-                         const ConfigFiles& conf,
-                         const ModelSpec& spec,
-                         const TypeSet& types,
-                         const TypeSystem& type_system) {
-  Timer t("build_model");
-
-  TRACE(TERA, 3, "Build Model for %s", to_string(spec).c_str());
-  Model model(scope, conf, spec, type_system, types);
-  TRACE(TERA, 3, "Model:\n%s\nBuild Model done", model.print().c_str());
-
-  update_model(model);
-  return model;
 }
 
 ModelStats& ModelStats::operator+=(const ModelStats& stats) {
