@@ -16,7 +16,7 @@ DexType* get_type(const std::string& type_s) {
   auto type = DexType::get_type(type_s.c_str());
   if (type == nullptr) {
     fprintf(stderr,
-            "[TERA] Warning: No type found for target type %s\n",
+            "[ClassMerging] Warning: No type found for target type %s\n",
             type_s.c_str());
   }
   return type;
@@ -38,7 +38,8 @@ void load_types(const std::vector<std::string>& type_names,
   for (const auto& t : ts) {
     const auto& cls = type_class(t);
     if (cls == nullptr) {
-      fprintf(stderr, "[TERA] Missing definition for type\n%s\n", SHOW(t));
+      fprintf(stderr, "[ClassMerging] Missing definition for type\n%s\n",
+              SHOW(t));
       types.clear();
       return;
     }
@@ -64,7 +65,8 @@ void load_types(const std::vector<std::string>& type_names, TypeSet& types) {
   for (const auto& t : ts) {
     const auto& cls = type_class(t);
     if (cls == nullptr) {
-      fprintf(stderr, "[TERA] Missing definition for type\n%s\n", SHOW(t));
+      fprintf(stderr, "[ClassMerging] Missing definition for type\n%s\n",
+              SHOW(t));
       types.clear();
       return;
     }
@@ -77,30 +79,33 @@ void load_types(const std::vector<std::string>& type_names, TypeSet& types) {
  */
 bool verify_model_spec(const ModelSpec& model_spec) {
   if (model_spec.name.empty()) {
-    fprintf(stderr, "[TERA] Wrong specification: model must have \"name\"\n");
+    fprintf(stderr,
+            "[ClassMerging] Wrong specification: model must have \"name\"\n");
     return false;
   }
 
   if (model_spec.class_name_prefix.empty()) {
     fprintf(stderr,
-            "[TERA] Wrong specification: model %s must have "
+            "[ClassMerging] Wrong specification: model %s must have "
             "\"class_name_prefix\"\n",
             model_spec.name.c_str());
     return false;
   }
 
   if (model_spec.roots.empty()) {
-    fprintf(stderr,
-            "[TERA] Wrong specification: model %s must have \"roots\"\n",
-            model_spec.name.c_str());
+    fprintf(
+        stderr,
+        "[ClassMerging] Wrong specification: model %s must have \"roots\"\n",
+        model_spec.name.c_str());
     return false;
   }
 
   for (const auto root : model_spec.roots) {
     if (root == nullptr) {
-      fprintf(stderr,
-              "[TERA] Wrong specification: model %s must have \"roots\"\n",
-              model_spec.name.c_str());
+      fprintf(
+          stderr,
+          "[ClassMerging] Wrong specification: model %s must have \"roots\"\n",
+          model_spec.name.c_str());
       return false;
     }
   }
@@ -134,7 +139,7 @@ TypeTagConfig get_type_tag_config(const std::string& type_tag_config) {
                     "Type tag config type %s not found. Please check the list"
                     " of accepted values.",
                     type_tag_config.c_str());
-  TRACE(TERA, 5, "type tag config %s %d", type_tag_config.c_str(),
+  TRACE(CLMG, 5, "type tag config %s %d", type_tag_config.c_str(),
         string_to_config.at(type_tag_config));
   return string_to_config.at(type_tag_config);
 }
@@ -173,7 +178,8 @@ void ClassMergingPass::bind_config() {
       const auto& value = *it;
       if (!value.isObject()) {
         fprintf(stderr,
-                "[TERA] Wrong specification: model in array not an object\n");
+                "[ClassMerging] Wrong specification: model in array not an "
+                "object\n");
         m_model_specs.clear();
         return;
       }
@@ -200,7 +206,8 @@ void ClassMergingPass::bind_config() {
       if (!generated.isNull()) {
         if (!generated.isObject()) {
           fprintf(stderr,
-                  "[TERA] Wrong specification: model in array not an object\n");
+                  "[ClassMerging] Wrong specification: model in array not an "
+                  "object\n");
           m_model_specs.clear();
           return;
         }
@@ -254,7 +261,8 @@ void ClassMergingPass::bind_config() {
       m_model_specs.emplace_back(std::move(model));
     }
 
-    TRACE(TERA, 1, "[TERA] valid model specs %ld", m_model_specs.size());
+    TRACE(CLMG, 1, "[ClassMerging] valid model specs %ld",
+          m_model_specs.size());
   });
 }
 

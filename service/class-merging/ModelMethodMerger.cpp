@@ -38,7 +38,7 @@ std::vector<IRInstruction*> find_before(IRCode* code,
   for (auto it = ii.begin(); it != ii.end(); ++it) {
     auto next_it = std::next(it);
     if (next_it != ii.end() && matcher(next_it->insn)) {
-      TRACE(TERA, 9, "  matched insn %s", SHOW(next_it->insn));
+      TRACE(CLMG, 9, "  matched insn %s", SHOW(next_it->insn));
       res.push_back(it->insn);
     }
   }
@@ -217,19 +217,19 @@ void MethodStats::add(const MethodOrderedSet& methods) {
 
 void MethodStats::print(const std::string& model_name,
                         uint32_t num_mergeables) {
-  if (!traceEnabled(TERA, 8)) {
+  if (!traceEnabled(CLMG, 8)) {
     return;
   }
-  TRACE(TERA,
+  TRACE(CLMG,
         8,
         "==== methods stats for %s (%d) ====",
         model_name.c_str(),
         num_mergeables);
   for (auto& mm : merged_methods) {
-    TRACE(TERA, 8, " %4d %s", mm.count, mm.name.c_str());
+    TRACE(CLMG, 8, " %4d %s", mm.count, mm.name.c_str());
     if (mm.count > 1) {
       for (const auto& sample : mm.samples) {
-        TRACE(TERA, 9, "%s", sample.c_str());
+        TRACE(CLMG, 9, "%s", sample.c_str());
       }
     }
   }
@@ -357,7 +357,7 @@ std::vector<IRInstruction*> ModelMethodMerger::make_check_cast(DexType* type,
 dispatch::DispatchMethod ModelMethodMerger::create_dispatch_method(
     const dispatch::Spec& spec, const std::vector<DexMethod*>& targets) {
   always_assert(targets.size());
-  TRACE(TERA,
+  TRACE(CLMG,
         5,
         "creating dispatch %s.%s for targets of size %d",
         SHOW(spec.owner_type),
@@ -388,11 +388,11 @@ std::map<SwitchIndices, DexMethod*> ModelMethodMerger::get_dedupped_indices_map(
     indices_to_callee[switch_indices] = *duplicate.begin();
   }
 
-  TRACE(TERA, 9, "---- SwitchIndices map ---");
+  TRACE(CLMG, 9, "---- SwitchIndices map ---");
   for (auto& it : indices_to_callee) {
     auto indices = it.first;
     auto callee = it.second;
-    TRACE(TERA, 9, "indices %s callee %s", SHOW(indices), SHOW(callee));
+    TRACE(CLMG, 9, "indices %s callee %s", SHOW(indices), SHOW(callee));
   }
   return indices_to_callee;
 }
@@ -542,7 +542,7 @@ void ModelMethodMerger::inline_dispatch_entries(DexMethod* dispatch) {
     auto& call_pos = pair.second;
     inliner::inline_method(dispatch, callee_code, call_pos);
   }
-  TRACE(TERA,
+  TRACE(CLMG,
         9,
         "inlined ctor dispatch %s\n%s",
         SHOW(dispatch),
@@ -552,7 +552,7 @@ void ModelMethodMerger::inline_dispatch_entries(DexMethod* dispatch) {
 std::string ModelMethodMerger::get_method_signature_string(DexMethod* meth) {
   if (m_method_debug_map.count(meth) > 0) {
     auto orig_signature = m_method_debug_map.at(meth);
-    TRACE(TERA, 9, "Method debug map look up %s", orig_signature.c_str());
+    TRACE(CLMG, 9, "Method debug map look up %s", orig_signature.c_str());
     return orig_signature;
   }
 
@@ -616,7 +616,7 @@ void ModelMethodMerger::merge_virtual_methods(
       auto type = type_to_sig.first;
       auto map = std::make_pair(type_to_sig.second, dispatch.main_dispatch);
       m_method_dedup_map[type].push_back(map);
-      TRACE(TERA,
+      TRACE(CLMG,
             9,
             " adding dedup map type %s %s -> %s",
             SHOW(type),
@@ -645,7 +645,7 @@ void ModelMethodMerger::merge_ctors() {
   }
 
   bool pass_type_tag_param = m_model_spec.pass_type_tag_to_ctor();
-  TRACE(TERA, 5, "pass type tag param %d", pass_type_tag_param);
+  TRACE(CLMG, 5, "pass type tag param %d", pass_type_tag_param);
   //////////////////////////////////////////
   // Create dispatch and fixes
   //////////////////////////////////////////
@@ -663,7 +663,7 @@ void ModelMethodMerger::merge_ctors() {
       proto_to_ctors[m->get_proto()].push_back(m);
     }
     always_assert(!proto_to_ctors.empty());
-    TRACE(TERA,
+    TRACE(CLMG,
           4,
           " Merging ctors for %s with %d different protos",
           SHOW(target_type),
@@ -678,7 +678,7 @@ void ModelMethodMerger::merge_ctors() {
             type_reference::get_method_signature(ctor);
         mutators::make_static(ctor, mutators::KeepThis::Yes);
         replace_method_args_head(ctor, target_type);
-        TRACE(TERA, 9, "  converting ctor %s", SHOW(ctor));
+        TRACE(CLMG, 9, "  converting ctor %s", SHOW(ctor));
       }
 
       // Create dispatch.
@@ -733,7 +733,7 @@ void ModelMethodMerger::merge_ctors() {
         auto type = type_to_sig.first;
         auto map = std::make_pair(type_to_sig.second, dispatch);
         m_method_dedup_map[type].push_back(map);
-        TRACE(TERA,
+        TRACE(CLMG,
               9,
               " adding dedup map type %s %s -> %s",
               SHOW(type),
@@ -777,7 +777,7 @@ void ModelMethodMerger::dedup_non_ctor_non_virt_methods() {
           annotated.push_back(m);
         }
       }
-      TRACE(TERA, 8, "const lift: start %ld", annotated.size());
+      TRACE(CLMG, 8, "const lift: start %ld", annotated.size());
       auto stub_methods = const_lift.lift_constants_from(
           m_scope, m_type_tags, annotated, CONST_LIFT_STUB_THRESHOLD);
       to_dedup.insert(to_dedup.end(), stub_methods.begin(), stub_methods.end());
@@ -805,21 +805,21 @@ void ModelMethodMerger::dedup_non_ctor_non_virt_methods() {
     std::set<DexMethod*, dexmethods_comparator> to_relocate(
         replacements.begin(), replacements.end());
     // Add to methods stats
-    if (traceEnabled(TERA, 8)) {
+    if (traceEnabled(CLMG, 8)) {
       m_method_stats.add(to_relocate);
     }
     for (auto m : to_relocate) {
       auto sig = get_method_signature_string(m);
       auto map = std::make_pair(sig, m);
       m_method_dedup_map[m->get_class()].push_back(map);
-      TRACE(TERA,
+      TRACE(CLMG,
             9,
             "dedup: adding dedup map type %s %s -> %s",
             SHOW(m->get_class()),
             SHOW(m),
             SHOW(merger_type));
 
-      TRACE(TERA, 8, "dedup: moving static|non_virt method %s", SHOW(m));
+      TRACE(CLMG, 8, "dedup: moving static|non_virt method %s", SHOW(m));
       relocate_method(m, merger_type);
     }
 
@@ -834,7 +834,7 @@ void ModelMethodMerger::dedup_non_ctor_non_virt_methods() {
         auto sig = get_method_signature_string(old_meth);
         auto map = std::make_pair(sig, pair.first);
         m_method_dedup_map[type].push_back(map);
-        TRACE(TERA,
+        TRACE(CLMG,
               9,
               "dedup: adding dedup map type %s %s -> %s",
               SHOW(type),
@@ -849,7 +849,7 @@ void ModelMethodMerger::dedup_non_ctor_non_virt_methods() {
       if (owner == merger_type) {
         return false;
       }
-      TRACE(TERA, 9, "dedup: removing %s", SHOW(m));
+      TRACE(CLMG, 9, "dedup: removing %s", SHOW(m));
       always_assert(m_mergeable_to_merger_ctor.count(owner));
       auto cls = type_class(owner);
       cls->remove_method(m);
@@ -863,7 +863,7 @@ void ModelMethodMerger::dedup_non_ctor_non_virt_methods() {
     non_vmethods.erase(
         std::remove_if(non_vmethods.begin(), non_vmethods.end(), should_erase),
         non_vmethods.end());
-    TRACE(TERA,
+    TRACE(CLMG,
           8,
           "dedup: clean up static|non_virt remainders %d",
           before - non_ctors.size() - non_vmethods.size());

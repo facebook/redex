@@ -30,6 +30,7 @@
   TM(CHECKRECURSION) \
   TM(CIC)            \
   TM(CLA)            \
+  TM(CLMG)           \
   TM(CLP_LITHO)      \
   TM(CONSTP)         \
   TM(CPG)            \
@@ -121,7 +122,6 @@
   TM(SWIN)           \
   TM(SWITCH_EQUIV)   \
   TM(SYNT)           \
-  TM(TERA)           \
   TM(TIME)           \
   TM(TP)             \
   TM(TRACKRESOURCES) \

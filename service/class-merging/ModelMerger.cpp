@@ -94,7 +94,7 @@ void update_code_type_refs(
     const Scope& scope,
     const std::unordered_map<const DexType*, DexType*>& mergeable_to_merger) {
   TRACE(
-      TERA, 8, "  Updating NEW_INSTANCE, NEW_ARRAY, CHECK_CAST & CONST_CLASS");
+      CLMG, 8, "  Updating NEW_INSTANCE, NEW_ARRAY, CHECK_CAST & CONST_CLASS");
   UnorderedTypeSet mergeables;
   for (const auto& pair : mergeable_to_merger) {
     mergeables.insert(pair.first);
@@ -160,14 +160,14 @@ void update_code_type_refs(
       if (type::is_array(ref_type)) {
         auto array_merger_type = type::make_array_type(merger_type);
         insn->set_type(array_merger_type);
-        TRACE(TERA,
+        TRACE(CLMG,
               9,
               "  replacing %s referencing array type of %s",
               SHOW(insn),
               SHOW(type));
       } else {
         insn->set_type(const_cast<DexType*>(merger_type));
-        TRACE(TERA, 9, "  replacing %s referencing %s", SHOW(insn), SHOW(type));
+        TRACE(CLMG, 9, "  replacing %s referencing %s", SHOW(insn), SHOW(type));
       }
     }
   };
@@ -185,7 +185,7 @@ void update_refs_to_mergeable_fields(
     cook_merger_fields_lookup(
         merger_fields.at(merger->type), merger->field_map, fields_lookup);
   }
-  TRACE(TERA, 8, "  Updating field refs");
+  TRACE(CLMG, 8, "  Updating field refs");
   walk::parallel::code(scope, [&](DexMethod* meth, IRCode& code) {
     auto ii = InstructionIterable(code);
     for (auto it = ii.begin(); it != ii.end(); ++it) {
@@ -205,7 +205,7 @@ void update_refs_to_mergeable_fields(
       }
       const auto new_field = fields_lookup.at(field);
       insn->set_field(new_field);
-      TRACE(TERA,
+      TRACE(CLMG,
             9,
             "  replacing %s field ref %s (defined on mergeable)",
             SHOW(insn),
@@ -286,7 +286,7 @@ void update_instance_of(
 
       always_assert(type_class(type));
       TRACE(
-          TERA, 9, " patching INSTANCE_OF at %s %s", SHOW(insn), SHOW(caller));
+          CLMG, 9, " patching INSTANCE_OF at %s %s", SHOW(insn), SHOW(caller));
       // Load type_tag.
       auto type_tag = type_tags.get_type_tag(type);
       auto type_tag_reg = code.allocate_temp();
@@ -308,7 +308,7 @@ void update_instance_of(
       // remove original INSTANCE_OF.
       code.remove_opcode(insn);
 
-      TRACE(TERA, 9, " patched INSTANCE_OF in \n%s", SHOW(&code));
+      TRACE(CLMG, 9, " patched INSTANCE_OF in \n%s", SHOW(&code));
     }
   });
 }
@@ -331,7 +331,7 @@ void update_instance_of_no_type_tag(
       always_assert(type_class(type));
       auto merger_type = mergeable_to_merger.at(type);
       insn->set_type(merger_type);
-      TRACE(TERA, 9, " patched INSTANCE_OF no type tag in \n%s", SHOW(&code));
+      TRACE(CLMG, 9, " patched INSTANCE_OF no type tag in \n%s", SHOW(&code));
     }
   });
 }
@@ -427,7 +427,7 @@ void fix_existing_merger_cls(const Model& model,
       cls->remove_field(field);
     }
   }
-  TRACE(TERA,
+  TRACE(CLMG,
         5,
         "create hierarhcy: updated DexClass from MergerType: %s",
         SHOW(cls));
@@ -437,7 +437,7 @@ void fix_existing_merger_cls(const Model& model,
 void trim_method_debug_map(
     const std::unordered_map<const DexType*, DexType*>& mergeable_to_merger,
     std::unordered_map<DexMethod*, std::string>& method_debug_map) {
-  TRACE(TERA, 5, "Method debug map un-trimmed %d", method_debug_map.size());
+  TRACE(CLMG, 5, "Method debug map un-trimmed %d", method_debug_map.size());
   size_t trimmed_cnt = 0;
   for (auto it = method_debug_map.begin(); it != method_debug_map.end();) {
     auto owner_type = it->first->get_class();
@@ -449,7 +449,7 @@ void trim_method_debug_map(
     }
   }
 
-  TRACE(TERA, 5, "Method debug map trimmed %d", trimmed_cnt);
+  TRACE(CLMG, 5, "Method debug map trimmed %d", trimmed_cnt);
 }
 
 void write_out_type_mapping(
@@ -478,7 +478,7 @@ void write_out_type_mapping(
   out << std::endl;
 
   os << out.str();
-  TRACE(TERA,
+  TRACE(CLMG,
         4,
         "Dumped type mapping (%d) to %s",
         out.str().size(),
@@ -532,7 +532,7 @@ std::vector<DexClass*> ModelMerger::merge_model(Scope& scope,
     DexType* type = const_cast<DexType*>(merger.type);
     auto cls = type_class(type);
     const auto& intfs = model.get_interfaces(type);
-    TRACE(TERA, 3, "%s", merger_info(merger).c_str());
+    TRACE(CLMG, 3, "%s", merger_info(merger).c_str());
 
     // MergerType has an existing class, update interfaces,
     // fields and parent
@@ -562,7 +562,7 @@ std::vector<DexClass*> ModelMerger::merge_model(Scope& scope,
     // or intfs_methods.
     if (model_spec.no_type_tag()) {
       if (!merger.vmethods.empty() || !merger.intfs_methods.empty()) {
-        TRACE(TERA,
+        TRACE(CLMG,
               5,
               "Bailing out: no type tag merger %s w/ true virtuals",
               SHOW(merger.type));
@@ -630,7 +630,7 @@ std::vector<DexClass*> ModelMerger::merge_model(Scope& scope,
     post_process(model, type_tags, mergeable_to_merger_ctor);
   }
 
-  TRACE(TERA, 3, "created %d merger classes", merger_classes.size());
+  TRACE(CLMG, 3, "created %d merger classes", merger_classes.size());
   m_stats.m_num_generated_classes = merger_classes.size();
   return merger_classes;
 }

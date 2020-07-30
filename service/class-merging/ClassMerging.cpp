@@ -56,7 +56,7 @@ void merge_model(Scope& scope,
   set_up(conf);
   always_assert(s_is_initialized);
   handle_interface_as_root(spec, scope, stores);
-  TRACE(TERA, 2, "[TERA] merging %s model", spec.name.c_str());
+  TRACE(CLMG, 2, "[ClassMerging] merging %s model", spec.name.c_str());
   Timer t("erase_model");
   for (const auto root : spec.roots) {
     always_assert(!is_interface(type_class(root)));

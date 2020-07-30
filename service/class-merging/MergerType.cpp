@@ -46,7 +46,7 @@ std::string get_root_type_name_tag(const DexType* root_type) {
   // name tag string.
   // E.g., "esaBE" -> "EBase".
   std::reverse(root_name_tag_str.begin(), root_name_tag_str.end());
-  TRACE(TERA, 7, "  root_name_tag %s", root_name_tag_str.c_str());
+  TRACE(CLMG, 7, "  root_name_tag %s", root_name_tag_str.c_str());
   return root_name_tag_str;
 }
 
