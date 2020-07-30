@@ -27,7 +27,7 @@
 #include <vector>
 
 #include "Macros.h"
-#ifdef IS_WINDOWS
+#if IS_WINDOWS
 #include "CompatWindows.h"
 #endif
 
