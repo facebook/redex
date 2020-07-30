@@ -1148,6 +1148,8 @@ class DexClass {
     return m_vmethods;
   }
 
+  std::vector<DexMethod*> get_all_methods() const;
+
   /* Gets the clinit method, aka the class initializer method.
    *
    * Unlike constructors, there's only ever one clinit method.
@@ -1192,6 +1194,8 @@ class DexClass {
     redex_assert(!m_external);
     return m_ifields;
   }
+
+  std::vector<DexField*> get_all_fields() const;
   void add_field(DexField* f);
   // Removes the field from this class
   void remove_field(const DexField* f);

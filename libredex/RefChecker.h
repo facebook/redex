@@ -43,6 +43,19 @@ class RefChecker {
 
   bool check_field(const DexField* field) const;
 
+  /**
+   * Check the :cls itself and its fields, methods and method code.
+   * No cache for :cls because it's common to only check a definition once.
+   */
+  bool check_class(const DexClass* cls) const;
+
+  /**
+   * Check :method signature and its code.
+   * No cache for the :method because it's common to only check a definition
+   * once.
+   */
+  bool check_method_and_code(const DexMethod* method) const;
+
  private:
   XStoreRefs* m_xstores;
   size_t m_store_idx;

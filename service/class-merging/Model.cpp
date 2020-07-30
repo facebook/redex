@@ -10,6 +10,7 @@
 #include "AnnoUtils.h"
 #include "ApproximateShapeMerging.h"
 #include "DexStoreUtil.h"
+#include "RefChecker.h"
 #include "Resolver.h"
 #include "Walkers.h"
 
@@ -144,87 +145,17 @@ size_t trim_groups(MergerType::ShapeCollector& shapes, size_t min_count) {
   return num_trimmed_types;
 }
 
-std::vector<std::string> get_acceptible_prefixes(const JsonWrapper& jw) {
-  std::vector<std::string> acceptible_prefixes;
-  jw.get("acceptible_prefixes", {}, acceptible_prefixes);
-  return acceptible_prefixes;
-}
-
-bool is_android_sdk_type(const std::string& android_sdk_prefix,
-                         const std::vector<std::string>& acceptible_prefixes,
-                         const DexType* type) {
-  const std::string& name = type->str();
-  for (const auto& acceptible_prefix : acceptible_prefixes) {
-    if (boost::starts_with(name, acceptible_prefix)) {
-      return false;
+void exclude_unsafe_sdk_and_store_refs(const TypeSet& mergeables,
+                                       const RefChecker& refchecker,
+                                       TypeSet& non_mergeables) {
+  for (auto type : mergeables) {
+    if (non_mergeables.count(type)) {
+      continue;
     }
-  }
-  return boost::starts_with(name, android_sdk_prefix);
-}
-
-void exclude_reference_to_android_sdk(const Json::Value& json_val,
-                                      const TypeSet& mergeables,
-                                      TypeSet& non_mergeables) {
-  JsonWrapper spec = JsonWrapper(json_val);
-  bool enabled = false;
-  spec.get("enabled", false, enabled);
-  if (!enabled) {
-    TRACE(TERA, 5, "Non mergeable (android_sdk) not enabled");
-    return;
-  }
-
-  std::string android_sdk_prefix = "Landroid/";
-  TRACE(TERA, 5, "Non mergeable (android_sdk) android_sdk_prefix %s",
-        android_sdk_prefix.c_str());
-  const std::vector<std::string> acceptible_prefixes =
-      get_acceptible_prefixes(spec);
-
-  std::vector<DexClass*> mergeable_classes;
-  for (const auto t : mergeables) {
-    auto cls = type_class(t);
-    mergeable_classes.push_back(cls);
-  }
-  // Check field references
-  walk::fields(mergeable_classes, [&](DexField* field) {
-    auto type = field->get_type();
-    if (is_android_sdk_type(android_sdk_prefix, acceptible_prefixes, type)) {
-      auto mergeable = field->get_class();
-      TRACE(TERA, 5, "Non mergeable (android_sdk) %s referencing %s",
-            SHOW(mergeable), SHOW(type));
-      non_mergeables.emplace(mergeable);
+    auto cls = type_class(type);
+    if (!refchecker.check_class(cls)) {
+      non_mergeables.insert(type);
     }
-  });
-
-  // Scan code references.
-  auto scanner = [&](DexMethod* meth) {
-    std::unordered_set<const DexType*> current_excluded;
-    auto code = meth->get_code();
-    if (!code) {
-      return current_excluded;
-    }
-
-    auto mergeable = meth->get_class();
-    for (const auto& mie : InstructionIterable(code)) {
-      std::vector<DexType*> gathered;
-      mie.insn->gather_types(gathered);
-      for (const auto referenced_type : gathered) {
-        if (is_android_sdk_type(android_sdk_prefix, acceptible_prefixes,
-                                referenced_type)) {
-          TRACE(TERA, 5, "Non mergeable (android_sdk) %s referencing %s",
-                SHOW(mergeable), SHOW(referenced_type));
-          current_excluded.insert(mergeable);
-        }
-      }
-    }
-
-    return current_excluded;
-  };
-  auto excluded_by_android_sdk_ref = walk::parallel::methods<
-      std::unordered_set<const DexType*>,
-      MergeContainers<std::unordered_set<const DexType*>>>(mergeable_classes,
-                                                           scanner);
-  for (const auto excluded : excluded_by_android_sdk_ref) {
-    non_mergeables.insert(excluded);
   }
 }
 
@@ -236,8 +167,13 @@ Model::Model(const Scope& scope,
              const ConfigFiles& conf,
              const DexStoresVector& stores,
              const ModelSpec& spec,
-             const TypeSystem& type_system)
-    : m_spec(spec), m_type_system(type_system), m_scope(scope), m_conf(conf) {
+             const TypeSystem& type_system,
+             const RefChecker& refchecker)
+    : m_spec(spec),
+      m_type_system(type_system),
+      m_ref_checker(refchecker),
+      m_scope(scope),
+      m_conf(conf) {
   for (const auto root : spec.roots) {
     m_type_system.get_all_children(root, m_types);
   }
@@ -632,10 +568,7 @@ void Model::find_non_mergeables(const Scope& scope, const TypeSet& generated) {
     });
   }
 
-  if (!m_spec.exclude_reference_to_android_sdk.isNull()) {
-    exclude_reference_to_android_sdk(m_spec.exclude_reference_to_android_sdk,
-                                     m_types, m_non_mergeables);
-  }
+  exclude_unsafe_sdk_and_store_refs(m_types, m_ref_checker, m_non_mergeables);
 
   m_metric.non_mergeables = m_non_mergeables.size();
   TRACE(TERA, 3, "Non mergeables %ld", m_non_mergeables.size());
@@ -1441,11 +1374,12 @@ Model Model::build_model(const Scope& scope,
                          const ConfigFiles& conf,
                          const DexStoresVector& stores,
                          const ModelSpec& spec,
-                         const TypeSystem& type_system) {
+                         const TypeSystem& type_system,
+                         const RefChecker& refchecker) {
   Timer t("build_model");
 
   TRACE(TERA, 3, "Build Model for %s", to_string(spec).c_str());
-  Model model(scope, conf, stores, spec, type_system);
+  Model model(scope, conf, stores, spec, type_system, refchecker);
   TRACE(TERA, 3, "Model:\n%s\nBuild Model done", model.print().c_str());
 
   update_model(model);

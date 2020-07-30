@@ -774,6 +774,12 @@ void DexClass::load_class_data_item(DexIdx* idx,
 
 std::unique_ptr<IRCode> DexMethod::release_code() { return std::move(m_code); }
 
+std::vector<DexMethod*> DexClass::get_all_methods() const {
+  std::vector<DexMethod*> all_methods(m_vmethods.begin(), m_vmethods.end());
+  all_methods.insert(all_methods.end(), m_dmethods.begin(), m_dmethods.end());
+  return all_methods;
+}
+
 void DexClass::add_method(DexMethod* m) {
   always_assert_log(m->is_concrete() || m->is_external(),
                     "Method %s must be concrete",
@@ -784,6 +790,12 @@ void DexClass::add_method(DexMethod* m) {
   } else {
     insert_sorted(m_dmethods, m, compare_dexmethods);
   }
+}
+
+std::vector<DexField*> DexClass::get_all_fields() const {
+  std::vector<DexField*> all_fields(m_ifields.begin(), m_ifields.end());
+  all_fields.insert(all_fields.end(), m_sfields.begin(), m_sfields.end());
+  return all_fields;
 }
 
 void DexClass::add_field(DexField* f) {
