@@ -1208,6 +1208,12 @@ class DexMethod:
         self.name_in_file = None
         self.name = None
 
+    def __len__(self):
+        ci = self.get_code_item()
+        return (len(self.encoded_method) if self.encoded_method else 0) + (
+            len(ci) if ci else 0
+        )
+
     def get_signature(self):
         class_name = self.get_class().get_name()
         method_name = self.get_name()
@@ -1444,6 +1450,11 @@ class DexClass:
         self.demangled = None
         self.method_mapping = None
 
+    def __len__(self):
+        return sum((len(m) for m in self.get_methods())) + sum(
+            (len(f) for f in self.get_fields())
+        )
+
     def dump(self, options, f=sys.stdout):
         dex = self.get_dex()
         class_def_offset = self.class_def.get_offset()
@@ -1613,6 +1624,9 @@ class DexField:
         self.name_in_file = None
         self.name = None
         self.is_instance_field = is_instance_field
+
+    def __len__(self):
+        return len(self.encoded_field) if self.encoded_field else 0
 
     def get_signature(self):
         class_name = self.get_class().get_name()
