@@ -15,9 +15,8 @@ namespace {
 DexType* get_type(const std::string& type_s) {
   auto type = DexType::get_type(type_s.c_str());
   if (type == nullptr) {
-    fprintf(stderr,
-            "[ClassMerging] Warning: No type found for target type %s\n",
-            type_s.c_str());
+    TRACE(CLMG, 2, "[ClassMerging] Warning: No type found for target type %s",
+          type_s.c_str());
   }
   return type;
 }
@@ -32,21 +31,6 @@ std::vector<DexType*> get_types(const std::vector<std::string>& target_types) {
   return types;
 }
 
-void load_types(const std::vector<std::string>& type_names,
-                std::unordered_set<DexType*>& types) {
-  std::vector<DexType*> ts = get_types(type_names);
-  for (const auto& t : ts) {
-    const auto& cls = type_class(t);
-    if (cls == nullptr) {
-      fprintf(stderr, "[ClassMerging] Missing definition for type\n%s\n",
-              SHOW(t));
-      types.clear();
-      return;
-    }
-    types.insert(t);
-  }
-};
-
 void load_types_and_prefixes(const std::vector<std::string>& type_names,
                              std::unordered_set<DexType*>& types,
                              std::unordered_set<std::string>& prefixes) {
@@ -60,54 +44,44 @@ void load_types_and_prefixes(const std::vector<std::string>& type_names,
   }
 }
 
-void load_types(const std::vector<std::string>& type_names, TypeSet& types) {
+template <typename Types>
+void load_types(const std::vector<std::string>& type_names, Types& types) {
   std::vector<DexType*> ts = get_types(type_names);
   for (const auto& t : ts) {
     const auto& cls = type_class(t);
     if (cls == nullptr) {
-      fprintf(stderr, "[ClassMerging] Missing definition for type\n%s\n",
-              SHOW(t));
+      TRACE(CLMG, 2, "Missing definition for type %s", SHOW(t));
       types.clear();
       return;
     }
     types.insert(t);
   }
-};
+}
 
 /**
  * Verify model specs are consistent
  */
 bool verify_model_spec(const ModelSpec& model_spec) {
-  if (model_spec.name.empty()) {
-    fprintf(stderr,
-            "[ClassMerging] Wrong specification: model must have \"name\"\n");
-    return false;
-  }
-
-  if (model_spec.class_name_prefix.empty()) {
-    fprintf(stderr,
-            "[ClassMerging] Wrong specification: model %s must have "
-            "\"class_name_prefix\"\n",
-            model_spec.name.c_str());
-    return false;
-  }
+  always_assert_log(
+      !model_spec.name.empty(),
+      "[ClassMerging] Wrong specification: model must have \"name\"");
+  always_assert_log(!model_spec.class_name_prefix.empty(),
+                    "[ClassMerging] Wrong specification: model %s must have "
+                    "\"class_name_prefix\"",
+                    model_spec.name.c_str());
 
   if (model_spec.roots.empty()) {
-    fprintf(
-        stderr,
-        "[ClassMerging] Wrong specification: model %s must have \"roots\"\n",
-        model_spec.name.c_str());
+    TRACE(CLMG, 2,
+          "[ClassMerging] Wrong specification: model %s must have \"roots\"",
+          model_spec.name.c_str());
     return false;
   }
 
   for (const auto root : model_spec.roots) {
-    if (root == nullptr) {
-      fprintf(
-          stderr,
-          "[ClassMerging] Wrong specification: model %s must have \"roots\"\n",
-          model_spec.name.c_str());
-      return false;
-    }
+    always_assert_log(
+        root,
+        "[ClassMerging] Wrong specification: model %s must have \"roots\"",
+        model_spec.name.c_str());
   }
 
   return true;
@@ -176,13 +150,9 @@ void ClassMergingPass::bind_config() {
     // load each model spec for erasure
     for (auto it = models.begin(); it != models.end(); ++it) {
       const auto& value = *it;
-      if (!value.isObject()) {
-        fprintf(stderr,
-                "[ClassMerging] Wrong specification: model in array not an "
-                "object\n");
-        m_model_specs.clear();
-        return;
-      }
+      always_assert_log(
+          value.isObject(),
+          "[ClassMerging] Wrong specification: model in array not an object");
       JsonWrapper model_spec = JsonWrapper(value);
       ModelSpec model;
       model_spec.get("enabled", true, model.enabled);
@@ -261,7 +231,7 @@ void ClassMergingPass::bind_config() {
       m_model_specs.emplace_back(std::move(model));
     }
 
-    TRACE(CLMG, 1, "[ClassMerging] valid model specs %ld",
+    TRACE(CLMG, 2, "[ClassMerging] valid model specs %ld",
           m_model_specs.size());
   });
 }
