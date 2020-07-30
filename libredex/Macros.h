@@ -11,6 +11,11 @@
 #define IS_WINDOWS 1
 #else
 #define IS_WINDOWS 0
+
+// Windows requires O_BINARY to not interpret text files and
+// have 0x1a terminate the file. For Linux, just make it `0`.
+#define O_BINARY 0
+
 #endif
 
 #ifndef _MSC_VER

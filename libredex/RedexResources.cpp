@@ -29,6 +29,8 @@
 #include "Macros.h"
 #if IS_WINDOWS
 #include "CompatWindows.h"
+#include <io.h>
+#include <share.h>
 #endif
 
 #ifdef __linux__
@@ -137,7 +139,7 @@ struct ReadFileContents final : public BaseFileContents {
   char inline_data[kDataSize];
 
   explicit ReadFileContents(const std::string& file) {
-    int fd = open(file.c_str(), O_RDONLY);
+    int fd = open(file.c_str(), O_RDONLY | O_BINARY);
     if (fd < 0) {
       throw std::runtime_error(std::string("Failed to open ") + file + ": " +
                                strerror_str(errno));
@@ -237,7 +239,7 @@ using XMLFileContents = PageSizeReadFileContents;
 // Mmaps may not amortize for small files. Split between `read` and `mmap`.
 template <size_t kThreshold, typename Fn>
 void read_file_with_contents(const std::string& file, Fn fn) {
-  int fd = open(file.c_str(), O_RDONLY);
+  int fd = open(file.c_str(), O_RDONLY | O_BINARY);
   if (fd < 0) {
     throw std::runtime_error(std::string("Failed to open ") + file + ": " +
                              strerror_str(errno));

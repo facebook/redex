@@ -39,6 +39,7 @@
 #include "DexUtil.h"
 #include "IODIMetadata.h"
 #include "IRCode.h"
+#include "Macros.h"
 #include "Pass.h"
 #include "Resolver.h"
 #include "Sha1.h"
@@ -2400,7 +2401,7 @@ void DexOutput::prepare(SortMode string_mode,
 
 void DexOutput::write() {
   struct stat st;
-  int fd = open(m_filename, O_CREAT | O_TRUNC | O_WRONLY, 0660);
+  int fd = open(m_filename, O_CREAT | O_TRUNC | O_WRONLY | O_BINARY, 0660);
   if (fd == -1) {
     perror("Error writing dex");
     return;
