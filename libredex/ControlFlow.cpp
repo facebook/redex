@@ -1044,13 +1044,18 @@ void ControlFlowGraph::sanity_check() const {
       }
 
       // Last instruction matches outgoing edges
-      auto num_goto_succs = get_succ_edges_of_type(b, EDGE_GOTO).size();
+      uint32_t num_goto_succs = 0;
+      uint32_t num_succs = 0;
+      for (const Edge* e : b->succs()) {
+        if (e->type() == EDGE_GOTO) {
+          ++num_goto_succs;
+        }
+        if (e->type() != EDGE_GHOST) {
+          ++num_succs;
+        }
+      }
       auto last_it = b->get_last_insn();
       auto num_preds = b->preds().size();
-      auto num_succs =
-          get_succ_edges_if(
-              b, [](const Edge* e) { return e->type() != EDGE_GHOST; })
-              .size();
       if (last_it != b->end()) {
         auto op = last_it->insn->opcode();
 
@@ -1549,6 +1554,7 @@ std::vector<Block*> ControlFlowGraph::wto_chains(
 
   // TODO: would breadth first be better?
   std::vector<Block*> wto_order;
+  wto_order.reserve(m_blocks.size());
   wto.visit_depth_first([&wto_order](Chain* c) {
     for (Block* b : *c) {
       wto_order.push_back(b);
