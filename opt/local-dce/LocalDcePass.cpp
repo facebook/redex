@@ -52,8 +52,8 @@ void LocalDcePass::run_pass(DexStoresVector& stores,
   auto configured_pure_methods = conf.get_pure_methods();
   pure_methods.insert(configured_pure_methods.begin(),
                       configured_pure_methods.end());
-  auto rstate_pure_method = get_rstate_pure_methods(scope);
-  pure_methods.insert(rstate_pure_method.begin(), rstate_pure_method.end());
+  auto immutable_getters = get_immutable_getters(scope);
+  pure_methods.insert(immutable_getters.begin(), immutable_getters.end());
   auto override_graph = method_override_graph::build_graph(scope);
   std::unordered_set<const DexMethod*> computed_no_side_effects_methods;
   auto computed_no_side_effects_methods_iterations =

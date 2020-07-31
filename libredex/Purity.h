@@ -100,7 +100,7 @@ CseLocation get_read_location(const IRInstruction* insn);
  */
 std::unordered_set<DexMethodRef*> get_pure_methods();
 
-std::unordered_set<DexMethod*> get_rstate_pure_methods(const Scope& scope);
+std::unordered_set<DexMethod*> get_immutable_getters(const Scope& scope);
 
 struct LocationsAndDependencies {
   CseUnorderedLocationSet locations;

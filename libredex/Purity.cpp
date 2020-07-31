@@ -308,10 +308,10 @@ std::unordered_set<DexMethodRef*> get_pure_methods() {
   return pure_methods;
 }
 
-std::unordered_set<DexMethod*> get_rstate_pure_methods(const Scope& scope) {
+std::unordered_set<DexMethod*> get_immutable_getters(const Scope& scope) {
   std::unordered_set<DexMethod*> pure_methods;
   walk::methods(scope, [&](DexMethod* method) {
-    if (method->rstate.pure_method() || method->rstate.immutable_getter()) {
+    if (method->rstate.immutable_getter()) {
       pure_methods.insert(method);
     }
   });

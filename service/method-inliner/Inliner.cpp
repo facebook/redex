@@ -182,8 +182,8 @@ MultiMethodInliner::MultiMethodInliner(
   if (m_config.run_cse || m_config.run_local_dce) {
     m_pure_methods.insert(configured_pure_methods.begin(),
                           configured_pure_methods.end());
-    auto rstate_pure_method = get_rstate_pure_methods(scope);
-    m_pure_methods.insert(rstate_pure_method.begin(), rstate_pure_method.end());
+    auto immutable_getters = get_immutable_getters(scope);
+    m_pure_methods.insert(immutable_getters.begin(), immutable_getters.end());
     if (m_config.run_cse) {
       m_cse_shared_state =
           std::make_unique<cse_impl::SharedState>(m_pure_methods);
