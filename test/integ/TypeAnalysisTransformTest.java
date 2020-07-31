@@ -100,3 +100,68 @@ class TestRemoveRedundantNullChecks {
     t.checkNEZNotNullArg(b);
   }
 }
+
+class TestRemoveRedundantTypeChecks {
+  Base mField1;
+
+  TestRemoveRedundantTypeChecks() {
+    mField1 = new SubOne();
+  }
+
+  public int checkInstanceOfBaseNullArg(Base b) {
+    int i = 42;
+    if (b instanceof Base) {
+      i += b.getVal();
+    }
+    return i;
+  }
+
+  public int checkInstanceOfBaseNotNullArg(Base b) {
+    int i = 42;
+    if (b instanceof Base) {
+      i += b.getVal();
+    }
+    return i;
+  }
+
+  public int checkInstanceOfSubOneArg(Base b) {
+    int i = 42;
+    if (b instanceof SubOne) {
+      i += ((SubOne) b).getVal();
+    }
+    return i;
+  }
+
+  public int checkInstanceOfSubTwoArg(Base b) {
+    int i = 42;
+    if (b instanceof SubTwo) {
+      i += ((SubTwo) b).getVal();
+    }
+    return i;
+  }
+
+  public int checkInstanceOfNullableField() {
+    int i = 42;
+    Base b = mField1;
+    if (b instanceof SubTwo) {
+      i += ((SubTwo) b).getVal();
+    }
+    return i;
+  }
+
+  static void main() {
+    TestRemoveRedundantTypeChecks t = new TestRemoveRedundantTypeChecks();
+    Base b = null;
+    t.checkInstanceOfBaseNullArg(b);
+    b = new Base();
+    t.checkInstanceOfBaseNotNullArg(b);
+
+    b = new SubOne();
+    t.checkInstanceOfSubOneArg(b);
+    t.checkInstanceOfSubTwoArg(b);
+
+    // null assignment making the field nullable
+    t.mField1 = null;
+    t.checkInstanceOfNullableField();
+  }
+}

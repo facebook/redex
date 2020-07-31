@@ -59,44 +59,6 @@ void print_type_chain(std::ostream& os, const DexType* type, size_t indent) {
   }
 }
 
-boost::optional<int32_t> evaluate_impl(const DexType* src_type,
-                                       const DexType* test_type) {
-  if (test_type == src_type) {
-    // Trivial.
-    return 1;
-  }
-
-  auto test_cls = type_class(test_type);
-  if (test_cls == nullptr) {
-    return boost::none;
-  }
-
-  auto src_cls = type_class(src_type);
-  if (src_cls == nullptr) {
-    return boost::none;
-  }
-
-  // OK, let's simplify for now. While some SDK classes should be set in
-  // stone, let's only work on internals.
-  if (test_cls->is_external() || src_cls->is_external()) {
-    return boost::none;
-  }
-
-  // Class vs class, for simplicity.
-  if (!is_interface(test_cls) && !is_interface(src_cls)) {
-    if (type::check_cast(src_cls->get_type(), test_cls->get_type())) {
-      // If check-cast succeeds, the result will be `true`.
-      return 1;
-    } else if (!type::check_cast(test_cls->get_type(), src_cls->get_type())) {
-      // The check can never succeed, as the test class is not a subtype.
-      return 0;
-    }
-    return boost::none;
-  }
-
-  return boost::none;
-}
-
 struct RemoveResult {
   size_t methods_w_instanceof{0};
   size_t overrides{0};
@@ -301,7 +263,7 @@ RemoveResult analyze_and_evaluate_instance_of(DexMethod* method) {
         continue;
       }
 
-      auto eval = evaluate_impl(*src_type_state, test_type);
+      auto eval = type::evaluate_type_check(*src_type_state, test_type);
       if (!eval) {
         continue;
       }
@@ -429,7 +391,7 @@ RemoveResult analyze_and_evaluate(DexMethod* method) {
         continue;
       }
 
-      auto eval = evaluate_impl(*src_type_state, test_type);
+      auto eval = type::evaluate_type_check(*src_type_state, test_type);
       if (!eval) {
         continue;
       }
@@ -568,7 +530,7 @@ RemoveResult optimize_impl(DexMethod* method,
 
 boost::optional<int32_t> EvaluateTypeChecksPass::evaluate(
     const DexType* src_type, const DexType* test_type) {
-  return evaluate_impl(src_type, test_type);
+  return type::evaluate_type_check(src_type, test_type);
 }
 
 void EvaluateTypeChecksPass::optimize(DexMethod* method, XStoreRefs& xstores) {

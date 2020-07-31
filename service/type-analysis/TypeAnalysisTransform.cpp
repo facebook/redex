@@ -73,18 +73,6 @@ bool is_supported_branch_type(IROpcode op) {
 
 namespace type_analyzer {
 
-/*
- * The nullness results is only guaranteed to be correct after the execution of
- * clinit and ctors.
- * TODO: The complete solution requires some kind of call graph analysis from
- * the clinit and ctor.
- */
-bool Transform::can_optimize_null_checks(const WholeProgramState& wps,
-                                         const DexMethod* method) {
-  return m_config.remove_redundant_null_checks && !method::is_init(method) &&
-         !method::is_clinit(method) && !wps.is_any_init_reachable(method);
-}
-
 void Transform::remove_redundant_null_checks(const DexTypeEnvironment& env,
                                              cfg::Block* block,
                                              Stats& stats) {
@@ -113,6 +101,46 @@ void Transform::remove_redundant_null_checks(const DexTypeEnvironment& env,
   }
 }
 
+void Transform::remove_redundant_type_checks(const DexTypeEnvironment& env,
+                                             IRList::iterator& it,
+                                             Stats& stats) {
+
+  auto insn = it->insn;
+  auto move_res = (++it)->insn;
+  always_assert(insn->opcode() == OPCODE_INSTANCE_OF);
+  always_assert(opcode::is_move_result_any(move_res->opcode()));
+  auto val = env.get(insn->src(0));
+  if (val.is_top() || val.is_bottom()) {
+    return;
+  }
+  auto val_type = val.get_dex_type();
+  if (val.is_null()) {
+    // always 0
+    auto eval_val = new IRInstruction(OPCODE_CONST);
+    eval_val->set_literal(0)->set_dest(move_res->dest());
+    m_replacements.push_back({insn, eval_val});
+    stats.type_check_removed++;
+  } else if (val.is_not_null() && val_type) {
+    // can be evaluated
+    DexType* src_type = const_cast<DexType*>(*val_type);
+    auto eval_res = type::evaluate_type_check(src_type, insn->get_type());
+    if (!eval_res) {
+      return;
+    }
+    auto eval_val = new IRInstruction(OPCODE_CONST);
+    eval_val->set_literal(*eval_res)->set_dest(move_res->dest());
+    m_replacements.push_back({insn, eval_val});
+    stats.type_check_removed++;
+  } else if (val.is_nullable() && val_type) {
+    // check can be converted to null checks
+    DexType* src_type = const_cast<DexType*>(*val_type);
+    auto eval_res = type::evaluate_type_check(src_type, insn->get_type());
+    if (eval_res) {
+      stats.null_check_only_type_checks++;
+    }
+  }
+}
+
 Transform::Stats Transform::apply(
     const type_analyzer::local::LocalTypeAnalyzer& lta,
     const WholeProgramState& wps,
@@ -120,7 +148,7 @@ Transform::Stats Transform::apply(
     const NullAssertionSet& null_assertion_set) {
   auto code = method->get_code();
   Transform::Stats stats{};
-  bool remove_null_checks = can_optimize_null_checks(wps, method);
+  bool can_use_nullness_results = wps.can_use_nullness_results(method);
   for (const auto& block : code->cfg().blocks()) {
     auto env = lta.get_entry_state_at(block);
     if (env.is_bottom()) {
@@ -145,9 +173,13 @@ Transform::Stats Transform::apply(
           stats.kotlin_null_check_removed++;
         }
       }
+      if (m_config.remove_redundant_type_checks && can_use_nullness_results &&
+          insn->opcode() == OPCODE_INSTANCE_OF) {
+        remove_redundant_type_checks(env, it, stats);
+      }
     }
 
-    if (remove_null_checks) {
+    if (m_config.remove_redundant_null_checks && can_use_nullness_results) {
       remove_redundant_null_checks(env, block, stats);
     }
   }

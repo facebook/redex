@@ -97,3 +97,93 @@ TEST_F(TypeAnalysisTransformTest, RemoveRedundantNullCheckTest) {
     EXPECT_TRUE(found_if_eqz);
   }
 }
+
+TEST_F(TypeAnalysisTransformTest, TestRemoveRedundantTypeChecks) {
+  auto scope = build_class_scope(stores);
+  set_root_method(
+      "Lcom/facebook/redextest/TestRemoveRedundantTypeChecks;.main:()V");
+
+  auto gta = new GlobalTypeAnalysisPass();
+  gta->get_config().transform.remove_redundant_type_checks = true;
+  std::vector<Pass*> passes{gta};
+  run_passes(passes);
+
+  {
+    auto meth_check_null_arg =
+        get_method("TestRemoveRedundantTypeChecks;.checkInstanceOfBaseNullArg",
+                   "Lcom/facebook/redextest/Base;", "I");
+    auto code = meth_check_null_arg->get_code();
+    const auto& insns = InstructionIterable(code);
+    bool found_const_0 = false;
+    for (auto& mie : insns) {
+      auto insn = mie.insn;
+      EXPECT_NE(insn->opcode(), OPCODE_INSTANCE_OF);
+      if (insn->opcode() == OPCODE_CONST && insn->get_literal() == 0) {
+        found_const_0 = true;
+      }
+    }
+    EXPECT_TRUE(found_const_0);
+  }
+  {
+    auto meth_check_not_null_arg = get_method(
+        "TestRemoveRedundantTypeChecks;.checkInstanceOfBaseNotNullArg",
+        "Lcom/facebook/redextest/Base;", "I");
+    auto code = meth_check_not_null_arg->get_code();
+    const auto& insns = InstructionIterable(code);
+    bool found_const_1 = false;
+    for (auto& mie : insns) {
+      auto insn = mie.insn;
+      EXPECT_NE(insn->opcode(), OPCODE_INSTANCE_OF);
+      if (insn->opcode() == OPCODE_CONST && insn->get_literal() == 1) {
+        found_const_1 = true;
+      }
+    }
+    EXPECT_TRUE(found_const_1);
+  }
+  {
+    auto meth_check_sub_one =
+        get_method("TestRemoveRedundantTypeChecks;.checkInstanceOfSubOneArg",
+                   "Lcom/facebook/redextest/Base;", "I");
+    auto code = meth_check_sub_one->get_code();
+    const auto& insns = InstructionIterable(code);
+    bool found_const_1 = false;
+    for (auto& mie : insns) {
+      auto insn = mie.insn;
+      EXPECT_NE(insn->opcode(), OPCODE_INSTANCE_OF);
+      if (insn->opcode() == OPCODE_CONST && insn->get_literal() == 1) {
+        found_const_1 = true;
+      }
+    }
+    EXPECT_TRUE(found_const_1);
+  }
+  {
+    auto meth_check_sub_two =
+        get_method("TestRemoveRedundantTypeChecks;.checkInstanceOfSubTwoArg",
+                   "Lcom/facebook/redextest/Base;", "I");
+    auto code = meth_check_sub_two->get_code();
+    const auto& insns = InstructionIterable(code);
+    bool found_const_0 = false;
+    for (auto& mie : insns) {
+      auto insn = mie.insn;
+      EXPECT_NE(insn->opcode(), OPCODE_INSTANCE_OF);
+      if (insn->opcode() == OPCODE_CONST && insn->get_literal() == 0) {
+        found_const_0 = true;
+      }
+    }
+    EXPECT_TRUE(found_const_0);
+  }
+  {
+    auto meth_check_nullable_field = get_method(
+        "TestRemoveRedundantTypeChecks;.checkInstanceOfNullableField", "", "I");
+    auto code = meth_check_nullable_field->get_code();
+    const auto& insns = InstructionIterable(code);
+    bool found_instance_of = false;
+    for (auto& mie : insns) {
+      auto insn = mie.insn;
+      if (insn->opcode() == OPCODE_INSTANCE_OF) {
+        found_instance_of = true;
+      }
+    }
+    EXPECT_TRUE(found_instance_of);
+  }
+}

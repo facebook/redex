@@ -206,4 +206,13 @@ bool is_subclass(const DexType* parent, const DexType* child);
  */
 bool is_uninstantiable_class(DexType* type);
 
+/**
+ * Evaluate a type check on the `src_type` against the `test_type`. It is
+ * equivalent to the semantic of the INSTANCE_OF check. If the check passes, the
+ * function returns 1; if it fails, the function returns 0. If it cannot be
+ * determined, the function returns none.
+ */
+boost::optional<int32_t> evaluate_type_check(const DexType* src_type,
+                                             const DexType* test_type);
+
 }; // namespace type

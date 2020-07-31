@@ -111,6 +111,17 @@ class WholeProgramState {
     return m_any_init_reachables.count(method);
   }
 
+  /*
+   * The nullness results is only guaranteed to be correct after the execution
+   * of clinit and ctors.
+   * TODO: The complete solution requires some kind of call graph analysis from
+   * the clinit and ctor.
+   */
+  bool can_use_nullness_results(const DexMethod* method) const {
+    return !method::is_init(method) && !method::is_clinit(method) &&
+           !is_any_init_reachable(method);
+  }
+
   // For debugging
   std::string print_field_partition_diff(const WholeProgramState& other) const;
 

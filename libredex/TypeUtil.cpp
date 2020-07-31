@@ -442,4 +442,42 @@ bool is_uninstantiable_class(DexType* type) {
   return !cls->has_ctors();
 }
 
+boost::optional<int32_t> evaluate_type_check(const DexType* src_type,
+                                             const DexType* test_type) {
+  if (test_type == src_type) {
+    // Trivial.
+    return 1;
+  }
+
+  auto test_cls = type_class(test_type);
+  if (test_cls == nullptr) {
+    return boost::none;
+  }
+
+  auto src_cls = type_class(src_type);
+  if (src_cls == nullptr) {
+    return boost::none;
+  }
+
+  // OK, let's simplify for now. While some SDK classes should be set in
+  // stone, let's only work on internals.
+  if (test_cls->is_external() || src_cls->is_external()) {
+    return boost::none;
+  }
+
+  // Class vs class, for simplicity.
+  if (!is_interface(test_cls) && !is_interface(src_cls)) {
+    if (type::check_cast(src_cls->get_type(), test_cls->get_type())) {
+      // If check-cast succeeds, the result will be `true`.
+      return 1;
+    } else if (!type::check_cast(test_cls->get_type(), src_cls->get_type())) {
+      // The check can never succeed, as the test class is not a subtype.
+      return 0;
+    }
+    return boost::none;
+  }
+
+  return boost::none;
+}
+
 }; // namespace type
