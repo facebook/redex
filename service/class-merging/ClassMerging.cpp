@@ -29,8 +29,9 @@ void set_up(ConfigFiles& conf) {
   s_is_initialized = true;
 }
 
-std::unique_ptr<RefChecker> ref_checker_for_root_store(
-    const DexStoresVector& stores, ConfigFiles& conf, int min_sdk) {
+std::unique_ptr<RefChecker> ref_checker_for_root_store(XStoreRefs* xstores,
+                                                       ConfigFiles& conf,
+                                                       int min_sdk) {
   auto min_sdk_api_file = conf.get_android_sdk_api_file(min_sdk);
   const api::AndroidSDK* min_sdk_api{nullptr};
   if (!min_sdk_api_file) {
@@ -40,8 +41,9 @@ std::unique_ptr<RefChecker> ref_checker_for_root_store(
   } else {
     min_sdk_api = &conf.get_android_sdk_api(min_sdk);
   }
-  XStoreRefs xstores(stores);
-  return std::make_unique<RefChecker>(&xstores, /*store_idx*/ 0, min_sdk_api);
+  // The primary dex is the store 0, the secondary dexes are in store 1, and
+  // then other stores.
+  return std::make_unique<RefChecker>(xstores, /*store_idx*/ 1, min_sdk_api);
 }
 
 } // namespace
@@ -63,7 +65,8 @@ void merge_model(Scope& scope,
   }
   TypeSystem type_system(scope);
   int32_t min_sdk = mgr.get_redex_options().min_sdk;
-  auto refchecker = ref_checker_for_root_store(stores, conf, min_sdk);
+  XStoreRefs xstores(stores);
+  auto refchecker = ref_checker_for_root_store(&xstores, conf, min_sdk);
   auto model =
       Model::build_model(scope, conf, stores, spec, type_system, *refchecker);
   model.update_redex_stats(mgr);
