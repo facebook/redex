@@ -184,6 +184,7 @@ uint32_t DexDebugItem::get_line_start() const {
 
 DexDebugItem::DexDebugItem(const DexDebugItem& that) {
   std::unordered_map<DexPosition*, DexPosition*> pos_map;
+  m_dbg_entries.reserve(that.m_dbg_entries.size());
   for (auto& entry : that.m_dbg_entries) {
     switch (entry.type) {
     case DexDebugEntryType::Position: {
@@ -357,6 +358,8 @@ std::unique_ptr<DexCode> DexCode::get_dex_code(DexIdx* idx, uint32_t offset) {
   const uint16_t* cdata = (const uint16_t*)(code + 1);
   uint32_t tries = code->tries_size;
   if (code->insns_size) {
+    // On average there seem to be about two code units per instruction
+    dc->m_insns->reserve(code->insns_size / 2);
     const uint16_t* end = cdata + code->insns_size;
     while (cdata < end) {
       DexInstruction* dop = DexInstruction::make_instruction(idx, &cdata);
