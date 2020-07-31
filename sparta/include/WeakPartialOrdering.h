@@ -399,8 +399,11 @@ class WpoBuilder final {
     for (uint32_t v = 1; v < get_next_dfn(); v++) {
       dsets.make_set(v);
       rep[v] = exit[v] = v;
-      for (auto u : m_non_back_preds[v]) {
-        origin[v].emplace_back(u, v);
+      const auto& non_back_preds_v = m_non_back_preds[v];
+      auto& origin_v = origin[v];
+      origin_v.reserve(origin_v.size() + non_back_preds_v.size());
+      for (auto u : non_back_preds_v) {
+        origin_v.emplace_back(u, v);
       }
     }
     // In reverse DFS order, build WPOs for SCCs bottom-up.
