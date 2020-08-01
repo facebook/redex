@@ -175,6 +175,10 @@ class XStoreRefs {
     return false;
   }
 
+  bool is_in_primary_dex(const DexType* type) const {
+    return !m_xstores.empty() && m_xstores[0].count(type);
+  }
+
   const DexStore* get_store(size_t idx) const { return m_stores[idx]; }
 
   const DexStore* get_store(const DexType* type) const {

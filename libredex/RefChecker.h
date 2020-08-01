@@ -56,6 +56,8 @@ class RefChecker {
    */
   bool check_method_and_code(const DexMethod* method) const;
 
+  bool is_in_primary_dex(const DexType* type) const;
+
  private:
   XStoreRefs* m_xstores;
   size_t m_store_idx;

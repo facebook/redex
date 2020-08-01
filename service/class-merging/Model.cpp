@@ -147,6 +147,7 @@ size_t trim_groups(MergerType::ShapeCollector& shapes, size_t min_count) {
 
 void exclude_unsafe_sdk_and_store_refs(const TypeSet& mergeables,
                                        const RefChecker& refchecker,
+                                       bool include_primary_dex,
                                        TypeSet& non_mergeables) {
   for (auto type : mergeables) {
     if (non_mergeables.count(type)) {
@@ -154,6 +155,9 @@ void exclude_unsafe_sdk_and_store_refs(const TypeSet& mergeables,
     }
     auto cls = type_class(type);
     if (!refchecker.check_class(cls)) {
+      non_mergeables.insert(type);
+    }
+    if (!include_primary_dex && refchecker.is_in_primary_dex(type)) {
       non_mergeables.insert(type);
     }
   }
@@ -178,11 +182,6 @@ Model::Model(const Scope& scope,
     m_type_system.get_all_children(root, m_types);
   }
   init(scope, spec, type_system);
-  auto non_root_store_types =
-      get_non_root_store_types(stores, m_types, spec.include_primary_dex);
-  for (const auto* type : non_root_store_types) {
-    m_non_mergeables.insert(type);
-  }
 }
 
 void Model::init(const Scope& scope,
@@ -568,7 +567,8 @@ void Model::find_non_mergeables(const Scope& scope, const TypeSet& generated) {
     });
   }
 
-  exclude_unsafe_sdk_and_store_refs(m_types, m_ref_checker, m_non_mergeables);
+  exclude_unsafe_sdk_and_store_refs(
+      m_types, m_ref_checker, m_spec.include_primary_dex, m_non_mergeables);
 
   m_metric.non_mergeables = m_non_mergeables.size();
   TRACE(CLMG, 3, "Non mergeables %ld", m_non_mergeables.size());
