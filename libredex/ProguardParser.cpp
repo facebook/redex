@@ -12,6 +12,7 @@
 #include "ProguardMap.h"
 #include "ProguardParser.h"
 #include "ProguardRegex.h"
+#include "Trace.h"
 
 namespace keep_rules {
 namespace proguard_parser {
@@ -34,6 +35,16 @@ void skip_to_next_command(std::vector<unique_ptr<Token>>::iterator* it) {
   }
 }
 
+static void trace_expecting(const char* expected,
+                            const std::unique_ptr<Token>& tok) {
+  TRACE(PROGUARD,
+        1,
+        "Expected %s but got %s at %u",
+        expected,
+        tok->show().c_str(),
+        tok->line);
+}
+
 bool parse_single_filepath_command(std::vector<unique_ptr<Token>>::iterator* it,
                                    token filepath_command_token,
                                    std::string* filepath) {
@@ -42,21 +53,17 @@ bool parse_single_filepath_command(std::vector<unique_ptr<Token>>::iterator* it,
     ++(*it); // Consume the command token.
     // Fail without consumption if this is an end of file token.
     if ((**it)->type == token::eof_token) {
-      cerr << "Expecting at least one file as an argument but found end of "
-              "file at line "
-           << line_number << endl;
+      trace_expecting("at least one file as an argument", **it);
       return true;
     }
     // Fail without consumption if this is a command token.
     if ((**it)->is_command()) {
-      cerr << "Expecting a file path argument but got command "
-           << (**it)->show() << " at line  " << (**it)->line << endl;
+      trace_expecting("a file path argument", **it);
       return true;
     }
     // Parse the filename.
     if ((**it)->type != token::filepath) {
-      cerr << "Expected a filepath but got " << (**it)->show() << " at line "
-           << (**it)->line << endl;
+      trace_expecting("a filepath", **it);
       return true;
     }
     *filepath = static_cast<Filepath*>((*it)->get())->path;
@@ -70,8 +77,7 @@ std::vector<std::string> parse_filepaths(
     std::vector<unique_ptr<Token>>::iterator* it) {
   std::vector<std::string> filepaths;
   if ((**it)->type != token::filepath) {
-    cerr << "Expected filepath but got " << (**it)->show() << " at line "
-         << (**it)->line << endl;
+    trace_expecting("a filepath", **it);
     return filepaths;
   }
   while ((**it)->type == token::filepath) {
@@ -90,21 +96,17 @@ bool parse_filepath_command(std::vector<unique_ptr<Token>>::iterator* it,
     ++(*it); // Consume the command token.
     // Fail without consumption if this is an end of file token.
     if ((**it)->type == token::eof_token) {
-      cerr << "Expecting at least one file as an argument but found end of "
-              "file at line "
-           << line_number << endl;
+      trace_expecting("at least one file as an argument", **it);
       return true;
     }
     // Fail without consumption if this is a command token.
     if ((**it)->is_command()) {
-      cerr << "Expecting a file path argument but got command "
-           << (**it)->show() << " at line  " << (**it)->line << endl;
+      trace_expecting("a file path argument", **it);
       return true;
     }
     // Parse the filename.
     if ((**it)->type != token::filepath) {
-      cerr << "Expected a filepath but got " << (**it)->show() << " at line "
-           << (**it)->line << endl;
+      trace_expecting("a filepath", **it);
       return true;
     }
     for (const auto& filepath : parse_filepaths(it)) {
@@ -140,9 +142,7 @@ bool parse_jars(std::vector<unique_ptr<Token>>::iterator* it,
     ++(*it); // Consume the jar token.
     // Fail without consumption if this is an end of file token.
     if ((**it)->type == token::eof_token) {
-      cerr << "Expecting at least one file as an argument but found end of "
-              "file at line "
-           << line_number << endl;
+      trace_expecting("at least one file as an argument", **it);
       return true;
     }
     // Parse the list of filenames.
@@ -204,8 +204,10 @@ bool parse_repackageclasses(std::vector<unique_ptr<Token>>::iterator* it) {
   // Ignore repackageclasses.
   ++(*it);
   if ((**it)->type == token::identifier) {
-    cerr << "Ignoring -repackageclasses "
-         << static_cast<Identifier*>((*it)->get())->ident << endl;
+    TRACE(PROGUARD,
+          1,
+          "Ignoring -repackageclasses %s",
+          static_cast<Identifier*>((*it)->get())->ident.c_str());
     ++(*it);
   }
   return true;
@@ -217,8 +219,7 @@ bool parse_target(std::vector<unique_ptr<Token>>::iterator* it,
     ++(*it); // Consume the target command token.
     // Check to make sure the next token is a version token.
     if ((**it)->type != token::target_version_token) {
-      cerr << "Expected a target version but got " << (**it)->show()
-           << " at line " << (**it)->line << endl;
+      trace_expecting("a target version", **it);
       return true;
     }
     *target_version = static_cast<TargetVersion*>((*it)->get())->target_version;
@@ -276,8 +277,7 @@ bool parse_modifiers(std::vector<unique_ptr<Token>>::iterator* it,
   while ((**it)->type == token::comma) {
     ++(*it);
     if (!is_modifier((**it)->type)) {
-      cerr << "Expected keep option modifier but found : " << (**it)->show()
-           << " at line number " << (**it)->line << endl;
+      trace_expecting("keep option modifier", **it);
       return false;
     }
     switch ((**it)->type) {
@@ -356,8 +356,7 @@ std::string parse_annotation_type(
   }
   ++(*it);
   if ((**it)->type != token::identifier) {
-    cerr << "Expecting a class identifier after @ but got " << (**it)->show()
-         << " at line " << (**it)->line << endl;
+    trace_expecting("a class identifier after @", **it);
     return "";
   }
   auto typ = static_cast<Identifier*>((*it)->get())->ident;
@@ -394,18 +393,22 @@ bool parse_access_flags(std::vector<unique_ptr<Token>>::iterator* it,
       *it = ++access_it;
       if (negated) {
         if (is_access_flag_set(setFlags_, access_flag)) {
-          cerr << "Access flag " << (**it)->show()
-               << " occurs with conflicting settings at line " << (**it)->line
-               << endl;
+          TRACE(PROGUARD,
+                1,
+                "Access flag %s occurs with conflicting settings at line %u",
+                (**it)->show().c_str(),
+                (**it)->line);
           return false;
         }
         set_access_flag(unsetFlags_, access_flag);
         negated = false;
       } else {
         if (is_access_flag_set(unsetFlags_, access_flag)) {
-          cerr << "Access flag " << (**it)->show()
-               << " occurs with conflicting settings at line " << (**it)->line
-               << endl;
+          TRACE(PROGUARD,
+                1,
+                "Access flag %s occurs with conflicting settings at line %u",
+                (**it)->show().c_str(),
+                (**it)->line);
           return false;
         }
         set_access_flag(setFlags_, access_flag);
@@ -443,8 +446,7 @@ bool parse_class_token(std::vector<unique_ptr<Token>>::iterator* it,
   case token::classToken:
     break;
   default:
-    cerr << "Expected interface, class or enum but got " << (**it)->show()
-         << " at line number " << (**it)->line << endl;
+    trace_expecting("interface, class or enum", **it);
     return false;
   }
   ++(*it);
@@ -457,7 +459,7 @@ bool parse_class_token(std::vector<unique_ptr<Token>>::iterator* it,
 bool consume_token(std::vector<unique_ptr<Token>>::iterator* it,
                    const token& tok) {
   if ((**it)->type != tok) {
-    cerr << "Unexpected token " << (**it)->show() << std::endl;
+    TRACE(PROGUARD, 1, "Unexpected token %s", (**it)->show().c_str());
     return false;
   }
   ++(*it);
@@ -468,8 +470,7 @@ bool consume_token(std::vector<unique_ptr<Token>>::iterator* it,
 void gobble_semicolon(std::vector<unique_ptr<Token>>::iterator* it, bool* ok) {
   *ok = consume_token(it, token::semiColon);
   if (!*ok) {
-    cerr << "Expecting a semicolon but found " << (**it)->show() << " at line "
-         << (**it)->line << std::endl;
+    trace_expecting("a semicolon", **it);
     return;
   }
 }
@@ -495,15 +496,15 @@ void parse_member_specification(std::vector<unique_ptr<Token>>::iterator* it,
                           member_specification.requiredUnsetAccessFlags)) {
     // There was a problem parsing the access flags. Return an empty class spec
     // for now.
-    cerr << "Problem parsing access flags for member specification.\n";
+    TRACE(
+        PROGUARD, 1, "Problem parsing access flags for member specification.");
     *ok = false;
     skip_to_semicolon(it);
     return;
   }
   // The next token better be an identifier.
   if ((**it)->type != token::identifier) {
-    cerr << "Expecting field or member specification but got " << (**it)->show()
-         << " at line " << (**it)->line << endl;
+    trace_expecting("field or member specification", **it);
     *ok = false;
     skip_to_semicolon(it);
     return;
@@ -547,8 +548,7 @@ void parse_member_specification(std::vector<unique_ptr<Token>>::iterator* it,
   } else {
     // This token is the type for the member specification.
     if ((**it)->type != token::identifier) {
-      cerr << "Expecting type identifier but got " << (**it)->show()
-           << " at line " << (**it)->line << endl;
+      trace_expecting("type identifier", **it);
       *ok = false;
       skip_to_semicolon(it);
       return;
@@ -557,8 +557,7 @@ void parse_member_specification(std::vector<unique_ptr<Token>>::iterator* it,
     ++(*it);
     member_specification.descriptor = convert_wildcard_type(typ);
     if ((**it)->type != token::identifier) {
-      cerr << "Expecting identifier name for class member but got "
-           << (**it)->show() << " at line " << (**it)->line << endl;
+      trace_expecting("identifier name for class member", **it);
       *ok = false;
       skip_to_semicolon(it);
       return;
@@ -577,8 +576,7 @@ void parse_member_specification(std::vector<unique_ptr<Token>>::iterator* it,
         break;
       }
       if ((**it)->type != token::identifier) {
-        std::cerr << "Expecting type identifier but got " << (**it)->show()
-                  << " at line " << (**it)->line << std::endl;
+        trace_expecting("type identifier", **it);
         *ok = false;
         return;
       }
@@ -587,8 +585,7 @@ void parse_member_specification(std::vector<unique_ptr<Token>>::iterator* it,
       arg += convert_wildcard_type(typ);
       // The next token better be a comma or a closing bracket.
       if ((**it)->type != token::comma && (**it)->type != token::closeBracket) {
-        std::cerr << "Expecting comma or ) but got " << (**it)->show()
-                  << " at line " << (**it)->line << std::endl;
+        trace_expecting("comma or )", **it);
         *ok = false;
         return;
       }
@@ -597,9 +594,7 @@ void parse_member_specification(std::vector<unique_ptr<Token>>::iterator* it,
       if ((**it)->type == token::comma) {
         consume_token(it, token::comma);
         if ((**it)->type != token::identifier) {
-          std::cerr << "Expecting type identifier after comma but got "
-                    << (**it)->show() << " at line " << (**it)->line
-                    << std::endl;
+          trace_expecting("type identifier after comma", **it);
           *ok = false;
           return;
         }
@@ -655,7 +650,8 @@ ClassSpecification parse_class_specification(
           it, class_spec.setAccessFlags, class_spec.unsetAccessFlags)) {
     // There was a problem parsing the access flags. Return an empty class spec
     // for now.
-    std::cerr << "Problem parsing access flags for class specification.\n";
+    TRACE(
+        PROGUARD, 1, "Problem parsing access flags for class specification.\n");
     *ok = false;
     return class_spec;
   }
@@ -666,8 +662,7 @@ ClassSpecification parse_class_specification(
   }
   // Parse the class name.
   if ((**it)->type != token::identifier) {
-    cerr << "Expected class name but got " << (**it)->show() << " at line "
-         << (**it)->line << endl;
+    trace_expecting("class name", **it);
     *ok = false;
     return class_spec;
   }
@@ -678,8 +673,7 @@ ClassSpecification parse_class_specification(
     ++(*it);
     class_spec.extendsAnnotationType = parse_annotation_type(it);
     if ((**it)->type != token::identifier) {
-      cerr << "Expecting a class name after extends/implements but got "
-           << (**it)->show() << " at line " << (**it)->line << endl;
+      trace_expecting("class name after extends/implements", **it);
       *ok = false;
       class_spec.extendsClassName = "";
     } else {
@@ -752,8 +746,7 @@ void parse(std::vector<unique_ptr<Token>>::iterator it,
     }
     uint32_t line = (*it)->line;
     if (!(*it)->is_command()) {
-      cerr << "Expecting command but found " << (*it)->show() << " at line "
-           << (*it)->line << endl;
+      trace_expecting("command", *it);
       ++it;
       skip_to_next_command(&it);
       continue;
@@ -962,12 +955,18 @@ void parse(std::vector<unique_ptr<Token>>::iterator it,
       auto cmd = static_cast<Command*>(it->get());
       // It is benign to drop -dontnote
       if (cmd->name() != "dontnote") {
-        cerr << "Unimplemented command (skipping): " << cmd->show()
-             << " at line " << (*it)->line << endl;
+        TRACE(PROGUARD,
+              1,
+              "Unimplemented command (skipping): %s at line %u",
+              cmd->show().c_str(),
+              (*it)->line);
       }
     } else {
-      cerr << "Unexpected token " << (*it)->show() << " at line " << (*it)->line
-           << endl;
+      TRACE(PROGUARD,
+            1,
+            "Unexpected token %s at line %u",
+            (*it)->show().c_str(),
+            (*it)->line);
       (*parse_errors)++;
     }
     ++it;
@@ -998,7 +997,7 @@ void parse(istream& config,
     pg_config->ok = ok;
   } else {
     pg_config->ok = false;
-    cerr << "Found " << parse_errors << " parse errors\n";
+    TRACE(PROGUARD, 1, "Found %u parse errors", parse_errors);
   }
 }
 
