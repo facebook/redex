@@ -33,6 +33,20 @@ on older OS versions.
 sudo ./setup_oss_toolchain.sh
 ```
 
+### Experimental: Windows (64-bit) with MSYS2
+
+You need [MSYS2](https://www.msys2.org/#installation) to build `redex-all` (only MingW-w64 is supported) and [Python 3.6+](https://www.python.org/downloads/windows/) to run `redex.py`.
+
+Install the build requirements in an MSYS or MingW64 shell:
+```
+pacman -Syuu && pacman -Sy make mingw-w64-x86_64-boost mingw-w64-x86_64-cmake mingw-w64-x86_64-gcc mingw-w64-x86_64-jsoncpp mingw-w64-x86_64-make
+```
+
+If you do not use Git on Windows directly, you may install and use it under MSYS2:
+```
+pacman -S git
+```
+
 ### Experimental: Windows 10 (64-bit)
 
 You need Visual Studio 2017. Visual Studio 2015 is also possible, but a couple of C++ compile errors need to be fixed. We use [vcpkg](https://github.com/Microsoft/vcpkg) for dependencies. Install vcpkg from their [document](https://github.com/Microsoft/vcpkg):
@@ -66,6 +80,35 @@ autoreconf -ivf && ./configure && make -j
 sudo make install
 ```
 If you experience out-of-memory errors, reduce Make parallelism, e.g., to `-j4`.
+
+### Experimental: Windows (64-bit) with MSYS2
+
+The MSYS2 build relies on CMake. In a MingW64 shell:
+```
+# Assumes you want to use Git under MSYS. Else skip to below.
+git clone https://github.com/facebook/redex.git
+cd redex
+# Assumes you are in the redex directory
+mkdir build-cmake
+cd build-cmake
+cmake -G "MSYS Makefiles" ..
+make -j
+```
+If you experience out-of-memory errors, reduce Make parallelism, e.g., to `-j4`.
+
+You may check whether the produced binary seems in a working condition:
+```
+# In the MingW64 shell:
+./redex-all.exe --show-passes
+# Or in a standard Windows command prompt in the same directory
+redex-all.exe --show-passes
+```
+The output should show a large number of included passes, at the time of writing 81.
+
+Bundling the `redex-all` binary with the python scripts is not supported on Windows. Manually copy the binary into the same directory as `redex.py` and use `redex.py` that way, or ensure that `redex.py` is called with the `--redex-binary` parameter:
+```
+python redex.py --redex-binary PATH_TO_BINARY [...]
+```
 
 ### Experimental: CMake for Mac, Linux, and Windows
 
@@ -109,6 +152,8 @@ You should see a `redex-all` executable, and the executable should show about 45
 ## Test
 Optionally, you can run our unit test suite.  We use gtest, which is automatically
 downloaded when testing (or by invoking a setup script directly).
+
+Note: Testing is currently not supported for CMake-based builds.
 
 ### Dependencies
 Some ReDex tests require a Java environment and Android compiler tooling. If a JDK and the
