@@ -33,10 +33,6 @@
 #include <share.h>
 #endif
 
-#ifdef __linux__
-#include <sys/mman.h> // For madvise
-#endif
-
 #include "androidfw/ResourceTypes.h"
 #include "utils/ByteOrder.h"
 #include "utils/Errors.h"
@@ -49,6 +45,7 @@
 
 #include "Debug.h"
 #include "Macros.h"
+#include "ReadMaybeMapped.h"
 #include "StringUtil.h"
 #include "Trace.h"
 #include "WorkQueue.h"
@@ -104,168 +101,6 @@ constexpr decltype(sparta::parallel::default_num_threads()) kReadNativeThreads =
 using path_t = boost::filesystem::path;
 using dir_iterator = boost::filesystem::directory_iterator;
 using rdir_iterator = boost::filesystem::recursive_directory_iterator;
-
-struct BaseFileContents {
-  virtual ~BaseFileContents() = default;
-
-  virtual const char* get_content() const = 0;
-  virtual size_t get_content_size() const = 0;
-};
-
-// Simple (old) fallback implementation.
-struct StdStringFileContents final : public BaseFileContents {
-  std::string content;
-
-  StdStringFileContents() = default;
-  ATTRIBUTE_UNUSED
-  explicit StdStringFileContents(const std::string& file) {
-    content = read_entire_file(file);
-  }
-
-  const char* get_content() const override { return content.data(); }
-  size_t get_content_size() const override { return content.size(); }
-};
-
-std::string strerror_str(int no) { return std::string(strerror(no)); };
-
-// Implementation based on posix read. Avoids heap allocation when data
-// is small enough.
-template <size_t kDataSize>
-struct ReadFileContents final : public BaseFileContents {
-  size_t size;
-  std::unique_ptr<char[]> content;
-  char inline_data[kDataSize];
-
-  explicit ReadFileContents(const std::string& file) {
-    int fd = open(file.c_str(), O_RDONLY | O_BINARY);
-    if (fd < 0) {
-      throw std::runtime_error(std::string("Failed to open ") + file + ": " +
-                               strerror_str(errno));
-    }
-    struct stat st = {};
-    if (fstat(fd, &st) == -1) {
-      auto saved_errno = errno;
-      close(fd);
-      throw std::runtime_error(std::string("Failed to get file length of ") +
-                               file + ": " + strerror_str(saved_errno));
-    }
-    read_data(file, fd, static_cast<size_t>(st.st_size));
-  }
-  ReadFileContents(const std::string& file, int fd, size_t size) {
-    read_data(file, fd, size);
-  }
-
-  void read_data(const std::string& file, int fd, size_t size_in) {
-    size = size_in;
-    if (size == 0) {
-      close(fd);
-      return;
-    }
-    char* data;
-    if (size > kDataSize) {
-      content = std::make_unique<char[]>(size);
-      data = content.get();
-    } else {
-      data = inline_data;
-    }
-
-    // Now read.
-    size_t remaining = size;
-    while (remaining > 0) {
-      ssize_t n = TEMP_FAILURE_RETRY(read(fd, data, remaining));
-      if (n <= 0) {
-        auto saved_errno = errno;
-        close(fd);
-        throw std::runtime_error(std::string("Failed reading ") + file + ": " +
-                                 strerror_str(saved_errno));
-      }
-      data += n;
-      remaining -= n;
-    }
-    close(fd);
-  }
-
-  const char* get_content() const override {
-    return size > kDataSize ? content.get() : inline_data;
-  }
-  size_t get_content_size() const override { return size; }
-};
-using PageSizeReadFileContents = ReadFileContents<4072>;
-static_assert(sizeof(PageSizeReadFileContents) == 4096 || sizeof(void*) != 8,
-              "Unexpected size");
-
-// Mmap: just map file contents and wrap the mapping, avoiding allocation
-// and explicit I/O.
-//
-// Note: using boost for Windows compat.
-template <int kMadviseFlags>
-struct MmapFileContents final : public BaseFileContents {
-  boost::iostreams::mapped_file_source mapped_file{};
-
-  explicit MmapFileContents(const std::string& file) {
-    mapped_file.open(file);
-    if (!mapped_file.is_open()) {
-      throw std::runtime_error(std::string("Could not open ") + file);
-    }
-#ifdef __linux__
-    if (mapped_file.size() > 0) {
-      auto rc = madvise(const_cast<char*>(mapped_file.data()),
-                        mapped_file.size(), kMadviseFlags);
-      if (rc != 0) {
-        TRACE(RES, 1, "madvise(%s): %s", file.c_str(),
-              strerror_str(errno).c_str());
-      }
-    }
-#endif
-  }
-
-  const char* get_content() const override { return mapped_file.data(); }
-  size_t get_content_size() const override { return mapped_file.size(); }
-
-  // Move semantics.
-  MmapFileContents(MmapFileContents&& other) = default;
-  MmapFileContents& operator=(MmapFileContents&& other) = default;
-
-  // No copy semantics.
-  MmapFileContents(const MmapFileContents&) = delete;
-  MmapFileContents& operator=(const MmapFileContents&) = delete;
-};
-
-// XML files are usually small (less than a page). Mmaps don't amortize.
-using XMLFileContents = PageSizeReadFileContents;
-
-// Mmaps may not amortize for small files. Split between `read` and `mmap`.
-template <size_t kThreshold, typename Fn>
-void read_file_with_contents(const std::string& file, Fn fn) {
-  int fd = open(file.c_str(), O_RDONLY | O_BINARY);
-  if (fd < 0) {
-    throw std::runtime_error(std::string("Failed to open ") + file + ": " +
-                             strerror_str(errno));
-  }
-  struct stat st = {};
-  if (fstat(fd, &st) == -1) {
-    auto saved_errno = errno;
-    close(fd);
-    throw std::runtime_error(std::string("Failed to get file length of ") +
-                             file + ": " + strerror_str(saved_errno));
-  }
-  size_t size = static_cast<size_t>(st.st_size);
-
-  if (size <= kThreshold) {
-    auto content = PageSizeReadFileContents(file, fd, size);
-    fn(content);
-  } else {
-    close(fd);
-    constexpr int kAdvFlags =
-#ifdef __linux__
-        MADV_SEQUENTIAL | MADV_WILLNEED;
-#else
-        0;
-#endif
-    auto content = MmapFileContents<kAdvFlags>(file);
-    fn(content);
-  }
-}
 
 std::string convert_from_string16(const android::String16& string16) {
   android::String8 string8(string16);
@@ -561,8 +396,7 @@ bool find_nested_tag(const android::String16& search_tag,
  * Parse AndroidManifest from buffer, return a list of class names that are
  * referenced
  */
-ManifestClassInfo extract_classes_from_manifest(
-    const BaseFileContents& manifest_contents) {
+ManifestClassInfo extract_classes_from_manifest(const char* data, size_t size) {
   // Tags
   android::String16 activity("activity");
   android::String16 activity_alias("activity-alias");
@@ -592,8 +426,7 @@ ManifestClassInfo extract_classes_from_manifest(
   android::String16 app_component_factory("appComponentFactory");
 
   android::ResXMLTree parser;
-  parser.setTo(manifest_contents.get_content(),
-               manifest_contents.get_content_size());
+  parser.setTo(data, size);
 
   ManifestClassInfo manifest_classes;
 
@@ -704,14 +537,12 @@ std::string read_attribute_name_at_idx(const android::ResXMLTree& parser,
 }
 
 void extract_classes_from_layout(
-    const XMLFileContents& layout_contents,
+    const char* data,
+    size_t size,
     const std::unordered_set<std::string>& attributes_to_read,
     std::unordered_set<std::string>& out_classes,
     std::unordered_multimap<std::string, std::string>& out_attributes) {
-
-  auto size = layout_contents.get_content_size();
-  auto data = layout_contents.get_content();
-  if (!is_binary_xml((void*)data, size)) {
+  if (!is_binary_xml(data, size)) {
     return;
   }
 
@@ -791,11 +622,11 @@ void extract_classes_from_layout(
  *
  */
 std::unordered_set<std::string> extract_classes_from_native_lib(
-    const BaseFileContents& lib_contents) {
+    const char* data, size_t size) {
   std::unordered_set<std::string> classes;
   char buffer[MAX_CLASSNAME_LENGTH + 2]; // +2 for the trailing ";\0"
-  const char* inptr = lib_contents.get_content();
-  const char* end = inptr + lib_contents.get_content_size();
+  const char* inptr = data;
+  const char* end = inptr + size;
 
   while (inptr < end) {
     char* outptr = buffer;
@@ -835,9 +666,8 @@ std::unordered_set<std::string> extract_classes_from_native_lib(
 // For external testing.
 std::unordered_set<std::string> extract_classes_from_native_lib(
     const std::string& lib_contents) {
-  StdStringFileContents contents;
-  contents.content = lib_contents;
-  return extract_classes_from_native_lib(contents);
+  return extract_classes_from_native_lib(lib_contents.data(),
+                                         lib_contents.size());
 }
 
 /*
@@ -901,15 +731,13 @@ boost::optional<int32_t> get_min_sdk(const std::string& manifest_filename) {
 
 ManifestClassInfo get_manifest_class_info(const std::string& filename) {
   ManifestClassInfo classes;
-  read_file_with_contents<64 * 1024>(
-      filename, [&](const BaseFileContents& contents) {
-        if (contents.get_content_size() == 0) {
-          fprintf(stderr, "Unable to read manifest file: %s\n",
-                  filename.c_str());
-          return;
-        }
-        classes = extract_classes_from_manifest(contents);
-      });
+  redex::read_file_with_contents(filename, [&](const char* data, size_t size) {
+    if (size == 0) {
+      fprintf(stderr, "Unable to read manifest file: %s\n", filename.c_str());
+      return;
+    }
+    classes = extract_classes_from_manifest(data, size);
+  });
   return classes;
 }
 
@@ -1281,9 +1109,10 @@ void collect_layout_classes_and_attributes_for_file(
     const std::unordered_set<std::string>& attributes_to_read,
     std::unordered_set<std::string>& out_classes,
     std::unordered_multimap<std::string, std::string>& out_attributes) {
-  XMLFileContents file_contents(file_path);
-  extract_classes_from_layout(file_contents, attributes_to_read, out_classes,
-                              out_attributes);
+  redex::read_file_with_contents(file_path, [&](const char* data, size_t size) {
+    extract_classes_from_layout(data, size, attributes_to_read, out_classes,
+                                out_attributes);
+  });
 }
 
 void collect_layout_classes_and_attributes(
@@ -1424,17 +1253,19 @@ std::unordered_set<std::string> get_native_classes(
           return;
         }
 
-        read_file_with_contents<64 * 1024>(
-            input, [&](const BaseFileContents& contents) {
+        redex::read_file_with_contents(
+            input,
+            [&](const char* data, size_t size) {
               std::unordered_set<std::string> classes_from_native =
-                  extract_classes_from_native_lib(contents);
+                  extract_classes_from_native_lib(data, size);
               if (!classes_from_native.empty()) {
                 std::unique_lock<std::mutex> lock(out_mutex);
                 // C++17: use merge to avoid copies.
                 all_classes.insert(classes_from_native.begin(),
                                    classes_from_native.end());
               }
-            });
+            },
+            64 * 1024);
       },
       std::min(sparta::parallel::default_num_threads(), kReadNativeThreads),
       /*push_tasks_while_running=*/true);

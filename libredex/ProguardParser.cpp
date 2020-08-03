@@ -14,6 +14,7 @@
 #include "ProguardMap.h"
 #include "ProguardParser.h"
 #include "ProguardRegex.h"
+#include "ReadMaybeMapped.h"
 
 namespace keep_rules {
 namespace proguard_parser {
@@ -1029,28 +1030,19 @@ void parse(std::istream& config,
 }
 
 void parse_file(const std::string& filename, ProguardConfiguration* pg_config) {
-  std::ifstream config(filename);
-  // First try relative path.
-  if (!config.is_open()) {
-    // Try with -basedirectory
-    config.open(pg_config->basedirectory + "/" + filename);
-    if (!config.is_open()) {
-      std::cerr << "ERROR: Failed to open ProGuard configuration file "
-                << filename << std::endl;
-      exit(1);
+  redex::read_file_with_contents(filename, [&](const char* data, size_t s) {
+    boost::string_view view(data, s);
+    parse(view, pg_config, filename);
+    // Parse the included files.
+    for (const auto& included_filename : pg_config->includes) {
+      if (pg_config->already_included.find(included_filename) !=
+          pg_config->already_included.end()) {
+        continue;
+      }
+      pg_config->already_included.emplace(included_filename);
+      parse_file(included_filename, pg_config);
     }
-  }
-
-  parse(config, pg_config, filename);
-  // Parse the included files.
-  for (const auto& included_filename : pg_config->includes) {
-    if (pg_config->already_included.find(included_filename) !=
-        pg_config->already_included.end()) {
-      continue;
-    }
-    pg_config->already_included.emplace(included_filename);
-    parse_file(included_filename, pg_config);
-  }
+  });
 }
 
 void remove_blacklisted_rules(ProguardConfiguration* pg_config) {
