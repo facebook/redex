@@ -74,14 +74,14 @@ TEST(ProguardParserTest, keepdirectories) {
       "-keepdirectories alpha \n"
       "-keepdirectories /alpha/beta \n"
       "-keepdirectories \"gamma\" \n"
-      "-keepdirectories /alpha/beta2:gamma/delta:/iota/a/b/c/deer\n");
+      "-keepdirectories /alpha/beta2:\"gamma/ delta\":/iota/a/b/c/deer\n");
   proguard_parser::parse(ss, &config);
   ASSERT_EQ(config.keepdirectories.size(), 6);
   ASSERT_EQ(config.keepdirectories[0], "alpha");
   ASSERT_EQ(config.keepdirectories[1], "/alpha/beta");
   ASSERT_EQ(config.keepdirectories[2], "gamma");
   ASSERT_EQ(config.keepdirectories[3], "/alpha/beta2");
-  ASSERT_EQ(config.keepdirectories[4], "gamma/delta");
+  ASSERT_EQ(config.keepdirectories[4], "gamma/ delta");
   ASSERT_EQ(config.keepdirectories[5], "/iota/a/b/c/deer");
 }
 

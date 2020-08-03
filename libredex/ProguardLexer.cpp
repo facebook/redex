@@ -5,6 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <boost/multi_index/hashed_index.hpp>
+#include <boost/multi_index/member.hpp>
+#include <boost/multi_index_container.hpp>
 #include <cctype>
 #include <istream>
 #include <unordered_map>
@@ -31,7 +34,7 @@ bool is_identifier_character(char ch) {
          ch == '!' || ch == '?' || ch == '%';
 }
 
-bool is_identifier(const std::string& ident) {
+bool is_identifier(const boost::string_view& ident) {
   for (const char& ch : ident) {
     if (!is_identifier_character(ch)) {
       return false;
@@ -40,117 +43,175 @@ bool is_identifier(const std::string& ident) {
   return true;
 }
 
-void skip_whitespace(std::istream& config, unsigned int* line) {
-  char ch;
-  while (isspace(config.peek())) {
-    config.get(ch);
+void skip_whitespace(boost::string_view& data, unsigned int* line) {
+  size_t index = 0;
+  for (; index != data.size(); ++index) {
+    char ch = data[index];
     if (ch == '\n') {
       (*line)++;
     }
+    if (!isspace(ch)) {
+      break;
+    }
+  }
+  if (index == data.size()) {
+    data = boost::string_view();
+  } else {
+    data = data.substr(index);
   }
 }
 
-std::string read_path(std::istream& config, unsigned int* line) {
-  std::string path;
-  skip_whitespace(config, line);
+boost::string_view read_path(boost::string_view& data, unsigned int* line) {
+  skip_whitespace(data, line);
   // Handle the case for optional filepath arguments by
   // returning an empty filepath.
-  if (config.peek() == '-' || config.peek() == EOF) {
-    return "";
+  if (data.empty() || data[0] == '-') {
+    return boost::string_view();
   }
-  while (config.peek() != ':' && !isspace(config.peek()) &&
-         config.peek() != EOF) {
-    char ch;
-    config.get(ch);
-    if (ch == '"') {
-      continue;
+
+  bool has_quotes = data[0] == '"';
+  size_t start = has_quotes ? 1 : 0;
+
+  size_t end = start;
+  for (; end != data.size(); ++end) {
+    char c = data[end];
+    if (c == ':' || (!has_quotes && isspace(c))) {
+      break;
     }
-    path += ch;
+    if (c == '"' && has_quotes) {
+      ++end;
+      break;
+    }
   }
-  return path;
+
+  if (start == end) {
+    data = data.substr(start);
+    return boost::string_view(); // Should maybe be an error.
+  }
+
+  size_t adjusted_end = end;
+  if (has_quotes && data[adjusted_end - 1] == '"') {
+    --adjusted_end;
+  }
+  auto ret = data.substr(start, adjusted_end - start);
+  data = data.substr(end);
+  return ret;
 }
 
-std::vector<std::pair<std::string, unsigned int>> read_paths(
-    std::istream& config, unsigned int* line) {
-  std::vector<std::pair<std::string, unsigned int>> paths;
-  paths.push_back({read_path(config, line), *line});
-  skip_whitespace(config, line);
-  while (config.peek() == ':') {
-    char ch;
-    config.get(ch);
-    paths.push_back({read_path(config, line), *line});
-    skip_whitespace(config, line);
+std::vector<std::pair<boost::string_view, unsigned int>> read_paths(
+    boost::string_view& data, unsigned int* line) {
+  std::vector<std::pair<boost::string_view, unsigned int>> paths;
+  paths.push_back({read_path(data, line), *line});
+  skip_whitespace(data, line);
+  while (!data.empty() && data[0] == ':') {
+    data = data.substr(1);
+    paths.push_back({read_path(data, line), *line});
+    skip_whitespace(data, line);
   }
   return paths;
 }
 
-bool is_version_character(char ch) { return ch == '.' || isdigit(ch); }
-
-std::string read_target_version(std::istream& config, unsigned int* line) {
-  std::string version;
-  skip_whitespace(config, line);
-  while (is_version_character(config.peek())) {
-    char ch;
-    config.get(ch);
-    version += ch;
+template <bool kSkipWs, typename FilterFn>
+boost::string_view parse_part_fn(boost::string_view& data,
+                                 unsigned int* line,
+                                 FilterFn fn) {
+  if (kSkipWs) {
+    skip_whitespace(data, line);
   }
-  return version;
+  auto first_delim = std::find_if(data.begin(), data.end(), fn);
+  auto part = first_delim != data.end()
+                  ? data.substr(0, first_delim - data.begin())
+                  : data;
+  data = first_delim != data.end() ? data.substr(first_delim - data.begin())
+                                   : boost::string_view();
+  return part;
 }
 
-bool is_package_name_character(char ch) {
-  return isalnum(ch) || ch == '.' || ch == '\'' || ch == '_' || ch == '$';
+boost::string_view read_target_version(boost::string_view& data,
+                                       unsigned int* line) {
+  auto is_version_character = [](char ch) { return ch == '.' || isdigit(ch); };
+  return parse_part_fn</*kSkipWs=*/true>(
+      data, line, [&](char c) { return !is_version_character(c); });
 }
 
-std::string parse_package_name(std::istream& config, unsigned int* line) {
-  skip_whitespace(config, line);
-  std::string package_name;
-  while (is_package_name_character(config.peek())) {
-    char ch;
-    config.get(ch);
-    package_name += ch;
-  }
-  return package_name;
+boost::string_view parse_package_name(boost::string_view& data,
+                                      unsigned int* line) {
+  auto pkg_name_char = [](char ch) {
+    return isalnum(ch) || ch == '.' || ch == '\'' || ch == '_' || ch == '$';
+  };
+  return parse_part_fn</*kSkipWs=*/true>(
+      data, line, [&](char c) { return !pkg_name_char(c); });
 }
 
-bool lex_filter(std::istream& config, std::string* filter, unsigned int* line) {
-  skip_whitespace(config, line);
+bool lex_filter(boost::string_view& data,
+                boost::string_view* filter,
+                unsigned int* line) {
+  skip_whitespace(data, line);
   // Make sure we are not at the end of the file or the start of another
   // command when the argument is missing.
-  if (config.peek() == EOF || config.peek() == '-') {
+  if (data.empty() || data[0] == '-') {
     return false;
   }
-  *filter = "";
-  while (config.peek() != ',' && !isspace(config.peek()) &&
-         !(config.peek() == EOF)) {
-    char ch;
-    config.get(ch);
-    *filter += ch;
-  }
+  *filter = parse_part_fn</*kSkipWs=*/false>(
+      data, line, [](char c) { return c == ',' || isspace(c); });
   return true;
 }
 
-std::vector<std::string> lex_filter_list(std::istream& config,
-                                         unsigned int* line) {
-  std::vector<std::string> filter_list;
-  std::string filter;
-  bool ok = lex_filter(config, &filter, line);
+std::vector<boost::string_view> lex_filter_list(boost::string_view& data,
+                                                unsigned int* line) {
+  std::vector<boost::string_view> filter_list;
+  boost::string_view filter;
+  bool ok = lex_filter(data, &filter, line);
   if (!ok) {
     return filter_list;
   }
   filter_list.push_back(filter);
-  skip_whitespace(config, line);
-  while (ok && config.peek() == ',') {
+  skip_whitespace(data, line);
+  while (ok && !data.empty() && data[0] == ',') {
     // Swallow up the comma.
-    char ch;
-    config.get(ch);
-    ok = lex_filter(config, &filter, line);
+    data = data.substr(1);
+    ok = lex_filter(data, &filter, line);
     if (ok) {
       filter_list.push_back(filter);
-      skip_whitespace(config, line);
+      skip_whitespace(data, line);
     }
   }
   return filter_list;
 }
+
+// std::unordered_map does not work with string views. Use Boost magic.
+template <typename T, typename Q>
+struct MyPair {
+  T first;
+  mutable Q second;
+};
+
+struct StringViewEquals {
+  bool operator()(const std::string& s1, const std::string& s2) const {
+    return s1 == s2;
+  }
+  bool operator()(const std::string& s1, const boost::string_view& v2) const {
+    return v2 == s1;
+  }
+  bool operator()(const boost::string_view& v1, const std::string& s2) const {
+    return v1 == s2;
+  }
+  bool operator()(const boost::string_view& v1,
+                  const boost::string_view& v2) const {
+    return v1 == v2;
+  }
+};
+
+using namespace boost::multi_index;
+
+template <typename Q>
+using UnorderedStringViewIndexableMap = multi_index_container<
+    MyPair<boost::string_view, Q>,
+    indexed_by<hashed_unique<member<MyPair<boost::string_view, Q>,
+                                    boost::string_view,
+                                    &MyPair<boost::string_view, Q>::first>,
+                             boost::hash<boost::string_view>,
+                             StringViewEquals>>>;
 
 } // namespace
 
@@ -217,17 +278,17 @@ std::string Token::show() const {
   case TokenType::varargs:
     return "varargs";
   case TokenType::command:
-    return "-" + *data;
+    return "-" + data.to_string();
   case TokenType::identifier:
-    return "identifier: " + *data;
+    return "identifier: " + data.to_string();
   case TokenType::arrayType:
     return "[]";
   case TokenType::filepath:
-    return "filepath " + *data;
+    return "filepath " + data.to_string();
   case TokenType::target_version_token:
-    return *data;
+    return data.to_string();
   case TokenType::filter_pattern:
-    return "filter: " + *data;
+    return "filter: " + data.to_string();
   case TokenType::eof_token:
     return "<EOF>";
 
@@ -324,7 +385,8 @@ std::string Token::show() const {
     return "-verbose";
 
   case TokenType::unknownToken:
-    return "unknown token at line " + std::to_string(line) + " : " + *data;
+    return "unknown token at line " + std::to_string(line) + " : " +
+           data.to_string();
   }
   not_reached();
 }
@@ -440,12 +502,7 @@ bool Token::is_command() const {
   not_reached();
 }
 
-std::vector<Token> lex(std::istream& config) {
-  std::vector<Token> tokens;
-
-  unsigned int line = 1;
-  char ch;
-
+std::vector<Token> lex(const boost::string_view& in) {
   std::unordered_map<char, TokenType> simple_tokens{
       {'{', TokenType::openCurlyBracket},
       {'}', TokenType::closeCurlyBracket},
@@ -459,7 +516,9 @@ std::vector<Token> lex(std::istream& config) {
       {'@', TokenType::annotation_application},
   };
 
-  std::unordered_map<std::string, TokenType> word_tokens{
+  using TokenMap = UnorderedStringViewIndexableMap<TokenType>;
+
+  TokenMap word_tokens{
       {"includedescriptorclasses", TokenType::includedescriptorclasses_token},
       {"allowshrinking", TokenType::allowshrinking_token},
       {"allowoptimization", TokenType::allowoptimization_token},
@@ -484,7 +543,7 @@ std::vector<Token> lex(std::istream& config) {
       {"implements", TokenType::implements},
   };
 
-  std::unordered_map<std::string, TokenType> simple_commands{
+  TokenMap simple_commands{
       // Keep Options
       {"keep", TokenType::keep},
       {"keepclassmembers", TokenType::keepclassmembers},
@@ -520,7 +579,7 @@ std::vector<Token> lex(std::istream& config) {
       {"verbose", TokenType::verbose_token},
   };
 
-  std::unordered_map<std::string, TokenType> single_filepath_commands{
+  TokenMap single_filepath_commands{
       // Input/Output Options
       {"include", TokenType::include},
       {"basedirectory", TokenType::basedirectory},
@@ -530,7 +589,7 @@ std::vector<Token> lex(std::istream& config) {
       // Shrinking Options
       {"printusage", TokenType::printusage},
   };
-  std::unordered_map<std::string, TokenType> multi_filepaths_commands{
+  TokenMap multi_filepaths_commands{
       // Input/Output Options
       {"injars", TokenType::injars},
       {"outjars", TokenType::outjars},
@@ -539,7 +598,7 @@ std::vector<Token> lex(std::istream& config) {
       {"keepdirectories", TokenType::keepdirectories},
   };
 
-  std::unordered_map<std::string, TokenType> filter_list_commands{
+  TokenMap filter_list_commands{
       // Optimization Options
       {"optimizations", TokenType::optimizations},
       // Obfuscation Options
@@ -548,29 +607,54 @@ std::vector<Token> lex(std::istream& config) {
       {"dontwarn", TokenType::dontwarn},
   };
 
+  std::vector<Token> tokens;
+  tokens.reserve(std::max((size_t)1, in.size() / 20)); // 5% ratio.
+
+  unsigned int line = 1;
+
   auto add_token = [&](TokenType type) { tokens.emplace_back(type, line); };
-  auto add_token_data = [&](TokenType type, std::string&& data) {
-    tokens.emplace_back(type, line, std::move(data));
+  auto add_token_data = [&](TokenType type, const boost::string_view& data) {
+    tokens.emplace_back(type, line, data);
   };
   auto add_token_line_data =
-      [&](TokenType type, size_t t_line, std::string&& data) {
-        tokens.emplace_back(type, t_line, std::move(data));
+      [&](TokenType type, size_t t_line, const boost::string_view& data) {
+        tokens.emplace_back(type, t_line, data);
       };
 
-  while (config.get(ch)) {
+  boost::string_view data = in;
+  while (!data.empty()) {
+    char ch = data[0];
+
     // Skip comments.
     if (ch == '#') {
-      std::string comment;
-      getline(config, comment);
-      line++;
+      auto eol_pos = data.find('\n');
+      if (eol_pos != boost::string_view::npos) {
+        data = data.substr(eol_pos + 1);
+      } else {
+        data = boost::string_view();
+      }
+      ++line;
       continue;
     }
 
-    // Skip white space.
-    if (isspace(ch)) {
-      if (ch == '\n') {
-        line++;
+    auto consume_ws = [&line, &data]() {
+      size_t index = 0;
+      for (; index != data.size(); ++index) {
+        char c = data[index];
+        if (c == '\n') {
+          line++;
+          continue;
+        }
+        if (!isspace(c)) {
+          break;
+        }
       }
+      data = data.substr(index);
+    };
+
+    // Skip whitespaces.
+    if (isspace(ch)) {
+      consume_ws();
       continue;
     }
 
@@ -578,23 +662,23 @@ std::vector<Token> lex(std::istream& config) {
       auto it = simple_tokens.find(ch);
       if (it != simple_tokens.end()) {
         add_token(it->second);
+        data = data.substr(1);
         continue;
       }
     }
 
     if (ch == '[') {
-      // Consume any whitespace
-      while (isspace(config.peek())) {
-        char skip;
-        config.get(skip);
-        if (skip == '\n') {
-          line++;
-        }
-      }
+      auto old_view = data;
+      data = data.substr(1);
+      consume_ws(); // Consume any whitespace
       // Check for closing brace.
-      if (config.peek() == ']') {
-        config.get(ch);
+      if (data.empty()) {
+        add_token_data(TokenType::unknownToken, old_view);
+        continue;
+      }
+      if (data[0] == ']') {
         add_token(TokenType::arrayType);
+        data = data.substr(1);
         continue;
       }
       // Any token other than a ']' next is a bad token.
@@ -602,11 +686,9 @@ std::vector<Token> lex(std::istream& config) {
 
     // Check for commands.
     if (ch == '-') {
-      std::string command;
-      while (!is_deliminator(config.peek())) {
-        config.get(ch);
-        command += ch;
-      }
+      data = data.substr(1);
+      auto command =
+          parse_part_fn</*kSkipWs=*/false>(data, &line, is_deliminator);
 
       {
         auto it = simple_commands.find(command);
@@ -620,9 +702,9 @@ std::vector<Token> lex(std::istream& config) {
         auto it = single_filepath_commands.find(command);
         if (it != single_filepath_commands.end()) {
           add_token(it->second);
-          std::string path = read_path(config, &line);
+          auto path = read_path(data, &line);
           if (!path.empty()) {
-            add_token_data(TokenType::filepath, std::move(path));
+            add_token_data(TokenType::filepath, path);
           }
           continue;
         }
@@ -632,10 +714,9 @@ std::vector<Token> lex(std::istream& config) {
         auto it = multi_filepaths_commands.find(command);
         if (it != multi_filepaths_commands.end()) {
           add_token(it->second);
-          auto paths = read_paths(config, &line);
+          auto paths = read_paths(data, &line);
           for (auto& path : paths) {
-            add_token_line_data(
-                TokenType::filepath, path.second, std::move(path.first));
+            add_token_line_data(TokenType::filepath, path.second, path.first);
           }
           continue;
         }
@@ -645,8 +726,8 @@ std::vector<Token> lex(std::istream& config) {
         auto it = filter_list_commands.find(command);
         if (it != filter_list_commands.end()) {
           add_token(it->second);
-          for (auto& filter : lex_filter_list(config, &line)) {
-            add_token_data(TokenType::filter_pattern, std::move(filter));
+          for (auto& filter : lex_filter_list(data, &line)) {
+            add_token_data(TokenType::filter_pattern, filter);
           }
           continue;
         }
@@ -655,9 +736,9 @@ std::vector<Token> lex(std::istream& config) {
       // Input/Output Options
       if (command == "target") {
         add_token(TokenType::target);
-        std::string version = read_target_version(config, &line);
+        auto version = read_target_version(data, &line);
         if (!version.empty()) {
-          add_token_data(TokenType::target_version_token, std::move(version));
+          add_token_data(TokenType::target_version_token, version);
         }
         continue;
       }
@@ -665,24 +746,19 @@ std::vector<Token> lex(std::istream& config) {
       // Obfuscation Options
       if (command == "repackageclasses") {
         add_token(TokenType::repackageclasses);
-        std::string package_name = parse_package_name(config, &line);
+        auto package_name = parse_package_name(data, &line);
         if (!package_name.empty()) {
-          add_token_data(TokenType::identifier, std::move(package_name));
+          add_token_data(TokenType::identifier, package_name);
         }
         continue;
       }
 
       // Some other command.
-      add_token_data(TokenType::command, std::move(command));
+      add_token_data(TokenType::command, command);
       continue;
     }
 
-    std::string word;
-    word += ch;
-    while (!is_deliminator(config.peek())) {
-      config >> ch;
-      word += ch;
-    }
+    auto word = parse_part_fn</*kSkipWs=*/false>(data, &line, is_deliminator);
 
     {
       auto it = word_tokens.find(word);
@@ -705,12 +781,12 @@ std::vector<Token> lex(std::istream& config) {
     }
 
     if (is_identifier(word)) {
-      add_token_data(TokenType::identifier, std::move(word));
+      add_token_data(TokenType::identifier, word);
       continue;
     }
 
     // This is an unrecognized token.
-    add_token_data(TokenType::unknownToken, std::move(word));
+    add_token_data(TokenType::unknownToken, word);
   }
   add_token(TokenType::eof_token);
   return tokens;

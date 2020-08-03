@@ -63,7 +63,7 @@ bool parse_single_filepath_command(std::vector<Token>::iterator* it,
                 << " at line " << (*it)->line << std::endl;
       return true;
     }
-    *filepath = *(*it)->data;
+    *filepath = (*it)->data.to_string();
     ++(*it); // Consume the filepath token
     return true;
   }
@@ -82,7 +82,7 @@ void parse_filepaths(std::vector<Token>::iterator* it,
     return;
   }
   while ((*it)->type == TokenType::filepath) {
-    into->push_back(*(*it)->data);
+    into->push_back((*it)->data.to_string());
     ++(*it);
   }
 }
@@ -202,7 +202,7 @@ bool parse_repackageclasses(std::vector<Token>::iterator* it) {
   // Ignore repackageclasses.
   ++(*it);
   if ((*it)->type == TokenType::identifier) {
-    std::cerr << "Ignoring -repackageclasses " << *(*it)->data << std::endl;
+    std::cerr << "Ignoring -repackageclasses " << (*it)->data << std::endl;
     ++(*it);
   }
   return true;
@@ -218,7 +218,7 @@ bool parse_target(std::vector<Token>::iterator* it,
                 << " at line " << (*it)->line << std::endl;
       return true;
     }
-    *target_version = *(*it)->data;
+    *target_version = (*it)->data.to_string();
     // Consume the target version token.
     ++(*it);
     return true;
@@ -244,7 +244,7 @@ bool parse_filter_list_command(std::vector<Token>::iterator* it,
   }
   ++(*it);
   while ((*it)->type == TokenType::filter_pattern) {
-    filters->push_back(*(*it)->data);
+    filters->push_back((*it)->data.to_string());
     ++(*it);
   }
   return true;
@@ -354,9 +354,9 @@ std::string parse_annotation_type(std::vector<Token>::iterator* it) {
               << (*it)->show() << " at line " << (*it)->line << std::endl;
     return "";
   }
-  const auto& typ = *(*it)->data;
+  const auto& typ = (*it)->data;
   ++(*it);
-  return convert_wildcard_type(typ);
+  return convert_wildcard_type(typ.to_string());
 }
 
 bool is_access_flag_set(const DexAccessFlags accessFlags,
@@ -500,7 +500,7 @@ void parse_member_specification(std::vector<Token>::iterator* it,
     skip_to_semicolon(it);
     return;
   }
-  const std::string& ident = *(*it)->data;
+  const auto& ident = (*it)->data;
   // Check for "*".
   if (ident == "*") {
     member_specification.name = "";
@@ -545,9 +545,9 @@ void parse_member_specification(std::vector<Token>::iterator* it,
       skip_to_semicolon(it);
       return;
     }
-    const std::string& typ = *(*it)->data;
+    const auto& typ = (*it)->data;
     ++(*it);
-    member_specification.descriptor = convert_wildcard_type(typ);
+    member_specification.descriptor = convert_wildcard_type(typ.to_string());
     if ((*it)->type != TokenType::identifier) {
       std::cerr << "Expecting identifier name for class member but got "
                 << (*it)->show() << " at line " << (*it)->line << std::endl;
@@ -555,7 +555,7 @@ void parse_member_specification(std::vector<Token>::iterator* it,
       skip_to_semicolon(it);
       return;
     }
-    member_specification.name = *(*it)->data;
+    member_specification.name = (*it)->data.to_string();
     ++(*it);
   }
   // Check to see if this is a method specification.
@@ -574,9 +574,9 @@ void parse_member_specification(std::vector<Token>::iterator* it,
         *ok = false;
         return;
       }
-      const std::string& typ = *(*it)->data;
+      const auto& typ = (*it)->data;
       consume_token(it, TokenType::identifier);
-      arg += convert_wildcard_type(typ);
+      arg += convert_wildcard_type(typ.to_string());
       // The next TokenType better be a comma or a closing bracket.
       if ((*it)->type != TokenType::comma &&
           (*it)->type != TokenType::closeBracket) {
@@ -663,7 +663,7 @@ ClassSpecification parse_class_specification(std::vector<Token>::iterator* it,
     *ok = false;
     return class_spec;
   }
-  class_spec.className = *(*it)->data;
+  class_spec.className = (*it)->data.to_string();
   ++(*it);
   // Parse extends/implements if present, treating implements like extends.
   if (((*it)->type == TokenType::extends) ||
@@ -676,7 +676,7 @@ ClassSpecification parse_class_specification(std::vector<Token>::iterator* it,
       *ok = false;
       class_spec.extendsClassName = "";
     } else {
-      class_spec.extendsClassName = *(*it)->data;
+      class_spec.extendsClassName = (*it)->data.to_string();
     }
     ++(*it);
   }
@@ -976,7 +976,7 @@ void parse(std::vector<Token>::iterator it,
 
     // Skip unknown token.
     if (it->is_command()) {
-      const auto& name = *it->data;
+      const auto& name = it->data;
       // It is benign to drop -dontnote
       if (name != "dontnote") {
         std::cerr << "Unimplemented command (skipping): " << it->show()
@@ -992,9 +992,7 @@ void parse(std::vector<Token>::iterator it,
   }
 }
 
-} // namespace
-
-void parse(std::istream& config,
+void parse(const boost::string_view& config,
            ProguardConfiguration* pg_config,
            const std::string& filename) {
   std::vector<Token> tokens = lex(config);
@@ -1002,7 +1000,7 @@ void parse(std::istream& config,
   // Check for bad tokens.
   for (auto& tok : tokens) {
     if (tok.type == TokenType::unknownToken) {
-      std::string spelling ATTRIBUTE_UNUSED = *tok.data;
+      std::string spelling ATTRIBUTE_UNUSED = tok.data.to_string();
       ok = false;
     }
     // std::cout << tok->show() << " at line " << tok->line << std::endl;
@@ -1018,6 +1016,16 @@ void parse(std::istream& config,
     pg_config->ok = false;
     std::cerr << "Found " << parse_errors << " parse errors\n";
   }
+}
+
+} // namespace
+
+void parse(std::istream& config,
+           ProguardConfiguration* pg_config,
+           const std::string& filename) {
+  std::stringstream buffer;
+  buffer << config.rdbuf();
+  parse(buffer.str(), pg_config, filename);
 }
 
 void parse_file(const std::string& filename, ProguardConfiguration* pg_config) {
@@ -1064,9 +1072,9 @@ void remove_blacklisted_rules(ProguardConfiguration* pg_config) {
   # See keepclassnames.pro, or T1890454.
   -keepnames class *
 )";
-  std::stringstream ss(blacklisted_rules);
+  // std::stringstream ss(blacklisted_rules);
   ProguardConfiguration pg_config_blacklist;
-  proguard_parser::parse(ss, &pg_config_blacklist);
+  parse(blacklisted_rules, &pg_config_blacklist, "<internal blacklist>");
   pg_config->keep_rules.erase_if([&](const KeepSpec& ks) {
     for (const auto& blacklisted_ks : pg_config_blacklist.keep_rules) {
       if (ks == *blacklisted_ks) {

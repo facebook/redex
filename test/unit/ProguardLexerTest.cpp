@@ -16,8 +16,7 @@ using namespace keep_rules::proguard_parser;
 
 // Make sure we can parse an empty string
 TEST(ProguardLexerTest, empty) {
-  std::istringstream ss("");
-  std::vector<Token> tokens = lex(ss);
+  std::vector<Token> tokens = lex("");
   ASSERT_EQ(tokens.size(), 1);
   ASSERT_EQ(tokens[0].type, TokenType::eof_token);
 }
@@ -26,7 +25,7 @@ TEST(ProguardLexerTest, empty) {
 TEST(ProguardLexerTest, assortment) {
   // The ss stream below should result in the vector of tokens in the expected
   // variable that occurs below this. Please keep ss and expected in sync.
-  std::stringstream ss(
+  const char* s =
       "{ } ( ) ; : ! , / class public final abstract interface\n"
       "enum extends implements private protected static\n"
       "volatile @ transient @interface synchronized native\n"
@@ -52,7 +51,7 @@ TEST(ProguardLexerTest, assortment) {
       "-dontwarn\n"
       "-verbose -someothercommand\n"
       "class com.google.android.gms.measurement.AppMeasurementService\n"
-      "<init>(...);\n");
+      "<init>(...);\n";
   std::vector<std::pair<unsigned, TokenType>> expected = {
       {1, TokenType::openCurlyBracket},
       {1, TokenType::closeCurlyBracket},
@@ -142,11 +141,14 @@ TEST(ProguardLexerTest, assortment) {
       {21, TokenType::semiColon},
       {22, TokenType::eof_token},
   };
-  std::vector<Token> tokens = lex(ss);
-  ASSERT_EQ(tokens.size(), expected.size());
+  std::vector<Token> tokens = lex(s);
+  EXPECT_EQ(tokens.size(), expected.size());
   for (auto i = 0; i < expected.size(); i++) {
     std::cerr << "Performing test " << i << std::endl;
-    ASSERT_EQ(expected[i].first, tokens[i].line);
-    ASSERT_EQ(expected[i].second, tokens[i].type);
+    EXPECT_EQ(expected[i].first, tokens[i].line);
+    EXPECT_EQ(expected[i].second, tokens[i].type) << tokens[i].show();
+  }
+  for (auto i = expected.size(); i < tokens.size(); ++i) {
+    EXPECT_TRUE(false) << "Unexpected token " << tokens[i].show();
   }
 }

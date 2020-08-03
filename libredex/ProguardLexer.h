@@ -19,8 +19,7 @@
 
 #pragma once
 
-#include <iosfwd>
-#include <memory>
+#include <boost/utility/string_view.hpp>
 #include <string>
 #include <vector>
 
@@ -126,13 +125,11 @@ enum class TokenType {
 struct Token {
   TokenType type;
   size_t line;
-  std::unique_ptr<std::string> data;
+  boost::string_view data;
 
   Token(TokenType type, size_t line_number) : type{type}, line{line_number} {}
-  Token(TokenType type, size_t line_number, std::string&& data_in)
-      : type{type}, line{line_number} {
-    data = std::make_unique<std::string>(std::move(data_in));
-  }
+  Token(TokenType type, size_t line_number, const boost::string_view& data_in)
+      : type{type}, line{line_number}, data(data_in) {}
 
   Token(Token&&) noexcept = default;
   Token& operator=(Token&&) noexcept = default;
@@ -141,7 +138,7 @@ struct Token {
   bool is_command() const;
 };
 
-std::vector<Token> lex(std::istream& config);
+std::vector<Token> lex(const boost::string_view& in);
 
 } // namespace proguard_parser
 } // namespace keep_rules
