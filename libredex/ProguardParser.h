@@ -7,18 +7,16 @@
 
 #pragma once
 
-#include <memory>
-#include <set>
-#include <vector>
+#include <iosfwd>
+#include <string>
 
 #include "ProguardConfiguration.h"
-#include "ProguardLexer.h"
 
 namespace keep_rules {
 namespace proguard_parser {
 
 void parse_file(const std::string& filename, ProguardConfiguration* pg_config);
-void parse(istream& config,
+void parse(std::istream& config,
            ProguardConfiguration* pg_config,
            const std::string& filename = "");
 
