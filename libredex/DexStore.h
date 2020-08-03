@@ -148,6 +148,11 @@ class XStoreRefs {
   explicit XStoreRefs(const DexStoresVector& stores);
 
   /**
+   * If there's no secondary dexes, it returns 0. Otherwise it returns 1.
+   */
+  size_t largest_root_store_id() const { return m_root_stores - 1; }
+
+  /**
    * Return a stored idx for a given type.
    * The store idx can be used in the 'bool illegal_ref(size_t, const DexType*)'
    * api.

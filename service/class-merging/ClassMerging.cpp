@@ -41,9 +41,11 @@ std::unique_ptr<RefChecker> ref_checker_for_root_store(XStoreRefs* xstores,
   } else {
     min_sdk_api = &conf.get_android_sdk_api(min_sdk);
   }
-  // The primary dex is the store 0, the secondary dexes are in store 1, and
-  // then other stores.
-  return std::make_unique<RefChecker>(xstores, /*store_idx*/ 1, min_sdk_api);
+  // RefChecker store_idx is initialized with `largest_root_store_id()`, so that
+  // it rejects all the references from stores with id larger than the largest
+  // root_store id.
+  return std::make_unique<RefChecker>(
+      xstores, xstores->largest_root_store_id(), min_sdk_api);
 }
 
 } // namespace
