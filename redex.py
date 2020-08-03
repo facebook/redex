@@ -50,6 +50,9 @@ from pyredex.utils import (
 )
 
 
+IS_WINDOWS = os.name == "nt"
+
+
 def patch_zip_file():
     # See http://bugs.python.org/issue14315
     old_decode_extra = zipfile.ZipInfo._decodeExtra
@@ -102,6 +105,7 @@ def write_debugger_command(dbg, src_root, args):
 
     The choice of debugger is governed by `dbg` which can be either "gdb" or "lldb".
     """
+    assert not IS_WINDOWS  # It's a Linux/Mac script...
     fd, script_name = tempfile.mkstemp(suffix=".sh", prefix="redex-{}-".format(dbg))
 
     # Parametrise redex binary.
@@ -116,7 +120,8 @@ def write_debugger_command(dbg, src_root, args):
         f.write(" ".join(dbg_prefix(dbg, src_root)))
         f.write(" ")
         f.write(" ".join(args))
-        os.fchmod(fd, 0o775)
+        if not IS_WINDOWS:
+            os.fchmod(fd, 0o775)  # This is unsupported on windows.
 
     return script_name
 
@@ -257,7 +262,13 @@ def maybe_reprint_error(lines, term_handler):
 
 
 def run_and_stream_stderr(args, env, pass_fds):
-    proc = subprocess.Popen(args, env=env, pass_fds=pass_fds, stderr=subprocess.PIPE)
+    if IS_WINDOWS:
+        # Windows does not support `pass_fds` parameter.
+        proc = subprocess.Popen(args, env=env, stderr=subprocess.PIPE)
+    else:
+        proc = subprocess.Popen(
+            args, env=env, pass_fds=pass_fds, stderr=subprocess.PIPE
+        )
 
     def stream_and_return():
         err_out = []
@@ -467,6 +478,11 @@ def run_redex_binary(state, term_handler):
 
                 if returncode == -6:  # SIGABRT
                     maybe_reprint_error(err_out, term_handler)
+
+                if IS_WINDOWS:
+                    raise RuntimeError(
+                        "redex-all crashed with exit code {}!".format(returncode)
+                    )
 
                 gdb_script_name = write_debugger_command(
                     "gdb", state.args.debug_source_root, args
