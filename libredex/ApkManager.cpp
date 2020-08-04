@@ -21,6 +21,10 @@ void create_directories_if_not_exists(std::string& dir) {
 }
 
 void check_directory(std::string& dir) {
+  if (dir.empty()) {
+    std::cerr << "error: directory not provided" << std::endl;
+    exit(EXIT_FAILURE);
+  }
   if (!boost::filesystem::is_directory(dir.c_str())) {
     std::cerr << "error: not a writable directory: " << dir << std::endl;
     exit(EXIT_FAILURE);
@@ -30,6 +34,9 @@ void check_directory(std::string& dir) {
 } // namespace
 
 bool ApkManager::has_asset_dir() {
+  if (m_apk_dir.empty()) {
+    return false;
+  }
   check_directory(m_apk_dir);
   std::ostringstream path;
   path << m_apk_dir << "/assets/secondary-program-dex-jars/";
