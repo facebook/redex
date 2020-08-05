@@ -169,8 +169,8 @@ TEST_F(ConfigurableTest, PrimitiveBindings) {
   json["float_param"] = 11.0f;
   json["bool_param"] = true;
   json["uint_param"] = 0xffffffff;
-  json["int64_param"] = {-5000000000};
-  json["uint64_param"] = {5000000000};
+  json["int64_param"] = Json::Int64(-5000000000);
+  json["uint64_param"] = Json::UInt64(5000000000);
   json["string_param"] = "a string";
   json["json_param"] = getFooBarObject();
   json["vector_of_string_param"] = getFooBarBazArray();
@@ -237,7 +237,7 @@ struct CompositeBindings : public Configurable {
 
 TEST_F(ConfigurableTest, CompositeBindings) {
   Json::Value json;
-  json["contained"]["uint64_param"] = 7000000000;
+  json["contained"]["uint64_param"] = Json::UInt64(7000000000);
   json["contained"]["string_param"] = "a different string";
 
   CompositeBindings c;
