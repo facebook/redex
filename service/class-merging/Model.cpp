@@ -14,6 +14,8 @@
 #include "Resolver.h"
 #include "Walkers.h"
 
+using namespace class_merging;
+
 size_t Model::s_num_interdex_groups = 0;
 std::unordered_map<DexType*, size_t> Model::s_cls_to_interdex_group;
 
@@ -839,6 +841,8 @@ size_t get_interdex_group(
 
 } // namespace
 
+namespace class_merging {
+
 std::vector<TypeSet> Model::group_per_interdex_set(const TypeSet& types) {
   const auto& type_to_usages = get_type_usages(types, m_scope);
   std::vector<TypeSet> new_groups(s_num_interdex_groups);
@@ -1418,3 +1422,5 @@ ModelStats& ModelStats::operator+=(const ModelStats& stats) {
   m_num_merged_nonvirt_methods += stats.m_num_merged_nonvirt_methods;
   return *this;
 }
+
+} // namespace class_merging

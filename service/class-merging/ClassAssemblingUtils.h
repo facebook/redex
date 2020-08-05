@@ -12,9 +12,9 @@
 #include "IRInstruction.h"
 #include "ModelMethodMerger.h"
 
+namespace class_merging {
+
 struct ModelSpec;
-using TypeSet = std::set<const DexType*, dextypes_comparator>;
-using FieldsMap = std::unordered_map<const DexType*, std::vector<DexField*>>;
 
 constexpr const char* INTERNAL_TYPE_TAG_FIELD_NAME = "$t";
 constexpr const char* EXTERNAL_TYPE_TAG_FIELD_NAME = "mTypeTag";
@@ -53,3 +53,5 @@ void add_class(DexClass* new_cls, Scope& scope, DexStoresVector& stores);
 void handle_interface_as_root(ModelSpec& spec,
                               Scope& scope,
                               DexStoresVector& stores);
+
+} // namespace class_merging

@@ -14,11 +14,15 @@
 #include "Model.h"
 #include "PassManager.h"
 
-struct MergerType;
-class ModelMethodMerger;
 class DexStore;
 class TypeTags;
+
 using DexStoresVector = std::vector<DexStore>;
+
+namespace class_merging {
+
+struct MergerType;
+class ModelMethodMerger;
 using MergerFields = std::unordered_map<const DexType*, std::vector<DexField*>>;
 
 class ModelMerger {
@@ -56,3 +60,5 @@ class ModelMerger {
                     const std::vector<const MergerType*>& mergers,
                     ModelMethodMerger& mm);
 };
+
+} // namespace class_merging

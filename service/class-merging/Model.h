@@ -14,6 +14,10 @@
 #include "MergerType.h"
 #include "TypeSystem.h"
 
+class RefChecker;
+
+namespace class_merging {
+
 using TypeToTypeSet = std::unordered_map<const DexType*, TypeSet>;
 
 enum InterDexGroupingType {
@@ -21,8 +25,6 @@ enum InterDexGroupingType {
   NON_HOT_SET = 1, // Exclude hot set.
   FULL = 2, // Apply interdex grouping on the entire input.
 };
-
-class RefChecker;
 
 enum TypeTagConfig {
   // No type tags exist in the input hierarchy. No type tags need to be
@@ -450,3 +452,5 @@ struct ModelStats {
 
   ModelStats& operator+=(const ModelStats& stats);
 };
+
+} // namespace class_merging

@@ -10,6 +10,8 @@
 #include <sstream>
 #include <string>
 
+namespace {
+
 /**
  * Extract a minimal but identifiable name tag from the given root type.
  * E.g., "Lcom/facebook/analytics/structuredlogger/base/TypedEventBase;" ->
@@ -50,6 +52,10 @@ std::string get_root_type_name_tag(const DexType* root_type) {
   return root_name_tag_str;
 }
 
+} // namespace
+
+namespace class_merging {
+
 std::string MergerType::Shape::build_type_name(
     const std::string& prefix,
     const DexType* root_type,
@@ -81,3 +87,5 @@ std::string MergerType::Shape::to_string() const {
      << float_fields << ")";
   return ss.str();
 }
+
+} // namespace class_merging

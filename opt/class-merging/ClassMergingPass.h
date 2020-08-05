@@ -14,6 +14,8 @@
 
 #include "Model.h"
 
+namespace class_merging {
+
 class ModelMerger;
 
 class ClassMergingPass : public Pass {
@@ -29,3 +31,5 @@ class ClassMergingPass : public Pass {
   std::vector<ModelSpec> m_model_specs;
   boost::optional<size_t> m_max_num_dispatch_target = boost::none;
 };
+
+} // namespace class_merging

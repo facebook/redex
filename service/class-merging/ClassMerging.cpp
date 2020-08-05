@@ -12,6 +12,8 @@
 #include "NormalizeConstructor.h"
 #include "RefChecker.h"
 
+using namespace class_merging;
+
 namespace {
 
 bool s_is_initialized = false;

@@ -9,6 +9,8 @@
 
 #include "MergerType.h"
 
+namespace class_merging {
+
 struct ApproximateStats {
   // Number of shapes being merged
   size_t shapes_merged{0};
@@ -41,3 +43,5 @@ void max_shape_merged_greedy(const JsonWrapper& specs,
                              const ConfigFiles& conf,
                              MergerType::ShapeCollector& shapes,
                              ApproximateStats& stats);
+
+} // namespace class_merging

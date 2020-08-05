@@ -23,6 +23,8 @@
 #include "TypeReference.h"
 #include "Walkers.h"
 
+using namespace class_merging;
+
 namespace {
 
 using MethodTypeTags = std::unordered_map<const DexMethod*, uint32_t>;
@@ -188,6 +190,8 @@ static void find_common_ctor_invocations(
   }
 }
 } // namespace
+
+namespace class_merging {
 
 void MethodStats::add(const MethodOrderedSet& methods) {
   std::unordered_map<std::string, size_t> method_counts;
@@ -971,3 +975,5 @@ void ModelMethodMerger::merge_methods_within_shape() {
   m_stats.m_num_merged_static_methods += stats.num_merged_static_methods;
   m_stats.m_num_merged_direct_methods += stats.num_merged_direct_methods;
 }
+
+} // namespace class_merging

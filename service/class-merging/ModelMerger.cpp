@@ -19,6 +19,8 @@
 
 #include <sstream>
 
+using namespace class_merging;
+
 namespace {
 
 using MergedTypeNames = std::unordered_map<std::string, std::string>;
@@ -487,6 +489,8 @@ void write_out_type_mapping(
 
 } // namespace
 
+namespace class_merging {
+
 const std::vector<DexField*> ModelMerger::empty_fields =
     std::vector<DexField*>();
 
@@ -654,3 +658,5 @@ void ModelMerger::update_redex_stats(const std::string& prefix,
   mgr.incr_metric(prefix + "_merged_nonvirt_methods",
                   m_stats.m_num_merged_nonvirt_methods);
 }
+
+} // namespace class_merging

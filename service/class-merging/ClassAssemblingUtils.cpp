@@ -14,6 +14,8 @@
 #include "DexUtil.h"
 #include "Model.h"
 
+using namespace class_merging;
+
 namespace {
 
 void patch_iget_for_int_like_types(DexMethod* meth,
@@ -143,6 +145,8 @@ DexType* create_empty_base_type(const ModelSpec& spec,
 }
 
 } // namespace
+
+namespace class_merging {
 
 DexClass* create_class(const DexType* type,
                        const DexType* super_type,
@@ -388,3 +392,5 @@ void handle_interface_as_root(ModelSpec& spec,
     spec.roots.erase(interface_root);
   }
 }
+
+} // namespace class_merging

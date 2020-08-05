@@ -12,6 +12,8 @@
 
 #include "ConfigFiles.h"
 
+using namespace class_merging;
+
 using Shape = MergerType::Shape;
 
 namespace {
@@ -250,6 +252,8 @@ void write_shape_graph(
 }
 
 } // namespace
+
+namespace class_merging {
 
 /**
  * A very simple greedy algorithm to merge shapes.
@@ -497,3 +501,5 @@ void max_shape_merged_greedy(const JsonWrapper& specs,
 
   write_shape_graph(conf, SHAPE_MERGE_GRAPH_FILE, merge_map, num_mergeables);
 }
+
+} // namespace class_merging

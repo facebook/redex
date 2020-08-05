@@ -10,6 +10,8 @@
 #include "ClassMerging.h"
 #include "DexUtil.h"
 
+using namespace class_merging;
+
 namespace {
 
 DexType* get_type(const std::string& type_s) {
@@ -119,6 +121,8 @@ TypeTagConfig get_type_tag_config(const std::string& type_tag_config) {
 }
 
 } // namespace
+
+namespace class_merging {
 
 void ClassMergingPass::bind_config() {
   bool process_method_meta;
@@ -254,3 +258,5 @@ void ClassMergingPass::run_pass(DexStoresVector& stores,
 }
 
 static ClassMergingPass s_pass;
+
+} // namespace class_merging

@@ -11,6 +11,8 @@
 
 #include "AnnoUtils.h"
 
+namespace class_merging {
+
 namespace type_tag_utils {
 
 constexpr const char* MODEL_IDENTITY =
@@ -28,3 +30,5 @@ boost::optional<uint32_t> parse_model_type_tag(const DexClass* model_cls) {
 }
 
 } // namespace type_tag_utils
+
+} // namespace class_merging

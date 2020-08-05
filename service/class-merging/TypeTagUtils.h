@@ -11,6 +11,8 @@
 
 #include "DexClass.h"
 
+namespace class_merging {
+
 namespace type_tag_utils {
 
 /**
@@ -19,3 +21,5 @@ namespace type_tag_utils {
 boost::optional<uint32_t> parse_model_type_tag(const DexClass*);
 
 } // namespace type_tag_utils
+
+} // namespace class_merging

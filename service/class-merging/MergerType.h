@@ -12,6 +12,8 @@
 #include "DexClass.h"
 #include "TypeSystem.h"
 
+namespace class_merging {
+
 using FieldsMap = std::unordered_map<const DexType*, std::vector<DexField*>>;
 
 /**
@@ -325,14 +327,16 @@ struct MergerType {
   bool has_fields() const { return !field_map.empty(); }
 };
 
+} // namespace class_merging
+
 /**
  * Hash funtion for using Shape as a key in std::unordered_map
  */
 namespace std {
 
 template <>
-struct hash<MergerType::Shape> {
-  std::size_t operator()(const MergerType::Shape& s) const {
+struct hash<class_merging::MergerType::Shape> {
+  std::size_t operator()(const class_merging::MergerType::Shape& s) const {
     using boost::hash_combine;
     using boost::hash_value;
 

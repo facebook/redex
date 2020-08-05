@@ -21,6 +21,8 @@ struct Spec;
 struct DispatchMethod;
 } // namespace dispatch
 
+namespace class_merging {
+
 using SwitchIndices = std::set<int>;
 using MethodOrderedSet = std::set<DexMethod*, dexmethods_comparator>;
 using TypeToMethod = std::unordered_map<const DexType*, const DexMethod*>;
@@ -136,3 +138,5 @@ class ModelMethodMerger {
 
   std::string get_method_signature_string(DexMethod* meth);
 };
+
+} // namespace class_merging
