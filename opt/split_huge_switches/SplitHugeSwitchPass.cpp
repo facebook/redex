@@ -883,7 +883,33 @@ void SplitHugeSwitchPass::run_pass(DexStoresVector& stores,
   mgr.set_metric("split_sources", candidates.size());
   mgr.set_metric("not_hot", stats.not_hot);
 
+  auto print_debug = [&](const Stats& stats, const Stats* result_stats) {
+    auto sorted = [](const auto& in) {
+      std::vector<const DexMethod*> tmp{in.begin(), in.end()};
+      std::sort(tmp.begin(), tmp.end(), compare_dexmethods);
+      return tmp;
+    };
+    auto print = [&](const auto& in, const std::string& header) {
+      std::cerr << header << std::endl;
+      for (const DexMethod* m : sorted(in)) {
+        std::cerr << " * " << show(m) << std::endl;
+      }
+    };
+    print(stats.large_methods_set, "Large methods");
+    print(stats.switch_methods_set, "Large methods with a switch");
+    print(stats.large_switches_set, "Large methods with a large switch");
+    std::cerr << stats.constructor << " constructors." << std::endl;
+    std::cerr << stats.non_simple_chain << " non-simple chains." << std::endl;
+    std::cerr << stats.not_hot << " non-hot methods." << std::endl;
+    if (result_stats != nullptr) {
+      print(result_stats->new_methods, "Created methods");
+    }
+  };
+
   if (candidates.empty()) {
+    if (m_debug) {
+      print_debug(stats, nullptr);
+    }
     return;
   }
 
@@ -918,24 +944,7 @@ void SplitHugeSwitchPass::run_pass(DexStoresVector& stores,
   // Debug output.
 
   if (m_debug) {
-    auto sorted = [](const auto& in) {
-      std::vector<const DexMethod*> tmp{in.begin(), in.end()};
-      std::sort(tmp.begin(), tmp.end(), compare_dexmethods);
-      return tmp;
-    };
-    auto print = [&](const auto& in, const std::string& header) {
-      std::cerr << header << std::endl;
-      for (const DexMethod* m : sorted(in)) {
-        std::cerr << " * " << show(m) << std::endl;
-      }
-    };
-    print(stats.large_methods_set, "Large methods");
-    print(stats.switch_methods_set, "Large methods with a switch");
-    print(stats.large_switches_set, "Large methods with a large switch");
-    std::cerr << stats.constructor << " constructors." << std::endl;
-    std::cerr << stats.non_simple_chain << " non-simple chains." << std::endl;
-    std::cerr << stats.not_hot << " non-hot methods." << std::endl;
-    print(result_stats.new_methods, "Created methods");
+    print_debug(stats, &result_stats);
   }
 }
 
