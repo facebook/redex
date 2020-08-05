@@ -13,8 +13,8 @@
 class TypeUtilTest : public RedexTest {
 
  protected:
-  const std::array<char, 9> PRIMS = {'Z', 'B', 'S', 'C', 'I',
-                                     'J', 'F', 'D', 'V'};
+  const std::array<char, 9> PRIMS{
+      {'Z', 'B', 'S', 'C', 'I', 'J', 'F', 'D', 'V'}};
 };
 
 TEST_F(TypeUtilTest, test_reference_type_wrappers) {

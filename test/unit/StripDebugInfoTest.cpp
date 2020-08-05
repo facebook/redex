@@ -19,7 +19,9 @@ using namespace strip_debug_info_impl;
 
 struct StripDebugInfoTest : public RedexTest {};
 
-void test(StripDebugInfoPass::Config config, const char* i, const char* o) {
+void test(const StripDebugInfoPass::Config& config,
+          const char* i,
+          const char* o) {
   auto code = assembler::ircode_from_string(i);
   code->set_registers_size(3);
   StripDebugInfo(config).run(*code);
@@ -29,17 +31,16 @@ void test(StripDebugInfoPass::Config config, const char* i, const char* o) {
 }
 
 TEST_F(StripDebugInfoTest, noopWithoutDebugInfo) {
-  test(
-      {
-          .drop_all_dbg_info = true,
-      },
-      R"(
+  StripDebugInfoPass::Config config;
+  config.drop_all_dbg_info = true;
+  test(config,
+       R"(
     (
      (const v0 0)
      (return v0)
     )
 )",
-      R"(
+       R"(
     (
      (const v0 0)
      (return v0)
@@ -53,19 +54,17 @@ TEST_F(StripDebugInfoTest, dropLineNumbersWithThrowing) {
   method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   auto field = static_cast<DexField*>(DexField::make_field("LFoo;.baz:I"));
   field->make_concrete(ACC_PUBLIC | ACC_STATIC);
-
-  test(
-      {
-          .drop_line_nrs = true,
-      },
-      R"(
+  StripDebugInfoPass::Config config;
+  config.drop_line_nrs = true;
+  test(config,
+       R"(
     (
      (.pos "LFoo;.bar:()V" "Foo.java" "420")
      (sget "LFoo;.baz:I")
      (move-result-pseudo v0)
     )
 )",
-      R"(
+       R"(
     (
      (sget "LFoo;.baz:I")
      (move-result-pseudo v0)
@@ -77,18 +76,16 @@ TEST_F(StripDebugInfoTest, dropLineNumbersWithNonThrowing) {
   auto method =
       static_cast<DexMethod*>(DexMethod::make_method("LFoo;.bar:()V"));
   method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
-
-  test(
-      {
-          .drop_line_nrs = true,
-      },
-      R"(
+  StripDebugInfoPass::Config config;
+  config.drop_line_nrs = true;
+  test(config,
+       R"(
     (
      (.pos "LFoo;.bar:()V" "Foo.java" "420")
      (const v0 420)
     )
 )",
-      R"(
+       R"(
     (
      (const v0 420)
     )
