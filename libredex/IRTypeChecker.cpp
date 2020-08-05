@@ -674,7 +674,8 @@ void IRTypeChecker::run() {
     IRInstruction* insn = mie.insn;
     try {
       auto it = type_envs.find(insn);
-      always_assert(it != type_envs.end());
+      always_assert_log(
+          it != type_envs.end(), "%s in:\n%s", SHOW(mie), SHOW(code));
       check_instruction(insn, &it->second);
     } catch (const TypeCheckingException& e) {
       m_good = false;
