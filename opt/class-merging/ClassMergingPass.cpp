@@ -134,6 +134,7 @@ void ClassMergingPass::bind_config() {
   bool merge_nonvirt_methods_within_shape;
   bind("merge_nonvirt_methods_within_shape", false,
        merge_nonvirt_methods_within_shape);
+  trait(Traits::Pass::unique, true);
 
   // load model specifications
   std::vector<Json::Value> models;
