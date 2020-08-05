@@ -15,6 +15,8 @@
 #include <sys/mman.h> // For madvise
 #endif
 
+#include "utils/Compat.h" // TEMP_FAILURE_RETRY, if necessary.
+
 #include "Debug.h"
 #include "Macros.h"
 
