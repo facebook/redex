@@ -517,15 +517,16 @@ def run_redex_binary(state, term_handler):
 
 def zipalign(unaligned_apk_path, output_apk_path, ignore_zipalign, page_align):
     # Align zip and optionally perform good compression.
-    zipalign = [
-        find_android_build_tool("zipalign"),
-        "4",
-        unaligned_apk_path,
-        output_apk_path,
-    ]
-    if page_align:
-        zipalign.insert(1, "-p")
     try:
+        zipalign = [
+            find_android_build_tool("zipalign"),
+            "4",
+            unaligned_apk_path,
+            output_apk_path,
+        ]
+        if page_align:
+            zipalign.insert(1, "-p")
+
         p = subprocess.Popen(zipalign, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         out, _ = p.communicate()
         if p.returncode == 0:

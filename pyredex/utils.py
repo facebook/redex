@@ -93,7 +93,13 @@ def find_android_build_tool(tool):
             return candidate
     except BaseException:
         pass
-    return shutil.which(tool)
+    tool_path = shutil.which(tool)
+    if tool_path is None:
+        raise RuntimeError(
+            'Could not find %s, searched "%s" and PATH'
+            % (tool, find_android_build_tools())
+        )
+    return tool_path
 
 
 def find_apksigner():
