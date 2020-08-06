@@ -28,7 +28,7 @@ macro(set_common_cxx_flags_for_redex)
         endif ()
 
         set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -Wall -pthread")
-        set(COMMON_CXX_FLAGS_NODBG, "-O3")
+        set(COMMON_CXX_FLAGS_NODBG "-O3 -UNDEBUG")
         set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} ${COMMON_CXX_FLAGS_NODBG} -pthread")
         set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} ${COMMON_CXX_FLAGS_NODBG} -pthread")
         set(CMAKE_CXX_FLAGS_MINSIZEREL "${CMAKE_CXX_FLAGS_MINSIZEREL} ${COMMON_CXX_FLAGS_NODBG} -pthread")
