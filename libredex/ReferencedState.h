@@ -279,6 +279,12 @@ class ReferencedState {
     }
   }
 
+  void unset_root() {
+    inner_struct.m_keep = false;
+    inner_struct.m_unset_allowshrinking = false;
+    inner_struct.m_unset_allowobfuscation = false;
+  }
+
   const keep_reason::ReasonPtrSet& keep_reasons() const {
     if (!RedexContext::record_keep_reasons()) {
       // We really should not allow this.
