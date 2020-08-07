@@ -498,7 +498,9 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       always_assert_log(!code.editable_cfg_built(), "%s has a cfg!", SHOW(m));
     });
 
-    class_cfgs.add_pass(pass->name(), VISUALIZER_PASS_OPTIONS);
+    class_cfgs.add_pass(
+        [&]() { return pass->name() + "(" + std::to_string(i) + ")"; },
+        VISUALIZER_PASS_OPTIONS);
 
     bool run_hasher = run_hasher_after_each_pass;
     bool run_type_checker = checker_conf.run_after_pass(pass);

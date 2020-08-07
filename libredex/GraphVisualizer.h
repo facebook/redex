@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <functional>
 #include <iosfwd>
 #include <sstream>
 #include <vector>
@@ -94,16 +95,19 @@ class Classes {
       : m_file_name(file_name),
         m_write_after_each_pass(write_after_arch_pass) {}
 
-  bool add(const std::string& class_name);
-  void add(DexClass* klass);
+  bool add(const std::string& class_name, bool add_initial_pass = true);
+  void add(DexClass* klass, bool add_initial_pass = true);
   void add_all(const std::string& class_names);
 
   void add_pass(const std::string& pass_name, Options o = SKIP_NO_CHANGE);
+  void add_pass(const std::function<std::string()>& pass_name_lazy,
+                Options o = SKIP_NO_CHANGE);
 
   void write() const;
 
  private:
   std::vector<visualizer::ClassCFGStream> m_class_cfgs;
+  std::vector<std::string> m_not_found;
   const std::string m_file_name;
   const bool m_write_after_each_pass;
 };
