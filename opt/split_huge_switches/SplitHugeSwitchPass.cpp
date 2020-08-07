@@ -604,11 +604,18 @@ AnalysisData analyze(DexMethod* m,
 
   // Filter out non-hot methods.
   if (method_profiles.has_stats()) {
-    const auto& profile_stats =
-        method_profiles.method_stats(method_profiles::COLD_START);
-    if (!profile_stats.count(m) ||
-        profile_stats.at(m).call_count < hotness_threshold ||
-        hotness_threshold <= 0) {
+    auto is_hot_fn = [&]() {
+      for (const auto& interaction_stats : method_profiles.all_interactions()) {
+        const auto& stats_map = interaction_stats.second;
+        if (stats_map.count(m) != 0 &&
+            stats_map.at(m).call_count >= hotness_threshold) {
+          return true;
+        }
+      }
+      return false;
+    };
+    bool is_hot = hotness_threshold > 0 && is_hot_fn();
+    if (!is_hot) {
       data.not_hot = true;
       return data;
     }
