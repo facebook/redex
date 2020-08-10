@@ -6,9 +6,9 @@
 
 import argparse
 import os
-import subprocess
-import sys
 import zipfile
+
+from pyredex.utils import sign_apk
 
 
 parser = argparse.ArgumentParser()
@@ -23,19 +23,4 @@ with zipfile.ZipFile(args.apk, "a") as zf:
     for asset in args.assets:
         zf.write(asset, os.path.join("assets", os.path.basename(asset)))
 
-subprocess.check_call(
-    [
-        "jarsigner",
-        "-sigalg",
-        "SHA1withRSA",
-        "-digestalg",
-        "SHA1",
-        "-keystore",
-        args.keystore,
-        "-storepass",
-        args.keypass,
-        args.apk,
-        args.keyalias,
-    ],
-    stdout=sys.stderr,
-)
+sign_apk(args.keystore, args.keypass, args.keyalias, args.apk)
