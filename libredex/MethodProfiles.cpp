@@ -376,12 +376,15 @@ dexmethods_profiled_comparator::dexmethods_profiled_comparator(
   }
   std::sort(m_interactions.begin(), m_interactions.end(),
             [this](const std::string& a, const std::string& b) {
-              if (a == COLD_START && b != COLD_START) {
-                // Cold Start always comes first;
-                return true;
+              if (a == b) {
+                return false;
               }
 
-              if (a == b) {
+              // Cold Start always comes first;
+              if (a == COLD_START) {
+                return true;
+              }
+              if (b == COLD_START) {
                 return false;
               }
 
