@@ -34,6 +34,7 @@ check_PROGRAMS = \
     points_to_semantics_test \
     propagation_test \
     pure_method_test \
+    reachability_test \
     reflection_analysis_test \
     remove_unreachable_test \
     result_propagation_test \
@@ -109,6 +110,9 @@ EXTRA_propagation_test_DEPENDENCIES = propagation_test-class.dex
 
 pure_method_test_SOURCES = PureFunctionTest.cpp
 EXTRA_pure_method_test_DEPENDENCIES = pure_method_test-class.dex
+
+reachability_test_SOURCES = ReachabilityTest.cpp
+EXTRA_reachability_test_DEPENDENCIES = reachability_test-class.dex
 
 reflection_analysis_test_SOURCES = ReflectionAnalysisTest.cpp
 EXTRA_reflection_analysis_test_DEPENDENCIES = reflection_analysis_test-class.dex
@@ -209,6 +213,9 @@ propagation_test-class.jar: Propagation.java
 	$(create_jar)
 
 pure_method_test-class.jar: PureFunctionTest.java
+	$(create_jar)
+
+reachability_test-class.jar: RemoveUnreachableTest.java
 	$(create_jar)
 
 reflection_analysis_test-class.jar: ReflectionAnalysis.java
