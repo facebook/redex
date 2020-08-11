@@ -44,7 +44,7 @@ from pyredex.utils import (
     make_temp_dir,
     move_dexen_to_directories,
     remove_comments,
-    set_android_sdk_path,
+    sdk_search_order,
     sign_apk,
     with_temp_cleanup,
 )
@@ -852,7 +852,7 @@ def prepare_redex(args):
     debug_mode = args.unpack_only or args.debug
 
     if args.android_sdk_path:
-        set_android_sdk_path(args.android_sdk_path)
+        sdk_search_order.insert(0, lambda x: args.android_sdk_path)
 
     # avoid accidentally mixing up file formats since we now support
     # both apk files and Android bundle files
