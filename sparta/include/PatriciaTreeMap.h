@@ -630,14 +630,23 @@ inline bool leq(const std::shared_ptr<PatriciaTree<IntegerType, Value>>& s,
   const auto& t0 = t_branch->left_tree();
   const auto& t1 = t_branch->right_tree();
   if (m == n && p == q) {
+    // The two trees have the same prefix, compare each subtrees.
     return leq(s0, t0) && leq(s1, t1);
   }
   if (m < n && match_prefix(q, p, m)) {
-    return leq(is_zero_bit(q, m) ? s0 : s1, t);
+    // The tree t only contains bindings present in a subtree of s, and s has
+    // bindings not present in t.
+    return Value::default_value().is_top() &&
+           leq(is_zero_bit(q, m) ? s0 : s1, t);
   }
-  // Otherwise, the tree t contains bindings to (non-default) values that are
-  // not bound in s (and therefore implicitly bound to the default value).
-  return Value::default_value().is_bottom();
+  if (m > n && match_prefix(p, q, n)) {
+    // The tree s only contains bindings present in a subtree of t, and t has
+    // bindings not present in s.
+    return Value::default_value().is_bottom() &&
+           leq(s, is_zero_bit(p, n) ? t0 : t1);
+  }
+  // s and t both have bindings that are not present in the other tree.
+  return false;
 }
 
 // A Patricia tree is a canonical representation of the set of keys it contains.
