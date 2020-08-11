@@ -96,6 +96,28 @@ TEST(PatriciaTreeMapAbstractPartitionTest, basicPartialOrders) {
     EXPECT_FALSE(p1.leq(p2));
     EXPECT_TRUE(p2.leq(p1));
   }
+
+  {
+    Partition p1({{1, Domain({"a"})}, {3, Domain({"a"})}});
+    Partition p2({{1, Domain({"a"})}, {2, Domain({"a"})}, {3, Domain({"a"})}});
+    EXPECT_TRUE(p1.leq(p2));
+    EXPECT_FALSE(p2.leq(p1));
+  }
+
+  {
+    Partition p1({{1, Domain({"a"})}, {3, Domain({"b"})}});
+    Partition p2({{1, Domain({"a"})}, {2, Domain({"a"})}, {3, Domain({"a"})}});
+    EXPECT_FALSE(p1.leq(p2));
+    EXPECT_FALSE(p2.leq(p1));
+  }
+
+  {
+    Partition p1({{1, Domain({"a"})}, {3, Domain({"b"})}});
+    Partition p2(
+        {{1, Domain({"a", "b"})}, {2, Domain({"a"})}, {3, Domain({"a", "b"})}});
+    EXPECT_TRUE(p1.leq(p2));
+    EXPECT_FALSE(p2.leq(p1));
+  }
 }
 
 TEST(PatriciaTreeMapAbstractPartitionTest, latticeOperations) {
