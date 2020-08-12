@@ -48,8 +48,8 @@ std::string get_apk_dir(const Json::Value& config) {
   return apkdir;
 }
 
-struct TypeCheckerConfig {
-  explicit TypeCheckerConfig(const ConfigFiles& conf) {
+struct CheckerConfig {
+  explicit CheckerConfig(const ConfigFiles& conf) {
     const Json::Value& type_checker_args =
         conf.get_json_config()["ir_type_checker"];
     run_type_checker_on_input =
@@ -61,6 +61,8 @@ struct TypeCheckerConfig {
     verify_moves = type_checker_args.get("verify_moves", true).asBool();
     check_no_overwrite_this =
         type_checker_args.get("check_no_overwrite_this", false).asBool();
+    check_num_of_refs =
+        type_checker_args.get("check_num_of_refs", false).asBool();
 
     for (auto& trigger_pass : type_checker_args["run_after_passes"]) {
       type_checker_trigger_passes.insert(trigger_pass.asString());
@@ -109,6 +111,57 @@ struct TypeCheckerConfig {
   bool run_after_pass(const Pass* pass) {
     return run_type_checker_after_each_pass ||
            type_checker_trigger_passes.count(pass->name()) > 0;
+  }
+
+  /**
+   * Return activated_passes.size() if the checking is turned off.
+   * Otherwize, return 0 or the index of the last InterDexPass.
+   */
+  size_t min_pass_idx_for_dex_ref_check(
+      const std::vector<Pass*>& activated_passes) {
+    if (!check_num_of_refs) {
+      return activated_passes.size();
+    }
+    size_t idx = 0;
+    for (size_t i = 0; i < activated_passes.size(); i++) {
+      if (activated_passes[i]->name() == "InterDexPass") {
+        idx = i;
+      }
+    }
+    return idx;
+  }
+
+  static void ref_validation(const DexStoresVector& stores,
+                             const std::string& pass_name) {
+    Timer t("ref_validation");
+    auto check_ref_num = [pass_name](const DexClasses& classes) {
+      constexpr size_t limit = 65536;
+      std::unordered_set<DexMethodRef*> total_method_refs;
+      std::unordered_set<DexFieldRef*> total_field_refs;
+      std::unordered_set<DexType*> total_type_refs;
+      for (const auto cls : classes) {
+        std::vector<DexMethodRef*> method_refs;
+        std::vector<DexFieldRef*> field_refs;
+        std::vector<DexType*> type_refs;
+        cls->gather_methods(method_refs);
+        cls->gather_fields(field_refs);
+        cls->gather_types(type_refs);
+        total_type_refs.insert(type_refs.begin(), type_refs.end());
+        total_field_refs.insert(field_refs.begin(), field_refs.end());
+        total_method_refs.insert(method_refs.begin(), method_refs.end());
+      }
+      always_assert_log(total_method_refs.size() <= limit,
+                        "%s adds too many method refs", pass_name.c_str());
+      always_assert_log(total_field_refs.size() <= limit,
+                        "%s adds too many field refs", pass_name.c_str());
+      always_assert_log(total_type_refs.size() <= limit,
+                        "%s adds too many type refs", pass_name.c_str());
+    };
+    for (const auto& store : stores) {
+      for (const auto& classes : store.get_dexen()) {
+        check_ref_num(classes);
+      }
+    }
   }
 
   // TODO(fengliu): Kill the `validate_access` flag.
@@ -166,6 +219,7 @@ struct TypeCheckerConfig {
   bool run_type_checker_on_input_ignore_access;
   bool verify_moves;
   bool check_no_overwrite_this;
+  bool check_num_of_refs;
 };
 
 struct ScopedVmHWM {
@@ -427,7 +481,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       check_unique_deobfuscated_names_args.get("run_finally", false).asBool();
 
   // Retrieve the type checker's settings.
-  TypeCheckerConfig checker_conf{conf};
+  CheckerConfig checker_conf{conf};
   checker_conf.on_input(scope);
 
   // Pull on method-profiles, so that they get initialized, and are matched
@@ -458,6 +512,9 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       traceEnabled(STATS, 1) || conf.get_json_config().get("mem_stats", true);
   const bool hwm_per_pass =
       conf.get_json_config().get("mem_stats_per_pass", true);
+
+  size_t min_pass_idx_for_dex_ref_check =
+      checker_conf.min_pass_idx_for_dex_ref_check(m_activated_passes);
 
   for (size_t i = 0; i < m_activated_passes.size(); ++i) {
     Pass* pass = m_activated_passes[i];
@@ -515,9 +572,12 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       if (run_type_checker) {
         // It's OK to overwrite the `this` register if we are not yet at the
         // output phase -- the register allocator can fix it up later.
-        TypeCheckerConfig::run_verifier(scope, checker_conf.verify_moves,
-                                        /* check_no_overwrite_this */ false,
-                                        /* validate_access */ false);
+        CheckerConfig::run_verifier(scope, checker_conf.verify_moves,
+                                    /* check_no_overwrite_this */ false,
+                                    /* validate_access */ false);
+      }
+      if (i >= min_pass_idx_for_dex_ref_check) {
+        CheckerConfig::ref_validation(stores, pass->name());
       }
       if (run_check_unique_deobfuscated_names_after_each_pass) {
         check_unique_deobfuscated_names(pass->name().c_str(), scope);
@@ -550,9 +610,9 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
 
   // Always run the type checker before generating the optimized dex code.
   scope = build_class_scope(it);
-  TypeCheckerConfig::run_verifier(scope, checker_conf.verify_moves,
-                                  get_redex_options().no_overwrite_this(),
-                                  /* validate_access */ true);
+  CheckerConfig::run_verifier(scope, checker_conf.verify_moves,
+                              get_redex_options().no_overwrite_this(),
+                              /* validate_access */ true);
 
   if (run_check_unique_deobfuscated_names_finally) {
     check_unique_deobfuscated_names("<final>", scope);
