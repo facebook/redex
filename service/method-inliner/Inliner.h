@@ -636,6 +636,9 @@ class MultiMethodInliner {
 
   std::unique_ptr<cse_impl::SharedState> m_cse_shared_state;
 
+  const DexFieldRef* m_sdk_int_field =
+      DexField::get_field("Landroid/os/Build$VERSION;.SDK_INT:I");
+
  public:
   const InliningInfo& get_info() { return info; }
 

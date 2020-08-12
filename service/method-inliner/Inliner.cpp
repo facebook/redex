@@ -1847,8 +1847,7 @@ bool MultiMethodInliner::check_android_os_version(IRInstruction* insn) {
   if (is_sget(op)) {
     auto ref = insn->get_field();
     DexField* field = resolve_field(ref, FieldSearch::Static);
-    if (field != nullptr &&
-        field == DexField::get_field("Landroid/os/Build$VERSION;.SDK_INT:I")) {
+    if (field != nullptr && field == m_sdk_int_field) {
       return true;
     }
   }
