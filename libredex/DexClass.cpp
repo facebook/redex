@@ -108,11 +108,17 @@ DexDebugEntry::~DexDebugEntry() {
  */
 static std::vector<DexDebugEntry> eval_debug_instructions(
     DexDebugItem* dbg,
-    std::vector<std::unique_ptr<DexDebugInstruction>>& insns,
+    DexIdx* idx,
+    const uint8_t** encdata_ptr,
     uint32_t absolute_line) {
   std::vector<DexDebugEntry> entries;
   uint32_t pc = 0;
-  for (auto& opcode : insns) {
+  while (true) {
+    std::unique_ptr<DexDebugInstruction> opcode(
+        DexDebugInstruction::make_instruction(idx, encdata_ptr));
+    if (opcode == nullptr) {
+      break;
+    }
     auto op = opcode->opcode();
     switch (op) {
     case DBG_ADVANCE_LINE: {
@@ -159,13 +165,7 @@ DexDebugItem::DexDebugItem(DexIdx* idx, uint32_t offset)
     // We emit matching number of nulls as method arguments at the end.
     decode_noindexable_string(idx, encdata);
   }
-  std::vector<std::unique_ptr<DexDebugInstruction>> insns;
-  DexDebugInstruction* dbgp;
-  while ((dbgp = DexDebugInstruction::make_instruction(idx, &encdata)) !=
-         nullptr) {
-    insns.emplace_back(dbgp);
-  }
-  m_dbg_entries = eval_debug_instructions(this, insns, line_start);
+  m_dbg_entries = eval_debug_instructions(this, idx, &encdata, line_start);
   m_on_disk_size = encdata - base_encdata;
 }
 
