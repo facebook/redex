@@ -7,7 +7,6 @@
 import argparse
 import enum
 import errno
-import fnmatch
 import glob
 import itertools
 import json
@@ -28,17 +27,14 @@ from os.path import abspath, dirname, isdir, isfile, join
 from pipes import quote
 
 import pyredex.logger as logger
-import pyredex.unpacker as unpacker
 from pyredex.logger import log
 from pyredex.utils import (
     LibraryManager,
     UnpackManager,
     ZipManager,
     ZipReset,
-    abs_glob,
     argparse_yes_no_flag,
     dex_glob,
-    ensure_libs_dir,
     find_android_build_tool,
     get_file_ext,
     make_temp_dir,

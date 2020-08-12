@@ -45,21 +45,21 @@ def main():
     block_size_array = []
     method_size_array = []
     num_virtual = 0
-    tr_file = open(args.trace_file, "r")
     trace = 0
-    for row in tr_file:
-        all_stats = row.split(",")
-        if all_stats[0] == "M" or all_stats[0] == "B":
-            trace = 1
-            if all_stats[0] == "M":
-                num_methods += 1
-                method_size_array.insert(len(method_size_array), int(all_stats[2]))
-                num_virtual += int(all_stats[4])
-            elif all_stats[0] == "B":
-                num_blocks += 1
-                num_instructions += int(all_stats[2])
-                fan_in += int(all_stats[4])
-                block_size_array.insert(len(method_size_array), int(all_stats[2]))
+    with open(args.trace_file, "r") as tr_file:
+        for row in tr_file:
+            all_stats = row.split(",")
+            if all_stats[0] == "M" or all_stats[0] == "B":
+                trace = 1
+                if all_stats[0] == "M":
+                    num_methods += 1
+                    method_size_array.insert(len(method_size_array), int(all_stats[2]))
+                    num_virtual += int(all_stats[4])
+                elif all_stats[0] == "B":
+                    num_blocks += 1
+                    num_instructions += int(all_stats[2])
+                    fan_in += int(all_stats[4])
+                    block_size_array.insert(len(method_size_array), int(all_stats[2]))
 
     print("========Summary=========")
     if trace:

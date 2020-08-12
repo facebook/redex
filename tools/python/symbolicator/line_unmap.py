@@ -32,7 +32,7 @@ class PositionMap(object):
                 raise Exception("Version mismatch")
             spool_count = struct.unpack("<L", mapping.read(4))[0]
             pmap = PositionMap()
-            for i in range(0, spool_count):
+            for _ in range(0, spool_count):
                 ssize = struct.unpack("<L", mapping.read(4))[0]
                 pmap.string_pool.append(mapping.read(ssize).decode("ascii"))
             logging.info("Unpacked %d strings from line map", spool_count)
@@ -40,7 +40,7 @@ class PositionMap(object):
             # this is pretty slow; it would be much faster in C++ with memcpy
             # and arrays of structs, but I don't know how to call C/C++ from
             # Python under our build system
-            for i in range(0, pos_count):
+            for _ in range(0, pos_count):
                 if version == 1:
                     pmap.positions.append(
                         MapEntry._make(

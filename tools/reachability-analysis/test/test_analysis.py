@@ -40,16 +40,12 @@ class TestAnalysis(unittest.TestCase):
         graph.add_edge(anno, bar)
 
         self.assertDictEqual(
-            analysis.find_boundary(graph, set([bar, corge])),
-            {foo: set([bar]), qux: set([bar])},
+            analysis.find_boundary(graph, {bar, corge}), {foo: {bar}, qux: {bar}}
         )
         self.assertDictEqual(
-            analysis.find_boundary(graph, set([bar])),
-            {foo: set([bar]), qux: set([bar])},
+            analysis.find_boundary(graph, {bar}), {foo: {bar}, qux: {bar}}
         )
-        self.assertDictEqual(
-            analysis.find_boundary(graph, set([corge])), {bar: set([corge])}
-        )
+        self.assertDictEqual(analysis.find_boundary(graph, {corge}), {bar: {corge}})
 
     def test_group_members_by_class(self):
         graph = core.ReachabilityGraph()
@@ -61,4 +57,4 @@ class TestAnalysis(unittest.TestCase):
         graph.add_node(foo_baz)
 
         grouped = analysis.group_members_by_class(graph)
-        self.assertDictEqual(grouped, {foo: set([foo_bar, foo_baz])})
+        self.assertDictEqual(grouped, {foo: {foo_bar, foo_baz}})

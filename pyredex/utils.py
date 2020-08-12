@@ -6,7 +6,6 @@
 
 import argparse
 import distutils.version
-import errno
 import fnmatch
 import glob
 import json
@@ -185,23 +184,23 @@ def sign_apk(keystore, keypass, keyalias, apk):
     )
 
 
-def remove_comments_from_line(l):
+def remove_comments_from_line(line):
     (found_backslash, in_quote) = (False, False)
-    for idx, c in enumerate(l):
+    for idx, c in enumerate(line):
         if c == "\\" and not found_backslash:
             found_backslash = True
         elif c == '"' and not found_backslash:
             found_backslash = False
             in_quote = not in_quote
         elif c == "#" and not in_quote:
-            return l[:idx]
+            return line[:idx]
         else:
             found_backslash = False
-    return l
+    return line
 
 
 def remove_comments(lines):
-    return "".join([remove_comments_from_line(l) + "\n" for l in lines])
+    return "".join([remove_comments_from_line(line) + "\n" for line in lines])
 
 
 def argparse_yes_no_flag(parser, flag_name, on_prefix="", off_prefix="no-", **kwargs):
@@ -465,15 +464,13 @@ class LibraryManager:
             extracted_dir = join(libs_dir, "__extracted_libs__")
             # Ensure both directories exist.
             self.temporary_libs_dir = ensure_libs_dir(libs_dir, extracted_dir)
-            lib_count = 0
-            for lib_to_extract in libs_to_extract:
-                extract_path = join(extracted_dir, "lib_{}.so".format(lib_count))
+            for i, lib_to_extract in enumerate(libs_to_extract):
+                extract_path = join(extracted_dir, "lib_{}.so".format(i))
                 if lib_to_extract.endswith(xz_lib_name):
                     cmd = "xz -d --stdout {} > {}".format(lib_to_extract, extract_path)
                 else:
                     cmd = "zstd -d {} -o {}".format(lib_to_extract, extract_path)
-                subprocess.check_call(cmd, shell=True)
-                lib_count += 1
+                subprocess.check_call(cmd, shell=True)  # noqa: P204
 
     def __exit__(self, *args):
         # This dir was just here so we could scan it for classnames, but we don't

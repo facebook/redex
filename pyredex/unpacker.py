@@ -426,7 +426,7 @@ class XZSDexMode(BaseDexMode):
         # concat_jar is a bunch of .dex.jar files concatenated together.
         concat_jar = join(dex_dir, self._xzs_filename[:-4])
         cmd = "cat {} | xz -d --threads 6 > {}".format(dest, concat_jar)
-        subprocess.check_call(cmd, shell=True)
+        subprocess.check_call(cmd, shell=True)  # noqa: P204
 
         if unpackage_metadata:
             shutil.copy(join(extracted_apk_dir, self._xzs_dir, "metadata.txt"), dex_dir)

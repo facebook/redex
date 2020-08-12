@@ -1715,7 +1715,7 @@ class File:
         if proguard_path and os.path.exists(proguard_path):
             self.proguard = Progard(proguard_path)
         if file_like is None:
-            file_like = open(path, "rb")
+            file_like = open(path, "rb")  # noqa: P201
         self.use_bytecode_format = use_bytecode_format
         self.data = file_extract.FileExtract(file_like, "=", 4)
         self.header = header_item(self.data)
@@ -2940,7 +2940,7 @@ class Opcode17(Opcode):
             f.write('warning: "const-wide/32" can be encoded as a ')
             f.write(
                 '"const-wide/16" more efficiently as (%i <= %i <= %i)\n'
-                % (UINT8_MAX, INT16_MIN, self.imm, INT16_MAX)
+                % (INT16_MIN, self.imm, INT16_MAX)
             )
             return 2
         return 0

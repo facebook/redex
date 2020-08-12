@@ -24,7 +24,7 @@ class CallableBase(object):
             )
             gdb.execute(prncmd, False, True)
             return ""
-        except:
+        except BaseException:
             return ""
 
 

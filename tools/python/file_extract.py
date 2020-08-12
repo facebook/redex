@@ -27,9 +27,9 @@ def dump_memory(base_addr, data, num_per_line, outfile):
     concat = None
     if data_len > 0:
         if isinstance(hex_string[0], int):
-            concat = lambda a, b: chr(a) + chr(b)
+            concat = lambda a, b: chr(a) + chr(b)  # noqa: E731
         else:
-            concat = lambda a, b: a + b
+            concat = lambda a, b: a + b  # noqa: E731
     while i < data_len:
         outfile.write("0x%8.8x: " % (addr + i))
         bytes_left = data_len - i

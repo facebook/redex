@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # Copyright (c) Facebook, Inc. and its affiliates.
 #
 # This source code is licensed under the MIT license found in the
@@ -13,11 +14,8 @@
 # Writing 281 bitmaps to /var/folders/1g/1dxc_1rd1jg5l2csn_tck2085w5qnj/T/tmpwMwbMCbitmaps.
 # 281 of 281 complete
 
-from __future__ import absolute_import, division, print_function, unicode_literals
-
 import argparse
 import enum
-import operator
 import os.path
 import struct
 import subprocess
@@ -29,8 +27,15 @@ from collections import defaultdict
 
 def parse_hprof_dump(instream):
     # Read the tag - a null-terminated string
-    iter_until_null = iter(lambda: instream.read(1), "\x00")
-    tag = reduce(operator.concat, iter_until_null, "")
+    tag = b""
+    while True:
+        byte = instream.read(1)
+        if not byte:
+            break
+        if byte == b"\x00":
+            break
+        tag.append(byte)
+    tag = tag.decode("utf-8")  # UTF8 should be close enough to modified UTF8.
 
     big_endian_unsigned_4byte_integer = struct.Struct(b">I")
     sizeof_id = big_endian_unsigned_4byte_integer.unpack(instream.read(4))[0]
@@ -491,7 +496,7 @@ class HprofInstance(HprofObject):
                 merged_fields_builder[name][clazz.name] = value
             clazz = clazz.super_class
 
-        for key, value in merged_fields_builder.iteritems():
+        for key, value in merged_fields_builder.items():
             # Avoid over-writing python internals, like __dict__
             if key in self.fields.__dict__:
                 key = "__hprof_" + key
@@ -566,13 +571,13 @@ class HprofClass(HprofObject):
         static_field_count = byte_stream.next_two_bytes()
         segment.static_fields = []
 
-        for x in xrange(static_field_count):
+        for _ in range(static_field_count):
             segment.static_fields.append(StaticField.parse(byte_stream))
 
         instance_field_count = byte_stream.next_two_bytes()
         segment.instance_fields = []
 
-        for x in xrange(instance_field_count):
+        for _ in range(instance_field_count):
             segment.instance_fields.append(InstanceField.parse(byte_stream))
 
         return segment
@@ -682,7 +687,7 @@ class HprofPrimitiveArray(HprofObject):
         self.array_values = []
         byte_stream = ByteStream(self.array_data)
         count = int(len(self.array_data) / self.prim_type.size())
-        for x in xrange(count):
+        for _ in range(count):
             self.array_values.append(self.prim_type.parse(byte_stream))
         # We keep around array_data since it's sometimes handy - like when loading bitmaps
 
@@ -714,7 +719,7 @@ class HprofObjectArray(HprofObject):
         segment.array_class_object_id = byte_stream.next_four_bytes()
 
         segment.array_values = []
-        for x in xrange(num_elements):
+        for _ in range(num_elements):
             segment.array_values.append(byte_stream.next_id())
 
         return segment
@@ -759,7 +764,7 @@ class HprofString(HprofInstance):
         char_array = self.class_fields["java.lang.String"]["value"]
         char_array.fully_resolve()
         return "".join(
-            [unichr(char_array.array_values[i]) for i in range(self.fields.count)]
+            [chr(char_array.array_values[i]) for i in range(self.fields.count)]
         )
 
     def __str__(self):
@@ -955,11 +960,11 @@ class HprofData(object):
 
     def resolve(self):
         # First resolve heaps
-        for heap in self.heap_dict.itervalues():
+        for heap in self.heap_dict.values():
             heap.resolve(self)
 
         # Then resolve classes
-        for obj in self.object_id_dict.itervalues():
+        for obj in self.object_id_dict.values():
             if isinstance(obj, HprofClass):
                 clazz = obj
                 clazz.resolve(self)
@@ -979,11 +984,11 @@ class HprofData(object):
         # at the time we create every HprofClass 'java.lang.Class' may have
         # not be parsed yet and thus unavailable
         clsCls = self.class_name_dict["java.lang.Class"]
-        for cls in self.class_name_dict.itervalues():
+        for cls in self.class_name_dict.values():
             cls.clazz = clsCls
 
         # Then other objects
-        for obj in self.object_id_dict.itervalues():
+        for obj in self.object_id_dict.values():
             if not isinstance(obj, HprofClass):
                 obj.resolve(self)
             obj.is_root = False  # Fixed up for root objects below
@@ -1002,7 +1007,7 @@ class HprofData(object):
     def lookup_instances_of_class(self, class_name):
         return [
             obj
-            for obj in self.object_id_dict.itervalues()
+            for obj in self.object_id_dict.values()
             if isinstance(obj, HprofInstance) and obj.clazz.name == class_name
         ]
 
@@ -1010,7 +1015,7 @@ class HprofData(object):
         if self.inverted_references is None:
             # Will be much faster for later invocations
             self.inverted_references = defaultdict(list)
-            for heap_obj in self.object_id_dict.itervalues():
+            for heap_obj in self.object_id_dict.values():
                 for ref in heap_obj.outgoing_references():
                     self.inverted_references[ref.referee].append(ref)
 
@@ -1104,7 +1109,7 @@ def roots_of_obj(hprof_data, obj):
 
 def zygote_references_to_app_objects(hprof_data):
     references = []
-    for obj in hprof_data.object_id_dict.itervalues():
+    for obj in hprof_data.object_id_dict.values():
         if obj.heap.name == "zygote":
             for reference in obj.outgoing_references():
                 if reference.referee.heap.name != "zygote":
@@ -1197,7 +1202,7 @@ def reachable(instance, filter_function=lambda x: True):
 
 
 def reachable_size(instance):
-    return sum([x.shallow_size() for x in reachable(instance)])
+    return sum(x.shallow_size() for x in reachable(instance))
 
 
 def retained(instance):
@@ -1213,7 +1218,7 @@ def retained(instance):
 
 
 def retained_size(instance):
-    return sum([x.shallow_size() for x in retained(instance)])
+    return sum(x.shallow_size() for x in retained(instance))
 
 
 def retained_in_set(instances, reachable_set):
@@ -1330,7 +1335,7 @@ def wasted_segments(char_array):
 
     segments = []
     current_segment_start = 0
-    for i, s in enumerate(sorted_forward):
+    for s in sorted_forward:
         if s.fields.offset > current_segment_start:
             segments.append((current_segment_start, s.fields.offset))
         current_segment_start = max(
@@ -1419,7 +1424,7 @@ def java_locals(hprof_data):
         for root in hprof_data.roots
         if root.heap_tag == HeapTag.ROOT_THREAD_OBJECT
     }
-    thread_locals = {thread: set() for thread in threads.itervalues()}
+    thread_locals = {thread: set() for thread in threads.values()}
     for loc in locs:
         thread_locals[threads[loc.thread_serial]].add(loc.obj)
     return thread_locals
@@ -1431,7 +1436,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     hp = parse_filename(args.hprof)
     classes = []
-    for cls_name, cls in hp.class_name_dict.iteritems():
+    for cls_name, cls in hp.class_name_dict.items():
         classes.append(
             (
                 cls_name,
