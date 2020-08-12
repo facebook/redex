@@ -528,6 +528,7 @@ class WpoBuilder final {
     }
 
     // Add scheduling constraints between the WPOs for maximal SCCs.
+    m_toplevel.reserve(get_next_dfn());
     for (uint32_t v = 1; v < get_next_dfn(); v++) {
       if (rep[dsets.find_set(v)] == v) {
         add_toplevel(v);
