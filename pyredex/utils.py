@@ -4,6 +4,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+import argparse
 import distutils.version
 import errno
 import glob
@@ -107,3 +108,25 @@ def remove_comments_from_line(l):
 
 def remove_comments(lines):
     return "".join([remove_comments_from_line(l) + "\n" for l in lines])
+
+
+def argparse_yes_no_flag(parser, flag_name, on_prefix="", off_prefix="no-", **kwargs):
+    class FlagAction(argparse.Action):
+        def __init__(self, option_strings, dest, nargs=None, **kwargs):
+            super(FlagAction, self).__init__(option_strings, dest, nargs=0, **kwargs)
+
+        def __call__(self, parser, namespace, values, option_string=None):
+            setattr(
+                namespace,
+                self.dest,
+                False if option_string.startswith(f"--{off_prefix}") else True,
+            )
+
+    parser.add_argument(
+        f"--{on_prefix}{flag_name}",
+        f"--{off_prefix}{flag_name}",
+        dest=flag_name,
+        action=FlagAction,
+        default=False,
+        **kwargs,
+    )
