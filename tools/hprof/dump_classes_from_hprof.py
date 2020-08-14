@@ -177,8 +177,8 @@ class Record(object):
         (tag, time_offset_us, length) = Record.record_struct.unpack(
             instream.read(struct.calcsize(Record.record_struct_format))
         )
-        data = array(b"B")
-        data.fromstring(instream.read(length))
+        data = array("B")
+        data.frombytes(instream.read(length))
         if tag == HprofTag.STRING.value:
             return hprof_data.parse_string_record(
                 tag=tag, time_offset_us=time_offset_us, data=data
@@ -215,7 +215,7 @@ class StringRecord(Record):
     def create(tag, time_offset_us, data):
         byte_stream = ByteStream(data)
         heap_id = byte_stream.next_four_bytes()
-        string = byte_stream.remainder().tostring()
+        string = byte_stream.remainder().tobytes().decode("utf-8")
         return StringRecord(tag, time_offset_us, heap_id, string)
 
 
@@ -503,7 +503,7 @@ class HprofInstance(HprofObject):
                 assert key not in self.fields.__dict__
 
             if len(value) == 1:
-                setattr(self.fields, key, value.values()[0])
+                setattr(self.fields, key, next(iter(value.values())))
             else:
                 # There is a conflict in the class hierarchy (e.g. privates with the
                 # same name), so we need to store a dictionary.
