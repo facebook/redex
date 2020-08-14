@@ -34,7 +34,7 @@ def parse_hprof_dump(instream):
             break
         if byte == b"\x00":
             break
-        tag.append(byte)
+        tag += byte
     tag = tag.decode("utf-8")  # UTF8 should be close enough to modified UTF8.
 
     big_endian_unsigned_4byte_integer = struct.Struct(b">I")
