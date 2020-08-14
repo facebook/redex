@@ -15,6 +15,7 @@
 #include "ControlFlow.h"
 #include "DisjointUnionAbstractDomain.h"
 #include "HashedAbstractPartition.h"
+#include "HashedSetAbstractDomain.h"
 #include "ObjectDomain.h"
 #include "ObjectWithImmutAttr.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
@@ -41,6 +42,8 @@
  * check if they are pointing to the same object in the abstract heap.
  */
 using SingletonObjectDomain = sparta::ConstantAbstractDomain<const DexField*>;
+
+using IntegerSetDomain = sparta::HashedSetAbstractDomain<int64_t>;
 
 using StringSetDomain = sparta::PatriciaTreeSetAbstractDomain<const DexString*>;
 
@@ -69,6 +72,7 @@ using AbstractHeapPointer =
 using ConstantValue =
     sparta::DisjointUnionAbstractDomain<SignedConstantDomain,
                                         SingletonObjectDomain,
+                                        IntegerSetDomain,
                                         StringSetDomain,
                                         StringDomain,
                                         ConstantClassObjectDomain,
