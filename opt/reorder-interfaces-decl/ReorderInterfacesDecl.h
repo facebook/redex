@@ -9,9 +9,9 @@
 
 #include "Pass.h"
 
-class ReorderInterfacesPass : public Pass {
+class ReorderInterfacesDeclPass : public Pass {
  public:
-  ReorderInterfacesPass() : Pass("ReorderInterfacesPass") {}
+  ReorderInterfacesDeclPass() : Pass("ReorderInterfacesDeclPass") {}
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 };

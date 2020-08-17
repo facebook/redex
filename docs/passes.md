@@ -502,9 +502,9 @@ Logview and bug reports are configured to automatically undo this renaming.
 See related:
 * [`ObfuscatePass`](#obfuscatepass)
 
-## ReorderInterfacesPass
+## ReorderInterfacesDeclPass
 
-`ReorderInterfacesPass` list for each class by how frquently the Interfaces
+`ReorderInterfacesDeclPass` list for each class by how frquently the Interfaces
 are called. The Interface list is searched linearly when an Interface is called,
 so calling an Interface at the list will be faster. An alphabetical sort is used
 for tie-breaks in number of incoming calls to preserve consistency across

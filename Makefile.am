@@ -296,7 +296,7 @@ libopt_la_SOURCES = \
 	opt/remove_gotos/RemoveGotos.cpp \
 	opt/remove-unused-args/RemoveUnusedArgs.cpp \
 	opt/renameclasses/RenameClassesV2.cpp \
-	opt/reorder-interfaces/ReorderInterfaces.cpp \
+	opt/reorder-interfaces-decl/ReorderInterfacesDecl.cpp \
 	opt/reduce-array-literals/ReduceArrayLiterals.cpp \
 	opt/reduce-gotos/ReduceGotos.cpp \
 	opt/resolve-refs/ResolveRefsPass.cpp \

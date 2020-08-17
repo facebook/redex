@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "ReorderInterfaces.h"
+#include "ReorderInterfacesDecl.h"
 
 #include <unordered_map>
 
@@ -30,9 +30,9 @@ using CallFrequencyMap = std::unordered_map<const DexType*, int>;
 /**
  * Helper class to implement the pass
  */
-class ReorderInterfacesImpl {
+class ReorderInterfacesDeclImpl {
  public:
-  explicit ReorderInterfacesImpl(Scope& scope) : m_scope(scope) {}
+  explicit ReorderInterfacesDeclImpl(Scope& scope) : m_scope(scope) {}
   void run();
 
  private:
@@ -53,7 +53,7 @@ class ReorderInterfacesImpl {
  * Run the pass by first computing call frequencies for each interface
  * then sorting the list of Interfaces for each Class.
  */
-void ReorderInterfacesImpl::run() {
+void ReorderInterfacesDeclImpl::run() {
   // Check out each instruction and process if it is a function invoke
   walk::opcodes(m_scope,
                 [](DexMethod*) { return true; },
@@ -70,9 +70,10 @@ void ReorderInterfacesImpl::run() {
  * Check whether the given instruction is a call to an Interface.
  * If so, increment the call frequency to that Interface.
  *
- * This method is used when we walk the opcodes in ReorderInterfacesImpl::run.
+ * This method is used when we walk the opcodes in
+ * ReorderInterfacesDeclImpl::run.
  */
-void ReorderInterfacesImpl::compute_call_frequencies(IRInstruction* insn) {
+void ReorderInterfacesDeclImpl::compute_call_frequencies(IRInstruction* insn) {
   // Process only call instructions
   if (is_invoke(insn->opcode())) {
     auto callee = insn->get_method();
@@ -98,7 +99,7 @@ void ReorderInterfacesImpl::compute_call_frequencies(IRInstruction* insn) {
  * Sort the list of given Interfaces with respect to the number of incoming
  * calls and return the sorted list
  */
-std::deque<DexType*> ReorderInterfacesImpl::sort_interfaces(
+std::deque<DexType*> ReorderInterfacesDeclImpl::sort_interfaces(
     const std::deque<DexType*>& unsorted_list) {
   std::deque<DexType*> sorted_list;
   // Create list of interfaces and store frequencies
@@ -131,7 +132,7 @@ std::deque<DexType*> ReorderInterfacesImpl::sort_interfaces(
 /**
  * Reorders Interface list for the given Class using the call frequencies
  */
-void ReorderInterfacesImpl::reorder_interfaces_for_class(DexClass* cls) {
+void ReorderInterfacesDeclImpl::reorder_interfaces_for_class(DexClass* cls) {
   const auto& cur_interface_list = cls->get_interfaces()->get_type_list();
 
   // If we have at most one interface implemented by this class,
@@ -153,7 +154,7 @@ void ReorderInterfacesImpl::reorder_interfaces_for_class(DexClass* cls) {
 /**
  * Reorders Interface list for all Classes in the Scope
  */
-void ReorderInterfacesImpl::reorder_interfaces() {
+void ReorderInterfacesDeclImpl::reorder_interfaces() {
   for (auto cls : m_scope) {
     reorder_interfaces_for_class(cls);
   }
@@ -164,13 +165,13 @@ void ReorderInterfacesImpl::reorder_interfaces() {
  * Compute the number of function invocations for each Interface and
  * sort the list of Interfaces for each Class.
  */
-void ReorderInterfacesPass::run_pass(DexStoresVector& stores,
-                                     ConfigFiles& /* unused */,
-                                     PassManager& /* unused */) {
+void ReorderInterfacesDeclPass::run_pass(DexStoresVector& stores,
+                                         ConfigFiles& /* unused */,
+                                         PassManager& /* unused */) {
   auto scope = build_class_scope(stores);
 
-  ReorderInterfacesImpl impl(scope);
+  ReorderInterfacesDeclImpl impl(scope);
   impl.run();
 }
 
-static ReorderInterfacesPass ri_pass;
+static ReorderInterfacesDeclPass ri_pass;
