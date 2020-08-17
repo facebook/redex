@@ -16,6 +16,7 @@
 
 import argparse
 import enum
+import logging
 import os.path
 import struct
 import subprocess
@@ -23,6 +24,10 @@ import sys
 import tempfile
 from array import array
 from collections import defaultdict
+
+
+# Allow missing IDs in some cases to work around seemingly broken hprofs.
+allow_missing_ids = False
 
 
 def parse_hprof_dump(instream):
@@ -341,7 +346,7 @@ class HprofRoot(SimpleSegment):
         super(HprofRoot, self).__init__(heap_tag, object_id)
 
     def resolve(self, hprof_data):
-        self.obj = hprof_data.object_id_dict[self.object_id]
+        self.obj = hprof_data.resolve_object_id(self.object_id)
         del self.object_id
 
     def __str__(self):
@@ -463,7 +468,7 @@ class HprofInstance(HprofObject):
         super(HprofInstance, self).resolve(hprof_data)
 
         # load the class of this instance
-        self.clazz = hprof_data.object_id_dict[self.class_object_id]
+        self.clazz = hprof_data.resolve_object_id(self.class_object_id)
         del self.class_object_id
 
         # To avoid over-writing shadowed fields, we have nested dicts, one for each
@@ -486,11 +491,7 @@ class HprofInstance(HprofObject):
                 name = field.name
 
                 if field.hprof_basic is HprofBasic.OBJECT:
-                    # Resolve non-null value to parsed instance
-                    if value != 0:
-                        value = hprof_data.object_id_dict[value]
-                    else:
-                        value = None
+                    value = hprof_data.resolve_object_id(value)
 
                 self.class_fields[clazz.name][name] = value
                 merged_fields_builder[name][clazz.name] = value
@@ -589,14 +590,14 @@ class HprofClass(HprofObject):
         self.name = hprof_data.lookup_string(load_class_record.class_string_id)
 
         if self.super_class_id > 0:
-            self.super_class = hprof_data.object_id_dict[self.super_class_id]
+            self.super_class = hprof_data.resolve_object_id(self.super_class_id)
             self.super_class.children.append(self)
         else:
             self.super_class = None
         del self.super_class_id
 
         if self.class_loader_id > 0:
-            self.class_loader = hprof_data.object_id_dict[self.class_loader_id]
+            self.class_loader = hprof_data.resolve_object_id(self.class_loader_id)
         else:
             self.class_loader = None
         del self.class_loader_id
@@ -608,11 +609,7 @@ class HprofClass(HprofObject):
         for static_field in self.static_fields:
             static_field.resolve(hprof_data)
             if static_field.hprof_basic == HprofBasic.OBJECT:
-                # Resolve non-null value to parsed instance
-                if static_field.value != 0:
-                    static_field.value = hprof_data.object_id_dict[static_field.value]
-                else:
-                    static_field.value = None
+                static_field.value = hprof_data.resolve_object_id(static_field.value)
             name = static_field.name
 
             # Don't want to overwrite Python internal fields - like __dict__
@@ -727,12 +724,14 @@ class HprofObjectArray(HprofObject):
     def resolve(self, hprof_data):
         super(HprofObjectArray, self).resolve(hprof_data)
 
-        self.clazz = hprof_data.object_id_dict[self.array_class_object_id]
+        self.clazz = hprof_data.resolve_object_id(self.array_class_object_id)
 
         for i, obj in enumerate(self.array_values):
             # Resolve non-null value to parsed instance
             if obj != 0:
-                self.array_values[i] = hprof_data.object_id_dict[obj]
+                self.array_values[i] = hprof_data.resolve_object_id(
+                    obj, "No object for %x (index %d in %x)", obj, i, self.object_id
+                )
             else:
                 self.array_values[i] = None
 
@@ -997,6 +996,19 @@ class HprofData(object):
         for root in self.roots:
             root.resolve(self)
             root.obj.is_root = True
+
+    def resolve_object_id(self, obj_id, fmt=None, *args):
+        if obj_id == 0:
+            return None
+        if obj_id in self.object_id_dict:
+            return self.object_id_dict[obj_id]
+        if allow_missing_ids:
+            if fmt is not None:
+                logging.warning(fmt, *args)
+            return None
+        if fmt is not None:
+            raise RuntimeError(fmt % args)
+        raise RuntimeError(f"No object for {obj_id:x}")
 
     def lookup_string(self, string_id):
         return self.string_id_dict[string_id].string
@@ -1432,8 +1444,18 @@ def java_locals(hprof_data):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--hprof", help="heap dump to generate class list from")
+    parser.add_argument(
+        "--hprof", help="heap dump to generate class list from", required=True
+    )
+    parser.add_argument(
+        "--allow_missing_ids",
+        help="Unresolvable IDs result in only warnings, not errors",
+        action="store_true",
+    )
+
     args = parser.parse_args()
+
+    allow_missing_ids = args.allow_missing_ids
     hp = parse_filename(args.hprof)
     classes = []
     for cls_name, cls in hp.class_name_dict.items():

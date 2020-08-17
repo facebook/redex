@@ -1,5 +1,5 @@
-The script in this directory can parse a heap dump from an android java app 
-and generate the list of classes that have been loaded. 
+The script in this directory can parse a heap dump from an android java app
+and generate the list of classes that have been loaded.
 
 To generate a class list do the following:
 // get the process id of the app
@@ -10,3 +10,7 @@ adb shell am dumpheap <pid> /data/local/tmp/SOMEDUMP.hprof
 adb pull /data/local/tmp/SOMEDUMP.hprof YOUR_DIR_HERE/.
 // pass the heap dump to the python script for parsing and printing out the class list
 python dump_classes_from_hprof.py --hprof YOUR_DIR_HERE/SOMEDUMP.hprof > list_of_classes.txt
+
+Sometimes hprof files seem to be malformed, i.e., an object might be referenced
+but not defined. In some cases it is reasonable to ignore these cases. You may
+try to add `--allow_missing_ids` to the command line.
