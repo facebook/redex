@@ -576,10 +576,6 @@ class DedupBlocksImpl {
   // is located and dedup the common block created from split.
   void split_postfix_blocks(const PostfixSplitGroupMap& dups,
                             cfg::ControlFlowGraph& cfg) {
-    fix_dex_pos_pointers(dups.begin(), dups.end(),
-                         [](auto it) { return it->second.postfix_blocks; },
-                         cfg);
-
     for (const PostfixSplitGroupMap::value_type* entry : get_id_order(dups)) {
       const auto& group = entry->second;
       TRACE(DEDUP_BLOCKS, 4,
