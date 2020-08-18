@@ -268,8 +268,9 @@ void ReBindRefsPass::eval_pass(DexStoresVector&,
                                ConfigFiles& conf,
                                PassManager& mgr) {
   int32_t min_sdk = mgr.get_redex_options().min_sdk;
-  // Disable rebind to external for API level older than 19.
-  if (min_sdk < 19) {
+  // Disable rebind to external for API level older than
+  // m_supported_min_sdk_for_external_refs.
+  if (min_sdk < m_supported_min_sdk_for_external_refs) {
     m_rebind_to_external = false;
     TRACE(BIND, 2, "Disabling rebind to external for min_sdk %d", min_sdk);
   }
