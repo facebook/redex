@@ -248,3 +248,13 @@ TEST(PatriciaTreeMapAbstractPartitionTest, destructiveOperations) {
   EXPECT_TRUE(p6.get(1).is_top());
   EXPECT_TRUE(p6.is_top());
 }
+
+TEST(PatriciaTreeMapAbstractPartitionTest, map) {
+  Partition p1({{1, Domain({"a", "b"})}});
+  bool any_changes = p1.map([](Domain d) { return d; });
+  EXPECT_FALSE(any_changes);
+
+  any_changes = p1.map([](Domain d) { return Domain::bottom(); });
+  EXPECT_TRUE(any_changes);
+  EXPECT_TRUE(p1.is_bottom());
+}
