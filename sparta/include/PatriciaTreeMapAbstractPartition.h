@@ -116,6 +116,13 @@ class PatriciaTreeMapAbstractPartition final
     return *this;
   }
 
+  bool map(std::function<Domain(const Domain&)> f) {
+    if (is_top()) {
+      return false;
+    }
+    return m_map.map(f);
+  }
+
   bool is_top() const override { return m_is_top; }
 
   bool is_bottom() const override { return !m_is_top && m_map.empty(); }
