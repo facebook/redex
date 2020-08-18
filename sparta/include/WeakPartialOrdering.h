@@ -162,7 +162,7 @@ class WeakPartialOrdering final {
   // This is NOT used in the concurrent fixpoint iteration.
   std::vector<WpoIdx> m_toplevel;
   // post DFN of the nodes.
-  std::unordered_map<NodeId, uint32_t> m_post_dfn;
+  std::unordered_map<NodeId, uint32_t, NodeHash> m_post_dfn;
   // This is used when generating a WTO from a WPO.
   // See algorithm ConstructWTO^{BU} in Section 7 of the POPL 2020 paper.
   bool m_lifted;
@@ -264,7 +264,7 @@ class WpoBuilder final {
   WpoBuilder(std::function<std::vector<NodeId>(const NodeId&)> successors,
              std::vector<WpoNodeT>& wpo_space,
              std::vector<WpoIdx>& toplevel,
-             std::unordered_map<NodeId, uint32_t>& post_dfn,
+             std::unordered_map<NodeId, uint32_t, NodeHash>& post_dfn,
              bool lift)
       : m_successors(successors),
         m_wpo_space(wpo_space),
@@ -613,9 +613,9 @@ class WpoBuilder final {
   // A reference to Wpo space that contains only the top level nodes.
   std::vector<WpoIdx>& m_toplevel;
   // A map from NodeId to DFN.
-  std::unordered_map<NodeId, uint32_t> m_dfn;
+  std::unordered_map<NodeId, uint32_t, NodeHash> m_dfn;
   // A map from NodeId to post DFN.
-  std::unordered_map<NodeId, uint32_t>& m_post_dfn;
+  std::unordered_map<NodeId, uint32_t, NodeHash>& m_post_dfn;
   // A map from DFN to NodeId.
   std::vector<NodeId> m_ref;
   // A map from DFN to DFNs of its backedge predecessors.
