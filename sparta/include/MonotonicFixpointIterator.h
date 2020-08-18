@@ -535,7 +535,7 @@ class MonotonicFixpointIterator
                                          std::placeholders::_1));
                 // Filter out duplicate succ nodes.
                 std::vector<NodeId> succ_nodes;
-                std::unordered_set<NodeId> succ_nodes_set;
+                std::unordered_set<NodeId, NodeHash> succ_nodes_set;
                 for (auto node : succ_nodes_tmp) {
                   if (!succ_nodes_set.count(node)) {
                     succ_nodes_set.emplace(node);

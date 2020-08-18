@@ -6,10 +6,14 @@
  */
 
 #include "MonotonicFixpointIterator.h"
+#include "HashedSetAbstractDomain.h"
+#include "PatriciaTreeMapAbstractEnvironment.h"
+#include "PatriciaTreeSet.h"
 
 #include <functional>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
+#include <initializer_list>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -17,7 +21,7 @@
 
 #include <boost/functional/hash.hpp>
 
-#include "HashedSetAbstractDomain.h"
+namespace liveness {
 
 using namespace sparta;
 
@@ -188,17 +192,19 @@ class FixpointEngine final
   const Program& m_program;
 };
 
-class MonotonicFixpointIteratorTest : public ::testing::Test {
+} // namespace liveness
+
+class MonotonicFixpointIteratorLivenessTest : public ::testing::Test {
  protected:
-  MonotonicFixpointIteratorTest() : m_program1("1"), m_program2("1") {}
+  MonotonicFixpointIteratorLivenessTest() : m_program1("1"), m_program2("1") {}
 
   virtual void SetUp() {
     build_program1();
     build_program2();
   }
 
-  Program m_program1;
-  Program m_program2;
+  liveness::Program m_program1;
+  liveness::Program m_program2;
 
  private:
   /*
@@ -214,6 +220,7 @@ class MonotonicFixpointIteratorTest : public ::testing::Test {
    *     }
    */
   void build_program1() {
+    using namespace liveness;
     m_program1.add("1", Statement(/* use: */ {}, /* def: */ {"a"}));
     m_program1.add("2", Statement(/* use: */ {"a"}, /* def: */ {"b"}));
     m_program1.add("3", Statement(/* use: */ {"c", "b"}, /* def: */ {"c"}));
@@ -246,6 +253,7 @@ class MonotonicFixpointIteratorTest : public ::testing::Test {
    *
    */
   void build_program2() {
+    using namespace liveness;
     m_program2.add("1", Statement(/* use: */ {"a", "b"}, /* def: */ {"x"}));
     m_program2.add("2", Statement(/* use: */ {"a", "b"}, /* def: */ {"y"}));
     m_program2.add("3", Statement(/* use: */ {"y", "a"}, /* def: */ {}));
@@ -264,8 +272,9 @@ class MonotonicFixpointIteratorTest : public ::testing::Test {
   }
 };
 
-TEST_F(MonotonicFixpointIteratorTest, program1) {
+TEST_F(MonotonicFixpointIteratorLivenessTest, program1) {
   using namespace std::placeholders;
+  using namespace liveness;
   FixpointEngine fp(this->m_program1);
   fp.run(LivenessDomain());
 
@@ -311,8 +320,9 @@ TEST_F(MonotonicFixpointIteratorTest, program1) {
   EXPECT_TRUE(fp.get_live_out_vars_at("6").elements().empty());
 }
 
-TEST_F(MonotonicFixpointIteratorTest, program2) {
+TEST_F(MonotonicFixpointIteratorLivenessTest, program2) {
   using namespace std::placeholders;
+  using namespace liveness;
   FixpointEngine fp(this->m_program2);
   fp.run(LivenessDomain());
 
@@ -359,4 +369,341 @@ TEST_F(MonotonicFixpointIteratorTest, program2) {
 
   ASSERT_TRUE(fp.get_live_in_vars_at("7").is_bottom());
   ASSERT_TRUE(fp.get_live_out_vars_at("7").is_bottom());
+}
+
+namespace numerical {
+
+using namespace sparta;
+
+/*
+ * In order to test the fixpoint iterator, we implement a numerical analysis on
+ * a skeleton language.
+ */
+
+/*
+ * A statement of our language is either:
+ * - An assignment: `x = 0`
+ * - An addition: `x = y + 1`
+ */
+struct Statement {
+  Statement() = default;
+  virtual ~Statement() = default;
+};
+
+struct Assignment : public Statement {
+  Assignment(std::string* variable, unsigned value)
+      : variable(variable), value(value) {}
+
+  std::string* variable;
+  unsigned value;
+};
+
+struct Addition : public Statement {
+  Addition(std::string* result, std::string* left, unsigned right)
+      : result(result), left(left), right(right) {}
+
+  std::string* result;
+  std::string* left;
+  unsigned right;
+};
+
+class BasicBlock;
+
+struct Edge final {
+  Edge(BasicBlock* source, BasicBlock* target)
+      : source(source), target(target) {}
+
+  BasicBlock* source;
+  BasicBlock* target;
+};
+
+class BasicBlock final {
+ public:
+  BasicBlock() = default;
+
+  void add(std::unique_ptr<Statement> statement) {
+    m_statements.push_back(std::move(statement));
+  }
+
+  void add_successor(BasicBlock* successor) {
+    m_edges.push_back(std::make_unique<Edge>(this, successor));
+    auto* edge = m_edges.back().get();
+    m_successors.push_back(edge);
+    successor->m_predecessors.push_back(edge);
+  }
+
+  const std::vector<std::unique_ptr<Statement>>& statements() const {
+    return m_statements;
+  }
+
+ private:
+  std::vector<std::unique_ptr<Statement>> m_statements;
+  std::vector<std::unique_ptr<Edge>> m_edges;
+  std::vector<Edge*> m_predecessors;
+  std::vector<Edge*> m_successors;
+
+  friend class ProgramInterface;
+};
+
+class Program final {
+ public:
+  Program() = default;
+
+  BasicBlock* create_block() {
+    m_basic_blocks.push_back(std::make_unique<BasicBlock>());
+    return m_basic_blocks.back().get();
+  }
+
+  void set_entry(BasicBlock* entry) { m_entry = entry; }
+
+  void set_exit(BasicBlock* exit) { m_exit = exit; }
+
+ private:
+  std::vector<std::unique_ptr<BasicBlock>> m_basic_blocks;
+  BasicBlock* m_entry = nullptr;
+  BasicBlock* m_exit = nullptr;
+
+  friend class ProgramInterface;
+};
+
+class ProgramInterface {
+ public:
+  using Graph = Program;
+  using NodeId = BasicBlock*;
+  using EdgeId = Edge*;
+
+  static NodeId entry(const Graph& graph) { return graph.m_entry; }
+  static NodeId exit(const Graph& graph) { return graph.m_exit; }
+  static std::vector<EdgeId> predecessors(const Graph&, const NodeId& node) {
+    return node->m_predecessors;
+  }
+  static std::vector<EdgeId> successors(const Graph&, const NodeId& node) {
+    return node->m_successors;
+  }
+  static NodeId source(const Graph&, const EdgeId& e) { return e->source; }
+  static NodeId target(const Graph&, const EdgeId& e) { return e->target; }
+};
+
+/* A powerset of integers with a widening to top. */
+class IntegerSetAbstractDomain final
+    : public AbstractDomain<IntegerSetAbstractDomain> {
+ public:
+  IntegerSetAbstractDomain() : m_top(true) {}
+
+  explicit IntegerSetAbstractDomain(std::initializer_list<unsigned> values)
+      : m_set(values), m_top(false) {}
+
+  static IntegerSetAbstractDomain bottom() {
+    return IntegerSetAbstractDomain(/* top */ false);
+  }
+
+  static IntegerSetAbstractDomain top() {
+    return IntegerSetAbstractDomain(/* top */ true);
+  }
+
+  bool is_bottom() const override { return !m_top && m_set.empty(); }
+
+  bool is_top() const override { return m_top; }
+
+  void set_to_bottom() override {
+    m_set.clear();
+    m_top = false;
+  }
+
+  void set_to_top() override {
+    m_set.clear();
+    m_top = true;
+  }
+
+  bool leq(const IntegerSetAbstractDomain& other) const override {
+    if (is_bottom() || other.is_top()) {
+      return true;
+    } else if (is_top() || other.is_bottom()) {
+      return false;
+    } else {
+      return m_set.is_subset_of(other.m_set);
+    }
+  }
+
+  bool equals(const IntegerSetAbstractDomain& other) const override {
+    if (is_bottom()) {
+      return other.is_bottom();
+    } else if (is_top()) {
+      return other.is_top();
+    } else {
+      return m_set.equals(other.m_set);
+    }
+  }
+
+  void join_with(const IntegerSetAbstractDomain& other) override {
+    if (is_top() || other.is_bottom()) {
+      return;
+    } else if (is_bottom() || other.is_top()) {
+      *this = other;
+    } else {
+      m_set.union_with(other.m_set);
+    }
+  }
+
+  void widen_with(const IntegerSetAbstractDomain& other) override {
+    if (is_top() || other.is_bottom()) {
+      return;
+    } else if (is_bottom() || other.is_top()) {
+      *this = other;
+    } else if (other.m_set.is_subset_of(m_set)) {
+      return;
+    } else {
+      set_to_top();
+    }
+  }
+
+  void meet_with(const IntegerSetAbstractDomain& other) override {
+    // Never used.
+  }
+
+  void narrow_with(const IntegerSetAbstractDomain& other) override {
+    // Never used.
+  }
+
+  /* Insert a value in the set. */
+  void insert(unsigned value) {
+    if (m_top) {
+      return;
+    }
+
+    m_set.insert(value);
+  }
+
+  /* Add two integer sets. */
+  static IntegerSetAbstractDomain add(const IntegerSetAbstractDomain& lhs,
+                                      const IntegerSetAbstractDomain& rhs) {
+    if (lhs.is_bottom() || rhs.is_bottom()) {
+      return bottom();
+    } else if (lhs.is_top() || rhs.is_top()) {
+      return top();
+    } else {
+      auto result = IntegerSetAbstractDomain::bottom();
+      for (unsigned x : lhs.m_set) {
+        for (unsigned y : rhs.m_set) {
+          result.insert(x + y);
+        }
+      }
+      return result;
+    }
+  }
+
+  friend std::ostream& operator<<(std::ostream& o,
+                                  const IntegerSetAbstractDomain& set) {
+    if (set.is_top()) {
+      o << "T";
+    } else if (set.is_bottom()) {
+      o << "_|_";
+    } else {
+      o << set.m_set;
+    }
+    return o;
+  }
+
+ private:
+  explicit IntegerSetAbstractDomain(bool top) : m_top(top) {}
+
+  PatriciaTreeSet<unsigned> m_set;
+  bool m_top;
+};
+
+using AbstractEnvironment =
+    PatriciaTreeMapAbstractEnvironment<std::string*, IntegerSetAbstractDomain>;
+
+class FixpointEngine final
+    : public MonotonicFixpointIterator<ProgramInterface, AbstractEnvironment> {
+ public:
+  explicit FixpointEngine(const Program& program)
+      : MonotonicFixpointIterator(program) {}
+
+  void analyze_node(const NodeId& bb,
+                    AbstractEnvironment* current_state) const override {
+    for (const auto& statement : bb->statements()) {
+      analyze_statement(statement.get(), current_state);
+    }
+  }
+
+  void analyze_statement(Statement* statement,
+                         AbstractEnvironment* current_state) const {
+    if (auto* assign = dynamic_cast<Assignment*>(statement)) {
+      current_state->set(assign->variable,
+                         IntegerSetAbstractDomain{assign->value});
+    } else if (auto* addition = dynamic_cast<Addition*>(statement)) {
+      current_state->set(addition->result,
+                         IntegerSetAbstractDomain::add(
+                             current_state->get(addition->left),
+                             IntegerSetAbstractDomain{addition->right}));
+    } else {
+      throw std::runtime_error("unreachable");
+    }
+  }
+
+  AbstractEnvironment analyze_edge(
+      const EdgeId&, const AbstractEnvironment& state) const override {
+    return state;
+  }
+};
+
+} // namespace numerical
+
+class MonotonicFixpointIteratorNumericalTest : public ::testing::Test {};
+
+TEST_F(MonotonicFixpointIteratorNumericalTest, program1) {
+  using namespace numerical;
+
+  /*
+   * bb1: x = 1;
+   *      if (...) {
+   * bb2:   y = x + 1;
+   *      } else {
+   * bb3:   y = x + 2;
+   *      }
+   * bb4: return
+   */
+  Program program;
+
+  BasicBlock* bb1 = program.create_block();
+  BasicBlock* bb2 = program.create_block();
+  BasicBlock* bb3 = program.create_block();
+  BasicBlock* bb4 = program.create_block();
+
+  std::string x = "x";
+  std::string y = "y";
+
+  bb1->add(std::make_unique<Assignment>(&x, 1));
+  bb1->add_successor(bb2);
+  bb1->add_successor(bb3);
+
+  bb2->add(std::make_unique<Addition>(&y, &x, 1));
+  bb2->add_successor(bb4);
+
+  bb3->add(std::make_unique<Addition>(&y, &x, 2));
+  bb3->add_successor(bb4);
+
+  program.set_entry(bb1);
+  program.set_exit(bb4);
+
+  FixpointEngine fp(program);
+  fp.run(AbstractEnvironment::top());
+
+  EXPECT_EQ(fp.get_entry_state_at(bb1), AbstractEnvironment::top());
+  EXPECT_EQ(fp.get_exit_state_at(bb1).get(&x), IntegerSetAbstractDomain{1});
+  EXPECT_EQ(fp.get_exit_state_at(bb1).get(&y), IntegerSetAbstractDomain::top());
+
+  EXPECT_EQ(fp.get_entry_state_at(bb2), fp.get_exit_state_at(bb1));
+  EXPECT_EQ(fp.get_exit_state_at(bb2).get(&x), IntegerSetAbstractDomain{1});
+  EXPECT_EQ(fp.get_exit_state_at(bb2).get(&y), IntegerSetAbstractDomain{2});
+
+  EXPECT_EQ(fp.get_entry_state_at(bb3), fp.get_exit_state_at(bb1));
+  EXPECT_EQ(fp.get_exit_state_at(bb3).get(&x), IntegerSetAbstractDomain{1});
+  EXPECT_EQ(fp.get_exit_state_at(bb3).get(&y), IntegerSetAbstractDomain{3});
+
+  EXPECT_EQ(fp.get_entry_state_at(bb4).get(&x), IntegerSetAbstractDomain{1});
+  EXPECT_EQ(fp.get_entry_state_at(bb4).get(&y),
+            (IntegerSetAbstractDomain{2, 3}));
+  EXPECT_EQ(fp.get_exit_state_at(bb4), fp.get_entry_state_at(bb4));
 }
