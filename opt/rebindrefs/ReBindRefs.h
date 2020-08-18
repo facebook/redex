@@ -48,7 +48,7 @@ class ReBindRefsPass : public Pass {
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
-  bool m_rebind_to_external;
+  bool m_rebind_to_external = false;
   int32_t m_supported_min_sdk_for_external_refs;
   std::vector<std::string> m_excluded_externals;
   const api::AndroidSDK* m_min_sdk_api;
