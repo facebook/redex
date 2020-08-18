@@ -62,6 +62,7 @@ void GlobalConfig::bind_config() {
   uint32_t uint32_param;
   // Sorted alphabetically
   bind("agg_method_stats_files", {}, string_vector_param);
+  bind("android_sdk_api_15_file", "", string_param);
   bind("android_sdk_api_21_file", "", string_param);
   bind("android_sdk_api_23_file", "", string_param);
   bind("android_sdk_api_25_file", "", string_param);
