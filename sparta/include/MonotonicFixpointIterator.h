@@ -187,19 +187,20 @@ class MonotonicFixpointIteratorBase
 
   void compute_entry_state(Context* context,
                            const NodeId& node,
-                           Domain* placeholder) {
-    placeholder->set_to_bottom();
+                           Domain* entry_state) {
     if (node == GraphInterface::entry(m_graph)) {
-      placeholder->join_with(context->get_initial_value());
+      entry_state->join_with(context->get_initial_value());
     }
     for (EdgeId edge : GraphInterface::predecessors(m_graph, node)) {
-      placeholder->join_with(this->analyze_edge(
+      entry_state->join_with(this->analyze_edge(
           edge, get_exit_state_at(GraphInterface::source(m_graph, edge))));
     }
   }
 
   void analyze_vertex(Context* context, const NodeId& node) {
-    Domain& entry_state = m_entry_states[node];
+    // Retrieve the entry state. If it does not exist, set it to bottom.
+    Domain& entry_state =
+        m_entry_states.emplace(node, Domain::bottom()).first->second;
     // We should be careful not to access m_exit_states[node] before computing
     // the entry state, as this may silently initialize it with an unwanted
     // value (i.e., the default-constructed value of Domain). This can in turn
@@ -298,7 +299,7 @@ class WTOMonotonicFixpointIterator
       // The state is updated in place within the hash table via side effects,
       // which avoids costly copies and allocations.
       Domain* current_state = &this->m_entry_states[head];
-      Domain new_state;
+      Domain new_state = Domain::bottom();
       this->compute_entry_state(context, head, &new_state);
       if (new_state.leq(*current_state)) {
         // At this point we know that the monotonic iteration sequence has
@@ -443,7 +444,7 @@ class ParallelMonotonicFixpointIterator
           auto head_idx = m_wpo.get_head_of_exit(wpo_idx);
           NodeId head = m_wpo.get_node(head_idx);
           Domain* current_state = &this->m_entry_states[head];
-          Domain new_state;
+          Domain new_state = Domain::bottom();
           this->compute_entry_state(&context, head, &new_state);
           if (new_state.leq(*current_state)) {
             // Component stablized.
@@ -579,7 +580,7 @@ class MonotonicFixpointIterator
       uint32_t head_idx = m_wpo.get_head_of_exit(wpo_idx);
       NodeId head = m_wpo.get_node(head_idx);
       Domain* current_state = &this->m_entry_states[head];
-      Domain new_state;
+      Domain new_state = Domain::bottom();
       this->compute_entry_state(&context, head, &new_state);
       if (new_state.leq(*current_state)) {
         // Component stablized.

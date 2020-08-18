@@ -707,3 +707,46 @@ TEST_F(MonotonicFixpointIteratorNumericalTest, program1) {
             (IntegerSetAbstractDomain{2, 3}));
   EXPECT_EQ(fp.get_exit_state_at(bb4), fp.get_entry_state_at(bb4));
 }
+
+TEST_F(MonotonicFixpointIteratorNumericalTest, program2) {
+  using namespace numerical;
+
+  /*
+   * bb1: x = 1;
+   *      while (...) {
+   * bb2:   x = x + 1;
+   *      }
+   * bb3: return
+   */
+  Program program;
+
+  BasicBlock* bb1 = program.create_block();
+  BasicBlock* bb2 = program.create_block();
+  BasicBlock* bb3 = program.create_block();
+
+  std::string x = "x";
+
+  bb1->add(std::make_unique<Assignment>(&x, 1));
+  bb1->add_successor(bb2);
+
+  bb2->add(std::make_unique<Addition>(&x, &x, 1));
+  bb2->add_successor(bb2);
+  bb2->add_successor(bb3);
+
+  program.set_entry(bb1);
+  program.set_exit(bb3);
+
+  FixpointEngine fp(program);
+  fp.run(AbstractEnvironment::top());
+
+  EXPECT_EQ(fp.get_entry_state_at(bb1), AbstractEnvironment::top());
+  EXPECT_EQ(fp.get_exit_state_at(bb1).get(&x), IntegerSetAbstractDomain{1});
+
+  EXPECT_EQ(fp.get_entry_state_at(bb2).get(&x),
+            IntegerSetAbstractDomain::top());
+  EXPECT_EQ(fp.get_exit_state_at(bb2).get(&x), IntegerSetAbstractDomain::top());
+
+  EXPECT_EQ(fp.get_entry_state_at(bb3).get(&x),
+            IntegerSetAbstractDomain::top());
+  EXPECT_EQ(fp.get_exit_state_at(bb3).get(&x), IntegerSetAbstractDomain::top());
+}
