@@ -34,6 +34,7 @@
 
 #include "ABExperimentContext.h"
 #include "CommentFilter.h"
+#include "ControlFlow.h" // To set DEBUG.
 #include "Debug.h"
 #include "DexClass.h"
 #include "DexHasher.h"
@@ -1127,6 +1128,8 @@ int main(int argc, char* argv[]) {
 
     slow_invariants_debug =
         args.config.get("slow_invariants_debug", false).asBool();
+    cfg::ControlFlowGraph::DEBUG =
+        cfg::ControlFlowGraph::DEBUG || slow_invariants_debug;
     if (slow_invariants_debug) {
       std::cerr << "Slow invariants enabled." << std::endl;
     }

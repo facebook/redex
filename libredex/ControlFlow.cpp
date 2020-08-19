@@ -591,6 +591,8 @@ std::ostream& operator<<(std::ostream& os, const Edge& e) {
   not_reached();
 }
 
+bool ControlFlowGraph::DEBUG = false;
+
 ControlFlowGraph::ControlFlowGraph(IRList* ir,
                                    reg_t registers_size,
                                    bool editable)

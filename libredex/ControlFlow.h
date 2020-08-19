@@ -412,7 +412,7 @@ struct DominatorInfo {
 class ControlFlowGraph {
 
  public:
-  static constexpr bool DEBUG{false};
+  static bool DEBUG;
 
   ControlFlowGraph() = default;
   ControlFlowGraph(const ControlFlowGraph&) = delete;
