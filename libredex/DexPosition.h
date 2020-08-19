@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 class DexClass;
@@ -29,6 +30,9 @@ struct DexPosition final {
 
   void bind(DexString* method_, DexString* file_);
   bool operator==(const DexPosition&) const;
+
+  static std::unique_ptr<DexPosition> make_synthetic_entry_position(
+      const DexMethod* method);
 };
 
 class PositionMapper {

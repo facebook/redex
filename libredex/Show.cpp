@@ -983,14 +983,20 @@ std::string show(const DexDebugInstruction* insn) {
 }
 
 std::ostream& operator<<(std::ostream& o, const DexPosition& pos) {
+  if (pos.method != nullptr) {
+    o << *pos.method;
+  } else {
+    o << "Unknown method";
+  }
+  o << "(";
   if (pos.file == nullptr) {
     o << "Unknown source";
   } else {
     o << *pos.file;
   }
-  o << ":" << pos.line;
+  o << ":" << pos.line << ")";
   if (pos.parent != nullptr) {
-    o << " (parent: " << pos.parent << ")";
+    o << " [parent: " << pos.parent << "]";
   }
   return o;
 }

@@ -53,8 +53,12 @@ void inline_tail_call(DexMethod* caller,
 /*
  * Inline `callee` into `caller` at `pos` but not check if the caller method has
  * the permit to call the inlined code.
+ *
+ * `caller_method` is only used to synthesize a DexPosition entry, if necessary.
+ * It is permissable to use nullptr, in which case no insertion takes place.
  */
-void inline_method_unsafe(IRCode* caller,
+void inline_method_unsafe(const DexMethod* caller_method,
+                          IRCode* caller,
                           IRCode* callee,
                           const IRList::iterator& pos);
 

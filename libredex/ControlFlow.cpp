@@ -845,6 +845,10 @@ boost::dynamic_bitset<> ControlFlowGraph::visit() const {
 
 void ControlFlowGraph::simplify() {
   remove_unreachable_blocks();
+  // FIXME: "Empty" blocks with only `DexPosition`s should be merged
+  //        into their successors for consistency. Otherwise
+  //        `remove_empty_blocks` will remove them, which it will not
+  //        if they are at the head of a non-empty block.
   remove_empty_blocks();
 }
 

@@ -30,6 +30,24 @@ bool DexPosition::operator==(const DexPosition& that) const {
            *parent == *that.parent));
 }
 
+std::unique_ptr<DexPosition> DexPosition::make_synthetic_entry_position(
+    const DexMethod* method) {
+  auto method_str = DexString::make_string(show_deobfuscated(method));
+
+  // For source, see if the class has a source.
+  DexString* source = nullptr;
+  auto cls = type_class(method->get_class());
+  if (cls != nullptr) {
+    source = cls->get_source_file();
+  }
+  // Fall back to "UnknownSource".
+  if (source == nullptr) {
+    source = DexString::make_string("UnknownSource");
+  }
+
+  return std::make_unique<DexPosition>(method_str, source, 0);
+}
+
 void RealPositionMapper::register_position(DexPosition* pos) {
   m_pos_line_map[pos] = -1;
 }

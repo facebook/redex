@@ -47,7 +47,6 @@ class IRCode {
   // exposing the param names should be enough
   std::unique_ptr<DexDebugItem> m_dbg;
 
-  IRList::iterator main_block() { return m_ir_list->main_block(); }
   IRList::iterator make_if_block(IRList::iterator cur,
                                  IRInstruction* insn,
                                  IRList::iterator* if_block) {
@@ -273,6 +272,8 @@ class IRCode {
   IRList::reverse_iterator rend() { return m_ir_list->rend(); }
   IRList::const_reverse_iterator rbegin() const { return m_ir_list->rbegin(); }
   IRList::const_reverse_iterator rend() const { return m_ir_list->rend(); }
+
+  IRList::iterator main_block() { return m_ir_list->main_block(); }
 
   IRList::iterator erase(IRList::iterator it) { return m_ir_list->erase(it); }
   IRList::iterator erase_and_dispose(IRList::iterator it) {
