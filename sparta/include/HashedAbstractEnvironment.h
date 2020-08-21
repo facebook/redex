@@ -116,13 +116,15 @@ class HashedAbstractEnvironment final
     return this->get_value()->m_map;
   }
 
-  Domain get(const Variable& variable) const {
+  const Domain& get(const Variable& variable) const {
     if (this->is_bottom()) {
-      return Domain::bottom();
+      static const Domain bottom = Domain::bottom();
+      return bottom;
     }
     auto binding = this->get_value()->m_map.find(variable);
     if (binding == this->get_value()->m_map.end()) {
-      return Domain::top();
+      static const Domain top = Domain::top();
+      return top;
     }
     return binding->second;
   }

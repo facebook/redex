@@ -76,13 +76,15 @@ class HashedAbstractPartition final
     return m_map;
   }
 
-  Domain get(const Label& label) const {
+  const Domain& get(const Label& label) const {
     if (is_top()) {
-      return Domain::top();
+      static const Domain top = Domain::top();
+      return top;
     }
     auto binding = m_map.find(label);
     if (binding == m_map.end()) {
-      return Domain::bottom();
+      static const Domain bottom = Domain::bottom();
+      return bottom;
     }
     return binding->second;
   }
