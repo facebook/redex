@@ -454,6 +454,20 @@ DexOutput::DexOutput(
   m_force_class_data_end_of_file = post_lowering != nullptr;
   m_gtypes = new GatheredTypes(classes, post_lowering);
   dodx = m_gtypes->get_dodx(m_output);
+
+  always_assert_log(
+      dodx->method_to_idx().size() <= kMaxMethodRefs,
+      "Trying to encode too many method refs in dex %lu: %lu (limit: %lu)",
+      m_dex_number,
+      dodx->method_to_idx().size(),
+      kMaxMethodRefs);
+  always_assert_log(
+      dodx->field_to_idx().size() <= kMaxFieldRefs,
+      "Trying to encode too many field refs in dex %lu: %lu (limit: %lu)",
+      m_dex_number,
+      dodx->field_to_idx().size(),
+      kMaxFieldRefs);
+
   m_filename = path;
   m_pos_mapper = pos_mapper;
   m_method_to_id = method_to_id;
@@ -829,18 +843,6 @@ void DexOutput::generate_field_data() {
 }
 
 void DexOutput::generate_method_data() {
-  always_assert_log(
-      dodx->method_to_idx().size() <= kMaxMethodRefs,
-      "Trying to encode too many method refs in dex %lu: %lu (limit: %lu)",
-      m_dex_number,
-      dodx->method_to_idx().size(),
-      kMaxMethodRefs);
-  always_assert_log(
-      dodx->field_to_idx().size() <= kMaxFieldRefs,
-      "Trying to encode too many field refs in dex %lu: %lu (limit: %lu)",
-      m_dex_number,
-      dodx->field_to_idx().size(),
-      kMaxFieldRefs);
   auto methodids = (dex_method_id*)(m_output + hdr.method_ids_off);
   for (auto& it : dodx->method_to_idx()) {
     auto method = it.first;
