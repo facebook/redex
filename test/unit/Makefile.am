@@ -222,6 +222,7 @@ ir_typechecker_test_SOURCES = IRTypeCheckerTest.cpp
 ir_typechecker_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
 java_parser_util_test_SOURCES = JavaParserUtilTest.cpp
+java_parser_util_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
 literals_test_SOURCES = LiteralsTest.cpp
 
