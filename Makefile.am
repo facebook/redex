@@ -78,6 +78,7 @@ libredex_la_SOURCES = \
 	libredex/IRTypeChecker.cpp \
 	libredex/IRTypeChecker.cpp \
 	libredex/JarLoader.cpp \
+	libredex/JavaParserUtil.cpp \
 	libredex/JsonWrapper.cpp \
 	libredex/KeepReason.cpp \
 	libredex/Match.cpp \

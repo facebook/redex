@@ -58,6 +58,7 @@ check_PROGRAMS = \
     ir_instruction_test \
     ir_list_test \
     ir_typechecker_test \
+    java_parser_util_test \
     literals_test \
     local_dce_test \
     local_pointers_test \
@@ -216,6 +217,8 @@ ir_list_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
 ir_typechecker_test_SOURCES = IRTypeCheckerTest.cpp
 ir_typechecker_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
+
+java_parser_util_test_SOURCES = JavaParserUtilTest.cpp
 
 literals_test_SOURCES = LiteralsTest.cpp
 
