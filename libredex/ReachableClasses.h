@@ -20,6 +20,7 @@ struct ReachableClassesConfig {
   bool analyze_native_lib_reachability = true;
   std::vector<std::string> keep_methods;
   std::vector<std::string> json_serde_supercls;
+  std::vector<std::string> fbjni_json_files;
 
   ReachableClassesConfig() {}
 
@@ -34,6 +35,7 @@ struct ReachableClassesConfig {
 
     config.get("keep_methods", {}, keep_methods);
     config.get("json_serde_supercls", {}, json_serde_supercls);
+    config.get("fbjni_json_files", {}, fbjni_json_files);
   }
 };
 

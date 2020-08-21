@@ -63,12 +63,16 @@ DexField* DexFieldRef::make_concrete(DexAccessFlags access_flags,
   return that;
 }
 
-DexFieldRef* DexField::get_field(const std::string& full_descriptor) {
-  auto fdt = dex_member_refs::parse_field(full_descriptor);
+DexFieldRef* DexField::get_field(
+    const dex_member_refs::FieldDescriptorTokens& fdt) {
   auto cls = DexType::get_type(fdt.cls.c_str());
   auto name = DexString::get_string(fdt.name);
   auto type = DexType::get_type(fdt.type.c_str());
   return DexField::get_field(cls, name, type);
+}
+
+DexFieldRef* DexField::get_field(const std::string& full_descriptor) {
+  return get_field(dex_member_refs::parse_field(full_descriptor));
 }
 
 DexFieldRef* DexField::make_field(const std::string& full_descriptor) {
@@ -570,9 +574,8 @@ DexMethod* DexMethod::make_method_from(DexMethod* that,
   return m;
 }
 
-template <bool kCheckFormat>
-DexMethodRef* DexMethod::get_method(const std::string& full_descriptor) {
-  auto mdt = dex_member_refs::parse_method<kCheckFormat>(full_descriptor);
+DexMethodRef* DexMethod::get_method(
+    const dex_member_refs::MethodDescriptorTokens& mdt) {
   auto cls = DexType::get_type(mdt.cls.c_str());
   auto name = DexString::get_string(mdt.name);
   std::deque<DexType*> args;
@@ -582,6 +585,12 @@ DexMethodRef* DexMethod::get_method(const std::string& full_descriptor) {
   auto dtl = DexTypeList::get_type_list(std::move(args));
   auto rtype = DexType::get_type(mdt.rtype.c_str());
   return DexMethod::get_method(cls, name, DexProto::get_proto(rtype, dtl));
+}
+
+template <bool kCheckFormat>
+DexMethodRef* DexMethod::get_method(const std::string& full_descriptor) {
+  return get_method(
+      dex_member_refs::parse_method<kCheckFormat>(full_descriptor));
 }
 template DexMethodRef* DexMethod::get_method<false>(const std::string&);
 template DexMethodRef* DexMethod::get_method<true>(const std::string&);

@@ -16,6 +16,7 @@
 
 #include "ClassHierarchy.h"
 #include "DexClass.h"
+#include "FbjniMarker.h"
 #include "Match.h"
 #include "RedexResources.h"
 #include "ReflectionAnalysis.h"
@@ -671,6 +672,10 @@ void init_reachable_classes(const Scope& scope,
         TRACE(PGR, 3, "native_lib: %s", classname.c_str());
         mark_reachable_by_classname(type);
         mark_reachable_by_native(type);
+      }
+
+      if (!config.fbjni_json_files.empty()) {
+        mark_native_classes_from_fbjni_configs(config.fbjni_json_files);
       }
     }
     walk::methods(scope, [&](DexMethod* meth) {

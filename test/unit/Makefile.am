@@ -45,6 +45,7 @@ check_PROGRAMS = \
     evaluate_type_checks_test \
     exception_test \
     extract_native_test \
+    fbjni_marker_test \
     final_inline_test \
     final_inline_v2_test \
     fp_ev_test \
@@ -188,6 +189,8 @@ evaluate_type_checks_test_SOURCES = EvaluateTypeChecksTest.cpp
 exception_test_SOURCES = RedexExceptionTest.cpp
 
 extract_native_test_SOURCES = ExtractNativeTest.cpp
+
+fbjni_marker_test_SOURCES = FbjniMarkerTest.cpp
 
 final_inline_test_SOURCES = FinalInlineTest.cpp
 
