@@ -222,10 +222,11 @@ class PatriciaTreeMap final {
 
   iterator end() const { return iterator(); }
 
-  const mapped_type at(Key key) const {
+  const mapped_type& at(Key key) const {
     const mapped_type* value = ptmap_impl::find_value(encode(key), m_tree);
     if (value == nullptr) {
-      return Value::default_value();
+      static const mapped_type default_value = Value::default_value();
+      return default_value;
     }
     return *value;
   }

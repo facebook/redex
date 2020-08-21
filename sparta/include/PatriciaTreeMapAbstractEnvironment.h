@@ -88,9 +88,10 @@ class PatriciaTreeMapAbstractEnvironment final
     return this->get_value()->m_map;
   }
 
-  Domain get(const Variable& variable) const {
+  const Domain& get(const Variable& variable) const {
     if (this->is_bottom()) {
-      return Domain::bottom();
+      static const Domain bottom = Domain::bottom();
+      return bottom;
     }
     return this->get_value()->m_map.at(variable);
   }
