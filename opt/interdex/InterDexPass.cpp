@@ -232,7 +232,7 @@ void InterDexPass::run_pass(DexStoresVector& stores,
   for (auto& store : stores) {
     if (store.is_root_store()) {
       run_pass(stores, store.get_dexen(), conf, mgr);
-    } else {
+    } else if (!store.is_generated()) {
       wq.add_item(&store);
     }
   }
