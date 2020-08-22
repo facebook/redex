@@ -77,28 +77,29 @@ class DexStoreClassesIterator
   explicit DexStoreClassesIterator(std::vector<DexStore>& stores)
       : m_stores(stores),
         m_current_store(stores.begin()),
-        m_current_classes(m_current_store->get_dexen().begin()) {}
+        m_current_classes(m_current_store->get_dexen().begin()) {
+    advance_end_classes();
+  }
 
   explicit DexStoreClassesIterator(const std::vector<DexStore>& stores)
       : m_stores(const_cast<std::vector<DexStore>&>(stores)),
         m_current_store(m_stores.begin()),
-        m_current_classes(m_current_store->get_dexen().begin()) {}
+        m_current_classes(m_current_store->get_dexen().begin()) {
+    advance_end_classes();
+  }
 
   DexStoreClassesIterator(std::vector<DexStore>& stores,
                           store_iterator current_store,
                           classes_iterator current_classes)
       : m_stores(stores),
         m_current_store(current_store),
-        m_current_classes(current_classes) {}
+        m_current_classes(current_classes) {
+    advance_end_classes();
+  }
 
   DexStoreClassesIterator& operator++() {
     ++m_current_classes;
-    while (m_current_store != m_stores.end() &&
-           m_current_classes != m_stores.back().get_dexen().end() &&
-           m_current_classes == m_current_store->get_dexen().end()) {
-      ++m_current_store;
-      m_current_classes = m_current_store->get_dexen().begin();
-    }
+    advance_end_classes();
     return *this;
   }
 
@@ -117,6 +118,16 @@ class DexStoreClassesIterator
     return m_current_classes != rhs.m_current_classes;
   }
   DexClasses& operator*() { return *m_current_classes; }
+
+ private:
+  void advance_end_classes() {
+    while (m_current_store != m_stores.end() &&
+           m_current_classes != m_stores.back().get_dexen().end() &&
+           m_current_classes == m_current_store->get_dexen().end()) {
+      ++m_current_store;
+      m_current_classes = m_current_store->get_dexen().begin();
+    }
+  }
 };
 
 /**
