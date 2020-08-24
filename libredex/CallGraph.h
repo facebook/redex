@@ -154,25 +154,33 @@ class SingleCalleeStrategy : public BuildStrategy {
 
  protected:
   bool is_definitely_virtual(DexMethod* method) const;
+  virtual DexMethod* resolve_callee(const DexMethod* caller,
+                                    IRInstruction* invoke) const;
 
   const Scope& m_scope;
   std::unordered_set<DexMethod*> m_non_virtual;
   mutable MethodRefCache m_resolved_refs;
 };
 
-class CompleteCallGraphStrategy : public BuildStrategy {
+class MultipleCalleeBaseStrategy : public SingleCalleeStrategy {
+ public:
+  explicit MultipleCalleeBaseStrategy(const Scope& scope);
+
+  CallSites get_callsites(const DexMethod* method) const override = 0;
+  std::vector<const DexMethod*> get_roots() const override = 0;
+
+ protected:
+  std::unique_ptr<const method_override_graph::Graph> m_method_override_graph;
+};
+
+class CompleteCallGraphStrategy : public MultipleCalleeBaseStrategy {
  public:
   explicit CompleteCallGraphStrategy(const Scope& scope);
   CallSites get_callsites(const DexMethod* method) const override;
   std::vector<const DexMethod*> get_roots() const override;
-
- protected:
-  const Scope& m_scope;
-  mutable MethodRefCache m_resolved_refs;
-  std::unique_ptr<const method_override_graph::Graph> m_method_override_graph;
 };
 
-class MultipleCalleeStrategy : public BuildStrategy {
+class MultipleCalleeStrategy : public MultipleCalleeBaseStrategy {
  public:
   explicit MultipleCalleeStrategy(const Scope& scope,
                                   uint32_t big_override_threshold);
@@ -180,13 +188,7 @@ class MultipleCalleeStrategy : public BuildStrategy {
   std::vector<const DexMethod*> get_roots() const override;
 
  protected:
-  bool is_definitely_virtual(DexMethod* method) const;
-
-  const Scope& m_scope;
-  std::unordered_set<DexMethod*> m_non_virtual;
-  std::unique_ptr<const method_override_graph::Graph> m_method_override_graph;
   std::unordered_set<const DexMethod*> m_big_override;
-  mutable MethodRefCache m_resolved_refs;
 };
 
 // A static-method-only API for use with the monotonic fixpoint iterator.

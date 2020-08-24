@@ -45,8 +45,7 @@ CallSites SingleCalleeStrategy::get_callsites(const DexMethod* method) const {
   for (auto& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
     if (is_invoke(insn->opcode())) {
-      auto callee = resolve_method(
-          insn->get_method(), opcode_to_search(insn), m_resolved_refs, method);
+      auto callee = this->resolve_callee(method, insn);
       if (callee == nullptr || is_definitely_virtual(callee)) {
         continue;
       }
@@ -74,8 +73,18 @@ bool SingleCalleeStrategy::is_definitely_virtual(DexMethod* method) const {
   return method->is_virtual() && m_non_virtual.count(method) == 0;
 }
 
+DexMethod* SingleCalleeStrategy::resolve_callee(const DexMethod* caller,
+                                                IRInstruction* invoke) const {
+  return resolve_method(
+      invoke->get_method(), opcode_to_search(invoke), m_resolved_refs, caller);
+}
+
+MultipleCalleeBaseStrategy::MultipleCalleeBaseStrategy(const Scope& scope)
+    : SingleCalleeStrategy(scope),
+      m_method_override_graph(mog::build_graph(scope)) {}
+
 CompleteCallGraphStrategy::CompleteCallGraphStrategy(const Scope& scope)
-    : m_scope(scope), m_method_override_graph(mog::build_graph(scope)) {}
+    : MultipleCalleeBaseStrategy(scope) {}
 
 CallSites CompleteCallGraphStrategy::get_callsites(
     const DexMethod* method) const {
@@ -87,8 +96,7 @@ CallSites CompleteCallGraphStrategy::get_callsites(
   for (auto& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
     if (is_invoke(insn->opcode())) {
-      auto callee = resolve_method(
-          insn->get_method(), opcode_to_search(insn), m_resolved_refs, method);
+      auto callee = this->resolve_callee(method, insn);
       if (callee == nullptr) {
         continue;
       }
@@ -119,11 +127,7 @@ std::vector<const DexMethod*> CompleteCallGraphStrategy::get_roots() const {
 
 MultipleCalleeStrategy::MultipleCalleeStrategy(const Scope& scope,
                                                uint32_t big_override_threshold)
-    : m_scope(scope) {
-  m_method_override_graph = mog::build_graph(scope);
-  auto non_virtual_vec =
-      mog::get_non_true_virtuals(*m_method_override_graph, scope);
-  m_non_virtual.insert(non_virtual_vec.begin(), non_virtual_vec.end());
+    : MultipleCalleeBaseStrategy(scope) {
   // Gather big overrides true virtual methods.
   ConcurrentSet<const DexMethod*> bigoverrides;
   walk::parallel::code(scope, [&](const DexMethod* method, IRCode& code) {
@@ -157,10 +161,6 @@ MultipleCalleeStrategy::MultipleCalleeStrategy(const Scope& scope,
   }
 }
 
-bool MultipleCalleeStrategy::is_definitely_virtual(DexMethod* method) const {
-  return method->is_virtual() && m_non_virtual.count(method) == 0;
-}
-
 CallSites MultipleCalleeStrategy::get_callsites(const DexMethod* method) const {
   CallSites callsites;
   auto* code = const_cast<IRCode*>(method->get_code());
@@ -170,8 +170,7 @@ CallSites MultipleCalleeStrategy::get_callsites(const DexMethod* method) const {
   for (auto& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
     if (is_invoke(insn->opcode())) {
-      auto callee = resolve_method(
-          insn->get_method(), opcode_to_search(insn), m_resolved_refs, method);
+      auto callee = this->resolve_callee(method, insn);
       if (callee == nullptr) {
         continue;
       }
