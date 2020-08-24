@@ -366,7 +366,8 @@ class DexOutput {
   void finalize_header();
   void init_header_offsets(const std::string& dex_magic);
   void write_symbol_files();
-  void align_output() { m_offset = (m_offset + 3) & ~3; }
+  uint32_t align(uint32_t offset) { return (offset + 3) & ~3; }
+  void align_output() { m_offset = align(m_offset); }
   void emit_locator(Locator locator);
   void emit_magic_locators();
   std::unique_ptr<Locator> locator_for_descriptor(

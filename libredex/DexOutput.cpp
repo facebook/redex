@@ -799,8 +799,7 @@ void DexOutput::generate_type_data() {
 
 void DexOutput::generate_typelist_data() {
   std::vector<DexTypeList*>& typel = dodx->typelist_list();
-  align_output();
-  uint32_t tl_start = m_offset;
+  uint32_t tl_start = align(m_offset);
   size_t num_tls = 0;
   for (DexTypeList* tl : typel) {
     if (tl->get_type_list().size() == 0) {
@@ -814,6 +813,7 @@ void DexOutput::generate_typelist_data() {
     m_offset += size;
     m_stats.num_type_lists++;
   }
+  /// insert_map_item returns early if num_tls is zero
   insert_map_item(TYPE_TYPE_LIST, (uint32_t)num_tls, tl_start,
                   m_offset - tl_start);
 }
@@ -929,8 +929,7 @@ void DexOutput::generate_code_items(const std::vector<SortMode>& mode) {
    * Optimization note:  We should pass a sort routine to the
    * emitlist to optimize pagecache efficiency.
    */
-  align_output();
-  uint32_t ci_start = m_offset;
+  uint32_t ci_start = align(m_offset);
   sync_all(*m_classes);
 
   // Get all methods.
@@ -987,6 +986,7 @@ void DexOutput::generate_code_items(const std::vector<SortMode>& mode) {
     m_stats.num_instructions += code->get_instructions().size();
     m_stats.instruction_bytes += insns_size * 2;
   }
+  /// insert_map_item returns early if m_code_item_emits is empty
   insert_map_item(TYPE_CODE_ITEM, (uint32_t)m_code_item_emits.size(), ci_start,
                   m_offset - ci_start);
 }
@@ -1136,7 +1136,7 @@ void DexOutput::unique_asets(annomap_t& annomap,
                              asetmap_t& asetmap,
                              std::vector<DexAnnotationSet*>& asetlist) {
   int asetcnt = 0;
-  uint32_t mentry_offset = m_offset;
+  uint32_t mentry_offset = align(m_offset);
   std::map<std::vector<uint32_t>, uint32_t> aset_offsets;
   for (auto aset : asetlist) {
     if (asetmap.count(aset)) continue;
@@ -1147,6 +1147,7 @@ void DexOutput::unique_asets(annomap_t& annomap,
       continue;
     }
     /* Insert new aset in tracking structs */
+    align_output();
     aset_offsets[aset_bytes] = m_offset;
     asetmap[aset] = m_offset;
     /* Not a dupe, encode... */
@@ -1165,7 +1166,7 @@ void DexOutput::unique_xrefs(asetmap_t& asetmap,
                              xrefmap_t& xrefmap,
                              std::vector<ParamAnnotations*>& xreflist) {
   int xrefcnt = 0;
-  uint32_t mentry_offset = m_offset;
+  uint32_t mentry_offset = align(m_offset);
   std::map<std::vector<uint32_t>, uint32_t> xref_offsets;
   for (auto xref : xreflist) {
     if (xrefmap.count(xref)) continue;
@@ -1182,6 +1183,7 @@ void DexOutput::unique_xrefs(asetmap_t& asetmap,
       continue;
     }
     /* Insert new xref in tracking structs */
+    align_output();
     xref_offsets[xref_bytes] = m_offset;
     xrefmap[xref] = m_offset;
     /* Not a dupe, encode... */
@@ -1201,7 +1203,7 @@ void DexOutput::unique_adirs(asetmap_t& asetmap,
                              adirmap_t& adirmap,
                              std::vector<DexAnnotationDirectory*>& adirlist) {
   int adircnt = 0;
-  uint32_t mentry_offset = m_offset;
+  uint32_t mentry_offset = align(m_offset);
   std::map<std::vector<uint32_t>, uint32_t> adir_offsets;
   for (auto adir : adirlist) {
     if (adirmap.count(adir)) continue;
@@ -1212,6 +1214,7 @@ void DexOutput::unique_adirs(asetmap_t& asetmap,
       continue;
     }
     /* Insert new adir in tracking structs */
+    align_output();
     adir_offsets[adir_bytes] = m_offset;
     adirmap[adir] = m_offset;
     /* Not a dupe, encode... */
@@ -1266,7 +1269,6 @@ void DexOutput::generate_annotations() {
     ad->gather_xrefs(xreflist);
   }
   unique_annotations(annomap, annolist);
-  align_output();
   unique_asets(annomap, asetmap, asetlist);
   unique_xrefs(asetmap, xrefmap, xreflist);
   unique_adirs(asetmap, xrefmap, adirmap, lad);
@@ -2402,7 +2404,6 @@ void DexOutput::prepare(SortMode string_mode,
     generate_class_data_items();
   }
   generate_map();
-  align_output();
   finalize_header();
   compute_method_to_id_map(dodx, m_classes, hdr.signature, m_method_to_id);
 }
