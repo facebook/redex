@@ -578,7 +578,7 @@ def copy_file_to_out_dir(tmp, apk_output_path, name, human_name, out_name):
     output_path = os.path.join(output_dir, out_name)
     tmp_path = tmp + "/" + name
     if os.path.isfile(tmp_path):
-        subprocess.check_call(["cp", tmp_path, output_path])
+        shutil.copy2(tmp_path, output_path)
         log("Copying " + human_name + " map to output dir")
         logging.warning("Copying " + human_name + " map to output_dir: " + output_path)
     else:
