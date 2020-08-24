@@ -325,6 +325,7 @@ libopt_la_SOURCES = \
 	opt/track_resources/TrackResources.cpp \
 	opt/throw-propagation/ThrowPropagationPass.cpp \
 	opt/type-analysis/GlobalTypeAnalysisPass.cpp \
+	opt/type-analysis/TypeAnalysisCallGraphGenerationPass.cpp \
 	opt/unreferenced_interfaces/UnreferencedInterfaces.cpp \
 	opt/unmark_proguard_keep/UnmarkProguardKeep.cpp \
 	opt/up-code-motion/UpCodeMotion.cpp \

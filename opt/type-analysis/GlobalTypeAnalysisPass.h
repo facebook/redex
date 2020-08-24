@@ -45,7 +45,7 @@ class GlobalTypeAnalysisPass : public Pass {
   };
 
   explicit GlobalTypeAnalysisPass(Config config)
-      : Pass("GlobalTypeAnalysisPass"), m_config(config) {}
+      : Pass("GlobalTypeAnalysisPass", Pass::ANALYSIS), m_config(config) {}
 
   GlobalTypeAnalysisPass() : GlobalTypeAnalysisPass(Config()) {}
 
@@ -65,6 +65,13 @@ class GlobalTypeAnalysisPass : public Pass {
       const type_analyzer::Transform::NullAssertionSet& null_assertion_set,
       PassManager& mgr);
 
+  std::shared_ptr<type_analyzer::global::GlobalTypeAnalyzer> get_result() {
+    return m_result;
+  }
+
+  void destroy_analysis_result() override { m_result = nullptr; }
+
  private:
   Config m_config;
+  std::shared_ptr<type_analyzer::global::GlobalTypeAnalyzer> m_result = nullptr;
 };
