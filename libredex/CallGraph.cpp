@@ -83,6 +83,71 @@ MultipleCalleeBaseStrategy::MultipleCalleeBaseStrategy(const Scope& scope)
     : SingleCalleeStrategy(scope),
       m_method_override_graph(mog::build_graph(scope)) {}
 
+std::vector<const DexMethod*> MultipleCalleeBaseStrategy::get_roots() const {
+  std::vector<const DexMethod*> roots;
+  MethodSet emplaced_methods;
+  // Gather clinits and root methods, and the methods that override or
+  // overriden by the root methods.
+  auto add_root_method_overrides = [&](const DexMethod* method) {
+    if (!method->get_code() || root(method) || method->is_external()) {
+      // No need to add root methods, they will be added anyway.
+      return;
+    }
+    if (!emplaced_methods.count(method)) {
+      roots.emplace_back(method);
+      emplaced_methods.emplace(method);
+    }
+  };
+  walk::methods(m_scope, [&](DexMethod* method) {
+    if (method::is_clinit(method)) {
+      roots.emplace_back(method);
+      emplaced_methods.emplace(method);
+      return;
+    }
+    if (!root(method) && !(method->is_virtual() &&
+                           is_interface(type_class(method->get_class())) &&
+                           !can_rename(method))) {
+      // For root methods and dynamically added classes, created via
+      // Proxy.newProxyInstance, we need to add them and their overrides and
+      // overriden to roots.
+      return;
+    }
+    if (!emplaced_methods.count(method)) {
+      roots.emplace_back(method);
+      emplaced_methods.emplace(method);
+    }
+    const auto& overriding_methods =
+        mog::get_overriding_methods(*m_method_override_graph, method);
+    for (auto overriding_method : overriding_methods) {
+      add_root_method_overrides(overriding_method);
+    }
+    const auto& overiden_methods =
+        mog::get_overridden_methods(*m_method_override_graph, method);
+    for (auto overiden_method : overiden_methods) {
+      add_root_method_overrides(overiden_method);
+    }
+  });
+  // Gather methods that override or implement external methods as well.
+  for (auto& pair : m_method_override_graph->nodes()) {
+    auto method = pair.first;
+    if (!method->is_external()) {
+      continue;
+    }
+    const auto& overriding_methods =
+        mog::get_overriding_methods(*m_method_override_graph, method);
+    for (auto* overriding : overriding_methods) {
+      if (!overriding->is_external() && !emplaced_methods.count(overriding)) {
+        roots.emplace_back(overriding);
+        emplaced_methods.emplace(overriding);
+      }
+    }
+  }
+  // Add additional roots if needed.
+  auto additional_roots = get_additional_roots(emplaced_methods);
+  roots.insert(roots.end(), additional_roots.begin(), additional_roots.end());
+  return roots;
+}
+
 CompleteCallGraphStrategy::CompleteCallGraphStrategy(const Scope& scope)
     : MultipleCalleeBaseStrategy(scope) {}
 
@@ -198,73 +263,16 @@ CallSites MultipleCalleeStrategy::get_callsites(const DexMethod* method) const {
   return callsites;
 }
 
-std::vector<const DexMethod*> MultipleCalleeStrategy::get_roots() const {
-  std::vector<const DexMethod*> roots;
-  std::unordered_set<const DexMethod*> emplaced_methods;
-  // Gather clinits and root methods, and the methods that override or
-  // overriden by the root methods.
-  auto add_root_method_overrides = [&](const DexMethod* method) {
-    if (!method->get_code() || root(method) || method->is_external()) {
-      // No need to add root methods, they will be added anyway.
-      return;
-    }
-    if (!emplaced_methods.count(method)) {
-      roots.emplace_back(method);
-      emplaced_methods.emplace(method);
-    }
-  };
-  walk::methods(m_scope, [&](DexMethod* method) {
-    if (method::is_clinit(method)) {
-      roots.emplace_back(method);
-      emplaced_methods.emplace(method);
-      return;
-    }
-    if (!root(method) && !(method->is_virtual() &&
-                           is_interface(type_class(method->get_class())) &&
-                           !can_rename(method))) {
-      // For root methods and dynamically added classes, created via
-      // Proxy.newProxyInstance, we need to add them and their overrides and
-      // overriden to roots.
-      return;
-    }
-    if (!emplaced_methods.count(method)) {
-      roots.emplace_back(method);
-      emplaced_methods.emplace(method);
-    }
-    const auto& overriding_methods =
-        mog::get_overriding_methods(*m_method_override_graph, method);
-    for (auto overriding_method : overriding_methods) {
-      add_root_method_overrides(overriding_method);
-    }
-    const auto& overiden_methods =
-        mog::get_overridden_methods(*m_method_override_graph, method);
-    for (auto overiden_method : overiden_methods) {
-      add_root_method_overrides(overiden_method);
-    }
-  });
-  // Gather methods that override or implement external methods as well.
-  for (auto& pair : m_method_override_graph->nodes()) {
-    auto method = pair.first;
-    if (!method->is_external()) {
-      continue;
-    }
-    const auto& overriding_methods =
-        mog::get_overriding_methods(*m_method_override_graph, method);
-    for (auto* overriding : overriding_methods) {
-      if (!overriding->is_external() && !emplaced_methods.count(overriding)) {
-        roots.emplace_back(overriding);
-        emplaced_methods.emplace(overriding);
-      }
-    }
-  }
-  // Add big override methods to root as well.
+// Add big override methods to root as well.
+std::vector<const DexMethod*> MultipleCalleeStrategy::get_additional_roots(
+    const MethodSet& existing_roots) const {
+  std::vector<const DexMethod*> additional_roots;
   for (auto method : m_big_override) {
-    if (!method->is_external() && !emplaced_methods.count(method)) {
-      roots.emplace_back(method);
-      emplaced_methods.emplace(method);
+    if (!method->is_external() && !existing_roots.count(method)) {
+      additional_roots.emplace_back(method);
     }
   }
-  return roots;
+  return additional_roots;
 }
 
 Edge::Edge(NodeId caller, NodeId callee, const IRList::iterator& invoke_it)
@@ -287,7 +295,7 @@ Graph::Graph(const BuildStrategy& strat)
 
   // Obtain the callsites of each method recursively, building the graph in the
   // process.
-  std::unordered_set<const DexMethod*> visited;
+  MethodSet visited;
   auto visit = [&](const auto* caller) {
     auto visit_impl = [&](const auto* caller, auto& visit_fn) {
       if (visited.count(caller) != 0) {
@@ -329,9 +337,10 @@ void Graph::add_edge(const NodeId& caller,
   callee->m_predecessors.emplace_back(edge);
 }
 
-std::unordered_set<const DexMethod*> resolve_callees_in_graph(
-    const Graph& graph, const DexMethod* method, const IRInstruction* insn) {
-  std::unordered_set<const DexMethod*> ret;
+MethodSet resolve_callees_in_graph(const Graph& graph,
+                                   const DexMethod* method,
+                                   const IRInstruction* insn) {
+  MethodSet ret;
   for (const auto& edge_id : graph.node(method)->callees()) {
     auto it = edge_id->invoke_iterator();
     if (it != IRList::iterator() && it->insn == insn) {
