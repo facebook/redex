@@ -51,7 +51,7 @@ class SynthTest1 : public RedexIntegrationTest {
  protected:
   template <typename P>
   bool assert_classes(const DexClasses& classes,
-                      const m::match_t<DexClass, P>& p) {
+                      const m::match_t<DexClass*, P>& p) {
     for (const auto& cls : classes) {
       if (p.matches(cls)) {
         return true;
