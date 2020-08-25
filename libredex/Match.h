@@ -199,7 +199,13 @@ inline auto is_abstract() {
       [](const T* t) { return (bool)(t->get_access() & ACC_ABSTRACT); });
 }
 
-/** Match types which are interfaces */
+/** Match classes that are enums */
+inline auto is_enum() {
+  return matcher<DexClass>(
+      [](const DexClass* cls) { return (bool)(cls->get_access() & ACC_ENUM); });
+}
+
+/** Match classes that are interfaces */
 inline auto is_interface() {
   return matcher<DexClass>([](const DexClass* cls) {
     return (bool)(cls->get_access() & ACC_INTERFACE);
@@ -397,12 +403,6 @@ inline auto is_constructor() {
 inline auto can_be_constructor() {
   return matcher<DexMethodRef>(
       [](const DexMethodRef* meth) { return method::is_constructor(meth); });
-}
-
-/** Match classes that are enums */
-inline auto is_enum() {
-  return matcher<DexClass>(
-      [](const DexClass* cls) { return (bool)(cls->get_access() & ACC_ENUM); });
 }
 
 /** Match classes that have class data */
