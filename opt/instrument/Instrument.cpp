@@ -557,10 +557,10 @@ void patch_array_size(DexClass* analysis_cls,
       // this const can affect other instructions. (Well, we might have a
       // unique const number though.) So, just create a new const load
       // instruction. LocalDCE can clean up the redundant instructions.
-      std::make_tuple(/* m::is_opcode(OPCODE_CONST), */
-                      m::is_opcode(OPCODE_NEW_ARRAY),
-                      m::is_opcode(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT),
-                      m::is_opcode(OPCODE_SPUT_OBJECT)),
+      std::make_tuple(/* m::const_(), */
+                      m::new_array_(),
+                      m::move_result_pseudo_object_(),
+                      m::sput_object_()),
       [&](DexMethod* method,
           cfg::Block*,
           const std::vector<IRInstruction*>& insts) {
@@ -699,7 +699,7 @@ auto generate_sharded_analysis_methods(DexClass* cls,
     bool patched = false;
     walk::matching_opcodes_in_block(
         *new_method,
-        std::make_tuple(m::is_opcode(OPCODE_SGET_OBJECT)),
+        std::make_tuple(m::sget_object_()),
         [&](DexMethod* method,
             cfg::Block*,
             const std::vector<IRInstruction*>& insts) {
@@ -746,9 +746,8 @@ std::vector<DexFieldRef*> patch_sharded_arrays(DexClass* cls,
   const std::string deobfuscated_prefix = "sMethodStats";
   walk::matching_opcodes_in_block(
       *clinit,
-      std::make_tuple(m::is_opcode(OPCODE_NEW_ARRAY),
-                      m::is_opcode(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT),
-                      m::is_opcode(OPCODE_SPUT_OBJECT)),
+      std::make_tuple(m::new_array_(), m::move_result_pseudo_object_(),
+                      m::sput_object_()),
       [&](DexMethod* method,
           cfg::Block*,
           const std::vector<IRInstruction*>& insts) {
@@ -819,9 +818,8 @@ std::vector<DexFieldRef*> patch_sharded_arrays(DexClass* cls,
   patched = false;
   walk::matching_opcodes_in_block(
       *clinit,
-      std::make_tuple(m::is_opcode(OPCODE_NEW_ARRAY),
-                      m::is_opcode(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT),
-                      m::is_opcode(OPCODE_SPUT_OBJECT)),
+      std::make_tuple(m::new_array_(), m::move_result_pseudo_object_(),
+                      m::sput_object_()),
       [&](DexMethod* method,
           cfg::Block*,
           const std::vector<IRInstruction*>& insts) {

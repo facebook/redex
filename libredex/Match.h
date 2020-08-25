@@ -288,6 +288,63 @@ inline auto access(match_t<DexAccessFlags, P> p) {
 ACCESSFLAGS
 #undef AF
 
+/**
+ * For each opcode and pseudo-opcode two matchers with the
+ * following signatures:
+ *
+ *   template <typename P>
+ *   match_t<IRInstruction*> {pred}_(match_t<IRInstruction*, P>)
+ *
+ * Matches instructions whose opcode matches {pred} and additionally matches
+ * the subordinate matcher.
+ *
+ *   match_t<IRInstruction*> {pred}_()
+ *
+ * Matches instructions whose opcode satisfies {pred}.  Note that the matcher's
+ * name has a trailing underscore to protect against opcodes that are also
+ * C++ keywords.
+ */
+#define OPCODE_MATCHER(PRED)                                           \
+  template <typename P>                                                \
+  inline auto PRED##_(match_t<IRInstruction*, P> p) {                  \
+    return matcher<IRInstruction*>(                                    \
+        [p = std::move(p)](const IRInstruction* insn) {                \
+          return opcode::is_##PRED(insn->opcode()) && p.matches(insn); \
+        });                                                            \
+  }                                                                    \
+                                                                       \
+  inline auto PRED##_() { return PRED##_(any<IRInstruction*>()); }
+
+#define OP(_, LC, ...) OPCODE_MATCHER(LC)
+#define IOP(_, LC, ...) OPCODE_MATCHER(LC)
+
+/*
+ * For each oprange, generates two matchers:
+ *
+ *   template <typename P>
+ *   match_t<IRInstruction*> {range}(match_t<IRInstruction*, P>)
+ *
+ * Matches instructions whose opcode is in {range} and additionally matches
+ * the subordinate matcher.
+ *
+ *   match_t<IRInstruction*> {range}()
+ *
+ * Matches instructions whose opcode is in {range}.
+ */
+#define OPRANGE(NAME, ...)                                             \
+  template <typename P>                                                \
+  inline auto NAME(match_t<IRInstruction*, P> p) {                     \
+    return matcher<IRInstruction*>(                                    \
+        [p = std::move(p)](const IRInstruction* insn) {                \
+          return opcode::is_##NAME(insn->opcode()) && p.matches(insn); \
+        });                                                            \
+  }                                                                    \
+                                                                       \
+  inline auto NAME() { return NAME(any<IRInstruction*>()); }
+
+#include "IROpcodes.def"
+#undef OPCODE_MATCHER
+
 /** Match T's which are external */
 template <typename T>
 inline auto is_external() {
@@ -312,123 +369,16 @@ inline auto can_be_constructor() {
       [](const DexMethodRef* meth) { return method::is_constructor(meth); });
 }
 
-/**
- * Matches IRInstructions
- */
-
 /** Any instruction which holds a type reference */
 inline auto has_type() {
   return matcher<IRInstruction*>(
       [](const IRInstruction* insn) { return insn->has_type(); });
 }
 
-/** const-string flavors */
-inline auto const_string() {
-  return matcher<IRInstruction*>([](const IRInstruction* insn) {
-    return insn->opcode() == OPCODE_CONST_STRING;
-  });
-}
-
-/** move-result-pseudo flavors */
-inline auto move_result_pseudo() {
-  return matcher<IRInstruction*>([](const IRInstruction* insn) {
-    return opcode::is_a_move_result_pseudo(insn->opcode());
-  });
-}
-
-/** new-instance flavors */
-template <typename P>
-inline auto new_instance(match_t<IRInstruction*, P> p) {
-  return matcher<IRInstruction*>([p = std::move(p)](const IRInstruction* insn) {
-    return insn->opcode() == OPCODE_NEW_INSTANCE && p.matches(insn);
-  });
-}
-
-inline auto new_instance() { return new_instance(any<IRInstruction*>()); }
-
-/** throw flavors */
-inline auto throwex() {
-  return matcher<IRInstruction*>(
-      [](const IRInstruction* insn) { return insn->opcode() == OPCODE_THROW; });
-}
-
-/** invoke-direct flavors */
-template <typename P>
-inline auto invoke_direct(match_t<IRInstruction*, P> p) {
-  return matcher<IRInstruction*>([p = std::move(p)](const IRInstruction* insn) {
-    return insn->opcode() == OPCODE_INVOKE_DIRECT && p.matches(insn);
-  });
-}
-
-inline auto invoke_direct() { return invoke_direct(any<IRInstruction*>()); }
-
-/** invoke-static flavors */
-template <typename P>
-inline auto invoke_static(match_t<IRInstruction*, P> p) {
-  return matcher<IRInstruction*>([p = std::move(p)](const IRInstruction* insn) {
-    return insn->opcode() == OPCODE_INVOKE_STATIC && p.matches(insn);
-  });
-}
-
-inline auto invoke_static() { return invoke_static(any<IRInstruction*>()); }
-
-/** invoke-virtual flavors */
-template <typename P>
-inline auto invoke_virtual(match_t<IRInstruction*, P> p) {
-  return matcher<IRInstruction*>([p = std::move(p)](const IRInstruction* insn) {
-    return insn->opcode() == OPCODE_INVOKE_VIRTUAL && p.matches(insn);
-  });
-}
-
-inline auto invoke_virtual() { return invoke_virtual(any<IRInstruction*>()); }
-
-/** invoke of any kind */
-template <typename P>
-inline auto invoke(match_t<IRInstruction*, P> p) {
-  return matcher<IRInstruction*>([p = std::move(p)](const IRInstruction* insn) {
-    return opcode::is_an_invoke(insn->opcode()) && p.matches(insn);
-  });
-}
-
-inline auto invoke() { return invoke(any<IRInstruction*>()); }
-
-/** iput flavors */
-template <typename P>
-inline auto iput(match_t<IRInstruction*, P> p) {
-  return matcher<IRInstruction*>([p = std::move(p)](const IRInstruction* insn) {
-    return opcode::is_an_iput(insn->opcode()) && p.matches(insn);
-  });
-}
-
-inline auto iput() { return iput(any<IRInstruction*>()); };
-
-/** iget flavors */
-template <typename P>
-inline auto iget(match_t<IRInstruction*, P> p) {
-  return matcher<IRInstruction*>([p = std::move(p)](const IRInstruction* insn) {
-    return opcode::is_an_iget(insn->opcode()) && p.matches(insn);
-  });
-}
-
-inline auto iget() { return iget(any<IRInstruction*>()); };
-
-/** return-void */
-inline auto return_void() {
-  return matcher<IRInstruction*>([](const IRInstruction* insn) {
-    return insn->opcode() == OPCODE_RETURN_VOID;
-  });
-}
-
 /** Matches instructions with specified number of arguments. */
 inline auto has_n_args(size_t n) {
   return matcher<IRInstruction*>(
       [n](const IRInstruction* insn) { return insn->srcs_size() == n; });
-}
-
-/** Matches instructions with specified opcode */
-inline auto is_opcode(IROpcode opcode) {
-  return matcher<IRInstruction*>(
-      [opcode](const IRInstruction* insn) { return insn->opcode() == opcode; });
 }
 
 /** Matchers that map from IRInstruction -> other types */

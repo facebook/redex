@@ -59,7 +59,7 @@ TEST_F(MatchTest, IputBasic) {
   std::vector<IRInstruction*> input{iput.get()};
   std::vector<IRInstruction*> match;
 
-  m::find_insn_match(input, m::iput(), match);
+  m::find_insn_match(input, m::an_iput(), match);
   ASSERT_EQ(match.size(), 1);
   EXPECT_EQ(match[0], iput.get());
 }
@@ -76,7 +76,7 @@ TEST_F(MatchTest, IgetBasic) {
   std::vector<IRInstruction*> input{iget.get()};
   std::vector<IRInstruction*> match;
 
-  m::find_insn_match(input, m::iget(), match);
+  m::find_insn_match(input, m::an_iget(), match);
   ASSERT_EQ(match.size(), 1);
   EXPECT_EQ(match[0], iget.get());
 }
@@ -93,7 +93,7 @@ TEST_F(MatchTest, InvokeBasic) {
   std::vector<IRInstruction*> input{invoke.get()};
   std::vector<IRInstruction*> match;
 
-  m::find_insn_match(input, m::invoke(), match);
+  m::find_insn_match(input, m::an_invoke(), match);
   ASSERT_EQ(match.size(), 1);
   EXPECT_EQ(match[0], invoke.get());
 }
@@ -135,7 +135,7 @@ TEST_F(MatchTest, NotAllMatch) {
   std::vector<IRInstruction*> input{iget.get(), iput.get(), invoke.get()};
   std::vector<IRInstruction*> match;
 
-  m::find_insn_match(input, m::iput(), match);
+  m::find_insn_match(input, m::an_iput(), match);
   ASSERT_EQ(match.size(), 1);
   EXPECT_EQ(match[0], iput.get());
 }
