@@ -107,7 +107,7 @@ TEST_F(MatchTest, opcode_string) {
   std::vector<IRInstruction*> input = {load_str};
   std::vector<IRInstruction*> match;
 
-  m::find_insn_match(input, m::opcode_string(m::equals(str)), match);
+  m::find_insn_match(input, m::has_string(m::equals(str)), match);
   EXPECT_EQ(match[0], load_str);
   delete load_str;
 }
@@ -164,7 +164,7 @@ TEST_F(MatchTest, SameFieldMatch) {
   std::vector<IRInstruction*> match;
 
   m::find_insn_match(
-      input, m::opcode_field(m::member_of<DexFieldRef>(m::equals(ty))), match);
+      input, m::has_field(m::member_of<DexFieldRef>(m::equals(ty))), match);
   EXPECT_EQ(match.size(), 2);
 }
 
@@ -192,7 +192,6 @@ TEST_F(MatchTest, SameMethodMatch) {
   std::vector<IRInstruction*> match;
 
   m::find_insn_match(
-      input, m::opcode_method(m::member_of<DexMethodRef>(m::equals(ty))),
-      match);
+      input, m::has_method(m::member_of<DexMethodRef>(m::equals(ty))), match);
   EXPECT_EQ(match.size(), 1);
 }

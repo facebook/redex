@@ -369,12 +369,6 @@ inline auto can_be_constructor() {
       [](const DexMethodRef* meth) { return method::is_constructor(meth); });
 }
 
-/** Any instruction which holds a type reference */
-inline auto has_type() {
-  return matcher<IRInstruction*>(
-      [](const IRInstruction* insn) { return insn->has_type(); });
-}
-
 /** Matches instructions with specified number of arguments. */
 inline auto has_n_args(size_t n) {
   return matcher<IRInstruction*>(
@@ -383,32 +377,40 @@ inline auto has_n_args(size_t n) {
 
 /** Matchers that map from IRInstruction -> other types */
 template <typename P>
-inline auto opcode_method(match_t<DexMethodRef*, P> p) {
+inline auto has_method(match_t<DexMethodRef*, P> p) {
   return matcher<IRInstruction*>([p = std::move(p)](const IRInstruction* insn) {
     return insn->has_method() && p.matches(insn->get_method());
   });
 }
 
+inline auto has_method() { return has_method(any<DexMethodRef*>()); }
+
 template <typename P>
-inline auto opcode_field(match_t<DexFieldRef*, P> p) {
+inline auto has_field(match_t<DexFieldRef*, P> p) {
   return matcher<IRInstruction*>([p = std::move(p)](const IRInstruction* insn) {
     return insn->has_field() && p.matches(insn->get_field());
   });
 }
 
+inline auto has_field() { return has_field(any<DexFieldRef*>()); }
+
 template <typename P>
-inline auto opcode_type(match_t<DexType*, P> p) {
+inline auto has_type(match_t<DexType*, P> p) {
   return matcher<IRInstruction*>([p = std::move(p)](const IRInstruction* insn) {
     return insn->has_type() && p.matches(insn->get_type());
   });
 }
 
+inline auto has_type() { return has_type(any<DexType*>()); }
+
 template <typename P>
-inline auto opcode_string(match_t<DexString*, P> p) {
+inline auto has_string(match_t<DexString*, P> p) {
   return matcher<IRInstruction*>([p = std::move(p)](const IRInstruction* insn) {
     return insn->has_string() && p.matches(insn->get_string());
   });
 }
+
+inline auto has_string() { return has_string(any<DexString*>()); }
 
 /** Match types which can be assigned to the given type */
 inline auto is_assignable_to(const DexType* parent) {

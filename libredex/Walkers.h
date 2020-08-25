@@ -172,8 +172,8 @@ class walk {
    * auto match = std::make_tuple(
    *     m::const_string(),
    *     m::invoke_static(
-   *         m::opcode_method(m::named<DexMethod>("forName") &&
-   *                          m::on_class<DexMethod>("Ljava/lang/Class;")) &&
+   *         m::has_method(m::named<DexMethod>("forName") &&
+   *                       m::on_class<DexMethod>("Ljava/lang/Class;")) &&
    *         m::has_n_args(1)));
    *
    * match_opcodes(classes,
