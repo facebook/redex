@@ -81,7 +81,7 @@ void Transform::remove_redundant_null_checks(const DexTypeEnvironment& env,
     return;
   }
   auto last_insn = insn_it->insn;
-  if (!is_testz_branch(last_insn->opcode())) {
+  if (!opcode::is_a_testz_branch(last_insn->opcode())) {
     return;
   }
   auto domain = env.get(last_insn->src(0));

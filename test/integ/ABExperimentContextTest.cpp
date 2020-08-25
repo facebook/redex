@@ -30,7 +30,7 @@ void change_called_method(DexMethod* m,
 
   for (const auto& mie : cfg::InstructionIterable(cfg)) {
     IRInstruction* insn = mie.insn;
-    if (is_invoke(insn->opcode())) {
+    if (opcode::is_an_invoke(insn->opcode())) {
 
       auto m_ref = insn->get_method();
       if (m_ref->get_name()->str() == original_method_name) {

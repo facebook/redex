@@ -627,7 +627,7 @@ static bool append_to_partial_candidate(
   }
   pcn->insns.push_back(insn);
   pc->insns_size++;
-  if (!opcode::is_move(opcode)) {
+  if (!opcode::is_a_move(opcode)) {
     // Moves are likely still eliminated by reg-alloc or other opts
     pc->size += insn->size();
   }
@@ -661,8 +661,8 @@ static bool can_outline_insn(const RefChecker& ref_checker,
     if (!ref_checker.check_field(field)) {
       return false;
     }
-    if (is_final(field) &&
-        (is_iput(insn->opcode()) || is_sput(insn->opcode()))) {
+    if (is_final(field) && (opcode::is_an_iput(insn->opcode()) ||
+                            opcode::is_an_sput(insn->opcode()))) {
       return false;
     }
   } else if (insn->has_type()) {
@@ -689,7 +689,7 @@ static bool is_uniquely_reached_via_pred(cfg::Block* block) {
 // the leaf blocks would unconditionally go to.
 static std::unordered_set<cfg::Block*> get_eventual_targets_after_outlining(
     cfg::Block* first_block, const cfg::InstructionIterator& it) {
-  always_assert(is_conditional_branch(it->insn->opcode()) ||
+  always_assert(opcode::is_a_conditional_branch(it->insn->opcode()) ||
                 is_switch(it->insn->opcode()));
   auto get_targets =
       [first_block](
@@ -704,7 +704,7 @@ static std::unordered_set<cfg::Block*> get_eventual_targets_after_outlining(
         auto last_block = big_block->get_last_block();
         auto last_insn_it = last_block->get_last_insn();
         if (last_insn_it != last_block->end() &&
-            (is_conditional_branch(last_insn_it->insn->opcode()) ||
+            (opcode::is_a_conditional_branch(last_insn_it->insn->opcode()) ||
              is_switch(last_insn_it->insn->opcode()))) {
           auto last_insn_cfg_it =
               last_block->to_cfg_instruction_iterator(last_insn_it);
@@ -795,7 +795,8 @@ static bool explore_candidates_from(
     if (!append_to_partial_candidate(reaching_initializeds, insn, pc, pcn)) {
       return false;
     }
-    if (is_conditional_branch(insn->opcode()) || is_switch(insn->opcode())) {
+    if (opcode::is_a_conditional_branch(insn->opcode()) ||
+        is_switch(insn->opcode())) {
       // If the branching structure is such that there's a tree where all
       // leaves nodes unconditionally goto a common block, then we'll attempt
       // to gather a partial candidate tree.
@@ -858,7 +859,7 @@ static bool explore_candidates_from(
     // a trailing consts tends to lead to better results and a faster outliner.)
     if (insn->opcode() == OPCODE_CONST || insn->opcode() == OPCODE_CONST_WIDE ||
         (insn->opcode() == IOPCODE_MOVE_RESULT_PSEUDO_OBJECT && prev_opcode &&
-         is_const(*prev_opcode))) {
+         opcode::is_a_const(*prev_opcode))) {
       continue;
     }
     if (explored_callback) {
@@ -1678,7 +1679,7 @@ class OutlinedMethodCreator {
         if (it != dbg_positions.end()) {
           DexPosition* dbg_pos = it->second;
           if (dbg_pos != last_dbg_pos &&
-              !opcode::is_move_result_pseudo(ci.core.opcode)) {
+              !opcode::is_a_move_result_pseudo(ci.core.opcode)) {
             auto cloned_dbg_pos = std::make_unique<DexPosition>(*dbg_pos);
             cloned_dbg_pos->parent = nullptr;
             code->push_back(std::move(cloned_dbg_pos));

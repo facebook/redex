@@ -1252,20 +1252,20 @@ DexPattern put_x_op(IROpcode opcode,
                     Register src,
                     Register obj_register,
                     Field field) {
-  if (is_iput(opcode)) {
+  if (opcode::is_an_iput(opcode)) {
     return {{opcode}, {src, obj_register}, {}, field};
   }
-  if (is_sput(opcode)) {
+  if (opcode::is_an_sput(opcode)) {
     return {{opcode}, {src}, {}, field};
   }
   not_reached_log("Not supported IROpcode %s", SHOW(opcode));
 }
 
 DexPattern get_x_op(IROpcode opcode, Register src, Field field) {
-  if (is_iget(opcode)) {
+  if (opcode::is_an_iget(opcode)) {
     return {{opcode}, {src}, {}, field};
   }
-  if (is_sget(opcode)) {
+  if (opcode::is_an_sget(opcode)) {
     return {{opcode}, {}, {}, field};
   }
   not_reached_log("Not supported IROpcode %s", SHOW(opcode));
@@ -1295,7 +1295,7 @@ DexPattern aput_x_op(IROpcode opcode,
                      Register src,
                      Register array_register,
                      Register index_register) {
-  if (is_aput(opcode)) {
+  if (opcode::is_an_aput(opcode)) {
     return {{opcode}, {src, array_register, index_register}, {}};
   }
   not_reached_log("Not supported IROpcode %s", SHOW(opcode));
@@ -1308,7 +1308,7 @@ std::vector<DexPattern> aput_x_patterns(IROpcode put_code) {
 DexPattern aget_x_op(IROpcode opcode,
                      Register array_register,
                      Register index_register) {
-  if (is_aget(opcode)) {
+  if (opcode::is_an_aget(opcode)) {
     return {{opcode}, {array_register, index_register}, {}};
   }
   not_reached_log("Not supported IROpcode %s", SHOW(opcode));

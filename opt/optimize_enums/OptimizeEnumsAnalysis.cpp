@@ -17,7 +17,7 @@ using namespace sparta;
 namespace {
 
 void analyze_move(const IRInstruction* insn, ConstantEnvironment* env) {
-  always_assert(is_move(insn->opcode()));
+  always_assert(opcode::is_a_move(insn->opcode()));
 
   auto src = insn->src(0);
   auto dst = insn->dest();

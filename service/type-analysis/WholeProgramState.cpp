@@ -235,7 +235,8 @@ void WholeProgramState::collect_field_types(
     const IRInstruction* insn,
     const DexTypeEnvironment& env,
     ConcurrentMap<const DexField*, std::vector<DexTypeDomain>>* field_tmp) {
-  if (!is_sput(insn->opcode()) && !is_iput(insn->opcode())) {
+  if (!opcode::is_an_sput(insn->opcode()) &&
+      !opcode::is_an_iput(insn->opcode())) {
     return;
   }
   auto field = resolve_field(insn->get_field());
@@ -260,7 +261,7 @@ void WholeProgramState::collect_return_types(
     const DexMethod* method,
     ConcurrentMap<const DexMethod*, std::vector<DexTypeDomain>>* method_tmp) {
   auto op = insn->opcode();
-  if (!is_return(op)) {
+  if (!opcode::is_a_return(op)) {
     return;
   }
   if (!returns_reference(method)) {

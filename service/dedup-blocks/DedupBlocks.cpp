@@ -803,7 +803,7 @@ class DedupBlocksImpl {
         auto def = *defs.elements().begin();
         auto def_opcode = def->opcode();
         always_assert(is_new_instance(def_opcode) ||
-                      opcode::is_load_param(def_opcode));
+                      opcode::is_a_load_param(def_opcode));
         // Log def instruction if it is not an earlier instruction from the
         // current block.
         if (!block_insns.count(def)) {

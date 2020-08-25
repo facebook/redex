@@ -270,7 +270,7 @@ EnumAttributes analyze_enum_clinit(const DexClass* cls) {
     for (auto& mie : InstructionIterable(b)) {
       auto* insn = mie.insn;
       fp_iter->analyze_instruction(insn, &env, insn == last_insn->insn);
-      if (is_return(insn->opcode())) {
+      if (opcode::is_a_return(insn->opcode())) {
         return_env.join_with(env);
       }
     }

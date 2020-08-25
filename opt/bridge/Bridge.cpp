@@ -42,7 +42,7 @@ DexMethodRef* match_pattern(DexMethod* bridge) {
   auto ii = InstructionIterable(code);
   auto it = ii.begin();
   auto end = ii.end();
-  while (it != end && opcode::is_load_param(it->insn->opcode())) {
+  while (it != end && opcode::is_a_load_param(it->insn->opcode())) {
     ++it;
   }
   while (it != end) {
@@ -59,10 +59,10 @@ DexMethodRef* match_pattern(DexMethod* bridge) {
   auto invoke = it->insn;
   ++it;
 
-  if (opcode::is_move_result(it->insn->opcode())) {
+  if (opcode::is_a_move_result(it->insn->opcode())) {
     ++it;
   }
-  if (!is_return(it->insn->opcode())) {
+  if (!opcode::is_a_return(it->insn->opcode())) {
     TRACE(BRIDGE, 5, "Rejecting unhandled pattern: `%s'", SHOW(bridge));
     return nullptr;
   }
@@ -119,7 +119,8 @@ void do_inlining(DexMethod* bridge, DexMethod* bridgee) {
   auto code = bridge->get_code();
   auto invoke =
       std::find_if(code->begin(), code->end(), [](const MethodItemEntry& mie) {
-        return mie.type == MFLOW_OPCODE && is_invoke(mie.insn->opcode());
+        return mie.type == MFLOW_OPCODE &&
+               opcode::is_an_invoke(mie.insn->opcode());
       });
   inliner::inline_tail_call(bridge, bridgee, invoke);
 }
@@ -258,7 +259,7 @@ class BridgeRemover {
   void exclude_referenced_bridgee(DexMethod* code_method, IRCode& code) {
     for (auto& mie : InstructionIterable(&code)) {
       auto inst = mie.insn;
-      if (!is_invoke(inst->opcode())) continue;
+      if (!opcode::is_an_invoke(inst->opcode())) continue;
       auto method = inst->get_method();
       auto range = m_potential_bridgee_refs.equal_range(MethodRef(
           method->get_class(), method->get_name(), method->get_proto()));

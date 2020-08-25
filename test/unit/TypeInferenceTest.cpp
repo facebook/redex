@@ -36,7 +36,7 @@ TEST_F(TypeInferenceTest, const0) {
   auto& envs = inference.get_type_environments();
   for (auto& mie : InstructionIterable(*code)) {
     auto insn = mie.insn;
-    if (is_invoke(insn->opcode())) {
+    if (opcode::is_an_invoke(insn->opcode())) {
       auto& env = envs.at(insn);
       auto dex_type = env.get_dex_type(insn->src(0));
       if (dex_type && *dex_type != type::java_lang_Object()) {

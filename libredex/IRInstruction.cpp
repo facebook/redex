@@ -146,7 +146,7 @@ IRInstruction* IRInstruction::set_srcs_size(uint16_t count) {
 
 uint16_t IRInstruction::size() const {
   auto op = m_opcode;
-  if (opcode::is_internal(op)) {
+  if (opcode::is_an_internal(op)) {
     return 0;
   }
   static int args[] = {
@@ -220,7 +220,7 @@ bool IRInstruction::invoke_src_is_wide(size_t i) const {
 bool IRInstruction::src_is_wide(size_t i) const {
   always_assert(i < srcs_size());
 
-  if (is_invoke(m_opcode)) {
+  if (opcode::is_an_invoke(m_opcode)) {
     return invoke_src_is_wide(i);
   }
 
@@ -276,7 +276,7 @@ bool IRInstruction::src_is_wide(size_t i) const {
 }
 
 void IRInstruction::normalize_registers() {
-  if (is_invoke(opcode())) {
+  if (opcode::is_an_invoke(opcode())) {
     auto& args = get_method()->get_proto()->get_args()->get_type_list();
     size_t old_srcs_idx{0};
     size_t srcs_idx{0};
@@ -300,7 +300,7 @@ void IRInstruction::normalize_registers() {
 }
 
 void IRInstruction::denormalize_registers() {
-  if (is_invoke(m_opcode)) {
+  if (opcode::is_an_invoke(m_opcode)) {
     auto& args = get_method()->get_proto()->get_args()->get_type_list();
     bool has_wide = false;
     for (const auto& arg : args) {
@@ -358,7 +358,7 @@ bool needs_range_conversion(const IRInstruction* insn) {
   if (insn->srcs_size() > dex_opcode::NON_RANGE_MAX) {
     return true;
   }
-  always_assert(!opcode::is_internal(op));
+  always_assert(!opcode::is_an_internal(op));
   auto dex_op = opcode::to_dex_opcode(op);
   for (size_t i = 0; i < insn->srcs_size(); ++i) {
     if (required_bit_width(insn->src(i)) >

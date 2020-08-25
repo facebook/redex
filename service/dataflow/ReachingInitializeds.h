@@ -38,7 +38,7 @@ class FixpointIterator final : public ir_analyzer::BaseIRAnalyzer<Environment> {
       current_state->set(insn->src(0), Domain(true));
     } else if (insn == m_first_init_load_param_insn) {
       current_state->set(insn->dest(), Domain(false));
-    } else if (opcode::is_move(opcode)) {
+    } else if (opcode::is_a_move(opcode)) {
       current_state->set(insn->dest(), current_state->get(insn->src(0)));
     } else if (opcode::is_move_result_any(insn->opcode())) {
       current_state->set(insn->dest(), current_state->get(RESULT_REGISTER));

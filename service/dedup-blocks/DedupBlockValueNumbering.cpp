@@ -34,8 +34,9 @@ const BlockValue* BlockValues::get_block_value(cfg::Block* block) const {
         operation.srcs.clear();
         operation.operation_index = ordered_operations.size() - 1;
       }
-      auto value = is_move(operation.opcode) ? operation.srcs.at(0)
-                                             : get_value_id(operation);
+      auto value = opcode::is_a_move(operation.opcode)
+                       ? operation.srcs.at(0)
+                       : get_value_id(operation);
       regs[mie.insn->dest()] = value;
       if (mie.insn->dest_is_wide()) {
         regs.erase(mie.insn->dest() + 1);
@@ -106,13 +107,13 @@ bool BlockValues::is_ordered_operation(const IROperation& operation) const {
                 operation.opcode != IOPCODE_OPERATION_RESULT);
   return operation.opcode == OPCODE_MOVE_EXCEPTION ||
          opcode::has_side_effects(operation.opcode) ||
-         opcode::is_load_param(operation.opcode) ||
+         opcode::is_a_load_param(operation.opcode) ||
          opcode::is_move_result_any(operation.opcode) ||
          opcode::may_throw(operation.opcode);
 }
 
 value_id_t BlockValues::get_value_id(const IROperation& operation) const {
-  always_assert(!is_move(operation.opcode));
+  always_assert(!opcode::is_a_move(operation.opcode));
   auto it = m_value_ids.find(operation);
   if (it != m_value_ids.end()) {
     return it->second;

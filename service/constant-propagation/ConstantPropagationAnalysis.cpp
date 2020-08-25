@@ -269,7 +269,7 @@ bool LocalArrayAnalyzer::analyze_fill_array_data(const IRInstruction* insn,
 
 bool PrimitiveAnalyzer::analyze_default(const IRInstruction* insn,
                                         ConstantEnvironment* env) {
-  if (opcode::is_load_param(insn->opcode())) {
+  if (opcode::is_a_load_param(insn->opcode())) {
     return true;
   }
   switch (insn->opcode()) {
@@ -993,7 +993,7 @@ ReturnState collect_return_state(
     for (auto& mie : InstructionIterable(b)) {
       auto* insn = mie.insn;
       fp_iter.analyze_instruction(insn, &env, insn == last_insn->insn);
-      if (is_return(insn->opcode())) {
+      if (opcode::is_a_return(insn->opcode())) {
         if (insn->opcode() != OPCODE_RETURN_VOID) {
           return_state.join_with(
               ReturnState(env.get(insn->dest()), env.get_heap()));
@@ -1167,7 +1167,7 @@ ConstantEnvironment FixpointIterator::analyze_edge(
 
   auto insn = last_insn_it->insn;
   auto op = insn->opcode();
-  if (is_conditional_branch(op)) {
+  if (opcode::is_a_conditional_branch(op)) {
     analyze_if(insn, &env, edge->type() == cfg::EDGE_BRANCH);
   } else if (is_switch(op)) {
     auto selector_val = env.get(insn->src(0));

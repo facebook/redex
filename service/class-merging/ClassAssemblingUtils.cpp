@@ -296,7 +296,7 @@ DexClass* create_merger_class(const DexType* type,
 void patch_iput(const IRList::iterator& it) {
   auto insn = it->insn;
   const auto op = insn->opcode();
-  always_assert(is_iput(op));
+  always_assert(opcode::is_an_iput(op));
   switch (op) {
   case OPCODE_IPUT_BYTE:
   case OPCODE_IPUT_CHAR:
@@ -313,7 +313,7 @@ void patch_iget(DexMethod* meth,
                 DexType* original_field_type) {
   auto insn = it->insn;
   const auto op = insn->opcode();
-  always_assert(is_iget(op));
+  always_assert(opcode::is_an_iget(op));
   switch (op) {
   case OPCODE_IGET_OBJECT: {
     auto dest = std::next(it)->insn->dest();

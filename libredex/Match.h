@@ -332,7 +332,7 @@ inline auto const_string() {
 /** move-result-pseudo flavors */
 inline auto move_result_pseudo() {
   return matcher<IRInstruction*>([](const IRInstruction* insn) {
-    return opcode::is_move_result_pseudo(insn->opcode());
+    return opcode::is_a_move_result_pseudo(insn->opcode());
   });
 }
 
@@ -386,7 +386,7 @@ inline auto invoke_virtual() { return invoke_virtual(any<IRInstruction*>()); }
 template <typename P>
 inline auto invoke(match_t<IRInstruction*, P> p) {
   return matcher<IRInstruction*>([p = std::move(p)](const IRInstruction* insn) {
-    return is_invoke(insn->opcode()) && p.matches(insn);
+    return opcode::is_an_invoke(insn->opcode()) && p.matches(insn);
   });
 }
 
@@ -396,7 +396,7 @@ inline auto invoke() { return invoke(any<IRInstruction*>()); }
 template <typename P>
 inline auto iput(match_t<IRInstruction*, P> p) {
   return matcher<IRInstruction*>([p = std::move(p)](const IRInstruction* insn) {
-    return is_iput(insn->opcode()) && p.matches(insn);
+    return opcode::is_an_iput(insn->opcode()) && p.matches(insn);
   });
 }
 
@@ -406,7 +406,7 @@ inline auto iput() { return iput(any<IRInstruction*>()); };
 template <typename P>
 inline auto iget(match_t<IRInstruction*, P> p) {
   return matcher<IRInstruction*>([p = std::move(p)](const IRInstruction* insn) {
-    return is_iget(insn->opcode()) && p.matches(insn);
+    return opcode::is_an_iget(insn->opcode()) && p.matches(insn);
   });
 }
 

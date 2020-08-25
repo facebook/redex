@@ -81,7 +81,7 @@ ConstantValue::collect_constant_loads_in(const IRCode* code) {
   auto ii = InstructionIterable(code);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
     auto insn = it->insn;
-    if (is_int_value() && is_literal_const(insn->opcode())) {
+    if (is_int_value() && opcode::is_a_literal_const(insn->opcode())) {
       int64_t literal = insn->get_literal();
       // Special handling for type tags to avoid sign extensionon on int64_t.
       if (m_kind == ConstantKind::TYPE) {

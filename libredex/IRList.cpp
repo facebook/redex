@@ -463,12 +463,12 @@ IRList::iterator IRList::insert_after(const IRList::iterator& position,
 void IRList::remove_opcode(const IRList::iterator& it) {
   always_assert(it->type == MFLOW_OPCODE);
   auto insn = it->insn;
-  always_assert(!opcode::is_move_result_pseudo(insn->opcode()));
+  always_assert(!opcode::is_a_move_result_pseudo(insn->opcode()));
   if (insn->has_move_result_pseudo()) {
     auto move_it = std::next(it);
     always_assert_log(
         move_it->type == MFLOW_OPCODE &&
-            opcode::is_move_result_pseudo(move_it->insn->opcode()),
+            opcode::is_a_move_result_pseudo(move_it->insn->opcode()),
         "No move-result-pseudo found for %s",
         SHOW(insn));
     delete move_it->insn;
@@ -507,7 +507,8 @@ size_t IRList::sum_opcode_sizes() const {
 size_t IRList::count_opcodes() const {
   size_t count{0};
   for (const auto& mie : m_list) {
-    if (mie.type == MFLOW_OPCODE && !opcode::is_internal(mie.insn->opcode())) {
+    if (mie.type == MFLOW_OPCODE &&
+        !opcode::is_an_internal(mie.insn->opcode())) {
       ++count;
     }
   }
@@ -639,7 +640,7 @@ boost::sub_range<IRList> IRList::get_param_instructions() {
       m_list.begin(), m_list.end(), [&](const MethodItemEntry& mie) {
         return mie.type == MFLOW_FALLTHROUGH ||
                (mie.type == MFLOW_OPCODE &&
-                opcode::is_load_param(mie.insn->opcode()));
+                opcode::is_a_load_param(mie.insn->opcode()));
       });
   return boost::sub_range<IRList>(m_list.begin(), params_end);
 }
@@ -782,7 +783,7 @@ IRInstruction* primary_instruction_of_move_result(IRList::iterator it) {
 IRInstruction* move_result_pseudo_of(IRList::iterator it) {
   ++it;
   always_assert(it->type == MFLOW_OPCODE &&
-                opcode::is_move_result_pseudo(it->insn->opcode()));
+                opcode::is_a_move_result_pseudo(it->insn->opcode()));
   return it->insn;
 }
 

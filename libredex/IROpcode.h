@@ -95,24 +95,9 @@ bool has_variable_srcs_size(IROpcode op);
 
 inline bool is_const_string(IROpcode op) { return op == OPCODE_CONST_STRING; }
 
-// Internal opcodes cannot be mapped to a corresponding DexOpcode.
-bool is_internal(IROpcode);
-
-bool is_load_param(IROpcode);
-
-inline bool is_move_result(IROpcode op) {
-  return op >= OPCODE_MOVE_RESULT && op <= OPCODE_MOVE_RESULT_OBJECT;
-}
-
-bool is_move_result_pseudo(IROpcode);
-
 bool is_move_result_any(IROpcode op);
 
-bool is_move(IROpcode);
-
 bool is_commutative(IROpcode opcode);
-
-bool is_cmp(IROpcode opcode);
 
 bool is_binop64(IROpcode op);
 

@@ -27,7 +27,7 @@ bool eligible_code(const IRCode* code) {
       eligible = false;
       return editable_cfg_adapter::LOOP_BREAK;
     }
-    if (!opcode::is_internal(opcode)) {
+    if (!opcode::is_an_internal(opcode)) {
       count++;
     }
     if (count > MAX_NUM_INSTRUCTIONS) {

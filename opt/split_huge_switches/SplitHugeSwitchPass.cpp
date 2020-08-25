@@ -179,7 +179,7 @@ ParamChain find_param_chain(cfg::ControlFlowGraph& cfg,
     seen.insert(src_insn);
 
     auto opcode = src_insn->opcode();
-    if (opcode::is_load_param(opcode)) {
+    if (opcode::is_a_load_param(opcode)) {
       return val;
     }
 
@@ -569,7 +569,7 @@ AnalysisData analyze(DexMethod* m,
   redex_assert(!switch_range.mid_cases.empty());
 
   const IRInstruction* load_param = param_chain->back();
-  if (!opcode::is_load_param(load_param->opcode())) {
+  if (!opcode::is_a_load_param(load_param->opcode())) {
     data.no_load_param_anchor = true;
     return data;
   }

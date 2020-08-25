@@ -30,7 +30,7 @@ void Transform::replace_with_const(const ConstantEnvironment& env,
   if (replacement.empty()) {
     return;
   }
-  if (opcode::is_move_result_pseudo(insn->opcode())) {
+  if (opcode::is_a_move_result_pseudo(insn->opcode())) {
     m_replacements.emplace_back(std::prev(it)->insn, replacement);
   } else {
     m_replacements.emplace_back(insn, replacement);
@@ -153,8 +153,9 @@ void Transform::simplify_instruction(const ConstantEnvironment& env,
   case IOPCODE_MOVE_RESULT_PSEUDO_OBJECT: {
     auto* primary_insn = ir_list::primary_instruction_of_move_result_pseudo(it);
     auto op = primary_insn->opcode();
-    if (is_sget(op) || is_iget(op) || is_aget(op) || is_div_int_lit(op) ||
-        is_rem_int_lit(op) || is_instance_of(op) || is_rem_int_or_long(op) ||
+    if (opcode::is_an_sget(op) || opcode::is_an_iget(op) ||
+        opcode::is_an_aget(op) || is_div_int_lit(op) || is_rem_int_lit(op) ||
+        is_instance_of(op) || is_rem_int_or_long(op) ||
         is_div_int_or_long(op) || is_check_cast(op)) {
       replace_with_const(env, it, xstores, declaring_type);
     }
@@ -337,7 +338,7 @@ void Transform::eliminate_dead_branch(
     return;
   }
 
-  if (!is_conditional_branch(insn->opcode())) {
+  if (!opcode::is_a_conditional_branch(insn->opcode())) {
     return;
   }
 
@@ -687,7 +688,7 @@ bool Transform::has_problematic_return(cfg::ControlFlowGraph& cfg,
     }
     for (auto& mie : InstructionIterable(block)) {
       IRInstruction* insn = mie.insn;
-      if (is_return(insn->opcode())) {
+      if (opcode::is_a_return(insn->opcode())) {
         auto defs = env.get(insn->src(0));
         always_assert(!defs.is_bottom() && !defs.is_top());
         for (auto def : defs.elements()) {
@@ -697,7 +698,7 @@ bool Transform::has_problematic_return(cfg::ControlFlowGraph& cfg,
               return true;
             }
           } else if (def->has_method()) {
-            always_assert(is_invoke(op));
+            always_assert(opcode::is_an_invoke(op));
             if (is_problematic_return_type(
                     def->get_method()->get_proto()->get_rtype(), def)) {
               return true;

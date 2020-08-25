@@ -254,7 +254,7 @@ std::unordered_set<int64_t> get_const_literals(DexMethod* method) {
 
   for (const auto& mie : InstructionIterable(method->get_code())) {
     auto insn = mie.insn;
-    if (is_const(insn->opcode()) && insn->has_literal()) {
+    if (opcode::is_a_const(insn->opcode()) && insn->has_literal()) {
       res.emplace(insn->get_literal());
     }
   }

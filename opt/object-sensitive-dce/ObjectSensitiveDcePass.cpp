@@ -54,7 +54,7 @@ class CallGraphStrategy final : public call_graph::BuildStrategy {
     }
     for (auto& mie : InstructionIterable(code)) {
       auto insn = mie.insn;
-      if (is_invoke(insn->opcode())) {
+      if (opcode::is_an_invoke(insn->opcode())) {
         auto callee = resolve_method(insn->get_method(), opcode_to_search(insn),
                                      m_resolved_refs, method);
         if (callee == nullptr || may_be_overridden(callee)) {

@@ -210,12 +210,14 @@ void WholeProgramState::collect_field_values(
     const DexType* clinit_cls,
     ConcurrentMap<const DexField*, std::vector<ConstantValue>>*
         fields_value_tmp) {
-  if (!is_sput(insn->opcode()) && !is_iput(insn->opcode())) {
+  if (!opcode::is_an_sput(insn->opcode()) &&
+      !opcode::is_an_iput(insn->opcode())) {
     return;
   }
   auto field = resolve_field(insn->get_field());
   if (field != nullptr && m_known_fields.count(field)) {
-    if (is_sput(insn->opcode()) && field->get_class() == clinit_cls) {
+    if (opcode::is_an_sput(insn->opcode()) &&
+        field->get_class() == clinit_cls) {
       return;
     }
     auto value = env.get(insn->src(0));
@@ -240,7 +242,7 @@ void WholeProgramState::collect_return_values(
     ConcurrentMap<const DexMethod*, std::vector<ConstantValue>>*
         methods_value_tmp) {
   auto op = insn->opcode();
-  if (!is_return(op)) {
+  if (!opcode::is_a_return(op)) {
     return;
   }
   if (op == OPCODE_RETURN_VOID) {

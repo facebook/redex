@@ -79,13 +79,13 @@ void RemoveArgs::gather_results_used() {
         const auto ii = InstructionIterable(code);
         for (auto it = ii.begin(); it != ii.end(); it++) {
           auto insn = it->insn;
-          if (!is_invoke(insn->opcode())) {
+          if (!opcode::is_an_invoke(insn->opcode())) {
             continue;
           }
           const auto next = std::next(it);
           always_assert(next != ii.end());
           const auto peek = next->insn;
-          if (!opcode::is_move_result(peek->opcode())) {
+          if (!opcode::is_a_move_result(peek->opcode())) {
             continue;
           }
           auto method = insn->get_method()->as_def();
@@ -131,7 +131,7 @@ std::deque<uint16_t> RemoveArgs::compute_live_args(
       continue;
     }
     auto insn = it->insn;
-    if (opcode::is_load_param(insn->opcode())) {
+    if (opcode::is_a_load_param(insn->opcode())) {
       if (live_vars.contains(insn->dest()) ||
           (is_instance_method && it->insn == first_insn)) {
         // Mark live args live, and always mark the "this" arg live.
@@ -345,7 +345,7 @@ RemoveArgs::MethodStats RemoveArgs::update_meths_with_unused_args_or_results() {
       if (entry.remove_result) {
         for (const auto& mie : InstructionIterable(method->get_code())) {
           auto insn = mie.insn;
-          if (is_return_value(insn->opcode())) {
+          if (opcode::is_a_return_value(insn->opcode())) {
             insn->set_opcode(OPCODE_RETURN_VOID);
             insn->set_srcs_size(0);
           }
@@ -408,7 +408,7 @@ size_t RemoveArgs::update_callsites() {
         size_t callsite_args_removed = 0;
         for (const auto& mie : InstructionIterable(code)) {
           auto insn = mie.insn;
-          if (is_invoke(insn->opcode())) {
+          if (opcode::is_an_invoke(insn->opcode())) {
             size_t insn_args_removed = update_callsite(insn);
             if (insn_args_removed > 0) {
               log_opt(CALLSITE_ARGS_REMOVED, method, insn);

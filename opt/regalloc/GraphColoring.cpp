@@ -97,7 +97,7 @@ RangeSet init_range_set(IRCode* code) {
     bool is_range{false};
     if (op == OPCODE_FILLED_NEW_ARRAY) {
       is_range = insn->srcs_size() > dex_opcode::NON_RANGE_MAX;
-    } else if (is_invoke(op)) {
+    } else if (opcode::is_an_invoke(op)) {
       is_range = sum_src_sizes(insn) > dex_opcode::NON_RANGE_MAX;
     }
     if (is_range) {
@@ -367,7 +367,8 @@ bool Allocator::coalesce(interference::Graph* ig, IRCode* code) {
   for (auto it = ii.begin(); it != end; ++it) {
     auto insn = it->insn;
     auto op = insn->opcode();
-    if (!is_move(op) && !has_2addr_form(op) && op != OPCODE_CHECK_CAST) {
+    if (!opcode::is_a_move(op) && !has_2addr_form(op) &&
+        op != OPCODE_CHECK_CAST) {
       continue;
     }
     reg_t dest;
@@ -379,7 +380,7 @@ bool Allocator::coalesce(interference::Graph* ig, IRCode* code) {
     dest = aliases.find_set(dest);
     auto src = aliases.find_set(insn->src(0));
     if (dest == src) {
-      if (is_move(op)) {
+      if (opcode::is_a_move(op)) {
         ++m_stats.moves_coalesced;
         code->remove_opcode(it.unwrap());
       }
@@ -397,7 +398,7 @@ bool Allocator::coalesce(interference::Graph* ig, IRCode* code) {
       ig->combine(parent, child);
       TRACE(REG, 7, "Coalescing v%u and v%u because of %s", parent, child,
             SHOW(insn));
-      if (is_move(op)) {
+      if (opcode::is_a_move(op)) {
         ++m_stats.moves_coalesced;
         code->remove_opcode(it.unwrap());
       }
@@ -830,7 +831,7 @@ std::unordered_map<reg_t, IRList::iterator> Allocator::find_param_splits(
   auto end = ii.end();
   for (auto it = ii.begin(); it != end; ++it) {
     auto* insn = it->insn;
-    if (opcode::is_load_param(insn->opcode())) {
+    if (opcode::is_a_load_param(insn->opcode())) {
       continue;
     }
     if (insn->has_dest()) {

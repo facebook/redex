@@ -430,7 +430,7 @@ class CFGVisualizer : public CodeVisualizer<CFGVisualizer> {
   void instruction(IRInstruction* insn, Block* from) {
     CodeVisualizer::instruction(insn);
 
-    if (is_conditional_branch(insn->opcode())) {
+    if (opcode::is_a_conditional_branch(insn->opcode())) {
       auto edge = m_cfg->get_succ_edge_if(
           from, [](Edge* e) { return e->type() == EDGE_BRANCH; });
       redex_assert(edge);

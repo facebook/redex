@@ -36,7 +36,7 @@ void drop_this(DexMethod* method) {
       auto src = insn->src(i);
       assert_log(
           src != this_reg, "method: %s\ninsn: %s\n", SHOW(method), SHOW(insn));
-      if (!is_invoke(insn->opcode())) {
+      if (!opcode::is_an_invoke(insn->opcode())) {
         // Make sure the `this` register isn't the upper half of a wide pair.
         // Exclude invoke because they explicitly refer to all registers, even
         // upper halves.

@@ -26,7 +26,8 @@ void test_inliner(const std::string& caller_str,
 
   const auto& callsite = std::find_if(
       caller->begin(), caller->end(), [](const MethodItemEntry& mie) {
-        return mie.type == MFLOW_OPCODE && is_invoke(mie.insn->opcode());
+        return mie.type == MFLOW_OPCODE &&
+               opcode::is_an_invoke(mie.insn->opcode());
       });
   inliner::inline_method_unsafe(
       /*caller_method=*/nullptr, caller.get(), callee.get(), callsite);

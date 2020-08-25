@@ -195,10 +195,10 @@ void update_refs_to_mergeable_fields(
       if (!insn->has_field()) {
         continue;
       }
-      const auto field =
-          resolve_field(insn->get_field(),
-                        is_ifield_op(insn->opcode()) ? FieldSearch::Instance
-                                                     : FieldSearch::Static);
+      const auto field = resolve_field(insn->get_field(),
+                                       opcode::is_an_ifield_op(insn->opcode())
+                                           ? FieldSearch::Instance
+                                           : FieldSearch::Static);
       if (field == nullptr) {
         continue;
       }
@@ -216,13 +216,13 @@ void update_refs_to_mergeable_fields(
       if (field->get_type() == new_field->get_type()) {
         continue;
       }
-      if (is_iget(insn->opcode())) {
+      if (opcode::is_an_iget(insn->opcode())) {
         auto field_type = field->get_type();
         field_type = mergeable_to_merger.count(field_type) > 0
                          ? mergeable_to_merger.at(field_type)
                          : field_type;
         patch_iget(meth, it.unwrap(), field_type);
-      } else if (is_iput(insn->opcode())) {
+      } else if (opcode::is_an_iput(insn->opcode())) {
         patch_iput(it.unwrap());
       }
     }

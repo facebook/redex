@@ -38,7 +38,8 @@ cfg::InstructionIterator find_instruction_matching(cfg::ControlFlowGraph* cfg,
 IRInstruction* find_put(cfg::ControlFlowGraph* cfg, DexFieldRef* field) {
   auto iterable = cfg::InstructionIterable(*cfg);
   for (auto it = iterable.begin(); it != iterable.end(); ++it) {
-    if (is_iput(it->insn->opcode()) && field == it->insn->get_field()) {
+    if (opcode::is_an_iput(it->insn->opcode()) &&
+        field == it->insn->get_field()) {
       return it->insn;
     }
   }

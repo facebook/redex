@@ -178,7 +178,7 @@ class ReflectionAnalyzer : public Base {
         auto insn = entry.first;
         auto calling_context = entry.second;
         auto op = insn->opcode();
-        always_assert(is_invoke(op));
+        always_assert(opcode::is_an_invoke(op));
 
         auto callees = call_graph::resolve_callees_in_graph(
             *this->get_call_graph(), m_method, insn);

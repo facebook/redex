@@ -598,7 +598,7 @@ void VirtualMerging::merge_methods() {
         auto last_it = block->end();
         for (auto it = block->begin(); it != block->end(); it++) {
           auto& mie = *it;
-          if (!opcode::is_load_param(mie.insn->opcode())) {
+          if (!opcode::is_a_load_param(mie.insn->opcode())) {
             break;
           }
           param_regs.push_back(mie.insn->dest());

@@ -71,7 +71,7 @@ boost::optional<RDefs> compute_rdefs(ControlFlowGraph& cfg) {
         continue;
       }
       block_map.emplace(mie.insn, b);
-      if (is_monitor(mie.insn->opcode())) {
+      if (opcode::is_a_monitor(mie.insn->opcode())) {
         monitor_insns.push_back(mie.insn);
       }
     }

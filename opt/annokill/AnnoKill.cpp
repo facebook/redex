@@ -247,7 +247,7 @@ AnnoKill::AnnoSet AnnoKill::get_referenced_annos() {
         } else if (insn->has_field()) {
           auto field = insn->get_field();
           auto fdef = resolve_field(field,
-                                    is_sfield_op(insn->opcode())
+                                    opcode::is_an_sfield_op(insn->opcode())
                                         ? FieldSearch::Static
                                         : FieldSearch::Instance);
           if (fdef != nullptr) field = fdef;

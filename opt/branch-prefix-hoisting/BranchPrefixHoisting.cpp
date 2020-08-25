@@ -132,7 +132,7 @@ bool BranchPrefixHoistingPass::is_insn_eligible(const IRInstruction& insn) {
     // to fail
     return false;
   }
-  return !is_branch(op) && !is_throw(op) && !is_return(op);
+  return !is_branch(op) && !is_throw(op) && !opcode::is_a_return(op);
 }
 
 // returns number of hoisted instructions

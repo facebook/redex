@@ -43,7 +43,7 @@ class MoveAwareFixpointIterator final
 
   void analyze_instruction(const IRInstruction* insn,
                            Environment* current_state) const override {
-    if (is_move(insn->opcode())) {
+    if (opcode::is_a_move(insn->opcode())) {
       current_state->set(insn->dest(), current_state->get(insn->src(0)));
     } else if (opcode::is_move_result_any(insn->opcode())) {
       current_state->set(insn->dest(), current_state->get(RESULT_REGISTER));

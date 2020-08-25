@@ -57,7 +57,7 @@ void scan_any_init_reachables(const call_graph::Graph& cg,
   TRACE(TYPE, 5, "[any init reachables] insert %s", SHOW(method));
   for (auto& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
-    if (!is_invoke(insn->opcode())) {
+    if (!opcode::is_an_invoke(insn->opcode())) {
       continue;
     }
     auto callee_method_def =
@@ -234,7 +234,7 @@ void GlobalTypeAnalysis::find_any_init_reachables(const Scope& scope,
     auto code = method->get_code();
     for (auto& mie : InstructionIterable(code)) {
       auto insn = mie.insn;
-      if (!is_invoke(insn->opcode())) {
+      if (!opcode::is_an_invoke(insn->opcode())) {
         continue;
       }
       auto callee_method_def =

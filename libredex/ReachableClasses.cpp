@@ -190,7 +190,7 @@ void analyze_reflection(const Scope& scope) {
     std::unique_ptr<ReflectionAnalysis> analysis = nullptr;
     for (auto& mie : InstructionIterable(code)) {
       IRInstruction* insn = mie.insn;
-      if (!is_invoke(insn->opcode())) {
+      if (!opcode::is_an_invoke(insn->opcode())) {
         continue;
       }
 

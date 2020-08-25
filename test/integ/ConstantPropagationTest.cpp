@@ -135,7 +135,7 @@ TEST_F(ConstantPropagationTest, constantPropagation) {
           bool has_if = false;
           for (auto& mie : insns) {
             IROpcode op = mie.insn->opcode();
-            if (is_conditional_branch(op)) {
+            if (opcode::is_a_conditional_branch(op)) {
               has_if = true;
             }
           }

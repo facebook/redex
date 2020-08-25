@@ -83,7 +83,7 @@ void trace_analysis_diff(DexMethod* method,
         auto prefix = "field " + show(insn);
         found_improvement =
             trace_results_if_different(prefix, gparam, lparam, out);
-      } else if (is_invoke(insn->opcode())) {
+      } else if (opcode::is_an_invoke(insn->opcode())) {
         auto gparam = genv.get(RESULT_REGISTER);
         auto it = code->iterator_to(mie);
         auto callee = insn->get_method();

@@ -667,7 +667,7 @@ bool may_be_dispatch(const DexMethod* method) {
     if (is_switch(op)) {
       return true;
     }
-    branches += is_conditional_branch(op);
+    branches += opcode::is_a_conditional_branch(op);
     if (branches > 1) {
       return true;
     }

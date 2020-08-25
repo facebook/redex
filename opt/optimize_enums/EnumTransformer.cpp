@@ -1516,7 +1516,7 @@ class EnumTransformer final {
         continue;
       }
       auto insn = it->insn;
-      if (is_sput(insn->opcode())) {
+      if (opcode::is_an_sput(insn->opcode())) {
         auto field = resolve_field(insn->get_field());
         if (field && enum_constants.count(field)) {
           code->insert_before(it, dasm(OPCODE_SGET_OBJECT, field));

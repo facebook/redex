@@ -171,7 +171,7 @@ static bool any_outside(const std::unordered_set<const IRInstruction*>& insns) {
 
 size_t OutlinerTypeAnalysis::get_load_param_index(
     const IRInstruction* load_param_insn) {
-  always_assert(opcode::is_load_param(load_param_insn->opcode()));
+  always_assert(opcode::is_a_load_param(load_param_insn->opcode()));
   auto& cfg = m_method->get_code()->cfg();
   auto param_insns = cfg.get_param_instructions();
   auto it = std::find_if(param_insns.begin(), param_insns.end(),
@@ -427,7 +427,7 @@ const DexType* OutlinerTypeAnalysis::get_type_of_reaching_defs(
 
 const DexType* OutlinerTypeAnalysis::get_if_insn_type_demand(
     IRInstruction* insn) {
-  always_assert(is_conditional_branch(insn->opcode()));
+  always_assert(opcode::is_a_conditional_branch(insn->opcode()));
   auto& env = m_type_environments->at(insn);
   for (size_t src_index = 0; src_index < insn->srcs_size(); src_index++) {
     auto t = env.get_type(insn->src(src_index));
@@ -751,7 +751,8 @@ OutlinerTypeAnalysis::get_defs(
   std::unordered_set<const IRInstruction*> res;
   for (auto insn : insns) {
     always_assert(insn->has_dest());
-    if (is_move(insn->opcode()) || opcode::is_move_result_any(insn->opcode())) {
+    if (opcode::is_a_move(insn->opcode()) ||
+        opcode::is_move_result_any(insn->opcode())) {
       auto reg = insn->srcs_size() ? insn->src(0) : RESULT_REGISTER;
       auto defs = m_reaching_defs_environments->at(insn).get(reg);
       if (defs.is_bottom() || defs.is_top()) {
@@ -781,7 +782,7 @@ void OutlinerTypeAnalysis::get_type_demand_helper(
     auto insn = pcn.insns.at(insn_idx);
     for (size_t i = 0; i < insn->srcs_size(); i++) {
       if (regs_to_track.count(insn->src(i))) {
-        if (is_move(insn->opcode())) {
+        if (opcode::is_a_move(insn->opcode())) {
           track_dest = true;
           continue;
         }
@@ -965,7 +966,7 @@ const DexType* OutlinerTypeAnalysis::get_type_of_defs(
   }
   std::unordered_set<const IRInstruction*> const_insns;
   for (auto def : defs) {
-    always_assert(!opcode::is_move(def->opcode()) &&
+    always_assert(!opcode::is_a_move(def->opcode()) &&
                   !opcode::is_move_result_any(def->opcode()));
     std::unordered_set<const IRInstruction*> expanded_defs;
     std::unordered_set<const IRInstruction*> visited;

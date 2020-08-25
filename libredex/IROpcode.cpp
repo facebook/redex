@@ -998,35 +998,8 @@ bool has_range_form(IROpcode op) {
   }
 }
 
-bool is_internal(IROpcode op) {
-  switch (op) {
-  case IOPCODE_LOAD_PARAM:
-  case IOPCODE_LOAD_PARAM_OBJECT:
-  case IOPCODE_LOAD_PARAM_WIDE:
-  case IOPCODE_MOVE_RESULT_PSEUDO:
-  case IOPCODE_MOVE_RESULT_PSEUDO_OBJECT:
-  case IOPCODE_MOVE_RESULT_PSEUDO_WIDE:
-    return true;
-  default:
-    return false;
-  }
-}
-
-bool is_load_param(IROpcode op) {
-  return op >= IOPCODE_LOAD_PARAM && op <= IOPCODE_LOAD_PARAM_WIDE;
-}
-
-bool is_move(IROpcode op) {
-  return op >= OPCODE_MOVE && op <= OPCODE_MOVE_OBJECT;
-}
-
-bool is_move_result_pseudo(IROpcode op) {
-  return op >= IOPCODE_MOVE_RESULT_PSEUDO &&
-         op <= IOPCODE_MOVE_RESULT_PSEUDO_WIDE;
-}
-
 bool is_move_result_any(IROpcode op) {
-  return opcode::is_move_result(op) || is_move_result_pseudo(op);
+  return is_a_move_result(op) || is_a_move_result_pseudo(op);
 }
 
 bool is_commutative(IROpcode opcode) {
@@ -1049,10 +1022,6 @@ bool is_commutative(IROpcode opcode) {
   default:
     return false;
   }
-}
-
-bool is_cmp(IROpcode opcode) {
-  return opcode >= OPCODE_CMPL_FLOAT && opcode <= OPCODE_CMP_LONG;
 }
 
 bool is_binop64(IROpcode op) {
@@ -1389,7 +1358,7 @@ bool has_side_effects(IROpcode opc) {
 namespace opcode_impl {
 
 bool has_dest(IROpcode op) {
-  if (opcode::is_internal(op)) {
+  if (opcode::is_an_internal(op)) {
     return true;
   } else {
     auto dex_op = opcode::to_dex_opcode(op);
@@ -1398,7 +1367,7 @@ bool has_dest(IROpcode op) {
 }
 
 bool has_move_result_pseudo(IROpcode op) {
-  if (opcode::is_internal(op)) {
+  if (opcode::is_an_internal(op)) {
     return false;
   } else if (op == OPCODE_CHECK_CAST) {
     return true;
@@ -1409,7 +1378,7 @@ bool has_move_result_pseudo(IROpcode op) {
 }
 
 unsigned min_srcs_size(IROpcode op) {
-  if (opcode::is_internal(op)) {
+  if (opcode::is_an_internal(op)) {
     return 0;
   } else {
     auto dex_op = opcode::to_dex_opcode(op);

@@ -226,7 +226,7 @@ UpCodeMotionPass::Stats UpCodeMotionPass::process_code(bool is_static,
     always_assert(last_insn_it != b->end());
 
     auto if_insn = last_insn_it->insn;
-    always_assert(is_conditional_branch(if_insn->opcode()));
+    always_assert(opcode::is_a_conditional_branch(if_insn->opcode()));
     always_assert(!if_insn->is_wide());
 
     // We found a block that ends with a conditional branch.

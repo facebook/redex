@@ -1308,7 +1308,8 @@ class LoadParamMutationTest : public IRTypeCheckerTest {
       return;
     }
 
-    if (it->type == MFLOW_OPCODE && opcode::is_load_param(it->insn->opcode())) {
+    if (it->type == MFLOW_OPCODE &&
+        opcode::is_a_load_param(it->insn->opcode())) {
       auto real_op = it->insn->opcode();
       for (auto op = IOPCODE_LOAD_PARAM; op <= IOPCODE_LOAD_PARAM_WIDE;
            op = static_cast<IROpcode>(static_cast<uint16_t>(op) + 1)) {

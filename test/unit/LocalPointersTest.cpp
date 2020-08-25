@@ -52,7 +52,7 @@ TEST_F(LocalPointersTest, domainOperations) {
 ptrs::InvokeToSummaryMap mark_all_invokes_as_non_escaping(const IRCode& code) {
   ptrs::InvokeToSummaryMap invoke_to_summary_map;
   for (const auto& mie : InstructionIterable(code)) {
-    if (is_invoke(mie.insn->opcode())) {
+    if (opcode::is_an_invoke(mie.insn->opcode())) {
       invoke_to_summary_map.emplace(mie.insn, ptrs::EscapeSummary({}));
     }
   }
@@ -317,7 +317,7 @@ TEST_F(LocalPointersTest, returnFreshValue) {
     const IRInstruction* invoke_insn{nullptr};
     for (const auto& mie : InstructionIterable(code.get())) {
       auto insn = mie.insn;
-      if (is_invoke(insn->opcode())) {
+      if (opcode::is_an_invoke(insn->opcode())) {
         invoke_insn = insn;
         invoke_to_summary_map.emplace(insn, fresh_return_summary);
       }
@@ -383,7 +383,7 @@ TEST_F(LocalPointersTest, returnEscapedValue) {
     const IRInstruction* invoke_insn{nullptr};
     for (const auto& mie : InstructionIterable(code.get())) {
       auto insn = mie.insn;
-      if (is_invoke(insn->opcode())) {
+      if (opcode::is_an_invoke(insn->opcode())) {
         invoke_insn = insn;
         invoke_to_summary_map.emplace(insn, fresh_return_summary);
       }

@@ -21,7 +21,7 @@
 int count_igets(cfg::ControlFlowGraph& cfg) {
   size_t num_igets = 0;
   for (const auto& mie : InstructionIterable(cfg)) {
-    if (is_iget(mie.insn->opcode())) {
+    if (opcode::is_an_iget(mie.insn->opcode())) {
       num_igets++;
     }
   }

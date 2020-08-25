@@ -35,7 +35,7 @@ bool is_leaf(cfg::ControlFlowGraph* cfg, cfg::Block* b, reg_t reg) {
   for (const auto& mie : InstructionIterable(b)) {
     auto insn = mie.insn;
     auto op = insn->opcode();
-    if (!(is_literal_const(op) || is_branch(op))) {
+    if (!(opcode::is_a_literal_const(op) || is_branch(op))) {
       // non-leaf nodes only have const and branch instructions
       return true;
     }
@@ -193,7 +193,7 @@ std::vector<cfg::Edge*> SwitchEquivFinder::find_leaves() {
           // lead to `leaf`.
           auto insn = mie.insn;
           auto op = insn->opcode();
-          if (is_literal_const(op)) {
+          if (opcode::is_a_literal_const(op)) {
             if (next_loads == boost::none) {
               // Copy loads here because we only want these loads to propagate
               // to successors of `next`, not any other successors of `b`
@@ -329,7 +329,7 @@ void SwitchEquivFinder::normalize_extra_loads(
   std::unordered_set<IRInstruction*> extra_loads;
   for (const auto& non_leaf : non_leaves) {
     for (const auto& mie : InstructionIterable(non_leaf)) {
-      if (is_literal_const(mie.insn->opcode())) {
+      if (opcode::is_a_literal_const(mie.insn->opcode())) {
         extra_loads.insert(mie.insn);
       }
     }

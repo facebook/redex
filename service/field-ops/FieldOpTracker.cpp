@@ -48,16 +48,17 @@ FieldWrites analyze_writes(const Scope& scope) {
            fp_iter.analyze_instruction(it++->insn, &env)) {
         auto* insn = it->insn;
         auto op = insn->opcode();
-        if (is_move(op) || is_iget(op) || is_aget(op) ||
-            is_conditional_branch(op) || is_monitor(op) ||
-            op == OPCODE_ARRAY_LENGTH || op == OPCODE_CHECK_CAST ||
-            op == OPCODE_INSTANCE_OF || op == OPCODE_FILL_ARRAY_DATA) {
+        if (opcode::is_a_move(op) || opcode::is_an_iget(op) ||
+            opcode::is_an_aget(op) || opcode::is_a_conditional_branch(op) ||
+            opcode::is_a_monitor(op) || op == OPCODE_ARRAY_LENGTH ||
+            op == OPCODE_CHECK_CAST || op == OPCODE_INSTANCE_OF ||
+            op == OPCODE_FILL_ARRAY_DATA) {
           // these operations don't let an object/array reference escape
           continue;
         }
         for (size_t src_idx = 0; src_idx < insn->srcs_size(); src_idx++) {
           DexField* put_value_field{nullptr};
-          if (is_iput(op) || is_sput(op)) {
+          if (opcode::is_an_iput(op) || opcode::is_an_sput(op)) {
             if (src_idx == 1) {
               // writing to a field of an object doesn't let the object
               // reference escape
@@ -65,7 +66,8 @@ FieldWrites analyze_writes(const Scope& scope) {
             }
             put_value_field = resolve_field(insn->get_field());
           }
-          if (is_aput(op) && op != OPCODE_APUT_OBJECT && src_idx == 1) {
+          if (opcode::is_an_aput(op) && op != OPCODE_APUT_OBJECT &&
+              src_idx == 1) {
             // writing to an element of an array doesn't let the array reference
             // escape; however, for aput-object, we'll register an escape of the
             // array definition, so that we'll prevent that array from being
@@ -146,12 +148,12 @@ FieldStatsMap analyze(const Scope& scope) {
     if (field == nullptr) {
       return;
     }
-    if (is_sget(op) || is_iget(op)) {
+    if (opcode::is_an_sget(op) || opcode::is_an_iget(op)) {
       ++field_stats[field].reads;
       if (!is_own_init(field, method)) {
         ++field_stats[field].reads_outside_init;
       }
-    } else if (is_sput(op) || is_iput(op)) {
+    } else if (opcode::is_an_sput(op) || opcode::is_an_iput(op)) {
       ++field_stats[field].writes;
     }
   });

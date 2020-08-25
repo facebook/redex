@@ -33,7 +33,7 @@ constexpr const char* ORDINAL_METHOD_NAME = "ordinal";
 
 void analyze_move_fields(const IRInstruction* insn,
                          DexFieldConstantEnvironment* env) {
-  always_assert(is_move(insn->opcode()));
+  always_assert(opcode::is_a_move(insn->opcode()));
 
   auto src = insn->src(0);
   auto dst = insn->dest();
@@ -185,7 +185,7 @@ namespace {
 
 void analyze_move_const(const IRInstruction* insn,
                         UInt32ConstantEnvironment* env) {
-  always_assert(is_move(insn->opcode()));
+  always_assert(opcode::is_a_move(insn->opcode()));
 
   auto src = insn->src(0);
   auto dst = insn->dest();

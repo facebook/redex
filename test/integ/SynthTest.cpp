@@ -88,7 +88,7 @@ TEST_F(SynthTest1, synthetic) {
         for (auto& mie : InstructionIterable(code->cfg())) {
           auto insn = mie.insn;
           std::cout << SHOW(insn) << std::endl;
-          if (is_invoke(insn->opcode())) {
+          if (opcode::is_an_invoke(insn->opcode())) {
             const auto clazz =
                 insn->get_method()->get_class()->get_name()->c_str();
             const auto n = insn->get_method()->get_name()->c_str();

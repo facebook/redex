@@ -44,7 +44,7 @@ CallSites SingleCalleeStrategy::get_callsites(const DexMethod* method) const {
   }
   for (auto& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
-    if (is_invoke(insn->opcode())) {
+    if (opcode::is_an_invoke(insn->opcode())) {
       auto callee = this->resolve_callee(method, insn);
       if (callee == nullptr || is_definitely_virtual(callee)) {
         continue;
@@ -160,7 +160,7 @@ CallSites CompleteCallGraphStrategy::get_callsites(
   }
   for (auto& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
-    if (is_invoke(insn->opcode())) {
+    if (opcode::is_an_invoke(insn->opcode())) {
       auto callee = this->resolve_callee(method, insn);
       if (callee == nullptr) {
         continue;
@@ -198,7 +198,7 @@ MultipleCalleeStrategy::MultipleCalleeStrategy(const Scope& scope,
   walk::parallel::code(scope, [&](const DexMethod* method, IRCode& code) {
     for (auto& mie : InstructionIterable(code)) {
       auto insn = mie.insn;
-      if (is_invoke(insn->opcode())) {
+      if (opcode::is_an_invoke(insn->opcode())) {
         auto callee =
             resolve_method(insn->get_method(), opcode_to_search(insn), method);
         if (callee == nullptr || !callee->is_virtual()) {
@@ -234,7 +234,7 @@ CallSites MultipleCalleeStrategy::get_callsites(const DexMethod* method) const {
   }
   for (auto& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
-    if (is_invoke(insn->opcode())) {
+    if (opcode::is_an_invoke(insn->opcode())) {
       auto callee = this->resolve_callee(method, insn);
       if (callee == nullptr) {
         continue;

@@ -373,7 +373,7 @@ CheckCastSet OptimizationImpl::fix_instructions(const DexType* intf,
             return out;
           };
 
-          if (is_invoke(insn->opcode())) {
+          if (opcode::is_an_invoke(insn->opcode())) {
             // We need check-casts for receiver and parameters, but not
             // return type.
 
@@ -402,7 +402,8 @@ CheckCastSet OptimizationImpl::fix_instructions(const DexType* intf,
             continue;
           }
 
-          if (is_iput(insn->opcode()) || is_sput(insn->opcode())) {
+          if (opcode::is_an_iput(insn->opcode()) ||
+              opcode::is_an_sput(insn->opcode())) {
             // If the field type is the interface, need a check-cast.
             auto fdef = insn->get_field();
             if (fdef->get_type() == intf) {

@@ -106,7 +106,7 @@ std::unordered_map<size_t, uint32_t> collect_reg_to_arg(
   size_t arg_index = 0;
   for (const auto& mie : InstructionIterable(params)) {
     auto load_insn = mie.insn;
-    always_assert(opcode::is_load_param(load_insn->opcode()));
+    always_assert(opcode::is_a_load_param(load_insn->opcode()));
 
     reg_to_arg[load_insn->dest()] = arg_index++;
   }
@@ -124,7 +124,7 @@ bool check_ordinal_usage(const DexMethod* method, size_t reg) {
   auto code = method->get_code();
   for (const auto& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
-    if (opcode::is_load_param(insn->opcode())) {
+    if (opcode::is_a_load_param(insn->opcode())) {
       // Skip load params. We already analyzed those.
       continue;
     }
@@ -466,7 +466,7 @@ class OptimizeEnums {
     auto code = InstructionIterable(method->get_code());
     auto it = code.begin();
     // Load parameter instructions.
-    while (it != code.end() && opcode::is_load_param(it->insn->opcode())) {
+    while (it != code.end() && opcode::is_a_load_param(it->insn->opcode())) {
       ++it;
     }
     if (it == code.end()) {
@@ -490,7 +490,7 @@ class OptimizeEnums {
 
     auto is_iput_or_const = [](IROpcode opcode) {
       // `const-string` is followed by `move-result-pseudo-object`
-      return is_iput(opcode) || is_literal_const(opcode) ||
+      return opcode::is_an_iput(opcode) || opcode::is_a_literal_const(opcode) ||
              opcode == OPCODE_CONST_STRING ||
              opcode == IOPCODE_MOVE_RESULT_PSEUDO_OBJECT;
     };

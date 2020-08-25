@@ -72,10 +72,10 @@ using MethodInsns =
 
 const DexType* get_type_from_insn(const IRInstruction* insn) {
   auto op = insn->opcode();
-  if (is_invoke(op)) {
+  if (opcode::is_an_invoke(op)) {
     return insn->get_method()->get_class();
   }
-  if (is_ifield_op(op) || is_sfield_op(op)) {
+  if (opcode::is_an_ifield_op(op) || opcode::is_an_sfield_op(op)) {
     return insn->get_field()->get_class();
   }
   return insn->get_type();

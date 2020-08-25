@@ -195,7 +195,7 @@ size_t analyze_and_rewrite(
     }
     auto* insn = it->insn;
     IROpcode op = insn->opcode();
-    if (!is_conditional_branch(op)) {
+    if (!opcode::is_a_conditional_branch(op)) {
       continue;
     }
 

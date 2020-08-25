@@ -320,7 +320,7 @@ void CFGInliner::move_return_reg(cfg::ControlFlowGraph* callee,
   std::vector<cfg::InstructionIterator> to_delete;
   auto iterable = cfg::InstructionIterable(*callee);
   for (auto it = iterable.begin(); it != iterable.end(); ++it) {
-    if (is_return(it->insn->opcode())) {
+    if (opcode::is_a_return(it->insn->opcode())) {
       IRInstruction* ret = it->insn;
       auto op = return_to_move(ret->opcode());
 

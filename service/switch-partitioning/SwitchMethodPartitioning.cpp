@@ -106,8 +106,8 @@ boost::optional<reg_t> SwitchMethodPartitioning::compute_prologue_blocks(
     // be no branch opcode -- the method will always throw an
     // IllegalArgumentException, or return when the switch is optimized.
     auto op = last_prologue_insn->opcode();
-    always_assert_log(!verify_default_case || is_branch(op) || is_return(op) ||
-                          op == OPCODE_THROW,
+    always_assert_log(!verify_default_case || is_branch(op) ||
+                          opcode::is_a_return(op) || op == OPCODE_THROW,
                       "%s in %s", SHOW(last_prologue_insn), SHOW(*cfg));
 
     if (!is_branch(op)) {
@@ -154,7 +154,8 @@ boost::optional<reg_t> SwitchMethodPartitioning::compute_prologue_blocks(
         for (const auto& mie : InstructionIterable(b)) {
           auto insn = mie.insn;
           auto op = insn->opcode();
-          always_assert_log(is_const(op) || is_conditional_branch(op),
+          always_assert_log(opcode::is_a_const(op) ||
+                                opcode::is_a_conditional_branch(op),
                             "Unexpected instruction in if-else tree %s",
                             SHOW(insn));
         }

@@ -35,7 +35,7 @@ void LocalTypeAnalyzer::analyze_instruction(const IRInstruction* insn,
 
 bool RegisterTypeAnalyzer::analyze_default(const IRInstruction* insn,
                                            DexTypeEnvironment* env) {
-  if (opcode::is_load_param(insn->opcode())) {
+  if (opcode::is_a_load_param(insn->opcode())) {
     return true;
   }
   if (insn->has_dest()) {

@@ -350,7 +350,7 @@ IRList::iterator find_or_insn_insert_point(cfg::Block* block) {
       block->begin(), block->end(), [&](const MethodItemEntry& mie) {
         auto mie_op = mie.insn->opcode();
         return (mie.type == MFLOW_OPCODE &&
-                (opcode::is_internal(mie_op) || mie_op == OPCODE_MOVE ||
+                (opcode::is_an_internal(mie_op) || mie_op == OPCODE_MOVE ||
                  mie_op == OPCODE_MOVE_WIDE ||
                  mie_op == OPCODE_MOVE_EXCEPTION ||
                  mie_op == OPCODE_MOVE_OBJECT || mie_op == OPCODE_MOVE_RESULT ||
@@ -459,7 +459,7 @@ int instrument_onBasicBlockBegin(
       code->begin(), code->end(), [&](const MethodItemEntry& mie) {
         return mie.type == MFLOW_FALLTHROUGH ||
                (mie.type == MFLOW_OPCODE &&
-                opcode::is_load_param(mie.insn->opcode()));
+                opcode::is_a_load_param(mie.insn->opcode()));
       });
 
   for (size_t reg_index = 0; reg_index < num_vectors; ++reg_index) {
@@ -497,7 +497,7 @@ void instrument_onMethodBegin(DexMethod* method,
       code->begin(), code->end(), [&](const MethodItemEntry& mie) {
         return mie.type == MFLOW_FALLTHROUGH ||
                (mie.type == MFLOW_OPCODE &&
-                opcode::is_load_param(mie.insn->opcode()));
+                opcode::is_a_load_param(mie.insn->opcode()));
       });
 
   if (insert_point == code->end()) {

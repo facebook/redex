@@ -1323,7 +1323,7 @@ bool ControlFlowGraph::insert(const InstructionIterator& position,
         auto existing_last_op = existing_last->insn->opcode();
         always_assert_log(!is_branch(existing_last_op) &&
                               !is_throw(existing_last_op) &&
-                              !is_return(existing_last_op),
+                              !opcode::is_a_return(existing_last_op),
                           "Can't add instructions after %s in Block %d in %s",
                           SHOW(existing_last->insn), b->id(), SHOW(*this));
 
@@ -1354,7 +1354,7 @@ bool ControlFlowGraph::insert(const InstructionIterator& position,
                       "create_branch() instead");
 
     IRList::iterator new_inserted_it = b->m_entries.insert_before(pos, insn);
-    if (is_throw(op) || is_return(op)) {
+    if (is_throw(op) || opcode::is_a_return(op)) {
       // Stop adding instructions when we understand that op
       // is the end of the block.
       insns_it = std::prev(end_index);
@@ -1368,7 +1368,7 @@ bool ControlFlowGraph::insert(const InstructionIterator& position,
       }
       remove_dangling_parents(dangling);
 
-      if (is_return(op)) {
+      if (opcode::is_a_return(op)) {
         // This block now ends in a return, it must have no successors.
         delete_succ_edge_if(
             b, [](const Edge* e) { return e->type() != EDGE_GHOST; });

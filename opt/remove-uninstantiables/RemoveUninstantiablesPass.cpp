@@ -207,7 +207,7 @@ RemoveUninstantiablesPass::replace_uninstantiable_refs(
       break;
     }
 
-    if ((is_iget(op) || is_iput(op)) &&
+    if ((opcode::is_an_iget(op) || opcode::is_an_iput(op)) &&
         scoped_uninstantiable_types.count(insn->get_field()->get_class())) {
       auto tmp = get_scratch();
       m.replace(it, {ir_const(tmp, 0), ir_throw(tmp)});
@@ -215,7 +215,7 @@ RemoveUninstantiablesPass::replace_uninstantiable_refs(
       continue;
     }
 
-    if ((is_iget(op) || is_sget(op)) &&
+    if ((opcode::is_an_iget(op) || opcode::is_an_sget(op)) &&
         scoped_uninstantiable_types.count(insn->get_field()->get_type())) {
       auto dest = cfg.move_result_of(it)->insn->dest();
       m.replace(it, {ir_const(dest, 0)});
