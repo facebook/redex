@@ -367,13 +367,6 @@ inline auto is_assignable_to(const DexType* parent) {
   });
 }
 
-/** Match methods that are bound to the given class. */
-template <typename T>
-inline auto on_class(const char* type) {
-  return matcher<T>(
-      [type](const T* t) { return t->get_class()->get_name()->str() == type; });
-}
-
 /** Match members and check predicate on their type */
 template <typename Member, typename P>
 inline auto member_of(match_t<DexType, P> p) {
