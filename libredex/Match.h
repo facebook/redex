@@ -12,6 +12,7 @@
 #include <type_traits>
 #include <vector>
 
+#include "DexAccess.h"
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "IRCode.h"
@@ -264,44 +265,51 @@ inline auto named(const char* name) {
       [name](const T* t) { return t->get_name()->str() == name; });
 }
 
+/** Matching on a type's access flags */
+template <typename T, typename P>
+inline auto access(match_t<DexAccessFlags, P> p) {
+  return matcher<T*>(
+      [p = std::move(p)](const T* t) { return p.matches(t->get_access()); });
+}
+
+/**
+ * For each {access} flag, a matcher with the following signature:
+ *
+ *   template <typename T> match_t<T*> is_{access}()
+ *
+ * Where `T` is a type with a `get_access()` member function.
+ */
+#define AF(_0, ACCESS, _2)                                          \
+  template <typename T>                                             \
+  inline auto is_##ACCESS() {                                       \
+    return matcher<T*>(                                             \
+        [](const T* t) { return ::is_##ACCESS(t->get_access()); }); \
+  }
+ACCESSFLAGS
+#undef AF
+
 /** Match T's which are external */
 template <typename T>
 inline auto is_external() {
   return matcher<T*>([](const T* t) { return t->is_external(); });
 }
 
-/** Match T's which are final */
-template <typename T>
-inline auto is_final() {
-  return matcher<T*>(
-      [](const T* t) { return (bool)(t->get_access() & ACC_FINAL); });
+/** Match methods that are default constructors */
+inline auto is_default_constructor() {
+  return matcher<DexMethod*>(detail::is_default_constructor);
 }
 
-/** Match T's which are static */
-template <typename T>
-inline auto is_static() {
-  return matcher<T*>(
-      [](const T* t) { return (bool)(t->get_access() & ACC_STATIC); });
-}
-
-/** Match T's which are interfaces */
-template <typename T>
-inline auto is_abstract() {
-  return matcher<T*>(
-      [](const T* t) { return (bool)(t->get_access() & ACC_ABSTRACT); });
-}
-
-/** Match classes that are enums */
-inline auto is_enum() {
-  return matcher<DexClass*>(
-      [](const DexClass* cls) { return (bool)(cls->get_access() & ACC_ENUM); });
-}
-
-/** Match classes that are interfaces */
-inline auto is_interface() {
-  return matcher<DexClass*>([](const DexClass* cls) {
-    return (bool)(cls->get_access() & ACC_INTERFACE);
+inline auto can_be_default_constructor() {
+  return matcher<DexMethodRef*>([](const DexMethodRef* meth) {
+    const DexMethod* def = meth->as_def();
+    return def && detail::is_default_constructor(def);
   });
+}
+
+/** Match methods that are constructors. INCLUDES static constructors! */
+inline auto can_be_constructor() {
+  return matcher<DexMethodRef*>(
+      [](const DexMethodRef* meth) { return method::is_constructor(meth); });
 }
 
 /**
@@ -465,29 +473,6 @@ inline auto member_of(match_t<DexType*, P> p) {
   return matcher<Member*>([p = std::move(p)](const Member* member) {
     return p.matches(member->get_class());
   });
-}
-
-/** Match methods that are default constructors */
-inline auto is_default_constructor() {
-  return matcher<DexMethod*>(detail::is_default_constructor);
-}
-
-inline auto can_be_default_constructor() {
-  return matcher<DexMethodRef*>([](const DexMethodRef* meth) {
-    const DexMethod* def = meth->as_def();
-    return def && detail::is_default_constructor(def);
-  });
-}
-
-/** Match methods that are constructors. INCLUDES static constructors! */
-inline auto is_constructor() {
-  return matcher<DexMethod*>(
-      [](const DexMethod* meth) { return method::is_constructor(meth); });
-}
-
-inline auto can_be_constructor() {
-  return matcher<DexMethodRef*>(
-      [](const DexMethodRef* meth) { return method::is_constructor(meth); });
 }
 
 /** Match classes that have class data */
