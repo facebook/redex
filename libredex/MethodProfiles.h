@@ -165,7 +165,7 @@ class MethodProfiles {
 
 class dexmethods_profiled_comparator {
   const MethodProfiles* m_method_profiles;
-  const std::unordered_set<std::string>* m_whitelisted_substrings;
+  const std::unordered_set<std::string>* m_allowlisted_substrings;
   // This cache should be a pointer so that copied
   // comparators can still share the same cache for better performance
   std::unordered_map<DexMethod*, double>* m_cache;
@@ -193,7 +193,7 @@ class dexmethods_profiled_comparator {
  public:
   dexmethods_profiled_comparator(
       const method_profiles::MethodProfiles* method_profiles,
-      const std::unordered_set<std::string>* whitelisted_substrings,
+      const std::unordered_set<std::string>* allowlisted_substrings,
       std::unordered_map<DexMethod*, double>* cache,
       bool legacy_order);
 

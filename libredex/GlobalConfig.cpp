@@ -26,7 +26,7 @@ void InlinerConfig::bind_config() {
   bind("blocklist", {}, m_blocklist);
   bind("blocklist", {}, m_blocklist);
   bind("caller_blocklist", {}, m_caller_blocklist);
-  bind("intradex_white_list", {}, m_intradex_white_list,
+  bind("intradex_allowlist", {}, m_intradex_allowlist,
        "The purpose of this white-list is to remove black-list entries when "
        "inlining after the InterDex pass has run. (This reduces the impact of "
        "black-list entries that avoid inlining conditional control-flow and "
@@ -102,7 +102,7 @@ void GlobalConfig::bind_config() {
   bind("keep_packages", {}, string_vector_param);
   bind("legacy_reflection_reachability", false, bool_param);
   bind("lower_with_cfg", {}, bool_param);
-  bind("method_sorting_whitelisted_substrings", {}, string_vector_param);
+  bind("method_sorting_allowlisted_substrings", {}, string_vector_param);
   bind("no_optimizations_annotations", {}, string_vector_param);
   bind("opt_decisions", OptDecisionsConfig(), opt_decisions_param);
   // TODO: Remove unused profiled_methods_file option and all build system

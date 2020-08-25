@@ -817,7 +817,7 @@ void redex_frontend(ConfigFiles& conf, /* input */
   stores.emplace_back(std::move(root_store));
 
   const JsonWrapper& json_config = conf.get_json_config();
-  dup_classes::read_dup_class_whitelist(json_config);
+  dup_classes::read_dup_class_allowlist(json_config);
 
   run_rethrow_first_aggregate([&]() {
     Timer t("Load classes from dexes");

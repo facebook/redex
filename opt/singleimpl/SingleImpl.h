@@ -10,8 +10,8 @@
 #include "Pass.h"
 
 struct SingleImplConfig {
-  std::vector<std::string> white_list;
-  std::vector<std::string> package_white_list;
+  std::vector<std::string> allowlist;
+  std::vector<std::string> package_allowlist;
   std::vector<std::string> blocklist;
   std::vector<std::string> package_blocklist;
   std::vector<std::string> anno_blocklist;
@@ -27,8 +27,8 @@ class SingleImplPass : public Pass {
   SingleImplPass() : Pass("SingleImplPass") {}
 
   void bind_config() override {
-    bind("white_list", {}, m_pass_config.white_list);
-    bind("package_white_list", {}, m_pass_config.package_white_list);
+    bind("allowlist", {}, m_pass_config.allowlist);
+    bind("package_allowlist", {}, m_pass_config.package_allowlist);
     bind("blocklist", {}, m_pass_config.blocklist);
     bind("package_blocklist", {}, m_pass_config.package_blocklist);
     bind("anno_blocklist", {}, m_pass_config.anno_blocklist);

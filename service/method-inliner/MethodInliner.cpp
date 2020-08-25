@@ -311,7 +311,7 @@ void run_inliner(DexStoresVector& stores,
   // Gather all inlinable candidates.
   auto inliner_config = conf.get_inliner_config();
   if (intra_dex) {
-    inliner_config.apply_intradex_white_list();
+    inliner_config.apply_intradex_allowlist();
   }
 
   method_profiles::MethodProfiles method_profiles =

@@ -309,11 +309,11 @@ class OptimizeEnums {
    * Replace enum with Boxed Integer object
    */
   void replace_enum_with_int(int max_enum_size,
-                             const std::vector<DexType*>& whitelist) {
+                             const std::vector<DexType*>& allowlist) {
     if (max_enum_size <= 0) {
       return;
     }
-    optimize_enums::Config config(max_enum_size, whitelist);
+    optimize_enums::Config config(max_enum_size, allowlist);
     const auto override_graph = method_override_graph::build_graph(m_scope);
     calculate_param_summaries(m_scope, *override_graph,
                               &config.param_summary_map);
@@ -920,10 +920,10 @@ void OptimizeEnumsPass::bind_config() {
   bind("max_enum_size", 100, m_max_enum_size,
        "The maximum number of enum field substitutions that are generated and "
        "stored in primary dex.");
-  bind("break_reference_equality_whitelist", {}, m_enum_to_integer_whitelist,
-       "A whitelist of enum classes that may have more than `max_enum_size` "
+  bind("break_reference_equality_allowlist", {}, m_enum_to_integer_allowlist,
+       "A allowlist of enum classes that may have more than `max_enum_size` "
        "enum fields, try to erase them without considering reference equality "
-       "of the enum objects. Do not add enums to the whitelist!");
+       "of the enum objects. Do not add enums to the allowlist!");
 }
 
 void OptimizeEnumsPass::run_pass(DexStoresVector& stores,
@@ -931,7 +931,7 @@ void OptimizeEnumsPass::run_pass(DexStoresVector& stores,
                                  PassManager& mgr) {
   OptimizeEnums opt_enums(stores, conf);
   opt_enums.remove_redundant_generated_classes();
-  opt_enums.replace_enum_with_int(m_max_enum_size, m_enum_to_integer_whitelist);
+  opt_enums.replace_enum_with_int(m_max_enum_size, m_enum_to_integer_allowlist);
   opt_enums.remove_enum_generated_methods();
   opt_enums.stats(mgr);
 }

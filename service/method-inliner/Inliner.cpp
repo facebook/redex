@@ -1099,7 +1099,7 @@ bool MultiMethodInliner::caller_too_large(DexType* caller_type,
     return false;
   }
 
-  if (m_config.whitelist_no_method_limit.count(caller_type)) {
+  if (m_config.allowlist_no_method_limit.count(caller_type)) {
     return false;
   }
 

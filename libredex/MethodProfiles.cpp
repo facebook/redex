@@ -343,15 +343,15 @@ bool MethodProfiles::parse_header(std::string& line) {
 
 dexmethods_profiled_comparator::dexmethods_profiled_comparator(
     const method_profiles::MethodProfiles* method_profiles,
-    const std::unordered_set<std::string>* whitelisted_substrings,
+    const std::unordered_set<std::string>* allowlisted_substrings,
     std::unordered_map<DexMethod*, double>* cache,
     bool legacy_order)
     : m_method_profiles(method_profiles),
-      m_whitelisted_substrings(whitelisted_substrings),
+      m_allowlisted_substrings(allowlisted_substrings),
       m_cache(cache),
       m_legacy_order(legacy_order) {
   always_assert(m_method_profiles != nullptr);
-  always_assert(m_whitelisted_substrings != nullptr);
+  always_assert(m_allowlisted_substrings != nullptr);
   always_assert(m_cache != nullptr);
 
   m_coldstart_start_marker = static_cast<DexMethod*>(
@@ -444,7 +444,7 @@ double dexmethods_profiled_comparator::get_method_sort_num(
 double dexmethods_profiled_comparator::get_method_sort_num_override(
     const DexMethod* method) {
   const std::string& deobfname = method->get_deobfuscated_name();
-  for (const std::string& substr : *m_whitelisted_substrings) {
+  for (const std::string& substr : *m_allowlisted_substrings) {
     if (deobfname.find(substr) != std::string::npos) {
       return COLD_START_RANGE_BEGIN + RANGE_SIZE / 2;
     }
@@ -468,8 +468,7 @@ bool dexmethods_profiled_comparator::operator()(DexMethod* a, DexMethod* b) {
     double w = get_method_sort_num(m);
     if (w == VERY_END) {
       // For methods not included in the profiled methods file, move them to
-      // the top section anyway if they match one of the whitelisted
-      // substrings.
+      // the top section anyway if they match one of the allowed substrings.
       w = get_method_sort_num_override(m);
     }
 

@@ -166,7 +166,7 @@ void GatheredTypes::sort_dexmethod_emitlist_profiled_order(
                    lmeth.end(),
                    method_profiles::dexmethods_profiled_comparator(
                        m_method_profiles,
-                       m_method_sorting_whitelisted_substrings,
+                       m_method_sorting_allowlisted_substrings,
                        &cache,
                        m_legacy_order));
 }
@@ -2350,9 +2350,9 @@ void DexOutput::write_symbol_files() {
                                 m_method_bytecode_offsets);
 }
 
-void GatheredTypes::set_method_sorting_whitelisted_substrings(
-    const std::unordered_set<std::string>* whitelisted_substrings) {
-  m_method_sorting_whitelisted_substrings = whitelisted_substrings;
+void GatheredTypes::set_method_sorting_allowlisted_substrings(
+    const std::unordered_set<std::string>* allowlisted_substrings) {
+  m_method_sorting_allowlisted_substrings = allowlisted_substrings;
 }
 
 void GatheredTypes::set_method_profiles(
@@ -2374,8 +2374,8 @@ void DexOutput::prepare(SortMode string_mode,
     m_gtypes->set_method_profiles(&conf.get_method_profiles());
     m_gtypes->set_legacy_order(conf.get_json_config().get(
         "legacy_profiled_code_item_sort_order", true));
-    m_gtypes->set_method_sorting_whitelisted_substrings(
-        &conf.get_method_sorting_whitelisted_substrings());
+    m_gtypes->set_method_sorting_allowlisted_substrings(
+        &conf.get_method_sorting_allowlisted_substrings());
   }
 
   fix_jumbos(m_classes, dodx);

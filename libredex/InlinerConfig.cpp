@@ -31,9 +31,9 @@ void InlinerConfig::populate(const Scope& scope) {
         break;
       }
     }
-    for (const auto& type_s : m_intradex_white_list) {
+    for (const auto& type_s : m_intradex_allowlist) {
       if (boost::starts_with(cls->get_name()->c_str(), type_s)) {
-        intradex_white_list.emplace(cls->get_type());
+        intradex_allowlist.emplace(cls->get_type());
         break;
       }
     }

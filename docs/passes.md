@@ -180,7 +180,7 @@ DelInitPass deletes unreferenced methods and fields that have no reachable
 constructor, as well as constructors for classes that can be removed or for
 classes that have another constructor that can be called.
 
-The scope of `DelInitPass` can be limited by a `package_white_list` in the
+The scope of `DelInitPass` can be limited by a `package_allowlist` in the
 [app's config file](config.md). Lacking a white list, `DelInitPass` works at
 global scope.
 
@@ -639,9 +639,9 @@ more granular level:
   "drop_local_variables" : "1",
   "drop_line_numbers" : "0",
   "drop_src_files" : "0",
-  "use_whitelist" : "0",
-  "cls_whitelist" : [],
-  "method_whitelist" : [],
+  "use_allowlist" : "0",
+  "cls_allowlist" : [],
+  "method_allowlist" : [],
   "drop_prologue_end" : "1",
   "drop_epilogue_begin" : "1",
   "drop_all_dbg_info_if_empty" : "1",

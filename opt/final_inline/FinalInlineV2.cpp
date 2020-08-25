@@ -651,7 +651,7 @@ class ThisObjectAnalysis final
  * Return false if all ifields are excluded - no need to check further.
  */
 bool get_ifields_read(
-    const std::unordered_set<std::string>& whitelist_method_names,
+    const std::unordered_set<std::string>& allowlist_method_names,
     const std::unordered_set<const DexType*>& parent_intf_set,
     const DexClass* ifield_cls,
     const DexMethod* method,
@@ -666,9 +666,9 @@ bool get_ifields_read(
       // For call on its parent's ctor, no need to proceed.
       return true;
     }
-    for (const auto& name : whitelist_method_names) {
-      // Whitelisted methods name from config, ignore.
-      // We have this whitelist so that we can ignore some methods that
+    for (const auto& name : allowlist_method_names) {
+      // Allowed methods name from config, ignore.
+      // We have this allowlist so that we can ignore some methods that
       // are safe and won't read instance field.
       // TODO: Switch to a proper interprocedural fixpoint analysis.
       if (method->get_name()->str() == name) {
@@ -732,7 +732,7 @@ bool get_ifields_read(
       }
       // Recusive check every methods accessed from <init>.
       bool keep_going =
-          get_ifields_read(whitelist_method_names, parent_intf_set, ifield_cls,
+          get_ifields_read(allowlist_method_names, parent_intf_set, ifield_cls,
                            callee, blocklist_ifields, visited);
       if (!keep_going) {
         return false;
@@ -759,11 +759,11 @@ bool get_ifields_read(
  */
 ConcurrentSet<DexField*> get_ifields_read_in_callees(
     const Scope& scope,
-    const std::unordered_set<std::string>& whitelist_method_names) {
+    const std::unordered_set<std::string>& allowlist_method_names) {
   ConcurrentSet<DexField*> return_ifields;
   TypeSystem ts(scope);
   walk::parallel::classes(scope, [&return_ifields, &ts,
-                                  &whitelist_method_names](DexClass* cls) {
+                                  &allowlist_method_names](DexClass* cls) {
     if (cls->is_external()) {
       return;
     }
@@ -801,7 +801,7 @@ ConcurrentSet<DexField*> get_ifields_read_in_callees(
         parent_intf_set.insert(intf_set.begin(), intf_set.end());
         for (const auto method : *check_methods) {
           bool keep_going =
-              get_ifields_read(whitelist_method_names, parent_intf_set, cls,
+              get_ifields_read(allowlist_method_names, parent_intf_set, cls,
                                method, &return_ifields, &visited);
           if (!keep_going) {
             break;
@@ -815,7 +815,7 @@ ConcurrentSet<DexField*> get_ifields_read_in_callees(
 
 cp::EligibleIfields gather_ifield_candidates(
     const Scope& scope,
-    const std::unordered_set<std::string>& whitelist_method_names) {
+    const std::unordered_set<std::string>& allowlist_method_names) {
   cp::EligibleIfields eligible_ifields;
   std::unordered_set<DexField*> ifields_candidates;
   walk::fields(scope, [&](DexField* field) {
@@ -871,7 +871,7 @@ cp::EligibleIfields gather_ifield_candidates(
     eligible_ifields.emplace(field);
   }
   auto blocklist_ifields =
-      get_ifields_read_in_callees(scope, whitelist_method_names);
+      get_ifields_read_in_callees(scope, allowlist_method_names);
   for (DexField* field : blocklist_ifields) {
     eligible_ifields.erase(field);
   }
@@ -967,7 +967,7 @@ void FinalInlinePassV2::run_pass(DexStoresVector& stores,
   size_t inlined_ifields_count{0};
   if (m_config.inline_instance_field) {
     cp::EligibleIfields eligible_ifields =
-        gather_ifield_candidates(scope, m_config.whitelist_method_names);
+        gather_ifield_candidates(scope, m_config.allowlist_method_names);
     inlined_ifields_count =
         run_inline_ifields(scope, &xstores, eligible_ifields, m_config);
   }

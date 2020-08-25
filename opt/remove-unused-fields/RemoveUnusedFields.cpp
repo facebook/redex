@@ -36,7 +36,7 @@ class RemoveUnusedFields final {
   RemoveUnusedFields(const Config& config, const Scope& scope)
       : m_config(config),
         m_scope(scope),
-        m_remove_unread_field_put_types_whitelist(
+        m_remove_unread_field_put_types_allowlist(
             {type::java_lang_String(), type::java_lang_Class(),
              type::java_lang_Boolean(), type::java_lang_Byte(),
              type::java_lang_Short(), type::java_lang_Character(),
@@ -74,8 +74,8 @@ class RemoveUnusedFields final {
            m_config.blocklist_classes.count(field->get_class()) != 0;
   }
 
-  bool is_whitelisted(DexField* field) const {
-    return !m_config.whitelist || m_config.whitelist->count(field) != 0;
+  bool is_allowlisted(DexField* field) const {
+    return !m_config.allowlist || m_config.allowlist->count(field) != 0;
   }
 
   bool can_remove_unread_field_put(DexField* field) const {
@@ -93,7 +93,7 @@ class RemoveUnusedFields final {
 
     // Nobody should ever rely on the lifetime of strings, classes, boxed
     // values, or enum values
-    if (m_remove_unread_field_put_types_whitelist.count(t)) {
+    if (m_remove_unread_field_put_types_allowlist.count(t)) {
       return true;
     }
     if (type::is_subclass(m_java_lang_Enum, t)) {
@@ -135,7 +135,7 @@ class RemoveUnusedFields final {
             stats.writes,
             is_synthetic(field));
       if (can_remove(field) && !is_blocklisted(field) &&
-          is_whitelisted(field)) {
+          is_allowlisted(field)) {
         if (m_config.remove_unread_fields && stats.reads == 0) {
           m_unread_fields.emplace(field);
           if (m_config.remove_vestigial_objects_written_fields &&
@@ -229,7 +229,7 @@ class RemoveUnusedFields final {
   std::unordered_set<const DexField*> m_unwritten_fields;
   std::unordered_set<const DexField*> m_zero_written_fields;
   std::unordered_set<const DexField*> m_vestigial_objects_written_fields;
-  std::unordered_set<DexType*> m_remove_unread_field_put_types_whitelist;
+  std::unordered_set<DexType*> m_remove_unread_field_put_types_allowlist;
   DexType* m_java_lang_Enum;
   std::atomic<size_t> m_unremovable_unread_field_puts{0};
 };

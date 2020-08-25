@@ -57,7 +57,7 @@ DexType* get_dextype_from_dotname(const char* dotname) {
 // Search a class name in a list of package names, return true if there is a
 // match
 bool find_package(const char* name) {
-  // If there's no whitelisted package, optimize every package by default
+  // If there's no allowed package, optimize every package by default
   if (package_filter.empty()) {
     return true;
   }

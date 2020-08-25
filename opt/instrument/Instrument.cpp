@@ -100,7 +100,7 @@ bool match_class_name(std::string cls_name,
   return false;
 }
 
-// Check for inclusion in whitelist or blocklist of methods/classes.
+// Check for inclusion in allowlist or blocklist of methods/classes.
 bool is_included(const DexMethod* method,
                  const std::unordered_set<std::string>& set) {
   if (match_class_name(show_deobfuscated(method->get_class()), set)) {
@@ -916,19 +916,19 @@ void do_simple_method_tracing(DexClass* analysis_cls,
       return 0;
     }
 
-    // Handle whitelist and blocklist.
-    if (!options.whitelist.empty()) {
-      if (is_included(method, options.whitelist)) {
-        TRACE(INSTRUMENT, 8, "Whitelist: included: %s", SHOW(method));
+    // Handle allowlist and blocklist.
+    if (!options.allowlist.empty()) {
+      if (is_included(method, options.allowlist)) {
+        TRACE(INSTRUMENT, 8, "Allow_list: included: %s", SHOW(method));
       } else {
         ++excluded;
-        TRACE(INSTRUMENT, 9, "Whitelist: excluded: %s", SHOW(method));
+        TRACE(INSTRUMENT, 9, "Allow_list: excluded: %s", SHOW(method));
         return 0;
       }
     }
 
     // In case of a conflict, when an entry is present in both blocklist
-    // and whitelist, the blocklist is given priority and the entry
+    // and allowlist, the blocklist is given priority and the entry
     // is not instrumented.
     if (is_included(method, options.blocklist)) {
       ++excluded;
@@ -1121,21 +1121,21 @@ void do_basic_block_tracing(DexClass* analysis_cls,
       return;
     }
 
-    // Basic block tracing assumes whitelist or set of cold start classes.
-    if ((!options.whitelist.empty() &&
-         !is_included(method, options.whitelist)) ||
+    // Basic block tracing assumes allowlist or set of cold start classes.
+    if ((!options.allowlist.empty() &&
+         !is_included(method, options.allowlist)) ||
         (options.only_cold_start_class &&
          !is_included(method, cold_start_classes))) {
       return;
     }
 
-    // Block_list has priority over whitelist or cold start list.
+    // Block_list has priority over allowlist or cold start list.
     if (is_included(method, options.blocklist)) {
       TRACE(INSTRUMENT, 9, "Block_list: excluded: %s", SHOW(method));
       return;
     }
 
-    TRACE(INSTRUMENT, 9, "Whitelist: included: %s", SHOW(method));
+    TRACE(INSTRUMENT, 9, "Allow_list: included: %s", SHOW(method));
     all_methods++;
     method_index = instrument_onBasicBlockBegin(
         &code, method, method_onMethodExit_map, method_index, all_bb_nums,
@@ -1185,7 +1185,7 @@ void InstrumentPass::bind_config() {
   bind("analysis_class_name", "", m_options.analysis_class_name);
   bind("analysis_method_name", "", m_options.analysis_method_name);
   bind("blocklist", {}, m_options.blocklist);
-  bind("whitelist", {}, m_options.whitelist);
+  bind("allowlist", {}, m_options.allowlist);
   bind("blocklist_file_name", "", m_options.blocklist_file_name);
   bind("metadata_file_name", "redex-instrument-metadata.txt",
        m_options.metadata_file_name);

@@ -719,7 +719,7 @@ class CodeTransformer final {
       m_replacements.push_back(InsnReplacement(cfg, block, mie, new_insn));
     } else {
       always_assert(
-          m_enum_util->m_config.breaking_reference_equality_whitelist.count(
+          m_enum_util->m_config.breaking_reference_equality_allowlist.count(
               field->get_type()));
       auto ordinal_reg = allocate_temp();
       std::vector<IRInstruction*> new_insns;
@@ -1065,7 +1065,7 @@ class EnumTransformer final {
               enum_cls->get_sfields().size());
         continue;
       } else if (num_enum_constants > config.max_enum_size) {
-        if (!config.breaking_reference_equality_whitelist.count(*it)) {
+        if (!config.breaking_reference_equality_allowlist.count(*it)) {
           TRACE(ENUM, 2, "\tSkip %s %lu values", SHOW(enum_cls),
                 num_enum_constants);
           continue;

@@ -163,8 +163,8 @@ void AnalysisImpl::filter_by_annotations(
  * White lists come first, then black lists.
  */
 void AnalysisImpl::filter_single_impl(const SingleImplConfig& config) {
-  filter_list(config.white_list, true);
-  filter_list(config.package_white_list, true);
+  filter_list(config.allowlist, true);
+  filter_list(config.package_allowlist, true);
   filter_list(config.blocklist, false);
   filter_list(config.package_blocklist, false);
   filter_by_annotations(config.anno_blocklist);

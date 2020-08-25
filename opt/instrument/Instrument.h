@@ -23,7 +23,7 @@ class InstrumentPass : public Pass {
     std::string analysis_class_name;
     std::string analysis_method_name;
     std::unordered_set<std::string> blocklist;
-    std::unordered_set<std::string> whitelist;
+    std::unordered_set<std::string> allowlist;
     std::string blocklist_file_name;
     std::string metadata_file_name;
     int64_t num_stats_per_method;

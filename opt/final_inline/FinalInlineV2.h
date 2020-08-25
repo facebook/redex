@@ -16,7 +16,7 @@ class FinalInlinePassV2 : public Pass {
  public:
   struct Config {
     std::unordered_set<const DexType*> blocklist_types;
-    std::unordered_set<std::string> whitelist_method_names;
+    std::unordered_set<std::string> allowlist_method_names;
     bool inline_instance_field;
     Config() : inline_instance_field(false) {}
   };
@@ -29,9 +29,9 @@ class FinalInlinePassV2 : public Pass {
          {},
          m_config.blocklist_types,
          "List of types that this optimization will omit.");
-    bind("whitelist_methods_name_checking_ifields_read",
+    bind("allowlist_methods_name_checking_ifields_read",
          {},
-         m_config.whitelist_method_names,
+         m_config.allowlist_method_names,
          "List of methods names that can be ignored when checking on instance "
          "field read in methods invoked by <init>");
   }

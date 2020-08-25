@@ -129,7 +129,7 @@ void EnumAnalyzeGeneratedMethods::process_invocation(
    * to a call to `Enum.valueOf()` or `Enum.values()` directly or reflectively
    * because they are safe and final.
    */
-  static const DexMethodRef* whitelisted_methods[] = {
+  static const DexMethodRef* allowlisted_methods[] = {
       DexMethod::get_method("Ljava/lang/Enum;.<init>:(Ljava/lang/String;I)V"),
       DexMethod::get_method("Ljava/lang/Enum;.compareTo:(Ljava/lang/Enum;)I"),
       DexMethod::get_method("Ljava/lang/Enum;.equals:(Ljava/lang/Object;)Z"),
@@ -142,9 +142,9 @@ void EnumAnalyzeGeneratedMethods::process_invocation(
   if (m_candidate_types.count(callee_class) ||
       type::java_lang_Enum() == callee_class ||
       type::java_lang_Object() == callee_class) {
-    for (auto whitelisted_method : whitelisted_methods) {
-      if (method::signatures_match(callee_ref, whitelisted_method)) {
-        TRACE(ENUM, 9, "Skipping whitelisted invocation %s", SHOW(insn));
+    for (auto allowlisted_method : allowlisted_methods) {
+      if (method::signatures_match(callee_ref, allowlisted_method)) {
+        TRACE(ENUM, 9, "Skipping allowed invocation %s", SHOW(insn));
         return;
       }
     }

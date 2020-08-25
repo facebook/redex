@@ -27,7 +27,7 @@ ConfigFiles::ConfigFiles(const Json::Value& config, const std::string& outdir)
         config.get("default_coldstart_classes", "").asString();
   }
 
-  load_method_sorting_whitelisted_substrings();
+  load_method_sorting_allowlisted_substrings();
   uint32_t instruction_size_bitwidth_limit =
       config.get("instruction_size_bitwidth_limit", 0).asUInt();
   always_assert_log(
@@ -146,14 +146,14 @@ ConfigFiles::load_class_lists() {
   return lists;
 }
 
-void ConfigFiles::load_method_sorting_whitelisted_substrings() {
+void ConfigFiles::load_method_sorting_allowlisted_substrings() {
   const auto json_cfg = get_json_config();
   Json::Value json_result;
-  json_cfg.get("method_sorting_whitelisted_substrings", Json::nullValue,
+  json_cfg.get("method_sorting_allowlisted_substrings", Json::nullValue,
                json_result);
   if (!json_result.empty()) {
     for (auto const& json_element : json_result) {
-      m_method_sorting_whitelisted_substrings.insert(json_element.asString());
+      m_method_sorting_allowlisted_substrings.insert(json_element.asString());
     }
   }
 }
@@ -199,7 +199,7 @@ void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
   jw.get("debug", false, inliner_config->debug);
   jw.get("blocklist", {}, inliner_config->m_blocklist);
   jw.get("caller_blocklist", {}, inliner_config->m_caller_blocklist);
-  jw.get("intradex_white_list", {}, inliner_config->m_intradex_white_list);
+  jw.get("intradex_allowlist", {}, inliner_config->m_intradex_allowlist);
 
   std::vector<std::string> no_inline_annos;
   jw.get("no_inline_annos", {}, no_inline_annos);
