@@ -93,6 +93,7 @@
   TM(PM)             \
   TM(POST_LOWERING)  \
   TM(PTA)            \
+  TM(PURITY)         \
   TM(QUICK)          \
   TM(RAL)            \
   TM(REACH)          \
