@@ -387,7 +387,7 @@ dispatch::DispatchMethod create_two_level_switch_dispatch(
   std::vector<IRList::iterator> to_delete;
   auto code = dispatch_meth->get_code();
   for (auto it = code->begin(); it != code->end(); ++it) {
-    if (it->type == MFLOW_OPCODE && is_goto(it->insn->opcode()) &&
+    if (it->type == MFLOW_OPCODE && opcode::is_goto(it->insn->opcode()) &&
         std::prev(it)->type == MFLOW_TARGET) {
       to_delete.emplace_back(it);
     }
@@ -664,7 +664,7 @@ bool may_be_dispatch(const DexMethod* method) {
   uint32_t branches = 0;
   for (auto& mie : InstructionIterable(code)) {
     auto op = mie.insn->opcode();
-    if (is_switch(op)) {
+    if (opcode::is_switch(op)) {
       return true;
     }
     branches += opcode::is_a_conditional_branch(op);

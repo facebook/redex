@@ -1527,7 +1527,7 @@ class EnumTransformer final {
         } else if (field == values_field) {
           it = code->erase(it);
         }
-      } else if (is_invoke_direct(insn->opcode()) &&
+      } else if (opcode::is_invoke_direct(insn->opcode()) &&
                  insn->get_method() == ctor) {
         summaries.emplace(insn, side_effects::Summary());
       }
@@ -1560,7 +1560,7 @@ class EnumTransformer final {
   bool empty(IRCode* code) {
     auto iterable = InstructionIterable(code);
     auto begin = iterable.begin();
-    return is_return_void(begin->insn->opcode());
+    return opcode::is_return_void(begin->insn->opcode());
   }
 
   /**

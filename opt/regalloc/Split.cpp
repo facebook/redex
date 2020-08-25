@@ -317,7 +317,7 @@ size_t split_for_last_use(const SplitPlan& split_plan,
         // will go into B11 but not both B11 and B12, so if this occurred,
         // we would treat it like the case of
         // live_out(block) - live_in(succ_block).
-        if (is_branch(insn->opcode()) && it == block->rbegin()) {
+        if (opcode::is_branch(insn->opcode()) && it == block->rbegin()) {
           for (auto& succ : block->succs()) {
             IRInstruction* mov =
                 gen_load_for_split(ig, l, load_store_reg, code);
@@ -340,7 +340,7 @@ size_t split_for_last_use(const SplitPlan& split_plan,
         }
 
         IRInstruction* mov = gen_load_for_split(ig, l, load_store_reg, code);
-        if (writes_result_register(insn->opcode()) &&
+        if (opcode::writes_result_register(insn->opcode()) &&
             it.base()->type == MFLOW_OPCODE &&
             opcode::is_a_move_result(it.base()->insn->opcode())) {
           // Move-result must follow instruction that write

@@ -332,7 +332,7 @@ BuilderAnalysis::get_vinvokes_to_this_infered_type() {
   std::unordered_map<IRInstruction*, DexType*> result;
 
   for (const auto& pair : m_usage) {
-    if (is_invoke_virtual(pair.first->opcode())) {
+    if (opcode::is_invoke_virtual(pair.first->opcode())) {
       always_assert(!result.count(const_cast<IRInstruction*>(pair.first)));
 
       auto current_instance = get_instantiated_type(pair.first);
@@ -340,7 +340,7 @@ BuilderAnalysis::get_vinvokes_to_this_infered_type() {
     }
 
     for (auto& insn : pair.second) {
-      if (is_invoke_virtual(insn->opcode())) {
+      if (opcode::is_invoke_virtual(insn->opcode())) {
         auto this_reg = insn->src(0);
         auto val = m_insn_to_env->at(insn).get(this_reg).get_constant();
 

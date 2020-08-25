@@ -53,7 +53,7 @@ bool end_of_block(const IRList* ir, const IRList::iterator& it, bool in_try) {
   if (it->type != MFLOW_OPCODE) {
     return false;
   }
-  if (is_branch(it->insn->opcode()) ||
+  if (opcode::is_branch(it->insn->opcode()) ||
       opcode::is_a_return(it->insn->opcode()) ||
       it->insn->opcode() == OPCODE_THROW) {
     return true;
@@ -97,7 +97,7 @@ IRList::iterator insn_before_position(cfg::Block* b) {
   for (auto it = b->begin(); it != b->end(); ++it) {
     if (it->type == MFLOW_OPCODE) {
       auto op = it->insn->opcode();
-      if (!opcode::is_move_result_any(op) && !is_goto(op)) {
+      if (!opcode::is_move_result_any(op) && !opcode::is_goto(op)) {
         return it;
       }
     } else if (it->type == MFLOW_POSITION) {
@@ -340,7 +340,7 @@ IRList::iterator Block::get_conditional_branch() {
   for (auto it = rbegin(); it != rend(); ++it) {
     if (it->type == MFLOW_OPCODE) {
       auto op = it->insn->opcode();
-      if (opcode::is_a_conditional_branch(op) || is_switch(op)) {
+      if (opcode::is_a_conditional_branch(op) || opcode::is_switch(op)) {
         return std::prev(it.base());
       }
     }
@@ -471,8 +471,8 @@ boost::optional<Edge::CaseKey> Block::remove_first_matching_target(
     if (mie.type == MFLOW_TARGET && mie.target->src == branch) {
       boost::optional<Edge::CaseKey> result;
       if (mie.target->type == BRANCH_MULTI) {
-        always_assert_log(is_switch(branch->insn->opcode()), "block %d in %s\n",
-                          id(), SHOW(*m_parent));
+        always_assert_log(opcode::is_switch(branch->insn->opcode()),
+                          "block %d in %s\n", id(), SHOW(*m_parent));
         result = mie.target->case_key;
       }
       m_entries.erase_and_dispose(it);
@@ -724,8 +724,8 @@ void ControlFlowGraph::connect_blocks(BranchToTargets& branch_to_targets) {
     bool fallthrough = true;
     if (last_mie.type == MFLOW_OPCODE) {
       auto last_op = last_mie.insn->opcode();
-      if (is_branch(last_op)) {
-        fallthrough = !is_goto(last_op);
+      if (opcode::is_branch(last_op)) {
+        fallthrough = !opcode::is_goto(last_op);
         auto const& target_blocks = branch_to_targets[&last_mie];
 
         for (auto target_block : target_blocks) {
@@ -739,11 +739,11 @@ void ControlFlowGraph::connect_blocks(BranchToTargets& branch_to_targets) {
               continue;
             }
           }
-          auto edge_type = is_goto(last_op) ? EDGE_GOTO : EDGE_BRANCH;
+          auto edge_type = opcode::is_goto(last_op) ? EDGE_GOTO : EDGE_BRANCH;
           add_edge(b, target_block, edge_type);
         }
 
-        if (m_editable && is_goto(last_op)) {
+        if (m_editable && opcode::is_goto(last_op)) {
           // We don't need the gotos in editable mode because the edges
           // fully encode that information
           delete last_mie.insn;
@@ -1039,7 +1039,7 @@ void ControlFlowGraph::sanity_check() const {
                             "failed to remove all targets. block %d in\n%s",
                             b->id(), SHOW(*this));
           if (mie.type == MFLOW_OPCODE) {
-            always_assert_log(!is_goto(mie.insn->opcode()),
+            always_assert_log(!opcode::is_goto(mie.insn->opcode()),
                               "failed to remove all gotos. block %d in\n%s",
                               b->id(), SHOW(*this));
           }
@@ -1065,14 +1065,14 @@ void ControlFlowGraph::sanity_check() const {
         if (opcode::is_a_conditional_branch(op)) {
           always_assert_log(num_succs == 2, "block %d, %s", b->id(),
                             SHOW(*this));
-        } else if (is_switch(op)) {
+        } else if (opcode::is_switch(op)) {
           always_assert_log(num_succs > 1, "block %d, %s", b->id(),
                             SHOW(*this));
         } else if (opcode::is_a_return(op)) {
           // Make sure we don't have any outgoing edges (except EDGE_GHOST)
           always_assert_log(num_succs == 0, "block %d, %s", b->id(),
                             SHOW(*this));
-        } else if (is_throw(op)) {
+        } else if (opcode::is_throw(op)) {
           // A throw could end the method or go to a catch handler.
           // Make sure this block has no outgoing non-throwing edges
           auto non_throw_edge = get_succ_edge_if(b, [](const Edge* e) {
@@ -1082,7 +1082,8 @@ void ControlFlowGraph::sanity_check() const {
                             SHOW(*this));
         }
 
-        if (num_preds > 0 && !(opcode::is_a_return(op) || is_throw(op))) {
+        if (num_preds > 0 &&
+            !(opcode::is_a_return(op) || opcode::is_throw(op))) {
           // Control Flow shouldn't just fall off the end of a block, unless
           // it's an orphan block that's unreachable anyway
           always_assert_log(num_succs > 0, "block %d, %s", b->id(),
@@ -2026,7 +2027,7 @@ void ControlFlowGraph::cleanup_deleted_edges(const EdgeSet& edges) {
       auto last_insn = last_it->insn;
       auto op = last_insn->opcode();
       auto remaining_forward_edges = pred_block->succs();
-      if ((opcode::is_a_conditional_branch(op) || is_switch(op)) &&
+      if ((opcode::is_a_conditional_branch(op) || opcode::is_switch(op)) &&
           remaining_forward_edges.size() == 1) {
         pred_block->m_entries.erase_and_dispose(last_it);
         Edge* fwd_edge = remaining_forward_edges[0];
@@ -2218,7 +2219,7 @@ void ControlFlowGraph::remove_insn(const InstructionIterator& it) {
                         [](const Edge* e) { return e->type() == EDGE_THROW; });
   }
 
-  if (opcode::is_a_conditional_branch(op) || is_switch(op)) {
+  if (opcode::is_a_conditional_branch(op) || opcode::is_switch(op)) {
     // Remove all outgoing EDGE_BRANCHes
     // leaving behind only an EDGE_GOTO (and maybe an EDGE_THROW?)
     //
@@ -2280,14 +2281,16 @@ void ControlFlowGraph::create_branch(
     const std::vector<std::pair<int32_t, Block*>>& case_to_block) {
   auto op = insn->opcode();
   always_assert(m_editable);
-  always_assert_log(is_branch(op), "%s is not a branch instruction", SHOW(op));
-  always_assert_log(!is_goto(op),
+  always_assert_log(opcode::is_branch(op), "%s is not a branch instruction",
+                    SHOW(op));
+  always_assert_log(!opcode::is_goto(op),
                     "There are no gotos in the editable CFG. Use add_edge()");
 
   auto existing_last = b->get_last_insn();
   if (existing_last != b->end()) {
     auto last_op = existing_last->insn->opcode();
-    always_assert_log(!(is_branch(last_op) || is_throw(last_op) ||
+    always_assert_log(!(opcode::is_branch(last_op) ||
+                        opcode::is_throw(last_op) ||
                         opcode::is_a_return(last_op)),
                       "Can't add branch after %s in Block %d in %s",
                       SHOW(existing_last->insn), b->id(), SHOW(*this));
@@ -2307,7 +2310,7 @@ void ControlFlowGraph::create_branch(
   }
 
   b->m_entries.push_back(*new MethodItemEntry(insn));
-  if (is_switch(op)) {
+  if (opcode::is_switch(op)) {
     for (const auto& entry : case_to_block) {
       add_edge(b, entry.second, entry.first);
     }

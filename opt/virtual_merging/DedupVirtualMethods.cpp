@@ -23,7 +23,7 @@ bool eligible_code(const IRCode* code) {
   uint32_t count = 0;
   editable_cfg_adapter::iterate(code, [&](const MethodItemEntry& mie) {
     auto opcode = mie.insn->opcode();
-    if (is_invoke_super(opcode)) {
+    if (opcode::is_invoke_super(opcode)) {
       eligible = false;
       return editable_cfg_adapter::LOOP_BREAK;
     }

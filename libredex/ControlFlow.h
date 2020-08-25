@@ -1321,8 +1321,8 @@ bool ControlFlowGraph::insert(const InstructionIterator& position,
         // This will abort if someone tries to insert after a returning or
         // throwing instruction.
         auto existing_last_op = existing_last->insn->opcode();
-        always_assert_log(!is_branch(existing_last_op) &&
-                              !is_throw(existing_last_op) &&
+        always_assert_log(!opcode::is_branch(existing_last_op) &&
+                              !opcode::is_throw(existing_last_op) &&
                               !opcode::is_a_return(existing_last_op),
                           "Can't add instructions after %s in Block %d in %s",
                           SHOW(existing_last->insn), b->id(), SHOW(*this));
@@ -1349,12 +1349,12 @@ bool ControlFlowGraph::insert(const InstructionIterator& position,
       }
     }
 
-    always_assert_log(!is_branch(op),
+    always_assert_log(!opcode::is_branch(op),
                       "insert() does not support branch opcodes. Use "
                       "create_branch() instead");
 
     IRList::iterator new_inserted_it = b->m_entries.insert_before(pos, insn);
-    if (is_throw(op) || opcode::is_a_return(op)) {
+    if (opcode::is_throw(op) || opcode::is_a_return(op)) {
       // Stop adding instructions when we understand that op
       // is the end of the block.
       insns_it = std::prev(end_index);
@@ -1373,7 +1373,7 @@ bool ControlFlowGraph::insert(const InstructionIterator& position,
         delete_succ_edge_if(
             b, [](const Edge* e) { return e->type() != EDGE_GHOST; });
       } else {
-        always_assert(is_throw(op));
+        always_assert(opcode::is_throw(op));
         // The only valid way to leave this block is via a throw edge.
         delete_succ_edge_if(b, [](const Edge* e) {
           return !(e->type() == EDGE_THROW || e->type() == EDGE_GHOST);

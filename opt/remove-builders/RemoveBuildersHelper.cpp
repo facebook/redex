@@ -965,7 +965,7 @@ void transfer_object_reach(DexType* obj,
     regs[insn->dest()] = regs[insn->src(0)];
   } else if (opcode::is_a_move_result(op)) {
     regs[insn->dest()] = regs[regs_size];
-  } else if (writes_result_register(op)) {
+  } else if (opcode::writes_result_register(op)) {
     if (opcode::is_an_invoke(op)) {
       auto invoked = insn->get_method();
       auto def = resolve_method(invoked, MethodSearch::Any);
@@ -1004,7 +1004,7 @@ bool tainted_reg_escapes(
       }
 
       if (method::is_init(invoked) ||
-          (invoked->get_class() == ty && !is_invoke_static(op))) {
+          (invoked->get_class() == ty && !opcode::is_invoke_static(op))) {
         // if a builder is passed as the first arg to a virtual function or a
         // ctor, we can treat it as non-escaping, since we also check that
         // those methods don't allow the builder to escape.

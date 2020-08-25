@@ -554,7 +554,7 @@ class FinalInlineImpl {
       // Check the code, bail out if there is branch instruction in clinit
       // because that may make the following pattern matching problematic.
       // We have control flow analysis in FinalInlineV2.
-      if (is_branch(it->insn->opcode())) {
+      if (opcode::is_branch(it->insn->opcode())) {
         return;
       }
     }

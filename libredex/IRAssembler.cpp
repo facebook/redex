@@ -94,9 +94,9 @@ s_expr to_s_expr(const IRInstruction* insn, const LabelRefs& label_refs) {
     break;
   }
 
-  if (is_branch(op)) {
+  if (opcode::is_branch(op)) {
     const auto& label_strs = label_refs.at(insn);
-    if (is_switch(op)) {
+    if (opcode::is_switch(op)) {
       // (switch v0 (:a :b :c))
       std::vector<s_expr> label_exprs;
       label_exprs.reserve(label_strs.size());
@@ -251,9 +251,9 @@ std::unique_ptr<IRInstruction> instruction_from_s_expr(
   }
   }
 
-  if (is_branch(op)) {
+  if (opcode::is_branch(op)) {
     std::string label_str;
-    if (is_switch(op)) {
+    if (opcode::is_switch(op)) {
       s_expr list;
       s_patn({s_patn(list)}, tail)
           .must_match(tail, "Expecting list of labels for " + opcode_str);

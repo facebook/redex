@@ -54,7 +54,7 @@ void change_super_class(DexClass* cls, DexType* super_type) {
     auto code = ctor->get_code();
     for (auto& mie : InstructionIterable(code)) {
       auto insn = mie.insn;
-      if (!is_invoke_direct(insn->opcode()) || !insn->has_method()) {
+      if (!opcode::is_invoke_direct(insn->opcode()) || !insn->has_method()) {
         continue;
       }
       // Replace "invoke_direct v0, old_super_type;.<init>:()V" with

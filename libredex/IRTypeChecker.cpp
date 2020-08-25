@@ -542,7 +542,8 @@ Result check_structure(const DexMethod* method, bool check_no_overwrite_this) {
                                   " at start of the method");
       }
       auto prev_op = prev->insn->opcode();
-      if (!(opcode::is_an_invoke(prev_op) || is_filled_new_array(prev_op))) {
+      if (!(opcode::is_an_invoke(prev_op) ||
+            opcode::is_filled_new_array(prev_op))) {
         return Result::make_error(
             "Encountered " + show(*it) +
             " without appropriate prefix "

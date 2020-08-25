@@ -69,6 +69,25 @@ IROpcode from_dex_opcode(DexOpcode);
  */
 DexOpcode to_dex_opcode(IROpcode);
 
+// if an IROpcode can be translated to a DexOpcode of /range format
+bool has_range_form(IROpcode);
+
+bool has_variable_srcs_size(IROpcode op);
+
+/*
+ * These instructions have observable side effects so must always be considered
+ * live, regardless of whether their output is consumed by another instruction.
+ */
+bool has_side_effects(IROpcode opc);
+
+bool is_move_result_any(IROpcode op);
+
+bool is_commutative(IROpcode opcode);
+
+bool is_binop64(IROpcode op);
+
+bool may_throw(IROpcode);
+
 /**
  * Creates predicates from definitions in IROpcode.defs, e.g. with the
  * following signatures:
@@ -85,24 +104,51 @@ DexOpcode to_dex_opcode(IROpcode);
   inline bool is_##LC(IROpcode op) { return op == IOPCODE_##UC; }
 #include "IROpcodes.def"
 
-bool may_throw(IROpcode);
+inline bool can_throw(IROpcode op) { return may_throw(op) || is_throw(op); }
 
-inline bool can_throw(IROpcode op) {
-  return may_throw(op) || op == OPCODE_THROW;
+inline bool writes_result_register(IROpcode op) {
+  return is_an_invoke(op) || is_filled_new_array(op);
 }
 
-// if an IROpcode can be translated to a DexOpcode of /range format
-bool has_range_form(IROpcode);
+inline bool is_branch(IROpcode op) {
+  switch (op) {
+  case OPCODE_SWITCH:
+  case OPCODE_IF_EQ:
+  case OPCODE_IF_NE:
+  case OPCODE_IF_LT:
+  case OPCODE_IF_GE:
+  case OPCODE_IF_GT:
+  case OPCODE_IF_LE:
+  case OPCODE_IF_EQZ:
+  case OPCODE_IF_NEZ:
+  case OPCODE_IF_LTZ:
+  case OPCODE_IF_GEZ:
+  case OPCODE_IF_GTZ:
+  case OPCODE_IF_LEZ:
+  case OPCODE_GOTO:
+    return true;
+  default:
+    return false;
+  }
+}
+
+inline bool is_div_int_lit(IROpcode op) {
+  return op == OPCODE_DIV_INT_LIT16 || op == OPCODE_DIV_INT_LIT8;
+}
+
+inline bool is_rem_int_lit(IROpcode op) {
+  return op == OPCODE_REM_INT_LIT16 || op == OPCODE_REM_INT_LIT8;
+}
+
+inline bool is_div_int_or_long(IROpcode op) {
+  return op == OPCODE_DIV_INT || op == OPCODE_DIV_LONG;
+}
+
+inline bool is_rem_int_or_long(IROpcode op) {
+  return op == OPCODE_REM_INT || op == OPCODE_REM_LONG;
+}
 
 DexOpcode range_version(IROpcode);
-
-bool has_variable_srcs_size(IROpcode op);
-
-bool is_move_result_any(IROpcode op);
-
-bool is_commutative(IROpcode opcode);
-
-bool is_binop64(IROpcode op);
 
 IROpcode load_param_to_move(IROpcode);
 
@@ -144,12 +190,6 @@ enum Branchingness {
 };
 
 Branchingness branchingness(IROpcode op);
-
-/*
- * These instructions have observable side effects so must always be considered
- * live, regardless of whether their output is consumed by another instruction.
- */
-bool has_side_effects(IROpcode opc);
 
 } // namespace opcode
 

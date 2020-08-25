@@ -1169,7 +1169,7 @@ ConstantEnvironment FixpointIterator::analyze_edge(
   auto op = insn->opcode();
   if (opcode::is_a_conditional_branch(op)) {
     analyze_if(insn, &env, edge->type() == cfg::EDGE_BRANCH);
-  } else if (is_switch(op)) {
+  } else if (opcode::is_switch(op)) {
     auto selector_val = env.get(insn->src(0));
     const auto& case_key = edge->case_key();
     if (case_key) {

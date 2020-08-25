@@ -117,7 +117,7 @@ class InitFixpointIterator final
         env->set(field, env->get(insn->src(0)));
       }
       return;
-    } else if (is_invoke_direct(opcode) &&
+    } else if (opcode::is_invoke_direct(opcode) &&
                method::is_init(insn->get_method())) {
       // Another construction invocation on `this` pointer.
       const auto& obj_domain = env->get(insn->src(0));

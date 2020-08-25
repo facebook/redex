@@ -81,7 +81,7 @@ namespace {
 bool has_switch(IRCode* code) {
   for (const auto& mie : InstructionIterable(*code)) {
     auto opcode = mie.insn->opcode();
-    if (is_switch(opcode)) {
+    if (opcode::is_switch(opcode)) {
       return true;
     }
   }
@@ -92,7 +92,7 @@ cfg::InstructionIterator find_large_switch(cfg::ControlFlowGraph& cfg,
                                            size_t case_threshold) {
   auto it = cfg::InstructionIterator(cfg, /*is_begin=*/true);
   for (; !it.is_end(); ++it) {
-    if (!is_switch(it->insn->opcode())) {
+    if (!opcode::is_switch(it->insn->opcode())) {
       continue;
     }
     auto block = it.block();

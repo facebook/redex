@@ -165,7 +165,7 @@ RefStats resolve_refs(DexMethod* method) {
 void try_desuperify(const DexMethod* caller,
                     IRInstruction* insn,
                     RefStats& stats) {
-  if (!is_invoke_super(insn->opcode())) {
+  if (!opcode::is_invoke_super(insn->opcode())) {
     return;
   }
   auto cls = type_class(caller->get_class());
@@ -265,7 +265,8 @@ RefStats ResolveRefsPass::refine_virtual_callsites(DexMethod* method,
     }
 
     auto opcode = insn->opcode();
-    if (!is_invoke_virtual(opcode) && !is_invoke_interface(opcode)) {
+    if (!opcode::is_invoke_virtual(opcode) &&
+        !opcode::is_invoke_interface(opcode)) {
       continue;
     }
 
@@ -309,7 +310,7 @@ RefStats ResolveRefsPass::refine_virtual_callsites(DexMethod* method,
     }
     TRACE(RESO, 2, "Resolving %s\n\t=>%s", SHOW(mref), SHOW(def_meth));
     insn->set_method(def_meth);
-    if (is_invoke_interface(opcode) && !is_interface(def_cls)) {
+    if (opcode::is_invoke_interface(opcode) && !is_interface(def_cls)) {
       insn->set_opcode(OPCODE_INVOKE_VIRTUAL);
       stats.num_invoke_interface_replaced++;
     } else {

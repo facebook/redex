@@ -190,7 +190,7 @@ Transform::Stats Transform::apply(
 void Transform::apply_changes(IRCode* code) {
   for (auto const& p : m_replacements) {
     IRInstruction* old_op = p.first;
-    if (is_branch(old_op->opcode())) {
+    if (opcode::is_branch(old_op->opcode())) {
       code->replace_branch(old_op, p.second);
     } else {
       code->replace_opcode(old_op, p.second);

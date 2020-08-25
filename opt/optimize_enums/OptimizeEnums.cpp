@@ -63,7 +63,7 @@ IRInstruction* get_ctor_call(const DexMethod* method,
   auto* code = method->get_code();
   for (const auto& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
-    if (!is_invoke_direct(insn->opcode())) {
+    if (!opcode::is_invoke_direct(insn->opcode())) {
       continue;
     }
 
@@ -474,7 +474,7 @@ class OptimizeEnums {
     }
 
     // invoke-direct {} Ljava/lang/Enum;.<init>:(Ljava/lang/String;I)V
-    if (!is_invoke_direct(it->insn->opcode())) {
+    if (!opcode::is_invoke_direct(it->insn->opcode())) {
       return false;
     } else {
       const DexMethodRef* ref = it->insn->get_method();
@@ -502,7 +502,7 @@ class OptimizeEnums {
     }
 
     // return-void is the last instruction
-    return is_return_void(it->insn->opcode()) && (++it) == code.end();
+    return opcode::is_return_void(it->insn->opcode()) && (++it) == code.end();
   }
 
   /**

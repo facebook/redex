@@ -109,7 +109,7 @@ void update_refs(Scope& scope,
         instr->set_field(field_def);
       }
     } else if (instr->has_method() &&
-               (is_invoke_direct(op) || is_invoke_static(op))) {
+               (opcode::is_invoke_direct(op) || opcode::is_invoke_static(op))) {
       // We only check invoke-direct and invoke-static because the method def
       // we've renamed is a `dmethod`, not a `vmethod`.
       //

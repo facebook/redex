@@ -35,7 +35,7 @@ bool is_leaf(cfg::ControlFlowGraph* cfg, cfg::Block* b, reg_t reg) {
   for (const auto& mie : InstructionIterable(b)) {
     auto insn = mie.insn;
     auto op = insn->opcode();
-    if (!(opcode::is_a_literal_const(op) || is_branch(op))) {
+    if (!(opcode::is_a_literal_const(op) || opcode::is_branch(op))) {
       // non-leaf nodes only have const and branch instructions
       return true;
     }
@@ -49,7 +49,8 @@ bool is_leaf(cfg::ControlFlowGraph* cfg, cfg::Block* b, reg_t reg) {
 
   auto last_insn = last->insn;
   auto last_op = last_insn->opcode();
-  if (is_branch(last_op) && SwitchEquivFinder::has_src(last_insn, reg)) {
+  if (opcode::is_branch(last_op) &&
+      SwitchEquivFinder::has_src(last_insn, reg)) {
     // The only non-leaf block is one that branches on the switching reg
     return false;
   }
@@ -117,7 +118,7 @@ SwitchEquivFinder::SwitchEquivFinder(
     // make sure the input is well-formed
     auto insn = m_root_branch->insn;
     auto op = insn->opcode();
-    always_assert(is_branch(op));
+    always_assert(opcode::is_branch(op));
     always_assert(has_src(insn, m_switching_reg));
   }
 

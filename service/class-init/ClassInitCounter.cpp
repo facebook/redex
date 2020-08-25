@@ -1242,7 +1242,7 @@ void ClassInitCounter::analyze_block(
         registers.insert(dest, registers.get(srcs[0]));
         clear_dest = false;
       }
-    } else if (is_new_instance(opcode)) {
+    } else if (opcode::is_new_instance(opcode)) {
       DexType* typ = i->get_type();
       registers.clear(RESULT_REGISTER);
       if ((tracked_set.empty() || tracked_set.count(i) != 0) &&
@@ -1274,13 +1274,13 @@ void ClassInitCounter::analyze_block(
       if (!registers.is_empty(srcs[0])) {
         registers.get(srcs[0])->escapes.add_array(i);
       }
-    } else if (is_filled_new_array(opcode)) {
+    } else if (opcode::is_filled_new_array(opcode)) {
       for (const auto src : srcs) {
         if (!registers.is_empty(src)) {
           registers.get(src)->escapes.add_array(i);
         }
       }
-    } else if (is_invoke_static(opcode)) {
+    } else if (opcode::is_invoke_static(opcode)) {
       auto curr_method = i->get_method();
       registers.clear(RESULT_REGISTER);
       if (m_optional_method && curr_method->get_name() == m_optional_method) {

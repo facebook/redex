@@ -154,9 +154,10 @@ void Transform::simplify_instruction(const ConstantEnvironment& env,
     auto* primary_insn = ir_list::primary_instruction_of_move_result_pseudo(it);
     auto op = primary_insn->opcode();
     if (opcode::is_an_sget(op) || opcode::is_an_iget(op) ||
-        opcode::is_an_aget(op) || is_div_int_lit(op) || is_rem_int_lit(op) ||
-        is_instance_of(op) || is_rem_int_or_long(op) ||
-        is_div_int_or_long(op) || is_check_cast(op)) {
+        opcode::is_an_aget(op) || opcode::is_div_int_lit(op) ||
+        opcode::is_rem_int_lit(op) || opcode::is_instance_of(op) ||
+        opcode::is_rem_int_or_long(op) || opcode::is_div_int_or_long(op) ||
+        opcode::is_check_cast(op)) {
       replace_with_const(env, it, xstores, declaring_type);
     }
     break;
@@ -173,7 +174,7 @@ void Transform::simplify_instruction(const ConstantEnvironment& env,
       replace_with_const(env, it, xstores, declaring_type);
     } else if (m_config.getter_methods_for_immutable_fields) {
       auto primary_insn = ir_list::primary_instruction_of_move_result(it);
-      if (is_invoke_virtual(primary_insn->opcode())) {
+      if (opcode::is_invoke_virtual(primary_insn->opcode())) {
         auto invoked =
             resolve_method(primary_insn->get_method(), MethodSearch::Virtual);
         if (m_config.getter_methods_for_immutable_fields->count(invoked)) {
@@ -237,7 +238,7 @@ void Transform::remove_dead_switch(const ConstantEnvironment& env,
   auto insn_it = block->get_last_insn();
   always_assert(insn_it != block->end());
   auto* insn = insn_it->insn;
-  always_assert(is_switch(insn->opcode()));
+  always_assert(opcode::is_switch(insn->opcode()));
 
   // Find successor blocks and a default block for switch
   std::unordered_set<cfg::Block*> succs;
@@ -333,7 +334,7 @@ void Transform::eliminate_dead_branch(
     return;
   }
   auto* insn = insn_it->insn;
-  if (is_switch(insn->opcode())) {
+  if (opcode::is_switch(insn->opcode())) {
     remove_dead_switch(env, cfg, block);
     return;
   }
@@ -416,7 +417,7 @@ void Transform::apply_changes(IRCode* code) {
   for (auto const& p : m_replacements) {
     IRInstruction* old_op = p.first;
     std::vector<IRInstruction*> new_ops = p.second;
-    if (is_branch(old_op->opcode())) {
+    if (opcode::is_branch(old_op->opcode())) {
       always_assert(new_ops.size() == 1);
       code->replace_branch(old_op, new_ops.at(0));
     } else {
@@ -520,7 +521,7 @@ void Transform::forward_targets(
       auto last_insn = succ->get_last_insn();
       for (auto& mie : InstructionIterable(succ)) {
         auto insn = mie.insn;
-        if (is_branch(insn->opcode())) {
+        if (opcode::is_branch(insn->opcode())) {
           continue;
         }
         // TODO: Support side-effect-free instruction sequences involving

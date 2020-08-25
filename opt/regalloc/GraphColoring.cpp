@@ -867,7 +867,8 @@ std::unordered_map<reg_t, IRList::iterator> Allocator::find_param_splits(
       // We need to check insn before end of block to make sure we didn't
       // insert load after branches.
       auto insn_it = idom->get_last_insn();
-      if (insn_it != idom->end() && !is_branch(insn_it->insn->opcode()) &&
+      if (insn_it != idom->end() &&
+          !opcode::is_branch(insn_it->insn->opcode()) &&
           !opcode::may_throw(insn_it->insn->opcode())) {
         ++insn_it;
       }

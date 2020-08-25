@@ -33,7 +33,8 @@ TEST_F(PostVerify, SinkCommonCtorInvocation) {
     auto param_insns = InstructionIterable(dm->get_code());
     for (auto param_it = param_insns.begin(); param_it != param_insns.end();
          ++param_it) {
-      invocation_count += is_invoke_direct(param_it->insn->opcode()) ? 1 : 0;
+      invocation_count +=
+          opcode::is_invoke_direct(param_it->insn->opcode()) ? 1 : 0;
     }
     EXPECT_EQ(invocation_count, 1);
   }

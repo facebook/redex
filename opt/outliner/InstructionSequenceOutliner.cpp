@@ -690,7 +690,7 @@ static bool is_uniquely_reached_via_pred(cfg::Block* block) {
 static std::unordered_set<cfg::Block*> get_eventual_targets_after_outlining(
     cfg::Block* first_block, const cfg::InstructionIterator& it) {
   always_assert(opcode::is_a_conditional_branch(it->insn->opcode()) ||
-                is_switch(it->insn->opcode()));
+                opcode::is_switch(it->insn->opcode()));
   auto get_targets =
       [first_block](
           cfg::Block* start_block) -> std::unordered_set<cfg::Block*> {
@@ -705,7 +705,7 @@ static std::unordered_set<cfg::Block*> get_eventual_targets_after_outlining(
         auto last_insn_it = last_block->get_last_insn();
         if (last_insn_it != last_block->end() &&
             (opcode::is_a_conditional_branch(last_insn_it->insn->opcode()) ||
-             is_switch(last_insn_it->insn->opcode()))) {
+             opcode::is_switch(last_insn_it->insn->opcode()))) {
           auto last_insn_cfg_it =
               last_block->to_cfg_instruction_iterator(last_insn_it);
           auto more_targets = get_eventual_targets_after_outlining(
@@ -796,7 +796,7 @@ static bool explore_candidates_from(
       return false;
     }
     if (opcode::is_a_conditional_branch(insn->opcode()) ||
-        is_switch(insn->opcode())) {
+        opcode::is_switch(insn->opcode())) {
       // If the branching structure is such that there's a tree where all
       // leaves nodes unconditionally goto a common block, then we'll attempt
       // to gather a partial candidate tree.

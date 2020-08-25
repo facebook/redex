@@ -68,7 +68,7 @@ bool BuilderTransform::inline_super_calls_and_ctors(const DexType* type) {
       auto insn = mie.insn;
       if (insn->opcode() == OPCODE_INVOKE_SUPER) {
         inlinable_insns.emplace(insn);
-      } else if (is_invoke_direct(insn->opcode())) {
+      } else if (opcode::is_invoke_direct(insn->opcode())) {
         auto callee = resolve_method(insn->get_method(), MethodSearch::Direct);
         if (super_ctors.count(callee)) {
           inlinable_insns.emplace(insn);
@@ -107,7 +107,7 @@ void BuilderTransform::update_virtual_calls(
     auto insn = pair.first;
     auto current_instance = pair.second;
 
-    if (is_invoke_virtual(insn->opcode())) {
+    if (opcode::is_invoke_virtual(insn->opcode())) {
       auto method = resolve_method(insn->get_method(), MethodSearch::Virtual);
       if (!method) {
         continue;

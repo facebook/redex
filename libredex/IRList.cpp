@@ -380,7 +380,7 @@ void IRList::replace_opcode(IRInstruction* to_delete,
 }
 
 void IRList::replace_opcode(IRInstruction* from, IRInstruction* to) {
-  always_assert_log(!is_branch(to->opcode()),
+  always_assert_log(!opcode::is_branch(to->opcode()),
                     "You may want replace_branch instead");
   replace_opcode(from, std::vector<IRInstruction*>{to});
 }
@@ -391,7 +391,7 @@ void IRList::replace_opcode_with_infinite_loop(IRInstruction* from) {
   for (; miter != m_list.end(); miter++) {
     MethodItemEntry* mentry = &*miter;
     if (mentry->type == MFLOW_OPCODE && mentry->insn == from) {
-      if (is_branch(from->opcode())) {
+      if (opcode::is_branch(from->opcode())) {
         remove_branch_targets(from);
       }
       mentry->insn = to;
@@ -408,8 +408,8 @@ void IRList::replace_opcode_with_infinite_loop(IRInstruction* from) {
 }
 
 void IRList::replace_branch(IRInstruction* from, IRInstruction* to) {
-  always_assert(is_branch(from->opcode()));
-  always_assert(is_branch(to->opcode()));
+  always_assert(opcode::is_branch(from->opcode()));
+  always_assert(opcode::is_branch(to->opcode()));
   for (auto& mentry : m_list) {
     if (mentry.type == MFLOW_OPCODE && mentry.insn == from) {
       mentry.insn = to;
@@ -475,7 +475,7 @@ void IRList::remove_opcode(const IRList::iterator& it) {
     move_it->type = MFLOW_FALLTHROUGH;
     move_it->insn = nullptr;
   }
-  if (is_branch(insn->opcode())) {
+  if (opcode::is_branch(insn->opcode())) {
     remove_branch_targets(insn);
   }
   it->type = MFLOW_FALLTHROUGH;
@@ -532,7 +532,7 @@ void IRList::sanity_check() const {
  * replaced by another instruction.
  */
 void IRList::remove_branch_targets(IRInstruction* branch_inst) {
-  always_assert_log(is_branch(branch_inst->opcode()),
+  always_assert_log(opcode::is_branch(branch_inst->opcode()),
                     "Instruction is not a branch instruction.");
   for (auto miter = m_list.begin(); miter != m_list.end(); miter++) {
     MethodItemEntry* mentry = &*miter;

@@ -204,7 +204,7 @@ bool IRInstruction::invoke_src_is_wide(size_t i) const {
 
   // virtual methods have `this` as the 0th register argument, but the
   // arg list does NOT include `this`
-  if (!is_invoke_static(m_opcode)) {
+  if (!opcode::is_invoke_static(m_opcode)) {
     if (i == 0) {
       // reference to `this`. References are never wide
       return false;
