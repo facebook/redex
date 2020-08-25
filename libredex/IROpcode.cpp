@@ -21,8 +21,7 @@ Ref ref(IROpcode opcode) {
 #define OP(op, ref, ...) \
   case OPCODE_##op:      \
     return ref;
-    OPS
-#undef OP
+#include "IROpcodes.def"
   case IOPCODE_LOAD_PARAM:
   case IOPCODE_LOAD_PARAM_OBJECT:
   case IOPCODE_LOAD_PARAM_WIDE:

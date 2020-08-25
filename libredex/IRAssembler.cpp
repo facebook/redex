@@ -18,10 +18,10 @@ using namespace sparta;
 namespace {
 
 // clang-format off
-#define OP(OP, KIND, STR) {OPCODE_##OP, STR},
 std::unordered_map<IROpcode, std::string, boost::hash<IROpcode>>
     opcode_to_string_table = {
-        OPS
+#define OP(OP, KIND, STR) {OPCODE_##OP, STR},
+#include "IROpcodes.def"
         {IOPCODE_LOAD_PARAM, "load-param"},
         {IOPCODE_LOAD_PARAM_OBJECT, "load-param-object"},
         {IOPCODE_LOAD_PARAM_WIDE, "load-param-wide"},
@@ -29,11 +29,10 @@ std::unordered_map<IROpcode, std::string, boost::hash<IROpcode>>
         {IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, "move-result-pseudo-object"},
         {IOPCODE_MOVE_RESULT_PSEUDO_WIDE, "move-result-pseudo-wide"},
 };
-#undef OP
 
-#define OP(OP, KIND, STR) {STR, OPCODE_##OP},
 std::unordered_map<std::string, IROpcode> string_to_opcode_table = {
-    OPS
+#define OP(OP, KIND, STR) {STR, OPCODE_##OP},
+#include "IROpcodes.def"
     {"load-param", IOPCODE_LOAD_PARAM},
     {"load-param-object", IOPCODE_LOAD_PARAM_OBJECT},
     {"load-param-wide", IOPCODE_LOAD_PARAM_WIDE},
@@ -41,7 +40,6 @@ std::unordered_map<std::string, IROpcode> string_to_opcode_table = {
     {"move-result-pseudo-object", IOPCODE_MOVE_RESULT_PSEUDO_OBJECT},
     {"move-result-pseudo-wide", IOPCODE_MOVE_RESULT_PSEUDO_WIDE},
 };
-#undef OP
 // clang-format on
 
 using LabelDefs = std::unordered_map<std::string, MethodItemEntry*>;

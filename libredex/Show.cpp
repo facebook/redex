@@ -874,9 +874,9 @@ std::string show(IROpcode opcode) {
 #define OP(op, ...) \
   case OPCODE_##op: \
     return #op;
-    OPS
-#undef OP
-        case IOPCODE_LOAD_PARAM : return "IOPCODE_LOAD_PARAM";
+#include "IROpcodes.def"
+  case IOPCODE_LOAD_PARAM:
+    return "IOPCODE_LOAD_PARAM";
   case IOPCODE_LOAD_PARAM_OBJECT:
     return "IOPCODE_LOAD_PARAM_OBJECT";
   case IOPCODE_LOAD_PARAM_WIDE:
