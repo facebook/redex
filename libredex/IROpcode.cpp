@@ -24,6 +24,7 @@ Ref ref(IROpcode opcode) {
 #define IOP(uc, lc, ref, ...) \
   case IOPCODE_##uc:          \
     return ref;
+#define OPRANGE(...)
 #include "IROpcodes.def"
   }
   not_reached_log("Unexpected opcode 0x%x", opcode);

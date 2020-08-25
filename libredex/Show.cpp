@@ -877,6 +877,7 @@ std::string show(IROpcode opcode) {
 #define IOP(op, ...) \
   case IOPCODE_##op: \
     return "IOPCODE_" #op;
+#define OPRANGE(...)
 #include "IROpcodes.def"
   }
   not_reached_log("Unknown opcode 0x%x", opcode);

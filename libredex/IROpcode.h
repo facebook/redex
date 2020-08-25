@@ -35,6 +35,7 @@ enum class Ref {
 enum IROpcode : uint16_t {
 #define OP(uc, lc, code, ...) OPCODE_##uc,
 #define IOP(uc, lc, code, ...) IOPCODE_##uc,
+#define OPRANGE(...)
 #include "IROpcodes.def"
 };
 // clang-format on
@@ -67,6 +68,17 @@ IROpcode from_dex_opcode(DexOpcode);
  * to return here.
  */
 DexOpcode to_dex_opcode(IROpcode);
+
+/**
+ * Creates a predicate for each OPRANGE in IROpcode.defs, e.g. with signature:
+ *
+ *   inline bool is_a_move(IROpcode op);
+ */
+#define OPRANGE(NAME, FST, LST) \
+  inline bool is_##NAME(IROpcode op) { return FST <= op && op <= LST; }
+#define OP(...)
+#define IOP(...)
+#include "IROpcodes.def"
 
 bool may_throw(IROpcode);
 

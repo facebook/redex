@@ -22,12 +22,14 @@ std::unordered_map<IROpcode, std::string, boost::hash<IROpcode>>
     opcode_to_string_table = {
 #define OP(UC, LC, KIND, STR) {OPCODE_##UC, STR},
 #define IOP(UC, LC, KIND, STR) {IOPCODE_##UC, STR},
+#define OPRANGE(...)
 #include "IROpcodes.def"
 };
 
 std::unordered_map<std::string, IROpcode> string_to_opcode_table = {
 #define OP(UC, LC, KIND, STR) {STR, OPCODE_##UC},
 #define IOP(UC, LC, KIND, STR) {STR, IOPCODE_##UC},
+#define OPRANGE(...)
 #include "IROpcodes.def"
 };
 // clang-format on
