@@ -473,23 +473,23 @@ void RenameClassesPassV2::eval_classes(Scope& scope,
       continue;
     }
 
-    // Don't rename anythings in the direct name blacklist (hierarchy ignored)
+    // Don't rename anythings in the direct name blocklist (hierarchy ignored)
     if (m_dont_rename_specific.count(clsname)) {
       m_dont_rename_reasons[clazz] = {DontRenameReasonCode::Specific, strname};
       continue;
     }
 
-    // Don't rename anything if it falls in a blacklisted package
-    bool package_blacklisted = false;
+    // Don't rename anything if it falls in an excluded package
+    bool package_blocklisted = false;
     for (const auto& pkg : m_dont_rename_packages) {
       if (strname.rfind("L" + pkg) == 0) {
-        TRACE(RENAME, 2, "%s blacklisted by pkg rule %s", clsname, pkg.c_str());
+        TRACE(RENAME, 2, "%s excluded by pkg rule %s", clsname, pkg.c_str());
         m_dont_rename_reasons[clazz] = {DontRenameReasonCode::Packages, pkg};
-        package_blacklisted = true;
+        package_blocklisted = true;
         break;
       }
     }
-    if (package_blacklisted) continue;
+    if (package_blocklisted) continue;
 
     if (dont_rename_class_name_literals.count(clsname)) {
       m_dont_rename_reasons[clazz] = {DontRenameReasonCode::ClassNameLiterals,
@@ -553,23 +553,23 @@ void RenameClassesPassV2::eval_classes_post(
     const char* clsname = clazz->get_name()->c_str();
     std::string strname = std::string(clsname);
 
-    // Don't rename anythings in the direct name blacklist (hierarchy ignored)
+    // Don't rename anythings in the direct name blocklist (hierarchy ignored)
     if (m_dont_rename_specific.count(clsname)) {
       m_dont_rename_reasons[clazz] = {DontRenameReasonCode::Specific, strname};
       continue;
     }
 
-    // Don't rename anything if it falls in a blacklisted package
-    bool package_blacklisted = false;
+    // Don't rename anything if it falls in an excluded package
+    bool package_blocklisted = false;
     for (const auto& pkg : m_dont_rename_packages) {
       if (strname.rfind("L" + pkg) == 0) {
-        TRACE(RENAME, 2, "%s blacklisted by pkg rule %s", clsname, pkg.c_str());
+        TRACE(RENAME, 2, "%s excluded by pkg rule %s", clsname, pkg.c_str());
         m_dont_rename_reasons[clazz] = {DontRenameReasonCode::Packages, pkg};
-        package_blacklisted = true;
+        package_blocklisted = true;
         break;
       }
     }
-    if (package_blacklisted) continue;
+    if (package_blocklisted) continue;
 
     if (dont_rename_hierarchies.count(clazz->get_type())) {
       std::string rule = dont_rename_hierarchies[clazz->get_type()];

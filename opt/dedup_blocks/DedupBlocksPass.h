@@ -17,7 +17,7 @@ class DedupBlocksPass : public Pass {
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
   void bind_config() override {
-    bind("method_black_list", {}, m_config.method_black_list);
+    bind("method_blocklist", {}, m_config.method_blocklist);
     bind("block_split_min_opcode_count",
          dedup_blocks_impl::Config::DEFAULT_BLOCK_SPLIT_MIN_OPCODE_COUNT,
          m_config.block_split_min_opcode_count);

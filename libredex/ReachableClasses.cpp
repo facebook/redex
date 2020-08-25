@@ -61,7 +61,7 @@ struct DexItemIter<DexMethod*, F> {
  * Prevent a class from being deleted due to its being referenced via
  * reflection. :reflecting_method is the method containing the reflection site.
  */
-void blacklist_field(DexMethod* reflecting_method,
+void blocklist_field(DexMethod* reflecting_method,
                      DexType* type,
                      DexString* name,
                      bool declared) {
@@ -76,19 +76,19 @@ void blacklist_field(DexMethod* reflecting_method,
     if (!is_public(t) && !declared) {
       return;
     }
-    TRACE(PGR, 4, "SRA BLACKLIST: %s", SHOW(t));
+    TRACE(PGR, 4, "SRA BLOCK_LIST: %s", SHOW(t));
     t->rstate.set_root(keep_reason::REFLECTION, reflecting_method);
   };
   DexItemIter<DexField*, decltype(yield)>::iterate(cls, yield);
   if (!declared) {
     auto super_cls = cls->get_super_class();
     if (super_cls != nullptr) {
-      blacklist_field(reflecting_method, super_cls, name, declared);
+      blocklist_field(reflecting_method, super_cls, name, declared);
     }
   }
 }
 
-void blacklist_method(DexMethod* reflecting_method,
+void blocklist_method(DexMethod* reflecting_method,
                       DexType* type,
                       DexString* name,
                       const boost::optional<std::vector<DexType*>>& params,
@@ -107,14 +107,14 @@ void blacklist_method(DexMethod* reflecting_method,
     if (!is_public(t) && !declared) {
       return;
     }
-    TRACE(PGR, 4, "SRA BLACKLIST: %s", SHOW(t));
+    TRACE(PGR, 4, "SRA BLOCK_LIST: %s", SHOW(t));
     t->rstate.set_root(keep_reason::REFLECTION, reflecting_method);
   };
   DexItemIter<DexMethod*, decltype(yield)>::iterate(cls, yield);
   if (!declared) {
     auto super_cls = cls->get_super_class();
     if (super_cls != nullptr) {
-      blacklist_method(reflecting_method, super_cls, name, params, declared);
+      blocklist_method(reflecting_method, super_cls, name, params, declared);
     }
   }
 }
@@ -249,25 +249,25 @@ void analyze_reflection(const Scope& scope) {
 
       switch (refl_type) {
       case GET_FIELD:
-        blacklist_field(method, arg_cls->dex_type, arg_str_value, false);
+        blocklist_field(method, arg_cls->dex_type, arg_str_value, false);
         break;
       case GET_DECLARED_FIELD:
-        blacklist_field(method, arg_cls->dex_type, arg_str_value, true);
+        blocklist_field(method, arg_cls->dex_type, arg_str_value, true);
         break;
       case GET_METHOD:
       case GET_CONSTRUCTOR:
-        blacklist_method(method, arg_cls->dex_type, arg_str_value, param_types,
+        blocklist_method(method, arg_cls->dex_type, arg_str_value, param_types,
                          false);
         break;
       case GET_DECLARED_METHOD:
       case GET_DECLARED_CONSTRUCTOR:
-        blacklist_method(method, arg_cls->dex_type, arg_str_value, param_types,
+        blocklist_method(method, arg_cls->dex_type, arg_str_value, param_types,
                          true);
         break;
       case INT_UPDATER:
       case LONG_UPDATER:
       case REF_UPDATER:
-        blacklist_field(method, arg_cls->dex_type, arg_str_value, true);
+        blocklist_field(method, arg_cls->dex_type, arg_str_value, true);
         break;
       }
     }

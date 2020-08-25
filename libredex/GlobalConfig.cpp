@@ -23,9 +23,9 @@ void InlinerConfig::bind_config() {
   bind("run_local_dce", run_local_dce, run_local_dce);
   bind("no_inline_annos", {}, m_no_inline_annos);
   bind("force_inline_annos", {}, m_force_inline_annos);
-  bind("black_list", {}, m_black_list);
-  bind("black_list", {}, m_black_list);
-  bind("caller_black_list", {}, m_caller_black_list);
+  bind("blocklist", {}, m_blocklist);
+  bind("blocklist", {}, m_blocklist);
+  bind("caller_blocklist", {}, m_caller_blocklist);
   bind("intradex_white_list", {}, m_intradex_white_list,
        "The purpose of this white-list is to remove black-list entries when "
        "inlining after the InterDex pass has run. (This reduces the impact of "

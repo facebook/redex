@@ -15,7 +15,7 @@
 class FinalInlinePassV2 : public Pass {
  public:
   struct Config {
-    std::unordered_set<const DexType*> black_list_types;
+    std::unordered_set<const DexType*> blocklist_types;
     std::unordered_set<std::string> whitelist_method_names;
     bool inline_instance_field;
     Config() : inline_instance_field(false) {}
@@ -25,9 +25,9 @@ class FinalInlinePassV2 : public Pass {
 
   void bind_config() override {
     bind("inline_instance_field", true, m_config.inline_instance_field);
-    bind("black_list_types",
+    bind("blocklist_types",
          {},
-         m_config.black_list_types,
+         m_config.blocklist_types,
          "List of types that this optimization will omit.");
     bind("whitelist_methods_name_checking_ifields_read",
          {},

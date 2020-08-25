@@ -1045,16 +1045,16 @@ void parse_file(const std::string& filename, ProguardConfiguration* pg_config) {
   });
 }
 
-void remove_blacklisted_rules(ProguardConfiguration* pg_config) {
-  // TODO: Make the set of blacklisted rules configurable.
-  auto blacklisted_rules = R"(
+void remove_blocklisted_rules(ProguardConfiguration* pg_config) {
+  // TODO: Make the set of excluded rules configurable.
+  auto blocklisted_rules = R"(
   # The proguard-android-optimize.txt file that is bundled with the Android SDK
   # has a keep rule to prevent removal of all resource ID fields. This is likely
   # because ProGuard runs before aapt which can change the values of those
   # fields. Since this is no longer true in our case, this rule is redundant and
   # hampers our optimizations.
   #
-  # I chose to blacklist this rule instead of unmarking all resource IDs so that
+  # I chose to exclude this rule instead of unmarking all resource IDs so that
   # if a resource ID really needs to be kept, the user can still keep it by
   # writing a keep rule that does a non-wildcard match.
   -keepclassmembers class **.R$* {
@@ -1064,12 +1064,12 @@ void remove_blacklisted_rules(ProguardConfiguration* pg_config) {
   # See keepclassnames.pro, or T1890454.
   -keepnames class *
 )";
-  // std::stringstream ss(blacklisted_rules);
-  ProguardConfiguration pg_config_blacklist;
-  parse(blacklisted_rules, &pg_config_blacklist, "<internal blacklist>");
+  // std::stringstream ss(blocklisted_rules);
+  ProguardConfiguration pg_config_blocklist;
+  parse(blocklisted_rules, &pg_config_blocklist, "<internal blocklist>");
   pg_config->keep_rules.erase_if([&](const KeepSpec& ks) {
-    for (const auto& blacklisted_ks : pg_config_blacklist.keep_rules) {
-      if (ks == *blacklisted_ks) {
+    for (const auto& blocklisted_ks : pg_config_blocklist.keep_rules) {
+      if (ks == *blocklisted_ks) {
         return true;
       }
     }

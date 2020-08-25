@@ -345,8 +345,8 @@ void RemoveBuildersPass::run_pass(DexStoresVector& stores,
       if (kept_builders.find(builder_cls) != kept_builders.end()) {
         continue;
       }
-      if (m_blacklist.find(builder) != m_blacklist.end()) {
-        TRACE(BUILDERS, 2, "Skipping blacklisted type %s", SHOW(builder));
+      if (m_blocklist.find(builder) != m_blocklist.end()) {
+        TRACE(BUILDERS, 2, "Skipping excluded type %s", SHOW(builder));
         continue;
       }
 

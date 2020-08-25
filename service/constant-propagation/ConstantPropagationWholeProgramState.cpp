@@ -117,12 +117,12 @@ WholeProgramState::WholeProgramState(
     const Scope& scope,
     const interprocedural::FixpointIterator& fp_iter,
     const std::unordered_set<DexMethod*>& non_true_virtuals,
-    const std::unordered_set<const DexType*>& field_black_list) {
+    const std::unordered_set<const DexType*>& field_blocklist) {
   walk::fields(scope, [&](DexField* field) {
     // We exclude those marked by keep rules: keep-marked fields may be
     // written to by non-Dex bytecode.
     // All fields not in m_known_fields will be bound to Top.
-    if (field_black_list.count(field->get_class())) {
+    if (field_blocklist.count(field->get_class())) {
       return;
     }
     if (is_static(field) && !root(field)) {

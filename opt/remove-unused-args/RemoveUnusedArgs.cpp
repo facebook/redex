@@ -184,7 +184,7 @@ bool RemoveArgs::update_method_signature(
                     "We don't treat virtuals, so methods must be defined\n");
 
   const std::string& full_name = method->get_deobfuscated_name();
-  for (const auto& s : m_black_list) {
+  for (const auto& s : m_blocklist) {
     if (full_name.find(s) != std::string::npos) {
       TRACE(ARGS, 3,
             "Skipping {%s} due to black list match of {%s} against {%s}",
@@ -433,7 +433,7 @@ void RemoveUnusedArgsPass::run_pass(DexStoresVector& stores,
   LocalDce::Stats local_dce_stats{0, 0};
   while (true) {
     num_iterations++;
-    RemoveArgs rm_args(scope, m_black_list, m_total_iterations++);
+    RemoveArgs rm_args(scope, m_blocklist, m_total_iterations++);
     auto pass_stats = rm_args.run();
     if (pass_stats.methods_updated_count == 0) {
       break;

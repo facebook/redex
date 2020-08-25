@@ -100,7 +100,7 @@ bool match_class_name(std::string cls_name,
   return false;
 }
 
-// Check for inclusion in whitelist or blacklist of methods/classes.
+// Check for inclusion in whitelist or blocklist of methods/classes.
 bool is_included(const DexMethod* method,
                  const std::unordered_set<std::string>& set) {
   if (match_class_name(show_deobfuscated(method->get_class()), set)) {
@@ -916,7 +916,7 @@ void do_simple_method_tracing(DexClass* analysis_cls,
       return 0;
     }
 
-    // Handle whitelist and blacklist.
+    // Handle whitelist and blocklist.
     if (!options.whitelist.empty()) {
       if (is_included(method, options.whitelist)) {
         TRACE(INSTRUMENT, 8, "Whitelist: included: %s", SHOW(method));
@@ -927,14 +927,14 @@ void do_simple_method_tracing(DexClass* analysis_cls,
       }
     }
 
-    // In case of a conflict, when an entry is present in both blacklist
-    // and whitelist, the blacklist is given priority and the entry
+    // In case of a conflict, when an entry is present in both blocklist
+    // and whitelist, the blocklist is given priority and the entry
     // is not instrumented.
-    if (is_included(method, options.blacklist)) {
+    if (is_included(method, options.blocklist)) {
       ++excluded;
-      TRACE(INSTRUMENT, 8, "Blacklist: excluded: %s", SHOW(method));
+      TRACE(INSTRUMENT, 8, "Block_list: excluded: %s", SHOW(method));
       ofs << "M,-1," << name << "," << sum_opcode_sizes << ",\""
-          << "BLACKLIST " << vshow(method->get_access(), true) << "\"\n";
+          << "BLOCK_LIST " << vshow(method->get_access(), true) << "\"\n";
       return 0;
     }
 
@@ -1129,9 +1129,9 @@ void do_basic_block_tracing(DexClass* analysis_cls,
       return;
     }
 
-    // Blacklist has priority over whitelist or cold start list.
-    if (is_included(method, options.blacklist)) {
-      TRACE(INSTRUMENT, 9, "Blacklist: excluded: %s", SHOW(method));
+    // Block_list has priority over whitelist or cold start list.
+    if (is_included(method, options.blocklist)) {
+      TRACE(INSTRUMENT, 9, "Block_list: excluded: %s", SHOW(method));
       return;
     }
 
@@ -1161,19 +1161,19 @@ void do_basic_block_tracing(DexClass* analysis_cls,
         (all_method_inst - 1), all_bb_inst, all_methods, all_bb_nums);
 }
 
-std::unordered_set<std::string> load_blacklist_file(
+std::unordered_set<std::string> load_blocklist_file(
     const std::string& file_name) {
-  // Assume the file simply enumerates blacklisted names.
+  // Assume the file simply enumerates excluded names.
   std::unordered_set<std::string> ret;
   std::ifstream ifs(file_name);
-  assert_log(ifs, "Can't open blacklist file: %s\n", SHOW(file_name));
+  assert_log(ifs, "Can't open blocklist file: %s\n", SHOW(file_name));
 
   std::string line;
   while (ifs >> line) {
     ret.insert(line);
   }
 
-  TRACE(INSTRUMENT, 3, "Loaded %zu blacklist entries from %s", ret.size(),
+  TRACE(INSTRUMENT, 3, "Loaded %zu blocklist entries from %s", ret.size(),
         SHOW(file_name));
   return ret;
 }
@@ -1184,9 +1184,9 @@ void InstrumentPass::bind_config() {
   bind("instrumentation_strategy", "", m_options.instrumentation_strategy);
   bind("analysis_class_name", "", m_options.analysis_class_name);
   bind("analysis_method_name", "", m_options.analysis_method_name);
-  bind("blacklist", {}, m_options.blacklist);
+  bind("blocklist", {}, m_options.blocklist);
   bind("whitelist", {}, m_options.whitelist);
-  bind("blacklist_file_name", "", m_options.blacklist_file_name);
+  bind("blocklist_file_name", "", m_options.blocklist_file_name);
   bind("metadata_file_name", "redex-instrument-metadata.txt",
        m_options.metadata_file_name);
   bind("num_stats_per_method", {1}, m_options.num_stats_per_method);
@@ -1241,9 +1241,9 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
   }
 
   // Append black listed classes from the file, if exists.
-  if (!m_options.blacklist_file_name.empty()) {
-    for (const auto& e : load_blacklist_file(m_options.blacklist_file_name)) {
-      m_options.blacklist.insert(e);
+  if (!m_options.blocklist_file_name.empty()) {
+    for (const auto& e : load_blocklist_file(m_options.blocklist_file_name)) {
+      m_options.blocklist.insert(e);
     }
   }
 

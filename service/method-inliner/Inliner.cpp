@@ -986,15 +986,15 @@ bool MultiMethodInliner::is_inlinable(const DexMethod* caller,
     }
     return false;
   }
-  if (is_blacklisted(callee)) {
+  if (is_blocklisted(callee)) {
     if (insn) {
-      log_nopt(INL_BLACKLISTED_CALLEE, callee);
+      log_nopt(INL_BLOCK_LISTED_CALLEE, callee);
     }
     return false;
   }
-  if (caller_is_blacklisted(caller)) {
+  if (caller_is_blocklisted(caller)) {
     if (insn) {
-      log_nopt(INL_BLACKLISTED_CALLER, caller);
+      log_nopt(INL_BLOCK_LISTED_CALLER, caller);
     }
     return false;
   }
@@ -1053,19 +1053,19 @@ void MultiMethodInliner::make_static_inlinable(
 }
 
 /**
- * Return whether the method or any of its ancestors are in the blacklist.
+ * Return whether the method or any of its ancestors are in the blocklist.
  * Typically used to prevent inlining / deletion of methods that are called
  * via reflection.
  */
-bool MultiMethodInliner::is_blacklisted(const DexMethod* callee) {
+bool MultiMethodInliner::is_blocklisted(const DexMethod* callee) {
   auto cls = type_class(callee->get_class());
-  // Enums' kept methods are all blacklisted
+  // Enums' kept methods are all excluded.
   if (is_enum(cls) && root(callee)) {
     return true;
   }
   while (cls != nullptr) {
-    if (m_config.get_black_list().count(cls->get_type())) {
-      info.blacklisted++;
+    if (m_config.get_blocklist().count(cls->get_type())) {
+      info.blocklisted++;
       return true;
     }
     cls = type_class(cls->get_super_class());
@@ -1610,10 +1610,10 @@ bool MultiMethodInliner::should_inline_optional(
   return true;
 }
 
-bool MultiMethodInliner::caller_is_blacklisted(const DexMethod* caller) {
+bool MultiMethodInliner::caller_is_blocklisted(const DexMethod* caller) {
   auto cls = caller->get_class();
-  if (m_config.get_caller_black_list().count(cls)) {
-    info.blacklisted++;
+  if (m_config.get_caller_blocklist().count(cls)) {
+    info.blocklisted++;
     return true;
   }
   return false;

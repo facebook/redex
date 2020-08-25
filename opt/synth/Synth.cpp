@@ -292,7 +292,7 @@ WrapperMethods analyze(const ClassHierarchy& ch,
                        const SynthConfig& synthConfig) {
   WrapperMethods ssms;
   for (auto cls : classes) {
-    if (synthConfig.black_list_types.count(cls->get_type())) {
+    if (synthConfig.blocklist_types.count(cls->get_type())) {
       continue;
     }
     for (auto dmethod : cls->get_dmethods()) {

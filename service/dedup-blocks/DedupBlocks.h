@@ -12,7 +12,7 @@
 namespace dedup_blocks_impl {
 
 struct Config {
-  std::unordered_set<DexMethod*> method_black_list;
+  std::unordered_set<DexMethod*> method_blocklist;
   static const unsigned int DEFAULT_BLOCK_SPLIT_MIN_OPCODE_COUNT = 1;
   unsigned int block_split_min_opcode_count =
       DEFAULT_BLOCK_SPLIT_MIN_OPCODE_COUNT;

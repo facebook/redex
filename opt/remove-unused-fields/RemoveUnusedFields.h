@@ -35,8 +35,8 @@ struct Config {
   bool remove_zero_written_fields;
   bool remove_vestigial_objects_written_fields;
   bool unsafe;
-  std::unordered_set<const DexType*> blacklist_types;
-  std::unordered_set<const DexType*> blacklist_classes;
+  std::unordered_set<const DexType*> blocklist_types;
+  std::unordered_set<const DexType*> blocklist_classes;
   boost::optional<std::unordered_set<DexField*>> whitelist;
 };
 
@@ -56,14 +56,14 @@ class PassImpl : public Pass {
          "If set, RUF will remove stores to fields that affect object "
          "lifetimes, observable via weak references, typically used in "
          "observer patterns.");
-    bind("blacklist_types",
+    bind("blocklist_types",
          {},
-         m_config.blacklist_types,
+         m_config.blocklist_types,
          "Fields with these types will never be removed.",
          Configurable::bindflags::types::warn_if_unresolvable);
-    bind("blacklist_classes",
+    bind("blocklist_classes",
          {},
-         m_config.blacklist_classes,
+         m_config.blocklist_classes,
          "Fields in these classes will never be removed.");
 
     // These options make it a bit more convenient to bisect the list of removed

@@ -435,8 +435,8 @@ void OptDataMapper::init_nopt_messages() {
       {INL_CROSS_STORE_REFS,
        "Didn''t inline: callee references a DexMember in a dex store different "
        "from the caller''s"},
-      {INL_BLACKLISTED_CALLEE, "Didn''t inline blacklisted method"},
-      {INL_BLACKLISTED_CALLER, "Didn''t inline into blacklisted method"},
+      {INL_BLOCK_LISTED_CALLEE, "Didn''t inline blocklisted method"},
+      {INL_BLOCK_LISTED_CALLER, "Didn''t inline into blocklisted method"},
       {INL_EXTERN_CATCH,
        "Didn''t inline: callee has a non-public external catch type"},
       {INL_TOO_BIG, "Didn''t inline: estimated inlined method size is too big"},

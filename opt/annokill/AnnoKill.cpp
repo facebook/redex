@@ -378,7 +378,7 @@ void AnnoKill::cleanup_aset(
     if (m_keep.count(anno_type) > 0) {
       TRACE(ANNO,
             3,
-            "Blacklisted annotation type %s, "
+            "Exclude annotation type %s, "
             "skipping...\n\tannotation: %s",
             SHOW(anno_type),
             SHOW(da));

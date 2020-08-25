@@ -57,9 +57,9 @@ constexpr const char* METRIC_ITERATIONS = "num_iterations";
 
 void ThrowPropagationPass::bind_config() {
   bind("debug", false, m_config.debug);
-  bind("black_list",
+  bind("blocklist",
        {},
-       m_config.black_list,
+       m_config.blocklist,
        "List of classes that will not be analyzed to determine which methods "
        "have no return.");
 }
@@ -72,7 +72,7 @@ std::unordered_set<DexMethod*> ThrowPropagationPass::get_no_return_methods(
         method->rstate.no_optimizations()) {
       return;
     }
-    if (config.black_list.count(method->get_class())) {
+    if (config.blocklist.count(method->get_class())) {
       TRACE(TP, 4, "black-listed method: %s", SHOW(method));
       return;
     }

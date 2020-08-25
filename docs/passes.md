@@ -501,10 +501,10 @@ in APK size, obfuscating the code, and ordering classes to optimize performance
 of loading.
 
 `RenameClassesPassV2` will not rename any class mentioned in resources, nor will
-it rename anything in blacklisted either by direct class name or as part of
-blacklisted package.
+it rename anything in blocklist either by direct class name or as part of
+an excluded package.
 
-`RenameClassesPassV2` relies on the [app's config file](config.md), blacklisting
+`RenameClassesPassV2` relies on the [app's config file](config.md), excluding 
 of the class or hierarchy, or use of reflection.
 
 Logview and bug reports are configured to automatically undo this renaming.

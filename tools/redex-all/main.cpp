@@ -792,7 +792,7 @@ void redex_frontend(ConfigFiles& conf, /* input */
     Timer time_pg_parsing("Parsed ProGuard config file");
     keep_rules::proguard_parser::parse_file(pg_config_path, &pg_config);
   }
-  keep_rules::proguard_parser::remove_blacklisted_rules(&pg_config);
+  keep_rules::proguard_parser::remove_blocklisted_rules(&pg_config);
 
   const auto& pg_libs = pg_config.libraryjars;
   args.jar_paths.insert(pg_libs.begin(), pg_libs.end());

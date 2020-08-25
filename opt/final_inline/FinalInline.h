@@ -28,14 +28,14 @@ class FinalInlinePass : public Pass {
   FinalInlinePass() : Pass("FinalInlinePass") {}
 
   void bind_config() override {
-    bind("black_list_annos",
+    bind("blocklist_annos",
          {},
-         m_config.black_list_annos,
+         m_config.blocklist_annos,
          "List of annotations, which when applied, will cause this "
          "optimization to omit the annotated element.");
-    bind("black_list_types",
+    bind("blocklist_types",
          {},
-         m_config.black_list_types,
+         m_config.blocklist_types,
          "List of types that this optimization will omit.");
     bind("keep_class_member_annos",
          {},
@@ -56,8 +56,8 @@ class FinalInlinePass : public Pass {
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
   struct Config {
-    std::vector<DexType*> black_list_annos;
-    std::vector<DexType*> black_list_types;
+    std::vector<DexType*> blocklist_annos;
+    std::vector<DexType*> blocklist_types;
     std::vector<DexType*> keep_class_member_annos;
     std::vector<std::string> keep_class_members;
     std::vector<std::string> remove_class_members;

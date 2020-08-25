@@ -397,16 +397,16 @@ void record_method_signature(
   });
 }
 
-void record_black_list(
+void record_blocklist(
     const Scope& scope,
     std::unordered_map<const DexType*, DontMergeState>* dont_merge_status,
-    const std::vector<std::string>& blacklist) {
-  if (blacklist.empty()) {
+    const std::vector<std::string>& blocklist) {
+  if (blocklist.empty()) {
     return;
   }
   walk::classes(scope, [&](DexClass* cls) {
-    // Mark class in blacklist as kStrict don't merge
-    for (const auto& name : blacklist) {
+    // Mark class in blocklist as kStrict don't merge
+    for (const auto& name : blocklist) {
       if (strstr(cls->get_name()->c_str(), name.c_str()) != nullptr) {
         TRACE(VMERGE,
               5,
@@ -456,13 +456,13 @@ void record_field_reference(
 void record_referenced(
     const Scope& scope,
     std::unordered_map<const DexType*, DontMergeState>* dont_merge_status,
-    const std::vector<std::string>& blacklist,
+    const std::vector<std::string>& blocklist,
     std::unordered_set<DexMethod*>* referenced_methods) {
   record_annotation(scope, dont_merge_status);
   record_code_reference(scope, dont_merge_status, referenced_methods);
   record_field_reference(scope, dont_merge_status);
   record_method_signature(scope, dont_merge_status);
-  record_black_list(scope, dont_merge_status, blacklist);
+  record_blocklist(scope, dont_merge_status, blocklist);
 }
 
 void move_fields(DexClass* from_cls, DexClass* to_cls) {
@@ -769,7 +769,7 @@ void VerticalMergingPass::run_pass(DexStoresVector& stores,
 
   std::unordered_map<const DexType*, DontMergeState> dont_merge_status;
   std::unordered_set<DexMethod*> referenced_methods;
-  record_referenced(scope, &dont_merge_status, m_blacklist,
+  record_referenced(scope, &dont_merge_status, m_blocklist,
                     &referenced_methods);
   XStoreRefs xstores(stores);
   std::unordered_map<DexClass*, DexClass*> mergeable_to_merger;

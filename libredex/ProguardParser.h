@@ -24,7 +24,7 @@ void parse(std::istream& config,
  * Typically used to remove keep rules that we wish to apply only to optimizers
  * that run prior to invoking Redex (e.g. ProGuard or R8).
  */
-void remove_blacklisted_rules(ProguardConfiguration* pg_config);
+void remove_blocklisted_rules(ProguardConfiguration* pg_config);
 
 } // namespace proguard_parser
 } // namespace keep_rules

@@ -24,7 +24,7 @@ void DedupBlocksPass::run_pass(DexStoresVector& stores,
       scope,
       [&](DexMethod* method) {
         const auto code = method->get_code();
-        if (code == nullptr || m_config.method_black_list.count(method) != 0) {
+        if (code == nullptr || m_config.method_blocklist.count(method) != 0) {
           return dedup_blocks_impl::Stats();
         }
 

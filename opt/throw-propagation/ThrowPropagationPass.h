@@ -15,7 +15,7 @@ class ThrowPropagationPass : public Pass {
  public:
   struct Config {
     bool debug{false};
-    std::unordered_set<const DexType*> black_list;
+    std::unordered_set<const DexType*> blocklist;
   };
 
   struct Stats {

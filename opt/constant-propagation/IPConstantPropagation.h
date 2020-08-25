@@ -29,7 +29,7 @@ class PassImpl : public Pass {
     // be treated as Top.
     uint64_t max_heap_analysis_iterations{0};
     uint32_t big_override_threshold{5};
-    std::unordered_set<const DexType*> field_black_list;
+    std::unordered_set<const DexType*> field_blocklist;
 
     Transform::Config transform;
     RuntimeAssertTransform::Config runtime_assert;
@@ -56,9 +56,9 @@ class PassImpl : public Pass {
     bind("max_heap_analysis_iterations",
          UINT64_C(0),
          m_config.max_heap_analysis_iterations);
-    bind("field_black_list",
+    bind("field_blocklist",
          {},
-         m_config.field_black_list,
+         m_config.field_blocklist,
          "List of types whose fields that this optimization will omit.");
   }
 

@@ -225,9 +225,9 @@ class MultiMethodInliner {
    * Cannot inline enum methods because they can be called by code we do
    * not own.
    */
-  bool is_blacklisted(const DexMethod* callee);
+  bool is_blocklisted(const DexMethod* callee);
 
-  bool caller_is_blacklisted(const DexMethod* caller);
+  bool caller_is_blocklisted(const DexMethod* caller);
 
   /**
    * Return true if the callee contains external catch exception types
@@ -594,7 +594,7 @@ class MultiMethodInliner {
     std::atomic<size_t> calls_not_inlinable{0};
     std::atomic<size_t> calls_not_inlined{0};
     std::atomic<size_t> not_found{0};
-    std::atomic<size_t> blacklisted{0};
+    std::atomic<size_t> blocklisted{0};
     std::atomic<size_t> throws{0};
     std::atomic<size_t> multi_ret{0};
     std::atomic<size_t> need_vmethod{0};
