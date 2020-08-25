@@ -20,14 +20,14 @@ namespace {
 // clang-format off
 std::unordered_map<IROpcode, std::string, boost::hash<IROpcode>>
     opcode_to_string_table = {
-#define OP(OP, KIND, STR) {OPCODE_##OP, STR},
-#define IOP(OP, KIND, STR) {IOPCODE_##OP, STR},
+#define OP(UC, LC, KIND, STR) {OPCODE_##UC, STR},
+#define IOP(UC, LC, KIND, STR) {IOPCODE_##UC, STR},
 #include "IROpcodes.def"
 };
 
 std::unordered_map<std::string, IROpcode> string_to_opcode_table = {
-#define OP(OP, KIND, STR) {STR, OPCODE_##OP},
-#define IOP(OP, KIND, STR) {STR, IOPCODE_##OP},
+#define OP(UC, LC, KIND, STR) {STR, OPCODE_##UC},
+#define IOP(UC, LC, KIND, STR) {STR, IOPCODE_##UC},
 #include "IROpcodes.def"
 };
 // clang-format on

@@ -33,8 +33,8 @@ enum class Ref {
 } // namespace opcode
 
 enum IROpcode : uint16_t {
-#define OP(op, code, ...) OPCODE_##op,
-#define IOP(op, code, ...) IOPCODE_##op,
+#define OP(uc, lc, code, ...) OPCODE_##uc,
+#define IOP(uc, lc, code, ...) IOPCODE_##uc,
 #include "IROpcodes.def"
 };
 // clang-format on

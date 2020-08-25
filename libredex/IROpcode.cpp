@@ -18,11 +18,11 @@ namespace opcode {
 // clang-format off
 Ref ref(IROpcode opcode) {
   switch (opcode) {
-#define OP(op, ref, ...) \
-  case OPCODE_##op:      \
+#define OP(uc, lc, ref, ...) \
+  case OPCODE_##uc:          \
     return ref;
-#define IOP(op, ref, ...) \
-  case IOPCODE_##op:      \
+#define IOP(uc, lc, ref, ...) \
+  case IOPCODE_##uc:          \
     return ref;
 #include "IROpcodes.def"
   }
