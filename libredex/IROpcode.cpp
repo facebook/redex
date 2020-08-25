@@ -21,14 +21,10 @@ Ref ref(IROpcode opcode) {
 #define OP(op, ref, ...) \
   case OPCODE_##op:      \
     return ref;
+#define IOP(op, ref, ...) \
+  case IOPCODE_##op:      \
+    return ref;
 #include "IROpcodes.def"
-  case IOPCODE_LOAD_PARAM:
-  case IOPCODE_LOAD_PARAM_OBJECT:
-  case IOPCODE_LOAD_PARAM_WIDE:
-  case IOPCODE_MOVE_RESULT_PSEUDO:
-  case IOPCODE_MOVE_RESULT_PSEUDO_OBJECT:
-  case IOPCODE_MOVE_RESULT_PSEUDO_WIDE:
-    return Ref::None;
   }
   not_reached_log("Unexpected opcode 0x%x", opcode);
 }

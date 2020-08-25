@@ -21,24 +21,14 @@ namespace {
 std::unordered_map<IROpcode, std::string, boost::hash<IROpcode>>
     opcode_to_string_table = {
 #define OP(OP, KIND, STR) {OPCODE_##OP, STR},
+#define IOP(OP, KIND, STR) {IOPCODE_##OP, STR},
 #include "IROpcodes.def"
-        {IOPCODE_LOAD_PARAM, "load-param"},
-        {IOPCODE_LOAD_PARAM_OBJECT, "load-param-object"},
-        {IOPCODE_LOAD_PARAM_WIDE, "load-param-wide"},
-        {IOPCODE_MOVE_RESULT_PSEUDO, "move-result-pseudo"},
-        {IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, "move-result-pseudo-object"},
-        {IOPCODE_MOVE_RESULT_PSEUDO_WIDE, "move-result-pseudo-wide"},
 };
 
 std::unordered_map<std::string, IROpcode> string_to_opcode_table = {
 #define OP(OP, KIND, STR) {STR, OPCODE_##OP},
+#define IOP(OP, KIND, STR) {STR, IOPCODE_##OP},
 #include "IROpcodes.def"
-    {"load-param", IOPCODE_LOAD_PARAM},
-    {"load-param-object", IOPCODE_LOAD_PARAM_OBJECT},
-    {"load-param-wide", IOPCODE_LOAD_PARAM_WIDE},
-    {"move-result-pseudo", IOPCODE_MOVE_RESULT_PSEUDO},
-    {"move-result-pseudo-object", IOPCODE_MOVE_RESULT_PSEUDO_OBJECT},
-    {"move-result-pseudo-wide", IOPCODE_MOVE_RESULT_PSEUDO_WIDE},
 };
 // clang-format on
 

@@ -34,14 +34,8 @@ enum class Ref {
 
 enum IROpcode : uint16_t {
 #define OP(op, code, ...) OPCODE_##op,
+#define IOP(op, code, ...) IOPCODE_##op,
 #include "IROpcodes.def"
-  IOPCODE_LOAD_PARAM,
-  IOPCODE_LOAD_PARAM_OBJECT,
-  IOPCODE_LOAD_PARAM_WIDE,
-
-  IOPCODE_MOVE_RESULT_PSEUDO,
-  IOPCODE_MOVE_RESULT_PSEUDO_OBJECT,
-  IOPCODE_MOVE_RESULT_PSEUDO_WIDE,
 };
 // clang-format on
 

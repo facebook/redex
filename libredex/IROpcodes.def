@@ -9,6 +9,10 @@
 #define OP(UC, REF, NAME)
 #endif // OP
 
+#ifndef IOP
+#define IOP(UC, REF, NAME)
+#endif
+
 // clang-format off
 OP(NOP               , Ref::None, "nop")
 OP(MOVE              , Ref::None, "move")
@@ -176,6 +180,14 @@ OP(XOR_INT_LIT8      , Ref::Literal, "xor-int/lit8")
 OP(SHL_INT_LIT8      , Ref::Literal, "shl-int/lit8")
 OP(SHR_INT_LIT8      , Ref::Literal, "shr-int/lit8")
 OP(USHR_INT_LIT8     , Ref::Literal, "ushr-int/lit8")
+
+IOP(LOAD_PARAM                , Ref::None, "load-param")
+IOP(LOAD_PARAM_OBJECT         , Ref::None, "load-param-object")
+IOP(LOAD_PARAM_WIDE           , Ref::None, "load-param-wide")
+IOP(MOVE_RESULT_PSEUDO        , Ref::None, "move-result-pseudo")
+IOP(MOVE_RESULT_PSEUDO_OBJECT , Ref::None, "move-result-pseudo-object")
+IOP(MOVE_RESULT_PSEUDO_WIDE   , Ref::None, "move-result-pseudo-wide")
 // clang-format on
 
 #undef OP
+#undef IOP
