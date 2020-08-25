@@ -23,6 +23,15 @@ namespace m {
 
 namespace detail {
 
+/**
+ * is_rvalue<T> is only instantiated for types T that are rvalue references.
+ * Used to restrict a signature with a forwarding reference so it does not
+ * accept an lvalue reference.
+ */
+template <typename T>
+using is_rvalue =
+    typename std::enable_if<std::is_rvalue_reference<T&&>::value>::type;
+
 bool is_assignable_to(const DexType* child, const DexType* parent);
 bool is_default_constructor(const DexMethod* meth);
 
@@ -189,11 +198,63 @@ inline auto any() {
   return matcher<T>([](arg_type) { return true; });
 }
 
-/** Compare two T at pointers */
+/**
+ * Equality predicates
+ *
+ * If equals is passed an lvalue reference, it assumes that the referent lives
+ * longer than the returned matcher.
+ *
+ * If an rvalue reference is passed in, the returned matcher will take ownership
+ * of the temporary.
+ *
+ * Pointers are special cased to be compared by value, to avoid an indirection.
+ */
 template <typename T>
-inline auto ptr_eq(const T* expected) {
-  return matcher<T*>(
-      [expected](const T* actual) { return expected == actual; });
+inline auto equals(const T& expect) {
+  return matcher<T>([&expect](const T& actual) { return expect == actual; });
+}
+
+template <typename T, typename = detail::is_rvalue<T>>
+inline auto equals(T&& expect) {
+  return matcher<T>([expect = std::forward<T>(expect)](const T& actual) {
+    return expect == actual;
+  });
+}
+
+template <typename T>
+inline auto equals(T* expect) {
+  return matcher<T*>([expect](const T* actual) { return expect == actual; });
+}
+
+template <typename T>
+inline auto equals(const T* expect) {
+  return matcher<T*>([expect](const T* actual) { return expect == actual; });
+}
+
+/**
+ * Match which checks for membership of T in container C via C::find(T)
+ *
+ * If an lvalue reference is passed in, it is assumed that the referent lives
+ * longer than the returned matcher.
+ *
+ * If the container is passed in by rvalue reference, the returned matcher will
+ * take ownership of the temporary.
+ */
+template <typename T, typename C>
+inline auto in(const C& c) {
+  using arg_type = typename arg<T>::val;
+  using mut_type = typename arg<T>::var;
+  return matcher<T>(
+      [&c](arg_type t) { return c.find(const_cast<mut_type>(t)) != c.end(); });
+}
+
+template <typename T, typename C, typename = detail::is_rvalue<C>>
+inline auto in(C&& c) {
+  using arg_type = typename arg<T>::val;
+  using mut_type = typename arg<T>::var;
+  return matcher<T>([c = std::forward<C>(c)](arg_type t) {
+    return c.find(const_cast<mut_type>(t)) != c.end();
+  });
 }
 
 /** Match any T named thusly */
@@ -498,18 +559,6 @@ inline auto any_annos(match_t<DexAnnotation*, P> p) {
           return p.matches(anno);
         });
   });
-}
-
-/**
- * Match which checks for membership of T in container C via C::find(T)
- * Does not take ownership of the container.
- */
-template <typename T, typename C>
-inline auto in(const C* c) {
-  using arg_type = typename arg<T>::val;
-  using mut_type = typename arg<T>::var;
-  return matcher<T>(
-      [c](arg_type t) { return c->find(const_cast<mut_type>(t)) != c->end(); });
 }
 
 /**

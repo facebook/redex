@@ -7,12 +7,44 @@
 
 #include <gtest/gtest.h>
 
+#include <unordered_set>
+
 #include "IRInstruction.h"
 #include "Match.h"
 #include "RedexTest.h"
 #include "Show.h"
 
 class MatchTest : public RedexTest {};
+
+TEST_F(MatchTest, Equality) {
+  auto m = m::equals(42);
+
+  int x = 43;
+  auto n = m::equals(x);
+  auto o = m::equals(&x);
+
+  EXPECT_TRUE(m.matches(42));
+  EXPECT_FALSE(m.matches(43));
+
+  EXPECT_TRUE(n.matches(43));
+  EXPECT_FALSE(n.matches(42));
+
+  EXPECT_TRUE(o.matches(&x));
+  EXPECT_FALSE(o.matches(nullptr));
+}
+
+TEST_F(MatchTest, In) {
+  auto n = m::in<int>(std::unordered_set<int>{43});
+
+  std::unordered_set<int> xs{42};
+  auto m = m::in<int>(xs);
+
+  EXPECT_TRUE(m.matches(42));
+  EXPECT_FALSE(m.matches(43));
+
+  EXPECT_TRUE(n.matches(43));
+  EXPECT_FALSE(n.matches(42));
+}
 
 TEST_F(MatchTest, IputBasic) {
   DexType* ty = DexType::make_type("Lfoo;");
@@ -75,7 +107,7 @@ TEST_F(MatchTest, opcode_string) {
   std::vector<IRInstruction*> input = {load_str};
   std::vector<IRInstruction*> match;
 
-  m::find_insn_match(input, m::opcode_string(m::ptr_eq(str)), match);
+  m::find_insn_match(input, m::opcode_string(m::equals(str)), match);
   EXPECT_EQ(match[0], load_str);
   delete load_str;
 }
@@ -132,7 +164,7 @@ TEST_F(MatchTest, SameFieldMatch) {
   std::vector<IRInstruction*> match;
 
   m::find_insn_match(
-      input, m::opcode_field(m::member_of<DexFieldRef>(m::ptr_eq(ty))), match);
+      input, m::opcode_field(m::member_of<DexFieldRef>(m::equals(ty))), match);
   EXPECT_EQ(match.size(), 2);
 }
 
@@ -160,7 +192,7 @@ TEST_F(MatchTest, SameMethodMatch) {
   std::vector<IRInstruction*> match;
 
   m::find_insn_match(
-      input, m::opcode_method(m::member_of<DexMethodRef>(m::ptr_eq(ty))),
+      input, m::opcode_method(m::member_of<DexMethodRef>(m::equals(ty))),
       match);
   EXPECT_EQ(match.size(), 1);
 }
