@@ -70,14 +70,19 @@ IROpcode from_dex_opcode(DexOpcode);
 DexOpcode to_dex_opcode(IROpcode);
 
 /**
- * Creates a predicate for each OPRANGE in IROpcode.defs, e.g. with signature:
+ * Creates predicates from definitions in IROpcode.defs, e.g. with the
+ * following signatures:
  *
- *   inline bool is_a_move(IROpcode op);
+ *   inline bool is_a_move(IROpcode op);  // OPRANGE(a_move, ...)
+ *   inline bool is_move(IROpcode op);    // OP(MOVE, move, ...)
+ *   inline bool is_load_param(IROpcode); // IOP(LOAD_PARAM, load_param, ...)
  */
 #define OPRANGE(NAME, FST, LST) \
   inline bool is_##NAME(IROpcode op) { return FST <= op && op <= LST; }
-#define OP(...)
-#define IOP(...)
+#define OP(UC, LC, ...) \
+  inline bool is_##LC(IROpcode op) { return op == OPCODE_##UC; }
+#define IOP(UC, LC, ...) \
+  inline bool is_##LC(IROpcode op) { return op == IOPCODE_##UC; }
 #include "IROpcodes.def"
 
 bool may_throw(IROpcode);
@@ -92,8 +97,6 @@ bool has_range_form(IROpcode);
 DexOpcode range_version(IROpcode);
 
 bool has_variable_srcs_size(IROpcode op);
-
-inline bool is_const_string(IROpcode op) { return op == OPCODE_CONST_STRING; }
 
 bool is_move_result_any(IROpcode op);
 
