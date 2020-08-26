@@ -144,6 +144,12 @@ TEST_F(ConcurrentContainersTest, concurrentSetTest) {
   EXPECT_EQ(3, set.size());
   set.clear();
   EXPECT_EQ(0, set.size());
+
+  std::unordered_set<uint32_t> non_concurrent_set{1, 5, 7, 9};
+  set.insert(non_concurrent_set.begin(), non_concurrent_set.end());
+  EXPECT_EQ(4, set.size());
+  set.clear();
+  EXPECT_EQ(0, set.size());
 }
 
 TEST_F(ConcurrentContainersTest, insertOnlyConcurrentSetTest) {
