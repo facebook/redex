@@ -149,6 +149,7 @@ void GlobalTypeAnalysisPass::optimize(
       Stats ra_stats;
       ra_stats.assert_stats =
           rat.apply(*lta, gta.get_whole_program_state(), method);
+      code->clear_cfg();
       return ra_stats;
     }
 
@@ -163,6 +164,7 @@ void GlobalTypeAnalysisPass::optimize(
             SHOW(method),
             SHOW(method->get_code()->cfg()));
     }
+    code->clear_cfg();
     return tr_stats;
   });
   stats.report(mgr);

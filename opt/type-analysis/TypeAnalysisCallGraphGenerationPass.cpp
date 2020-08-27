@@ -24,7 +24,12 @@ class TypeAnalysisBasedStrategy : public MultipleCalleeBaseStrategy {
   explicit TypeAnalysisBasedStrategy(
       const Scope& scope,
       std::shared_ptr<type_analyzer::global::GlobalTypeAnalyzer> gta)
-      : MultipleCalleeBaseStrategy(scope), m_gta(std::move(gta)) {}
+      : MultipleCalleeBaseStrategy(scope), m_gta(std::move(gta)) {
+    walk::parallel::code(scope, [](DexMethod*, IRCode& code) {
+      code.build_cfg(/* editable */ false);
+      code.cfg().calculate_exit_block();
+    });
+  }
 
   CallSites get_callsites(const DexMethod* method) const override {
     CallSites callsites;
