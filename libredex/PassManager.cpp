@@ -28,6 +28,7 @@
 #include "IRTypeChecker.h"
 #include "InstructionLowering.h"
 #include "JemallocUtil.h"
+#include "MethodProfiles.h"
 #include "OptData.h"
 #include "Pass.h"
 #include "PrintSeeds.h"

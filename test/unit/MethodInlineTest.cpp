@@ -14,6 +14,7 @@
 #include "IRAssembler.h"
 #include "IRCode.h"
 #include "Inliner.h"
+#include "InlinerConfig.h"
 #include "RedexTest.h"
 
 struct MethodInlineTest : public RedexTest {};

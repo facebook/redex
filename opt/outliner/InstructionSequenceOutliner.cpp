@@ -86,6 +86,7 @@
 #include "InterDexPass.h"
 #include "Lazy.h"
 #include "Liveness.h"
+#include "MethodProfiles.h"
 #include "MutablePriorityQueue.h"
 #include "OutlinerTypeAnalysis.h"
 #include "PartialCandidates.h"
