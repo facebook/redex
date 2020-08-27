@@ -19,6 +19,30 @@ namespace mog = method_override_graph;
 
 namespace {
 
+void report_stats(const Graph& graph, PassManager& mgr) {
+  auto stats = get_num_nodes_edges(graph);
+  mgr.incr_metric("callgraph_nodes", stats.num_nodes);
+  mgr.incr_metric("callgraph_edges", stats.num_edges);
+  mgr.incr_metric("callgraph_callsites", stats.num_callsites);
+  TRACE(TYPE, 2, "TypeAnalysisCallGraphGenerationPass Stats:");
+  TRACE(TYPE, 2, " callgraph nodes = %u", stats.num_nodes);
+  TRACE(TYPE, 2, " callgraph edges = %u", stats.num_edges);
+  TRACE(TYPE, 2, " callgraph callsites = %u", stats.num_callsites);
+}
+
+/*
+ * We can resolve the class of an invoke-interface target. In that case, we want
+ * to adjust the MethodSearch type to be Virtual.
+ */
+MethodSearch get_method_search(const DexClass* analysis_cls,
+                               IRInstruction* insn) {
+  auto ms = opcode_to_search(insn);
+  if (ms == MethodSearch::Interface && !is_interface(analysis_cls)) {
+    ms = MethodSearch::Virtual;
+  }
+  return ms;
+}
+
 class TypeAnalysisBasedStrategy : public MultipleCalleeBaseStrategy {
  public:
   explicit TypeAnalysisBasedStrategy(
@@ -55,7 +79,8 @@ class TypeAnalysisBasedStrategy : public MultipleCalleeBaseStrategy {
         if (resolved_callee == nullptr) {
           continue;
         }
-        if (!is_definitely_virtual(resolved_callee)) {
+        if (!is_definitely_virtual(resolved_callee) ||
+            opcode::is_invoke_super(insn->opcode())) {
           // Not true virtual call
           if (resolved_callee->is_concrete()) {
             callsites.emplace_back(resolved_callee, code->iterator_to(mie));
@@ -79,21 +104,32 @@ class TypeAnalysisBasedStrategy : public MultipleCalleeBaseStrategy {
     auto* callee_ref = insn->get_method();
     auto domain = env.get(insn->src(0));
     auto analysis_cls = domain.get_dex_cls();
+    DexMethod* analysis_resolved_callee = nullptr;
     if (analysis_cls) {
-      resolved_callee =
+      auto method_search = get_method_search(*analysis_cls, insn);
+      analysis_resolved_callee =
           resolve_method(*analysis_cls, callee_ref->get_name(),
-                         callee_ref->get_proto(), opcode_to_search(insn));
+                         callee_ref->get_proto(), method_search);
+      if (analysis_resolved_callee) {
+        resolved_callee = analysis_resolved_callee;
+      } else {
+        // If the analysis type is too generic and we cannot resolve a concrete
+        // callee based on that type, we fall back to the method reference at
+        // the call site.
+        TRACE(TYPE, 5, "Unresolved callee at %s for analysis cls %s",
+              SHOW(insn), SHOW(*analysis_cls));
+      }
     }
+
     // Add callees to callsites
     if (resolved_callee->is_concrete()) {
       callsites.emplace_back(resolved_callee, code->iterator_to(invoke));
     }
-    if (insn->opcode() != OPCODE_INVOKE_SUPER) {
-      const auto& overriding_methods = mog::get_overriding_methods(
-          *m_method_override_graph, resolved_callee);
-      for (auto overriding_method : overriding_methods) {
-        callsites.emplace_back(overriding_method, code->iterator_to(invoke));
-      }
+    always_assert(!opcode::is_invoke_super(insn->opcode()));
+    const auto& overriding_methods =
+        mog::get_overriding_methods(*m_method_override_graph, resolved_callee);
+    for (auto overriding_method : overriding_methods) {
+      callsites.emplace_back(overriding_method, code->iterator_to(invoke));
     }
   }
 
@@ -113,6 +149,8 @@ void TypeAnalysisCallGraphGenerationPass::run_pass(DexStoresVector& stores,
   Scope scope = build_class_scope(stores);
   m_result = std::make_shared<call_graph::Graph>(
       TypeAnalysisBasedStrategy(scope, gta));
+  always_assert(m_result);
+  report_stats(*m_result, mgr);
 }
 
 static TypeAnalysisCallGraphGenerationPass s_pass;
