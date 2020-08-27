@@ -343,6 +343,15 @@ class DexTypeDomain
     return get<1>().get_dex_type();
   }
 
+  boost::optional<const DexClass*> get_dex_cls() const {
+    auto dex_type = get<1>().get_dex_type();
+    if (!dex_type) {
+      return boost::none;
+    }
+    auto dex_cls = type_class(*dex_type);
+    return dex_cls ? boost::optional<const DexClass*>(dex_cls) : boost::none;
+  }
+
   SmallSetDexTypeDomain get_set_domain() { return get<2>(); }
 
   sparta::PatriciaTreeSet<const DexType*> get_type_set() {

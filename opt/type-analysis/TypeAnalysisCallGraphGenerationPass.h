@@ -8,7 +8,7 @@
 #pragma once
 
 #include "CallGraph.h"
-#include "GlobalTypeAnalyzer.h"
+#include "GlobalTypeAnalysisPass.h"
 #include "Pass.h"
 
 /*
@@ -24,7 +24,8 @@ class TypeAnalysisCallGraphGenerationPass : public Pass {
   Config& get_config() { return m_config; }
 
   explicit TypeAnalysisCallGraphGenerationPass(Config config)
-      : Pass("TypeAnalysisCallGraphGenerationPass"), m_config(config) {}
+      : Pass("TypeAnalysisCallGraphGenerationPass", Pass::ANALYSIS),
+        m_config(config) {}
 
   TypeAnalysisCallGraphGenerationPass()
       : TypeAnalysisCallGraphGenerationPass(Config()) {}
@@ -32,6 +33,11 @@ class TypeAnalysisCallGraphGenerationPass : public Pass {
   void bind_config() override {
     bind("dump_call_graph", false, m_config.dump_call_graph);
     trait(Traits::Pass::unique, true);
+  }
+
+  void set_analysis_usage(AnalysisUsage& au) const override {
+    au.add_required<GlobalTypeAnalysisPass>();
+    au.set_preserve_all();
   }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
