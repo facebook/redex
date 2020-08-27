@@ -13,6 +13,7 @@
 #include "DexClass.h"
 #include "IRInstruction.h"
 #include "Inliner.h"
+#include "InlinerConfig.h"
 #include "Resolver.h"
 
 using RegSet = boost::dynamic_bitset<>;

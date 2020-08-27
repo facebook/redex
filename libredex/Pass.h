@@ -8,20 +8,16 @@
 #pragma once
 
 #include <algorithm>
-#include <functional>
-#include <iostream>
-#include <json/json.h>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
-#include "AnalysisUsage.h"
-#include "ConfigFiles.h"
 #include "Configurable.h"
-#include "DexClass.h"
 #include "DexStore.h"
-#include "PassRegistry.h"
 #include "Traits.h"
 
+class AnalysisUsage;
+struct ConfigFiles;
 class PassManager;
 
 class Pass : public Configurable {
@@ -31,10 +27,7 @@ class Pass : public Configurable {
     ANALYSIS,
   };
 
-  explicit Pass(const std::string& name, Kind kind = TRANSFORMATION)
-      : m_name(name), m_kind(kind) {
-    PassRegistry::get().register_pass(this);
-  }
+  explicit Pass(const std::string& name, Kind kind = TRANSFORMATION);
 
   std::string name() const { return m_name; }
 
@@ -63,13 +56,7 @@ class Pass : public Configurable {
                         ConfigFiles& conf,
                         PassManager& mgr) = 0;
 
-  virtual void set_analysis_usage(AnalysisUsage& analysis_usage) const {
-    // By default, analysis passes preserves all existing analysis while
-    // transformation passes preserves none.
-    if (m_kind == ANALYSIS) {
-      analysis_usage.set_preserve_all();
-    }
-  }
+  virtual void set_analysis_usage(AnalysisUsage& analysis_usage) const;
 
  private:
   std::string m_name;

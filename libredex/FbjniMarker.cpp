@@ -13,6 +13,7 @@
 #include "JavaParserUtil.h"
 
 #include <deque>
+#include <fstream>
 #include <json/json.h>
 
 template <class DexMember>

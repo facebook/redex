@@ -14,6 +14,7 @@
 #include <unordered_set>
 #include <vector>
 
+#include "ConfigFiles.h"
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "IRInstruction.h"

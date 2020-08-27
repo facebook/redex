@@ -40,6 +40,7 @@
 #include "IODIMetadata.h"
 #include "IRCode.h"
 #include "Macros.h"
+#include "MethodProfiles.h"
 #include "Pass.h"
 #include "Resolver.h"
 #include "Sha1.h"

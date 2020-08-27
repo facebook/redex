@@ -8,6 +8,7 @@
 #include "SplitHugeSwitchPass.h"
 
 #include <algorithm>
+#include <iostream>
 #include <unordered_set>
 
 #include <boost/optional.hpp>

@@ -10,7 +10,7 @@
 #include <cstdio>
 
 #include "GraphColoring.h"
-#include "PassManager.h"
+#include "Pass.h"
 
 namespace regalloc {
 

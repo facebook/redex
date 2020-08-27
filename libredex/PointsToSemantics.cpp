@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <deque>
+#include <fstream>
 #include <iomanip>
 #include <iterator>
 #include <limits>

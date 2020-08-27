@@ -7,10 +7,17 @@
 
 #pragma once
 
-#include "Inliner.h"
+#include "DexStore.h"
+#include "InlinerConfig.h"
 #include "Pass.h"
-#include "PassManager.h"
+#include "Resolver.h"
 #include "TypeSystem.h"
+
+class MultiMethodInliner;
+
+namespace method_profiles {
+class MethodProfiles;
+} // namespace method_profiles
 
 struct VirtualMergingStats {
   size_t invoke_super_methods{0};
@@ -35,6 +42,7 @@ struct VirtualMergingStats {
 class VirtualMerging {
  public:
   VirtualMerging(DexStoresVector&, const inliner::InlinerConfig&, size_t);
+  ~VirtualMerging();
   void run(const method_profiles::MethodProfiles&);
   const VirtualMergingStats& get_stats() { return m_stats; }
 

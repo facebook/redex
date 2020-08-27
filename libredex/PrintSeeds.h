@@ -7,10 +7,11 @@
 
 #pragma once
 
-#include <iostream>
+#include <iosfwd>
 
 #include "DexClass.h"
-#include "DexUtil.h"
+
+struct ProguardMap;
 
 namespace keep_rules {
 

@@ -8,7 +8,7 @@
 #pragma once
 
 #include "DexClass.h"
-#include "PassManager.h"
+#include "Pass.h"
 
 /**
  * Merge Interfaces that have same implementors and interface children.

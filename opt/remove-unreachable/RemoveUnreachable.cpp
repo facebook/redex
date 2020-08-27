@@ -10,6 +10,7 @@
 #include <atomic>
 #include <set>
 
+#include "ConfigFiles.h"
 #include "DexUtil.h"
 #include "IOUtil.h"
 #include "MethodOverrideGraph.h"

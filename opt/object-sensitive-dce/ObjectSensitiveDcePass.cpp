@@ -7,6 +7,7 @@
 
 #include "ObjectSensitiveDcePass.h"
 
+#include <fstream>
 #include <functional>
 
 #include "ConcurrentContainers.h"

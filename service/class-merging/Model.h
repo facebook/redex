@@ -14,6 +14,7 @@
 #include "MergerType.h"
 #include "TypeSystem.h"
 
+struct ConfigFiles;
 class RefChecker;
 
 namespace class_merging {

@@ -21,6 +21,7 @@
 #include "EditableCfgAdapter.h"
 #include "IRInstruction.h"
 #include "InlineForSpeed.h"
+#include "InlinerConfig.h"
 #include "LocalDce.h"
 #include "MethodProfiles.h"
 #include "Mutators.h"

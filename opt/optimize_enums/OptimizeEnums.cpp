@@ -8,6 +8,7 @@
 #include "OptimizeEnums.h"
 
 #include "ClassAssemblingUtils.h"
+#include "ConfigFiles.h"
 #include "EnumAnalyzeGeneratedMethods.h"
 #include "EnumClinitAnalysis.h"
 #include "EnumInSwitch.h"
@@ -16,6 +17,7 @@
 #include "IRCode.h"
 #include "OptimizeEnumsAnalysis.h"
 #include "OptimizeEnumsGeneratedAnalysis.h"
+#include "ProguardMap.h"
 #include "Resolver.h"
 #include "ScopedCFG.h"
 #include "SwitchEquivFinder.h"

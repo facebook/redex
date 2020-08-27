@@ -11,6 +11,7 @@
 #include <mutex>
 #include <utility>
 
+#include "ConfigFiles.h"
 #include "Creators.h"
 #include "Debug.h"
 #include "DexClass.h"

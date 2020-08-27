@@ -11,6 +11,7 @@
 #include <gtest/gtest.h>
 #include <json/json.h>
 
+#include "ConfigFiles.h"
 #include "DexClass.h"
 #include "DexLoader.h"
 #include "DexStore.h"

@@ -6,6 +6,8 @@
  */
 
 #include "LayoutReachabilityPass.h"
+
+#include "ConfigFiles.h"
 #include "ReachableClasses.h"
 
 void LayoutReachabilityPass::run_pass(DexStoresVector& stores,

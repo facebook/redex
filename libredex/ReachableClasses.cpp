@@ -10,6 +10,7 @@
 #include <boost/filesystem.hpp>
 #include <chrono>
 #include <fstream>
+#include <iostream>
 #include <sstream>
 #include <string>
 #include <unordered_set>

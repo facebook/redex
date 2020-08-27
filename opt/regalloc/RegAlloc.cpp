@@ -8,6 +8,7 @@
 #include "RegAlloc.h"
 
 #include <boost/functional/hash.hpp>
+#include <iostream>
 
 #include "Debug.h"
 #include "DexUtil.h"

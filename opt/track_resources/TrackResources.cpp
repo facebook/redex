@@ -19,6 +19,7 @@
 #include "DexOutput.h"
 #include "DexUtil.h"
 #include "IRCode.h"
+#include "ProguardMap.h"
 #include "ReachableClasses.h"
 #include "Resolver.h"
 #include "Walkers.h"

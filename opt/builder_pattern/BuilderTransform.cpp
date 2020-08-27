@@ -42,6 +42,8 @@ BuilderTransform::get_not_inlined_insns(
   return not_inlined_insns;
 }
 
+BuilderTransform::~BuilderTransform() {}
+
 /**
  * For all the methods of the given type, try inlining all super calls and
  * constructors of the super type. If any of them fails, return false.

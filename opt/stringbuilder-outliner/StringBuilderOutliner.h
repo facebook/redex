@@ -9,6 +9,7 @@
 
 #include "AbstractDomain.h"
 #include "LocalPointersAnalysis.h"
+#include "Pass.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
 
 /*

@@ -8,6 +8,7 @@
 #include "ModelMerger.h"
 
 #include "ClassAssemblingUtils.h"
+#include "ConfigFiles.h"
 #include "DexUtil.h"
 #include "MethodReference.h"
 #include "PassManager.h"
@@ -17,6 +18,7 @@
 #include "TypeTagUtils.h"
 #include "Walkers.h"
 
+#include <fstream>
 #include <sstream>
 
 using namespace class_merging;

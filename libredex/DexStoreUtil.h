@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include "DexStore.h"
 #include "DexUtil.h"
 
 using TypeSet = std::set<const DexType*, dextypes_comparator>;

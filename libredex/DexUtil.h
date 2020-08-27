@@ -16,6 +16,7 @@
 #include "ClassUtil.h"
 #include "Debug.h"
 #include "DexClass.h"
+#include "DexStore.h"
 #include "IRInstruction.h"
 #include "MethodUtil.h"
 #include "PassManager.h"

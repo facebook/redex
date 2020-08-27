@@ -7,7 +7,7 @@
 
 #include "Reachability.h"
 
-#include <ostream>
+#include <fstream>
 
 #include "Creators.h"
 #include "Debug.h"

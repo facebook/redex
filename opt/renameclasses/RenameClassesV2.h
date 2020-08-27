@@ -11,6 +11,8 @@
 
 #include "ClassHierarchy.h"
 
+struct ProguardMap;
+
 enum class DontRenameReasonCode {
   Annotated,
   Annotations,

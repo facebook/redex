@@ -8,6 +8,7 @@
 #include "MergeInterface.h"
 
 #include "ClassHierarchy.h"
+#include "ConfigFiles.h"
 #include "DexAnnotation.h"
 #include "DexClass.h"
 #include "DexUtil.h"

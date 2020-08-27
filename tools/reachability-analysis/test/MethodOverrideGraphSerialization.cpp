@@ -7,7 +7,7 @@
 
 #include "MethodOverrideGraph.h"
 
-#include <ostream>
+#include <fstream>
 
 #include "Creators.h"
 #include "Debug.h"

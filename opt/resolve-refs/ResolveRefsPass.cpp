@@ -10,6 +10,7 @@
 #include <boost/algorithm/string.hpp>
 
 #include "ApiLevelChecker.h"
+#include "ConfigFiles.h"
 #include "DexUtil.h"
 #include "MethodOverrideGraph.h"
 #include "Resolver.h"

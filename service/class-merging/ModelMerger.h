@@ -12,9 +12,9 @@
 
 #include "DexClass.h"
 #include "Model.h"
-#include "PassManager.h"
 
 class DexStore;
+class PassManager;
 class TypeTags;
 
 using DexStoresVector = std::vector<DexStore>;

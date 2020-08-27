@@ -13,6 +13,7 @@
 #include <utility>
 #include <vector>
 
+#include "Debug.h"
 #include "DexClass.h"
 
 class DexStore;

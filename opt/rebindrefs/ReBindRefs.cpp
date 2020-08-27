@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "ApiLevelChecker.h"
+#include "ConfigFiles.h"
 #include "Debug.h"
 #include "DexClass.h"
 #include "DexUtil.h"

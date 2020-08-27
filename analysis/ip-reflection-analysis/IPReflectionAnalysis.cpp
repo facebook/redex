@@ -7,8 +7,11 @@
 
 #include "IPReflectionAnalysis.h"
 
+#include <fstream>
+
 #include "AbstractDomain.h"
 #include "CallGraph.h"
+#include "ConfigFiles.h"
 #include "MethodOverrideGraph.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "PatriciaTreeMapAbstractPartition.h"

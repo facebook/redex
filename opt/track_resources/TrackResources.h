@@ -9,6 +9,8 @@
 
 #include "Pass.h"
 
+struct ProguardMap;
+
 class TrackResourcesPass : public Pass {
  public:
   TrackResourcesPass() : Pass("TrackResourcesPass") {}

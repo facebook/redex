@@ -7,6 +7,7 @@
 
 #include "IPConstantPropagation.h"
 
+#include "ConfigFiles.h"
 #include "ConstantEnvironment.h"
 #include "ConstantPropagationAnalysis.h"
 #include "ConstructorParams.h"

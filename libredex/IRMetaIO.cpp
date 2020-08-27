@@ -7,6 +7,9 @@
 
 #include "IRMetaIO.h"
 
+#include <fstream>
+#include <iostream>
+
 #include "StringBuilder.h"
 #include "Walkers.h"
 

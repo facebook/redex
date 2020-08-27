@@ -7,9 +7,7 @@
 
 #pragma once
 
-#include "PassManager.h"
-
-#include <unordered_set>
+#include "Pass.h"
 
 class BasicBlockProfilePass : public Pass {
  public:

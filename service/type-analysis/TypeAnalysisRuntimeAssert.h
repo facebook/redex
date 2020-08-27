@@ -11,6 +11,8 @@
 #include "LocalTypeAnalyzer.h"
 #include "WholeProgramState.h"
 
+struct ProguardMap;
+
 namespace type_analyzer {
 
 class RuntimeAssertTransform {

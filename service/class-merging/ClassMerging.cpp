@@ -7,7 +7,10 @@
 
 #include "ClassMerging.h"
 
+#include <iostream>
+
 #include "ClassAssemblingUtils.h"
+#include "ConfigFiles.h"
 #include "ModelMerger.h"
 #include "NormalizeConstructor.h"
 #include "RefChecker.h"

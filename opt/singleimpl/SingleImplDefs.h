@@ -19,6 +19,8 @@
 #include "IRList.h"
 #include "SingleImpl.h"
 
+struct ProguardMap;
+
 /**
  * Analyze and optimize data structures.
  * The data set is filled during analysis and it's used by the optimizer.

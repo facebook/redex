@@ -6,6 +6,7 @@
  */
 
 #include <atomic>
+#include <iostream>
 #include <memory>
 #include <unordered_map>
 #include <unordered_set>
@@ -246,7 +247,7 @@ TEST_F(SplitHugeSwitchTest, Split1) {
       (:L3 2)
       (const v1 2)
       (goto :L0)
-      
+
       (:L2 1)
       (const v1 1)
       (goto :L0)

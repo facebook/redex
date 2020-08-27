@@ -7,9 +7,12 @@
 
 #pragma once
 
-#include "PassManager.h"
-
+#include <unordered_map>
 #include <unordered_set>
+
+#include "Pass.h"
+
+class DexMethod;
 
 class InstrumentPass : public Pass {
  public:

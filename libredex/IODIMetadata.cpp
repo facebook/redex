@@ -7,6 +7,8 @@
 
 #include "IODIMetadata.h"
 
+#include <fstream>
+
 #include "DexUtil.h"
 #include "Trace.h"
 

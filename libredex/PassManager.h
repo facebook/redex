@@ -7,12 +7,6 @@
 
 #pragma once
 
-#include "ApkManager.h"
-#include "DexHasher.h"
-#include "Pass.h"
-#include "ProguardConfiguration.h"
-#include "RedexOptions.h"
-
 #include <boost/optional.hpp>
 #include <json/json.h>
 #include <string>
@@ -20,6 +14,20 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
+
+#include "AnalysisUsage.h"
+#include "ApkManager.h"
+#include "DexHasher.h"
+#include "JsonWrapper.h"
+#include "ProguardConfiguration.h"
+#include "RedexOptions.h"
+
+struct ConfigFiles;
+class DexStore;
+class Pass;
+
+// Must match DexStore.
+using DexStoresVector = std::vector<DexStore>;
 
 class PassManager {
  public:

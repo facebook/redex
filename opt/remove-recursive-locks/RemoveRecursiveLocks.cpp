@@ -10,10 +10,12 @@
 #include <bitset>
 #include <boost/optional.hpp>
 #include <boost/variant.hpp>
+#include <iostream>
 #include <limits>
 
 #include "BaseIRAnalyzer.h"
 #include "CFGMutation.h"
+#include "ConfigFiles.h"
 #include "ConstantAbstractDomain.h"
 #include "ControlFlow.h"
 #include "IRInstruction.h"

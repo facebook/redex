@@ -12,6 +12,8 @@
 #include "ConstantPropagationWholeProgramState.h"
 #include "DexClass.h"
 
+struct ProguardMap;
+
 namespace constant_propagation {
 
 /*

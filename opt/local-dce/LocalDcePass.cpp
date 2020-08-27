@@ -14,6 +14,7 @@
 
 #include <boost/dynamic_bitset.hpp>
 
+#include "ConfigFiles.h"
 #include "ControlFlow.h"
 #include "DexClass.h"
 #include "DexUtil.h"

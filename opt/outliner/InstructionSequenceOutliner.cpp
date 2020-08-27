@@ -76,6 +76,7 @@
 
 #include "BigBlocks.h"
 #include "CFGMutation.h"
+#include "ConfigFiles.h"
 #include "Creators.h"
 #include "DexClass.h"
 #include "DexLimits.h"

@@ -7,6 +7,7 @@
 
 #include "GlobalTypeAnalysisPass.h"
 
+#include "ConfigFiles.h"
 #include "DexUtil.h"
 #include "GlobalTypeAnalyzer.h"
 #include "TypeAnalysisTransform.h"

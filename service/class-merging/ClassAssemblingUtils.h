@@ -9,6 +9,7 @@
 
 #include "Creators.h"
 #include "DexClass.h"
+#include "DexStore.h"
 #include "IRInstruction.h"
 #include "ModelMethodMerger.h"
 

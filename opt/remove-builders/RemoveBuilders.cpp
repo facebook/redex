@@ -10,6 +10,7 @@
 #include <boost/regex.hpp>
 #include <tuple>
 
+#include "ConfigFiles.h"
 #include "Dataflow.h"
 #include "DexUtil.h"
 #include "IRCode.h"

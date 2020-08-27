@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "ClassHierarchy.h"
+#include "ConfigFiles.h"
 #include "Deleter.h"
 #include "DexClass.h"
 #include "DexUtil.h"

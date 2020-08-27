@@ -13,6 +13,7 @@
 #include <typeinfo>
 #include <unordered_set>
 
+#include "AnalysisUsage.h"
 #include "ApiLevelChecker.h"
 #include "ApkManager.h"
 #include "CommandProfiling.h"
@@ -28,6 +29,7 @@
 #include "InstructionLowering.h"
 #include "JemallocUtil.h"
 #include "OptData.h"
+#include "Pass.h"
 #include "PrintSeeds.h"
 #include "ProguardPrintConfiguration.h"
 #include "ProguardReporting.h"

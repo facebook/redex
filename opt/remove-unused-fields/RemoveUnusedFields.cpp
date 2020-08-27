@@ -6,10 +6,13 @@
  */
 
 #include <atomic>
+#include <fstream>
+#include <iostream>
 
 #include "RemoveUnusedFields.h"
 
 #include "CFGMutation.h"
+#include "ConfigFiles.h"
 #include "DexClass.h"
 #include "FieldOpTracker.h"
 #include "IRCode.h"
