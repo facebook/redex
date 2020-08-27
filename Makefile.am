@@ -154,6 +154,7 @@ libredex_la_SOURCES = \
 	libredex/DexStoreUtil.cpp \
 	libredex/DuplicateClasses.cpp \
 	libredex/EditableCfgAdapter.cpp \
+	libredex/FbjniMarker.cpp \
 	libredex/FieldOpTracker.cpp \
 	libredex/FrameworkApi.cpp \
 	libredex/GlobalConfig.cpp \

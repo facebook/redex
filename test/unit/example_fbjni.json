@@ -1,0 +1,20 @@
+[
+  {
+      "class_path": "com.facebook.common.dextricks.DalvikInternals$CrashLogParameters",
+      "fields": [],
+      "methods": [
+          "public int getInstacrashInterval()"
+      ],
+      "exceptions": []
+  },
+  {
+    "class_path": "com.facebook.livemaps.lens.data.parsing.model.RoomModelAdapter",
+    "fields": [
+        "double longitude"
+    ],
+    "methods": [],
+    "exceptions": [
+        "java.lang.NullPointerException"
+    ]
+}
+]

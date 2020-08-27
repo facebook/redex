@@ -15,6 +15,7 @@
 
 #include "ClassHierarchy.h"
 #include "DexClass.h"
+#include "FbjniMarker.h"
 #include "Match.h"
 #include "RedexResources.h"
 #include "ReflectionAnalysis.h"
@@ -636,6 +637,7 @@ void init_reachable_classes(const Scope& scope, const JsonWrapper& config) {
   std::unordered_set<std::string> prune_unexported_components;
   bool compute_xml_reachability;
   bool analyze_native_lib_reachability;
+  std::vector<std::string> fbjni_json_files;
 
   config.get("apk_dir", "", apk_dir);
   config.get("keep_packages", {}, reflected_package_names);
@@ -643,6 +645,7 @@ void init_reachable_classes(const Scope& scope, const JsonWrapper& config) {
   config.get("prune_unexported_components", {}, prune_unexported_components);
   config.get("analyze_native_lib_reachability", true,
              analyze_native_lib_reachability);
+  config.get("fbjni_json_files", {}, fbjni_json_files);
 
   {
     Timer t{"Mark keep-methods"};
@@ -669,6 +672,10 @@ void init_reachable_classes(const Scope& scope, const JsonWrapper& config) {
         TRACE(PGR, 3, "native_lib: %s", classname.c_str());
         mark_reachable_by_classname(type);
         mark_reachable_by_native(type);
+      }
+
+      if (!fbjni_json_files.empty()) {
+        mark_native_classes_from_fbjni_configs(fbjni_json_files);
       }
     }
     walk::methods(scope, [&](DexMethod* meth) {

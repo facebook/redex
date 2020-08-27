@@ -8,6 +8,7 @@
 #pragma once
 
 #include <algorithm>
+#include <boost/algorithm/string/predicate.hpp>
 #include <functional>
 #include <unordered_set>
 #include <vector>
@@ -195,6 +196,20 @@ bool has_anno(const T* t, const std::unordered_set<DexType*>& anno_types) {
 
 namespace java_names {
 
+inline boost::optional<char> primitive_name_to_desc(const std::string& name) {
+  const static std::unordered_map<std::string, char> conversion_table{
+      {"void", 'V'},    {"byte", 'B'},  {"char", 'C'},
+      {"short", 'S'},   {"int", 'I'},   {"long", 'J'},
+      {"boolean", 'Z'}, {"float", 'F'}, {"double", 'D'},
+  };
+  auto it = conversion_table.find(name);
+  if (it != conversion_table.end()) {
+    return it->second;
+  } else {
+    return boost::none;
+  }
+}
+
 // Example: "Ljava/lang/String;" --> "java.lang.String"
 inline std::string internal_to_external(const std::string& internal_name) {
   auto external_name = internal_name.substr(1, internal_name.size() - 2);
@@ -202,11 +217,50 @@ inline std::string internal_to_external(const std::string& internal_name) {
   return external_name;
 }
 
+
 // Example: "java.lang.String" --> "Ljava/lang/String;"
 inline std::string external_to_internal(const std::string& external_name) {
   auto internal_name = "L" + external_name + ";";
   std::replace(internal_name.begin(), internal_name.end(), '.', '/');
   return internal_name;
+}
+
+inline std::string external_to_internal2(const std::string& external_name) {
+  // Primitive types (not including their arrays) are special notations
+  auto maybe_primitive_name = primitive_name_to_desc(external_name);
+  if (maybe_primitive_name) {
+    return std::string(1, *maybe_primitive_name);
+  }
+
+  int array_level = std::count(external_name.begin(), external_name.end(), '[');
+  std::string component_external_name = external_name.substr(array_level);
+  /**
+   * Note: "I" is a perfectly valid external name denoting a class of "LI;"
+   * while "int" is the external name for int type. However, "[I" is an array of
+   * int. For an array of "I", you need to use "[LI;"
+   */
+  if (array_level != 0 && component_external_name.size() == 1) {
+    // It must be an array of primitives. The internal name is the same as the
+    // external name.
+    return external_name;
+  }
+
+  std::string component_internal_name = component_external_name;
+  if (array_level == 0) {
+    component_internal_name = "L" + component_internal_name;
+  }
+
+  std::replace(
+      component_internal_name.begin(), component_internal_name.end(), '.', '/');
+  if (!boost::algorithm::ends_with(component_internal_name, ";")) {
+    component_internal_name += ";";
+  }
+  std::string array_prefix;
+  array_prefix.reserve(array_level);
+  for (int i = 0; i < array_level; i++) {
+    array_prefix += '[';
+  }
+  return array_prefix + component_internal_name;
 }
 
 inline std::string package_name(const std::string& type_name) {

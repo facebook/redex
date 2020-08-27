@@ -347,6 +347,8 @@ class DexField : public DexFieldRef {
     return g_redex->get_field(container, name, type);
   }
 
+  static DexFieldRef* get_field(const dex_member_refs::FieldDescriptorTokens&);
+
   /**
    * Get a field using a full descriptor: Lcls;.name:type
    */
@@ -928,6 +930,9 @@ class DexMethod : public DexMethodRef {
                                    const std::string& name,
                                    std::initializer_list<std::string> arg_types,
                                    const std::string& return_type);
+
+  static DexMethodRef* get_method(
+      const dex_member_refs::MethodDescriptorTokens&);
 
   /**
    * Get a method using a full descriptor: Lcls;.name:(args)rtype
