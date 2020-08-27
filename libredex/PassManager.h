@@ -79,9 +79,10 @@ class PassManager {
 
   template <typename PassType>
   PassType* get_preserved_analysis() const {
-    auto pass = m_preserved_analysis_passes.find(typeid(PassType).name());
+    auto pass =
+        m_preserved_analysis_passes.find(get_analysis_id_by_pass<PassType>());
     if (pass != m_preserved_analysis_passes.end()) {
-      return dynamic_cast<PassType*>(pass->second);
+      return static_cast<PassType*>(pass->second);
     }
     return nullptr;
   }

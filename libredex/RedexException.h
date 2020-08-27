@@ -21,6 +21,7 @@ enum RedexError {
   DUPLICATE_CLASSES = 4,
   DUPLICATE_METHODS = 5,
   BAD_ANNOTATION = 6,
+  UNSATISFIED_ANALYSIS_PASS = 7,
 };
 
 class RedexException : public std::exception {

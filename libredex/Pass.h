@@ -42,7 +42,11 @@ class Pass : public Configurable {
 
   bool is_analysis_pass() const { return m_kind == ANALYSIS; }
 
-  virtual void destroy_analysis_result() {}
+  virtual void destroy_analysis_result() {
+    always_assert_log(m_kind != ANALYSIS,
+                      "destroy_analysis_result not implemented for %s",
+                      m_name.c_str());
+  }
 
   /**
    * All passes' eval_pass are run, and then all passes' run_pass are run. This
@@ -60,15 +64,10 @@ class Pass : public Configurable {
                         PassManager& mgr) = 0;
 
   virtual void set_analysis_usage(AnalysisUsage& analysis_usage) const {
-    switch (m_kind) {
-    case TRANSFORMATION:
-      analysis_usage.set_preserve_none();
-      break;
-    case ANALYSIS:
+    // By default, analysis passes preserves all existing analysis while
+    // transformation passes preserves none.
+    if (m_kind == ANALYSIS) {
       analysis_usage.set_preserve_all();
-      break;
-    default:
-      not_reached();
     }
   }
 

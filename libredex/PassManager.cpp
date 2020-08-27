@@ -516,17 +516,13 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   size_t min_pass_idx_for_dex_ref_check =
       checker_conf.min_pass_idx_for_dex_ref_check(m_activated_passes);
 
+  // Abort if the analysis pass dependencies are not satisfied.
+  AnalysisUsage::check_dependencies(m_activated_passes);
+
   for (size_t i = 0; i < m_activated_passes.size(); ++i) {
     Pass* pass = m_activated_passes[i];
     AnalysisUsage analysis_usage;
     pass->set_analysis_usage(analysis_usage);
-
-    for (const auto& analysis_id : analysis_usage.get_required_passes()) {
-      always_assert_log(
-          m_preserved_analysis_passes.count(analysis_id),
-          "%s requires analysis results from %s, but it's not available.",
-          pass->name().c_str(), analysis_id.c_str());
-    }
 
     TRACE(PM, 1, "Running %s...", pass->name().c_str());
     ScopedVmHWM vm_hwm{hwm_pass_stats, hwm_per_pass};
@@ -584,17 +580,13 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       }
     }
 
-    if (!analysis_usage.get_preserve_status()) {
-      // Invalidate existing preserved analyses.
-      for (auto entry : m_preserved_analysis_passes) {
-        entry.second->destroy_analysis_result();
-      }
-      m_preserved_analysis_passes.clear();
-    }
+    // Invalidate existing preserved analyses according to policy set by each
+    // pass.
+    analysis_usage.do_pass_invalidation(&m_preserved_analysis_passes);
 
     if (pass->is_analysis_pass()) {
       // If the pass is an analysis pass, preserve it.
-      m_preserved_analysis_passes.emplace(typeid(*pass).name(), pass);
+      m_preserved_analysis_passes.emplace(get_analysis_id_by_pass(pass), pass);
     }
 
     // New methods might have been introduced by this pass; process previously

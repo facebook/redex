@@ -14,6 +14,7 @@ LDADD = $(COMMON_TEST_LIBS)
 
 check_PROGRAMS = \
     aliased_registers_test \
+    analysis_usage_test \
     array_propagation_test \
     blaming_escape_test \
     boxed_boolean_propagation_test \
@@ -120,6 +121,8 @@ check_PROGRAMS = \
     xstorerefs_test
 
 aliased_registers_test_SOURCES = AliasedRegistersTest.cpp
+
+analysis_usage_test_SOURCES = AnalysisUsageTest.cpp
 
 array_propagation_test_SOURCES = constant-propagation/ArrayPropagationTest.cpp
 array_propagation_test_CPPFLAGS = $(COMMON_INCLUDES) $(COMMON_TEST_INCLUDES) -I$(top_srcdir)/sparta/test
@@ -372,6 +375,7 @@ xstorerefs_test_SOURCES = XStoreRefsTest.cpp
 
 TESTS = \
     aliased_registers_test \
+    analysis_usage_test \
     array_propagation_test \
     blaming_escape_test \
     boxed_boolean_propagation_test \
