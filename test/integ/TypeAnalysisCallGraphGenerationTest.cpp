@@ -45,4 +45,56 @@ TEST_F(TypeAnalysisCallGraphGenerationTest, Test) {
   ASSERT_TRUE(callees.count(get_method("Base;.getVal", "", "I")));
   ASSERT_TRUE(callees.count(get_method("SubOne;.getVal", "", "I")));
   ASSERT_TRUE(callees.count(get_method("SubTwo;.getVal", "", "I")));
+
+  // TypeAnalysisCallGraphGenerationTest.baseArg() calls SubOne.getVal()
+  auto meth_basearg = get_method("TypeAnalysisCallGraphGenerationTest;.baseArg",
+                                 "Lcom/facebook/redextest/Base;", "I");
+  ASSERT_TRUE(meth_basearg);
+  ASSERT_TRUE(cg->has_node(meth_basearg));
+  auto successors = GraphInterface::successors(*cg, cg->node(meth_basearg));
+  ASSERT_TRUE(successors.size());
+  for (auto const& s : successors) {
+    const auto& target = GraphInterface::target(*cg, s);
+    ASSERT_EQ(target->method(), get_method("SubOne;.getVal", "", "I"));
+  }
+
+  // TypeAnalysisCallGraphGenerationTest.intfArg() calls SubOne.getName()
+  auto meth_intfarg =
+      get_method("TypeAnalysisCallGraphGenerationTest;.intfArg",
+                 "Lcom/facebook/redextest/I;", "Ljava/lang/String;");
+  ASSERT_TRUE(meth_intfarg);
+  ASSERT_TRUE(cg->has_node(meth_intfarg));
+  successors = GraphInterface::successors(*cg, cg->node(meth_intfarg));
+  ASSERT_TRUE(successors.size());
+  for (auto const& s : successors) {
+    const auto& target = GraphInterface::target(*cg, s);
+    ASSERT_EQ(target->method(),
+              get_method("SubOne;.getName", "", "Ljava/lang/String;"));
+  }
+
+  // TypeAnalysisCallGraphGenerationTest.baseField() calls SubTwo.getVal()
+  auto meth_basefield =
+      get_method("TypeAnalysisCallGraphGenerationTest;.baseField", "", "I");
+  ASSERT_TRUE(meth_basefield);
+  ASSERT_TRUE(cg->has_node(meth_basefield));
+  successors = GraphInterface::successors(*cg, cg->node(meth_basefield));
+  ASSERT_TRUE(successors.size());
+  for (auto const& s : successors) {
+    const auto& target = GraphInterface::target(*cg, s);
+    ASSERT_EQ(target->method(), get_method("SubTwo;.getVal", "", "I"));
+  }
+
+  // TypeAnalysisCallGraphGenerationTest.intfField() calls SubTwo.getName()
+  auto meth_intffield =
+      get_method("TypeAnalysisCallGraphGenerationTest;.intfField", "",
+                 "Ljava/lang/String;");
+  ASSERT_TRUE(meth_intffield);
+  ASSERT_TRUE(cg->has_node(meth_intffield));
+  successors = GraphInterface::successors(*cg, cg->node(meth_intffield));
+  ASSERT_TRUE(successors.size());
+  for (auto const& s : successors) {
+    const auto& target = GraphInterface::target(*cg, s);
+    ASSERT_EQ(target->method(),
+              get_method("SubTwo;.getName", "", "Ljava/lang/String;"));
+  }
 }
