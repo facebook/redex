@@ -15,6 +15,7 @@
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "IRInstruction.h"
+#include "PassManager.h"
 #include "ReachableClasses.h"
 #include "Walkers.h"
 

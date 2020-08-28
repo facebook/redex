@@ -10,6 +10,7 @@
 #include "GlobalTypeAnalyzer.h"
 #include "IRCode.h"
 #include "LocalTypeAnalyzer.h"
+#include "PassManager.h"
 #include "WholeProgramState.h"
 
 namespace type_analyzer {

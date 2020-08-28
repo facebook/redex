@@ -22,6 +22,7 @@
 #include "InterDexPass.h"
 #include "MethodProfiles.h"
 #include "MethodUtil.h"
+#include "PassManager.h"
 #include "PluginRegistry.h"
 #include "ReachingDefinitions.h"
 #include "ScopedCFG.h"

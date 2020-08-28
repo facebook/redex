@@ -10,6 +10,7 @@
 
 #include "DexClass.h"
 #include "DexUtil.h"
+#include "PassManager.h"
 #include "ReachableClasses.h"
 #include "RemoveEmptyClasses.h"
 #include "Walkers.h"

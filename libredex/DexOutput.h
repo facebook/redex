@@ -18,6 +18,7 @@
 #include "Pass.h"
 #include "PostLowering.h"
 #include "ProguardMap.h"
+#include "RedexOptions.h"
 #include "Trace.h"
 
 #include <locator.h>

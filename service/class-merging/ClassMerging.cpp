@@ -13,6 +13,7 @@
 #include "ConfigFiles.h"
 #include "ModelMerger.h"
 #include "NormalizeConstructor.h"
+#include "PassManager.h"
 #include "RefChecker.h"
 
 using namespace class_merging;

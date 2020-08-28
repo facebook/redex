@@ -13,6 +13,7 @@
 #include "ConstructorParams.h"
 #include "IPConstantPropagationAnalysis.h"
 #include "MethodOverrideGraph.h"
+#include "PassManager.h"
 #include "Timer.h"
 #include "Walkers.h"
 

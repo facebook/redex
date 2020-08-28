@@ -17,6 +17,7 @@
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "LiveRange.h"
+#include "PassManager.h"
 #include "Show.h"
 #include "Transform.h"
 #include "Walkers.h"

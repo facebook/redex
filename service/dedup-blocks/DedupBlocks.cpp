@@ -49,6 +49,7 @@
 #include "DedupBlockValueNumbering.h"
 
 #include "Liveness.h"
+#include "PassManager.h"
 #include "ReachingDefinitions.h"
 #include "TypeInference.h"
 #include <boost/functional/hash.hpp>

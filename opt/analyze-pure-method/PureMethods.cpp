@@ -7,7 +7,7 @@
 
 #include "PureMethods.h"
 #include "LocalPointersAnalysis.h"
-#include "Pass.h"
+#include "PassManager.h"
 #include "Purity.h"
 #include "SideEffectSummary.h"
 #include "SummarySerialization.h"

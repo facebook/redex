@@ -14,6 +14,7 @@
 #include "DexUtil.h"
 #include "HierarchyUtil.h"
 #include "LocalPointersAnalysis.h"
+#include "PassManager.h"
 #include "SummarySerialization.h"
 #include "Transform.h"
 #include "Walkers.h"

@@ -17,6 +17,7 @@
 #include "IRInstruction.h"
 #include "InstructionSequenceOutliner.h"
 #include "MethodProfiles.h"
+#include "PassManager.h"
 #include "Walkers.h"
 #include "locator.h"
 

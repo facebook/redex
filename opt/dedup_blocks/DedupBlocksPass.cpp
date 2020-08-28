@@ -7,6 +7,7 @@
 
 #include "DedupBlocksPass.h"
 
+#include "PassManager.h"
 #include "Walkers.h"
 
 namespace {

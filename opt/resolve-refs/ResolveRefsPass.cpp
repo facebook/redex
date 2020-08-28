@@ -13,6 +13,7 @@
 #include "ConfigFiles.h"
 #include "DexUtil.h"
 #include "MethodOverrideGraph.h"
+#include "PassManager.h"
 #include "Resolver.h"
 #include "TypeInference.h"
 #include "Walkers.h"

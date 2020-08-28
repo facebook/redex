@@ -13,6 +13,7 @@
 #include "DexLoader.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
+#include "PassManager.h"
 #include "Resolver.h"
 #include "Walkers.h"
 

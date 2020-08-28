@@ -17,6 +17,7 @@
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "IROpcode.h"
+#include "PassManager.h"
 #include "Walkers.h"
 
 /**

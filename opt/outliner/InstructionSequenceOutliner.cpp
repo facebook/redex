@@ -90,6 +90,7 @@
 #include "MutablePriorityQueue.h"
 #include "OutlinerTypeAnalysis.h"
 #include "PartialCandidates.h"
+#include "PassManager.h"
 #include "ReachingInitializeds.h"
 #include "RefChecker.h"
 #include "Resolver.h"

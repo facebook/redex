@@ -19,6 +19,7 @@
 #include "DexLoader.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
+#include "PassManager.h"
 #include "SingleImplDefs.h"
 #include "Trace.h"
 #include "Walkers.h"

@@ -17,6 +17,7 @@
 #include "IRCode.h"
 #include "OptimizeEnumsAnalysis.h"
 #include "OptimizeEnumsGeneratedAnalysis.h"
+#include "PassManager.h"
 #include "ProguardMap.h"
 #include "Resolver.h"
 #include "ScopedCFG.h"

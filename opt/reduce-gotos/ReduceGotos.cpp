@@ -33,6 +33,7 @@
 #include "IRInstruction.h"
 #include "IROpcode.h"
 #include "Liveness.h"
+#include "PassManager.h"
 #include "Walkers.h"
 
 namespace {

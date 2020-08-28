@@ -8,6 +8,7 @@
 #pragma once
 
 #include <boost/optional.hpp>
+#include <json/json.h>
 
 #include "ApproximateShapeMerging.h"
 #include "DexClass.h"
@@ -15,6 +16,7 @@
 #include "TypeSystem.h"
 
 struct ConfigFiles;
+class PassManager;
 class RefChecker;
 
 namespace class_merging {

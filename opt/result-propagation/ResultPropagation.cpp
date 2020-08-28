@@ -14,6 +14,7 @@
 #include "ControlFlow.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
+#include "PassManager.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "Resolver.h"
 #include "Walkers.h"

@@ -13,7 +13,7 @@
 
 #include "BinarySerialization.h"
 #include "DexUtil.h"
-#include "Pass.h"
+#include "ProguardConfiguration.h"
 #include "ReachableClasses.h"
 #include "Resolver.h"
 #include "Timer.h"

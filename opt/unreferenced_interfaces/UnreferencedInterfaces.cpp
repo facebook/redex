@@ -12,6 +12,7 @@
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "IROpcode.h"
+#include "PassManager.h"
 #include "Resolver.h"
 #include "Trace.h"
 #include "Walkers.h"

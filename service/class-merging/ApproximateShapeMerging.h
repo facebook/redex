@@ -9,6 +9,9 @@
 
 #include "MergerType.h"
 
+struct ConfigFiles;
+class JsonWrapper;
+
 namespace class_merging {
 
 struct ApproximateStats {

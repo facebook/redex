@@ -9,6 +9,7 @@
 
 #include "ApiLevelChecker.h"
 #include "ClassHierarchy.h"
+#include "PassManager.h"
 #include "Resolver.h"
 #include "Walkers.h"
 

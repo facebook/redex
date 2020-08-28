@@ -10,6 +10,7 @@
 #include "Creators.h"
 #include "DexStoreUtil.h"
 #include "DexUtil.h"
+#include "PassManager.h"
 #include "Resolver.h"
 #include "SwitchDispatch.h"
 #include "TypeReference.h"

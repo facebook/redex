@@ -50,6 +50,7 @@
 #include "IRInstruction.h"
 #include "Inliner.h"
 #include "MethodProfiles.h"
+#include "PassManager.h"
 #include "Resolver.h"
 #include "TypeSystem.h"
 #include "Walkers.h"

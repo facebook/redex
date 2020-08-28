@@ -16,6 +16,7 @@
 #include "DexClass.h"
 #include "FieldOpTracker.h"
 #include "IRCode.h"
+#include "PassManager.h"
 #include "Resolver.h"
 #include "Walkers.h"
 

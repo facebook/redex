@@ -10,6 +10,7 @@
 #include <boost/optional.hpp>
 
 #include "ControlFlow.h"
+#include "PassManager.h"
 #include "ReachingDefinitions.h"
 #include "ScopedCFG.h"
 #include "Walkers.h"

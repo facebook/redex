@@ -8,6 +8,7 @@
 #include "ConstantPropagationPass.h"
 
 #include "ConstantPropagation.h"
+#include "PassManager.h"
 #include "Walkers.h"
 
 using namespace constant_propagation;

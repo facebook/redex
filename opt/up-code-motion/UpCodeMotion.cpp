@@ -36,6 +36,7 @@
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "IROpcode.h"
+#include "PassManager.h"
 #include "TypeInference.h"
 #include "Walkers.h"
 

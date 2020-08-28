@@ -11,6 +11,7 @@
 #include "ControlFlow.h"
 #include "DexUtil.h"
 #include "IRCode.h"
+#include "PassManager.h"
 #include "Trace.h"
 #include "Walkers.h"
 

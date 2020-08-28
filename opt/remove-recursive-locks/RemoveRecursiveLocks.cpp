@@ -20,6 +20,7 @@
 #include "ControlFlow.h"
 #include "IRInstruction.h"
 #include "MethodProfiles.h"
+#include "PassManager.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "ReachingDefinitions.h"
 #include "ScopedCFG.h"

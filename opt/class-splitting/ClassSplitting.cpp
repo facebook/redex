@@ -36,6 +36,7 @@
 #include "MethodOverrideGraph.h"
 #include "MethodProfiles.h"
 #include "Mutators.h"
+#include "PassManager.h"
 #include "PluginRegistry.h"
 #include "Resolver.h"
 #include "Walkers.h"

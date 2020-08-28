@@ -39,6 +39,7 @@
 #include "ControlFlow.h"
 #include "DexUtil.h"
 #include "IRCode.h"
+#include "PassManager.h"
 #include "Purity.h"
 #include "Resolver.h"
 #include "ScopedCFG.h"

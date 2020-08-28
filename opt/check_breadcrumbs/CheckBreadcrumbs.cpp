@@ -16,6 +16,7 @@
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
+#include "PassManager.h"
 #include "Resolver.h"
 #include "Walkers.h"
 

@@ -12,6 +12,7 @@
 #include "ControlFlow.h"
 #include "DexAsm.h"
 #include "DexClass.h"
+#include "PassManager.h"
 #include "Resolver.h"
 #include "Trace.h"
 #include "Walkers.h"

@@ -22,6 +22,7 @@
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "MethodOverrideGraph.h"
+#include "PassManager.h"
 #include "Purity.h"
 #include "Resolver.h"
 #include "Transform.h"

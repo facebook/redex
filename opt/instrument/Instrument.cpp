@@ -13,6 +13,7 @@
 #include "InterDexPassPlugin.h"
 #include "Match.h"
 #include "MethodReference.h"
+#include "PassManager.h"
 #include "Show.h"
 #include "TypeSystem.h"
 #include "Walkers.h"
