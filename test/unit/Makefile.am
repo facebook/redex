@@ -65,6 +65,7 @@ check_PROGRAMS = \
     local_dce_test \
     local_pointers_test \
     loop_info_test \
+    loosen_access_modifier_test \
     match_test \
     method_inline_test \
     method_merger_test \
@@ -236,6 +237,8 @@ local_pointers_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
 loop_info_test_SOURCES = LoopInfoTest.cpp
 loop_info_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
+
+loosen_access_modifier_test_SOURCES = LoosenAccessModifierTest.cpp
 
 match_test_SOURCES = MatchTest.cpp
 
@@ -425,6 +428,7 @@ TESTS = \
     local_dce_test \
     local_pointers_test \
     loop_info_test \
+    loosen_access_modifier_test \
     match_test \
     method_inline_test \
     method_merger_test \

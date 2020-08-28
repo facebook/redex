@@ -98,14 +98,15 @@ using DexClasses = std::vector<DexClass*>;
 
 /**
  * Loosen those access modifiers of a class that do not require a corresponding
- * change in opcodes. 0. Direct instance methods will not be changed so we don't
+ * change in opcodes.
+ * 0. Direct instance methods will not be changed so we don't
  * need update opcodes.
  * 1. Make the class public.
- * 2. Make protected and package-private virtual methods public.
+ * 2. Make protected and package-private virtual methods public properly.
  * 3. Make constructors and static methods public.
  * 4. Make all fields public.
  */
-void loosen_access_modifier(DexClass* clazz);
+void loosen_access_modifier_except_vmethods(DexClass* clazz);
 
 /*
  * Loosen access modifier of classes and @InnerClass annotations without needing

@@ -583,7 +583,7 @@ std::vector<DexClass*> ModelMerger::merge_model(Scope& scope,
   for (auto merger : to_materialize) {
     auto type = const_cast<DexType*>(merger->type);
     for (auto mergeable : merger->mergeables) {
-      loosen_access_modifier(type_class(mergeable));
+      loosen_access_modifier_except_vmethods(type_class(mergeable));
       merged_type_names[mergeable->get_name()->str()] = type->get_name()->str();
       mergeable_to_merger[mergeable] = type;
     }
