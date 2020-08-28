@@ -291,7 +291,6 @@ void ReBindRefsPass::eval_pass(DexStoresVector&,
                                ConfigFiles& conf,
                                PassManager& mgr) {
   int32_t min_sdk = mgr.get_redex_options().min_sdk;
-  bool explicitly_enabled_external = m_rebind_to_external;
   // Disable rebind to external for API level older than
   // m_supported_min_sdk_for_external_refs.
   if (min_sdk < m_supported_min_sdk_for_external_refs) {
@@ -304,7 +303,7 @@ void ReBindRefsPass::eval_pass(DexStoresVector&,
   if (!min_sdk_api_file) {
     TRACE(BIND, 2, "Android SDK API %d file cannot be found.", min_sdk);
     always_assert_log(
-        !explicitly_enabled_external ||
+        !m_rebind_to_external ||
             min_sdk < m_supported_min_sdk_for_external_refs,
         "Android SDK API %d file can not be found but rebind_to_external is "
         "explicitly enabled for this version. Please pass the api list to "
