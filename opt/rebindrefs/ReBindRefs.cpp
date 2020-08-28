@@ -303,7 +303,6 @@ void ReBindRefsPass::eval_pass(DexStoresVector&,
   auto min_sdk_api_file = conf.get_android_sdk_api_file(min_sdk);
   if (!min_sdk_api_file) {
     TRACE(BIND, 2, "Android SDK API %d file cannot be found.", min_sdk);
-    m_rebind_to_external = false;
     always_assert_log(
         !explicitly_enabled_external ||
             min_sdk < m_supported_min_sdk_for_external_refs,
@@ -311,6 +310,7 @@ void ReBindRefsPass::eval_pass(DexStoresVector&,
         "explicitly enabled for this version. Please pass the api list to "
         "Redex or turn off `rebind_to_external`.",
         min_sdk);
+    m_rebind_to_external = false;
   } else {
     TRACE(BIND, 2, "Android SDK API %d file found: %s", min_sdk,
           min_sdk_api_file->c_str());
