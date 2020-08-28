@@ -41,7 +41,8 @@ void loosen_access_modifier_for_vmethods(const Scope& scope) {
     if (is_final(method) && !pair.second.children.empty()) {
       overriden_should_not_be_public(method, graph.get(), &should_not_mark);
       always_assert_log(!is_public(method) && !is_protected(method),
-                        "%s is visible final but it has children");
+                        "%s is visible final but it has children",
+                        SHOW(method));
     }
   }
   walk::parallel::classes(scope, [&should_not_mark](DexClass* cls) {
