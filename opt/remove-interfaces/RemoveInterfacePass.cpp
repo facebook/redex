@@ -12,6 +12,7 @@
 #include "DexUtil.h"
 #include "PassManager.h"
 #include "Resolver.h"
+#include "Show.h"
 #include "SwitchDispatch.h"
 #include "TypeReference.h"
 #include "TypeSystem.h"

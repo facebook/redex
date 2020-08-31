@@ -24,6 +24,7 @@
 #include "ReachingDefinitions.h"
 #include "Resolver.h"
 #include "ScopedCFG.h"
+#include "Show.h"
 #include "Transform.h"
 #include "TypeSystem.h"
 #include "Walkers.h"

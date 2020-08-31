@@ -44,6 +44,7 @@
 #include "Pass.h"
 #include "Resolver.h"
 #include "Sha1.h"
+#include "Show.h"
 #include "Trace.h"
 #include "Walkers.h"
 #include "WorkQueue.h"

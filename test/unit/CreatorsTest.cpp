@@ -11,6 +11,7 @@
 #include "DexAsm.h"
 #include "DexClass.h"
 #include "RedexTest.h"
+#include "Show.h"
 
 using namespace dex_asm;
 

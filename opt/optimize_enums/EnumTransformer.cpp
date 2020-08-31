@@ -14,6 +14,7 @@
 #include "Mutators.h"
 #include "OptData.h"
 #include "Resolver.h"
+#include "Show.h"
 #include "TypeReference.h"
 #include "UsedVarsAnalysis.h"
 #include "Walkers.h"

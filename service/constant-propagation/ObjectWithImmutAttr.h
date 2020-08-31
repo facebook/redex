@@ -11,6 +11,7 @@
 #include "DisjointUnionAbstractDomain.h"
 #include "SignedConstantDomain.h"
 
+#include "Show.h"
 #include "TypeUtil.h"
 
 class DexField;

@@ -9,6 +9,7 @@
 
 #include "MethodReference.h"
 #include "Resolver.h"
+#include "Show.h"
 #include "Walkers.h"
 
 namespace {

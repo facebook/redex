@@ -10,9 +10,10 @@
 #include <cstdint>
 #include <string>
 
-#include "Show.h"
-
 class DexField;
+class DexMethod;
+class DexMethodRef;
+class DexType;
 
 enum DexOpcode : uint16_t;
 

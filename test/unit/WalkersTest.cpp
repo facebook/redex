@@ -11,6 +11,7 @@
 
 #include "DexUtil.h"
 #include "RedexTest.h"
+#include "Show.h"
 
 struct WalkersTest : public RedexTest {};
 

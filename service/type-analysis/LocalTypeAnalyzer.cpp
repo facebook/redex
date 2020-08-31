@@ -11,6 +11,7 @@
 #include <sstream>
 
 #include "Resolver.h"
+#include "Show.h"
 
 using namespace type_analyzer;
 

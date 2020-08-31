@@ -10,6 +10,7 @@
 #include "CFGInliner.h"
 #include "ClassInitCounter.h"
 #include "IROpcode.h"
+#include "Show.h"
 
 #include <unordered_set>
 

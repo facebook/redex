@@ -12,6 +12,7 @@
 #include "IRCode.h"
 #include "MethodReference.h"
 #include "Resolver.h"
+#include "Show.h"
 #include "TypeReference.h"
 #include "TypeTags.h"
 

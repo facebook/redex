@@ -15,6 +15,7 @@
 #include "DexAsm.h"
 #include "DexClass.h"
 #include "PassManager.h"
+#include "Show.h"
 #include "Walkers.h"
 
 using namespace stringbuilder_outliner;

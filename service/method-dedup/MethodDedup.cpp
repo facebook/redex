@@ -9,6 +9,7 @@
 
 #include "IRCode.h"
 #include "MethodReference.h"
+#include "Show.h"
 
 namespace {
 

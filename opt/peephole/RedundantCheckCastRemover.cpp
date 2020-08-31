@@ -12,6 +12,7 @@
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "Match.h"
+#include "Show.h"
 #include "Walkers.h"
 
 RedundantCheckCastRemover::RedundantCheckCastRemover(

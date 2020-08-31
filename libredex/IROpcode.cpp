@@ -12,6 +12,7 @@
 #include "DexInstruction.h"
 #include "DexOpcode.h"
 #include "DexUtil.h"
+#include "Show.h"
 
 namespace opcode {
 

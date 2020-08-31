@@ -10,6 +10,7 @@
 #include <fstream>
 #include <iostream>
 
+#include "Show.h"
 #include "StringBuilder.h"
 #include "Walkers.h"
 

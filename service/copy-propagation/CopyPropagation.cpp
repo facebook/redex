@@ -21,6 +21,7 @@
 #include "MonotonicFixpointIterator.h"
 #include "Resolver.h"
 #include "ScopedCFG.h"
+#include "Show.h"
 #include "Walkers.h"
 
 using namespace sparta;

@@ -11,6 +11,7 @@
 #include "DexClass.h"
 #include "IRCode.h"
 #include "IRTypeChecker.h"
+#include "Show.h"
 #include "Walkers.h"
 
 /**

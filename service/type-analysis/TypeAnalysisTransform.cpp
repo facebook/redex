@@ -8,6 +8,7 @@
 #include "TypeAnalysisTransform.h"
 
 #include "DexInstruction.h"
+#include "Show.h"
 
 namespace {
 

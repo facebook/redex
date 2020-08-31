@@ -10,7 +10,6 @@
 #include "DexCallSite.h"
 #include "DexInstruction.h"
 #include "DexMethodHandle.h"
-#include "Show.h"
 
 #include <boost/range/any_range.hpp>
 
@@ -224,7 +223,7 @@ class IRInstruction final {
    */
   IROpcode opcode() const { return m_opcode; }
   reg_t dest() const {
-    always_assert_log(has_dest(), "No dest for %s", SHOW(m_opcode));
+    always_assert_log(has_dest(), "No dest for %s", show_opcode().c_str());
     return m_dest;
   }
   reg_t src(size_t i) const;
@@ -399,6 +398,8 @@ class IRInstruction final {
   uint64_t hash() const;
 
  private:
+  std::string show_opcode() const; // To avoid "Show.h" in the header.
+
   // 2 is chosen because it's the maximum number of registers (32 bits each) we
   // can fit in the size of a pointer (on a 64bit system).
   // In practice, most IRInstructions have 2 or fewer source registers, so we

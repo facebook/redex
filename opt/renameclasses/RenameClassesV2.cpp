@@ -23,6 +23,7 @@
 #include "PassManager.h"
 #include "ReachableClasses.h"
 #include "RedexResources.h"
+#include "Show.h"
 #include "TypeStringRewriter.h"
 #include "Walkers.h"
 #include "Warning.h"

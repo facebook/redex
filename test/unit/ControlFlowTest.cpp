@@ -13,6 +13,7 @@
 #include "IRAssembler.h"
 #include "IRCode.h"
 #include "RedexTest.h"
+#include "Show.h"
 
 namespace cfg {
 

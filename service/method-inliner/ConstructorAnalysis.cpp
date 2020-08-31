@@ -11,6 +11,7 @@
 #include "BaseIRAnalyzer.h"
 #include "ConstantAbstractDomain.h"
 #include "ControlFlow.h"
+#include "DexClass.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "MethodUtil.h"

@@ -16,6 +16,7 @@
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "PatriciaTreeMapAbstractPartition.h"
 #include "Resolver.h"
+#include "Show.h"
 #include "SpartaInterprocedural.h"
 
 namespace {

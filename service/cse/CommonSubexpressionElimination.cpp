@@ -63,6 +63,7 @@
 #include "PatriciaTreeSetAbstractDomain.h"
 #include "ReducedProductAbstractDomain.h"
 #include "Resolver.h"
+#include "Show.h"
 #include "TypeInference.h"
 #include "Walkers.h"
 

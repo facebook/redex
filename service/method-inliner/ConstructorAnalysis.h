@@ -7,7 +7,8 @@
 
 #pragma once
 
-#include "DexClass.h"
+class DexMethod;
+class IRInstruction;
 
 namespace constructor_analysis {
 

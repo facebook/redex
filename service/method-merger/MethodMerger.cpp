@@ -11,6 +11,7 @@
 #include "MethodOverrideGraph.h"
 #include "MethodReference.h"
 #include "Resolver.h"
+#include "Show.h"
 #include "SwitchDispatch.h"
 #include "Walkers.h"
 

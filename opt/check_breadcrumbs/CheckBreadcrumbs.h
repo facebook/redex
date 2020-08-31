@@ -7,7 +7,14 @@
 
 #pragma once
 
+#include <map>
+#include <vector>
+
+#include "DexClass.h" // All the comparators.
+#include "DexStore.h" // XStoreRefs.
 #include "Pass.h"
+
+class IRInstruction;
 
 /**
  * This pass only makes sense when applied at the end of a redex optimization

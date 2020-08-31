@@ -9,6 +9,7 @@
 
 #include "DexUtil.h"
 #include "IRCode.h"
+#include "Show.h"
 #include "Timer.h"
 #include "WorkQueue.h"
 

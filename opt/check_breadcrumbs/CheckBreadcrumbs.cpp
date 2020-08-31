@@ -18,6 +18,7 @@
 #include "IRInstruction.h"
 #include "PassManager.h"
 #include "Resolver.h"
+#include "Show.h"
 #include "Walkers.h"
 
 /**

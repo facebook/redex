@@ -9,6 +9,7 @@
 
 #include "CallGraph.h"
 #include "ConcurrentContainers.h"
+#include "Show.h"
 #include "Walkers.h"
 
 using namespace side_effects;

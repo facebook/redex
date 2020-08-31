@@ -18,6 +18,7 @@
 #include "PassManager.h"
 #include "Peephole.h"
 #include "RedexTest.h"
+#include "Show.h"
 
 // Helper to hold a list of instructions
 struct IRInstructionList {

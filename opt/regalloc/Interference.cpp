@@ -11,6 +11,7 @@
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "MonotonicFixpointIterator.h"
+#include "Show.h"
 
 namespace regalloc {
 

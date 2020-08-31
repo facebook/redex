@@ -23,6 +23,7 @@
 
 #include "LocalDcePass.h"
 #include "ReBindRefs.h"
+#include "Show.h"
 #include "Synth.h"
 
 #include "Match.h"

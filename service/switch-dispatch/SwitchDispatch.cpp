@@ -10,6 +10,7 @@
 #include <cmath>
 
 #include "Creators.h"
+#include "Show.h"
 #include "TypeReference.h"
 
 using namespace type_reference;

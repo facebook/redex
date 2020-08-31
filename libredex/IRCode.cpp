@@ -25,6 +25,7 @@
 #include "IRInstruction.h"
 #include "IROpcode.h"
 #include "InstructionLowering.h"
+#include "Show.h"
 #include "Transform.h"
 #include "Util.h"
 

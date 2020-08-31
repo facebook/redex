@@ -414,11 +414,14 @@ class Model {
   }
 
   void move_child_to_mergeables(MergerType& merger, const DexType* child) {
-    TRACE(CLMG, 3, "Adding child %s to merger %s", SHOW(child),
+    TRACE(CLMG, 3, "Adding child %s to merger %s", show_type(child).c_str(),
           print(&merger).c_str());
     remove_child(child);
     merger.mergeables.insert(child);
   }
+
+  static std::string show_type(const DexType* type); // To avoid "Show.h" in the
+                                                     // header.
 
   // printers
   std::string print(const MergerType* merger) const;

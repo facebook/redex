@@ -24,6 +24,7 @@
 #include "IRCode.h"
 #include "OptDataDefs.h"
 #include "Resolver.h"
+#include "Show.h"
 #include "Trace.h"
 
 namespace {

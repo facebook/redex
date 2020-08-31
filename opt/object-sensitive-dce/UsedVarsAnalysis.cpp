@@ -10,6 +10,7 @@
 #include <utility>
 
 #include "ReachableClasses.h"
+#include "Show.h"
 
 namespace ptrs = local_pointers;
 

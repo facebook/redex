@@ -17,6 +17,7 @@
 #include "IRInstruction.h"
 #include "PassManager.h"
 #include "ReachableClasses.h"
+#include "Show.h"
 #include "Walkers.h"
 
 namespace {

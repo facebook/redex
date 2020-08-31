@@ -12,6 +12,7 @@
 #include "IRCode.h"
 #include "RedexTest.h"
 #include "ResultPropagation.h"
+#include "Show.h"
 
 const DexMethodRef* get_invoked_method(cfg::ControlFlowGraph* cfg) {
   auto iterable = cfg::InstructionIterable(*cfg);

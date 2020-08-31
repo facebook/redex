@@ -12,6 +12,7 @@
 #include "DexClass.h"
 #include "DexPosition.h"
 #include "DexUtil.h"
+#include "Show.h"
 
 DexPosition::DexPosition(uint32_t line) : line(line) {}
 

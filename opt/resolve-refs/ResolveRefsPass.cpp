@@ -15,6 +15,7 @@
 #include "MethodOverrideGraph.h"
 #include "PassManager.h"
 #include "Resolver.h"
+#include "Show.h"
 #include "TypeInference.h"
 #include "Walkers.h"
 

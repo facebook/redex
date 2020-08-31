@@ -11,6 +11,7 @@
 #include "DexUtil.h"
 #include "ObfuscateUtils.h"
 #include "Resolver.h"
+#include "Show.h"
 #include "Trace.h"
 #include "VirtualScope.h"
 #include "Walkers.h"

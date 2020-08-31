@@ -16,6 +16,7 @@
 #include "ControlFlow.h"
 #include "Debug.h"
 #include "IRCode.h"
+#include "Show.h"
 
 // The "Hotspot Client Compiler Visualizer" (c1visualizer) is a tool consuming
 // Hotspot C1 compiler debug info to display control flow graphs of compilation

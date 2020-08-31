@@ -14,6 +14,7 @@
 #include "PassManager.h"
 #include "RefChecker.h"
 #include "Resolver.h"
+#include "Show.h"
 #include "Walkers.h"
 
 using namespace class_merging;
@@ -1211,6 +1212,8 @@ void Model::distribute_virtual_methods(
     }
   }
 }
+
+std::string Model::show_type(const DexType* type) { return show(type); }
 
 std::string Model::print() const {
   size_t count{0};

@@ -8,9 +8,20 @@
 #pragma once
 
 #include "ConcurrentContainers.h"
+#include "IROpcode.h"
 #include "MethodOverrideGraph.h"
 #include "PatriciaTreeSet.h"
 #include "Purity.h"
+
+class DexField;
+class DexMethod;
+class DexMethodRef;
+class DexType;
+class IRInstruction;
+
+namespace cfg {
+class ControlFlowGraph;
+} // namespace cfg
 
 namespace cse_impl {
 

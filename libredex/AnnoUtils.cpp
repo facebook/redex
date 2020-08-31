@@ -9,6 +9,8 @@
 
 #include <utility>
 
+#include "Show.h"
+
 namespace {
 
 const DexEncodedValue* parse_anno_value_helper(const DexAnnotationSet* anno_set,

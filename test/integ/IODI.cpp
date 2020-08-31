@@ -20,6 +20,7 @@
 #include "InstructionLowering.h"
 #include "RedexContext.h"
 #include "SanitizersConfig.h"
+#include "Show.h"
 #include "Walkers.h"
 
 struct DexOutputTestHelper {

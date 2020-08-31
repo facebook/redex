@@ -22,6 +22,7 @@
 #include "LocalDce.h"
 #include "RedexTest.h"
 #include "ReflectionAnalysis.h"
+#include "Show.h"
 
 using namespace testing;
 using namespace reflection;

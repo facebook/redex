@@ -9,6 +9,7 @@
 
 #include "DexClass.h"
 #include "DexUtil.h"
+#include "Show.h"
 
 #include <boost/range/any_range.hpp>
 #include <cstring>
@@ -429,3 +430,5 @@ void IRInstruction::gather_types(std::vector<DexType*>& ltype) const {
     break;
   }
 }
+
+std::string IRInstruction::show_opcode() const { return show(m_opcode); }

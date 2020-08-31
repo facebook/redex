@@ -6,6 +6,7 @@
  */
 
 #include "InstructionLowering.h"
+#include "Show.h"
 #include "Walkers.h"
 
 namespace instruction_lowering {

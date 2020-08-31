@@ -10,6 +10,7 @@
 #include <boost/range/adaptor/reversed.hpp>
 
 #include "IROpcode.h"
+#include "Show.h"
 #include "Transform.h"
 
 namespace {
@@ -32,6 +33,9 @@ DexProto* make_static_sig(DexMethod* meth) {
 }
 
 } // namespace
+
+std::string ClassCreator::show_cls(const DexClass* cls) { return show(cls); }
+std::string ClassCreator::show_type(const DexType* type) { return show(type); }
 
 MethodBlock::MethodBlock(const IRList::iterator& iterator,
                          MethodCreator* creator)

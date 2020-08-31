@@ -7,6 +7,7 @@
 
 #include "DexUtil.h"
 #include "MethodOverrideGraph.h"
+#include "Show.h"
 #include "Walkers.h"
 
 namespace {

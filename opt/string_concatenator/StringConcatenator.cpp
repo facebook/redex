@@ -18,6 +18,7 @@
 #include "IRCode.h"
 #include "PassManager.h"
 #include "Resolver.h"
+#include "Show.h"
 #include "Walkers.h"
 
 /* This pass finds <clinit> methods with lots of string concatenations of

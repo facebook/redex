@@ -12,6 +12,7 @@
 #include "DexUtil.h"
 #include "IRAssembler.h"
 #include "ScopeHelper.h"
+#include "Show.h"
 
 namespace {
 

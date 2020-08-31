@@ -12,6 +12,7 @@
 
 #include "DexClass.h"
 #include "DexLimits.h"
+#include "Show.h"
 #include "Util.h"
 
 namespace {

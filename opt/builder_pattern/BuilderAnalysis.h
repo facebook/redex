@@ -6,6 +6,8 @@
 
 #include "DexClass.h"
 
+class IRInstruction;
+
 namespace builder_pattern {
 
 namespace impl {

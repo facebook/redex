@@ -10,6 +10,7 @@
 
 #include "CrossDexRefMinimizer.h"
 #include "DexUtil.h"
+#include "Show.h"
 
 namespace interdex {
 

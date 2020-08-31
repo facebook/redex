@@ -24,6 +24,7 @@
 #include "IRInstruction.h"
 #include "InterDexPassPlugin.h"
 #include "ReachableClasses.h"
+#include "Show.h"
 #include "StringUtil.h"
 #include "Walkers.h"
 #include "file-utils.h"

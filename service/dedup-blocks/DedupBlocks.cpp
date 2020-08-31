@@ -51,6 +51,7 @@
 #include "Liveness.h"
 #include "PassManager.h"
 #include "ReachingDefinitions.h"
+#include "Show.h"
 #include "TypeInference.h"
 #include <boost/functional/hash.hpp>
 

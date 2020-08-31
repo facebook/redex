@@ -8,6 +8,7 @@
 #include "AnnoUtils.h"
 #include "MethodUtil.h"
 #include "RedexTest.h"
+#include "Show.h"
 
 class ClinitSideEffectTest : public RedexIntegrationTest {};
 

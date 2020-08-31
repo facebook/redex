@@ -10,6 +10,7 @@
 #include "DexUtil.h"
 #include "GlobalTypeAnalysisPass.h"
 #include "MethodOverrideGraph.h"
+#include "Show.h"
 #include "Walkers.h"
 
 using namespace call_graph;

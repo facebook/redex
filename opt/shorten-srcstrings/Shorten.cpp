@@ -21,6 +21,7 @@
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "PassManager.h"
+#include "Show.h"
 #include "Walkers.h"
 #include "Warning.h"
 

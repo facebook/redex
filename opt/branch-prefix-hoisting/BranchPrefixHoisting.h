@@ -13,6 +13,13 @@
 #include "IRList.h"
 #include "Pass.h"
 
+class IRCode;
+
+namespace cfg {
+class Block;
+class ControlFlowGraph;
+} // namespace cfg
+
 class BranchPrefixHoistingPass : public Pass {
  public:
   BranchPrefixHoistingPass() : Pass("BranchPrefixHoistingPass") {}

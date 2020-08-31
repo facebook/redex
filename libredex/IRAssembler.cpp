@@ -13,6 +13,8 @@
 #include <string>
 #include <unordered_map>
 
+#include "Show.h"
+
 using namespace sparta;
 
 namespace {

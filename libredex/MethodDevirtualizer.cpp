@@ -10,6 +10,7 @@
 #include "MethodOverrideGraph.h"
 #include "Mutators.h"
 #include "Resolver.h"
+#include "Show.h"
 #include "Walkers.h"
 
 namespace mog = method_override_graph;

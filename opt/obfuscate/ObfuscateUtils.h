@@ -12,6 +12,8 @@
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "ReachableClasses.h"
+#include "Show.h"
+
 #include <list>
 #include <type_traits>
 

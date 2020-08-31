@@ -8,6 +8,7 @@
 #include "OutlinerTypeAnalysis.h"
 
 #include "DexTypeEnvironment.h"
+#include "Show.h"
 
 namespace outliner_impl {
 

@@ -12,6 +12,7 @@
 
 #include "DexClass.h"
 #include "MethodOverrideGraph.h"
+#include "Show.h"
 #include "Trace.h"
 #include "TypeReference.h"
 #include "TypeSystem.h"

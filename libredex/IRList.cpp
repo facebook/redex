@@ -12,6 +12,7 @@
 
 #include "DexUtil.h"
 #include "IRInstruction.h"
+#include "Show.h"
 
 bool TryEntry::operator==(const TryEntry& other) const {
   return type == other.type && *catch_start == *other.catch_start;

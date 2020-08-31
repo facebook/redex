@@ -10,6 +10,7 @@
 #include "BaseIRAnalyzer.h"
 #include "GlobalTypeAnalyzer.h"
 #include "Resolver.h"
+#include "Show.h"
 #include "Walkers.h"
 
 using namespace type_analyzer;
@@ -140,6 +141,11 @@ WholeProgramState::WholeProgramState(
 
   analyze_clinits_and_ctors(scope, gta, &m_field_partition);
   collect(scope, gta);
+}
+
+std::string WholeProgramState::show_field(const DexField* f) { return show(f); }
+std::string WholeProgramState::show_method(const DexMethod* m) {
+  return show(m);
 }
 
 /*

@@ -62,7 +62,7 @@ class WholeProgramState {
     }
     auto domain = m_field_partition.get(field);
     if (domain.is_bottom()) {
-      TRACE(TYPE, 5, "Missing type for field %s", SHOW(field));
+      TRACE(TYPE, 5, "Missing type for field %s", show_field(field).c_str());
       return DexTypeDomain::top();
     }
     return domain;
@@ -81,7 +81,7 @@ class WholeProgramState {
     }
     auto domain = m_method_partition.get(method);
     if (domain.is_bottom()) {
-      TRACE(TYPE, 5, "Missing type for method %s", SHOW(method));
+      TRACE(TYPE, 5, "Missing type for method %s", show_method(method).c_str());
       return DexTypeDomain::top();
     }
     return domain;
@@ -153,6 +153,10 @@ class WholeProgramState {
       ConcurrentMap<const DexMethod*, std::vector<DexTypeDomain>>* method_tmp);
 
   bool is_reachable(const global::GlobalTypeAnalyzer&, const DexMethod*) const;
+
+  // To avoid "Show.h" in the header.
+  static std::string show_field(const DexField* f);
+  static std::string show_method(const DexMethod* m);
 
   // Track the set of fields that we can correctly analyze.
   // The unknown fields can be written to by non-dex code or through reflection.

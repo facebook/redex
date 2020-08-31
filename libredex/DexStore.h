@@ -156,6 +156,9 @@ class XStoreRefs {
    */
   size_t m_root_stores;
 
+  static std::string show_type(const DexType* type); // To avoid "Show.h" in the
+                                                     // header.
+
  public:
   explicit XStoreRefs(const DexStoresVector& stores);
 
@@ -173,7 +176,7 @@ class XStoreRefs {
     for (size_t store_idx = 0; store_idx < m_xstores.size(); store_idx++) {
       if (m_xstores[store_idx].count(type) > 0) return store_idx;
     }
-    not_reached_log("type %s not in the current APK", SHOW(type));
+    not_reached_log("type %s not in the current APK", show_type(type).c_str());
   }
 
   /**

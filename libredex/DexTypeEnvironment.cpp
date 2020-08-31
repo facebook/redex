@@ -10,6 +10,8 @@
 #include <boost/optional/optional_io.hpp>
 #include <ostream>
 
+#include "Show.h"
+
 namespace dtv_impl {
 
 bool implements(const DexClass* cls, const DexType* intf) {
@@ -224,6 +226,26 @@ void SmallSetDexTypeDomain::widen_with(const SmallSetDexTypeDomain& other) {
     return;
   }
   join_with(other);
+}
+
+std::ostream& operator<<(std::ostream& out, const SingletonDexTypeDomain& x) {
+  using namespace sparta;
+  switch (x.kind()) {
+  case AbstractValueKind::Bottom: {
+    out << "_|_";
+    break;
+  }
+  case AbstractValueKind::Top: {
+    out << "T";
+    break;
+  }
+  case AbstractValueKind::Value: {
+    auto type = x.get_dex_type();
+    out << (type ? show(*type) : std::string("<NONE>"));
+    break;
+  }
+  }
+  return out;
 }
 
 std::ostream& operator<<(std::ostream& out, const SmallSetDexTypeDomain& x) {

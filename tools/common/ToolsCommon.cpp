@@ -27,6 +27,7 @@
 #include "InstructionLowering.h"
 #include "JarLoader.h"
 #include "Macros.h"
+#include "Show.h"
 #include "Timer.h"
 #include "Walkers.h"
 

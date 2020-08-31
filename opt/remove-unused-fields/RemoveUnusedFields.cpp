@@ -18,6 +18,7 @@
 #include "IRCode.h"
 #include "PassManager.h"
 #include "Resolver.h"
+#include "Show.h"
 #include "Walkers.h"
 
 using namespace remove_unused_fields;

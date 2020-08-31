@@ -43,6 +43,7 @@
 #include "Purity.h"
 #include "Resolver.h"
 #include "ScopedCFG.h"
+#include "Show.h"
 #include "Trace.h"
 #include "Walkers.h"
 

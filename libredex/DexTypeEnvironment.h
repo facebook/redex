@@ -138,26 +138,10 @@ class SingletonDexTypeDomain final
   }
 
   friend std::ostream& operator<<(std::ostream& out,
-                                  const SingletonDexTypeDomain& x) {
-    using namespace sparta;
-    switch (x.kind()) {
-    case AbstractValueKind::Bottom: {
-      out << "_|_";
-      break;
-    }
-    case AbstractValueKind::Top: {
-      out << "T";
-      break;
-    }
-    case AbstractValueKind::Value: {
-      auto type = x.get_dex_type();
-      out << (type ? show(*type) : std::string("<NONE>"));
-      break;
-    }
-    }
-    return out;
-  }
+                                  const SingletonDexTypeDomain& x);
 };
+
+std::ostream& operator<<(std::ostream& out, const SingletonDexTypeDomain& x);
 
 std::ostream& operator<<(std::ostream& output, const DexType* dex_type);
 

@@ -11,6 +11,7 @@
 #include "MethodOverrideGraph.h"
 
 struct ConfigFiles;
+class IRInstruction;
 
 enum class CseSpecialLocations : uintptr_t {
   GENERAL_MEMORY_BARRIER,

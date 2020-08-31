@@ -12,6 +12,7 @@
 #include "IROpcode.h"
 #include "Pass.h"
 #include "RedexTest.h"
+#include "Show.h"
 
 #include <json/json.h>
 #include <string>

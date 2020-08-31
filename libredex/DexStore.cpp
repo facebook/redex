@@ -12,6 +12,7 @@
 #include "CppUtil.h"
 #include "DexStore.h"
 #include "DexUtil.h"
+#include "Show.h"
 
 constexpr const char* ROOT_STORE_NAME = "classes";
 
@@ -99,6 +100,8 @@ bool XStoreRefs::illegal_ref_load_types(const DexType* location,
   }
   return false;
 }
+
+std::string XStoreRefs::show_type(const DexType* type) { return show(type); }
 
 XDexRefs::XDexRefs(const DexStoresVector& stores) {
   size_t dex_nr = 0;

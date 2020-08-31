@@ -25,6 +25,7 @@
 #include "DexClass.h"
 #include "DuplicateClasses.h"
 #include "JarLoader.h"
+#include "Show.h"
 #include "Trace.h"
 #include "Util.h"
 

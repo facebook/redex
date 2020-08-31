@@ -8,6 +8,7 @@
 #include "DedupBlocksPass.h"
 
 #include "PassManager.h"
+#include "Show.h"
 #include "Walkers.h"
 
 namespace {

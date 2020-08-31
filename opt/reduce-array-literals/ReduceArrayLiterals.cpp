@@ -17,11 +17,13 @@
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "InterDexPass.h"
+#include "PassManager.h"
 #include "PatriciaTreeMap.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "PatriciaTreeSet.h"
 #include "PluginRegistry.h"
 #include "Resolver.h"
+#include "Show.h"
 #include "Walkers.h"
 
 using namespace sparta;

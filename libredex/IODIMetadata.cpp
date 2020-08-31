@@ -10,6 +10,7 @@
 #include <fstream>
 
 #include "DexUtil.h"
+#include "Show.h"
 #include "Trace.h"
 
 namespace {

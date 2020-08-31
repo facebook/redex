@@ -259,6 +259,9 @@ class ClassScopes {
   InterfaceMap m_interface_map;
   SignatureMap m_sig_map;
 
+  static std::string show_type(const DexType* type); // To avoid "Show.h" in the
+                                                     // header.
+
  public:
   explicit ClassScopes(const Scope& scope);
 
@@ -336,7 +339,8 @@ class ClassScopes {
       }
     }
     always_assert_log(m_hierarchy.find(type) != m_hierarchy.end(),
-                      "no entry in ClassHierarchy for type %s\n", SHOW(type));
+                      "no entry in ClassHierarchy for type %s\n",
+                      show_type(type).c_str());
     // recursively call for each child
     for (const auto& child : m_hierarchy.at(type)) {
       walk_virtual_scopes(child, walker);
@@ -367,7 +371,8 @@ class ClassScopes {
       walker(type, scopes_it->second);
     }
     always_assert_log(m_hierarchy.find(type) != m_hierarchy.end(),
-                      "no entry in ClassHierarchy for type %s\n", SHOW(type));
+                      "no entry in ClassHierarchy for type %s\n",
+                      show_type(type).c_str());
     // recursively call for each child
     for (const auto& child : m_hierarchy.at(type)) {
       walk_class_scopes(child, walker);

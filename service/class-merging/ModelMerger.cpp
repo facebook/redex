@@ -13,6 +13,7 @@
 #include "MethodReference.h"
 #include "PassManager.h"
 #include "Resolver.h"
+#include "Show.h"
 #include "TypeReference.h"
 #include "TypeStringRewriter.h"
 #include "TypeTagUtils.h"

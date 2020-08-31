@@ -21,6 +21,7 @@
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "PassManager.h"
+#include "Show.h"
 #include "Walkers.h"
 
 namespace {

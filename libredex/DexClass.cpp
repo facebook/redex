@@ -17,6 +17,7 @@
 #include "DuplicateClasses.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
+#include "Show.h"
 #include "StringBuilder.h"
 #include "Util.h"
 #include "Walkers.h"
@@ -1512,3 +1513,7 @@ void gather_components(std::vector<DexString*>& lstring,
 
   sort_unique(lstring);
 }
+
+std::string DexField::self_show() const { return show(this); }
+std::string DexMethod::self_show() const { return show(this); }
+std::string DexClass::self_show() const { return show(m_self); }

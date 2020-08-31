@@ -14,6 +14,7 @@
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "RedexTest.h"
+#include "Show.h"
 #include "Transform.h"
 
 #include "CopyPropagationPass.h"

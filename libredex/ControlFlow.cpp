@@ -16,6 +16,7 @@
 #include "CppUtil.h"
 #include "DexUtil.h"
 #include "GraphUtil.h"
+#include "Show.h"
 #include "Transform.h"
 #include "WeakTopologicalOrdering.h"
 
@@ -175,6 +176,13 @@ bool catch_entries_equivalent_to_throw_edges(
 } // namespace
 
 namespace cfg {
+
+namespace details {
+
+std::string show_cfg(const ControlFlowGraph& cfg) { return show(cfg); }
+std::string show_insn(const IRInstruction* insn) { return show(insn); }
+
+} // namespace details
 
 void Block::free() {
   for (auto& mie : *this) {

@@ -9,6 +9,7 @@
 
 #include "DexUtil.h"
 #include "IRCode.h"
+#include "Show.h"
 
 namespace {
 void drop_this(DexMethod* method) {

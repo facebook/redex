@@ -21,6 +21,7 @@
 #include "Match.h"
 #include "RedexResources.h"
 #include "ReflectionAnalysis.h"
+#include "Show.h"
 #include "StringUtil.h"
 #include "TypeSystem.h"
 #include "Walkers.h"

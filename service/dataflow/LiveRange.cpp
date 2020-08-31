@@ -14,6 +14,7 @@
 #include "IRCode.h"
 #include "ReachingDefinitions.h"
 #include "ScopedCFG.h"
+#include "Show.h"
 
 namespace {
 

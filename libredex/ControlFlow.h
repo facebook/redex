@@ -84,6 +84,14 @@ class Block;
 class ControlFlowGraph;
 class CFGInliner;
 
+namespace details {
+
+// To avoid "Show.h" in the header.
+std::string show_cfg(const ControlFlowGraph& cfg);
+std::string show_insn(const IRInstruction* insn);
+
+} // namespace details
+
 struct ThrowInfo {
   // nullptr means catch all
   DexType* catch_type;
@@ -1216,16 +1224,17 @@ class InstructionIteratorImpl {
       return;
     }
     auto begin = InstructionIteratorImpl<is_const>(*m_cfg, true);
-    always_assert_log(*this != begin, "%s", SHOW(*m_cfg));
+    always_assert_log(*this != begin, "%s", details::show_cfg(*m_cfg).c_str());
   }
 
   void assert_not_end() const {
     if (!ControlFlowGraph::DEBUG) {
       return;
     }
-    always_assert_log(m_block != m_cfg->m_blocks.end(), "%s", SHOW(*m_cfg));
+    always_assert_log(m_block != m_cfg->m_blocks.end(), "%s",
+                      details::show_cfg(*m_cfg).c_str());
     always_assert_log(m_it != ir_list::InstructionIteratorImpl<is_const>(),
-                      "%s", SHOW(*m_cfg));
+                      "%s", details::show_cfg(*m_cfg).c_str());
   }
 
   bool is_end() const {
@@ -1325,7 +1334,8 @@ bool ControlFlowGraph::insert(const InstructionIterator& position,
                               !opcode::is_throw(existing_last_op) &&
                               !opcode::is_a_return(existing_last_op),
                           "Can't add instructions after %s in Block %d in %s",
-                          SHOW(existing_last->insn), b->id(), SHOW(*this));
+                          details::show_insn(existing_last->insn).c_str(),
+                          b->id(), details::show_cfg(*this).c_str());
 
         // When inserting after an instruction that may throw, we need to start
         // a new block. We also copy over all throw-edges. See FIXME below for
@@ -1334,7 +1344,8 @@ bool ControlFlowGraph::insert(const InstructionIterator& position,
           always_assert_log(!existing_last->insn->has_move_result_any(),
                             "Can't add instructions after throwing instruction "
                             "%s with move-result in Block %d in %s",
-                            SHOW(existing_last->insn), b->id(), SHOW(*this));
+                            details::show_insn(existing_last->insn).c_str(),
+                            b->id(), details::show_cfg(*this).c_str());
           Block* new_block = create_block();
           if (opcode::may_throw(op)) {
             copy_succ_edges_of_type(b, new_block, EDGE_THROW);

@@ -21,6 +21,7 @@
 #include "IROpcode.h"
 #include "RedexTest.h"
 #include "Resolver.h"
+#include "Show.h"
 
 // Map of type string -> (sget opcode, sput opcode)
 static std::unordered_map<std::string, std::pair<IROpcode, IROpcode>> init_ops =

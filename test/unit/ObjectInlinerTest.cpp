@@ -13,6 +13,7 @@
 #include "IRCode.h"
 #include "ObjectInlinePlugin.h"
 #include "RedexTest.h"
+#include "Show.h"
 
 cfg::InstructionIterator find_instruction_matching(cfg::ControlFlowGraph* cfg,
                                                    IRInstruction* i) {

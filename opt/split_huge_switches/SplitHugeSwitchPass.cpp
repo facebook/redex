@@ -26,6 +26,7 @@
 #include "PluginRegistry.h"
 #include "ReachingDefinitions.h"
 #include "ScopedCFG.h"
+#include "Show.h"
 #include "TypeUtil.h"
 #include "Walkers.h"
 

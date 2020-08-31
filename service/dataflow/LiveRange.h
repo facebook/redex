@@ -12,6 +12,8 @@
 
 #include "IRInstruction.h"
 
+class IRCode;
+
 /*
  * This module renumbers registers so that they represent live ranges. Live
  * ranges are the union of use-def chains that share defs in common. See e.g.

@@ -21,6 +21,7 @@
 #include "IRAssembler.h"
 #include "MethodProfiles.h"
 #include "RedexTest.h"
+#include "Show.h"
 #include "Trace.h"
 #include "VirtScopeHelper.h"
 #include "VirtualRenamer.h"

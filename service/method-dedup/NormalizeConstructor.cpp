@@ -10,6 +10,7 @@
 #include "DexClass.h"
 #include "EditableCfgAdapter.h"
 #include "MethodReference.h"
+#include "Show.h"
 #include "Walkers.h"
 
 namespace {

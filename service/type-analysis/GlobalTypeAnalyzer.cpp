@@ -10,6 +10,7 @@
 #include "ConcurrentContainers.h"
 #include "MethodOverrideGraph.h"
 #include "Resolver.h"
+#include "Show.h"
 #include "Walkers.h"
 
 namespace mog = method_override_graph;

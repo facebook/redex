@@ -9,6 +9,7 @@
 
 #include "IRAssembler.h"
 #include "RedexTest.h"
+#include "Show.h"
 
 struct IRAssemblerTest : public RedexTest {};
 

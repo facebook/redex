@@ -11,6 +11,7 @@
 #include "DexIdx.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
+#include "Show.h"
 
 void DexEncodedValueMethodType::gather_strings(
     std::vector<DexString*>& lstring) const {
@@ -856,4 +857,31 @@ std::string DexEncodedValueArray::show() const {
 
 std::string DexEncodedValueArray::show_deobfuscated() const {
   return show_helper(this, true);
+}
+
+std::string DexEncodedValueString::show() const { return ::show(m_string); }
+
+std::string DexEncodedValueType::show() const { return ::show(m_type); }
+
+std::string DexEncodedValueField::show() const { return ::show(m_field); }
+std::string DexEncodedValueField::show_deobfuscated() const {
+  return ::show_deobfuscated(m_field);
+}
+
+std::string DexEncodedValueMethod::show() const { return ::show(m_method); }
+std::string DexEncodedValueMethod::show_deobfuscated() const {
+  return ::show_deobfuscated(m_method);
+}
+
+std::string DexEncodedValueMethodType::show() const { return ::show(m_proto); }
+std::string DexEncodedValueMethodType::show_deobfuscated() const {
+  return ::show_deobfuscated(m_proto);
+}
+
+std::string DexEncodedValueMethodHandle::show() const {
+  return ::show(m_methodhandle);
+}
+std::string DexEncodedValueMethodHandle::show_deobfuscated() const {
+  // TODO(T58570881) - fix deobfuscation
+  return ::show(m_methodhandle);
 }

@@ -11,6 +11,7 @@
 
 #include "DexAnnotation.h"
 #include "DexUtil.h"
+#include "Show.h"
 #include "SingleImplDefs.h"
 
 namespace {

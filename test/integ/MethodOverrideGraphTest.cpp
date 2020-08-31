@@ -13,6 +13,7 @@
 
 #include "DexLoader.h"
 #include "RedexTest.h"
+#include "Show.h"
 
 namespace mog = method_override_graph;
 

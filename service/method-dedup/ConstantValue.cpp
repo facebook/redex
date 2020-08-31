@@ -10,6 +10,7 @@
 #include <boost/algorithm/string.hpp>
 
 #include "Creators.h"
+#include "Show.h"
 #include "TypeReference.h"
 
 namespace {

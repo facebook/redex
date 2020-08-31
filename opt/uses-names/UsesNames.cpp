@@ -11,6 +11,7 @@
 #include "ConcurrentContainers.h"
 #include "DexUtil.h"
 #include "PassManager.h"
+#include "Show.h"
 #include "Walkers.h"
 
 /*

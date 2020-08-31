@@ -24,6 +24,7 @@
 #include "IRInstruction.h"
 #include "PassManager.h"
 #include "RedundantCheckCastRemover.h"
+#include "Show.h"
 #include "SpartaWorkQueue.h"
 #include "Walkers.h"
 

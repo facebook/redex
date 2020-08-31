@@ -40,6 +40,7 @@
 #include "PatriciaTreeSetAbstractDomain.h"
 #include "PointsToSemanticsUtils.h"
 #include "RedexContext.h"
+#include "Show.h"
 #include "Trace.h"
 #include "Walkers.h"
 

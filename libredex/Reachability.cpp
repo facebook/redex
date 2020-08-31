@@ -16,6 +16,7 @@
 #include "ProguardConfiguration.h"
 #include "ReachableClasses.h"
 #include "Resolver.h"
+#include "Show.h"
 #include "Timer.h"
 #include "Walkers.h"
 #include "WorkQueue.h"

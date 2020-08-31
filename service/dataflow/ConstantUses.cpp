@@ -65,6 +65,7 @@
 
 #include "ConstantUses.h"
 #include "DexUtil.h"
+#include "Show.h"
 
 namespace constant_uses {
 

@@ -9,6 +9,7 @@
 
 #include "DexUtil.h"
 #include "ReachingDefinitions.h"
+#include "Show.h"
 
 namespace check_casts {
 

@@ -13,6 +13,7 @@
 #include "DexUtil.h"
 #include "LocalDce.h"
 #include "Purity.h"
+#include "Show.h"
 #include "Walkers.h"
 
 using namespace cse_impl;

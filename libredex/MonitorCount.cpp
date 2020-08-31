@@ -10,6 +10,7 @@
 #include <algorithm>
 
 #include "IRCode.h"
+#include "Show.h"
 #include "Walkers.h"
 
 namespace {

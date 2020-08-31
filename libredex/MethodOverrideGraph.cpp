@@ -12,6 +12,7 @@
 #include "BinarySerialization.h"
 #include "PatriciaTreeMap.h"
 #include "PatriciaTreeSet.h"
+#include "Show.h"
 #include "Timer.h"
 #include "Walkers.h"
 

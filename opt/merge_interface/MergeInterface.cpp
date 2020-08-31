@@ -15,6 +15,7 @@
 #include "IROpcode.h"
 #include "PassManager.h"
 #include "Resolver.h"
+#include "Show.h"
 #include "Trace.h"
 #include "TypeReference.h"
 #include "TypeSystem.h"

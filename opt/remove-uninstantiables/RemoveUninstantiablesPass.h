@@ -10,6 +10,10 @@
 #include "DexStore.h"
 #include "Pass.h"
 
+namespace cfg {
+class ControlFlowGraph;
+} // namespace cfg
+
 /// Looks for mentions of classes that have no constructors and use the fact
 /// they can't be instantiated to simplify those mentions:
 ///

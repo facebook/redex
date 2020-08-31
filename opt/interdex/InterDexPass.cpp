@@ -11,6 +11,7 @@
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "PassManager.h"
+#include "Show.h"
 #include "WorkQueue.h"
 
 namespace {

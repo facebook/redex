@@ -10,6 +10,7 @@
 #include "DexAccess.h"
 #include "DexUtil.h"
 #include "ReachableClasses.h"
+#include "Show.h"
 #include "Timer.h"
 #include "Trace.h"
 
@@ -918,3 +919,5 @@ InterfaceScope ClassScopes::find_interface_scope(const DexMethod* meth) const {
   }
   return intf_scope;
 }
+
+std::string ClassScopes::show_type(const DexType* type) { return show(type); }

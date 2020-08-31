@@ -9,6 +9,7 @@
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "ReachableClasses.h"
+#include "Show.h"
 #include "Walkers.h"
 
 size_t delete_methods(

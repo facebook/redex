@@ -14,6 +14,7 @@
 #include "EditableCfgAdapter.h"
 #include "IRInstruction.h"
 #include "Resolver.h"
+#include "Show.h"
 #include "Trace.h"
 #include "Walkers.h"
 #include "WeakTopologicalOrdering.h"

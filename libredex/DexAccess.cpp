@@ -8,6 +8,7 @@
 #include "DexAccess.h"
 #include "DexClass.h"
 #include "MethodOverrideGraph.h"
+#include "Show.h"
 #include "Walkers.h"
 
 namespace {
