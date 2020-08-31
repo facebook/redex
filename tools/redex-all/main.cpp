@@ -52,6 +52,7 @@
 #include "ProguardMatcher.h"
 #include "ProguardParser.h" // New ProGuard Parser
 #include "ProguardPrintConfiguration.h" // New ProGuard configuration
+#include "Purity.h" // For defaults from config.
 #include "ReachableClasses.h"
 #include "RedexContext.h"
 #include "RedexResources.h"
@@ -1198,6 +1199,9 @@ int main(int argc, char* argv[]) {
     }
 
     redex_frontend(conf, args, *pg_config, stores, stats);
+
+    // Initialize purity defaults, if set.
+    purity::CacheConfig::parse_default(conf);
 
     auto const& passes = PassRegistry::get().get_passes();
     PassManager manager(passes, std::move(pg_config), args.config,

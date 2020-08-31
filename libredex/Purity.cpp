@@ -6,12 +6,42 @@
  */
 
 #include "Purity.h"
+
+#include <sstream>
+
+#include "ConfigFiles.h"
 #include "ControlFlow.h"
 #include "EditableCfgAdapter.h"
 #include "IRInstruction.h"
 #include "Resolver.h"
+#include "Trace.h"
 #include "Walkers.h"
 #include "WeakTopologicalOrdering.h"
+
+namespace purity {
+
+CacheConfig& CacheConfig::get_default() {
+  static CacheConfig cc = CacheConfig{};
+  return cc;
+}
+
+void CacheConfig::parse_default(const ConfigFiles& conf) {
+  CacheConfig& def = CacheConfig::get_default();
+  const auto& json = conf.get_json_config();
+  if (json.contains("purity")) {
+    auto purity = JsonWrapper(json["purity"]);
+    if (purity.contains("cache")) {
+      auto cache = JsonWrapper(purity["cache"]);
+      cache.get("max_entries", def.max_entries, def.max_entries);
+      cache.get("fill_entry_threshold", def.fill_entry_threshold,
+                def.fill_entry_threshold);
+      cache.get("fill_size_threshold", def.fill_size_threshold,
+                def.fill_size_threshold);
+    }
+  }
+}
+
+} // namespace purity
 
 std::ostream& operator<<(std::ostream& o, const CseLocation& l) {
   switch (l.special_location) {
@@ -376,7 +406,8 @@ size_t compute_locations_closure(
     const method_override_graph::Graph* method_override_graph,
     std::function<boost::optional<LocationsAndDependencies>(DexMethod*)>
         init_func,
-    std::unordered_map<const DexMethod*, CseUnorderedLocationSet>* result) {
+    std::unordered_map<const DexMethod*, CseUnorderedLocationSet>* result,
+    const purity::CacheConfig& cache_config) {
   // 1. Let's initialize known method read locations and dependencies by
   //    scanning method bodies
   ConcurrentMap<const DexMethod*, LocationsAndDependencies>
@@ -420,37 +451,153 @@ size_t compute_locations_closure(
   size_t iterations = 0;
   while (impacted_methods.size()) {
     iterations++;
+    Timer t{std::string("Iteration ") + std::to_string(iterations)};
+
     // We order the impacted methods in a deterministic way that's likely
     // helping to reduce the number of needed iterations.
-    sparta::WeakTopologicalOrdering<const DexMethod*> wto(
-        nullptr,
-        [&impacted_methods, &inverse_dependencies](const DexMethod* const& m) {
-          std::vector<const DexMethod*> successors;
-          if (m == nullptr) {
-            std::copy(impacted_methods.begin(), impacted_methods.end(),
-                      std::back_inserter(successors));
+    std::vector<const DexMethod*> ordered_impacted_methods;
+
+    {
+      constexpr bool kCacheDebug = false;
+
+      struct Cache {
+        struct CacheData {
+          size_t runs{0};
+          size_t size_if_populated{0};
+          std::vector<const DexMethod*> data;
+        };
+        std::unordered_map<const DexMethod*, CacheData> cache;
+        size_t sum_entries{0};
+        size_t pop_miss{0};
+
+        const size_t cache_max_entries;
+        const size_t cache_fill_entry_threshold;
+        const size_t cache_fill_size_threshold;
+
+        explicit Cache(const purity::CacheConfig& config)
+            : cache_max_entries(config.max_entries),
+              cache_fill_entry_threshold(config.fill_entry_threshold),
+              cache_fill_size_threshold(config.fill_size_threshold) {}
+
+        boost::optional<std::vector<const DexMethod*>> get(const DexMethod* m) {
+          auto it = cache.find(m);
+          if (it == cache.end()) {
+            return boost::none;
+          }
+          redex_assert(it->second.runs > 0);
+          if (it->second.runs < cache_fill_entry_threshold) {
+            return boost::none;
+          }
+          ++it->second.runs;
+          if (it->second.size_if_populated > 0) {
+            // We did not have space.
+            pop_miss++;
+            return boost::none;
+          }
+          return it->second.data;
+        }
+
+        void new_data(const DexMethod* m,
+                      const std::vector<const DexMethod*>& data) {
+          CacheData& cd = cache[m];
+          cd.runs++;
+          if (cd.runs < cache_fill_entry_threshold) {
+            return; // Do not cache, yet.
+          }
+          size_t size = data.size();
+          if (size >= cache_fill_size_threshold &&
+              sum_entries + size <= cache_max_entries) {
+            redex_assert(cd.size_if_populated == 0);
+            cd.data = data;
+            sum_entries += size;
           } else {
-            auto it = inverse_dependencies.find(m);
-            if (it != inverse_dependencies.end()) {
-              for (auto n : it->second) {
-                if (impacted_methods.count(n)) {
-                  successors.push_back(n);
+            redex_assert(cd.size_if_populated == 0 ||
+                         cd.size_if_populated == size);
+            cd.size_if_populated = size;
+          }
+        }
+
+        void print_stats() const {
+          std::ostringstream oss;
+
+          size_t sum_not_pop{0};
+          size_t max_not_pop{0};
+          size_t max_pop{0};
+          size_t max_not_pop_runs{0};
+          size_t max_pop_runs{0};
+          size_t below_size_thresh{0};
+          size_t runs_below_size_thresh{0};
+          for (const auto& p : cache) {
+            sum_not_pop += p.second.size_if_populated;
+            max_not_pop = std::max(max_not_pop, p.second.size_if_populated);
+            if (p.second.size_if_populated > 0) {
+              max_not_pop_runs = std::max(max_not_pop_runs, p.second.runs);
+              if (p.second.size_if_populated < cache_fill_size_threshold) {
+                ++below_size_thresh;
+                runs_below_size_thresh += p.second.runs;
+              }
+            } else {
+              max_pop_runs = std::max(max_pop_runs, p.second.runs);
+              max_pop = std::max(max_pop, p.second.data.size());
+            }
+          }
+          oss << "  In=" << sum_entries << " Miss=" << pop_miss << std::endl;
+          oss << "  CACHED: Max=" << max_pop << " Runs=" << max_pop_runs
+              << std::endl;
+          oss << " NCACHED: Sum=" << sum_not_pop << " Max=" << max_not_pop
+              << " Runs=" << max_not_pop_runs << std::endl;
+          oss << " NCACHED: #short=" << below_size_thresh
+              << " Runs=" << runs_below_size_thresh;
+          TRACE(PURITY, 1, "%s", oss.str().c_str());
+        }
+      };
+
+      Cache cache(cache_config);
+      sparta::WeakTopologicalOrdering<const DexMethod*> wto(
+          nullptr,
+          [&impacted_methods, &inverse_dependencies,
+           &cache](const DexMethod* const& m) {
+            auto cached = cache.get(m);
+            if (cached && !kCacheDebug) {
+              return std::move(*cached);
+            }
+
+            std::vector<const DexMethod*> successors;
+            if (m == nullptr) {
+              std::copy(impacted_methods.begin(), impacted_methods.end(),
+                        std::back_inserter(successors));
+            } else {
+              auto it = inverse_dependencies.find(m);
+              if (it != inverse_dependencies.end()) {
+                for (auto n : it->second) {
+                  if (impacted_methods.count(n)) {
+                    successors.push_back(n);
+                  }
                 }
               }
             }
-          }
-          // Make number of iterations deterministic
-          std::sort(successors.begin(), successors.end(), compare_dexmethods);
-          return successors;
-        });
+            // Make number of iterations deterministic
+            std::sort(successors.begin(), successors.end(), compare_dexmethods);
 
-    std::vector<const DexMethod*> ordered_impacted_methods;
-    wto.visit_depth_first([&ordered_impacted_methods](const DexMethod* m) {
-      if (m) {
-        ordered_impacted_methods.push_back(m);
+            if (kCacheDebug && cached) {
+              redex_assert(*cached == successors);
+            }
+
+            cache.new_data(m, successors);
+            return successors;
+          });
+
+      if (traceEnabled(PURITY, 5)) {
+        cache.print_stats();
       }
-    });
-    impacted_methods.clear();
+
+      wto.visit_depth_first([&ordered_impacted_methods](const DexMethod* m) {
+        if (m) {
+          ordered_impacted_methods.push_back(m);
+        }
+      });
+      impacted_methods.clear();
+    }
 
     std::vector<const DexMethod*> changed_methods;
     for (const DexMethod* method : ordered_impacted_methods) {
@@ -535,7 +682,8 @@ static size_t analyze_read_locations(
     bool ignore_methods_with_assumenosideeffects,
     bool for_conditional_purity,
     bool compute_locations,
-    std::unordered_map<const DexMethod*, CseUnorderedLocationSet>* result) {
+    std::unordered_map<const DexMethod*, CseUnorderedLocationSet>* result,
+    const purity::CacheConfig& cache_config) {
   std::unordered_set<const DexMethod*> pure_methods_closure;
   for (auto pure_method_ref : pure_methods) {
     auto pure_method = pure_method_ref->as_def();
@@ -646,20 +794,21 @@ static size_t analyze_read_locations(
 
         return lads;
       },
-      result);
+      result, cache_config);
 }
 
 size_t compute_conditionally_pure_methods(
     const Scope& scope,
     const method_override_graph::Graph* method_override_graph,
     const std::unordered_set<DexMethodRef*>& pure_methods,
-    std::unordered_map<const DexMethod*, CseUnorderedLocationSet>* result) {
+    std::unordered_map<const DexMethod*, CseUnorderedLocationSet>* result,
+    const purity::CacheConfig& cache_config) {
   Timer t("compute_conditionally_pure_methods");
   auto iterations = analyze_read_locations(
       scope, method_override_graph, pure_methods,
       /* ignore_methods_with_assumenosideeffects */ false,
       /* for_conditional_purity */ true,
-      /* compute_locations */ true, result);
+      /* compute_locations */ true, result, cache_config);
   for (auto& p : *result) {
     TRACE(CSE, 4, "[CSE] conditionally pure method %s: %s", SHOW(p.first),
           SHOW(&p.second));
@@ -671,15 +820,16 @@ size_t compute_no_side_effects_methods(
     const Scope& scope,
     const method_override_graph::Graph* method_override_graph,
     const std::unordered_set<DexMethodRef*>& pure_methods,
-    std::unordered_set<const DexMethod*>* result) {
+    std::unordered_set<const DexMethod*>* result,
+    const purity::CacheConfig& cache_config) {
   Timer t("compute_no_side_effects_methods");
   std::unordered_map<const DexMethod*, CseUnorderedLocationSet>
       method_locations;
-  auto iterations =
-      analyze_read_locations(scope, method_override_graph, pure_methods,
-                             /* ignore_methods_with_assumenosideeffects */ true,
-                             /* for_conditional_purity */ false,
-                             /* compute_locations */ false, &method_locations);
+  auto iterations = analyze_read_locations(
+      scope, method_override_graph, pure_methods,
+      /* ignore_methods_with_assumenosideeffects */ true,
+      /* for_conditional_purity */ false,
+      /* compute_locations */ false, &method_locations, cache_config);
   for (auto& p : method_locations) {
     TRACE(CSE, 4, "[CSE] no side effects method %s", SHOW(p.first));
     result->insert(p.first);

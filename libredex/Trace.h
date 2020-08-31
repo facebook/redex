@@ -82,6 +82,7 @@
   TM(PGR)            \
   TM(PM)             \
   TM(PTA)            \
+  TM(PURITY)         \
   TM(QUICK)          \
   TM(RAL)            \
   TM(REDEX)          \
