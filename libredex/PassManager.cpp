@@ -454,7 +454,6 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
 
   sanitizers::lsan_do_recoverable_leak_check();
 
-  // TODO(fengliu) : Remove Pass::eval_pass API
   for (size_t i = 0; i < m_activated_passes.size(); ++i) {
     Pass* pass = m_activated_passes[i];
     TRACE(PM, 1, "Evaluating %s...", pass->name().c_str());
