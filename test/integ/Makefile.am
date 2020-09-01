@@ -140,14 +140,14 @@ javac_source_target = -source 1.7 -target 1.7
 
 define create_jar
 	mkdir -p $@.tmp
-	javac $(javac_source_target) -d $@.tmp $^
+	$(JAVAC) $(javac_source_target) -d $@.tmp $^
 	jar cf $@ -C $@.tmp .
 endef
 
 SUFFIXES = .dex
 
 .jar.dex:
-	dx --dex --output=$@ $^
+	$(DX) --dex --output=$@ $^
 
 ab_experiment_context_test-class.jar: ABExperimentContextTest.java
 	$(create_jar)
