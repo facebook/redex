@@ -7,9 +7,7 @@
 
 #pragma once
 
-#include "Pass.h"
-
-#include "ApiLevelsUtils.h"
+#include "ExternalRefsManglingPass.h"
 
 /**
  * A method reference encoded in an invoke-virtual/interface instruction can be
@@ -28,28 +26,17 @@
  * call-graph statically. Including more code is an undesired side-affect of
  * running this pass too early.
  */
-class ReBindRefsPass : public Pass {
+class ReBindRefsPass : public ExternalRefsManglingPass {
  public:
-  ReBindRefsPass() : Pass("ReBindRefsPass") {}
+  ReBindRefsPass() : ExternalRefsManglingPass("ReBindRefsPass") {}
 
-  void bind_config() override {
-    // Allowing resolving method ref to an external one.
-    bind("rebind_to_external", false, m_rebind_to_external);
-    bind("supported_min_sdk_for_external_refs", 19,
-         m_supported_min_sdk_for_external_refs,
-         "If rebind_to_external is turned on, the minimal sdk level that can "
-         "be supported.");
-    bind("excluded_externals", {}, m_excluded_externals,
-         "Externals types/prefixes excluded from reference rebinding");
+  void bind_config() override { ExternalRefsManglingPass::bind_config(); }
+
+  void eval_pass(DexStoresVector& stores,
+                 ConfigFiles& conf,
+                 PassManager& mgr) override {
+    ExternalRefsManglingPass::eval_pass(stores, conf, mgr);
   }
 
-  void eval_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
-
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
-
- private:
-  bool m_rebind_to_external = false;
-  int32_t m_supported_min_sdk_for_external_refs;
-  std::vector<std::string> m_excluded_externals;
-  const api::AndroidSDK* m_min_sdk_api;
 };

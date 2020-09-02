@@ -7,9 +7,7 @@
 
 #pragma once
 
-#include "Pass.h"
-
-#include "ApiLevelsUtils.h"
+#include "ExternalRefsManglingPass.h"
 
 /**
  * A field or method being referenced by an instruction could be a pure `ref`.
@@ -31,34 +29,26 @@ namespace impl {
 struct RefStats;
 } // namespace impl
 
-class ResolveRefsPass : public Pass {
+class ResolveRefsPass : public ExternalRefsManglingPass {
  public:
-  ResolveRefsPass() : Pass("ResolveRefsPass") {}
+  ResolveRefsPass() : ExternalRefsManglingPass("ResolveRefsPass") {}
 
   void bind_config() override {
-    bind("resolve_to_external", false, m_resolve_to_external,
-         "Allowing resolving method ref to an external one");
-    bind("supported_min_sdk_for_external_refs", 19,
-         m_supported_min_sdk_for_external_refs,
-         "If resolve_to_external is turned on, the minimal sdk level that can "
-         "be supported.");
+    ExternalRefsManglingPass::bind_config();
     bind("desuperify", true, m_desuperify,
          "Convert invoke-super calls to invoke-virtual where possible");
-    bind("excluded_externals", {}, m_excluded_externals,
-         "Externals types/prefixes excluded from reference resolution");
     trait(Traits::Pass::atleast, 1);
   }
 
-  void eval_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+  void eval_pass(DexStoresVector& stores,
+                 ConfigFiles& conf,
+                 PassManager& mgr) override {
+    ExternalRefsManglingPass::eval_pass(stores, conf, mgr);
+  }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
   impl::RefStats refine_virtual_callsites(DexMethod* method, bool desuperify);
-
-  bool m_resolve_to_external;
-  int32_t m_supported_min_sdk_for_external_refs;
   bool m_desuperify;
-  std::vector<std::string> m_excluded_externals;
-  const api::AndroidSDK* m_min_sdk_api;
 };

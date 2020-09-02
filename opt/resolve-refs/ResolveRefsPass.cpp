@@ -303,7 +303,7 @@ RefStats ResolveRefsPass::refine_virtual_callsites(DexMethod* method,
       continue;
     }
     // Stop if the resolve_to_external config is False.
-    if (!m_resolve_to_external && def_cls->is_external()) {
+    if (!m_refine_to_external && def_cls->is_external()) {
       TRACE(RESO, 4, "Bailed on external %s", SHOW(def_meth));
       continue;
     } else if (def_cls->is_external() && !m_min_sdk_api->has_method(def_meth)) {
@@ -322,37 +322,6 @@ RefStats ResolveRefsPass::refine_virtual_callsites(DexMethod* method,
   }
 
   return stats;
-}
-
-void ResolveRefsPass::eval_pass(DexStoresVector&,
-                                ConfigFiles& conf,
-                                PassManager& mgr) {
-  int32_t min_sdk = mgr.get_redex_options().min_sdk;
-  // Disable resolution to external for API level older than 19.
-  if (m_resolve_to_external &&
-      min_sdk < m_supported_min_sdk_for_external_refs) {
-    m_resolve_to_external = false;
-    TRACE(RESO, 2, "Disabling resolution to external for min_sdk %d", min_sdk);
-  }
-
-  // Load min_sdk API file
-  auto min_sdk_api_file = conf.get_android_sdk_api_file(min_sdk);
-  if (!min_sdk_api_file) {
-    TRACE(RESO, 2, "Android SDK API %d file cannot be found.", min_sdk);
-    always_assert_log(
-        !m_resolve_to_external ||
-            min_sdk < m_supported_min_sdk_for_external_refs,
-        "Android SDK API %d file can not be found but resolve_to_external is "
-        "explicitly enabled for this version. Please pass the api list to "
-        "Redex or turn off `resolve_to_external`.",
-        min_sdk);
-    m_resolve_to_external = false;
-  } else {
-    TRACE(RESO, 2, "Android SDK API %d file found: %s", min_sdk,
-          min_sdk_api_file->c_str());
-  }
-
-  m_min_sdk_api = &conf.get_android_sdk_api(min_sdk);
 }
 
 void ResolveRefsPass::run_pass(DexStoresVector& stores,
