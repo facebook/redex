@@ -522,14 +522,17 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   // Abort if the analysis pass dependencies are not satisfied.
   AnalysisUsage::check_dependencies(m_activated_passes);
 
+  std::unordered_map<const Pass*, size_t> runs;
+
   for (size_t i = 0; i < m_activated_passes.size(); ++i) {
     Pass* pass = m_activated_passes[i];
+    const size_t pass_run = ++runs[pass];
     AnalysisUsage analysis_usage;
     pass->set_analysis_usage(analysis_usage);
 
     TRACE(PM, 1, "Running %s...", pass->name().c_str());
     ScopedVmHWM vm_hwm{hwm_pass_stats, hwm_per_pass};
-    Timer t(pass->name() + " (run)");
+    Timer t(pass->name() + " " + std::to_string(pass_run) + " (run)");
     m_current_pass_info = &m_pass_info[i];
 
     {
