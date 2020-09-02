@@ -85,3 +85,17 @@ TEST(SpartaWorkQueueTest, checkDynamicallyAddingTasks) {
   // 10 + 9 + ... + 1 + 0 = 55
   EXPECT_EQ(55, result);
 }
+
+TEST(SpartaWorkQueueTest, preciseScheduling) {
+  std::array<int, NUM_INTS> array = {0};
+
+  auto wq = sparta::work_queue<int*>([](int* a) { (*a)++; });
+
+  for (int idx = 0; idx < NUM_INTS; ++idx) {
+    wq.add_item(&array[idx], /* worker_id */ 0);
+  }
+  wq.run_all();
+  for (int idx = 0; idx < NUM_INTS; ++idx) {
+    ASSERT_EQ(1, array[idx]);
+  }
+}

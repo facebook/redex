@@ -211,6 +211,9 @@ class SpartaWorkQueue {
 
   void add_item(Input task);
 
+  /* Add an item on the queue of the given worker. */
+  void add_item(Input task, size_t worker_id);
+
   /**
    * Spawn threads and evaluate function.  This method blocks.
    */
@@ -240,6 +243,12 @@ void SpartaWorkQueue<Input, Executor>::add_item(Input task) {
   m_insert_idx = (m_insert_idx + 1) % m_num_threads;
   assert(m_insert_idx < m_states.size());
   m_states[m_insert_idx]->m_queue.push(task);
+}
+
+template <class Input, typename Executor>
+void SpartaWorkQueue<Input, Executor>::add_item(Input task, size_t worker_id) {
+  assert(worker_id < m_states.size());
+  m_states[worker_id]->m_queue.push(task);
 }
 
 /*
