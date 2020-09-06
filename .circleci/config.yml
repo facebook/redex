@@ -95,7 +95,7 @@ jobs:
       - run:
           name: Build
           shell: c:/tools/msys64/msys2_shell.cmd -defterm -no-start -mingw64 -full-path -here -c
-          command: mkdir build && cd build && cmake -G "MSYS Makefiles" .. && make -j 4
+          command: mkdir build && cd build && cmake -G "MSYS Makefiles" .. && make -j 4 ; ls -l ; exit 1
 
       - run:
           name: Minimal Test
