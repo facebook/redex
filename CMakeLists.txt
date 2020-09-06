@@ -55,16 +55,10 @@ include_directories(
         ${includes})
 
 file(GLOB_RECURSE redex_srcs
-        "analysis/max-depth/*.cpp"
-        "analysis/max-depth/*.h"
-        "analysis/ip-reflection-analysis/*.cpp"
-        "analysis/ip-reflection-analysis/*.h"
         "libredex/*.cpp"
         "libredex/*.h"
         "service/*.cpp"
         "service/*.h"
-        "opt/*.cpp"
-        "opt/*.h"
         "util/CommandProfiling.cpp"
         "util/CommandProfiling.h"
         "util/JemallocUtil.cpp"
@@ -80,6 +74,17 @@ file(GLOB_RECURSE redex_srcs
         )
 
 add_library(redex STATIC ${redex_srcs})
+
+file(GLOB_RECURSE redex_opt_srcs
+        "analysis/max-depth/*.cpp"
+        "analysis/max-depth/*.h"
+        "analysis/ip-reflection-analysis/*.cpp"
+        "analysis/ip-reflection-analysis/*.h"
+        "opt/*.cpp"
+        "opt/*.h"
+        )
+
+add_library(redex_opt STATIC ${redex_opt_srcs})
 
 file(GLOB_RECURSE tool_srcs
         "tools/tool/*.cpp"
@@ -112,15 +117,16 @@ endif (MINGW)
 
 target_link_libraries(redex-all
         ${STATIC_LINK_FLAG}
+        redex_opt
+        redex
+        resource
         ${Boost_LIBRARIES}
         ${REDEX_JSONCPP_LIBRARY}
         ${REDEX_ZLIB_LIBRARY}
         ${CMAKE_DL_LIBS}
-        redex
-        resource
         ${MINGW_EXTRA_LIBS}
         )
 
 target_compile_definitions(redex-all PRIVATE)
 
-set_link_whole(redex-all redex)
+set_link_whole(redex-all redex_opt)
