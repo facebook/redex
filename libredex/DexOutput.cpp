@@ -793,7 +793,7 @@ void DexOutput::generate_type_data() {
       dodx->type_to_idx().size() < get_max_type_refs(m_min_sdk),
       "Trying to encode too many type refs in dex %lu: %lu (limit: %lu).\n"
       "NOTE: Please check InterDexPass config flags and set: "
-      "`reserved_trefs: %lu` (or larger, until the issue goes away)",
+      "reserved_trefs: %lu (or larger, until the issue goes away)",
       m_dex_number,
       dodx->type_to_idx().size(),
       get_max_type_refs(m_min_sdk),
