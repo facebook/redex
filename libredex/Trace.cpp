@@ -83,12 +83,14 @@ struct Tracer {
              bool suppress_newline,
              const char* fmt,
              va_list ap) {
+#if !IS_WINDOWS
     if (m_method_filter && TraceContext::s_current_method != nullptr) {
       if (strstr(TraceContext::s_current_method->c_str(), m_method_filter) ==
           nullptr) {
         return;
       }
     }
+#endif
     std::lock_guard<std::mutex> guard(TraceContext::s_trace_mutex);
     if (m_show_timestamps) {
       auto t = std::time(nullptr);
@@ -197,5 +199,8 @@ void trace(TraceModule module,
   va_end(ap);
 }
 
+#if !IS_WINDOWS
 thread_local const std::string* TraceContext::s_current_method = nullptr;
+#endif
+
 std::mutex TraceContext::s_trace_mutex;
