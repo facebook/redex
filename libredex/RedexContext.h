@@ -171,6 +171,7 @@ struct RedexContext {
                              const char*,
                              Value,
                              TruncatedStringHash,
+                             Identity,
                              n_slots>;
 
   struct Strcmp {
