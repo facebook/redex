@@ -26,8 +26,10 @@ RedexContext::RedexContext(bool allow_class_duplicates)
 
 RedexContext::~RedexContext() {
   // Delete DexStrings.
-  for (auto const& p : s_string_map) {
-    delete p.second;
+  for (auto& segment : s_string_map) {
+    for (auto const& p : segment) {
+      delete p.second;
+    }
   }
   // Delete DexTypes.  NB: This table intentionally contains aliases (multiple
   // DexStrings map to the same DexType), so we have to dedup the set of types
@@ -95,7 +97,10 @@ static StoredValue* try_insert(Key key,
 
 DexString* RedexContext::make_string(const char* nstr, uint32_t utfsize) {
   always_assert(nstr != nullptr);
-  auto rv = s_string_map.get(nstr, nullptr);
+  auto p = std::make_pair(nstr, utfsize);
+  auto& segment = s_string_map.at(p);
+
+  auto rv = segment.get(p, nullptr);
   if (rv != nullptr) {
     return rv;
   }
@@ -104,14 +109,17 @@ DexString* RedexContext::make_string(const char* nstr, uint32_t utfsize) {
   // non-const function is called on the string (but note the std::string itself
   // is const)
   auto dexstring = new DexString(nstr, utfsize);
-  return try_insert(dexstring->c_str(), dexstring, &s_string_map);
+  auto p2 = std::make_pair(dexstring->c_str(), utfsize);
+  return try_insert(p2, dexstring, &segment);
 }
 
 DexString* RedexContext::get_string(const char* nstr, uint32_t utfsize) {
   if (nstr == nullptr) {
     return nullptr;
   }
-  return s_string_map.get(nstr, nullptr);
+  auto p = std::make_pair(nstr, utfsize);
+  auto& segment = s_string_map.at(p);
+  return segment.get(p, nullptr);
 }
 
 DexType* RedexContext::make_type(const DexString* dstring) {

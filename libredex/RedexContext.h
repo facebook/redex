@@ -155,24 +155,58 @@ struct RedexContext {
   struct Strcmp;
   struct TruncatedStringHash;
 
-  // We use this instead of an unordered_map-based ConcurrentMap because
-  // hashing is expensive on large strings -- it has to hash the entire key to
-  // find its bucket. An std::map (i.e. a tree) performs better with large keys
-  // in a sparse keyset because it only needs to find the first character that
-  // differs between keys when traversing the tree, meaning that it usually
-  // doesn't need to examine the entire key for insertions.
+  // Hashing is expensive on large strings (long Java type names, string
+  // literals), so we avoid using `std::unordered_map` directly.
   //
-  // We still need to do hashing in order to shard the keys across the
-  // individually-locked std::maps, but it suffices to hash a substring for this
-  // purpose.
-  template <typename Value, size_t n_slots = 127>
-  using ConcurrentLargeStringMap =
-      ConcurrentMapContainer<std::map<const char*, Value, Strcmp>,
-                             const char*,
-                             Value,
-                             TruncatedStringHash,
-                             Identity,
+  // For leaf-level storage we use `std::map` (i.e., a tree). In a sparse
+  // string keyset with large keys this performs better as only the suffix
+  // until first change needs to be compared.
+  //
+  // For sharding, we use two layers. The first layer is a partial string
+  // hash as defined by `TruncatedStringHash`. It picks a segment "close"
+  // to the front and performs reasonably well. A std::array is used for
+  // sharding here (see `LargeStringMap`).
+  //
+  // The second layer optimizes the string comparison. We have additional
+  // data besides the string data pointer, namely the UTF size. We can
+  // avoid comparisons for different string lengths. The second layer
+  // thus shards over it. We use the `ConcurrentContainer` sharding for
+  // this (see `ConcurrentProjectedStringMap`).
+  //
+  // The two layers give infrastructure overhead, however, the base size
+  // of a `std::map` and `ConcurrentContainer` is quite small.
+
+  using StringMapKey = std::pair<const char*, uint32_t>;
+  struct StringMapKeyHash {
+    size_t operator()(const StringMapKey& k) const { return k.second; }
+  };
+  struct StringMapKeyProjection {
+    const char* operator()(const StringMapKey& k) const { return k.first; }
+  };
+
+  template <size_t n_slots = 31>
+  using ConcurrentProjectedStringMap =
+      ConcurrentMapContainer<std::map<const char*, DexString*, Strcmp>,
+                             StringMapKey,
+                             DexString*,
+                             StringMapKeyHash,
+                             StringMapKeyProjection,
                              n_slots>;
+
+  template <size_t n_slots, size_t m_slots>
+  struct LargeStringMap {
+    using AType = std::array<ConcurrentProjectedStringMap<n_slots>, m_slots>;
+
+    AType map;
+
+    ConcurrentProjectedStringMap<n_slots>& at(const StringMapKey& k) {
+      size_t hashed = TruncatedStringHash()(k.first) % m_slots;
+      return map[hashed];
+    }
+
+    typename AType::iterator begin() { return map.begin(); }
+    typename AType::iterator end() { return map.end(); }
+  };
 
   struct Strcmp {
     bool operator()(const char* a, const char* b) const {
@@ -204,7 +238,7 @@ struct RedexContext {
   };
 
   // DexString
-  ConcurrentLargeStringMap<DexString*> s_string_map;
+  LargeStringMap<31, 127> s_string_map;
 
   // DexType
   ConcurrentMap<const DexString*, DexType*> s_type_map;
