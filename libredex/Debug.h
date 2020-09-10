@@ -95,6 +95,11 @@ void crash_backtrace_handler(int sig);
 // asserts will sleep forever.
 void block_multi_asserts(bool block);
 
+// If called, assertions on threads other than the caller may immediately abort
+// instead of raising an exception. Currently only implemented for Linux.
+// Note: this is a workaround for libstdc++ from GCC < 8.
+void set_abort_if_not_this_thread();
+
 // Stats from /proc. See http://man7.org/linux/man-pages/man5/proc.5.html.
 struct VmStats {
   uint64_t vm_peak = 0; // "Peak virtual memory size."

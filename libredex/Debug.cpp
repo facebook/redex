@@ -133,6 +133,7 @@ using traced = boost::error_info<struct tag_stacktrace, StType>;
 #ifdef __linux__
 std::atomic<pid_t> g_aborting{0};
 pid_t get_tid() { return syscall(SYS_gettid); }
+pid_t g_abort_if_not_tid{0};
 #endif
 bool g_block_multi_asserts{false};
 
@@ -140,6 +141,15 @@ bool g_block_multi_asserts{false};
 
 void block_multi_asserts(bool block) {
   g_block_multi_asserts = block; // Ignore races and such.
+}
+
+void set_abort_if_not_this_thread() {
+#if defined(__linux__) && defined(__GNUC__)
+// See https://gcc.gnu.org/bugzilla/show_bug.cgi?id=55917.
+#if __GNUC__ < 8
+  g_abort_if_not_tid = get_tid();
+#endif
+#endif
 }
 
 void assert_fail(const char* expr,
@@ -170,16 +180,25 @@ void assert_fail(const char* expr,
   do_throw = true;
 #endif
 
-  if (do_throw || !g_block_multi_asserts) {
-    throw boost::enable_error_info(RedexException(type, msg))
-        << traced(StType());
+  if (!do_throw && g_block_multi_asserts) {
+    // Another thread already threw. Avoid "terminate called recursively."
+    // Infinite loop.
+    for (;;) {
+      sleep(1000);
+    }
   }
 
-  // Another thread already threw. Avoid "terminate called recursively."
-  // Infinite loop.
-  for (;;) {
-    sleep(1000);
+#ifdef __linux__
+  // Asked to abort if not the set thread. Print message and exit.
+  if (g_abort_if_not_tid != 0 && g_abort_if_not_tid != cur) {
+    // Pretend a termination for `redex.py`.
+    std::cerr << "terminate called after assertion" << std::endl;
+    std::cerr << "  what():  " << msg << std::endl;
+    abort();
   }
+#endif
+
+  throw boost::enable_error_info(RedexException(type, msg)) << traced(StType());
 }
 
 void print_stack_trace(std::ostream& os, const std::exception& e) {

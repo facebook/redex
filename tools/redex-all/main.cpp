@@ -1104,6 +1104,8 @@ int main(int argc, char* argv[]) {
 
   // Only log one assert.
   block_multi_asserts(/*block=*/true);
+  // For better stacks in abort dumps.
+  set_abort_if_not_this_thread();
 
   std::string stats_output_path;
   Json::Value stats;
