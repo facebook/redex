@@ -9,6 +9,7 @@
 
 #include <boost/optional.hpp>
 #include <json/json.h>
+#include <memory>
 #include <string>
 #include <typeinfo>
 #include <unordered_map>
@@ -40,6 +41,8 @@ class PassManager {
               std::unique_ptr<keep_rules::ProguardConfiguration> pg_config,
               const Json::Value& config = Json::Value(Json::objectValue),
               const RedexOptions& options = RedexOptions{});
+
+  ~PassManager();
 
   struct PassInfo {
     const Pass* pass;
@@ -95,14 +98,16 @@ class PassManager {
     return nullptr;
   }
 
+  Pass* find_pass(const std::string& pass_name) const;
+
  private:
   void activate_pass(const std::string& name, const Json::Value& cfg);
-
-  Pass* find_pass(const std::string& pass_name) const;
 
   void init(const Json::Value& config);
 
   hashing::DexHash run_hasher(const char* name, const Scope& scope);
+
+  void eval_passes(DexStoresVector&, ConfigFiles&);
 
   ApkManager m_apk_mgr;
   std::vector<Pass*> m_registered_passes;
@@ -118,22 +123,7 @@ class PassManager {
   bool m_testing_mode{false};
   bool m_regalloc_has_run{false};
 
-  struct ProfilerInfo {
-    std::string command;
-    boost::optional<std::string> shutdown_cmd;
-    boost::optional<std::string> post_cmd;
-    const Pass* pass;
-    ProfilerInfo(const std::string& command,
-                 const boost::optional<std::string>& shutdown_cmd,
-                 const boost::optional<std::string>& post_cmd,
-                 const Pass* pass)
-        : command(command),
-          shutdown_cmd(shutdown_cmd),
-          post_cmd(post_cmd),
-          pass(pass) {}
-  };
-
-  boost::optional<ProfilerInfo> m_profiler_info;
   Pass* m_malloc_profile_pass{nullptr};
+
   boost::optional<hashing::DexHash> m_initial_hash;
 };

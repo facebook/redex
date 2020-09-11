@@ -14,6 +14,8 @@ class ScopedCommandProfiling final {
       boost::optional<std::string> cmd,
       boost::optional<std::string> shutdown_cmd = boost::none,
       boost::optional<std::string> post_cmd = boost::none);
+  ScopedCommandProfiling(const ScopedCommandProfiling&) = delete;
+  ScopedCommandProfiling(ScopedCommandProfiling&&) = default;
 
   ~ScopedCommandProfiling();
 
