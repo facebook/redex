@@ -26,7 +26,7 @@ class ExamplePartialPass : public PartialPass {
   ExamplePartialPass() : PartialPass("ExamplePartialPass") {}
 
   void run_partial_pass(DexStoresVector& /* stores */,
-                        Scope& scope,
+                        Scope scope,
                         ConfigFiles& /* conf */,
                         PassManager& /* mgr */) override {
     // basically just visit classes

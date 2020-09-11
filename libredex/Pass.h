@@ -87,7 +87,7 @@ class PartialPass : public Pass {
                 PassManager& mgr) final;
 
   virtual void run_partial_pass(DexStoresVector& whole_program_stores,
-                                Scope& current_scope,
+                                Scope current_scope,
                                 ConfigFiles& conf,
                                 PassManager& mgr) = 0;
 
