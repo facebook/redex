@@ -18,6 +18,13 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 TMP=$(mktemp -d 2>/dev/null)
 trap 'rm -r $TMP' EXIT
 
+BOOST_DEB_UBUNTU_PKGS="libboost-filesystem-dev
+                       libboost-iostreams-dev
+                       libboost-program-options-dev
+                       libboost-regex-dev
+                       libboost-system-dev
+                       libboost-thread-dev"
+
 function install_python36_from_source {
     pushd "$TMP"
     wget https://www.python.org/ftp/python/3.6.10/Python-3.6.10.tgz
@@ -50,7 +57,7 @@ function install_from_apt {
         wget
         zlib1g-dev $*"
   apt-get update
-  apt-get install ${PKGS}
+  apt-get install --no-install-recommends -y ${PKGS}
 }
 
 function handle_debian {
@@ -64,7 +71,7 @@ function handle_debian {
             install_boost_from_source
             ;;
         *)
-            install_from_apt libboost-all-dev python3
+            install_from_apt ${BOOST_DEB_UBUNTU_PKGS} python3
             ;;
     esac
 }
@@ -81,7 +88,7 @@ function handle_ubuntu {
             install_boost_from_source
             ;;
         2*)
-            install_from_apt libboost-all-dev python3
+            install_from_apt ${BOOST_DEB_UBUNTU_PKGS} python3
             ;;
         *)
             echo "Unsupported Ubuntu version $1"
