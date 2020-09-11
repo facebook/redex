@@ -654,6 +654,22 @@ void VerticalMergingPass::move_methods(
   auto move_method = [&](DexMethod* method) {
     TRACE(VMERGE, 5, "%s | %s | %s", SHOW(from_cls), SHOW(to_cls),
           SHOW(method));
+    if (method::is_clinit(method)) {
+      // We have removed pairs that both have clinit, so we can just move
+      // clinit to target class.
+      auto methodref_in_context = DexMethod::get_method(
+          target_cls_type, method->get_name(), method->get_proto());
+      if (methodref_in_context) {
+        (*methodref_update_map)[methodref_in_context] = method;
+        DexMethodRef::erase_method(methodref_in_context);
+      }
+      from_cls->remove_method(method);
+      DexMethodSpec spec;
+      spec.cls = target_cls_type;
+      method->change(spec, false /* rename_on_collision */);
+      to_cls->add_method(method);
+      return;
+    }
     if (is_merging_super_to_sub) {
       // Super class is being merged into subclass
       auto methodref_in_context = DexMethod::get_method(
@@ -663,8 +679,8 @@ void VerticalMergingPass::move_methods(
               5,
               "ALREADY EXISTED METHODREF %s",
               SHOW(methodref_in_context));
-        DexMethod* method_def =
-            resolve_method(methodref_in_context, MethodSearch::Any);
+        DexMethod* method_def = resolve_method(
+            to_cls, method->get_name(), method->get_proto(), MethodSearch::Any);
         always_assert_log(
             method_def != nullptr,
             "Found a method ref can't be resolve during merging.\n");
