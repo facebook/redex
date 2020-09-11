@@ -233,7 +233,7 @@ inline DexMethod* resolve_method(DexMethodRef* method,
   if (def != ref_cache.end()) {
     return def->second;
   }
-  auto mdef = resolve_method(method, search);
+  auto mdef = resolve_method(method, search, caller);
   if (mdef != nullptr) {
     ref_cache.emplace(MethodRefCacheKey{method, search}, mdef);
   }
