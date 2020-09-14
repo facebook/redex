@@ -7,10 +7,13 @@
 
 #include "IPConstantPropagation.h"
 
+#include <signal.h>
+
 #include <gtest/gtest.h>
 
 #include "ConstantPropagationRuntimeAssert.h"
 #include "Creators.h"
+#include "Debug.h"
 #include "DexUtil.h"
 #include "IPConstantPropagationAnalysis.h"
 #include "IRAssembler.h"
@@ -467,9 +470,14 @@ TEST_F(InterproceduralConstantPropagationTest, unreachableInvoke) {
   // Check m2 is reachable, despite m3 being unreachable
   auto& graph = fp_iter.get_call_graph();
 
-  EXPECT_EQ(
-      fp_iter.get_entry_state_at(graph.node(m2)).get(CURRENT_PARTITION_LABEL),
-      ArgumentDomain({{0, SignedConstantDomain(0)}}));
+  signal(SIGABRT, crash_backtrace_handler);
+
+  // Cache in variables, work around certain GCC bug. Must make a copy, as
+  // intermediate domain is temporary.
+  const auto res =
+      fp_iter.get_entry_state_at(graph.node(m2)).get(CURRENT_PARTITION_LABEL);
+  const auto exp = ArgumentDomain({{0, SignedConstantDomain(0)}});
+  EXPECT_EQ(res, exp);
   EXPECT_TRUE(fp_iter.get_entry_state_at(graph.node(m3)).is_bottom());
 }
 
