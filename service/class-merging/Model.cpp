@@ -773,7 +773,11 @@ void Model::break_by_interface(const MergerType& merger,
 
 namespace {
 
-DexType* check_current_instance(const TypeSet& types, IRInstruction* insn) {
+using TypeHashSet = std::unordered_set<DexType*>;
+using ConstTypeHashSet = std::unordered_set<const DexType*>;
+
+DexType* check_current_instance(const ConstTypeHashSet& types,
+                                IRInstruction* insn) {
   DexType* type = nullptr;
   if (insn->has_type()) {
     type = insn->get_type();
@@ -790,9 +794,9 @@ DexType* check_current_instance(const TypeSet& types, IRInstruction* insn) {
   return type;
 }
 
-ConcurrentMap<DexType*, std::unordered_set<DexType*>> get_type_usages(
-    const TypeSet& types, const Scope& scope) {
-  ConcurrentMap<DexType*, std::unordered_set<DexType*>> res;
+ConcurrentMap<DexType*, TypeHashSet> get_type_usages(
+    const ConstTypeHashSet& types, const Scope& scope) {
+  ConcurrentMap<DexType*, TypeHashSet> res;
 
   walk::parallel::opcodes(scope, [&](DexMethod* method, IRInstruction* insn) {
     auto cls = method->get_class();
@@ -829,7 +833,7 @@ ConcurrentMap<DexType*, std::unordered_set<DexType*>> get_type_usages(
 }
 
 size_t get_interdex_group(
-    const std::unordered_set<DexType*>& types,
+    const TypeHashSet& types,
     const std::unordered_map<DexType*, size_t>& cls_to_interdex_groups,
     size_t interdex_groups) {
   // By default, we consider the class in the last group.
@@ -848,7 +852,8 @@ size_t get_interdex_group(
 namespace class_merging {
 
 std::vector<TypeSet> Model::group_per_interdex_set(const TypeSet& types) {
-  const auto& type_to_usages = get_type_usages(types, m_scope);
+  ConstTypeHashSet type_hash_set{types.begin(), types.end()};
+  const auto& type_to_usages = get_type_usages(type_hash_set, m_scope);
   std::vector<TypeSet> new_groups(s_num_interdex_groups);
   for (const auto& pair : type_to_usages) {
     auto index = get_interdex_group(pair.second, s_cls_to_interdex_group,
