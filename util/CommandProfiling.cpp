@@ -108,3 +108,19 @@ ScopedCommandProfiling::~ScopedCommandProfiling() {
     }
   }
 }
+
+ScopedCommandProfiling::ScopedCommandProfiling(
+    ScopedCommandProfiling&& other) noexcept {
+  *this = std::move(other);
+}
+
+ScopedCommandProfiling& ScopedCommandProfiling::operator=(
+    ScopedCommandProfiling&& rhs) noexcept {
+  m_profiler = rhs.m_profiler;
+  m_shutdown_cmd = std::move(rhs.m_shutdown_cmd);
+  m_post_cmd = std::move(rhs.m_post_cmd);
+
+  rhs.m_profiler = -1;
+
+  return *this;
+}
