@@ -8,26 +8,23 @@ aliases:
    branches:
      only:
        - master
- - &filter-not-gh-pages
+ - &filter-not-gh-pages-not-master
    branches:
      ignore:
        - gh-pages
+       - master
 
 orbs:
   win: circleci/windows@2.2.0
 
-jobs:
-  build:
-    docker:
-      - image: circleci/buildpack-deps:xenial
-    # GCC is hungry.
-    resource_class: large
-    # Tell everyone we're using GCC 5.
-    environment:
-      CXX: g++-5
+commands:
+  build-and-test-w-make:
+    description: "Prepare, build and test ReDex"
+    parameters:
+      configure_extra:
+        default: ""
+        type: string
     steps:
-      - checkout
-
       # Setup. Includes boost.
       - run:
           name: Setup
@@ -38,7 +35,7 @@ jobs:
       - run:
           name: Setup for tests
           command: |
-            sudo apt-get install -y --no-install-recommends dalvik-exchange openjdk-8-jdk-headless
+            sudo apt-get install -y --no-install-recommends dalvik-exchange default-jdk-headless
             sudo ln -s /usr/bin/dalvik-exchange /usr/local/bin/dx
 
       # Configure.
@@ -46,7 +43,7 @@ jobs:
           name: Configure
           command: |
             autoreconf -ivf
-            ./configure CXX="g++-5"
+            ./configure << parameters.configure_extra >>
 
       # Actual build.
       - run:
@@ -69,6 +66,47 @@ jobs:
             make -j4 check
       - store_test_results:
           path: /tmp/test-results
+
+jobs:
+  build-16_04:
+    docker:
+      - image: circleci/buildpack-deps:xenial
+    # GCC is hungry.
+    resource_class: large
+    # Tell everyone we're using GCC 5.
+    environment:
+      CXX: g++-5
+    steps:
+      - checkout
+      - build-and-test-w-make:
+          configure_extra: "CXX='g++-5'"
+
+  build-20_04:
+    docker:
+      - image: circleci/buildpack-deps:focal
+    # GCC is hungry.
+    resource_class: large
+    steps:
+      - checkout
+      - build-and-test-w-make
+
+  build-deb_stable:
+    docker:
+      - image: circleci/buildpack-deps:stable
+    # GCC is hungry.
+    resource_class: large
+    steps:
+      - checkout
+      - build-and-test-w-make
+
+  build-deb_testing:
+    docker:
+      - image: circleci/buildpack-deps:testing
+    # GCC is hungry.
+    resource_class: large
+    steps:
+      - checkout
+      - build-and-test-w-make
 
   build-windows:
     executor:
@@ -120,14 +158,42 @@ jobs:
             unset CI_PULL_REQUEST CIRCLE_PULL_REQUEST
             cd website && yarn install && GIT_USER=docusaurus-bot USE_SSH=false yarn run publish-gh-pages
 
+# TODO: branch filtering is deprecated, but workflow filtering documentation
+#       for 2.1 does not exist and 2.0 requires a schedule.
+
 workflows:
   version: 2.1
-  build_and_deploy:
+  build_master:
     jobs:
-      # Note: only filter gh-pages for 'build' so that pull requests/stable get checked.
-      - build:
-          filters: *filter-not-gh-pages
+      - build-16_04:
+          filters: *filter-only-master
       - build-windows:
-          filters: *filter-not-gh-pages
+          filters: *filter-only-master
+
       - deploy-website:
           filters: *filter-only-master
+
+  build_other:
+    jobs:
+      # Note: only filter gh-pages for 'build_other' so that pull
+      #       requests/stable get checked.
+      - build-16_04:
+          filters: *filter-not-gh-pages-not-master
+      - build-20_04:
+          filters: *filter-not-gh-pages-not-master
+      - build-deb_stable:
+          filters: *filter-not-gh-pages-not-master
+      - build-deb_testing:
+          filters: *filter-not-gh-pages-not-master
+      - build-windows:
+          filters: *filter-not-gh-pages-not-master
+
+  nightly:
+    triggers:
+      - schedule:
+          cron: "0 0 * * *"
+          filters: *filter-only-master
+    jobs:
+      - build-20_04
+      - build-deb_stable
+      - build-deb_testing
