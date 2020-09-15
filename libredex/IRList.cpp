@@ -10,6 +10,7 @@
 #include <iterator>
 #include <vector>
 
+#include "DexClass.h"
 #include "DexUtil.h"
 #include "IRInstruction.h"
 #include "Show.h"
@@ -31,6 +32,12 @@ bool BranchTarget::operator==(const BranchTarget& other) const {
   if (src == nullptr || other.src == nullptr) return false;
   return *src == *other.src;
 }
+
+MethodItemEntry::MethodItemEntry(std::unique_ptr<DexDebugInstruction> dbgop)
+    : type(MFLOW_DEBUG), dbgop(std::move(dbgop)) {}
+
+MethodItemEntry::MethodItemEntry(std::unique_ptr<DexPosition> pos)
+    : type(MFLOW_POSITION), pos(std::move(pos)) {}
 
 MethodItemEntry::MethodItemEntry(const MethodItemEntry& that)
     : type(that.type) {
