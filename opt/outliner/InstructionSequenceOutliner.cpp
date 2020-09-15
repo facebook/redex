@@ -79,6 +79,7 @@
 #include "ConfigFiles.h"
 #include "Creators.h"
 #include "DexClass.h"
+#include "DexInstruction.h"
 #include "DexLimits.h"
 #include "DexPosition.h"
 #include "DexUtil.h"

@@ -8,6 +8,7 @@
 #include "LayoutReachabilityPass.h"
 
 #include "ConfigFiles.h"
+#include "DexUtil.h"
 #include "ReachableClasses.h"
 #include "Trace.h"
 

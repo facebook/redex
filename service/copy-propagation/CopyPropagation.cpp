@@ -14,6 +14,7 @@
 #include "CanonicalizeLocks.h"
 #include "ConstantUses.h"
 #include "ControlFlow.h"
+#include "DexOpcode.h"
 #include "DexUtil.h"
 #include "IRInstruction.h"
 #include "IROpcode.h"

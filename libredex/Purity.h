@@ -13,6 +13,8 @@
 struct ConfigFiles;
 class IRInstruction;
 
+enum IROpcode : uint16_t;
+
 enum class CseSpecialLocations : uintptr_t {
   GENERAL_MEMORY_BARRIER,
   ARRAY_COMPONENT_TYPE_INT,

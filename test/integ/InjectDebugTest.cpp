@@ -13,6 +13,7 @@
 #include <iostream>
 #include <string>
 
+#include "DexInstruction.h"
 #include "DexLoader.h"
 #include "DexOutput.h"
 #include "DexPosition.h"

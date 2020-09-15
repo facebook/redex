@@ -13,6 +13,7 @@
 
 #include "ControlFlow.h"
 #include "Debug.h"
+#include "DexOpcode.h"
 #include "DexUtil.h"
 #include "Dominators.h"
 #include "IRCode.h"

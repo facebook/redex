@@ -5,6 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include "DexOutput.h"
+
 #include <algorithm>
 #include <assert.h>
 #include <exception>
@@ -33,9 +35,9 @@
 #include "Debug.h"
 #include "DexCallSite.h"
 #include "DexClass.h"
+#include "DexInstruction.h"
 #include "DexLimits.h"
 #include "DexMethodHandle.h"
-#include "DexOutput.h"
 #include "DexPosition.h"
 #include "DexUtil.h"
 #include "IODIMetadata.h"

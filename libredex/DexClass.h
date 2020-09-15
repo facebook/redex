@@ -20,7 +20,6 @@
 #include "DexAnnotation.h"
 #include "DexDefs.h"
 #include "DexEncoding.h"
-#include "DexInstruction.h"
 #include "RedexContext.h"
 #include "ReferencedState.h"
 #include "Util.h"
@@ -47,7 +46,9 @@
 
 class DexClass;
 class DexDebugInstruction;
+class DexField;
 class DexIdx;
+class DexInstruction;
 class DexOutputIdx;
 struct DexPosition;
 class DexString;
@@ -715,13 +716,7 @@ class DexCode {
 
   DexCode(const DexCode&);
 
-  ~DexCode() {
-    if (m_insns) {
-      for (auto const& op : *m_insns) {
-        delete op;
-      }
-    }
-  }
+  ~DexCode();
 
  public:
   const DexDebugItem* get_debug_item() const { return m_dbg.get(); }

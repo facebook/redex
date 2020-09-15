@@ -12,6 +12,7 @@
 
 #include "DexClass.h"
 #include "DexDebugInstruction.h"
+#include "DexInstruction.h"
 #include "DexPosition.h"
 #include "DexUtil.h"
 #include "IRInstruction.h"

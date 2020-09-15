@@ -8,6 +8,7 @@
 #include <gtest/gtest.h>
 
 #include "DexAsm.h"
+#include "DexInstruction.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
 #include "InstructionLowering.h"

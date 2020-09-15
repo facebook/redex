@@ -7,9 +7,17 @@
 
 #pragma once
 
-#include "IRCode.h"
-#include "IRInstruction.h"
-#include "Pass.h"
+#include <cstdint>
+#include <vector>
+
+class DexMethod;
+class DexStore;
+class IRInstruction;
+struct MethodItemEntry;
+
+enum DexOpcode : uint16_t;
+
+using DexStoresVector = std::vector<DexStore>;
 
 namespace instruction_lowering {
 

@@ -14,6 +14,7 @@
 #include <utility>
 
 #include "CppUtil.h"
+#include "DexInstruction.h"
 #include "DexPosition.h"
 #include "DexUtil.h"
 #include "GraphUtil.h"

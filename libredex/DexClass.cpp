@@ -12,6 +12,7 @@
 #include "DexDebugInstruction.h"
 #include "DexDefs.h"
 #include "DexIdx.h"
+#include "DexInstruction.h"
 #include "DexMemberRefs.h"
 #include "DexOutput.h"
 #include "DexPosition.h"
@@ -369,6 +370,14 @@ DexCode::DexCode(const DexCode& that)
   }
   if (that.m_dbg) {
     m_dbg.reset(new DexDebugItem(*that.m_dbg));
+  }
+}
+
+DexCode::~DexCode() {
+  if (m_insns) {
+    for (auto const& op : *m_insns) {
+      delete op;
+    }
   }
 }
 

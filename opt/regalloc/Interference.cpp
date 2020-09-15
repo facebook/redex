@@ -8,6 +8,7 @@
 #include "Interference.h"
 
 #include "ControlFlow.h"
+#include "DexOpcode.h"
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "MonotonicFixpointIterator.h"

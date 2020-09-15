@@ -17,6 +17,7 @@
 #include "ConstantPropagationWholeProgramState.h"
 #include "ConstructorAnalysis.h"
 #include "ControlFlow.h"
+#include "DexInstruction.h"
 #include "DexPosition.h"
 #include "DexUtil.h"
 #include "EditableCfgAdapter.h"

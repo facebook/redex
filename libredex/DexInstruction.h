@@ -7,9 +7,7 @@
 
 #pragma once
 
-#include <assert.h>
 #include <cstring>
-#include <list>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -24,6 +22,7 @@
 
 class DexIdx;
 class DexOutputIdx;
+class DexString;
 
 class DexInstruction : public Gatherable {
  protected:
