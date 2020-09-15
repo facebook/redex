@@ -11,6 +11,7 @@
 #include <climits>
 
 #include "ConfigFiles.h"
+#include "Trace.h"
 
 using namespace class_merging;
 

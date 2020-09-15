@@ -12,6 +12,7 @@
 
 #include "DexClass.h"
 #include "Model.h"
+#include "Trace.h"
 
 class DexStore;
 class PassManager;

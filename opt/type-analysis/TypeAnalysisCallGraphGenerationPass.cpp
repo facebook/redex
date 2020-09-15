@@ -11,6 +11,7 @@
 #include "GlobalTypeAnalysisPass.h"
 #include "MethodOverrideGraph.h"
 #include "Show.h"
+#include "Trace.h"
 #include "Walkers.h"
 
 using namespace call_graph;

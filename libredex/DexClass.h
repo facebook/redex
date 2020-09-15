@@ -12,24 +12,17 @@
 #include <functional>
 #include <initializer_list>
 #include <limits>
-#include <list>
-#include <map>
 #include <memory>
-#include <sstream>
 #include <string>
 #include <utility>
 
 #include "DexAccess.h"
 #include "DexAnnotation.h"
-#include "DexDebugInstruction.h"
 #include "DexDefs.h"
 #include "DexEncoding.h"
-#include "DexIdx.h"
 #include "DexInstruction.h"
-#include "DexPosition.h"
 #include "RedexContext.h"
 #include "ReferencedState.h"
-#include "Trace.h"
 #include "Util.h"
 
 /*
@@ -54,9 +47,12 @@
 
 class DexClass;
 class DexDebugInstruction;
+class DexIdx;
 class DexOutputIdx;
+struct DexPosition;
 class DexString;
 class DexType;
+class PositionMapper;
 
 using Scope = std::vector<DexClass*>;
 
@@ -625,27 +621,15 @@ struct DexDebugEntry final {
     std::unique_ptr<DexPosition> pos;
     std::unique_ptr<DexDebugInstruction> insn;
   };
-  DexDebugEntry(uint32_t addr, std::unique_ptr<DexPosition> pos)
-      : type(DexDebugEntryType::Position), addr(addr), pos(std::move(pos)) {}
-  DexDebugEntry(uint32_t addr, std::unique_ptr<DexDebugInstruction> insn)
-      : type(DexDebugEntryType::Instruction),
-        addr(addr),
-        insn(std::move(insn)) {}
+  DexDebugEntry(uint32_t addr, std::unique_ptr<DexPosition> pos);
+  DexDebugEntry(uint32_t addr, std::unique_ptr<DexDebugInstruction> insn);
   // should only be copied via DexDebugItem's copy ctor, which is responsible
   // for remapping DexPositions' parent pointer
   DexDebugEntry(const DexDebugEntry&) = delete;
   DexDebugEntry(DexDebugEntry&& other) noexcept;
   ~DexDebugEntry();
-  void gather_strings(std::vector<DexString*>& lstring) const {
-    if (type == DexDebugEntryType::Instruction) {
-      insn->gather_strings(lstring);
-    }
-  }
-  void gather_types(std::vector<DexType*>& ltype) const {
-    if (type == DexDebugEntryType::Instruction) {
-      insn->gather_types(ltype);
-    }
-  }
+  void gather_strings(std::vector<DexString*>& lstring) const;
+  void gather_types(std::vector<DexType*>& ltype) const;
 };
 
 class DexDebugItem {

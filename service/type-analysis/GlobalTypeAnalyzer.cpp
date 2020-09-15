@@ -11,6 +11,7 @@
 #include "MethodOverrideGraph.h"
 #include "Resolver.h"
 #include "Show.h"
+#include "Trace.h"
 #include "Walkers.h"
 
 namespace mog = method_override_graph;

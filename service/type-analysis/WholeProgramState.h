@@ -12,6 +12,7 @@
 #include "DexTypeEnvironment.h"
 #include "HashedAbstractPartition.h"
 #include "InstructionAnalyzer.h"
+#include "Trace.h"
 
 std::ostream& operator<<(std::ostream& out, const DexField* field);
 

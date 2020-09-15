@@ -13,6 +13,7 @@
 #include "DexUtil.h"
 #include "ReachableClasses.h"
 #include "Show.h"
+#include "Trace.h"
 
 #include <list>
 #include <type_traits>

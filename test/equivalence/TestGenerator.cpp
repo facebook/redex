@@ -19,6 +19,7 @@
 
 #include "DexLoader.h"
 #include "DexOutput.h"
+#include "DexPosition.h"
 #include "IRCode.h"
 #include "InstructionLowering.h"
 #include "RedexTestUtils.h"

@@ -14,7 +14,6 @@
 #include <stdlib.h>
 
 #include "Show.h"
-#include "Trace.h"
 
 using namespace method_profiles;
 

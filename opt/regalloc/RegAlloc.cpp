@@ -23,6 +23,7 @@
 #include "Walkers.h"
 
 #include "JemallocUtil.h"
+#include "Trace.h"
 
 namespace regalloc {
 

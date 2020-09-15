@@ -11,6 +11,7 @@
 #include "IRCode.h"
 #include "LocalTypeAnalyzer.h"
 #include "PassManager.h"
+#include "Trace.h"
 #include "WholeProgramState.h"
 
 namespace type_analyzer {

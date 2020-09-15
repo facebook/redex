@@ -7,6 +7,7 @@
 
 #include "MergerType.h"
 
+#include "Trace.h"
 #include <sstream>
 #include <string>
 

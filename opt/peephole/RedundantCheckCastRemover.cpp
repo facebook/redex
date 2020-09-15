@@ -13,6 +13,7 @@
 #include "IRCode.h"
 #include "Match.h"
 #include "Show.h"
+#include "Trace.h"
 #include "Walkers.h"
 
 RedundantCheckCastRemover::RedundantCheckCastRemover(

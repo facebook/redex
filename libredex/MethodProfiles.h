@@ -11,6 +11,7 @@
 
 #include "DexClass.h"
 #include "Timer.h"
+#include "Trace.h"
 
 namespace method_profiles {
 

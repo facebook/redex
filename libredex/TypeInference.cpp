@@ -12,6 +12,7 @@
 #include <sstream>
 
 #include "Show.h"
+#include "Trace.h"
 
 std::ostream& operator<<(std::ostream& output, const IRType& type) {
   switch (type) {

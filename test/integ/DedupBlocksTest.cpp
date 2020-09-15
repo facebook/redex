@@ -13,6 +13,7 @@
 #include "IRCode.h"
 #include "RedexTest.h"
 #include "Show.h"
+#include "Trace.h"
 #include "Transform.h"
 
 #include "DedupBlocksPass.h"

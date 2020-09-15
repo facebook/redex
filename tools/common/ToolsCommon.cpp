@@ -22,6 +22,7 @@
 #include "CommentFilter.h"
 #include "DexLoader.h"
 #include "DexOutput.h"
+#include "DexPosition.h"
 #include "DexUtil.h"
 #include "IRMetaIO.h"
 #include "InstructionLowering.h"

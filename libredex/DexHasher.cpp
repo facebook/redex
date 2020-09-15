@@ -9,10 +9,12 @@
 
 #include "DexAccess.h"
 #include "DexClass.h"
+#include "DexPosition.h"
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "IROpcode.h"
 #include "Show.h"
+#include "Trace.h"
 #include "Walkers.h"
 
 namespace hashing {

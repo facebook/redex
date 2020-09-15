@@ -16,6 +16,7 @@
 #include "MethodOverrideGraph.h"
 #include "PassManager.h"
 #include "ReachableClasses.h"
+#include "Trace.h"
 #include "Walkers.h"
 
 namespace {

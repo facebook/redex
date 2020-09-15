@@ -8,6 +8,7 @@
 #include "PerfMethodInlinePass.h"
 
 #include "MethodInliner.h"
+#include "Trace.h"
 
 void PerfMethodInlinePass::run_pass(DexStoresVector& stores,
                                     ConfigFiles& conf,

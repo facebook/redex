@@ -11,8 +11,10 @@
 #include "DexAccess.h"
 #include "DexDebugInstruction.h"
 #include "DexDefs.h"
+#include "DexIdx.h"
 #include "DexMemberRefs.h"
 #include "DexOutput.h"
+#include "DexPosition.h"
 #include "DexUtil.h"
 #include "DuplicateClasses.h"
 #include "IRCode.h"
@@ -84,6 +86,13 @@ DexFieldRef* DexField::make_field(const std::string& full_descriptor) {
   return DexField::make_field(cls, name, type);
 }
 
+DexDebugEntry::DexDebugEntry(uint32_t addr,
+                             std::unique_ptr<DexDebugInstruction> insn)
+    : type(DexDebugEntryType::Instruction), addr(addr), insn(std::move(insn)) {}
+
+DexDebugEntry::DexDebugEntry(uint32_t addr, std::unique_ptr<DexPosition> pos)
+    : type(DexDebugEntryType::Position), addr(addr), pos(std::move(pos)) {}
+
 DexDebugEntry::DexDebugEntry(DexDebugEntry&& that) noexcept
     : type(that.type), addr(that.addr) {
   switch (type) {
@@ -104,6 +113,17 @@ DexDebugEntry::~DexDebugEntry() {
   case DexDebugEntryType::Instruction:
     insn.~unique_ptr<DexDebugInstruction>();
     break;
+  }
+}
+
+void DexDebugEntry::gather_strings(std::vector<DexString*>& lstring) const {
+  if (type == DexDebugEntryType::Instruction) {
+    insn->gather_strings(lstring);
+  }
+}
+void DexDebugEntry::gather_types(std::vector<DexType*>& ltype) const {
+  if (type == DexDebugEntryType::Instruction) {
+    insn->gather_types(ltype);
   }
 }
 

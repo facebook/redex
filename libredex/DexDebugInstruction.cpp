@@ -11,6 +11,7 @@
 #include "DexClass.h"
 #include "DexDebugInstruction.h"
 #include "DexDefs.h"
+#include "DexIdx.h"
 #include "DexOutput.h"
 
 void DexDebugOpcodeSetFile::gather_strings(

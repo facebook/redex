@@ -22,6 +22,7 @@
 #include "Resolver.h"
 #include "ScopedCFG.h"
 #include "SwitchEquivFinder.h"
+#include "Trace.h"
 #include "Walkers.h"
 
 /**

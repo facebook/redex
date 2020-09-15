@@ -25,6 +25,7 @@
 #include "PassManager.h"
 #include "Purity.h"
 #include "Resolver.h"
+#include "Trace.h"
 #include "Transform.h"
 #include "TypeSystem.h"
 #include "Walkers.h"

@@ -11,6 +11,8 @@
 #include <vector>
 
 #include "DexClass.h"
+#include "DexDebugInstruction.h"
+#include "DexPosition.h"
 #include "DexUtil.h"
 #include "IRInstruction.h"
 #include "Show.h"

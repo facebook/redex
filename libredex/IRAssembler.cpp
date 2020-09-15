@@ -13,6 +13,7 @@
 #include <string>
 #include <unordered_map>
 
+#include "DexPosition.h"
 #include "Show.h"
 
 using namespace sparta;

@@ -13,6 +13,7 @@
 #include "DexClass.h"
 #include "S_Expression.h"
 #include "Show.h"
+#include "Trace.h"
 
 /*
  * This module serves to (de)serialize maps of DexMethods to summary objects

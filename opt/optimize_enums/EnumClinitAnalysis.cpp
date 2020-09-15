@@ -10,6 +10,7 @@
 #include "ConstantPropagationAnalysis.h"
 #include "DexUtil.h"
 #include "Resolver.h"
+#include "Trace.h"
 
 /* clang-format off */
 /*

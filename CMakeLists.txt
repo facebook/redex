@@ -73,6 +73,8 @@ file(GLOB_RECURSE redex_srcs
         "util/Sha1.h"
         "shared/DexDefs.cpp"
         "shared/DexDefs.h"
+        "shared/DexEncoding.cpp"
+        "shared/DexEncoding.h"
         "shared/file-utils.cpp"
         "shared/file-utils.h"
         "liblocator/locator.cpp"

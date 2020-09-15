@@ -8,6 +8,7 @@
 #include "ConstantPropagationTransform.h"
 
 #include "ReachingDefinitions.h"
+#include "Trace.h"
 #include "Transform.h"
 #include "TypeInference.h"
 

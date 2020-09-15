@@ -12,6 +12,7 @@
 
 #include "ConstantPropagationAnalysis.h"
 #include "ReachingDefinitions.h"
+#include "Trace.h"
 
 namespace {
 

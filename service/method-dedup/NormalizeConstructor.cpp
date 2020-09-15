@@ -11,6 +11,7 @@
 #include "EditableCfgAdapter.h"
 #include "MethodReference.h"
 #include "Show.h"
+#include "Trace.h"
 #include "Walkers.h"
 
 namespace {

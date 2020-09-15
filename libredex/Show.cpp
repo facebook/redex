@@ -20,6 +20,7 @@
 #include "DexIdx.h"
 #include "DexInstruction.h"
 #include "DexMethodHandle.h"
+#include "DexPosition.h"
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "IROpcode.h"

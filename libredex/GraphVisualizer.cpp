@@ -15,6 +15,7 @@
 
 #include "ControlFlow.h"
 #include "Debug.h"
+#include "DexPosition.h"
 #include "IRCode.h"
 #include "Show.h"
 

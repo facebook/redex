@@ -23,6 +23,7 @@
 #include "ReflectionAnalysis.h"
 #include "Show.h"
 #include "StringUtil.h"
+#include "Trace.h"
 #include "TypeSystem.h"
 #include "Walkers.h"
 

@@ -8,6 +8,7 @@
 #include "ConstantPropagationWholeProgramState.h"
 
 #include "IPConstantPropagationAnalysis.h"
+#include "Trace.h"
 #include "Walkers.h"
 
 using namespace constant_propagation;

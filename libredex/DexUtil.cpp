@@ -18,6 +18,7 @@
 #include "DexLoader.h"
 #include "EditableCfgAdapter.h"
 #include "Resolver.h"
+#include "Trace.h"
 #include "UnknownVirtuals.h"
 
 DexAccessFlags merge_visibility(uint32_t vis1, uint32_t vis2) {

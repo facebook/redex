@@ -15,6 +15,7 @@
 #include "MethodOverrideGraph.h"
 #include "PassManager.h"
 #include "Timer.h"
+#include "Trace.h"
 #include "Walkers.h"
 
 namespace mog = method_override_graph;

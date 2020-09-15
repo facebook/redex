@@ -13,6 +13,7 @@
 #include "LocalPointersAnalysis.h"
 #include "Pass.h"
 #include "SideEffectSummary.h"
+#include "Trace.h"
 #include "UsedVarsAnalysis.h"
 
 class ObjectSensitiveDcePass final : public Pass {

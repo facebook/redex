@@ -13,6 +13,7 @@
 #include "ApproximateShapeMerging.h"
 #include "DexClass.h"
 #include "MergerType.h"
+#include "Trace.h"
 #include "TypeSystem.h"
 
 struct ConfigFiles;

@@ -17,6 +17,7 @@
 #include "Dominators.h"
 #include "IRCode.h"
 #include "Show.h"
+#include "Trace.h"
 #include "Transform.h"
 #include "VirtualRegistersFile.h"
 

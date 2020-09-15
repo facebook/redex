@@ -17,6 +17,7 @@
 #include "PassManager.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "Resolver.h"
+#include "Trace.h"
 #include "Walkers.h"
 
 using namespace sparta;

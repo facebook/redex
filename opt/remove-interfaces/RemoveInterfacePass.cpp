@@ -14,6 +14,7 @@
 #include "Resolver.h"
 #include "Show.h"
 #include "SwitchDispatch.h"
+#include "Trace.h"
 #include "TypeReference.h"
 #include "TypeSystem.h"
 #include "Walkers.h"

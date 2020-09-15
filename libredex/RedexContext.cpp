@@ -18,6 +18,7 @@
 #include "DexClass.h"
 #include "DuplicateClasses.h"
 #include "Show.h"
+#include "Trace.h"
 
 RedexContext* g_redex;
 

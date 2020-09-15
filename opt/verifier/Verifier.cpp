@@ -19,6 +19,7 @@
 #include "DexUtil.h"
 #include "IRInstruction.h"
 #include "ReachableClasses.h"
+#include "Trace.h"
 #include "Walkers.h"
 
 namespace {

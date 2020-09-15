@@ -14,9 +14,11 @@
 #include <utility>
 
 #include "CppUtil.h"
+#include "DexPosition.h"
 #include "DexUtil.h"
 #include "GraphUtil.h"
 #include "Show.h"
+#include "Trace.h"
 #include "Transform.h"
 #include "WeakTopologicalOrdering.h"
 

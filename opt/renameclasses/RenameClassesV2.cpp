@@ -28,6 +28,7 @@
 #include "Walkers.h"
 #include "Warning.h"
 
+#include "Trace.h"
 #include <locator.h>
 using facebook::Locator;
 

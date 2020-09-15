@@ -36,6 +36,7 @@
 #include "DexLimits.h"
 #include "DexMethodHandle.h"
 #include "DexOutput.h"
+#include "DexPosition.h"
 #include "DexUtil.h"
 #include "IODIMetadata.h"
 #include "IRCode.h"

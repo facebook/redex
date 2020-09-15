@@ -21,11 +21,13 @@
 #include "Debug.h"
 #include "DexClass.h"
 #include "DexDebugInstruction.h"
+#include "DexPosition.h"
 #include "DexUtil.h"
 #include "IRInstruction.h"
 #include "IROpcode.h"
 #include "InstructionLowering.h"
 #include "Show.h"
+#include "Trace.h"
 #include "Transform.h"
 #include "Util.h"
 

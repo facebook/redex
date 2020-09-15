@@ -13,6 +13,7 @@
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "RedexTest.h"
+#include "Trace.h"
 
 #include "ConstantPropagationPass.h"
 #include "DelInit.h"

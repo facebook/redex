@@ -8,6 +8,7 @@
 #include "EnumAnalyzeGeneratedMethods.h"
 
 #include "Show.h"
+#include "Trace.h"
 
 using namespace optimize_enums;
 

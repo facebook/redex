@@ -64,6 +64,7 @@
 #include "ReducedProductAbstractDomain.h"
 #include "Resolver.h"
 #include "Show.h"
+#include "Trace.h"
 #include "TypeInference.h"
 #include "Walkers.h"
 

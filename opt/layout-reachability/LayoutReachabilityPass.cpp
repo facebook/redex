@@ -9,6 +9,7 @@
 
 #include "ConfigFiles.h"
 #include "ReachableClasses.h"
+#include "Trace.h"
 
 void LayoutReachabilityPass::run_pass(DexStoresVector& stores,
                                       ConfigFiles& conf,

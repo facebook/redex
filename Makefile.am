@@ -42,7 +42,6 @@ libredex_la_SOURCES = \
 	libredex/DexCallSite.cpp \
 	libredex/DexClass.cpp \
 	libredex/DexDebugInstruction.cpp \
-	libredex/DexEncoding.cpp \
 	libredex/DexHasher.cpp \
 	libredex/DexIdx.cpp \
 	libredex/DexInstruction.cpp \
@@ -199,6 +198,7 @@ libredex_la_SOURCES = \
 	service/type-analysis/TypeAnalysisRuntimeAssert.cpp \
 	service/type-string-rewriter/TypeStringRewriter.cpp \
 	shared/DexDefs.cpp \
+	shared/DexEncoding.cpp \
 	shared/file-utils.cpp \
 	util/CommandProfiling.cpp \
 	util/JemallocUtil.cpp \

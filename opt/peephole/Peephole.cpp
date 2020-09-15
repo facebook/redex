@@ -26,6 +26,7 @@
 #include "RedundantCheckCastRemover.h"
 #include "Show.h"
 #include "SpartaWorkQueue.h"
+#include "Trace.h"
 #include "Walkers.h"
 
 ////////////////////////////////////////////////////////////////////////////////

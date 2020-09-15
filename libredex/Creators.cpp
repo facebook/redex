@@ -9,6 +9,7 @@
 
 #include <boost/range/adaptor/reversed.hpp>
 
+#include "DexPosition.h"
 #include "IROpcode.h"
 #include "Show.h"
 #include "Transform.h"

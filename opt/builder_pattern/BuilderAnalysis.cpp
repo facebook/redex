@@ -10,6 +10,7 @@
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "Resolver.h"
 #include "Show.h"
+#include "Trace.h"
 
 using namespace sparta;
 

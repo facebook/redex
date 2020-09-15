@@ -24,6 +24,7 @@
 #include "Purity.h"
 #include "Resolver.h"
 #include "Timer.h"
+#include "Trace.h"
 #include "TypeSystem.h"
 #include "TypeUtil.h"
 #include "Walkers.h"

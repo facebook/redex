@@ -25,6 +25,7 @@ std::enable_if_t<std::is_integral<T>::value, int> fpclassify(T x) {
 
 #include "DexUtil.h"
 #include "Resolver.h"
+#include "Trace.h"
 #include "Transform.h"
 #include "Walkers.h"
 

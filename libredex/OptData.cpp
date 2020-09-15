@@ -19,6 +19,7 @@
 #include <utility>
 
 #include "DexClass.h"
+#include "DexPosition.h"
 #include "DexUtil.h"
 #include "EditableCfgAdapter.h"
 #include "IRCode.h"

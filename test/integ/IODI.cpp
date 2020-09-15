@@ -16,6 +16,7 @@
 #include "DexEncoding.h"
 #include "DexLoader.h"
 #include "DexOutput.h"
+#include "DexPosition.h"
 #include "IODIMetadata.h"
 #include "InstructionLowering.h"
 #include "RedexContext.h"

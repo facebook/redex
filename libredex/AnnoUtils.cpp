@@ -10,6 +10,7 @@
 #include <utility>
 
 #include "Show.h"
+#include "Trace.h"
 
 namespace {
 

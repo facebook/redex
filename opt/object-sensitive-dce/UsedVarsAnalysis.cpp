@@ -11,6 +11,7 @@
 
 #include "ReachableClasses.h"
 #include "Show.h"
+#include "Trace.h"
 
 namespace ptrs = local_pointers;
 

@@ -25,6 +25,7 @@
 #include "ReBindRefs.h"
 #include "Show.h"
 #include "Synth.h"
+#include "Trace.h"
 
 #include "Match.h"
 

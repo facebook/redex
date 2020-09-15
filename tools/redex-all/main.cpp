@@ -40,6 +40,7 @@
 #include "DexHasher.h"
 #include "DexLoader.h"
 #include "DexOutput.h"
+#include "DexPosition.h"
 #include "DuplicateClasses.h"
 #include "GlobalConfig.h"
 #include "IODIMetadata.h"

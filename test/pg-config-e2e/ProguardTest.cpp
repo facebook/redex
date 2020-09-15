@@ -26,6 +26,7 @@
 #include "ReachableClasses.h"
 #include "RedexTest.h"
 #include "Show.h"
+#include "Trace.h"
 
 using namespace keep_rules;
 

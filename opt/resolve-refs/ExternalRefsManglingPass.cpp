@@ -9,6 +9,7 @@
 
 #include "ConfigFiles.h"
 #include "PassManager.h"
+#include "Trace.h"
 
 void ExternalRefsManglingPass::eval_pass(DexStoresVector&,
                                          ConfigFiles& conf,

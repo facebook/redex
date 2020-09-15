@@ -13,6 +13,7 @@
 #include "Match.h"
 #include "Resolver.h"
 #include "Show.h"
+#include "Trace.h"
 
 using namespace sparta;
 using namespace type_inference;

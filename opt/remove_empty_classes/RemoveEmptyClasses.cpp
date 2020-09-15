@@ -13,6 +13,7 @@
 #include "PassManager.h"
 #include "ReachableClasses.h"
 #include "RemoveEmptyClasses.h"
+#include "Trace.h"
 #include "Walkers.h"
 
 constexpr const char* METRIC_REMOVED_EMPTY_CLASSES =

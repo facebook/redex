@@ -19,6 +19,7 @@
 #include "IRCode.h"
 #include "Match.h"
 #include "Thread.h"
+#include "Trace.h"
 #include "VirtualScope.h"
 #include "WorkQueue.h"
 

@@ -10,6 +10,7 @@
 #include "ConstantPropagationAnalysis.h"
 #include "ConstantPropagationTransform.h"
 
+#include "Trace.h"
 #include "Walkers.h"
 
 namespace constant_propagation {

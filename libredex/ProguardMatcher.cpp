@@ -25,6 +25,7 @@
 #include "Show.h"
 #include "StringBuilder.h"
 #include "Timer.h"
+#include "Trace.h"
 #include "WorkQueue.h"
 
 using namespace keep_rules;
