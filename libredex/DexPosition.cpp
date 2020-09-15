@@ -7,7 +7,6 @@
 
 #include <fstream>
 #include <iostream>
-#include <json/json.h>
 
 #include "DexClass.h"
 #include "DexPosition.h"

@@ -592,7 +592,7 @@ void RenameClassesPassV2::eval_classes_post(
 void RenameClassesPassV2::eval_pass(DexStoresVector& stores,
                                     ConfigFiles& conf,
                                     PassManager& mgr) {
-  auto json = conf.get_json_config();
+  const auto& json = conf.get_json_config();
   json.get("apk_dir", "", m_apk_dir);
   TRACE(RENAME, 3, "APK Dir: %s", m_apk_dir.c_str());
   auto scope = build_class_scope(stores);

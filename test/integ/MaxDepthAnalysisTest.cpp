@@ -13,7 +13,7 @@
 #include "Pass.h"
 #include "RedexTest.h"
 
-#include <json/json.h>
+#include <json/value.h>
 #include <string>
 
 class AnalysisConsumerPass : public Pass {

@@ -8,6 +8,7 @@
 #pragma once
 
 #include <boost/variant.hpp>
+#include <json/value.h>
 #include <mutex>
 #include <utility>
 

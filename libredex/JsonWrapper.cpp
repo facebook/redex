@@ -5,31 +5,44 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "ConfigFiles.h"
+#include "JsonWrapper.h"
 
-#include <string>
-#include <vector>
+#include <algorithm>
+#include <json/value.h>
+
+JsonWrapper::JsonWrapper() : JsonWrapper(Json::nullValue) {}
+JsonWrapper::JsonWrapper(const Json::Value& config)
+    : m_config(new Json::Value(config)) {}
+
+JsonWrapper::~JsonWrapper() {}
+
+JsonWrapper::JsonWrapper(JsonWrapper&& other) noexcept
+    : m_config(std::move(other.m_config)) {}
+JsonWrapper& JsonWrapper::operator=(JsonWrapper&& rhs) noexcept {
+  m_config = std::move(rhs.m_config);
+  return *this;
+}
 
 void JsonWrapper::get(const char* name, int64_t dflt, int64_t& param) const {
-  param = m_config.get(name, (Json::Int64)dflt).asInt();
+  param = m_config->get(name, (Json::Int64)dflt).asInt();
 }
 
 void JsonWrapper::get(const char* name, size_t dflt, size_t& param) const {
-  param = m_config.get(name, (Json::UInt)dflt).asUInt();
+  param = m_config->get(name, (Json::UInt)dflt).asUInt();
 }
 
 void JsonWrapper::get(const char* name,
                       const std::string& dflt,
                       std::string& param) const {
-  param = m_config.get(name, dflt).asString();
+  param = m_config->get(name, dflt).asString();
 }
 
 std::string JsonWrapper::get(const char* name, const std::string& dflt) const {
-  return m_config.get(name, dflt).asString();
+  return m_config->get(name, dflt).asString();
 }
 
 void JsonWrapper::get(const char* name, bool dflt, bool& param) const {
-  auto val = m_config.get(name, dflt);
+  auto val = m_config->get(name, dflt);
 
   // Do some simple type conversions that folly used to do
   if (val.isBool()) {
@@ -66,7 +79,7 @@ bool JsonWrapper::get(const char* name, bool dflt) const {
 void JsonWrapper::get(const char* name,
                       const std::vector<std::string>& dflt,
                       std::vector<std::string>& param) const {
-  auto it = m_config[name];
+  auto it = (*m_config)[name];
   // NOLINTNEXTLINE(readability-container-size-empty)
   if (it == Json::nullValue) {
     param = dflt;
@@ -81,7 +94,7 @@ void JsonWrapper::get(const char* name,
 void JsonWrapper::get(const char* name,
                       const std::vector<std::string>& dflt,
                       std::unordered_set<std::string>& param) const {
-  auto it = m_config[name];
+  auto it = (*m_config)[name];
   param.clear();
   // NOLINTNEXTLINE(readability-container-size-empty)
   if (it == Json::nullValue) {
@@ -97,7 +110,7 @@ void JsonWrapper::get(
     const char* name,
     const std::unordered_map<std::string, std::vector<std::string>>& dflt,
     std::unordered_map<std::string, std::vector<std::string>>& param) const {
-  auto cfg = m_config[name];
+  auto cfg = (*m_config)[name];
   param.clear();
   // NOLINTNEXTLINE(readability-container-size-empty)
   if (cfg == Json::nullValue) {
@@ -132,17 +145,17 @@ void JsonWrapper::get(
 void JsonWrapper::get(const char* name,
                       const Json::Value& dflt,
                       Json::Value& param) const {
-  param = m_config.get(name, dflt);
+  param = m_config->get(name, dflt);
 }
 
 Json::Value JsonWrapper::get(const char* name, const Json::Value& dflt) const {
-  return m_config.get(name, dflt);
+  return m_config->get(name, dflt);
 }
 
 const Json::Value& JsonWrapper::operator[](const char* name) const {
-  return m_config[name];
+  return (*m_config)[name];
 }
 
 bool JsonWrapper::contains(const char* name) const {
-  return m_config.isMember(name);
+  return m_config->isMember(name);
 }

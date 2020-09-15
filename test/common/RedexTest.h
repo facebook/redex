@@ -9,7 +9,7 @@
 
 #include <boost/filesystem.hpp>
 #include <gtest/gtest.h>
-#include <json/json.h>
+#include <json/value.h>
 
 #include "ConfigFiles.h"
 #include "DexClass.h"

@@ -9,6 +9,7 @@
 
 #include <fstream>
 #include <iostream>
+#include <json/json.h>
 #include <string>
 #include <vector>
 
@@ -157,7 +158,7 @@ ConfigFiles::load_class_lists() {
 }
 
 void ConfigFiles::load_method_sorting_allowlisted_substrings() {
-  const auto json_cfg = get_json_config();
+  const auto& json_cfg = get_json_config();
   Json::Value json_result;
   json_cfg.get("method_sorting_allowlisted_substrings", Json::nullValue,
                json_result);

@@ -511,18 +511,18 @@ TEST_F(RemoveUninstantiablesTest, RunPass) {
                   (throw v5)
                 ))");
 
-  auto pass_infos = pm.get_pass_info();
-  auto rm_uninst = std::find_if(
-      pass_infos.begin(), pass_infos.end(), [](PassManager::PassInfo& pi) {
+  const auto& pass_infos = pm.get_pass_info();
+  auto rm_uninst =
+      std::find_if(pass_infos.begin(), pass_infos.end(), [](const auto& pi) {
         return pi.pass->name() == "RemoveUninstantiablesPass";
       });
   ASSERT_NE(rm_uninst, pass_infos.end());
 
-  EXPECT_EQ(1, rm_uninst->metrics["instance_ofs"]);
-  EXPECT_EQ(1, rm_uninst->metrics["invokes"]);
-  EXPECT_EQ(1, rm_uninst->metrics["field_accesses_on_uninstantiable"]);
-  EXPECT_EQ(2, rm_uninst->metrics["instance_methods_of_uninstantiable"]);
-  EXPECT_EQ(1, rm_uninst->metrics["get_uninstantiables"]);
+  EXPECT_EQ(1, rm_uninst->metrics.at("instance_ofs"));
+  EXPECT_EQ(1, rm_uninst->metrics.at("invokes"));
+  EXPECT_EQ(1, rm_uninst->metrics.at("field_accesses_on_uninstantiable"));
+  EXPECT_EQ(2, rm_uninst->metrics.at("instance_methods_of_uninstantiable"));
+  EXPECT_EQ(1, rm_uninst->metrics.at("get_uninstantiables"));
 }
 
 TEST_F(RemoveUninstantiablesTest, VoidIsUninstantiable) {

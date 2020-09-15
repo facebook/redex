@@ -501,11 +501,20 @@ std::unique_ptr<keep_rules::ProguardConfiguration> empty_pg_config() {
   return std::make_unique<keep_rules::ProguardConfiguration>();
 }
 
+PassManager::PassManager(const std::vector<Pass*>& passes)
+    : PassManager(passes, Json::Value(Json::objectValue), RedexOptions{}) {}
 PassManager::PassManager(const std::vector<Pass*>& passes,
                          const Json::Value& config,
                          const RedexOptions& options)
     : PassManager(passes, empty_pg_config(), config, options) {}
 
+PassManager::PassManager(
+    const std::vector<Pass*>& passes,
+    std::unique_ptr<keep_rules::ProguardConfiguration> pg_config)
+    : PassManager(passes,
+                  std::move(pg_config),
+                  Json::Value(Json::objectValue),
+                  RedexOptions{}) {}
 PassManager::PassManager(
     const std::vector<Pass*>& passes,
     std::unique_ptr<keep_rules::ProguardConfiguration> pg_config,

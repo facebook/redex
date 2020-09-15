@@ -18,6 +18,7 @@
 #include <vector>
 
 #include <boost/optional.hpp>
+#include <json/value.h>
 
 #include "Debug.h"
 #include "JsonWrapper.h"

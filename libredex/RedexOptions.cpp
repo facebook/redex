@@ -7,6 +7,8 @@
 
 #include "RedexOptions.h"
 
+#include <json/value.h>
+
 #include "Debug.h"
 
 void RedexOptions::serialize(Json::Value& entry_data) const {

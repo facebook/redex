@@ -7,7 +7,12 @@
 
 #pragma once
 
-#include <json/json.h>
+#include <cstdint>
+#include <string>
+
+namespace Json {
+class Value;
+} // namespace Json
 
 enum Architecture {
   UNKNOWN,

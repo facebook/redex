@@ -13,14 +13,16 @@
 #include <unordered_set>
 #include <vector>
 
-#include <json/json.h>
-
 #include "JsonWrapper.h"
 #include "ProguardMap.h"
 
 class DexMethodRef;
 class DexType;
 struct ProguardMap;
+
+namespace Json {
+class Value;
+} // namespace Json
 
 namespace api {
 class AndroidSDK;

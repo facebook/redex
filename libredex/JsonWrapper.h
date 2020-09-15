@@ -7,18 +7,25 @@
 
 #pragma once
 
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
-#include <json/json.h>
+namespace Json {
+class Value;
+} // namespace Json
 
 class JsonWrapper {
  public:
-  JsonWrapper() = default;
+  JsonWrapper();
+  explicit JsonWrapper(const Json::Value& config);
 
-  explicit JsonWrapper(const Json::Value& config) : m_config(config) {}
+  ~JsonWrapper();
+
+  JsonWrapper(JsonWrapper&&) noexcept;
+  JsonWrapper& operator=(JsonWrapper&&) noexcept;
 
   void get(const char* name, int64_t dflt, int64_t& param) const;
 
@@ -54,5 +61,5 @@ class JsonWrapper {
   bool contains(const char* name) const;
 
  private:
-  Json::Value m_config;
+  std::unique_ptr<Json::Value> m_config;
 };

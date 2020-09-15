@@ -8,7 +8,6 @@
 #pragma once
 
 #include <boost/optional.hpp>
-#include <json/json.h>
 #include <memory>
 #include <string>
 #include <typeinfo>
@@ -27,19 +26,25 @@ struct ConfigFiles;
 class DexStore;
 class Pass;
 
+namespace Json {
+class Value;
+} // namespace Json
+
 // Must match DexStore.
 using DexStoresVector = std::vector<DexStore>;
 
 class PassManager {
  public:
-  explicit PassManager(
-      const std::vector<Pass*>& passes,
-      const Json::Value& config = Json::Value(Json::objectValue),
-      const RedexOptions& options = RedexOptions{});
+  explicit PassManager(const std::vector<Pass*>& passes);
+  explicit PassManager(const std::vector<Pass*>& passes,
+                       const Json::Value& config,
+                       const RedexOptions& options = RedexOptions{});
 
   PassManager(const std::vector<Pass*>& passes,
+              std::unique_ptr<keep_rules::ProguardConfiguration> pg_config);
+  PassManager(const std::vector<Pass*>& passes,
               std::unique_ptr<keep_rules::ProguardConfiguration> pg_config,
-              const Json::Value& config = Json::Value(Json::objectValue),
+              const Json::Value& config,
               const RedexOptions& options = RedexOptions{});
 
   ~PassManager();

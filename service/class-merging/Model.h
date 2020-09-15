@@ -8,7 +8,7 @@
 #pragma once
 
 #include <boost/optional.hpp>
-#include <json/json.h>
+#include <json/value.h>
 
 #include "ApproximateShapeMerging.h"
 #include "DexClass.h"
