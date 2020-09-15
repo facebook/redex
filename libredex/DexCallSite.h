@@ -7,16 +7,19 @@
 
 #pragma once
 
-#include "DexAnnotation.h"
-#include "RedexContext.h"
-
 #include <string>
 #include <vector>
 
+class DexEncodedValue;
+class DexEncodedValueArray;
+class DexFieldRef;
 class DexIdx;
 class DexMethod;
 class DexMethodHandle;
+class DexMethodRef;
+class DexProto;
 class DexString;
+struct RedexContext;
 
 class DexCallSite {
   friend struct RedexContext;

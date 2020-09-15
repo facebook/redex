@@ -7,11 +7,21 @@
 
 #pragma once
 
-#include "DexCallSite.h"
-#include "DexInstruction.h"
-#include "DexMethodHandle.h"
-
 #include <boost/range/any_range.hpp>
+#include <limits>
+#include <string>
+#include <vector>
+
+#include "Debug.h"
+#include "IROpcode.h"
+
+class DexCallSite;
+class DexFieldRef;
+class DexMethodHandle;
+class DexMethodRef;
+class DexOpcodeData;
+class DexString;
+class DexType;
 
 /*
  * Our IR is very similar to the Dalvik instruction set, but with a few tweaks
@@ -354,29 +364,9 @@ class IRInstruction final {
 
   void gather_types(std::vector<DexType*>& ltype) const;
 
-  void gather_fields(std::vector<DexFieldRef*>& lfield) const {
-    if (has_field()) {
-      lfield.push_back(m_field);
-    }
-    if (has_callsite()) {
-      m_callsite->gather_fields(lfield);
-    }
-    if (has_methodhandle()) {
-      m_methodhandle->gather_fields(lfield);
-    }
-  }
+  void gather_fields(std::vector<DexFieldRef*>& lfield) const;
 
-  void gather_methods(std::vector<DexMethodRef*>& lmethod) const {
-    if (has_method()) {
-      lmethod.push_back(m_method);
-    }
-    if (has_callsite()) {
-      m_callsite->gather_methods(lmethod);
-    }
-    if (has_methodhandle()) {
-      m_methodhandle->gather_methods(lmethod);
-    }
-  }
+  void gather_methods(std::vector<DexMethodRef*>& lmethod) const;
 
   void gather_callsites(std::vector<DexCallSite*>& lcallsite) const {
     if (has_callsite()) {
@@ -384,15 +374,7 @@ class IRInstruction final {
     }
   }
 
-  void gather_methodhandles(
-      std::vector<DexMethodHandle*>& lmethodhandle) const {
-    if (has_methodhandle()) {
-      lmethodhandle.push_back(m_methodhandle);
-    }
-    if (has_callsite()) {
-      m_callsite->gather_methodhandles(lmethodhandle);
-    }
-  }
+  void gather_methodhandles(std::vector<DexMethodHandle*>& lmethodhandle) const;
 
   // Compute current instruction's hash.
   uint64_t hash() const;

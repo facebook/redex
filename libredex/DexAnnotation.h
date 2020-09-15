@@ -9,10 +9,9 @@
 
 #include <boost/functional/hash.hpp>
 #include <deque>
-#include <list>
 #include <map>
-#include <sstream>
 #include <unordered_set>
+#include <vector>
 
 #include "Gatherable.h"
 

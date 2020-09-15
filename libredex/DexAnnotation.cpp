@@ -6,6 +6,9 @@
  */
 
 #include "DexAnnotation.h"
+
+#include <sstream>
+
 #include "Debug.h"
 #include "DexClass.h"
 #include "DexIdx.h"
