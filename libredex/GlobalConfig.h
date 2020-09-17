@@ -128,6 +128,8 @@ class GlobalConfig : public Configurable {
 
   static GlobalConfigRegistry& default_registry();
 
+  static GlobalConfig& get();
+
  private:
   std::unordered_map<std::string, std::unique_ptr<Configurable>>
       m_global_configs;
