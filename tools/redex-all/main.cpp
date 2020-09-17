@@ -359,7 +359,7 @@ Arguments parse_args(int argc, char* argv[]) {
   if (vm.count("reflect-config")) {
     Json::Value reflected_config;
 
-    GlobalConfig gc;
+    GlobalConfig gc(GlobalConfig::default_registry());
     reflected_config["global"] = reflect_config(gc.reflect());
 
     Json::Value pass_configs = Json::arrayValue;

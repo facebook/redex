@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include <functional>
+
 #include "Configurable.h"
 #include "InlinerConfig.h"
 
@@ -76,14 +78,58 @@ struct OptDecisionsConfig : public Configurable {
   bool enable_logs;
 };
 
-class GlobalConfig : public Configurable {
+class GlobalConfig;
 
+using BindOperationFn = std::function<std::unique_ptr<Configurable>(
+    GlobalConfig*, const std::string&)>;
+
+struct GlobalConfigRegistryEntry {
+  GlobalConfigRegistryEntry(const std::string& name,
+                            BindOperationFn bind_operation);
+  std::string name;
+  BindOperationFn bind_operation;
+};
+
+using GlobalConfigRegistry = std::vector<GlobalConfigRegistryEntry>;
+
+class GlobalConfig : public Configurable {
  public:
+  explicit GlobalConfig(GlobalConfigRegistry registry)
+      : Configurable(), m_registry(std::move(registry)) {}
+
   void bind_config() override;
   std::string get_config_name() override { return "GlobalConfig"; }
   std::string get_config_doc() override {
     return "All the Redex configuration that isn't pass-specific lives here.";
   }
 
+  template <typename ConfigType>
+  ConfigType* get_config_by_name(const std::string& name) {
+    auto& type = m_global_configs.at(name);
+    return static_cast<ConfigType*>(type.get());
+  }
+
+  template <typename ConfigType>
+  static BindOperationFn get_bind_operation() {
+    return [](GlobalConfig* global_config,
+              const std::string& name) -> std::unique_ptr<Configurable> {
+      std::unique_ptr<ConfigType> config_ptr = std::make_unique<ConfigType>();
+      auto& config = *config_ptr;
+      global_config->bind(
+          name, ConfigType(), config, config_ptr->get_config_doc());
+      return std::unique_ptr<Configurable>{config_ptr.release()};
+    };
+  }
+
+  template <typename ConfigType>
+  static GlobalConfigRegistryEntry register_as(const std::string& name) {
+    return GlobalConfigRegistryEntry(name, get_bind_operation<ConfigType>());
+  }
+
+  static GlobalConfigRegistry& default_registry();
+
  private:
+  std::unordered_map<std::string, std::unique_ptr<Configurable>>
+      m_global_configs;
+  GlobalConfigRegistry m_registry;
 };
