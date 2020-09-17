@@ -884,8 +884,12 @@ class OptimizeEnums {
         }
       }
 
-      if (type && is_enum(type_class(type))) {
-        return type;
+      if (type) {
+        if (auto possible_enum_cls = type_class(type)) {
+          if (is_enum(possible_enum_cls)) {
+            return type;
+          }
+        }
       }
 
       std::size_t found = class_name.find_last_of('/');
