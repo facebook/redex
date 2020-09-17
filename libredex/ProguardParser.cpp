@@ -602,6 +602,23 @@ void parse_member_specification(std::vector<Token>::iterator* it,
     arg += member_specification.descriptor;
     member_specification.descriptor = arg;
   }
+  // if with value, look for return
+  if ((*it)->type == TokenType::returns) {
+    ++(*it);
+    const auto& rident = (*it)->data;
+    if (rident == "true") {
+      member_specification.return_value.value_type =
+          AssumeReturnValue::ValueType::ValueBool;
+      member_specification.return_value.value.b = true;
+      ++(*it);
+    }
+    if (rident == "false") {
+      member_specification.return_value.value_type =
+          AssumeReturnValue::ValueType::ValueBool;
+      member_specification.return_value.value.b = false;
+      ++(*it);
+    }
+  }
   // Make sure member specification ends with a semicolon.
   gobble_semicolon(it, ok);
   if (!ok) {

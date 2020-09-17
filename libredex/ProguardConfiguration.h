@@ -16,12 +16,25 @@
 
 namespace keep_rules {
 
+// To hold the value in -assumenosideeffects with value.
+struct AssumeReturnValue {
+  AssumeReturnValue() : value_type(ValueNone) {}
+  enum ValueType {
+    ValueBool,
+    ValueNone,
+  } value_type;
+  union Value {
+    bool b;
+  } value;
+};
+
 struct MemberSpecification {
   DexAccessFlags requiredSetAccessFlags = DexAccessFlags(0);
   DexAccessFlags requiredUnsetAccessFlags = DexAccessFlags(0);
   std::string annotationType;
   std::string name;
   std::string descriptor;
+  AssumeReturnValue return_value;
 
   friend bool operator==(const MemberSpecification& lhs,
                          const MemberSpecification& rhs);

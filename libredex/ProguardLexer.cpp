@@ -357,6 +357,8 @@ std::string Token::show() const {
     return "-mergeinterfacesaggressively";
   case TokenType::allowaccessmodification_token:
     return "-allowaccessmodification";
+  case TokenType::returns:
+    return "return";
 
   // Obfuscation Options
   case TokenType::dontobfuscate:
@@ -475,6 +477,7 @@ bool Token::is_command() const {
   case TokenType::assumenosideeffects:
   case TokenType::mergeinterfacesaggressively:
   case TokenType::allowaccessmodification_token:
+  case TokenType::returns:
     return true;
 
   // Obfuscation Options
@@ -541,6 +544,7 @@ std::vector<Token> lex(const boost::string_view& in) {
       {"varargs", TokenType::varargs},
       {"extends", TokenType::extends},
       {"implements", TokenType::implements},
+      {"return", TokenType::returns},
   };
 
   TokenMap simple_commands{

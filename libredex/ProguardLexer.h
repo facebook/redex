@@ -102,6 +102,7 @@ enum class TokenType {
   assumenosideeffects,
   mergeinterfacesaggressively,
   allowaccessmodification_token,
+  returns,
 
   // Obfuscation Options
   dontobfuscate,
