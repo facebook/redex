@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <json/value.h>
+#include <stdexcept>
 
 JsonWrapper::JsonWrapper() : JsonWrapper(Json::nullValue) {}
 JsonWrapper::JsonWrapper(const Json::Value& config)
