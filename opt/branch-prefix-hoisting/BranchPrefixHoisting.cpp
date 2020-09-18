@@ -143,6 +143,17 @@ bool BranchPrefixHoistingPass::is_insn_eligible(const IRInstruction& insn) {
 int BranchPrefixHoistingPass::process_hoisting_for_block(
     cfg::Block* block, cfg::ControlFlowGraph& cfg) {
 
+  auto all_preds_are_same = [](const std::vector<cfg::Edge*>& edge_lst) {
+    if (edge_lst.size() == 1) {
+      return true;
+    }
+    std::set<cfg::Block*> count;
+    for (auto e : edge_lst) {
+      count.insert(e->src());
+    }
+    return count.size() == 1;
+  };
+
   if (!is_block_eligible(block)) {
     return 0;
   }
@@ -158,18 +169,15 @@ int BranchPrefixHoistingPass::process_hoisting_for_block(
   std::unordered_set<reg_t> crit_regs(srcs.begin(), srcs.end());
 
   std::vector<cfg::Block*> succ_blocks = get_succ_blocks(block);
-
-  // make sure every successor has only one predecessor
+  // make sure every successor has same predecessor
   for (auto succ_block : succ_blocks) {
     const auto& preds_of_succ_block = succ_block->preds();
-    if (preds_of_succ_block.size() != 1) {
+    if (!all_preds_are_same(preds_of_succ_block)) {
       // we can only hoist the prefix if the block has only one incoming edge
       return 0;
     }
   }
-
   auto insns_to_hoist = get_insns_to_hoist(succ_blocks, crit_regs);
-
   if (!insns_to_hoist.empty()) {
     // do the mutation
     hoist_insns_for_block(
@@ -272,7 +280,12 @@ void BranchPrefixHoistingPass::hoist_insns_for_block(
   auto it = block->to_cfg_instruction_iterator(pos);
   cfg.insert_before(it, heap_insn_objs);
 
+  std::unordered_set<cfg::Block*> proessed_blocks;
   for (auto succ_block : succ_blocks) {
+    if (proessed_blocks.count(succ_block)) {
+      continue;
+    }
+    proessed_blocks.insert(succ_block);
     auto to_remove =
         ir_list::InstructionIterator(succ_block->begin(), succ_block->end());
 

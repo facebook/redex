@@ -20,7 +20,6 @@ void test(const std::string& code_str,
           const std::string& expected_str,
           size_t expected_instructions_hoisted) {
   auto code = assembler::ircode_from_string(code_str);
-  auto expected = assembler::ircode_from_string(expected_str);
   auto code_ptr = code.get();
   code_ptr->build_cfg(true);
   auto& cfg = code_ptr->cfg();
@@ -29,7 +28,8 @@ void test(const std::string& code_str,
   int actual_insns_hoisted = BranchPrefixHoistingPass::process_cfg(cfg);
 
   std::cerr << "after:" << std::endl << SHOW(cfg);
-
+  EXPECT_EQ(expected_instructions_hoisted, actual_insns_hoisted);
+  auto expected = assembler::ircode_from_string(expected_str);
   auto expected_ptr = expected.get();
   expected_ptr->build_cfg(true);
   auto& expected_cfg = expected_ptr->cfg();
@@ -38,7 +38,6 @@ void test(const std::string& code_str,
   code_ptr->clear_cfg();
   expected_ptr->clear_cfg();
 
-  EXPECT_EQ(expected_instructions_hoisted, actual_insns_hoisted);
   EXPECT_EQ(assembler::to_s_expr(code.get()),
             assembler::to_s_expr(expected.get()));
 }
@@ -343,41 +342,137 @@ TEST_F(BranchPrefixHoistingTest, branch_goes_to_same_block) {
   )";
   const auto& expected_str = R"(
     (
-      (if-eqz v0 :true)
-      (:true)
       (const v1 1)
       (const v2 2)
       (const v3 3)
       (const v4 4)
       (const v5 5)
       (const v6 7)
+      (if-eqz v0 :true)
+      (:true)
       (:end)
       (return-void)
     )
   )";
-  test(code_str, expected_str, 0);
+  test(code_str, expected_str, 6);
 }
 
 TEST_F(BranchPrefixHoistingTest, switch_two_same_cases) {
   const auto& code_str = R"(
     (
-      (const v0 0)
-      (switch v0 (:case1 :case1))
+      (load-param v0)
+      (switch v0 (:case1 :case2))
       (:case1 1)
       (const v1 1)
       (const v2 2)
+      (goto :end)
+      (:case2 2)
+      (const v1 1)
+      (const v2 2)
+      (goto :end)
+      (:end)
       (return-void)
     )
   )";
   const auto& expected_str = R"(
     (
-      (const v0 0)
-      (switch v0 (:case1 :case1))
-      (:case1 1)
+      (load-param v0)
       (const v1 1)
       (const v2 2)
+      (switch v0 (:case1 :case2))
+      (:case1 1)
+      (goto :end)
+      (:case2 2)
+      (goto :end)
+      (:end)
       (return-void)
     )
   )";
-  test(code_str, expected_str, 0);
+  test(code_str, expected_str, 2);
 }
+
+TEST_F(BranchPrefixHoistingTest, switch_with_same_cases) {
+  const auto& code_str = R"(
+    (
+      (load-param v0)
+      (switch v0 (:a :b :c :d :e :f))
+
+      (:a 0)
+      (const v1 1)
+      (add-int v2 v1 v1)
+      (add-int v2 v2 v1)
+      (goto :end)
+
+      (:b 1)
+      (const v1 1)
+      (add-int v2 v1 v1)
+      (add-int v2 v2 v1)
+      (goto :end)
+
+      (:c 2)
+      (const v1 1)
+      (add-int v2 v1 v1)
+      (add-int v2 v2 v1)
+      (goto :end)
+
+      (:d 3)
+      (const v1 1)
+      (add-int v2 v1 v1)
+      (add-int v2 v1 v1)
+      (goto :end)
+
+      (:e 4)
+      (const v1 1)
+      (add-int v2 v1 v1)
+      (add-int v2 v1 v1)
+      (goto :end)
+
+      (:f 5)
+      (const v1 1)
+      (add-int v2 v1 v1)
+      (add-int v2 v1 v1)
+      (goto :end)
+
+      (:end)
+      (return-void)
+    )
+  )";
+
+  auto expected_str = R"(
+     (
+      (load-param v0)
+      (const v1 1)
+      (add-int v2 v1 v1)
+      (switch v0 (:a :b :c :d :e :f))
+
+      (:a 0)
+      (add-int v2 v2 v1)
+      (goto :end)
+
+      (:b 1)
+      (add-int v2 v2 v1)
+      (goto :end)
+
+      (:c 2)
+      (add-int v2 v2 v1)
+      (goto :end)
+
+      (:d 3)
+      (add-int v2 v1 v1)
+      (goto :end)
+
+      (:e 4)
+      (add-int v2 v1 v1)
+      (goto :end)
+
+      (:f 5)
+      (add-int v2 v1 v1)
+      (goto :end)
+
+      (:end)
+      (return-void)
+    )
+  )";
+  test(code_str, expected_str, 2);
+}
+
