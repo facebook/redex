@@ -98,10 +98,14 @@ class ConstNullnessDomain
 };
 
 /*
- * Reference:
+ * Spec wise the max size of a Java array is
+ * std::numeric_limits<int32_t>::max() - 8. Reference:
  * http://hg.openjdk.java.net/jdk7/jdk7/jdk/rev/ec45423a4700#l5.12
+ *
+ * However, for performance reasons, we don't want to allocate a Domain this
+ * large. We cap the size of the array elements at 1000.
  */
-constexpr int64_t JAVA_ARRAY_SIZE_MAX = std::numeric_limits<int32_t>::max() - 8;
+constexpr int64_t JAVA_ARRAY_SIZE_MAX = 1000;
 
 class ArrayNullnessDomain final
     : public sparta::ReducedProductAbstractDomain<

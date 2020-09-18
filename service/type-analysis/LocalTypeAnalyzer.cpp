@@ -324,8 +324,10 @@ bool RegisterTypeAnalyzer::analyze_new_instance(const IRInstruction* insn,
 bool RegisterTypeAnalyzer::analyze_new_array(const IRInstruction* insn,
                                              DexTypeEnvironment* env) {
   auto length_opt = env->get(insn->src(0)).get_constant();
-  // If length is missing, drop array nullness.
-  if (!ArrayNullnessDomain::is_valid_array_size(length_opt)) {
+  // If it's a primitive array or the length is missing, drop array elements
+  // nullness.
+  if (!type::is_reference_array(insn->get_type()) ||
+      !ArrayNullnessDomain::is_valid_array_size(length_opt)) {
     env->set(RESULT_REGISTER, DexTypeDomain(insn->get_type()));
   } else {
     env->set(RESULT_REGISTER, DexTypeDomain(insn->get_type(), *length_opt));
