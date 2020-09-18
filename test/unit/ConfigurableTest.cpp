@@ -530,3 +530,21 @@ TEST_F(ConfigurableTest, RequiredBinds) {
     EXPECT_EQ(DexType::get_type(type1), c.m_type_param);
   }
 }
+
+struct DeductionBinds : public Base {
+  DeductionBinds() {}
+  void bind_config() override {
+    bind("int_param", 123, m_int64_param);
+    bind("type_param", nullptr, m_type_param);
+  }
+};
+
+TEST_F(ConfigurableTest, BindDeduction) {
+  {
+    Json::Value json;
+    DeductionBinds c{};
+    c.parse_config(JsonWrapper(json));
+    EXPECT_EQ(123, c.m_int64_param);
+    EXPECT_EQ(nullptr, c.m_type_param);
+  }
+}
