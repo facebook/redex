@@ -36,6 +36,8 @@ class SetValue final
 
   SetValue(std::initializer_list<Element> l) : m_set(l.begin(), l.end()) {}
 
+  SetValue(const PatriciaTreeSet<Element>& set) : m_set(set) {}
+
   const PatriciaTreeSet<Element>& elements() const override { return m_set; }
 
   size_t size() const override { return m_set.size(); }
@@ -139,6 +141,10 @@ class PatriciaTreeSetAbstractDomain final
 
   explicit PatriciaTreeSetAbstractDomain(std::initializer_list<Element> l) {
     this->set_to_value(Value(l));
+  }
+
+  explicit PatriciaTreeSetAbstractDomain(const PatriciaTreeSet<Element>& set) {
+    this->set_to_value(Value(set));
   }
 
   static PatriciaTreeSetAbstractDomain bottom() {
