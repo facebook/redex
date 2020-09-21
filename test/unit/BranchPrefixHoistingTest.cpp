@@ -475,3 +475,35 @@ TEST_F(BranchPrefixHoistingTest, switch_with_same_cases) {
   )";
   test(code_str, expected_str, 2);
 }
+
+TEST_F(BranchPrefixHoistingTest, branch_with_same_return) {
+  const auto& code_str = R"(
+    (
+      (load-param v0)
+      (if-eqz v0 :true)
+      (const v1 1)
+      (const v2 2)
+      (const v3 3)
+      (return-void)
+      (:true)
+      (const v1 1)
+      (const v2 2)
+      (const v3 3)
+      (return-void)
+    )
+  )";
+
+  const auto& expected_str = R"(
+    (
+      (load-param v0)
+      (const v1 1)
+      (const v2 2)
+      (const v3 3)
+      (return-void)
+      (if-eqz v0 :true)
+      (:true)
+    )
+  )";
+  test(code_str, expected_str, 4);
+}
+
