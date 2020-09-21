@@ -475,4 +475,3 @@ TEST_F(BranchPrefixHoistingTest, switch_with_same_cases) {
   )";
   test(code_str, expected_str, 2);
 }
-
