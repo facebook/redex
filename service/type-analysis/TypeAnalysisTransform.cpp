@@ -148,6 +148,7 @@ Transform::Stats Transform::apply(
     DexMethod* method,
     const NullAssertionSet& null_assertion_set) {
   auto code = method->get_code();
+  TRACE(TYPE_TRANSFORM, 4, "Processing %s", SHOW(method));
   Transform::Stats stats{};
   bool can_use_nullness_results = wps.can_use_nullness_results(method);
   for (const auto& block : code->cfg().blocks()) {
@@ -179,7 +180,6 @@ Transform::Stats Transform::apply(
         remove_redundant_type_checks(env, it, stats);
       }
     }
-
     if (m_config.remove_redundant_null_checks && can_use_nullness_results) {
       remove_redundant_null_checks(env, block, stats);
     }

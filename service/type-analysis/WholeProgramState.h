@@ -134,11 +134,19 @@ class WholeProgramState {
     out << wps.m_method_partition;
     return out;
   }
+  boost::optional<DexTypeDomain> get_type_for_method_with_known_type(
+      const DexMethodRef* method) const {
+    if (m_known_method_returns.find(method) != m_known_method_returns.end()) {
+      return m_known_method_returns.find(method)->second;
+    }
+    return boost::none;
+  }
 
  private:
   void analyze_clinits_and_ctors(const Scope&,
                                  const global::GlobalTypeAnalyzer&,
                                  DexTypeFieldPartition*);
+  void setup_known_method_returns();
 
   void collect(const Scope& scope, const global::GlobalTypeAnalyzer&);
 
@@ -172,6 +180,7 @@ class WholeProgramState {
 
   DexTypeFieldPartition m_field_partition;
   DexTypeMethodPartition m_method_partition;
+  std::unordered_map<const DexMethodRef*, DexTypeDomain> m_known_method_returns;
 };
 
 class WholeProgramAwareAnalyzer final
