@@ -18,7 +18,9 @@ TEST_F(BranchPrefixWhenTest, switch_test) {
       DexMethod::get_method("Lcom/facebook/redextest/Foo;.bar_packed:(I)V");
   auto code = meth->as_def()->get_code();
   code->build_cfg(true);
-  auto v = BranchPrefixHoistingPass::process_cfg(code->cfg());
+  type_inference::TypeInference type_inference(code->cfg());
+  type_inference.run(meth->as_def());
+  auto v = BranchPrefixHoistingPass::process_cfg(code->cfg(), type_inference);
   // All the cases in the switch precedes with System.out.print, including the
   // default path. Hence, all the paths has the following two instructions in
   // the prefix:

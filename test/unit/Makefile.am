@@ -133,7 +133,7 @@ blaming_escape_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
 boxed_boolean_propagation_test_SOURCES = constant-propagation/BoxedBooleanPropagationTest.cpp
 
-branch_prefix_hoisting_test_SOURCES = BranchPrefixHoistingTest.cpp
+branch_prefix_hoisting_test_SOURCES = BranchPrefixHoistingTest.cpp ScopeHelper.cpp
 
 cfg_inliner_test_SOURCES = CFGInlinerTest.cpp
 cfg_inliner_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
