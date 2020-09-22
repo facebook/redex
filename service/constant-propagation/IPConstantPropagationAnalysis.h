@@ -27,7 +27,6 @@ namespace interprocedural {
  * distinct types: Here, the environment variables denote param index, whereas
  * in a ConstantRegisterEnvironment, they denote registers.
  */
-using param_index_t = uint16_t;
 
 using ArgumentDomain =
     sparta::PatriciaTreeMapAbstractEnvironment<param_index_t, ConstantValue>;

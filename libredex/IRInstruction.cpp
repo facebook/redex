@@ -71,7 +71,7 @@ bool IRInstruction::operator==(const IRInstruction& that) const {
   }
 }
 
-reg_t IRInstruction::src(size_t i) const {
+reg_t IRInstruction::src(src_index_t i) const {
   if (m_num_inline_srcs <= MAX_NUM_INLINE_SRCS) {
     always_assert(i < m_num_inline_srcs);
     return m_inline_srcs[i];
@@ -99,7 +99,7 @@ std::vector<reg_t> IRInstruction::srcs_vec() const {
   return result;
 }
 
-IRInstruction* IRInstruction::set_src(size_t i, reg_t reg) {
+IRInstruction* IRInstruction::set_src(src_index_t i, reg_t reg) {
   if (m_num_inline_srcs <= MAX_NUM_INLINE_SRCS) {
     always_assert(i < m_num_inline_srcs);
     m_inline_srcs[i] = reg;
@@ -116,7 +116,7 @@ size_t IRInstruction::srcs_size() const {
   return m_srcs->size();
 }
 
-IRInstruction* IRInstruction::set_srcs_size(uint16_t count) {
+IRInstruction* IRInstruction::set_srcs_size(size_t count) {
   if (m_num_inline_srcs <= MAX_NUM_INLINE_SRCS) {
     if (count <= MAX_NUM_INLINE_SRCS) {
       // staying in the inline state
@@ -203,7 +203,7 @@ uint16_t IRInstruction::size() const {
 
 // The instruction format doesn't tell us the width of registers for invoke
 // so we inspect the signature of the method we're calling
-bool IRInstruction::invoke_src_is_wide(size_t i) const {
+bool IRInstruction::invoke_src_is_wide(src_index_t i) const {
   always_assert(has_method());
 
   // virtual methods have `this` as the 0th register argument, but the
@@ -221,7 +221,7 @@ bool IRInstruction::invoke_src_is_wide(size_t i) const {
   return type::is_wide_type(args[i]);
 }
 
-bool IRInstruction::src_is_wide(size_t i) const {
+bool IRInstruction::src_is_wide(src_index_t i) const {
   always_assert(i < srcs_size());
 
   if (opcode::is_an_invoke(m_opcode)) {
