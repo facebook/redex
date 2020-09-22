@@ -20,6 +20,7 @@
 #include "PassManager.h"
 #include "Show.h"
 #include "Trace.h"
+#include "Util.h"
 #include "Walkers.h"
 
 /**
@@ -101,7 +102,9 @@ boost::optional<IRInstruction> BranchPrefixHoistingPass::get_next_common_insn(
   std::unordered_set<IRInstruction, decltype(irinsn_hash)> insns_at_iters(
       3, irinsn_hash);
   // record the (const val) uses and make sure theey are the same
-  std::unordered_set<constant_uses::TypeDemand> const_zero_use_types;
+  std::unordered_set<constant_uses::TypeDemand, EnumClassHash>
+      const_zero_use_types;
+
   bool type_analysis_failed = false;
 
   for (unsigned i = 0; i < block_iters.size(); i++) {
