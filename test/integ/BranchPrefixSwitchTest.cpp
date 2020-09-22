@@ -20,7 +20,9 @@ TEST_F(BranchPrefixWhenTest, switch_test) {
   code->build_cfg(true);
   type_inference::TypeInference type_inference(code->cfg());
   type_inference.run(meth->as_def());
-  auto v = BranchPrefixHoistingPass::process_cfg(code->cfg(), type_inference);
+  constant_uses::ConstantUses constant_uses(code->cfg(), meth->as_def());
+  auto v = BranchPrefixHoistingPass::process_cfg(code->cfg(), type_inference,
+                                                 constant_uses);
   // All the cases in the switch precedes with System.out.print, including the
   // default path. Hence, all the paths has the following two instructions in
   // the prefix:

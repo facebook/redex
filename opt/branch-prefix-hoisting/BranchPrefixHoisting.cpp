@@ -77,7 +77,8 @@ void BranchPrefixHoistingPass::setup_side_effect_on_vregs(
 boost::optional<IRInstruction> BranchPrefixHoistingPass::get_next_common_insn(
     std::vector<IRList::iterator> block_iters, // create a copy
     const std::vector<cfg::Block*>& blocks,
-    int iterator_offset) {
+    int iterator_offset,
+    constant_uses::ConstantUses& constant_uses) {
   const static auto irinsn_hash = [](const IRInstruction& insn) {
     return insn.hash();
   };
@@ -99,15 +100,31 @@ boost::optional<IRInstruction> BranchPrefixHoistingPass::get_next_common_insn(
 
   std::unordered_set<IRInstruction, decltype(irinsn_hash)> insns_at_iters(
       3, irinsn_hash);
+  // record the (const val) uses and make sure theey are the same
+  std::unordered_set<constant_uses::TypeDemand> const_zero_use_types;
+  bool type_analysis_failed = false;
+
   for (unsigned i = 0; i < block_iters.size(); i++) {
     if (block_iters[i] == blocks[i]->end() ||
         block_iters[i]->type != MFLOW_OPCODE) {
       return boost::none;
     } else {
-      insns_at_iters.insert(*(block_iters[i]->insn));
+      auto insn = block_iters[i]->insn;
+      auto op = insn->opcode();
+      if (op == OPCODE_CONST && insn->has_literal()) {
+        // Makesure all the constant uses are of same type before hoisting.
+        auto type_demand = constant_uses.get_constant_type_demand(insn);
+        if (type_demand == constant_uses::TypeDemand::Error) {
+          type_analysis_failed = true;
+        } else {
+          const_zero_use_types.insert(type_demand);
+        }
+      }
+      insns_at_iters.insert(*insn);
     }
   }
-  if (insns_at_iters.size() == 1) {
+  if (insns_at_iters.size() == 1 && !type_analysis_failed &&
+      const_zero_use_types.size() <= 1) {
     return *(insns_at_iters.begin());
   } else {
     return boost::none;
@@ -132,12 +149,6 @@ std::vector<cfg::Block*> get_succ_blocks(cfg::Block* block) {
 
 bool BranchPrefixHoistingPass::is_insn_eligible(const IRInstruction& insn) {
   auto op = insn.opcode();
-  if (op == OPCODE_CONST && insn.has_literal() && insn.get_literal() == 0) {
-    // (const v 0) can either be moving number 0 or null pointer to a register
-    // we need to exclude this instruction because it causes IRTypeChecker
-    // to fail
-    return false;
-  }
   return !opcode::is_branch(op) && !opcode::is_throw(op);
 }
 
@@ -145,7 +156,8 @@ bool BranchPrefixHoistingPass::is_insn_eligible(const IRInstruction& insn) {
 int BranchPrefixHoistingPass::process_hoisting_for_block(
     cfg::Block* block,
     cfg::ControlFlowGraph& cfg,
-    type_inference::TypeInference& type_inference) {
+    type_inference::TypeInference& type_inference,
+    constant_uses::ConstantUses& constant_uses) {
 
   auto all_preds_are_same = [](const std::vector<cfg::Edge*>& edge_lst) {
     if (edge_lst.size() == 1) {
@@ -189,7 +201,8 @@ int BranchPrefixHoistingPass::process_hoisting_for_block(
       return 0;
     }
   }
-  auto insns_to_hoist = get_insns_to_hoist(succ_blocks, crit_regs);
+  auto insns_to_hoist =
+      get_insns_to_hoist(succ_blocks, crit_regs, constant_uses);
   if (!insns_to_hoist.empty()) {
     // do the mutation
     return hoist_insns_for_block(block,
@@ -212,7 +225,8 @@ void BranchPrefixHoistingPass::skip_pos_debug(IRList::iterator& it,
 
 std::vector<IRInstruction> BranchPrefixHoistingPass::get_insns_to_hoist(
     const std::vector<cfg::Block*>& succ_blocks,
-    std::unordered_map<reg_t, bool>& crit_regs) {
+    std::unordered_map<reg_t, bool>& crit_regs,
+    constant_uses::ConstantUses& constant_uses) {
   // get iterators that points to the beginning of each block
   std::vector<IRList::iterator> block_iters;
   block_iters.reserve(succ_blocks.size());
@@ -235,7 +249,7 @@ std::vector<IRInstruction> BranchPrefixHoistingPass::get_insns_to_hoist(
       }
     }
     boost::optional<IRInstruction> common_insn =
-        get_next_common_insn(block_iters, succ_blocks, 0);
+        get_next_common_insn(block_iters, succ_blocks, 0, constant_uses);
 
     if (common_insn && is_insn_eligible(*common_insn)) {
       IRInstruction only_insn = *common_insn;
@@ -246,7 +260,7 @@ std::vector<IRInstruction> BranchPrefixHoistingPass::get_insns_to_hoist(
         // 3. have no side effect on crit_regs
         // otherwise, stop here and do not proceed
         boost::optional<IRInstruction> next_common_insn =
-            get_next_common_insn(block_iters, succ_blocks, 1);
+            get_next_common_insn(block_iters, succ_blocks, 1, constant_uses);
         if (!next_common_insn) {
           // next one is not common, or at least one succ block reaches the end
           // give up on this instruction
@@ -397,13 +411,17 @@ int BranchPrefixHoistingPass::process_code(IRCode* code, DexMethod* method) {
   auto& cfg = code->cfg();
   type_inference::TypeInference type_inference(cfg);
   type_inference.run(method);
-  int ret = process_cfg(cfg, type_inference);
+  constant_uses::ConstantUses constant_uses(cfg, method);
+
+  int ret = process_cfg(cfg, type_inference, constant_uses);
   code->clear_cfg();
   return ret;
 }
 
 int BranchPrefixHoistingPass::process_cfg(
-    cfg::ControlFlowGraph& cfg, type_inference::TypeInference& type_inference) {
+    cfg::ControlFlowGraph& cfg,
+    type_inference::TypeInference& type_inference,
+    constant_uses::ConstantUses& constant_uses) {
   int ret_insns_hoisted = 0;
   bool performed_transformation = false;
   do {
@@ -414,7 +432,7 @@ int BranchPrefixHoistingPass::process_cfg(
     for (auto block : blocks) {
       // when we are processing hoist for one block, other blocks may be changed
       int n_insn_hoisted =
-          process_hoisting_for_block(block, cfg, type_inference);
+          process_hoisting_for_block(block, cfg, type_inference, constant_uses);
       if (n_insn_hoisted) {
         performed_transformation = true;
         ret_insns_hoisted += n_insn_hoisted;

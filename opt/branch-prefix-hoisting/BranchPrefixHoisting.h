@@ -10,6 +10,7 @@
 #include <unordered_set>
 #include <vector>
 
+#include "ConstantUses.h"
 #include "IRList.h"
 #include "Pass.h"
 #include "TypeInference.h"
@@ -29,16 +30,21 @@ class BranchPrefixHoistingPass : public Pass {
 
   static int process_code(IRCode*, DexMethod*);
   static int process_cfg(cfg::ControlFlowGraph&,
-                         type_inference::TypeInference&);
+                         type_inference::TypeInference&,
+                         constant_uses::ConstantUses&);
   static int process_hoisting_for_block(cfg::Block*,
                                         cfg::ControlFlowGraph&,
-                                        type_inference::TypeInference&);
+                                        type_inference::TypeInference&,
+                                        constant_uses::ConstantUses&);
 
   static void setup_side_effect_on_vregs(const IRInstruction&,
                                          std::unordered_map<reg_t, bool>&);
 
   static boost::optional<IRInstruction> get_next_common_insn(
-      std::vector<IRList::iterator>, const std::vector<cfg::Block*>&, int);
+      std::vector<IRList::iterator>,
+      const std::vector<cfg::Block*>&,
+      int,
+      constant_uses::ConstantUses&);
 
  private:
   static bool is_block_eligible(cfg::Block*);
@@ -55,7 +61,8 @@ class BranchPrefixHoistingPass : public Pass {
 
   static std::vector<IRInstruction> get_insns_to_hoist(
       const std::vector<cfg::Block*>& succ_blocks,
-      std::unordered_map<reg_t, bool>& crit_regs);
+      std::unordered_map<reg_t, bool>& crit_regs,
+      constant_uses::ConstantUses& constant_uses);
   static bool create_move_and_fix_clobbered(
       const IRList::iterator& pos,
       std::vector<IRInstruction*>& heap_insn_objs,

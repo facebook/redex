@@ -37,8 +37,9 @@ void test(const std::string& code_str,
 
   type_inference::TypeInference type_inference(cfg);
   type_inference.run(method);
+  constant_uses::ConstantUses constant_uses(cfg, method);
   int actual_insns_hoisted =
-      BranchPrefixHoistingPass::process_cfg(cfg, type_inference);
+      BranchPrefixHoistingPass::process_cfg(cfg, type_inference, constant_uses);
 
   std::cerr << "after:" << std::endl << SHOW(code->cfg());
   EXPECT_EQ(expected_instructions_hoisted, actual_insns_hoisted);
@@ -572,4 +573,59 @@ TEST_F(BranchPrefixHoistingTest, branch_with_clber_wide) {
     )
   )";
   test(code_str, expected_str, 2);
+}
+
+TEST_F(BranchPrefixHoistingTest, branch_with_const_zero) {
+
+  const auto& code_str = R"(
+    (
+      (load-param v0)
+      (if-eqz v0 :true)
+      (const v1 0)
+      (add-int v2 v1 v1)
+      (add-int v2 v1 v1)
+      (goto :end)
+      (:true)
+      (const v1 0)
+      (add-int v2 v1 v1)
+      (add-int v2 v2 v1)
+      (:end)
+      (return-void)
+    )
+  )";
+  const auto& expected_str = R"(
+    (
+      (load-param v0)
+      (const v1 0)
+      (add-int v2 v1 v1)
+      (if-eqz v0 :true)
+      (add-int v2 v1 v1)
+      (goto :end)
+      (:true)
+      (add-int v2 v2 v1)
+      (:end)
+      (return-void)
+    )
+  )";
+  test(code_str, expected_str, 2);
+}
+
+TEST_F(BranchPrefixHoistingTest, branch_with_const_zero_2) {
+
+  const auto& code_str = R"(
+    (
+      (load-param v0)
+      (if-eqz v0 :true)
+      (const v1 0)
+      (add-int v2 v1 v1)
+      (goto :end)
+      (:true)
+      (const v1 0)
+      (invoke-static (v1) "Ljava/lang/System;.arraycopy:(Ljava/lang/Object;)V")
+      (add-int v2 v2 v1)
+      (:end)
+      (return-void)
+    )
+  )";
+  test(code_str, code_str, 0);
 }
