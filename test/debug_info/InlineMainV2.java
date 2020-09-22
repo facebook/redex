@@ -19,6 +19,7 @@ public class InlineMainV2 extends InstrumentationTestCase {
 
   LineMapperV2 lm;
 
+  @Before
   public void setUp() throws Exception {
     super.setUp();
     lm = new LineMapperV2(
@@ -37,7 +38,7 @@ public class InlineMainV2 extends InstrumentationTestCase {
       ArrayList<StackTraceElement> trace = lm.mapStackTrace(e.getStackTrace());
       assertEquals(TraceUtil.traceToString(trace, 2), Arrays.asList(
         "com.facebook.redexlinemap.InlineSeparateFileV2.wrapsThrow(InlineSeparateFileV2.java:12)",
-        "com.facebook.redexlinemap.InlineMainV2.testBasic(InlineMainV2.java:35)"
+        "com.facebook.redexlinemap.InlineMainV2.testBasic(InlineMainV2.java:36)"
       ));
     }
   }
@@ -54,7 +55,7 @@ public class InlineMainV2 extends InstrumentationTestCase {
       assertEquals(TraceUtil.traceToString(trace, 3), Arrays.asList(
         "com.facebook.redexlinemap.InlineSeparateFileV2.wrapsThrow(InlineSeparateFileV2.java:12)",
         "com.facebook.redexlinemap.InlineSeparateFileV2.inlineOnce(InlineSeparateFileV2.java:16)",
-        "com.facebook.redexlinemap.InlineMainV2.testInlineOnce(InlineMainV2.java:51)"
+        "com.facebook.redexlinemap.InlineMainV2.testInlineOnce(InlineMainV2.java:52)"
       ));
     }
   }
@@ -72,7 +73,7 @@ public class InlineMainV2 extends InstrumentationTestCase {
         "com.facebook.redexlinemap.InlineSeparateFileV2.wrapsThrow(InlineSeparateFileV2.java:12)",
         "com.facebook.redexlinemap.InlineSeparateFileV2.inlineOnce1(InlineSeparateFileV2.java:20)",
         "com.facebook.redexlinemap.InlineSeparateFileV2.inlineTwice(InlineSeparateFileV2.java:24)",
-        "com.facebook.redexlinemap.InlineMainV2.testInlineTwice(InlineMainV2.java:68)"
+        "com.facebook.redexlinemap.InlineMainV2.testInlineTwice(InlineMainV2.java:69)"
       ));
     }
   }
@@ -98,8 +99,8 @@ public class InlineMainV2 extends InstrumentationTestCase {
     } catch (Exception e) {
       ArrayList<StackTraceElement> trace = lm.mapStackTrace(e.getStackTrace());
       assertEquals(TraceUtil.traceToString(trace, 2), Arrays.asList(
-       "com.facebook.redexlinemap.InlineMainV2.ignoreAndThrow(InlineMainV2.java:86)",
-       "com.facebook.redexlinemap.InlineMainV2.testPositionReset(InlineMainV2.java:97)"
+       "com.facebook.redexlinemap.InlineMainV2.ignoreAndThrow(InlineMainV2.java:87)",
+       "com.facebook.redexlinemap.InlineMainV2.testPositionReset(InlineMainV2.java:98)"
       ));
     }
   }
@@ -122,8 +123,8 @@ public class InlineMainV2 extends InstrumentationTestCase {
           TraceUtil.traceToString(trace, 3),
           Arrays.asList(
             "com.facebook.redexlinemap.InlineSeparateFileV2.wrapsThrow(InlineSeparateFileV2.java:12)",
-            "com.facebook.redexlinemap.InlineMainV2.elseThrows(InlineMainV2.java:111)",
-            "com.facebook.redexlinemap.InlineMainV2.testElseThrows(InlineMainV2.java:118)"));
+            "com.facebook.redexlinemap.InlineMainV2.elseThrows(InlineMainV2.java:112)",
+            "com.facebook.redexlinemap.InlineMainV2.testElseThrows(InlineMainV2.java:119)"));
     }
   }
 }
