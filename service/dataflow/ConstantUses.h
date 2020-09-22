@@ -56,3 +56,15 @@ class ConstantUses {
 };
 
 } // namespace constant_uses
+
+namespace std {
+
+template <>
+struct hash<constant_uses::TypeDemand> {
+  std::size_t operator()(constant_uses::TypeDemand const& demand) const
+      noexcept {
+    return static_cast<size_t>(demand);
+  }
+};
+
+} // namespace std
