@@ -161,6 +161,9 @@ struct References {
   std::vector<DexType*> types;
   std::vector<DexFieldRef*> fields;
   std::vector<DexMethodRef*> methods;
+  // Conditional method references. They are already resolved DexMethods
+  // conditionally reachable at virtual call sites.
+  std::vector<const DexMethod*> cond_methods;
 };
 
 // Each thread will have its own instance of Stats, so align it in order to
@@ -276,6 +279,10 @@ class TransitiveClosureMarker {
 
   virtual void visit_cls(const DexClass* cls);
 
+  virtual void visit_method_ref(const DexMethodRef* method);
+
+  void visit_field_ref(const DexFieldRef* field);
+
   virtual References gather(const DexAnnotation* anno) const;
 
   virtual References gather(const DexMethod* method) const;
@@ -285,7 +292,9 @@ class TransitiveClosureMarker {
   template <class Parent>
   void push(const Parent* parent, const DexType* type);
 
- private:
+  void push(const DexMethodRef* parent, const DexType* type);
+
+ protected:
   template <class Parent, class InputIt>
   void push(const Parent* parent, InputIt begin, InputIt end);
 
@@ -297,6 +306,8 @@ class TransitiveClosureMarker {
 
   template <class Parent>
   void push(const Parent* parent, const DexMethodRef* method);
+
+  void push(const DexMethodRef* parent, const DexMethodRef* method);
 
   void push_cond(const DexMethod* method);
 
@@ -311,12 +322,15 @@ class TransitiveClosureMarker {
   void push_typelike_strings(const Parent* parent,
                              const std::vector<DexString*>& strings);
 
-  void visit(const DexFieldRef* field);
-
-  void visit(const DexMethodRef* method);
-
   template <class Parent, class Object>
   void record_reachability(Parent* parent, Object* object);
+
+  /*
+   * Resolve the method reference more conservatively without the context of the
+   * call, such as call instruction, target type and the caller method.
+   */
+  static DexMethod* resolve_without_context(const DexMethodRef* method,
+                                            const DexClass* cls);
 
   const IgnoreSets& m_ignore_sets;
   const method_override_graph::Graph& m_method_override_graph;

@@ -293,6 +293,7 @@ libopt_la_SOURCES = \
 	opt/remove_redundant_check_casts/RemoveRedundantCheckCasts.cpp \
 	opt/remove-uninstantiables/RemoveUninstantiablesPass.cpp \
 	opt/remove-unreachable/RemoveUnreachable.cpp \
+	opt/remove-unreachable/TypeAnalysisAwareRemoveUnreachable.cpp \
 	opt/remove-nullcheck-string-arg/RemoveNullcheckStringArg.cpp \
 	opt/remove-unused-fields/RemoveUnusedFields.cpp \
 	opt/remove_empty_classes/RemoveEmptyClasses.cpp \
