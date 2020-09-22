@@ -12,14 +12,12 @@
 
 #include "ControlFlow.h"
 #include "IRCode.h"
-#include "ReachingDefinitions.h"
 #include "ScopedCFG.h"
 #include "Show.h"
 
 namespace {
 
 using namespace live_range;
-using namespace sparta;
 
 /*
  * Type aliases for disjoint_sets
@@ -59,12 +57,10 @@ class SymRegMapper {
   std::unordered_map<Def, reg_t> m_def_to_reg;
 };
 
-using UDChains = std::unordered_map<Use, PatriciaTreeSet<Def>>;
-
 /*
  * Put all defs with a use in common into the same set.
  */
-void unify_defs(const UDChains& chains, DefSets* def_sets) {
+void unify_defs(const UseDefChains& chains, DefSets* def_sets) {
   for (const auto& chain : chains) {
     auto& defs = chain.second;
     auto it = defs.begin();
@@ -76,41 +72,62 @@ void unify_defs(const UDChains& chains, DefSets* def_sets) {
   }
 }
 
-UDChains calculate_ud_chains(const cfg::ControlFlowGraph& cfg) {
-  reaching_defs::FixpointIterator fixpoint_iter{cfg};
-  fixpoint_iter.run(reaching_defs::Environment());
-  UDChains chains;
-  for (cfg::Block* block : cfg.blocks()) {
-    reaching_defs::Environment defs_in =
-        fixpoint_iter.get_entry_state_at(block);
-    for (const auto& mie : InstructionIterable(block)) {
-      auto insn = mie.insn;
-      for (size_t i = 0; i < insn->srcs_size(); ++i) {
-        auto src = insn->src(i);
-        Use use{insn, src};
-        auto defs = defs_in.get(src);
-        always_assert_log(!defs.is_top() && defs.size() > 0,
-                          "Found use without def when processing [0x%lx]%s",
-                          &mie, SHOW(insn));
-        chains[use] = defs.elements();
-      }
-      fixpoint_iter.analyze_instruction(insn, &defs_in);
-    }
-  }
-  return chains;
-}
-
 } // namespace
 
 namespace live_range {
 
 bool Use::operator==(const Use& that) const {
-  return insn == that.insn && reg == that.reg;
+  return insn == that.insn && src_index == that.src_index;
+}
+
+Chains::Chains(const cfg::ControlFlowGraph& cfg) : m_cfg(cfg), m_fp_iter(cfg) {
+  m_fp_iter.run(reaching_defs::Environment());
+}
+
+template <typename Fn>
+void Chains::replay_analysis_with_callback(Fn f) const {
+  for (cfg::Block* block : m_cfg.blocks()) {
+    auto defs_in = m_fp_iter.get_entry_state_at(block);
+    for (const auto& mie : InstructionIterable(block)) {
+      auto insn = mie.insn;
+      for (src_index_t i = 0; i < insn->srcs_size(); ++i) {
+        Use use{insn, i};
+        auto src = insn->src(i);
+        auto defs = defs_in.get(src);
+        always_assert_log(!defs.is_top() && defs.size() > 0,
+                          "Found use without def when processing [0x%lx]%s",
+                          &mie, SHOW(insn));
+        f(use, defs);
+      }
+      m_fp_iter.analyze_instruction(insn, &defs_in);
+    }
+  }
+}
+
+UseDefChains Chains::get_use_def_chains() const {
+  UseDefChains chains;
+  replay_analysis_with_callback(
+      [&chains](const Use& use, const reaching_defs::Domain& defs) {
+        chains[use] = defs.elements();
+      });
+  return chains;
+}
+
+DefUseChains Chains::get_def_use_chains() const {
+  DefUseChains chains;
+  replay_analysis_with_callback(
+      [&chains](const Use& use, const reaching_defs::Domain& defs) {
+        for (auto def : defs.elements()) {
+          chains[def].emplace(use);
+        }
+      });
+  return chains;
 }
 
 void renumber_registers(IRCode* code, bool width_aware) {
   cfg::ScopedCFG cfg(code);
-  auto chains = calculate_ud_chains(*cfg);
+
+  auto ud_chains = Chains(*cfg).get_use_def_chains();
 
   Rank rank;
   Parent parent;
@@ -120,7 +137,7 @@ void renumber_registers(IRCode* code, bool width_aware) {
       def_sets.make_set(mie.insn);
     }
   }
-  unify_defs(chains, &def_sets);
+  unify_defs(ud_chains, &def_sets);
   SymRegMapper sym_reg_mapper(width_aware);
   for (auto& mie : cfg::InstructionIterable(*cfg)) {
     auto insn = mie.insn;
@@ -131,8 +148,8 @@ void renumber_registers(IRCode* code, bool width_aware) {
   }
   for (auto& mie : cfg::InstructionIterable(*cfg)) {
     auto insn = mie.insn;
-    for (size_t i = 0; i < insn->srcs_size(); ++i) {
-      auto& defs = chains.at(Use{insn, insn->src(i)});
+    for (src_index_t i = 0; i < insn->srcs_size(); ++i) {
+      auto& defs = ud_chains.at(Use{insn, i});
       insn->set_src(i, sym_reg_mapper.at(def_sets.find_set(*defs.begin())));
     }
   }

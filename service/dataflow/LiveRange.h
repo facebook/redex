@@ -10,7 +10,10 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#include "ControlFlow.h"
 #include "IRInstruction.h"
+#include "PatriciaTreeSet.h"
+#include "ReachingDefinitions.h"
 
 class IRCode;
 
@@ -29,7 +32,7 @@ using Def = IRInstruction*;
 
 struct Use {
   IRInstruction* insn;
-  reg_t reg;
+  src_index_t src_index;
   bool operator==(const Use&) const;
 };
 
@@ -41,7 +44,7 @@ template <>
 struct hash<live_range::Use> {
   size_t operator()(const live_range::Use& use) const {
     size_t seed = boost::hash<IRInstruction*>()(use.insn);
-    boost::hash_combine(seed, use.reg);
+    boost::hash_combine(seed, use.src_index);
     return seed;
   }
 };
@@ -49,6 +52,22 @@ struct hash<live_range::Use> {
 } // namespace std
 
 namespace live_range {
+
+using UseDefChains = std::unordered_map<Use, sparta::PatriciaTreeSet<Def>>;
+using DefUseChains = std::unordered_map<Def, std::unordered_set<Use>>;
+
+class Chains {
+ public:
+  explicit Chains(const cfg::ControlFlowGraph& cfg);
+  UseDefChains get_use_def_chains() const;
+  DefUseChains get_def_use_chains() const;
+
+ private:
+  const cfg::ControlFlowGraph& m_cfg;
+  reaching_defs::FixpointIterator m_fp_iter;
+  template <typename Fn>
+  void replay_analysis_with_callback(Fn f) const;
+};
 
 /*
  * width_aware means that the renumbering process will allocate 2 slots per
