@@ -130,6 +130,8 @@ void MethodItemEntry::gather_methods(
   case MFLOW_POSITION:
   case MFLOW_FALLTHROUGH:
   case MFLOW_TARGET:
+  // DexDebugInstruction does not have method reference.
+  case MFLOW_DEBUG:
     break;
   case MFLOW_OPCODE:
     insn->gather_methods(lmethod);
@@ -137,9 +139,7 @@ void MethodItemEntry::gather_methods(
   case MFLOW_DEX_OPCODE:
     dex_insn->gather_methods(lmethod);
     break;
-  case MFLOW_DEBUG:
-    dbgop->gather_methods(lmethod);
-    break;
+ 
   }
 }
 
