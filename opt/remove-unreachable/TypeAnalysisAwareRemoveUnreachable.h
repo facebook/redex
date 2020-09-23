@@ -9,32 +9,21 @@
 
 #include "GlobalTypeAnalysisPass.h"
 #include "Pass.h"
-#include "Reachability.h"
+#include "RemoveUnreachable.h"
 
-class TypeAnalysisAwareRemoveUnreachablePass : public Pass {
+class TypeAnalysisAwareRemoveUnreachablePass
+    : public RemoveUnreachablePassBase {
  public:
   TypeAnalysisAwareRemoveUnreachablePass()
-      : Pass("TypeAnalysisAwareRemoveUnreachablePass") {}
-
-  void bind_config() override {
-    bind("ignore_string_literals", {}, m_ignore_sets.string_literals);
-    bind("ignore_string_literal_annos", {}, m_ignore_sets.string_literal_annos);
-    bind("ignore_system_annos", {}, m_ignore_sets.system_annos);
-    bind("keep_class_in_string", true, m_ignore_sets.keep_class_in_string);
-    after_configuration([this] {
-      // To keep the backward compatability of this code, ensure that the
-      // "MemberClasses" annotation is always in system_annos.
-      m_ignore_sets.system_annos.emplace(
-          DexType::get_type("Ldalvik/annotation/MemberClasses;"));
-    });
-  }
+      : RemoveUnreachablePassBase("TypeAnalysisAwareRemoveUnreachablePass") {}
 
   void set_analysis_usage(AnalysisUsage& au) const override {
     au.add_required<GlobalTypeAnalysisPass>();
   }
 
-  void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
-
- private:
-  reachability::IgnoreSets m_ignore_sets;
+  std::unique_ptr<reachability::ReachableObjects> compute_reachable_objects(
+      const DexStoresVector& stores,
+      PassManager& pm,
+      int* num_ignore_check_strings,
+      bool emit_graph_this_run) override;
 };

@@ -198,6 +198,7 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects_with_type_anaysis(
     const DexStoresVector& stores,
     const IgnoreSets& ignore_sets,
     int* num_ignore_check_strings,
+    bool record_reachability,
     std::shared_ptr<type_analyzer::global::GlobalTypeAnalyzer> gta) {
   Timer t("Marking");
   auto scope = build_class_scope(stores);
@@ -210,7 +211,6 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects_with_type_anaysis(
   auto reachable_objects = std::make_unique<ReachableObjects>();
   ConditionallyMarked cond_marked;
   auto method_override_graph = mog::build_graph(scope);
-  bool record_reachability = false;
 
   ConcurrentSet<ReachableObject, ReachableObjectHash> root_set;
   RootSetMarker root_set_marker(*method_override_graph,
@@ -249,51 +249,21 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects_with_type_anaysis(
 
 } // namespace
 
-void TypeAnalysisAwareRemoveUnreachablePass::run_pass(DexStoresVector& stores,
-                                                      ConfigFiles&,
-                                                      PassManager& pm) {
-  // Store names of removed classes and methods
-  ConcurrentSet<std::string> removed_symbols;
-
-  if (pm.no_proguard_rules()) {
-    TRACE(RMU,
-          1,
-          "TypeAnalysisAwareRemoveUnreachablePass not run because no "
-          "ProGuard configuration was provided.");
-    return;
-  }
-
+std::unique_ptr<reachability::ReachableObjects>
+TypeAnalysisAwareRemoveUnreachablePass::compute_reachable_objects(
+    const DexStoresVector& stores,
+    PassManager& pm,
+    int* num_ignore_check_strings,
+    bool emit_graph_this_run) {
   // Fetch analysis result
   auto analysis = pm.template get_preserved_analysis<GlobalTypeAnalysisPass>();
   always_assert(analysis);
   auto gta = analysis->get_result();
   always_assert(gta);
 
-  bool output_unreachable_symbols = pm.get_current_pass_info()->repeat == 0;
-  int num_ignore_check_strings = 0;
-  auto reachables = compute_reachable_objects_with_type_anaysis(
-      stores, m_ignore_sets, &num_ignore_check_strings, gta);
-
-  reachability::ObjectCounts before = reachability::count_objects(stores);
-  TRACE(RMU, 1, "before: %lu classes, %lu fields, %lu methods",
-        before.num_classes, before.num_fields, before.num_methods);
-  pm.set_metric("before.num_classes", before.num_classes);
-  pm.set_metric("before.num_fields", before.num_fields);
-  pm.set_metric("before.num_methods", before.num_methods);
-  pm.set_metric("marked_classes", reachables->num_marked_classes());
-  pm.set_metric("marked_fields", reachables->num_marked_fields());
-  pm.set_metric("marked_methods", reachables->num_marked_methods());
-
-  reachability::sweep(stores, *reachables,
-                      output_unreachable_symbols ? &removed_symbols : nullptr);
-
-  reachability::ObjectCounts after = reachability::count_objects(stores);
-  TRACE(RMU, 1, "after: %lu classes, %lu fields, %lu methods",
-        after.num_classes, after.num_fields, after.num_methods);
-  pm.incr_metric("num_ignore_check_strings", num_ignore_check_strings);
-  pm.incr_metric("classes_removed", before.num_classes - after.num_classes);
-  pm.incr_metric("fields_removed", before.num_fields - after.num_fields);
-  pm.incr_metric("methods_removed", before.num_methods - after.num_methods);
+  return compute_reachable_objects_with_type_anaysis(stores, m_ignore_sets,
+                                                     num_ignore_check_strings,
+                                                     emit_graph_this_run, gta);
 }
 
 static TypeAnalysisAwareRemoveUnreachablePass s_pass;

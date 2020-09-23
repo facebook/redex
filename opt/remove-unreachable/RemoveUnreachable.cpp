@@ -65,9 +65,9 @@ void root_metrics(DexStoresVector& stores, PassManager& pm) {
 
 namespace mog = method_override_graph;
 
-void RemoveUnreachablePass::run_pass(DexStoresVector& stores,
-                                     ConfigFiles& conf,
-                                     PassManager& pm) {
+void RemoveUnreachablePassBase::run_pass(DexStoresVector& stores,
+                                         ConfigFiles& conf,
+                                         PassManager& pm) {
   // Store names of removed classes and methods
   ConcurrentSet<std::string> removed_symbols;
 
@@ -87,8 +87,8 @@ void RemoveUnreachablePass::run_pass(DexStoresVector& stores,
           *m_emit_graph_on_run;
   bool output_unreachable_symbols = pm.get_current_pass_info()->repeat == 0;
   int num_ignore_check_strings = 0;
-  auto reachables = reachability::compute_reachable_objects(
-      stores, m_ignore_sets, &num_ignore_check_strings, emit_graph_this_run);
+  auto reachables = this->compute_reachable_objects(
+      stores, pm, &num_ignore_check_strings, emit_graph_this_run);
 
   reachability::ObjectCounts before = reachability::count_objects(stores);
   TRACE(RMU, 1, "before: %lu classes, %lu fields, %lu methods",
@@ -130,7 +130,7 @@ void RemoveUnreachablePass::run_pass(DexStoresVector& stores,
   }
 }
 
-void RemoveUnreachablePass::write_out_removed_symbols(
+void RemoveUnreachablePassBase::write_out_removed_symbols(
     const std::string& filepath,
     const ConcurrentSet<std::string>& removed_symbols) {
   std::fstream out(filepath, std::ios_base::app);
@@ -153,6 +153,15 @@ void RemoveUnreachablePass::write_out_removed_symbols(
   for (auto s_ptr : sorted) {
     out << *s_ptr << std::endl;
   }
+}
+
+std::unique_ptr<reachability::ReachableObjects>
+RemoveUnreachablePass::compute_reachable_objects(const DexStoresVector& stores,
+                                                 PassManager& /* pm */,
+                                                 int* num_ignore_check_strings,
+                                                 bool emit_graph_this_run) {
+  return reachability::compute_reachable_objects(
+      stores, m_ignore_sets, num_ignore_check_strings, emit_graph_this_run);
 }
 
 static RemoveUnreachablePass s_pass;

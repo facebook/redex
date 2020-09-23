@@ -10,9 +10,9 @@
 #include "Pass.h"
 #include "Reachability.h"
 
-class RemoveUnreachablePass : public Pass {
+class RemoveUnreachablePassBase : public Pass {
  public:
-  RemoveUnreachablePass() : Pass("RemoveUnreachablePass") {}
+  explicit RemoveUnreachablePassBase(const std::string& name) : Pass(name) {}
 
   void bind_config() override {
     bind("ignore_string_literals", {}, m_ignore_sets.string_literals);
@@ -30,11 +30,29 @@ class RemoveUnreachablePass : public Pass {
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
+  virtual std::unique_ptr<reachability::ReachableObjects>
+  compute_reachable_objects(const DexStoresVector& stores,
+                            PassManager& pm,
+                            int* num_ignore_check_strings,
+                            bool emit_graph_this_run) = 0;
+
   void write_out_removed_symbols(
       const std::string& filepath,
       const ConcurrentSet<std::string>& removed_symbols);
 
- private:
+ protected:
   reachability::IgnoreSets m_ignore_sets;
   boost::optional<uint32_t> m_emit_graph_on_run;
+};
+
+class RemoveUnreachablePass : public RemoveUnreachablePassBase {
+ public:
+  RemoveUnreachablePass()
+      : RemoveUnreachablePassBase("RemoveUnreachablePass") {}
+
+  std::unique_ptr<reachability::ReachableObjects> compute_reachable_objects(
+      const DexStoresVector& stores,
+      PassManager& pm,
+      int* num_ignore_check_strings,
+      bool emit_graph_this_run) override;
 };
