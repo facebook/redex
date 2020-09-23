@@ -97,6 +97,7 @@
 #include "RefChecker.h"
 #include "Resolver.h"
 #include "Show.h"
+#include "StlUtil.h"
 #include "Trace.h"
 #include "Walkers.h"
 
@@ -738,13 +739,8 @@ static std::unordered_set<cfg::Block*> get_eventual_targets_after_outlining(
   auto targets = get_targets((*succs_it)->target());
   for (succs_it++; succs_it != succs.end() && !targets.empty(); succs_it++) {
     auto other_targets = get_targets((*succs_it)->target());
-    for (auto targets_it = targets.begin(); targets_it != targets.end();) {
-      if (other_targets.count(*targets_it)) {
-        targets_it++;
-      } else {
-        targets_it = targets.erase(targets_it);
-      }
-    }
+    std20::erase_if(targets,
+                    [&](auto it) { return !other_targets.count(*it); });
   }
   return targets;
 }
@@ -2350,18 +2346,16 @@ static NewlyOutlinedMethods outline(
         auto& other_c = candidates_with_infos->at(other_id);
         for (auto& cml : cmls) {
           auto& other_cmls = other_c.info.methods.at(method);
-          for (auto it = other_cmls.begin(); it != other_cmls.end();) {
-            auto& other_cml = *it;
-            if (ranges_overlap(cml.ranges, other_cml.ranges)) {
-              it = other_cmls.erase(it);
+          std20::erase_if(other_cmls, [&](auto it) {
+            if (ranges_overlap(cml.ranges, it->ranges)) {
               other_c.info.count--;
               if (other_id != id) {
                 other_candidate_ids_with_changes.insert(other_id);
               }
-            } else {
-              ++it;
+              return true;
             }
-          }
+            return false;
+          });
         }
       }
     }

@@ -9,6 +9,7 @@
 
 #include "DexTypeEnvironment.h"
 #include "Show.h"
+#include "StlUtil.h"
 
 namespace outliner_impl {
 
@@ -129,18 +130,14 @@ const DexType* OutlinerTypeAnalysis::narrow_type_demands(
     }
 
     // remove less specific object types
-    for (auto it = type_demands.begin(); it != type_demands.end();) {
-      if (type::is_object(*it) &&
-          std::find_if(type_demands.begin(), type_demands.end(),
-                       [&it](const DexType* t) {
-                         return t != *it && type::is_object(t) &&
-                                type::check_cast(t, *it);
-                       }) != type_demands.end()) {
-        it = type_demands.erase(it);
-      } else {
-        it++;
-      }
-    }
+    std20::erase_if(type_demands, [&type_demands](auto it) {
+      return type::is_object(*it) &&
+             std::find_if(type_demands.begin(), type_demands.end(),
+                          [&it](const DexType* t) {
+                            return t != *it && type::is_object(t) &&
+                                   type::check_cast(t, *it);
+                          }) != type_demands.end();
+    });
 
     // TODO: I saw that most often, when multiple object type demands
     // remain, they are often even contradictory, and that's because in fact
@@ -1057,16 +1054,12 @@ const DexType* OutlinerTypeAnalysis::get_type_of_defs(
   }
 
   // remove more specific object types
-  for (auto it = types.begin(); it != types.end();) {
-    if (type::is_object(*it) &&
-        std::find_if(types.begin(), types.end(), [&it](const DexType* t) {
-          return t != *it && type::is_object(t) && type::check_cast(*it, t);
-        }) != types.end()) {
-      it = types.erase(it);
-    } else {
-      it++;
-    }
-  }
+  std20::erase_if(types, [&types](auto it) {
+    return type::is_object(*it) &&
+           std::find_if(types.begin(), types.end(), [&it](const DexType* t) {
+             return t != *it && type::is_object(t) && type::check_cast(*it, t);
+           }) != types.end();
+  });
 
   if (types.size() > 1) {
     // TODO: Consider folding the above attempts to reduce the types set

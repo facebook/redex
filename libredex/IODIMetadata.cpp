@@ -11,6 +11,7 @@
 
 #include "DexUtil.h"
 #include "Show.h"
+#include "StlUtil.h"
 #include "Trace.h"
 
 namespace {
@@ -62,15 +63,14 @@ void IODIMetadata::mark_methods(DexStoresVector& scope) {
       }
     }
   }
-  for (auto it = m_iodi_methods.begin(); it != m_iodi_methods.end();) {
+  std20::erase_if(m_iodi_methods, [](auto it) {
     if (it->second == nullptr) {
       TRACE(IODI, 3, "[IODI] Method cannot use IODI due to name collisions: %s",
             it->first.c_str());
-      it = m_iodi_methods.erase(it);
-    } else {
-      it++;
+      return true;
     }
-  }
+    return false;
+  });
 }
 
 void IODIMetadata::mark_method_huge(const DexMethod* method) {

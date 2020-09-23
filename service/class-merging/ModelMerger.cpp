@@ -14,6 +14,7 @@
 #include "PassManager.h"
 #include "Resolver.h"
 #include "Show.h"
+#include "StlUtil.h"
 #include "TypeReference.h"
 #include "TypeStringRewriter.h"
 #include "TypeTagUtils.h"
@@ -444,15 +445,13 @@ void trim_method_debug_map(
     std::unordered_map<DexMethod*, std::string>& method_debug_map) {
   TRACE(CLMG, 5, "Method debug map un-trimmed %d", method_debug_map.size());
   size_t trimmed_cnt = 0;
-  for (auto it = method_debug_map.begin(); it != method_debug_map.end();) {
-    auto owner_type = it->first->get_class();
-    if (mergeable_to_merger.count(owner_type) == 0) {
-      it = method_debug_map.erase(it);
+  std20::erase_if(method_debug_map, [&](auto it) {
+    if (mergeable_to_merger.count(it->first->get_class())) {
       ++trimmed_cnt;
-    } else {
-      ++it;
+      return true;
     }
-  }
+    return false;
+  });
 
   TRACE(CLMG, 5, "Method debug map trimmed %d", trimmed_cnt);
 }

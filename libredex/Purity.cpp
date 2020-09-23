@@ -15,6 +15,7 @@
 #include "IRInstruction.h"
 #include "Resolver.h"
 #include "Show.h"
+#include "StlUtil.h"
 #include "Trace.h"
 #include "Walkers.h"
 #include "WeakTopologicalOrdering.h"
@@ -670,13 +671,8 @@ size_t compute_locations_closure(
 
       // remove inverse dependency entries as appropriate
       auto& entries = idit->second;
-      for (auto it = entries.begin(); it != entries.end();) {
-        if (!method_lads.count(*it)) {
-          it = entries.erase(it);
-        } else {
-          it++;
-        }
-      }
+      std20::erase_if(entries,
+                      [&](auto it) { return !method_lads.count(*it); });
 
       if (entries.empty()) {
         // remove inverse dependency

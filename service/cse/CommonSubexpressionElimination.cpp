@@ -64,6 +64,7 @@
 #include "ReducedProductAbstractDomain.h"
 #include "Resolver.h"
 #include "Show.h"
+#include "StlUtil.h"
 #include "Trace.h"
 #include "TypeInference.h"
 #include "Walkers.h"
@@ -1114,13 +1115,9 @@ CseUnorderedLocationSet SharedState::get_relevant_written_locations(
   }
 
   // Remove written locations that are not read
-  for (auto it = written_locations.begin(); it != written_locations.end();) {
-    if (!read_locations.count(*it)) {
-      it = written_locations.erase(it);
-    } else {
-      it++;
-    }
-  }
+  std20::erase_if(written_locations, [&read_locations](auto it) {
+    return !read_locations.count(*it);
+  });
 
   return written_locations;
 }

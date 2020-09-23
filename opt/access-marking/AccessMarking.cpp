@@ -19,6 +19,7 @@
 #include "ReachableClasses.h"
 #include "Resolver.h"
 #include "Show.h"
+#include "StlUtil.h"
 #include "Trace.h"
 #include "Walkers.h"
 
@@ -95,16 +96,12 @@ std::unordered_set<DexMethod*> find_private_methods(
   for (auto* dmethod : dmethods) {
     candidates.emplace(dmethod);
   }
-  for (auto it = candidates.begin(); it != candidates.end();) {
+  std20::erase_if(candidates, [](auto it) {
     auto* m = *it;
     TRACE(ACCESS, 3, "Considering for privatization: %s", SHOW(m));
-    if (method::is_clinit(m) || !can_rename(m) || is_abstract(m) ||
-        is_private(m)) {
-      it = candidates.erase(it);
-    } else {
-      ++it;
-    }
-  }
+    return method::is_clinit(m) || !can_rename(m) || is_abstract(m) ||
+           is_private(m);
+  });
 
   ConcurrentSet<DexMethod*> externally_referenced;
   walk::parallel::opcodes(

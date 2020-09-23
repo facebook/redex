@@ -12,6 +12,7 @@
 
 #include "ConstantPropagationAnalysis.h"
 #include "ReachingDefinitions.h"
+#include "StlUtil.h"
 #include "Trace.h"
 
 namespace {
@@ -370,23 +371,13 @@ void SwitchEquivFinder::normalize_extra_loads(
   // Remove loads that aren't used outside the if-else chain blocks
   for (auto& block_and_insns : m_extra_loads) {
     InstructionSet& insns = block_and_insns.second;
-    for (auto it = insns.begin(); it != insns.end();) {
-      if (used_defs.count(it->second) == 0) {
-        it = insns.erase(it);
-      } else {
-        ++it;
-      }
-    }
+    std20::erase_if(insns, [&used_defs](auto it) {
+      return used_defs.count(it->second) == 0;
+    });
   }
 
   // Remove empty instruction lists from `m_extra_loads` (possibly emptying it)
-  for (auto it = m_extra_loads.begin(); it != m_extra_loads.end();) {
-    if (it->second.empty()) {
-      it = m_extra_loads.erase(it);
-    } else {
-      ++it;
-    }
-  }
+  std20::erase_if(m_extra_loads, [](auto it) { return it->second.empty(); });
 }
 
 // Use a sparta analysis to find the value of reg at the beginning of each leaf

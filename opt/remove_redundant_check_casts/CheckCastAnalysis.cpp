@@ -10,6 +10,7 @@
 #include "DexUtil.h"
 #include "ReachingDefinitions.h"
 #include "Show.h"
+#include "StlUtil.h"
 
 namespace check_casts {
 
@@ -410,13 +411,7 @@ CheckCastAnalysis::CheckCastAnalysis(const CheckCastConfig& config,
     auto& demands = p.second;
     if (demands.count(nullptr)) {
       // no need to keep around anything else
-      for (auto it = demands.begin(); it != demands.end();) {
-        if (*it) {
-          it = demands.erase(it);
-        } else {
-          ++it;
-        }
-      }
+      std20::erase_if(demands, [](auto it) { return *it; });
       always_assert(demands.count(nullptr));
       always_assert(demands.size() == 1);
       continue;

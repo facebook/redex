@@ -25,6 +25,7 @@
 #include "PassManager.h"
 #include "Purity.h"
 #include "Resolver.h"
+#include "StlUtil.h"
 #include "Trace.h"
 #include "Transform.h"
 #include "TypeSystem.h"
@@ -71,14 +72,10 @@ void LocalDcePass::run_pass(DexStoresVector& stores,
     // compute_no_side_effects_methods might have found methods that have no
     // implementors. Let's not silently remove invocations to those in LocalDce,
     // as invoking them *will* unconditionally cause an exception.
-    for (auto it = pure_methods.begin(); it != pure_methods.end();) {
-      auto m = *it;
-      if (m->is_def() && !has_implementor(override_graph.get(), m->as_def())) {
-        it = pure_methods.erase(it);
-      } else {
-        it++;
-      }
-    }
+    std20::erase_if(pure_methods, [&](auto it) {
+      return (*it)->is_def() &&
+             !has_implementor(override_graph.get(), (*it)->as_def());
+    });
   }
 
   auto stats =

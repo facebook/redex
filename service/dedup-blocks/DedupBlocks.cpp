@@ -53,6 +53,7 @@
 #include "PassManager.h"
 #include "ReachingDefinitions.h"
 #include "Show.h"
+#include "StlUtil.h"
 #include "Trace.h"
 #include "TypeInference.h"
 #include <boost/functional/hash.hpp>
@@ -534,16 +535,10 @@ class DedupBlocksImpl {
         auto& majority_count_group = insn_count[majority_insn];
 
         // Remove the iterators
-        for (auto it = block_iterator_map.begin();
-             it != block_iterator_map.end();) {
-          if (majority_count_group.blocks.find(it->first) ==
-              majority_count_group.blocks.end()) {
-            // Remove iterator that is not in the majority group
-            it = block_iterator_map.erase(it);
-          } else {
-            it++;
-          }
-        }
+        std20::erase_if(block_iterator_map, [&](auto it) {
+          return majority_count_group.blocks.find(it->first) ==
+                 majority_count_group.blocks.end();
+        });
 
         // Is this the best saving we've seen so far?
         // Note we only want at least block_split_min_opcode_count deep (config)
@@ -861,13 +856,8 @@ class DedupBlocksImpl {
   static void remove_if(
       std::unordered_map<TKey, TValue, THash, TPred>& duplicates,
       NeedToRemove need_to_remove) {
-    for (auto it = duplicates.begin(); it != duplicates.end();) {
-      if (need_to_remove(it->second)) {
-        it = duplicates.erase(it);
-      } else {
-        ++it;
-      }
-    }
+    std20::erase_if(duplicates,
+                    [&](auto it) { return need_to_remove(it->second); });
   }
 
   static bool is_singleton_or_inconsistent(

@@ -7,6 +7,8 @@
 
 #include "DedupBlockValueNumbering.h"
 
+#include "StlUtil.h"
+
 using namespace DedupBlkValueNumbering;
 
 // Return BlockValue hash for the given block.
@@ -46,13 +48,9 @@ const BlockValue* BlockValues::get_block_value(cfg::Block* block) const {
   auto live_out_vars = m_liveness_fixpoint_iter.get_live_out_vars_at(block);
   always_assert(!live_out_vars.is_top());
   always_assert(!live_out_vars.is_bottom());
-  for (auto regs_it = regs.begin(); regs_it != regs.end();) {
-    if (live_out_vars.elements().contains(regs_it->first)) {
-      regs_it++;
-    } else {
-      regs_it = regs.erase(regs_it);
-    }
-  }
+  std20::erase_if(regs, [&live_out_vars](auto it) {
+    return !live_out_vars.elements().contains(it->first);
+  });
   for (auto reg : live_out_vars.elements()) {
     prepare_and_get_reg(regs, reg);
   }
