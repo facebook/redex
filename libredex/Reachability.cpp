@@ -602,8 +602,8 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects(
     const DexStoresVector& stores,
     const IgnoreSets& ignore_sets,
     int* num_ignore_check_strings,
-    bool should_mark_all_as_seed,
     bool record_reachability,
+    bool should_mark_all_as_seed,
     std::unique_ptr<const mog::Graph>* out_method_override_graph) {
 
   auto setup_root_set_marker = [should_mark_all_as_seed](
