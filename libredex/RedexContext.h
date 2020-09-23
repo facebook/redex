@@ -247,3 +247,4 @@ class aggregate_exception : public std::exception {
 
   const std::vector<std::exception_ptr> m_exceptions;
 };
+void run_rethrow_first_aggregate(const std::function<void()>& f);
