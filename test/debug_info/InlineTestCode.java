@@ -29,6 +29,7 @@ public class InlineTestCode {
     try {
       InlineSeparateFileV2.wrapsThrow();
     } catch (Exception e) {
+      assertRawStackSize(e, 2, "testBasic");
       ArrayList<StackTraceElement> trace = lm.mapStackTrace(e.getStackTrace());
       assertThat(TraceUtil.traceToString(trace, 2))
           .isEqualTo(
@@ -45,13 +46,14 @@ public class InlineTestCode {
     try {
       InlineSeparateFileV2.inlineOnce();
     } catch (Exception e) {
+      assertRawStackSize(e, 2, "testInlineOnce");
       ArrayList<StackTraceElement> trace = lm.mapStackTrace(e.getStackTrace());
       assertThat(TraceUtil.traceToString(trace, 3))
           .isEqualTo(
               Arrays.asList(
                   "com.facebook.redexlinemap.InlineSeparateFileV2.wrapsThrow(InlineSeparateFileV2.java:12)",
                   "com.facebook.redexlinemap.InlineSeparateFileV2.inlineOnce(InlineSeparateFileV2.java:16)",
-                  "com.facebook.redexlinemap.InlineTestCode.testInlineOnce(InlineTestCode.java:46)"));
+                  "com.facebook.redexlinemap.InlineTestCode.testInlineOnce(InlineTestCode.java:47)"));
     }
   }
 
@@ -62,6 +64,7 @@ public class InlineTestCode {
     try {
       InlineSeparateFileV2.inlineTwice();
     } catch (Exception e) {
+      assertRawStackSize(e, 2, "testInlineTwice");
       ArrayList<StackTraceElement> trace = lm.mapStackTrace(e.getStackTrace());
       assertThat(TraceUtil.traceToString(trace, 4))
           .isEqualTo(
@@ -69,7 +72,7 @@ public class InlineTestCode {
                   "com.facebook.redexlinemap.InlineSeparateFileV2.wrapsThrow(InlineSeparateFileV2.java:12)",
                   "com.facebook.redexlinemap.InlineSeparateFileV2.inlineOnce1(InlineSeparateFileV2.java:20)",
                   "com.facebook.redexlinemap.InlineSeparateFileV2.inlineTwice(InlineSeparateFileV2.java:24)",
-                  "com.facebook.redexlinemap.InlineTestCode.testInlineTwice(InlineTestCode.java:63)"));
+                  "com.facebook.redexlinemap.InlineTestCode.testInlineTwice(InlineTestCode.java:65)"));
     }
   }
 
@@ -92,12 +95,13 @@ public class InlineTestCode {
     try {
       ignoreAndThrow(inlineMe());
     } catch (Exception e) {
+      assertRawStackSize(e, 2, "testPositionReset");
       ArrayList<StackTraceElement> trace = lm.mapStackTrace(e.getStackTrace());
       assertThat(TraceUtil.traceToString(trace, 2))
           .isEqualTo(
               Arrays.asList(
-                  "com.facebook.redexlinemap.InlineTestCode.ignoreAndThrow(InlineTestCode.java:82)",
-                  "com.facebook.redexlinemap.InlineTestCode.testPositionReset(InlineTestCode.java:93)"));
+                  "com.facebook.redexlinemap.InlineTestCode.ignoreAndThrow(InlineTestCode.java:85)",
+                  "com.facebook.redexlinemap.InlineTestCode.testPositionReset(InlineTestCode.java:96)"));
     }
   }
 
@@ -115,13 +119,14 @@ public class InlineTestCode {
     try {
       elseThrows();
     } catch (Exception e) {
+      assertRawStackSize(e, 2, "testElseThrows");
       ArrayList<StackTraceElement> trace = lm.mapStackTrace(e.getStackTrace());
       assertThat(TraceUtil.traceToString(trace, 3))
           .isEqualTo(
               Arrays.asList(
                   "com.facebook.redexlinemap.InlineSeparateFileV2.wrapsThrow(InlineSeparateFileV2.java:12)",
-                  "com.facebook.redexlinemap.InlineTestCode.elseThrows(InlineTestCode.java:108)",
-                  "com.facebook.redexlinemap.InlineTestCode.testElseThrows(InlineTestCode.java:116)"));
+                  "com.facebook.redexlinemap.InlineTestCode.elseThrows(InlineTestCode.java:112)",
+                  "com.facebook.redexlinemap.InlineTestCode.testElseThrows(InlineTestCode.java:120)"));
     }
   }
 
@@ -140,5 +145,17 @@ public class InlineTestCode {
       }
     }
     return res;
+  }
+
+  private static void assertRawStackSize(Throwable t, int size, String expectedMethod) {
+    assertRawStackSize(t, size, expectedMethod, InlineTestCode.class.getName());
+  }
+  private static void assertRawStackSize(Throwable t, int size, String expectedMethod, String expectedClass) {
+    StackTraceElement[] trace = t.getStackTrace();
+    assertThat(trace.length).isGreaterThanOrEqualTo(size);
+    assertThat(trace[size - 1].getMethodName()).isEqualTo(expectedMethod);
+    if (expectedClass != null) {
+      assertThat(trace[size - 1].getClassName()).endsWith(expectedClass);
+    }
   }
 }
