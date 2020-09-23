@@ -7,7 +7,9 @@
 
 package com.facebook.redexlinemap;
 
-import java.io.*;
+import java.io.DataInputStream;
+import java.io.InputStream;
+import java.io.IOException;
 import java.util.ArrayList;
 
 public class LineMapperV2 {
@@ -19,8 +21,7 @@ public class LineMapperV2 {
     // own integer reader
     byte[] b = new byte[4];
     ds.readFully(b, 0, 4);
-    return (b[0] & 0xff) | ((b[1] & 0xff) << 8) | ((b[2] & 0xff) << 16) |
-        ((b[3] & 0xff) << 24);
+    return (b[0] & 0xff) | ((b[1] & 0xff) << 8) | ((b[2] & 0xff) << 16) | ((b[3] & 0xff) << 24);
   }
 
   public LineMapperV2(InputStream ins) throws Exception {
@@ -28,13 +29,12 @@ public class LineMapperV2 {
     DataInputStream ds = new DataInputStream(ins);
     long magic = readInt(ds);
     if (magic != 0xfaceb000) {
-      throw new Exception("Magic number mismatch: got " +
-                          Long.toHexString(magic));
+      throw new IllegalArgumentException("Magic number mismatch: got " + Long.toHexString(magic));
     }
     int version = readInt(ds);
     if (version != 2) {
-      throw new Exception("Version mismatch: Expected 2, got " +
-                          Integer.toString(version));
+      throw new IllegalArgumentException(
+          "Version mismatch: Expected 2, got " + Integer.toString(version));
     }
     int spool_count = readInt(ds);
     System.out.println(Integer.toString(spool_count));
@@ -57,9 +57,9 @@ public class LineMapperV2 {
   }
 
   public ArrayList<PositionV2> getPositionsAt(long idx) {
-    ArrayList<PositionV2> positions = new ArrayList();
+    ArrayList<PositionV2> positions = new ArrayList<>();
     while (idx >= 0) {
-      PositionV2 pos = mapping.get((int)idx);
+      PositionV2 pos = mapping.get((int) idx);
       positions.add(pos);
       idx = pos.parent - 1;
     }
@@ -67,17 +67,19 @@ public class LineMapperV2 {
   }
 
   public ArrayList<StackTraceElement> mapStackTrace(StackTraceElement[] trace) {
-    ArrayList<StackTraceElement> newTrace = new ArrayList();
+    ArrayList<StackTraceElement> newTrace = new ArrayList<>();
     for (StackTraceElement el : trace) {
       String fn = el.getFileName();
       if (fn.equals("")) {
         int line = el.getLineNumber();
         ArrayList<PositionV2> positions = getPositionsAt(line - 1);
         for (PositionV2 pos : positions) {
-          newTrace.add(new StackTraceElement(stringPool[pos.class_id],
-                                             stringPool[pos.method_id],
-                                             stringPool[pos.file_id],
-                                             pos.line));
+          newTrace.add(
+              new StackTraceElement(
+                  stringPool[pos.class_id],
+                  stringPool[pos.method_id],
+                  stringPool[pos.file_id],
+                  pos.line));
         }
       } else {
         newTrace.add(el);
@@ -93,8 +95,8 @@ class PositionV2 {
   int file_id;
   int line;
   long parent;
-  public PositionV2(
-      int class_id, int method_id, int file_id, int line, long parent) {
+
+  public PositionV2(int class_id, int method_id, int file_id, int line, long parent) {
     this.class_id = class_id;
     this.method_id = method_id;
     this.file_id = file_id;
