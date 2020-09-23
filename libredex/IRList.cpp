@@ -139,7 +139,6 @@ void MethodItemEntry::gather_methods(
   case MFLOW_DEX_OPCODE:
     dex_insn->gather_methods(lmethod);
     break;
- 
   }
 }
 
