@@ -1410,6 +1410,11 @@ void DexMethod::gather_fields(std::vector<DexFieldRef*>& lfield) const {
 
 void DexMethod::gather_methods(std::vector<DexMethodRef*>& lmethod) const {
   if (m_code) m_code->gather_methods(lmethod);
+  gather_methods_from_annos(lmethod);
+}
+
+void DexMethod::gather_methods_from_annos(
+    std::vector<DexMethodRef*>& lmethod) const {
   if (m_anno) m_anno->gather_methods(lmethod);
   auto param_anno = get_param_anno();
   if (param_anno) {

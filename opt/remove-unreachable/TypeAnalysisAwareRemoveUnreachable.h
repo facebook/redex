@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "GlobalTypeAnalysisPass.h"
 #include "Pass.h"
 #include "Reachability.h"
 
@@ -26,6 +27,10 @@ class TypeAnalysisAwareRemoveUnreachablePass : public Pass {
       m_ignore_sets.system_annos.emplace(
           DexType::get_type("Ldalvik/annotation/MemberClasses;"));
     });
+  }
+
+  void set_analysis_usage(AnalysisUsage& au) const override {
+    au.add_required<GlobalTypeAnalysisPass>();
   }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;

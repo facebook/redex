@@ -1068,6 +1068,7 @@ class DexMethod : public DexMethodRef {
   void gather_types(std::vector<DexType*>& ltype) const;
   void gather_fields(std::vector<DexFieldRef*>& lfield) const;
   void gather_methods(std::vector<DexMethodRef*>& lmethod) const;
+  void gather_methods_from_annos(std::vector<DexMethodRef*>& lmethod) const;
   void gather_strings(std::vector<DexString*>& lstring,
                       bool exclude_loads = false) const;
   void gather_callsites(std::vector<DexCallSite*>& ltype) const;

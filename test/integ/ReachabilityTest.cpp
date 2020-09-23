@@ -7,68 +7,10 @@
 
 #include <gtest/gtest.h>
 
-#include "ProguardConfiguration.h"
-#include "ProguardMatcher.h"
-#include "ProguardParser.h"
+#include "Reachability.h"
 #include "RedexTest.h"
 
-#include "Reachability.h"
-
-// TODO(T68802519)(adicatana): the helper functions below are now being used in
-// 3 different places, add to RedexIntegrationTest maybe.
-template <typename C>
-DexClass* find_class(const C& classes, const std::string& name) {
-  const auto it =
-      std::find_if(classes.begin(), classes.end(),
-                   [&name](const DexClass* cls) { return cls->str() == name; });
-  return it == classes.end() ? nullptr : *it;
-}
-
-template <typename C>
-DexField* find_ifield(const C& classes,
-                      const char* cls,
-                      const char* type,
-                      const char* name) {
-  const auto* c = find_class(classes, cls);
-  const auto& ifields = c->get_ifields();
-  const auto it = std::find(ifields.begin(), ifields.end(),
-                            DexField::make_field(DexType::make_type(cls),
-                                                 DexString::make_string(name),
-                                                 DexType::make_type(type)));
-  return it == ifields.end() ? nullptr : *it;
-}
-
-template <typename C>
-DexMethod* find_vmethod(const C& classes,
-                        const char* cls,
-                        const char* rtype,
-                        const char* name,
-                        const std::vector<const char*>& args) {
-  const auto* c = find_class(classes, cls);
-  const auto& vmethods = c->get_vmethods();
-  const auto it = std::find(vmethods.begin(), vmethods.end(),
-                            DexMethod::make_method(cls, name, rtype, args));
-  return it == vmethods.end() ? nullptr : *it;
-}
-
 class ReachabilityTest : public RedexIntegrationTest {};
-
-std::unique_ptr<keep_rules::ProguardConfiguration>
-process_and_get_proguard_config(const std::vector<DexClasses>& dexen,
-                                const std::string& config) {
-  auto pg_config = std::make_unique<keep_rules::ProguardConfiguration>();
-  std::istringstream pg_config_text(config);
-  keep_rules::proguard_parser::parse(pg_config_text, pg_config.get());
-
-  ProguardMap pm;
-  // We aren't loading any external jars for this test
-  // so external_classes is empty
-  Scope external_classes;
-  apply_deobfuscated_names(dexen, pm);
-  Scope scope = build_class_scope(dexen);
-  process_proguard_rules(pm, scope, external_classes, *pg_config, true);
-  return pg_config;
-}
 
 TEST_F(ReachabilityTest, ReachabilityFromProguardTest) {
   const auto& dexen = stores[0].get_dexen();

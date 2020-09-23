@@ -8,7 +8,6 @@
 #include "TypeAnalysisCallGraphGenerationPass.h"
 
 #include "DexUtil.h"
-#include "GlobalTypeAnalysisPass.h"
 #include "MethodOverrideGraph.h"
 #include "Show.h"
 #include "Trace.h"
