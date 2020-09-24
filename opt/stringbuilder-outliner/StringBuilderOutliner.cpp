@@ -381,7 +381,6 @@ void Outliner::transform(IRCode* code) {
 
     size_t idx{0};
     for (auto* insn : state) {
-      auto callee = insn->get_method();
       reg_t reg;
       if (insns_to_insert.count(insn)) {
         // An instruction can occur in more than one BuilderState if the

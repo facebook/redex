@@ -112,7 +112,6 @@ void ReduceGotosPass::process_code_switches(cfg::ControlFlowGraph& cfg,
     auto it = b->get_last_insn();
     always_assert(it != b->end());
     auto insn = it->insn;
-    auto opcode = insn->opcode();
     cfg::Block* goto_target = b->goes_to();
 
     std::unordered_set<cfg::Edge*> fallthrough_edges;

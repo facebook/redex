@@ -62,7 +62,6 @@ void FixpointIterator::analyze_node(call_graph::NodeId const& node,
     auto last_insn = block->get_last_insn();
     for (auto& mie : InstructionIterable(block)) {
       auto* insn = mie.insn;
-      auto op = insn->opcode();
       if (insn->has_method()) {
         if (outgoing_insns.count(insn)) {
           ArgumentDomain out_args;

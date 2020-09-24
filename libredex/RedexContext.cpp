@@ -362,7 +362,6 @@ void RedexContext::mutate_method(DexMethodRef* method,
 
   // We might still miss name collision cases. As of now, let's just assert.
   if (s_method_map.count(r)) {
-    auto& m = *s_method_map.find(r)->second;
     always_assert_log(!s_method_map.count(r),
                       "Another method of the same signature already exists %s"
                       " %s %s",

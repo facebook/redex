@@ -112,12 +112,12 @@ DexType* create_empty_base_type(const ModelSpec& spec,
   // package as the root interface.
   auto base_type = DexType::make_type(
       DexString::make_string("L" + spec.class_name_prefix + "EmptyBase;"));
-  auto base_class = create_class(base_type,
-                                 type::java_lang_Object(),
-                                 get_merger_package_name(interface_root),
-                                 std::vector<DexField*>(),
-                                 TypeSet(),
-                                 true);
+  create_class(base_type,
+               type::java_lang_Object(),
+               get_merger_package_name(interface_root),
+               std::vector<DexField*>(),
+               TypeSet(),
+               true);
 
   TRACE(CLMG, 3, "Created an empty base class %s for interface %s.", SHOW(cls),
         SHOW(interface_root));

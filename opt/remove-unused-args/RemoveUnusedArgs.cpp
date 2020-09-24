@@ -195,7 +195,6 @@ bool RemoveArgs::update_method_signature(
     }
   }
 
-  auto num_orig_args = method->get_proto()->get_args()->get_type_list().size();
   auto live_args = get_live_arg_type_list(method, live_arg_idxs);
   auto live_args_list = DexTypeList::make_type_list(std::move(live_args));
   DexType* rtype =

@@ -737,7 +737,6 @@ void DexOutput::emit_magic_locators() {
 
   // We decode all class names --- to find the first and last renamed one,
   // and also check that all renamed names are indeed in the right place.
-  dex_class_def* cdefs = (dex_class_def*)(m_output + hdr.class_defs_off);
   for (uint32_t i = 0; i < hdr.class_defs_size; i++) {
     DexClass* clz = m_classes->at(i);
     const char* str = clz->get_name()->c_str();
@@ -1092,7 +1091,7 @@ void DexOutput::generate_static_values() {
     for (uint32_t i = 0; i < callsites.size(); i++) {
       auto callsite = callsites[i];
       auto eva = callsite->as_encoded_value_array();
-      uint32_t offset = 0;
+      uint32_t offset;
       if (enc_arrays.count(eva)) {
         offset = m_call_site_items[callsite] = enc_arrays.at(eva);
       } else {
@@ -1405,7 +1404,6 @@ uint32_t emit_instruction_offset_debug_info(
     if (!dbg_item) {
       continue;
     }
-    dex_code_item* dci = it.code_item;
     DexMethod* method = it.method;
     uint32_t param_size = method->get_proto()->get_args()->size();
     // We still want to fill in pos_mapper and code_debug_map, so run the

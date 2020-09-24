@@ -610,6 +610,7 @@ IROpcode get_iget_type(DexField* field) {
   case DataType::Double:
     return OPCODE_IGET_WIDE;
   case DataType::Void:
+  default:
     not_reached();
   }
 }

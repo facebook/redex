@@ -23,7 +23,6 @@ Transform::Stats ConstantPropagation::run(DexMethod* method,
   TRACE(CONSTP, 2, "Method: %s", SHOW(method));
   auto code = method->get_code();
   code->build_cfg(/* editable */ false);
-  auto& cfg = code->cfg();
 
   TRACE(CONSTP, 5, "CFG: %s", SHOW(code->cfg()));
   Transform::Stats local_stats;

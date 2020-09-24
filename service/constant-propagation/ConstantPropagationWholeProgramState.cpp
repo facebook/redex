@@ -54,7 +54,6 @@ void analyze_clinits(const Scope& scope,
                      const interprocedural::FixpointIterator& fp_iter,
                      ConstantFieldPartition* field_partition) {
   for (DexClass* cls : scope) {
-    auto& dmethods = cls->get_dmethods();
     auto clinit = cls->get_clinit();
     if (clinit == nullptr) {
       // If there is no class initializer, then the initial field values are

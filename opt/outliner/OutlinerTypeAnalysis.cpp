@@ -95,6 +95,7 @@ const DexType* OutlinerTypeAnalysis::get_inferred_type(
   case LONG2:
   case SCALAR2:
   case TOP:
+  default:
     not_reached();
   }
 }
