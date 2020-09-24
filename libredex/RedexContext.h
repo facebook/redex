@@ -38,6 +38,9 @@ struct DexFieldSpec;
 struct DexDebugEntry;
 struct DexPosition;
 struct RedexContext;
+namespace keep_rules {
+struct AssumeReturnValue;
+}
 
 extern RedexContext* g_redex;
 
@@ -150,6 +153,13 @@ struct RedexContext {
   void add_destruction_task(const Task& t) { m_destruction_tasks.push_back(t); }
 
   FrequentlyUsedPointers pointers_cache() { return m_pointers_cache; }
+
+  // Set and return method's keep_rules::AssumeReturnValue provided by proguard
+  // rules.
+
+  void set_return_value(DexMethod* method, keep_rules::AssumeReturnValue& val);
+  keep_rules::AssumeReturnValue* get_return_value(DexMethod* method);
+  void unset_return_value(DexMethod* method);
 
  private:
   struct Strcmp;
@@ -281,6 +291,10 @@ struct RedexContext {
   bool m_allow_class_duplicates;
 
   FrequentlyUsedPointers m_pointers_cache;
+
+  // Return values map specified by Proguard assume value
+  ConcurrentMap<DexMethod*, std::unique_ptr<keep_rules::AssumeReturnValue>>
+      method_return_values;
 };
 
 // One or more exceptions

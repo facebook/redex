@@ -609,13 +609,13 @@ void parse_member_specification(std::vector<Token>::iterator* it,
     if (rident == "true") {
       member_specification.return_value.value_type =
           AssumeReturnValue::ValueType::ValueBool;
-      member_specification.return_value.value.b = true;
+      member_specification.return_value.value.v = 1;
       ++(*it);
     }
     if (rident == "false") {
       member_specification.return_value.value_type =
           AssumeReturnValue::ValueType::ValueBool;
-      member_specification.return_value.value.b = false;
+      member_specification.return_value.value.v = 0;
       ++(*it);
     }
   }

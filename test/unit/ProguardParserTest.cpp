@@ -823,14 +823,12 @@ TEST(ProguardParserTest, assumenosideeffects_with_value) {
     const auto& k2 = *it++;
     EXPECT_EQ(k2->class_spec.methodSpecifications[0].return_value.value_type,
               keep_rules::AssumeReturnValue::ValueBool);
-    EXPECT_EQ(k2->class_spec.methodSpecifications[0].return_value.value.b,
-              true);
+    EXPECT_EQ(k2->class_spec.methodSpecifications[0].return_value.value.v, 1);
     EXPECT_EQ(k2->class_spec.methodSpecifications[0].name, "foo1");
 
     EXPECT_EQ(k2->class_spec.methodSpecifications[1].return_value.value_type,
               keep_rules::AssumeReturnValue::ValueBool);
-    EXPECT_EQ(k2->class_spec.methodSpecifications[1].return_value.value.b,
-              false);
+    EXPECT_EQ(k2->class_spec.methodSpecifications[1].return_value.value.v, 0);
     EXPECT_EQ(k2->class_spec.methodSpecifications[1].name, "foo2");
 
     EXPECT_EQ(k2->class_spec.methodSpecifications[2].return_value.value_type,
@@ -846,8 +844,7 @@ TEST(ProguardParserTest, assumenosideeffects_with_value) {
     const auto& k3 = *it++;
     EXPECT_EQ(k3->class_spec.methodSpecifications[0].return_value.value_type,
               keep_rules::AssumeReturnValue::ValueBool);
-    EXPECT_EQ(k3->class_spec.methodSpecifications[0].return_value.value.b,
-              false);
+    EXPECT_EQ(k3->class_spec.methodSpecifications[0].return_value.value.v, 0);
     EXPECT_EQ(k3->class_spec.methodSpecifications[0].name, "foo");
     EXPECT_EQ(k3->class_spec.className, "Foo");
     const auto& k4 = *it++;

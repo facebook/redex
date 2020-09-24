@@ -24,7 +24,7 @@ struct AssumeReturnValue {
     ValueNone,
   } value_type;
   union Value {
-    bool b;
+    int v;
   } value;
 };
 

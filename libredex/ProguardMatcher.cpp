@@ -358,6 +358,22 @@ class ProguardMatcher {
   ConcurrentSet<const KeepSpec*> m_unused_rules;
 };
 
+template <class DexMember>
+void apply_assume_method_return_value(const KeepSpec& k, DexMember* member) {
+  for (auto& method_spec : k.class_spec.methodSpecifications) {
+    auto return_val = method_spec.return_value;
+    switch (return_val.value_type) {
+    case keep_rules::AssumeReturnValue::ValueBool:
+      always_assert(type::is_boolean(member->get_proto()->get_rtype()));
+      g_redex->set_return_value(member, return_val);
+      continue;
+    case keep_rules::AssumeReturnValue::ValueNone:
+      g_redex->unset_return_value(member);
+      continue;
+    }
+  }
+}
+
 // Updates a class, field or method to add keep modifiers.
 // Note: includedescriptorclasses and allowoptimization are not implemented.
 template <class DexMember>
@@ -516,6 +532,9 @@ void KeepRuleMatcher::keep_methods(
     if (method_level_match(methodSpecification, method, method_regex)) {
       if (m_rule_type == RuleType::KEEP) {
         apply_keep_modifiers(m_keep_rule, method);
+      }
+      if (m_rule_type == RuleType::ASSUME_NO_SIDE_EFFECTS) {
+        apply_assume_method_return_value(m_keep_rule, method);
       }
       apply_rule(method);
     }

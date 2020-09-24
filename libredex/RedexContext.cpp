@@ -17,6 +17,7 @@
 #include "DexCallSite.h"
 #include "DexClass.h"
 #include "DuplicateClasses.h"
+#include "ProguardConfiguration.h"
 #include "Show.h"
 #include "Trace.h"
 
@@ -442,5 +443,25 @@ void run_rethrow_first_aggregate(const std::function<void()>& f) {
     }
     // Rethrow the first one.
     std::rethrow_exception(ae.m_exceptions.at(0));
+  }
+}
+
+void RedexContext::set_return_value(DexMethod* method,
+                                    keep_rules::AssumeReturnValue& val) {
+  method_return_values.emplace(
+      method, std::make_unique<keep_rules::AssumeReturnValue>(val));
+}
+
+keep_rules::AssumeReturnValue* RedexContext::get_return_value(
+    DexMethod* method) {
+  if (method_return_values.find(method) != method_return_values.end()) {
+    return method_return_values.find(method)->second.get();
+  }
+  return nullptr;
+}
+
+void RedexContext::unset_return_value(DexMethod* method) {
+  if (method_return_values.find(method) != method_return_values.end()) {
+    method_return_values.erase(method);
   }
 }
