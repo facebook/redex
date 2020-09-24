@@ -380,6 +380,8 @@ work_queue_test_SOURCES = WorkQueueTest.cpp
 
 xstorerefs_test_SOURCES = XStoreRefsTest.cpp
 
+resolve_proguard_value_test_SOURCES = ResolveProguardAssumeValuesTest.cpp
+
 TESTS = \
     aliased_registers_test \
     analysis_usage_test \
@@ -487,4 +489,5 @@ TESTS = \
     virtual_merging_test \
     walkers_test \
     work_queue_test \
-    xstorerefs_test
+    xstorerefs_test \
+    resolve_proguard_value_test

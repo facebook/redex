@@ -306,6 +306,7 @@ libopt_la_SOURCES = \
 	opt/resolve-refs/ResolveRefsPass.cpp \
 	opt/resolve-refs/ExternalRefsManglingPass.cpp \
 	opt/result-propagation/ResultPropagation.cpp \
+	opt/resolve-proguard-values/ResolveProguardAssumeValues.cpp \
 	opt/shorten-srcstrings/Shorten.cpp \
 	opt/make-public/MakePublicPass.cpp \
 	opt/methodinline/IntraDexInlinePass.cpp \
