@@ -1461,13 +1461,13 @@ class EnumTransformer final {
     always_assert(values_field);
     auto& dmethods = enum_cls->get_dmethods();
     // Delete <init>, values() and valueOf(String) methods, and clean <clinit>.
-    std20::erase_if(dmethods, [&](auto it) {
+    std20::erase_if(dmethods, [&, this](auto it) {
       auto method = *it;
       if (method::is_clinit(method)) {
         clean_clinit(enum_constants, enum_cls, method, values_field);
         return empty(method->get_code());
       }
-      return is_generated_enum_method(method);
+      return this->is_generated_enum_method(method);
     });
   }
 
@@ -1552,7 +1552,7 @@ class EnumTransformer final {
   /**
    * Only use for <clinit> code.
    */
-  bool empty(IRCode* code) {
+  static bool empty(IRCode* code) {
     auto iterable = InstructionIterable(code);
     auto begin = iterable.begin();
     return opcode::is_return_void(begin->insn->opcode());
