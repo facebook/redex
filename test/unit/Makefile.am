@@ -99,6 +99,7 @@ check_PROGRAMS = \
     remove_unused_args_test \
     renamer_test \
     resolver_test \
+    resolve_proguard_value_test \
     result_propagation_test \
     side_effects_summary_test \
     signed_constant_propagation_test \
@@ -120,7 +121,7 @@ check_PROGRAMS = \
     virtual_merging_test \
     walkers_test \
     work_queue_test \
-    xstorerefs_test
+    xstorerefs_test 
 
 aliased_registers_test_SOURCES = AliasedRegistersTest.cpp
 
@@ -319,6 +320,7 @@ remove_unused_args_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 renamer_test_SOURCES = RenamerTest.cpp VirtScopeHelper.cpp ScopeHelper.cpp
 
 resolver_test_SOURCES = ResolverTest.cpp
+resolve_proguard_value_test_SOURCES = ResolveProguardAssumeValuesTest.cpp
 
 result_propagation_test_SOURCES = ResultPropagationTest.cpp
 result_propagation_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
@@ -380,7 +382,6 @@ work_queue_test_SOURCES = WorkQueueTest.cpp
 
 xstorerefs_test_SOURCES = XStoreRefsTest.cpp
 
-resolve_proguard_value_test_SOURCES = ResolveProguardAssumeValuesTest.cpp
 
 TESTS = \
     aliased_registers_test \
@@ -468,6 +469,7 @@ TESTS = \
     remove_unused_args_test \
     renamer_test \
     resolver_test \
+    resolve_proguard_value_test \
     result_propagation_test \
     side_effects_summary_test \
     signed_constant_propagation_test \
@@ -489,5 +491,4 @@ TESTS = \
     virtual_merging_test \
     walkers_test \
     work_queue_test \
-    xstorerefs_test \
-    resolve_proguard_value_test
+    xstorerefs_test 
