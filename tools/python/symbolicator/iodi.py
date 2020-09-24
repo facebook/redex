@@ -19,12 +19,24 @@ class IODIMetadata(object):
                 raise Exception("Unexpected version: " + str(version))
             if zero != 0:
                 raise Exception("Unexpected zero: " + str(zero))
-            self.entries = {}
+            self._entries = {}
             for _ in range(count):
                 klen, method_id = struct.unpack("<HQ", f.read(2 + 8))
                 form = "<" + str(klen) + "s"
                 key = struct.unpack(form, f.read(klen))[0].decode("ascii")
-                self.entries[key] = method_id
+                self._entries[key] = method_id
+
+    def map_iodi(
+        self, debug_line_map, class_name, method_name, input_lineno, input_method_id
+    ):
+        qualified_name = class_name + "." + method_name
+        if qualified_name in self._entries:
+            method_id = self._entries[qualified_name]
+            mapped = debug_line_map.find_line_number(method_id, input_lineno)
+            if mapped is not None:
+                return (mapped, method_id)
+            return (None, method_id)
+        return (None, None)
 
     def _write(self, form, *vals):
         self._f.write(struct.pack(form, *vals))
@@ -33,7 +45,7 @@ class IODIMetadata(object):
         with open(path, "wb") as f:
             self._f = f
             self._write("<LLLL", 0xFACEB001, 1, len(self.entries), 0)
-            for key, mid in self.entries.items():
+            for key, mid in self._entries.items():
                 self._write("<HQ", len(key), mid)
                 self._write("<" + str(len(key)) + "s", key.encode("ascii"))
             self._f = None

@@ -31,15 +31,14 @@ class LogcatSymbolicator(object):
         lineno = int(matchobj.group("lineno"))
         cls = matchobj.group("class")
         if self.symbol_maps.iodi_metadata is not None:
-            iodi_map = self.symbol_maps.iodi_metadata.entries
-            qualified_name = cls + "." + matchobj.group("method")
-            if qualified_name in iodi_map:
-                method_id = iodi_map[qualified_name]
-                mapped = self.symbol_maps.debug_line_map.find_line_number(
-                    method_id, lineno
-                )
-                if mapped is not None:
-                    lineno = mapped
+            mapped_lineno, _ = self.symbol_maps.iodi_metadata.map_iodi(
+                self.symbol_maps.debug_line_map,
+                cls,
+                matchobj.group("method"),
+                lineno,
+                None,
+            )
+            lineno = mapped_lineno if mapped_lineno else lineno
         positions = self.symbol_maps.line_map.get_stack(lineno - 1)
         if cls in self.symbol_maps.class_map:
             cls = self.symbol_maps.class_map[cls]
