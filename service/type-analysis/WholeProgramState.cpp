@@ -25,11 +25,25 @@ std::ostream& operator<<(std::ostream& out, const DexMethod* method) {
   return out;
 }
 
-/* Map of method to known retun type - Esepecially for the Boxed values. TODO
+/* Map of method to known return type - Esepecially for the Boxed values. TODO
  * construct the list.*/
 std::unordered_map<const char*, const char*> STATIC_METHOD_TO_TYPE_MAP = {
+    {"Ljava/lang/Boolean;.valueOf:(Z)Ljava/lang/Boolean;",
+     "Ljava/lang/Boolean;"},
+    {"Ljava/lang/Character;.valueOf:(C)Ljava/lang/Character;",
+     "Ljava/lang/Character;"},
+    {"Ljava/lang/Byte;.valueOf:(B)Ljava/lang/Byte;", "Ljava/lang/Byte;"},
     {"Ljava/lang/Integer;.valueOf:(I)Ljava/lang/Integer;",
      "Ljava/lang/Integer;"},
+    {"Ljava/lang/Long;.valueOf:(J)Ljava/lang/Long;", "Ljava/lang/Long;"},
+    {"Ljava/lang/Float;.valueOf:(F)Ljava/lang/Float;", "Ljava/lang/Float;"},
+    {"Ljava/lang/Double;.valueOf:(D)Ljava/lang/Double;", "Ljava/lang/Double;"},
+    {"Ljava/lang/String;.valueOf:(C)Ljava/lang/String;", "Ljava/lang/String;"},
+    {"Ljava/lang/String;.valueOf:(D)Ljava/lang/String;", "Ljava/lang/String;"},
+    {"Ljava/lang/String;.valueOf:(F)Ljava/lang/String;", "Ljava/lang/String;"},
+    {"Ljava/lang/String;.valueOf:(I)Ljava/lang/String;", "Ljava/lang/String;"},
+    {"Ljava/lang/String;.valueOf:(J)Ljava/lang/String;", "Ljava/lang/String;"},
+    {"Ljava/lang/String;.valueOf:(Z)Ljava/lang/String;", "Ljava/lang/String;"},
 };
 
 namespace {
