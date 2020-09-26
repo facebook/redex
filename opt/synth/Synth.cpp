@@ -649,7 +649,7 @@ void replace_wrappers(const ClassHierarchy& ch,
   }
   for (auto wpair : wrapper_calls) {
     auto call_inst = wpair.first;
-    auto wrapper = static_cast<DexMethod*>(call_inst->get_method());
+    auto wrapper = resolve_method(call_inst->get_method(), MethodSearch::Any);
     auto wrappee = wpair.second;
     auto success =
         replace_method_wrapper(ch, &*code, call_inst, wrapper, wrappee, ssms);
@@ -660,7 +660,7 @@ void replace_wrappers(const ClassHierarchy& ch,
   for (auto wpair : wrapped_calls) {
     auto call_inst = wpair.first;
     auto wrapper = wpair.second;
-    auto wrappee = static_cast<DexMethod*>(call_inst->get_method());
+    auto wrappee = resolve_method(call_inst->get_method(), MethodSearch::Any);
     auto success =
         replace_method_wrapper(ch, &*code, call_inst, wrapper, wrappee, ssms);
     if (!success) {
