@@ -130,6 +130,112 @@ public class InlineTestCode {
     }
   }
 
+  @NoInline
+  private void elseThrows(int i) throws Exception {
+    if (lm == null) {
+      System.out.println(i);
+    } else {
+      InlineSeparateFileV2.wrapsThrow();
+    }
+  }
+
+  @NoInline
+  private void elseThrows(char c) throws Exception {
+    if (lm != null) {  // Intentionally changed order.
+      InlineSeparateFileV2.wrapsThrow();
+    } else {
+      System.out.println(c);
+    }
+  }
+
+  @NoInline
+  private void elseThrows(float f) throws Exception {
+    if (lm == null) {
+      System.out.println(f);
+    } else {
+      InlineSeparateFileV2.wrapsThrow();
+    }
+  }
+
+  @NoInline
+  private void elseThrows(Object o) throws Exception {
+    if (lm != null) {  // Intentionally changed order.
+      InlineSeparateFileV2.wrapsThrow();
+    } else {
+      System.out.println(o);
+    }
+  }
+
+  @NoInline
+  @SuppressWarnings("CatchGeneralException")
+  public void testElseThrowsOverload() throws Exception {
+    HashSet<StackTraceElement> frames = new HashSet<>();
+    try {
+      elseThrows((int)0);
+    } catch (Exception e) {
+      assertRawStackSize(e, 3, "testElseThrowsOverload");
+      frames.add(e.getStackTrace()[1]);
+      ArrayList<StackTraceElement> trace = lm.mapStackTrace(e.getStackTrace());
+      assertThat(TraceUtil.traceToString(trace, 3))
+          .isEqualTo(
+              Arrays.asList(
+                  "com.facebook.redexlinemap.InlineSeparateFileV2.wrapsThrow(InlineSeparateFileV2.java:12)",
+                  "com.facebook.redexlinemap.InlineTestCode.elseThrows(InlineTestCode.java:138)",
+                  "com.facebook.redexlinemap.InlineTestCode.testElseThrowsOverload(InlineTestCode.java:174)"));
+    }
+
+    try {
+      elseThrows('a');
+    } catch (Exception e) {
+      assertRawStackSize(e, 3, "testElseThrowsOverload");
+      frames.add(e.getStackTrace()[1]);
+      ArrayList<StackTraceElement> trace = lm.mapStackTrace(e.getStackTrace());
+      assertThat(TraceUtil.traceToString(trace, 3))
+          .isEqualTo(
+              Arrays.asList(
+                  "com.facebook.redexlinemap.InlineSeparateFileV2.wrapsThrow(InlineSeparateFileV2.java:12)",
+                  "com.facebook.redexlinemap.InlineTestCode.elseThrows(InlineTestCode.java:145)",
+                  "com.facebook.redexlinemap.InlineTestCode.testElseThrowsOverload(InlineTestCode.java:188)"));
+    }
+
+    try {
+      elseThrows(0.1f);
+    } catch (Exception e) {
+      assertRawStackSize(e, 3, "testElseThrowsOverload");
+      frames.add(e.getStackTrace()[1]);
+      ArrayList<StackTraceElement> trace = lm.mapStackTrace(e.getStackTrace());
+      assertThat(TraceUtil.traceToString(trace, 3))
+          .isEqualTo(
+              Arrays.asList(
+                  "com.facebook.redexlinemap.InlineSeparateFileV2.wrapsThrow(InlineSeparateFileV2.java:12)",
+                  "com.facebook.redexlinemap.InlineTestCode.elseThrows(InlineTestCode.java:156)",
+                  "com.facebook.redexlinemap.InlineTestCode.testElseThrowsOverload(InlineTestCode.java:202)"));
+    }
+
+    try {
+      elseThrows(null);
+    } catch (Exception e) {
+      assertRawStackSize(e, 3, "testElseThrowsOverload");
+      frames.add(e.getStackTrace()[1]);
+      ArrayList<StackTraceElement> trace = lm.mapStackTrace(e.getStackTrace());
+      assertThat(TraceUtil.traceToString(trace, 3))
+          .isEqualTo(
+              Arrays.asList(
+                  "com.facebook.redexlinemap.InlineSeparateFileV2.wrapsThrow(InlineSeparateFileV2.java:12)",
+                  "com.facebook.redexlinemap.InlineTestCode.elseThrows(InlineTestCode.java:163)",
+                  "com.facebook.redexlinemap.InlineTestCode.testElseThrowsOverload(InlineTestCode.java:216)"));
+    }
+
+    // Check that all `elseThrows` functions exist (not inlined).
+    HashSet<Method> methods = new HashSet<>();
+    for (Method m : getClass().getDeclaredMethods()) {
+      if (m.getName().equals("elseThrows")) {
+        methods.add(m);
+      }
+    }
+    assertThat(methods).hasSize(4);
+  }
+
   public static void checkTests(Class<?> cls) throws Exception {
     HashSet<String> expected = getTestNamedMethods(InlineTestCode.class);
     HashSet<String> actual = getTestNamedMethods(cls);

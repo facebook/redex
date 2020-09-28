@@ -57,4 +57,9 @@ public class InlineMainV2IODI {
   public void testElseThrows() throws Exception {
     itc.testElseThrows();
   }
+
+  @Test
+  public void testElseThrowsOverload() throws Exception {
+    itc.testElseThrowsOverload();
+  }
 }

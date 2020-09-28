@@ -54,4 +54,9 @@ public class InlineMainV2 {
   public void testElseThrows() throws Exception {
     itc.testElseThrows();
   }
+
+  @Test
+  public void testElseThrowsOverload() throws Exception {
+    itc.testElseThrowsOverload();
+  }
 }
