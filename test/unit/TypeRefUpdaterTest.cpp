@@ -53,6 +53,11 @@ TEST_F(TypeRefUpdaterTest, init_collision) {
       (new-instance "LFoo;")
       (move-result-pseudo-object v0)
       (invoke-direct (v0) "LFoo;.<init>:(LBar;)V")
+
+      (new-instance "LFoo;")
+      (move-result-pseudo-object v0)
+      ; No definition for the constructor.
+      (invoke-direct (v0) "LFoo;.<init>:(LFoo;LFoo;)V")
       (return-void)
     )
   )"));
@@ -77,6 +82,11 @@ TEST_F(TypeRefUpdaterTest, init_collision) {
       (new-instance "LFoo;")
       (move-result-pseudo-object v0)
       (invoke-direct (v0) "LFoo;.<init>:(LBar;)V")
+
+      (new-instance "LFoo;")
+      (move-result-pseudo-object v0)
+      ; No definition for the constructor. We update its signature.
+      (invoke-direct (v0) "LFoo;.<init>:(LBar;LBar;)V")
       (return-void)
     )
   )");

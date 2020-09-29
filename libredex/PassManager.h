@@ -16,15 +16,17 @@
 #include <boost/optional.hpp>
 #include <json/json.h>
 #include <string>
+#include <typeinfo>
 #include <unordered_map>
 #include <utility>
 #include <vector>
 
 class PassManager {
  public:
-  PassManager(const std::vector<Pass*>& passes,
-              const Json::Value& config = Json::Value(Json::objectValue),
-              const RedexOptions& options = RedexOptions{});
+  explicit PassManager(
+      const std::vector<Pass*>& passes,
+      const Json::Value& config = Json::Value(Json::objectValue),
+      const RedexOptions& options = RedexOptions{});
 
   PassManager(const std::vector<Pass*>& passes,
               std::unique_ptr<keep_rules::ProguardConfiguration> pg_config,
@@ -37,15 +39,15 @@ class PassManager {
     size_t repeat; // zero-based
     size_t total_repeat;
     std::string name;
-    std::unordered_map<std::string, int> metrics;
+    std::unordered_map<std::string, int64_t> metrics;
     JsonWrapper config;
     boost::optional<hashing::DexHash> hash;
   };
 
   void run_passes(DexStoresVector&, ConfigFiles&);
-  void incr_metric(const std::string& key, int value);
-  void set_metric(const std::string& key, int value);
-  int get_metric(const std::string& key);
+  void incr_metric(const std::string& key, int64_t value);
+  void set_metric(const std::string& key, int64_t value);
+  int64_t get_metric(const std::string& key);
   const std::vector<PassManager::PassInfo>& get_pass_info() const;
   boost::optional<hashing::DexHash> get_initial_hash() const {
     return m_initial_hash;
@@ -53,7 +55,7 @@ class PassManager {
   const RedexOptions& get_redex_options() const { return m_redex_options; }
 
   // A temporary hack to return the interdex metrics. Will be removed later.
-  const std::unordered_map<std::string, int>& get_interdex_metrics();
+  const std::unordered_map<std::string, int64_t>& get_interdex_metrics();
 
   keep_rules::ProguardConfiguration& get_proguard_config() {
     return *m_pg_config;
@@ -75,6 +77,15 @@ class PassManager {
 
   bool regalloc_has_run() { return m_regalloc_has_run; }
 
+  template <typename PassType>
+  PassType* get_preserved_analysis() const {
+    auto pass = m_preserved_analysis_passes.find(typeid(PassType).name());
+    if (pass != m_preserved_analysis_passes.end()) {
+      return dynamic_cast<PassType*>(pass->second);
+    }
+    return nullptr;
+  }
+
  private:
   void activate_pass(const std::string& name, const Json::Value& cfg);
 
@@ -87,6 +98,7 @@ class PassManager {
   ApkManager m_apk_mgr;
   std::vector<Pass*> m_registered_passes;
   std::vector<Pass*> m_activated_passes;
+  std::unordered_map<AnalysisID, Pass*> m_preserved_analysis_passes;
 
   // Per-pass information and metrics
   std::vector<PassManager::PassInfo> m_pass_info;
@@ -99,12 +111,17 @@ class PassManager {
 
   struct ProfilerInfo {
     std::string command;
+    boost::optional<std::string> shutdown_cmd;
     boost::optional<std::string> post_cmd;
     const Pass* pass;
     ProfilerInfo(const std::string& command,
+                 const boost::optional<std::string>& shutdown_cmd,
                  const boost::optional<std::string>& post_cmd,
                  const Pass* pass)
-        : command(command), post_cmd(post_cmd), pass(pass) {}
+        : command(command),
+          shutdown_cmd(shutdown_cmd),
+          post_cmd(post_cmd),
+          pass(pass) {}
   };
 
   boost::optional<ProfilerInfo> m_profiler_info;

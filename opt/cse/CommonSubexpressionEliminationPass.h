@@ -15,8 +15,8 @@ class CommonSubexpressionEliminationPass : public Pass {
   CommonSubexpressionEliminationPass()
       : Pass("CommonSubexpressionEliminationPass") {}
 
-  virtual void bind_config() override;
-  virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+  void bind_config() override;
+  void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
   bool m_debug;

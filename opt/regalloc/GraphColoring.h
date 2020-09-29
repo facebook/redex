@@ -103,7 +103,7 @@ class Allocator {
 
   Allocator() = default; // use default config
 
-  Allocator(const Config& config) : m_config(config) {}
+  explicit Allocator(const Config& config) : m_config(config) {}
 
   bool coalesce(interference::Graph*, IRCode*);
 

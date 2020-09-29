@@ -23,9 +23,15 @@ void InlinerConfig::bind_config() {
   bind("run_local_dce", run_local_dce, run_local_dce);
   bind("no_inline_annos", {}, m_no_inline_annos);
   bind("force_inline_annos", {}, m_force_inline_annos);
-  bind("black_list", {}, m_black_list);
-  bind("black_list", {}, m_black_list);
-  bind("caller_black_list", {}, m_caller_black_list);
+  bind("blocklist", {}, m_blocklist);
+  bind("blocklist", {}, m_blocklist);
+  bind("caller_blocklist", {}, m_caller_blocklist);
+  bind("intradex_white_list", {}, m_intradex_white_list,
+       "The purpose of this white-list is to remove black-list entries when "
+       "inlining after the InterDex pass has run. (This reduces the impact of "
+       "black-list entries that avoid inlining conditional control-flow and "
+       "catchers that cause issues with the SwitchMethodPartitioning analysis "
+       "that tends to be used by passes that run before or during InterDex.)");
 }
 
 void OptDecisionsConfig::bind_config() {
@@ -64,10 +70,16 @@ void GlobalConfig::bind_config() {
   bind("agg_method_stats_files", {}, string_vector_param);
   bind("android_sdk_api_15_file", "", string_param);
   bind("android_sdk_api_16_file", "", string_param);
+  bind("android_sdk_api_17_file", "", string_param);
+  bind("android_sdk_api_18_file", "", string_param);
+  bind("android_sdk_api_19_file", "", string_param);
   bind("android_sdk_api_21_file", "", string_param);
   bind("android_sdk_api_23_file", "", string_param);
   bind("android_sdk_api_25_file", "", string_param);
   bind("android_sdk_api_26_file", "", string_param);
+  bind("android_sdk_api_27_file", "", string_param);
+  bind("android_sdk_api_28_file", "", string_param);
+  bind("android_sdk_api_29_file", "", string_param);
   bind("bytecode_sort_mode", {}, string_vector_param);
   bind("legacy_profiled_code_item_sort_order", true, bool_param);
   bind("coldstart_classes", "", string_param);
@@ -82,16 +94,20 @@ void GlobalConfig::bind_config() {
   bind("instruction_size_bitwidth_limit", 0u, uint32_param);
   bind("ir_type_checker", IRTypeCheckerConfig(), ir_type_checker_param);
   bind("hasher", HasherConfig(), hasher_param);
-  bind("check_unique_deobfuscated_names", CheckUniqueDeobfuscatedNamesConfig(), check_unique_deobfuscated_names_config);
+  bind("check_unique_deobfuscated_names", CheckUniqueDeobfuscatedNamesConfig(),
+       check_unique_deobfuscated_names_config);
   bind("json_serde_supercls", {}, string_vector_param);
   bind("keep_all_annotation_classes", true, bool_param);
   bind("keep_methods", {}, string_vector_param);
   bind("keep_packages", {}, string_vector_param);
   bind("legacy_reflection_reachability", false, bool_param);
   bind("lower_with_cfg", {}, bool_param);
-  bind("method_sorting_whitelisted_substrings", {}, string_vector_param);
+  bind("method_sorting_allowlisted_substrings", {}, string_vector_param);
   bind("no_optimizations_annotations", {}, string_vector_param);
   bind("opt_decisions", OptDecisionsConfig(), opt_decisions_param);
+  // TODO: Remove unused profiled_methods_file option and all build system
+  // references
+  bind("profiled_methods_file", "", string_param);
   bind("proguard_map", "", string_param);
   bind("prune_unexported_components", {}, string_vector_param);
   bind("pure_methods", {}, string_vector_param);
@@ -99,4 +115,5 @@ void GlobalConfig::bind_config() {
   bind("string_sort_mode", "", string_param);
   bind("write_cfg_each_pass", false, bool_param);
   bind("dump_cfg_classes", "", string_param);
+  bind("slow_invariants_debug", false, bool_param);
 }

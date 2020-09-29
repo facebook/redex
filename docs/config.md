@@ -69,9 +69,9 @@ this config:
 # Configuring optimization behavior
 
 Each optimization pass has some configurable parameters that are specific to
-that pass.  These are often blacklists (or whitelists) indicating what code the
-optimization should leave alone (for blacklists) or what code should be
-optimized (for whitelists).
+that pass.  These are often blocklists (or allowlists) indicating what code the
+optimization should leave alone (for blocklists) or what code should be
+optimized (for allowlists).
 
 A simple example is ShortenSrcStrings.  This pass removes filenames indicating
 what source code produced each class.  It's a waste to ship those source strings

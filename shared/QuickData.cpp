@@ -76,7 +76,7 @@ uint16_t QuickData::get_field_offset(const std::string& dex,
   return 0;
 }
 
-void QuickData::serialize(std::shared_ptr<FILE*> fd) {
+void QuickData::serialize(const std::shared_ptr<FILE*>& fd) {
 
   {
     auto data_fh = FileHandle(*fd);
@@ -150,7 +150,7 @@ void QuickData::load_data(const char* location) {
   file.reset(MappedFile::mmap_file(
       length, PROT_READ, MAP_PRIVATE, fileno(fd), location, &error_msg));
   fclose(fd);
-  if (file.get() == nullptr) {
+  if (file == nullptr) {
     CHECK(!error_msg.empty());
     std::ostringstream error_str;
     error_str << "QuickData: Error attempting to mmap " << error_msg.c_str();

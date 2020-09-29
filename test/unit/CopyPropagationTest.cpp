@@ -94,6 +94,7 @@ TEST_F(CopyPropagationTest, noRemapRange) {
   code->set_registers_size(7);
 
   copy_propagation_impl::Config config;
+  config.regalloc_has_run = true;
   CopyPropagation(config).run(code.get());
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -113,6 +114,7 @@ TEST_F(CopyPropagationTest, deleteSelfMove) {
     (
       (const v1 0)
       (move v0 v0)
+      (return-void)
     )
 )");
   code->set_registers_size(2);
@@ -123,6 +125,7 @@ TEST_F(CopyPropagationTest, deleteSelfMove) {
   auto expected_code = assembler::ircode_from_string(R"(
     (
       (const v1 0)
+      (return-void)
     )
 )");
 
@@ -136,6 +139,7 @@ TEST_F(CopyPropagationTest, representative) {
       (move v1 v0)
       (invoke-static (v0) "Lcls;.foo:(I)V")
       (invoke-static (v1) "Lcls;.bar:(I)V")
+      (return-void)
     )
 )");
   code->set_registers_size(2);
@@ -149,6 +153,7 @@ TEST_F(CopyPropagationTest, representative) {
       (move v1 v0)
       (invoke-static (v0) "Lcls;.foo:(I)V")
       (invoke-static (v0) "Lcls;.bar:(I)V")
+      (return-void)
     )
 )");
 
@@ -163,6 +168,7 @@ TEST_F(CopyPropagationTest, verifyEnabled) {
       (int-to-float v1 v0) ; use v0 as float
       (const v0 0)
       (float-to-int v1 v0) ; use v0 as int
+      (return-void)
     )
 )");
   code->set_registers_size(2);
@@ -176,6 +182,7 @@ TEST_F(CopyPropagationTest, verifyEnabled) {
       (int-to-float v1 v0) ; use v0 as int
       (const v0 0) ; DON'T delete this. Verifier needs it
       (float-to-int v1 v0) ; use v0 as float
+      (return-void)
     )
 )");
 
@@ -190,6 +197,7 @@ TEST_F(CopyPropagationTest, consts_safe_by_constant_uses) {
       (int-to-float v1 v0) ; use v0 as int
       (const v0 0)
       (int-to-double v1 v0) ; use v0 as int
+      (return-void)
     )
 )");
   code->set_registers_size(2);
@@ -202,6 +210,39 @@ TEST_F(CopyPropagationTest, consts_safe_by_constant_uses) {
       (const v0 0)
       (int-to-float v1 v0) ; use v0 as int
       (int-to-double v1 v0) ; use v0 as int
+      (return-void)
+    )
+)");
+
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+}
+
+TEST_F(CopyPropagationTest, non_zero_constant_cannot_have_object_type_demand) {
+  // if-s on non-zero constants cannot effectively include Object in the
+  // type demand, reducing the type demand to Int, allowing for more
+  // copy-propagation
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (const v0 42)
+      (if-eqz v0 :L1) ; must be int, as it's non-zero
+      (const v0 42)
+      (add-int v1 v0 v0) ; int demand
+      (:L1)
+      (return-void)
+    )
+)");
+  code->set_registers_size(2);
+
+  copy_propagation_impl::Config config;
+  CopyPropagation(config).run(code.get());
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (const v0 42)
+      (if-eqz v0 :L1) ; must be int, as it's non-zero
+      (add-int v1 v0 v0) ; int demand
+      (:L1)
+      (return-void)
     )
 )");
 
@@ -223,6 +264,7 @@ TEST_F(CopyPropagationTest, consts_safe_by_constant_uses_aput) {
       (aput v0 v1 v2)
       (const v0 0) ; can be deleted
       (int-to-double v1 v0)
+      (return-void)
      )
     )
 )");
@@ -240,6 +282,7 @@ TEST_F(CopyPropagationTest, consts_safe_by_constant_uses_aput) {
       (const v2 0) ; dead, and local-dce would delete later
       (aput v0 v1 v0)
       (int-to-double v1 v0)
+      (return-void)
     )
 )");
 
@@ -260,6 +303,7 @@ TEST_F(CopyPropagationTest, consts_unsafe_by_constant_uses_aput) {
       (aput v0 v1 v2)
       (const v0 0) ; used as int
       (int-to-double v1 v0)
+      (return-void)
      )
     )
 )");
@@ -279,7 +323,8 @@ TEST_F(CopyPropagationTest, consts_unsafe_by_constant_uses_aput) {
       (aput v0 v1 v2)
       (const v0 0) ; used as int, redundant with v2!
       (int-to-double v1 v2)
-      )
+      (return-void)
+    )
 )");
 
   EXPECT_CODE_EQ(code, expected_code.get());
@@ -293,6 +338,7 @@ TEST_F(CopyPropagationTest, wide_consts_safe_by_constant_uses) {
       (long-to-float v2 v0) ; use v0 as long
       (const-wide v0 0)
       (long-to-double v2 v0) ; use v0 as long
+      (return-void)
     )
 )");
   code->set_registers_size(4);
@@ -305,6 +351,7 @@ TEST_F(CopyPropagationTest, wide_consts_safe_by_constant_uses) {
       (const-wide v0 0)
       (long-to-float v2 v0) ; use v0 as long
       (long-to-double v2 v0) ; use v0 as long
+      (return-void)
     )
 )");
 
@@ -368,6 +415,7 @@ TEST_F(CopyPropagationTest, cliqueAliasing) {
       (move v0 v1)
       (move v1 v3)
       (move v0 v2)
+      (return-void)
     )
   )");
   code->set_registers_size(4);
@@ -381,6 +429,7 @@ TEST_F(CopyPropagationTest, cliqueAliasing) {
       (move v1 v2)
       (move v0 v1)
       (move v1 v3)
+      (return-void)
     )
   )");
 
@@ -426,41 +475,29 @@ TEST_F(CopyPropagationTest, loopNoChange) {
 }
 
 TEST_F(CopyPropagationTest, branchNoChange) {
-  auto code = assembler::ircode_from_string(R"(
+  auto no_change = R"(
     (
       (if-eqz v0 :true)
 
       (move v1 v2)
-      (goto :end)
-
-      (:true)
-      (move v3 v2)
 
       (:end)
       (move v1 v3)
       (return-void)
+
+      (:true)
+      (move v3 v2)
+      (goto :end)
     )
-  )");
+  )";
+
+  auto code = assembler::ircode_from_string(no_change);
   code->set_registers_size(4);
 
   copy_propagation_impl::Config config;
   CopyPropagation(config).run(code.get());
 
-  auto expected_code = assembler::ircode_from_string(R"(
-    (
-      (if-eqz v0 :true)
-
-      (move v1 v2)
-      (goto :end)
-
-      (:true)
-      (move v3 v2)
-
-      (:end)
-      (move v1 v3)
-      (return-void)
-    )
-  )");
+  auto expected_code = assembler::ircode_from_string(no_change);
 
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
@@ -471,14 +508,14 @@ TEST_F(CopyPropagationTest, intersect1) {
       (if-eqz v0 :true)
 
       (move v1 v2)
-      (goto :end)
-
-      (:true)
-      (move v1 v2)
 
       (:end)
       (move v1 v2)
       (return-void)
+
+      (:true)
+      (move v1 v2)
+      (goto :end)
     )
   )");
   code->set_registers_size(4);
@@ -491,13 +528,13 @@ TEST_F(CopyPropagationTest, intersect1) {
       (if-eqz v0 :true)
 
       (move v1 v2)
-      (goto :end)
-
-      (:true)
-      (move v1 v2)
 
       (:end)
       (return-void)
+
+      (:true)
+      (move v1 v2)
+      (goto :end)
     )
   )");
 
@@ -511,14 +548,14 @@ TEST_F(CopyPropagationTest, intersect2) {
       (if-eqz v0 :true)
 
       (move v3 v1)
-      (goto :end)
-
-      (:true)
-      (move v4 v1)
 
       (:end)
       (move v3 v4)
       (return-void)
+
+      (:true)
+      (move v4 v1)
+      (goto :end)
     )
   )";
   auto code = assembler::ircode_from_string(no_change);
@@ -538,6 +575,7 @@ TEST_F(CopyPropagationTest, wide) {
     (
       (move-wide v0 v2)
       (move-wide v0 v2)
+      (return-void)
     )
   )");
   code->set_registers_size(4);
@@ -549,6 +587,7 @@ TEST_F(CopyPropagationTest, wide) {
   auto expected_code = assembler::ircode_from_string(R"(
     (
       (move-wide v0 v2)
+      (return-void)
     )
   )");
 
@@ -561,6 +600,7 @@ TEST_F(CopyPropagationTest, wideClobber) {
       (move v1 v4)
       (move-wide v0 v2)
       (move v1 v4)
+      (return-void)
     )
   )");
   code->set_registers_size(5);
@@ -574,6 +614,7 @@ TEST_F(CopyPropagationTest, wideClobber) {
       (move v1 v4)
       (move-wide v0 v2)
       (move v1 v4)
+      (return-void)
     )
   )");
 
@@ -586,6 +627,7 @@ TEST_F(CopyPropagationTest, wideClobberWideTrue) {
       (move v1 v4)
       (move-wide v0 v2)
       (move v1 v4)
+      (return-void)
     )
   )");
   code->set_registers_size(5);
@@ -599,6 +641,7 @@ TEST_F(CopyPropagationTest, wideClobberWideTrue) {
       (move v1 v4)
       (move-wide v0 v2)
       (move v1 v4)
+      (return-void)
     )
   )");
 
@@ -612,6 +655,7 @@ TEST_F(CopyPropagationTest, repWide) {
       (move-wide v2 v0)
       (const v1 0)
       (move-wide v4 v2)
+      (return-void)
     )
   )");
   code->set_registers_size(5);
@@ -628,6 +672,7 @@ TEST_F(CopyPropagationTest, repWide) {
       (const v1 0)
       (move-wide v4 v2) ; don't switch v2 to v0
                         ; because `const v1` invalidated v0
+      (return-void)
     )
   )");
 
@@ -642,13 +687,14 @@ TEST_F(CopyPropagationTest, whichRep) {
       (if-eqz v0 :true)
 
       (move v1 v2)
-      (goto :end)
-
-      (:true)
-      (move v2 v1)
 
       (:end)
       (move v3 v1)
+      (return-void)
+
+      (:true)
+      (move v2 v1)
+      (goto :end)
     )
   )";
   auto code = assembler::ircode_from_string(no_change);
@@ -676,6 +722,7 @@ TEST_F(CopyPropagationTest, whichRep2) {
 
       (:end)
       (move v3 v1)
+      (return-void)
     )
   )";
   auto code = assembler::ircode_from_string(no_change);
@@ -695,13 +742,14 @@ TEST_F(CopyPropagationTest, whichRepPreserve) {
       (if-eqz v0 :true)
 
       (move v1 v2)
-      (goto :end)
-
-      (:true)
-      (move v1 v2)
 
       (:end)
       (move v3 v1)
+      (return-void)
+
+      (:true)
+      (move v1 v2)
+      (goto :end)
     )
   )");
   code->set_registers_size(4);
@@ -715,13 +763,14 @@ TEST_F(CopyPropagationTest, whichRepPreserve) {
       (if-eqz v0 :true)
 
       (move v1 v2)
-      (goto :end)
-
-      (:true)
-      (move v1 v2)
 
       (:end)
       (move v3 v2)
+      (return-void)
+
+      (:true)
+      (move v1 v2)
+      (goto :end)
     )
   )");
 
@@ -734,6 +783,7 @@ TEST_F(CopyPropagationTest, wideInvokeSources) {
     (
       (move-wide v0 v15)
       (invoke-static (v0) "Lcom;.foo:(J)V")
+      (return-void)
     )
   )";
   auto code = assembler::ircode_from_string(no_change);
@@ -808,5 +858,115 @@ TEST_F(CopyPropagationTest, instance_of_kills_type_demands) {
     )
 )");
 
+  EXPECT_CODE_EQ(code, expected_code.get());
+}
+
+TEST_F(CopyPropagationTest, ResueConst) {
+  auto method = assembler::method_from_string(R"(
+    (method (public static) "LFoo;.bar:()Ljava/lang/Object;"
+    (
+      (const v2 1)
+      (const v3 1)  ; this can be deleted
+      (const v4 1)  ; this can be deleted
+      (const v5 1)  ; this can be deleted
+      (const v6 1)  ; this can be deleted
+      (invoke-static (v1 v2 v3 v4 v5 v6) "LFoo;.bar:(IIIIII)V")
+    )
+  )
+)");
+
+  auto code = method->get_code();
+  code->set_registers_size(4);
+
+  copy_propagation_impl::Config config;
+  config.regalloc_has_run = false;
+  CopyPropagation(config).run(code, method);
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (const v2 1)
+      (const v3 1)
+      (const v4 1)
+      (const v5 1)
+      (const v6 1)
+      (invoke-static (v1 v2 v2 v2 v2 v2) "LFoo;.bar:(IIIIII)V")
+    )
+)");
+  EXPECT_CODE_EQ(code, expected_code.get());
+}
+
+TEST_F(CopyPropagationTest, lock_canonicalization_none) {
+  auto method = assembler::method_from_string(R"(
+    (method (public static) "LFoo;.bar:()Ljava/lang/Object;"
+     (
+       (const v0 0)
+       (move-object v1 v0)
+       (monitor-enter v1)
+       (monitor-exit v1)
+
+       (const-class "LFoo;")
+       (move-result-pseudo-object v2)
+       (move-object v3 v2)
+       (monitor-enter v3)
+       (monitor-exit v3)
+    )
+  )
+)");
+  auto code = method->get_code();
+  code->set_registers_size(4);
+
+  copy_propagation_impl::Config config;
+  CopyPropagation(config).run(code, method);
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+       (const v0 0)
+       (move-object v1 v0)
+       (monitor-enter v1)
+       (monitor-exit v1)
+
+       (const-class "LFoo;")
+       (move-result-pseudo-object v2)
+       (move-object v3 v2)
+       (monitor-enter v3)
+       (monitor-exit v3)
+    )
+)");
+  EXPECT_CODE_EQ(code, expected_code.get());
+}
+
+TEST_F(CopyPropagationTest, lock_canonicalization) {
+  auto method = assembler::method_from_string(R"(
+    (method (public static) "LFoo;.bar:()Ljava/lang/Object;"
+     (
+       (const v0 0)
+       (move-object v1 v0)
+       (monitor-enter v1)
+       (monitor-exit v1)
+
+       (move-object v1 v0)
+       (monitor-enter v1)
+       (monitor-exit v1)
+    )
+  )
+)");
+  auto code = method->get_code();
+  code->set_registers_size(2);
+
+  copy_propagation_impl::Config config;
+  CopyPropagation(config).run(code, method);
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+       (const v0 0)
+       (move-object v2 v0)
+       (move-object v1 v0)
+       (monitor-enter v2)
+       (monitor-exit v2)
+
+       (monitor-enter v2)
+       (monitor-exit v2)
+    )
+)");
   EXPECT_CODE_EQ(code, expected_code.get());
 }

@@ -13,13 +13,20 @@
 #include "IRCode.h"
 #include "InstructionLowering.h"
 #include "LocalDcePass.h"
+#include "MethodOverrideGraph.h"
+#include "Purity.h"
 #include "RedexTest.h"
 #include "ScopeHelper.h"
+#include "VirtualScope.h"
 
 struct LocalDceTryTest : public RedexTest {
   DexMethod* m_method;
 
   LocalDceTryTest() {
+    // Calling get_vmethods under the hood initializes the object-class, which
+    // we need in the tests to create a proper scope
+    get_vmethods(type::java_lang_Object());
+
     auto args = DexTypeList::make_type_list({});
     auto proto = DexProto::make_proto(type::_void(), args);
     m_method =
@@ -223,6 +230,19 @@ TEST_F(LocalDceTryTest, deadCast) {
 
 struct LocalDceEnhanceTest : public RedexTest {};
 
+static std::unordered_set<DexMethodRef*> get_no_side_effect_methods(
+    const Scope& scope) {
+  std::unordered_set<DexMethodRef*> pure_methods;
+  auto override_graph = method_override_graph::build_graph(scope);
+  std::unordered_set<const DexMethod*> computed_no_side_effects_methods;
+  compute_no_side_effects_methods(scope, override_graph.get(), pure_methods,
+                                  &computed_no_side_effects_methods);
+  for (auto m : computed_no_side_effects_methods) {
+    pure_methods.insert(const_cast<DexMethod*>(m));
+  }
+  return pure_methods;
+}
+
 TEST_F(LocalDceEnhanceTest, NoImplementorIntfTest) {
   Scope scope = create_empty_scope();
   auto void_t = type::_void();
@@ -248,16 +268,14 @@ TEST_F(LocalDceEnhanceTest, NoImplementorIntfTest) {
       (return-void)
     )
   )");
-  LocalDcePass impl;
-  impl.no_implementor_abstract_is_pure = 1;
-  const auto& pure_methods = impl.find_pure_methods(scope);
+  const auto& pure_methods = get_no_side_effect_methods(scope);
   LocalDce ldce(pure_methods);
   IRCode* ircode = code.get();
   ldce.dce(ircode);
   EXPECT_CODE_EQ(ircode, expected_code.get());
 }
 
-TEST_F(LocalDceEnhanceTest, HaveImplementorTest) {
+TEST_F(LocalDceEnhanceTest, HaveImplementorWithoutSideEffectsTest) {
   Scope scope = create_empty_scope();
   auto void_t = type::_void();
   auto void_void =
@@ -288,13 +306,52 @@ TEST_F(LocalDceEnhanceTest, HaveImplementorTest) {
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
+      (return-void)
+    )
+  )");
+  const auto& pure_methods = get_no_side_effect_methods(scope);
+  LocalDce ldce(pure_methods);
+  IRCode* ircode = code.get();
+  ldce.dce(ircode);
+  EXPECT_CODE_EQ(ircode, expected_code.get());
+}
+
+TEST_F(LocalDceEnhanceTest, HaveImplementorWithSideEffectsTest) {
+  Scope scope = create_empty_scope();
+  auto void_t = type::_void();
+  auto void_void =
+      DexProto::make_proto(void_t, DexTypeList::make_type_list({}));
+
+  DexType* a_type = DexType::make_type("LA;");
+  DexClass* a_cls = create_internal_class(a_type, type::java_lang_Object(), {},
+                                          ACC_PUBLIC | ACC_ABSTRACT);
+  create_abstract_method(a_cls, "m", void_void);
+
+  DexType* b_type = DexType::make_type("LB;");
+  DexClass* b_cls = create_internal_class(b_type, a_type, {});
+
+  DexType* c_type = DexType::make_type("LC;");
+  DexClass* c_cls = create_internal_class(c_type, b_type, {});
+  create_throwing_method(c_cls, "m", void_void);
+
+  scope.push_back(a_cls);
+  scope.push_back(b_cls);
+  scope.push_back(c_cls);
+
+  auto code = assembler::ircode_from_string(R"(
+    (
       (invoke-virtual (v0) "LA;.m:()V")
       (return-void)
     )
   )");
-  LocalDcePass impl;
-  impl.no_implementor_abstract_is_pure = 1;
-  const auto& pure_methods = impl.find_pure_methods(scope);
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (invoke-virtual (v0) "LA;.m:()V")
+      (return-void)
+    )
+  )");
+  const auto& pure_methods = get_no_side_effect_methods(scope);
   LocalDce ldce(pure_methods);
   IRCode* ircode = code.get();
   ldce.dce(ircode);
@@ -329,16 +386,52 @@ TEST_F(LocalDceEnhanceTest, NoImplementorTest) {
       (return-void)
     )
   )");
-  LocalDcePass impl;
-  impl.no_implementor_abstract_is_pure = 1;
-  const auto& pure_methods = impl.find_pure_methods(scope);
+  const auto& pure_methods = get_no_side_effect_methods(scope);
   LocalDce ldce(pure_methods);
   IRCode* ircode = code.get();
   ldce.dce(ircode);
   EXPECT_CODE_EQ(ircode, expected_code.get());
 }
 
-TEST_F(LocalDceEnhanceTest, HaveImplementorIntfTest) {
+TEST_F(LocalDceEnhanceTest, HaveImplementorIntfWithSideEffectsTest) {
+  Scope scope = create_empty_scope();
+  auto void_t = type::_void();
+  auto void_void =
+      DexProto::make_proto(void_t, DexTypeList::make_type_list({}));
+  DexType* a_type = DexType::make_type("LA;");
+  DexClass* a_cls = create_internal_class(a_type, type::java_lang_Object(), {},
+                                          ACC_PUBLIC | ACC_INTERFACE);
+  create_abstract_method(a_cls, "m", void_void);
+
+  DexType* b_type = DexType::make_type("LB;");
+  DexClass* b_cls =
+      create_internal_class(b_type, type::java_lang_Object(), {a_type});
+  create_throwing_method(b_cls, "m", void_void);
+
+  scope.push_back(a_cls);
+  scope.push_back(b_cls);
+
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (invoke-virtual (v0) "LA;.m:()V")
+      (return-void)
+    )
+  )");
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (invoke-virtual (v0) "LA;.m:()V")
+      (return-void)
+    )
+  )");
+  const auto& pure_methods = get_no_side_effect_methods(scope);
+  LocalDce ldce(pure_methods);
+  IRCode* ircode = code.get();
+  ldce.dce(ircode);
+  EXPECT_CODE_EQ(ircode, expected_code.get());
+}
+
+TEST_F(LocalDceEnhanceTest, HaveImplementorIntfWithoutSideEffectsTest) {
   Scope scope = create_empty_scope();
   auto void_t = type::_void();
   auto void_void =
@@ -364,14 +457,173 @@ TEST_F(LocalDceEnhanceTest, HaveImplementorIntfTest) {
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
+      (return-void)
+    )
+  )");
+  const auto& pure_methods = get_no_side_effect_methods(scope);
+  LocalDce ldce(pure_methods);
+  IRCode* ircode = code.get();
+  ldce.dce(ircode);
+  EXPECT_CODE_EQ(ircode, expected_code.get());
+}
+
+TEST_F(LocalDceEnhanceTest, NoImplementorMayAllocateRegistersTest) {
+  Scope scope = create_empty_scope();
+  auto void_t = type::_void();
+  auto void_void =
+      DexProto::make_proto(void_t, DexTypeList::make_type_list({}));
+  DexType* a_type = DexType::make_type("LA;");
+  DexClass* a_cls = create_internal_class(a_type, type::java_lang_Object(), {},
+                                          ACC_PUBLIC | ACC_ABSTRACT);
+  create_abstract_method(a_cls, "m", void_void);
+
+  DexType* b_type = DexType::make_type("LB;");
+  DexClass* b_cls = create_internal_class(b_type, a_type, {});
+
+  scope.push_back(a_cls);
+  scope.push_back(b_cls);
+
+  auto code = assembler::ircode_from_string(R"(
+    (
       (invoke-virtual (v0) "LA;.m:()V")
       (return-void)
     )
   )");
-  LocalDcePass impl;
-  impl.no_implementor_abstract_is_pure = 1;
-  const auto& pure_methods = impl.find_pure_methods(scope);
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (throw v0)
+    )
+  )");
+  const auto& pure_methods = get_no_side_effect_methods(scope);
+  auto override_graph = method_override_graph::build_graph(scope);
+  LocalDce ldce(pure_methods, override_graph.get(),
+                /* may_allocate_registers */ true);
+}
+
+TEST_F(LocalDceTryTest, invoked_static_method_with_pure_external_barrier) {
+  ClassCreator creator(DexType::make_type("LNativeTest;"));
+  creator.set_super(type::java_lang_Object());
+
+  auto native_method =
+      DexMethod::make_method("LNativeTest;.native:()V")
+          ->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_NATIVE, false);
+
+  auto method = DexMethod::make_method("LNativeTest;.test:()V")
+                    ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  method->set_code(assembler::ircode_from_string(R"(
+                    (
+                      (invoke-static () "LNativeTest;.native:()V")
+                      (return-void)
+                    )
+                    )"));
+  creator.add_method(method);
+
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (invoke-static () "LNativeTest;.test:()V")
+      (return-void)
+    )
+  )");
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (return-void)
+    )
+  )");
+
+  Scope scope{type_class(type::java_lang_Object()), creator.create()};
+  std::unordered_set<DexMethodRef*> pure_methods = {native_method};
+  // We are computing other no-side-effects method just like the LocalDcePass
+  // would.
+  auto override_graph = method_override_graph::build_graph(scope);
+  std::unordered_set<const DexMethod*> computed_no_side_effects_methods;
+  compute_no_side_effects_methods(scope, override_graph.get(), pure_methods,
+                                  &computed_no_side_effects_methods);
+  for (auto m : computed_no_side_effects_methods) {
+    pure_methods.insert(const_cast<DexMethod*>(m));
+  }
   LocalDce ldce(pure_methods);
+  IRCode* ircode = code.get();
+  ldce.dce(ircode);
+  EXPECT_CODE_EQ(ircode, expected_code.get());
+}
+
+TEST_F(LocalDceTryTest, normalize_new_instances) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (new-instance "Ljava/lang/Object;")
+      (move-result-pseudo-object v0)
+      (new-instance "Ljava/lang/Object;")
+      (move-result-pseudo-object v1)
+      (new-instance "Ljava/lang/Object;")
+      (move-result-pseudo-object v2)
+      (invoke-direct (v0) "Ljava/lang/Object;.<init>:()V")
+      (invoke-direct (v1) "Ljava/lang/Object;.<init>:()V")
+      (invoke-direct (v2) "Ljava/lang/Object;.<init>:()V")
+      (return-void)
+    )
+  )");
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (new-instance "Ljava/lang/Object;")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0) "Ljava/lang/Object;.<init>:()V")
+      (new-instance "Ljava/lang/Object;")
+      (move-result-pseudo-object v1)
+      (invoke-direct (v1) "Ljava/lang/Object;.<init>:()V")
+      (new-instance "Ljava/lang/Object;")
+      (move-result-pseudo-object v2)
+      (invoke-direct (v2) "Ljava/lang/Object;.<init>:()V")
+      (return-void)
+    )
+  )");
+
+  Scope scope{type_class(type::java_lang_Object())};
+  LocalDce ldce({});
+  IRCode* ircode = code.get();
+  ldce.dce(ircode);
+  EXPECT_CODE_EQ(ircode, expected_code.get());
+}
+
+TEST_F(LocalDceTryTest, normalize_new_instances_no_aliases) {
+  // This is currently a limitation of the normalization; could be improved one
+  // day.
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (new-instance "Ljava/lang/Object;")
+      (move-result-pseudo-object v0)
+
+      (new-instance "Ljava/lang/Object;")
+      (move-result-pseudo-object v1)
+      (move-object v3 v1)
+
+      (new-instance "Ljava/lang/Object;")
+      (move-result-pseudo-object v2)
+      (invoke-direct (v0) "Ljava/lang/Object;.<init>:()V")
+      (invoke-direct (v1) "Ljava/lang/Object;.<init>:()V")
+      (invoke-direct (v2) "Ljava/lang/Object;.<init>:()V")
+      (return-object v3)
+    )
+  )");
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (new-instance "Ljava/lang/Object;")
+      (move-result-pseudo-object v1)
+      (move-object v3 v1)
+
+      (new-instance "Ljava/lang/Object;")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0) "Ljava/lang/Object;.<init>:()V")
+      (invoke-direct (v1) "Ljava/lang/Object;.<init>:()V")
+      (new-instance "Ljava/lang/Object;")
+      (move-result-pseudo-object v2)
+      (invoke-direct (v2) "Ljava/lang/Object;.<init>:()V")
+      (return-object v3)
+    )
+  )");
+
+  LocalDce ldce({});
   IRCode* ircode = code.get();
   ldce.dce(ircode);
   EXPECT_CODE_EQ(ircode, expected_code.get());

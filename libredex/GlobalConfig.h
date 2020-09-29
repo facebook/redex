@@ -36,11 +36,12 @@ struct IRTypeCheckerConfig : public Configurable {
 };
 
 struct HasherConfig : public Configurable {
-  public:
+ public:
   void bind_config() override;
   std::string get_config_name() override { return "HasherConfig"; }
   std::string get_config_doc() override {
-    return "This configuration is used to direct Redex to hash the contents of the dex"
+    return "This configuration is used to direct Redex to hash the contents of "
+           "the dex"
            "after various stages of optimization to find non-determinism.";
   }
 
@@ -48,11 +49,14 @@ struct HasherConfig : public Configurable {
 };
 
 struct CheckUniqueDeobfuscatedNamesConfig : public Configurable {
-  public:
+ public:
   void bind_config() override;
-  std::string get_config_name() override { return "CheckUniqueDeobfuscatedNamesConfig"; }
+  std::string get_config_name() override {
+    return "CheckUniqueDeobfuscatedNamesConfig";
+  }
   std::string get_config_doc() override {
-    return "This configuration is used to direct Redex to perform internal integrity checks.";
+    return "This configuration is used to direct Redex to perform internal "
+           "integrity checks.";
   }
 
   bool run_after_each_pass{false};

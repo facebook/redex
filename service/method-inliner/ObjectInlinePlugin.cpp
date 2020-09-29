@@ -11,13 +11,14 @@
 #include "ClassInitCounter.h"
 #include "IROpcode.h"
 
+#include <unordered_set>
+
 using namespace cic;
 using namespace cfg;
 
 ObjectInlinePlugin::ObjectInlinePlugin(
     const FieldSetMap& field_sets,
-    const std::map<DexFieldRef*, DexFieldRef*, dexfields_comparator>&
-        field_swaps,
+    const std::unordered_map<DexFieldRef*, DexFieldRef*>& field_swaps,
     const std::vector<reg_t>& srcs,
     reg_t value_register,
     boost::optional<reg_t> caller_this,
@@ -31,9 +32,8 @@ ObjectInlinePlugin::ObjectInlinePlugin(
       m_callee_this_reg(callee_this),
       m_callee_class(callee_type) {}
 
-const boost::optional<std::reference_wrapper<std::vector<reg_t>>>
-ObjectInlinePlugin::inline_srcs() {
-  return std::reference_wrapper<std::vector<reg_t>>(m_srcs);
+boost::optional<const std::vector<reg_t>&> ObjectInlinePlugin::inline_srcs() {
+  return m_srcs;
 }
 
 boost::optional<reg_t> ObjectInlinePlugin::reg_for_return() {
@@ -48,12 +48,12 @@ bool ObjectInlinePlugin::remove_inline_site() { return false; }
  * Convert field iputs in caller to moves when object is inlined, according to
  * the analysis data in m_initial_field_sets
  * Save what register a field value is being moved into into m_set_field_sets
- * Can increase the number of registers in caller
  * Does not use callee.
  */
-void ObjectInlinePlugin::update_before_reg_remap(ControlFlowGraph* caller,
+bool ObjectInlinePlugin::update_before_reg_remap(ControlFlowGraph* caller,
                                                  ControlFlowGraph* callee) {
   // Assumes only updating for one object being inlined.
+  bool allocated = false;
   for (auto block : caller->blocks()) {
     for (auto& mie : ir_list::InstructionIterable(block)) {
       IRInstruction* insn = mie.insn;
@@ -80,6 +80,7 @@ void ObjectInlinePlugin::update_before_reg_remap(ControlFlowGraph* caller,
         auto move = new IRInstruction(opcode::iput_to_move(opcode));
         move->set_src(0, current_reg);
         if (final_field == m_set_field_sets.end()) {
+          allocated = true;
           reg_t assign_reg = caller->allocate_temp();
           m_set_field_sets[field] = {
               {{assign_reg, {}}}, field_set_data.set, cic::OneReg};
@@ -97,6 +98,7 @@ void ObjectInlinePlugin::update_before_reg_remap(ControlFlowGraph* caller,
       }
     }
   }
+  return allocated;
 }
 
 /*
@@ -114,8 +116,8 @@ bool ObjectInlinePlugin::update_after_reg_remap(ControlFlowGraph*,
   // load params have been changed to moves
   IRInstruction* original_load_this = callee->entry_block()->begin()->insn;
   reg_t callee_this = original_load_this->dest();
-  std::set<DexFieldRef*, dexfields_comparator> used_fields;
-  std::set<reg_t> this_refs = {callee_this};
+  std::unordered_set<DexFieldRef*> used_fields;
+  std::unordered_set<reg_t> this_refs = {callee_this};
 
   for (auto block : callee->blocks()) {
     IRInstruction* awaiting_dest_instr = nullptr;
@@ -182,7 +184,7 @@ bool ObjectInlinePlugin::update_after_reg_remap(ControlFlowGraph*,
       block->remove_insn(it);
     }
   }
-  for (auto fs : m_set_field_sets) {
+  for (const auto& fs : m_set_field_sets) {
     if (used_fields.count(fs.first) == 0) {
       m_unaccessed_field_sets.insert(fs);
     }

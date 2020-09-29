@@ -12,8 +12,8 @@
 namespace dedup_blocks_impl {
 
 struct Config {
-  std::unordered_set<DexMethod*> method_black_list;
-  static const unsigned int DEFAULT_BLOCK_SPLIT_MIN_OPCODE_COUNT = 2;
+  std::unordered_set<DexMethod*> method_blocklist;
+  static const unsigned int DEFAULT_BLOCK_SPLIT_MIN_OPCODE_COUNT = 1;
   unsigned int block_split_min_opcode_count =
       DEFAULT_BLOCK_SPLIT_MIN_OPCODE_COUNT;
   bool split_postfix = true;
@@ -31,14 +31,14 @@ struct Stats {
 
 class DedupBlocks {
  public:
-  DedupBlocks(const Config& config, DexMethod* method);
+  DedupBlocks(const Config* config, DexMethod* method);
 
   const Stats& get_stats() const { return m_stats; }
 
   void run();
 
  private:
-  const Config& m_config;
+  const Config* m_config;
   DexMethod* m_method;
   Stats m_stats;
 };

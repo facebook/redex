@@ -114,13 +114,13 @@ class MoveResultAwareFixpointIterator final
   void analyze_instruction(
       const IRInstruction* insn,
       reaching_defs::Environment* current_state) const override {
-    constexpr reg_t RESULT = ir_analyzer::RESULT_REGISTER;
     if (opcode::is_move_result_any(insn->opcode())) {
-      current_state->set(insn->dest(), current_state->get(RESULT));
-      current_state->set(RESULT, reaching_defs::Domain::top());
+      current_state->set(insn->dest(), current_state->get(RESULT_REGISTER));
+      current_state->set(RESULT_REGISTER, reaching_defs::Domain::top());
     } else if (insn->has_move_result_any()) {
       current_state->set(
-          RESULT, reaching_defs::Domain(const_cast<IRInstruction*>(insn)));
+          RESULT_REGISTER,
+          reaching_defs::Domain(const_cast<IRInstruction*>(insn)));
     } else if (insn->has_dest()) {
       current_state->set(
           insn->dest(),
@@ -604,11 +604,18 @@ AnalysisData analyze(DexMethod* m,
 
   // Filter out non-hot methods.
   if (method_profiles.has_stats()) {
-    const auto& profile_stats =
-        method_profiles.method_stats(method_profiles::COLD_START);
-    if (!profile_stats.count(m) ||
-        profile_stats.at(m).call_count < hotness_threshold ||
-        hotness_threshold <= 0) {
+    auto is_hot_fn = [&]() {
+      for (const auto& interaction_stats : method_profiles.all_interactions()) {
+        const auto& stats_map = interaction_stats.second;
+        if (stats_map.count(m) != 0 &&
+            stats_map.at(m).call_count >= hotness_threshold) {
+          return true;
+        }
+      }
+      return false;
+    };
+    bool is_hot = hotness_threshold > 0 && is_hot_fn();
+    if (!is_hot) {
       data.not_hot = true;
       return data;
     }
@@ -883,7 +890,33 @@ void SplitHugeSwitchPass::run_pass(DexStoresVector& stores,
   mgr.set_metric("split_sources", candidates.size());
   mgr.set_metric("not_hot", stats.not_hot);
 
+  auto print_debug = [&](const Stats& stats, const Stats* result_stats) {
+    auto sorted = [](const auto& in) {
+      std::vector<const DexMethod*> tmp{in.begin(), in.end()};
+      std::sort(tmp.begin(), tmp.end(), compare_dexmethods);
+      return tmp;
+    };
+    auto print = [&](const auto& in, const std::string& header) {
+      std::cerr << header << std::endl;
+      for (const DexMethod* m : sorted(in)) {
+        std::cerr << " * " << show(m) << std::endl;
+      }
+    };
+    print(stats.large_methods_set, "Large methods");
+    print(stats.switch_methods_set, "Large methods with a switch");
+    print(stats.large_switches_set, "Large methods with a large switch");
+    std::cerr << stats.constructor << " constructors." << std::endl;
+    std::cerr << stats.non_simple_chain << " non-simple chains." << std::endl;
+    std::cerr << stats.not_hot << " non-hot methods." << std::endl;
+    if (result_stats != nullptr) {
+      print(result_stats->new_methods, "Created methods");
+    }
+  };
+
   if (candidates.empty()) {
+    if (m_debug) {
+      print_debug(stats, nullptr);
+    }
     return;
   }
 
@@ -918,24 +951,7 @@ void SplitHugeSwitchPass::run_pass(DexStoresVector& stores,
   // Debug output.
 
   if (m_debug) {
-    auto sorted = [](const auto& in) {
-      std::vector<const DexMethod*> tmp{in.begin(), in.end()};
-      std::sort(tmp.begin(), tmp.end(), compare_dexmethods);
-      return tmp;
-    };
-    auto print = [&](const auto& in, const std::string& header) {
-      std::cerr << header << std::endl;
-      for (const DexMethod* m : sorted(in)) {
-        std::cerr << " * " << show(m) << std::endl;
-      }
-    };
-    print(stats.large_methods_set, "Large methods");
-    print(stats.switch_methods_set, "Large methods with a switch");
-    print(stats.large_switches_set, "Large methods with a large switch");
-    std::cerr << stats.constructor << " constructors." << std::endl;
-    std::cerr << stats.non_simple_chain << " non-simple chains." << std::endl;
-    std::cerr << stats.not_hot << " non-hot methods." << std::endl;
-    print(result_stats.new_methods, "Created methods");
+    print_debug(stats, &result_stats);
   }
 }
 

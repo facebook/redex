@@ -14,6 +14,7 @@
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "RedexTest.h"
+#include "RedexTestUtils.h"
 
 #include "InterDexPass.h"
 #include <boost/filesystem.hpp>
@@ -24,9 +25,9 @@ class InterDexTest : public RedexIntegrationTest {
                    const std::string& expected_manifest) {
     std::cout << "Loaded classes: " << classes->size() << std::endl;
 
-    auto tmp_dir = make_tmp_dir();
+    auto tmp_dir = redex::make_tmp_dir("redex_interdex_test_%%%%%%%%");
 
-    auto betmap_file = make_betmap_file(tmp_dir, betmap);
+    auto betmap_file = make_betmap_file(tmp_dir.path, betmap);
     auto config_file_env = std::getenv("config_file");
     always_assert_log(config_file_env,
                       "Config file must be specified to InterDexTest.\n");
@@ -34,10 +35,10 @@ class InterDexTest : public RedexIntegrationTest {
     std::ifstream config_file(config_file_env, std::ifstream::binary);
     Json::Value cfg;
     config_file >> cfg;
-    cfg["apk_dir"] = tmp_dir;
+    cfg["apk_dir"] = tmp_dir.path;
     cfg["coldstart_classes"] = betmap_file;
 
-    auto path = boost::filesystem::path(tmp_dir);
+    auto path = boost::filesystem::path(tmp_dir.path);
     path += boost::filesystem::path::preferred_separator;
     path += "assets";
     path += boost::filesystem::path::preferred_separator;
@@ -68,13 +69,6 @@ class InterDexTest : public RedexIntegrationTest {
     }
     return path;
   }
-
-  std::string make_tmp_dir() {
-    auto path = boost::filesystem::temp_directory_path();
-    path += boost::filesystem::unique_path("/redex_interdex_test_%%%%%%%%");
-    boost::filesystem::create_directories(path);
-    return path.string();
-  }
 };
 
 /* clang-format off */
@@ -82,17 +76,17 @@ class InterDexTest : public RedexIntegrationTest {
 TEST_F(InterDexTest, interdex_noscroll_nobg_noext) {
   define_test({
       "com/facebook/redextest/InterDexPrimary.class",
-      "com/facebook/redextest/C0.class", 
+      "com/facebook/redextest/C0.class",
       "DexEndMarker0.class",
-      "com/facebook/redextest/C1.class", 
+      "com/facebook/redextest/C1.class",
       "com/facebook/redextest/C2.class",
-      "DexEndMarker1.class", 
+      "DexEndMarker1.class",
       "com/facebook/redextest/C3.class",
-      "com/facebook/redextest/C4.class", 
+      "com/facebook/redextest/C4.class",
       "com/facebook/redextest/C5.class",
-      "com/facebook/redextest/C6.class", 
+      "com/facebook/redextest/C6.class",
       "com/facebook/redextest/C7.class",
-      "com/facebook/redextest/C8.class", 
+      "com/facebook/redextest/C8.class",
       "com/facebook/redextest/C9.class"
     },
     "Lsecondary/dex00/Canary;,ordinal=0,coldstart=1,extended=0,primary=0,scroll=0,background=0\n"
@@ -104,17 +98,17 @@ TEST_F(InterDexTest, interdex_noscroll_nobg_noext) {
 TEST_F(InterDexTest, interdex_noscroll_nobg_ext) {
   define_test({
       "com/facebook/redextest/InterDexPrimary.class",
-      "com/facebook/redextest/C0.class", 
+      "com/facebook/redextest/C0.class",
       "DexEndMarker0.class",
-      "com/facebook/redextest/C1.class", 
+      "com/facebook/redextest/C1.class",
       "com/facebook/redextest/C2.class",
-      "DexEndMarker1.class", 
+      "DexEndMarker1.class",
       "com/facebook/redextest/C3.class",
-      "com/facebook/redextest/C4.class", 
-      "com/facebook/redextest/C5.class", 
+      "com/facebook/redextest/C4.class",
+      "com/facebook/redextest/C5.class",
       "com/facebook/redextest/C6.class",
       "com/facebook/redextest/C7.class",
-      "com/facebook/redextest/C8.class", 
+      "com/facebook/redextest/C8.class",
       "com/facebook/redextest/C9.class",
       "com/facebook/redextest/C10.class",
       "com/facebook/redextest/C11.class",
@@ -129,18 +123,18 @@ TEST_F(InterDexTest, interdex_noscroll_nobg_ext) {
 TEST_F(InterDexTest, interdex_noscroll_bg_noext) {
   define_test({
       "com/facebook/redextest/InterDexPrimary.class",
-      "com/facebook/redextest/C0.class", 
+      "com/facebook/redextest/C0.class",
       "DexEndMarker0.class",
-      "com/facebook/redextest/C1.class", 
+      "com/facebook/redextest/C1.class",
       "com/facebook/redextest/C2.class",
-      "DexEndMarker1.class", 
+      "DexEndMarker1.class",
       "com/facebook/redextest/C3.class",
-      "com/facebook/redextest/C4.class", 
+      "com/facebook/redextest/C4.class",
       "BackgroundSetStart0.class",
-      "com/facebook/redextest/C5.class", 
+      "com/facebook/redextest/C5.class",
       "com/facebook/redextest/C6.class",
       "com/facebook/redextest/C7.class",
-      "com/facebook/redextest/C8.class", 
+      "com/facebook/redextest/C8.class",
       "com/facebook/redextest/C9.class",
       "com/facebook/redextest/C10.class",
       "com/facebook/redextest/C11.class",
@@ -156,19 +150,19 @@ TEST_F(InterDexTest, interdex_noscroll_bg_noext) {
 TEST_F(InterDexTest, interdex_noscroll_bg_ext) {
   define_test({
       "com/facebook/redextest/InterDexPrimary.class",
-      "com/facebook/redextest/C0.class", 
+      "com/facebook/redextest/C0.class",
       "DexEndMarker0.class",
-      "com/facebook/redextest/C1.class", 
+      "com/facebook/redextest/C1.class",
       "com/facebook/redextest/C2.class",
-      "DexEndMarker1.class", 
+      "DexEndMarker1.class",
       "com/facebook/redextest/C3.class",
-      "com/facebook/redextest/C4.class", 
+      "com/facebook/redextest/C4.class",
       "BackgroundSetStart0.class",
-      "com/facebook/redextest/C5.class", 
+      "com/facebook/redextest/C5.class",
       "com/facebook/redextest/C6.class",
-      "BackgroundSetEnd0.class", 
+      "BackgroundSetEnd0.class",
       "com/facebook/redextest/C7.class",
-      "com/facebook/redextest/C8.class", 
+      "com/facebook/redextest/C8.class",
       "com/facebook/redextest/C9.class"
     },
     "Lsecondary/dex00/Canary;,ordinal=0,coldstart=1,extended=0,primary=0,scroll=0,background=0\n"
@@ -180,19 +174,19 @@ TEST_F(InterDexTest, interdex_noscroll_bg_ext) {
 TEST_F(InterDexTest, interdex_scroll_nobg_noext) {
   define_test({
       "com/facebook/redextest/InterDexPrimary.class",
-      "com/facebook/redextest/C0.class", 
+      "com/facebook/redextest/C0.class",
       "DexEndMarker0.class",
-      "com/facebook/redextest/C1.class", 
+      "com/facebook/redextest/C1.class",
       "com/facebook/redextest/C2.class",
-      "DexEndMarker1.class", 
+      "DexEndMarker1.class",
       "ScrollSetStart0.class",
       "com/facebook/redextest/C3.class",
-      "com/facebook/redextest/C4.class", 
+      "com/facebook/redextest/C4.class",
       "com/facebook/redextest/C5.class",
       "ScrollSetEnd0.class",
-      "com/facebook/redextest/C6.class", 
+      "com/facebook/redextest/C6.class",
       "com/facebook/redextest/C7.class",
-      "com/facebook/redextest/C8.class", 
+      "com/facebook/redextest/C8.class",
       "com/facebook/redextest/C9.class"
     },
     "Lsecondary/dex00/Canary;,ordinal=0,coldstart=1,extended=0,primary=0,scroll=0,background=0\n"
@@ -204,19 +198,19 @@ TEST_F(InterDexTest, interdex_scroll_nobg_noext) {
 TEST_F(InterDexTest, interdex_scroll_nobg_ext) {
   define_test({
       "com/facebook/redextest/InterDexPrimary.class",
-      "com/facebook/redextest/C0.class", 
+      "com/facebook/redextest/C0.class",
       "DexEndMarker0.class",
-      "com/facebook/redextest/C1.class", 
+      "com/facebook/redextest/C1.class",
       "com/facebook/redextest/C2.class",
-      "DexEndMarker1.class", 
+      "DexEndMarker1.class",
       "ScrollSetStart0.class",
       "com/facebook/redextest/C3.class",
-      "com/facebook/redextest/C4.class", 
-      "com/facebook/redextest/C5.class", 
+      "com/facebook/redextest/C4.class",
+      "com/facebook/redextest/C5.class",
       "ScrollSetEnd0.class",
       "com/facebook/redextest/C6.class",
       "com/facebook/redextest/C7.class",
-      "com/facebook/redextest/C8.class", 
+      "com/facebook/redextest/C8.class",
       "com/facebook/redextest/C9.class",
       "com/facebook/redextest/C10.class",
       "com/facebook/redextest/C11.class",
@@ -231,20 +225,20 @@ TEST_F(InterDexTest, interdex_scroll_nobg_ext) {
 TEST_F(InterDexTest, interdex_scroll_bg_noext) {
   define_test({
       "com/facebook/redextest/InterDexPrimary.class",
-      "com/facebook/redextest/C0.class", 
+      "com/facebook/redextest/C0.class",
       "DexEndMarker0.class",
-      "com/facebook/redextest/C1.class", 
+      "com/facebook/redextest/C1.class",
       "com/facebook/redextest/C2.class",
-      "DexEndMarker1.class", 
+      "DexEndMarker1.class",
       "ScrollSetStart0.class",
       "com/facebook/redextest/C3.class",
-      "com/facebook/redextest/C4.class", 
-      "com/facebook/redextest/C5.class", 
+      "com/facebook/redextest/C4.class",
+      "com/facebook/redextest/C5.class",
       "ScrollSetEnd0.class",
       "BackgroundSetStart0.class",
       "com/facebook/redextest/C6.class",
       "com/facebook/redextest/C7.class",
-      "com/facebook/redextest/C8.class", 
+      "com/facebook/redextest/C8.class",
       "com/facebook/redextest/C9.class",
       "com/facebook/redextest/C10.class",
       "com/facebook/redextest/C11.class",
@@ -260,21 +254,21 @@ TEST_F(InterDexTest, interdex_scroll_bg_noext) {
 TEST_F(InterDexTest, interdex_scroll_bg_ext) {
   define_test({
       "com/facebook/redextest/InterDexPrimary.class",
-      "com/facebook/redextest/C0.class", 
+      "com/facebook/redextest/C0.class",
       "DexEndMarker0.class",
-      "com/facebook/redextest/C1.class", 
+      "com/facebook/redextest/C1.class",
       "com/facebook/redextest/C2.class",
-      "DexEndMarker1.class", 
+      "DexEndMarker1.class",
       "ScrollSetStart0.class",
       "com/facebook/redextest/C3.class",
-      "com/facebook/redextest/C4.class", 
-      "com/facebook/redextest/C5.class", 
+      "com/facebook/redextest/C4.class",
+      "com/facebook/redextest/C5.class",
       "ScrollSetEnd0.class",
       "BackgroundSetStart0.class",
       "com/facebook/redextest/C6.class",
-      "BackgroundSetEnd0.class", 
+      "BackgroundSetEnd0.class",
       "com/facebook/redextest/C7.class",
-      "com/facebook/redextest/C8.class", 
+      "com/facebook/redextest/C8.class",
       "com/facebook/redextest/C9.class"
     },
     "Lsecondary/dex00/Canary;,ordinal=0,coldstart=1,extended=0,primary=0,scroll=0,background=0\n"

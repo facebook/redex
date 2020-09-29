@@ -49,13 +49,12 @@ if ( _zlib_roots )
     find_path( ZLIB_INCLUDE_DIR NAMES zlib.h
         PATHS ${_zlib_roots} NO_DEFAULT_PATH
         PATH_SUFFIXES "include" )
-    find_library( ZLIB_LIBRARIES NAMES libz.a zlib
+    find_library( ZLIB_LIBRARIES NAMES libz.a libz.so zlib
         PATHS ${_zlib_roots} NO_DEFAULT_PATH
         PATH_SUFFIXES "lib" )
 else ()
     find_path( ZLIB_INCLUDE_DIR NAMES zlib.h )
-    # Only look for the static library
-    find_library( ZLIB_LIBRARIES NAMES libz.a zlib )
+    find_library( ZLIB_LIBRARIES NAMES libz.a libz.so zlib )
 endif ()
 
 if (ZLIB_INCLUDE_DIR AND (PARQUET_MINIMAL_DEPENDENCY OR ZLIB_LIBRARIES))
@@ -88,7 +87,7 @@ else ()
   if (NOT ZLIB_FIND_QUIETLY)
     set(ZLIB_ERR_MSG "Could not find the ZLIB library. Looked in ")
     if ( _zlib_roots )
-      set(ZLIB_ERR_MSG "${ZLIB_ERR_MSG} in ${_zlib_roots}.")
+      set(ZLIB_ERR_MSG "${ZLIB_ERR_MSG} ${_zlib_roots}.")
     else ()
       set(ZLIB_ERR_MSG "${ZLIB_ERR_MSG} system search paths.")
     endif ()

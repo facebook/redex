@@ -541,6 +541,15 @@ std::string show_opcode(const DexInstruction* insn) {
   case DOPCODE_FILLED_NEW_ARRAY:
     ss << "filled-new-array " << show(((DexOpcodeType*)insn)->get_type());
     return ss.str();
+  case FOPCODE_PACKED_SWITCH:
+    ss << "packed-switch-payload";
+    return ss.str();
+  case FOPCODE_SPARSE_SWITCH:
+    ss << "sparse-switch-payload";
+    return ss.str();
+  case FOPCODE_FILLED_ARRAY:
+    ss << "fill-array-data-payload";
+    return ss.str();
   default:
     return "unknown_op_code";
   }
@@ -879,8 +888,7 @@ std::string show(IROpcode opcode) {
   case IOPCODE_MOVE_RESULT_PSEUDO_WIDE:
     return "IOPCODE_MOVE_RESULT_PSEUDO_WIDE";
   }
-  always_assert_log(false, "Unknown opcode 0x%x", opcode);
-  return "";
+  not_reached_log("Unknown opcode 0x%x", opcode);
 }
 
 std::string show(DexOpcode opcode) {
@@ -901,10 +909,97 @@ std::string show(DexOpcode opcode) {
   }
 }
 
+// Read n_bytes bytes from data into an integral value of type
+// IntType while also incrementing the data pointer by n_bytes bytes.
+// n_bytes should be less than sizeof(IntType)
+template <typename IntType>
+static IntType read(const uint8_t*& data, uint16_t n_bytes) {
+  static_assert(std::is_integral<IntType>::value,
+                "Only read into integral values.");
+  always_assert_log(sizeof(IntType) >= n_bytes,
+                    "Should not read more bytes than sizeof(IntType)");
+  IntType result;
+  memcpy(&result, data, n_bytes);
+  data += n_bytes;
+  return result;
+}
+
+std::string show(const DexOpcodeData* insn) {
+  if (!insn) return "";
+  std::ostringstream ss;
+  ss << "{ ";
+  const auto* data = insn->data();
+  switch (insn->opcode()) {
+  case FOPCODE_SPARSE_SWITCH: {
+    // See format at
+    // https://source.android.com/devices/tech/dalvik/dalvik-bytecode#sparse-switch
+    const uint16_t entries = *data++;
+    const uint16_t* tdata = data + 2 * entries;
+
+    const uint8_t* data_ptr = (uint8_t*)data;
+    const uint8_t* tdata_ptr = (uint8_t*)tdata;
+    for (size_t i = 0; i < entries; i++) {
+      if (i != 0) {
+        ss << ", ";
+      }
+      int32_t case_key = read<int32_t>(data_ptr, sizeof(int32_t));
+      uint32_t target_offset = read<uint32_t>(tdata_ptr, sizeof(uint32_t));
+      ss << case_key << "->" << target_offset;
+    }
+    break;
+  }
+  case FOPCODE_PACKED_SWITCH: {
+    // See format at
+    // https://source.android.com/devices/tech/dalvik/dalvik-bytecode#packed-switch
+    const uint16_t entries = *data++;
+    const uint8_t* data_ptr = (uint8_t*)data;
+    int32_t case_key = read<int32_t>(data_ptr, sizeof(int32_t));
+    for (size_t i = 0; i < entries; i++) {
+      if (i != 0) {
+        ss << ", ";
+      }
+      uint32_t target_offset = read<uint32_t>(data_ptr, sizeof(uint32_t));
+      ss << case_key++ << "->" << target_offset;
+    }
+    break;
+  }
+  case FOPCODE_FILLED_ARRAY: {
+    // See format at
+    // https://source.android.com/devices/tech/dalvik/dalvik-bytecode#fill-array
+    const uint16_t ewidth = *data++;
+    const uint32_t size = *((uint32_t*)data);
+    ss << "[" << size << " x " << ewidth << "] ";
+    // escape size
+    data += 2;
+    const uint8_t* data_ptr = (uint8_t*)data;
+    ss << "{ ";
+    for (size_t i = 0; i < size; i++) {
+      if (i != 0) {
+        ss << ", ";
+      }
+      ss << std::hex << read<uint64_t>(data_ptr, ewidth);
+    }
+    ss << " }";
+    break;
+  }
+  default:
+    // should not get here
+    ss << "unknown_payload";
+    break;
+  }
+  ss << " }";
+  return ss.str();
+}
+
 std::string show(const DexInstruction* insn) {
   if (!insn) return "";
   std::ostringstream ss;
   ss << show_opcode(insn);
+  if (dex_opcode::is_fopcode(insn->opcode())) {
+    ss << " " << show(static_cast<const DexOpcodeData*>(insn));
+    return ss.str();
+  }
+
   bool first = true;
   if (insn->has_dest()) {
     ss << " v" << insn->dest();

@@ -115,10 +115,9 @@ XDexRefs::XDexRefs(const DexStoresVector& stores) {
 
 size_t XDexRefs::get_dex_idx(const DexType* type) const {
   auto it = m_dexes.find(type);
-  if (it != m_dexes.end()) {
-    return it->second;
-  }
-  always_assert_log(false, "type %s not in the current APK", SHOW(type));
+  always_assert_log(
+      it != m_dexes.end(), "type %s not in the current APK", SHOW(type));
+  return it->second;
 }
 
 bool XDexRefs::cross_dex_ref_override(const DexMethod* overridden,

@@ -38,7 +38,8 @@ struct TryEntry {
 struct CatchEntry {
   DexType* catch_type;
   MethodItemEntry* next; // always null for catchall
-  CatchEntry(DexType* catch_type) : catch_type(catch_type), next(nullptr) {}
+  explicit CatchEntry(DexType* catch_type)
+      : catch_type(catch_type), next(nullptr) {}
 
   bool operator==(const CatchEntry& other) const;
 };
@@ -75,7 +76,7 @@ struct BranchTarget {
   int32_t case_key;
 
   BranchTarget() = default;
-  BranchTarget(MethodItemEntry* src) : src(src), type(BRANCH_SIMPLE) {}
+  explicit BranchTarget(MethodItemEntry* src) : src(src), type(BRANCH_SIMPLE) {}
 
   BranchTarget(MethodItemEntry* src, int32_t case_key)
       : src(src), type(BRANCH_MULTI), case_key(case_key) {}
@@ -142,15 +143,15 @@ struct MethodItemEntry {
   }
   MethodItemEntry(TryEntryType try_type, MethodItemEntry* catch_start)
       : type(MFLOW_TRY), tentry(new TryEntry(try_type, catch_start)) {}
-  MethodItemEntry(DexType* catch_type)
+  explicit MethodItemEntry(DexType* catch_type)
       : type(MFLOW_CATCH), centry(new CatchEntry(catch_type)) {}
-  MethodItemEntry(BranchTarget* bt) {
+  explicit MethodItemEntry(BranchTarget* bt) {
     this->type = MFLOW_TARGET;
     this->target = bt;
   }
-  MethodItemEntry(std::unique_ptr<DexDebugInstruction> dbgop)
+  explicit MethodItemEntry(std::unique_ptr<DexDebugInstruction> dbgop)
       : type(MFLOW_DEBUG), dbgop(std::move(dbgop)) {}
-  MethodItemEntry(std::unique_ptr<DexPosition> pos)
+  explicit MethodItemEntry(std::unique_ptr<DexPosition> pos)
       : type(MFLOW_POSITION), pos(std::move(pos)) {}
 
   bool operator==(const MethodItemEntry&) const;
@@ -387,8 +388,10 @@ class IRList {
   void gather_callsites(std::vector<DexCallSite*>& lcallsite) const;
   void gather_methodhandles(std::vector<DexMethodHandle*>& lmethodhandle) const;
 
-  IRList::iterator erase(IRList::iterator it) { return m_list.erase(it); }
-  IRList::iterator erase_and_dispose(IRList::iterator it) {
+  IRList::iterator erase(const IRList::iterator& it) {
+    return m_list.erase(it);
+  }
+  IRList::iterator erase_and_dispose(const IRList::iterator& it) {
     return m_list.erase_and_dispose(it, disposer);
   }
   void clear_and_dispose() { m_list.clear_and_dispose(disposer); }
@@ -429,13 +432,22 @@ class InstructionIteratorImpl {
       ++m_it;
     }
   }
+  /*
+   * If m_it doesn't point to an MIE of type MFLOW_OPCODE, decrement it until
+   * it does. Otherwise do nothing.
+   */
+  void to_prev_instruction() {
+    while (m_it->type != MFLOW_OPCODE) {
+      --m_it;
+    }
+  }
 
  public:
   using difference_type = long;
   using value_type = Mie&;
   using pointer = Mie*;
   using reference = Mie&;
-  using iterator_category = std::forward_iterator_tag;
+  using iterator_category = std::bidirectional_iterator_tag;
 
   InstructionIteratorImpl() {}
   InstructionIteratorImpl(Iterator it, Iterator end) : m_it(it), m_end(end) {
@@ -451,6 +463,18 @@ class InstructionIteratorImpl {
   InstructionIteratorImpl operator++(int) {
     auto rv = *this;
     ++(*this);
+    return rv;
+  }
+
+  InstructionIteratorImpl& operator--() {
+    --m_it;
+    to_prev_instruction();
+    return *this;
+  }
+
+  InstructionIteratorImpl operator--(int) {
+    auto rv = *this;
+    --(*this);
     return rv;
   }
 
@@ -510,22 +534,6 @@ class InstructionIterableImpl {
   }
 
   bool empty() const { return begin() == end(); }
-
-  bool structural_equals(const InstructionIterableImpl& other) {
-    auto it1 = this->begin();
-    auto it2 = other.begin();
-
-    for (; it1 != this->end() && it2 != other.end(); ++it1, ++it2) {
-      auto& mie1 = *it1;
-      auto& mie2 = *it2;
-
-      if (*mie1.insn != *mie2.insn) {
-        return false;
-      }
-    }
-
-    return it1 == this->end() && it2 == other.end();
-  }
 };
 
 using InstructionIterator = InstructionIteratorImpl<false>;
@@ -546,6 +554,8 @@ class ConstInstructionIterable : public InstructionIterableImpl<true> {
 };
 
 IRInstruction* primary_instruction_of_move_result_pseudo(IRList::iterator it);
+
+IRInstruction* primary_instruction_of_move_result(IRList::iterator it);
 
 IRInstruction* move_result_pseudo_of(IRList::iterator it);
 

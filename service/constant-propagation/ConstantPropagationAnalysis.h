@@ -7,12 +7,33 @@
 
 #pragma once
 
+#include <utility>
+
 #include "ConstantEnvironment.h"
 #include "IRCode.h"
 #include "InstructionAnalyzer.h"
+#include "KotlinNullCheckMethods.h"
+#include "MethodUtil.h"
 #include "MonotonicFixpointIterator.h"
 
 namespace constant_propagation {
+
+// This returns methods that are used in Kotlin null assertion.
+// These null assertions will take the object that they are checking for
+// nullness as first argument and returns void. The value of the object will
+// not be null beyond this program point in the execution path.
+inline std::unordered_set<DexMethodRef*> get_kotlin_null_assertions() {
+  return {method::kotlin_jvm_internal_Intrinsics_checkParameterIsNotNull(),
+          kotlin_nullcheck_wrapper::
+              kotlin_jvm_internal_Intrinsics_WrCheckParameter(),
+          method::kotlin_jvm_internal_Intrinsics_checExpressionValueIsNotNull(),
+          kotlin_nullcheck_wrapper::
+              kotlin_jvm_internal_Intrinsics_WrCheckExpression()};
+}
+
+boost::optional<size_t> get_null_check_object_index(
+    const IRInstruction* insn,
+    const std::unordered_set<DexMethodRef*>& kotlin_null_check_assertions);
 
 namespace intraprocedural {
 
@@ -27,20 +48,27 @@ class FixpointIterator final
   explicit FixpointIterator(
       const cfg::ControlFlowGraph& cfg,
       InstructionAnalyzer<ConstantEnvironment> insn_analyzer)
-      : MonotonicFixpointIterator(cfg), m_insn_analyzer(insn_analyzer) {}
+      : MonotonicFixpointIterator(cfg),
+        m_insn_analyzer(std::move(insn_analyzer)),
+        m_kotlin_null_check_assertions(get_kotlin_null_assertions()) {}
 
   ConstantEnvironment analyze_edge(
       const EdgeId&,
       const ConstantEnvironment& exit_state_at_source) const override;
 
   void analyze_instruction(const IRInstruction* insn,
-                           ConstantEnvironment* current_state) const;
+                           ConstantEnvironment* current_state,
+                           bool is_last) const;
+
+  void analyze_instruction_no_throw(const IRInstruction* insn,
+                                    ConstantEnvironment* current_state) const;
 
   void analyze_node(const NodeId& block,
                     ConstantEnvironment* state_at_entry) const override;
 
  private:
   InstructionAnalyzer<ConstantEnvironment> m_insn_analyzer;
+  std::unordered_set<DexMethodRef*> m_kotlin_null_check_assertions;
 };
 
 } // namespace intraprocedural
@@ -72,6 +100,9 @@ class PrimitiveAnalyzer final
 
   static bool analyze_binop(const IRInstruction* insn,
                             ConstantEnvironment* env);
+
+  static bool analyze_check_cast(const IRInstruction* insn,
+                                 ConstantEnvironment* env);
 
   static bool analyze_instance_of(const IRInstruction* insn,
                                   ConstantEnvironment* env);
@@ -124,9 +155,10 @@ class LocalArrayAnalyzer final
 };
 
 /*
- * Handle static fields in <clinit> methods. Since class initializers must (in
- * most cases) complete running before any other piece of code can modify these
- * fields, we can treat them as non-escaping while analyzing these methods.
+ * Handle static fields in <clinit> methods. Since class method_initializers
+ * must (in most cases) complete running before any other piece of code can
+ * modify these fields, we can treat them as non-escaping while analyzing these
+ * methods.
  */
 class ClinitFieldAnalyzer final
     : public InstructionAnalyzerBase<ClinitFieldAnalyzer,
@@ -168,7 +200,12 @@ class InitFieldAnalyzer final
 };
 
 struct EnumFieldAnalyzerState {
+  // Construction of this object is expensive because get_method acquires a
+  // global lock. `get` creates a singleton once and reuses it.
+  static const EnumFieldAnalyzerState& get();
+
   const DexMethod* enum_equals;
+
   EnumFieldAnalyzerState()
       : enum_equals(static_cast<DexMethod*>(DexMethod::get_method(
             "Ljava/lang/Enum;.equals:(Ljava/lang/Object;)Z"))) {
@@ -196,7 +233,79 @@ class EnumFieldAnalyzer final
                              ConstantEnvironment*);
 };
 
+/**
+ * Specify how an immutatble field is initialized through function call.
+ * For instance, a boxed integer is usually constructed through
+ * `Integer.valueOf(I)` invocation with a primitive value, the primitive value
+ * can be retrieved through `Integer.intValue()`.
+ */
+struct ImmutableAttributeAnalyzerState {
+  struct Initializer {
+    ImmutableAttr::Attr attr;
+    size_t insn_src_id_of_attr;
+    // The object is passed in as a source register of the method invocation,
+    // like `this` pointer of constructor.
+    boost::optional<size_t> insn_src_id_of_obj = boost::none;
+    // The object is the return value of the method. Example, Integer.valueOf(I)
+    bool obj_is_dest() const { return insn_src_id_of_obj == boost::none; }
+
+    explicit Initializer(DexMethod* method_attr) : attr(method_attr) {}
+    explicit Initializer(DexField* field_attr) : attr(field_attr) {}
+
+    Initializer& set_src_id_of_attr(size_t id) {
+      insn_src_id_of_attr = id;
+      return *this;
+    }
+    Initializer& set_obj_to_dest() {
+      insn_src_id_of_obj = boost::none;
+      return *this;
+    }
+    Initializer& set_src_id_of_obj(size_t id) {
+      insn_src_id_of_obj = id;
+      return *this;
+    }
+  };
+
+  ConcurrentMap<DexMethod*, std::vector<Initializer>> method_initializers;
+  ConcurrentSet<DexMethod*> attribute_methods;
+  ConcurrentSet<DexField*> attribute_fields;
+
+  ImmutableAttributeAnalyzerState();
+
+  Initializer& add_initializer(DexMethod* initialize_method, DexMethod* attr);
+  Initializer& add_initializer(DexMethod* initialize_method, DexField* attr);
+  Initializer& add_initializer(DexMethod* initialize_method,
+                               const ImmutableAttr::Attr& attr);
+};
+
+class ImmutableAttributeAnalyzer final
+    : public InstructionAnalyzerBase<ImmutableAttributeAnalyzer,
+                                     ConstantEnvironment,
+                                     ImmutableAttributeAnalyzerState*> {
+  static bool analyze_method_initialization(
+      const ImmutableAttributeAnalyzerState*,
+      const IRInstruction*,
+      ConstantEnvironment*,
+      DexMethod* method);
+  static bool analyze_method_attr(const ImmutableAttributeAnalyzerState*,
+                                  const IRInstruction*,
+                                  ConstantEnvironment*,
+                                  DexMethod* method);
+
+ public:
+  static bool analyze_invoke(const ImmutableAttributeAnalyzerState*,
+                             const IRInstruction*,
+                             ConstantEnvironment*);
+  static bool analyze_iget(const ImmutableAttributeAnalyzerState*,
+                           const IRInstruction* insn,
+                           ConstantEnvironment* env);
+};
+
 struct BoxedBooleanAnalyzerState {
+  // Construction of this object is expensive because get_type/field/method
+  // acquires a global lock. `get` creates a singleton once and reuses it.
+  static const BoxedBooleanAnalyzerState& get();
+
   const DexType* boolean_class{DexType::get_type("Ljava/lang/Boolean;")};
   const DexField* boolean_true{static_cast<DexField*>(
       DexField::get_field("Ljava/lang/Boolean;.TRUE:Ljava/lang/Boolean;"))};
@@ -232,6 +341,17 @@ class StringAnalyzer
   }
 };
 
+class ConstantClassObjectAnalyzer
+    : public InstructionAnalyzerBase<ConstantClassObjectAnalyzer,
+                                     ConstantEnvironment> {
+ public:
+  static bool analyze_const_class(const IRInstruction* insn,
+                                  ConstantEnvironment* env) {
+    env->set(RESULT_REGISTER, ConstantClassObjectDomain(insn->get_type()));
+    return true;
+  }
+};
+
 /*
  * Utility methods.
  */
@@ -259,11 +379,12 @@ class runtime_equals_visitor : public boost::static_visitor<bool> {
 
   // SingletonObjectDomain and StringDomains are equal iff their respective
   // constants are equal.
-  template <
-      typename Constant,
-      typename = typename std::enable_if_t<
-          template_util::contains<Constant, const DexField*, const DexString*>::
-              value>>
+  template <typename Constant,
+            typename = typename std::enable_if_t<
+                template_util::contains<Constant,
+                                        const DexField*,
+                                        const DexString*,
+                                        const DexType*>::value>>
   bool operator()(const sparta::ConstantAbstractDomain<Constant>& d1,
                   const sparta::ConstantAbstractDomain<Constant>& d2) const {
     if (!(d1.is_value() && d2.is_value())) {
@@ -338,5 +459,11 @@ void semantically_inline_method(
  */
 ReturnState collect_return_state(IRCode* code,
                                  const intraprocedural::FixpointIterator&);
+
+/*
+ * Get source argument index, if any, which is getting dereferenced by an
+ * instruction. A null object would cause an exception to be thrown.
+ */
+boost::optional<size_t> get_dereferenced_object_src_index(const IRInstruction*);
 
 } // namespace constant_propagation

@@ -20,7 +20,7 @@ class SynthPass : public Pass {
     bind("synth_only", false, m_pass_config.synth_only);
     bind("remove_pub", true, m_pass_config.remove_pub);
     bind("remove_constructors", true, m_pass_config.remove_constructors);
-    bind("black_list_types", {}, m_pass_config.black_list_types);
+    bind("blocklist_types", {}, m_pass_config.blocklist_types);
   }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;

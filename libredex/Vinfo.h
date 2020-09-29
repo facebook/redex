@@ -46,7 +46,7 @@ class Vinfo {
   };
   using vinfos_t = std::unordered_map<const DexMethod*, vinfo_t>;
 
-  Vinfo(const std::vector<DexClass*>& scope);
+  explicit Vinfo(const std::vector<DexClass*>& scope);
 
   /**
    * Finds the topmost declaration of this method.

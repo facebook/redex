@@ -10,28 +10,52 @@
 #include <boost/noncopyable.hpp>
 #include <boost/optional.hpp>
 #include <map>
+#include <memory>
 #include <set>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include "androidfw/ResourceTypes.h"
+
+namespace boost {
+namespace iostreams {
+class mapped_file;
+} // namespace iostreams
+} // namespace boost
+
+struct RedexMappedFile {
+  std::unique_ptr<boost::iostreams::mapped_file> file;
+  std::string filename;
+  bool read_only;
+
+  RedexMappedFile(std::unique_ptr<boost::iostreams::mapped_file> in_file,
+                  std::string in_filename,
+                  bool read_only);
+  ~RedexMappedFile();
+
+  RedexMappedFile(RedexMappedFile&& other) noexcept;
+  RedexMappedFile& operator=(RedexMappedFile&& rhs) noexcept;
+
+  RedexMappedFile(const RedexMappedFile&) = delete;
+  RedexMappedFile& operator=(const RedexMappedFile&) = delete;
+
+  const char* const_data() const;
+  char* data() const;
+  size_t size() const;
+};
 
 const char* const ONCLICK_ATTRIBUTE = "android:onClick";
 
 std::string read_entire_file(const std::string& filename);
 void write_entire_file(const std::string& filename,
                        const std::string& contents);
-void* map_file(const char* path,
-               int* file_descriptor,
-               size_t* length,
-               const bool mode_write = false);
+RedexMappedFile map_file(const char* path, bool mode_write = false);
 size_t write_serialized_data(const android::Vector<char>& cVec,
-                             int file_descriptor,
-                             void* file_pointer,
-                             size_t length);
-void unmap_and_close(int file_descriptor, void* file_pointer, size_t length);
+                             RedexMappedFile map);
+void unmap_and_close(RedexMappedFile map);
 
 std::string get_string_attribute_value(const android::ResXMLTree& parser,
                                        const android::String16& attribute_name);
@@ -77,6 +101,8 @@ struct ComponentTagInfo {
   ComponentTag tag;
   std::string classname;
   BooleanXMLAttribute is_exported;
+  std::string permission;
+  std::string protection_level;
   // Not defined on <provider>
   bool has_intent_filters{false};
   // Only defined on <provider>
@@ -84,8 +110,14 @@ struct ComponentTagInfo {
 
   ComponentTagInfo(ComponentTag tag,
                    const std::string& classname,
-                   BooleanXMLAttribute is_exported)
-      : tag(tag), classname(classname), is_exported(is_exported) {}
+                   BooleanXMLAttribute is_exported,
+                   std::string permission,
+                   std::string protection_level)
+      : tag(tag),
+        classname(classname),
+        is_exported(is_exported),
+        permission(std::move(permission)),
+        protection_level(std::move(protection_level)) {}
 };
 
 struct ManifestClassInfo {
@@ -95,6 +127,10 @@ struct ManifestClassInfo {
 };
 
 ManifestClassInfo get_manifest_class_info(const std::string& filename);
+
+// For testing only!
+std::unordered_set<std::string> extract_classes_from_native_lib(
+    const std::string& lib_contents);
 
 std::unordered_set<std::string> get_native_classes(
     const std::string& apk_directory);
@@ -199,11 +235,10 @@ class ResourcesArscFile {
   size_t serialize();
   ~ResourcesArscFile();
 
-  size_t get_length() { return m_arsc_len; }
+  size_t get_length() const;
 
  private:
-  bool m_file_closed = false;
-  int m_arsc_fd;
+  RedexMappedFile m_f;
   size_t m_arsc_len;
-  void* m_arsc_ptr;
+  bool m_file_closed = false;
 };

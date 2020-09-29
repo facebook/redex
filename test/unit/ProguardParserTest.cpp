@@ -74,14 +74,14 @@ TEST(ProguardParserTest, keepdirectories) {
       "-keepdirectories alpha \n"
       "-keepdirectories /alpha/beta \n"
       "-keepdirectories \"gamma\" \n"
-      "-keepdirectories /alpha/beta2:gamma/delta:/iota/a/b/c/deer\n");
+      "-keepdirectories /alpha/beta2:\"gamma/ delta\":/iota/a/b/c/deer\n");
   proguard_parser::parse(ss, &config);
   ASSERT_EQ(config.keepdirectories.size(), 6);
   ASSERT_EQ(config.keepdirectories[0], "alpha");
   ASSERT_EQ(config.keepdirectories[1], "/alpha/beta");
   ASSERT_EQ(config.keepdirectories[2], "gamma");
   ASSERT_EQ(config.keepdirectories[3], "/alpha/beta2");
-  ASSERT_EQ(config.keepdirectories[4], "gamma/delta");
+  ASSERT_EQ(config.keepdirectories[4], "gamma/ delta");
   ASSERT_EQ(config.keepdirectories[5], "/iota/a/b/c/deer");
 }
 
@@ -756,7 +756,7 @@ TEST(ProguardParserTest, keep_annotation_classes) {
   }
 }
 
-TEST(ProguardParserTest, remove_blacklisted_rules) {
+TEST(ProguardParserTest, remove_blocklisted_rules) {
   {
     ProguardConfiguration config;
     std::istringstream ss(R"(
@@ -770,7 +770,7 @@ TEST(ProguardParserTest, remove_blacklisted_rules) {
     proguard_parser::parse(ss, &config);
     ASSERT_TRUE(config.ok);
     EXPECT_EQ(config.keep_rules.size(), 4);
-    proguard_parser::remove_blacklisted_rules(&config);
+    proguard_parser::remove_blocklisted_rules(&config);
     EXPECT_EQ(config.keep_rules.size(), 2);
     // Check that we preserve the contents / order of the remaining rules.
     auto it = config.keep_rules.begin();
@@ -791,7 +791,7 @@ TEST(ProguardParserTest, remove_blacklisted_rules) {
     proguard_parser::parse(ss, &config);
     ASSERT_TRUE(config.ok);
     EXPECT_EQ(config.keep_rules.size(), 2);
-    proguard_parser::remove_blacklisted_rules(&config);
+    proguard_parser::remove_blocklisted_rules(&config);
     EXPECT_EQ(config.keep_rules.size(), 2);
   }
 }

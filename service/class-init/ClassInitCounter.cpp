@@ -13,6 +13,7 @@
 #include "BaseIRAnalyzer.h"
 #include "ControlFlow.h"
 #include "IRCode.h"
+#include "ScopedCFG.h"
 
 using namespace cic;
 
@@ -20,8 +21,8 @@ bool operator==(const FieldSet& a, const FieldSet& b) {
   if (a.set != b.set || a.source != b.source) {
     return false;
   }
-  std::set<IRInstruction*> a_instrs;
-  std::set<IRInstruction*> b_instrs;
+  std::unordered_set<IRInstruction*> a_instrs;
+  std::unordered_set<IRInstruction*> b_instrs;
   for (const auto& a_reg_instr : a.regs) {
     a_instrs.insert(a_reg_instr.second.begin(), a_reg_instr.second.end());
   }
@@ -39,12 +40,12 @@ inline bool operator==(const MethodCall& a, const MethodCall& b) {
   if (a.call != b.call) {
     return false;
   }
-  std::set<IRInstruction*> a_instrs;
-  std::set<IRInstruction*> b_instrs;
-  for (auto call : a.call_sites) {
+  std::unordered_set<IRInstruction*> a_instrs;
+  std::unordered_set<IRInstruction*> b_instrs;
+  for (const auto& call : a.call_sites) {
     a_instrs.insert(call.first);
   }
-  for (auto call : b.call_sites) {
+  for (const auto& call : b.call_sites) {
     b_instrs.insert(call.first);
   }
   return a_instrs == b_instrs;
@@ -92,7 +93,7 @@ std::string show(const FieldSetMap& fields_writes) {
 std::string show(const FieldReads& field_reads) {
   std::stringstream out;
   out << "[";
-  for (auto field_read : field_reads.get_fields()) {
+  for (const auto& field_read : field_reads.get_fields()) {
     out << "{\"field_read\" : \"" << field_read.first->get_name()->str()
         << "\"flow\" :\"" << show(field_read.second) << "\"},";
   }
@@ -120,11 +121,11 @@ std::string show(const Escapes& escapes) {
                              : "\"NoReturn\"")
       << "\", "
       << "\"via_array_write\" : "
-      << (escapes.via_array_write.size() == 0 ? "\"none\"," : "[");
-  for (auto i_flow : escapes.via_array_write) {
+      << (escapes.via_array_write.empty() ? "\"none\"," : "[");
+  for (const auto& i_flow : escapes.via_array_write) {
     out << "\"" << show(i_flow.second) << "\",";
   }
-  out << (escapes.via_array_write.size() == 0 ? "" : "],")
+  out << (escapes.via_array_write.empty() ? "" : "],")
       << "\"via_field\" : " << show(escapes.via_field_set) << ", "
       << "\"via_static_method\" : " << show(escapes.via_smethod_call) << ", "
       << "\"via_virtual_method\" : " << show(escapes.via_vmethod_call) << "}}";
@@ -246,7 +247,7 @@ std::vector<DexFieldRef*> get_keys(const FieldSetMap& m) {
 
 std::vector<DexFieldRef*> get_keys(const FieldReadMap& m) {
   std::vector<DexFieldRef*> m_keys = {};
-  for (auto f : m) {
+  for (const auto& f : m) {
     m_keys.emplace_back(f.first);
   }
   return m_keys;
@@ -264,7 +265,7 @@ FieldSet path_combine(const FieldSet& main, const FieldSet& other) {
   auto combined_regs = main.regs;
   for (const auto& o_reg : other.regs) {
     auto& reg = combined_regs[o_reg.first];
-    for (auto o_instr : o_reg.second) {
+    for (const auto& o_instr : o_reg.second) {
       reg.insert(o_instr);
     }
   }
@@ -278,7 +279,7 @@ FieldSet merge(const FieldSet& main, const FieldSet& other) {
   if (other.regs != main.regs) {
     for (const auto& o_reg : other.regs) {
       auto reg = merged_regs[o_reg.first];
-      for (auto o_instr : o_reg.second) {
+      for (const auto& o_instr : o_reg.second) {
         reg.insert(o_instr);
       }
     }
@@ -302,7 +303,7 @@ MethodCall path_combine(const MethodCall& main, const MethodCall& other) {
 
 void FieldWriteRegs::combine_paths(const FieldWriteRegs& other) {
   std::vector<DexFieldRef*> m_keys = get_keys(m_fields);
-  for (auto field : m_keys) {
+  for (const auto& field : m_keys) {
     auto field_data = m_fields.find(field);
     auto other_field = other.m_fields.find(field);
     if (other_field == other.m_fields.end()) {
@@ -324,11 +325,11 @@ void FieldWriteRegs::combine_paths(const FieldWriteRegs& other) {
 }
 
 void FieldWriteRegs::merge(const FieldWriteRegs& other) {
-  if (other.m_fields.size() == 0) {
+  if (other.m_fields.empty()) {
     return;
   }
   std::vector<DexFieldRef*> m_keys = get_keys(m_fields);
-  for (auto field : m_keys) {
+  for (const auto& field : m_keys) {
     auto field_data = m_fields.find(field);
     auto other_field = other.m_fields.find(field);
     if (other_field == other.m_fields.end()) {
@@ -376,7 +377,7 @@ void FieldReads::add_field(DexFieldRef* field) {
 
 // Fields that don't match are inconsistent but ok to have more or less fields
 bool FieldReads::consistent_with(const FieldReads& other) {
-  for (auto read : m_fields) {
+  for (const auto& read : m_fields) {
     auto o_read = other.m_fields.find(read.first);
     if (o_read == other.m_fields.end()) {
       continue;
@@ -389,16 +390,16 @@ bool FieldReads::consistent_with(const FieldReads& other) {
 }
 
 void FieldReads::combine_paths(const FieldReads& other) {
-  if (other.m_fields.size() == 0) {
+  if (other.m_fields.empty()) {
     return;
   }
   auto keys = get_keys(m_fields);
-  for (auto key : keys) {
+  for (const auto& key : keys) {
     if (other.m_fields.count(key) == 0) {
       m_fields[key] = Conditional;
     }
   }
-  for (auto o_read : other.m_fields) {
+  for (const auto& o_read : other.m_fields) {
     auto read = m_fields.find(o_read.first);
     if (read == m_fields.end()) {
       m_fields[o_read.first] = Conditional;
@@ -407,11 +408,11 @@ void FieldReads::combine_paths(const FieldReads& other) {
 }
 
 void FieldReads::merge(const FieldReads& other) {
-  if (other.m_fields.size() == 0) {
+  if (other.m_fields.empty()) {
     return;
   }
   // Outer path flow holds over inner path flow, so just don't lose any
-  for (auto o_read : other.m_fields) {
+  for (const auto& o_read : other.m_fields) {
     if (m_fields.count(o_read.first) == 0) {
       m_fields[o_read.first] = o_read.second;
     }
@@ -424,11 +425,11 @@ bool MethodCalls::consistent_with(const MethodCalls& other) {
 }
 
 void MethodCalls::combine_paths(const MethodCalls& other) {
-  if (other.m_calls.size() == 0) {
+  if (other.m_calls.empty()) {
     return;
   }
   std::vector<DexMethodRef*> m_keys = get_keys(m_calls);
-  for (auto call : m_keys) {
+  for (const auto& call : m_keys) {
     auto call_data = m_calls.find(call);
     auto other_call = other.m_calls.find(call);
     if (other_call == other.m_calls.end()) {
@@ -451,18 +452,18 @@ void MethodCalls::combine_paths(const MethodCalls& other) {
 }
 
 void MethodCalls::merge(const MethodCalls& other) {
-  if (other.m_calls.size() == 0) {
+  if (other.m_calls.empty()) {
     return;
   }
   std::vector<DexMethodRef*> m_keys = get_keys(m_calls);
-  for (auto call : m_keys) {
+  for (const auto& call : m_keys) {
     auto call_data = m_calls.find(call);
     auto other_call = other.m_calls.find(call);
     if (other_call == other.m_calls.end()) {
       continue;
     }
     if (other_call->second != call_data->second) {
-      for (auto o_call_site : other_call->second.call_sites) {
+      for (const auto& o_call_site : other_call->second.call_sites) {
         call_data->second.call_sites.insert(o_call_site);
       }
     }
@@ -519,7 +520,7 @@ void Escapes::add_dmethod(DexMethodRef* method,
                           IRInstruction* instr) {
   auto exists_check = via_vmethod_call.find(method);
   if (exists_check == via_vmethod_call.end()) {
-    via_vmethod_call[method] = (MethodCall){AllPaths, {{instr, object}}};
+    via_vmethod_call[method] = MethodCall{AllPaths, {{instr, object}}};
   } else {
     via_vmethod_call[method].call_sites.insert({instr, object});
   }
@@ -571,11 +572,11 @@ bool Escapes::consistent_with(const Escapes& other) {
 }
 
 void Escapes::combine_paths(const Escapes& other) {
-  if (return_instrs.size() >= 1 || other.return_instrs.size() >= 1) {
+  if (!return_instrs.empty() || !other.return_instrs.empty()) {
     via_return =
         path_combine(via_return ? via_return.value() : Conditional,
                      other.via_return ? other.via_return.value() : Conditional);
-    for (auto o_instr : other.return_instrs) {
+    for (const auto& o_instr : other.return_instrs) {
       return_instrs.insert(o_instr);
     }
   }
@@ -650,10 +651,10 @@ void Escapes::merge(const Escapes& other) {
   if (!via_return && other.via_return) {
     via_return = other.via_return;
   }
-  for (auto insn : other.return_instrs) {
+  for (auto* insn : other.return_instrs) {
     return_instrs.insert(insn);
   }
-  for (auto i_flow : other.via_array_write) {
+  for (const auto& i_flow : other.via_array_write) {
     if (via_array_write.count(i_flow.first) == 0) {
       via_array_write[i_flow.first] = i_flow.second;
     }
@@ -689,8 +690,8 @@ void TrackedUses::combine_paths(const TrackedUses& other) {
   safe_escapes.combine_paths(other.safe_escapes);
 }
 
-std::vector<std::pair<IRInstruction*, reg_t>>
-Escapes::get_escape_instructions() {
+std::vector<std::pair<IRInstruction*, reg_t>> Escapes::get_escape_instructions()
+    const {
   std::vector<std::pair<IRInstruction*, reg_t>> escapes;
   if (via_return) {
     for (auto i : return_instrs) {
@@ -706,12 +707,12 @@ Escapes::get_escape_instructions() {
   }
 
   for (const auto& v_call : via_vmethod_call) {
-    for (auto i_reg : v_call.second.call_sites) {
+    for (const auto i_reg : v_call.second.call_sites) {
       escapes.emplace_back(i_reg);
     }
   }
   for (const auto& s_call : via_smethod_call) {
-    for (auto i_reg : s_call.second.call_sites) {
+    for (const auto i_reg : s_call.second.call_sites) {
       escapes.emplace_back(i_reg);
     }
   }
@@ -727,10 +728,9 @@ void TrackedUses::merge(const TrackedUses& other) {
 }
 
 void ObjectUses::combine_paths(const TrackedUses& other) {
-  if (other.m_tracked_kind == Merged) {
-    always_assert(
-        "ObjectUses cannot be combined with a MergedUses, check logic at call");
-  }
+  always_assert_log(
+      other.m_tracked_kind != Merged,
+      "ObjectUses cannot be combined with a MergedUses, check logic at call");
   TrackedUses::combine_paths(other);
   if (reinterpret_cast<const ObjectUses&>(other).created_flow != AllPaths) {
     created_flow = Conditional;
@@ -738,10 +738,9 @@ void ObjectUses::combine_paths(const TrackedUses& other) {
 }
 
 void ObjectUses::merge(const TrackedUses& other) {
-  if (other.m_tracked_kind == Merged) {
-    always_assert(
-        "ObjectUses cannot be combined with a MergedUses, check logic at call");
-  }
+  always_assert_log(
+      other.m_tracked_kind != Merged,
+      "ObjectUses cannot be combined with a MergedUses, check logic at call");
   // this uses created_flow supercedes ones from program order later uses
   TrackedUses::merge(other);
 }
@@ -749,43 +748,50 @@ void ObjectUses::merge(const TrackedUses& other) {
 bool ObjectUses::consistent_with(const TrackedUses& other_tracked) {
   if (other_tracked.m_tracked_kind == Object) {
     auto other = reinterpret_cast<const ObjectUses&>(other_tracked);
-    return other.m_id == m_id && m_class_used == other.m_class_used;
+    return other.m_ir == m_ir && m_class_used == other.m_class_used;
   } else {
     auto other_merged = reinterpret_cast<const MergedUses&>(other_tracked);
-    if (other_merged.get_instrs().count(m_id) == 0 ||
-        other_merged.get_classes().count(m_class_used) == 0) {
-      return false;
-    }
-    return true;
+    return other_merged.contains_instr(m_ir) &&
+           other_merged.contains_type(m_class_used);
   }
 }
 
 MergedUses::MergedUses(const ObjectUses& older, const ObjectUses& newer)
     : TrackedUses(Merged) {
-  m_instrs = {older.get_instr(), newer.get_instr()};
+  m_instrs.insert(older.get_po_identity());
+  m_instrs.insert(newer.get_po_identity());
   m_classes.insert(older.get_represents_typ());
   m_classes.insert(newer.get_represents_typ());
 }
 
 MergedUses::MergedUses(const ObjectUses& other) : TrackedUses(Merged) {
-  m_instrs.insert(other.get_instr());
+  m_instrs.insert(other.get_po_identity());
   m_classes.insert(other.get_represents_typ());
   m_includes_nullable = true;
+}
+
+bool MergedUses::contains_instr(
+    const std::shared_ptr<InstructionPOIdentity>& i) const {
+  return m_instrs.count(i) == 0;
+}
+
+bool MergedUses::contains_type(DexType* c) const {
+  return m_classes.count(c) == 0;
 }
 
 void MergedUses::combine_paths(const TrackedUses& other) {
   if (other.m_tracked_kind == Object) {
     auto obj_use_other = reinterpret_cast<const ObjectUses&>(other);
-    m_instrs.insert(obj_use_other.get_instr());
+    m_instrs.insert(obj_use_other.get_po_identity());
     m_classes.insert(obj_use_other.get_represents_typ());
   } else {
     auto merged_use_other = reinterpret_cast<const MergedUses&>(other);
     m_includes_nullable =
         merged_use_other.m_includes_nullable || m_includes_nullable;
-    for (auto i : merged_use_other.get_instrs()) {
+    for (const auto& i : merged_use_other.m_instrs) {
       m_instrs.insert(i);
     }
-    for (auto c : merged_use_other.get_classes()) {
+    for (auto* c : merged_use_other.m_classes) {
       m_classes.insert(c);
     }
   }
@@ -796,8 +802,8 @@ void MergedUses::merge(const TrackedUses& other) {
   if (other.m_tracked_kind == Object) {
     auto obj_use_other = reinterpret_cast<const ObjectUses&>(other);
     m_classes.insert(obj_use_other.get_represents_typ());
-    if (m_instrs.count(obj_use_other.get_instr()) == 0) {
-      m_instrs.insert(obj_use_other.get_instr());
+    if (!contains_instr(obj_use_other.get_po_identity())) {
+      m_instrs.insert(obj_use_other.get_po_identity());
       // A merge between an ObjectUse and a MergedUse from a
       // new instruction always implies different paths were taken to here
       TrackedUses::combine_paths(other);
@@ -808,24 +814,24 @@ void MergedUses::merge(const TrackedUses& other) {
     }
   } else {
     auto merged_use_other = reinterpret_cast<const MergedUses&>(other);
-    for (auto c : merged_use_other.get_classes()) {
+    for (auto* c : merged_use_other.m_classes) {
       m_classes.insert(c);
     }
     m_includes_nullable =
         merged_use_other.m_includes_nullable || m_includes_nullable;
-    std::vector<IRInstruction*> intersection;
+    std::vector<std::shared_ptr<InstructionPOIdentity>> intersection;
     std::set_intersection(
-        m_instrs.begin(), m_instrs.end(), merged_use_other.get_instrs().begin(),
-        merged_use_other.get_instrs().end(), std::back_inserter(intersection));
+        m_instrs.begin(), m_instrs.end(), merged_use_other.m_instrs.begin(),
+        merged_use_other.m_instrs.end(), std::back_inserter(intersection));
 
-    if (intersection.size() > 0) {
+    if (!intersection.empty()) {
       // We have come from some of the same instructions, so merge without paths
       TrackedUses::merge(other);
     } else {
       // We're joining two paths
       TrackedUses::combine_paths(other);
     }
-    for (auto i : merged_use_other.get_instrs()) {
+    for (const auto& i : merged_use_other.m_instrs) {
       m_instrs.insert(i);
     }
   }
@@ -835,40 +841,58 @@ bool MergedUses::consistent_with(const TrackedUses& other_tracked) {
   // May want to subset check the members
   if (other_tracked.m_tracked_kind == Object) {
     auto other = reinterpret_cast<const ObjectUses&>(other_tracked);
-    if (m_instrs.count(other.get_instr()) == 0) {
-      return false;
-    }
-    return true;
+    return contains_instr(other.get_po_identity());
   } else {
     auto other_merged = reinterpret_cast<const MergedUses&>(other_tracked);
-    std::vector<IRInstruction*> intersection;
+    std::vector<std::shared_ptr<InstructionPOIdentity>> intersection;
     std::set_intersection(
-        m_instrs.begin(), m_instrs.end(), other_merged.get_instrs().begin(),
-        other_merged.get_instrs().end(), std::back_inserter(intersection));
+        m_instrs.begin(), m_instrs.end(), other_merged.m_instrs.begin(),
+        other_merged.m_instrs.end(), std::back_inserter(intersection));
 
     // If our instructions are overlapping, we're consistent
-    return intersection.size() > 0;
+    return !intersection.empty();
   }
 }
 
-bool MergedUses::same_instrs(const MergedUses& other) const {
-  for (auto i : m_instrs) {
-    if (other.get_instrs().count(i) == 0) {
+bool MergedUses::equal(const MergedUses& other) const {
+  for (const auto& i : m_instrs) {
+    if (!other.contains_instr(i)) {
       return false;
     }
   }
-  for (auto i : other.get_instrs()) {
-    if (m_instrs.count(i) == 0) {
+  for (const auto& i : other.m_instrs) {
+    if (!contains_instr(i)) {
       return false;
     }
   }
   return true;
 }
 
+bool MergedUses::less(const MergedUses& other) const {
+  auto m_iterator = m_instrs.begin();
+  auto o_iterator = other.m_instrs.begin();
+  for (; m_iterator != m_instrs.end(); m_iterator++) {
+    for (; o_iterator != other.m_instrs.end(); o_iterator++) {
+      if (m_iterator == m_instrs.end()) {
+        return false;
+      }
+      if (*m_iterator < *o_iterator) {
+        return true;
+      } else if (*m_iterator == *o_iterator) {
+        m_iterator++;
+        continue;
+      }
+      return false;
+    }
+    return false;
+  }
+  return false;
+}
+
 size_t MergedUses::hash() const {
   size_t result;
-  for (auto i : m_instrs) {
-    result = result ^ i->hash();
+  for (const auto& i : m_instrs) {
+    result = result ^ i->insn->hash();
   }
   return result;
 }
@@ -1067,7 +1091,9 @@ void RegisterSet::merge_registers(const RegisterSet& comes_after,
 
 std::shared_ptr<ObjectUses> InitLocation::add_init(DexClass* container,
                                                    DexMethod* caller,
-                                                   IRInstruction* instr) {
+                                                   IRInstruction* instr,
+                                                   uint32_t block_id,
+                                                   uint32_t instruction_count) {
   if (m_inits[container][caller].count(instr) == 0) {
     // We've not seen this instruction initializing our class before
     // So increase count of the number of initializations
@@ -1075,7 +1101,8 @@ std::shared_ptr<ObjectUses> InitLocation::add_init(DexClass* container,
   }
   TRACE(CIC, 8, "Adding init to %s, from instruction %s", SHOW(m_typ),
         SHOW(instr));
-  auto usage = std::make_shared<ObjectUses>(m_typ, instr);
+  auto usage =
+      std::make_shared<ObjectUses>(m_typ, instr, block_id, instruction_count);
   m_inits[container][caller][instr].emplace_back(usage);
   return usage;
 }
@@ -1087,13 +1114,41 @@ void InitLocation::update_object(DexClass* container,
       std::make_shared<ObjectUses>(obj)};
 }
 
+void InitLocation::reset_uses_from(DexClass* cls_impl, DexMethod* method) {
+  auto class_seen = m_inits.find(cls_impl);
+  if (class_seen == m_inits.end()) {
+    return;
+  }
+  auto& method_table = class_seen->second;
+  auto method_seen = method_table.find(method);
+  if (method_seen == method_table.end()) {
+    return;
+  }
+  method_table.erase(method);
+}
+
+void InitLocation::all_uses_from(DexClass* cls_impl,
+                                 DexMethod* method,
+                                 ObjectUsedSet& set) const {
+  const auto methods = m_inits.find(cls_impl);
+  if (methods == m_inits.end()) {
+    return;
+  }
+  const auto instructions_uses = methods->second.find(method);
+  if (instructions_uses == methods->second.end()) {
+    return;
+  }
+  for (const auto& inst_uses : instructions_uses->second) {
+    set.insert(inst_uses.second.begin(), inst_uses.second.end());
+  }
+}
+
 ClassInitCounter::ClassInitCounter(
     DexType* parent_class,
-    const std::set<DexMethodRef*, dexmethods_comparator>& safe_escapes,
+    const std::unordered_set<DexMethodRef*>& safe_escapes,
     const std::unordered_set<DexClass*>& classes,
     boost::optional<DexString*> optional_method_name)
-    : m_optional_method(std::move(optional_method_name)),
-      m_safe_escapes{safe_escapes} {
+    : m_optional_method(optional_method_name), m_safe_escapes{safe_escapes} {
   find_children(parent_class, classes);
   TRACE(CIC,
         3,
@@ -1102,10 +1157,10 @@ ClassInitCounter::ClassInitCounter(
         SHOW(parent_class));
   for (DexClass* current : classes) {
     for (DexMethod* method : current->get_vmethods()) {
-      inits_any_children(current, method);
+      find_uses_within(current, method);
     }
     for (DexMethod* method : current->get_dmethods()) {
-      inits_any_children(current, method);
+      find_uses_within(current, method);
     }
   }
 }
@@ -1118,13 +1173,15 @@ void ClassInitCounter::find_children(
       m_type_to_inits.insert({type, InitLocation(type)});
     }
   }
-  return;
 }
 
-void ClassInitCounter::analyze_block(DexClass* container,
-                                     DexMethod* method,
-                                     cfg::Block* prev_block,
-                                     cfg::Block* block) {
+void ClassInitCounter::analyze_block(
+    DexClass* container,
+    DexMethod* method,
+    TypeToInit& type_to_inits,
+    const std::unordered_set<IRInstruction*>& tracked_set,
+    cfg::Block* prev_block,
+    cfg::Block* block) {
   bool first_visit = true;
 
   if (visited_blocks.count(prev_block) && visited_blocks.count(block)) {
@@ -1160,6 +1217,8 @@ void ClassInitCounter::analyze_block(DexClass* container,
   }
 
   RegisterSet registers = visited_blocks[block]->input_registers;
+  uint32_t block_id = block->id();
+  uint32_t instruction_count = 0;
 
   for (const auto& instr : InstructionIterable(block)) {
     auto i = instr.insn;
@@ -1174,9 +1233,9 @@ void ClassInitCounter::analyze_block(DexClass* container,
 
     if (opcode::is_move_result(opcode) ||
         opcode::is_move_result_pseudo(opcode)) {
-      if (!registers.is_empty(ir_analyzer::RESULT_REGISTER)) {
-        registers.insert(dest, registers.get(ir_analyzer::RESULT_REGISTER));
-        registers.clear(ir_analyzer::RESULT_REGISTER);
+      if (!registers.is_empty(RESULT_REGISTER)) {
+        registers.insert(dest, registers.get(RESULT_REGISTER));
+        registers.clear(RESULT_REGISTER);
         clear_dest = false;
       }
     } else if (is_move(opcode)) {
@@ -1186,12 +1245,13 @@ void ClassInitCounter::analyze_block(DexClass* container,
       }
     } else if (is_new_instance(opcode)) {
       DexType* typ = i->get_type();
-      registers.clear(ir_analyzer::RESULT_REGISTER);
-      if (m_type_to_inits.count(typ) != 0) {
+      registers.clear(RESULT_REGISTER);
+      if ((tracked_set.empty() || tracked_set.count(i) != 0) &&
+          (type_to_inits.count(typ) != 0)) {
         TRACE(CIC, 5, "Adding an init for type %s", SHOW(typ));
-        std::shared_ptr<ObjectUses> use =
-            m_type_to_inits[typ].add_init(container, method, i);
-        registers.insert(ir_analyzer::RESULT_REGISTER, use);
+        std::shared_ptr<ObjectUses> use = type_to_inits[typ].add_init(
+            container, method, i, block_id, instruction_count);
+        registers.insert(RESULT_REGISTER, use);
       }
     } else if (is_iput(opcode)) {
       auto field = i->get_field();
@@ -1205,7 +1265,7 @@ void ClassInitCounter::analyze_block(DexClass* container,
       if (!registers.is_empty(srcs[0])) {
         registers.get(srcs[0])->fields_read.add_field(i->get_field());
       }
-      registers.clear(ir_analyzer::RESULT_REGISTER);
+      registers.clear(RESULT_REGISTER);
     } else if (is_sput(opcode)) {
       auto field = i->get_field();
       if (!registers.is_empty(srcs[0])) {
@@ -1216,23 +1276,24 @@ void ClassInitCounter::analyze_block(DexClass* container,
         registers.get(srcs[0])->escapes.add_array(i);
       }
     } else if (is_filled_new_array(opcode)) {
-      for (auto src : srcs) {
+      for (const auto src : srcs) {
         if (!registers.is_empty(src)) {
           registers.get(src)->escapes.add_array(i);
         }
       }
     } else if (is_invoke_static(opcode)) {
       auto curr_method = i->get_method();
-      registers.clear(ir_analyzer::RESULT_REGISTER);
+      registers.clear(RESULT_REGISTER);
       if (m_optional_method && curr_method->get_name() == m_optional_method) {
         auto ret_typ = curr_method->get_proto()->get_rtype();
-        if (m_type_to_inits.count(ret_typ) != 0) {
-          std::shared_ptr<ObjectUses> use =
-              m_type_to_inits[ret_typ].add_init(container, method, i);
-          registers.insert(ir_analyzer::RESULT_REGISTER, use);
+        if ((tracked_set.empty() || tracked_set.count(i) != 0) &&
+            type_to_inits.count(ret_typ) != 0) {
+          std::shared_ptr<ObjectUses> use = type_to_inits[ret_typ].add_init(
+              container, method, i, block_id, instruction_count);
+          registers.insert(RESULT_REGISTER, use);
         }
       }
-      for (auto src : srcs) {
+      for (const auto src : srcs) {
         if (!registers.is_empty(src)) {
           if (m_safe_escapes.find(curr_method) == m_safe_escapes.end()) {
             registers.get(src)->escapes.add_smethod(curr_method, src, i);
@@ -1248,7 +1309,7 @@ void ClassInitCounter::analyze_block(DexClass* container,
         registers.get(target_reg)
             ->method_calls.add_call(curr_method, target_reg, i);
       }
-      for (auto src : srcs) {
+      for (const auto src : srcs) {
         if (src != target_reg && !registers.is_empty(src)) {
           if (m_safe_escapes.find(curr_method) == m_safe_escapes.end()) {
             registers.get(src)->escapes.add_dmethod(curr_method, src, i);
@@ -1257,7 +1318,7 @@ void ClassInitCounter::analyze_block(DexClass* container,
           }
         }
       }
-      registers.clear(ir_analyzer::RESULT_REGISTER);
+      registers.clear(RESULT_REGISTER);
     } else if (is_return_value(opcode)) {
       if (srcs.size() == 1 && !(registers.is_empty(srcs[0]))) {
         registers.get(srcs[0])->escapes.add_return(i);
@@ -1266,11 +1327,12 @@ void ClassInitCounter::analyze_block(DexClass* container,
     if (clear_dest) {
       registers.clear(dest);
     }
+    instruction_count++;
   }
 
   if (!first_visit) {
     TRACE(CIC, 8, "Not our first visit to %zu, check for different blocks",
-          block->id());
+          block_id);
     bool same_block =
         visited_blocks[block]->basic_block_registers.consistent_with(registers);
     if (same_block && visited_blocks[block]->final_result_registers) {
@@ -1290,7 +1352,7 @@ void ClassInitCounter::analyze_block(DexClass* container,
     visited_blocks[block]->basic_block_registers = std::move(registers);
   }
 
-  if (block->succs().size() == 0) {
+  if (block->succs().empty()) {
     TRACE(CIC, 8, "Termination of block %zu", block->id());
     visited_blocks[block]->final_result_registers =
         visited_blocks[block]->basic_block_registers;
@@ -1301,10 +1363,10 @@ void ClassInitCounter::analyze_block(DexClass* container,
   // Book keeping to differentiate first path from an empty registerset
   bool walked_one_path = false;
 
-  for (auto edge : block->succs()) {
+  for (auto* edge : block->succs()) {
     cfg::Block* next = edge->target();
     TRACE(CIC, 8, "making call from %zu to block %zu", block->id(), next->id());
-    analyze_block(container, method, block, next);
+    analyze_block(container, method, type_to_inits, tracked_set, block, next);
     assert(visited_blocks[next]->final_result_registers);
 
     TRACE(CIC, 8, "Combining paths after looking at block %zu from %zu",
@@ -1323,32 +1385,41 @@ void ClassInitCounter::analyze_block(DexClass* container,
   visited_blocks[block]->final_result_registers.value().merge_effects(paths);
 }
 
-void ClassInitCounter::inits_any_children(DexClass* container,
-                                          DexMethod* method) {
+std::pair<ObjectUsedSet, MergedUsedSet> ClassInitCounter::find_uses_of(
+    IRInstruction* origin, DexType* typ, DexMethod* method) {
+  TypeToInit init_storage;
+  init_storage.insert({typ, InitLocation(typ)});
+  std::unordered_set<IRInstruction*> tracked{origin};
+  DexClass* container = type_class(method->get_class());
+
+  drive_analysis(container, method, "find_uses_of", tracked, init_storage);
+
+  ObjectUsedSet use;
+  use.insert(init_storage[typ].get_inits()[container][method][origin][0]);
+  return {use, MergedUsedSet()};
+}
+
+void ClassInitCounter::drive_analysis(
+    DexClass* container,
+    DexMethod* method,
+    const std::string& analysis,
+    const std::unordered_set<IRInstruction*>& tracking,
+    TypeToInit& type_to_inits) {
   IRCode* instructions = method->get_code();
   if (instructions == nullptr) {
     return;
   }
+  cfg::ScopedCFG graph(instructions);
 
-  instructions->build_cfg(true);
-  const cfg::ControlFlowGraph& graph = instructions->cfg();
-
-  if (graph.blocks().size() > 9000) {
-    TRACE(CIC, 4, "Skipping analysis for method %s.%s",
-          container->get_name()->c_str(), method->get_name()->c_str());
-    instructions->clear_cfg();
-    return;
-  }
-
-  cfg::Block* block = graph.entry_block();
+  cfg::Block* block = graph->entry_block();
   visited_blocks =
       std::unordered_map<cfg::Block*, std::shared_ptr<RegistersPerBlock>>();
 
-  TRACE(CIC, 5, "starting analysis for method %s.%s with %zu blocks\n",
-        container->get_name()->c_str(), method->get_name()->c_str(),
-        graph.num_blocks());
+  TRACE(CIC, 5, "starting %s analysis for method %s.%s with %zu blocks\n",
+        analysis.c_str(), SHOW(container), SHOW(method), graph->num_blocks());
 
-  analyze_block(container, method, nullptr, block);
+  analyze_block(container, method, type_to_inits, tracking, nullptr, block);
+
   auto& merged_set = m_stored_mergeds[container->get_type()][method];
   // This loop collects the results of all ObjectUses and MergedUses encountered
   // in the forwards analysis, which has been merged bottom up to coalesce the
@@ -1360,15 +1431,46 @@ void ClassInitCounter::inits_any_children(DexClass* container,
   for (const auto& use :
        visited_blocks[block]->final_result_registers.value().m_all_uses) {
     if (use->m_tracked_kind == Object) {
-      m_type_to_inits[static_cast<ObjectUses&>(*use).get_represents_typ()]
+      type_to_inits[static_cast<ObjectUses&>(*use).get_represents_typ()]
           .update_object(container, method, static_cast<ObjectUses&>(*use));
     } else {
       merged_set.insert(
           std::make_shared<MergedUses>(static_cast<MergedUses&>(*use)));
     }
   }
+}
 
-  instructions->clear_cfg();
+void ClassInitCounter::find_uses_within(DexClass* container,
+                                        DexMethod* method) {
+  DexType* container_type = container->get_type();
+  for (auto& t_init : m_type_to_inits) {
+    t_init.second.reset_uses_from(container, method);
+  }
+  if (m_stored_mergeds.count(container_type) != 0) {
+    m_stored_mergeds[container_type].erase(method);
+  }
+  std::unordered_set<IRInstruction*> empty;
+  drive_analysis(container, method, "find_uses_within", empty, m_type_to_inits);
+}
+
+std::pair<ObjectUsedSet, MergedUsedSet> ClassInitCounter::all_uses_from(
+    DexType* container, DexMethod* method) {
+  MergedUsedSet merged_set;
+  const auto container_methods = m_stored_mergeds.find(container);
+  if (container_methods != m_stored_mergeds.end()) {
+    const auto methods_uses = container_methods->second.find(method);
+    if (methods_uses != container_methods->second.end()) {
+      merged_set.insert(methods_uses->second.begin(),
+                        methods_uses->second.end());
+    }
+  }
+
+  ObjectUsedSet object_set;
+  for (const auto& typ_init : m_type_to_inits) {
+    typ_init.second.all_uses_from(type_class(container), method, object_set);
+  }
+
+  return std::make_pair(object_set, merged_set);
 }
 
 // This is generating an almost json representation, but may have extra ,s

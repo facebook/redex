@@ -21,6 +21,8 @@
 #include "DexOutput.h"
 #include "IRCode.h"
 #include "InstructionLowering.h"
+#include "RedexTestUtils.h"
+#include "SanitizersConfig.h"
 #include "TestGenerator.h"
 
 namespace fs = boost::filesystem;
@@ -71,9 +73,8 @@ int main(int argc, char* argv[]) {
   EquivalenceTest::generate_all(*runner_cls);
 
   Json::Value json(Json::objectValue);
-  char templ[] = "redex_equivalence_test_XXXXXX";
-  auto tmpdir = mkdtemp(templ);
-  std::string metadir(tmpdir);
+  auto tmpdir = redex::make_tmp_dir("redex_equivalence_test_%%%%%%%%");
+  std::string metadir(tmpdir.path);
   metadir += "/meta";
   int status = mkdir(metadir.c_str(), 0755);
   if (status != 0) {
@@ -85,7 +86,7 @@ int main(int argc, char* argv[]) {
     exit(EXIT_FAILURE);
   }
 
-  ConfigFiles conf(json, tmpdir);
+  ConfigFiles conf(json, tmpdir.path);
   std::unique_ptr<PositionMapper> pos_mapper(PositionMapper::make(""));
 
   DexStore store("classes");
@@ -109,7 +110,6 @@ int main(int argc, char* argv[]) {
                        nullptr /* IODIMetadata* */,
                        stores[0].get_dex_magic());
 
-  fs::remove_all(tmpdir);
   delete g_redex;
   return 0;
 }

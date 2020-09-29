@@ -8,6 +8,7 @@
 #pragma once
 
 #include "ConstantAbstractDomain.h"
+#include "ReducedProductAbstractDomain.h"
 #include "SignDomain.h"
 
 using ConstantDomain = sparta::ConstantAbstractDomain<int64_t>;

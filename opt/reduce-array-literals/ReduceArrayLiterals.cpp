@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "BaseIRAnalyzer.h"
+#include "CFGMutation.h"
 #include "ConstantAbstractDomain.h"
 #include "ControlFlow.h"
 #include "HashedSetAbstractDomain.h"
@@ -77,7 +78,7 @@ struct TrackedValueHasher {
     case TrackedValueKind::NewArray:
       return tv.length + (size_t)tv.new_array_insn ^ tv.aput_insns_size;
     default:
-      always_assert(false);
+      not_reached();
     }
   }
 };
@@ -96,7 +97,7 @@ bool operator==(const TrackedValue& a, const TrackedValue& b) {
            a.aput_insns_size == b.aput_insns_size &&
            a.aput_insns == b.aput_insns;
   default:
-    always_assert(false);
+    not_reached();
   }
 }
 
@@ -183,7 +184,7 @@ using TrackedDomainEnvironment =
 class Analyzer final : public BaseIRAnalyzer<TrackedDomainEnvironment> {
 
  public:
-  Analyzer(cfg::ControlFlowGraph& cfg) : BaseIRAnalyzer(cfg) {
+  explicit Analyzer(cfg::ControlFlowGraph& cfg) : BaseIRAnalyzer(cfg) {
     MonotonicFixpointIterator::run(TrackedDomainEnvironment::top());
   }
 
@@ -364,7 +365,7 @@ ReduceArrayLiterals::ReduceArrayLiterals(cfg::ControlFlowGraph& cfg,
     }
   }
 
-  if (!new_array_insns.size()) {
+  if (new_array_insns.empty()) {
     return;
   }
 
@@ -384,7 +385,7 @@ void ReduceArrayLiterals::patch() {
   for (auto& p : m_array_literals) {
     const IRInstruction* new_array_insn = p.first;
     std::vector<const IRInstruction*>& aput_insns = p.second;
-    if (aput_insns.size() == 0) {
+    if (aput_insns.empty()) {
       // Really no point of doing anything with these
       continue;
     }
@@ -516,6 +517,7 @@ size_t ReduceArrayLiterals::patch_new_array_chunk(
     boost::optional<reg_t> chunk_dest,
     reg_t overall_dest,
     std::vector<reg_t>* temp_regs) {
+  cfg::CFGMutation mutation(m_cfg);
 
   size_t chunk_size =
       std::min(aput_insns.size() - chunk_start, m_max_filled_elements);
@@ -582,10 +584,9 @@ size_t ReduceArrayLiterals::patch_new_array_chunk(
     invoke_static_insn->set_src(4, m_local_temp_regs[2]);
     new_insns.push_back(invoke_static_insn);
   }
-  m_cfg.insert_after(it, new_insns);
+  mutation.insert_after(it, new_insns);
 
   // find iterators corresponding to the aput instructions
-
   std::unordered_set<const IRInstruction*> aput_insns_set(aput_insns.begin(),
                                                           aput_insns.end());
   std::unordered_map<const IRInstruction*, cfg::InstructionIterator>
@@ -598,30 +599,39 @@ size_t ReduceArrayLiterals::patch_new_array_chunk(
     }
   }
 
-  // replace aput instructions with moves to temporary regs used by
-  // filled-new-array instruction (see above)
+  // replace aput instructions with moves or check-cast instructions to
+  // temporary regs used by filled-new-array instruction (see above)
 
-  auto move_op = type::is_primitive(type::get_array_component_type(type))
-                     ? OPCODE_MOVE
-                     : OPCODE_MOVE_OBJECT;
+  // most check-cast instructions will get eliminated again by the
+  // remove-reundant-check-casts pass
 
+  auto component_type = type::get_array_component_type(type);
+  bool is_component_type_primitive = type::is_primitive(component_type);
   for (size_t index = chunk_start; index < chunk_end; index++) {
     const IRInstruction* aput_insn = aput_insns[index];
     always_assert(is_aput(aput_insn->opcode()));
     always_assert(aput_insn->src(1) == overall_dest);
     it = aput_insns_iterators.at(aput_insn);
-    IRInstruction* move_insn = new IRInstruction(move_op);
-    move_insn->set_dest(filled_new_array_insn->src(index - chunk_start));
-    move_insn->set_src(0, aput_insn->src(0));
-
-    // TODO: Add a cfg::replace_insn method, instead of having to
-    // insert_before followed by remove_insn
-
-    // inserting moves doesn't invalidate iterators
-    m_cfg.insert_before(it, move_insn);
-    // removing instructions doesn't invalidate iterators
-    m_cfg.remove_insn(it);
+    auto dest = filled_new_array_insn->src(index - chunk_start);
+    auto src = aput_insn->src(0);
+    if (is_component_type_primitive) {
+      always_assert(aput_insn->opcode() != OPCODE_APUT_OBJECT);
+      IRInstruction* move_insn = new IRInstruction(OPCODE_MOVE);
+      move_insn->set_dest(dest);
+      move_insn->set_src(0, src);
+      mutation.replace(it, {move_insn});
+    } else {
+      always_assert(aput_insn->opcode() == OPCODE_APUT_OBJECT);
+      IRInstruction* check_cast_insn = new IRInstruction(OPCODE_CHECK_CAST);
+      check_cast_insn->set_type(component_type);
+      check_cast_insn->set_src(0, src);
+      IRInstruction* move_result_pseudo_object_insn =
+          new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
+      move_result_pseudo_object_insn->set_dest(dest);
+      mutation.replace(it, {check_cast_insn, move_result_pseudo_object_insn});
+    }
   }
+  mutation.flush();
 
   return chunk_size;
 }

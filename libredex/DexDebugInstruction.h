@@ -30,18 +30,11 @@ class DexDebugInstruction : public Gatherable {
   DexDebugItemOpcode m_opcode;
 
  public:
-  DexDebugInstruction(DexDebugItemOpcode op, uint32_t v = DEX_NO_INDEX)
-      : Gatherable() {
-    m_opcode = op;
-    m_uvalue = v;
-    m_signed = false;
-  }
+  explicit DexDebugInstruction(DexDebugItemOpcode op, uint32_t v = DEX_NO_INDEX)
+      : m_uvalue(v), m_signed(false), m_opcode(op) {}
 
-  DexDebugInstruction(DexDebugItemOpcode op, int32_t v) : Gatherable() {
-    m_opcode = op;
-    m_value = v;
-    m_signed = true;
-  }
+  DexDebugInstruction(DexDebugItemOpcode op, int32_t v)
+      : m_value(v), m_signed(true), m_opcode(op) {}
 
  public:
   virtual void encode(DexOutputIdx* dodx, uint8_t*& encdata);
@@ -50,6 +43,8 @@ class DexDebugInstruction : public Gatherable {
   virtual std::unique_ptr<DexDebugInstruction> clone() const {
     return std::make_unique<DexDebugInstruction>(*this);
   }
+  static std::unique_ptr<DexDebugInstruction> create_line_entry(int8_t line,
+                                                                uint8_t addr);
 
   DexDebugItemOpcode opcode() const { return m_opcode; }
 
@@ -75,7 +70,8 @@ class DexDebugOpcodeSetFile : public DexDebugInstruction {
   DexString* m_str;
 
  public:
-  DexDebugOpcodeSetFile(DexString* str) : DexDebugInstruction(DBG_SET_FILE) {
+  explicit DexDebugOpcodeSetFile(DexString* str)
+      : DexDebugInstruction(DBG_SET_FILE) {
     m_str = str;
   }
 

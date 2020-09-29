@@ -26,7 +26,7 @@ struct AnalysisImpl : SingleImplAnalysis {
   AnalysisImpl(const Scope& scope,
                const ProguardMap& pg_map,
                const DexStoresVector& stores)
-      : SingleImplAnalysis(), scope(scope), pg_map(pg_map), xstores(stores) {}
+      : scope(scope), pg_map(pg_map), xstores(stores) {}
 
   void create_single_impl(const TypeMap& single_impl,
                           const TypeSet& intfs,
@@ -47,7 +47,7 @@ struct AnalysisImpl : SingleImplAnalysis {
   void filter_proguard_special_interface();
   void filter_do_not_strip();
   void filter_list(const std::vector<std::string>& list, bool keep_match);
-  void filter_by_annotations(const std::vector<std::string>& black_list);
+  void filter_by_annotations(const std::vector<std::string>& blocklist);
 
  private:
   const Scope& scope;
@@ -140,9 +140,9 @@ void AnalysisImpl::filter_proguard_special_interface() {
 }
 
 void AnalysisImpl::filter_by_annotations(
-    const std::vector<std::string>& black_list) {
+    const std::vector<std::string>& blocklist) {
   std::unordered_set<DexType*> anno_types;
-  for (const auto& s : black_list) {
+  for (const auto& s : blocklist) {
     auto ty = DexType::get_type(s.c_str());
     if (ty != nullptr) {
       anno_types.emplace(ty);
@@ -165,9 +165,9 @@ void AnalysisImpl::filter_by_annotations(
 void AnalysisImpl::filter_single_impl(const SingleImplConfig& config) {
   filter_list(config.white_list, true);
   filter_list(config.package_white_list, true);
-  filter_list(config.black_list, false);
-  filter_list(config.package_black_list, false);
-  filter_by_annotations(config.anno_black_list);
+  filter_list(config.blocklist, false);
+  filter_list(config.package_blocklist, false);
+  filter_by_annotations(config.anno_blocklist);
   // TODO(T33109158): Better way to eliminate VerifyError.
   if (config.filter_proguard_special_interfaces) {
     filter_proguard_special_interface();
@@ -242,7 +242,7 @@ void AnalysisImpl::escape_with_clinit() {
     // same. Interfaces should not have static methods and even if so we
     // just escape them. From our analysis it turns out there are few with
     // clinit only and as expected none with static methods.
-    if (type_class(intf_it.first)->get_dmethods().size() > 0) {
+    if (!type_class(intf_it.first)->get_dmethods().empty()) {
       escape_interface(intf_it.first, CLINIT);
     }
   }
@@ -259,10 +259,10 @@ void AnalysisImpl::escape_with_clinit() {
 void AnalysisImpl::escape_with_sfields() {
   for (auto const& intf_it : single_impls) {
     auto intf_cls = type_class(intf_it.first);
-    redex_assert(intf_cls->get_ifields().size() == 0);
+    redex_assert(intf_cls->get_ifields().empty());
     always_assert(!intf_cls->is_external());
     const auto& sfields = intf_cls->get_sfields();
-    if (sfields.size() == 0) continue;
+    if (sfields.empty()) continue;
     escape_interface(intf_it.first, HAS_SFIELDS);
     for (auto sfield : sfields) {
       auto ftype = sfield->get_class();
@@ -361,24 +361,35 @@ void AnalysisImpl::collect_method_defs() {
  */
 void AnalysisImpl::analyze_opcodes() {
 
-  auto check_arg = [&](DexType* type, DexMethodRef* meth, IRInstruction* insn) {
+  auto check_arg = [&](DexMethod* referrer,
+                       const IRList::iterator& insn_it,
+                       DexType* type,
+                       DexMethodRef* meth,
+                       IRInstruction* insn) {
     auto intf = get_and_check_single_impl(type);
     if (intf) {
+      single_impls[intf].referencing_methods[referrer][insn] = insn_it;
       single_impls[intf].methodrefs[meth].insert(insn);
     }
   };
 
-  auto check_sig = [&](DexMethodRef* meth, IRInstruction* insn) {
+  auto check_sig = [&](DexMethod* referrer,
+                       const IRList::iterator& insn_it,
+                       DexMethodRef* meth,
+                       IRInstruction* insn) {
     // check the sig for single implemented interface
     const auto proto = meth->get_proto();
-    check_arg(proto->get_rtype(), meth, insn);
+    check_arg(referrer, insn_it, proto->get_rtype(), meth, insn);
     const auto args = proto->get_args();
     for (const auto arg : args->get_type_list()) {
-      check_arg(arg, meth, insn);
+      check_arg(referrer, insn_it, arg, meth, insn);
     }
   };
 
-  auto check_field = [&](DexFieldRef* field, IRInstruction* insn) {
+  auto check_field = [&](DexMethod* referrer,
+                         const IRList::iterator& insn_it,
+                         DexFieldRef* field,
+                         IRInstruction* insn) {
     auto cls = field->get_class();
     cls = get_and_check_single_impl(cls);
     if (cls) {
@@ -387,91 +398,96 @@ void AnalysisImpl::analyze_opcodes() {
     const auto type = field->get_type();
     auto intf = get_and_check_single_impl(type);
     if (intf) {
+      single_impls[intf].referencing_methods[referrer][insn] = insn_it;
       single_impls[intf].fieldrefs[field].push_back(insn);
     }
   };
 
-  walk::opcodes(scope,
-                [](DexMethod* method) { return true; },
-                [&](DexMethod* method, IRInstruction* insn) {
-                  auto op = insn->opcode();
-                  switch (op) {
-                  // type ref
-                  case OPCODE_CONST_CLASS:
-                  case OPCODE_CHECK_CAST:
-                  case OPCODE_INSTANCE_OF:
-                  case OPCODE_NEW_INSTANCE:
-                  case OPCODE_NEW_ARRAY:
-                  case OPCODE_FILLED_NEW_ARRAY: {
-                    auto intf = get_and_check_single_impl(insn->get_type());
-                    if (intf) {
-                      single_impls[intf].typerefs.push_back(insn);
-                    }
-                    return;
-                  }
-                  // field ref
-                  case OPCODE_IGET:
-                  case OPCODE_IGET_WIDE:
-                  case OPCODE_IGET_OBJECT:
-                  case OPCODE_IPUT:
-                  case OPCODE_IPUT_WIDE:
-                  case OPCODE_IPUT_OBJECT: {
-                    DexFieldRef* field =
-                        resolve_field(insn->get_field(), FieldSearch::Instance);
-                    if (field == nullptr) {
-                      field = insn->get_field();
-                    }
-                    check_field(field, insn);
-                    return;
-                  }
-                  case OPCODE_SGET:
-                  case OPCODE_SGET_WIDE:
-                  case OPCODE_SGET_OBJECT:
-                  case OPCODE_SPUT:
-                  case OPCODE_SPUT_WIDE:
-                  case OPCODE_SPUT_OBJECT: {
-                    DexFieldRef* field =
-                        resolve_field(insn->get_field(), FieldSearch::Static);
-                    if (field == nullptr) {
-                      field = insn->get_field();
-                    }
-                    check_field(field, insn);
-                    return;
-                  }
-                  // method ref
-                  case OPCODE_INVOKE_INTERFACE: {
-                    // if it is an invoke on the interface method, collect it as
-                    // such
-                    const auto meth = insn->get_method();
-                    const auto owner = meth->get_class();
-                    const auto intf = get_and_check_single_impl(owner);
-                    if (intf) {
-                      // if the method ref is not defined on the interface
-                      // itself drop the optimization
-                      const auto& meths = type_class(intf)->get_vmethods();
-                      if (std::find(meths.begin(), meths.end(), meth) ==
-                          meths.end()) {
-                        escape_interface(intf, UNKNOWN_MREF);
-                      } else {
-                        single_impls[intf].intf_methodrefs[meth].insert(insn);
-                      }
-                    }
-                    check_sig(meth, insn);
-                    return;
-                  }
+  walk::code(scope, [&](DexMethod* method, IRCode& code) {
+    redex_assert(!code.editable_cfg_built()); // Need *one* way to
+    auto ii = ir_list::InstructionIterable(code);
+    const auto& end = ii.end();
+    for (auto it = ii.begin(); it != end; ++it) {
+      auto insn = it->insn;
+      auto op = insn->opcode();
+      switch (op) {
+      // type ref
+      case OPCODE_CONST_CLASS:
+      case OPCODE_CHECK_CAST:
+      case OPCODE_INSTANCE_OF:
+      case OPCODE_NEW_INSTANCE:
+      case OPCODE_NEW_ARRAY:
+      case OPCODE_FILLED_NEW_ARRAY: {
+        auto intf = get_and_check_single_impl(insn->get_type());
+        if (intf) {
+          single_impls[intf].referencing_methods[method][insn] = it.unwrap();
+          single_impls[intf].typerefs.push_back(insn);
+        }
+        break;
+      }
+      // field ref
+      case OPCODE_IGET:
+      case OPCODE_IGET_WIDE:
+      case OPCODE_IGET_OBJECT:
+      case OPCODE_IPUT:
+      case OPCODE_IPUT_WIDE:
+      case OPCODE_IPUT_OBJECT: {
+        DexFieldRef* field =
+            resolve_field(insn->get_field(), FieldSearch::Instance);
+        if (field == nullptr) {
+          field = insn->get_field();
+        }
+        check_field(method, it.unwrap(), field, insn);
+        break;
+      }
+      case OPCODE_SGET:
+      case OPCODE_SGET_WIDE:
+      case OPCODE_SGET_OBJECT:
+      case OPCODE_SPUT:
+      case OPCODE_SPUT_WIDE:
+      case OPCODE_SPUT_OBJECT: {
+        DexFieldRef* field =
+            resolve_field(insn->get_field(), FieldSearch::Static);
+        if (field == nullptr) {
+          field = insn->get_field();
+        }
+        check_field(method, it.unwrap(), field, insn);
+        break;
+      }
+      // method ref
+      case OPCODE_INVOKE_INTERFACE: {
+        // if it is an invoke on the interface method, collect it as such
+        const auto meth = insn->get_method();
+        const auto owner = meth->get_class();
+        const auto intf = get_and_check_single_impl(owner);
+        if (intf) {
+          // if the method ref is not defined on the interface
+          // itself drop the optimization
+          const auto& meths = type_class(intf)->get_vmethods();
+          if (std::find(meths.begin(), meths.end(), meth) == meths.end()) {
+            escape_interface(intf, UNKNOWN_MREF);
+          } else {
+            single_impls[intf].referencing_methods[method][insn] = it.unwrap();
+            single_impls[intf].intf_methodrefs[meth].insert(insn);
+          }
+        }
+        check_sig(method, it.unwrap(), meth, insn);
+        break;
+      }
 
-                  case OPCODE_INVOKE_DIRECT:
-                  case OPCODE_INVOKE_STATIC:
-                  case OPCODE_INVOKE_VIRTUAL:
-                  case OPCODE_INVOKE_SUPER: {
-                    const auto meth = insn->get_method();
-                    check_sig(meth, insn);
-                    return;
-                  }
-                  default:
-                    return;
-                  }
-                });
+      case OPCODE_INVOKE_DIRECT:
+      case OPCODE_INVOKE_STATIC:
+      case OPCODE_INVOKE_VIRTUAL:
+      case OPCODE_INVOKE_SUPER: {
+        const auto meth = insn->get_method();
+        check_sig(method, it.unwrap(), meth, insn);
+        break;
+      }
+      default:
+        break;
+      }
+    }
+  });
 }
 
 /**

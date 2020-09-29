@@ -55,7 +55,7 @@ std::unordered_set<DexMethod*> methodgroups_to_methodset(
  */
 class RefCounter {
  public:
-  RefCounter(method_reference::CallSites& call_sites) {
+  explicit RefCounter(method_reference::CallSites& call_sites) {
     for (auto& callsite : call_sites) {
       ++m_counter[callsite.callee];
     }

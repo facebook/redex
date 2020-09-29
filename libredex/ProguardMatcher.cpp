@@ -9,7 +9,9 @@
 #include <boost/regex.hpp>
 #include <iostream>
 #include <mutex>
+#include <sstream>
 #include <thread>
+#include <unordered_set>
 
 #include "ClassHierarchy.h"
 #include "ConcurrentContainers.h"
@@ -299,11 +301,23 @@ class KeepRuleMatcher {
   }
 
  private:
+  void maybe_warn(const std::string& warning) {
+    std::unique_lock<std::mutex> lock{m_warn_mutex};
+    if (m_already_warned.count(warning) > 0) {
+      return;
+    }
+    m_already_warned.emplace(warning);
+    std::cerr << warning << std::endl;
+  }
+
   size_t m_member_matches{0};
   size_t m_class_matches{0};
   RuleType m_rule_type;
   const KeepSpec& m_keep_rule;
   RegexMap& m_regex_map;
+
+  std::mutex m_warn_mutex;
+  std::unordered_set<std::string> m_already_warned;
 };
 
 class ProguardMatcher {
@@ -618,14 +632,17 @@ void KeepRuleMatcher::mark_class_and_members_for_keep(DexClass* cls) {
   }
   // Mark descriptor classes
   if (m_keep_rule.includedescriptorclasses) {
-    std::cerr << "WARNING: 'includedescriptorclasses' keep modifier is NOT "
-                 "implemented: "
-              << show_keep(m_keep_rule) << std::endl;
+    std::ostringstream oss;
+    oss << "WARNING: 'includedescriptorclasses' keep modifier is NOT "
+           "implemented: "
+        << show_keep(m_keep_rule);
+    maybe_warn(oss.str());
   }
   if (m_keep_rule.allowoptimization) {
-    std::cerr
-        << "WARNING: 'allowoptimization' keep modifier is NOT implemented: "
-        << show_keep(m_keep_rule) << std::endl;
+    std::ostringstream oss;
+    oss << "WARNING: 'allowoptimization' keep modifier is NOT implemented: "
+        << show_keep(m_keep_rule);
+    maybe_warn(oss.str());
   }
   if (m_keep_rule.mark_classes || m_keep_rule.mark_conditionally) {
     apply_keep_modifiers(m_keep_rule, cls);
@@ -783,7 +800,7 @@ void ProguardMatcher::process_keep(const KeepSpecSet& keep_rules,
 
     // This is also very fast. Process it in the main thread, too.
     const auto& extendsClassName = keep_rule.class_spec.extendsClassName;
-    if (extendsClassName != "" &&
+    if (!extendsClassName.empty() &&
         !classname_contains_wildcard(extendsClassName)) {
       DexClass* super = find_single_class(extendsClassName);
       if (super != nullptr) {

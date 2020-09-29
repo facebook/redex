@@ -80,9 +80,7 @@ class FieldAnalyzer final
     case IOPCODE_LOAD_PARAM:
     case IOPCODE_LOAD_PARAM_WIDE:
     case IOPCODE_LOAD_PARAM_OBJECT: {
-      always_assert_log(false,
-                        "<clinit> is static and doesn't take any arguments");
-      break;
+      not_reached_log("<clinit> is static and doesn't take any arguments");
     }
 
     case OPCODE_MOVE:
@@ -207,7 +205,7 @@ class ConstAnalyzer final
                                        UInt32ConstantEnvironment> {
 
  public:
-  ConstAnalyzer(const cfg::ControlFlowGraph& cfg)
+  explicit ConstAnalyzer(const cfg::ControlFlowGraph& cfg)
       : MonotonicFixpointIterator(cfg) {
     MonotonicFixpointIterator::run(UInt32ConstantEnvironment::top());
   }
@@ -244,9 +242,7 @@ class ConstAnalyzer final
     case IOPCODE_LOAD_PARAM:
     case IOPCODE_LOAD_PARAM_WIDE:
     case IOPCODE_LOAD_PARAM_OBJECT: {
-      always_assert_log(false,
-                        "<clinit> is static and doesn't take any arguments");
-      break;
+      not_reached_log("<clinit> is static and doesn't take any arguments");
     }
 
     case OPCODE_MOVE:
@@ -279,27 +275,20 @@ OptimizeEnumsGeneratedAnalysis::~OptimizeEnumsGeneratedAnalysis() {}
 OptimizeEnumsGeneratedAnalysis::OptimizeEnumsGeneratedAnalysis(
     const DexClass* generated_cls, const DexType* current_enum)
     : m_enum(current_enum), m_generated_cls(generated_cls) {
-  auto method = generated_cls->get_clinit();
-  always_assert(method && method->get_code());
+  auto clinit = generated_cls->get_clinit();
+  always_assert(clinit && clinit->get_code());
 
-  auto* code = method->get_code();
-  code->build_cfg(/* editable */ false);
-  cfg::ControlFlowGraph& cfg = code->cfg();
-  cfg.calculate_exit_block();
+  m_clinit_cfg = cfg::ScopedCFG(clinit->get_code());
+  m_clinit_cfg->calculate_exit_block();
 
-  m_field_analyzer =
-      std::make_unique<impl::FieldAnalyzer>(cfg, generated_cls, current_enum);
-  m_const_analyzer = std::make_unique<impl::ConstAnalyzer>(cfg);
+  m_field_analyzer = std::make_unique<impl::FieldAnalyzer>(
+      *m_clinit_cfg, generated_cls, current_enum);
+  m_const_analyzer = std::make_unique<impl::ConstAnalyzer>(*m_clinit_cfg);
 }
 
 void OptimizeEnumsGeneratedAnalysis::collect_generated_switch_cases(
     GeneratedSwitchCases& generated_switch_cases) {
-
-  auto clinit = m_generated_cls->get_clinit();
-  auto* code = clinit->get_code();
-  auto& cfg = code->cfg();
-
-  for (cfg::Block* block : cfg.blocks()) {
+  for (cfg::Block* block : m_clinit_cfg->blocks()) {
     auto const_env = m_const_analyzer->get_entry_state_at(block);
     auto field_env = m_field_analyzer->get_entry_state_at(block);
 

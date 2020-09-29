@@ -14,7 +14,7 @@
 #include <functional>
 #include <vector>
 
-typedef uint32_t VdexChecksum;
+using VdexChecksum = uint32_t;
 
 constexpr uint32_t kDexMagicNum = 0x0a786564;
 

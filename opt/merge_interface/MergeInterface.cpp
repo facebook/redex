@@ -106,7 +106,7 @@ std::vector<DexClassSet> collect_can_merge(
 
     // Collect interfaces that we need to merge.
     for (const auto& pair : interface_class_map) {
-      if (pair.first.size() > 0 && pair.second.size() > 1) {
+      if (!pair.first.empty() && pair.second.size() > 1) {
         // Consider interfaces with same set of implementors as mergeable.
         interface_set.emplace_back(pair.second);
       }
@@ -276,7 +276,7 @@ void strip_out_dmethod_relo_problem_intf(const Scope& scope,
     for (auto set_it = intf_set.begin(); set_it != intf_set.end(); ++set_it) {
       DexClass* interface_cls = (*set_it);
       const auto& dmethods = interface_cls->get_dmethods();
-      if (dmethods.size() == 0) {
+      if (dmethods.empty()) {
         continue;
       }
       for (const auto& dmethod : dmethods) {
@@ -355,8 +355,7 @@ void move_methods_to_interface(
     from_interface->remove_method(method_to_move);
     DexMethodSpec spec;
     spec.cls = target_intf_type;
-    method_to_move->change(spec,
-                           false /* rename on collision */);
+    method_to_move->change(spec, false /* rename on collision */);
     target_interface->add_method(method_to_move);
   }
 }
@@ -482,8 +481,7 @@ void update_reference_for_code(
           } else {
             DexMethodSpec spec;
             spec.cls = target_type;
-            meth_ref->change(spec,
-                             false /* rename on collision */);
+            meth_ref->change(spec, false /* rename on collision */);
           }
         }
         continue;
@@ -614,6 +612,7 @@ void MergeInterfacePass::run_pass(DexStoresVector& stores,
       auto& dexes = dex_store.get_dexen();
       auto& primary_dex = dexes[0];
       std::vector<DexClass*> primary_dex_classes;
+      primary_dex_classes.reserve(primary_dex.size());
       for (auto& cls : primary_dex) {
         primary_dex_classes.emplace_back(cls);
       }

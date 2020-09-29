@@ -15,6 +15,7 @@
 #include "Warning.h"
 
 unsigned DexInstruction::count_from_opcode() const {
+  // clang-format off
   static int args[] = {
       0, /* FMT_f00x   */
       0, /* FMT_f10x   */
@@ -62,6 +63,7 @@ unsigned DexInstruction::count_from_opcode() const {
       2, /* FMT_f57c */
       0, /* FMT_fopcode   */
   };
+  // clang-format on
   return args[dex_opcode::format(opcode())];
 };
 
@@ -139,9 +141,8 @@ unsigned DexInstruction::srcs_size() const {
   case FMT_f3rms:
   case FMT_f3rmi:
   case FMT_iopcode:
-    always_assert_log(false, "Unimplemented opcode `%s'", SHOW(this));
+    not_reached_log("Unimplemented opcode `%s'", SHOW(this));
   }
-  not_reached();
 }
 
 uint16_t DexInstruction::dest() const {
@@ -172,9 +173,8 @@ uint16_t DexInstruction::dest() const {
     return m_arg[0];
   default:
     // All other formats do not define a destination register.
-    always_assert_log(false, "Unhandled opcode: %s", SHOW(opcode()));
+    not_reached_log("Unhandled opcode: %s", SHOW(opcode()));
   }
-  not_reached();
 }
 
 DexInstruction* DexInstruction::set_dest(uint16_t vreg) {
@@ -211,9 +211,8 @@ DexInstruction* DexInstruction::set_dest(uint16_t vreg) {
     return this;
   default:
     // All other formats do not define a destination register.
-    always_assert_log(false, "Unhandled opcode: %s", SHOW(this));
+    not_reached_log("Unhandled opcode: %s", SHOW(this));
   }
-  not_reached();
 }
 
 uint16_t DexInstruction::src(int i) const {
@@ -304,11 +303,11 @@ uint16_t DexInstruction::src(int i) const {
     case 6:
       return (m_arg[1] >> 12) & 0xf;
     }
+    not_reached();
   default:
     // All other formats do not define source registers.
-    always_assert_log(false, "Unhandled opcode: %s", SHOW(this));
+    not_reached_log("Unhandled opcode: %s", SHOW(this));
   }
-  not_reached();
 }
 
 DexInstruction* DexInstruction::set_src(int i, uint16_t vreg) {
@@ -440,11 +439,11 @@ DexInstruction* DexInstruction::set_src(int i, uint16_t vreg) {
       m_arg[0] = (m_arg[1] & 0x0fff) | (vreg << 12);
       return this;
     }
+    not_reached();
   default:
     // All other formats do not define source registers.
-    always_assert_log(false, "Unhandled opcode: %s", SHOW(this));
+    not_reached_log("Unhandled opcode: %s", SHOW(this));
   }
-  not_reached();
 }
 
 DexInstruction* DexInstruction::set_srcs(const std::vector<uint16_t>& vregs) {
@@ -485,9 +484,8 @@ int64_t DexInstruction::get_literal() const {
     return signext<64>(literal);
   }
   default:
-    redex_assert(false);
+    not_reached();
   }
-  not_reached();
 }
 
 DexInstruction* DexInstruction::set_literal(int64_t literal) {
@@ -520,9 +518,8 @@ DexInstruction* DexInstruction::set_literal(int64_t literal) {
     m_arg[3] = literal >> 48;
     return this;
   default:
-    redex_assert(false);
+    not_reached();
   }
-  not_reached();
 }
 
 int32_t DexInstruction::offset() const {
@@ -540,9 +537,8 @@ int32_t DexInstruction::offset() const {
     return (int32_t)signext<32>(offset);
   }
   default:
-    redex_assert(false);
+    not_reached();
   }
-  not_reached();
 }
 
 DexInstruction* DexInstruction::set_offset(int32_t offset) {
@@ -570,9 +566,8 @@ DexInstruction* DexInstruction::set_offset(int32_t offset) {
     m_arg[1] = offset >> 16;
     return this;
   default:
-    redex_assert(false);
+    not_reached();
   }
-  not_reached();
 }
 
 uint16_t DexInstruction::range_base() const {
@@ -641,8 +636,8 @@ void DexOpcodeString::gather_strings(std::vector<DexString*>& lstring) const {
 
 uint16_t DexOpcodeString::size() const { return jumbo() ? 3 : 2; }
 
-void DexOpcodeString::encode(DexOutputIdx* dodx, uint16_t*& insns) {
-  encode_opcode(dodx, insns);
+void DexOpcodeString::encode(DexOutputIdx* dodx, uint16_t*& insns) const {
+  encode_opcode(insns);
   uint32_t sidx = dodx->stringidx(m_string);
   uint16_t idx = (uint16_t)sidx;
   if (!jumbo()) {
@@ -666,8 +661,8 @@ void DexOpcodeType::gather_types(std::vector<DexType*>& ltype) const {
   ltype.push_back(m_type);
 }
 
-void DexOpcodeType::encode(DexOutputIdx* dodx, uint16_t*& insns) {
-  encode_opcode(dodx, insns);
+void DexOpcodeType::encode(DexOutputIdx* dodx, uint16_t*& insns) const {
+  encode_opcode(insns);
   uint16_t idx = dodx->typeidx(m_type);
   *insns++ = idx;
   encode_args(insns);
@@ -679,8 +674,8 @@ void DexOpcodeField::gather_fields(std::vector<DexFieldRef*>& lfield) const {
 
 uint16_t DexOpcodeField::size() const { return 2; }
 
-void DexOpcodeField::encode(DexOutputIdx* dodx, uint16_t*& insns) {
-  encode_opcode(dodx, insns);
+void DexOpcodeField::encode(DexOutputIdx* dodx, uint16_t*& insns) const {
+  encode_opcode(insns);
   uint16_t idx = dodx->fieldidx(m_field);
   *insns++ = idx;
 }
@@ -692,8 +687,8 @@ void DexOpcodeMethod::gather_methods(
 
 uint16_t DexOpcodeMethod::size() const { return 3; }
 
-void DexOpcodeMethod::encode(DexOutputIdx* dodx, uint16_t*& insns) {
-  encode_opcode(dodx, insns);
+void DexOpcodeMethod::encode(DexOutputIdx* dodx, uint16_t*& insns) const {
+  encode_opcode(insns);
   uint16_t idx = dodx->methodidx(m_method);
   *insns++ = idx;
   encode_args(insns);
@@ -701,8 +696,8 @@ void DexOpcodeMethod::encode(DexOutputIdx* dodx, uint16_t*& insns) {
 
 uint16_t DexOpcodeCallSite::size() const { return 3; }
 
-void DexOpcodeCallSite::encode(DexOutputIdx* dodx, uint16_t*& insns) {
-  encode_opcode(dodx, insns);
+void DexOpcodeCallSite::encode(DexOutputIdx* dodx, uint16_t*& insns) const {
+  encode_opcode(insns);
   uint16_t idx = dodx->callsiteidx(m_callsite);
   *insns++ = idx;
   encode_args(insns);
@@ -733,8 +728,8 @@ void DexOpcodeCallSite::gather_fields(std::vector<DexFieldRef*>& lfield) const {
 
 uint16_t DexOpcodeMethodHandle::size() const { return 3; }
 
-void DexOpcodeMethodHandle::encode(DexOutputIdx* dodx, uint16_t*& insns) {
-  encode_opcode(dodx, insns);
+void DexOpcodeMethodHandle::encode(DexOutputIdx* dodx, uint16_t*& insns) const {
+  encode_opcode(insns);
   uint16_t idx = dodx->methodhandleidx(m_methodhandle);
   *insns++ = idx;
   encode_args(insns);
@@ -757,14 +752,15 @@ void DexOpcodeMethodHandle::gather_methodhandles(
 
 uint16_t DexOpcodeData::size() const { return m_data_count + 1; }
 
-void DexOpcodeData::encode(DexOutputIdx* dodx, uint16_t*& insns) {
-  encode_opcode(dodx, insns);
+void DexOpcodeData::encode(DexOutputIdx* /* unused */, uint16_t*& insns) const {
+  encode_opcode(insns);
   memcpy(insns, m_data, m_data_count * sizeof(uint16_t));
   insns += m_data_count;
 }
 
-void DexInstruction::encode(DexOutputIdx* dodx, uint16_t*& insns) {
-  encode_opcode(dodx, insns);
+void DexInstruction::encode(DexOutputIdx* /* unused */,
+                            uint16_t*& insns) const {
+  encode_opcode(insns);
   encode_args(insns);
 }
 

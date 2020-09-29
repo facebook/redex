@@ -8,6 +8,7 @@
 #pragma once
 
 #include "DexClass.h"
+#include "WellKnownTypes.h"
 
 /**
  * Basic datatypes used by bytecode.
@@ -28,51 +29,24 @@ enum class DataType : uint8_t {
 
 namespace type {
 
-DexType* _void();
+#define DECLARE_TYPE(name, _) DexType* name();
 
-DexType* _byte();
+#define FOR_EACH DECLARE_TYPE
+WELL_KNOWN_TYPES
+#undef FOR_EACH
+#undef DECLARE_TYPE
 
-DexType* _char();
+namespace pseudo {
+#define DECLARE_PSEUDO_TYPE_FIELD(name, _) DexFieldRef* name();
 
-DexType* _short();
+#define FOR_EACH DECLARE_PSEUDO_TYPE_FIELD
+PRIMITIVE_PSEUDO_TYPE_FIELDS
+#undef FOR_EACH
+} // namespace pseudo
 
-DexType* _int();
-
-DexType* _long();
-
-DexType* _boolean();
-
-DexType* _float();
-
-DexType* _double();
-
-DexType* java_lang_String();
-
-DexType* java_lang_Class();
-
-DexType* java_lang_Enum();
-
-DexType* java_lang_Object();
-
-DexType* java_lang_Void();
-
-DexType* java_lang_Throwable();
-
-DexType* java_lang_Boolean();
-
-DexType* java_lang_Byte();
-
-DexType* java_lang_Short();
-
-DexType* java_lang_Character();
-
-DexType* java_lang_Integer();
-
-DexType* java_lang_Long();
-
-DexType* java_lang_Float();
-
-DexType* java_lang_Double();
+// Do some simple checks to ascertain whether the descriptor looks valid.
+// NOTE: may fail for UTF strings.
+bool is_valid(const std::string& descriptor);
 
 /**
  * Return true if the type is a primitive.
@@ -225,8 +199,20 @@ bool is_subclass(const DexType* parent, const DexType* child);
 
 /**
  * Whether the given type refers to a proper class that has no ctor,
- * and is not external or native.
+ * and is not external or native. This function only makes a quick determination
+ * without considering whether an interface or abstract class has any
+ * implementations (see the RemoveUninstantiablesPass for a more complete
+ * analysis).
  */
 bool is_uninstantiable_class(DexType* type);
+
+/**
+ * Evaluate a type check on the `src_type` against the `test_type`. It is
+ * equivalent to the semantic of the INSTANCE_OF check. If the check passes, the
+ * function returns 1; if it fails, the function returns 0. If it cannot be
+ * determined, the function returns none.
+ */
+boost::optional<int32_t> evaluate_type_check(const DexType* src_type,
+                                             const DexType* test_type);
 
 }; // namespace type

@@ -25,9 +25,9 @@ namespace {
  *
  * TODO(emmasevastian): Move it to utils.
  */
-std::string get_simple_deobfuscated_name(DexType* type) {
+std::string get_simple_deobfuscated_name(const DexType* type) {
   auto* cls = type_class(type);
-  std::string full_name = "";
+  std::string full_name;
   if (cls) {
     full_name = cls->get_deobfuscated_name();
   }
@@ -46,11 +46,13 @@ std::string get_simple_deobfuscated_name(DexType* type) {
  * - filtering of types with the same simple name
  * - creation of mapping from simple_name to type
  */
-std::unordered_map<std::string, DexType*> get_simple_cls_name_to_accepted_types(
-    const std::unordered_map<DexType*, FrameworkAPI>& framework_cls_to_api) {
+std::unordered_map<std::string, const DexType*>
+get_simple_cls_name_to_accepted_types(
+    const std::unordered_map<const DexType*, FrameworkAPI>&
+        framework_cls_to_api) {
 
   std::vector<std::string> filter;
-  std::unordered_map<std::string, DexType*> simple_cls_name_to_type;
+  std::unordered_map<std::string, const DexType*> simple_cls_name_to_type;
   for (const auto& pair : framework_cls_to_api) {
     auto simple_name = get_simple_deobfuscated_name(pair.first);
 
@@ -88,7 +90,7 @@ bool check_methods(
     const api::FrameworkAPI& framework_api,
     const std::unordered_map<const DexType*, DexType*>& release_to_framework,
     const std::unordered_set<DexMethodRef*>& methods_non_private) {
-  if (methods.size() == 0) {
+  if (methods.empty()) {
     return true;
   }
 
@@ -140,7 +142,7 @@ bool check_fields(
     const api::FrameworkAPI& framework_api,
     const std::unordered_map<const DexType*, DexType*>& release_to_framework,
     const std::unordered_set<DexFieldRef*>& fields_non_private) {
-  if (fields.size() == 0) {
+  if (fields.empty()) {
     return true;
   }
 
@@ -225,7 +227,7 @@ bool check_hierarchy(
     const api::FrameworkAPI& framework_api,
     const std::unordered_map<const DexType*, DexType*>& release_to_framework,
     const TypeSystem& type_system,
-    const std::unordered_set<DexType*>& framework_classes) {
+    const std::unordered_set<const DexType*>& framework_classes) {
   DexType* type = cls->get_type();
   if (!is_interface(cls)) {
     // We don't need to worry about subclasses, as those we just need to update
@@ -384,8 +386,7 @@ void ApiLevelsUtils::gather_non_private_members(const Scope& scope) {
 }
 
 void ApiLevelsUtils::load_framework_api(const Scope& scope) {
-  std::unordered_map<DexType*, FrameworkAPI> framework_cls_to_api =
-      get_framework_classes();
+  auto framework_cls_to_api = get_framework_classes();
   for (auto it = framework_cls_to_api.begin();
        it != framework_cls_to_api.end();) {
     auto* framework_cls = it->first;
@@ -403,9 +404,9 @@ void ApiLevelsUtils::load_framework_api(const Scope& scope) {
     }
   }
 
-  std::unordered_map<std::string, DexType*> simple_cls_name_to_type =
+  std::unordered_map<std::string, const DexType*> simple_cls_name_to_type =
       get_simple_cls_name_to_accepted_types(framework_cls_to_api);
-  if (simple_cls_name_to_type.size() == 0) {
+  if (simple_cls_name_to_type.empty()) {
     // Nothing to do here :|
     TRACE(
         API_UTILS, 1,

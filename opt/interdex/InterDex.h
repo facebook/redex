@@ -34,7 +34,6 @@ class InterDex {
            bool static_prune_classes,
            bool normal_primary_dex,
            bool force_single_dex,
-           bool emit_scroll_set_marker,
            bool emit_canaries,
            bool minimize_cross_dex_refs,
            const CrossDexRefMinimizerConfig& cross_dex_refs_config,
@@ -85,7 +84,7 @@ class InterDex {
     return m_cross_dex_ref_minimizer.stats();
   }
 
-  const CrossDexRelocatorStats get_cross_dex_relocator_stats() const {
+  CrossDexRelocatorStats get_cross_dex_relocator_stats() const {
     if (m_cross_dex_relocator != nullptr) {
       return m_cross_dex_relocator->stats();
     }

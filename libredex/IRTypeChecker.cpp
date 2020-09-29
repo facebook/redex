@@ -56,27 +56,31 @@ void check_type_match(reg_t reg, IRType actual, IRType expected) {
 }
 
 /*
- * If the inferred type is Ljava/lang/Object;, it's a fall back from a
- * conflicting join. There's no point performing more precise type checking
- * since we don't know about its type.
- * If the inferred type is Ljava/lang/Throwable;, it comes from MOVE_EXCEPTION.
- * Since we don't model exception handler here, there's no way for us to know
- * the precise exception type. We approximate all exception type to
- * Ljava/lang/Throwable;. Therefore, it is not feasible to check type assignment
- * on exception types.
+ * There are cases where we cannot precisely infer the exception type for
+ * MOVE_EXCEPTION. In these cases, we use Ljava/lang/Throwable; as a fallback
+ * type.
  */
 bool is_inference_fallback_type(const DexType* type) {
-  return type == type::java_lang_Object() ||
-         type == type::java_lang_Throwable();
+  return type == type::java_lang_Throwable();
 }
 
 /*
  * We might not have the external DexClass to fully determine the hierarchy.
- * Therefore, be more conservative when assigning to external DexType.
+ * Therefore, be more lenient when assigning from or to external DexType.
  */
 bool check_cast_helper(const DexType* from, const DexType* to) {
-  auto to_cls = type_class(to);
-  if (!to_cls || to_cls->is_external()) {
+  // We can always cast to Object
+  if (to == type::java_lang_Object()) {
+    return true;
+  }
+  // We can never cast from Object to anything besides Object
+  if (from == type::java_lang_Object() && from != to) {
+    // TODO(T66567547) sanity check that type::check_cast would have agreed
+    always_assert(!type::check_cast(from, to));
+    return false;
+  }
+  // If we have any external types (aside from Object), allow it
+  if (!type_class_internal(from) || !type_class_internal(to)) {
     return true;
   }
   return type::check_cast(from, to);
@@ -93,9 +97,7 @@ bool check_is_assignable_from(const DexType* from,
                               const DexType* to,
                               bool strict) {
   always_assert(from && to);
-
   always_assert_log(!type::is_primitive(from), "%s", SHOW(from));
-  TRACE(TYPE, 2, "assign check %s to %s", SHOW(from), SHOW(to));
 
   if (type::is_primitive(from) || type::is_primitive(to)) {
     return false; // Expect types be a reference type.
@@ -325,7 +327,7 @@ Result check_load_params(const DexMethod* method) {
       ok = type::is_primitive(*sig_it) && type::is_wide_type(*sig_it);
       break;
     default:
-      always_assert(false);
+      not_reached();
     }
     if (!ok) {
       return std::string("Incompatible load-param ") + show(insn) + " for " +
@@ -554,7 +556,8 @@ Result check_structure(const DexMethod* method, bool check_no_overwrite_this) {
                                 " without appropriate prefix "
                                 "instruction");
     } else if (insn->has_move_result_pseudo() &&
-               (it == code->end() || !is_move_result_pseudo(*std::next(it)))) {
+               (it == code->end() || std::next(it) == code->end() ||
+                !is_move_result_pseudo(*std::next(it)))) {
       return Result::make_error("Did not find move-result-pseudo after " +
                                 show(*it) + " in \n" + show(code));
     }
@@ -671,7 +674,8 @@ void IRTypeChecker::run() {
     IRInstruction* insn = mie.insn;
     try {
       auto it = type_envs.find(insn);
-      always_assert(it != type_envs.end());
+      always_assert_log(
+          it != type_envs.end(), "%s in:\n%s", SHOW(mie), SHOW(code));
       check_instruction(insn, &it->second);
     } catch (const TypeCheckingException& e) {
       m_good = false;
@@ -686,10 +690,10 @@ void IRTypeChecker::run() {
   }
   m_complete = true;
 
-  if (traceEnabled(TYPE, 5)) {
+  if (traceEnabled(TYPE, 9)) {
     std::ostringstream out;
     m_type_inference->print(out);
-    TRACE(TYPE, 5, "%s", out.str().c_str());
+    TRACE(TYPE, 9, "%s", out.str().c_str());
   }
 }
 
@@ -709,6 +713,22 @@ void IRTypeChecker::assume_reference(TypeEnvironment* state,
               reg,
               /* expected */ REFERENCE,
               /* ignore_top */ in_move && !m_verify_moves);
+}
+
+void IRTypeChecker::assume_assignable(boost::optional<const DexType*> from,
+                                      DexType* to) const {
+  // There are some cases in type inference where we have to give up
+  // and claim we don't know anything about a dex type. See
+  // IRTypeCheckerTest.joinCommonBaseWithConflictingInterface, for
+  // example - the last invoke of 'base.foo()' after the blocks join -
+  // we no longer know anything about the type of the reference. It's
+  // in such a case as that that we have to bail out here when the from
+  // optional is empty.
+  if (from && !check_is_assignable_from(*from, to, false)) {
+    std::ostringstream out;
+    out << ": " << *from << " is not assignable to " << to << std::endl;
+    throw TypeCheckingException(out.str());
+  }
 }
 
 // This method performs type checking only: the type environment is not updated
@@ -1057,11 +1077,16 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
     if (insn->opcode() != OPCODE_INVOKE_STATIC) {
       // The first argument is a reference to the object instance on which the
       // method is invoked.
-      assume_reference(current_state, insn->src(src_idx++));
+      auto src = insn->src(src_idx++);
+      assume_reference(current_state, src);
+      assume_assignable(current_state->get_dex_type(src),
+                        dex_method->get_class());
     }
     for (DexType* arg_type : arg_types) {
       if (type::is_object(arg_type)) {
-        assume_reference(current_state, insn->src(src_idx++));
+        auto src = insn->src(src_idx++);
+        assume_reference(current_state, src);
+        assume_assignable(current_state->get_dex_type(src), arg_type);
         continue;
       }
       if (type::is_integer(arg_type)) {
@@ -1080,7 +1105,8 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
       assume_double(current_state, insn->src(src_idx++));
     }
     if (m_validate_access) {
-      auto resolved = resolve_method(dex_method, opcode_to_search(insn));
+      auto resolved =
+          resolve_method(dex_method, opcode_to_search(insn), m_dex_method);
       validate_access(m_dex_method, resolved);
     }
     break;
@@ -1263,8 +1289,8 @@ IRType IRTypeChecker::get_type(IRInstruction* insn, reg_t reg) const {
   return it->second.get_type(reg).element();
 }
 
-const boost::optional<const DexType*> IRTypeChecker::get_dex_type(
-    IRInstruction* insn, reg_t reg) const {
+boost::optional<const DexType*> IRTypeChecker::get_dex_type(IRInstruction* insn,
+                                                            reg_t reg) const {
   check_completion();
   auto& type_envs = m_type_inference->get_type_environments();
   auto it = type_envs.find(insn);

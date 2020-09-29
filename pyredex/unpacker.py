@@ -15,7 +15,7 @@ import zipfile
 from os.path import basename, dirname, getsize, isdir, isfile, join
 
 from pyredex.logger import log
-from pyredex.utils import abs_glob
+from pyredex.utils import ZipReset, abs_glob
 
 
 class ApplicationModule(object):
@@ -52,6 +52,7 @@ class ApplicationModule(object):
                             extracted_apk_dir, name, canary_prefix, dependencies
                         )
                     )
+        modules.sort(key=lambda m: m.path)
         return modules
 
     def get_name(self):
@@ -110,9 +111,15 @@ class ApplicationModule(object):
         have_locators,
         locator_store_id,
         fast_repackage,
+        reset_timestamps,
     ):
         self.dex_mode.repackage(
-            extracted_apk_dir, dex_dir, have_locators, locator_store_id, fast_repackage
+            extracted_apk_dir,
+            dex_dir,
+            have_locators,
+            locator_store_id,
+            fast_repackage,
+            reset_timestamps,
         )
 
 
@@ -174,7 +181,14 @@ class BaseDexMode(object):
         if os.path.exists(primary_dex):
             shutil.move(primary_dex, dex_dir)
 
-    def repackage(self, extracted_apk_dir, dex_dir, have_locators, fast_repackage):
+    def repackage(
+        self,
+        extracted_apk_dir,
+        dex_dir,
+        have_locators,
+        fast_repackage,
+        reset_timestamps,
+    ):
         primary_dex = join(dex_dir, self._dex_prefix + ".dex")
         if os.path.exists(primary_dex):
             shutil.move(primary_dex, extracted_apk_dir)
@@ -229,9 +243,15 @@ class Api21DexMode(BaseDexMode):
         have_locators,
         locator_store_id=0,
         fast_repackage=False,
+        reset_timestamps=True,
     ):
         BaseDexMode.repackage(
-            self, extracted_apk_dir, dex_dir, have_locators, fast_repackage
+            self,
+            extracted_apk_dir,
+            dex_dir,
+            have_locators,
+            fast_repackage,
+            reset_timestamps,
         )
         metadata_dir = join(extracted_apk_dir, self._secondary_dir)
 
@@ -330,9 +350,15 @@ class SubdirDexMode(BaseDexMode):
         have_locators,
         locator_store_id=0,
         fast_repackage=False,
+        reset_timestamps=True,
     ):
         BaseDexMode.repackage(
-            self, extracted_apk_dir, dex_dir, have_locators, fast_repackage
+            self,
+            extracted_apk_dir,
+            dex_dir,
+            have_locators,
+            fast_repackage,
+            reset_timestamps,
         )
 
         metadata = DexMetadata(
@@ -349,7 +375,7 @@ class SubdirDexMode(BaseDexMode):
             shutil.move(oldpath, dexpath)
 
             jarpath = dexpath + ".jar"
-            create_dex_jar(jarpath, dexpath)
+            create_dex_jar(jarpath, dexpath, reset_timestamps=reset_timestamps)
             metadata.add_dex(jarpath, BaseDexMode.get_canary(self, i))
 
             dex_meta_base = jarpath + ".meta"
@@ -400,7 +426,7 @@ class XZSDexMode(BaseDexMode):
         # concat_jar is a bunch of .dex.jar files concatenated together.
         concat_jar = join(dex_dir, self._xzs_filename[:-4])
         cmd = "cat {} | xz -d --threads 6 > {}".format(dest, concat_jar)
-        subprocess.check_call(cmd, shell=True)
+        subprocess.check_call(cmd, shell=True)  # noqa: P204
 
         if unpackage_metadata:
             shutil.copy(join(extracted_apk_dir, self._xzs_dir, "metadata.txt"), dex_dir)
@@ -480,9 +506,15 @@ class XZSDexMode(BaseDexMode):
         have_locators,
         locator_store_id=0,
         fast_repackage=False,
+        reset_timestamps=True,
     ):
         BaseDexMode.repackage(
-            self, extracted_apk_dir, dex_dir, have_locators, fast_repackage
+            self,
+            extracted_apk_dir,
+            dex_dir,
+            have_locators,
+            fast_repackage,
+            reset_timestamps,
         )
 
         dex_sizes = {}
@@ -507,7 +539,7 @@ class XZSDexMode(BaseDexMode):
                 # Package each dex into a jar
                 shutil.move(oldpath, dexpath)
                 jarpath = dexpath + ".jar"
-                create_dex_jar(jarpath, dexpath)
+                create_dex_jar(jarpath, dexpath, reset_timestamps=reset_timestamps)
                 dex_sizes[jarpath] = getsize(dexpath)
                 jar_sizes[jarpath] = getsize(jarpath)
 
@@ -582,7 +614,9 @@ def extract_dex_from_jar(jarpath, dexpath):
         os.rename(join(dest_directory, dexname), dexpath)
 
 
-def create_dex_jar(jarpath, dexpath, compression=zipfile.ZIP_STORED):
+def create_dex_jar(
+    jarpath, dexpath, compression=zipfile.ZIP_STORED, reset_timestamps=True
+):
     with zipfile.ZipFile(jarpath, mode="w") as zf:
         zf.write(dexpath, "classes.dex", compress_type=compression)
         zf.writestr(
@@ -591,3 +625,5 @@ def create_dex_jar(jarpath, dexpath, compression=zipfile.ZIP_STORED):
             b"Dex-Location: classes.dex\n"
             b"Created-By: redex\n\n",
         )
+    if reset_timestamps:
+        ZipReset.reset_file(jarpath)

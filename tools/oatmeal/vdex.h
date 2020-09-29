@@ -13,7 +13,7 @@
 
 constexpr uint32_t kVdexMagicNum = 0x78656476;
 
-typedef uint32_t VdexChecksum;
+using VdexChecksum = uint32_t;
 
 struct PACK VdexFileHeader {
   uint8_t magic_[4];

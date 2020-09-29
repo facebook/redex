@@ -10,6 +10,7 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/filesystem.hpp>
+#include <boost/iostreams/device/mapped_file.hpp>
 #include <boost/optional.hpp>
 #include <boost/regex.hpp>
 #include <cstdio>
@@ -17,22 +18,19 @@
 #include <fcntl.h>
 #include <fstream>
 #include <map>
+#include <mutex>
 #include <sstream>
 #include <string>
-
-#ifdef _MSC_VER
-#include <mman/sys/mman.h>
-#else
-#include <sys/mman.h>
-#endif
-
 #include <sys/stat.h>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
-#ifdef _MSC_VER
+#include "Macros.h"
+#if IS_WINDOWS
 #include "CompatWindows.h"
+#include <io.h>
+#include <share.h>
 #endif
 
 #include "androidfw/ResourceTypes.h"
@@ -46,12 +44,59 @@
 #include <json/json.h>
 
 #include "Debug.h"
+#include "Macros.h"
+#include "ReadMaybeMapped.h"
 #include "StringUtil.h"
+#include "Trace.h"
+#include "WorkQueue.h"
+
+// Workaround for inclusion order, when compiling on Windows (#defines NO_ERROR
+// as 0).
+#ifdef NO_ERROR
+#undef NO_ERROR
+#endif
+
+RedexMappedFile::RedexMappedFile(
+    std::unique_ptr<boost::iostreams::mapped_file> file,
+    std::string filename,
+    bool read_only)
+    : file(std::move(file)),
+      filename(std::move(filename)),
+      read_only(read_only) {}
+
+RedexMappedFile::~RedexMappedFile() {}
+
+RedexMappedFile::RedexMappedFile(RedexMappedFile&& other) noexcept {
+  file = std::move(other.file);
+  filename = std::move(other.filename);
+  read_only = other.read_only;
+}
+
+RedexMappedFile& RedexMappedFile::operator=(RedexMappedFile&& rhs) noexcept {
+  file = std::move(rhs.file);
+  filename = std::move(rhs.filename);
+  read_only = rhs.read_only;
+  return *this;
+}
+
+const char* RedexMappedFile::const_data() const { return file->const_data(); }
+char* RedexMappedFile::data() const {
+  redex_assert(!read_only);
+  return file->data();
+}
+size_t RedexMappedFile::size() const { return file->size(); }
+
+namespace {
 
 constexpr size_t MIN_CLASSNAME_LENGTH = 10;
 constexpr size_t MAX_CLASSNAME_LENGTH = 500;
 
 const uint32_t PACKAGE_RESID_START = 0x7f000000;
+
+constexpr decltype(sparta::parallel::default_num_threads()) kReadXMLThreads =
+    4u;
+constexpr decltype(sparta::parallel::default_num_threads()) kReadNativeThreads =
+    2u;
 
 using path_t = boost::filesystem::path;
 using dir_iterator = boost::filesystem::directory_iterator;
@@ -62,6 +107,8 @@ std::string convert_from_string16(const android::String16& string16) {
   std::string converted(string8.string());
   return converted;
 }
+
+} // namespace
 
 // Returns the attribute with the given name for the current XML element
 std::string get_string_attribute_value(
@@ -135,6 +182,8 @@ int get_int_attribute_or_default_value(const android::ResXMLTree& parser,
   return default_value;
 }
 
+namespace {
+
 std::string dotname_to_dexname(const std::string& classname) {
   std::string dexname;
   dexname.reserve(classname.size() + 2);
@@ -181,13 +230,12 @@ void extract_js_asset_registrations(const std::string& file_contents,
   extract_by_pattern(file_contents, register_regex, registrations);
   for (const std::string& registration : registrations) {
     boost::smatch m;
-    if (!boost::regex_search(registration, m, location_regex) ||
-        m.size() == 0) {
+    if (!boost::regex_search(registration, m, location_regex) || m.empty()) {
       continue;
     }
     std::ostringstream asset_path;
     asset_path << m[1].str() << '/'; // location
-    if (!boost::regex_search(registration, m, name_regex) || m.size() == 0) {
+    if (!boost::regex_search(registration, m, name_regex) || m.empty()) {
       continue;
     }
     asset_path << m[1].str(); // name
@@ -256,6 +304,8 @@ std::unordered_set<uint32_t> extract_xml_reference_attributes(
   return result;
 }
 
+} // namespace
+
 /**
  * Follows the reference links for a resource for all configurations.
  * Outputs all the nodes visited, as well as all the string values seen.
@@ -307,6 +357,7 @@ void walk_references_for_resource(
   }
 }
 
+namespace {
 /*
  * Look for <search_tag> within the descendants of the current node in the XML
  * tree.
@@ -331,8 +382,7 @@ bool find_nested_tag(const android::String16& search_tag,
       break;
     }
     case android::ResXMLParser::BAD_DOCUMENT: {
-      always_assert(false);
-      break;
+      not_reached();
     }
     default: {
       break;
@@ -346,8 +396,7 @@ bool find_nested_tag(const android::String16& search_tag,
  * Parse AndroidManifest from buffer, return a list of class names that are
  * referenced
  */
-ManifestClassInfo extract_classes_from_manifest(
-    const std::string& manifest_contents) {
+ManifestClassInfo extract_classes_from_manifest(const char* data, size_t size) {
   // Tags
   android::String16 activity("activity");
   android::String16 activity_alias("activity-alias");
@@ -370,11 +419,14 @@ ManifestClassInfo extract_classes_from_manifest(
   // Attributes
   android::String16 authorities("authorities");
   android::String16 exported("exported");
+  android::String16 protection_level("protectionLevel");
+  android::String16 permission("permission");
   android::String16 name("name");
   android::String16 target_activity("targetActivity");
+  android::String16 app_component_factory("appComponentFactory");
 
   android::ResXMLTree parser;
-  parser.setTo(manifest_contents.data(), manifest_contents.size());
+  parser.setTo(data, size);
 
   ManifestClassInfo manifest_classes;
 
@@ -391,9 +443,15 @@ ManifestClassInfo extract_classes_from_manifest(
       if (tag == application) {
         std::string classname = get_string_attribute_value(parser, name);
         // android:name is an optional attribute for <application>
-        if (classname.size()) {
+        if (!classname.empty()) {
           manifest_classes.application_classes.emplace(
               dotname_to_dexname(classname));
+        }
+        std::string app_factory_cls =
+            get_string_attribute_value(parser, app_component_factory);
+        if (!app_factory_cls.empty()) {
+          manifest_classes.application_classes.emplace(
+              dotname_to_dexname(app_factory_cls));
         }
       } else if (tag == instrumentation) {
         std::string classname = get_string_attribute_value(parser, name);
@@ -406,6 +464,11 @@ ManifestClassInfo extract_classes_from_manifest(
         always_assert(classname.size());
 
         bool has_exported_attribute = has_bool_attribute(parser, exported);
+        android::Res_value ignore_output;
+        bool has_permission_attribute =
+            has_raw_attribute_value(parser, permission, ignore_output);
+        bool has_protection_level_attribute =
+            has_raw_attribute_value(parser, protection_level, ignore_output);
         bool is_exported = get_bool_attribute_value(parser, exported,
                                                     /* default_value */ false);
 
@@ -419,10 +482,21 @@ ManifestClassInfo extract_classes_from_manifest(
         } else {
           export_attribute = BooleanXMLAttribute::Undefined;
         }
+        std::string permission_attribute;
+        std::string protection_level_attribute;
+        if (has_permission_attribute) {
+          permission_attribute = get_string_attribute_value(parser, permission);
+        }
+        if (has_protection_level_attribute) {
+          protection_level_attribute =
+              get_string_attribute_value(parser, protection_level);
+        }
 
         ComponentTagInfo tag_info(string_to_tag.at(tag),
                                   dotname_to_dexname(classname),
-                                  export_attribute);
+                                  export_attribute,
+                                  permission_attribute,
+                                  protection_level_attribute);
 
         if (tag == provider) {
           std::string text = get_string_attribute_value(parser, authorities);
@@ -463,14 +537,12 @@ std::string read_attribute_name_at_idx(const android::ResXMLTree& parser,
 }
 
 void extract_classes_from_layout(
-    const std::string& layout_contents,
+    const char* data,
+    size_t size,
     const std::unordered_set<std::string>& attributes_to_read,
     std::unordered_set<std::string>& out_classes,
     std::unordered_multimap<std::string, std::string>& out_attributes) {
-
-  auto size = layout_contents.size();
-  auto data = layout_contents.data();
-  if (!is_binary_xml((void*)data, size)) {
+  if (!is_binary_xml(data, size)) {
     return;
   }
 
@@ -550,18 +622,15 @@ void extract_classes_from_layout(
  *
  */
 std::unordered_set<std::string> extract_classes_from_native_lib(
-    const std::string& lib_contents) {
+    const char* data, size_t size) {
   std::unordered_set<std::string> classes;
   char buffer[MAX_CLASSNAME_LENGTH + 2]; // +2 for the trailing ";\0"
-  const char* inptr = lib_contents.data();
-  char* outptr = buffer;
-  const char* end = inptr + lib_contents.size();
-
-  size_t length = 0;
+  const char* inptr = data;
+  const char* end = inptr + size;
 
   while (inptr < end) {
-    outptr = buffer;
-    length = 0;
+    char* outptr = buffer;
+    size_t length = 0;
     // All classnames start with a package, which starts with a lowercase
     // letter. Some of them are preceded by an 'L' and followed by a ';' in
     // native libraries while others are not.
@@ -572,13 +641,12 @@ std::unordered_set<std::string> extract_classes_from_native_lib(
         length++;
       }
 
-      while (( // This loop is safe since lib_contents.data() ends with a \0
-                 (*inptr >= 'a' && *inptr <= 'z') ||
-                 (*inptr >= 'A' && *inptr <= 'Z') ||
-                 (*inptr >= '0' && *inptr <= '9') || *inptr == '/' ||
-                 *inptr == '_' || *inptr == '$') &&
+      while (inptr < end &&
+             ((*inptr >= 'a' && *inptr <= 'z') ||
+              (*inptr >= 'A' && *inptr <= 'Z') ||
+              (*inptr >= '0' && *inptr <= '9') || *inptr == '/' ||
+              *inptr == '_' || *inptr == '$') &&
              length < MAX_CLASSNAME_LENGTH) {
-
         *outptr++ = *inptr++;
         length++;
       }
@@ -593,6 +661,15 @@ std::unordered_set<std::string> extract_classes_from_native_lib(
   return classes;
 }
 
+} // namespace
+
+// For external testing.
+std::unordered_set<std::string> extract_classes_from_native_lib(
+    const std::string& lib_contents) {
+  return extract_classes_from_native_lib(lib_contents.data(),
+                                         lib_contents.size());
+}
+
 /*
  * Reads an entire file into a std::string. Returns an empty string if
  * anything went wrong (e.g. file not found).
@@ -601,6 +678,7 @@ std::string read_entire_file(const std::string& filename) {
   std::ifstream in(filename, std::ios::in | std::ios::binary);
   std::ostringstream sstr;
   sstr << in.rdbuf();
+  redex_assert(!in.bad());
   return sstr.str();
 }
 
@@ -613,7 +691,7 @@ void write_entire_file(const std::string& filename,
 boost::optional<int32_t> get_min_sdk(const std::string& manifest_filename) {
   const std::string& manifest = read_entire_file(manifest_filename);
 
-  if (manifest.size() == 0) {
+  if (manifest.empty()) {
     fprintf(stderr, "WARNING: Cannot find/read the manifest file %s\n",
             manifest_filename.c_str());
     return boost::none;
@@ -652,15 +730,18 @@ boost::optional<int32_t> get_min_sdk(const std::string& manifest_filename) {
 }
 
 ManifestClassInfo get_manifest_class_info(const std::string& filename) {
-  std::string manifest = read_entire_file(filename);
   ManifestClassInfo classes;
-  if (manifest.size()) {
-    classes = extract_classes_from_manifest(manifest);
-  } else {
-    fprintf(stderr, "Unable to read manifest file: %s\n", filename.data());
-  }
+  redex::read_file_with_contents(filename, [&](const char* data, size_t size) {
+    if (size == 0) {
+      fprintf(stderr, "Unable to read manifest file: %s\n", filename.c_str());
+      return;
+    }
+    classes = extract_classes_from_manifest(data, size);
+  });
   return classes;
 }
+
+namespace {
 
 std::unordered_set<std::string> get_files_by_suffix(
     const std::string& directory, const std::string& suffix) {
@@ -688,9 +769,13 @@ std::unordered_set<std::string> get_files_by_suffix(
   return files;
 }
 
+} // namespace
+
 std::unordered_set<std::string> get_xml_files(const std::string& directory) {
   return get_files_by_suffix(directory, ".xml");
 }
+
+namespace {
 
 std::unordered_set<std::string> get_js_files(const std::string& directory) {
   return get_files_by_suffix(directory, ".js");
@@ -700,7 +785,7 @@ std::unordered_set<std::string> get_candidate_js_resources_from_bundle(
     const std::string& filename) {
   std::string file_contents = read_entire_file(filename);
   std::unordered_set<std::string> js_candidate_resources;
-  if (file_contents.size()) {
+  if (!file_contents.empty()) {
     js_candidate_resources = extract_js_resources(file_contents);
   } else {
     fprintf(stderr, "Unable to read file: %s\n", filename.data());
@@ -775,6 +860,8 @@ std::unordered_set<uint32_t> get_js_resources_by_parsing(
   return get_apk_resources_from_candidates(js_candidate_resources, name_to_ids);
 }
 
+} // namespace
+
 std::unordered_set<uint32_t> get_js_resources(
     const std::string& directory,
     const std::vector<std::string>& js_assets_lists,
@@ -807,13 +894,17 @@ std::unordered_set<uint32_t> get_resources_by_name_prefix(
   return found_resources;
 }
 
+namespace {
+
 void ensure_file_contents(const std::string& file_contents,
                           const std::string& filename) {
-  if (!file_contents.size()) {
+  if (file_contents.empty()) {
     fprintf(stderr, "Unable to read file: %s\n", filename.data());
     throw std::runtime_error("Unable to read file: " + filename);
   }
 }
+
+} // namespace
 
 bool is_raw_resource(const std::string& filename) {
   return filename.find("/res/raw/") != std::string::npos ||
@@ -830,6 +921,8 @@ std::unordered_set<uint32_t> get_xml_reference_attributes(
   ensure_file_contents(file_contents, filename);
   return extract_xml_reference_attributes(file_contents, filename);
 }
+
+namespace {
 
 bool is_drawable_attribute(android::ResXMLTree& parser, size_t attr_index) {
   size_t name_size;
@@ -853,6 +946,8 @@ bool is_drawable_attribute(android::ResXMLTree& parser, size_t attr_index) {
 
   return false;
 }
+
+} // namespace
 
 int inline_xml_reference_attributes(
     const std::string& filename,
@@ -966,11 +1061,12 @@ void remap_xml_reference_attributes(
   }
 }
 
-std::vector<std::string> find_resource_xml_files(
-    const std::string& apk_directory) {
+namespace {
 
-  std::vector<std::string> layout_files;
-
+template <typename Fn>
+void find_resource_xml_files(const std::string& apk_directory,
+                             const std::vector<std::string>& skip_dirs_prefixes,
+                             Fn handler) {
   std::string root = apk_directory + std::string("/res");
   path_t res(root);
 
@@ -980,28 +1076,43 @@ std::vector<std::string> find_resource_xml_files(
       const path_t& entry_path = entry.path();
 
       if (is_directory(entry_path)) {
+        auto matches_prefix = [&skip_dirs_prefixes](const auto& p) {
+          const auto& str = p.string();
+          for (const auto& prefix : skip_dirs_prefixes) {
+            if (str.find(prefix) == 0) {
+              return true;
+            }
+          }
+          return false;
+        };
+        if (matches_prefix(entry_path.filename())) {
+          continue;
+        }
+
         for (auto lit = dir_iterator(entry_path); lit != dir_iterator();
              ++lit) {
           const path_t& resource_path = lit->path();
           if (is_regular_file(resource_path) &&
               ends_with(resource_path.string().c_str(), ".xml")) {
-            layout_files.push_back(resource_path.string());
+            handler(resource_path.string());
           }
         }
       }
     }
   }
-  return layout_files;
 }
+
+} // namespace
 
 void collect_layout_classes_and_attributes_for_file(
     const std::string& file_path,
     const std::unordered_set<std::string>& attributes_to_read,
     std::unordered_set<std::string>& out_classes,
     std::unordered_multimap<std::string, std::string>& out_attributes) {
-  std::string contents = read_entire_file(file_path);
-  extract_classes_from_layout(contents, attributes_to_read, out_classes,
-                              out_attributes);
+  redex::read_file_with_contents(file_path, [&](const char* data, size_t size) {
+    extract_classes_from_layout(data, size, attributes_to_read, out_classes,
+                                out_attributes);
+  });
 }
 
 void collect_layout_classes_and_attributes(
@@ -1009,10 +1120,69 @@ void collect_layout_classes_and_attributes(
     const std::unordered_set<std::string>& attributes_to_read,
     std::unordered_set<std::string>& out_classes,
     std::unordered_multimap<std::string, std::string>& out_attributes) {
-  std::vector<std::string> files = find_resource_xml_files(apk_directory);
-  for (const auto& layout_file : files) {
-    collect_layout_classes_and_attributes_for_file(
-        layout_file, attributes_to_read, out_classes, out_attributes);
+  auto collect_fn = [&](const std::vector<std::string>& prefixes) {
+    std::mutex out_mutex;
+    auto wq = workqueue_foreach<std::string>(
+        [&](sparta::SpartaWorkerState<std::string>* worker_state,
+            const std::string& input) {
+          if (input.empty()) {
+            // Dispatcher, find files and create tasks.
+            find_resource_xml_files(apk_directory, prefixes,
+                                    [&](const std::string& file) {
+                                      worker_state->push_task(file);
+                                    });
+            return;
+          }
+
+          std::unordered_set<std::string> local_out_classes;
+          std::unordered_multimap<std::string, std::string>
+              local_out_attributes;
+          collect_layout_classes_and_attributes_for_file(
+              input, attributes_to_read, local_out_classes,
+              local_out_attributes);
+          if (!local_out_classes.empty() || !local_out_attributes.empty()) {
+            std::unique_lock<std::mutex> lock(out_mutex);
+            // C++17: use merge to avoid copies.
+            out_classes.insert(local_out_classes.begin(),
+                               local_out_classes.end());
+            out_attributes.insert(local_out_attributes.begin(),
+                                  local_out_attributes.end());
+          }
+        },
+        std::min(sparta::parallel::default_num_threads(), kReadXMLThreads),
+        /*push_tasks_while_running=*/true);
+    wq.add_item("");
+    wq.run_all();
+  };
+
+  collect_fn({
+      // Animations do not have references (that we track).
+      "anim",
+      // Colors do not have references.
+      "color",
+      // There are usually a lot of drawable resources, non of
+      // which contain any code references.
+      "drawable",
+      // Raw would not contain binary XML.
+      "raw",
+  });
+
+  if (slow_invariants_debug) {
+    TRACE(RES, 1,
+          "Checking collect_layout_classes_and_attributes filter assumption");
+    size_t out_classes_size = out_classes.size();
+    size_t out_attributes_size = out_attributes.size();
+
+    // Comparison is complicated, as out_attributes is a multi-map.
+    // Assume that the inputs were empty, for simplicity.
+    out_classes.clear();
+    out_attributes.clear();
+
+    collect_fn({});
+    size_t new_out_classes_size = out_classes.size();
+    size_t new_out_attributes_size = out_attributes.size();
+    redex_assert(out_classes_size == new_out_classes_size);
+    redex_assert(out_attributes_size == new_out_attributes_size);
   }
 }
 
@@ -1038,12 +1208,13 @@ std::set<std::string> multimap_values_to_set(
   return result;
 }
 
+namespace {
+
 /**
  * Return a list of all the .so files in /lib
  */
-std::vector<std::string> find_native_library_files(
-    const std::string& apk_directory) {
-  std::vector<std::string> native_library_files;
+template <typename Fn>
+void find_native_library_files(const std::string& apk_directory, Fn handler) {
   std::string lib_root = apk_directory + std::string("/lib");
   std::string library_extension(".so");
 
@@ -1056,74 +1227,87 @@ std::vector<std::string> find_native_library_files(
       if (is_regular_file(entry_path) &&
           ends_with(entry_path.filename().string().c_str(),
                     library_extension.c_str())) {
-        native_library_files.push_back(entry_path.string());
+        handler(entry_path.string());
       }
     }
   }
-  return native_library_files;
 }
+
+} // namespace
 
 /**
  * Return all potential java class names located in native libraries.
  */
 std::unordered_set<std::string> get_native_classes(
     const std::string& apk_directory) {
-  std::vector<std::string> native_libs =
-      find_native_library_files(apk_directory);
+  std::mutex out_mutex;
   std::unordered_set<std::string> all_classes;
-  for (const auto& native_lib : native_libs) {
-    std::string contents = read_entire_file(native_lib);
-    std::unordered_set<std::string> classes_from_layout =
-        extract_classes_from_native_lib(contents);
-    all_classes.insert(classes_from_layout.begin(), classes_from_layout.end());
-  }
+  auto wq = workqueue_foreach<std::string>(
+      [&](sparta::SpartaWorkerState<std::string>* worker_state,
+          const std::string& input) {
+        if (input.empty()) {
+          // Dispatcher, find files and create tasks.
+          find_native_library_files(
+              apk_directory,
+              [&](const std::string& file) { worker_state->push_task(file); });
+          return;
+        }
+
+        redex::read_file_with_contents(
+            input,
+            [&](const char* data, size_t size) {
+              std::unordered_set<std::string> classes_from_native =
+                  extract_classes_from_native_lib(data, size);
+              if (!classes_from_native.empty()) {
+                std::unique_lock<std::mutex> lock(out_mutex);
+                // C++17: use merge to avoid copies.
+                all_classes.insert(classes_from_native.begin(),
+                                   classes_from_native.end());
+              }
+            },
+            64 * 1024);
+      },
+      std::min(sparta::parallel::default_num_threads(), kReadNativeThreads),
+      /*push_tasks_while_running=*/true);
+  wq.add_item("");
+  wq.run_all();
   return all_classes;
 }
 
-void* map_file(const char* path,
-               int* file_descriptor,
-               size_t* length,
-               const bool mode_write) {
-  *file_descriptor = open(path, mode_write ? O_RDWR : O_RDONLY);
-  if (*file_descriptor <= 0) {
-    throw std::runtime_error("Failed to open arsc file");
+RedexMappedFile map_file(const char* path, bool mode_write) {
+  auto map = std::make_unique<boost::iostreams::mapped_file>();
+  std::ios_base::openmode mode = (std::ios_base::openmode)(
+      std::ios_base::in | (mode_write ? std::ios_base::out : 0));
+  map->open(path, mode);
+  if (!map->is_open()) {
+    throw std::runtime_error(std::string("Could not map ") + path);
   }
-  struct stat st = {};
-  if (fstat(*file_descriptor, &st) == -1) {
-    close(*file_descriptor);
-    throw std::runtime_error("Failed to get file length");
-  }
-  *length = static_cast<size_t>(st.st_size);
-  int flags = PROT_READ;
-  if (mode_write) {
-    flags |= PROT_WRITE;
-  }
-  void* fp = mmap(nullptr, *length, flags, MAP_SHARED, *file_descriptor, 0);
-  if (fp == MAP_FAILED) {
-    close(*file_descriptor);
-    throw std::runtime_error("Failed to mmap file");
-  }
-  return fp;
+
+  return RedexMappedFile(std::move(map), path, !mode_write);
 }
 
-void unmap_and_close(int file_descriptor, void* file_pointer, size_t length) {
-  munmap(file_pointer, length);
-  close(file_descriptor);
-}
+void unmap_and_close(RedexMappedFile f ATTRIBUTE_UNUSED) {}
 
 size_t write_serialized_data(const android::Vector<char>& cVec,
-                             int file_descriptor,
-                             void* file_pointer,
-                             size_t length) {
+                             RedexMappedFile f) {
   size_t vec_size = cVec.size();
+  size_t f_size = f.size();
   if (vec_size > 0) {
-    memcpy(file_pointer, &(cVec[0]), vec_size);
+    memcpy(f.data(), &(cVec[0]), vec_size);
   }
-
-  munmap(file_pointer, length);
-  ftruncate(file_descriptor, cVec.size());
-  close(file_descriptor);
-  return vec_size > 0 ? vec_size : length;
+  f.file.reset(); // Close the map.
+#if IS_WINDOWS
+  int fd;
+  auto open_res =
+      _sopen_s(&fd, f.filename.c_str(), _O_BINARY | _O_RDWR, _SH_DENYRW, 0);
+  redex_assert(open_res == 0);
+  auto trunc_res = _chsize_s(fd, vec_size);
+  _close(fd);
+#else
+  auto trunc_res = truncate(f.filename.c_str(), vec_size);
+#endif
+  redex_assert(trunc_res == 0);
+  return vec_size > 0 ? vec_size : f_size;
 }
 
 int replace_in_xml_string_pool(
@@ -1227,29 +1411,27 @@ int rename_classes_in_layout(
     const std::map<std::string, std::string>& shortened_names,
     size_t* out_num_renamed,
     ssize_t* out_size_delta) {
-
-  int file_desc;
-  size_t len;
-  auto fp = map_file(file_path.c_str(), &file_desc, &len, true);
+  RedexMappedFile f = map_file(file_path.c_str(), /*mode_write=*/true);
+  size_t len = f.size();
 
   android::Vector<char> serialized;
-  auto status = replace_in_xml_string_pool(fp, len, shortened_names,
+  auto status = replace_in_xml_string_pool(f.data(), f.size(), shortened_names,
                                            &serialized, out_num_renamed);
 
   if (*out_num_renamed == 0 || status != android::OK) {
-    unmap_and_close(file_desc, fp, len);
+    unmap_and_close(std::move(f));
     return status;
   }
 
-  write_serialized_data(serialized, file_desc, fp, len);
+  write_serialized_data(serialized, std::move(f));
   *out_size_delta = serialized.size() - len;
   return android::OK;
 }
 
-ResourcesArscFile::ResourcesArscFile(const std::string& path) {
-  m_arsc_ptr = map_file(path.c_str(), &m_arsc_fd, &m_arsc_len, true);
-
-  int error = res_table.add(m_arsc_ptr, m_arsc_len, /* cookie */ -1,
+ResourcesArscFile::ResourcesArscFile(const std::string& path)
+    : m_f(map_file(path.c_str(), /*mode_write=*/true)) {
+  m_arsc_len = m_f.size();
+  int error = res_table.add(m_f.const_data(), m_f.size(), /* cookie */ -1,
                             /* copyData*/ true);
   always_assert_log(error == 0, "Reading arsc failed with error code: %d",
                     error);
@@ -1268,10 +1450,12 @@ ResourcesArscFile::ResourcesArscFile(const std::string& path) {
   }
 }
 
+size_t ResourcesArscFile::get_length() const { return m_arsc_len; }
+
 size_t ResourcesArscFile::serialize() {
   android::Vector<char> cVec;
   res_table.serialize(cVec, 0);
-  m_arsc_len = write_serialized_data(cVec, m_arsc_fd, m_arsc_ptr, m_arsc_len);
+  m_arsc_len = write_serialized_data(cVec, std::move(m_f));
   m_file_closed = true;
   return m_arsc_len;
 }
@@ -1331,8 +1515,4 @@ std::vector<std::string> ResourcesArscFile::get_resource_strings_by_name(
   return ret;
 }
 
-ResourcesArscFile::~ResourcesArscFile() {
-  if (!m_file_closed) {
-    unmap_and_close(m_arsc_fd, m_arsc_ptr, m_arsc_len);
-  }
-}
+ResourcesArscFile::~ResourcesArscFile() {}

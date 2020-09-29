@@ -90,6 +90,8 @@ void InterDexPass::bind_config() {
   bind("can_touch_coldstart_extended_cls", false,
        m_can_touch_coldstart_extended_cls);
   bind("expect_order_list", false, m_expect_order_list);
+
+  trait(Traits::Pass::unique, true);
 }
 
 void InterDexPass::run_pass(DexStoresVector& stores,
@@ -118,11 +120,12 @@ void InterDexPass::run_pass(DexStoresVector& stores,
   bool force_single_dex = conf.get_json_config().get("force_single_dex", false);
   XStoreRefs xstore_refs(stores);
   InterDex interdex(original_scope, dexen, mgr.apk_manager(), conf, plugins,
-                    m_linear_alloc_limit, m_static_prune,
-                    m_normal_primary_dex, force_single_dex,
-                    m_emit_scroll_set_marker, m_emit_canaries,
+                    m_linear_alloc_limit, m_static_prune, m_normal_primary_dex,
+                    force_single_dex, m_emit_canaries,
                     m_minimize_cross_dex_refs, m_minimize_cross_dex_refs_config,
-                    m_cross_dex_relocator_config, reserve_frefs, reserve_trefs, reserve_mrefs, &xstore_refs, mgr.get_redex_options().min_sdk);
+                    m_cross_dex_relocator_config, reserve_frefs, reserve_trefs,
+                    reserve_mrefs, &xstore_refs,
+                    mgr.get_redex_options().min_sdk);
 
   if (m_expect_order_list) {
     always_assert_log(
@@ -200,11 +203,12 @@ void InterDexPass::run_pass_on_nonroot_store(DexStoresVector& stores,
   // Initialize interdex and run for nonroot store
   XStoreRefs xstore_refs(stores);
   InterDex interdex(original_scope, dexen, mgr.apk_manager(), conf, plugins,
-                    m_linear_alloc_limit, m_static_prune,
-                    m_normal_primary_dex, false /* force single dex */,
-                    m_emit_scroll_set_marker, false /* emit canaries */,
+                    m_linear_alloc_limit, m_static_prune, m_normal_primary_dex,
+                    false /* force single dex */, false /* emit canaries */,
                     false /* minimize_cross_dex_refs */, cross_dex_refs_config,
-                    cross_dex_relocator_config, reserve_frefs, reserve_trefs, reserve_mrefs, &xstore_refs, mgr.get_redex_options().min_sdk);
+                    cross_dex_relocator_config, reserve_frefs, reserve_trefs,
+                    reserve_mrefs, &xstore_refs,
+                    mgr.get_redex_options().min_sdk);
 
   interdex.run_on_nonroot_store();
 

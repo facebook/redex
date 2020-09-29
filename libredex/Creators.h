@@ -58,6 +58,12 @@ struct Location {
     return empty_loc;
   }
 
+  Location(const Location&) = default;
+  Location(Location&&) noexcept = default;
+
+  Location& operator=(const Location&) = default;
+  Location& operator=(Location&&) = default;
+
  private:
   /**
    * Size of this location.
@@ -378,7 +384,7 @@ struct MethodBlock {
  */
 struct MethodCreator {
  public:
-  MethodCreator(DexMethod* meth);
+  explicit MethodCreator(DexMethod* meth);
   MethodCreator(DexMethodRef* ref,
                 DexAccessFlags access,
                 DexAnnotationSet* anno = nullptr,
@@ -405,8 +411,7 @@ struct MethodCreator {
    */
   Location make_local(DexType* type) {
     auto next_reg = meth_code->get_registers_size();
-    Location local{type, next_reg};
-    locals.push_back(std::move(local));
+    locals.emplace_back(Location{type, next_reg});
     meth_code->set_registers_size(next_reg + Location::loc_size(type));
     return locals.back();
   }
@@ -458,8 +463,7 @@ struct MethodCreator {
 
   Location make_local_at(DexType* type, reg_t i) {
     always_assert(i < meth_code->get_registers_size());
-    Location local{type, i};
-    locals.push_back(std::move(local));
+    locals.emplace_back(Location{type, i});
     return locals.back();
   }
 

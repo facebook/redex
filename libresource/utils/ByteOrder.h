@@ -23,7 +23,7 @@
 #include <sys/types.h>
 #if defined(HAVE_WINSOCK)
 #include <winsock2.h>
-#elif !defined(_MSC_VER)
+#elif !defined(_MSC_VER) && !defined(__MINGW64__) && !defined(__MINGW32__)
 #include <netinet/in.h>
 #endif
 

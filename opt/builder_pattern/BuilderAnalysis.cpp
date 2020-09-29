@@ -226,7 +226,7 @@ void BuilderAnalysis::print_usage() {
   }
 
   always_assert(m_analyzer);
-  if (m_usage.size() == 0) {
+  if (m_usage.empty()) {
     return;
   }
 
@@ -274,7 +274,7 @@ DexType* get_instantiated_type(const IRInstruction* insn) {
   }
 
   default:
-    always_assert_log(false, "Different instantion opcode %s", SHOW(insn));
+    not_reached_log("Different instantion opcode %s", SHOW(insn));
   }
 
   return current_instance;

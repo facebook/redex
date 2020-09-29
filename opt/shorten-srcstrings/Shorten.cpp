@@ -46,7 +46,7 @@ static bool is_reasonable_string(const char* str, size_t len) {
 
 DexString* get_suitable_string(std::unordered_set<DexString*>& set,
                                std::vector<DexString*>& dex_strings) {
-  while (dex_strings.size()) {
+  while (!dex_strings.empty()) {
     DexString* val = dex_strings.back();
     dex_strings.pop_back();
     auto valstr = val->c_str();

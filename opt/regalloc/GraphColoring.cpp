@@ -449,7 +449,7 @@ void Allocator::simplify(interference::Graph* ig,
     }
   }
   while (true) {
-    while (low.size() > 0) {
+    while (!low.empty()) {
       auto reg = *low.begin();
       const auto& node = ig->get_node(reg);
       TRACE(REG, 6, "Removing %u", reg);
@@ -472,7 +472,7 @@ void Allocator::simplify(interference::Graph* ig,
         }
       }
     }
-    if (high.size() == 0) {
+    if (high.empty()) {
       break;
     }
     // When picking the spill candidate, always prefer yet-unspilled nodes to
@@ -819,7 +819,7 @@ void Allocator::find_split(const interference::Graph& ig,
 std::unordered_map<reg_t, IRList::iterator> Allocator::find_param_splits(
     const std::unordered_set<reg_t>& orig_params, IRCode* code) {
   std::unordered_map<reg_t, IRList::iterator> load_locations;
-  if (orig_params.size() == 0) {
+  if (orig_params.empty()) {
     return load_locations;
   }
   // Erase parameter from list if there exist instructions overwriting the
@@ -842,7 +842,7 @@ std::unordered_map<reg_t, IRList::iterator> Allocator::find_param_splits(
       }
     }
   }
-  if (params.size() == 0) {
+  if (params.empty()) {
     return load_locations;
   }
 
@@ -853,7 +853,7 @@ std::unordered_map<reg_t, IRList::iterator> Allocator::find_param_splits(
     auto block_uses = find_first_uses(param, start_block);
     // Since this function only gets called for param regs that need to be
     // spilled, they must be constrained by at least one use.
-    always_assert(block_uses.size() != 0);
+    always_assert(!block_uses.empty());
     if (block_uses.size() > 1) {
       // There are multiple use sites for this param register.
       // Find the immediate dominator of the blocks that contain those uses and
@@ -897,7 +897,7 @@ void Allocator::split_params(const interference::Graph& ig,
                              const std::unordered_set<reg_t>& param_spills,
                              IRCode* code) {
   auto load_locations = find_param_splits(param_spills, code);
-  if (load_locations.size() == 0) {
+  if (load_locations.empty()) {
     return;
   }
 
@@ -1153,7 +1153,7 @@ void Allocator::allocate(DexMethod* method) {
       split_params(ig, spill_plan.param_spills, code);
       spill(ig, spill_plan, range_set, code);
 
-      if (split_plan.split_around.size() > 0) {
+      if (!split_plan.split_around.empty()) {
         TRACE(REG, 5, "Split plan:\n%s", SHOW(split_plan));
         m_stats.split_moves +=
             split(fixpoint_iter, split_plan, split_costs, ig, code);

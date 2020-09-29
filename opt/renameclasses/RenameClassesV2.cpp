@@ -71,7 +71,7 @@ const char* dont_rename_reason_to_metric(DontRenameReasonCode reason) {
   case DontRenameReasonCode::SerdeRelationships:
     return "num_dont_rename_serde_relationships";
   default:
-    always_assert_log(false, "Unexpected DontRenameReasonCode: %d", reason);
+    not_reached_log("Unexpected DontRenameReasonCode: %d", reason);
   }
 }
 
@@ -157,7 +157,7 @@ RenameClassesPassV2::build_dont_rename_for_types_with_reflection(
           "%s got translated to %s",
           refl_type_str.c_str(),
           deobf_cls_string.c_str());
-    if (deobf_cls_string == "") {
+    if (deobf_cls_string.empty()) {
       deobf_cls_string = refl_type_str;
     }
     DexType* type_with_refl = DexType::get_type(deobf_cls_string.c_str());
@@ -433,7 +433,7 @@ void RenameClassesPassV2::eval_classes(Scope& scope,
   auto dont_rename_native_bindings = build_dont_rename_native_bindings(scope);
   auto dont_rename_annotated = build_dont_rename_annotated();
 
-  std::string norule = "";
+  std::string norule;
 
   for (auto clazz : scope) {
     // Short circuit force renames
@@ -473,23 +473,23 @@ void RenameClassesPassV2::eval_classes(Scope& scope,
       continue;
     }
 
-    // Don't rename anythings in the direct name blacklist (hierarchy ignored)
+    // Don't rename anythings in the direct name blocklist (hierarchy ignored)
     if (m_dont_rename_specific.count(clsname)) {
       m_dont_rename_reasons[clazz] = {DontRenameReasonCode::Specific, strname};
       continue;
     }
 
-    // Don't rename anything if it falls in a blacklisted package
-    bool package_blacklisted = false;
+    // Don't rename anything if it falls in an excluded package
+    bool package_blocklisted = false;
     for (const auto& pkg : m_dont_rename_packages) {
       if (strname.rfind("L" + pkg) == 0) {
-        TRACE(RENAME, 2, "%s blacklisted by pkg rule %s", clsname, pkg.c_str());
+        TRACE(RENAME, 2, "%s excluded by pkg rule %s", clsname, pkg.c_str());
         m_dont_rename_reasons[clazz] = {DontRenameReasonCode::Packages, pkg};
-        package_blacklisted = true;
+        package_blocklisted = true;
         break;
       }
     }
-    if (package_blacklisted) continue;
+    if (package_blocklisted) continue;
 
     if (dont_rename_class_name_literals.count(clsname)) {
       m_dont_rename_reasons[clazz] = {DontRenameReasonCode::ClassNameLiterals,
@@ -528,7 +528,7 @@ void RenameClassesPassV2::eval_classes(Scope& scope,
 
     if (!can_rename_if_also_renaming_xml(clazz)) {
       const auto& keep_reasons = clazz->rstate.keep_reasons();
-      auto rule = keep_reasons.size() > 0 ? show(*keep_reasons.begin()) : "";
+      auto rule = !keep_reasons.empty() ? show(*keep_reasons.begin()) : "";
       m_dont_rename_reasons[clazz] = {DontRenameReasonCode::ProguardCantRename,
                                       get_keep_rule(clazz)};
       continue;
@@ -553,23 +553,23 @@ void RenameClassesPassV2::eval_classes_post(
     const char* clsname = clazz->get_name()->c_str();
     std::string strname = std::string(clsname);
 
-    // Don't rename anythings in the direct name blacklist (hierarchy ignored)
+    // Don't rename anythings in the direct name blocklist (hierarchy ignored)
     if (m_dont_rename_specific.count(clsname)) {
       m_dont_rename_reasons[clazz] = {DontRenameReasonCode::Specific, strname};
       continue;
     }
 
-    // Don't rename anything if it falls in a blacklisted package
-    bool package_blacklisted = false;
+    // Don't rename anything if it falls in an excluded package
+    bool package_blocklisted = false;
     for (const auto& pkg : m_dont_rename_packages) {
       if (strname.rfind("L" + pkg) == 0) {
-        TRACE(RENAME, 2, "%s blacklisted by pkg rule %s", clsname, pkg.c_str());
+        TRACE(RENAME, 2, "%s excluded by pkg rule %s", clsname, pkg.c_str());
         m_dont_rename_reasons[clazz] = {DontRenameReasonCode::Packages, pkg};
-        package_blacklisted = true;
+        package_blocklisted = true;
         break;
       }
     }
-    if (package_blacklisted) continue;
+    if (package_blocklisted) continue;
 
     if (dont_rename_hierarchies.count(clazz->get_type())) {
       std::string rule = dont_rename_hierarchies[clazz->get_type()];
@@ -647,11 +647,12 @@ void RenameClassesPassV2::rename_classes(Scope& scope,
     TRACE(RENAME, 2, "'%s' ->  %s (%u)'", oldname->c_str(),
           prefixed_descriptor.c_str(), sequence);
 
-    auto exists = DexString::get_string(prefixed_descriptor);
-    always_assert_log(!exists, "Collision on class %s (%s)", oldname->c_str(),
+    auto dstring = DexString::make_string(prefixed_descriptor);
+
+    always_assert_log(!DexType::get_type(dstring),
+                      "Type name collision detected. %s already exists.",
                       prefixed_descriptor.c_str());
 
-    auto dstring = DexString::make_string(prefixed_descriptor);
     name_mapping.add_type_name(clazz->get_name(), dstring);
     dtype->set_name(dstring);
     std::string old_str(oldname->c_str());
@@ -759,7 +760,7 @@ void RenameClassesPassV2::run_pass(DexStoresVector& stores,
     return;
   }
 
-  if (m_package_prefix != "") {
+  if (!m_package_prefix.empty()) {
     always_assert_log(
         !(conf.get_json_config().get("emit_locator_strings", false)),
         "Rename classes package_prefix doesn't work together with "

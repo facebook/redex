@@ -35,13 +35,13 @@ class FinalInlineImpl {
   const Scope& m_full_scope;
   FinalInlinePass::Config& m_config;
 
-  bool is_cls_blacklisted(DexClass* clazz) {
-    for (auto& type : m_config.black_list_types) {
+  bool is_cls_blocklisted(DexClass* clazz) {
+    for (auto& type : m_config.blocklist_types) {
       if (clazz->get_type() == type) {
         return true;
       }
     }
-    for (auto& anno_type : m_config.black_list_annos) {
+    for (auto& anno_type : m_config.blocklist_annos) {
       if (has_anno(clazz, anno_type)) {
         return true;
       }
@@ -94,7 +94,7 @@ class FinalInlineImpl {
     std::vector<DexClass*> smallscope;
     uint32_t aflags = ACC_STATIC | ACC_FINAL;
     for (auto clazz : m_full_scope) {
-      if (is_cls_blacklisted(clazz)) {
+      if (is_cls_blocklisted(clazz)) {
         continue;
       }
       bool found = can_delete(clazz);
@@ -171,20 +171,17 @@ class FinalInlineImpl {
   bool validate_sget(DexMethod* context, IRInstruction* opfield) {
     if (check_sget(opfield)) {
       return true;
-    } else {
-      auto field = resolve_field(opfield->get_field(), FieldSearch::Static);
-      always_assert_log(field->is_concrete(), "Must be a concrete field");
-      auto value = field->get_static_value();
-      always_assert_log(
-          false,
-          "Unexpected field type in inline_*sget %s for field %s value %s in "
-          "method %s\n",
-          SHOW(opfield),
-          SHOW(field),
-          value != nullptr ? value->show().c_str() : "('nullptr')",
-          SHOW(context));
-      return false;
     }
+    auto field = resolve_field(opfield->get_field(), FieldSearch::Static);
+    always_assert_log(field->is_concrete(), "Must be a concrete field");
+    auto value = field->get_static_value();
+    not_reached_log(
+        "Unexpected field type in inline_*sget %s for field %s value %s in "
+        "method %s\n",
+        SHOW(opfield),
+        SHOW(field),
+        value != nullptr ? value->show().c_str() : "('nullptr')",
+        SHOW(context));
   }
 
   /*
@@ -220,7 +217,7 @@ class FinalInlineImpl {
     std::unordered_set<DexField*> inline_field;
     uint32_t aflags = ACC_STATIC | ACC_FINAL;
     for (auto clazz : m_full_scope) {
-      if (is_cls_blacklisted(clazz)) {
+      if (is_cls_blocklisted(clazz)) {
         continue;
       }
       std::unordered_map<DexField*, bool> blank_statics;
@@ -408,7 +405,7 @@ class FinalInlineImpl {
     size_t nreplaced = 0;
     size_t ntotal = 0;
     for (auto clazz : m_full_scope) {
-      if (is_cls_blacklisted(clazz)) {
+      if (is_cls_blocklisted(clazz)) {
         continue;
       }
       auto clinit = clazz->get_clinit();
@@ -534,7 +531,7 @@ class FinalInlineImpl {
       const Scope& scope) {
     std::unordered_map<DexField*, std::vector<FieldDependency>> result;
     for (auto clazz : scope) {
-      if (is_cls_blacklisted(clazz)) {
+      if (is_cls_blocklisted(clazz)) {
         continue;
       }
       auto clinit = clazz->get_clinit();
@@ -683,7 +680,7 @@ void FinalInlinePass::inline_fields(const Scope& scope,
   impl.inline_field_values();
 }
 
-const std::unordered_map<DexField*, std::vector<FieldDependency>>
+std::unordered_map<DexField*, std::vector<FieldDependency>>
 FinalInlinePass::find_dependencies(const Scope& scope,
                                    DexMethod* method,
                                    FinalInlinePass::Config& config) {

@@ -7,15 +7,59 @@
 
 #include "RemoveUnreachable.h"
 
+#include <atomic>
+#include <set>
+
 #include "DexUtil.h"
 #include "IOUtil.h"
 #include "MethodOverrideGraph.h"
 #include "PassManager.h"
+#include "ReachableClasses.h"
+#include "Walkers.h"
 
 namespace {
 const std::string UNREACHABLE_SYMBOLS_FILENAME =
     "redex-unreachable-removed-symbols.txt";
-} // end anonymous namespace
+
+void root_metrics(DexStoresVector& stores, PassManager& pm) {
+  auto scope = build_class_scope(stores);
+  std::atomic<size_t> root_classes{0};
+  std::atomic<size_t> root_methods{0};
+  std::atomic<size_t> root_fields{0};
+
+  walk::parallel::classes(scope, [&](const DexClass* cls) {
+    if (root(cls)) {
+      root_classes++;
+    }
+
+    for (auto const& f : cls->get_ifields()) {
+      if (root(f)) {
+        root_fields++;
+      }
+    }
+    for (auto const& f : cls->get_sfields()) {
+      if (root(f)) {
+        root_fields++;
+      }
+    }
+
+    for (auto const& m : cls->get_dmethods()) {
+      if (root(m)) {
+        root_methods++;
+      }
+    }
+    for (auto const& m : cls->get_dmethods()) {
+      if (root(m)) {
+        root_methods++;
+      }
+    }
+  });
+  pm.set_metric("root_classes", root_classes.load());
+  pm.set_metric("root_methods", root_methods.load());
+  pm.set_metric("root_fields", root_fields.load());
+}
+
+} // namespace
 
 namespace mog = method_override_graph;
 
@@ -33,6 +77,8 @@ void RemoveUnreachablePass::run_pass(DexStoresVector& stores,
     return;
   }
 
+  root_metrics(stores, pm);
+
   bool emit_graph_this_run =
       m_emit_graph_on_run &&
       static_cast<int64_t>(pm.get_current_pass_info()->repeat + 1) ==
@@ -41,11 +87,20 @@ void RemoveUnreachablePass::run_pass(DexStoresVector& stores,
   int num_ignore_check_strings = 0;
   auto reachables = reachability::compute_reachable_objects(
       stores, m_ignore_sets, &num_ignore_check_strings, emit_graph_this_run);
+
   reachability::ObjectCounts before = reachability::count_objects(stores);
   TRACE(RMU, 1, "before: %lu classes, %lu fields, %lu methods",
         before.num_classes, before.num_fields, before.num_methods);
+  pm.set_metric("before.num_classes", before.num_classes);
+  pm.set_metric("before.num_fields", before.num_fields);
+  pm.set_metric("before.num_methods", before.num_methods);
+  pm.set_metric("marked_classes", reachables->num_marked_classes());
+  pm.set_metric("marked_fields", reachables->num_marked_fields());
+  pm.set_metric("marked_methods", reachables->num_marked_methods());
+
   reachability::sweep(stores, *reachables,
                       output_unreachable_symbols ? &removed_symbols : nullptr);
+
   reachability::ObjectCounts after = reachability::count_objects(stores);
   TRACE(RMU, 1, "after: %lu classes, %lu fields, %lu methods",
         after.num_classes, after.num_fields, after.num_methods);
@@ -84,8 +139,17 @@ void RemoveUnreachablePass::write_out_removed_symbols(
   }
   TRACE(RMU, 4, "Writing %d removed symbols to %s", removed_symbols.size(),
         filepath.c_str());
-  for (const auto& obj : removed_symbols) {
-    out << obj << std::endl;
+  struct StringPtrComparator {
+    bool operator()(const std::string* s1, const std::string* s2) const {
+      return *s1 < *s2;
+    }
+  };
+  std::set<const std::string*, StringPtrComparator> sorted;
+  std::transform(removed_symbols.begin(), removed_symbols.end(),
+                 std::inserter(sorted, sorted.end()),
+                 [](const std::string& s) { return &s; });
+  for (auto s_ptr : sorted) {
+    out << *s_ptr << std::endl;
   }
 }
 

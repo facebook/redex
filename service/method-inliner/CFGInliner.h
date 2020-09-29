@@ -17,12 +17,14 @@ class CFGInlinerPlugin;
 class CFGInliner {
  public:
   /*
-   * Copy callee's blocks into caller: uses default plugin, and insertion
-   * Expects callsite to be a method call from caller
+   * Copy callee's blocks into caller: uses default plugin, and insertion.
+   * Expects callsite to be a method call from caller.
+   * Registers starting with next_caller_reg must be available.
    */
   static void inline_cfg(ControlFlowGraph* caller,
                          const cfg::InstructionIterator& callsite,
-                         const ControlFlowGraph& callee);
+                         const ControlFlowGraph& callee,
+                         size_t next_caller_reg);
 
   /*
    * Copy callee's blocks into caller:
@@ -31,6 +33,8 @@ class CFGInliner {
   static void inline_cfg(ControlFlowGraph* caller,
                          const cfg::InstructionIterator& inline_site,
                          const ControlFlowGraph& callee,
+
+                         size_t next_caller_reg,
                          CFGInlinerPlugin& plugin);
 
  private:
@@ -62,7 +66,7 @@ class CFGInliner {
   /*
    * Change the register numbers to not overlap with caller.
    */
-  static void remap_registers(ControlFlowGraph* callee, reg_t caller_regs_size);
+  static void remap_registers(ControlFlowGraph* callee, reg_t next_caller_reg);
 
   /*
    * Move ownership of blocks and edges from callee to caller
@@ -130,11 +134,6 @@ class CFGInliner {
    * Return the equivalent move opcode for the given return opcode
    */
   static IROpcode return_to_move(IROpcode op);
-
-  /*
-   * Find the first debug position preceding the callsite
-   */
-  static DexPosition* get_dbg_pos(const cfg::InstructionIterator& callsite);
 };
 
 /*
@@ -152,7 +151,11 @@ class CFGInlinerPlugin {
   // Will be called before any of caller or callee's registers have changed
   // Override this method to modify either after the copy is made and before
   // any registers are adjusted.
-  virtual void update_before_reg_remap(ControlFlowGraph*, ControlFlowGraph*) {}
+  //
+  // Returns `true` if registers have been added.
+  virtual bool update_before_reg_remap(ControlFlowGraph*, ControlFlowGraph*) {
+    return false;
+  }
   // Will be called after both register remap and load parameter to move have
   // changed callee, but before callee's blocks are merged into caller.
   // Override to modify either before the merge occurs.
@@ -167,8 +170,7 @@ class CFGInlinerPlugin {
   // Optionally provide a set of registers for the sources of callee's
   // parameters If none is returned, inliner extracts registers from the sources
   // of the instruction within the instruction iterator
-  virtual const boost::optional<std::reference_wrapper<std::vector<reg_t>>>
-  inline_srcs() {
+  virtual boost::optional<const std::vector<reg_t>&> inline_srcs() {
     return boost::none;
   }
 

@@ -27,7 +27,7 @@ class FileHandle {
     }
   }
 
-  FileHandle& operator=(FileHandle&& other) {
+  FileHandle& operator=(FileHandle&& other) noexcept {
     bytes_written_ = other.bytes_written_;
     seek_ref_ = other.seek_ref_;
     fh_ = other.fh_;
@@ -35,7 +35,7 @@ class FileHandle {
     return *this;
   }
 
-  FileHandle(FileHandle&& other) {
+  FileHandle(FileHandle&& other) noexcept {
     bytes_written_ = other.bytes_written_;
     seek_ref_ = other.seek_ref_;
     fh_ = other.fh_;

@@ -46,7 +46,7 @@ class MemoryAccounterImpl : public MemoryAccounter {
   UNCOPYABLE(MemoryAccounterImpl);
   MOVABLE(MemoryAccounterImpl);
 
-  MemoryAccounterImpl(ConstBuffer buf) : buf_(buf) {
+  explicit MemoryAccounterImpl(ConstBuffer buf) : buf_(buf) {
     // mark end to avoid special case in print.
     consumed_ranges_.emplace_back(buf_.len, buf_.len);
   }
@@ -59,7 +59,7 @@ class MemoryAccounterImpl : public MemoryAccounter {
 
     Range prev{0, 0};
     printf("Memory accounting:\n");
-    if (consumed_ranges_.size() == 0) {
+    if (consumed_ranges_.empty()) {
       printf("  no unconsumed memory found\n");
     }
 
@@ -107,7 +107,7 @@ class MemoryAccounterImpl : public MemoryAccounter {
   }
 
   static MemoryAccounter* Cur() {
-    if (accounter_stack_.size() == 0) {
+    if (accounter_stack_.empty()) {
       return &nil_accounter_;
     }
     return accounter_stack_.back().get();
@@ -139,7 +139,9 @@ class MultiBufferMemoryAccounter : public MemoryAccounter {
   MOVABLE(MultiBufferMemoryAccounter);
   UNCOPYABLE(MultiBufferMemoryAccounter);
 
-  MultiBufferMemoryAccounter(ConstBuffer buf) { accounters_.emplace_back(buf); }
+  explicit MultiBufferMemoryAccounter(ConstBuffer buf) {
+    accounters_.emplace_back(buf);
+  }
 
   void print() override;
 
@@ -235,6 +237,6 @@ MemoryAccounterScope::MemoryAccounterScope(ConstBuffer buf) {
 }
 
 MemoryAccounterScope::~MemoryAccounterScope() {
-  CHECK(MemoryAccounterImpl::accounter_stack_.size() > 0);
+  CHECK(!MemoryAccounterImpl::accounter_stack_.empty());
   MemoryAccounterImpl::accounter_stack_.pop_back();
 }

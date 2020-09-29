@@ -17,6 +17,7 @@
 #include "OptimizeEnumsAnalysis.h"
 #include "OptimizeEnumsGeneratedAnalysis.h"
 #include "Resolver.h"
+#include "ScopedCFG.h"
 #include "SwitchEquivFinder.h"
 #include "Walkers.h"
 
@@ -67,7 +68,7 @@ IRInstruction* get_ctor_call(const DexMethod* method,
     }
 
     auto method_inv =
-        resolve_method(insn->get_method(), opcode_to_search(insn));
+        resolve_method(insn->get_method(), opcode_to_search(insn), method);
     if (method_inv == java_enum_ctor) {
       return insn;
     }
@@ -308,11 +309,11 @@ class OptimizeEnums {
    * Replace enum with Boxed Integer object
    */
   void replace_enum_with_int(int max_enum_size,
-                             const std::vector<DexType*>& whitelist) {
+                             const std::vector<DexType*>& allowlist) {
     if (max_enum_size <= 0) {
       return;
     }
-    optimize_enums::Config config(max_enum_size, whitelist);
+    optimize_enums::Config config(max_enum_size, allowlist);
     const auto override_graph = method_override_graph::build_graph(m_scope);
     calculate_param_summaries(m_scope, *override_graph,
                               &config.param_summary_map);
@@ -392,7 +393,7 @@ class OptimizeEnums {
 
     auto should_consider_enum = [&](DexClass* cls) {
       // Only consider enums that are final, not external, do not have
-      // interfaces, and are not instance fields of serializable classes.
+      // interfaces, and are not instance fields of any classes.
       return is_enum(cls) && !cls->is_external() && is_final(cls) &&
              can_delete(cls) && cls->get_interfaces()->size() == 0 &&
              !types_used_as_instance_fields.count(cls->get_type());
@@ -512,7 +513,6 @@ class OptimizeEnums {
    */
   std::vector<DexClass*> collect_generated_classes() {
     std::vector<DexClass*> generated_classes;
-    std::unordered_set<DexClass*> scope_classes(m_scope.begin(), m_scope.end());
 
     // To avoid any cross store references, only accept generated classes
     // that are in the root store (same for the Enums they reference).
@@ -528,24 +528,18 @@ class OptimizeEnums {
 
       // We expect the generated classes to ONLY contain the lookup tables
       // and the static initializer (<clinit>)
-      if (sfields.size() > 0 && cls->get_dmethods().size() == 1 &&
-          cls->get_vmethods().size() == 0 && cls->get_ifields().size() == 0) {
+      if (!sfields.empty() && cls->get_dmethods().size() == 1 &&
+          cls->get_vmethods().empty() && cls->get_ifields().empty()) {
+        auto all_sfields_lookup_tables =
+            std::all_of(sfields.begin(), sfields.end(), [](DexField* sfield) {
+              const auto& deobfuscated_name = sfield->get_deobfuscated_name();
+              const auto& name = deobfuscated_name.empty()
+                                     ? sfield->get_name()->str()
+                                     : deobfuscated_name;
+              return name.find("$SwitchMap$") != std::string::npos;
+            });
 
-        bool accept_cls = true;
-        for (auto sfield : sfields) {
-          const std::string& deobfuscated_name =
-              sfield->get_deobfuscated_name();
-          const std::string& sfield_name = deobfuscated_name.empty()
-                                               ? sfield->get_name()->str()
-                                               : deobfuscated_name;
-
-          if (sfield_name.find("$SwitchMap$") == std::string::npos) {
-            accept_cls = false;
-            break;
-          }
-        }
-
-        if (accept_cls) {
+        if (all_sfields_lookup_tables) {
           generated_classes.emplace_back(cls);
         }
       }
@@ -631,10 +625,10 @@ class OptimizeEnums {
 
     namespace cp = constant_propagation;
     walk::code(m_scope, [&](DexMethod*, IRCode& code) {
-      code.build_cfg(/* editable */ true);
-      auto& cfg = code.cfg();
-      cfg.calculate_exit_block();
-      optimize_enums::Iterator fixpoint(&cfg);
+      cfg::ScopedCFG cfg(&code);
+      cfg->calculate_exit_block();
+
+      optimize_enums::Iterator fixpoint(cfg.get());
       fixpoint.run(optimize_enums::Environment());
       std::unordered_set<IRInstruction*> switches;
       for (const auto& info : fixpoint.collect()) {
@@ -653,7 +647,6 @@ class OptimizeEnums {
         remove_lookup_table_usage(enum_field_to_ordinal, generated_switch_cases,
                                   info);
       }
-      code.clear_cfg();
     });
   }
 
@@ -876,7 +869,7 @@ class OptimizeEnums {
 
       if (!type && !m_pg_map.empty()) {
         const std::string& obfuscated_name =
-            m_pg_map.translate_class(class_name.c_str());
+            m_pg_map.translate_class(class_name);
 
         // Get type associated type from the obfuscated class name.
         if (!obfuscated_name.empty()) {
@@ -931,10 +924,10 @@ void OptimizeEnumsPass::bind_config() {
   bind("max_enum_size", 100, m_max_enum_size,
        "The maximum number of enum field substitutions that are generated and "
        "stored in primary dex.");
-  bind("break_reference_equality_whitelist", {}, m_enum_to_integer_whitelist,
-       "A whitelist of enum classes that may have more than `max_enum_size` "
+  bind("break_reference_equality_allowlist", {}, m_enum_to_integer_allowlist,
+       "A allowlist of enum classes that may have more than `max_enum_size` "
        "enum fields, try to erase them without considering reference equality "
-       "of the enum objects. Do not add enums to the whitelist!");
+       "of the enum objects. Do not add enums to the allowlist!");
 }
 
 void OptimizeEnumsPass::run_pass(DexStoresVector& stores,
@@ -942,7 +935,7 @@ void OptimizeEnumsPass::run_pass(DexStoresVector& stores,
                                  PassManager& mgr) {
   OptimizeEnums opt_enums(stores, conf);
   opt_enums.remove_redundant_generated_classes();
-  opt_enums.replace_enum_with_int(m_max_enum_size, m_enum_to_integer_whitelist);
+  opt_enums.replace_enum_with_int(m_max_enum_size, m_enum_to_integer_allowlist);
   opt_enums.remove_enum_generated_methods();
   opt_enums.stats(mgr);
 }

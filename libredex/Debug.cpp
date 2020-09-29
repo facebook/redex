@@ -7,6 +7,7 @@
 
 #include "Debug.h"
 
+#include <atomic>
 #include <exception>
 #include <fstream>
 #include <iomanip>
@@ -19,8 +20,23 @@
 #include <stdlib.h>
 #include <string>
 
-#ifndef _MSC_VER
+#include "Macros.h"
+
+#if !IS_WINDOWS
 #include <execinfo.h>
+#include <unistd.h>
+#elif defined(_MSC_VER)
+// Need sleep.
+#include <windows.h>
+#define sleep(x) Sleep(1000 * (x))
+#else
+// Mingw has unistd with sleep.
+#include <unistd.h>
+#endif
+
+#ifdef __linux__
+#include <sys/syscall.h>
+#include <sys/types.h>
 #include <unistd.h>
 #endif
 
@@ -29,11 +45,17 @@
 #ifdef __APPLE__
 #define BOOST_STACKTRACE_GNU_SOURCE_NOT_REQUIRED
 #endif
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wshadow"
 #include <boost/stacktrace.hpp>
+#pragma GCC diagnostic pop
+
+// By default, run with slow invariant checks in debug mode.
+bool slow_invariants_debug{debug};
 
 namespace {
 void crash_backtrace() {
-#ifndef _MSC_VER
+#if !IS_WINDOWS
   constexpr int max_bt_frames = 256;
   void* buf[max_bt_frames];
   auto frames = backtrace(buf, max_bt_frames);
@@ -74,10 +96,51 @@ std::string format2string(const char* fmt, ...) {
 
 namespace {
 
-using traced =
-    boost::error_info<struct tag_stacktrace, boost::stacktrace::stacktrace>;
+#if !IS_WINDOWS
+
+// To have unified decoding in redex.py, use GNU backtrace here with a helper.
+struct StackTrace {
+  std::array<void*, 256> trace;
+  size_t len;
+
+  StackTrace() { len = backtrace(trace.data(), trace.size()); }
+
+  void print_to_stderr() const {
+    backtrace_symbols_fd(trace.data(), len, STDERR_FILENO);
+  }
+};
+
+using StType = StackTrace;
+
+void print_stack_trace_impl(std::ostream& /* os */, const StackTrace* st) {
+  // Does not support ostream right now.
+  st->print_to_stderr();
+}
+
+#else
+
+// Use boost stacktrace on Windows.
+using StType = boost::stacktrace::stacktrace;
+
+void print_stack_trace_impl(std::ostream& os, const StType* st) {
+  os << *st << std::endl;
+}
+
+#endif
+
+using traced = boost::error_info<struct tag_stacktrace, StType>;
+
+#ifdef __linux__
+std::atomic<pid_t> g_aborting{0};
+pid_t get_tid() { return syscall(SYS_gettid); }
+#endif
+bool g_block_multi_asserts{false};
 
 } // namespace
+
+void block_multi_asserts(bool block) {
+  g_block_multi_asserts = block; // Ignore races and such.
+}
 
 void assert_fail(const char* expr,
                  const char* file,
@@ -94,14 +157,35 @@ void assert_fail(const char* expr,
   msg += v_format2string(fmt, ap);
 
   va_end(ap);
-  throw boost::enable_error_info(RedexException(type, msg))
-      << traced(boost::stacktrace::stacktrace());
+
+  bool do_throw;
+#ifdef __linux__
+  pid_t cur = get_tid();
+  pid_t expected = 0;
+  do_throw = g_aborting.compare_exchange_strong(expected, cur);
+  if (!do_throw) {
+    do_throw = expected == cur;
+  }
+#else
+  do_throw = true;
+#endif
+
+  if (do_throw || !g_block_multi_asserts) {
+    throw boost::enable_error_info(RedexException(type, msg))
+        << traced(StType());
+  }
+
+  // Another thread already threw. Avoid "terminate called recursively."
+  // Infinite loop.
+  for (;;) {
+    sleep(1000);
+  }
 }
 
 void print_stack_trace(std::ostream& os, const std::exception& e) {
-  const boost::stacktrace::stacktrace* st = boost::get_error_info<traced>(e);
+  const StType* st = boost::get_error_info<traced>(e);
   if (st) {
-    os << *st << std::endl;
+    print_stack_trace_impl(os, st);
   }
 }
 
@@ -157,4 +241,15 @@ VmStats get_mem_stats() {
     }
   }
   return res;
+}
+
+bool try_reset_hwm_mem_stat() {
+  // See http://man7.org/linux/man-pages/man5/proc.5.html for `clear_refs` and
+  // the magic `5`.
+  std::ofstream ifs("/proc/self/clear_refs");
+  if (ifs.fail()) {
+    return false;
+  }
+  ifs << 5;
+  return true;
 }

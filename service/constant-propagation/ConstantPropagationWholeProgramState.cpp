@@ -117,12 +117,12 @@ WholeProgramState::WholeProgramState(
     const Scope& scope,
     const interprocedural::FixpointIterator& fp_iter,
     const std::unordered_set<DexMethod*>& non_true_virtuals,
-    const std::unordered_set<const DexType*>& field_black_list) {
+    const std::unordered_set<const DexType*>& field_blocklist) {
   walk::fields(scope, [&](DexField* field) {
     // We exclude those marked by keep rules: keep-marked fields may be
     // written to by non-Dex bytecode.
     // All fields not in m_known_fields will be bound to Top.
-    if (field_black_list.count(field->get_class())) {
+    if (field_blocklist.count(field->get_class())) {
       return;
     }
     if (is_static(field) && !root(field)) {
@@ -167,9 +167,10 @@ void WholeProgramState::collect(
     auto intra_cp = fp_iter.get_intraprocedural_analysis(method);
     for (cfg::Block* b : cfg.blocks()) {
       auto env = intra_cp->get_entry_state_at(b);
+      auto last_insn = b->get_last_insn();
       for (auto& mie : InstructionIterable(b)) {
         auto* insn = mie.insn;
-        intra_cp->analyze_instruction(insn, &env);
+        intra_cp->analyze_instruction(insn, &env, insn == last_insn->insn);
         collect_field_values(insn, env,
                              method::is_clinit(method) ? method->get_class()
                                                        : nullptr,

@@ -37,7 +37,7 @@ Redex ProGuard rule matcher to make sure the ProGuard rules were properly
 interpreted.
 **/
 
-DexClass* find_class_named(const DexClasses& classes, const std::string name) {
+DexClass* find_class_named(const DexClasses& classes, const std::string& name) {
   auto it =
       std::find_if(classes.begin(), classes.end(), [&name](DexClass* cls) {
         return name == cls->get_deobfuscated_name();
@@ -179,11 +179,12 @@ TEST_F(ProguardTest, assortment) {
     EXPECT_FALSE(impl::KeepState::allowobfuscation(alpha));
   }
 
-  // Beta is not used so should not have a keep marker.
-  auto beta =
-      find_class_named(classes, "Lcom/facebook/redex/test/proguard/Beta;");
-  ASSERT_NE(nullptr, beta);
-  EXPECT_FALSE(root(beta));
+  { // Beta is not used so should not have a keep marker.
+    auto beta =
+        find_class_named(classes, "Lcom/facebook/redex/test/proguard/Beta;");
+    ASSERT_NE(nullptr, beta);
+    EXPECT_FALSE(root(beta));
+  }
 
   { // Gamma is not used anywhere but the class only is kept by the config.
     auto gamma =

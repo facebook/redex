@@ -171,8 +171,7 @@ DexOpcode select_binop_lit_opcode(const IRInstruction* insn) {
     }
   } else {
     // literal > 16 not yet supported
-    always_assert_log(
-        false, "binop_lit doesn't support literals greater than 16 bits");
+    not_reached_log("binop_lit doesn't support literals greater than 16 bits");
   }
 }
 

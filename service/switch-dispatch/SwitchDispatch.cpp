@@ -28,7 +28,7 @@ constexpr uint64_t MAX_NUM_DISPATCH_TARGET = 500;
  * is too large. See https://code.google.com/p/android/issues/detail?id=66655.
  *
  * Although the limit is only applicable to dex2oat dependent build, we want to
- * avoid that from happening wherever Type Erasure is enabled. Since we want to
+ * avoid that from happening wherever Class Merging is enabled. Since we want to
  * leave some room for accommodating the injected switch dispatch code, the
  * number here is lower than the actual limit.
  */
@@ -68,7 +68,7 @@ void emit_check_cast(const dispatch::Spec& spec,
                      std::vector<Location>& args,
                      DexMethod* callee,
                      MethodBlock* block) {
-  if (args.size() && spec.proto->get_args()->size()) {
+  if (!args.empty() && spec.proto->get_args()->size()) {
     auto dispatch_head_arg_type =
         spec.proto->get_args()->get_type_list().front();
     auto callee_head_arg_type =
@@ -511,7 +511,7 @@ size_t get_type_tag_location_for_ctor_and_static(const dispatch::Spec& spec,
     return arg_list->size() - 1;
   }
 
-  always_assert_log(false, "Unexpected dispatch type %d\n", spec.type);
+  not_reached_log("Unexpected dispatch type %d\n", spec.type);
 }
 
 } // namespace
@@ -541,7 +541,7 @@ DispatchMethod create_virtual_dispatch(
 DexMethod* create_ctor_or_static_dispatch(
     const Spec& spec,
     const std::map<SwitchIndices, DexMethod*>& indices_to_callee) {
-  always_assert(indices_to_callee.size() && spec.overridden_meth == nullptr);
+  always_assert(!indices_to_callee.empty() && spec.overridden_meth == nullptr);
   TRACE(SDIS,
         5,
         "creating dispatch %s.%s for targets of size %d",

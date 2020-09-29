@@ -23,14 +23,16 @@ namespace cfg {
  */
 void CFGInliner::inline_cfg(ControlFlowGraph* caller,
                             const InstructionIterator& callsite,
-                            const ControlFlowGraph& callee_orig) {
+                            const ControlFlowGraph& callee_orig,
+                            size_t next_caller_reg) {
   CFGInlinerPlugin base_plugin;
-  inline_cfg(caller, callsite, callee_orig, base_plugin);
+  inline_cfg(caller, callsite, callee_orig, next_caller_reg, base_plugin);
 }
 
 void CFGInliner::inline_cfg(ControlFlowGraph* caller,
                             const InstructionIterator& inline_site,
                             const ControlFlowGraph& callee_orig,
+                            size_t next_caller_reg,
                             CFGInlinerPlugin& plugin) {
   always_assert(&inline_site.cfg() == caller);
 
@@ -57,7 +59,7 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
 
   // Find the closest dbg position for the inline site, if split before
   DexPosition* inline_site_dbg_pos =
-      inline_after ? nullptr : get_dbg_pos(inline_site);
+      inline_after ? nullptr : inline_site.cfg().get_dbg_pos(inline_site);
 
   // make the invoke last of its block or first based on inline_after
   Block* split_on_inline = inline_after
@@ -67,8 +69,9 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
         SHOW(*caller));
 
   // Find the closest dbg position for the inline site, if split after
-  inline_site_dbg_pos =
-      inline_after ? get_dbg_pos(inline_site) : inline_site_dbg_pos;
+  inline_site_dbg_pos = inline_after
+                            ? inline_site.cfg().get_dbg_pos(inline_site)
+                            : inline_site_dbg_pos;
 
   if (inline_site_dbg_pos) {
     set_dbg_pos_parents(&callee, inline_site_dbg_pos);
@@ -83,17 +86,18 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
     }
   }
 
-  plugin.update_before_reg_remap(caller, &callee);
+  if (plugin.update_before_reg_remap(caller, &callee)) {
+    next_caller_reg = caller->get_registers_size();
+  }
 
   // make sure the callee's registers don't overlap with the caller's
   auto callee_regs_size = callee.get_registers_size();
-  auto caller_regs_size = caller->get_registers_size();
-  remap_registers(&callee, caller_regs_size);
+  auto old_caller_regs_size = caller->get_registers_size();
+  always_assert(next_caller_reg <= old_caller_regs_size);
+  remap_registers(&callee, next_caller_reg);
 
   auto alt_srcs = plugin.inline_srcs();
-  move_arg_regs(&callee,
-                alt_srcs ? alt_srcs.value().get()
-                         : inline_site->insn->srcs_vec());
+  move_arg_regs(&callee, alt_srcs ? *alt_srcs : inline_site->insn->srcs_vec());
 
   auto return_reg = plugin.reg_for_return();
 
@@ -124,7 +128,10 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
   if (need_reg_size_recompute) {
     caller->recompute_registers_size();
   } else {
-    caller->set_registers_size(caller_regs_size + callee_regs_size);
+    size_t needed_caller_regs_size = next_caller_reg + callee_regs_size;
+    if (needed_caller_regs_size > old_caller_regs_size) {
+      caller->set_registers_size(needed_caller_regs_size);
+    }
   }
 
   TRACE(CFG, 3, "caller after connect %s", SHOW(*caller));
@@ -203,14 +210,14 @@ Block* CFGInliner::maybe_split_block_before(ControlFlowGraph* caller,
  * Change the register numbers to not overlap with caller.
  */
 void CFGInliner::remap_registers(cfg::ControlFlowGraph* callee,
-                                 reg_t caller_regs_size) {
+                                 reg_t next_caller_reg) {
   for (auto& mie : cfg::InstructionIterable(*callee)) {
     auto insn = mie.insn;
     for (reg_t i = 0; i < insn->srcs_size(); ++i) {
-      insn->set_src(i, insn->src(i) + caller_regs_size);
+      insn->set_src(i, insn->src(i) + next_caller_reg);
     }
     if (insn->has_dest()) {
-      insn->set_dest(insn->dest() + caller_regs_size);
+      insn->set_dest(insn->dest() + next_caller_reg);
     }
   }
 }
@@ -393,7 +400,7 @@ void CFGInliner::add_callee_throws_to_caller(
         auto index = starting_index;
         for (Edge* caller_catch : caller_catches) {
           cfg->add_edge(callee_block, caller_catch->target(),
-                        caller_catch->m_throw_info->catch_type, index);
+                        caller_catch->throw_info()->catch_type, index);
           ++index;
         }
       };
@@ -414,14 +421,14 @@ void CFGInliner::add_callee_throws_to_caller(
           add_throw_edges(callee_block, /* starting_index */ 0);
         }
       }
-    } else if (existing_throws.back()->m_throw_info->catch_type != nullptr) {
+    } else if (existing_throws.back()->throw_info()->catch_type != nullptr) {
       // Blocks that throw already
       //   * Instructions that can throw that were already in a try region with
       //   catch blocks
       //   * But don't add to the end of a throw list if there's a catchall
       //   already
       add_throw_edges(callee_block,
-                      existing_throws.back()->m_throw_info->index + 1);
+                      existing_throws.back()->throw_info()->index + 1);
     }
   }
 }
@@ -454,61 +461,8 @@ IROpcode CFGInliner::return_to_move(IROpcode op) {
   case OPCODE_RETURN_OBJECT:
     return OPCODE_MOVE_OBJECT;
   default:
-    always_assert_log(false, "Expected return op, got %s", SHOW(op));
-    not_reached();
+    not_reached_log("Expected return op, got %s", SHOW(op));
   }
-}
-
-DexPosition* CFGInliner::get_dbg_pos(const cfg::InstructionIterator& callsite) {
-  auto search_block = [](Block* b,
-                         IRList::iterator in_block_it) -> DexPosition* {
-    // Search for an MFLOW_POSITION preceding this instruction within the
-    // same block
-    while (in_block_it->type != MFLOW_POSITION && in_block_it != b->begin()) {
-      --in_block_it;
-    }
-    return in_block_it->type == MFLOW_POSITION ? in_block_it->pos.get()
-                                               : nullptr;
-  };
-  auto result = search_block(callsite.block(), callsite.unwrap());
-  if (result != nullptr) {
-    return result;
-  }
-
-  // TODO: Positions should be connected to instructions rather than preceding
-  // them in the flow of instructions. Having the positions depend on the order
-  // of instructions is a very linear way to encode the information which isn't
-  // very amenable to the editable CFG.
-
-  // while there's a single predecessor, follow that edge
-  const auto& cfg = callsite.cfg();
-  std::unordered_set<Block*> visited;
-  std::function<DexPosition*(Block*)> check_prev_block;
-  check_prev_block = [&cfg, &visited, &check_prev_block,
-                      &search_block](Block* b) -> DexPosition* {
-    // Check for an infinite loop
-    const auto& pair = visited.insert(b);
-    bool already_there = !pair.second;
-    if (already_there) {
-      return nullptr;
-    }
-
-    const auto& reverse_gotos = cfg.get_pred_edges_of_type(b, EDGE_GOTO);
-    if (b->preds().size() == 1 && !reverse_gotos.empty()) {
-      Block* prev_block = reverse_gotos[0]->src();
-      if (!prev_block->empty()) {
-        auto result = search_block(prev_block, std::prev(prev_block->end()));
-        if (result != nullptr) {
-          return result;
-        }
-      }
-      // Didn't find any MFLOW_POSITIONs in `prev_block`, keep going.
-      return check_prev_block(prev_block);
-    }
-    // This block has no solo predecessors anymore. Nowhere left to search.
-    return nullptr;
-  };
-  return check_prev_block(callsite.block());
 }
 
 } // namespace cfg

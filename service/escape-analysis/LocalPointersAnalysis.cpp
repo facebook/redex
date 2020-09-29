@@ -29,8 +29,7 @@ bool dest_may_be_pointer(const IRInstruction* insn) {
   auto op = insn->opcode();
   switch (op) {
   case OPCODE_NOP:
-    always_assert_log(false, "No dest");
-    not_reached();
+    not_reached_log("No dest");
   case OPCODE_MOVE:
   case OPCODE_MOVE_WIDE:
     return false;
@@ -46,14 +45,12 @@ bool dest_may_be_pointer(const IRInstruction* insn) {
   case OPCODE_RETURN:
   case OPCODE_RETURN_WIDE:
   case OPCODE_RETURN_OBJECT:
-    always_assert_log(false, "No dest");
-    not_reached();
+    not_reached_log("No dest");
   case OPCODE_MONITOR_ENTER:
   case OPCODE_MONITOR_EXIT:
   case OPCODE_THROW:
   case OPCODE_GOTO:
-    always_assert_log(false, "No dest");
-    not_reached();
+    not_reached_log("No dest");
   case OPCODE_NEG_INT:
   case OPCODE_NOT_INT:
   case OPCODE_NEG_LONG:
@@ -94,8 +91,7 @@ bool dest_may_be_pointer(const IRInstruction* insn) {
   case OPCODE_IF_GEZ:
   case OPCODE_IF_GTZ:
   case OPCODE_IF_LEZ:
-    always_assert_log(false, "No dest");
-    not_reached();
+    not_reached_log("No dest");
   case OPCODE_AGET:
   case OPCODE_AGET_WIDE:
     return false;
@@ -113,8 +109,7 @@ bool dest_may_be_pointer(const IRInstruction* insn) {
   case OPCODE_APUT_BYTE:
   case OPCODE_APUT_CHAR:
   case OPCODE_APUT_SHORT:
-    always_assert_log(false, "No dest");
-    not_reached();
+    not_reached_log("No dest");
   case OPCODE_ADD_INT:
   case OPCODE_SUB_INT:
   case OPCODE_MUL_INT:
@@ -171,8 +166,7 @@ bool dest_may_be_pointer(const IRInstruction* insn) {
     return insn->get_literal() == 0;
   case OPCODE_FILL_ARRAY_DATA:
   case OPCODE_SWITCH:
-    always_assert_log(false, "No dest");
-    not_reached();
+    not_reached_log("No dest");
   case OPCODE_CONST_WIDE:
   case OPCODE_IGET:
   case OPCODE_IGET_WIDE:
@@ -191,8 +185,7 @@ bool dest_may_be_pointer(const IRInstruction* insn) {
   case OPCODE_IPUT_BYTE:
   case OPCODE_IPUT_CHAR:
   case OPCODE_IPUT_SHORT:
-    always_assert_log(false, "No dest");
-    not_reached();
+    not_reached_log("No dest");
   case OPCODE_SGET:
   case OPCODE_SGET_WIDE:
     return false;
@@ -210,8 +203,7 @@ bool dest_may_be_pointer(const IRInstruction* insn) {
   case OPCODE_SPUT_BYTE:
   case OPCODE_SPUT_CHAR:
   case OPCODE_SPUT_SHORT:
-    always_assert_log(false, "No dest");
-    not_reached();
+    not_reached_log("No dest");
   case OPCODE_INVOKE_VIRTUAL:
   case OPCODE_INVOKE_SUPER:
   case OPCODE_INVOKE_DIRECT:
@@ -241,20 +233,7 @@ bool dest_may_be_pointer(const IRInstruction* insn) {
   case IOPCODE_MOVE_RESULT_PSEUDO_WIDE:
     return false;
   default:
-    always_assert_log(false, "Unknown opcode %02x\n", op);
-  }
-}
-
-static void analyze_dest(const IRInstruction* insn,
-                         reg_t dest,
-                         EnvironmentWithStore* env) {
-  // While the analysis would still work if we treated all non-pointer-values
-  // as escaping pointers, it would bloat the size of our abstract domain and
-  // incur a runtime performance tax.
-  if (dest_may_be_pointer(insn)) {
-    env->set_may_escape_pointer(dest, insn);
-  } else {
-    env->set_pointers(dest, PointerSet::top());
+    not_reached_log("Unknown opcode %02x\n", op);
   }
 }
 
@@ -262,7 +241,7 @@ void analyze_invoke_with_summary(const EscapeSummary& summary,
                                  const IRInstruction* insn,
                                  Environment* env) {
   for (auto src_idx : summary.escaping_parameters) {
-    env->set_may_escape(insn->src(src_idx));
+    env->set_may_escape(insn->src(src_idx), insn);
   }
 
   switch (summary.returned_parameters.kind()) {
@@ -283,7 +262,7 @@ void analyze_invoke_with_summary(const EscapeSummary& summary,
     // We are intentionally handling Bottom by setting the result register to
     // Top. This is a loss of precision but it makes it easier to implement
     // dead code elimination. See UsedVarsTest_noReturn for details.
-    analyze_dest(insn, RESULT_REGISTER, env);
+    escape_dest(insn, RESULT_REGISTER, env);
     break;
   }
   }
@@ -294,20 +273,8 @@ void analyze_invoke_with_summary(const EscapeSummary& summary,
  */
 void analyze_generic_invoke(const IRInstruction* insn,
                             EnvironmentWithStore* env) {
-  size_t idx{0};
-  if (insn->opcode() != OPCODE_INVOKE_STATIC) {
-    env->set_may_escape(insn->src(0));
-    ++idx;
-  }
-  const auto& arg_types =
-      insn->get_method()->get_proto()->get_args()->get_type_list();
-  for (const auto* arg : arg_types) {
-    if (!type::is_primitive(arg)) {
-      env->set_may_escape(insn->src(idx));
-    }
-    ++idx;
-  }
-  analyze_dest(insn, RESULT_REGISTER, env);
+  escape_invoke_params(insn, env);
+  escape_dest(insn, RESULT_REGISTER, env);
 }
 
 } // namespace
@@ -321,13 +288,43 @@ void escape_heap_referenced_objects(const IRInstruction* insn,
   // written to them must be treated as escaping.
   if (op == OPCODE_APUT_OBJECT || op == OPCODE_SPUT_OBJECT ||
       op == OPCODE_IPUT_OBJECT) {
-    env->set_may_escape(insn->src(0));
+    env->set_may_escape(insn->src(0), insn);
   } else if (op == OPCODE_FILLED_NEW_ARRAY &&
              !type::is_primitive(
                  type::get_array_component_type(insn->get_type()))) {
     for (size_t i = 0; i < insn->srcs_size(); ++i) {
-      env->set_may_escape(insn->src(i));
+      env->set_may_escape(insn->src(i), insn);
     }
+  }
+}
+
+void escape_dest(const IRInstruction* insn,
+                 reg_t dest,
+                 EnvironmentWithStore* env) {
+  // While the analysis would still work if we treated all non-pointer-values
+  // as escaping pointers, it would bloat the size of our abstract domain and
+  // incur a runtime performance tax.
+  if (dest_may_be_pointer(insn)) {
+    env->set_may_escape_pointer(dest, insn, insn);
+  } else {
+    env->set_pointers(dest, PointerSet::top());
+  }
+}
+
+void escape_invoke_params(const IRInstruction* insn,
+                          EnvironmentWithStore* env) {
+  size_t idx{0};
+  if (insn->opcode() != OPCODE_INVOKE_STATIC) {
+    env->set_may_escape(insn->src(0), insn);
+    ++idx;
+  }
+  const auto& arg_types =
+      insn->get_method()->get_proto()->get_args()->get_type_list();
+  for (const auto* arg : arg_types) {
+    if (!type::is_primitive(arg)) {
+      env->set_may_escape(insn->src(idx), insn);
+    }
+    ++idx;
   }
 }
 
@@ -343,9 +340,9 @@ void default_instruction_handler(const IRInstruction* insn,
   } else if (opcode::is_move_result_any(op)) {
     env->set_pointers(insn->dest(), env->get_pointers(RESULT_REGISTER));
   } else if (insn->has_dest()) {
-    analyze_dest(insn, insn->dest(), env);
+    escape_dest(insn, insn->dest(), env);
   } else if (insn->has_move_result_any()) {
-    analyze_dest(insn, RESULT_REGISTER, env);
+    escape_dest(insn, RESULT_REGISTER, env);
   }
 }
 
@@ -368,7 +365,7 @@ void FixpointIterator::analyze_instruction(const IRInstruction* insn,
   } else {
     default_instruction_handler(insn, env);
     if (m_escape_check_cast && op == OPCODE_CHECK_CAST) {
-      env->set_may_escape(insn->src(0));
+      env->set_may_escape(insn->src(0), insn);
     }
   }
 }
@@ -390,7 +387,7 @@ static void analyze_method_recursive(
     sparta::PatriciaTreeSet<const DexMethodRef*> visiting,
     FixpointIteratorMap* fp_iter_map,
     SummaryCMap* summary_map) {
-  if (summary_map->count(method) != 0 || visiting.contains(method) ||
+  if (!method || summary_map->count(method) != 0 || visiting.contains(method) ||
       method->get_code() == nullptr) {
     return;
   }
@@ -398,9 +395,9 @@ static void analyze_method_recursive(
 
   std::unordered_map<const IRInstruction*, EscapeSummary> invoke_to_summary_map;
   if (call_graph.has_node(method)) {
-    const auto& callee_edges = call_graph.node(method).callees();
+    const auto& callee_edges = call_graph.node(method)->callees();
     for (const auto& edge : callee_edges) {
-      auto* callee = edge->callee();
+      auto* callee = edge->callee()->method();
       analyze_method_recursive(callee, call_graph, visiting, fp_iter_map,
                                summary_map);
       if (summary_map->count(callee) != 0) {
@@ -414,8 +411,20 @@ static void analyze_method_recursive(
   auto& cfg = code->cfg();
   auto fp_iter = new FixpointIterator(cfg, std::move(invoke_to_summary_map));
   fp_iter->run(Environment());
-  fp_iter_map->emplace(method, fp_iter);
-  summary_map->emplace(method, get_escape_summary(*fp_iter, *code));
+
+  // The following updates form a critical section.
+  {
+    boost::lock_guard<boost::mutex> lock(fp_iter_map->get_lock(method));
+    fp_iter_map->update_unsafe(method,
+                               [&](auto, FixpointIterator*& v, bool exists) {
+                                 redex_assert(!(exists ^ (v != nullptr)));
+                                 delete v;
+                                 v = fp_iter;
+                               });
+    summary_map->update(method, [&](auto, EscapeSummary& v, bool) {
+      v = get_escape_summary(*fp_iter, *code);
+    });
+  }
 }
 
 FixpointIteratorMapPtr analyze_scope(const Scope& scope,
@@ -580,10 +589,9 @@ EscapeSummary EscapeSummary::from_s_expr(const sparta::s_expr& expr) {
     const auto& s = returned_params_s_expr.get_string();
     if (s == "Top") {
       summary.returned_parameters.set_to_top();
-    } else if (s == "Bottom") {
-      summary.returned_parameters.set_to_bottom();
     } else {
-      always_assert(false);
+      redex_assert(s == "Bottom");
+      summary.returned_parameters.set_to_bottom();
     }
   } else {
     always_assert(returned_params_s_expr.is_list());

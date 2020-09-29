@@ -44,7 +44,7 @@ struct Reason {
     const DexMethod* method;
   };
 
-  Reason(KeepReasonType type) : type(type) {
+  explicit Reason(KeepReasonType type) : type(type) {
     always_assert(type != KEEP_RULE && type != REFLECTION);
   }
 

@@ -47,9 +47,24 @@ DexMethod* resolve_intf_method_ref(const DexClass* cls,
 DexMethod* resolve_method(const DexClass* cls,
                           const DexString* name,
                           const DexProto* proto,
-                          MethodSearch search) {
+                          MethodSearch search,
+                          const DexMethod* caller) {
   if (search == MethodSearch::Interface) {
     return resolve_intf_method_ref(cls, name, proto);
+  }
+  if (search == MethodSearch::Super) {
+    if (caller) {
+      // caller must be provided. This condition is here to be compatible with
+      // old behavior.
+      DexType* containing_type = caller->get_class();
+      DexClass* containing_class = type_class(containing_type);
+      if (containing_class == nullptr) return nullptr;
+      DexType* super_class = containing_class->get_super_class();
+      if (!super_class) return nullptr;
+      cls = type_class(super_class);
+    }
+    // The rest is the same as virtual.
+    search = MethodSearch::Virtual;
   }
   while (cls) {
     if (search == MethodSearch::Virtual || search == MethodSearch::Any) {
@@ -78,6 +93,7 @@ DexMethod* resolve_method_ref(const DexClass* cls,
                               const DexString* name,
                               const DexProto* proto,
                               MethodSearch search) {
+  always_assert(search != MethodSearch::Super);
   if (search != MethodSearch::Interface) {
     const auto& super = cls->get_super_class();
     if (super == nullptr) return nullptr;

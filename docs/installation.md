@@ -20,33 +20,31 @@ brew install autoconf automake libtool python3
 brew install boost jsoncpp
 ```
 
-### Ubuntu (64-bit)
+### Ubuntu/Debian (64-bit)
+Base requirements are automake & libtool, GCC >= 5, Python >= 3.6 and Boost >= 1.71.0, as well as
+development versions of `iberty`, `jemalloc`, `jsoncpp`, `lz4`, `lzma`, and `zlib`.
+#### Ubuntu 16.04+, Debian 10(Buster)+
+The minimum supported Ubntu version is 16.04. The minimum supported Debian version is 10.
+
+A [convenience script](https://github.com/facebook/redex/blob/master/setup_oss_toolchain.sh)
+will set up the build environment. This may include downloading Python 3.6 and Boost 1.71.0
+on older OS versions.
 ```
-sudo apt-get install \
-    g++ \
-    automake \
-    autoconf \
-    autoconf-archive \
-    libtool \
-    liblz4-dev \
-    liblzma-dev \
-    make \
-    zlib1g-dev \
-    binutils-dev \
-    libjemalloc-dev \
-    libiberty-dev \
-    libjsoncpp-dev
+sudo ./setup_oss_toolchain.sh
 ```
 
-Redex requires boost version >= 1.71. The versions in the Ubuntu up to 19.10 repositories are too old.
-This script will install boost for you instead:
+### Experimental: Windows (64-bit) with MSYS2
+
+You need [MSYS2](https://www.msys2.org/#installation) to build `redex-all` (only MingW-w64 is supported) and [Python 3.6+](https://www.python.org/downloads/windows/) to run `redex.py`.
+
+Install the build requirements in an MSYS or MingW64 shell:
 ```
-sudo ./get_boost.sh
+pacman -Syuu && pacman -Sy make mingw-w64-x86_64-boost mingw-w64-x86_64-cmake mingw-w64-x86_64-gcc mingw-w64-x86_64-jsoncpp mingw-w64-x86_64-make
 ```
 
-Proceed installing libboost:
+If you do not use Git on Windows directly, you may install and use it under MSYS2:
 ```
-sudo apt-get install libboost-all-dev
+pacman -S git
 ```
 
 ### Experimental: Windows 10 (64-bit)
@@ -78,9 +76,38 @@ cd redex
 
 Now, build ReDex using autoconf and make.
 ```
-# if you're using gcc, please use gcc-5
-autoreconf -ivf && ./configure && make -j4
+autoreconf -ivf && ./configure && make -j
 sudo make install
+```
+If you experience out-of-memory errors, reduce Make parallelism, e.g., to `-j4`.
+
+### Experimental: Windows (64-bit) with MSYS2
+
+The MSYS2 build relies on CMake. In a MingW64 shell:
+```
+# Assumes you want to use Git under MSYS. Else skip to below.
+git clone https://github.com/facebook/redex.git
+cd redex
+# Assumes you are in the redex directory
+mkdir build-cmake
+cd build-cmake
+cmake -G "MSYS Makefiles" ..
+make -j
+```
+If you experience out-of-memory errors, reduce Make parallelism, e.g., to `-j4`.
+
+You may check whether the produced binary seems in a working condition:
+```
+# In the MingW64 shell:
+./redex-all.exe --show-passes
+# Or in a standard Windows command prompt in the same directory
+redex-all.exe --show-passes
+```
+The output should show a large number of included passes, at the time of writing 81.
+
+Bundling the `redex-all` binary with the python scripts is not supported on Windows. Manually copy the binary into the same directory as `redex.py` and use `redex.py` that way, or ensure that `redex.py` is called with the `--redex-binary` parameter:
+```
+python redex.py --redex-binary PATH_TO_BINARY [...]
 ```
 
 ### Experimental: CMake for Mac, Linux, and Windows
@@ -123,11 +150,25 @@ You should see a `redex-all` executable, and the executable should show about 45
 ```
 
 ## Test
+Optionally, you can run our unit test suite.  We use gtest, which is automatically
+downloaded when testing (or by invoking a setup script directly).
 
-Optionally, you can run our unit test suite.  We use gtest, which is downloaded
-via a setup script.
+Note: Testing is currently not supported for CMake-based builds.
+
+### Dependencies
+Some ReDex tests require a Java environment and Android compiler tooling. If a JDK and the
+Android SDK are available on the machine, ensure that `javac` and `dx` are available on
+the `PATH`. Otherwise, install those dependencies.
+
+For Ubuntu/Debian, this may for example be done with
 ```
-./test/setup.sh
-cd test
-make check
+sudo apt-get install -y --no-install-recommends dalvik-exchange openjdk-8-jdk-headless
+sudo ln -s /usr/bin/dalvik-exchange /usr/local/bin/dx
 ```
+
+### Execute
+Run tests with
+```
+make -j check
+```
+If you experience out-of-memory errors, reduce Make parallelism, e.g., to `-j4`.

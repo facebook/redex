@@ -29,7 +29,11 @@ class CommonSubexpressionEliminationTest : public RedexTest {
 void test(const Scope& scope,
           const std::string& code_str,
           const std::string& expected_str,
-          size_t expected_instructions_eliminated) {
+          size_t expected_instructions_eliminated,
+          bool is_static = true,
+          bool is_init_or_clinit = false,
+          DexType* declaring_type = nullptr,
+          DexTypeList* args = DexTypeList::make_type_list({})) {
   auto field_a = DexField::make_field("LFoo;.a:I")->make_concrete(ACC_PUBLIC);
 
   auto field_b = DexField::make_field("LFoo;.b:I")->make_concrete(ACC_PUBLIC);
@@ -49,7 +53,7 @@ void test(const Scope& scope,
   auto code = assembler::ircode_from_string(code_str);
   auto expected = assembler::ircode_from_string(expected_str);
 
-  code.get()->build_cfg(/* editable */ true);
+  code->build_cfg(/* editable */ true);
   walk::code(scope, [&](DexMethod*, IRCode& code) {
     code.build_cfg(/* editable */ true);
   });
@@ -57,13 +61,11 @@ void test(const Scope& scope,
   auto pure_methods = get_pure_methods();
   cse_impl::SharedState shared_state(pure_methods);
   shared_state.init_scope(scope);
-  cse_impl::CommonSubexpressionElimination cse(&shared_state,
-                                               code.get()->cfg());
-  bool is_static = true;
-  DexType* declaring_type = nullptr;
-  DexTypeList* args = DexTypeList::make_type_list({});
-  cse.patch(is_static, declaring_type, args, /* max_estimated_registers */ 300);
-  code.get()->clear_cfg();
+  cse_impl::CommonSubexpressionElimination cse(&shared_state, code->cfg(),
+                                               is_static, is_init_or_clinit,
+                                               declaring_type, args);
+  cse.patch();
+  code->clear_cfg();
   walk::code(scope, [&](DexMethod*, IRCode& code) { code.clear_cfg(); });
   auto stats = cse.get_stats();
 
@@ -1126,6 +1128,23 @@ TEST_F(CommonSubexpressionEliminationTest, aput_related_aget) {
   test(Scope{type_class(type::java_lang_Object())}, code_str, expected_str, 1);
 }
 
+TEST_F(CommonSubexpressionEliminationTest, aput_object_related_aget_object) {
+  // We don't forward aput-object values to aget-object. (In general, a
+  // check-cast instruction needs to get introduced, but that isn't implemented
+  // yet.)
+  auto code_str = R"(
+    (
+      (const v0 0)
+      (const v1 0)
+      (const v2 0)
+      (aput-object v0 v1 v2)
+      (aget-object v1 v2)
+      (move-result-pseudo v0)
+    )
+  )";
+  test(Scope{type_class(type::java_lang_Object())}, code_str, code_str, 0);
+}
+
 TEST_F(CommonSubexpressionEliminationTest, iput_related_iget) {
   auto code_str = R"(
     (
@@ -1225,6 +1244,7 @@ TEST_F(CommonSubexpressionEliminationTest, simple_with_put) {
       (move v1 v3)
     )
   )";
+  test(Scope{type_class(type::java_lang_Object())}, code_str, expected_str, 1);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, array_length) {
@@ -1523,4 +1543,179 @@ TEST_F(CommonSubexpressionEliminationTest,
        code_str,
        expected_str,
        1);
+}
+
+TEST_F(CommonSubexpressionEliminationTest, tracked_final_field_within_clinit) {
+  ClassCreator bar_creator(DexType::make_type("LBar;"));
+  bar_creator.set_super(type::java_lang_Object());
+
+  DexField::make_field("LBar;.x:I")
+      ->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_FINAL);
+
+  auto code_str = R"(
+    (
+      (sget "LBar;.x:I")
+      (move-result-pseudo v0)
+      (invoke-static () "LWhat;.ever:()V")
+      (sget "LBar;.x:I")
+      (move-result-pseudo v0)
+    )
+  )";
+  auto expected_str = code_str;
+  bool is_static = true;
+  bool is_init_or_clinit = true;
+  DexType* declaring_type = bar_creator.create()->get_type();
+  test(Scope{type_class(type::java_lang_Object()), type_class(declaring_type)},
+       code_str, expected_str, 0, is_static, is_init_or_clinit, declaring_type);
+}
+
+TEST_F(CommonSubexpressionEliminationTest,
+       untracked_final_field_outside_clinit) {
+  ClassCreator bar_creator(DexType::make_type("LBar;"));
+  bar_creator.set_super(type::java_lang_Object());
+
+  DexField::make_field("LBar;.x:I")
+      ->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_FINAL);
+
+  auto code_str = R"(
+    (
+      (sget "LBar;.x:I")
+      (move-result-pseudo v0)
+      (invoke-static () "LWhat;.ever:()V")
+      (sget "LBar;.x:I")
+      (move-result-pseudo v0)
+    )
+  )";
+  auto expected_str = R"(
+    (
+      (sget "LBar;.x:I")
+      (move-result-pseudo v0)
+      (move v1 v0)
+      (invoke-static () "LWhat;.ever:()V")
+      (sget "LBar;.x:I")
+      (move-result-pseudo v0)
+      (move v0 v1)
+    )
+  )";
+  bool is_static = true;
+  bool is_init_or_clinit = false;
+  DexType* declaring_type = bar_creator.create()->get_type();
+  test(Scope{type_class(type::java_lang_Object()), type_class(declaring_type)},
+       code_str, expected_str, 1, is_static, is_init_or_clinit, declaring_type);
+}
+
+TEST_F(CommonSubexpressionEliminationTest, tracked_final_field_within_init) {
+  ClassCreator bar_creator(DexType::make_type("LBar;"));
+  bar_creator.set_super(type::java_lang_Object());
+
+  DexField::make_field("LBar;.x:I")->make_concrete(ACC_PUBLIC | ACC_FINAL);
+
+  auto code_str = R"(
+    (
+      (load-param-object v0)
+      (iget v0 "LBar;.x:I")
+      (move-result-pseudo v1)
+      (invoke-static () "LWhat;.ever:()V")
+      (iget v0 "LBar;.x:I")
+      (move-result-pseudo v1)
+    )
+  )";
+  auto expected_str = code_str;
+  bool is_static = false;
+  bool is_init_or_clinit = true;
+  DexType* declaring_type = bar_creator.create()->get_type();
+  test(Scope{type_class(type::java_lang_Object()), type_class(declaring_type)},
+       code_str, expected_str, 0, is_static, is_init_or_clinit, declaring_type);
+}
+
+TEST_F(CommonSubexpressionEliminationTest, untracked_final_field_outside_init) {
+  ClassCreator bar_creator(DexType::make_type("LBar;"));
+  bar_creator.set_super(type::java_lang_Object());
+
+  DexField::make_field("LBar;.x:I")->make_concrete(ACC_PUBLIC | ACC_FINAL);
+
+  auto code_str = R"(
+    (
+      (load-param-object v0)
+      (iget v0 "LBar;.x:I")
+      (move-result-pseudo v1)
+      (invoke-static () "LWhat;.ever:()V")
+      (iget v0 "LBar;.x:I")
+      (move-result-pseudo v1)
+    )
+  )";
+  auto expected_str = R"(
+    (
+      (load-param-object v0)
+      (iget v0 "LBar;.x:I")
+      (move-result-pseudo v1)
+        (move v2 v1)
+      (invoke-static () "LWhat;.ever:()V")
+      (iget v0 "LBar;.x:I")
+      (move-result-pseudo v1)
+      (move v1 v2)
+    )
+  )";
+  bool is_static = false;
+  bool is_init_or_clinit = false;
+  DexType* declaring_type = bar_creator.create()->get_type();
+  test(Scope{type_class(type::java_lang_Object()), type_class(declaring_type)},
+       code_str, expected_str, 1, is_static, is_init_or_clinit, declaring_type);
+}
+
+TEST_F(CommonSubexpressionEliminationTest, phi_node) {
+  auto code_str = R"(
+    (
+      (load-param v0)
+      (const v1 1)
+      (const v2 2)
+      (if-eqz v0 :L1)
+      (add-int v3 v1 v2)
+      (:L2)
+      (add-int v5 v1 v2)
+      (return v5)
+      (:L1)
+      (add-int v4 v1 v2)
+      (goto :L2)
+    )
+  )";
+  auto expected_str = R"(
+    (
+      (load-param v0)
+      (const v1 1)
+      (const v2 2)
+      (if-eqz v0 :L1)
+      (add-int v3 v1 v2)
+      (move v6 v3)
+      (:L2)
+      (add-int v5 v1 v2)
+      (move v5 v6)
+      (return v5)
+      (:L1)
+      (add-int v4 v1 v2)
+      (move v6 v4)
+      (goto :L2)
+    )
+  )";
+  test(Scope{type_class(type::java_lang_Object())}, code_str, expected_str, 1);
+}
+
+TEST_F(CommonSubexpressionEliminationTest, no_phi_node) {
+  auto code_str = R"(
+    (
+      (load-param v0)
+      (const v1 1)
+      (const v2 2)
+      (if-eqz v0 :L1)
+      (add-int v3 v1 v2)
+      (:L2)
+      (add-int v5 v1 v2)
+      (return v5)
+      (:L1)
+      (sub-int v4 v1 v2)
+      (goto :L2)
+    )
+  )";
+  auto expected_str = code_str;
+  test(Scope{type_class(type::java_lang_Object())}, code_str, expected_str, 0);
 }

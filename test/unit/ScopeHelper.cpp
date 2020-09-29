@@ -263,3 +263,18 @@ DexMethod* create_empty_method(DexClass* cls,
   cls->add_method(method);
   return method;
 }
+
+DexMethod* create_throwing_method(DexClass* cls,
+                                  const char* name,
+                                  DexProto* proto,
+                                  DexAccessFlags access /*= ACC_PUBLIC*/) {
+  MethodCreator mcreator(cls->get_type(), DexString::make_string(name), proto,
+                         access);
+  auto main_block = mcreator.get_main_block();
+  auto null_loc = mcreator.make_local(type::java_lang_Object());
+  main_block->load_null(null_loc);
+  main_block->throwex(null_loc);
+  auto method = mcreator.create();
+  cls->add_method(method);
+  return method;
+}

@@ -25,8 +25,13 @@
 #include "IRMetaIO.h"
 #include "InstructionLowering.h"
 #include "JarLoader.h"
+#include "Macros.h"
 #include "Timer.h"
 #include "Walkers.h"
+
+#if IS_WINDOWS
+#include <io.h>
+#endif
 
 namespace {
 /**
@@ -106,23 +111,10 @@ void write_intermediate_dex(const RedexOptions& redex_options,
       if (store.get_dexen()[i].empty()) {
         continue;
       }
-      std::ostringstream ss;
-      ss << output_ir_dir << "/" << store.get_name();
-      if (store.get_name().compare("classes") == 0) {
-        // primary/secondary dex store, primary has no numeral and secondaries
-        // start at 2
-        if (i > 0) {
-          ss << (i + 1);
-        }
-      } else {
-        // other dex stores do not have a primary,
-        // so it makes sense to start at 2
-        ss << (i + 2);
-      }
-      ss << ".dex";
-
+      std::string filename =
+          redex::get_dex_output_name(output_ir_dir, store, i);
       write_classes_to_dex(redex_options,
-                           ss.str(),
+                           filename,
                            &store.get_dexen()[i],
                            nullptr /* locator_index */,
                            store_number,
@@ -133,7 +125,7 @@ void write_intermediate_dex(const RedexOptions& redex_options,
                            nullptr,
                            nullptr /* IODIMetadata* */,
                            stores[0].get_dex_magic());
-      auto basename = boost::filesystem::path(ss.str()).filename().string();
+      auto basename = boost::filesystem::path(filename).filename().string();
       store_files["list"].append(basename);
     }
   }
@@ -153,7 +145,9 @@ void load_intermediate_dex(const std::string& input_ir_dir,
     for (const Json::Value& file_name : store_files["list"]) {
       auto location = boost::filesystem::path(input_ir_dir);
       location /= file_name.asString();
-      DexClasses classes = load_classes_from_dex(location.c_str(), &dex_stats);
+      // `string().c_str()` to get guaranteed `const char*`.
+      DexClasses classes =
+          load_classes_from_dex(location.string().c_str(), &dex_stats);
       stores.back().add_classes(std::move(classes));
     }
   }
@@ -166,6 +160,13 @@ bool load_ir_meta(const std::string& input_ir_dir) {
   Timer t("Loading IR meta");
   return ir_meta_io::load(input_ir_dir);
 }
+
+static void assert_dex_magic_consistency(const std::string& source,
+                                         const std::string& target) {
+  always_assert_log(source.compare(target) == 0,
+                    "APK contains dex file of different versions: %s vs %s\n",
+                    source.c_str(), target.c_str());
+}
 } // namespace
 
 namespace redex {
@@ -174,7 +175,7 @@ bool dir_is_writable(const std::string& dir) {
   if (!boost::filesystem::is_directory(dir)) {
     return false;
   }
-#ifdef _MSC_VER
+#if IS_WINDOWS
   return _access(dir.c_str(), 2) == 0;
 #else
   return access(dir.c_str(), W_OK) == 0;
@@ -225,7 +226,7 @@ void load_all_intermediate(const std::string& input_ir_dir,
 
   // load external classes
   Scope external_classes;
-  if ((*entry_data).get("jars", Json::nullValue).size()) {
+  if (!(*entry_data).get("jars", Json::nullValue).empty()) {
     for (const Json::Value& item : (*entry_data)["jars"]) {
       const std::string jar_path = item.asString();
       always_assert(load_jar_file(jar_path.c_str(), &external_classes));
@@ -241,5 +242,73 @@ void load_all_intermediate(const std::string& input_ir_dir,
     std::cerr << error;
     TRACE_NO_LINE(MAIN, 1, "%s", error.c_str());
   }
+}
+
+/**
+ * Helper to load classes from a list of input dex files into a DexStoresVector.
+ * Processes dex (.dex) files as well as DexMetadata files (.json)
+ */
+void load_classes_from_dexes_and_metadata(
+    const std::vector<std::string>& dex_files,
+    DexStoresVector& stores,
+    dex_stats_t& input_totals,
+    std::vector<dex_stats_t>& input_dexes_stats) {
+  always_assert_log(!stores.empty(),
+                    "Cannot load classes into empty DexStoresVector");
+  for (const auto& filename : dex_files) {
+    if (filename.size() >= 5 &&
+        filename.compare(filename.size() - 4, 4, ".dex") == 0) {
+      assert_dex_magic_consistency(stores[0].get_dex_magic(),
+                                   load_dex_magic_from_dex(filename.c_str()));
+      dex_stats_t dex_stats;
+      DexClasses classes = load_classes_from_dex(filename.c_str(), &dex_stats);
+      input_totals += dex_stats;
+      input_dexes_stats.push_back(dex_stats);
+      stores[0].add_classes(std::move(classes));
+    } else {
+      DexMetadata store_metadata;
+      store_metadata.parse(filename);
+      DexStore store(store_metadata);
+      for (const auto& file_path : store_metadata.get_files()) {
+        assert_dex_magic_consistency(
+            stores[0].get_dex_magic(),
+            load_dex_magic_from_dex(file_path.c_str()));
+        dex_stats_t dex_stats;
+        DexClasses classes =
+            load_classes_from_dex(file_path.c_str(), &dex_stats);
+
+        input_totals += dex_stats;
+        input_dexes_stats.push_back(dex_stats);
+        store.add_classes(std::move(classes));
+      }
+      stores.emplace_back(std::move(store));
+    }
+  }
+}
+
+/**
+ * Helper to get the output name of a specific dex file when a series of dex
+ * files are being output by redex programs.
+ * Index corresponds to the position in the order dex files are passed into
+ * the redex programs: classes.dex -> 0, classes2.dex -> 1, classes3.dex -> 2...
+ */
+std::string get_dex_output_name(const std::string& output_dir,
+                                const DexStore& store,
+                                int index) {
+  std::ostringstream ss;
+  ss << output_dir << "/" << store.get_name();
+  if (store.get_name().compare("classes") == 0) {
+    // primary/secondary dex store, primary has no numeral and secondaries
+    // start at 2
+    if (index > 0) {
+      ss << (index + 1);
+    }
+  } else {
+    // other dex stores do not have a primary,
+    // so it makes sense to start at 2
+    ss << (index + 2);
+  }
+  ss << ".dex";
+  return ss.str();
 }
 } // namespace redex

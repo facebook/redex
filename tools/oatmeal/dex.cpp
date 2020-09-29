@@ -591,7 +591,7 @@ void quicken_dex(const char* location,
     size_t length = sbuf.st_size;
     map.reset(MappedFile::mmap_file(length, PROT_READ, MAP_PRIVATE, fileno(fd),
                                     location, &error_msg));
-    if (map.get() == nullptr) {
+    if (map == nullptr) {
       CHECK(!error_msg.empty());
       return;
     }

@@ -74,7 +74,7 @@ def get_trace_file():
     trace_file = os.environ.get("TRACEFILE")
     if trace_file:
         sys.stderr.write("Trace output will go to %s\n" % trace_file)
-        trace_fp = open(trace_file, "w")
+        trace_fp = open(trace_file, "w")  # noqa: P201
     else:
         trace_fp = sys.stderr
     return trace_fp

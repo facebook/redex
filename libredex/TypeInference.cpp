@@ -11,8 +11,6 @@
 #include <ostream>
 #include <sstream>
 
-#include "DexTypeDomain.h"
-
 std::ostream& operator<<(std::ostream& output, const IRType& type) {
   switch (type) {
   case BOTTOM: {
@@ -36,7 +34,7 @@ std::ostream& operator<<(std::ostream& output, const IRType& type) {
     break;
   }
   case REFERENCE: {
-    output << "REFERENCE";
+    output << "REF";
     break;
   }
   case INT: {
@@ -102,18 +100,17 @@ void set_type(TypeEnvironment* state, reg_t reg, const TypeDomain& type) {
 
 void set_integer(TypeEnvironment* state, reg_t reg) {
   state->set_type(reg, TypeDomain(INT));
+  state->reset_dex_type(reg);
 }
 
 void set_float(TypeEnvironment* state, reg_t reg) {
   state->set_type(reg, TypeDomain(FLOAT));
+  state->reset_dex_type(reg);
 }
 
 void set_scalar(TypeEnvironment* state, reg_t reg) {
   state->set_type(reg, TypeDomain(SCALAR));
-}
-
-void set_reference(TypeEnvironment* state, reg_t reg) {
-  state->set_type(reg, TypeDomain(REFERENCE));
+  state->reset_dex_type(reg);
 }
 
 void set_reference(TypeEnvironment* state,
@@ -122,22 +119,35 @@ void set_reference(TypeEnvironment* state,
   state->set_type(reg, TypeDomain(REFERENCE));
   const DexTypeDomain dex_type =
       dex_type_opt ? DexTypeDomain(*dex_type_opt) : DexTypeDomain::top();
-  state->set_concrete_type(reg, dex_type);
+  state->set_dex_type(reg, dex_type);
+}
+
+void set_reference(TypeEnvironment* state,
+                   reg_t reg,
+                   const DexTypeDomain& dex_type) {
+  state->set_type(reg, TypeDomain(REFERENCE));
+  state->set_dex_type(reg, dex_type);
 }
 
 void set_long(TypeEnvironment* state, reg_t reg) {
   state->set_type(reg, TypeDomain(LONG1));
   state->set_type(reg + 1, TypeDomain(LONG2));
+  state->reset_dex_type(reg);
+  state->reset_dex_type(reg + 1);
 }
 
 void set_double(TypeEnvironment* state, reg_t reg) {
   state->set_type(reg, TypeDomain(DOUBLE1));
   state->set_type(reg + 1, TypeDomain(DOUBLE2));
+  state->reset_dex_type(reg);
+  state->reset_dex_type(reg + 1);
 }
 
 void set_wide_scalar(TypeEnvironment* state, reg_t reg) {
   state->set_type(reg, TypeDomain(SCALAR1));
   state->set_type(reg + 1, TypeDomain(SCALAR2));
+  state->reset_dex_type(reg);
+  state->reset_dex_type(reg + 1);
 }
 
 // This is used for the operand of a comparison operation with zero. The
@@ -270,29 +280,38 @@ void TypeInference::refine_scalar(TypeEnvironment* state, reg_t reg) const {
   refine_type(state,
               reg,
               /* expected */ SCALAR);
+  state->reset_dex_type(reg);
 }
 
 void TypeInference::refine_integer(TypeEnvironment* state, reg_t reg) const {
   refine_type(state, reg, /* expected */ INT);
+  state->reset_dex_type(reg);
 }
 
 void TypeInference::refine_float(TypeEnvironment* state, reg_t reg) const {
   refine_type(state, reg, /* expected */ FLOAT);
+  state->reset_dex_type(reg);
 }
 
 void TypeInference::refine_wide_scalar(TypeEnvironment* state,
                                        reg_t reg) const {
   refine_wide_type(state, reg, /* expected1 */ SCALAR1,
                    /* expected2 */ SCALAR2);
+  state->reset_dex_type(reg);
+  state->reset_dex_type(reg + 1);
 }
 
 void TypeInference::refine_long(TypeEnvironment* state, reg_t reg) const {
   refine_wide_type(state, reg, /* expected1 */ LONG1, /* expected2 */ LONG2);
+  state->reset_dex_type(reg);
+  state->reset_dex_type(reg + 1);
 }
 
 void TypeInference::refine_double(TypeEnvironment* state, reg_t reg) const {
   refine_wide_type(state, reg, /* expected1 */ DOUBLE1,
                    /* expected2 */ DOUBLE2);
+  state->reset_dex_type(reg);
+  state->reset_dex_type(reg + 1);
 }
 
 void TypeInference::run(const DexMethod* dex_method) {
@@ -312,9 +331,7 @@ void TypeInference::run(bool is_static,
   const auto& signature = args->get_type_list();
   auto sig_it = signature.begin();
   bool first_param = true;
-  // By construction, the IOPCODE_LOAD_PARAM_* instructions are located at the
-  // beginning of the entry block of the CFG.
-  for (const auto& mie : InstructionIterable(m_cfg.entry_block())) {
+  for (const auto& mie : InstructionIterable(m_cfg.get_param_instructions())) {
     IRInstruction* insn = mie.insn;
     switch (insn->opcode()) {
     case IOPCODE_LOAD_PARAM_OBJECT: {
@@ -325,9 +342,10 @@ void TypeInference::run(bool is_static,
         set_reference(&init_state, insn->dest(), declaring_type);
       } else {
         // This is a regular parameter of the method.
+        always_assert(sig_it != signature.end());
         const DexType* type = *sig_it;
-        always_assert(sig_it++ != signature.end());
         set_reference(&init_state, insn->dest(), type);
+        ++sig_it;
       }
       break;
     }
@@ -349,15 +367,10 @@ void TypeInference::run(bool is_static,
       }
       break;
     }
-    default: {
-      // We've reached the end of the LOAD_PARAM_* instruction block and we
-      // simply exit the loop. Note that premature loop exit is probably the
-      // only legitimate use of goto in C++ code.
-      goto done;
-    }
+    default:
+      not_reached();
     }
   }
-done:
   MonotonicFixpointIterator::run(init_state);
   populate_type_environments();
 }
@@ -390,8 +403,8 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
   case OPCODE_MOVE_OBJECT: {
     refine_reference(current_state, insn->src(0));
     if (current_state->get_type(insn->src(0)) == TypeDomain(REFERENCE)) {
-      const auto& dex_type_opt = current_state->get_dex_type(insn->src(0));
-      set_reference(current_state, insn->dest(), dex_type_opt);
+      const auto dex_type = current_state->get_type_domain(insn->src(0));
+      set_reference(current_state, insn->dest(), dex_type);
     } else {
       set_type(current_state, insn->dest(),
                current_state->get_type(insn->src(0)));
@@ -418,7 +431,7 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
     refine_reference(current_state, RESULT_REGISTER);
     set_reference(current_state,
                   insn->dest(),
-                  current_state->get_dex_type(RESULT_REGISTER));
+                  current_state->get_type_domain(RESULT_REGISTER));
     break;
   }
   case IOPCODE_MOVE_RESULT_PSEUDO_WIDE:
@@ -454,13 +467,11 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
     std::unordered_set<DexType*> catch_types;
 
     for (cfg::Edge* edge : preds) {
-      auto* throw_info = edge->throw_info();
-      if (!throw_info) {
-        // Some edges may contain no throw info.
+      if (edge->type() != cfg::EDGE_THROW) {
         continue;
       }
 
-      DexType* catch_type = throw_info->catch_type;
+      DexType* catch_type = edge->throw_info()->catch_type;
       if (catch_type) {
         catch_types.emplace(catch_type);
       } else {
@@ -493,7 +504,7 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
   }
   case OPCODE_CONST: {
     if (insn->get_literal() == 0) {
-      current_state->set_concrete_type(insn->dest(), DexTypeDomain::top());
+      current_state->set_dex_type(insn->dest(), DexTypeDomain::null());
       set_type(current_state, insn->dest(), TypeDomain(ZERO));
     } else {
       set_type(current_state, insn->dest(), TypeDomain(CONST));
@@ -643,7 +654,7 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
       const auto etype = type::get_array_component_type(*dex_type_opt);
       set_reference(current_state, RESULT_REGISTER, etype);
     } else {
-      set_reference(current_state, RESULT_REGISTER);
+      set_reference(current_state, RESULT_REGISTER, DexTypeDomain::top());
     }
     break;
   }
@@ -795,9 +806,9 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
   case OPCODE_INVOKE_CUSTOM:
   case OPCODE_INVOKE_POLYMORPHIC: {
     // TODO(T59277083)
-    always_assert_log(false,
-                      "TypeInference::analyze_instruction does not support "
-                      "invoke-custom and invoke-polymorphic yet");
+    not_reached_log(
+        "TypeInference::analyze_instruction does not support "
+        "invoke-custom and invoke-polymorphic yet");
     break;
   }
   case OPCODE_INVOKE_VIRTUAL:

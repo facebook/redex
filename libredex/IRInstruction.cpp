@@ -97,9 +97,6 @@ std::vector<reg_t> IRInstruction::srcs_vec() const {
 
 IRInstruction* IRInstruction::set_src(size_t i, reg_t reg) {
   if (m_num_inline_srcs <= MAX_NUM_INLINE_SRCS) {
-    if (i >= m_num_inline_srcs) {
-      printf("Exception!\n\n");
-    }
     always_assert(i < m_num_inline_srcs);
     m_inline_srcs[i] = reg;
   } else {
@@ -407,4 +404,28 @@ uint64_t IRInstruction::hash() const {
   }
 
   return result;
+}
+
+void IRInstruction::gather_types(std::vector<DexType*>& ltype) const {
+  switch (opcode::ref(opcode())) {
+  case opcode::Ref::None:
+  case opcode::Ref::String:
+  case opcode::Ref::Literal:
+  case opcode::Ref::Data:
+  case opcode::Ref::CallSite:
+  case opcode::Ref::MethodHandle:
+    break;
+
+  case opcode::Ref::Type:
+    ltype.push_back(m_type);
+    break;
+
+  case opcode::Ref::Field:
+    m_field->gather_types_shallow(ltype);
+    break;
+
+  case opcode::Ref::Method:
+    m_method->gather_types_shallow(ltype);
+    break;
+  }
 }

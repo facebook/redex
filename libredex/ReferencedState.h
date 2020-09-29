@@ -17,13 +17,15 @@
 
 namespace ir_meta_io {
 class IRMetaIO;
-}
+} // namespace ir_meta_io
 
 namespace keep_rules {
 namespace impl {
 class KeepState;
-}
+} // namespace impl
 } // namespace keep_rules
+
+using InterdexSubgroupIdx = uint32_t;
 
 class ReferencedState {
  private:
@@ -68,6 +70,21 @@ class ReferencedState {
     bool m_dont_inline : 1;
     bool m_force_inline : 1;
 
+    // This is set by the ImmutableGetters pass. It indicates that a method
+    // is pure.
+    bool m_immutable_getter : 1;
+
+    // This is set by the AnalyzePureMethodsPass. It indicates that a method
+    // is pure as defined in Purity.h.
+    // *WARNING*
+    // Any optimisation that might alter the semantics in such a way that it is
+    // no longer pure should invalidate this flag. It could also be invalidated
+    // by running AnalyzePureMethodsPass which would recompute it.
+    bool m_pure_method : 1;
+
+    // Whether this member is an outlined class or method.
+    bool m_outlined : 1;
+
     bool m_name_used : 1;
     InnerStruct() {
       // Initializers in bit fields are C++20...
@@ -91,13 +108,17 @@ class ReferencedState {
       m_dont_inline = false;
       m_force_inline = false;
 
+      m_immutable_getter = false;
+      m_pure_method = false;
+      m_outlined = false;
+
       m_name_used = false;
     }
   } inner_struct;
 
   // InterDex subgroup, if any.
   // NOTE: Will be set ONLY for generated classes.
-  boost::optional<size_t> m_interdex_subgroup{boost::none};
+  boost::optional<InterdexSubgroupIdx> m_interdex_subgroup{boost::none};
 
   // Going through hoops here to reduce the size of ReferencedState while
   // keeping memory requirements still small in non-default case.
@@ -157,6 +178,14 @@ class ReferencedState {
           this->inner_struct.m_dont_inline | other.inner_struct.m_dont_inline;
       this->inner_struct.m_force_inline =
           this->inner_struct.m_force_inline & other.inner_struct.m_force_inline;
+
+      this->inner_struct.m_immutable_getter =
+          this->inner_struct.m_immutable_getter &
+          other.inner_struct.m_immutable_getter;
+      this->inner_struct.m_pure_method =
+          this->inner_struct.m_pure_method & other.inner_struct.m_pure_method;
+      this->inner_struct.m_outlined =
+          this->inner_struct.m_outlined & other.inner_struct.m_outlined;
     }
   }
 
@@ -288,10 +317,13 @@ class ReferencedState {
 
   void set_whyareyoukeeping() { inner_struct.m_whyareyoukeeping = true; }
 
-  void set_interdex_subgroup(const boost::optional<size_t>& interdex_subgroup) {
+  void set_interdex_subgroup(
+      const boost::optional<InterdexSubgroupIdx>& interdex_subgroup) {
     m_interdex_subgroup = interdex_subgroup;
   }
-  size_t get_interdex_subgroup() const { return m_interdex_subgroup.get(); }
+  InterdexSubgroupIdx get_interdex_subgroup() const {
+    return m_interdex_subgroup.get();
+  }
   bool has_interdex_subgroup() const {
     return m_interdex_subgroup != boost::none;
   }
@@ -313,6 +345,16 @@ class ReferencedState {
   bool dont_inline() const { return inner_struct.m_dont_inline; }
   void set_dont_inline() { inner_struct.m_dont_inline = true; }
 
+  bool immutable_getter() const { return inner_struct.m_immutable_getter; }
+  void set_immutable_getter() { inner_struct.m_immutable_getter = true; }
+
+  bool pure_method() const { return inner_struct.m_pure_method; }
+  void set_pure_method() { inner_struct.m_pure_method = true; }
+  void reset_pure_method() { inner_struct.m_pure_method = false; }
+
+  bool outlined() const { return inner_struct.m_outlined; }
+  void set_outlined() { inner_struct.m_outlined = true; }
+  void reset_outlined() { inner_struct.m_outlined = false; }
   void set_name_used() { inner_struct.m_name_used = true; }
   bool name_used() { return inner_struct.m_name_used; }
 

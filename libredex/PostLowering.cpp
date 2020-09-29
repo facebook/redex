@@ -9,6 +9,7 @@
 
 class NoopPostLowering : public PostLowering {
  public:
+  void sync() override {}
   void gather_components(std::vector<DexString*>&,
                          std::vector<DexType*>&,
                          std::vector<DexFieldRef*>&,

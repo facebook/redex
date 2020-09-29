@@ -341,16 +341,16 @@ void OptDataMapper::serialize_opt_nopt_helper(
   for (size_t i = 0; i < opts.size(); ++i) {
     verify_opt(opts.at(i));
     Json::Value opt_data;
-    opt_data["reason_idx"] = (uint)i;
-    opt_data["id"] = (uint)id;
+    opt_data["reason_idx"] = (uint32_t)i;
+    opt_data["id"] = (uint32_t)id;
     opt_data["reason_code"] = opts.at(i);
     opt_arr->append(opt_data);
   }
   for (size_t i = 0; i < nopts.size(); ++i) {
     verify_nopt(nopts.at(i));
     Json::Value nopt_data;
-    nopt_data["reason_idx"] = (uint)i;
-    nopt_data["id"] = (uint)id;
+    nopt_data["reason_idx"] = (uint32_t)i;
+    nopt_data["id"] = (uint32_t)id;
     nopt_data["reason_code"] = nopts.at(i);
     nopt_arr->append(nopt_data);
   }
@@ -364,7 +364,7 @@ void OptDataMapper::serialize_class(
     Json::Value* nopt_arr) {
   const auto& name = get_deobfuscated_name_substr(cls_opt_data->m_cls);
   Json::Value cls_data;
-  cls_data["id"] = (uint)cls_id;
+  cls_data["id"] = (uint32_t)cls_id;
   cls_data["package"] = cls_opt_data->m_package;
   cls_data["source_file"] =
       cls_opt_data->m_has_srcfile ? cls_opt_data->m_filename : "";
@@ -383,13 +383,13 @@ void OptDataMapper::serialize_method(
     Json::Value* nopt_arr) {
   const auto& method = meth_opt_data->m_method;
   Json::Value meth_data;
-  meth_data["id"] = (uint)meth_id;
-  meth_data["cls_id"] = (uint)cls_id;
+  meth_data["id"] = (uint32_t)meth_id;
+  meth_data["cls_id"] = (uint32_t)cls_id;
   meth_data["has_line_num"] = meth_opt_data->m_has_line_num ? 1 : 0;
-  meth_data["line_num"] = (uint)meth_opt_data->m_line_num;
+  meth_data["line_num"] = (uint32_t)meth_opt_data->m_line_num;
   meth_data["signature"] = get_deobfuscated_name(method);
-  meth_data["code_size"] =
-      (uint)(method->get_code() ? method->get_code()->sum_opcode_sizes() : 0);
+  meth_data["code_size"] = (uint32_t)(
+      method->get_code() ? method->get_code()->sum_opcode_sizes() : 0);
   arr->append(meth_data);
   serialize_opt_nopt_helper(meth_opt_data->m_opts, meth_opt_data->m_nopts,
                             meth_id, opt_arr, nopt_arr);
@@ -403,10 +403,10 @@ void OptDataMapper::serialize_insn(
     Json::Value* opt_arr,
     Json::Value* nopt_arr) {
   Json::Value insn_data;
-  insn_data["id"] = (uint)insn_id;
-  insn_data["meth_id"] = (uint)meth_id;
+  insn_data["id"] = (uint32_t)insn_id;
+  insn_data["meth_id"] = (uint32_t)meth_id;
   insn_data["has_line_num"] = insn_opt_data->m_has_line_num ? 1 : 0;
-  insn_data["line_num"] = (uint)insn_opt_data->m_line_num;
+  insn_data["line_num"] = (uint32_t)insn_opt_data->m_line_num;
   insn_data["instruction"] = insn_opt_data->m_insn_orig;
 
   // TODO In case of invokes, we want to show the deobfuscated name for clarity,
@@ -435,8 +435,8 @@ void OptDataMapper::init_nopt_messages() {
       {INL_CROSS_STORE_REFS,
        "Didn''t inline: callee references a DexMember in a dex store different "
        "from the caller''s"},
-      {INL_BLACKLISTED_CALLEE, "Didn''t inline blacklisted method"},
-      {INL_BLACKLISTED_CALLER, "Didn''t inline into blacklisted method"},
+      {INL_BLOCKLISTED_CALLEE, "Didn''t inline blocklisted method"},
+      {INL_BLOCKLISTED_CALLER, "Didn''t inline into blocklisted method"},
       {INL_EXTERN_CATCH,
        "Didn''t inline: callee has a non-public external catch type"},
       {INL_TOO_BIG, "Didn''t inline: estimated inlined method size is too big"},

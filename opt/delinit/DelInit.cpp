@@ -57,8 +57,8 @@ DexType* get_dextype_from_dotname(const char* dotname) {
 // Search a class name in a list of package names, return true if there is a
 // match
 bool find_package(const char* name) {
-  // If there's no whitelisted package, optimize every package by default
-  if (package_filter.size() == 0) {
+  // If there's no allowed package, optimize every package by default
+  if (package_filter.empty()) {
     return true;
   }
   for (auto& el_str : package_filter) {
@@ -116,7 +116,7 @@ void find_referenced_classes(const Scope& scope) {
         auto evalue = dae.encoded_value;
         std::vector<DexType*> ltype;
         evalue->gather_types(ltype);
-        if (ltype.size()) {
+        if (!ltype.empty()) {
           for (auto dextype : ltype) {
             referenced_classes.insert(type_class(dextype));
           }
@@ -405,7 +405,7 @@ void DeadRefs::collect_dmethods(Scope& scope) {
       }
     }
 
-    if (ci.initmethods.size() || ci.dmethods.size()) {
+    if (!ci.initmethods.empty() || !ci.dmethods.empty()) {
       local_stats.emplace(
           clazz, (LocalStats){ci.initmethods.size(), ci.dmethods.size()});
     }
@@ -437,7 +437,7 @@ void DeadRefs::track_callers(Scope& scope) {
       [&](DexMethod* m, IRInstruction* insn) {
         if (insn->has_method()) {
           auto callee =
-              resolve_method(insn->get_method(), opcode_to_search(insn));
+              resolve_method(insn->get_method(), opcode_to_search(insn), m);
           if (callee == nullptr || !callee->is_concrete()) return;
           to_erase.update(
               callee->get_class(),

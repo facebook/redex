@@ -8,6 +8,8 @@
 #include "DexMemberRefs.h"
 
 #include "Debug.h"
+#include "DexUtil.h"
+#include "TypeUtil.h"
 
 #include <sstream>
 
@@ -18,11 +20,12 @@ static size_t expect(const std::string& s,
                      const T& needle,
                      size_t start_pos = 0) {
   auto pos = s.find(needle, start_pos);
-  if (pos == std::string::npos) {
+  auto error_fn = [&]() {
     std::ostringstream ss;
     ss << "Could not find \"" << needle << "\" in \"" << s << "\"";
-    always_assert_log(false, ss.str().c_str());
-  }
+    return ss.str();
+  };
+  always_assert_log(pos != std::string::npos, "%s", error_fn().c_str());
   return pos;
 }
 
@@ -40,7 +43,9 @@ FieldDescriptorTokens parse_field(const std::string& s) {
   return fdt;
 }
 
-static std::vector<std::string> split_args(std::string args) {
+namespace {
+
+std::vector<std::string> split_args(std::string args) {
   std::vector<std::string> ret;
   auto begin = size_t{0};
   while (begin < args.length()) {
@@ -64,6 +69,9 @@ static std::vector<std::string> split_args(std::string args) {
   return ret;
 }
 
+} // namespace
+
+template <bool kCheckFormat>
 MethodDescriptorTokens parse_method(const std::string& s) {
   auto cls_end = expect(s, '.');
   auto name_start = cls_end + 1;
@@ -79,7 +87,27 @@ MethodDescriptorTokens parse_method(const std::string& s) {
   auto args_str = s.substr(args_start, args_end - args_start);
   mdt.args = split_args(args_str);
   mdt.rtype = s.substr(rtype_start);
+  if (kCheckFormat) {
+    // Macros are ugly, but it will print nicer since asserts are macros, too.
+#define context_assert(e, local_ctx) \
+  always_assert_log(e, "Invalid: %s (%s)", local_ctx.c_str(), s.c_str());
+
+    context_assert(type::is_valid(mdt.cls), mdt.cls);
+    // Class must not be a primitive.
+    context_assert(mdt.cls.at(0) == 'L' || mdt.cls.at(0) == '[', mdt.cls);
+
+    context_assert(!mdt.name.empty(), mdt.name);
+    // Name must be a valid identifier.
+    context_assert(is_valid_identifier(mdt.name), mdt.name);
+
+    for (const std::string& t : mdt.args) {
+      context_assert(type::is_valid(t), t);
+    }
+    context_assert(type::is_valid(mdt.rtype), mdt.rtype);
+  }
   return mdt;
 }
+template MethodDescriptorTokens parse_method<false>(const std::string&);
+template MethodDescriptorTokens parse_method<true>(const std::string&);
 
 } // namespace dex_member_refs

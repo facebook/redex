@@ -67,7 +67,7 @@ const char* architecture_to_string(Architecture arch) {
 }
 
 DebugInfoKind parse_debug_info_kind(const std::string& raw_kind) {
-  if (raw_kind == "no_custom_symbolication" || raw_kind == "") {
+  if (raw_kind == "no_custom_symbolication" || raw_kind.empty()) {
     return DebugInfoKind::NoCustomSymbolication;
   } else if (raw_kind == "per_method_debug") {
     return DebugInfoKind::PerMethodDebug;
@@ -75,6 +75,8 @@ DebugInfoKind parse_debug_info_kind(const std::string& raw_kind) {
     return DebugInfoKind::NoPositions;
   } else if (raw_kind == "iodi") {
     return DebugInfoKind::InstructionOffsets;
+  } else if (raw_kind == "bytecode_debugger") {
+    return DebugInfoKind::BytecodeDebugger;
   } else {
     std::ostringstream os;
     bool first{true};
@@ -86,8 +88,8 @@ DebugInfoKind parse_debug_info_kind(const std::string& raw_kind) {
       os << '"' << debug_info_kind_to_string(static_cast<DebugInfoKind>(i))
          << '"';
     }
-    always_assert_log(false, "Unknown debug info kind. Supported kinds are %s",
-                      os.str().c_str());
+    not_reached_log("Unknown debug info kind. Supported kinds are %s",
+                    os.str().c_str());
   }
 }
 
@@ -101,8 +103,10 @@ std::string debug_info_kind_to_string(const DebugInfoKind& kind) {
     return "no_positions";
   case DebugInfoKind::InstructionOffsets:
     return "iodi";
+  case DebugInfoKind::BytecodeDebugger:
+    return "bytecode_debugger";
   case DebugInfoKind::Size:
-    always_assert_log(false, "DebugInfoKind::Size should not be used");
+    not_reached_log("DebugInfoKind::Size should not be used");
   }
 }
 

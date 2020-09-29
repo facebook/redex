@@ -88,6 +88,11 @@ bool is_package_private(DexMember* m) {
   return is_package_private(m->get_access());
 }
 
+template <class DexMember>
+bool is_public_or_protected(DexMember* m) {
+  return m->get_access() & (ACC_PUBLIC | ACC_PROTECTED);
+}
+
 class DexClass;
 using DexClasses = std::vector<DexClass*>;
 

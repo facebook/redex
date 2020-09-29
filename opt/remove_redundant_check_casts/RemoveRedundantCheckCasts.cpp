@@ -8,34 +8,31 @@
 #include "RemoveRedundantCheckCasts.h"
 
 #include "CheckCastAnalysis.h"
+#include "CheckCastTransform.h"
 #include "DexClass.h"
 #include "PassManager.h"
 #include "Walkers.h"
 
 namespace check_casts {
 
-size_t remove_redundant_check_casts(DexMethod* method) {
-  if (!method || !method->get_code()) {
-    return 0;
+impl::Stats remove_redundant_check_casts(const CheckCastConfig& config,
+                                         DexMethod* method) {
+  if (!method || !method->get_code() || method->rstate.no_optimizations()) {
+    return impl::Stats{};
   }
 
   auto* code = method->get_code();
   code->build_cfg(/* editable */ true);
-  auto& cfg = code->cfg();
-  impl::CheckCastAnalysis analysis(method);
+  impl::CheckCastAnalysis analysis(config, method);
   auto casts = analysis.collect_redundant_checks_replacement();
-  for (const auto& cast : casts) {
-    auto it = cfg.find_insn(cast.insn, cast.block);
-    boost::optional<IRInstruction*> replacement = cast.replacement;
-    if (replacement) {
-      cfg.replace_insn(it, *replacement);
-    } else {
-      cfg.remove_insn(it);
-    }
-  }
+  auto stats = impl::apply(method, casts);
 
   code->clear_cfg();
-  return casts.size();
+  return stats;
+}
+
+void RemoveRedundantCheckCastsPass::bind_config() {
+  bind("weaken", m_config.weaken, m_config.weaken);
 }
 
 void RemoveRedundantCheckCastsPass::run_pass(DexStoresVector& stores,
@@ -43,12 +40,14 @@ void RemoveRedundantCheckCastsPass::run_pass(DexStoresVector& stores,
                                              PassManager& mgr) {
   auto scope = build_class_scope(stores);
 
-  size_t num_redundant_check_casts =
-      walk::parallel::methods<size_t>(scope, [&](DexMethod* method) {
-        return remove_redundant_check_casts(method);
+  auto stats =
+      walk::parallel::methods<impl::Stats>(scope, [&](DexMethod* method) {
+        return remove_redundant_check_casts(m_config, method);
       });
 
-  mgr.set_metric("num_redundant_check_casts", num_redundant_check_casts);
+  mgr.set_metric("num_removed_casts", stats.removed_casts);
+  mgr.set_metric("num_replaced_casts", stats.replaced_casts);
+  mgr.set_metric("num_weakened_casts", stats.weakened_casts);
 }
 
 static RemoveRedundantCheckCastsPass s_pass;

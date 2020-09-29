@@ -10,10 +10,10 @@
 
 namespace dup_classes {
 
-// Read whitelisted duplicate class list from config.
-void read_dup_class_whitelist(const JsonWrapper& json_cfg);
+// Read allowed duplicate class list from config.
+void read_dup_class_allowlist(const JsonWrapper& json_cfg);
 
-// Return true if the cls is among one of the known whitelisted duplicated
+// Return true if the cls is among one of the known allowed duplicated
 // classes.
 bool is_known_dup(DexClass* cls);
 

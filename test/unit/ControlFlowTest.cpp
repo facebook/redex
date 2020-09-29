@@ -25,7 +25,10 @@ std::ostream& operator<<(std::ostream& os, const Block* b) {
 using namespace cfg;
 using namespace dex_asm;
 
-class ControlFlowTest : public RedexTest {};
+class ControlFlowTest : public RedexTest {
+ public:
+  InstructionEquality m_equal = std::equal_to<const IRInstruction&>();
+};
 
 TEST_F(ControlFlowTest, findExitBlocks) {
   {
@@ -276,6 +279,37 @@ TEST_F(ControlFlowTest, iterate2) {
     EXPECT_EQ(1, entry.second);
   }
   TRACE(CFG, 1, SHOW(code->cfg()));
+}
+
+TEST_F(ControlFlowTest, iterate3) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (load-param v0)
+
+     (:loop)
+     (const v1 0)
+     (if-gez v0 :if-true-label)
+     (goto :loop) ; this goto is removed
+
+     (:if-true-label)
+     (return-void)
+    )
+)");
+  code->build_cfg(/* editable */ true);
+  // Check that ++ and -- agree
+  auto iterable = cfg::InstructionIterable(code->cfg());
+  std::stack<cfg::InstructionIterator> iterators;
+  for (auto it = iterable.end(); it != iterable.begin(); --it) {
+    iterators.push(it);
+  }
+  iterators.push(iterable.begin());
+  for (auto it = iterable.begin(); it != iterable.end(); ++it) {
+    EXPECT_EQ(it, iterators.top());
+    iterators.pop();
+  }
+  EXPECT_EQ(iterable.end(), iterators.top());
+  iterators.pop();
+  EXPECT_TRUE(iterators.empty());
 }
 
 // C++14 Null Forward Iterators
@@ -962,9 +996,7 @@ TEST_F(ControlFlowTest, deep_copy1) {
   IRList* orig_list = orig.linearize();
   IRList* copy_list = copy.linearize();
 
-  auto orig_iterable = ir_list::InstructionIterable(orig_list);
-  auto copy_iterable = ir_list::InstructionIterable(copy_list);
-  EXPECT_TRUE(orig_iterable.structural_equals(copy_iterable));
+  EXPECT_TRUE(orig_list->structural_equals(*copy_list, m_equal));
 }
 
 TEST_F(ControlFlowTest, deep_copy2) {
@@ -993,9 +1025,7 @@ TEST_F(ControlFlowTest, deep_copy2) {
   IRList* orig_list = orig.linearize();
   IRList* copy_list = copy.linearize();
 
-  auto orig_iterable = ir_list::InstructionIterable(orig_list);
-  auto copy_iterable = ir_list::InstructionIterable(copy_list);
-  EXPECT_TRUE(orig_iterable.structural_equals(copy_iterable));
+  EXPECT_TRUE(orig_list->structural_equals(*copy_list, m_equal));
 }
 
 TEST_F(ControlFlowTest, deep_copy3) {
@@ -1033,9 +1063,48 @@ TEST_F(ControlFlowTest, deep_copy3) {
   IRList* orig_list = orig.linearize();
   IRList* copy_list = copy.linearize();
 
-  auto orig_iterable = ir_list::InstructionIterable(orig_list);
-  auto copy_iterable = ir_list::InstructionIterable(copy_list);
-  EXPECT_TRUE(orig_iterable.structural_equals(copy_iterable));
+  EXPECT_TRUE(orig_list->structural_equals(*copy_list, m_equal));
+}
+
+TEST_F(ControlFlowTest, deep_copy_into_existing_cfg) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (if-eqz v0 :thr)
+      (return-void)
+      (:thr)
+      (throw v0)
+    )
+)");
+
+  auto copy_code = assembler::ircode_from_string(R"(
+    (
+      (const v0 10)
+
+      (:loop)
+      (if-eqz v0 :end)
+      (invoke-static (v0) "LCls;.foo:(I)I")
+      (move-result v1)
+      (add-int v0 v0 v1)
+      (goto :loop)
+
+      (:end)
+      (return-void)
+    )
+)");
+
+  code->build_cfg(/* editable */ true);
+  auto& orig = code->cfg();
+
+  copy_code->build_cfg(/* editable */ true);
+  auto& copy = copy_code->cfg();
+
+  orig.deep_copy(&copy);
+
+  code->clear_cfg();
+  copy_code->clear_cfg();
+
+  EXPECT_CODE_EQ(code.get(), copy_code.get());
 }
 
 TEST_F(ControlFlowTest, line_numbers) {
@@ -2121,7 +2190,27 @@ TEST_F(ControlFlowTest, get_param_instructions_basic) {
     )
   )");
 
-  code->build_cfg(/* editable */ true);
+  code->build_cfg(/* editable= */ true);
+  auto& cfg = code->cfg();
+
+  MethodItemEntry* param_insn = &*cfg.entry_block()->begin();
+  auto param_insns_range = cfg.get_param_instructions();
+  EXPECT_FALSE(param_insns_range.empty());
+  EXPECT_EQ(&*param_insns_range.begin(), param_insn);
+  EXPECT_EQ(&*param_insns_range.end(), &*std::next(cfg.entry_block()->begin()));
+}
+
+TEST_F(ControlFlowTest, get_param_instructions_basic_non_editable) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (const-string "one")
+      (move-result-pseudo v0)
+      (return v0)
+    )
+  )");
+
+  code->build_cfg(/* editable= */ false);
   auto& cfg = code->cfg();
 
   MethodItemEntry* param_insn = &*cfg.entry_block()->begin();
@@ -2138,8 +2227,42 @@ TEST_F(ControlFlowTest, get_param_instructions_empty) {
     )
   )");
 
-  code->build_cfg(/* editable */ true);
+  code->build_cfg(/* editable= */ true);
   auto& cfg = code->cfg();
 
   EXPECT_TRUE(cfg.get_param_instructions().empty());
+}
+
+TEST_F(ControlFlowTest, get_param_instructions_empty_not_editable) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (.dbg DBG_SET_PROLOGUE_END)
+    )
+  )");
+
+  code->build_cfg(/* editable= */ false);
+  auto& cfg = code->cfg();
+
+  EXPECT_TRUE(cfg.get_param_instructions().empty());
+}
+
+TEST_F(ControlFlowTest, no_crash_on_remove_insn) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (invoke-virtual (v) "LFoo;.bar:()V")
+    )
+  )");
+  code->build_cfg(/* editable */ true);
+  auto& cfg = code->cfg();
+
+  auto it = InstructionIterator{cfg, /*is_begin=*/true};
+  for (; !it.is_end(); ++it) {
+    if (it->insn->opcode() == OPCODE_INVOKE_VIRTUAL) {
+      break;
+    }
+  }
+  ASSERT_FALSE(it.is_end());
+
+  cfg.remove_insn(it); // Should not crash.
 }

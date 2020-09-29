@@ -11,11 +11,15 @@
 #include <ostream>
 
 #include <boost/optional.hpp>
+#include <utility>
 
 #include "AbstractDomain.h"
 #include "ConstantAbstractDomain.h"
 #include "DexClass.h"
+#include "DexUtil.h"
 #include "IRInstruction.h"
+#include "PatriciaTreeMapAbstractEnvironment.h"
+#include "PatriciaTreeMapAbstractPartition.h"
 
 namespace reflection {
 
@@ -100,32 +104,28 @@ struct AbstractObject final : public sparta::AbstractValue<AbstractObject> {
   AbstractObject() = default;
 
   explicit AbstractObject(DexString* s)
-      : obj_kind(STRING),
-        dex_type(nullptr),
-        dex_string(s),
-        potential_dex_types() {}
+      : obj_kind(STRING), dex_type(nullptr), dex_string(s) {}
 
   explicit AbstractObject(int64_t i)
-      : obj_kind(INT),
-        dex_type(nullptr),
-        dex_string(nullptr),
-        dex_int(i),
-        potential_dex_types() {}
+      : obj_kind(INT), dex_type(nullptr), dex_string(nullptr), dex_int(i) {}
 
   AbstractObject(AbstractObjectKind k, DexType* t)
-      : obj_kind(k), dex_type(t), dex_string(nullptr), potential_dex_types() {
+      : obj_kind(k), dex_type(t), dex_string(nullptr) {
     always_assert(k == OBJECT || k == CLASS);
   }
 
   AbstractObject(AbstractObjectKind k,
                  DexType* t,
                  std::unordered_set<DexType*> p)
-      : obj_kind(k), dex_type(t), dex_string(nullptr), potential_dex_types(p) {
+      : obj_kind(k),
+        dex_type(t),
+        dex_string(nullptr),
+        potential_dex_types(std::move(p)) {
     always_assert(k == OBJECT || k == CLASS);
   }
 
   AbstractObject(AbstractObjectKind k, DexType* t, DexString* s)
-      : obj_kind(k), dex_type(t), dex_string(s), potential_dex_types() {
+      : obj_kind(k), dex_type(t), dex_string(s) {
     always_assert(k == FIELD || k == METHOD);
   }
 
@@ -133,15 +133,17 @@ struct AbstractObject final : public sparta::AbstractValue<AbstractObject> {
                  DexType* t,
                  DexString* s,
                  std::unordered_set<DexType*> p)
-      : obj_kind(k), dex_type(t), dex_string(s), potential_dex_types(p) {
+      : obj_kind(k),
+        dex_type(t),
+        dex_string(s),
+        potential_dex_types(std::move(p)) {
     always_assert(k == FIELD || k == METHOD);
   }
 
   AbstractObject(AbstractObjectKind k, AbstractHeapAddress addr)
       : obj_kind(k),
         dex_type(DexType::make_type("[Ljava/lang/Class;")),
-        dex_string(nullptr),
-        potential_dex_types() {
+        dex_string(nullptr) {
     heap_address = addr;
     always_assert(k == OBJECT);
   }
@@ -180,6 +182,25 @@ struct AbstractObject final : public sparta::AbstractValue<AbstractObject> {
   }
 };
 
+class AbstractObjectDomain final
+    : public sparta::AbstractDomainScaffolding<AbstractObject,
+                                               AbstractObjectDomain> {
+ public:
+  AbstractObjectDomain() { this->set_to_top(); }
+  explicit AbstractObjectDomain(AbstractObject obj) {
+    this->set_to_value(AbstractObject(std::move(obj)));
+  }
+  explicit AbstractObjectDomain(sparta::AbstractValueKind kind)
+      : sparta::AbstractDomainScaffolding<AbstractObject, AbstractObjectDomain>(
+            kind) {}
+
+  boost::optional<AbstractObject> get_object() const {
+    return (this->kind() == sparta::AbstractValueKind::Value)
+               ? boost::optional<AbstractObject>(*this->get_value())
+               : boost::none;
+  }
+};
+
 bool operator==(const AbstractObject& x, const AbstractObject& y);
 
 bool operator!=(const AbstractObject& x, const AbstractObject& y);
@@ -192,6 +213,100 @@ using ReflectionAbstractObject =
 using ReflectionSites = std::vector<
     std::pair<IRInstruction*, std::map<reg_t, ReflectionAbstractObject>>>;
 
+using param_index_t = uint16_t;
+
+using CallingContext =
+    sparta::PatriciaTreeMapAbstractPartition<param_index_t,
+                                             AbstractObjectDomain>;
+
+// Maps from callsite instruction to the corresponding calling context.
+using CallingContextMap =
+    sparta::PatriciaTreeMapAbstractEnvironment<const IRInstruction*,
+                                               CallingContext>;
+
+using SummaryQueryFn =
+    std::function<AbstractObjectDomain(const IRInstruction*)>;
+
+struct MetadataCache {
+  DexMethodRef* const get_class{DexMethod::make_method(
+      "Ljava/lang/Object;", "getClass", {}, "Ljava/lang/Class;")};
+  DexMethodRef* const get_method{
+      DexMethod::make_method("Ljava/lang/Class;",
+                             "getMethod",
+                             {"Ljava/lang/String;", "[Ljava/lang/Class;"},
+                             "Ljava/lang/reflect/Method;")};
+  DexMethodRef* const get_declared_method{
+      DexMethod::make_method("Ljava/lang/Class;",
+                             "getDeclaredMethod",
+                             {"Ljava/lang/String;", "[Ljava/lang/Class;"},
+                             "Ljava/lang/reflect/Method;")};
+  DexMethodRef* const get_methods{DexMethod::make_method(
+      "Ljava/lang/Class;", "getMethods", {}, "[Ljava/lang/reflect/Method;")};
+  DexMethodRef* const get_declared_methods{
+      DexMethod::make_method("Ljava/lang/Class;",
+                             "getDeclaredMethods",
+                             {},
+                             "[Ljava/lang/reflect/Method;")};
+  DexMethodRef* const get_constructor{
+      DexMethod::make_method("Ljava/lang/Class;",
+                             "getConstructor",
+                             {"[Ljava/lang/Class;"},
+                             "Ljava/lang/reflect/Constructor;")};
+  DexMethodRef* const get_declared_constructor{
+      DexMethod::make_method("Ljava/lang/Class;",
+                             "getDeclaredConstructor",
+                             {"[Ljava/lang/Class;"},
+                             "Ljava/lang/reflect/Constructor;")};
+  DexMethodRef* const get_constructors{
+      DexMethod::make_method("Ljava/lang/Class;",
+                             "getConstructors",
+                             {},
+                             "[Ljava/lang/reflect/Constructor;")};
+  DexMethodRef* const get_declared_constructors{
+      DexMethod::make_method("Ljava/lang/Class;",
+                             "getDeclaredConstructors",
+                             {},
+                             "[Ljava/lang/reflect/Constructor;")};
+  DexMethodRef* const get_field{
+      DexMethod::make_method("Ljava/lang/Class;",
+                             "getField",
+                             {"Ljava/lang/String;"},
+                             "Ljava/lang/reflect/Field;")};
+  DexMethodRef* const get_declared_field{
+      DexMethod::make_method("Ljava/lang/Class;",
+                             "getDeclaredField",
+                             {"Ljava/lang/String;"},
+                             "Ljava/lang/reflect/Field;")};
+  DexMethodRef* const get_fields{DexMethod::make_method(
+      "Ljava/lang/Class;", "getFields", {}, "[Ljava/lang/reflect/Field;")};
+  DexMethodRef* const get_declared_fields{
+      DexMethod::make_method("Ljava/lang/Class;",
+                             "getDeclaredFields",
+                             {},
+                             "[Ljava/lang/reflect/Field;")};
+  DexMethodRef* const get_method_name{DexMethod::make_method(
+      "Ljava/lang/reflect/Method;", "getName", {}, "Ljava/lang/String;")};
+  DexMethodRef* const get_field_name{DexMethod::make_method(
+      "Ljava/lang/reflect/Field;", "getName", {}, "Ljava/lang/String;")};
+  DexMethodRef* const for_name{DexMethod::make_method("Ljava/lang/Class;",
+                                                      "forName",
+                                                      {"Ljava/lang/String;"},
+                                                      "Ljava/lang/Class;")};
+
+  const std::map<const DexFieldRef*, DexType*, dexfields_comparator>
+      primitive_field_to_type = {
+          {type::pseudo::Void_TYPE(), type::_void()},
+          {type::pseudo::Boolean_TYPE(), type::_boolean()},
+          {type::pseudo::Byte_TYPE(), type::_byte()},
+          {type::pseudo::Character_TYPE(), type::_char()},
+          {type::pseudo::Short_TYPE(), type::_short()},
+          {type::pseudo::Integer_TYPE(), type::_int()},
+          {type::pseudo::Long_TYPE(), type::_long()},
+          {type::pseudo::Float_TYPE(), type::_float()},
+          {type::pseudo::Double_TYPE(), type::_double()},
+  };
+};
+
 class ReflectionAnalysis final {
  public:
   // If we don't declare a destructor for this class, a default destructor will
@@ -201,9 +316,14 @@ class ReflectionAnalysis final {
   // sra_impl::Analyzer.
   ~ReflectionAnalysis();
 
-  explicit ReflectionAnalysis(DexMethod* dex_method);
+  explicit ReflectionAnalysis(DexMethod* dex_method,
+                              CallingContext* context = nullptr,
+                              SummaryQueryFn* summary_query_fn = nullptr,
+                              const MetadataCache* cache = nullptr);
 
-  const ReflectionSites get_reflection_sites() const;
+  ReflectionSites get_reflection_sites() const;
+
+  AbstractObjectDomain get_return_value() const;
 
   /**
    * Return a parameter type array for this invoke method instruction.
@@ -225,9 +345,12 @@ class ReflectionAnalysis final {
   boost::optional<ClassObjectSource> get_class_source(
       size_t reg, IRInstruction* insn) const;
 
+  CallingContextMap get_calling_context_partition() const;
+
  private:
   const DexMethod* m_dex_method;
   std::unique_ptr<impl::Analyzer> m_analyzer;
+  MetadataCache* m_fallback_cache = nullptr;
 
   void get_reflection_site(
       const reg_t reg,
@@ -241,7 +364,13 @@ std::ostream& operator<<(std::ostream& out,
                          const reflection::AbstractObject& x);
 
 std::ostream& operator<<(std::ostream& out,
+                         const reflection::AbstractObjectDomain& x);
+
+std::ostream& operator<<(std::ostream& out,
                          const reflection::ClassObjectSource& cls_src);
 
 std::ostream& operator<<(std::ostream& out,
                          const reflection::ReflectionAbstractObject& aobj);
+
+std::ostream& operator<<(std::ostream& out,
+                         const reflection::ReflectionSites& sites);

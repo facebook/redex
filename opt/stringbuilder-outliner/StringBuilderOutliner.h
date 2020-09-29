@@ -151,7 +151,9 @@ class BuilderStore {
       sparta::PatriciaTreeMapAbstractEnvironment<const IRInstruction*,
                                                  BuilderDomain>;
 
-  static void set_may_escape(const IRInstruction* ptr, Domain* dom) {
+  static void set_may_escape(const IRInstruction* ptr,
+                             const IRInstruction* /* blame */,
+                             Domain* dom) {
     dom->set(ptr, BuilderDomain::top());
   }
 
@@ -168,7 +170,7 @@ using Environment = local_pointers::EnvironmentWithStoreImpl<BuilderStore>;
 
 class FixpointIterator final : public ir_analyzer::BaseIRAnalyzer<Environment> {
  public:
-  FixpointIterator(const cfg::ControlFlowGraph& cfg);
+  explicit FixpointIterator(const cfg::ControlFlowGraph& cfg);
 
   void analyze_instruction(const IRInstruction* insn,
                            Environment* env) const override;
@@ -202,7 +204,7 @@ struct Stats {
 
 class Outliner {
  public:
-  Outliner(Config config = Config());
+  explicit Outliner(Config config = Config());
 
   const Config& get_config() const { return m_config; }
 
@@ -266,7 +268,7 @@ class StringBuilderOutlinerPass : public Pass {
          m_config.min_outline_count);
   }
 
-  virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+  void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
   Config m_config;

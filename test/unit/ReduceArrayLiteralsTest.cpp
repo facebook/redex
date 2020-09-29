@@ -25,11 +25,10 @@ void test(const std::string& code_str,
   auto code = assembler::ircode_from_string(code_str);
   auto expected = assembler::ircode_from_string(expected_str);
 
-  code.get()->build_cfg(/* editable */ true);
-  ReduceArrayLiterals ral(
-      code.get()->cfg(), max_filled_elements, min_sdk, arch);
+  code->build_cfg(/* editable */ true);
+  ReduceArrayLiterals ral(code->cfg(), max_filled_elements, min_sdk, arch);
   ral.patch();
-  code.get()->clear_cfg();
+  code->clear_cfg();
   auto stats = ral.get_stats();
 
   // printf("ACTUAL CODE: \n %s\n", assembler::to_string(code.get()).c_str());
@@ -81,7 +80,7 @@ TEST_F(ReduceArrayLiteralsTest, array_one_element) {
       (const v0 0)
       (const-string "hello")
       (move-result-pseudo-object v2)
-      (aput v2 v1 v0)
+      (aput-object v2 v1 v0)
       (return-object v1)
     )
   )";
@@ -91,7 +90,8 @@ TEST_F(ReduceArrayLiteralsTest, array_one_element) {
       (const v0 0)
       (const-string "hello")
       (move-result-pseudo-object v2)
-      (move-object v3 v2)
+      (check-cast v2 "Ljava/lang/String;")
+      (move-result-pseudo-object v3)
       (filled-new-array (v3) "[Ljava/lang/String;")
       (move-result-object v1)
       (return-object v1)
@@ -228,7 +228,8 @@ TEST_F(ReduceArrayLiteralsTest, array_more_than_max_elements) {
       (const-string "hello")
       (move-result-pseudo-object v2)
       (const v0 0)
-      (move-object v7 v2)
+      (check-cast v2 "Ljava/lang/String;")
+      (move-result-pseudo-object v7)
       (filled-new-array (v7) "[Ljava/lang/String;")
       (move-result-object v3)
       (const v4 0)
@@ -238,7 +239,8 @@ TEST_F(ReduceArrayLiteralsTest, array_more_than_max_elements) {
       (const-string "hello2")
       (move-result-pseudo-object v2)
       (const v0 1)
-      (move-object v7 v2)
+      (check-cast v2 "Ljava/lang/String;")
+      (move-result-pseudo-object v7)
       (filled-new-array (v7) "[Ljava/lang/String;")
       (move-result-object v3)
       (const v4 0)
@@ -272,9 +274,11 @@ TEST_F(ReduceArrayLiteralsTest, array_two_same_elements) {
       (const-string "hello")
       (move-result-pseudo-object v2)
       (const v0 0)
-      (move-object v3 v2)
+      (check-cast v2 "Ljava/lang/String;")
+      (move-result-pseudo-object v3)
       (const v0 1)
-      (move-object v4 v2)
+      (check-cast v2 "Ljava/lang/String;")
+      (move-result-pseudo-object v4)
       (filled-new-array (v3 v4) "[Ljava/lang/String;")
       (move-result-object v1)
       (return-object v1)
@@ -306,11 +310,13 @@ TEST_F(ReduceArrayLiteralsTest, array_two_different_elements) {
       (const-string "hello")
       (move-result-pseudo-object v2)
       (const v0 0)
-      (move-object v3 v2)
+      (check-cast v2 "Ljava/lang/String;")
+      (move-result-pseudo-object v3)
       (const-string "hello2")
       (move-result-pseudo-object v2)
       (const v0 1)
-      (move-object v4 v2)
+      (check-cast v2 "Ljava/lang/String;")
+      (move-result-pseudo-object v4)
       (filled-new-array (v3 v4) "[Ljava/lang/String;")
       (move-result-object v1)
       (return-object v1)

@@ -51,8 +51,7 @@ size_t read(std::istream& input,
     }
     always_assert_log(!s_expr_input.fail(), "%s\n",
                       s_expr_input.what().c_str());
-    DexMethodRef* dex_method =
-        DexMethod::get_method(expr[0].get_string().c_str());
+    DexMethodRef* dex_method = DexMethod::get_method(expr[0].get_string());
     if (dex_method == nullptr) {
       continue;
     }

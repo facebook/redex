@@ -40,6 +40,11 @@ class IRTypeCheckerTest : public RedexTest {
         DexType::make_type("F"), // v13
         type::java_lang_Object() // v14
     });
+    ClassCreator cc(type::java_lang_Object());
+    cc.set_access(ACC_PUBLIC);
+    cc.set_external();
+    auto object_class = cc.create();
+
     auto proto = DexProto::make_proto(type::_boolean(), args);
     m_method =
         DexMethod::make_method(DexType::make_type("Lbar;"),
@@ -286,7 +291,7 @@ TEST_F(IRTypeCheckerTest, referenceFromInteger) {
       checker.what(),
       MatchesRegex(
           "^Type error in method testMethod at instruction 'AGET v0, v5' "
-          "@ 0x[0-9a-f]+ for register v0: expected type REFERENCE, but found "
+          "@ 0x[0-9a-f]+ for register v0: expected type REF, but found "
           "INT instead"));
 }
 
@@ -326,7 +331,7 @@ TEST_F(IRTypeCheckerTest, uninitializedRegister) {
       MatchesRegex(
           "^Type error in method testMethod at instruction 'INVOKE_VIRTUAL v0, "
           "Lbar;\\.foo:\\(\\)V' @ 0x[0-9a-f]+ for register v0: expected "
-          "type REFERENCE, but found TOP instead"));
+          "type REF, but found TOP instead"));
 }
 
 TEST_F(IRTypeCheckerTest, undefinedRegister) {
@@ -358,7 +363,7 @@ TEST_F(IRTypeCheckerTest, undefinedRegister) {
       MatchesRegex(
           "^Type error in method testMethod at instruction 'INVOKE_VIRTUAL v0, "
           "Lbar;\\.foo:\\(\\)V' @ 0x[0-9a-f]+ for register v0: expected "
-          "type REFERENCE, but found TOP instead"));
+          "type REF, but found TOP instead"));
 }
 
 TEST_F(IRTypeCheckerTest, signatureMismatch) {
@@ -470,7 +475,7 @@ TEST_F(IRTypeCheckerTest, verifyMoves) {
       MatchesRegex(
           "^Type error in method testMethod at instruction "
           "'MOVE_OBJECT v1, v0' @ 0x[0-9a-f]+ for register v0: expected type "
-          "REFERENCE, but found TOP instead"));
+          "REF, but found TOP instead"));
 }
 
 TEST_F(IRTypeCheckerTest, exceptionHandler) {
@@ -598,7 +603,7 @@ TEST_F(IRTypeCheckerTest, zeroOrReference) {
  * base.foo();
  */
 TEST_F(IRTypeCheckerTest, joinDexTypesSharingCommonBaseSimple) {
-  // Construct type hierarhcy.
+  // Construct type hierarchy.
   const auto type_base = DexType::make_type("LBase;");
   const auto type_a = DexType::make_type("LA;");
   const auto type_b = DexType::make_type("LB;");
@@ -630,7 +635,7 @@ TEST_F(IRTypeCheckerTest, joinDexTypesSharingCommonBaseSimple) {
   cls_b_creator.add_method(b_foo);
   cls_b_creator.create();
 
-  // Construct code that references the above hierarhcy.
+  // Construct code that references the above hierarchy.
   using namespace dex_asm;
   auto if_mie = new MethodItemEntry(dasm(OPCODE_IF_EQZ, {5_v}));
   auto goto_mie = new MethodItemEntry(dasm(OPCODE_GOTO, {}));
@@ -706,7 +711,7 @@ TEST_F(IRTypeCheckerTest, joinDexTypesSharingCommonBaseSimple) {
  * base.foo();
  */
 TEST_F(IRTypeCheckerTest, joinCommonBaseWithConflictingInterface) {
-  // Construct type hierarhcy.
+  // Construct type hierarchy.
   const auto type_base = DexType::make_type("LBase;");
   const auto type_a = DexType::make_type("LA;");
   const auto type_b = DexType::make_type("LB;");
@@ -741,7 +746,7 @@ TEST_F(IRTypeCheckerTest, joinCommonBaseWithConflictingInterface) {
   cls_b_creator.add_method(b_foo);
   cls_b_creator.create();
 
-  // Construct code that references the above hierarhcy.
+  // Construct code that references the above hierarchy.
   using namespace dex_asm;
   auto if_mie = new MethodItemEntry(dasm(OPCODE_IF_EQZ, {5_v}));
   auto goto_mie = new MethodItemEntry(dasm(OPCODE_GOTO, {}));
@@ -817,7 +822,7 @@ TEST_F(IRTypeCheckerTest, joinCommonBaseWithConflictingInterface) {
  * base.foo();
  */
 TEST_F(IRTypeCheckerTest, joinCommonBaseWithMergableInterface) {
-  // Construct type hierarhcy.
+  // Construct type hierarchy.
   const auto type_base = DexType::make_type("LBase;");
   const auto type_a = DexType::make_type("LA;");
   const auto type_b = DexType::make_type("LB;");
@@ -853,7 +858,7 @@ TEST_F(IRTypeCheckerTest, joinCommonBaseWithMergableInterface) {
   cls_b_creator.add_method(b_foo);
   cls_b_creator.create();
 
-  // Construct code that references the above hierarhcy.
+  // Construct code that references the above hierarchy.
   using namespace dex_asm;
   auto if_mie = new MethodItemEntry(dasm(OPCODE_IF_EQZ, {5_v}));
   auto goto_mie = new MethodItemEntry(dasm(OPCODE_GOTO, {}));
@@ -912,6 +917,79 @@ TEST_F(IRTypeCheckerTest, joinCommonBaseWithMergableInterface) {
   EXPECT_EQ(type_b, *checker.get_dex_type(insns[7], 0));
   EXPECT_EQ(type_base, *checker.get_dex_type(insns[8], 0));
   EXPECT_EQ(type_base, *checker.get_dex_type(insns[9], 0));
+}
+
+/**
+ * The bytecode stream of the following Java code.
+ *
+ * Base base;
+ * if (condition) {
+ *   base = null;
+ * } else {
+ *   base = new Object();
+ * }
+ * base.foo();
+ */
+TEST_F(IRTypeCheckerTest, invokeInvalidObjectType) {
+  // Construct type hierarchy.
+  const auto type_base = DexType::make_type("LBase;");
+
+  ClassCreator cls_base_creator(type_base);
+  cls_base_creator.set_super(type::java_lang_Object());
+  auto base_foobar = DexMethod::make_method("LBase;.foobar:()I")
+                         ->make_concrete(ACC_PUBLIC, true);
+  cls_base_creator.add_method(base_foobar);
+  cls_base_creator.create();
+
+  auto object_ctor = DexMethod::make_method("Ljava/lang/Object;.<init>:()V");
+  EXPECT_TRUE(object_ctor != nullptr);
+
+  // Construct code that references the above hierarchy.
+  using namespace dex_asm;
+  auto if_mie = new MethodItemEntry(dasm(OPCODE_IF_EQZ, {5_v}));
+  auto goto_mie = new MethodItemEntry(dasm(OPCODE_GOTO, {}));
+  auto target1 = new BranchTarget(if_mie);
+  auto target2 = new BranchTarget(goto_mie);
+
+  std::vector<IRInstruction*> insns = {
+      // B0
+      // *if_mie, // branch to target1
+      // B1
+      dasm(OPCODE_CONST, {0_v, 0_L}),
+      // *goto_mie, // branch to target2
+      // B2
+      // target1,
+      dasm(OPCODE_NEW_INSTANCE, type::java_lang_Object()),
+      dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {0_v}),
+      dasm(OPCODE_INVOKE_DIRECT, object_ctor, {0_v}),
+      // target2,
+      // B3
+      // Coming out of one branch, v0 is null and coming out of the
+      // other, it's an Object, but not (necessarily) a Base
+      dasm(OPCODE_INVOKE_VIRTUAL, base_foobar, {0_v}),
+      dasm(OPCODE_RETURN, {9_v}),
+  };
+
+  IRCode* code = m_method->get_code();
+  code->push_back(*if_mie);
+  code->push_back(insns[0]);
+  code->push_back(*goto_mie);
+  code->push_back(target1);
+  code->push_back(insns[1]);
+  code->push_back(insns[2]);
+  code->push_back(insns[3]);
+  code->push_back(target2);
+  code->push_back(insns[4]);
+  code->push_back(insns[5]);
+
+  add_code(insns);
+  IRTypeChecker checker(m_method);
+  checker.run();
+
+  // This should NOT type check successfully due to invoking Base.foobar against
+  // an Object
+  EXPECT_FALSE(checker.good()) << checker.what();
+  EXPECT_NE("OK", checker.what());
 }
 
 TEST_F(IRTypeCheckerTest, invokeInitAfterNewInstance) {

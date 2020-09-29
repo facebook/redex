@@ -51,12 +51,12 @@ class RemoveClasses {
   RemoveClasses(const DexType* super_cls,
                 const Scope& scope,
                 const inliner::InlinerConfig& inliner_config,
-                const std::vector<DexType*>& blacklist,
+                const std::vector<DexType*>& blocklist,
                 bool propagate_escape_results,
                 DexStoresVector& stores)
       : m_root(super_cls),
         m_scope(scope),
-        m_blacklist(blacklist),
+        m_blocklist(blocklist),
         m_type_system(scope),
         m_propagate_escape_results(propagate_escape_results),
         m_transform(scope, m_type_system, super_cls, inliner_config, stores) {
@@ -108,7 +108,7 @@ class RemoveClasses {
 
     // We are only tackling leaf classes.
     for (const DexType* type : subclasses) {
-      if (m_type_system.get_children(type).size() == 0) {
+      if (m_type_system.get_children(type).empty()) {
         if (m_root != object_type || boost::regex_search(type->c_str(), re)) {
           m_classes.emplace(type);
         }
@@ -164,10 +164,10 @@ class RemoveClasses {
       }
     });
 
-    for (DexType* type : m_blacklist) {
+    for (DexType* type : m_blocklist) {
       if (m_classes.count(type)) {
         TRACE(BLD_PATTERN, 2,
-              "Excluding type since it was in the blacklist: %s", SHOW(type));
+              "Excluding type since it was in the blocklist: %s", SHOW(type));
         m_excluded_types.emplace(type);
       }
     }
@@ -206,14 +206,14 @@ class RemoveClasses {
       // or take the builder as an argument, except for the ctors.
       std::unordered_set<IRInstruction*> to_inline =
           analysis->get_all_inlinable_insns();
-      if (to_inline.size() == 0) {
+      if (to_inline.empty()) {
         TRACE(BLD_PATTERN, 3,
               "Everything that could be inlined was inlined for %s",
               SHOW(method));
 
         // Check if any of the instance builder types cannot be removed.
         auto non_removable_types = analysis->non_removable_types();
-        if (non_removable_types.size() > 0) {
+        if (!non_removable_types.empty()) {
           for (DexType* type : non_removable_types) {
             if (m_excluded_types.count(type) == 0 &&
                 !m_propagate_escape_results) {
@@ -241,7 +241,7 @@ class RemoveClasses {
       auto not_inlined_insns =
           m_transform.get_not_inlined_insns(method, to_inline);
 
-      if (not_inlined_insns.size() > 0) {
+      if (!not_inlined_insns.empty()) {
         auto to_eliminate =
             analysis->get_instantiated_types(&not_inlined_insns);
         for (const DexType* type : to_eliminate) {
@@ -289,7 +289,7 @@ class RemoveClasses {
 
   const DexType* m_root;
   const Scope& m_scope;
-  const std::vector<DexType*>& m_blacklist;
+  const std::vector<DexType*>& m_blocklist;
   TypeSystem m_type_system;
   bool m_propagate_escape_results;
   BuilderTransform m_transform;
@@ -306,7 +306,7 @@ void RemoveBuilderPatternPass::bind_config() {
   std::vector<DexType*> roots;
   bind("roots", {}, roots, Configurable::default_doc(),
        Configurable::bindflags::types::warn_if_unresolvable);
-  bind("blacklist", {}, m_blacklist, Configurable::default_doc(),
+  bind("blocklist", {}, m_blocklist, Configurable::default_doc(),
        Configurable::bindflags::types::warn_if_unresolvable);
   bind("propagate_escape_results", true, m_propagate_escape_results);
 
@@ -338,7 +338,7 @@ void RemoveBuilderPatternPass::run_pass(DexStoresVector& stores,
 
   for (const auto& root : m_roots) {
     RemoveClasses rm_builder_pattern(root, scope, conf.get_inliner_config(),
-                                     m_blacklist, m_propagate_escape_results,
+                                     m_blocklist, m_propagate_escape_results,
                                      stores);
     rm_builder_pattern.optimize();
     rm_builder_pattern.print_stats(mgr);

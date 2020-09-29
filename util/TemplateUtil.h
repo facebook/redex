@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include <type_traits>
+
 namespace template_util {
 
 // Extract the first type in a parameter pack.

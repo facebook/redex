@@ -43,7 +43,7 @@ class SwitchEquivFinder final {
 
   // Return all the blocks traversed by the finder, including leaves and
   // non-leaves.
-  const std::vector<cfg::Block*> visited_blocks() const;
+  std::vector<cfg::Block*> visited_blocks() const;
 
  private:
   std::vector<cfg::Edge*> find_leaves();

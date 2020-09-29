@@ -39,6 +39,7 @@
 #include "DexUtil.h"
 #include "IODIMetadata.h"
 #include "IRCode.h"
+#include "Macros.h"
 #include "Pass.h"
 #include "Resolver.h"
 #include "Sha1.h"
@@ -165,7 +166,7 @@ void GatheredTypes::sort_dexmethod_emitlist_profiled_order(
                    lmeth.end(),
                    method_profiles::dexmethods_profiled_comparator(
                        m_method_profiles,
-                       m_method_sorting_whitelisted_substrings,
+                       m_method_sorting_allowlisted_substrings,
                        &cache,
                        m_legacy_order));
 }
@@ -448,7 +449,13 @@ DexOutput::DexOutput(
     : m_config_files(config_files), m_min_sdk(min_sdk) {
   m_classes = classes;
   m_iodi_metadata = iodi_metadata;
-  m_output = (uint8_t*)malloc(k_max_dex_size);
+  // Required because the BytecodeDebugger setting creates huge amounts
+  // of debug information (multiple dex debug entries per instruction)
+  if (debug_info_kind == DebugInfoKind::BytecodeDebugger) {
+    m_output = (uint8_t*)malloc(k_max_dex_size * 2);
+  } else {
+    m_output = (uint8_t*)malloc(k_max_dex_size);
+  }
   memset(m_output, 0, k_max_dex_size);
   m_offset = 0;
   m_force_class_data_end_of_file = post_lowering != nullptr;
@@ -457,13 +464,15 @@ DexOutput::DexOutput(
 
   always_assert_log(
       dodx->method_to_idx().size() <= kMaxMethodRefs,
-      "Trying to encode too many method refs in dex %lu: %lu (limit: %lu)",
+      "Trying to encode too many method refs in dex %lu: %lu (limit: %lu). Run "
+      "with `-J ir_type_checker.check_num_of_refs=true`.",
       m_dex_number,
       dodx->method_to_idx().size(),
       kMaxMethodRefs);
   always_assert_log(
       dodx->field_to_idx().size() <= kMaxFieldRefs,
-      "Trying to encode too many field refs in dex %lu: %lu (limit: %lu)",
+      "Trying to encode too many field refs in dex %lu: %lu (limit: %lu). Run "
+      "with `-J ir_type_checker.check_num_of_refs=true`.",
       m_dex_number,
       dodx->field_to_idx().size(),
       kMaxFieldRefs);
@@ -718,8 +727,8 @@ void DexOutput::generate_string_data(SortMode mode) {
 }
 
 void DexOutput::emit_magic_locators() {
-  uint global_class_indices_first = Locator::invalid_global_class_index;
-  uint global_class_indices_last = Locator::invalid_global_class_index;
+  uint32_t global_class_indices_first = Locator::invalid_global_class_index;
+  uint32_t global_class_indices_last = Locator::invalid_global_class_index;
 
   // We decode all class names --- to find the first and last renamed one,
   // and also check that all renamed names are indeed in the right place.
@@ -802,7 +811,7 @@ void DexOutput::generate_typelist_data() {
   uint32_t tl_start = align(m_offset);
   size_t num_tls = 0;
   for (DexTypeList* tl : typel) {
-    if (tl->get_type_list().size() == 0) {
+    if (tl->get_type_list().empty()) {
       m_tl_emit_offsets[tl] = 0;
       continue;
     }
@@ -1092,7 +1101,7 @@ void DexOutput::generate_static_values() {
       }
     }
   }
-  if (m_static_values.size() || m_call_site_items.size()) {
+  if (!m_static_values.empty() || !m_call_site_items.empty()) {
     insert_map_item(TYPE_ENCODED_ARRAY_ITEM, (uint32_t)enc_arrays.size(),
                     sv_start, m_offset - sv_start);
   }
@@ -1282,10 +1291,10 @@ void DexOutput::generate_annotations() {
 
 namespace {
 struct DebugMetadata {
-  DexDebugItem* dbg;
-  dex_code_item* dci;
-  uint32_t line_start;
-  uint32_t num_params;
+  DexDebugItem* dbg{nullptr};
+  dex_code_item* dci{nullptr};
+  uint32_t line_start{0};
+  uint32_t num_params{0};
   std::vector<std::unique_ptr<DexDebugInstruction>> dbgops;
 };
 
@@ -1339,23 +1348,6 @@ int emit_debug_info(
   return emit_positions
              ? emit_debug_info_for_metadata(dodx, metadata, output, offset)
              : 0;
-}
-
-// Returns a DexDebugInstruction corresponding to emitting a line entry
-// with the given address offset and line offset. Asserts if invalid arguments.
-inline std::unique_ptr<DexDebugInstruction> create_line_entry(int8_t line,
-                                                              uint8_t addr) {
-  // These are limits imposed by
-  // https://source.android.com/devices/tech/dalvik/dex-format#opcodes
-  always_assert(line >= -4 && line <= 10);
-  always_assert(addr <= 17);
-  // Below is correct because adjusted_opcode = (addr * 15) + (line + 4), so
-  // line_offset = -4 + (adjusted_opcode % 15) = -4 + line + 4 = line
-  // addr_offset = adjusted_opcode / 15 = addr * 15 / 15 = addr since line + 4
-  // is bounded by 0 and 14 we know (line + 4) / 15 = 0
-  uint8_t opcode = 0xa + (addr * 15) + (line + 4);
-  return std::make_unique<DexDebugInstruction>(
-      static_cast<DexDebugItemOpcode>(opcode));
 }
 
 uint32_t emit_instruction_offset_debug_info(
@@ -1442,7 +1434,7 @@ uint32_t emit_instruction_offset_debug_info(
     //   2.1.2) Filter out methods who increase uncompressed APK size
 
     auto& sizes = pts.second;
-    always_assert(sizes.size() > 0);
+    always_assert(!sizes.empty());
 
     // 2.1.1) In Android 8+ there's a background optimizer service that
     // automatically runs dex2oat with a profile collected by the runtime JIT.
@@ -1750,11 +1742,11 @@ uint32_t emit_instruction_offset_debug_info(
       std::vector<std::unique_ptr<DexDebugInstruction>> dbgops;
       if (bucket_size > 0) {
         // First emit an entry for pc = 0 -> line = 0
-        dbgops.push_back(create_line_entry(0, 0));
+        dbgops.push_back(DexDebugInstruction::create_line_entry(0, 0));
         // Now emit an entry for each pc thereafter
         // (0x1e increments addr+line by 1)
         for (size_t i = 1; i < bucket_size; i++) {
-          dbgops.push_back(create_line_entry(1, 1));
+          dbgops.push_back(DexDebugInstruction::create_line_entry(1, 1));
         }
       }
       offset +=
@@ -1774,6 +1766,12 @@ uint32_t emit_instruction_offset_debug_info(
       continue;
     }
     dex_code_item* dci = it.code_item;
+    auto code_size = dc->size();
+    if (code_size == 0) {
+      // If there are no instructions then we don't need any debug info!
+      dci->debug_info_off = 0;
+      continue;
+    }
     // If a method is too big then it's been marked as so internally, so this
     // will return false.
     DexMethod* method = it.method;
@@ -1784,7 +1782,6 @@ uint32_t emit_instruction_offset_debug_info(
       auto size_offset_it = param_size_to_oset.find(param_size);
       always_assert_log(size_offset_it != size_offset_end,
                         "Expected to find param to offset: %s", SHOW(method));
-      auto code_size = dc->size();
       auto& size_to_offset = size_offset_it->second;
       // Returns first key >= code_size or end if such an entry doesn't exist.
       // Aka first debug program long enough to represent a method of size
@@ -2157,8 +2154,7 @@ const char* deobf_primitive(char type) {
   case 'V':
     return "void";
   default:
-    always_assert_log(false, "Illegal type: %c", type);
-    not_reached();
+    not_reached_log("Illegal type: %c", type);
   }
 }
 
@@ -2354,9 +2350,9 @@ void DexOutput::write_symbol_files() {
                                 m_method_bytecode_offsets);
 }
 
-void GatheredTypes::set_method_sorting_whitelisted_substrings(
-    const std::unordered_set<std::string>* whitelisted_substrings) {
-  m_method_sorting_whitelisted_substrings = whitelisted_substrings;
+void GatheredTypes::set_method_sorting_allowlisted_substrings(
+    const std::unordered_set<std::string>* allowlisted_substrings) {
+  m_method_sorting_allowlisted_substrings = allowlisted_substrings;
 }
 
 void GatheredTypes::set_method_profiles(
@@ -2378,8 +2374,8 @@ void DexOutput::prepare(SortMode string_mode,
     m_gtypes->set_method_profiles(&conf.get_method_profiles());
     m_gtypes->set_legacy_order(conf.get_json_config().get(
         "legacy_profiled_code_item_sort_order", true));
-    m_gtypes->set_method_sorting_whitelisted_substrings(
-        &conf.get_method_sorting_whitelisted_substrings());
+    m_gtypes->set_method_sorting_allowlisted_substrings(
+        &conf.get_method_sorting_allowlisted_substrings());
   }
 
   fix_jumbos(m_classes, dodx);
@@ -2410,7 +2406,7 @@ void DexOutput::prepare(SortMode string_mode,
 
 void DexOutput::write() {
   struct stat st;
-  int fd = open(m_filename, O_CREAT | O_TRUNC | O_WRONLY, 0660);
+  int fd = open(m_filename, O_CREAT | O_TRUNC | O_WRONLY | O_BINARY, 0660);
   if (fd == -1) {
     perror("Error writing dex");
     return;

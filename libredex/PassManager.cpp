@@ -8,7 +8,9 @@
 #include "PassManager.h"
 
 #include <boost/filesystem.hpp>
+#include <cinttypes>
 #include <cstdio>
+#include <typeinfo>
 #include <unordered_set>
 
 #include "ApiLevelChecker.h"
@@ -46,40 +48,218 @@ std::string get_apk_dir(const Json::Value& config) {
   return apkdir;
 }
 
-// TODO(fengliu): Kill the `validate_access` flag.
-void run_verifier(const Scope& scope,
-                  bool verify_moves,
-                  bool check_no_overwrite_this,
-                  bool validate_access) {
-  TRACE(PM, 1, "Running IRTypeChecker...");
-  Timer t("IRTypeChecker");
-  walk::parallel::methods(scope, [=](DexMethod* dex_method) {
-    IRTypeChecker checker(dex_method, validate_access);
-    if (verify_moves) {
-      checker.verify_moves();
-    }
-    if (check_no_overwrite_this) {
-      checker.check_no_overwrite_this();
-    }
-    checker.run();
-    if (checker.fail()) {
-      std::string msg = checker.what();
-      fprintf(stderr, "ABORT! Inconsistency found in Dex code for %s.\n %s\n",
-              SHOW(dex_method), msg.c_str());
-      fprintf(stderr, "Code:\n%s\n", SHOW(dex_method->get_code()));
-      exit(EXIT_FAILURE);
-    }
-  });
-}
+struct CheckerConfig {
+  explicit CheckerConfig(const ConfigFiles& conf) {
+    const Json::Value& type_checker_args =
+        conf.get_json_config()["ir_type_checker"];
+    run_type_checker_on_input =
+        type_checker_args.get("run_on_input", true).asBool();
+    run_type_checker_on_input_ignore_access =
+        type_checker_args.get("run_on_input_ignore_access", false).asBool();
+    run_type_checker_after_each_pass =
+        type_checker_args.get("run_after_each_pass", true).asBool();
+    verify_moves = type_checker_args.get("verify_moves", true).asBool();
+    check_no_overwrite_this =
+        type_checker_args.get("check_no_overwrite_this", false).asBool();
+    check_num_of_refs =
+        type_checker_args.get("check_num_of_refs", false).asBool();
 
-static void check_unique_deobfuscated_names(const char* pass_name, const Scope& scope) {
+    for (auto& trigger_pass : type_checker_args["run_after_passes"]) {
+      type_checker_trigger_passes.insert(trigger_pass.asString());
+    }
+  }
+
+  void on_input(const Scope& scope) {
+    if (!run_type_checker_on_input) {
+      std::cerr << "Note: input type checking is turned off!" << std::endl;
+      return;
+    }
+    auto res = run_verifier(scope, verify_moves,
+                            /* check_no_overwrite_this= */ false,
+                            /* validate_access= */ true,
+                            /* exit_on_fail= */ false);
+    if (!res) {
+      return; // No issues.
+    }
+    if (!run_type_checker_on_input_ignore_access) {
+      std::string msg = *res;
+      msg +=
+          "\n If you are confident that this does not matter (e.g., because "
+          "you are using MakePublicPass), turn off accessibility checking on "
+          "input with `-J ir_type_checker.run_on_input_ignore_access=true`.\n "
+          "You may turn off all input checking with `-J "
+          "ir_type_checker.run_on_input=false`.";
+      fail_error(msg);
+    }
+
+    res = run_verifier(scope, verify_moves,
+                       /* check_no_overwrite_this= */ false,
+                       /* validate_access= */ false,
+                       /* exit_on_fail= */ false);
+    if (!res) {
+      std::cerr << "Warning: input has accessibility issues. Continuing."
+                << std::endl;
+      return; // "No" issues.
+    }
+    std::string msg = *res;
+    msg +=
+        "\n If you are confident that this does not matter, turn off input "
+        "checking with `-J ir_type_checker.run_on_input=false`.";
+    fail_error(msg);
+  }
+
+  bool run_after_pass(const Pass* pass) {
+    return run_type_checker_after_each_pass ||
+           type_checker_trigger_passes.count(pass->name()) > 0;
+  }
+
+  /**
+   * Return activated_passes.size() if the checking is turned off.
+   * Otherwize, return 0 or the index of the last InterDexPass.
+   */
+  size_t min_pass_idx_for_dex_ref_check(
+      const std::vector<Pass*>& activated_passes) {
+    if (!check_num_of_refs) {
+      return activated_passes.size();
+    }
+    size_t idx = 0;
+    for (size_t i = 0; i < activated_passes.size(); i++) {
+      if (activated_passes[i]->name() == "InterDexPass") {
+        idx = i;
+      }
+    }
+    return idx;
+  }
+
+  static void ref_validation(const DexStoresVector& stores,
+                             const std::string& pass_name) {
+    Timer t("ref_validation");
+    auto check_ref_num = [pass_name](const DexClasses& classes) {
+      constexpr size_t limit = 65536;
+      std::unordered_set<DexMethodRef*> total_method_refs;
+      std::unordered_set<DexFieldRef*> total_field_refs;
+      std::unordered_set<DexType*> total_type_refs;
+      for (const auto cls : classes) {
+        std::vector<DexMethodRef*> method_refs;
+        std::vector<DexFieldRef*> field_refs;
+        std::vector<DexType*> type_refs;
+        cls->gather_methods(method_refs);
+        cls->gather_fields(field_refs);
+        cls->gather_types(type_refs);
+        total_type_refs.insert(type_refs.begin(), type_refs.end());
+        total_field_refs.insert(field_refs.begin(), field_refs.end());
+        total_method_refs.insert(method_refs.begin(), method_refs.end());
+      }
+      always_assert_log(total_method_refs.size() <= limit,
+                        "%s adds too many method refs", pass_name.c_str());
+      always_assert_log(total_field_refs.size() <= limit,
+                        "%s adds too many field refs", pass_name.c_str());
+      always_assert_log(total_type_refs.size() <= limit,
+                        "%s adds too many type refs", pass_name.c_str());
+    };
+    for (const auto& store : stores) {
+      for (const auto& classes : store.get_dexen()) {
+        check_ref_num(classes);
+      }
+    }
+  }
+
+  // TODO(fengliu): Kill the `validate_access` flag.
+  static boost::optional<std::string> run_verifier(const Scope& scope,
+                                                   bool verify_moves,
+                                                   bool check_no_overwrite_this,
+                                                   bool validate_access,
+                                                   bool exit_on_fail = true) {
+    TRACE(PM, 1, "Running IRTypeChecker...");
+    Timer t("IRTypeChecker");
+    std::atomic<size_t> errors{0};
+    boost::optional<std::string> first_error_msg;
+    walk::parallel::methods(scope, [&](DexMethod* dex_method) {
+      IRTypeChecker checker(dex_method, validate_access);
+      if (verify_moves) {
+        checker.verify_moves();
+      }
+      if (check_no_overwrite_this) {
+        checker.check_no_overwrite_this();
+      }
+      checker.run();
+      if (checker.fail()) {
+        bool first = errors.fetch_add(1) == 0;
+        if (first) {
+          std::ostringstream oss;
+          oss << "Inconsistency found in Dex code for " << show(dex_method)
+              << std::endl
+              << " " << checker.what() << std::endl
+              << "Code:" << std::endl
+              << show(dex_method->get_code());
+          first_error_msg = oss.str();
+        }
+      }
+    });
+
+    if (errors.load() > 0 && exit_on_fail) {
+      redex_assert(first_error_msg);
+      fail_error(*first_error_msg, errors.load());
+    }
+
+    return first_error_msg;
+  }
+
+  static void fail_error(const std::string& error_msg, size_t errors = 1) {
+    std::cerr << error_msg << std::endl;
+    if (errors > 1) {
+      std::cerr << "(" << (errors - 1) << " more issues!)" << std::endl;
+    }
+    _exit(EXIT_FAILURE);
+  }
+
+  std::unordered_set<std::string> type_checker_trigger_passes;
+  bool run_type_checker_on_input;
+  bool run_type_checker_after_each_pass;
+  bool run_type_checker_on_input_ignore_access;
+  bool verify_moves;
+  bool check_no_overwrite_this;
+  bool check_num_of_refs;
+};
+
+struct ScopedVmHWM {
+  explicit ScopedVmHWM(bool enabled, bool reset) : enabled(enabled) {
+    if (enabled) {
+      if (reset) {
+        try_reset_hwm_mem_stat();
+      }
+      before = get_mem_stats().vm_hwm;
+    }
+  }
+
+  void trace_log(PassManager* mgr, const Pass* pass) {
+    if (enabled) {
+      uint64_t after = get_mem_stats().vm_hwm;
+      if (mgr != nullptr) {
+        mgr->set_metric("vm_hwm_after", after);
+        mgr->set_metric("vm_hwm_delta", after - before);
+      }
+      TRACE(STATS, 1, "VmHWM for %s was %s (%s over start).",
+            pass->name().c_str(), pretty_bytes(after).c_str(),
+            pretty_bytes(after - before).c_str());
+    }
+  }
+
+  uint64_t before;
+  bool enabled;
+};
+
+static void check_unique_deobfuscated_names(const char* pass_name,
+                                            const Scope& scope) {
   TRACE(PM, 1, "Running check_unique_deobfuscated_names...");
   Timer t("check_unique_deobfuscated_names");
   std::unordered_map<std::string, DexMethod*> method_names;
   walk::methods(scope, [&method_names, pass_name](DexMethod* dex_method) {
     auto it = method_names.find(dex_method->get_deobfuscated_name());
     if (it != method_names.end()) {
-      fprintf(stderr, "ABORT! [%s] Duplicate deobfuscated method name: %s\nfor %s\n vs %s\n",
+      fprintf(stderr,
+              "ABORT! [%s] Duplicate deobfuscated method name: %s\nfor %s\n vs "
+              "%s\n",
               pass_name, it->first.c_str(), SHOW(dex_method), SHOW(it->second));
       exit(EXIT_FAILURE);
     }
@@ -89,8 +269,10 @@ static void check_unique_deobfuscated_names(const char* pass_name, const Scope& 
   walk::fields(scope, [&field_names, pass_name](DexField* dex_field) {
     auto it = field_names.find(dex_field->get_deobfuscated_name());
     if (it != field_names.end()) {
-      fprintf(stderr, "ABORT! [%s] Duplicate deobfuscated field name: %s\nfor %s\n vs %s\n",
-              pass_name, it->first.c_str(), SHOW(dex_field), SHOW(it->second));
+      fprintf(
+          stderr,
+          "ABORT! [%s] Duplicate deobfuscated field name: %s\nfor %s\n vs %s\n",
+          pass_name, it->first.c_str(), SHOW(dex_field), SHOW(it->second));
       exit(EXIT_FAILURE);
     }
     field_names.emplace(dex_field->get_deobfuscated_name(), dex_field);
@@ -125,11 +307,16 @@ PassManager::PassManager(
     // nonexistent passes are caught as early as possible
     auto pass = find_pass(getenv("PROFILE_PASS"));
     always_assert(pass != nullptr);
+    boost::optional<std::string> shutdown_cmd = boost::none;
+    if (getenv("PROFILE_SHUTDOWN_COMMAND")) {
+      shutdown_cmd = std::string(getenv("PROFILE_SHUTDOWN_COMMAND"));
+    }
     boost::optional<std::string> post_cmd = boost::none;
     if (getenv("PROFILE_POST_COMMAND")) {
       post_cmd = std::string(getenv("PROFILE_POST_COMMAND"));
     }
-    m_profiler_info = ProfilerInfo(getenv("PROFILE_COMMAND"), post_cmd, pass);
+    m_profiler_info =
+        ProfilerInfo(getenv("PROFILE_COMMAND"), shutdown_cmd, post_cmd, pass);
     fprintf(stderr, "Will run profiler for %s\n", pass->name().c_str());
   }
   if (getenv("MALLOC_PROFILE_PASS")) {
@@ -219,6 +406,8 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   DexStoreClassesIterator it(stores);
   Scope scope = build_class_scope(it);
 
+  // Clear stale data. Make sure we start fresh.
+  m_preserved_analysis_passes.clear();
 
   {
     Timer t("API Level Checker");
@@ -284,25 +473,16 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   const Json::Value& check_unique_deobfuscated_names_args =
       conf.get_json_config()["check_unique_deobfuscated_names"];
   bool run_check_unique_deobfuscated_names_after_each_pass =
-      check_unique_deobfuscated_names_args.get("run_after_each_pass", false).asBool();
+      check_unique_deobfuscated_names_args.get("run_after_each_pass", false)
+          .asBool();
   bool run_check_unique_deobfuscated_names_initially =
       check_unique_deobfuscated_names_args.get("run_initially", false).asBool();
   bool run_check_unique_deobfuscated_names_finally =
       check_unique_deobfuscated_names_args.get("run_finally", false).asBool();
 
   // Retrieve the type checker's settings.
-  const Json::Value& type_checker_args =
-      conf.get_json_config()["ir_type_checker"];
-  bool run_type_checker_after_each_pass =
-      type_checker_args.get("run_after_each_pass", false).asBool();
-  bool verify_moves = type_checker_args.get("verify_moves", true).asBool();
-  bool check_no_overwrite_this =
-      type_checker_args.get("check_no_overwrite_this", false).asBool();
-  std::unordered_set<std::string> type_checker_trigger_passes;
-
-  for (auto& trigger_pass : type_checker_args["run_after_passes"]) {
-    type_checker_trigger_passes.insert(trigger_pass.asString());
-  }
+  CheckerConfig checker_conf{conf};
+  checker_conf.on_input(scope);
 
   // Pull on method-profiles, so that they get initialized, and are matched
   // against the *initial* methods
@@ -328,9 +508,28 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
 
   sanitizers::lsan_do_recoverable_leak_check();
 
+  const bool hwm_pass_stats =
+      traceEnabled(STATS, 1) || conf.get_json_config().get("mem_stats", true);
+  const bool hwm_per_pass =
+      conf.get_json_config().get("mem_stats_per_pass", true);
+
+  size_t min_pass_idx_for_dex_ref_check =
+      checker_conf.min_pass_idx_for_dex_ref_check(m_activated_passes);
+
   for (size_t i = 0; i < m_activated_passes.size(); ++i) {
     Pass* pass = m_activated_passes[i];
+    AnalysisUsage analysis_usage;
+    pass->set_analysis_usage(analysis_usage);
+
+    for (const auto& analysis_id : analysis_usage.get_required_passes()) {
+      always_assert_log(
+          m_preserved_analysis_passes.count(analysis_id),
+          "%s requires analysis results from %s, but it's not available.",
+          pass->name().c_str(), analysis_id.c_str());
+    }
+
     TRACE(PM, 1, "Running %s...", pass->name().c_str());
+    ScopedVmHWM vm_hwm{hwm_pass_stats, hwm_per_pass};
     Timer t(pass->name() + " (run)");
     m_current_pass_info = &m_pass_info[i];
 
@@ -339,10 +538,14 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       ScopedCommandProfiling cmd_prof(
           run_profiler ? boost::make_optional(m_profiler_info->command)
                        : boost::none,
+          run_profiler ? m_profiler_info->shutdown_cmd : boost::none,
           run_profiler ? m_profiler_info->post_cmd : boost::none);
       jemalloc_util::ScopedProfiling malloc_prof(m_malloc_profile_pass == pass);
       pass->run_pass(stores, conf, *this);
     }
+
+    vm_hwm.trace_log(this, pass);
+
     sanitizers::lsan_do_recoverable_leak_check();
     walk::parallel::code(build_class_scope(stores), [](DexMethod* m,
                                                        IRCode& code) {
@@ -352,13 +555,15 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       always_assert_log(!code.editable_cfg_built(), "%s has a cfg!", SHOW(m));
     });
 
-    class_cfgs.add_pass(pass->name(), VISUALIZER_PASS_OPTIONS);
+    class_cfgs.add_pass(
+        [&]() { return pass->name() + "(" + std::to_string(i) + ")"; },
+        VISUALIZER_PASS_OPTIONS);
 
     bool run_hasher = run_hasher_after_each_pass;
-    bool run_type_checker = run_type_checker_after_each_pass ||
-                            type_checker_trigger_passes.count(pass->name()) > 0;
+    bool run_type_checker = checker_conf.run_after_pass(pass);
 
-    if (run_hasher || run_type_checker || run_check_unique_deobfuscated_names_after_each_pass) {
+    if (run_hasher || run_type_checker ||
+        run_check_unique_deobfuscated_names_after_each_pass) {
       scope = build_class_scope(it);
       if (run_hasher) {
         m_current_pass_info->hash = boost::optional<hashing::DexHash>(
@@ -367,13 +572,29 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       if (run_type_checker) {
         // It's OK to overwrite the `this` register if we are not yet at the
         // output phase -- the register allocator can fix it up later.
-        run_verifier(scope, verify_moves,
-                     /* check_no_overwrite_this */ false,
-                     /* validate_access */ false);
+        CheckerConfig::run_verifier(scope, checker_conf.verify_moves,
+                                    /* check_no_overwrite_this */ false,
+                                    /* validate_access */ false);
+      }
+      if (i >= min_pass_idx_for_dex_ref_check) {
+        CheckerConfig::ref_validation(stores, pass->name());
       }
       if (run_check_unique_deobfuscated_names_after_each_pass) {
         check_unique_deobfuscated_names(pass->name().c_str(), scope);
       }
+    }
+
+    if (!analysis_usage.get_preserve_status()) {
+      // Invalidate existing preserved analyses.
+      for (auto entry : m_preserved_analysis_passes) {
+        entry.second->destroy_analysis_result();
+      }
+      m_preserved_analysis_passes.clear();
+    }
+
+    if (pass->is_analysis_pass()) {
+      // If the pass is an analysis pass, preserve it.
+      m_preserved_analysis_passes.emplace(typeid(*pass).name(), pass);
     }
 
     // New methods might have been introduced by this pass; process previously
@@ -381,15 +602,18 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
     // using method profiles benefit)
     conf.process_unresolved_method_profile_lines();
     set_metric("~result~MethodProfiles~", conf.get_method_profiles().size());
-    set_metric("~result~MethodProfiles~unresolved~", conf.get_method_profiles().unresolved_size());
+    set_metric("~result~MethodProfiles~unresolved~",
+               conf.get_method_profiles().unresolved_size());
 
     m_current_pass_info = nullptr;
   }
 
   // Always run the type checker before generating the optimized dex code.
   scope = build_class_scope(it);
-  run_verifier(scope, verify_moves, get_redex_options().no_overwrite_this(),
-               /* validate_access */ true);
+  CheckerConfig::run_verifier(scope, checker_conf.verify_moves,
+                              get_redex_options().no_overwrite_this(),
+                              /* validate_access */ true);
+
   if (run_check_unique_deobfuscated_names_finally) {
     check_unique_deobfuscated_names("<final>", scope);
   }
@@ -424,7 +648,7 @@ void PassManager::activate_pass(const std::string& name,
       return;
     }
   }
-  always_assert_log(false, "No pass named %s!", name.c_str());
+  not_reached_log("No pass named %s!", name.c_str());
 }
 
 Pass* PassManager::find_pass(const std::string& pass_name) const {
@@ -435,17 +659,17 @@ Pass* PassManager::find_pass(const std::string& pass_name) const {
   return pass_it != m_activated_passes.end() ? *pass_it : nullptr;
 }
 
-void PassManager::incr_metric(const std::string& key, int value) {
+void PassManager::incr_metric(const std::string& key, int64_t value) {
   always_assert_log(m_current_pass_info != nullptr, "No current pass!");
   (m_current_pass_info->metrics)[key] += value;
 }
 
-void PassManager::set_metric(const std::string& key, int value) {
+void PassManager::set_metric(const std::string& key, int64_t value) {
   always_assert_log(m_current_pass_info != nullptr, "No current pass!");
   (m_current_pass_info->metrics)[key] = value;
 }
 
-int PassManager::get_metric(const std::string& key) {
+int64_t PassManager::get_metric(const std::string& key) {
   return (m_current_pass_info->metrics)[key];
 }
 
@@ -453,13 +677,13 @@ const std::vector<PassManager::PassInfo>& PassManager::get_pass_info() const {
   return m_pass_info;
 }
 
-const std::unordered_map<std::string, int>&
+const std::unordered_map<std::string, int64_t>&
 PassManager::get_interdex_metrics() {
   for (const auto& pass_info : m_pass_info) {
     if (pass_info.pass->name() == "InterDexPass") {
       return pass_info.metrics;
     }
   }
-  static std::unordered_map<std::string, int> empty;
+  static std::unordered_map<std::string, int64_t> empty;
   return empty;
 }

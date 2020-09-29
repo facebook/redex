@@ -33,15 +33,13 @@ struct DontRenameReason {
 
 namespace rewriter {
 class TypeStringMap;
-}
+} // namespace rewriter
 
 class RenameClassesPassV2 : public Pass {
  public:
   RenameClassesPassV2() : Pass("RenameClassesPassV2") {}
 
   void bind_config() override {
-    std::string unused;
-    bind("class_rename", "", unused);
     bind("rename_annotations", false, m_rename_annotations);
     bind("force_rename_hierarchies", {}, m_force_rename_hierarchies);
     bind("allow_layout_rename_packages", {}, m_allow_layout_rename_packages);
@@ -52,6 +50,7 @@ class RenameClassesPassV2 : public Pass {
     bind("dont_rename_types_with_reflection", {},
          m_dont_rename_types_with_reflection);
     bind("package_prefix", "", m_package_prefix);
+    trait(Traits::Pass::unique, true);
   }
 
   void eval_pass(DexStoresVector& stores,

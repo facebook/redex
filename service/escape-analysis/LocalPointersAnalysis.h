@@ -8,6 +8,7 @@
 #pragma once
 
 #include <ostream>
+#include <utility>
 
 #include "BaseIRAnalyzer.h"
 #include "CallGraph.h"
@@ -66,14 +67,19 @@ class EnvironmentWithStore {
 
   virtual void set_fresh_pointer(reg_t reg, const IRInstruction* pointer) = 0;
 
+  /*
+   * Indicate that the blamed instruction may cause the pointer which is held
+   * in the given register to escape.
+   */
   virtual void set_may_escape_pointer(reg_t reg,
-                                      const IRInstruction* pointer) = 0;
+                                      const IRInstruction* pointer,
+                                      const IRInstruction* blame) = 0;
 
   /*
-   * Consider all pointers that may be contained in this register to point to
-   * escaping values.
+   * Consider all pointers that may be contained in this register to have been
+   * escaped by the blamed instruction.
    */
-  virtual void set_may_escape(reg_t reg) = 0;
+  virtual void set_may_escape(reg_t reg, const IRInstruction* blame) = 0;
 };
 
 template <class Store>
@@ -89,7 +95,10 @@ class EnvironmentWithStoreImpl final
       sparta::ReducedProductAbstractDomain<EnvironmentWithStoreImpl<Store>,
                                            PointerEnvironment,
                                            StoreDomain>;
-  using typename Base::ReducedProductAbstractDomain;
+
+  EnvironmentWithStoreImpl() = default;
+  EnvironmentWithStoreImpl(PointerEnvironment pe, StoreDomain sd)
+      : Base(std::make_tuple(std::move(pe), std::move(sd))) {}
 
   static void reduce_product(
       const std::tuple<PointerEnvironment, StoreDomain>&) {}
@@ -119,11 +128,13 @@ class EnvironmentWithStoreImpl final
   }
 
   void set_may_escape_pointer(reg_t reg,
-                              const IRInstruction* pointer) override {
+                              const IRInstruction* pointer,
+                              const IRInstruction* blame) override {
     set_pointers(reg, PointerSet(pointer));
     if (!is_always_escaping(pointer)) {
-      Base::template apply<1>(
-          [&](StoreDomain* store) { Store::set_may_escape(pointer, store); });
+      Base::template apply<1>([&](StoreDomain* store) {
+        Store::set_may_escape(pointer, blame, store);
+      });
     }
   }
 
@@ -140,12 +151,13 @@ class EnvironmentWithStoreImpl final
     });
   }
 
-  void set_may_escape(reg_t reg) override {
-    update_store(reg, [](const IRInstruction* pointer, StoreDomain* store) {
-      if (!is_always_escaping(pointer)) {
-        Store::set_may_escape(pointer, store);
-      }
-    });
+  void set_may_escape(reg_t reg, const IRInstruction* blame) override {
+    update_store(reg,
+                 [blame](const IRInstruction* pointer, StoreDomain* store) {
+                   if (!is_always_escaping(pointer)) {
+                     Store::set_may_escape(pointer, blame, store);
+                   }
+                 });
   }
 
  private:
@@ -190,7 +202,7 @@ struct EscapeSummary {
   EscapeSummary(std::initializer_list<uint16_t> l) : escaping_parameters(l) {}
 
   EscapeSummary(ParamSet ps, std::initializer_list<uint16_t> l)
-      : escaping_parameters(l), returned_parameters(ps) {}
+      : escaping_parameters(l), returned_parameters(std::move(ps)) {}
 
   static EscapeSummary from_s_expr(const sparta::s_expr&);
 };
@@ -209,7 +221,9 @@ class MayEscapeStore {
  public:
   using Domain = PointerSet;
 
-  static void set_may_escape(const IRInstruction* ptr, Domain* dom) {
+  static void set_may_escape(const IRInstruction* ptr,
+                             const IRInstruction* /* blame */,
+                             Domain* dom) {
     dom->add(ptr);
   }
 
@@ -241,7 +255,7 @@ class FixpointIterator final : public ir_analyzer::BaseIRAnalyzer<Environment> {
       InvokeToSummaryMap invoke_to_summary_map = InvokeToSummaryMap(),
       bool escape_check_cast = false)
       : ir_analyzer::BaseIRAnalyzer<Environment>(cfg),
-        m_invoke_to_summary_map(invoke_to_summary_map),
+        m_invoke_to_summary_map(std::move(invoke_to_summary_map)),
         m_escape_check_cast(escape_check_cast) {}
 
   void analyze_instruction(const IRInstruction* insn,
@@ -260,8 +274,19 @@ class FixpointIterator final : public ir_analyzer::BaseIRAnalyzer<Environment> {
   const bool m_escape_check_cast;
 };
 
+/*
+ * If `insn` creates a pointer, mark it as escaped, otherwise clear the contents
+ * of `dest`.  `dest` is assumed to be the destination for `insn` -- either the
+ * result register, or the instruction's own register field.
+ */
+void escape_dest(const IRInstruction* insn,
+                 reg_t dest,
+                 EnvironmentWithStore* env);
+
 void escape_heap_referenced_objects(const IRInstruction* insn,
                                     EnvironmentWithStore* env);
+
+void escape_invoke_params(const IRInstruction* insn, EnvironmentWithStore* env);
 
 void default_instruction_handler(const IRInstruction* insn,
                                  EnvironmentWithStore* env);

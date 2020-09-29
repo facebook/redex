@@ -149,8 +149,8 @@ class DedupStringsPass : public Pass {
  public:
   DedupStringsPass() : Pass("DedupStringsPass") {}
 
-  virtual void bind_config() override;
-  virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+  void bind_config() override;
+  void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
   int64_t m_max_factory_methods;

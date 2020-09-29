@@ -72,11 +72,12 @@ void inline_method(DexMethod* caller,
 
 /*
  * Use the editable CFG instead of IRCode to do the inlining. Return true on
- * success.
+ * success. Registers starting with next_caller_reg must be available
  */
 bool inline_with_cfg(DexMethod* caller_method,
                      DexMethod* callee_method,
-                     IRInstruction* callsite);
+                     IRInstruction* callsite,
+                     size_t next_caller_reg);
 
 } // namespace inliner
 
@@ -105,6 +106,18 @@ struct InvokeConstantArgumentsAndDeadBlocks {
 
 using ConstantArgumentsOccurrences = std::pair<ConstantArguments, size_t>;
 
+struct Inlinable {
+  DexMethod* callee;
+  IRList::iterator iterator;
+  IRInstruction* insn;
+  bool optional{true};
+};
+
+struct CalleeCallerRefs {
+  bool same_class;
+  size_t classes;
+};
+
 /**
  * Helper class to inline a set of candidates.
  * Take a set of candidates and a scope and walk all instructions in scope
@@ -130,9 +143,10 @@ class MultiMethodInliner {
       MultiMethodInlinerMode mode = InterDex,
       const CalleeCallerInsns& true_virtual_callers = {},
       const method_profiles::MethodProfiles* method_profiles = nullptr,
-      const std::unordered_map<const DexMethod*, size_t>&
-          same_method_implementations = {},
-      bool analyze_and_prune_inits = false);
+      const std::unordered_map<const DexMethod*, size_t>*
+          same_method_implementations = nullptr,
+      bool analyze_and_prune_inits = false,
+      const std::unordered_set<DexMethodRef*>& configured_pure_methods = {});
 
   ~MultiMethodInliner() { delayed_invoke_direct_to_static(); }
 
@@ -155,7 +169,8 @@ class MultiMethodInliner {
    * Inline callees in the caller if is_inlinable below returns true.
    */
   void inline_callees(DexMethod* caller,
-                      const std::vector<DexMethod*>& callees);
+                      const std::vector<DexMethod*>& callees,
+                      const std::vector<DexMethod*>& optional_callees = {});
 
   /**
    * Inline callees in the given instructions in the caller, if is_inlinable
@@ -169,10 +184,13 @@ class MultiMethodInliner {
    * The predicates below define the constraints for inlining.
    * Providing an instrucion is optional, and only used for logging.
    */
-  bool is_inlinable(DexMethod* caller,
-                    DexMethod* callee,
+  bool is_inlinable(const DexMethod* caller,
+                    const DexMethod* callee,
                     const IRInstruction* insn,
-                    size_t estimated_insn_size);
+                    size_t estimated_insn_size,
+                    std::vector<DexMethod*>* make_static);
+
+  void make_static_inlinable(std::vector<DexMethod*>& make_static);
 
   ConcurrentSet<DexMethod*>& get_delayed_make_static() {
     return m_delayed_make_static;
@@ -199,18 +217,17 @@ class MultiMethodInliner {
       CallerNonrecursiveCalleesByStackDepth*
           caller_nonrecursive_callees_by_stack_depth);
 
-  void inline_inlinables(
-      DexMethod* caller,
-      const std::vector<std::pair<DexMethod*, IRList::iterator>>& inlinables);
+  void inline_inlinables(DexMethod* caller,
+                         const std::vector<Inlinable>& inlinables);
 
   /**
    * Return true if the method is related to enum (java.lang.Enum and derived).
    * Cannot inline enum methods because they can be called by code we do
    * not own.
    */
-  bool is_blacklisted(const DexMethod* callee);
+  bool is_blocklisted(const DexMethod* callee);
 
-  bool caller_is_blacklisted(const DexMethod* caller);
+  bool caller_is_blocklisted(const DexMethod* caller);
 
   /**
    * Return true if the callee contains external catch exception types
@@ -309,6 +326,13 @@ class MultiMethodInliner {
   bool should_inline(const DexMethod* callee);
 
   /**
+   * Whether it's beneficial to inline the callee at a particular callsite.
+   */
+  bool should_inline_optional(DexMethod* caller,
+                              const IRInstruction* invoke_insn,
+                              DexMethod* callee);
+
+  /**
    * should_inline_fast will return true for a subset of methods compared to
    * should_inline. should_inline_fast can be evaluated much more quickly, as it
    * doesn't need to peek into the callee code.
@@ -319,6 +343,21 @@ class MultiMethodInliner {
    * Gets the number of instructions in a callee.
    */
   size_t get_callee_insn_size(const DexMethod* callee);
+
+  /**
+   * Gets the set of referenced types in a callee.
+   */
+  std::vector<DexType*> get_callee_type_refs(const DexMethod* callee);
+
+  /**
+   * Gets the number of (internal) referenced methods in a callee.
+   */
+  size_t get_callee_method_refs(const DexMethod* callee);
+
+  /**
+   * Computes information about callers of a method.
+   */
+  CalleeCallerRefs get_callee_caller_refs(const DexMethod* callee);
 
   /**
    * We want to avoid inlining a large method with many callers as that would
@@ -446,6 +485,13 @@ class MultiMethodInliner {
   mutable ConcurrentMap<const DexMethod*, boost::optional<size_t>>
       m_inlined_costs;
 
+  // Cache of the inlined costs of each method and each constant-arguments key
+  // after all its eligible callsites have been inlined.
+  mutable ConcurrentMap<
+      const DexMethod*,
+      std::shared_ptr<std::unordered_map<std::string, size_t>>>
+      m_inlined_costs_keyed;
+
   /**
    * For all (reachable) invoked methods, list of constant arguments
    */
@@ -453,9 +499,11 @@ class MultiMethodInliner {
                              std::vector<ConstantArgumentsOccurrences>>
       m_callee_constant_arguments;
 
-  // Cache of whether all callers of a callee are in the same class.
-  mutable ConcurrentMap<const DexMethod*, boost::optional<bool>>
-      m_callers_in_same_class;
+  /**
+   * For all (reachable) invoke instructions, constant arguments
+   */
+  mutable ConcurrentMap<const IRInstruction*, ConstantArguments>
+      m_call_constant_arguments;
 
   // Priority thread pool to handle parallel processing of methods, either
   // shrinking initially / after inlining into them, or even to inline in
@@ -505,6 +553,17 @@ class MultiMethodInliner {
   // Optional cache for get_callee_insn_size function
   std::unique_ptr<ConcurrentMap<const DexMethod*, size_t>> m_callee_insn_sizes;
 
+  // Optional cache for get_callee_type_refs function
+  std::unique_ptr<ConcurrentMap<const DexMethod*, std::vector<DexType*>>>
+      m_callee_type_refs;
+
+  // Optional cache for get_callee_caller_res function
+  std::unique_ptr<ConcurrentMap<const DexMethod*, CalleeCallerRefs>>
+      m_callee_caller_refs;
+
+  // Optional cache for get_callee_method_refs function
+  std::unique_ptr<ConcurrentMap<const DexMethod*, size_t>> m_callee_method_refs;
+
   // Cache of whether a constructor can be unconditionally inlined.
   mutable ConcurrentMap<const DexMethod*, boost::optional<bool>>
       m_can_inline_init;
@@ -532,8 +591,10 @@ class MultiMethodInliner {
 
     // statistics that may be incremented concurrently
     std::atomic<size_t> calls_inlined{0};
+    std::atomic<size_t> calls_not_inlinable{0};
+    std::atomic<size_t> calls_not_inlined{0};
     std::atomic<size_t> not_found{0};
-    std::atomic<size_t> blacklisted{0};
+    std::atomic<size_t> blocklisted{0};
     std::atomic<size_t> throws{0};
     std::atomic<size_t> multi_ret{0};
     std::atomic<size_t> need_vmethod{0};
@@ -564,16 +625,19 @@ class MultiMethodInliner {
 
   // Represents the size of the largest same-method-implementation group that a
   // method belongs in; the default value is 1.
-  const std::unordered_map<const DexMethod*, size_t>&
+  const std::unordered_map<const DexMethod*, size_t>*
       m_same_method_implementations;
 
-  const std::unordered_set<DexMethodRef*> m_pure_methods;
+  std::unordered_set<DexMethodRef*> m_pure_methods;
 
   // Whether to do some deep analysis to determine if constructor candidates
   // can be safely inlined, and don't inline them otherwise.
   bool m_analyze_and_prune_inits;
 
   std::unique_ptr<cse_impl::SharedState> m_cse_shared_state;
+
+  const DexFieldRef* m_sdk_int_field =
+      DexField::get_field("Landroid/os/Build$VERSION;.SDK_INT:I");
 
  public:
   const InliningInfo& get_info() { return info; }

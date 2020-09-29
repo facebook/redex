@@ -70,4 +70,46 @@ bool no_invoke_super(const DexMethod* method) {
   return true;
 }
 
+DexMethod* java_lang_Enum_ctor() {
+  return static_cast<DexMethod*>(
+      DexMethod::make_method("Ljava/lang/Enum;.<init>:(Ljava/lang/String;I)V"));
+}
+
+DexMethod* java_lang_Enum_ordinal() {
+  return static_cast<DexMethod*>(
+      DexMethod::make_method("Ljava/lang/Enum;.ordinal:()I"));
+}
+
+DexMethod* java_lang_Enum_name() {
+  return static_cast<DexMethod*>(
+      DexMethod::make_method("Ljava/lang/Enum;.name:()Ljava/lang/String;"));
+}
+
+DexMethod* java_lang_Enum_equals() {
+  return static_cast<DexMethod*>(
+      DexMethod::make_method("Ljava/lang/Enum;.equals:(Ljava/lang/Object;)Z"));
+}
+
+DexMethod* java_lang_Integer_valueOf() {
+  return static_cast<DexMethod*>(DexMethod::make_method(
+      "Ljava/lang/Integer;.valueOf:(I)Ljava/lang/Integer;"));
+}
+
+DexMethod* java_lang_Integer_intValue() {
+  return static_cast<DexMethod*>(
+      DexMethod::make_method("Ljava/lang/Integer;.intValue:()I"));
+}
+
+DexMethod* kotlin_jvm_internal_Intrinsics_checkParameterIsNotNull() {
+  return static_cast<DexMethod*>(DexMethod::make_method(
+      "Lkotlin/jvm/internal/Intrinsics;.checkParameterIsNotNull:(Ljava/lang/"
+      "Object;Ljava/lang/String;)V"));
+}
+
+DexMethod* kotlin_jvm_internal_Intrinsics_checExpressionValueIsNotNull() {
+  return static_cast<DexMethod*>(DexMethod::make_method(
+      "Lkotlin/jvm/internal/Intrinsics;.checkExpressionValueIsNotNull:(Ljava/"
+      "lang/Object;Ljava/lang/String;)V"));
+}
+
 }; // namespace method

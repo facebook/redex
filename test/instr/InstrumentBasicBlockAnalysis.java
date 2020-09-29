@@ -9,27 +9,25 @@ package com.facebook.redextest;
 
 public class InstrumentBasicBlockAnalysis {
 
-  // InstrumentPass will patch.
-  private static final short[] sBasicBlockStats = new short[0];
+  private static final int[] sBasicBlockStats = new int[0];
 
-  // InstrumentPass will insert one of these onMethodExit calls.
-  public static void onMethodExit(int methodId, int bbVector) {
+  public static void onMethodExitBB(int methodId, int bbVector) {
     sBasicBlockStats[methodId] |= bbVector;
   }
 
-  public static void onMethodExit(int methodId, short bbVector1, short bbVector2) {
+  public static void onMethodExitBB(int methodId, short bbVector1, short bbVector2) {
     sBasicBlockStats[methodId] |= bbVector1;
     sBasicBlockStats[methodId + 1] |= bbVector2;
   }
 
-  public static void onMethodExit(
+  public static void onMethodExitBB(
       int methodId, short bbVector1, short bbVector2, short bbVector3) {
     sBasicBlockStats[methodId] |= bbVector1;
     sBasicBlockStats[methodId + 1] |= bbVector2;
     sBasicBlockStats[methodId + 2] |= bbVector3;
   }
 
-  public static void onMethodExit(
+  public static void onMethodExitBB(
       int methodId, short bbVector1, short bbVector2, short bbVector3, short bbVector4) {
     sBasicBlockStats[methodId] |= bbVector1;
     sBasicBlockStats[methodId + 1] |= bbVector2;
@@ -37,7 +35,7 @@ public class InstrumentBasicBlockAnalysis {
     sBasicBlockStats[methodId + 3] |= bbVector4;
   }
 
-  public static void onMethodExit(
+  public static void onMethodExitBB(
       int methodId,
       short bbVector1,
       short bbVector2,
@@ -51,7 +49,7 @@ public class InstrumentBasicBlockAnalysis {
     sBasicBlockStats[methodId + 4] |= bbVector5;
   }
 
-  public static void onMethodExit(int methodId, short[] bbVector) {
+  public static void onMethodExitBB(int methodId, short[] bbVector) {
     for (int i = 0; i < bbVector.length; i++) {
       sBasicBlockStats[methodId + 1] |= bbVector[i];
     }

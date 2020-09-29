@@ -10,12 +10,13 @@
 #include "ConstantPropagationWholeProgramState.h"
 #include "IRCode.h"
 #include "Pass.h"
+#include "PatriciaTreeSetAbstractDomain.h"
 
 class FinalInlinePassV2 : public Pass {
  public:
   struct Config {
-    std::unordered_set<const DexType*> black_list_types;
-    std::unordered_set<std::string> whitelist_method_names;
+    std::unordered_set<const DexType*> blocklist_types;
+    std::unordered_set<std::string> allowlist_method_names;
     bool inline_instance_field;
     Config() : inline_instance_field(false) {}
   };
@@ -24,20 +25,23 @@ class FinalInlinePassV2 : public Pass {
 
   void bind_config() override {
     bind("inline_instance_field", true, m_config.inline_instance_field);
-    bind("black_list_types",
+    bind("blocklist_types",
          {},
-         m_config.black_list_types,
+         m_config.blocklist_types,
          "List of types that this optimization will omit.");
-    bind("whitelist_methods_name_checking_ifields_read",
+    bind("allowlist_methods_name_checking_ifields_read",
          {},
-         m_config.whitelist_method_names,
+         m_config.allowlist_method_names,
          "List of methods names that can be ignored when checking on instance "
          "field read in methods invoked by <init>");
   }
 
-  static size_t run(const Scope&, const Config& config = Config());
+  static size_t run(const Scope&,
+                    const XStoreRefs*,
+                    const Config& config = Config());
   static size_t run_inline_ifields(
       const Scope&,
+      const XStoreRefs*,
       const constant_propagation::EligibleIfields& eligible_ifields,
       const Config& config = Config());
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
@@ -50,7 +54,7 @@ namespace final_inline {
 
 class class_initialization_cycle : public std::exception {
  public:
-  class_initialization_cycle(const DexClass* cls) {
+  explicit class_initialization_cycle(const DexClass* cls) {
     m_msg = "Found a class initialization cycle involving " + show(cls);
   }
 
@@ -61,6 +65,30 @@ class class_initialization_cycle : public std::exception {
 };
 
 constant_propagation::WholeProgramState analyze_and_simplify_clinits(
-    const Scope& scope);
+    const Scope& scope,
+    const XStoreRefs* xstores,
+    const std::unordered_set<std::string>& allowed_opaque_callee_names = {});
+
+class StaticFieldReadAnalysis {
+ public:
+  using Result = sparta::PatriciaTreeSetAbstractDomain<const DexFieldRef*>;
+
+  StaticFieldReadAnalysis(
+      const call_graph::Graph& call_graph,
+      const std::unordered_set<std::string>& allowed_opaque_callee_names);
+
+  Result analyze(const DexMethod* method);
+
+ private:
+  const call_graph::Graph& m_graph;
+  std::unordered_map<const DexMethod*, Result> m_summaries;
+  std::unordered_set<const DexMethod*> m_finalized;
+  std::unordered_set<const DexMethodRef*> m_allowed_opaque_callees;
+
+  Result analyze(const DexMethod* method,
+                 std::unordered_set<const DexMethod*>& pending_methods);
+};
+
+call_graph::Graph build_class_init_graph(const Scope& scope);
 
 } // namespace final_inline

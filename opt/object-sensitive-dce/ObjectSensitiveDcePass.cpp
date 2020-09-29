@@ -42,7 +42,7 @@ namespace uv = used_vars;
 
 class CallGraphStrategy final : public call_graph::BuildStrategy {
  public:
-  CallGraphStrategy(const Scope& scope)
+  explicit CallGraphStrategy(const Scope& scope)
       : m_scope(scope),
         m_non_overridden_virtuals(hier::find_non_overridden_virtuals(scope)) {}
 
@@ -56,7 +56,7 @@ class CallGraphStrategy final : public call_graph::BuildStrategy {
       auto insn = mie.insn;
       if (is_invoke(insn->opcode())) {
         auto callee = resolve_method(insn->get_method(), opcode_to_search(insn),
-                                     m_resolved_refs);
+                                     m_resolved_refs, method);
         if (callee == nullptr || may_be_overridden(callee)) {
           continue;
         }
@@ -97,9 +97,9 @@ static side_effects::InvokeToSummaryMap build_summary_map(
     DexMethod* method) {
   side_effects::InvokeToSummaryMap invoke_to_summary_map;
   if (call_graph.has_node(method)) {
-    const auto& callee_edges = call_graph.node(method).callees();
+    const auto& callee_edges = call_graph.node(method)->callees();
     for (const auto& edge : callee_edges) {
-      auto* callee = edge->callee();
+      auto* callee = edge->callee()->method();
       if (effect_summaries.count(callee) != 0) {
         invoke_to_summary_map.emplace(edge->invoke_iterator()->insn,
                                       effect_summaries.at(callee));

@@ -66,7 +66,7 @@ class ConstantArrayDomain final
         "Domain::default_value() does not exist");
   }
 
-  ConstantArrayDomain(uint32_t length) {
+  explicit ConstantArrayDomain(uint32_t length) {
     mutate_array_length(
         [length](ArrayLengthDomain* len) { *len = ArrayLengthDomain(length); });
     mutate_array_values([length](ArrayValuesDomain* values) {

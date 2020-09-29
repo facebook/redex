@@ -69,12 +69,23 @@ bool is_aligned(uint32_t in) {
 }
 
 template <typename T>
+inline T clz(T in) {
+  static_assert(sizeof(T) == sizeof(uint64_t) || sizeof(T) == sizeof(uint32_t),
+                "Unsupported size");
+  return (sizeof(T) == sizeof(uint32_t)) ? __builtin_clz(in)
+                                         : __builtin_clzll(in);
+};
+
+// This is a non-standard definition.
+// roundUpToPowerOfTwo(x) = { nextPowerOfTwo(x) iff x < 2
+//                            normalRoundUpToPowerOfTwo(x) iff x >= 2
+// That is, rUp(0) = 1 and rUp(1) = 2, but rUp(2) = 2.
+template <typename T>
 inline T roundUpToPowerOfTwo(T in) {
   static_assert(std::is_unsigned<T>::value, "Only support unsigned types.");
-  return (sizeof(T) == sizeof(uint32_t))
-             ? (1u << (std::numeric_limits<T>::digits - __builtin_clz(in - 1)))
-             : (1Lu
-                << (std::numeric_limits<T>::digits - __builtin_clzll(in - 1)));
+  return (in < 2u) ? in + 1
+                   : static_cast<T>(1u)
+                         << (std::numeric_limits<T>::digits - clz(in - 1u));
 }
 
 template <typename T>

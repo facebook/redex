@@ -22,7 +22,7 @@
 
 #include <stddef.h>
 
-#if defined(HAVE_WINSOCK) || defined(_MSC_VER)
+#if defined(HAVE_WINSOCK) || defined(_MSC_VER) || defined(__MINGW64__) || defined(__MINGW32__)
 # undef  nhtol
 # undef  htonl
 # undef  nhtos

@@ -36,10 +36,10 @@ void InlineForSpeed::compute_hot_methods() {
     constexpr double HOT_PERCENTILE = 0.1;
     // Find the lowest score that is within the given percentile
     constexpr size_t MIN_SIZE = 1;
-    size_t warm_size =
-        std::max(MIN_SIZE, static_cast<size_t>(popular_set_size * WARM_PERCENTILE));
-    size_t hot_size =
-        std::max(MIN_SIZE, static_cast<size_t>(popular_set_size * HOT_PERCENTILE));
+    size_t warm_size = std::max(
+        MIN_SIZE, static_cast<size_t>(popular_set_size * WARM_PERCENTILE));
+    size_t hot_size = std::max(
+        MIN_SIZE, static_cast<size_t>(popular_set_size * HOT_PERCENTILE));
     // the "top" of the queue is actually the minimum warm/hot score
     using pq =
         std::priority_queue<double, std::vector<double>, std::greater<double>>;
@@ -150,7 +150,8 @@ bool InlineForSpeed::should_inline_per_interaction(
   // Smaller methods tend to benefit more from inlining. Allow warm + small
   // methods, or hot + medium size methods.
   constexpr uint32_t SMALL_ENOUGH = 20;
-  bool either_small = caller_insns < SMALL_ENOUGH || callee_insns < SMALL_ENOUGH;
+  bool either_small =
+      caller_insns < SMALL_ENOUGH || callee_insns < SMALL_ENOUGH;
   bool either_hot = caller_hits >= hot_score || callee_hits >= hot_score;
   bool result = either_small || either_hot;
   if (result) {

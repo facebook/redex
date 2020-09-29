@@ -51,7 +51,7 @@ struct DedupBlocksTest : public RedexTest {
   DedupBlocksTest() {
     m_args = DexTypeList::make_type_list({});
     m_proto = DexProto::make_proto(type::_void(), m_args);
-    m_type = DexType::make_type("testClass");
+    m_type = DexType::make_type("LTestClass");
 
     m_creator = new ClassCreator(m_type);
     m_creator->set_super(type::java_lang_Object());
@@ -235,6 +235,7 @@ TEST_F(DedupBlocksTest, postfixDiscardingOneCase) {
       (goto :C)
 
       (:E)
+      (add-int v0 v0 v0)
       (return-void)
 
       (:C)
@@ -285,6 +286,7 @@ TEST_F(DedupBlocksTest, postfixDiscardingOneCase) {
       (add-int v0 v0 v0)
 
       (:E)
+      (add-int v0 v0 v0)
       (return-void)
 
       (:D)
@@ -520,6 +522,7 @@ TEST_F(DedupBlocksTest, diffSuccessorsNoChange1) {
   auto str = R"(
     (
       (const v0 0)
+      (const v2 3)
       (if-eqz v0 :left)
 
       ; right
@@ -528,6 +531,7 @@ TEST_F(DedupBlocksTest, diffSuccessorsNoChange1) {
       (if-eqz v1 :right2)
 
       (:middle)
+      (add-int v0 v0 v2)
       (return-void)
 
       (:right2)
@@ -542,6 +546,7 @@ TEST_F(DedupBlocksTest, diffSuccessorsNoChange1) {
       (:left2)
       (const v2 2)
       (goto :middle)
+
     )
   )";
 
@@ -561,6 +566,7 @@ TEST_F(DedupBlocksTest, diffSuccessorsNoChange2) {
   auto str = R"(
     (
       (const v0 0)
+      (const v2 3)
       (if-eqz v0 :left)
 
       ; right
@@ -572,6 +578,7 @@ TEST_F(DedupBlocksTest, diffSuccessorsNoChange2) {
       (const v3 3)
 
       (:middle)
+      (add-int v0 v0 v2)
       (return-void)
 
       (:left)
@@ -581,6 +588,7 @@ TEST_F(DedupBlocksTest, diffSuccessorsNoChange2) {
       ; left2
       (const v2 2)
       (goto :middle)
+
     )
   )";
 
@@ -653,15 +661,15 @@ TEST_F(DedupBlocksTest, blockWithNewInstanceAndConstroctor) {
       (if-eqz v0 :c)
 
       (:b)
-      (new-instance "testClass")
+      (new-instance "LTestClass")
       (move-result-pseudo-object v0)
-      (invoke-direct (v0 v1) "testClass.<init>:(I)V")
+      (invoke-direct (v0 v1) "LTestClass.<init>:(I)V")
       (throw v0)
 
       (:c)
-      (new-instance "testClass")
+      (new-instance "LTestClass")
       (move-result-pseudo-object v0)
-      (invoke-direct (v0 v1) "testClass.<init>:(I)V")
+      (invoke-direct (v0 v1) "LTestClass.<init>:(I)V")
       (throw v0)
     )
   )");
@@ -680,9 +688,9 @@ TEST_F(DedupBlocksTest, blockWithNewInstanceAndConstroctor) {
 
       (:b)
       (:c)
-      (new-instance "testClass")
+      (new-instance "LTestClass")
       (move-result-pseudo-object v0)
-      (invoke-direct (v0 v1) "testClass.<init>:(I)V")
+      (invoke-direct (v0 v1) "LTestClass.<init>:(I)V")
       (throw v0)
     )
   )");
@@ -705,22 +713,22 @@ TEST_F(DedupBlocksTest, constructsObjectFromAnotherBlock) {
       (if-eqz v0 :d)
 
       (:b)
-      (new-instance "testClass")
+      (new-instance "LTestClass")
       (move-result-pseudo-object v0)
 
       (:c)
       (const v1 1)
-      (invoke-direct (v0 v1) "testClass.<init>:(I)V")
+      (invoke-direct (v0 v1) "LTestClass.<init>:(I)V")
       (throw v0)
 
       (:d)
-      (new-instance "testClass")
+      (new-instance "LTestClass")
       (move-result-pseudo-object v0)
       (const v1 2)
 
       (:e)
       (const v1 1)
-      (invoke-direct (v0 v1) "testClass.<init>:(I)V")
+      (invoke-direct (v0 v1) "LTestClass.<init>:(I)V")
       (throw v0)
     )
   )";
@@ -743,24 +751,24 @@ TEST_F(DedupBlocksTest, constructsObjectFromAnotherBlockViaMove) {
       (if-eqz v0 :d)
 
       (:b)
-      (new-instance "testClass")
+      (new-instance "LTestClass")
       (move-result-pseudo-object v2)
 
       (:c)
       (move-object v0 v2)
       (const v1 1)
-      (invoke-direct (v0 v1) "testClass.<init>:(I)V")
+      (invoke-direct (v0 v1) "LTestClass.<init>:(I)V")
       (throw v0)
 
       (:d)
-      (new-instance "testClass")
+      (new-instance "LTestClass")
       (move-result-pseudo-object v2)
       (const v1 2)
 
       (:e)
       (move-object v0 v2)
       (const v1 1)
-      (invoke-direct (v0 v1) "testClass.<init>:(I)V")
+      (invoke-direct (v0 v1) "LTestClass.<init>:(I)V")
       (throw v0)
     )
   )";
@@ -777,18 +785,18 @@ TEST_F(DedupBlocksTest, dedupCatchBlocks) {
   std::string str_code = R"(
     (
       (.try_start t_0)
-      (new-instance "testClass")
+      (new-instance "LTestClass")
       (move-result-pseudo-object v0)
-      (invoke-direct (v0) "testClass.<init>:()V")
+      (invoke-direct (v0) "LTestClass.<init>:()V")
       (.try_end t_0)
 
       (.try_start t_2)
-      (iget v0 "testClass;.a:I")
+      (iget v0 "LTestClass;.a:I")
       (move-result-pseudo v2)
       (.try_end t_2)
 
       (.try_start t_1)
-      (iget v0 "testClass;.b:I")
+      (iget v0 "LTestClass;.b:I")
       (move-result-pseudo v3)
       (.try_end t_1)
 
@@ -818,18 +826,18 @@ TEST_F(DedupBlocksTest, dedupCatchBlocks) {
   std::string expect_str = R"(
     (
       (.try_start t_0)
-      (new-instance "testClass")
+      (new-instance "LTestClass")
       (move-result-pseudo-object v0)
-      (invoke-direct (v0) "testClass.<init>:()V")
+      (invoke-direct (v0) "LTestClass.<init>:()V")
       (.try_end t_0)
 
       (.try_start t_2)
-      (iget v0 "testClass;.a:I")
+      (iget v0 "LTestClass;.a:I")
       (move-result-pseudo v2)
       (.try_end t_2)
 
       (.try_start t_0)
-      (iget v0 "testClass;.b:I")
+      (iget v0 "LTestClass;.b:I")
       (move-result-pseudo v3)
       (.try_end t_0)
 
@@ -856,9 +864,9 @@ TEST_F(DedupBlocksTest, dontDedupCatchBlockAndNonCatchBlock) {
   std::string str_code = R"(
     (
       (.try_start t_0)
-      (new-instance "testClass")
+      (new-instance "LTestClass")
       (move-result-pseudo-object v0)
-      (invoke-direct (v0) "testClass.<init>:()V")
+      (invoke-direct (v0) "LTestClass.<init>:()V")
       (.try_end t_0)
 
       (if-eqz v0 :block_no_catch)
@@ -923,4 +931,215 @@ TEST_F(DedupBlocksTest, respectTypes) {
   auto expected_str = str;
   auto expected_code = assembler::ircode_from_string(expected_str);
   EXPECT_CODE_EQ(expected_code.get(), method->get_code());
+}
+
+TEST_F(DedupBlocksTest, self_loops_are_alike) {
+  auto input_code = assembler::ircode_from_string(R"(
+    (
+      (:a)
+      (const v0 0)
+      (if-eqz v0 :c)
+
+      (:b)
+      (nop)
+      (goto :b)
+
+      (:c)
+      (nop)
+      (goto :c)
+    )
+  )");
+  auto method = get_fresh_method("self_loops_are_alike");
+  method->set_code(std::move(input_code));
+  auto code = method->get_code();
+
+  run_dedup_blocks();
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (:a)
+      (const v0 0)
+      (if-eqz v0 :c)
+
+      (:b)
+      (:c)
+      (nop)
+      (goto :b)
+    )
+  )");
+
+  EXPECT_CODE_EQ(expected_code.get(), code);
+}
+
+TEST_F(DedupBlocksTest, conditional_self_loops_are_alike) {
+  auto input_code = assembler::ircode_from_string(R"(
+    (
+      (:a)
+      (const v0 0)
+      (const v1 0)
+      (if-eqz v1 :c)
+
+      (:b)
+      (nop)
+      (if-eqz v0 :b)
+      (goto :end)
+
+      (:c)
+      (nop)
+      (if-eqz v0 :c)
+
+      (:end)
+      (return-void)
+    )
+  )");
+  auto method = get_fresh_method("conditional_self_loops_are_alike");
+  method->set_code(std::move(input_code));
+  auto code = method->get_code();
+
+  run_dedup_blocks();
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (:a)
+      (const v0 0)
+      (const v1 0)
+      (if-eqz v1 :c)
+
+      (:b)
+      (:c)
+      (nop)
+      (if-eqz v0 :b)
+      (return-void)
+    )
+  )");
+
+  EXPECT_CODE_EQ(expected_code.get(), code);
+}
+
+TEST_F(DedupBlocksTest, return_if_single) {
+  auto input_code = assembler::ircode_from_string(R"(
+    (
+      (const v0 1)
+      (if-eqz v0 :label)
+      (return-void)
+      (:label)
+      (return-void)
+    )
+  )");
+  auto method = get_fresh_method("conditional_self_loops_are_alike");
+  method->set_code(std::move(input_code));
+  auto code = method->get_code();
+
+  run_dedup_blocks();
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (const v0 1)
+      (if-eqz v0 :label)
+      (:label)
+      (return-void)
+    )
+  )");
+
+  EXPECT_CODE_EQ(expected_code.get(), code);
+}
+
+// Blocks B and C are different only in register allocation.
+TEST_F(DedupBlocksTest, conditional_hashed_alike) {
+  auto input_code = assembler::ircode_from_string(R"(
+    (
+      (:a)
+      (const v0 0)
+      (const v1 0)
+      (const v2 0)
+      (if-eqz v1 :c)
+
+      (:b)
+      (move-exception v3)
+      (monitor-exit  v2)
+      (throw v3)
+      (if-eqz v0 :b)
+      (goto :end)
+
+      (:c)
+      (move-exception v4)
+      (monitor-exit  v2)
+      (throw v4)
+      (if-eqz v0 :c)
+
+      (:end)
+    )
+  )");
+  auto method = get_fresh_method("conditional_hashed_alike");
+  method->set_code(std::move(input_code));
+  auto code = method->get_code();
+
+  run_dedup_blocks();
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (const v1 0)
+      (const v2 0)
+      (if-eqz v1 :c)
+
+      (:c)
+      (move-exception v3)
+      (monitor-exit  v2)
+      (throw v3)
+    )
+  )");
+
+  EXPECT_CODE_EQ(expected_code.get(), code);
+}
+
+// Value for add-int are different so this cannont be deduplicated.
+TEST_F(DedupBlocksTest, conditional_hashed_not_alike) {
+  auto input_code = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (const v1 1)
+      (const v2 2)
+      (if-eqz v0 :b)
+
+      (add-int v0 v1 v0)
+      (goto :end)
+
+      (:b)
+      (add-int v0 v2 v0)
+      (goto :end)
+
+      (add-int v0 v2 v0)
+      (:end)
+      (add-int v0 v2 v0)
+      (return-void)
+    )
+  )");
+
+  auto method = get_fresh_method("conditional_hashed_not_alike");
+  method->set_code(std::move(input_code));
+  auto code = method->get_code();
+
+  run_dedup_blocks();
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (const v1 1)
+      (const v2 2)
+      (if-eqz v0 :b)
+
+      (add-int v0 v1 v0)
+
+      (:end)
+      (add-int v0 v2 v0)
+      (return-void)
+
+      (:b)
+      (add-int v0 v2 v0)
+      (goto :end)
+    )
+  )");
+
+  EXPECT_CODE_EQ(expected_code.get(), code);
 }

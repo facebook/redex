@@ -20,6 +20,8 @@ constexpr bool debug =
 #endif // NDEBUG
     ;
 
+extern bool slow_invariants_debug;
+
 #ifdef _MSC_VER
 #define DEBUG_ONLY
 
@@ -27,6 +29,11 @@ constexpr bool debug =
   do {                   \
     redex_assert(false); \
     __assume(false);     \
+  } while (true)
+#define not_reached_log(msg, ...)          \
+  do {                                     \
+    assert_log(false, msg, ##__VA_ARGS__); \
+    __assume(false);                       \
   } while (true)
 
 #define assert_fail_impl(e, type, msg, ...) \
@@ -38,6 +45,11 @@ constexpr bool debug =
   do {                       \
     redex_assert(false);     \
     __builtin_unreachable(); \
+  } while (true)
+#define not_reached_log(msg, ...)          \
+  do {                                     \
+    assert_log(false, msg, ##__VA_ARGS__); \
+    __builtin_unreachable();               \
   } while (true)
 
 #define assert_fail_impl(e, type, msg, ...) \
@@ -79,9 +91,14 @@ void print_stack_trace(std::ostream& os, const std::exception& e);
 
 void crash_backtrace_handler(int sig);
 
+// If `block` is true, only a single assert will be logged. All following
+// asserts will sleep forever.
+void block_multi_asserts(bool block);
+
 // Stats from /proc. See http://man7.org/linux/man-pages/man5/proc.5.html.
 struct VmStats {
   uint64_t vm_peak = 0; // "Peak virtual memory size."
   uint64_t vm_hwm = 0; // "Peak resident set size ("high water mark")."
 };
 VmStats get_mem_stats();
+bool try_reset_hwm_mem_stat(); // Attempt to reset the vm_hwm value.

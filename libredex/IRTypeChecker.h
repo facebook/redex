@@ -104,8 +104,8 @@ class IRTypeChecker final {
    */
   IRType get_type(IRInstruction* insn, reg_t reg) const;
 
-  const boost::optional<const DexType*> get_dex_type(IRInstruction* insn,
-                                                     reg_t reg) const;
+  boost::optional<const DexType*> get_dex_type(IRInstruction* insn,
+                                               reg_t reg) const;
 
  private:
   void check_completion() const {
@@ -120,6 +120,8 @@ class IRTypeChecker final {
   void assume_reference(TypeEnvironment* state,
                         reg_t reg,
                         bool in_move = false) const;
+  void assume_assignable(boost::optional<const DexType*> from,
+                         DexType* to) const;
   void check_instruction(IRInstruction* insn,
                          TypeEnvironment* current_state) const;
 

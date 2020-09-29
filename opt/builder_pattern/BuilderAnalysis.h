@@ -33,7 +33,7 @@ class BuilderAnalysis final {
 
   void populate_usage();
 
-  bool has_usage() const { return m_usage.size() != 0; }
+  bool has_usage() const { return !m_usage.empty(); }
   const InstantiationToUsage& get_usage() { return m_usage; }
   size_t get_num_usages() const { return m_usage.size(); }
   size_t get_total_num_usages() const { return m_total_usages; }

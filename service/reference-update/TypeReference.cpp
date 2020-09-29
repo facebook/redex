@@ -40,8 +40,7 @@ void fix_colliding_dmethods(
 
     DexMethodSpec spec;
     spec.proto = new_proto;
-    meth->change(spec,
-                 false /* rename on collision */);
+    meth->change(spec, false /* rename on collision */);
     num_additional_args[meth] = arg_count;
 
     auto code = meth->get_code();
@@ -66,9 +65,9 @@ void fix_colliding_dmethods(
       if (!insn->has_method()) {
         continue;
       }
-      const auto callee =
-          resolve_method(insn->get_method(),
-                         opcode_to_search(const_cast<IRInstruction*>(insn)));
+      const auto callee = resolve_method(
+          insn->get_method(),
+          opcode_to_search(const_cast<IRInstruction*>(insn)), meth);
       if (callee == nullptr ||
           colliding_methods.find(callee) == colliding_methods.end()) {
         continue;
@@ -276,8 +275,7 @@ void update_vmethods_group_one_type_ref(const VMethodGroup& group,
           SHOW(method),
           SHOW(spec.name),
           SHOW(spec.proto));
-    method->change(
-        spec, false /* rename on collision */);
+    method->change(spec, false /* rename on collision */);
   }
 }
 } // namespace
@@ -339,8 +337,7 @@ void TypeRefUpdater::update_methods_fields(const Scope& scope) {
             method->get_class(), method->get_name(), new_proto)) {
       DexMethodSpec spec;
       spec.proto = new_proto;
-      method->change(spec,
-                     false /* rename on collision */);
+      method->change(spec, false /* rename on collision */);
       TRACE(REFU, 9, "Update ctor %s ", SHOW(method));
     } else {
       colliding_inits.emplace(method->as_def(), new_proto);
@@ -407,18 +404,30 @@ bool TypeRefUpdater::mangling(DexMethodRef* method) {
   }
   DexProto* new_proto = DexProto::make_proto(
       rtype, DexTypeList::make_type_list(std::move(new_args)));
-  // TODO(fengliu) : This is not the right fix.
-  if (method::is_init(method) && method->is_def()) {
-    // Don't check for init collisions here, since mangling() can execute in a
-    // parallel context.
-    m_inits.emplace(method->as_def(), new_proto);
+  if (method::is_init(method)) {
+    // Handle <init> method definitions separately because their names must be
+    // "<init>"
+    if (method->is_def()) {
+      // Don't check for init collisions here, since mangling() can execute in a
+      // parallel context.
+      m_inits.emplace(method->as_def(), new_proto);
+    } else {
+      // TODO(fengliu): Work on D19340102 to figure out these cases.
+      TRACE(REFU,
+            2,
+            "[Warning] Method ref %s has no definition but has internal type "
+            "reference in its signature",
+            SHOW(method));
+      DexMethodSpec spec;
+      spec.proto = new_proto;
+      method->change(spec, false /* rename on collision */);
+    }
   } else {
     DexMethodSpec spec;
     spec.proto = new_proto;
     boost::hash_combine(seed, method->str());
     spec.name = gen_new_name(method->str(), seed);
-    method->change(spec,
-                   false /* rename on collision */);
+    method->change(spec, false /* rename on collision */);
     TRACE(REFU, 9, "Update method %s ", SHOW(method));
   }
   return true;
@@ -587,8 +596,7 @@ void update_method_signature_type_references(
         TRACE(REFU, 8, "sig: updating direct method %s", SHOW(method));
         DexMethodSpec spec;
         spec.proto = new_proto;
-        method->change(spec,
-                       true /* rename on collision */);
+        method->change(spec, true /* rename on collision */);
       } else {
         colliding_directs[method] = new_proto;
       }
@@ -655,7 +663,7 @@ void update_field_type_references(
         always_assert_log(
             old_to_new.count(type) == 0,
             "Find old type in field reference %s, please make sure that "
-            "ReBindRefsPass is enabled before TypeErasurePass\n",
+            "ReBindRefsPass is enabled before ClassMergingPass\n",
             SHOW(insn));
       }
     }

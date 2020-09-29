@@ -60,11 +60,8 @@ class DexEncodedValue : public Gatherable {
   DexEncodedValueTypes m_evtype;
   uint64_t m_value;
 
-  DexEncodedValue(DexEncodedValueTypes type, uint64_t value = 0)
-      : Gatherable() {
-    m_evtype = type;
-    m_value = value;
-  }
+  explicit DexEncodedValue(DexEncodedValueTypes type, uint64_t value = 0)
+      : m_evtype(type), m_value(value) {}
 
  public:
   DexEncodedValueTypes evtype() const { return m_evtype; }
@@ -110,7 +107,8 @@ class DexEncodedValueString : public DexEncodedValue {
   DexString* m_string;
 
  public:
-  DexEncodedValueString(DexString* string) : DexEncodedValue(DEVT_STRING) {
+  explicit DexEncodedValueString(DexString* string)
+      : DexEncodedValue(DEVT_STRING) {
     m_string = string;
   }
 
@@ -138,7 +136,7 @@ class DexEncodedValueType : public DexEncodedValue {
   DexType* m_type;
 
  public:
-  DexEncodedValueType(DexType* type) : DexEncodedValue(DEVT_TYPE) {
+  explicit DexEncodedValueType(DexType* type) : DexEncodedValue(DEVT_TYPE) {
     m_type = type;
   }
 
@@ -196,7 +194,8 @@ class DexEncodedValueMethod : public DexEncodedValue {
   DexMethodRef* m_method;
 
  public:
-  DexEncodedValueMethod(DexMethodRef* method) : DexEncodedValue(DEVT_METHOD) {
+  explicit DexEncodedValueMethod(DexMethodRef* method)
+      : DexEncodedValue(DEVT_METHOD) {
     m_method = method;
   }
 
@@ -264,10 +263,8 @@ class DexEncodedValueMethodHandle : public DexEncodedValue {
     m_methodhandle = methodhandle;
   }
 
-  void gather_fields(
-      std::vector<DexFieldRef*>& lfield) const override;
-  void gather_methods(
-      std::vector<DexMethodRef*>& lmethod) const override;
+  void gather_fields(std::vector<DexFieldRef*>& lfield) const override;
+  void gather_methods(std::vector<DexMethodRef*>& lmethod) const override;
   void gather_methodhandles(
       std::vector<DexMethodHandle*>& lhandles) const override;
   void encode(DexOutputIdx* dodx, uint8_t*& encdata) override;
@@ -305,8 +302,8 @@ class DexEncodedValueArray : public DexEncodedValue {
    * Static values are encoded without a DEVT_ARRAY header byte
    * so we differentiate that here.
    */
-  DexEncodedValueArray(std::deque<DexEncodedValue*>* evalues,
-                       bool static_val = false)
+  explicit DexEncodedValueArray(std::deque<DexEncodedValue*>* evalues,
+                                bool static_val = false)
       : DexEncodedValue(DEVT_ARRAY), m_evalues(evalues) {
     m_static_val = static_val;
   }
@@ -412,7 +409,7 @@ class DexAnnotation : public Gatherable {
 
  public:
   DexAnnotation(DexType* type, DexAnnotationVisibility viz)
-      : Gatherable(), m_type(type), m_viz(viz) {}
+      : m_type(type), m_viz(viz) {}
 
   static DexAnnotation* get_annotation(DexIdx* idx, uint32_t anno_off);
   void gather_types(std::vector<DexType*>& ltype) const override;
@@ -436,7 +433,7 @@ class DexAnnotationSet : public Gatherable {
   std::vector<DexAnnotation*> m_annotations;
 
  public:
-  DexAnnotationSet() : Gatherable() {}
+  DexAnnotationSet() = default;
   DexAnnotationSet(const DexAnnotationSet& that) {
     for (const auto& anno : that.m_annotations) {
       m_annotations.push_back(new DexAnnotation(*anno));

@@ -120,7 +120,7 @@ DexStoresVector Tool::init(const std::string& system_jar_paths,
   }
 
   // Load jars
-  if (system_jar_paths != "") {
+  if (!system_jar_paths.empty()) {
     auto delim = boost::is_any_of(":,");
     std::vector<std::string> system_jars;
     boost::split(system_jars, system_jar_paths, delim);
@@ -158,7 +158,7 @@ DexStoresVector Tool::init(const std::string& system_jar_paths,
   }
   Scope scope = build_class_scope(stores);
   JsonWrapper config(Json::nullValue);
-  init_reachable_classes(scope, config);
+  init_reachable_classes(scope, ReachableClassesConfig(config));
 
   return stores;
 }

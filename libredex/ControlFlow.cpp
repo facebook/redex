@@ -71,16 +71,6 @@ bool ends_with_may_throw(cfg::Block* p) {
   return false;
 }
 
-bool cannot_throw(cfg::Block* b) {
-  for (const auto& mie : InstructionIterable(b)) {
-    auto op = mie.insn->opcode();
-    if (opcode::can_throw(op)) {
-      return false;
-    }
-  }
-  return true;
-}
-
 /*
  * Return true if the block does not contain anything we need.
  */
@@ -450,11 +440,20 @@ Block* Block::goes_to_only_edge() const {
   return nullptr;
 }
 
+bool Block::cannot_throw() const {
+  for (auto& mie : ir_list::ConstInstructionIterable(this)) {
+    if (opcode::can_throw(mie.insn->opcode())) {
+      return false;
+    }
+  }
+  return true;
+}
+
 std::vector<Edge*> Block::get_outgoing_throws_in_order() const {
   std::vector<Edge*> result =
       m_parent->get_succ_edges_of_type(this, EDGE_THROW);
   std::sort(result.begin(), result.end(), [](const Edge* e1, const Edge* e2) {
-    return e1->m_throw_info->index < e2->m_throw_info->index;
+    return e1->throw_info()->index < e2->throw_info()->index;
   });
   return result;
 }
@@ -479,12 +478,10 @@ boost::optional<Edge::CaseKey> Block::remove_first_matching_target(
       return result;
     }
   }
-  always_assert_log(false,
-                    "block %d has no targets matching %s:\n%s",
-                    id(),
-                    SHOW(branch->insn),
-                    SHOW(&m_entries));
-  not_reached();
+  not_reached_log("block %d has no targets matching %s:\n%s",
+                  id(),
+                  SHOW(branch->insn),
+                  SHOW(&m_entries));
 }
 
 // These assume that the iterator is inside this block
@@ -550,36 +547,59 @@ bool Block::push_back(IRInstruction* insn) {
   return m_parent->push_back(this, insn);
 }
 
+bool Block::structural_equals(const Block* other) const {
+  auto iterable1 = ir_list::ConstInstructionIterable(this);
+  auto iterable2 = ir_list::ConstInstructionIterable(other);
+  auto it1 = iterable1.begin();
+  auto it2 = iterable2.begin();
+
+  for (; it1 != iterable1.end() && it2 != iterable2.end(); ++it1, ++it2) {
+    auto& mie1 = *it1;
+    auto& mie2 = *it2;
+
+    if (*mie1.insn != *mie2.insn) {
+      return false;
+    }
+  }
+
+  return it1 == iterable1.end() && it2 == iterable2.end();
+}
+
 std::ostream& operator<<(std::ostream& os, const Edge& e) {
   switch (e.type()) {
-  case EDGE_GOTO: {
-    os << "goto";
-    break;
-  }
+  case EDGE_GOTO:
+    return os << "goto";
+
   case EDGE_BRANCH: {
     os << "branch";
     const auto& key = e.case_key();
     if (key) {
       os << " " << *key;
     }
+    return os;
+  }
+
+  case EDGE_THROW:
+    return os << "throw";
+
+  case EDGE_GHOST:
+    return os << "ghost";
+
+  case EDGE_TYPE_SIZE:
     break;
   }
-  case EDGE_THROW: {
-    os << "throw";
-    break;
-  }
-  default: {
-    break;
-  }
-  }
-  return os;
+  not_reached();
 }
+
+bool ControlFlowGraph::DEBUG = false;
 
 ControlFlowGraph::ControlFlowGraph(IRList* ir,
                                    reg_t registers_size,
                                    bool editable)
-    : m_registers_size(registers_size), m_editable(editable) {
-  always_assert_log(ir->size() > 0, "IRList contains no instructions");
+    : m_orig_list(editable ? nullptr : ir),
+      m_registers_size(registers_size),
+      m_editable(editable) {
+  always_assert_log(!ir->empty(), "IRList contains no instructions");
 
   BranchToTargets branch_to_targets;
   TryEnds try_ends;
@@ -934,7 +954,7 @@ void ControlFlowGraph::remove_empty_blocks() {
 
     const auto& succs = get_succ_edges_if(
         b, [](const Edge* e) { return e->type() != EDGE_GHOST; });
-    if (succs.size() > 0) {
+    if (!succs.empty()) {
       always_assert_log(succs.size() == 1,
                         "too many successors for empty block %d:\n%s",
                         it->first, SHOW(*this));
@@ -969,6 +989,12 @@ void ControlFlowGraph::remove_empty_blocks() {
       if (b == entry_block()) {
         m_entry_block = succ;
       }
+    }
+    if (b == m_entry_block) {
+      // Don't delete the entry block. If it was empty and had a successor,
+      // we'd have replaced it just above.
+      ++it;
+      continue;
     }
 
     for (const auto& mie : *b) {
@@ -1020,13 +1046,18 @@ void ControlFlowGraph::sanity_check() const {
       }
 
       // Last instruction matches outgoing edges
-      auto num_goto_succs = get_succ_edges_of_type(b, EDGE_GOTO).size();
+      uint32_t num_goto_succs = 0;
+      uint32_t num_succs = 0;
+      for (const Edge* e : b->succs()) {
+        if (e->type() == EDGE_GOTO) {
+          ++num_goto_succs;
+        }
+        if (e->type() != EDGE_GHOST) {
+          ++num_succs;
+        }
+      }
       auto last_it = b->get_last_insn();
       auto num_preds = b->preds().size();
-      auto num_succs =
-          get_succ_edges_if(
-              b, [](const Edge* e) { return e->type() != EDGE_GHOST; })
-              .size();
       if (last_it != b->end()) {
         auto op = last_it->insn->opcode();
 
@@ -1069,6 +1100,18 @@ void ControlFlowGraph::sanity_check() const {
       always_assert_log(num_goto_succs < 2, "block %d, %s", b->id(),
                         SHOW(*this));
     }
+
+    // IRInstruction pointers must be unique.
+    std::unordered_set<IRInstruction*> pointer_check;
+    for (const auto& mie : ConstInstructionIterable(*this)) {
+      auto insn = mie.insn;
+      always_assert_log(
+          pointer_check.count(insn) == 0,
+          "IRInstruction pointers must be unqiue. You have inserted the "
+          "following IRInstruction* multiple times:\n >> %s",
+          SHOW(*insn));
+      pointer_check.insert(insn);
+    }
   }
 
   for (const auto& entry : m_blocks) {
@@ -1096,7 +1139,7 @@ void ControlFlowGraph::sanity_check() const {
       Edge* e = *it;
       if (!last) {
         always_assert_log(
-            e->m_throw_info->catch_type != nullptr,
+            e->throw_info()->catch_type != nullptr,
             "Can't have a catchall (%d -> %d) that isn't last. %s",
             e->src()->id(), e->target()->id(), SHOW(*this));
       }
@@ -1183,11 +1226,21 @@ uint32_t ControlFlowGraph::sum_opcode_sizes() const {
 }
 
 boost::sub_range<IRList> ControlFlowGraph::get_param_instructions() const {
+  if (!m_editable) {
+    return m_orig_list->get_param_instructions();
+  }
+
   // Find the first block that has instructions
   Block* block = entry_block();
+  std::unordered_set<Block*> visited{block};
   while (block != nullptr &&
          (block->empty() || block->get_first_insn() == block->end())) {
     block = block->goes_to();
+    if (!visited.insert(block).second) {
+      // We found a loop, and no param instructions.
+      block = nullptr;
+      break;
+    }
   }
   if (block == nullptr) {
     // Return an empty sub_range
@@ -1278,10 +1331,11 @@ cfg::InstructionIterator ControlFlowGraph::primary_instruction_of_move_result(
     always_assert(insn->has_move_result_any());
     return res;
   } else {
-    auto res = std::prev(it.unwrap());
+    auto res = std::prev(it);
+    always_assert(res.block() == it.block());
     auto insn = res->insn;
     always_assert(insn->has_move_result_any());
-    return block->to_cfg_instruction_iterator(res);
+    return res;
   }
 }
 
@@ -1313,6 +1367,7 @@ cfg::InstructionIterator ControlFlowGraph::move_result_of(
  */
 void ControlFlowGraph::deep_copy(ControlFlowGraph* new_cfg) const {
   always_assert(editable());
+  new_cfg->clear();
   new_cfg->m_editable = true;
   new_cfg->set_registers_size(this->get_registers_size());
 
@@ -1353,8 +1408,8 @@ void ControlFlowGraph::deep_copy(ControlFlowGraph* new_cfg) const {
 
   // patch the block pointers in the edges to their new cfg counterparts
   for (Edge* e : new_cfg->m_edges) {
-    e->m_src = new_cfg->m_blocks.at(e->m_src->id());
-    e->m_target = new_cfg->m_blocks.at(e->m_target->id());
+    e->set_src(new_cfg->m_blocks.at(e->src()->id()));
+    e->set_target(new_cfg->m_blocks.at(e->target()->id()));
   }
 
   // update the entry and exit block pointers to their new cfg counterparts
@@ -1501,6 +1556,7 @@ std::vector<Block*> ControlFlowGraph::wto_chains(
 
   // TODO: would breadth first be better?
   std::vector<Block*> wto_order;
+  wto_order.reserve(m_blocks.size());
   wto.visit_depth_first([&wto_order](Chain* c) {
     for (Block* b : *c) {
       wto_order.push_back(b);
@@ -1524,8 +1580,8 @@ void ControlFlowGraph::insert_branches_and_targets(
         auto& branch_mie = *branch_it;
 
         BranchTarget* bt =
-            edge->m_case_key != boost::none
-                ? new BranchTarget(&branch_mie, *edge->m_case_key)
+            edge->case_key() != boost::none
+                ? new BranchTarget(&branch_mie, *edge->case_key())
                 : new BranchTarget(&branch_mie);
         auto target_mie = new MethodItemEntry(bt);
         edge->target()->m_entries.push_front(*target_mie);
@@ -1616,7 +1672,7 @@ void ControlFlowGraph::insert_try_catch_markers(
     Block* b = *it;
     MethodItemEntry* new_catch = create_catch(b, &catch_to_containing_block);
 
-    if (new_catch == nullptr && cannot_throw(b) && !b->is_catch()) {
+    if (new_catch == nullptr && b->cannot_throw() && !b->is_catch()) {
       // Generate fewer try regions by merging blocks that cannot throw into the
       // previous try region.
       //
@@ -1664,7 +1720,7 @@ MethodItemEntry* ControlFlowGraph::create_catch(
   }
 
   std::sort(throws.begin(), throws.end(), [](const Edge* e1, const Edge* e2) {
-    return e1->m_throw_info->index < e2->m_throw_info->index;
+    return e1->throw_info()->index < e2->throw_info()->index;
   });
   const auto& throws_end = throws.end();
 
@@ -1698,7 +1754,7 @@ MethodItemEntry* ControlFlowGraph::create_catch(
         MethodItemEntry* next = self(self, std::next(it));
 
         // create a new catch entry and insert it into the bytecode
-        auto new_catch = new MethodItemEntry(edge->m_throw_info->catch_type);
+        auto new_catch = new MethodItemEntry(edge->throw_info()->catch_type);
         new_catch->centry->next = next;
         catch_block->m_entries.push_front(*new_catch);
         catch_to_containing_block->emplace(new_catch, catch_block);
@@ -1755,16 +1811,7 @@ std::vector<Block*> ControlFlowGraph::blocks_reverse_post_deprecated() const {
   return postorder;
 }
 
-ControlFlowGraph::~ControlFlowGraph() {
-  for (const auto& entry : m_blocks) {
-    Block* b = entry.second;
-    delete b;
-  }
-
-  for (Edge* e : m_edges) {
-    delete e;
-  }
-}
+ControlFlowGraph::~ControlFlowGraph() { free_all_blocks_and_edges(); }
 
 Block* ControlFlowGraph::create_block() {
   size_t id = next_block_id();
@@ -1943,6 +1990,31 @@ void ControlFlowGraph::remove_edge(Edge* edge, bool cleanup) {
                  [edge](const Edge* e) { return edge == e; }, cleanup);
 }
 
+void ControlFlowGraph::free_all_blocks_and_edges() {
+  for (const auto& entry : m_blocks) {
+    Block* b = entry.second;
+    delete b;
+  }
+
+  for (Edge* e : m_edges) {
+    delete e;
+  }
+}
+
+void ControlFlowGraph::clear() {
+  free_all_blocks_and_edges();
+
+  m_blocks.clear();
+  m_edges.clear();
+
+  m_registers_size = 0;
+
+  m_entry_block = nullptr;
+  m_exit_block = nullptr;
+
+  m_editable = true;
+}
+
 // After `edges` have been removed from the graph,
 //   * Turn BRANCHes/SWITCHes with one outgoing edge into GOTOs
 void ControlFlowGraph::cleanup_deleted_edges(const EdgeSet& edges) {
@@ -1956,7 +2028,9 @@ void ControlFlowGraph::cleanup_deleted_edges(const EdgeSet& edges) {
       if ((is_conditional_branch(op) || is_switch(op)) &&
           remaining_forward_edges.size() == 1) {
         pred_block->m_entries.erase_and_dispose(last_it);
-        remaining_forward_edges.at(0)->m_type = EDGE_GOTO;
+        Edge* fwd_edge = remaining_forward_edges[0];
+        fwd_edge->set_type(EDGE_GOTO);
+        fwd_edge->set_case_key(boost::none);
       }
     }
   }
@@ -2085,10 +2159,10 @@ void ControlFlowGraph::move_edge(Edge* edge,
   remove_edge(edge, /* cleanup */ false);
 
   if (new_source != nullptr) {
-    edge->m_src = new_source;
+    edge->set_src(new_source);
   }
   if (new_target != nullptr) {
-    edge->m_target = new_target;
+    edge->set_target(new_target);
   }
 
   edge->src()->m_succs.push_back(edge);
@@ -2108,7 +2182,7 @@ bool ControlFlowGraph::blocks_are_in_same_try(const Block* b1,
     auto e1 = *it1;
     auto e2 = *it2;
     if (e1->target() != e2->target() ||
-        e1->m_throw_info->catch_type != e2->m_throw_info->catch_type) {
+        e1->throw_info()->catch_type != e2->throw_info()->catch_type) {
       return false;
     }
   }
@@ -2155,27 +2229,26 @@ void ControlFlowGraph::remove_insn(const InstructionIterator& it) {
   } else if (insn->has_move_result_any()) {
     // delete the move-result(-pseudo) too
     if (insn == last_it->insn) {
-      // The move-result(-pseudo) is in the next (runtime) block.
+      // The move-result(-pseudo) is in the next (runtime) block, if any.
       // We follow the goto edge to the block that should have the
       // move-result(-pseudo).
       //
       // We can't use std::next because that goes to the next block in ID order,
       // which may not be the next runtime block.
       auto move_result_block = block->goes_to();
-      always_assert_log(move_result_block != nullptr,
-                        "Cannot follow goto of B%u in %s", block->id(),
-                        SHOW(*this));
-      auto first_it = move_result_block->get_first_insn();
-      if (first_it != move_result_block->end() &&
-          opcode::is_move_result_any(first_it->insn->opcode())) {
-        // We can safely delete this move-result(-pseudo) because it cannot be
-        // the move-result(-pseudo) of more than one primary instruction. A CFG
-        // with multiple edges to a block beginning with a move-result(-pseudo)
-        // is a malformed CFG.
-        always_assert_log(move_result_block->preds().size() == 1,
-                          "Multiple edges to a move-result-pseudo in %d. %s",
-                          move_result_block->id(), SHOW(*this));
-        move_result_block->m_entries.erase_and_dispose(first_it);
+      if (move_result_block != nullptr) {
+        auto first_it = move_result_block->get_first_insn();
+        if (first_it != move_result_block->end() &&
+            opcode::is_move_result_any(first_it->insn->opcode())) {
+          // We can safely delete this move-result(-pseudo) because it cannot be
+          // the move-result(-pseudo) of more than one primary instruction. A
+          // CFG with multiple edges to a block beginning with a
+          // move-result(-pseudo) is a malformed CFG.
+          always_assert_log(move_result_block->preds().size() == 1,
+                            "Multiple edges to a move-result-pseudo in %d. %s",
+                            move_result_block->id(), SHOW(*this));
+          move_result_block->m_entries.erase_and_dispose(first_it);
+        }
       }
     } else {
       // The move-result(-pseudo) is in the same block as this one.
@@ -2268,7 +2341,7 @@ void ControlFlowGraph::copy_succ_edges_if(Block* from,
 
   for (auto e : edges) {
     Edge* copy = new Edge(*e);
-    copy->m_src = to;
+    copy->set_src(to);
     add_edge(copy);
   }
 }
@@ -2363,6 +2436,59 @@ ControlFlowGraph::EdgeSet ControlFlowGraph::remove_succ_edges(Block* b,
 ControlFlowGraph::EdgeSet ControlFlowGraph::remove_pred_edges(Block* b,
                                                               bool cleanup) {
   return remove_pred_edge_if(b, [](const Edge*) { return true; }, cleanup);
+}
+
+DexPosition* ControlFlowGraph::get_dbg_pos(
+    const cfg::InstructionIterator& callsite) {
+  always_assert(&callsite.cfg() == this);
+  auto search_block = [](Block* b,
+                         IRList::iterator in_block_it) -> DexPosition* {
+    // Search for an MFLOW_POSITION preceding this instruction within the
+    // same block
+    while (in_block_it->type != MFLOW_POSITION && in_block_it != b->begin()) {
+      --in_block_it;
+    }
+    return in_block_it->type == MFLOW_POSITION ? in_block_it->pos.get()
+                                               : nullptr;
+  };
+  auto result = search_block(callsite.block(), callsite.unwrap());
+  if (result != nullptr) {
+    return result;
+  }
+
+  // TODO: Positions should be connected to instructions rather than preceding
+  // them in the flow of instructions. Having the positions depend on the order
+  // of instructions is a very linear way to encode the information which isn't
+  // very amenable to the editable CFG.
+
+  // while there's a single predecessor, follow that edge
+  std::unordered_set<Block*> visited;
+  std::function<DexPosition*(Block*)> check_prev_block;
+  check_prev_block = [this, &visited, &check_prev_block,
+                      &search_block](Block* b) -> DexPosition* {
+    // Check for an infinite loop
+    const auto& pair = visited.insert(b);
+    bool already_there = !pair.second;
+    if (already_there) {
+      return nullptr;
+    }
+
+    const auto& reverse_gotos = this->get_pred_edges_of_type(b, EDGE_GOTO);
+    if (b->preds().size() == 1 && !reverse_gotos.empty()) {
+      Block* prev_block = reverse_gotos[0]->src();
+      if (!prev_block->empty()) {
+        auto result = search_block(prev_block, std::prev(prev_block->end()));
+        if (result != nullptr) {
+          return result;
+        }
+      }
+      // Didn't find any MFLOW_POSITIONs in `prev_block`, keep going.
+      return check_prev_block(prev_block);
+    }
+    // This block has no solo predecessors anymore. Nowhere left to search.
+    return nullptr;
+  };
+  return check_prev_block(callsite.block());
 }
 
 } // namespace cfg

@@ -31,3 +31,15 @@ bool load_jar_file(const char* location,
                    const attribute_hook_t& = nullptr);
 
 bool load_class_file(const std::string& filename, Scope* classes = nullptr);
+
+void init_basic_types();
+bool process_jar(const char* location,
+                 const uint8_t* mapping,
+                 ssize_t size,
+                 Scope* classes,
+                 const attribute_hook_t& attr_hook);
+
+bool parse_class(uint8_t* buffer,
+                 Scope* classes,
+                 attribute_hook_t attr_hook,
+                 const std::string& jar_location = "");

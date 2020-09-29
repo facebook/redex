@@ -21,7 +21,7 @@ VdexFile::VdexFile(VdexFileHeader& header, ConstBuffer buf) : header_(header) {
   for (size_t dex_index = 0; dex_index < header.number_of_dex_files_;
        ++dex_index) {
     auto dex_header = DexFileHeader::parse(remaining_dexes_buf);
-    dex_headers_.push_back(std::move(dex_header));
+    dex_headers_.push_back(dex_header);
     if (dex_header.magic != kDexMagicNum) {
       fprintf(stderr, "Bad dex magic\n");
       return;

@@ -164,7 +164,7 @@ class InstructionAnalyzerCombiner final {
         "InstructionAnalyzerBase!");
   }
 
-  InstructionAnalyzerCombiner(typename Analyzers::State... states)
+  explicit InstructionAnalyzerCombiner(typename Analyzers::State... states)
       : m_states(std::make_tuple(states...)) {}
 
   // If all sub-analyzers have a default-constructible state, then this

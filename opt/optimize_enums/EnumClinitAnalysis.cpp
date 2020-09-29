@@ -67,6 +67,7 @@ DexField* get_enum_name_field() {
 }
 
 struct EnumOrdinalAnalyzerState {
+  // NOLINTNEXTLINE(google-explicit-constructor,hicpp-explicit-conversions)
   /* implicit */ EnumOrdinalAnalyzerState(const DexType* clinit_class)
       : clinit_class(clinit_class) {
     auto& fields = type_class(clinit_class)->get_ifields();
@@ -91,10 +92,12 @@ struct EnumOrdinalAnalyzerState {
 
 class EnumOrdinalAnalyzer;
 
-using CombinedAnalyzer = InstructionAnalyzerCombiner<EnumOrdinalAnalyzer,
-                                                     cp::HeapEscapeAnalyzer,
-                                                     cp::StringAnalyzer,
-                                                     cp::PrimitiveAnalyzer>;
+using CombinedAnalyzer =
+    InstructionAnalyzerCombiner<EnumOrdinalAnalyzer,
+                                cp::HeapEscapeAnalyzer,
+                                cp::StringAnalyzer,
+                                cp::ConstantClassObjectAnalyzer,
+                                cp::PrimitiveAnalyzer>;
 
 class EnumOrdinalAnalyzer
     : public InstructionAnalyzerBase<EnumOrdinalAnalyzer,
@@ -173,7 +176,7 @@ class EnumOrdinalAnalyzer
       cp::semantically_inline_method(
           method->get_code(),
           insn,
-          CombinedAnalyzer(state, nullptr, nullptr, nullptr),
+          CombinedAnalyzer(state, nullptr, nullptr, nullptr, nullptr),
           env);
       return true;
     }
@@ -252,7 +255,8 @@ EnumAttributes analyze_enum_clinit(const DexClass* cls) {
   code->build_cfg(/* editable */ false);
   auto& cfg = code->cfg();
   auto fp_iter = std::make_unique<cp::intraprocedural::FixpointIterator>(
-      cfg, CombinedAnalyzer(cls->get_type(), nullptr, nullptr, nullptr));
+      cfg,
+      CombinedAnalyzer(cls->get_type(), nullptr, nullptr, nullptr, nullptr));
   fp_iter->run(ConstantEnvironment());
 
   // XXX we can't use collect_return_state below because it doesn't capture the
@@ -262,9 +266,10 @@ EnumAttributes analyze_enum_clinit(const DexClass* cls) {
   auto return_env = ConstantEnvironment::bottom();
   for (cfg::Block* b : cfg.blocks()) {
     auto env = fp_iter->get_entry_state_at(b);
+    auto last_insn = b->get_last_insn();
     for (auto& mie : InstructionIterable(b)) {
       auto* insn = mie.insn;
-      fp_iter->analyze_instruction(insn, &env);
+      fp_iter->analyze_instruction(insn, &env, insn == last_insn->insn);
       if (is_return(insn->opcode())) {
         return_env.join_with(env);
       }
@@ -279,7 +284,9 @@ EnumAttributes analyze_enum_clinit(const DexClass* cls) {
   EnumAttributes attributes;
   for (auto& pair : return_env.get_field_environment().bindings()) {
     auto* enum_sfield = pair.first;
-    if (enum_sfield->get_class() != cls->get_type()) {
+    if (enum_sfield->get_class() != cls->get_type() ||
+        !check_required_access_flags(optimize_enums::enum_field_access(),
+                                     enum_sfield->get_access())) {
       continue;
     }
     auto heap_ptr = pair.second.maybe_get<AbstractHeapPointer>();

@@ -51,7 +51,8 @@ constexpr IRInstruction* CURRENT_PARTITION_LABEL = nullptr;
 /*
  * Return an environment populated with parameter values.
  */
-ConstantEnvironment env_with_params(const IRCode* code,
+ConstantEnvironment env_with_params(bool is_static,
+                                    const IRCode* code,
                                     const ArgumentDomain& args);
 
 using ProcedureAnalysisFactory =
@@ -78,7 +79,7 @@ class FixpointIterator : public sparta::ParallelMonotonicFixpointIterator<
     m_wps.reset(wps);
   }
 
-  void analyze_node(const DexMethod* const& method,
+  void analyze_node(const call_graph::NodeId& node,
                     Domain* current_state) const override;
 
   Domain analyze_edge(const std::shared_ptr<call_graph::Edge>& edge,
@@ -92,6 +93,8 @@ class FixpointIterator : public sparta::ParallelMonotonicFixpointIterator<
   void set_whole_program_state(std::unique_ptr<WholeProgramState> wps) {
     m_wps = std::move(wps);
   }
+
+  const call_graph::Graph& get_call_graph() { return m_call_graph; }
 
  private:
   std::unique_ptr<const WholeProgramState> m_wps;

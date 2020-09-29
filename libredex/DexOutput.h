@@ -26,13 +26,13 @@ using facebook::Locator;
 class DexCallSite;
 class DexMethodHandle;
 
-typedef std::unordered_map<DexString*, uint32_t> dexstring_to_idx;
-typedef std::unordered_map<DexType*, uint16_t> dextype_to_idx;
-typedef std::unordered_map<DexProto*, uint32_t> dexproto_to_idx;
-typedef std::unordered_map<DexFieldRef*, uint32_t> dexfield_to_idx;
-typedef std::unordered_map<DexMethodRef*, uint32_t> dexmethod_to_idx;
-typedef std::unordered_map<DexCallSite*, uint32_t> dexcallsite_to_idx;
-typedef std::unordered_map<DexMethodHandle*, uint32_t> dexmethodhandle_to_idx;
+using dexstring_to_idx = std::unordered_map<DexString*, uint32_t>;
+using dextype_to_idx = std::unordered_map<DexType*, uint16_t>;
+using dexproto_to_idx = std::unordered_map<DexProto*, uint32_t>;
+using dexfield_to_idx = std::unordered_map<DexFieldRef*, uint32_t>;
+using dexmethod_to_idx = std::unordered_map<DexMethodRef*, uint32_t>;
+using dexcallsite_to_idx = std::unordered_map<DexCallSite*, uint32_t>;
+using dexmethodhandle_to_idx = std::unordered_map<DexMethodHandle*, uint32_t>;
 
 using LocatorIndex = std::unordered_map<DexString*, Locator>;
 LocatorIndex make_locator_index(DexStoresVector& stores);
@@ -141,15 +141,15 @@ dex_stats_t write_classes_to_dex(
     PostLowering const* post_lowering = nullptr,
     int min_sdk = 0);
 
-typedef bool (*cmp_dstring)(const DexString*, const DexString*);
-typedef bool (*cmp_dtype)(const DexType*, const DexType*);
-typedef bool (*cmp_dproto)(const DexProto*, const DexProto*);
-typedef bool (*cmp_dfield)(const DexFieldRef*, const DexFieldRef*);
-typedef bool (*cmp_dmethod)(const DexMethodRef*, const DexMethodRef*);
-typedef bool (*cmp_dtypelist)(const DexTypeList*, const DexTypeList*);
-typedef bool (*cmp_callsite)(const DexCallSite*, const DexCallSite*);
-typedef bool (*cmp_methodhandle)(const DexMethodHandle*,
-                                 const DexMethodHandle*);
+using cmp_dstring = bool (*)(const DexString*, const DexString*);
+using cmp_dtype = bool (*)(const DexType*, const DexType*);
+using cmp_dproto = bool (*)(const DexProto*, const DexProto*);
+using cmp_dfield = bool (*)(const DexFieldRef*, const DexFieldRef*);
+using cmp_dmethod = bool (*)(const DexMethodRef*, const DexMethodRef*);
+using cmp_dtypelist = bool (*)(const DexTypeList*, const DexTypeList*);
+using cmp_callsite = bool (*)(const DexCallSite*, const DexCallSite*);
+using cmp_methodhandle = bool (*)(const DexMethodHandle*,
+                                  const DexMethodHandle*);
 
 inline bool compare_dexcallsites(const DexCallSite* a, const DexCallSite* b) {
   if (a == nullptr) {
@@ -221,7 +221,8 @@ class GatheredTypes {
   std::unordered_map<const DexString*, unsigned int> m_cls_strings;
   std::unordered_map<const DexMethod*, unsigned int> m_methods_in_cls_order;
   const method_profiles::MethodProfiles* m_method_profiles{nullptr};
-  const std::unordered_set<std::string>* m_method_sorting_whitelisted_substrings{nullptr};
+  const std::unordered_set<std::string>*
+      m_method_sorting_allowlisted_substrings{nullptr};
   bool m_legacy_order{true};
 
   void gather_components(PostLowering const* post_lowering);
@@ -242,8 +243,8 @@ class GatheredTypes {
   void build_method_map();
 
  public:
-  GatheredTypes(DexClasses* classes,
-                PostLowering const* post_lowering = nullptr);
+  explicit GatheredTypes(DexClasses* classes,
+                         PostLowering const* post_lowering = nullptr);
 
   DexOutputIdx* get_dodx(const uint8_t* base);
   template <class T = decltype(compare_dexstrings)>
@@ -260,10 +261,10 @@ class GatheredTypes {
   void sort_dexmethod_emitlist_cls_order(std::vector<DexMethod*>& lmeth);
   void sort_dexmethod_emitlist_clinit_order(std::vector<DexMethod*>& lmeth);
   void sort_dexmethod_emitlist_profiled_order(std::vector<DexMethod*>& lmeth);
-  void set_method_sorting_whitelisted_substrings(
-      const std::unordered_set<std::string>* whitelisted_substrings);
+  void set_method_sorting_allowlisted_substrings(
+      const std::unordered_set<std::string>* allowlisted_substrings);
   void set_method_profiles(
-    const method_profiles::MethodProfiles* method_profiles);
+      const method_profiles::MethodProfiles* method_profiles);
   void set_legacy_order(bool legacy_order);
 
   std::unordered_set<DexString*> index_type_names();
@@ -276,10 +277,10 @@ std::vector<DexString*> GatheredTypes::get_dexstring_emitlist(T cmp) {
   return strlist;
 }
 
-typedef std::map<DexAnnotation*, uint32_t> annomap_t;
-typedef std::map<DexAnnotationSet*, uint32_t> asetmap_t;
-typedef std::map<ParamAnnotations*, uint32_t> xrefmap_t;
-typedef std::map<DexAnnotationDirectory*, uint32_t> adirmap_t;
+using annomap_t = std::map<DexAnnotation*, uint32_t>;
+using asetmap_t = std::map<DexAnnotationSet*, uint32_t>;
+using xrefmap_t = std::map<ParamAnnotations*, uint32_t>;
+using adirmap_t = std::map<DexAnnotationDirectory*, uint32_t>;
 
 struct CodeItemEmit {
   DexMethod* method;

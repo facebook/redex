@@ -7,65 +7,97 @@
 
 #include "TypeUtil.h"
 
+#include "DexUtil.h"
+#include "RedexContext.h"
+
 namespace type {
 
-DexType* _void() { return DexType::make_type("V"); }
+#define DEFINE_CACHED_TYPE(func_name, _) \
+  DexType* func_name() { return g_redex->pointers_cache().type_##func_name(); }
 
-DexType* _byte() { return DexType::make_type("B"); }
+#define FOR_EACH DEFINE_CACHED_TYPE
+WELL_KNOWN_TYPES
+#undef FOR_EACH
 
-DexType* _char() { return DexType::make_type("C"); }
+namespace pseudo {
 
-DexType* _short() { return DexType::make_type("S"); }
+#define DEFINE_CACHED_PSEUDO_TYPE(func_name, _)           \
+  DexFieldRef* func_name() {                              \
+    return g_redex->pointers_cache().field_##func_name(); \
+  }
 
-DexType* _int() { return DexType::make_type("I"); }
+#define FOR_EACH DEFINE_CACHED_PSEUDO_TYPE
+PRIMITIVE_PSEUDO_TYPE_FIELDS
+#undef FOR_EACH
 
-DexType* _long() { return DexType::make_type("J"); }
+} // namespace pseudo
 
-DexType* _boolean() { return DexType::make_type("Z"); }
+bool is_valid(const std::string& type) {
+  if (type.empty()) {
+    return false;
+  }
+  size_t non_array_start = 0;
 
-DexType* _float() { return DexType::make_type("F"); }
+  while (non_array_start < type.length() && type[non_array_start] == '[') {
+    ++non_array_start;
+  }
+  if (non_array_start == type.length()) {
+    return false;
+  }
 
-DexType* _double() { return DexType::make_type("D"); }
+  switch (type[non_array_start]) {
+  case 'Z':
+  case 'B':
+  case 'S':
+  case 'C':
+  case 'I':
+  case 'J':
+  case 'F':
+  case 'D':
+  case 'V':
+    return non_array_start + 1 == type.length(); // Must be last character
+  case 'L':
+    break;
+  default:
+    return false;
+  }
 
-DexType* java_lang_String() { return DexType::make_type("Ljava/lang/String;"); }
+  // Object type now.
 
-DexType* java_lang_Class() { return DexType::make_type("Ljava/lang/Class;"); }
+  // Must be at least three characters.
+  if (non_array_start + 3 > type.length()) {
+    return false;
+  }
 
-DexType* java_lang_Enum() { return DexType::make_type("Ljava/lang/Enum;"); }
+  // Last one is a semicolon.
+  if (type[type.length() - 1] != ';') {
+    return false;
+  }
 
-DexType* java_lang_Object() { return DexType::make_type("Ljava/lang/Object;"); }
+  // Scan the identifiers.
+  size_t start = non_array_start + 1;
+  size_t i = start;
+  for (; i != type.length() - 1; ++i) {
+    if (type[i] == '/') {
+      // Found a segment, do a check.
+      if (!is_valid_identifier(type, start, i - start)) {
+        return false;
+      }
+      start = i + 1;
+    }
+  }
+  if (start != i) {
+    // Handle tail.
+    if (!is_valid_identifier(type, start, i - start)) {
+      return false;
+    }
+  }
 
-DexType* java_lang_Void() { return DexType::make_type("Ljava/lang/Void;"); }
-
-DexType* java_lang_Throwable() {
-  return DexType::make_type("Ljava/lang/Throwable;");
+  return true;
 }
-
-DexType* java_lang_Boolean() {
-  return DexType::make_type("Ljava/lang/Boolean;");
-}
-
-DexType* java_lang_Byte() { return DexType::make_type("Ljava/lang/Byte;"); }
-
-DexType* java_lang_Short() { return DexType::make_type("Ljava/lang/Short;"); }
-
-DexType* java_lang_Character() {
-  return DexType::make_type("Ljava/lang/Character;");
-}
-
-DexType* java_lang_Integer() {
-  return DexType::make_type("Ljava/lang/Integer;");
-}
-
-DexType* java_lang_Long() { return DexType::make_type("Ljava/lang/Long;"); }
-
-DexType* java_lang_Float() { return DexType::make_type("Ljava/lang/Float;"); }
-
-DexType* java_lang_Double() { return DexType::make_type("Ljava/lang/Double;"); }
 
 bool is_primitive(const DexType* type) {
-  auto* const name = type->get_name()->c_str();
-  switch (name[0]) {
+  switch (type->get_name()->str().at(0)) {
   case 'Z':
   case 'B':
   case 'S':
@@ -79,8 +111,10 @@ bool is_primitive(const DexType* type) {
   case 'L':
   case '[':
     return false;
+  default:
+    not_reached_log("unexpected leading character in type: %s",
+                    type->get_name()->c_str());
   }
-  not_reached();
 }
 
 bool is_wide_type(const DexType* type) {
@@ -177,6 +211,17 @@ char type_shorty(const DexType* type) {
 
 bool check_cast(const DexType* type, const DexType* base_type) {
   if (type == base_type) return true;
+  if (type != nullptr && is_array(type)) {
+    if (base_type != nullptr && is_array(base_type)) {
+      auto element_type = get_array_element_type(type);
+      auto element_base_type = get_array_element_type(base_type);
+      if (!is_primitive(element_type) && !is_primitive(element_base_type) &&
+          check_cast(element_type, element_base_type)) {
+        return true;
+      }
+    }
+    return base_type == java_lang_Object();
+  }
   const auto cls = type_class(type);
   if (cls == nullptr) return false;
   if (check_cast(cls->get_super_class(), base_type)) return true;
@@ -389,16 +434,50 @@ bool is_uninstantiable_class(DexType* type) {
     return false;
   }
 
-  if (type == java_lang_Void()) {
-    return true;
-  }
-
   auto cls = type_class(type);
   if (cls == nullptr || is_interface(cls) || is_native(cls) ||
       cls->is_external() || !cls->rstate.can_delete()) {
     return false;
   }
   return !cls->has_ctors();
+}
+
+boost::optional<int32_t> evaluate_type_check(const DexType* src_type,
+                                             const DexType* test_type) {
+  if (test_type == src_type) {
+    // Trivial.
+    return 1;
+  }
+
+  auto test_cls = type_class(test_type);
+  if (test_cls == nullptr) {
+    return boost::none;
+  }
+
+  auto src_cls = type_class(src_type);
+  if (src_cls == nullptr) {
+    return boost::none;
+  }
+
+  // OK, let's simplify for now. While some SDK classes should be set in
+  // stone, let's only work on internals.
+  if (test_cls->is_external() || src_cls->is_external()) {
+    return boost::none;
+  }
+
+  // Class vs class, for simplicity.
+  if (!is_interface(test_cls) && !is_interface(src_cls)) {
+    if (type::check_cast(src_cls->get_type(), test_cls->get_type())) {
+      // If check-cast succeeds, the result will be `true`.
+      return 1;
+    } else if (!type::check_cast(test_cls->get_type(), src_cls->get_type())) {
+      // The check can never succeed, as the test class is not a subtype.
+      return 0;
+    }
+    return boost::none;
+  }
+
+  return boost::none;
 }
 
 }; // namespace type

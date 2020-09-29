@@ -17,10 +17,9 @@ class TypeTags {
   const DexType* get_type(uint32_t type_tag) const;
   size_t size() const;
 
-  typedef
-      typename std::unordered_map<uint32_t, const DexType*>::iterator iterator;
-  typedef typename std::unordered_map<uint32_t, const DexType*>::const_iterator
-      const_iterator;
+  using iterator = std::unordered_map<uint32_t, const DexType*>::iterator;
+  using const_iterator =
+      std::unordered_map<uint32_t, const DexType*>::const_iterator;
 
   iterator begin() { return m_tag_to_type.begin(); }
   const_iterator begin() const { return m_tag_to_type.begin(); }

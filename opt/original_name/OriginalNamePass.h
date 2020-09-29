@@ -16,6 +16,7 @@ class OriginalNamePass : public Pass {
 
   void bind_config() override {
     bind("hierarchy_roots", {}, m_hierarchy_roots);
+    trait(Traits::Pass::unique, true);
   }
 
   void run_pass(DexStoresVector& stores,

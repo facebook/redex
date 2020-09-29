@@ -24,7 +24,7 @@ namespace cfg {
 class CFGMutation {
  public:
   /// Create a new mutation to apply to \p cfg.
-  CFGMutation(ControlFlowGraph& cfg);
+  explicit CFGMutation(ControlFlowGraph& cfg);
 
   /// CFGMutation is not copyable
   CFGMutation(const CFGMutation&) = delete;

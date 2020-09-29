@@ -25,6 +25,7 @@ class CheckBreadcrumbsPass : public Pass {
     bind("reject_illegal_refs_root_store",
          false,
          reject_illegal_refs_root_store);
+    trait(Traits::Pass::unique, true);
   }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;

@@ -52,7 +52,7 @@ class DexInstruction : public Gatherable {
   // count, we'll have to add a assert here.
   // Holds formats:
   // 10x 11x 11n 12x 22x 21s 21h 31i 32x 51l
-  DexInstruction(const uint16_t* opcodes, int count) : Gatherable() {
+  DexInstruction(const uint16_t* opcodes, int count) {
     always_assert_log(count <= MAX_ARG_COUNT,
                       "arg count %d exceeded the limit of %d",
                       count,
@@ -65,8 +65,8 @@ class DexInstruction : public Gatherable {
   }
 
  public:
-  DexInstruction(DexOpcode op)
-      : Gatherable(), m_opcode(op), m_count(count_from_opcode()) {}
+  explicit DexInstruction(DexOpcode op)
+      : m_opcode(op), m_count(count_from_opcode()) {}
 
   DexInstruction(DexOpcode opcode, uint16_t arg) : DexInstruction(opcode) {
     redex_assert(m_count == 1);
@@ -74,22 +74,20 @@ class DexInstruction : public Gatherable {
   }
 
  protected:
-  void encode_args(uint16_t*& insns) {
+  void encode_args(uint16_t*& insns) const {
     for (int i = 0; i < m_count; i++) {
       *insns++ = m_arg[i];
     }
   }
 
-  void encode_opcode(DexOutputIdx* dodx, uint16_t*& insns) {
-    *insns++ = m_opcode;
-  }
+  void encode_opcode(uint16_t*& insns) const { *insns++ = m_opcode; }
 
  public:
   static DexInstruction* make_instruction(DexIdx* idx,
                                           const uint16_t** insns_ptr);
   /* Creates the right subclass of DexInstruction for the given opcode */
   static DexInstruction* make_instruction(DexOpcode);
-  virtual void encode(DexOutputIdx* dodx, uint16_t*& insns);
+  virtual void encode(DexOutputIdx* dodx, uint16_t*& insns) const;
   virtual uint16_t size() const;
   virtual DexInstruction* clone() const { return new DexInstruction(*this); }
   bool operator==(const DexInstruction&) const;
@@ -153,7 +151,7 @@ class DexOpcodeString : public DexInstruction {
 
  public:
   uint16_t size() const override;
-  void encode(DexOutputIdx* dodx, uint16_t*& insns) override;
+  void encode(DexOutputIdx* dodx, uint16_t*& insns) const override;
   void gather_strings(std::vector<DexString*>& lstring) const override;
   DexOpcodeString* clone() const override { return new DexOpcodeString(*this); }
 
@@ -175,7 +173,7 @@ class DexOpcodeType : public DexInstruction {
 
  public:
   uint16_t size() const override;
-  void encode(DexOutputIdx* dodx, uint16_t*& insns) override;
+  void encode(DexOutputIdx* dodx, uint16_t*& insns) const override;
   void gather_types(std::vector<DexType*>& ltype) const override;
   DexOpcodeType* clone() const override { return new DexOpcodeType(*this); }
 
@@ -201,7 +199,7 @@ class DexOpcodeField : public DexInstruction {
 
  public:
   uint16_t size() const override;
-  void encode(DexOutputIdx* dodx, uint16_t*& insns) override;
+  void encode(DexOutputIdx* dodx, uint16_t*& insns) const override;
   void gather_fields(std::vector<DexFieldRef*>& lfield) const override;
   DexOpcodeField* clone() const override { return new DexOpcodeField(*this); }
 
@@ -221,7 +219,7 @@ class DexOpcodeMethod : public DexInstruction {
 
  public:
   uint16_t size() const override;
-  void encode(DexOutputIdx* dodx, uint16_t*& insns) override;
+  void encode(DexOutputIdx* dodx, uint16_t*& insns) const override;
   void gather_methods(std::vector<DexMethodRef*>& lmethod) const override;
   DexOpcodeMethod* clone() const override { return new DexOpcodeMethod(*this); }
 
@@ -242,7 +240,7 @@ class DexOpcodeCallSite : public DexInstruction {
 
  public:
   uint16_t size() const override;
-  void encode(DexOutputIdx* dodx, uint16_t*& insns) override;
+  void encode(DexOutputIdx* dodx, uint16_t*& insns) const override;
   void gather_callsites(std::vector<DexCallSite*>& lcallsite) const override;
   void gather_strings(std::vector<DexString*>& lstring) const override;
   void gather_methodhandles(
@@ -270,7 +268,7 @@ class DexOpcodeMethodHandle : public DexInstruction {
 
  public:
   uint16_t size() const override;
-  void encode(DexOutputIdx* dodx, uint16_t*& insns) override;
+  void encode(DexOutputIdx* dodx, uint16_t*& insns) const override;
   void gather_methodhandles(
       std::vector<DexMethodHandle*>& lmethodhandle) const override;
   void gather_methods(std::vector<DexMethodRef*>& lmethod) const override;
@@ -302,7 +300,7 @@ class DexOpcodeData : public DexInstruction {
  public:
   // This size refers to the whole instruction, not just the data portion
   uint16_t size() const override;
-  void encode(DexOutputIdx* dodx, uint16_t*& insns) override;
+  void encode(DexOutputIdx* dodx, uint16_t*& insns) const override;
   DexOpcodeData* clone() const override { return new DexOpcodeData(*this); }
 
   DexOpcodeData(const uint16_t* opcodes, int count)
@@ -313,7 +311,7 @@ class DexOpcodeData : public DexInstruction {
     memcpy(m_data, opcodes, count * sizeof(uint16_t));
   }
 
-  DexOpcodeData(const std::vector<uint16_t>& opcodes)
+  explicit DexOpcodeData(const std::vector<uint16_t>& opcodes)
       : DexInstruction(&opcodes[0], 0),
         m_data_count(opcodes.size() - 1),
         m_data(new uint16_t[opcodes.size() - 1]) {
@@ -489,6 +487,20 @@ inline bool is_conditional_branch(IROpcode op) {
   }
 }
 
+inline bool is_testz_branch(IROpcode op) {
+  switch (op) {
+  case OPCODE_IF_EQZ:
+  case OPCODE_IF_NEZ:
+  case OPCODE_IF_LTZ:
+  case OPCODE_IF_GEZ:
+  case OPCODE_IF_GTZ:
+  case OPCODE_IF_LEZ:
+    return true;
+  default:
+    return false;
+  }
+}
+
 inline bool is_goto(IROpcode op) { return op == OPCODE_GOTO; }
 
 inline bool is_switch(IROpcode op) { return op == OPCODE_SWITCH; }
@@ -522,3 +534,5 @@ inline bool is_div_int_or_long(IROpcode op) {
 inline bool is_rem_int_or_long(IROpcode op) {
   return op == OPCODE_REM_INT || op == OPCODE_REM_LONG;
 }
+
+inline bool is_check_cast(IROpcode op) { return op == OPCODE_CHECK_CAST; }

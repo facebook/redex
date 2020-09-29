@@ -19,4 +19,5 @@ void print_seeds(std::ostream& output,
                  const Scope& classes,
                  const bool allowshrinking_filter = false,
                  const bool allowobfuscation_filter = false);
-}
+
+} // namespace keep_rules

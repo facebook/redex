@@ -229,7 +229,7 @@ class Analyzer final : public BaseIRAnalyzer<ParamDomainEnvironment> {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-const std::unordered_map<const IRInstruction*, ParamIndex> get_load_param_map(
+std::unordered_map<const IRInstruction*, ParamIndex> get_load_param_map(
     cfg::ControlFlowGraph& cfg) {
   std::unordered_map<const IRInstruction*, ParamIndex> map;
   const auto param_insns = InstructionIterable(cfg.get_param_instructions());
@@ -242,7 +242,7 @@ const std::unordered_map<const IRInstruction*, ParamIndex> get_load_param_map(
   return map;
 }
 
-const boost::optional<ParamIndex> ReturnParamResolver::get_return_param_index(
+boost::optional<ParamIndex> ReturnParamResolver::get_return_param_index(
     const IRInstruction* insn,
     const std::unordered_map<const DexMethod*, ParamIndex>&
         methods_which_return_parameter,
@@ -404,7 +404,7 @@ bool ReturnParamResolver::returns_receiver(const DexMethodRef* method) const {
   return false;
 }
 
-const boost::optional<ParamIndex> ReturnParamResolver::get_return_param_index(
+boost::optional<ParamIndex> ReturnParamResolver::get_return_param_index(
     cfg::ControlFlowGraph& cfg,
     const std::unordered_map<const DexMethod*, ParamIndex>&
         methods_which_return_parameter) const {
@@ -522,7 +522,7 @@ void ResultPropagationPass::run_pass(DexStoresVector& stores,
 
 using ParamIndexMap = std::unordered_map<const DexMethod*, ParamIndex>;
 
-const std::unordered_map<const DexMethod*, ParamIndex>
+std::unordered_map<const DexMethod*, ParamIndex>
 ResultPropagationPass::find_methods_which_return_parameter(
     PassManager& mgr, const Scope& scope, const ReturnParamResolver& resolver) {
   walk::parallel::code(scope, [](DexMethod* method, IRCode& code) {

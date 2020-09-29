@@ -13,6 +13,7 @@
 #include "ControlFlow.h"
 #include "IRCode.h"
 #include "ReachingDefinitions.h"
+#include "ScopedCFG.h"
 
 namespace {
 
@@ -33,7 +34,7 @@ using DefSets = boost::disjoint_sets<RankPMap, ParentPMap>;
  */
 class SymRegMapper {
  public:
-  SymRegMapper(bool width_aware) : m_width_aware(width_aware) {}
+  explicit SymRegMapper(bool width_aware) : m_width_aware(width_aware) {}
 
   reg_t make(Def def) {
     if (m_def_to_reg.find(def) == m_def_to_reg.end()) {
@@ -107,43 +108,34 @@ bool Use::operator==(const Use& that) const {
 }
 
 void renumber_registers(IRCode* code, bool width_aware) {
-  bool should_clear_cfg = false;
-  if (!code->editable_cfg_built()) {
-    code->build_cfg(/* editable */ true);
-    should_clear_cfg = true;
-  }
-  auto& cfg = code->cfg();
-  auto chains = calculate_ud_chains(cfg);
+  cfg::ScopedCFG cfg(code);
+  auto chains = calculate_ud_chains(*cfg);
 
   Rank rank;
   Parent parent;
   DefSets def_sets((RankPMap(rank)), (ParentPMap(parent)));
-  for (const auto& mie : cfg::InstructionIterable(cfg)) {
+  for (const auto& mie : cfg::InstructionIterable(*cfg)) {
     if (mie.insn->has_dest()) {
       def_sets.make_set(mie.insn);
     }
   }
   unify_defs(chains, &def_sets);
   SymRegMapper sym_reg_mapper(width_aware);
-  for (auto& mie : cfg::InstructionIterable(cfg)) {
+  for (auto& mie : cfg::InstructionIterable(*cfg)) {
     auto insn = mie.insn;
     if (insn->has_dest()) {
       auto sym_reg = sym_reg_mapper.make(def_sets.find_set(insn));
       insn->set_dest(sym_reg);
     }
   }
-  for (auto& mie : cfg::InstructionIterable(cfg)) {
+  for (auto& mie : cfg::InstructionIterable(*cfg)) {
     auto insn = mie.insn;
     for (size_t i = 0; i < insn->srcs_size(); ++i) {
       auto& defs = chains.at(Use{insn, insn->src(i)});
       insn->set_src(i, sym_reg_mapper.at(def_sets.find_set(*defs.begin())));
     }
   }
-  cfg.set_registers_size(sym_reg_mapper.regs_size());
-
-  if (should_clear_cfg) {
-    code->clear_cfg();
-  }
+  cfg->set_registers_size(sym_reg_mapper.regs_size());
 }
 
 } // namespace live_range

@@ -18,6 +18,7 @@
 #include "Resolver.h"
 #include "Timer.h"
 #include "Walkers.h"
+#include "WorkQueue.h"
 
 using namespace reachability;
 
@@ -219,8 +220,7 @@ void TransitiveClosureMarker::visit(const ReachableObject& obj) {
     break;
   case ReachableObjectType::ANNO:
   case ReachableObjectType::SEED:
-    always_assert_log(false, "Unexpected ReachableObject type");
-    break;
+    not_reached_log("Unexpected ReachableObject type");
   }
 }
 
@@ -341,7 +341,7 @@ void TransitiveClosureMarker::gather_and_push(DexMethod* meth) {
   auto* cls = type_class(type);
   auto refs = gather(meth);
   bool check_strings = m_ignore_sets.keep_class_in_string;
-  if (!check_strings && refs.strings.size() > 0 && has_class_forname(meth)) {
+  if (!check_strings && !refs.strings.empty() && has_class_forname(meth)) {
     check_strings = true;
   }
   if (m_ignore_sets.string_literals.count(type)) {
@@ -395,7 +395,7 @@ void TransitiveClosureMarker::visit_cls(const DexClass* cls) {
     } else if (method::is_init(m)) {
       // Push the parameterless constructor, in case it's constructed via
       // .class or Class.forName()
-      if (m->get_proto()->get_args()->get_type_list().size() == 0) {
+      if (m->get_proto()->get_args()->get_type_list().empty()) {
         push(cls, m);
       }
     }
@@ -516,7 +516,7 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects(
 
   size_t num_threads = redex_parallel::default_num_threads();
   auto stats_arr = std::make_unique<Stats[]>(num_threads);
-  MarkWorkQueue work_queue(
+  auto work_queue = workqueue_foreach<ReachableObject>(
       [&](MarkWorkerState* worker_state, const ReachableObject& obj) {
         TransitiveClosureMarker transitive_closure_marker(
             ignore_sets, *method_override_graph, record_reachability,
@@ -525,7 +525,8 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects(
         transitive_closure_marker.visit(obj);
         return nullptr;
       },
-      num_threads);
+      num_threads,
+      /*push_tasks_while_running=*/true);
   for (const auto& obj : root_set) {
     work_queue.add_item(obj);
   }

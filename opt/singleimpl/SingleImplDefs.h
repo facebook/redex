@@ -16,6 +16,7 @@
 #include "ClassHierarchy.h"
 #include "DexClass.h"
 #include "IRInstruction.h"
+#include "IRList.h"
 #include "SingleImpl.h"
 
 /**
@@ -118,6 +119,10 @@ struct SingleImplData {
   // opcodes to a methodref with the single impl interface in the signature
   MethodToOpcodes methodrefs;
 
+  std::unordered_map<DexMethod*,
+                     std::unordered_map<IRInstruction*, IRList::iterator>>
+      referencing_methods;
+
   bool is_escaped() const { return escape != NO_ESCAPE; }
 };
 
@@ -173,10 +178,22 @@ struct SingleImplAnalysis {
   SingleImpls single_impls;
 };
 
+struct OptimizeStats {
+  size_t removed_interfaces{0};
+  size_t inserted_check_casts{0};
+  size_t retained_check_casts{0};
+  OptimizeStats& operator+=(const OptimizeStats& rhs) {
+    removed_interfaces += rhs.removed_interfaces;
+    inserted_check_casts += rhs.inserted_check_casts;
+    retained_check_casts += rhs.retained_check_casts;
+    return *this;
+  }
+};
+
 /**
  * Run an optimization pass over a SingleImplAnalysis.
  */
-size_t optimize(std::unique_ptr<SingleImplAnalysis> analysis,
-                const ClassHierarchy& ch,
-                Scope& scope,
-                const SingleImplConfig& config);
+OptimizeStats optimize(std::unique_ptr<SingleImplAnalysis> analysis,
+                       const ClassHierarchy& ch,
+                       Scope& scope,
+                       const SingleImplConfig& config);

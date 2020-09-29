@@ -50,7 +50,7 @@ std::vector<typename GraphInterface::NodeId> postorder_sort(
       break;
     }
     case VISITED: {
-      always_assert(false);
+      not_reached();
     }
     }
   }

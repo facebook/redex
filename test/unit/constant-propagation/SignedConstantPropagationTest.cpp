@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "ConstantPropagation.h"
+#include "ConstantPropagationPass.h"
 
 #include <gtest/gtest.h>
 
@@ -230,7 +230,7 @@ TEST_F(ConstantNezTest, NonDeterminableNEZ) {
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
-TEST(ConstantPropagation, IfToGoto) {
+TEST_F(ConstantPropagationTest, IfToGoto) {
   auto code = assembler::ircode_from_string(R"(
     (
      (const v0 0)
@@ -259,7 +259,7 @@ TEST(ConstantPropagation, IfToGoto) {
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
-TEST(ConstantPropagation, FoldArithmeticAddLit) {
+TEST_F(ConstantPropagationTest, FoldArithmeticAddLit) {
   auto code = assembler::ircode_from_string(R"(
     (
      (const v0 2147483646)
@@ -291,7 +291,7 @@ TEST(ConstantPropagation, FoldArithmeticAddLit) {
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
-TEST(ConstantPropagation, AnalyzeCmp) {
+TEST_F(ConstantPropagationTest, AnalyzeCmp) {
   auto code = assembler::ircode_from_string(R"(
     (
       (load-param v0)
@@ -360,7 +360,7 @@ TEST(ConstantPropagation, AnalyzeCmp) {
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
-TEST(ConstantPropagation, ConditionalConstant_EqualsAlwaysTrue) {
+TEST_F(ConstantPropagationTest, ConditionalConstant_EqualsAlwaysTrue) {
   auto code = assembler::ircode_from_string(R"(
     (
      (const v0 0)
@@ -399,7 +399,7 @@ TEST(ConstantPropagation, ConditionalConstant_EqualsAlwaysTrue) {
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
-TEST(ConstantPropagation, ConditionalConstant_EqualsAlwaysFalse) {
+TEST_F(ConstantPropagationTest, ConditionalConstant_EqualsAlwaysFalse) {
   auto code = assembler::ircode_from_string(R"(
     (
      (const v0 1)
@@ -436,7 +436,7 @@ TEST(ConstantPropagation, ConditionalConstant_EqualsAlwaysFalse) {
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
-TEST(ConstantPropagation, ConditionalConstant_LessThanAlwaysTrue) {
+TEST_F(ConstantPropagationTest, ConditionalConstant_LessThanAlwaysTrue) {
   auto code = assembler::ircode_from_string(R"(
     (
      (const v0 0)
@@ -473,7 +473,7 @@ TEST(ConstantPropagation, ConditionalConstant_LessThanAlwaysTrue) {
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
-TEST(ConstantPropagation, ConditionalConstant_LessThanAlwaysFalse) {
+TEST_F(ConstantPropagationTest, ConditionalConstant_LessThanAlwaysFalse) {
   auto code = assembler::ircode_from_string(R"(
     (
      (const v0 1)
@@ -510,7 +510,7 @@ TEST(ConstantPropagation, ConditionalConstant_LessThanAlwaysFalse) {
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
-TEST(ConstantPropagation, ConditionalConstantInferZero) {
+TEST_F(ConstantPropagationTest, ConditionalConstantInferZero) {
   auto code = assembler::ircode_from_string(R"(
     (
      (load-param v0) ; some unknown value
@@ -543,7 +543,7 @@ TEST(ConstantPropagation, ConditionalConstantInferZero) {
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
-TEST(ConstantPropagation, ConditionalConstantInferInterval) {
+TEST_F(ConstantPropagationTest, ConditionalConstantInferInterval) {
   auto code = assembler::ircode_from_string(R"(
     (
      (load-param v0) ; some unknown value
@@ -576,7 +576,7 @@ TEST(ConstantPropagation, ConditionalConstantInferInterval) {
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
-TEST(ConstantPropagation, ConditionalConstantCompareIntervals) {
+TEST_F(ConstantPropagationTest, ConditionalConstantCompareIntervals) {
   auto code = assembler::ircode_from_string(R"( (
        (load-param v0)
        (load-param v1)
@@ -622,7 +622,7 @@ TEST(ConstantPropagation, ConditionalConstantCompareIntervals) {
 }
 
 // This test catches the regression described in D8676637.
-TEST(ConstantPropagation, MayMustCompare) {
+TEST_F(ConstantPropagationTest, MayMustCompare) {
   {
     auto code = assembler::ircode_from_string(R"( (
        (load-param v0)
@@ -678,7 +678,7 @@ TEST(ConstantPropagation, MayMustCompare) {
   }
 }
 
-TEST(ConstantPropagation, FoldBitwiseAndLit) {
+TEST_F(ConstantPropagationTest, FoldBitwiseAndLit) {
   auto code = assembler::ircode_from_string(R"(
     (
       (const v0 1023)
@@ -699,7 +699,7 @@ TEST(ConstantPropagation, FoldBitwiseAndLit) {
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
-TEST(ConstantPropagation, FoldBitwiseOrLit) {
+TEST_F(ConstantPropagationTest, FoldBitwiseOrLit) {
   auto code = assembler::ircode_from_string(R"(
     (
       (const v0 257)
@@ -720,7 +720,7 @@ TEST(ConstantPropagation, FoldBitwiseOrLit) {
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
-TEST(ConstantPropagation, FoldBitwiseXorLit) {
+TEST_F(ConstantPropagationTest, FoldBitwiseXorLit) {
   auto code = assembler::ircode_from_string(R"(
     (
       (const v0 1023)
@@ -741,7 +741,7 @@ TEST(ConstantPropagation, FoldBitwiseXorLit) {
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
-TEST(ConstantPropagation, FoldBitwiseShiftLeftOverflowLit) {
+TEST_F(ConstantPropagationTest, FoldBitwiseShiftLeftOverflowLit) {
   auto code = assembler::ircode_from_string(R"(
     (
       (const v0 -16776961)
@@ -760,7 +760,7 @@ TEST(ConstantPropagation, FoldBitwiseShiftLeftOverflowLit) {
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
-TEST(ConstantPropagation, FoldBitwiseShiftLit) {
+TEST_F(ConstantPropagationTest, FoldBitwiseShiftLit) {
   auto code = assembler::ircode_from_string(R"(
     (
       (const v0 1023)
@@ -781,7 +781,7 @@ TEST(ConstantPropagation, FoldBitwiseShiftLit) {
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
-TEST(ConstantPropagation, FoldBitwiseOverShiftLit) {
+TEST_F(ConstantPropagationTest, FoldBitwiseOverShiftLit) {
   auto code = assembler::ircode_from_string(R"(
     (
       (const v0 1023)
@@ -802,7 +802,7 @@ TEST(ConstantPropagation, FoldBitwiseOverShiftLit) {
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
-TEST(ConstantPropagation, FoldBitwiseArithAndLogicalRightShiftLit) {
+TEST_F(ConstantPropagationTest, FoldBitwiseArithAndLogicalRightShiftLit) {
   auto code = assembler::ircode_from_string(R"(
     (
       (const v0 -1024)
@@ -823,7 +823,7 @@ TEST(ConstantPropagation, FoldBitwiseArithAndLogicalRightShiftLit) {
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
-TEST(ConstantPropagation, FoldDivIntLit) {
+TEST_F(ConstantPropagationTest, FoldDivIntLit) {
   auto code = assembler::ircode_from_string(R"(
     (
       (const v0 4096)

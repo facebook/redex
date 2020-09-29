@@ -23,7 +23,7 @@ class SimpleFastDominators {
    *
    *    K. D. Cooper et.al. A Simple, Fast Dominance Algorithm.
    */
-  SimpleFastDominators(const typename GraphInterface::Graph& graph) {
+  explicit SimpleFastDominators(const typename GraphInterface::Graph& graph) {
     // Sort nodes in postorder and create a map of each node to its postorder
     // number.
     m_postordering = graph::postorder_sort<GraphInterface>(graph);

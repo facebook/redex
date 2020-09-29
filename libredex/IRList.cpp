@@ -234,8 +234,7 @@ opcode::Branchingness MethodItemEntry::branchingness() const {
   case MFLOW_OPCODE:
     return opcode::branchingness(insn->opcode());
   case MFLOW_DEX_OPCODE:
-    always_assert_log(false, "Not expecting dex instructions here");
-    not_reached();
+    not_reached_log("Not expecting dex instructions here");
   default:
     return opcode::BRANCH_NONE;
   }
@@ -285,9 +284,8 @@ MethodItemEntry* MethodItemEntryCloner::clone(const MethodItemEntry* mie) {
   case MFLOW_FALLTHROUGH:
     return cloned_mie;
   case MFLOW_DEX_OPCODE:
-    always_assert_log(false, "DexInstructions not expected here");
+    not_reached_log("DexInstructions not expected here");
   }
-  not_reached();
 }
 
 void MethodItemEntryCloner::fix_parent_positions(
@@ -419,10 +417,8 @@ void IRList::replace_branch(IRInstruction* from, IRInstruction* to) {
       return;
     }
   }
-  always_assert_log(false,
-                    "No match found while replacing '%s' with '%s'",
-                    SHOW(from),
-                    SHOW(to));
+  not_reached_log("No match found while replacing '%s' with '%s'", SHOW(from),
+                  SHOW(to));
 }
 
 void IRList::insert_after(IRInstruction* position,
@@ -450,7 +446,7 @@ void IRList::insert_after(IRInstruction* position,
       return;
     }
   }
-  always_assert_log(false, "No match found");
+  not_reached_log("No match found");
 }
 
 IRList::iterator IRList::insert_before(const IRList::iterator& position,
@@ -495,8 +491,7 @@ void IRList::remove_opcode(IRInstruction* insn) {
       return;
     }
   }
-  always_assert_log(false, "No match found while removing '%s' from method",
-                    SHOW(insn));
+  not_reached_log("No match found while removing '%s' from method", SHOW(insn));
 }
 
 size_t IRList::sum_opcode_sizes() const {
@@ -771,6 +766,16 @@ IRInstruction* primary_instruction_of_move_result_pseudo(IRList::iterator it) {
   always_assert_log(it->type == MFLOW_OPCODE &&
                         it->insn->has_move_result_pseudo(),
                     "%s does not have a move result pseudo", SHOW(*it));
+  return it->insn;
+}
+
+IRInstruction* primary_instruction_of_move_result(IRList::iterator it) {
+  // There may be debug info between primary insn and move-result*?
+  do {
+    --it;
+  } while (it->type != MFLOW_OPCODE);
+  always_assert_log(it->insn->has_move_result(),
+                    "%s does not have a move result", SHOW(*it));
   return it->insn;
 }
 

@@ -12,6 +12,7 @@
 #include <unordered_set>
 #include <vector>
 
+#include "CFGMutation.h"
 #include "ControlFlow.h"
 #include "DexClass.h"
 #include "DexUtil.h"
@@ -20,76 +21,14 @@
 #include "IRInstruction.h"
 #include "MethodOverrideGraph.h"
 #include "Purity.h"
+#include "ReachingDefinitions.h"
 #include "Resolver.h"
+#include "ScopedCFG.h"
 #include "Transform.h"
 #include "TypeSystem.h"
 #include "Walkers.h"
 
 namespace {
-
-/*
- * These instructions have observable side effects so must always be considered
- * live, regardless of whether their output is consumed by another instruction.
- */
-static bool has_side_effects(IROpcode opc) {
-  switch (opc) {
-  case OPCODE_RETURN_VOID:
-  case OPCODE_RETURN:
-  case OPCODE_RETURN_WIDE:
-  case OPCODE_RETURN_OBJECT:
-  case OPCODE_MONITOR_ENTER:
-  case OPCODE_MONITOR_EXIT:
-  case OPCODE_FILL_ARRAY_DATA:
-  case OPCODE_THROW:
-  case OPCODE_GOTO:
-  case OPCODE_SWITCH:
-  case OPCODE_IF_EQ:
-  case OPCODE_IF_NE:
-  case OPCODE_IF_LT:
-  case OPCODE_IF_GE:
-  case OPCODE_IF_GT:
-  case OPCODE_IF_LE:
-  case OPCODE_IF_EQZ:
-  case OPCODE_IF_NEZ:
-  case OPCODE_IF_LTZ:
-  case OPCODE_IF_GEZ:
-  case OPCODE_IF_GTZ:
-  case OPCODE_IF_LEZ:
-  case OPCODE_APUT:
-  case OPCODE_APUT_WIDE:
-  case OPCODE_APUT_OBJECT:
-  case OPCODE_APUT_BOOLEAN:
-  case OPCODE_APUT_BYTE:
-  case OPCODE_APUT_CHAR:
-  case OPCODE_APUT_SHORT:
-  case OPCODE_IPUT:
-  case OPCODE_IPUT_WIDE:
-  case OPCODE_IPUT_OBJECT:
-  case OPCODE_IPUT_BOOLEAN:
-  case OPCODE_IPUT_BYTE:
-  case OPCODE_IPUT_CHAR:
-  case OPCODE_IPUT_SHORT:
-  case OPCODE_SPUT:
-  case OPCODE_SPUT_WIDE:
-  case OPCODE_SPUT_OBJECT:
-  case OPCODE_SPUT_BOOLEAN:
-  case OPCODE_SPUT_BYTE:
-  case OPCODE_SPUT_CHAR:
-  case OPCODE_SPUT_SHORT:
-  case OPCODE_INVOKE_VIRTUAL:
-  case OPCODE_INVOKE_SUPER:
-  case OPCODE_INVOKE_DIRECT:
-  case OPCODE_INVOKE_STATIC:
-  case OPCODE_INVOKE_INTERFACE:
-  case IOPCODE_LOAD_PARAM:
-  case IOPCODE_LOAD_PARAM_OBJECT:
-  case IOPCODE_LOAD_PARAM_WIDE:
-    return true;
-  default:
-    return false;
-  }
-  not_reached();
-}
 
 template <typename... T>
 std::string show(const boost::dynamic_bitset<T...>& bits) {
@@ -130,13 +69,10 @@ void update_liveness(const IRInstruction* inst,
 ////////////////////////////////////////////////////////////////////////////////
 
 void LocalDce::dce(IRCode* code) {
-  bool editable_cfg_built = code->editable_cfg_built();
-  if (!editable_cfg_built) {
-    code->build_cfg(/* editable */ true);
-  }
-  auto& cfg = code->cfg();
-  const auto& blocks = graph::postorder_sort<cfg::GraphInterface>(cfg);
-  auto regs = cfg.get_registers_size();
+  cfg::ScopedCFG cfg(code);
+  normalize_new_instances(*cfg);
+  const auto& blocks = graph::postorder_sort<cfg::GraphInterface>(*cfg);
+  auto regs = cfg->get_registers_size();
   std::unordered_map<cfg::BlockId, boost::dynamic_bitset<>> liveness;
   for (cfg::Block* b : blocks) {
     liveness.emplace(b->id(), boost::dynamic_bitset<>(regs + 1));
@@ -144,7 +80,7 @@ void LocalDce::dce(IRCode* code) {
   bool changed;
   std::vector<std::pair<cfg::Block*, IRList::iterator>> dead_instructions;
 
-  TRACE(DCE, 5, "%s", SHOW(cfg));
+  TRACE(DCE, 5, "%s", SHOW(*cfg));
 
   // Iterate liveness analysis to a fixed point.
   do {
@@ -175,7 +111,7 @@ void LocalDce::dce(IRCode* code) {
         if (it->type != MFLOW_OPCODE) {
           continue;
         }
-        bool required = is_required(cfg, b, it->insn, bliveness);
+        bool required = is_required(*cfg, b, it->insn, bliveness);
         if (required) {
           update_liveness(it->insn, bliveness);
         } else {
@@ -197,28 +133,57 @@ void LocalDce::dce(IRCode* code) {
 
   // Remove dead instructions.
   std::unordered_set<IRInstruction*> seen;
+  std::vector<std::pair<IRInstruction*, cfg::Block*>> npe_instructions;
   for (const auto& pair : dead_instructions) {
     cfg::Block* b = pair.first;
     IRList::iterator it = pair.second;
-    if (seen.count(it->insn)) {
+    auto insn = it->insn;
+    if (seen.count(insn)) {
       continue;
     }
-    TRACE(DCE, 2, "DEAD: %s", SHOW(it->insn));
-    seen.emplace(it->insn);
-    b->remove_insn(it);
+    seen.emplace(insn);
+    DexMethod* method;
+    if (m_may_allocate_registers && m_method_override_graph &&
+        (insn->opcode() == OPCODE_INVOKE_VIRTUAL ||
+         insn->opcode() == OPCODE_INVOKE_INTERFACE) &&
+        (method = resolve_method(insn->get_method(), opcode_to_search(insn))) !=
+            nullptr &&
+        !has_implementor(m_method_override_graph, method)) {
+      TRACE(DCE, 2, "DEAD NPE: %s", SHOW(insn));
+      npe_instructions.emplace_back(insn, b);
+    } else {
+      TRACE(DCE, 2, "DEAD: %s", SHOW(insn));
+      seen.emplace(insn);
+      b->remove_insn(it);
+    }
   }
-  auto unreachable_insn_count = cfg.remove_unreachable_blocks();
-  cfg.recompute_registers_size();
+  if (!npe_instructions.empty()) {
+    auto null_reg = cfg->allocate_temp();
+    for (auto pair : npe_instructions) {
+      auto it = cfg->find_insn(pair.first, pair.second);
+      if (it.is_end()) {
+        // can happen if we replaced an earlier invocation with throw null.
+        continue;
+      }
+      std::vector<IRInstruction*> insns;
+      auto const_insn = new IRInstruction(OPCODE_CONST);
+      const_insn->set_dest(null_reg)->set_literal(0);
+      insns.push_back(const_insn);
+      auto throw_insn = new IRInstruction(OPCODE_THROW);
+      throw_insn->set_src(0, null_reg);
+      insns.push_back(throw_insn);
+      cfg->replace_insns(it, insns);
+    }
+  }
+  auto unreachable_insn_count = cfg->remove_unreachable_blocks();
+  cfg->recompute_registers_size();
 
+  m_stats.npe_instruction_count += npe_instructions.size();
   m_stats.dead_instruction_count += dead_instructions.size();
   m_stats.unreachable_instruction_count += unreachable_insn_count;
 
   TRACE(DCE, 5, "=== Post-DCE CFG ===");
-  TRACE(DCE, 5, "%s", SHOW(cfg));
-
-  if (!editable_cfg_built) {
-    code->clear_cfg();
-  }
+  TRACE(DCE, 5, "%s", SHOW(*cfg));
 }
 
 /*
@@ -229,7 +194,7 @@ bool LocalDce::is_required(cfg::ControlFlowGraph& cfg,
                            cfg::Block* b,
                            IRInstruction* inst,
                            const boost::dynamic_bitset<>& bliveness) {
-  if (has_side_effects(inst->opcode())) {
+  if (opcode::has_side_effects(inst->opcode())) {
     if (is_invoke(inst->opcode())) {
       const auto meth =
           resolve_method(inst->get_method(), opcode_to_search(inst));
@@ -274,4 +239,89 @@ bool LocalDce::assumenosideeffects(DexMethodRef* ref, DexMethod* meth) {
     return true;
   }
   return m_pure_methods.find(ref) != m_pure_methods.end();
+}
+
+void LocalDce::normalize_new_instances(cfg::ControlFlowGraph& cfg) {
+  // TODO: This normalization optimization doesn't really belong to local-dce,
+  // but it combines nicely as local-dce will clean-up redundant new-instance
+  // instructions and moves afterwards.
+  cfg::CFGMutation mutation(cfg);
+  reaching_defs::MoveAwareFixpointIterator fp_iter(cfg);
+  fp_iter.run({});
+  for (cfg::Block* block : cfg.blocks()) {
+    auto env = fp_iter.get_entry_state_at(block);
+    if (env.is_bottom()) {
+      continue;
+    }
+    auto ii = InstructionIterable(block);
+    for (auto it = ii.begin(), end = ii.end(), last_insn = end; it != end;
+         last_insn = it, fp_iter.analyze_instruction(it->insn, &env), it++) {
+      IRInstruction* insn = it->insn;
+      if (insn->opcode() != OPCODE_INVOKE_DIRECT ||
+          !method::is_init(insn->get_method())) {
+        continue;
+      }
+      auto type = insn->get_method()->get_class();
+      auto reg = insn->src(0);
+      auto defs = env.get(reg);
+      always_assert(!defs.is_top());
+      always_assert(!defs.is_bottom());
+      IRInstruction* old_new_instance_insn{nullptr};
+      for (auto def : defs.elements()) {
+        if (def->opcode() == OPCODE_NEW_INSTANCE) {
+          always_assert(old_new_instance_insn == nullptr);
+          old_new_instance_insn = def;
+          always_assert(def->get_type() == type);
+        }
+      }
+      if (old_new_instance_insn == nullptr) {
+        // base constructor invocation
+        continue;
+      }
+      if (last_insn != end &&
+          last_insn->insn->opcode() == IOPCODE_MOVE_RESULT_PSEUDO_OBJECT &&
+          last_insn->insn->dest() == reg) {
+        auto primary_insn = cfg.primary_instruction_of_move_result(
+            block->to_cfg_instruction_iterator(last_insn));
+        if (primary_insn->insn->opcode() == OPCODE_NEW_INSTANCE) {
+          always_assert(primary_insn->insn->get_type() == type);
+          // already normalized
+          continue;
+        }
+      }
+
+      // Let's detect aliases which might have been created via move-object
+      // instructions.
+      bool aliased{false};
+      for (const auto& pair : env.bindings()) {
+        auto other_defs = pair.second;
+        always_assert(!other_defs.is_top());
+        always_assert(!other_defs.is_bottom());
+        if (other_defs.contains(old_new_instance_insn) && pair.first != reg) {
+          aliased = true;
+          break;
+        }
+      }
+      if (aliased) {
+        // Don't touch this; maybe this will go away after another round of
+        // copy-propagation / local-dce.
+        m_stats.aliased_new_instances++;
+        continue;
+      }
+
+      // We don't bother removing the old new-instance instruction (or other
+      // intermediate move-object instructions) here, as LocalDce will do that
+      // as part of its normal operation.
+      auto new_instance_insn = new IRInstruction(OPCODE_NEW_INSTANCE);
+      new_instance_insn->set_type(type);
+      auto move_result_pseudo_object_insn =
+          new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
+      move_result_pseudo_object_insn->set_dest(reg);
+      mutation.insert_before(
+          block->to_cfg_instruction_iterator(it),
+          {new_instance_insn, move_result_pseudo_object_insn});
+      m_stats.normalized_new_instances++;
+    }
+  }
+  mutation.flush();
 }

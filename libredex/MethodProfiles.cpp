@@ -7,6 +7,8 @@
 
 #include "MethodProfiles.h"
 
+#include <boost/algorithm/string.hpp>
+#include <fstream>
 #include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
@@ -16,6 +18,27 @@
 using namespace method_profiles;
 
 extern int errno;
+
+namespace {
+
+template <class Func>
+bool parse_cells(std::string& line, const Func& parse_cell) {
+  char* save_ptr = nullptr;
+  char* tok = const_cast<char*>(line.c_str());
+  uint32_t i = 0;
+  // Assuming there are no quoted strings containing commas!
+  while ((tok = strtok_r(tok, ",", &save_ptr)) != nullptr) {
+    bool success = parse_cell(tok, i);
+    if (!success) {
+      return false;
+    }
+    tok = nullptr;
+    ++i;
+  }
+  return true;
+}
+
+} // namespace
 
 const StatsMap& MethodProfiles::method_stats(
     const std::string& interaction_id) const {
@@ -44,30 +67,17 @@ bool MethodProfiles::parse_stats_file(const std::string& csv_filename) {
     return false;
   }
 
-  auto cleanup = [](FILE* fp, char* line = nullptr) {
-    if (fp) {
-      fclose(fp);
-    }
-    if (line) {
-      // getline allocates buffer space and expects us to free it
-      free(line);
-    }
-  };
-
   // Using C-style file reading and parsing because it's faster than the
   // iostreams equivalent and we expect to read very large csv files.
-  FILE* fp = fopen(csv_filename.c_str(), "r");
-  if (fp == nullptr) {
-    std::cerr << "FAILED to open " << csv_filename << ": " << strerror(errno)
-              << "\n";
-    cleanup(fp);
+  std::ifstream ifs(csv_filename);
+  if (!ifs.good()) {
+    std::cerr << "FAILED to open " << csv_filename << std::endl;
     return false;
   }
 
   // getline will allocate a buffer and put a pointer to it here
-  char* line = nullptr;
-  size_t len = 0;
-  while (getline(&line, &len, fp) != -1) {
+  std::string line;
+  while (std::getline(ifs, line)) {
     bool success = false;
     if (m_mode == NONE) {
       success = parse_header(line);
@@ -75,20 +85,17 @@ bool MethodProfiles::parse_stats_file(const std::string& csv_filename) {
       success = parse_line(line);
     }
     if (!success) {
-      cleanup(fp, line);
       return false;
     }
   }
-  if (errno != 0) {
-    std::cerr << "FAILED to read a line: " << strerror(errno) << "\n";
-    cleanup(fp, line);
+  if (ifs.bad()) {
+    std::cerr << "FAILED to read a line!" << std::endl;
     return false;
   }
 
   TRACE(METH_PROF, 1,
         "MethodProfiles successfully parsed %zu rows; %zu unresolved lines",
         size(), unresolved_size());
-  cleanup(fp, line);
   return true;
 }
 
@@ -112,7 +119,7 @@ double parse_double(const char* tok) {
   return result;
 }
 
-bool MethodProfiles::parse_metadata(char* line) {
+bool MethodProfiles::parse_metadata(std::string& line) {
   always_assert(m_mode == METADATA);
   uint32_t interaction_count{0};
   auto parse_cell = [&](char* tok, uint32_t col) -> bool {
@@ -148,7 +155,7 @@ bool MethodProfiles::parse_metadata(char* line) {
   return true;
 }
 
-bool MethodProfiles::parse_main(char* line) {
+bool MethodProfiles::parse_main(std::string& line) {
   always_assert(m_mode == MAIN);
   Stats stats;
   std::string interaction_id;
@@ -160,7 +167,7 @@ bool MethodProfiles::parse_main(char* line) {
       // the file)
       return true;
     case NAME:
-      ref = DexMethod::get_method(tok);
+      ref = DexMethod::get_method</*kCheckFormat=*/true>(tok);
       if (ref == nullptr) {
         TRACE(METH_PROF, 6, "failed to resolve %s", tok);
       }
@@ -228,7 +235,7 @@ bool MethodProfiles::parse_main(char* line) {
   return true;
 }
 
-bool MethodProfiles::parse_line(char* line) {
+bool MethodProfiles::parse_line(std::string& line) {
   if (m_mode == MAIN) {
     return parse_main(line);
   } else if (m_mode == METADATA) {
@@ -249,12 +256,12 @@ boost::optional<uint32_t> MethodProfiles::get_interaction_count(
 }
 
 void MethodProfiles::process_unresolved_lines() {
-  auto unresolved_lines = m_unresolved_lines;
+  auto unresolved_lines = std::move(m_unresolved_lines);
   m_unresolved_lines.clear();
   for (auto& pair : unresolved_lines) {
     m_interaction_id = pair.first;
     for (auto& line : pair.second) {
-      bool success = parse_main(const_cast<char*>(line.c_str()));
+      bool success = parse_main(line);
       always_assert(success);
     }
   }
@@ -269,7 +276,7 @@ void MethodProfiles::process_unresolved_lines() {
         total_rows, unresolved_size());
 }
 
-bool MethodProfiles::parse_header(char* line) {
+bool MethodProfiles::parse_header(std::string& line) {
   always_assert(m_mode == NONE);
   auto check_cell = [](const char* expected, const char* tok,
                        uint32_t col) -> bool {
@@ -281,7 +288,7 @@ bool MethodProfiles::parse_header(char* line) {
     }
     return true;
   };
-  if (strncmp(line, "interaction", 11) == 0) {
+  if (boost::starts_with(line, "interaction")) {
     m_mode = METADATA;
     // Extra metadata at the top of the file that we want to parse
     auto parse_cell = [&](char* tok, uint32_t col) -> bool {
@@ -336,15 +343,15 @@ bool MethodProfiles::parse_header(char* line) {
 
 dexmethods_profiled_comparator::dexmethods_profiled_comparator(
     const method_profiles::MethodProfiles* method_profiles,
-    const std::unordered_set<std::string>* whitelisted_substrings,
+    const std::unordered_set<std::string>* allowlisted_substrings,
     std::unordered_map<DexMethod*, double>* cache,
     bool legacy_order)
     : m_method_profiles(method_profiles),
-      m_whitelisted_substrings(whitelisted_substrings),
+      m_allowlisted_substrings(allowlisted_substrings),
       m_cache(cache),
       m_legacy_order(legacy_order) {
   always_assert(m_method_profiles != nullptr);
-  always_assert(m_whitelisted_substrings != nullptr);
+  always_assert(m_allowlisted_substrings != nullptr);
   always_assert(m_cache != nullptr);
 
   m_coldstart_start_marker = static_cast<DexMethod*>(
@@ -437,7 +444,7 @@ double dexmethods_profiled_comparator::get_method_sort_num(
 double dexmethods_profiled_comparator::get_method_sort_num_override(
     const DexMethod* method) {
   const std::string& deobfname = method->get_deobfuscated_name();
-  for (const std::string& substr : *m_whitelisted_substrings) {
+  for (const std::string& substr : *m_allowlisted_substrings) {
     if (deobfname.find(substr) != std::string::npos) {
       return COLD_START_RANGE_BEGIN + RANGE_SIZE / 2;
     }
@@ -461,7 +468,7 @@ bool dexmethods_profiled_comparator::operator()(DexMethod* a, DexMethod* b) {
     double w = get_method_sort_num(m);
     if (w == VERY_END) {
       // For methods not included in the profiled methods file, move them to
-      // the top section anyway if they match one of the whitelisted
+      // the top section anyway if they match one of the allowed
       // substrings.
       w = get_method_sort_num_override(m);
     }

@@ -7,6 +7,8 @@
 
 #include <gtest/gtest.h>
 
+#include <boost/filesystem.hpp>
+
 #include "DexCallSite.h"
 #include "DexClass.h"
 #include "DexInstruction.h"
@@ -18,6 +20,8 @@
 #include "InstructionLowering.h"
 #include "PassManager.h"
 #include "RedexContext.h"
+#include "RedexTestUtils.h"
+#include "SanitizersConfig.h"
 #include "Walkers.h"
 
 using CallSitePredicate = const std::function<bool(DexCallSite*)>&;
@@ -332,12 +336,11 @@ TEST(Dex038Test, ReadWriteDex038) {
   std::unordered_map<DexCode*, std::vector<DebugLineItem>> code_debug_lines;
 
   Json::Value conf_obj = Json::nullValue;
-  char tmpdir_template[] = "dex038_test_XXXXXX";
-  std::string tmpdir = mkdtemp(tmpdir_template);
-  ConfigFiles dummy_cfg(conf_obj, tmpdir);
+  auto tmpdir = redex::make_tmp_dir("dex038_test_%%%%%%%%");
+  ConfigFiles dummy_cfg(conf_obj, tmpdir.path);
   RedexOptions dummy_options;
 
-  std::string metafiles = tmpdir + "/meta";
+  std::string metafiles = tmpdir.path + "/meta";
   int status = mkdir(metafiles.c_str(), 0755);
   if (status) {
     EXPECT_EQ(EEXIST, errno);
@@ -345,7 +348,7 @@ TEST(Dex038Test, ReadWriteDex038) {
 
   instruction_lowering::run(stores, true);
 
-  std::string output_dex = tmpdir + "/output.dex";
+  std::string output_dex = tmpdir.path + "/output.dex";
   write_classes_to_dex(dummy_options,
                        output_dex,
                        &classes,

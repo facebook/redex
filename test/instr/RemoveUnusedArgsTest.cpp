@@ -42,7 +42,7 @@ TEST_F(PreVerify, CtorsDefined) {
 
   auto ctors = foo->get_ctors();
   EXPECT_EQ(ctors.size(), 3);
-  for (uint i = 0; i < 3; ++i) {
+  for (size_t i = 0; i < 3; ++i) {
     auto ctor = ctors.at(i);
     ASSERT_NE(nullptr, ctor);
   }

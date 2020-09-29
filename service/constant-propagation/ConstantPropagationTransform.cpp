@@ -7,7 +7,9 @@
 
 #include "ConstantPropagationTransform.h"
 
+#include "ReachingDefinitions.h"
 #include "Transform.h"
+#include "TypeInference.h"
 
 namespace constant_propagation {
 
@@ -18,12 +20,14 @@ namespace constant_propagation {
  * register.
  */
 void Transform::replace_with_const(const ConstantEnvironment& env,
-                                   const IRList::iterator& it) {
+                                   const IRList::iterator& it,
+                                   const XStoreRefs* xstores,
+                                   const DexType* declaring_type) {
   auto* insn = it->insn;
   auto value = env.get(insn->dest());
-  auto replacement =
-      ConstantValue::apply_visitor(value_to_instruction_visitor(insn), value);
-  if (replacement.size() == 0) {
+  auto replacement = ConstantValue::apply_visitor(
+      value_to_instruction_visitor(insn, xstores, declaring_type), value);
+  if (replacement.empty()) {
     return;
   }
   if (opcode::is_move_result_pseudo(insn->opcode())) {
@@ -40,17 +44,41 @@ void Transform::replace_with_const(const ConstantEnvironment& env,
  * removing not used arguments.
  */
 void Transform::generate_const_param(const ConstantEnvironment& env,
-                                     const IRList::iterator& it) {
+                                     const IRList::iterator& it,
+                                     const XStoreRefs* xstores,
+                                     const DexType* declaring_type) {
   auto* insn = it->insn;
   auto value = env.get(insn->dest());
-  auto replacement =
-      ConstantValue::apply_visitor(value_to_instruction_visitor(insn), value);
-  if (replacement.size() == 0) {
+  auto replacement = ConstantValue::apply_visitor(
+      value_to_instruction_visitor(insn, xstores, declaring_type), value);
+  if (replacement.empty()) {
     return;
   }
   m_added_param_values.insert(m_added_param_values.end(), replacement.begin(),
                               replacement.end());
   ++m_stats.added_param_const;
+}
+bool Transform::eliminate_redundant_null_check(
+    const ConstantEnvironment& env,
+    const WholeProgramState& /* unused */,
+    const IRList::iterator& it) {
+  auto* insn = it->insn;
+  switch (insn->opcode()) {
+  case OPCODE_INVOKE_STATIC: {
+    if (auto index =
+            get_null_check_object_index(insn, m_kotlin_null_check_assertions)) {
+      auto val = env.get(insn->src(*index)).maybe_get<SignedConstantDomain>();
+      if (val && val->interval() == sign_domain::Interval::NEZ) {
+        m_deletes.push_back(it);
+        return true;
+      }
+    }
+    break;
+  }
+  default:
+    break;
+  }
+  return false;
 }
 
 bool Transform::eliminate_redundant_put(const ConstantEnvironment& env,
@@ -103,19 +131,21 @@ bool Transform::eliminate_redundant_put(const ConstantEnvironment& env,
 
 void Transform::simplify_instruction(const ConstantEnvironment& env,
                                      const WholeProgramState& wps,
-                                     const IRList::iterator& it) {
+                                     const IRList::iterator& it,
+                                     const XStoreRefs* xstores,
+                                     const DexType* declaring_type) {
   auto* insn = it->insn;
   switch (insn->opcode()) {
   case IOPCODE_LOAD_PARAM:
   case IOPCODE_LOAD_PARAM_OBJECT:
   case IOPCODE_LOAD_PARAM_WIDE: {
-    generate_const_param(env, it);
+    generate_const_param(env, it, xstores, declaring_type);
     break;
   }
   case OPCODE_MOVE:
   case OPCODE_MOVE_WIDE:
     if (m_config.replace_moves_with_consts) {
-      replace_with_const(env, it);
+      replace_with_const(env, it, xstores, declaring_type);
     }
     break;
   case IOPCODE_MOVE_RESULT_PSEUDO:
@@ -125,24 +155,33 @@ void Transform::simplify_instruction(const ConstantEnvironment& env,
     auto op = primary_insn->opcode();
     if (is_sget(op) || is_iget(op) || is_aget(op) || is_div_int_lit(op) ||
         is_rem_int_lit(op) || is_instance_of(op) || is_rem_int_or_long(op) ||
-        is_div_int_or_long(op)) {
-      replace_with_const(env, it);
+        is_div_int_or_long(op) || is_check_cast(op)) {
+      replace_with_const(env, it, xstores, declaring_type);
     }
     break;
   }
-  // We currently don't replace move-result opcodes with consts because it's
-  // unlikely that we can get a more compact encoding (move-result can address
-  // 8-bit register operands while taking up just 1 code unit). However it can
-  // be a net win if we can remove the invoke opcodes as well -- we need a
-  // purity analysis for that though.
-  /*
+  // Currently it's default to not replace move-result opcodes with consts
+  // because it's unlikely that we can get a more compact encoding (move-result
+  // can address 8-bit register operands while taking up just 1 code unit).
+  // However it can be a net win if we can remove the invoke opcodes as well --
+  // we need a purity analysis for that though.
   case OPCODE_MOVE_RESULT:
   case OPCODE_MOVE_RESULT_WIDE:
   case OPCODE_MOVE_RESULT_OBJECT: {
-    replace_with_const(it, env);
+    if (m_config.replace_move_result_with_consts) {
+      replace_with_const(env, it, xstores, declaring_type);
+    } else if (m_config.getter_methods_for_immutable_fields) {
+      auto primary_insn = ir_list::primary_instruction_of_move_result(it);
+      if (is_invoke_virtual(primary_insn->opcode())) {
+        auto invoked =
+            resolve_method(primary_insn->get_method(), MethodSearch::Virtual);
+        if (m_config.getter_methods_for_immutable_fields->count(invoked)) {
+          replace_with_const(env, it, xstores, declaring_type);
+        }
+      }
+    }
     break;
   }
-  */
   case OPCODE_ADD_INT_LIT16:
   case OPCODE_ADD_INT_LIT8:
   case OPCODE_RSUB_INT:
@@ -170,7 +209,7 @@ void Transform::simplify_instruction(const ConstantEnvironment& env,
   case OPCODE_AND_LONG:
   case OPCODE_OR_LONG:
   case OPCODE_XOR_LONG: {
-    replace_with_const(env, it);
+    replace_with_const(env, it, xstores, declaring_type);
     break;
   }
 
@@ -331,55 +370,12 @@ bool Transform::replace_with_throw(const ConstantEnvironment& env,
                                    IRCode* code,
                                    boost::optional<int32_t>* temp_reg) {
   auto* insn = it->insn;
-  auto opcode = insn->opcode();
-  size_t src_index;
-  switch (opcode) {
-  case OPCODE_MONITOR_ENTER:
-  case OPCODE_MONITOR_EXIT:
-  case OPCODE_AGET:
-  case OPCODE_AGET_BYTE:
-  case OPCODE_AGET_CHAR:
-  case OPCODE_AGET_WIDE:
-  case OPCODE_AGET_SHORT:
-  case OPCODE_AGET_OBJECT:
-  case OPCODE_AGET_BOOLEAN:
-  case OPCODE_IGET:
-  case OPCODE_IGET_BYTE:
-  case OPCODE_IGET_CHAR:
-  case OPCODE_IGET_WIDE:
-  case OPCODE_IGET_SHORT:
-  case OPCODE_IGET_OBJECT:
-  case OPCODE_IGET_BOOLEAN:
-  case OPCODE_ARRAY_LENGTH:
-  case OPCODE_FILL_ARRAY_DATA:
-  case OPCODE_INVOKE_SUPER:
-  case OPCODE_INVOKE_INTERFACE:
-  case OPCODE_INVOKE_VIRTUAL:
-  case OPCODE_INVOKE_DIRECT:
-    src_index = 0;
-    break;
-  case OPCODE_APUT:
-  case OPCODE_APUT_BYTE:
-  case OPCODE_APUT_CHAR:
-  case OPCODE_APUT_WIDE:
-  case OPCODE_APUT_SHORT:
-  case OPCODE_APUT_OBJECT:
-  case OPCODE_APUT_BOOLEAN:
-  case OPCODE_IPUT:
-  case OPCODE_IPUT_BYTE:
-  case OPCODE_IPUT_CHAR:
-  case OPCODE_IPUT_WIDE:
-  case OPCODE_IPUT_SHORT:
-  case OPCODE_IPUT_OBJECT:
-  case OPCODE_IPUT_BOOLEAN:
-    src_index = 1;
-    break;
-  default: {
+  auto dereferenced_object_src_index = get_dereferenced_object_src_index(insn);
+  if (!dereferenced_object_src_index) {
     return false;
   }
-  }
 
-  auto reg = insn->src(src_index);
+  auto reg = insn->src(*dereferenced_object_src_index);
   auto value = env.get(reg).maybe_get<SignedConstantDomain>();
   std::vector<IRInstruction*> new_insns;
   if (!value || !value->get_constant() || *value->get_constant() != 0) {
@@ -440,10 +436,12 @@ void Transform::apply_changes(IRCode* code) {
   }
 }
 
-Transform::Stats Transform::apply(
+Transform::Stats Transform::apply_on_uneditable_cfg(
     const intraprocedural::FixpointIterator& intra_cp,
     const WholeProgramState& wps,
-    IRCode* code) {
+    IRCode* code,
+    const XStoreRefs* xstores,
+    const DexType* declaring_type) {
   auto& cfg = code->cfg();
   boost::optional<int32_t> temp_reg;
   for (const auto& block : cfg.blocks()) {
@@ -453,18 +451,303 @@ Transform::Stats Transform::apply(
     if (env.is_bottom()) {
       continue;
     }
+    auto last_insn = block->get_last_insn();
     for (auto& mie : InstructionIterable(block)) {
       auto it = code->iterator_to(mie);
       bool any_changes = eliminate_redundant_put(env, wps, it) ||
+                         eliminate_redundant_null_check(env, wps, it) ||
                          replace_with_throw(env, it, code, &temp_reg);
-      intra_cp.analyze_instruction(mie.insn, &env);
-      if (!any_changes && !m_redundant_move_results.count(mie.insn)) {
-        simplify_instruction(env, wps, code->iterator_to(mie));
+      auto* insn = mie.insn;
+      intra_cp.analyze_instruction(insn, &env, insn == last_insn->insn);
+      if (!any_changes && !m_redundant_move_results.count(insn)) {
+        simplify_instruction(env, wps, code->iterator_to(mie), xstores,
+                             declaring_type);
       }
     }
     eliminate_dead_branch(intra_cp, env, cfg, block);
   }
   apply_changes(code);
+  return m_stats;
+}
+
+void Transform::forward_targets(
+    const intraprocedural::FixpointIterator& intra_cp,
+    const ConstantEnvironment& env,
+    cfg::ControlFlowGraph& cfg,
+    cfg::Block* block,
+    std::unique_ptr<LivenessFixpointIterator>& liveness_fixpoint_iter) {
+  if (env.is_bottom()) {
+    // we found an unreachable block; ignore it
+    return;
+  }
+
+  // normal edges are of type goto or branch, not throw or ghost
+  auto is_normal = [](const cfg::Edge* e) {
+    return e->type() == cfg::EDGE_GOTO || e->type() == cfg::EDGE_BRANCH;
+  };
+
+  // Data structure that holds a possible target block, together with a set out
+  // registers that would have been assigned along the way to the target block.
+  struct TargetAndAssignedRegs {
+    cfg::Block* target;
+    std::unordered_set<reg_t> assigned_regs;
+  };
+
+  // Helper function that computs (ordered) list of unconditional target blocks,
+  // together with the sets of assigned registers.
+  auto get_unconditional_targets =
+      [&intra_cp, &cfg, &is_normal,
+       &env](cfg::Edge* succ_edge) -> std::vector<TargetAndAssignedRegs> {
+    auto succ_env = intra_cp.analyze_edge(succ_edge, env);
+    if (succ_env.is_bottom()) {
+      return {};
+    }
+
+    std::vector<TargetAndAssignedRegs> unconditional_targets{
+        (TargetAndAssignedRegs){succ_edge->target(), {}}};
+    std::unordered_set<cfg::Block*> visited;
+    while (true) {
+      auto& last_unconditional_target = unconditional_targets.back();
+      auto succ = last_unconditional_target.target;
+      if (!visited.insert(succ).second) {
+        // We found a loop; give up.
+        return {};
+      }
+      // We'll have to add to the set of assigned regs, so we make an
+      // intentional copy here
+      auto assigned_regs = last_unconditional_target.assigned_regs;
+      auto last_insn = succ->get_last_insn();
+      for (auto& mie : InstructionIterable(succ)) {
+        auto insn = mie.insn;
+        if (is_branch(insn->opcode())) {
+          continue;
+        }
+        // TODO: Support side-effect-free instruction sequences involving
+        // move-result(-pseudo), similar to what LocalDCE does
+        if (opcode::has_side_effects(insn->opcode()) || !insn->has_dest() ||
+            opcode::is_move_result_any(insn->opcode())) {
+          TRACE(CONSTP, 5, "forward_targets cannot follow %s",
+                SHOW(insn->opcode()));
+          // We stop the analysis here.
+          return unconditional_targets;
+        }
+
+        assigned_regs.insert(insn->dest());
+        intra_cp.analyze_instruction(insn, &succ_env, insn == last_insn->insn);
+        always_assert(!succ_env.is_bottom());
+      }
+
+      boost::optional<std::pair<cfg::Block*, ConstantEnvironment>>
+          only_feasible;
+      for (auto succ_succ_edge : cfg.get_succ_edges_if(succ, is_normal)) {
+        auto succ_succ_env = intra_cp.analyze_edge(succ_succ_edge, succ_env);
+        if (succ_succ_env.is_bottom()) {
+          continue;
+        }
+        if (only_feasible) {
+          // Found another one that's feasible, so there's not just a single
+          // feasible successor. We stop the analysis here.
+          return unconditional_targets;
+        }
+        only_feasible = std::make_pair(succ_succ_edge->target(), succ_succ_env);
+      }
+      unconditional_targets.push_back(
+          (TargetAndAssignedRegs){only_feasible->first, assigned_regs});
+      succ_env = only_feasible->second;
+    }
+  };
+
+  // Helper to check if any assigned register is live at the target block
+  auto is_any_assigned_reg_live_at_target =
+      [&liveness_fixpoint_iter,
+       &cfg](const TargetAndAssignedRegs& unconditional_target) {
+        auto& assigned_regs = unconditional_target.assigned_regs;
+        if (assigned_regs.empty()) {
+          return false;
+        }
+        if (!liveness_fixpoint_iter) {
+          liveness_fixpoint_iter.reset(new LivenessFixpointIterator(cfg));
+          liveness_fixpoint_iter->run(LivenessDomain());
+        }
+        auto live_in_vars = liveness_fixpoint_iter->get_live_in_vars_at(
+            unconditional_target.target);
+        if (live_in_vars.is_bottom()) {
+          // Could happen after having applied other transformations already
+          return true;
+        }
+        always_assert(!live_in_vars.is_top());
+        auto& elements = live_in_vars.elements();
+        return std::find_if(assigned_regs.begin(), assigned_regs.end(),
+                            [&elements](reg_t reg) {
+                              return elements.contains(reg);
+                            }) != assigned_regs.end();
+      };
+
+  // Helper function to find furthest feasible target block for which no
+  // assigned regs are live-in
+  auto get_furthest_target_without_live_assigned_regs =
+      [&is_any_assigned_reg_live_at_target](
+          const std::vector<TargetAndAssignedRegs>& unconditional_targets)
+      -> cfg::Block* {
+    // The first (if any) unconditional target isn't interesting, as that's the
+    // one that's already currently on the cfg edge
+    if (unconditional_targets.size() <= 1) {
+      return nullptr;
+    }
+
+    // Find last successor where no assigned reg is live
+    for (int i = unconditional_targets.size() - 1; i >= 1; --i) {
+      auto& unconditional_target = unconditional_targets.at(i);
+      if (is_any_assigned_reg_live_at_target(unconditional_target)) {
+        continue;
+      }
+      TRACE(CONSTP, 2,
+            "forward_targets rewrites target, skipping %zu targets, discharged "
+            "%zu assigned regs",
+            i, unconditional_target.assigned_regs.size());
+      return unconditional_target.target;
+    }
+    return nullptr;
+  };
+
+  // Main loop over, analyzing and potentially rewriting all normal successor
+  // edges to the furthest unconditional feasible target
+  for (auto succ_edge : cfg.get_succ_edges_if(block, is_normal)) {
+    auto unconditional_targets = get_unconditional_targets(succ_edge);
+    auto new_target =
+        get_furthest_target_without_live_assigned_regs(unconditional_targets);
+    if (!new_target) {
+      continue;
+    }
+    // Found (last) successor where no assigned reg is live -- forward to
+    // there
+    cfg.set_edge_target(succ_edge, new_target);
+    ++m_stats.branches_forwarded;
+  }
+  // TODO: Forwarding may leave behind trivial conditional branches that can
+  // be folded.
+}
+
+bool Transform::has_problematic_return(cfg::ControlFlowGraph& cfg,
+                                       DexMethod* method,
+                                       const XStoreRefs* xstores) {
+  // Nothing to check without method information
+  if (!method) {
+    return false;
+  }
+
+  // No return issues when rtype is primitive
+  auto rtype = method->get_proto()->get_rtype();
+  if (type::is_primitive(rtype)) {
+    return false;
+  }
+
+  // No return issues when there are no try/catch blocks
+  auto blocks = cfg.blocks();
+  bool has_catch =
+      std::find_if(blocks.begin(), blocks.end(), [](cfg::Block* block) {
+        return block->is_catch();
+      }) != blocks.end();
+  if (!has_catch) {
+    return false;
+  }
+
+  // For all return instructions, check whether the reaching definitions are of
+  // a type that's unavailable/external, or defined in a different store.
+  auto declaring_class_idx = xstores->get_store_idx(method->get_class());
+  auto is_problematic_return_type = [&](const DexType* t, IRInstruction* insn) {
+    t = type::get_element_type_if_array(t);
+    if (!type_class_internal(t)) {
+      // An unavailable or external class
+      TRACE(CONSTP, 2,
+            "Skipping {%s} because {%s} is unavailable/external in {%s}",
+            SHOW(method), SHOW(t), SHOW(insn));
+      return true;
+    }
+    if (!xstores) {
+      return false;
+    }
+    auto t_idx = xstores->get_store_idx(t);
+    if (t_idx == declaring_class_idx) {
+      return false;
+    }
+    TRACE(CONSTP, 2,
+          "Skipping {%s} because {%s} is from different store (%zu vs %zu) in "
+          "{%s}",
+          SHOW(method), SHOW(t), declaring_class_idx, t_idx, SHOW(insn));
+    return true;
+  };
+  reaching_defs::MoveAwareFixpointIterator fp_iter(cfg);
+  fp_iter.run({});
+  std::unique_ptr<type_inference::TypeInference> ti;
+  for (cfg::Block* block : blocks) {
+    auto env = fp_iter.get_entry_state_at(block);
+    if (env.is_bottom()) {
+      continue;
+    }
+    for (auto& mie : InstructionIterable(block)) {
+      IRInstruction* insn = mie.insn;
+      if (is_return(insn->opcode())) {
+        auto defs = env.get(insn->src(0));
+        always_assert(!defs.is_bottom() && !defs.is_top());
+        for (auto def : defs.elements()) {
+          auto op = def->opcode();
+          if (def->has_type()) {
+            if (is_problematic_return_type(def->get_type(), def)) {
+              return true;
+            }
+          } else if (def->has_method()) {
+            always_assert(is_invoke(op));
+            if (is_problematic_return_type(
+                    def->get_method()->get_proto()->get_rtype(), def)) {
+              return true;
+            }
+          } else if (op == OPCODE_IGET_OBJECT || op == OPCODE_SGET_OBJECT) {
+            if (is_problematic_return_type(def->get_field()->get_type(), def)) {
+              return true;
+            }
+          } else if (op == OPCODE_AGET_OBJECT) {
+            if (!ti) {
+              ti.reset(new type_inference::TypeInference(cfg));
+              ti->run(method);
+            }
+            auto& type_environments = ti->get_type_environments();
+            auto& type_environment = type_environments.at(def);
+            auto dex_type = type_environment.get_dex_type(def->src(1));
+            if (dex_type && type::is_array(*dex_type) &&
+                is_problematic_return_type(
+                    type::get_array_component_type(*dex_type), def)) {
+              return true;
+            }
+          }
+        }
+      }
+      fp_iter.analyze_instruction(insn, &env);
+    }
+  }
+  return false;
+}
+
+Transform::Stats Transform::apply(
+    const intraprocedural::FixpointIterator& intra_cp,
+    cfg::ControlFlowGraph& cfg,
+    DexMethod* method,
+    const XStoreRefs* xstores) {
+  // The following is an attempt to avoid creating a control-flow structure that
+  // triggers the Android bug described in T55782799, related to a return
+  // statement in a try region when a type is unavailable/external, possibly
+  // from a different store.
+  // Besides that Android bug, it really shouldn't be necessary to do anything
+  // special about unavailable types or cross-store references here.
+  if (has_problematic_return(cfg, method, xstores)) {
+    return m_stats;
+  }
+
+  std::unique_ptr<LivenessFixpointIterator> liveness_fixpoint_iter;
+  for (auto block : cfg.blocks()) {
+    auto env = intra_cp.get_exit_state_at(block);
+    forward_targets(intra_cp, env, cfg, block, liveness_fixpoint_iter);
+  }
   return m_stats;
 }
 

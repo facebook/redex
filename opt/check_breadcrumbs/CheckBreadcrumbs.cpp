@@ -136,9 +136,9 @@ void Breadcrumbs::report_deleted_types(bool report_only, PassManager& mgr) {
   size_t bad_type_insns_count = 0;
   size_t bad_field_insns_count = 0;
   size_t bad_meths_insns_count = 0;
-  if (m_bad_fields.size() > 0 || m_bad_methods.size() > 0 ||
-      m_bad_type_insns.size() > 0 || m_bad_field_insns.size() > 0 ||
-      m_bad_meth_insns.size() > 0) {
+  if (!m_bad_fields.empty() || !m_bad_methods.empty() ||
+      !m_bad_type_insns.empty() || !m_bad_field_insns.empty() ||
+      !m_bad_meth_insns.empty()) {
     std::ostringstream ss;
     for (const auto& bad_field : m_bad_fields) {
       for (const auto& field : bad_field.second) {
@@ -302,8 +302,8 @@ bool Breadcrumbs::has_illegal_access(const DexMethod* input_method) {
       }
     }
     if (insn->has_method()) {
-      auto res_method =
-          resolve_method(insn->get_method(), opcode_to_search(insn));
+      auto res_method = resolve_method(insn->get_method(),
+                                       opcode_to_search(insn), input_method);
       if (res_method != nullptr) {
         if (!check_method_accessibility(input_method, res_method)) {
           result = true;
@@ -542,7 +542,7 @@ void Breadcrumbs::check_method_opcode(const DexMethod* method,
     m_illegal_method_call[method].emplace_back(insn);
   }
 
-  DexMethod* res_meth = resolve_method(meth, opcode_to_search(insn));
+  DexMethod* res_meth = resolve_method(meth, opcode_to_search(insn), method);
   if (res_meth != nullptr) {
     // a resolved method can only differ in the owner class
     if (res_meth != meth) {

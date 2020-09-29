@@ -50,7 +50,7 @@ class LevelChecker {
    * correct but it seems like most developers just forgot (or were too lazy) to
    * put the annotation on all the inner classes (especially anonymous ones).
    */
-  static int32_t get_method_level(DexMethod* method);
+  static int32_t get_method_level(const DexMethod* method);
 
   /**
    * Return the minimum api level of the entire app. This is the lowest value

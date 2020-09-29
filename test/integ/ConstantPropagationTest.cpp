@@ -14,7 +14,7 @@
 #include "IRCode.h"
 #include "RedexTest.h"
 
-#include "ConstantPropagation.h"
+#include "ConstantPropagationPass.h"
 #include "DelInit.h"
 #include "LocalDce.h"
 #include "RemoveEmptyClasses.h"
@@ -104,8 +104,7 @@ TEST_F(ConstantPropagationTest, constantPropagation) {
     }
   }
 
-  Pass* constp = nullptr;
-  constp = new ConstantPropagationPass();
+  Pass* constp = new ConstantPropagationPass();
   std::vector<Pass*> passes = {constp};
 
   run_passes(passes);

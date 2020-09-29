@@ -48,7 +48,7 @@ std::ostream& operator<<(std::ostream& os, Interval interval) {
     os << "GTZ";
     return os;
   case Interval::NEZ:
-    os << "GTZ";
+    os << "NEZ";
     return os;
   case Interval::EQZ:
     os << "EQZ";

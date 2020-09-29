@@ -11,6 +11,7 @@ sys.path.append(redex_path)
 
 import redex
 import pyredex.unpacker as unpacker
+import pyredex.utils as utils
 
 
 def redexdump_binary():
@@ -45,7 +46,7 @@ if __name__ == '__main__':
     apk_dir = redex.make_temp_dir('.apk_dir')
     dex_dir = redex.make_temp_dir('.dex_dir')
 
-    redex.unzip_apk(apk, apk_dir)
+    utils.unzip_apk(apk, apk_dir)
     dex_mode = unpacker.detect_secondary_dex_mode(apk_dir)
     dex_mode.unpackage(apk_dir, dex_dir)
     dexen = redex.dex_glob(dex_dir)

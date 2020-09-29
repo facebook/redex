@@ -13,11 +13,11 @@ import sys
 from os.path import expanduser
 
 
-PAT_ANON_CLASS = re.compile(".*\$[0-9]+;")
+PAT_ANON_CLASS = re.compile(r".*\$[0-9]+;")
 
 HISTORY_FILE = expanduser("~/.dexsql.history")
 
-OPCODES = dict()
+OPCODES = {}
 OPCODES[0x1A] = "const-string"
 OPCODES[0x1B] = "const-string/jumbo"
 OPCODES[0x1C] = "const-class"
@@ -62,6 +62,7 @@ OPCODES[0x75] = "invoke-super/range"
 OPCODES[0x76] = "invoke-direct/range"
 OPCODES[0x77] = "invoke-static/range"
 OPCODES[0x78] = "invoke-interface/range"
+
 
 # operates on classes.name column
 # return the first n levels of the package: PKG("com/foo/bar", 2) => "com/foo"
@@ -153,7 +154,7 @@ def udf_is_default_ctor(name):
 # operates on fields.name
 class AggregateFieldShape:
     def __init__(self):
-        self.shape = dict()
+        self.shape = {}
 
     def step(self, value):
         element = value[value.index(":") + 1]

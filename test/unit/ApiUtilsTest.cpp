@@ -19,32 +19,23 @@ std::vector<DexClass*> create_scope(bool add_parent) {
   std::vector<DexClass*> scope = create_empty_scope();
   auto obj_t = type::java_lang_Object();
 
-  auto a_t = DexType::make_type("Landroidx/ArrayMap;");
-  auto a_cls = create_internal_class(a_t, obj_t, {});
-  scope.push_back(a_cls);
+  auto make_cls = [&](const char* name, DexType* super_cls) {
+    auto t = DexType::make_type(name);
+    auto cls = create_internal_class(t, super_cls, {});
+    scope.push_back(cls);
+    return cls;
+  };
 
-  auto b_t = DexType::make_type("Landroidx/ArraySet;");
-  auto b_cls = create_internal_class(b_t, obj_t, {});
-  scope.push_back(b_cls);
-
-  auto c_t = DexType::make_type("Landroidx/LongSparseArray;");
-  auto c_cls = create_internal_class(c_t, a_t, {});
-  scope.push_back(c_cls);
-
-  auto d_t = DexType::make_type("Landroidx/FragmentContainer;");
-  auto d_cls = create_internal_class(d_t, obj_t, {});
-  scope.push_back(d_cls);
-
+  auto a_cls = make_cls("Landroidx/ArrayMap;", obj_t);
+  DexType* b_parent = obj_t;
   if (add_parent) {
-    auto d_t = DexType::make_type("Landroidx/ArraySetParentClass;");
-    auto d_cls = create_internal_class(d_t, obj_t, {});
-    b_cls->set_super_class(d_t);
-    scope.push_back(d_cls);
+    auto p_cls = make_cls("Landroidx/ArraySetParentClass;", obj_t);
+    b_parent = p_cls->get_type();
   }
-
-  auto android_view = DexType::make_type("Landroid/view/View;");
-  auto av_cls = create_internal_class(android_view, obj_t, {});
-  scope.push_back(av_cls);
+  make_cls("Landroidx/ArraySet;", b_parent);
+  make_cls("Landroidx/LongSparseArray;", a_cls->get_type());
+  make_cls("Landroidx/FragmentContainer;", obj_t);
+  make_cls("Landroid/view/View;", obj_t);
 
   return scope;
 }

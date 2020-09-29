@@ -93,7 +93,7 @@ void print_scope(Scope& scope) {
   for (const auto& cls : scope) {
     TRACE_NO_LINE(OBFUSCATE, 2, "** %s extends %s", SHOW(cls),
                   SHOW(cls->get_super_class()));
-    if (cls->get_interfaces()->get_type_list().size() > 0) {
+    if (!cls->get_interfaces()->get_type_list().empty()) {
       TRACE_NO_LINE(OBFUSCATE, 2, " implements ");
       for (const auto& intf : cls->get_interfaces()->get_type_list()) {
         TRACE_NO_LINE(OBFUSCATE, 2, "%s, ", SHOW(intf));

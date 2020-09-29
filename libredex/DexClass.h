@@ -17,6 +17,7 @@
 #include <memory>
 #include <sstream>
 #include <string>
+#include <utility>
 
 #include "DexAccess.h"
 #include "DexAnnotation.h"
@@ -183,7 +184,7 @@ class DexType {
   DexString* m_name;
 
   // See UNIQUENESS above for the rationale for the private constructor pattern.
-  DexType(DexString* dstring) { m_name = dstring; }
+  explicit DexType(DexString* dstring) { m_name = dstring; }
 
  public:
   // DexType retrieval/creation
@@ -267,6 +268,7 @@ struct dextypes_comparator {
  */
 class DexFieldRef {
   friend struct RedexContext;
+  friend class DexClass;
 
  protected:
   DexFieldSpec m_spec;
@@ -298,8 +300,7 @@ class DexFieldRef {
   void gather_types_shallow(std::vector<DexType*>& ltype) const;
   void gather_strings_shallow(std::vector<DexString*>& lstring) const;
 
-  void change(const DexFieldSpec& ref,
-              bool rename_on_collision = false) {
+  void change(const DexFieldSpec& ref, bool rename_on_collision = false) {
     g_redex->mutate_field(this, ref, rename_on_collision);
   }
 
@@ -396,15 +397,17 @@ class DexField : public DexFieldRef {
       // This comes up for redex-created fields
       return std::string(c_str());
     }
-    auto dot_pos = full_name.find(".");
-    auto colon_pos = full_name.find(":");
+    auto dot_pos = full_name.find('.');
+    auto colon_pos = full_name.find(':');
     if (dot_pos == std::string::npos || colon_pos == std::string::npos) {
       return full_name;
     }
     return full_name.substr(dot_pos + 1, colon_pos - dot_pos - 1);
   }
 
-  void set_deobfuscated_name(std::string name) { m_deobfuscated_name = name; }
+  void set_deobfuscated_name(std::string name) {
+    m_deobfuscated_name = std::move(name);
+  }
   const std::string& get_deobfuscated_name() const {
     return m_deobfuscated_name;
   }
@@ -471,7 +474,7 @@ class DexTypeList {
   std::deque<DexType*> m_list;
 
   // See UNIQUENESS above for the rationale for the private constructor pattern.
-  DexTypeList(std::deque<DexType*>&& p) { m_list = std::move(p); }
+  explicit DexTypeList(std::deque<DexType*>&& p) { m_list = std::move(p); }
 
  public:
   std::deque<DexType*>::iterator begin() { return m_list.begin(); }
@@ -630,7 +633,7 @@ struct DexDebugEntry final {
   // should only be copied via DexDebugItem's copy ctor, which is responsible
   // for remapping DexPositions' parent pointer
   DexDebugEntry(const DexDebugEntry&) = delete;
-  DexDebugEntry(DexDebugEntry&& other);
+  DexDebugEntry(DexDebugEntry&& other) noexcept;
   ~DexDebugEntry();
   void gather_strings(std::vector<DexString*>& lstring) const {
     if (type == DexDebugEntryType::Instruction) {
@@ -687,7 +690,7 @@ std::vector<std::unique_ptr<DexDebugInstruction>> generate_debug_instructions(
     uint32_t* line_start,
     std::vector<DebugLineItem>* line_info);
 
-typedef std::vector<std::pair<DexType*, uint32_t>> DexCatches;
+using DexCatches = std::vector<std::pair<DexType*, uint32_t>>;
 
 struct DexTryItem {
   uint32_t m_start_addr;
@@ -808,6 +811,7 @@ class DexCode {
  */
 class DexMethodRef {
   friend struct RedexContext;
+  friend class DexClass;
 
  protected:
   DexMethodSpec m_spec;
@@ -837,8 +841,7 @@ class DexMethodRef {
   void gather_types_shallow(std::vector<DexType*>& ltype) const;
   void gather_strings_shallow(std::vector<DexString*>& lstring) const;
 
-  void change(const DexMethodSpec& ref,
-              bool rename_on_collision) {
+  void change(const DexMethodSpec& ref, bool rename_on_collision) {
     g_redex->mutate_method(this, ref, rename_on_collision);
   }
 
@@ -909,7 +912,7 @@ class DexMethod : public DexMethodRef {
   static DexMethodRef* make_method(const char* cls_name,
                                    const char* meth_name,
                                    const char* rtype_str,
-                                   std::vector<const char*> arg_strs) {
+                                   const std::vector<const char*>& arg_strs) {
     DexType* cls = DexType::make_type(cls_name);
     DexString* name = DexString::make_string(meth_name);
     DexType* rtype = DexType::make_type(rtype_str);
@@ -936,7 +939,11 @@ class DexMethod : public DexMethodRef {
 
   /**
    * Get a method using a full descriptor: Lcls;.name:(args)rtype
+   *
+   * When `kCheckFormat` = true, syntactical issues in the string
+   * will lead to asserts, i.e., throws.
    */
+  template <bool kCheckFormat = false>
   static DexMethodRef* get_method(const std::string&);
 
   /**
@@ -979,15 +986,17 @@ class DexMethod : public DexMethodRef {
     return m_access;
   }
   const ParamAnnotations* get_param_anno() const {
-    if (m_param_anno.size() == 0) return nullptr;
+    if (m_param_anno.empty()) return nullptr;
     return &m_param_anno;
   }
   ParamAnnotations* get_param_anno() {
-    if (m_param_anno.size() == 0) return nullptr;
+    if (m_param_anno.empty()) return nullptr;
     return &m_param_anno;
   }
 
-  void set_deobfuscated_name(std::string name) { m_deobfuscated_name = name; }
+  void set_deobfuscated_name(std::string name) {
+    m_deobfuscated_name = std::move(name);
+  }
   const std::string& get_deobfuscated_name() const {
     return m_deobfuscated_name;
   }
@@ -1097,22 +1106,22 @@ using dexcode_to_offset = std::unordered_map<DexCode*, uint32_t>;
 
 class DexClass {
  private:
-  DexAccessFlags m_access_flags;
   DexType* m_super_class;
   DexType* m_self;
   DexTypeList* m_interfaces;
   DexString* m_source_file;
   DexAnnotationSet* m_anno;
-  bool m_external;
-  bool m_perf_sensitive;
   std::string m_deobfuscated_name;
   const std::string m_location; // TODO: string interning
   std::vector<DexField*> m_sfields;
   std::vector<DexField*> m_ifields;
   std::vector<DexMethod*> m_dmethods;
   std::vector<DexMethod*> m_vmethods;
+  DexAccessFlags m_access_flags;
+  bool m_external;
+  bool m_perf_sensitive;
 
-  DexClass(const std::string& location) : m_location(location){};
+  explicit DexClass(const std::string& location) : m_location(location){};
   void load_class_annotations(DexIdx* idx, uint32_t anno_off);
   void load_class_data_item(DexIdx* idx,
                             uint32_t cdi_off,
@@ -1144,6 +1153,8 @@ class DexClass {
     return m_vmethods;
   }
 
+  std::vector<DexMethod*> get_all_methods() const;
+
   /* Gets the clinit method, aka the class initializer method.
    *
    * Unlike constructors, there's only ever one clinit method.
@@ -1170,12 +1181,14 @@ class DexClass {
 
   bool has_ctors() const {
     // TODO: There must be a logarithmic approach to this. dmethods are sorted!
-    return !!get_ctors().size();
+    return !get_ctors().empty();
   }
 
   void add_method(DexMethod* m);
   // Removes the method from this class
   void remove_method(const DexMethod* m);
+  // Remove the method from the class and delete the definition.
+  void remove_method_definition(DexMethod* m);
   const std::vector<DexField*>& get_sfields() const { return m_sfields; }
   std::vector<DexField*>& get_sfields() {
     redex_assert(!m_external);
@@ -1186,9 +1199,13 @@ class DexClass {
     redex_assert(!m_external);
     return m_ifields;
   }
+
+  std::vector<DexField*> get_all_fields() const;
   void add_field(DexField* f);
   // Removes the field from this class
   void remove_field(const DexField* f);
+  // Remove the field from the class and delete the definition.
+  void remove_field_definition(DexField* f);
   DexField* find_field(const char* name, const DexType* field_type) const;
 
   DexAnnotationDirectory* get_annotation_directory();

@@ -10,6 +10,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include "DexClass.h"
@@ -23,11 +24,11 @@ class DexMetadata {
   std::vector<std::string> files;
 
  public:
-  const std::string get_id() const { return id; }
-  void set_id(std::string name) { id = name; }
+  const std::string& get_id() const { return id; }
+  void set_id(std::string name) { id = std::move(name); }
   void set_files(const std::vector<std::string>& f) { files = f; }
-  const std::vector<std::string> get_files() const { return files; }
-  const std::vector<std::string> get_dependencies() const {
+  const std::vector<std::string>& get_files() const { return files; }
+  const std::vector<std::string>& get_dependencies() const {
     return dependencies;
   }
   std::vector<std::string>& get_dependencies() { return dependencies; }
@@ -42,8 +43,8 @@ class DexStore {
   bool m_generated = false;
 
  public:
-  DexStore(const DexMetadata metadata) : m_metadata(metadata){};
-  DexStore(const std::string& name);
+  explicit DexStore(const DexMetadata& metadata) : m_metadata(metadata){};
+  explicit DexStore(const std::string& name);
 
   std::string get_name() const;
   const std::string& get_dex_magic() const { return dex_magic; }
@@ -73,31 +74,32 @@ class DexStoreClassesIterator
   classes_iterator m_current_classes;
 
  public:
-  DexStoreClassesIterator(std::vector<DexStore>& stores)
+  explicit DexStoreClassesIterator(std::vector<DexStore>& stores)
       : m_stores(stores),
         m_current_store(stores.begin()),
-        m_current_classes(m_current_store->get_dexen().begin()) {}
+        m_current_classes(m_current_store->get_dexen().begin()) {
+    advance_end_classes();
+  }
 
-  DexStoreClassesIterator(const std::vector<DexStore>& stores)
+  explicit DexStoreClassesIterator(const std::vector<DexStore>& stores)
       : m_stores(const_cast<std::vector<DexStore>&>(stores)),
         m_current_store(m_stores.begin()),
-        m_current_classes(m_current_store->get_dexen().begin()) {}
+        m_current_classes(m_current_store->get_dexen().begin()) {
+    advance_end_classes();
+  }
 
   DexStoreClassesIterator(std::vector<DexStore>& stores,
                           store_iterator current_store,
                           classes_iterator current_classes)
       : m_stores(stores),
         m_current_store(current_store),
-        m_current_classes(current_classes) {}
+        m_current_classes(current_classes) {
+    advance_end_classes();
+  }
 
   DexStoreClassesIterator& operator++() {
     ++m_current_classes;
-    while (m_current_store != m_stores.end() &&
-           m_current_classes != m_stores.back().get_dexen().end() &&
-           m_current_classes == m_current_store->get_dexen().end()) {
-      ++m_current_store;
-      m_current_classes = m_current_store->get_dexen().begin();
-    }
+    advance_end_classes();
     return *this;
   }
 
@@ -116,6 +118,16 @@ class DexStoreClassesIterator
     return m_current_classes != rhs.m_current_classes;
   }
   DexClasses& operator*() { return *m_current_classes; }
+
+ private:
+  void advance_end_classes() {
+    while (m_current_store != m_stores.end() &&
+           m_current_classes != m_stores.back().get_dexen().end() &&
+           m_current_classes == m_current_store->get_dexen().end()) {
+      ++m_current_store;
+      m_current_classes = m_current_store->get_dexen().begin();
+    }
+  }
 };
 
 /**
@@ -147,6 +159,11 @@ class XStoreRefs {
   explicit XStoreRefs(const DexStoresVector& stores);
 
   /**
+   * If there's no secondary dexes, it returns 0. Otherwise it returns 1.
+   */
+  size_t largest_root_store_id() const { return m_root_stores - 1; }
+
+  /**
    * Return a stored idx for a given type.
    * The store idx can be used in the 'bool illegal_ref(size_t, const DexType*)'
    * api.
@@ -155,7 +172,7 @@ class XStoreRefs {
     for (size_t store_idx = 0; store_idx < m_xstores.size(); store_idx++) {
       if (m_xstores[store_idx].count(type) > 0) return store_idx;
     }
-    always_assert_log(false, "type %s not in the current APK", SHOW(type));
+    not_reached_log("type %s not in the current APK", SHOW(type));
   }
 
   /**
@@ -172,6 +189,10 @@ class XStoreRefs {
     }
 
     return false;
+  }
+
+  bool is_in_primary_dex(const DexType* type) const {
+    return !m_xstores.empty() && m_xstores[0].count(type);
   }
 
   const DexStore* get_store(size_t idx) const { return m_stores[idx]; }

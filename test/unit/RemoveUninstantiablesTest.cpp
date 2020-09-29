@@ -11,10 +11,43 @@
 #include "IRAssembler.h"
 #include "RedexTest.h"
 #include "RemoveUninstantiablesPass.h"
+#include "VirtualScope.h"
 
 namespace {
 
-class RemoveUninstantiablesTest : public RedexTest {};
+struct RemoveUninstantiablesTest : public RedexTest {
+  RemoveUninstantiablesTest() {
+    always_assert(type_class(type::java_lang_Object()) == nullptr);
+    always_assert(type_class(type::java_lang_Void()) == nullptr);
+    ClassCreator cc_object(type::java_lang_Object());
+    cc_object.set_access(ACC_PUBLIC);
+    cc_object.create();
+    ClassCreator cc_void(type::java_lang_Void());
+    cc_void.set_access(ACC_PUBLIC | ACC_ABSTRACT);
+    cc_void.set_super(type::java_lang_Object());
+    cc_void.create();
+  }
+};
+
+std::unordered_set<DexType*> compute_uninstantiable_types() {
+  Scope scope;
+  g_redex->walk_type_class([&](const DexType*, const DexClass* cls) {
+    scope.push_back(const_cast<DexClass*>(cls));
+  });
+  scope.push_back(type_class(type::java_lang_Void()));
+  return RemoveUninstantiablesPass::compute_scoped_uninstantiable_types(scope);
+}
+
+RemoveUninstantiablesPass::Stats replace_uninstantiable_refs(
+    cfg::ControlFlowGraph& cfg) {
+  return RemoveUninstantiablesPass::replace_uninstantiable_refs(
+      compute_uninstantiable_types(), cfg);
+}
+
+RemoveUninstantiablesPass::Stats replace_all_with_throw(
+    cfg::ControlFlowGraph& cfg) {
+  return RemoveUninstantiablesPass::replace_all_with_throw(cfg);
+}
 
 /// Expect \c RemoveUninstantiablesPass to convert \p ACTUAL into \p EXPECTED
 /// where both parameters are strings containing IRCode in s-expression form.
@@ -26,7 +59,7 @@ class RemoveUninstantiablesTest : public RedexTest {};
     const auto expected_ir = assembler::ircode_from_string(EXPECTED); \
                                                                       \
     actual_ir->build_cfg();                                           \
-    STATS += RemoveUninstantiablesPass::OPERATION(actual_ir->cfg());  \
+    STATS += OPERATION(actual_ir->cfg());                             \
     actual_ir->clear_cfg();                                           \
                                                                       \
     EXPECT_CODE_EQ(expected_ir.get(), actual_ir.get());               \
@@ -73,7 +106,7 @@ const char* const Bar_qux = R"(
 (method (public) "LBar;.qux:()I"
   ((load-param-object v0) ; this
    (iget-object v0 "LBar;.mFoo:LFoo;")
-   (move-result-pseudo v1)
+   (move-result-pseudo-object v1)
    (iput-object v1 v0 "LBar;.mFoo:LFoo;")
    (if-eqz v1 :else)
    (invoke-virtual (v1) "LFoo;.qux:()LFoo;")
@@ -83,7 +116,7 @@ const char* const Bar_qux = R"(
    (return v3)
    (:else)
    (iget-object v1 "LFoo;.mBar:LBar;")
-   (move-result-pseudo v3)
+   (move-result-pseudo-object v3)
    (const v4 0)
    (return v4))
 ))";
@@ -120,6 +153,24 @@ TEST_F(RemoveUninstantiablesTest, InstanceOf) {
                   (const v1 0)
                   (instance-of v0 "LBar;")
                   (move-result-pseudo v1)
+                ))");
+
+  EXPECT_EQ(1, stats.instance_ofs);
+}
+
+TEST_F(RemoveUninstantiablesTest, InstanceOfUnimplementedInterface) {
+  auto cls = def_class("LFoo;");
+  cls->set_access(cls->get_access() | ACC_INTERFACE | ACC_ABSTRACT);
+
+  RemoveUninstantiablesPass::Stats stats;
+  EXPECT_CHANGE(replace_uninstantiable_refs,
+                stats,
+                /* ACTUAL */ R"((
+                  (instance-of v0 "LFoo;")
+                  (move-result-pseudo v1)
+                ))",
+                /* EXPECTED */ R"((
+                  (const v1 0)
                 ))");
 
   EXPECT_EQ(1, stats.instance_ofs);
@@ -412,7 +463,7 @@ TEST_F(RemoveUninstantiablesTest, ReplaceAllWithThrow) {
 }
 
 TEST_F(RemoveUninstantiablesTest, RunPass) {
-  DexStoresVector dss{{"test_store"}};
+  DexStoresVector dss{DexStore{"test_store"}};
 
   auto* Foo = def_class("LFoo;", Foo_baz, Foo_qux);
   auto* Bar = def_class("LBar;", Bar_init, Bar_baz, Bar_qux);
@@ -472,6 +523,67 @@ TEST_F(RemoveUninstantiablesTest, RunPass) {
   EXPECT_EQ(1, rm_uninst->metrics["field_accesses_on_uninstantiable"]);
   EXPECT_EQ(2, rm_uninst->metrics["instance_methods_of_uninstantiable"]);
   EXPECT_EQ(1, rm_uninst->metrics["get_uninstantiables"]);
+}
+
+TEST_F(RemoveUninstantiablesTest, VoidIsUninstantiable) {
+  auto uninstantiable_types = compute_uninstantiable_types();
+  EXPECT_TRUE(uninstantiable_types.count(type::java_lang_Void()));
+}
+
+TEST_F(RemoveUninstantiablesTest, UnimplementedInterfaceIsUninstantiable) {
+  auto foo = def_class("LFoo;");
+  foo->set_access(foo->get_access() | ACC_INTERFACE | ACC_ABSTRACT);
+  auto uninstantiable_types = compute_uninstantiable_types();
+  EXPECT_TRUE(uninstantiable_types.count(foo->get_type()));
+}
+
+TEST_F(RemoveUninstantiablesTest,
+       UnimplementedInterfaceWithRootMethodIsNotUninstantiable) {
+  auto foo = def_class("LFoo;");
+  foo->set_access(foo->get_access() | ACC_INTERFACE | ACC_ABSTRACT);
+  auto method =
+      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.root:()Z"));
+  method->make_concrete(ACC_PUBLIC | ACC_ABSTRACT, /* is_virtual */ true);
+  method->rstate.set_root();
+  foo->add_method(method);
+  auto uninstantiable_types = compute_uninstantiable_types();
+  EXPECT_FALSE(uninstantiable_types.count(foo->get_type()));
+}
+
+TEST_F(RemoveUninstantiablesTest,
+       UnimplementedAnnotationInterfaceIsNotUninstantiable) {
+  auto foo = def_class("LFoo;");
+  foo->set_access(foo->get_access() | ACC_INTERFACE | ACC_ABSTRACT |
+                  ACC_ANNOTATION);
+  auto uninstantiable_types = compute_uninstantiable_types();
+  EXPECT_FALSE(uninstantiable_types.count(foo->get_type()));
+}
+
+TEST_F(RemoveUninstantiablesTest, ImplementedInterfaceIsNotUninstantiable) {
+  auto foo = def_class("LFoo;");
+  foo->set_access(foo->get_access() | ACC_INTERFACE | ACC_ABSTRACT);
+  auto bar = def_class("LBar;", Bar_init, Bar_baz);
+  bar->set_interfaces(DexTypeList::make_type_list({foo->get_type()}));
+  auto uninstantiable_types = compute_uninstantiable_types();
+  EXPECT_FALSE(uninstantiable_types.count(foo->get_type()));
+  EXPECT_FALSE(uninstantiable_types.count(bar->get_type()));
+}
+
+TEST_F(RemoveUninstantiablesTest, AbstractClassIsUninstantiable) {
+  auto foo = def_class("LFoo;");
+  foo->set_access(foo->get_access() | ACC_ABSTRACT);
+  auto uninstantiable_types = compute_uninstantiable_types();
+  EXPECT_TRUE(uninstantiable_types.count(foo->get_type()));
+}
+
+TEST_F(RemoveUninstantiablesTest, ExtendedAbstractClassIsNotUninstantiable) {
+  auto foo = def_class("LFoo;");
+  foo->set_access(foo->get_access() | ACC_ABSTRACT);
+  auto bar = def_class("LBar;", Bar_init);
+  bar->set_super_class(foo->get_type());
+  auto uninstantiable_types = compute_uninstantiable_types();
+  EXPECT_FALSE(uninstantiable_types.count(foo->get_type()));
+  EXPECT_FALSE(uninstantiable_types.count(bar->get_type()));
 }
 
 } // namespace

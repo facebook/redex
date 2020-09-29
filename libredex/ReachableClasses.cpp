@@ -7,6 +7,7 @@
 
 #include "ReachableClasses.h"
 
+#include <boost/filesystem.hpp>
 #include <chrono>
 #include <fstream>
 #include <sstream>
@@ -60,7 +61,7 @@ struct DexItemIter<DexMethod*, F> {
  * Prevent a class from being deleted due to its being referenced via
  * reflection. :reflecting_method is the method containing the reflection site.
  */
-void blacklist_field(DexMethod* reflecting_method,
+void blocklist_field(DexMethod* reflecting_method,
                      DexType* type,
                      DexString* name,
                      bool declared) {
@@ -75,19 +76,19 @@ void blacklist_field(DexMethod* reflecting_method,
     if (!is_public(t) && !declared) {
       return;
     }
-    TRACE(PGR, 4, "SRA BLACKLIST: %s", SHOW(t));
+    TRACE(PGR, 4, "SRA BLOCKLIST: %s", SHOW(t));
     t->rstate.set_root(keep_reason::REFLECTION, reflecting_method);
   };
   DexItemIter<DexField*, decltype(yield)>::iterate(cls, yield);
   if (!declared) {
     auto super_cls = cls->get_super_class();
     if (super_cls != nullptr) {
-      blacklist_field(reflecting_method, super_cls, name, declared);
+      blocklist_field(reflecting_method, super_cls, name, declared);
     }
   }
 }
 
-void blacklist_method(DexMethod* reflecting_method,
+void blocklist_method(DexMethod* reflecting_method,
                       DexType* type,
                       DexString* name,
                       const boost::optional<std::vector<DexType*>>& params,
@@ -106,14 +107,14 @@ void blacklist_method(DexMethod* reflecting_method,
     if (!is_public(t) && !declared) {
       return;
     }
-    TRACE(PGR, 4, "SRA BLACKLIST: %s", SHOW(t));
+    TRACE(PGR, 4, "SRA BLOCKLIST: %s", SHOW(t));
     t->rstate.set_root(keep_reason::REFLECTION, reflecting_method);
   };
   DexItemIter<DexMethod*, decltype(yield)>::iterate(cls, yield);
   if (!declared) {
     auto super_cls = cls->get_super_class();
     if (super_cls != nullptr) {
-      blacklist_method(reflecting_method, super_cls, name, params, declared);
+      blocklist_method(reflecting_method, super_cls, name, params, declared);
     }
   }
 }
@@ -182,6 +183,8 @@ void analyze_reflection(const Scope& scope) {
     }
   };
 
+  reflection::MetadataCache refl_metadata_cache;
+
   std::mutex mutation_mutex;
   walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
     std::unique_ptr<ReflectionAnalysis> analysis = nullptr;
@@ -210,7 +213,11 @@ void analyze_reflection(const Scope& scope) {
       // on the method. So, we wait until we're sure we need it.
       // We use a unique_ptr so that we'll still only have one per method.
       if (!analysis) {
-        analysis = std::make_unique<ReflectionAnalysis>(method);
+        analysis = std::make_unique<ReflectionAnalysis>(
+            /* dex_method */ method,
+            /* context (interprocedural only) */ nullptr,
+            /* summary_query_fn (interprocedural only) */ nullptr,
+            /* metadata_cache */ &refl_metadata_cache);
       }
 
       auto arg_cls = analysis->get_abstract_object(insn->src(0), insn);
@@ -242,25 +249,25 @@ void analyze_reflection(const Scope& scope) {
 
       switch (refl_type) {
       case GET_FIELD:
-        blacklist_field(method, arg_cls->dex_type, arg_str_value, false);
+        blocklist_field(method, arg_cls->dex_type, arg_str_value, false);
         break;
       case GET_DECLARED_FIELD:
-        blacklist_field(method, arg_cls->dex_type, arg_str_value, true);
+        blocklist_field(method, arg_cls->dex_type, arg_str_value, true);
         break;
       case GET_METHOD:
       case GET_CONSTRUCTOR:
-        blacklist_method(method, arg_cls->dex_type, arg_str_value, param_types,
+        blocklist_method(method, arg_cls->dex_type, arg_str_value, param_types,
                          false);
         break;
       case GET_DECLARED_METHOD:
       case GET_DECLARED_CONSTRUCTOR:
-        blacklist_method(method, arg_cls->dex_type, arg_str_value, param_types,
+        blocklist_method(method, arg_cls->dex_type, arg_str_value, param_types,
                          true);
         break;
       case INT_UPDATER:
       case LONG_UPDATER:
       case REF_UPDATER:
-        blacklist_field(method, arg_cls->dex_type, arg_str_value, true);
+        blocklist_field(method, arg_cls->dex_type, arg_str_value, true);
         break;
       }
     }
@@ -361,7 +368,7 @@ bool matches_onclick_method(const DexMethod* dmethod,
 // android.content.Context that accept 1 argument (an android.view.View).
 void mark_onclick_attributes_reachable(
     const Scope& scope, const std::set<std::string>& onclick_attribute_values) {
-  if (onclick_attribute_values.size() == 0) {
+  if (onclick_attribute_values.empty()) {
     return;
   }
   auto type_context = DexType::get_type("Landroid/content/Context;");
@@ -448,8 +455,16 @@ void analyze_reachable_from_manifest(
     prune_unexported_components.emplace(string_to_tag.at(s));
   }
 
-  std::string manifest = apk_dir + std::string("/AndroidManifest.xml");
-  const auto& manifest_class_info = get_manifest_class_info(manifest);
+  auto manifest_class_info = [&apk_dir]() {
+    try {
+      std::string manifest =
+          (boost::filesystem::path(apk_dir) / "AndroidManifest.xml").string();
+      return get_manifest_class_info(manifest);
+    } catch (const std::exception& e) {
+      std::cerr << "Error reading manifest: " << e.what() << std::endl;
+      return ManifestClassInfo{};
+    }
+  }();
 
   for (const auto& classname : manifest_class_info.application_classes) {
     mark_manifest_root(classname);
@@ -540,7 +555,7 @@ void initialize_reachable_for_json_serde(
       serde_superclses.emplace(supercls);
     }
   }
-  if (serde_superclses.size() == 0) {
+  if (serde_superclses.empty()) {
     return;
   }
   ClassHierarchy ch = build_type_hierarchy(scope);
@@ -553,13 +568,13 @@ void initialize_reachable_for_json_serde(
 
 void keep_methods(const Scope& scope, const std::vector<std::string>& ms) {
   std::set<std::string> methods_to_keep(ms.begin(), ms.end());
-  for (auto const& cls : scope) {
-    for (auto& m : cls->get_dmethods()) {
+  for (const auto* cls : scope) {
+    for (auto* m : cls->get_dmethods()) {
       if (methods_to_keep.count(m->get_name()->c_str())) {
         m->rstate.ref_by_string();
       }
     }
-    for (auto& m : cls->get_vmethods()) {
+    for (auto* m : cls->get_vmethods()) {
       if (methods_to_keep.count(m->get_name()->c_str())) {
         m->rstate.ref_by_string();
       }
@@ -630,43 +645,28 @@ void analyze_serializable(const Scope& scope) {
  *    section of the config) and classes that extend from them
  *  - Classes reachable from native libraries
  */
-void init_reachable_classes(const Scope& scope, const JsonWrapper& config) {
-
-  std::string apk_dir;
-  std::vector<std::string> reflected_package_names;
-  std::unordered_set<std::string> prune_unexported_components;
-  bool compute_xml_reachability;
-  bool analyze_native_lib_reachability;
-  std::vector<std::string> fbjni_json_files;
-
-  config.get("apk_dir", "", apk_dir);
-  config.get("keep_packages", {}, reflected_package_names);
-  config.get("compute_xml_reachability", true, compute_xml_reachability);
-  config.get("prune_unexported_components", {}, prune_unexported_components);
-  config.get("analyze_native_lib_reachability", true,
-             analyze_native_lib_reachability);
-  config.get("fbjni_json_files", {}, fbjni_json_files);
-
+void init_reachable_classes(const Scope& scope,
+                            const ReachableClassesConfig& config) {
   {
     Timer t{"Mark keep-methods"};
     std::vector<std::string> methods;
-    config.get("keep_methods", {}, methods);
-    keep_methods(scope, methods);
+    keep_methods(scope, config.keep_methods);
   }
 
-  if (apk_dir.size()) {
-    if (compute_xml_reachability) {
+  if (!config.apk_dir.empty()) {
+    if (config.compute_xml_reachability) {
       Timer t{"Computing XML reachability"};
       // Classes present in manifest
-      analyze_reachable_from_manifest(apk_dir, prune_unexported_components);
+      analyze_reachable_from_manifest(config.apk_dir,
+                                      config.prune_unexported_components);
       // Classes present in XML layouts
-      analyze_reachable_from_xml_layouts(scope, apk_dir);
+      analyze_reachable_from_xml_layouts(scope, config.apk_dir);
     }
 
-    if (analyze_native_lib_reachability) {
+    if (config.analyze_native_lib_reachability) {
       Timer t{"Computing native reachability"};
       // Classnames present in native libraries (lib/*/*.so)
-      for (const std::string& classname : get_native_classes(apk_dir)) {
+      for (const std::string& classname : get_native_classes(config.apk_dir)) {
         auto type = DexType::get_type(classname.c_str());
         if (type == nullptr) continue;
         TRACE(PGR, 3, "native_lib: %s", classname.c_str());
@@ -674,8 +674,8 @@ void init_reachable_classes(const Scope& scope, const JsonWrapper& config) {
         mark_reachable_by_native(type);
       }
 
-      if (!fbjni_json_files.empty()) {
-        mark_native_classes_from_fbjni_configs(fbjni_json_files);
+      if (!config.fbjni_json_files.empty()) {
+        mark_native_classes_from_fbjni_configs(config.fbjni_json_files);
       }
     }
     walk::methods(scope, [&](DexMethod* meth) {
@@ -696,7 +696,7 @@ void init_reachable_classes(const Scope& scope, const JsonWrapper& config) {
     std::unordered_set<DexClass*> reflected_package_classes;
     for (auto clazz : scope) {
       const char* cname = clazz->get_type()->get_name()->c_str();
-      for (const auto& pkg : reflected_package_names) {
+      for (const auto& pkg : config.reflected_package_names) {
         if (starts_with(cname, pkg.c_str())) {
           reflected_package_classes.insert(clazz);
           continue;
@@ -725,9 +725,7 @@ void init_reachable_classes(const Scope& scope, const JsonWrapper& config) {
 
   {
     Timer t{"Initializing for json serde"};
-    std::vector<std::string> json_serde_supercls;
-    config.get("json_serde_supercls", {}, json_serde_supercls);
-    initialize_reachable_for_json_serde(scope, json_serde_supercls);
+    initialize_reachable_for_json_serde(scope, config.json_serde_supercls);
   }
 }
 

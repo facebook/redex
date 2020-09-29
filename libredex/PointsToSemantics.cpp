@@ -623,7 +623,7 @@ std::ostream& operator<<(std::ostream& o, const PointsToAction& a) {
         break;
       }
       default: {
-        always_assert(false);
+        not_reached();
       }
       }
       o << "}";
@@ -848,7 +848,7 @@ class AnchorPropagation final : public BaseIRAnalyzer<AnchorEnvironment> {
         break;
       }
       default: {
-        always_assert_log(false, "Unexpected instruction '%s'\n", SHOW(insn));
+        not_reached_log("Unexpected instruction '%s'\n", SHOW(insn));
       }
       }
       first_param = false;
@@ -892,37 +892,32 @@ class PointsToActionGenerator final {
     // the entry block. We need to process them first.
     size_t param_cursor = 0;
     bool first_param = true;
-    for (const MethodItemEntry& mie : *cfg.entry_block()) {
-      if (mie.type == MFLOW_OPCODE) {
-        IRInstruction* insn = mie.insn;
-        switch (insn->opcode()) {
-        case IOPCODE_LOAD_PARAM_OBJECT: {
-          if (first_param && !is_static(m_dex_method)) {
-            // If the method is not static, the first parameter corresponds to
-            // `this`, which is represented using a special points-to variable.
-          } else {
-            m_semantics->add(PointsToAction::load_operation(
-                PointsToOperation(PTS_LOAD_PARAM, param_cursor++),
-                get_variable_from_anchor(insn)));
-          }
-          break;
+    for (const MethodItemEntry& mie :
+         InstructionIterable(cfg.get_param_instructions())) {
+      IRInstruction* insn = mie.insn;
+      switch (insn->opcode()) {
+      case IOPCODE_LOAD_PARAM_OBJECT: {
+        if (first_param && !is_static(m_dex_method)) {
+          // If the method is not static, the first parameter corresponds to
+          // `this`, which is represented using a special points-to variable.
+        } else {
+          m_semantics->add(PointsToAction::load_operation(
+              PointsToOperation(PTS_LOAD_PARAM, param_cursor++),
+              get_variable_from_anchor(insn)));
         }
-        case IOPCODE_LOAD_PARAM:
-        case IOPCODE_LOAD_PARAM_WIDE: {
-          ++param_cursor;
-          break;
-        }
-        default: {
-          // We've reached the end of the LOAD_PARAM_* instruction block and we
-          // simply exit the loop. Note that premature loop exit is probably the
-          // only legitimate use of goto in C++ code.
-          goto done;
-        }
-        }
-        first_param = false;
+        break;
       }
+      case IOPCODE_LOAD_PARAM:
+      case IOPCODE_LOAD_PARAM_WIDE: {
+        ++param_cursor;
+        break;
+      }
+      default:
+        not_reached();
+      }
+      first_param = false;
     }
-  done:
+
     // We go over each IR instruction and generate the corresponding points-to
     // actions.
     for (cfg::Block* block : cfg.blocks()) {
@@ -1205,7 +1200,7 @@ class PointsToActionGenerator final {
     }
     default: {
       // This function is only called on invoke instructions.
-      always_assert(false);
+      not_reached();
     }
     }
 
@@ -1236,7 +1231,7 @@ class PointsToActionGenerator final {
       return PointsToVariable();
     }
     auto anchors = s.elements();
-    if (anchors.size() == 0) {
+    if (anchors.empty()) {
       // The denotation of the anchor set is just the `null` reference. This is
       // represented by a special points-to variable.
       return PointsToVariable::null_variable();
@@ -1620,14 +1615,11 @@ void PointsToSemantics::initialize_entry(DexMethod* dex_method) {
   if (dex_method->get_code() == nullptr) {
     if ((access_flags & DexAccessFlags::ACC_ABSTRACT)) {
       kind = PTS_ABSTRACT;
-    } else if ((access_flags & DexAccessFlags::ACC_NATIVE)) {
-      kind = PTS_NATIVE;
     } else {
       // The definition of a method that is neither abstract nor native should
       // always have an associated IRCode component.
-      always_assert_log(false,
-                        "Method %s has no associated code component",
-                        SHOW(dex_method->get_name()));
+      redex_assert(access_flags & DexAccessFlags::ACC_NATIVE);
+      kind = PTS_NATIVE;
     }
   } else {
     kind = default_method_kind();

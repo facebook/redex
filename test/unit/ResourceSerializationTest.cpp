@@ -18,7 +18,8 @@ std::string make_big_string(size_t len) {
   return result;
 }
 
-void assert_u16_string(const std::u16string& actual_str, std::string expected) {
+void assert_u16_string(const std::u16string& actual_str,
+                       const std::string& expected) {
   std::u16string expected_str(expected.begin(), expected.end());
   ASSERT_EQ(actual_str, expected_str);
 }
@@ -138,10 +139,7 @@ TEST(ResStringPool, ReplaceStringsInXmlLayout) {
   // Given layout file should have a series of View subclasses in the XML, which
   // we will rename. Parse the resulting binary data, and make sure all tags are
   // right.
-  size_t length;
-  int file_descriptor;
-  auto fp =
-      map_file(std::getenv("test_layout_path"), &file_descriptor, &length);
+  auto f = map_file(std::getenv("test_layout_path"));
 
   std::map<std::string, std::string> shortened_names;
   shortened_names.emplace("com.example.test.CustomViewGroup", "Z.a");
@@ -152,7 +150,7 @@ TEST(ResStringPool, ReplaceStringsInXmlLayout) {
   android::Vector<char> serialized;
   size_t num_renamed = 0;
   replace_in_xml_string_pool(
-      fp, length, shortened_names, &serialized, &num_renamed);
+      f.const_data(), f.size(), shortened_names, &serialized, &num_renamed);
 
   EXPECT_EQ(num_renamed, 3);
   android::ResXMLTree parser;
@@ -184,38 +182,34 @@ TEST(ResStringPool, ReplaceStringsInXmlLayout) {
            type != android::ResXMLParser::END_DOCUMENT);
   EXPECT_EQ(tag_count, 5);
 
-  unmap_and_close(file_descriptor, fp, length);
+  unmap_and_close(std::move(f));
 }
 
-void assert_serialized_data(void* original,
+void assert_serialized_data(const void* original,
                             size_t length,
                             android::Vector<char>& serialized) {
   ASSERT_EQ(length, serialized.size());
   for (size_t i = 0; i < length; i++) {
-    auto actual = *((char*)original + i);
+    auto actual = *((const char*)original + i);
     ASSERT_EQ(actual, serialized[i]);
   }
 }
 
 TEST(ResTable, TestRoundTrip) {
-  size_t length;
-  int file_descriptor;
-  auto fp = map_file(std::getenv("test_arsc_path"), &file_descriptor, &length);
+  auto f = map_file(std::getenv("test_arsc_path"));
   android::ResTable table;
-  ASSERT_EQ(table.add(fp, length), 0);
+  ASSERT_EQ(table.add(f.const_data(), f.size()), 0);
   // Just invoke the serialize method to ensure the same data comes back
   android::Vector<char> serialized;
   table.serialize(serialized, 0);
-  assert_serialized_data(fp, length, serialized);
-  unmap_and_close(file_descriptor, fp, length);
+  assert_serialized_data(f.const_data(), f.size(), serialized);
+  unmap_and_close(std::move(f));
 }
 
 TEST(ResTable, AppendNewType) {
-  size_t length;
-  int file_descriptor;
-  auto fp = map_file(std::getenv("test_arsc_path"), &file_descriptor, &length);
+  auto f = map_file(std::getenv("test_arsc_path"));
   android::ResTable table;
-  ASSERT_EQ(table.add(fp, length), 0);
+  ASSERT_EQ(table.add(f.const_data(), f.size()), 0);
   // Read the number of original types.
   android::Vector<android::String8> original_type_names;
   table.getTypeNamesForPackage(0, &original_type_names);
@@ -232,7 +226,10 @@ TEST(ResTable, AppendNewType) {
     values.push_back(val);
   }
 
-  android::ResTable_config config = {sizeof(android::ResTable_config)};
+  // Initializing the ResTable_config is a pain.
+  android::ResTable_config config;
+  memset(&config, 0, sizeof(android::ResTable_config));
+  config.size = sizeof(android::ResTable_config);
 
   android::Vector<android::ResTable_config> config_vec;
   config_vec.push(config);
@@ -277,5 +274,5 @@ TEST(ResTable, AppendNewType) {
   round_trip.getTypeNamesForPackage(0, &type_names);
   ASSERT_EQ(type_names.size(), original_type_names.size() + 1);
 
-  unmap_and_close(file_descriptor, fp, length);
+  unmap_and_close(std::move(f));
 }

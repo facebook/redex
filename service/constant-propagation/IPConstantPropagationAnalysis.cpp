@@ -14,18 +14,30 @@ namespace interprocedural {
 /*
  * Return an environment populated with parameter values.
  */
-ConstantEnvironment env_with_params(const IRCode* code,
+ConstantEnvironment env_with_params(bool is_static,
+                                    const IRCode* code,
                                     const ArgumentDomain& args) {
+  boost::sub_range<IRList> param_instruction =
+      code->editable_cfg_built() ? code->cfg().get_param_instructions()
+                                 : code->get_param_instructions();
   size_t idx{0};
   ConstantEnvironment env;
-  for (auto& mie : InstructionIterable(code->get_param_instructions())) {
-    env.set(mie.insn->dest(), args.get(idx++));
+  for (auto& mie : InstructionIterable(param_instruction)) {
+    auto value = args.get(idx);
+    if (idx == 0 && !is_static) {
+      // Use a customized meet operator for special handling the NEZ and other
+      // non-null objects.
+      value = meet(value, SignedConstantDomain(sign_domain::Interval::NEZ));
+    }
+    env.set(mie.insn->dest(), value);
+    idx++;
   }
   return env;
 }
 
-void FixpointIterator::analyze_node(const DexMethod* const& method,
+void FixpointIterator::analyze_node(call_graph::NodeId const& node,
                                     Domain* current_state) const {
+  const DexMethod* method = node->method();
   // The entry node has no associated method.
   if (method == nullptr) {
     return;
@@ -37,13 +49,17 @@ void FixpointIterator::analyze_node(const DexMethod* const& method,
   auto& cfg = code->cfg();
   auto intra_cp = get_intraprocedural_analysis(method);
   const auto outgoing_edges =
-      call_graph::GraphInterface::successors(m_call_graph, method);
+      call_graph::GraphInterface::successors(m_call_graph, node);
   std::unordered_set<IRInstruction*> outgoing_insns;
   for (const auto& edge : outgoing_edges) {
+    if (edge->callee() == m_call_graph.exit()) {
+      continue; // ghost edge to the ghost exit node
+    }
     outgoing_insns.emplace(edge->invoke_iterator()->insn);
   }
   for (auto* block : cfg.blocks()) {
     auto state = intra_cp->get_entry_state_at(block);
+    auto last_insn = block->get_last_insn();
     for (auto& mie : InstructionIterable(block)) {
       auto* insn = mie.insn;
       auto op = insn->opcode();
@@ -56,7 +72,7 @@ void FixpointIterator::analyze_node(const DexMethod* const& method,
           current_state->set(insn, out_args);
         }
       }
-      intra_cp->analyze_instruction(insn, &state);
+      intra_cp->analyze_instruction(insn, &state, insn == last_insn->insn);
     }
   }
 }
@@ -78,7 +94,12 @@ Domain FixpointIterator::analyze_edge(
 
 std::unique_ptr<intraprocedural::FixpointIterator>
 FixpointIterator::get_intraprocedural_analysis(const DexMethod* method) const {
-  auto args = this->get_entry_state_at(const_cast<DexMethod*>(method));
+  auto args = Domain::bottom();
+
+  if (m_call_graph.has_node(method)) {
+    args = this->get_entry_state_at(m_call_graph.node(method));
+  }
+
   return m_proc_analysis_factory(method,
                                  this->get_whole_program_state(),
                                  args.get(CURRENT_PARTITION_LABEL));
@@ -101,6 +122,11 @@ void set_encoded_values(const DexClass* cls, ConstantEnvironment* env) {
       env->set(
           sfield,
           StringDomain(static_cast<DexEncodedValueString*>(value)->string()));
+    } else if (sfield->get_type() == type::java_lang_Class() &&
+               value->evtype() == DEVT_TYPE) {
+      env->set(sfield,
+               ConstantClassObjectDomain(
+                   static_cast<DexEncodedValueType*>(value)->type()));
     } else {
       env->set(sfield, ConstantValue::top());
     }

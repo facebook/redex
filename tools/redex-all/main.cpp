@@ -32,7 +32,9 @@
 #include <boost/program_options.hpp>
 #include <json/json.h>
 
+#include "ABExperimentContext.h"
 #include "CommentFilter.h"
+#include "ControlFlow.h" // To set DEBUG.
 #include "Debug.h"
 #include "DexClass.h"
 #include "DexHasher.h"
@@ -43,6 +45,7 @@
 #include "IODIMetadata.h"
 #include "InstructionLowering.h"
 #include "JarLoader.h"
+#include "Macros.h"
 #include "MonitorCount.h"
 #include "NoOptimizationsMatcher.h"
 #include "OptData.h"
@@ -56,6 +59,7 @@
 #include "ReachableClasses.h"
 #include "RedexContext.h"
 #include "RedexResources.h"
+#include "SanitizersConfig.h"
 #include "Show.h"
 #include "Timer.h"
 #include "ToolsCommon.h"
@@ -179,6 +183,7 @@ Json::Value default_config() {
 
 Json::Value reflect_config(const Configurable::Reflection& cr) {
   Json::Value params = Json::arrayValue;
+  Json::Value traits = Json::arrayValue;
   int params_idx = 0;
   for (auto& entry : cr.params) {
     Json::Value param;
@@ -186,29 +191,37 @@ Json::Value reflect_config(const Configurable::Reflection& cr) {
     param["doc"] = entry.second.doc;
     param["is_required"] = entry.second.is_required;
     param["bindflags"] = static_cast<Json::UInt64>(entry.second.bindflags);
-    switch (entry.second.type) {
-    case Configurable::ReflectionParam::Type::PRIMITIVE:
-      param["type"] = std::get<Configurable::ReflectionParam::Type::PRIMITIVE>(
-          entry.second.variant);
-      param["default_value"] = entry.second.default_value;
-      break;
-    case Configurable::ReflectionParam::Type::COMPOSITE:
-      param["type"] = reflect_config(
-          std::get<Configurable::ReflectionParam::Type::COMPOSITE>(
-              entry.second.variant));
-      break;
-    default:
-      always_assert_log(false,
-                        "Invalid Configurable::ReflectionParam::Type: %d",
-                        entry.second.type);
-      break;
-    }
+    [&]() {
+      switch (entry.second.type) {
+      case Configurable::ReflectionParam::Type::PRIMITIVE:
+        param["type"] =
+            std::get<Configurable::ReflectionParam::Type::PRIMITIVE>(
+                entry.second.variant);
+        param["default_value"] = entry.second.default_value;
+        return;
+      case Configurable::ReflectionParam::Type::COMPOSITE:
+        param["type"] = reflect_config(
+            std::get<Configurable::ReflectionParam::Type::COMPOSITE>(
+                entry.second.variant));
+        return;
+      }
+      not_reached_log("Invalid Configurable::ReflectionParam::Type: %d",
+                      entry.second.type);
+    }();
     params[params_idx++] = param;
+  }
+  int traits_idx = 0;
+  for (auto& entry : cr.traits) {
+    Json::Value trait;
+    trait["name"] = entry.first;
+    trait["value"] = entry.second.value;
+    traits[traits_idx++] = trait;
   }
   Json::Value reflected_config;
   reflected_config["name"] = cr.name;
   reflected_config["doc"] = cr.doc;
   reflected_config["params"] = params;
+  reflected_config["traits"] = traits;
   return reflected_config;
 }
 
@@ -502,7 +515,13 @@ Arguments parse_args(int argc, char* argv[]) {
   }
 
   std::string metafiles = args.out_dir + "/meta/";
-  int status = mkdir(metafiles.c_str(), 0755);
+  int status = [&metafiles]() -> int {
+#if !IS_WINDOWS
+    return mkdir(metafiles.c_str(), 0755);
+#else
+    return mkdir(metafiles.c_str());
+#endif
+  }();
   if (status != 0 && errno != EEXIST) {
     // Attention: errno may get changed by syscalls or lib functions.
     // Saving before printing is a conventional way of using errno.
@@ -609,7 +628,7 @@ Json::Value get_pass_stats(const PassManager& mgr) {
     }
     Json::Value pass;
     for (const auto& pass_metric : pass_info.metrics) {
-      pass[pass_metric.first] = pass_metric.second;
+      pass[pass_metric.first] = (Json::Int64)pass_metric.second;
     }
     all[pass_info.name] = pass;
   }
@@ -754,18 +773,11 @@ void write_debug_line_mapping(
   ofs << line_out.str();
 }
 
-const std::string get_dex_magic(std::vector<std::string>& dex_files) {
-  always_assert_log(dex_files.size() > 0, "APK contains no dex file\n");
+std::string get_dex_magic(std::vector<std::string>& dex_files) {
+  always_assert_log(!dex_files.empty(), "APK contains no dex file\n");
   // Get dex magic from the first dex file since all dex magic
   // should be consistent within one APK.
   return load_dex_magic_from_dex(dex_files[0].c_str());
-}
-
-static void assert_dex_magic_consistency(const std::string& source,
-                                         const std::string& target) {
-  always_assert_log(source.compare(target) == 0,
-                    "APK contains dex file of different versions: %s vs %s\n",
-                    source.c_str(), target.c_str());
 }
 
 /**
@@ -781,7 +793,7 @@ void redex_frontend(ConfigFiles& conf, /* input */
     Timer time_pg_parsing("Parsed ProGuard config file");
     keep_rules::proguard_parser::parse_file(pg_config_path, &pg_config);
   }
-  keep_rules::proguard_parser::remove_blacklisted_rules(&pg_config);
+  keep_rules::proguard_parser::remove_blocklisted_rules(&pg_config);
 
   const auto& pg_libs = pg_config.libraryjars;
   args.jar_paths.insert(pg_libs.begin(), pg_libs.end());
@@ -806,46 +818,16 @@ void redex_frontend(ConfigFiles& conf, /* input */
   stores.emplace_back(std::move(root_store));
 
   const JsonWrapper& json_config = conf.get_json_config();
-  dup_classes::read_dup_class_whitelist(json_config);
+  dup_classes::read_dup_class_allowlist(json_config);
 
-  {
-    run_rethrow_first_aggregate([&]() {
-      Timer t("Load classes from dexes");
-      dex_stats_t input_totals;
-      std::vector<dex_stats_t> input_dexes_stats;
-      for (const auto& filename : args.dex_files) {
-        if (filename.size() >= 5 &&
-            filename.compare(filename.size() - 4, 4, ".dex") == 0) {
-          assert_dex_magic_consistency(stores[0].get_dex_magic(),
-                                      load_dex_magic_from_dex(filename.c_str()));
-          dex_stats_t dex_stats;
-          DexClasses classes =
-              load_classes_from_dex(filename.c_str(), &dex_stats);
-          input_totals += dex_stats;
-          input_dexes_stats.push_back(dex_stats);
-          stores[0].add_classes(std::move(classes));
-        } else {
-          DexMetadata store_metadata;
-          store_metadata.parse(filename);
-          DexStore store(store_metadata);
-          for (const auto& file_path : store_metadata.get_files()) {
-            assert_dex_magic_consistency(
-                stores[0].get_dex_magic(),
-                load_dex_magic_from_dex(file_path.c_str()));
-            dex_stats_t dex_stats;
-            DexClasses classes =
-                load_classes_from_dex(file_path.c_str(), &dex_stats);
-
-            input_totals += dex_stats;
-            input_dexes_stats.push_back(dex_stats);
-            store.add_classes(std::move(classes));
-          }
-          stores.emplace_back(std::move(store));
-        }
-      }
-      stats["input_stats"] = get_input_stats(input_totals, input_dexes_stats);
-    });
-  }
+  run_rethrow_first_aggregate([&]() {
+    Timer t("Load classes from dexes");
+    dex_stats_t input_totals;
+    std::vector<dex_stats_t> input_dexes_stats;
+    redex::load_classes_from_dexes_and_metadata(
+        args.dex_files, stores, input_totals, input_dexes_stats);
+    stats["input_stats"] = get_input_stats(input_totals, input_dexes_stats);
+  });
 
   Scope external_classes;
   args.entry_data["jars"] = Json::arrayValue;
@@ -856,8 +838,7 @@ void redex_frontend(ConfigFiles& conf, /* input */
       TRACE(MAIN, 1, "LIBRARY JAR: %s", library_jar.c_str());
       if (!load_jar_file(library_jar.c_str(), &external_classes)) {
         // Try again with the basedir
-        std::string basedir_path =
-            pg_config.basedirectory + "/" + library_jar.c_str();
+        std::string basedir_path = pg_config.basedirectory + "/" + library_jar;
         if (!load_jar_file(basedir_path.c_str())) {
           std::cerr << "error: library jar could not be loaded: " << library_jar
                     << std::endl;
@@ -923,7 +904,7 @@ void redex_frontend(ConfigFiles& conf, /* input */
   {
     Timer t("Initializing reachable classes");
     // init reachable will change rstate of classes, methods and fields
-    init_reachable_classes(scope, json_config);
+    init_reachable_classes(scope, ReachableClassesConfig(json_config));
   }
 }
 
@@ -977,6 +958,10 @@ void redex_backend(const std::string& output_dir,
   std::unique_ptr<PostLowering> post_lowering =
       redex_options.redacted ? PostLowering::create() : nullptr;
 
+  if (post_lowering) {
+    post_lowering->sync();
+  }
+
   if (is_iodi(dik)) {
     Timer t("Compute initial IODI metadata");
     iodi_metadata.mark_methods(stores);
@@ -985,24 +970,9 @@ void redex_backend(const std::string& output_dir,
     auto& store = stores[store_number];
     Timer t("Writing optimized dexes");
     for (size_t i = 0; i < store.get_dexen().size(); i++) {
-      std::ostringstream ss;
-      ss << output_dir << "/" << store.get_name();
-      if (store.get_name().compare("classes") == 0) {
-        // primary/secondary dex store, primary has no numeral and secondaries
-        // start at 2
-        if (i > 0) {
-          ss << (i + 1);
-        }
-      } else {
-        // other dex stores do not have a primary,
-        // so it makes sense to start at 2
-        ss << (i + 2);
-      }
-      ss << ".dex";
-
       auto this_dex_stats =
           write_classes_to_dex(redex_options,
-                               ss.str(),
+                               redex::get_dex_output_name(output_dir, store, i),
                                &store.get_dexen()[i],
                                locator_index,
                                store_number,
@@ -1124,47 +1094,16 @@ void dump_class_method_info_map(const std::string& file_path,
 
 } // namespace
 
-// Some defaults for sanitizers. Can be overridden with ASAN_OPTIONS.
-const char* kAsanDefaultOptions =
-    "abort_on_error=1" // Use abort instead of exit, will get stack
-                       // traces for things like ubsan.
-    ":"
-    "check_initialization_order=1"
-    ":"
-    "detect_invalid_pointer_pairs=1"
-    ":"
-    "detect_leaks=0"
-    ":"
-    "detect_stack_use_after_return=1"
-    ":"
-    "print_scariness=1"
-    ":"
-    "print_suppressions=0"
-    ":"
-    "strict_init_order=1";
-
-#if defined(__clang__)
-#define NO_SANITIZE \
-  __attribute__((__no_sanitize__("address", "undefined", "thread")))
-#define VISIBLE \
-  __attribute__((__visibility__("default"))) __attribute__((__used__))
-#else
-#define NO_SANITIZE
-#define VISIBLE
-#endif
-
-extern "C" NO_SANITIZE VISIBLE __attribute__((__weak__)) const char*
-__asan_default_options() {
-  return kAsanDefaultOptions;
-}
-
 int main(int argc, char* argv[]) {
   signal(SIGSEGV, crash_backtrace_handler);
   signal(SIGABRT, crash_backtrace_handler);
   signal(SIGINT, crash_backtrace_handler);
-#ifndef _MSC_VER
+#if !IS_WINDOWS
   signal(SIGBUS, crash_backtrace_handler);
 #endif
+
+  // Only log one assert.
+  block_multi_asserts(/*block=*/true);
 
   std::string stats_output_path;
   Json::Value stats;
@@ -1188,6 +1127,14 @@ int main(int argc, char* argv[]) {
     RedexContext::set_record_keep_reasons(
         args.config.get("record_keep_reasons", false).asBool());
 
+    slow_invariants_debug =
+        args.config.get("slow_invariants_debug", false).asBool();
+    cfg::ControlFlowGraph::DEBUG =
+        cfg::ControlFlowGraph::DEBUG || slow_invariants_debug;
+    if (slow_invariants_debug) {
+      std::cerr << "Slow invariants enabled." << std::endl;
+    }
+
     auto pg_config = std::make_unique<keep_rules::ProguardConfiguration>();
     DexStoresVector stores;
     ConfigFiles conf(args.config, args.out_dir);
@@ -1208,6 +1155,11 @@ int main(int argc, char* argv[]) {
     auto const& passes = PassRegistry::get().get_passes();
     PassManager manager(passes, std::move(pg_config), args.config,
                         args.redex_options);
+
+    if (manager.get_redex_options().is_art_build) {
+      ab_test::ABExperimentContext::force_preferred_mode();
+    }
+
     {
       Timer t("Running optimization passes");
       manager.run_passes(stores, conf);
@@ -1244,9 +1196,11 @@ int main(int argc, char* argv[]) {
   }
 
   TRACE(MAIN, 1, "Done.");
-  TRACE(MAIN, 1, "Memory stats: VmPeak=%s VmHWM=%s",
-        pretty_bytes(vm_stats.vm_peak).c_str(),
-        pretty_bytes(vm_stats.vm_hwm).c_str());
+  if (traceEnabled(MAIN, 1) || traceEnabled(STATS, 1)) {
+    TRACE(STATS, 0, "Memory stats: VmPeak=%s VmHWM=%s",
+          pretty_bytes(vm_stats.vm_peak).c_str(),
+          pretty_bytes(vm_stats.vm_hwm).c_str());
+  }
 
   return 0;
 }

@@ -1,4 +1,4 @@
-version: 2
+version: 2.1
 
 # If you only want circle to run on direct commits to master, you can uncomment this out
 # and uncomment the filters: *filter-only-master down below too
@@ -8,6 +8,13 @@ aliases:
    branches:
      only:
        - master
+ - &filter-not-gh-pages
+   branches:
+     ignore:
+       - gh-pages
+
+orbs:
+  win: circleci/windows@2.2.0
 
 jobs:
   build:
@@ -27,6 +34,13 @@ jobs:
           command: |
             sudo ./setup_oss_toolchain.sh
 
+      # For testing, need additional dependencies not provided by the image.
+      - run:
+          name: Setup for tests
+          command: |
+            sudo apt-get install -y --no-install-recommends dalvik-exchange openjdk-8-jdk-headless
+            sudo ln -s /usr/bin/dalvik-exchange /usr/local/bin/dx
+
       # Configure.
       - run:
           name: Configure
@@ -42,6 +56,53 @@ jobs:
           command: |
             make -j4
 
+      # Build & run tests.
+      - run:
+          name: Build tests
+          command: |
+            make -j4 check TESTS=
+      - run:
+          name: Run tests
+          command: |
+            mkdir -p /tmp/test-results
+            export GTEST_OUTPUT=xml:/tmp/test-results/
+            make -j4 check
+      - store_test_results:
+          path: /tmp/test-results
+
+  build-windows:
+    executor:
+      name: win/default
+      # GCC is hungry.
+      size: "large"
+
+    steps:
+      - checkout
+
+      - run:
+          name: Install MSYS2
+          shell: bash.exe
+          command: choco install msys2 -y
+      - run:
+          name: Update MSYS2 package DB
+          shell: c:/tools/msys64/msys2_shell.cmd -defterm -no-start -msys2 -full-path -here -c
+          command: pacman -Syuu --noconfirm
+      - run:
+          name: Setup
+          shell: c:/tools/msys64/msys2_shell.cmd -defterm -no-start -msys2 -full-path -here -c
+          command: pacman -S --needed --noconfirm make mingw-w64-x86_64-boost mingw-w64-x86_64-cmake mingw-w64-x86_64-gcc mingw-w64-x86_64-jsoncpp mingw-w64-x86_64-make
+
+      - run:
+          name: Build
+          shell: c:/tools/msys64/msys2_shell.cmd -defterm -no-start -mingw64 -full-path -here -c
+          command: mkdir build && cd build && cmake -G "MSYS Makefiles" .. && make -j 4
+
+      - run:
+          name: Minimal Test
+          # Using bash because somehow piping does not seem to work correctly with cmd.
+          shell: bash.exe
+          command: 'build/redex-all --show-passes | grep -E "Registered passes: [1-9][0-9]*"'
+
   deploy-website:
     docker:
       # specify the version you desire here
@@ -54,15 +115,19 @@ jobs:
           command: |
             git config --global user.email "docusaurus-bot@users.noreply.github.com"
             git config --global user.name "Website Deployment Script"
-            echo "machine github.com login docusaurus-bot password $GITHUB_TOKEN" > ~/.netrc
+            echo "machine github.com login docusaurus-bot password $DOCUSAURUS_GITHUB_TOKEN" > ~/.netrc
             echo "Deploying website..."
+            unset CI_PULL_REQUEST CIRCLE_PULL_REQUEST
             cd website && yarn install && GIT_USER=docusaurus-bot USE_SSH=false yarn run publish-gh-pages
 
 workflows:
-  version: 2
+  version: 2.1
   build_and_deploy:
     jobs:
-      # Note: no filter for 'build' so that pull requests get checked.
-      - build
+      # Note: only filter gh-pages for 'build' so that pull requests/stable get checked.
+      - build:
+          filters: *filter-not-gh-pages
+      - build-windows:
+          filters: *filter-not-gh-pages
       - deploy-website:
           filters: *filter-only-master

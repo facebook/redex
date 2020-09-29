@@ -42,6 +42,12 @@ DexClass* create_a_class(const char* description) {
   return cc.create();
 }
 
+void create_runtime_exception_init() {
+  auto init_method = static_cast<DexMethod*>(DexMethod::make_method(
+      "Ljava/lang/RuntimeException;.<init>:(Ljava/lang/String;)V"));
+  init_method->set_external();
+}
+
 /**
  * Create a method like
  * void {{name}}() {
@@ -53,12 +59,62 @@ DexMethod* make_a_method(DexClass* cls, const char* name, int val) {
       DexProto::make_proto(type::_void(), DexTypeList::make_type_list({}));
   auto ref = DexMethod::make_method(
       cls->get_type(), DexString::make_string(name), proto);
-  MethodCreator mc(ref, ACC_PUBLIC);
+  MethodCreator mc(ref, ACC_STATIC | ACC_PUBLIC);
   auto main_block = mc.get_main_block();
   auto loc = mc.make_local(type::_int());
   main_block->load_const(loc, val);
   main_block->ret_void();
   auto method = mc.create();
+  cls->add_method(method);
+  return method;
+}
+
+/**
+ * Create a method like
+ * void {{name}}() {
+ *   while (true) {}
+ * }
+ */
+DexMethod* make_loopy_method(DexClass* cls, const char* name) {
+  auto proto =
+      DexProto::make_proto(type::_void(), DexTypeList::make_type_list({}));
+  auto ref = DexMethod::make_method(
+      cls->get_type(), DexString::make_string(name), proto);
+  MethodCreator mc(ref, ACC_STATIC | ACC_PUBLIC);
+  auto method = mc.create();
+  method->set_code(assembler::ircode_from_string("((:begin) (goto :begin))"));
+  cls->add_method(method);
+  return method;
+}
+
+/**
+ * Create a method like
+ * public static void {{name}}(int x) {
+ *   if (x != 0) {
+ *     throw new RuntimeException("bla");
+ *   }
+ * }
+ */
+DexMethod* make_precondition_method(DexClass* cls, const char* name) {
+  auto method_name = cls->get_name()->str() + "." + name;
+  auto method = assembler::method_from_string(std::string("") + R"(
+    (method (public static) ")" + method_name +
+                                              R"(:(I)V"
+      (
+        (load-param v0)
+        (if-eqz v0 :fail)
+        (return-void)
+
+        (:fail)
+        (new-instance "Ljava/lang/RuntimeException;")
+        (move-result-pseudo-object v1)
+        (const-string "Bla")
+        (move-result-pseudo-object v2)
+        (invoke-direct (v1 v2) "Ljava/lang/RuntimeException;.<init>:(Ljava/lang/String;)V")
+        (throw v1)
+     )
+    )
+  )");
   cls->add_method(method);
   return method;
 }
@@ -78,10 +134,31 @@ DexMethod* make_a_method_calls_others(DexClass* cls,
       DexProto::make_proto(type::_void(), DexTypeList::make_type_list({}));
   auto ref = DexMethod::make_method(
       cls->get_type(), DexString::make_string(name), proto);
-  MethodCreator mc(ref, ACC_PUBLIC);
+  MethodCreator mc(ref, ACC_STATIC | ACC_PUBLIC);
   auto main_block = mc.get_main_block();
   for (auto callee : methods) {
     main_block->invoke(callee, {});
+  }
+  main_block->ret_void();
+  auto method = mc.create();
+  cls->add_method(method);
+  return method;
+}
+
+DexMethod* make_a_method_calls_others_with_arg(
+    DexClass* cls,
+    const char* name,
+    const std::vector<std::pair<DexMethod*, int32_t>>& methods) {
+  auto proto =
+      DexProto::make_proto(type::_void(), DexTypeList::make_type_list({}));
+  auto ref = DexMethod::make_method(
+      cls->get_type(), DexString::make_string(name), proto);
+  MethodCreator mc(ref, ACC_STATIC | ACC_PUBLIC);
+  auto main_block = mc.get_main_block();
+  auto loc = mc.make_local(type::_int());
+  for (auto& p : methods) {
+    main_block->load_const(loc, p.second);
+    main_block->invoke(p.first, {loc});
   }
   main_block->ret_void();
   auto method = mc.create();
@@ -256,4 +333,264 @@ TEST_F(MethodInlineTest, test_intra_dex_inlining) {
   for (auto method : expected_inlined) {
     EXPECT_EQ(inlined.count(method), 1);
   }
+}
+
+TEST_F(MethodInlineTest, minimal_self_loop_regression) {
+  MethodRefCache resolve_cache;
+  auto resolver = [&resolve_cache](DexMethodRef* method, MethodSearch search) {
+    return resolve_method(method, search, resolve_cache);
+  };
+
+  bool intra_dex = false;
+
+  DexStoresVector stores;
+  std::unordered_set<DexMethod*> candidates;
+  std::unordered_set<DexMethod*> expected_inlined;
+  auto foo_cls = create_a_class("Lfoo;");
+  {
+    DexStore store("root");
+    store.add_classes({});
+    store.add_classes({foo_cls});
+    stores.push_back(std::move(store));
+  }
+  {
+    auto foo_m1 = make_loopy_method(foo_cls, "foo_m1");
+    candidates.insert(foo_m1);
+    // foo_main calls foo_m1.
+    make_a_method_calls_others(foo_cls, "foo_main", {foo_m1});
+    expected_inlined.insert(foo_m1);
+  }
+  auto scope = build_class_scope(stores);
+  api::LevelChecker::init(0, scope);
+  inliner::InlinerConfig inliner_config;
+  inliner_config.populate(scope);
+  inliner_config.use_cfg_inliner = true;
+  MultiMethodInliner inliner(scope,
+                             stores,
+                             candidates,
+                             resolver,
+                             inliner_config,
+                             intra_dex ? IntraDex : InterDex);
+  inliner.inline_methods();
+  auto inlined = inliner.get_inlined();
+  EXPECT_EQ(inlined.size(), expected_inlined.size());
+  for (auto method : expected_inlined) {
+    EXPECT_EQ(inlined.count(method), 1);
+  }
+}
+
+TEST_F(MethodInlineTest, non_unique_inlined_registers) {
+  MethodRefCache resolve_cache;
+  auto resolver = [&resolve_cache](DexMethodRef* method, MethodSearch search) {
+    return resolve_method(method, search, resolve_cache);
+  };
+
+  bool intra_dex = false;
+
+  DexStoresVector stores;
+  std::unordered_set<DexMethod*> candidates;
+  std::unordered_set<DexMethod*> expected_inlined;
+  auto foo_cls = create_a_class("Lfoo;");
+  {
+    DexStore store("root");
+    store.add_classes({});
+    store.add_classes({foo_cls});
+    stores.push_back(std::move(store));
+  }
+  DexMethod* foo_main;
+  {
+    auto foo_m1 = make_a_method(foo_cls, "foo_m1", 1);
+    auto foo_m2 = make_a_method(foo_cls, "foo_m2", 2);
+    candidates.insert(foo_m1);
+    candidates.insert(foo_m2);
+    // foo_main calls foo_m1 and foo_m2.
+    foo_main =
+        make_a_method_calls_others(foo_cls, "foo_main", {foo_m1, foo_m2});
+    expected_inlined.insert(foo_m1);
+    expected_inlined.insert(foo_m2);
+  }
+  auto scope = build_class_scope(stores);
+  api::LevelChecker::init(0, scope);
+  inliner::InlinerConfig inliner_config;
+  inliner_config.populate(scope);
+  inliner_config.use_cfg_inliner = true;
+  inliner_config.unique_inlined_registers = false;
+  MultiMethodInliner inliner(scope,
+                             stores,
+                             candidates,
+                             resolver,
+                             inliner_config,
+                             intra_dex ? IntraDex : InterDex);
+  inliner.inline_methods();
+  auto inlined = inliner.get_inlined();
+  EXPECT_EQ(inlined.size(), expected_inlined.size());
+  for (auto method : expected_inlined) {
+    EXPECT_EQ(inlined.count(method), 1);
+  }
+
+  // Note: the position in the middle is an artifact and may get cleaned up.
+  const auto& expected_str = R"(
+    (
+      (const v0 1)
+      (const v0 2)
+      (.pos:dbg_0 "Lfoo;.foo_main:()V" UnknownSource 0)
+      (return-void)
+    )
+  )";
+  auto actual = foo_main->get_code();
+  auto expected = assembler::ircode_from_string(expected_str);
+  EXPECT_CODE_EQ(expected.get(), actual);
+}
+
+TEST_F(MethodInlineTest, inline_beneficial_on_average_after_constant_prop) {
+  MethodRefCache resolve_cache;
+  auto resolver = [&resolve_cache](DexMethodRef* method, MethodSearch search) {
+    return resolve_method(method, search, resolve_cache);
+  };
+
+  bool intra_dex = false;
+
+  DexStoresVector stores;
+  std::unordered_set<DexMethod*> candidates;
+  std::unordered_set<DexMethod*> expected_inlined;
+  auto foo_cls = create_a_class("Lfoo;");
+  {
+    DexStore store("root");
+    store.add_classes({});
+    store.add_classes({foo_cls});
+    stores.push_back(std::move(store));
+  }
+  DexMethod *check_method, *foo_main;
+  {
+    create_runtime_exception_init();
+    check_method = make_precondition_method(foo_cls, "check");
+    candidates.insert(check_method);
+    // foo_main calls check_method a few times.
+    foo_main = make_a_method_calls_others_with_arg(foo_cls,
+                                                   "foo_main",
+                                                   {
+                                                       {check_method, 1},
+                                                       {check_method, 1},
+                                                       {check_method, 1},
+                                                       {check_method, 1},
+                                                       {check_method, 1},
+                                                       {check_method, 1},
+                                                   });
+    expected_inlined.insert(check_method);
+  }
+  auto scope = build_class_scope(stores);
+  api::LevelChecker::init(0, scope);
+  inliner::InlinerConfig inliner_config;
+  inliner_config.populate(scope);
+  inliner_config.use_cfg_inliner = true;
+  inliner_config.throws_inline = true;
+  inliner_config.run_const_prop = true;
+  inliner_config.run_local_dce = true;
+  check_method->get_code()->build_cfg(true);
+  foo_main->get_code()->build_cfg(true);
+  MultiMethodInliner inliner(scope,
+                             stores,
+                             candidates,
+                             resolver,
+                             inliner_config,
+                             intra_dex ? IntraDex : InterDex);
+  inliner.inline_methods();
+  auto inlined = inliner.get_inlined();
+  EXPECT_EQ(inlined.size(), expected_inlined.size());
+  for (auto method : expected_inlined) {
+    EXPECT_EQ(inlined.count(method), 1);
+  }
+
+  const auto& expected_str = R"(
+    (
+      (.pos:dbg_0 "Lfoo;.foo_main:()V" UnknownSource 0)
+      (return-void)
+    )
+  )";
+  foo_main->get_code()->clear_cfg();
+  auto actual = foo_main->get_code();
+  auto expected = assembler::ircode_from_string(expected_str);
+  EXPECT_CODE_EQ(expected.get(), actual);
+}
+
+TEST_F(MethodInlineTest,
+       inline_beneficial_for_particular_instance_after_constant_prop) {
+  MethodRefCache resolve_cache;
+  auto resolver = [&resolve_cache](DexMethodRef* method, MethodSearch search) {
+    return resolve_method(method, search, resolve_cache);
+  };
+
+  bool intra_dex = false;
+
+  DexStoresVector stores;
+  std::unordered_set<DexMethod*> candidates;
+  std::unordered_set<DexMethod*> expected_inlined;
+  auto foo_cls = create_a_class("Lfoo;");
+  {
+    DexStore store("root");
+    store.add_classes({});
+    store.add_classes({foo_cls});
+    stores.push_back(std::move(store));
+  }
+  DexMethod *check_method, *foo_main;
+  {
+    create_runtime_exception_init();
+    check_method = make_precondition_method(foo_cls, "check");
+    candidates.insert(check_method);
+    // foo_main calls check_method a few times.
+    foo_main = make_a_method_calls_others_with_arg(foo_cls,
+                                                   "foo_main",
+                                                   {
+                                                       {check_method, 0},
+                                                       {check_method, 0},
+                                                       {check_method, 1},
+                                                       {check_method, 0},
+                                                       {check_method, 0},
+                                                       {check_method, 0},
+                                                   });
+    expected_inlined.insert(check_method);
+  }
+  auto scope = build_class_scope(stores);
+  api::LevelChecker::init(0, scope);
+  inliner::InlinerConfig inliner_config;
+  inliner_config.populate(scope);
+  inliner_config.use_cfg_inliner = true;
+  inliner_config.throws_inline = true;
+  inliner_config.run_const_prop = true;
+  inliner_config.run_local_dce = true;
+  check_method->get_code()->build_cfg(true);
+  foo_main->get_code()->build_cfg(true);
+  MultiMethodInliner inliner(scope,
+                             stores,
+                             candidates,
+                             resolver,
+                             inliner_config,
+                             intra_dex ? IntraDex : InterDex);
+  inliner.inline_methods();
+  auto inlined = inliner.get_inlined();
+  EXPECT_EQ(inlined.size(), expected_inlined.size());
+  for (auto method : expected_inlined) {
+    EXPECT_EQ(inlined.count(method), 1);
+  }
+
+  const auto& expected_str = R"(
+    (
+      (.pos:dbg_0 "Lfoo;.foo_main:()V" UnknownSource 0)
+      (const v0 0)
+      (invoke-static (v0) "Lfoo;.check:(I)V")
+      (const v0 0)
+      (invoke-static (v0) "Lfoo;.check:(I)V")
+      (const v0 0)
+      (invoke-static (v0) "Lfoo;.check:(I)V")
+      (const v0 0)
+      (invoke-static (v0) "Lfoo;.check:(I)V")
+      (const v0 0)
+      (invoke-static (v0) "Lfoo;.check:(I)V")
+      (return-void)
+    )
+  )";
+  foo_main->get_code()->clear_cfg();
+  auto actual = foo_main->get_code();
+  auto expected = assembler::ircode_from_string(expected_str);
+  EXPECT_CODE_EQ(expected.get(), actual);
 }

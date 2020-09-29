@@ -13,8 +13,7 @@
 
 extern "C" {
 
-typedef int (*MallctlFn)(
-    const char* name, void* oldp, size_t* oldlenp, void* newp, size_t newlen);
+using MallctlFn = int (*)(const char*, void*, size_t*, void*, size_t);
 
 #if defined(__unix__) || defined(__APPLE__)
 // We use dynamic lookup to avoid making jemalloc a required build dependency.

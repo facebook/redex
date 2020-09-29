@@ -7,7 +7,6 @@
 import argparse
 import enum
 import errno
-import fnmatch
 import glob
 import itertools
 import json
@@ -15,6 +14,7 @@ import logging
 import os
 import platform
 import re
+import shlex
 import shutil
 import signal
 import struct
@@ -23,21 +23,30 @@ import sys
 import tempfile
 import timeit
 import zipfile
-from os.path import abspath, basename, dirname, isdir, isfile, join
+from os.path import abspath, dirname, isdir, isfile, join
 from pipes import quote
 
 import pyredex.logger as logger
-import pyredex.unpacker as unpacker
 from pyredex.logger import log
 from pyredex.utils import (
-    abs_glob,
+    LibraryManager,
+    UnpackManager,
+    ZipManager,
+    ZipReset,
     argparse_yes_no_flag,
-    find_android_build_tools,
+    dex_glob,
+    find_android_build_tool,
+    get_file_ext,
     make_temp_dir,
+    move_dexen_to_directories,
     remove_comments,
+    sdk_search_order,
     sign_apk,
     with_temp_cleanup,
 )
+
+
+IS_WINDOWS = os.name == "nt"
 
 
 def patch_zip_file():
@@ -56,8 +65,6 @@ def patch_zip_file():
 patch_zip_file()
 
 timer = timeit.default_timer
-
-per_file_compression = {}
 
 
 def pgize(name):
@@ -94,6 +101,7 @@ def write_debugger_command(dbg, src_root, args):
 
     The choice of debugger is governed by `dbg` which can be either "gdb" or "lldb".
     """
+    assert not IS_WINDOWS  # It's a Linux/Mac script...
     fd, script_name = tempfile.mkstemp(suffix=".sh", prefix="redex-{}-".format(dbg))
 
     # Parametrise redex binary.
@@ -108,7 +116,8 @@ def write_debugger_command(dbg, src_root, args):
         f.write(" ".join(dbg_prefix(dbg, src_root)))
         f.write(" ")
         f.write(" ".join(args))
-        os.fchmod(fd, 0o775)
+        if not IS_WINDOWS:
+            os.fchmod(fd, 0o775)  # This is unsupported on windows.
 
     return script_name
 
@@ -209,8 +218,53 @@ def maybe_addr2line(lines):
     sys.stderr.write("\n")
 
 
+def maybe_reprint_error(lines, term_handler):
+    terminate_lines = []
+    for line in lines:
+        stripped_line = line.strip()
+
+        if stripped_line.startswith("terminate called"):
+            terminate_lines.append(stripped_line)
+            continue
+
+        if len(terminate_lines) > 0:
+            terminate_lines.append(stripped_line)
+
+            # Stop on ten lines.
+            if len(terminate_lines) >= 10:
+                break
+            continue
+
+    if not terminate_lines:
+        return
+
+    if len(terminate_lines) >= 3:
+        # See if we have an empty line.
+        try:
+            empty_index = terminate_lines.index("")
+            terminate_lines = terminate_lines[0:empty_index]
+        except ValueError:
+            # Probably not one of ours, or with a very detailed error, just
+            # print two lines.
+            terminate_lines = terminate_lines[0:2]
+
+    if term_handler is not None:
+        term_handler(terminate_lines)
+        return
+
+    for line in terminate_lines:
+        print("%s" % line)
+    print()  # An empty line to separate.
+
+
 def run_and_stream_stderr(args, env, pass_fds):
-    proc = subprocess.Popen(args, env=env, pass_fds=pass_fds, stderr=subprocess.PIPE)
+    if IS_WINDOWS:
+        # Windows does not support `pass_fds` parameter.
+        proc = subprocess.Popen(args, env=env, stderr=subprocess.PIPE)
+    else:
+        proc = subprocess.Popen(
+            args, env=env, pass_fds=pass_fds, stderr=subprocess.PIPE
+        )
 
     def stream_and_return():
         err_out = []
@@ -296,7 +350,7 @@ class SigIntHandler:
         signal.alarm(3)
 
 
-def run_redex_binary(state):
+def run_redex_binary(state, term_handler):
     if state.args.redex_binary is None:
         state.args.redex_binary = shutil.which("redex-all")
 
@@ -320,6 +374,10 @@ def run_redex_binary(state):
         "--outdir",
         state.dex_dir,
     ]
+
+    if state.args.cmd_prefix is not None:
+        args = state.args.cmd_prefix.split() + args
+
     if state.args.config:
         args += ["--config", state.args.config]
 
@@ -378,7 +436,7 @@ def run_redex_binary(state):
     start = timer()
 
     if state.args.debug:
-        print("cd %s && %s" % (os.getcwd(), " ".join(prefix + map(quote, args))))
+        print("cd %s && %s" % (os.getcwd(), " ".join(prefix + list(map(quote, args)))))
         sys.exit()
 
     env = os.environ.copy()
@@ -414,6 +472,14 @@ def run_redex_binary(state):
                 # Check for crash traces.
                 maybe_addr2line(err_out)
 
+                if returncode == -6:  # SIGABRT
+                    maybe_reprint_error(err_out, term_handler)
+
+                if IS_WINDOWS:
+                    raise RuntimeError(
+                        "redex-all crashed with exit code {}!".format(returncode)
+                    )
+
                 gdb_script_name = write_debugger_command(
                     "gdb", state.args.debug_source_root, args
                 )
@@ -445,88 +511,42 @@ def run_redex_binary(state):
     log("Dex processing finished in {:.2f} seconds".format(timer() - start))
 
 
-def extract_dex_number(dexfilename):
-    m = re.search(r"(classes|.*-)(\d+)", basename(dexfilename))
-    if m is None:
-        raise Exception("Bad secondary dex name: " + dexfilename)
-    return int(m.group(2))
-
-
-def dex_glob(directory):
-    """
-    Return the dexes in a given directory, with the primary dex first.
-    """
-    primary = join(directory, "classes.dex")
-    if not isfile(primary):
-        raise Exception("No primary dex found")
-
-    secondaries = [
-        d for d in glob.glob(join(directory, "*.dex")) if not d.endswith("classes.dex")
-    ]
-    secondaries.sort(key=extract_dex_number)
-
-    return [primary] + secondaries
-
-
-def move_dexen_to_directories(root, dexpaths):
-    """
-    Move each dex file to its own directory within root and return a list of the
-    new paths. Redex will operate on each dex and put the modified dex into the
-    same directory.
-    """
-    res = []
-    for idx, dexpath in enumerate(dexpaths):
-        dexname = basename(dexpath)
-        dirpath = join(root, "dex" + str(idx))
-        os.mkdir(dirpath)
-        shutil.move(dexpath, dirpath)
-        res.append(join(dirpath, dexname))
-
-    return res
-
-
-def unzip_apk(apk, destination_directory):
-    with zipfile.ZipFile(apk) as z:
-        for info in z.infolist():
-            per_file_compression[info.filename] = info.compress_type
-        z.extractall(destination_directory)
-
-
 def zipalign(unaligned_apk_path, output_apk_path, ignore_zipalign, page_align):
     # Align zip and optionally perform good compression.
     try:
-        zipalign = [join(find_android_build_tools(), "zipalign")]
-    except Exception:
-        # We couldn't find zipalign via ANDROID_SDK.  Try PATH.
-        zipalign = ["zipalign"]
-    args = ["4", unaligned_apk_path, output_apk_path]
-    if page_align:
-        args = ["-p"] + args
-    success = False
-    try:
-        p = subprocess.Popen(zipalign + args, stderr=subprocess.PIPE)
-        err = p.communicate()[1]
-        if p.returncode != 0:
-            error = err.decode(sys.getfilesystemencoding())
-            print("Failed to execute zipalign, stderr: {}".format(error))
-        else:
-            success = True
+        zipalign = [
+            find_android_build_tool("zipalign"),
+            "4",
+            unaligned_apk_path,
+            output_apk_path,
+        ]
+        if page_align:
+            zipalign.insert(1, "-p")
+
+        p = subprocess.Popen(zipalign, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        out, _ = p.communicate()
+        if p.returncode == 0:
+            os.remove(unaligned_apk_path)
+            return
+        out_str = out.decode(sys.getfilesystemencoding())
+        raise RuntimeError("Failed to execute zipalign, output: {}".format(out_str))
     except OSError as e:
         if e.errno == errno.ENOENT:
             print("Couldn't find zipalign. See README.md to resolve this.")
-        else:
-            print("Failed to execute zipalign, strerror: {}".format(e.strerror))
-    finally:
-        if not success:
-            if not ignore_zipalign:
-                raise Exception("Zipalign failed to run")
-            shutil.copy(unaligned_apk_path, output_apk_path)
+        if not ignore_zipalign:
+            raise e
+        shutil.copy(unaligned_apk_path, output_apk_path)
+    except BaseException:
+        if not ignore_zipalign:
+            raise
+        shutil.copy(unaligned_apk_path, output_apk_path)
     os.remove(unaligned_apk_path)
 
 
-def create_output_apk(
-    extracted_apk_dir,
+def align_and_sign_output_apk(
+    unaligned_apk_path,
     output_apk_path,
+    reset_timestamps,
     sign,
     keystore,
     key_alias,
@@ -534,31 +554,6 @@ def create_output_apk(
     ignore_zipalign,
     page_align,
 ):
-
-    # Remove old signature files
-    for f in abs_glob(extracted_apk_dir, "META-INF/*"):
-        cert_path = join(extracted_apk_dir, f)
-        if isfile(cert_path):
-            os.remove(cert_path)
-
-    directory = make_temp_dir(".redex_unaligned", False)
-    unaligned_apk_path = join(directory, "redex-unaligned.apk")
-
-    if isfile(unaligned_apk_path):
-        os.remove(unaligned_apk_path)
-
-    # Create new zip file
-    with zipfile.ZipFile(unaligned_apk_path, "w") as unaligned_apk:
-        for dirpath, _dirnames, filenames in os.walk(extracted_apk_dir):
-            for filename in filenames:
-                filepath = join(dirpath, filename)
-                archivepath = filepath[len(extracted_apk_dir) + 1 :]
-                try:
-                    compress = per_file_compression[archivepath]
-                except KeyError:
-                    compress = zipfile.ZIP_DEFLATED
-                unaligned_apk.write(filepath, archivepath, compress_type=compress)
-
     if isfile(output_apk_path):
         os.remove(output_apk_path)
 
@@ -570,6 +565,9 @@ def create_output_apk(
 
     zipalign(unaligned_apk_path, output_apk_path, ignore_zipalign, page_align)
 
+    if reset_timestamps:
+        ZipReset.reset_file(output_apk_path)
+
     # Add new signature
     if sign:
         sign_apk(keystore, key_password, key_alias, output_apk_path)
@@ -580,7 +578,7 @@ def copy_file_to_out_dir(tmp, apk_output_path, name, human_name, out_name):
     output_path = os.path.join(output_dir, out_name)
     tmp_path = tmp + "/" + name
     if os.path.isfile(tmp_path):
-        subprocess.check_call(["cp", tmp_path, output_path])
+        shutil.copy2(tmp_path, output_path)
         log("Copying " + human_name + " map to output dir")
         logging.warning("Copying " + human_name + " map to output_dir: " + output_path)
     else:
@@ -785,7 +783,6 @@ Given an APK, produce a better APK!
         default="",
         help="Stop before stop_pass and dump intermediate dex and IR meta data to output_ir folder",
     )
-
     parser.add_argument(
         "--debug-source-root",
         default=None,
@@ -799,12 +796,22 @@ Given an APK, produce a better APK!
         help="Clean up temporaries even under failure",
     )
 
+    parser.add_argument("--cmd-prefix", type=str, help="Prefix redex-all with")
+
+    parser.add_argument(
+        "--reset-zip-timestamps",
+        action="store_true",
+        help="Reset zip timestamps for deterministic output",
+    )
+
     parser.add_argument(
         "-q",
         "--quiet",
         action="store_true",
         help="Do not be verbose, and override TRACE.",
     )
+
+    parser.add_argument("--android-sdk-path", type=str, help="Path to Android SDK")
 
     return parser
 
@@ -814,61 +821,34 @@ class State(object):
     # launch_redex_binary, finalize_redex
     def __init__(
         self,
-        application_modules,
         args,
         config_dict,
         debugger,
         dex_dir,
         dexen,
-        dex_mode,
         extracted_apk_dir,
-        temporary_libs_dir,
         stop_pass_idx,
+        lib_manager,
+        unpack_manager,
+        zip_manager,
     ):
-        self.application_modules = application_modules
         self.args = args
         self.config_dict = config_dict
         self.debugger = debugger
         self.dex_dir = dex_dir
         self.dexen = dexen
-        self.dex_mode = dex_mode
         self.extracted_apk_dir = extracted_apk_dir
-        self.temporary_libs_dir = temporary_libs_dir
         self.stop_pass_idx = stop_pass_idx
-
-
-def ensure_libs_dir(libs_dir, sub_dir):
-    """Ensures the base libs directory and the sub directory exist. Returns top
-    most dir that was created.
-    """
-    if os.path.exists(libs_dir):
-        os.mkdir(sub_dir)
-        return sub_dir
-    else:
-        os.mkdir(libs_dir)
-        os.mkdir(sub_dir)
-        return libs_dir
-
-
-def get_file_ext(file_name):
-    return os.path.splitext(file_name)[1]
-
-
-def get_dex_file_path(args, extracted_apk_dir):
-    # base on file extension check if input is
-    # an apk file (".apk") or an Android bundle file (".aab")
-    # TODO: support loadable modules (at this point only
-    # very basic support is provided - in case of Android bundles
-    # "regular" apk file content is moved to the "base"
-    # sub-directory of the bundle archive)
-    if get_file_ext(args.input_apk) == ".aab":
-        return join(extracted_apk_dir, "base", "dex")
-    else:
-        return extracted_apk_dir
+        self.lib_manager = lib_manager
+        self.unpack_manager = unpack_manager
+        self.zip_manager = zip_manager
 
 
 def prepare_redex(args):
     debug_mode = args.unpack_only or args.debug
+
+    if args.android_sdk_path:
+        sdk_search_order.insert(0, lambda x: args.android_sdk_path)
 
     # avoid accidentally mixing up file formats since we now support
     # both apk files and Android bundle files
@@ -939,67 +919,27 @@ def prepare_redex(args):
     if not extracted_apk_dir:
         extracted_apk_dir = make_temp_dir(".redex_extracted_apk", debug_mode)
 
-    log("Extracting apk...")
-    unzip_apk(args.input_apk, extracted_apk_dir)
+    directory = make_temp_dir(".redex_unaligned", False)
+    unaligned_apk_path = join(directory, "redex-unaligned.apk")
+    zip_manager = ZipManager(args.input_apk, extracted_apk_dir, unaligned_apk_path)
+    zip_manager.__enter__()
 
-    dex_file_path = get_dex_file_path(args, extracted_apk_dir)
-
-    dex_mode = unpacker.detect_secondary_dex_mode(dex_file_path)
-    log("Detected dex mode " + str(type(dex_mode).__name__))
     if not dex_dir:
         dex_dir = make_temp_dir(".redex_dexen", debug_mode)
 
-    log("Unpacking dex files")
-    dex_mode.unpackage(dex_file_path, dex_dir)
+    unpack_manager = UnpackManager(
+        args.input_apk,
+        extracted_apk_dir,
+        dex_dir,
+        have_locators=config_dict.get("emit_locator_strings"),
+        debug_mode=debug_mode,
+        fast_repackage=args.dev,
+        reset_timestamps=args.reset_zip_timestamps or args.dev,
+    )
+    store_files = unpack_manager.__enter__()
 
-    log("Detecting Application Modules")
-    application_modules = unpacker.ApplicationModule.detect(extracted_apk_dir)
-    store_files = []
-    store_metadata_dir = make_temp_dir(".application_module_metadata", debug_mode)
-    for module in application_modules:
-        canary_prefix = module.get_canary_prefix()
-        log(
-            "found module: "
-            + module.get_name()
-            + " "
-            + (canary_prefix if canary_prefix is not None else "(no canary prefix)")
-        )
-        store_path = os.path.join(dex_dir, module.get_name())
-        os.mkdir(store_path)
-        module.unpackage(extracted_apk_dir, store_path)
-        store_metadata = os.path.join(store_metadata_dir, module.get_name() + ".json")
-        module.write_redex_metadata(store_path, store_metadata)
-        store_files.append(store_metadata)
-
-    # Some of the native libraries can be concatenated together into one
-    # xz-compressed file. We need to decompress that file so that we can scan
-    # through it looking for classnames.
-    libs_to_extract = []
-    temporary_libs_dir = None
-    xz_lib_name = "libs.xzs"
-    zstd_lib_name = "libs.zstd"
-    for root, _, filenames in os.walk(extracted_apk_dir):
-        for filename in fnmatch.filter(filenames, xz_lib_name):
-            libs_to_extract.append(join(root, filename))
-        for filename in fnmatch.filter(filenames, zstd_lib_name):
-            fullpath = join(root, filename)
-            # For voltron modules BUCK creates empty zstd files for each module
-            if os.path.getsize(fullpath) > 0:
-                libs_to_extract.append(fullpath)
-    if len(libs_to_extract) > 0:
-        libs_dir = join(extracted_apk_dir, "lib")
-        extracted_dir = join(libs_dir, "__extracted_libs__")
-        # Ensure both directories exist.
-        temporary_libs_dir = ensure_libs_dir(libs_dir, extracted_dir)
-        lib_count = 0
-        for lib_to_extract in libs_to_extract:
-            extract_path = join(extracted_dir, "lib_{}.so".format(lib_count))
-            if lib_to_extract.endswith(xz_lib_name):
-                cmd = "xz -d --stdout {} > {}".format(lib_to_extract, extract_path)
-            else:
-                cmd = "zstd -d {} -o {}".format(lib_to_extract, extract_path)
-            subprocess.check_call(cmd, shell=True)
-            lib_count += 1
+    lib_manager = LibraryManager(extracted_apk_dir)
+    lib_manager.__enter__()
 
     if args.unpack_only:
         print("APK: " + extracted_apk_dir)
@@ -1050,59 +990,32 @@ def prepare_redex(args):
         debugger = None
 
     return State(
-        application_modules=application_modules,
         args=args,
         config_dict=config_dict,
         debugger=debugger,
         dex_dir=dex_dir,
         dexen=dexen,
-        dex_mode=dex_mode,
         extracted_apk_dir=extracted_apk_dir,
-        temporary_libs_dir=temporary_libs_dir,
         stop_pass_idx=stop_pass_idx,
+        lib_manager=lib_manager,
+        unpack_manager=unpack_manager,
+        zip_manager=zip_manager,
     )
 
 
 def finalize_redex(state):
-    # This dir was just here so we could scan it for classnames, but we don't
-    # want to pack it back up into the apk
-    if state.temporary_libs_dir is not None:
-        shutil.rmtree(state.temporary_libs_dir)
+    state.lib_manager.__exit__(*sys.exc_info())
 
     repack_start_time = timer()
 
-    log("Repacking dex files")
-    have_locators = state.config_dict.get("emit_locator_strings")
-    log("Emit Locator Strings: %s" % have_locators)
+    state.unpack_manager.__exit__(*sys.exc_info())
+    state.zip_manager.__exit__(*sys.exc_info())
 
-    state.dex_mode.repackage(
-        get_dex_file_path(state.args, state.extracted_apk_dir),
-        state.dex_dir,
-        have_locators,
-        fast_repackage=state.args.dev,
-    )
-
-    locator_store_id = 1
-    for module in state.application_modules:
-        log(
-            "repacking module: "
-            + module.get_name()
-            + " with id "
-            + str(locator_store_id)
-        )
-        module.repackage(
-            state.extracted_apk_dir,
-            state.dex_dir,
-            have_locators,
-            locator_store_id,
-            fast_repackage=state.args.dev,
-        )
-        locator_store_id = locator_store_id + 1
-
-    log("Creating output apk")
-    create_output_apk(
-        state.extracted_apk_dir,
+    align_and_sign_output_apk(
+        state.zip_manager.output_apk,
         state.args.out,
+        # In dev mode, reset timestamps.
+        state.args.reset_zip_timestamps or state.args.dev,
         state.args.sign,
         state.args.keystore,
         state.args.keyalias,
@@ -1110,6 +1023,7 @@ def finalize_redex(state):
         state.args.ignore_zipalign,
         state.args.page_align_libs,
     )
+
     log(
         "Creating output APK finished in {:.2f} seconds".format(
             timer() - repack_start_time
@@ -1122,15 +1036,18 @@ def finalize_redex(state):
     copy_all_file_to_out_dir(
         meta_file_dir, state.args.out, "*", "all redex generated artifacts"
     )
+    # Write invocation file
+    with open(join(dirname(state.args.out), "redex.py-invocation.txt"), "w") as f:
+        print("%s" % " ".join(map(shlex.quote, sys.argv)), file=f)
 
     copy_all_file_to_out_dir(
         state.dex_dir, state.args.out, "*.dot", "approximate shape graphs"
     )
 
 
-def run_redex(args):
+def run_redex(args, term_handler=None):
     state = prepare_redex(args)
-    run_redex_binary(state)
+    run_redex_binary(state, term_handler)
 
     if args.stop_pass:
         # Do not remove temp dirs

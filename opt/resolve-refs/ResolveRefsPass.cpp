@@ -60,10 +60,12 @@ struct RefStats {
   }
 };
 
-void resolve_method_refs(IRInstruction* insn, RefStats& stats) {
+void resolve_method_refs(const DexMethod* caller,
+                         IRInstruction* insn,
+                         RefStats& stats) {
   always_assert(insn->has_method());
   auto mref = insn->get_method();
-  auto mdef = resolve_method(mref, opcode_to_search(insn));
+  auto mdef = resolve_method(mref, opcode_to_search(insn), caller);
   if (!mdef || mdef == mref) {
     return;
   }
@@ -118,7 +120,7 @@ RefStats resolve_refs(DexMethod* method) {
     case OPCODE_INVOKE_SUPER:
     case OPCODE_INVOKE_INTERFACE:
     case OPCODE_INVOKE_STATIC:
-      resolve_method_refs(insn, stats);
+      resolve_method_refs(method, insn, stats);
       break;
     case OPCODE_SGET:
     case OPCODE_SGET_WIDE:
@@ -268,7 +270,7 @@ RefStats ResolveRefsPass::refine_virtual_callsites(DexMethod* method,
     }
 
     auto mref = insn->get_method();
-    auto callee = resolve_method(mref, opcode_to_search(insn));
+    auto callee = resolve_method(mref, opcode_to_search(insn), method);
     if (!callee) {
       continue;
     }

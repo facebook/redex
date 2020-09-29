@@ -27,7 +27,7 @@ ConfigFiles::ConfigFiles(const Json::Value& config, const std::string& outdir)
         config.get("default_coldstart_classes", "").asString();
   }
 
-  load_method_sorting_whitelisted_substrings();
+  load_method_sorting_allowlisted_substrings();
   uint32_t instruction_size_bitwidth_limit =
       config.get("instruction_size_bitwidth_limit", 0).asUInt();
   always_assert_log(
@@ -47,7 +47,7 @@ const std::unordered_set<DexType*>& ConfigFiles::get_no_optimizations_annos() {
     Json::Value no_optimizations_anno;
     m_json.get("no_optimizations_annotations", Json::nullValue,
                no_optimizations_anno);
-    if (no_optimizations_anno != Json::nullValue) {
+    if (!no_optimizations_anno.empty()) {
       for (auto const& config_anno_name : no_optimizations_anno) {
         std::string anno_name = config_anno_name.asString();
         DexType* anno = DexType::get_type(anno_name.c_str());
@@ -65,7 +65,7 @@ const std::unordered_set<DexMethodRef*>& ConfigFiles::get_pure_methods() {
   if (m_pure_methods.empty()) {
     Json::Value pure_methods;
     m_json.get("pure_methods", Json::nullValue, pure_methods);
-    if (pure_methods != Json::nullValue) {
+    if (!pure_methods.empty()) {
       for (auto const& method_name : pure_methods) {
         std::string name = method_name.asString();
         DexMethodRef* method = DexMethod::get_method(name);
@@ -146,14 +146,14 @@ ConfigFiles::load_class_lists() {
   return lists;
 }
 
-void ConfigFiles::load_method_sorting_whitelisted_substrings() {
+void ConfigFiles::load_method_sorting_allowlisted_substrings() {
   const auto json_cfg = get_json_config();
   Json::Value json_result;
-  json_cfg.get("method_sorting_whitelisted_substrings", Json::nullValue,
+  json_cfg.get("method_sorting_allowlisted_substrings", Json::nullValue,
                json_result);
-  if (json_result != Json::nullValue) {
+  if (!json_result.empty()) {
     for (auto const& json_element : json_result) {
-      m_method_sorting_whitelisted_substrings.insert(json_element.asString());
+      m_method_sorting_allowlisted_substrings.insert(json_element.asString());
     }
   }
 }
@@ -170,10 +170,10 @@ void ConfigFiles::ensure_agg_method_stats_loaded() {
 void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
   Json::Value config;
   m_json.get("inliner", Json::nullValue, config);
-  if (config == Json::nullValue) {
+  if (config.empty()) {
     m_json.get("MethodInlinePass", Json::nullValue, config);
   }
-  if (config == Json::nullValue) {
+  if (config.empty()) {
     fprintf(stderr, "WARNING: No inliner config\n");
     return;
   }
@@ -197,8 +197,9 @@ void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
   jw.get("run_local_dce", false, inliner_config->run_local_dce);
   jw.get("run_dedup_blocks", false, inliner_config->run_dedup_blocks);
   jw.get("debug", false, inliner_config->debug);
-  jw.get("black_list", {}, inliner_config->m_black_list);
-  jw.get("caller_black_list", {}, inliner_config->m_caller_black_list);
+  jw.get("blocklist", {}, inliner_config->m_blocklist);
+  jw.get("caller_blocklist", {}, inliner_config->m_caller_blocklist);
+  jw.get("intradex_white_list", {}, inliner_config->m_intradex_white_list);
 
   std::vector<std::string> no_inline_annos;
   jw.get("no_inline_annos", {}, no_inline_annos);

@@ -22,7 +22,7 @@ class TypeStringMap {
 
  public:
   TypeStringMap() {}
-  TypeStringMap(
+  explicit TypeStringMap(
       const std::unordered_map<const DexType*, DexType*>& type_mapping);
   /**
    * Add type mapping from old_name to new_name.

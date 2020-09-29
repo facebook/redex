@@ -37,7 +37,7 @@ struct DexHash {
 
 class DexScopeHasher final {
  public:
-  DexScopeHasher(const Scope& scope) : m_scope(scope) {}
+  explicit DexScopeHasher(const Scope& scope) : m_scope(scope) {}
   DexHash run();
 
  private:
@@ -46,7 +46,7 @@ class DexScopeHasher final {
 
 class DexClassHasher final {
  public:
-  DexClassHasher(DexClass* cls) : m_cls(cls) {}
+  explicit DexClassHasher(DexClass* cls) : m_cls(cls) {}
   DexHash run();
 
  private:

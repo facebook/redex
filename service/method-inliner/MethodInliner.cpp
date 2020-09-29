@@ -130,7 +130,7 @@ std::unordered_map<const DexMethod*, DexMethod*> get_same_implementation_map(
     }
     const auto& overriding_methods =
         mog::get_overriding_methods(method_override_graph, method);
-    if (overriding_methods.size() == 0) {
+    if (overriding_methods.empty()) {
       return;
     }
     // Filter out methods without IRCode.
@@ -146,7 +146,7 @@ std::unordered_map<const DexMethod*, DexMethod*> get_same_implementation_map(
       }
       filtered_methods.emplace(overriding_method);
     }
-    if (filtered_methods.size() == 0) {
+    if (filtered_methods.empty()) {
       return;
     }
     if (method->get_code()) {
@@ -252,7 +252,7 @@ void gather_true_virtual_methods(
       const auto& overriding_methods =
           mog::get_overriding_methods(*method_override_graph, callee);
       if (!callee->is_external()) {
-        if (overriding_methods.size() == 0) {
+        if (overriding_methods.empty()) {
           // There is no override for this method
           update_monomorphic_callsite(
               method, insn, static_cast<DexMethod*>(callee), &meth_caller);
@@ -310,6 +310,9 @@ void run_inliner(DexStoresVector& stores,
   CalleeCallerInsns true_virtual_callers;
   // Gather all inlinable candidates.
   auto inliner_config = conf.get_inliner_config();
+  if (intra_dex) {
+    inliner_config.apply_intradex_white_list();
+  }
 
   method_profiles::MethodProfiles method_profiles =
       use_method_profiles ? conf.get_method_profiles()
@@ -322,6 +325,8 @@ void run_inliner(DexStoresVector& stores,
   if (use_method_profiles) {
     inliner_config.shrink_other_methods = false;
   }
+
+  inliner_config.unique_inlined_registers = false;
 
   auto methods =
       gather_non_virtual_methods(scope, inliner_config.virtual_inline);
@@ -351,8 +356,8 @@ void run_inliner(DexStoresVector& stores,
   MultiMethodInliner inliner(scope, stores, methods, resolver, inliner_config,
                              intra_dex ? IntraDex : InterDex,
                              true_virtual_callers, &method_profiles,
-                             same_method_implementations,
-                             analyze_and_prune_inits);
+                             &same_method_implementations,
+                             analyze_and_prune_inits, conf.get_pure_methods());
   inliner.inline_methods();
 
   if (inliner_config.use_cfg_inliner) {
@@ -387,8 +392,8 @@ void run_inliner(DexStoresVector& stores,
   TRACE(INLINE, 3, "max_call_stack_depth %ld",
         inliner.get_info().max_call_stack_depth);
   TRACE(INLINE, 3, "waited seconds %ld", inliner.get_info().waited_seconds);
-  TRACE(INLINE, 3, "blacklisted meths %ld",
-        (size_t)inliner.get_info().blacklisted);
+  TRACE(INLINE, 3, "blocklisted meths %ld",
+        (size_t)inliner.get_info().blocklisted);
   TRACE(INLINE, 3, "virtualizing methods %ld",
         (size_t)inliner.get_info().need_vmethod);
   TRACE(INLINE, 3, "invoke super %ld", (size_t)inliner.get_info().invoke_super);
@@ -420,6 +425,9 @@ void run_inliner(DexStoresVector& stores,
   mgr.incr_metric("caller_too_large", inliner.get_info().caller_too_large);
   mgr.incr_metric("inlined_init_count", inlined_init_count);
   mgr.incr_metric("calls_inlined", inliner.get_info().calls_inlined);
+  mgr.incr_metric("calls_not_inlinable",
+                  inliner.get_info().calls_not_inlinable);
+  mgr.incr_metric("calls_not_inlined", inliner.get_info().calls_not_inlined);
   mgr.incr_metric("methods_removed", deleted);
   mgr.incr_metric("escaped_virtual", inliner.get_info().escaped_virtual);
   mgr.incr_metric("unresolved_methods", inliner.get_info().unresolved_methods);
@@ -443,6 +451,7 @@ void run_inliner(DexStoresVector& stores,
                   inliner.get_delayed_shrinking_callees());
   mgr.incr_metric("instructions_eliminated_const_prop",
                   inliner.get_const_prop_stats().branches_removed +
+                      inliner.get_const_prop_stats().branches_forwarded +
                       inliner.get_const_prop_stats().materialized_consts +
                       inliner.get_const_prop_stats().added_param_const +
                       inliner.get_const_prop_stats().throws);

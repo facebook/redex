@@ -60,7 +60,7 @@ class StaticStringBuilder {
 
 class DynamicStringBuilder {
  public:
-  DynamicStringBuilder(uint32_t expected_num_strings) {
+  explicit DynamicStringBuilder(uint32_t expected_num_strings) {
     m_strings.reserve(expected_num_strings);
   }
 

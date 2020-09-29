@@ -11,7 +11,7 @@
 #include <ostream>
 
 #include "BaseIRAnalyzer.h"
-#include "DexTypeDomain.h"
+#include "DexTypeEnvironment.h"
 #include "FiniteAbstractDomain.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "ReducedProductAbstractDomain.h"
@@ -138,18 +138,25 @@ using namespace ir_analyzer;
 using BasicTypeEnvironment =
     sparta::PatriciaTreeMapAbstractEnvironment<reg_t, TypeDomain>;
 
-using DexTypeEnvironment =
-    sparta::PatriciaTreeMapAbstractEnvironment<reg_t, DexTypeDomain>;
-
+/*
+ * Note that we only track the register DexTypeDomain mapping here. We always
+ * take the declared DexType when reading a field. We do not track more precise
+ * DexType for fields for individual intraprocedural analysis.
+ * The reason is that the analysis can be incomplete. A field can potentially
+ * be written by another thread concurrently. That write is visible to the
+ * reads of the method we are analyzing currently. We could lose type
+ * information if we don't consider write from other methods. Therefore, we stay
+ * with the declared field type for local type inference.
+ */
 class TypeEnvironment final
     : public sparta::ReducedProductAbstractDomain<TypeEnvironment,
                                                   BasicTypeEnvironment,
-                                                  DexTypeEnvironment> {
+                                                  RegTypeEnvironment> {
  public:
   using ReducedProductAbstractDomain::ReducedProductAbstractDomain;
 
   static void reduce_product(
-      std::tuple<BasicTypeEnvironment, DexTypeEnvironment>& /* product */) {}
+      std::tuple<BasicTypeEnvironment, RegTypeEnvironment>& /* product */) {}
 
   TypeDomain get_type(reg_t reg) const { return get<0>().get(reg); }
 
@@ -167,15 +174,21 @@ class TypeEnvironment final
     return get<1>().get(reg).get_dex_type();
   }
 
-  void set_concrete_type(reg_t reg, const DexTypeDomain& dex_type) {
+  DexTypeDomain get_type_domain(reg_t reg) const { return get<1>().get(reg); }
+
+  void set_dex_type(reg_t reg, const DexTypeDomain& dex_type) {
     apply<1>([=](auto env) { env->set(reg, dex_type); }, true);
+  }
+
+  void reset_dex_type(reg_t reg) {
+    apply<1>([=](auto env) { env->set(reg, DexTypeDomain::top()); }, true);
   }
 };
 
 class TypeInference final
     : public ir_analyzer::BaseIRAnalyzer<TypeEnvironment> {
  public:
-  TypeInference(const cfg::ControlFlowGraph& cfg)
+  explicit TypeInference(const cfg::ControlFlowGraph& cfg)
       : ir_analyzer::BaseIRAnalyzer<TypeEnvironment>(cfg), m_cfg(cfg) {}
 
   void run(const DexMethod* dex_method);

@@ -24,8 +24,7 @@ void JsonWrapper::get(const char* name,
   param = m_config.get(name, dflt).asString();
 }
 
-const std::string JsonWrapper::get(const char* name,
-                                   const std::string& dflt) const {
+std::string JsonWrapper::get(const char* name, const std::string& dflt) const {
   return m_config.get(name, dflt).asString();
 }
 
@@ -68,6 +67,7 @@ void JsonWrapper::get(const char* name,
                       const std::vector<std::string>& dflt,
                       std::vector<std::string>& param) const {
   auto it = m_config[name];
+  // NOLINTNEXTLINE(readability-container-size-empty)
   if (it == Json::nullValue) {
     param = dflt;
   } else {
@@ -83,6 +83,7 @@ void JsonWrapper::get(const char* name,
                       std::unordered_set<std::string>& param) const {
   auto it = m_config[name];
   param.clear();
+  // NOLINTNEXTLINE(readability-container-size-empty)
   if (it == Json::nullValue) {
     param.insert(dflt.begin(), dflt.end());
   } else {
@@ -98,6 +99,7 @@ void JsonWrapper::get(
     std::unordered_map<std::string, std::vector<std::string>>& param) const {
   auto cfg = m_config[name];
   param.clear();
+  // NOLINTNEXTLINE(readability-container-size-empty)
   if (cfg == Json::nullValue) {
     param = dflt;
   } else {
@@ -133,8 +135,7 @@ void JsonWrapper::get(const char* name,
   param = m_config.get(name, dflt);
 }
 
-const Json::Value JsonWrapper::get(const char* name,
-                                   const Json::Value& dflt) const {
+Json::Value JsonWrapper::get(const char* name, const Json::Value& dflt) const {
   return m_config.get(name, dflt);
 }
 

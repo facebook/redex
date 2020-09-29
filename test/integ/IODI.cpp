@@ -19,6 +19,7 @@
 #include "IODIMetadata.h"
 #include "InstructionLowering.h"
 #include "RedexContext.h"
+#include "SanitizersConfig.h"
 #include "Walkers.h"
 
 struct DexOutputTestHelper {

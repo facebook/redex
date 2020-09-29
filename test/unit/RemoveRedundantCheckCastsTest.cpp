@@ -57,13 +57,13 @@ struct RemoveRedundantCheckCastsTest : public RedexTest {
   void create_hierarchy() {
     std::vector<DexType*> no_interfaces;
 
-    DexType* i_c_type = DexType::make_type("I_C;");
+    DexType* i_c_type = DexType::make_type("LI_C;");
     DexClass* i_c_cls = create_class(i_c_type, type::java_lang_Object(),
                                      no_interfaces, ACC_PUBLIC | ACC_INTERFACE);
     m_classes.push_back(i_c_cls);
 
     std::vector<DexType*> c_interfaces{i_c_type};
-    DexType* c_type = DexType::make_type("C;");
+    DexType* c_type = DexType::make_type("LC;");
     DexClass* c_cls = create_class(c_type, type::java_lang_Object(),
                                    c_interfaces, ACC_PUBLIC);
     m_classes.push_back(c_cls);
@@ -81,7 +81,7 @@ struct RemoveRedundantCheckCastsTest : public RedexTest {
     m_classes.push_back(i_b1_cls);
 
     std::vector<DexType*> b_interfaces{i_b0_type, i_b1_type};
-    DexType* b_type = DexType::make_type("B;");
+    DexType* b_type = DexType::make_type("LB;");
     DexClass* b_cls = create_class(b_type, c_type, b_interfaces, ACC_PUBLIC);
     m_classes.push_back(b_cls);
 
@@ -91,7 +91,7 @@ struct RemoveRedundantCheckCastsTest : public RedexTest {
     m_classes.push_back(i_a_cls);
 
     std::vector<DexType*> a_interfaces{i_a_type};
-    DexType* a_type = DexType::make_type("A;");
+    DexType* a_type = DexType::make_type("LA;");
     DexClass* a_cls = create_class(a_type, b_type, a_interfaces, ACC_PUBLIC);
     m_classes.push_back(a_cls);
   }
@@ -138,10 +138,10 @@ TEST_F(RemoveRedundantCheckCastsTest, simplestCase) {
 
   auto str = R"(
     (
-      (new-instance "C;")
+      (new-instance "LC;")
       (move-result-pseudo-object v0)
-      (invoke-direct (v0) "C;.<init>:()V")
-      (check-cast v0 "C;")
+      (invoke-direct (v0) "LC;.<init>:()V")
+      (check-cast v0 "LC;")
       (move-result-pseudo-object v0)
     )
   )";
@@ -153,9 +153,84 @@ TEST_F(RemoveRedundantCheckCastsTest, simplestCase) {
 
   auto expected_str = R"(
     (
-      (new-instance "C;")
+      (new-instance "LC;")
       (move-result-pseudo-object v0)
-      (invoke-direct (v0) "C;.<init>:()V")
+      (invoke-direct (v0) "LC;.<init>:()V")
+    )
+  )";
+  auto expected_code = assembler::ircode_from_string(expected_str);
+  EXPECT_CODE_EQ(expected_code.get(), method->get_code());
+}
+
+TEST_F(RemoveRedundantCheckCastsTest, weaken_remove) {
+  using namespace dex_asm;
+  DexMethod* method = create_empty_method("weaken_remove");
+
+  auto str = R"(
+    (
+      (new-instance "LC;")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0) "LC;.<init>:()V")
+      (check-cast v0 "LD;")
+      (move-result-pseudo-object v0)
+    )
+  )";
+
+  auto code = assembler::ircode_from_string(str);
+  method->set_code(std::move(code));
+
+  run_remove_redundant_check_casts();
+
+  auto expected_str = R"(
+    (
+      (new-instance "LC;")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0) "LC;.<init>:()V")
+    )
+  )";
+  auto expected_code = assembler::ircode_from_string(expected_str);
+  EXPECT_CODE_EQ(expected_code.get(), method->get_code());
+}
+
+TEST_F(RemoveRedundantCheckCastsTest, weaken) {
+  auto a_type = DexType::make_type("LAA;");
+  auto b_type = DexType::make_type("LBB;");
+  auto c_type = DexType::make_type("LCC;");
+  ClassCreator a_creator(a_type);
+  a_creator.set_super(type::java_lang_Object());
+  ClassCreator b_creator(b_type);
+  b_creator.set_super(a_type);
+  ClassCreator c_creator(c_type);
+  c_creator.set_super(b_type);
+  a_creator.create();
+  b_creator.create();
+  c_creator.create();
+
+  using namespace dex_asm;
+  DexMethod* method = create_empty_method("weaken_remove");
+
+  auto str = R"(
+    (
+      (sget-object "LDummy;.fooA:LAA;")
+      (move-result-pseudo-object v0)
+      (check-cast v0 "LCC;")
+      (move-result-pseudo-object v0)
+      (sput-object v0 "LDummy;.fooB:LBB;")
+    )
+  )";
+
+  auto code = assembler::ircode_from_string(str);
+  method->set_code(std::move(code));
+
+  run_remove_redundant_check_casts();
+
+  auto expected_str = R"(
+    (
+      (sget-object "LDummy;.fooA:LAA;")
+      (move-result-pseudo-object v0)
+      (check-cast v0 "LBB;")
+      (move-result-pseudo-object v0)
+      (sput-object v0 "LDummy;.fooB:LBB;")
     )
   )";
   auto expected_code = assembler::ircode_from_string(expected_str);
@@ -169,7 +244,7 @@ TEST_F(RemoveRedundantCheckCastsTest, castingZero) {
   auto str = R"(
     (
       (const v0 0)
-      (check-cast v0 "C;")
+      (check-cast v0 "LC;")
       (move-result-pseudo-object v0)
     )
   )";
@@ -194,10 +269,10 @@ TEST_F(RemoveRedundantCheckCastsTest, parentCheckCast) {
 
   auto str = R"(
     (
-      (new-instance "A;")
+      (new-instance "LA;")
       (move-result-pseudo-object v0)
-      (invoke-direct (v0) "A;.<init>:()V")
-      (check-cast v0 "B;")
+      (invoke-direct (v0) "LA;.<init>:()V")
+      (check-cast v0 "LB;")
       (move-result-pseudo-object v0)
     )
   )";
@@ -209,9 +284,9 @@ TEST_F(RemoveRedundantCheckCastsTest, parentCheckCast) {
 
   auto expected_str = R"(
     (
-      (new-instance "A;")
+      (new-instance "LA;")
       (move-result-pseudo-object v0)
-      (invoke-direct (v0) "A;.<init>:()V")
+      (invoke-direct (v0) "LA;.<init>:()V")
     )
   )";
   auto expected_code = assembler::ircode_from_string(expected_str);
@@ -224,10 +299,10 @@ TEST_F(RemoveRedundantCheckCastsTest, skipParentCheckCast) {
 
   auto str = R"(
     (
-      (new-instance "A;")
+      (new-instance "LA;")
       (move-result-pseudo-object v0)
-      (invoke-direct (v0) "A;.<init>:()V")
-      (check-cast v0 "C;")
+      (invoke-direct (v0) "LA;.<init>:()V")
+      (check-cast v0 "LC;")
       (move-result-pseudo-object v0)
     )
   )";
@@ -239,9 +314,9 @@ TEST_F(RemoveRedundantCheckCastsTest, skipParentCheckCast) {
 
   auto expected_str = R"(
     (
-      (new-instance "A;")
+      (new-instance "LA;")
       (move-result-pseudo-object v0)
-      (invoke-direct (v0) "A;.<init>:()V")
+      (invoke-direct (v0) "LA;.<init>:()V")
     )
   )";
   auto expected_code = assembler::ircode_from_string(expected_str);
@@ -254,11 +329,12 @@ TEST_F(RemoveRedundantCheckCastsTest, subclassCheckCast) {
 
   auto str = R"(
     (
-      (new-instance "C;")
+      (new-instance "LC;")
       (move-result-pseudo-object v0)
-      (invoke-direct (v0) "C;.<init>:()V")
-      (check-cast v0 "B;")
+      (invoke-direct (v0) "LC;.<init>:()V")
+      (check-cast v0 "LB;")
       (move-result-pseudo-object v0)
+      (sput-object v0 "LD;.bar:LB;")
     )
   )";
 
@@ -269,11 +345,12 @@ TEST_F(RemoveRedundantCheckCastsTest, subclassCheckCast) {
 
   auto expected_str = R"(
     (
-      (new-instance "C;")
+      (new-instance "LC;")
       (move-result-pseudo-object v0)
-      (invoke-direct (v0) "C;.<init>:()V")
-      (check-cast v0 "B;")
+      (invoke-direct (v0) "LC;.<init>:()V")
+      (check-cast v0 "LB;")
       (move-result-pseudo-object v0)
+      (sput-object v0 "LD;.bar:LB;")
     )
   )";
   auto expected_code = assembler::ircode_from_string(expected_str);
@@ -286,9 +363,9 @@ TEST_F(RemoveRedundantCheckCastsTest, directInterfaceCheckCast_WithMove) {
 
   auto str = R"(
     (
-      (new-instance "B;")
+      (new-instance "LB;")
       (move-result-pseudo-object v0)
-      (invoke-direct (v0) "B;.<init>:()V")
+      (invoke-direct (v0) "LB;.<init>:()V")
       (check-cast v0 "I_B0;")
       (move-result-pseudo-object v1)
     )
@@ -301,9 +378,9 @@ TEST_F(RemoveRedundantCheckCastsTest, directInterfaceCheckCast_WithMove) {
 
   auto expected_str = R"(
     (
-      (new-instance "B;")
+      (new-instance "LB;")
       (move-result-pseudo-object v0)
-      (invoke-direct (v0) "B;.<init>:()V")
+      (invoke-direct (v0) "LB;.<init>:()V")
       (move-object v1 v0)
     )
   )";
@@ -317,10 +394,10 @@ TEST_F(RemoveRedundantCheckCastsTest, parentInterfaceCheckCast_WithMove) {
 
   auto str = R"(
     (
-      (new-instance "B;")
+      (new-instance "LB;")
       (move-result-pseudo-object v0)
-      (invoke-direct (v0) "B;.<init>:()V")
-      (check-cast v0 "I_C;")
+      (invoke-direct (v0) "LB;.<init>:()V")
+      (check-cast v0 "LI_C;")
       (move-result-pseudo-object v1)
     )
   )";
@@ -332,9 +409,9 @@ TEST_F(RemoveRedundantCheckCastsTest, parentInterfaceCheckCast_WithMove) {
 
   auto expected_str = R"(
     (
-      (new-instance "B;")
+      (new-instance "LB;")
       (move-result-pseudo-object v0)
-      (invoke-direct (v0) "B;.<init>:()V")
+      (invoke-direct (v0) "LB;.<init>:()V")
       (move-object v1 v0)
     )
   )";
@@ -352,18 +429,18 @@ TEST_F(RemoveRedundantCheckCastsTest, sameTypeInterfaceCheckCast) {
       (const v0 0)
 
       (if-eqz v0 :lb0)
-      (new-instance "B;")
+      (new-instance "LB;")
       (move-result-pseudo-object v1)
-      (invoke-direct (v1) "B;.<init>:()V")
+      (invoke-direct (v1) "LB;.<init>:()V")
       (goto :lb1)
 
       (:lb0)
-      (new-instance "B;")
+      (new-instance "LB;")
       (move-result-pseudo-object v1)
-      (invoke-direct (v1) "B;.<init>:()V")
+      (invoke-direct (v1) "LB;.<init>:()V")
 
       (:lb1)
-      (check-cast v1 "I_C;")
+      (check-cast v1 "LI_C;")
       (move-result-pseudo-object v1)
       (return-void)
     )
@@ -380,15 +457,15 @@ TEST_F(RemoveRedundantCheckCastsTest, sameTypeInterfaceCheckCast) {
       (const v0 0)
 
       (if-eqz v0 :lb1)
-      (new-instance "B;")
+      (new-instance "LB;")
       (move-result-pseudo-object v1)
-      (invoke-direct (v1) "B;.<init>:()V")
+      (invoke-direct (v1) "LB;.<init>:()V")
       (:lb0)
       (return-void)
       (:lb1)
-      (new-instance "B;")
+      (new-instance "LB;")
       (move-result-pseudo-object v1)
-      (invoke-direct (v1) "B;.<init>:()V")
+      (invoke-direct (v1) "LB;.<init>:()V")
       (goto :lb0)
     )
   )";
@@ -406,19 +483,20 @@ TEST_F(RemoveRedundantCheckCastsTest, differentTypeInterfaceCheckCast) {
       (const v0 0)
 
       (if-eqz v0 :lb0)
-      (new-instance "B;")
+      (new-instance "LB;")
       (move-result-pseudo-object v1)
-      (invoke-direct (v1) "B;.<init>:()V")
+      (invoke-direct (v1) "LB;.<init>:()V")
       (goto :lb1)
 
       (:lb0)
-      (new-instance "A;")
+      (new-instance "LA;")
       (move-result-pseudo-object v1)
-      (invoke-direct (v1) "A;.<init>:()V")
+      (invoke-direct (v1) "LA;.<init>:()V")
 
       (:lb1)
-      (check-cast v1 "I_C;")
+      (check-cast v1 "LI_C;")
       (move-result-pseudo-object v1)
+      (sput-object v1 "LDummy;.foo:LI_C;")
       (return-void)
     )
   )";
@@ -434,17 +512,18 @@ TEST_F(RemoveRedundantCheckCastsTest, differentTypeInterfaceCheckCast) {
       (const v0 0)
 
       (if-eqz v0 :lb1)
-      (new-instance "B;")
+      (new-instance "LB;")
       (move-result-pseudo-object v1)
-      (invoke-direct (v1) "B;.<init>:()V")
+      (invoke-direct (v1) "LB;.<init>:()V")
       (:lb0)
-      (check-cast v1 "I_C;")
+      (check-cast v1 "LI_C;")
       (move-result-pseudo-object v1)
+      (sput-object v1 "LDummy;.foo:LI_C;")
       (return-void)
       (:lb1)
-      (new-instance "A;")
+      (new-instance "LA;")
       (move-result-pseudo-object v1)
-      (invoke-direct (v1) "A;.<init>:()V")
+      (invoke-direct (v1) "LA;.<init>:()V")
       (goto :lb0)
     )
   )";

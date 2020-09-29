@@ -1171,6 +1171,7 @@ class Progard:
                             class_dict[new] = old
                     else:
                         (old, new) = line.split(" -> ")
+                        new = new.rstrip(":")
                         # print('class old = "%s"' % (old))
                         # print('class new = "%s"' % (new))
                         class_dict = {}
@@ -1206,6 +1207,12 @@ class DexMethod:
         self.insns = None
         self.name_in_file = None
         self.name = None
+
+    def __len__(self):
+        ci = self.get_code_item()
+        return (len(self.encoded_method) if self.encoded_method else 0) + (
+            len(ci) if ci else 0
+        )
 
     def get_signature(self):
         class_name = self.get_class().get_name()
@@ -1443,6 +1450,11 @@ class DexClass:
         self.demangled = None
         self.method_mapping = None
 
+    def __len__(self):
+        return sum((len(m) for m in self.get_methods())) + sum(
+            (len(f) for f in self.get_fields())
+        )
+
     def dump(self, options, f=sys.stdout):
         dex = self.get_dex()
         class_def_offset = self.class_def.get_offset()
@@ -1613,6 +1625,9 @@ class DexField:
         self.name = None
         self.is_instance_field = is_instance_field
 
+    def __len__(self):
+        return len(self.encoded_field) if self.encoded_field else 0
+
     def get_signature(self):
         class_name = self.get_class().get_name()
         field_name = self.get_name_in_file()
@@ -1700,7 +1715,7 @@ class File:
         if proguard_path and os.path.exists(proguard_path):
             self.proguard = Progard(proguard_path)
         if file_like is None:
-            file_like = open(path, "rb")
+            file_like = open(path, "rb")  # noqa: P201
         self.use_bytecode_format = use_bytecode_format
         self.data = file_extract.FileExtract(file_like, "=", 4)
         self.header = header_item(self.data)
@@ -2925,7 +2940,7 @@ class Opcode17(Opcode):
             f.write('warning: "const-wide/32" can be encoded as a ')
             f.write(
                 '"const-wide/16" more efficiently as (%i <= %i <= %i)\n'
-                % (UINT8_MAX, INT16_MIN, self.imm, INT16_MAX)
+                % (INT16_MIN, self.imm, INT16_MAX)
             )
             return 2
         return 0

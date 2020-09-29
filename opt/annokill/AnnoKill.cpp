@@ -274,7 +274,8 @@ AnnoKill::AnnoSet AnnoKill::get_referenced_annos() {
           }
         } else if (insn->has_method()) {
           auto method = insn->get_method();
-          DexMethod* methdef = resolve_method(method, opcode_to_search(insn));
+          DexMethod* methdef =
+              resolve_method(method, opcode_to_search(insn), meth);
           if (methdef != nullptr) method = methdef;
 
           bool referenced = false;
@@ -377,7 +378,7 @@ void AnnoKill::cleanup_aset(
     if (m_keep.count(anno_type) > 0) {
       TRACE(ANNO,
             3,
-            "Blacklisted annotation type %s, "
+            "Blocklisted annotation type %s, "
             "skipping...\n\tannotation: %s",
             SHOW(anno_type),
             SHOW(da));

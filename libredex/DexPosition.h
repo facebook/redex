@@ -8,6 +8,7 @@
 #pragma once
 
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -25,7 +26,7 @@ struct DexPosition final {
   // when a function gets inlined for the first time, all its DexPositions will
   // have the DexPosition of the callsite as their parent.
   DexPosition* parent{nullptr};
-  DexPosition(uint32_t line);
+  explicit DexPosition(uint32_t line);
   DexPosition(DexString* method, DexString* file, uint32_t line);
 
   void bind(DexString* method_, DexString* file_);
@@ -62,7 +63,7 @@ class RealPositionMapper : public PositionMapper {
   void write_map_v2();
 
  public:
-  RealPositionMapper(const std::string& filename_v2)
+  explicit RealPositionMapper(const std::string& filename_v2)
       : m_filename_v2(filename_v2) {}
   DexString* get_source_file(const DexClass*) override;
   uint32_t position_to_line(DexPosition*) override;

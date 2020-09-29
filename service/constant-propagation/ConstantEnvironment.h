@@ -8,13 +8,16 @@
 #pragma once
 
 #include <limits>
+#include <utility>
 
 #include "ConstantAbstractDomain.h"
 #include "ConstantArrayDomain.h"
 #include "ControlFlow.h"
 #include "DisjointUnionAbstractDomain.h"
 #include "HashedAbstractPartition.h"
+#include "HashedSetAbstractDomain.h"
 #include "ObjectDomain.h"
+#include "ObjectWithImmutAttr.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "PatriciaTreeSetAbstractDomain.h"
 #include "ReducedProductAbstractDomain.h"
@@ -26,8 +29,6 @@
  *   - Constant array values, referenced by registers that point into the heap
  *   - Constant primitive values stored in fields
  */
-
-constexpr reg_t RESULT_REGISTER = std::numeric_limits<reg_t>::max();
 
 /*****************************************************************************
  * Abstract stack / environment values.
@@ -42,9 +43,23 @@ constexpr reg_t RESULT_REGISTER = std::numeric_limits<reg_t>::max();
  */
 using SingletonObjectDomain = sparta::ConstantAbstractDomain<const DexField*>;
 
+using IntegerSetDomain = sparta::HashedSetAbstractDomain<int64_t>;
+
 using StringSetDomain = sparta::PatriciaTreeSetAbstractDomain<const DexString*>;
 
 using StringDomain = sparta::ConstantAbstractDomain<const DexString*>;
+
+using ConstantClassObjectDomain =
+    sparta::ConstantAbstractDomain<const DexType*>;
+
+/**
+ * This domain stores an object with **immutable** attributes. The
+ * attributes must be immutable, for example, final primitive instance fields
+ * that are never changed after initialization, regardless of whether the object
+ * may escape.
+ */
+using ObjectWithImmutAttrDomain =
+    sparta::ConstantAbstractDomain<std::shared_ptr<ObjectWithImmutAttr>>;
 
 /*
  * This represents a new-instance or new-array instruction.
@@ -54,11 +69,15 @@ using AbstractHeapPointer =
 
 // TODO: Refactor so that we don't have to list every single possible
 // sub-Domain here.
-using ConstantValue = sparta::DisjointUnionAbstractDomain<SignedConstantDomain,
-                                                          SingletonObjectDomain,
-                                                          StringSetDomain,
-                                                          StringDomain,
-                                                          AbstractHeapPointer>;
+using ConstantValue =
+    sparta::DisjointUnionAbstractDomain<SignedConstantDomain,
+                                        SingletonObjectDomain,
+                                        IntegerSetDomain,
+                                        StringSetDomain,
+                                        StringDomain,
+                                        ConstantClassObjectDomain,
+                                        ObjectWithImmutAttrDomain,
+                                        AbstractHeapPointer>;
 
 // For storing non-escaping static and instance fields.
 using FieldEnvironment =
@@ -69,6 +88,8 @@ using ConstantRegisterEnvironment =
 
 /*****************************************************************************
  * Heap values.
+ * ConstantPropagationPass and IPCP do not support heap stores properly. Use
+ * LocalPointersAnalysis for local mutable objects analysis.
  *****************************************************************************/
 
 using ConstantPrimitiveArrayDomain = ConstantArrayDomain<SignedConstantDomain>;
@@ -170,18 +191,18 @@ class ConstantEnvironment final
 
   ConstantEnvironment& mutate_register_environment(
       std::function<void(ConstantRegisterEnvironment*)> f) {
-    apply<0>(f);
+    apply<0>(std::move(f));
     return *this;
   }
 
   ConstantEnvironment& mutate_field_environment(
       std::function<void(FieldEnvironment*)> f) {
-    apply<1>(f);
+    apply<1>(std::move(f));
     return *this;
   }
 
   ConstantEnvironment& mutate_heap(std::function<void(ConstantHeap*)> f) {
-    apply<2>(f);
+    apply<2>(std::move(f));
     return *this;
   }
 
@@ -278,3 +299,8 @@ class ReturnState : public sparta::ReducedProductAbstractDomain<ReturnState,
 
   ConstantHeap get_heap() { return ReducedProductAbstractDomain::get<1>(); }
 };
+
+// TODO: Instead of this custom meet function, the ConstantValue should get a
+// custom meet AND JOIN that knows about the relationship of NEZ and certain
+// non-null custom object domains.
+ConstantValue meet(const ConstantValue& left, const ConstantValue& right);

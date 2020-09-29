@@ -64,7 +64,7 @@ uint32_t RealPositionMapper::position_to_line(DexPosition* pos) {
 }
 
 void RealPositionMapper::write_map() {
-  if (m_filename_v2 != "") {
+  if (!m_filename_v2.empty()) {
     write_map_v2();
   }
 }
@@ -151,7 +151,7 @@ void RealPositionMapper::write_map_v2() {
 }
 
 PositionMapper* PositionMapper::make(const std::string& map_filename_v2) {
-  if (map_filename_v2 == "") {
+  if (map_filename_v2.empty()) {
     // If no path is provided for the map, just pass the original line numbers
     // through to the output. This does mean that the line numbers will be
     // incorrect for inlined code.

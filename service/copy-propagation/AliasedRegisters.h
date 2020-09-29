@@ -25,9 +25,6 @@
 
 namespace aliased_registers {
 
-using Register = uint32_t;
-const Register RESULT_REGISTER = std::numeric_limits<Register>::max() - 1;
-
 class Value {
  public:
   enum class Kind : uint8_t {
@@ -46,7 +43,7 @@ class Value {
   constant_uses::TypeDemand m_type_demand;
 
   union {
-    Register m_reg;
+    reg_t m_reg;
     int64_t m_literal;
     DexString* m_str;
     DexType* m_type;
@@ -55,7 +52,7 @@ class Value {
   };
 
   // hide these constuctors in favor of the named version below
-  explicit Value(Kind k, Register r) {
+  explicit Value(Kind k, reg_t r) {
     always_assert(k == Kind::REGISTER);
     m_kind = k;
     m_reg = r;
@@ -73,7 +70,7 @@ class Value {
   }
 
  public:
-  static Value create_register(Register r) { return Value{Kind::REGISTER, r}; }
+  static Value create_register(reg_t r) { return Value{Kind::REGISTER, r}; }
 
   static Value create_literal(int64_t l, constant_uses::TypeDemand td) {
     return Value{Kind::CONST_LITERAL, l, td};
@@ -101,29 +98,9 @@ class Value {
   explicit Value(DexField* f) : m_kind(Kind::STATIC_FINAL), m_field(f) {}
   explicit Value() : m_kind(Kind::NONE), m_dummy() {}
 
-  bool operator==(const Value& other) const {
-    if (m_kind != other.m_kind) {
-      return false;
-    }
-
-    switch (m_kind) {
-    case Kind::REGISTER:
-      return m_reg == other.m_reg;
-    case Kind::CONST_LITERAL:
-    case Kind::CONST_LITERAL_UPPER:
-      return m_literal == other.m_literal &&
-             m_type_demand == other.m_type_demand;
-    case Kind::CONST_STRING:
-      return m_str == other.m_str;
-    case Kind::CONST_TYPE:
-      return m_type == other.m_type;
-    case Kind::STATIC_FINAL:
-    case Kind::STATIC_FINAL_UPPER:
-      return m_field == other.m_field;
-    case Kind::NONE:
-      return true;
-    }
-  }
+  bool operator==(const Value& other) const;
+  bool operator<(const Value& other) const;
+  std::string str() const;
 
   bool operator!=(const Value& other) const { return !(*this == other); }
 
@@ -136,7 +113,7 @@ class Value {
 
   bool is_register() const { return m_kind == Kind::REGISTER; }
 
-  Register reg() const {
+  reg_t reg() const {
     always_assert(m_kind == Kind::REGISTER);
     return m_reg;
   }
@@ -158,9 +135,9 @@ class AliasedRegisters final : public sparta::AbstractValue<AliasedRegisters> {
   bool are_aliases(const Value& r1, const Value& r2) const;
 
   // Each alias group has one representative register
-  Register get_representative(
+  reg_t get_representative(
       const Value& r,
-      const boost::optional<Register>& max_addressable = boost::none) const;
+      const boost::optional<reg_t>& max_addressable = boost::none) const;
 
   // ---- extends AbstractValue ----
 
@@ -181,16 +158,20 @@ class AliasedRegisters final : public sparta::AbstractValue<AliasedRegisters> {
   sparta::AbstractValueKind narrow_with(const AliasedRegisters& other) override;
 
  private:
-  // An undirected graph where register values are vertices
-  // and an edge means they are aliased.
-  // Using a set for the edge container makes sure we can't have parallel edges
-  using Graph = boost::adjacency_list<boost::setS, // out edge container
-                                      boost::vecS, // vertex container
-                                      boost::undirectedS, // undirected graph
-                                      Value>; // node property
-  using vertex_t = boost::graph_traits<Graph>::vertex_descriptor;
+  // A directed graph where register Values are vertices
+  using Graph =
+      boost::adjacency_list<boost::vecS, // out edge container
+                            boost::vecS, // vertex container
+                            boost::bidirectionalS, // directed graph with access
+                                                   // to both incoming and
+                                                   // outgoing edges
+                            Value>; // node property
   Graph m_graph;
 
+ public:
+  using vertex_t = boost::graph_traits<Graph>::vertex_descriptor;
+
+ private:
   // For keeping track of the oldest representative.
   //
   // When adding a vertex to a group, it gets 1 + the max insertion number of
@@ -203,21 +184,23 @@ class AliasedRegisters final : public sparta::AbstractValue<AliasedRegisters> {
   using InsertionOrder = std::unordered_map<vertex_t, size_t>;
   InsertionOrder m_insert_order;
 
-  const boost::range_detail::integer_iterator<vertex_t> find(
-      const Value& r) const;
-
+  boost::optional<vertex_t> find(const Value& r) const;
+  boost::optional<vertex_t> find_in_tree(const Value& r,
+                                         vertex_t in_this_tree) const;
   vertex_t find_or_create(const Value& r);
+  vertex_t find_root(vertex_t v) const;
+  vertex_t find_new_root(vertex_t old_root) const;
+
+  void change_root_helper(vertex_t old_root,
+                          boost::optional<vertex_t> maybe_new_root);
+  void maybe_change_root(vertex_t old_root);
+  void change_root_to(vertex_t old_root, vertex_t new_root);
 
   bool has_edge_between(const Value& r1, const Value& r2) const;
-  bool are_adjacent(vertex_t v1, vertex_t v2) const;
+  bool vertices_are_aliases(vertex_t v1, vertex_t v2) const;
 
   // return a vector of all vertices in v's alias group (including v itself)
   std::vector<vertex_t> vertices_in_group(vertex_t v) const;
-
-  // merge r1's group with r2. This operation is symmetric
-  void merge_groups_of(const Value& r1,
-                       const Value& r2,
-                       const AliasedRegisters& other);
 
   // return all groups (not including singletons)
   std::vector<std::vector<vertex_t>> all_groups();
@@ -231,13 +214,15 @@ class AliasedRegisters final : public sparta::AbstractValue<AliasedRegisters> {
   void handle_edge_intersection_insert_order(const AliasedRegisters& other);
   void handle_insert_order_at_merge(const std::vector<vertex_t>& group,
                                     const AliasedRegisters& other);
-
   void renumber_insert_order(
       std::vector<vertex_t> group,
       const std::function<bool(vertex_t, vertex_t)>& less_than);
 
-  // return true if v has any neighboring vertices
-  bool has_neighbors(vertex_t v);
+  bool is_singleton(vertex_t v);
+  bool has_incoming(vertex_t v);
+  bool has_outgoing(vertex_t v);
+
+  std::string dump() const;
 };
 
 class AliasDomain final
@@ -249,7 +234,7 @@ class AliasDomain final
       sparta::AbstractValueKind kind = sparta::AbstractValueKind::Top)
       : AbstractDomainScaffolding(kind) {}
 
-  void update(std::function<void(AliasedRegisters&)> operation) {
+  void update(const std::function<void(AliasedRegisters&)>& operation) {
     if (is_bottom()) {
       return;
     }

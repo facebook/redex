@@ -13,12 +13,22 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#include "CheckCastAnalysis.h"
+#include "CheckCastTransform.h"
 #include "ClassHierarchy.h"
+#include "ConstantPropagationAnalysis.h"
+#include "ConstantPropagationTransform.h"
+#include "ConstantPropagationWholeProgramState.h"
 #include "Debug.h"
 #include "DexLoader.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
+#include "IRCode.h"
+#include "IRList.h"
+#include "IRTypeChecker.h"
+#include "LocalDce.h"
 #include "Resolver.h"
+#include "ScopedCFG.h"
 #include "SingleImpl.h"
 #include "SingleImplDefs.h"
 #include "Trace.h"
@@ -161,20 +171,20 @@ bool update_method_proto(const DexType* old_type_ref,
   return true;
 }
 
-} // namespace
+using CheckCastSet = std::unordered_set<const IRInstruction*>;
 
 struct OptimizationImpl {
   OptimizationImpl(std::unique_ptr<SingleImplAnalysis> analysis,
                    const ClassHierarchy& ch)
       : single_impls(std::move(analysis)), ch(ch) {}
 
-  size_t optimize(Scope& scope, const SingleImplConfig& config);
+  OptimizeStats optimize(Scope& scope, const SingleImplConfig& config);
 
  private:
   EscapeReason can_optimize(const DexType* intf,
                             const SingleImplData& data,
                             bool rename_on_collision);
-  void do_optimize(const DexType* intf, const SingleImplData& data);
+  CheckCastSet do_optimize(const DexType* intf, const SingleImplData& data);
   EscapeReason check_field_collision(const DexType* intf,
                                      const SingleImplData& data);
   EscapeReason check_method_collision(const DexType* intf,
@@ -184,6 +194,8 @@ struct OptimizationImpl {
                                   DexMethod* method);
   void set_field_defs(const DexType* intf, const SingleImplData& data);
   void set_field_refs(const DexType* intf, const SingleImplData& data);
+  CheckCastSet fix_instructions(const DexType* intf,
+                                const SingleImplData& data);
   void set_method_defs(const DexType* intf, const SingleImplData& data);
   void set_method_refs(const DexType* intf, const SingleImplData& data);
   void rewrite_interface_methods(const DexType* intf,
@@ -191,6 +203,8 @@ struct OptimizationImpl {
   void rewrite_annotations(Scope& scope, const SingleImplConfig& config);
   void rename_possible_collisions(const DexType* intf,
                                   const SingleImplData& data);
+
+  void post_process(const std::unordered_set<DexMethod*>& methods);
 
  private:
   std::unique_ptr<SingleImplAnalysis> single_impls;
@@ -259,9 +273,151 @@ void OptimizationImpl::set_method_defs(const DexType* intf,
   for (auto method : data.methoddefs) {
     TRACE(INTF, 3, "(MDEF) %s", SHOW(method));
     TRACE(INTF, 5, "(MDEF) Update method: %s", SHOW(method));
-    always_assert(update_method_proto(intf, data.cls, method));
+    bool res = update_method_proto(intf, data.cls, method);
+    always_assert(res);
     TRACE(INTF, 3, "(MDEF)\t=> %s", SHOW(method));
   }
+}
+
+template <typename T, typename Fn>
+void for_all_methods(const T& methods, Fn fn, bool parallel = true) {
+  if (parallel) {
+    auto wq = workqueue_foreach<DexMethod*>(fn);
+    for (auto* m : methods) {
+      wq.add_item(const_cast<DexMethod*>(m));
+    }
+    wq.run_all();
+  } else {
+    for (auto* m : methods) {
+      fn(const_cast<DexMethod*>(m));
+    }
+  }
+}
+
+// When replacing interfaces with classes, type-correct bytecode may
+// become incorrect. That is due to the relaxed nature of interface
+// assignability: at the bytecode level, any reference can be assigned
+// to an interface-typed entity. Actual checks happen at an eventual
+// `invoke-interface`.
+//
+// Example:
+//   void foo(ISub i) {}
+//   void bar(ISuper i) {
+//     foo(i); // Java source needs cast here.
+//   }
+//
+// This method inserts check-casts for each invoke parameter and
+// field value. Expectation is that unnecessary insertions (e.g.,
+// duplicate check-casts) will be eliminated, for example, in
+// `post_process`.
+CheckCastSet OptimizationImpl::fix_instructions(const DexType* intf,
+                                                const SingleImplData& data) {
+  if (data.referencing_methods.empty()) {
+    return {};
+  }
+  std::vector<const DexMethod*> methods;
+  methods.reserve(data.referencing_methods.size());
+  std::transform(data.referencing_methods.begin(),
+                 data.referencing_methods.end(), std::back_inserter(methods),
+                 [](auto& p) { return p.first; });
+  // The typical number of methods is too small, it is actually significant
+  // overhead to spin up pool threads to just let them die.
+  constexpr bool PARALLEL = false;
+
+  std::mutex ret_lock;
+  CheckCastSet ret;
+
+  for_all_methods(
+      methods,
+      [&](DexMethod* caller) {
+        std::vector<reg_t> temps; // Cached temps.
+        auto code = caller->get_code();
+        redex_assert(!code->editable_cfg_built());
+
+        for (const auto& insn_it_pair : data.referencing_methods.at(caller)) {
+          auto insn_it = insn_it_pair.second;
+          auto insn = insn_it_pair.first;
+
+          auto temp_it = temps.begin();
+          auto add_check_cast = [&](reg_t reg) {
+            auto check_cast = new IRInstruction(OPCODE_CHECK_CAST);
+            check_cast->set_src(0, reg);
+            check_cast->set_type(data.cls);
+            code->insert_before(insn_it, *new MethodItemEntry(check_cast));
+
+            if (PARALLEL) {
+              std::unique_lock<std::mutex> lock(ret_lock);
+              ret.insert(check_cast);
+            } else {
+              ret.insert(check_cast);
+            }
+
+            // See if we need a new temp.
+            reg_t out;
+            if (temp_it == temps.end()) {
+              reg_t new_temp = code->allocate_temp();
+              temps.push_back(new_temp);
+              temp_it = temps.end();
+              out = new_temp;
+            } else {
+              out = *temp_it;
+              temp_it++;
+            }
+
+            auto pseudo_move_result =
+                new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
+            pseudo_move_result->set_dest(out);
+            code->insert_before(insn_it,
+                                *new MethodItemEntry(pseudo_move_result));
+
+            return out;
+          };
+
+          if (is_invoke(insn->opcode())) {
+            // We need check-casts for receiver and parameters, but not
+            // return type.
+
+            auto mref = insn->get_method();
+
+            // Receiver.
+            if (mref->get_class() == intf) {
+              reg_t new_receiver = add_check_cast(insn->src(0));
+              insn->set_src(0, new_receiver);
+            }
+
+            // Parameters.
+            const auto& arg_list =
+                mref->get_proto()->get_args()->get_type_list();
+            size_t idx = insn->opcode() == OPCODE_INVOKE_STATIC ? 0 : 1;
+            for (const auto arg : arg_list) {
+              if (arg != intf) {
+                idx++;
+                continue;
+              }
+
+              reg_t new_param = add_check_cast(insn->src(idx));
+              insn->set_src(idx, new_param);
+              idx++;
+            }
+            continue;
+          }
+
+          if (is_iput(insn->opcode()) || is_sput(insn->opcode())) {
+            // If the field type is the interface, need a check-cast.
+            auto fdef = insn->get_field();
+            if (fdef->get_type() == intf) {
+              reg_t new_param = add_check_cast(insn->src(0));
+              insn->set_src(0, new_param);
+            }
+            continue;
+          }
+
+          // Others do not need fixup.
+        }
+      },
+      PARALLEL);
+
+  return ret;
 }
 
 /**
@@ -324,8 +480,8 @@ void OptimizationImpl::rewrite_interface_methods(const DexType* intf,
       auto unique = deobfuscated_name_counters[deoob_impl_name]++;
       auto new_deob_name = deoob_impl_name + "." +
                            meth->get_simple_deobfuscated_name() +
-                           "$REDEX_SINGLE_IMPL$" + std::to_string(unique) + ":" +
-                           show_deobfuscated(meth->get_proto());
+                           "$REDEX_SINGLE_IMPL$" + std::to_string(unique) +
+                           ":" + show_deobfuscated(meth->get_proto());
       new_meth->set_deobfuscated_name(new_deob_name);
       new_meth->rstate = meth->rstate;
       TRACE(INTF, 5, "(MITF) created impl method %s", SHOW(new_meth));
@@ -544,8 +700,9 @@ void OptimizationImpl::rename_possible_collisions(const DexType* intf,
 /**
  * Perform the optimization.
  */
-void OptimizationImpl::do_optimize(const DexType* intf,
-                                   const SingleImplData& data) {
+CheckCastSet OptimizationImpl::do_optimize(const DexType* intf,
+                                           const SingleImplData& data) {
+  CheckCastSet ret = fix_instructions(intf, data);
   set_type_refs(intf, data);
   set_field_defs(intf, data);
   set_field_refs(intf, data);
@@ -553,16 +710,19 @@ void OptimizationImpl::do_optimize(const DexType* intf,
   set_method_refs(intf, data);
   rewrite_interface_methods(intf, data);
   remove_interface(intf, data);
+  return ret;
 }
 
 /**
  * Run an optimization step.
  */
-size_t OptimizationImpl::optimize(Scope& scope,
-                                  const SingleImplConfig& config) {
+OptimizeStats OptimizationImpl::optimize(Scope& scope,
+                                         const SingleImplConfig& config) {
   TypeList to_optimize;
   single_impls->get_interfaces(to_optimize);
   std::sort(to_optimize.begin(), to_optimize.end(), compare_dextypes);
+  std::unordered_set<DexMethod*> for_post_processing;
+  CheckCastSet inserted_check_casts;
   for (auto intf : to_optimize) {
     auto& intf_data = single_impls->get_single_impl_data(intf);
     if (intf_data.is_escaped()) continue;
@@ -572,7 +732,11 @@ size_t OptimizationImpl::optimize(Scope& scope,
       single_impls->escape_interface(intf, escape);
       continue;
     }
-    do_optimize(intf, intf_data);
+    auto check_casts = do_optimize(intf, intf_data);
+    inserted_check_casts.insert(check_casts.begin(), check_casts.end());
+    for (auto& p : intf_data.referencing_methods) {
+      for_post_processing.insert(p.first);
+    }
     optimized.insert(intf);
   }
 
@@ -588,16 +752,57 @@ size_t OptimizationImpl::optimize(Scope& scope,
     rewrite_annotations(scope, config);
   }
 
-  return optimized.size();
+  post_process(for_post_processing);
+  std::atomic<size_t> retained{0};
+  {
+    for_all_methods(for_post_processing, [&](const DexMethod* m) {
+      auto code = m->get_code();
+      size_t found = 0;
+      for (const auto& mie : ir_list::ConstInstructionIterable(*code)) {
+        if (inserted_check_casts.count(mie.insn) != 0) {
+          ++found;
+        }
+      }
+      retained += found;
+    });
+  }
+
+  OptimizeStats ret;
+  ret.removed_interfaces = optimized.size();
+  ret.inserted_check_casts = inserted_check_casts.size();
+  ret.retained_check_casts = retained.load();
+  return ret;
 }
+
+void OptimizationImpl::post_process(
+    const std::unordered_set<DexMethod*>& methods) {
+  // The analysis times the number of methods is easily expensive, run in
+  // parallel.
+  for_all_methods(methods,
+                  [](DexMethod* m) {
+                    auto code = m->get_code();
+                    if (code->cfg_built()) {
+                      code->clear_cfg();
+                    }
+                    cfg::ScopedCFG cfg(code);
+                    check_casts::CheckCastConfig config;
+                    check_casts::impl::CheckCastAnalysis analysis(config, m);
+                    auto casts =
+                        analysis.collect_redundant_checks_replacement();
+                    check_casts::impl::apply(m, casts);
+                  },
+                  /*parallel=*/true);
+}
+
+} // namespace
 
 /**
  * Entry point for an optimization pass.
  */
-size_t optimize(std::unique_ptr<SingleImplAnalysis> analysis,
-                const ClassHierarchy& ch,
-                Scope& scope,
-                const SingleImplConfig& config) {
+OptimizeStats optimize(std::unique_ptr<SingleImplAnalysis> analysis,
+                       const ClassHierarchy& ch,
+                       Scope& scope,
+                       const SingleImplConfig& config) {
   OptimizationImpl optimizer(std::move(analysis), ch);
   return optimizer.optimize(scope, config);
 }

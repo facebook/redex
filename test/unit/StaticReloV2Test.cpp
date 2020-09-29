@@ -20,7 +20,7 @@ namespace static_relo_v2 {
 struct StaticReloV2Test : public RedexTest {
   DexProto* m_proto;
 
-  StaticReloV2Test() : RedexTest() {
+  StaticReloV2Test() {
     m_proto =
         DexProto::make_proto(type::_void(), DexTypeList::make_type_list({}));
   }

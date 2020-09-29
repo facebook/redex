@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "ClassUtil.h"
+#include "Debug.h"
 #include "DexClass.h"
 #include "IRInstruction.h"
 #include "MethodUtil.h"
@@ -28,7 +29,9 @@
  */
 void change_visibility(DexMethod* method, DexType* scope = nullptr);
 
-void change_visibility(IRCode* code, DexType* scope = nullptr);
+void change_visibility(IRCode* code,
+                       DexType* scope,
+                       DexMethod* effective_caller_resolved_from);
 
 /**
  * NOTE: Only relocates the method. Doesn't check the correctness here,
@@ -64,7 +67,7 @@ bool relocate_method_if_no_changes(DexMethod* method, DexType* to_type);
 bool can_change_visibility_for_relocation(const DexMethod* method);
 
 bool can_change_visibility_for_relocation(
-    const IRCode* code);
+    const IRCode* code, const DexMethod* effective_caller_resolved_from);
 
 /**
  * Merge the 2 visibility access flags. Return the most permissive visibility.
@@ -194,7 +197,27 @@ bool has_anno(const T* t, const std::unordered_set<DexType*>& anno_types) {
   return false;
 }
 
+// Check whether the given string is a valid identifier. This does
+// not handle UTF. Checks against the Java bytecode specification,
+// which is a bit more relaxed than Dex's.
+bool is_valid_identifier(const std::string& s, size_t start, size_t len);
+bool is_valid_identifier(const std::string& s);
+
 namespace java_names {
+
+inline boost::optional<std::string> primitive_desc_to_name(char desc) {
+  const static std::unordered_map<char, std::string> conversion_table{
+      {'V', "void"},    {'B', "byte"},  {'C', "char"},
+      {'S', "short"},   {'I', "int"},   {'J', "long"},
+      {'Z', "boolean"}, {'F', "float"}, {'D', "double"},
+  };
+  auto it = conversion_table.find(desc);
+  if (it != conversion_table.end()) {
+    return it->second;
+  } else {
+    return boost::none;
+  }
+}
 
 inline boost::optional<char> primitive_name_to_desc(const std::string& name) {
   const static std::unordered_map<std::string, char> conversion_table{
@@ -211,21 +234,48 @@ inline boost::optional<char> primitive_name_to_desc(const std::string& name) {
 }
 
 // Example: "Ljava/lang/String;" --> "java.lang.String"
+// Example: "[Ljava/lang/String;" --> "[Ljava.lang.String;"
+// Example: "I" --> "int"
+// Example: "[I" --> "[I"
 inline std::string internal_to_external(const std::string& internal_name) {
-  auto external_name = internal_name.substr(1, internal_name.size() - 2);
-  std::replace(external_name.begin(), external_name.end(), '/', '.');
-  return external_name;
-}
+  int array_level = std::count(internal_name.begin(), internal_name.end(), '[');
 
+  std::string component_name = internal_name.substr(array_level);
+
+  char type = component_name.at(0);
+  if (type == 'L') {
+    // For arrays, we need to preserve the semicolon at the end of the name
+    auto external_name = component_name.substr(
+        1, component_name.size() - (array_level == 0 ? 2 : 1));
+    std::replace(external_name.begin(), external_name.end(), '/', '.');
+    std::string array_prefix;
+    array_prefix.reserve(array_level);
+    for (int i = 0; i < array_level; i++) {
+      array_prefix += '[';
+    }
+    if (array_level != 0) {
+      array_prefix += "L"; // external only uses 'L' for arrays
+    }
+    return array_prefix + external_name;
+  } else if (array_level) {
+    // If the type is an array of primitives, the external format is the same
+    // as internal.
+    return internal_name;
+  } else {
+    auto maybe_external_name = primitive_desc_to_name(type);
+    always_assert_log(
+        maybe_external_name, "%s is not a valid primitive type.", type);
+    return *maybe_external_name;
+  }
+}
 
 // Example: "java.lang.String" --> "Ljava/lang/String;"
+// Example: "[Ljava.lang.String;" --> "[Ljava/lang/String;"
+// Example: "int" --> "I"
+// Example: "[I" --> "[I"
+// Example: "I" --> "LI;"
+// Example: "[LI;" --> "[LI;"
 inline std::string external_to_internal(const std::string& external_name) {
-  auto internal_name = "L" + external_name + ";";
-  std::replace(internal_name.begin(), internal_name.end(), '.', '/');
-  return internal_name;
-}
-
-inline std::string external_to_internal2(const std::string& external_name) {
   // Primitive types (not including their arrays) are special notations
   auto maybe_primitive_name = primitive_name_to_desc(external_name);
   if (maybe_primitive_name) {
@@ -263,9 +313,34 @@ inline std::string external_to_internal2(const std::string& external_name) {
   return array_prefix + component_internal_name;
 }
 
+// Example: "Ljava/lang/String;" --> "String"
+// Example: "[Ljava/lang/String;" --> "String[]"
+// Example: "I" --> "int"
+// Example: "[I" --> "int[]"
+inline std::string internal_to_simple(const std::string& internal_name) {
+  int array_level = std::count(internal_name.begin(), internal_name.end(), '[');
+  std::string component_name = internal_name.substr(array_level);
+  std::string component_external_name = internal_to_external(component_name);
+  std::size_t last_dot = component_external_name.rfind('.');
+  std::string component_simple_name;
+  if (last_dot == std::string::npos) {
+    // No dot was found, the name is already simple.
+    component_simple_name = component_external_name;
+  } else {
+    component_simple_name = component_external_name.substr(last_dot + 1);
+  }
+  // append a pair of [] for each array level.
+  std::string array_suffix;
+  array_suffix.reserve(2 * array_level);
+  for (int i = 0; i < array_level; i++) {
+    array_suffix += "[]";
+  }
+  return component_simple_name + array_suffix;
+}
+
 inline std::string package_name(const std::string& type_name) {
   std::string nice_name = internal_to_external(type_name);
-  std::size_t last_dot = nice_name.rfind(".");
+  std::size_t last_dot = nice_name.rfind('.');
   if (last_dot != std::string::npos) {
     return nice_name.substr(0, last_dot);
   } else {

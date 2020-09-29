@@ -23,6 +23,7 @@
 #include "IRInstruction.h"
 #include "PassManager.h"
 #include "RedundantCheckCastRemover.h"
+#include "SpartaWorkQueue.h"
 #include "Walkers.h"
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -236,7 +237,7 @@ struct DexPattern {
         kind(DexPattern::Kind::field),
         field(field) {}
 
-  static const DexPattern copy_matched_instruction(int index) {
+  static DexPattern copy_matched_instruction(int index) {
     return DexPattern(index);
   }
 
@@ -343,7 +344,7 @@ struct Matcher {
         return false;
       }
 
-      if (dex_pattern.dests.size() != 0) {
+      if (!dex_pattern.dests.empty()) {
         redex_assert(dex_pattern.dests.size() == 1);
         if (!match_reg(dex_pattern.dests[0], insn->dest())) {
           return false;
@@ -369,10 +370,10 @@ struct Matcher {
       case DexPattern::Kind::field:
         return match_field(dex_pattern.field, insn->get_field());
       case DexPattern::Kind::copy:
-        always_assert_log(
-            false, "Kind::copy can only be used in replacements. Not matches");
+        not_reached_log(
+            "Kind::copy can only be used in replacements. Not matches");
       }
-      return false;
+      not_reached();
     };
 
     redex_assert(match_index < pattern.match.size());
@@ -419,8 +420,7 @@ struct Matcher {
   // Generate skeleton instruction for the replacement.
   IRInstruction* generate_dex_instruction(const DexPattern& replace) {
     if (replace.opcodes.size() != 1) {
-      always_assert_log(false, "Replacement must have unique opcode");
-      return nullptr;
+      not_reached_log("Replacement must have unique opcode");
     }
 
     const auto opcode = *begin(replace.opcodes);
@@ -504,8 +504,7 @@ struct Matcher {
       return new IRInstruction(static_cast<IROpcode>(opcode));
     }
 
-    always_assert_log(false, "Unhandled opcode: 0x%x", opcode);
-    return nullptr;
+    not_reached_log("Unhandled opcode: 0x%x", opcode);
   }
 
   // After a successful match, get the replacement instructions. We substitute
@@ -526,7 +525,7 @@ struct Matcher {
       replacements.push_back(replace);
 
       // Fill the arguments appropriately.
-      if (replace_info.dests.size() > 0) {
+      if (!replace_info.dests.empty()) {
         redex_assert(replace_info.dests.size() == 1);
         const Register dest = replace_info.dests[0];
         always_assert(matched_regs.find(dest) != end(matched_regs));
@@ -638,9 +637,8 @@ struct Matcher {
           break;
         }
         default:
-          always_assert_log(false, "Unexpected string directive: 0x%x",
-                            replace_info.string);
-          break;
+          not_reached_log("Unexpected string directive: 0x%x",
+                          replace_info.string);
         }
       } else if (replace_info.kind == DexPattern::Kind::literal) {
         switch (replace_info.literal) {
@@ -686,9 +684,7 @@ struct Matcher {
           replace->set_type(matched_types.at(Type::B));
           break;
         default:
-          always_assert_log(false, "Unexpected type directive 0x%x",
-                            replace_info.type);
-          break;
+          not_reached_log("Unexpected type directive 0x%x", replace_info.type);
         }
       } else if (replace_info.kind == DexPattern::Kind::field) {
         switch (replace_info.field) {
@@ -698,8 +694,8 @@ struct Matcher {
         case Field::B:
           replace->set_field(matched_fields.at(Field::B));
         default:
-          always_assert_log(false, "Unexpected field directive 0x%x",
-                            replace_info.field);
+          not_reached_log("Unexpected field directive 0x%x",
+                          replace_info.field);
         }
       }
     }
@@ -1262,7 +1258,7 @@ DexPattern put_x_op(IROpcode opcode,
   if (is_sput(opcode)) {
     return {{opcode}, {src}, {}, field};
   }
-  always_assert_log(false, "Not supported IROpcode %s", SHOW(opcode));
+  not_reached_log("Not supported IROpcode %s", SHOW(opcode));
 }
 
 DexPattern get_x_op(IROpcode opcode, Register src, Field field) {
@@ -1272,7 +1268,7 @@ DexPattern get_x_op(IROpcode opcode, Register src, Field field) {
   if (is_sget(opcode)) {
     return {{opcode}, {}, {}, field};
   }
-  always_assert_log(false, "Not supported IROpcode %s", SHOW(opcode));
+  not_reached_log("Not supported IROpcode %s", SHOW(opcode));
 }
 
 std::vector<DexPattern> put_x_patterns(IROpcode put_code) {
@@ -1302,7 +1298,7 @@ DexPattern aput_x_op(IROpcode opcode,
   if (is_aput(opcode)) {
     return {{opcode}, {src, array_register, index_register}, {}};
   }
-  always_assert_log(false, "Not supported IROpcode %s", SHOW(opcode));
+  not_reached_log("Not supported IROpcode %s", SHOW(opcode));
 }
 
 std::vector<DexPattern> aput_x_patterns(IROpcode put_code) {
@@ -1315,7 +1311,7 @@ DexPattern aget_x_op(IROpcode opcode,
   if (is_aget(opcode)) {
     return {{opcode}, {array_register, index_register}, {}};
   }
-  always_assert_log(false, "Not supported IROpcode %s", SHOW(opcode));
+  not_reached_log("Not supported IROpcode %s", SHOW(opcode));
 }
 
 std::vector<DexPattern> aput_aget_x_patterns(
@@ -1335,10 +1331,16 @@ std::vector<Pattern> get_aputaget_patterns() {
             aput_aget_x_patterns(OPCODE_APUT_WIDE, OPCODE_AGET_WIDE,
                                  move_result_pseudo_wide),
             aput_x_patterns(OPCODE_APUT_WIDE)},
-           {"Replace_AputAgetObject",
-            aput_aget_x_patterns(OPCODE_APUT_OBJECT, OPCODE_AGET_OBJECT,
-                                 move_result_pseudo_object),
-            aput_x_patterns(OPCODE_APUT_OBJECT)},
+           /* The following is only valid when aput-object would receive values
+              that match the array type. However, this is not statically
+              checked, and other Redex optimizations may violate that
+              assumption.
+
+              {"Replace_AputAgetObject",
+                       aput_aget_x_patterns(OPCODE_APUT_OBJECT,
+                              OPCODE_AGET_OBJECT, move_result_pseudo_object),
+                       aput_x_patterns(OPCODE_APUT_OBJECT)},
+           */
            {"Replace_AputAgetShort",
             aput_aget_x_patterns(OPCODE_APUT_SHORT, OPCODE_AGET_SHORT,
                                  move_result_pseudo),
@@ -1590,7 +1592,7 @@ std::vector<Pattern> get_arith_patterns() {
 
 // clang-format off
 
-const DexPattern invoke_class_get_simple_name() {
+DexPattern invoke_class_get_simple_name() {
   return {{OPCODE_INVOKE_VIRTUAL,
            OPCODE_INVOKE_SUPER,
            OPCODE_INVOKE_DIRECT,
@@ -1620,11 +1622,11 @@ std::vector<Pattern> get_func_patterns() {
   };
 }
 
-const DexPattern new_instance(Type type) {
+DexPattern new_instance(Type type) {
   return {{OPCODE_NEW_INSTANCE}, {}, {}, type};
 };
 
-const DexPattern invoke_npe_init(Register r) {
+DexPattern invoke_npe_init(Register r) {
   return {{OPCODE_INVOKE_DIRECT},
           {r},
           {},
@@ -1632,7 +1634,7 @@ const DexPattern invoke_npe_init(Register r) {
               "Ljava/lang/NullPointerException;", "<init>", "V", {})};
 }
 
-const DexPattern throw_exception(Register r) {
+DexPattern throw_exception(Register r) {
   return {{OPCODE_THROW},
           {r},
           {}};
@@ -1660,7 +1662,7 @@ std::vector<Pattern> get_throw_empty_npe_patterns() {
 
 // clang-format on
 
-const std::vector<std::vector<Pattern>> get_all_patterns() {
+std::vector<std::vector<Pattern>> get_all_patterns() {
   return {get_string_patterns(),
           get_arith_patterns(),
           get_func_patterns(),
@@ -1731,14 +1733,18 @@ class alignas(CACHE_LINE_SIZE) PeepholeOptimizer {
     // so they can match on the same pattern without interfering
     for (size_t i = 0; i < m_matchers.size(); ++i) {
       auto& matcher = m_matchers[i];
-      std::vector<ReplacementItem> deletes;
-      std::vector<ReplacementItem> inserts;
 
       const auto& blocks = cfg.blocks();
+      cfg::CFGMutation mutator(cfg);
+
       for (const auto& block : blocks) {
         // Currently, all patterns do not span over multiple basic blocks. So
         // reset all matching states on visiting every basic block.
         matcher.reset();
+
+        // Overlapping matches are not correctly handled by the current
+        // CFGMutation capabilities.
+        std::unordered_set<IRInstruction*> removed_insns;
 
         for (auto& mie : InstructionIterable(block)) {
           if (!matcher.try_match(mie.insn)) {
@@ -1748,43 +1754,40 @@ class alignas(CACHE_LINE_SIZE) PeepholeOptimizer {
           TRACE(PEEPHOLE, 7, "PATTERN %s MATCHED!",
                 matcher.pattern.name.c_str());
 
-          std::vector<IRInstruction*> empty;
-          for (auto insn : matcher.matched_instructions) {
-            if (opcode::is_move_result_pseudo(insn->opcode())) {
-              continue;
+          // Check that the anchor has not been removed by a previous match.
+          if (removed_insns.count(matcher.matched_instructions[0])) {
+            std::cerr << "WARNING: Overlapping peephole match!";
+            matcher.reset();
+            continue;
+          }
+
+          // First insert before, as we need the anchor.
+          {
+            auto it = cfg.find_insn(matcher.matched_instructions[0], block);
+            redex_assert(!it.is_end());
+            auto replace = matcher.get_replacements();
+            for (const auto& r : replace) {
+              TRACE(PEEPHOLE, 8, "-- %s", SHOW(r));
             }
-            deletes.push_back(ReplacementItem(block, insn, empty));
+            mutator.insert_before(it, replace);
+
+            m_stats_inserted += replace.size();
           }
 
-          auto replace = matcher.get_replacements();
-          for (const auto& r : replace) {
-            TRACE(PEEPHOLE, 8, "-- %s", SHOW(r));
+          // Then remove all the matched instructions.
+          for (auto insn : matcher.matched_instructions) {
+            auto it = cfg.find_insn(insn, block);
+            redex_assert(!it.is_end());
+            mutator.remove(it);
           }
-
-          m_stats_inserted += replace.size();
+          removed_insns.insert(matcher.matched_instructions.begin(),
+                               matcher.matched_instructions.end());
           m_stats_removed += matcher.match_index;
-
-          inserts.emplace_back(block, matcher.matched_instructions[0], replace);
           matcher.reset();
         }
       }
 
-      cfg::CFGMutation mutator(cfg);
-
-      for (const auto& insert : inserts) {
-        auto it = cfg.find_insn(insert.insn, insert.block);
-        if (!it.is_end()) {
-          mutator.insert_before(it, insert.replacement);
-        }
-      }
-
-      for (const auto& del : deletes) {
-        auto it = cfg.find_insn(del.insn, del.block);
-        if (!it.is_end()) {
-          mutator.remove(it);
-        }
-      }
-
+      // Apply the mutator.
       mutator.flush();
     }
 
@@ -1800,8 +1803,7 @@ class alignas(CACHE_LINE_SIZE) PeepholeOptimizer {
           m_stats_inserted - m_stats_removed);
     int num_patterns_matched = 0;
     for (size_t i = 0; i < m_matchers.size(); ++i) {
-      num_patterns_matched +=
-          m_mgr.get_metric(m_matchers[i].pattern.name.c_str());
+      num_patterns_matched += m_mgr.get_metric(m_matchers[i].pattern.name);
     }
     TRACE(PEEPHOLE, 1, "%lu patterns matched and replaced",
           num_patterns_matched);
@@ -1812,7 +1814,7 @@ class alignas(CACHE_LINE_SIZE) PeepholeOptimizer {
             5,
             "%s: %d",
             current_pattern_name.c_str(),
-            m_mgr.get_metric(current_pattern_name.c_str()));
+            m_mgr.get_metric(current_pattern_name));
     }
   }
 
@@ -1824,7 +1826,7 @@ class alignas(CACHE_LINE_SIZE) PeepholeOptimizer {
 
   void incr_all_metrics() {
     for (size_t i = 0; i < m_matchers.size(); i++) {
-      m_mgr.incr_metric(m_matchers[i].pattern.name.c_str(), m_stats[i]);
+      m_mgr.incr_metric(m_matchers[i].pattern.name, m_stats[i]);
     }
   }
 };
@@ -1842,13 +1844,24 @@ void PeepholePass::run_pass(DexStoresVector& stores,
         mgr, pats, config.disabled_peepholes));
   }
 
-  walk::parallel::methods(
-      scope,
-      [&](DexMethod* method) {
-        auto& ph = peephole_optimizers[redex_parallel::get_worker_id()];
-        ph->run_method(method);
+  auto wq = workqueue_foreach<DexClass*>(
+      [&peephole_optimizers](sparta::SpartaWorkerState<DexClass*>* state,
+                             DexClass* cls) {
+        auto& ph = peephole_optimizers[state->worker_id()];
+        for (const auto& m : cls->get_dmethods()) {
+          TraceContext context(m->get_deobfuscated_name());
+          ph->run_method(m);
+        }
+        for (const auto& m : cls->get_vmethods()) {
+          TraceContext context(m->get_deobfuscated_name());
+          ph->run_method(m);
+        }
       },
       num_threads);
+  for (const auto& cls : scope) {
+    wq.add_item(cls);
+  }
+  wq.run_all();
 
   for (size_t i = 0; i < num_threads; ++i) {
     peephole_optimizers[i]->incr_all_metrics();

@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <boost/filesystem.hpp>
 #include <gtest/gtest.h>
 #include <json/json.h>
 
@@ -16,6 +17,9 @@
 #include "IRAssembler.h"
 #include "PassManager.h"
 #include "RedexContext.h"
+#ifndef IS_REDEX_TEST_LIBRARY
+#include "SanitizersConfig.h"
+#endif
 
 struct RedexTest : public testing::Test {
   RedexTest() { g_redex = new RedexContext(); }

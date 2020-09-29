@@ -93,8 +93,70 @@ void RemoveUninstantiablesPass::Stats::report(PassManager& mgr) const {
 #undef REPORT
 }
 
+// Computes set of uninstantiable types, also looking at the type system to
+// find non-external (and non-native)...
+// - interfaces that are not annotations, are not root (or unrenameable) and
+//   do not contain root (or unrenameable) methods and have no non-abstract
+//   classes implementing them, and
+// - abstract (non-interface) classes that are not extended by any non-abstract
+//   class
+std::unordered_set<DexType*>
+RemoveUninstantiablesPass::compute_scoped_uninstantiable_types(
+    const Scope& scope) {
+  // First, we compute types that might possibly be uninstantiable, and classes
+  // that we consider instantiable.
+  std::unordered_set<DexType*> uninstantiable_types;
+  std::unordered_set<const DexClass*> instantiable_classes;
+  auto is_interface_instantiable = [](const DexClass* interface) {
+    if (is_annotation(interface) || interface->is_external() ||
+        is_native(interface) || root(interface) || !can_rename(interface)) {
+      return true;
+    }
+    for (auto method : interface->get_vmethods()) {
+      if (root(method) || !can_rename(method)) {
+        return true;
+      }
+    }
+    return false;
+  };
+  walk::classes(scope, [&](const DexClass* cls) {
+    if (type::is_uninstantiable_class(cls->get_type())) {
+      uninstantiable_types.insert(cls->get_type());
+    } else if (is_interface(cls) && !is_interface_instantiable(cls)) {
+      uninstantiable_types.insert(cls->get_type());
+    } else if (is_abstract(cls) && !is_interface(cls) && !cls->is_external() &&
+               !is_native(cls)) {
+      uninstantiable_types.insert(cls->get_type());
+    } else {
+      instantiable_classes.insert(cls);
+    }
+  });
+  // Next, we prune the list of possibly uninstantiable types by looking at
+  // what instantiable classes implement and extend.
+  std::unordered_set<const DexClass*> visited;
+  std::function<bool(const DexClass*)> visit;
+  visit = [&](const DexClass* cls) {
+    if (cls == nullptr || !visited.insert(cls).second) {
+      return false;
+    }
+    uninstantiable_types.erase(cls->get_type());
+    for (auto interface : cls->get_interfaces()->get_type_list()) {
+      visit(type_class(interface));
+    }
+    return true;
+  };
+  for (auto cls : instantiable_classes) {
+    while (visit(cls)) {
+      cls = type_class(cls->get_super_class());
+    }
+  }
+  uninstantiable_types.insert(type::java_lang_Void());
+  return uninstantiable_types;
+}
+
 RemoveUninstantiablesPass::Stats
 RemoveUninstantiablesPass::replace_uninstantiable_refs(
+    const std::unordered_set<DexType*>& scoped_uninstantiable_types,
     cfg::ControlFlowGraph& cfg) {
   cfg::CFGMutation m(cfg);
 
@@ -113,7 +175,7 @@ RemoveUninstantiablesPass::replace_uninstantiable_refs(
     auto op = insn->opcode();
     switch (op) {
     case OPCODE_INSTANCE_OF:
-      if (type::is_uninstantiable_class(insn->get_type())) {
+      if (scoped_uninstantiable_types.count(insn->get_type())) {
         auto dest = cfg.move_result_of(it)->insn->dest();
         m.replace(it, {ir_const(dest, 0)});
         stats.instance_ofs++;
@@ -122,7 +184,7 @@ RemoveUninstantiablesPass::replace_uninstantiable_refs(
 
     case OPCODE_INVOKE_DIRECT:
     case OPCODE_INVOKE_VIRTUAL:
-      if (type::is_uninstantiable_class(insn->get_method()->get_class())) {
+      if (scoped_uninstantiable_types.count(insn->get_method()->get_class())) {
         auto tmp = get_scratch();
         m.replace(it, {ir_const(tmp, 0), ir_throw(tmp)});
         stats.invokes++;
@@ -130,7 +192,7 @@ RemoveUninstantiablesPass::replace_uninstantiable_refs(
       continue;
 
     case OPCODE_CHECK_CAST:
-      if (type::is_uninstantiable_class(insn->get_type())) {
+      if (scoped_uninstantiable_types.count(insn->get_type())) {
         auto src = insn->src(0);
         auto dest = cfg.move_result_of(it)->insn->dest();
         m.replace(it,
@@ -146,7 +208,7 @@ RemoveUninstantiablesPass::replace_uninstantiable_refs(
     }
 
     if ((is_iget(op) || is_iput(op)) &&
-        type::is_uninstantiable_class(insn->get_field()->get_class())) {
+        scoped_uninstantiable_types.count(insn->get_field()->get_class())) {
       auto tmp = get_scratch();
       m.replace(it, {ir_const(tmp, 0), ir_throw(tmp)});
       stats.field_accesses_on_uninstantiable++;
@@ -154,7 +216,7 @@ RemoveUninstantiablesPass::replace_uninstantiable_refs(
     }
 
     if ((is_iget(op) || is_sget(op)) &&
-        type::is_uninstantiable_class(insn->get_field()->get_type())) {
+        scoped_uninstantiable_types.count(insn->get_field()->get_type())) {
       auto dest = cfg.move_result_of(it)->insn->dest();
       m.replace(it, {ir_const(dest, 0)});
       stats.get_uninstantiables++;
@@ -187,8 +249,10 @@ void RemoveUninstantiablesPass::run_pass(DexStoresVector& stores,
                                          ConfigFiles&,
                                          PassManager& mgr) {
   Scope scope = build_class_scope(stores);
-  Stats stats =
-      walk::parallel::methods<Stats>(scope, [](DexMethod* method) -> Stats {
+  std::unordered_set<DexType*> scoped_uninstantiable_types =
+      compute_scoped_uninstantiable_types(scope);
+  Stats stats = walk::parallel::methods<Stats>(
+      scope, [&scoped_uninstantiable_types](DexMethod* method) -> Stats {
         Stats stats;
 
         auto code = method->get_code();
@@ -198,10 +262,11 @@ void RemoveUninstantiablesPass::run_pass(DexStoresVector& stores,
 
         code->build_cfg();
         if (!is_static(method) &&
-            type::is_uninstantiable_class(method->get_class())) {
+            scoped_uninstantiable_types.count(method->get_class())) {
           stats += replace_all_with_throw(code->cfg());
         } else {
-          stats += replace_uninstantiable_refs(code->cfg());
+          stats += replace_uninstantiable_refs(scoped_uninstantiable_types,
+                                               code->cfg());
         }
         code->clear_cfg();
 

@@ -5,10 +5,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include "DexLoader.h"
 #include "DexAccess.h"
 #include "DexCallSite.h"
 #include "DexDefs.h"
-#include "DexLoader.h"
 #include "DexMethodHandle.h"
 #include "IRCode.h"
 #include "Trace.h"
@@ -42,15 +42,11 @@ static void validate_dex_header(const dex_header* dh,
                 !memcmp(dh->magic, DEX_HEADER_DEXMAGIC_V35, sizeof(dh->magic));
     break;
   default:
-    always_assert_log(
-        false, "Unrecognized support_dex_version %d\n", support_dex_version);
+    not_reached_log("Unrecognized support_dex_version %d\n",
+                    support_dex_version);
   }
-  if (!supported) {
-    always_assert_log(false,
-                      "Bad dex magic %s for support_dex_version %d\n",
-                      dh->magic,
-                      support_dex_version);
-  }
+  always_assert_log(supported, "Bad dex magic %s for support_dex_version %d\n",
+                    dh->magic, support_dex_version);
   always_assert_log(
       dh->file_size == dexsize,
       "Reported size in header (%z) does not match file size (%u)\n",
@@ -133,7 +129,7 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
     std::unique_ptr<DexEncodedValueArray> deva(clz->get_static_values());
     if (deva) {
       if (!enc_arrays.count(*deva)) {
-        enc_arrays.emplace(std::move(*deva.get()));
+        enc_arrays.emplace(std::move(*deva));
         stats->num_static_values++;
       }
     }
@@ -494,12 +490,13 @@ DexClasses DexLoader::load_dex(const dex_header* dh, dex_stats_t* stats) {
   auto num_threads = redex_parallel::default_num_threads();
   std::vector<std::vector<std::exception_ptr>> exceptions_vec(num_threads);
   auto wq = workqueue_foreach<class_load_work*>(
-      [&exceptions_vec](class_load_work* clw) {
+      [&exceptions_vec](sparta::SpartaWorkerState<class_load_work*>* state,
+                        class_load_work* clw) {
         try {
           clw->dl->load_dex_class(clw->num);
         } catch (const std::exception& exc) {
           TRACE(MAIN, 1, "Worker throw the exception:%s", exc.what());
-          exceptions_vec[redex_parallel::get_worker_id()].emplace_back(
+          exceptions_vec[state->worker_id()].emplace_back(
               std::current_exception());
         }
       },
@@ -514,8 +511,8 @@ DexClasses DexLoader::load_dex(const dex_header* dh, dex_stats_t* stats) {
 
   std::vector<std::exception_ptr> all_exceptions;
   for (auto& exceptions : exceptions_vec) {
-    all_exceptions.insert(
-        all_exceptions.end(), exceptions.begin(), exceptions.end());
+    all_exceptions.insert(all_exceptions.end(), exceptions.begin(),
+                          exceptions.end());
   }
   if (!all_exceptions.empty()) {
     // At least one of the workers raised an exception
@@ -533,10 +530,9 @@ DexClasses DexLoader::load_dex(const dex_header* dh, dex_stats_t* stats) {
   return classes;
 }
 
-static void mt_balloon(DexMethod* method) { method->balloon(); }
-
 static void balloon_all(const Scope& scope) {
-  auto wq = workqueue_foreach<DexMethod*>(mt_balloon);
+  auto wq = workqueue_foreach<DexMethod*>(
+      [](DexMethod* method) { method->balloon(); });
   walk::methods(scope, [&](DexMethod* m) {
     if (m->get_dex_code()) {
       wq.add_item(m);
@@ -576,7 +572,7 @@ DexClasses load_classes_from_dex(const dex_header* dh,
   return classes;
 }
 
-const std::string load_dex_magic_from_dex(const char* location) {
+std::string load_dex_magic_from_dex(const char* location) {
   DexLoader dl(location);
   auto dh = dl.get_dex_header(location);
   return dh->magic;

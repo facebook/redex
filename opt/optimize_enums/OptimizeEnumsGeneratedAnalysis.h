@@ -10,6 +10,7 @@
 #include <unordered_map>
 
 #include "DexClass.h"
+#include "ScopedCFG.h"
 
 namespace optimize_enums {
 
@@ -37,6 +38,7 @@ class OptimizeEnumsGeneratedAnalysis final {
  private:
   const DexType* m_enum;
   const DexClass* m_generated_cls;
+  cfg::ScopedCFG m_clinit_cfg;
   std::unique_ptr<impl::FieldAnalyzer> m_field_analyzer;
   std::unique_ptr<impl::ConstAnalyzer> m_const_analyzer;
 };

@@ -284,7 +284,7 @@ void purge_wrapped_wrappers(WrapperMethods& ssms) {
     TRACE(SYNT, 5, "Removing wrapper: %s", SHOW(meth));
     ssms.wrappers.erase(meth);
   }
-  ssms.next_pass = ssms.next_pass || remove.size() > 0;
+  ssms.next_pass = ssms.next_pass || !remove.empty();
 }
 
 WrapperMethods analyze(const ClassHierarchy& ch,
@@ -292,7 +292,7 @@ WrapperMethods analyze(const ClassHierarchy& ch,
                        const SynthConfig& synthConfig) {
   WrapperMethods ssms;
   for (auto cls : classes) {
-    if (synthConfig.black_list_types.count(cls->get_type())) {
+    if (synthConfig.blocklist_types.count(cls->get_type())) {
       continue;
     }
     for (auto dmethod : cls->get_dmethods()) {
@@ -384,7 +384,7 @@ IRInstruction* make_iget(DexField* field, reg_t src) {
     case DataType::Double:
       return OPCODE_IGET_WIDE;
     case DataType::Void:
-      redex_assert(false);
+      not_reached();
     }
     not_reached();
   }();

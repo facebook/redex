@@ -29,11 +29,11 @@ using MethodMap = std::map<MethodTuple, DexClass*>;
  * ConfigFiles should be a readonly structure
  */
 struct ConfigFiles {
-  ConfigFiles(const Json::Value& config);
+  explicit ConfigFiles(const Json::Value& config);
   ConfigFiles(const Json::Value& config, const std::string& outdir);
 
   const std::vector<std::string>& get_coldstart_classes() {
-    if (m_coldstart_classes.size() == 0) {
+    if (m_coldstart_classes.empty()) {
       m_coldstart_classes = load_coldstart_classes();
     }
     return m_coldstart_classes;
@@ -76,8 +76,8 @@ struct ConfigFiles {
   const std::unordered_set<DexMethodRef*>& get_pure_methods();
 
   const std::unordered_set<std::string>&
-  get_method_sorting_whitelisted_substrings() const {
-    return m_method_sorting_whitelisted_substrings;
+  get_method_sorting_allowlisted_substrings() const {
+    return m_method_sorting_allowlisted_substrings;
   }
 
   std::string metafile(const std::string& basename) const {
@@ -109,33 +109,13 @@ struct ConfigFiles {
       m_inliner_config = std::make_unique<inliner::InlinerConfig>();
       load_inliner_config(m_inliner_config.get());
     }
-    return *m_inliner_config.get();
+    return *m_inliner_config;
   }
 
   boost::optional<std::string> get_android_sdk_api_file(int32_t api_level) {
-    std::string api_file = "";
-    switch (api_level) {
-    case 15:
-      m_json.get("android_sdk_api_15_file", "", api_file);
-      break;
-    case 16:
-      m_json.get("android_sdk_api_16_file", "", api_file);
-      break;
-    case 21:
-      m_json.get("android_sdk_api_21_file", "", api_file);
-      break;
-    case 23:
-      m_json.get("android_sdk_api_23_file", "", api_file);
-      break;
-    case 25:
-      m_json.get("android_sdk_api_25_file", "", api_file);
-      break;
-    case 26:
-      m_json.get("android_sdk_api_26_file", "", api_file);
-      break;
-    default:
-      break;
-    }
+    std::string api_file;
+    std::string key = "android_sdk_api_" + std::to_string(api_level) + "_file";
+    m_json.get(key.c_str(), "", api_file);
 
     if (api_file.empty()) {
       return boost::none;
@@ -152,7 +132,7 @@ struct ConfigFiles {
     }
 
     always_assert(min_sdk_api == m_min_sdk_api_level);
-    return *m_android_min_sdk_api.get();
+    return *m_android_min_sdk_api;
   }
 
   /**
@@ -166,7 +146,7 @@ struct ConfigFiles {
 
   std::vector<std::string> load_coldstart_classes();
   std::unordered_map<std::string, std::vector<std::string>> load_class_lists();
-  void load_method_sorting_whitelisted_substrings();
+  void load_method_sorting_allowlisted_substrings();
   void ensure_agg_method_stats_loaded();
   void load_inliner_config(inliner::InlinerConfig*);
 
@@ -175,7 +155,7 @@ struct ConfigFiles {
   std::string m_coldstart_class_filename;
   std::vector<std::string> m_coldstart_classes;
   std::unordered_map<std::string, std::vector<std::string>> m_class_lists;
-  std::unordered_set<std::string> m_method_sorting_whitelisted_substrings;
+  std::unordered_set<std::string> m_method_sorting_allowlisted_substrings;
   std::string m_printseeds; // Filename to dump computed seeds.
   method_profiles::MethodProfiles m_method_profiles;
 

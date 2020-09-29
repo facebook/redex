@@ -30,11 +30,9 @@ static IROpcode opcode_for_interval(const sign_domain::Interval intv) {
   switch (intv) {
   case Interval::ALL:
   case Interval::EMPTY:
-    always_assert_log(false, "Cannot generate opcode for this interval");
-    not_reached();
+    not_reached_log("Cannot generate opcode for this interval");
   case Interval::SIZE:
-    always_assert_log(false, "SIZE is not a valid interval");
-    not_reached();
+    not_reached_log("SIZE is not a valid interval");
   case Interval::LTZ:
     return OPCODE_IF_LTZ;
   case Interval::NEZ:

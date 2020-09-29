@@ -1,0 +1,20 @@
+# No-op config to make Circle stop complaining about
+# builds failing on the gh-pages branch due to lack
+# of config.yml.
+# See https://github.com/facebook/docusaurus/issues/2990
+version: 2.1
+
+jobs:
+  noop:
+    docker:
+      - image: cimg/python:3.7
+    steps:
+      - run: echo "noop"
+
+workflows:
+  noop:
+    jobs:
+      - noop:
+          filters:
+            branches:
+              ignore: /.*/

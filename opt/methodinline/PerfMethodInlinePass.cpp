@@ -19,9 +19,7 @@ void PerfMethodInlinePass::run_pass(DexStoresVector& stores,
     return;
   }
   if (!mgr.get_redex_options().enable_pgi) {
-    TRACE(METH_PROF,
-          1,
-          "PerfMethodInlinePass requires --enable-pgi to run");
+    TRACE(METH_PROF, 1, "PerfMethodInlinePass requires --enable-pgi to run");
     return;
   }
   inliner::run_inliner(

@@ -9,11 +9,12 @@
 
 #include <algorithm>
 #include <functional>
-#include <iostream>
 #include <map>
 #include <string>
 #include <type_traits>
+#include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include <boost/optional.hpp>
@@ -23,6 +24,7 @@
 
 class DexClass;
 class DexMethod;
+class DexMethodRef;
 class DexType;
 
 // clang-format off
@@ -103,11 +105,13 @@ class Configurable {
   };
 
   struct ReflectionParam;
+  struct ReflectionTrait;
 
   struct Reflection {
     std::string name;
     std::string doc;
     std::map<std::string, ReflectionParam> params;
+    std::map<std::string, ReflectionTrait> traits;
   };
 
   struct ReflectionParam {
@@ -119,7 +123,7 @@ class Configurable {
         const bool is_required,
         const bindflags_t bindflags,
         const std::string& primitive,
-        const Json::Value default_value = Json::nullValue) {
+        const Json::Value& default_value = Json::nullValue) {
       this->name = name;
       this->doc = doc;
       this->is_required = is_required;
@@ -164,6 +168,19 @@ class Configurable {
     Type type;
     std::tuple<std::string, Reflection> variant;
     Json::Value default_value;
+  };
+
+  struct ReflectionTrait {
+    ReflectionTrait() {}
+
+    explicit ReflectionTrait(const std::string& name,
+                             const Json::Value& value) {
+      this->name = name;
+      this->value = value;
+    }
+
+    std::string name;
+    Json::Value value;
   };
 
  public:
@@ -225,7 +242,7 @@ class Configurable {
   void after_configuration(std::function<void()> after_configuration_fn) {
     always_assert_log(!m_after_configuration,
                       "after_configuration may only be called once");
-    m_after_configuration = after_configuration_fn;
+    m_after_configuration = std::move(after_configuration_fn);
   }
 
   /**
@@ -245,15 +262,17 @@ class Configurable {
     return t;
   }
 
-  typedef std::function<void(
-      const std::string& param_name,
-      const std::string& param_doc,
-      const bool param_is_required,
-      const bindflags_t param_bindflags,
-      const Configurable::ReflectionParam::Type param_type_tag,
-      const std::tuple<std::string, Configurable::Reflection>& param_type,
-      const Json::Value)>
-      ReflectorFunc;
+  using ReflectorParamFunc = std::function<void(
+      const std::string&,
+      const std::string&,
+      const bool,
+      const bindflags_t,
+      const Configurable::ReflectionParam::Type,
+      const std::tuple<std::string, Configurable::Reflection>&,
+      const Json::Value)>;
+
+  using ReflectorTraitFunc =
+      std::function<void(const std::string&, const Json::Value)>;
 
   template <typename T>
   struct DefaultValueType {
@@ -269,7 +288,7 @@ class Configurable {
    * will have specializations provided in Configurable.cpp
    */
   template <typename T>
-  void reflect(ReflectorFunc& reflector,
+  void reflect(ReflectorParamFunc& reflector,
                const std::string& param_name,
                const std::string& param_doc,
                const bool param_is_required,
@@ -285,13 +304,18 @@ class Configurable {
   }
 
   template <typename T>
+  void reflect_trait(ReflectorTraitFunc& reflector_trait,
+                     const std::string& name,
+                     T value);
+
+  template <typename T>
   void bind(const std::string& name,
             T defaultValue,
             T& dest,
             const std::string& doc = default_doc(),
             bindflags_t bindflags = 0) {
     if (m_reflecting) {
-      reflect(m_reflector,
+      reflect(m_param_reflector,
               name,
               doc,
               false /* param_is_required */,
@@ -310,8 +334,8 @@ class Configurable {
                      bindflags_t bindflags = 0) {
     // TODO(T44504176): we could reflect the requiredness here
     if (m_reflecting) {
-      reflect(m_reflector, name, doc, true /* param_is_required */, bindflags,
-              dest, static_cast<T>(0));
+      reflect(m_param_reflector, name, doc, true /* param_is_required */,
+              bindflags, dest, static_cast<T>(0));
     } else {
       parse_required(name, dest, bindflags);
     }
@@ -323,6 +347,13 @@ class Configurable {
             const std::string& doc = default_doc(),
             bindflags_t bindflags = 0) {
     bind(name, std::string(defaultValue), dest, doc, bindflags);
+  }
+
+  template <typename T>
+  void trait(const std::string& name, T value) {
+    if (m_reflecting) {
+      reflect_trait(m_trait_reflector, name, value);
+    }
   }
 
  private:
@@ -342,21 +373,19 @@ class Configurable {
   template <typename T>
   void parse_required(const std::string& name, T& dest, bindflags_t bindflags) {
     boost::optional<const Json::Value&> value = m_parser(name);
-    if (value) {
-      dest = Configurable::as<T>(*value, bindflags);
-    } else {
-      always_assert_log(false,
-                        "Missing required parameter: %s.%s",
-                        get_config_name().c_str(),
-                        name.c_str());
-    }
+    always_assert_log(value,
+                      "Missing required parameter: %s.%s",
+                      get_config_name().c_str(),
+                      name.c_str());
+    dest = Configurable::as<T>(*value, bindflags);
   }
 
  private:
   std::function<void()> m_after_configuration;
   std::function<boost::optional<const Json::Value&>(const std::string& name)>
       m_parser;
-  ReflectorFunc m_reflector;
+  ReflectorParamFunc m_param_reflector;
+  ReflectorTraitFunc m_trait_reflector;
   bool m_reflecting;
 };
 
@@ -367,11 +396,12 @@ class Configurable {
   T Configurable::as<T>(const Json::Value& value, bindflags_t bindflags); \
   template <>                                                             \
   void Configurable::reflect<T>(                                          \
-      ReflectorFunc & reflector, const std::string& param_name,           \
+      ReflectorParamFunc & reflector, const std::string& param_name,      \
       const std::string& param_doc, const bool param_is_required,         \
       const Configurable::bindflags_t param_bindflags, T& param,          \
       typename DefaultValueType<T>::type default_value);
 
+#define SINGLE_ARG(...) __VA_ARGS__
 DEFINE_CONFIGURABLE_PRIMITIVE(float)
 DEFINE_CONFIGURABLE_PRIMITIVE(bool)
 DEFINE_CONFIGURABLE_PRIMITIVE(int)
@@ -387,6 +417,7 @@ DEFINE_CONFIGURABLE_PRIMITIVE(unsigned long long)
 DEFINE_CONFIGURABLE_PRIMITIVE(DexType*)
 DEFINE_CONFIGURABLE_PRIMITIVE(std::string)
 DEFINE_CONFIGURABLE_PRIMITIVE(Json::Value)
+DEFINE_CONFIGURABLE_PRIMITIVE(std::vector<Json::Value>)
 DEFINE_CONFIGURABLE_PRIMITIVE(boost::optional<std::string>)
 DEFINE_CONFIGURABLE_PRIMITIVE(std::vector<std::string>)
 DEFINE_CONFIGURABLE_PRIMITIVE(std::vector<unsigned int>)
@@ -399,5 +430,10 @@ DEFINE_CONFIGURABLE_PRIMITIVE(std::unordered_set<DexClass*>)
 DEFINE_CONFIGURABLE_PRIMITIVE(std::unordered_set<DexMethod*>)
 DEFINE_CONFIGURABLE_PRIMITIVE(Configurable::MapOfMethods)
 DEFINE_CONFIGURABLE_PRIMITIVE(Configurable::MapOfVectorOfStrings)
+DEFINE_CONFIGURABLE_PRIMITIVE(
+    SINGLE_ARG(std::unordered_map<DexMethodRef*, DexMethodRef*>))
+DEFINE_CONFIGURABLE_PRIMITIVE(
+    SINGLE_ARG(std::unordered_map<DexType*, DexType*>))
+#undef SINGLE_ARG
 
 #undef DEFINE_CONFIGURABLE_PRIMITIVE

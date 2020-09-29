@@ -58,7 +58,7 @@ DexOpcode goto_for_offset(int32_t offset) {
   case 4:
     return DOPCODE_GOTO_32;
   default:
-    always_assert_log(false, "Invalid bytecount %d", offset);
+    not_reached_log("Invalid bytecount %d", offset);
   }
 }
 
@@ -69,9 +69,8 @@ using namespace boost::bimaps;
 struct Entry {};
 struct Addr {};
 
-typedef bimap<tagged<MethodItemEntry*, Entry>,
-              unordered_set_of<tagged<uint32_t, Addr>>>
-    EntryAddrBiMap;
+using EntryAddrBiMap = bimap<tagged<MethodItemEntry*, Entry>,
+                             unordered_set_of<tagged<uint32_t, Addr>>>;
 
 } // namespace
 
@@ -210,7 +209,7 @@ static void shard_multi_target(IRList* ir,
       insert_multi_branch_target(ir, case_key, target, src);
     }
   } else {
-    always_assert_log(false, "Bad fopcode 0x%04x in shard_multi_target", ftype);
+    not_reached_log("Bad fopcode 0x%04x in shard_multi_target", ftype);
   }
 }
 
@@ -550,7 +549,7 @@ IRList* deep_copy_ir_list(IRList* old_ir_list) {
     case MFLOW_FALLTHROUGH:
       break;
     case MFLOW_DEX_OPCODE:
-      always_assert_log(false, "DexInstruction not expected here!");
+      not_reached_log("DexInstruction not expected here!");
     default:
       not_reached();
     }
@@ -776,7 +775,7 @@ void IRCode::split_and_insert_try_regions(
         valid_addr += insn_size;
       }
     }
-    always_assert_log(false, "no valid address for %d", requested_addr);
+    not_reached_log("no valid address for %d", requested_addr);
   };
 
   constexpr uint32_t max = std::numeric_limits<uint16_t>::max();
@@ -1098,4 +1097,25 @@ void IRCode::gather_methodhandles(
   } else {
     m_ir_list->gather_methodhandles(lmethodhandle);
   }
+}
+
+/*
+ * Returns an estimated of the number of 2-byte code units needed to encode
+ * all the instructions.
+ */
+size_t IRCode::sum_opcode_sizes() const {
+  if (editable_cfg_built()) {
+    return m_cfg->sum_opcode_sizes();
+  }
+  return m_ir_list->sum_opcode_sizes();
+}
+
+/*
+ * Returns the number of instructions.
+ */
+size_t IRCode::count_opcodes() const {
+  if (editable_cfg_built()) {
+    return m_cfg->num_opcodes();
+  }
+  return m_ir_list->count_opcodes();
 }

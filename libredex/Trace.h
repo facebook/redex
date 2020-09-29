@@ -14,21 +14,23 @@
 #include "Util.h"
 
 #define TMS          \
-  TM(ADD_REDEX_TXT)  \
   TM(ACCESS)         \
-  TM(API_UTILS)      \
   TM(ANNO)           \
+  TM(API_UTILS)      \
   TM(ARGS)           \
   TM(BBPROFILE)      \
   TM(BIND)           \
+  TM(BLD_PATTERN)    \
   TM(BPH)            \
+  TM(BRCR)           \
   TM(BRIDGE)         \
   TM(BUILDERS)       \
-  TM(CLA)            \
   TM(CFG)            \
   TM(CFP)            \
+  TM(CHECKRECURSION) \
   TM(CIC)            \
-  TM(CLP_GQL)        \
+  TM(CLA)            \
+  TM(CLMG)           \
   TM(CLP_LITHO)      \
   TM(CONSTP)         \
   TM(CPG)            \
@@ -46,98 +48,94 @@
   TM(DS)             \
   TM(EMPTY)          \
   TM(ENUM)           \
+  TM(EVALTC)         \
   TM(FINALINLINE)    \
+  TM(GETTER)         \
   TM(HASHER)         \
-  TM(HOTNESS)        \
   TM(ICONSTP)        \
   TM(IDEX)           \
-  TM(INLINE)         \
-  TM(GETTER)         \
+  TM(IFCS_ANALYSIS)  \
   TM(INL)            \
+  TM(INLINE)         \
   TM(INLRES)         \
-  TM(INTRO_SWITCH)   \
   TM(INSTRUMENT)     \
   TM(INTF)           \
-  TM(BLD_PATTERN)    \
+  TM(INTRO_SWITCH)   \
+  TM(IODI)           \
+  TM(ISO)            \
   TM(LCR_PASS)       \
   TM(LIB)            \
   TM(LOC)            \
+  TM(LOCKS)          \
+  TM(LOOP)           \
   TM(MAGIC_FIELDS)   \
   TM(MAIN)           \
   TM(MARIANA_TRENCH) \
+  TM(MEINT)          \
   TM(METH_DEDUP)     \
   TM(METH_MERGER)    \
   TM(METH_PROF)      \
   TM(MMINL)          \
-  TM(MMODE)          \
+  TM(MODULARITY)     \
   TM(MONITOR)        \
   TM(MORTIROLO)      \
   TM(MTRANS)         \
+  TM(NULLCHECK)      \
   TM(OBFUSCATE)      \
   TM(OPTRES)         \
+  TM(OPT_STORES)     \
+  TM(OPUT)           \
   TM(ORIGINALNAME)   \
   TM(OSDCE)          \
   TM(OUTLINE)        \
   TM(PEEPHOLE)       \
   TM(PGR)            \
   TM(PM)             \
+  TM(POST_LOWERING)  \
   TM(PTA)            \
   TM(PURITY)         \
   TM(QUICK)          \
   TM(RAL)            \
-  TM(REDEX)          \
   TM(REACH)          \
-  TM(REACH_DUMP)     \
-  TM(CHECKRECURSION) \
-  TM(REFU)           \
   TM(REFL)           \
+  TM(REFU)           \
   TM(REG)            \
-  TM(RELO)           \
   TM(RENAME)         \
+  TM(RES)            \
   TM(RESO)           \
   TM(RG)             \
   TM(RME)            \
   TM(RMGOTO)         \
-  TM(RMU)            \
-  TM(RMUNINST)       \
-  TM(RMUF)           \
   TM(RM_INTF)        \
+  TM(RMU)            \
+  TM(RMUF)           \
+  TM(RMUNINST)       \
   TM(RP)             \
   TM(SDIS)           \
   TM(SHORTEN)        \
-  TM(SINK)           \
   TM(SPLIT_RES)      \
   TM(STATIC_RELO)    \
+  TM(STATS)          \
   TM(STRBUILD)       \
   TM(STR_CAT)        \
-  TM(STR_SIMPLE)     \
   TM(SUPER)          \
+  TM(SW)             \
+  TM(SWIN)           \
   TM(SWITCH_EQUIV)   \
   TM(SYNT)           \
   TM(TIME)           \
+  TM(TP)             \
   TM(TRACKRESOURCES) \
   TM(TYPE)           \
+  TM(TYPE_TRANSFORM) \
   TM(UCM)            \
-  TM(UNTF)           \
-  TM(VERIFY)         \
-  TM(VMERGE)         \
-  TM(VIRT)           \
-  TM(TERA)           \
-  TM(BRCR)           \
-  TM(SWIN)           \
-  TM(SWCL)           \
-  TM(SW)             \
-  TM(IFCS_ANALYSIS)  \
   TM(UNREF_INTF)     \
   TM(USES_NAMES)     \
-  TM(OPT_STORES)     \
-  TM(MEINT)          \
-  TM(OPUT)           \
-  TM(IODI)           \
-  TM(MODULARITY)     \
+  TM(VERIFY)         \
+  TM(VIRT)           \
   TM(VM)             \
-  TM(POST_LOWERING)  \
-  TM(LOOP)
+  TM(VMERGE)         \
+  /* End of list */
 
 enum TraceModule : int {
 #define TM(x) x,

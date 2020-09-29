@@ -88,7 +88,7 @@ class CrossDexRefMinimizer {
     uint64_t refs_weight;
     uint64_t applied_refs_weight;
     uint64_t seed_weight{0};
-    ClassInfo(uint32_t i)
+    explicit ClassInfo(uint32_t i)
         : index(i),
           infrequent_refs_weight(),
           refs_weight(0),
@@ -121,7 +121,7 @@ class CrossDexRefMinimizer {
                    std::vector<DexString*>& strings);
 
  public:
-  CrossDexRefMinimizer(const CrossDexRefMinimizerConfig& config)
+  explicit CrossDexRefMinimizer(const CrossDexRefMinimizerConfig& config)
       : m_config(config) {}
   // Gather frequency counts; must be called for relevant classes before
   // inserting them

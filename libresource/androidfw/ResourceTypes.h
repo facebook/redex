@@ -32,7 +32,7 @@
 #include <stdint.h>
 #include <sys/types.h>
 
-#ifdef _MSC_VER
+#if defined(_MSC_VER) || defined(__MINGW64__) || defined(__MINGW32__)
 #include <mutex>
 #endif
 
@@ -543,7 +543,7 @@ private:
     void*                       mOwnedData;
     const ResStringPool_header* mHeader;
     size_t                      mSize;
-#ifndef _MSC_VER
+#if !defined(_MSC_VER) && !defined(__MINGW64__) && !defined(__MINGW32__)
     mutable Mutex               mDecodeLock;
 #else
     mutable std::mutex          mDecodeLock;
@@ -1981,7 +1981,7 @@ private:
       const ResTable_config& config,
       const Vector<uint32_t>& source_ids);
 
-#ifndef _MSC_VER
+#if !defined(_MSC_VER) && !defined(__MINGW64__) && !defined(__MINGW32__)
     mutable Mutex               mLock;
 #else
     mutable std::mutex          mLock;

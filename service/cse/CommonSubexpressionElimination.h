@@ -9,6 +9,7 @@
 
 #include "ConcurrentContainers.h"
 #include "MethodOverrideGraph.h"
+#include "PatriciaTreeSet.h"
 #include "Purity.h"
 
 namespace cse_impl {
@@ -22,7 +23,6 @@ struct Stats {
   size_t methods_using_other_tracked_location_bit{0};
   // keys are IROpcode encoded as uint16_t, to make OSS build happy
   std::unordered_map<uint16_t, size_t> eliminated_opcodes;
-  size_t skipped_due_to_too_many_registers{0};
   size_t max_iterations{0};
 
   Stats& operator+=(const Stats&);
@@ -57,7 +57,7 @@ struct BarrierHasher {
 
 class SharedState {
  public:
-  SharedState(const std::unordered_set<DexMethodRef*>& pure_methods);
+  explicit SharedState(const std::unordered_set<DexMethodRef*>& pure_methods);
   void init_scope(const Scope&);
   CseUnorderedLocationSet get_relevant_written_locations(
       const IRInstruction* insn,
@@ -73,6 +73,7 @@ class SharedState {
   const std::unordered_set<DexMethodRef*>& get_pure_methods() const {
     return m_pure_methods;
   }
+  const method_override_graph::Graph* get_method_override_graph() const;
 
  private:
   void init_method_barriers(const Scope& scope);
@@ -82,7 +83,10 @@ class SharedState {
       const IRInstruction* insn, const CseUnorderedLocationSet& read_locations);
   // after init_scope, m_pure_methods will include m_conditionally_pure_methods
   std::unordered_set<DexMethodRef*> m_pure_methods;
+  // methods which never represent barriers
   std::unordered_set<DexMethodRef*> m_safe_methods;
+  // subset of safe methods which are in fact defs
+  std::unordered_set<const DexMethod*> m_safe_method_defs;
   std::unique_ptr<ConcurrentMap<Barrier, size_t, BarrierHasher>> m_barriers;
   std::unordered_map<const DexMethod*, CseUnorderedLocationSet>
       m_method_written_locations;
@@ -95,37 +99,39 @@ class SharedState {
 class CommonSubexpressionElimination {
  public:
   CommonSubexpressionElimination(SharedState* shared_state,
-                                 cfg::ControlFlowGraph&);
+                                 cfg::ControlFlowGraph&,
+                                 bool is_static,
+                                 bool is_init_or_clinit,
+                                 DexType* declaring_type,
+                                 DexTypeList* args);
 
   const Stats& get_stats() const { return m_stats; }
 
   /*
    * Patch code based on analysis results.
    */
-  bool patch(bool is_static,
-             DexType* declaring_type,
-             DexTypeList* args,
-             unsigned int max_estimated_registers,
-             bool runtime_assertions = false);
+  bool patch(bool runtime_assertions = false);
 
  private:
   // CSE is finding instances where the result (in the dest register) of an
   // earlier instruction can be forwarded to replace the result of another
   // (later) instruction.
   struct Forward {
-    const IRInstruction* earlier_insn;
+    // Index into m_earlier_insns
+    size_t earlier_insns_index;
     IRInstruction* insn;
   };
   std::vector<Forward> m_forward;
-  std::unordered_set<const IRInstruction*> m_earlier_insns;
+  // List of unique sets of earlier instructions to be forwarded
+  std::vector<sparta::PatriciaTreeSet<const IRInstruction*>> m_earlier_insns;
   SharedState* m_shared_state;
   cfg::ControlFlowGraph& m_cfg;
   Stats m_stats;
+  bool m_is_static;
+  DexType* m_declaring_type;
+  DexTypeList* m_args;
 
   void insert_runtime_assertions(
-      bool is_static,
-      DexType* declaring_type,
-      DexTypeList* args,
       const std::vector<std::pair<Forward, IRInstruction*>>& to_check);
 };
 

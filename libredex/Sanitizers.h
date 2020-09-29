@@ -17,15 +17,15 @@ namespace sanitizers {
 
 #include <sanitizer/lsan_interface.h>
 
-void lsan_do_leak_check() { __lsan_do_leak_check(); }
-int lsan_do_recoverable_leak_check() {
+inline void lsan_do_leak_check() { __lsan_do_leak_check(); }
+inline int lsan_do_recoverable_leak_check() {
   return __lsan_do_recoverable_leak_check();
 }
 
 #else
 
-void lsan_do_leak_check() {}
-int lsan_do_recoverable_leak_check() { return 0; }
+inline void lsan_do_leak_check() {}
+inline int lsan_do_recoverable_leak_check() { return 0; }
 
 #endif // __has_feature(address_sanitizer)
 

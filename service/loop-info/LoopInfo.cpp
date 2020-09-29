@@ -164,7 +164,7 @@ LoopInfo::LoopInfo(cfg::ControlFlowGraph& cfg) {
       continue;
     }
 
-    always_assert(blocks_in_loop.size() != 0);
+    always_assert(!blocks_in_loop.empty());
     auto loop_header = blocks_in_loop.front();
     auto loop_header_preds = loop_header->preds();
     auto loop_preheader = cfg.create_block();

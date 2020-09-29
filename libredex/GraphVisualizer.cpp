@@ -207,7 +207,7 @@ class TaggedBase {
 
     // See copy constructor. Assignment operators for lint.
     ValueStream& operator=(const ValueStream&) { not_reached(); }
-    ValueStream& operator=(ValueStream&& rhs) {
+    ValueStream& operator=(ValueStream&& rhs) noexcept {
       oss = std::move(rhs.oss);
       trg = rhs.trg;
       rhs.disposed = true;
@@ -629,7 +629,7 @@ std::vector<DexMethod*> get_all_methods(DexClass* klass) {
 // the CFG did not change.
 MethodCFGStream::MethodCFGStream(DexMethod* m) : m_method(m) {
   m_orig_name = vshow(m, false);
-  print_compilation_header(m_ss, m_orig_name.c_str(), m_orig_name.c_str());
+  print_compilation_header(m_ss, m_orig_name, m_orig_name);
 }
 
 void MethodCFGStream::add_pass(const std::string& pass_name,
@@ -722,26 +722,46 @@ void Classes::add_all(const std::string& class_names) {
     auto complete = c + ';';
     if (!add(complete)) {
       std::cerr << "Did not find class " << complete;
+      m_not_found.push_back(complete);
     }
   }
 }
 
-bool Classes::add(const std::string& class_name) {
+bool Classes::add(const std::string& class_name, bool add_initial_pass) {
   auto type = DexType::make_type(class_name.c_str());
   auto klass = type_class(type);
   if (!klass) {
     return false;
   }
-  add(klass);
+  add(klass, add_initial_pass);
   return true;
 }
 
-void Classes::add(DexClass* klass) {
+void Classes::add(DexClass* klass, bool add_initial_pass) {
   m_class_cfgs.emplace_back(klass);
-  m_class_cfgs.back().add_pass("Initial");
+  if (add_initial_pass) {
+    m_class_cfgs.back().add_pass("Initial");
+  }
 }
 
 void Classes::add_pass(const std::string& pass_name, Options o) {
+  add_pass([&pass_name]() { return pass_name; }, o);
+}
+
+void Classes::add_pass(const std::function<std::string()>& pass_name_lazy,
+                       Options o) {
+  auto end =
+      std::remove_if(m_not_found.begin(), m_not_found.end(),
+                     [&](const std::string& class_name) {
+                       return add(class_name, /*add_initial_pass=*/false);
+                     });
+  if (end != m_not_found.end()) {
+    m_not_found.erase(end, m_not_found.end());
+  }
+  if (m_class_cfgs.empty()) {
+    return;
+  }
+  std::string pass_name = pass_name_lazy();
   for (auto& class_cfg : m_class_cfgs) {
     class_cfg.add_pass(pass_name, o);
   }

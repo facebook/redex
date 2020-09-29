@@ -197,7 +197,7 @@ void deserialize_class_data(std::ifstream& istrm, uint32_t data_size) {
       break;
     }
     default: {
-      always_assert(false);
+      not_reached();
     }
     }
   }

@@ -12,7 +12,6 @@
 #include "IRCode.h"
 #include "LoopInfo.h"
 #include "RedexTest.h"
-#include "TestLoop.h"
 #include "WeakTopologicalOrdering.h"
 
 class LoopInfoTest : public RedexTest {};

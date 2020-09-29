@@ -19,6 +19,7 @@
  * 2) It replaces gotos that eventually simply return by return instructions.
  *    Return instructions tend to have a smaller encoding than goto
  *    instructions, and tend to compress better due to less entropy (no offset).
+ * 3) Do the same for throws.
  */
 
 #include "ReduceGotos.h"
@@ -55,6 +56,8 @@ constexpr const char* METRIC_TRAILING_MOVES_REMOVED =
     "num_trailing_moves_removed";
 constexpr const char* METRIC_INVERTED_CONDITIONAL_BRANCHES =
     "num_inverted_conditional_branches";
+constexpr const char* METRIC_NUM_GOTOS_REPLACED_WITH_THROWS =
+    "num_gotos_replaced_with_throws";
 
 } // namespace
 
@@ -79,7 +82,7 @@ void ReduceGotosPass::process_code_switches(cfg::ControlFlowGraph& cfg,
                [](cfg::Block* b) {
                  return b->branchingness() == opcode::BRANCH_SWITCH;
                });
-  if (switch_blocks.size() == 0) {
+  if (switch_blocks.empty()) {
     // Let's skip computing the liveness
     return;
   }
@@ -230,7 +233,7 @@ void ReduceGotosPass::process_code_switches(cfg::ControlFlowGraph& cfg,
       stats.remaining_trivial_switches++;
     }
 
-    if (fallthrough_edges.size() == 0) {
+    if (fallthrough_edges.empty()) {
       // Nothing to optimize here
       continue;
     }
@@ -243,7 +246,7 @@ void ReduceGotosPass::process_code_switches(cfg::ControlFlowGraph& cfg,
         cases.emplace_back(*branch_edge->case_key(), branch_edge->target());
       }
     }
-    always_assert(cases.size() > 0);
+    always_assert(!cases.empty());
 
     // Sort, to make things tidy and deterministic, and ensure we can rely on
     // the front and back case keys being ordered properly
@@ -274,6 +277,131 @@ void ReduceGotosPass::process_code_switches(cfg::ControlFlowGraph& cfg,
     }
   }
 }
+
+namespace {
+
+template <typename Blocks,
+          typename BlockFilter,
+          typename OpcodeFilter,
+          typename ForceBlockCheck>
+std::tuple<bool, size_t, size_t> process_code_ifs_impl(
+    const Blocks& order,
+    cfg::ControlFlowGraph& cfg,
+    const BlockFilter& block_filter,
+    const OpcodeFilter& opcode_filter,
+    const ForceBlockCheck& force_block_check) {
+  bool rerun = false;
+  size_t removed_trailing_moves = 0;
+  size_t replaced_gotos = 0;
+
+  for (auto block_it = order.begin(); block_it != order.end(); ++block_it) {
+    cfg::Block* b = *block_it;
+    auto last_mie_it = b->get_last_insn();
+    if (last_mie_it == b->end()) {
+      continue;
+    }
+    auto first_mie_it = b->get_first_insn();
+    if (first_mie_it != last_mie_it) {
+      continue;
+    }
+    if (block_filter(b)) {
+      continue;
+    }
+    MethodItemEntry* mie = &*last_mie_it;
+    if (!opcode_filter(mie->insn->opcode())) {
+      continue;
+    }
+
+    std::vector<std::pair<cfg::Block*, IRInstruction*>> insns_to_add;
+    for (cfg::Edge* e : cfg.get_pred_edges_of_type(b, cfg::EDGE_GOTO)) {
+      cfg::Block* src = e->src();
+
+      auto cloned_insn = std::make_unique<IRInstruction>(*mie->insn);
+
+      bool removed_trailing_move = false;
+      if (cloned_insn->srcs_size()) {
+        redex_assert(cloned_insn->srcs_size() == 1);
+        // eliminate trailing move instruction by specializing return
+        // instruction
+        auto src_last_mie_it = src->get_last_insn();
+        if (src_last_mie_it != src->end()) {
+          // We are looking for an instruction of the form
+          //   move $dest, $source
+          // matching an
+          //   return $dest
+          // instruction we found earlier.
+          IRInstruction* src_last_insn = src_last_mie_it->insn;
+          if (is_move(src_last_insn->opcode()) &&
+              src_last_insn->dest() == cloned_insn->src(0) &&
+              src_last_insn->is_wide() == cloned_insn->is_wide()) {
+            // Found a matching move! We'll rewrite the (cloned) return
+            // instruction to
+            //   return $source
+            removed_trailing_move = true;
+            cloned_insn->set_src(0, src_last_insn->src(0));
+            src->remove_insn(src_last_mie_it);
+            removed_trailing_moves++;
+          }
+        }
+      }
+
+      if (removed_trailing_move) {
+        // Let's remember to run the optimization one more time, as removing
+        // this move instruction may have unlocked further potential as it may
+        // create a block with just a return in it.
+        rerun = true;
+      } else if (block_it != order.begin() && *std::prev(block_it) == src) {
+        // Don't put in a return instruction if we would just fall through
+        // anyway, i.e. if linearization won't insert a goto here.
+        continue;
+      }
+
+      const auto& non_gotos =
+          cfg.get_succ_edges_if(src, [](const cfg::Edge* e) {
+            return e->type() == cfg::EDGE_BRANCH ||
+                   e->type() == cfg::EDGE_THROW;
+          });
+      if (!non_gotos.empty() || force_block_check(b, src)) {
+        // It's not safe to add an instruction because `src` has outgoing edges
+        // of another type (or we were forced to by the caller).
+        //
+        // Create a new block that only `src` is the predecessor of.
+        // This way, when the CFG chooses an order, it may choose this block
+        // as the fallthrough predecessor, which means we don't need a goto.
+        //
+        // Effectively, we are duplicating this block for each of its goto
+        // predecessors. Notice that this optimization is the opposite of
+        // DedupBlocksPass. This optimization should always occur after
+        // DedupBlocks because DedupBlocks doesn't check if deduplicating the
+        // blocks is worth the extra goto.
+        auto new_block = cfg.create_block();
+        new_block->push_back(cloned_insn.release());
+        cfg.set_edge_target(e, new_block);
+      } else {
+        // `src` has no other outgoing edges, we will add a return to this
+        // block directly. However, we can't do it yet because we're iterating
+        // through a copy of the predecessor edges of `b` and adding a return
+        // deletes the outgoing edges of `src`. If we deleted this edge now we
+        // might reach a stale Edge pointer that has been deleted.
+        insns_to_add.emplace_back(src, cloned_insn.release());
+      }
+
+      replaced_gotos++;
+    }
+
+    for (const auto& pair : insns_to_add) {
+      // `src` has no other outgoing edges, we can just stick the return
+      // instruction on the end
+      cfg::Block* src = pair.first;
+      IRInstruction* cloned_insn = pair.second;
+      src->push_back(cloned_insn);
+    }
+  }
+
+  return std::make_tuple(rerun, removed_trailing_moves, replaced_gotos);
+}
+
+} // namespace
 
 void ReduceGotosPass::process_code_ifs(cfg::ControlFlowGraph& cfg,
                                        Stats& stats) {
@@ -312,117 +440,39 @@ void ReduceGotosPass::process_code_ifs(cfg::ControlFlowGraph& cfg,
     }
   }
 
-  // Optimization #2:
-  // Inline all blocks that just contain a single return instruction and are
-  // reached via a goto edge; this may leave behind some unreachable blocks
-  // which will get cleaned up via simplify() eventually.
+  // Optimization #2 & #3:
+  // Inline all blocks that just contain a single return or throw instruction
+  // and are reached via a goto edge; this may leave behind some unreachable
+  // blocks which will get cleaned up via simplify() eventually.
   // Small bonus optimization: Also eliminate move instructions that only exist
-  // to faciliate shared return instructions.
+  // to faciliate shared return or throw instructions.
 
   bool rerun;
   do {
-    auto order = cfg.order();
     rerun = false;
-    for (auto block_it = order.begin(); block_it != order.end(); ++block_it) {
-      cfg::Block* b = *block_it;
-      auto last_mie_it = b->get_last_insn();
-      if (last_mie_it == b->end()) {
-        continue;
-      }
-      auto first_mie_it = b->get_first_insn();
-      if (first_mie_it != last_mie_it) {
-        continue;
-      }
-      MethodItemEntry* mie = &*last_mie_it;
-      if (!is_return(mie->insn->opcode())) {
-        continue;
-      }
-
-      std::vector<std::pair<cfg::Block*, IRInstruction*>> returns_to_add;
-      for (cfg::Edge* e : cfg.get_pred_edges_of_type(b, cfg::EDGE_GOTO)) {
-        cfg::Block* src = e->src();
-
-        IRInstruction* cloned_return = new IRInstruction(*mie->insn);
-
-        bool removed_trailing_move = false;
-        if (cloned_return->srcs_size()) {
-          // eliminate trailing move instruction by specializing return
-          // instruction
-          auto src_last_mie_it = src->get_last_insn();
-          if (src_last_mie_it != src->end()) {
-            // We are looking for an instruction of the form
-            //   move $dest, $source
-            // matching an
-            //   return $dest
-            // instruction we found earlier.
-            IRInstruction* src_last_insn = src_last_mie_it->insn;
-            if (is_move(src_last_insn->opcode()) &&
-                src_last_insn->dest() == cloned_return->src(0) &&
-                src_last_insn->is_wide() == cloned_return->is_wide()) {
-              // Found a matching move! We'll rewrite the (cloned) return
-              // instruction to
-              //   return $source
-              removed_trailing_move = true;
-              cloned_return->set_src(0, src_last_insn->src(0));
-              src->remove_insn(src_last_mie_it);
-              stats.removed_trailing_moves++;
-            }
-          }
-        }
-
-        if (removed_trailing_move) {
-          // Let's remember to run the optimization one more time, as removing
-          // this move instruction may have unlocked further potential as it may
-          // create a block with just a return in it.
-          rerun = true;
-        } else if (block_it != order.begin() && *std::prev(block_it) == src) {
-          // Don't put in a return instruction if we would just fall through
-          // anyway, i.e. if linearization won't insert a goto here.
-          continue;
-        }
-
-        const auto& non_gotos =
-            cfg.get_succ_edges_if(src, [](const cfg::Edge* e) {
-              return e->type() == cfg::EDGE_BRANCH ||
-                     e->type() == cfg::EDGE_THROW;
-            });
-        if (!non_gotos.empty()) {
-          // It's not safe to add a return because `src` has outgoing edges of
-          // another type.
-          //
-          // Create a new return block that only `src` is the predecessor of.
-          // This way, when the CFG chooses an order, it may choose this block
-          // as the fallthrough predecessor, which means we don't need a goto.
-          //
-          // Effectively, we are duplicating this return block for each of its
-          // goto predecessors. Notice that this optimization is the opposite of
-          // DedupBlocksPass. This optimization should always occur after
-          // DedupBlocks because DedupBlocks doesn't check if deduplicating the
-          // blocks is worth the extra goto.
-          auto new_return_block = cfg.create_block();
-          new_return_block->push_back(cloned_return);
-          cfg.set_edge_target(e, new_return_block);
-        } else {
-          // `src` has no other outgoing edges, we will add a return to this
-          // block directly. However, we can't do it yet because we're iterating
-          // through a copy of the predecessor edges of `b` and adding a return
-          // deletes the outgoing edges of `src`. If we deleted this edge now we
-          // might reach a stale Edge pointer that has been deleted.
-          returns_to_add.emplace_back(src, cloned_return);
-        }
-
-        stats.replaced_gotos_with_returns++;
-      }
-
-      for (const auto& pair : returns_to_add) {
-        // `src` has no other outgoing edges, we can just stick the return
-        // instruction on the end
-        cfg::Block* src = pair.first;
-        IRInstruction* cloned_return = pair.second;
-        src->push_back(cloned_return);
-      }
+    {
+      auto return_res = process_code_ifs_impl(
+          cfg.order(), cfg, [](const cfg::Block* b) { return false; },
+          [](IROpcode op) { return is_return(op); },
+          [](const cfg::Block* to, const cfg::Block* from) { return false; });
+      rerun = std::get<0>(return_res);
+      stats.removed_trailing_moves += std::get<1>(return_res);
+      stats.replaced_gotos_with_returns += std::get<2>(return_res);
     }
-
+    {
+      auto throw_res = process_code_ifs_impl(
+          cfg.order(), cfg,
+          [&cfg](const cfg::Block* b) {
+            return !cfg.get_succ_edges_of_type(b, cfg::EDGE_THROW).empty();
+          },
+          [](IROpcode op) { return op == OPCODE_THROW; },
+          [&cfg](const cfg::Block* to, const cfg::Block* from) {
+            return !cfg.get_succ_edges_of_type(from, cfg::EDGE_THROW).empty();
+          });
+      rerun |= std::get<0>(throw_res);
+      stats.removed_trailing_moves += std::get<1>(throw_res);
+      stats.replaced_gotos_with_throws += std::get<2>(throw_res);
+    }
   } while (rerun);
 }
 
@@ -481,6 +531,8 @@ void ReduceGotosPass::run_pass(DexStoresVector& stores,
   mgr.incr_metric(METRIC_TRAILING_MOVES_REMOVED, stats.removed_trailing_moves);
   mgr.incr_metric(METRIC_INVERTED_CONDITIONAL_BRANCHES,
                   stats.inverted_conditional_branches);
+  mgr.incr_metric(METRIC_NUM_GOTOS_REPLACED_WITH_THROWS,
+                  stats.replaced_gotos_with_throws);
   TRACE(RG, 1,
         "[reduce gotos] Replaced %u gotos with returns, inverted %u "
         "conditional brnaches in total",
@@ -500,6 +552,7 @@ ReduceGotosPass::Stats& ReduceGotosPass::Stats::operator+=(
   remaining_two_case_switches += that.remaining_two_case_switches;
   remaining_range_switches += that.remaining_range_switches;
   remaining_range_switch_cases += that.remaining_range_switch_cases;
+  replaced_gotos_with_throws += that.replaced_gotos_with_throws;
   return *this;
 }
 

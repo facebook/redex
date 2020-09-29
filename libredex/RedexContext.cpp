@@ -62,6 +62,10 @@ RedexContext::~RedexContext() {
   for (const auto& p : s_keep_reasons) {
     delete p.second;
   }
+
+  for (const Task& t : m_destruction_tasks) {
+    t();
+  }
 }
 
 /*

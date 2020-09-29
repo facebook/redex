@@ -145,12 +145,12 @@ DexMethod* generate_dispatch(const DexType* base_type,
 void update_interface_calls(
     const Scope& scope,
     const std::unordered_map<DexMethod*, DexMethod*>& old_to_new_callee) {
-  auto patcher = [&old_to_new_callee](DexMethod*, IRInstruction* insn) {
+  auto patcher = [&old_to_new_callee](DexMethod* meth, IRInstruction* insn) {
     if (!insn->has_method()) {
       return;
     }
     const auto method =
-        resolve_method(insn->get_method(), opcode_to_search(insn));
+        resolve_method(insn->get_method(), opcode_to_search(insn), meth);
     if (method == nullptr || old_to_new_callee.count(method) == 0) {
       return;
     }
@@ -235,10 +235,8 @@ void remove_interface_references(
       return;
     }
     auto opcode = insn->opcode();
-    if (is_opcode_excluded(opcode)) {
-      always_assert_log(false, "Unexpected opcode %s on %s\n", SHOW(opcode),
-                        SHOW(type));
-    }
+    always_assert_log(!is_opcode_excluded(opcode),
+                      "Unexpected opcode %s on %s\n", SHOW(opcode), SHOW(type));
     always_assert(type_class(type));
     auto new_type = get_replacement_type(type_system, type, root);
     if (type::is_array(ref_type)) {
@@ -505,7 +503,7 @@ void RemoveInterfacePass::remove_interfaces_for_root(
   TypeSet removed =
       remove_leaf_interfaces(scope, root, interfaces, type_system);
 
-  while (removed.size() > 0) {
+  while (!removed.empty()) {
     for (const auto intf : removed) {
       interfaces.erase(intf);
       m_removed_interfaces.insert(intf);

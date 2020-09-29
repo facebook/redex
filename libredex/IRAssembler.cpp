@@ -79,7 +79,7 @@ s_expr to_s_expr(const IRInstruction* insn, const LabelRefs& label_refs) {
   case opcode::Ref::None:
     break;
   case opcode::Ref::Data:
-    always_assert_log(false, "Not yet supported");
+    not_reached_log("Not yet supported");
     break;
   case opcode::Ref::Field:
     s_exprs.emplace_back(show(insn->get_field()));
@@ -109,6 +109,7 @@ s_expr to_s_expr(const IRInstruction* insn, const LabelRefs& label_refs) {
     if (is_switch(op)) {
       // (switch v0 (:a :b :c))
       std::vector<s_expr> label_exprs;
+      label_exprs.reserve(label_strs.size());
       for (const auto& label_str : label_strs) {
         label_exprs.emplace_back(label_str);
       }
@@ -155,7 +156,7 @@ std::vector<s_expr> to_s_exprs(
       }
     }
     auto result = to_s_exprs(snay, positions_emitted);
-    always_assert(positions_emitted->size() > 0);
+    always_assert(!positions_emitted->empty());
     auto parent_idx = positions_emitted->size() - 1;
     positions_emitted->push_back(pos);
     auto pos_idx = positions_emitted->size() - 1;
@@ -206,7 +207,7 @@ std::unique_ptr<IRInstruction> instruction_from_s_expr(
   case opcode::Ref::None:
     break;
   case opcode::Ref::Data:
-    always_assert_log(false, "Not yet supported");
+    not_reached_log("Not yet supported");
     break;
   case opcode::Ref::Field: {
     std::string str;
@@ -251,11 +252,11 @@ std::unique_ptr<IRInstruction> instruction_from_s_expr(
     break;
   }
   case opcode::Ref::CallSite: {
-    always_assert_log(false, "callsites currently unsupported in s-exprs");
+    not_reached_log("callsites currently unsupported in s-exprs");
     break;
   }
   case opcode::Ref::MethodHandle: {
-    always_assert_log(false, "methodhandles currently unsupported in s-exprs");
+    not_reached_log("methodhandles currently unsupported in s-exprs");
     break;
   }
   }
@@ -616,7 +617,7 @@ s_expr to_s_expr(const IRCode* code) {
         auto prev = std::prev(it);
         if (can_merge(prev, it)) {
           auto& label_strs = label_refs.at(prev->target->src->insn);
-          if (label_strs.size() > 0) {
+          if (!label_strs.empty()) {
             const auto& label_name = label_strs.back();
             label_refs[bt->src->insn].push_back(label_name);
             break;
@@ -721,7 +722,8 @@ static boost::optional<reg_t> largest_reg_operand(const IRInstruction* insn) {
 std::unique_ptr<IRCode> ircode_from_s_expr(const s_expr& e) {
   s_expr insns_expr;
   auto code = std::make_unique<IRCode>();
-  always_assert(s_patn({}, insns_expr).match_with(e));
+  bool matched = s_patn({}, insns_expr).match_with(e);
+  always_assert(matched);
   always_assert_log(insns_expr.size() > 0, "Empty instruction list?! %s");
   LabelDefs label_defs;
   LabelRefs label_refs;
@@ -757,7 +759,7 @@ std::unique_ptr<IRCode> ircode_from_s_expr(const s_expr& e) {
         std::string catch_name;
         s_patn({s_patn(&catch_name)})
             .must_match(tail, "try marker is missing a name");
-        always_assert(catch_name != "");
+        always_assert(!catch_name.empty());
         auto try_marker = new MethodItemEntry(is_start ? TRY_START : TRY_END,
                                               catches.at(catch_name));
         code->push_back(*try_marker);
@@ -779,7 +781,8 @@ std::unique_ptr<IRCode> ircode_from_s_expr(const s_expr& e) {
               .must_match(tail, "catch marker is missing a name");
         }
         // Get the type name, for example: "LCatchType;"
-        always_assert_log(this_catch != "", "catch marker is missing a name");
+        always_assert_log(!this_catch.empty(),
+                          "catch marker is missing a name");
         std::string type_name;
         // nullptr is a valid catch type. It means catch all exceptions.
         DexType* catch_type = nullptr;
@@ -788,7 +791,7 @@ std::unique_ptr<IRCode> ircode_from_s_expr(const s_expr& e) {
         }
         MethodItemEntry* catch_marker = catches.at(this_catch);
         catch_marker->centry->catch_type = catch_type;
-        if (next_catch != "") {
+        if (!next_catch.empty()) {
           catch_marker->centry->next = catches.at(next_catch);
         }
         code->push_back(*catch_marker);

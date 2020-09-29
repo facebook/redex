@@ -19,15 +19,21 @@ void InlinerConfig::populate(const Scope& scope) {
     return;
   }
   walk::classes(scope, [this](DexClass* cls) {
-    for (const auto& type_s : m_black_list) {
+    for (const auto& type_s : m_blocklist) {
       if (boost::starts_with(cls->get_name()->c_str(), type_s)) {
-        black_list.emplace(cls->get_type());
+        blocklist.emplace(cls->get_type());
         break;
       }
     }
-    for (const auto& type_s : m_caller_black_list) {
+    for (const auto& type_s : m_caller_blocklist) {
       if (boost::starts_with(cls->get_name()->c_str(), type_s)) {
-        caller_black_list.emplace(cls->get_type());
+        caller_blocklist.emplace(cls->get_type());
+        break;
+      }
+    }
+    for (const auto& type_s : m_intradex_white_list) {
+      if (boost::starts_with(cls->get_name()->c_str(), type_s)) {
+        intradex_white_list.emplace(cls->get_type());
         break;
       }
     }

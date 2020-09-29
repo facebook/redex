@@ -108,12 +108,12 @@ using RefsMap =
 // Uncomment and use this as a prefix for virtual method
 // names for debugging
 // const std::string prefix = __Redex__";
-const std::string prefix = "";
+const std::string prefix;
 
 DexString* get_name(int seed) {
   std::string name;
   obfuscate_utils::compute_identifier(seed, &name);
-  if (prefix.size()) {
+  if (!prefix.empty()) {
     name = prefix + name;
   }
   return DexString::make_string(name);
@@ -209,8 +209,7 @@ void VirtualRenamer::rename(DexMethodRef* meth, DexString* name) {
       }
     }
   }
-  meth->change(spec,
-               false /* rename on collision */);
+  meth->change(spec, false /* rename on collision */);
 
   if (stack_trace_elements) {
     std::string ste = get_prefix(meth->get_class()) + name->str();
@@ -250,7 +249,7 @@ int VirtualRenamer::rename_scope(const VirtualScope* scope, DexString* name) {
       TRACE(OBFUSCATE, 2, "not concrete %s", SHOW(vmeth.first));
     }
   }
-  redex_assert(scope->methods.size() > 0);
+  redex_assert(!scope->methods.empty());
   rename_scope_ref(scope->methods[0].first, name);
   return renamed;
 }

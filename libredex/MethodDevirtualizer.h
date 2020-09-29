@@ -15,17 +15,6 @@ struct DevirtualizerConfigs {
   bool dmethods_not_using_this = true;
   bool dmethods_using_this = false;
   bool ignore_keep = false;
-
-  DevirtualizerConfigs(bool vmethods_not_using_this = true,
-                       bool vmethods_using_this = false,
-                       bool dmethods_not_using_this = true,
-                       bool dmethods_using_this = false,
-                       bool ignore_keep = false)
-      : vmethods_not_using_this(vmethods_not_using_this),
-        vmethods_using_this(vmethods_using_this),
-        dmethods_not_using_this(dmethods_not_using_this),
-        dmethods_using_this(dmethods_using_this),
-        ignore_keep(ignore_keep) {}
 };
 
 struct DevirtualizerMetrics {

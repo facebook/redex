@@ -14,7 +14,7 @@
 #include "DexStore.h"
 #include "RedexContext.h"
 
-Scope scope_from_dex_files(const std::vector<std::string>& dex_files) {
+inline Scope scope_from_dex_files(const std::vector<std::string>& dex_files) {
   DexMetadata dm;
   dm.set_id("classes");
   DexStore root_store(dm);

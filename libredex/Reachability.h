@@ -15,7 +15,8 @@
 #include "KeepReason.h"
 #include "MethodOverrideGraph.h"
 #include "Pass.h"
-#include "WorkQueue.h"
+#include "SpartaWorkQueue.h"
+#include "Thread.h"
 
 namespace reachability {
 
@@ -120,6 +121,12 @@ class ReachableObjects {
     return m_marked_fields.count_unsafe(field);
   }
 
+  size_t num_marked_classes() const { return m_marked_classes.size(); }
+
+  size_t num_marked_fields() const { return m_marked_fields.size(); }
+
+  size_t num_marked_methods() const { return m_marked_methods.size(); }
+
  private:
   template <class Seed>
   void record_is_seed(Seed* seed);
@@ -161,8 +168,7 @@ struct alignas(CACHE_LINE_SIZE) Stats {
   int num_ignore_check_strings;
 };
 
-using MarkWorkQueue = WorkQueue<ReachableObject>;
-using MarkWorkerState = WorkerState<ReachableObject>;
+using MarkWorkerState = sparta::SpartaWorkerState<ReachableObject>;
 
 /*
  * These helper classes compute reachable objects by a DFS+marking algorithm.

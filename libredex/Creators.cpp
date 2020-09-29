@@ -116,8 +116,7 @@ void MethodBlock::iget(DexField* field, Location obj, Location& dst) {
     opcode = OPCODE_IGET_OBJECT;
     break;
   default:
-    always_assert(false);
-    break;
+    not_reached();
   }
   ifield_op(opcode, field, obj, dst);
 }
@@ -152,8 +151,7 @@ void MethodBlock::iput(DexField* field, Location obj, Location src) {
     opcode = OPCODE_IPUT_OBJECT;
     break;
   default:
-    always_assert(false);
-    break;
+    not_reached();
   }
   ifield_op(opcode, field, obj, src);
 }
@@ -166,7 +164,7 @@ void MethodBlock::ifield_op(IROpcode opcode,
   if (is_iget(opcode)) {
     auto iget = new IRInstruction(opcode);
     iget->set_field(field);
-    src_or_dst.type = field->get_class();
+    src_or_dst.type = field->get_type();
     iget->set_src(0, obj.get_reg());
     push_instruction(iget);
     push_instruction(
@@ -211,8 +209,7 @@ void MethodBlock::sget(DexField* field, Location& dst) {
     opcode = OPCODE_SGET_OBJECT;
     break;
   default:
-    always_assert(false);
-    break;
+    not_reached();
   }
   sfield_op(opcode, field, dst);
 }
@@ -247,8 +244,7 @@ void MethodBlock::sput(DexField* field, Location src) {
     opcode = OPCODE_SPUT_OBJECT;
     break;
   default:
-    always_assert(false);
-    break;
+    not_reached();
   }
   sfield_op(opcode, field, src);
 }
@@ -260,7 +256,7 @@ void MethodBlock::sfield_op(IROpcode opcode,
   if (is_sget(opcode)) {
     auto sget = new IRInstruction(opcode);
     sget->set_field(field);
-    src_or_dst.type = field->get_class();
+    src_or_dst.type = field->get_type();
     push_instruction(sget);
     push_instruction(
         (new IRInstruction(opcode::move_result_pseudo_for_sget(opcode)))

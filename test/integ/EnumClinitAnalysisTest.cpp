@@ -35,7 +35,7 @@ class EnumClinitAnalysisTest : public RedexIntegrationTest {};
  */
 TEST_F(EnumClinitAnalysisTest, OrdinalAnalysis) {
   using namespace optimize_enums;
-  always_assert(load_class_file(std::getenv("enum_class_file")));
+  ASSERT_TRUE(load_class_file(std::getenv("enum_class_file")));
 
   // EnumSafe
   auto enum_cls = type_class(DexType::get_type(ENUM_SAFE));

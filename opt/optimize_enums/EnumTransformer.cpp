@@ -97,8 +97,6 @@ struct EnumUtil {
   const DexString* VALUES_METHOD_STR = DexString::make_string("values");
   const DexString* VALUEOF_METHOD_STR = DexString::make_string("valueOf");
 
-  const DexString* VALUES_FIELD_STR = DexString::make_string("$VALUES");
-
   const DexType* ENUM_TYPE = type::java_lang_Enum();
   DexType* INT_TYPE = type::_int();
   DexType* INTEGER_TYPE = type::java_lang_Integer();
@@ -111,8 +109,7 @@ struct EnumUtil {
   DexType* ILLEGAL_ARG_EXCP_TYPE =
       DexType::make_type("Ljava/lang/IllegalArgumentException;");
 
-  const DexMethodRef* ENUM_ORDINAL_METHOD =
-      DexMethod::make_method("Ljava/lang/Enum;.ordinal:()I");
+  const DexMethodRef* ENUM_ORDINAL_METHOD = method::java_lang_Enum_ordinal();
   const DexMethodRef* ENUM_EQUALS_METHOD =
       DexMethod::make_method("Ljava/lang/Enum;.equals:(Ljava/lang/Object;)Z");
   const DexMethodRef* ENUM_COMPARETO_METHOD =
@@ -121,8 +118,7 @@ struct EnumUtil {
       DexMethod::make_method("Ljava/lang/Enum;.toString:()Ljava/lang/String;");
   const DexMethodRef* ENUM_HASHCODE_METHOD =
       DexMethod::make_method("Ljava/lang/Enum;.hashCode:()I");
-  const DexMethodRef* ENUM_NAME_METHOD =
-      DexMethod::make_method("Ljava/lang/Enum;.name:()Ljava/lang/String;");
+  const DexMethodRef* ENUM_NAME_METHOD = method::java_lang_Enum_name();
   const DexMethodRef* STRING_VALUEOF_METHOD = DexMethod::make_method(
       "Ljava/lang/String;.valueOf:(Ljava/lang/Object;)Ljava/lang/String;");
   const DexMethodRef* STRINGBUILDER_APPEND_OBJ_METHOD = DexMethod::make_method(
@@ -133,14 +129,12 @@ struct EnumUtil {
   DexMethodRef* STRINGBUILDER_APPEND_STR_METHOD = DexMethod::make_method(
       "Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/"
       "StringBuilder;");
-  DexMethodRef* INTEGER_INTVALUE_METHOD =
-      DexMethod::make_method("Ljava/lang/Integer;.intValue:()I");
+  DexMethodRef* INTEGER_INTVALUE_METHOD = method::java_lang_Integer_intValue();
   DexMethodRef* INTEGER_EQUALS_METHOD = DexMethod::make_method(
       "Ljava/lang/Integer;.equals:(Ljava/lang/Object;)Z");
   DexMethodRef* INTEGER_COMPARETO_METHOD = DexMethod::make_method(
       "Ljava/lang/Integer;.compareTo:(Ljava/lang/Integer;)I");
-  DexMethodRef* INTEGER_VALUEOF_METHOD = DexMethod::make_method(
-      "Ljava/lang/Integer;.valueOf:(I)Ljava/lang/Integer;");
+  DexMethodRef* INTEGER_VALUEOF_METHOD = method::java_lang_Integer_valueOf();
   DexMethodRef* RTEXCEPTION_CTOR_METHOD = DexMethod::make_method(
       "Ljava/lang/RuntimeException;.<init>:(Ljava/lang/String;)V");
   DexMethodRef* ILLEGAL_ARG_CONSTRUCT_METHOD = DexMethod::make_method(
@@ -725,7 +719,7 @@ class CodeTransformer final {
       m_replacements.push_back(InsnReplacement(cfg, block, mie, new_insn));
     } else {
       always_assert(
-          m_enum_util->m_config.breaking_reference_equality_whitelist.count(
+          m_enum_util->m_config.breaking_reference_equality_allowlist.count(
               field->get_type()));
       auto ordinal_reg = allocate_temp();
       std::vector<IRInstruction*> new_insns;
@@ -1071,7 +1065,7 @@ class EnumTransformer final {
               enum_cls->get_sfields().size());
         continue;
       } else if (num_enum_constants > config.max_enum_size) {
-        if (!config.breaking_reference_equality_whitelist.count(*it)) {
+        if (!config.breaking_reference_equality_allowlist.count(*it)) {
           TRACE(ENUM, 2, "\tSkip %s %lu values", SHOW(enum_cls),
                 num_enum_constants);
           continue;
@@ -1428,7 +1422,7 @@ class EnumTransformer final {
       }
     }
     // Arbitrarily choose the first case block as the default case.
-    always_assert(cases.size() > 0);
+    always_assert(!cases.empty());
     cfg.create_branch(entry, dasm(OPCODE_SWITCH, {0_v}), cases.front().second,
                       cases);
     cfg.recompute_registers_size();
@@ -1483,13 +1477,33 @@ class EnumTransformer final {
   }
 
   /**
-   * Erase the put instructions that write enum values and synthetic $VALUES
-   * array, then erase the dead instructions.
+   * Erase enum construction code. Erase the put instructions that write enum
+   * values and synthetic $VALUES array, then erase the dead instructions.
+   *
+   * The code before the transformation:
+   *
+   * new-instance v0 LCandidateEnum;
+   * invoke-direct v0 v1 v2 Ljava/lang/Enum;.<init>:(Ljava/lang/String;I)V
+   * sput-object v0 LCandidateEnum;.f:LCandidateEnum;
+   * ... // maybe more objects construction.
+   * sput-object v3 LCandidateEnum;.$VALUES:[LCandidateEnum;
+   * ... // register v0 may be used.
+   *
+   * The code after the transformation:
+   *
+   * // Deleted. new-instance v0 LCandidateEnum;
+   * // Deleted. invoke-direct v0 v1 v2
+   * Ljava/lang/Enum;.<init>:(Ljava/lang/String;I)V
+   * // Deleted. sput-object v0 LCandidateEnum;.f:LCandidateEnum;
+   * sget-object v0 LCandidateEnum;.f:LCandidateEnum;
+   * ... // maybe more objects construction.
+   * // Deleted. sput-object v3 LCandidateEnum;.$VALUES:[LCandidateEnum;
+   * ... // register v0 may be used.
    */
-  void clean_clinit(const EnumConstantsMap& enum_constants,
-                    DexClass* enum_cls,
-                    DexMethod* clinit,
-                    DexField* values_field) {
+  static void clean_clinit(const EnumConstantsMap& enum_constants,
+                           DexClass* enum_cls,
+                           DexMethod* clinit,
+                           DexField* values_field) {
     auto code = clinit->get_code();
     auto ctors = enum_cls->get_ctors();
     always_assert(ctors.size() == 1);
@@ -1504,9 +1518,14 @@ class EnumTransformer final {
       auto insn = it->insn;
       if (is_sput(insn->opcode())) {
         auto field = resolve_field(insn->get_field());
-        if (field && (enum_constants.count(field) || field == values_field)) {
+        if (field && enum_constants.count(field)) {
+          code->insert_before(it, dasm(OPCODE_SGET_OBJECT, field));
+          code->insert_before(
+              it,
+              dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {{VREG, insn->src(0)}}));
           it = code->erase(it);
-          continue;
+        } else if (field == values_field) {
+          it = code->erase(it);
         }
       } else if (is_invoke_direct(insn->opcode()) &&
                  insn->get_method() == ctor) {
@@ -1526,6 +1545,12 @@ class EnumTransformer final {
     code->clear_cfg();
     for (const auto& insn : dead_instructions) {
       code->remove_opcode(insn);
+    }
+    // Assert no instruction about the $VALUES field.
+    for (auto& mie : InstructionIterable(code)) {
+      auto insn = mie.insn;
+      always_assert_log(!insn->has_field() || insn->get_field() != values_field,
+                        "%s can not be deleted", SHOW(insn));
     }
   }
 

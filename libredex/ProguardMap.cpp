@@ -231,8 +231,8 @@ void ProguardMap::parse_proguard_map(std::istream& fp) {
     if (comment(line)) {
       continue;
     }
-    always_assert_log(
-        false, "Bogus line encountered in proguard map: %s\n", line.c_str());
+    not_reached_log("Bogus line encountered in proguard map: %s\n",
+                    line.c_str());
   }
 }
 

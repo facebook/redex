@@ -212,7 +212,7 @@ namespace interdex {
 
 bool is_canary(DexClass* clazz) {
   const char* cname = clazz->get_type()->get_name()->c_str();
-  return strncmp(cname, CANARY_PREFIX, sizeof(CANARY_PREFIX) - 1) == 0;
+  return strncmp(cname, CANARY_PREFIX, strlen(CANARY_PREFIX)) == 0;
 }
 
 bool InterDex::should_skip_class_due_to_plugin(DexClass* clazz) {
@@ -283,7 +283,7 @@ bool InterDex::emit_class(DexInfo& dex_info,
     flush_out_dex(dex_info);
 
     // Plugins may maintain internal state after gathering refs, and then they
-    // tend to forget that state after flushing out (type erasure,
+    // tend to forget that state after flushing out (class merging,
     // looking at you). So, let's redo gathering of refs here to give
     // plugins a chance to rebuild their internal state.
     clazz_mrefs.clear();
@@ -364,7 +364,7 @@ void InterDex::emit_interdex_classes(
     DexInfo& dex_info,
     const std::vector<DexType*>& interdex_types,
     const std::unordered_set<DexClass*>& unreferenced_classes) {
-  if (interdex_types.size() == 0) {
+  if (interdex_types.empty()) {
     TRACE(IDEX, 2, "No interdex classes passed.");
     return;
   }
@@ -421,7 +421,7 @@ void InterDex::emit_interdex_classes(
         auto end_marker =
             std::find(m_end_markers.begin(), m_end_markers.end(), type);
         // Cold start end marker is the last dex end marker
-        auto cold_start_end_marker = m_end_markers.size()
+        auto cold_start_end_marker = !m_end_markers.empty()
                                          ? m_end_markers.end() - 1
                                          : m_end_markers.end();
         if (end_marker != m_end_markers.end()) {
@@ -485,10 +485,11 @@ std::vector<std::vector<DexType*>> get_extra_classes_per_interdex_group(
     const Scope& scope) {
   std::vector<std::vector<DexType*>> res(MAX_DEX_NUM);
 
-  size_t num_interdex_groups = 0;
+  InterdexSubgroupIdx num_interdex_groups = 0;
   walk::classes(scope, [&](const DexClass* cls) {
     if (cls->rstate.has_interdex_subgroup()) {
-      size_t interdex_subgroup = cls->rstate.get_interdex_subgroup();
+      InterdexSubgroupIdx interdex_subgroup =
+          cls->rstate.get_interdex_subgroup();
       res[interdex_subgroup].push_back(cls->get_type());
       num_interdex_groups =
           std::max(num_interdex_groups, interdex_subgroup + 1);
@@ -770,14 +771,13 @@ void InterDex::run_in_force_single_dex_mode() {
   }
 
   // Emit all no matter what it is.
-  if (m_dexes_structure.get_current_dex_classes().size()) {
+  if (!m_dexes_structure.get_current_dex_classes().empty()) {
     flush_out_dex(dex_info);
   }
 
   TRACE(IDEX, 7, "IDEX: force_single_dex dex number: %d",
         m_dexes_structure.get_num_dexes());
   print_stats(&m_dexes_structure);
-  return;
 }
 
 void InterDex::run() {
@@ -800,7 +800,7 @@ void InterDex::run() {
   // NOTE: If primary dex is treated as a normal dex, we are going to modify
   //       it too, based on coldstart classes. Because of that, we need to
   //       update the coldstart list to respect the primary dex.
-  if (m_normal_primary_dex && m_interdex_types.size() > 0) {
+  if (m_normal_primary_dex && !m_interdex_types.empty()) {
     update_interdexorder(primary_dex, &m_interdex_types);
   }
 
@@ -824,7 +824,7 @@ void InterDex::run() {
   }
 
   // Emit what is left, if any.
-  if (m_dexes_structure.get_current_dex_classes().size()) {
+  if (!m_dexes_structure.get_current_dex_classes().empty()) {
     flush_out_dex(dex_info);
   }
 
@@ -862,7 +862,7 @@ void InterDex::run_on_nonroot_store() {
   }
 
   // Emit what is left, if any.
-  if (m_dexes_structure.get_current_dex_classes().size()) {
+  if (!m_dexes_structure.get_current_dex_classes().empty()) {
     flush_out_dex(EMPTY_DEX_INFO);
   }
 

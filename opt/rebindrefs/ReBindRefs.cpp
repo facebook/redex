@@ -36,6 +36,18 @@ bool is_array_clone(DexMethodRef* mref, DexType* mtype) {
          !type::is_primitive(type::get_array_element_type(mtype));
 }
 
+inline bool match(const DexString* name,
+                  const DexProto* proto,
+                  const DexMethod* cls_meth) {
+  return name == cls_meth->get_name() && proto == cls_meth->get_proto();
+}
+
+// Only looking at the public, protected and private bits.
+template <typename DexMember>
+DexAccessFlags get_visibility(const DexMember* member) {
+  return member->get_access() & VISIBILITY_MASK;
+}
+
 struct Rebinder {
  private:
   template <typename T>
@@ -139,27 +151,37 @@ struct Rebinder {
    * Java allows relaxing visibility down the hierarchy chain so while
    * rebinding we don't want to bind to a method up the hierarchy that would
    * not be visible.
-   * Walk up the hierarchy chain as long as the method is public.
+   * Walk up the hierarchy chain as long as the method is visible.
    */
   DexMethod* bind_to_visible_ancestor(const DexClass* cls,
                                       const DexString* name,
                                       const DexProto* proto) {
-    DexMethod* top_impl = nullptr;
+    auto leaf_impl = resolve_virtual(cls, name, proto);
+    if (!leaf_impl) {
+      return nullptr;
+    }
+    auto leaf_vis = get_visibility(leaf_impl);
+    if (!is_public(leaf_vis)) {
+      return leaf_impl;
+    }
+    DexMethod* top_impl = leaf_impl;
+    // The resolved leaf impl can only be PUBLIC at this point.
     while (cls) {
       for (const auto& cls_meth : cls->get_vmethods()) {
-        if (name == cls_meth->get_name() && proto == cls_meth->get_proto()) {
-          auto curr_vis = cls_meth->get_access() & VISIBILITY_MASK;
-          auto curr_cls_vis = cls->get_access() & VISIBILITY_MASK;
-          if (curr_vis != ACC_PUBLIC || curr_cls_vis != ACC_PUBLIC) {
-            return top_impl != nullptr ? top_impl : cls_meth;
+        if (match(name, proto, cls_meth)) {
+          auto curr_vis = get_visibility(cls_meth);
+          auto curr_cls_vis = get_visibility(cls);
+          if (is_private(curr_vis) || is_package_private(curr_vis) ||
+              !is_public(curr_cls_vis)) {
+            return top_impl;
           }
-          if (top_impl != nullptr) {
-            auto top_vis = top_impl->get_access() & VISIBILITY_MASK;
-            auto top_cls_vis = type_class(top_impl->get_class())->get_access() &
-                               VISIBILITY_MASK;
-            if (top_vis != curr_vis || top_cls_vis != curr_cls_vis) {
-              return top_impl;
-            }
+          bool is_external = cls->is_external() || cls_meth->is_external();
+          if (is_external && !is_public(curr_vis)) {
+            return top_impl;
+          }
+          // We can only rebind PUBLIC to PUBLIC here.
+          if (leaf_vis != curr_vis) {
+            return top_impl;
           }
           top_impl = cls_meth;
           break;
@@ -268,6 +290,7 @@ void ReBindRefsPass::eval_pass(DexStoresVector&,
                                ConfigFiles& conf,
                                PassManager& mgr) {
   int32_t min_sdk = mgr.get_redex_options().min_sdk;
+  bool explicitly_enabled_external = m_rebind_to_external;
   // Disable rebind to external for API level older than
   // m_supported_min_sdk_for_external_refs.
   if (min_sdk < m_supported_min_sdk_for_external_refs) {
@@ -280,6 +303,13 @@ void ReBindRefsPass::eval_pass(DexStoresVector&,
   if (!min_sdk_api_file) {
     TRACE(BIND, 2, "Android SDK API %d file cannot be found.", min_sdk);
     m_rebind_to_external = false;
+    always_assert_log(
+        !explicitly_enabled_external ||
+            min_sdk < m_supported_min_sdk_for_external_refs,
+        "Android SDK API %d file can not be found but rebind_to_external is "
+        "explicitly enabled for this version. Please pass the api list to "
+        "Redex or turn off `rebind_to_external`.",
+        min_sdk);
   } else {
     TRACE(BIND, 2, "Android SDK API %d file found: %s", min_sdk,
           min_sdk_api_file->c_str());

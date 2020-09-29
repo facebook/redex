@@ -24,7 +24,7 @@ void DedupBlocksPass::run_pass(DexStoresVector& stores,
       scope,
       [&](DexMethod* method) {
         const auto code = method->get_code();
-        if (code == nullptr || m_config.method_black_list.count(method) != 0) {
+        if (code == nullptr || m_config.method_blocklist.count(method) != 0) {
           return dedup_blocks_impl::Stats();
         }
 
@@ -36,7 +36,7 @@ void DedupBlocksPass::run_pass(DexStoresVector& stores,
         TRACE(DEDUP_BLOCKS, 5, "[dedup blocks] method %s before:\n%s",
               SHOW(method), SHOW(cfg));
 
-        dedup_blocks_impl::DedupBlocks impl(m_config, method);
+        dedup_blocks_impl::DedupBlocks impl(&m_config, method);
         impl.run();
 
         code->clear_cfg();

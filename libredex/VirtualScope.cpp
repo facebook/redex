@@ -250,7 +250,7 @@ void mark_methods(const DexType* type,
     const auto name = protos_it.first;
     for (const auto& proto : protos_it.second) {
       auto& scopes = sig_map[name][proto];
-      always_assert(scopes.size() > 0);
+      always_assert(!scopes.empty());
       always_assert(scopes[0].type == type);
       // mark final and override accordingly
       auto& first_scope = scopes[0];
@@ -269,7 +269,7 @@ void mark_methods(const DexType* type,
       // in base so they must all be override
       if (scopes.size() > 1) {
         for (auto scope = scopes.begin() + 1; scope != scopes.end(); scope++) {
-          always_assert((*scope).methods.size() > 0);
+          always_assert(!(*scope).methods.empty());
           TRACE(VIRT, 6, "OVERRIDE %s", SHOW((*scope).methods[0].first));
           (*scope).methods[0].second |= OVERRIDE;
         }
@@ -392,7 +392,7 @@ void merge(const BaseSigs& base_sigs,
       // needs to merge
       // first scope in base_sig_map must be that of the type under
       // analysis because we built it first and added to the empty vector
-      always_assert(virt_scopes.size() > 0);
+      always_assert(!virt_scopes.empty());
       TRACE(VIRT,
             4,
             "- found existing scopes for %s:%s (%ld) - first: %s, %ld, %ld",
@@ -487,7 +487,7 @@ bool load_interface_methods(const DexClass* intf_cls,
                             BaseIntfSigs& intf_methods) {
   bool escaped = false;
   const auto& interfaces = intf_cls->get_interfaces()->get_type_list();
-  if (interfaces.size() > 0) {
+  if (!interfaces.empty()) {
     if (load_interfaces_methods(interfaces, intf_methods)) {
       escaped = true;
     }
@@ -524,7 +524,7 @@ bool load_interfaces_methods(const std::deque<DexType*>& interfaces,
  * Get all interface methods for a given type.
  */
 bool get_interface_methods(const DexType* type, BaseIntfSigs& intf_methods) {
-  always_assert_log(intf_methods.size() == 0, "intf_methods is an out param");
+  always_assert_log(intf_methods.empty(), "intf_methods is an out param");
   // REVIEW: should we always have a DexClass for java.lang.Object?
   if (type == type::java_lang_Object()) return false;
   auto cls = type_class(type);
@@ -532,7 +532,7 @@ bool get_interface_methods(const DexType* type, BaseIntfSigs& intf_methods) {
       cls != nullptr, "DexClass must exist for type %s\n", SHOW(type));
   bool escaped = false;
   const auto& interfaces = cls->get_interfaces()->get_type_list();
-  if (interfaces.size() > 0) {
+  if (!interfaces.empty()) {
     if (load_interfaces_methods(interfaces, intf_methods)) escaped = true;
   }
   return escaped;
@@ -563,7 +563,7 @@ bool load_interfaces(const DexType* type,
       const auto& name = sig_it.first;
       const auto& proto = proto_it.first;
       always_assert(sig_map[name][proto].size() <= 1);
-      if (sig_map[name][proto].size() == 0) {
+      if (sig_map[name][proto].empty()) {
         // the method interface is not implemented in current
         // type. The class is abstract or a definition up the
         // hierarchy is present.
@@ -650,7 +650,7 @@ void load_methods(const DexType* type, SignatureMap& sig_map) {
 bool build_signature_map(const ClassHierarchy& hierarchy,
                          const DexType* type,
                          SignatureMap& sig_map) {
-  always_assert_log(sig_map.size() == 0,
+  always_assert_log(sig_map.empty(),
                     "intf_methods and children_methods are out params");
   const TypeSet& children = hierarchy.at(type);
   TRACE(VIRT, 3, "* Visit %s", SHOW(type));
@@ -802,7 +802,7 @@ const VirtualScope& find_virtual_scope(const SignatureMap& sig_map,
     if (scope.type == type::java_lang_Object()) return scope;
     if (type::is_subclass(scope.type, meth_type)) return scope;
   }
-  always_assert_log(false, "unreachable. Scope not found for %s\n", SHOW(meth));
+  not_reached_log("unreachable. Scope not found for %s\n", SHOW(meth));
 }
 
 bool can_rename_scope(const VirtualScope* scope) {
@@ -888,7 +888,7 @@ void ClassScopes::build_interface_scopes() {
     }
     for (const auto& meth : intf_cls->get_vmethods()) {
       const auto& scopes = m_sig_map[meth->get_name()][meth->get_proto()];
-      always_assert(scopes.size() > 0); // at least the method itself
+      always_assert(!scopes.empty()); // at least the method itself
       auto& intf_scope = m_interface_scopes[intf_it.first];
       intf_scope.push_back({});
       for (const auto& scope : scopes) {
@@ -910,7 +910,7 @@ InterfaceScope ClassScopes::find_interface_scope(const DexMethod* meth) const {
   }
 
   const auto& scopes = m_sig_map.at(meth->get_name()).at(meth->get_proto());
-  always_assert(scopes.size() > 0); // at least the method itself
+  always_assert(!scopes.empty()); // at least the method itself
   for (const auto& scope : scopes) {
     if (scope.interfaces.count(intf) == 0) continue;
     TRACE_NO_LINE(VIRT, 9, "add interface scope for %s", SHOW(intf));

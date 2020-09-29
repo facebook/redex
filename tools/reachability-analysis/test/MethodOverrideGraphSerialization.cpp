@@ -14,6 +14,7 @@
 #include "DexAnnotation.h"
 #include "DexClass.h"
 #include "RedexContext.h"
+#include "SanitizersConfig.h"
 
 namespace mog = method_override_graph;
 

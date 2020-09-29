@@ -20,7 +20,7 @@ class OptimizeEnumsPass : public Pass {
 
  private:
   int m_max_enum_size;
-  std::vector<DexType*> m_enum_to_integer_whitelist;
+  std::vector<DexType*> m_enum_to_integer_allowlist;
 };
 
 } // namespace optimize_enums

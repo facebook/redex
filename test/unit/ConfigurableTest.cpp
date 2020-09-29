@@ -18,7 +18,7 @@ struct Base : public Configurable {
   int m_int_param;
   float m_float_param;
   bool m_bool_param;
-  uint m_uint_param;
+  unsigned int m_uint_param;
   int64_t m_int64_param;
   uint64_t m_uint64_param;
   std::string m_string_param;
@@ -32,7 +32,7 @@ struct Base : public Configurable {
 };
 
 struct BadBindFlags : public Base {
-  BadBindFlags(bindflags_t bindflags = 0) { m_bindflags = bindflags; }
+  explicit BadBindFlags(bindflags_t bindflags = 0) { m_bindflags = bindflags; }
   void bind_config() override {
     bind("int_param", 0, m_int_param, "", m_bindflags);
   }
@@ -73,7 +73,7 @@ TEST_F(ConfigurableTest, BadBindFlags) {
 }
 
 struct OptionalBindings : public Base {
-  OptionalBindings(bindflags_t optional_string_bindflags) {
+  explicit OptionalBindings(bindflags_t optional_string_bindflags) {
     m_optional_string_bindflags = optional_string_bindflags;
   }
   void bind_config() override {
@@ -169,8 +169,8 @@ TEST_F(ConfigurableTest, PrimitiveBindings) {
   json["float_param"] = 11.0f;
   json["bool_param"] = true;
   json["uint_param"] = 0xffffffff;
-  json["int64_param"] = {-5000000000};
-  json["uint64_param"] = {5000000000};
+  json["int64_param"] = Json::Int64(-5000000000);
+  json["uint64_param"] = Json::UInt64(5000000000);
   json["string_param"] = "a string";
   json["json_param"] = getFooBarObject();
   json["vector_of_string_param"] = getFooBarBazArray();
@@ -237,7 +237,7 @@ struct CompositeBindings : public Configurable {
 
 TEST_F(ConfigurableTest, CompositeBindings) {
   Json::Value json;
-  json["contained"]["uint64_param"] = 7000000000;
+  json["contained"]["uint64_param"] = Json::UInt64(7000000000);
   json["contained"]["string_param"] = "a different string";
 
   CompositeBindings c;
@@ -255,7 +255,9 @@ TEST_F(ConfigurableTest, CompositeBindings) {
 }
 
 struct TypesBindFlags : public Base {
-  TypesBindFlags(bindflags_t bindflags = 0) { m_bindflags = bindflags; }
+  explicit TypesBindFlags(bindflags_t bindflags = 0) {
+    m_bindflags = bindflags;
+  }
   void bind_config() override {
     bind("types_param", {}, m_types_param, "", m_bindflags);
   }
@@ -304,7 +306,9 @@ TEST_F(ConfigurableTest, TypesBindFlags) {
 }
 
 struct MethodsBindFlags : public Base {
-  MethodsBindFlags(bindflags_t bindflags = 0) { m_bindflags = bindflags; }
+  explicit MethodsBindFlags(bindflags_t bindflags = 0) {
+    m_bindflags = bindflags;
+  }
   void bind_config() override {
     bind("methods_param", {}, m_methods_param, "", m_bindflags);
   }
@@ -369,7 +373,7 @@ TEST_F(ConfigurableTest, MethodsBindFlags) {
 }
 
 struct AfterConfiguration : public Base {
-  AfterConfiguration(int iterations)
+  explicit AfterConfiguration(int iterations)
       : m_after_config_called(false), m_iterations(iterations) {}
   void bind_config() override {
     for (int i = 0; i < m_iterations; ++i) {

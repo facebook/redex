@@ -61,17 +61,15 @@ reg_t find_determining_reg(
     } else if (left_is_known && !right_is_known) {
       return right_reg;
     } else {
-      always_assert_log(false,
-                        "Could not find determining register (unexpected "
-                        "structure of non-leaf node)\n%s",
-                        SHOW(b));
+      not_reached_log(
+          "Could not find determining register (unexpected structure of "
+          "non-leaf node)\n%s",
+          SHOW(b));
     }
   }
-  always_assert_log(
-      false,
+  not_reached_log(
       "Could not find determining register (unrecognized last instruction)\n%s",
       SHOW(b));
-  not_reached();
 }
 
 } // namespace
@@ -226,8 +224,19 @@ SwitchMethodPartitioning::SwitchMethodPartitioning(IRCode* code,
         m_key_to_block[*c] = case_block;
       } else {
         // handle multiple case keys that map to a single block
-        always_assert(edge->type() == cfg::EDGE_BRANCH);
         const auto& edge_case_key = edge->case_key();
+        // Constant-propagation might infer NEZ for the default case; tolerate
+        // that.
+        if (edge_case_key == boost::none &&
+            case_key.interval() == sign_domain::Interval::NEZ) {
+          auto last_insn_it = case_block->get_last_insn();
+          if (last_insn_it != case_block->end() &&
+              last_insn_it->insn->opcode() == OPCODE_THROW) {
+            // Looks like a block that throws an IllegalArgumentException
+            continue;
+          }
+        }
+        always_assert(edge->type() == cfg::EDGE_BRANCH);
         always_assert(edge_case_key != boost::none);
         m_key_to_block[*edge_case_key] = case_block;
       }

@@ -6,7 +6,7 @@
 
 from collections import defaultdict
 
-from . import core
+from . import core  # noqa F401
 from .core import ReachableObjectType
 
 

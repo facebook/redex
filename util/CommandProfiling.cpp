@@ -23,14 +23,12 @@ namespace {
 pid_t spawn(const std::string& cmd) {
 #ifdef _POSIX_VERSION
   auto child = fork();
-  if (child == -1) {
-    always_assert_log(false, "Failed to fork");
-    not_reached();
-  } else if (child != 0) {
+  always_assert_log(child != -1, "Failed to fork");
+  if (child != 0) {
     return child;
   } else {
-    execl("/bin/sh", "/bin/sh", "-c", cmd.c_str(), nullptr);
-    always_assert_log(false, "exec of command failed");
+    int ret = execl("/bin/sh", "/bin/sh", "-c", cmd.c_str(), nullptr);
+    always_assert_log(ret != -1, "exec of command failed: %s", strerror(errno));
     not_reached();
   }
 #else
@@ -65,9 +63,9 @@ pid_t kill_and_wait(pid_t pid, int sig) {
 #endif
 }
 
-void run_post_cmd(const std::string& cmd) {
+void run_and_wait(const std::string& cmd) {
 #ifdef _POSIX_VERSION
-  auto child = spawn(cmd + " perf.data");
+  auto child = spawn(cmd);
   if (child == 0) {
     return;
   }
@@ -76,18 +74,21 @@ void run_post_cmd(const std::string& cmd) {
   pid_t wpid = waitpid(child, &status, 0);
   always_assert_log(wpid != -1, "Failed to waitpid: %s", strerror(errno));
   if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
-    std::cerr << "Failed post-cmd " << cmd << std::endl;
+    std::cerr << "Failed cmd " << cmd << std::endl;
   }
 #else
-  std::cerr << "run_post_cmd() is a no-op on non-POSIX systems" << std::endl;
+  std::cerr << "run_and_wait() is a no-op on non-POSIX systems" << std::endl;
 #endif
 }
 
 } // namespace
 
 ScopedCommandProfiling::ScopedCommandProfiling(
-    boost::optional<std::string> cmd, boost::optional<std::string> post_cmd) {
+    boost::optional<std::string> cmd,
+    boost::optional<std::string> shutdown_cmd,
+    boost::optional<std::string> post_cmd) {
   if (cmd) {
+    m_shutdown_cmd = std::move(shutdown_cmd);
     m_post_cmd = std::move(post_cmd);
     fprintf(stderr, "Running profiler...\n");
     m_profiler = spawn_profiler(*cmd);
@@ -97,9 +98,13 @@ ScopedCommandProfiling::ScopedCommandProfiling(
 ScopedCommandProfiling::~ScopedCommandProfiling() {
   if (m_profiler != -1) {
     std::cerr << "Waiting for profiler to finish..." << std::endl;
-    kill_and_wait(m_profiler, SIGINT);
+    if (m_shutdown_cmd) {
+      run_and_wait(*m_shutdown_cmd);
+    } else {
+      kill_and_wait(m_profiler, SIGINT);
+    }
     if (m_post_cmd) {
-      run_post_cmd(*m_post_cmd);
+      run_and_wait(*m_post_cmd + " perf.data");
     }
   }
 }

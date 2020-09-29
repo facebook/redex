@@ -179,11 +179,10 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
     if (!can_relocate(cls) || should_not_relocate_methods_of_class) {
       return;
     }
-
     auto cls_has_problematic_clinit = method::clinit_may_have_side_effects(cls);
 
     SplitClass& sc = m_split_classes[cls];
-    always_assert(sc.relocatable_methods.size() == 0);
+    always_assert(sc.relocatable_methods.empty());
     auto process_method = [&](DexMethod* method) {
       if (m_sufficiently_popular_methods.count(method)) {
         return;
@@ -456,7 +455,7 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
           case OPCODE_INVOKE_VIRTUAL:
           case OPCODE_INVOKE_SUPER: {
             auto resolved_method = resolve_method(
-                insn->get_method(), opcode_to_search(insn));
+                insn->get_method(), opcode_to_search(insn), method);
             if (resolved_method &&
                 methods_to_staticize.count(resolved_method)) {
               insn->set_opcode(OPCODE_INVOKE_STATIC);
@@ -468,7 +467,7 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
           case OPCODE_INVOKE_INTERFACE:
           case OPCODE_INVOKE_STATIC: {
             auto resolved_method = resolve_method(
-                insn->get_method(), opcode_to_search(insn));
+                insn->get_method(), opcode_to_search(insn), method);
             always_assert(!resolved_method ||
                           !methods_to_staticize.count(resolved_method));
             break;

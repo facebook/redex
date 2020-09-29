@@ -13,6 +13,7 @@
 #include "DexUtil.h"
 #include "ReachableClasses.h"
 #include <list>
+#include <type_traits>
 
 namespace obfuscate_utils {
 void compute_identifier(int value, std::string* res);
@@ -20,9 +21,9 @@ void compute_identifier(int value, std::string* res);
 
 // Type for the map of descriptor -> [newname -> oldname]
 // This map is used for reverse lookup to find naming collisions
-typedef std::unordered_map<std::string,
-                           std::unordered_map<std::string, std::string>>
-    NameMapping;
+using NameMapping =
+    std::unordered_map<std::string,
+                       std::unordered_map<std::string, std::string>>;
 
 // Renames a field in the Dex
 void rename_field(DexField* field, const std::string& new_name);
@@ -46,7 +47,8 @@ bool should_rename_elem(const T* member) {
  * vmethods (requires some additional information). Additionally, some record
  * of the old name is necessary to fix up ref opcodes.
  */
-template <class T>
+template <class T,
+          typename std::enable_if<std::is_pointer<T>::value, int>::type = 0>
 class DexNameWrapper {
  protected:
   T dex_elem;
@@ -55,24 +57,26 @@ class DexNameWrapper {
   std::string name{"INVALID_DEFAULT_NAME"};
 
  public:
+  using const_type = typename std::add_const<T>::type;
+
   // Default constructor is only ever used for map template to work correctly
   // we have added asserts to make sure there are no nullptrs returned.
   DexNameWrapper() = default;
   virtual ~DexNameWrapper() {}
-  DexNameWrapper(DexNameWrapper&& other) = default;
+  DexNameWrapper(DexNameWrapper&& other) noexcept = default;
   DexNameWrapper(DexNameWrapper const& other) = default;
   // This is the constructor that should be used, creates a new wrapper on
   // the pointer it is passed
   explicit DexNameWrapper(T dex_elem) : dex_elem(dex_elem) {}
 
   DexNameWrapper& operator=(DexNameWrapper const& other) = default;
-  DexNameWrapper& operator=(DexNameWrapper&& other) = default;
+  DexNameWrapper& operator=(DexNameWrapper&& other) noexcept = default;
 
   inline T get() {
     always_assert(dex_elem != nullptr);
     return dex_elem;
   }
-  inline const T get() const {
+  inline const_type get() const {
     always_assert(dex_elem != nullptr);
     return dex_elem;
   }
@@ -91,9 +95,9 @@ class DexNameWrapper {
   }
 
   // Meant to be overridden, but we don't want this class to be abstract
-  virtual void mark_unrenamable() { always_assert(false); }
-  virtual void mark_renamable() { always_assert(false); }
-  virtual bool should_rename() { always_assert(false); }
+  virtual void mark_unrenamable() { not_reached(); }
+  virtual void mark_renamable() { not_reached(); }
+  virtual bool should_rename() { not_reached(); }
 
   virtual std::string get_printable() {
     std::ostringstream res;
@@ -249,7 +253,7 @@ class NameGenerator {
   std::unordered_set<std::string>& used_ids;
   // Gets the next name that is not in the used_ids set
   std::string next_name() {
-    std::string res = "";
+    std::string res;
     do {
       res.clear();
       obfuscate_utils::compute_identifier(ctr++, &res);
@@ -512,6 +516,7 @@ class DexElemManager {
         ref_getter_fn(ref_ctr),
         elemCtr(elem_ctr),
         mark_all_unrenamable(false) {}
+  // NOLINTNEXTLINE(performance-noexcept-move-constructor)
   DexElemManager(DexElemManager&& other) = default;
   virtual ~DexElemManager() {}
 
@@ -645,11 +650,11 @@ class DexElemManager {
   }
 };
 
-typedef DexElemManager<DexField*, DexFieldRef*, DexFieldSpec, DexType*>
-    DexFieldManager;
+using DexFieldManager =
+    DexElemManager<DexField*, DexFieldRef*, DexFieldSpec, DexType*>;
 DexFieldManager new_dex_field_manager();
-typedef DexElemManager<DexMethod*, DexMethodRef*, DexMethodSpec, DexProto*>
-    DexMethodManager;
+using DexMethodManager =
+    DexElemManager<DexMethod*, DexMethodRef*, DexMethodSpec, DexProto*>;
 DexMethodManager new_dex_method_manager();
 
 // Look at a list of members and check if there is a renamable member
@@ -678,7 +683,7 @@ class RenamingContext {
   virtual bool can_rename_elem(T elem) const { return can_rename(elem); }
 };
 
-typedef RenamingContext<DexField*> FieldRenamingContext;
+using FieldRenamingContext = RenamingContext<DexField*>;
 
 // Method renaming context is special because we have to make sure we don't
 // rename <init> or <clinit> ever regardless of configs

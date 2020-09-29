@@ -15,6 +15,7 @@
 #include "DexClass.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
+#include "InstructionSequenceOutliner.h"
 #include "Walkers.h"
 #include "locator.h"
 
@@ -105,7 +106,8 @@ std::unordered_set<const DexMethod*> DedupStrings::get_perf_sensitive_methods(
     // We also choose to not dedup strings in cl_inits and outlined methods,
     // as they either tend to get called during critical initialization code
     // paths, or often.
-    if (dexnr == 0 || method::is_clinit(method)) {
+    if (dexnr == 0 || method::is_clinit(method) ||
+        type_class(method->get_class())->rstate.outlined()) {
       return true;
     }
     if (!cls->is_perf_sensitive()) {
@@ -179,10 +181,10 @@ DexMethod* DedupStrings::make_const_string_loader_method(
   auto dex_it = dex.begin();
   for (; dex_it != dex.end() && interdex::is_canary(*dex_it); dex_it++) {
   }
- dex.insert(dex_it, host_cls);
+  dex.insert(dex_it, host_cls);
 
   // Here we build the string lookup method with a big switch statement.
-  always_assert(strings.size() > 0);
+  always_assert(!strings.empty());
   const auto string_type = type::java_lang_String();
   const auto proto = DexProto::make_proto(
       string_type, DexTypeList::make_type_list({type::_int()}));
@@ -190,7 +192,7 @@ DexMethod* DedupStrings::make_const_string_loader_method(
                                DexString::make_string("lookup"),
                                proto,
                                ACC_PUBLIC | ACC_STATIC);
-  redex_assert(strings.size() > 0);
+  redex_assert(!strings.empty());
   auto id_arg = method_creator.get_local(0);
   auto res_var = method_creator.make_local(type::java_lang_String());
   auto main_block = method_creator.get_main_block();
@@ -312,7 +314,7 @@ DedupStrings::get_strings_to_dedup(
   ordered_strings.reserve(occurrences.size());
   for (auto& p : occurrences) {
     const auto& m = p.second;
-    always_assert(m.size() >= 1);
+    always_assert(!m.empty());
     if (m.size() == 1) continue;
     ordered_strings.push_back(p.first);
   }
@@ -479,7 +481,7 @@ DedupStrings::get_strings_to_dedup(
   // generate factory methods; remember details in dedup-info data structure
   for (size_t dexnr = 0; dexnr < dexen.size(); ++dexnr) {
     std::vector<DexString*>& strings = strings_in_dexes[dexnr];
-    if (strings.size() == 0) {
+    if (strings.empty()) {
       continue;
     }
     std::sort(strings.begin(), strings.end(),
@@ -609,7 +611,7 @@ void DedupStrings::rewrite_const_string_instructions(
 // space for that many method refs and type refs.
 class DedupStringsInterDexPlugin : public interdex::InterDexPassPlugin {
  public:
-  DedupStringsInterDexPlugin(size_t max_factory_methods)
+  explicit DedupStringsInterDexPlugin(size_t max_factory_methods)
       : m_max_factory_methods(max_factory_methods) {}
 
   size_t reserve_mrefs() override { return m_max_factory_methods; }
@@ -638,6 +640,8 @@ void DedupStringsPass::bind_config() {
   bind("method_profiles_appear_percent_threshold",
        default_method_profiles_appear_percent_threshold,
        m_method_profiles_appear_percent_threshold);
+
+  trait(Traits::Pass::unique, true);
 
   after_configuration([this] {
     always_assert(m_max_factory_methods > 0);

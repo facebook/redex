@@ -67,7 +67,7 @@ struct BlockAccessor;
 
 namespace cfg {
 
-enum EdgeType {
+enum EdgeType : uint8_t {
   // The false branch of an if statement, default of a switch, or unconditional
   // goto
   EDGE_GOTO,
@@ -104,50 +104,54 @@ struct ThrowInfo {
 class Edge final {
  public:
   using CaseKey = int32_t;
+  using MaybeCaseKey = boost::optional<CaseKey>;
 
  private:
   Block* m_src;
   Block* m_target;
+  union {
+    // If `m_type` is EDGE_THROW then this union points to a ThrowInfo
+    // Edge owns this ThrowInfo and is responsible for deleting it.
+    ThrowInfo* m_throw_info;
+    // If `m_type` is not EDGE_THROW then this union is an optional case key.
+    // If this edge is a non-default outgoing edge of a OPCODE_SWITCH, then
+    // this is not `boost::none`.
+    MaybeCaseKey m_case_key;
+  };
   EdgeType m_type;
-
-  // If this branch is a non-default case of a switch statement, this is the
-  // index of the corresponding case block.
-  boost::optional<CaseKey> m_case_key;
-
-  std::unique_ptr<ThrowInfo> m_throw_info{nullptr};
-
-  friend class Block;
-  friend class ControlFlowGraph;
-  friend class CFGInliner;
 
  public:
   Edge(Block* src, Block* target, EdgeType type)
-      : m_src(src), m_target(target), m_type(type) {
+      : m_src(src), m_target(target), m_case_key(boost::none), m_type(type) {
     always_assert_log(m_type != EDGE_THROW,
                       "Need a catch type and index to create a THROW edge");
   }
   Edge(Block* src, Block* target, CaseKey case_key)
       : m_src(src),
         m_target(target),
-        m_type(EDGE_BRANCH),
-        m_case_key(case_key) {}
+        m_case_key(case_key),
+        m_type(EDGE_BRANCH) {}
   Edge(Block* src, Block* target, DexType* catch_type, uint32_t index)
       : m_src(src),
         m_target(target),
-        m_type(EDGE_THROW),
-        m_throw_info(std::make_unique<ThrowInfo>(catch_type, index)) {}
+        m_throw_info(new ThrowInfo(catch_type, index)),
+        m_type(EDGE_THROW) {}
 
   /*
    * Copy constructor.
    * Notice that this shallowly copies the block pointers!
    */
-  Edge(const Edge& e)
-      : m_src(e.m_src),
-        m_target(e.m_target),
-        m_type(e.m_type),
-        m_case_key(e.m_case_key) {
-    if (e.m_throw_info) {
-      m_throw_info = std::make_unique<ThrowInfo>(*e.m_throw_info);
+  Edge(const Edge& e) : m_src(e.m_src), m_target(e.m_target), m_type(e.m_type) {
+    if (m_type == EDGE_THROW) {
+      m_throw_info = new ThrowInfo(*e.throw_info());
+    } else {
+      m_case_key = e.case_key();
+    }
+  }
+
+  ~Edge() {
+    if (m_type == EDGE_THROW) {
+      delete m_throw_info;
     }
   }
 
@@ -167,18 +171,41 @@ class Edge final {
   }
 
   bool equals_ignore_source_and_target(const Edge& that) const {
-    return m_type == that.m_type &&
-           ((m_throw_info == nullptr && that.m_throw_info == nullptr) ||
-            *m_throw_info == *that.m_throw_info) &&
-           m_case_key == that.m_case_key;
+    if (m_type != that.m_type) {
+      return false;
+    } else if (m_type == EDGE_THROW) {
+      return (throw_info() == nullptr && that.throw_info() == nullptr) ||
+             *throw_info() == *that.throw_info();
+    } else {
+      return case_key() == that.case_key();
+    }
   }
 
+  // getters
   Block* src() const { return m_src; }
   Block* target() const { return m_target; }
   EdgeType type() const { return m_type; }
-  ThrowInfo* throw_info() const { return m_throw_info.get(); }
-  const boost::optional<CaseKey>& case_key() const { return m_case_key; }
-  void set_case_key(boost::optional<CaseKey> k) { m_case_key = k; }
+  ThrowInfo* throw_info() const {
+    always_assert(m_type == EDGE_THROW);
+    return m_throw_info;
+  }
+  const MaybeCaseKey& case_key() const {
+    always_assert(m_type != EDGE_THROW);
+    return m_case_key;
+  }
+
+  // setters
+  void set_case_key(const MaybeCaseKey& k) {
+    always_assert(m_type != EDGE_THROW);
+    m_case_key = k;
+  }
+  void set_src(Block* b) { m_src = b; }
+  void set_target(Block* b) { m_target = b; }
+  void set_type(EdgeType new_type) {
+    always_assert_log(!((m_type == EDGE_THROW) ^ (new_type == EDGE_THROW)),
+                      "Can't convert to or from throw edge");
+    m_type = new_type;
+  }
 };
 
 std::ostream& operator<<(std::ostream& os, const Edge& e);
@@ -211,6 +238,10 @@ class Block final {
   Block(const Block& b, MethodItemEntryCloner* cloner);
 
   BlockId id() const { return m_id; }
+  ControlFlowGraph& cfg() const {
+    always_assert(m_parent != nullptr);
+    return *m_parent;
+  }
   const std::vector<Edge*>& preds() const { return m_preds; }
   const std::vector<Edge*>& succs() const { return m_succs; }
 
@@ -292,6 +323,9 @@ class Block final {
   // Otherwise, return nullptr
   Block* goes_to() const;
 
+  // If this block contains no instructions that can throw.
+  bool cannot_throw() const;
+
   // TODO?: Should we just always store the throws in index order?
   std::vector<Edge*> get_outgoing_throws_in_order() const;
 
@@ -338,6 +372,8 @@ class Block final {
   bool push_back(const std::vector<IRInstruction*>& insns);
   bool push_back(IRInstruction* insn);
 
+  bool structural_equals(const Block* other) const;
+
  private:
   friend class ControlFlowGraph;
   friend class CFGInliner;
@@ -376,7 +412,7 @@ struct DominatorInfo {
 class ControlFlowGraph {
 
  public:
-  static constexpr bool DEBUG{false};
+  static bool DEBUG;
 
   ControlFlowGraph() = default;
   ControlFlowGraph(const ControlFlowGraph&) = delete;
@@ -759,7 +795,7 @@ class ControlFlowGraph {
   cfg::InstructionIterator move_result_of(const cfg::InstructionIterator& it);
 
   /*
-   * fill `new_cfg` with a copy of `this`
+   * clear and fill `new_cfg` with a copy of `this`.
    */
   void deep_copy(ControlFlowGraph* new_cfg) const;
 
@@ -769,6 +805,11 @@ class ControlFlowGraph {
 
   // choose an order of blocks for output
   std::vector<Block*> order();
+
+  /*
+   * Find the first debug position preceding an instruction
+   */
+  DexPosition* get_dbg_pos(const cfg::InstructionIterator& it);
 
  private:
   using BranchToTargets =
@@ -852,6 +893,12 @@ class ControlFlowGraph {
   // Assert if there are edges that are never a predecessor or successor of a
   // block
   void no_unreferenced_edges() const;
+
+  // Remove all edges and blocks of the CFG, free the memory and
+  // set all fields to their defaults.
+  // NOTE: this will result in an empty CFG, same as if the default
+  // constructor has been called.
+  void clear();
 
   template <class ForwardIt>
   bool insert(const InstructionIterator& position,
@@ -991,6 +1038,9 @@ class ControlFlowGraph {
   //      outgoing edge instructions.
   void cleanup_deleted_edges(const EdgeSet& edges);
 
+  // free all allocated memory of the CFG
+  void free_all_blocks_and_edges();
+
   // Move edge between new_source and new_target.
   // If either new_source or new_target is null, don't change that field of the
   // edge
@@ -1007,9 +1057,10 @@ class ControlFlowGraph {
   Blocks m_blocks;
   EdgeSet m_edges;
 
-  reg_t m_registers_size{0};
+  IRList* m_orig_list{nullptr}; // Only set when !m_editable.
   Block* m_entry_block{nullptr};
   Block* m_exit_block{nullptr};
+  reg_t m_registers_size{0};
   bool m_editable{true};
 };
 
@@ -1044,6 +1095,7 @@ class InstructionIteratorImpl {
       conditional<is_const, const MethodItemEntry, MethodItemEntry>::type;
   using Iterator = typename std::
       conditional<is_const, IRList::const_iterator, IRList::iterator>::type;
+  using IRListInstructionIterable = ir_list::InstructionIterableImpl<is_const>;
 
   // Use a pointer so that we can be copy constructible
   Cfg* m_cfg;
@@ -1083,7 +1135,7 @@ class InstructionIteratorImpl {
   using difference_type = long;
   using value_type = Mie&;
   using pointer = Mie*;
-  using iterator_category = std::forward_iterator_tag;
+  using iterator_category = std::bidirectional_iterator_tag;
 
   // TODO: Is it possible to recover a valid state of iterators into the CFG
   // after an insertion operation?
@@ -1102,8 +1154,7 @@ class InstructionIteratorImpl {
     if (is_begin) {
       m_block = m_cfg->m_blocks.begin();
       if (m_block != m_cfg->m_blocks.end()) {
-        auto iterable =
-            ir_list::InstructionIterableImpl<is_const>(m_block->second);
+        auto iterable = IRListInstructionIterable(m_block->second);
         m_it = iterable.begin();
         if (m_it == iterable.end()) {
           to_next_block();
@@ -1127,6 +1178,24 @@ class InstructionIteratorImpl {
     return result;
   }
 
+  InstructionIteratorImpl<is_const>& operator--() {
+    assert_not_begin();
+    // as long as we are at the beginning of the current block, keep going back
+    // to the end of the previous block
+    while (m_block == m_cfg->m_blocks.end() ||
+           m_it == IRListInstructionIterable(m_block->second).begin()) {
+      m_it = IRListInstructionIterable((--m_block)->second).end();
+    }
+    --m_it;
+    return *this;
+  }
+
+  InstructionIteratorImpl<is_const> operator--(int) {
+    auto result = *this;
+    --(*this);
+    return result;
+  }
+
   reference operator*() const {
     assert_not_end();
     return *m_it;
@@ -1140,6 +1209,14 @@ class InstructionIteratorImpl {
 
   bool operator!=(const InstructionIteratorImpl& other) const {
     return !(*this == other);
+  }
+
+  void assert_not_begin() const {
+    if (!ControlFlowGraph::DEBUG) {
+      return;
+    }
+    auto begin = InstructionIteratorImpl<is_const>(*m_cfg, true);
+    always_assert_log(*this != begin, "%s", SHOW(*m_cfg));
   }
 
   void assert_not_end() const {

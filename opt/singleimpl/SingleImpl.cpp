@@ -29,6 +29,8 @@ namespace {
 
 constexpr const char* METRIC_REMOVED_INTERFACES = "num_removed_interfaces";
 constexpr const char* METRIC_INVOKE_INT_TO_VIRT = "num_invoke_intf_to_virt";
+constexpr const char* METRIC_INSERTED_CHECK_CASTS = "num_inserted_check_casts";
+constexpr const char* METRIC_RETAINED_CHECK_CASTS = "num_retained_check_casts";
 
 /**
  * Build a map from interface to the type implementing that
@@ -102,9 +104,10 @@ void SingleImplPass::run_pass(DexStoresVector& stores,
   ClassHierarchy ch = build_type_hierarchy(scope);
   int max_steps = 0;
   size_t previous_invoke_intf_count = s_invoke_intf_count;
-  removed_count = 0;
+  OptimizeStats stats;
   const auto& pg_map = conf.get_proguard_map();
   while (true) {
+    Timer t{std::string("Iteration ").append(std::to_string(max_steps + 1))};
     TRACE(INTF, 9, "\tOPTIMIZE ROUND %d", max_steps);
     DEBUG_ONLY size_t scope_size = scope.size();
     TypeToTypes intfs_to_classes;
@@ -116,10 +119,13 @@ void SingleImplPass::run_pass(DexStoresVector& stores,
     std::unique_ptr<SingleImplAnalysis> single_impls =
         SingleImplAnalysis::analyze(scope, stores, single_impl, intfs, pg_map,
                                     m_pass_config);
-    auto optimized =
+
+    auto optimized_stats =
         optimize(std::move(single_impls), ch, scope, m_pass_config);
-    if (optimized == 0 || ++max_steps >= MAX_PASSES) break;
-    removed_count += optimized;
+    stats += optimized_stats;
+    if (optimized_stats.removed_interfaces == 0 || ++max_steps >= MAX_PASSES) {
+      break;
+    }
     redex_assert(scope_size > scope.size());
   }
 
@@ -128,9 +134,11 @@ void SingleImplPass::run_pass(DexStoresVector& stores,
   TRACE(INTF, 1, "Updated invoke-interface to invoke-virtual %ld",
         s_invoke_intf_count - previous_invoke_intf_count);
 
-  mgr.incr_metric(METRIC_REMOVED_INTERFACES, removed_count);
+  mgr.incr_metric(METRIC_REMOVED_INTERFACES, stats.removed_interfaces);
   mgr.incr_metric(METRIC_INVOKE_INT_TO_VIRT,
                   s_invoke_intf_count - previous_invoke_intf_count);
+  mgr.set_metric(METRIC_INSERTED_CHECK_CASTS, stats.inserted_check_casts);
+  mgr.set_metric(METRIC_RETAINED_CHECK_CASTS, stats.retained_check_casts);
 
   post_dexen_changes(scope, stores);
 }

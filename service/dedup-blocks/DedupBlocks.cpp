@@ -46,36 +46,61 @@
  */
 
 #include "DedupBlocks.h"
+#include "DedupBlockValueNumbering.h"
 
 #include "Liveness.h"
 #include "ReachingDefinitions.h"
 #include "TypeInference.h"
+#include <boost/functional/hash.hpp>
 
 namespace {
 
 using hash_t = std::size_t;
 
-// Structural equality of opcodes
-static bool same_code(cfg::Block* b1, cfg::Block* b2) {
-  return InstructionIterable(b1).structural_equals(InstructionIterable(b2));
+static bool is_branch_or_goto(const cfg::Edge* edge) {
+  auto type = edge->type();
+  return type == cfg::EDGE_BRANCH || type == cfg::EDGE_GOTO;
 }
 
-// The blocks must also have the exact same successors
-// (and reached in the same ways)
-static bool same_successors(const cfg::Block* b1, const cfg::Block* b2) {
-  const auto& b1_succs = b1->succs();
-  const auto& b2_succs = b2->succs();
+static std::vector<cfg::Edge*> get_branch_or_goto_succs(
+    const cfg::Block* block) {
+  std::vector<cfg::Edge*> succs;
+  for (auto edge : block->succs()) {
+    if (is_branch_or_goto(edge)) {
+      succs.push_back(edge);
+    }
+  }
+  return succs;
+}
+
+// The blocks must also have the exact same branch and goto successors.
+static bool same_branch_and_goto_successors(const cfg::Block* b1,
+                                            const cfg::Block* b2) {
+  auto b1_succs = get_branch_or_goto_succs(b1);
+  auto b2_succs = get_branch_or_goto_succs(b2);
   if (b1_succs.size() != b2_succs.size()) {
     return false;
   }
-  for (const cfg::Edge* b1_succ : b1_succs) {
-    const auto& in_b2 = std::find_if(b2_succs.begin(), b2_succs.end(),
-                                     [&b1_succ](const cfg::Edge* e) {
-                                       return e->equals_ignore_source(*b1_succ);
-                                     });
-    if (in_b2 == b2_succs.end()) {
-      // b1 has a succ that b2 doesn't. Note that both the succ blocks and
-      // the edge types have to match
+  using Key = std::pair<cfg::EdgeType, cfg::Edge::CaseKey>;
+  std::unordered_map<Key, cfg::Block*, boost::hash<Key>> b2_succs_map;
+  for (auto b2_succ : b2_succs) {
+    b2_succs_map.emplace(
+        std::make_pair(b2_succ->type(), b2_succ->case_key().value_or(0)),
+        b2_succ->target());
+  }
+  for (auto b1_succ : b1_succs) {
+    // For successors being the same, we need to find a matching entry for
+    // b1_succ in the b2_succs_map map.
+    auto it = b2_succs_map.find(
+        std::make_pair(b1_succ->type(), b1_succ->case_key().value_or(0)));
+    if (it == b2_succs_map.end()) {
+      return false;
+    }
+    auto b2_succ_target = it->second;
+    // Either targets need to be the same, or both targets must be pointing to
+    // same block (to support deduping of simple self-loops).
+    if (b1_succ->target() != b2_succ_target &&
+        (b1_succ->target() != b1 || b2_succ_target != b2)) {
       return false;
     }
   }
@@ -84,24 +109,31 @@ static bool same_successors(const cfg::Block* b1, const cfg::Block* b2) {
 
 struct SuccBlocksInSameGroup {
   bool operator()(const cfg::Block* a, const cfg::Block* b) const {
-    return same_successors(a, b) && a->same_try(b) &&
+    return same_branch_and_goto_successors(a, b) && a->same_try(b) &&
            a->is_catch() == b->is_catch();
   }
 };
 
-struct BlocksInSameGroup {
-  bool operator()(cfg::Block* a, cfg::Block* b) const {
-    return SuccBlocksInSameGroup{}(a, b) && same_code(a, b);
+struct BlockAndBlockValuePair {
+  cfg::Block* block;
+  const DedupBlkValueNumbering::BlockValue* block_value;
+};
+
+const cfg::Block& operator*(const BlockAndBlockValuePair& p) {
+  return *p.block;
+}
+
+struct BlockAndBlockValuePairInSameGroup {
+  bool operator()(const BlockAndBlockValuePair& p,
+                  const BlockAndBlockValuePair& q) const {
+    return SuccBlocksInSameGroup{}(p.block, q.block) &&
+           *p.block_value == *q.block_value;
   }
 };
 
-struct BlockHasher {
-  hash_t operator()(cfg::Block* b) const {
-    hash_t result = 0;
-    for (auto& mie : InstructionIterable(b)) {
-      result ^= mie.insn->hash();
-    }
-    return result;
+struct BlockAndBlockValuePairHasher {
+  hash_t operator()(const BlockAndBlockValuePair& p) const {
+    return DedupBlkValueNumbering::BlockValueHasher()(*p.block_value);
   }
 };
 
@@ -116,7 +148,11 @@ struct BlockSuccHasher {
   hash_t operator()(cfg::Block* b) const {
     hash_t result = 0;
     for (const auto& succ : b->succs()) {
-      result ^= succ->target()->id();
+      if (is_branch_or_goto(succ) && b == succ->target()) {
+        result ^= 27277 * (hash_t)succ->type();
+      } else {
+        result ^= succ->target()->id();
+      }
     }
     return result;
   }
@@ -157,19 +193,26 @@ namespace dedup_blocks_impl {
 
 class DedupBlocksImpl {
  public:
-  DedupBlocksImpl(const Config& config, Stats& stats)
-      : m_config(config), m_stats(stats) {}
+  DedupBlocksImpl(const Config* config, Stats& stats)
+      : m_config(config), m_stats(stats) {
+    always_assert(m_config);
+  }
 
   // Dedup blocks that are exactly the same
   bool dedup(DexMethod* method, cfg::ControlFlowGraph& cfg) {
-    Duplicates dups = collect_duplicates(method, cfg);
-    if (dups.size() > 0) {
-      if (m_config.debug) {
+    cfg.calculate_exit_block();
+    LivenessFixpointIterator liveness_fixpoint_iter(cfg);
+    liveness_fixpoint_iter.run({});
+    DedupBlkValueNumbering::BlockValues block_values(liveness_fixpoint_iter);
+    Duplicates dups =
+        collect_duplicates(method, cfg, block_values, liveness_fixpoint_iter);
+    if (!dups.empty()) {
+      if (m_config->debug) {
         check_inits(cfg);
       }
       record_stats(dups);
       deduplicate(dups, cfg);
-      if (m_config.debug) {
+      if (m_config->debug) {
         check_inits(cfg);
       }
       return true;
@@ -190,12 +233,12 @@ class DedupBlocksImpl {
    */
   void split_postfix(DexMethod* method, cfg::ControlFlowGraph& cfg) {
     PostfixSplitGroupMap dups = collect_postfix_duplicates(method, cfg);
-    if (dups.size() > 0) {
-      if (m_config.debug) {
+    if (!dups.empty()) {
+      if (m_config->debug) {
         check_inits(cfg);
       }
       split_postfix_blocks(dups, cfg);
-      if (m_config.debug) {
+      if (m_config->debug) {
         check_inits(cfg);
       }
     }
@@ -210,8 +253,10 @@ class DedupBlocksImpl {
   // Because `BlocksInSameGroup` depends on the CFG, modifications to the CFG
   // invalidate this map.
   using BlockSet = std::set<cfg::Block*, BlockCompare>;
-  using Duplicates =
-      std::unordered_map<cfg::Block*, BlockSet, BlockHasher, BlocksInSameGroup>;
+  using Duplicates = std::unordered_map<BlockAndBlockValuePair,
+                                        BlockSet,
+                                        BlockAndBlockValuePairHasher,
+                                        BlockAndBlockValuePairInSameGroup>;
   struct PostfixSplitGroup {
     BlockSet postfix_blocks;
     std::map<cfg::Block*, IRList::reverse_iterator, BlockCompare>
@@ -224,11 +269,15 @@ class DedupBlocksImpl {
                                                   PostfixSplitGroup,
                                                   BlockSuccHasher,
                                                   SuccBlocksInSameGroup>;
-  const Config& m_config;
+  const Config* m_config;
   Stats& m_stats;
 
   // Find blocks with the same exact code
-  Duplicates collect_duplicates(DexMethod* method, cfg::ControlFlowGraph& cfg) {
+  Duplicates collect_duplicates(
+      DexMethod* method,
+      cfg::ControlFlowGraph& cfg,
+      DedupBlkValueNumbering::BlockValues& block_values,
+      LivenessFixpointIterator& liveness_fixpoint_iter) {
     const auto& blocks = cfg.blocks();
     Duplicates duplicates;
 
@@ -244,14 +293,14 @@ class DedupBlocksImpl {
         //       A -> [A]
         //   * after the second iteration (inserted A')
         //       A -> [A, A']
-        duplicates[block].insert(block);
+        auto& dups = duplicates[{block, block_values.get_block_value(block)}];
+        dups.insert(block);
         ++m_stats.eligible_blocks;
       }
     }
 
     std::unique_ptr<reaching_defs::MoveAwareFixpointIterator>
         reaching_defs_fixpoint_iter;
-    std::unique_ptr<LivenessFixpointIterator> liveness_fixpoint_iter;
     std::unique_ptr<type_inference::TypeInference> type_inference;
     remove_if(duplicates, [&](auto& blocks) {
       return is_singleton_or_inconsistent(
@@ -368,8 +417,7 @@ class DedupBlocksImpl {
 
     // Group by successors if blocks share a single successor block.
     for (cfg::Block* block : blocks) {
-      if (has_opcodes(block) &&
-          block->num_opcodes() >= m_config.block_split_min_opcode_count) {
+      if (block->num_opcodes() >= m_config->block_split_min_opcode_count) {
         // Insert into other blocks that share the same successors
         splitGroupMap[block].postfix_blocks.insert(block);
       }
@@ -494,12 +542,11 @@ class DedupBlocksImpl {
         }
 
         // Is this the best saving we've seen so far?
-        // Note we only want at least 3 level deep otherwise it is probably not
-        // quite worth it (configurable).
+        // Note we only want at least block_split_min_opcode_count deep (config)
         size_t cur_saved_insn =
             cur_insn_index * (majority_count_group.blocks.size() - 1);
-        if (cur_saved_insn > best_saved_insn &&
-            cur_insn_index >= m_config.block_split_min_opcode_count) {
+        if (cur_saved_insn >= best_saved_insn &&
+            cur_insn_index >= m_config->block_split_min_opcode_count) {
           // Save it
           best_saved_insn = cur_saved_insn;
           best_insn_count = cur_insn_index;
@@ -529,10 +576,6 @@ class DedupBlocksImpl {
   // is located and dedup the common block created from split.
   void split_postfix_blocks(const PostfixSplitGroupMap& dups,
                             cfg::ControlFlowGraph& cfg) {
-    fix_dex_pos_pointers(dups.begin(), dups.end(),
-                         [](auto it) { return it->second.postfix_blocks; },
-                         cfg);
-
     for (const PostfixSplitGroupMap::value_type* entry : get_id_order(dups)) {
       const auto& group = entry->second;
       TRACE(DEDUP_BLOCKS, 4,
@@ -660,10 +703,6 @@ class DedupBlocksImpl {
   }
 
   static bool is_eligible(cfg::Block* block) {
-    if (!has_opcodes(block)) {
-      return false;
-    }
-
     // We can't split up move-result(-pseudo) instruction pairs
     if (begins_with_move_result(block)) {
       return false;
@@ -676,8 +715,11 @@ class DedupBlocksImpl {
   }
 
   static bool begins_with_move_result(cfg::Block* block) {
-    const auto& first_mie = *block->get_first_insn();
-    auto first_op = first_mie.insn->opcode();
+    const auto first_mie_it = block->get_first_insn();
+    if (first_mie_it == block->end()) {
+      return false;
+    }
+    auto first_op = first_mie_it->insn->opcode();
     return opcode::is_move_result_any(first_op);
   }
 
@@ -830,7 +872,7 @@ class DedupBlocksImpl {
       cfg::ControlFlowGraph& cfg,
       std::unique_ptr<reaching_defs::MoveAwareFixpointIterator>&
           reaching_defs_fixpoint_iter,
-      std::unique_ptr<LivenessFixpointIterator>& liveness_fixpoint_iter,
+      LivenessFixpointIterator& liveness_fixpoint_iter,
       std::unique_ptr<type_inference::TypeInference>& type_inference) {
     if (blocks.size() <= 1) {
       return true;
@@ -867,14 +909,8 @@ class DedupBlocksImpl {
       type_inference.reset(new type_inference::TypeInference(cfg));
       type_inference->run(method);
     }
-    auto& environments = type_inference->get_type_environments();
-    if (!liveness_fixpoint_iter) {
-      cfg.calculate_exit_block();
-      liveness_fixpoint_iter.reset(new LivenessFixpointIterator(cfg));
-      liveness_fixpoint_iter->run(LivenessDomain());
-    }
     auto live_in_vars =
-        liveness_fixpoint_iter->get_live_in_vars_at(*blocks.begin());
+        liveness_fixpoint_iter.get_live_in_vars_at(*blocks.begin());
     if (!(live_in_vars.is_value())) {
       // should never happen, but we are not going to fight that here
       return true;
@@ -883,9 +919,7 @@ class DedupBlocksImpl {
     // corresponds to what will happen when we dedup the blocks.
     boost::optional<type_inference::TypeEnvironment> joined_env;
     for (cfg::Block* block : blocks) {
-      auto first_insn = block->get_first_insn();
-      always_assert(first_insn != block->end());
-      auto& env = environments.at(first_insn->insn);
+      auto env = type_inference->get_entry_state_at(block);
       if (!joined_env) {
         joined_env = env;
       } else {
@@ -899,9 +933,7 @@ class DedupBlocksImpl {
     // TODO: Can we be even more lenient without actually deduping and
     // re-type-inferring?
     for (cfg::Block* block : blocks) {
-      auto first_insn = block->get_first_insn();
-      always_assert(first_insn != block->end());
-      auto& env = environments.at(first_insn->insn);
+      auto env = type_inference->get_entry_state_at(block);
       bool matches = true;
       for (auto reg : live_in_vars.elements()) {
         auto type = joined_env->get_type(reg);
@@ -936,11 +968,6 @@ class DedupBlocksImpl {
     return boost::none;
   }
 
-  static bool has_opcodes(cfg::Block* block) {
-    const auto& iterable = InstructionIterable(block);
-    return !iterable.empty();
-  }
-
   static size_t num_opcodes(cfg::Block* block) {
     size_t result = 0;
     const auto& iterable = InstructionIterable(block);
@@ -953,7 +980,9 @@ class DedupBlocksImpl {
   static void print_dups(const Duplicates& dups) {
     TRACE(DEDUP_BLOCKS, 4, "duplicate blocks set: {");
     for (const auto& entry : dups) {
-      TRACE(DEDUP_BLOCKS, 4, "  hash = %lu", BlockHasher{}(entry.first));
+      TRACE(
+          DEDUP_BLOCKS, 4, "  hash = %lu",
+          DedupBlkValueNumbering::BlockValueHasher{}(*entry.first.block_value));
       for (cfg::Block* b : entry.second) {
         TRACE(DEDUP_BLOCKS, 4, "    block %d", b->id());
         for (const MethodItemEntry& mie : *b) {
@@ -965,14 +994,16 @@ class DedupBlocksImpl {
   }
 };
 
-DedupBlocks::DedupBlocks(const Config& config, DexMethod* method)
-    : m_config(config), m_method(method) {}
+DedupBlocks::DedupBlocks(const Config* config, DexMethod* method)
+    : m_config(config), m_method(method) {
+  always_assert(m_config);
+}
 
 void DedupBlocks::run() {
   DedupBlocksImpl impl(m_config, m_stats);
   auto& cfg = m_method->get_code()->cfg();
   do {
-    if (m_config.split_postfix) {
+    if (m_config->split_postfix) {
       impl.split_postfix(m_method, cfg);
     }
   } while (impl.dedup(m_method, cfg));

@@ -35,21 +35,21 @@ def slice_passes(passes, low, high):
 
 
 def bisect(passes, config, config_path, cmd):
-    l = 0
-    u = count_nonspecial_passes(passes)
-    while l < u - 1:
-        m = (l + u) / 2
-        testpasses = slice_passes(passes, l, m)
+    lower = 0
+    upper = count_nonspecial_passes(passes)
+    while lower < upper - 1:
+        m = (lower + upper) / 2
+        testpasses = slice_passes(passes, lower, m)
         print("Testing passes: " + str(testpasses))
         config["redex"]["passes"] = testpasses
         with open(config_path, "w") as config_file:
             json.dump(config, config_file)
-        ret = subprocess.call(cmd, shell=True)
+        ret = subprocess.call(cmd, shell=True)  # noqa: P204
         if ret == 0:
-            l = m
+            lower = m
         else:
-            u = m
-    return filter_special(slice_passes(passes, l, u))
+            upper = m
+    return filter_special(slice_passes(passes, lower, upper))
 
 
 if __name__ == "__main__":

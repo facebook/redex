@@ -12,7 +12,9 @@
 #include "DexClass.h"
 #include "DexLoader.h"
 #include "IRCode.h"
+#define IS_REDEX_TEST_LIBRARY
 #include "RedexTest.h"
+#undef IS_REDEX_TEST_LIBRARY
 
 using ResourceFiles = std::unordered_map<std::string, std::string>;
 ResourceFiles decode_resource_paths(const char* location, const char* suffix);

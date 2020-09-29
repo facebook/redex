@@ -44,7 +44,9 @@ void test(const std::string& code_str,
             stats.replaced_trivial_switches);
 
   EXPECT_EQ(assembler::to_s_expr(code.get()),
-            assembler::to_s_expr(expected.get()));
+            assembler::to_s_expr(expected.get()))
+      << "  " << assembler::to_s_expr(code.get()).str() << "\n---\n"
+      << "  " << assembler::to_s_expr(expected.get()).str();
 }
 
 TEST_F(ReduceGotosTest, packed_switch_useless) {
@@ -440,4 +442,119 @@ TEST_F(ReduceGotosTest, invert) {
     )
   )";
   test(code_str, expected_str, 0, 0, 1);
+}
+
+TEST_F(ReduceGotosTest, move_throw) {
+  const auto& code_str = R"(
+    (
+      (const v2 0)
+
+      (if-eqz v0 :true)
+      (goto :throw)
+
+      (:true)
+      (return v2)
+
+      (:throw)
+      (throw v2)
+    )
+  )";
+  const auto& expected_str = R"(
+    (
+      (const v2 0)
+
+      (if-eqz v0 :true)
+      (throw v2)
+
+      (:true)
+      (return v2)
+    )
+  )";
+  test(code_str, expected_str, 0, 0, 0);
+}
+
+TEST_F(ReduceGotosTest, duplicate_throw) {
+  // Note: the duplicated "(const v2 0)" is necessary to not trigger branch
+  // inversion.
+  const auto& code_str = R"(
+    (
+      (const v2 0)
+
+      (if-eqz v0 :true)
+      (const v2 0)
+      (goto :throw)
+
+      (:true)
+
+      (if-eqz v0 :true2)
+      (const v2 0)
+      (goto :throw)
+
+      (:true2)
+      (return v2)
+
+      (:throw)
+      (throw v2)
+    )
+  )";
+  const auto& expected_str = R"(
+    (
+      (const v2 0)
+
+      (if-eqz v0 :true)
+      (const v2 0)
+      (throw v2)
+
+      (:true)
+
+      (if-eqz v0 :true2)
+      (const v2 0)
+      (throw v2)
+
+      (:true2)
+      (return v2)
+    )
+  )";
+  test(code_str, expected_str, 0, 0, 0);
+}
+
+TEST_F(ReduceGotosTest, no_join_throw) {
+  const auto& code_str = R"(
+    (
+      (const v2 0)
+
+      (if-eqz v0 :true)
+      (.try_start a)
+      (sget "LFoo;.b:I")
+      (goto :throw)
+      (.try_end a)
+
+      (:true)
+      (return v2)
+
+      (:throw)
+      (throw v2)
+
+      (.catch (a))
+      (return v2)
+    )
+  )";
+  const auto& expected_str = R"(
+    (
+      (const v2 0)
+
+      (if-eqz v0 :true)
+      (.try_start a)
+      (sget "LFoo;.b:I")
+      (.try_end a)
+      (throw v2)
+
+      (.catch (a))
+      (return v2)
+
+      (:true)
+      (return v2)
+    )
+  )";
+  test(code_str, expected_str, 0, 0, 0);
 }

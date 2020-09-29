@@ -130,9 +130,9 @@ std::unordered_set<DexClass*> get_trivial_builders(
 
     // Filter out builders that do "extra work".
     bool has_static_methods =
-        get_static_methods(builder_class->get_dmethods()).size() != 0;
+        !get_static_methods(builder_class->get_dmethods()).empty();
 
-    if (has_static_methods || builder_class->get_sfields().size()) {
+    if (has_static_methods || !builder_class->get_sfields().empty()) {
       continue;
     }
 
@@ -345,8 +345,8 @@ void RemoveBuildersPass::run_pass(DexStoresVector& stores,
       if (kept_builders.find(builder_cls) != kept_builders.end()) {
         continue;
       }
-      if (m_blacklist.find(builder) != m_blacklist.end()) {
-        TRACE(BUILDERS, 2, "Skipping blacklisted type %s", SHOW(builder));
+      if (m_blocklist.find(builder) != m_blocklist.end()) {
+        TRACE(BUILDERS, 2, "Skipping excluded type %s", SHOW(builder));
         continue;
       }
 

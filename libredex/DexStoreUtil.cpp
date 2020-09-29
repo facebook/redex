@@ -15,10 +15,8 @@ bool is_in_non_root_store(const DexType* type,
   // Hack to go around the fact that the primary dex goes in its own bucket.
   size_t next_store_idx = stores[0].get_dexen().size() == 1 ? 1 : 2;
   if (!include_primary_dex && store_idx == 0) {
-    TRACE(TERA, 5, "Skip %s as we are not touching primary dex", SHOW(type));
     return true;
   } else if (store_idx >= next_store_idx) {
-    TRACE(TERA, 5, "Skip %s outside of the root store", SHOW(type));
     return true;
   }
   return false;

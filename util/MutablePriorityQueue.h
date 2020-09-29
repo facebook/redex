@@ -7,6 +7,10 @@
 
 #pragma once
 
+#include <functional>
+#include <map>
+#include <unordered_map>
+
 /*
  * Collection type that maintains a set of elements with associated
  * priorities, allowing updating priorities, and enabling efficient

@@ -20,24 +20,24 @@
 namespace {
 
 /**
- * If DontMergeState is STRICT, then don't merge no matter this
+ * If DontMergeState is kStrict, then don't merge no matter this
  * type is merger or mergeable.
- * If DontMergeState is CONDITIONAL, then don't merge if this
+ * If DontMergeState is kConditional, then don't merge if this
  * type is mergeable.
  */
-enum DontMergeState { CONDITIONAL, STRICT };
+enum DontMergeState { kConditional, kStrict };
 
 void record_dont_merge_state(
     const DexType* type,
     DontMergeState state,
     std::unordered_map<const DexType*, DontMergeState>* dont_merge_status) {
   auto element_type = type::get_element_type_if_array(type);
-  if (state == STRICT) {
+  if (state == kStrict) {
     (*dont_merge_status)[element_type] = state;
     return;
   }
   const auto& find = dont_merge_status->find(element_type);
-  if (find == dont_merge_status->end() || find->second != STRICT) {
+  if (find == dont_merge_status->end() || find->second != kStrict) {
     (*dont_merge_status)[element_type] = state;
   }
 }
@@ -55,16 +55,16 @@ void check_dont_merge_list(
   const auto& find_child = dont_merge_status.find(child_cls->get_type());
   const auto& find_end = dont_merge_status.end();
   if (find_parent == find_end &&
-      (find_child == find_end || find_child->second != STRICT)) {
-    // Parent class is not referenced, and child class is not having STRICT
+      (find_child == find_end || find_child->second != kStrict)) {
+    // Parent class is not referenced, and child class is not having kStrict
     // don't merge status, so we can merge parent class into child class.
     (*mergeable_to_merger)[parent_cls] = child_cls;
   } else if (find_child == find_end) {
     // Parent class is in don't remove set but child class is not. Check if we
     // can merge child class into parent class instead (which requires parent
-    // class is not having STRICT don't merge status, and child class is
+    // class is not having kStrict don't merge status, and child class is
     // removable).
-    if (find_parent->second != STRICT && can_delete(child_cls) &&
+    if (find_parent->second != kStrict && can_delete(child_cls) &&
         can_rename(child_cls)) {
       if (is_abstract(child_cls)) {
         for (auto method : child_cls->get_vmethods()) {
@@ -139,8 +139,7 @@ void handle_invoke_super(
     mergeable->remove_method(callee);
     DexMethodSpec spec;
     spec.cls = merger->get_type();
-    callee->change(spec,
-                   true /* rename_on_collision */);
+    callee->change(spec, true /* rename_on_collision */);
     merger->add_method(callee);
     for (auto insn : callee_to_insn.second) {
       if (insn->opcode() == OPCODE_INVOKE_SUPER) {
@@ -200,8 +199,7 @@ void handle_invoke_init(
     DexMethodSpec spec;
     spec.cls = merger->get_type();
     spec.proto = new_proto;
-    callee->change(spec,
-                   false /* rename_on_collision */);
+    callee->change(spec, false /* rename_on_collision */);
     merger->add_method(callee);
   }
 }
@@ -213,7 +211,7 @@ void handle_invoke_init(
  *   2. Parent class has only one child class.
  *   3. Both classes are not external classes and not interface.
  *   4. Mergeable class is deletable.
- *   5. Both classes are not in STRICT don't merge state, and mergeable is not
+ *   5. Both classes are not in kStrict don't merge state, and mergeable is not
  *      in any don't merge state.
  *   6. Classes are not throwable.
  */
@@ -236,7 +234,7 @@ void collect_can_merge(
       if (throwables.count(child_type)) {
         continue;
       }
-      if (get_children(ch, child_type).size() != 0) {
+      if (!get_children(ch, child_type).empty()) {
         // TODO(suree404): we are skipping pairs that child class still have
         // their subclasses, but we might still be able to optimize this case.
         continue;
@@ -265,7 +263,7 @@ void record_annotation(
     std::vector<DexType*> types_in_anno;
     anno->gather_types(types_in_anno);
     for (const auto& type : types_in_anno) {
-      record_dont_merge_state(type, STRICT, dont_merge_status);
+      record_dont_merge_state(type, kStrict, dont_merge_status);
     }
   });
 }
@@ -285,7 +283,7 @@ void record_code_reference(
             // We don't want to merge class if either merger or
             // mergeable was ever accessed in instance_of to prevent
             // semantic error.
-            record_dont_merge_state(insn->get_type(), STRICT,
+            record_dont_merge_state(insn->get_type(), kStrict,
                                     dont_merge_status);
             return;
           }
@@ -300,12 +298,12 @@ void record_code_reference(
               // merge it as we need the field and this field can't be renamed
               // if having collision.
               // TODO(suree404): can improve.
-              record_dont_merge_state(field->get_class(), CONDITIONAL,
+              record_dont_merge_state(field->get_class(), kConditional,
                                       dont_merge_status);
             }
           } else {
-            record_dont_merge_state(insn->get_field()->get_class(), CONDITIONAL,
-                                    dont_merge_status);
+            record_dont_merge_state(insn->get_field()->get_class(),
+                                    kConditional, dont_merge_status);
           }
         } else if (insn->has_method()) {
           DexMethod* callee =
@@ -330,7 +328,7 @@ void record_code_reference(
                 callee->get_class() == insn->get_method()->get_class()) {
               DexClass* callee_class = type_class(callee->get_class());
               if (callee_class && is_abstract(callee_class)) {
-                record_dont_merge_state(callee->get_class(), CONDITIONAL,
+                record_dont_merge_state(callee->get_class(), kConditional,
                                         dont_merge_status);
               }
             }
@@ -357,7 +355,7 @@ void record_code_reference(
           if (cls && !is_abstract(cls)) {
             // If a type is referenced and not a abstract type then
             // add it to don't use this type as mergeable.
-            record_dont_merge_state(self_type, CONDITIONAL, dont_merge_status);
+            record_dont_merge_state(self_type, kConditional, dont_merge_status);
           }
         }
       });
@@ -377,13 +375,13 @@ void record_method_signature(
     bool method_is_native = is_native(method);
     DexType* self_type = method->get_class();
     if (method_is_native || type == self_type) {
-      record_dont_merge_state(type, CONDITIONAL, dont_merge_status);
+      record_dont_merge_state(type, kConditional, dont_merge_status);
     } else {
       DexClass* cls = type_class(type);
       if (cls && (!is_abstract(cls) || !can_rename(method))) {
         // If a type is referenced and not a abstract type then add it to
         // don't use this type as mergeable.
-        record_dont_merge_state(type, CONDITIONAL, dont_merge_status);
+        record_dont_merge_state(type, kConditional, dont_merge_status);
       }
     }
   };
@@ -399,16 +397,16 @@ void record_method_signature(
   });
 }
 
-void record_black_list(
+void record_blocklist(
     const Scope& scope,
     std::unordered_map<const DexType*, DontMergeState>* dont_merge_status,
-    const std::vector<std::string>& blacklist) {
-  if (blacklist.size() == 0) {
+    const std::vector<std::string>& blocklist) {
+  if (blocklist.empty()) {
     return;
   }
   walk::classes(scope, [&](DexClass* cls) {
-    // Mark class in blacklist as STRICT don't merge
-    for (const auto& name : blacklist) {
+    // Mark class in blocklist as kStrict don't merge
+    for (const auto& name : blocklist) {
       if (strstr(cls->get_name()->c_str(), name.c_str()) != nullptr) {
         TRACE(VMERGE,
               5,
@@ -416,7 +414,7 @@ void record_black_list(
               SHOW(cls),
               cls->rstate.str().c_str(),
               can_delete(cls));
-        record_dont_merge_state(cls->get_type(), STRICT, dont_merge_status);
+        record_dont_merge_state(cls->get_type(), kStrict, dont_merge_status);
         return;
       }
     }
@@ -449,7 +447,7 @@ void record_field_reference(
     std::unordered_map<const DexType*, DontMergeState>* dont_merge_status) {
   walk::fields(scope, [&](DexField* field) {
     if (!can_rename(field)) {
-      record_dont_merge_state(field->get_type(), CONDITIONAL,
+      record_dont_merge_state(field->get_type(), kConditional,
                               dont_merge_status);
     }
   });
@@ -458,13 +456,13 @@ void record_field_reference(
 void record_referenced(
     const Scope& scope,
     std::unordered_map<const DexType*, DontMergeState>* dont_merge_status,
-    const std::vector<std::string>& blacklist,
+    const std::vector<std::string>& blocklist,
     std::unordered_set<DexMethod*>* referenced_methods) {
   record_annotation(scope, dont_merge_status);
   record_code_reference(scope, dont_merge_status, referenced_methods);
   record_field_reference(scope, dont_merge_status);
   record_method_signature(scope, dont_merge_status);
-  record_black_list(scope, dont_merge_status, blacklist);
+  record_blocklist(scope, dont_merge_status, blocklist);
 }
 
 void move_fields(DexClass* from_cls, DexClass* to_cls) {
@@ -700,8 +698,7 @@ void VerticalMergingPass::move_methods(
             from_cls->remove_method(method);
             DexMethodSpec spec;
             spec.cls = target_cls_type;
-            method->change(spec,
-                           true /* rename_on_collision */);
+            method->change(spec, true /* rename_on_collision */);
             to_cls->add_method(method);
           } else {
             // Otherwise we shouldn't care for the method as the method in
@@ -727,8 +724,7 @@ void VerticalMergingPass::move_methods(
       from_cls->remove_method(method);
       DexMethodSpec spec;
       spec.cls = target_cls_type;
-      method->change(spec,
-                     false /* rename_on_collision */);
+      method->change(spec, false /* rename_on_collision */);
       to_cls->add_method(method);
     } else {
       // Subclass is being merged into super class. Just discard methods as
@@ -789,7 +785,7 @@ void VerticalMergingPass::run_pass(DexStoresVector& stores,
 
   std::unordered_map<const DexType*, DontMergeState> dont_merge_status;
   std::unordered_set<DexMethod*> referenced_methods;
-  record_referenced(scope, &dont_merge_status, m_blacklist,
+  record_referenced(scope, &dont_merge_status, m_blocklist,
                     &referenced_methods);
   XStoreRefs xstores(stores);
   std::unordered_map<DexClass*, DexClass*> mergeable_to_merger;

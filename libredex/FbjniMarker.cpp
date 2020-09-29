@@ -29,7 +29,7 @@ static void mark_class_reachable_by_native(const DexType* dtype) {
 }
 
 DexType* FbjniMarker::process_class_path(const std::string& class_path) {
-  std::string class_name = java_names::external_to_internal2(class_path);
+  std::string class_name = java_names::external_to_internal(class_path);
 
   auto type = DexType::get_type(class_name.c_str());
   always_assert_log(
@@ -104,11 +104,11 @@ std::string FbjniMarker::to_internal_type(const std::string& str) {
   std::string type_str = array_level > 0 ? str.substr(0, str.find('[')) : str;
   if (java_names::primitive_name_to_desc(type_str)) {
     // is primitive type
-    auto internal_name = java_names::external_to_internal2(type_str);
+    auto internal_name = java_names::external_to_internal(type_str);
     return array_prefix + internal_name;
   } else {
     // not primitive, try fully-qualify name first
-    auto inter_str = java_names::external_to_internal2(type_str);
+    auto inter_str = java_names::external_to_internal(type_str);
     for (auto dtype : types) {
       if (dtype->str() == type_str) {
         return array_prefix + type_str;
@@ -123,7 +123,7 @@ std::string FbjniMarker::to_internal_type(const std::string& str) {
     }
 
     // error: No matching type
-    always_assert_log(false, "Can not resolve type %s", str.c_str());
+    not_reached_log("Can not resolve type %s", str.c_str());
     return nullptr;
   }
 }

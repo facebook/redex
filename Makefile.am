@@ -5,123 +5,27 @@ SUBDIRS = . test
 ACLOCAL_AMFLAGS = -I m4
 AM_CXXFLAGS = --std=gnu++14 -O3 -Wall -g
 
+include $(top_srcdir)/Makefile.inc
+
 #
 # Include paths
 #
-AM_CPPFLAGS = \
-	-I$(top_srcdir)/liblocator \
-	-I$(top_srcdir)/libredex \
-	-I$(top_srcdir)/libresource \
-	-I$(top_srcdir)/libresource/android \
-	-I$(top_srcdir)/libresource/androidfw \
-	-I$(top_srcdir)/libresource/cutils \
-	-I$(top_srcdir)/libresource/system \
-	-I$(top_srcdir)/libresource/utils \
-	-I$(top_srcdir)/opt \
-	-I$(top_srcdir)/opt/access-marking \
-	-I$(top_srcdir)/opt/add_redex_txt_to_apk \
-	-I$(top_srcdir)/opt/annoclasskill \
-	-I$(top_srcdir)/opt/annokill \
-	-I$(top_srcdir)/opt/basic-block \
-	-I$(top_srcdir)/opt/builder_pattern \
-	-I$(top_srcdir)/opt/branch-prefix-hoisting \
-	-I$(top_srcdir)/opt/bridge \
-	-I$(top_srcdir)/opt/check_breadcrumbs \
-	-I$(top_srcdir)/opt/class-splitting \
-	-I$(top_srcdir)/opt/constant-propagation \
-	-I$(top_srcdir)/opt/copy-propagation \
-	-I$(top_srcdir)/opt/cse \
-	-I$(top_srcdir)/opt/dedup_blocks \
-	-I$(top_srcdir)/opt/dedup-strings \
-	-I$(top_srcdir)/opt/delinit \
-	-I$(top_srcdir)/opt/delsuper \
-	-I$(top_srcdir)/opt/final_inline \
-	-I$(top_srcdir)/opt/instrument \
-	-I$(top_srcdir)/opt/interdex \
-	-I$(top_srcdir)/opt/introduce_switch \
-	-I$(top_srcdir)/opt/local-dce \
-	-I$(top_srcdir)/opt/layout-reachability \
-	-I$(top_srcdir)/opt/merge_interface \
-	-I$(top_srcdir)/opt/obfuscate \
-	-I$(top_srcdir)/opt/object-sensitive-dce \
-	-I$(top_srcdir)/opt/optimize_enums \
-	-I$(top_srcdir)/opt/original_name \
-	-I$(top_srcdir)/opt/peephole \
-	-I$(top_srcdir)/opt/print-members \
-	-I$(top_srcdir)/opt/rebindrefs \
-	-I$(top_srcdir)/opt/redundant_move_elimination \
-	-I$(top_srcdir)/opt/regalloc \
-	-I$(top_srcdir)/opt/remove-apilevel-checks \
-	-I$(top_srcdir)/opt/remove-builders \
-	-I$(top_srcdir)/opt/remove-interfaces \
-	-I$(top_srcdir)/opt/remove_redundant_check_casts \
-	-I$(top_srcdir)/opt/remove-uninstantiables \
-	-I$(top_srcdir)/opt/remove-unreachable \
-	-I$(top_srcdir)/opt/remove_empty_classes \
-	-I$(top_srcdir)/opt/remove_gotos \
-	-I$(top_srcdir)/opt/remove-unused-args \
-	-I$(top_srcdir)/opt/renameclasses \
-	-I$(top_srcdir)/opt/reorder-interfaces \
-	-I$(top_srcdir)/opt/reduce-array-literals \
-	-I$(top_srcdir)/opt/reduce-gotos \
-	-I$(top_srcdir)/opt/resolve-refs \
-	-I$(top_srcdir)/opt/result-propagation \
-	-I$(top_srcdir)/opt/stringbuilder-outliner \
-	-I$(top_srcdir)/opt/shorten-srcstrings \
-	-I$(top_srcdir)/opt/make-public \
-	-I$(top_srcdir)/opt/methodinline \
-	-I$(top_srcdir)/opt/singleimpl \
-	-I$(top_srcdir)/opt/split_huge_switches \
-	-I$(top_srcdir)/opt/static-sink \
-	-I$(top_srcdir)/opt/staticrelo \
-	-I$(top_srcdir)/opt/string_concatenator \
-	-I$(top_srcdir)/opt/strip-debug-info \
-	-I$(top_srcdir)/opt/synth \
-	-I$(top_srcdir)/opt/test_cfg \
-	-I$(top_srcdir)/opt/track_resources \
-	-I$(top_srcdir)/opt/type-erasure \
-	-I$(top_srcdir)/opt/unreferenced_interfaces \
-	-I$(top_srcdir)/opt/unmark_proguard_keep \
-	-I$(top_srcdir)/opt/unterface \
-	-I$(top_srcdir)/opt/up-code-motion \
-	-I$(top_srcdir)/opt/verifier \
-	-I$(top_srcdir)/opt/vertical_merging \
-	-I$(top_srcdir)/opt/virtual_merging \
-	-I$(top_srcdir)/opt/virtual_scope \
-	-I$(top_srcdir)/service/api-levels \
-	-I$(top_srcdir)/service/class-init \
-	-I$(top_srcdir)/service/constant-propagation \
-	-I$(top_srcdir)/service/copy-propagation \
-	-I$(top_srcdir)/service/cse \
-	-I$(top_srcdir)/service/dataflow \
-	-I$(top_srcdir)/service/dedup-blocks \
-	-I$(top_srcdir)/service/escape-analysis \
-	-I$(top_srcdir)/service/local-dce \
-	-I$(top_srcdir)/service/method-dedup \
-	-I$(top_srcdir)/service/method-inliner \
-	-I$(top_srcdir)/service/method-merger \
-	-I$(top_srcdir)/service/reference-update \
-	-I$(top_srcdir)/service/switch-dispatch \
-	-I$(top_srcdir)/service/switch-partitioning \
-	-I$(top_srcdir)/service/type-analysis \
-	-I$(top_srcdir)/service/type-string-rewriter \
-	-I$(top_srcdir)/shared \
-	-I$(top_srcdir)/sparta/include \
-	-I$(top_srcdir)/tools/common \
-	-I$(top_srcdir)/tools/redexdump \
-	-I$(top_srcdir)/util \
-	-I/usr/include/jsoncpp
+AM_CPPFLAGS = $(COMMON_INCLUDES)
+
+noinst_LTLIBRARIES = libredex.la libopt.la
 
 #
 # libredex: the optimizer's guts
 #
-noinst_LTLIBRARIES = libredex.la
 
 libredex_la_SOURCES = \
 	liblocator/locator.cpp \
+	libredex/ABExperimentContext.cpp \
+	libredex/ABExperimentContextImpl.cpp \
 	libredex/AnnoUtils.cpp \
 	libredex/ApiLevelChecker.cpp \
 	libredex/ApkManager.cpp \
+	libredex/BigBlocks.cpp \
 	libredex/CFGMutation.cpp \
 	libredex/CallGraph.cpp \
 	libredex/ClassHierarchy.cpp \
@@ -133,6 +37,7 @@ libredex_la_SOURCES = \
 	libredex/Debug.cpp \
 	libredex/DexAccess.cpp \
 	libredex/DexAnnotation.cpp \
+	libredex/DexAsm.cpp \
 	libredex/DexCallSite.cpp \
 	libredex/DexClass.cpp \
 	libredex/DexDebugInstruction.cpp \
@@ -149,18 +54,17 @@ libredex_la_SOURCES = \
 	libredex/DexStats.cpp \
 	libredex/DexStore.cpp \
 	libredex/DexStoreUtil.cpp \
-	libredex/DexTypeDomain.cpp \
+	libredex/DexTypeEnvironment.cpp \
 	libredex/DexUtil.cpp \
 	libredex/DexStoreUtil.cpp \
 	libredex/DuplicateClasses.cpp \
 	libredex/EditableCfgAdapter.cpp \
 	libredex/FbjniMarker.cpp \
-	libredex/FieldOpTracker.cpp \
 	libredex/FrameworkApi.cpp \
+	libredex/FrequentlyUsedPointersCache.cpp \
 	libredex/GlobalConfig.cpp \
 	libredex/GraphVisualizer.cpp \
 	libredex/HierarchyUtil.cpp \
-	libredex/ImmutableSubcomponentAnalyzer.cpp \
 	libredex/InitCollisionFinder.cpp \
 	libredex/InlineForSpeed.cpp \
 	libredex/InlinerConfig.cpp \
@@ -186,6 +90,7 @@ libredex_la_SOURCES = \
 	libredex/MonitorCount.cpp \
 	libredex/Mutators.cpp \
 	libredex/NoOptimizationsMatcher.cpp \
+	libredex/NullnessDomain.cpp \
 	libredex/OptData.cpp \
 	libredex/Pass.cpp \
 	libredex/PassManager.cpp \
@@ -207,11 +112,13 @@ libredex_la_SOURCES = \
 	libredex/Purity.cpp \
 	libredex/Reachability.cpp \
 	libredex/ReachableClasses.cpp \
+	libredex/ReadMaybeMapped.cpp \
 	libredex/RedexContext.cpp \
 	libredex/RedexException.cpp \
 	libredex/RedexOptions.cpp \
 	libredex/RedexResources.cpp \
 	libredex/ReflectionAnalysis.cpp \
+	libredex/RefChecker.cpp \
 	libredex/Resolver.cpp \
 	libredex/Show.cpp \
 	libredex/Timer.cpp \
@@ -235,6 +142,61 @@ libredex_la_SOURCES = \
 	libresource/TypeWrappers.cpp \
 	libresource/Unicode.cpp \
 	libresource/VectorImpl.cpp \
+	service/api-levels/ApiLevelsUtils.cpp \
+	service/class-init/ClassInitCounter.cpp \
+	service/class-merging/ApproximateShapeMerging.cpp \
+	service/class-merging/ClassAssemblingUtils.cpp \
+	service/class-merging/ClassMerging.cpp \
+	service/class-merging/MergerType.cpp \
+	service/class-merging/ModelMerger.cpp \
+	service/class-merging/ModelMethodMerger.cpp \
+	service/class-merging/Model.cpp \
+	service/class-merging/TypeTagUtils.cpp \
+	service/constant-propagation/ConstantEnvironment.cpp \
+	service/constant-propagation/ConstantPropagationAnalysis.cpp \
+	service/constant-propagation/ConstantPropagation.cpp \
+	service/constant-propagation/ConstantPropagationTransform.cpp \
+	service/constant-propagation/ConstantPropagationWholeProgramState.cpp \
+	service/constant-propagation/ConstructorParams.cpp \
+	service/constant-propagation/IPConstantPropagationAnalysis.cpp \
+	service/constant-propagation/ObjectDomain.cpp \
+	service/constant-propagation/SignDomain.cpp \
+	service/copy-propagation/AliasedRegisters.cpp \
+	service/copy-propagation/CanonicalizeLocks.cpp \
+	service/copy-propagation/CopyPropagation.cpp \
+	service/cse/CommonSubexpressionElimination.cpp \
+	service/dataflow/LiveRange.cpp \
+	service/dataflow/ConstantUses.cpp \
+	service/dedup-blocks/DedupBlocks.cpp \
+	service/dedup-blocks/DedupBlockValueNumbering.cpp \
+	service/escape-analysis/BlamingAnalysis.cpp \
+	service/escape-analysis/LocalPointersAnalysis.cpp \
+	service/field-ops/FieldOpTracker.cpp \
+	service/local-dce/LocalDce.cpp \
+	service/loop-info/LoopInfo.cpp \
+	service/method-dedup/ConstantLifting.cpp \
+	service/method-dedup/ConstantValue.cpp \
+	service/method-dedup/MethodDedup.cpp \
+	service/method-dedup/NormalizeConstructor.cpp \
+	service/method-dedup/TypeTags.cpp \
+	service/method-inliner/CFGInliner.cpp \
+	service/method-inliner/ConstructorAnalysis.cpp \
+	service/method-inliner/Deleter.cpp \
+	service/method-inliner/Inliner.cpp \
+	service/method-inliner/MethodInliner.cpp \
+	service/method-inliner/ObjectInlinePlugin.cpp \
+	service/method-merger/MethodMerger.cpp \
+	service/reference-update/MethodReference.cpp \
+	service/reference-update/TypeReference.cpp \
+	service/switch-dispatch/SwitchDispatch.cpp \
+	service/switch-partitioning/SwitchEquivFinder.cpp \
+	service/switch-partitioning/SwitchMethodPartitioning.cpp \
+	service/type-analysis/GlobalTypeAnalyzer.cpp \
+	service/type-analysis/LocalTypeAnalyzer.cpp \
+	service/type-analysis/WholeProgramState.cpp \
+	service/type-analysis/TypeAnalysisTransform.cpp \
+	service/type-analysis/TypeAnalysisRuntimeAssert.cpp \
+	service/type-string-rewriter/TypeStringRewriter.cpp \
 	shared/DexDefs.cpp \
 	shared/file-utils.cpp \
 	util/CommandProfiling.cpp \
@@ -250,15 +212,19 @@ libredex_la_LIBADD = \
 	-lpthread
 
 #
-# redex-all: the main executable
+# libopt: the optimization passes
 #
-bin_PROGRAMS = redexdump
-noinst_PROGRAMS = redex-all
 
-redex_all_SOURCES = \
-	libredex/DexAsm.cpp \
+# Autoconf + libtool does not handle whole-archive well, and it is not
+# supported on MacOS ("-all_load"). But we would need this for pass
+# registration. Instead, share sources and create libopt for the tests.
+
+libopt_la_SOURCES = \
+	analysis/max-depth/MaxDepthAnalysis.cpp \
+	analysis/ip-reflection-analysis/IPReflectionAnalysis.cpp \
 	opt/access-marking/AccessMarking.cpp \
 	opt/annokill/AnnoKill.cpp \
+	opt/analyze-pure-method/PureMethods.cpp \
 	opt/basic-block/BasicBlockProfile.cpp \
 	opt/builder_pattern/BuilderAnalysis.cpp \
 	opt/builder_pattern/BuilderTransform.cpp \
@@ -267,8 +233,9 @@ redex_all_SOURCES = \
 	opt/bridge/Bridge.cpp \
 	opt/check_breadcrumbs/CheckBreadcrumbs.cpp \
 	opt/check-recursion/CheckRecursion.cpp \
+	opt/class-merging/ClassMergingPass.cpp \
 	opt/class-splitting/ClassSplitting.cpp \
-	opt/constant-propagation/ConstantPropagation.cpp \
+	opt/constant-propagation/ConstantPropagationPass.cpp \
 	opt/constant-propagation/ConstantPropagationRuntimeAssert.cpp \
 	opt/constant-propagation/IPConstantPropagation.cpp \
 	opt/copy-propagation/CopyPropagationPass.cpp \
@@ -277,10 +244,10 @@ redex_all_SOURCES = \
 	opt/dedup-strings/DedupStrings.cpp \
 	opt/delinit/DelInit.cpp \
 	opt/delsuper/DelSuper.cpp \
+	opt/evaluate_type_checks/EvaluateTypeChecks.cpp \
 	opt/final_inline/FinalInline.cpp \
 	opt/final_inline/FinalInlineV2.cpp \
 	opt/instrument/Instrument.cpp \
-	opt/instrument/BlockInstrument.cpp \
 	opt/interdex/CrossDexRefMinimizer.cpp \
 	opt/interdex/CrossDexRelocator.cpp \
 	opt/interdex/DexStructure.cpp \
@@ -319,16 +286,19 @@ redex_all_SOURCES = \
 	opt/remove-builders/RemoveBuilders.cpp \
 	opt/remove-builders/RemoveBuildersHelper.cpp \
 	opt/remove-interfaces/RemoveInterfacePass.cpp \
+	opt/remove-recursive-locks/RemoveRecursiveLocks.cpp \
 	opt/remove_redundant_check_casts/CheckCastAnalysis.cpp \
+	opt/remove_redundant_check_casts/CheckCastTransform.cpp \
 	opt/remove_redundant_check_casts/RemoveRedundantCheckCasts.cpp \
 	opt/remove-uninstantiables/RemoveUninstantiablesPass.cpp \
 	opt/remove-unreachable/RemoveUnreachable.cpp \
+	opt/remove-nullcheck-string-arg/RemoveNullcheckStringArg.cpp \
 	opt/remove-unused-fields/RemoveUnusedFields.cpp \
 	opt/remove_empty_classes/RemoveEmptyClasses.cpp \
 	opt/remove_gotos/RemoveGotos.cpp \
 	opt/remove-unused-args/RemoveUnusedArgs.cpp \
 	opt/renameclasses/RenameClassesV2.cpp \
-	opt/reorder-interfaces/ReorderInterfaces.cpp \
+	opt/reorder-interfaces-decl/ReorderInterfacesDecl.cpp \
 	opt/reduce-array-literals/ReduceArrayLiterals.cpp \
 	opt/reduce-gotos/ReduceGotos.cpp \
 	opt/resolve-refs/ResolveRefsPass.cpp \
@@ -338,6 +308,8 @@ redex_all_SOURCES = \
 	opt/methodinline/IntraDexInlinePass.cpp \
 	opt/methodinline/MethodInlinePass.cpp \
 	opt/methodinline/PerfMethodInlinePass.cpp \
+	opt/outliner/OutlinerTypeAnalysis.cpp \
+	opt/outliner/InstructionSequenceOutliner.cpp \
 	opt/singleimpl/SingleImpl.cpp \
 	opt/singleimpl/SingleImplAnalyze.cpp \
 	opt/singleimpl/SingleImplOptimize.cpp \
@@ -351,61 +323,40 @@ redex_all_SOURCES = \
 	opt/synth/Synth.cpp \
 	opt/test_cfg/TestCFG.cpp \
 	opt/track_resources/TrackResources.cpp \
-	opt/type-erasure/ApproximateShapeMerging.cpp \
-	opt/type-erasure/ClassAssemblingUtils.cpp \
-	opt/type-erasure/MergerType.cpp \
-	opt/type-erasure/ModelMethodMerger.cpp \
-	opt/type-erasure/Model.cpp \
-	opt/type-erasure/ModelMerger.cpp \
-	opt/type-erasure/TypeErasureInterDexPlugin.cpp \
-	opt/type-erasure/TypeErasurePass.cpp \
-	opt/type-erasure/TypeTagUtils.cpp \
+	opt/throw-propagation/ThrowPropagationPass.cpp \
+	opt/type-analysis/GlobalTypeAnalysisPass.cpp \
 	opt/unreferenced_interfaces/UnreferencedInterfaces.cpp \
 	opt/unmark_proguard_keep/UnmarkProguardKeep.cpp \
 	opt/up-code-motion/UpCodeMotion.cpp \
 	opt/uses-names/UsesNames.cpp \
 	opt/verifier/Verifier.cpp \
 	opt/vertical_merging/VerticalMerging.cpp \
+	opt/virtual_merging/DedupVirtualMethods.cpp \
 	opt/virtual_merging/VirtualMerging.cpp \
-	opt/virtual_scope/MethodDevirtualizationPass.cpp \
-	service/api-levels/ApiLevelsUtils.cpp \
-	service/class-init/ClassInitCounter.cpp \
-	service/constant-propagation/ConstantEnvironment.cpp \
-	service/constant-propagation/ConstantPropagationAnalysis.cpp \
-	service/constant-propagation/ConstantPropagationTransform.cpp \
-	service/constant-propagation/ConstantPropagationWholeProgramState.cpp \
-	service/constant-propagation/IPConstantPropagationAnalysis.cpp \
-	service/constant-propagation/ObjectDomain.cpp \
-	service/constant-propagation/SignDomain.cpp \
-	service/copy-propagation/AliasedRegisters.cpp \
-	service/copy-propagation/CopyPropagation.cpp \
-	service/cse/CommonSubexpressionElimination.cpp \
-	service/dataflow/LiveRange.cpp \
-	service/dataflow/ConstantUses.cpp \
-	service/dedup-blocks/DedupBlocks.cpp \
-	service/escape-analysis/LocalPointersAnalysis.cpp \
-	service/local-dce/LocalDce.cpp \
-	service/loop-info/LoopInfo.cpp \
-	service/method-dedup/ConstantLifting.cpp \
-	service/method-dedup/ConstantValue.cpp \
-	service/method-dedup/MethodDedup.cpp \
-	service/method-dedup/TypeTags.cpp \
-	service/method-inliner/CFGInliner.cpp \
-	service/method-inliner/ConstructorAnalysis.cpp \
-	service/method-inliner/Deleter.cpp \
-	service/method-inliner/Inliner.cpp \
-	service/method-inliner/MethodInliner.cpp \
-	service/method-inliner/ObjectInlinePlugin.cpp \
-	service/method-merger/MethodMerger.cpp \
-	service/reference-update/MethodReference.cpp \
-	service/reference-update/TypeReference.cpp \
-	service/switch-dispatch/SwitchDispatch.cpp \
-	service/switch-partitioning/SwitchEquivFinder.cpp \
-	service/switch-partitioning/SwitchMethodPartitioning.cpp \
-	service/type-analysis/LocalTypeAnalyzer.cpp \
-	service/type-string-rewriter/TypeStringRewriter.cpp \
+	opt/virtual_scope/MethodDevirtualizationPass.cpp
+
+libopt_la_LIBADD = \
+    libredex.la \
+	$(BOOST_FILESYSTEM_LIB) \
+	$(BOOST_SYSTEM_LIB) \
+	$(BOOST_REGEX_LIB) \
+	$(BOOST_IOSTREAMS_LIB) \
+	$(BOOST_THREAD_LIB) \
+	-lpthread
+
+#
+# redex-all: the main executable
+#
+bin_PROGRAMS = redexdump
+noinst_PROGRAMS = redex-all
+
+redex_all_SOURCES = \
+    $(libopt_la_SOURCES) \
 	tools/common/ToolsCommon.cpp \
 	tools/redex-all/main.cpp
+
+# Workaround for not using libopt.
+redex_all_CPPFLAGS = $(AM_CPPFLAGS)
 
 redex_all_LDADD = \
 	libredex.la \

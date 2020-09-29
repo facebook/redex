@@ -35,8 +35,6 @@ constexpr const char* METRIC_CONDITIONALLY_PURE_METHODS =
     "num_conditionally_pure_methods";
 constexpr const char* METRIC_CONDITIONALLY_PURE_METHODS_ITERATIONS =
     "num_conditionally_pure_methods_iterations";
-constexpr const char* METRIC_SKIPPED_DUE_TO_TOO_MANY_REGISTERS =
-    "num_skipped_due_to_too_many_registers";
 constexpr const char* METRIC_MAX_ITERATIONS = "num_max_iterations";
 
 } // namespace
@@ -59,6 +57,8 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
   auto configured_pure_methods = conf.get_pure_methods();
   pure_methods.insert(configured_pure_methods.begin(),
                       configured_pure_methods.end());
+  auto immutable_getters = get_immutable_getters(scope);
+  pure_methods.insert(immutable_getters.begin(), immutable_getters.end());
 
   auto shared_state = SharedState(pure_methods);
   shared_state.init_scope(scope);
@@ -87,29 +87,25 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
           stats.max_iterations++;
           TRACE(CSE, 3, "[CSE] processing %s", SHOW(method));
           always_assert(code->editable_cfg_built());
-          CommonSubexpressionElimination cse(&shared_state, code->cfg());
-          bool any_changes = cse.patch(is_static(method), method->get_class(),
-                                       method->get_proto()->get_args(),
-                                       copy_prop_config.max_estimated_registers,
-                                       m_runtime_assertions);
+          CommonSubexpressionElimination cse(
+              &shared_state, code->cfg(), is_static(method),
+              method::is_init(method) || method::is_clinit(method),
+              method->get_class(), method->get_proto()->get_args());
+          bool any_changes = cse.patch(m_runtime_assertions);
           stats += cse.get_stats();
-          code->clear_cfg();
 
           if (!any_changes) {
+            code->clear_cfg();
             return stats;
           }
-
-          // TODO: CopyPropagation will separately construct
-          // an editable cfg. Don't do that, and fully convert that passes
-          // to be cfg-based.
 
           copy_propagation_impl::CopyPropagation copy_propagation(
               copy_prop_config);
           copy_propagation.run(code, method);
 
-          code->build_cfg(/* editable */ true);
-
-          auto local_dce = LocalDce(shared_state.get_pure_methods());
+          auto local_dce = LocalDce(shared_state.get_pure_methods(),
+                                    shared_state.get_method_override_graph(),
+                                    /* may_allocate_registers */ true);
           local_dce.dce(code);
 
           if (traceEnabled(CSE, 5)) {
@@ -139,8 +135,6 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
     name += SHOW(static_cast<IROpcode>(p.first));
     mgr.incr_metric(name, p.second);
   }
-  mgr.incr_metric(METRIC_SKIPPED_DUE_TO_TOO_MANY_REGISTERS,
-                  stats.skipped_due_to_too_many_registers);
   mgr.incr_metric(METRIC_MAX_ITERATIONS, stats.max_iterations);
 
   shared_state.cleanup();

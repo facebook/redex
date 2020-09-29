@@ -32,9 +32,9 @@ class RemoveArgs {
   };
 
   RemoveArgs(const Scope& scope,
-             const std::vector<std::string>& black_list,
+             const std::vector<std::string>& blocklist,
              size_t iteration = 0)
-      : m_scope(scope), m_black_list(black_list), m_iteration(iteration){};
+      : m_scope(scope), m_blocklist(blocklist), m_iteration(iteration){};
   RemoveArgs::PassStats run();
   std::deque<uint16_t> compute_live_args(
       DexMethod* method,
@@ -47,7 +47,7 @@ class RemoveArgs {
   std::unordered_map<DexString*, std::unordered_map<DexTypeList*, size_t>>
       m_renamed_indices;
   ConcurrentSet<DexMethod*> m_result_used;
-  const std::vector<std::string>& m_black_list;
+  const std::vector<std::string>& m_blocklist;
   size_t m_iteration;
 
   std::deque<DexType*> get_live_arg_type_list(
@@ -65,11 +65,11 @@ class RemoveUnusedArgsPass : public Pass {
  public:
   RemoveUnusedArgsPass() : Pass("RemoveUnusedArgsPass") {}
 
-  void bind_config() override { bind("black_list", {}, m_black_list); }
+  void bind_config() override { bind("blocklist", {}, m_blocklist); }
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager& mgr) override;
 
  private:
-  std::vector<std::string> m_black_list;
+  std::vector<std::string> m_blocklist;
   size_t m_total_iterations{0};
 };
 

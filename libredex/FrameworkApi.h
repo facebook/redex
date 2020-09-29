@@ -38,6 +38,10 @@ struct FrameworkAPI {
                   DexProto* meth_proto,
                   DexAccessFlags meth_access_flags,
                   bool relax_access_flags_matching = false) const;
+
+  bool has_field(const std::string& simple_deobfuscated_name,
+                 DexAccessFlags field_access_flags,
+                 bool relax_access_flags_matching = false) const;
 };
 
 class AndroidSDK {
@@ -52,11 +56,12 @@ class AndroidSDK {
     }
   }
 
-  std::unordered_map<DexType*, FrameworkAPI> get_framework_classes() {
+  const std::unordered_map<const DexType*, FrameworkAPI>&
+  get_framework_classes() const {
     return m_framework_classes;
   }
 
-  bool has_method(DexMethod* meth) const {
+  bool has_method(const DexMethod* meth) const {
     auto type = meth->get_class();
     const auto& it = m_framework_classes.find(type);
     if (it == m_framework_classes.end()) {
@@ -69,11 +74,28 @@ class AndroidSDK {
                           /* relax_access_flags_matching */ true);
   }
 
+  bool has_field(const DexField* field) const {
+    auto type = field->get_class();
+    const auto& it = m_framework_classes.find(type);
+    if (it == m_framework_classes.end()) {
+      return false;
+    }
+
+    const auto& api = it->second;
+    return api.has_field(field->get_simple_deobfuscated_name(),
+                         field->get_access(),
+                         /* relax_access_flags_matching */ true);
+  }
+
+  bool has_type(const DexType* type) const {
+    return m_framework_classes.count(type);
+  }
+
  private:
   void load_framework_classes();
 
   std::string m_sdk_api_file;
-  std::unordered_map<DexType*, FrameworkAPI> m_framework_classes;
+  std::unordered_map<const DexType*, FrameworkAPI> m_framework_classes;
 };
 
 } // namespace api

@@ -146,14 +146,16 @@ TypeDemand ConstantUses::get_constant_type_demand(IRInstruction* insn) const {
         type_demand & Float ? "Float" : "",
         type_demand & Object ? "Object" : "", type_demand & Long ? "Long" : "",
         type_demand & Double ? "Double" : "");
+  if (insn->get_literal() != 0) {
+    type_demand = (TypeDemand)(type_demand & ~TypeDemand::Object);
+  }
   return type_demand;
 }
 
 TypeDemand ConstantUses::get_type_demand(DexType* type) {
   switch (type->c_str()[0]) {
   case 'V':
-    always_assert(false);
-    return TypeDemand::Error;
+    not_reached();
 
   case 'B':
   case 'C':
@@ -205,8 +207,7 @@ TypeDemand ConstantUses::get_type_demand(IRInstruction* insn,
   case OPCODE_SGET_SHORT:
   case OPCODE_SGET_WIDE:
   case OPCODE_SGET_OBJECT:
-    always_assert(false);
-    return TypeDemand::Error;
+    not_reached();
 
   case OPCODE_RETURN:
   case OPCODE_RETURN_WIDE:
@@ -446,8 +447,7 @@ TypeDemand ConstantUses::get_type_demand(IRInstruction* insn,
     case OPCODE_APUT_OBJECT:
       return TypeDemand::Object;
     default:
-      always_assert(false);
-      return TypeDemand::Error;
+      not_reached();
     }
 
   case OPCODE_IPUT:
@@ -491,8 +491,7 @@ TypeDemand ConstantUses::get_type_demand(IRInstruction* insn,
   }
   case OPCODE_INVOKE_CUSTOM:
   case OPCODE_INVOKE_POLYMORPHIC:
-    always_assert_log(
-        false,
+    not_reached_log(
         "Unsupported instruction {%s} in ConstantUses::get_type_demand\n",
         SHOW(insn));
   }

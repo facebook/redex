@@ -278,6 +278,8 @@ bool is_commutative(IROpcode opcode);
 
 bool is_cmp(IROpcode opcode);
 
+bool is_binop64(IROpcode op);
+
 IROpcode load_param_to_move(IROpcode);
 
 IROpcode iget_to_move(IROpcode);
@@ -318,6 +320,12 @@ enum Branchingness {
 };
 
 Branchingness branchingness(IROpcode op);
+
+/*
+ * These instructions have observable side effects so must always be considered
+ * live, regardless of whether their output is consumed by another instruction.
+ */
+bool has_side_effects(IROpcode opc);
 
 } // namespace opcode
 

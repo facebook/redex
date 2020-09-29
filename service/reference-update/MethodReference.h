@@ -32,7 +32,7 @@ struct NewCallee {
   DexMethod* method;
   boost::optional<std::vector<uint32_t>> additional_args = boost::none;
 
-  NewCallee(DexMethod* method) : method(method) {}
+  explicit NewCallee(DexMethod* method) : method(method) {}
   NewCallee(DexMethod* method, boost::optional<uint32_t> arg) : method(method) {
     if (arg == boost::none) {
       return;

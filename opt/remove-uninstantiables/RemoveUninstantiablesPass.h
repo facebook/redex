@@ -25,10 +25,6 @@
 ///    null;` for the same reason as above.
 ///  - Field accesses returning an uninstantiable class will always return
 ///    `null`.
-///
-/// NOTE: This pass should not be run between invocations of RemoveUnreachable
-/// and TypeErasure as the latter can effectively re-introduce constructors
-/// removed by the former.
 class RemoveUninstantiablesPass : public Pass {
  public:
   RemoveUninstantiablesPass() : Pass("RemoveUninstantiablesPass") {}
@@ -50,9 +46,14 @@ class RemoveUninstantiablesPass : public Pass {
     void report(PassManager& mgr) const;
   };
 
+  static std::unordered_set<DexType*> compute_scoped_uninstantiable_types(
+      const Scope& scope);
+
   /// Look for mentions of uninstantiable classes in \p cfg and modify them
   /// in-place.
-  static Stats replace_uninstantiable_refs(cfg::ControlFlowGraph& cfg);
+  static Stats replace_uninstantiable_refs(
+      const std::unordered_set<DexType*>& scoped_uninstantiable_types,
+      cfg::ControlFlowGraph& cfg);
 
   /// Replace the instructions in \p cfg with `throw null;`.  Preserves the
   /// initial run of load-param instructions in the ControlFlowGraph.

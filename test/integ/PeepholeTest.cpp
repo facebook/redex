@@ -29,7 +29,7 @@ struct IRInstructionList {
 
   std::vector<std::unique_ptr<IRInstruction>> instructions;
 
-  explicit IRInstructionList(std::initializer_list<IRInstruction*> in) {
+  IRInstructionList(std::initializer_list<IRInstruction*> in) {
     for (IRInstruction* insn : in) {
       instructions.emplace_back(insn); // moves insn into unique_ptr
     }
@@ -133,7 +133,7 @@ class PeepholeTest : public ::testing::Test {
     manager.set_testing_mode();
   }
 
-  virtual void SetUp() override {
+  void SetUp() override {
     saved_context = g_redex;
     g_redex = new RedexContext();
     const char* dexfile = std::getenv("dexfile");
@@ -149,7 +149,7 @@ class PeepholeTest : public ::testing::Test {
     ASSERT_NE(nullptr, dex_class);
   }
 
-  virtual void TearDown() override {
+  void TearDown() override {
     delete g_redex;
     g_redex = saved_context;
   }
@@ -973,6 +973,9 @@ TEST(PeepholeTestA, RemoveArrayPutGetWideArray) {
         )
       )");
 }
+
+/* Replace_AputAgetObject is disabled because it makes assumptions that may be
+violated by other Redex passes, and are not checked by anything.
 TEST(PeepholeTestA, RemoveArrayPutGetObjectArray) {
   aputget_peep_hole_test(
       R"(
@@ -1002,6 +1005,7 @@ TEST(PeepholeTestA, RemoveArrayPutGetObjectArray) {
         )
       )");
 }
+*/
 
 TEST(PeepholeTestA, RemoveArrayPutGetNegativeIntByte) {
   // Negative (aput & aget byte)

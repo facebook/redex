@@ -22,6 +22,7 @@
 #include "LocalDce.h"
 #include "Purity.h"
 #include "Resolver.h"
+#include "Timer.h"
 #include "TypeSystem.h"
 #include "TypeUtil.h"
 #include "Walkers.h"
@@ -39,6 +40,8 @@
  */
 
 namespace cp = constant_propagation;
+
+using namespace sparta;
 
 namespace {
 
@@ -150,12 +153,14 @@ using CombinedAnalyzer =
     InstructionAnalyzerCombiner<cp::ClinitFieldAnalyzer,
                                 cp::WholeProgramAwareAnalyzer,
                                 cp::StringAnalyzer,
+                                cp::ConstantClassObjectAnalyzer,
                                 cp::PrimitiveAnalyzer>;
 
 using CombinedInitAnalyzer =
     InstructionAnalyzerCombiner<cp::InitFieldAnalyzer,
                                 cp::WholeProgramAwareAnalyzer,
                                 cp::StringAnalyzer,
+                                cp::ConstantClassObjectAnalyzer,
                                 cp::PrimitiveAnalyzer>;
 /*
  * Converts a ConstantValue into its equivalent encoded_value. Returns null if
@@ -163,7 +168,10 @@ using CombinedInitAnalyzer =
  */
 class encoding_visitor : public boost::static_visitor<DexEncodedValue*> {
  public:
-  encoding_visitor(const DexField* field) : m_field(field) {}
+  explicit encoding_visitor(const DexField* field,
+                            const XStoreRefs* xstores,
+                            const DexType* declaring_type)
+      : m_field(field), m_xstores(xstores), m_declaring_type(declaring_type) {}
 
   DexEncodedValue* operator()(const SignedConstantDomain& dom) const {
     auto cst = dom.get_constant();
@@ -190,6 +198,22 @@ class encoding_visitor : public boost::static_visitor<DexEncodedValue*> {
     }
   }
 
+  DexEncodedValue* operator()(const ConstantClassObjectDomain& dom) const {
+    auto cst = dom.get_constant();
+    if (!cst) {
+      return nullptr;
+    }
+    if (m_field->get_type() != type::java_lang_Class()) {
+      // See above: There's a limitation in older DalvikVMs
+      return nullptr;
+    }
+    auto type = const_cast<DexType*>(*cst);
+    if (!m_xstores || m_xstores->illegal_ref(m_declaring_type, type)) {
+      return nullptr;
+    }
+    return new DexEncodedValueType(type);
+  }
+
   template <typename Domain>
   DexEncodedValue* operator()(const Domain&) const {
     return nullptr;
@@ -197,46 +221,38 @@ class encoding_visitor : public boost::static_visitor<DexEncodedValue*> {
 
  private:
   const DexField* m_field;
+  const XStoreRefs* m_xstores;
+  const DexType* m_declaring_type;
 };
 
-/*
- * If a field is both read and written to in its initializer, then we can
- * update its encoded value with the value at exit only if the reads (sgets) are
- * are dominated by the writes (sputs) -- otherwise we may change program
- * semantics. Checking for dominance takes some work, and static fields are
- * rarely read in their class' <clinit>, so we simply avoid inlining all fields
- * that are read in their class' <clinit>.
- *
- * TODO: We should really transitively analyze all callees for field reads.
- * Right now this just analyzes the sgets directly in the <clinit>.
- */
-std::unordered_set<const DexFieldRef*> gather_read_static_fields(
-    DexClass* cls) {
-  std::unordered_set<const DexFieldRef*> read_fields;
-  auto clinit = cls->get_clinit();
-  for (auto* block : clinit->get_code()->cfg().blocks()) {
-    for (auto& mie : InstructionIterable(block)) {
-      auto insn = mie.insn;
-      if (is_sget(insn->opcode())) {
-        read_fields.emplace(insn->get_field());
-        TRACE(FINALINLINE, 3, "Found static field read in clinit: %s",
-              SHOW(insn->get_field()));
+class ClassInitStrategy final : public call_graph::SingleCalleeStrategy {
+ public:
+  explicit ClassInitStrategy(const Scope& scope)
+      : call_graph::SingleCalleeStrategy(scope) {}
+
+  std::vector<const DexMethod*> get_roots() const override {
+    std::vector<const DexMethod*> roots;
+
+    walk::methods(m_scope, [&](DexMethod* method) {
+      if (method::is_clinit(method)) {
+        roots.emplace_back(method);
       }
-    }
+    });
+    return roots;
   }
-  return read_fields;
-}
+};
 
 void encode_values(DexClass* cls,
                    const FieldEnvironment& field_env,
-                   const std::unordered_set<const DexFieldRef*>& blacklist) {
+                   const PatriciaTreeSet<const DexFieldRef*>& blocklist,
+                   const XStoreRefs* xstores) {
   for (auto* field : cls->get_sfields()) {
-    if (blacklist.count(field)) {
+    if (blocklist.contains(field)) {
       continue;
     }
     auto value = field_env.get(field);
-    auto encoded_value =
-        ConstantValue::apply_visitor(encoding_visitor(field), value);
+    auto encoded_value = ConstantValue::apply_visitor(
+        encoding_visitor(field, xstores, cls->get_type()), value);
     if (encoded_value == nullptr) {
       continue;
     }
@@ -250,6 +266,135 @@ void encode_values(DexClass* cls,
 
 namespace final_inline {
 
+call_graph::Graph build_class_init_graph(const Scope& scope) {
+  Timer t("Build class init graph");
+  auto graph = call_graph::Graph(ClassInitStrategy(scope));
+  return graph;
+}
+
+StaticFieldReadAnalysis::StaticFieldReadAnalysis(
+    const call_graph::Graph& call_graph,
+    const std::unordered_set<std::string>& allowed_opaque_callee_names)
+    : m_graph(call_graph) {
+
+  // By default, the analysis gives up when it sees a true virtual callee.
+  // However, we can allow some methods to be treated as if no field is read
+  // from the callees so the analysis gives up less often.
+  for (const auto& name : allowed_opaque_callee_names) {
+    DexMethodRef* callee = DexMethod::get_method(name);
+    always_assert_log(callee, "Method %s does not exist.", name.c_str());
+    m_allowed_opaque_callees.emplace(callee);
+  }
+}
+
+/*
+ * If a field is both read and written to in its initializer, then we can
+ * update its encoded value with the value at exit only if the reads (sgets) are
+ * are dominated by the writes (sputs) -- otherwise we may change program
+ * semantics. Checking for dominance takes some work, and static fields are
+ * rarely read in their class' <clinit>, so we simply avoid inlining all fields
+ * that are read in their class' <clinit>.
+ *
+ * This analysis is an interprocedural analysis that collects all static field
+ * reads from the current method. Technically there are other opcodes that
+ * triggers more <clinit>s, which can also read from a field. To make this fully
+ * sound, we need to account for potential class loads as well.
+ */
+
+StaticFieldReadAnalysis::Result StaticFieldReadAnalysis::analyze(
+    const DexMethod* method) {
+  std::unordered_set<const DexMethod*> pending;
+
+  Result last = Result::bottom();
+  while (true) {
+    Result new_result = analyze(method, pending);
+    if (pending.count(method) == 0 || new_result == last) {
+      pending.erase(method);
+      m_finalized.emplace(method);
+      return new_result;
+    } else {
+      last = new_result;
+    }
+  }
+}
+
+StaticFieldReadAnalysis::Result StaticFieldReadAnalysis::analyze(
+    const DexMethod* method,
+    std::unordered_set<const DexMethod*>& pending_methods) {
+
+  if (!method) {
+    return {};
+  }
+
+  if (m_finalized.count(method)) {
+    return m_summaries.at(method);
+  }
+
+  auto code = method->get_code();
+  if (!code) {
+    return {};
+  }
+
+  Result ret{};
+  for (auto& mie : InstructionIterable(code)) {
+    auto insn = mie.insn;
+    if (is_sget(insn->opcode())) {
+      ret.add(insn->get_field());
+    }
+  }
+
+  pending_methods.emplace(method);
+  m_summaries[method] = ret;
+
+  bool callee_pending = false;
+
+  for (auto& mie : InstructionIterable(code)) {
+    auto insn = mie.insn;
+    if (is_invoke(insn->opcode())) {
+      auto callee_method_def =
+          resolve_method(insn->get_method(), opcode_to_search(insn), method);
+      if (!callee_method_def || callee_method_def->is_external() ||
+          !callee_method_def->is_concrete() ||
+          m_allowed_opaque_callees.count(callee_method_def)) {
+        continue;
+      }
+      auto callees = resolve_callees_in_graph(m_graph, method, insn);
+      if (callees.empty()) {
+        TRACE(FINALINLINE, 2, "%s has opaque callees %s", SHOW(method),
+              SHOW(insn->get_method()));
+        pending_methods.erase(method);
+        ret = Result::top();
+        m_summaries[method] = ret;
+        return ret;
+      }
+
+      for (const DexMethod* callee : callees) {
+        Result callee_result;
+        if (pending_methods.count(callee)) {
+          callee_pending = true;
+          callee_result = m_summaries.at(callee);
+        } else {
+          callee_result = analyze(callee, pending_methods);
+        }
+        ret.join_with(callee_result);
+        if (ret.is_top()) {
+          pending_methods.erase(method);
+          m_summaries[method] = ret;
+          return ret;
+        }
+        if (pending_methods.count(callee)) {
+          callee_pending = true;
+        }
+      }
+    }
+  }
+  if (!callee_pending) {
+    pending_methods.erase(method);
+  }
+  m_summaries[method] = ret;
+  return ret;
+}
+
 /*
  * This method determines the values of the static fields after the <clinit>
  * has finished running and generates their encoded_value equivalents.
@@ -257,9 +402,16 @@ namespace final_inline {
  * Additionally, for static final fields, this method collects and returns them
  * as part of the WholeProgramState object.
  */
-cp::WholeProgramState analyze_and_simplify_clinits(const Scope& scope) {
+cp::WholeProgramState analyze_and_simplify_clinits(
+    const Scope& scope,
+    const XStoreRefs* xstores,
+    const std::unordered_set<std::string>& allowed_opaque_callee_names) {
   const std::unordered_set<DexMethodRef*> pure_methods = get_pure_methods();
   cp::WholeProgramState wps;
+
+  auto graph = call_graph::Graph(ClassInitStrategy(scope));
+  StaticFieldReadAnalysis analysis(graph, allowed_opaque_callee_names);
+
   for (DexClass* cls : reverse_tsort_by_clinit_deps(scope)) {
     ConstantEnvironment env;
     cp::set_encoded_values(cls, &env);
@@ -270,13 +422,20 @@ cp::WholeProgramState analyze_and_simplify_clinits(const Scope& scope) {
       auto& cfg = code->cfg();
       cfg.calculate_exit_block();
       cp::intraprocedural::FixpointIterator intra_cp(
-          cfg, CombinedAnalyzer(cls->get_type(), &wps, nullptr, nullptr));
+          cfg,
+          CombinedAnalyzer(cls->get_type(), &wps, nullptr, nullptr, nullptr));
       intra_cp.run(env);
       env = intra_cp.get_exit_state_at(cfg.exit_block());
 
       // Generate the new encoded_values and re-run the analysis.
-      encode_values(cls, env.get_field_environment(),
-                    gather_read_static_fields(cls));
+      StaticFieldReadAnalysis::Result res = analysis.analyze(clinit);
+
+      if (res.is_bottom() || res.is_top()) {
+        TRACE(FINALINLINE, 1, "Skipped encoding for class %s.", SHOW(cls));
+      } else {
+        encode_values(cls, env.get_field_environment(), res.elements(),
+                      xstores);
+      }
       auto fresh_env = ConstantEnvironment();
       cp::set_encoded_values(cls, &fresh_env);
       intra_cp.run(fresh_env);
@@ -285,7 +444,9 @@ cp::WholeProgramState analyze_and_simplify_clinits(const Scope& scope) {
       // remove those sputs.
       cp::Transform::Config transform_config;
       transform_config.class_under_init = cls->get_type();
-      cp::Transform(transform_config).apply(intra_cp, wps, code);
+      cp::Transform(transform_config)
+          .apply_on_uneditable_cfg(intra_cp, wps, code, xstores,
+                                   cls->get_type());
       // Delete the instructions rendered dead by the removal of those sputs.
       LocalDce(pure_methods).dce(code);
       // If the clinit is empty now, delete it.
@@ -310,7 +471,9 @@ cp::WholeProgramState analyze_and_simplify_clinits(const Scope& scope) {
  * we are only considering class with only one <init>.
  */
 cp::WholeProgramState analyze_and_simplify_inits(
-    const Scope& scope, const cp::EligibleIfields& eligible_ifields) {
+    const Scope& scope,
+    const XStoreRefs* xstores,
+    const cp::EligibleIfields& eligible_ifields) {
   const std::unordered_set<DexMethodRef*> pure_methods = get_pure_methods();
   cp::WholeProgramState wps;
   for (DexClass* cls : reverse_tsort_by_init_deps(scope)) {
@@ -331,14 +494,17 @@ cp::WholeProgramState analyze_and_simplify_inits(
         auto& cfg = code->cfg();
         cfg.calculate_exit_block();
         cp::intraprocedural::FixpointIterator intra_cp(
-            cfg, CombinedInitAnalyzer(cls->get_type(), &wps, nullptr, nullptr));
+            cfg, CombinedInitAnalyzer(cls->get_type(), &wps, nullptr, nullptr,
+                                      nullptr));
         intra_cp.run(env);
         env = intra_cp.get_exit_state_at(cfg.exit_block());
 
         // Remove redundant iputs in inits
         cp::Transform::Config transform_config;
         transform_config.class_under_init = cls->get_type();
-        cp::Transform(transform_config).apply(intra_cp, wps, code);
+        cp::Transform(transform_config)
+            .apply_on_uneditable_cfg(intra_cp, wps, code, xstores,
+                                     cls->get_type());
         // Delete the instructions rendered dead by the removal of those iputs.
         LocalDce(pure_methods).dce(code);
       }
@@ -407,7 +573,8 @@ class ThisObjectAnalysis final
           }
           if (use_this) {
             auto insn_method = insn->get_method();
-            auto callee = resolve_method(insn_method, opcode_to_search(insn));
+            auto callee =
+                resolve_method(insn_method, opcode_to_search(insn), m_method);
             if (insn->opcode() == OPCODE_INVOKE_STATIC ||
                 insn->opcode() == OPCODE_INVOKE_DIRECT) {
               if (callee != nullptr && callee->get_code() != nullptr) {
@@ -480,15 +647,15 @@ class ThisObjectAnalysis final
 
 /**
  * This function adds instance fields in cls_to_check that the method
- * accessed in blacklist_ifields.
- * Return false if all ifields are blacklisted - no need to check further.
+ * accessed in blocklist_ifields.
+ * Return false if all ifields are excluded - no need to check further.
  */
 bool get_ifields_read(
-    const std::unordered_set<std::string>& whitelist_method_names,
+    const std::unordered_set<std::string>& allowlist_method_names,
     const std::unordered_set<const DexType*>& parent_intf_set,
     const DexClass* ifield_cls,
     const DexMethod* method,
-    ConcurrentSet<DexField*>* blacklist_ifields,
+    ConcurrentSet<DexField*>* blocklist_ifields,
     std::unordered_set<const DexMethod*>* visited) {
   if (visited->count(method)) {
     return true;
@@ -499,9 +666,9 @@ bool get_ifields_read(
       // For call on its parent's ctor, no need to proceed.
       return true;
     }
-    for (const auto& name : whitelist_method_names) {
-      // Whitelisted methods name from config, ignore.
-      // We have this whitelist so that we can ignore some methods that
+    for (const auto& name : allowlist_method_names) {
+      // Allowed methods name from config, ignore.
+      // We have this allowlist so that we can ignore some methods that
       // are safe and won't read instance field.
       // TODO: Switch to a proper interprocedural fixpoint analysis.
       if (method->get_name()->str() == name) {
@@ -512,7 +679,7 @@ bool get_ifields_read(
   if (method == nullptr || method->get_code() == nullptr) {
     // We can't track down further, don't process any ifields from ifield_cls.
     for (const auto& field : ifield_cls->get_ifields()) {
-      blacklist_ifields->emplace(field);
+      blocklist_ifields->emplace(field);
     }
     return false;
   }
@@ -520,14 +687,14 @@ bool get_ifields_read(
     auto insn = mie.insn;
     if (is_iget(insn->opcode())) {
       // Meet accessing of a ifield in a method called from <init>, add
-      // to blacklist.
+      // to blocklist.
       auto field = resolve_field(insn->get_field(), FieldSearch::Instance);
       if (field != nullptr && field->get_class() == ifield_cls->get_type()) {
-        blacklist_ifields->emplace(field);
+        blocklist_ifields->emplace(field);
       }
     } else if (is_invoke(insn->opcode())) {
       auto insn_method = insn->get_method();
-      auto callee = resolve_method(insn_method, opcode_to_search(insn));
+      auto callee = resolve_method(insn_method, opcode_to_search(insn), method);
       if (insn->opcode() == OPCODE_INVOKE_DIRECT ||
           insn->opcode() == OPCODE_INVOKE_STATIC) {
         // For invoke on a direct/static method, if we can't resolve them or
@@ -565,8 +732,8 @@ bool get_ifields_read(
       }
       // Recusive check every methods accessed from <init>.
       bool keep_going =
-          get_ifields_read(whitelist_method_names, parent_intf_set, ifield_cls,
-                           callee, blacklist_ifields, visited);
+          get_ifields_read(allowlist_method_names, parent_intf_set, ifield_cls,
+                           callee, blocklist_ifields, visited);
       if (!keep_going) {
         return false;
       }
@@ -576,7 +743,7 @@ bool get_ifields_read(
 }
 
 /**
- * This function add ifields like x in following example in blacklist to avoid
+ * This function add ifields like x in following example in blocklist to avoid
  * inlining them.
  *   class Foo {
  *     final int x;
@@ -592,16 +759,16 @@ bool get_ifields_read(
  */
 ConcurrentSet<DexField*> get_ifields_read_in_callees(
     const Scope& scope,
-    const std::unordered_set<std::string>& whitelist_method_names) {
+    const std::unordered_set<std::string>& allowlist_method_names) {
   ConcurrentSet<DexField*> return_ifields;
   TypeSystem ts(scope);
   walk::parallel::classes(scope, [&return_ifields, &ts,
-                                  &whitelist_method_names](DexClass* cls) {
+                                  &allowlist_method_names](DexClass* cls) {
     if (cls->is_external()) {
       return;
     }
     auto ctors = cls->get_ctors();
-    if (ctors.size() != 1 || cls->get_ifields().size() == 0) {
+    if (ctors.size() != 1 || cls->get_ifields().empty()) {
       // We are not inlining ifields in multi-ctors class so can also ignore
       // them here.
       // Also no need to proceed if there is no ifields for a class.
@@ -619,13 +786,13 @@ ConcurrentSet<DexField*> get_ifields_read_in_callees(
       // Only check on methods called with this object as arguments.
       auto check_methods = fixpoint.collect_method_called_on_this();
       if (!check_methods) {
-        // This object escaped to heap, blacklist all.
+        // This object escaped to heap, blocklist all.
         for (const auto& field : cls->get_ifields()) {
           return_ifields.emplace(field);
         }
         return;
       }
-      if (check_methods->size() > 0) {
+      if (!check_methods->empty()) {
         std::unordered_set<const DexMethod*> visited;
         const auto& parent_chain = ts.parent_chain(cls->get_type());
         std::unordered_set<const DexType*> parent_intf_set{parent_chain.begin(),
@@ -634,7 +801,7 @@ ConcurrentSet<DexField*> get_ifields_read_in_callees(
         parent_intf_set.insert(intf_set.begin(), intf_set.end());
         for (const auto method : *check_methods) {
           bool keep_going =
-              get_ifields_read(whitelist_method_names, parent_intf_set, cls,
+              get_ifields_read(allowlist_method_names, parent_intf_set, cls,
                                method, &return_ifields, &visited);
           if (!keep_going) {
             break;
@@ -648,7 +815,7 @@ ConcurrentSet<DexField*> get_ifields_read_in_callees(
 
 cp::EligibleIfields gather_ifield_candidates(
     const Scope& scope,
-    const std::unordered_set<std::string>& whitelist_method_names) {
+    const std::unordered_set<std::string>& allowlist_method_names) {
   cp::EligibleIfields eligible_ifields;
   std::unordered_set<DexField*> ifields_candidates;
   walk::fields(scope, [&](DexField* field) {
@@ -703,9 +870,9 @@ cp::EligibleIfields gather_ifield_candidates(
   for (DexField* field : ifields_candidates) {
     eligible_ifields.emplace(field);
   }
-  auto blacklist_ifields =
-      get_ifields_read_in_callees(scope, whitelist_method_names);
-  for (DexField* field : blacklist_ifields) {
+  auto blocklist_ifields =
+      get_ifields_read_in_callees(scope, allowlist_method_names);
+  for (DexField* field : blocklist_ifields) {
     eligible_ifields.erase(field);
   }
   return eligible_ifields;
@@ -713,8 +880,9 @@ cp::EligibleIfields gather_ifield_candidates(
 
 size_t inline_final_gets(
     const Scope& scope,
+    const XStoreRefs* xstores,
     const cp::WholeProgramState& wps,
-    const std::unordered_set<const DexType*>& black_list_types,
+    const std::unordered_set<const DexType*>& blocklist_types,
     cp::FieldType field_type) {
   size_t inlined_count{0};
   walk::code(scope, [&](const DexMethod* method, IRCode& code) {
@@ -729,7 +897,7 @@ size_t inline_final_gets(
       auto op = insn->opcode();
       if (is_iget(op) || is_sget(op)) {
         auto field = resolve_field(insn->get_field());
-        if (field == nullptr || black_list_types.count(field->get_class())) {
+        if (field == nullptr || blocklist_types.count(field->get_class())) {
           continue;
         }
         if (field_type == cp::FieldType::INSTANCE && method::is_init(method) &&
@@ -739,10 +907,11 @@ size_t inline_final_gets(
           continue;
         }
         auto replacement = ConstantValue::apply_visitor(
-            cp::value_to_instruction_visitor(
-                ir_list::move_result_pseudo_of(it)),
+            cp::value_to_instruction_visitor(ir_list::move_result_pseudo_of(it),
+                                             xstores,
+                                             method->get_class()),
             wps.get_field_value(field));
-        if (replacement.size() == 0) {
+        if (replacement.empty()) {
           continue;
         }
         replacements.emplace_back(insn, replacement);
@@ -758,10 +927,12 @@ size_t inline_final_gets(
 
 } // namespace
 
-size_t FinalInlinePassV2::run(const Scope& scope, const Config& config) {
+size_t FinalInlinePassV2::run(const Scope& scope,
+                              const XStoreRefs* xstores,
+                              const Config& config) {
   try {
-    auto wps = final_inline::analyze_and_simplify_clinits(scope);
-    return inline_final_gets(scope, wps, config.black_list_types,
+    auto wps = final_inline::analyze_and_simplify_clinits(scope, xstores);
+    return inline_final_gets(scope, xstores, wps, config.blocklist_types,
                              cp::FieldType::STATIC);
   } catch (final_inline::class_initialization_cycle& e) {
     std::cerr << e.what();
@@ -771,10 +942,12 @@ size_t FinalInlinePassV2::run(const Scope& scope, const Config& config) {
 
 size_t FinalInlinePassV2::run_inline_ifields(
     const Scope& scope,
+    const XStoreRefs* xstores,
     const cp::EligibleIfields& eligible_ifields,
     const Config& config) {
-  auto wps = final_inline::analyze_and_simplify_inits(scope, eligible_ifields);
-  return inline_final_gets(scope, wps, config.black_list_types,
+  auto wps = final_inline::analyze_and_simplify_inits(scope, xstores,
+                                                      eligible_ifields);
+  return inline_final_gets(scope, xstores, wps, config.blocklist_types,
                            cp::FieldType::INSTANCE);
 }
 
@@ -789,13 +962,14 @@ void FinalInlinePassV2::run_pass(DexStoresVector& stores,
     return;
   }
   auto scope = build_class_scope(stores);
-  auto inlined_sfields_count = run(scope, m_config);
+  XStoreRefs xstores(stores);
+  auto inlined_sfields_count = run(scope, &xstores, m_config);
   size_t inlined_ifields_count{0};
   if (m_config.inline_instance_field) {
     cp::EligibleIfields eligible_ifields =
-        gather_ifield_candidates(scope, m_config.whitelist_method_names);
+        gather_ifield_candidates(scope, m_config.allowlist_method_names);
     inlined_ifields_count =
-        run_inline_ifields(scope, eligible_ifields, m_config);
+        run_inline_ifields(scope, &xstores, eligible_ifields, m_config);
   }
   mgr.incr_metric("num_static_finals_inlined", inlined_sfields_count);
   mgr.incr_metric("num_instance_finals_inlined", inlined_ifields_count);

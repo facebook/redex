@@ -45,7 +45,7 @@ DexClasses load_classes_from_dex(const char* location,
 DexClasses load_classes_from_dex(const dex_header* dh,
                                  const char* location,
                                  bool balloon = true);
-const std::string load_dex_magic_from_dex(const char* location);
+std::string load_dex_magic_from_dex(const char* location);
 void balloon_for_test(const Scope& scope);
 
 static inline const uint8_t* align_ptr(const uint8_t* const ptr,

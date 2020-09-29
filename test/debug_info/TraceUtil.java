@@ -18,7 +18,7 @@ public class TraceUtil {
       List<StackTraceElement> trace, int limit) {
     ArrayList<String> result = new ArrayList();
     for (int i = 0; i < limit && i < trace.size(); ++i) {
-      result.add(trace.get(i).toString());
+      result.add(trace.get(i).toString().replace(":0", ""));
     }
     return result;
   }

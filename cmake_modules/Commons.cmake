@@ -22,11 +22,13 @@ macro(set_common_cxx_flags_for_redex)
         set(CMAKE_CXX_FLAGS_MINSIZEREL "${CMAKE_CXX_FLAGS_MINSIZEREL} /MT")
     else ()
         if (UNIX AND NOT APPLE AND ENABLE_STATIC)
-            set(CMAKE_EXE_LINKER_FLAGS "-static-libgcc -static-libstdc++")
+            set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static-libgcc -static-libstdc++")
+        elseif (MINGW)
+            set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static -static-libgcc -static-libstdc++")
         endif ()
 
         set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -Wall -pthread")
-        set(COMMON_CXX_FLAGS_NODBG, "-O3")
+        set(COMMON_CXX_FLAGS_NODBG "-O3 -UNDEBUG")
         set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} ${COMMON_CXX_FLAGS_NODBG} -pthread")
         set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} ${COMMON_CXX_FLAGS_NODBG} -pthread")
         set(CMAKE_CXX_FLAGS_MINSIZEREL "${CMAKE_CXX_FLAGS_MINSIZEREL} ${COMMON_CXX_FLAGS_NODBG} -pthread")
@@ -52,11 +54,14 @@ macro(add_dependent_packages_for_redex)
 
     if(ENABLE_STATIC)
         set(REDEX_JSONCPP_LIBRARY ${JSONCPP_LIBRARY_STATIC})
+        if (MINGW)
+            # MSYS's JSONCPP only gets detected as shared, leaving the value
+            # above empty. Hardcode as a workaround.
+            set(REDEX_JSONCPP_LIBRARY ${JSONCPP_INCLUDE_DIRS}/../lib/libjsoncpp.a)
+        endif (MINGW)
     else()
         set(REDEX_JSONCPP_LIBRARY ${JSONCPP_LIBRARY})
     endif()
-
-    message("-- REDEX_JSONCPP_LIBRARY: ${REDEX_JSONCPP_LIBRARY}")
 
     if (APPLE)
         #Static library is not installed on default path in MacOS because it conflicts with Xcode Version

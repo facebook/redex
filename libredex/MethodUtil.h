@@ -92,4 +92,20 @@ inline bool has_code(const DexMethodRef* meth) {
 inline bool signatures_match(const DexMethodRef* a, const DexMethodRef* b) {
   return a->get_name() == b->get_name() && a->get_proto() == b->get_proto();
 }
+
+DexMethod* java_lang_Enum_ctor();
+
+DexMethod* java_lang_Enum_ordinal();
+
+DexMethod* java_lang_Enum_name();
+
+DexMethod* java_lang_Enum_equals();
+
+DexMethod* java_lang_Integer_valueOf();
+
+DexMethod* java_lang_Integer_intValue();
+
+DexMethod* kotlin_jvm_internal_Intrinsics_checkParameterIsNotNull();
+
+DexMethod* kotlin_jvm_internal_Intrinsics_checExpressionValueIsNotNull();
 }; // namespace method

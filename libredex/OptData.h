@@ -90,7 +90,7 @@ class MethodOptData {
   friend class OptDataMapper;
 
  public:
-  MethodOptData(const DexMethod* method);
+  explicit MethodOptData(const DexMethod* method);
   std::shared_ptr<InsnOptData> get_insn_opt_data(const IRInstruction* insn);
 
  private:
@@ -111,7 +111,7 @@ class ClassOptData {
   friend class OptDataMapper;
 
  public:
-  ClassOptData(const DexClass* cls);
+  explicit ClassOptData(const DexClass* cls);
   std::shared_ptr<MethodOptData> get_meth_opt_data(const DexMethod* method);
 
  private:

@@ -14,7 +14,7 @@
 void unmark_keep(const Scope& scope,
                  const std::vector<std::string>& package_list,
                  const std::vector<std::string>& supercls_list) {
-  if (package_list.size() == 0 && supercls_list.size() == 0) {
+  if (package_list.empty() && supercls_list.empty()) {
     return;
   }
   std::unordered_set<const DexType*> superclasses;

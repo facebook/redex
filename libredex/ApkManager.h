@@ -13,7 +13,7 @@
 
 class ApkManager {
  public:
-  ApkManager(std::string&& apk_dir) : m_apk_dir(apk_dir) {}
+  explicit ApkManager(std::string apk_dir) : m_apk_dir(std::move(apk_dir)) {}
 
   virtual ~ApkManager() {
     for (auto& fd : m_files) {

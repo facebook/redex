@@ -208,24 +208,23 @@ void relocate_method(DexMethod* method, DexType* to_type) {
   from_cls->remove_method(method);
   DexMethodSpec spec;
   spec.cls = to_type;
-  method->change(spec,
-                 true /* rename on collision */);
+  method->change(spec, true /* rename on collision */);
   to_cls->add_method(method);
 }
 
 bool can_change_visibility_for_relocation(const DexMethod* method) {
-  return can_change_visibility_for_relocation(method->get_code());
+  return can_change_visibility_for_relocation(method->get_code(), method);
 }
 
 bool can_change_visibility_for_relocation(
-    const IRCode* code) {
+    const IRCode* code, const DexMethod* effective_caller_resolved_from) {
   // NODE: Keep in sync with change_visibility
   always_assert(code != nullptr);
 
   bool res{true};
   editable_cfg_adapter::iterate(
       const_cast<IRCode*>(code),
-      [&res](MethodItemEntry& mie) {
+      [&res, effective_caller_resolved_from](MethodItemEntry& mie) {
         auto insn = mie.insn;
 
         if (insn->has_field()) {
@@ -254,7 +253,8 @@ bool can_change_visibility_for_relocation(
             return editable_cfg_adapter::LOOP_BREAK;
           }
           auto current_method =
-              resolve_method(insn->get_method(), opcode_to_search(insn));
+              resolve_method(insn->get_method(), opcode_to_search(insn),
+                             effective_caller_resolved_from);
           if (current_method == nullptr &&
               insn->opcode() == OPCODE_INVOKE_VIRTUAL &&
               unknown_virtuals::is_method_known_to_be_public(
@@ -301,54 +301,60 @@ bool can_change_visibility_for_relocation(
 }
 
 void change_visibility(DexMethod* method, DexType* scope) {
-  change_visibility(method->get_code(), scope);
+  change_visibility(method->get_code(), scope, method);
 }
 
-void change_visibility(IRCode* code, DexType* scope) {
+void change_visibility(IRCode* code,
+                       DexType* scope,
+                       DexMethod* effective_caller_resolved_from) {
   // NOTE: Keep in sync with can_change_visibility_for_relocation
   always_assert(code != nullptr);
 
-  editable_cfg_adapter::iterate(code, [scope](MethodItemEntry& mie) {
-    auto insn = mie.insn;
+  editable_cfg_adapter::iterate(
+      code, [scope, effective_caller_resolved_from](MethodItemEntry& mie) {
+        auto insn = mie.insn;
 
-    if (insn->has_field()) {
-      auto cls = type_class(insn->get_field()->get_class());
-      if (cls != nullptr && !cls->is_external()) {
-        set_public(cls);
-      }
-      auto field =
-          resolve_field(insn->get_field(), is_sfield_op(insn->opcode())
-                                               ? FieldSearch::Static
-                                               : FieldSearch::Instance);
-      if (field != nullptr && field->is_concrete()) {
-        set_public(field);
-        set_public(type_class(field->get_class()));
-        // FIXME no point in rewriting opcodes in the method
-        insn->set_field(field);
-      }
-    } else if (insn->has_method()) {
-      auto cls = type_class(insn->get_method()->get_class());
-      if (cls != nullptr && !cls->is_external()) {
-        set_public(cls);
-      }
-      auto current_method =
-          resolve_method(insn->get_method(), opcode_to_search(insn));
-      if (current_method != nullptr && current_method->is_concrete() &&
-          (scope == nullptr || current_method->get_class() != scope)) {
-        set_public(current_method);
-        set_public(type_class(current_method->get_class()));
-        // FIXME no point in rewriting opcodes in the method
-        insn->set_method(current_method);
-      }
-    } else if (insn->has_type()) {
-      auto type = insn->get_type();
-      auto cls = type_class(type);
-      if (cls != nullptr && !cls->is_external()) {
-        set_public(cls);
-      }
-    }
-    return editable_cfg_adapter::LOOP_CONTINUE;
-  });
+        if (insn->has_field()) {
+          auto cls = type_class(insn->get_field()->get_class());
+          if (cls != nullptr && !cls->is_external()) {
+            set_public(cls);
+          }
+          auto field =
+              resolve_field(insn->get_field(), is_sfield_op(insn->opcode())
+                                                   ? FieldSearch::Static
+                                                   : FieldSearch::Instance);
+          if (field != nullptr && field->is_concrete()) {
+            set_public(field);
+            set_public(type_class(field->get_class()));
+            // FIXME no point in rewriting opcodes in the method
+            insn->set_field(field);
+          }
+        } else if (insn->has_method()) {
+          auto cls = type_class(insn->get_method()->get_class());
+          if (cls != nullptr && !cls->is_external()) {
+            set_public(cls);
+          }
+          auto current_method =
+              resolve_method(insn->get_method(), opcode_to_search(insn),
+                             effective_caller_resolved_from);
+          if (current_method != nullptr && current_method->is_concrete() &&
+              (scope == nullptr || current_method->get_class() != scope)) {
+            set_public(current_method);
+            cls = type_class(current_method->get_class());
+            always_assert(cls != nullptr);
+            set_public(cls);
+            // FIXME no point in rewriting opcodes in the method
+            insn->set_method(current_method);
+          }
+        } else if (insn->has_type()) {
+          auto type = insn->get_type();
+          auto cls = type_class(type);
+          if (cls != nullptr && !cls->is_external()) {
+            set_public(cls);
+          }
+        }
+        return editable_cfg_adapter::LOOP_CONTINUE;
+      });
 
   std::vector<DexType*> types;
   if (code->editable_cfg_built()) {
@@ -377,7 +383,8 @@ bool gather_invoked_methods_that_prevent_relocation(
     auto insn = mie.insn;
     auto opcode = insn->opcode();
     if (is_invoke(opcode)) {
-      auto meth = resolve_method(insn->get_method(), opcode_to_search(insn));
+      auto meth =
+          resolve_method(insn->get_method(), opcode_to_search(insn), method);
       if (!meth && opcode == OPCODE_INVOKE_VIRTUAL &&
           unknown_virtuals::is_method_known_to_be_public(insn->get_method())) {
         continue;
@@ -412,5 +419,30 @@ bool relocate_method_if_no_changes(DexMethod* method, DexType* to_type) {
   relocate_method(method, to_type);
   change_visibility(method);
 
+  return true;
+}
+
+bool is_valid_identifier(const std::string& s) {
+  return is_valid_identifier(s, 0, s.length());
+}
+
+bool is_valid_identifier(const std::string& s, size_t start, size_t len) {
+  if (len == 0) {
+    // Identifiers must not be empty.
+    return false;
+  }
+  for (size_t i = start; i != start + len; ++i) {
+    switch (s.at(i)) {
+    // Forbidden characters. This may not work for UTF encodings.
+    case '/':
+    case ';':
+    case '.':
+    case '[':
+      return false;
+    // Allow everything else.
+    default:
+      break;
+    }
+  }
   return true;
 }

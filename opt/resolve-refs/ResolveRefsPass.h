@@ -42,6 +42,7 @@ class ResolveRefsPass : public Pass {
          "Convert invoke-super calls to invoke-virtual where possible");
     bind("excluded_externals", {}, m_excluded_externals,
          "Externals types/prefixes excluded from reference resolution");
+    trait(Traits::Pass::atleast, 1);
   }
 
   void eval_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;

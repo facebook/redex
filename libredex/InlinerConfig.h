@@ -30,37 +30,48 @@ struct InlinerConfig {
   bool run_local_dce{false};
   bool run_dedup_blocks{false};
   bool shrink_other_methods{true};
+  bool unique_inlined_registers{true};
   bool debug{false};
-  std::unordered_set<DexType*> whitelist_no_method_limit;
+  std::unordered_set<DexType*> allowlist_no_method_limit;
   // We will populate the information to rstate of classes and methods.
   std::unordered_set<DexType*> m_no_inline_annos;
   std::unordered_set<DexType*> m_force_inline_annos;
   // Prefixes of classes not to inline from / into
-  std::vector<std::string> m_black_list;
-  std::vector<std::string> m_caller_black_list;
+  std::vector<std::string> m_blocklist;
+  std::vector<std::string> m_caller_blocklist;
+  std::vector<std::string> m_intradex_white_list;
 
   /**
-   * 1. Populate m_black_list m_caller_black_list to black_list and
-   * caller_black_list with the initial scope.
+   * 1. Populate m_blocklist m_caller_blocklist to blocklist and
+   * caller_blocklist with the initial scope.
    * 2. Set rstate of classes and methods if they are annotated by any
    * m_no_inline_annos and m_force_inline_annos.
    */
   void populate(const Scope& scope);
 
-  const std::unordered_set<DexType*>& get_black_list() const {
-    always_assert_log(m_populated, "Should populate blacklist\n");
-    return black_list;
+  const std::unordered_set<DexType*>& get_blocklist() const {
+    always_assert_log(m_populated, "Should populate blocklist\n");
+    return blocklist;
   }
 
-  const std::unordered_set<DexType*>& get_caller_black_list() const {
-    always_assert_log(m_populated, "Should populate blacklist\n");
-    return caller_black_list;
+  const std::unordered_set<DexType*>& get_caller_blocklist() const {
+    always_assert_log(m_populated, "Should populate blocklist\n");
+    return caller_blocklist;
+  }
+
+  void apply_intradex_white_list() {
+    always_assert_log(m_populated, "Should populate allowlist\n");
+    for (auto type : intradex_white_list) {
+      blocklist.erase(type);
+      caller_blocklist.erase(type);
+    }
   }
 
  private:
   bool m_populated{false};
   // The populated black lists.
-  std::unordered_set<DexType*> black_list;
-  std::unordered_set<DexType*> caller_black_list;
+  std::unordered_set<DexType*> blocklist;
+  std::unordered_set<DexType*> caller_blocklist;
+  std::unordered_set<DexType*> intradex_white_list;
 };
 } // namespace inliner

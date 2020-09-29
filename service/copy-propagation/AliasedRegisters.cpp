@@ -17,6 +17,7 @@
 #pragma GCC diagnostic pop
 #endif
 #include <boost/optional.hpp>
+#include <boost/range/algorithm.hpp>
 #include <boost/range/iterator_range.hpp>
 #include <limits>
 #include <numeric>
@@ -24,39 +25,56 @@
 
 using namespace sparta;
 
-// Implemented by an undirected graph where nodes are Registers and edges are an
-// alias between them.
+// AliasedRegisters is a data structure that CopyPropagation uses to keep track
+// of which Values (registers, constants, final fields, etc.) are the same
+// (aliased).
 //
-// An alias group is a fully connected clique of nodes.
-// Every node in a group is aliased to every other node.
+// For example,
+//   move v1, v0
+//   move v2, v0
+//   move v1, v2 ; delete this instruction because v1 and v2 are already aliased
 //
-// Data structure invariant: The graph is a forest of cliques
-// Corollary: There are no edges that are not part of a clique.
+// AliasedRegisters uses a graph to keep track of these alias relationships,
+// where nodes are Values. The graph is a forest of trees, where each tree is an
+// "alias group", meaning that all Values in the group (tree) are aliased to
+// each other. Creating groups like this implements the transitive nature of the
+// aliasing relationship.
+//
+// This is similar in concept to union/find. But it also needs to support
+// deleting an element and intersecting two data structures, which is why we
+// have a custom implementation.
+//
+// The implementation is similar to a link/cut tree, but these trees only have
+// two levels (every node is either a root or a leaf). The reason for the two
+// level design is because we are not actually supporting the "cut" part of the
+// link/cut tree. After two groups A and B get unioned, if one of the elements
+// of B gets overwritten, we only want to remove that single element from the
+// group instead of splitting off all the elements that were formerly in B. So
+// it's more of a link/delete tree.
+//
+// A single group could be represented as multiple different trees (by choosing
+// different roots), but this is undesirable. To enforce canonical trees, we use
+// `Value::operator<` to ensure that the minimum node is always the root node.
+// This incurs the cost of changing the root node more frequently, but it's
+// worth it over all, especially when computing the intersection of two graphs.
 //
 // The aliasing relation is an equivalence relation. An alias group is an
 // equivalence class of this relation.
-//   Reflexive : a node is trivially equivalent to itself
-//   Symmetric : edges in the graph are undirected
-//   Transitive: `AliasedRegisters::move` adds an edge to every node in the
-//               group, creating a clique
+//   Reflexive : A node is trivially equivalent to itself
+//   Symmetric : If two nodes have the same root, they must be in the same tree
+//   Transitive: `AliasedRegisters::move` adds an edge from the new node the
+//               root of the tree
 
 namespace aliased_registers {
 
+using vertex_t = AliasedRegisters::vertex_t;
+
 // Move `moving` into the alias group of `group`
-//
-// Create an edge from `moving` to every vertex in the alias group of
-// `group`.
-//
-// We want alias groups to be fully connected cliques.
-// Here's an example to show why:
-//
-//   move v1, v2
-//   move v0, v1 # (call `AliasedRegisters::move(v0, v1)` here)
-//   const v1, 0
-//
-// At this point, v0 and v2 still hold the same value, but if we had just
-// added an edge from v0 to v1, then we would have lost this information.
 void AliasedRegisters::move(const Value& moving, const Value& group) {
+  always_assert_log(!moving.is_none() && !group.is_none(),
+                    "Neither should be NONE. %s, %s",
+                    moving.str().c_str(),
+                    group.str().c_str());
   // Only need to do something if they're not already in same group
   if (!are_aliases(moving, group)) {
     // remove from the old group
@@ -67,9 +85,17 @@ void AliasedRegisters::move(const Value& moving, const Value& group) {
     const auto& grp = vertices_in_group(v_group);
     track_insert_order(moving, v_moving, group, v_group, grp);
 
-    // add edge to every node in new group
-    for (vertex_t v : grp) {
-      boost::add_edge(v_moving, v, m_graph);
+    // Add an edge from `moving` to the root of its new group
+    // This maintains a maximum of 2 levels in the tree.
+    // Therefore, root nodes are the only nodes with incoming edges.
+    vertex_t v_group_root = find_root(v_group);
+    boost::add_edge(v_moving, v_group_root, m_graph);
+
+    // We want to have a single canonical representation of a tree. Make sure
+    // the root is always the node that sorts lowest of the Values in this tree
+    const Value& group_root = m_graph[v_group_root];
+    if (moving < group_root) {
+      change_root_to(v_group_root, v_moving);
     }
   }
 }
@@ -78,8 +104,8 @@ void AliasedRegisters::move(const Value& moving, const Value& group) {
 // `v_moving` is the newest member of `group` so it should have the highest
 // insertion number.
 //
-// If this call creates a new clique (of size two), also set the insertion
-// number of v_group
+// If this call creates a new group (of size two), also set the insertion
+// number of `v_group`
 void AliasedRegisters::track_insert_order(const Value& moving,
                                           vertex_t v_moving,
                                           const Value& group,
@@ -87,52 +113,135 @@ void AliasedRegisters::track_insert_order(const Value& moving,
                                           const std::vector<vertex_t>& grp) {
   always_assert(!grp.empty());
   if (grp.size() == 1 && group.is_register()) {
-    // We're creating a new clique from a solitary vertex. The group
-    // register is the oldest, followed by moving.
-    m_insert_order[v_group] = 0;
+    // We're creating a new group from a singleton. The `group`
+    // register is the oldest, followed by `moving`.
+    m_insert_order.emplace(v_group, 0);
   }
 
   if (moving.is_register()) {
-    m_insert_order[v_moving] =
+    size_t moving_index =
         1 + std::accumulate(
                 grp.begin(), grp.end(), 0, [this](size_t acc, vertex_t v) {
                   // use operator[] to ignore non-register group members
                   return std::max(acc, m_insert_order[v]);
                 });
+    m_insert_order.emplace(v_moving, moving_index);
   }
 }
 
-// Remove r from its alias group
+// Remove `r` from its alias group
 void AliasedRegisters::break_alias(const Value& r) {
   const auto& v = find(r);
-  const auto& end = boost::vertices(m_graph).second;
-  if (v != end) {
-    // clear removes all edges incident to r
+  if (v) {
+    // if `v` was the root of a tree, we need to promote a leaf
+    maybe_change_root(*v);
+
+    // clear removes all edges to and from `r`
     boost::clear_vertex(*v, m_graph);
 
     if (r.is_register()) {
-      // v is not in a clique any more so it has no insert order
+      // `v` is not in a group any more so it has no insert order
       clear_insert_number(*v);
     }
   }
 }
 
 // Call this when `v` should no longer have an insertion number (because it does
-// not belong to a clique).
+// not belong to a group).
 void AliasedRegisters::clear_insert_number(vertex_t v) {
   m_insert_order.erase(v);
 }
 
-// if there is an edge between r1 to r2, then they are aliases.
-// We only need to check for single edge paths because `move` adds an edge to
-// every node in the alias group, thus maintaining transitive closure of the
-// graph
+// Two Values are aliased when they are in the same tree
 bool AliasedRegisters::are_aliases(const Value& r1, const Value& r2) const {
   if (r1 == r2) {
     return true;
   }
+  const auto& v1 = find(r1);
+  return v1 != boost::none && find_in_tree(r2, *v1) != boost::none;
+}
 
-  return has_edge_between(r1, r2);
+// Two vertices are aliased when they have the same root
+bool AliasedRegisters::vertices_are_aliases(vertex_t v1, vertex_t v2) const {
+  return v1 == v2 || find_root(v1) == find_root(v2);
+}
+
+// Return the vertex of the root node of the tree that `v` belongs to
+// If `v` is not part of a group, then it is a singleton and it is its own root
+// node.
+vertex_t AliasedRegisters::find_root(vertex_t v) const {
+  // The trees only have two levels. No need to loop
+  const auto& adj = boost::adjacent_vertices(v, m_graph);
+  const auto& begin = adj.first;
+  const auto& end = adj.second;
+  if (begin == end) {
+    // `v` is its own root
+    return v;
+  }
+  always_assert_log(std::next(begin) == end,
+                    "a tree can't have more than one root");
+  return *begin;
+}
+
+// If `old_root` is a root node, promote a different node from this tree to the
+// root.
+void AliasedRegisters::change_root_helper(
+    vertex_t old_root, boost::optional<vertex_t> maybe_new_root) {
+  const auto& in_adj = boost::inv_adjacent_vertices(old_root, m_graph);
+  const auto& in_begin = in_adj.first;
+  const auto& in_end = in_adj.second;
+  if (in_begin != in_end) {
+    always_assert_log(
+        !has_outgoing(old_root), "Only 2 levels allowed\n%s", dump().c_str());
+    vertex_t new_root = (maybe_new_root == boost::none)
+                            ? find_new_root(old_root)
+                            : *maybe_new_root;
+    if (new_root != old_root) {
+      always_assert_log(
+          !has_incoming(new_root), "Only 2 levels allowed\n%s", dump().c_str());
+      std::vector<vertex_t> leaves;
+      leaves.reserve((in_end - in_begin) - 1);
+      for (auto it = in_begin; it != in_end; ++it) {
+        if (*it != new_root) {
+          leaves.push_back(*it);
+        }
+      }
+      // For all nodes in the tree that aren't the new or old root,
+      // redirect their outgoing edges to the new root
+      for (vertex_t leaf : leaves) {
+        boost::remove_edge(leaf, old_root, m_graph);
+        boost::add_edge(leaf, new_root, m_graph);
+      }
+      // reverse the edge between the old root and the new root
+      boost::remove_edge(new_root, old_root, m_graph);
+      boost::add_edge(old_root, new_root, m_graph);
+    }
+  }
+}
+
+// If `old_root` is a root, promote one of its leaves to the root.
+// Otherwise, do nothing.
+void AliasedRegisters::maybe_change_root(vertex_t old_root) {
+  change_root_helper(old_root, boost::none);
+}
+
+// Promote `new_root` to a root and demote `old_root` to a leaf
+void AliasedRegisters::change_root_to(vertex_t old_root, vertex_t new_root) {
+  always_assert(old_root != new_root);
+  always_assert(has_incoming(old_root));
+  change_root_helper(old_root, new_root);
+}
+
+// We want to have a single canonical representation of a tree. the new root is
+// the node that sorts lowest of the leaves in this tree
+vertex_t AliasedRegisters::find_new_root(vertex_t old_root) const {
+  const auto& in_adj = boost::inv_adjacent_vertices(old_root, m_graph);
+  const auto& in_begin = in_adj.first;
+  const auto& in_end = in_adj.second;
+  always_assert_log(in_begin != in_end, "%s", dump().c_str());
+  return *boost::range::min_element(in_adj, [this](vertex_t v1, vertex_t v2) {
+    return m_graph[v1] < m_graph[v2];
+  });
 }
 
 // Return a representative for this register.
@@ -150,14 +259,13 @@ bool AliasedRegisters::are_aliases(const Value& r1, const Value& r2) const {
 //   move v0, v2
 //
 // `max_addressable` is useful for instructions that can only address up to v15
-Register AliasedRegisters::get_representative(
-    const Value& orig, const boost::optional<Register>& max_addressable) const {
+reg_t AliasedRegisters::get_representative(
+    const Value& orig, const boost::optional<reg_t>& max_addressable) const {
   always_assert(orig.is_register());
 
-  // if r is not in the graph, then it has no representative
+  // if orig is not in the graph, then it has no representative
   const auto& v = find(orig);
-  const auto& end = boost::vertices(m_graph).second;
-  if (v == end) {
+  if (!v) {
     return orig.reg();
   }
 
@@ -190,84 +298,90 @@ Register AliasedRegisters::get_representative(
 }
 
 // if `r` is in the graph, return the vertex holding it.
-// if not, return the `end` iterator of the vertices
-const boost::range_detail::integer_iterator<AliasedRegisters::vertex_t>
-AliasedRegisters::find(const Value& r) const {
+// if not, return boost::none.
+// WARNING: this operation is expensive on large graphs. It's an O(n) search of
+// all the nodes.
+boost::optional<vertex_t> AliasedRegisters::find(const Value& r) const {
   const auto& iters = boost::vertices(m_graph);
   const auto& begin = iters.first;
   const auto& end = iters.second;
   for (auto it = begin; it != end; ++it) {
     if (m_graph[*it] == r) {
-      return it;
+      return *it;
     }
   }
-  return end;
+  return boost::none;
+}
+
+// If any nodes in the same tree as `in_this_tree` have the Value `r`, then
+// return `r`'s vertex.
+// This is a faster alternative to a `find()` over the entire graph
+boost::optional<vertex_t> AliasedRegisters::find_in_tree(
+    const Value& r, vertex_t in_this_tree) const {
+  vertex_t root = find_root(in_this_tree);
+  if (m_graph[root] == r) {
+    return root;
+  }
+  const auto& adj = boost::inv_adjacent_vertices(root, m_graph);
+  const auto& begin = adj.first;
+  const auto& end = adj.second;
+  for (auto it = begin; it != end; ++it) {
+    if (m_graph[*it] == r) {
+      return *it;
+    }
+  }
+  return boost::none;
 }
 
 // returns the vertex holding `r` or creates a new (unconnected)
 // vertex if `r` is not in m_graph
-AliasedRegisters::vertex_t AliasedRegisters::find_or_create(const Value& r) {
+vertex_t AliasedRegisters::find_or_create(const Value& r) {
   const auto& it = find(r);
-  const auto& end = boost::vertices(m_graph).second;
-  if (it != end) {
+  if (it) {
     return *it;
   } else {
-    return boost::add_vertex(r, m_graph);
+    vertex_t v = boost::add_vertex(r, m_graph);
+    return v;
   }
 }
 
-// return true if there is a path of length exactly 1 from r1 to r2
-bool AliasedRegisters::has_edge_between(const Value& r1,
-                                        const Value& r2) const {
-  // find the vertex for r1
-  const auto& search1 = find(r1);
-  const auto& end = boost::vertices(m_graph).second;
-  if (search1 == end) {
-    return false;
-  }
-  vertex_t v1 = *search1;
-
-  // search the neighbors of v1 for a vertex with value r2.
-  const auto& adj = boost::adjacent_vertices(v1, m_graph);
-  const auto& adj_begin = adj.first;
-  const auto& adj_end = adj.second;
-  for (auto it = adj_begin; it != adj_end; ++it) {
-    if (m_graph[*it] == r2) {
-      return true;
-    }
-  }
-  return false;
-}
-
-bool AliasedRegisters::are_adjacent(vertex_t v1, vertex_t v2) const {
-  // and check that they have an edge between them
-  const auto& adj = boost::adjacent_vertices(v1, m_graph);
-  const auto& adj_begin = adj.first;
-  const auto& adj_end = adj.second;
-  const auto& edge_search = std::find(adj_begin, adj_end, v2);
-  return edge_search != adj_end;
-}
-
-// return a vector of v and all of it's neighbors (in no particular order)
-std::vector<AliasedRegisters::vertex_t> AliasedRegisters::vertices_in_group(
-    vertex_t v) const {
+// return a vector of `v` and all the vertices in the same tree
+// (with the root first)
+std::vector<vertex_t> AliasedRegisters::vertices_in_group(
+    vertex_t input) const {
+  vertex_t root = find_root(input);
+  const auto& in_adj = boost::inv_adjacent_vertices(root, m_graph);
+  const auto& in_begin = in_adj.first;
+  const auto& in_end = in_adj.second;
   std::vector<vertex_t> result;
-  result.push_back(v);
-  const auto& adj = boost::adjacent_vertices(v, m_graph);
-  const auto& adj_begin = adj.first;
-  const auto& adj_end = adj.second;
-  for (auto it = adj_begin; it != adj_end; ++it) {
+  result.reserve(1 + (in_end - in_begin));
+  result.push_back(root);
+  for (auto it = in_begin; it != in_end; ++it) {
     result.push_back(*it);
   }
   return result;
 }
 
-// return true if v has any neighboring vertices
-bool AliasedRegisters::has_neighbors(vertex_t v) {
-  const auto& adj = boost::adjacent_vertices(v, m_graph);
-  const auto& begin = adj.first;
-  const auto& end = adj.second;
-  return begin != end;
+// return true if `v` has no neighbors
+bool AliasedRegisters::is_singleton(vertex_t v) {
+  return !has_outgoing(v) && !has_incoming(v);
+}
+
+// return true if `v` has any incoming edges (equivalent to v being a root of a
+// non-singleton tree)
+bool AliasedRegisters::has_incoming(vertex_t v) {
+  const auto& in_adj = boost::inv_adjacent_vertices(v, m_graph);
+  const auto& in_begin = in_adj.first;
+  const auto& in_end = in_adj.second;
+  return in_begin != in_end;
+}
+
+// return true if `v` has any outgoing edges (equivalent to v being a leaf)
+bool AliasedRegisters::has_outgoing(vertex_t v) {
+  const auto& out_adj = boost::adjacent_vertices(v, m_graph);
+  const auto& out_begin = out_adj.first;
+  const auto& out_end = out_adj.second;
+  return out_begin != out_end;
 }
 
 // ---- extends AbstractValue ----
@@ -282,32 +396,22 @@ AbstractValueKind AliasedRegisters::kind() const {
                                          : AbstractValueKind::Top;
 }
 
-// The lattice looks like this:
-//
-//             T (graphs with no edges)
-//      graphs with 1 edge                  ^  join moves up (edge intersection)
-//      graphs with 2 edges                 |
-//            ...                           v  meet moves down (edge union)
-//      graphs with n edges
-//            ...
-//            _|_
-//
-// So, leq is the superset relation on the edge set
+// leq (<=) is the superset relation on the alias groups
 bool AliasedRegisters::leq(const AliasedRegisters& other) const {
   if (boost::num_edges(m_graph) < boost::num_edges(other.m_graph)) {
     // this cannot be a superset of other if this has fewer edges
     return false;
   }
 
-  // for all edges in other (the potential subset), make sure this contains that
-  // edge.
+  // for all edges in `other` (the potential subset), make sure `this` has that
+  // alias relationship
   const auto& iters = boost::edges(other.m_graph);
   const auto& begin = iters.first;
   const auto& end = iters.second;
   for (auto it = begin; it != end; ++it) {
     const Value& r1 = other.m_graph[boost::source(*it, other.m_graph)];
     const Value& r2 = other.m_graph[boost::target(*it, other.m_graph)];
-    if (!has_edge_between(r1, r2)) {
+    if (!are_aliases(r1, r2)) {
       return false;
     }
   }
@@ -330,63 +434,51 @@ AbstractValueKind AliasedRegisters::widen_with(const AliasedRegisters& other) {
 
 // alias group union
 AbstractValueKind AliasedRegisters::meet_with(const AliasedRegisters& other) {
-
-  const auto& iters = boost::edges(other.m_graph);
-  const auto& begin = iters.first;
-  const auto& end = iters.second;
-  for (auto it = begin; it != end; ++it) {
-    const Value& r1 = other.m_graph[boost::source(*it, other.m_graph)];
-    const Value& r2 = other.m_graph[boost::target(*it, other.m_graph)];
-    if (!this->are_aliases(r1, r2)) {
-      this->merge_groups_of(r1, r2, other);
-    }
-  }
-  return AbstractValueKind::Value;
+  not_reached_log("UNUSED");
 }
 
-void AliasedRegisters::merge_groups_of(const Value& r1,
-                                       const Value& r2,
-                                       const AliasedRegisters& other) {
-  vertex_t v1 = find_or_create(r1);
-  vertex_t v2 = find_or_create(r2);
-
-  const auto& group1 = vertices_in_group(v1);
-  const auto& group2 = vertices_in_group(v2);
-  std::vector<vertex_t> union_group;
-  union_group.reserve(group1.size() + group2.size());
-  union_group.insert(union_group.begin(), group1.begin(), group1.end());
-  union_group.insert(union_group.begin(), group2.begin(), group2.end());
-
-  handle_insert_order_at_merge(union_group, other);
-  for (vertex_t g1 : group1) {
-    for (vertex_t g2 : group2) {
-      boost::add_edge(g1, g2, m_graph);
-    }
-  }
-}
-
-// edge intersection
+// Alias group intersection.
+// Only keep the alias relationships that both `this` and `other` contain.
 AbstractValueKind AliasedRegisters::join_with(const AliasedRegisters& other) {
+  auto this_before_groups = this->all_groups();
 
-  // fill `deletes` with edges that aren't in `other`
-  std::vector<std::pair<vertex_t, vertex_t>> deletes;
-  const auto& iters = boost::edges(this->m_graph);
-  const auto& begin = iters.first;
-  const auto& end = iters.second;
-  for (auto it = begin; it != end; ++it) {
-    vertex_t v1 = boost::source(*it, this->m_graph);
-    vertex_t v2 = boost::target(*it, this->m_graph);
-    const Value& r1 = this->m_graph[v1];
-    const Value& r2 = this->m_graph[v2];
-    if (!other.has_edge_between(r1, r2)) {
-      deletes.emplace_back(v1, v2);
+  // Remove all edges from this graph. We will add back the ones that `other`
+  // also has
+  using edge_t = boost::graph_traits<Graph>::edge_descriptor;
+  boost::remove_edge_if([](const edge_t&) { return true; }, m_graph);
+
+  // Break up each group into some number of new groups.
+  // Intersection can't create any groups larger than what `this` had, only the
+  // same size or smaller.
+  for (auto& group : this_before_groups) {
+    // Sort so that we only have to scan the nodes after the potential root
+    // (remember that the root node must sort lowest of its tree)
+    std::sort(group.begin(), group.end(), [this](vertex_t v1, vertex_t v2) {
+      return m_graph[v1] < m_graph[v2];
+    });
+    // Starting with the lowest node, grab all the singletons that `other`
+    // agrees are aliased with this potential root.
+    // Repeat with the next potential root.
+    size_t sz = group.size();
+    for (size_t i = 0; i < sz; ++i) {
+      vertex_t new_root = group[i];
+      if (has_outgoing(new_root)) {
+        // This can't be a new root because it's already a leaf
+        continue;
+      }
+      // We can start iterating from i + 1 because everything beneath `i` has
+      // already been considered as a potential root and had all possible nodes
+      // added to its tree.
+      for (size_t j = i + 1; j < sz; ++j) {
+        // If `v` hasn't already been added to another tree and `other` agrees,
+        // then add the edge.
+        vertex_t v = group[j];
+        if (!has_outgoing(v) &&
+            other.are_aliases(this->m_graph[v], this->m_graph[new_root])) {
+          boost::add_edge(v, new_root, m_graph);
+        }
+      }
     }
-  }
-
-  // This maintains a forest of cliques because any subset of nodes of a clique
-  // is also a clique
-  for (const auto& edge : deletes) {
-    boost::remove_edge(edge.first, edge.second, this->m_graph);
   }
 
   handle_edge_intersection_insert_order(other);
@@ -395,12 +487,13 @@ AbstractValueKind AliasedRegisters::join_with(const AliasedRegisters& other) {
 
 void AliasedRegisters::handle_edge_intersection_insert_order(
     const AliasedRegisters& other) {
-  // Clear out stale values in m_insert_order for vertices removed from cliques.
+  // Clear out stale values in `m_insert_order` for vertices removed from
+  // groups.
   const auto& iters = boost::vertices(this->m_graph);
   const auto& begin = iters.first;
   const auto& end = iters.second;
   for (auto it = begin; it != end; ++it) {
-    if (!has_neighbors(*it)) {
+    if (is_singleton(*it)) {
       clear_insert_number(*it);
     }
   }
@@ -411,30 +504,31 @@ void AliasedRegisters::handle_edge_intersection_insert_order(
   }
 }
 
-// Merge the ordering in other.m_insert_order into this->m_insert_order.
+// Merge the ordering in `other.m_insert_order` into `this->m_insert_order`.
 //
 // When both graphs know about an edge (and they don't agree about insertion
 // order), use register number.
 // When only one graph knows about an edge, use insertion order from that graph.
 // When neither graph knows about the edge, use register number.
-// This function can be used (carefully) for both union and intersection.
 void AliasedRegisters::handle_insert_order_at_merge(
     const std::vector<vertex_t>& group, const AliasedRegisters& other) {
   renumber_insert_order(group, [this, &other](vertex_t a, vertex_t b) {
-    // return true if a occurs before b.
-    // return false if they compare equal or if b occurs before a.
+    // return true if `a` occurs before `b`.
+    // return false if they compare equal or if `b` occurs before `a`.
 
-    // `a` and `b` only index into this, not other.
     if (a == b) return false;
+    // `a` and `b` only index into this, not other.
     const Value& val_a = this->m_graph[a];
     const Value& val_b = this->m_graph[b];
-    auto other_a = other.find(val_a);
-    auto other_b = other.find(val_b);
 
-    bool this_has_edge = this->are_adjacent(a, b);
-    bool other_has_edge = other.are_aliases(val_a, val_b);
+    bool this_has = this->vertices_are_aliases(a, b);
+    boost::optional<vertex_t> other_a = other.find(val_a);
+    boost::optional<vertex_t> other_b =
+        (other_a == boost::none ? boost::none
+                                : other.find_in_tree(val_b, *other_a));
+    bool other_has = other_b != boost::none;
 
-    if (this_has_edge && other_has_edge) {
+    if (this_has && other_has) {
       // Intersection case should always come here
       bool this_less_than =
           this->m_insert_order.at(a) < this->m_insert_order.at(b);
@@ -450,19 +544,20 @@ void AliasedRegisters::handle_insert_order_at_merge(
         // The graphs do not agree. Choose a deterministic order
         return val_a.reg() < val_b.reg();
       }
-    } else if (this_has_edge) {
+    } else if (this_has) {
       return this->m_insert_order.at(a) < this->m_insert_order.at(b);
-    } else if (other_has_edge) {
+    } else if (other_has) {
       return other.m_insert_order.at(*other_a) <
              other.m_insert_order.at(*other_b);
     } else {
+      // Neither graph has this relationship. Choose a deterministic order
       return val_a.reg() < val_b.reg();
     }
   });
 }
 
 // Rewrite the insertion number of all registers in `group` in an order defined
-// by less_than
+// by `less_than`
 void AliasedRegisters::renumber_insert_order(
     std::vector<vertex_t> group,
     const std::function<bool(vertex_t, vertex_t)>& less_than) {
@@ -474,6 +569,11 @@ void AliasedRegisters::renumber_insert_order(
                      [this](vertex_t v) { return !m_graph[v].is_register(); }),
       group.end());
 
+  if (group.size() < 2) {
+    // No need to assign insert order for singletons
+    return;
+  }
+
   // Assign new insertion numbers based on sorting.
   std::sort(group.begin(), group.end(), less_than);
   size_t i = 0;
@@ -484,8 +584,7 @@ void AliasedRegisters::renumber_insert_order(
 }
 
 // return all groups (not including singletons)
-std::vector<std::vector<AliasedRegisters::vertex_t>>
-AliasedRegisters::all_groups() {
+std::vector<std::vector<vertex_t>> AliasedRegisters::all_groups() {
   std::vector<std::vector<vertex_t>> result;
   std::unordered_set<vertex_t> visited;
 
@@ -493,11 +592,11 @@ AliasedRegisters::all_groups() {
   const auto& begin = iters.first;
   const auto& end = iters.second;
   for (auto it = begin; it != end; ++it) {
-    if (visited.count(*it) == 0) {
-      auto group = vertices_in_group(*it);
-      for (vertex_t v : group) {
-        visited.insert(v);
-      }
+    vertex_t root = find_root(*it);
+    const auto& pair = visited.insert(root);
+    bool insertion_took_place = pair.second;
+    if (insertion_took_place) {
+      auto group = vertices_in_group(root);
       if (group.size() > 1) {
         result.emplace_back(std::move(group));
       }
@@ -505,4 +604,111 @@ AliasedRegisters::all_groups() {
   }
   return result;
 }
+
+// returns a string representation of this data structure. Intended for
+// debugging.
+std::string AliasedRegisters::dump() const {
+  std::ostringstream oss;
+  const auto& iters = boost::edges(this->m_graph);
+  const auto& begin = iters.first;
+  const auto& end = iters.second;
+  oss << "Graph [" << std::endl;
+  for (auto it = begin; it != end; ++it) {
+    const Value& r1 = m_graph[boost::source(*it, m_graph)];
+    const Value& r2 = m_graph[boost::target(*it, m_graph)];
+    oss << "(" << r1.str().c_str() << " -> " << r2.str().c_str() << ") "
+        << std::endl;
+  }
+  oss << "] insert order [" << std::endl;
+  for (const auto& entry : m_insert_order) {
+    vertex_t v = entry.first;
+    const Value& r = m_graph[v];
+    size_t i = entry.second;
+    oss << r.str().c_str() << " has index " << i << std::endl;
+  }
+  oss << "]" << std::endl;
+  return oss.str();
+}
+
+bool Value::operator==(const Value& other) const {
+  if (m_kind != other.m_kind) {
+    return false;
+  }
+
+  switch (m_kind) {
+  case Kind::REGISTER:
+    return m_reg == other.m_reg;
+  case Kind::CONST_LITERAL:
+  case Kind::CONST_LITERAL_UPPER:
+    return m_literal == other.m_literal && m_type_demand == other.m_type_demand;
+  case Kind::CONST_STRING:
+    return m_str == other.m_str;
+  case Kind::CONST_TYPE:
+    return m_type == other.m_type;
+  case Kind::STATIC_FINAL:
+  case Kind::STATIC_FINAL_UPPER:
+    return m_field == other.m_field;
+  case Kind::NONE:
+    return true;
+  }
+}
+
+bool Value::operator<(const Value& other) const {
+  if (m_kind != other.m_kind) {
+    return m_kind < other.m_kind;
+  }
+  switch (m_kind) {
+  case Kind::REGISTER:
+    return m_reg < other.m_reg;
+  case Kind::CONST_LITERAL:
+  case Kind::CONST_LITERAL_UPPER:
+    if (m_literal != other.m_literal) {
+      return m_literal < other.m_literal;
+    } else {
+      return m_type_demand < other.m_type_demand;
+    }
+  case Kind::CONST_STRING:
+    return compare_dexstrings(m_str, other.m_str);
+  case Kind::CONST_TYPE:
+    return compare_dextypes(m_type, other.m_type);
+  case Kind::STATIC_FINAL:
+  case Kind::STATIC_FINAL_UPPER:
+    return compare_dexfields(m_field, other.m_field);
+  case Kind::NONE:
+    not_reached_log("can't sort NONEs");
+  }
+}
+
+// returns a string representation of this Value. Intended for debugging.
+std::string Value::str() const {
+  std::ostringstream oss;
+  switch (m_kind) {
+  case Kind::REGISTER:
+    oss << "v" << m_reg;
+    break;
+  case Kind::CONST_LITERAL:
+    oss << m_literal;
+    break;
+  case Kind::CONST_LITERAL_UPPER:
+    oss << m_literal << " upper";
+    break;
+  case Kind::CONST_STRING:
+    oss << m_str->str();
+    break;
+  case Kind::CONST_TYPE:
+    oss << m_type->str();
+    break;
+  case Kind::STATIC_FINAL:
+    oss << m_field->str();
+    break;
+  case Kind::STATIC_FINAL_UPPER:
+    oss << m_field->str() << " upper";
+    break;
+  case Kind::NONE:
+    oss << "NONE";
+    break;
+  }
+  return oss.str();
+}
+
 } // namespace aliased_registers

@@ -152,37 +152,20 @@ class MethodProfiles {
   bool parse_stats_file(const std::string& csv_filename);
 
   // Read a line of data (not a header)
-  bool parse_line(char* line);
+  bool parse_line(std::string& line);
   // Read a line from the main section of the aggregated stats file and put an
   // entry into m_method_stats
-  bool parse_main(char* line);
+  bool parse_main(std::string& line);
   // Read a line of data from the metadata section (at the top of the file)
-  bool parse_metadata(char* line);
+  bool parse_metadata(std::string& line);
 
   // Parse the first line and make sure it matches our expectations
-  bool parse_header(char* line);
-
-  template <class Func>
-  bool parse_cells(char* line, const Func& parse_cell) {
-    char* save_ptr = nullptr;
-    char* tok = line;
-    uint32_t col = 0;
-    // Assuming there are no quoted strings containing commas!
-    while ((tok = strtok_r(tok, ",", &save_ptr)) != nullptr) {
-      bool success = parse_cell(tok, col);
-      if (!success) {
-        return false;
-      }
-      tok = nullptr;
-      ++col;
-    }
-    return true;
-  }
+  bool parse_header(std::string& line);
 };
 
 class dexmethods_profiled_comparator {
   const MethodProfiles* m_method_profiles;
-  const std::unordered_set<std::string>* m_whitelisted_substrings;
+  const std::unordered_set<std::string>* m_allowlisted_substrings;
   // This cache should be a pointer so that copied
   // comparators can still share the same cache for better performance
   std::unordered_map<DexMethod*, double>* m_cache;
@@ -210,7 +193,7 @@ class dexmethods_profiled_comparator {
  public:
   dexmethods_profiled_comparator(
       const method_profiles::MethodProfiles* method_profiles,
-      const std::unordered_set<std::string>* whitelisted_substrings,
+      const std::unordered_set<std::string>* allowlisted_substrings,
       std::unordered_map<DexMethod*, double>* cache,
       bool legacy_order);
 

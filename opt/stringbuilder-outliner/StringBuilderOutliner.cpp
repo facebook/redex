@@ -19,8 +19,6 @@
 
 using namespace stringbuilder_outliner;
 
-constexpr auto RESULT_REGISTER = ir_analyzer::RESULT_REGISTER;
-
 FixpointIterator::FixpointIterator(const cfg::ControlFlowGraph& cfg)
     : ir_analyzer::BaseIRAnalyzer<Environment>(cfg),
       m_stringbuilder(DexType::get_type("Ljava/lang/StringBuilder;")),
@@ -204,7 +202,7 @@ void Outliner::analyze(IRCode& code) {
   // be outlinable. Only do the more expensive fixpoint calculations if the
   // method passes this check.
   auto tostring_instructions = find_tostring_instructions(cfg);
-  if (tostring_instructions.size() == 0) {
+  if (tostring_instructions.empty()) {
     return;
   }
 

@@ -28,7 +28,7 @@ enum TypeDemand : uint8_t {
 
 class ConstantUses {
  public:
-  explicit ConstantUses(const cfg::ControlFlowGraph& cfg, DexMethod* method);
+  ConstantUses(const cfg::ControlFlowGraph& cfg, DexMethod* method);
 
   // Given a const or const-wide instruction, retrieve all instructions that
   // use it.

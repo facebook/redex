@@ -27,9 +27,9 @@ def dump_memory(base_addr, data, num_per_line, outfile):
     concat = None
     if data_len > 0:
         if isinstance(hex_string[0], int):
-            concat = lambda a, b: chr(a) + chr(b)
+            concat = lambda a, b: chr(a) + chr(b)  # noqa: E731
         else:
-            concat = lambda a, b: a + b
+            concat = lambda a, b: a + b  # noqa: E731
     while i < data_len:
         outfile.write("0x%8.8x: " % (addr + i))
         bytes_left = data_len - i
@@ -399,7 +399,7 @@ class FileExtract:
         """Extract a fixed length C string from the current file position."""
         s = self.read_size(n)
         if s:
-            cstr, = struct.unpack(self.byte_order + ("%i" % n) + "s", s)
+            (cstr,) = struct.unpack(self.byte_order + ("%i" % n) + "s", s)
             # Strip trialing NULLs
             cstr = cstr.strip(b"\0")
             if isprint_only_with_space_padding:
@@ -807,6 +807,10 @@ class AutoParser:
         self.context = context  # Any object you want to store for future usage
         self.max_name_len = 0
         self.extract_items(items, data)
+        self.__len = data.tell() - self.__offset
+
+    def __len__(self):
+        return self.__len
 
     def get_list_header_lines(self):
         """When an object of this type is in a list, print out this string

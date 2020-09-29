@@ -20,7 +20,7 @@ using ParamIndex = uint32_t;
  * A helper function that computes the mapping of load param instructions
  * to their respective indices.
  */
-const std::unordered_map<const IRInstruction*, ParamIndex> get_load_param_map(
+std::unordered_map<const IRInstruction*, ParamIndex> get_load_param_map(
     cfg::ControlFlowGraph& cfg);
 
 /*
@@ -29,7 +29,7 @@ const std::unordered_map<const IRInstruction*, ParamIndex> get_load_param_map(
  */
 class ReturnParamResolver {
  public:
-  ReturnParamResolver(const method_override_graph::Graph& graph)
+  explicit ReturnParamResolver(const method_override_graph::Graph& graph)
       : m_graph(graph),
         m_byte_buffer_type(DexType::make_type("Ljava/nio/ByteBuffer;")),
         m_char_buffer_type(DexType::make_type("Ljava/nio/CharBuffer;")),
@@ -51,7 +51,7 @@ class ReturnParamResolver {
    * For an invocation given by an instruction, figure out whether
    * it will always return one of its incoming sources.
    */
-  const boost::optional<ParamIndex> get_return_param_index(
+  boost::optional<ParamIndex> get_return_param_index(
       const IRInstruction* insn,
       const std::unordered_map<const DexMethod*, ParamIndex>&
           methods_which_return_parameter,
@@ -61,7 +61,7 @@ class ReturnParamResolver {
    * For a method given by its cfg, figure out whether all regular return
    * instructions would return a particular incoming parameter.
    */
-  const boost::optional<ParamIndex> get_return_param_index(
+  boost::optional<ParamIndex> get_return_param_index(
       cfg::ControlFlowGraph& cfg,
       const std::unordered_map<const DexMethod*, ParamIndex>&
           methods_which_return_parameter) const;
@@ -146,7 +146,7 @@ class ResultPropagationPass : public Pass {
    * figure out all methods which return an incoming parameter, taking into
    * account deep call chains.
    */
-  static const std::unordered_map<const DexMethod*, ParamIndex>
+  static std::unordered_map<const DexMethod*, ParamIndex>
   find_methods_which_return_parameter(PassManager& mgr,
                                       const Scope& scope,
                                       const ReturnParamResolver& resolver);

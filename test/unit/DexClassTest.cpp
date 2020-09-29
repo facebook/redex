@@ -58,6 +58,19 @@ TEST_F(DexClassTest, testUniqueFieldName) {
   EXPECT_EQ(newname->str(), "barr$1");
 }
 
+TEST_F(DexClassTest, testUniqueTypeName) {
+  DexType::make_type("LFoo;");
+  auto bar_type = DexType::make_unique_type("LBar;");
+  auto foor0_type = DexType::make_unique_type("LFoo;");
+  auto foor1_type = DexType::make_unique_type("LFoo;");
+  auto foor0r0_type = DexType::make_unique_type("LFoor$0;");
+
+  EXPECT_EQ(bar_type->str(), "LBar;"); // no conflict, should not be renamed
+  EXPECT_EQ(foor0_type->str(), "LFoor$0;");
+  EXPECT_EQ(foor1_type->str(), "LFoor$1;");
+  EXPECT_EQ(foor0r0_type->str(), "LFoor$0r$0;");
+}
+
 TEST_F(DexClassTest, gather_load_types) {
   auto helper = redex::test::SimpleClassHierarchy{};
 

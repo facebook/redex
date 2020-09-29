@@ -48,7 +48,8 @@ constexpr const char* METRIC_RESERVED_MREFS = "reserved_mrefs";
 
 class InterDexPass : public Pass {
  public:
-  InterDexPass(bool register_plugins = true) : Pass(INTERDEX_PASS_NAME) {
+  explicit InterDexPass(bool register_plugins = true)
+      : Pass(INTERDEX_PASS_NAME) {
     if (register_plugins) {
       std::unique_ptr<InterDexRegistry> plugin =
           std::make_unique<InterDexRegistry>();
@@ -71,7 +72,6 @@ class InterDexPass : public Pass {
   int64_t m_reserved_mrefs;
   bool m_can_touch_coldstart_cls;
   bool m_can_touch_coldstart_extended_cls;
-  bool m_emit_scroll_set_marker;
   bool m_minimize_cross_dex_refs;
   CrossDexRefMinimizerConfig m_minimize_cross_dex_refs_config;
   CrossDexRelocatorConfig m_cross_dex_relocator_config;

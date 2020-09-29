@@ -25,8 +25,8 @@
 class VerticalMergingPass : public Pass {
  public:
   VerticalMergingPass() : Pass("VerticalMergingPass") {}
-  virtual void bind_config() override { bind("blacklist", {}, m_blacklist); }
-  virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+  void bind_config() override { bind("blocklist", {}, m_blocklist); }
+  void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
   void merge_classes(const Scope&,
@@ -39,5 +39,5 @@ class VerticalMergingPass : public Pass {
                     const std::unordered_set<DexMethod*>&,
                     std::unordered_map<DexMethodRef*, DexMethodRef*>*);
   void change_super_calls(const std::unordered_map<DexClass*, DexClass*>&);
-  std::vector<std::string> m_blacklist;
+  std::vector<std::string> m_blocklist;
 };

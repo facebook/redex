@@ -44,34 +44,33 @@
  */
 
 namespace {
-using Register = uint32_t;
 using StrBuilderId = uint32_t;
 
 class RegMap {
-  using RegStrMap = std::unordered_map<Register, std::string>;
-  using RegBuilderMap = std::unordered_map<Register, StrBuilderId>;
+  using RegStrMap = std::unordered_map<reg_t, std::string>;
+  using RegBuilderMap = std::unordered_map<reg_t, StrBuilderId>;
   RegStrMap m_strings;
   RegBuilderMap m_builders;
 
  public:
-  void put_string(Register r, const std::string& s) {
+  void put_string(reg_t r, const std::string& s) {
     m_builders.erase(r);
     m_strings[r] = s;
   }
 
-  void put_builder(Register r, StrBuilderId b) {
+  void put_builder(reg_t r, StrBuilderId b) {
     m_strings.erase(r);
     m_builders[r] = b;
   }
 
-  boost::optional<std::string> find_string(Register r) {
+  boost::optional<std::string> find_string(reg_t r) {
     const auto& search = m_strings.find(r);
     return (search == m_strings.end())
                ? boost::none
                : boost::optional<std::string>(search->second);
   }
 
-  boost::optional<StrBuilderId> find_builder(Register r) {
+  boost::optional<StrBuilderId> find_builder(reg_t r) {
     const auto& search = m_builders.find(r);
     return (search == m_builders.end())
                ? boost::none
@@ -147,7 +146,6 @@ class Concatenator {
   using BuilderStrMap = std::unordered_map<StrBuilderId, std::string>;
   using FieldMap = std::map<DexFieldRef*, std::string, dexfields_comparator>;
 
-  const Register RESULT_REGISTER = std::numeric_limits<Register>::max() - 1;
   const ConcatenatorConfig& m_config;
 
   /* match this (and similar) patterns:
@@ -189,7 +187,7 @@ class Concatenator {
       auto insn = mie.insn;
       auto op = insn->opcode();
 
-      const auto& move = [&registers](Register dest, Register source) {
+      const auto& move = [&registers](reg_t dest, reg_t source) {
         const auto& str_search = registers.find_string(source);
         const auto& builder_search = registers.find_builder(source);
         if (str_search != boost::none) {
@@ -326,7 +324,7 @@ class Concatenator {
   }
 
  public:
-  Concatenator(const ConcatenatorConfig& config) : m_config(config) {}
+  explicit Concatenator(const ConcatenatorConfig& config) : m_config(config) {}
 
   Stats run(cfg::ControlFlowGraph* cfg,
             DexMethod* method,

@@ -12,20 +12,20 @@
 
 #include "ProguardLexer.h"
 
+using namespace keep_rules::proguard_parser;
+
 // Make sure we can parse an empty string
 TEST(ProguardLexerTest, empty) {
-  std::istringstream ss("");
-  std::vector<std::unique_ptr<keep_rules::proguard_parser::Token>> tokens =
-      keep_rules::proguard_parser::lex(ss);
+  std::vector<Token> tokens = lex("");
   ASSERT_EQ(tokens.size(), 1);
-  ASSERT_EQ(tokens[0]->type, keep_rules::proguard_parser::token::eof_token);
+  ASSERT_EQ(tokens[0].type, TokenType::eof_token);
 }
 
 // Parse a few tokens.
 TEST(ProguardLexerTest, assortment) {
   // The ss stream below should result in the vector of tokens in the expected
   // variable that occurs below this. Please keep ss and expected in sync.
-  std::stringstream ss(
+  const char* s =
       "{ } ( ) ; : ! , / class public final abstract interface\n"
       "enum extends implements private protected static\n"
       "volatile @ transient @interface synchronized native\n"
@@ -51,106 +51,104 @@ TEST(ProguardLexerTest, assortment) {
       "-dontwarn\n"
       "-verbose -someothercommand\n"
       "class com.google.android.gms.measurement.AppMeasurementService\n"
-      "<init>(...);\n");
-  std::vector<std::pair<unsigned, keep_rules::proguard_parser::token>>
-      expected = {
-          {1, keep_rules::proguard_parser::token::openCurlyBracket},
-          {1, keep_rules::proguard_parser::token::closeCurlyBracket},
-          {1, keep_rules::proguard_parser::token::openBracket},
-          {1, keep_rules::proguard_parser::token::closeBracket},
-          {1, keep_rules::proguard_parser::token::semiColon},
-          {1, keep_rules::proguard_parser::token::colon},
-          {1, keep_rules::proguard_parser::token::notToken},
-          {1, keep_rules::proguard_parser::token::comma},
-          {1, keep_rules::proguard_parser::token::slash},
-          {1, keep_rules::proguard_parser::token::classToken},
-          {1, keep_rules::proguard_parser::token::publicToken},
-          {1, keep_rules::proguard_parser::token::final},
-          {1, keep_rules::proguard_parser::token::abstract},
-          {1, keep_rules::proguard_parser::token::interface},
-          {2, keep_rules::proguard_parser::token::enumToken},
-          {2, keep_rules::proguard_parser::token::extends},
-          {2, keep_rules::proguard_parser::token::implements},
-          {2, keep_rules::proguard_parser::token::privateToken},
-          {2, keep_rules::proguard_parser::token::protectedToken},
-          {2, keep_rules::proguard_parser::token::staticToken},
-          {3, keep_rules::proguard_parser::token::volatileToken},
-          {3, keep_rules::proguard_parser::token::annotation_application},
-          {3, keep_rules::proguard_parser::token::transient},
-          {3, keep_rules::proguard_parser::token::annotation},
-          {3, keep_rules::proguard_parser::token::synchronized},
-          {3, keep_rules::proguard_parser::token::native},
-          {4, keep_rules::proguard_parser::token::strictfp},
-          {4, keep_rules::proguard_parser::token::synthetic},
-          {4, keep_rules::proguard_parser::token::bridge},
-          {4, keep_rules::proguard_parser::token::varargs},
-          {4, keep_rules::proguard_parser::token::identifier},
-          {4, keep_rules::proguard_parser::token::identifier},
-          {4, keep_rules::proguard_parser::token::identifier},
-          {5, keep_rules::proguard_parser::token::identifier},
-          {5, keep_rules::proguard_parser::token::arrayType},
-          {6, keep_rules::proguard_parser::token::target},
-          {6, keep_rules::proguard_parser::token::target_version_token},
-          {7, keep_rules::proguard_parser::token::include},
-          {7, keep_rules::proguard_parser::token::filepath},
-          {8, keep_rules::proguard_parser::token::basedirectory},
-          {8, keep_rules::proguard_parser::token::filepath},
-          {9, keep_rules::proguard_parser::token::injars},
-          {9, keep_rules::proguard_parser::token::filepath},
-          {10, keep_rules::proguard_parser::token::outjars},
-          {10, keep_rules::proguard_parser::token::filepath},
-          {10, keep_rules::proguard_parser::token::filepath},
-          {11, keep_rules::proguard_parser::token::libraryjars},
-          {11, keep_rules::proguard_parser::token::filepath},
-          {12, keep_rules::proguard_parser::token::keepdirectories},
-          {12, keep_rules::proguard_parser::token::filepath},
-          {13, keep_rules::proguard_parser::token::keep},
-          {13, keep_rules::proguard_parser::token::keepclassmembernames},
-          {13, keep_rules::proguard_parser::token::keepnames},
-          {13, keep_rules::proguard_parser::token::keepnames},
-          {13, keep_rules::proguard_parser::token::keepclasseswithmembernames},
-          {14, keep_rules::proguard_parser::token::printseeds},
-          {14, keep_rules::proguard_parser::token::filepath},
-          {15,
-           keep_rules::proguard_parser::token::includedescriptorclasses_token},
-          {15, keep_rules::proguard_parser::token::allowshrinking_token},
-          {15, keep_rules::proguard_parser::token::allowoptimization_token},
-          {15, keep_rules::proguard_parser::token::allowobfuscation_token},
-          {16, keep_rules::proguard_parser::token::dontshrink},
-          {16, keep_rules::proguard_parser::token::printusage},
-          {16, keep_rules::proguard_parser::token::whyareyoukeeping},
-          {17, keep_rules::proguard_parser::token::dontoptimize},
-          {17, keep_rules::proguard_parser::token::optimizations},
-          {17, keep_rules::proguard_parser::token::optimizationpasses},
-          {17, keep_rules::proguard_parser::token::assumenosideeffects},
-          {17, keep_rules::proguard_parser::token::mergeinterfacesaggressively},
-          {17,
-           keep_rules::proguard_parser::token::allowaccessmodification_token},
-          {18, keep_rules::proguard_parser::token::printmapping},
-          {18, keep_rules::proguard_parser::token::repackageclasses},
-          {18, keep_rules::proguard_parser::token::keepattributes},
-          {18, keep_rules::proguard_parser::token::
-                   dontusemixedcaseclassnames_token},
-          {18, keep_rules::proguard_parser::token::dontpreverify_token},
-          {18, keep_rules::proguard_parser::token::printconfiguration},
-          {18, keep_rules::proguard_parser::token::dontwarn},
-          {19, keep_rules::proguard_parser::token::verbose_token},
-          {19, keep_rules::proguard_parser::token::command},
-          {20, keep_rules::proguard_parser::token::classToken},
-          {20, keep_rules::proguard_parser::token::identifier},
-          {21, keep_rules::proguard_parser::token::identifier},
-          {21, keep_rules::proguard_parser::token::openBracket},
-          {21, keep_rules::proguard_parser::token::identifier},
-          {21, keep_rules::proguard_parser::token::closeBracket},
-          {21, keep_rules::proguard_parser::token::semiColon},
-          {22, keep_rules::proguard_parser::token::eof_token},
-      };
-  std::vector<std::unique_ptr<keep_rules::proguard_parser::Token>> tokens =
-      keep_rules::proguard_parser::lex(ss);
-  ASSERT_EQ(tokens.size(), expected.size());
+      "<init>(...);\n";
+  std::vector<std::pair<unsigned, TokenType>> expected = {
+      {1, TokenType::openCurlyBracket},
+      {1, TokenType::closeCurlyBracket},
+      {1, TokenType::openBracket},
+      {1, TokenType::closeBracket},
+      {1, TokenType::semiColon},
+      {1, TokenType::colon},
+      {1, TokenType::notToken},
+      {1, TokenType::comma},
+      {1, TokenType::slash},
+      {1, TokenType::classToken},
+      {1, TokenType::publicToken},
+      {1, TokenType::final},
+      {1, TokenType::abstract},
+      {1, TokenType::interface},
+      {2, TokenType::enumToken},
+      {2, TokenType::extends},
+      {2, TokenType::implements},
+      {2, TokenType::privateToken},
+      {2, TokenType::protectedToken},
+      {2, TokenType::staticToken},
+      {3, TokenType::volatileToken},
+      {3, TokenType::annotation_application},
+      {3, TokenType::transient},
+      {3, TokenType::annotation},
+      {3, TokenType::synchronized},
+      {3, TokenType::native},
+      {4, TokenType::strictfp},
+      {4, TokenType::synthetic},
+      {4, TokenType::bridge},
+      {4, TokenType::varargs},
+      {4, TokenType::identifier},
+      {4, TokenType::identifier},
+      {4, TokenType::identifier},
+      {5, TokenType::identifier},
+      {5, TokenType::arrayType},
+      {6, TokenType::target},
+      {6, TokenType::target_version_token},
+      {7, TokenType::include},
+      {7, TokenType::filepath},
+      {8, TokenType::basedirectory},
+      {8, TokenType::filepath},
+      {9, TokenType::injars},
+      {9, TokenType::filepath},
+      {10, TokenType::outjars},
+      {10, TokenType::filepath},
+      {10, TokenType::filepath},
+      {11, TokenType::libraryjars},
+      {11, TokenType::filepath},
+      {12, TokenType::keepdirectories},
+      {12, TokenType::filepath},
+      {13, TokenType::keep},
+      {13, TokenType::keepclassmembernames},
+      {13, TokenType::keepnames},
+      {13, TokenType::keepnames},
+      {13, TokenType::keepclasseswithmembernames},
+      {14, TokenType::printseeds},
+      {14, TokenType::filepath},
+      {15, TokenType::includedescriptorclasses_token},
+      {15, TokenType::allowshrinking_token},
+      {15, TokenType::allowoptimization_token},
+      {15, TokenType::allowobfuscation_token},
+      {16, TokenType::dontshrink},
+      {16, TokenType::printusage},
+      {16, TokenType::whyareyoukeeping},
+      {17, TokenType::dontoptimize},
+      {17, TokenType::optimizations},
+      {17, TokenType::optimizationpasses},
+      {17, TokenType::assumenosideeffects},
+      {17, TokenType::mergeinterfacesaggressively},
+      {17, TokenType::allowaccessmodification_token},
+      {18, TokenType::printmapping},
+      {18, TokenType::repackageclasses},
+      {18, TokenType::keepattributes},
+      {18, TokenType::dontusemixedcaseclassnames_token},
+      {18, TokenType::dontpreverify_token},
+      {18, TokenType::printconfiguration},
+      {18, TokenType::dontwarn},
+      {19, TokenType::verbose_token},
+      {19, TokenType::command},
+      {20, TokenType::classToken},
+      {20, TokenType::identifier},
+      {21, TokenType::identifier},
+      {21, TokenType::openBracket},
+      {21, TokenType::identifier},
+      {21, TokenType::closeBracket},
+      {21, TokenType::semiColon},
+      {22, TokenType::eof_token},
+  };
+  std::vector<Token> tokens = lex(s);
+  EXPECT_EQ(tokens.size(), expected.size());
   for (auto i = 0; i < expected.size(); i++) {
     std::cerr << "Performing test " << i << std::endl;
-    ASSERT_EQ(expected[i].first, tokens[i]->line);
-    ASSERT_EQ(expected[i].second, tokens[i]->type);
+    EXPECT_EQ(expected[i].first, tokens[i].line);
+    EXPECT_EQ(expected[i].second, tokens[i].type) << tokens[i].show();
+  }
+  for (auto i = expected.size(); i < tokens.size(); ++i) {
+    EXPECT_TRUE(false) << "Unexpected token " << tokens[i].show();
   }
 }

@@ -149,6 +149,15 @@ class ConcurrentContainer {
     return m_slots[i].size();
   }
 
+  /*
+   * WARNING: Only use with unsafe functions, or risk deadlock or undefined
+   * behavior!
+   */
+  boost::mutex& get_lock(const Key& key) const {
+    size_t slot = Hash()(key) % n_slots;
+    return get_lock(slot);
+  }
+
  protected:
   // Only derived classes may be instantiated or copied.
   ConcurrentContainer() = default;
@@ -159,7 +168,7 @@ class ConcurrentContainer {
     }
   }
 
-  ConcurrentContainer(ConcurrentContainer&& container) {
+  ConcurrentContainer(ConcurrentContainer&& container) noexcept {
     for (size_t i = 0; i < n_slots; ++i) {
       m_slots[i] = std::move(container.m_slots[i]);
     }
@@ -189,7 +198,7 @@ class ConcurrentMapContainer
   ConcurrentMapContainer(const ConcurrentMapContainer& container)
       : ConcurrentContainer<MapContainer, Key, Hash, n_slots>(container) {}
 
-  ConcurrentMapContainer(ConcurrentMapContainer&& container)
+  ConcurrentMapContainer(ConcurrentMapContainer&& container) noexcept
       : ConcurrentContainer<MapContainer, Key, Hash, n_slots>(
             std::move(container)) {}
 
@@ -216,7 +225,10 @@ class ConcurrentMapContainer
     return this->get_container(slot).at(key);
   }
 
-  Value get(const Key& key, Value default_value) {
+  /*
+   * This operation is always thread-safe.
+   */
+  Value get(const Key& key, Value default_value) const {
     size_t slot = Hash()(key) % n_slots;
     boost::lock_guard<boost::mutex> lock(this->get_lock(slot));
     const auto& map = this->get_container(slot);
@@ -289,10 +301,24 @@ class ConcurrentMapContainer
    * doesn't exist, it is created. The third argument of the updater function is
    * a Boolean flag denoting whether the entry exists or not.
    */
-  void update(const Key& key,
-              const std::function<void(const Key&, Value&, bool)>& updater) {
+  template <
+      typename UpdateFn = const std::function<void(const Key&, Value&, bool)>&>
+  void update(const Key& key, UpdateFn updater) {
     size_t slot = Hash()(key) % n_slots;
     boost::lock_guard<boost::mutex> lock(this->get_lock(slot));
+    auto& map = this->get_container(slot);
+    auto it = map.find(key);
+    if (it == map.end()) {
+      updater(key, map[key], false);
+    } else {
+      updater(it->first, it->second, true);
+    }
+  }
+
+  template <
+      typename UpdateFn = const std::function<void(const Key&, Value&, bool)>&>
+  void update_unsafe(const Key& key, UpdateFn updater) {
+    size_t slot = Hash()(key) % n_slots;
     auto& map = this->get_container(slot);
     auto it = map.find(key);
     if (it == map.end()) {
@@ -333,7 +359,7 @@ class ConcurrentSet final
                             Hash,
                             n_slots>(set) {}
 
-  ConcurrentSet(ConcurrentSet&& set)
+  ConcurrentSet(ConcurrentSet&& set) noexcept
       : ConcurrentContainer<std::unordered_set<Key, Hash, Equal>,
                             Key,
                             Hash,
@@ -372,6 +398,69 @@ class ConcurrentSet final
   }
 };
 
+/**
+ * A concurrent set that only accept insertions.
+ *
+ * This allows accessing constant references on elements safely.
+ */
+template <typename Key,
+          typename Hash = std::hash<Key>,
+          typename Equal = std::equal_to<Key>,
+          size_t n_slots = 31>
+class InsertOnlyConcurrentSet final
+    : public ConcurrentContainer<std::unordered_set<Key, Hash, Equal>,
+                                 Key,
+                                 Hash,
+                                 n_slots> {
+ public:
+  InsertOnlyConcurrentSet() = default;
+
+  InsertOnlyConcurrentSet(const InsertOnlyConcurrentSet& set)
+      : ConcurrentContainer<std::unordered_set<Key, Hash, Equal>,
+                            Key,
+                            Hash,
+                            n_slots>(set) {}
+
+  InsertOnlyConcurrentSet(InsertOnlyConcurrentSet&& set) noexcept
+      : ConcurrentContainer<std::unordered_set<Key, Hash, Equal>,
+                            Key,
+                            Hash,
+                            n_slots>(std::move(set)) {}
+
+  /*
+   * Returns a pair consisting of a pointer on the inserted element (or the
+   * element that prevented the insertion) and a boolean denoting whether the
+   * insertion took place. This operation is always thread-safe.
+   */
+  std::pair<const Key*, bool> insert(const Key& key) {
+    size_t slot = Hash()(key) % n_slots;
+    boost::lock_guard<boost::mutex> lock(this->get_lock(slot));
+    auto& set = this->get_container(slot);
+    // `std::unordered_set::insert` does not invalidate references,
+    // thus it is safe to return a reference on the object.
+    auto result = set.insert(key);
+    return {&*result.first, result.second};
+  }
+
+  /*
+   * Return a pointer on the element, or `nullptr` if the element is not in the
+   * set. This operation is always thread-safe.
+   */
+  const Key* get(const Key& key) const {
+    size_t slot = Hash()(key) % n_slots;
+    boost::lock_guard<boost::mutex> lock(this->get_lock(slot));
+    const auto& set = this->get_container(slot);
+    auto result = set.find(key);
+    if (result == set.end()) {
+      return nullptr;
+    } else {
+      return &*result;
+    }
+  }
+
+  size_t erase(const Key& key) = delete;
+};
+
 namespace cc_impl {
 
 template <typename Container, size_t n_slots>
@@ -380,10 +469,13 @@ class ConcurrentContainerIterator final {
   using base_iterator = std::conditional_t<std::is_const<Container>::value,
                                            typename Container::const_iterator,
                                            typename Container::iterator>;
+  using const_base_iterator = typename Container::const_iterator;
   using difference_type = std::ptrdiff_t;
   using value_type = typename base_iterator::value_type;
   using pointer = typename base_iterator::pointer;
+  using const_pointer = typename Container::const_iterator::pointer;
   using reference = typename base_iterator::reference;
+  using const_reference = typename Container::const_iterator::reference;
   using iterator_category = std::forward_iterator_tag;
 
   explicit ConcurrentContainerIterator(Container* slots)
@@ -432,12 +524,12 @@ class ConcurrentContainerIterator final {
     return m_position.operator->();
   }
 
-  const reference operator*() const {
+  const_reference operator*() const {
     always_assert(m_position != m_slots[n_slots - 1].end());
     return *m_position;
   }
 
-  const pointer operator->() const {
+  const_pointer operator->() const {
     always_assert(m_position != m_slots[n_slots - 1].end());
     return m_position.operator->();
   }

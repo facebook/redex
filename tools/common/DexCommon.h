@@ -11,7 +11,7 @@
 #include "DexDefs.h"
 #include <stdint.h>
 
-typedef uint32_t symdstr; // Offset into symtool string table.
+using symdstr = uint32_t; // Offset into symtool string table.
 
 struct ddump_data {
   ssize_t dexorder_size;
