@@ -25,6 +25,12 @@ std::string pretty_prefix_for_cls(const DexClass* cls) {
 }
 } // namespace
 
+std::string IODIMetadata::get_iodi_name(const DexMethod* m) {
+  std::string prefix = pretty_prefix_for_cls(type_class(m->get_class()));
+  prefix += m->str();
+  return prefix;
+}
+
 void IODIMetadata::mark_methods(DexStoresVector& scope) {
   // Calculates which methods won't collide with other methods when printed
   // in a stack trace (e.g. due to method overloading or templating).
@@ -36,16 +42,20 @@ void IODIMetadata::mark_methods(DexStoresVector& scope) {
   //
   // We do this linearly for now because otherwise we need locks
 
+  std::unordered_map<std::string, DexMethod*> name_method_map;
+
   auto emplace_entry = [&](const std::string& str, DexMethod* m) {
-    auto iter = m_iodi_methods.find(str);
-    if (iter != m_iodi_methods.end()) {
+    auto iter = name_method_map.find(str);
+    if (iter != name_method_map.end()) {
+      mark_method_huge(m);
       auto name_iter = m_method_to_name.find(iter->second);
       if (name_iter != m_method_to_name.end()) {
+        mark_method_huge(name_iter->first);
         m_method_to_name.erase(name_iter);
       }
       iter->second = nullptr;
     } else {
-      m_iodi_methods.emplace(str, m);
+      name_method_map.emplace(str, m);
       m_method_to_name.emplace(m, str);
     }
   };
@@ -63,14 +73,8 @@ void IODIMetadata::mark_methods(DexStoresVector& scope) {
       }
     }
   }
-  std20::erase_if(m_iodi_methods, [](auto it) {
-    if (it->second == nullptr) {
-      TRACE(IODI, 3, "[IODI] Method cannot use IODI due to name collisions: %s",
-            it->first.c_str());
-      return true;
-    }
-    return false;
-  });
+
+  m_marked = true;
 }
 
 void IODIMetadata::mark_method_huge(const DexMethod* method) {
@@ -79,6 +83,8 @@ void IODIMetadata::mark_method_huge(const DexMethod* method) {
 
 // Returns whether we can symbolicate using IODI for the given method.
 bool IODIMetadata::can_safely_use_iodi(const DexMethod* method) const {
+  redex_assert(m_marked);
+
   // We can use IODI if we don't have a collision, if the method isn't virtual
   // and if it isn't too big.
   //
@@ -87,22 +93,13 @@ bool IODIMetadata::can_safely_use_iodi(const DexMethod* method) const {
   if (m_huge_methods.count(method) > 0) {
     return false;
   }
-
-  std::string pretty_name;
-  {
-    auto iter = m_method_to_name.find(method);
-    if (iter == m_method_to_name.end()) {
-      TRACE(IODI, 4, "[IODI] Warning: didn't find %s in pretty map in %s",
-            SHOW(method), __PRETTY_FUNCTION__);
-      auto cls = type_class(method->get_class());
-      always_assert(cls);
-      pretty_name = pretty_prefix_for_cls(cls);
-      pretty_name += method->str();
-    } else {
-      pretty_name = iter->second;
-    }
+  if (debug) {
+    std::string pretty_name = get_iodi_name(method);
+    auto it = m_method_to_name.find(method);
+    redex_assert(it != m_method_to_name.end());
+    redex_assert(pretty_name == it->second);
   }
-  return m_iodi_methods.find(pretty_name) != m_iodi_methods.end();
+  return true;
 }
 
 void IODIMetadata::write(
@@ -156,8 +153,8 @@ void IODIMetadata::write(
   uint32_t count = 0;
   uint32_t huge_count = 0;
 
-  for (const auto& it : m_iodi_methods) {
-    if (!can_safely_use_iodi(it.second)) {
+  for (const auto& it : m_method_to_name) {
+    if (!can_safely_use_iodi(it.first)) {
       // This will occur if at some point a method was marked as huge during
       // encoding.
       huge_count += 1;
@@ -165,11 +162,11 @@ void IODIMetadata::write(
     }
     count += 1;
     always_assert_log(count != 0, "Too many entries found, overflowed");
-    always_assert(it.first.size() < UINT16_MAX);
-    entry_hdr.klen = it.first.size();
-    entry_hdr.method_id = method_to_id.at(const_cast<DexMethod*>(it.second));
+    always_assert(it.second.size() < UINT16_MAX);
+    entry_hdr.klen = it.second.size();
+    entry_hdr.method_id = method_to_id.at(const_cast<DexMethod*>(it.first));
     ofs.write((const char*)&entry_hdr, sizeof(EntryHeader));
-    ofs << it.first;
+    ofs << it.second;
   }
   // Rewind and write the header now that we know single/dup counts
   ofs.seekp(0);

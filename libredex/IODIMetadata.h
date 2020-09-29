@@ -53,9 +53,11 @@ class IODIMetadata {
   // but exposed for testing.
   void write(std::ostream& ofs, const MethodToIdMap& method_to_id);
 
+  static std::string get_iodi_name(const DexMethod* m);
+
  private:
-  std::unordered_map<std::string, const DexMethod*> m_iodi_methods;
-  // These exists for can_safely_use_iodi
   std::unordered_map<const DexMethod*, std::string> m_method_to_name;
   std::unordered_set<const DexMethod*> m_huge_methods;
+
+  bool m_marked{false};
 };
