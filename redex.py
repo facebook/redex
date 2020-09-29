@@ -376,7 +376,7 @@ def run_redex_binary(state, term_handler):
     ]
 
     if state.args.cmd_prefix is not None:
-        args = state.args.cmd_prefix.split() + args
+        args = shlex.split(state.args.cmd_prefix) + args
 
     if state.args.config:
         args += ["--config", state.args.config]
