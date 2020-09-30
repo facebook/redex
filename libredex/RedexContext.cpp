@@ -445,6 +445,24 @@ void run_rethrow_first_aggregate(const std::function<void()>& f) {
   }
 }
 
+void RedexContext::set_field_value(DexField* field,
+                                   keep_rules::AssumeReturnValue& val) {
+  field_values.emplace(field,
+                       std::make_unique<keep_rules::AssumeReturnValue>(val));
+}
+
+keep_rules::AssumeReturnValue* RedexContext::get_field_value(DexField* field) {
+  auto it = field_values.find(field);
+  if (it != field_values.end()) {
+    return it->second.get();
+  }
+  return nullptr;
+}
+
+void RedexContext::unset_field_value(DexField* method) {
+  field_values.erase(method);
+}
+
 void RedexContext::set_return_value(DexMethod* method,
                                     keep_rules::AssumeReturnValue& val) {
   method_return_values.emplace(
@@ -453,14 +471,13 @@ void RedexContext::set_return_value(DexMethod* method,
 
 keep_rules::AssumeReturnValue* RedexContext::get_return_value(
     DexMethod* method) {
-  if (method_return_values.find(method) != method_return_values.end()) {
-    return method_return_values.find(method)->second.get();
+  auto it = method_return_values.find(method);
+  if (it != method_return_values.end()) {
+    return it->second.get();
   }
   return nullptr;
 }
 
 void RedexContext::unset_return_value(DexMethod* method) {
-  if (method_return_values.find(method) != method_return_values.end()) {
-    method_return_values.erase(method);
-  }
+  method_return_values.erase(method);
 }

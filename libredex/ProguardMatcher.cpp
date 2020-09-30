@@ -359,6 +359,22 @@ class ProguardMatcher {
 };
 
 template <class DexMember>
+void apply_assume_field_return_value(const KeepSpec& k, DexMember* member) {
+  for (auto& field_spec : k.class_spec.fieldSpecifications) {
+    auto field_val = field_spec.return_value;
+    switch (field_val.value_type) {
+    case keep_rules::AssumeReturnValue::ValueBool:
+      always_assert(type::is_boolean(member->get_type()));
+      g_redex->set_field_value(member, field_val);
+      continue;
+    case keep_rules::AssumeReturnValue::ValueNone:
+      g_redex->unset_field_value(member);
+      continue;
+    }
+  }
+}
+
+template <class DexMember>
 void apply_assume_method_return_value(const KeepSpec& k, DexMember* member) {
   for (auto& method_spec : k.class_spec.methodSpecifications) {
     auto return_val = method_spec.return_value;
@@ -481,6 +497,9 @@ void KeepRuleMatcher::keep_fields(const Container& fields,
     }
     if (m_rule_type == RuleType::KEEP) {
       apply_keep_modifiers(m_keep_rule, field);
+    }
+    if (m_rule_type == RuleType::ASSUME_NO_SIDE_EFFECTS) {
+      apply_assume_field_return_value(m_keep_rule, field);
     }
     apply_rule(field);
   }

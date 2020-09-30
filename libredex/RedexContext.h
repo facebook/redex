@@ -34,6 +34,7 @@ class DexProto;
 class DexMethodRef;
 class DexMethodHandle;
 class DexClass;
+class DexField;
 struct DexFieldSpec;
 struct DexDebugEntry;
 struct DexPosition;
@@ -154,9 +155,14 @@ struct RedexContext {
 
   FrequentlyUsedPointers pointers_cache() { return m_pointers_cache; }
 
+  // Set and return field values keep_rules::AssumeReturnValue provided by
+  // proguard rules.
+  void set_field_value(DexField* field, keep_rules::AssumeReturnValue& val);
+  keep_rules::AssumeReturnValue* get_field_value(DexField* field);
+  void unset_field_value(DexField* field);
+
   // Set and return method's keep_rules::AssumeReturnValue provided by proguard
   // rules.
-
   void set_return_value(DexMethod* method, keep_rules::AssumeReturnValue& val);
   keep_rules::AssumeReturnValue* get_return_value(DexMethod* method);
   void unset_return_value(DexMethod* method);
@@ -292,6 +298,9 @@ struct RedexContext {
 
   FrequentlyUsedPointers m_pointers_cache;
 
+  // Field values map specified by Proguard assume value
+  ConcurrentMap<DexField*, std::unique_ptr<keep_rules::AssumeReturnValue>>
+      field_values;
   // Return values map specified by Proguard assume value
   ConcurrentMap<DexMethod*, std::unique_ptr<keep_rules::AssumeReturnValue>>
       method_return_values;
