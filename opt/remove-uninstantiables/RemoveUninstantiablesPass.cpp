@@ -126,7 +126,7 @@ RemoveUninstantiablesPass::compute_scoped_uninstantiable_types(
     } else if (is_interface(cls) && !is_interface_instantiable(cls)) {
       uninstantiable_types.insert(cls->get_type());
     } else if (is_abstract(cls) && !is_interface(cls) && !cls->is_external() &&
-               !is_native(cls)) {
+               !is_native(cls) && !root(cls)) {
       uninstantiable_types.insert(cls->get_type());
     } else {
       instantiable_classes.insert(cls);
