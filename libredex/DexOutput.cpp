@@ -1758,6 +1758,7 @@ uint32_t emit_instruction_offset_debug_info(
         post_iodi_offset - initial_offset);
   // 3)
   auto size_offset_end = param_size_to_oset.end();
+  std::unordered_set<const DexMethod*> to_remove;
   for (auto& it : code_items) {
     DexCode* dc = it->code;
     const auto dbg = dc->get_debug_item();
@@ -1789,7 +1790,13 @@ uint32_t emit_instruction_offset_debug_info(
           dodx, method_to_debug_meta.at(method), output, offset, true);
       *dbgcount += 1;
     }
+    to_remove.insert(method);
   }
+  code_items.erase(std::remove_if(code_items.begin(), code_items.end(),
+                                  [&to_remove](const CodeItemEmit* cie) {
+                                    return to_remove.count(cie->method) > 0;
+                                  }),
+                   code_items.end());
   TRACE(IODI, 2, "[IODI] Non-IODI programs took up %d bytes\n",
         offset - post_iodi_offset);
   // Return how much data we've encoded
@@ -1862,10 +1869,15 @@ uint32_t emit_instruction_offset_debug_info(
 
   const uint32_t initial_offset = offset;
   if (!code_items_tmp.empty()) {
+    const size_t before_size = code_items_tmp.size();
     offset += emit_instruction_offset_debug_info(
         dodx, pos_mapper, code_items_tmp, iodi_metadata, output, offset,
         dbgcount, code_debug_map);
+    const size_t after_size = code_items_tmp.size();
+    redex_assert(after_size < before_size);
   }
+
+  redex_assert(code_items_tmp.empty());
 
   // Emit the methods we could not handle.
   for (auto* cie : unsupported_code_items) {
