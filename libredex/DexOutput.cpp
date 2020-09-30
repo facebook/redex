@@ -1357,7 +1357,7 @@ int emit_debug_info(
 uint32_t emit_instruction_offset_debug_info(
     DexOutputIdx* dodx,
     PositionMapper* pos_mapper,
-    std::vector<CodeItemEmit>& code_items,
+    std::vector<CodeItemEmit*>& code_items,
     IODIMetadata& iodi_metadata,
     uint8_t* output,
     uint32_t offset,
@@ -1399,26 +1399,22 @@ uint32_t emit_instruction_offset_debug_info(
   constexpr int TMP_SIZE = 128 * 1024;
   uint8_t* tmp = (uint8_t*)malloc(TMP_SIZE);
   for (auto& it : code_items) {
-    DexCode* dc = it.code;
+    DexCode* dc = it->code;
     const auto dbg_item = dc->get_debug_item();
-    if (!dbg_item) {
-      continue;
-    }
-    DexMethod* method = it.method;
+    redex_assert(dbg_item);
+    DexMethod* method = it->method;
+    redex_assert(iodi_metadata.can_safely_use_iodi(method));
     uint32_t param_size = method->get_proto()->get_args()->size();
     // We still want to fill in pos_mapper and code_debug_map, so run the
     // usual code to emit debug info. We cache this and use it later if
     // it turns out we want to emit normal debug info for a given method.
     DebugMetadata metadata = calculate_debug_metadata(
-        dbg_item, dc, it.code_item, pos_mapper, param_size, code_debug_map);
+        dbg_item, dc, it->code_item, pos_mapper, param_size, code_debug_map);
 
     int debug_size =
         emit_debug_info_for_metadata(dodx, metadata, tmp, 0, false);
     always_assert_log(debug_size < TMP_SIZE, "Tmp buffer overrun");
     method_to_debug_meta.emplace(method, std::move(metadata));
-    if (!iodi_metadata.can_safely_use_iodi(method)) {
-      continue;
-    }
     auto res = param_to_sizes[param_size].emplace(MethodKey{method, dc->size()},
                                                   debug_size);
     always_assert_log(res.second, "Failed to insert %s, %d pair", SHOW(method),
@@ -1763,25 +1759,18 @@ uint32_t emit_instruction_offset_debug_info(
   // 3)
   auto size_offset_end = param_size_to_oset.end();
   for (auto& it : code_items) {
-    DexCode* dc = it.code;
+    DexCode* dc = it->code;
     const auto dbg = dc->get_debug_item();
-    if (!dbg) {
-      continue;
-    }
-    dex_code_item* dci = it.code_item;
+    redex_assert(dbg != nullptr);
     auto code_size = dc->size();
-    if (code_size == 0) {
-      // If there are no instructions then we don't need any debug info!
-      dci->debug_info_off = 0;
-      continue;
-    }
+    redex_assert(code_size != 0);
     // If a method is too big then it's been marked as so internally, so this
     // will return false.
-    DexMethod* method = it.method;
+    DexMethod* method = it->method;
     if (iodi_metadata.can_safely_use_iodi(method)) {
       // Here we sanity check to make sure that all IODI programs are at least
       // as long as they need to be.
-      uint32_t param_size = it.method->get_proto()->get_args()->size();
+      uint32_t param_size = it->method->get_proto()->get_args()->size();
       auto size_offset_it = param_size_to_oset.find(param_size);
       always_assert_log(size_offset_it != size_offset_end,
                         "Expected to find param to offset: %s", SHOW(method));
@@ -1794,7 +1783,7 @@ uint32_t emit_instruction_offset_debug_info(
       always_assert_log(offset_it != offset_end,
                         "Expected IODI program to be big enough for %s : %u",
                         SHOW(method), code_size);
-      dci->debug_info_off = offset_it->second;
+      it->code_item->debug_info_off = offset_it->second;
     } else {
       offset += emit_debug_info_for_metadata(
           dodx, method_to_debug_meta.at(method), output, offset, true);
@@ -1803,6 +1792,79 @@ uint32_t emit_instruction_offset_debug_info(
   }
   TRACE(IODI, 2, "[IODI] Non-IODI programs took up %d bytes\n",
         offset - post_iodi_offset);
+  // Return how much data we've encoded
+  return offset - initial_offset;
+}
+
+uint32_t emit_instruction_offset_debug_info(
+    DexOutputIdx* dodx,
+    PositionMapper* pos_mapper,
+    std::vector<CodeItemEmit>& code_items,
+    IODIMetadata& iodi_metadata,
+    uint8_t* output,
+    uint32_t offset,
+    int* dbgcount,
+    std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_map) {
+  std::vector<CodeItemEmit*> code_items_tmp;
+  code_items_tmp.reserve(code_items.size());
+  std::transform(code_items.begin(), code_items.end(),
+                 std::back_inserter(code_items_tmp),
+                 [](CodeItemEmit& cie) { return &cie; });
+  // Remove all items without debug info or no code.
+  code_items_tmp.erase(std::remove_if(code_items_tmp.begin(),
+                                      code_items_tmp.end(),
+                                      [](auto cie) {
+                                        if (!cie->code->get_debug_item()) {
+                                          return true;
+                                        };
+                                        if (cie->code->size() == 0) {
+                                          // If there are no instructions then
+                                          // we don't need any debug info!
+                                          cie->code_item->debug_info_off = 0;
+                                          return true;
+                                        }
+                                        return false;
+                                      }),
+                       code_items_tmp.end());
+  TRACE(IODI, 1, "Removed %zu CIEs w/o debug data.",
+        code_items.size() - code_items_tmp.size());
+  // Remove all unsupported items.
+  std::vector<CodeItemEmit*> unsupported_code_items;
+  code_items_tmp.erase(
+      std::remove_if(code_items_tmp.begin(), code_items_tmp.end(),
+                     [&](CodeItemEmit* cie) {
+                       bool supported =
+                           iodi_metadata.can_safely_use_iodi(cie->method);
+                       if (!supported) {
+                         unsupported_code_items.push_back(cie);
+                       }
+                       return !supported;
+                     }),
+      code_items_tmp.end());
+
+  const uint32_t initial_offset = offset;
+  if (!code_items_tmp.empty()) {
+    offset += emit_instruction_offset_debug_info(
+        dodx, pos_mapper, code_items_tmp, iodi_metadata, output, offset,
+        dbgcount, code_debug_map);
+  }
+
+  // Emit the methods we could not handle.
+  for (auto* cie : unsupported_code_items) {
+    DexCode* dc = cie->code;
+    redex_assert(dc->size() != 0);
+    const auto dbg_item = dc->get_debug_item();
+    redex_assert(dbg_item);
+    DexMethod* method = cie->method;
+    uint32_t param_size = method->get_proto()->get_args()->size();
+    DebugMetadata metadata = calculate_debug_metadata(
+        dbg_item, dc, cie->code_item, pos_mapper, param_size, code_debug_map);
+    offset +=
+        emit_debug_info_for_metadata(dodx, metadata, output, offset, true);
+    *dbgcount += 1;
+    iodi_metadata.mark_method_huge(method);
+  }
+
   // Return how much data we've encoded
   return offset - initial_offset;
 }
