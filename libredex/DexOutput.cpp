@@ -1805,6 +1805,21 @@ uint32_t emit_instruction_offset_debug_info(
     uint32_t offset,
     int* dbgcount,
     std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_map) {
+  // IODI only supports non-ambiguous methods, i.e., an overload cluster is
+  // only a single method.
+  const size_t large_bound = 1;
+
+  std::unordered_set<const DexMethod*> too_large_cluster_methods;
+  {
+    for (const auto& p : iodi_metadata.get_name_clusters()) {
+      if (p.second.size() > large_bound) {
+        too_large_cluster_methods.insert(p.second.begin(), p.second.end());
+      }
+    }
+  }
+  TRACE(IODI, 1, "%zu methods in too-large clusters.",
+        too_large_cluster_methods.size());
+
   std::vector<CodeItemEmit*> code_items_tmp;
   code_items_tmp.reserve(code_items.size());
   std::transform(code_items.begin(), code_items.end(),
@@ -1830,17 +1845,20 @@ uint32_t emit_instruction_offset_debug_info(
         code_items.size() - code_items_tmp.size());
   // Remove all unsupported items.
   std::vector<CodeItemEmit*> unsupported_code_items;
-  code_items_tmp.erase(
-      std::remove_if(code_items_tmp.begin(), code_items_tmp.end(),
-                     [&](CodeItemEmit* cie) {
-                       bool supported =
-                           iodi_metadata.can_safely_use_iodi(cie->method);
-                       if (!supported) {
-                         unsupported_code_items.push_back(cie);
-                       }
-                       return !supported;
-                     }),
-      code_items_tmp.end());
+  if (!too_large_cluster_methods.empty()) {
+    code_items_tmp.erase(
+        std::remove_if(code_items_tmp.begin(), code_items_tmp.end(),
+                       [&](CodeItemEmit* cie) {
+                         bool supported =
+                             too_large_cluster_methods.count(cie->method) == 0;
+                         if (!supported) {
+                           iodi_metadata.mark_method_huge(cie->method);
+                           unsupported_code_items.push_back(cie);
+                         }
+                         return !supported;
+                       }),
+        code_items_tmp.end());
+  }
 
   const uint32_t initial_offset = offset;
   if (!code_items_tmp.empty()) {

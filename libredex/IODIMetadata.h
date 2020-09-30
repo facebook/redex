@@ -55,7 +55,25 @@ class IODIMetadata {
 
   static std::string get_iodi_name(const DexMethod* m);
 
+  const DexMethod* get_canonical_method(const DexMethod* m) const {
+    return m_canonical.at(m);
+  }
+
+  const std::unordered_map<const DexMethod*,
+                           std::unordered_set<const DexMethod*>>&
+  get_name_clusters() const {
+    return m_name_clusters;
+  }
+  const std::unordered_set<const DexMethod*>& get_cluster(
+      const DexMethod* m) const {
+    return m_name_clusters.at(get_canonical_method(m));
+  }
+
  private:
+  std::unordered_map<const DexMethod*, std::unordered_set<const DexMethod*>>
+      m_name_clusters;
+  std::unordered_map<const DexMethod*, const DexMethod*> m_canonical;
+
   std::unordered_map<const DexMethod*, std::string> m_method_to_name;
   std::unordered_set<const DexMethod*> m_huge_methods;
 

@@ -44,7 +44,21 @@ void IODIMetadata::mark_methods(DexStoresVector& scope) {
 
   std::unordered_map<std::string, DexMethod*> name_method_map;
 
+  std::unordered_map<std::string, const DexMethod*> name_map;
   auto emplace_entry = [&](const std::string& str, DexMethod* m) {
+    {
+      const DexMethod* canonical;
+      auto it = name_map.find(str);
+      if (it == name_map.end()) {
+        canonical = m;
+        name_map.emplace(str, m);
+      } else {
+        canonical = m_canonical.at(it->second);
+      }
+      m_canonical[m] = canonical;
+      m_name_clusters[canonical].insert(m);
+    }
+
     auto iter = name_method_map.find(str);
     if (iter != name_method_map.end()) {
       mark_method_huge(m);
@@ -85,21 +99,7 @@ void IODIMetadata::mark_method_huge(const DexMethod* method) {
 bool IODIMetadata::can_safely_use_iodi(const DexMethod* method) const {
   redex_assert(m_marked);
 
-  // We can use IODI if we don't have a collision, if the method isn't virtual
-  // and if it isn't too big.
-  //
-  // It turns out for some methods using IODI isn't beneficial. See
-  // comment in emit_instruction_offset_debug_info for more info.
-  if (m_huge_methods.count(method) > 0) {
-    return false;
-  }
-  if (debug) {
-    std::string pretty_name = get_iodi_name(method);
-    auto it = m_method_to_name.find(method);
-    redex_assert(it != m_method_to_name.end());
-    redex_assert(pretty_name == it->second);
-  }
-  return true;
+  return m_huge_methods.count(method) == 0;
 }
 
 void IODIMetadata::write(
