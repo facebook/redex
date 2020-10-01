@@ -61,10 +61,8 @@ void IODIMetadata::mark_methods(DexStoresVector& scope) {
 
     auto iter = name_method_map.find(str);
     if (iter != name_method_map.end()) {
-      mark_method_huge(m);
       auto name_iter = m_method_to_name.find(iter->second);
       if (name_iter != m_method_to_name.end()) {
-        mark_method_huge(name_iter->first);
         m_method_to_name.erase(name_iter);
       }
       iter->second = nullptr;
@@ -93,13 +91,6 @@ void IODIMetadata::mark_methods(DexStoresVector& scope) {
 
 void IODIMetadata::mark_method_huge(const DexMethod* method) {
   m_huge_methods.insert(method);
-}
-
-// Returns whether we can symbolicate using IODI for the given method.
-bool IODIMetadata::can_safely_use_iodi(const DexMethod* method) const {
-  redex_assert(m_marked);
-
-  return m_huge_methods.count(method) == 0;
 }
 
 void IODIMetadata::write(
@@ -154,7 +145,7 @@ void IODIMetadata::write(
   uint32_t huge_count = 0;
 
   for (const auto& it : m_method_to_name) {
-    if (!can_safely_use_iodi(it.first)) {
+    if (is_huge(it.first)) {
       // This will occur if at some point a method was marked as huge during
       // encoding.
       huge_count += 1;

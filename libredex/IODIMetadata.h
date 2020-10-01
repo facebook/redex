@@ -42,8 +42,9 @@ class IODIMetadata {
   // determined to be too big for a given dex.
   void mark_method_huge(const DexMethod* method);
 
-  // Returns whether we can symbolicate using IODI for the given method.
-  bool can_safely_use_iodi(const DexMethod* method) const;
+  bool is_huge(const DexMethod* m) const {
+    return m_huge_methods.count(m) != 0;
+  }
 
   // Write to disk, pretty usual. Does nothing if filename len is 0.
   using MethodToIdMap = std::unordered_map<DexMethod*, uint64_t>;

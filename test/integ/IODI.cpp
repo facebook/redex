@@ -7,6 +7,7 @@
 
 #include <gtest/gtest.h>
 
+#include <bitset>
 #include <fcntl.h>
 #include <sstream>
 #include <stdexcept>
@@ -41,7 +42,8 @@ void reset_redex() {
 }
 
 DexClasses run_redex(std::unordered_map<std::string, uint64_t>* mid = nullptr,
-                     std::string* iodi_data = nullptr) {
+                     std::string* iodi_data = nullptr,
+                     bool iodi_layers = false) {
   reset_redex();
   const char* dexfile = std::getenv("dexfile");
   EXPECT_NE(nullptr, dexfile);
@@ -74,7 +76,8 @@ DexClasses run_redex(std::unordered_map<std::string, uint64_t>* mid = nullptr,
                    false, /* normal_primary_dex */
                    0,
                    0,
-                   DebugInfoKind::InstructionOffsets,
+                   iodi_layers ? DebugInfoKind::InstructionOffsetsLayered
+                               : DebugInfoKind::InstructionOffsets,
                    &iodi_metadata,
                    dummy_cfg,
                    pos_mapper.get(),
@@ -112,21 +115,51 @@ DexClasses run_redex(std::unordered_map<std::string, uint64_t>* mid = nullptr,
   return result;
 }
 
+bool is_layered_iodi(const DexDebugItem& debug_item) {
+  const auto line_start = debug_item.get_line_start();
+  return (line_start & DexOutput::kIODILayerMask) != 0;
+}
+
+bool is_plain_or_iodi_plain(const DexDebugItem& debug_item) {
+  return (debug_item.get_line_start() & DexOutput::kIODIDataMask) != 0;
+}
+
 bool is_iodi(const DexDebugItem& debug_item) {
+  bool iodi_layered{is_layered_iodi(debug_item)};
   if (debug_item.get_line_start() != 0) {
-    return false;
+    if (!iodi_layered) {
+      return false;
+    }
   }
+
+  if (iodi_layered) {
+    return true;
+  }
+
   const auto& entries = debug_item.get_entries();
   for (size_t i = 0; i < entries.size(); i++) {
     auto& entry = entries[i];
     if (entry.type != DexDebugEntryType::Position) {
       continue;
     }
-    if (i != entry.addr || i != entry.pos->line) {
+    auto line = entry.pos->line;
+    if (!iodi_layered && (line & DexOutput::kIODILayerMask) != 0) {
+      return false;
+    }
+    line &= DexOutput::kIODIDataMask;
+    if (i != entry.addr || i != line) {
       return false;
     }
   }
   return true;
+}
+
+boost::optional<size_t> get_iodi_layer(const DexDebugItem& debug_item) {
+  auto line_start = debug_item.get_line_start();
+  if (line_start != 0 && !is_layered_iodi(debug_item)) {
+    return boost::none;
+  }
+  return (line_start & DexOutput::kIODILayerMask) >> DexOutput::kIODILayerShift;
 }
 
 size_t debug_item_line_table_size(const DexDebugItem& debug_item) {
@@ -168,21 +201,26 @@ DexDebugMap debug_to_methods(const DexClasses& classes) {
   return result;
 }
 
+std::string dex_debug_item_to_str(const DexDebugItem& item) {
+  std::ostringstream oss;
+  oss << "\"positions\" : [\n";
+  for (auto& entry : item.get_entries()) {
+    if (entry.type != DexDebugEntryType::Position) {
+      continue;
+    }
+    oss << "    " << entry.addr << " : " << entry.pos->line << " = " << std::hex
+        << entry.pos->line << std::dec << ",\n";
+  }
+  oss << "  ],\n  \"is_iodi\" : " << (is_iodi(item) ? "\"true\"" : "\"false\"");
+  return oss.str();
+}
+
 #if 0
 void log_debug_to_methods(const std::map<void*, DexMethods>& result) {
   for (auto& dtm : result) {
-    std::cerr << "{\n";
-    const auto& entries = ((DexDebugItem*)dtm.first)->get_entries();
-    std::cerr << "  \"positions\" : [\n";
-    for (auto& entry : entries) {
-      if (entry.type != DexDebugEntryType::Position) {
-        continue;
-      }
-      std::cerr << "    " << entry.addr << " : " << entry.pos->line << ",\n";
-    }
-    std::cerr << "  ],\n  \"is_iodi\" : "
-              << (is_iodi(*(DexDebugItem*)dtm.first) ? "\"true\"" : "\"false\"")
-              << ",\n  \"methods\" : [\n";
+    std::cerr << "{\n  ";
+    std::cerr << dex_debug_item_to_str(*(DexDebugItem*)dtm.first);
+    std::cerr << ",\n  \"methods\" : [\n";
     for (DexMethod* method : dtm.second) {
       std::cerr << "    \"" << show(method) << "\",\n";
     }
@@ -226,18 +264,34 @@ TEST(IODITest, avoidDexLayoutOOM) {
   auto debug_data = debug_to_methods(classes);
   for (auto& data : debug_data) {
     DexDebugItem* debug_item = (DexDebugItem*)data.first;
+    auto& methods = data.second;
     if (!is_iodi(*debug_item)) {
       continue;
     }
     size_t inflated_size =
         debug_item_line_table_size(*debug_item) * data.second.size();
-    EXPECT_LE(inflated_size, 8 * 1024);
+    auto print_methods = [&methods]() {
+      std::ostringstream oss;
+      for (const auto* m : methods) {
+        oss << " " << show(m);
+      }
+      return oss.str();
+    };
+    EXPECT_LE(inflated_size, 8 * 1024) << print_methods();
   }
 }
 
 // Below will need to compute debug program size (meaning including the
 // header)
 TEST(IODITest, usingIODIWorthIt) {
+  // TODO: This will have to load the original line maps and compute
+  //       the regular debug sizes to compare. Sometimes using plain
+  //       IODI is an improvement, just for line number encoding.
+}
+
+// Below will need to compute debug program size (meaning including the
+// header)
+TEST(IODITest, couldIODIBeBetter) {
   auto method_to_pre_debug_size = extract_method_to_debug_size();
   EXPECT_GT(method_to_pre_debug_size.size(), 0);
   auto classes = run_redex();
@@ -250,8 +304,9 @@ TEST(IODITest, usingIODIWorthIt) {
     std::set<DexMethod*, PCCompare> methods;
     methods.insert(data.second.begin(), data.second.end());
     EXPECT_EQ(methods.size(), data.second.size());
-    EXPECT_GT(methods.size(), 1);
-
+    if (methods.size() == 1) {
+      continue;
+    }
     auto next_biggest = methods.begin();
     uint32_t biggest_insns = (*next_biggest)->get_dex_code()->size();
     while ((*next_biggest)->get_dex_code()->size() == biggest_insns &&
@@ -304,12 +359,14 @@ TEST(IODITest, iodiBigEnough) {
   auto debug_data = debug_to_methods(classes);
   for (auto& data : debug_data) {
     DexDebugItem* debug_item = (DexDebugItem*)data.first;
-    if (!is_iodi(*debug_item)) {
+    if (is_plain_or_iodi_plain(*debug_item)) {
       continue;
     }
     for (DexMethod* method : data.second) {
-      ASSERT_GE(debug_item_line_table_size(*debug_item),
-                method->get_dex_code()->size());
+      EXPECT_GE(debug_item_line_table_size(*debug_item),
+                method->get_dex_code()->size())
+          << show(method) << "\n"
+          << dex_debug_item_to_str(*debug_item);
     }
   }
 }
@@ -329,7 +386,7 @@ TEST(IODITest, someUseIODI) {
 }
 
 TEST(IODITest, sameNameDontUseIODI) {
-  auto classes = run_redex();
+  auto classes = run_redex(nullptr, nullptr, /*iodi_layers=*/false);
   size_t same_name_count = 0;
   for (DexClass* cls : classes) {
     std::unordered_map<std::string, DexMethods> name_to_methods;
@@ -358,8 +415,112 @@ TEST(IODITest, sameNameDontUseIODI) {
       }
     }
   }
-  // <init>, <init>, sameName, sameName, sameName
-  EXPECT_EQ(same_name_count, 5);
+  // <init>, <init>, sameName, sameName, sameName (3x + 1)
+  EXPECT_EQ(same_name_count, 12);
+}
+
+TEST(IODITest, sameNameIODILayered) {
+  auto classes = run_redex(nullptr, nullptr, /*iodi_layers=*/true);
+  size_t same_name_count = 0;
+  for (DexClass* cls : classes) {
+    std::unordered_map<std::string, DexMethods> name_to_methods;
+    for (DexMethod* method : cls->get_dmethods()) {
+      name_to_methods[method->str()].push_back(method);
+    }
+    for (DexMethod* method : cls->get_vmethods()) {
+      name_to_methods[method->str()].push_back(method);
+    }
+
+    for (auto& iter : name_to_methods) {
+      if (iter.second.size() == 1) {
+        continue;
+      }
+      size_t w_dbg = 0;
+      size_t iodi = 0;
+      for (DexMethod* method : iter.second) {
+        DexCode* code = method->get_dex_code();
+        if (!code) {
+          continue;
+        }
+        DexDebugItem* debug_item = code->get_debug_item();
+        if (!debug_item) {
+          continue;
+        }
+        ++w_dbg;
+        iodi += is_iodi(*debug_item) ? 1 : 0;
+        same_name_count += 1;
+      }
+      auto print = [&]() {
+        std::ostringstream oss;
+        for (DexMethod* method : iter.second) {
+          DexCode* code = method->get_dex_code();
+          if (!code) {
+            continue;
+          }
+          DexDebugItem* debug_item = code->get_debug_item();
+          if (!debug_item) {
+            continue;
+          }
+          oss << show(method) << ": " << dex_debug_item_to_str(*debug_item)
+              << "\n";
+        }
+        return oss.str();
+      };
+      EXPECT_EQ(iodi, w_dbg) << print();
+    }
+  }
+  // <init>, <init>, sameName, sameName, sameName (3x + 1)
+  EXPECT_EQ(same_name_count, 12);
+}
+
+TEST(IODITest, iodiLayers) {
+  auto classes = run_redex(nullptr, nullptr, /*iodi_layers=*/true);
+  size_t cluster_count{0};
+  for (DexClass* cls : classes) {
+    std::unordered_map<std::string, DexMethods> name_to_methods;
+    for (DexMethod* method : cls->get_dmethods()) {
+      name_to_methods[method->str()].push_back(method);
+    }
+    for (DexMethod* method : cls->get_vmethods()) {
+      name_to_methods[method->str()].push_back(method);
+    }
+
+    for (auto& iter : name_to_methods) {
+      if (iter.second.size() == 1) {
+        continue;
+      }
+      std::bitset<DexOutput::kIODILayerBound + 1> iodi_layers{};
+      bool have_non_iodi = false;
+      for (DexMethod* method : iter.second) {
+        DexCode* code = method->get_dex_code();
+        if (!code) {
+          continue;
+        }
+        DexDebugItem* debug_item = code->get_debug_item();
+        if (!debug_item) {
+          continue;
+        }
+
+        if (!is_iodi(*debug_item)) {
+          have_non_iodi = true;
+          EXPECT_FALSE(iodi_layers.test(0));
+          continue;
+        }
+
+        auto layer = get_iodi_layer(*debug_item);
+        ASSERT_TRUE(layer);
+        EXPECT_FALSE(iodi_layers.test(*layer))
+            << show(method) << ": " << *layer << " @ "
+            << debug_item->get_line_start();
+        EXPECT_TRUE(*layer != 0 || !have_non_iodi);
+        iodi_layers.set(*layer);
+      }
+      if (iodi_layers.test(1)) {
+        ++cluster_count;
+      }
+    }
+  }
+  EXPECT_EQ(4u, cluster_count);
 }
 
 namespace {
@@ -403,7 +564,7 @@ TEST(IODITest, encodedMetadataContainsAllIODI) {
   std::unordered_map<std::string, uint64_t> iodi_mid;
   for (auto& data : debug_data) {
     DexDebugItem* debug_item = (DexDebugItem*)data.first;
-    if (!is_iodi(*debug_item)) {
+    if (is_plain_or_iodi_plain(*debug_item)) {
       continue;
     }
     for (DexMethod* method : data.second) {
@@ -412,8 +573,10 @@ TEST(IODITest, encodedMetadataContainsAllIODI) {
       pretty_name.push_back('.');
       pretty_name += method->str();
       auto iter = mid.find(pretty_name);
-      EXPECT_NE(iter, mid.end());
-      iodi_mid.emplace(pretty_name, iter->second);
+      EXPECT_NE(iter, mid.end()) << pretty_name;
+      if (iter != mid.end()) {
+        iodi_mid.emplace(pretty_name, iter->second);
+      }
     }
   }
 

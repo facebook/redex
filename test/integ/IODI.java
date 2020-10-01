@@ -75,6 +75,38 @@ public class IODI {
     System.out.println(str2);
   }
 
+  public void SameName2() {
+    System.out.println("hellow");
+  }
+
+  public void SameName2(String str) {
+    System.out.println(str);
+  }
+
+  public void SameName2(Integer str) {
+    System.out.println(str);
+  }
+
+  public void SameName2(String str, String str2) {
+    System.out.println(str);
+    System.out.println("meow");
+    System.out.println(str2);
+  }
+
+  public void SameName3() {
+    System.out.println("hellow");
+  }
+
+  public void SameName3(String str) {
+    System.out.println(str);
+  }
+
+  public void SameName3(String str, String str2) {
+    System.out.println(str);
+    System.out.println("meow");
+    System.out.println(str2);
+  }
+
   // This method shouldn't use IODI as it's too big
   public void HugeShouldNotUse(int i) {
     System.out.println("1");

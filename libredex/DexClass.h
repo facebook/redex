@@ -674,7 +674,8 @@ std::vector<std::unique_ptr<DexDebugInstruction>> generate_debug_instructions(
     DexDebugItem* debugitem,
     PositionMapper* pos_mapper,
     uint32_t* line_start,
-    std::vector<DebugLineItem>* line_info);
+    std::vector<DebugLineItem>* line_info,
+    uint32_t line_addin);
 
 using DexCatches = std::vector<std::pair<DexType*, uint32_t>>;
 

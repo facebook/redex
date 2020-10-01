@@ -297,6 +297,14 @@ class DexOutput {
  public:
   dex_stats_t m_stats;
 
+  static constexpr size_t kIODILayerBits = 4;
+  static constexpr size_t kIODILayerBound = 1 << (kIODILayerBits - 1);
+  static constexpr size_t kIODILayerShift =
+      sizeof(uint32_t) * 8 - kIODILayerBits;
+  static constexpr uint32_t kIODIDataMask = (1 << kIODILayerShift) - 1;
+  static constexpr uint32_t kIODILayerMask = ((1 << kIODILayerBits) - 1)
+                                             << kIODILayerShift;
+
  private:
   DexClasses* m_classes;
   DexOutputIdx* dodx;

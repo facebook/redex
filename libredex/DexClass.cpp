@@ -240,7 +240,8 @@ std::vector<std::unique_ptr<DexDebugInstruction>> generate_debug_instructions(
     DexDebugItem* debugitem,
     PositionMapper* pos_mapper,
     uint32_t* line_start,
-    std::vector<DebugLineItem>* line_info) {
+    std::vector<DebugLineItem>* line_info,
+    uint32_t line_addin) {
   std::vector<std::unique_ptr<DexDebugInstruction>> dbgops;
   uint32_t prev_addr = 0;
   boost::optional<uint32_t> prev_line;
@@ -272,7 +273,7 @@ std::vector<std::unique_ptr<DexDebugInstruction>> generate_debug_instructions(
     }
     // only emit the last position entry for a given address
     if (!positions.empty()) {
-      auto line = pos_mapper->position_to_line(positions.back());
+      auto line = pos_mapper->position_to_line(positions.back()) | line_addin;
       line_info->emplace_back(DebugLineItem(it->addr, line));
       int32_t line_delta;
       if (prev_line) {
