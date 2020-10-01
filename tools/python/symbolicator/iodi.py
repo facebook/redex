@@ -10,6 +10,12 @@ import sys
 
 
 class IODIMetadata(object):
+    # This needs to match the definitions in DexOutput.h!
+    IODI_LAYER_BITS = 4
+    IODI_LAYER_SHIFT = 32 - IODI_LAYER_BITS
+    IODI_DATA_MASK = (1 << IODI_LAYER_SHIFT) - 1
+    IODI_LAYER_MASK = ((1 << IODI_LAYER_BITS) - 1) << IODI_LAYER_SHIFT
+
     def __init__(self, path):
         with open(path, "rb") as f:
             magic, version, count, zero = struct.unpack("<LLLL", f.read(4 * 4))
@@ -29,14 +35,24 @@ class IODIMetadata(object):
     def map_iodi(
         self, debug_line_map, class_name, method_name, input_lineno, input_method_id
     ):
+        input_lineno = int(input_lineno)
         qualified_name = class_name + "." + method_name
+        layer = (
+            input_lineno & IODIMetadata.IODI_LAYER_MASK
+        ) >> IODIMetadata.IODI_LAYER_SHIFT
+        adjusted_lineno = input_lineno
+        if layer > 0:
+            qualified_name += "@" + str(layer)
+            adjusted_lineno = input_lineno & IODIMetadata.IODI_DATA_MASK
+        res_lineno = None if input_lineno == adjusted_lineno else adjusted_lineno
+
         if qualified_name in self._entries:
             method_id = self._entries[qualified_name]
-            mapped = debug_line_map.find_line_number(method_id, input_lineno)
+            mapped = debug_line_map.find_line_number(method_id, adjusted_lineno)
             if mapped is not None:
                 return (mapped, method_id)
-            return (None, method_id)
-        return (None, None)
+            return (res_lineno, method_id)
+        return (res_lineno, None)
 
     def _write(self, form, *vals):
         self._f.write(struct.pack(form, *vals))
