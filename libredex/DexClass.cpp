@@ -273,8 +273,9 @@ std::vector<std::unique_ptr<DexDebugInstruction>> generate_debug_instructions(
     }
     // only emit the last position entry for a given address
     if (!positions.empty()) {
-      auto line = pos_mapper->position_to_line(positions.back()) | line_addin;
-      line_info->emplace_back(DebugLineItem(it->addr, line));
+      auto line_base = pos_mapper->position_to_line(positions.back());
+      auto line = line_base | line_addin;
+      line_info->emplace_back(DebugLineItem(it->addr, line_base));
       int32_t line_delta;
       if (prev_line) {
         line_delta = line - *prev_line;

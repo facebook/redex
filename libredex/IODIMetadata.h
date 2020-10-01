@@ -55,6 +55,9 @@ class IODIMetadata {
   void write(std::ostream& ofs, const MethodToIdMap& method_to_id);
 
   static std::string get_iodi_name(const DexMethod* m);
+  static const std::string& get_layered_name(const std::string& base_name,
+                                             size_t layer,
+                                             std::string& storage);
 
   const DexMethod* get_canonical_method(const DexMethod* m) const {
     return m_canonical.at(m);
@@ -70,11 +73,18 @@ class IODIMetadata {
     return m_name_clusters.at(get_canonical_method(m));
   }
 
+  void set_iodi_layer(const DexMethod* method, size_t layer);
+  size_t get_iodi_layer(const DexMethod* method) const;
+
  private:
   std::unordered_map<const DexMethod*, std::unordered_set<const DexMethod*>>
       m_name_clusters;
   std::unordered_map<const DexMethod*, const DexMethod*> m_canonical;
 
+  std::unordered_map<const DexMethod*, std::pair<std::string, size_t>>
+      m_iodi_method_layers;
+
+  // These exists for can_safely_use_iodi
   std::unordered_map<const DexMethod*, std::string> m_method_to_name;
   std::unordered_set<const DexMethod*> m_huge_methods;
 

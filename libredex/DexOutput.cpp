@@ -1446,6 +1446,7 @@ uint32_t emit_instruction_offset_debug_info(
     PositionMapper* pos_mapper,
     std::vector<CodeItemEmit*>& code_items,
     IODIMetadata& iodi_metadata,
+    size_t iodi_layer,
     uint32_t line_addin,
     uint8_t* output,
     uint32_t offset,
@@ -2040,6 +2041,7 @@ uint32_t emit_instruction_offset_debug_info(
     // will return false.
     DexMethod* method = it->method;
     if (!iodi_metadata.is_huge(method)) {
+      TRACE(IODI, 3, "Emitting %s as IODI", SHOW(method));
       // Here we sanity check to make sure that all IODI programs are at least
       // as long as they need to be.
       uint32_t param_size = it->method->get_proto()->get_args()->size();
@@ -2056,7 +2058,9 @@ uint32_t emit_instruction_offset_debug_info(
                         "Expected IODI program to be big enough for %s : %u",
                         SHOW(method), code_size);
       it->code_item->debug_info_off = offset_it->second;
+      iodi_metadata.set_iodi_layer(method, iodi_layer);
     } else {
+      TRACE(IODI, 3, "Emitting %s as non-IODI", SHOW(method));
       // Recompute the debug data with no line add-in if not in a cluster.
       // TODO: If a whole cluster does not have IODI, we should emit base
       //       versions for all of them.
@@ -2161,7 +2165,7 @@ uint32_t emit_instruction_offset_debug_info(
       TRACE(IODI, 1, "IODI iteration %zu", i);
       const size_t before_size = code_items_tmp.size();
       offset += emit_instruction_offset_debug_info(
-          dodx, pos_mapper, code_items_tmp, iodi_metadata,
+          dodx, pos_mapper, code_items_tmp, iodi_metadata, i,
           i << DexOutput::kIODILayerShift, output, offset, dbgcount,
           code_debug_map);
       const size_t after_size = code_items_tmp.size();

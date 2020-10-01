@@ -9,6 +9,7 @@
 
 #include <fstream>
 
+#include "DexOutput.h"
 #include "DexUtil.h"
 #include "Show.h"
 #include "StlUtil.h"
@@ -29,6 +30,18 @@ std::string IODIMetadata::get_iodi_name(const DexMethod* m) {
   std::string prefix = pretty_prefix_for_cls(type_class(m->get_class()));
   prefix += m->str();
   return prefix;
+}
+
+const std::string& IODIMetadata::get_layered_name(const std::string& base_name,
+                                                  size_t layer,
+                                                  std::string& storage) {
+  if (layer == 0) {
+    return base_name;
+  }
+  storage = base_name;
+  storage += "@";
+  storage += std::to_string(layer);
+  return storage;
 }
 
 void IODIMetadata::mark_methods(DexStoresVector& scope) {
@@ -89,6 +102,15 @@ void IODIMetadata::mark_methods(DexStoresVector& scope) {
   m_marked = true;
 }
 
+void IODIMetadata::set_iodi_layer(const DexMethod* method, size_t layer) {
+  m_iodi_method_layers.emplace(method,
+                               std::make_pair(get_iodi_name(method), layer));
+}
+size_t IODIMetadata::get_iodi_layer(const DexMethod* method) const {
+  auto it = m_iodi_method_layers.find(method);
+  return it != m_iodi_method_layers.end() ? it->second.second : 0u;
+}
+
 void IODIMetadata::mark_method_huge(const DexMethod* method) {
   m_huge_methods.insert(method);
 }
@@ -142,28 +164,32 @@ void IODIMetadata::write(
   } entry_hdr;
 
   uint32_t count = 0;
-  uint32_t huge_count = 0;
+  size_t max_layer{0};
+  size_t layered_count{0};
 
-  for (const auto& it : m_method_to_name) {
-    if (is_huge(it.first)) {
-      // This will occur if at some point a method was marked as huge during
-      // encoding.
-      huge_count += 1;
-      continue;
-    }
+  for (const auto& p : m_iodi_method_layers) {
     count += 1;
     always_assert_log(count != 0, "Too many entries found, overflowed");
-    always_assert(it.second.size() < UINT16_MAX);
-    entry_hdr.klen = it.second.size();
-    entry_hdr.method_id = method_to_id.at(const_cast<DexMethod*>(it.first));
+
+    auto* method = p.first;
+    const auto& name = p.second.first;
+    auto layer = p.second.second;
+    redex_assert(layer < DexOutput::kIODILayerBound);
+
+    std::string tmp;
+    const std::string& layered_name = get_layered_name(name, layer, tmp);
+
+    always_assert(layered_name.size() < UINT16_MAX);
+    entry_hdr.klen = layered_name.size();
+    entry_hdr.method_id = method_to_id.at(const_cast<DexMethod*>(method));
     ofs.write((const char*)&entry_hdr, sizeof(EntryHeader));
-    ofs << it.second;
+    ofs << layered_name;
   }
   // Rewind and write the header now that we know single/dup counts
   ofs.seekp(0);
   header.count = count;
   ofs.write((const char*)&header, sizeof(Header));
   TRACE(IODI, 1,
-        "[IODI] Emitted %u entries, %u ignored because they were too big.",
-        count, huge_count);
+        "[IODI] Emitted %u entries, %zu in layers (maximum layer %zu).", count,
+        layered_count, max_layer + 1);
 }
