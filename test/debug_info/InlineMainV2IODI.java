@@ -60,6 +60,6 @@ public class InlineMainV2IODI {
 
   @Test
   public void testElseThrowsOverload() throws Exception {
-    itc.testElseThrowsOverload();
+    itc.testElseThrowsOverload(null);
   }
 }

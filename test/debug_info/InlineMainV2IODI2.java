@@ -7,24 +7,32 @@
 
 package com.facebook.redexlinemap;
 
+import static org.fest.assertions.api.Assertions.assertThat;
+
+import java.util.BitSet;
+import java.util.HashSet;
+
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-public class InlineMainV2 {
+public class InlineMainV2IODI2 {
 
   InlineTestCode itc;
 
   @BeforeClass
   public static void checkTests() throws Exception {
-    InlineTestCode.checkTests(InlineMainV2.class);
+    InlineTestCode.checkTests(InlineMainV2IODI2.class);
   }
 
   @Before
   public void setUp() throws Exception {
     itc =
         new InlineTestCode(
-            new LineMapperV2(getClass().getResourceAsStream("/assets/redex-line-number-map-v2")));
+            new LineMapperV2(
+                getClass().getResourceAsStream("/assets/redex-line-number-map-v2"),
+                getClass().getResourceAsStream("/assets/iodi-metadata"),
+                getClass().getResourceAsStream("/assets/redex-debug-line-map-v2")));
   }
 
   /** Check that the stack trace of a non-inlined function makes sense. */
@@ -57,6 +65,23 @@ public class InlineMainV2 {
 
   @Test
   public void testElseThrowsOverload() throws Exception {
-    itc.testElseThrowsOverload(null);
+    itc.testElseThrowsOverload(
+        new InlineTestCode.OverloadCheck() {
+          @Override
+          public void check(HashSet<StackTraceElement> frames) {
+            BitSet bs = new BitSet(8);
+            for (StackTraceElement ste : frames) {
+              assertThat(ste.getMethodName()).isEqualTo("elseThrows");
+              int layer = IODIConstants.getLayer(ste.getLineNumber());
+              assertThat(bs.get(layer)).isFalse();
+              bs.set(layer);
+            }
+            int setBits = 0;
+            for (int i = 0; i < bs.length(); i++) {
+              setBits += bs.get(i) ? 1 : 0;
+            }
+            assertThat(setBits).isEqualTo(frames.size());
+          }
+        });
   }
 }

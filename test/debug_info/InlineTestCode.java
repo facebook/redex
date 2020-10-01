@@ -168,7 +168,7 @@ public class InlineTestCode {
 
   @NoInline
   @SuppressWarnings("CatchGeneralException")
-  public void testElseThrowsOverload() throws Exception {
+  public void testElseThrowsOverload(OverloadCheck oc) throws Exception {
     HashSet<StackTraceElement> frames = new HashSet<>();
     try {
       elseThrows((int)0);
@@ -234,6 +234,15 @@ public class InlineTestCode {
       }
     }
     assertThat(methods).hasSize(4);
+
+    // Extra checks?
+    if (oc != null) {
+      oc.check(frames);
+    }
+  }
+
+  public interface OverloadCheck {
+    public void check(HashSet<StackTraceElement> frames);
   }
 
   public static void checkTests(Class<?> cls) throws Exception {

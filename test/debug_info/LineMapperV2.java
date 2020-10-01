@@ -200,20 +200,23 @@ public class LineMapperV2 {
     if (lines == null) {
       return -1;
     }
-    int result = -1;
+    OffsetLine bestLine = null;
     for (OffsetLine offsetLine : lines) {
       if (offsetLine.pc <= line) {
-        result = offsetLine.mappedLine;
+        bestLine = offsetLine;
       } else {
-        if (result == -1) {
+        if (bestLine == null) {
           // Better to give a rough line number than fail epicly.
           // Copied from Python symbolizer.
-          result = offsetLine.mappedLine;
+          bestLine = offsetLine;
         }
         break;
       }
     }
-    return result;
+    if (bestLine != null) {
+      return bestLine.mappedLine;
+    }
+    return -1;
   }
 
   public ArrayList<StackTraceElement> mapStackTrace(StackTraceElement[] trace) {
@@ -224,6 +227,11 @@ public class LineMapperV2 {
         int line = el.getLineNumber();
         if (iodiMapping != null && lineMappings != null) {
           String name = el.getClassName() + "." + el.getMethodName();
+          int layer = IODIConstants.getLayer(line);
+          if (layer > 0) {
+            name += "@" + layer;
+            line = IODIConstants.getEncodedLine(line);
+          }
           Long mappedId = iodiMapping.get(name);
           if (mappedId != null) {
             int mappedLine = findLineNumber(mappedId, line);
