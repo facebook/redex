@@ -114,9 +114,6 @@ class GlobalTypeAnalysis {
 
   void run(Scope& scope) { analyze(scope); }
 
-  /*
-   * Exposed for testing purposes.
-   */
   std::unique_ptr<GlobalTypeAnalyzer> analyze(const Scope&);
 
  private:
