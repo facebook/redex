@@ -82,21 +82,22 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
       : m_config(config), m_mgr(mgr), m_method_profiles(method_profiles) {}
 
   void configure(const Scope& scope, ConfigFiles& conf) override {
-    if (m_method_profiles.has_stats()) {
-      for (auto& p : m_method_profiles.all_interactions()) {
-        auto& method_stats = p.second;
-        walk::methods(scope, [&](DexMethod* method) {
-          auto it = method_stats.find(method);
-          if (it == method_stats.end()) {
-            return;
-          }
-          if (it->second.appear_percent >=
-              m_config.method_profiles_appear_percent_threshold) {
-            m_sufficiently_popular_methods.insert(method);
-          }
-        });
-      }
+    always_assert(m_method_profiles.has_stats());
+
+    for (auto& p : m_method_profiles.all_interactions()) {
+      auto& method_stats = p.second;
+      walk::methods(scope, [&](DexMethod* method) {
+        auto it = method_stats.find(method);
+        if (it == method_stats.end()) {
+          return;
+        }
+        if (it->second.appear_percent >=
+            m_config.method_profiles_appear_percent_threshold) {
+          m_sufficiently_popular_methods.insert(method);
+        }
+      });
     }
+
     if (m_config.relocate_non_true_virtual_methods) {
       m_non_true_virtual_methods =
           method_override_graph::get_non_true_virtuals(scope);
@@ -772,6 +773,13 @@ void ClassSplittingPass::run_pass(DexStoresVector& stores,
                                   PassManager& mgr) {
   TRACE(CS, 1, "[class splitting] Enabled: %d", m_config.enabled);
   if (!m_config.enabled) {
+    return;
+  }
+
+  const auto& method_profiles = conf.get_method_profiles();
+  if (!method_profiles.has_stats()) {
+    TRACE(CS, 1,
+          "[class splitting] Disabled since we don't have method profiles");
     return;
   }
 
