@@ -65,8 +65,17 @@ class Chains {
  private:
   const cfg::ControlFlowGraph& m_cfg;
   reaching_defs::FixpointIterator m_fp_iter;
-  template <typename Fn>
-  void replay_analysis_with_callback(Fn f) const;
+};
+
+class MoveAwareChains {
+ public:
+  explicit MoveAwareChains(const cfg::ControlFlowGraph& cfg);
+  UseDefChains get_use_def_chains() const;
+  DefUseChains get_def_use_chains() const;
+
+ private:
+  const cfg::ControlFlowGraph& m_cfg;
+  reaching_defs::MoveAwareFixpointIterator m_fp_iter;
 };
 
 /*

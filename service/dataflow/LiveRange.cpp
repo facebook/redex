@@ -72,6 +72,52 @@ void unify_defs(const UseDefChains& chains, DefSets* def_sets) {
   }
 }
 
+template <typename Iter, typename Fn>
+void replay_analysis_with_callback(const cfg::ControlFlowGraph& cfg,
+                                   const Iter& iter,
+                                   Fn f) {
+  for (cfg::Block* block : cfg.blocks()) {
+    auto defs_in = iter.get_entry_state_at(block);
+    for (const auto& mie : InstructionIterable(block)) {
+      auto insn = mie.insn;
+      for (src_index_t i = 0; i < insn->srcs_size(); ++i) {
+        Use use{insn, i};
+        auto src = insn->src(i);
+        auto defs = defs_in.get(src);
+        always_assert_log(!defs.is_top() && defs.size() > 0,
+                          "Found use without def when processing [0x%lx]%s",
+                          &mie, SHOW(insn));
+        f(use, defs);
+      }
+      iter.analyze_instruction(insn, &defs_in);
+    }
+  }
+}
+
+template <typename Iter>
+UseDefChains get_use_def_chains_impl(const cfg::ControlFlowGraph& cfg,
+                                     const Iter& iter) {
+  UseDefChains chains;
+  replay_analysis_with_callback(
+      cfg, iter, [&chains](const Use& use, const reaching_defs::Domain& defs) {
+        chains[use] = defs.elements();
+      });
+  return chains;
+}
+
+template <typename Iter>
+DefUseChains get_def_use_chains_impl(const cfg::ControlFlowGraph& cfg,
+                                     const Iter& iter) {
+  DefUseChains chains;
+  replay_analysis_with_callback(
+      cfg, iter, [&chains](const Use& use, const reaching_defs::Domain& defs) {
+        for (auto def : defs.elements()) {
+          chains[def].emplace(use);
+        }
+      });
+  return chains;
+}
+
 } // namespace
 
 namespace live_range {
@@ -84,44 +130,25 @@ Chains::Chains(const cfg::ControlFlowGraph& cfg) : m_cfg(cfg), m_fp_iter(cfg) {
   m_fp_iter.run(reaching_defs::Environment());
 }
 
-template <typename Fn>
-void Chains::replay_analysis_with_callback(Fn f) const {
-  for (cfg::Block* block : m_cfg.blocks()) {
-    auto defs_in = m_fp_iter.get_entry_state_at(block);
-    for (const auto& mie : InstructionIterable(block)) {
-      auto insn = mie.insn;
-      for (src_index_t i = 0; i < insn->srcs_size(); ++i) {
-        Use use{insn, i};
-        auto src = insn->src(i);
-        auto defs = defs_in.get(src);
-        always_assert_log(!defs.is_top() && defs.size() > 0,
-                          "Found use without def when processing [0x%lx]%s",
-                          &mie, SHOW(insn));
-        f(use, defs);
-      }
-      m_fp_iter.analyze_instruction(insn, &defs_in);
-    }
-  }
-}
-
 UseDefChains Chains::get_use_def_chains() const {
-  UseDefChains chains;
-  replay_analysis_with_callback(
-      [&chains](const Use& use, const reaching_defs::Domain& defs) {
-        chains[use] = defs.elements();
-      });
-  return chains;
+  return get_use_def_chains_impl(m_cfg, m_fp_iter);
 }
 
 DefUseChains Chains::get_def_use_chains() const {
-  DefUseChains chains;
-  replay_analysis_with_callback(
-      [&chains](const Use& use, const reaching_defs::Domain& defs) {
-        for (auto def : defs.elements()) {
-          chains[def].emplace(use);
-        }
-      });
-  return chains;
+  return get_def_use_chains_impl(m_cfg, m_fp_iter);
+}
+
+MoveAwareChains::MoveAwareChains(const cfg::ControlFlowGraph& cfg)
+    : m_cfg(cfg), m_fp_iter(cfg) {
+  m_fp_iter.run(reaching_defs::Environment());
+}
+
+UseDefChains MoveAwareChains::get_use_def_chains() const {
+  return get_use_def_chains_impl(m_cfg, m_fp_iter);
+}
+
+DefUseChains MoveAwareChains::get_def_use_chains() const {
+  return get_def_use_chains_impl(m_cfg, m_fp_iter);
 }
 
 void renumber_registers(IRCode* code, bool width_aware) {
