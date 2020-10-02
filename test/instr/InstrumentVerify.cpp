@@ -12,7 +12,6 @@
 #include "DexInstruction.h"
 #include "IRCode.h"
 #include "Show.h"
-#include "Trace.h"
 #include "VerifyUtil.h"
 #include "Walkers.h"
 
@@ -58,7 +57,7 @@ TEST_F(PostVerify, InstrumentVerify) {
   //                        "Lcom/facebook/redextest/InstrumentTestClass1;");
   // ASSERT_NE(cls, nullptr);
   //
-  // // This class is in blocklist. None of its methods should be instrumented.
+  // // This class is in blacklist. None of its methods should be instrumented.
   // walk::methods(std::vector<DexClass*>{cls}, [](DexMethod* method) {
   //   EXPECT_EQ(nullptr,
   //             find_invoke(method, DOPCODE_INVOKE_STATIC, "onMethodBegin"));

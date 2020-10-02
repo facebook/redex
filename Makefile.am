@@ -248,6 +248,7 @@ libopt_la_SOURCES = \
 	opt/evaluate_type_checks/EvaluateTypeChecks.cpp \
 	opt/final_inline/FinalInline.cpp \
 	opt/final_inline/FinalInlineV2.cpp \
+	opt/instrument/BlockInstrument.cpp \
 	opt/instrument/Instrument.cpp \
 	opt/interdex/CrossDexRefMinimizer.cpp \
 	opt/interdex/CrossDexRelocator.cpp \

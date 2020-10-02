@@ -7,6 +7,7 @@
 
 #include "Instrument.h"
 
+#include "BlockInstrument.h"
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "InterDexPass.h"
@@ -102,380 +103,6 @@ bool match_class_name(std::string cls_name,
   return false;
 }
 
-// Check for inclusion in allowlist or blocklist of methods/classes.
-bool is_included(const DexMethod* method,
-                 const std::unordered_set<std::string>& set) {
-  if (match_class_name(show_deobfuscated(method->get_class()), set)) {
-    return true;
-  }
-  // Check for method by its full name.
-  return set.count(method->get_deobfuscated_name());
-}
-
-std::unordered_map<int /* Number of arguments*/, DexMethod*>
-find_analysis_methods(const DexClass& cls, const std::string& name) {
-  std::unordered_map<int, DexMethod*> analysis_method_map;
-  for (const auto& dm : cls.get_dmethods()) {
-    if (name == dm->get_name()->c_str()) {
-      auto const v =
-          std::next(dm->get_proto()->get_args()->get_type_list().begin(), 1);
-      if (*v == DexType::make_type("[S")) {
-        analysis_method_map.emplace(1, dm);
-      } else {
-        analysis_method_map.emplace(dm->get_proto()->get_args()->size(), dm);
-      }
-    }
-  }
-  return analysis_method_map;
-}
-
-std::unordered_map<int, DexMethod*> find_and_verify_analysis_method(
-    const DexClass& cls, const std::string& method_name) {
-  const auto& analysis_method_map = find_analysis_methods(cls, method_name);
-  if (!analysis_method_map.empty()) {
-    return analysis_method_map;
-  }
-
-  std::cerr << "[InstrumentPass] error: cannot find " << method_name << " in "
-            << show(cls) << std::endl;
-  for (const auto& m : cls.get_dmethods()) {
-    std::cerr << " " << show(m) << std::endl;
-  }
-  exit(1);
-}
-
-// Find if the current insertion point lies within a try_start - try_end block.
-// If it does, return its corresponding catch block.
-MethodItemEntry* find_try_block(IRCode* code,
-                                const IRList::iterator& insert_point) {
-  for (auto mie_try = insert_point; mie_try != code->begin(); --mie_try) {
-    if (mie_try->type == MFLOW_TRY && mie_try->tentry->type == TRY_END) {
-      return nullptr;
-    } else if (mie_try->type == MFLOW_TRY &&
-               mie_try->tentry->type == TRY_START) {
-      return mie_try->tentry->catch_start;
-    }
-  }
-  return nullptr;
-}
-
-void insert_try_start_instr(IRCode* code,
-                            const IRList::iterator& insert_point,
-                            MethodItemEntry* catch_block) {
-  if (catch_block) {
-    auto try_start = new MethodItemEntry(TRY_START, catch_block);
-    code->insert_before(insert_point, *try_start);
-  }
-}
-
-void insert_try_end_instr(IRCode* code,
-                          const IRList::iterator& insert_point,
-                          MethodItemEntry* catch_block) {
-  if (catch_block) {
-    auto try_end = new MethodItemEntry(TRY_END, catch_block);
-    code->insert_before(insert_point, *try_end);
-  }
-}
-
-void insert_invoke_instr(IRCode* code,
-                         const IRList::iterator& insert_point,
-                         IRInstruction* method_id_inst,
-                         IRInstruction* invoke_inst) {
-  // When inserting an INVOKE instruction within a try_catch block, in
-  // order to prevent adding an extra throw edge to the CFG, we split the
-  // block into two. We insert a TRY_END instruction before our
-  // instrumentation INVOKE call and a TRY_START after.
-
-  auto catch_block = find_try_block(code, insert_point);
-
-  insert_try_end_instr(code, insert_point, catch_block);
-  code->insert_before(code->insert_before(insert_point, invoke_inst),
-                      method_id_inst);
-  insert_try_start_instr(code, insert_point, catch_block);
-}
-
-// TODO(minjang): We could simply utilize already existing analysis methods
-// instead of making an array. For an instance, to handle 42 bit vecgors, We
-// could call 8 times of onMethodExitBB(SSSSS) and 1 time of onMethodExitBB(SS).
-//
-// ---
-// When the number of bit vectors for a method is more than 5, they are added to
-// an array and the array is passed to the analysis function onMethodExitBB()
-// along with the method identifier.
-//
-// Algorithm:
-//  Bit vectors: v_0, v_1, v_2, v_3, v_4, v_5
-//  num_vectors: 6
-//  Initialize size of new array: CONST <v_array>, 6
-//  Initialize a new empty array: NEW_ARRAY <v_array>, [S
-//  For each bit vector <v_i>:
-//   Initialize index:     CONST <v_pos>, [position]
-//   Add to array:         APUT_OBJECT <v_i>, <v_array> , <v_pos>
-//  Finally, call analysis_method:
-//   Initialize method id: CONST <v_mId>, [method_id]
-//   Actual call:          INVOKE_STATIC <v_mId>, <v_array>
-//
-// Example:
-//  CONST v59, 6
-//  NEW_ARRAY v59, [S
-//  IOPCODE_MOVE_RESULT_PSEUDO_OBJECT v59
-//  CONST v60, 0
-//  APUT v52, v59, v60
-//  CONST v61, 1
-//  APUT v53, v59, v61
-//  CONST v62, 2
-//  APUT v54, v59, v62
-//  CONST v63, 3
-//  APUT v55, v59, v63
-//  CONST v64, 4
-//  APUT v56, v59, v64
-//  CONST v65, 5
-//  APUT v57, v59, v65
-//  CONST v66, 6171
-//  INVOKE_STATIC v66, v59, Lcom/foo/Analysis;.onMethodExitBB:(I[S)V
-void insert_invoke_static_array_arg(IRCode* code,
-                                    size_t method_id,
-                                    DexMethod* method_onMethodExit,
-                                    const std::vector<reg_t>& reg_bb_vector,
-                                    const IRList::iterator& insert_point) {
-  // If num_vectors >5, create array of all bit vectors. Add as argument to
-  // invoke call.
-  size_t num_vectors = reg_bb_vector.size();
-  // Create new array.
-  IRInstruction* array_size_inst = new IRInstruction(OPCODE_CONST);
-  array_size_inst->set_literal(num_vectors);
-  const auto array_dest = code->allocate_temp();
-  array_size_inst->set_dest(array_dest);
-
-  IRInstruction* new_array_insn = new IRInstruction(OPCODE_NEW_ARRAY);
-  new_array_insn->set_type(type::make_array_type(type::_short()));
-  new_array_insn->set_srcs_size(1);
-  new_array_insn->set_src(0, array_dest);
-
-  IRInstruction* move_result_pseudo =
-      new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
-  move_result_pseudo->set_dest(array_dest);
-
-  auto catch_block = find_try_block(code, insert_point);
-
-  insert_try_end_instr(code, insert_point, catch_block);
-  code->insert_before(
-      code->insert_before(code->insert_before(insert_point, move_result_pseudo),
-                          new_array_insn),
-      array_size_inst);
-  insert_try_start_instr(code, insert_point, catch_block);
-
-  // Set of instructions to add bit vectors to newly created array.
-  std::vector<IRInstruction*> index_inst(num_vectors);
-  std::vector<IRInstruction*> aput_inst(num_vectors);
-  std::vector<reg_t> index_reg(num_vectors);
-
-  catch_block = find_try_block(code, insert_point);
-
-  insert_try_end_instr(code, insert_point, catch_block);
-  for (size_t i = 0; i < num_vectors; i++) {
-    // Initialize index where this element is to be inserted.
-    index_inst[i] = new IRInstruction(OPCODE_CONST);
-    index_inst[i]->set_literal(i);
-    index_reg[i] = code->allocate_temp();
-    index_inst[i]->set_dest(index_reg[i]);
-
-    // APUT instruction adds the bit vector to the array.
-    aput_inst[i] = new IRInstruction(OPCODE_APUT_SHORT);
-    aput_inst[i]->set_srcs_size(3);
-    aput_inst[i]->set_src(0, reg_bb_vector[i]);
-    aput_inst[i]->set_src(1, array_dest);
-    aput_inst[i]->set_src(2, index_reg[i]);
-
-    code->insert_before(code->insert_before(insert_point, aput_inst[i]),
-                        index_inst[i]);
-  }
-  insert_try_start_instr(code, insert_point, catch_block);
-
-  // Finally, make the INVOKE_STATIC call to analysis function.
-  // Argument 1: Method ID, Argument 2: Array of bit vectors.
-  IRInstruction* method_id_inst = new IRInstruction(OPCODE_CONST);
-  method_id_inst->set_literal(method_id);
-  auto reg_method_id = code->allocate_temp();
-  method_id_inst->set_dest(reg_method_id);
-
-  IRInstruction* invoke_inst = new IRInstruction(OPCODE_INVOKE_STATIC);
-  invoke_inst->set_method(method_onMethodExit);
-  invoke_inst->set_srcs_size(2);
-  invoke_inst->set_src(0, reg_method_id);
-  invoke_inst->set_src(1, array_dest);
-
-  insert_invoke_instr(code, insert_point, method_id_inst, invoke_inst);
-}
-
-void insert_invoke_static_call_bb(IRCode* code,
-                                  size_t method_id,
-                                  DexMethod* method_onMethodExit,
-                                  const std::vector<reg_t>& reg_bb_vector) {
-  for (auto mie = code->begin(); mie != code->end(); ++mie) {
-    if (mie->type == MFLOW_OPCODE &&
-        (mie->insn->opcode() == OPCODE_RETURN ||
-         mie->insn->opcode() == OPCODE_RETURN_OBJECT ||
-         mie->insn->opcode() == OPCODE_RETURN_VOID)) {
-      IRInstruction* method_id_inst = new IRInstruction(OPCODE_CONST);
-      method_id_inst->set_literal(method_id);
-      auto reg_method_id = code->allocate_temp();
-      method_id_inst->set_dest(reg_method_id);
-
-      assert(!reg_bb_vector.empty());
-      if (reg_bb_vector.size() <= 5) {
-        IRInstruction* invoke_inst = new IRInstruction(OPCODE_INVOKE_STATIC);
-        // Method to be invoked depends on the number of vectors in current
-        // method. The '1' is added to count first argument i.e. method_id.
-        invoke_inst->set_method(method_onMethodExit);
-        invoke_inst->set_srcs_size(reg_bb_vector.size() + 1);
-        invoke_inst->set_src(0, reg_method_id);
-        for (size_t reg_index = 0; reg_index < reg_bb_vector.size();
-             ++reg_index) {
-          invoke_inst->set_src(reg_index + 1, reg_bb_vector[reg_index]);
-        }
-        insert_invoke_instr(code, mie, method_id_inst, invoke_inst);
-      } else {
-        insert_invoke_static_array_arg(code, method_id, method_onMethodExit,
-                                       reg_bb_vector, mie);
-      }
-    }
-  }
-}
-
-IRList::iterator find_or_insn_insert_point(cfg::Block* block) {
-  // After every invoke instruction, the value returned from the function is
-  // moved to a register. The instruction used to move depends on the type of
-  // return value. Our instrumentation should skip over all these move_result
-  // instructions.
-  return std::find_if_not(
-      block->begin(), block->end(), [&](const MethodItemEntry& mie) {
-        auto mie_op = mie.insn->opcode();
-        return (mie.type == MFLOW_OPCODE &&
-                (opcode::is_an_internal(mie_op) || mie_op == OPCODE_MOVE ||
-                 mie_op == OPCODE_MOVE_WIDE ||
-                 mie_op == OPCODE_MOVE_EXCEPTION ||
-                 mie_op == OPCODE_MOVE_OBJECT || mie_op == OPCODE_MOVE_RESULT ||
-                 mie_op == OPCODE_MOVE_RESULT_OBJECT ||
-                 mie_op == OPCODE_MOVE_RESULT_WIDE)) ||
-               (mie.type == MFLOW_TRY &&
-                (mie.tentry->type == TRY_END || mie.tentry->type == TRY_START));
-        //
-        // TODO(minjang): Fix a bug! Should pass MFLOW_TARGET as well.
-        //
-      });
-}
-
-// For every basic block, add an instruction to calculate:
-//   bit_vector[n] OR (1 << block_id).
-//
-// We use 16-bit short vectors to capture all the basic blocks in a method. We
-// reserve the MSB of each 16-bit vector as the end marker. This end marker is
-// used to distinguish multiple bit vectors. The set MSB indicates continuation:
-// read the following vector(s) again until we see the unset MSB. We actually
-// use 15 bits per vector.
-int instrument_onBasicBlockBegin(
-    IRCode* code,
-    DexMethod* method,
-    const std::unordered_map<int, DexMethod*>& method_onMethodExit_map,
-    size_t method_id,
-    int& all_bbs,
-    int& num_blocks_instrumented,
-    int& all_methods_inst,
-    std::map<int, std::pair<std::string, int>>& method_id_name_map,
-    std::map<size_t, int>& bb_vector_stat) {
-  assert(code != nullptr);
-
-  code->build_cfg(/* editable */ false);
-  const auto& blocks = code->cfg().blocks();
-
-  // It is done this way to avoid using ceil() or double/float casting.
-  // Since we reserve the MSB as the end marker, we divide by 15.
-  const size_t num_vectors = (blocks.size() + 15 - 1) / 15;
-
-  TRACE(INSTRUMENT, 7, "[%s] Basic Blocks: %zu, Necessary vectors: %zu",
-        SHOW(method->get_name()), blocks.size(), num_vectors);
-
-  all_bbs += blocks.size();
-
-  // Add <num_vectors> shorts to the beginning to method. These will be used as
-  // basic block 16-bit vectors.
-  std::vector<reg_t> reg_bb_vector(num_vectors);
-  std::vector<IRInstruction*> const_inst_int(num_vectors);
-  for (size_t reg_index = 0; reg_index < num_vectors; ++reg_index) {
-    const_inst_int.at(reg_index) = new IRInstruction(OPCODE_CONST);
-    // The very last bit is for the end marker: the unset bit. Otherwise, set
-    // the MSB to indicate continuation.
-    const_inst_int.at(reg_index)->set_literal(
-        reg_index == num_vectors - 1 ? 0 : -32768);
-    reg_bb_vector.at(reg_index) = code->allocate_temp();
-    const_inst_int.at(reg_index)->set_dest(reg_bb_vector.at(reg_index));
-  }
-
-  // Before the basic blocks are instrumented, at the method exit points,
-  // we add an INVOKE_STATIC call to send the bit vector to logs. This is done
-  // before actual instrumentation to get the updated CFG after adding edges to
-  // this invoke call. The INVOKE call takes (num_vectors + 1) arguments:
-  // Method ID (actually, the short array offset) and bit vectors * n.
-  size_t index_to_method = (num_vectors > 5) ? 1 : num_vectors + 1;
-  ++bb_vector_stat[num_vectors];
-  assert(method_onMethodExit_map.count(index_to_method));
-  insert_invoke_static_call_bb(code, method_id,
-                               method_onMethodExit_map.at(index_to_method),
-                               reg_bb_vector);
-
-  for (cfg::Block* block : blocks) {
-    const size_t block_vector_index = block->id() / 15;
-    // Add instruction to calculate 'basic_block_bit_vector |= 1 << block->id()'
-    // We use OPCODE_OR_INT_LIT16 to prevent inserting an extra CONST
-    // instruction into the bytecode.
-    IRInstruction* or_inst = new IRInstruction(OPCODE_OR_INT_LIT16);
-    or_inst->set_literal(static_cast<int16_t>(1ULL << (block->id() % 15)));
-    or_inst->set_src(0, reg_bb_vector.at(block_vector_index));
-    or_inst->set_dest(reg_bb_vector.at(block_vector_index));
-
-    // Find where to insert the newly created instruction block.
-    auto insert_point = find_or_insn_insert_point(block);
-
-    // We do not instrument a Basic block if:
-    // 1. It only has internal or MOVE instructions.
-    // 2. BB has no opcodes.
-    if (insert_point == block->end() || block->num_opcodes() < 1) {
-      TRACE(INSTRUMENT, 7, "No instrumentation to block: %s",
-            SHOW(show(method) + std::to_string(block->id())));
-      continue;
-    }
-    num_blocks_instrumented++;
-    code->insert_before(insert_point, or_inst);
-  }
-
-  // We use intentionally obfuscated name to guarantee the uniqueness.
-  const auto& method_name = show(method);
-  assert(!method_id_name_map.count(method_id));
-  method_id_name_map.emplace(method_id,
-                             std::make_pair(method_name, blocks.size()));
-
-  // Find a point at the beginning of the method to insert the init
-  // instruction. This initializes bit vector registers to 0.
-  auto insert_point_init = std::find_if_not(
-      code->begin(), code->end(), [&](const MethodItemEntry& mie) {
-        return mie.type == MFLOW_FALLTHROUGH ||
-               (mie.type == MFLOW_OPCODE &&
-                opcode::is_a_load_param(mie.insn->opcode()));
-      });
-
-  for (size_t reg_index = 0; reg_index < num_vectors; ++reg_index) {
-    code->insert_before(insert_point_init, const_inst_int.at(reg_index));
-  }
-
-  TRACE(INSTRUMENT, 7, "Id: %zu Method: %s", method_id, SHOW(method_name));
-  TRACE(INSTRUMENT, 7, "After Instrumentation Full:\n %s", SHOW(code));
-
-  method_id += num_vectors;
-  all_methods_inst++;
-  return method_id;
-}
-
 void instrument_onMethodBegin(DexMethod* method,
                               int index,
                               DexMethod* method_onMethodBegin) {
@@ -542,113 +169,6 @@ void instrument_onMethodBegin(DexMethod* method,
       TRACE(INSTRUMENT, 9, "%s", SHOW(*it));
     }
   }
-}
-
-// Find a sequence of opcode that creates a static array. Patch the array size.
-void patch_array_size(DexClass* analysis_cls,
-                      const std::string& array_name,
-                      const int array_size) {
-  DexMethod* clinit = analysis_cls->get_clinit();
-  always_assert(clinit != nullptr);
-
-  auto* code = clinit->get_code();
-  bool patched = false;
-  walk::matching_opcodes_in_block(
-      *clinit,
-      // Don't find OPCODE_CONST. It might be deduped with others, or changing
-      // this const can affect other instructions. (Well, we might have a
-      // unique const number though.) So, just create a new const load
-      // instruction. LocalDCE can clean up the redundant instructions.
-      std::make_tuple(/* m::const_(), */
-                      m::new_array_(),
-                      m::move_result_pseudo_object_(),
-                      m::sput_object_()),
-      [&](DexMethod* method,
-          cfg::Block*,
-          const std::vector<IRInstruction*>& insts) {
-        assert(method == clinit);
-        if (insts[2]->get_field()->get_name()->str() != array_name) {
-          return;
-        }
-
-        IRInstruction* const_inst = new IRInstruction(OPCODE_CONST);
-        const_inst->set_literal(array_size);
-        const auto reg_dest = code->allocate_temp();
-        const_inst->set_dest(reg_dest);
-        insts[0]->set_src(0, reg_dest);
-        for (auto& mie : InstructionIterable(code)) {
-          if (mie.insn == insts[0]) {
-            code->insert_before(code->iterator_to(mie), const_inst);
-            patched = true;
-            return;
-          }
-        }
-      });
-
-  if (!patched) {
-    std::cerr << "[InstrumentPass] error: cannot patch array size."
-              << std::endl;
-    std::cerr << show(clinit->get_code()) << std::endl;
-    exit(1);
-  }
-
-  TRACE(INSTRUMENT, 2, "%s array was patched: %d", SHOW(array_name),
-        array_size);
-}
-
-void patch_static_field(DexClass* analysis_cls,
-                        const std::string& field_name,
-                        const int new_number) {
-  DexMethod* clinit = analysis_cls->get_clinit();
-  always_assert(clinit != nullptr);
-
-  // Find the sput with the given field name.
-  auto* code = clinit->get_code();
-  IRInstruction* sput_inst = nullptr;
-  IRList::iterator insert_point;
-  for (auto& mie : InstructionIterable(code)) {
-    auto* insn = mie.insn;
-    if (insn->opcode() == OPCODE_SPUT &&
-        insn->get_field()->get_name()->str() == field_name) {
-      sput_inst = insn;
-      insert_point = code->iterator_to(mie);
-      break;
-    }
-  }
-
-  // SPUT can be null if the original field value was encoded in the
-  // static_values_off array. And consider simplifying using make_concrete.
-  if (sput_inst == nullptr) {
-    TRACE(INSTRUMENT, 2, "sput %s was deleted; creating it", SHOW(field_name));
-    sput_inst = new IRInstruction(OPCODE_SPUT);
-    sput_inst->set_field(
-        DexField::make_field(DexType::make_type(analysis_cls->get_name()),
-                             DexString::make_string(field_name),
-                             DexType::make_type("I")));
-    insert_point =
-        code->insert_after(code->get_param_instructions().end(), sput_inst);
-  }
-
-  // Create a new const instruction just like patch_stat_array_size.
-  IRInstruction* const_inst = new IRInstruction(OPCODE_CONST);
-  const_inst->set_literal(new_number);
-  const auto reg_dest = code->allocate_temp();
-  const_inst->set_dest(reg_dest);
-
-  sput_inst->set_src(0, reg_dest);
-  code->insert_before(insert_point, const_inst);
-  TRACE(INSTRUMENT, 2, "%s was patched: %d", SHOW(field_name), new_number);
-}
-
-void write_basic_block_index_file(
-    const std::string& file_name,
-    const std::map<int, std::pair<std::string, int>>& id_name_map) {
-  std::ofstream ofs(file_name, std::ofstream::out | std::ofstream::trunc);
-  for (const auto& p : id_name_map) {
-    ofs << p.first << "," << p.second.first << "," << p.second.second
-        << std::endl;
-  }
-  TRACE(INSTRUMENT, 2, "Index file was written to: %s", SHOW(file_name));
 }
 
 void replace_substr(std::string& data,
@@ -816,7 +336,7 @@ std::vector<DexFieldRef*> patch_sharded_arrays(DexClass* cls,
   auto field =
       cls->find_field_from_simple_deobfuscated_name("sMethodStatsArray");
   always_assert(field != nullptr);
-  patch_array_size(cls, field->get_name()->str(), num_shards);
+  InstrumentPass::patch_array_size(cls, field->get_name()->str(), num_shards);
   patched = false;
   walk::matching_opcodes_in_block(
       *clinit,
@@ -920,11 +440,11 @@ void do_simple_method_tracing(DexClass* analysis_cls,
 
     // Handle allowlist and blocklist.
     if (!options.allowlist.empty()) {
-      if (is_included(method, options.allowlist)) {
-        TRACE(INSTRUMENT, 8, "Allow_list: included: %s", SHOW(method));
+      if (InstrumentPass::is_included(method, options.allowlist)) {
+        TRACE(INSTRUMENT, 8, "Allowlist: included: %s", SHOW(method));
       } else {
         ++excluded;
-        TRACE(INSTRUMENT, 9, "Allow_list: excluded: %s", SHOW(method));
+        TRACE(INSTRUMENT, 9, "Allowlist: excluded: %s", SHOW(method));
         return 0;
       }
     }
@@ -932,11 +452,11 @@ void do_simple_method_tracing(DexClass* analysis_cls,
     // In case of a conflict, when an entry is present in both blocklist
     // and allowlist, the blocklist is given priority and the entry
     // is not instrumented.
-    if (is_included(method, options.blocklist)) {
+    if (InstrumentPass::is_included(method, options.blocklist)) {
       ++excluded;
-      TRACE(INSTRUMENT, 8, "Block_list: excluded: %s", SHOW(method));
+      TRACE(INSTRUMENT, 8, "Blocklist: excluded: %s", SHOW(method));
       ofs << "M,-1," << name << "," << sum_opcode_sizes << ",\""
-          << "BLOCK_LIST " << vshow(method->get_access(), true) << "\"\n";
+          << "BLOCKLIST " << vshow(method->get_access(), true) << "\"\n";
       return 0;
     }
 
@@ -1043,8 +563,8 @@ void do_simple_method_tracing(DexClass* analysis_cls,
     size_t n = kTotalSize / NUM_SHARDS + (i < kTotalSize % NUM_SHARDS ? 1 : 0);
     // Get obfuscated name corresponding to each sMethodStat[1-N] field.
     const auto field_name = array_fields[i]->get_name()->str();
-    patch_array_size(analysis_cls, field_name,
-                     options.num_stats_per_method * n);
+    InstrumentPass::patch_array_size(analysis_cls, field_name,
+                                     options.num_stats_per_method * n);
   }
 
   // Patch method count constant.
@@ -1052,7 +572,8 @@ void do_simple_method_tracing(DexClass* analysis_cls,
   auto field = analysis_cls->find_field_from_simple_deobfuscated_name(
       "sNumStaticallyInstrumented");
   always_assert(field != nullptr);
-  patch_static_field(analysis_cls, field->get_name()->str(), kTotalSize);
+  InstrumentPass::patch_static_field(analysis_cls, field->get_name()->str(),
+                                     kTotalSize);
 
   ofs.close();
   TRACE(INSTRUMENT, 2, "Index file was written to: %s", SHOW(file_name));
@@ -1061,111 +582,9 @@ void do_simple_method_tracing(DexClass* analysis_cls,
   pm.incr_metric("Excluded", excluded);
 }
 
-// A simple bit-vector basic block instrumentation algorithm
-//
-//  Example) Original CFG
-//   +--------+       +--------+       +--------+
-//   | block0 | ----> | block1 | ----> | block2 |
-//   |        |       |        |       | Return |
-//   +--------+       +--------+       +--------+
-//
-//  Instrumented CFG:
-//   - Initialize bit vector(s) at the beginning
-//   - Set <bb_id>-th bit in the vector using or-lit/16. So, the bit vector is a
-//     short type. We don't use a 32-bit int; no such or-lit/32 instruction.
-//   - Before RETURN, insert INVOKE onMethodExit(method_id, bit_vectors).
-//
-//   +------------------+     +------------------+     +-----------------------+
-//   | * CONST v0, 0    | --> | * OR_LIT16 v0, 2 | --> | * OR_LIT16 v0, 4      |
-//   | * OR_LIT16 v0, 1 |     |   block1         |     |   block2              |
-//   |   block0         |     |                  |     | * CONST v2, method_id |
-//   +------------------+     +------------------+     | * INVOKE v2,v0, ...   |
-//                                                     |   Return              |
-//                                                     +-----------------------+
-//
-void do_basic_block_tracing(DexClass* analysis_cls,
-                            DexStoresVector& stores,
-                            ConfigFiles& cfg,
-                            PassManager& pm,
-                            const InstrumentPass::Options& options) {
-  const auto& method_onMethodExit_map = find_and_verify_analysis_method(
-      *analysis_cls, options.analysis_method_name);
-
-  size_t method_index = 1;
-  int all_bb_nums = 0;
-  int all_methods = 0;
-  int all_bb_inst = 0;
-  int all_method_inst = 0;
-  std::map<int /*id*/, std::pair<std::string, int /*number of BBs*/>>
-      method_id_name_map;
-  auto scope = build_class_scope(stores);
-
-  auto interdex_list = cfg.get_coldstart_classes();
-  std::unordered_set<std::string> cold_start_classes;
-  std::string dex_end_marker0("LDexEndMarker0;");
-  for (auto class_string : interdex_list) {
-    if (class_string == dex_end_marker0) {
-      break;
-    }
-    class_string.back() = '/';
-    cold_start_classes.insert(class_string);
-  }
-  TRACE(INSTRUMENT, 7, "Number of classes: %d", cold_start_classes.size());
-
-  std::map<size_t /* num_vectors */, int /* count */> bb_vector_stat;
-  walk::code(scope, [&](DexMethod* method, IRCode& code) {
-    if (method == analysis_cls->get_clinit()) {
-      return;
-    }
-    if (std::any_of(method_onMethodExit_map.begin(),
-                    method_onMethodExit_map.end(),
-                    [&](const auto& e) { return e.second == method; })) {
-      return;
-    }
-
-    // Basic block tracing assumes allowlist or set of cold start classes.
-    if ((!options.allowlist.empty() &&
-         !is_included(method, options.allowlist)) ||
-        (options.only_cold_start_class &&
-         !is_included(method, cold_start_classes))) {
-      return;
-    }
-
-    // Block_list has priority over allowlist or cold start list.
-    if (is_included(method, options.blocklist)) {
-      TRACE(INSTRUMENT, 9, "Block_list: excluded: %s", SHOW(method));
-      return;
-    }
-
-    TRACE(INSTRUMENT, 9, "Allow_list: included: %s", SHOW(method));
-    all_methods++;
-    method_index = instrument_onBasicBlockBegin(
-        &code, method, method_onMethodExit_map, method_index, all_bb_nums,
-        all_bb_inst, all_method_inst, method_id_name_map, bb_vector_stat);
-  });
-  patch_array_size(analysis_cls, "sBasicBlockStats", method_index);
-
-  write_basic_block_index_file(cfg.metafile(options.metadata_file_name),
-                               method_id_name_map);
-
-  double cumulative = 0.;
-  TRACE(INSTRUMENT, 4, "BB vector stats:");
-  for (const auto& p : bb_vector_stat) {
-    double percent = (double)p.second * 100. / (float)all_method_inst;
-    cumulative += percent;
-    TRACE(INSTRUMENT, 4, " %3zu bit vectors: %6d (%6.3lf%%, %6.3lf%%)", p.first,
-          p.second, percent, cumulative);
-  }
-
-  TRACE(INSTRUMENT, 3,
-        "Instrumented %d methods and %d blocks, out of %d methods and %d "
-        "blocks",
-        (all_method_inst - 1), all_bb_inst, all_methods, all_bb_nums);
-}
-
 std::unordered_set<std::string> load_blocklist_file(
     const std::string& file_name) {
-  // Assume the file simply enumerates excluded names.
+  // Assume the file simply enumerates blocklisted names.
   std::unordered_set<std::string> ret;
   std::ifstream ifs(file_name);
   assert_log(ifs, "Can't open blocklist file: %s\n", SHOW(file_name));
@@ -1182,6 +601,102 @@ std::unordered_set<std::string> load_blocklist_file(
 
 } // namespace
 
+// Find a sequence of opcode that creates a static array. Patch the array size.
+void InstrumentPass::patch_array_size(DexClass* analysis_cls,
+                                      const std::string& array_name,
+                                      const int array_size) {
+  DexMethod* clinit = analysis_cls->get_clinit();
+  always_assert(clinit != nullptr);
+
+  auto* code = clinit->get_code();
+  bool patched = false;
+  walk::matching_opcodes_in_block(
+      *clinit,
+      // Don't find OPCODE_CONST. It might be deduped with others, or changing
+      // this const can affect other instructions. (Well, we might have a
+      // unique const number though.) So, just create a new const load
+      // instruction. LocalDCE can clean up the redundant instructions.
+      std::make_tuple(/* m::const_(), */
+                      m::new_array_(),
+                      m::move_result_pseudo_object_(),
+                      m::sput_object_()),
+      [&](DexMethod* method,
+          cfg::Block*,
+          const std::vector<IRInstruction*>& insts) {
+        assert(method == clinit);
+        if (insts[2]->get_field()->get_name()->str() != array_name) {
+          return;
+        }
+
+        IRInstruction* const_inst = new IRInstruction(OPCODE_CONST);
+        const_inst->set_literal(array_size);
+        const auto reg_dest = code->allocate_temp();
+        const_inst->set_dest(reg_dest);
+        insts[0]->set_src(0, reg_dest);
+        for (auto& mie : InstructionIterable(code)) {
+          if (mie.insn == insts[0]) {
+            code->insert_before(code->iterator_to(mie), const_inst);
+            patched = true;
+            return;
+          }
+        }
+      });
+
+  if (!patched) {
+    std::cerr << "[InstrumentPass] error: cannot patch array size."
+              << std::endl;
+    std::cerr << show(clinit->get_code()) << std::endl;
+    exit(1);
+  }
+
+  TRACE(INSTRUMENT, 2, "%s array was patched: %d", SHOW(array_name),
+        array_size);
+}
+
+void InstrumentPass::patch_static_field(DexClass* analysis_cls,
+                                        const std::string& field_name,
+                                        const int new_number) {
+  DexMethod* clinit = analysis_cls->get_clinit();
+  always_assert(clinit != nullptr);
+
+  // Find the sput with the given field name.
+  auto* code = clinit->get_code();
+  IRInstruction* sput_inst = nullptr;
+  IRList::iterator insert_point;
+  for (auto& mie : InstructionIterable(code)) {
+    auto* insn = mie.insn;
+    if (insn->opcode() == OPCODE_SPUT &&
+        insn->get_field()->get_name()->str() == field_name) {
+      sput_inst = insn;
+      insert_point = code->iterator_to(mie);
+      break;
+    }
+  }
+
+  // SPUT can be null if the original field value was encoded in the
+  // static_values_off array. And consider simplifying using make_concrete.
+  if (sput_inst == nullptr) {
+    TRACE(INSTRUMENT, 2, "sput %s was deleted; creating it", SHOW(field_name));
+    sput_inst = new IRInstruction(OPCODE_SPUT);
+    sput_inst->set_field(
+        DexField::make_field(DexType::make_type(analysis_cls->get_name()),
+                             DexString::make_string(field_name),
+                             DexType::make_type("I")));
+    insert_point =
+        code->insert_after(code->get_param_instructions().end(), sput_inst);
+  }
+
+  // Create a new const instruction just like patch_stat_array_size.
+  IRInstruction* const_inst = new IRInstruction(OPCODE_CONST);
+  const_inst->set_literal(new_number);
+  const auto reg_dest = code->allocate_temp();
+  const_inst->set_dest(reg_dest);
+
+  sput_inst->set_src(0, reg_dest);
+  code->insert_before(insert_point, const_inst);
+  TRACE(INSTRUMENT, 2, "%s was patched: %d", SHOW(field_name), new_number);
+}
+
 void InstrumentPass::bind_config() {
   bind("instrumentation_strategy", "", m_options.instrumentation_strategy);
   bind("analysis_class_name", "", m_options.analysis_class_name);
@@ -1193,11 +708,11 @@ void InstrumentPass::bind_config() {
        m_options.metadata_file_name);
   bind("num_stats_per_method", {1}, m_options.num_stats_per_method);
   bind("num_shards", {1}, m_options.num_shards);
-  bind("only_cold_start_class", true, m_options.only_cold_start_class);
+  // Note: only_cold_start_class is only used for block tracing.
+  bind("only_cold_start_class", false, m_options.only_cold_start_class);
   bind("methods_replacement", {}, m_options.methods_replacement,
        "Replacing instance method call with static method call.",
        Configurable::bindflags::methods::error_if_unresolvable);
-  trait(Traits::Pass::unique, true);
 
   after_configuration([this] {
     // Make a small room for additional method refs during InterDex.
@@ -1221,6 +736,35 @@ void InstrumentPass::bind_config() {
   });
 }
 
+// Check for inclusion in allow/block lists of methods/classes. It supports:
+// - "Lcom/fb/foo/" matches "^Lcom/fb/foo/*" or "^Lcom/facebook/debug;"
+// - "Lcom/fb/foo;.bar()V" matches exact full method names.
+// - "Lcom/fb/foo;.bar*" matches method name prefixes.
+bool InstrumentPass::is_included(const DexMethod* method,
+                                 const std::unordered_set<std::string>& set) {
+  if (set.empty()) {
+    return false;
+  }
+
+  // Try to check for method by its full name.
+  const auto& full_method_name = method->get_deobfuscated_name();
+  if (set.count(full_method_name)) {
+    return true;
+  }
+
+  // Prefix method name matching.
+  for (const auto& pattern : set) {
+    if (pattern.back() == '*') {
+      if (full_method_name.find(pattern.substr(0, pattern.length() - 1)) !=
+          std::string::npos) {
+        return true;
+      }
+    }
+  }
+
+  return match_class_name(show_deobfuscated(method->get_class()), set);
+}
+
 void InstrumentPass::run_pass(DexStoresVector& stores,
                               ConfigFiles& cfg,
                               PassManager& pm) {
@@ -1234,6 +778,7 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
     pm.set_metric("wrapped_invocations", num_wrapped_invocations);
     return;
   }
+
   if (!cfg.get_json_config().get("instrument_pass_enabled", false) &&
       !pm.get_redex_options().instrument_pass_enabled) {
     TRACE(INSTRUMENT, 1,
@@ -1242,7 +787,7 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
     return;
   }
 
-  // Append black listed classes from the file, if exists.
+  // Append block listed classes from the file, if exists.
   if (!m_options.blocklist_file_name.empty()) {
     for (const auto& e : load_blocklist_file(m_options.blocklist_file_name)) {
       m_options.blocklist.insert(e);
@@ -1289,9 +834,11 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
   if (m_options.instrumentation_strategy == "simple_method_tracing") {
     do_simple_method_tracing(analysis_cls, stores, cfg, pm, m_options);
   } else if (m_options.instrumentation_strategy == "basic_block_tracing") {
-    do_basic_block_tracing(analysis_cls, stores, cfg, pm, m_options);
+    BlockInstrumentHelper::do_basic_block_tracing(analysis_cls, stores, cfg, pm,
+                                                  m_options);
   } else {
     std::cerr << "[InstrumentPass] Unknown instrumentation strategy.\n";
+    exit(1);
   }
 }
 
