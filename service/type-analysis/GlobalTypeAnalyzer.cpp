@@ -268,7 +268,9 @@ std::unique_ptr<GlobalTypeAnalyzer> GlobalTypeAnalysis::analyze(
   // within FixpointIterator::analyze_node(), since that can get called
   // multiple times for a given method
   walk::parallel::code(scope, [](DexMethod*, IRCode& code) {
-    code.build_cfg(/* editable */ false);
+    if (!code.cfg_built()) {
+      code.build_cfg(/* editable */ false);
+    }
     code.cfg().calculate_exit_block();
   });
   find_any_init_reachables(scope, cg);
