@@ -45,8 +45,12 @@ void trace_whole_program_state_diff(const WholeProgramState& old_wps,
 
 void scan_any_init_reachables(const call_graph::Graph& cg,
                               const DexMethod* method,
+                              bool trace_callbacks,
                               ConcurrentSet<const DexMethod*>& reachables) {
-  if (!method || method::is_any_init(method) || reachables.count(method)) {
+  if (!method || method::is_clinit(method) || reachables.count(method)) {
+    return;
+  }
+  if (!trace_callbacks && method::is_init(method)) {
     return;
   }
   auto code = method->get_code();
@@ -75,8 +79,19 @@ void scan_any_init_reachables(const call_graph::Graph& cg,
     }
     auto callees = resolve_callees_in_graph(cg, method, insn);
     for (const DexMethod* callee : callees) {
-      scan_any_init_reachables(cg, callee, reachables);
+      scan_any_init_reachables(cg, callee, false, reachables);
     }
+  }
+  if (!trace_callbacks) {
+    return;
+  }
+  const auto owning_cls = type_class(method->get_class());
+  if (!owning_cls) {
+    return;
+  }
+  // If trace_callbacks, include all vmethods of the same class.
+  for (const auto* vmethod : owning_cls->get_vmethods()) {
+    scan_any_init_reachables(cg, vmethod, false, reachables);
   }
 }
 
@@ -211,6 +226,61 @@ std::unique_ptr<local::LocalTypeAnalyzer> GlobalTypeAnalyzer::analyze_method(
   return local_ta;
 }
 
+bool args_have_type(const DexProto* proto, const DexType* type) {
+  always_assert(type);
+  for (const auto arg_type : proto->get_args()->get_type_list()) {
+    if (arg_type == type) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/*
+ * Determine if a type is likely an anonymous class by looking at the type
+ * hierarchy instead of checking its name. The reason is that the type name can
+ * be obfuscated before running the analysis, so it's not always reliable.
+ *
+ * An anonymous can either extend an abstract type or extend j/l/Object; and
+ * implement one interface.
+ */
+bool is_likely_anonymous_class(const DexType* type) {
+  const auto* cls = type_class(type);
+  if (!cls) {
+    return false;
+  }
+  const auto* super_type = cls->get_super_class();
+  if (super_type == type::java_lang_Object()) {
+    auto intfs = cls->get_interfaces()->get_type_list();
+    return intfs.size() == 1;
+  }
+  const auto* super_cls = type_class(super_type);
+  if (super_cls && is_abstract(super_cls)) {
+    return true;
+  }
+  return false;
+}
+
+/*
+ * Check if the object being constructed is leaking to an instance of an
+ * anonymous class, whose call back can be invoked by another thread. If that
+ * happens, the call back can transitively access fields that are not fully
+ * initialized.
+ */
+bool is_leaking_this_in_ctor(const DexMethod* caller, const DexMethod* callee) {
+  if (method::is_init(caller) && method::is_init(callee)) {
+    const auto* caller_type = caller->get_class();
+    if (!args_have_type(callee->get_proto(), caller_type)) {
+      return false;
+    }
+
+    const auto* callee_type = callee->get_class();
+    return is_likely_anonymous_class(callee_type);
+  }
+
+  return false;
+}
+
 /*
  * The nullness analysis has an issue. That is in a method reachable from a
  * clinit or ctor in the call graph, a read of a field that is not yet
@@ -254,7 +324,10 @@ void GlobalTypeAnalysis::find_any_init_reachables(const Scope& scope,
       }
       auto callees = resolve_callees_in_graph(cg, method, insn);
       for (const DexMethod* callee : callees) {
-        scan_any_init_reachables(cg, callee, m_any_init_reachables);
+        bool trace_callbacks_in_callee_cls =
+            is_leaking_this_in_ctor(method, callee);
+        scan_any_init_reachables(
+            cg, callee, trace_callbacks_in_callee_cls, m_any_init_reachables);
       }
     }
   });

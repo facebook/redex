@@ -25,6 +25,32 @@ class SubTwo extends Base {
   }
 }
 
+/*
+ * Anonymous class call back example
+ */
+interface Callback {
+  void hook();
+}
+
+class RenderView {
+  Callback mCallback = new Callback() {
+    @Override
+    public void hook() {
+      checkBaseField();
+    }
+  };
+  Base mBase;
+
+  RenderView() { mBase = new Base(); }
+
+  int checkBaseField() {
+    if (mBase != null) {
+      return 2;
+    }
+    return 1;
+  }
+}
+
 class TestRemoveRedundantNullChecks {
 
   Base mField1;
@@ -98,6 +124,9 @@ class TestRemoveRedundantNullChecks {
     t.checkNEZNullArg(b);
     b = new Base();
     t.checkNEZNotNullArg(b);
+
+    RenderView rv = new RenderView();
+    rv.checkBaseField();
   }
 }
 
