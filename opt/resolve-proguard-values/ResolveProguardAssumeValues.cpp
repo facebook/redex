@@ -8,6 +8,8 @@
 #include "ResolveProguardAssumeValues.h"
 #include "CFGMutation.h"
 #include "ReachingDefinitions.h"
+#include "RedexContext.h"
+#include "Resolver.h"
 #include "ScopedCFG.h"
 #include "Show.h"
 #include "Trace.h"
@@ -30,8 +32,12 @@ void ResolveProguardAssumeValuesPass::run_pass(DexStoresVector& stores,
   stats.report(mgr);
   TRACE(PGR,
         2,
-        "ResolveProguardAssumeValuesPass Stats: %ul",
+        "ResolveProguardAssumeValuesPass return values changed: %ul",
         stats.method_return_values_changed);
+  TRACE(PGR,
+        2,
+        "ResolveProguardAssumeValuesPass field values changed: %ul",
+        stats.field_values_changed);
 }
 
 ResolveProguardAssumeValuesPass::Stats
@@ -41,46 +47,61 @@ ResolveProguardAssumeValuesPass::process_for_code(IRCode* code) {
   cfg::ScopedCFG cfg(code);
   cfg::CFGMutation mutation(*cfg);
 
-  for (auto* b : cfg->blocks()) {
-    for (const auto& insn_it : ir_list::InstructionIterable{b}) {
-      auto insn = insn_it.insn;
-
-      // We consider static methods and methods that are not external.
-      if (insn->opcode() != OPCODE_INVOKE_STATIC ||
-          insn->get_method()->is_external()) {
-        continue;
+  auto ii = InstructionIterable(*cfg);
+  for (auto insn_it = ii.begin(); insn_it != ii.end(); ++insn_it) {
+    auto insn = insn_it->insn;
+    switch (insn->opcode()) {
+    case OPCODE_SGET_BOOLEAN: {
+      auto field = resolve_field(insn->get_field());
+      auto field_value = g_redex->get_field_value(field);
+      if (!field_value ||
+          field_value->value_type != keep_rules::AssumeReturnValue::ValueBool) {
+        break;
       }
+
+      auto move_result_it = cfg->move_result_of(insn_it);
+      if (!move_result_it.is_end()) {
+        auto move_insn = move_result_it->insn;
+        int val = field_value->value.v;
+        IRInstruction* new_insn = new IRInstruction(OPCODE_CONST);
+        new_insn->set_literal(val)->set_dest(move_insn->dest());
+
+        TRACE(PGR, 5, "Changing:\n %s and %s", SHOW(insn), SHOW(move_insn));
+        TRACE(PGR, 5, "TO:\n %s", SHOW(new_insn));
+        mutation.replace(move_result_it, {new_insn});
+        stat.field_values_changed++;
+      }
+      break;
+    }
+    case OPCODE_INVOKE_STATIC: {
       auto m = insn->get_method()->as_def();
-      if (!m) {
-        continue;
+      // We consider static methods and methods that are not external.
+      if (!m || insn->get_method()->is_external()) {
+        break;
       }
       auto return_value = g_redex->get_return_value(m);
-      if (!return_value) {
-        continue;
+      if (!return_value || return_value->value_type !=
+                               keep_rules::AssumeReturnValue::ValueBool) {
+        break;
       }
 
-      if ((*return_value).value_type ==
-          keep_rules::AssumeReturnValue::ValueNone) {
-        continue;
-      }
-      auto it = cfg->find_insn(insn);
-      auto next_it = std::next(it);
-      if (!next_it.is_end() && (*return_value).value_type ==
-                                   keep_rules::AssumeReturnValue::ValueBool) {
-        auto next_insn = next_it->insn;
+      auto move_result_it = cfg->move_result_of(insn_it);
+      if (!move_result_it.is_end()) {
+        auto move_insn = move_result_it->insn;
+        int val = (*return_value).value.v;
+        IRInstruction* new_insn = new IRInstruction(OPCODE_CONST);
+        new_insn->set_literal(val)->set_dest(move_insn->dest());
 
-        if (next_insn->opcode() == OPCODE_MOVE_RESULT) {
-          int val = (*return_value).value.v;
-          IRInstruction* new_insn = new IRInstruction(OPCODE_CONST);
-          new_insn->set_literal(val)->set_dest(next_insn->dest());
-
-          TRACE(PGR, 5, "Changing:\n %s and %s", SHOW(insn), SHOW(next_insn));
-          TRACE(PGR, 5, "TO:\n %s", SHOW(new_insn));
-          mutation.replace(next_it, {new_insn});
-          stat.method_return_values_changed++;
-        }
+        TRACE(PGR, 5, "Changing:\n %s and %s", SHOW(insn), SHOW(move_insn));
+        TRACE(PGR, 5, "TO:\n %s", SHOW(new_insn));
+        mutation.replace(move_result_it, {new_insn});
+        stat.method_return_values_changed++;
       }
+      break;
     }
+    default:
+      break;
+    } // switch
   }
   mutation.flush();
   return stat;

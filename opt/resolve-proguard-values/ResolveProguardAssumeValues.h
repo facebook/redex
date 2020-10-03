@@ -12,14 +12,17 @@
 class ResolveProguardAssumeValuesPass : public Pass {
   struct Stats {
     size_t method_return_values_changed{0};
+    size_t field_values_changed{0};
 
     Stats& operator+=(const Stats& that) {
       method_return_values_changed += that.method_return_values_changed;
+      field_values_changed += that.field_values_changed;
       return *this;
     }
     void report(PassManager& mgr) const {
       mgr.incr_metric("method_return_values_changed",
                       method_return_values_changed);
+      mgr.incr_metric("field_values_changed", field_values_changed);
     }
   };
 

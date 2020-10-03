@@ -181,3 +181,85 @@ TEST_F(ResolveProguardAssumeValuesTest, simple_method_not_known) {
   )";
   test(code_str, expected_str);
 }
+
+TEST_F(ResolveProguardAssumeValuesTest, field_simple_bool) {
+  DexClass* classA = create_class_local("LCls;");
+  auto field = static_cast<DexField*>(DexField::make_field("LCls;.f:J"));
+  auto encoded_value = DexEncodedValue::zero_for_type(field->get_type());
+  field->make_concrete(ACC_PUBLIC | ACC_STATIC, encoded_value);
+  classA->add_field(field);
+  keep_rules::AssumeReturnValue val;
+  val.value_type = keep_rules::AssumeReturnValue::ValueType::ValueBool;
+  val.value.v = 1;
+  g_redex->set_field_value(field, val);
+  const auto& code_str = R"(
+    (
+      (const-wide v3 2)
+      (const-wide v0 10)
+      (if-ge v3 v0 :true)
+      (sget-boolean "LCls;.f:J")
+      (move-result v1)
+      (goto :end)
+      (:true)
+      (sget-boolean "LCls;.f:J")
+      (move-result v1)
+      (:end)
+      (return v1)
+    )
+  )";
+  const auto& expected_str = R"(
+    (
+      (const-wide v3 2)
+      (const-wide v0 10)
+      (if-ge v3 v0 :true)
+      (sget-boolean "LCls;.f:J")
+      (const v1 1)
+      (goto :end)
+      (:true)
+      (sget-boolean "LCls;.f:J")
+      (const v1 1)
+      (:end)
+      (return v1)
+    )
+  )";
+  test(code_str, expected_str);
+}
+
+TEST_F(ResolveProguardAssumeValuesTest, field_simple_bool_with_no_rule) {
+  DexClass* classA = create_class_local("LCls;");
+  auto field = static_cast<DexField*>(DexField::make_field("LCls;.f:J"));
+  auto encoded_value = DexEncodedValue::zero_for_type(field->get_type());
+  field->make_concrete(ACC_PUBLIC | ACC_STATIC, encoded_value);
+  classA->add_field(field);
+  const auto& code_str = R"(
+    (
+      (const-wide v3 2)
+      (const-wide v0 10)
+      (if-ge v3 v0 :true)
+      (sget-boolean "LCls;.f:J")
+      (move-result v1)
+      (goto :end)
+      (:true)
+      (sget-boolean "LCls;.f:J")
+      (move-result v1)
+      (:end)
+      (return v1)
+    )
+  )";
+  const auto& expected_str = R"(
+    (
+      (const-wide v3 2)
+      (const-wide v0 10)
+      (if-ge v3 v0 :true)
+      (sget-boolean "LCls;.f:J")
+      (move-result v1)
+      (goto :end)
+      (:true)
+      (sget-boolean "LCls;.f:J")
+      (move-result v1)
+      (:end)
+      (return v1)
+    )
+  )";
+  test(code_str, expected_str);
+}
