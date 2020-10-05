@@ -8,6 +8,7 @@
 #include "OutlinerTypeAnalysis.h"
 
 #include "DexTypeEnvironment.h"
+#include "Macros.h"
 #include "Show.h"
 #include "StlUtil.h"
 
@@ -914,7 +915,7 @@ const DexType* OutlinerTypeAnalysis::get_const_insns_type_demand(
           type_demands.insert(type::_int());
           break;
         }
-        // fallthrough
+        FALLTHROUGH_INTENDED;
       default:
         type_demands.insert(get_type_demand(p.first, p.second));
         break;

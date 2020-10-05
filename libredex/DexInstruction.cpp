@@ -12,6 +12,7 @@
 #include "DexIdx.h"
 #include "DexMethodHandle.h"
 #include "DexOutput.h"
+#include "Macros.h"
 #include "Show.h"
 #include "Warning.h"
 
@@ -255,7 +256,7 @@ uint16_t DexInstruction::src(int i) const {
   case FMT_f22c_s:
     redex_assert(i < 2);
     if (i == 0) return (m_opcode >> 8) & 0xf;
-    if (i == 1) return (m_opcode >> 12) & 0xf;
+    return (m_opcode >> 12) & 0xf; // i == 1
   case FMT_f32x:
     redex_assert(i == 0);
     return m_arg[1];
@@ -791,6 +792,7 @@ DexInstruction* DexInstruction::make_instruction(DexIdx* idx,
     }
   }
   /* Format 10, fall through for NOP */
+    FALLTHROUGH_INTENDED;
   case DOPCODE_MOVE:
   case DOPCODE_MOVE_WIDE:
   case DOPCODE_MOVE_OBJECT:

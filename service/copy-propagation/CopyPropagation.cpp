@@ -391,6 +391,7 @@ class AliasFixpointIterator final
           }
         }
       }
+      break;
     default:
       break;
     }
