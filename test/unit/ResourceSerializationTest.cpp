@@ -10,6 +10,7 @@
 
 #include "Debug.h"
 #include "RedexResources.h"
+#include "SanitizersConfig.h"
 #include "androidfw/ResourceTypes.h"
 
 std::string make_big_string(size_t len) {
