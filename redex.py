@@ -515,7 +515,7 @@ def zipalign(unaligned_apk_path, output_apk_path, ignore_zipalign, page_align):
     # Align zip and optionally perform good compression.
     try:
         zipalign = [
-            find_android_build_tool("zipalign"),
+            find_android_build_tool("zipalign.exe" if IS_WINDOWS else "zipalign"),
             "4",
             unaligned_apk_path,
             output_apk_path,
