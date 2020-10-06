@@ -18,26 +18,29 @@ orbs:
   win: circleci/windows@2.2.0
 
 commands:
-  build-and-test-w-make:
-    description: "Prepare, build and test ReDex"
-    parameters:
-      configure_extra:
-        default: ""
-        type: string
+  # Setup. Includes boost.
+  base-build-setup:
     steps:
-      # Setup. Includes boost.
       - run:
           name: Setup
           command: |
             sudo ./setup_oss_toolchain.sh
 
-      # For testing, need additional dependencies not provided by the image.
+  # For testing, need additional dependencies not provided by the image.
+  test-build-setup:
+    steps:
       - run:
           name: Setup for tests
           command: |
             sudo apt-get install -y --no-install-recommends dalvik-exchange default-jdk-headless
             sudo ln -s /usr/bin/dalvik-exchange /usr/local/bin/dx
 
+  configure-and-build-w-make:
+    parameters:
+      configure_extra:
+        default: ""
+        type: string
+    steps:
       # Configure.
       - run:
           name: Configure
@@ -53,7 +56,10 @@ commands:
           command: |
             make -j4
 
-      # Build & run tests.
+  # Build & run tests.
+  test-w-make:
+    description: "Test ReDex with make"
+    steps:
       - run:
           name: Build tests
           command: |
@@ -67,6 +73,21 @@ commands:
       - store_test_results:
           path: /tmp/test-results
 
+  setup-build-and-test-w-make:
+    description: "Prepare, build and test ReDex"
+    parameters:
+      configure_extra:
+        default: ""
+        type: string
+    steps:
+      - base-build-setup
+      - test-build-setup
+
+      - configure-and-build-w-make:
+          configure_extra: << parameters.configure_extra >>
+
+      - test-w-make
+
 jobs:
   build-16_04:
     docker:
@@ -78,7 +99,7 @@ jobs:
       CXX: g++-5
     steps:
       - checkout
-      - build-and-test-w-make:
+      - setup-build-and-test-w-make:
           configure_extra: "CXX='g++-5'"
 
   build-20_04:
@@ -88,7 +109,7 @@ jobs:
     resource_class: large
     steps:
       - checkout
-      - build-and-test-w-make
+      - setup-build-and-test-w-make
 
   build-deb_stable:
     docker:
@@ -97,7 +118,7 @@ jobs:
     resource_class: large
     steps:
       - checkout
-      - build-and-test-w-make
+      - setup-build-and-test-w-make
 
   build-deb_testing:
     docker:
@@ -106,7 +127,7 @@ jobs:
     resource_class: large
     steps:
       - checkout
-      - build-and-test-w-make
+      - setup-build-and-test-w-make
 
   build-windows:
     executor:
