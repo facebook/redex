@@ -36,6 +36,7 @@
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "IROpcode.h"
+#include "Macros.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "PatriciaTreeSetAbstractDomain.h"
 #include "PointsToSemanticsUtils.h"
@@ -776,8 +777,8 @@ class AnchorPropagation final : public BaseIRAnalyzer<AnchorEnvironment> {
       current_state->set(insn->dest(), current_state->get(insn->src(0)));
       break;
     }
-    case IOPCODE_MOVE_RESULT_PSEUDO_OBJECT: {
-    case OPCODE_MOVE_RESULT_OBJECT:
+    case IOPCODE_MOVE_RESULT_PSEUDO_OBJECT:
+    case OPCODE_MOVE_RESULT_OBJECT: {
       current_state->set(insn->dest(), current_state->get(RESULT_REGISTER));
       break;
     }
@@ -1026,6 +1027,7 @@ class PointsToActionGenerator final {
       }
       // Otherwise, we fall through to the generic case.
     }
+      FALLTHROUGH_INTENDED;
     case OPCODE_NEW_ARRAY:
     case OPCODE_FILLED_NEW_ARRAY: {
       m_semantics->add(PointsToAction::load_operation(
