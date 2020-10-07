@@ -23,7 +23,7 @@ import sys
 import tempfile
 import timeit
 import zipfile
-from os.path import abspath, dirname, isdir, isfile, join
+from os.path import abspath, dirname, getsize, isdir, isfile, join
 from pipes import quote
 
 import pyredex.logger as logger
@@ -1036,6 +1036,26 @@ def finalize_redex(state):
     copy_all_file_to_out_dir(
         meta_file_dir, state.args.out, "*", "all redex generated artifacts"
     )
+
+    redex_stats_filename = state.config_dict.get("stats_output", "redex-stats.txt")
+    redex_stats_file = join(dirname(meta_file_dir), redex_stats_filename)
+    if isfile(redex_stats_file):
+        with open(redex_stats_file, "r") as fr:
+            apk_input_size = getsize(state.args.input_apk)
+            apk_output_size = getsize(state.args.out)
+            redex_stats_json = json.load(fr)
+            redex_stats_json["input_stats"]["total_stats"][
+                "num_compressed_apk_bytes"
+            ] = apk_input_size
+            redex_stats_json["output_stats"]["total_stats"][
+                "num_compressed_apk_bytes"
+            ] = apk_output_size
+            update_redex_stats_file = join(
+                dirname(state.args.out), redex_stats_filename
+            )
+            with open(update_redex_stats_file, "w") as fw:
+                json.dump(redex_stats_json, fw)
+
     # Write invocation file
     with open(join(dirname(state.args.out), "redex.py-invocation.txt"), "w") as f:
         print("%s" % " ".join(map(shlex.quote, sys.argv)), file=f)
