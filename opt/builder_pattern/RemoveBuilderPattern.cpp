@@ -6,10 +6,17 @@
 
 #include "BuilderAnalysis.h"
 #include "BuilderTransform.h"
+#include "CommonSubexpressionElimination.h"
 #include "ConfigFiles.h"
+#include "ConstantPropagationAnalysis.h"
+#include "ConstantPropagationTransform.h"
+#include "ConstantPropagationWholeProgramState.h"
+#include "CopyPropagation.h"
 #include "DexClass.h"
 #include "DexUtil.h"
+#include "LocalDce.h"
 #include "PassManager.h"
+#include "ScopedCFG.h"
 #include "Show.h"
 #include "Trace.h"
 #include "TypeSystem.h"
@@ -62,7 +69,8 @@ class RemoveClasses {
         m_blocklist(blocklist),
         m_type_system(scope),
         m_propagate_escape_results(propagate_escape_results),
-        m_transform(scope, m_type_system, super_cls, inliner_config, stores) {
+        m_transform(scope, m_type_system, super_cls, inliner_config, stores),
+        m_stores(stores) {
     gather_classes();
   }
 
@@ -122,7 +130,10 @@ class RemoveClasses {
   void update_usage() {
     auto buildee_types = get_associated_buildees(m_classes);
 
-    walk::methods(m_scope, [&](DexMethod* method) {
+    std::mutex methods_mutex;
+    std::vector<DexMethod*> methods;
+
+    walk::parallel::methods(m_scope, [&](DexMethod* method) {
       if (!method || !method->get_code()) {
         return;
       }
@@ -134,13 +145,27 @@ class RemoveClasses {
       }
 
       BuilderAnalysis analysis(m_classes, m_excluded_types, method);
+      analysis.run_analysis();
+      if (analysis.has_usage()) {
+        std::unique_lock<std::mutex> lock{methods_mutex};
+        methods.push_back(method);
+      }
+    });
+
+    if (methods.empty()) {
+      return;
+    }
+    std::sort(methods.begin(), methods.end(), compare_dexmethods);
+
+    for (auto method : methods) {
+      BuilderAnalysis analysis(m_classes, m_excluded_types, method);
 
       bool are_builders_to_remove =
           inline_builders_and_check_method(method, &analysis);
       m_num_usages += analysis.get_total_num_usages();
 
       if (!are_builders_to_remove) {
-        return;
+        continue;
       }
 
       // When we get here we know that we can remove the builders.
@@ -154,7 +179,80 @@ class RemoveClasses {
       }
 
       m_transform.replace_fields(analysis.get_usage(), method);
-    });
+    }
+
+    shrink_methods(methods);
+  }
+
+  void shrink_methods(const std::vector<DexMethod*>& methods) {
+    // Run shrinking opts to optimize the changed methods.
+
+    XStoreRefs xstores(m_stores);
+    std::unordered_set<DexMethodRef*> pure; // Don't assume anything;
+    cse_impl::SharedState shared_state(pure);
+
+    auto post_process = [&](DexMethod* method) {
+      auto code = method->get_code();
+
+      {
+        if (code->editable_cfg_built()) {
+          code->clear_cfg();
+        }
+        code->build_cfg(/*editable=*/false);
+        constant_propagation::intraprocedural::FixpointIterator fp_iter(
+            code->cfg(), constant_propagation::ConstantPrimitiveAnalyzer());
+        fp_iter.run(ConstantEnvironment());
+        constant_propagation::Transform::Config config;
+        constant_propagation::Transform tf(config);
+        tf.apply_on_uneditable_cfg(fp_iter,
+                                   constant_propagation::WholeProgramState(),
+                                   code, &xstores, method->get_class());
+        code->clear_cfg();
+      }
+
+      always_assert(!code->editable_cfg_built());
+      cfg::ScopedCFG cfg(code);
+      cfg->calculate_exit_block();
+      {
+        constant_propagation::intraprocedural::FixpointIterator fp_iter(
+            *cfg, constant_propagation::ConstantPrimitiveAnalyzer());
+        fp_iter.run(ConstantEnvironment());
+        constant_propagation::Transform::Config config;
+        constant_propagation::Transform tf(config);
+        tf.apply(fp_iter, *cfg, method, &xstores);
+      }
+
+      {
+        cse_impl::CommonSubexpressionElimination cse(
+            &shared_state, *cfg, is_static(method),
+            method::is_init(method) || method::is_clinit(method),
+            method->get_class(), method->get_proto()->get_args());
+        cse.patch();
+      }
+
+      {
+        copy_propagation_impl::Config copy_prop_config;
+        copy_prop_config.eliminate_const_classes = false;
+        copy_prop_config.eliminate_const_strings = false;
+        copy_prop_config.static_finals = false;
+        copy_propagation_impl::CopyPropagation copy_propagation(
+            copy_prop_config);
+        copy_propagation.run(code, method);
+      }
+
+      {
+        LocalDce dce(pure, /* no mog */ nullptr,
+                     /*may_allocate_registers=*/true);
+        dce.dce(*cfg);
+      }
+    };
+
+    // Walkers are over classes, so need to do this "manually."
+    auto wq = workqueue_foreach<DexMethod*>(post_process);
+    for (auto* m : methods) {
+      wq.add_item(m);
+    }
+    wq.run_all();
   }
 
   void collect_excluded_types() {
@@ -301,6 +399,7 @@ class RemoveClasses {
   std::unordered_set<const DexType*> m_removed_types;
   size_t m_num_usages{0};
   size_t m_num_removed_usages{0};
+  const DexStoresVector& m_stores;
 };
 
 } // namespace
