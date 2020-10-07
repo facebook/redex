@@ -78,6 +78,7 @@
 #include "CFGMutation.h"
 #include "ConfigFiles.h"
 #include "Creators.h"
+#include "Debug.h"
 #include "DexClass.h"
 #include "DexInstruction.h"
 #include "DexLimits.h"
@@ -88,6 +89,7 @@
 #include "InterDexPass.h"
 #include "Lazy.h"
 #include "Liveness.h"
+#include "Macros.h"
 #include "MethodProfiles.h"
 #include "MutablePriorityQueue.h"
 #include "OutlinerTypeAnalysis.h"
@@ -100,6 +102,8 @@
 #include "StlUtil.h"
 #include "Trace.h"
 #include "Walkers.h"
+
+using namespace instruction_sequence_outliner;
 
 namespace {
 
@@ -768,7 +772,7 @@ using ExploredCallback =
 // Result indicates whether the big block was successfully explored to the end.
 static bool explore_candidates_from(
     LazyReachingInitializedsEnvironments& reaching_initializeds,
-    const InstructionSequenceOutlinerConfig& config,
+    const Config& config,
     const RefChecker& ref_checker,
     const CandidateInstructionCoresSet& recurring_cores,
     PartialCandidate* pc,
@@ -892,7 +896,7 @@ struct FindCandidatesStats {
 // For each candidate, gather information about where exactly in the
 // given method it is located.
 static MethodCandidates find_method_candidates(
-    const InstructionSequenceOutlinerConfig& config,
+    const Config& config,
     const RefChecker& ref_checker,
     bool skip_loops,
     DexMethod* method,
@@ -1361,7 +1365,7 @@ static DexMethod* find_reusable_method(
 }
 
 static size_t get_savings(
-    const InstructionSequenceOutlinerConfig& config,
+    const Config& config,
     const Candidate& c,
     const CandidateInfo& ci,
     const ReusableOutlinedMethods* reusable_outlined_methods) {
@@ -1401,7 +1405,7 @@ struct CandidateWithInfo {
 // deterministic (as opposed to a pointer) and provide an efficient
 // identification mechanism.
 static void get_beneficial_candidates(
-    const InstructionSequenceOutlinerConfig& config,
+    const Config& config,
     PassManager& mgr,
     const Scope& scope,
     const std::unordered_set<DexMethod*>& sufficiently_warm_methods,
@@ -1993,7 +1997,7 @@ class DexState {
 // outlined methods
 class HostClassSelector {
  private:
-  const InstructionSequenceOutlinerConfig& m_config;
+  const Config& m_config;
   PassManager& m_mgr;
   DexState& m_dex_state;
   DexClass* m_outlined_cls{nullptr};
@@ -2009,7 +2013,7 @@ class HostClassSelector {
   HostClassSelector() = delete;
   HostClassSelector(const HostClassSelector&) = delete;
   HostClassSelector& operator=(const HostClassSelector&) = delete;
-  HostClassSelector(const InstructionSequenceOutlinerConfig& config,
+  HostClassSelector(const Config& config,
                     PassManager& mgr,
                     DexState& dex_state,
                     int min_sdk,
@@ -2256,7 +2260,7 @@ bool outline_candidate(const Candidate& c,
 // Perform outlining of most beneficial candidates, while staying within
 // reference limits.
 static NewlyOutlinedMethods outline(
-    const InstructionSequenceOutlinerConfig& config,
+    const Config& config,
     PassManager& mgr,
     DexState& dex_state,
     int min_sdk,
@@ -2402,8 +2406,7 @@ size_t count_affected_methods(
 ////////////////////////////////////////////////////////////////////////////////
 
 std::unordered_map<const DexMethodRef*, double> get_methods_global_order(
-    ConfigFiles& config_files,
-    const InstructionSequenceOutlinerConfig& config) {
+    ConfigFiles& config_files, const Config& config) {
   if (!config.reorder_with_method_profiles) {
     return {};
   }
@@ -2458,7 +2461,7 @@ std::unordered_map<const DexMethodRef*, double> get_methods_global_order(
 }
 
 void reorder_with_method_profiles(
-    const InstructionSequenceOutlinerConfig& config,
+    const Config& config,
     PassManager& mgr,
     const Scope& dex,
     const std::unordered_map<const DexMethodRef*, double>& methods_global_order,
@@ -2605,7 +2608,7 @@ static size_t clear_cfgs(
 static void gather_sufficiently_warm_and_hot_methods(
     const Scope& scope,
     ConfigFiles& config_files,
-    const InstructionSequenceOutlinerConfig& config,
+    const Config& config,
     std::unordered_set<DexMethod*>* sufficiently_warm_methods,
     std::unordered_set<DexMethod*>* sufficiently_hot_methods) {
   bool has_method_profiles{false};
@@ -2636,13 +2639,55 @@ static void gather_sufficiently_warm_and_hot_methods(
     }
   }
 
-  if (config.use_perf_sensitive_if_no_method_profiles && !has_method_profiles) {
+  switch (config.perf_sensitivity) {
+  case PerfSensitivity::kNeverUse:
+    break;
+
+  case PerfSensitivity::kWarmWhenNoProfiles:
+    if (has_method_profiles) {
+      break;
+    }
+    FALLTHROUGH_INTENDED;
+  case PerfSensitivity::kAlwaysWarm:
     walk::methods(scope, [sufficiently_warm_methods](DexMethod* method) {
       if (type_class(method->get_class())->is_perf_sensitive()) {
         sufficiently_warm_methods->insert(method);
       }
     });
+    break;
+
+  case PerfSensitivity::kHotWhenNoProfiles:
+    if (has_method_profiles) {
+      break;
+    }
+    FALLTHROUGH_INTENDED;
+  case PerfSensitivity::kAlwaysHot:
+    walk::methods(scope, [sufficiently_hot_methods](DexMethod* method) {
+      if (type_class(method->get_class())->is_perf_sensitive()) {
+        sufficiently_hot_methods->insert(method);
+      }
+    });
+    break;
   }
+}
+
+PerfSensitivity parse_perf_sensitivity(const std::string& str) {
+  if (str == "never") {
+    return PerfSensitivity::kNeverUse;
+  }
+  if (str == "warm-when-no-profiles") {
+    return PerfSensitivity::kWarmWhenNoProfiles;
+  }
+  if (str == "always-warm") {
+    return PerfSensitivity::kAlwaysWarm;
+  }
+  if (str == "hot-when-no-profiles") {
+    return PerfSensitivity::kHotWhenNoProfiles;
+  }
+  if (str == "always-hot") {
+    return PerfSensitivity::kAlwaysHot;
+  }
+  always_assert_log(false, "Unknown perf sensitivity: %s", str.c_str());
 }
 
 } // namespace
@@ -2668,11 +2713,8 @@ void InstructionSequenceOutliner::bind_config() {
        m_config.method_profiles_warm_call_count,
        m_config.method_profiles_warm_call_count,
        "Loops are not outlined from warm methods");
-  bind("use_perf_sensitive_if_no_method_profiles",
-       m_config.use_perf_sensitive_if_no_method_profiles,
-       m_config.use_perf_sensitive_if_no_method_profiles,
-       "Whether to use provided cold-start configuration data to "
-       "determine if certain code should not be outlined from a method");
+  std::string perf_sensitivity_str;
+  bind("perf_sensitivity", "warm-when-no-profiles", perf_sensitivity_str);
   bind("reuse_outlined_methods_across_dexes",
        m_config.reuse_outlined_methods_across_dexes,
        m_config.reuse_outlined_methods_across_dexes,
@@ -2687,9 +2729,13 @@ void InstructionSequenceOutliner::bind_config() {
        m_config.savings_threshold,
        "Minimum number of code units saved before a particular code sequence "
        "is outlined anywhere");
-  always_assert(m_config.min_insns_size >= MIN_INSNS_SIZE);
-  always_assert(m_config.max_insns_size >= m_config.min_insns_size);
-  always_assert(m_config.max_outlined_methods_per_class > 0);
+  after_configuration([=]() {
+    always_assert(m_config.min_insns_size >= MIN_INSNS_SIZE);
+    always_assert(m_config.max_insns_size >= m_config.min_insns_size);
+    always_assert(m_config.max_outlined_methods_per_class > 0);
+    always_assert(!perf_sensitivity_str.empty());
+    m_config.perf_sensitivity = parse_perf_sensitivity(perf_sensitivity_str);
+  });
 }
 
 void InstructionSequenceOutliner::run_pass(DexStoresVector& stores,
