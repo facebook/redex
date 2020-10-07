@@ -215,7 +215,7 @@ class Configurable {
    * schema itself may contain nested schemas, reflecting parameters which are
    * composite.
    */
-  Reflection reflect();
+  virtual Reflection reflect();
 
   /**
    * Apply the declared bindings in order to consume json at configuration

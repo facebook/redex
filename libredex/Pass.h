@@ -72,6 +72,8 @@ class Pass : public Configurable {
     }
   }
 
+  Configurable::Reflection reflect() override;
+
  private:
   std::string m_name;
   Kind m_kind;
