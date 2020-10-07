@@ -2714,7 +2714,7 @@ void InstructionSequenceOutliner::bind_config() {
        m_config.method_profiles_warm_call_count,
        "Loops are not outlined from warm methods");
   std::string perf_sensitivity_str;
-  bind("perf_sensitivity", "warm-when-no-profiles", perf_sensitivity_str);
+  bind("perf_sensitivity", "always-hot", perf_sensitivity_str);
   bind("reuse_outlined_methods_across_dexes",
        m_config.reuse_outlined_methods_across_dexes,
        m_config.reuse_outlined_methods_across_dexes,
