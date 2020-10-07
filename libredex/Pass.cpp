@@ -24,6 +24,18 @@ void Pass::set_analysis_usage(AnalysisUsage& analysis_usage) const {
   }
 }
 
+Configurable::Reflection Pass::reflect() {
+  auto cr = Configurable::reflect();
+  if (cr.params.count("disabled") == 0) {
+    // Add in a "disabled" param for the PassManager.
+    cr.params["disabled"] = Configurable::ReflectionParam(
+        "disabled", "Disable the pass",
+        /*is_required=*/false, /*bindflags=*/0, "bool",
+        /*default_value=*/Json::nullValue);
+  }
+  return cr;
+}
+
 void PartialPass::run_pass(DexStoresVector& whole_program_stores,
                            ConfigFiles& conf,
                            PassManager& mgr) {

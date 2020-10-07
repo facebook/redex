@@ -58,6 +58,8 @@ class Pass : public Configurable {
 
   virtual void set_analysis_usage(AnalysisUsage& analysis_usage) const;
 
+  Configurable::Reflection reflect() override;
+
  private:
   std::string m_name;
   Kind m_kind;
