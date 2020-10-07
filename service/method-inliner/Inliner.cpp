@@ -22,6 +22,7 @@
 #include "IRInstruction.h"
 #include "InlineForSpeed.h"
 #include "LocalDce.h"
+#include "Macros.h"
 #include "MethodProfiles.h"
 #include "Mutators.h"
 #include "OptData.h"
@@ -2224,6 +2225,7 @@ class MethodSplicer {
         return true;
       }
     }
+      FALLTHROUGH_INTENDED;
     default:
       return false;
     }

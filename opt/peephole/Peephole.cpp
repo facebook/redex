@@ -693,6 +693,7 @@ struct Matcher {
           break;
         case Field::B:
           replace->set_field(matched_fields.at(Field::B));
+          break;
         default:
           not_reached_log("Unexpected field directive 0x%x",
                           replace_info.field);

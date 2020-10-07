@@ -29,3 +29,19 @@
 #define ATTRIBUTE_UNUSED
 
 #endif
+
+// [[fallthrough]]; is standard with C++17. Until then, use specifics.
+#ifndef FALLTHROUGH_INTENDED
+#if __cplusplus >= 201703L
+#define FALLTHROUGH_INTENDED [[fallthrough]]
+#elif defined(__clang__)
+#define FALLTHROUGH_INTENDED [[clang::fallthrough]]
+#elif defined(__GNUC__) && (__GNUC__ >= 7)
+// Note: GCC also scans comments with a regex, but let's ignore that.
+#define FALLTHROUGH_INTENDED [[gcc::fallthrough]]
+#else
+#define FALLTHROUGH_INTENDED \
+  do {                       \
+  } while (false)
+#endif
+#endif // FALLTHROUGH_INTENDED

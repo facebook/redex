@@ -11,6 +11,7 @@
 #include "DexDefs.h"
 #include "DexMethodHandle.h"
 #include "IRCode.h"
+#include "Macros.h"
 #include "Trace.h"
 #include "Walkers.h"
 #include "WorkQueue.h"
@@ -32,11 +33,11 @@ static void validate_dex_header(const dex_header* dh,
   case 38:
     supported = supported ||
                 !memcmp(dh->magic, DEX_HEADER_DEXMAGIC_V38, sizeof(dh->magic));
-    /* intentional fallthrough to also check for v37 */
+    FALLTHROUGH_INTENDED; /* intentional fallthrough to also check for v37 */
   case 37:
     supported = supported ||
                 !memcmp(dh->magic, DEX_HEADER_DEXMAGIC_V37, sizeof(dh->magic));
-    /* intentional fallthrough to also check for v35 */
+    FALLTHROUGH_INTENDED; /* intentional fallthrough to also check for v35 */
   case 35:
     supported = supported ||
                 !memcmp(dh->magic, DEX_HEADER_DEXMAGIC_V35, sizeof(dh->magic));
