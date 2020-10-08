@@ -395,14 +395,17 @@ bool parse_class(uint8_t* buffer,
             "  Previous: '%s'\n",
             SHOW(self), jar_location.c_str(), cls->get_location().c_str());
 
-      // There are still blocking issues in instrumentation test that are
-      // blocking. We can make this throw again once they are fixed.
+      // TODO: There are still blocking issues in instrumentation test that are
+      // blocking. We currently only fail for duplicate `android*` classes,
+      // we can make this throw for all the classes once they are fixed.
 
-      // throw RedexException(RedexError::DUPLICATE_CLASSES,
-      //                      "Found duplicate class in two different files.",
-      //                      {{"class", SHOW(self)},
-      //                       {"dex1", jar_location},
-      //                       {"dex2", cls->get_location()}});
+      if (boost::starts_with(cls->str(), "Landroid")) {
+        throw RedexException(RedexError::DUPLICATE_CLASSES,
+                             "Found duplicate class in two different files.",
+                             {{"class", SHOW(self)},
+                              {"jar", jar_location},
+                              {"dex", cls->get_location()}});
+      }
     }
     return true;
   }
