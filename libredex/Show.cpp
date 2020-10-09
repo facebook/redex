@@ -9,7 +9,14 @@
 
 #include <iomanip>
 
+#include <boost/version.hpp>
+// Quoted was accepted into public components as of 1.73. The `detail`
+// header was removed in 1.74.
+#if BOOST_VERSION < 107400
 #include <boost/io/detail/quoted_manip.hpp>
+#else
+#include <boost/io/quoted.hpp>
+#endif
 
 #include "ControlFlow.h"
 #include "Creators.h"
