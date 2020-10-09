@@ -50,7 +50,7 @@ class GlobalTypeAnalysisPass : public Pass {
   GlobalTypeAnalysisPass() : GlobalTypeAnalysisPass(Config()) {}
 
   void bind_config() override {
-    bind("max_global_analysis_iteration", size_t(100),
+    bind("max_global_analysis_iteration", size_t(10),
          m_config.max_global_analysis_iteration,
          "Maximum number of global iterations the analysis runs");
     bind("insert_runtime_asserts", false, m_config.insert_runtime_asserts);

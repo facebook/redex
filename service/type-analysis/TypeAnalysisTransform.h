@@ -82,7 +82,7 @@ class Transform final {
   static void setup(NullAssertionSet& null_assertion_set);
 
  private:
-  void apply_changes(IRCode*);
+  void apply_changes(DexMethod* method);
 
   void remove_redundant_null_checks(const DexTypeEnvironment& env,
                                     cfg::Block* block,

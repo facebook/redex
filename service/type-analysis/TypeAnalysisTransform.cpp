@@ -184,11 +184,12 @@ Transform::Stats Transform::apply(
       remove_redundant_null_checks(env, block, stats);
     }
   }
-  apply_changes(code);
+  apply_changes(method);
   return stats;
 }
 
-void Transform::apply_changes(IRCode* code) {
+void Transform::apply_changes(DexMethod* method) {
+  auto* code = method->get_code();
   for (auto const& p : m_replacements) {
     IRInstruction* old_op = p.first;
     if (opcode::is_branch(old_op->opcode())) {
