@@ -44,6 +44,7 @@
 #include "IRCode.h"
 #include "Macros.h"
 #include "MethodProfiles.h"
+#include "MethodSimilarityOrderer.h"
 #include "Pass.h"
 #include "Resolver.h"
 #include "Sha1.h"
@@ -152,6 +153,11 @@ std::vector<DexMethod*> GatheredTypes::get_dexmethod_emitlist() {
   return methlist;
 }
 
+void GatheredTypes::sort_dexmethod_emitlist_method_ref_order(
+    std::vector<DexMethod*>& lmeth) {
+  MethodSimilarityOrderer::order(lmeth);
+}
+
 void GatheredTypes::sort_dexmethod_emitlist_default_order(
     std::vector<DexMethod*>& lmeth) {
   std::stable_sort(lmeth.begin(), lmeth.end(), compare_dexmethods);
@@ -171,6 +177,7 @@ void GatheredTypes::sort_dexmethod_emitlist_profiled_order(
   std::stable_sort(lmeth.begin(),
                    lmeth.end(),
                    method_profiles::dexmethods_profiled_comparator(
+                       lmeth,
                        m_method_profiles,
                        m_method_sorting_allowlisted_substrings,
                        &cache,
@@ -970,6 +977,10 @@ void DexOutput::generate_code_items(const std::vector<SortMode>& mode) {
     case SortMode::CLASS_STRINGS:
       TRACE(CUSTOMSORT, 2,
             "Unsupport bytecode sorting method SortMode::CLASS_STRINGS");
+      break;
+    case SortMode::METHOD_SIMILARITY:
+      TRACE(CUSTOMSORT, 2, "using method refs order");
+      m_gtypes->sort_dexmethod_emitlist_method_ref_order(lmeth);
       break;
     case SortMode::DEFAULT:
       TRACE(CUSTOMSORT, 2, "using default sorting order");
@@ -2887,6 +2898,8 @@ static SortMode make_sort_bytecode(const std::string& sort_bytecode) {
     return SortMode::CLINIT_FIRST;
   } else if (sort_bytecode == "method_profiled_order") {
     return SortMode::METHOD_PROFILED_ORDER;
+  } else if (sort_bytecode == "method_similarity_order") {
+    return SortMode::METHOD_SIMILARITY;
   } else {
     return SortMode::DEFAULT;
   }

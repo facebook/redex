@@ -43,6 +43,7 @@ enum class SortMode {
   CLASS_STRINGS,
   CLINIT_FIRST,
   METHOD_PROFILED_ORDER,
+  METHOD_SIMILARITY,
   DEFAULT
 };
 
@@ -258,6 +259,7 @@ class GatheredTypes {
 
   void gather_class(int num);
 
+  void sort_dexmethod_emitlist_method_ref_order(std::vector<DexMethod*>& lmeth);
   void sort_dexmethod_emitlist_default_order(std::vector<DexMethod*>& lmeth);
   void sort_dexmethod_emitlist_cls_order(std::vector<DexMethod*>& lmeth);
   void sort_dexmethod_emitlist_clinit_order(std::vector<DexMethod*>& lmeth);
