@@ -90,6 +90,9 @@ void InterDexPass::bind_config() {
   bind("can_touch_coldstart_extended_cls", false,
        m_can_touch_coldstart_extended_cls);
   bind("expect_order_list", false, m_expect_order_list);
+  bind("sort_remaining_classes", false, m_sort_remaining_classes,
+       "Whether to sort classes in non-primary, non-perf-sensitive dexes "
+       "according to their inheritance hierarchies");
 
   trait(Traits::Pass::unique, true);
 }
@@ -125,7 +128,7 @@ void InterDexPass::run_pass(DexStoresVector& stores,
                     m_minimize_cross_dex_refs, m_minimize_cross_dex_refs_config,
                     m_cross_dex_relocator_config, reserve_frefs, reserve_trefs,
                     reserve_mrefs, &xstore_refs,
-                    mgr.get_redex_options().min_sdk);
+                    mgr.get_redex_options().min_sdk, m_sort_remaining_classes);
 
   if (m_expect_order_list) {
     always_assert_log(
@@ -208,7 +211,7 @@ void InterDexPass::run_pass_on_nonroot_store(DexStoresVector& stores,
                     false /* minimize_cross_dex_refs */, cross_dex_refs_config,
                     cross_dex_relocator_config, reserve_frefs, reserve_trefs,
                     reserve_mrefs, &xstore_refs,
-                    mgr.get_redex_options().min_sdk);
+                    mgr.get_redex_options().min_sdk, m_sort_remaining_classes);
 
   interdex.run_on_nonroot_store();
 

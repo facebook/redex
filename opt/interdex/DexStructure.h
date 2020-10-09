@@ -26,6 +26,7 @@ struct DexInfo {
   bool background{false};
   bool extended{false};
   bool scroll{false};
+  bool betamap_ordered{false};
 };
 
 class DexStructure {

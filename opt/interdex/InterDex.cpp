@@ -450,6 +450,7 @@ void InterDex::emit_interdex_classes(
         dex_info.extended = true;
         m_emitting_extended = true;
       }
+      dex_info.betamap_ordered = true;
       emit_class(dex_info, cls, /* check_if_skip */ true,
                  /* perf_sensitive */ true);
     }
@@ -940,7 +941,70 @@ void InterDex::flush_out_dex(DexInfo& dex_info) {
     }
   }
 
-  m_outdex.emplace_back(m_dexes_structure.end_dex(dex_info));
+  {
+    auto classes = m_dexes_structure.end_dex(dex_info);
+    if (m_sort_remaining_classes && !dex_info.primary &&
+        !dex_info.betamap_ordered) {
+      TRACE(IDEX, 2, "Sorting classes in secondary dex number %d",
+            m_dexes_structure.get_num_secondary_dexes());
+      std::sort(classes.begin(), classes.end(), [](DexClass* c1, DexClass* c2) {
+        // Canary classes go first
+        if (is_canary(c1) != is_canary(c2)) {
+          return (is_canary(c1) ? 1 : 0) > (is_canary(c2) ? 1 : 0);
+        }
+        // Interfaces go after non-interfaces
+        if (is_interface(c1) != is_interface(c2)) {
+          return (is_interface(c1) ? 1 : 0) < (is_interface(c2) ? 1 : 0);
+        }
+        // Base types and implemented interfaces go last
+        if (type::check_cast(c2->get_type(), c1->get_type())) {
+          return false;
+        }
+        always_assert(c1 != c2);
+        if (type::check_cast(c1->get_type(), c2->get_type())) {
+          return true;
+        }
+        // If types are unrelated, sort by super-classes and then
+        // interfaces
+        if (c1->get_super_class() != c2->get_super_class()) {
+          return compare_dextypes(c1->get_super_class(), c2->get_super_class());
+        }
+        if (c1->get_interfaces() != c2->get_interfaces()) {
+          return compare_dextypelists(c1->get_interfaces(),
+                                      c2->get_interfaces());
+        }
+        // Tie-breaker: fields/methods count distance
+        int dmethods_distance =
+            (int)c1->get_dmethods().size() - (int)c2->get_dmethods().size();
+        if (dmethods_distance != 0) {
+          return dmethods_distance < 0;
+        }
+        int vmethods_distance =
+            (int)c1->get_vmethods().size() - (int)c2->get_vmethods().size();
+        if (vmethods_distance != 0) {
+          return vmethods_distance < 0;
+        }
+        int ifields_distance =
+            (int)c1->get_ifields().size() - (int)c2->get_ifields().size();
+        if (ifields_distance != 0) {
+          return ifields_distance < 0;
+        }
+        int sfields_distance =
+            (int)c1->get_sfields().size() - (int)c2->get_sfields().size();
+        if (sfields_distance != 0) {
+          return sfields_distance < 0;
+        }
+        // Tie-breaker: has-class-data
+        if (c1->has_class_data() != c2->has_class_data()) {
+          return (c1->has_class_data() ? 1 : 0) <
+                 (c2->has_class_data() ? 1 : 0);
+        }
+        // Final tie-breaker: Compare types, which means names
+        return compare_dextypes(c1->get_type(), c2->get_type());
+      });
+    }
+    m_outdex.emplace_back(std::move(classes));
+  }
 
   if (!m_emitting_scroll_set) {
     dex_info.scroll = false;
@@ -951,6 +1015,12 @@ void InterDex::flush_out_dex(DexInfo& dex_info) {
   if (!m_emitting_extended) {
     dex_info.extended = false;
   }
+
+  // This is false by default and set to true everytime
+  // a DEX contains classes already ordered by the betamap.
+  // This resets the flag as this method advances to the next
+  // writable DEX.
+  dex_info.betamap_ordered = false;
 }
 
 } // namespace interdex

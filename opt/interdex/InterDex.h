@@ -42,7 +42,8 @@ class InterDex {
            size_t reserve_trefs,
            size_t reserve_mrefs,
            const XStoreRefs* xstore_refs,
-           int min_sdk)
+           int min_sdk,
+           bool sort_remaining_classes)
       : m_dexen(dexen),
         m_apk_manager(apk_manager),
         m_conf(conf),
@@ -60,7 +61,8 @@ class InterDex {
         m_cross_dex_relocator_config(cross_dex_relocator_config),
         m_original_scope(original_scope),
         m_scope(build_class_scope(m_dexen)),
-        m_xstore_refs(xstore_refs) {
+        m_xstore_refs(xstore_refs),
+        m_sort_remaining_classes(sort_remaining_classes) {
     m_dexes_structure.set_linear_alloc_limit(linear_alloc_limit);
     m_dexes_structure.set_reserve_frefs(reserve_frefs);
     m_dexes_structure.set_reserve_trefs(reserve_trefs);
@@ -172,6 +174,7 @@ class InterDex {
   Scope m_scope;
   std::vector<DexType*> m_interdex_types;
   const XStoreRefs* m_xstore_refs;
+  bool m_sort_remaining_classes;
 };
 
 } // namespace interdex
