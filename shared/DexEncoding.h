@@ -144,7 +144,7 @@ inline uint8_t* write_sleb128(uint8_t* ptr, int32_t val) {
       *ptr++ = v;
       return ptr;
     }
-    if (val < 0 && val > -64) {
+    if (val < 0 && val >= -64) {
       /* Negative sleb termination */
       *ptr++ = v;
       return ptr;
