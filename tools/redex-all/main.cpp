@@ -938,6 +938,9 @@ void redex_backend(const std::string& output_dir,
     locator_index = new LocatorIndex(make_locator_index(stores));
   }
 
+  auto disable_method_similarity_order =
+      json_config.get("disable_method_similarity_order", false);
+
   dex_stats_t output_totals;
   std::vector<dex_stats_t> output_dexes_stats;
 
@@ -984,7 +987,8 @@ void redex_backend(const std::string& output_dir,
                                is_iodi(dik) ? &iodi_metadata : nullptr,
                                stores[0].get_dex_magic(),
                                post_lowering.get(),
-                               manager.get_redex_options().min_sdk);
+                               manager.get_redex_options().min_sdk,
+                               disable_method_similarity_order);
 
       output_totals += this_dex_stats;
       output_dexes_stats.push_back(this_dex_stats);

@@ -2526,7 +2526,8 @@ dex_stats_t write_classes_to_dex(
     IODIMetadata* iodi_metadata,
     const std::string& dex_magic,
     PostLowering const* post_lowering,
-    int min_sdk) {
+    int min_sdk,
+    bool disable_method_similarity_order) {
   const JsonWrapper& json_cfg = conf.get_json_config();
   bool force_single_dex = json_cfg.get("force_single_dex", false);
   if (force_single_dex) {
@@ -2552,6 +2553,14 @@ dex_stats_t write_classes_to_dex(
     for (const auto& val : sort_bytecode_cfg) {
       code_sort_mode.push_back(make_sort_bytecode(val.asString()));
     }
+  }
+  if (disable_method_similarity_order) {
+    TRACE(OPUT, 3, "[write_classes_to_dex] disable_method_similarity_order");
+    code_sort_mode.erase(
+        std::remove_if(
+            code_sort_mode.begin(), code_sort_mode.end(),
+            [&](SortMode sm) { return sm == SortMode::METHOD_SIMILARITY; }),
+        code_sort_mode.end());
   }
   if (code_sort_mode.empty()) {
     code_sort_mode.push_back(SortMode::DEFAULT);
