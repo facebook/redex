@@ -76,6 +76,7 @@ class InterDexPass : public Pass {
   CrossDexRefMinimizerConfig m_minimize_cross_dex_refs_config;
   CrossDexRelocatorConfig m_cross_dex_relocator_config;
   bool m_expect_order_list;
+  bool m_sort_remaining_classes;
 
   virtual void run_pass(DexStoresVector&,
                         DexClassesVector&,
