@@ -19,6 +19,7 @@
 #include "TypeSystem.h"
 #include "Walkers.h"
 
+#include <boost/algorithm/string.hpp>
 #include <cmath>
 #include <fstream>
 #include <iostream>
@@ -38,6 +39,8 @@
 namespace {
 
 constexpr bool instr_debug = false;
+
+static const char* STATS_FIELD_NAME = "sMethodStats";
 
 class InstrumentInterDexPlugin : public interdex::InterDexPassPlugin {
  public:
@@ -171,44 +174,34 @@ void instrument_onMethodBegin(DexMethod* method,
   }
 }
 
-void replace_substr(std::string& data,
-                    const std::string& to_find,
-                    const std::string& to_replace) {
-  size_t pos = data.find(to_find);
-  while (pos != std::string::npos) {
-    data.replace(pos, to_find.size(), to_replace);
-    pos = data.find(to_find, pos + to_replace.size());
-  }
-}
-
-auto generate_sharded_analysis_methods(DexClass* cls,
-                                       const std::string& deobfuscated_prefix,
-                                       const std::vector<DexFieldRef*> fields,
-                                       const size_t num_shards) -> auto {
-  // deobfuscated_prefix is the deobfuscated name
-  // e.g. onMethodBeginBasicGated
+auto generate_sharded_analysis_methods(
+    DexClass* cls,
+    const std::string& template_method_full_name,
+    const std::unordered_map<int /*shard_num*/, DexFieldRef*>& array_fields,
+    const size_t num_shards) -> auto {
   DexMethod* template_method =
-      cls->find_method_from_simple_deobfuscated_name(deobfuscated_prefix);
+      cls->find_method_from_simple_deobfuscated_name(template_method_full_name);
 
   if (template_method == nullptr) {
     std::cerr << "[InstrumentPass] error: failed to find template method \'"
-              << deobfuscated_prefix << "\' in " << show(*cls) << std::endl;
+              << template_method_full_name << "\' in " << show(*cls)
+              << std::endl;
     for (const auto& m : cls->get_dmethods()) {
       std::cerr << " " << show(m) << std::endl;
     }
     exit(1);
   }
 
-  const auto& method_prefix = template_method->get_name()->str();
+  const std::string& template_method_name = template_method->get_name()->str();
 
-  std::unordered_map<int /*shard index*/, DexMethod*> methods = {};
-  std::unordered_map<std::string, int> names = {};
+  std::unordered_map<int /*shard_num*/, DexMethod*> new_analysis_methods;
+  std::unordered_set<std::string> method_names;
 
+  // Even if one shard, we create a new method from the template method.
   for (size_t i = 1; i <= num_shards; ++i) {
-    const auto new_name = method_prefix + std::to_string(i);
-    auto deobfuscated_name = template_method->get_deobfuscated_name();
-    replace_substr(deobfuscated_name, deobfuscated_prefix,
-                   deobfuscated_prefix + std::to_string(i));
+    const auto new_name = template_method_name + std::to_string(i);
+    std::string deobfuscated_name = template_method->get_deobfuscated_name();
+    boost::replace_first(deobfuscated_name, template_method_name, new_name);
 
     DexMethod* new_method =
         DexMethod::make_method_from(template_method,
@@ -217,7 +210,7 @@ auto generate_sharded_analysis_methods(DexClass* cls,
     new_method->set_deobfuscated_name(deobfuscated_name);
     cls->add_method(new_method);
 
-    // Patch array name.
+    // Patch the array name in newly created method.
     bool patched = false;
     walk::matching_opcodes_in_block(
         *new_method,
@@ -226,26 +219,29 @@ auto generate_sharded_analysis_methods(DexClass* cls,
             cfg::Block*,
             const std::vector<IRInstruction*>& insts) {
           DexField* field = static_cast<DexField*>(insts[0]->get_field());
-          if (field->get_simple_deobfuscated_name() == "sMethodStats") {
-            insts[0]->set_field(fields[i - 1]);
+          if (field->get_simple_deobfuscated_name() == STATS_FIELD_NAME) {
+            // Set the new field created from patch_sharded_arrays.
+            insts[0]->set_field(array_fields.at(i));
             patched = true;
             return;
           }
         });
 
     always_assert_log(patched, "Failed to patch sMethodStats1 in %s\n",
-                      SHOW(new_name));
-    names[new_name] = i;
-    methods[i] = new_method;
-    TRACE(INSTRUMENT, 4, "Cloned %s and patched the stat array successfully",
-          SHOW(new_name));
+                      SHOW(new_method));
+    method_names.insert(new_name);
+    new_analysis_methods[i] = new_method;
+    TRACE(INSTRUMENT, 2, "Created %s with %s", SHOW(new_method),
+          SHOW(array_fields.at(i)));
   }
 
-  return std::make_pair(methods, names);
+  // Remove template method.
+  cls->remove_method(template_method);
+  return std::make_pair(new_analysis_methods, method_names);
 }
 
-std::vector<DexFieldRef*> patch_sharded_arrays(DexClass* cls,
-                                               const size_t num_shards) {
+std::unordered_map<int /*shard_num*/, DexFieldRef*> patch_sharded_arrays(
+    DexClass* cls, const size_t num_shards) {
   // Insert additional sMethodStatsN into the clinit
   //
   // private static short[] sMethodStats1 = new short[0];
@@ -263,9 +259,8 @@ std::vector<DexFieldRef*> patch_sharded_arrays(DexClass* cls,
   always_assert(num_shards > 0);
   DexMethod* clinit = cls->get_clinit();
   IRCode* code = clinit->get_code();
-  std::vector<DexFieldRef*> fields;
+  std::unordered_map<int /*shard_num*/, DexFieldRef*> fields;
   bool patched = false;
-  const std::string deobfuscated_prefix = "sMethodStats";
   walk::matching_opcodes_in_block(
       *clinit,
       std::make_tuple(m::new_array_(), m::move_result_pseudo_object_(),
@@ -276,18 +271,18 @@ std::vector<DexFieldRef*> patch_sharded_arrays(DexClass* cls,
         DexField* template_field =
             static_cast<DexField*>(insts[2]->get_field());
         if (template_field->get_simple_deobfuscated_name() !=
-            deobfuscated_prefix) {
+            STATS_FIELD_NAME) {
           return;
         }
 
-        // Create new sMethodStatsN fields.
-        const auto& field_prefix = template_field->get_name()->str();
-
+        // Create new sMethodStatsN fields. Even if num_shard is 1, we create
+        // new field from the template field. Regarding obfuscation, the rename
+        // module runs after InstrumentPass. So, we just need to assign
+        // human-readable names here.
         for (size_t i = 1; i <= num_shards; i++) {
-          const auto new_name = field_prefix + std::to_string(i);
+          const auto new_name = STATS_FIELD_NAME + std::to_string(i);
           auto deobfuscated_name = template_field->get_deobfuscated_name();
-          replace_substr(deobfuscated_name, deobfuscated_prefix,
-                         deobfuscated_prefix + std::to_string(i));
+          boost::replace_first(deobfuscated_name, STATS_FIELD_NAME, new_name);
 
           DexField* new_field = static_cast<DexField*>(
               DexField::make_field(template_field->get_class(),
@@ -296,23 +291,30 @@ std::vector<DexFieldRef*> patch_sharded_arrays(DexClass* cls,
           new_field->set_deobfuscated_name(deobfuscated_name);
           new_field->make_concrete(template_field->get_access(),
                                    template_field->get_static_value());
-          fields.push_back(new_field);
+          fields[i] = new_field;
+          TRACE(INSTRUMENT, 2, "Created array: %s", SHOW(new_field));
           cls->add_field(new_field);
         }
 
         // Clone the matched three instructions, but with new field names.
         for (size_t i = num_shards; i >= 1; --i) {
-          code->insert_after(
-              insts[2], {(new IRInstruction(OPCODE_NEW_ARRAY))
-                             ->set_type(insts[0]->get_type())
-                             ->set_src(0, insts[0]->src(0)),
-                         (new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT))
-                             ->set_dest(insts[1]->dest()),
-                         (new IRInstruction(OPCODE_SPUT_OBJECT))
-                             ->set_src(0, insts[2]->src(0))
-                             ->set_field(fields[i - 1])});
+          auto new_insts = {
+              (new IRInstruction(OPCODE_NEW_ARRAY))
+                  ->set_type(insts[0]->get_type())
+                  ->set_src(0, insts[0]->src(0)),
+              (new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT))
+                  ->set_dest(insts[1]->dest()),
+              (new IRInstruction(OPCODE_SPUT_OBJECT))
+                  ->set_src(0, insts[2]->src(0))
+                  ->set_field(fields.at(i))};
+          if (i == 1) {
+            code->replace_opcode(insts[2], new_insts);
+          } else {
+            code->insert_after(insts[2], new_insts);
+          }
         }
         patched = true;
+        cls->remove_field(template_field);
       });
 
   always_assert_log(patched, "Failed to insert sMethodStatsN:\n%s",
@@ -356,8 +358,7 @@ std::vector<DexFieldRef*> patch_sharded_arrays(DexClass* cls,
         for (size_t i = num_shards; i >= 1; --i) {
           code->insert_after(
               insts[2],
-              {(new IRInstruction(OPCODE_SGET_OBJECT))
-                   ->set_field(fields[i - 1]),
+              {(new IRInstruction(OPCODE_SGET_OBJECT))->set_field(fields.at(i)),
                (new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT))
                    ->set_dest(vY),
                (new IRInstruction(OPCODE_CONST))
@@ -562,7 +563,7 @@ void do_simple_method_tracing(DexClass* analysis_cls,
   for (size_t i = 0; i < NUM_SHARDS; ++i) {
     size_t n = kTotalSize / NUM_SHARDS + (i < kTotalSize % NUM_SHARDS ? 1 : 0);
     // Get obfuscated name corresponding to each sMethodStat[1-N] field.
-    const auto field_name = array_fields[i]->get_name()->str();
+    const auto field_name = array_fields.at(i + 1)->get_name()->str();
     InstrumentPass::patch_array_size(analysis_cls, field_name,
                                      options.num_stats_per_method * n);
   }
