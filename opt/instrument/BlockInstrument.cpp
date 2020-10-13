@@ -22,34 +22,72 @@
 #include <vector>
 
 namespace {
+using OnMethodExitMap =
+    std::map<size_t, // arity of vector arguments (excluding `int offset`)
+             std::pair<DexMethod*, // onMethodExit
+                       DexMethod*>>; // onMethodExit_Epilogue
 
-std::unordered_map<int, /*num of arguments*/ DexMethod*> build_onMethodExit_map(
-    const DexClass& cls, const std::string& onMethodExit_name) {
-  std::unordered_map<int, DexMethod*> onMethodExit_map;
-  for (const auto& dm : cls.get_dmethods()) {
-    if (onMethodExit_name == dm->get_name()->c_str()) {
-      auto const v =
-          std::next(dm->get_proto()->get_args()->get_type_list().begin(), 1);
-      if (*v == DexType::make_type("[S")) {
-        // General case: void onMethodExit(int offset, short[] bbVector)
-        onMethodExit_map.emplace(1, dm);
-      } else {
-        // Specific cases: void onMethodExit(int offset, short vec1, ..., vecN)
-        onMethodExit_map.emplace(dm->get_proto()->get_args()->size(), dm);
-      }
+OnMethodExitMap build_onMethodExit_map(const DexClass& cls,
+                                       const std::string& onMethodExit_name) {
+  const std::string epilogue_name = onMethodExit_name + "_Epilogue";
+  std::map<size_t, std::pair<DexMethod*, DexMethod*>> onMethodExit_map;
+  for (const auto& m : cls.get_dmethods()) {
+    const auto& name = m->get_name()->str();
+    if (onMethodExit_name != name && epilogue_name != name) {
+      continue;
+    }
+
+    // onMethodExit must be (int offset) or (int, short vec1, ..., short vecN);
+    const auto* args = m->get_proto()->get_args();
+    if (args->size() == 0 ||
+        *args->get_type_list().begin() != DexType::make_type("I") ||
+        std::any_of(
+            std::next(args->get_type_list().begin(), 1),
+            args->get_type_list().end(),
+            [](const auto& type) { return type != DexType::make_type("S"); })) {
+      std::cerr << "[InstrumentPass] error: Proto type of onMethodExit must be "
+                   "(int) or (int, short, ..., short), but it was "
+                << show(m->get_proto()) << std::endl;
+      exit(1);
+    }
+
+    auto& pair = onMethodExit_map[args->size() - 1];
+    if (epilogue_name == name) {
+      pair.second = m;
+    } else {
+      pair.first = m;
     }
   }
 
-  if (!onMethodExit_map.empty()) {
-    return onMethodExit_map;
+  if (onMethodExit_map.empty()) {
+    std::cerr << "[InstrumentPass] error: cannot find " << onMethodExit_name
+              << " in " << show(cls) << std::endl;
+    for (const auto& m : cls.get_dmethods()) {
+      std::cerr << " " << show(m) << std::endl;
+    }
+    exit(1);
   }
 
-  std::cerr << "[InstrumentPass] error: cannot find " << onMethodExit_name
-            << " in " << show(cls) << std::endl;
-  for (const auto& m : cls.get_dmethods()) {
-    std::cerr << " " << show(m) << std::endl;
+  // For all non-zero arities, both onMethodExit/_Epilogue must exist.
+  if (std::any_of(
+          begin(onMethodExit_map), end(onMethodExit_map), [](const auto& kv) {
+            return kv.first != 0 &&
+                   (kv.second.first == nullptr || kv.second.second == nullptr);
+          })) {
+    std::cerr << "[InstrumentPass] error: there must be a pair of onMethodExit "
+                 "and onMethodExit_Epilogue for each overloaded type, except "
+                 "for zero arity"
+              << std::endl;
+    for (const auto& kv : onMethodExit_map) {
+      std::cerr << " arity: " << kv.first
+                << ", onMethodExit: " << (kv.second.first ? "T" : "F")
+                << ", onMethodExit_Epilogue: " << (kv.second.second ? "T" : "F")
+                << std::endl;
+    }
+    exit(1);
   }
-  exit(1);
+
+  return onMethodExit_map;
 }
 
 std::unordered_set<std::string> get_cold_start_classes(ConfigFiles& cfg) {
@@ -98,13 +136,22 @@ void BlockInstrumentHelper::do_basic_block_tracing(
     ConfigFiles& cfg,
     PassManager& pm,
     const InstrumentPass::Options& options) {
+  // I'm too lazy to support sharding in block instrumentation. Future work.
+  if (options.num_shards != 1 || options.num_stats_per_method != 0) {
+    std::cerr << "[InstrumentPass] error: basic block profiling must have "
+                 "num_shard = 1 and num_stats_per_method = 0"
+              << std::endl;
+    exit(1);
+  }
+
   const auto& onMethodExit_map =
       build_onMethodExit_map(*analysis_cls, options.analysis_method_name);
+  const size_t max_vector_arity = onMethodExit_map.rbegin()->first - 1;
 
   auto cold_start_classes = get_cold_start_classes(cfg);
   TRACE(INSTRUMENT, 7, "Cold start classes: %zu", cold_start_classes.size());
 
-  size_t method_index = 1;
+  size_t method_offset = 1;
   int num_all_bbs = 0;
   int num_instrumented_bbs = 0;
   int num_instrumented_methods = 0;
@@ -116,6 +163,7 @@ void BlockInstrumentHelper::do_basic_block_tracing(
   int blocklisted = 0;
   int rejected = 0;
   int candidates = 0;
+  int instrumented = 0;
 
   std::map<int /*id*/, std::pair<std::string /*name*/, int /*num_BBs*/>>
       method_id_name_map;
@@ -128,7 +176,10 @@ void BlockInstrumentHelper::do_basic_block_tracing(
     }
     if (std::any_of(onMethodExit_map.begin(),
                     onMethodExit_map.end(),
-                    [&](const auto& e) { return e.second == method; })) {
+                    [&](const auto& e) {
+                      return e.second.first == method ||
+                             e.second.second == method;
+                    })) {
       specials++;
       return;
     }
@@ -165,4 +216,5 @@ void BlockInstrumentHelper::do_basic_block_tracing(
   TRACE(INSTRUMENT, 4, "- Selected by cold start set: %d", picked_by_cs);
   TRACE(INSTRUMENT, 4, "  (But rejected by blocklist: %d)", blocklisted);
   TRACE(INSTRUMENT, 4, "- Total candidates: %d", candidates);
+  TRACE(INSTRUMENT, 4, "- Total instrumented: %d", instrumented);
 }
