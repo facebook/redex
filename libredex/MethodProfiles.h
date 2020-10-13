@@ -200,6 +200,10 @@ class dexmethods_profiled_comparator {
       const std::unordered_set<std::string>* allowlisted_substrings,
       bool legacy_order);
 
+  // See class comment.
+  dexmethods_profiled_comparator(const dexmethods_profiled_comparator&) =
+      delete;
+
   bool operator()(DexMethod* a, DexMethod* b);
 };
 

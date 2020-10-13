@@ -167,7 +167,7 @@ void GatheredTypes::sort_dexmethod_emitlist_cls_order(
 void GatheredTypes::sort_dexmethod_emitlist_profiled_order(
     std::vector<DexMethod*>& lmeth) {
   // Use std::ref to avoid comparator copies.
-  auto comparator = method_profiles::dexmethods_profiled_comparator(
+  method_profiles::dexmethods_profiled_comparator comparator(
       lmeth,
       m_method_profiles,
       m_method_sorting_allowlisted_substrings,
