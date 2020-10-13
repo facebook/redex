@@ -1,5 +1,6 @@
 Checks: >
   -*,
+  bugprone-*,-bugprone-narrowing-conversions,-bugprone-too-small-loop-variable,bugprone-macro-parentheses,
   modernize-make-shared,
   performance-*,-performance-inefficient-string-concatenation,
   readability-const-return-type,readability-container-size-empty,readability-redundant-*,
