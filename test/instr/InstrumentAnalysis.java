@@ -7,16 +7,19 @@
 
 package com.facebook.redextest;
 
+import com.facebook.proguard.annotations.DoNotStrip;
+
 import android.util.Log;
 import java.text.MessageFormat;
 
 public class InstrumentAnalysis {
   private static final String LOG_TAG = "DYNA";
 
-  private static int sNumStaticallyInstrumented = 0; // Redex will patch
-  private static final int[] sMethodStats = new int[0]; // Redex will patch
-  private static short[][] sMethodStatsArray = new short[][] {};  // Redex will patch
+  @DoNotStrip private static int sNumStaticallyInstrumented = 0; // Redex will patch
+  @DoNotStrip private static final int[] sMethodStats = new int[0]; // Redex will patch
+  @DoNotStrip private static short[][] sMethodStatsArray = new short[][] {}; // Redex will patch
 
+  @DoNotStrip
   public static void onMethodBegin(int index) {
     ++sMethodStats[index];
     Log.i(LOG_TAG, MessageFormat.format("increment: {0}, {1}", index, sMethodStats[index]));
