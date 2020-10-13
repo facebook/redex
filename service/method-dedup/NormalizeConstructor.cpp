@@ -220,6 +220,21 @@ void reorder_callsite_args(const std::vector<uint32_t>& old_field_id_to_arg_id,
 
 namespace method_dedup {
 
+uint32_t estimate_deduplicatable_ctor_code_size(const DexClass* cls) {
+  const auto& ifields = cls->get_ifields();
+  uint32_t estimated_size = 0;
+  for (auto method : cls->get_ctors()) {
+    auto summary = summarize_constructor_logic(ifields, method);
+    if (!summary) {
+      continue;
+    }
+    estimated_size += method->get_code()->sum_opcode_sizes() +
+                      /*estimated encoded_method size*/ 2 +
+                      /*method_id_item size*/ 8;
+  }
+  return estimated_size;
+}
+
 uint32_t dedup_constructors(const std::vector<DexClass*>& classes,
                             const std::vector<DexClass*>& scope) {
   Timer timer("dedup_constructors");
