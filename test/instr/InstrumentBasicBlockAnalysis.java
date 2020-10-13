@@ -7,53 +7,84 @@
 
 package com.facebook.redextest;
 
+import com.facebook.proguard.annotations.DoNotStrip;
+import java.util.concurrent.atomic.AtomicInteger;
+
 public class InstrumentBasicBlockAnalysis {
 
   // InstrumentPass will patch.
-  private static final short[] sBasicBlockStats = new short[0];
+  @DoNotStrip private static final short[] sMethodStats = new short[0];
+  @DoNotStrip private static AtomicInteger sMethodCounter = new AtomicInteger(0);
+  @DoNotStrip private static boolean sIsEnabled = true;
 
-  // InstrumentPass will insert one of these onMethodExit calls.
-  public static void onMethodExit(int methodId, int bbVector) {
-    sBasicBlockStats[methodId] |= bbVector;
+  @DoNotStrip
+  public static void onMethodExit(int offset) {
+    if (sIsEnabled) {
+      ++sMethodStats[offset];
+      if (sMethodStats[offset + 1] == 0) {
+        sMethodStats[offset + 1] = (short) sMethodCounter.incrementAndGet();
+      }
+    }
   }
 
-  public static void onMethodExit(int methodId, short bbVector1, short bbVector2) {
-    sBasicBlockStats[methodId] |= bbVector1;
-    sBasicBlockStats[methodId + 1] |= bbVector2;
+  public static void onMethodExit(int offset, short bitvec) {
+    if (sIsEnabled) {
+      ++sMethodStats[offset];
+      if (sMethodStats[offset + 1] == 0) {
+        sMethodStats[offset + 1] = (short) sMethodCounter.incrementAndGet();
+      }
+      sMethodStats[offset + 2] |= bitvec;
+    }
   }
 
-  public static void onMethodExit(
-      int methodId, short bbVector1, short bbVector2, short bbVector3) {
-    sBasicBlockStats[methodId] |= bbVector1;
-    sBasicBlockStats[methodId + 1] |= bbVector2;
-    sBasicBlockStats[methodId + 2] |= bbVector3;
+  @DoNotStrip
+  public static void onMethodExit(int offset, short bitvec1, short bitvec2) {
+    if (sIsEnabled) {
+      ++sMethodStats[offset];
+      if (sMethodStats[offset + 1] == 0) {
+        sMethodStats[offset + 1] = (short) sMethodCounter.incrementAndGet();
+      }
+      sMethodStats[offset + 2] |= bitvec1;
+      sMethodStats[offset + 3] |= bitvec2;
+    }
   }
 
-  public static void onMethodExit(
-      int methodId, short bbVector1, short bbVector2, short bbVector3, short bbVector4) {
-    sBasicBlockStats[methodId] |= bbVector1;
-    sBasicBlockStats[methodId + 1] |= bbVector2;
-    sBasicBlockStats[methodId + 2] |= bbVector3;
-    sBasicBlockStats[methodId + 3] |= bbVector4;
+  @DoNotStrip
+  public static void onMethodExit(int offset, short bitvec1, short bitvec2, short bitvec3) {
+    if (sIsEnabled) {
+      ++sMethodStats[offset];
+      if (sMethodStats[offset + 1] == 0) {
+        sMethodStats[offset + 1] = (short) sMethodCounter.incrementAndGet();
+      }
+      sMethodStats[offset + 2] |= bitvec1;
+      sMethodStats[offset + 3] |= bitvec2;
+      sMethodStats[offset + 4] |= bitvec3;
+    }
   }
 
-  public static void onMethodExit(
-      int methodId,
-      short bbVector1,
-      short bbVector2,
-      short bbVector3,
-      short bbVector4,
-      short bbVector5) {
-    sBasicBlockStats[methodId] |= bbVector1;
-    sBasicBlockStats[methodId + 1] |= bbVector2;
-    sBasicBlockStats[methodId + 2] |= bbVector3;
-    sBasicBlockStats[methodId + 3] |= bbVector4;
-    sBasicBlockStats[methodId + 4] |= bbVector5;
+  // Epilogues to support more than 3 bit vectors.
+  @DoNotStrip
+  public static void onMethodExit_Epilogue(int offset, short bitvec1) {
+    if (sIsEnabled) {
+      sMethodStats[offset + 0] |= bitvec1;
+    }
   }
 
-  public static void onMethodExit(int methodId, short[] bbVector) {
-    for (int i = 0; i < bbVector.length; i++) {
-      sBasicBlockStats[methodId + 1] |= bbVector[i];
+  @DoNotStrip
+  public static void onMethodExit_Epilogue(int offset, short bitvec1, short bitvec2) {
+    if (sIsEnabled) {
+      sMethodStats[offset + 0] |= bitvec1;
+      sMethodStats[offset + 1] |= bitvec2;
+    }
+  }
+
+  @DoNotStrip
+  public static void onMethodExit_Epilogue(
+      int offset, short bitvec1, short bitvec2, short bitvec3) {
+    if (sIsEnabled) {
+      sMethodStats[offset + 0] |= bitvec1;
+      sMethodStats[offset + 1] |= bitvec2;
+      sMethodStats[offset + 2] |= bitvec3;
     }
   }
 }
