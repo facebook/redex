@@ -43,10 +43,12 @@ void trace_whole_program_state_diff(const WholeProgramState& old_wps,
   }
 }
 
-void scan_any_init_reachables(const call_graph::Graph& cg,
-                              const DexMethod* method,
-                              bool trace_callbacks,
-                              ConcurrentSet<const DexMethod*>& reachables) {
+void scan_any_init_reachables(
+    const call_graph::Graph& cg,
+    const method_override_graph::Graph& method_override_graph,
+    const DexMethod* method,
+    bool trace_callbacks,
+    ConcurrentSet<const DexMethod*>& reachables) {
   if (!method || method::is_clinit(method) || reachables.count(method)) {
     return;
   }
@@ -79,7 +81,8 @@ void scan_any_init_reachables(const call_graph::Graph& cg,
     }
     auto callees = resolve_callees_in_graph(cg, method, insn);
     for (const DexMethod* callee : callees) {
-      scan_any_init_reachables(cg, callee, false, reachables);
+      scan_any_init_reachables(
+          cg, method_override_graph, callee, false, reachables);
     }
   }
   if (!trace_callbacks) {
@@ -89,9 +92,20 @@ void scan_any_init_reachables(const call_graph::Graph& cg,
   if (!owning_cls) {
     return;
   }
-  // If trace_callbacks, include all vmethods of the same class.
+  // If trace_callbacks, include external overrides (potential call backs)
   for (const auto* vmethod : owning_cls->get_vmethods()) {
-    scan_any_init_reachables(cg, vmethod, false, reachables);
+    bool overrides_external = false;
+    const auto& overridens =
+        mog::get_overridden_methods(method_override_graph, vmethod);
+    for (auto overriden : overridens) {
+      if (overriden->is_external()) {
+        overrides_external = true;
+      }
+    }
+    if (overrides_external) {
+      scan_any_init_reachables(
+          cg, method_override_graph, vmethod, false, reachables);
+    }
   }
 }
 
@@ -237,6 +251,27 @@ bool args_have_type(const DexProto* proto, const DexType* type) {
 }
 
 /*
+ * Check if a class extends an Android SDK class. It is relevant to the init
+ * reachable analysis since the external super type can call an overriding
+ * method on a subclass from its own ctor.
+ */
+bool extends_android_sdk(const DexClass* cls) {
+  if (!cls) {
+    return false;
+  }
+  auto* super_type = cls->get_super_class();
+  auto* super_cls = type_class(cls->get_super_class());
+  while (super_cls && super_type != type::java_lang_Object()) {
+    if (boost::starts_with(show(super_type), "Landroid/")) {
+      return true;
+    }
+    super_type = super_cls->get_super_class();
+    super_cls = type_class(super_type);
+  }
+  return false;
+}
+
+/*
  * Determine if a type is likely an anonymous class by looking at the type
  * hierarchy instead of checking its name. The reason is that the type name can
  * be obfuscated before running the analysis, so it's not always reliable.
@@ -296,6 +331,7 @@ bool is_leaking_this_in_ctor(const DexMethod* caller, const DexMethod* callee) {
  */
 void GlobalTypeAnalysis::find_any_init_reachables(const Scope& scope,
                                                   const call_graph::Graph& cg) {
+  auto method_override_graph = mog::build_graph(scope);
   walk::parallel::methods(scope, [&](DexMethod* method) {
     if (!method::is_any_init(method)) {
       return;
@@ -326,8 +362,32 @@ void GlobalTypeAnalysis::find_any_init_reachables(const Scope& scope,
       for (const DexMethod* callee : callees) {
         bool trace_callbacks_in_callee_cls =
             is_leaking_this_in_ctor(method, callee);
+        scan_any_init_reachables(cg,
+                                 *method_override_graph,
+                                 callee,
+                                 trace_callbacks_in_callee_cls,
+                                 m_any_init_reachables);
+      }
+    }
+  });
+  // For classes extending an Android SDK type, their virtual methods overriding
+  // an external can be reachable from the ctor of the super class.
+  walk::parallel::classes(scope, [&](DexClass* cls) {
+    if (!extends_android_sdk(cls)) {
+      return;
+    }
+    for (const auto* vmethod : cls->get_vmethods()) {
+      bool overrides_external = false;
+      const auto& overridens =
+          mog::get_overridden_methods(*method_override_graph, vmethod);
+      for (auto overriden : overridens) {
+        if (overriden->is_external()) {
+          overrides_external = true;
+        }
+      }
+      if (overrides_external) {
         scan_any_init_reachables(
-            cg, callee, trace_callbacks_in_callee_cls, m_any_init_reachables);
+            cg, *method_override_graph, vmethod, false, m_any_init_reachables);
       }
     }
   });

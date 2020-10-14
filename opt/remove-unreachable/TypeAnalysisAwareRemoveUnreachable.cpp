@@ -7,6 +7,8 @@
 
 #include "TypeAnalysisAwareRemoveUnreachable.h"
 
+#include <boost/algorithm/string.hpp>
+
 #include "MethodOverrideGraph.h"
 #include "PassManager.h"
 #include "Reachability.h"
