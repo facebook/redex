@@ -84,6 +84,25 @@ class TypeAnaysisAwareClosureMarker final
     for (auto const& t : method->get_proto()->get_args()->get_type_list()) {
       push(method, t);
     }
+
+    auto m = method->as_def();
+    if (!m || !root(m) || m->is_external()) {
+      return;
+    }
+    // We still have to conditionally mark root overrides. RootSetMarker already
+    // covers external overrides, so we skip them here.
+    if (m->is_virtual() || !m->is_concrete()) {
+      const auto& overriding_methods =
+          mog::get_overriding_methods(m_method_override_graph, m);
+      if (!overriding_methods.empty()) {
+        TRACE(REACH, 3, "root with overrides: %u %s", overriding_methods.size(),
+              SHOW(m));
+      }
+      for (auto* overriding : overriding_methods) {
+        push_cond(overriding);
+        TRACE(REACH, 3, "marking root override: %s", SHOW(overriding));
+      }
+    }
   }
 
  private:
@@ -108,7 +127,7 @@ class TypeAnaysisAwareClosureMarker final
                                       DexMethod* resolved_callee,
                                       IRInstruction* invoke,
                                       References& refs) const {
-    TRACE(RMU, 5, "Gathering method from true virtual call %s", SHOW(invoke));
+    TRACE(TRMU, 5, "Gathering method from true virtual call %s", SHOW(invoke));
     auto* callee_ref = invoke->get_method();
     // If we failed to resolve the callee earlier and we know this is might be a
     // true virtual call, resolve the callee in a more conservative way to
@@ -119,7 +138,7 @@ class TypeAnaysisAwareClosureMarker final
           callee_ref, type_class(callee_ref->get_class()));
     }
     // Push the resolved method ref
-    TRACE(RMU, 5, "Push resolved callee %s", SHOW(resolved_callee));
+    TRACE(TRMU, 5, "Push resolved callee %s", SHOW(resolved_callee));
     refs.methods.push_back(resolved_callee);
 
     auto domain = env.get(invoke->src(0));
@@ -130,21 +149,21 @@ class TypeAnaysisAwareClosureMarker final
       analysis_resolved_callee =
           resolve_method(*analysis_cls, callee_ref->get_name(),
                          callee_ref->get_proto(), method_search);
-      TRACE(RMU, 5, "Analysis type %s", SHOW(*analysis_cls));
+      TRACE(TRMU, 5, "Analysis type %s", SHOW(*analysis_cls));
       if (analysis_resolved_callee) {
         if (analysis_resolved_callee != resolved_callee) {
-          TRACE(RMU, 5, "Push analysis resolved callee %s",
+          TRACE(TRMU, 5, "Push analysis resolved callee %s",
                 SHOW(analysis_resolved_callee));
           refs.methods.push_back(analysis_resolved_callee);
         }
         resolved_callee = analysis_resolved_callee;
-        TRACE(RMU, 5, "Resolved callee %s for analysis cls %s",
+        TRACE(TRMU, 5, "Resolved callee %s for analysis cls %s",
               SHOW(resolved_callee), SHOW(*analysis_cls));
       } else {
         // If the analysis type is too generic and we cannot resolve a concrete
         // callee based on that type, we fall back to the method reference at
         // the call site.
-        TRACE(RMU, 5, "Unresolved callee at %s for analysis cls %s",
+        TRACE(TRMU, 5, "Unresolved callee at %s for analysis cls %s",
               SHOW(invoke), SHOW(*analysis_cls));
       }
     }
@@ -152,7 +171,7 @@ class TypeAnaysisAwareClosureMarker final
     const auto& overriding_methods =
         mog::get_overriding_methods(m_method_override_graph, resolved_callee);
     for (auto overriding_method : overriding_methods) {
-      TRACE(RMU, 5, "Gather conditional method ref %s",
+      TRACE(TRMU, 5, "Gather conditional method ref %s",
             SHOW(overriding_method));
       refs.cond_methods.push_back(overriding_method);
     }
@@ -161,6 +180,10 @@ class TypeAnaysisAwareClosureMarker final
   void gather_methods_on_code(const DexMethod* method, References& refs) const {
     auto* code = const_cast<IRCode*>(method->get_code());
     if (code == nullptr) {
+      return;
+    }
+    if (!code->cfg_built()) {
+      code->gather_methods(refs.methods);
       return;
     }
     auto lta = m_gta->get_local_analysis(method);
@@ -183,7 +206,7 @@ class TypeAnaysisAwareClosureMarker final
           auto* method_ref = insn->get_method();
           always_assert(method_ref);
           refs.methods.push_back(method_ref);
-          TRACE(RMU, 5, "Gather non-true-virtual at %s resolved as %s",
+          TRACE(TRMU, 5, "Gather non-true-virtual at %s resolved as %s",
                 SHOW(insn), SHOW(resolved_callee));
           continue;
         }

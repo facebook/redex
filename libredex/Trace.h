@@ -127,6 +127,7 @@
   TM(TIME)           \
   TM(TP)             \
   TM(TRACKRESOURCES) \
+  TM(TRMU)           \
   TM(TYPE)           \
   TM(TYPE_TRANSFORM) \
   TM(UCM)            \
