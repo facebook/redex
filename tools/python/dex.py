@@ -1958,8 +1958,8 @@ class File:
 
     def get_method_id(self, method_ref):
         """method_ref can be one of:
-           - a encoded_method object
-           - integer method index"""
+        - a encoded_method object
+        - integer method index"""
         method_ids = self.get_method_ids()
         if method_ids:
             if isinstance(method_ref, encoded_method):
