@@ -9,6 +9,7 @@
 
 #include "PassManager.h"
 
+#include <unordered_map>
 #include <unordered_set>
 
 class InstrumentPass : public Pass {
@@ -28,6 +29,17 @@ class InstrumentPass : public Pass {
                                  const int new_number);
   static bool is_included(const DexMethod* method,
                           const std::unordered_set<std::string>& set);
+
+  static std::unordered_map<int /*shard_num*/, DexFieldRef*>
+  patch_sharded_arrays(DexClass* cls, const size_t num_shards);
+
+  static std::pair<std::unordered_map<int /*shard_num*/, DexMethod*>,
+                   std::unordered_set<std::string>>
+  generate_sharded_analysis_methods(
+      DexClass* cls,
+      const std::string& template_method_full_name,
+      const std::unordered_map<int /*shard_num*/, DexFieldRef*>& array_fields,
+      const size_t num_shards);
 
   struct Options {
     std::string instrumentation_strategy;
