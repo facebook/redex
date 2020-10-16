@@ -688,6 +688,45 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
   const method_profiles::MethodProfiles& m_method_profiles;
 };
 
+void update_coldstart_classes_order(
+    ConfigFiles& conf,
+    PassManager& mgr,
+    const std::unordered_set<DexType*>& coldstart_types,
+    const std::vector<std::string>& previously_relocated_types,
+    bool log = true) {
+  const auto& coldstart_classes = conf.get_coldstart_classes();
+
+  std::unordered_map<std::string, std::string> replacement;
+  for (const auto& str : previously_relocated_types) {
+    auto initial_type = str.substr(0, str.size() - 11) + ";";
+
+    auto type = DexType::get_type(initial_type.c_str());
+    always_assert(type);
+
+    if (!coldstart_types.count(type)) {
+      replacement[str] = initial_type;
+    }
+  }
+
+  if (!replacement.empty()) {
+    std::vector<std::string> new_coldstart_classes(coldstart_classes.size());
+
+    for (const auto& str : coldstart_classes) {
+      if (replacement.count(str)) {
+        new_coldstart_classes.push_back(replacement[str]);
+      } else {
+        new_coldstart_classes.push_back(str);
+      }
+    }
+
+    conf.update_coldstart_classes(std::move(new_coldstart_classes));
+  }
+
+  if (log) {
+    mgr.set_metric("num_coldstart_classes_updated", replacement.size());
+  }
+}
+
 } // namespace
 
 void ClassSplittingPass::run_before_interdex(DexStoresVector& stores,
@@ -702,12 +741,21 @@ void ClassSplittingPass::run_before_interdex(DexStoresVector& stores,
   auto scope = build_class_scope(stores);
   class_splitting_plugin.configure(scope, conf);
   std::unordered_set<DexType*> coldstart_types;
+  std::vector<std::string> previously_relocated_types;
   for (const auto& str : conf.get_coldstart_classes()) {
     DexType* type = DexType::get_type(str.c_str());
     if (type) {
       coldstart_types.insert(type);
+    } else if (boost::algorithm::ends_with(str, "$relocated;")) {
+      previously_relocated_types.emplace_back(str);
     }
   }
+
+  // Since classes that we previously split and ONLY the relocated part appears
+  // in betamap won't be actually split this time, we also need to update the
+  // initial class ordering to reflect that.
+  update_coldstart_classes_order(conf, mgr, coldstart_types,
+                                 previously_relocated_types);
 
   // In a clandestine way, we create instances of all InterDex plugins on the
   // side in order to check if we should skip a class for some obscure reason.
