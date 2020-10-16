@@ -13,7 +13,7 @@ struct ClassSplittingConfig {
   bool enabled{true};
   bool combine_target_classes_by_api_level{false};
   unsigned int relocated_methods_per_target_class{64};
-  float method_profiles_appear_percent_threshold{1.f};
+  float method_profiles_appear_percent_threshold{0.5f};
   bool relocate_static_methods{true};
   bool relocate_non_static_direct_methods{true};
   bool relocate_non_true_virtual_methods{true};
