@@ -12,6 +12,7 @@
 struct ClassSplittingConfig {
   bool enabled{true};
   bool combine_target_classes_by_api_level{false};
+  // Relocated methods per target class when combining by API Level.
   unsigned int relocated_methods_per_target_class{64};
   float method_profiles_appear_percent_threshold{0.5f};
   bool relocate_static_methods{true};

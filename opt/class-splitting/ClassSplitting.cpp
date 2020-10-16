@@ -6,17 +6,20 @@
  */
 
 /*
- * This pass splits out static methods with lass 0
- * in the cold-start dexes.
- * The approach here is a new interdex plugin. This enables...
+ * This pass splits out methods that are not frequently called (see
+ * method_profiles_appear_percent_threshold for the frequent threashold) from
+ * the cold-start dexes.
+ *
+ * The approach here is a new interdex plugin (with the possibility of running
+ * it outside InterDex as well). This enables:
  * - only treating classes that end up in the non-primary cold-start dexes;
  * - accounting for extra classes, which is important to determine when a dex
  *   is full.
  *
- * Relocated methods are moved into new special classes at the end of the dex.
- * Each class is filled with up to a configurable number of methods; only when
- * a class is full, another one is created. Separate classes are created for
- * distinct required api levels.
+ * Relocated methods are moved into new special classes. Each class is filled
+ * with up to a configurable number of methods; only when a class is full,
+ * another one is created. Separate classes might be created for distinct
+ * required api levels.
  */
 
 #include "ClassSplitting.h"
@@ -62,6 +65,8 @@ constexpr const char* METRIC_POPULAR_METHODS =
 constexpr const char* METRIC_RELOCATED_METHODS =
     "num_class_splitting_relocated_methods";
 constexpr const char* METRIC_TRAMPOLINES = "num_class_splitting_trampolines";
+
+constexpr const char* RELOCATED_SUFFIX = "$relocated;";
 
 struct ClassSplittingStats {
   size_t relocation_classes{0};
@@ -142,8 +147,8 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
                                       DexClass* target_cls,
                                       uint32_t api_level) {
     std::string name = method->get_name()->str();
-    // We are merging two "namespace" here, so we make it clear what kind of
-    // method a trampoline came from. We don't support comining target classes
+    // We are merging two "namespaces" here, so we make it clear what kind of
+    // method a trampoline came from. We don't support combining target classes
     // by api-level here, as we'd have to do more uniquing.
     always_assert(!m_config.combine_target_classes_by_api_level);
     if (method->is_virtual()) {
@@ -225,7 +230,7 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
         } else {
           auto& source_name = source_cls->str();
           target_cls = create_target_class(
-              source_name.substr(0, source_name.size() - 1) + "$relocated;");
+              source_name.substr(0, source_name.size() - 1) + RELOCATED_SUFFIX);
           m_target_classes_by_source_classes.emplace(source_cls, target_cls);
         }
       }
@@ -303,7 +308,7 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
           TRACE(CS,
                 4,
                 "[class splitting] Method earlier identified as relocatable is "
-                "not longer relocatable: {%s}",
+                "no longer relocatable: {%s}",
                 SHOW(method));
           m_stats.non_relocated_methods++;
           return;
@@ -746,14 +751,14 @@ void ClassSplittingPass::run_before_interdex(DexStoresVector& stores,
     DexType* type = DexType::get_type(str.c_str());
     if (type) {
       coldstart_types.insert(type);
-    } else if (boost::algorithm::ends_with(str, "$relocated;")) {
+    } else if (boost::algorithm::ends_with(str, RELOCATED_SUFFIX)) {
       previously_relocated_types.emplace_back(str);
     }
   }
 
   // Since classes that we previously split and ONLY the relocated part appears
-  // in betamap won't be actually split this time, we also need to update the
-  // initial class ordering to reflect that.
+  // in coldstart types won't be actually split this time, we also need to
+  // update the initial class ordering to reflect that.
   update_coldstart_classes_order(conf, mgr, coldstart_types,
                                  previously_relocated_types);
 
@@ -785,13 +790,13 @@ void ClassSplittingPass::run_before_interdex(DexStoresVector& stores,
     return false;
   };
 
-  // We are only going to do perform class-splitting in the first store, as
-  // that's where all the perf-sensitive classes.
+  // We are only going to perform class-splitting in the first store, as that's
+  // where all the perf-sensitive classes are.
   auto& store = stores.at(0);
   auto& dexen = store.get_dexen();
   DexClasses classes;
   // We skip the first dex, as that's the primary dex, and we won't split
-  // classes in there anyway
+  // classes in there anyway.
   for (size_t dex_nr = 1; dex_nr < dexen.size(); dex_nr++) {
     auto& dex = dexen.at(dex_nr);
     for (auto cls : dex) {
