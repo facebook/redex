@@ -99,6 +99,9 @@ DexMethod* MethodSimilarityOrderer::get_next() {
   }
   boost::optional<size_t> best_candidate_index;
   if (!m_last_code_hash_ids.empty()) {
+    // Similarity score for each candidate method, based on the number of
+    // shared, missing and additional hash ids when compared to the previously
+    // chosen method.
     struct Score {
       size_t shared{0};
       size_t missing{0};
