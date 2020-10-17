@@ -100,9 +100,9 @@ DexMethod* MethodSimilarityOrderer::get_next() {
   boost::optional<size_t> best_candidate_index;
   if (!m_last_code_hash_ids.empty()) {
     struct Score {
-      int shared{0};
-      int missing{0};
-      int additional{0};
+      size_t shared{0};
+      size_t missing{0};
+      size_t additional{0};
       int value() const { return 2 * shared - missing - 2 * additional; }
     };
     std::unordered_map<DexMethod*, Score> candidate_scores;
@@ -116,16 +116,12 @@ DexMethod* MethodSimilarityOrderer::get_next() {
     // minus penalty points for every non-matching code-hash-id
     for (auto& p : candidate_scores) {
       auto& other_code_hash_ids = m_method_code_hash_ids.at(p.first);
-      for (auto other_code_hash_id : other_code_hash_ids) {
-        if (!m_last_code_hash_ids.count(other_code_hash_id)) {
-          p.second.additional++;
-        }
-      }
-      for (auto code_hash_id : m_last_code_hash_ids) {
-        if (!other_code_hash_ids.count(code_hash_id)) {
-          p.second.missing++;
-        }
-      }
+
+      size_t other_code_hash_ids_size = other_code_hash_ids.size();
+      size_t last_code_hash_ids_size = m_last_code_hash_ids.size();
+
+      p.second.additional = other_code_hash_ids_size - p.second.shared;
+      p.second.missing = last_code_hash_ids_size - p.second.shared;
     }
     // Then we'll find the best matching candidate with a non-negative score.
     boost::optional<Score> best_candidate_score;
