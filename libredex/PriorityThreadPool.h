@@ -8,6 +8,10 @@
 #pragma once
 
 #include <boost/optional.hpp>
+// We for now need a larger stack size than the default, and on Mac OS
+// this is the only way (or pthreads directly), as `ulimit -s` does not
+// apply to non-main threads.
+#include <boost/thread.hpp>
 #include <chrono>
 #include <condition_variable>
 #include <mutex>
@@ -30,7 +34,7 @@
  */
 class PriorityThreadPool {
  private:
-  std::vector<std::thread> m_pool;
+  std::vector<boost::thread> m_pool;
   // The following data structures are guarded by this mutex.
   std::mutex m_mutex;
   std::condition_variable m_work_condition;
@@ -71,8 +75,12 @@ class PriorityThreadPool {
     if (num_threads > 0) {
       // std::thread cannot be copied, so need to do this in a loop instead of
       // `resize`.
+
+      boost::thread::attributes attrs;
+      attrs.set_stack_size(8 * 1024 * 1024); // 8MB stack.
+
       for (size_t i = 0; i != (size_t)num_threads; ++i) {
-        m_pool.emplace_back(&PriorityThreadPool::run, this);
+        m_pool.emplace_back(attrs, [this]() { this->run(); });
       }
     }
   }
