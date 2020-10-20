@@ -121,24 +121,24 @@ class IODITest : public ::testing::Test {
 
   static bool is_iodi(const DexDebugItem& debug_item) {
     bool iodi_layered{is_layered_iodi(debug_item)};
-    if (debug_item.get_line_start() != 0) {
-      if (!iodi_layered) {
-        return false;
-      }
-    }
-
     if (iodi_layered) {
       return true;
+    }
+
+    if (debug_item.get_line_start() != 0) {
+      return false;
     }
 
     const auto& entries = debug_item.get_entries();
     for (size_t i = 0; i < entries.size(); i++) {
       auto& entry = entries[i];
+      // IODI emits only DBG_FIRST_SPECIAL opcodes.
+      // If we see anything else, its not IODI.
       if (entry.type != DexDebugEntryType::Position) {
-        continue;
+        return false;
       }
       auto line = entry.pos->line;
-      if (!iodi_layered && (line & DexOutput::kIODILayerMask) != 0) {
+      if ((line & DexOutput::kIODILayerMask) != 0) {
         return false;
       }
       line &= DexOutput::kIODIDataMask;
