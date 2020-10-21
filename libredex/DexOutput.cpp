@@ -1376,7 +1376,7 @@ struct MethodKeyCompare {
   // even if they have the same size as another method.
   bool operator()(const MethodKey& left, const MethodKey& right) const {
     if (left.size == right.size) {
-      return (uintptr_t)left.method > (uintptr_t)right.method;
+      return compare_dexmethods(left.method, right.method);
     } else {
       return left.size > right.size;
     }
