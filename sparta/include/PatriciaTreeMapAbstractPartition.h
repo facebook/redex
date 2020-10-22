@@ -201,6 +201,18 @@ class PatriciaTreeMapAbstractPartition final
     m_map.intersection_with(operation, other.m_map);
   }
 
+  void difference_like_operation(
+      const PatriciaTreeMapAbstractPartition& other,
+      std::function<Domain(const Domain&, const Domain&)> operation) {
+    if (other.is_top()) {
+      set_to_bottom();
+    } else if (is_top()) {
+      return;
+    } else {
+      m_map.difference_with(operation, other.m_map);
+    }
+  }
+
   static PatriciaTreeMapAbstractPartition bottom() {
     return PatriciaTreeMapAbstractPartition();
   }
