@@ -103,6 +103,12 @@ inline std::shared_ptr<PatriciaTree<IntegerType, Value>> intersect(
     const std::shared_ptr<PatriciaTree<IntegerType, Value>>& s,
     const std::shared_ptr<PatriciaTree<IntegerType, Value>>& t);
 
+template <typename IntegerType, typename Value>
+inline std::shared_ptr<PatriciaTree<IntegerType, Value>> diff(
+    const ptmap_impl::CombiningFunction<typename Value::type>& combine,
+    const std::shared_ptr<PatriciaTree<IntegerType, Value>>& s,
+    const std::shared_ptr<PatriciaTree<IntegerType, Value>>& t);
+
 template <typename T>
 T snd(const T&, const T& second) {
   return second;
@@ -325,6 +331,14 @@ class PatriciaTreeMap final {
     return *this;
   }
 
+  // Requires that `combine(bottom, ...) = bottom`.
+  PatriciaTreeMap& difference_with(const combining_function& combine,
+                                   const PatriciaTreeMap& other) {
+    m_tree =
+        ptmap_impl::diff<IntegerType, Value>(combine, m_tree, other.m_tree);
+    return *this;
+  }
+
   PatriciaTreeMap get_union_with(const combining_function& combine,
                                  const PatriciaTreeMap& other) const {
     auto result = *this;
@@ -336,6 +350,13 @@ class PatriciaTreeMap final {
                                         const PatriciaTreeMap& other) const {
     auto result = *this;
     result.intersection_with(combine, other);
+    return result;
+  }
+
+  PatriciaTreeMap get_difference_with(const combining_function& combine,
+                                      const PatriciaTreeMap& other) const {
+    auto result = *this;
+    result.difference_with(combine, other);
     return result;
   }
 
@@ -898,7 +919,7 @@ inline std::shared_ptr<PatriciaTree<IntegerType, Value>> merge(
   return join(p, s, q, t);
 }
 
-// Combine :value with the value in :leaf.
+// Combine :value with the value in :leaf with combine(:leaf, :value).
 template <typename IntegerType, typename Value>
 inline std::shared_ptr<PatriciaTree<IntegerType, Value>> combine_leaf(
     const ptmap_impl::CombiningFunction<typename Value::type>& combine,
@@ -1001,6 +1022,99 @@ inline std::shared_ptr<PatriciaTree<IntegerType, Value>> intersect(
   }
   // The prefixes disagree.
   return nullptr;
+}
+
+template <typename IntegerType, typename Value>
+inline std::shared_ptr<PatriciaTree<IntegerType, Value>> diff(
+    const ptmap_impl::CombiningFunction<typename Value::type>& combine,
+    const std::shared_ptr<PatriciaTree<IntegerType, Value>>& s,
+    const std::shared_ptr<PatriciaTree<IntegerType, Value>>& t) {
+  if (s == t) {
+    // This conditional is what allows the intersection operation to complete in
+    // sublinear time when the operands share some structure.
+    return nullptr;
+  }
+  if (s == nullptr) {
+    return nullptr;
+  }
+  if (t == nullptr) {
+    return s;
+  }
+  if (s->is_leaf()) {
+    const auto& leaf =
+        std::static_pointer_cast<PatriciaTreeLeaf<IntegerType, Value>>(s);
+    auto* value = find_value(leaf->key(), t);
+    if (value == nullptr) {
+      return s;
+    }
+    return combine_leaf(combine, *value, leaf);
+  }
+  if (t->is_leaf()) {
+    const auto& leaf =
+        std::static_pointer_cast<PatriciaTreeLeaf<IntegerType, Value>>(t);
+    return update(combine, leaf->key(), leaf->value(), s);
+  }
+  const auto& s_branch =
+      std::static_pointer_cast<PatriciaTreeBranch<IntegerType, Value>>(s);
+  const auto& t_branch =
+      std::static_pointer_cast<PatriciaTreeBranch<IntegerType, Value>>(t);
+  IntegerType m = s_branch->branching_bit();
+  IntegerType n = t_branch->branching_bit();
+  IntegerType p = s_branch->prefix();
+  IntegerType q = t_branch->prefix();
+  const auto& s0 = s_branch->left_tree();
+  const auto& s1 = s_branch->right_tree();
+  const auto& t0 = t_branch->left_tree();
+  const auto& t1 = t_branch->right_tree();
+  auto combine_separate_trees =
+      [](const typename Value::type& x, const typename Value::type& y) ->
+      typename Value::type {
+    if (Value::is_default_value(x)) {
+      return y;
+    }
+    if (Value::is_default_value(y)) {
+      return x;
+    }
+    BOOST_THROW_EXCEPTION(internal_error()
+                          << error_msg("Malformed Patricia tree"));
+  };
+  if (m == n && p == q) {
+    // The two trees have the same prefix. We merge the difference of the
+    // corresponding subtrees.
+    auto new_left = diff(combine, s0, t0);
+    auto new_right = diff(combine, s1, t1);
+    if (new_left == s0 && new_right == s1) {
+      return s;
+    }
+    return merge<IntegerType, Value>(
+        combine_separate_trees, new_left, new_right);
+  }
+  if (m < n && match_prefix(q, p, m)) {
+    // q contains p. Diff t with a subtree of s.
+    if (is_zero_bit(q, m)) {
+      auto new_left = diff(combine, s0, t);
+      if (new_left == s0) {
+        return s;
+      }
+      return merge<IntegerType, Value>(combine_separate_trees, new_left, s1);
+    } else {
+      auto new_right = diff(combine, s1, t);
+      if (new_right == s1) {
+        return s;
+      }
+      return merge<IntegerType, Value>(combine_separate_trees, s0, new_right);
+    }
+  }
+  if (m > n && match_prefix(p, q, n)) {
+    // p contains q. Diff s with a subtree of t.
+    if (is_zero_bit(p, n)) {
+      return diff(combine, s, t0);
+    } else {
+      return diff(combine, s, t1);
+    }
+  }
+  // The prefixes disagree.
+  return s;
 }
 
 // The iterator basically performs a post-order traversal of the tree, pausing

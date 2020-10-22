@@ -11,6 +11,7 @@
 #include <boost/concept_check.hpp>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
+#include <initializer_list>
 #include <unordered_map>
 
 using namespace sparta;
@@ -18,6 +19,19 @@ using namespace sparta;
 using pt_map = PatriciaTreeMap<uint32_t, uint32_t>;
 
 BOOST_CONCEPT_ASSERT((boost::ForwardContainer<pt_map>));
+
+namespace {
+
+pt_map create_pt_map(
+    std::initializer_list<std::pair<uint32_t, uint32_t>> pairs) {
+  pt_map map;
+  for (const auto& p : pairs) {
+    map.insert_or_assign(p.first, p.second);
+  }
+  return map;
+}
+
+} // namespace
 
 TEST(PatriciaTreeMapTest, basicOperations) {
   constexpr uint32_t bigint = std::numeric_limits<uint32_t>::max();
@@ -48,12 +62,7 @@ TEST(PatriciaTreeMapTest, basicOperations) {
 
 TEST(PatriciaTreeMapTest, erase_all_matching) {
   constexpr uint32_t default_value = 0;
-  pt_map m1;
-  m1.insert_or_assign(0, 1);
-  m1.insert_or_assign(1, 1);
-  m1.insert_or_assign(2, 1);
-  m1.insert_or_assign(3, 1);
-  m1.insert_or_assign(4, 1);
+  pt_map m1 = create_pt_map({{0, 1}, {1, 1}, {2, 1}, {3, 1}, {4, 1}});
 
   bool any_changes = m1.erase_all_matching(0);
   EXPECT_TRUE(!any_changes);
@@ -79,10 +88,7 @@ TEST(PatriciaTreeMapTest, erase_all_matching) {
 
 TEST(PatriciaTreeMapTest, map) {
   constexpr uint32_t default_value = 0;
-  pt_map m1;
-  m1.insert_or_assign(0, 1);
-  m1.insert_or_assign(1, 2);
-  m1.insert_or_assign(2, 4);
+  pt_map m1 = create_pt_map({{0, 1}, {1, 2}, {2, 4}});
 
   bool any_changes = m1.map([](uint32_t value) { return value; });
   EXPECT_FALSE(any_changes);
@@ -113,4 +119,93 @@ TEST(PatriciaTreeMapTest, mapOfUnsignedInt64) {
     EXPECT_NE(entries.end(), it);
     EXPECT_EQ(it->second, e.second);
   }
+}
+
+TEST(PatriciaTreeMapTest, difference) {
+  auto substract = [](uint32_t x, uint32_t y) -> uint32_t {
+    if (x == 0) {
+      // bottom - anything = bottom
+      return 0;
+    } else {
+      return x - y;
+    }
+  };
+
+  EXPECT_EQ(pt_map().get_difference_with(substract, pt_map()), pt_map());
+  EXPECT_EQ(create_pt_map({{1, 1}}).get_difference_with(substract, pt_map()),
+            create_pt_map({{1, 1}}));
+  EXPECT_EQ(pt_map().get_difference_with(substract, create_pt_map({{1, 1}})),
+            pt_map());
+
+  // lhs is a leaf.
+  EXPECT_EQ(create_pt_map({{1, 1}}).get_difference_with(
+                substract, create_pt_map({{1, 1}})),
+            pt_map());
+  EXPECT_EQ(create_pt_map({{1, 3}}).get_difference_with(
+                substract, create_pt_map({{1, 1}})),
+            create_pt_map({{1, 2}}));
+  EXPECT_EQ(create_pt_map({{1, 3}}).get_difference_with(
+                substract, create_pt_map({{2, 1}})),
+            create_pt_map({{1, 3}}));
+  EXPECT_EQ(create_pt_map({{1, 3}}).get_difference_with(
+                substract, create_pt_map({{1, 1}, {2, 1}})),
+            create_pt_map({{1, 2}}));
+
+  // rhs is a leaf.
+  EXPECT_EQ(create_pt_map({{1, 3}, {2, 3}})
+                .get_difference_with(substract, create_pt_map({{1, 1}})),
+            create_pt_map({{1, 2}, {2, 3}}));
+  EXPECT_EQ(create_pt_map({{1, 3}, {2, 3}, {3, 3}})
+                .get_difference_with(substract, create_pt_map({{2, 1}})),
+            create_pt_map({{1, 3}, {2, 2}, {3, 3}}));
+  EXPECT_EQ(create_pt_map({{1, 3}, {2, 3}, {3, 3}})
+                .get_difference_with(substract, create_pt_map({{4, 1}})),
+            create_pt_map({{1, 3}, {2, 3}, {3, 3}}));
+  EXPECT_EQ(create_pt_map({{1, 3}, {2, 3}, {3, 3}})
+                .get_difference_with(substract, create_pt_map({{2, 3}})),
+            create_pt_map({{1, 3}, {3, 3}}));
+
+  // lhs and rhs have common prefixes.
+  EXPECT_EQ(
+      create_pt_map({{1, 3}, {2, 3}})
+          .get_difference_with(substract, create_pt_map({{1, 3}, {2, 3}})),
+      pt_map());
+  EXPECT_EQ(
+      create_pt_map({{1, 3}, {2, 3}})
+          .get_difference_with(substract, create_pt_map({{1, 1}, {2, 1}})),
+      create_pt_map({{1, 2}, {2, 2}}));
+  EXPECT_EQ(create_pt_map({{1, 3}, {2, 3}, {3, 3}})
+                .get_difference_with(substract,
+                                     create_pt_map({{1, 1}, {2, 1}, {3, 1}})),
+            create_pt_map({{1, 2}, {2, 2}, {3, 2}}));
+
+  // rhs is included in lhs.
+  EXPECT_EQ(
+      create_pt_map({{1, 3}, {2, 3}, {3, 3}})
+          .get_difference_with(substract, create_pt_map({{1, 1}, {2, 1}})),
+      create_pt_map({{1, 2}, {2, 2}, {3, 3}}));
+  EXPECT_EQ(
+      create_pt_map({{1, 3}, {2, 3}, {3, 3}, {4, 3}})
+          .get_difference_with(substract, create_pt_map({{1, 1}, {3, 1}})),
+      create_pt_map({{1, 2}, {2, 3}, {3, 2}, {4, 3}}));
+
+  // lhs is included in rhs.
+  EXPECT_EQ(create_pt_map({{1, 3}, {3, 3}})
+                .get_difference_with(
+                    substract, create_pt_map({{1, 1}, {2, 1}, {3, 1}, {4, 1}})),
+            create_pt_map({{1, 2}, {3, 2}}));
+  EXPECT_EQ(create_pt_map({{1, 3}, {3, 3}})
+                .get_difference_with(substract,
+                                     create_pt_map({{1, 1}, {2, 1}, {3, 1}})),
+            create_pt_map({{1, 2}, {3, 2}}));
+
+  // lhs and rhs have different prefixes.
+  EXPECT_EQ(
+      create_pt_map({{1, 3}, {3, 3}})
+          .get_difference_with(substract, create_pt_map({{2, 1}, {4, 1}})),
+      create_pt_map({{1, 3}, {3, 3}}));
+  EXPECT_EQ(create_pt_map({{1, 3}, {3, 3}, {5, 3}})
+                .get_difference_with(substract,
+                                     create_pt_map({{2, 1}, {4, 1}, {6, 1}})),
+            create_pt_map({{1, 3}, {3, 3}, {5, 3}}));
 }
