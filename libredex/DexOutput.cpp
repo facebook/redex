@@ -470,14 +470,14 @@ DexOutput::DexOutput(
       dodx->method_to_idx().size() <= kMaxMethodRefs,
       "Trying to encode too many method refs in dex %lu: %lu (limit: %lu). Run "
       "with `-J ir_type_checker.check_num_of_refs=true`.",
-      m_dex_number,
+      dex_number,
       dodx->method_to_idx().size(),
       kMaxMethodRefs);
   always_assert_log(
       dodx->field_to_idx().size() <= kMaxFieldRefs,
       "Trying to encode too many field refs in dex %lu: %lu (limit: %lu). Run "
       "with `-J ir_type_checker.check_num_of_refs=true`.",
-      m_dex_number,
+      dex_number,
       dodx->field_to_idx().size(),
       kMaxFieldRefs);
 
