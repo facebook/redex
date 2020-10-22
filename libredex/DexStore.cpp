@@ -61,6 +61,20 @@ void DexMetadata::parse(const std::string& path) {
   }
 }
 
+std::unordered_set<const DexType*> get_root_store_types(
+    const DexStoresVector& stores, bool include_primary_dex) {
+  std::unordered_set<const DexType*> types;
+  redex_assert(!stores.empty());
+  const auto& root_dexen = stores[0].get_dexen();
+  size_t index = include_primary_dex ? 0 : 1;
+  for (; index < root_dexen.size(); index++) {
+    for (const auto cls : root_dexen[index]) {
+      types.insert(cls->get_type());
+    }
+  }
+  return types;
+}
+
 XStoreRefs::XStoreRefs(const DexStoresVector& stores) {
   m_xstores.push_back(std::unordered_set<const DexType*>());
   m_stores.push_back(&stores[0]);

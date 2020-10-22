@@ -10,7 +10,6 @@
 #include "AnnoUtils.h"
 #include "ApproximateShapeMerging.h"
 #include "ConfigFiles.h"
-#include "DexStoreUtil.h"
 #include "PassManager.h"
 #include "RefChecker.h"
 #include "Resolver.h"

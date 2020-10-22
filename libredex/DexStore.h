@@ -132,6 +132,13 @@ class DexStoreClassesIterator
 };
 
 /**
+ * Return all the root store types if `include_primary_dex` is true, otherwise
+ * return all the types from secondary dexes.
+ */
+std::unordered_set<const DexType*> get_root_store_types(
+    const DexStoresVector& stores, bool include_primary_dex = true);
+
+/**
  * Provide an API to determine whether an illegal cross DexStore
  * reference/dependency is created.
  * TODO: this probably need to rely on metadata to be correct. Right now it
