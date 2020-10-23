@@ -54,9 +54,11 @@ void load_generated_types(const ModelSpec& spec,
       type_system.get_all_children(type, generated);
     }
   }
-  for (const auto type : scope) {
-    if (has_any_annotation(type, spec.gen_annos)) {
-      generated.insert(type->get_type());
+  if (!spec.gen_annos.empty()) {
+    for (const auto type : scope) {
+      if (has_any_annotation(type, spec.gen_annos)) {
+        generated.insert(type->get_type());
+      }
     }
   }
 }
