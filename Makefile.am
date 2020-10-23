@@ -148,6 +148,7 @@ libredex_la_SOURCES = \
 	service/class-merging/ApproximateShapeMerging.cpp \
 	service/class-merging/ClassAssemblingUtils.cpp \
 	service/class-merging/ClassMerging.cpp \
+	service/class-merging/AnonymousModelGenerator.cpp \
 	service/class-merging/MergerType.cpp \
 	service/class-merging/ModelMerger.cpp \
 	service/class-merging/ModelMethodMerger.cpp \
@@ -235,6 +236,7 @@ libopt_la_SOURCES = \
 	opt/bridge/Bridge.cpp \
 	opt/check_breadcrumbs/CheckBreadcrumbs.cpp \
 	opt/check-recursion/CheckRecursion.cpp \
+	opt/class-merging/AnonymousClassMergingPass.cpp \
 	opt/class-merging/ClassMergingPass.cpp \
 	opt/class-splitting/ClassSplitting.cpp \
 	opt/constant-propagation/ConstantPropagationPass.cpp \

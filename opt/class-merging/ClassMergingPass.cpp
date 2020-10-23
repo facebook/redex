@@ -75,6 +75,8 @@ bool verify_model_spec(const ModelSpec& model_spec) {
                     model_spec.name.c_str());
 
   if (model_spec.roots.empty()) {
+    // To share the configurations easily across apps, we ignore the models
+    // without roots.
     TRACE(CLMG, 2,
           "[ClassMerging] Wrong specification: model %s must have \"roots\"",
           model_spec.name.c_str());
@@ -87,7 +89,6 @@ bool verify_model_spec(const ModelSpec& model_spec) {
         "[ClassMerging] Wrong specification: model %s must have \"roots\"",
         model_spec.name.c_str());
   }
-
   return true;
 }
 
