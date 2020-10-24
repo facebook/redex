@@ -36,7 +36,19 @@ enum class MethodSearch {
   Super, // invoke-super: vmethods up the hierarchy
   Any, // any method (vmethods or dmethods) in class and up the hierarchy
        // but not interfaces
-  Interface // invoke-interface: vmethods in interface class graph
+  Interface, // invoke-interface: vmethods in interface class graph
+  InterfaceVirtual // invoke-virtual but the final resolved method is interface
+                   // method. Fallback to interface search when virtual search
+                   // failed.
+                   // This is added because we don't have Miranda methods in
+                   // Redex but this case exist:
+                   // Interface a { something(); }
+                   // class b implements a {}
+                   // class c extends b { something(){} }
+                   // ... invoke-virtual b.something() ...
+                   // MethodSearch::Virtual will return nullptr. So we added
+                   // MethodSearch::InterfaceVirtual that can resolve to
+                   // a.something()
 };
 
 struct MethodRefCacheKey {
