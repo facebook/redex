@@ -113,7 +113,7 @@ std::vector<const DexMethod*> MultipleCalleeBaseStrategy::get_roots() const {
       // overriden to roots.
       return;
     }
-    if (!emplaced_methods.count(method)) {
+    if (!emplaced_methods.count(method) && method->get_code()) {
       roots.emplace_back(method);
       emplaced_methods.emplace(method);
     }
@@ -137,7 +137,8 @@ std::vector<const DexMethod*> MultipleCalleeBaseStrategy::get_roots() const {
     const auto& overriding_methods =
         mog::get_overriding_methods(*m_method_override_graph, method);
     for (auto* overriding : overriding_methods) {
-      if (!overriding->is_external() && !emplaced_methods.count(overriding)) {
+      if (!overriding->is_external() && !emplaced_methods.count(overriding) &&
+          overriding->get_code()) {
         roots.emplace_back(overriding);
         emplaced_methods.emplace(overriding);
       }
@@ -291,7 +292,9 @@ CallSites MultipleCalleeStrategy::get_callsites(const DexMethod* method) const {
           const auto& overriding_methods =
               mog::get_overriding_methods(*m_method_override_graph, callee);
           for (auto overriding_method : overriding_methods) {
-            callsites.emplace_back(overriding_method, code->iterator_to(mie));
+            if (overriding_method->get_code()) {
+              callsites.emplace_back(overriding_method, code->iterator_to(mie));
+            }
           }
         }
       } else if (callee->is_concrete()) {
@@ -307,7 +310,8 @@ std::vector<const DexMethod*> MultipleCalleeStrategy::get_additional_roots(
     const MethodSet& existing_roots) const {
   std::vector<const DexMethod*> additional_roots;
   for (auto method : m_big_override) {
-    if (!method->is_external() && !existing_roots.count(method)) {
+    if (!method->is_external() && !existing_roots.count(method) &&
+        method->get_code()) {
       additional_roots.emplace_back(method);
     }
   }

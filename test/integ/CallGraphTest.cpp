@@ -189,7 +189,6 @@ TEST_F(CallGraphTest, test_multiple_callee_graph_entry) {
   auto entry_callees = get_callees(multiple_graph->entry());
   EXPECT_THAT(entry_callees,
               ::testing::UnorderedElementsAre(clinit,
-                                              more_intf_return,
                                               more_impl1_return,
                                               more_impl2_return,
                                               more_impl3_return,
