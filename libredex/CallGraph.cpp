@@ -11,6 +11,7 @@
 
 #include "ConcurrentContainers.h"
 #include "MethodOverrideGraph.h"
+#include "Show.h"
 #include "Walkers.h"
 
 namespace mog = method_override_graph;
@@ -151,6 +152,29 @@ std::vector<const DexMethod*> MultipleCalleeBaseStrategy::get_roots() const {
 CompleteCallGraphStrategy::CompleteCallGraphStrategy(const Scope& scope)
     : MultipleCalleeBaseStrategy(scope) {}
 
+DexMethod* resolve_interface_virtual_callee(const IRInstruction* insn,
+                                            const DexMethod* caller,
+                                            MethodRefCache& ref_cache,
+                                            bool use_cache) {
+  DexMethod* callee = nullptr;
+  if (opcode_to_search(insn) == MethodSearch::Virtual) {
+    callee = use_cache ? resolve_method(insn->get_method(),
+                                        MethodSearch::InterfaceVirtual,
+                                        ref_cache,
+                                        caller)
+                       : resolve_method(insn->get_method(),
+                                        MethodSearch::InterfaceVirtual,
+                                        caller);
+    if (callee == nullptr) {
+      auto insn_method_cls = type_class(insn->get_method()->get_class());
+      if (insn_method_cls != nullptr && !insn_method_cls->is_external()) {
+        fprintf(stderr, "Unexpected unresolved insn %s", SHOW(insn));
+      }
+    }
+  }
+  return callee;
+}
+
 CallSites CompleteCallGraphStrategy::get_callsites(
     const DexMethod* method) const {
   CallSites callsites;
@@ -163,7 +187,11 @@ CallSites CompleteCallGraphStrategy::get_callsites(
     if (opcode::is_an_invoke(insn->opcode())) {
       auto callee = this->resolve_callee(method, insn);
       if (callee == nullptr) {
-        continue;
+        callee = resolve_interface_virtual_callee(
+            insn, method, m_resolved_refs, /* use_cache */ true);
+        if (callee == nullptr) {
+          continue;
+        }
       }
       if (callee->is_concrete()) {
         callsites.emplace_back(callee, code->iterator_to(mie));
@@ -201,7 +229,14 @@ MultipleCalleeStrategy::MultipleCalleeStrategy(const Scope& scope,
       if (opcode::is_an_invoke(insn->opcode())) {
         auto callee =
             resolve_method(insn->get_method(), opcode_to_search(insn), method);
-        if (callee == nullptr || !callee->is_virtual()) {
+        if (callee == nullptr) {
+          callee = resolve_interface_virtual_callee(
+              insn, method, m_resolved_refs, /* use_cache */ false);
+          if (callee == nullptr) {
+            continue;
+          }
+        }
+        if (!callee->is_virtual()) {
           continue;
         }
         const auto& overriding_methods =
@@ -237,7 +272,11 @@ CallSites MultipleCalleeStrategy::get_callsites(const DexMethod* method) const {
     if (opcode::is_an_invoke(insn->opcode())) {
       auto callee = this->resolve_callee(method, insn);
       if (callee == nullptr) {
-        continue;
+        callee = resolve_interface_virtual_callee(
+            insn, method, m_resolved_refs, /* use_cache */ true);
+        if (callee == nullptr) {
+          continue;
+        }
       }
       if (is_definitely_virtual(callee)) {
         // For true virtual callees, add the callee itself and all of its

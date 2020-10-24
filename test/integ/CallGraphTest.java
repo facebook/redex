@@ -91,5 +91,21 @@ class LessThan5Impl3 implements LessThan5 {
 }
 
 class LessThan5Impl4 implements LessThan5 {
-  public int returnNum() { return 4; }
+  public int returnNum() {
+    PureRefImpl2 pureRef = new PureRefImpl3();
+    int get5 = pureRef.returnNum();
+    return 4;
+  }
+}
+
+interface PureRef {
+  public int returnNum();
+}
+
+abstract class PureRefImpl1 implements PureRef {}
+
+abstract class PureRefImpl2 extends PureRefImpl1 {}
+
+class PureRefImpl3 extends PureRefImpl2 {
+  public int returnNum() { return 5; }
 }
