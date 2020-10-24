@@ -149,6 +149,15 @@ WholeProgramState::WholeProgramState(
   collect(scope, fp_iter);
 }
 
+WholeProgramState::WholeProgramState(
+    const Scope& scope,
+    const interprocedural::FixpointIterator& fp_iter,
+    const std::unordered_set<DexMethod*>& non_true_virtuals,
+    const std::unordered_set<const DexType*>& field_blocklist,
+    const call_graph::Graph& call_graph)
+    : WholeProgramState(scope, fp_iter, non_true_virtuals, field_blocklist) {
+  m_call_graph = call_graph;
+}
 /*
  * Walk over the entire program, doing a join over the values written to each
  * field, as well as a join over the values returned by each method.
@@ -322,6 +331,25 @@ bool WholeProgramAwareAnalyzer::analyze_invoke(
     ConstantEnvironment* env) {
   if (whole_program_state == nullptr) {
     return false;
+  }
+  if (whole_program_state->has_call_graph()) {
+    auto method = resolve_method(insn->get_method(), opcode_to_search(insn));
+    if (method == nullptr && opcode_to_search(insn) == MethodSearch::Virtual) {
+      method =
+          resolve_method(insn->get_method(), MethodSearch::InterfaceVirtual);
+    }
+    if (method == nullptr) {
+      return false;
+    }
+    if (whole_program_state->method_is_dynamic(method)) {
+      return false;
+    }
+    auto value = whole_program_state->get_return_value_from_cg(insn);
+    if (value.is_top()) {
+      return false;
+    }
+    env->set(RESULT_REGISTER, value);
+    return true;
   }
   auto op = insn->opcode();
   if (op != OPCODE_INVOKE_DIRECT && op != OPCODE_INVOKE_STATIC &&

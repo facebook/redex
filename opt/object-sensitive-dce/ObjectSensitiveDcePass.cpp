@@ -74,13 +74,14 @@ class CallGraphStrategy final : public call_graph::BuildStrategy {
   // which means that the dead code removal will not optimize them fully. I'm
   // not sure why these "unreachable" methods are not ultimately removed by RMU,
   // but as it stands, properly optimizing them is a size win for us.
-  std::vector<const DexMethod*> get_roots() const override {
-    std::vector<const DexMethod*> roots;
+  call_graph::RootAndDynamic get_roots() const override {
+    call_graph::RootAndDynamic root_and_dynamic;
+    auto& roots = root_and_dynamic.roots;
 
     walk::code(m_scope, [&](DexMethod* method, IRCode& code) {
       roots.emplace_back(method);
     });
-    return roots;
+    return root_and_dynamic;
   }
 
  private:

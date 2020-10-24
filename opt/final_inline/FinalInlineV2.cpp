@@ -232,15 +232,16 @@ class ClassInitStrategy final : public call_graph::SingleCalleeStrategy {
   explicit ClassInitStrategy(const Scope& scope)
       : call_graph::SingleCalleeStrategy(scope) {}
 
-  std::vector<const DexMethod*> get_roots() const override {
-    std::vector<const DexMethod*> roots;
+  call_graph::RootAndDynamic get_roots() const override {
+    call_graph::RootAndDynamic root_and_dynamic;
+    auto& roots = root_and_dynamic.roots;
 
     walk::methods(m_scope, [&](DexMethod* method) {
       if (method::is_clinit(method)) {
         roots.emplace_back(method);
       }
     });
-    return roots;
+    return root_and_dynamic;
   }
 };
 
