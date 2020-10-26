@@ -24,7 +24,7 @@ class ExternalRefsManglingPass : public Pass {
   void bind_config() override {
     bind("refine_to_external", false, m_refine_to_external,
          "Allowing resolving method ref to an external one");
-    bind("supported_min_sdk_for_external_refs", 19,
+    bind("supported_min_sdk_for_external_refs", 15,
          m_supported_min_sdk_for_external_refs,
          "If refine_to_external is turned on, the minimal sdk level that can "
          "be supported.");
