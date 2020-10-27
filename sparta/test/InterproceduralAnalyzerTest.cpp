@@ -386,7 +386,7 @@ Lattice lattice({BOTTOM, PURE, IMPURE, TOP},
 using PurityDomain = sparta::
     FiniteAbstractDomain<Elements, Lattice, Lattice::Encoding, &lattice>;
 
-struct Callsite {
+struct CallsiteEdgeTarget {
   // TODO: This can be a Reduced Product with the current calling context?
   using Domain = sparta::HashedSetAbstractDomain<language::Function*>;
 
@@ -396,7 +396,7 @@ struct Callsite {
   }
 };
 
-using CallerContext = typename Callsite::Domain;
+using CallerContext = typename CallsiteEdgeTarget::Domain;
 
 template <typename Base>
 class SimpleFunctionAnalyzer : public Base {
@@ -591,7 +591,7 @@ struct PurityAnalysisAdaptor : public language::AnalysisAdaptorBase {
 
   template <typename IntraproceduralBase>
   using FunctionAnalyzer = SimpleFunctionAnalyzer<IntraproceduralBase>;
-  using Callsite = Callsite;
+  using Callsite = CallsiteEdgeTarget;
 
   // Optional: override call graph level fixpoint iterator type
   template <typename GraphInterface, typename Domain>
