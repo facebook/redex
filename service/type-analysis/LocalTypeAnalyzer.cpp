@@ -78,9 +78,6 @@ bool RegisterTypeAnalyzer::analyze_const_class(const IRInstruction*,
 
 bool RegisterTypeAnalyzer::analyze_aget(const IRInstruction* insn,
                                         DexTypeEnvironment* env) {
-  if (insn->opcode() != OPCODE_AGET_OBJECT) {
-    return false;
-  }
   auto array_type = env->get(insn->src(0)).get_dex_type();
   if (!array_type || !*array_type) {
     env->set(RESULT_REGISTER, DexTypeDomain::top());

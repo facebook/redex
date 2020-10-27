@@ -25,7 +25,7 @@ class Transform final {
  public:
   using NullAssertionSet = std::unordered_set<DexMethodRef*>;
   struct Config {
-    bool remove_redundant_null_checks{false};
+    bool remove_redundant_null_checks{true};
     bool remove_kotlin_null_check_assertions{false};
     bool remove_redundant_type_checks{true};
     Config() {}

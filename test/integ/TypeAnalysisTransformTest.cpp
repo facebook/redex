@@ -105,6 +105,19 @@ TEST_F(TypeAnalysisTransformTest, RemoveRedundantNullCheckTest) {
       EXPECT_NE(mie.insn->opcode(), OPCODE_IF_EQZ);
     }
   }
+  {
+    auto meth_check_primitive_array_field =
+        get_method("ReactNode;.getCool", "I", "Ljava/lang/String;");
+    auto code = meth_check_primitive_array_field->get_code();
+    const auto& insns = InstructionIterable(code);
+    bool found_if_eqz = false;
+    for (auto& mie : insns) {
+      if (mie.insn->opcode() == OPCODE_IF_EQZ) {
+        found_if_eqz = true;
+      }
+    }
+    EXPECT_TRUE(found_if_eqz);
+  }
 }
 
 TEST_F(TypeAnalysisTransformTest, TestRemoveRedundantTypeChecks) {
