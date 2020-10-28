@@ -55,8 +55,19 @@ export(TARGETS sparta FILE sparta_target.cmake)
 # test
 ###################################################
 file(GLOB test
-        "test/*"
+        "test/*.cpp"
         )
 
-add_executable(sparta_test ${test})
-target_link_libraries(sparta_test sparta gmock_main)
+# ${test} contains all paths to the test cpps
+foreach(testfile ${test})
+    # ${testfile} is in the format of test/SomeTest.cpp
+    string(REPLACE ".cpp" "_test" no_ext_name ${testfile})
+    # ${no_ext_name} is in the format of test/SomeTest_test
+    get_filename_component(test_bin ${no_ext_name} NAME)
+    # ${test_bin} is in the format of SomeTest_test
+    add_executable(${test_bin} ${testfile})
+    target_link_libraries(${test_bin} PRIVATE sparta gmock_main)
+endforeach()
+
+# Copy the script that runs all tests under the build directory
+configure_file(run_all_tests.sh run_all_tests.sh COPYONLY)
