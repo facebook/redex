@@ -1445,13 +1445,14 @@ class DexClass:
         self.dex = dex
         self.class_def = class_def
         self.methods = None
+        self.unsorted_methods = None
         self.fields = None
         self.mangled = None
         self.demangled = None
         self.method_mapping = None
 
     def __len__(self):
-        return sum((len(m) for m in self.get_methods())) + sum(
+        return sum((len(m) for m in self.get_methods(sort=False))) + sum(
             (len(f) for f in self.get_fields())
         )
 
@@ -1549,8 +1550,25 @@ class DexClass:
     def get_dex(self):
         return self.dex
 
-    def get_methods(self):
-        if self.methods is None:
+    def get_methods(self, sort=True):
+        if self.methods is not None:
+            return self.methods
+        if self.unsorted_methods is not None and not sort:
+            return self.unsorted_methods
+
+        if not sort:
+            class_data = self.class_def.class_data
+            self.unsorted_methods = [
+                DexMethod(self, m, False) for m in class_data.direct_methods
+            ]
+            return self.unsorted_methods
+
+        if self.unsorted_methods is not None:
+            self.methods = sorted(
+                self.unsorted_methods, key=lambda method: method.get_line_number()
+            )
+            self.unsorted_methods = None
+        else:
             class_data = self.class_def.class_data
             self.methods = sorted(
                 [DexMethod(self, m, False) for m in class_data.direct_methods]
@@ -1727,6 +1745,7 @@ class File:
         self.method_ids = None
         self.class_defs = None
         self.classes = None
+        self.unsorted_classes = None
         self.call_site_ids = None
         self.method_handle_items = None
         self.code_items = None
@@ -1792,17 +1811,30 @@ class File:
             if class_str_idx >= 0:
                 class_idx = self.find_type_idx(class_str_idx)
         if isinstance(class_idx, numbers.Integral):
-            classes = self.get_classes()
+            classes = self.get_classes(sort=False)
             for cls in classes:
                 if cls.class_def.class_idx == class_idx:
                     return cls
         return None
 
     def find_string_idx(self, match_s):
-        strings = self.get_strings()
-        for (i, s) in enumerate(strings):
-            if match_s == s.data:
-                return i
+        match_key = match_s if isinstance(match_s, str) else match_s.data
+
+        class StringsWrapper:
+            def __init__(self, base):
+                self._base = base
+
+            def __getitem__(self, idx):
+                return self._base[idx].data
+
+            def __len__(self):
+                return len(self._base)
+
+        bisect_against = StringsWrapper(self.get_strings())
+
+        i = bisect.bisect_left(bisect_against, match_key)
+        if i != len(bisect_against) and bisect_against[i] == match_key:
+            return i
         return -1
 
     def get_string(self, index):
@@ -2066,8 +2098,8 @@ class File:
     def find_method_from_code_off(self, code_off):
         if code_off == 0:
             return None
-        for cls in self.get_classes():
-            for method in cls.get_methods():
+        for cls in self.get_classes(sort=False):
+            for method in cls.get_methods(sort=False):
                 if method.get_code_offset() == code_off:
                     return method
         return None
@@ -2082,13 +2114,28 @@ class File:
             self.data.pop_offset_and_seek()
         return self.class_defs
 
-    def get_classes(self):
-        if self.classes is None:
+    def get_classes(self, sort=True):
+        if self.classes is not None:
+            return self.classes
+        if self.unsorted_classes is not None and not sort:
+            return self.unsorted_classes
+
+        if not sort:
+            self.unsorted_classes = [
+                DexClass(self, class_def) for class_def in self.get_class_defs()
+            ]
+            return self.unsorted_classes
+
+        if self.unsorted_classes is not None:
+            self.classes = sorted(
+                self.unsorted_classes, key=lambda cls: cls.get_line_number()
+            )
+            self.unsorted_classes = None
+        else:
             self.classes = sorted(
                 (DexClass(self, class_def) for class_def in self.get_class_defs()),
                 key=lambda cls: cls.get_line_number(),
             )
-            self.data.pop_offset_and_seek()
         return self.classes
 
     def get_strings(self):
