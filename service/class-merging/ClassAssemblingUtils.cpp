@@ -79,7 +79,8 @@ std::string get_merger_package_name(const DexType* type) {
   // Avoid an Android OS like package name, which might confuse the custom class
   // loader.
   if (boost::starts_with(pkg_name, "Landroid") ||
-      boost::starts_with(pkg_name, "Ldalvik")) {
+      boost::starts_with(pkg_name, "Ldalvik") ||
+      boost::starts_with(pkg_name, "Ljava")) {
     return "Lcom/facebook/redex/";
   }
   return pkg_name;
