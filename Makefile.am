@@ -150,6 +150,7 @@ libredex_la_SOURCES = \
 	service/class-merging/ClassMerging.cpp \
 	service/class-merging/AnonymousModelGenerator.cpp \
 	service/class-merging/MergerType.cpp \
+	service/class-merging/MergingStrategies.cpp \
 	service/class-merging/ModelMerger.cpp \
 	service/class-merging/ModelMethodMerger.cpp \
 	service/class-merging/Model.cpp \

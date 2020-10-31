@@ -63,7 +63,7 @@ std::string MergerType::Shape::build_type_name(
     const std::string& name,
     size_t count,
     const boost::optional<InterdexSubgroupIdx>& interdex_subgroup_idx,
-    const boost::optional<InterdexSubgroupIdx>& subgroup_idx) const {
+    const InterdexSubgroupIdx subgroup_idx) const {
   auto root_name_tag = get_root_type_name_tag(root_type);
   std::ostringstream ss;
   ss << "L" << prefix << root_name_tag << name;
@@ -74,8 +74,8 @@ std::string MergerType::Shape::build_type_name(
     ss << "_I" << interdex_subgroup_idx.get();
   }
 
-  if (subgroup_idx != boost::none) {
-    ss << "_" << subgroup_idx.get();
+  if (subgroup_idx != 0) {
+    ss << "_" << subgroup_idx;
   }
   ss << ";";
   return ss.str();
@@ -87,6 +87,42 @@ std::string MergerType::Shape::to_string() const {
      << "," << int_fields << "," << long_fields << "," << double_fields << ","
      << float_fields << ")";
   return ss.str();
+}
+
+MergerType::Shape::Shape(const std::vector<DexField*>& fields) {
+  for (const auto& field : fields) {
+    const auto field_type = field->get_type();
+    if (field_type == type::java_lang_String()) {
+      string_fields++;
+      continue;
+    }
+    switch (type::type_shorty(field_type)) {
+    case 'L':
+    case '[':
+      reference_fields++;
+      break;
+    case 'J':
+      long_fields++;
+      break;
+    case 'D':
+      double_fields++;
+      break;
+    case 'F':
+      float_fields++;
+      break;
+    case 'Z':
+      bool_fields++;
+      break;
+    case 'B':
+    case 'S':
+    case 'C':
+    case 'I':
+      int_fields++;
+      break;
+    default:
+      not_reached();
+    }
+  }
 }
 
 } // namespace class_merging

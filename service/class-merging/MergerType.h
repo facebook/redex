@@ -67,19 +67,25 @@ struct MergerType {
    */
   struct Shape {
     // a string field: Ljava/lang/String;
-    int string_fields;
+    int string_fields{0};
     // a reference field: any type starting with 'L' or '['
-    int reference_fields;
+    int reference_fields{0};
     // a boolean field: 'Z'
-    int bool_fields;
+    int bool_fields{0};
     // a primitive field that fits into an int: 'B', 'S', 'C', 'I'
-    int int_fields;
+    int int_fields{0};
     // a long field: 'J':
-    int long_fields;
+    int long_fields{0};
     // a double field: 'D':
-    int double_fields;
+    int double_fields{0};
     // a float field: 'F':
-    int float_fields;
+    int float_fields{0};
+
+    Shape() {}
+    /**
+     * Construct a Shape object for the fields.
+     */
+    explicit Shape(const std::vector<DexField*>&);
 
     /**
      * Build a suitable and unique type name for a shape.
@@ -89,10 +95,8 @@ struct MergerType {
         const DexType* root_type,
         const std::string& name,
         size_t count,
-        const boost::optional<InterdexSubgroupIdx>& interdex_subgroup_idx =
-            boost::none,
-        const boost::optional<InterdexSubgroupIdx>& subgroup_idx =
-            boost::none) const;
+        const boost::optional<InterdexSubgroupIdx>& interdex_subgroup_idx,
+        const InterdexSubgroupIdx subgroup_idx) const;
 
     /**
      * Returns if this shape includes another shape

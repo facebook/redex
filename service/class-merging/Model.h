@@ -199,8 +199,6 @@ class Model {
                            const TypeSystem& type_system,
                            const RefChecker& refchecker);
 
-  static void update_model(Model& model);
-
   const std::string& get_name() const { return m_spec.name; }
   std::vector<const DexType*> get_roots() const {
     std::vector<const DexType*> res;
@@ -362,14 +360,14 @@ class Model {
                                   const MergerType::Shape& shape,
                                   const DexType* parent,
                                   const TypeSet& intfs,
-                                  const TypeSet& classes);
+                                  const std::vector<const DexType*>& classes);
   MergerType& create_merger_helper(
       const DexType* merger_type,
       const MergerType::Shape& shape,
       const TypeSet& group_key,
-      const TypeSet& group_values,
+      const std::vector<const DexType*>& group_values,
       const boost::optional<InterdexSubgroupIdx>& interdex_subgroup_idx,
-      const boost::optional<InterdexSubgroupIdx>& subgroup_idx);
+      const InterdexSubgroupIdx subgroup_idx);
   void create_mergers_helper(
       const DexType* merger_type,
       const MergerType::Shape& shape,
@@ -389,7 +387,8 @@ class Model {
   void flatten_shapes(const MergerType& merger,
                       MergerType::ShapeCollector& shapes);
   std::vector<TypeSet> group_per_interdex_set(const TypeSet& types);
-  void map_fields(MergerType& shape, const TypeSet& classes);
+  void map_fields(MergerType& shape,
+                  const std::vector<const DexType*>& classes);
 
   // collect and distribute methods across MergerTypes
   void collect_methods();
