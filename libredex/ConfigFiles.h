@@ -98,6 +98,9 @@ struct ConfigFiles {
 
   std::string get_outdir() const { return outdir; }
 
+  // For development only!
+  void set_outdir(const std::string& new_outdir) { outdir = new_outdir; }
+
   const ProguardMap& get_proguard_map() const;
 
   const std::string& get_printseeds() const { return m_printseeds; }
