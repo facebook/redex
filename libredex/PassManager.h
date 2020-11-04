@@ -90,8 +90,10 @@ class PassManager {
   ApkManager& apk_manager() { return m_apk_mgr; }
 
   void record_running_regalloc() { m_regalloc_has_run = true; }
+  bool regalloc_has_run() const { return m_regalloc_has_run; }
 
-  bool regalloc_has_run() { return m_regalloc_has_run; }
+  void record_running_interdex() { m_interdex_has_run = true; }
+  bool interdex_has_run() const { return m_interdex_has_run; }
 
   template <typename PassType>
   PassType* get_preserved_analysis() const {
@@ -127,6 +129,7 @@ class PassManager {
   const RedexOptions m_redex_options;
   bool m_testing_mode{false};
   bool m_regalloc_has_run{false};
+  bool m_interdex_has_run{false};
 
   Pass* m_malloc_profile_pass{nullptr};
 

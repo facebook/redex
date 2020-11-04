@@ -60,6 +60,11 @@ class InterDexPass : public Pass {
 
   void bind_config() override;
 
+  void eval_pass(DexStoresVector& stores,
+                 ConfigFiles& conf,
+                 PassManager& mgr) override {
+    ++m_eval;
+  }
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
@@ -77,6 +82,9 @@ class InterDexPass : public Pass {
   CrossDexRelocatorConfig m_cross_dex_relocator_config;
   bool m_expect_order_list;
   bool m_sort_remaining_classes;
+
+  size_t m_run{0}; // Which iteration of `run_pass`.
+  size_t m_eval{0}; // How many `eval_pass` iterations.
 
   virtual void run_pass(DexStoresVector&,
                         DexClassesVector&,

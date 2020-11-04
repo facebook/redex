@@ -240,6 +240,12 @@ void InterDexPass::run_pass(DexStoresVector& stores,
     }
   }
   wq.run_all();
+
+  ++m_run;
+  // For the last invocation, record that final interdex has been done.
+  if (m_eval == m_run) {
+    mgr.record_running_interdex();
+  }
 }
 
 static InterDexPass s_pass;
