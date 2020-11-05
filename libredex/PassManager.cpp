@@ -588,7 +588,11 @@ class AfterPassSizes {
 #endif
   }
 
-  void wait() { check_open_jobs(/*no_hang=*/false); }
+  void wait() {
+#ifdef __linux__
+    check_open_jobs(/*no_hang=*/false);
+#endif
+  }
 
  private:
 #ifdef __linux__
