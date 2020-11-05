@@ -7,8 +7,6 @@
 
 #pragma once
 
-#include <iostream>
-
 #include <boost/optional.hpp>
 #include <functional>
 #include <memory>
@@ -231,8 +229,9 @@ class InterproceduralAnalyzer {
     boost::optional<CallGraph> callgraph = boost::none;
 
     for (int iteration = 0; iteration < m_max_iteration; iteration++) {
-      // TODO: remove or abstract logging
-      std::cerr << "Iteration " << iteration + 1 << std::endl;
+      if (m_logger) {
+        (*m_logger)(std::string("Iteration ") + std::to_string(iteration + 1));
+      }
       if (!callgraph || rebuild_callgraph_on_each_iteration) {
         callgraph = Analysis::call_graph_of(m_program, &this->registry);
       }
@@ -256,8 +255,10 @@ class InterproceduralAnalyzer {
       if (this->registry.has_update()) {
         this->registry.materialize_update();
       } else {
-        std::cerr << "Global fixpoint reached after " << iteration + 1
-                  << " iterations." << std::endl;
+        if (m_logger) {
+          (*m_logger)(std::string("Global fixpoint reached after ") +
+                      std::to_string(iteration + 1) + " iterations.");
+        }
         break;
       }
     }
@@ -280,10 +281,16 @@ class InterproceduralAnalyzer {
     return analyzer;
   }
 
+  void set_logger(const std::function<void(const std::string&)>& logger) {
+    m_logger = logger;
+  }
+
  private:
   Program m_program;
   int m_max_iteration;
   AnalysisParameters* m_parameters;
+  boost::optional<std::function<void(const std::string&)>> m_logger =
+      boost::none;
 };
 
 } // namespace sparta
