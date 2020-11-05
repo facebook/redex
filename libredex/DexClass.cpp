@@ -1142,17 +1142,32 @@ void DexClass::gather_types(std::vector<DexType*>& ltype) const {
     m->gather_types(ltype);
   }
   for (auto const& f : m_sfields) {
-    f->gather_types_shallow(ltype);
     f->gather_types(ltype);
   }
   for (auto const& f : m_ifields) {
-    f->gather_types_shallow(ltype);
     f->gather_types(ltype);
   }
+
   ltype.push_back(m_super_class);
   ltype.push_back(m_self);
   if (m_interfaces) m_interfaces->gather_types(ltype);
   if (m_anno) m_anno->gather_types(ltype);
+
+  // We also need to gather types needed for field and method refs.
+  std::vector<DexFieldRef*> lfield;
+  gather_fields(lfield);
+  for (auto const& f : lfield) {
+    f->gather_types_shallow(ltype);
+  }
+
+  std::vector<DexMethodRef*> lmethod;
+  gather_methods(lmethod);
+  for (auto const& m : lmethod) {
+    m->gather_types_shallow(ltype);
+  }
+
+  // Remove duplicates.
+  sort_unique(ltype);
 }
 
 void DexClass::gather_load_types(std::unordered_set<DexType*>& ltype) const {
