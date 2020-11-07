@@ -6,6 +6,7 @@
  */
 
 #include "FlatSet.h"
+#include "PatriciaTreeSet.h"
 
 #include <cstdint>
 #include <limits>
@@ -15,39 +16,10 @@
 #include <unordered_set>
 #include <vector>
 
-#include <boost/concept/assert.hpp>
-#include <boost/concept_check.hpp>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 using namespace sparta;
-
-using flat_set = FlatSet<uint32_t>;
-
-BOOST_CONCEPT_ASSERT((boost::ForwardContainer<flat_set>));
-
-class FlatSetTest : public ::testing::Test {
- protected:
-  FlatSetTest()
-      : m_rd_device(),
-        m_generator(m_rd_device()),
-        m_size_dist(0, 50),
-        m_elem_dist(0, std::numeric_limits<uint32_t>::max()) {}
-
-  flat_set generate_random_set() {
-    flat_set s;
-    size_t size = m_size_dist(m_generator);
-    for (size_t i = 0; i < size; ++i) {
-      s.insert(m_elem_dist(m_generator));
-    }
-    return s;
-  }
-
-  std::random_device m_rd_device;
-  std::mt19937 m_generator;
-  std::uniform_int_distribution<uint32_t> m_size_dist;
-  std::uniform_int_distribution<uint32_t> m_elem_dist;
-};
 
 namespace {
 
@@ -91,10 +63,38 @@ std::vector<uint32_t> get_difference(const std::vector<uint32_t>& a,
 
 } // namespace
 
-TEST_F(FlatSetTest, basicOperations) {
+template <typename Set>
+class UInt32SetTest : public ::testing::Test {
+ protected:
+  UInt32SetTest()
+      : m_rd_device(),
+        m_generator(m_rd_device()),
+        m_size_dist(0, 50),
+        m_elem_dist(0, std::numeric_limits<uint32_t>::max()) {}
+
+  Set generate_random_set() {
+    Set s;
+    size_t size = m_size_dist(m_generator);
+    for (size_t i = 0; i < size; ++i) {
+      s.insert(m_elem_dist(m_generator));
+    }
+    return s;
+  }
+
+  std::random_device m_rd_device;
+  std::mt19937 m_generator;
+  std::uniform_int_distribution<uint32_t> m_size_dist;
+  std::uniform_int_distribution<uint32_t> m_elem_dist;
+};
+
+using UInt32Sets =
+    ::testing::Types<PatriciaTreeSet<uint32_t>, FlatSet<uint32_t>>;
+TYPED_TEST_CASE(UInt32SetTest, UInt32Sets);
+
+TYPED_TEST(UInt32SetTest, basicOperations) {
   const uint32_t bigint = std::numeric_limits<uint32_t>::max();
-  flat_set s1;
-  flat_set empty_set;
+  TypeParam s1;
+  TypeParam empty_set;
   std::vector<uint32_t> elements1 = {0, 1, 2, 3, 4, 1023, bigint};
 
   for (uint32_t x : elements1) {
@@ -110,7 +110,7 @@ TEST_F(FlatSetTest, basicOperations) {
   EXPECT_FALSE(s1.contains(17));
   EXPECT_FALSE(s1.contains(1000000));
 
-  flat_set s2 = s1;
+  TypeParam s2 = s1;
   std::vector<uint32_t> elements2 = {0, 2, 3, 1023};
   s2.remove(1).remove(4).remove(bigint);
 
@@ -121,7 +121,7 @@ TEST_F(FlatSetTest, basicOperations) {
     std::ostringstream out;
     out << s2;
     EXPECT_EQ("{0, 2, 3, 1023}", out.str());
-    flat_set s_init_list({0, 2, 3, 1023});
+    TypeParam s_init_list({0, 2, 3, 1023});
     EXPECT_TRUE(s_init_list.equals(s2));
   }
 
@@ -134,8 +134,8 @@ TEST_F(FlatSetTest, basicOperations) {
   EXPECT_FALSE(empty_set.equals(s1));
 
   std::vector<uint32_t> elements3 = {2, 1023, 4096, 13001, bigint};
-  flat_set s3(elements3.begin(), elements3.end());
-  flat_set u13 = s1;
+  TypeParam s3(elements3.begin(), elements3.end());
+  TypeParam u13 = s1;
   u13.union_with(s3);
   EXPECT_TRUE(s1.is_subset_of(u13));
   EXPECT_TRUE(s3.is_subset_of(u13));
@@ -148,7 +148,7 @@ TEST_F(FlatSetTest, basicOperations) {
   EXPECT_TRUE(s1.get_union_with(empty_set).equals(s1));
   EXPECT_TRUE(s1.get_union_with(s1).equals(s1));
 
-  flat_set i13 = s1;
+  TypeParam i13 = s1;
   i13.intersection_with(s3);
   EXPECT_TRUE(i13.is_subset_of(s1));
   EXPECT_TRUE(i13.is_subset_of(s3));
@@ -169,29 +169,29 @@ TEST_F(FlatSetTest, basicOperations) {
 
   std::vector<uint32_t> elements4 = {0,    1,    2,       5,     101,
                                      4096, 8137, 1234567, bigint};
-  flat_set t3(elements3.begin(), elements3.end());
-  flat_set t4(elements4.begin(), elements4.end());
-  flat_set d34 = t3;
+  TypeParam t3(elements3.begin(), elements3.end());
+  TypeParam t4(elements4.begin(), elements4.end());
+  TypeParam d34 = t3;
   d34.difference_with(t4);
   EXPECT_THAT(d34, ::testing::UnorderedElementsAre(1023, 13001));
 
-  flat_set d43 = t4.get_difference_with(t3);
+  TypeParam d43 = t4.get_difference_with(t3);
   EXPECT_THAT(d43,
               ::testing::UnorderedElementsAre(0, 1, 5, 101, 8137, 1234567));
 }
 
-TEST_F(FlatSetTest, robustness) {
+TYPED_TEST(UInt32SetTest, robustness) {
   for (size_t k = 0; k < 10; ++k) {
-    flat_set s1 = this->generate_random_set();
-    flat_set s2 = this->generate_random_set();
+    TypeParam s1 = this->generate_random_set();
+    TypeParam s2 = this->generate_random_set();
     auto elems1 = std::vector<uint32_t>(s1.begin(), s1.end());
     auto elems2 = std::vector<uint32_t>(s2.begin(), s2.end());
     std::vector<uint32_t> ref_u12 = get_union(elems1, elems2);
     std::vector<uint32_t> ref_i12 = get_intersection(elems1, elems2);
     std::vector<uint32_t> ref_d12 = get_difference(elems1, elems2);
-    flat_set u12 = s1.get_union_with(s2);
-    flat_set i12 = s1.get_intersection_with(s2);
-    flat_set d12 = s1.get_difference_with(s2);
+    TypeParam u12 = s1.get_union_with(s2);
+    TypeParam i12 = s1.get_intersection_with(s2);
+    TypeParam d12 = s1.get_difference_with(s2);
     EXPECT_THAT(u12, ::testing::UnorderedElementsAreArray(ref_u12))
         << "s1 = " << s1 << ", s2 = " << s2;
     EXPECT_THAT(i12, ::testing::UnorderedElementsAreArray(ref_i12))
@@ -206,52 +206,63 @@ TEST_F(FlatSetTest, robustness) {
   }
 }
 
-using string_set = FlatSet<std::string*>;
-
-BOOST_CONCEPT_ASSERT((boost::ForwardContainer<string_set>));
-
-std::vector<std::string> string_set_to_vector(const string_set& s) {
-  std::vector<std::string> v;
-  for (std::string* p : s) {
-    v.push_back(*p);
+template <typename Set>
+class StringSetTest : public ::testing::Test {
+ protected:
+  static std::vector<std::string> string_set_to_vector(const Set& s) {
+    std::vector<std::string> v;
+    for (std::string* p : s) {
+      v.push_back(*p);
+    }
+    return v;
   }
-  return v;
-}
+};
 
-TEST_F(FlatSetTest, setsOfPointers) {
+using StringSets =
+    ::testing::Types<PatriciaTreeSet<std::string*>, FlatSet<std::string*>>;
+TYPED_TEST_CASE(StringSetTest, StringSets);
+
+TYPED_TEST(StringSetTest, setsOfPointers) {
   std::string a = "a";
   std::string b = "b";
   std::string c = "c";
   std::string d = "d";
 
-  string_set s_abcd;
+  TypeParam s_abcd;
   s_abcd.insert(&a).insert(&b).insert(&c).insert(&d);
-  EXPECT_THAT(string_set_to_vector(s_abcd),
+  EXPECT_THAT(this->string_set_to_vector(s_abcd),
               ::testing::UnorderedElementsAre("a", "b", "c", "d"));
 
-  string_set s_bc = s_abcd;
+  TypeParam s_bc = s_abcd;
   s_bc.remove(&a).remove(&d);
-  EXPECT_THAT(string_set_to_vector(s_bc),
+  EXPECT_THAT(this->string_set_to_vector(s_bc),
               ::testing::UnorderedElementsAre("b", "c"));
 
-  string_set s_ab = s_abcd;
+  TypeParam s_ab = s_abcd;
   s_ab.filter([](std::string* x) { return *x < "c"; });
-  EXPECT_THAT(string_set_to_vector(s_ab),
+  EXPECT_THAT(this->string_set_to_vector(s_ab),
               ::testing::UnorderedElementsAre("a", "b"));
-  string_set s = s_ab;
+  TypeParam s = s_ab;
   s.filter([](std::string* x) { return *x >= "a"; });
   EXPECT_TRUE(s.equals(s_ab));
   s.filter([](std::string* x) { return *x > "g"; });
   EXPECT_TRUE(s.empty());
 
-  string_set t({&a});
+  TypeParam t({&a});
   std::ostringstream out;
   out << t;
   EXPECT_EQ("{a}", out.str());
 }
 
-TEST_F(FlatSetTest, setOfUnsignedInt64) {
-  FlatSet<uint64_t> s;
+template <typename Set>
+class UInt64SetTest : public ::testing::Test {};
+
+using UInt64Sets =
+    ::testing::Types<PatriciaTreeSet<uint64_t>, FlatSet<uint64_t>>;
+TYPED_TEST_CASE(UInt64SetTest, UInt64Sets);
+
+TYPED_TEST(UInt64SetTest, setOfUnsignedInt64) {
+  TypeParam s;
   std::set<uint64_t> values = {0, 1, 2, 10, 4000000000};
 
   for (auto v : values) {
