@@ -265,7 +265,7 @@ class PatriciaTreeSet final {
                                   const PatriciaTreeSet<Element>& s) {
     o << "{";
     for (auto it = s.begin(); it != s.end(); ++it) {
-      o << PatriciaTreeSet<Element>::deref(*it);
+      o << pt_util::Dereference<Element>()(*it);
       if (std::next(it) != s.end()) {
         o << ", ";
       }
@@ -299,18 +299,6 @@ class PatriciaTreeSet final {
   template <typename T = Element,
             typename std::enable_if_t<!std::is_pointer<T>::value, int> = 0>
   static Element decode(Element x) {
-    return x;
-  }
-
-  template <typename T = Element,
-            typename std::enable_if_t<std::is_pointer<T>::value, int> = 0>
-  static const typename std::remove_pointer<T>::type& deref(Element x) {
-    return *x;
-  }
-
-  template <typename T = Element,
-            typename std::enable_if_t<!std::is_pointer<T>::value, int> = 0>
-  static Element deref(Element x) {
     return x;
   }
 
