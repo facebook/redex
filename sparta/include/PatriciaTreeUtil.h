@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include <type_traits>
+
 namespace sparta {
 
 namespace pt_util {
@@ -35,6 +37,18 @@ template <typename IntegerType>
 IntegerType match_prefix(IntegerType k, IntegerType p, IntegerType m) {
   return mask(k, m) == p;
 }
+
+template <typename T, typename = void>
+struct Dereference {
+  T operator()(T x) const { return x; }
+};
+
+template <typename T>
+struct Dereference<T, std::enable_if_t<std::is_pointer<T>::value>> {
+  const typename std::remove_pointer<T>::type& operator()(T x) const {
+    return *x;
+  }
+};
 
 } // namespace pt_util
 
