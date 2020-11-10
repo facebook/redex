@@ -19,7 +19,7 @@
 namespace sparta {
 
 /*
- * Represents an unordered set implemented with a sorted vector.
+ * Represents a set implemented with a sorted vector.
  *
  * It is similar to `boost::container::flat_set` but provides set operations
  * such as union, intersection and difference, using the same interface as
