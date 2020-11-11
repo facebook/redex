@@ -96,6 +96,7 @@
   TM(PTA)            \
   TM(PURITY)         \
   TM(QUICK)          \
+  TM(RABBIT)         \
   TM(RAL)            \
   TM(REACH)          \
   TM(REFL)           \
