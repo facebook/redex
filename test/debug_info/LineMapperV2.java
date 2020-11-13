@@ -223,7 +223,7 @@ public class LineMapperV2 {
     ArrayList<StackTraceElement> newTrace = new ArrayList<>();
     for (StackTraceElement el : trace) {
       String fn = el.getFileName();
-      if (fn.equals("")) {
+      if (fn == null || fn.equals("")) {
         int line = el.getLineNumber();
         if (iodiMapping != null && lineMappings != null) {
           String name = el.getClassName() + "." + el.getMethodName();

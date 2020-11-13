@@ -956,7 +956,7 @@ void redex_backend(ConfigFiles& conf,
                                                   : line_number_map_filename));
   std::unordered_map<DexMethod*, uint64_t> method_to_id;
   std::unordered_map<DexCode*, std::vector<DebugLineItem>> code_debug_lines;
-  IODIMetadata iodi_metadata;
+  IODIMetadata iodi_metadata(redex_options.min_sdk);
 
   std::unique_ptr<PostLowering> post_lowering =
       redex_options.redacted ? PostLowering::create() : nullptr;

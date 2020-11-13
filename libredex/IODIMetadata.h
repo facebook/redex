@@ -30,9 +30,14 @@
 // - Write out the mapping specified in the second bullet point to disk
 class IODIMetadata {
  public:
+  uint32_t min_sdk{0};
+
   // We can initialize this guy for free. If this feature is enabled then
   // invoke the methods below.
   IODIMetadata() {}
+
+  // Android builds with min_sdk >= 26 don't need IODI to emit debug info
+  explicit IODIMetadata(uint32_t min_sdk) : min_sdk{min_sdk} {}
 
   // This fills the internal map of stack trace name -> method. This must be
   // called after the last pass and before anything starts to get lowered.

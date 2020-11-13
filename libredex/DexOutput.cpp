@@ -1555,6 +1555,9 @@ uint32_t emit_instruction_offset_debug_info(
                      param_to_sizes.begin(), param_to_sizes.end()};
 
   // 2)
+  // For API level 26 and above, ART defaults to printing PCs
+  // in place of line numbers so IODI debug programs aren't needed.
+  bool requires_iodi_programs = iodi_metadata.min_sdk < 26 || iodi_layer > 0;
   std::unordered_map<uint32_t, std::map<uint32_t, uint32_t>> param_size_to_oset;
   uint32_t initial_offset = offset;
   for (int32_t size = pso.next(); size != -1; size = pso.next()) {
@@ -1822,21 +1825,23 @@ uint32_t emit_instruction_offset_debug_info(
       // can always make everything use iodi)
       int64_t max_win_delta = 0;
 
-      for (iter = std::next(iter); iter != end; iter++) {
-        uint64_t iodi_size = iter->first.size;
-        // This is calculated as:
-        //   "how much do we save by using a smaller iodi program after
-        //    removing the cost of not using an iodi program for the larger
-        //    methods"
-        int64_t win_delta =
-            (base_iodi_size - iodi_size) - total_normal_dbg_cost;
-        // If it's as good as the win then we use it because we want to make
-        // as small debug programs as possible due to dex2oat
-        if (win_delta >= max_win_delta) {
-          max_win_delta = win_delta;
-          best_iter = iter;
+      if (requires_iodi_programs) {
+        for (iter = std::next(iter); iter != end; iter++) {
+          uint64_t iodi_size = iter->first.size;
+          // This is calculated as:
+          //   "how much do we save by using a smaller iodi program after
+          //    removing the cost of not using an iodi program for the larger
+          //    methods"
+          int64_t win_delta =
+              (base_iodi_size - iodi_size) - total_normal_dbg_cost;
+          // If it's as good as the win then we use it because we want to make
+          // as small debug programs as possible due to dex2oat
+          if (win_delta >= max_win_delta) {
+            max_win_delta = win_delta;
+            best_iter = iter;
+          }
+          total_normal_dbg_cost += iter->second;
         }
-        total_normal_dbg_cost += iter->second;
       }
 
       size_t insns_size = best_iter != end ? best_iter->first.size : 0;
@@ -1848,19 +1853,23 @@ uint32_t emit_instruction_offset_debug_info(
         }
       }
       auto iodi_size = insns_size + padding;
-      if (total_normal_dbg_cost < iodi_size) {
-        // If using IODI period isn't valuable then don't use it!
-        best_iter = end;
-        if (!dry_run) {
-          TRACE(IODI, 3,
-                "[IODI] Opting out of IODI for %u arity methods entirely",
-                param_size);
+
+      if (requires_iodi_programs) {
+        if (total_normal_dbg_cost < iodi_size) {
+          // If using IODI period isn't valuable then don't use it!
+          best_iter = end;
+          if (!dry_run) {
+            TRACE(IODI, 3,
+                  "[IODI] Opting out of IODI for %u arity methods entirely",
+                  param_size);
+          }
         }
       }
 
       // Now we've found which methods are too large to be beneficial. Tell IODI
       // infra about these large methods
       size_t num_big = 0;
+      assert(sizes.begin() == best_iter || requires_iodi_programs);
       for (auto big = sizes.begin(); big != best_iter; big++) {
         if (!dry_run) {
           iodi_metadata.mark_method_huge(big->first.method);
@@ -1870,6 +1879,7 @@ uint32_t emit_instruction_offset_debug_info(
         }
         num_big += 1;
       }
+
       size_t num_small_enough = sizes.size() - num_big;
       if (dry_run) {
         size_t sum = 0;
@@ -1882,18 +1892,49 @@ uint32_t emit_instruction_offset_debug_info(
       }
 
       // 2.2) Emit IODI programs (other debug programs will be emitted below)
-      TRACE(IODI, 2,
-            "[IODI] @%u(%u): Of %u methods %u were too big, %u at biggest %u",
-            offset, param_size, sizes.size(), num_big, num_small_enough,
-            insns_size);
-      if (num_small_enough == 0) {
-        return 0;
+      if (requires_iodi_programs) {
+        TRACE(IODI, 2,
+              "[IODI] @%u(%u): Of %u methods %u were too big, %u at biggest %u",
+              offset, param_size, sizes.size(), num_big, num_small_enough,
+              insns_size);
+        if (num_small_enough == 0) {
+          return 0;
+        }
+        auto bucket_res = create_buckets(best_iter, end);
+        auto& buckets = bucket_res.first;
+        total_inflated_size = bucket_res.second;
+        TRACE(IODI, 3,
+              "[IODI][Buckets] Bucketed %u arity methods into %u buckets with "
+              "total"
+              " inflated size %u:\n",
+              param_size, buckets.size(), total_inflated_size);
+        auto& size_to_offset = param_size_to_oset[param_size];
+        for (auto& bucket : buckets) {
+          auto bucket_size = bucket.first;
+          TRACE(IODI, 3, "  - %u methods in bucket size %u @ %lu",
+                bucket.second, bucket_size, offset);
+          size_to_offset.emplace(bucket_size, offset);
+          std::vector<std::unique_ptr<DexDebugInstruction>> dbgops;
+          if (bucket_size > 0) {
+            // First emit an entry for pc = 0 -> line = start
+            dbgops.push_back(DexDebugInstruction::create_line_entry(0, 0));
+            // Now emit an entry for each pc thereafter
+            // (0x1e increments addr+line by 1)
+            for (size_t i = 1; i < bucket_size; i++) {
+              dbgops.push_back(DexDebugInstruction::create_line_entry(1, 1));
+            }
+          }
+          offset += DexDebugItem::encode(nullptr, output + offset, line_addin,
+                                         param_size, dbgops);
+          *dbgcount += 1;
+        }
       }
-      auto bucket_res = create_buckets(best_iter, end);
-      auto& buckets = bucket_res.first;
-      total_inflated_size = bucket_res.second;
+
       if (traceEnabled(IODI, 4)) {
-        double ammortized_cost = (double)iodi_size / (double)num_small_enough;
+        double ammortized_cost = 0;
+        if (requires_iodi_programs) {
+          ammortized_cost = (double)iodi_size / (double)num_small_enough;
+        }
         for (auto it = best_iter; it != end; it++) {
           TRACE(IODI, 4,
                 "[IODI][savings] %s saved %u bytes (%u), cost of %f, net %f",
@@ -1901,31 +1942,7 @@ uint32_t emit_instruction_offset_debug_info(
                 ammortized_cost, (double)it->second - ammortized_cost);
         }
       }
-      TRACE(
-          IODI, 3,
-          "[IODI][Buckets] Bucketed %u arity methods into %u buckets with total"
-          " inflated size %u:\n",
-          param_size, buckets.size(), total_inflated_size);
-      auto& size_to_offset = param_size_to_oset[param_size];
-      for (auto& bucket : buckets) {
-        auto bucket_size = bucket.first;
-        TRACE(IODI, 3, "  - %u methods in bucket size %u @ %lu", bucket.second,
-              bucket_size, offset);
-        size_to_offset.emplace(bucket_size, offset);
-        std::vector<std::unique_ptr<DexDebugInstruction>> dbgops;
-        if (bucket_size > 0) {
-          // First emit an entry for pc = 0 -> line = start
-          dbgops.push_back(DexDebugInstruction::create_line_entry(0, 0));
-          // Now emit an entry for each pc thereafter
-          // (0x1e increments addr+line by 1)
-          for (size_t i = 1; i < bucket_size; i++) {
-            dbgops.push_back(DexDebugInstruction::create_line_entry(1, 1));
-          }
-        }
-        offset += DexDebugItem::encode(nullptr, output + offset, line_addin,
-                                       param_size, dbgops);
-        *dbgcount += 1;
-      }
+
       return 0;
     };
     auto mark_clusters_as_skip = [&](const auto& sizes) {
@@ -2049,24 +2066,28 @@ uint32_t emit_instruction_offset_debug_info(
     // will return false.
     DexMethod* method = it->method;
     if (!iodi_metadata.is_huge(method)) {
-      TRACE(IODI, 3, "Emitting %s as IODI", SHOW(method));
-      // Here we sanity check to make sure that all IODI programs are at least
-      // as long as they need to be.
-      uint32_t param_size = it->method->get_proto()->get_args()->size();
-      auto size_offset_it = param_size_to_oset.find(param_size);
-      always_assert_log(size_offset_it != size_offset_end,
-                        "Expected to find param to offset: %s", SHOW(method));
-      auto& size_to_offset = size_offset_it->second;
-      // Returns first key >= code_size or end if such an entry doesn't exist.
-      // Aka first debug program long enough to represent a method of size
-      // code_size.
-      auto offset_it = size_to_offset.lower_bound(code_size);
-      auto offset_end = size_to_offset.end();
-      always_assert_log(offset_it != offset_end,
-                        "Expected IODI program to be big enough for %s : %u",
-                        SHOW(method), code_size);
-      it->code_item->debug_info_off = offset_it->second;
       iodi_metadata.set_iodi_layer(method, iodi_layer);
+      TRACE(IODI, 3, "Emitting %s as IODI", SHOW(method));
+      if (requires_iodi_programs) {
+        // Here we sanity check to make sure that all IODI programs are at least
+        // as long as they need to be.
+        uint32_t param_size = it->method->get_proto()->get_args()->size();
+        auto size_offset_it = param_size_to_oset.find(param_size);
+        always_assert_log(size_offset_it != size_offset_end,
+                          "Expected to find param to offset: %s", SHOW(method));
+        auto& size_to_offset = size_offset_it->second;
+        // Returns first key >= code_size or end if such an entry doesn't exist.
+        // Aka first debug program long enough to represent a method of size
+        // code_size.
+        auto offset_it = size_to_offset.lower_bound(code_size);
+        auto offset_end = size_to_offset.end();
+        always_assert_log(offset_it != offset_end,
+                          "Expected IODI program to be big enough for %s : %u",
+                          SHOW(method), code_size);
+        it->code_item->debug_info_off = offset_it->second;
+      } else {
+        it->code_item->debug_info_off = 0;
+      }
     } else {
       TRACE(IODI, 3, "Emitting %s as non-IODI", SHOW(method));
       // Recompute the debug data with no line add-in if not in a cluster.
