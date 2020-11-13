@@ -14,7 +14,7 @@ class LogcatSymbolicator(object):
 
     TRACE_REGEX = re.compile(
         r"^(?P<prefix>.*)\s+at (?P<class>[A-Za-z][0-9A-Za-z_$]*\.[0-9A-Za-z_$.]+)"
-        r"\.(?P<method>[0-9A-Za-z_$<>]+)\(:(?P<lineno>\d+)\)\s*\n",
+        r"\.(?P<method>[0-9A-Za-z_$<>]+)\((Unknown Source)?:(?P<lineno>\d+)\)\s*\n",
         re.MULTILINE,
     )
 
