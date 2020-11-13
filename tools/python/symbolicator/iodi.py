@@ -32,9 +32,7 @@ class IODIMetadata(object):
                 key = struct.unpack(form, f.read(klen))[0].decode("ascii")
                 self._entries[key] = method_id
 
-    def map_iodi(
-        self, debug_line_map, class_name, method_name, input_lineno, input_method_id
-    ):
+    def map_iodi(self, debug_line_map, class_name, method_name, input_lineno):
         input_lineno = int(input_lineno)
         qualified_name = class_name + "." + method_name
         layer = (
@@ -53,6 +51,13 @@ class IODIMetadata(object):
                 return (mapped, method_id)
             return (res_lineno, method_id)
         return (res_lineno, None)
+
+    def map_iodi_no_debug_to_mappings(self, debug_line_map, class_name, method_name):
+        qualified_name = class_name + "." + method_name
+        if qualified_name in self._entries:
+            method_id = self._entries[qualified_name]
+            return debug_line_map.get_mappings(method_id)
+        return None
 
     def _write(self, form, *vals):
         self._f.write(struct.pack(form, *vals))

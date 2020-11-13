@@ -36,7 +36,6 @@ class LogcatSymbolicator(object):
                 cls,
                 matchobj.group("method"),
                 lineno,
-                None,
             )
             lineno = mapped_lineno if mapped_lineno else lineno
         positions = self.symbol_maps.line_map.get_stack(lineno - 1)

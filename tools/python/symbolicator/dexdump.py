@@ -30,7 +30,8 @@ class DexdumpSymbolicator(object):
         self.current_class = None
         self.current_class_name = None
         self.current_method = None
-        self.last_line = None
+        self.last_lineno = None
+        self.prev_line = None
 
     def class_replacer(self, matchobj):
         m = matchobj.group("class")
@@ -79,18 +80,15 @@ class DexdumpSymbolicator(object):
         self.current_class = None
         self.current_class_name = None
         self.current_method = None
-        self.last_line = None
+        self.last_lineno = None
+        self.prev_line = None
 
     def symbolicate(self, line):
-        extra = None
+        symbolicated_line = self._symbolicate(line)
+        self.prev_line = line
+        return symbolicated_line
 
-        def p(s):
-            nonlocal extra
-            if extra is None:
-                extra = s
-            else:
-                extra += ", " + s
-
+    def _symbolicate(self, line):
         if self.symbol_maps.iodi_metadata:
             match = self.METHOD_CLS_HDR_REGEX.search(line)
             if match:
@@ -110,14 +108,13 @@ class DexdumpSymbolicator(object):
                             self.current_class_name,
                             self.current_method,
                             lineno,
-                            None,
                         )
                         if mapped_line:
-                            if self.last_line:
-                                if self.last_line == mapped_line:
+                            if self.last_lineno:
+                                if self.last_lineno == mapped_line:
                                     # Don't emit duplicate line entries
                                     return None
-                            self.last_line = mapped_line
+                            self.last_lineno = mapped_line
                             positions = map(
                                 lambda p: "%s:%d" % (p.file, p.line),
                                 self.symbol_maps.line_map.get_stack(mapped_line - 1),
@@ -128,6 +125,34 @@ class DexdumpSymbolicator(object):
                                 + ", ".join(positions)
                                 + "\n"
                             )
+                    no_debug_info = (
+                        "positions     :" in self.prev_line
+                        and "locals        :" in line
+                    )
+                    if no_debug_info:
+                        mappings = self.symbol_maps.iodi_metadata.map_iodi_no_debug_to_mappings(
+                            self.symbol_maps.debug_line_map,
+                            self.current_class_name,
+                            self.current_method,
+                        )
+                        if mappings is None:
+                            return line
+                        result = ""
+                        for i, (pc, mapped_line) in enumerate(mappings):
+                            positions = map(
+                                lambda p: "%s:%d" % (p.file, p.line),
+                                self.symbol_maps.line_map.get_stack(mapped_line - 1),
+                            )
+                            if i == 0:
+                                pc = 0
+                            result += (
+                                "        "
+                                + "{0:#0{1}x}".format(pc, 6)
+                                + " line="
+                                + ", ".join(positions)
+                                + "\n"
+                            )
+                        return result + line
 
             if self.CLS_CHUNK_HDR_REGEX.match(line):
                 # If we match a header but its the wrong header then ignore the
