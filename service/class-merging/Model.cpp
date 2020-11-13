@@ -396,14 +396,13 @@ void Model::create_mergers_helper(
     const boost::optional<InterdexSubgroupIdx>& interdex_subgroup_idx,
     const boost::optional<size_t>& max_mergeables_count,
     size_t min_mergeables_count) {
-
-  auto finalized_groups = strategy::group_by_cls_count(
-      group_values, min_mergeables_count, max_mergeables_count);
   InterdexSubgroupIdx subgroup_cnt = 0;
-  for (auto& group : finalized_groups) {
-    create_merger_helper(merger_type, shape, intf_set, group,
-                         interdex_subgroup_idx, subgroup_cnt++);
-  }
+  strategy::split_groups(
+      group_values, min_mergeables_count, max_mergeables_count,
+      [&](const std::vector<const DexType*>& group) {
+        create_merger_helper(merger_type, shape, intf_set, group,
+                             interdex_subgroup_idx, subgroup_cnt++);
+      });
 }
 
 /**

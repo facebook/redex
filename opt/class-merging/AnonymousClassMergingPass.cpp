@@ -12,6 +12,7 @@
 #include "AnonymousModelGenerator.h"
 #include "ClassMerging.h"
 #include "ConfigFiles.h"
+#include "MergingStrategies.h"
 #include "PassManager.h"
 
 namespace class_merging {
@@ -44,6 +45,7 @@ void AnonymousClassMergingPass::run_pass(DexStoresVector& stores,
     m_merging_spec.merge_per_interdex_set = InterDexGroupingType::FULL;
     m_merging_spec.include_primary_dex =
         conf.get_json_config().get("force_single_dex", false);
+    strategy::set_merging_strategy(strategy::BY_CODE_SIZE);
 
     class_merging::merge_model(scope, conf, mgr, stores, m_merging_spec);
     post_dexen_changes(scope, stores);

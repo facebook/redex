@@ -9,38 +9,27 @@
 
 #include "ClassHierarchy.h"
 
+#include "IRCode.h"
 #include "MergingStrategies.h"
 #include "NormalizeConstructor.h"
+#include "Trace.h"
 
 namespace class_merging {
 namespace strategy {
 
-std::vector<std::vector<const DexType*>> group_by_cls_count(
-    const TypeSet& mergeable_types,
-    size_t min_mergeables_count,
-    const boost::optional<size_t>& opt_max_mergeables_count) {
-  size_t max_mergeables_count = opt_max_mergeables_count
-                                    ? *opt_max_mergeables_count
-                                    : std::numeric_limits<size_t>::max();
-  redex_assert(min_mergeables_count <= max_mergeables_count &&
-               min_mergeables_count >= 2);
+Strategy g_strategy = BY_CLASS_COUNT;
 
-  size_t remaining_count = mergeable_types.size();
-  std::vector<std::vector<const DexType*>> groups;
+void set_merging_strategy(const Strategy strategy) {
+  g_strategy = strategy;
+  TRACE(CLMG, 9, "Set Merging Strategy to %d", strategy);
+}
 
-  auto it = mergeable_types.begin();
-  for (; remaining_count >= max_mergeables_count;
-       remaining_count -= max_mergeables_count) {
-    auto next = std::next(it, max_mergeables_count);
-    std::vector<const DexType*> curr_group(it, next);
-    groups.emplace_back(std::move(curr_group));
-    it = next;
+size_t estimate_vmethods_code_size(const DexClass* cls) {
+  size_t estimated_size = 0;
+  for (auto method : cls->get_vmethods()) {
+    estimated_size += method->get_code()->sum_opcode_sizes();
   }
-  if (remaining_count >= min_mergeables_count) {
-    std::vector<const DexType*> curr_group(it, mergeable_types.end());
-    groups.emplace_back(std::move(curr_group));
-  }
-  return groups;
+  return estimated_size;
 }
 
 } // namespace strategy

@@ -9,6 +9,7 @@
 
 #include "ClassMerging.h"
 #include "DexUtil.h"
+#include "MergingStrategies.h"
 #include "Show.h"
 #include "Trace.h"
 
@@ -250,6 +251,8 @@ void ClassMergingPass::run_pass(DexStoresVector& stores,
   if (m_model_specs.empty()) {
     return;
   }
+  strategy::set_merging_strategy(strategy::BY_CLASS_COUNT);
+
   auto scope = build_class_scope(stores);
   for (ModelSpec& model_spec : m_model_specs) {
     if (!model_spec.enabled) {
