@@ -11,12 +11,15 @@
 
 class DexClass;
 using Scope = std::vector<DexClass*>;
+class PassManager;
 
 namespace class_merging {
 
 struct ModelSpec;
 
 void discover_mergeable_anonymous_classes(const Scope& scope,
-                                          ModelSpec* merging_spec);
+                                          size_t min_implementors,
+                                          ModelSpec* merging_spec,
+                                          PassManager* mgr);
 
 } // namespace class_merging

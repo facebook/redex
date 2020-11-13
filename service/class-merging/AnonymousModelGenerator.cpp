@@ -7,6 +7,7 @@
 
 #include "AnonymousModelGenerator.h"
 #include "Model.h"
+#include "PassManager.h"
 #include "Show.h"
 #include "TypeUtil.h"
 #include "Walkers.h"
@@ -28,6 +29,7 @@ bool maybe_anonymous_class(const DexClass* cls) {
   return (pos < name.size() && name[pos] >= '0' && name[pos] <= '9') ||
          name.find(LAMBDA_CLASS_NAME_PREFIX) != std::string::npos;
 }
+
 } // namespace
 
 namespace class_merging {
@@ -36,15 +38,11 @@ namespace class_merging {
  * Analyze type hierarchy to find anonymous classes to merge.
  */
 void discover_mergeable_anonymous_classes(const Scope& scope,
-                                          ModelSpec* merging_spec) {
-  merging_spec->name = "Anonymous Classes";
-  merging_spec->class_name_prefix = "Ano";
-  // TODO(fengliu): The limit should be configurable.
-  constexpr const size_t min_implementor_size = 500;
+                                          size_t min_implementor_size,
+                                          ModelSpec* merging_spec,
+                                          PassManager* mgr) {
   const auto object_type = type::java_lang_Object();
-  // TODO(fengliu): Change the vector to number of types if no more analysis
-  // needed.
-  std::unordered_map<DexType*, std::vector<DexType*>> interface_to_implementors;
+  std::unordered_map<DexType*, size_t> interfaces;
   walk::classes(scope, [&](const DexClass* cls) {
     if (is_interface(cls) || cls->get_super_class() != object_type ||
         cls->get_interfaces()->size() != 1 || !maybe_anonymous_class(cls)) {
@@ -56,18 +54,20 @@ void discover_mergeable_anonymous_classes(const Scope& scope,
     auto* intf = *cls->get_interfaces()->begin();
     if (auto intf_def = type_class(intf)) {
       if (intf_def->get_interfaces()->size() == 0) {
-        interface_to_implementors[intf].push_back(cls->get_type());
+        interfaces[intf] += 1;
         return;
       }
     }
   });
-  for (const auto& pair : interface_to_implementors) {
+  for (const auto& pair : interfaces) {
     auto intf = pair.first;
     if (!merging_spec->exclude_types.count(intf) &&
-        pair.second.size() >= min_implementor_size) {
+        pair.second >= min_implementor_size) {
+      mgr->incr_metric("impls_" + show(intf), pair.second);
       TRACE(CLMG, 9, "discovered new root %s", SHOW(pair.first));
       merging_spec->roots.insert(pair.first);
     }
   }
 }
+
 } // namespace class_merging
