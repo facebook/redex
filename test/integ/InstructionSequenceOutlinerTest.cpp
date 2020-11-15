@@ -157,10 +157,16 @@ TEST_F(InstructionSequenceOutlinerTest, in_try) {
 
   for (auto m : in_try_methods) {
     cfg::ScopedCFG scoped_cfg(m->get_code());
-    EXPECT_EQ(count_invokes(*scoped_cfg, println_method), 0);
+    // TODO(T79690286): Change the number of expected println methods to 0 once
+    // we outline from methods with exceptions again
+    EXPECT_EQ(count_invokes(*scoped_cfg, println_method), 5);
     auto outlined_method = find_invoked_method(*scoped_cfg, "$outline");
-    EXPECT_NE(outlined_method, nullptr);
-    EXPECT_EQ(count_invokes(*scoped_cfg, outlined_method), 1);
+    // TODO(T79690286): Change to EXPECT_NE once we outline from methods with
+    // exceptions again
+    EXPECT_EQ(outlined_method, nullptr);
+    // TODO(T79690286): Change the number of outlined methods to 1 once we
+    // outline from methods with exceptions again
+    EXPECT_EQ(count_invokes(*scoped_cfg, outlined_method), 0);
   }
 }
 

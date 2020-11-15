@@ -1145,6 +1145,18 @@ static MethodCandidates find_method_candidates(
 // get_recurring_cores
 ////////////////////////////////////////////////////////////////////////////////
 
+static bool method_has_try_blocks(DexMethod* method) {
+  auto code = method->get_code();
+  if (code->editable_cfg_built()) {
+    auto ii = cfg::InstructionIterable(code->cfg());
+    return std::any_of(ii.begin(), ii.end(),
+                       [](auto& mie) { return mie.type == MFLOW_TRY; });
+  } else {
+    return std::any_of(code->begin(), code->end(),
+                       [](auto& mie) { return mie.type == MFLOW_TRY; });
+  }
+}
+
 static bool can_outline_from_method(
     DexMethod* method,
     const std::unordered_set<DexMethod*>& sufficiently_hot_methods) {
@@ -1154,6 +1166,10 @@ static bool can_outline_from_method(
   if (sufficiently_hot_methods.count(method)) {
     return false;
   }
+  if (method_has_try_blocks(method)) {
+    return false;
+  }
+
   return true;
 }
 
