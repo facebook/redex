@@ -102,8 +102,8 @@ adb <span class="hljs-keyword">shell</span><span class="bash"> am dumpheap YOUR_
 <pre><code class="hljs">adb pull <span class="hljs-meta-keyword">/data/</span>local<span class="hljs-meta-keyword">/tmp/</span>SOMEDUMP.hprof YOUR_DIR_HERE/.
 </code></pre>
 <p>// pass the heap dump to the python script for parsing and printing out the class list
-// Note that the script needs python 2</p>
-<pre><code class="hljs">YOUR_PYTHON_2_PATH redex/tools/hprof/dump_classes_from_hprof<span class="hljs-selector-class">.py</span> --hprof YOUR_DIR_HERE/SOMEDUMP<span class="hljs-selector-class">.hprof</span> &gt; list_of_classes<span class="hljs-selector-class">.txt</span>
+// Note that the script needs python 3</p>
+<pre><code class="hljs">redex/tools/hprof/dump_classes_from_hprof<span class="hljs-selector-class">.py</span> --hprof YOUR_DIR_HERE/SOMEDUMP<span class="hljs-selector-class">.hprof</span> &gt; list_of_classes<span class="hljs-selector-class">.txt</span>
 </code></pre>
 <p>If everything worked out, list_of_classes.txt will contain a large number of lines of the form foobar.class
 You'll note that many of the classes list are actually classes provided by the system and not from your app.
@@ -138,7 +138,7 @@ adb <span class="hljs-keyword">shell</span><span class="bash"> dumpsys meminfo Y
 <li>Hopefully memory usage has gone down!</li>
 </ul>
 <p>If you want performance measurements, you'll have to set up a test for app startup and run it on apks with and without the interdex pass applied.</p>
-</span></div></article></div><div class="docLastUpdate"><em>Last updated on 2020-2-5 by Lior Saddan</em></div><div class="docs-prevnext"><a class="docs-prev button" href="/docs/docker"><span class="arrow-prev">← </span><span>Docker Container Deployments</span></a><a class="docs-next button" href="/docs/faq"><span>FAQ</span><span class="arrow-next"> →</span></a></div></div></div><nav class="onPageNav"><ul class="toc-headings"><li><a href="#step-by-step-on-how-to-generate-class-list">Step-by-Step on how to generate class list</a></li><li><a href="#options">Options</a></li></ul></nav></div><footer class="nav-footer" id="footer"><section class="sitemap"><a href="/" class="nav-home"><img src="/img/redex.png" alt="Redex" width="66" height="58"/></a><div class="footerSection"><h5>Docs</h5><a href="
+</span></div></article></div><div class="docLastUpdate"><em>Last updated on 2020-11-17 by Yuxuan Chen (C2)</em></div><div class="docs-prevnext"><a class="docs-prev button" href="/docs/docker"><span class="arrow-prev">← </span><span>Docker Container Deployments</span></a><a class="docs-next button" href="/docs/faq"><span>FAQ</span><span class="arrow-next"> →</span></a></div></div></div><nav class="onPageNav"><ul class="toc-headings"><li><a href="#step-by-step-on-how-to-generate-class-list">Step-by-Step on how to generate class list</a></li><li><a href="#options">Options</a></li></ul></nav></div><footer class="nav-footer" id="footer"><section class="sitemap"><a href="/" class="nav-home"><img src="/img/redex.png" alt="Redex" width="66" height="58"/></a><div class="footerSection"><h5>Docs</h5><a href="
                 /docs/en/installation">Getting Started</a><a href="
                 /docs/en/configuring">Configuring</a><a href="
                 /docs/en/usage">Using</a><a href="
