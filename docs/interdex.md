@@ -10,7 +10,7 @@ the normal compilation tool chain.
 
 Consider a dex with classes c0, c1, c2, ... . Let's assume the order in which
 they are accessed during runtime is c0, c1, c2, ... .
-The actual layout in the bytecode section might be 
+The actual layout in the bytecode section might be
 c1000, c291, c3, c705, ..., c0,..., c1 and so on
 
 And of course the same issue happens if there are multiple dexes, with the
@@ -35,7 +35,7 @@ release build, otherwise the class ordering will not reflect reality.
 
 It is equally important that the usage reflects a real-world scenario. Using
 an overly simplistic test or startup scenario will not generate representative
-data and will not lead to performance improvements. 
+data and will not lead to performance improvements.
 
 Note that if you use proguard for obfuscation or another program to the same
 end, you'll have to disable those steps for profiling. Obfuscation is not
@@ -60,9 +60,9 @@ On your computer:
  adb pull /data/local/tmp/SOMEDUMP.hprof YOUR_DIR_HERE/.
  ```
  // pass the heap dump to the python script for parsing and printing out the class list
- // Note that the script needs python 2
+ // Note that the script needs python 3
  ```
- YOUR_PYTHON_2_PATH redex/tools/hprof/dump_classes_from_hprof.py --hprof YOUR_DIR_HERE/SOMEDUMP.hprof > list_of_classes.txt
+ redex/tools/hprof/dump_classes_from_hprof.py --hprof YOUR_DIR_HERE/SOMEDUMP.hprof > list_of_classes.txt
  ```
 
  If everything worked out, list_of_classes.txt will contain a large number of lines of the form foobar.class
