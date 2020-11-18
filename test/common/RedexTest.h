@@ -11,6 +11,7 @@
 #include <gtest/gtest.h>
 #include <json/value.h>
 
+#include "ABExperimentContext.h"
 #include "ConfigFiles.h"
 #include "DexClass.h"
 #include "DexLoader.h"
@@ -29,6 +30,16 @@ struct RedexTest : public testing::Test {
   RedexTest() { g_redex = new RedexContext(); }
 
   ~RedexTest() { delete g_redex; }
+
+  static void force_experiments_control_mode() {
+    ab_test::ABExperimentContext::force_control_mode();
+  }
+  static void force_experiments_preferred_mode() {
+    ab_test::ABExperimentContext::force_preferred_mode();
+  }
+  static void force_experiments_test_mode() {
+    ab_test::ABExperimentContext::force_test_mode();
+  }
 };
 
 struct RedexIntegrationTest : public RedexTest {
