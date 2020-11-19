@@ -397,7 +397,7 @@ void Model::create_mergers_helper(
     const boost::optional<size_t>& max_mergeables_count,
     size_t min_mergeables_count) {
   InterdexSubgroupIdx subgroup_cnt = 0;
-  strategy::split_groups(
+  strategy::apply_grouping(
       group_values, min_mergeables_count, max_mergeables_count,
       [&](const std::vector<const DexType*>& group) {
         create_merger_helper(merger_type, shape, intf_set, group,
