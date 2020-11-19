@@ -1060,6 +1060,12 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
     break;
   }
   }
+
+  // If the opcode does not set the RESULT_REGISTER, clear it.
+  if (!insn->has_move_result_any()) {
+    set_type(current_state, RESULT_REGISTER, TypeDomain::top());
+    current_state->reset_dex_type(RESULT_REGISTER);
+  }
 }
 
 void TypeInference::print(std::ostream& output) const {
