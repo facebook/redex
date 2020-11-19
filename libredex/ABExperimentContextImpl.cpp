@@ -55,6 +55,9 @@ bool ABExperimentContextImpl::use_test() {
 }
 
 void ABExperimentContextImpl::set_global_mode(ABGlobalMode ab_global_mode) {
+  if (AB_GLOBAL_MODE == ab_global_mode) {
+    return;
+  }
   // no currently existing instance
   always_assert(INST_CNT == 0);
   AB_GLOBAL_MODE = ab_global_mode;
