@@ -74,8 +74,10 @@
 
 #include <boost/format.hpp>
 
+#include "ABExperimentContext.h"
 #include "BigBlocks.h"
 #include "CFGMutation.h"
+#include "ConcurrentContainers.h"
 #include "ConfigFiles.h"
 #include "Creators.h"
 #include "Debug.h"
@@ -659,6 +661,11 @@ static bool can_outline_insn(const RefChecker& ref_checker,
       return false;
     }
     if (!ref_checker.check_method(method)) {
+      return false;
+    }
+    auto rabbit_type =
+        DexType::make_type("Lcom/facebook/redex/RabbitRuntimeHelper;");
+    if (method->get_class() == rabbit_type) {
       return false;
     }
   } else if (insn->has_field()) {
@@ -2199,13 +2206,16 @@ using NewlyOutlinedMethods =
     std::unordered_map<DexMethod*, std::vector<DexMethod*>>;
 
 // Outlining all occurrences of a particular candidate.
-bool outline_candidate(const Candidate& c,
-                       const CandidateInfo& ci,
-                       ReusableOutlinedMethods* reusable_outlined_methods,
-                       NewlyOutlinedMethods* newly_outlined_methods,
-                       DexState* dex_state,
-                       HostClassSelector* host_class_selector,
-                       OutlinedMethodCreator* outlined_method_creator) {
+bool outline_candidate(
+    const Candidate& c,
+    const CandidateInfo& ci,
+    ReusableOutlinedMethods* reusable_outlined_methods,
+    NewlyOutlinedMethods* newly_outlined_methods,
+    DexState* dex_state,
+    HostClassSelector* host_class_selector,
+    OutlinedMethodCreator* outlined_method_creator,
+    ConcurrentMap<DexMethod*, std::shared_ptr<ab_test::ABExperimentContext>>*
+        experiments_contexts) {
   // Before attempting to create or reuse an outlined method that hasn't been
   // referenced in this dex before, we'll make sure that all the involved
   // type refs can be added to the dex. We collect those type refs.
@@ -2262,6 +2272,12 @@ bool outline_candidate(const Candidate& c,
   for (auto& p : ci.methods) {
     auto method = p.first;
     auto& cfg = method->get_code()->cfg();
+    if (experiments_contexts->count(method) == 0) {
+      auto exp = ab_test::ABExperimentContext::create(
+          &cfg, method, "outliner_v1",
+          ab_test::ABExperimentPreferredMode::PREFER_TEST);
+      experiments_contexts->insert({method, std::move(exp)});
+    }
     TRACE(ISO, 7, "[invoke sequence outliner] before outlined %s from %s\n%s",
           SHOW(outlined_method), SHOW(method), SHOW(cfg));
     for (auto& cml : p.second) {
@@ -2284,7 +2300,9 @@ static NewlyOutlinedMethods outline(
     std::unordered_map<DexMethod*, std::unordered_set<CandidateId>>*
         candidate_ids_by_methods,
     ReusableOutlinedMethods* reusable_outlined_methods,
-    size_t iteration) {
+    size_t iteration,
+    ConcurrentMap<DexMethod*, std::shared_ptr<ab_test::ABExperimentContext>>*
+        experiments_contexts) {
   MethodNameGenerator method_name_generator(mgr, iteration);
   OutlinedMethodCreator outlined_method_creator(mgr, method_name_generator);
   HostClassSelector host_class_selector(config, mgr, dex_state, min_sdk,
@@ -2347,7 +2365,8 @@ static NewlyOutlinedMethods outline(
           2 * savings);
     if (outline_candidate(cwi.candidate, cwi.info, reusable_outlined_methods,
                           &newly_outlined_methods, &dex_state,
-                          &host_class_selector, &outlined_method_creator)) {
+                          &host_class_selector, &outlined_method_creator,
+                          experiments_contexts)) {
       dex_state.insert_method_ref();
     } else {
       TRACE(ISO, 3, "[invoke sequence outliner] could not ouline");
@@ -2586,16 +2605,29 @@ void reorder_with_method_profiles(
 
 static size_t clear_cfgs(
     const Scope& scope,
-    const std::unordered_set<DexMethod*>& sufficiently_hot_methods) {
+    const std::unordered_set<DexMethod*>& sufficiently_hot_methods,
+    ConcurrentMap<DexMethod*, std::shared_ptr<ab_test::ABExperimentContext>>*
+        experiments_contexts) {
   std::atomic<size_t> methods{0};
-  walk::parallel::code(scope, [&sufficiently_hot_methods,
-                               &methods](DexMethod* method, IRCode& code) {
-    if (!can_outline_from_method(method, sufficiently_hot_methods)) {
-      return;
-    }
-    code.clear_cfg();
-    methods++;
-  });
+  walk::parallel::code(
+      scope, [&sufficiently_hot_methods, &methods,
+              experiments_contexts](DexMethod* method, IRCode& code) {
+        if (!can_outline_from_method(method, sufficiently_hot_methods)) {
+          return;
+        }
+
+        auto exp = experiments_contexts->get(method, nullptr);
+        if (exp) {
+          exp->flush();
+          experiments_contexts->erase(method);
+        } else {
+          code.clear_cfg();
+        }
+
+        methods++;
+      });
+
+  always_assert(experiments_contexts->size() == 0);
   return (size_t)methods;
 }
 
@@ -2837,16 +2869,19 @@ void InstructionSequenceOutliner::run_pass(DexStoresVector& stores,
       // TODO: Merge candidates that are equivalent except that one returns
       // something and the other doesn't. Affects around 1.5% of candidates.
       DexState dex_state(mgr, dex, dex_id++, reserved_trefs, reserved_mrefs);
+      ConcurrentMap<DexMethod*, std::shared_ptr<ab_test::ABExperimentContext>>
+          experiments_contexts;
       auto newly_outlined_methods =
           outline(m_config, mgr, dex_state, min_sdk, &candidates_with_infos,
                   &candidate_ids_by_methods, reusable_outlined_methods.get(),
-                  iteration);
+                  iteration, &experiments_contexts);
 
       reorder_with_method_profiles(m_config, mgr, dex, methods_global_order,
                                    newly_outlined_methods);
       auto affected_methods = count_affected_methods(newly_outlined_methods);
 
-      auto total_methods = clear_cfgs(dex, sufficiently_hot_methods);
+      auto total_methods =
+          clear_cfgs(dex, sufficiently_hot_methods, &experiments_contexts);
       if (total_methods > 0) {
         mgr.incr_metric(std::string("percent_methods_affected_in_Dex") +
                             std::to_string(dex_id),
