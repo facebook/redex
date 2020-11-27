@@ -74,6 +74,7 @@ struct ReachableObjectHash {
 
 struct IgnoreSets {
   IgnoreSets() = default;
+  std::unordered_set<const DexMethodRef*> methods;
   std::unordered_set<const DexType*> string_literals;
   std::unordered_set<const DexType*> string_literal_annos;
   std::unordered_set<const DexType*> system_annos;
@@ -205,8 +206,14 @@ class RootSetMarker {
    */
   void mark(const Scope& scope);
 
+  /*
+   * Mark all DexMethods (and their respective classes) as seeds.
+   */
+  void mark_methods_as_seed(
+      const std::unordered_set<const DexMethod*>& members);
+
   /**
-   * marks everything as seed
+   * Mark everything as seed.
    */
   void mark_all_as_seed(const Scope& scope);
 
@@ -322,6 +329,22 @@ class TransitiveClosureMarker {
   static DexMethodRef* s_class_forname;
 };
 
+/*
+ * Compute all reachable objects from the provided seeds only.
+ */
+std::unique_ptr<ReachableObjects> compute_reachable_objects(
+    const DexStoresVector& stores,
+    const IgnoreSets& ignore_sets,
+    int* num_ignore_check_strings,
+    const std::unordered_set<const DexMethod*>& seeds,
+    bool record_reachability = false,
+    std::unique_ptr<const method_override_graph::Graph>*
+        out_method_override_graph = nullptr);
+
+/*
+ * Compute all reachable objects from the existing configurations
+ * (e.g. proguard rules).
+ */
 std::unique_ptr<ReachableObjects> compute_reachable_objects(
     const DexStoresVector& stores,
     const IgnoreSets& ignore_sets,
@@ -330,6 +353,12 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects(
     bool should_mark_all_as_seed = false,
     std::unique_ptr<const method_override_graph::Graph>*
         out_method_override_graph = nullptr);
+
+/*
+ * Compute all reachable methods from the set of reachable objects.
+ */
+std::unordered_set<DexMethod*> compute_reachable_methods(
+    DexStoresVector& stores, const ReachableObjects& reachables);
 
 void sweep(DexStoresVector& stores,
            const ReachableObjects& reachables,

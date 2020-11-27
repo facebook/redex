@@ -9,6 +9,8 @@
 
 #include "ControlFlow.h"
 
+struct RedexTest;
+
 namespace ab_test {
 
 /**
@@ -24,6 +26,8 @@ enum class ABExperimentPreferredMode { PREFER_CONTROL, PREFER_TEST };
  * actually be visible (i.e. applied) or not, depending on its setup.
  */
 class ABExperimentContext {
+  friend RedexTest;
+
  public:
   static std::unique_ptr<ABExperimentContext> create(
       cfg::ControlFlowGraph* cfg,
@@ -70,7 +74,5 @@ class ABExperimentContext {
    * exists.
    */
   static void force_control_mode();
-
-  friend class ABExperimentContextTest;
 };
 } // namespace ab_test

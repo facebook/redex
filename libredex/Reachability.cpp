@@ -57,6 +57,62 @@ DexMethod* resolve(const DexMethodRef* method, const DexClass* cls) {
   return nullptr;
 }
 
+/*
+ * Setup the algorithm's seeds using setup_root and computes all reachable
+ * objects by applying a transitive closure.
+ */
+std::unique_ptr<ReachableObjects> setup_seeds_and_compute_reachable_objects(
+    const DexStoresVector& stores,
+    const IgnoreSets& ignore_sets,
+    int* num_ignore_check_strings,
+    const std::function<void(RootSetMarker&, const Scope&)>&
+        setup_root_set_marker,
+    bool record_reachability,
+    std::unique_ptr<const mog::Graph>* out_method_override_graph) {
+  Timer t("Marking");
+  auto scope = build_class_scope(stores);
+  auto reachable_objects = std::make_unique<ReachableObjects>();
+  ConditionallyMarked cond_marked;
+  auto method_override_graph = mog::build_graph(scope);
+
+  ConcurrentSet<ReachableObject, ReachableObjectHash> root_set;
+  RootSetMarker root_set_marker(*method_override_graph,
+                                record_reachability,
+                                &cond_marked,
+                                reachable_objects.get(),
+                                &root_set);
+  setup_root_set_marker(root_set_marker, scope);
+
+  size_t num_threads = redex_parallel::default_num_threads();
+  auto stats_arr = std::make_unique<Stats[]>(num_threads);
+  auto work_queue = workqueue_foreach<ReachableObject>(
+      [&](MarkWorkerState* worker_state, const ReachableObject& obj) {
+        TransitiveClosureMarker transitive_closure_marker(
+            ignore_sets, *method_override_graph, record_reachability,
+            &cond_marked, reachable_objects.get(), worker_state,
+            &stats_arr[worker_state->worker_id()]);
+        transitive_closure_marker.visit(obj);
+        return nullptr;
+      },
+      num_threads,
+      /*push_tasks_while_running=*/true);
+  for (const auto& obj : root_set) {
+    work_queue.add_item(obj);
+  }
+  work_queue.run_all();
+
+  if (num_ignore_check_strings != nullptr) {
+    for (size_t i = 0; i < num_threads; ++i) {
+      *num_ignore_check_strings += stats_arr[i].num_ignore_check_strings;
+    }
+  }
+
+  if (out_method_override_graph) {
+    *out_method_override_graph = std::move(method_override_graph);
+  }
+
+  return reachable_objects;
+}
 } // namespace
 
 namespace reachability {
@@ -88,6 +144,15 @@ bool RootSetMarker::is_canary(const DexClass* cls) {
 
 bool RootSetMarker::should_mark_cls(const DexClass* cls) {
   return root(cls) || is_canary(cls);
+}
+
+void RootSetMarker::mark_methods_as_seed(
+    const std::unordered_set<const DexMethod*>& methods) {
+  for (const auto* method : methods) {
+    auto dex_class = type_class(method->get_class());
+    push_seed(dex_class);
+    push_seed(method);
+  }
 }
 
 void RootSetMarker::mark_all_as_seed(const Scope& scope) {
@@ -276,6 +341,11 @@ void TransitiveClosureMarker::push(const Parent* parent,
   if (!method) {
     return;
   }
+
+  if (m_ignore_sets.methods.count(method)) {
+    return;
+  }
+
   record_reachability(parent, method);
   if (m_reachable_objects->marked(method)) {
     return;
@@ -493,56 +563,43 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects(
     const DexStoresVector& stores,
     const IgnoreSets& ignore_sets,
     int* num_ignore_check_strings,
+    const std::unordered_set<const DexMethod*>& seeds,
+    bool record_reachability,
+    std::unique_ptr<const method_override_graph::Graph>*
+        out_method_override_graph) {
+
+  always_assert(!seeds.empty());
+  auto setup_root_set_marker = [&seeds](RootSetMarker& root_set_marker,
+                                        const Scope& /* unused */) {
+    root_set_marker.mark_methods_as_seed(seeds);
+  };
+
+  return setup_seeds_and_compute_reachable_objects(
+      stores, ignore_sets, num_ignore_check_strings, setup_root_set_marker,
+      record_reachability, out_method_override_graph);
+}
+
+std::unique_ptr<ReachableObjects> compute_reachable_objects(
+    const DexStoresVector& stores,
+    const IgnoreSets& ignore_sets,
+    int* num_ignore_check_strings,
     bool record_reachability,
     bool should_mark_all_as_seed,
     std::unique_ptr<const mog::Graph>* out_method_override_graph) {
-  Timer t("Marking");
-  auto scope = build_class_scope(stores);
-  auto reachable_objects = std::make_unique<ReachableObjects>();
-  ConditionallyMarked cond_marked;
-  auto method_override_graph = mog::build_graph(scope);
 
-  ConcurrentSet<ReachableObject, ReachableObjectHash> root_set;
-  RootSetMarker root_set_marker(*method_override_graph,
-                                record_reachability,
-                                &cond_marked,
-                                reachable_objects.get(),
-                                &root_set);
-  if (should_mark_all_as_seed) {
-    root_set_marker.mark_all_as_seed(scope);
-  } else {
-    root_set_marker.mark(scope);
-  }
-
-  size_t num_threads = redex_parallel::default_num_threads();
-  auto stats_arr = std::make_unique<Stats[]>(num_threads);
-  auto work_queue = workqueue_foreach<ReachableObject>(
-      [&](MarkWorkerState* worker_state, const ReachableObject& obj) {
-        TransitiveClosureMarker transitive_closure_marker(
-            ignore_sets, *method_override_graph, record_reachability,
-            &cond_marked, reachable_objects.get(), worker_state,
-            &stats_arr[worker_state->worker_id()]);
-        transitive_closure_marker.visit(obj);
-        return nullptr;
-      },
-      num_threads,
-      /*push_tasks_while_running=*/true);
-  for (const auto& obj : root_set) {
-    work_queue.add_item(obj);
-  }
-  work_queue.run_all();
-
-  if (num_ignore_check_strings != nullptr) {
-    for (size_t i = 0; i < num_threads; ++i) {
-      *num_ignore_check_strings += stats_arr[i].num_ignore_check_strings;
+  auto setup_root_set_marker = [should_mark_all_as_seed](
+                                   RootSetMarker& root_set_marker,
+                                   const Scope& scope) {
+    if (should_mark_all_as_seed) {
+      root_set_marker.mark_all_as_seed(scope);
+    } else {
+      root_set_marker.mark(scope);
     }
-  }
+  };
 
-  if (out_method_override_graph) {
-    *out_method_override_graph = std::move(method_override_graph);
-  }
-
-  return reachable_objects;
+  return setup_seeds_and_compute_reachable_objects(
+      stores, ignore_sets, num_ignore_check_strings, setup_root_set_marker,
+      record_reachability, out_method_override_graph);
 }
 
 void ReachableObjects::record_reachability(const DexMethodRef* member,
@@ -648,6 +705,36 @@ void sweep(DexStoresVector& stores,
                         &cls->get_vmethods(), removed_symbols);
     });
   }
+}
+
+std::unordered_set<DexMethod*> compute_reachable_methods(
+    DexStoresVector& stores, const ReachableObjects& reachables) {
+  ConcurrentSet<DexMethod*> concurrent_reachable_methods;
+
+  auto get_all_marked_methods =
+      [&reachables](const std::vector<DexMethod*>& methods) {
+        std::vector<DexMethod*> unmarked;
+        for (auto* m : methods) {
+          if (reachables.marked_unsafe(m)) {
+            unmarked.push_back(m);
+          }
+        }
+        return unmarked;
+      };
+
+  for (auto& dex : DexStoreClassesIterator(stores)) {
+    walk::parallel::classes(dex, [&](DexClass* cls) {
+      auto dm_dex = get_all_marked_methods(cls->get_dmethods());
+      auto vm_dex = get_all_marked_methods(cls->get_vmethods());
+
+      concurrent_reachable_methods.insert(dm_dex.begin(), dm_dex.end());
+      concurrent_reachable_methods.insert(vm_dex.begin(), vm_dex.end());
+    });
+  }
+
+  std::unordered_set<DexMethod*> reachable_methods(
+      concurrent_reachable_methods.begin(), concurrent_reachable_methods.end());
+  return reachable_methods;
 }
 
 ObjectCounts count_objects(const DexStoresVector& stores) {

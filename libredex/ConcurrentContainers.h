@@ -388,6 +388,16 @@ class ConcurrentSet final
   /*
    * This operation is always thread-safe.
    */
+  template <typename InputIt>
+  void insert(InputIt first, InputIt last) {
+    for (; first != last; ++first) {
+      insert(*first);
+    }
+  }
+
+  /*
+   * This operation is always thread-safe.
+   */
   template <typename... Args>
   bool emplace(Args&&... args) {
     Key key(std::forward<Args>(args)...);
