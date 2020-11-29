@@ -1185,8 +1185,10 @@ int main(int argc, char* argv[]) {
     PassManager manager(passes, std::move(pg_config), args.config,
                         args.redex_options);
 
-    if (manager.get_redex_options().is_art_build ||
-        !args.config.get("enable_ab_experiments", false).asBool()) {
+    if (conf.get_json_config().get("force_ab_exp_test_mode", false)) {
+      ab_test::ABExperimentContext::force_test_mode();
+    } else if (manager.get_redex_options().is_art_build ||
+               !args.config.get("enable_ab_experiments", false).asBool()) {
       ab_test::ABExperimentContext::force_preferred_mode();
     }
 

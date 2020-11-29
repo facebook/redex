@@ -2273,9 +2273,8 @@ bool outline_candidate(
     auto method = p.first;
     auto& cfg = method->get_code()->cfg();
     if (experiments_contexts->count(method) == 0) {
-      auto exp = ab_test::ABExperimentContext::create(
-          &cfg, method, "outliner_v1",
-          ab_test::ABExperimentPreferredMode::PREFER_TEST);
+      auto exp =
+          ab_test::ABExperimentContext::create(&cfg, method, "outliner_v1");
       experiments_contexts->insert({method, std::move(exp)});
     }
     TRACE(ISO, 7, "[invoke sequence outliner] before outlined %s from %s\n%s",
