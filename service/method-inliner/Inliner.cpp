@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <utility>
 
+#include "ABExperimentContext.h"
 #include "ApiLevelChecker.h"
 #include "CFGInliner.h"
 #include "ConcurrentContainers.h"
@@ -690,6 +691,18 @@ void MultiMethodInliner::inline_inlinables(
     cfg_next_caller_reg = caller->cfg().get_registers_size();
   }
   size_t calls_not_inlinable{0}, calls_not_inlined{0};
+
+  std::unique_ptr<ab_test::ABExperimentContext> exp;
+  bool caller_had_editable_cfg = caller->editable_cfg_built();
+
+  if (for_speed()) {
+    if (!caller_had_editable_cfg) {
+      caller->build_cfg();
+    }
+    exp = ab_test::ABExperimentContext::create(&caller->cfg(), caller_method,
+                                               "pgi_v1");
+  }
+
   for (const auto& inlinable : ordered_inlinables) {
     auto callee_method = inlinable.callee;
     auto callee = callee_method->get_code();
@@ -754,6 +767,13 @@ void MultiMethodInliner::inline_inlinables(
 
   for (IRCode* code : need_deconstruct) {
     code->clear_cfg();
+  }
+
+  if (exp != nullptr) {
+    exp->flush();
+    if (caller_had_editable_cfg) {
+      caller->build_cfg();
+    }
   }
 
   info.calls_inlined += inlined_callees.size();
