@@ -809,9 +809,9 @@ TEST_F(ConstantPropagationTest, RedundantNullCheck) {
     (
       (load-param v0)
       (load-param v1)
-      (invoke-static (v0) "Lkotlin/jvm/internal/Intrinsics;.$WrCheckParameter:(Ljava/lang/Object;)V")
-      (invoke-static (v1) "Lkotlin/jvm/internal/Intrinsics;.$WrCheckParameter:(Ljava/lang/Object;)V")
-      (invoke-static (v0) "Lkotlin/jvm/internal/Intrinsics;.$WrCheckParameter:(Ljava/lang/Object;)V")
+      (invoke-static (v0) "Lkotlin/jvm/internal/Intrinsics;.$WrCheckParameter:(Ljava/lang/Object;I)V")
+      (invoke-static (v1) "Lkotlin/jvm/internal/Intrinsics;.$WrCheckParameter:(Ljava/lang/Object;I)V")
+      (invoke-static (v0) "Lkotlin/jvm/internal/Intrinsics;.$WrCheckParameter:(Ljava/lang/Object;I)V")
       (return-void)
     )
   )");
@@ -824,8 +824,8 @@ TEST_F(ConstantPropagationTest, RedundantNullCheck) {
     (
       (load-param v0)
       (load-param v1)
-      (invoke-static (v0) "Lkotlin/jvm/internal/Intrinsics;.$WrCheckParameter:(Ljava/lang/Object;)V")
-      (invoke-static (v1) "Lkotlin/jvm/internal/Intrinsics;.$WrCheckParameter:(Ljava/lang/Object;)V")
+      (invoke-static (v0) "Lkotlin/jvm/internal/Intrinsics;.$WrCheckParameter:(Ljava/lang/Object;I)V")
+      (invoke-static (v1) "Lkotlin/jvm/internal/Intrinsics;.$WrCheckParameter:(Ljava/lang/Object;I)V")
       (return-void)
     )
   )");
@@ -836,9 +836,9 @@ TEST_F(ConstantPropagationTest, RedundantNullCheckCmp) {
   auto code = assembler::ircode_from_string(R"(
     (
       (load-param v0)
-      (invoke-static (v0) "Lkotlin/jvm/internal/Intrinsics;.$WrCheckParameter:(Ljava/lang/Object;)V")
+      (invoke-static (v0) "Lkotlin/jvm/internal/Intrinsics;.$WrCheckParameter:(Ljava/lang/Object;I)V")
       (if-eqz v0 :L0)
-      (invoke-static (v0) "Lkotlin/jvm/internal/Intrinsics;.$WrCheckParameter:(Ljava/lang/Object;)V")
+      (invoke-static (v0) "Lkotlin/jvm/internal/Intrinsics;.$WrCheckParameter:(Ljava/lang/Object;I)V")
       (:L0)
       (return-void)
     )
@@ -851,7 +851,7 @@ TEST_F(ConstantPropagationTest, RedundantNullCheckCmp) {
   auto expected_code = assembler::ircode_from_string(R"(
     (
       (load-param v0)
-      (invoke-static (v0) "Lkotlin/jvm/internal/Intrinsics;.$WrCheckParameter:(Ljava/lang/Object;)V")
+      (invoke-static (v0) "Lkotlin/jvm/internal/Intrinsics;.$WrCheckParameter:(Ljava/lang/Object;I)V")
       (return-void)
     )
   )");

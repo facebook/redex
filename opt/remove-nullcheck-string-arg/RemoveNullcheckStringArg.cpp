@@ -11,29 +11,14 @@
 #include "Creators.h"
 #include "DexClass.h"
 #include "DexUtil.h"
+#include "KotlinNullCheckMethods.h"
 #include "PassManager.h"
 #include "ReachingDefinitions.h"
 #include "Show.h"
 #include "Trace.h"
 #include "Walkers.h"
 
-namespace {
-
-constexpr const char* CHECK_PARAM_NULL_SIGNATURE =
-    "Lkotlin/jvm/internal/Intrinsics;.checkParameterIsNotNull:(Ljava/lang/"
-    "Object;Ljava/lang/String;)V";
-constexpr const char* CHECK_EXPR_NULL_SIGNATURE =
-    "Lkotlin/jvm/internal/Intrinsics;.checkExpressionValueIsNotNull:(Ljava/"
-    "lang/Object;Ljava/lang/String;)V";
-
-constexpr const char* WRAPPER_CHECK_PARAM_NULL_METHOD = "$WrCheckParameter";
-constexpr const char* WRAPPER_CHECK_EXPR_NULL_METHOD = "$WrCheckExpression";
-
-constexpr const char* NEW_CHECK_PARAM_NULL_SIGNATURE =
-    "Lkotlin/jvm/internal/Intrinsics;.$WrCheckParameter:(Ljava/lang/Object;I)V";
-constexpr const char* NEW_CHECK_EXPR_NULL_SIGNATURE =
-    "Lkotlin/jvm/internal/Intrinsics;.$WrCheckExpression:(Ljava/lang/Object;)V";
-} // namespace
+using namespace kotlin_nullcheck_wrapper;
 
 void RemoveNullcheckStringArg::run_pass(DexStoresVector& stores,
                                         ConfigFiles& /*conf*/,

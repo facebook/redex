@@ -21,12 +21,6 @@ class DexMethodRef;
 
 namespace constant_propagation {
 
-// This returns methods that are used in Kotlin null assertion.
-// These null assertions will take the object that they are checking for
-// nullness as first argument and returns void. The value of the object will
-// not be null beyond this program point in the execution path.
-const std::unordered_set<DexMethodRef*>& get_kotlin_null_assertions();
-
 boost::optional<size_t> get_null_check_object_index(
     const IRInstruction* insn,
     const std::unordered_set<DexMethodRef*>& kotlin_null_check_assertions);
@@ -60,7 +54,7 @@ class FixpointIterator final
 
  private:
   InstructionAnalyzer<ConstantEnvironment> m_insn_analyzer;
-  const std::unordered_set<DexMethodRef*>& m_kotlin_null_check_assertions;
+  const std::unordered_set<DexMethodRef*> m_kotlin_null_check_assertions;
 };
 
 } // namespace intraprocedural

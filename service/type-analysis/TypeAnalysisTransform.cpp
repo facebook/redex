@@ -8,17 +8,12 @@
 #include "TypeAnalysisTransform.h"
 
 #include "DexInstruction.h"
+#include "KotlinNullCheckMethods.h"
 #include "Show.h"
 
+using namespace kotlin_nullcheck_wrapper;
+
 namespace {
-
-constexpr const char* CHECK_PARAM_NULL_SIGNATURE =
-    "Lkotlin/jvm/internal/Intrinsics;.checkParameterIsNotNull:(Ljava/lang/"
-    "Object;Ljava/lang/String;)V";
-constexpr const char* CHECK_EXPR_NULL_SIGNATURE =
-    "Lkotlin/jvm/internal/Intrinsics;.checkExpressionValueIsNotNull:(Ljava/"
-    "lang/Object;Ljava/lang/String;)V";
-
 enum BranchResult {
   ALWAYS_TAKEN,
   NEVER_TAKEN,

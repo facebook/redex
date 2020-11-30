@@ -109,37 +109,6 @@ bool is_zero(boost::optional<SignedConstantDomain> src) {
 
 namespace constant_propagation {
 
-namespace {
-
-std::mutex g_kotlin_mutex;
-std::unordered_set<DexMethodRef*>* g_kotlin_cache{nullptr};
-
-std::unordered_set<DexMethodRef*>* get_kotlin_null_assertions_internal() {
-  std::unique_lock<std::mutex> lock(g_kotlin_mutex);
-  if (g_kotlin_cache == nullptr) {
-    g_kotlin_cache = new std::unordered_set<DexMethodRef*>{
-        method::kotlin_jvm_internal_Intrinsics_checkParameterIsNotNull(),
-        kotlin_nullcheck_wrapper::
-            kotlin_jvm_internal_Intrinsics_WrCheckParameter(),
-        method::kotlin_jvm_internal_Intrinsics_checExpressionValueIsNotNull(),
-        kotlin_nullcheck_wrapper::
-            kotlin_jvm_internal_Intrinsics_WrCheckExpression()};
-
-    g_redex->add_destruction_task([]() {
-      std::unique_lock<std::mutex> lock(g_kotlin_mutex);
-      delete g_kotlin_cache;
-      g_kotlin_cache = nullptr;
-    });
-  }
-  return g_kotlin_cache;
-}
-
-} // namespace
-
-const std::unordered_set<DexMethodRef*>& get_kotlin_null_assertions() {
-  return *get_kotlin_null_assertions_internal();
-}
-
 boost::optional<size_t> get_null_check_object_index(
     const IRInstruction* insn,
     const std::unordered_set<DexMethodRef*>& kotlin_null_check_assertions) {
@@ -1049,7 +1018,8 @@ FixpointIterator::FixpointIterator(
     InstructionAnalyzer<ConstantEnvironment> insn_analyzer)
     : MonotonicFixpointIterator(cfg),
       m_insn_analyzer(std::move(insn_analyzer)),
-      m_kotlin_null_check_assertions(get_kotlin_null_assertions()) {}
+      m_kotlin_null_check_assertions(
+          kotlin_nullcheck_wrapper::get_kotlin_null_assertions()) {}
 
 void FixpointIterator::analyze_instruction(const IRInstruction* insn,
                                            ConstantEnvironment* env,
