@@ -98,7 +98,7 @@ class FileEncode:
 
     def __init__(self, f, b="=", addr_size=0):
         """Initialize with an open binary file and optional byte order and
-           address byte size.
+        address byte size.
         """
         self.file = f
         self.addr_size = addr_size
@@ -233,7 +233,7 @@ class FileExtract:
 
     def __init__(self, f, b="=", addr_size=0):
         """Initialize with an open binary file and optional byte order and
-           address byte size
+        address byte size
         """
         self.file = f
         self.offsets = []
@@ -587,8 +587,8 @@ class AutoParser:
     decoded. A quick example for a C structure:
 
         struct load_command {
-                uint32_t cmd;		/* type of load command */
-                uint32_t cmdsize;	/* total size of command in bytes */
+                uint32_t cmd;           /* type of load command */
+                uint32_t cmdsize;       /* total size of command in bytes */
         };
 
     The python code would look like:
@@ -814,19 +814,19 @@ class AutoParser:
 
     def get_list_header_lines(self):
         """When an object of this type is in a list, print out this string
-           before printing out any items"""
+        before printing out any items"""
         return None
 
     def get_dump_header(self):
         """Override in subclasses to print this string out before any items
-           are dumped. This is a good place to put a description of the item
-           represented by this class and possible to print out a table header
-           in case the items are a list"""
+        are dumped. This is a good place to put a description of the item
+        represented by this class and possible to print out a table header
+        in case the items are a list"""
         return None
 
     def get_dump_prefix(self):
         """Override in subclasses to print out a string before each item in
-           this class"""
+        this class"""
         return None
 
     def get_dump_flat(self):
