@@ -168,6 +168,33 @@ commands:
 
       - test-w-make
 
+  setup-build-and-test-windows:
+    description: "Prepare, build and test ReDex on Windows with MSYS2"
+    steps:
+      - run:
+          name: Install MSYS2
+          shell: bash.exe
+          command: choco install msys2 -y
+      - run:
+          name: Update MSYS2 package DB
+          shell: c:/tools/msys64/msys2_shell.cmd -defterm -no-start -msys2 -full-path -here -c
+          command: pacman -Syuu --noconfirm
+      - run:
+          name: Setup
+          shell: c:/tools/msys64/msys2_shell.cmd -defterm -no-start -msys2 -full-path -here -c
+          command: pacman -S --needed --noconfirm make mingw-w64-x86_64-boost mingw-w64-x86_64-cmake mingw-w64-x86_64-gcc mingw-w64-x86_64-jsoncpp mingw-w64-x86_64-make zip unzip
+
+      - run:
+          name: Build
+          shell: c:/tools/msys64/msys2_shell.cmd -defterm -no-start -mingw64 -full-path -here -c
+          command: mkdir build && cd build && cmake -G "MSYS Makefiles" .. && make -j 4
+
+      - run:
+          name: Minimal Test
+          # Using bash because somehow piping does not seem to work correctly with cmd.
+          shell: bash.exe
+          command: 'build/redex-all --show-passes | grep -E "Registered passes: [1-9][0-9]*"'
+
 jobs:
   build-16_04:
     docker:
@@ -217,30 +244,25 @@ jobs:
 
     steps:
       - checkout
+      - setup-build-and-test-windows
+
+  build-windows-artifacts:
+    executor:
+      name: win/default
+      # GCC is hungry.
+      size: "large"
+
+    steps:
+      - checkout
+      - setup-build-and-test-windows
 
       - run:
-          name: Install MSYS2
-          shell: bash.exe
-          command: choco install msys2 -y
-      - run:
-          name: Update MSYS2 package DB
-          shell: c:/tools/msys64/msys2_shell.cmd -defterm -no-start -msys2 -full-path -here -c
-          command: pacman -Syuu --noconfirm
-      - run:
-          name: Setup
-          shell: c:/tools/msys64/msys2_shell.cmd -defterm -no-start -msys2 -full-path -here -c
-          command: pacman -S --needed --noconfirm make mingw-w64-x86_64-boost mingw-w64-x86_64-cmake mingw-w64-x86_64-gcc mingw-w64-x86_64-jsoncpp mingw-w64-x86_64-make
-
-      - run:
-          name: Build
+          name: Zip redex-all
           shell: c:/tools/msys64/msys2_shell.cmd -defterm -no-start -mingw64 -full-path -here -c
-          command: mkdir build && cd build && cmake -G "MSYS Makefiles" .. && make -j 4
+          command: cp build/redex-all.exe . && zip -r -9 redex.zip LICENSE redex-all.exe redex.py pyredex && ls -l redex.zip && unzip -l redex.zip
 
-      - run:
-          name: Minimal Test
-          # Using bash because somehow piping does not seem to work correctly with cmd.
-          shell: bash.exe
-          command: 'build/redex-all --show-passes | grep -E "Registered passes: [1-9][0-9]*"'
+      - store_artifacts:
+          path: .\redex.zip
 
   deploy-website:
     docker:
@@ -286,7 +308,7 @@ workflows:
           filters: *filter-not-gh-pages-not-master
       - build-deb_testing:
           filters: *filter-not-gh-pages-not-master
-      - build-windows:
+      - build-windows-artifacts:
           filters: *filter-not-gh-pages-not-master
 
   nightly:
@@ -298,3 +320,4 @@ workflows:
       - build-20_04
       - build-deb_stable
       - build-deb_testing
+      - build-windows-artifacts
