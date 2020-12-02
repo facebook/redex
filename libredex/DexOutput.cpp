@@ -329,6 +329,7 @@ void GatheredTypes::build_cls_load_map() {
     // class first
     std::vector<DexType*> cls_types;
     cls->gather_types(cls_types);
+    std::sort(cls_types.begin(), cls_types.end(), compare_dextypes);
     for (const auto& t : cls_types) {
       if (!m_cls_load_strings.count(t->get_name())) {
         m_cls_load_strings[t->get_name()] = index;
