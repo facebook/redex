@@ -37,11 +37,13 @@ std::string get_root_type_name_tag(const DexType* root_type) {
   // Keep scanning backwards. Find the first cap letter of the second to last
   // word if any.
   // E.g., "Lcom/facebook/TypedEventBase;" -> "esaBE".
-  for (++rit; rit != root_type_name.rend(); ++rit) {
-    auto c = *rit;
-    if (isupper(c)) {
-      root_name_tag << c;
-      break;
+  if (rit != root_type_name.rend()) {
+    for (++rit; rit != root_type_name.rend(); ++rit) {
+      auto c = *rit;
+      if (isupper(c)) {
+        root_name_tag << c;
+        break;
+      }
     }
   }
   auto root_name_tag_str = root_name_tag.str();
