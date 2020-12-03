@@ -195,6 +195,11 @@ commands:
           shell: bash.exe
           command: 'build/redex-all --show-passes | grep -E "Registered passes: [1-9][0-9]*"'
 
+      - run:
+          name: Package
+          shell: c:/tools/msys64/msys2_shell.cmd -defterm -no-start -mingw64 -full-path -here -c
+          command: cd build && make -j 4 package
+
 jobs:
   build-16_04:
     docker:
@@ -257,12 +262,12 @@ jobs:
       - setup-build-and-test-windows
 
       - run:
-          name: Zip redex-all
+          name: Copy package for CircleCI
           shell: c:/tools/msys64/msys2_shell.cmd -defterm -no-start -mingw64 -full-path -here -c
-          command: cp build/redex-all.exe . && cp config/default.config . &&  zip -r -9 redex.zip LICENSE default.config redex-all.exe redex.py pyredex && ls -l redex.zip && unzip -l redex.zip
+          command: mkdir artifacts && mv build/Redex*.zip artifacts/
 
       - store_artifacts:
-          path: .\redex.zip
+          path: .\artifacts
 
   deploy-website:
     docker:
@@ -308,7 +313,7 @@ workflows:
           filters: *filter-not-gh-pages-not-master
       - build-deb_testing:
           filters: *filter-not-gh-pages-not-master
-      - build-windows:
+      - build-windows-artifacts:
           filters: *filter-not-gh-pages-not-master
 
   nightly:
