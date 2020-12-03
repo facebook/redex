@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charSet="utf-8"/><meta http-equiv="X-UA-Compatible" content="IE=edge"/><title>Usage · Redex</title><meta name="viewport" content="width=device-width"/><meta name="generator" content="Docusaurus"/><meta name="description" content="To use ReDex, first build your app and find the APK for it.  Then run:"/><meta name="docsearch:language" content="en"/><meta property="og:title" content="Usage · Redex"/><meta property="og:type" content="website"/><meta property="og:url" content="https://fbredex.com/"/><meta property="og:description" content="To use ReDex, first build your app and find the APK for it.  Then run:"/><meta property="og:image" content="https://fbredex.com/img/og_image.png"/><meta name="twitter:card" content="summary"/><link rel="shortcut icon" href="/img/favicon.png"/><link rel="stylesheet" href="https://cdn.jsdelivr.net/docsearch.js/1/docsearch.min.css"/><link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/default.min.css"/><script type="text/javascript" src="https://buttons.github.io/buttons.js"></script><script src="/js/scrollSpy.js"></script><link rel="stylesheet" href="/css/main.css"/><script src="/js/codetabs.js"></script></head><body class="sideNavVisible separateOnPageNav"><div class="fixedHeaderContainer"><div class="headerWrapper wrapper"><header><a href="/"><img class="logo" src="/img/redex.png" alt="Redex"/><h2 class="headerTitleWithLogo">Redex</h2></a><div class="navigationWrapper navigationSlider"><nav class="slidingNav"><ul class="nav-site nav-site-internal"><li class="siteNavGroupActive"><a href="/docs/installation" target="_self">Docs</a></li><li class="siteNavGroupActive"><a href="/docs/faq" target="_self">FAQ</a></li><li class=""><a href="https://code.facebook.com/posts/1480969635539475/optimizing-android-bytecode-with-redex" target="_self">Birth</a></li><li class="navSearchWrapper reactNavSearchWrapper"><input type="text" id="search_input_react" placeholder="Search" title="Search"/></li></ul></nav></div></header></div></div><div class="navPusher"><div class="docMainWrapper wrapper"><div class="docsNavContainer" id="docsNav"><nav class="toc"><div class="toggleNav"><section class="navWrapper wrapper"><div class="navBreadcrumb wrapper"><div class="navToggle" id="navToggler"><div class="hamburger-menu"><div class="line1"></div><div class="line2"></div><div class="line3"></div></div></div><h2><i>›</i><span>Getting Started</span></h2><div class="tocToggler" id="tocToggler"><i class="icon-toc"></i></div></div><div class="navGroups"><div class="navGroup"><h3 class="navGroupCategoryTitle">Getting Started</h3><ul class=""><li class="navListItem"><a class="navItem" href="/docs/installation">Installation</a></li><li class="navListItem"><a class="navItem" href="/docs/configuring">Configuring ReDex</a></li><li class="navListItem"><a class="navItem" href="/docs/passes">Passes</a></li><li class="navListItem navListItemActive"><a class="navItem" href="/docs/usage">Usage</a></li></ul></div><div class="navGroup"><h3 class="navGroupCategoryTitle">Examples</h3><ul class=""><li class="navListItem"><a class="navItem" href="/docs/proguard">Using ProGuard Rules with Redex</a></li><li class="navListItem"><a class="navItem" href="/docs/synth">Redex Synth Pass Example</a></li></ul></div><div class="navGroup"><h3 class="navGroupCategoryTitle">Technical Details</h3><ul class=""><li class="navListItem"><a class="navItem" href="/docs/docker">Docker Container Deployments</a></li><li class="navListItem"><a class="navItem" href="/docs/interdex">Interdex</a></li></ul></div><div class="navGroup"><h3 class="navGroupCategoryTitle">Help</h3><ul class=""><li class="navListItem"><a class="navItem" href="/docs/faq">FAQ</a></li></ul></div></div></section></div><script>
+<!DOCTYPE html><html lang="en"><head><meta charSet="utf-8"/><meta http-equiv="X-UA-Compatible" content="IE=edge"/><title>Usage · Redex</title><meta name="viewport" content="width=device-width"/><meta name="generator" content="Docusaurus"/><meta name="description" content="To use ReDex, first build your app and find the APK for it.  Then the simplest"/><meta name="docsearch:language" content="en"/><meta property="og:title" content="Usage · Redex"/><meta property="og:type" content="website"/><meta property="og:url" content="https://fbredex.com/"/><meta property="og:description" content="To use ReDex, first build your app and find the APK for it.  Then the simplest"/><meta property="og:image" content="https://fbredex.com/img/og_image.png"/><meta name="twitter:card" content="summary"/><link rel="shortcut icon" href="/img/favicon.png"/><link rel="stylesheet" href="https://cdn.jsdelivr.net/docsearch.js/1/docsearch.min.css"/><link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/default.min.css"/><script type="text/javascript" src="https://buttons.github.io/buttons.js"></script><script src="/js/scrollSpy.js"></script><link rel="stylesheet" href="/css/main.css"/><script src="/js/codetabs.js"></script></head><body class="sideNavVisible separateOnPageNav"><div class="fixedHeaderContainer"><div class="headerWrapper wrapper"><header><a href="/"><img class="logo" src="/img/redex.png" alt="Redex"/><h2 class="headerTitleWithLogo">Redex</h2></a><div class="navigationWrapper navigationSlider"><nav class="slidingNav"><ul class="nav-site nav-site-internal"><li class="siteNavGroupActive"><a href="/docs/installation" target="_self">Docs</a></li><li class="siteNavGroupActive"><a href="/docs/faq" target="_self">FAQ</a></li><li class=""><a href="https://code.facebook.com/posts/1480969635539475/optimizing-android-bytecode-with-redex" target="_self">Birth</a></li><li class="navSearchWrapper reactNavSearchWrapper"><input type="text" id="search_input_react" placeholder="Search" title="Search"/></li></ul></nav></div></header></div></div><div class="navPusher"><div class="docMainWrapper wrapper"><div class="docsNavContainer" id="docsNav"><nav class="toc"><div class="toggleNav"><section class="navWrapper wrapper"><div class="navBreadcrumb wrapper"><div class="navToggle" id="navToggler"><div class="hamburger-menu"><div class="line1"></div><div class="line2"></div><div class="line3"></div></div></div><h2><i>›</i><span>Getting Started</span></h2><div class="tocToggler" id="tocToggler"><i class="icon-toc"></i></div></div><div class="navGroups"><div class="navGroup"><h3 class="navGroupCategoryTitle">Getting Started</h3><ul class=""><li class="navListItem"><a class="navItem" href="/docs/installation">Installation</a></li><li class="navListItem"><a class="navItem" href="/docs/configuring">Configuring ReDex</a></li><li class="navListItem"><a class="navItem" href="/docs/passes">Passes</a></li><li class="navListItem navListItemActive"><a class="navItem" href="/docs/usage">Usage</a></li></ul></div><div class="navGroup"><h3 class="navGroupCategoryTitle">Examples</h3><ul class=""><li class="navListItem"><a class="navItem" href="/docs/proguard">Using ProGuard Rules with Redex</a></li><li class="navListItem"><a class="navItem" href="/docs/synth">Redex Synth Pass Example</a></li></ul></div><div class="navGroup"><h3 class="navGroupCategoryTitle">Technical Details</h3><ul class=""><li class="navListItem"><a class="navItem" href="/docs/docker">Docker Container Deployments</a></li><li class="navListItem"><a class="navItem" href="/docs/interdex">Interdex</a></li></ul></div><div class="navGroup"><h3 class="navGroupCategoryTitle">Help</h3><ul class=""><li class="navListItem"><a class="navItem" href="/docs/faq">FAQ</a></li></ul></div></div></section></div><script>
             var coll = document.getElementsByClassName('collapsible');
             var checkActiveCategory = true;
             for (var i = 0; i < coll.length; i++) {
@@ -54,15 +54,129 @@
                 };
               }
             });
-        </script></nav></div><div class="container mainContainer docsContainer"><div class="wrapper"><div class="post"><header class="postHeader"><h1 id="__docusaurus" class="postHeaderTitle">Usage</h1></header><article><div><span><p>To use ReDex, first build your app and find the APK for it.  Then run:</p>
-<pre><code class="hljs">redex <span class="hljs-type">path</span>/<span class="hljs-keyword">to</span>/your.apk -o <span class="hljs-type">path</span>/<span class="hljs-keyword">to</span>/output.apk
+        </script></nav></div><div class="container mainContainer docsContainer"><div class="wrapper"><div class="post"><header class="postHeader"><h1 id="__docusaurus" class="postHeaderTitle">Usage</h1></header><article><div><span><p>To use ReDex, first build your app and find the APK for it.  Then the simplest
+invocation is:</p>
+<pre><code class="hljs">[python3] redex.py <span class="hljs-type">path</span>/<span class="hljs-keyword">to</span>/your.apk -o <span class="hljs-type">path</span>/<span class="hljs-keyword">to</span>/output.apk
 </code></pre>
+<p>A more complete invocation with:</p>
+<ul>
+<li>the default configuration setting <a href="https://github.com/facebook/redex/blob/master/config/default.config">config/default.config</a></li>
+<li>Android Framework API description files</li>
+<li>access to the Android SDK tools</li>
+</ul>
+<pre><code class="hljs">[python3] redex.py -c <span class="hljs-keyword">default</span>.config <span class="hljs-string">\</span>
+  -S android_sdk_api_14_file=path/<span class="hljs-keyword">to</span>/service/api-levels/framework_classes_api_14.txt <span class="hljs-string">\</span>
+  -S android_sdk_api_15_file=path/<span class="hljs-keyword">to</span>/service/api-levels/framework_classes_api_15.txt <span class="hljs-string">\</span>
+  [...] <span class="hljs-string">\</span>
+  -S android_sdk_api_29_file=path/<span class="hljs-keyword">to</span>/service/api-levels/framework_classes_api_29.txt <span class="hljs-string">\</span>
+  --android-sdk-path path/<span class="hljs-keyword">to</span>/android/sdk <span class="hljs-string">\</span>
+  path/<span class="hljs-keyword">to</span>/your.apk -o path/<span class="hljs-keyword">to</span>/output.apk
+</code></pre>
+<p>The full set of options can be found with</p>
+<pre><code class="hljs">[<span class="hljs-keyword">python3</span>] redex.<span class="hljs-keyword">py</span> --<span class="hljs-keyword">help</span>
+</code></pre>
+<p>and at the time of writing is</p>
+<pre><code class="hljs">usage: redex.py [-h] [-o [OUT]] [-j JARPATHS] [<span class="hljs-comment">--redex-binary [REDEX_BINARY]]</span>
+                [-c CONFIG] [<span class="hljs-comment">--sign] [-s [KEYSTORE]] [-a [KEYALIAS]]</span>
+                [-p [KEYPASS]] [-u] [<span class="hljs-comment">--unpack-dest UNPACK_DEST] [-w [WARN]]</span>
+                [-d] [<span class="hljs-comment">--dev] [-m [PROGUARD_MAP]] [--printseeds [PRINTSEEDS]]</span>
+                [<span class="hljs-comment">--used-js-assets USED_JS_ASSETS] [-P PROGUARD_CONFIGS]</span>
+                [-k [KEEP]] [-A [ARCH]] [-S PASSTHRU] [-J PASSTHRU_JSON]
+                [<span class="hljs-comment">--lldb] [--gdb] [--ignore-zipalign] [--verify-none-mode]</span>
+                [<span class="hljs-comment">--enable-instrument-pass] [--is-art-build] [--enable-pgi]</span>
+                [<span class="hljs-comment">--redacted] [--disable-dex-hasher] [--page-align-libs]</span>
+                [<span class="hljs-comment">--side-effect-summaries SIDE_EFFECT_SUMMARIES]</span>
+                [<span class="hljs-comment">--escape-summaries ESCAPE_SUMMARIES] [--stop-pass STOP_PASS]</span>
+                [<span class="hljs-comment">--output-ir OUTPUT_IR]</span>
+                [<span class="hljs-comment">--debug-source-root [DEBUG_SOURCE_ROOT]] [--always-clean-up]</span>
+                [<span class="hljs-comment">--cmd-prefix CMD_PREFIX] [--reset-zip-timestamps] [-q]</span>
+                [<span class="hljs-comment">--android-sdk-path ANDROID_SDK_PATH]</span>
+                input_apk
+
+Given an APK, produce a better APK!
+
+positional arguments:
+  input_apk             Input APK file
+
+optional arguments:
+  -h, <span class="hljs-comment">--help            show this help message and exit</span>
+  -o [OUT], <span class="hljs-comment">--out [OUT]</span>
+                        Output APK file name (defaults to redex-out.apk)
+  -j JARPATHS, <span class="hljs-comment">--jarpath JARPATHS</span>
+                        Path to dependent library jar file
+  <span class="hljs-comment">--redex-binary [REDEX_BINARY]</span>
+                        Path to redex binary
+  -c CONFIG, <span class="hljs-comment">--config CONFIG</span>
+                        Configuration file
+  <span class="hljs-comment">--sign, --no-sign     Sign the apk after optimizing it</span>
+  -s [KEYSTORE], <span class="hljs-comment">--keystore [KEYSTORE]</span>
+  -a [KEYALIAS], <span class="hljs-comment">--keyalias [KEYALIAS]</span>
+  -p [KEYPASS], <span class="hljs-comment">--keypass [KEYPASS]</span>
+  -u, <span class="hljs-comment">--unpack-only     Unpack the apk and print the unpacked directories,</span>
+                        don't run any redex passes or repack the apk
+  <span class="hljs-comment">--unpack-dest UNPACK_DEST</span>
+                        Specify the base name of the destination directories;
+                        works <span class="hljs-keyword">with</span> -u
+  -w [WARN], <span class="hljs-comment">--warn [WARN]</span>
+                        Control verbosity <span class="hljs-keyword">of</span> <span class="hljs-keyword">warnings</span>
+  -d, <span class="hljs-comment">--debug           Unpack the apk and print the redex command line to run</span>
+  <span class="hljs-comment">--dev                 Optimize for development speed</span>
+  -m [PROGUARD_MAP], <span class="hljs-comment">--proguard-map [PROGUARD_MAP]</span>
+                        <span class="hljs-keyword">Path</span> <span class="hljs-keyword">to</span> proguard mapping.txt <span class="hljs-keyword">for</span> deobfuscating <span class="hljs-keyword">names</span>
+  <span class="hljs-comment">--printseeds [PRINTSEEDS]</span>
+                        <span class="hljs-keyword">File</span> <span class="hljs-keyword">to</span> print seeds <span class="hljs-keyword">to</span>
+  <span class="hljs-comment">--used-js-assets USED_JS_ASSETS</span>
+                        A <span class="hljs-keyword">JSON</span> <span class="hljs-keyword">file</span> (<span class="hljs-keyword">or</span> files) containing a <span class="hljs-keyword">list</span> <span class="hljs-keyword">of</span> resources
+                        used <span class="hljs-keyword">by</span> JS
+  -P PROGUARD_CONFIGS, <span class="hljs-comment">--proguard-config PROGUARD_CONFIGS</span>
+                        <span class="hljs-keyword">Path</span> <span class="hljs-keyword">to</span> proguard config
+  -k [<span class="hljs-keyword">KEEP</span>], <span class="hljs-comment">--keep [KEEP]</span>
+                        [deprecated] <span class="hljs-keyword">Path</span> <span class="hljs-keyword">to</span> <span class="hljs-keyword">file</span> containing classes <span class="hljs-keyword">to</span> <span class="hljs-keyword">keep</span>
+  -A [ARCH], <span class="hljs-comment">--arch [ARCH]</span>
+                        Architecture; one of arm/armv7/arm64/x86_64/x86"
+  -S PASSTHRU           Arguments passed through to redex
+  -J PASSTHRU_JSON      JSON-formatted arguments passed through to redex
+  <span class="hljs-comment">--lldb                Run redex binary in lldb</span>
+  <span class="hljs-comment">--gdb                 Run redex binary in gdb</span>
+  <span class="hljs-comment">--ignore-zipalign     Ignore if zipalign is not found</span>
+  <span class="hljs-comment">--verify-none-mode    Enable verify-none mode on redex</span>
+  <span class="hljs-comment">--enable-instrument-pass</span>
+                        Enable InstrumentPass if any
+  <span class="hljs-comment">--is-art-build        States that this is an art only build</span>
+  <span class="hljs-comment">--enable-pgi          If not passed, Profile Guided Inlining is disabled</span>
+  <span class="hljs-comment">--redacted            Specifies how dex files should be laid out</span>
+  <span class="hljs-comment">--disable-dex-hasher  Disable DexHasher</span>
+  <span class="hljs-comment">--page-align-libs     Preserve 4k page alignment for uncompressed libs</span>
+  <span class="hljs-comment">--side-effect-summaries SIDE_EFFECT_SUMMARIES</span>
+                        Side effect information for external methods
+  <span class="hljs-comment">--escape-summaries ESCAPE_SUMMARIES</span>
+                        Escape information for external methods
+  <span class="hljs-comment">--stop-pass STOP_PASS</span>
+                        <span class="hljs-keyword">Stop</span> <span class="hljs-keyword">before</span> a pass <span class="hljs-keyword">and</span> dump intermediate dex <span class="hljs-keyword">and</span> IR
+                        meta <span class="hljs-keyword">data</span> <span class="hljs-keyword">to</span> a <span class="hljs-keyword">directory</span>
+  <span class="hljs-comment">--output-ir OUTPUT_IR</span>
+                        <span class="hljs-keyword">Stop</span> <span class="hljs-keyword">before</span> stop_pass <span class="hljs-keyword">and</span> dump intermediate dex <span class="hljs-keyword">and</span> IR
+                        meta <span class="hljs-keyword">data</span> <span class="hljs-keyword">to</span> output_ir folder
+  <span class="hljs-comment">--debug-source-root [DEBUG_SOURCE_ROOT]</span>
+                        Root <span class="hljs-keyword">directory</span> that <span class="hljs-keyword">all</span> <span class="hljs-keyword">references</span> <span class="hljs-keyword">to</span> <span class="hljs-keyword">source</span> files <span class="hljs-keyword">in</span>
+                        debug information <span class="hljs-keyword">is</span> given <span class="hljs-keyword">relative</span> to.
+  <span class="hljs-comment">--always-clean-up     Clean up temporaries even under failure</span>
+  <span class="hljs-comment">--cmd-prefix CMD_PREFIX</span>
+                        Prefix redex-<span class="hljs-keyword">all</span> <span class="hljs-keyword">with</span>
+  <span class="hljs-comment">--reset-zip-timestamps</span>
+                        <span class="hljs-keyword">Reset</span> zip timestamps <span class="hljs-keyword">for</span> <span class="hljs-keyword">deterministic</span> <span class="hljs-keyword">output</span>
+  -q, <span class="hljs-comment">--quiet           Do not be verbose, and override TRACE.</span>
+  <span class="hljs-comment">--android-sdk-path ANDROID_SDK_PATH</span>
+                        <span class="hljs-keyword">Path</span> <span class="hljs-keyword">to</span> Android SDK
+</code></pre>
+<p>From here, you may want to read the <a href="/docs/configuring">configuration guide</a> and details
+about the <a href="/docs/passes">passes</a>.</p>
 <p>If you want some statistics about each pass, you can turn on tracing:</p>
 <pre><code class="hljs"><span class="hljs-builtin-name">export</span> <span class="hljs-attribute">TRACE</span>=1
 </code></pre>
 <p>The result <code>output.apk</code> should be smaller and faster than the
-input.  Enjoy!</p>
-</span></div></article></div><div class="docLastUpdate"><em>Last updated on 2019-2-22 by Joel Marcey</em></div><div class="docs-prevnext"><a class="docs-prev button" href="/docs/passes"><span class="arrow-prev">← </span><span>Passes</span></a><a class="docs-next button" href="/docs/proguard"><span class="function-name-prevnext">Using ProGuard Rules with Redex</span><span class="arrow-next"> →</span></a></div></div></div><nav class="onPageNav"></nav></div><footer class="nav-footer" id="footer"><section class="sitemap"><a href="/" class="nav-home"><img src="/img/redex.png" alt="Redex" width="66" height="58"/></a><div class="footerSection"><h5>Docs</h5><a href="
+input. Enjoy!</p>
+</span></div></article></div><div class="docLastUpdate"><em>Last updated on 2020-12-3 by Andreas Gampe</em></div><div class="docs-prevnext"><a class="docs-prev button" href="/docs/passes"><span class="arrow-prev">← </span><span>Passes</span></a><a class="docs-next button" href="/docs/proguard"><span class="function-name-prevnext">Using ProGuard Rules with Redex</span><span class="arrow-next"> →</span></a></div></div></div><nav class="onPageNav"></nav></div><footer class="nav-footer" id="footer"><section class="sitemap"><a href="/" class="nav-home"><img src="/img/redex.png" alt="Redex" width="66" height="58"/></a><div class="footerSection"><h5>Docs</h5><a href="
                 /docs/en/installation">Getting Started</a><a href="
                 /docs/en/configuring">Configuring</a><a href="
                 /docs/en/usage">Using</a><a href="
