@@ -294,10 +294,10 @@ void AnalysisImpl::escape_cross_stores() {
     if (cls != nullptr) {
       if (xstores.illegal_ref_load_types(intf_it.first, cls)) {
         escape_interface(intf_it.first, CROSS_STORES);
-        std::cerr << "Warning: found " << show(cls)
-                  << " which is by itself not a cross-store violation for "
-                  << show(intf_it.first)
-                  << ", but depends on other types that are!" << std::endl;
+        TRACE(INTF, 0,
+              "Warning: found %s which is by itself not a cross-store "
+              "violation for %s but depends on other types that are!",
+              SHOW(cls), SHOW(intf_it.first));
         continue;
       }
     }
