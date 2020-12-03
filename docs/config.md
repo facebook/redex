@@ -35,7 +35,7 @@ in [config/default.config](https://github.com/facebook/redex/blob/master/config/
 Name this file default.config, and invoke `redex` with it:
 
 ```
-% redex -c default.config -o tmp/output.apk input.apk
+% redex.py -c default.config -o tmp/output.apk input.apk
 ```
 
 This will do... exactly what redex does without the config.  Not so exciting, is
@@ -95,14 +95,14 @@ Options for each pass are documented with that pass.
 
 # Global options
 
-* `redex.passes`  
-   **Type**: array of strings  
+* `redex.passes`
+   **Type**: array of strings
    A list of passes to be run in the specified order.
 
-* `coldstart_classes`  
-   **Type**: string  
+* `coldstart_classes`
+   **Type**: string
    Path to a file containing a list of class names in the order they are used
-   for cold start.  Example format:  
+   for cold start.  Example format:
    ```
    com/foo/Bar.class
    com/foo/Baz.class
@@ -110,8 +110,8 @@ Options for each pass are documented with that pass.
    com/foo/Quux.class
    ```
 
-* `proguard_map`  
-   **Type**: string  
+* `proguard_map`
+   **Type**: string
    Path to a file containing ProGuard's mapping of unobfuscated
    class/field/method names to obfuscated names.  This option is useful if you
    are running ReDex after ProGuard, so that ReDex will properly understand
