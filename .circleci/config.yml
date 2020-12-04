@@ -182,7 +182,7 @@ commands:
       - run:
           name: Setup
           shell: c:/tools/msys64/msys2_shell.cmd -defterm -no-start -msys2 -full-path -here -c
-          command: pacman -S --needed --noconfirm make mingw-w64-x86_64-boost mingw-w64-x86_64-cmake mingw-w64-x86_64-gcc mingw-w64-x86_64-jsoncpp mingw-w64-x86_64-make zip unzip
+          command: pacman -S --needed --noconfirm make mingw-w64-x86_64-boost mingw-w64-x86_64-cmake mingw-w64-x86_64-gcc mingw-w64-x86_64-jsoncpp mingw-w64-x86_64-make zip unzip mingw-w64-x86_64-python
 
       - run:
           name: Build
