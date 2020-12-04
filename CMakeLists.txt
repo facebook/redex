@@ -126,3 +126,17 @@ target_link_libraries(redex-all
 target_compile_definitions(redex-all PRIVATE)
 
 set_link_whole(redex-all redex)
+
+install(TARGETS redex-all DESTINATION .)
+
+# redex.py things...
+
+install(FILES redex.py DESTINATION .)
+install(DIRECTORY pyredex DESTINATION .)
+
+# Misc stuff, for good measure.
+install(FILES LICENSE README.md config/default.config DESTINATION .)
+
+set(CPACK_INCLUDE_TOPLEVEL_DIRECTORY OFF)
+set(CPACK_GENERATOR "ZIP")
+include(CPack)
