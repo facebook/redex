@@ -134,6 +134,17 @@ install(TARGETS redex-all DESTINATION .)
 install(FILES redex.py DESTINATION .)
 install(DIRECTORY pyredex DESTINATION .)
 
+file(GLOB gen_packed_apilevels "gen_packed_apilevels.py")
+file(GLOB api_level_srcs "service/api-levels/framework_classes_api_*.txt")
+
+add_custom_command(
+    OUTPUT  generated_apilevels.py
+    COMMAND python3 ${gen_packed_apilevels} -o ${CMAKE_CURRENT_BINARY_DIR}/generated_apilevels.py ${api_level_srcs}
+    DEPENDS ${api_level_srcs} ${gen_packed_apilevels}
+)
+add_custom_target(generated_apilevels ALL DEPENDS generated_apilevels.py)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/generated_apilevels.py DESTINATION .)
+
 # Misc stuff, for good measure.
 install(FILES LICENSE README.md config/default.config DESTINATION .)
 
