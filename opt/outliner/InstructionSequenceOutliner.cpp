@@ -1651,7 +1651,8 @@ class OutlinedMethodCreator {
           cfg::Block* last_block{nullptr};
           for (auto& csi : cn.insns) {
             auto next_dbg_pos{last_dbg_pos};
-            for (; it->type == MFLOW_POSITION || it->type == MFLOW_DEBUG;
+            for (; it->type == MFLOW_POSITION || it->type == MFLOW_DEBUG ||
+                   it->type == MFLOW_SOURCE_BLOCK;
                  it++) {
               if (it->type == MFLOW_POSITION) {
                 next_dbg_pos = it->pos.get();

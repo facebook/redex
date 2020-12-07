@@ -551,12 +551,14 @@ IRList* deep_copy_ir_list(IRList* old_ir_list) {
     case MFLOW_POSITION:
       copy_mie->pos = std::move(old_position_to_new[mie.pos.get()]);
       break;
+    case MFLOW_SOURCE_BLOCK:
+      new (&copy_mie->src_block)
+          std::unique_ptr<SourceBlock>(new SourceBlock(*mie.src_block));
+      break;
     case MFLOW_FALLTHROUGH:
       break;
     case MFLOW_DEX_OPCODE:
       not_reached_log("DexInstruction not expected here!");
-    default:
-      not_reached();
     }
 
     ir_list->push_back(*copy_mie);

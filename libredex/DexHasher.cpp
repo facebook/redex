@@ -171,9 +171,15 @@ void DexClassHasher::hash(const IRCode* c) {
       if (mie.pos->file) hash(mie.pos->file);
       hash(mie.pos->line);
       break;
+    case MFLOW_SOURCE_BLOCK:
+      if (mie.src_block) {
+        hash(mie.src_block->src);
+        hash(mie.src_block->id);
+      }
+      break;
     case MFLOW_FALLTHROUGH:
       break;
-    default:
+    case MFLOW_DEX_OPCODE:
       not_reached();
     }
   }

@@ -42,6 +42,9 @@ MethodItemEntry::MethodItemEntry(std::unique_ptr<DexDebugInstruction> dbgop)
 MethodItemEntry::MethodItemEntry(std::unique_ptr<DexPosition> pos)
     : type(MFLOW_POSITION), pos(std::move(pos)) {}
 
+MethodItemEntry::MethodItemEntry(std::unique_ptr<SourceBlock> src_block)
+    : type(MFLOW_SOURCE_BLOCK), src_block(std::move(src_block)) {}
+
 MethodItemEntry::MethodItemEntry(const MethodItemEntry& that)
     : type(that.type) {
   switch (type) {
@@ -66,6 +69,10 @@ MethodItemEntry::MethodItemEntry(const MethodItemEntry& that)
   case MFLOW_POSITION:
     new (&pos) std::unique_ptr<DexPosition>(new DexPosition(*that.pos));
     break;
+  case MFLOW_SOURCE_BLOCK:
+    new (&src_block)
+        std::unique_ptr<SourceBlock>(new SourceBlock(*that.src_block));
+    break;
   case MFLOW_FALLTHROUGH:
     break;
   }
@@ -87,6 +94,9 @@ MethodItemEntry::~MethodItemEntry() {
     break;
   case MFLOW_POSITION:
     pos.~unique_ptr<DexPosition>();
+    break;
+  case MFLOW_SOURCE_BLOCK:
+    src_block.~unique_ptr<SourceBlock>();
     break;
   case MFLOW_OPCODE:
   case MFLOW_DEX_OPCODE:
@@ -117,6 +127,7 @@ void MethodItemEntry::gather_strings(std::vector<DexString*>& lstring) const {
     // although DexPosition contains strings, these strings don't find their
     // way into the APK
     break;
+  case MFLOW_SOURCE_BLOCK:
   case MFLOW_FALLTHROUGH:
     break;
   }
@@ -130,6 +141,8 @@ void MethodItemEntry::gather_methods(
   case MFLOW_POSITION:
   case MFLOW_FALLTHROUGH:
   case MFLOW_TARGET:
+  // SourceBlock does not keep the method reachable.
+  case MFLOW_SOURCE_BLOCK:
   // DexDebugInstruction does not have method reference.
   case MFLOW_DEBUG:
     break;
@@ -150,6 +163,7 @@ void MethodItemEntry::gather_callsites(
   case MFLOW_POSITION:
   case MFLOW_FALLTHROUGH:
   case MFLOW_TARGET:
+  case MFLOW_SOURCE_BLOCK:
     break;
   case MFLOW_OPCODE:
     insn->gather_callsites(lcallsite);
@@ -183,6 +197,8 @@ void MethodItemEntry::gather_methodhandles(
     break;
   case MFLOW_POSITION:
     break;
+  case MFLOW_SOURCE_BLOCK:
+    break;
   case MFLOW_FALLTHROUGH:
     break;
   }
@@ -206,6 +222,8 @@ void MethodItemEntry::gather_fields(std::vector<DexFieldRef*>& lfield) const {
     dbgop->gather_fields(lfield);
     break;
   case MFLOW_POSITION:
+    break;
+  case MFLOW_SOURCE_BLOCK:
     break;
   case MFLOW_FALLTHROUGH:
     break;
@@ -233,6 +251,8 @@ void MethodItemEntry::gather_types(std::vector<DexType*>& ltype) const {
     dbgop->gather_types(ltype);
     break;
   case MFLOW_POSITION:
+    break;
+  case MFLOW_SOURCE_BLOCK:
     break;
   case MFLOW_FALLTHROUGH:
     break;
@@ -293,6 +313,8 @@ MethodItemEntry* MethodItemEntryCloner::clone(const MethodItemEntry* mie) {
     return cloned_mie;
   case MFLOW_FALLTHROUGH:
     return cloned_mie;
+  case MFLOW_SOURCE_BLOCK:
+    return cloned_mie;
   case MFLOW_DEX_OPCODE:
     not_reached_log("DexInstructions not expected here");
   }
@@ -328,6 +350,8 @@ bool MethodItemEntry::operator==(const MethodItemEntry& that) const {
     return *dbgop == *that.dbgop;
   case MFLOW_POSITION:
     return *pos == *that.pos;
+  case MFLOW_SOURCE_BLOCK:
+    return *src_block == *that.src_block;
   case MFLOW_FALLTHROUGH:
     return true;
   };

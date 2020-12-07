@@ -105,6 +105,8 @@ const char* method_item_type_str(MethodItemType t) {
     return "debug";
   case MFLOW_POSITION:
     return "position";
+  case MFLOW_SOURCE_BLOCK:
+    return "source-block";
   case MFLOW_FALLTHROUGH:
     return "fallthrough";
   }
@@ -311,6 +313,11 @@ class CodeVisualizer : public TaggedBase {
     }
   }
 
+  void source_block(const SourceBlock& sb) {
+    m_output << method_item_type_str(MFLOW_SOURCE_BLOCK) << " \""
+             << show(sb.src) << "\"@" << sb.id;
+  }
+
   template <typename... Args>
   void mie(const MethodItemEntry& mie, Args... args) {
     switch (mie.type) {
@@ -329,6 +336,10 @@ class CodeVisualizer : public TaggedBase {
 
     case MFLOW_OPCODE:
       static_cast<T*>(this)->instruction(mie.insn, args...);
+      return;
+
+    case MFLOW_SOURCE_BLOCK:
+      static_cast<T*>(this)->source_block(*mie.src_block);
       return;
     }
   }
