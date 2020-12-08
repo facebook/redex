@@ -1452,6 +1452,26 @@ InstructionIterator ControlFlowGraph::find_insn(IRInstruction* needle,
   return iterable.end();
 }
 
+ConstInstructionIterator ControlFlowGraph::find_insn(IRInstruction* needle,
+                                                     Block* hint) const {
+  if (hint != nullptr) {
+    auto ii = ir_list::InstructionIterable(hint);
+    for (auto it = ii.begin(); it != ii.end(); ++it) {
+      if (it->insn == needle) {
+        return hint->to_cfg_instruction_iterator(it);
+      }
+    }
+  }
+
+  auto iterable = ConstInstructionIterable(*this);
+  for (auto it = iterable.begin(); it != iterable.end(); ++it) {
+    if (it->insn == needle) {
+      return it;
+    }
+  }
+  return iterable.end();
+}
+
 std::vector<Block*> ControlFlowGraph::order() {
   // We must simplify first to remove any unreachable blocks
   simplify();
