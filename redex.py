@@ -350,7 +350,22 @@ class SigIntHandler:
         signal.alarm(3)
 
 
-def run_redex_binary(state, term_handler):
+class ExceptionMessageFormatter:
+    def format_rerun_message(self, gdb_script_name, lldb_script_name):
+        return "You can re-run it under gdb by running {} or under lldb by running {}".format(
+            gdb_script_name, lldb_script_name
+        )
+
+    def format_message(
+        self, err_out, default_error_msg, gdb_script_name, lldb_script_name
+    ):
+        return "{} {}".format(
+            default_error_msg,
+            self.format_rerun_message(gdb_script_name, lldb_script_name),
+        )
+
+
+def run_redex_binary(state, term_handler, exception_formatter):
     if state.args.redex_binary is None:
         state.args.redex_binary = shutil.which("redex-all")
 
@@ -475,10 +490,11 @@ def run_redex_binary(state, term_handler):
                 if returncode == -6:  # SIGABRT
                     maybe_reprint_error(err_out, term_handler)
 
+                default_error_msg = "redex-all crashed with exit code {}!".format(
+                    returncode
+                )
                 if IS_WINDOWS:
-                    raise RuntimeError(
-                        "redex-all crashed with exit code {}!".format(returncode)
-                    )
+                    raise RuntimeError(default_error_msg)
 
                 gdb_script_name = write_debugger_command(
                     "gdb", state.args.debug_source_root, args
@@ -486,12 +502,10 @@ def run_redex_binary(state, term_handler):
                 lldb_script_name = write_debugger_command(
                     "lldb", state.args.debug_source_root, args
                 )
-                raise RuntimeError(
-                    (
-                        "redex-all crashed with exit code {}! You can re-run it "
-                        + "under gdb by running {} or under lldb by running {}"
-                    ).format(returncode, gdb_script_name, lldb_script_name)
+                msg = exception_formatter.format_message(
+                    err_out, default_error_msg, gdb_script_name, lldb_script_name
                 )
+                raise RuntimeError(msg)
             return True
         except OSError as err:
             if err.errno == errno.ETXTBSY:
@@ -1095,9 +1109,11 @@ def finalize_redex(state):
     )
 
 
-def run_redex(args, term_handler=None):
+def run_redex(args, term_handler=None, exception_formatter=None):
     state = prepare_redex(args)
-    run_redex_binary(state, term_handler)
+    if exception_formatter is None:
+        exception_formatter = ExceptionMessageFormatter()
+    run_redex_binary(state, term_handler, exception_formatter)
 
     if args.stop_pass:
         # Do not remove temp dirs

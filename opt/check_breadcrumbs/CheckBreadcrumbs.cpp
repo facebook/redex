@@ -408,10 +408,10 @@ void Breadcrumbs::report_illegal_refs(bool fail_if_illegal_refs,
         num_illegal_method_defs);
   TRACE(BRCR, 2, "%s", ss.str().c_str());
 
-  always_assert_log(ss.str().empty() || !fail_if_illegal_refs,
-                    "ERROR - illegal cross store references "
-                    "(contact redex@on-call):\n%s",
-                    ss.str().c_str());
+  always_assert_type_log(ss.str().empty() || !fail_if_illegal_refs,
+                         RedexError::REJECTED_CODING_PATTERN,
+                         "ERROR - illegal cross store references!\n%s",
+                         ss.str().c_str());
 
   mgr.set_metric(METRIC_TYPES_WITH_ALLOWED_VIOLATIONS,
                  m_types_with_allowed_violations.size());
