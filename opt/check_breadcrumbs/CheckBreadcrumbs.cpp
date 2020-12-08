@@ -142,6 +142,97 @@ void build_allowed_violations(const Scope& scope,
   }
 }
 
+void print_allowed_violations_per_class(
+    const Scope& scope,
+    const XStoreRefs& xstores,
+    const std::map<const DexType*, Fields, dextypes_comparator>& illegal_fields,
+    const std::map<const DexMethod*, Types, dexmethods_comparator>&
+        illegal_method,
+    const MethodInsns& illegal_type,
+    const MethodInsns& illegal_field_type,
+    const MethodInsns& illegal_field_cls,
+    const MethodInsns& illegal_method_call) {
+  for (const auto& cls : scope) {
+    auto type = cls->get_type();
+    std::ostringstream fields_detail;
+    auto fields = illegal_fields.find(type);
+    if (fields != illegal_fields.end()) {
+      for (const auto f : fields->second) {
+        fields_detail << "    " << f->get_deobfuscated_name() << " ("
+                      << get_store_name(xstores, f->get_type()) << ")"
+                      << std::endl;
+      }
+    }
+    std::ostringstream methods_detail;
+    for (const auto& method : cls->get_all_methods()) {
+      std::ostringstream method_detail;
+      auto protos = illegal_method.find(method);
+      if (protos != illegal_method.end()) {
+        for (const auto proto_type : protos->second) {
+          method_detail << "      Proto type " << show_deobfuscated(proto_type)
+                        << " (" << get_store_name(xstores, proto_type) << ")"
+                        << std::endl;
+        }
+      }
+      auto type_insns = illegal_type.find(method);
+      if (type_insns != illegal_type.end()) {
+        for (const auto insn : type_insns->second) {
+          method_detail << "      Instruction type " << show_deobfuscated(insn)
+                        << " (" << get_store_name(xstores, insn->get_type())
+                        << ")" << std::endl;
+        }
+      }
+      auto field_type_insns = illegal_field_type.find(method);
+      if (field_type_insns != illegal_field_type.end()) {
+        for (const auto insn : field_type_insns->second) {
+          method_detail
+              << "      Field type " << show_deobfuscated(insn) << " ("
+              << get_store_name(xstores, insn->get_field()->get_class()) << ")"
+              << std::endl;
+        }
+      }
+      auto field_cls_insns = illegal_field_cls.find(method);
+      if (field_cls_insns != illegal_field_cls.end()) {
+        for (const auto insn : field_cls_insns->second) {
+          method_detail
+              << "      Field class " << show_deobfuscated(insn) << " ("
+              << get_store_name(xstores, insn->get_field()->get_type()) << ")"
+              << std::endl;
+        }
+      }
+      auto method_calls = illegal_method_call.find(method);
+      if (method_calls != illegal_method_call.end()) {
+        for (const auto insn : method_calls->second) {
+          method_detail
+              << "      Callee class " << show_deobfuscated(insn) << " ("
+              << get_store_name(xstores, insn->get_method()->get_class()) << ")"
+              << std::endl;
+        }
+      }
+      auto detail_str = method_detail.str();
+      if (!detail_str.empty()) {
+        methods_detail << "    " << show_deobfuscated(method) << std::endl
+                       << detail_str;
+      }
+    }
+    auto fields_detail_str = fields_detail.str();
+    auto methods_detail_str = methods_detail.str();
+    if (!fields_detail_str.empty() || !methods_detail_str.empty()) {
+      TRACE(BRCR, 3, "Allowed violations in type %s (%s)",
+            show_deobfuscated(type).c_str(),
+            get_store_name(xstores, type).c_str());
+      if (!fields_detail_str.empty()) {
+        TRACE(BRCR, 3, "  Fields:");
+        TRACE(BRCR, 3, fields_detail_str.c_str());
+      }
+      if (!methods_detail_str.empty()) {
+        TRACE(BRCR, 3, "  Methods:");
+        TRACE(BRCR, 3, methods_detail_str.c_str());
+      }
+    }
+  }
+}
+
 } // namespace
 
 Breadcrumbs::Breadcrumbs(const Scope& scope,
@@ -430,8 +521,11 @@ void Breadcrumbs::report_illegal_refs(bool fail_if_illegal_refs,
         sum_instructions(allowed_illegal_method_call),
         allowed_illegal_method.size());
   if (traceEnabled(BRCR, 3)) {
-    // Print suppressed violations
-    // TODO :) :)
+    print_allowed_violations_per_class(
+        m_scope_to_walk, m_xstores, allowed_illegal_fields,
+        allowed_illegal_method, allowed_illegal_type,
+        allowed_illegal_field_type, allowed_illegal_field_cls,
+        allowed_illegal_method_call);
   }
 }
 
@@ -495,7 +589,7 @@ bool Breadcrumbs::is_illegal_cross_store(const DexType* caller,
     if (m_xstores.illegal_ref_between_stores(caller_store_idx,
                                              callee_store_idx)) {
       if (callee_to_check != callee) {
-        TRACE(BRCR, 3,
+        TRACE(BRCR, 4,
               "Illegal reference from %s to class %s in type hierarchy of %s",
               show_deobfuscated(caller).c_str(),
               show_deobfuscated(callee_to_check).c_str(),
