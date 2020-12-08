@@ -395,11 +395,18 @@ redexdump_LDADD = \
 bin_SCRIPTS = redex apkutil
 CLEANFILES = redex
 
+# Embedded API level files.
+GEN_API_LEVELS_SCRIPT = gen_packed_apilevels.py
+GENERATED_API_LEVELS_MODULE = generated_apilevels.py
+$(GENERATED_API_LEVELS_MODULE): $(GEN_API_LEVELS_SCRIPT) service/api-levels/framework_classes_api_*.txt
+	python3 $(GEN_API_LEVELS_SCRIPT) -o $@ service/api-levels/framework_classes_api_*.txt
+
 PYTHON_SRCS := redex.py \
 	pyredex/__init__.py \
 	pyredex/logger.py \
 	pyredex/unpacker.py \
-	pyredex/utils.py
+	pyredex/utils.py \
+	$(GENERATED_API_LEVELS_MODULE)
 
 redex: redex-all $(PYTHON_SRCS)
 	$(srcdir)/bundle-redex.sh

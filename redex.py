@@ -844,6 +844,33 @@ class State(object):
         self.zip_manager = zip_manager
 
 
+def _check_android_sdk_api(args):
+    arg_template = "android_sdk_api_{level}_file="
+    arg_re = re.compile("^" + arg_template.format(level="(\\d+)"))
+    for arg in args.passthru:
+        if arg_re.match(arg):
+            return
+
+    # Nothing found, check whether we have files embedded
+    logging.warning("No android_sdk_api_XX_file parameters found!")
+    try:
+        import generated_apilevels as ga
+
+        levels = ga.get_api_levels()
+        logging.info("Found embedded API levels: %s", levels)
+        api_dir = make_temp_dir("api_levels")
+        logging.info("Writing API level files to %s", api_dir)
+        for level in levels:
+            blob = ga.get_api_level_file(level)
+            filename = os.path.join(api_dir, f"framework_classes_api_{level}.txt")
+            with open(filename, "wb") as f:
+                f.write(blob)
+            arg = arg_template.format(level=level) + filename
+            args.passthru.append(arg)
+    except ImportError:
+        logging.warning("No embedded files, please add manually!")
+
+
 def prepare_redex(args):
     debug_mode = args.unpack_only or args.debug
 
@@ -980,6 +1007,9 @@ def prepare_redex(args):
             % (key, value, key_value_str, prev_value)
         )
         config_dict[key] = json.loads(value)
+
+    # Scan for framework files. If not found, warn and add them if available.
+    _check_android_sdk_api(args)
 
     log("Running redex-all on {} dex files ".format(len(dexen)))
     if args.lldb:
