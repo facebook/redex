@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <atomic>
 #include <boost/optional/optional.hpp>
+#include <boost/thread/thread.hpp>
 #include <cassert>
 #include <chrono>
 #include <condition_variable>
@@ -17,7 +18,6 @@
 #include <numeric>
 #include <queue>
 #include <random>
-#include <thread>
 #include <utility>
 
 #include "Arity.h"
@@ -30,7 +30,7 @@ namespace parallel {
  * Sparta uses the number of physical cores.
  */
 static inline unsigned int default_num_threads() {
-  unsigned int threads = std::thread::hardware_concurrency();
+  unsigned int threads = boost::thread::physical_concurrency();
   return std::max(1u, threads);
 }
 
@@ -257,7 +257,7 @@ void SpartaWorkQueue<Input, Executor>::add_item(Input task, size_t worker_id) {
  */
 template <class Input, typename Executor>
 void SpartaWorkQueue<Input, Executor>::run_all() {
-  std::vector<std::thread> all_threads;
+  std::vector<boost::thread> all_threads;
   m_state_counters.num_non_empty = 0;
   m_state_counters.num_running = 0;
   m_state_counters.waiter->take_all();
@@ -305,7 +305,10 @@ void SpartaWorkQueue<Input, Executor>::run_all() {
     }
   }
   for (size_t i = 0; i < m_num_threads; ++i) {
-    all_threads.emplace_back(std::bind<void>(worker, m_states[i].get(), i));
+    boost::thread::attributes attrs;
+    attrs.set_stack_size(8 * 1024 * 1024);
+    all_threads.emplace_back(attrs,
+                             std::bind<void>(worker, m_states[i].get(), i));
   }
 
   for (auto& thread : all_threads) {
