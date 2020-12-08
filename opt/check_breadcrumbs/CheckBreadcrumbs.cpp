@@ -119,12 +119,22 @@ size_t illegal_elements(const XStoreRefs& xstores,
 
 Breadcrumbs::Breadcrumbs(const Scope& scope,
                          DexStoresVector& stores,
-                         bool reject_illegal_refs_root_store)
+                         bool reject_illegal_refs_root_store,
+                         bool only_verify_primary_dex)
     : m_scope(scope),
       m_xstores(stores),
       m_reject_illegal_refs_root_store(reject_illegal_refs_root_store) {
   m_classes.insert(scope.begin(), scope.end());
   m_multiple_root_store_dexes = stores[0].get_dexen().size() > 1;
+  if (only_verify_primary_dex) {
+    for (auto& c : scope) {
+      if (m_xstores.is_in_primary_dex(c->get_type())) {
+        m_scope_to_walk.push_back(c);
+      }
+    }
+  } else {
+    m_scope_to_walk.insert(m_scope_to_walk.end(), scope.begin(), scope.end());
+  }
 }
 
 void Breadcrumbs::check_breadcrumbs() {
@@ -391,7 +401,7 @@ void Breadcrumbs::bad_type(const DexType* type,
 
 // Verify that all field definitions reference types that are not deleted.
 void Breadcrumbs::check_fields() {
-  walk::fields(m_scope, [&](DexField* field) {
+  walk::fields(m_scope_to_walk, [&](DexField* field) {
     bool check_cross_store_ref = true;
     std::vector<DexType*> type_refs;
     field->gather_types(type_refs);
@@ -416,7 +426,7 @@ void Breadcrumbs::check_fields() {
 // Verify that all method definitions use not deleted types in their signatures
 // and annotations.
 void Breadcrumbs::check_methods() {
-  walk::methods(m_scope, [&](DexMethod* method) {
+  walk::methods(m_scope_to_walk, [&](DexMethod* method) {
     bool check_cross_store_ref = true;
     // Check type references on the method signature.
     const auto* bad_ref = check_method(method);
@@ -567,7 +577,7 @@ void Breadcrumbs::check_method_opcode(const DexMethod* method,
 }
 
 void Breadcrumbs::check_opcodes() {
-  walk::opcodes(m_scope,
+  walk::opcodes(m_scope_to_walk,
                 [](DexMethod*) { return true; },
                 [&](DexMethod* method, IRInstruction* insn) {
                   if (insn->has_type()) {
@@ -588,7 +598,8 @@ void CheckBreadcrumbsPass::run_pass(DexStoresVector& stores,
                                     ConfigFiles& /* conf */,
                                     PassManager& mgr) {
   auto scope = build_class_scope(stores);
-  Breadcrumbs bc(scope, stores, reject_illegal_refs_root_store);
+  Breadcrumbs bc(scope, stores, reject_illegal_refs_root_store,
+                 only_verify_primary_dex);
   bc.check_breadcrumbs();
   bc.report_deleted_types(!fail, mgr);
   bc.report_illegal_refs(fail_if_illegal_refs, mgr);

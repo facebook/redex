@@ -32,6 +32,7 @@ class CheckBreadcrumbsPass : public Pass {
     bind("reject_illegal_refs_root_store",
          false,
          reject_illegal_refs_root_store);
+    bind("only_verify_primary_dex", false, only_verify_primary_dex);
     trait(Traits::Pass::unique, true);
   }
 
@@ -41,6 +42,7 @@ class CheckBreadcrumbsPass : public Pass {
   bool fail;
   bool fail_if_illegal_refs;
   bool reject_illegal_refs_root_store;
+  bool only_verify_primary_dex;
 };
 
 namespace {
@@ -57,7 +59,8 @@ class Breadcrumbs {
  public:
   explicit Breadcrumbs(const Scope& scope,
                        DexStoresVector& stores,
-                       bool reject_illegal_refs_root_store);
+                       bool reject_illegal_refs_root_store,
+                       bool only_verify_primary_dex);
   void check_breadcrumbs();
   void report_deleted_types(bool report_only, PassManager& mgr);
   std::string get_methods_with_bad_refs();
@@ -66,6 +69,7 @@ class Breadcrumbs {
 
  private:
   const Scope& m_scope;
+  Scope m_scope_to_walk;
   std::unordered_set<const DexClass*> m_classes;
   std::map<const DexType*, Fields, dextypes_comparator> m_bad_fields;
   std::map<const DexType*, Methods, dextypes_comparator> m_bad_methods;
