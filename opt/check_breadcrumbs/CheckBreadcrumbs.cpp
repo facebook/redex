@@ -13,6 +13,7 @@
 #include <sstream>
 #include <unordered_set>
 
+#include <boost/algorithm/string/join.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/filesystem.hpp>
 
@@ -110,8 +111,10 @@ size_t sum_instructions(const MethodInsns& map) {
 
 void build_allowed_violations(const Scope& scope,
                               const std::string& allowed_violations_file_path,
+                              bool enforce_types_exist,
                               std::unordered_set<const DexType*>* types,
-                              std::unordered_set<std::string>* type_prefixes) {
+                              std::unordered_set<std::string>* type_prefixes,
+                              std::vector<std::string>* unneeded_lines) {
   if (!boost::filesystem::exists(allowed_violations_file_path)) {
     return;
   }
@@ -122,14 +125,14 @@ void build_allowed_violations(const Scope& scope,
             allowed_violations_file_path.c_str());
     return;
   }
-  std::unordered_set<std::string> allowed_class_names;
+  std::unordered_map<std::string, bool> allowed_class_names;
   std::string line;
   while (std::getline(input, line)) {
     if (line.empty() || boost::algorithm::starts_with(line, "#")) {
       continue;
     }
     if (boost::algorithm::ends_with(line, ";")) {
-      allowed_class_names.emplace(line);
+      allowed_class_names.emplace(line, false);
     } else {
       type_prefixes->emplace(line);
     }
@@ -138,6 +141,14 @@ void build_allowed_violations(const Scope& scope,
     auto& dname = cls->get_deobfuscated_name();
     if (allowed_class_names.count(dname) != 0) {
       types->emplace(cls->get_type());
+      allowed_class_names[dname] = true;
+    }
+  }
+  if (enforce_types_exist) {
+    for (const auto& pair : allowed_class_names) {
+      if (!pair.second) {
+        unneeded_lines->emplace_back(pair.first);
+      }
     }
   }
 }
@@ -233,6 +244,18 @@ void print_allowed_violations_per_class(
   }
 }
 
+template <typename T, typename PrinterFn>
+void gather_unnessary_allows(const std::unordered_set<T>& expected_violations,
+                             const std::unordered_set<T>& actual_violations,
+                             const PrinterFn& printer,
+                             std::vector<std::string>* unneeded_lines) {
+  for (auto& e : expected_violations) {
+    if (!actual_violations.count(e)) {
+      unneeded_lines->emplace_back(printer(e));
+    }
+  }
+}
+
 } // namespace
 
 Breadcrumbs::Breadcrumbs(const Scope& scope,
@@ -241,12 +264,14 @@ Breadcrumbs::Breadcrumbs(const Scope& scope,
                          bool reject_illegal_refs_root_store,
                          bool only_verify_primary_dex,
                          bool verify_type_hierarchies,
-                         bool verify_proto_cross_dex)
+                         bool verify_proto_cross_dex,
+                         bool enforce_allowed_violations_file)
     : m_scope(scope),
       m_xstores(stores),
       m_reject_illegal_refs_root_store(reject_illegal_refs_root_store),
       m_verify_type_hierarchies(verify_type_hierarchies),
-      m_verify_proto_cross_dex(verify_proto_cross_dex) {
+      m_verify_proto_cross_dex(verify_proto_cross_dex),
+      m_enforce_allowed_violations_file(enforce_allowed_violations_file) {
   m_classes.insert(scope.begin(), scope.end());
   m_multiple_root_store_dexes = stores[0].get_dexen().size() > 1;
   if (only_verify_primary_dex) {
@@ -259,8 +284,9 @@ Breadcrumbs::Breadcrumbs(const Scope& scope,
     m_scope_to_walk.insert(m_scope_to_walk.end(), scope.begin(), scope.end());
   }
   build_allowed_violations(m_scope, allowed_violations_file_path,
-                           &m_allow_violations,
-                           &m_allow_violation_type_prefixes);
+                           enforce_allowed_violations_file, &m_allow_violations,
+                           &m_allow_violation_type_prefixes,
+                           &m_unneeded_violations_file_lines);
 }
 
 void Breadcrumbs::check_breadcrumbs() {
@@ -381,6 +407,7 @@ bool Breadcrumbs::should_allow_violations(const DexType* type) {
   for (const auto& s : m_allow_violation_type_prefixes) {
     if (boost::algorithm::starts_with(dname, s)) {
       m_types_with_allowed_violations.emplace(type);
+      m_type_prefixes_with_allowed_violations.emplace(s);
       return true;
     }
   }
@@ -526,6 +553,22 @@ void Breadcrumbs::report_illegal_refs(bool fail_if_illegal_refs,
         allowed_illegal_method, allowed_illegal_type,
         allowed_illegal_field_type, allowed_illegal_field_cls,
         allowed_illegal_method_call);
+  }
+  if (m_enforce_allowed_violations_file) {
+    // Enforce no unnecessary lines in violations file.
+    gather_unnessary_allows(
+        m_allow_violations, m_types_with_allowed_violations,
+        [](const DexType* t) { return show_deobfuscated(t); },
+        &m_unneeded_violations_file_lines);
+    gather_unnessary_allows(m_allow_violation_type_prefixes,
+                            m_type_prefixes_with_allowed_violations,
+                            [](std::string s) { return s; },
+                            &m_unneeded_violations_file_lines);
+    always_assert_log(
+        m_unneeded_violations_file_lines.empty(),
+        "Please prune the following lines from allowed "
+        "violations list, they are not needed:\n%s",
+        boost::algorithm::join(m_unneeded_violations_file_lines, "\n").c_str());
   }
 }
 
@@ -864,7 +907,8 @@ void CheckBreadcrumbsPass::run_pass(DexStoresVector& stores,
   auto scope = build_class_scope(stores);
   Breadcrumbs bc(scope, allowed_violations_file_path, stores,
                  reject_illegal_refs_root_store, only_verify_primary_dex,
-                 verify_type_hierarchies, verify_proto_cross_dex);
+                 verify_type_hierarchies, verify_proto_cross_dex,
+                 enforce_allowed_violations_file);
   bc.check_breadcrumbs();
   bc.report_deleted_types(!fail, mgr);
   bc.report_illegal_refs(fail_if_illegal_refs, mgr);

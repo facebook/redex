@@ -37,6 +37,9 @@ class CheckBreadcrumbsPass : public Pass {
     bind("verify_type_hierarchies", false, verify_type_hierarchies);
     bind("verify_proto_cross_dex", false, verify_proto_cross_dex);
     bind("allowed_violations", "", allowed_violations_file_path);
+    bind("enforce_allowed_violations_file",
+         false,
+         enforce_allowed_violations_file);
     trait(Traits::Pass::unique, true);
   }
 
@@ -51,6 +54,7 @@ class CheckBreadcrumbsPass : public Pass {
   bool verify_proto_cross_dex;
   // Path to file with types or type prefixes to permit cross store violations.
   std::string allowed_violations_file_path;
+  bool enforce_allowed_violations_file;
 };
 
 namespace {
@@ -72,7 +76,8 @@ class Breadcrumbs {
                        bool reject_illegal_refs_root_store,
                        bool only_verify_primary_dex,
                        bool verify_type_hierarchies,
-                       bool verify_proto_cross_dex);
+                       bool verify_proto_cross_dex,
+                       bool enforce_allowed_violations_file);
   void check_breadcrumbs();
   void report_deleted_types(bool report_only, PassManager& mgr);
   std::string get_methods_with_bad_refs();
@@ -101,10 +106,13 @@ class Breadcrumbs {
   std::unordered_set<const DexType*> m_allow_violations;
   std::unordered_set<std::string> m_allow_violation_type_prefixes;
   std::unordered_set<const DexType*> m_types_with_allowed_violations;
+  std::unordered_set<std::string> m_type_prefixes_with_allowed_violations;
+  std::vector<std::string> m_unneeded_violations_file_lines;
   bool m_multiple_root_store_dexes;
   bool m_reject_illegal_refs_root_store;
   bool m_verify_type_hierarchies;
   bool m_verify_proto_cross_dex;
+  bool m_enforce_allowed_violations_file;
 
   bool should_allow_violations(const DexType* type);
   size_t process_illegal_elements(const XStoreRefs& xstores,
