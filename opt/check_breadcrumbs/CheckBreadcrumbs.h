@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <iosfwd>
 #include <map>
 #include <vector>
 
@@ -35,6 +36,7 @@ class CheckBreadcrumbsPass : public Pass {
     bind("only_verify_primary_dex", false, only_verify_primary_dex);
     bind("verify_type_hierarchies", false, verify_type_hierarchies);
     bind("verify_proto_cross_dex", false, verify_proto_cross_dex);
+    bind("allowed_violations", "", allowed_violations_file_path);
     trait(Traits::Pass::unique, true);
   }
 
@@ -47,6 +49,8 @@ class CheckBreadcrumbsPass : public Pass {
   bool only_verify_primary_dex;
   bool verify_type_hierarchies;
   bool verify_proto_cross_dex;
+  // Path to file with types or type prefixes to permit cross store violations.
+  std::string allowed_violations_file_path;
 };
 
 namespace {
@@ -63,6 +67,7 @@ using MethodInsns =
 class Breadcrumbs {
  public:
   explicit Breadcrumbs(const Scope& scope,
+                       const std::string& allowed_violations_file_path,
                        DexStoresVector& stores,
                        bool reject_illegal_refs_root_store,
                        bool only_verify_primary_dex,
@@ -93,11 +98,20 @@ class Breadcrumbs {
   MethodInsns m_illegal_field_cls;
   MethodInsns m_illegal_method_call;
   XStoreRefs m_xstores;
+  std::unordered_set<const DexType*> m_allow_violations;
+  std::unordered_set<std::string> m_allow_violation_type_prefixes;
+  std::unordered_set<const DexType*> m_types_with_allowed_violations;
   bool m_multiple_root_store_dexes;
   bool m_reject_illegal_refs_root_store;
   bool m_verify_type_hierarchies;
   bool m_verify_proto_cross_dex;
 
+  bool should_allow_violations(const DexType* type);
+  size_t process_illegal_elements(const XStoreRefs& xstores,
+                                  const MethodInsns& method_to_insns,
+                                  const char* desc,
+                                  MethodInsns& suppressed,
+                                  std::ostream& ss);
   bool is_illegal_cross_store(const DexType* caller, const DexType* callee);
   const DexType* check_type(const DexType* type);
   const DexType* check_method(const DexMethodRef* method);
