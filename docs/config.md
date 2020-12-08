@@ -116,3 +116,14 @@ Options for each pass are documented with that pass.
    class/field/method names to obfuscated names.  This option is useful if you
    are running ReDex after ProGuard, so that ReDex will properly understand
    obfuscated names.
+
+# Complete configuration
+
+To see the (almost) complete list of configuration parameters, run
+```
+redex-all --reflect-config
+```
+(Note that you run `redex-all` here, not the `redex.py` wrapper!)
+
+This emits a JSON document detailing parameters, their types, defaults and
+possibly documentation.
