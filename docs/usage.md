@@ -10,14 +10,9 @@ invocation is:
 ```
 A more complete invocation with:
 * the default configuration setting [config/default.config](https://github.com/facebook/redex/blob/master/config/default.config)
-* Android Framework API description files
 * access to the Android SDK tools
 ```
 [python3] redex.py -c default.config \
-  -S android_sdk_api_14_file=path/to/service/api-levels/framework_classes_api_14.txt \
-  -S android_sdk_api_15_file=path/to/service/api-levels/framework_classes_api_15.txt \
-  [...] \
-  -S android_sdk_api_29_file=path/to/service/api-levels/framework_classes_api_29.txt \
   --android-sdk-path path/to/android/sdk \
   path/to/your.apk -o path/to/output.apk
 ```
