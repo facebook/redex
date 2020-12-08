@@ -61,16 +61,11 @@ invocation is:</p>
 <p>A more complete invocation with:</p>
 <ul>
 <li>the default configuration setting <a href="https://github.com/facebook/redex/blob/master/config/default.config">config/default.config</a></li>
-<li>Android Framework API description files</li>
 <li>access to the Android SDK tools</li>
 </ul>
-<pre><code class="hljs">[python3] redex.py -c <span class="hljs-keyword">default</span>.config <span class="hljs-string">\</span>
-  -S android_sdk_api_14_file=path/<span class="hljs-keyword">to</span>/service/api-levels/framework_classes_api_14.txt <span class="hljs-string">\</span>
-  -S android_sdk_api_15_file=path/<span class="hljs-keyword">to</span>/service/api-levels/framework_classes_api_15.txt <span class="hljs-string">\</span>
-  [...] <span class="hljs-string">\</span>
-  -S android_sdk_api_29_file=path/<span class="hljs-keyword">to</span>/service/api-levels/framework_classes_api_29.txt <span class="hljs-string">\</span>
-  --android-sdk-path path/<span class="hljs-keyword">to</span>/android/sdk <span class="hljs-string">\</span>
-  path/<span class="hljs-keyword">to</span>/your.apk -o path/<span class="hljs-keyword">to</span>/output.apk
+<pre><code class="hljs">[python3] redex.py -c <span class="hljs-keyword">default</span>.config \
+  --android-sdk-path<span class="hljs-built_in"> path</span>/<span class="hljs-keyword">to</span>/android/sdk \
+ <span class="hljs-built_in"> path</span>/<span class="hljs-keyword">to</span>/your.apk -o<span class="hljs-built_in"> path</span>/<span class="hljs-keyword">to</span>/output.apk
 </code></pre>
 <p>The full set of options can be found with</p>
 <pre><code class="hljs">[<span class="hljs-keyword">python3</span>] redex.<span class="hljs-keyword">py</span> --<span class="hljs-keyword">help</span>
@@ -176,7 +171,7 @@ about the <a href="/docs/passes">passes</a>.</p>
 </code></pre>
 <p>The result <code>output.apk</code> should be smaller and faster than the
 input. Enjoy!</p>
-</span></div></article></div><div class="docLastUpdate"><em>Last updated on 2020-12-3 by Andreas Gampe</em></div><div class="docs-prevnext"><a class="docs-prev button" href="/docs/passes"><span class="arrow-prev">← </span><span>Passes</span></a><a class="docs-next button" href="/docs/proguard"><span class="function-name-prevnext">Using ProGuard Rules with Redex</span><span class="arrow-next"> →</span></a></div></div></div><nav class="onPageNav"></nav></div><footer class="nav-footer" id="footer"><section class="sitemap"><a href="/" class="nav-home"><img src="/img/redex.png" alt="Redex" width="66" height="58"/></a><div class="footerSection"><h5>Docs</h5><a href="
+</span></div></article></div><div class="docLastUpdate"><em>Last updated on 2020-12-8 by Andreas Gampe</em></div><div class="docs-prevnext"><a class="docs-prev button" href="/docs/passes"><span class="arrow-prev">← </span><span>Passes</span></a><a class="docs-next button" href="/docs/proguard"><span class="function-name-prevnext">Using ProGuard Rules with Redex</span><span class="arrow-next"> →</span></a></div></div></div><nav class="onPageNav"></nav></div><footer class="nav-footer" id="footer"><section class="sitemap"><a href="/" class="nav-home"><img src="/img/redex.png" alt="Redex" width="66" height="58"/></a><div class="footerSection"><h5>Docs</h5><a href="
                 /docs/en/installation">Getting Started</a><a href="
                 /docs/en/configuring">Configuring</a><a href="
                 /docs/en/usage">Using</a><a href="
