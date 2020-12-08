@@ -120,10 +120,12 @@ size_t illegal_elements(const XStoreRefs& xstores,
 Breadcrumbs::Breadcrumbs(const Scope& scope,
                          DexStoresVector& stores,
                          bool reject_illegal_refs_root_store,
-                         bool only_verify_primary_dex)
+                         bool only_verify_primary_dex,
+                         bool verify_type_hierarchies)
     : m_scope(scope),
       m_xstores(stores),
-      m_reject_illegal_refs_root_store(reject_illegal_refs_root_store) {
+      m_reject_illegal_refs_root_store(reject_illegal_refs_root_store),
+      m_verify_type_hierarchies(verify_type_hierarchies) {
   m_classes.insert(scope.begin(), scope.end());
   m_multiple_root_store_dexes = stores[0].get_dexen().size() > 1;
   if (only_verify_primary_dex) {
@@ -337,16 +339,36 @@ bool Breadcrumbs::is_illegal_cross_store(const DexType* caller,
     return false;
   }
 
-  size_t caller_store_idx = m_xstores.get_store_idx(caller);
-  size_t callee_store_idx = m_xstores.get_store_idx(callee);
-
-  if (m_multiple_root_store_dexes && caller_store_idx == 0 &&
-      callee_store_idx == 1 && !m_reject_illegal_refs_root_store) {
-    return false;
+  std::set<const DexType*, dextypes_comparator> load_types;
+  if (m_verify_type_hierarchies) {
+    auto callee_cls = type_class(callee);
+    std::unordered_set<DexType*> types;
+    callee_cls->gather_load_types(types);
+    load_types.insert(types.begin(), types.end());
+  } else {
+    load_types.emplace(callee);
   }
 
-  return m_xstores.illegal_ref_between_stores(caller_store_idx,
-                                              callee_store_idx);
+  size_t caller_store_idx = m_xstores.get_store_idx(caller);
+  for (const auto& callee_to_check : load_types) {
+    size_t callee_store_idx = m_xstores.get_store_idx(callee_to_check);
+    if (m_multiple_root_store_dexes && caller_store_idx == 0 &&
+        callee_store_idx == 1 && !m_reject_illegal_refs_root_store) {
+      return false;
+    }
+    if (m_xstores.illegal_ref_between_stores(caller_store_idx,
+                                             callee_store_idx)) {
+      if (callee_to_check != callee) {
+        TRACE(BRCR, 3,
+              "Illegal reference from %s to class %s in type hierarchy of %s",
+              show_deobfuscated(caller).c_str(),
+              show_deobfuscated(callee_to_check).c_str(),
+              show_deobfuscated(callee).c_str());
+      }
+      return true;
+    }
+  }
+  return false;
 }
 
 /**
@@ -599,7 +621,7 @@ void CheckBreadcrumbsPass::run_pass(DexStoresVector& stores,
                                     PassManager& mgr) {
   auto scope = build_class_scope(stores);
   Breadcrumbs bc(scope, stores, reject_illegal_refs_root_store,
-                 only_verify_primary_dex);
+                 only_verify_primary_dex, verify_type_hierarchies);
   bc.check_breadcrumbs();
   bc.report_deleted_types(!fail, mgr);
   bc.report_illegal_refs(fail_if_illegal_refs, mgr);
