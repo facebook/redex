@@ -213,7 +213,7 @@ TEST_F(CheckBreadcrumbsTest, AccessValidityTest) {
   std::vector<DexStore> stores;
   stores.emplace_back(std::move(store));
   auto scope = build_class_scope(stores);
-  Breadcrumbs bc(scope, stores, false, false, false);
+  Breadcrumbs bc(scope, stores, false, false, false, false);
   std::vector<DexMethod*> method_list = call_a_fields_and_methods_methods();
   EXPECT_EQ(bc.has_illegal_access(method_list[0]), false);
   EXPECT_EQ(bc.has_illegal_access(method_list[1]), false);

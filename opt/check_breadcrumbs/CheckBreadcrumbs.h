@@ -34,6 +34,7 @@ class CheckBreadcrumbsPass : public Pass {
          reject_illegal_refs_root_store);
     bind("only_verify_primary_dex", false, only_verify_primary_dex);
     bind("verify_type_hierarchies", false, verify_type_hierarchies);
+    bind("verify_proto_cross_dex", false, verify_proto_cross_dex);
     trait(Traits::Pass::unique, true);
   }
 
@@ -45,6 +46,7 @@ class CheckBreadcrumbsPass : public Pass {
   bool reject_illegal_refs_root_store;
   bool only_verify_primary_dex;
   bool verify_type_hierarchies;
+  bool verify_proto_cross_dex;
 };
 
 namespace {
@@ -52,6 +54,7 @@ namespace {
 using Fields = std::vector<const DexField*>;
 using Methods = std::vector<const DexMethod*>;
 using Instructions = std::vector<const IRInstruction*>;
+using Types = std::vector<const DexType*>;
 using MethodInsns =
     std::map<const DexMethod*, Instructions, dexmethods_comparator>;
 
@@ -63,7 +66,8 @@ class Breadcrumbs {
                        DexStoresVector& stores,
                        bool reject_illegal_refs_root_store,
                        bool only_verify_primary_dex,
-                       bool verify_type_hierarchies);
+                       bool verify_type_hierarchies,
+                       bool verify_proto_cross_dex);
   void check_breadcrumbs();
   void report_deleted_types(bool report_only, PassManager& mgr);
   std::string get_methods_with_bad_refs();
@@ -82,6 +86,7 @@ class Breadcrumbs {
   std::map<const DexMethod*, MethodInsns, dexmethods_comparator>
       m_bad_meth_insns;
   std::map<const DexType*, Fields, dextypes_comparator> m_illegal_field;
+  std::map<const DexMethod*, Types, dexmethods_comparator> m_illegal_method;
   std::map<const DexMethod*, Fields, dexmethods_comparator> m_bad_fields_refs;
   MethodInsns m_illegal_type;
   MethodInsns m_illegal_field_type;
@@ -91,6 +96,7 @@ class Breadcrumbs {
   bool m_multiple_root_store_dexes;
   bool m_reject_illegal_refs_root_store;
   bool m_verify_type_hierarchies;
+  bool m_verify_proto_cross_dex;
 
   bool is_illegal_cross_store(const DexType* caller, const DexType* callee);
   const DexType* check_type(const DexType* type);

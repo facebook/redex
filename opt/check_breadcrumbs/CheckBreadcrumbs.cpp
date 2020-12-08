@@ -121,11 +121,13 @@ Breadcrumbs::Breadcrumbs(const Scope& scope,
                          DexStoresVector& stores,
                          bool reject_illegal_refs_root_store,
                          bool only_verify_primary_dex,
-                         bool verify_type_hierarchies)
+                         bool verify_type_hierarchies,
+                         bool verify_proto_cross_dex)
     : m_scope(scope),
       m_xstores(stores),
       m_reject_illegal_refs_root_store(reject_illegal_refs_root_store),
-      m_verify_type_hierarchies(verify_type_hierarchies) {
+      m_verify_type_hierarchies(verify_type_hierarchies),
+      m_verify_proto_cross_dex(verify_proto_cross_dex) {
   m_classes.insert(scope.begin(), scope.end());
   m_multiple_root_store_dexes = stores[0].get_dexen().size() > 1;
   if (only_verify_primary_dex) {
@@ -265,6 +267,18 @@ void Breadcrumbs::report_illegal_refs(bool fail_if_illegal_refs,
     }
   }
 
+  for (const auto& pair : m_illegal_method) {
+    const auto method = pair.first;
+    const auto& types = pair.second;
+    ss << "Illegal types in method proto " << show_deobfuscated(method) << " ("
+       << get_store_name(m_xstores, method->get_class()) << ")" << std::endl;
+    for (const auto t : types) {
+      ss << "\t" << show_deobfuscated(t) << " (" << get_store_name(m_xstores, t)
+         << ")" << std::endl;
+    }
+  }
+
+  size_t num_illegal_method_defs = m_illegal_method.size();
   size_t num_illegal_type_refs =
       illegal_elements(m_xstores, m_illegal_type, "type refs", ss);
   size_t num_illegal_field_type_refs =
@@ -276,7 +290,8 @@ void Breadcrumbs::report_illegal_refs(bool fail_if_illegal_refs,
 
   size_t num_illegal_cross_store_refs =
       num_illegal_fields + num_illegal_type_refs + num_illegal_field_cls +
-      num_illegal_field_type_refs + num_illegal_method_calls;
+      num_illegal_field_type_refs + num_illegal_method_calls +
+      num_illegal_method_defs;
   mgr.set_metric(METRIC_ILLEGAL_CROSS_STORE_REFS, num_illegal_cross_store_refs);
 
   TRACE(BRCR,
@@ -285,12 +300,14 @@ void Breadcrumbs::report_illegal_refs(bool fail_if_illegal_refs,
         "Illegal type refs : %ld\n"
         "Illegal field type refs : %ld\n"
         "Illegal field cls refs : %ld\n"
-        "Illegal method calls : %ld\n",
+        "Illegal method calls : %ld\n"
+        "Illegal method defs : %ld\n",
         num_illegal_fields,
         num_illegal_type_refs,
         num_illegal_field_type_refs,
         num_illegal_field_cls,
-        num_illegal_method_calls);
+        num_illegal_method_calls,
+        num_illegal_method_defs);
   TRACE(BRCR, 2, "%s", ss.str().c_str());
 
   always_assert_log(ss.str().empty() || !fail_if_illegal_refs,
@@ -465,6 +482,18 @@ void Breadcrumbs::check_methods() {
 
     if (check_cross_store_ref) {
       has_illegal_access(method);
+      if (m_verify_proto_cross_dex) {
+        // Ensure type hierarchies of proto types, which might be meaningful for
+        // verification on some OS versions.
+        const auto cls = method->get_class();
+        std::vector<DexType*> proto_types;
+        method->get_proto()->gather_types(proto_types);
+        for (const auto& t : proto_types) {
+          if (is_illegal_cross_store(cls, t)) {
+            m_illegal_method[method].emplace_back(t);
+          }
+        }
+      }
     }
   });
 }
@@ -621,7 +650,8 @@ void CheckBreadcrumbsPass::run_pass(DexStoresVector& stores,
                                     PassManager& mgr) {
   auto scope = build_class_scope(stores);
   Breadcrumbs bc(scope, stores, reject_illegal_refs_root_store,
-                 only_verify_primary_dex, verify_type_hierarchies);
+                 only_verify_primary_dex, verify_type_hierarchies,
+                 verify_proto_cross_dex);
   bc.check_breadcrumbs();
   bc.report_deleted_types(!fail, mgr);
   bc.report_illegal_refs(fail_if_illegal_refs, mgr);
