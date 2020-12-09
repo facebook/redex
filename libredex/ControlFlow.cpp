@@ -405,6 +405,17 @@ bool Block::starts_with_move_result() {
   return false;
 }
 
+bool Block::starts_with_move_exception() {
+  auto first_it = get_first_insn();
+  if (first_it != end()) {
+    auto first_op = first_it->insn->opcode();
+    if (opcode::is_move_exception(first_op)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 bool Block::contains_opcode(IROpcode opcode) {
   for (auto it = begin(); it != end(); ++it) {
     if (it->type != MFLOW_OPCODE) {

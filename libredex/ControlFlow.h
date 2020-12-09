@@ -318,6 +318,8 @@ class Block final {
   // including move-result-pseudo
   bool starts_with_move_result();
 
+  bool starts_with_move_exception();
+
   bool contains_opcode(IROpcode opcode);
 
   // returns true iff the block starts with the same MethodItemEntries as the
