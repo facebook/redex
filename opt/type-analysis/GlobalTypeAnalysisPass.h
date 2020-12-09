@@ -55,7 +55,6 @@ class GlobalTypeAnalysisPass : public Pass {
          "Maximum number of global iterations the analysis runs");
     bind("insert_runtime_asserts", false, m_config.insert_runtime_asserts);
     bind("trace_global_local_diff", false, m_config.trace_global_local_diff);
-    trait(Traits::Pass::unique, true);
   }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
