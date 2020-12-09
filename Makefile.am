@@ -66,7 +66,6 @@ libredex_la_SOURCES = \
 	libredex/GraphVisualizer.cpp \
 	libredex/HierarchyUtil.cpp \
 	libredex/InitCollisionFinder.cpp \
-	libredex/InlineForSpeed.cpp \
 	libredex/InlinerConfig.cpp \
 	libredex/InstructionLowering.cpp \
 	libredex/IODIMetadata.cpp \
