@@ -1033,6 +1033,10 @@ bool is_move_result_any(IROpcode op) {
   return opcode::is_move_result(op) || is_move_result_pseudo(op);
 }
 
+bool is_move_exception(IROpcode op) {
+  return op == OPCODE_MOVE_EXCEPTION;
+}
+
 bool is_commutative(IROpcode opcode) {
   switch (opcode) {
   case OPCODE_AND_INT:

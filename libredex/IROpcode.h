@@ -274,6 +274,8 @@ bool is_move_result_any(IROpcode op);
 
 bool is_move(IROpcode);
 
+bool is_move_exception(IROpcode);
+
 bool is_commutative(IROpcode opcode);
 
 bool is_cmp(IROpcode opcode);
