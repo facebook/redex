@@ -136,7 +136,7 @@ FieldWrites analyze_writes(const Scope& scope) {
 
 FieldStatsMap analyze(const Scope& scope) {
   FieldStatsMap field_stats;
-  // Gather the read/write counts.
+  // Gather the read/write counts from instructions.
   walk::opcodes(scope, [&](const DexMethod* method, const IRInstruction* insn) {
     auto op = insn->opcode();
     if (!insn->has_field()) {
@@ -153,6 +153,17 @@ FieldStatsMap analyze(const Scope& scope) {
       }
     } else if (is_sput(op) || is_iput(op)) {
       ++field_stats[field].writes;
+    }
+  });
+  // Gather field reads from annotations.
+  walk::annotations(scope, [&](DexAnnotation* anno) {
+    std::vector<DexFieldRef*> fields_in_anno;
+    anno->gather_fields(fields_in_anno);
+    for (const auto& field_ref : fields_in_anno) {
+      auto field = resolve_field(field_ref);
+      if (field) {
+        ++field_stats[field].reads;
+      }
     }
   });
   return field_stats;
