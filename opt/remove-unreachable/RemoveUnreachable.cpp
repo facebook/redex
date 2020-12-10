@@ -85,7 +85,10 @@ void RemoveUnreachablePassBase::run_pass(DexStoresVector& stores,
       m_emit_graph_on_run &&
       static_cast<int64_t>(pm.get_current_pass_info()->repeat + 1) ==
           *m_emit_graph_on_run;
-  bool output_unreachable_symbols = pm.get_current_pass_info()->repeat == 0;
+  bool output_unreachable_symbols = m_always_emit_unreachable_symbols ||
+                                    pm.get_current_pass_info()->repeat == 0;
+  TRACE(RMU, 2, "RMU: output unreachable symbols %d",
+        output_unreachable_symbols);
   int num_ignore_check_strings = 0;
   auto reachables = this->compute_reachable_objects(
       stores, pm, &num_ignore_check_strings, emit_graph_this_run);

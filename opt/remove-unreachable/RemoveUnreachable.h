@@ -20,6 +20,9 @@ class RemoveUnreachablePassBase : public Pass {
     bind("ignore_system_annos", {}, m_ignore_sets.system_annos);
     bind("keep_class_in_string", true, m_ignore_sets.keep_class_in_string);
     bind("emit_graph_on_run", boost::optional<uint32_t>{}, m_emit_graph_on_run);
+    bind("always_emit_unreachable_symbols",
+         false,
+         m_always_emit_unreachable_symbols);
     after_configuration([this] {
       // To keep the backward compatability of this code, ensure that the
       // "MemberClasses" annotation is always in system_annos.
@@ -43,6 +46,7 @@ class RemoveUnreachablePassBase : public Pass {
  protected:
   reachability::IgnoreSets m_ignore_sets;
   boost::optional<uint32_t> m_emit_graph_on_run;
+  bool m_always_emit_unreachable_symbols = false;
 };
 
 class RemoveUnreachablePass : public RemoveUnreachablePassBase {
