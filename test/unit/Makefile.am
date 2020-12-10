@@ -85,6 +85,7 @@ check_PROGRAMS = \
     proguard_parser_test \
     proguard_regex_test \
     pure_analysis_test \
+    random_forest_test \
     reaching_definitions_test \
     reduce_array_literals_test \
     reduce_gotos_test \
@@ -122,7 +123,7 @@ check_PROGRAMS = \
     virtual_merging_test \
     walkers_test \
     work_queue_test \
-    xstorerefs_test 
+    xstorerefs_test
 
 aliased_registers_test_SOURCES = AliasedRegistersTest.cpp
 
@@ -286,6 +287,8 @@ proguard_regex_test_SOURCES = ProguardRegexTest.cpp
 
 pure_analysis_test_SOURCES = PureAnalysisTest.cpp
 pure_analysis_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
+
+random_forest_test_SOURCES = RandomForestTest.cpp
 
 reaching_definitions_test_SOURCES = ReachingDefinitionsTest.cpp
 
@@ -458,6 +461,7 @@ TESTS = \
     proguard_parser_test \
     proguard_regex_test \
     pure_analysis_test \
+    random_forest_test \
     reaching_definitions_test \
     reduce_array_literals_test \
     reduce_gotos_test \
@@ -495,4 +499,4 @@ TESTS = \
     virtual_merging_test \
     walkers_test \
     work_queue_test \
-    xstorerefs_test 
+    xstorerefs_test
