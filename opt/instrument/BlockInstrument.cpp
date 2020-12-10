@@ -21,6 +21,8 @@
 #include <unordered_set>
 #include <vector>
 
+using namespace instrument;
+
 namespace {
 using OnMethodExitMap =
     std::map<size_t, // arity of vector arguments (excluding `int offset`)

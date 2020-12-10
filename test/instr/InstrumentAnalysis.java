@@ -18,6 +18,7 @@ public class InstrumentAnalysis {
   @DoNotStrip private static int sNumStaticallyInstrumented = 0; // Redex will patch
   @DoNotStrip private static final int[] sMethodStats = new int[0]; // Redex will patch
   @DoNotStrip private static short[][] sMethodStatsArray = new short[][] {}; // Redex will patch
+  @DoNotStrip private static int sProfileType = 0;
 
   @DoNotStrip
   public static void onMethodBegin(int index) {

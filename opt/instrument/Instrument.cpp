@@ -26,6 +26,8 @@
 #include <unordered_set>
 #include <vector>
 
+using namespace instrument;
+
 /*
  * This pass performs instrumentation for dynamic (runtime) analysis.
  *
@@ -37,8 +39,6 @@
 namespace {
 
 static bool debug = false;
-
-static const char* STATS_FIELD_NAME = "sMethodStats";
 
 class InstrumentInterDexPlugin : public interdex::InterDexPassPlugin {
  public:
@@ -370,6 +370,13 @@ void do_simple_method_tracing(DexClass* analysis_cls,
   InstrumentPass::patch_static_field(analysis_cls, field->get_name()->str(),
                                      kTotalSize);
 
+  field =
+      analysis_cls->find_field_from_simple_deobfuscated_name("sProfileType");
+  always_assert(field != nullptr);
+  InstrumentPass::patch_static_field(
+      analysis_cls, field->get_name()->str(),
+      static_cast<int>(ProfileTypeFlags::SimpleMethodTracing));
+
   ofs.close();
   TRACE(INSTRUMENT, 2, "Index file was written to: %s", SHOW(file_name));
 
@@ -395,6 +402,8 @@ std::unordered_set<std::string> load_blocklist_file(
 }
 
 } // namespace
+
+constexpr const char* InstrumentPass::STATS_FIELD_NAME;
 
 // Find a sequence of opcode that creates a static array. Patch the array size.
 void InstrumentPass::patch_array_size(DexClass* analysis_cls,
@@ -607,7 +616,8 @@ InstrumentPass::generate_sharded_analysis_methods(
             cfg::Block*,
             const std::vector<IRInstruction*>& insts) {
           DexField* field = static_cast<DexField*>(insts[0]->get_field());
-          if (field->get_simple_deobfuscated_name() == STATS_FIELD_NAME) {
+          if (field->get_simple_deobfuscated_name() ==
+              InstrumentPass::STATS_FIELD_NAME) {
             // Set the new field created from patch_sharded_arrays.
             insts[0]->set_field(array_fields.at(i));
             patched = true;
@@ -629,7 +639,10 @@ InstrumentPass::generate_sharded_analysis_methods(
 }
 
 std::unordered_map<int /*shard_num*/, DexFieldRef*>
-InstrumentPass::patch_sharded_arrays(DexClass* cls, const size_t num_shards) {
+InstrumentPass::patch_sharded_arrays(
+    DexClass* cls,
+    const size_t num_shards,
+    const std::map<int /*shard_num*/, std::string>& suggested_names) {
   // Insert additional sMethodStatsN into the clinit
   //
   // private static short[] sMethodStats1 = new short[0];
@@ -660,7 +673,7 @@ InstrumentPass::patch_sharded_arrays(DexClass* cls, const size_t num_shards) {
         DexField* template_field =
             static_cast<DexField*>(insts[2]->get_field());
         if (template_field->get_simple_deobfuscated_name() !=
-            STATS_FIELD_NAME) {
+            InstrumentPass::STATS_FIELD_NAME) {
           return;
         }
 
@@ -669,9 +682,13 @@ InstrumentPass::patch_sharded_arrays(DexClass* cls, const size_t num_shards) {
         // module runs after InstrumentPass. So, we just need to assign
         // human-readable names here.
         for (size_t i = 1; i <= num_shards; i++) {
-          const auto new_name = STATS_FIELD_NAME + std::to_string(i);
+          const auto new_name =
+              suggested_names.count(i)
+                  ? suggested_names.at(i)
+                  : InstrumentPass::STATS_FIELD_NAME + std::to_string(i);
           auto deobfuscated_name = template_field->get_deobfuscated_name();
-          boost::replace_first(deobfuscated_name, STATS_FIELD_NAME, new_name);
+          boost::replace_first(deobfuscated_name,
+                               InstrumentPass::STATS_FIELD_NAME, new_name);
 
           DexField* new_field = static_cast<DexField*>(
               DexField::make_field(template_field->get_class(),
