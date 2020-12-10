@@ -10,11 +10,11 @@
 #include <queue>
 
 #include "ConfigFiles.h"
-#include "ControlFlow.h"
 #include "IRCode.h"
 #include "InlineForSpeed.h"
 #include "MethodInliner.h"
 #include "MethodProfiles.h"
+#include "RandomForest.h"
 #include "Resolver.h"
 #include "Show.h"
 #include "Trace.h"
@@ -204,7 +204,70 @@ bool InlineForSpeedMethodProfiles::should_inline_per_interaction(
   return result;
 }
 
+using namespace random_forest;
+
+class InlineForSpeedDecisionTrees final : public InlineForSpeed {
+ public:
+  InlineForSpeedDecisionTrees(const MethodProfiles* method_profiles,
+                              Forest&& forest)
+      : m_method_context_context(method_profiles),
+        m_forest(std::move(forest)) {}
+
+  bool should_inline(const DexMethod* caller_method,
+                     const DexMethod* callee_method) override {
+    auto& caller_context = get_or_create(caller_method);
+    auto& callee_context = get_or_create(callee_method);
+
+    return m_forest.accept(caller_context, callee_context);
+  }
+
+ private:
+  const MethodContext& get_or_create(const DexMethod* m) {
+    auto it = m_cache.find(m);
+    if (it != m_cache.end()) {
+      return it->second;
+    }
+
+    auto insert_it = m_cache.emplace(m, m_method_context_context.create(m));
+    return insert_it.first->second;
+  }
+
+  MethodContextContext m_method_context_context;
+  std::unordered_map<const DexMethod*, MethodContext> m_cache;
+  Forest m_forest;
+};
+
 } // namespace
+
+PerfMethodInlinePass::~PerfMethodInlinePass() {}
+
+struct PerfMethodInlinePass::Config {
+  boost::optional<random_forest::Forest> forest = boost::none;
+};
+
+void PerfMethodInlinePass::bind_config() {
+  std::string random_forest_file;
+  bind("random_forest_file", "", random_forest_file);
+  after_configuration([this, random_forest_file]() {
+    this->m_config = std::make_unique<PerfMethodInlinePass::Config>();
+    if (!random_forest_file.empty()) {
+      std::stringstream buffer;
+      {
+        std::ifstream ifs(random_forest_file);
+        always_assert(ifs);
+        buffer << ifs.rdbuf();
+        always_assert(!ifs.fail());
+      }
+      // For simplicity, accept an empty file.
+      if (!buffer.str().empty()) {
+        this->m_config->forest =
+            random_forest::Forest::deserialize(buffer.str());
+        TRACE(METH_PROF, 1, "Loaded a forest with %zu decision trees.",
+              this->m_config->forest->size());
+      }
+    }
+  });
+}
 
 void PerfMethodInlinePass::run_pass(DexStoresVector& stores,
                                     ConfigFiles& conf,
@@ -220,6 +283,8 @@ void PerfMethodInlinePass::run_pass(DexStoresVector& stores,
     return;
   }
 
+  redex_assert(m_config);
+
   const auto& method_profiles = conf.get_method_profiles();
   if (!method_profiles.has_stats()) {
     // PerfMethodInline is enabled, but there are no profiles available. Bail,
@@ -228,10 +293,14 @@ void PerfMethodInlinePass::run_pass(DexStoresVector& stores,
     return;
   }
 
-  InlineForSpeedMethodProfiles ifsmp(&method_profiles);
+  // Unique pointer for indirection and single path.
+  std::unique_ptr<InlineForSpeed> ifs{
+      m_config->forest ? (InlineForSpeed*)(new InlineForSpeedDecisionTrees(
+                             &method_profiles, m_config->forest->clone()))
+                       : new InlineForSpeedMethodProfiles(&method_profiles)};
 
   inliner::run_inliner(stores, mgr, conf, /* intra_dex */ true,
-                       /* inline_for_speed= */ &ifsmp);
+                       /* inline_for_speed= */ ifs.get());
 }
 
 static PerfMethodInlinePass s_pass;
