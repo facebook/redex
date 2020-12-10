@@ -15,9 +15,10 @@ import java.text.MessageFormat;
 public class InstrumentAnalysis {
   private static final String LOG_TAG = "DYNA";
 
-  @DoNotStrip private static int sNumStaticallyInstrumented = 0; // Redex will patch
-  @DoNotStrip private static final int[] sMethodStats = new int[0]; // Redex will patch
-  @DoNotStrip private static short[][] sMethodStatsArray = new short[][] {}; // Redex will patch
+  // Redex will patch these fields.
+  @DoNotStrip private static final int[] sMethodStats = new int[0];
+  @DoNotStrip private static short[][] sMethodStatsArray = new short[][] {};
+  @DoNotStrip private static int sNumStaticallyInstrumented = 0;
   @DoNotStrip private static int sProfileType = 0;
 
   @DoNotStrip

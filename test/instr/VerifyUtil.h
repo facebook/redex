@@ -59,3 +59,14 @@ DexOpcodeMethod* find_invoke(std::vector<DexInstruction*>::iterator begin,
 DexInstruction* find_instruction(DexMethod* m, DexOpcode opcode);
 
 void verify_type_erased(const DexClass* cls, size_t num_dmethods = 0);
+
+// A quick helper to dump CFGs before/after verify
+//
+// How to use:
+//  REDEX_INSTRUMENT_TEST_BASE_FILENAME="test.txt"
+//  buck test //foo/test/instr:basic_block_tracing_verify
+//
+// You will see "before_test.txt" and "after_test.txt".
+void dump_cfgs(bool is_prev_verify,
+               const DexClass* cls,
+               const std::function<bool(const DexMethod*)>& filter);
