@@ -65,18 +65,20 @@ class FixpointIterator {
                      NodeId>::value,
         "No implementation of entry()");
     static_assert(
-        !std::is_same<typename std::iterator_traits<typename decltype(
-                          GraphInterface::predecessors(
-                              std::declval<Graph>(),
-                              std::declval<NodeId>()))::iterator>::value_type,
-                      void>::value,
+        !std::is_same<
+            typename std::iterator_traits<typename std::remove_reference<
+                decltype(GraphInterface::predecessors(
+                    std::declval<Graph>(),
+                    std::declval<NodeId>()))>::type::iterator>::value_type,
+            void>::value,
         "No implementation of predecessors() that returns an iterable type");
     static_assert(
-        !std::is_same<typename std::iterator_traits<typename decltype(
-                          GraphInterface::successors(
-                              std::declval<Graph>(),
-                              std::declval<NodeId>()))::iterator>::value_type,
-                      void>::value,
+        !std::is_same<
+            typename std::iterator_traits<typename std::remove_reference<
+                decltype(GraphInterface::successors(
+                    std::declval<Graph>(),
+                    std::declval<NodeId>()))>::type::iterator>::value_type,
+            void>::value,
         "No implementation of successors() that returns an iterable type");
     static_assert(
         std::is_same<decltype(GraphInterface::source(std::declval<Graph>(),
