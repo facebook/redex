@@ -412,6 +412,15 @@ inline auto has_string(match_t<DexString*, P> p) {
 
 inline auto has_string() { return has_string(any<DexString*>()); }
 
+template <typename P>
+inline auto has_literal(match_t<int64_t, P> p) {
+  return matcher<IRInstruction*>([p = std::move(p)](const IRInstruction* insn) {
+    return insn->has_literal() && p.matches(insn->get_literal());
+  });
+}
+
+inline auto has_literal() { return has_literal(any<int64_t>()); }
+
 /** Match types which can be assigned to the given type */
 inline auto is_assignable_to(const DexType* parent) {
   return matcher<DexType*>([parent](const DexType* child) {

@@ -112,6 +112,22 @@ TEST_F(MatchTest, opcode_string) {
   delete load_str;
 }
 
+TEST_F(MatchTest, has_literal) {
+  auto const_str = std::make_unique<IRInstruction>(OPCODE_CONST_STRING);
+  const_str->set_string(DexString::make_string("foo"));
+
+  auto const_int = std::make_unique<IRInstruction>(OPCODE_CONST);
+  const_int->set_literal(42);
+
+  auto p = m::has_literal();
+  auto q = m::has_literal(m::equals<int64_t>(43));
+  auto r = m::has_literal(m::equals<int64_t>(42));
+
+  EXPECT_FALSE(p.matches(const_str.get()));
+  EXPECT_FALSE(q.matches(const_int.get()));
+  EXPECT_TRUE(r.matches(const_int.get()));
+}
+
 TEST_F(MatchTest, NotAllMatch) {
   DexType* ty = DexType::make_type("Lfoo;");
   DexString* str = DexString::make_string("foo");
