@@ -67,6 +67,7 @@ check_PROGRAMS = \
     local_pointers_test \
     loop_info_test \
     loosen_access_modifier_test \
+    match_flow_test \
     match_test \
     method_inline_test \
     method_merger_test \
@@ -248,6 +249,8 @@ loop_info_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 loosen_access_modifier_test_SOURCES = LoosenAccessModifierTest.cpp
 
 match_test_SOURCES = MatchTest.cpp
+
+match_flow_test_SOURCES = MatchFlowTest.cpp
 
 method_inline_test_SOURCES = MethodInlineTest.cpp
 
@@ -443,6 +446,7 @@ TESTS = \
     local_pointers_test \
     loop_info_test \
     loosen_access_modifier_test \
+    match_flow_test \
     match_test \
     method_inline_test \
     method_merger_test \
