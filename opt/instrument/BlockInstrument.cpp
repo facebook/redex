@@ -16,6 +16,7 @@
 #include "Walkers.h"
 
 #include <algorithm>
+#include <boost/algorithm/string/join.hpp>
 #include <cmath>
 #include <fstream>
 #include <functional>
@@ -33,7 +34,8 @@ namespace {
 constexpr bool DEBUG_CFG = false;
 constexpr bool CONST_PROP = false;
 constexpr size_t BIT_VECTOR_SIZE = 16;
-constexpr size_t MAX_BLOCKS = 0;
+// Up to 10 16-bit vectors
+constexpr size_t MAX_BLOCKS = 16 * 10;
 
 using OnMethodExitMap =
     std::map<size_t, // arity of vector arguments (excluding `int offset`)
@@ -45,6 +47,15 @@ struct MethodInfo {
     size_t num_blocks = 0;
     size_t num_regs = 0;
     size_t num_exits = 0;
+  };
+
+  struct BlockStats {
+    size_t num_empty_blocks = 0;
+    size_t num_useless_blocks = 0;
+    size_t num_catches = 0;
+    size_t num_move_exceptions = 0;
+    size_t num_instrumented_catches = 0;
+    size_t num_instrumented_blocks = 0;
   };
 
   const DexMethod* method = nullptr;
@@ -60,9 +71,50 @@ struct MethodInfo {
   size_t num_exit_calls = 0;
   uint64_t signature = 0;
 
+  BlockStats block_stats;
   Stats before;
+  Stats check_point;
   Stats after;
+
+  std::map<size_t /*bit_id*/, int /*block_id*/> bit_id_map;
 };
+
+void write_metadata(const std::string& file_name,
+                    const std::vector<MethodInfo>& all_info) {
+  // Write a short metadata of this metadata file in the first two lines.
+  std::ofstream ofs(file_name, std::ofstream::out | std::ofstream::trunc);
+  ofs << "profile_type,version,num_methods" << std::endl;
+  ofs << "basic-block-tracing,1," << all_info.size() << std::endl;
+
+  // The real CSV-style metadata follows.
+  const std::string headers[] = {"offset",           "name",    "too_many_bb",
+                                 "non_entry_blocks", "vectors", "signature",
+                                 "bit_id_2_block_id"};
+  ofs << boost::algorithm::join(headers, ",") << "\n";
+
+  auto block_map_to_string = [](const auto& bit_id_map) -> std::string {
+    std::vector<std::string> fields;
+    for (const auto& pair : bit_id_map) {
+      fields.emplace_back(std::to_string(pair.second));
+    }
+    return boost::algorithm::join(fields, ";");
+  };
+
+  for (const auto& info : all_info) {
+    const std::string fields[] = {
+        std::to_string(info.offset),
+        info.method->get_deobfuscated_name(),
+        std::to_string(!info.is_block_instrumented),
+        std::to_string(info.num_non_entry_blocks),
+        std::to_string(info.num_vectors),
+        std::to_string(info.signature),
+        block_map_to_string(info.bit_id_map),
+    };
+    ofs << boost::algorithm::join(fields, ",") << "\n";
+  }
+
+  TRACE(INSTRUMENT, 2, "Metadata file was written to: %s", SHOW(file_name));
+}
 
 uint64_t compute_cfg_signature(const std::map<size_t, cfg::Block*> blocks) {
   // Blocks should be sorted in a deterministic way like a RPO.
@@ -121,6 +173,18 @@ std::vector<cfg::Block*> only_terminal_return_or_throw_blocks(
                      [](const auto& b) { return !b->succs().empty(); }),
       blocks.end());
   return blocks;
+}
+
+IRList::iterator get_first_non_move_result_insn(cfg::Block* b) {
+  for (auto it = b->begin(); it != b->end(); ++it) {
+    if (it->type != MFLOW_OPCODE) {
+      continue;
+    }
+    if (!opcode::is_move_result_any(it->insn->opcode())) {
+      return it;
+    }
+  }
+  return b->end();
 }
 
 OnMethodExitMap build_onMethodExit_map(const DexClass& cls,
@@ -310,6 +374,73 @@ auto get_blocks_to_instrument(const cfg::ControlFlowGraph& cfg) {
   return id_block_map;
 }
 
+void insert_block_coverage_computations(
+    DexMethod* method,
+    const std::map<size_t, cfg::Block*>& block_map,
+    const std::vector<reg_t>& reg_vectors,
+    MethodInfo::BlockStats& block_stats,
+    std::map<size_t, int>& id_block_map) {
+  using namespace cfg;
+
+  for (auto& pair : block_map) {
+    const size_t bit_id = pair.first;
+    const size_t vector_id = bit_id / BIT_VECTOR_SIZE;
+    Block* block = pair.second;
+
+    if (block->num_opcodes() == 0) {
+      TRACE(INSTRUMENT, 9, "[%s] No opcode in bid %zu",
+            show_deobfuscated(method).c_str(), block->id());
+      block_stats.num_empty_blocks++;
+      id_block_map[bit_id] = -1;
+      continue;
+    }
+
+    IRList::iterator insert_pos;
+    if (block->starts_with_move_result()) {
+      insert_pos = get_first_non_move_result_insn(block);
+    } else if (block->starts_with_move_exception()) {
+      // move-exception must only ever occur as the first instruction of an
+      // exception handler; anywhere else is invalid. So, take the next
+      // instruction of the move-exception.
+      block_stats.num_move_exceptions++;
+      insert_pos = std::next(block->get_first_insn());
+      while (insert_pos != block->end() && insert_pos->type != MFLOW_OPCODE) {
+        insert_pos = std::next(insert_pos);
+      }
+    } else {
+      insert_pos = block->get_first_non_param_loading_insn();
+    }
+
+    if (insert_pos == block->end()) {
+      TRACE(INSTRUMENT, 9, "[%s] No effective opcode in bid %zu",
+            show_deobfuscated(method).c_str(), block->id());
+      block_stats.num_useless_blocks++;
+      id_block_map[bit_id] = -2;
+      continue;
+    }
+
+    // TODO: There is a potential register allocation issue when we instrument
+    // extremely large number of basic blocks. We've found a case. So, for now,
+    // we don't instrument catch blocks with the hope these blocks are cold.
+    if (block->is_catch()) {
+      id_block_map[bit_id] = -3;
+      block_stats.num_catches++;
+      continue;
+    }
+
+    block_stats.num_instrumented_catches += block->is_catch() ? 1 : 0;
+    block_stats.num_instrumented_blocks++;
+
+    // bit_vectors[vector_id] |= 1 << bit_id'
+    IRInstruction* inst = new IRInstruction(OPCODE_OR_INT_LIT16);
+    inst->set_literal(static_cast<int16_t>(1ULL << (bit_id % BIT_VECTOR_SIZE)));
+    inst->set_src(0, reg_vectors.at(vector_id));
+    inst->set_dest(reg_vectors.at(vector_id));
+    block->insert_before(block->to_cfg_instruction_iterator(insert_pos), inst);
+    id_block_map[bit_id] = static_cast<int>(block->id());
+  }
+}
+
 MethodInfo instrument_basic_blocks(IRCode& code,
                                    DexMethod* method,
                                    const OnMethodExitMap& onMethodExit_map,
@@ -335,8 +466,6 @@ MethodInfo instrument_basic_blocks(IRCode& code,
   size_t num_non_entry_blocks = cfg.blocks().size() - 1;
   const bool reject_block_instrument = (num_non_entry_blocks >= MAX_BLOCKS);
   if (!reject_block_instrument) {
-    // Get candidate blocks to be instrumented. Some blocks may be empty, have
-    // no effective opcodes, or catch blocks.
     block_map = get_blocks_to_instrument(cfg);
   }
   const size_t num_blocks_to_instrument = block_map.size();
@@ -377,17 +506,22 @@ MethodInfo instrument_basic_blocks(IRCode& code,
 
   // Step 3: Insert onMethodExit in exit block(s).
   //
+  // TODO: What about no exit blocks possibly due to infinite loops? Such case
+  // is extremely rare in our apps. In this case, let us do method tracing by
+  // instrumenting prologues.
   info.num_exit_calls = insert_onMethodExit_calls(
       cfg, reg_vectors, method_offset, reg_method_offset, onMethodExit_map,
       max_vector_arity);
 
   // Not sure whether inserting onMethodExits would change CFG shape?
   cfg.recompute_registers_size();
-  fill_stats(info.after, cfg);
+  fill_stats(info.check_point, cfg);
 
   // Step 4: Insert block coverage update instructions to each blocks.
   //
-  // TODO: Next diff
+  insert_block_coverage_computations(method, block_map, reg_vectors,
+                                     info.block_stats, info.bit_id_map);
+  fill_stats(info.after, cfg);
 
   if (DEBUG_CFG) {
     TRACE(INSTRUMENT, 9, "AFTER: %s, %s", show_deobfuscated(method).c_str(),
@@ -412,6 +546,179 @@ std::unordered_set<std::string> get_cold_start_classes(ConfigFiles& cfg) {
   }
   return cold_start_classes;
 }
+
+void print_stats(const std::vector<MethodInfo>& instrumented_methods) {
+  const size_t total_instrumented = instrumented_methods.size();
+  const size_t total_block_instrumented = std::count_if(
+      instrumented_methods.begin(), instrumented_methods.end(),
+      [](const MethodInfo& i) { return i.is_block_instrumented; });
+  const size_t only_method_instrumented =
+      total_instrumented - total_block_instrumented;
+
+  auto print = [](size_t num, size_t total, size_t& accumulate) {
+    std::stringstream ss;
+    accumulate += num;
+    ss << std::fixed << std::setprecision(3) << std::setw(6) << num << " ("
+       << std::setw(6) << (num * 100. / total) << "%, " << std::setw(6)
+       << (accumulate * 100. / total) << "%)";
+    return ss.str();
+  };
+
+  auto divide = [](size_t a, size_t b) {
+    if (b == 0) {
+      return std::string("N/A");
+    }
+    std::stringstream ss;
+    ss << std::fixed << std::setprecision(2) << double(a) / double(b);
+    return ss.str();
+  };
+
+  // ----- Print summary
+  TRACE(INSTRUMENT, 4, "Maximum blocks for block instrumentation: %zu",
+        MAX_BLOCKS);
+  TRACE(INSTRUMENT, 4, "Total instrumented: %zu", total_instrumented);
+  TRACE(INSTRUMENT, 4, "- Block + method instrumented: %zu",
+        total_block_instrumented);
+  TRACE(INSTRUMENT, 4, "- Only method instrumented: %zu",
+        only_method_instrumented);
+
+  // ----- Bit-vector stats
+  TRACE(INSTRUMENT, 4, "Bit-vector stats for block instrumented methods:");
+  {
+    size_t acc = 0;
+    size_t total_bit_vectors = 0;
+    std::map<int /*num_vectors*/, size_t /*num_methods*/> dist;
+    for (const auto& i : instrumented_methods) {
+      if (i.is_block_instrumented) {
+        ++dist[i.num_vectors];
+        total_bit_vectors += i.num_vectors;
+      } else {
+        ++dist[-1];
+      }
+    }
+    for (const auto& p : dist) {
+      TRACE(INSTRUMENT, 4, " %3d vectors: %s", p.first,
+            SHOW(print(p.second, total_instrumented, acc)));
+    }
+    TRACE(INSTRUMENT, 4, "Total/average bit vectors: %zu, %s",
+          total_bit_vectors,
+          divide(total_bit_vectors, total_block_instrumented).c_str());
+  }
+
+  // ----- Instrumented block stats
+  TRACE(INSTRUMENT, 4, "Instrumented / actual non-entry block stats:");
+  {
+    std::map<int, std::pair<size_t /*instrumented*/, size_t /*block*/>> dist;
+    size_t total_instrumented_blocks = 0;
+    size_t total_non_entry_blocks = 0;
+    for (const auto& i : instrumented_methods) {
+      if (i.is_block_instrumented) {
+        ++dist[i.block_stats.num_instrumented_blocks].first;
+        total_instrumented_blocks += i.block_stats.num_instrumented_blocks;
+      } else {
+        ++dist[-1].first;
+      }
+      ++dist[i.num_non_entry_blocks].second;
+      total_non_entry_blocks += i.num_non_entry_blocks;
+    }
+    size_t accs[2] = {0, 0};
+    for (const auto& p : dist) {
+      TRACE(INSTRUMENT, 4, " %5d blocks: %s | %s", p.first,
+            SHOW(print(p.second.first, total_instrumented, accs[0])),
+            SHOW(print(p.second.second, total_instrumented, accs[1])));
+    }
+    TRACE(INSTRUMENT, 4, "Total/average instrumented blocks: %zu, %s",
+          total_instrumented_blocks,
+          divide(total_instrumented_blocks, total_block_instrumented).c_str());
+    TRACE(INSTRUMENT, 4, "Total/average non-entry blocks: %zu, %s",
+          total_non_entry_blocks,
+          divide(total_non_entry_blocks, total_instrumented).c_str());
+  }
+
+  const int total_catches = std::accumulate(
+      instrumented_methods.begin(), instrumented_methods.end(), int(0),
+      [](int a, auto&& i) { return a + i.block_stats.num_catches; });
+  TRACE(INSTRUMENT, 4, "Ignored catch blocks: %d", total_catches);
+
+  // ----- Instrumented exit block stats
+  TRACE(INSTRUMENT, 4, "Instrumented exit block stats:");
+  {
+    size_t acc = 0;
+    size_t total_exits = 0;
+    std::map<int /*num_vectors*/, size_t /*num_methods*/> dist;
+    for (const auto& i : instrumented_methods) {
+      if (i.num_exit_calls == 0) {
+        TRACE(INSTRUMENT, 4, "What? no instrumented exit blocks: %s",
+              i.method->get_deobfuscated_name().c_str());
+      }
+      ++dist[i.num_exit_calls];
+      total_exits += i.num_exit_calls;
+    }
+    for (const auto& p : dist) {
+      TRACE(INSTRUMENT, 4, " %4d exits: %s", p.first,
+            SHOW(print(p.second, total_instrumented, acc)));
+    }
+    TRACE(INSTRUMENT, 4, "Total/average instrumented exits: %zu, %s",
+          total_exits, divide(total_exits, total_instrumented).c_str());
+  }
+
+  auto print_two_dists = [&](const char* name1, const char* name2,
+                             auto&& accessor1, auto&& accessor2) {
+    std::map<int, std::pair<size_t, size_t>> dist;
+    size_t total1 = 0;
+    size_t total2 = 0;
+    for (const auto& i : instrumented_methods) {
+      if (i.is_block_instrumented) {
+        ++dist[accessor1(i.block_stats)].first;
+        ++dist[accessor2(i.block_stats)].second;
+        total1 += accessor1(i.block_stats);
+        total2 += accessor2(i.block_stats);
+      } else {
+        ++dist[-1].first;
+        ++dist[-1].second;
+      }
+    }
+    size_t accs[2] = {0, 0};
+    for (const auto& p : dist) {
+      TRACE(INSTRUMENT, 4, " %5d blocks: %s | %s", p.first,
+            SHOW(print(p.second.first, total_instrumented, accs[0])),
+            SHOW(print(p.second.second, total_instrumented, accs[1])));
+    }
+    TRACE(INSTRUMENT, 4, "Total/average %s blocks: %zu, %s", name1, total1,
+          divide(total1, total_block_instrumented).c_str());
+    TRACE(INSTRUMENT, 4, "Total/average %s blocks: %zu, %s", name2, total2,
+          divide(total2, total_block_instrumented).c_str());
+  };
+
+  TRACE(INSTRUMENT, 4, "Catch / move-exception block stats:");
+  print_two_dists("catch", "move-except",
+                  [](auto&& v) { return v.num_catches; },
+                  [](auto&& v) { return v.num_move_exceptions; });
+
+  TRACE(INSTRUMENT, 4, "Empty / useless block stats:");
+  print_two_dists("empty", "useless",
+                  [](auto&& v) { return v.num_empty_blocks; },
+                  [](auto&& v) { return v.num_useless_blocks; });
+
+  // -- Check: to be removed
+  auto count = [&](auto fn) {
+    return std::count_if(instrumented_methods.begin(),
+                         instrumented_methods.end(), fn);
+  };
+  TRACE(INSTRUMENT, 4, "# of exits mismatched: %d",
+        count([](const MethodInfo& i) {
+          return i.num_exit_calls != i.before.num_exits;
+        }));
+  TRACE(INSTRUMENT, 4, "# of exits changed: before v. check: %d",
+        count([](const MethodInfo& i) {
+          return i.before.num_exits != i.check_point.num_exits;
+        }));
+  TRACE(INSTRUMENT, 4, "# of exits changed: check v. after: %d",
+        count([](const MethodInfo& i) {
+          return i.check_point.num_exits != i.after.num_exits;
+        }));
+}
+
 } // namespace
 
 //------------------------------------------------------------------------------
@@ -468,6 +775,7 @@ void BlockInstrumentHelper::do_basic_block_tracing(
   const auto& onMethodExit_map =
       build_onMethodExit_map(*analysis_cls, options.analysis_method_name);
   const size_t max_vector_arity = onMethodExit_map.rbegin()->first;
+  TRACE(INSTRUMENT, 4, "Max arity for onMethodExit: %zu", max_vector_arity);
 
   auto cold_start_classes = get_cold_start_classes(cfg);
   TRACE(INSTRUMENT, 7, "Cold start classes: %zu", cold_start_classes.size());
@@ -558,8 +866,10 @@ void BlockInstrumentHelper::do_basic_block_tracing(
       analysis_cls, field->get_name()->str(),
       static_cast<int>(ProfileTypeFlags::BasicBlockTracing));
 
-  // TODO: Write metadata
-  // TODO: Print stats
+  write_metadata(cfg.metafile(options.metadata_file_name),
+                 instrumented_methods);
+
+  print_stats(instrumented_methods);
 
   TRACE(INSTRUMENT, 4, "Instrumentation selection stats:");
   TRACE(INSTRUMENT, 4, "- All methods: %d", all_methods);
@@ -571,6 +881,4 @@ void BlockInstrumentHelper::do_basic_block_tracing(
   TRACE(INSTRUMENT, 4, "- Explicitly rejected:");
   TRACE(INSTRUMENT, 4, "  Not in allow or cold start set: %d", rejected);
   TRACE(INSTRUMENT, 4, "  Block listed: %d", blocklisted);
-  TRACE(INSTRUMENT, 4, "- Instrumented: %zu", instrumented_methods.size());
-  TRACE(INSTRUMENT, 4, "  Only method instrumented: %d", block_instrumented);
 }
