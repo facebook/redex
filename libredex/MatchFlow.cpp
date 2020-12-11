@@ -8,11 +8,6 @@
 #include "MatchFlow.h"
 
 namespace mf {
-namespace detail {
-
-InstructionMatcher::~InstructionMatcher() = default;
-
-} // namespace detail
 
 result_t flow_t::find(const cfg::ControlFlowGraph&, location_t) const {
   result_t::Locations locations{m_constraints.size()};

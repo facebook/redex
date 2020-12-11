@@ -7,15 +7,15 @@
 
 #include <gtest/gtest.h>
 
+#include <iterator>
+#include <vector>
+
 #include "IRAssembler.h"
 #include "IRInstruction.h"
 #include "Match.h"
 #include "MatchFlow.h"
 #include "RedexTest.h"
 #include "ScopedCFG.h"
-
-#include <iterator>
-#include <vector>
 
 namespace mf {
 namespace {
