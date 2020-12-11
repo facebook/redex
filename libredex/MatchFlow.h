@@ -13,6 +13,7 @@
 
 #include <limits>
 #include <memory>
+#include <unordered_map>
 #include <vector>
 
 namespace mf {
@@ -98,6 +99,7 @@ struct location_t {
 
  private:
   friend struct flow_t;
+  friend struct result_t;
   location_t(flow_t* owner, detail::LocationIx ix) : m_owner(owner), m_ix(ix) {}
 
   /** Access the underlying constraint */
@@ -108,10 +110,82 @@ struct location_t {
 };
 
 struct result_t {
-  struct insn_iterator;
-  struct insn_range;
-  struct src_iterator;
-  struct src_range;
+ private:
+  /**
+   * Locations represents the following nested mapping:
+   *
+   *   location_t ->> IRInstruction* -> src_index_t ->> IRInstruction*
+   *
+   * Where ->> represents a multimap.  As all results come from a single
+   * flow_t instance, the location_t can be referred to by its index which is
+   * just a number.  These numbers are densely packed, so the multimap is
+   * represented by a vector-of-pointers-to-maps with location indices serving
+   * as keys.  The pointer indirection aims to save space in the case of an
+   * empty mapping.
+   *
+   * Similarly, source indices are densely packed for an instruction, so the
+   * inner multimap is represented by a vector-of-vectors, keyed by the source
+   * index.
+   */
+  using Source = std::vector<IRInstruction*>;
+  using Sources = std::vector<Source>;
+  using Instructions = std::unordered_map<IRInstruction*, Sources>;
+  using Locations = std::vector<std::unique_ptr<Instructions>>;
+
+ public:
+  template <typename It>
+  struct range {
+    range(It begin, It end) : m_begin(begin), m_end(end) {}
+
+    static range empty() {
+      It it;
+      return {it, it};
+    }
+
+    /**
+     * If the range contains precisely one instruction, returns it, otherwise
+     * returns nullptr.
+     */
+    IRInstruction* unique() {
+      return std::next(m_begin) == m_end ? *m_begin : nullptr;
+    }
+
+    It begin() const { return m_begin; }
+    It end() const { return m_end; }
+
+   private:
+    It m_begin;
+    It m_end;
+  };
+
+  struct insn_iterator {
+    using iterator_category = std::forward_iterator_tag;
+    using value_type = IRInstruction*;
+    using difference_type = Instructions::const_iterator::difference_type;
+    using pointer = IRInstruction**;
+    using reference = IRInstruction*&;
+
+    insn_iterator() = default;
+
+    insn_iterator& operator++();
+    insn_iterator operator++(int);
+
+    IRInstruction* const& operator*() const;
+
+    bool operator==(const insn_iterator& that) const;
+    bool operator!=(const insn_iterator& that) const;
+
+   private:
+    friend struct result_t;
+    explicit insn_iterator(Instructions::const_iterator it) : m_it(it) {}
+
+    Instructions::const_iterator m_it;
+  };
+
+  using src_iterator = Source::const_iterator;
+
+  using insn_range = range<insn_iterator>;
+  using src_range = range<src_iterator>;
 
   /**
    * Return all instructions referred to by l in these results.
@@ -124,7 +198,17 @@ struct result_t {
    * data-flow constraint on l.  If insn is not matched by the constraint at l,
    * an empty range is returned.
    */
-  src_range matching(location_t l, IRInstruction* insn, src_index_t ix) const;
+  src_range matching(location_t l,
+                     const IRInstruction* insn,
+                     src_index_t ix) const;
+
+ private:
+  friend struct flow_t;
+
+  /** result_t instances are only constructible by flow_t::find. */
+  explicit result_t(Locations results) : m_results(std::move(results)) {}
+
+  Locations m_results;
 };
 
 template <typename M>
@@ -164,6 +248,29 @@ inline location_t location_t::src(src_index_t src, location_t src_constraint) {
 
 inline detail::Constraint& location_t::constraint() {
   return m_owner->m_constraints[m_ix];
+}
+
+inline result_t::insn_iterator& result_t::insn_iterator::operator++() {
+  ++m_it;
+  return *this;
+}
+
+inline result_t::insn_iterator result_t::insn_iterator::operator++(int) {
+  return insn_iterator{m_it++};
+}
+
+inline IRInstruction* const& result_t::insn_iterator::operator*() const {
+  return m_it->first;
+}
+
+inline bool result_t::insn_iterator::operator==(
+    const result_t::insn_iterator& that) const {
+  return m_it == that.m_it;
+}
+
+inline bool result_t::insn_iterator::operator!=(
+    const result_t::insn_iterator& that) const {
+  return !(*this == that);
 }
 
 } // namespace mf
