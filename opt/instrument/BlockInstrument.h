@@ -11,6 +11,8 @@
 #include "Instrument.h"
 #include "PassManager.h"
 
+namespace instrument {
+
 class BlockInstrumentHelper {
  public:
   static void do_basic_block_tracing(DexClass* analysis_cls,
@@ -19,3 +21,5 @@ class BlockInstrumentHelper {
                                      PassManager& pm,
                                      const InstrumentPass::Options& options);
 };
+
+} // namespace instrument

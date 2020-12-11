@@ -14,6 +14,17 @@
 
 class DexMethod;
 
+namespace instrument {
+
+enum class ProfileTypeFlags {
+  NotSpecified = 0,
+  MethodCallCount = 1,
+  MethodCallOrder = 2,
+  BlockCoverage = 4,
+  SimpleMethodTracing = 1 | 2,
+  BasicBlockTracing = 1 | 2 | 4,
+};
+
 class InstrumentPass : public Pass {
  public:
   InstrumentPass() : Pass("InstrumentPass") {}
@@ -23,6 +34,8 @@ class InstrumentPass : public Pass {
 
   // Helper functions for both method and block instrumentations.
   //
+  constexpr static const char* STATS_FIELD_NAME = "sMethodStats";
+
   static void patch_array_size(DexClass* analysis_cls,
                                const std::string& array_name,
                                const int array_size);
@@ -33,7 +46,10 @@ class InstrumentPass : public Pass {
                           const std::unordered_set<std::string>& set);
 
   static std::unordered_map<int /*shard_num*/, DexFieldRef*>
-  patch_sharded_arrays(DexClass* cls, const size_t num_shards);
+  patch_sharded_arrays(
+      DexClass* cls,
+      const size_t num_shards,
+      const std::map<int /*shard_num*/, std::string>& suggested_names = {});
 
   static std::pair<std::unordered_map<int /*shard_num*/, DexMethod*>,
                    std::unordered_set<std::string>>
@@ -60,3 +76,5 @@ class InstrumentPass : public Pass {
  private:
   Options m_options;
 };
+
+} // namespace instrument

@@ -8,13 +8,19 @@
 #include <algorithm>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/algorithm/string/replace.hpp>
+#include <boost/regex.hpp>
 #include <cstring>
+#include <fstream>
 #include <gtest/gtest.h>
 #include <sstream>
 
+#include "ControlFlow.h"
 #include "Debug.h"
+#include "DexInstruction.h"
+#include "IRCode.h"
 #include "Show.h"
 #include "VerifyUtil.h"
+#include "Walkers.h"
 
 DexClass* find_class_named(const DexClasses& classes, const char* name) {
   auto it =
@@ -149,4 +155,39 @@ void verify_type_erased(const DexClass* cls, size_t num_dmethods) {
   const auto& vmethods = cls->get_vmethods();
   ASSERT_TRUE(vmethods.empty())
       << show(cls) << " has " << vmethods.size() << " vmethods\n";
+}
+
+void dump_cfgs(bool is_prev_verify,
+               const DexClass* cls,
+               const std::function<bool(const DexMethod*)>& filter) {
+  using namespace cfg;
+  const char* base_filename =
+      std::getenv("REDEX_INSTRUMENT_TEST_BASE_FILENAME");
+  if (base_filename == nullptr) {
+    return;
+  }
+
+  std::ofstream file((is_prev_verify ? "before_" : "after_") +
+                     std::string(base_filename));
+  boost::regex addr("\\[0x[0-9a-f]+\\] ");
+  walk::methods(std::vector<const DexClass*>{cls}, [&](DexMethod* method) {
+    if (!filter(method)) {
+      return;
+    }
+
+    file << "============================================================\n";
+    file << (is_prev_verify ? "Before: " : "After: ") << show(method) << '\n';
+    file << "============================================================\n";
+
+    method->balloon();
+    IRCode* code = method->get_code();
+    code->build_cfg(/*editable*/ false);
+    cfg::ControlFlowGraph& cfg = code->cfg();
+    cfg.write_dot_format(file);
+
+    // Dump CFG wihout address parts for easier diff between before/after files.
+    std::stringstream ss;
+    ss << show(cfg) << "\n\n";
+    file << boost::regex_replace(ss.str(), addr, "");
+  });
 }

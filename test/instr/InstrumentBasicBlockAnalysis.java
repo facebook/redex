@@ -14,8 +14,12 @@ public class InstrumentBasicBlockAnalysis {
 
   // InstrumentPass will patch.
   @DoNotStrip private static final short[] sMethodStats = new short[0];
-  @DoNotStrip private static AtomicInteger sMethodCounter = new AtomicInteger(0);
+  @DoNotStrip private static short[][] sMethodStatsArray = new short[][] {}; // Redex will patch
+  @DoNotStrip private static int sNumStaticallyInstrumented = 0;
+  @DoNotStrip private static int sProfileType = 0;
+
   @DoNotStrip private static boolean sIsEnabled = true;
+  @DoNotStrip private static AtomicInteger sMethodCounter = new AtomicInteger(0);
 
   @DoNotStrip
   public static void onMethodExit(int offset) {
