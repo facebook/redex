@@ -8,10 +8,10 @@
 #include <algorithm>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/algorithm/string/replace.hpp>
+#include <boost/regex.hpp>
 #include <cstring>
 #include <fstream>
 #include <gtest/gtest.h>
-#include <regex>
 #include <sstream>
 #include <string>
 
@@ -167,7 +167,7 @@ void dump_cfgs(bool is_prev_verify,
 
   std::ofstream file((is_prev_verify ? "before_" : "after_") +
                      std::string(base_filename));
-  std::regex addr("\\[0x[0-9a-f]+\\] ");
+  boost::regex addr("\\[0x[0-9a-f]+\\] ");
   walk::methods(std::vector<const DexClass*>{cls}, [&](DexMethod* method) {
     if (!filter(method)) {
       return;
@@ -186,6 +186,6 @@ void dump_cfgs(bool is_prev_verify,
     // Dump CFG wihout address parts for easier diff between before/after files.
     std::stringstream ss;
     ss << show(cfg) << "\n\n";
-    file << std::regex_replace(ss.str(), addr, "");
+    file << boost::regex_replace(ss.str(), addr, "");
   });
 }

@@ -40,6 +40,10 @@ namespace {
 
 static bool debug = false;
 
+constexpr const char* SIMPLE_METHOD_TRACING = "simple_method_tracing";
+constexpr const char* BASIC_BLOCK_TRACING = "basic_block_tracing";
+constexpr const char* METHOD_REPLACEMENT = "methods_replacement";
+
 class InstrumentInterDexPlugin : public interdex::InterDexPassPlugin {
  public:
   explicit InstrumentInterDexPlugin(size_t max_analysis_methods)
@@ -518,21 +522,31 @@ void InstrumentPass::bind_config() {
        "Replacing instance method call with static method call.",
        Configurable::bindflags::methods::error_if_unresolvable);
 
-  after_configuration([this] {
+  size_t max_analysis_methods;
+  if (m_options.instrumentation_strategy == SIMPLE_METHOD_TRACING) {
+    max_analysis_methods = m_options.num_shards;
+  } else if (m_options.instrumentation_strategy == BASIC_BLOCK_TRACING) {
+    // Our current DynamicAnalysis has 11 onMethodExit* methods.
+    max_analysis_methods = 11;
+  } else {
+    max_analysis_methods = 1;
+  }
+
+  after_configuration([this, max_analysis_methods] {
     // Make a small room for additional method refs during InterDex.
     interdex::InterDexRegistry* registry =
         static_cast<interdex::InterDexRegistry*>(
             PluginRegistry::get().pass_registry(interdex::INTERDEX_PASS_NAME));
-    registry->register_plugin("INSTRUMENT_PASS_PLUGIN",
-                              [num_shards = m_options.num_shards]() {
-                                return new InstrumentInterDexPlugin(num_shards);
-                              });
+    registry->register_plugin(
+        "INSTRUMENT_PASS_PLUGIN", [max_analysis_methods]() {
+          return new InstrumentInterDexPlugin(max_analysis_methods);
+        });
     // Currently we only support instance call to static call.
     for (auto& pair : m_options.methods_replacement) {
       always_assert(!is_static(pair.first));
       always_assert(is_static(pair.second));
     }
-    if (m_options.instrumentation_strategy == "methods_replacement") {
+    if (m_options.instrumentation_strategy == METHOD_REPLACEMENT) {
       always_assert_log(
           !m_options.methods_replacement.empty(),
           "Invalid configuration, `methods_replacement` should not be empty\n");
@@ -791,7 +805,7 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
                               ConfigFiles& cfg,
                               PassManager& pm) {
   // TODO(fengliu): We may need change this but leave it here for local test.
-  if (m_options.instrumentation_strategy == "methods_replacement") {
+  if (m_options.instrumentation_strategy == METHOD_REPLACEMENT) {
     bool exclude_primary_dex =
         pm.get_redex_options().is_art_build ? false : true;
     auto num_wrapped_invocations =
@@ -853,9 +867,9 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
         SHOW(m_options.analysis_class_name),
         SHOW(analysis_cls->get_location()));
 
-  if (m_options.instrumentation_strategy == "simple_method_tracing") {
+  if (m_options.instrumentation_strategy == SIMPLE_METHOD_TRACING) {
     do_simple_method_tracing(analysis_cls, stores, cfg, pm, m_options);
-  } else if (m_options.instrumentation_strategy == "basic_block_tracing") {
+  } else if (m_options.instrumentation_strategy == BASIC_BLOCK_TRACING) {
     BlockInstrumentHelper::do_basic_block_tracing(analysis_cls, stores, cfg, pm,
                                                   m_options);
   } else {

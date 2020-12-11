@@ -32,7 +32,6 @@ using namespace instrument;
 namespace {
 
 constexpr bool DEBUG_CFG = false;
-constexpr bool CONST_PROP = false;
 constexpr size_t BIT_VECTOR_SIZE = 16;
 // Up to 10 16-bit vectors
 constexpr size_t MAX_BLOCKS = 16 * 10;
@@ -87,13 +86,14 @@ void write_metadata(const std::string& file_name,
   ofs << "basic-block-tracing,1," << all_info.size() << std::endl;
 
   // The real CSV-style metadata follows.
-  const std::string headers[] = {"offset",           "name",    "too_many_bb",
-                                 "non_entry_blocks", "vectors", "signature",
-                                 "bit_id_2_block_id"};
+  const std::array<std::string, 7> headers = {
+      "offset",  "name",      "too_many_bb",      "non_entry_blocks",
+      "vectors", "signature", "bit_id_2_block_id"};
   ofs << boost::algorithm::join(headers, ",") << "\n";
 
   auto block_map_to_string = [](const auto& bit_id_map) -> std::string {
     std::vector<std::string> fields;
+    fields.reserve(bit_id_map.size());
     for (const auto& pair : bit_id_map) {
       fields.emplace_back(std::to_string(pair.second));
     }
@@ -101,10 +101,10 @@ void write_metadata(const std::string& file_name,
   };
 
   for (const auto& info : all_info) {
-    const std::string fields[] = {
+    const std::array<std::string, 7> fields = {
         std::to_string(info.offset),
         info.method->get_deobfuscated_name(),
-        std::to_string(!info.is_block_instrumented),
+        std::to_string(info.is_block_instrumented ? 0 : 1),
         std::to_string(info.num_non_entry_blocks),
         std::to_string(info.num_vectors),
         std::to_string(info.signature),
@@ -116,7 +116,7 @@ void write_metadata(const std::string& file_name,
   TRACE(INSTRUMENT, 2, "Metadata file was written to: %s", SHOW(file_name));
 }
 
-uint64_t compute_cfg_signature(const std::map<size_t, cfg::Block*> blocks) {
+uint64_t compute_cfg_signature(const std::map<size_t, cfg::Block*>& blocks) {
   // Blocks should be sorted in a deterministic way like a RPO.
   // Encode block shapes with opcodes lists per block.
   std::ostringstream serialized;
@@ -140,7 +140,7 @@ uint64_t compute_cfg_signature(const std::map<size_t, cfg::Block*> blocks) {
 }
 
 std::vector<cfg::Block*> only_terminal_return_or_throw_blocks(
-    cfg::ControlFlowGraph& cfg, bool log = false) {
+    cfg::ControlFlowGraph& cfg) {
 
   // For example, `real_exit_blocks` returns the following 4 exit blocks. But we
   // don't need to instrument exit blocks that are still with successors.
@@ -343,7 +343,7 @@ size_t insert_onMethodExit_calls(
 
   // Which blocks should have onMethodExits? Let's ignore infinite loop cases,
   // and do on returns/throws that have no successors.
-  const auto& exit_blocks = only_terminal_return_or_throw_blocks(cfg, true);
+  const auto& exit_blocks = only_terminal_return_or_throw_blocks(cfg);
   for (cfg::Block* b : exit_blocks) {
     assert(b->succs().empty());
     // The later DedupBlocksPass could deduplicate these calls.
@@ -462,7 +462,7 @@ MethodInfo instrument_basic_blocks(IRCode& code,
   // The blocks are sorted in RPO. We don't instrument entry blocks. If too many
   // blocks, it falls back to empty blocks, which is method tracing.
   std::map<size_t /*bit id*/, Block*> block_map{};
-  always_assert(cfg.blocks().size() > 0);
+  always_assert(!cfg.blocks().empty());
   size_t num_non_entry_blocks = cfg.blocks().size() - 1;
   const bool reject_block_instrument = (num_non_entry_blocks >= MAX_BLOCKS);
   if (!reject_block_instrument) {
@@ -621,7 +621,7 @@ void print_stats(const std::vector<MethodInfo>& instrumented_methods) {
       ++dist[i.num_non_entry_blocks].second;
       total_non_entry_blocks += i.num_non_entry_blocks;
     }
-    size_t accs[2] = {0, 0};
+    std::array<size_t, 2> accs = {0, 0};
     for (const auto& p : dist) {
       TRACE(INSTRUMENT, 4, " %5d blocks: %s | %s", p.first,
             SHOW(print(p.second.first, total_instrumented, accs[0])),
@@ -678,7 +678,7 @@ void print_stats(const std::vector<MethodInfo>& instrumented_methods) {
         ++dist[-1].second;
       }
     }
-    size_t accs[2] = {0, 0};
+    std::array<size_t, 2> accs = {0, 0};
     for (const auto& p : dist) {
       TRACE(INSTRUMENT, 4, " %5d blocks: %s | %s", p.first,
             SHOW(print(p.second.first, total_instrumented, accs[0])),
