@@ -130,5 +130,22 @@ using Sources = std::vector<Source>;
 using Instructions = std::unordered_map<IRInstruction*, Sources>;
 using Locations = std::vector<std::unique_ptr<Instructions>>;
 
+/**
+ * Calculate the use-def graph modulo instruction constraints in `constraints`,
+ * transitively reachable from instructions matching the `root`-th constraint in
+ * `cfg`.
+ *
+ * - Nodes in the graph are (loc, insn) pairs -- an instruction and the location
+ *   referring to an instruction constraint it matches.
+ * - Edges (l, i) -[src]-> (k, j) indicate that the destination of instruction i
+ *   flows into the src-th operand of instruction j.
+ *
+ * This function relies on a backward analysis, and so will calculate an exit
+ * block for the supplied `cfg` if one does not already exist.
+ */
+Locations instruction_graph(cfg::ControlFlowGraph& cfg,
+                            const std::vector<Constraint>& constraints,
+                            LocationIx root);
+
 } // namespace detail
 } // namespace mf

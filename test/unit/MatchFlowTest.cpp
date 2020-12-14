@@ -69,7 +69,7 @@ TEST_F(MatchFlowTest, Empty) {
   EXPECT_EQ(insns.begin(), insns.end());
 }
 
-TEST_F(MatchFlowTest, InstructionConstraintAnalysis) {
+TEST_F(MatchFlowTest, InstructionGraph) {
   // Use a loop to test that the analysis will terminate in such cases.
   auto code = assembler::ircode_from_string(R"((
     (const v0 0)
@@ -80,7 +80,6 @@ TEST_F(MatchFlowTest, InstructionConstraintAnalysis) {
   ))");
 
   cfg::ScopedCFG cfg{code.get()};
-  cfg->calculate_exit_block();
 
   using namespace detail;
   std::vector<Constraint> constraints;
@@ -92,33 +91,126 @@ TEST_F(MatchFlowTest, InstructionConstraintAnalysis) {
   // operand is constrained by second constraint (the const).
   constraints[0].srcs = {{0, 1}};
 
-  InstructionConstraintAnalysis analysis{*cfg, constraints, 0};
-  analysis.run({});
+  auto ii = InstructionIterable(*cfg);
+  std::vector<MethodItemEntry> mies{ii.begin(), ii.end()};
 
-  for (auto* block : cfg->blocks()) {
-    auto env = analysis.get_entry_state_at(block);
-    for (auto it = block->rbegin(); it != block->rend(); ++it) {
-      if (it->type != MFLOW_OPCODE) {
-        continue;
-      }
+  IRInstruction* const_0 = mies[0].insn;
+  IRInstruction* const_1 = mies[1].insn;
+  IRInstruction* add_int = mies[2].insn;
 
-      auto* insn = it->insn;
-      analysis.analyze_instruction(insn, &env);
-      if (insn->opcode() == OPCODE_ADD_INT) {
-        auto r1_obligations = env.get(1);
-        ASSERT_FALSE(r1_obligations.is_bottom());
-        ASSERT_FALSE(r1_obligations.is_top());
-        EXPECT_EQ(r1_obligations.size(), 1);
-        EXPECT_EQ(*r1_obligations.elements().begin(), Obligation(0, insn, 1));
+  ASSERT_EQ(const_0->opcode(), OPCODE_CONST);
+  ASSERT_EQ(const_0->get_literal(), 0);
 
-        auto r0_obligations = env.get(0);
-        ASSERT_FALSE(r0_obligations.is_bottom());
-        ASSERT_FALSE(r0_obligations.is_top());
-        EXPECT_EQ(r0_obligations.size(), 1);
-        EXPECT_EQ(*r0_obligations.elements().begin(), Obligation(0, insn, 0));
-      }
-    }
-  }
+  ASSERT_EQ(const_1->opcode(), OPCODE_CONST);
+  ASSERT_EQ(const_1->get_literal(), 1);
+
+  ASSERT_EQ(add_int->opcode(), OPCODE_ADD_INT);
+
+  auto graph = instruction_graph(*cfg, constraints, 0);
+
+  ASSERT_EQ(graph[0]->count(add_int), 1);
+  ASSERT_EQ((*graph[0])[add_int][0].size(), 1);
+  EXPECT_EQ((*graph[0])[add_int][0][0], add_int);
+  ASSERT_EQ((*graph[0])[add_int][1].size(), 1);
+  EXPECT_EQ((*graph[0])[add_int][1][0], const_1);
+
+  EXPECT_EQ(graph[1]->count(const_0), 0);
+  EXPECT_EQ(graph[1]->count(const_1), 1);
+}
+
+TEST_F(MatchFlowTest, InstructionGraphNoFlowConstraint) {
+  auto code = assembler::ircode_from_string(R"((
+    (const v0 0)
+    (const v1 1)
+    (add-int v0 v0 v1)
+  ))");
+
+  cfg::ScopedCFG cfg{code.get()};
+
+  using namespace detail;
+  std::vector<Constraint> constraints;
+
+  constraints.emplace_back(insn_matcher(m::add_int_()));
+  constraints[0].srcs = {{NO_LOC, 1}};
+
+  constraints.emplace_back(insn_matcher(m::const_()));
+
+  auto ii = InstructionIterable(*cfg);
+  std::vector<MethodItemEntry> mies{ii.begin(), ii.end()};
+
+  IRInstruction* const_1 = mies[1].insn;
+  IRInstruction* add_int = mies[2].insn;
+
+  ASSERT_EQ(const_1->opcode(), OPCODE_CONST);
+  ASSERT_EQ(const_1->get_literal(), 1);
+
+  ASSERT_EQ(add_int->opcode(), OPCODE_ADD_INT);
+
+  auto graph = instruction_graph(*cfg, constraints, 0);
+
+  ASSERT_EQ(graph[0]->count(add_int), 1);
+  EXPECT_EQ((*graph[0])[add_int][0].size(), 0);
+  ASSERT_EQ((*graph[0])[add_int][1].size(), 1);
+  EXPECT_EQ((*graph[0])[add_int][1][0], const_1);
+
+  EXPECT_EQ(graph[1]->count(const_1), 1);
+}
+
+TEST_F(MatchFlowTest, InstructionGraphTransitiveFailure) {
+  auto code = assembler::ircode_from_string(R"((
+    (const v0 0)
+    (const v1 1)
+    (sub-int v0 v1 v0)
+    (add-int v0 v0 v1)
+  ))");
+
+  cfg::ScopedCFG cfg{code.get()};
+
+  using namespace detail;
+  std::vector<Constraint> constraints;
+
+  constraints.emplace_back(insn_matcher(m::add_int_()));
+  constraints[0].srcs = {{1, 2}};
+
+  constraints.emplace_back(insn_matcher(m::sub_int_()));
+  constraints[1].srcs = {{2, 2}};
+
+  constraints.emplace_back(
+      insn_matcher(m::const_(m::has_literal(m::equals<int64_t>(1)))));
+
+  auto ii = InstructionIterable(*cfg);
+  std::vector<MethodItemEntry> mies{ii.begin(), ii.end()};
+
+  IRInstruction* const_1 = mies[1].insn;
+  IRInstruction* sub_int = mies[2].insn;
+  IRInstruction* add_int = mies[3].insn;
+
+  ASSERT_EQ(const_1->opcode(), OPCODE_CONST);
+  ASSERT_EQ(const_1->get_literal(), 1);
+
+  ASSERT_EQ(sub_int->opcode(), OPCODE_SUB_INT);
+  ASSERT_EQ(add_int->opcode(), OPCODE_ADD_INT);
+
+  auto graph = instruction_graph(*cfg, constraints, 0);
+
+  ASSERT_EQ(graph[0]->count(add_int), 1);
+  ASSERT_EQ((*graph[0])[add_int][0].size(), 1);
+  EXPECT_EQ((*graph[0])[add_int][0][0], sub_int);
+  ASSERT_EQ((*graph[0])[add_int][1].size(), 1);
+  EXPECT_EQ((*graph[0])[add_int][1][0], const_1);
+
+  // Even though its flow constraints aren't met, the output from instruction
+  // graph will return it because it is only concerned with reachability
+  // and instruction constraints.
+  ASSERT_EQ(graph[1]->count(sub_int), 1);
+  ASSERT_EQ((*graph[1])[sub_int][0].size(), 1);
+  EXPECT_EQ((*graph[1])[sub_int][0][0], const_1);
+
+  // Strange way to check that sub_int does not have any matching edges flowing
+  // into its src 1.
+  EXPECT_EQ((*graph[1])[sub_int].size(), 1);
+
+  EXPECT_EQ(graph[2]->count(const_1), 1);
 }
 
 } // namespace
