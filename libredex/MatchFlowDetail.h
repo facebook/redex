@@ -169,6 +169,20 @@ struct DataFlowGraph {
     IRInstruction* to_insn;
   };
 
+  /** Construct an empty data-flow graph */
+  DataFlowGraph();
+
+  // DataFlowGraph is moveable and copyable
+  DataFlowGraph(DataFlowGraph&&) = default;
+  DataFlowGraph& operator=(DataFlowGraph&&) = default;
+  DataFlowGraph(const DataFlowGraph&) = default;
+  DataFlowGraph& operator=(const DataFlowGraph&) = default;
+
+  /**
+   * Number of nodes in the graph, not including the sentinel node.
+   */
+  size_t size() const;
+
   /**
    * Decides whether (loc, insn) exists as a node in this graph.
    */

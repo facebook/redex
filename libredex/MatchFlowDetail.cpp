@@ -89,6 +89,16 @@ void InstructionConstraintAnalysis::analyze_instruction(
   propagate(m_root);
 }
 
+DataFlowGraph::DataFlowGraph() {
+  // Add the sentinel node, for pointing to entrypoints.
+  add_node(NO_LOC, nullptr);
+}
+
+size_t DataFlowGraph::size() const {
+  // Subtract 1 for the sentinel node.
+  return m_adjacencies.size() - 1;
+}
+
 bool DataFlowGraph::has_node(LocationIx loc, IRInstruction* insn) const {
   return m_adjacencies.count({loc, insn});
 }

@@ -81,6 +81,18 @@ TEST_F(MatchFlowTest, Empty) {
   EXPECT_EQ(insns.begin(), insns.end());
 }
 
+TEST_F(MatchFlowTest, DFGSize) {
+  using namespace detail;
+  DataFlowGraph graph;
+  EXPECT_EQ(0, graph.size());
+
+  graph.add_node(0, nullptr);
+  EXPECT_EQ(1, graph.size());
+
+  graph.add_node(0, nullptr);
+  EXPECT_EQ(1, graph.size());
+}
+
 TEST_F(MatchFlowTest, InstructionGraph) {
   // Use a loop to test that the analysis will terminate in such cases.
   auto code = assembler::ircode_from_string(R"((
