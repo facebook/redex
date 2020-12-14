@@ -360,7 +360,8 @@ Arguments parse_args(int argc, char* argv[]) {
   if (vm.count("reflect-config")) {
     Json::Value reflected_config;
 
-    reflected_config["global"] = reflect_config(GlobalConfig::get().reflect());
+    GlobalConfig gc(GlobalConfig::default_registry());
+    reflected_config["global"] = reflect_config(gc.reflect());
 
     Json::Value pass_configs = Json::arrayValue;
     const auto& passes = PassRegistry::get().get_passes();
@@ -1176,7 +1177,7 @@ int main(int argc, char* argv[]) {
     }
 
     redex_frontend(conf, args, *pg_config, stores, stats);
-    GlobalConfig::get().parse_config(conf.get_json_config());
+    conf.parse_global_config();
 
     // Initialize purity defaults, if set.
     purity::CacheConfig::parse_default(conf);

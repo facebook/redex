@@ -23,6 +23,7 @@
 ConfigFiles::ConfigFiles(const Json::Value& config, const std::string& outdir)
     : m_json(config),
       outdir(outdir),
+      m_global_config(GlobalConfig::default_registry()),
       m_proguard_map(
           new ProguardMap(config.get("proguard_map", "").asString())),
       m_printseeds(config.get("printseeds", "").asString()),
@@ -243,6 +244,10 @@ const inliner::InlinerConfig& ConfigFiles::get_inliner_config() {
     load_inliner_config(m_inliner_config.get());
   }
   return *m_inliner_config;
+}
+
+void ConfigFiles::parse_global_config() {
+  m_global_config.parse_config(m_json);
 }
 
 void ConfigFiles::load(const Scope& scope) {

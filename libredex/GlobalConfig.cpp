@@ -128,8 +128,3 @@ GlobalConfigRegistry& GlobalConfig::default_registry() {
   };
   return registry;
 }
-
-GlobalConfig& GlobalConfig::get() {
-  static GlobalConfig gc(default_registry());
-  return gc;
-}
