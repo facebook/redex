@@ -139,7 +139,17 @@ using Locations = std::vector<std::unique_ptr<Instructions>>;
  */
 struct DataFlowGraph {
   using Node = std::tuple<LocationIx, IRInstruction*>;
-  using Edge = std::tuple<src_index_t, LocationIx, IRInstruction*>;
+
+  // A redundant representation where {l, i, ix, k, j} represents the edge
+  //
+  //  (l, i) -[ix]-> (k, j)
+  //
+  // to simplify referencing source nodes from edges.
+  using Edge = std::tuple<LocationIx,
+                          IRInstruction*,
+                          src_index_t,
+                          LocationIx,
+                          IRInstruction*>;
 
   /**
    * Decides whether (loc, insn) exists as a node in this graph.
@@ -197,10 +207,11 @@ struct DataFlowGraph {
   //
   //   (l, i) -[ix]-> (k, j)
   //
-  // are represented by two entries in the mapping:
+  // are accounted for in both the outbound edge list of their source as well
+  // as the inbound edge list of their target:
   //
-  //   m_adjacencies[(l, i)].out containing (ix, k, j)
-  //   m_adjacencies[(k, j)].in  containing (ix, l, i)
+  //   m_adjacencies[(l, i)].out
+  //   m_adjacencies[(k, j)].in
   std::unordered_map<Node, Adjacencies, boost::hash<Node>> m_adjacencies;
 };
 

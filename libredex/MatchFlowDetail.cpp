@@ -100,8 +100,9 @@ void DataFlowGraph::add_edge(LocationIx lfrom,
                              src_index_t src,
                              LocationIx lto,
                              IRInstruction* ito) {
-  m_adjacencies[{lfrom, ifrom}].out.emplace_back(src, lto, ito);
-  m_adjacencies[{lto, ito}].in.emplace_back(src, lfrom, ifrom);
+  Edge e{lfrom, ifrom, src, lto, ito};
+  m_adjacencies[{lfrom, ifrom}].out.push_back(e);
+  m_adjacencies[{lto, ito}].in.push_back(e);
 }
 
 const std::vector<DataFlowGraph::Edge>& DataFlowGraph::inbound(

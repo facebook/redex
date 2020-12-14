@@ -111,9 +111,10 @@ TEST_F(MatchFlowTest, InstructionGraph) {
 
   auto graph = instruction_graph(*cfg, constraints, 0);
 
-  EXPECT_THAT(graph.inbound(0, add_int),
-              UnorderedElementsAre(DataFlowGraph::Edge(0, 0, add_int),
-                                   DataFlowGraph::Edge(1, 1, const_1)));
+  EXPECT_THAT(
+      graph.inbound(0, add_int),
+      UnorderedElementsAre(DataFlowGraph::Edge(0, add_int, 0, 0, add_int),
+                           DataFlowGraph::Edge(1, const_1, 1, 0, add_int)));
 
   EXPECT_FALSE(graph.has_node(1, const_0));
   EXPECT_TRUE(graph.has_node(1, const_1));
@@ -149,8 +150,9 @@ TEST_F(MatchFlowTest, InstructionGraphNoFlowConstraint) {
 
   auto graph = instruction_graph(*cfg, constraints, 0);
 
-  EXPECT_THAT(graph.inbound(0, add_int),
-              UnorderedElementsAre(DataFlowGraph::Edge(1, 1, const_1)));
+  EXPECT_THAT(
+      graph.inbound(0, add_int),
+      UnorderedElementsAre(DataFlowGraph::Edge(1, const_1, 1, 0, add_int)));
 
   EXPECT_TRUE(graph.has_node(1, const_1));
 }
@@ -192,15 +194,17 @@ TEST_F(MatchFlowTest, InstructionGraphTransitiveFailure) {
 
   auto graph = instruction_graph(*cfg, constraints, 0);
 
-  EXPECT_THAT(graph.inbound(0, add_int),
-              UnorderedElementsAre(DataFlowGraph::Edge(0, 1, sub_int),
-                                   DataFlowGraph::Edge(1, 2, const_1)));
+  EXPECT_THAT(
+      graph.inbound(0, add_int),
+      UnorderedElementsAre(DataFlowGraph::Edge(1, sub_int, 0, 0, add_int),
+                           DataFlowGraph::Edge(2, const_1, 1, 0, add_int)));
 
   // Even though its flow constraints aren't met, the output from instruction
   // graph will return it because it is only concerned with reachability
   // and instruction constraints.
-  EXPECT_THAT(graph.inbound(1, sub_int),
-              UnorderedElementsAre(DataFlowGraph::Edge(0, 2, const_1)));
+  EXPECT_THAT(
+      graph.inbound(1, sub_int),
+      UnorderedElementsAre(DataFlowGraph::Edge(2, const_1, 0, 1, sub_int)));
 
   EXPECT_TRUE(graph.has_node(2, const_1));
 }
