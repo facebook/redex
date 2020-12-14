@@ -87,9 +87,48 @@ void InstructionConstraintAnalysis::analyze_instruction(IRInstruction* insn,
   propagate(m_root);
 }
 
-Locations instruction_graph(cfg::ControlFlowGraph& cfg,
-                            const std::vector<Constraint>& constraints,
-                            LocationIx root) {
+bool DataFlowGraph::has_node(LocationIx loc, IRInstruction* insn) const {
+  return m_adjacencies.count({loc, insn});
+}
+
+void DataFlowGraph::add_node(LocationIx loc, IRInstruction* insn) {
+  (void)m_adjacencies[{loc, insn}];
+}
+
+void DataFlowGraph::add_edge(LocationIx lfrom,
+                             IRInstruction* ifrom,
+                             src_index_t src,
+                             LocationIx lto,
+                             IRInstruction* ito) {
+  m_adjacencies[{lfrom, ifrom}].out.emplace_back(src, lto, ito);
+  m_adjacencies[{lto, ito}].in.emplace_back(src, lfrom, ifrom);
+}
+
+const std::vector<DataFlowGraph::Edge>& DataFlowGraph::inbound(
+    LocationIx loc, IRInstruction* insn) const {
+  auto it = m_adjacencies.find({loc, insn});
+  if (it == m_adjacencies.end()) {
+    static std::vector<Edge> none;
+    return none;
+  }
+
+  return it->second.in;
+}
+
+const std::vector<DataFlowGraph::Edge>& DataFlowGraph::outbound(
+    LocationIx loc, IRInstruction* insn) const {
+  auto it = m_adjacencies.find({loc, insn});
+  if (it == m_adjacencies.end()) {
+    static std::vector<Edge> none;
+    return none;
+  }
+
+  return it->second.out;
+}
+
+DataFlowGraph instruction_graph(cfg::ControlFlowGraph& cfg,
+                                const std::vector<Constraint>& constraints,
+                                LocationIx root) {
   if (!cfg.exit_block()) {
     // The instruction constraint analysis runs backwards and so requires a
     // single exit block to start from.
@@ -99,29 +138,13 @@ Locations instruction_graph(cfg::ControlFlowGraph& cfg,
   InstructionConstraintAnalysis analysis{cfg, constraints, root};
   analysis.run({});
 
-  Locations graph{constraints.size()};
-
-  // Add (loc, insn) as a node in the graph.  Concretely, create a map
-  // containing nodes for location `loc`, if necessary and then add `insn` to
-  // it.  Returns a pointer to the sources (inbound edges) for the newly added
-  // node which are initially empty for a fresh node.
-  const auto add_node = [&](LocationIx loc, IRInstruction* insn) -> Sources* {
-    if (graph[loc] == nullptr) {
-      graph[loc] = std::make_unique<Instructions>();
-    }
-
-    return &(*graph[loc])[insn];
-  };
+  DataFlowGraph graph;
 
   // Check whether (loc, insn) should be in the graph, and adds it if necessary.
   // Returns a boolean indicating whether the node was added or not.
   const auto test_node = [&](LocationIx loc, IRInstruction* insn) {
-    if (loc != NO_LOC && constraints.at(loc).insn_matcher->matches(insn)) {
-      add_node(loc, insn);
-      return true;
-    }
-
-    return false;
+    return loc != NO_LOC && constraints.at(loc).insn_matcher->matches(insn) &&
+           (graph.add_node(loc, insn), true);
   };
 
   // Check whether `insn` could serve as the operand implied by the obligation:
@@ -137,12 +160,7 @@ Locations instruction_graph(cfg::ControlFlowGraph& cfg,
       return;
     }
 
-    auto* srcs = add_node(to_loc, to_insn);
-    if (srcs->size() <= to_src) {
-      srcs->resize(to_src + 1);
-    }
-
-    (*srcs)[to_src].push_back(insn);
+    graph.add_edge(from_loc, insn, to_src, to_loc, to_insn);
   };
 
   for (auto* block : cfg.blocks()) {

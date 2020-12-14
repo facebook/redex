@@ -11,6 +11,8 @@
 #include <cstddef>
 #include <limits>
 #include <memory>
+#include <unordered_map>
+#include <vector>
 
 #include "BaseIRAnalyzer.h"
 #include "HashedSetAbstractDomain.h"
@@ -131,6 +133,78 @@ using Instructions = std::unordered_map<IRInstruction*, Sources>;
 using Locations = std::vector<std::unique_ptr<Instructions>>;
 
 /**
+ * Mutable representation of a data-flow graph.  Nodes in this graph are
+ * represented by (LocationIx, IRInstruction*) pairs, and edges are labelled
+ * with a src_index_t.
+ */
+struct DataFlowGraph {
+  using Node = std::tuple<LocationIx, IRInstruction*>;
+  using Edge = std::tuple<src_index_t, LocationIx, IRInstruction*>;
+
+  /**
+   * Decides whether (loc, insn) exists as a node in this graph.
+   */
+  bool has_node(LocationIx loc, IRInstruction* insn) const;
+
+  /**
+   * Returns a reference to the edges that flow in to the (loc, insn) node.
+   * Edges are represented by a tuple:
+   *
+   *   (ix, lfrom, ifrom)
+   *
+   * Where `ix` is the edge label (the index of the operand) and (lfrom, ifrom)
+   * is the source node.
+   *
+   * If !has_node(loc, insn), a reference to an empty vector is returned.
+   */
+  const std::vector<Edge>& inbound(LocationIx loc, IRInstruction* insn) const;
+
+  /**
+   * Returns a reference to the edges that flow out of the (loc, insn) node.
+   * Edges are represented by a tuple:
+   *
+   *   (ix, lto, ito)
+   *
+   * Where `ix` is the edge label (the index of the operand) and (lto, ito) is
+   * the target node.
+   *
+   * If !has_node(loc, insn), a reference to an empty vector is returned.
+   */
+  const std::vector<Edge>& outbound(LocationIx loc, IRInstruction* insn) const;
+
+  /** Add (loc, insn) as a node in the graph. */
+  void add_node(LocationIx loc, IRInstruction* insn);
+
+  /**
+   * Add (lfrom, ifrom) -[src]-> (lto, ito) as an edge in the graph, implicitly
+   * adding (lfrom, ifrom) and (lto, ito) as nodes in the graph.
+   *
+   * Edges are not uniqued, multiple invocations of add_edge with the same
+   * parameters will result in duplicate edges in the graph.
+   */
+  void add_edge(LocationIx lfrom,
+                IRInstruction* ifrom,
+                src_index_t src,
+                LocationIx lto,
+                IRInstruction* ito);
+
+ private:
+  struct Adjacencies {
+    std::vector<Edge> in, out;
+  };
+
+  // Every node in the data-flow graph exists as a key in this map.  Edges,
+  //
+  //   (l, i) -[ix]-> (k, j)
+  //
+  // are represented by two entries in the mapping:
+  //
+  //   m_adjacencies[(l, i)].out containing (ix, k, j)
+  //   m_adjacencies[(k, j)].in  containing (ix, l, i)
+  std::unordered_map<Node, Adjacencies, boost::hash<Node>> m_adjacencies;
+};
+
+/**
  * Calculate the use-def graph modulo instruction constraints in `constraints`,
  * transitively reachable from instructions matching the `root`-th constraint in
  * `cfg`.
@@ -143,9 +217,9 @@ using Locations = std::vector<std::unique_ptr<Instructions>>;
  * This function relies on a backward analysis, and so will calculate an exit
  * block for the supplied `cfg` if one does not already exist.
  */
-Locations instruction_graph(cfg::ControlFlowGraph& cfg,
-                            const std::vector<Constraint>& constraints,
-                            LocationIx root);
+DataFlowGraph instruction_graph(cfg::ControlFlowGraph& cfg,
+                                const std::vector<Constraint>& constraints,
+                                LocationIx root);
 
 } // namespace detail
 } // namespace mf

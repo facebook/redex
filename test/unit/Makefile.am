@@ -251,6 +251,7 @@ loosen_access_modifier_test_SOURCES = LoosenAccessModifierTest.cpp
 match_test_SOURCES = MatchTest.cpp
 
 match_flow_test_SOURCES = MatchFlowTest.cpp
+match_flow_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
 method_inline_test_SOURCES = MethodInlineTest.cpp
 

@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 #include <iterator>
@@ -20,6 +21,8 @@
 
 namespace mf {
 namespace {
+
+using ::testing::UnorderedElementsAre;
 
 class MatchFlowTest : public RedexTest {};
 
@@ -108,14 +111,12 @@ TEST_F(MatchFlowTest, InstructionGraph) {
 
   auto graph = instruction_graph(*cfg, constraints, 0);
 
-  ASSERT_EQ(graph[0]->count(add_int), 1);
-  ASSERT_EQ((*graph[0])[add_int][0].size(), 1);
-  EXPECT_EQ((*graph[0])[add_int][0][0], add_int);
-  ASSERT_EQ((*graph[0])[add_int][1].size(), 1);
-  EXPECT_EQ((*graph[0])[add_int][1][0], const_1);
+  EXPECT_THAT(graph.inbound(0, add_int),
+              UnorderedElementsAre(DataFlowGraph::Edge(0, 0, add_int),
+                                   DataFlowGraph::Edge(1, 1, const_1)));
 
-  EXPECT_EQ(graph[1]->count(const_0), 0);
-  EXPECT_EQ(graph[1]->count(const_1), 1);
+  EXPECT_FALSE(graph.has_node(1, const_0));
+  EXPECT_TRUE(graph.has_node(1, const_1));
 }
 
 TEST_F(MatchFlowTest, InstructionGraphNoFlowConstraint) {
@@ -148,12 +149,10 @@ TEST_F(MatchFlowTest, InstructionGraphNoFlowConstraint) {
 
   auto graph = instruction_graph(*cfg, constraints, 0);
 
-  ASSERT_EQ(graph[0]->count(add_int), 1);
-  EXPECT_EQ((*graph[0])[add_int][0].size(), 0);
-  ASSERT_EQ((*graph[0])[add_int][1].size(), 1);
-  EXPECT_EQ((*graph[0])[add_int][1][0], const_1);
+  EXPECT_THAT(graph.inbound(0, add_int),
+              UnorderedElementsAre(DataFlowGraph::Edge(1, 1, const_1)));
 
-  EXPECT_EQ(graph[1]->count(const_1), 1);
+  EXPECT_TRUE(graph.has_node(1, const_1));
 }
 
 TEST_F(MatchFlowTest, InstructionGraphTransitiveFailure) {
@@ -193,24 +192,17 @@ TEST_F(MatchFlowTest, InstructionGraphTransitiveFailure) {
 
   auto graph = instruction_graph(*cfg, constraints, 0);
 
-  ASSERT_EQ(graph[0]->count(add_int), 1);
-  ASSERT_EQ((*graph[0])[add_int][0].size(), 1);
-  EXPECT_EQ((*graph[0])[add_int][0][0], sub_int);
-  ASSERT_EQ((*graph[0])[add_int][1].size(), 1);
-  EXPECT_EQ((*graph[0])[add_int][1][0], const_1);
+  EXPECT_THAT(graph.inbound(0, add_int),
+              UnorderedElementsAre(DataFlowGraph::Edge(0, 1, sub_int),
+                                   DataFlowGraph::Edge(1, 2, const_1)));
 
   // Even though its flow constraints aren't met, the output from instruction
   // graph will return it because it is only concerned with reachability
   // and instruction constraints.
-  ASSERT_EQ(graph[1]->count(sub_int), 1);
-  ASSERT_EQ((*graph[1])[sub_int][0].size(), 1);
-  EXPECT_EQ((*graph[1])[sub_int][0][0], const_1);
+  EXPECT_THAT(graph.inbound(1, sub_int),
+              UnorderedElementsAre(DataFlowGraph::Edge(0, 2, const_1)));
 
-  // Strange way to check that sub_int does not have any matching edges flowing
-  // into its src 1.
-  EXPECT_EQ((*graph[1])[sub_int].size(), 1);
-
-  EXPECT_EQ(graph[2]->count(const_1), 1);
+  EXPECT_TRUE(graph.has_node(2, const_1));
 }
 
 } // namespace
