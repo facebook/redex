@@ -22,6 +22,7 @@
 namespace mf {
 namespace {
 
+using ::testing::Contains;
 using ::testing::UnorderedElementsAre;
 
 class MatchFlowTest : public RedexTest {};
@@ -116,8 +117,11 @@ TEST_F(MatchFlowTest, InstructionGraph) {
       UnorderedElementsAre(DataFlowGraph::Edge(0, add_int, 0, 0, add_int),
                            DataFlowGraph::Edge(1, const_1, 1, 0, add_int)));
 
+  EXPECT_THAT(
+      graph.outbound(NO_LOC, nullptr),
+      Contains(DataFlowGraph::Edge(NO_LOC, nullptr, NO_SRC, 1, const_1)));
+
   EXPECT_FALSE(graph.has_node(1, const_0));
-  EXPECT_TRUE(graph.has_node(1, const_1));
 }
 
 TEST_F(MatchFlowTest, InstructionGraphNoFlowConstraint) {
@@ -154,7 +158,9 @@ TEST_F(MatchFlowTest, InstructionGraphNoFlowConstraint) {
       graph.inbound(0, add_int),
       UnorderedElementsAre(DataFlowGraph::Edge(1, const_1, 1, 0, add_int)));
 
-  EXPECT_TRUE(graph.has_node(1, const_1));
+  EXPECT_THAT(
+      graph.outbound(NO_LOC, nullptr),
+      Contains(DataFlowGraph::Edge(NO_LOC, nullptr, NO_SRC, 1, const_1)));
 }
 
 TEST_F(MatchFlowTest, InstructionGraphTransitiveFailure) {
@@ -206,7 +212,9 @@ TEST_F(MatchFlowTest, InstructionGraphTransitiveFailure) {
       graph.inbound(1, sub_int),
       UnorderedElementsAre(DataFlowGraph::Edge(2, const_1, 0, 1, sub_int)));
 
-  EXPECT_TRUE(graph.has_node(2, const_1));
+  EXPECT_THAT(
+      graph.outbound(NO_LOC, nullptr),
+      Contains(DataFlowGraph::Edge(NO_LOC, nullptr, NO_SRC, 2, const_1)));
 }
 
 } // namespace

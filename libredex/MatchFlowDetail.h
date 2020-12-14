@@ -29,6 +29,9 @@ using LocationIx = size_t;
 /** Sentinel value denoting the lack of a location. */
 constexpr LocationIx NO_LOC = std::numeric_limits<size_t>::max();
 
+/** Sentinel value denoting the lack of a source. */
+constexpr src_index_t NO_SRC = std::numeric_limits<src_index_t>::max();
+
 /**
  * Matchers, such as
  *
@@ -186,6 +189,12 @@ struct DataFlowGraph {
   void add_node(LocationIx loc, IRInstruction* insn);
 
   /**
+   * Add (loc, insn) as a node in the graph, and indicate that this node will
+   * not have any inbound edges.  This fact is not checked at any later point.
+   */
+  void add_entrypoint(LocationIx loc, IRInstruction* insn);
+
+  /**
    * Add (lfrom, ifrom) -[src]-> (lto, ito) as an edge in the graph, implicitly
    * adding (lfrom, ifrom) and (lto, ito) as nodes in the graph.
    *
@@ -212,6 +221,9 @@ struct DataFlowGraph {
   //
   //   m_adjacencies[(l, i)].out
   //   m_adjacencies[(k, j)].in
+  //
+  // A sentinel node -- (NO_LOC, nullptr) -- has sentinel outbound edges to
+  // every node without (other) inbound edges.
   std::unordered_map<Node, Adjacencies, boost::hash<Node>> m_adjacencies;
 };
 

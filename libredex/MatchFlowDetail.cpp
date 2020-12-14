@@ -7,6 +7,8 @@
 
 #include "MatchFlowDetail.h"
 
+#include <algorithm>
+
 #include <boost/optional/optional.hpp>
 
 namespace {
@@ -95,6 +97,10 @@ void DataFlowGraph::add_node(LocationIx loc, IRInstruction* insn) {
   (void)m_adjacencies[{loc, insn}];
 }
 
+void DataFlowGraph::add_entrypoint(LocationIx loc, IRInstruction* insn) {
+  add_edge(NO_LOC, nullptr, NO_SRC, loc, insn);
+}
+
 void DataFlowGraph::add_edge(LocationIx lfrom,
                              IRInstruction* ifrom,
                              src_index_t src,
@@ -144,8 +150,27 @@ DataFlowGraph instruction_graph(cfg::ControlFlowGraph& cfg,
   // Check whether (loc, insn) should be in the graph, and adds it if necessary.
   // Returns a boolean indicating whether the node was added or not.
   const auto test_node = [&](LocationIx loc, IRInstruction* insn) {
-    return loc != NO_LOC && constraints.at(loc).insn_matcher->matches(insn) &&
-           (graph.add_node(loc, insn), true);
+    if (loc == NO_LOC) {
+      return false;
+    }
+
+    auto& constraint = constraints.at(loc);
+    if (!constraint.insn_matcher->matches(insn)) {
+      return false;
+    }
+
+    bool obligation_free =
+        std::all_of(constraint.srcs.begin(),
+                    constraint.srcs.end(),
+                    [](LocationIx loc) { return loc == NO_LOC; });
+
+    if (obligation_free) {
+      graph.add_entrypoint(loc, insn);
+    } else {
+      graph.add_node(loc, insn);
+    }
+
+    return true;
   };
 
   // Check whether `insn` could serve as the operand implied by the obligation:
