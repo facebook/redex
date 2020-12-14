@@ -23,9 +23,11 @@
 #include "Macros.h"
 #include "Show.h"
 
+#if !IS_WINDOWS
 struct TraceContextAccess {
   static const TraceContext* get_s_context() { return TraceContext::s_context; }
 };
+#endif
 
 namespace {
 
