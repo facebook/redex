@@ -116,8 +116,8 @@ struct result_t {
     using iterator_category = std::forward_iterator_tag;
     using value_type = IRInstruction*;
     using difference_type = Instructions::const_iterator::difference_type;
-    using pointer = IRInstruction**;
-    using reference = IRInstruction*&;
+    using pointer = IRInstruction* const*;
+    using reference = IRInstruction* const&;
 
     insn_iterator() = default;
 
@@ -166,23 +166,10 @@ struct result_t {
 };
 
 template <typename M>
-inline location_t flow_t::insn(m::match_t<IRInstruction*, M> insn_matcher) {
-  struct Wrapper : public detail::InstructionMatcher {
-    explicit Wrapper(m::match_t<IRInstruction*, M> m)
-        : m_insn_matcher(std::move(m)) {}
-
-    ~Wrapper() override = default;
-
-    bool matches(const IRInstruction* insn) const override {
-      return m_insn_matcher.matches(insn);
-    }
-
-    m::match_t<IRInstruction*, M> m_insn_matcher;
-  };
+inline location_t flow_t::insn(m::match_t<IRInstruction*, M> m) {
 
   detail::LocationIx ix = m_constraints.size();
-  m_constraints.emplace_back(
-      std::make_unique<Wrapper>(std::move(insn_matcher)));
+  m_constraints.emplace_back(mf::detail::insn_matcher(m));
 
   return location_t{this, ix};
 }

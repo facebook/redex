@@ -7,11 +7,16 @@
 
 #pragma once
 
+#include <boost/functional/hash.hpp>
 #include <cstddef>
 #include <limits>
 #include <memory>
 
+#include "BaseIRAnalyzer.h"
+#include "HashedSetAbstractDomain.h"
 #include "IRInstruction.h"
+#include "Match.h"
+#include "PatriciaTreeMapAbstractPartition.h"
 
 namespace mf {
 namespace detail {
@@ -38,6 +43,27 @@ struct InstructionMatcher {
 };
 
 /**
+ * Hide the implementation of a m::match_t<IRInstruction*, M> by wrapping it to
+ * create a std::unique_ptr<InstructionMatcher>.
+ */
+template <typename M>
+std::unique_ptr<InstructionMatcher> insn_matcher(
+    m::match_t<IRInstruction*, M> m) {
+  struct Wrapper : public detail::InstructionMatcher {
+    explicit Wrapper(m::match_t<IRInstruction*, M> m)
+        : m_insn_matcher(std::move(m)) {}
+
+    bool matches(const IRInstruction* insn) const override {
+      return m_insn_matcher.matches(insn);
+    }
+
+    m::match_t<IRInstruction*, M> m_insn_matcher;
+  };
+
+  return std::make_unique<Wrapper>(std::move(m));
+}
+
+/**
  * An instruction constraint is composed of the predicate that the instruction
  * is expected to match, and references to any constraints on values flowing
  * into the instruction.
@@ -56,6 +82,31 @@ struct Constraint {
   // source operands.  This vector can contain "holes", represented by NO_LOC.
   // Such a hole implies no constraint for that instruction operand.
   std::vector<LocationIx> srcs;
+};
+
+using Obligation = std::tuple<LocationIx, IRInstruction*, src_index_t>;
+using Domain =
+    sparta::HashedSetAbstractDomain<Obligation, boost::hash<Obligation>>;
+using Partition = sparta::PatriciaTreeMapAbstractPartition<reg_t, Domain>;
+
+/**
+ * Tracks constraints imposed on instructions based on where their results flow
+ * into.
+ */
+struct InstructionConstraintAnalysis
+    : public ir_analyzer::BaseBackwardsIRAnalyzer<Partition> {
+  using Base = ir_analyzer::BaseBackwardsIRAnalyzer<Partition>;
+
+  InstructionConstraintAnalysis(const cfg::ControlFlowGraph& cfg,
+                                const std::vector<Constraint>& constraints,
+                                LocationIx root)
+      : Base(cfg), m_constraints(constraints), m_root(root) {}
+
+  void analyze_instruction(IRInstruction* insn, Partition* env) const override;
+
+ private:
+  const std::vector<Constraint>& m_constraints;
+  LocationIx m_root;
 };
 
 } // namespace detail
