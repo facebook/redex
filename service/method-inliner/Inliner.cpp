@@ -334,7 +334,7 @@ void MultiMethodInliner::inline_methods() {
       caller_nonrecursive_callees_by_stack_depth;
   for (const auto& it : caller_callee) {
     auto caller = it.first;
-    TraceContext context(caller->get_deobfuscated_name());
+    TraceContext context(caller);
     // if the caller is not a top level keep going, it will be traversed
     // when inlining a top level caller
     if (callee_caller.find(caller) != callee_caller.end()) continue;
@@ -477,6 +477,7 @@ size_t MultiMethodInliner::compute_caller_nonrecursive_callees_by_stack_depth(
 
 void MultiMethodInliner::caller_inline(
     DexMethod* caller, const std::vector<DexMethod*>& nonrecursive_callees) {
+  TraceContext context(caller);
   // We select callees to inline into this caller
   std::vector<DexMethod*> selected_callees;
   std::vector<DexMethod*> optional_selected_callees;
@@ -549,6 +550,7 @@ void MultiMethodInliner::inline_callees(
     DexMethod* caller,
     const std::vector<DexMethod*>& callees,
     const std::vector<DexMethod*>& optional_callees) {
+  TraceContext context{caller};
   size_t found = 0;
 
   // walk the caller opcodes collecting all candidates to inline
@@ -619,6 +621,7 @@ void MultiMethodInliner::inline_callees(
 
 void MultiMethodInliner::inline_callees(
     DexMethod* caller, const std::unordered_set<IRInstruction*>& insns) {
+  TraceContext context{caller};
   std::vector<Inlinable> inlinables;
   editable_cfg_adapter::iterate_with_iterator(
       caller->get_code(), [&](const IRList::iterator& it) {
@@ -722,9 +725,11 @@ void MultiMethodInliner::inline_inlinables(
     // the fact that we'll have to make some methods static.
     make_static_inlinable(make_static);
 
-    TRACE(MMINL, 4, "inline %s (%d) in %s (%d)", SHOW(callee),
-          caller->get_registers_size(), SHOW(caller),
-          callee->get_registers_size());
+    TRACE(MMINL, 4, "inline %s (%d) in %s (%d)",
+          callee->cfg_built() ? SHOW(callee->cfg()) : SHOW(callee),
+          callee->get_registers_size(),
+          caller->cfg_built() ? SHOW(caller->cfg()) : SHOW(caller),
+          caller->get_registers_size());
 
     if (m_config.use_cfg_inliner) {
       if (m_config.unique_inlined_registers) {
@@ -746,7 +751,9 @@ void MultiMethodInliner::inline_inlinables(
       always_assert(callsite->insn == callsite_insn);
       inliner::inline_method_unsafe(caller_method, caller, callee, callsite);
     }
-    TRACE(INL, 2, "caller: %s\tcallee: %s", SHOW(caller), SHOW(callee));
+    TRACE(INL, 2, "caller: %s\tcallee: %s",
+          caller->cfg_built() ? SHOW(caller->cfg()) : SHOW(caller),
+          SHOW(callee));
     estimated_insn_size += get_callee_insn_size(callee_method);
 
     inlined_callees.push_back(callee_method);
@@ -902,6 +909,7 @@ void MultiMethodInliner::shrink_method(DexMethod* method) {
 }
 
 void MultiMethodInliner::postprocess_method(DexMethod* method) {
+  TraceContext context(method);
   bool delayed_shrinking = false;
   bool is_callee = !!m_async_callee_priorities.count(method);
   if (m_shrinking_enabled && !method->rstate.no_optimizations()) {
@@ -1004,6 +1012,7 @@ bool MultiMethodInliner::is_inlinable(const DexMethod* caller,
                                       const IRInstruction* insn,
                                       size_t estimated_insn_size,
                                       std::vector<DexMethod*>* make_static) {
+  TraceContext context{caller};
   // don't inline cross store references
   if (cross_store_reference(caller, callee)) {
     if (insn) {
@@ -1397,6 +1406,7 @@ size_t MultiMethodInliner::get_inlined_cost(const DexMethod* callee) {
     const auto& callee_constant_arguments =
         callee_constant_arguments_it->second;
     auto process_key = [&](const ConstantArgumentsOccurrences& cao) {
+      TraceContext context(callee);
       const auto& constant_arguments = cao.first;
       const auto count = cao.second;
       TRACE(INLINE, 5, "[too_many_callers] get_inlined_cost %s", SHOW(callee));

@@ -19,7 +19,13 @@
 #include <unordered_map>
 #include <utility>
 
+#include "Debug.h"
 #include "Macros.h"
+#include "Show.h"
+
+struct TraceContextAccess {
+  static const TraceContext* get_s_context() { return TraceContext::s_context; }
+};
 
 namespace {
 
@@ -74,8 +80,28 @@ struct Tracer {
     }
   }
 
-  bool traceEnabled(TraceModule module, int level) {
-    return level <= m_level || level <= m_traces[module];
+  bool check_trace_context() const {
+#if !IS_WINDOWS
+    if (m_method_filter == nullptr) {
+      return true;
+    }
+    const TraceContext* context = TraceContextAccess::get_s_context();
+    if (context == nullptr) {
+      return true;
+    }
+    return context->get_string_value().find(m_method_filter) !=
+           std::string::npos;
+#else
+    return true;
+#endif
+  }
+
+  bool traceEnabled(TraceModule module, int level) const {
+    bool by_level = level <= m_level || level <= m_traces[module];
+    if (!by_level) {
+      return false;
+    }
+    return check_trace_context();
   }
 
   void trace(TraceModule module,
@@ -83,15 +109,9 @@ struct Tracer {
              bool suppress_newline,
              const char* fmt,
              va_list ap) {
-#if !IS_WINDOWS
-    if (m_method_filter && TraceContext::s_current_method != nullptr) {
-      if (strstr(TraceContext::s_current_method->c_str(), m_method_filter) ==
-          nullptr) {
-        return;
-      }
-    }
-#endif
-    std::lock_guard<std::mutex> guard(TraceContext::s_trace_mutex);
+    // Assume that `trace` is never called without `traceEnabled`, so we
+    // do not need to check anything (including context) here.
+    std::lock_guard<std::mutex> guard(m_trace_mutex);
     if (m_show_timestamps) {
       auto t = std::time(nullptr);
       struct tm local_tm;
@@ -177,6 +197,8 @@ struct Tracer {
   FILE* m_file{nullptr};
   long m_level{0};
   std::array<long, N_TRACE_MODULES> m_traces;
+
+  std::mutex m_trace_mutex;
 };
 
 static Tracer tracer;
@@ -200,7 +222,16 @@ void trace(TraceModule module,
 }
 
 #if !IS_WINDOWS
-thread_local const std::string* TraceContext::s_current_method = nullptr;
-#endif
+const std::string& TraceContext::get_string_value() const {
+  if (string_value->empty()) {
+    if (method != nullptr) {
+      string_value_cache = show_deobfuscated(method);
+    } else if (type != nullptr) {
+      string_value_cache = show_deobfuscated(type);
+    }
+  }
+  return *string_value;
+}
 
-std::mutex TraceContext::s_trace_mutex;
+thread_local const TraceContext* TraceContext::s_context = nullptr;
+#endif
