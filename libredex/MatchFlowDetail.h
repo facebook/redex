@@ -89,25 +89,27 @@ struct Constraint {
   std::vector<LocationIx> srcs;
 };
 
+// Types for InstructionConstraintAnalysis' (ICA) Abstract State.
 using Obligation = std::tuple<LocationIx, IRInstruction*, src_index_t>;
-using Domain =
+using ICADomain =
     sparta::HashedSetAbstractDomain<Obligation, boost::hash<Obligation>>;
-using Partition = sparta::PatriciaTreeMapAbstractPartition<reg_t, Domain>;
+using ICAPartition = sparta::PatriciaTreeMapAbstractPartition<reg_t, ICADomain>;
 
 /**
  * Tracks constraints imposed on instructions based on where their results flow
  * into.
  */
 struct InstructionConstraintAnalysis
-    : public ir_analyzer::BaseBackwardsIRAnalyzer<Partition> {
-  using Base = ir_analyzer::BaseBackwardsIRAnalyzer<Partition>;
+    : public ir_analyzer::BaseBackwardsIRAnalyzer<ICAPartition> {
+  using Base = ir_analyzer::BaseBackwardsIRAnalyzer<ICAPartition>;
 
   InstructionConstraintAnalysis(const cfg::ControlFlowGraph& cfg,
                                 const std::vector<Constraint>& constraints,
                                 LocationIx root)
       : Base(cfg), m_constraints(constraints), m_root(root) {}
 
-  void analyze_instruction(IRInstruction* insn, Partition* env) const override;
+  void analyze_instruction(IRInstruction* insn,
+                           ICAPartition* env) const override;
 
  private:
   const std::vector<Constraint>& m_constraints;

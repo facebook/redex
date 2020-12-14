@@ -34,8 +34,8 @@ namespace detail {
 
 InstructionMatcher::~InstructionMatcher() = default;
 
-void InstructionConstraintAnalysis::analyze_instruction(IRInstruction* insn,
-                                                        Partition* env) const {
+void InstructionConstraintAnalysis::analyze_instruction(
+    IRInstruction* insn, ICAPartition* env) const {
 
   // Propagate data-flow constraints if the instruction constraint at loc
   // matches for the instruction being analyzed.
@@ -53,9 +53,9 @@ void InstructionConstraintAnalysis::analyze_instruction(IRInstruction* insn,
       }
 
       reg_t src = insn->src(ix);
-      env->update(src, [o = Obligation{loc, insn, ix}](const Domain& dom) {
+      env->update(src, [o = Obligation{loc, insn, ix}](const ICADomain& dom) {
         if (dom.is_bottom()) {
-          return Domain(o);
+          return ICADomain(o);
         }
 
         auto cpy = dom;
@@ -68,10 +68,10 @@ void InstructionConstraintAnalysis::analyze_instruction(IRInstruction* insn,
   if (auto d = dest(insn)) {
     // Instructions stomp their destination registers, so no other instruction
     // can satisfy these obligations along this trace.
-    Domain obligations;
-    env->update(*d, [&obligations](const Domain& dom) {
+    ICADomain obligations;
+    env->update(*d, [&obligations](const ICADomain& dom) {
       obligations = dom;
-      return Domain::bottom();
+      return ICADomain::bottom();
     });
 
     always_assert(!obligations.is_top());
@@ -202,7 +202,7 @@ DataFlowGraph instruction_graph(cfg::ControlFlowGraph& cfg,
       test_node(root, insn);
 
       if (auto d = dest(insn)) {
-        const Domain& obligations = env.get(*d);
+        const ICADomain& obligations = env.get(*d);
         always_assert(!obligations.is_top());
 
         if (!obligations.is_bottom()) {
