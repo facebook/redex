@@ -109,5 +109,26 @@ struct InstructionConstraintAnalysis
   LocationIx m_root;
 };
 
+/**
+ * Locations represents the following nested mapping:
+ *
+ *   location_t ->> IRInstruction* -> src_index_t ->> IRInstruction*
+ *
+ * Where ->> represents a multimap.  As all results come from a single
+ * flow_t instance, the location_t can be referred to by its index which is
+ * just a number.  These numbers are densely packed, so the multimap is
+ * represented by a vector-of-pointers-to-maps with location indices serving
+ * as keys.  The pointer indirection aims to save space in the case of an
+ * empty mapping.
+ *
+ * Similarly, source indices are densely packed for an instruction, so the
+ * inner multimap is represented by a vector-of-vectors, keyed by the source
+ * index.
+ */
+using Source = std::vector<IRInstruction*>;
+using Sources = std::vector<Source>;
+using Instructions = std::unordered_map<IRInstruction*, Sources>;
+using Locations = std::vector<std::unique_ptr<Instructions>>;
+
 } // namespace detail
 } // namespace mf

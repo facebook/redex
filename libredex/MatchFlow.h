@@ -64,29 +64,6 @@ struct location_t {
 };
 
 struct result_t {
- private:
-  /**
-   * Locations represents the following nested mapping:
-   *
-   *   location_t ->> IRInstruction* -> src_index_t ->> IRInstruction*
-   *
-   * Where ->> represents a multimap.  As all results come from a single
-   * flow_t instance, the location_t can be referred to by its index which is
-   * just a number.  These numbers are densely packed, so the multimap is
-   * represented by a vector-of-pointers-to-maps with location indices serving
-   * as keys.  The pointer indirection aims to save space in the case of an
-   * empty mapping.
-   *
-   * Similarly, source indices are densely packed for an instruction, so the
-   * inner multimap is represented by a vector-of-vectors, keyed by the source
-   * index.
-   */
-  using Source = std::vector<IRInstruction*>;
-  using Sources = std::vector<Source>;
-  using Instructions = std::unordered_map<IRInstruction*, Sources>;
-  using Locations = std::vector<std::unique_ptr<Instructions>>;
-
- public:
   template <typename It>
   struct range {
     range(It begin, It end) : m_begin(begin), m_end(end) {}
@@ -113,9 +90,11 @@ struct result_t {
   };
 
   struct insn_iterator {
+    using underlying_iterator = detail::Instructions::const_iterator;
+
     using iterator_category = std::forward_iterator_tag;
     using value_type = IRInstruction*;
-    using difference_type = Instructions::const_iterator::difference_type;
+    using difference_type = underlying_iterator::difference_type;
     using pointer = IRInstruction* const*;
     using reference = IRInstruction* const&;
 
@@ -131,12 +110,12 @@ struct result_t {
 
    private:
     friend struct result_t;
-    explicit insn_iterator(Instructions::const_iterator it) : m_it(it) {}
+    explicit insn_iterator(underlying_iterator it) : m_it(it) {}
 
-    Instructions::const_iterator m_it;
+    underlying_iterator m_it;
   };
 
-  using src_iterator = Source::const_iterator;
+  using src_iterator = detail::Source::const_iterator;
 
   using insn_range = range<insn_iterator>;
   using src_range = range<src_iterator>;
@@ -160,9 +139,10 @@ struct result_t {
   friend struct flow_t;
 
   /** result_t instances are only constructible by flow_t::find. */
-  explicit result_t(Locations results) : m_results(std::move(results)) {}
+  explicit result_t(detail::Locations results)
+      : m_results(std::move(results)) {}
 
-  Locations m_results;
+  detail::Locations m_results;
 };
 
 template <typename M>

@@ -10,7 +10,7 @@
 namespace mf {
 
 result_t flow_t::find(const cfg::ControlFlowGraph&, location_t) const {
-  result_t::Locations locations{m_constraints.size()};
+  detail::Locations locations{m_constraints.size()};
   return result_t{std::move(locations)};
 }
 
