@@ -20,6 +20,14 @@
 #include "ScopedCFG.h"
 
 namespace mf {
+namespace detail {
+inline bool operator==(const DataFlowGraph::Edge& e,
+                       const DataFlowGraph::Edge& f) {
+  return e.from_loc == f.from_loc && e.from_insn == f.from_insn &&
+         e.src == f.src && e.to_loc == f.to_loc && e.to_insn == f.to_insn;
+}
+} // namespace detail
+
 namespace {
 
 using ::testing::Contains;
