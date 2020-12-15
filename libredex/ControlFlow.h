@@ -65,6 +65,12 @@ struct BlockAccessor;
 } // namespace impl
 } // namespace inliner
 
+namespace source_blocks {
+namespace impl {
+struct BlockAccessor;
+} // namespace impl
+} // namespace source_blocks
+
 namespace cfg {
 
 enum EdgeType : uint8_t {
@@ -390,6 +396,7 @@ class Block final {
   friend class InstructionIteratorImpl<false>;
   friend class InstructionIteratorImpl<true>;
   friend struct ::inliner::impl::BlockAccessor;
+  friend struct ::source_blocks::impl::BlockAccessor;
 
   // return an iterator to the conditional branch (including switch) in this
   // block. If there is no such instruction, return end()
