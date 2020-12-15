@@ -55,6 +55,7 @@ class DexType;
   TM(EVALTC)         \
   TM(FINALINLINE)    \
   TM(GETTER)         \
+  TM(GQL)            \
   TM(HASHER)         \
   TM(ICONSTP)        \
   TM(IDEX)           \
