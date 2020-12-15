@@ -660,7 +660,9 @@ void print_stats(const std::vector<MethodInfo>& instrumented_methods) {
           total_exits, divide(total_exits, total_instrumented).c_str());
   }
 
-  auto print_two_dists = [&](const char* name1, const char* name2,
+  auto print_two_dists = [&divide, &print, &instrumented_methods,
+                          total_instrumented, total_block_instrumented](
+                             const char* name1, const char* name2,
                              auto&& accessor1, auto&& accessor2) {
     std::map<int, std::pair<size_t, size_t>> dist;
     size_t total1 = 0;
