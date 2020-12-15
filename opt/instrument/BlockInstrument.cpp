@@ -36,6 +36,8 @@ constexpr size_t BIT_VECTOR_SIZE = 16;
 // Up to 10 16-bit vectors
 constexpr size_t MAX_BLOCKS = 16 * 10;
 
+constexpr int PROFILING_DATA_VERSION = 2;
+
 using OnMethodExitMap =
     std::map<size_t, // arity of vector arguments (excluding `int offset`)
              std::pair<DexMethod*, // onMethodExit
@@ -104,7 +106,8 @@ void write_metadata(const std::string& file_name,
   // Write a short metadata of this metadata file in the first two lines.
   std::ofstream ofs(file_name, std::ofstream::out | std::ofstream::trunc);
   ofs << "profile_type,version,num_methods" << std::endl;
-  ofs << "basic-block-tracing,2," << all_info.size() << std::endl;
+  ofs << "basic-block-tracing," << PROFILING_DATA_VERSION << ","
+      << all_info.size() << std::endl;
 
   // The real CSV-style metadata follows.
   const std::array<std::string, 8> headers = {
@@ -813,7 +816,8 @@ void BlockInstrumentHelper::do_basic_block_tracing(
   TRACE(INSTRUMENT, 7, "Cold start classes: %zu", cold_start_classes.size());
 
   // This method_offset is used in sMethodStats[] to locate a method profile.
-  size_t method_offset = 0;
+  // We have a small header in the beginning of sMethodStats.
+  size_t method_offset = 8;
   std::vector<MethodInfo> instrumented_methods;
 
   int all_methods = 0;
