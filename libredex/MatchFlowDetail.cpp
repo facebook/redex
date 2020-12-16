@@ -96,12 +96,16 @@ struct InconsistentDFGNodesAnalysis
     }
 
     auto& srcs = m_constraints.at(node_loc(n)).srcs;
-    std::vector<size_t> consistent_edges(srcs.size());
+    std::vector<size_t> consistent_edges(srcs.size(), 0);
+    std::vector<size_t> inconsistent_edges(srcs.size(), 0);
 
-    // Sources without constraints are implicitly consistent.
+    // Sources without constraints are implicitly consistent and sources with
+    // inconsistencies are inconsistent.
     for (size_t i = 0; i < srcs.size(); ++i) {
       if (srcs[i].loc == NO_LOC) {
         consistent_edges.at(i)++;
+      } else if (m_dfg.has_inconsistency(node_loc(n), node_insn(n), i)) {
+        inconsistent_edges.at(i)++;
       }
     }
 
@@ -113,14 +117,27 @@ struct InconsistentDFGNodesAnalysis
 
       // The abstract partition tracks inconsistent nodes, if it does not
       // contain the source node, it is treated as a consistent source.
-      if (!part->get(node_loc(e.from)).contains(node_insn(e.from))) {
+      if (part->get(node_loc(e.from)).contains(node_insn(e.from))) {
+        inconsistent_edges.at(e.src)++;
+      } else {
         consistent_edges.at(e.src)++;
       }
     }
 
-    bool is_consistent = std::all_of(consistent_edges.begin(),
-                                     consistent_edges.end(),
-                                     [](size_t count) { return count > 0; });
+    bool is_consistent = true;
+    for (size_t i = 0; is_consistent && i < srcs.size(); ++i) {
+      auto consistent_srcs = consistent_edges.at(i);
+      auto inconsistent_srcs = inconsistent_edges.at(i);
+
+      switch (srcs.at(i).quant) {
+      case QuantFlag::exists:
+        is_consistent = consistent_srcs > 0;
+        break;
+      case QuantFlag::forall:
+        is_consistent = inconsistent_srcs == 0;
+        break;
+      }
+    }
 
     if (!is_consistent) {
       part->update(node_loc(n), [&n](const IDNDomain& dom) {
@@ -202,18 +219,21 @@ void InstructionConstraintAnalysis::analyze_instruction(
         auto to_src = std::get<2>(o);
 
         const auto& from_src = m_constraints.at(to_loc).srcs.at(to_src);
-        propagate(from_src.loc);
 
         if (opcode::is_a_move(insn->opcode())) {
           if (from_src.alias == AliasFlag::alias) {
             env->update(insn->src(0), add_obligation(o));
+            continue;
           }
         } else if (opcode::is_a_move_result(insn->opcode())) {
           if (from_src.alias == AliasFlag::alias ||
               from_src.alias == AliasFlag::result) {
             env->update(RESULT_REGISTER, add_obligation(o));
+            continue;
           }
         }
+
+        propagate(from_src.loc);
       }
     }
   }
@@ -445,12 +465,26 @@ DataFlowGraph instruction_graph(cfg::ControlFlowGraph& cfg,
     auto to_insn = std::get<1>(o);
     auto to_src = std::get<2>(o);
 
-    auto from_loc = constraints.at(to_loc).srcs.at(to_src).loc;
-    if (!test_node(from_loc, insn)) {
-      return;
+    auto& from_src = constraints.at(to_loc).srcs.at(to_src);
+
+    if (opcode::is_a_move(insn->opcode())) {
+      if (from_src.alias == AliasFlag::alias) {
+        return;
+      }
     }
 
-    graph.add_edge(from_loc, insn, to_src, to_loc, to_insn);
+    if (opcode::is_a_move_result(insn->opcode())) {
+      if (from_src.alias == AliasFlag::alias ||
+          from_src.alias == AliasFlag::result) {
+        return;
+      }
+    }
+
+    if (test_node(from_src.loc, insn)) {
+      graph.add_edge(from_src.loc, insn, to_src, to_loc, to_insn);
+    } else {
+      graph.mark_inconsistent(to_loc, to_insn, to_src);
+    }
   };
 
   for (auto* block : cfg.blocks()) {

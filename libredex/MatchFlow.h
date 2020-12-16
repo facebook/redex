@@ -82,6 +82,10 @@ constexpr detail::AliasFlag result = detail::AliasFlag::result;
 // exists.
 constexpr detail::QuantFlag exists = detail::QuantFlag::exists;
 
+// Source constraint is matched if all found sources that flow in (as per the
+// alias flag) match the constraint.
+constexpr detail::QuantFlag forall = detail::QuantFlag::forall;
+
 struct flag_t {
   constexpr flag_t() = default;
 

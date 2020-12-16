@@ -41,6 +41,7 @@ enum class AliasFlag : uint16_t {
 
 enum class QuantFlag : uint16_t {
   exists,
+  forall,
 };
 
 /**
