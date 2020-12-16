@@ -8,6 +8,7 @@
 #include "MatchFlowDetail.h"
 
 #include <algorithm>
+#include <queue>
 
 #include <boost/optional/optional.hpp>
 
@@ -259,6 +260,78 @@ const std::vector<DataFlowGraph::Edge>& DataFlowGraph::outbound(
   }
 
   return it->second.out;
+}
+
+Locations DataFlowGraph::locations(LocationIx root) const {
+  Locations locations;
+
+  // Exist to avoid creating a temporary for potentially unnecessary
+  // insertions.
+  const Source no_src;
+  const Sources no_srcs;
+
+  // Ensures `node` exists in `locations`.  Returns a pointer to the node's
+  // Sources if it was added as a consequence of this call.  Returns nullptr
+  // otherwise.
+  const auto insert_node = [&locations, &no_srcs](const Node& n) -> Sources* {
+    auto loc = node_loc(n);
+    auto* insn = node_insn(n);
+
+    auto& insns = locations.at(loc);
+    if (!insns) {
+      insns = std::make_unique<Instructions>();
+    }
+
+    // C++17: Use try_emplace to avoid copy.
+    auto res = insns->emplace(insn, no_srcs);
+
+    // Return pointer to value if this is the first time the node was inserted
+    return res.second ? &res.first->second : nullptr;
+  };
+
+  std::queue<Node> frontier;
+
+  // (1) Determine roots and count locations
+  size_t locs = 0;
+  for (auto& adj : m_adjacencies) {
+    auto& n = adj.first;
+    auto loc = node_loc(n);
+
+    if (loc == root) {
+      frontier.push(n);
+    }
+
+    if (loc != NO_LOC && loc >= locs) {
+      locs = loc + 1;
+    }
+  }
+
+  // (2) Reserve space for all locations
+  locations.resize(locs);
+
+  // (3) Traverse graph from roots, adding nodes.
+  for (; !frontier.empty(); frontier.pop()) {
+    auto& n = frontier.front();
+
+    if (auto* srcs = insert_node(n)) {
+      auto& in = m_adjacencies.find(n)->second.in;
+
+      for (auto& e : in) {
+        if (e.src == NO_SRC) {
+          continue;
+        }
+
+        if (e.src >= srcs->size()) {
+          srcs->resize(e.src + 1, no_src);
+        }
+
+        srcs->at(e.src).push_back(e.from_insn);
+        frontier.push({e.from_loc, e.from_insn});
+      }
+    }
+  }
+
+  return locations;
 }
 
 void DataFlowGraph::propagate_flow_constraints(

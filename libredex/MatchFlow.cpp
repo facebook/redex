@@ -9,9 +9,13 @@
 
 namespace mf {
 
-result_t flow_t::find(const cfg::ControlFlowGraph&, location_t) const {
-  detail::Locations locations{m_constraints.size()};
-  return result_t{std::move(locations)};
+result_t flow_t::find(cfg::ControlFlowGraph& cfg, location_t l) const {
+  always_assert(this == l.m_owner && "location_t from another flow_t");
+
+  auto dfg = detail::instruction_graph(cfg, m_constraints, l.m_ix);
+  dfg.propagate_flow_constraints(m_constraints);
+
+  return result_t{dfg.locations(l.m_ix)};
 }
 
 result_t::insn_range result_t::matching(location_t l) const {

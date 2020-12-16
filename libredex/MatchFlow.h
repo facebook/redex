@@ -34,9 +34,11 @@ struct flow_t {
 
   /**
    * Search for sub-trees originating from instructions matching the constraints
-   * at l, in the given control-flow graph.
+   * at l, in the given control-flow graph.  This operation requires that a
+   * unique exit block exists in `cfg`, and will calculate one (mutating the
+   * CFG) if it does not exist.
    */
-  result_t find(const cfg::ControlFlowGraph& cfg, location_t l) const;
+  result_t find(cfg::ControlFlowGraph& cfg, location_t l) const;
 
  private:
   friend struct location_t;

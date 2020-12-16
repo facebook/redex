@@ -214,6 +214,13 @@ struct DataFlowGraph {
    */
   const std::vector<Edge>& outbound(LocationIx loc, IRInstruction* insn) const;
 
+  /**
+   * Copy the sub-graph flowing into root (i.e. reachable transitively via
+   * inbound edges), converting it into the Locations data structure (internal
+   * representation of mf::result_t).
+   */
+  Locations locations(LocationIx root) const;
+
   /** Add (loc, insn) as a node in the graph. */
   void add_node(LocationIx loc, IRInstruction* insn);
 

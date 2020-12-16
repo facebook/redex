@@ -59,7 +59,37 @@ TEST_F(MatchFlowTest, RangeUnique) {
   EXPECT_EQ(rtwo.unique(), nullptr);
 }
 
-TEST_F(MatchFlowTest, Empty) {
+TEST_F(MatchFlowTest, MultipleResults) {
+  flow_t f;
+
+  auto const_int = f.insn(m::const_());
+
+  auto code = assembler::ircode_from_string(R"((
+    (const v0 0)
+    (const v1 1)
+    (:L)
+    (add-int v0 v0 v1)
+    (goto :L)
+  ))");
+
+  cfg::ScopedCFG cfg{code.get()};
+  auto ii = InstructionIterable(*cfg);
+  std::vector<MethodItemEntry> mies{ii.begin(), ii.end()};
+
+  IRInstruction* const_0 = mies[0].insn;
+  IRInstruction* const_1 = mies[1].insn;
+
+  ASSERT_EQ(const_0->opcode(), OPCODE_CONST);
+  ASSERT_EQ(const_1->opcode(), OPCODE_CONST);
+
+  auto res = f.find(*cfg, const_int);
+  auto insns = res.matching(const_int);
+
+  std::vector<IRInstruction*> vinsns{insns.begin(), insns.end()};
+  EXPECT_THAT(vinsns, UnorderedElementsAre(const_0, const_1));
+}
+
+TEST_F(MatchFlowTest, Cycle) {
   flow_t f;
 
   auto add = f.insn(m::add_int_());
@@ -74,11 +104,170 @@ TEST_F(MatchFlowTest, Empty) {
   ))");
 
   cfg::ScopedCFG cfg{code.get()};
+  auto ii = InstructionIterable(*cfg);
+  std::vector<MethodItemEntry> mies{ii.begin(), ii.end()};
+
+  IRInstruction* add_int = mies[2].insn;
+  ASSERT_EQ(add_int->opcode(), OPCODE_ADD_INT);
 
   auto res = f.find(*cfg, add);
 
   auto insns = res.matching(add);
-  EXPECT_EQ(insns.begin(), insns.end());
+  EXPECT_EQ(insns.unique(), add_int);
+}
+
+TEST_F(MatchFlowTest, MatchingNotRoot) {
+  flow_t f;
+
+  auto lit = f.insn(m::const_());
+  auto add = f.insn(m::add_int_()).src(0, lit);
+  auto sub = f.insn(m::sub_int_()).src(0, add).src(1, add);
+
+  auto code = assembler::ircode_from_string(R"((
+    (const v0 0)
+    (const v1 1)
+    (const v2 2)
+    (add-int v3 v0 v2)
+    (add-int v4 v1 v2)
+    (add-int v5 v2 v2)
+    (sub-int v6 v3 v4)
+  ))");
+
+  cfg::ScopedCFG cfg{code.get()};
+  auto ii = InstructionIterable(*cfg);
+  std::vector<MethodItemEntry> mies{ii.begin(), ii.end()};
+
+  IRInstruction* const_0 = mies[0].insn;
+  IRInstruction* const_1 = mies[1].insn;
+
+  ASSERT_EQ(const_0->opcode(), OPCODE_CONST);
+  ASSERT_EQ(const_1->opcode(), OPCODE_CONST);
+
+  auto res = f.find(*cfg, sub);
+
+  auto insns = res.matching(lit);
+  std::vector<IRInstruction*> vinsns{insns.begin(), insns.end()};
+  EXPECT_THAT(vinsns, UnorderedElementsAre(const_0, const_1));
+}
+
+TEST_F(MatchFlowTest, MatchingNotRootDiamond) {
+  flow_t f;
+
+  auto lit = f.insn(m::const_());
+  auto add = f.insn(m::add_int_()).src(0, lit);
+  auto sub = f.insn(m::sub_int_()).src(0, add).src(1, add);
+
+  auto code = assembler::ircode_from_string(R"((
+    (const v0 0)
+    (const v1 1)
+    (add-int v2 v0 v1)
+    (add-int v3 v0 v1)
+    (add-int v4 v1 v1)
+    (sub-int v5 v2 v3)
+  ))");
+
+  cfg::ScopedCFG cfg{code.get()};
+  auto ii = InstructionIterable(*cfg);
+  std::vector<MethodItemEntry> mies{ii.begin(), ii.end()};
+
+  IRInstruction* const_0 = mies[0].insn;
+  ASSERT_EQ(const_0->opcode(), OPCODE_CONST);
+
+  auto res = f.find(*cfg, sub);
+
+  auto insns = res.matching(lit);
+  std::vector<IRInstruction*> vinsns{insns.begin(), insns.end()};
+  EXPECT_THAT(vinsns, UnorderedElementsAre(const_0));
+}
+
+TEST_F(MatchFlowTest, OnlyMatchingSource) {
+  flow_t f;
+
+  auto lit = f.insn(m::const_());
+  auto add = f.insn(m::add_int_()).src(0, lit);
+
+  auto code = assembler::ircode_from_string(R"((
+    (const v0 0)
+    (add-int v0 v0 v0)
+    (const v1 1)
+    (add-int v1 v1 v1)
+  ))");
+
+  cfg::ScopedCFG cfg{code.get()};
+  auto ii = InstructionIterable(*cfg);
+  std::vector<MethodItemEntry> mies{ii.begin(), ii.end()};
+
+  IRInstruction* const_0 = mies[0].insn;
+  IRInstruction* add_int_0 = mies[1].insn;
+  IRInstruction* const_1 = mies[2].insn;
+  IRInstruction* add_int_1 = mies[3].insn;
+
+  ASSERT_EQ(const_0->opcode(), OPCODE_CONST);
+  ASSERT_EQ(add_int_0->opcode(), OPCODE_ADD_INT);
+  ASSERT_EQ(const_1->opcode(), OPCODE_CONST);
+  ASSERT_EQ(add_int_1->opcode(), OPCODE_ADD_INT);
+
+  auto res = f.find(*cfg, add);
+
+  auto srcs_0 = res.matching(add, add_int_0, 0);
+  EXPECT_EQ(srcs_0.unique(), const_0);
+
+  auto srcs_1 = res.matching(add, add_int_1, 0);
+  EXPECT_EQ(srcs_1.unique(), const_1);
+
+  auto consts = res.matching(lit);
+  std::vector<IRInstruction*> vconsts{consts.begin(), consts.end()};
+  EXPECT_THAT(vconsts, UnorderedElementsAre(const_0, const_1));
+}
+
+TEST_F(MatchFlowTest, MultipleMatchingSource) {
+  flow_t f;
+
+  auto lit = f.insn(m::const_());
+  auto add = f.insn(m::add_int_()).src(0, lit);
+
+  auto code = assembler::ircode_from_string(R"((
+    (load-param v0)
+    (if-eqz v0 :else)
+    (const v0 0)
+    (goto :end)
+    (:else)
+    (const v0 1)
+    (:end)
+    (add-int v0 v0 v0)
+    (const v1 2)
+    (add-int v1 v1 v1)
+    (return-void)
+  ))");
+
+  cfg::ScopedCFG cfg{code.get()};
+  auto ii = InstructionIterable(*cfg);
+  std::vector<MethodItemEntry> mies{ii.begin(), ii.end()};
+
+  IRInstruction* const_0 = mies[2].insn;
+  IRInstruction* const_1 = mies[3].insn;
+  IRInstruction* add_int_0 = mies[4].insn;
+  IRInstruction* const_2 = mies[5].insn;
+  IRInstruction* add_int_1 = mies[6].insn;
+
+  ASSERT_EQ(const_0->opcode(), OPCODE_CONST);
+  ASSERT_EQ(const_1->opcode(), OPCODE_CONST);
+  ASSERT_EQ(add_int_0->opcode(), OPCODE_ADD_INT);
+  ASSERT_EQ(const_2->opcode(), OPCODE_CONST);
+  ASSERT_EQ(add_int_1->opcode(), OPCODE_ADD_INT);
+
+  auto res = f.find(*cfg, add);
+
+  auto srcs_0 = res.matching(add, add_int_0, 0);
+  std::vector<IRInstruction*> vsrcs_0{srcs_0.begin(), srcs_0.end()};
+  EXPECT_THAT(vsrcs_0, UnorderedElementsAre(const_0, const_1));
+
+  auto srcs_1 = res.matching(add, add_int_1, 0);
+  EXPECT_EQ(srcs_1.unique(), const_2);
+
+  auto consts = res.matching(lit);
+  std::vector<IRInstruction*> vconsts{consts.begin(), consts.end()};
+  EXPECT_THAT(vconsts, UnorderedElementsAre(const_0, const_1, const_2));
 }
 
 TEST_F(MatchFlowTest, DFGSize) {
@@ -253,6 +442,11 @@ TEST_F(MatchFlowTest, InstructionGraphTransitiveFailure) {
   EXPECT_FALSE(graph.has_node(0, add_int));
   EXPECT_FALSE(graph.has_node(1, sub_int));
   EXPECT_TRUE(graph.has_node(2, const_1));
+
+  auto locs = graph.locations(0);
+
+  // Although const_1 existed in the graph, it isn't reachable from a root node.
+  EXPECT_EQ(locs.at(2), nullptr);
 }
 
 } // namespace
