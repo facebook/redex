@@ -137,3 +137,39 @@ class NonVirtualsUser {
     nv.non_virtual2(1.0);
   }
 }
+
+class Reorderables {
+  public void reorderable1(int x, Object y, double z) {
+  }
+
+  public void reorderable2(double x, int y, Object z) {
+    // happens to be already normalized
+  }
+
+  public void reorderable2(Object x, double y, int z) {
+  }
+
+  public void reorderable2(Object x, int y, double z) {
+  }
+}
+
+interface ReorderablesInterface {
+  void reorderable1(int x, Object y, double z);
+  void reorderable2(double x, int y, Object z);
+  void reorderable2(Object x, double y, int z);
+  void reorderable2(Object x, int y, double z);
+}
+
+class SubReorderables extends Reorderables implements ReorderablesInterface {
+  public void reorderable1(int x, Object y, double z) {
+  }
+
+  public void reorderable2(double x, int y, Object z) {
+  }
+
+  public void reorderable2(Object x, double y, int z) {
+  }
+
+  public void reorderable2(Object x, int y, double z) {
+  }
+}
