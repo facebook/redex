@@ -236,6 +236,19 @@ struct DataFlowGraph {
                 LocationIx lto,
                 IRInstruction* ito);
 
+  /**
+   * Apply flow constraints through the data-flow graph, removing nodes whose
+   * flow constraints are not met.  Removing one such node can have transitive
+   * effects (i.e. make downstream nodes inconsistent).
+   *
+   * Guaranteed to remove the smallest set of nodes required to ensure all
+   * remaining nodes are consistent with respect to each other and the supplied
+   * flow constraints.
+   *
+   * Edges from/to removed nodes are also cleaned up.
+   */
+  void propagate_flow_constraints(const std::vector<Constraint>& constraints);
+
  private:
   struct Adjacencies {
     std::vector<Edge> in, out;

@@ -142,6 +142,16 @@ TEST_F(MatchFlowTest, InstructionGraph) {
       Contains(DataFlowGraph::Edge(NO_LOC, nullptr, NO_SRC, 1, const_1)));
 
   EXPECT_FALSE(graph.has_node(1, const_0));
+
+  ASSERT_TRUE(graph.has_node(0, add_int));
+  ASSERT_TRUE(graph.has_node(1, const_1));
+  ASSERT_EQ(graph.size(), 2);
+
+  graph.propagate_flow_constraints(constraints);
+
+  EXPECT_TRUE(graph.has_node(0, add_int));
+  EXPECT_TRUE(graph.has_node(1, const_1));
+  EXPECT_EQ(graph.size(), 2);
 }
 
 TEST_F(MatchFlowTest, InstructionGraphNoFlowConstraint) {
@@ -235,6 +245,14 @@ TEST_F(MatchFlowTest, InstructionGraphTransitiveFailure) {
   EXPECT_THAT(
       graph.outbound(NO_LOC, nullptr),
       Contains(DataFlowGraph::Edge(NO_LOC, nullptr, NO_SRC, 2, const_1)));
+
+  ASSERT_TRUE(graph.has_node(1, sub_int));
+  ASSERT_TRUE(graph.has_node(0, add_int));
+  graph.propagate_flow_constraints(constraints);
+
+  EXPECT_FALSE(graph.has_node(0, add_int));
+  EXPECT_FALSE(graph.has_node(1, sub_int));
+  EXPECT_TRUE(graph.has_node(2, const_1));
 }
 
 } // namespace

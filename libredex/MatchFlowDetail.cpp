@@ -11,6 +11,12 @@
 
 #include <boost/optional/optional.hpp>
 
+#include "MonotonicFixpointIterator.h"
+#include "PatriciaTreeSetAbstractDomain.h"
+
+namespace mf {
+namespace detail {
+
 namespace {
 
 /**
@@ -27,10 +33,122 @@ inline boost::optional<reg_t> dest(const IRInstruction* insn) {
   }
 }
 
-} // namespace
+inline LocationIx node_loc(const DataFlowGraph::Node& n) {
+  return std::get<0>(n);
+}
 
-namespace mf {
-namespace detail {
+inline IRInstruction* node_insn(const DataFlowGraph::Node& n) {
+  return std::get<1>(n);
+}
+
+struct SpartaDFG {
+  using Graph = DataFlowGraph;
+  using NodeId = DataFlowGraph::Node;
+  using EdgeId = DataFlowGraph::Edge;
+  using NodeHash = boost::hash<NodeId>;
+
+  static NodeId entry(const Graph&) { return NodeId{NO_LOC, nullptr}; }
+
+  static const std::vector<EdgeId>& predecessors(const Graph& graph,
+                                                 const NodeId& n) {
+    return graph.inbound(node_loc(n), node_insn(n));
+  }
+
+  static const std::vector<EdgeId>& successors(const Graph& graph,
+                                               const NodeId& n) {
+    return graph.outbound(node_loc(n), node_insn(n));
+  }
+
+  static NodeId source(const Graph&, const EdgeId& e) {
+    return NodeId{e.from_loc, e.from_insn};
+  }
+
+  static NodeId target(const Graph&, const EdgeId& e) {
+    return NodeId{e.to_loc, e.to_insn};
+  }
+};
+
+// Types for InconsistentDFGNodesAnalysis' (IDN) Abstract State.
+using IDNDomain = sparta::PatriciaTreeSetAbstractDomain<IRInstruction*>;
+using IDNPartition =
+    sparta::PatriciaTreeMapAbstractPartition<LocationIx, IDNDomain>;
+
+struct InconsistentDFGNodesAnalysis
+    : public sparta::MonotonicFixpointIterator<SpartaDFG,
+                                               IDNPartition,
+                                               SpartaDFG::NodeHash> {
+  using Base = sparta::
+      MonotonicFixpointIterator<SpartaDFG, IDNPartition, SpartaDFG::NodeHash>;
+
+  using NodeId = SpartaDFG::NodeId;
+  using EdgeId = SpartaDFG::EdgeId;
+
+  explicit InconsistentDFGNodesAnalysis(
+      const DataFlowGraph& dfg, const std::vector<Constraint>& constraints)
+      : Base(dfg, dfg.size()), m_dfg(dfg), m_constraints(constraints) {}
+
+  void analyze_node(const NodeId& n, IDNPartition* part) const override {
+    if (node_loc(n) == NO_LOC) {
+      // Entrypoint doesn't require analysis.
+      return;
+    }
+
+    // Nothing to do if the node is already considered inconsistent.
+    if (part->get(node_loc(n)).contains(node_insn(n))) {
+      return;
+    }
+
+    auto& srcs = m_constraints.at(node_loc(n)).srcs;
+    std::vector<size_t> consistent_edges(srcs.size());
+
+    // Sources without constraints are implicitly consistent.
+    for (size_t i = 0; i < srcs.size(); ++i) {
+      if (srcs[i] == NO_LOC) {
+        consistent_edges.at(i)++;
+      }
+    }
+
+    for (const auto& e : m_dfg.inbound(node_loc(n), node_insn(n))) {
+      if (e.from_loc == NO_LOC) {
+        // Skip sentinel nodes.
+        continue;
+      }
+
+      // The abstract partition tracks inconsistent nodes, if it does not
+      // contain the source node, it is treated as a consistent source.
+      if (!part->get(e.from_loc).contains(e.from_insn)) {
+        consistent_edges.at(e.src)++;
+      }
+    }
+
+    bool is_consistent = std::all_of(consistent_edges.begin(),
+                                     consistent_edges.end(),
+                                     [](size_t count) { return count > 0; });
+
+    if (!is_consistent) {
+      part->update(node_loc(n), [&n](const IDNDomain& dom) {
+        if (dom.is_bottom()) {
+          return IDNDomain(node_insn(n));
+        } else {
+          auto cpy = dom;
+          cpy.add(node_insn(n));
+          return cpy;
+        }
+      });
+    }
+  }
+
+  IDNPartition analyze_edge(const EdgeId&,
+                            const IDNPartition& p) const override {
+    return p;
+  }
+
+ private:
+  const DataFlowGraph& m_dfg;
+  const std::vector<Constraint>& m_constraints;
+};
+
+} // namespace
 
 InstructionMatcher::~InstructionMatcher() = default;
 
@@ -141,6 +259,41 @@ const std::vector<DataFlowGraph::Edge>& DataFlowGraph::outbound(
   }
 
   return it->second.out;
+}
+
+void DataFlowGraph::propagate_flow_constraints(
+    const std::vector<Constraint>& constraints) {
+
+  InconsistentDFGNodesAnalysis analysis{*this, constraints};
+  analysis.run({});
+
+  // (1) Erase inconsistent nodes.
+  for (auto it = m_adjacencies.begin(), end = m_adjacencies.end(); it != end;) {
+    auto& node = it->first;
+    auto part = analysis.get_exit_state_at(node);
+
+    if (part.get(node_loc(node)).contains(node_insn(node))) {
+      it = m_adjacencies.erase(it);
+    } else {
+      ++it;
+    }
+  }
+
+  // (2) Erase edges from/to inconsistent nodes from consistent ones.
+  for (auto& adj : m_adjacencies) {
+    auto& in = adj.second.in;
+    auto in_rm = std::remove_if(in.begin(), in.end(), [this](Edge& e) {
+      return !m_adjacencies.count(Node{e.from_loc, e.from_insn});
+    });
+
+    auto& out = adj.second.out;
+    auto out_rm = std::remove_if(out.begin(), out.end(), [this](Edge& e) {
+      return !m_adjacencies.count(Node{e.to_loc, e.to_insn});
+    });
+
+    in.erase(in_rm, in.end());
+    out.erase(out_rm, out.end());
+  }
 }
 
 DataFlowGraph instruction_graph(cfg::ControlFlowGraph& cfg,
