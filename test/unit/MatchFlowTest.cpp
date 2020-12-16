@@ -81,6 +81,29 @@ TEST_F(MatchFlowTest, RangeUnique) {
   EXPECT_EQ(rtwo.unique(), nullptr);
 }
 
+TEST_F(MatchFlowTest, NoResults) {
+  flow_t f;
+  auto lit = f.insn(m::const_());
+  auto add = f.insn(m::add_int_()).src(0, lit, exists | dest);
+
+  auto code = assembler::ircode_from_string(R"((
+    (const v0 0)
+    (sub-int v0 v0 v0)
+    (return-void)
+  ))");
+
+  cfg::ScopedCFG cfg{code.get()};
+  auto ii = InstructionIterable(*cfg);
+  std::vector<MethodItemEntry> mies{ii.begin(), ii.end()};
+
+  ASSERT_INSN(sub_int, mies[1], OPCODE_SUB_INT);
+
+  auto res = f.find(*cfg, add);
+  EXPECT_INSNS(res.matching(add));
+  EXPECT_INSNS(res.matching(add, sub_int, 0));
+  EXPECT_INSNS(res.matching(lit));
+}
+
 TEST_F(MatchFlowTest, MultipleResults) {
   flow_t f;
 

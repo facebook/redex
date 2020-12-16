@@ -19,7 +19,11 @@ result_t flow_t::find(cfg::ControlFlowGraph& cfg, location_t l) const {
 }
 
 result_t::insn_range result_t::matching(location_t l) const {
-  auto& insns = m_results.at(l.m_ix);
+  if (l.m_ix >= m_results.size()) {
+    return insn_range::empty();
+  }
+
+  auto& insns = m_results[l.m_ix];
   if (!insns) {
     return insn_range::empty();
   }
@@ -31,7 +35,11 @@ result_t::insn_range result_t::matching(location_t l) const {
 result_t::src_range result_t::matching(location_t l,
                                        const IRInstruction* insn,
                                        src_index_t ix) const {
-  auto& insns = m_results.at(l.m_ix);
+  if (l.m_ix >= m_results.size()) {
+    return src_range::empty();
+  }
+
+  auto& insns = m_results[l.m_ix];
   if (!insns) {
     return src_range::empty();
   }
