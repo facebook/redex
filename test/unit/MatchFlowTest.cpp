@@ -23,8 +23,15 @@ namespace mf {
 namespace detail {
 inline bool operator==(const DataFlowGraph::Edge& e,
                        const DataFlowGraph::Edge& f) {
-  return e.from_loc == f.from_loc && e.from_insn == f.from_insn &&
-         e.src == f.src && e.to_loc == f.to_loc && e.to_insn == f.to_insn;
+  return e.from == f.from && e.src == f.src && e.to == f.to;
+}
+
+DataFlowGraph::Edge Edge(LocationIx from_loc,
+                         IRInstruction* from_insn,
+                         src_index_t src,
+                         LocationIx to_loc,
+                         IRInstruction* to_insn) {
+  return DataFlowGraph::Edge({from_loc, from_insn}, src, {to_loc, to_insn});
 }
 } // namespace detail
 
@@ -321,14 +328,12 @@ TEST_F(MatchFlowTest, InstructionGraph) {
 
   auto graph = instruction_graph(*cfg, constraints, 0);
 
-  EXPECT_THAT(
-      graph.inbound(0, add_int),
-      UnorderedElementsAre(DataFlowGraph::Edge(0, add_int, 0, 0, add_int),
-                           DataFlowGraph::Edge(1, const_1, 1, 0, add_int)));
+  EXPECT_THAT(graph.inbound(0, add_int),
+              UnorderedElementsAre(Edge(0, add_int, 0, 0, add_int),
+                                   Edge(1, const_1, 1, 0, add_int)));
 
-  EXPECT_THAT(
-      graph.outbound(NO_LOC, nullptr),
-      Contains(DataFlowGraph::Edge(NO_LOC, nullptr, NO_SRC, 1, const_1)));
+  EXPECT_THAT(graph.outbound(NO_LOC, nullptr),
+              Contains(Edge(NO_LOC, nullptr, NO_SRC, 1, const_1)));
 
   EXPECT_FALSE(graph.has_node(1, const_0));
 
@@ -373,13 +378,11 @@ TEST_F(MatchFlowTest, InstructionGraphNoFlowConstraint) {
 
   auto graph = instruction_graph(*cfg, constraints, 0);
 
-  EXPECT_THAT(
-      graph.inbound(0, add_int),
-      UnorderedElementsAre(DataFlowGraph::Edge(1, const_1, 1, 0, add_int)));
+  EXPECT_THAT(graph.inbound(0, add_int),
+              UnorderedElementsAre(Edge(1, const_1, 1, 0, add_int)));
 
-  EXPECT_THAT(
-      graph.outbound(NO_LOC, nullptr),
-      Contains(DataFlowGraph::Edge(NO_LOC, nullptr, NO_SRC, 1, const_1)));
+  EXPECT_THAT(graph.outbound(NO_LOC, nullptr),
+              Contains(Edge(NO_LOC, nullptr, NO_SRC, 1, const_1)));
 }
 
 TEST_F(MatchFlowTest, InstructionGraphTransitiveFailure) {
@@ -419,21 +422,18 @@ TEST_F(MatchFlowTest, InstructionGraphTransitiveFailure) {
 
   auto graph = instruction_graph(*cfg, constraints, 0);
 
-  EXPECT_THAT(
-      graph.inbound(0, add_int),
-      UnorderedElementsAre(DataFlowGraph::Edge(1, sub_int, 0, 0, add_int),
-                           DataFlowGraph::Edge(2, const_1, 1, 0, add_int)));
+  EXPECT_THAT(graph.inbound(0, add_int),
+              UnorderedElementsAre(Edge(1, sub_int, 0, 0, add_int),
+                                   Edge(2, const_1, 1, 0, add_int)));
 
   // Even though its flow constraints aren't met, the output from instruction
   // graph will return it because it is only concerned with reachability
   // and instruction constraints.
-  EXPECT_THAT(
-      graph.inbound(1, sub_int),
-      UnorderedElementsAre(DataFlowGraph::Edge(2, const_1, 0, 1, sub_int)));
+  EXPECT_THAT(graph.inbound(1, sub_int),
+              UnorderedElementsAre(Edge(2, const_1, 0, 1, sub_int)));
 
-  EXPECT_THAT(
-      graph.outbound(NO_LOC, nullptr),
-      Contains(DataFlowGraph::Edge(NO_LOC, nullptr, NO_SRC, 2, const_1)));
+  EXPECT_THAT(graph.outbound(NO_LOC, nullptr),
+              Contains(Edge(NO_LOC, nullptr, NO_SRC, 2, const_1)));
 
   ASSERT_TRUE(graph.has_node(1, sub_int));
   ASSERT_TRUE(graph.has_node(0, add_int));

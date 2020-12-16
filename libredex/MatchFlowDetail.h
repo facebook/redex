@@ -151,22 +151,11 @@ struct DataFlowGraph {
   //
   // to simplify referencing source nodes from edges.
   struct Edge {
-    Edge(LocationIx from_loc,
-         IRInstruction* from_insn,
-         src_index_t src,
-         LocationIx to_loc,
-         IRInstruction* to_insn)
-        : from_loc{from_loc},
-          from_insn{from_insn},
-          src{src},
-          to_loc{to_loc},
-          to_insn{to_insn} {}
+    Edge(Node from, src_index_t src, Node to) : from{from}, src{src}, to{to} {}
 
-    LocationIx from_loc;
-    IRInstruction* from_insn;
+    Node from;
     src_index_t src;
-    LocationIx to_loc;
-    IRInstruction* to_insn;
+    Node to;
   };
 
   /** Construct an empty data-flow graph */

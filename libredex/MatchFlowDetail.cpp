@@ -60,13 +60,9 @@ struct SpartaDFG {
     return graph.outbound(node_loc(n), node_insn(n));
   }
 
-  static NodeId source(const Graph&, const EdgeId& e) {
-    return NodeId{e.from_loc, e.from_insn};
-  }
+  static NodeId source(const Graph&, const EdgeId& e) { return e.from; }
 
-  static NodeId target(const Graph&, const EdgeId& e) {
-    return NodeId{e.to_loc, e.to_insn};
-  }
+  static NodeId target(const Graph&, const EdgeId& e) { return e.to; }
 };
 
 // Types for InconsistentDFGNodesAnalysis' (IDN) Abstract State.
@@ -110,14 +106,14 @@ struct InconsistentDFGNodesAnalysis
     }
 
     for (const auto& e : m_dfg.inbound(node_loc(n), node_insn(n))) {
-      if (e.from_loc == NO_LOC) {
+      if (node_loc(e.from) == NO_LOC) {
         // Skip sentinel nodes.
         continue;
       }
 
       // The abstract partition tracks inconsistent nodes, if it does not
       // contain the source node, it is treated as a consistent source.
-      if (!part->get(e.from_loc).contains(e.from_insn)) {
+      if (!part->get(node_loc(e.from)).contains(node_insn(e.from))) {
         consistent_edges.at(e.src)++;
       }
     }
@@ -235,9 +231,11 @@ void DataFlowGraph::add_edge(LocationIx lfrom,
                              src_index_t src,
                              LocationIx lto,
                              IRInstruction* ito) {
-  Edge e{lfrom, ifrom, src, lto, ito};
-  m_adjacencies[{lfrom, ifrom}].out.push_back(e);
-  m_adjacencies[{lto, ito}].in.push_back(e);
+  Node f{lfrom, ifrom};
+  Node t{lto, ito};
+  Edge e{f, src, t};
+  m_adjacencies[f].out.push_back(e);
+  m_adjacencies[t].in.push_back(e);
 }
 
 const std::vector<DataFlowGraph::Edge>& DataFlowGraph::inbound(
@@ -325,8 +323,8 @@ Locations DataFlowGraph::locations(LocationIx root) const {
           srcs->resize(e.src + 1, no_src);
         }
 
-        srcs->at(e.src).push_back(e.from_insn);
-        frontier.push({e.from_loc, e.from_insn});
+        srcs->at(e.src).push_back(node_insn(e.from));
+        frontier.push(e.from);
       }
     }
   }
@@ -356,12 +354,12 @@ void DataFlowGraph::propagate_flow_constraints(
   for (auto& adj : m_adjacencies) {
     auto& in = adj.second.in;
     auto in_rm = std::remove_if(in.begin(), in.end(), [this](Edge& e) {
-      return !m_adjacencies.count(Node{e.from_loc, e.from_insn});
+      return !m_adjacencies.count(e.from);
     });
 
     auto& out = adj.second.out;
     auto out_rm = std::remove_if(out.begin(), out.end(), [this](Edge& e) {
-      return !m_adjacencies.count(Node{e.to_loc, e.to_insn});
+      return !m_adjacencies.count(e.to);
     });
 
     in.erase(in_rm, in.end());
