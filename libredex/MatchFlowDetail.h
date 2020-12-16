@@ -12,6 +12,7 @@
 #include <limits>
 #include <memory>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "BaseIRAnalyzer.h"
@@ -196,6 +197,13 @@ struct DataFlowGraph {
   bool has_node(LocationIx loc, IRInstruction* insn) const;
 
   /**
+   * Decides whether the src-th operand of insn, when interpreted as a loc has
+   * been marked as accepting a value that does not match its constraint.
+   */
+  bool has_inconsistency(LocationIx loc,
+                         IRInstruction* insn,
+                         src_index_t src) const;
+  /**
    * Returns a reference to the edges that flow in to the (loc, insn) node.
    * Edges are represented by a tuple:
    *
@@ -251,6 +259,12 @@ struct DataFlowGraph {
                 IRInstruction* ito);
 
   /**
+   * Indicate that a value flowing into the src-th operand of insn does not
+   * match the src-th flow constraint of the loc-th constraint.
+   */
+  void mark_inconsistent(LocationIx loc, IRInstruction* insn, src_index_t src);
+
+  /**
    * Apply flow constraints through the data-flow graph, removing nodes whose
    * flow constraints are not met.  Removing one such node can have transitive
    * effects (i.e. make downstream nodes inconsistent).
@@ -266,6 +280,7 @@ struct DataFlowGraph {
  private:
   struct Adjacencies {
     std::vector<Edge> in, out;
+    std::unordered_set<src_index_t> inconsistent;
   };
 
   // Every node in the data-flow graph exists as a key in this map.  Edges,
@@ -280,6 +295,8 @@ struct DataFlowGraph {
   //
   // A sentinel node -- (NO_LOC, nullptr) -- has sentinel outbound edges to
   // every node without (other) inbound edges.
+  //
+  // Each node is also associated with a set of inconsistent sources.
   std::unordered_map<Node, Adjacencies, boost::hash<Node>> m_adjacencies;
 };
 

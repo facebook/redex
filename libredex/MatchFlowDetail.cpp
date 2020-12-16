@@ -235,6 +235,13 @@ bool DataFlowGraph::has_node(LocationIx loc, IRInstruction* insn) const {
   return m_adjacencies.count({loc, insn});
 }
 
+bool DataFlowGraph::has_inconsistency(LocationIx loc,
+                                      IRInstruction* insn,
+                                      src_index_t src) const {
+  auto it = m_adjacencies.find({loc, insn});
+  return it != m_adjacencies.end() && it->second.inconsistent.count(src);
+}
+
 void DataFlowGraph::add_node(LocationIx loc, IRInstruction* insn) {
   (void)m_adjacencies[{loc, insn}];
 }
@@ -253,6 +260,12 @@ void DataFlowGraph::add_edge(LocationIx lfrom,
   Edge e{f, src, t};
   m_adjacencies[f].out.push_back(e);
   m_adjacencies[t].in.push_back(e);
+}
+
+void DataFlowGraph::mark_inconsistent(LocationIx loc,
+                                      IRInstruction* insn,
+                                      src_index_t src) {
+  m_adjacencies[{loc, insn}].inconsistent.insert(src);
 }
 
 const std::vector<DataFlowGraph::Edge>& DataFlowGraph::inbound(

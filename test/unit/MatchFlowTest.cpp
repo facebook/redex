@@ -355,6 +355,18 @@ TEST_F(MatchFlowTest, DFGSize) {
   EXPECT_EQ(1, graph.size());
 }
 
+TEST_F(MatchFlowTest, DFGInconsistent) {
+  using namespace detail;
+  DataFlowGraph graph;
+
+  auto uinsn = std::make_unique<IRInstruction>(OPCODE_CONST);
+  auto* insn = uinsn.get();
+
+  EXPECT_FALSE(graph.has_inconsistency(0, insn, 0));
+  graph.mark_inconsistent(0, insn, 0);
+  EXPECT_TRUE(graph.has_inconsistency(0, insn, 0));
+}
+
 TEST_F(MatchFlowTest, InstructionGraph) {
   // Use a loop to test that the analysis will terminate in such cases.
   auto code = assembler::ircode_from_string(R"((
