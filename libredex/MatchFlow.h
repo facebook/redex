@@ -68,6 +68,16 @@ constexpr detail::AliasFlag dest = detail::AliasFlag::dest;
 // B's source register would be matched by A.
 constexpr detail::AliasFlag alias = detail::AliasFlag::alias;
 
+// Look for sources via a move-result to the instruction that fills the result
+// register, i.e.
+//
+//   A:  invoke-static "LFoo;.bar:()I"
+//       move-result r
+//   B:  return      r
+//
+// B's source register would be matched by A, via the move-result.
+constexpr detail::AliasFlag result = detail::AliasFlag::result;
+
 // (Default) Source constraint is matched if at least one matching source
 // exists.
 constexpr detail::QuantFlag exists = detail::QuantFlag::exists;

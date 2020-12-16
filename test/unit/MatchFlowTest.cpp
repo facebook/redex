@@ -284,6 +284,42 @@ TEST_F(MatchFlowTest, AliasSrc) {
   EXPECT_INSNS(res.matching(add, add_int, 1), const_2);
 }
 
+TEST_F(MatchFlowTest, ResultSrc) {
+  auto* Foo_src = DexMethod::make_method("LFoo;.src:()I");
+
+  flow_t f;
+  auto any = f.insn(m::invoke_static_() || m::const_());
+  auto src = f.insn(m::invoke_static_(m::has_method(m::equals(Foo_src))));
+  auto add = f.insn(m::add_int_())
+                 .src(0, src, exists | result)
+                 .src(1, any, exists | alias);
+
+  auto code = assembler::ircode_from_string(R"((
+    (const v0 0)
+    (const v1 1)
+    (load-param v2)
+    (if-eqz v2 :end)
+    (invoke-static () "LFoo;.src:()I")
+    (move-result v0)
+    (move v1 v0)
+    (:end)
+    (add-int v2 v0 v1)
+    (return-void)
+  ))");
+
+  cfg::ScopedCFG cfg{code.get()};
+  auto ii = InstructionIterable(*cfg);
+  std::vector<MethodItemEntry> mies{ii.begin(), ii.end()};
+
+  ASSERT_INSN(const_1, mies[1], OPCODE_CONST);
+  ASSERT_INSN(invoke_src, mies[4], OPCODE_INVOKE_STATIC);
+  ASSERT_INSN(add_int, mies[7], OPCODE_ADD_INT);
+
+  auto res = f.find(*cfg, add);
+  EXPECT_INSNS(res.matching(add, add_int, 0), invoke_src);
+  EXPECT_INSNS(res.matching(add, add_int, 1), const_1, invoke_src);
+}
+
 TEST_F(MatchFlowTest, DFGSize) {
   using namespace detail;
   DataFlowGraph graph;

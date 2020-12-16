@@ -208,6 +208,11 @@ void InstructionConstraintAnalysis::analyze_instruction(
           if (from_src.alias == AliasFlag::alias) {
             env->update(insn->src(0), add_obligation(o));
           }
+        } else if (opcode::is_a_move_result(insn->opcode())) {
+          if (from_src.alias == AliasFlag::alias ||
+              from_src.alias == AliasFlag::result) {
+            env->update(RESULT_REGISTER, add_obligation(o));
+          }
         }
       }
     }
