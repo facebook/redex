@@ -22,6 +22,185 @@ struct flag_t;
 struct location_t;
 struct result_t;
 
+/**
+ * Data Flow Matching
+ * =============================================================================
+ *
+ * A mechanism for describing predicates over a program's data-flow graph, in
+ * two parts:
+ *
+ *  - Constraints over individual instructions, using m::match_t predicates.
+ *  - Constraints over data-dependencies between instructions (e.g. that the
+ *    operand to one instruction should be the result of an instruction matching
+ *    some further constraint itself, and so on, transitively).
+ *
+ *
+ * Defining Matchers
+ * -----------------------------------------------------------------------------
+ *
+ * Predicates are represented as a graph with instruction constraints as nodes
+ * and flow constraints as edges.
+ *
+ *   template <typename M>
+ *   location_t flow_t::insn(m::match_t<IRInstruction*, M> m)
+ *
+ * is used to introduce a new instruction constraint, predicated on the
+ * instruction matcher `m`.  It returns a reference to that constraint which can
+ * be used to introduce flow-constraints from or to it, or query results for
+ * instructions matching it.
+ *
+ *   location_t location_t::src(src_index_t ix, location_t l, flag_t flags)
+ *
+ * is used to introduce a new flow constraint, requiring that an instruction
+ * matching the constraint at `this` location must have its `ix`-th operand
+ * supplied by an instruction matching the constraint at `l`, subject to the
+ * modifiers imposed by the `flags` (see "Flags", below).
+ *
+ * A reference to the target location is returned, to allow calls to `src` to
+ * be chained:
+ *
+ *   auto x = f.insn(...);
+ *   auto y = f.insn(...);
+ *   auto z = f.insn(...).src(0, x).src(1, y);
+ *
+ * It is not possible to share locations that originate from different `flow_t`
+ * instances.  This will throw an exception at runtime.
+ *
+ *
+ * Flags
+ * -----------------------------------------------------------------------------
+ *
+ * Flags modify flow constraints.  When discussing the effect of flags below,
+ * consider the following bytecode (assume there are entrypoints into A, B, D,
+ * and F):
+ *
+ *       ...
+ *   A:  const r 0
+ *       goto  :R
+ *
+ *   B:  const a 1
+ *       move  b a
+ *   C:  move  r b
+ *       goto  :R
+ *
+ *   D:  invoke-static LFoo;.bar:()I
+ *   E:  move-result r
+ *       goto  :R
+ *
+ *   F:  invoke-static LFoo;.baz:()I
+ *       move-result a
+ *   G:  move  r a
+ *       goto  :R
+ *
+ *   R:  return r
+ *
+ *
+ * Alias Flags determine how far to search for candidate instructions:
+ *
+ * mf::dest - (default) look at the instructions whose destination register
+ *     directly fills the source register.  In the example above, instructions
+ *     labelled A, C, E, and G are `dest` candidates.
+ *
+ * mf::alias - look for candidate instructions by following zero or more
+ *     move or move-result instructions.  The moves/move-results themselves are
+ *     ignored.  In the above example, A, B, D, and F are `alias` candidates.
+ *
+ * mf::result - look for candidate instructions optionally behind a move-result.
+ *     move-results themselves are ignored.  In the above example, A, C, D, G
+ *     are `result` candidates.
+ *
+ *
+ * Quant Flags determine how many candidates (instructions found by following
+ * the rules for the provided alias flag) should match the constraint for the
+ * operand to be considered consistent:
+ *
+ * mf::exists - (default) at least one candidate instruction must match the
+ *     constraint.
+ *
+ * mf::forall - all candidate instructions must match the constraint.
+ *
+ * mf::unique - there must be exactly one candidate instruction, and it must
+ *     match the constraint.
+ *
+ *
+ * Querying Results
+ * -----------------------------------------------------------------------------
+ *
+ * A predicate is applied over a CFG using `find`:
+ *
+ *   result_t flow_t::find(ControlFlowGraph& cfg, location_t l)
+ *
+ * The result is a sub-graph of the data-flow graph reachable by following edges
+ * matching flow constraints, backwards starting from instructions matching the
+ * root location, `l`.  This data structure can be queried in two ways:
+ *
+ *   result_t::matching(location_t l)
+ *   result_t::matching(location_t l, IRInstruction* insn, src_index_t ix)
+ *
+ * Both queries return an iterable range of instructions.
+ *
+ * The first query returns all instructions matching the constraint at `l`,
+ * reachable from the root passed to `find`.
+ *
+ * The second query returns all instructions that could supply the `ix`-th
+ * operand to `insn`, when `insn` matches the constraint at `l`.  It could
+ * return a different set of instructions for the same instruction and operand,
+ * given a different location, e.g.
+ *
+ *   flow_t f;
+ *
+ *   auto odd  = f.insn(m::const_(m::has_literal(is_odd)));
+ *   auto even = f.insn(m::const_(m::has_literal(is_even)));
+ *   auto addo = f.insn(m::add_int_()).src(0, odd);
+ *   auto adde = f.insn(m::add_int_()).src(0, even);
+ *   auto sub  = f.insn(m::sub_int_()).src(0, addo).src(1, adde);
+ *
+ * when applied to some code (assuming some entrypoints into X and Y):
+ *
+ *     ...
+ *  X: const   a 0
+ *     goto    :Z
+ *
+ *  Y: const   a 1
+ *     goto    :Z
+ *
+ *  Z: const   b 0
+ *  W: add-int c a b
+ *  U: sub-int d c c
+ *
+ * and then queried:
+ *
+ *   auto res = f.find(cfg, sub);
+ *
+ *   res.matching(addo, W, 0); // = {X}
+ *   res.matching(adde, W, 0); // = {Y}
+ *
+ * ...will yield different results for W's first operand, depending on the
+ * location.
+ *
+ * NB. `res.matching(addo, W, 1)` is empty, because `addo`'s second operand is
+ * not constrained.  It can be made to produce `Z` by adding another constraint:
+ *
+ *   auto any = f.insn(m::any<IRInstruction*>());
+ *   addo.src(1, any);
+ *
+ * NB. In the following predicate, the `lit` location occurs in two flow
+ * constraints:
+ *
+ *   flow_t f;
+ *   auto lit = f.insn(m::const_());
+ *   auto add = f.insn(m::add_int_()).src(0, lit).src(1, lit);
+ *
+ *   auto res = f.find(cfg, add);
+ *
+ * `res` finds add instructions where both operands are constants, NOT add
+ * instructions where both operands are the SAME const instruction. I.e. the
+ * following suffices:
+ *
+ *     const   a 0
+ *     const   b 1
+ *     add-int c a b
+ */
 struct flow_t {
   /**
    * Add a new instruction constraint to this predicate.
@@ -46,48 +225,11 @@ struct flow_t {
   std::vector<detail::Constraint> m_constraints;
 };
 
-/** Flags */
-
-// (Default) Look for sources one step away from the current instruction, i.e.
-//
-//   A:  const   r, 0
-//   B:  return  r
-//
-// B's source register would be matched by A.
 constexpr detail::AliasFlag dest = detail::AliasFlag::dest;
-
-// Look for sources by following zero or moves to the current instruction, i.e.
-//
-//   A:  const  r, 0
-//       move   q, r
-//       move   p, q
-//           ...
-//       move   a, b
-//   B:  return a
-//
-// B's source register would be matched by A.
 constexpr detail::AliasFlag alias = detail::AliasFlag::alias;
-
-// Look for sources via a move-result to the instruction that fills the result
-// register, i.e.
-//
-//   A:  invoke-static "LFoo;.bar:()I"
-//       move-result r
-//   B:  return      r
-//
-// B's source register would be matched by A, via the move-result.
 constexpr detail::AliasFlag result = detail::AliasFlag::result;
-
-// (Default) Source constraint is matched if at least one matching source
-// exists.
 constexpr detail::QuantFlag exists = detail::QuantFlag::exists;
-
-// Source constraint is matched if all found sources that flow in (as per the
-// AliasFlag) match the constraint.
 constexpr detail::QuantFlag forall = detail::QuantFlag::forall;
-
-// Source constraint is matched if exactly one source flows in (as per the
-// AliasFlag) and it matches the constraint.
 constexpr detail::QuantFlag unique = detail::QuantFlag::unique;
 
 struct flag_t {
