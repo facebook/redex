@@ -300,7 +300,8 @@ struct result_t {
      * returns nullptr.
      */
     IRInstruction* unique() {
-      return std::next(m_begin) == m_end ? *m_begin : nullptr;
+      return m_begin != m_end && std::next(m_begin) == m_end ? *m_begin
+                                                             : nullptr;
     }
 
     It begin() const { return m_begin; }
