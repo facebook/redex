@@ -192,6 +192,12 @@ libredex_la_SOURCES = \
 	service/method-merger/MethodMerger.cpp \
 	service/reference-update/MethodReference.cpp \
 	service/reference-update/TypeReference.cpp \
+	service/regalloc/GraphColoring.cpp \
+	service/regalloc/Interference.cpp \
+	service/regalloc/RegisterAllocation.cpp \
+	service/regalloc/RegisterType.cpp \
+	service/regalloc/Split.cpp \
+	service/regalloc/VirtualRegistersFile.cpp \
 	service/switch-dispatch/SwitchDispatch.cpp \
 	service/switch-partitioning/SwitchEquivFinder.cpp \
 	service/switch-partitioning/SwitchMethodPartitioning.cpp \
@@ -284,12 +290,7 @@ libopt_la_SOURCES = \
 	opt/peephole/RedundantCheckCastRemover.cpp \
 	opt/print-members/PrintMembers.cpp \
 	opt/rebindrefs/ReBindRefs.cpp \
-	opt/regalloc/GraphColoring.cpp \
-	opt/regalloc/Interference.cpp \
 	opt/regalloc/RegAlloc.cpp \
-	opt/regalloc/RegisterType.cpp \
-	opt/regalloc/Split.cpp \
-	opt/regalloc/VirtualRegistersFile.cpp \
 	opt/remove-apilevel-checks/RemoveApiLevelChecks.cpp \
 	opt/remove-builders/RemoveBuilders.cpp \
 	opt/remove-builders/RemoveBuildersHelper.cpp \

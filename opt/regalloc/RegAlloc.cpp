@@ -7,62 +7,17 @@
 
 #include "RegAlloc.h"
 
-#include <boost/functional/hash.hpp>
-#include <iostream>
-
 #include "Debug.h"
 #include "DexUtil.h"
 #include "GraphColoring.h"
-#include "IRAssembler.h"
-#include "IRCode.h"
-#include "IRInstruction.h"
-#include "LiveRange.h"
 #include "PassManager.h"
-#include "Show.h"
-#include "Transform.h"
-#include "Walkers.h"
-
-#include "JemallocUtil.h"
+#include "RegisterAllocation.h"
 #include "Trace.h"
+#include "Walkers.h"
 
 namespace regalloc {
 
 using Stats = graph_coloring::Allocator::Stats;
-
-Stats RegAllocPass::allocate(
-    const graph_coloring::Allocator::Config& allocator_config, DexMethod* m) {
-  if (m->get_code() == nullptr) {
-    return Stats();
-  }
-  auto& code = *m->get_code();
-  TRACE(REG, 5, "regs:%d code:\n%s", code.get_registers_size(), SHOW(&code));
-  try {
-    live_range::renumber_registers(&code, /* width_aware */ true);
-    // The transformations below all require a CFG. Build it once
-    // here instead of requiring each transform to build it.
-    code.build_cfg(/* editable */ false);
-    graph_coloring::Allocator allocator(allocator_config);
-    allocator.allocate(m);
-    TRACE(REG, 5, "After alloc: regs:%d code:\n%s", code.get_registers_size(),
-          SHOW(&code));
-    return allocator.get_stats();
-  } catch (const std::exception& e) {
-    std::cerr << "Failed to allocate " << SHOW(m) << ": " << e.what()
-              << std::endl;
-    print_stack_trace(std::cerr, e);
-
-    std::string cfg_tmp;
-    if (code.cfg_built()) {
-      cfg_tmp = SHOW(code.cfg());
-      code.clear_cfg();
-    }
-    std::cerr << "As s-expr: " << std::endl
-              << assembler::to_s_expr(&code) << std::endl;
-    std::cerr << "As CFG: " << std::endl << cfg_tmp << std::endl;
-
-    throw;
-  }
-}
 
 void RegAllocPass::eval_pass(DexStoresVector&, ConfigFiles&, PassManager&) {
   ++m_eval;
@@ -78,8 +33,9 @@ void RegAllocPass::run_pass(DexStoresVector& stores,
       mgr.get_redex_options().no_overwrite_this();
 
   auto scope = build_class_scope(stores);
-  auto stats = walk::parallel::methods<Stats>(
-      scope, [&](DexMethod* m) { return allocate(allocator_config, m); });
+  auto stats = walk::parallel::methods<Stats>(scope, [&](DexMethod* m) {
+    return graph_coloring::allocate(allocator_config, m);
+  });
 
   TRACE(REG, 1, "Total reiteration count: %lu", stats.reiteration_count);
   TRACE(REG, 1, "Total Params spilled early: %lu", stats.params_spill_early);

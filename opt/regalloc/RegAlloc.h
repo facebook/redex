@@ -7,10 +7,10 @@
 
 #pragma once
 
-#include <cstdio>
-
 #include "GraphColoring.h"
 #include "Pass.h"
+
+class DexMethod;
 
 namespace regalloc {
 
@@ -23,12 +23,6 @@ class RegAllocPass : public Pass {
     bind("live_range_splitting", false, unused);
     trait(Traits::Pass::atleast, 1);
   }
-
-  /*
-   * Allocate the code in a single method; exposed for unit tests.
-   */
-  static graph_coloring::Allocator::Stats allocate(
-      const graph_coloring::Allocator::Config&, DexMethod*);
 
   void eval_pass(DexStoresVector& stores,
                  ConfigFiles& conf,

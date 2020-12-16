@@ -20,7 +20,7 @@
 #include "Liveness.h"
 #include "OpcodeList.h"
 #include "RedexTest.h"
-#include "RegAlloc.h"
+#include "RegisterAllocation.h"
 #include "RegisterType.h"
 #include "Show.h"
 #include "Transform.h"
@@ -373,7 +373,7 @@ TEST_F(RegAllocTest, NoOverlapWideSrcs) {
   method->get_code()->set_registers_size(4);
 
   graph_coloring::Allocator::Config config;
-  RegAllocPass::allocate(config, method);
+  graph_coloring::allocate(config, method);
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
@@ -890,7 +890,7 @@ TEST_F(RegAllocTest, NoOverwriteThis) {
 
   graph_coloring::Allocator::Config config;
   config.no_overwrite_this = true;
-  RegAllocPass::allocate(config, method);
+  graph_coloring::allocate(config, method);
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
