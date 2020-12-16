@@ -56,6 +56,18 @@ struct flow_t {
 // B's source register would be matched by A.
 constexpr detail::AliasFlag dest = detail::AliasFlag::dest;
 
+// Look for sources by following zero or moves to the current instruction, i.e.
+//
+//   A:  const  r, 0
+//       move   q, r
+//       move   p, q
+//           ...
+//       move   a, b
+//   B:  return a
+//
+// B's source register would be matched by A.
+constexpr detail::AliasFlag alias = detail::AliasFlag::alias;
+
 // (Default) Source constraint is matched if at least one matching source
 // exists.
 constexpr detail::QuantFlag exists = detail::QuantFlag::exists;

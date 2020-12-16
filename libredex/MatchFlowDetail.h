@@ -34,6 +34,7 @@ constexpr src_index_t NO_SRC = std::numeric_limits<src_index_t>::max();
 
 enum class AliasFlag : uint16_t {
   dest,
+  alias,
 };
 
 enum class QuantFlag : uint16_t {

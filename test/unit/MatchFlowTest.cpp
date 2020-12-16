@@ -247,6 +247,43 @@ TEST_F(MatchFlowTest, MultipleMatchingSource) {
   EXPECT_INSNS(res.matching(lit), const_0, const_1, const_2);
 }
 
+TEST_F(MatchFlowTest, AliasSrc) {
+  flow_t f;
+  auto lit = f.insn(m::const_());
+  auto add = f.insn(m::add_int_())
+                 .src(0, lit, exists | alias)
+                 .src(1, lit, exists | dest);
+
+  auto code = assembler::ircode_from_string(R"((
+    (load-param v0)
+    (const v1 1)
+    (const v2 2)
+    (const v3 3)
+    (if-eqz v0 :else)
+    (move v1 v2)
+    (goto :end)
+    (:else)
+    (move v2 v3)
+    (move v1 v2)
+    (:end)
+    (add-int v4 v1 v2)
+    (return-void)
+  ))");
+
+  cfg::ScopedCFG cfg{code.get()};
+  auto ii = InstructionIterable(*cfg);
+  std::vector<MethodItemEntry> mies{ii.begin(), ii.end()};
+
+  ASSERT_INSN(const_1, mies[1], OPCODE_CONST);
+  ASSERT_INSN(const_2, mies[2], OPCODE_CONST);
+  ASSERT_INSN(const_3, mies[3], OPCODE_CONST);
+  ASSERT_INSN(add_int, mies[8], OPCODE_ADD_INT);
+
+  auto res = f.find(*cfg, add);
+  EXPECT_INSNS(res.matching(add, add_int, 0), const_2, const_3);
+  EXPECT_INSNS(res.matching(add, add_int, 1), const_2);
+}
+
 TEST_F(MatchFlowTest, DFGSize) {
   using namespace detail;
   DataFlowGraph graph;

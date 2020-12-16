@@ -152,9 +152,23 @@ InstructionMatcher::~InstructionMatcher() = default;
 void InstructionConstraintAnalysis::analyze_instruction(
     IRInstruction* insn, ICAPartition* env) const {
 
+  // Curried lambda (o: Obligation) -> (dom: ICADomain) -> ICADomain returning
+  // a copy of dom with o added.
+  const auto add_obligation = [](Obligation o) {
+    return [o = std::move(o)](const ICADomain& dom) {
+      if (dom.is_bottom()) {
+        return ICADomain(o);
+      }
+
+      auto cpy = dom;
+      cpy.add(o);
+      return cpy;
+    };
+  };
+
   // Propagate data-flow constraints if the instruction constraint at loc
   // matches for the instruction being analyzed.
-  const auto propagate = [this, insn, env](LocationIx loc) {
+  const auto propagate = [this, insn, env, add_obligation](LocationIx loc) {
     const auto& constraint = m_constraints.at(loc);
     if (!constraint.insn_matcher->matches(insn)) {
       return;
@@ -168,15 +182,7 @@ void InstructionConstraintAnalysis::analyze_instruction(
       }
 
       reg_t src = insn->src(ix);
-      env->update(src, [o = Obligation{loc, insn, ix}](const ICADomain& dom) {
-        if (dom.is_bottom()) {
-          return ICADomain(o);
-        }
-
-        auto cpy = dom;
-        cpy.add(o);
-        return cpy;
-      });
+      env->update(src, add_obligation({loc, insn, ix}));
     }
   };
 
@@ -195,8 +201,14 @@ void InstructionConstraintAnalysis::analyze_instruction(
         auto to_loc = std::get<0>(o);
         auto to_src = std::get<2>(o);
 
-        auto from_loc = m_constraints.at(to_loc).srcs.at(to_src).loc;
-        propagate(from_loc);
+        const auto& from_src = m_constraints.at(to_loc).srcs.at(to_src);
+        propagate(from_src.loc);
+
+        if (opcode::is_a_move(insn->opcode())) {
+          if (from_src.alias == AliasFlag::alias) {
+            env->update(insn->src(0), add_obligation(o));
+          }
+        }
       }
     }
   }
