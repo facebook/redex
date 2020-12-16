@@ -46,12 +46,60 @@ struct flow_t {
   std::vector<detail::Constraint> m_constraints;
 };
 
+/** Flags */
+
+// (Default) Look for sources one step away from the current instruction, i.e.
+//
+//   A:  const   r, 0
+//   B:  return  r
+//
+// B's source register would be matched by A.
+constexpr detail::AliasFlag dest = detail::AliasFlag::dest;
+
+// (Default) Source constraint is matched if at least one matching source
+// exists.
+constexpr detail::QuantFlag exists = detail::QuantFlag::exists;
+
+struct flag_t {
+  constexpr flag_t() = default;
+
+  // NOLINTNEXTLINE(google-explicit-constructor,hicpp-explicit-conversions)
+  /* implicit */ constexpr flag_t(detail::AliasFlag a) : m_alias{a} {}
+
+  // NOLINTNEXTLINE(google-explicit-constructor,hicpp-explicit-conversions)
+  /* implicit */ constexpr flag_t(detail::QuantFlag q) : m_quant{q} {}
+
+  constexpr flag_t(detail::AliasFlag a, detail::QuantFlag q)
+      : m_alias{a}, m_quant{q} {}
+
+ private:
+  friend struct location_t;
+
+  detail::AliasFlag m_alias{};
+  detail::QuantFlag m_quant{};
+};
+
+namespace detail {
+// Re-open the detail namespace to define operator|, because ADL only adds the
+// innermost namespaces for parameter types to the lookup set.
+
+inline constexpr flag_t operator|(AliasFlag a, QuantFlag q) { return {a, q}; }
+inline constexpr flag_t operator|(QuantFlag q, AliasFlag a) { return {a, q}; }
+
+} // namespace detail
+
 struct location_t {
   /**
    * Add a data-flow constraint:  The operand referred to by ix must be supplied
    * by an instruction matching the constraint at l.
+   *
+   * flags modify the nature of the constraint and come in two varieties: An
+   * AliasFlag and a QuantFlag.  At most one of each can be supplied.  If a
+   * variety of flag is not supplied, a default is chosen.  Consult the
+   * documentation for each flag to see how they modify constraints and which is
+   * the default.
    */
-  location_t src(src_index_t ix, location_t l);
+  location_t src(src_index_t ix, location_t l, flag_t flags = {});
 
  private:
   friend struct flow_t;
@@ -156,16 +204,18 @@ inline location_t flow_t::insn(m::match_t<IRInstruction*, M> m) {
   return location_t{this, ix};
 }
 
-inline location_t location_t::src(src_index_t src, location_t src_constraint) {
+inline location_t location_t::src(src_index_t src,
+                                  location_t src_constraint,
+                                  flag_t flags) {
   always_assert(m_owner != nullptr && m_owner == src_constraint.m_owner &&
                 "location_t shared between flow_t instances.");
 
   auto& src_locs = constraint().srcs;
   if (src_locs.size() <= src) {
-    src_locs.resize(src + 1, detail::NO_LOC);
+    src_locs.resize(src + 1, {detail::NO_LOC, {}, {}});
   }
 
-  src_locs[src] = src_constraint.m_ix;
+  src_locs[src] = {src_constraint.m_ix, flags.m_alias, flags.m_quant};
   return *this;
 }
 

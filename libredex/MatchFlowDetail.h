@@ -32,6 +32,14 @@ constexpr LocationIx NO_LOC = std::numeric_limits<size_t>::max();
 /** Sentinel value denoting the lack of a source. */
 constexpr src_index_t NO_SRC = std::numeric_limits<src_index_t>::max();
 
+enum class AliasFlag : uint16_t {
+  dest,
+};
+
+enum class QuantFlag : uint16_t {
+  exists,
+};
+
 /**
  * Matchers, such as
  *
@@ -77,6 +85,13 @@ std::unique_ptr<InstructionMatcher> insn_matcher(
  * particular instance of flow_t, a LocationIx value suffices.
  */
 struct Constraint {
+
+  struct Src {
+    LocationIx loc;
+    AliasFlag alias;
+    QuantFlag quant;
+  };
+
   explicit Constraint(std::unique_ptr<InstructionMatcher> insn_matcher)
       : insn_matcher(std::move(insn_matcher)) {}
 
@@ -84,9 +99,10 @@ struct Constraint {
   std::unique_ptr<InstructionMatcher> insn_matcher;
 
   // References to constraints for instructions supplying values to the various
-  // source operands.  This vector can contain "holes", represented by NO_LOC.
-  // Such a hole implies no constraint for that instruction operand.
-  std::vector<LocationIx> srcs;
+  // source operands, along with any modifiers (flags) for this edge.  This
+  // vector can contain "holes", represented by a Src whose loc is NO_LOC.  Such
+  // a hole implies no constraint for that instruction operand.
+  std::vector<Src> srcs;
 };
 
 // Types for InstructionConstraintAnalysis' (ICA) Abstract State.

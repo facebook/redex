@@ -100,7 +100,7 @@ struct InconsistentDFGNodesAnalysis
 
     // Sources without constraints are implicitly consistent.
     for (size_t i = 0; i < srcs.size(); ++i) {
-      if (srcs[i] == NO_LOC) {
+      if (srcs[i].loc == NO_LOC) {
         consistent_edges.at(i)++;
       }
     }
@@ -163,7 +163,7 @@ void InstructionConstraintAnalysis::analyze_instruction(
     size_t srcs = insn->srcs_size();
     size_t edges = constraint.srcs.size();
     for (size_t ix = 0; ix < std::min(srcs, edges); ++ix) {
-      if (constraint.srcs[ix] == NO_LOC) {
+      if (constraint.srcs[ix].loc == NO_LOC) {
         continue;
       }
 
@@ -195,7 +195,7 @@ void InstructionConstraintAnalysis::analyze_instruction(
         auto to_loc = std::get<0>(o);
         auto to_src = std::get<2>(o);
 
-        auto from_loc = m_constraints.at(to_loc).srcs.at(to_src);
+        auto from_loc = m_constraints.at(to_loc).srcs.at(to_src).loc;
         propagate(from_loc);
       }
     }
@@ -393,10 +393,10 @@ DataFlowGraph instruction_graph(cfg::ControlFlowGraph& cfg,
       return false;
     }
 
-    bool obligation_free =
-        std::all_of(constraint.srcs.begin(),
-                    constraint.srcs.end(),
-                    [](LocationIx loc) { return loc == NO_LOC; });
+    bool obligation_free = std::all_of(
+        constraint.srcs.begin(),
+        constraint.srcs.end(),
+        [](const Constraint::Src& src) { return src.loc == NO_LOC; });
 
     if (obligation_free) {
       graph.add_entrypoint(loc, insn);
@@ -415,7 +415,7 @@ DataFlowGraph instruction_graph(cfg::ControlFlowGraph& cfg,
     auto to_insn = std::get<1>(o);
     auto to_src = std::get<2>(o);
 
-    auto from_loc = constraints.at(to_loc).srcs.at(to_src);
+    auto from_loc = constraints.at(to_loc).srcs.at(to_src).loc;
     if (!test_node(from_loc, insn)) {
       return;
     }

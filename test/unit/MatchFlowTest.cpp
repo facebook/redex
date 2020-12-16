@@ -309,7 +309,10 @@ TEST_F(MatchFlowTest, InstructionGraph) {
 
   // First operand is constrained by the first constraint (i.e. itself), second
   // operand is constrained by second constraint (the const).
-  constraints[0].srcs = {{0, 1}};
+  constraints[0].srcs = {
+      {0, AliasFlag::dest, QuantFlag::exists},
+      {1, AliasFlag::dest, QuantFlag::exists},
+  };
 
   auto ii = InstructionIterable(*cfg);
   std::vector<MethodItemEntry> mies{ii.begin(), ii.end()};
@@ -361,7 +364,10 @@ TEST_F(MatchFlowTest, InstructionGraphNoFlowConstraint) {
   std::vector<Constraint> constraints;
 
   constraints.emplace_back(insn_matcher(m::add_int_()));
-  constraints[0].srcs = {{NO_LOC, 1}};
+  constraints[0].srcs = {
+      {NO_LOC, AliasFlag::dest, QuantFlag::exists},
+      {1, AliasFlag::dest, QuantFlag::exists},
+  };
 
   constraints.emplace_back(insn_matcher(m::const_()));
 
@@ -399,10 +405,16 @@ TEST_F(MatchFlowTest, InstructionGraphTransitiveFailure) {
   std::vector<Constraint> constraints;
 
   constraints.emplace_back(insn_matcher(m::add_int_()));
-  constraints[0].srcs = {{1, 2}};
+  constraints[0].srcs = {
+      {1, AliasFlag::dest, QuantFlag::exists},
+      {2, AliasFlag::dest, QuantFlag::exists},
+  };
 
   constraints.emplace_back(insn_matcher(m::sub_int_()));
-  constraints[1].srcs = {{2, 2}};
+  constraints[1].srcs = {
+      {2, AliasFlag::dest, QuantFlag::exists},
+      {2, AliasFlag::dest, QuantFlag::exists},
+  };
 
   constraints.emplace_back(
       insn_matcher(m::const_(m::has_literal(m::equals<int64_t>(1)))));
