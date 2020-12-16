@@ -19,6 +19,7 @@
 #include "IRInstruction.h"
 #include "MethodUtil.h"
 #include "ReachableClasses.h"
+#include "Resolver.h"
 
 namespace m {
 
@@ -433,6 +434,18 @@ template <typename Member, typename P>
 inline auto member_of(match_t<DexType*, P> p) {
   return matcher<Member*>([p = std::move(p)](const Member* member) {
     return p.matches(member->get_class());
+  });
+}
+
+/** Predicate on a method after it is resolved. */
+template <typename P>
+inline auto resolve_method(MethodSearch ms, match_t<DexMethod*, P> p) {
+  return matcher<DexMethodRef*>([ms, p = std::move(p)](const DexMethodRef* mr) {
+    // resolve_method accepts a non-const DexMethodRef* to return a non-const
+    // DexMethod*.  const_cast is safe to get around that as the return value
+    // is treated as const.
+    const auto* m = resolve_method(const_cast<DexMethodRef*>(mr), ms);
+    return m && p.matches(m);
   });
 }
 
