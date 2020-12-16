@@ -46,6 +46,15 @@ using ::testing::UnorderedElementsAre;
   IRInstruction* IDENT = (MIE).insn;    \
   ASSERT_EQ((IDENT)->opcode(), (OPCODE))
 
+// Expect that the instruction RANGE contains the following instructions, in
+// some order.
+#define EXPECT_INSNS(RANGE, ...)                                              \
+  do {                                                                        \
+    const auto& _range = (RANGE);                                             \
+    std::vector<IRInstruction*> _insns{std::begin(_range), std::end(_range)}; \
+    EXPECT_THAT(_insns, UnorderedElementsAre(__VA_ARGS__));                   \
+  } while (0)
+
 class MatchFlowTest : public RedexTest {};
 
 using test_range = result_t::range<std::vector<IRInstruction*>::const_iterator>;
@@ -93,10 +102,7 @@ TEST_F(MatchFlowTest, MultipleResults) {
   ASSERT_INSN(const_1, mies[1], OPCODE_CONST);
 
   auto res = f.find(*cfg, const_int);
-  auto insns = res.matching(const_int);
-
-  std::vector<IRInstruction*> vinsns{insns.begin(), insns.end()};
-  EXPECT_THAT(vinsns, UnorderedElementsAre(const_0, const_1));
+  EXPECT_INSNS(res.matching(const_int), const_0, const_1);
 }
 
 TEST_F(MatchFlowTest, Cycle) {
@@ -120,9 +126,7 @@ TEST_F(MatchFlowTest, Cycle) {
   ASSERT_INSN(add_int, mies[2], OPCODE_ADD_INT);
 
   auto res = f.find(*cfg, add);
-
-  auto insns = res.matching(add);
-  EXPECT_EQ(insns.unique(), add_int);
+  EXPECT_INSNS(res.matching(add), add_int);
 }
 
 TEST_F(MatchFlowTest, MatchingNotRoot) {
@@ -150,10 +154,7 @@ TEST_F(MatchFlowTest, MatchingNotRoot) {
   ASSERT_INSN(const_1, mies[1], OPCODE_CONST);
 
   auto res = f.find(*cfg, sub);
-
-  auto insns = res.matching(lit);
-  std::vector<IRInstruction*> vinsns{insns.begin(), insns.end()};
-  EXPECT_THAT(vinsns, UnorderedElementsAre(const_0, const_1));
+  EXPECT_INSNS(res.matching(lit), const_0, const_1);
 }
 
 TEST_F(MatchFlowTest, MatchingNotRootDiamond) {
@@ -179,10 +180,7 @@ TEST_F(MatchFlowTest, MatchingNotRootDiamond) {
   ASSERT_INSN(const_0, mies[0], OPCODE_CONST);
 
   auto res = f.find(*cfg, sub);
-
-  auto insns = res.matching(lit);
-  std::vector<IRInstruction*> vinsns{insns.begin(), insns.end()};
-  EXPECT_THAT(vinsns, UnorderedElementsAre(const_0));
+  EXPECT_INSNS(res.matching(lit), const_0);
 }
 
 TEST_F(MatchFlowTest, OnlyMatchingSource) {
@@ -208,16 +206,9 @@ TEST_F(MatchFlowTest, OnlyMatchingSource) {
   ASSERT_INSN(add_int_1, mies[3], OPCODE_ADD_INT);
 
   auto res = f.find(*cfg, add);
-
-  auto srcs_0 = res.matching(add, add_int_0, 0);
-  EXPECT_EQ(srcs_0.unique(), const_0);
-
-  auto srcs_1 = res.matching(add, add_int_1, 0);
-  EXPECT_EQ(srcs_1.unique(), const_1);
-
-  auto consts = res.matching(lit);
-  std::vector<IRInstruction*> vconsts{consts.begin(), consts.end()};
-  EXPECT_THAT(vconsts, UnorderedElementsAre(const_0, const_1));
+  EXPECT_INSNS(res.matching(add, add_int_0, 0), const_0);
+  EXPECT_INSNS(res.matching(add, add_int_1, 0), const_1);
+  EXPECT_INSNS(res.matching(lit), const_0, const_1);
 }
 
 TEST_F(MatchFlowTest, MultipleMatchingSource) {
@@ -251,17 +242,9 @@ TEST_F(MatchFlowTest, MultipleMatchingSource) {
   ASSERT_INSN(add_int_1, mies[6], OPCODE_ADD_INT);
 
   auto res = f.find(*cfg, add);
-
-  auto srcs_0 = res.matching(add, add_int_0, 0);
-  std::vector<IRInstruction*> vsrcs_0{srcs_0.begin(), srcs_0.end()};
-  EXPECT_THAT(vsrcs_0, UnorderedElementsAre(const_0, const_1));
-
-  auto srcs_1 = res.matching(add, add_int_1, 0);
-  EXPECT_EQ(srcs_1.unique(), const_2);
-
-  auto consts = res.matching(lit);
-  std::vector<IRInstruction*> vconsts{consts.begin(), consts.end()};
-  EXPECT_THAT(vconsts, UnorderedElementsAre(const_0, const_1, const_2));
+  EXPECT_INSNS(res.matching(add, add_int_0, 0), const_0, const_1);
+  EXPECT_INSNS(res.matching(add, add_int_1, 0), const_2);
+  EXPECT_INSNS(res.matching(lit), const_0, const_1, const_2);
 }
 
 TEST_F(MatchFlowTest, DFGSize) {
