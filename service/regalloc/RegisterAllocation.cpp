@@ -9,6 +9,7 @@
 
 #include <iostream>
 
+#include "CppUtil.h"
 #include "Debug.h"
 #include "DexClass.h"
 #include "DexUtil.h"
@@ -32,6 +33,7 @@ Stats allocate(const Config& allocator_config, DexMethod* m) {
     return Stats();
   }
   auto& code = *m->get_code();
+  auto scoped = at_scope_exit([&code]() { code.clear_cfg(); });
   TRACE(REG, 5, "regs:%d code:\n%s", code.get_registers_size(), SHOW(&code));
   try {
     live_range::renumber_registers(&code, /* width_aware */ true);

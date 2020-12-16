@@ -14,6 +14,7 @@ class DexMethod;
 namespace regalloc {
 namespace graph_coloring {
 
+// Note: this always destroys any CFG the method might have created.
 Allocator::Stats allocate(const Allocator::Config&, DexMethod*);
 
 } // namespace graph_coloring

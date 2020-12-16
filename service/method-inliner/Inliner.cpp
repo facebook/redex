@@ -31,6 +31,7 @@
 #include "Mutators.h"
 #include "OptData.h"
 #include "Purity.h"
+#include "RegisterAllocation.h"
 #include "Resolver.h"
 #include "Timer.h"
 #include "Transform.h"
@@ -880,6 +881,38 @@ void MultiMethodInliner::shrink_method(DexMethod* method) {
     auto local_dce = LocalDce(m_pure_methods);
     local_dce.dce(code);
     local_dce_stats = local_dce.get_stats();
+  }
+
+  if (m_config.run_reg_alloc) {
+    auto get_features = [&code]() -> std::tuple<size_t, size_t, size_t> {
+      if (!traceEnabled(MMINL, 4)) {
+        return std::make_tuple(0u, 0u, 0u);
+      }
+      if (!code->editable_cfg_built()) {
+        code->build_cfg(/* editable= */ true);
+      }
+      const auto& cfg = code->cfg();
+
+      size_t regs_before = cfg.get_registers_size();
+      size_t insn_before = cfg.num_opcodes();
+      size_t blocks_before = cfg.num_blocks();
+      return std::make_tuple(regs_before, insn_before, blocks_before);
+    };
+
+    // It's OK to ensure we have an editable CFG, the allocator would build it,
+    // too.
+    auto before_features = get_features();
+
+    regalloc::graph_coloring::allocate({}, method);
+    // After this, any CFG is gone.
+
+    // Assume that dedup will run, so building CFG is OK.
+    auto after_features = get_features();
+    TRACE(MMINL, 4, "Inliner.RegAlloc: %s: (%zu, %zu, %zu) -> (%zu, %zu, %zu)",
+          SHOW(method), std::get<0>(before_features),
+          std::get<1>(before_features), std::get<2>(before_features),
+          std::get<0>(after_features), std::get<1>(after_features),
+          std::get<2>(after_features));
   }
 
   if (m_config.run_dedup_blocks) {

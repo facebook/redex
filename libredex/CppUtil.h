@@ -21,3 +21,15 @@ auto self_recursive_fn(const Fn& fn, Args&&... args)
     -> decltype(fn(fn, std::forward<Args>(args)...)) {
   return fn(fn, std::forward<Args>(args)...);
 }
+
+// Simple guard to execute given function on destruction.
+template <typename Fn>
+struct ScopeGuard {
+  Fn fn;
+  explicit ScopeGuard(Fn fn) : fn(std::move(fn)) {}
+  ~ScopeGuard() { fn(); }
+};
+template <typename Fn>
+ScopeGuard<Fn> at_scope_exit(Fn fn) {
+  return ScopeGuard<Fn>(std::move(fn));
+}

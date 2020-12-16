@@ -20,6 +20,7 @@ void InlinerConfig::bind_config() {
   bind("run_cse", run_cse, run_cse);
   bind("run_dedup_blocks", run_dedup_blocks, run_dedup_blocks);
   bind("run_copy_prop", run_copy_prop, run_copy_prop);
+  bind("run_reg_alloc", run_reg_alloc, run_reg_alloc);
   bind("run_local_dce", run_local_dce, run_local_dce);
   bind("no_inline_annos", {}, m_no_inline_annos);
   bind("force_inline_annos", {}, m_force_inline_annos);
