@@ -69,8 +69,8 @@ struct BlockInfo {
   IRList::iterator it;
   BitId bit_id;
 
-  BlockInfo(cfg::Block* b, BlockType t, IRList::iterator i)
-      : block(b), type(t), it(i), bit_id(-1) {}
+  BlockInfo(cfg::Block* b, BlockType t, const IRList::iterator& i)
+      : block(b), type(t), it(i), bit_id(std::numeric_limits<BitId>::max()) {}
 
   bool is_instrumentable() const {
     return (type & BlockType::Instrumentable) == BlockType::Instrumentable;
@@ -144,7 +144,7 @@ void write_metadata(const std::string& file_name,
     const std::array<std::string, 8> fields = {
         std::to_string(info.offset),
         info.method->get_deobfuscated_name(),
-        std::to_string(info.too_many_blocks),
+        std::to_string(info.too_many_blocks ? 1 : 0),
         std::to_string(info.num_non_entry_blocks),
         std::to_string(info.num_vectors),
         to_hex(info.signature),
@@ -458,8 +458,7 @@ auto get_blocks_to_instrument(const cfg::ControlFlowGraph& cfg) {
   return std::make_tuple(block_info_list, id, false);
 }
 
-void insert_block_coverage_computations(DexMethod* method,
-                                        const std::vector<BlockInfo>& blocks,
+void insert_block_coverage_computations(const std::vector<BlockInfo>& blocks,
                                         const std::vector<reg_t>& reg_vectors) {
   for (const auto& info : blocks) {
     if (!info.is_instrumentable()) {
@@ -526,7 +525,7 @@ MethodInfo instrument_basic_blocks(IRCode& code,
 
   // Step 4: Insert block coverage update instructions to each blocks.
   //
-  insert_block_coverage_computations(method, blocks, reg_vectors);
+  insert_block_coverage_computations(blocks, reg_vectors);
   cfg.recompute_registers_size();
 
   auto count = [&blocks](BlockType type) -> size_t {
@@ -788,7 +787,7 @@ void BlockInstrumentHelper::do_basic_block_tracing(
     DexClass* analysis_cls,
     DexStoresVector& stores,
     ConfigFiles& cfg,
-    PassManager& pm,
+    PassManager&,
     const InstrumentPass::Options& options) {
   // I'm too lazy to support sharding in block instrumentation. Future work.
   const size_t NUM_SHARDS = options.num_shards;
