@@ -40,6 +40,12 @@ namespace {
 using ::testing::Contains;
 using ::testing::UnorderedElementsAre;
 
+// Assert that the MIE contains an instruction whose opcode is OPCODE and then
+// return a pointer to that instruction.
+#define ASSERT_INSN(IDENT, MIE, OPCODE) \
+  IRInstruction* IDENT = (MIE).insn;    \
+  ASSERT_EQ((IDENT)->opcode(), (OPCODE))
+
 class MatchFlowTest : public RedexTest {};
 
 using test_range = result_t::range<std::vector<IRInstruction*>::const_iterator>;
@@ -83,11 +89,8 @@ TEST_F(MatchFlowTest, MultipleResults) {
   auto ii = InstructionIterable(*cfg);
   std::vector<MethodItemEntry> mies{ii.begin(), ii.end()};
 
-  IRInstruction* const_0 = mies[0].insn;
-  IRInstruction* const_1 = mies[1].insn;
-
-  ASSERT_EQ(const_0->opcode(), OPCODE_CONST);
-  ASSERT_EQ(const_1->opcode(), OPCODE_CONST);
+  ASSERT_INSN(const_0, mies[0], OPCODE_CONST);
+  ASSERT_INSN(const_1, mies[1], OPCODE_CONST);
 
   auto res = f.find(*cfg, const_int);
   auto insns = res.matching(const_int);
@@ -114,8 +117,7 @@ TEST_F(MatchFlowTest, Cycle) {
   auto ii = InstructionIterable(*cfg);
   std::vector<MethodItemEntry> mies{ii.begin(), ii.end()};
 
-  IRInstruction* add_int = mies[2].insn;
-  ASSERT_EQ(add_int->opcode(), OPCODE_ADD_INT);
+  ASSERT_INSN(add_int, mies[2], OPCODE_ADD_INT);
 
   auto res = f.find(*cfg, add);
 
@@ -144,11 +146,8 @@ TEST_F(MatchFlowTest, MatchingNotRoot) {
   auto ii = InstructionIterable(*cfg);
   std::vector<MethodItemEntry> mies{ii.begin(), ii.end()};
 
-  IRInstruction* const_0 = mies[0].insn;
-  IRInstruction* const_1 = mies[1].insn;
-
-  ASSERT_EQ(const_0->opcode(), OPCODE_CONST);
-  ASSERT_EQ(const_1->opcode(), OPCODE_CONST);
+  ASSERT_INSN(const_0, mies[0], OPCODE_CONST);
+  ASSERT_INSN(const_1, mies[1], OPCODE_CONST);
 
   auto res = f.find(*cfg, sub);
 
@@ -177,8 +176,7 @@ TEST_F(MatchFlowTest, MatchingNotRootDiamond) {
   auto ii = InstructionIterable(*cfg);
   std::vector<MethodItemEntry> mies{ii.begin(), ii.end()};
 
-  IRInstruction* const_0 = mies[0].insn;
-  ASSERT_EQ(const_0->opcode(), OPCODE_CONST);
+  ASSERT_INSN(const_0, mies[0], OPCODE_CONST);
 
   auto res = f.find(*cfg, sub);
 
@@ -204,15 +202,10 @@ TEST_F(MatchFlowTest, OnlyMatchingSource) {
   auto ii = InstructionIterable(*cfg);
   std::vector<MethodItemEntry> mies{ii.begin(), ii.end()};
 
-  IRInstruction* const_0 = mies[0].insn;
-  IRInstruction* add_int_0 = mies[1].insn;
-  IRInstruction* const_1 = mies[2].insn;
-  IRInstruction* add_int_1 = mies[3].insn;
-
-  ASSERT_EQ(const_0->opcode(), OPCODE_CONST);
-  ASSERT_EQ(add_int_0->opcode(), OPCODE_ADD_INT);
-  ASSERT_EQ(const_1->opcode(), OPCODE_CONST);
-  ASSERT_EQ(add_int_1->opcode(), OPCODE_ADD_INT);
+  ASSERT_INSN(const_0, mies[0], OPCODE_CONST);
+  ASSERT_INSN(add_int_0, mies[1], OPCODE_ADD_INT);
+  ASSERT_INSN(const_1, mies[2], OPCODE_CONST);
+  ASSERT_INSN(add_int_1, mies[3], OPCODE_ADD_INT);
 
   auto res = f.find(*cfg, add);
 
@@ -251,17 +244,11 @@ TEST_F(MatchFlowTest, MultipleMatchingSource) {
   auto ii = InstructionIterable(*cfg);
   std::vector<MethodItemEntry> mies{ii.begin(), ii.end()};
 
-  IRInstruction* const_0 = mies[2].insn;
-  IRInstruction* const_1 = mies[3].insn;
-  IRInstruction* add_int_0 = mies[4].insn;
-  IRInstruction* const_2 = mies[5].insn;
-  IRInstruction* add_int_1 = mies[6].insn;
-
-  ASSERT_EQ(const_0->opcode(), OPCODE_CONST);
-  ASSERT_EQ(const_1->opcode(), OPCODE_CONST);
-  ASSERT_EQ(add_int_0->opcode(), OPCODE_ADD_INT);
-  ASSERT_EQ(const_2->opcode(), OPCODE_CONST);
-  ASSERT_EQ(add_int_1->opcode(), OPCODE_ADD_INT);
+  ASSERT_INSN(const_0, mies[2], OPCODE_CONST);
+  ASSERT_INSN(const_1, mies[3], OPCODE_CONST);
+  ASSERT_INSN(add_int_0, mies[4], OPCODE_ADD_INT);
+  ASSERT_INSN(const_2, mies[5], OPCODE_CONST);
+  ASSERT_INSN(add_int_1, mies[6], OPCODE_ADD_INT);
 
   auto res = f.find(*cfg, add);
 
@@ -317,17 +304,12 @@ TEST_F(MatchFlowTest, InstructionGraph) {
   auto ii = InstructionIterable(*cfg);
   std::vector<MethodItemEntry> mies{ii.begin(), ii.end()};
 
-  IRInstruction* const_0 = mies[0].insn;
-  IRInstruction* const_1 = mies[1].insn;
-  IRInstruction* add_int = mies[2].insn;
+  ASSERT_INSN(const_0, mies[0], OPCODE_CONST);
+  ASSERT_INSN(const_1, mies[1], OPCODE_CONST);
+  ASSERT_INSN(add_int, mies[2], OPCODE_ADD_INT);
 
-  ASSERT_EQ(const_0->opcode(), OPCODE_CONST);
   ASSERT_EQ(const_0->get_literal(), 0);
-
-  ASSERT_EQ(const_1->opcode(), OPCODE_CONST);
   ASSERT_EQ(const_1->get_literal(), 1);
-
-  ASSERT_EQ(add_int->opcode(), OPCODE_ADD_INT);
 
   auto graph = instruction_graph(*cfg, constraints, 0);
 
@@ -374,13 +356,9 @@ TEST_F(MatchFlowTest, InstructionGraphNoFlowConstraint) {
   auto ii = InstructionIterable(*cfg);
   std::vector<MethodItemEntry> mies{ii.begin(), ii.end()};
 
-  IRInstruction* const_1 = mies[1].insn;
-  IRInstruction* add_int = mies[2].insn;
-
-  ASSERT_EQ(const_1->opcode(), OPCODE_CONST);
+  ASSERT_INSN(const_1, mies[1], OPCODE_CONST);
+  ASSERT_INSN(add_int, mies[2], OPCODE_ADD_INT);
   ASSERT_EQ(const_1->get_literal(), 1);
-
-  ASSERT_EQ(add_int->opcode(), OPCODE_ADD_INT);
 
   auto graph = instruction_graph(*cfg, constraints, 0);
 
@@ -422,15 +400,10 @@ TEST_F(MatchFlowTest, InstructionGraphTransitiveFailure) {
   auto ii = InstructionIterable(*cfg);
   std::vector<MethodItemEntry> mies{ii.begin(), ii.end()};
 
-  IRInstruction* const_1 = mies[1].insn;
-  IRInstruction* sub_int = mies[2].insn;
-  IRInstruction* add_int = mies[3].insn;
-
-  ASSERT_EQ(const_1->opcode(), OPCODE_CONST);
+  ASSERT_INSN(const_1, mies[1], OPCODE_CONST);
+  ASSERT_INSN(sub_int, mies[2], OPCODE_SUB_INT);
+  ASSERT_INSN(add_int, mies[3], OPCODE_ADD_INT);
   ASSERT_EQ(const_1->get_literal(), 1);
-
-  ASSERT_EQ(sub_int->opcode(), OPCODE_SUB_INT);
-  ASSERT_EQ(add_int->opcode(), OPCODE_ADD_INT);
 
   auto graph = instruction_graph(*cfg, constraints, 0);
 
