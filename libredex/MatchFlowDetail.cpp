@@ -136,6 +136,9 @@ struct InconsistentDFGNodesAnalysis
       case QuantFlag::forall:
         is_consistent = inconsistent_srcs == 0;
         break;
+      case QuantFlag::unique:
+        is_consistent = inconsistent_srcs == 0 && consistent_srcs == 1;
+        break;
       }
     }
 

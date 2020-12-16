@@ -514,6 +514,36 @@ TEST_F(MatchFlowTest, ForallTransitive) {
   EXPECT_INSNS(res_any.matching(add_any, add_int_8, 0), const_2, const_4);
 }
 
+TEST_F(MatchFlowTest, UniqueSrc) {
+  flow_t f;
+
+  auto lit = f.insn(m::const_());
+  auto add = f.insn(m::add_int_()).src(0, lit, unique | dest);
+
+  auto code = assembler::ircode_from_string(R"((
+    (load-param v0)
+    (const v1 1)
+    (const v2 2)
+    (if-eqz v0 :end)
+    (const v2 3)
+    (:end)
+    (add-int v3 v1 v2)
+    (add-int v4 v2 v1)
+    (return-void)
+  ))");
+
+  cfg::ScopedCFG cfg{code.get()};
+  auto ii = InstructionIterable(*cfg);
+  std::vector<MethodItemEntry> mies{ii.begin(), ii.end()};
+
+  ASSERT_INSN(const_1, mies[1], OPCODE_CONST);
+  ASSERT_INSN(add_int_3, mies[5], OPCODE_ADD_INT);
+
+  auto res = f.find(*cfg, add);
+  EXPECT_INSNS(res.matching(add), add_int_3);
+  EXPECT_INSNS(res.matching(add, add_int_3, 0), const_1);
+}
+
 TEST_F(MatchFlowTest, DFGSize) {
   using namespace detail;
   DataFlowGraph graph;
