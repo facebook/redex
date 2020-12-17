@@ -348,7 +348,7 @@ size_t exclude_unremovables(const Scope& scope,
 DexMethod* find_matching_virtual_method(const TypeSystem& type_system,
                                         const DexType* owner,
                                         const VirtualScope* scope) {
-  for (const auto vmeth : scope->methods) {
+  for (const auto& vmeth : scope->methods) {
     auto method = vmeth.first;
     if (!method->is_def() || !is_public(method)) {
       continue;

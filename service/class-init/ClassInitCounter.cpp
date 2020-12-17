@@ -707,12 +707,12 @@ std::vector<std::pair<IRInstruction*, reg_t>> Escapes::get_escape_instructions()
   }
 
   for (const auto& v_call : via_vmethod_call) {
-    for (const auto i_reg : v_call.second.call_sites) {
+    for (const auto& i_reg : v_call.second.call_sites) {
       escapes.emplace_back(i_reg);
     }
   }
   for (const auto& s_call : via_smethod_call) {
-    for (const auto i_reg : s_call.second.call_sites) {
+    for (const auto& i_reg : s_call.second.call_sites) {
       escapes.emplace_back(i_reg);
     }
   }
