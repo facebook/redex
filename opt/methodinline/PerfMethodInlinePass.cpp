@@ -332,6 +332,7 @@ void PerfMethodInlinePass::run_pass(DexStoresVector& stores,
         ifs->get_num_accepted(), ifs->get_num_choices());
   mgr.set_metric("pgi_inline_choices", ifs->get_num_choices());
   mgr.set_metric("pgi_inline_choices_accepted", ifs->get_num_accepted());
+  mgr.set_metric("pgi_use_random_forest", m_config->forest ? 1 : 0);
 }
 
 static PerfMethodInlinePass s_pass;
