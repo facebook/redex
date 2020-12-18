@@ -48,3 +48,33 @@ class GraphInterface {
 
   static NodeId target(const Graph&, const EdgeId& edge) { return edge; }
 };
+
+class GraphInterfaceWithExit {
+ public:
+  using NodeId = uint32_t;
+  using EdgeId = NodeId;
+  using Graph = SimpleGraph;
+
+  static NodeId entry(const Graph&) { return 0; }
+  static NodeId exit(const Graph&) { return 100; }
+
+  static std::vector<EdgeId> predecessors(const Graph& graph,
+                                          const NodeId& node) {
+    if (graph.preds.count(node)) {
+      return graph.preds.at(node);
+    }
+    return {};
+  }
+
+  static std::vector<EdgeId> successors(const Graph& graph,
+                                        const NodeId& node) {
+    if (graph.succs.count(node)) {
+      return graph.succs.at(node);
+    }
+    return {};
+  }
+
+  static NodeId source(const Graph&, const EdgeId& edge) { return edge; }
+
+  static NodeId target(const Graph&, const EdgeId& edge) { return edge; }
+};
