@@ -108,7 +108,7 @@ void RemoveArgs::gather_results_used() {
 // For normalization, we put primitive types last and thus all reference types
 // first, as shorty strings take up space in a dex but don't distinguish arrays
 // and classes.
-inline bool compare_dextypes_for_normalization(const DexType* a,
+static bool compare_dextypes_for_normalization(const DexType* a,
                                                const DexType* b) {
   int a_primitive = type::is_primitive(a) ? 1 : 0;
   int b_primitive = type::is_primitive(b) ? 1 : 0;
@@ -127,12 +127,22 @@ static DexProto* normalize_proto(DexProto* proto) {
       rtype, DexTypeList::make_type_list(std::move(args_copy)));
 }
 
-inline bool compare_weighted_dexprotos(const std::pair<DexProto*, size_t>& a,
+static bool compare_weighted_dexprotos(const std::pair<DexProto*, size_t>& a,
                                        const std::pair<DexProto*, size_t>& b) {
   if (a.second != b.second) {
     return a.second > b.second;
   }
   return compare_dexprotos(a.first, b.first);
+}
+
+static bool any_external(const std::unordered_set<const DexMethod*>& methods) {
+  for (auto method : methods) {
+    auto cls = type_class(method->get_class());
+    if (cls == nullptr || cls->is_external()) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /**
@@ -158,20 +168,24 @@ void RemoveArgs::compute_reordered_protos(const mog::Graph& override_graph) {
         if (!can_rename(caller) || is_native(caller)) {
           record_fixed_proto(caller_proto, 1);
         } else if (caller->is_virtual()) {
-          if (is_interface(type_class(caller->get_class())) &&
-              (root(caller) || !can_rename(caller))) {
+          auto is_interface_method =
+              is_interface(type_class(caller->get_class()));
+          if ((is_interface_method && (root(caller) || !can_rename(caller)))) {
             // We cannot rule out that there are dynamically added classes,
             // created via Proxy.newProxyInstance, that override this method. So
             // we assume the worst.
             record_fixed_proto(caller_proto, 0);
           } else {
             auto& node = override_graph.get_node(caller);
-            for (auto parent : node.parents) {
-              auto cls = type_class(parent->get_class());
-              if (cls == nullptr || cls->is_external()) {
-                record_fixed_proto(caller_proto, 0);
-                break;
-              }
+            if (any_external(node.parents)) {
+              // We can't change the signature of an overriding method when the
+              // overridden method is external
+              record_fixed_proto(caller_proto, 0);
+            } else if (is_interface_method && any_external(node.children)) {
+              // This captures the case where an interface defines a method
+              // whose only implementation is one that is inherited from an
+              // external base class.
+              record_fixed_proto(caller_proto, 0);
             }
           }
         }
