@@ -69,6 +69,7 @@ class InstrumentPass : public Pass {
     int64_t num_shards;
     bool only_cold_start_class;
     std::unordered_map<DexMethod*, DexMethod*> methods_replacement;
+    std::vector<std::string> analysis_method_names;
   };
 
  private:

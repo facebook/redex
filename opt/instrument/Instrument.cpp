@@ -521,13 +521,14 @@ void InstrumentPass::bind_config() {
   bind("methods_replacement", {}, m_options.methods_replacement,
        "Replacing instance method call with static method call.",
        Configurable::bindflags::methods::error_if_unresolvable);
+  bind("analysis_method_names", {}, m_options.analysis_method_names);
 
   size_t max_analysis_methods;
   if (m_options.instrumentation_strategy == SIMPLE_METHOD_TRACING) {
     max_analysis_methods = m_options.num_shards;
   } else if (m_options.instrumentation_strategy == BASIC_BLOCK_TRACING) {
-    // Our current DynamicAnalysis has 11 onMethodExit* methods.
-    max_analysis_methods = 11;
+    // Our current DynamicAnalysis has 7 onMethodExits and 1 onMethodBegin.
+    max_analysis_methods = 8;
   } else {
     max_analysis_methods = 1;
   }

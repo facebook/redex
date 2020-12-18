@@ -33,15 +33,15 @@ namespace {
 
 constexpr bool DEBUG_CFG = false;
 constexpr size_t BIT_VECTOR_SIZE = 16;
-// Up to 10 16-bit vectors
-constexpr size_t MAX_BLOCKS = 16 * 10;
+// A single onMethodExit call passes up to 7 vectors. Let's have at most 2
+// onMethodExits, which is 7 * 2 * 16 = 224 blocks.
+constexpr size_t MAX_BLOCKS = 7 * 2 * 16;
 
-constexpr int PROFILING_DATA_VERSION = 2;
+constexpr int PROFILING_DATA_VERSION = 3;
 
 using OnMethodExitMap =
     std::map<size_t, // arity of vector arguments (excluding `int offset`)
-             std::pair<DexMethod*, // onMethodExit
-                       DexMethod*>>; // onMethodExit_Epilogue
+             DexMethod*>;
 
 enum class BlockType {
   Unspecified = 0,
@@ -111,7 +111,7 @@ void write_metadata(const std::string& file_name,
 
   // The real CSV-style metadata follows.
   const std::array<std::string, 8> headers = {
-      "offset",  "name",      "too_many_bb",       "non_entry_blocks",
+      "offset",  "name",      "instrument",        "non_entry_blocks",
       "vectors", "signature", "bit_id_2_block_id", "rejected_blocks"};
   ofs << boost::algorithm::join(headers, ",") << "\n";
 
@@ -140,11 +140,25 @@ void write_metadata(const std::string& file_name,
     return ss.str();
   };
 
+  // 'instrument' column:
+  // - 1: method only
+  // - 2: method + blocks
+  // - 3: method + blocks, but no onMethodExit. We can't track blocks.
+  auto instrumented = [](const MethodInfo& i) {
+    if (i.too_many_blocks) {
+      return 1;
+    } else if (i.num_exit_calls == 0 && i.num_vectors != 0) {
+      return 3;
+    } else {
+      return 2;
+    }
+  };
+
   for (const auto& info : all_info) {
     const std::array<std::string, 8> fields = {
         std::to_string(info.offset),
         info.method->get_deobfuscated_name(),
-        std::to_string(info.too_many_blocks ? 1 : 0),
+        std::to_string(instrumented(info)),
         std::to_string(info.num_non_entry_blocks),
         std::to_string(info.num_vectors),
         to_hex(info.signature),
@@ -230,11 +244,10 @@ IRList::iterator get_first_non_move_result_insn(cfg::Block* b) {
 
 OnMethodExitMap build_onMethodExit_map(const DexClass& cls,
                                        const std::string& onMethodExit_name) {
-  const std::string epilogue_name = onMethodExit_name + "_Epilogue";
-  std::map<size_t, std::pair<DexMethod*, DexMethod*>> onMethodExit_map;
+  OnMethodExitMap onMethodExit_map;
   for (const auto& m : cls.get_dmethods()) {
     const auto& name = m->get_name()->str();
-    if (onMethodExit_name != name && epilogue_name != name) {
+    if (onMethodExit_name != name) {
       continue;
     }
 
@@ -255,12 +268,8 @@ OnMethodExitMap build_onMethodExit_map(const DexClass& cls,
           show(m->get_proto()).c_str());
     }
 
-    auto& pair = onMethodExit_map[args->size() - 1];
-    if (epilogue_name == name) {
-      pair.second = m;
-    } else {
-      pair.first = m;
-    }
+    // -1 is to exclude `int offset`.
+    onMethodExit_map[args->size() - 1] = m;
   }
 
   if (onMethodExit_map.empty()) {
@@ -273,58 +282,70 @@ OnMethodExitMap build_onMethodExit_map(const DexClass& cls,
                       onMethodExit_name.c_str(), SHOW(cls), ss.str().c_str());
   }
 
-  // For all non-zero arities, both onMethodExit/_Epilogue must exist.
-  if (std::any_of(
-          begin(onMethodExit_map), end(onMethodExit_map), [](const auto& kv) {
-            return kv.first != 0 &&
-                   (kv.second.first == nullptr || kv.second.second == nullptr);
-          })) {
-    std::stringstream ss;
-    for (const auto& kv : onMethodExit_map) {
-      ss << " arity: " << kv.first
-         << ", onMethodExit: " << (kv.second.first ? "T" : "F")
-         << ", onMethodExit_Epilogue: " << (kv.second.second ? "T" : "F")
-         << std::endl;
-    }
-    always_assert_log(
-        false,
-        "[InstrumentPass] error: there must be a pair of onMethodExit "
-        "and onMethodExit_Epilogue for each overloaded type, except "
-        "for zero arity:\n%s",
-        ss.str().c_str());
-  }
-
   return onMethodExit_map;
 }
 
-auto insert_allocation_insts(cfg::ControlFlowGraph& cfg,
-                             const size_t num_vectors, // May be zero
-                             const size_t method_offset) {
-  std::vector<reg_t> reg_vectors(num_vectors);
-  // Create instructions to allocate a set of 16-bit bit vectors.
-  // +1 is for holding method offset in DynamicAnalysis.sBlockStats[].
-  std::vector<IRInstruction*> const_insts(num_vectors + 1);
-  for (size_t i = 0; i < num_vectors; ++i) {
-    const_insts.at(i) = new IRInstruction(OPCODE_CONST);
-    const_insts.at(i)->set_literal(0);
-    reg_vectors.at(i) = cfg.allocate_temp();
-    const_insts.at(i)->set_dest(reg_vectors.at(i));
+DexMethod* load_onMethodBegin(const DexClass& cls,
+                              const std::string& method_name) {
+  for (const auto& m : cls.get_dmethods()) {
+    const auto& name = m->get_name()->str();
+    if (method_name != name) {
+      continue;
+    }
+    const auto* args = m->get_proto()->get_args();
+    if (args->size() != 1 ||
+        *args->get_type_list().begin() != DexType::make_type("I")) {
+      always_assert_log(
+          false,
+          "[InstrumentPass] error: Proto type of onMethodBegin must be "
+          "onMethodBegin(int), but it was %s",
+          show(m->get_proto()).c_str());
+    }
+    return m;
   }
 
-  // We also allocate a register that holds the method offset, which is used
-  // to call onMethodExit. Let's create once in the entry block, and later all
-  // exit blocks will use it.
+  std::stringstream ss;
+  for (const auto& m : cls.get_dmethods()) {
+    ss << " " << show(m) << std::endl;
+  }
+  always_assert_log(false, "[InstrumentPass] error: cannot find %s in %s:\n%s",
+                    method_name.c_str(), SHOW(cls), ss.str().c_str());
+}
+
+auto insert_prologue_insts(cfg::ControlFlowGraph& cfg,
+                           DexMethod* onMethodBegin,
+                           const size_t num_vectors,
+                           const size_t method_offset) {
+  std::vector<reg_t> reg_vectors(num_vectors);
+  std::vector<IRInstruction*> prologues(num_vectors + 2);
+
+  // Create instructions to allocate a set of 16-bit bit vectors.
+  for (size_t i = 0; i < num_vectors; ++i) {
+    prologues.at(i) = new IRInstruction(OPCODE_CONST);
+    prologues.at(i)->set_literal(0);
+    reg_vectors.at(i) = cfg.allocate_temp();
+    prologues.at(i)->set_dest(reg_vectors.at(i));
+  }
+
+  // Do onMethodBegin instrumentation. We allocate a register that holds the
+  // method offset, which is used for all onMethodBegin/Exit.
   IRInstruction* method_offset_inst = new IRInstruction(OPCODE_CONST);
   method_offset_inst->set_literal(method_offset);
   const reg_t reg_method_offset = cfg.allocate_temp();
   method_offset_inst->set_dest(reg_method_offset);
-  const_insts.at(num_vectors) = method_offset_inst;
+  prologues.at(num_vectors) = method_offset_inst;
 
-  // Insert all OPCODE_CONSTs to the entry block (right after param loading).
+  IRInstruction* invoke_inst = new IRInstruction(OPCODE_INVOKE_STATIC);
+  invoke_inst->set_method(onMethodBegin);
+  invoke_inst->set_srcs_size(1);
+  invoke_inst->set_src(0, reg_method_offset);
+  prologues.at(num_vectors + 1) = invoke_inst;
+
+  // Insert all prologue opcodes to the entry block (right after param loading).
   cfg.entry_block()->insert_before(
       cfg.entry_block()->to_cfg_instruction_iterator(
           cfg.entry_block()->get_first_non_param_loading_insn()),
-      const_insts);
+      prologues);
 
   return std::make_tuple(reg_vectors, reg_method_offset);
 }
@@ -334,34 +355,31 @@ size_t insert_onMethodExit_calls(
     const std::vector<reg_t>& reg_vectors, // May be empty
     const size_t method_offset,
     const reg_t reg_method_offset,
-    const std::map<size_t, std::pair<DexMethod*, DexMethod*>>& onMethodExit_map,
+    const std::map<size_t, DexMethod*>& onMethodExit_map,
     const size_t max_vector_arity) {
+  // If reg_vectors is emptry (methods with a single entry block), no need to
+  // instrument onMethodExit.
+  if (reg_vectors.empty()) {
+    return 0;
+  }
+
   // When a method exits, we call onMethodExit to pass all vectors to record.
   // onMethodExit is overloaded to some degrees (e.g., up to 5 vectors). If
-  // number of vectors > 5, generate one or more onMethodExit_Epilogue calls.
-  //
-  // Even if reg_vectors is emptry (methods with a single entry block), we still
-  // call 'onMethodExit(int offset)' to track method execution.
+  // number of vectors > 5, generate one or more onMethodExit calls.
   const size_t num_vectors = reg_vectors.size();
-  const size_t empty = num_vectors == 0 ? 0 : 1;
   const size_t num_invokes =
       std::max(1., std::ceil(double(num_vectors) / double(max_vector_arity)));
-  const size_t remainder = (num_vectors % max_vector_arity) == 0
-                               ? max_vector_arity * empty
-                               : (num_vectors % max_vector_arity);
 
   auto create_invoke_insts = [&]() -> auto {
     // This code works in case of num_invokes == 1.
     std::vector<IRInstruction*> invoke_insts(num_invokes * 2 - 1);
     size_t offset = method_offset;
-    for (size_t i = 0; i < num_invokes; ++i) {
-      const size_t arity =
-          (i != num_invokes - 1) ? max_vector_arity * empty : remainder;
+    for (size_t i = 0, v = num_vectors; i < num_invokes;
+         ++i, v -= max_vector_arity) {
+      const size_t arity = std::min(v, max_vector_arity);
 
       IRInstruction* inst = new IRInstruction(OPCODE_INVOKE_STATIC);
-      const auto& pair = onMethodExit_map.at(arity);
-      // onMethodExit followed by zero or more onMethodExit_Epilogue.
-      inst->set_method(i == 0 ? pair.first : pair.second);
+      inst->set_method(onMethodExit_map.at(arity));
       inst->set_srcs_size(arity + 1);
       inst->set_src(0, reg_method_offset);
       for (size_t j = 0; j < arity; ++j) {
@@ -371,9 +389,8 @@ size_t insert_onMethodExit_calls(
 
       if (i != num_invokes - 1) {
         inst = new IRInstruction(OPCODE_CONST);
-        // Move forward the offset. Note that the first onMethodExit writes
-        // method profiling in the first two elements. So, we have +2 here.
-        offset += max_vector_arity + (i == 0 ? 2 : 0);
+        // Move forward the offset.
+        offset += max_vector_arity;
         inst->set_literal(offset);
         inst->set_dest(reg_method_offset);
         invoke_insts.at(i * 2 + 1) = inst;
@@ -481,6 +498,7 @@ void insert_block_coverage_computations(const std::vector<BlockInfo>& blocks,
 
 MethodInfo instrument_basic_blocks(IRCode& code,
                                    DexMethod* method,
+                                   DexMethod* onMethodBegin,
                                    const OnMethodExitMap& onMethodExit_map,
                                    const size_t max_vector_arity,
                                    const size_t method_offset) {
@@ -505,14 +523,15 @@ MethodInfo instrument_basic_blocks(IRCode& code,
     TRACE(INSTRUMENT, 9, "%s", SHOW(cfg));
   }
 
-  // Step 2: Insert bit-vector allocation code in its method entry point.
+  // Step 2: Insert onMethodBegin to track method execution, and bit-vector
+  //         allocation code in its method entry point.
   //
   const size_t num_vectors =
       std::ceil(num_to_instrument / double(BIT_VECTOR_SIZE));
   std::vector<reg_t> reg_vectors;
   reg_t reg_method_offset;
   std::tie(reg_vectors, reg_method_offset) =
-      insert_allocation_insts(cfg, num_vectors, method_offset);
+      insert_prologue_insts(cfg, onMethodBegin, num_vectors, method_offset);
 
   // Step 3: Insert onMethodExit in exit block(s).
   //
@@ -683,10 +702,13 @@ void print_stats(const std::vector<MethodInfo>& instrumented_methods) {
     size_t acc = 0;
     size_t total_exits = 0;
     std::map<int /*num_vectors*/, size_t /*num_methods*/> dist;
+    TRACE(INSTRUMENT, 4, "No onMethodExit but 1+ non-entry blocks:");
+    int k = 0;
     for (const auto& i : instrumented_methods) {
-      if (i.num_exit_calls == 0) {
-        TRACE(INSTRUMENT, 4, "What? no instrumented exit blocks: %s",
-              i.method->get_deobfuscated_name().c_str());
+      if (!i.too_many_blocks && i.num_exit_calls == 0 &&
+          i.num_non_entry_blocks != 0) {
+        TRACE(INSTRUMENT, 4, "- %d: %zu, %s", ++k, i.num_non_entry_blocks,
+              show_deobfuscated(i.method).c_str());
       }
       ++dist[i.num_exit_calls];
       total_exits += i.num_exit_calls;
@@ -779,9 +801,9 @@ void print_stats(const std::vector<MethodInfo>& instrumented_methods) {
 //                                                     |   Return              |
 //                                                     +-----------------------+
 //
-// This instrumentation subsumes the method tracing. We currently don't
-// instrument methods with large number of basic blocks. In this case, they are
-// only instrumented for method tracing with onMethodExit.
+// This instrumentation includes the method tracing by inserting onMethodBegin.
+// We currently don't instrument methods with large number of basic blocks. In
+// this case, they are only instrumented for method tracing.
 //------------------------------------------------------------------------------
 void BlockInstrumentHelper::do_basic_block_tracing(
     DexClass* analysis_cls,
@@ -792,10 +814,15 @@ void BlockInstrumentHelper::do_basic_block_tracing(
   // I'm too lazy to support sharding in block instrumentation. Future work.
   const size_t NUM_SHARDS = options.num_shards;
   if (NUM_SHARDS != 1 || options.num_stats_per_method != 0) {
-    std::cerr << "[InstrumentPass] error: basic block profiling currently only "
-                 "supports num_shard = 1 and num_stats_per_method = 0"
-              << std::endl;
-    exit(1);
+    always_assert_log(
+        false,
+        "[InstrumentPass] error: basic block profiling currently only "
+        "supports num_shard = 1 and num_stats_per_method = 0");
+  }
+  if (options.analysis_method_names.size() != 2) {
+    always_assert_log(false,
+                      "[InstrumentPass] error: basic block profiling must have "
+                      "two analysis methods: [onMethodBegin, onMethodExit]");
   }
 
   // Even so, we need to update sharded arrays with 1 for the Java-side code.
@@ -806,8 +833,12 @@ void BlockInstrumentHelper::do_basic_block_tracing(
       {{1, InstrumentPass::STATS_FIELD_NAME}});
   always_assert(array_fields.size() == NUM_SHARDS);
 
+  DexMethod* onMethodBegin =
+      load_onMethodBegin(*analysis_cls, options.analysis_method_names[0]);
+  TRACE(INSTRUMENT, 4, "Loaded onMethodBegin: %s", SHOW(onMethodBegin));
+
   const auto& onMethodExit_map =
-      build_onMethodExit_map(*analysis_cls, options.analysis_method_name);
+      build_onMethodExit_map(*analysis_cls, options.analysis_method_names[1]);
   const size_t max_vector_arity = onMethodExit_map.rbegin()->first;
   TRACE(INSTRUMENT, 4, "Max arity for onMethodExit: %zu", max_vector_arity);
 
@@ -831,16 +862,13 @@ void BlockInstrumentHelper::do_basic_block_tracing(
   auto scope = build_class_scope(stores);
   walk::code(scope, [&](DexMethod* method, IRCode& code) {
     all_methods++;
-    if (method == analysis_cls->get_clinit()) {
+    if (method == analysis_cls->get_clinit() || method == onMethodBegin) {
       specials++;
       return;
     }
 
     if (std::any_of(onMethodExit_map.begin(), onMethodExit_map.end(),
-                    [&](const auto& e) {
-                      return e.second.first == method ||
-                             e.second.second == method;
-                    })) {
+                    [&](const auto& e) { return e.second == method; })) {
       specials++;
       return;
     }
@@ -869,8 +897,9 @@ void BlockInstrumentHelper::do_basic_block_tracing(
       return;
     }
 
-    instrumented_methods.emplace_back(instrument_basic_blocks(
-        code, method, onMethodExit_map, max_vector_arity, method_offset));
+    instrumented_methods.emplace_back(
+        instrument_basic_blocks(code, method, onMethodBegin, onMethodExit_map,
+                                max_vector_arity, method_offset));
 
     const auto& method_info = instrumented_methods.back();
     if (method_info.too_many_blocks) {

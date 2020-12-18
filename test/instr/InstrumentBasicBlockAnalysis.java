@@ -22,7 +22,7 @@ public class InstrumentBasicBlockAnalysis {
   @DoNotStrip private static AtomicInteger sMethodCounter = new AtomicInteger(0);
 
   @DoNotStrip
-  public static void onMethodExit(int offset) {
+  public static void onMethodBegin(int offset) {
     if (sIsEnabled) {
       ++sMethodStats[offset];
       if (sMethodStats[offset + 1] == 0) {
@@ -33,10 +33,6 @@ public class InstrumentBasicBlockAnalysis {
 
   public static void onMethodExit(int offset, short bitvec) {
     if (sIsEnabled) {
-      ++sMethodStats[offset];
-      if (sMethodStats[offset + 1] == 0) {
-        sMethodStats[offset + 1] = (short) sMethodCounter.incrementAndGet();
-      }
       sMethodStats[offset + 2] |= bitvec;
     }
   }
@@ -44,10 +40,6 @@ public class InstrumentBasicBlockAnalysis {
   @DoNotStrip
   public static void onMethodExit(int offset, short bitvec1, short bitvec2) {
     if (sIsEnabled) {
-      ++sMethodStats[offset];
-      if (sMethodStats[offset + 1] == 0) {
-        sMethodStats[offset + 1] = (short) sMethodCounter.incrementAndGet();
-      }
       sMethodStats[offset + 2] |= bitvec1;
       sMethodStats[offset + 3] |= bitvec2;
     }
@@ -56,39 +48,9 @@ public class InstrumentBasicBlockAnalysis {
   @DoNotStrip
   public static void onMethodExit(int offset, short bitvec1, short bitvec2, short bitvec3) {
     if (sIsEnabled) {
-      ++sMethodStats[offset];
-      if (sMethodStats[offset + 1] == 0) {
-        sMethodStats[offset + 1] = (short) sMethodCounter.incrementAndGet();
-      }
       sMethodStats[offset + 2] |= bitvec1;
       sMethodStats[offset + 3] |= bitvec2;
       sMethodStats[offset + 4] |= bitvec3;
-    }
-  }
-
-  // Epilogues to support more than 3 bit vectors.
-  @DoNotStrip
-  public static void onMethodExit_Epilogue(int offset, short bitvec1) {
-    if (sIsEnabled) {
-      sMethodStats[offset + 0] |= bitvec1;
-    }
-  }
-
-  @DoNotStrip
-  public static void onMethodExit_Epilogue(int offset, short bitvec1, short bitvec2) {
-    if (sIsEnabled) {
-      sMethodStats[offset + 0] |= bitvec1;
-      sMethodStats[offset + 1] |= bitvec2;
-    }
-  }
-
-  @DoNotStrip
-  public static void onMethodExit_Epilogue(
-      int offset, short bitvec1, short bitvec2, short bitvec3) {
-    if (sIsEnabled) {
-      sMethodStats[offset + 0] |= bitvec1;
-      sMethodStats[offset + 1] |= bitvec2;
-      sMethodStats[offset + 2] |= bitvec3;
     }
   }
 }
