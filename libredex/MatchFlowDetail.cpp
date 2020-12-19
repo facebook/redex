@@ -202,7 +202,7 @@ void InstructionConstraintAnalysis::analyze_instruction(
       }
 
       reg_t src = insn->src(ix);
-      env->update(src, add_obligation({loc, insn, ix}));
+      env->update(src, add_obligation(Obligation(loc, insn, ix)));
     }
   };
 
@@ -255,18 +255,18 @@ size_t DataFlowGraph::size() const {
 }
 
 bool DataFlowGraph::has_node(LocationIx loc, IRInstruction* insn) const {
-  return m_adjacencies.count({loc, insn});
+  return m_adjacencies.count(Node(loc, insn));
 }
 
 bool DataFlowGraph::has_inconsistency(LocationIx loc,
                                       IRInstruction* insn,
                                       src_index_t src) const {
-  auto it = m_adjacencies.find({loc, insn});
+  auto it = m_adjacencies.find(Node(loc, insn));
   return it != m_adjacencies.end() && it->second.inconsistent.count(src);
 }
 
 void DataFlowGraph::add_node(LocationIx loc, IRInstruction* insn) {
-  (void)m_adjacencies[{loc, insn}];
+  (void)m_adjacencies[Node(loc, insn)];
 }
 
 void DataFlowGraph::add_entrypoint(LocationIx loc, IRInstruction* insn) {
@@ -288,12 +288,12 @@ void DataFlowGraph::add_edge(LocationIx lfrom,
 void DataFlowGraph::mark_inconsistent(LocationIx loc,
                                       IRInstruction* insn,
                                       src_index_t src) {
-  m_adjacencies[{loc, insn}].inconsistent.insert(src);
+  m_adjacencies[Node(loc, insn)].inconsistent.insert(src);
 }
 
 const std::vector<DataFlowGraph::Edge>& DataFlowGraph::inbound(
     LocationIx loc, IRInstruction* insn) const {
-  auto it = m_adjacencies.find({loc, insn});
+  auto it = m_adjacencies.find(Node(loc, insn));
   if (it == m_adjacencies.end()) {
     static std::vector<Edge> none;
     return none;
@@ -304,7 +304,7 @@ const std::vector<DataFlowGraph::Edge>& DataFlowGraph::inbound(
 
 const std::vector<DataFlowGraph::Edge>& DataFlowGraph::outbound(
     LocationIx loc, IRInstruction* insn) const {
-  auto it = m_adjacencies.find({loc, insn});
+  auto it = m_adjacencies.find(Node(loc, insn));
   if (it == m_adjacencies.end()) {
     static std::vector<Edge> none;
     return none;
