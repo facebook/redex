@@ -31,7 +31,9 @@ DataFlowGraph::Edge Edge(LocationIx from_loc,
                          src_index_t src,
                          LocationIx to_loc,
                          IRInstruction* to_insn) {
-  return DataFlowGraph::Edge({from_loc, from_insn}, src, {to_loc, to_insn});
+  DataFlowEdge::Node from{from_loc, from_insn};
+  DataFlowEdge::Node to{to_loc, to_insn};
+  return DataFlowGraph::Edge(from, src, to);
 }
 } // namespace detail
 
