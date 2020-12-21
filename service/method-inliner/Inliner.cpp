@@ -903,7 +903,9 @@ void MultiMethodInliner::shrink_method(DexMethod* method) {
     // too.
     auto before_features = get_features();
 
-    regalloc::graph_coloring::allocate({}, method);
+    auto config = regalloc::graph_coloring::Allocator::Config{};
+    config.no_overwrite_this = true; // Downstream passes may rely on this.
+    regalloc::graph_coloring::allocate(config, method);
     // After this, any CFG is gone.
 
     // Assume that dedup will run, so building CFG is OK.
