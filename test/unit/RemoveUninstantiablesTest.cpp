@@ -80,6 +80,25 @@ RemoveUninstantiablesPass::Stats replace_all_with_throw(
     EXPECT_CODE_EQ(expected_ir.get(), actual_ir);                     \
   } while (0)
 
+/// Expect method with full signature \p SIGNATURE to not exist.
+#define EXPECT_NO_METHOD_DEF(SIGNATURE)             \
+  do {                                              \
+    std::string signature = (SIGNATURE);            \
+    auto method = DexMethod::get_method(signature); \
+    EXPECT_TRUE(!method || !method->is_def());      \
+                                                    \
+  } while (0)
+
+/// Expect method with full signature \p SIGNATURE to exist, and be
+/// abstract.
+#define EXPECT_ABSTRACT_METHOD(SIGNATURE)                            \
+  do {                                                               \
+    std::string signature = (SIGNATURE);                             \
+    auto method = DexMethod::get_method(signature);                  \
+    EXPECT_NE(nullptr, method) << "Method not found: " << signature; \
+    EXPECT_TRUE(is_abstract(method->as_def()));                      \
+  } while (0)
+
 /// Register a new class with \p name, and methods \p methods, given in
 /// s-expression form.
 template <typename... Methods>
@@ -132,6 +151,18 @@ const char* const Foo_qux = R"(
 (method (public) "LFoo;.qux:()LFoo;"
   ((load-param-object v0)
    (return-object v0))
+))";
+
+const char* const Foo_fox = R"(
+(method (private) "LFoo;.fox:()LFoo;"
+  ((load-param-object v0)
+   (return-object v0))
+))";
+
+const char* const FooBar_baz = R"(
+(method (public) "LFooBar;.baz:()V"
+  ((load-param-object v0)
+   (return-void))
 ))";
 
 TEST_F(RemoveUninstantiablesTest, InstanceOf) {
@@ -460,15 +491,17 @@ TEST_F(RemoveUninstantiablesTest, ReplaceAllWithThrow) {
                   (const v3 0)
                   (throw v3)
                 ))");
-  EXPECT_EQ(1, stats.instance_methods_of_uninstantiable);
+  EXPECT_EQ(1, stats.throw_null_methods);
 }
 
 TEST_F(RemoveUninstantiablesTest, RunPass) {
   DexStoresVector dss{DexStore{"test_store"}};
 
-  auto* Foo = def_class("LFoo;", Foo_baz, Foo_qux);
+  auto* Foo = def_class("LFoo;", Foo_baz, Foo_qux, Foo_fox);
   auto* Bar = def_class("LBar;", Bar_init, Bar_baz, Bar_qux);
-  dss.back().add_classes({Foo, Bar});
+  auto* FooBar = def_class("LFooBar;", FooBar_baz);
+  dss.back().add_classes({Foo, Bar, FooBar});
+  FooBar->set_super_class(Foo->get_type());
 
   DexField::make_field("LBar;.mFoo:LFoo;")->make_concrete(ACC_PUBLIC);
   DexField::make_field("LFoo;.mBar:LBar;")->make_concrete(ACC_PUBLIC);
@@ -479,14 +512,11 @@ TEST_F(RemoveUninstantiablesTest, RunPass) {
   ConfigFiles c(Json::nullValue);
   pm.run_passes(dss, c);
 
-  EXPECT_METHOD("LFoo;.baz:()V",
-                R"((
-                  (load-param-object v0)
-                  (const v1 0)
-                  (throw v1)
-                ))");
+  EXPECT_ABSTRACT_METHOD("LFoo;.baz:()V");
+  EXPECT_ABSTRACT_METHOD("LFoo;.qux:()LFoo;");
+  EXPECT_NO_METHOD_DEF("LFooBar;.baz:()V");
 
-  EXPECT_METHOD("LFoo;.qux:()LFoo;",
+  EXPECT_METHOD("LFoo;.fox:()LFoo;",
                 R"((
                   (load-param-object v0)
                   (const v1 0)
@@ -522,7 +552,10 @@ TEST_F(RemoveUninstantiablesTest, RunPass) {
   EXPECT_EQ(1, rm_uninst->metrics.at("instance_ofs"));
   EXPECT_EQ(1, rm_uninst->metrics.at("invokes"));
   EXPECT_EQ(1, rm_uninst->metrics.at("field_accesses_on_uninstantiable"));
-  EXPECT_EQ(2, rm_uninst->metrics.at("instance_methods_of_uninstantiable"));
+  EXPECT_EQ(1, rm_uninst->metrics.at("abstracted_classes"));
+  EXPECT_EQ(2, rm_uninst->metrics.at("abstracted_vmethods"));
+  EXPECT_EQ(1, rm_uninst->metrics.at("removed_vmethods"));
+  EXPECT_EQ(1, rm_uninst->metrics.at("throw_null_methods"));
   EXPECT_EQ(1, rm_uninst->metrics.at("get_uninstantiables"));
 }
 

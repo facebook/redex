@@ -12,6 +12,7 @@
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "PassManager.h"
+#include "Resolver.h"
 #include "Trace.h"
 #include "Walkers.h"
 
@@ -61,8 +62,10 @@ RemoveUninstantiablesPass::Stats& RemoveUninstantiablesPass::Stats::operator+=(
   this->invokes += that.invokes;
   this->field_accesses_on_uninstantiable +=
       that.field_accesses_on_uninstantiable;
-  this->instance_methods_of_uninstantiable +=
-      that.instance_methods_of_uninstantiable;
+  this->throw_null_methods += that.throw_null_methods;
+  this->abstracted_classes += that.abstracted_classes;
+  this->abstracted_vmethods += that.abstracted_vmethods;
+  this->removed_vmethods += that.removed_vmethods;
   this->get_uninstantiables += that.get_uninstantiables;
   this->check_casts += that.check_casts;
   return *this;
@@ -87,7 +90,10 @@ void RemoveUninstantiablesPass::Stats::report(PassManager& mgr) const {
   REPORT(instance_ofs);
   REPORT(invokes);
   REPORT(field_accesses_on_uninstantiable);
-  REPORT(instance_methods_of_uninstantiable);
+  REPORT(throw_null_methods);
+  REPORT(abstracted_classes);
+  REPORT(abstracted_vmethods);
+  REPORT(removed_vmethods);
   REPORT(get_uninstantiables);
   REPORT(check_casts);
 
@@ -247,7 +253,7 @@ RemoveUninstantiablesPass::replace_all_with_throw(cfg::ControlFlowGraph& cfg) {
   cfg.insert_before(it, {ir_const(tmp, 0), ir_throw(tmp)});
 
   Stats stats;
-  stats.instance_methods_of_uninstantiable++;
+  stats.throw_null_methods++;
   return stats;
 }
 
@@ -257,8 +263,17 @@ void RemoveUninstantiablesPass::run_pass(DexStoresVector& stores,
   Scope scope = build_class_scope(stores);
   std::unordered_set<DexType*> scoped_uninstantiable_types =
       compute_scoped_uninstantiable_types(scope);
+  // We perform structural changes, i.e. whether a method has a body and
+  // removal, as a post-processing step, to streamline the main operations
+  struct ClassPostProcessing {
+    std::unordered_map<DexMethod*, DexMethod*> remove_vmethods;
+    std::unordered_set<DexMethod*> abstract_vmethods;
+  };
+  ConcurrentMap<DexClass*, ClassPostProcessing> class_post_processing;
   Stats stats = walk::parallel::methods<Stats>(
-      scope, [&scoped_uninstantiable_types](DexMethod* method) -> Stats {
+      scope,
+      [&scoped_uninstantiable_types,
+       &class_post_processing](DexMethod* method) -> Stats {
         Stats stats;
 
         auto code = method->get_code();
@@ -269,7 +284,30 @@ void RemoveUninstantiablesPass::run_pass(DexStoresVector& stores,
         code->build_cfg();
         if (!is_static(method) &&
             scoped_uninstantiable_types.count(method->get_class())) {
-          stats += replace_all_with_throw(code->cfg());
+          auto overridden_method =
+              method->is_virtual()
+                  ? resolve_method(method, MethodSearch::Super, method)
+                  : nullptr;
+          if (overridden_method == nullptr && method->is_virtual()) {
+            class_post_processing.update(
+                type_class(method->get_class()),
+                [method](DexClass*, ClassPostProcessing& cpp, bool) {
+                  cpp.abstract_vmethods.insert(method);
+                });
+            stats.abstracted_vmethods++;
+          } else if (overridden_method != nullptr && can_delete(method) &&
+                     (is_protected(method) || is_public(overridden_method))) {
+            always_assert(overridden_method != method);
+            class_post_processing.update(
+                type_class(method->get_class()),
+                [method,
+                 overridden_method](DexClass*, ClassPostProcessing& cpp, bool) {
+                  cpp.remove_vmethods.emplace(method, overridden_method);
+                });
+            stats.removed_vmethods++;
+          } else {
+            stats += replace_all_with_throw(code->cfg());
+          }
         } else {
           stats += replace_uninstantiable_refs(scoped_uninstantiable_types,
                                                code->cfg());
@@ -278,6 +316,70 @@ void RemoveUninstantiablesPass::run_pass(DexStoresVector& stores,
 
         return stats;
       });
+
+  // Post-processing:
+  // 1. make methods abstract (stretty straightforward), and
+  // 2. remove methods (per class in parallel for best performance, and rewrite
+  // all invocation references)
+  std::vector<DexClass*> classes_with_removed_vmethods;
+  std::unordered_map<DexMethodRef*, DexMethodRef*> removed_vmethods;
+  for (auto& p : class_post_processing) {
+    auto cls = p.first;
+    auto& cpp = p.second;
+    if (!cpp.abstract_vmethods.empty()) {
+      if (!is_abstract(cls)) {
+        stats.abstracted_classes++;
+        cls->set_access((cls->get_access() & ~ACC_FINAL) | ACC_ABSTRACT);
+      }
+      for (auto method : cpp.abstract_vmethods) {
+        method->set_access((DexAccessFlags)(
+            (method->get_access() & ~ACC_FINAL) | ACC_ABSTRACT));
+        method->set_code(nullptr);
+      }
+    }
+    if (!cpp.remove_vmethods.empty()) {
+      classes_with_removed_vmethods.push_back(cls);
+      removed_vmethods.insert(cpp.remove_vmethods.begin(),
+                              cpp.remove_vmethods.end());
+    }
+  }
+
+  walk::parallel::classes(classes_with_removed_vmethods,
+                          [&class_post_processing](DexClass* cls) {
+                            auto& cpp = class_post_processing.at_unsafe(cls);
+                            for (auto& p : cpp.remove_vmethods) {
+                              cls->remove_method_definition(p.first);
+                            }
+                          });
+
+  // Forward chains.
+  using iterator = std::unordered_map<DexMethodRef*, DexMethodRef*>::iterator;
+  std::function<DexMethodRef*(iterator&)> forward;
+  forward = [&forward, &removed_vmethods](iterator& it) {
+    auto it2 = removed_vmethods.find(it->second);
+    if (it2 != removed_vmethods.end()) {
+      it->second = forward(it2);
+    }
+    return it->second;
+  };
+  for (auto it = removed_vmethods.begin(); it != removed_vmethods.end(); it++) {
+    forward(it);
+  }
+
+  walk::parallel::code(scope, [&](DexMethod*, IRCode& code) {
+    editable_cfg_adapter::iterate(&code, [&](MethodItemEntry& mie) {
+      auto insn = mie.insn;
+      if (insn->opcode() == OPCODE_INVOKE_VIRTUAL) {
+        auto it = removed_vmethods.find(insn->get_method());
+        if (it != removed_vmethods.end()) {
+          insn->set_method(it->second);
+        }
+      }
+      always_assert(!insn->has_method() ||
+                    !removed_vmethods.count(insn->get_method()));
+      return editable_cfg_adapter::LOOP_CONTINUE;
+    });
+  });
 
   stats.report(mgr);
 }
