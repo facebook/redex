@@ -213,8 +213,6 @@ using ReflectionAbstractObject =
 using ReflectionSites = std::vector<
     std::pair<IRInstruction*, std::map<reg_t, ReflectionAbstractObject>>>;
 
-using param_index_t = uint16_t;
-
 using CallingContext =
     sparta::PatriciaTreeMapAbstractPartition<param_index_t,
                                              AbstractObjectDomain>;

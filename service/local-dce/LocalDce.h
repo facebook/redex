@@ -68,6 +68,7 @@ class LocalDce {
   const Stats& get_stats() const { return m_stats; }
 
   void dce(IRCode*);
+  void dce(cfg::ControlFlowGraph&);
 
  private:
   const std::unordered_set<DexMethodRef*>& m_pure_methods;

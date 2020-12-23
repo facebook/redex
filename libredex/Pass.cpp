@@ -26,7 +26,7 @@ void PartialPass::run_pass(DexStoresVector& whole_program_stores,
                            PassManager& mgr) {
   Scope current_scope =
       build_class_scope_with_packages_config(whole_program_stores);
-  run_partial_pass(whole_program_stores, current_scope, conf, mgr);
+  run_partial_pass(whole_program_stores, std::move(current_scope), conf, mgr);
 }
 
 Scope PartialPass::build_class_scope_with_packages_config(

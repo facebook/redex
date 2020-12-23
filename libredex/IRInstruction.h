@@ -114,6 +114,10 @@
  *     invoke-static {v0} LQux;.a(LFoo;)V
  */
 using reg_t = uint32_t;
+using src_index_t = uint16_t;
+
+// Index to a method parameter. Used in an invoke instruction.
+using param_index_t = src_index_t;
 
 // We use this special register to denote the result of a method invocation or a
 // filled-array creation. If the result is a wide value, RESULT_REGISTER + 1
@@ -199,9 +203,9 @@ class IRInstruction final {
   // instructions. They explicitly refer to both halves of a pair, rather than
   // just the lower half. This method returns true on both lower and upper
   // halves.
-  bool invoke_src_is_wide(size_t i) const;
+  bool invoke_src_is_wide(src_index_t i) const;
 
-  bool src_is_wide(size_t i) const;
+  bool src_is_wide(src_index_t i) const;
   bool dest_is_wide() const {
     always_assert(has_dest());
     return opcode_impl::dest_is_wide(m_opcode);
@@ -227,7 +231,7 @@ class IRInstruction final {
     always_assert_log(has_dest(), "No dest for %s", SHOW(m_opcode));
     return m_dest;
   }
-  reg_t src(size_t i) const;
+  reg_t src(src_index_t i) const;
 
  private:
   using reg_range_super = boost::iterator_range<const reg_t*>;
@@ -256,8 +260,8 @@ class IRInstruction final {
     m_dest = reg;
     return this;
   }
-  IRInstruction* set_src(size_t i, reg_t reg);
-  IRInstruction* set_srcs_size(uint16_t count);
+  IRInstruction* set_src(src_index_t i, reg_t reg);
+  IRInstruction* set_srcs_size(size_t count);
 
   int64_t get_literal() const {
     always_assert(has_literal());

@@ -27,7 +27,6 @@ namespace global {
  * distinct types: Here, the environment variables denote param index, whereas
  * in a DexTypeEnvironment, they denote registers.
  */
-using param_index_t = uint16_t;
 
 using ArgumentTypeEnvironment =
     sparta::PatriciaTreeMapAbstractEnvironment<param_index_t, DexTypeDomain>;

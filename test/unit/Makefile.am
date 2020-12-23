@@ -61,6 +61,7 @@ check_PROGRAMS = \
     ir_typechecker_test \
     java_parser_util_test \
     literals_test \
+    live_range_test \
     local_dce_test \
     local_pointers_test \
     loop_info_test \
@@ -226,6 +227,9 @@ java_parser_util_test_SOURCES = JavaParserUtilTest.cpp
 java_parser_util_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
 literals_test_SOURCES = LiteralsTest.cpp
+
+live_range_test_SOURCES = LiveRangeTest.cpp
+live_range_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
 local_dce_test_SOURCES = LocalDceTest.cpp ScopeHelper.cpp
 
@@ -421,6 +425,7 @@ TESTS = \
     ir_typechecker_test \
     java_parser_util_test \
     literals_test \
+    live_range_test \
     local_dce_test \
     local_pointers_test \
     loop_info_test \
