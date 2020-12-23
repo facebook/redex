@@ -11,6 +11,7 @@
 #include "IRAssembler.h"
 #include "RedexTest.h"
 #include "RemoveUninstantiablesPass.h"
+#include "ScopeHelper.h"
 #include "VirtualScope.h"
 
 namespace {
@@ -584,6 +585,57 @@ TEST_F(RemoveUninstantiablesTest, ExtendedAbstractClassIsNotUninstantiable) {
   auto uninstantiable_types = compute_uninstantiable_types();
   EXPECT_FALSE(uninstantiable_types.count(foo->get_type()));
   EXPECT_FALSE(uninstantiable_types.count(bar->get_type()));
+}
+
+TEST_F(RemoveUninstantiablesTest, InvokeInterfaceOnUninstantiable) {
+  auto foo = def_class("LFoo;");
+  foo->set_access(foo->get_access() | ACC_INTERFACE | ACC_ABSTRACT);
+
+  auto void_t = type::_void();
+  auto void_void =
+      DexProto::make_proto(void_t, DexTypeList::make_type_list({}));
+  create_abstract_method(foo, "abs", void_void);
+
+  RemoveUninstantiablesPass::Stats stats;
+  EXPECT_CHANGE(replace_uninstantiable_refs,
+                stats,
+                /* ACTUAL */ R"((
+                  (const v0 0)
+                  (invoke-interface (v0) "LFoo;.abs:()V;")
+                  (return-void)
+                ))",
+                /* EXPECTED */ R"((
+                  (const v0 0)
+                  (const v1 0)
+                  (throw v1)
+                ))");
+  EXPECT_EQ(1, stats.invokes);
+}
+
+TEST_F(RemoveUninstantiablesTest, InvokeSuperOnUninstantiable) {
+  auto foo = def_class("LFoo;");
+  auto void_t = type::_void();
+  auto void_void =
+      DexProto::make_proto(void_t, DexTypeList::make_type_list({}));
+  create_abstract_method(foo, "abs", void_void);
+
+  auto bar = def_class("LBar;");
+  bar->set_super_class(foo->get_type());
+
+  RemoveUninstantiablesPass::Stats stats;
+  EXPECT_CHANGE(replace_uninstantiable_refs,
+                stats,
+                /* ACTUAL */ R"((
+                  (const v0 0)
+                  (invoke-super (v0) "LBar;.abs:()V;")
+                  (return-void)
+                ))",
+                /* EXPECTED */ R"((
+                  (const v0 0)
+                  (const v1 0)
+                  (throw v1)
+                ))");
+  EXPECT_EQ(1, stats.invokes);
 }
 
 } // namespace

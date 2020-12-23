@@ -185,6 +185,11 @@ RemoveUninstantiablesPass::replace_uninstantiable_refs(
 
     case OPCODE_INVOKE_DIRECT:
     case OPCODE_INVOKE_VIRTUAL:
+    case OPCODE_INVOKE_INTERFACE:
+    case OPCODE_INVOKE_SUPER:
+      // Note that we don't want to call resolve_method here: The most precise
+      // class information is already present in the supplied method reference,
+      // which gives us the best change of finding an uninstantiable type.
       if (scoped_uninstantiable_types.count(insn->get_method()->get_class())) {
         auto tmp = get_scratch();
         m.replace(it, {ir_const(tmp, 0), ir_throw(tmp)});
