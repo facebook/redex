@@ -54,7 +54,9 @@ class RemoveUninstantiablesPass : public Pass {
   };
 
   static std::unordered_set<DexType*> compute_scoped_uninstantiable_types(
-      const Scope& scope);
+      const Scope& scope,
+      std::unordered_map<DexType*, std::unordered_set<DexType*>>*
+          instantiable_children = nullptr);
 
   /// Look for mentions of uninstantiable classes in \p cfg and modify them
   /// in-place.

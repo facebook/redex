@@ -141,6 +141,21 @@ const char* const Bar_qux = R"(
    (return v4))
 ))";
 
+const char* const BarBar_init = R"(
+(method (private) "LBarBar;.<init>:()V"
+  ((load-param-object v0)
+   (invoke-direct (v0) "LBar;.<init>:()V")
+   (return-void))
+))";
+
+const char* const BarBar_baz = R"(
+(method (public) "LBarBar;.baz:()V"
+  ((load-param-object v0)
+   (new-instance "LBarBar;")
+   (move-result-pseudo-object v1)
+   (return-void))
+))";
+
 const char* const Foo_baz = R"(
 (method (public) "LFoo;.baz:()V"
   ((load-param-object v0)
@@ -669,6 +684,40 @@ TEST_F(RemoveUninstantiablesTest, InvokeSuperOnUninstantiable) {
                   (throw v1)
                 ))");
   EXPECT_EQ(1, stats.invokes);
+}
+
+TEST_F(RemoveUninstantiablesTest, RunPassInstantiableChildrenDefined) {
+  DexStoresVector dss{DexStore{"test_store"}};
+
+  auto* Bar = def_class("LBar;", Bar_init, Bar_baz);
+  DexMethod::get_method("LBar;.<init>:()V")->as_def()->set_access(ACC_PUBLIC);
+  auto* BarBar = def_class("LBarBar;", BarBar_init, BarBar_baz);
+  DexMethod::get_method("LBarBar;.<init>:()V")
+      ->as_def()
+      ->set_access(ACC_PUBLIC);
+  dss.back().add_classes({Bar, BarBar});
+  BarBar->set_super_class(Bar->get_type());
+
+  RemoveUninstantiablesPass pass;
+  PassManager pm({&pass});
+
+  ConfigFiles c(Json::nullValue);
+  pm.run_passes(dss, c);
+
+  EXPECT_ABSTRACT_METHOD("LBar;.baz:()V");
+
+  const auto& pass_infos = pm.get_pass_info();
+  auto rm_uninst =
+      std::find_if(pass_infos.begin(), pass_infos.end(), [](const auto& pi) {
+        return pi.pass->name() == "RemoveUninstantiablesPass";
+      });
+  ASSERT_NE(rm_uninst, pass_infos.end());
+
+  EXPECT_EQ(1, rm_uninst->metrics.at("abstracted_classes"));
+  EXPECT_EQ(1, rm_uninst->metrics.at("abstracted_vmethods"));
+  EXPECT_EQ(0, rm_uninst->metrics.at("removed_vmethods"));
+  EXPECT_EQ(0, rm_uninst->metrics.at("throw_null_methods"));
+  EXPECT_EQ(0, rm_uninst->metrics.at("get_uninstantiables"));
 }
 
 } // namespace
