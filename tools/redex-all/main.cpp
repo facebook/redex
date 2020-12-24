@@ -782,6 +782,59 @@ std::string get_dex_magic(std::vector<std::string>& dex_files) {
   return load_dex_magic_from_dex(dex_files[0].c_str());
 }
 
+void dump_keep_reasons(const ConfigFiles& conf,
+                       const Arguments& args,
+                       const DexStoresVector& stores) {
+  if (!args.config.get("dump_keep_reasons", false).asBool()) {
+    return;
+  }
+
+  std::ofstream ofs(conf.metafile("redex-keep-reasons.txt"));
+
+  auto scope = build_class_scope(stores);
+  for (const auto* cls : scope) {
+    auto has_keep_reasons = [cls]() {
+      if (!cls->rstate.keep_reasons().empty()) {
+        return true;
+      }
+      for (auto* m : cls->get_all_methods()) {
+        if (!m->rstate.keep_reasons().empty()) {
+          return true;
+        }
+      }
+      for (auto* f : cls->get_all_fields()) {
+        if (!f->rstate.keep_reasons().empty()) {
+          return true;
+        }
+      }
+      return false;
+    };
+    if (!has_keep_reasons()) {
+      continue;
+    }
+    auto print_keep_reasons = [&ofs](const auto& reasons, const char* indent) {
+      for (const auto* r : reasons) {
+        ofs << indent << "* " << *r << "\n";
+      }
+    };
+    ofs << "Class: " << show_deobfuscated(cls) << "\n";
+    print_keep_reasons(cls->rstate.keep_reasons(), " ");
+
+    auto print_list = [&ofs, &print_keep_reasons](const auto& c,
+                                                  const char* name) {
+      for (const auto* member : c) {
+        if (member->rstate.keep_reasons().empty()) {
+          continue; // Skip stuff w/o reasons.
+        }
+        ofs << " " << name << ": " << show_deobfuscated(member) << "\n";
+        print_keep_reasons(member->rstate.keep_reasons(), "  ");
+      }
+    };
+    print_list(cls->get_all_fields(), "Field");
+    print_list(cls->get_all_methods(), "Method");
+  }
+}
+
 /**
  * Pre processing steps: load dex and configurations
  */
@@ -907,6 +960,10 @@ void redex_frontend(ConfigFiles& conf, /* input */
     Timer t("Initializing reachable classes");
     // init reachable will change rstate of classes, methods and fields
     init_reachable_classes(scope, ReachableClassesConfig(json_config));
+  }
+
+  if (RedexContext::record_keep_reasons()) {
+    dump_keep_reasons(conf, args, stores);
   }
 }
 
