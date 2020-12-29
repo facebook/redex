@@ -522,6 +522,8 @@ void InstrumentPass::bind_config() {
        "Replacing instance method call with static method call.",
        Configurable::bindflags::methods::error_if_unresolvable);
   bind("analysis_method_names", {}, m_options.analysis_method_names);
+  // 0 means the block tracing is effectively method-only tracing.
+  bind("max_num_blocks", {0}, m_options.max_num_blocks);
 
   size_t max_analysis_methods;
   if (m_options.instrumentation_strategy == SIMPLE_METHOD_TRACING) {

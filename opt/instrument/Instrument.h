@@ -70,6 +70,7 @@ class InstrumentPass : public Pass {
     bool only_cold_start_class;
     std::unordered_map<DexMethod*, DexMethod*> methods_replacement;
     std::vector<std::string> analysis_method_names;
+    int64_t max_num_blocks;
   };
 
  private:
