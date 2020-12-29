@@ -30,10 +30,6 @@ namespace {
 
 constexpr bool DEBUG_CFG = false;
 constexpr size_t BIT_VECTOR_SIZE = 16;
-// A single onMethodExit call passes up to 7 vectors. Let's have at most 2
-// onMethodExits, which is 7 * 2 * 16 = 224 blocks.
-constexpr size_t MAX_BLOCKS = 7 * 2 * 16;
-
 constexpr int PROFILING_DATA_VERSION = 3;
 
 using OnMethodExitMap =
@@ -444,7 +440,8 @@ BlockInfo create_block_info(cfg::Block* block) {
   return {block, BlockType::Instrumentable | type, insert_pos};
 }
 
-auto get_blocks_to_instrument(const cfg::ControlFlowGraph& cfg) {
+auto get_blocks_to_instrument(const cfg::ControlFlowGraph& cfg,
+                              const size_t max_num_blocks) {
   auto blocks = graph::postorder_sort<cfg::GraphInterface>(cfg);
 
   // We don't need to instrument entry block obviously.
@@ -462,7 +459,7 @@ auto get_blocks_to_instrument(const cfg::ControlFlowGraph& cfg) {
     block_info_list.emplace_back(create_block_info(b));
     auto& info = block_info_list.back();
     if ((info.type & BlockType::Instrumentable) == BlockType::Instrumentable) {
-      if (id >= MAX_BLOCKS) {
+      if (id >= max_num_blocks) {
         return std::make_tuple(std::vector<BlockInfo>{}, BitId(0),
                                true /* too many block */);
       }
@@ -498,7 +495,8 @@ MethodInfo instrument_basic_blocks(IRCode& code,
                                    DexMethod* onMethodBegin,
                                    const OnMethodExitMap& onMethodExit_map,
                                    const size_t max_vector_arity,
-                                   const size_t method_offset) {
+                                   const size_t method_offset,
+                                   const size_t max_num_blocks) {
   using namespace cfg;
 
   code.build_cfg(/*editable*/ true);
@@ -512,7 +510,7 @@ MethodInfo instrument_basic_blocks(IRCode& code,
   size_t num_to_instrument;
   bool too_many_blocks;
   std::tie(blocks, num_to_instrument, too_many_blocks) =
-      get_blocks_to_instrument(cfg);
+      get_blocks_to_instrument(cfg, max_num_blocks);
 
   if (DEBUG_CFG) {
     TRACE(INSTRUMENT, 9, "BEFORE: %s, %s", show_deobfuscated(method).c_str(),
@@ -600,7 +598,8 @@ std::unordered_set<std::string> get_cold_start_classes(ConfigFiles& cfg) {
   return cold_start_classes;
 }
 
-void print_stats(const std::vector<MethodInfo>& instrumented_methods) {
+void print_stats(const std::vector<MethodInfo>& instrumented_methods,
+                 const size_t max_num_blocks) {
   const size_t total_instrumented = instrumented_methods.size();
   const size_t total_block_instrumented =
       std::count_if(instrumented_methods.begin(), instrumented_methods.end(),
@@ -628,7 +627,7 @@ void print_stats(const std::vector<MethodInfo>& instrumented_methods) {
 
   // ----- Print summary
   TRACE(INSTRUMENT, 4, "Maximum blocks for block instrumentation: %zu",
-        MAX_BLOCKS);
+        max_num_blocks);
   TRACE(INSTRUMENT, 4, "Total instrumented: %zu", total_instrumented);
   TRACE(INSTRUMENT, 4, "- Block + method instrumented: %zu",
         total_block_instrumented);
@@ -822,6 +821,8 @@ void BlockInstrumentHelper::do_basic_block_tracing(
                       "two analysis methods: [onMethodBegin, onMethodExit]");
   }
 
+  const size_t max_num_blocks = options.max_num_blocks;
+
   // Even so, we need to update sharded arrays with 1 for the Java-side code.
   const auto& array_fields = InstrumentPass::patch_sharded_arrays(
       analysis_cls, NUM_SHARDS,
@@ -894,9 +895,9 @@ void BlockInstrumentHelper::do_basic_block_tracing(
       return;
     }
 
-    instrumented_methods.emplace_back(
-        instrument_basic_blocks(code, method, onMethodBegin, onMethodExit_map,
-                                max_vector_arity, method_offset));
+    instrumented_methods.emplace_back(instrument_basic_blocks(
+        code, method, onMethodBegin, onMethodExit_map, max_vector_arity,
+        method_offset, max_num_blocks));
 
     const auto& method_info = instrumented_methods.back();
     if (method_info.too_many_blocks) {
@@ -930,7 +931,7 @@ void BlockInstrumentHelper::do_basic_block_tracing(
   write_metadata(cfg.metafile(options.metadata_file_name),
                  instrumented_methods);
 
-  print_stats(instrumented_methods);
+  print_stats(instrumented_methods, max_num_blocks);
 
   TRACE(INSTRUMENT, 4, "Instrumentation selection stats:");
   TRACE(INSTRUMENT, 4, "- All methods: %d", all_methods);
