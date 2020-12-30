@@ -7,6 +7,8 @@
 import hashlib
 import itertools
 import json
+import logging
+import lzma
 import os
 import re
 import shutil
@@ -390,6 +392,75 @@ class SubdirDexMode(BaseDexMode):
         shutil.move(jar_meta_path, join(extracted_apk_dir, self._secondary_dir))
 
 
+warned_about_xz = False
+
+
+def _warn_xz():
+    global warned_about_xz
+    if not warned_about_xz:
+        logging.warning(
+            "Falling back to python lzma. For increased performance, install xz."
+        )
+        warned_about_xz = True
+
+
+def unpack_xz(input, output):
+    # See whether the `xz` binary exists. It may be faster because of multithreaded decoding.
+    if shutil.which("xz"):
+        cmd = 'cat "{}" | xz -d --threads 6 > "{}"'.format(input, output)
+        subprocess.check_call(cmd, shell=True)  # noqa: P204
+        return
+
+    _warn_xz()
+
+    with lzma.open(input, "rb") as input_f:
+        with open(output, "wb") as output_f:
+            BUF_SIZE = 4 * 1024 * 1024
+            while True:
+                buf = input_f.read(BUF_SIZE)
+                if not buf:
+                    break
+                output_f.write(buf)
+
+
+def pack_xz(input, output, compression_level=9, threads=6, check=lzma.CHECK_CRC32):
+    # See whether the `xz` binary exists. It may be faster because of multithreaded encoding.
+    if shutil.which("xz"):
+        check_map = {
+            lzma.CHECK_CRC32: "crc32",
+            lzma.CHECK_CRC64: "crc64",
+            lzma.CHECK_SHA256: "sha256",
+            lzma.CHECK_NONE: None,
+            None: None,
+        }
+        check_str = check_map[check]
+
+        subprocess.check_call(  # noqa(P204)
+            f"xz -z{compression_level} --threads={threads} -c"
+            + (f" --check={check_str}" if check_str else "")
+            + f" {input} > {output}",
+            shell=True,
+        )
+        return
+
+    _warn_xz()
+
+    c = lzma.LZMACompressor(
+        format=lzma.FORMAT_XZ, check=check, preset=compression_level
+    )
+    with open(output, "wb") as output_f:
+        with open(input, "rb") as input_f:
+            BUF_SIZE = 4 * 1024 * 1024
+            while True:
+                buf = input_f.read(BUF_SIZE)
+                if not buf:
+                    break
+                c_buf = c.compress(buf)
+                output_f.write(c_buf)
+        end_buf = c.flush()
+        output_f.write(end_buf)
+
+
 class XZSDexMode(BaseDexMode):
     """
     Secondary dex files are packaged in individual jar files where are then
@@ -425,8 +496,7 @@ class XZSDexMode(BaseDexMode):
 
         # concat_jar is a bunch of .dex.jar files concatenated together.
         concat_jar = join(dex_dir, self._xzs_filename[:-4])
-        cmd = "cat {} | xz -d --threads 6 > {}".format(dest, concat_jar)
-        subprocess.check_call(cmd, shell=True)  # noqa: P204
+        unpack_xz(dest, concat_jar)
 
         if unpackage_metadata:
             shutil.copy(join(extracted_apk_dir, self._xzs_dir, "metadata.txt"), dex_dir)
@@ -567,16 +637,13 @@ class XZSDexMode(BaseDexMode):
         )
 
         # XZ-compress the result
-        compression_level = 0 if fast_repackage else 9
-        subprocess.check_call(
-            [
-                "xz",
-                "-z%d" % compression_level,
-                "--check=crc32",
-                "--threads=6",
-                concat_jar_path,
-            ]
+        pack_xz(
+            input=concat_jar_path,
+            output=f"{concat_jar_path}.xz",
+            compression_level=0 if fast_repackage else 9,
         )
+        # Delete the original.
+        os.remove(concat_jar_path)
 
         # Copy all the archive and metadata back to the apk directory
         secondary_dex_dir = join(extracted_apk_dir, self._xzs_dir)

@@ -468,10 +468,10 @@ class LibraryManager:
             for i, lib_to_extract in enumerate(libs_to_extract):
                 extract_path = join(extracted_dir, "lib_{}.so".format(i))
                 if lib_to_extract.endswith(xz_lib_name):
-                    cmd = "xz -d --stdout {} > {}".format(lib_to_extract, extract_path)
+                    pyredex.unpacker.unpack_xz(lib_to_extract, extract_path)
                 else:
-                    cmd = "zstd -d {} -o {}".format(lib_to_extract, extract_path)
-                subprocess.check_call(cmd, shell=True)  # noqa: P204
+                    cmd = 'zstd -d "{}" -o "{}"'.format(lib_to_extract, extract_path)
+                    subprocess.check_call(cmd, shell=True)  # noqa: P204
 
     def __exit__(self, *args):
         # This dir was just here so we could scan it for classnames, but we don't
