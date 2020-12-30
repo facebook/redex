@@ -253,15 +253,15 @@ TEST_F(PatriciaTreeOverUnderSetAbstractDomainTest, add) {
 
   set = Domain::bottom();
   set.add(Domain());
-  EXPECT_EQ(set, Domain::bottom());
+  EXPECT_EQ(set, Domain());
 
   set = Domain::bottom();
   set.add(Domain::top());
-  EXPECT_EQ(set, Domain::bottom());
+  EXPECT_EQ(set, Domain::top());
 
   set = Domain::top();
   set.add(Domain::bottom());
-  EXPECT_EQ(set, Domain::bottom());
+  EXPECT_EQ(set, Domain::top());
 
   set = Domain::top();
   set.add(Domain());
@@ -273,7 +273,7 @@ TEST_F(PatriciaTreeOverUnderSetAbstractDomainTest, add) {
 
   set = Domain();
   set.add(Domain::bottom());
-  EXPECT_EQ(set, Domain::bottom());
+  EXPECT_EQ(set, Domain());
 
   set = Domain();
   set.add(Domain());
@@ -366,7 +366,11 @@ TEST_F(PatriciaTreeOverUnderSetAbstractDomainTest, add) {
 TEST_F(PatriciaTreeOverUnderSetAbstractDomainTest, add_over) {
   auto set = Domain::bottom();
   set.add_over(1);
-  EXPECT_EQ(set, Domain::bottom());
+  EXPECT_EQ(set, Domain(/* over */ Set{1}, /* under */ Set{}));
+
+  set = Domain::bottom();
+  set.add_over(Set{});
+  EXPECT_EQ(set, Domain(/* over */ Set{}, /* under */ Set{}));
 
   set = Domain::top();
   set.add_over(1);
@@ -447,7 +451,11 @@ TEST_F(PatriciaTreeOverUnderSetAbstractDomainTest, add_over) {
 TEST_F(PatriciaTreeOverUnderSetAbstractDomainTest, add_under) {
   auto set = Domain::bottom();
   set.add_under(1);
-  EXPECT_EQ(set, Domain::bottom());
+  EXPECT_EQ(set, Domain(1));
+
+  set = Domain::bottom();
+  set.add_under(Set{});
+  EXPECT_EQ(set, Domain());
 
   set = Domain::top();
   set.add_under(1);
