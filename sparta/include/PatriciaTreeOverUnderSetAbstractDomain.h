@@ -177,6 +177,8 @@ class PatriciaTreeOverUnderSetAbstractDomain final
   void add_over(const PatriciaTreeSet<Element>& set) {
     if (this->is_value()) {
       this->get_value()->add_over(set);
+    } else if (this->is_bottom()) {
+      this->set_to_value(Value(/* over */ set, /* under */ {}));
     }
   }
 
@@ -185,18 +187,18 @@ class PatriciaTreeOverUnderSetAbstractDomain final
   void add_under(const PatriciaTreeSet<Element>& set) {
     if (this->is_value()) {
       this->get_value()->add_under(set);
+    } else if (this->is_bottom()) {
+      this->set_to_value(Value(/* over */ set, /* under */ set));
     }
   }
 
   void add(const PatriciaTreeOverUnderSetAbstractDomain& other) {
-    if (this->is_bottom()) {
-      return;
-    } else if (other.is_bottom()) {
-      this->set_to_bottom();
-    } else if (this->is_top()) {
+    if (this->is_top() || other.is_bottom()) {
       return;
     } else if (other.is_top()) {
       this->set_to_top();
+    } else if (this->is_bottom()) {
+      this->set_to_value(*other.get_value());
     } else {
       this->get_value()->add(*other.get_value());
     }
