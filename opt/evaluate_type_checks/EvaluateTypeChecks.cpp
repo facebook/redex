@@ -67,6 +67,7 @@ struct RemoveResult {
   size_t class_always_fail{0};
   size_t def_use_loop{0};
   size_t multi_use{0};
+  size_t multi_def{0};
   size_t non_move{0};
   size_t non_branch{0};
   size_t non_supported_branch{0};
@@ -80,6 +81,7 @@ struct RemoveResult {
     class_always_fail += rhs.class_always_fail;
     def_use_loop += rhs.def_use_loop;
     multi_use += rhs.multi_use;
+    multi_def += rhs.multi_def;
     non_move += rhs.non_move;
     non_branch += rhs.non_branch;
     non_supported_branch += rhs.non_supported_branch;
@@ -92,6 +94,7 @@ namespace instance_of {
 
 using DefUses =
     std::unordered_map<IRInstruction*, std::unordered_set<IRInstruction*>>;
+using UseDefs = std::unordered_map<IRInstruction*, size_t>;
 
 DefUses compute_def_uses(ControlFlowGraph& cfg) {
   using namespace reaching_defs;
@@ -119,10 +122,12 @@ DefUses compute_def_uses(ControlFlowGraph& cfg) {
 }
 
 // Follow def-use chains. Find a terminal use. Only allow moves along
-// the chain.
-IRInstruction* find_single_terminal_use(IRInstruction* start,
-                                        const DefUses& def_uses,
-                                        RemoveResult& res) {
+// the chain. Don't consider uses with more than one definition.
+IRInstruction* find_single_terminal_use_without_multiple_defs(
+    IRInstruction* start,
+    const DefUses& def_uses,
+    const UseDefs& use_defs,
+    RemoveResult& res) {
   IRInstruction* insn = start;
   std::unordered_set<IRInstruction*> seen;
   for (;;) {
@@ -151,7 +156,12 @@ IRInstruction* find_single_terminal_use(IRInstruction* start,
       return nullptr;
     }
 
-    insn = *it->second.begin();
+    auto next_insn = *it->second.begin();
+    if (use_defs.count(next_insn) && use_defs.at(next_insn) > 1) {
+      ++res.multi_def;
+      return nullptr;
+    }
+    insn = next_insn;
   }
   not_reached();
 }
@@ -165,7 +175,8 @@ IRInstruction* find_single_terminal_use(IRInstruction* start,
 // branch, it is a tighter encoding (though more expensive at runtime).
 //
 // The simple approach here figures out if the output of the instance-of only
-// flows into an if-eqz or if-nez directly, and in that case uses the value
+// flows into an if-eqz or if-nez directly, and if that is the only value
+// flowing into the conditional branch, and in that case uses the value
 // directly. The instance-of can then be eliminated, saving space (and
 // increasing speed). Follow-up analyzes and optimizations might take advantage
 // of the simpler code, e.g., when it can be shown that the receiver is (or is
@@ -179,6 +190,12 @@ void analyze_true_instance_ofs(
     return;
   }
   auto def_uses = compute_def_uses(cfg);
+  UseDefs use_defs;
+  for (auto& p : def_uses) {
+    for (auto use : p.second) {
+      use_defs[use]++;
+    }
+  }
   for (const auto* mie : true_modulo_null_set) {
     auto def_it = cfg.find_insn(mie->insn);
     auto move_it = cfg.move_result_of(def_it);
@@ -186,8 +203,8 @@ void analyze_true_instance_ofs(
       continue;
     }
 
-    IRInstruction* insn =
-        find_single_terminal_use(move_it->insn, def_uses, res);
+    IRInstruction* insn = find_single_terminal_use_without_multiple_defs(
+        move_it->insn, def_uses, use_defs, res);
     if (insn == nullptr) {
       continue;
     }
@@ -588,6 +605,7 @@ void EvaluateTypeChecksPass::run_pass(DexStoresVector& stores,
   mgr.set_metric("num_class_always_fail", stats.class_always_fail);
   mgr.set_metric("num_def_use_loop", stats.def_use_loop);
   mgr.set_metric("num_multi_use", stats.multi_use);
+  mgr.set_metric("num_multi_use", stats.multi_def);
   mgr.set_metric("num_non_move", stats.non_move);
 }
 
