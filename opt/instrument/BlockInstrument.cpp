@@ -91,12 +91,85 @@ struct MethodInfo {
   size_t num_instrumented_blocks = 0;
 
   std::vector<cfg::BlockId> bit_id_2_block_id;
+  std::vector<std::vector<const SourceBlock*>> bit_id_2_source_blocks;
   std::map<cfg::BlockId, BlockType> rejected_blocks;
 };
 
-void write_metadata(const std::string& file_name,
+using MethodDictionary = std::unordered_map<const DexMethodRef*, size_t>;
+
+MethodDictionary create_method_dictionary(
+    const std::string& file_name, const std::vector<MethodInfo>& all_info) {
+  std::unordered_set<const DexMethodRef*> methods_set;
+  for (const auto& info : all_info) {
+    methods_set.insert(info.method);
+    for (const auto& sb_vec : info.bit_id_2_source_blocks) {
+      for (const auto* sb : sb_vec) {
+        methods_set.insert(sb->src);
+      }
+    }
+  }
+  std::vector<const DexMethodRef*> methods(methods_set.begin(),
+                                           methods_set.end());
+  std::sort(methods.begin(), methods.end(), compare_dexmethods);
+  size_t idx{0};
+
+  std::ofstream ofs(file_name, std::ofstream::out | std::ofstream::trunc);
+  MethodDictionary method_dictionary;
+  for (const auto* m : methods) {
+    method_dictionary.emplace(m, idx);
+    ofs << idx << "," << show(m) << "\n";
+    ++idx;
+  }
+
+  return method_dictionary;
+}
+
+std::ostream& print_source_blocks(
+    std::ostream& os,
+    const MethodDictionary& dict,
+    const std::vector<const SourceBlock*>& blocks) {
+  bool first = true;
+  for (auto* sb : blocks) {
+    if (first) {
+      first = false;
+    } else {
+      os << ";";
+    }
+    os << dict.at(sb->src) << "#" << sb->id;
+  }
+  return os;
+}
+
+std::ostream& write_source_blocks_for_method(std::ostream& os,
+                                             const MethodDictionary& dict,
+                                             const MethodInfo& info) {
+  os << dict.at(info.method);
+  for (const auto& v : info.bit_id_2_source_blocks) {
+    os << ",";
+    print_source_blocks(os, dict, v);
+  }
+  os << "\n";
+  return os;
+}
+
+std::ofstream create_bits_to_source_blocks_file(const ConfigFiles& cfg) {
+  std::ofstream sb_ofs(cfg.metafile("redex-block-bits-to-source-blocks.csv"),
+                       std::ofstream::out | std::ofstream::trunc);
+
+  sb_ofs << "# Block bits to source blocks v1\n";
+
+  return sb_ofs;
+}
+
+void write_metadata(const ConfigFiles& cfg,
+                    const std::string& metadata_base_file_name,
                     const std::vector<MethodInfo>& all_info) {
+  auto method_dictionary = create_method_dictionary(
+      cfg.metafile("redex-source-block-method-dictionary.csv"), all_info);
+  auto sb_ofs = create_bits_to_source_blocks_file(cfg);
+
   // Write a short metadata of this metadata file in the first two lines.
+  auto file_name = cfg.metafile(metadata_base_file_name);
   std::ofstream ofs(file_name, std::ofstream::out | std::ofstream::trunc);
   ofs << "profile_type,version,num_methods" << std::endl;
   ofs << "basic-block-tracing," << PROFILING_DATA_VERSION << ","
@@ -159,6 +232,19 @@ void write_metadata(const std::string& file_name,
         rejected_blocks(info.rejected_blocks),
     };
     ofs << boost::algorithm::join(fields, ",") << "\n";
+  }
+
+  // The CSV looks nicer if we sort the methods, especially since they're only
+  // indexed.
+  std::vector<const MethodInfo*> sorted;
+  sorted.reserve(all_info.size());
+  std::transform(all_info.begin(), all_info.end(), std::back_inserter(sorted),
+                 [](const MethodInfo& i) { return &i; });
+  std::sort(sorted.begin(), sorted.end(), [](auto* lhs, auto* rhs) {
+    return compare_dexmethods(lhs->method, rhs->method);
+  });
+  for (const auto* info : sorted) {
+    write_source_blocks_for_method(sb_ofs, method_dictionary, *info);
   }
 
   TRACE(INSTRUMENT, 2, "Metadata file was written to: %s", SHOW(file_name));
@@ -490,6 +576,17 @@ void insert_block_coverage_computations(const std::vector<BlockInfo>& blocks,
   }
 }
 
+std::vector<const SourceBlock*> gather_source_blocks(const cfg::Block* b) {
+  std::vector<const SourceBlock*> ret;
+  for (const auto& mie : *b) {
+    if (mie.type != MFLOW_SOURCE_BLOCK) {
+      continue;
+    }
+    ret.push_back(mie.src_block.get());
+  }
+  return ret;
+}
+
 MethodInfo instrument_basic_blocks(IRCode& code,
                                    DexMethod* method,
                                    DexMethod* onMethodBegin,
@@ -566,9 +663,11 @@ MethodInfo instrument_basic_blocks(IRCode& code,
   always_assert(count(BlockType::Instrumentable) == num_to_instrument);
 
   info.bit_id_2_block_id.reserve(num_to_instrument);
+  info.bit_id_2_source_blocks.reserve(num_to_instrument);
   for (const auto& i : blocks) {
     if (i.is_instrumentable()) {
       info.bit_id_2_block_id.push_back(i.block->id());
+      info.bit_id_2_source_blocks.emplace_back(gather_source_blocks(i.block));
     } else {
       info.rejected_blocks[i.block->id()] = i.type;
     }
@@ -928,8 +1027,7 @@ void BlockInstrumentHelper::do_basic_block_tracing(
       analysis_cls, field->get_name()->str(),
       static_cast<int>(ProfileTypeFlags::BasicBlockTracing));
 
-  write_metadata(cfg.metafile(options.metadata_file_name),
-                 instrumented_methods);
+  write_metadata(cfg, options.metadata_file_name, instrumented_methods);
 
   print_stats(instrumented_methods, max_num_blocks);
 
