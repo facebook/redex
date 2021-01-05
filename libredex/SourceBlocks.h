@@ -9,10 +9,12 @@
 
 #include <cstdint>
 #include <memory>
+#include <sstream>
 #include <unordered_set>
 
 #include "ControlFlow.h"
 #include "CppUtil.h"
+#include "Debug.h"
 #include "DexClass.h"
 #include "IRList.h"
 
@@ -40,9 +42,11 @@ struct BlockAccessor {
   }
 };
 
-} // namespace impl
-
-inline size_t insert_source_blocks(DexMethod* method, ControlFlowGraph* cfg) {
+template <typename BlockStartFn, typename EdgeFn, typename BlockEndFn>
+void visit_in_order(ControlFlowGraph* cfg,
+                    const BlockStartFn& block_start_fn,
+                    const EdgeFn& edge_fn,
+                    const BlockEndFn& block_end_fn) {
   // Do not rely on `blocks()`, as there are no ordering guarantees. For now,
   // do a simple DFS with explicitly ordered edges.
 
@@ -88,15 +92,15 @@ inline size_t insert_source_blocks(DexMethod* method, ControlFlowGraph* cfg) {
       }
       case EDGE_GHOST:
         return false;
-      default:
+      case EDGE_TYPE_SIZE:
         not_reached();
       }
+      not_reached(); // For GCC.
     });
     return succs;
   };
 
   std::unordered_set<Block*> visited;
-  uint32_t id{0};
   self_recursive_fn(
       [&](auto self, Block* cur) {
         if (visited.count(cur)) {
@@ -104,21 +108,72 @@ inline size_t insert_source_blocks(DexMethod* method, ControlFlowGraph* cfg) {
         }
         visited.insert(cur);
 
-        source_blocks::impl::BlockAccessor::push_source_block(
-            cur, std::make_unique<SourceBlock>(method, id, 0.0f));
-        ++id;
+        block_start_fn(cur);
 
         for (const auto* e : get_sorted_edges(cur)) {
           if (e->type() == EDGE_GHOST) {
             continue;
           }
+          edge_fn(cur, e);
           self(self, e->target());
         }
+
+        block_end_fn(cur);
       },
       cfg->entry_block());
 
   redex_assert(visited.size() == cfg->blocks().size());
-  return visited.size();
+}
+
+} // namespace impl
+
+struct InsertResult {
+  size_t block_count;
+  std::string serialized;
+};
+
+inline InsertResult insert_source_blocks(DexMethod* method,
+                                         ControlFlowGraph* cfg,
+                                         bool serialize = true) {
+  uint32_t id{0};
+  std::ostringstream oss;
+
+  auto block_start_fn = [&](Block* cur) {
+    if (serialize) {
+      oss << "(";
+    }
+
+    source_blocks::impl::BlockAccessor::push_source_block(
+        cur, std::make_unique<SourceBlock>(method, id, 0.0f));
+    ++id;
+  };
+  auto edge_fn = [&](Block* /* cur */, const Edge* e) {
+    if (serialize) {
+      auto get_edge_char = [e]() {
+        switch (e->type()) {
+        case EDGE_BRANCH:
+          return 'b';
+        case EDGE_GOTO:
+          return 'g';
+        case EDGE_THROW:
+          return 't';
+        case EDGE_GHOST:
+        case EDGE_TYPE_SIZE:
+          not_reached();
+        }
+        not_reached(); // For GCC.
+      };
+      oss << " " << get_edge_char();
+    }
+  };
+  auto block_end_fn = [&](Block* /* cur */) {
+    if (serialize) {
+      oss << ")";
+    }
+  };
+  impl::visit_in_order(cfg, block_start_fn, edge_fn, block_end_fn);
+
+  return {cfg->blocks().size(), oss.str()};
 }
 
 } // namespace source_blocks

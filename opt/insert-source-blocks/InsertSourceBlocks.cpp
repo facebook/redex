@@ -7,14 +7,17 @@
 
 #include "InsertSourceBlocks.h"
 
-#include <atomic>
 #include <cstdint>
+#include <fstream>
+#include <mutex>
 
+#include "ConfigFiles.h"
 #include "DexClass.h"
 #include "DexStore.h"
 #include "IRCode.h"
 #include "PassManager.h"
 #include "ScopedCFG.h"
+#include "Show.h"
 #include "SourceBlocks.h"
 #include "Walkers.h"
 
@@ -22,31 +25,68 @@ using namespace cfg;
 
 namespace {
 
-size_t source_blocks(DexMethod* method, IRCode* code) {
+source_blocks::InsertResult source_blocks(DexMethod* method,
+                                          IRCode* code,
+                                          bool serialize) {
   ScopedCFG cfg(code);
-  return source_blocks::insert_source_blocks(method, cfg.get());
+  return source_blocks::insert_source_blocks(method, cfg.get(), serialize);
 }
 
-void run_source_blocks(DexStoresVector& stores, PassManager& mgr) {
+void run_source_blocks(DexStoresVector& stores,
+                       ConfigFiles& conf,
+                       PassManager& mgr,
+                       bool serialize) {
   auto scope = build_class_scope(stores);
 
-  std::atomic<size_t> all{0};
+  std::mutex serialized_guard;
+  std::vector<std::pair<const DexMethod*, std::string>> serialized;
+  size_t blocks{0};
   walk::parallel::methods(scope, [&](DexMethod* method) {
     auto code = method->get_code();
     if (code != nullptr) {
-      auto s = source_blocks(method, code);
-      all.fetch_add(s);
+      auto res = source_blocks(method, code, serialize);
+      std::unique_lock<std::mutex> lock(serialized_guard);
+      serialized.emplace_back(method, std::move(res.serialized));
+      blocks += res.block_count;
     }
   });
-  mgr.set_metric("inserted_source_blocks", all.load());
+  mgr.set_metric("inserted_source_blocks", blocks);
+  mgr.set_metric("handled_methods", serialized.size());
+
+  if (!serialize) {
+    return;
+  }
+
+  std::sort(serialized.begin(),
+            serialized.end(),
+            [](const auto& lhs, const auto& rhs) {
+              return compare_dexmethods(lhs.first, rhs.first);
+            });
+
+  std::ofstream ofs(conf.metafile("redex-source-blocks.csv"));
+  ofs << "type,version\nredex-source-blocks,1\nname,serialized\n";
+  for (const auto& p : serialized) {
+    ofs << show(p.first) << "," << p.second << "\n";
+  }
 }
 
 } // namespace
 
+void InsertSourceBlocksPass::bind_config() {
+  bind("force_serialize",
+       m_force_serialize_,
+       m_force_serialize_,
+       "Force serialization of the CFGs. Testing only.");
+}
+
 void InsertSourceBlocksPass::run_pass(DexStoresVector& stores,
-                                      ConfigFiles&,
+                                      ConfigFiles& conf,
                                       PassManager& mgr) {
-  run_source_blocks(stores, mgr);
+  run_source_blocks(stores,
+                    conf,
+                    mgr,
+                    mgr.get_redex_options().instrument_pass_enabled ||
+                        m_force_serialize_);
 }
 
 static InsertSourceBlocksPass s_pass;

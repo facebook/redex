@@ -18,5 +18,9 @@ class InsertSourceBlocksPass : public Pass {
  public:
   InsertSourceBlocksPass() : Pass("InsertSourceBlocksPass") {}
 
+  void bind_config() override;
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+
+ private:
+  bool m_force_serialize_{false};
 };
