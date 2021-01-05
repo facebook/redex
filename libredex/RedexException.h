@@ -14,13 +14,15 @@
 #include <vector>
 
 enum RedexError {
-  // define errors here
+  // Error codes here may also be referenced from py runner scripts for
+  // supplimental/custom error messages.
   INTERNAL_ERROR = 1,
   GENERIC_ASSERTION_ERROR = 2,
   CACHE_INDEX_OUT_OF_BOUND = 3,
   DUPLICATE_CLASSES = 4,
   DUPLICATE_METHODS = 5,
   BAD_ANNOTATION = 6,
+  REJECTED_CODING_PATTERN = 8,
 };
 
 class RedexException : public std::exception {
