@@ -185,8 +185,8 @@ void analyze_true_instance_ofs(
     ControlFlowGraph& cfg,
     CFGMutation& mutation,
     RemoveResult& res,
-    const std::unordered_set<const MethodItemEntry*>& true_modulo_null_set) {
-  if (true_modulo_null_set.empty()) {
+    const std::vector<const MethodItemEntry*>& true_modulo_nulls) {
+  if (true_modulo_nulls.empty()) {
     return;
   }
   auto def_uses = compute_def_uses(cfg);
@@ -196,7 +196,7 @@ void analyze_true_instance_ofs(
       use_defs[use]++;
     }
   }
-  for (const auto* mie : true_modulo_null_set) {
+  for (const auto* mie : true_modulo_nulls) {
     auto def_it = cfg.find_insn(mie->insn);
     auto move_it = cfg.move_result_of(def_it);
     if (move_it.is_end()) { // Should not happen.
@@ -246,7 +246,7 @@ RemoveResult analyze_and_evaluate_instance_of(DexMethod* method) {
   CFGMutation mutation(*cfg);
 
   RemoveResult res;
-  std::unordered_set<const MethodItemEntry*> true_modulo_null_set;
+  std::vector<const MethodItemEntry*> true_modulo_nulls;
 
   // Figure out types. Find guaranteed-false checks.
   {
@@ -300,7 +300,7 @@ RemoveResult analyze_and_evaluate_instance_of(DexMethod* method) {
       }
 
       if (*eval == 1) {
-        true_modulo_null_set.insert(&mie);
+        true_modulo_nulls.push_back(&mie);
         ++res.class_always_succeed_or_null;
         continue;
       }
@@ -327,7 +327,7 @@ RemoveResult analyze_and_evaluate_instance_of(DexMethod* method) {
   // See whether the checks that will succeed if the value is not null
   // can be turned into a null check. If the result is used for more
   // than a branch, transformation is likely not beneficial at the moment.
-  analyze_true_instance_ofs(*cfg, mutation, res, true_modulo_null_set);
+  analyze_true_instance_ofs(*cfg, mutation, res, true_modulo_nulls);
 
   mutation.flush();
   return res;
