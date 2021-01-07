@@ -1166,6 +1166,10 @@ std::ostream& operator<<(std::ostream& o, const MethodItemEntry& mie) {
   case MFLOW_POSITION:
     o << "POSITION: " << *mie.pos;
     break;
+  case MFLOW_SOURCE_BLOCK:
+    o << "SOURCE-BLOCK: " << show(mie.src_block->src) << "@"
+      << mie.src_block->id;
+    break;
   case MFLOW_FALLTHROUGH:
     o << "FALLTHROUGH";
     break;

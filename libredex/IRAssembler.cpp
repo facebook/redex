@@ -700,6 +700,9 @@ s_expr to_s_expr(const IRCode* code) {
       break;
     case MFLOW_DEX_OPCODE:
       not_reached();
+    case MFLOW_SOURCE_BLOCK:
+      // TODO(SOURCE-BLOCK)
+      break;
     }
   }
 

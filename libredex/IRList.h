@@ -84,6 +84,29 @@ struct BranchTarget {
   bool operator==(const BranchTarget& other) const;
 };
 
+/**
+ * A SourceBlock refers to a method and block ID that the following code came
+ * from. It also has a float payload at the moment (though that is in flow),
+ * which will be used for profiling information.
+ */
+struct SourceBlock {
+  DexMethodRef* src{nullptr};
+  // Large methods exist, but a 32-bit integer is safe.
+  uint32_t id{0};
+  // Use float over double to have a struct without padding. Additional
+  // precision is unnecessary.
+  float val{0};
+
+  SourceBlock() = default;
+  SourceBlock(DexMethodRef* src, size_t id, float v)
+      : src(src), id(id), val(v) {}
+  SourceBlock(const SourceBlock&) = default;
+
+  bool operator==(const SourceBlock& other) const {
+    return src == other.src && id == other.id && val == other.val;
+  }
+};
+
 /*
  * MethodItemEntry (and the IRLists that it gets linked into) is a data
  * structure of DEX methods that is easier to modify than DexMethod.
@@ -113,6 +136,9 @@ enum MethodItemType {
   MFLOW_DEBUG,
   MFLOW_POSITION,
 
+  // This holds information about the source block.
+  MFLOW_SOURCE_BLOCK,
+
   // A no-op
   MFLOW_FALLTHROUGH,
 };
@@ -131,6 +157,7 @@ struct MethodItemEntry {
     BranchTarget* target;
     std::unique_ptr<DexDebugInstruction> dbgop;
     std::unique_ptr<DexPosition> pos;
+    std::unique_ptr<SourceBlock> src_block;
   };
   MethodItemEntry(const MethodItemEntry&);
   explicit MethodItemEntry(DexInstruction* dex_insn) {
@@ -153,6 +180,7 @@ struct MethodItemEntry {
       : type(MFLOW_DEBUG), dbgop(std::move(dbgop)) {}
   explicit MethodItemEntry(std::unique_ptr<DexPosition> pos)
       : type(MFLOW_POSITION), pos(std::move(pos)) {}
+  explicit MethodItemEntry(std::unique_ptr<SourceBlock> src_block);
 
   bool operator==(const MethodItemEntry&) const;
 
