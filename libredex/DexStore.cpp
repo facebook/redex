@@ -160,3 +160,26 @@ bool XDexRefs::cross_dex_ref(const DexMethod* caller,
                              const DexMethod* callee) const {
   return get_dex_idx(callee->get_class()) != get_dex_idx(caller->get_class());
 }
+
+void squash_into_one_dex(DexStoresVector& stores) {
+  redex_assert(!stores.empty());
+  auto& root_store = *stores.begin();
+  auto& dexes = root_store.get_dexen();
+  if (dexes.empty()) {
+    redex_assert(stores.size() == 1);
+    return;
+  }
+  auto it = dexes.begin();
+  auto& primary_dex = *it;
+  for (it++; it != dexes.end(); ++it) {
+    primary_dex.insert(primary_dex.end(), it->begin(), it->end());
+  }
+  dexes.erase(dexes.begin() + 1, dexes.end());
+  for (auto other_store_it = ++stores.begin(); other_store_it != stores.end();
+       ++other_store_it) {
+    for (auto& dex : other_store_it->get_dexen()) {
+      primary_dex.insert(primary_dex.end(), dex.begin(), dex.end());
+    }
+  }
+  stores.erase(stores.begin() + 1, stores.end());
+}

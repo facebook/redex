@@ -276,3 +276,7 @@ const api::AndroidSDK& ConfigFiles::get_android_sdk_api(int32_t min_sdk_api) {
 const ProguardMap& ConfigFiles::get_proguard_map() const {
   return *m_proguard_map;
 }
+
+bool ConfigFiles::force_single_dex() const {
+  return m_json.get("force_single_dex", false);
+}

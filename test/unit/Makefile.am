@@ -38,6 +38,7 @@ check_PROGRAMS = \
     dex_loader_test \
     dex_mutate_test \
     dex_output_test \
+    dex_store_test \
     dex_type_environment_test \
     dex_util_test \
     dominators_test \
@@ -182,6 +183,8 @@ dex_loader_test_SOURCES = DexLoaderTest.cpp
 dex_mutate_test_SOURCES = DexMutateTest.cpp
 
 dex_output_test_SOURCES = DexOutputTest.cpp
+
+dex_store_test_SOURCES = DexStoreTest.cpp
 
 dex_type_environment_test_SOURCES = type-analysis/DexTypeEnvironmentTest.cpp
 
@@ -419,6 +422,7 @@ TESTS = \
     dex_loader_test \
     dex_mutate_test \
     dex_output_test \
+    dex_store_test \
     dex_type_environment_test \
     dex_util_test \
     dominators_test \

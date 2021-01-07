@@ -140,6 +140,8 @@ struct ConfigFiles {
    */
   void load(const Scope& scope);
 
+  bool force_single_dex() const;
+
  private:
   JsonWrapper m_json;
   std::string outdir;
