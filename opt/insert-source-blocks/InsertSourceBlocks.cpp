@@ -19,6 +19,7 @@
 #include "ScopedCFG.h"
 #include "Show.h"
 #include "SourceBlocks.h"
+#include "Trace.h"
 #include "Walkers.h"
 
 using namespace cfg;
@@ -82,6 +83,13 @@ void InsertSourceBlocksPass::bind_config() {
 void InsertSourceBlocksPass::run_pass(DexStoresVector& stores,
                                       ConfigFiles& conf,
                                       PassManager& mgr) {
+  // TODO(agampe): This should eventually go away. For now, avoid the overhead.
+  if (!mgr.get_redex_options().instrument_pass_enabled) {
+    TRACE(METH_PROF,
+          1,
+          "Not an instrumentation build, not running InsertSourceBlocksPass");
+  }
+
   run_source_blocks(stores,
                     conf,
                     mgr,
