@@ -23,14 +23,39 @@ namespace {
 
 using namespace method_profiles;
 
-class InlineForSpeedMethodProfiles final : public InlineForSpeed {
+class InlineForSpeedBase : public InlineForSpeed {
+ public:
+  bool should_inline(const DexMethod* caller_method,
+                     const DexMethod* callee_method) final {
+    bool accept = should_inline_impl(caller_method, callee_method);
+    ++m_num_choices;
+    if (accept) {
+      ++m_num_accepted;
+    }
+    return accept;
+  }
+
+  size_t get_num_choices() const { return m_num_choices; }
+  size_t get_num_accepted() const { return m_num_accepted; }
+
+ protected:
+  virtual bool should_inline_impl(const DexMethod* caller_method,
+                                  const DexMethod* callee_method) = 0;
+
+  size_t m_num_choices{0};
+  size_t m_num_accepted{0};
+};
+
+class InlineForSpeedMethodProfiles final : public InlineForSpeedBase {
  public:
   explicit InlineForSpeedMethodProfiles(const MethodProfiles* method_profiles)
       : m_method_profiles(method_profiles) {
     compute_hot_methods();
   }
-  bool should_inline(const DexMethod* caller_method,
-                     const DexMethod* callee_method) override;
+
+ protected:
+  bool should_inline_impl(const DexMethod* caller_method,
+                          const DexMethod* callee_method) override;
 
  private:
   void compute_hot_methods();
@@ -115,7 +140,7 @@ void InlineForSpeedMethodProfiles::compute_hot_methods() {
   }
 }
 
-bool InlineForSpeedMethodProfiles::should_inline(
+bool InlineForSpeedMethodProfiles::should_inline_impl(
     const DexMethod* caller_method, const DexMethod* callee_method) {
   // TODO(T80442770): Remove this restriction once the experimentation framework
   // can support methods with exceptions or we're done with the experiment.
@@ -206,15 +231,16 @@ bool InlineForSpeedMethodProfiles::should_inline_per_interaction(
 
 using namespace random_forest;
 
-class InlineForSpeedDecisionTrees final : public InlineForSpeed {
+class InlineForSpeedDecisionTrees final : public InlineForSpeedBase {
  public:
   InlineForSpeedDecisionTrees(const MethodProfiles* method_profiles,
                               Forest&& forest)
       : m_method_context_context(method_profiles),
         m_forest(std::move(forest)) {}
 
-  bool should_inline(const DexMethod* caller_method,
-                     const DexMethod* callee_method) override {
+ protected:
+  bool should_inline_impl(const DexMethod* caller_method,
+                          const DexMethod* callee_method) override {
     auto& caller_context = get_or_create(caller_method);
     auto& callee_context = get_or_create(callee_method);
 
@@ -294,13 +320,18 @@ void PerfMethodInlinePass::run_pass(DexStoresVector& stores,
   }
 
   // Unique pointer for indirection and single path.
-  std::unique_ptr<InlineForSpeed> ifs{
-      m_config->forest ? (InlineForSpeed*)(new InlineForSpeedDecisionTrees(
+  std::unique_ptr<InlineForSpeedBase> ifs{
+      m_config->forest ? (InlineForSpeedBase*)(new InlineForSpeedDecisionTrees(
                              &method_profiles, m_config->forest->clone()))
                        : new InlineForSpeedMethodProfiles(&method_profiles)};
 
   inliner::run_inliner(stores, mgr, conf, /* intra_dex */ true,
                        /* inline_for_speed= */ ifs.get());
+
+  TRACE(METH_PROF, 1, "Accepted %zu out of %zu choices.",
+        ifs->get_num_accepted(), ifs->get_num_choices());
+  mgr.set_metric("pgi_inline_choices", ifs->get_num_choices());
+  mgr.set_metric("pgi_inline_choices_accepted", ifs->get_num_accepted());
 }
 
 static PerfMethodInlinePass s_pass;
