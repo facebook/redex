@@ -299,7 +299,7 @@ void run_inliner(DexStoresVector& stores,
                  PassManager& mgr,
                  ConfigFiles& conf,
                  bool intra_dex /* false */,
-                 bool use_method_profiles /* false */) {
+                 InlineForSpeed* inline_for_speed) {
   if (mgr.no_proguard_rules()) {
     TRACE(INLINE, 1,
           "MethodInlinePass not run because no ProGuard configuration was "
@@ -314,15 +314,7 @@ void run_inliner(DexStoresVector& stores,
     inliner_config.apply_intradex_white_list();
   }
 
-  method_profiles::MethodProfiles method_profiles =
-      use_method_profiles ? conf.get_method_profiles()
-                          : method_profiles::MethodProfiles{};
-  if (use_method_profiles && !method_profiles.has_stats()) {
-    // PerfMethodInline is enabled, but there are no profiles available. Bail,
-    // don't run a regular inline pass.
-    return;
-  }
-  if (use_method_profiles) {
+  if (inline_for_speed != nullptr) {
     inliner_config.shrink_other_methods = false;
   }
 
@@ -355,7 +347,7 @@ void run_inliner(DexStoresVector& stores,
   // inline candidates
   MultiMethodInliner inliner(scope, stores, methods, resolver, inliner_config,
                              intra_dex ? IntraDex : InterDex,
-                             true_virtual_callers, &method_profiles,
+                             true_virtual_callers, inline_for_speed,
                              &same_method_implementations,
                              analyze_and_prune_inits, conf.get_pure_methods());
   inliner.inline_methods();

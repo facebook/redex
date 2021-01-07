@@ -8,6 +8,8 @@
 #include "InlinerConfig.h"
 #include "PassManager.h"
 
+class InlineForSpeed;
+
 namespace inliner {
 /**
  * Before InterDexPass, we can run inliner with "intra_dex=false" to do global
@@ -18,5 +20,5 @@ void run_inliner(DexStoresVector& stores,
                  PassManager& mgr,
                  ConfigFiles& inliner_config,
                  bool intra_dex = false,
-                 bool use_method_profiles = false);
+                 InlineForSpeed* inline_for_speed = nullptr);
 } // namespace inliner
