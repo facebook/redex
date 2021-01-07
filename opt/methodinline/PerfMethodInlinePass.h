@@ -13,6 +13,13 @@
 class PerfMethodInlinePass : public Pass {
  public:
   PerfMethodInlinePass() : Pass("PerfMethodInlinePass") {}
+  ~PerfMethodInlinePass();
+
+  void bind_config() override;
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+
+ private:
+  struct Config;
+  std::unique_ptr<Config> m_config;
 };
