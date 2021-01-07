@@ -771,6 +771,7 @@ void MultiMethodInliner::inline_inlinables(
   }
 
   if (exp != nullptr) {
+    caller->cfg().simplify(); // Remove unreachable code.
     exp->flush();
     if (caller_had_editable_cfg) {
       caller->build_cfg();
