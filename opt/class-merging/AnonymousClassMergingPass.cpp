@@ -42,7 +42,8 @@ void AnonymousClassMergingPass::run_pass(DexStoresVector& stores,
     // Finishing the merging configurations.
     m_merging_spec.name = "Anonymous Classes";
     m_merging_spec.class_name_prefix = "Anon";
-    m_merging_spec.merge_per_interdex_set = InterDexGroupingType::FULL;
+    m_merging_spec.merge_per_interdex_set =
+        InterDexGroupingType::NON_ORDERED_SET;
     m_merging_spec.include_primary_dex =
         conf.get_json_config().get("force_single_dex", false);
     strategy::set_merging_strategy(strategy::BY_CODE_SIZE);

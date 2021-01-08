@@ -814,6 +814,13 @@ std::vector<TypeSet> Model::group_per_interdex_set(const TypeSet& types) {
         // Drop mergeables that are in the hot set.
         continue;
       }
+    } else if (m_spec.merge_per_interdex_set ==
+               InterDexGroupingType::NON_ORDERED_SET) {
+      if (index < s_num_interdex_groups - 1) {
+        // Only merge the last group which are not in ordered set, drop other
+        // mergeables.
+        continue;
+      }
     }
     new_groups[index].emplace(pair.first);
   }

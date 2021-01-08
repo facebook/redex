@@ -27,7 +27,8 @@ using TypeToTypeSet = std::unordered_map<const DexType*, TypeSet>;
 enum InterDexGroupingType {
   DISABLED = 0, // No interdex grouping.
   NON_HOT_SET = 1, // Exclude hot set.
-  FULL = 2, // Apply interdex grouping on the entire input.
+  NON_ORDERED_SET = 2, // Exclude all ordered set.
+  FULL = 3, // Apply interdex grouping on the entire input.
 };
 
 enum TypeTagConfig {
