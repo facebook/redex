@@ -74,25 +74,6 @@ using namespace cse_impl;
 
 namespace {
 
-constexpr const char* METRIC_RESULTS_CAPTURED = "num_results_captured";
-constexpr const char* METRIC_STORES_CAPTURED = "num_stores_captured";
-constexpr const char* METRIC_ARRAY_LENGTHS_CAPTURED =
-    "num_array_lengths_captured";
-constexpr const char* METRIC_ELIMINATED_INSTRUCTIONS =
-    "num_eliminated_instructions";
-constexpr const char* METRIC_MAX_VALUE_IDS = "max_value_ids";
-constexpr const char* METRIC_METHODS_USING_OTHER_TRACKED_LOCATION_BIT =
-    "methods_using_other_tracked_location_bit";
-constexpr const char* METRIC_INSTR_PREFIX = "instr_";
-constexpr const char* METRIC_METHOD_BARRIERS = "num_method_barriers";
-constexpr const char* METRIC_METHOD_BARRIERS_ITERATIONS =
-    "num_method_barriers_iterations";
-constexpr const char* METRIC_CONDITIONALLY_PURE_METHODS =
-    "num_conditionally_pure_methods";
-constexpr const char* METRIC_CONDITIONALLY_PURE_METHODS_ITERATIONS =
-    "num_conditionally_pure_methods_iterations";
-constexpr const char* METRIC_MAX_ITERATIONS = "num_max_iterations";
-
 using value_id_t = uint64_t;
 constexpr size_t TRACKED_LOCATION_BITS = 42; // leaves 20 bits for running index
 enum ValueIdFlags : value_id_t {
@@ -1322,17 +1303,6 @@ static IROpcode get_move_opcode(const IRInstruction* earlier_insn) {
 bool CommonSubexpressionElimination::patch(bool runtime_assertions) {
   if (m_forward.empty()) {
     return false;
-  }
-
-  unsigned int max_dest = 0;
-  for (const auto& mie : cfg::InstructionIterable(m_cfg)) {
-    if (mie.insn->has_dest() && mie.insn->dest() > max_dest) {
-      max_dest = mie.insn->dest();
-    }
-  };
-  for (const auto& earlier_insns : m_earlier_insns) {
-    IROpcode move_opcode = get_move_opcode(*earlier_insns.begin());
-    max_dest += (move_opcode == OPCODE_MOVE_WIDE) ? 2 : 1;
   }
 
   TRACE(CSE, 5, "[CSE] before:\n%s", SHOW(m_cfg));
