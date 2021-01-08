@@ -809,12 +809,13 @@ std::vector<TypeSet> Model::group_per_interdex_set(const TypeSet& types) {
   for (const auto& pair : type_to_usages) {
     auto index = get_interdex_group(pair.second, s_cls_to_interdex_group,
                                     s_num_interdex_groups);
+    if (m_spec.merge_per_interdex_set == InterDexGroupingType::NON_HOT_SET) {
+      if (index == 0) {
+        // Drop mergeables that are in the hot set.
+        continue;
+      }
+    }
     new_groups[index].emplace(pair.first);
-  }
-
-  if (m_spec.merge_per_interdex_set == InterDexGroupingType::NON_HOT_SET) {
-    // Drop mergeables that are in the hot set.
-    new_groups[0].clear();
   }
 
   return new_groups;
