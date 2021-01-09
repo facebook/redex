@@ -865,9 +865,9 @@ void print_stats(const std::vector<MethodInfo>& instrumented_methods,
   };
 
   TRACE(INSTRUMENT, 4, "Empty / useless block stats:");
-  print_two_dists("empty", "useless",
-                  [](auto&& v) { return v.num_empty_blocks; },
-                  [](auto&& v) { return v.num_useless_blocks; });
+  print_two_dists(
+      "empty", "useless", [](auto&& v) { return v.num_empty_blocks; },
+      [](auto&& v) { return v.num_useless_blocks; });
 }
 
 } // namespace

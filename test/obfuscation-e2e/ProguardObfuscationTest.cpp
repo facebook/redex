@@ -82,14 +82,15 @@ bool ProguardObfuscationTest::method_is_renamed(const DexClass* cls,
 bool ProguardObfuscationTest::refs_to_field_found(const std::string& name) {
   bool res = false;
   DexClasses& classes(dexen.front());
-  walk::opcodes(classes,
-                [](DexMethod*) { return true; },
-                [&](DexMethod* method, IRInstruction* instr) {
-                  if (!opcode::is_an_ifield_op(instr->opcode())) return;
-                  DexFieldRef* field_ref = instr->get_field();
-                  if (field_ref->is_def()) return;
+  walk::opcodes(
+      classes,
+      [](DexMethod*) { return true; },
+      [&](DexMethod* method, IRInstruction* instr) {
+        if (!opcode::is_an_ifield_op(instr->opcode())) return;
+        DexFieldRef* field_ref = instr->get_field();
+        if (field_ref->is_def()) return;
 
-                  res |= show(field_ref) == name;
-                });
+        res |= show(field_ref) == name;
+      });
   return res;
 }

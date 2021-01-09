@@ -82,7 +82,7 @@ RemoveArgs::PassStats RemoveArgs::run() {
  */
 void RemoveArgs::gather_results_used() {
   walk::parallel::code(
-      m_scope, [& result_used = m_result_used](DexMethod*, IRCode& code) {
+      m_scope, [&result_used = m_result_used](DexMethod*, IRCode& code) {
         const auto ii = InstructionIterable(code);
         for (auto it = ii.begin(); it != ii.end(); it++) {
           auto insn = it->insn;

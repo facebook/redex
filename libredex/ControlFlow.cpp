@@ -2022,7 +2022,8 @@ void ControlFlowGraph::delete_pred_edges(Block* b) {
 ControlFlowGraph::EdgeSet ControlFlowGraph::remove_edges_between(Block* p,
                                                                  Block* s,
                                                                  bool cleanup) {
-  return remove_edge_if(p, s, [](const Edge*) { return true; }, cleanup);
+  return remove_edge_if(
+      p, s, [](const Edge*) { return true; }, cleanup);
 }
 
 void ControlFlowGraph::delete_edges_between(Block* p, Block* s) {
@@ -2030,8 +2031,9 @@ void ControlFlowGraph::delete_edges_between(Block* p, Block* s) {
 }
 
 void ControlFlowGraph::remove_edge(Edge* edge, bool cleanup) {
-  remove_edge_if(edge->src(), edge->target(),
-                 [edge](const Edge* e) { return edge == e; }, cleanup);
+  remove_edge_if(
+      edge->src(), edge->target(), [edge](const Edge* e) { return edge == e; },
+      cleanup);
 }
 
 void ControlFlowGraph::free_all_blocks_and_edges() {
@@ -2476,12 +2478,14 @@ std::ostream& ControlFlowGraph::write_dot_format(std::ostream& o) const {
 
 ControlFlowGraph::EdgeSet ControlFlowGraph::remove_succ_edges(Block* b,
                                                               bool cleanup) {
-  return remove_succ_edge_if(b, [](const Edge*) { return true; }, cleanup);
+  return remove_succ_edge_if(
+      b, [](const Edge*) { return true; }, cleanup);
 }
 
 ControlFlowGraph::EdgeSet ControlFlowGraph::remove_pred_edges(Block* b,
                                                               bool cleanup) {
-  return remove_pred_edge_if(b, [](const Edge*) { return true; }, cleanup);
+  return remove_pred_edge_if(
+      b, [](const Edge*) { return true; }, cleanup);
 }
 
 DexPosition* ControlFlowGraph::get_dbg_pos(

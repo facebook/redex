@@ -20,16 +20,16 @@ size_t delete_methods(
     std::function<DexMethod*(DexMethodRef*, MethodSearch search)> resolver) {
 
   // if a removable candidate is invoked do not delete
-  walk::opcodes(scope, [](DexMethod* meth) { return true; },
-                [&](DexMethod* meth, IRInstruction* insn) {
-                  if (opcode::is_an_invoke(insn->opcode())) {
-                    auto callee =
-                        resolver(insn->get_method(), opcode_to_search(insn));
-                    if (callee != nullptr) {
-                      removable.erase(callee);
-                    }
-                  }
-                });
+  walk::opcodes(
+      scope, [](DexMethod* meth) { return true; },
+      [&](DexMethod* meth, IRInstruction* insn) {
+        if (opcode::is_an_invoke(insn->opcode())) {
+          auto callee = resolver(insn->get_method(), opcode_to_search(insn));
+          if (callee != nullptr) {
+            removable.erase(callee);
+          }
+        }
+      });
 
   // if a removable candidate is referenced by an annotation do not delete
   walk::annotations(scope, [&](DexAnnotation* anno) {

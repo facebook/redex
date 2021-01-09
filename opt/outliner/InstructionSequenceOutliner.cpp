@@ -1743,11 +1743,10 @@ class OutlinedMethodCreator {
       m_outlined_method_instructions += cn.insns.size();
       if (cn.succs.empty()) {
         if (c.res_type != nullptr) {
-          IROpcode ret_opcode = type::is_object(c.res_type)
-                                    ? OPCODE_RETURN_OBJECT
-                                    : type::is_wide_type(c.res_type)
-                                          ? OPCODE_RETURN_WIDE
-                                          : OPCODE_RETURN;
+          IROpcode ret_opcode =
+              type::is_object(c.res_type)      ? OPCODE_RETURN_OBJECT
+              : type::is_wide_type(c.res_type) ? OPCODE_RETURN_WIDE
+                                               : OPCODE_RETURN;
           auto ret_insn = new IRInstruction(ret_opcode);
           ret_insn->set_src(0, *cn.res_reg);
           code->push_back(ret_insn);
@@ -1948,7 +1947,7 @@ class DexState {
     m_method_refs_count = method_refs.size() + reserved_mrefs;
     m_type_refs.insert(type_refs.begin(), type_refs.end());
 
-    walk::classes(dex, [& class_ids = m_class_ids](DexClass* cls) {
+    walk::classes(dex, [&class_ids = m_class_ids](DexClass* cls) {
       class_ids.emplace(cls->get_type(), class_ids.size());
     });
 

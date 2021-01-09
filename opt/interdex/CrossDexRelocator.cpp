@@ -133,10 +133,9 @@ bool CrossDexRelocator::handle_invoked_direct_methods_that_prevent_relocation(
 std::string CrossDexRelocator::create_new_type_name(RelocatedMethodKind kind) {
   std::stringstream ss;
   ss << "Lredex/$Relocated"
-     << (kind == RelocatedMethodKind::Static
-             ? "Static"
-             : kind == RelocatedMethodKind::NonStaticDirect ? "NonStaticDirect"
-                                                            : "Virtual")
+     << (kind == RelocatedMethodKind::Static            ? "Static"
+         : kind == RelocatedMethodKind::NonStaticDirect ? "NonStaticDirect"
+                                                        : "Virtual")
      << std::to_string(m_next_method_id++) << ";";
   return ss.str();
 }

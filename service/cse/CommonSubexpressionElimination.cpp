@@ -1280,23 +1280,21 @@ CommonSubexpressionElimination::CommonSubexpressionElimination(
 
 static IROpcode get_move_opcode(const IRInstruction* earlier_insn) {
   if (earlier_insn->has_dest()) {
-    return earlier_insn->dest_is_wide()
-               ? OPCODE_MOVE_WIDE
-               : earlier_insn->dest_is_object() ? OPCODE_MOVE_OBJECT
-                                                : OPCODE_MOVE;
+    return earlier_insn->dest_is_wide()     ? OPCODE_MOVE_WIDE
+           : earlier_insn->dest_is_object() ? OPCODE_MOVE_OBJECT
+                                            : OPCODE_MOVE;
   } else if (earlier_insn->opcode() == OPCODE_NEW_ARRAY) {
     return OPCODE_MOVE;
   } else {
     always_assert(opcode::is_an_aput(earlier_insn->opcode()) ||
                   opcode::is_an_iput(earlier_insn->opcode()) ||
                   opcode::is_an_sput(earlier_insn->opcode()));
-    return earlier_insn->src_is_wide(0)
-               ? OPCODE_MOVE_WIDE
-               : (earlier_insn->opcode() == OPCODE_APUT_OBJECT ||
-                  earlier_insn->opcode() == OPCODE_IPUT_OBJECT ||
-                  earlier_insn->opcode() == OPCODE_SPUT_OBJECT)
-                     ? OPCODE_MOVE_OBJECT
-                     : OPCODE_MOVE;
+    return earlier_insn->src_is_wide(0) ? OPCODE_MOVE_WIDE
+           : (earlier_insn->opcode() == OPCODE_APUT_OBJECT ||
+              earlier_insn->opcode() == OPCODE_IPUT_OBJECT ||
+              earlier_insn->opcode() == OPCODE_SPUT_OBJECT)
+               ? OPCODE_MOVE_OBJECT
+               : OPCODE_MOVE;
   }
 }
 

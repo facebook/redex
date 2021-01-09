@@ -929,16 +929,17 @@ void DexOutput::generate_class_data_items() {
 static void sync_all(const Scope& scope) {
   constexpr bool serial = false; // for debugging
   auto wq = workqueue_foreach<DexMethod*>([](DexMethod* m) { m->sync(); });
-  walk::code(scope,
-             [](DexMethod*) { return true; },
-             [&](DexMethod* m, IRCode&) {
-               if (serial) {
-                 TRACE(MTRANS, 2, "Syncing %s", SHOW(m));
-                 m->sync();
-               } else {
-                 wq.add_item(m);
-               }
-             });
+  walk::code(
+      scope,
+      [](DexMethod*) { return true; },
+      [&](DexMethod* m, IRCode&) {
+        if (serial) {
+          TRACE(MTRANS, 2, "Syncing %s", SHOW(m));
+          m->sync();
+        } else {
+          wq.add_item(m);
+        }
+      });
   wq.run_all();
 }
 

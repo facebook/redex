@@ -121,25 +121,25 @@ MultiMethodInliner::MultiMethodInliner(
     std::unordered_set<DexMethod*> candidate_callees(candidates.begin(),
                                                      candidates.end());
     XDexRefs x_dex(stores);
-    walk::opcodes(scope, [](DexMethod* caller) { return true; },
-                  [&](DexMethod* caller, IRInstruction* insn) {
-                    if (opcode::is_an_invoke(insn->opcode())) {
-                      auto callee =
-                          resolver(insn->get_method(), opcode_to_search(insn));
-                      if (callee != nullptr && callee->is_concrete() &&
-                          candidate_callees.count(callee) &&
-                          true_virtual_callers.count(callee) == 0) {
-                        if (x_dex.cross_dex_ref(caller, callee)) {
-                          candidate_callees.erase(callee);
-                          if (callee_caller.count(callee)) {
-                            callee_caller.erase(callee);
-                          }
-                        } else {
-                          callee_caller[callee].push_back(caller);
-                        }
-                      }
-                    }
-                  });
+    walk::opcodes(
+        scope, [](DexMethod* caller) { return true; },
+        [&](DexMethod* caller, IRInstruction* insn) {
+          if (opcode::is_an_invoke(insn->opcode())) {
+            auto callee = resolver(insn->get_method(), opcode_to_search(insn));
+            if (callee != nullptr && callee->is_concrete() &&
+                candidate_callees.count(callee) &&
+                true_virtual_callers.count(callee) == 0) {
+              if (x_dex.cross_dex_ref(caller, callee)) {
+                candidate_callees.erase(callee);
+                if (callee_caller.count(callee)) {
+                  callee_caller.erase(callee);
+                }
+              } else {
+                callee_caller[callee].push_back(caller);
+              }
+            }
+          }
+        });
     for (const auto& callee_callers : true_virtual_callers) {
       auto callee = callee_callers.first;
       for (const auto& caller_insns : callee_callers.second) {
@@ -2086,16 +2086,17 @@ void MultiMethodInliner::delayed_invoke_direct_to_static() {
     TRACE(MMINL, 6, "making %s static", method->get_name()->c_str());
     mutators::make_static(method);
   }
-  walk::parallel::opcodes(m_scope, [](DexMethod* meth) { return true; },
-                          [&](DexMethod*, IRInstruction* insn) {
-                            auto op = insn->opcode();
-                            if (op == OPCODE_INVOKE_DIRECT) {
-                              auto m = insn->get_method()->as_def();
-                              if (m && m_delayed_make_static.count_unsafe(m)) {
-                                insn->set_opcode(OPCODE_INVOKE_STATIC);
-                              }
-                            }
-                          });
+  walk::parallel::opcodes(
+      m_scope, [](DexMethod* meth) { return true; },
+      [&](DexMethod*, IRInstruction* insn) {
+        auto op = insn->opcode();
+        if (op == OPCODE_INVOKE_DIRECT) {
+          auto m = insn->get_method()->as_def();
+          if (m && m_delayed_make_static.count_unsafe(m)) {
+            insn->set_opcode(OPCODE_INVOKE_STATIC);
+          }
+        }
+      });
 }
 
 namespace {

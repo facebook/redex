@@ -290,20 +290,21 @@ class DelSuper {
       // remove the method declarations and the runtime semantics would be
       // unchanged -- but this ensures that we have no more references to
       // that method_id and can avoid emitting it in the dex output.
-      walk::opcodes(m_scope,
-                    [](DexMethod* meth) { return true; },
-                    [&](DexMethod* meth, IRInstruction* insn) {
-                      if (opcode::is_an_invoke(insn->opcode())) {
-                        auto method = insn->get_method()->as_def();
-                        if (!method) {
-                          return;
-                        }
-                        while (m_delmeths.count(method)) {
-                          method = m_delmeths.at(method);
-                        }
-                        insn->set_method(method);
-                      }
-                    });
+      walk::opcodes(
+          m_scope,
+          [](DexMethod* meth) { return true; },
+          [&](DexMethod* meth, IRInstruction* insn) {
+            if (opcode::is_an_invoke(insn->opcode())) {
+              auto method = insn->get_method()->as_def();
+              if (!method) {
+                return;
+              }
+              while (m_delmeths.count(method)) {
+                method = m_delmeths.at(method);
+              }
+              insn->set_method(method);
+            }
+          });
       for (const auto& pair : m_delmeths) {
         auto meth = pair.first;
         auto clazz = type_class(meth->get_class());

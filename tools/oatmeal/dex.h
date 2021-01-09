@@ -94,11 +94,11 @@ class stream {
       const std::function<void(DexOpcode, const uint16_t* const ptr)>&;
   using CodeItemWalkerFn = const std::function<void(const uint8_t* const ptr)>&;
 
-  static void stream_dex(const uint8_t* begin,
-                         const size_t size,
-                         InsnWalkerFn walker,
-                         CodeItemWalkerFn code_item_walker =
-                             [](const uint8_t* const insn) {});
+  static void stream_dex(
+      const uint8_t* begin,
+      const size_t size,
+      InsnWalkerFn walker,
+      CodeItemWalkerFn code_item_walker = [](const uint8_t* const insn) {});
 };
 
 void print_dex_opcodes(const uint8_t* begin, const size_t size);

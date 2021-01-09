@@ -560,10 +560,11 @@ void Breadcrumbs::report_illegal_refs(bool fail_if_illegal_refs,
         m_allow_violations, m_types_with_allowed_violations,
         [](const DexType* t) { return show_deobfuscated(t); },
         &m_unneeded_violations_file_lines);
-    gather_unnessary_allows(m_allow_violation_type_prefixes,
-                            m_type_prefixes_with_allowed_violations,
-                            [](std::string s) { return s; },
-                            &m_unneeded_violations_file_lines);
+    gather_unnessary_allows(
+        m_allow_violation_type_prefixes,
+        m_type_prefixes_with_allowed_violations,
+        [](std::string s) { return s; },
+        &m_unneeded_violations_file_lines);
     always_assert_log(
         m_unneeded_violations_file_lines.empty(),
         "Please prune the following lines from allowed "
@@ -884,21 +885,22 @@ void Breadcrumbs::check_method_opcode(const DexMethod* method,
 }
 
 void Breadcrumbs::check_opcodes() {
-  walk::opcodes(m_scope_to_walk,
-                [](DexMethod*) { return true; },
-                [&](DexMethod* method, IRInstruction* insn) {
-                  if (insn->has_type()) {
-                    check_type_opcode(method, insn);
-                    return;
-                  }
-                  if (insn->has_field()) {
-                    check_field_opcode(method, insn);
-                    return;
-                  }
-                  if (insn->has_method()) {
-                    check_method_opcode(method, insn);
-                  }
-                });
+  walk::opcodes(
+      m_scope_to_walk,
+      [](DexMethod*) { return true; },
+      [&](DexMethod* method, IRInstruction* insn) {
+        if (insn->has_type()) {
+          check_type_opcode(method, insn);
+          return;
+        }
+        if (insn->has_field()) {
+          check_field_opcode(method, insn);
+          return;
+        }
+        if (insn->has_method()) {
+          check_method_opcode(method, insn);
+        }
+      });
 }
 
 void CheckBreadcrumbsPass::run_pass(DexStoresVector& stores,

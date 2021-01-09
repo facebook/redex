@@ -738,19 +738,19 @@ void VirtualMerging::remove_methods() {
 // Part 6: Remap all invoke-virtual instructions where the associated method got
 // removed
 void VirtualMerging::remap_invoke_virtuals() {
-  walk::parallel::opcodes(m_scope,
-                          [](const DexMethod*) { return true; },
-                          [&](const DexMethod*, IRInstruction* insn) {
-                            if (insn->opcode() == OPCODE_INVOKE_VIRTUAL) {
-                              auto method_ref = insn->get_method();
-                              auto method = resolve_method(
-                                  method_ref, MethodSearch::Virtual);
-                              auto it = m_virtual_methods_to_remap.find(method);
-                              if (it != m_virtual_methods_to_remap.end()) {
-                                insn->set_method(it->second);
-                              }
-                            }
-                          });
+  walk::parallel::opcodes(
+      m_scope,
+      [](const DexMethod*) { return true; },
+      [&](const DexMethod*, IRInstruction* insn) {
+        if (insn->opcode() == OPCODE_INVOKE_VIRTUAL) {
+          auto method_ref = insn->get_method();
+          auto method = resolve_method(method_ref, MethodSearch::Virtual);
+          auto it = m_virtual_methods_to_remap.find(method);
+          if (it != m_virtual_methods_to_remap.end()) {
+            insn->set_method(it->second);
+          }
+        }
+      });
 }
 
 void VirtualMerging::run(const method_profiles::MethodProfiles& profiles) {

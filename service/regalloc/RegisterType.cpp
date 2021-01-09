@@ -433,8 +433,9 @@ RegisterType src_reg_type(const IRInstruction* insn, vreg_t i) {
   case OPCODE_APUT:
     return i == 1 ? RegisterType::OBJECT : RegisterType::NORMAL;
   case OPCODE_APUT_WIDE:
-    return i == 1 ? RegisterType::OBJECT
-                  : i == 2 ? RegisterType::NORMAL : RegisterType::WIDE;
+    return i == 1   ? RegisterType::OBJECT
+           : i == 2 ? RegisterType::NORMAL
+                    : RegisterType::WIDE;
   case OPCODE_APUT_OBJECT:
     return i <= 1 ? RegisterType::OBJECT : RegisterType::NORMAL;
   case OPCODE_APUT_BOOLEAN:

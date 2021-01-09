@@ -779,20 +779,20 @@ void OptimizationImpl::post_process(
     const std::unordered_set<DexMethod*>& methods) {
   // The analysis times the number of methods is easily expensive, run in
   // parallel.
-  for_all_methods(methods,
-                  [](DexMethod* m) {
-                    auto code = m->get_code();
-                    if (code->cfg_built()) {
-                      code->clear_cfg();
-                    }
-                    cfg::ScopedCFG cfg(code);
-                    check_casts::CheckCastConfig config;
-                    check_casts::impl::CheckCastAnalysis analysis(config, m);
-                    auto casts =
-                        analysis.collect_redundant_checks_replacement();
-                    check_casts::impl::apply(m, casts);
-                  },
-                  /*parallel=*/true);
+  for_all_methods(
+      methods,
+      [](DexMethod* m) {
+        auto code = m->get_code();
+        if (code->cfg_built()) {
+          code->clear_cfg();
+        }
+        cfg::ScopedCFG cfg(code);
+        check_casts::CheckCastConfig config;
+        check_casts::impl::CheckCastAnalysis analysis(config, m);
+        auto casts = analysis.collect_redundant_checks_replacement();
+        check_casts::impl::apply(m, casts);
+      },
+      /*parallel=*/true);
 }
 
 } // namespace

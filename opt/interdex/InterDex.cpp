@@ -69,28 +69,29 @@ std::unordered_set<DexClass*> find_unrefenced_coldstart_classes(
     old_no_ref = new_no_ref;
     new_no_ref = 0;
     cold_cold_references.clear();
-    walk::code(input_scope,
-               [&](DexMethod* meth) {
-                 return coldstart_classes.count(meth->get_class()) > 0;
-               },
-               [&](DexMethod* meth, const IRCode& code) {
-                 auto base_cls = meth->get_class();
-                 for (auto& mie : InstructionIterable(meth->get_code())) {
-                   auto inst = mie.insn;
-                   DexType* called_cls = nullptr;
-                   if (inst->has_method()) {
-                     called_cls = inst->get_method()->get_class();
-                   } else if (inst->has_field()) {
-                     called_cls = inst->get_field()->get_class();
-                   } else if (inst->has_type()) {
-                     called_cls = inst->get_type();
-                   }
-                   if (called_cls != nullptr && base_cls != called_cls &&
-                       coldstart_classes.count(called_cls) > 0) {
-                     cold_cold_references.insert(called_cls);
-                   }
-                 }
-               });
+    walk::code(
+        input_scope,
+        [&](DexMethod* meth) {
+          return coldstart_classes.count(meth->get_class()) > 0;
+        },
+        [&](DexMethod* meth, const IRCode& code) {
+          auto base_cls = meth->get_class();
+          for (auto& mie : InstructionIterable(meth->get_code())) {
+            auto inst = mie.insn;
+            DexType* called_cls = nullptr;
+            if (inst->has_method()) {
+              called_cls = inst->get_method()->get_class();
+            } else if (inst->has_field()) {
+              called_cls = inst->get_field()->get_class();
+            } else if (inst->has_type()) {
+              called_cls = inst->get_type();
+            }
+            if (called_cls != nullptr && base_cls != called_cls &&
+                coldstart_classes.count(called_cls) > 0) {
+              cold_cold_references.insert(called_cls);
+            }
+          }
+        });
     for (const auto& cls : scope) {
       // Make sure we don't drop classes which might be
       // called from native code.
