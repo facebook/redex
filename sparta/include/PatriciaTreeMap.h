@@ -1066,18 +1066,18 @@ inline std::shared_ptr<PatriciaTree<IntegerType, Value>> diff(
   const auto& s1 = s_branch->right_tree();
   const auto& t0 = t_branch->left_tree();
   const auto& t1 = t_branch->right_tree();
-  auto combine_separate_trees =
-      [](const typename Value::type& x, const typename Value::type& y) ->
+  auto combine_separate_trees = [](const typename Value::type& x,
+                                   const typename Value::type& y) ->
       typename Value::type {
-    if (Value::is_default_value(x)) {
-      return y;
-    }
-    if (Value::is_default_value(y)) {
-      return x;
-    }
-    BOOST_THROW_EXCEPTION(internal_error()
-                          << error_msg("Malformed Patricia tree"));
-  };
+        if (Value::is_default_value(x)) {
+          return y;
+        }
+        if (Value::is_default_value(y)) {
+          return x;
+        }
+        BOOST_THROW_EXCEPTION(internal_error()
+                              << error_msg("Malformed Patricia tree"));
+      };
   if (m == n && p == q) {
     // The two trees have the same prefix. We merge the difference of the
     // corresponding subtrees.

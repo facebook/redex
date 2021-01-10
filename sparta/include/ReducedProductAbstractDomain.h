@@ -194,9 +194,10 @@ class ReducedProductAbstractDomain
   // property of the Narrowing.
 
   virtual void meet_with(const Derived& other_domain) override {
-    this->combine_with(other_domain,
-                       [](auto&& self, auto&& other) { self.meet_with(other); },
-                       /* smash_bottom */ true);
+    this->combine_with(
+        other_domain,
+        [](auto&& self, auto&& other) { self.meet_with(other); },
+        /* smash_bottom */ true);
   }
 
   virtual void narrow_with(const Derived& other_domain) override {

@@ -74,8 +74,8 @@ struct hash<language::ControlPoint> {
 
 template <>
 struct hash<std::pair<Function*, Function*>> {
-  size_t operator()(const std::pair<Function*, Function*>& pair) const
-      noexcept {
+  size_t operator()(
+      const std::pair<Function*, Function*>& pair) const noexcept {
     Function *from, *to;
     std::tie(from, to) = pair;
     return ((size_t)from) ^ ((size_t)to);

@@ -366,28 +366,29 @@ class ParallelMonotonicFixpointIterator
       : fp_impl::
             MonotonicFixpointIteratorBase<GraphInterface, Domain, NodeHash>(
                 graph, /*cfg_size_hint*/ 4),
-        m_wpo(GraphInterface::entry(graph),
-              [=, &graph](const NodeId& x) {
-                const auto& succ_edges = GraphInterface::successors(graph, x);
-                std::vector<NodeId> succ_nodes_tmp;
-                std::transform(succ_edges.begin(),
-                               succ_edges.end(),
-                               std::back_inserter(succ_nodes_tmp),
-                               std::bind(&GraphInterface::target,
-                                         std::ref(graph),
-                                         std::placeholders::_1));
-                // Filter out duplicate succ nodes.
-                std::vector<NodeId> succ_nodes;
-                std::unordered_set<NodeId> succ_nodes_set;
-                for (auto node : succ_nodes_tmp) {
-                  if (!succ_nodes_set.count(node)) {
-                    succ_nodes_set.emplace(node);
-                    succ_nodes.emplace_back(node);
-                  }
+        m_wpo(
+            GraphInterface::entry(graph),
+            [=, &graph](const NodeId& x) {
+              const auto& succ_edges = GraphInterface::successors(graph, x);
+              std::vector<NodeId> succ_nodes_tmp;
+              std::transform(succ_edges.begin(),
+                             succ_edges.end(),
+                             std::back_inserter(succ_nodes_tmp),
+                             std::bind(&GraphInterface::target,
+                                       std::ref(graph),
+                                       std::placeholders::_1));
+              // Filter out duplicate succ nodes.
+              std::vector<NodeId> succ_nodes;
+              std::unordered_set<NodeId> succ_nodes_set;
+              for (auto node : succ_nodes_tmp) {
+                if (!succ_nodes_set.count(node)) {
+                  succ_nodes_set.emplace(node);
+                  succ_nodes.emplace_back(node);
                 }
-                return succ_nodes;
-              },
-              false),
+              }
+              return succ_nodes;
+            },
+            false),
         m_num_thread(num_thread) {
     // Gathering all reachable nodes in graph.
     std::stack<NodeId> node_queue;
@@ -524,28 +525,29 @@ class MonotonicFixpointIterator
       : fp_impl::MonotonicFixpointIteratorBase<GraphInterface,
                                                Domain,
                                                NodeHash>(graph, cfg_size_hint),
-        m_wpo(GraphInterface::entry(graph),
-              [=, &graph](const NodeId& x) {
-                const auto& succ_edges = GraphInterface::successors(graph, x);
-                std::vector<NodeId> succ_nodes_tmp;
-                std::transform(succ_edges.begin(),
-                               succ_edges.end(),
-                               std::back_inserter(succ_nodes_tmp),
-                               std::bind(&GraphInterface::target,
-                                         std::ref(graph),
-                                         std::placeholders::_1));
-                // Filter out duplicate succ nodes.
-                std::vector<NodeId> succ_nodes;
-                std::unordered_set<NodeId, NodeHash> succ_nodes_set;
-                for (auto node : succ_nodes_tmp) {
-                  if (!succ_nodes_set.count(node)) {
-                    succ_nodes_set.emplace(node);
-                    succ_nodes.emplace_back(node);
-                  }
+        m_wpo(
+            GraphInterface::entry(graph),
+            [=, &graph](const NodeId& x) {
+              const auto& succ_edges = GraphInterface::successors(graph, x);
+              std::vector<NodeId> succ_nodes_tmp;
+              std::transform(succ_edges.begin(),
+                             succ_edges.end(),
+                             std::back_inserter(succ_nodes_tmp),
+                             std::bind(&GraphInterface::target,
+                                       std::ref(graph),
+                                       std::placeholders::_1));
+              // Filter out duplicate succ nodes.
+              std::vector<NodeId> succ_nodes;
+              std::unordered_set<NodeId, NodeHash> succ_nodes_set;
+              for (auto node : succ_nodes_tmp) {
+                if (!succ_nodes_set.count(node)) {
+                  succ_nodes_set.emplace(node);
+                  succ_nodes.emplace_back(node);
                 }
-                return succ_nodes;
-              },
-              false) {}
+              }
+              return succ_nodes;
+            },
+            false) {}
 
   /*
    * Executes the fixpoint iterator given an abstract value describing the

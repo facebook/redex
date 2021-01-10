@@ -124,15 +124,17 @@ class DirectProductAbstractDomain : public AbstractDomain<Derived> {
   // to refine the result of these operations.
 
   virtual void meet_with(const Derived& other_domain) override {
-    combine_with(other_domain,
-                 [](auto&& self, auto&& other) { self.meet_with(other); },
-                 /* smash_bottom */ false);
+    combine_with(
+        other_domain,
+        [](auto&& self, auto&& other) { self.meet_with(other); },
+        /* smash_bottom */ false);
   }
 
   virtual void narrow_with(const Derived& other_domain) override {
-    combine_with(other_domain,
-                 [](auto&& self, auto&& other) { self.narrow_with(other); },
-                 /* smash_bottom */ false);
+    combine_with(
+        other_domain,
+        [](auto&& self, auto&& other) { self.narrow_with(other); },
+        /* smash_bottom */ false);
   }
 
   // reduce() should only refine (lower) a given component of a product based on
@@ -142,15 +144,17 @@ class DirectProductAbstractDomain : public AbstractDomain<Derived> {
   // product after a join/widen, so these methods are virtual as well.
 
   virtual void join_with(const Derived& other_domain) override {
-    combine_with(other_domain,
-                 [](auto&& self, auto&& other) { self.join_with(other); },
-                 /* smash_bottom */ false);
+    combine_with(
+        other_domain,
+        [](auto&& self, auto&& other) { self.join_with(other); },
+        /* smash_bottom */ false);
   }
 
   virtual void widen_with(const Derived& other_domain) override {
-    combine_with(other_domain,
-                 [](auto&& self, auto&& other) { self.widen_with(other); },
-                 /* smash_bottom */ false);
+    combine_with(
+        other_domain,
+        [](auto&& self, auto&& other) { self.widen_with(other); },
+        /* smash_bottom */ false);
   }
 
   friend std::ostream& operator<<(std::ostream& o, const Derived& p) {
