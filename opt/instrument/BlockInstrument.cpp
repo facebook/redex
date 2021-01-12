@@ -46,6 +46,14 @@ enum class BlockType {
   MoveException = 1 << 5,
 };
 
+enum class InstrumentedType {
+  // Too many basic blocks. We only did method tracing.
+  MethodOnly = 1,
+  Both = 2,
+  // Rare cases: due to infinite loops, no onMethodExit was instrumented.
+  UnableToTrackBlock = 3,
+};
+
 inline BlockType operator|(BlockType a, BlockType b) {
   return static_cast<BlockType>(static_cast<int>(a) | static_cast<int>(b));
 }
@@ -94,6 +102,16 @@ struct MethodInfo {
   std::vector<std::vector<const SourceBlock*>> bit_id_2_source_blocks;
   std::map<cfg::BlockId, BlockType> rejected_blocks;
 };
+
+InstrumentedType get_instrumented_type(const MethodInfo& i) {
+  if (i.too_many_blocks) {
+    return InstrumentedType::MethodOnly;
+  } else if (i.num_exit_calls == 0 && i.num_vectors != 0) {
+    return InstrumentedType::UnableToTrackBlock;
+  } else {
+    return InstrumentedType::Both;
+  }
+}
 
 using MethodDictionary = std::unordered_map<const DexMethodRef*, size_t>;
 
@@ -206,25 +224,11 @@ void write_metadata(const ConfigFiles& cfg,
     return ss.str();
   };
 
-  // 'instrument' column:
-  // - 1: method only
-  // - 2: method + blocks
-  // - 3: method + blocks, but no onMethodExit. We can't track blocks.
-  auto instrumented = [](const MethodInfo& i) {
-    if (i.too_many_blocks) {
-      return 1;
-    } else if (i.num_exit_calls == 0 && i.num_vectors != 0) {
-      return 3;
-    } else {
-      return 2;
-    }
-  };
-
   for (const auto& info : all_info) {
     const std::array<std::string, 8> fields = {
         std::to_string(info.offset),
         info.method->get_deobfuscated_name(),
-        std::to_string(instrumented(info)),
+        std::to_string(static_cast<int>(get_instrumented_type(info))),
         std::to_string(info.num_non_entry_blocks),
         std::to_string(info.num_vectors),
         to_hex(info.signature),
@@ -530,9 +534,19 @@ auto get_blocks_to_instrument(const cfg::ControlFlowGraph& cfg,
                               const size_t max_num_blocks) {
   auto blocks = graph::postorder_sort<cfg::GraphInterface>(cfg);
 
-  // We don't need to instrument entry block obviously.
-  assert(blocks.back() == cfg.entry_block());
-  blocks.pop_back();
+  // We don't instrument entry block.
+  //
+  // But there's an exceptional case. If the entry block is in a try-catch,
+  // which happens very rarely, inserting onMethodBegin will create an
+  // additional block because onMethodBegin may throw. The original entry block
+  // becomes non-entry. In this case, we still need to instrument the entry
+  // block at this moment. See testFunc10 in InstrumentBasicBlockTarget.java.
+  //
+  // So, remove entry block only if entry block isn't in any try-catch.
+  if (cfg.entry_block()->get_outgoing_throws_in_order().empty()) {
+    assert(blocks.back() == cfg.entry_block());
+    blocks.pop_back();
+  }
 
   // Convert to reverse postorder (RPO).
   std::reverse(blocks.begin(), blocks.end());
@@ -599,6 +613,8 @@ MethodInfo instrument_basic_blocks(IRCode& code,
   code.build_cfg(/*editable*/ true);
   ControlFlowGraph& cfg = code.cfg();
 
+  const std::string& before_cfg = show(cfg);
+
   // Step 1: Get sorted basic blocks to instrument with their information.
   //
   // The blocks are sorted in RPO. We don't instrument entry blocks. If too many
@@ -618,12 +634,14 @@ MethodInfo instrument_basic_blocks(IRCode& code,
   // Step 2: Insert onMethodBegin to track method execution, and bit-vector
   //         allocation code in its method entry point.
   //
+  const size_t origin_num_non_entry_blocks = cfg.blocks().size() - 1;
   const size_t num_vectors =
       std::ceil(num_to_instrument / double(BIT_VECTOR_SIZE));
   std::vector<reg_t> reg_vectors;
   reg_t reg_method_offset;
   std::tie(reg_vectors, reg_method_offset) =
       insert_prologue_insts(cfg, onMethodBegin, num_vectors, method_offset);
+  const size_t after_prologue_num_non_entry_blocks = cfg.blocks().size() - 1;
 
   // Step 3: Insert onMethodExit in exit block(s).
   //
@@ -677,6 +695,26 @@ MethodInfo instrument_basic_blocks(IRCode& code,
     TRACE(INSTRUMENT, 9, "AFTER: %s, %s", show_deobfuscated(method).c_str(),
           SHOW(method));
     TRACE(INSTRUMENT, 9, "%s", SHOW(cfg));
+  }
+
+  // Check the post condition:
+  //   num_instrumented_blocks == num_non_entry_blocks - num_rejected_blocks
+  if (get_instrumented_type(info) != InstrumentedType::MethodOnly &&
+      info.bit_id_2_block_id.size() !=
+          info.num_non_entry_blocks - info.rejected_blocks.size()) {
+    TRACE(INSTRUMENT, 7, "Post condition violation! in %s", SHOW(method));
+    TRACE(INSTRUMENT, 7, "- Instrumented type: %d",
+          get_instrumented_type(info));
+    TRACE(INSTRUMENT, 7, "  %zu != %zu - %zu", info.bit_id_2_block_id.size(),
+          info.num_non_entry_blocks, info.rejected_blocks.size());
+    TRACE(INSTRUMENT, 7, "  original non-entry blocks: %zu",
+          origin_num_non_entry_blocks);
+    TRACE(INSTRUMENT, 7, "  after prologue instrumentation: %zu",
+          after_prologue_num_non_entry_blocks);
+    TRACE(INSTRUMENT, 7, "===== BEFORE CFG");
+    TRACE(INSTRUMENT, 7, "%s", SHOW(before_cfg));
+    TRACE(INSTRUMENT, 7, "===== AFTER CFG");
+    TRACE(INSTRUMENT, 7, "%s", SHOW(cfg));
   }
 
   code.clear_cfg();

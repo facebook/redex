@@ -231,6 +231,17 @@ public class InstrumentBasicBlockTarget {
   }
 
   @DoNotStrip
+  public static boolean testFunc10() {
+    try {
+      Class.forName("com.facebook.Foo");
+      return true;
+    } catch (ClassNotFoundException e) {
+      System.out.println("can't load it");
+      return false;
+    }
+  }
+
+  @DoNotStrip
   public static void main(String args[]) {
     Random rand = new Random();
     System.out.println(testFunc9(rand.nextInt(100)));
