@@ -86,12 +86,15 @@ class InterDexPass : public Pass {
   size_t m_run{0}; // Which iteration of `run_pass`.
   size_t m_eval{0}; // How many `eval_pass` iterations.
 
-  virtual void run_pass(DexStoresVector&,
+  virtual void run_pass(const Scope&,
+                        const XStoreRefs&,
+                        DexStoresVector&,
                         DexClassesVector&,
                         ConfigFiles&,
                         PassManager&);
 
-  void run_pass_on_nonroot_store(DexStoresVector&,
+  void run_pass_on_nonroot_store(const Scope&,
+                                 const XStoreRefs&,
                                  DexClassesVector&,
                                  ConfigFiles&,
                                  PassManager&);

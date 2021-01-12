@@ -859,7 +859,7 @@ void InterDex::run() {
 
 void InterDex::run_on_nonroot_store() {
   TRACE(IDEX, 2, "IDEX: Running on non-root store");
-  for (DexClass* cls : m_original_scope) {
+  for (DexClass* cls : m_scope) {
     emit_class(EMPTY_DEX_INFO, cls, /* check_if_skip */ false,
                /* perf_sensitive */ false);
   }

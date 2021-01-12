@@ -97,7 +97,9 @@ void InterDexPass::bind_config() {
   trait(Traits::Pass::unique, true);
 }
 
-void InterDexPass::run_pass(DexStoresVector& stores,
+void InterDexPass::run_pass(const Scope& original_scope,
+                            const XStoreRefs& xstore_refs,
+                            DexStoresVector& stores,
                             DexClassesVector& dexen,
                             ConfigFiles& conf,
                             PassManager& mgr) {
@@ -109,7 +111,6 @@ void InterDexPass::run_pass(DexStoresVector& stores,
   size_t reserve_frefs = m_reserved_frefs;
   size_t reserve_trefs = m_reserved_trefs;
   size_t reserve_mrefs = m_reserved_mrefs;
-  auto original_scope = build_class_scope(stores);
   for (const auto& plugin : plugins) {
     plugin->configure(original_scope, conf);
     reserve_frefs += plugin->reserve_frefs();
@@ -121,7 +122,6 @@ void InterDexPass::run_pass(DexStoresVector& stores,
   mgr.set_metric(METRIC_RESERVED_MREFS, reserve_mrefs);
 
   bool force_single_dex = conf.get_json_config().get("force_single_dex", false);
-  XStoreRefs xstore_refs(stores);
   InterDex interdex(original_scope, dexen, mgr.apk_manager(), conf, plugins,
                     m_linear_alloc_limit, m_static_prune, m_normal_primary_dex,
                     force_single_dex, m_emit_canaries,
@@ -184,12 +184,11 @@ void InterDexPass::run_pass(DexStoresVector& stores,
                  cross_dex_relocator_stats.relocated_virtual_methods);
 }
 
-void InterDexPass::run_pass_on_nonroot_store(DexStoresVector& stores,
+void InterDexPass::run_pass_on_nonroot_store(const Scope& original_scope,
+                                             const XStoreRefs& xstore_refs,
                                              DexClassesVector& dexen,
                                              ConfigFiles& conf,
                                              PassManager& mgr) {
-  auto original_scope = build_class_scope(stores);
-
   // Setup default configs for non-root store
   // For now, no plugins configured for non-root stores
   std::vector<std::unique_ptr<InterDexPassPlugin>> plugins;
@@ -199,12 +198,11 @@ void InterDexPass::run_pass_on_nonroot_store(DexStoresVector& stores,
 
   // Cross dex ref minimizers are disabled for non-root stores
   // TODO: Make this logic cleaner when these features get enabled for non-root
-  // stores
+  //       stores. Would also need to clean up after it.
   CrossDexRefMinimizerConfig cross_dex_refs_config;
   CrossDexRelocatorConfig cross_dex_relocator_config;
 
   // Initialize interdex and run for nonroot store
-  XStoreRefs xstore_refs(stores);
   InterDex interdex(original_scope, dexen, mgr.apk_manager(), conf, plugins,
                     m_linear_alloc_limit, m_static_prune, m_normal_primary_dex,
                     false /* force single dex */, false /* emit canaries */,
@@ -215,8 +213,7 @@ void InterDexPass::run_pass_on_nonroot_store(DexStoresVector& stores,
 
   interdex.run_on_nonroot_store();
 
-  auto final_scope = build_class_scope(stores);
-  interdex.cleanup(final_scope);
+  dexen = interdex.take_outdex();
 }
 
 void InterDexPass::run_pass(DexStoresVector& stores,
@@ -229,12 +226,17 @@ void InterDexPass::run_pass(DexStoresVector& stores,
     return;
   }
 
+  Scope original_scope = build_class_scope(stores);
+  XStoreRefs xstore_refs(stores);
+
   auto wq = workqueue_foreach<DexStore*>([&](DexStore* store) {
-    run_pass_on_nonroot_store(stores, store->get_dexen(), conf, mgr);
+    run_pass_on_nonroot_store(original_scope, xstore_refs, store->get_dexen(),
+                              conf, mgr);
   });
   for (auto& store : stores) {
     if (store.is_root_store()) {
-      run_pass(stores, store.get_dexen(), conf, mgr);
+      run_pass(original_scope, xstore_refs, stores, store.get_dexen(), conf,
+               mgr);
     } else if (!store.is_generated()) {
       wq.add_item(&store);
     }
