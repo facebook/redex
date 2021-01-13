@@ -11,6 +11,7 @@
 #include "CallGraph.h"
 #include "Creators.h"
 #include "IRAssembler.h"
+#include "KotlinNullCheckMethods.h"
 #include "RedexTest.h"
 #include "Walkers.h"
 
@@ -73,8 +74,8 @@ struct TypeAnalysisTransformTest : public RedexTest {
             return type_analyzer::Transform::Stats();
           }
 
-          type_analyzer::Transform::NullAssertionSet null_assertion_set;
-          Transform::setup(null_assertion_set);
+          type_analyzer::Transform::NullAssertionSet null_assertion_set =
+              kotlin_nullcheck_wrapper::get_kotlin_null_assertions();
           auto lta = gta->get_local_analysis(method);
           auto& code = *method->get_code();
           Transform tf(config);
