@@ -312,3 +312,8 @@ class XDexRefs {
    */
   size_t num_dexes() const;
 };
+
+/**
+ * Squash the stores into a single dex.
+ */
+void squash_into_one_dex(DexStoresVector& stores);

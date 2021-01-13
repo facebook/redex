@@ -403,6 +403,12 @@ hashing::DexHash PassManager::run_hasher(const char* pass_name,
 }
 
 void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
+  if (conf.force_single_dex()) {
+    // Squash the dexes into one, so that the passes all see only one dex and
+    // all the cross-dex reference checking are accurate.
+    squash_into_one_dex(stores);
+  }
+
   DexStoreClassesIterator it(stores);
   Scope scope = build_class_scope(it);
 

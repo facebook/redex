@@ -8,6 +8,7 @@
 #include "ClassMergingPass.h"
 
 #include "ClassMerging.h"
+#include "ConfigFiles.h"
 #include "DexUtil.h"
 
 using namespace class_merging;
@@ -251,6 +252,12 @@ void ClassMergingPass::run_pass(DexStoresVector& stores,
   for (ModelSpec& model_spec : m_model_specs) {
     if (!model_spec.enabled) {
       continue;
+    }
+    if (conf.force_single_dex() && !model_spec.include_primary_dex) {
+      TRACE(CLMG, 2,
+            "Change include_primary_dex to true because the apk will be single "
+            "dex");
+      model_spec.include_primary_dex = true;
     }
     class_merging::merge_model(scope, conf, mgr, stores, model_spec);
   }

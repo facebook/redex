@@ -230,3 +230,7 @@ void ConfigFiles::load(const Scope& scope) {
   get_inliner_config();
   m_inliner_config->populate(scope);
 }
+
+bool ConfigFiles::force_single_dex() const {
+  return m_json.get("force_single_dex", false);
+}
