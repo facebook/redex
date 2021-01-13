@@ -47,9 +47,11 @@ inline DexMethod* kotlin_jvm_internal_Intrinsics_WrCheckExpression() {
 // not be null beyond this program point in the execution path.
 inline std::unordered_set<DexMethodRef*> get_kotlin_null_assertions() {
   return {method::kotlin_jvm_internal_Intrinsics_checkParameterIsNotNull(),
+          method::kotlin_jvm_internal_Intrinsics_checkNotNullParameter(),
           kotlin_nullcheck_wrapper::
               kotlin_jvm_internal_Intrinsics_WrCheckParameter(),
           method::kotlin_jvm_internal_Intrinsics_checExpressionValueIsNotNull(),
+          method::kotlin_jvm_internal_Intrinsics_checkNotNullExpressionValue(),
           kotlin_nullcheck_wrapper::
               kotlin_jvm_internal_Intrinsics_WrCheckExpression()};
 }

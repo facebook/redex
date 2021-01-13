@@ -106,10 +106,21 @@ DexMethod* kotlin_jvm_internal_Intrinsics_checkParameterIsNotNull() {
       "Object;Ljava/lang/String;)V"));
 }
 
+DexMethod* kotlin_jvm_internal_Intrinsics_checkNotNullParameter() {
+  return static_cast<DexMethod*>(DexMethod::make_method(
+      "Lkotlin/jvm/internal/Intrinsics;.checkNotNullParameter:(Ljava/lang/"
+      "Object;Ljava/lang/String;)V"));
+}
+
 DexMethod* kotlin_jvm_internal_Intrinsics_checExpressionValueIsNotNull() {
   return static_cast<DexMethod*>(DexMethod::make_method(
       "Lkotlin/jvm/internal/Intrinsics;.checkExpressionValueIsNotNull:(Ljava/"
       "lang/Object;Ljava/lang/String;)V"));
 }
 
+DexMethod* kotlin_jvm_internal_Intrinsics_checkNotNullExpressionValue() {
+  return static_cast<DexMethod*>(DexMethod::make_method(
+      "Lkotlin/jvm/internal/Intrinsics;.checkNotNullExpressionValue:(Ljava/"
+      "lang/Object;Ljava/lang/String;)V"));
+}
 }; // namespace method
