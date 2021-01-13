@@ -50,39 +50,61 @@ void RemoveNullcheckStringArg::run_pass(DexStoresVector& stores,
 
 bool RemoveNullcheckStringArg::setup(
     TransferMap& transfer_map, std::unordered_set<DexMethod*>& new_methods) {
-  auto new_check_param_method = get_wrapper_method_with_int_index(
-      CHECK_PARAM_NULL_SIGNATURE, WRAPPER_CHECK_PARAM_NULL_METHOD,
-      NEW_CHECK_PARAM_NULL_SIGNATURE);
-  auto new_check_expr_method = get_wrapper_method(
-      CHECK_EXPR_NULL_SIGNATURE, WRAPPER_CHECK_EXPR_NULL_METHOD,
-      NEW_CHECK_EXPR_NULL_SIGNATURE);
 
+  bool is_param_check_V1_4 = false;
+  DexMethodRef* builtin_param =
+      DexMethod::get_method(CHECK_PARAM_NULL_SIGNATURE_V1_3);
+  if (!builtin_param) {
+    is_param_check_V1_4 = true;
+    builtin_param = DexMethod::get_method(CHECK_PARAM_NULL_SIGNATURE_V1_4);
+  }
+  /* If we didn't find the method, giveup. */
+  if (!builtin_param) {
+    return false;
+  }
+
+  bool is_expr_check_V1_4 = false;
+  DexMethodRef* builtin_expr =
+      DexMethod::get_method(CHECK_EXPR_NULL_SIGNATURE_V1_3);
+  if (!builtin_expr) {
+    is_expr_check_V1_4 = true;
+    builtin_expr = DexMethod::get_method(CHECK_EXPR_NULL_SIGNATURE_V1_4);
+  }
+  if (!builtin_expr) {
+    return false;
+  }
+
+  if (is_expr_check_V1_4 != is_param_check_V1_4) {
+    /* We have V1_3 and v1_4 mthods. */
+    TRACE(NULLCHECK, 1, "We have Kotlin 1.3 and 1.4 NULLCHECK assertions");
+    return false;
+  }
+
+  auto new_check_param_method = get_wrapper_method_with_int_index(
+      NEW_CHECK_PARAM_NULL_SIGNATURE, WRAPPER_CHECK_PARAM_NULL_METHOD,
+      builtin_param);
+  auto new_check_expr_method =
+      get_wrapper_method(NEW_CHECK_EXPR_NULL_SIGNATURE,
+                         WRAPPER_CHECK_EXPR_NULL_METHOD, builtin_expr);
   /* If we could not generate suitable wrapper method, giveup. */
   if (!new_check_param_method || !new_check_expr_method) {
     return false;
   }
-  transfer_map[DexMethod::get_method(CHECK_PARAM_NULL_SIGNATURE)] =
-      std::make_pair(new_check_param_method, true);
-  transfer_map[DexMethod::get_method(CHECK_EXPR_NULL_SIGNATURE)] =
-      std::make_pair(new_check_expr_method, false);
-  new_methods.insert(new_check_param_method);
+  transfer_map[builtin_param] = std::make_pair(new_check_param_method, true);
+  transfer_map[builtin_expr] = std::make_pair(new_check_expr_method, false);
+
   new_methods.insert(new_check_expr_method);
+  new_methods.insert(new_check_param_method);
   return true;
 }
 
 DexMethod* RemoveNullcheckStringArg::get_wrapper_method(
-    const char* builtin_signature,
+    const char* wrapper_signature,
     const char* wrapper_name,
-    const char* wrapper_signature) {
+    DexMethodRef* builtin) {
 
   if (DexMethod::get_method(wrapper_signature)) {
     /* Wrapper method already exist. */
-    return nullptr;
-  }
-
-  DexMethodRef* builtin = DexMethod::get_method(builtin_signature);
-  /* If we didn't find the method, giveup. */
-  if (!builtin) {
     return nullptr;
   }
 
@@ -90,6 +112,7 @@ DexMethod* RemoveNullcheckStringArg::get_wrapper_method(
   if (!host_cls) {
     return nullptr;
   }
+
   DexTypeList* arg_signature =
       DexTypeList::make_type_list({type::java_lang_Object()});
   const auto proto = DexProto::make_proto(type::_void(), arg_signature);
@@ -120,18 +143,12 @@ DexMethod* RemoveNullcheckStringArg::get_wrapper_method(
 }
 
 DexMethod* RemoveNullcheckStringArg::get_wrapper_method_with_int_index(
-    const char* builtin_signature,
+    const char* wrapper_signature,
     const char* wrapper_name,
-    const char* wrapper_signature) {
+    DexMethodRef* builtin) {
 
   if (DexMethod::get_method(wrapper_signature)) {
     /* Wrapper method already exist. */
-    return nullptr;
-  }
-
-  DexMethodRef* builtin = DexMethod::get_method(builtin_signature);
-  /* If we didn't find the method, giveup. */
-  if (!builtin) {
     return nullptr;
   }
 
@@ -139,6 +156,7 @@ DexMethod* RemoveNullcheckStringArg::get_wrapper_method_with_int_index(
   if (!host_cls) {
     return nullptr;
   }
+
   DexTypeList* arg_signature =
       DexTypeList::make_type_list({type::java_lang_Object(), type::_int()});
   const auto proto = DexProto::make_proto(type::_void(), arg_signature);

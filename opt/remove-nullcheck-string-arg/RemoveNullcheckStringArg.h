@@ -71,14 +71,14 @@ class RemoveNullcheckStringArg : public Pass {
    * wrapped does not exist or if creation of new method fails, return nullptr.
    * Otherwise create a method in the same class as in \p
    * builtin_signature with a new name \p wrapper_name. */
-  DexMethod* get_wrapper_method(const char* builtin_signature,
+  DexMethod* get_wrapper_method(const char* wrapper_signature,
                                 const char* wrapper_name,
-                                const char* wrapper_signature);
+                                DexMethodRef* builtin);
   /* If the \p wrapper_signature, that also takes int index, is already present
    * or if the function being wrapped does not exist or if creation of new
    * method fails, return nullptr. Otherwise create a method in the same class
    * as in \p builtin_signature with a new name \p wrapper_name. */
-  DexMethod* get_wrapper_method_with_int_index(const char* builtin_signature,
+  DexMethod* get_wrapper_method_with_int_index(const char* wrapper_signature,
                                                const char* wrapper_name,
-                                               const char* wrapper_signature);
+                                               DexMethodRef* builtin);
 };

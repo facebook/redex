@@ -13,11 +13,17 @@ namespace kotlin_nullcheck_wrapper {
 constexpr const char* WRAPPER_CHECK_PARAM_NULL_METHOD = "$WrCheckParameter";
 constexpr const char* WRAPPER_CHECK_EXPR_NULL_METHOD = "$WrCheckExpression";
 
-constexpr const char* CHECK_PARAM_NULL_SIGNATURE =
+constexpr const char* CHECK_PARAM_NULL_SIGNATURE_V1_3 =
     "Lkotlin/jvm/internal/Intrinsics;.checkParameterIsNotNull:(Ljava/lang/"
     "Object;Ljava/lang/String;)V";
-constexpr const char* CHECK_EXPR_NULL_SIGNATURE =
+constexpr const char* CHECK_PARAM_NULL_SIGNATURE_V1_4 =
+    "Lkotlin/jvm/internal/Intrinsics;.checkNotNullParameter:(Ljava/lang/"
+    "Object;Ljava/lang/String;)V";
+constexpr const char* CHECK_EXPR_NULL_SIGNATURE_V1_3 =
     "Lkotlin/jvm/internal/Intrinsics;.checkExpressionValueIsNotNull:(Ljava/"
+    "lang/Object;Ljava/lang/String;)V";
+constexpr const char* CHECK_EXPR_NULL_SIGNATURE_V1_4 =
+    "Lkotlin/jvm/internal/Intrinsics;.checkNotNullExpressionValue:(Ljava/"
     "lang/Object;Ljava/lang/String;)V";
 
 constexpr const char* NEW_CHECK_PARAM_NULL_SIGNATURE =
