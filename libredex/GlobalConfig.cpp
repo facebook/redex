@@ -86,6 +86,7 @@ void GlobalConfig::bind_config() {
   bind("emit_class_method_info_map", false, bool_param);
   bind("emit_locator_strings", {}, bool_param);
   bind("enable_ab_experiments", false, bool_param);
+  bind("force_ab_exp_test_mode", false, bool_param);
   bind("force_single_dex", false, bool_param);
   bind("instruction_size_bitwidth_limit", 0u, uint32_param);
   bind("json_serde_supercls", {}, string_vector_param);
