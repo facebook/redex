@@ -574,8 +574,16 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
   ClassSplittingStats m_stats;
   std::unordered_set<DexMethod*> m_non_true_virtual_methods;
 
+  bool matches(const std::string& name, const std::string& v) {
+    return name.find(v) != std::string::npos;
+  }
   bool can_relocate(const DexClass* cls) {
-    return !cls->is_external() && !cls->rstate.is_generated();
+    return !cls->is_external() && !cls->rstate.is_generated() &&
+           std::find_if(m_config.blocklist_types.begin(),
+                        m_config.blocklist_types.end(),
+                        [&](const std::string& v) {
+                          return matches(cls->c_str(), v);
+                        }) == m_config.blocklist_types.end();
   }
 
   bool can_relocate(bool cls_has_problematic_clinit,

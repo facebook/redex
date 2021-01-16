@@ -22,6 +22,7 @@ struct ClassSplittingConfig {
   bool run_before_interdex{true};
   bool trampolines{true};
   unsigned int trampoline_size_threshold{100};
+  std::vector<std::string> blocklist_types;
 };
 
 class ClassSplittingPass : public Pass {
@@ -56,6 +57,10 @@ class ClassSplittingPass : public Pass {
     bind("trampolines", m_config.trampolines, m_config.trampolines);
     bind("trampoline_size_threshold", m_config.trampoline_size_threshold,
          m_config.trampoline_size_threshold);
+    bind("blocklist_types",
+         {},
+         m_config.blocklist_types,
+         "List of types for classes to not split.");
     always_assert(!m_config.relocate_true_virtual_methods ||
                   m_config.trampolines);
     always_assert(!m_config.trampolines ||
