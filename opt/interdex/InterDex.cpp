@@ -934,11 +934,16 @@ void InterDex::flush_out_dex(DexInfo& dex_info) {
         m_dexes_structure.get_current_dex_squashed_classes();
     classes.insert(classes.end(), squashed_classes.begin(),
                    squashed_classes.end());
-    auto add_classes = plugin->additional_classes(m_outdex, classes);
-    for (auto add_class : add_classes) {
+    for (auto cls : plugin->additional_classes(m_outdex, classes)) {
       TRACE(IDEX, 4, "IDEX: Emitting %s-plugin-generated class :: %s",
-            plugin->name().c_str(), SHOW(add_class));
-      m_dexes_structure.add_class_no_checks(add_class);
+            plugin->name().c_str(), SHOW(cls));
+      m_dexes_structure.add_class_no_checks(cls);
+      // If this is the primary dex, or if there are any betamap-ordered classes
+      // in this dex, then we treat the additional classes as perf-sensitive, to
+      // be conservative.
+      if (dex_info.primary || dex_info.betamap_ordered) {
+        cls->set_perf_sensitive(true);
+      }
     }
   }
 
