@@ -2776,6 +2776,9 @@ void InstructionSequenceOutliner::bind_config() {
        m_config.savings_threshold,
        "Minimum number of code units saved before a particular code sequence "
        "is outlined anywhere");
+  bind("outline_from_primary_dex", m_config.outline_from_primary_dex,
+       m_config.outline_from_primary_dex,
+       "Whether to outline from primary dex");
   after_configuration([=]() {
     always_assert(m_config.min_insns_size >= MIN_INSNS_SIZE);
     always_assert(m_config.max_insns_size >= m_config.min_insns_size);
@@ -2831,8 +2834,16 @@ void InstructionSequenceOutliner::run_pass(DexStoresVector& stores,
   }
   boost::optional<size_t> last_store_idx;
   auto iteration = m_iteration++;
+  bool is_primary_dex{true};
   for (auto& store : stores) {
     for (auto& dex : store.get_dexen()) {
+      if (is_primary_dex) {
+        is_primary_dex = false;
+        if (!m_config.outline_from_primary_dex) {
+          // Don't touch the primary dex
+          continue;
+        }
+      }
       if (dex.empty()) {
         continue;
       }

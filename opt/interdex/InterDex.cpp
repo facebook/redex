@@ -187,6 +187,7 @@ void do_order_classes(const std::vector<std::string>& coldstart_class_names,
     if (DexType* type = DexType::get_type(class_name.c_str())) {
       if (auto cls = type_class(type)) {
         class_to_priority[cls] = priority++;
+        cls->set_perf_sensitive(true);
       }
     }
   }
@@ -342,7 +343,7 @@ void InterDex::emit_primary_dex(
   // Now add the rest.
   for (DexClass* cls : primary_dex) {
     emit_class(primary_dex_info, cls, /* check_if_skip */ true,
-               /* perf_sensitive */ true);
+               /* perf_sensitive */ false);
   }
   TRACE(IDEX, 2,
         "[primary dex]: %d out of %d classes in primary dex "
