@@ -71,8 +71,8 @@ class AnnoKill {
   void count_annotation(const DexAnnotation* da);
 
   Scope& m_scope;
-  bool m_only_force_kill;
-  bool m_kill_bad_signatures;
+  const bool m_only_force_kill;
+  const bool m_kill_bad_signatures;
   AnnoSet m_kill;
   AnnoSet m_force_kill;
   AnnoSet m_keep;
