@@ -714,7 +714,11 @@ void update_coldstart_classes_order(
     auto initial_type = str.substr(0, str.size() - 11) + ";";
 
     auto type = DexType::get_type(initial_type.c_str());
-    always_assert(type);
+    if (type == nullptr) {
+      TRACE(CS, 2, "[class splitting] Cannot find previously relocated type %s in cold-start classes", initial_type.c_str());
+      mgr.incr_metric("num_missing_initial_types", 1);
+      continue;
+    }
 
     if (!coldstart_types.count(type)) {
       replacement[str] = initial_type;
