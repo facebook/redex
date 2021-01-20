@@ -6,6 +6,7 @@
  */
 
 #include <gtest/gtest.h>
+#include <json/json.h>
 
 #include "ControlFlow.h"
 #include "DexInstruction.h"
@@ -44,7 +45,24 @@ size_t count_invokes(const cfg::ControlFlowGraph& cfg,
   return count_invokes(cfg, find_invoked_method(cfg, name));
 }
 
-class InstructionSequenceOutlinerTest : public RedexIntegrationTest {};
+class InstructionSequenceOutlinerTest : public RedexIntegrationTest {
+ public:
+  InstructionSequenceOutlinerTest() {
+    auto config_file_env = std::getenv("config_file");
+    always_assert_log(config_file_env,
+                      "Config file must be specified to InterDexTest.\n");
+
+    std::ifstream config_file(config_file_env, std::ifstream::binary);
+    config_file >> m_cfg;
+  }
+
+  void run_passes(const std::vector<Pass*>& passes) {
+    RedexIntegrationTest::run_passes(passes, nullptr, m_cfg);
+  }
+
+ private:
+  Json::Value m_cfg;
+};
 
 TEST_F(InstructionSequenceOutlinerTest, basic) {
   force_experiments_test_mode();
