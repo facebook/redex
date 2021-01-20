@@ -78,12 +78,15 @@ class InterDexPass : public Pass {
   bool m_expect_order_list;
   bool m_sort_remaining_classes;
 
-  virtual void run_pass(DexStoresVector&,
+  virtual void run_pass(const Scope&,
+                        const XStoreRefs&,
+                        DexStoresVector&,
                         DexClassesVector&,
                         ConfigFiles&,
                         PassManager&);
 
-  void run_pass_on_nonroot_store(DexStoresVector&,
+  void run_pass_on_nonroot_store(const Scope&,
+                                 const XStoreRefs&,
                                  DexClassesVector&,
                                  ConfigFiles&,
                                  PassManager&);
