@@ -33,8 +33,8 @@ constexpr const char* METRIC_SIGNATURES_KILLED = "num_signatures_killed";
 
 AnnoKill::AnnoKill(
     Scope& scope,
-    bool kill_bad_signatures,
     bool only_force_kill,
+    bool kill_bad_signatures,
     const AnnoNames& keep,
     const AnnoNames& kill,
     const AnnoNames& force_kill,
@@ -45,6 +45,11 @@ AnnoKill::AnnoKill(
     : m_scope(scope),
       m_only_force_kill(only_force_kill),
       m_kill_bad_signatures(kill_bad_signatures) {
+  TRACE(ANNO,
+        2,
+        "only_force_kill=%u kill_bad_signatures=%d",
+        m_only_force_kill,
+        kill_bad_signatures);
   // Load annotations that should not be deleted.
   TRACE(ANNO, 2, "Keep annotations count %d", keep.size());
   for (const auto& anno_name : keep) {
@@ -659,8 +664,8 @@ void AnnoKillPass::run_pass(DexStoresVector& stores,
   auto scope = build_class_scope(stores);
 
   AnnoKill ak(scope,
-              m_kill_bad_signatures,
               only_force_kill(),
+              m_kill_bad_signatures,
               m_keep_annos,
               m_kill_annos,
               m_force_kill_annos,
