@@ -37,7 +37,6 @@ class RedexOptions {
  public:
   bool verify_none_enabled{false};
   bool is_art_build{false};
-  bool enable_pgi{false};
   bool disable_dex_hasher{false};
   bool instrument_pass_enabled{false};
   bool redacted{false};
