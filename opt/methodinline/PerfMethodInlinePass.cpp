@@ -304,10 +304,6 @@ void PerfMethodInlinePass::run_pass(DexStoresVector& stores,
           "Skipping PerfMethodInlinePass because Instrumentation is enabled");
     return;
   }
-  if (!mgr.get_redex_options().enable_pgi) {
-    TRACE(METH_PROF, 1, "PerfMethodInlinePass requires --enable-pgi to run");
-    return;
-  }
 
   redex_assert(m_config);
 

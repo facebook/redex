@@ -402,9 +402,6 @@ def run_redex_binary(state, term_handler, exception_formatter):
     if state.args.is_art_build:
         args += ["--is-art-build"]
 
-    if state.args.enable_pgi:
-        args += ["--enable-pgi"]
-
     if state.args.redacted:
         args += ["--redacted"]
 
@@ -758,11 +755,6 @@ Given an APK, produce a better APK!
         "--is-art-build",
         action="store_true",
         help="States that this is an art only build",
-    )
-    parser.add_argument(
-        "--enable-pgi",
-        action="store_true",
-        help="If not passed, Profile Guided Inlining is disabled",
     )
     parser.add_argument(
         "--redacted",

@@ -102,7 +102,6 @@ UNUSED void dump_args(const Arguments& args) {
   std::cout << "verify_none_mode: " << args.redex_options.verify_none_enabled
             << std::endl;
   std::cout << "art_build: " << args.redex_options.is_art_build << std::endl;
-  std::cout << "enable_pgi: " << args.redex_options.enable_pgi << std::endl;
   std::cout << "enable_instrument_pass: "
             << args.redex_options.instrument_pass_enabled << std::endl;
   std::cout << "min_sdk: " << args.redex_options.min_sdk << std::endl;
@@ -279,10 +278,6 @@ Arguments parse_args(int argc, char* argv[]) {
       "is-art-build",
       po::bool_switch(&args.redex_options.is_art_build)->default_value(false),
       "If specified, states that the current build is art specific.\n");
-  od.add_options()(
-      "enable-pgi",
-      po::bool_switch(&args.redex_options.enable_pgi)->default_value(false),
-      "If not specified, Profile Guided Inlining will not be run.\n");
   od.add_options()(
       "disable-dex-hasher",
       po::bool_switch(&args.redex_options.disable_dex_hasher)
@@ -537,8 +532,6 @@ Arguments parse_args(int argc, char* argv[]) {
         args.redex_options.verify_none_enabled ? "Yes" : "No");
   TRACE(MAIN, 2, "Art build: %s",
         args.redex_options.is_art_build ? "Yes" : "No");
-  TRACE(MAIN, 2, "PGI enabled: %s",
-        args.redex_options.enable_pgi ? "Yes" : "No");
   TRACE(MAIN, 2, "Enable InstrumentPass: %s",
         args.redex_options.instrument_pass_enabled ? "Yes" : "No");
 
