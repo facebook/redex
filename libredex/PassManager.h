@@ -95,6 +95,11 @@ class PassManager {
   void record_running_interdex() { m_interdex_has_run = true; }
   bool interdex_has_run() const { return m_interdex_has_run; }
 
+  void record_unreliable_virtual_scopes() {
+    m_unreliable_virtual_scopes = true;
+  }
+  bool unreliable_virtual_scopes() const { return m_unreliable_virtual_scopes; }
+
   template <typename PassType>
   PassType* get_preserved_analysis() const {
     auto pass =
@@ -130,6 +135,7 @@ class PassManager {
   bool m_testing_mode{false};
   bool m_regalloc_has_run{false};
   bool m_interdex_has_run{false};
+  bool m_unreliable_virtual_scopes{false};
 
   Pass* m_malloc_profile_pass{nullptr};
 

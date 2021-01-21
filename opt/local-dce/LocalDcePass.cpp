@@ -58,13 +58,18 @@ void LocalDcePass::run_pass(DexStoresVector& stores,
                       configured_pure_methods.end());
   auto immutable_getters = get_immutable_getters(scope);
   pure_methods.insert(immutable_getters.begin(), immutable_getters.end());
-  auto override_graph = method_override_graph::build_graph(scope);
+  std::unique_ptr<const method_override_graph::Graph> override_graph;
   std::unordered_set<const DexMethod*> computed_no_side_effects_methods;
-  auto computed_no_side_effects_methods_iterations =
-      compute_no_side_effects_methods(scope, override_graph.get(), pure_methods,
-                                      &computed_no_side_effects_methods);
-  for (auto m : computed_no_side_effects_methods) {
-    pure_methods.insert(const_cast<DexMethod*>(m));
+  size_t computed_no_side_effects_methods_iterations = 0;
+  if (!mgr.unreliable_virtual_scopes()) {
+    override_graph = method_override_graph::build_graph(scope);
+    computed_no_side_effects_methods_iterations =
+        compute_no_side_effects_methods(scope, override_graph.get(),
+                                        pure_methods,
+                                        &computed_no_side_effects_methods);
+    for (auto m : computed_no_side_effects_methods) {
+      pure_methods.insert(const_cast<DexMethod*>(m));
+    }
   }
 
   bool may_allocate_registers = !mgr.regalloc_has_run();
