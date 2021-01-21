@@ -73,7 +73,7 @@ class GlobalTypeAnalyzer : public sparta::ParallelMonotonicFixpointIterator<
   }
 
   void analyze_node(const call_graph::NodeId& node,
-                    ArgumentTypePartition* current_state) const override;
+                    ArgumentTypePartition* current_partition) const override;
 
   ArgumentTypePartition analyze_edge(
       const std::shared_ptr<call_graph::Edge>& edge,

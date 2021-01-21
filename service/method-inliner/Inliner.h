@@ -141,7 +141,7 @@ class MultiMethodInliner {
       const std::vector<DexClass*>& scope,
       DexStoresVector& stores,
       const std::unordered_set<DexMethod*>& candidates,
-      std::function<DexMethod*(DexMethodRef*, MethodSearch)> resolver,
+      std::function<DexMethod*(DexMethodRef*, MethodSearch)> resolve_fn,
       const inliner::InlinerConfig& config,
       MultiMethodInlinerMode mode = InterDex,
       const CalleeCallerInsns& true_virtual_callers = {},
@@ -297,7 +297,7 @@ class MultiMethodInliner {
    */
   bool cross_store_reference(const DexMethod* caller, const DexMethod* callee);
 
-  bool is_estimate_over_max(uint64_t estimated_insn_size,
+  bool is_estimate_over_max(uint64_t estimated_caller_size,
                             const DexMethod* callee,
                             uint64_t max);
 

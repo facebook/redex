@@ -43,7 +43,7 @@ class FixpointIterator final
       const ConstantEnvironment& exit_state_at_source) const override;
 
   void analyze_instruction(const IRInstruction* insn,
-                           ConstantEnvironment* current_state,
+                           ConstantEnvironment* env,
                            bool is_last) const;
 
   void analyze_instruction_no_throw(const IRInstruction* insn,

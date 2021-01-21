@@ -135,7 +135,7 @@ dex_stats_t write_classes_to_dex(
     size_t store_number,
     size_t dex_number,
     ConfigFiles& conf,
-    PositionMapper* line_mapper,
+    PositionMapper* pos_mapper,
     std::unordered_map<DexMethod*, uint64_t>* method_to_id,
     std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
     IODIMetadata* iodi_metadata,
@@ -340,7 +340,7 @@ class DexOutput {
   bool m_force_class_data_end_of_file;
   int m_min_sdk;
 
-  void insert_map_item(uint16_t typeidx,
+  void insert_map_item(uint16_t maptype,
                        uint32_t size,
                        uint32_t offset,
                        uint32_t bytes);

@@ -141,7 +141,7 @@ struct MethodBlock {
    * Instance field setter.
    * The field must be a field def.
    */
-  void iput(DexField* field, Location self, Location src);
+  void iput(DexField* field, Location obj, Location src);
 
   /**
    * Instance field opcode.
@@ -478,7 +478,7 @@ struct MethodCreator {
                                       IRList::iterator* true_block);
   IRList::iterator make_switch_block(
       IRList::iterator curr,
-      IRInstruction* opcode,
+      IRInstruction* insn,
       IRList::iterator* default_block,
       std::map<SwitchIndices, IRList::iterator>& cases);
 

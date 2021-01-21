@@ -242,7 +242,7 @@ class MethodItemEntryCloner {
 
  public:
   MethodItemEntryCloner();
-  MethodItemEntry* clone(const MethodItemEntry* mei);
+  MethodItemEntry* clone(const MethodItemEntry* mie);
 
   /*
    * This should to be called after the whole method is already cloned so that
@@ -281,11 +281,11 @@ class IRList {
   IRList::iterator main_block();
   IRList::iterator make_if_block(const IRList::iterator& cur,
                                  IRInstruction* insn,
-                                 IRList::iterator* if_block);
+                                 IRList::iterator* false_block);
   IRList::iterator make_if_else_block(const IRList::iterator& cur,
                                       IRInstruction* insn,
-                                      IRList::iterator* if_block,
-                                      IRList::iterator* else_block);
+                                      IRList::iterator* false_block,
+                                      IRList::iterator* true_block);
   IRList::iterator make_switch_block(
       const IRList::iterator& cur,
       IRInstruction* insn,

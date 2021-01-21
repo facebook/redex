@@ -29,7 +29,7 @@ class DexLoader {
   DexClasses load_dex(const char* location,
                       dex_stats_t* stats,
                       int support_dex_version);
-  DexClasses load_dex(const dex_header* hdr, dex_stats_t* stats);
+  DexClasses load_dex(const dex_header* dh, dex_stats_t* stats);
   void load_dex_class(int num);
   void gather_input_stats(dex_stats_t* stats, const dex_header* dh);
   DexIdx* get_idx() { return m_idx.get(); }

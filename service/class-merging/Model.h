@@ -365,14 +365,14 @@ class Model {
   MergerType& create_merger_helper(
       const DexType* merger_type,
       const MergerType::Shape& shape,
-      const TypeSet& group_key,
+      const TypeSet& intf_set,
       const std::vector<const DexType*>& group_values,
       const boost::optional<InterdexSubgroupIdx>& interdex_subgroup_idx,
       const InterdexSubgroupIdx subgroup_idx);
   void create_mergers_helper(
       const DexType* merger_type,
       const MergerType::Shape& shape,
-      const TypeSet& group_key,
+      const TypeSet& intf_set,
       const TypeSet& group_values,
       const boost::optional<InterdexSubgroupIdx>& interdex_subgroup_idx,
       const boost::optional<size_t>& max_mergeables_count,
@@ -388,7 +388,7 @@ class Model {
   void flatten_shapes(const MergerType& merger,
                       MergerType::ShapeCollector& shapes);
   std::vector<TypeSet> group_per_interdex_set(const TypeSet& types);
-  void map_fields(MergerType& shape,
+  void map_fields(MergerType& merger,
                   const std::vector<const DexType*>& classes);
 
   // collect and distribute methods across MergerTypes
@@ -396,7 +396,7 @@ class Model {
   void add_virtual_scope(MergerType& merger, const VirtualScope& virt_scope);
   void add_interface_scope(MergerType& merger, const VirtualScope& intf_scope);
   void distribute_virtual_methods(const DexType* type,
-                                  std::vector<const VirtualScope*> virt_meths);
+                                  std::vector<const VirtualScope*> base_scopes);
 
   // Model internal type system helpers
   void set_parent_child(const DexType* parent, const DexType* child) {

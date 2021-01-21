@@ -55,7 +55,7 @@ class MethodCFGStream {
 
   void add_pass(const std::string& pass_name,
                 Options o = (Options)(SKIP_NO_CHANGE | PRINT_CODE),
-                const optional<std::string>& prefix_block = boost::none);
+                const optional<std::string>& extra_prefix = boost::none);
 
   std::string get_output() const { return m_ss.str(); }
 

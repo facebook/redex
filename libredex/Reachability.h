@@ -213,7 +213,7 @@ class RootSetMarker {
    * Mark all DexMethods (and their respective classes) as seeds.
    */
   void mark_methods_as_seed(
-      const std::unordered_set<const DexMethod*>& members);
+      const std::unordered_set<const DexMethod*>& methods);
 
   /**
    * Mark everything as seed.

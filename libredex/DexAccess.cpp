@@ -31,7 +31,7 @@ void overriden_should_not_be_public(
  * parents, they do not have overriding relationship. Change the latter method
  * be visible to it is wrong.
  */
-void loosen_access_modifier_for_vmethods(const Scope& scope) {
+void loosen_access_modifier_for_vmethods(const DexClasses& scope) {
   auto graph = method_override_graph::build_graph(scope);
   const auto& nodes = graph->nodes();
   std::unordered_set<const DexMethod*> should_not_mark;
@@ -74,18 +74,18 @@ void loosen_access_modifier_except_vmethods(DexClass* clazz) {
   }
 }
 
-void loosen_access_modifier(const Scope& scope) {
-  walk::parallel::classes(scope, [](DexClass* clazz) {
+void loosen_access_modifier(const DexClasses& classes) {
+  walk::parallel::classes(classes, [](DexClass* clazz) {
     loosen_access_modifier_except_vmethods(clazz);
   });
-  loosen_access_modifier_for_vmethods(scope);
+  loosen_access_modifier_for_vmethods(classes);
 
   DexType* dalvikinner = DexType::get_type("Ldalvik/annotation/InnerClass;");
   if (!dalvikinner) {
     return;
   }
 
-  walk::annotations(scope, [&dalvikinner](DexAnnotation* anno) {
+  walk::annotations(classes, [&dalvikinner](DexAnnotation* anno) {
     if (anno->type() != dalvikinner) return;
     auto elems = anno->anno_elems();
     for (auto elem : elems) {

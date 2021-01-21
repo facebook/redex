@@ -66,7 +66,7 @@ class RemoveArgs {
   std::deque<DexType*> get_live_arg_type_list(
       DexMethod* method, const std::deque<uint16_t>& live_arg_idxs);
   bool update_method_signature(DexMethod* method,
-                               const std::deque<uint16_t>& live_args,
+                               const std::deque<uint16_t>& live_arg_idxs,
                                bool remove_result,
                                DexProto* reordered_proto);
   MethodStats update_method_protos(const mog::Graph& override_graph);

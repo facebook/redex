@@ -108,7 +108,7 @@ class PassManager {
   Pass* find_pass(const std::string& pass_name) const;
 
  private:
-  void activate_pass(const std::string& name, const Json::Value& cfg);
+  void activate_pass(const std::string& name, const Json::Value& conf);
 
   void init(const Json::Value& config);
 

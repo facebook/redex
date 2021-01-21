@@ -26,7 +26,7 @@ class OptimizeEnumsAnalysis final {
   ~OptimizeEnumsAnalysis();
 
   explicit OptimizeEnumsAnalysis(
-      const DexClass* current_enum,
+      const DexClass* enum_cls,
       const std::unordered_map<const DexMethod*, uint32_t>&
           ctor_to_arg_ordinal);
 

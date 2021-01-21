@@ -361,8 +361,8 @@ bool InterDex::emit_class(DexInfo& dex_info,
 
 void InterDex::emit_primary_dex(
     const DexClasses& primary_dex,
-    const std::vector<DexType*>& interdex_types,
-    const std::unordered_set<DexClass*>& unreferenced_cls) {
+    const std::vector<DexType*>& interdex_order,
+    const std::unordered_set<DexClass*>& unreferenced_classes) {
 
   std::unordered_set<DexClass*> primary_dex_set(primary_dex.begin(),
                                                 primary_dex.end());
@@ -376,14 +376,14 @@ void InterDex::emit_primary_dex(
   // Sort the primary dex according to interdex order (aka emit first the
   // primary classes that appear in the interdex order, in the order that
   // they appear there).
-  for (DexType* type : interdex_types) {
+  for (DexType* type : interdex_order) {
     DexClass* cls = type_class(type);
     if (!cls) {
       continue;
     }
 
     if (primary_dex_set.count(cls) > 0) {
-      if (unreferenced_cls.count(cls) > 0) {
+      if (unreferenced_classes.count(cls) > 0) {
         TRACE(IDEX, 5, "[primary dex]: %s no longer linked to coldstart set.",
               SHOW(cls));
         coldstart_classes_skipped_in_primary++;

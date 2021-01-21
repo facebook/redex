@@ -145,16 +145,16 @@ class Analyzer final : public ir_analyzer::BaseIRAnalyzer<ConstantEnvironment> {
 OptimizeEnumsAnalysis::~OptimizeEnumsAnalysis() {}
 
 OptimizeEnumsAnalysis::OptimizeEnumsAnalysis(
-    const DexClass* cls,
+    const DexClass* enum_cls,
     const std::unordered_map<const DexMethod*, uint32_t>& ctor_to_arg_ordinal)
-    : m_cls(cls) {
-  auto clinit = cls->get_clinit();
+    : m_cls(enum_cls) {
+  auto clinit = enum_cls->get_clinit();
   always_assert(clinit && clinit->get_code());
 
   m_clinit_cfg = cfg::ScopedCFG(clinit->get_code());
   m_clinit_cfg->calculate_exit_block();
-  m_analyzer =
-      std::make_unique<impl::Analyzer>(*m_clinit_cfg, ctor_to_arg_ordinal, cls);
+  m_analyzer = std::make_unique<impl::Analyzer>(
+      *m_clinit_cfg, ctor_to_arg_ordinal, enum_cls);
 }
 
 /**

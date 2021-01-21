@@ -138,7 +138,7 @@ class DexInstruction : public Gatherable {
    */
   uint16_t count() { return m_count; }
 
-  friend std::string show(const DexInstruction* op);
+  friend std::string show(const DexInstruction* insn);
 
  private:
   unsigned count_from_opcode() const;

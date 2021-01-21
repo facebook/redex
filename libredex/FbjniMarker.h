@@ -16,8 +16,8 @@
 class FbjniMarker {
  public:
   DexType* process_class_path(const std::string& class_path);
-  DexField* process_field(DexType* type, const std::string& class_path);
-  DexMethod* process_method(DexType* type, const std::string& class_path);
+  DexField* process_field(DexType* type, const std::string& field_str);
+  DexMethod* process_method(DexType* type, const std::string& method_str);
 
  private:
   std::string to_internal_type(const std::string& str);
@@ -26,4 +26,4 @@ class FbjniMarker {
 };
 
 void mark_native_classes_from_fbjni_configs(
-    const std::vector<std::string>& config_file);
+    const std::vector<std::string>& json_files);

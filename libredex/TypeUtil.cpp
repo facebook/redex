@@ -32,20 +32,21 @@ PRIMITIVE_PSEUDO_TYPE_FIELDS
 
 } // namespace pseudo
 
-bool is_valid(const std::string& type) {
-  if (type.empty()) {
+bool is_valid(const std::string& descriptor) {
+  if (descriptor.empty()) {
     return false;
   }
   size_t non_array_start = 0;
 
-  while (non_array_start < type.length() && type[non_array_start] == '[') {
+  while (non_array_start < descriptor.length() &&
+         descriptor[non_array_start] == '[') {
     ++non_array_start;
   }
-  if (non_array_start == type.length()) {
+  if (non_array_start == descriptor.length()) {
     return false;
   }
 
-  switch (type[non_array_start]) {
+  switch (descriptor[non_array_start]) {
   case 'Z':
   case 'B':
   case 'S':
@@ -55,7 +56,7 @@ bool is_valid(const std::string& type) {
   case 'F':
   case 'D':
   case 'V':
-    return non_array_start + 1 == type.length(); // Must be last character
+    return non_array_start + 1 == descriptor.length(); // Must be last character
   case 'L':
     break;
   default:
@@ -65,22 +66,22 @@ bool is_valid(const std::string& type) {
   // Object type now.
 
   // Must be at least three characters.
-  if (non_array_start + 3 > type.length()) {
+  if (non_array_start + 3 > descriptor.length()) {
     return false;
   }
 
   // Last one is a semicolon.
-  if (type[type.length() - 1] != ';') {
+  if (descriptor[descriptor.length() - 1] != ';') {
     return false;
   }
 
   // Scan the identifiers.
   size_t start = non_array_start + 1;
   size_t i = start;
-  for (; i != type.length() - 1; ++i) {
-    if (type[i] == '/') {
+  for (; i != descriptor.length() - 1; ++i) {
+    if (descriptor[i] == '/') {
       // Found a segment, do a check.
-      if (!is_valid_identifier(type, start, i - start)) {
+      if (!is_valid_identifier(descriptor, start, i - start)) {
         return false;
       }
       start = i + 1;
@@ -88,7 +89,7 @@ bool is_valid(const std::string& type) {
   }
   if (start != i) {
     // Handle tail.
-    if (!is_valid_identifier(type, start, i - start)) {
+    if (!is_valid_identifier(descriptor, start, i - start)) {
       return false;
     }
   }

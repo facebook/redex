@@ -143,7 +143,7 @@ class Allocator {
       const std::unordered_set<reg_t>&, IRCode*);
 
   void split_params(const interference::Graph&,
-                    const std::unordered_set<reg_t>& param_regs,
+                    const std::unordered_set<reg_t>& param_spills,
                     IRCode*);
 
   void spill(const interference::Graph&,

@@ -49,7 +49,7 @@ class InstructionSequenceOutliner : public Pass {
 
   void bind_config() override;
   void run_pass(DexStoresVector& stores,
-                ConfigFiles& cfg,
+                ConfigFiles& config,
                 PassManager& mgr) override;
 
  private:

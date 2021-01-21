@@ -118,7 +118,7 @@ class Breadcrumbs {
   size_t process_illegal_elements(const XStoreRefs& xstores,
                                   const MethodInsns& method_to_insns,
                                   const char* desc,
-                                  MethodInsns& suppressed,
+                                  MethodInsns& allowed,
                                   std::ostream& ss);
   bool is_illegal_cross_store(const DexType* caller, const DexType* callee);
   const DexType* check_type(const DexType* type);

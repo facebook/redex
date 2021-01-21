@@ -377,18 +377,16 @@ inline location_t flow_t::insn(m::match_t<IRInstruction*, M> m) {
   return location_t{this, ix};
 }
 
-inline location_t location_t::src(src_index_t src,
-                                  location_t src_constraint,
-                                  flag_t flags) {
-  always_assert(m_owner != nullptr && m_owner == src_constraint.m_owner &&
+inline location_t location_t::src(src_index_t ix, location_t l, flag_t flags) {
+  always_assert(m_owner != nullptr && m_owner == l.m_owner &&
                 "location_t shared between flow_t instances.");
 
   auto& src_locs = constraint().srcs;
-  if (src_locs.size() <= src) {
-    src_locs.resize(src + 1, {detail::NO_LOC, {}, {}});
+  if (src_locs.size() <= ix) {
+    src_locs.resize(ix + 1, {detail::NO_LOC, {}, {}});
   }
 
-  src_locs[src] = {src_constraint.m_ix, flags.m_alias, flags.m_quant};
+  src_locs[ix] = {l.m_ix, flags.m_alias, flags.m_quant};
   return *this;
 }
 

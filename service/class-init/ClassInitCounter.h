@@ -398,7 +398,8 @@ class RegisterSet {
   // Potentially lifting ObjectUses into MergedUses, and expanding existing
   // MergedUses to more cover more ObjectUses.
   // Any newly created MergedUses are stored globally
-  void merge_registers(const RegisterSet& other, MergedUsedSet& stored);
+  void merge_registers(const RegisterSet& comes_after,
+                       MergedUsedSet& merge_store);
 
   // Merge m_all_uses from successor(s) to the current, PO earlier uses
   void merge_effects(const RegisterSet& other);
@@ -467,7 +468,7 @@ class ClassInitCounter final {
                          std::unordered_map<DexMethod*, MergedUsedSet>>;
 
   ClassInitCounter(
-      DexType* common_parent,
+      DexType* parent_class,
       const std::unordered_set<DexMethodRef*>& safe_escapes,
       const std::unordered_set<DexClass*>& classes,
       boost::optional<DexString*> optional_method_name = boost::none);

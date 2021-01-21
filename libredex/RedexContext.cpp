@@ -459,8 +459,8 @@ keep_rules::AssumeReturnValue* RedexContext::get_field_value(DexField* field) {
   return nullptr;
 }
 
-void RedexContext::unset_field_value(DexField* method) {
-  field_values.erase(method);
+void RedexContext::unset_field_value(DexField* field) {
+  field_values.erase(field);
 }
 
 void RedexContext::set_return_value(DexMethod* method,

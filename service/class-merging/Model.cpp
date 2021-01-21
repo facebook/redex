@@ -606,10 +606,10 @@ void Model::shape_model() {
   TRACE(CLMG, 4, "Excluded types total %ld", m_excluded.size());
 }
 
-void Model::shape_merger(const MergerType& merger,
+void Model::shape_merger(const MergerType& root,
                          MergerType::ShapeCollector& shapes) {
   // if the root has got no children there is nothing to "shape"
-  const auto& children = m_hierarchy.find(merger.type);
+  const auto& children = m_hierarchy.find(root.type);
   if (children == m_hierarchy.end()) {
     return;
   }

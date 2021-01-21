@@ -134,14 +134,14 @@ std::string get_string_attribute_value(
 
 bool has_raw_attribute_value(const android::ResXMLTree& parser,
                              const android::String16& attribute_name,
-                             android::Res_value& outValue) {
+                             android::Res_value& out_value) {
   const size_t attr_count = parser.getAttributeCount();
 
   for (size_t i = 0; i < attr_count; ++i) {
     size_t len;
     android::String16 key(parser.getAttributeName(i, &len));
     if (key == attribute_name) {
-      parser.getAttributeValue(i, &outValue);
+      parser.getAttributeValue(i, &out_value);
       return true;
     }
   }
@@ -1286,7 +1286,7 @@ RedexMappedFile map_file(const char* path, bool mode_write) {
   return RedexMappedFile(std::move(map), path, !mode_write);
 }
 
-void unmap_and_close(RedexMappedFile f ATTRIBUTE_UNUSED) {}
+void unmap_and_close(RedexMappedFile map ATTRIBUTE_UNUSED) {}
 
 size_t write_serialized_data(const android::Vector<char>& cVec,
                              RedexMappedFile f) {

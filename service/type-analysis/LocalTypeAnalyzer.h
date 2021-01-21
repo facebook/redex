@@ -28,7 +28,7 @@ class LocalTypeAnalyzer final
         m_insn_analyzer(std::move(insn_analyer)) {}
 
   void analyze_instruction(const IRInstruction* insn,
-                           DexTypeEnvironment* current_state) const override;
+                           DexTypeEnvironment* env) const override;
 
  private:
   InstructionAnalyzer<DexTypeEnvironment> m_insn_analyzer;
