@@ -33,6 +33,7 @@ constexpr const char* METRIC_INSTR_PREFIX = "instr_";
 constexpr const char* METRIC_METHOD_BARRIERS = "num_method_barriers";
 constexpr const char* METRIC_METHOD_BARRIERS_ITERATIONS =
     "num_method_barriers_iterations";
+constexpr const char* METRIC_FINALIZABLE_FIELDS = "num_finalizable_fields";
 constexpr const char* METRIC_CONDITIONALLY_PURE_METHODS =
     "num_conditionally_pure_methods";
 constexpr const char* METRIC_CONDITIONALLY_PURE_METHODS_ITERATIONS =
@@ -129,6 +130,8 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
   mgr.incr_metric(METRIC_METHOD_BARRIERS, shared_state_stats.method_barriers);
   mgr.incr_metric(METRIC_METHOD_BARRIERS_ITERATIONS,
                   shared_state_stats.method_barriers_iterations);
+  mgr.incr_metric(METRIC_FINALIZABLE_FIELDS,
+                  shared_state_stats.finalizable_fields);
   mgr.incr_metric(METRIC_CONDITIONALLY_PURE_METHODS,
                   shared_state_stats.conditionally_pure_methods);
   mgr.incr_metric(METRIC_CONDITIONALLY_PURE_METHODS_ITERATIONS,

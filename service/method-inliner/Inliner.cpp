@@ -1530,7 +1530,11 @@ bool MultiMethodInliner::can_inline_init(const DexMethod* init_method) {
     return *opt_can_inline_init;
   }
 
-  bool res = constructor_analysis::can_inline_init(init_method);
+  const std::unordered_set<const DexField*>* finalizable_fields =
+      m_cse_shared_state ? &m_cse_shared_state->get_finalizable_fields()
+                         : nullptr;
+  bool res =
+      constructor_analysis::can_inline_init(init_method, finalizable_fields);
   m_can_inline_init.update(
       init_method,
       [&](const DexMethod*, boost::optional<bool>& value, bool exists) {

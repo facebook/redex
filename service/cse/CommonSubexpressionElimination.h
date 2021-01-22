@@ -42,6 +42,7 @@ struct Stats {
 struct SharedStateStats {
   size_t method_barriers{0};
   size_t method_barriers_iterations{0};
+  size_t finalizable_fields{0};
   size_t conditionally_pure_methods{0};
   size_t conditionally_pure_methods_iterations{0};
 };
@@ -88,9 +89,13 @@ class SharedState {
     return m_pure_methods;
   }
   const method_override_graph::Graph* get_method_override_graph() const;
+  const std::unordered_set<const DexField*>& get_finalizable_fields() const {
+    return m_finalizable_fields;
+  }
 
  private:
   void init_method_barriers(const Scope& scope);
+  void init_finalizable_fields(const Scope& scope);
   bool may_be_barrier(const IRInstruction* insn, DexType* exact_virtual_scope);
   bool is_invoke_safe(const IRInstruction* insn, DexType* exact_virtual_scope);
   CseUnorderedLocationSet get_relevant_written_locations(
@@ -102,6 +107,7 @@ class SharedState {
   // subset of safe methods which are in fact defs
   std::unordered_set<const DexMethod*> m_safe_method_defs;
   const std::unordered_set<DexString*>& m_finalish_field_names;
+  std::unordered_set<const DexField*> m_finalizable_fields;
   std::unique_ptr<ConcurrentMap<Barrier, size_t, BarrierHasher>> m_barriers;
   std::unordered_map<const DexMethod*, CseUnorderedLocationSet>
       m_method_written_locations;

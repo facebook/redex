@@ -199,7 +199,9 @@ class Analyzer final : public BaseIRAnalyzer<ConstructorAnalysisEnvironment> {
 
 namespace constructor_analysis {
 
-bool can_inline_init(const DexMethod* init_method) {
+bool can_inline_init(
+    const DexMethod* init_method,
+    const std::unordered_set<const DexField*>* finalizable_fields) {
   always_assert(method::is_init(init_method));
   auto code = init_method->get_code();
   if (!code) {
@@ -235,7 +237,9 @@ bool can_inline_init(const DexMethod* init_method) {
       auto field_ref = insn->get_field();
       DexField* field = resolve_field(field_ref, FieldSearch::Instance);
       if (field == nullptr ||
-          (field->get_class() == declaring_type && is_final(field))) {
+          (field->get_class() == declaring_type &&
+           (is_final(field) ||
+            (finalizable_fields && finalizable_fields->count(field))))) {
         return false;
       }
     }

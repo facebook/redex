@@ -62,7 +62,9 @@ size_t mark_methods_final(const Scope& scope,
   return n_methods_finalized;
 }
 
-size_t mark_fields_final(const Scope& scope) {
+size_t mark_fields_final(const Scope& scope,
+                         bool consider_unwritten_fields,
+                         bool consider_written_fields) {
   field_op_tracker::FieldStatsMap field_stats =
       field_op_tracker::analyze(scope);
 
@@ -72,6 +74,12 @@ size_t mark_fields_final(const Scope& scope) {
     auto& stats = pair.second;
     if (stats.init_writes == stats.writes && can_rename(field) &&
         !is_final(field) && !is_volatile(field) && !field->is_external()) {
+      if (!consider_unwritten_fields && stats.writes == 0) {
+        continue;
+      }
+      if (!consider_written_fields && stats.writes > 0) {
+        continue;
+      }
       // Note: There is one more thing that javac enforces around final fields:
       // That there's at most one write to the field along any constrol-flow
       // path. We skip the complexities of checking that here, as the JVM spec
@@ -194,8 +202,9 @@ void AccessMarkingPass::run_pass(DexStoresVector& stores,
     pm.incr_metric("finalized_methods", n_methods_final);
     TRACE(ACCESS, 1, "Finalized %lu methods", n_methods_final);
   }
-  if (m_finalize_fields) {
-    auto n_fields_final = mark_fields_final(scope);
+  if (m_finalize_unwritten_fields || m_finalize_written_fields) {
+    auto n_fields_final = mark_fields_final(
+        scope, m_finalize_unwritten_fields, m_finalize_written_fields);
     pm.incr_metric("finalized_fields", n_fields_final);
     TRACE(ACCESS, 1, "Finalized %lu fields", n_fields_final);
   }

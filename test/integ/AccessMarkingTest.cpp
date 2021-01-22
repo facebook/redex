@@ -6,6 +6,7 @@
  */
 
 #include <gtest/gtest.h>
+#include <json/json.h>
 #include <sstream>
 
 #include "AccessMarking.h"
@@ -19,7 +20,15 @@ TEST_F(AccessMarkingTest, test_all) {
       new AccessMarkingPass(),
   };
 
-  run_passes(passes);
+  auto config_file_env = std::getenv("config_file");
+  always_assert_log(config_file_env,
+                    "Config file must be specified to AccessMarkingTest.\n");
+
+  std::ifstream config_file(config_file_env, std::ifstream::binary);
+  Json::Value cfg;
+  config_file >> cfg;
+
+  run_passes(passes, nullptr, cfg);
 
   // Check finalization of fields
 

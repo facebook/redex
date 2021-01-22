@@ -56,6 +56,7 @@
 #include "BaseIRAnalyzer.h"
 #include "ConstantAbstractDomain.h"
 #include "ControlFlow.h"
+#include "FieldOpTracker.h"
 #include "HashedSetAbstractDomain.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
@@ -966,6 +967,24 @@ void SharedState::init_method_barriers(const Scope& scope) {
   }
 }
 
+void SharedState::init_finalizable_fields(const Scope& scope) {
+  Timer t("init_finalizable_fields");
+  field_op_tracker::FieldStatsMap field_stats =
+      field_op_tracker::analyze(scope);
+
+  for (auto& pair : field_stats) {
+    auto* field = pair.first;
+    auto& stats = pair.second;
+    // We are checking a subset of what the AccessMarking pass is checking for
+    // finalization, as that's what CSE really cares about.
+    if (stats.init_writes == stats.writes && can_rename(field) &&
+        !is_final(field) && !is_volatile(field) && !field->is_external()) {
+      m_finalizable_fields.insert(field);
+    }
+  }
+  m_stats.finalizable_fields = m_finalizable_fields.size();
+}
+
 void SharedState::init_scope(const Scope& scope) {
   always_assert(!m_method_override_graph);
   m_method_override_graph = method_override_graph::build_graph(scope);
@@ -987,6 +1006,7 @@ void SharedState::init_scope(const Scope& scope) {
   }
 
   init_method_barriers(scope);
+  init_finalizable_fields(scope);
 }
 
 CseUnorderedLocationSet SharedState::get_relevant_written_locations(
@@ -1156,7 +1176,8 @@ bool SharedState::has_pure_method(const IRInstruction* insn) const {
 }
 
 bool SharedState::is_finalish(const DexField* field) const {
-  return is_final(field) || !!m_finalish_field_names.count(field->get_name());
+  return is_final(field) || !!m_finalizable_fields.count(field) ||
+         !!m_finalish_field_names.count(field->get_name());
 }
 
 void SharedState::cleanup() {
