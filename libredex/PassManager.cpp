@@ -73,18 +73,37 @@ struct ProfilerInfo {
       // nonexistent passes are caught as early as possible
       auto pass = mgr.find_pass(getenv("PROFILE_PASS"));
       always_assert(pass != nullptr);
-      boost::optional<std::string> shutdown_cmd = boost::none;
-      if (getenv("PROFILE_SHUTDOWN_COMMAND")) {
-        shutdown_cmd = std::string(getenv("PROFILE_SHUTDOWN_COMMAND"));
-      }
-      boost::optional<std::string> post_cmd = boost::none;
-      if (getenv("PROFILE_POST_COMMAND")) {
-        post_cmd = std::string(getenv("PROFILE_POST_COMMAND"));
-      }
-      auto ret = boost::make_optional<ProfilerInfo>(ProfilerInfo{
-          getenv("PROFILE_COMMAND"), shutdown_cmd, post_cmd, pass});
       std::cerr << "Will run profiler for " << pass->name() << std::endl;
-      return ret;
+      return create_info("PROFILE_COMMAND", "PROFILE_SHUTDOWN_COMMAND",
+                         "PROFILE_POST_COMMAND", pass);
+    }
+    return boost::none;
+  }
+
+  static boost::optional<ProfilerInfo> create_all_passes() {
+    if (getenv("ALL_PASSES_PROFILE_COMMAND")) {
+      std::cerr << "Will run profiler for all passes!" << std::endl;
+      return create_info("ALL_PASSES_PROFILE_COMMAND",
+                         "ALL_PASSES_PROFILE_SHUTDOWN_COMMAND",
+                         "ALL_PASSES_PROFILE_POST_COMMAND", nullptr);
+    }
+    return boost::none;
+  }
+
+  static boost::optional<ProfilerInfo> create_info(const char* profiler_key,
+                                                   const char* shutdown_key,
+                                                   const char* post_key,
+                                                   const Pass* pass) {
+    std::string profiler = getenv(profiler_key);
+    auto shutdown_cmd = get_env_str(shutdown_key);
+    auto post_cmd = get_env_str(post_key);
+    return boost::make_optional<ProfilerInfo>(
+        ProfilerInfo{profiler, shutdown_cmd, post_cmd, pass});
+  }
+
+  static boost::optional<std::string> get_env_str(const char* key) {
+    if (getenv(key)) {
+      return std::string(getenv(key));
     }
     return boost::none;
   }
@@ -486,7 +505,8 @@ void maybe_enable_opt_data(const ConfigFiles& conf) {
 
 boost::optional<ScopedCommandProfiling> maybe_command_profile(
     const boost::optional<ProfilerInfo>& profiler_info, const Pass* pass) {
-  if (!profiler_info || profiler_info->pass != pass) {
+  if (!profiler_info ||
+      (profiler_info->pass != nullptr && profiler_info->pass != pass)) {
     return boost::none;
   }
   return ScopedCommandProfiling{boost::make_optional(profiler_info->command),
@@ -825,6 +845,7 @@ void PassManager::eval_passes(DexStoresVector& stores, ConfigFiles& conf) {
 
 void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   auto profiler_info = ProfilerInfo::create(*this);
+  auto profiler_all_info = ProfilerInfo::create_all_passes();
 
   if (conf.force_single_dex()) {
     // Squash the dexes into one, so that the passes all see only one dex and
@@ -945,6 +966,8 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
 
     {
       auto scoped_command_prof = maybe_command_profile(profiler_info, pass);
+      auto scoped_command_all_prof =
+          maybe_command_profile(profiler_all_info, pass);
       jemalloc_util::ScopedProfiling malloc_prof(m_malloc_profile_pass == pass);
       pass->run_pass(stores, conf, *this);
     }
