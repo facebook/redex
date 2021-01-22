@@ -33,7 +33,8 @@ void test(const Scope& scope,
           bool is_static = true,
           bool is_init_or_clinit = false,
           DexType* declaring_type = nullptr,
-          DexTypeList* args = DexTypeList::make_type_list({})) {
+          DexTypeList* args = DexTypeList::make_type_list({}),
+          const std::unordered_set<DexString*>& finalish_field_names = {}) {
   auto field_a = DexField::make_field("LFoo;.a:I")->make_concrete(ACC_PUBLIC);
 
   auto field_b = DexField::make_field("LFoo;.b:I")->make_concrete(ACC_PUBLIC);
@@ -59,7 +60,6 @@ void test(const Scope& scope,
   });
 
   auto pure_methods = get_pure_methods();
-  std::unordered_set<DexString*> finalish_field_names;
   cse_impl::SharedState shared_state(pure_methods, finalish_field_names);
   shared_state.init_scope(scope);
   cse_impl::CommonSubexpressionElimination cse(&shared_state, code->cfg(),
@@ -1719,4 +1719,43 @@ TEST_F(CommonSubexpressionEliminationTest, no_phi_node) {
   )";
   auto expected_str = code_str;
   test(Scope{type_class(type::java_lang_Object())}, code_str, expected_str, 0);
+}
+
+TEST_F(CommonSubexpressionEliminationTest, untracked_finalish_field) {
+  ClassCreator bar_creator(DexType::make_type("LBar;"));
+  bar_creator.set_super(type::java_lang_Object());
+
+  auto finalish_field =
+      DexField::make_field("LBar;.x:I")->make_concrete(ACC_PUBLIC);
+
+  auto code_str = R"(
+    (
+      (load-param-object v0)
+      (iget v0 "LBar;.x:I")
+      (move-result-pseudo v1)
+      (invoke-static () "LWhat;.ever:()V")
+      (iget v0 "LBar;.x:I")
+      (move-result-pseudo v1)
+    )
+  )";
+  auto expected_str = R"(
+    (
+      (load-param-object v0)
+      (iget v0 "LBar;.x:I")
+      (move-result-pseudo v1)
+        (move v2 v1)
+      (invoke-static () "LWhat;.ever:()V")
+      (iget v0 "LBar;.x:I")
+      (move-result-pseudo v1)
+      (move v1 v2)
+    )
+  )";
+  bool is_static = false;
+  bool is_init_or_clinit = false;
+  auto declaring_type = bar_creator.create()->get_type();
+  auto args = DexTypeList::make_type_list({});
+  auto finalish_field_name = finalish_field->get_name();
+  test(Scope{type_class(type::java_lang_Object()), type_class(declaring_type)},
+       code_str, expected_str, 1, is_static, is_init_or_clinit, declaring_type,
+       args, {finalish_field_name});
 }
