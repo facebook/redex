@@ -648,6 +648,56 @@ TEST_F(CopyPropagationTest, wideClobberWideTrue) {
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
+TEST_F(CopyPropagationTest, wideClobberWideOddUp) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (move-wide v3 v2)
+      (move-wide v2 v3)
+      (return-void)
+    )
+  )");
+  code->set_registers_size(5);
+
+  copy_propagation_impl::Config config;
+  config.wide_registers = true;
+  CopyPropagation(config).run(code.get());
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (move-wide v3 v2)
+      (move-wide v2 v3)
+      (return-void)
+    )
+  )");
+
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+}
+
+TEST_F(CopyPropagationTest, wideClobberWideOddDown) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (move-wide v1 v2)
+      (move-wide v2 v1)
+      (return-void)
+    )
+  )");
+  code->set_registers_size(5);
+
+  copy_propagation_impl::Config config;
+  config.wide_registers = true;
+  CopyPropagation(config).run(code.get());
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (move-wide v1 v2)
+      (move-wide v2 v1)
+      (return-void)
+    )
+  )");
+
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+}
+
 TEST_F(CopyPropagationTest, repWide) {
   auto code = assembler::ircode_from_string(R"(
     (

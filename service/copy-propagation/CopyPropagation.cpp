@@ -159,10 +159,27 @@ class AliasFixpointIterator final
             }
           }
         } else {
-          // move dst into src's alias group
-          aliases.move(dst.lower, src.lower);
-          if (dst.upper != src.upper) { // Don't ask `aliases` about Value::none
-            aliases.move(dst.upper, src.upper);
+          if (src.upper.is_register() && src.lower.reg() != RESULT_REGISTER) {
+            // Be careful about wide copies.
+            redex_assert(dst.upper.is_register());
+            redex_assert(dst.lower.reg() != RESULT_REGISTER);
+            reg_t src_reg = src.lower.reg();
+            reg_t dst_reg = dst.lower.reg();
+            if (src_reg + 1 == dst_reg) {
+              aliases.move(dst.upper, src.upper);
+              aliases.move(dst.lower, src.lower);
+            } else {
+              // Also correct for "if (src_reg == dst_reg + 1)"
+              aliases.move(dst.lower, src.lower);
+              aliases.move(dst.upper, src.upper);
+            }
+          } else {
+            // move dst into src's alias group
+            aliases.move(dst.lower, src.lower);
+            if (dst.upper != src.upper) { // Don't ask `aliases` about
+                                          // Value::none
+              aliases.move(dst.upper, src.upper);
+            }
           }
         }
       } else if (!dst.lower.is_none()) {
