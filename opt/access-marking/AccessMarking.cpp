@@ -70,8 +70,8 @@ size_t mark_fields_final(const Scope& scope) {
   for (auto& pair : field_stats) {
     auto* field = pair.first;
     auto& stats = pair.second;
-    if (stats.writes == 0 && !is_final(field) && !is_volatile(field) &&
-        !field->is_external()) {
+    if (stats.writes == 0 && can_rename(field) && !is_final(field) &&
+        !is_volatile(field) && !field->is_external()) {
       set_final(field);
       ++n_fields_finalized;
     }
