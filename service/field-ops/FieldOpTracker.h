@@ -16,9 +16,6 @@ namespace field_op_tracker {
 struct FieldStats {
   // Number of instructions which read a field in the entire program.
   size_t reads{0};
-  // Number of instructions which read this field outside of a <clinit> or
-  // <init>.
-  size_t reads_outside_init{0};
   // Number of instructions which write a field in the entire program.
   size_t writes{0};
 };

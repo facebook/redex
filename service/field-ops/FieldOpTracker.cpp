@@ -20,11 +20,6 @@
 
 namespace field_op_tracker {
 
-bool is_own_init(DexField* field, const DexMethod* method) {
-  return (method::is_clinit(method) || method::is_init(method)) &&
-         method->get_class() == field->get_class();
-}
-
 FieldWrites analyze_writes(const Scope& scope) {
   ConcurrentSet<DexField*> concurrent_non_zero_written_fields;
   ConcurrentSet<DexField*> concurrent_non_vestigial_objects_written_fields;
@@ -150,9 +145,6 @@ FieldStatsMap analyze(const Scope& scope) {
     }
     if (opcode::is_an_sget(op) || opcode::is_an_iget(op)) {
       ++field_stats[field].reads;
-      if (!is_own_init(field, method)) {
-        ++field_stats[field].reads_outside_init;
-      }
     } else if (opcode::is_an_sput(op) || opcode::is_an_iput(op)) {
       ++field_stats[field].writes;
     }
