@@ -1013,13 +1013,41 @@ ReturnState collect_return_state(
 
 namespace intraprocedural {
 
+namespace {
+
+std::atomic<std::unordered_set<DexMethodRef*>*> kotlin_null_assertions{nullptr};
+const std::unordered_set<DexMethodRef*>& get_kotlin_null_assertions() {
+  for (;;) {
+    auto* ptr = kotlin_null_assertions.load();
+    if (ptr != nullptr) {
+      return *ptr;
+    }
+    auto uptr = std::make_unique<std::unordered_set<DexMethodRef*>>(
+        kotlin_nullcheck_wrapper::get_kotlin_null_assertions());
+    if (kotlin_null_assertions.compare_exchange_strong(ptr, uptr.get())) {
+      // Add a task to delete stuff.
+      g_redex->add_destruction_task([]() {
+        auto* ptr = kotlin_null_assertions.load();
+        if (ptr != nullptr) {
+          auto old_ptr = ptr;
+          if (kotlin_null_assertions.compare_exchange_strong(ptr, nullptr)) {
+            delete old_ptr;
+          }
+        }
+      });
+      return *uptr.release();
+    }
+  }
+}
+
+} // namespace
+
 FixpointIterator::FixpointIterator(
     const cfg::ControlFlowGraph& cfg,
     InstructionAnalyzer<ConstantEnvironment> insn_analyzer)
     : MonotonicFixpointIterator(cfg),
       m_insn_analyzer(std::move(insn_analyzer)),
-      m_kotlin_null_check_assertions(
-          kotlin_nullcheck_wrapper::get_kotlin_null_assertions()) {}
+      m_kotlin_null_check_assertions(get_kotlin_null_assertions()) {}
 
 void FixpointIterator::analyze_instruction(const IRInstruction* insn,
                                            ConstantEnvironment* env,
