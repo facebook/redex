@@ -68,7 +68,9 @@ struct BarrierHasher {
 
 class SharedState {
  public:
-  explicit SharedState(const std::unordered_set<DexMethodRef*>& pure_methods);
+  explicit SharedState(
+      const std::unordered_set<DexMethodRef*>& pure_methods,
+      const std::unordered_set<DexString*>& finalish_field_names);
   void init_scope(const Scope&);
   CseUnorderedLocationSet get_relevant_written_locations(
       const IRInstruction* insn,
@@ -76,6 +78,7 @@ class SharedState {
       const CseUnorderedLocationSet& read_locations);
   void log_barrier(const Barrier& barrier);
   bool has_pure_method(const IRInstruction* insn) const;
+  bool is_finalish(const DexField* field) const;
   void cleanup();
   const CseUnorderedLocationSet&
   get_read_locations_of_conditionally_pure_method(
@@ -98,6 +101,7 @@ class SharedState {
   std::unordered_set<DexMethodRef*> m_safe_methods;
   // subset of safe methods which are in fact defs
   std::unordered_set<const DexMethod*> m_safe_method_defs;
+  const std::unordered_set<DexString*>& m_finalish_field_names;
   std::unique_ptr<ConcurrentMap<Barrier, size_t, BarrierHasher>> m_barriers;
   std::unordered_map<const DexMethod*, CseUnorderedLocationSet>
       m_method_written_locations;

@@ -95,7 +95,8 @@ MultiMethodInliner::MultiMethodInliner(
     const std::unordered_map<const DexMethod*, size_t>*
         same_method_implementations,
     bool analyze_and_prune_inits,
-    const std::unordered_set<DexMethodRef*>& configured_pure_methods)
+    const std::unordered_set<DexMethodRef*>& configured_pure_methods,
+    const std::unordered_set<DexString*>& configured_finalish_field_names)
     : resolver(std::move(resolve_fn)),
       xstores(stores),
       m_scope(scope),
@@ -104,6 +105,7 @@ MultiMethodInliner::MultiMethodInliner(
       m_inline_for_speed(inline_for_speed),
       m_same_method_implementations(same_method_implementations),
       m_pure_methods(get_pure_methods()),
+      m_finalish_field_names(configured_finalish_field_names),
       m_analyze_and_prune_inits(analyze_and_prune_inits) {
   for (const auto& callee_callers : true_virtual_callers) {
     for (const auto& caller_insns : callee_callers.second) {
@@ -191,8 +193,8 @@ MultiMethodInliner::MultiMethodInliner(
     auto immutable_getters = get_immutable_getters(scope);
     m_pure_methods.insert(immutable_getters.begin(), immutable_getters.end());
     if (m_config.run_cse) {
-      m_cse_shared_state =
-          std::make_unique<cse_impl::SharedState>(m_pure_methods);
+      m_cse_shared_state = std::make_unique<cse_impl::SharedState>(
+          m_pure_methods, m_finalish_field_names);
     }
     if (m_config.run_local_dce) {
       std::unique_ptr<const method_override_graph::Graph> owned_override_graph;

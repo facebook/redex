@@ -103,6 +103,7 @@ void GlobalConfig::bind_config() {
   bind("proguard_map", "", string_param);
   bind("prune_unexported_components", {}, string_vector_param);
   bind("pure_methods", {}, string_vector_param);
+  bind("finalish_field_names", {}, string_vector_param);
   bind("record_keep_reasons", {}, bool_param);
   bind("dump_keep_reasons", {}, bool_param);
   bind("string_sort_mode", "", string_param);

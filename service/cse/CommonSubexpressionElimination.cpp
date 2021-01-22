@@ -265,7 +265,8 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
          it != read_location_counts.end();) {
       auto location = it->first;
       // If we are reading a final field...
-      if (location.has_field() && is_final(location.get_field()) &&
+      if (location.has_field() &&
+          shared_state->is_finalish(location.get_field()) &&
           !root(location.get_field()) && can_rename(location.get_field()) &&
           can_delete(location.get_field()) &&
           !location.get_field()->is_external()) {
@@ -764,8 +765,12 @@ namespace cse_impl {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-SharedState::SharedState(const std::unordered_set<DexMethodRef*>& pure_methods)
-    : m_pure_methods(pure_methods), m_safe_methods(pure_methods) {
+SharedState::SharedState(
+    const std::unordered_set<DexMethodRef*>& pure_methods,
+    const std::unordered_set<DexString*>& finalish_field_names)
+    : m_pure_methods(pure_methods),
+      m_safe_methods(pure_methods),
+      m_finalish_field_names(finalish_field_names) {
   // The following methods are...
   // - static, or
   // - direct (constructors), or
@@ -1148,6 +1153,10 @@ bool SharedState::has_pure_method(const IRInstruction* insn) const {
   }
 
   return false;
+}
+
+bool SharedState::is_finalish(const DexField* field) const {
+  return is_final(field) || !!m_finalish_field_names.count(field->get_name());
 }
 
 void SharedState::cleanup() {

@@ -193,8 +193,10 @@ class RemoveClasses {
     // Run shrinking opts to optimize the changed methods.
 
     XStoreRefs xstores(m_stores);
-    std::unordered_set<DexMethodRef*> pure; // Don't assume anything;
-    cse_impl::SharedState shared_state(pure);
+    std::unordered_set<DexMethodRef*> pure_methods; // Don't assume anything;
+    std::unordered_set<DexString*> finalish_field_names; // Don't assume
+                                                         // anything;
+    cse_impl::SharedState shared_state(pure_methods, finalish_field_names);
 
     auto post_process = [&](DexMethod* method) {
       auto code = method->get_code();
@@ -246,7 +248,7 @@ class RemoveClasses {
       }
 
       {
-        LocalDce dce(pure, /* no mog */ nullptr,
+        LocalDce dce(pure_methods, /* no mog */ nullptr,
                      /*may_allocate_registers=*/true);
         dce.dce(*cfg);
       }

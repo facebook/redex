@@ -59,7 +59,8 @@ void test(const Scope& scope,
   });
 
   auto pure_methods = get_pure_methods();
-  cse_impl::SharedState shared_state(pure_methods);
+  std::unordered_set<DexString*> finalish_field_names;
+  cse_impl::SharedState shared_state(pure_methods, finalish_field_names);
   shared_state.init_scope(scope);
   cse_impl::CommonSubexpressionElimination cse(&shared_state, code->cfg(),
                                                is_static, is_init_or_clinit,

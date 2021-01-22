@@ -89,6 +89,24 @@ const std::unordered_set<DexMethodRef*>& ConfigFiles::get_pure_methods() {
 }
 
 /**
+ * This function relies on the g_redex.
+ */
+const std::unordered_set<DexString*>& ConfigFiles::get_finalish_field_names() {
+  if (m_finalish_field_names.empty()) {
+    Json::Value finalish_field_names;
+    m_json.get("finalish_field_names", Json::nullValue, finalish_field_names);
+    if (!finalish_field_names.empty()) {
+      for (auto const& field_name : finalish_field_names) {
+        std::string name = field_name.asString();
+        DexString* str = DexString::make_string(name);
+        if (str) m_finalish_field_names.insert(str);
+      }
+    }
+  }
+  return m_finalish_field_names;
+}
+
+/**
  * Read an interdex list file and return as a vector of appropriately-formatted
  * classname strings.
  */
