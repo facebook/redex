@@ -41,6 +41,8 @@ constexpr const char* METRIC_RELOCATED_NON_STATIC_DIRECT_METHODS =
     "num_relocated_non_static_direct_methods";
 constexpr const char* METRIC_RELOCATED_VIRTUAL_METHODS =
     "num_relocated_virtual_methods";
+constexpr const char* METRIC_CURRENT_CLASSES_WHEN_EMITTING_REMAINING =
+    "num_current_classes_when_emitting_remaining";
 
 constexpr const char* METRIC_RESERVED_FREFS = "reserved_frefs";
 constexpr const char* METRIC_RESERVED_TREFS = "reserved_trefs";

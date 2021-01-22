@@ -752,6 +752,9 @@ void InterDex::init_cross_dex_ref_minimizer_and_relocate_methods() {
 }
 
 void InterDex::emit_remaining_classes(DexInfo& dex_info) {
+  m_current_classes_when_emitting_remaining =
+      m_dexes_structure.get_current_dex_classes().size();
+
   if (!m_minimize_cross_dex_refs) {
     for (DexClass* cls : m_scope) {
       emit_class(dex_info, cls, /* check_if_skip */ true,

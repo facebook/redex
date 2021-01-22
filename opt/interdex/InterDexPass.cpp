@@ -182,6 +182,9 @@ void InterDexPass::run_pass(const Scope& original_scope,
                  cross_dex_relocator_stats.relocated_non_static_direct_methods);
   mgr.set_metric(METRIC_RELOCATED_VIRTUAL_METHODS,
                  cross_dex_relocator_stats.relocated_virtual_methods);
+
+  mgr.set_metric(METRIC_CURRENT_CLASSES_WHEN_EMITTING_REMAINING,
+                 interdex.get_current_classes_when_emitting_remaining());
 }
 
 void InterDexPass::run_pass_on_nonroot_store(const Scope& original_scope,
