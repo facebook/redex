@@ -739,6 +739,16 @@ void InterDex::init_cross_dex_ref_minimizer_and_relocate_methods() {
   for (DexClass* cls : classes_to_insert) {
     m_cross_dex_ref_minimizer.insert(cls);
   }
+
+  // A few classes might have already been emitted to the current dex which we
+  // are about to fill up. Make it so that the minimizer knows that all the refs
+  // of those classes have already been emitted.
+  for (auto cls : m_dexes_structure.get_current_dex_classes()) {
+    m_cross_dex_ref_minimizer.sample(cls);
+    m_cross_dex_ref_minimizer.insert(cls);
+    m_cross_dex_ref_minimizer.erase(cls, /* emitted */ true,
+                                    /* overflowed */ false);
+  }
 }
 
 void InterDex::emit_remaining_classes(DexInfo& dex_info) {
