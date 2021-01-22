@@ -52,6 +52,14 @@ struct ConfigFiles {
     return m_coldstart_classes;
   }
 
+  /**
+   * NOTE: ONLY use if you know what you are doing!
+   */
+  void update_coldstart_classes(
+      std::vector<std::string> new_coldstart_classes) {
+    m_coldstart_classes = std::move(new_coldstart_classes);
+  }
+
   void ensure_class_lists_loaded() {
     if (!m_load_class_lists_attempted) {
       m_load_class_lists_attempted = true;
