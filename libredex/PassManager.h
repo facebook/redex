@@ -77,6 +77,11 @@ class PassManager {
 
   bool regalloc_has_run() { return m_regalloc_has_run; }
 
+  void record_unreliable_virtual_scopes() {
+    m_unreliable_virtual_scopes = true;
+  }
+  bool unreliable_virtual_scopes() const { return m_unreliable_virtual_scopes; }
+
   template <typename PassType>
   PassType* get_preserved_analysis() const {
     auto pass = m_preserved_analysis_passes.find(typeid(PassType).name());
@@ -108,6 +113,7 @@ class PassManager {
   const RedexOptions m_redex_options;
   bool m_testing_mode{false};
   bool m_regalloc_has_run{false};
+  bool m_unreliable_virtual_scopes{false};
 
   struct ProfilerInfo {
     std::string command;
