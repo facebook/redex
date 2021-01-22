@@ -138,7 +138,7 @@ MethodDictionary create_method_dictionary(
   MethodDictionary method_dictionary;
   for (const auto* m : methods) {
     method_dictionary.emplace(m, idx);
-    ofs << idx << "," << show(m) << "\n";
+    ofs << idx << "," << show_deobfuscated(m) << "\n";
     ++idx;
   }
 

@@ -1073,6 +1073,18 @@ def finalize_redex(state):
         meta_file_dir, state.args.out, "*", "all redex generated artifacts"
     )
 
+    if state.args.enable_instrument_pass:
+        log("Creating redex-instrument-metadata.zip")
+        zipfile_path = join(dirname(state.args.out), "redex-instrument-metadata.zip")
+        with zipfile.ZipFile(zipfile_path, "w", compression=zipfile.ZIP_DEFLATED) as z:
+            for f in (
+                "redex-instrument-metadata.txt",
+                "redex-source-block-method-dictionary.csv",
+                "redex-block-bits-to-source-blocks.csv",
+                "redex-source-blocks.csv",
+            ):
+                z.write(join(dirname(state.args.out), f), f)
+
     redex_stats_filename = state.config_dict.get("stats_output", "redex-stats.txt")
     redex_stats_file = join(dirname(meta_file_dir), redex_stats_filename)
     if isfile(redex_stats_file):
