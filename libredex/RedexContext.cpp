@@ -481,3 +481,8 @@ keep_rules::AssumeReturnValue* RedexContext::get_return_value(
 void RedexContext::unset_return_value(DexMethod* method) {
   method_return_values.erase(method);
 }
+
+void RedexContext::add_destruction_task(const Task& t) {
+  std::unique_lock<std::mutex> lock{m_destruction_tasks_lock};
+  m_destruction_tasks.push_back(t);
+}

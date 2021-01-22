@@ -151,7 +151,7 @@ struct RedexContext {
   // Add a lambda to be called when RedexContext is destructed. This is
   // especially useful for resetting caches/singletons in tests.
   using Task = std::function<void(void)>;
-  void add_destruction_task(const Task& t) { m_destruction_tasks.push_back(t); }
+  void add_destruction_task(const Task& t);
 
   FrequentlyUsedPointers pointers_cache() { return m_pointers_cache; }
 
@@ -291,6 +291,7 @@ struct RedexContext {
       s_keep_reasons;
 
   // These functions will be called when ~RedexContext() is called
+  std::mutex m_destruction_tasks_lock;
   std::vector<Task> m_destruction_tasks;
 
   bool m_record_keep_reasons{false};
