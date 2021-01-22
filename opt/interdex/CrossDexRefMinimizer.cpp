@@ -416,4 +416,18 @@ void CrossDexRefMinimizer::erase(DexClass* cls, bool emitted, bool reset) {
   reprioritize(affected_classes);
 }
 
+size_t CrossDexRefMinimizer::get_unapplied_refs(DexClass* cls) {
+  auto it = m_class_infos.find(cls);
+  if (it == m_class_infos.end()) {
+    return 0;
+  }
+  size_t unapplied_refs{0};
+  for (auto& p : it->second.refs) {
+    if (!m_applied_refs.count(p.first)) {
+      unapplied_refs++;
+    }
+  }
+  return unapplied_refs;
+}
+
 } // namespace interdex

@@ -774,8 +774,22 @@ void InterDex::emit_remaining_classes(DexInfo& dex_info) {
   //   refs
   bool pick_worst = true;
   while (!m_cross_dex_ref_minimizer.empty()) {
-    DexClass* cls = pick_worst ? m_cross_dex_ref_minimizer.worst()
-                               : m_cross_dex_ref_minimizer.front();
+    DexClass* cls{nullptr};
+    if (pick_worst) {
+      // Figure out which class has the most unapplied references
+      auto worst = m_cross_dex_ref_minimizer.worst();
+      // Use that worst class if it has more unapplied refs than already applied
+      // refs
+      if (m_cross_dex_ref_minimizer.get_unapplied_refs(worst) >
+          m_cross_dex_ref_minimizer.get_applied_refs()) {
+        cls = worst;
+      }
+    }
+    if (!cls) {
+      // Default case
+      cls = m_cross_dex_ref_minimizer.front();
+    }
+
     std::vector<DexClass*> erased_classes;
     bool emitted = emit_class(dex_info, cls, /* check_if_skip */ false,
                               /* perf_sensitive */ false, &erased_classes);
