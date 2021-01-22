@@ -70,8 +70,22 @@ size_t mark_fields_final(const Scope& scope) {
   for (auto& pair : field_stats) {
     auto* field = pair.first;
     auto& stats = pair.second;
-    if (stats.writes == 0 && can_rename(field) && !is_final(field) &&
-        !is_volatile(field) && !field->is_external()) {
+    if (stats.init_writes == stats.writes && can_rename(field) &&
+        !is_final(field) && !is_volatile(field) && !field->is_external()) {
+      // Note: There is one more thing that javac enforces around final fields:
+      // That there's at most one write to the field along any constrol-flow
+      // path. We skip the complexities of checking that here, as the JVM spec
+      // doesn't call this out as a requirement.
+      //
+      // Except for the following special case for sanity:
+      if (is_static(field) && !field->get_static_value()->is_zero() &&
+          stats.writes > 0) {
+        // Let's not make fields final if they have both a static value and are
+        // written to in the static initializer. I cannot see where the JVM spec
+        // would forbid making it final in this case, but we'll be conservative
+        // to be safe and sane.
+        continue;
+      }
       set_final(field);
       ++n_fields_finalized;
     }

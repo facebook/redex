@@ -16,6 +16,7 @@
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "ReachingDefinitions.h"
 #include "Resolver.h"
+#include "ScopedCFG.h"
 #include "Walkers.h"
 
 namespace field_op_tracker {
@@ -134,11 +135,44 @@ FieldWrites analyze_writes(const Scope& scope) {
 FieldStatsMap analyze(const Scope& scope) {
   ConcurrentMap<DexField*, FieldStats> concurrent_field_stats;
   // Gather the read/write counts from instructions.
-  walk::parallel::methods(scope, [&](const DexMethod* method) {
+  walk::parallel::methods(scope, [&](DexMethod* method) {
     if (!method->get_code()) {
       return;
     }
     std::unordered_map<DexField*, FieldStats> field_stats;
+    if (method::is_init(method)) {
+      // compute init_writes by checking receiver of each iput
+      cfg::ScopedCFG cfg(method->get_code());
+      reaching_defs::MoveAwareFixpointIterator reaching_definitions(*cfg);
+      reaching_definitions.run(reaching_defs::Environment());
+      auto first_load_param = cfg->get_param_instructions().begin()->insn;
+      always_assert(first_load_param->opcode() == IOPCODE_LOAD_PARAM_OBJECT);
+      for (cfg::Block* block : cfg->blocks()) {
+        auto env = reaching_definitions.get_entry_state_at(block);
+        auto insns = InstructionIterable(block);
+        for (auto it = insns.begin(); it != insns.end();
+             reaching_definitions.analyze_instruction(it++->insn, &env)) {
+          IRInstruction* insn = it->insn;
+          if (!opcode::is_an_iput(insn->opcode())) {
+            continue;
+          }
+          auto field = resolve_field(insn->get_field());
+          if (field == nullptr || field->get_class() != method->get_class()) {
+            continue;
+          }
+          // We only consider for init_writes those iputs where the obj is the
+          // receiver. I cannot see where the JVM spec this would be enforced,
+          // we'll be conservative to be safe.
+          auto obj_defs = env.get(insn->src(1));
+          if (!obj_defs.is_top() && !obj_defs.is_bottom() &&
+              obj_defs.elements().size() == 1 &&
+              *obj_defs.elements().begin() == first_load_param) {
+            ++field_stats[field].init_writes;
+          }
+        }
+      }
+    }
+    bool is_clinit = method::is_clinit(method);
     editable_cfg_adapter::iterate(
         method->get_code(), [&](const MethodItemEntry& mie) {
           auto insn = mie.insn;
@@ -154,6 +188,10 @@ FieldStatsMap analyze(const Scope& scope) {
             ++field_stats[field].reads;
           } else if (opcode::is_an_sput(op) || opcode::is_an_iput(op)) {
             ++field_stats[field].writes;
+            if (is_clinit && is_static(field) &&
+                field->get_class() == method->get_class()) {
+              ++field_stats[field].init_writes;
+            }
           }
           return editable_cfg_adapter::LOOP_CONTINUE;
         });

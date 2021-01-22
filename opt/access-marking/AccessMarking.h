@@ -33,8 +33,8 @@ class AccessMarkingPass : public Pass {
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
-  bool m_finalize_classes;
-  bool m_finalize_methods;
-  bool m_finalize_fields;
-  bool m_privatize_methods;
+  bool m_finalize_classes{true};
+  bool m_finalize_methods{true};
+  bool m_finalize_fields{true};
+  bool m_privatize_methods{true};
 };

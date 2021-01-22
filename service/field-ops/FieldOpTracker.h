@@ -18,10 +18,16 @@ struct FieldStats {
   size_t reads{0};
   // Number of instructions which write a field in the entire program.
   size_t writes{0};
+  // Number of instructions which write this field inside of a <clinit> or
+  // <init> of the same declaring type, where the field is static for <clinit>
+  // and an instance field accessed via the receiver parameter for <init>.
+  // init_writes are also included in writes.
+  size_t init_writes{0};
 
   FieldStats& operator+=(const FieldStats& that) {
     reads += that.reads;
     writes += that.writes;
+    init_writes += that.init_writes;
     return *this;
   }
 };
