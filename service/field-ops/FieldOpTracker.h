@@ -18,6 +18,12 @@ struct FieldStats {
   size_t reads{0};
   // Number of instructions which write a field in the entire program.
   size_t writes{0};
+
+  FieldStats& operator+=(const FieldStats& that) {
+    reads += that.reads;
+    writes += that.writes;
+    return *this;
+  }
 };
 
 using FieldStatsMap = std::unordered_map<DexField*, FieldStats>;

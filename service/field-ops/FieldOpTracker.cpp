@@ -132,23 +132,40 @@ FieldWrites analyze_writes(const Scope& scope) {
 };
 
 FieldStatsMap analyze(const Scope& scope) {
-  FieldStatsMap field_stats;
+  ConcurrentMap<DexField*, FieldStats> concurrent_field_stats;
   // Gather the read/write counts from instructions.
-  walk::opcodes(scope, [&](const DexMethod* method, const IRInstruction* insn) {
-    auto op = insn->opcode();
-    if (!insn->has_field()) {
+  walk::parallel::methods(scope, [&](const DexMethod* method) {
+    if (!method->get_code()) {
       return;
     }
-    auto field = resolve_field(insn->get_field());
-    if (field == nullptr) {
-      return;
-    }
-    if (opcode::is_an_sget(op) || opcode::is_an_iget(op)) {
-      ++field_stats[field].reads;
-    } else if (opcode::is_an_sput(op) || opcode::is_an_iput(op)) {
-      ++field_stats[field].writes;
+    std::unordered_map<DexField*, FieldStats> field_stats;
+    editable_cfg_adapter::iterate(
+        method->get_code(), [&](const MethodItemEntry& mie) {
+          auto insn = mie.insn;
+          auto op = insn->opcode();
+          if (!insn->has_field()) {
+            return editable_cfg_adapter::LOOP_CONTINUE;
+          }
+          auto field = resolve_field(insn->get_field());
+          if (field == nullptr) {
+            return editable_cfg_adapter::LOOP_CONTINUE;
+          }
+          if (opcode::is_an_sget(op) || opcode::is_an_iget(op)) {
+            ++field_stats[field].reads;
+          } else if (opcode::is_an_sput(op) || opcode::is_an_iput(op)) {
+            ++field_stats[field].writes;
+          }
+          return editable_cfg_adapter::LOOP_CONTINUE;
+        });
+    for (auto& p : field_stats) {
+      concurrent_field_stats.update(
+          p.first, [&](DexField*, FieldStats& fs, bool) { fs += p.second; });
     }
   });
+
+  FieldStatsMap field_stats(concurrent_field_stats.begin(),
+                            concurrent_field_stats.end());
+
   // Gather field reads from annotations.
   walk::annotations(scope, [&](DexAnnotation* anno) {
     std::vector<DexFieldRef*> fields_in_anno;
