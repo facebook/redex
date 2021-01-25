@@ -428,7 +428,7 @@ class DevirtualizerTest : public RedexTest {};
 
 TEST_F(DevirtualizerTest, OneClass2Finals) {
   std::vector<DexClass*> scope = create_scope_1();
-  auto methods = mog::get_non_true_virtuals(scope);
+  auto methods = mog::get_non_true_virtuals(*mog::build_graph(scope), scope);
   EXPECT_THAT(
       get_method_names(methods),
       ::testing::UnorderedElementsAre("LA;.final1:()V", "LA;.final2:()V"));
@@ -436,14 +436,14 @@ TEST_F(DevirtualizerTest, OneClass2Finals) {
 
 TEST_F(DevirtualizerTest, AbstractClassInterface1Final) {
   std::vector<DexClass*> scope = create_scope_2();
-  auto methods = mog::get_non_true_virtuals(scope);
+  auto methods = mog::get_non_true_virtuals(*mog::build_graph(scope), scope);
   EXPECT_THAT(get_method_names(methods),
               ::testing::UnorderedElementsAre("LA;.final1:()V"));
 }
 
 TEST_F(DevirtualizerTest, InterfaceClassInheritance2Final) {
   std::vector<DexClass*> scope = create_scope_3();
-  auto methods = mog::get_non_true_virtuals(scope);
+  auto methods = mog::get_non_true_virtuals(*mog::build_graph(scope), scope);
   EXPECT_THAT(
       get_method_names(methods),
       ::testing::UnorderedElementsAre("LA;.final1:()V", "LB;.final2:()V"));
@@ -451,21 +451,21 @@ TEST_F(DevirtualizerTest, InterfaceClassInheritance2Final) {
 
 TEST_F(DevirtualizerTest, InterfaceWithImplInBase1Final) {
   std::vector<DexClass*> scope = create_scope_4();
-  auto methods = mog::get_non_true_virtuals(scope);
+  auto methods = mog::get_non_true_virtuals(*mog::build_graph(scope), scope);
   EXPECT_THAT(get_method_names(methods),
               ::testing::UnorderedElementsAre("LA;.final1:()V"));
 }
 
 TEST_F(DevirtualizerTest, InterfaceWithImplInBaseAndOverride1Final) {
   std::vector<DexClass*> scope = create_scope_5();
-  auto methods = mog::get_non_true_virtuals(scope);
+  auto methods = mog::get_non_true_virtuals(*mog::build_graph(scope), scope);
   EXPECT_THAT(get_method_names(methods),
               ::testing::UnorderedElementsAre("LB;.final1:()V"));
 }
 
 TEST_F(DevirtualizerTest, InterfaceWithImplInBase2Classes2Final) {
   std::vector<DexClass*> scope = create_scope_6();
-  auto methods = mog::get_non_true_virtuals(scope);
+  auto methods = mog::get_non_true_virtuals(*mog::build_graph(scope), scope);
   EXPECT_THAT(
       get_method_names(methods),
       ::testing::UnorderedElementsAre("LB;.final1:()V", "LC;.final1:()V"));
@@ -473,7 +473,7 @@ TEST_F(DevirtualizerTest, InterfaceWithImplInBase2Classes2Final) {
 
 TEST_F(DevirtualizerTest, InterfaceWithImplInBaseMultipleClasses3Final) {
   std::vector<DexClass*> scope = create_scope_7();
-  auto methods = mog::get_non_true_virtuals(scope);
+  auto methods = mog::get_non_true_virtuals(*mog::build_graph(scope), scope);
   EXPECT_THAT(get_method_names(methods),
               ::testing::UnorderedElementsAre(
                   "LB;.final1:()V", "LC;.final1:()V", "LE;.final1:()V"));
@@ -482,7 +482,7 @@ TEST_F(DevirtualizerTest, InterfaceWithImplInBaseMultipleClasses3Final) {
 TEST_F(DevirtualizerTest,
        InterfaceWithImplInBaseMultipleClassesAndOverloads6Final) {
   std::vector<DexClass*> scope = create_scope_8();
-  auto methods = mog::get_non_true_virtuals(scope);
+  auto methods = mog::get_non_true_virtuals(*mog::build_graph(scope), scope);
   EXPECT_THAT(get_method_names(methods),
               ::testing::UnorderedElementsAre(
                   "LB;.final1:()V", "LC;.final1:()V", "LE;.final1:()V",
@@ -493,7 +493,7 @@ TEST_F(DevirtualizerTest,
 TEST_F(DevirtualizerTest,
        InterfacesWithImplInBaseMultipleClassesAndOverloads3Final) {
   std::vector<DexClass*> scope = create_scope_9();
-  auto methods = mog::get_non_true_virtuals(scope);
+  auto methods = mog::get_non_true_virtuals(*mog::build_graph(scope), scope);
   EXPECT_THAT(get_method_names(methods),
               ::testing::UnorderedElementsAre(
                   "LB;.final1:()V", "LC;.final1:()V", "LE;.final1:()V"));
@@ -501,7 +501,7 @@ TEST_F(DevirtualizerTest,
 
 TEST_F(DevirtualizerTest, GenericRichHierarchy) {
   std::vector<DexClass*> scope = create_scope_10();
-  auto methods = mog::get_non_true_virtuals(scope);
+  auto methods = mog::get_non_true_virtuals(*mog::build_graph(scope), scope);
   EXPECT_THAT(get_method_names(methods),
               ::testing::UnorderedElementsAre(
                   "LA;.final1:()V", "LABA;.final2:()V", "LAA;.final1:(I)V",

@@ -100,10 +100,12 @@ class AnalyzerGenerator {
 std::unique_ptr<FixpointIterator> PassImpl::analyze(
     const Scope& scope,
     const ImmutableAttributeAnalyzerState* immut_analyzer_state) {
-  call_graph::Graph cg = m_config.use_multiple_callee_callgraph
-                             ? call_graph::multiple_callee_graph(
-                                   scope, m_config.big_override_threshold)
-                             : call_graph::single_callee_graph(scope);
+  auto method_override_graph = mog::build_graph(scope);
+  call_graph::Graph cg =
+      m_config.use_multiple_callee_callgraph
+          ? call_graph::multiple_callee_graph(*method_override_graph, scope,
+                                              m_config.big_override_threshold)
+          : call_graph::single_callee_graph(*method_override_graph, scope);
   auto cg_stats = get_num_nodes_edges(cg);
   m_stats.callgraph_nodes = cg_stats.num_nodes;
   m_stats.callgraph_edges = cg_stats.num_edges;
@@ -113,7 +115,8 @@ std::unique_ptr<FixpointIterator> PassImpl::analyze(
   // Run the bootstrap. All field value and method return values are
   // represented by Top.
   fp_iter->run({{CURRENT_PARTITION_LABEL, ArgumentDomain()}});
-  auto non_true_virtuals = mog::get_non_true_virtuals(scope);
+  auto non_true_virtuals =
+      mog::get_non_true_virtuals(*method_override_graph, scope);
   for (size_t i = 0; i < m_config.max_heap_analysis_iterations; ++i) {
     // Build an approximation of all the field values and method return values.
     auto wps =

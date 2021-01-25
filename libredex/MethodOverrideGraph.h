@@ -57,11 +57,6 @@ bool is_true_virtual(const Graph& graph, const DexMethod* method);
 std::unordered_set<DexMethod*> get_non_true_virtuals(const Graph& graph,
                                                      const Scope& scope);
 
-inline std::unordered_set<DexMethod*> get_non_true_virtuals(
-    const Scope& scope) {
-  return get_non_true_virtuals(*build_graph(scope), scope);
-}
-
 /*
  * The `children` edges point to the overriders / implementors of the current
  * Node's method.

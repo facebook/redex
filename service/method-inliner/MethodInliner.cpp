@@ -35,8 +35,8 @@ namespace {
  * Collect all non virtual methods and make all small methods candidates
  * for inlining.
  */
-std::unordered_set<DexMethod*> gather_non_virtual_methods(Scope& scope,
-                                                          bool virtual_inline) {
+std::unordered_set<DexMethod*> gather_non_virtual_methods(
+    Scope& scope, const mog::Graph* method_override_graph) {
   // trace counter
   size_t all_methods = 0;
   size_t direct_methods = 0;
@@ -74,8 +74,9 @@ std::unordered_set<DexMethod*> gather_non_virtual_methods(Scope& scope,
 
     methods.insert(method);
   });
-  if (virtual_inline) {
-    auto non_virtual = mog::get_non_true_virtuals(scope);
+  if (method_override_graph) {
+    auto non_virtual =
+        mog::get_non_true_virtuals(*method_override_graph, scope);
     non_virt_methods = non_virtual.size();
     for (const auto& vmeth : non_virtual) {
       auto code = vmeth->get_code();
@@ -192,14 +193,14 @@ using CallerInsns =
  * return an object type.
  */
 void gather_true_virtual_methods(
+    const mog::Graph& method_override_graph,
     const Scope& scope,
     CalleeCallerInsns* true_virtual_callers,
     std::unordered_set<DexMethod*>* methods,
     std::unordered_map<const DexMethod*, size_t>* same_method_implementations) {
-  auto method_override_graph = mog::build_graph(scope);
-  auto non_virtual = mog::get_non_true_virtuals(*method_override_graph, scope);
+  auto non_virtual = mog::get_non_true_virtuals(method_override_graph, scope);
   auto same_implementation_map = get_same_implementation_map(
-      scope, *method_override_graph, same_method_implementations);
+      scope, method_override_graph, same_method_implementations);
   std::unordered_set<DexMethod*> non_virtual_set{non_virtual.begin(),
                                                  non_virtual.end()};
   // Add mapping from callee to monomorphic callsites.
@@ -251,7 +252,7 @@ void gather_true_virtual_methods(
         continue;
       }
       const auto& overriding_methods =
-          mog::get_overriding_methods(*method_override_graph, callee);
+          mog::get_overriding_methods(method_override_graph, callee);
       if (!callee->is_external()) {
         if (overriding_methods.empty()) {
           // There is no override for this method
@@ -321,8 +322,12 @@ void run_inliner(DexStoresVector& stores,
 
   inliner_config.unique_inlined_registers = false;
 
-  auto methods =
-      gather_non_virtual_methods(scope, inliner_config.virtual_inline);
+  std::unique_ptr<const mog::Graph> method_override_graph;
+  if (inliner_config.virtual_inline) {
+    method_override_graph = mog::build_graph(scope);
+  }
+
+  auto methods = gather_non_virtual_methods(scope, method_override_graph.get());
 
   // The methods list computed above includes all constructors, regardless of
   // whether it's safe to inline them or not. We'll let the inliner decide
@@ -331,7 +336,8 @@ void run_inliner(DexStoresVector& stores,
 
   std::unordered_map<const DexMethod*, size_t> same_method_implementations;
   if (inliner_config.virtual_inline && inliner_config.true_virtual_inline) {
-    gather_true_virtual_methods(scope, &true_virtual_callers, &methods,
+    gather_true_virtual_methods(*method_override_graph, scope,
+                                &true_virtual_callers, &methods,
                                 &same_method_implementations);
   }
   // keep a map from refs to defs or nullptr if no method was found

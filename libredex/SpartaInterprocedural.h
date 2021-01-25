@@ -10,6 +10,7 @@
 #include "Analyzer.h"
 #include "CallGraph.h"
 #include "DexClass.h"
+#include "MethodOverrideGraph.h"
 #include "MonotonicFixpointIterator.h"
 
 namespace sparta_interprocedural {
@@ -32,7 +33,10 @@ struct AnalysisAdaptorBase {
   static call_graph::Graph call_graph_of(const Scope& scope,
                                          Registry* /*reg*/) {
     constexpr uint32_t big_override_threshold = 5;
-    return call_graph::multiple_callee_graph(scope, big_override_threshold);
+    return call_graph::multiple_callee_graph(
+        *method_override_graph::build_graph(scope),
+        scope,
+        big_override_threshold);
   }
 
   static const DexMethod* function_by_node_id(const call_graph::NodeId& node) {

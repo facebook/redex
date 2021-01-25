@@ -37,11 +37,16 @@ class Graph;
  * TODO: Once we have points-to information, we should expand the callgraph
  * to include invoke-virtuals that refer to sets of methods.
  */
-Graph single_callee_graph(const Scope&);
+Graph single_callee_graph(
+    const method_override_graph::Graph& method_override_graph, const Scope&);
 
-Graph multiple_callee_graph(const Scope&, uint32_t big_override_threshold);
+Graph multiple_callee_graph(
+    const method_override_graph::Graph& method_override_graph,
+    const Scope&,
+    uint32_t big_override_threshold);
 
-Graph complete_call_graph(const Scope&);
+Graph complete_call_graph(
+    const method_override_graph::Graph& method_override_graph, const Scope&);
 
 struct CallSite {
   const DexMethod* callee;
@@ -174,7 +179,8 @@ class Graph final {
 
 class SingleCalleeStrategy : public BuildStrategy {
  public:
-  explicit SingleCalleeStrategy(const Scope& scope);
+  explicit SingleCalleeStrategy(const method_override_graph::Graph&,
+                                const Scope& scope);
   CallSites get_callsites(const DexMethod* method) const override;
   RootAndDynamic get_roots() const override;
 
@@ -190,7 +196,8 @@ class SingleCalleeStrategy : public BuildStrategy {
 
 class MultipleCalleeBaseStrategy : public SingleCalleeStrategy {
  public:
-  explicit MultipleCalleeBaseStrategy(const Scope& scope);
+  explicit MultipleCalleeBaseStrategy(const method_override_graph::Graph&,
+                                      const Scope& scope);
 
   CallSites get_callsites(const DexMethod* method) const override = 0;
   RootAndDynamic get_roots() const override;
@@ -202,19 +209,21 @@ class MultipleCalleeBaseStrategy : public SingleCalleeStrategy {
     return std::vector<const DexMethod*>();
   }
 
-  std::unique_ptr<const method_override_graph::Graph> m_method_override_graph;
+  const method_override_graph::Graph& m_method_override_graph;
 };
 
 class CompleteCallGraphStrategy : public MultipleCalleeBaseStrategy {
  public:
-  explicit CompleteCallGraphStrategy(const Scope& scope);
+  explicit CompleteCallGraphStrategy(const method_override_graph::Graph&,
+                                     const Scope& scope);
   CallSites get_callsites(const DexMethod* method) const override;
   RootAndDynamic get_roots() const override;
 };
 
 class MultipleCalleeStrategy : public MultipleCalleeBaseStrategy {
  public:
-  explicit MultipleCalleeStrategy(const Scope& scope,
+  explicit MultipleCalleeStrategy(const method_override_graph::Graph&,
+                                  const Scope& scope,
                                   uint32_t big_override_threshold);
   CallSites get_callsites(const DexMethod* method) const override;
 

@@ -11,6 +11,7 @@
 #include "DexTypeEnvironment.h"
 #include "HashedAbstractPartition.h"
 #include "LocalTypeAnalyzer.h"
+#include "MethodOverrideGraph.h"
 #include "WholeProgramState.h"
 
 namespace type_analyzer {
@@ -127,7 +128,10 @@ class GlobalTypeAnalysis {
     size_t resolved_methods{0};
   } m_stats;
 
-  void find_any_init_reachables(const Scope&, const call_graph::Graph&);
+  void find_any_init_reachables(
+      const method_override_graph::Graph& method_override_graph,
+      const Scope&,
+      const call_graph::Graph&);
 
   void trace_stats(WholeProgramState& wps);
 };

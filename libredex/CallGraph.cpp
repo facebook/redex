@@ -18,22 +18,28 @@ namespace mog = method_override_graph;
 
 namespace call_graph {
 
-Graph single_callee_graph(const Scope& scope) {
-  return Graph(SingleCalleeStrategy(scope));
+Graph single_callee_graph(const mog::Graph& method_override_graph,
+                          const Scope& scope) {
+  return Graph(SingleCalleeStrategy(method_override_graph, scope));
 }
 
-Graph complete_call_graph(const Scope& scope) {
-  return Graph(CompleteCallGraphStrategy(scope));
+Graph complete_call_graph(const mog::Graph& method_override_graph,
+                          const Scope& scope) {
+  return Graph(CompleteCallGraphStrategy(method_override_graph, scope));
 }
 
-Graph multiple_callee_graph(const Scope& scope,
+Graph multiple_callee_graph(const mog::Graph& method_override_graph,
+                            const Scope& scope,
                             uint32_t big_override_threshold) {
-  return Graph(MultipleCalleeStrategy(scope, big_override_threshold));
+  return Graph(MultipleCalleeStrategy(method_override_graph, scope,
+                                      big_override_threshold));
 }
 
-SingleCalleeStrategy::SingleCalleeStrategy(const Scope& scope)
+SingleCalleeStrategy::SingleCalleeStrategy(
+    const mog::Graph& method_override_graph, const Scope& scope)
     : m_scope(scope) {
-  auto non_virtual_vec = mog::get_non_true_virtuals(scope);
+  auto non_virtual_vec =
+      mog::get_non_true_virtuals(method_override_graph, scope);
   m_non_virtual.insert(non_virtual_vec.begin(), non_virtual_vec.end());
 }
 
@@ -76,13 +82,14 @@ bool SingleCalleeStrategy::is_definitely_virtual(DexMethod* method) const {
 
 DexMethod* SingleCalleeStrategy::resolve_callee(const DexMethod* caller,
                                                 IRInstruction* invoke) const {
-  return resolve_method(
-      invoke->get_method(), opcode_to_search(invoke), m_resolved_refs, caller);
+  return resolve_method(invoke->get_method(), opcode_to_search(invoke),
+                        m_resolved_refs, caller);
 }
 
-MultipleCalleeBaseStrategy::MultipleCalleeBaseStrategy(const Scope& scope)
-    : SingleCalleeStrategy(scope),
-      m_method_override_graph(mog::build_graph(scope)) {}
+MultipleCalleeBaseStrategy::MultipleCalleeBaseStrategy(
+    const mog::Graph& method_override_graph, const Scope& scope)
+    : SingleCalleeStrategy(method_override_graph, scope),
+      m_method_override_graph(method_override_graph) {}
 
 RootAndDynamic MultipleCalleeBaseStrategy::get_roots() const {
   RootAndDynamic root_and_dynamic;
@@ -124,25 +131,25 @@ RootAndDynamic MultipleCalleeBaseStrategy::get_roots() const {
       emplaced_methods.emplace(method);
     }
     const auto& overriding_methods =
-        mog::get_overriding_methods(*m_method_override_graph, method);
+        mog::get_overriding_methods(m_method_override_graph, method);
     for (auto overriding_method : overriding_methods) {
       add_root_method_overrides(overriding_method);
     }
     const auto& overiden_methods =
-        mog::get_overridden_methods(*m_method_override_graph, method);
+        mog::get_overridden_methods(m_method_override_graph, method);
     for (auto overiden_method : overiden_methods) {
       add_root_method_overrides(overiden_method);
     }
   });
   // Gather methods that override or implement external methods as well.
-  for (auto& pair : m_method_override_graph->nodes()) {
+  for (auto& pair : m_method_override_graph.nodes()) {
     auto method = pair.first;
     if (!method->is_external()) {
       continue;
     }
     dynamic_methods.emplace(method);
     const auto& overriding_methods =
-        mog::get_overriding_methods(*m_method_override_graph, method);
+        mog::get_overriding_methods(m_method_override_graph, method);
     for (auto* overriding : overriding_methods) {
       if (overriding->is_external()) {
         dynamic_methods.emplace(method);
@@ -160,8 +167,9 @@ RootAndDynamic MultipleCalleeBaseStrategy::get_roots() const {
   return root_and_dynamic;
 }
 
-CompleteCallGraphStrategy::CompleteCallGraphStrategy(const Scope& scope)
-    : MultipleCalleeBaseStrategy(scope) {}
+CompleteCallGraphStrategy::CompleteCallGraphStrategy(
+    const mog::Graph& method_override_graph, const Scope& scope)
+    : MultipleCalleeBaseStrategy(method_override_graph, scope) {}
 
 DexMethod* resolve_interface_virtual_callee(const IRInstruction* insn,
                                             const DexMethod* caller,
@@ -198,8 +206,8 @@ CallSites CompleteCallGraphStrategy::get_callsites(
     if (opcode::is_an_invoke(insn->opcode())) {
       auto callee = this->resolve_callee(method, insn);
       if (callee == nullptr) {
-        callee = resolve_interface_virtual_callee(
-            insn, method, m_resolved_refs, /* use_cache */ true);
+        callee = resolve_interface_virtual_callee(insn, method, m_resolved_refs,
+                                                  /* use_cache */ true);
         if (callee == nullptr) {
           continue;
         }
@@ -208,7 +216,7 @@ CallSites CompleteCallGraphStrategy::get_callsites(
         callsites.emplace_back(callee, code->iterator_to(mie));
       }
       auto overriding =
-          mog::get_overriding_methods(*m_method_override_graph, callee);
+          mog::get_overriding_methods(m_method_override_graph, callee);
 
       for (auto m : overriding) {
         callsites.emplace_back(m, code->iterator_to(mie));
@@ -229,9 +237,11 @@ RootAndDynamic CompleteCallGraphStrategy::get_roots() const {
   return root_and_dynamic;
 }
 
-MultipleCalleeStrategy::MultipleCalleeStrategy(const Scope& scope,
-                                               uint32_t big_override_threshold)
-    : MultipleCalleeBaseStrategy(scope) {
+MultipleCalleeStrategy::MultipleCalleeStrategy(
+    const mog::Graph& method_override_graph,
+    const Scope& scope,
+    uint32_t big_override_threshold)
+    : MultipleCalleeBaseStrategy(method_override_graph, scope) {
   // Gather big overrides true virtual methods.
   ConcurrentSet<const DexMethod*> bigoverrides;
   walk::parallel::code(scope, [&](const DexMethod* method, IRCode& code) {
@@ -251,7 +261,7 @@ MultipleCalleeStrategy::MultipleCalleeStrategy(const Scope& scope,
           continue;
         }
         const auto& overriding_methods =
-            mog::get_overriding_methods(*m_method_override_graph, callee);
+            mog::get_overriding_methods(m_method_override_graph, callee);
         uint32_t num_override = 0;
         for (auto overriding_method : overriding_methods) {
           if (overriding_method->get_code()) {
@@ -283,8 +293,8 @@ CallSites MultipleCalleeStrategy::get_callsites(const DexMethod* method) const {
     if (opcode::is_an_invoke(insn->opcode())) {
       auto callee = this->resolve_callee(method, insn);
       if (callee == nullptr) {
-        callee = resolve_interface_virtual_callee(
-            insn, method, m_resolved_refs, /* use_cache */ true);
+        callee = resolve_interface_virtual_callee(insn, method, m_resolved_refs,
+                                                  /* use_cache */ true);
         if (callee == nullptr) {
           continue;
         }
@@ -300,7 +310,7 @@ CallSites MultipleCalleeStrategy::get_callsites(const DexMethod* method) const {
         }
         if (insn->opcode() != OPCODE_INVOKE_SUPER) {
           const auto& overriding_methods =
-              mog::get_overriding_methods(*m_method_override_graph, callee);
+              mog::get_overriding_methods(m_method_override_graph, callee);
           for (auto overriding_method : overriding_methods) {
             if (overriding_method->get_code()) {
               callsites.emplace_back(overriding_method, code->iterator_to(mie));
@@ -362,8 +372,8 @@ Graph::Graph(const BuildStrategy& strat)
         this->add_edge(make_node(caller), m_exit, IRList::iterator());
       }
       for (const auto& callsite : callsites) {
-        this->add_edge(
-            make_node(caller), make_node(callsite.callee), callsite.invoke);
+        this->add_edge(make_node(caller), make_node(callsite.callee),
+                       callsite.invoke);
         m_insn_to_callee[callsite.invoke->insn].emplace(callsite.callee);
         visit_fn(callsite.callee, visit_fn);
       }

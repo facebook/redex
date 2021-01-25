@@ -17,6 +17,7 @@
 #include "DexUtil.h"
 #include "IPConstantPropagationAnalysis.h"
 #include "IRAssembler.h"
+#include "MethodOverrideGraph.h"
 #include "RedexTest.h"
 #include "Walkers.h"
 
@@ -448,7 +449,8 @@ TEST_F(InterproceduralConstantPropagationTest, unreachableInvoke) {
   auto cls = creator.create();
   scope.push_back(cls);
 
-  call_graph::Graph cg = call_graph::single_callee_graph(scope);
+  call_graph::Graph cg = call_graph::single_callee_graph(
+      *method_override_graph::build_graph(scope), scope);
   walk::code(scope, [](DexMethod*, IRCode& code) {
     code.build_cfg(/* editable */ false);
   });

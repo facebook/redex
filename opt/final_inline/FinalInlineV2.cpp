@@ -229,8 +229,10 @@ class encoding_visitor : public boost::static_visitor<DexEncodedValue*> {
 
 class ClassInitStrategy final : public call_graph::SingleCalleeStrategy {
  public:
-  explicit ClassInitStrategy(const Scope& scope)
-      : call_graph::SingleCalleeStrategy(scope) {}
+  explicit ClassInitStrategy(
+      const method_override_graph::Graph& method_override_graph,
+      const Scope& scope)
+      : call_graph::SingleCalleeStrategy(method_override_graph, scope) {}
 
   call_graph::RootAndDynamic get_roots() const override {
     call_graph::RootAndDynamic root_and_dynamic;
@@ -271,7 +273,8 @@ namespace final_inline {
 
 call_graph::Graph build_class_init_graph(const Scope& scope) {
   Timer t("Build class init graph");
-  auto graph = call_graph::Graph(ClassInitStrategy(scope));
+  auto graph = call_graph::Graph(
+      ClassInitStrategy(*method_override_graph::build_graph(scope), scope));
   return graph;
 }
 
@@ -412,7 +415,9 @@ cp::WholeProgramState analyze_and_simplify_clinits(
   const std::unordered_set<DexMethodRef*> pure_methods = get_pure_methods();
   cp::WholeProgramState wps;
 
-  auto graph = call_graph::Graph(ClassInitStrategy(scope));
+  auto method_override_graph = method_override_graph::build_graph(scope);
+  auto graph =
+      call_graph::Graph(ClassInitStrategy(*method_override_graph, scope));
   StaticFieldReadAnalysis analysis(graph, allowed_opaque_callee_names);
 
   for (DexClass* cls : reverse_tsort_by_clinit_deps(scope)) {
