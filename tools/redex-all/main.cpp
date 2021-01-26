@@ -1148,25 +1148,6 @@ void dump_class_method_info_map(const std::string& file_path,
   });
 }
 
-boost::optional<ScopedCommandProfiling> maybe_command_profile() {
-  if (getenv("GLOBAL_PROFILE_COMMAND") == nullptr) {
-    return boost::none;
-  }
-
-  boost::optional<std::string> shutdown_cmd = boost::none;
-  if (getenv("GLOBAL_PROFILE_SHUTDOWN_COMMAND") != nullptr) {
-    shutdown_cmd = std::string(getenv("GLOBAL_PROFILE_SHUTDOWN_COMMAND"));
-  }
-  boost::optional<std::string> post_cmd = boost::none;
-  if (getenv("GLOBAL_PROFILE_POST_COMMAND")) {
-    post_cmd = std::string(getenv("GLOBAL_PROFILE_POST_COMMAND"));
-  }
-
-  return ScopedCommandProfiling{
-      boost::make_optional(std::string(getenv("GLOBAL_PROFILE_COMMAND"))),
-      shutdown_cmd, post_cmd};
-}
-
 } // namespace
 
 int main(int argc, char* argv[]) {
@@ -1182,7 +1163,8 @@ int main(int argc, char* argv[]) {
   // For better stacks in abort dumps.
   set_abort_if_not_this_thread();
 
-  auto maybe_global_profile = maybe_command_profile();
+  auto maybe_global_profile =
+      ScopedCommandProfiling::maybe_from_env("GLOBAL_", "global");
 
   std::string stats_output_path;
   Json::Value stats;
