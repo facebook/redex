@@ -494,7 +494,7 @@ size_t insert_onMethodExit_calls(
   return exit_blocks.size();
 }
 
-BlockInfo create_block_info(cfg::Block* block) {
+BlockInfo create_block_info(cfg::Block* block, bool instrument_catches) {
   if (block->num_opcodes() == 0) {
     return {block, BlockType::Empty, {}};
   }
@@ -502,7 +502,7 @@ BlockInfo create_block_info(cfg::Block* block) {
   // TODO: There is a potential register allocation issue when we instrument
   // extremely large number of basic blocks. We've found a case. So, for now,
   // we don't instrument catch blocks with the hope these blocks are cold.
-  if (block->is_catch()) {
+  if (block->is_catch() && !instrument_catches) {
     return {block, BlockType::Catch, {}};
   }
 
@@ -531,7 +531,8 @@ BlockInfo create_block_info(cfg::Block* block) {
 }
 
 auto get_blocks_to_instrument(const cfg::ControlFlowGraph& cfg,
-                              const size_t max_num_blocks) {
+                              const size_t max_num_blocks,
+                              bool instrument_catches) {
   auto blocks = graph::postorder_sort<cfg::GraphInterface>(cfg);
 
   // We don't instrument entry block.
@@ -556,7 +557,7 @@ auto get_blocks_to_instrument(const cfg::ControlFlowGraph& cfg,
   block_info_list.reserve(blocks.size());
   BitId id = 0;
   for (cfg::Block* b : blocks) {
-    block_info_list.emplace_back(create_block_info(b));
+    block_info_list.emplace_back(create_block_info(b, instrument_catches));
     auto& info = block_info_list.back();
     if ((info.type & BlockType::Instrumentable) == BlockType::Instrumentable) {
       if (id >= max_num_blocks) {
@@ -607,7 +608,8 @@ MethodInfo instrument_basic_blocks(IRCode& code,
                                    const OnMethodExitMap& onMethodExit_map,
                                    const size_t max_vector_arity,
                                    const size_t method_offset,
-                                   const size_t max_num_blocks) {
+                                   const size_t max_num_blocks,
+                                   bool instrument_catches) {
   using namespace cfg;
 
   code.build_cfg(/*editable*/ true);
@@ -623,7 +625,7 @@ MethodInfo instrument_basic_blocks(IRCode& code,
   size_t num_to_instrument;
   bool too_many_blocks;
   std::tie(blocks, num_to_instrument, too_many_blocks) =
-      get_blocks_to_instrument(cfg, max_num_blocks);
+      get_blocks_to_instrument(cfg, max_num_blocks, instrument_catches);
 
   if (DEBUG_CFG) {
     TRACE(INSTRUMENT, 9, "BEFORE: %s, %s", show_deobfuscated(method).c_str(),
@@ -1034,7 +1036,7 @@ void BlockInstrumentHelper::do_basic_block_tracing(
 
     instrumented_methods.emplace_back(instrument_basic_blocks(
         code, method, onMethodBegin, onMethodExit_map, max_vector_arity,
-        method_offset, max_num_blocks));
+        method_offset, max_num_blocks, options.instrument_catches));
 
     const auto& method_info = instrumented_methods.back();
     if (method_info.too_many_blocks) {
