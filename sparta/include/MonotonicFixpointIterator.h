@@ -341,11 +341,10 @@ class WPOCounter {
  * partial ordering (WPO) of a rooted directed graph, as described in the paper:
  *
  *   Sung Kook Kim, Arnaud J. Venet, and Aditya V. Thakur.
- *   Deterministic Parallel Fixpoint Computation. To appear in POPL 2020
+ *   Deterministic Parallel Fixpoint Computation.
  *
- *   Preprint: https://arxiv.org/abs/1909.05951
+ *   https://dl.acm.org/ft_gateway.cfm?id=3371082
  *
- * Authors: Sung Kook Kim, Aditya V. Thakur.
  */
 template <typename GraphInterface,
           typename Domain,
@@ -425,6 +424,7 @@ class ParallelMonotonicFixpointIterator
                                      uint32_t wpo_idx) {
           std::atomic<uint32_t>& current_counter =
               m_wpo_counter.value_at(wpo_idx);
+          assert(current_counter == m_wpo.get_num_preds(wpo_idx));
           current_counter = 0;
           // NonExit node
           if (!m_wpo.is_exit(wpo_idx)) {
@@ -441,14 +441,14 @@ class ParallelMonotonicFixpointIterator
             return nullptr;
           }
           // Exit node
-          // Check if component of the exit node has stablized.
+          // Check if component of the exit node has stabilized.
           auto head_idx = m_wpo.get_head_of_exit(wpo_idx);
           NodeId head = m_wpo.get_node(head_idx);
           Domain* current_state = &this->m_entry_states[head];
           Domain new_state = Domain::bottom();
           this->compute_entry_state(&context, head, &new_state);
           if (new_state.leq(*current_state)) {
-            // Component stablized.
+            // Component stabilized.
             context.reset_local_iteration_count_for(head);
             *current_state = std::move(new_state);
             for (auto succ_idx : m_wpo.get_successors(wpo_idx)) {
@@ -461,7 +461,7 @@ class ParallelMonotonicFixpointIterator
               }
             }
           } else {
-            // Component didn't stablize.
+            // Component didn't stabilize.
             this->extrapolate(context, head, current_state, new_state);
             context.increase_iteration_count_for(head);
             // Set component nodes v's counter to their
@@ -471,10 +471,18 @@ class ParallelMonotonicFixpointIterator
               assert(component_idx != entry_idx);
               std::atomic<uint32_t>& component_counter =
                   m_wpo_counter.value_at(component_idx);
-              component_counter = pred_pair.second;
               // Push component nodes in work queue if their counter number
               // matches their NumSchedPreds.
-              if (m_wpo_counter.value_at(component_idx) ==
+
+              // Note: On page 10, https://dl.acm.org/ft_gateway.cfm?id=3371082
+              // suggests to set the counter to be *equal* to the number of
+              // predecessors not in our component. However, that is only
+              // correct when all counter updates of a scheduling step are done
+              // together as a single atomic update. Instead, we choose to
+              // update point-wise, in which case we have to *add* the number of
+              // predecessors, and update our own counter to 0 before updating
+              // any other dependent counters.
+              if ((component_counter += pred_pair.second) ==
                   m_wpo.get_num_preds(component_idx)) {
                 worker_state->push_task(component_idx);
               }
@@ -484,7 +492,7 @@ class ParallelMonotonicFixpointIterator
               // Because entry node have num_preds = 0, and for
               // get_num_outer_preds the nodes with num_outer_preds are ignored.
               // So we need to manually add entry node back to work queue if
-              // the component didn't stablize.
+              // the component didn't stabilize.
               worker_state->push_task(head_idx);
             }
           }
@@ -494,6 +502,9 @@ class ParallelMonotonicFixpointIterator
         /*push_tasks_while_running=*/true);
     wq.add_item(m_wpo.get_entry());
     wq.run_all();
+    for (uint32_t idx = 0; idx < m_wpo.size(); ++idx) {
+      assert(m_wpo_counter.value_at(idx) == 0);
+    }
   }
 
  private:
@@ -564,6 +575,7 @@ class MonotonicFixpointIterator
     assert(m_wpo.get_num_preds(entry_idx) == 0);
     // Prepare work queue.
     auto process_node = [&](uint32_t wpo_idx) {
+      assert(wpo_counter[wpo_idx] == m_wpo.get_num_preds(wpo_idx));
       wpo_counter[wpo_idx] = 0;
       // NonExit node
       if (!m_wpo.is_exit(wpo_idx)) {
@@ -578,14 +590,14 @@ class MonotonicFixpointIterator
         return nullptr;
       }
       // Exit node
-      // Check if component of the exit node has stablized.
+      // Check if component of the exit node has stabilized.
       uint32_t head_idx = m_wpo.get_head_of_exit(wpo_idx);
       NodeId head = m_wpo.get_node(head_idx);
       Domain* current_state = &this->m_entry_states[head];
       Domain new_state = Domain::bottom();
       this->compute_entry_state(&context, head, &new_state);
       if (new_state.leq(*current_state)) {
-        // Component stablized.
+        // Component stabilized.
         context.reset_local_iteration_count_for(head);
         *current_state = std::move(new_state);
         for (auto succ_idx : m_wpo.get_successors(wpo_idx)) {
@@ -596,7 +608,7 @@ class MonotonicFixpointIterator
           }
         }
       } else {
-        // Component didn't stablize.
+        // Component didn't stabilize.
         this->extrapolate(context, head, current_state, new_state);
         context.increase_iteration_count_for(head);
         // Set component nodes v's counter to their
@@ -604,10 +616,10 @@ class MonotonicFixpointIterator
         for (auto pred_pair : m_wpo.get_num_outer_preds(wpo_idx)) {
           auto component_idx = pred_pair.first;
           assert(component_idx != entry_idx);
-          wpo_counter[component_idx] = pred_pair.second;
           // Push component nodes in work queue if their counter number
           // matches their NumSchedPreds.
-          if (pred_pair.second == m_wpo.get_num_preds(component_idx)) {
+          if ((wpo_counter[component_idx] += pred_pair.second) ==
+              m_wpo.get_num_preds(component_idx)) {
             work_queue.emplace(component_idx);
           }
         }
@@ -616,7 +628,7 @@ class MonotonicFixpointIterator
           // Because entry node have num_preds = 0, and for
           // get_num_outer_preds the nodes with num_outer_preds are ignored.
           // So we need to manually add entry node back to work queue if
-          // the component didn't stablize.
+          // the component didn't stabilize.
           work_queue.emplace(head_idx);
         }
       }
@@ -628,6 +640,9 @@ class MonotonicFixpointIterator
       auto item = work_queue.front();
       work_queue.pop();
       process_node(item);
+    }
+    for (uint32_t idx = 0; idx < m_wpo.size(); ++idx) {
+      assert(wpo_counter[idx] == 0);
     }
   }
 
