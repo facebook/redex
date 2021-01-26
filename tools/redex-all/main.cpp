@@ -1208,8 +1208,12 @@ int main(int argc, char* argv[]) {
       args.redex_options.min_sdk = *maybe_sdk;
     }
 
-    redex_frontend(conf, args, *pg_config, stores, stats);
-    conf.parse_global_config();
+    {
+      auto profile_frontend =
+          ScopedCommandProfiling::maybe_from_env("FRONTEND_", "frontend");
+      redex_frontend(conf, args, *pg_config, stores, stats);
+      conf.parse_global_config();
+    }
 
     // Initialize purity defaults, if set.
     purity::CacheConfig::parse_default(conf);
@@ -1232,6 +1236,8 @@ int main(int argc, char* argv[]) {
 
     if (args.stop_pass_idx == boost::none) {
       // Call redex_backend by default
+      auto profile_backend =
+          ScopedCommandProfiling::maybe_from_env("BACKEND_", "backend");
       redex_backend(conf, manager, stores, stats);
       if (args.config.get("emit_class_method_info_map", false).asBool()) {
         dump_class_method_info_map(conf.metafile(CLASS_METHOD_INFO_MAP),
