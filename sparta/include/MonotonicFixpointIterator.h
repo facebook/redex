@@ -320,22 +320,6 @@ class WTOMonotonicFixpointIterator
   WeakTopologicalOrdering<NodeId, NodeHash> m_wto;
 };
 
-class WPOCounter {
- public:
-  void init(uint32_t size) {
-    for (uint32_t idx = 0; idx < size; ++idx) {
-      m_counter[idx] = 0;
-    }
-  }
-
-  std::atomic<uint32_t>& value_at(uint32_t wpo_idx) {
-    return m_counter[wpo_idx];
-  }
-
- private:
-  std::unordered_map<uint32_t, std::atomic<uint32_t>> m_counter;
-};
-
 /*
  * Implementation of a deterministic concurrent fixpoint algorithm for weak
  * partial ordering (WPO) of a rooted directed graph, as described in the paper:
@@ -415,23 +399,23 @@ class ParallelMonotonicFixpointIterator
   void run(const Domain& init) {
     this->set_all_to_bottom(m_all_nodes);
     Context context(init, m_all_nodes);
-    m_wpo_counter.init(m_wpo.size());
+    std::unique_ptr<std::atomic<uint32_t>[]> wpo_counter(
+        new std::atomic<uint32_t>[m_wpo.size()]);
+    std::fill_n(wpo_counter.get(), m_wpo.size(), 0);
     auto entry_idx = m_wpo.get_entry();
     assert(m_wpo.get_num_preds(entry_idx) == 0);
     // Prepare work queue.
     auto wq = sparta::work_queue<uint32_t>(
-        [&context, &entry_idx, this](WPOWorkerState* worker_state,
-                                     uint32_t wpo_idx) {
-          std::atomic<uint32_t>& current_counter =
-              m_wpo_counter.value_at(wpo_idx);
+        [&context, &entry_idx, &wpo_counter, this](WPOWorkerState* worker_state,
+                                                   uint32_t wpo_idx) {
+          std::atomic<uint32_t>& current_counter = wpo_counter[wpo_idx];
           assert(current_counter == m_wpo.get_num_preds(wpo_idx));
           current_counter = 0;
           // NonExit node
           if (!m_wpo.is_exit(wpo_idx)) {
             this->analyze_vertex(&context, m_wpo.get_node(wpo_idx));
             for (auto succ_idx : m_wpo.get_successors(wpo_idx)) {
-              std::atomic<uint32_t>& succ_counter =
-                  m_wpo_counter.value_at(succ_idx);
+              std::atomic<uint32_t>& succ_counter = wpo_counter[succ_idx];
               // Increase succ node's counter, push succ nodes in work queue if
               // their counter number matches their NumSchedPreds.
               if (++succ_counter == m_wpo.get_num_preds(succ_idx)) {
@@ -452,8 +436,7 @@ class ParallelMonotonicFixpointIterator
             context.reset_local_iteration_count_for(head);
             *current_state = std::move(new_state);
             for (auto succ_idx : m_wpo.get_successors(wpo_idx)) {
-              std::atomic<uint32_t>& succ_counter =
-                  m_wpo_counter.value_at(succ_idx);
+              std::atomic<uint32_t>& succ_counter = wpo_counter[succ_idx];
               // Increase succ node's counter, push succ nodes in work queue if
               // their counter number matches their NumSchedPreds.
               if (++succ_counter == m_wpo.get_num_preds(succ_idx)) {
@@ -470,7 +453,7 @@ class ParallelMonotonicFixpointIterator
               auto component_idx = pred_pair.first;
               assert(component_idx != entry_idx);
               std::atomic<uint32_t>& component_counter =
-                  m_wpo_counter.value_at(component_idx);
+                  wpo_counter[component_idx];
               // Push component nodes in work queue if their counter number
               // matches their NumSchedPreds.
 
@@ -503,13 +486,12 @@ class ParallelMonotonicFixpointIterator
     wq.add_item(m_wpo.get_entry());
     wq.run_all();
     for (uint32_t idx = 0; idx < m_wpo.size(); ++idx) {
-      assert(m_wpo_counter.value_at(idx) == 0);
+      assert(wpo_counter[idx] == 0);
     }
   }
 
  private:
   WeakPartialOrdering<NodeId, NodeHash> m_wpo;
-  WPOCounter m_wpo_counter;
   size_t m_num_thread;
   std::unordered_set<NodeId> m_all_nodes;
 };
@@ -569,7 +551,9 @@ class MonotonicFixpointIterator
   void run(const Domain& init) {
     this->clear();
     Context context(init);
-    std::unordered_map<uint32_t, uint32_t> wpo_counter;
+    std::unique_ptr<std::atomic<uint32_t>[]> wpo_counter(
+        new std::atomic<uint32_t>[m_wpo.size()]);
+    std::fill_n(wpo_counter.get(), m_wpo.size(), 0);
     std::queue<uint32_t> work_queue;
     auto entry_idx = m_wpo.get_entry();
     assert(m_wpo.get_num_preds(entry_idx) == 0);
