@@ -63,7 +63,7 @@ macro(add_dependent_packages_for_redex)
         set(REDEX_JSONCPP_LIBRARY ${JSONCPP_LIBRARY})
     endif()
 
-    if (APPLE)
+    if (APPLE AND (NOT ZLIB_HOME))
         #Static library is not installed on default path in MacOS because it conflicts with Xcode Version
         set(ZLIB_HOME "/usr/local/opt/zlib/")
     endif ()
