@@ -20,6 +20,7 @@
 #include <vector>
 
 #include "ConcurrentContainers.h"
+#include "Debug.h"
 #include "DexMemberRefs.h"
 #include "FrequentlyUsedPointersCache.h"
 #include "KeepReason.h"
@@ -153,7 +154,18 @@ struct RedexContext {
   using Task = std::function<void(void)>;
   void add_destruction_task(const Task& t);
 
-  FrequentlyUsedPointers pointers_cache() { return m_pointers_cache; }
+  static constexpr bool kDebugPointersCacheLoad = false;
+  void load_pointers_cache() {
+    m_pointers_cache.load();
+    m_pointers_cache_loaded = true;
+  }
+  const FrequentlyUsedPointers& pointers_cache() {
+    if (!m_pointers_cache_loaded) {
+      redex_assert(!kDebugPointersCacheLoad);
+      load_pointers_cache();
+    }
+    return m_pointers_cache;
+  }
 
   // Set and return field values keep_rules::AssumeReturnValue provided by
   // proguard rules.
@@ -297,6 +309,7 @@ struct RedexContext {
   bool m_record_keep_reasons{false};
   bool m_allow_class_duplicates;
 
+  bool m_pointers_cache_loaded{false};
   FrequentlyUsedPointers m_pointers_cache;
 
   // Field values map specified by Proguard assume value

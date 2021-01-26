@@ -837,6 +837,9 @@ void redex_frontend(ConfigFiles& conf, /* input */
                     DexStoresVector& stores,
                     Json::Value& stats) {
   Timer redex_frontend_timer("Redex_frontend");
+
+  g_redex->load_pointers_cache();
+
   for (const auto& pg_config_path : args.proguard_config_paths) {
     Timer time_pg_parsing("Parsed ProGuard config file");
     keep_rules::proguard_parser::parse_file(pg_config_path, &pg_config);
