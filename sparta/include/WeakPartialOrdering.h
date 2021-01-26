@@ -10,11 +10,10 @@
  * as described in the paper:
  *
  *   Sung Kook Kim, Arnaud J. Venet, and Aditya V. Thakur.
- *   Deterministic Parallel Fixpoint Computation. To appear in POPL 2020
+ *   Deterministic Parallel Fixpoint Computation.
  *
- *   Preprint: https://arxiv.org/abs/1909.05951
+ *   https://dl.acm.org/ft_gateway.cfm?id=3371082
  *
- * Authors: Sung Kook Kim, Aditya V. Thakur.
  */
 
 #pragma once
@@ -141,12 +140,10 @@ class WpoNode final {
  * partial ordering (WPO). A technical paper to appear in POPL 2020:
  *
  *   Sung Kook Kim, Arnaud J. Venet, and Aditya V. Thakur.
- *   Deterministic Parallel Fixpoint Computation. To appear in POPL 2020
+ *   Deterministic Parallel Fixpoint Computation.
  *
- *   Preprint: https://arxiv.org/abs/1909.05951
+ *   https://dl.acm.org/ft_gateway.cfm?id=3371082
  *
- * Weak partial ordering generalizes weak topological ordering (WTO) and allows
- * concurrent fixpoint iteration algorithms.
  */
 template <typename NodeId, typename NodeHash = std::hash<NodeId>>
 class WeakPartialOrdering final {
