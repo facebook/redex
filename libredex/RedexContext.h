@@ -41,7 +41,7 @@ struct DexPosition;
 struct RedexContext;
 namespace keep_rules {
 struct AssumeReturnValue;
-}
+} // namespace keep_rules
 
 extern RedexContext* g_redex;
 

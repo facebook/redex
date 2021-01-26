@@ -95,7 +95,7 @@ using GlobalConfigRegistry = std::vector<GlobalConfigRegistryEntry>;
 class GlobalConfig : public Configurable {
  public:
   explicit GlobalConfig(GlobalConfigRegistry registry)
-      : Configurable(), m_registry(std::move(registry)) {}
+      : m_registry(std::move(registry)) {}
 
   void bind_config() override;
   std::string get_config_name() override { return "GlobalConfig"; }

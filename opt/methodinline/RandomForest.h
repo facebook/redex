@@ -13,6 +13,7 @@
 #include <functional>
 #include <memory>
 #include <sstream>
+#include <utility>
 #include <vector>
 
 #include "ControlFlow.h"
@@ -167,7 +168,7 @@ struct DecisionTreeFeature : public DecisionTreeNode {
                       float threshold)
       : true_branch(std::move(true_branch)),
         false_branch(std::move(false_branch)),
-        feature_name(feature_name),
+        feature_name(std::move(feature_name)),
         feature_fn(fn),
         threshold(threshold) {}
 
@@ -269,7 +270,7 @@ inline FeatureFunctionMap get_default_feature_function_map() {
 using namespace sparta;
 
 inline std::unique_ptr<DecisionTreeNode> deserialize_tree(
-    s_expr expr, const FeatureFunctionMap& feature_fns) {
+    const s_expr& expr, const FeatureFunctionMap& feature_fns) {
   s_expr tail;
   if (s_patn({s_patn("acc")}, tail).match_with(expr)) {
     always_assert(tail.size() == 2);

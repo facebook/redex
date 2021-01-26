@@ -168,7 +168,7 @@ struct LocksIterator : public ir_analyzer::BaseIRAnalyzer<LockEnvironment> {
     }
 
     auto def = it->second;
-    auto def_state = exit_state_at_source.get(def);
+    const auto& def_state = exit_state_at_source.get(def);
     if (def_state.is_top() || def_state.is_bottom()) {
       // Uh-oh. Something is wrong.
       return LockEnvironment(sparta::AbstractValueKind::Top);
@@ -268,7 +268,7 @@ boost::optional<RDefs> compute_rdefs(ControlFlowGraph& cfg) {
     return defs_in;
   };
   auto get_singleton = [](auto& defs, reg_t reg) -> IRInstruction* {
-    auto defs0 = defs.get(reg);
+    const auto& defs0 = defs.get(reg);
     if (defs0.is_top() || defs0.is_bottom()) {
       return nullptr;
     }
@@ -290,7 +290,7 @@ boost::optional<RDefs> compute_rdefs(ControlFlowGraph& cfg) {
     auto it = block_map.find(insn);
     redex_assert(it != block_map.end());
     auto defs = get_defs(it->second, insn);
-    auto defs0 = defs.get(reg);
+    const auto& defs0 = defs.get(reg);
     if (defs0.is_top()) {
       return "top";
     }
@@ -564,7 +564,7 @@ size_t remove(ControlFlowGraph& cfg, AnalysisResult& analysis) {
         auto def = it->second;
 
         auto& bindings = state.bindings();
-        auto def_state = bindings.at(def);
+        const auto& def_state = bindings.at(def);
         if (def_state.is_value()) {
           size_t times = analysis::get_per(*def_state.get_constant());
           if (times >=

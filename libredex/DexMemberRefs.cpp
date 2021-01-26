@@ -90,7 +90,7 @@ MethodDescriptorTokens parse_method(const std::string& s) {
   if (kCheckFormat) {
     // Macros are ugly, but it will print nicer since asserts are macros, too.
 #define context_assert(e, local_ctx) \
-  always_assert_log(e, "Invalid: %s (%s)", local_ctx.c_str(), s.c_str());
+  always_assert_log(e, "Invalid: %s (%s)", (local_ctx).c_str(), s.c_str());
 
     context_assert(type::is_valid(mdt.cls), mdt.cls);
     // Class must not be a primitive.

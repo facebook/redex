@@ -274,7 +274,7 @@ class Analyzer final : public BaseIRAnalyzer<TrackedDomainEnvironment> {
     }
 
     case IOPCODE_MOVE_RESULT_PSEUDO_OBJECT: {
-      const auto value = current_state->get(RESULT_REGISTER);
+      const auto& value = current_state->get(RESULT_REGISTER);
       set_current_state_at(insn->dest(), false /* is_wide */, value);
       break;
     }
@@ -650,7 +650,7 @@ void ReduceArrayLiteralsPass::bind_config() {
   // the register allocator, and use an excessive number of stack space at
   // runtime, while also being reasonably large so that this optimization still
   // results in a significant win in terms of instructions count.
-  bind("max_filled_elements", {27}, m_max_filled_elements);
+  bind("max_filled_elements", 27, m_max_filled_elements);
   after_configuration([this] {
     always_assert(m_max_filled_elements < 0xff);
     interdex::InterDexRegistry* registry =

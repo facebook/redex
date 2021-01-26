@@ -201,7 +201,7 @@ Block* CFGInliner::maybe_split_block_before(ControlFlowGraph* caller,
   }
   // Else inject an instruction and then split so 'it' is first of block
   auto dummy_end_instruction = new IRInstruction(OPCODE_NOP);
-  caller->insert_before(it, {dummy_end_instruction});
+  caller->insert_before(it, dummy_end_instruction);
   caller->split_block(caller->find_insn(dummy_end_instruction, old_block));
   Block* goto_block = old_block->goes_to();
   always_assert(goto_block != nullptr);

@@ -178,7 +178,7 @@ size_t analyze_and_rewrite(
     return defs_in;
   };
   auto get_singleton = [](auto& defs, reg_t reg) -> IRInstruction* {
-    auto defs0 = defs.get(reg);
+    const auto& defs0 = defs.get(reg);
     if (defs0.is_top() || defs0.is_bottom()) {
       return nullptr;
     }

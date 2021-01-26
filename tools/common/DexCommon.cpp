@@ -64,9 +64,12 @@ void open_dex_file(const char* filename, ddump_data* rd) {
     exit(1);
   }
   rd->dexh = (dex_header*)rd->dexmmap;
-  if (memcmp(rd->dexh->magic, dex_v35_header_string, sizeof(rd->dexh->magic)) &&
-      memcmp(rd->dexh->magic, dex_v37_header_string, sizeof(rd->dexh->magic)) &&
-      memcmp(rd->dexh->magic, dex_v38_header_string, sizeof(rd->dexh->magic))) {
+  if (memcmp(rd->dexh->magic, dex_v35_header_string, sizeof(rd->dexh->magic)) !=
+          0 &&
+      memcmp(rd->dexh->magic, dex_v37_header_string, sizeof(rd->dexh->magic)) !=
+          0 &&
+      memcmp(rd->dexh->magic, dex_v38_header_string, sizeof(rd->dexh->magic)) !=
+          0) {
     fprintf(stderr, "Bad dex magic, bailing\n");
     exit(1);
   }

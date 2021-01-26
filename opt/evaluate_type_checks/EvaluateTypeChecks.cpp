@@ -107,7 +107,7 @@ DefUses compute_def_uses(ControlFlowGraph& cfg) {
       auto insn = mie.insn;
       for (size_t i = 0; i < insn->srcs_size(); ++i) {
         auto src_reg = insn->src(i);
-        auto defs = defs_in.get(src_reg);
+        const auto& defs = defs_in.get(src_reg);
         always_assert_log(!defs.is_top() && defs.size() > 0,
                           "Found use without def when processing [0x%lx]%s",
                           &mie, SHOW(insn));
