@@ -832,7 +832,14 @@ void print_stats(const std::vector<MethodInfo>& instrumented_methods,
   const int total_catches = std::accumulate(
       instrumented_methods.begin(), instrumented_methods.end(), int(0),
       [](int a, auto&& i) { return a + i.num_catches; });
-  TRACE(INSTRUMENT, 4, "Ignored catch blocks: %d", total_catches);
+  const int total_instrumented_catches = std::accumulate(
+      instrumented_methods.begin(), instrumented_methods.end(), int(0),
+      [](int a, auto&& i) { return a + i.num_instrumented_catches; });
+  TRACE(INSTRUMENT, 4, "Total catch blocks: %d", total_catches);
+  TRACE(INSTRUMENT, 4, "Instrumented catch blocks: %d",
+        total_instrumented_catches);
+  TRACE(INSTRUMENT, 4, "Ignored catch blocks: %d",
+        total_catches - total_instrumented_catches);
 
   // ----- Instrumented exit block stats
   TRACE(INSTRUMENT, 4, "Instrumented exit block stats:");
@@ -908,9 +915,9 @@ void print_stats(const std::vector<MethodInfo>& instrumented_methods,
   };
 
   TRACE(INSTRUMENT, 4, "Empty / useless block stats:");
-  print_two_dists("empty", "useless",
-                  [](auto&& v) { return v.num_empty_blocks; },
-                  [](auto&& v) { return v.num_useless_blocks; });
+  print_two_dists(
+      "empty", "useless", [](auto&& v) { return v.num_empty_blocks; },
+      [](auto&& v) { return v.num_useless_blocks; });
 }
 
 } // namespace
