@@ -3,6 +3,8 @@ id: usage
 title: Usage
 ---
 
+## Basic Usage
+
 To use ReDex, first build your app and find the APK for it.  Then the simplest
 invocation is:
 ```
@@ -119,10 +121,23 @@ optional arguments:
 From here, you may want to read the [configuration guide](config.md) and details
 about the [passes](passes.md).
 
+The result `output.apk` should be smaller and faster than the
+input.
+
+## Tracing
+
 If you want some statistics about each pass, you can turn on tracing:
 ```
 export TRACE=1
 ```
-
-The result `output.apk` should be smaller and faster than the
-input. Enjoy!
+More specifically, tracing has [categories](https://github.com/facebook/redex/blob/c5d5651b8b3ae9fda7b3305de9f55e1b82077a2d/libredex/Trace.h#L20)
+and levels. For a `TRACE(X, Y, msg)` statement in the code to be logged,
+category `X` must have level `Y` or higher:
+```
+export TRACE=X:1,Y:2,Z:3
+```
+The output of tracing can also be redirected to a file with the `TRACEFILE`
+variable:
+```
+export TRACEFILE=/path/to/trace.txt
+```
