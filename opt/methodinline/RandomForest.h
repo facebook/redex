@@ -103,7 +103,7 @@ class MethodContextContext {
   }
 
  private:
-  MethodContextContext() = default;
+  MethodContextContext() : m_interaction_list() {}
 
   static std::vector<std::string> create_interaction_list(
       const MethodProfiles* profiles) {
