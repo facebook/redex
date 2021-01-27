@@ -385,6 +385,9 @@ using IsDomain = sparta::ConstantAbstractDomain<bool>;
 using ThisPointerEnvironment =
     sparta::PatriciaTreeMapAbstractEnvironment<reg_t, IsDomain>;
 
+std::ostream& operator<<(std::ostream& output,
+                         const ThisPointerEnvironment& env);
+
 /*
  * Combining the register mapping and the field mapping to the DexTypeDomain.
  */
@@ -472,4 +475,7 @@ class DexTypeEnvironment final
   void set_this_ptr(reg_t reg, const IsDomain& is_this) {
     apply<2>([&](ThisPointerEnvironment* env) { env->set(reg, is_this); });
   }
+
+  friend std::ostream& operator<<(std::ostream& out,
+                                  const ThisPointerEnvironment& x);
 };

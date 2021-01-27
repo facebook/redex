@@ -266,3 +266,24 @@ std::ostream& operator<<(std::ostream& out, const SmallSetDexTypeDomain& x) {
   }
   return out;
 }
+
+std::ostream& operator<<(std::ostream& output,
+                         const ThisPointerEnvironment& env) {
+  using namespace sparta;
+  switch (env.kind()) {
+  case AbstractValueKind::Bottom: {
+    output << "_|_";
+    break;
+  }
+  case AbstractValueKind::Top: {
+    output << "T";
+    break;
+  }
+  case AbstractValueKind::Value: {
+    output << "[#" << env.size() << "]";
+    output << env.bindings();
+    break;
+  }
+  }
+  return output;
+}
