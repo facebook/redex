@@ -322,3 +322,21 @@ class TestK {
     Foo f2 = new Foo(f1);
   }
 }
+
+class TestL {
+  static class A {}
+
+  static class Foo {
+    A f;
+    Foo() {
+      f = new A();
+    }
+    Foo(Foo other) {
+      other.f = new A();
+    }
+  }
+  static void main() {
+    Foo f1 = new Foo();
+    Foo f2 = new Foo(f1);
+  }
+}

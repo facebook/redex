@@ -276,6 +276,21 @@ TEST_F(DexTypeEnvironmentTest, FieldEnvTest) {
   EXPECT_EQ(env.get(f2), DexTypeDomain(m_type_a));
 }
 
+TEST_F(DexTypeEnvironmentTest, ThisPointerEnvTest) {
+  auto env = DexTypeEnvironment();
+  reg_t v0 = 0;
+  EXPECT_FALSE(env.is_this_ptr(v0));
+
+  env.set_this_ptr(v0, IsDomain(true));
+  EXPECT_TRUE(env.is_this_ptr(v0));
+
+  env.set_this_ptr(v0, IsDomain(false));
+  reg_t v1 = 1;
+  env.set_this_ptr(v1, IsDomain(true));
+  EXPECT_FALSE(env.is_this_ptr(v0));
+  EXPECT_TRUE(env.is_this_ptr(v1));
+}
+
 TEST_F(DexTypeEnvironmentTest, JoinWithTest) {
   auto domain_a1 = DexTypeDomain(m_type_a1);
   auto domain_a2 = DexTypeDomain(m_type_a2);

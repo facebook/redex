@@ -293,3 +293,18 @@ TEST_F(GlobalTypeAnalysisTest, InstanceSensitiveCtorTest) {
   EXPECT_EQ(ftype.get_single_domain(),
             SingletonDexTypeDomain(get_type("TestK$A")));
 }
+
+TEST_F(GlobalTypeAnalysisTest, InstanceSensitiveCtorNullnessTest) {
+  auto scope = build_class_scope(stores);
+  set_root_method("Lcom/facebook/redextest/TestL;.main:()V");
+  GlobalTypeAnalysis analysis;
+  auto gta = analysis.analyze(scope);
+  auto wps = gta->get_whole_program_state();
+
+  auto field_f = get_field("TestL$Foo;.f:Lcom/facebook/redextest/TestL$A;");
+  auto ftype = wps.get_field_type(field_f);
+  EXPECT_FALSE(ftype.is_top());
+  EXPECT_TRUE(ftype.is_nullable());
+  EXPECT_EQ(ftype.get_single_domain(),
+            SingletonDexTypeDomain(get_type("TestL$A")));
+}
