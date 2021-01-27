@@ -104,37 +104,52 @@ void remove_referenced(const Scope& scope,
                        TypeSet& candidates,
                        UnreferencedInterfacesPass::Metric& metric) {
 
-  const auto check_type = [&](DexType* t, size_t& count) {
+  ConcurrentSet<const DexType*> concurrent_candidates_to_erase;
+  const auto check_type = [&](DexType* t) {
     const auto type = type::get_element_type_if_array(t);
     if (candidates.count(type) > 0) {
-      candidates.erase(type);
-      count++;
+      concurrent_candidates_to_erase.insert(type);
     }
   };
+  const auto process_candidates_to_erase = [&](size_t& count) {
+    for (auto type : concurrent_candidates_to_erase) {
+      if (candidates.count(type) > 0) {
+        candidates.erase(type);
+        count++;
+      }
+    }
+    concurrent_candidates_to_erase.clear();
+  };
 
-  walk::fields(scope, [&](DexField* field) {
-    check_type(field->get_type(), metric.field_refs);
-  });
-  walk::methods(scope, [&](DexMethod* meth) {
+  walk::parallel::fields(
+      scope, [&](DexField* field) { check_type(field->get_type()); });
+  process_candidates_to_erase(metric.field_refs);
+
+  walk::parallel::methods(scope, [&](DexMethod* meth) {
     const auto proto = meth->get_proto();
-    check_type(proto->get_rtype(), metric.sig_refs);
+    check_type(proto->get_rtype());
     for (const auto& type : proto->get_args()->get_type_list()) {
-      check_type(type, metric.sig_refs);
+      check_type(type);
     }
   });
-  walk::annotations(scope, [&](DexAnnotation* anno) {
+  process_candidates_to_erase(metric.sig_refs);
+
+  walk::parallel::annotations(scope, [&](DexAnnotation* anno) {
     std::vector<DexType*> types_in_anno;
     anno->gather_types(types_in_anno);
     for (const auto& type : types_in_anno) {
-      check_type(type, metric.anno_refs);
+      check_type(type);
     }
   });
-  walk::opcodes(
+  process_candidates_to_erase(metric.anno_refs);
+
+  ConcurrentSet<DexClass*> concurrent_unresolved_classes;
+  walk::parallel::opcodes(
       scope,
       [](DexMethod*) { return true; },
       [&](DexMethod*, IRInstruction* insn) {
         if (insn->has_type()) {
-          check_type(insn->get_type(), metric.insn_refs);
+          check_type(insn->get_type());
           return;
         }
 
@@ -145,7 +160,7 @@ void remove_referenced(const Scope& scope,
           insn->get_method()->gather_types_shallow(types_in_insn);
         }
         for (const auto type : types_in_insn) {
-          check_type(type, metric.insn_refs);
+          check_type(type);
         }
 
         if (!insn->has_method()) return;
@@ -159,7 +174,7 @@ void remove_referenced(const Scope& scope,
           return;
         }
         if (meth != nullptr) {
-          check_type(meth->get_class(), metric.insn_refs);
+          check_type(meth->get_class());
           return;
         }
 
@@ -169,18 +184,22 @@ void remove_referenced(const Scope& scope,
         // To be safe let's remove every interface involved in this branch
         const auto& cls = type_class(insn->get_method()->get_class());
         if (cls == nullptr) return;
-
-        TypeSet intfs;
-        if (is_interface(cls)) {
-          intfs.insert(cls->get_type());
-          get_super_interfaces(intfs, cls);
-        } else {
-          get_interfaces(intfs, cls);
-        }
-        for (const auto& intf : intfs) {
-          metric.unresolved_meths += candidates.erase(intf);
-        }
+        concurrent_unresolved_classes.insert(cls);
       });
+  process_candidates_to_erase(metric.insn_refs);
+
+  for (auto cls : concurrent_unresolved_classes) {
+    TypeSet intfs;
+    if (is_interface(cls)) {
+      intfs.insert(cls->get_type());
+      get_super_interfaces(intfs, cls);
+    } else {
+      get_interfaces(intfs, cls);
+    }
+    for (const auto& intf : intfs) {
+      metric.unresolved_meths += candidates.erase(intf);
+    }
+  }
 }
 
 bool implements_removables(const TypeSet& removable, DexClass* cls) {
