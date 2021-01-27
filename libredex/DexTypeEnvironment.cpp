@@ -163,6 +163,11 @@ std::ostream& operator<<(std::ostream& output, const DexType* dex_type) {
   return output;
 }
 
+std::ostream& operator<<(std::ostream& output, bool val) {
+  output << (val ? "true" : "false");
+  return output;
+}
+
 bool SmallSetDexTypeDomain::leq(const SmallSetDexTypeDomain& other) const {
   if (is_bottom()) {
     return true;

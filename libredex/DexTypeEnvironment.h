@@ -145,6 +145,8 @@ std::ostream& operator<<(std::ostream& out, const SingletonDexTypeDomain& x);
 
 std::ostream& operator<<(std::ostream& output, const DexType* dex_type);
 
+std::ostream& operator<<(std::ostream& output, bool val);
+
 /*
  *
  * Small Set DexTypeDomain
