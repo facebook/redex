@@ -27,6 +27,6 @@ void ABExperimentContext::force_control_mode() {
   ABExperimentContextImpl::set_global_mode(ABGlobalMode::CONTROL);
 }
 
-void ABExperimentContext::force_preferred_mode() {
+void ABExperimentContext::disable_ab_experiments() {
   ABExperimentContextImpl::set_global_mode();
 }

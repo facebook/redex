@@ -46,10 +46,13 @@ class ABExperimentContext {
   virtual ~ABExperimentContext() {}
 
   /**
+   * Disables A/B experiments in this build of Redex.
+   * When flushed, experiments will use their preferred mode instead of
+   * tracking both branches.
    * NOTE: this can only be used as long as no ABExperimentContext instance
    * exists.
    */
-  static void force_preferred_mode();
+  static void disable_ab_experiments();
 
   /**
    * Forces all ABExperimentContext instances to apply changes happening
