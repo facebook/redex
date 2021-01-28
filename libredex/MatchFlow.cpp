@@ -47,11 +47,11 @@ result_t::src_range result_t::matching(location_t l,
   // const_cast is required because `insns` holds `IRInstruction*` keys, but
   // `find` will not mutate the `insn` passed in, despite the cast.
   auto srcs = insns->find(const_cast<IRInstruction*>(insn));
-  if (srcs == insns->end()) {
+  if (srcs == insns->end() || ix >= srcs->second.size()) {
     return src_range::empty();
   }
 
-  auto& src = srcs->second.at(ix);
+  auto& src = srcs->second[ix];
   return src_range{src.cbegin(), src.cend()};
 }
 
