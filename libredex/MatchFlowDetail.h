@@ -242,10 +242,9 @@ struct DataFlowGraph {
   void add_node(LocationIx loc, IRInstruction* insn);
 
   /**
-   * Add (loc, insn) as a node in the graph, and indicate that this node will
-   * not have any inbound edges.  This fact is not checked at any later point.
+   * Locate nodes without any inbound edges and mark them as "entry-points".
    */
-  void add_entrypoint(LocationIx loc, IRInstruction* insn);
+  void calculate_entrypoints();
 
   /**
    * Add (lfrom, ifrom) -[src]-> (lto, ito) as an edge in the graph, implicitly

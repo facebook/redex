@@ -302,6 +302,33 @@ TEST_F(MatchFlowTest, VShapePredicate) {
   EXPECT_INSNS(res.matching(lit), const_0, const_1);
 }
 
+TEST_F(MatchFlowTest, FailAtLastHurdle) {
+  // Regression test for a situation where a chain of instructions should fail
+  // because the last (obligation-free) constraint in the chain is not matched.
+
+  flow_t f;
+  auto lit = f.insn(m::const_(m::has_literal(m::equals<int64_t>(1))));
+  auto ary = f.insn(m::new_array_()).src(0, lit);
+
+  auto code = assembler::ircode_from_string(R"((
+    (const v0 0)
+    (new-array v0 "[I")
+    (move-result-pseudo-object v0)
+    (return-void)
+  ))");
+
+  cfg::ScopedCFG cfg{code.get()};
+  auto ii = InstructionIterable(*cfg);
+  std::vector<MethodItemEntry> mies{ii.begin(), ii.end()};
+
+  ASSERT_INSN(const_0, mies[0], OPCODE_CONST);
+  ASSERT_INSN(new_ary, mies[1], OPCODE_NEW_ARRAY);
+
+  auto res = f.find(*cfg, ary);
+  EXPECT_INSNS(res.matching(lit));
+  EXPECT_INSNS(res.matching(ary));
+}
+
 TEST_F(MatchFlowTest, AliasSrc) {
   flow_t f;
   auto lit = f.insn(m::const_());

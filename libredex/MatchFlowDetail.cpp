@@ -269,8 +269,20 @@ void DataFlowGraph::add_node(LocationIx loc, IRInstruction* insn) {
   (void)m_adjacencies[Node(loc, insn)];
 }
 
-void DataFlowGraph::add_entrypoint(LocationIx loc, IRInstruction* insn) {
-  add_edge(NO_LOC, nullptr, NO_SRC, loc, insn);
+void DataFlowGraph::calculate_entrypoints() {
+  std::vector<Node> entrypoints;
+
+  for (const auto& nodes : m_adjacencies) {
+    const auto& node = nodes.first;
+    const auto& inbound = nodes.second.in;
+    if (inbound.empty()) {
+      entrypoints.push_back(node);
+    }
+  }
+
+  for (auto& ep : entrypoints) {
+    add_edge(NO_LOC, nullptr, NO_SRC, node_loc(ep), node_insn(ep));
+  }
 }
 
 void DataFlowGraph::add_edge(LocationIx lfrom,
@@ -446,17 +458,7 @@ DataFlowGraph instruction_graph(cfg::ControlFlowGraph& cfg,
       return false;
     }
 
-    bool obligation_free = std::all_of(
-        constraint.srcs.begin(),
-        constraint.srcs.end(),
-        [](const Constraint::Src& src) { return src.loc == NO_LOC; });
-
-    if (obligation_free) {
-      graph.add_entrypoint(loc, insn);
-    } else {
-      graph.add_node(loc, insn);
-    }
-
+    graph.add_node(loc, insn);
     return true;
   };
 
@@ -517,6 +519,7 @@ DataFlowGraph instruction_graph(cfg::ControlFlowGraph& cfg,
     }
   }
 
+  graph.calculate_entrypoints();
   return graph;
 }
 
