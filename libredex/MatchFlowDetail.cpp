@@ -228,7 +228,7 @@ void InstructionConstraintAnalysis::analyze_instruction(
             env->update(insn->src(0), add_obligation(o));
             continue;
           }
-        } else if (opcode::is_a_move_result(insn->opcode())) {
+        } else if (opcode::is_move_result_any(insn->opcode())) {
           if (from_src.alias == AliasFlag::alias ||
               from_src.alias == AliasFlag::result) {
             env->update(RESULT_REGISTER, add_obligation(o));
@@ -476,7 +476,7 @@ DataFlowGraph instruction_graph(cfg::ControlFlowGraph& cfg,
       }
     }
 
-    if (opcode::is_a_move_result(insn->opcode())) {
+    if (opcode::is_move_result_any(insn->opcode())) {
       if (from_src.alias == AliasFlag::alias ||
           from_src.alias == AliasFlag::result) {
         return;

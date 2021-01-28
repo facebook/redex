@@ -397,20 +397,33 @@ TEST_F(MatchFlowTest, ResultSrc) {
   auto* Foo_src = DexMethod::make_method("LFoo;.src:()I");
 
   flow_t f;
-  auto any = f.insn(m::any<IRInstruction*>());
-  auto src = f.insn(m::invoke_static_(m::has_method(m::equals(Foo_src))));
+  auto fst = f.insn(m::invoke_static_() || m::const_string_());
+  auto snd = f.insn(m::any<IRInstruction*>());
   auto add = f.insn(m::add_int_())
-                 .src(0, src, exists | result)
-                 .src(1, any, exists | alias);
+                 .src(0, fst, exists | result)
+                 .src(1, snd, exists | alias);
 
   auto code = assembler::ircode_from_string(R"((
+    (load-param v0)
+    (switch v0 (:a :b :c))
+
+    (:a 0)
     (const v0 0)
     (const v1 1)
-    (load-param v2)
-    (if-eqz v2 :end)
+    (goto :end)
+
+    (:b 1)
     (invoke-static () "LFoo;.src:()I")
     (move-result v0)
     (move v1 v0)
+    (goto :end)
+
+    (:c 2)
+    (const-string "bar")
+    (move-result-pseudo-object v0)
+    (move v1 v0)
+    (goto :end)
+
     (:end)
     (add-int v2 v0 v1)
     (return-void)
@@ -420,13 +433,14 @@ TEST_F(MatchFlowTest, ResultSrc) {
   auto ii = InstructionIterable(*cfg);
   std::vector<MethodItemEntry> mies{ii.begin(), ii.end()};
 
-  ASSERT_INSN(const_1, mies[1], OPCODE_CONST);
+  ASSERT_INSN(const_1, mies[3], OPCODE_CONST);
   ASSERT_INSN(invoke_src, mies[4], OPCODE_INVOKE_STATIC);
-  ASSERT_INSN(add_int, mies[7], OPCODE_ADD_INT);
+  ASSERT_INSN(const_str, mies[7], OPCODE_CONST_STRING);
+  ASSERT_INSN(add_int, mies[10], OPCODE_ADD_INT);
 
   auto res = f.find(*cfg, add);
-  EXPECT_INSNS(res.matching(add, add_int, 0), invoke_src);
-  EXPECT_INSNS(res.matching(add, add_int, 1), const_1, invoke_src);
+  EXPECT_INSNS(res.matching(add, add_int, 0), invoke_src, const_str);
+  EXPECT_INSNS(res.matching(add, add_int, 1), const_1, invoke_src, const_str);
 }
 
 TEST_F(MatchFlowTest, ForallDirect) {
