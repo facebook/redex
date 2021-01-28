@@ -21,7 +21,10 @@
 #include "ScopedCFG.h"
 #include "Show.h"
 
-class SourceBlocksTest : public RedexIntegrationTest {};
+class SourceBlocksTest : public RedexIntegrationTest {
+ protected:
+  void enable_pass(InsertSourceBlocksPass& isbp) { isbp.m_force_run = true; }
+};
 
 TEST_F(SourceBlocksTest, source_blocks) {
   auto type = DexType::get_type("Lcom/facebook/redextest/SourceBlocksTest;");
@@ -44,6 +47,7 @@ TEST_F(SourceBlocksTest, source_blocks) {
   // Run the pass, check that each block has a SourceBlock.
   {
     InsertSourceBlocksPass isbp{};
+    enable_pass(isbp);
     run_passes({&isbp});
 
     for (auto* m : cls->get_all_methods()) {
