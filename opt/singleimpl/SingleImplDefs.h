@@ -125,6 +125,8 @@ struct SingleImplData {
                      std::unordered_map<IRInstruction*, IRList::iterator>>
       referencing_methods;
 
+  std::mutex mutex;
+
   bool is_escaped() const { return escape != NO_ESCAPE; }
 };
 
