@@ -54,10 +54,15 @@ include_directories(
         ${ZLIB_INCLUDE_DIRS}
         ${includes})
 
-install(DIRECTORY ${includes}
+install(DIRECTORY libredex util libresource shared
         DESTINATION include/redex
-        FILES_MATCHING
-        PATTERN "*.h")
+        FILES_MATCHING PATTERN "*.h" PATTERN "*.def")
+install(DIRECTORY sparta/include/
+        DESTINATION include/redex/sparta
+        FILES_MATCHING PATTERN "*.h")
+install(DIRECTORY tools/common tools/tool
+        DESTINATION include/redex/tools
+        FILES_MATCHING PATTERN "*.h")
 
 file(GLOB_RECURSE redex_srcs
         "analysis/max-depth/*.cpp"
