@@ -84,10 +84,11 @@ void InsertSourceBlocksPass::run_pass(DexStoresVector& stores,
                                       ConfigFiles& conf,
                                       PassManager& mgr) {
   // TODO(agampe): This should eventually go away. For now, avoid the overhead.
-  if (!mgr.get_redex_options().instrument_pass_enabled) {
+  if (!mgr.get_redex_options().instrument_pass_enabled && !m_force_run) {
     TRACE(METH_PROF,
           1,
           "Not an instrumentation build, not running InsertSourceBlocksPass");
+    return;
   }
 
   run_source_blocks(stores,
