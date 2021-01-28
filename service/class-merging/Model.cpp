@@ -1058,7 +1058,7 @@ void Model::add_interface_scope(MergerType& merger,
   const auto& insert = [&](MergerType::InterfaceMethod& intf_meths) {
     intf_meths.interfaces.insert(intf_scope.interfaces.begin(),
                                  intf_scope.interfaces.end());
-    for (const auto vmeth : intf_scope.methods) {
+    for (const auto& vmeth : intf_scope.methods) {
       if (!vmeth.first->is_def()) continue;
       if (merger.mergeables.count(vmeth.first->get_class()) == 0) continue;
       TRACE(CLMG,

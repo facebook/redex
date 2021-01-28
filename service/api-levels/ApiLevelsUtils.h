@@ -17,10 +17,8 @@ using TypeToFrameworkAPI = std::unordered_map<const DexType*, FrameworkAPI>;
 class ApiLevelsUtils {
  public:
   ApiLevelsUtils(const Scope& scope,
-                 const std::string& framework_api_info_filename,
-                 uint32_t api_level)
+                 const std::string& framework_api_info_filename)
       : m_framework_api_info_filename(framework_api_info_filename),
-        m_api_level(api_level),
         m_sdk_api(framework_api_info_filename) {
     // Setting up both m_types_to_framework_api and m_framework_classes
     load_framework_api(scope);
@@ -55,7 +53,6 @@ class ApiLevelsUtils {
   TypeToFrameworkAPI m_types_to_framework_api;
   std::unordered_set<const DexType*> m_framework_classes;
   std::string m_framework_api_info_filename;
-  uint32_t m_api_level;
   api::AndroidSDK m_sdk_api;
 
   /**

@@ -174,7 +174,7 @@ class ReflectionAnalyzer : public Base {
         &this->get_analysis_parameters()->refl_meta_cache);
 
     m_summary.set_value(analysis.get_return_value());
-    m_summary.set_reflection_sites(std::move(analysis.get_reflection_sites()));
+    m_summary.set_reflection_sites(analysis.get_reflection_sites());
 
     auto partition = analysis.get_calling_context_partition();
     if (!partition.is_top() && !partition.is_bottom()) {

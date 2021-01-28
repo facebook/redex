@@ -129,8 +129,7 @@ void log_nopt(NoptReason nopt, const DexClass* cls) {
   OptDataMapper::get_instance().log_nopt(nopt, cls);
 }
 
-InsnOptData::InsnOptData(const DexMethod* method, const IRInstruction* insn)
-    : m_method(method) {
+InsnOptData::InsnOptData(const DexMethod* method, const IRInstruction* insn) {
   m_insn_orig = SHOW(insn);
   m_has_line_num = get_line_num(method, insn, &m_line_num);
 }

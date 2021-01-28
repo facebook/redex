@@ -206,9 +206,9 @@ MultiMethodInliner::MultiMethodInliner(
         override_graph = owned_override_graph.get();
       }
       std::unordered_set<const DexMethod*> computed_no_side_effects_methods;
-      auto computed_no_side_effects_methods_iterations =
-          compute_no_side_effects_methods(scope, override_graph, m_pure_methods,
-                                          &computed_no_side_effects_methods);
+      /* Returns computed_no_side_effects_methods_iterations */
+      compute_no_side_effects_methods(scope, override_graph, m_pure_methods,
+                                      &computed_no_side_effects_methods);
       for (auto m : computed_no_side_effects_methods) {
         m_pure_methods.insert(const_cast<DexMethod*>(m));
       }
@@ -2195,7 +2195,6 @@ void remap_callee_for_tail_call(const IRCode* caller_code,
  */
 class MethodSplicer {
   IRCode* m_mtcaller;
-  IRCode* m_mtcallee;
   MethodItemEntryCloner m_mie_cloner;
   const RegMap& m_callee_reg_map;
   DexPosition* m_invoke_position;
@@ -2204,12 +2203,10 @@ class MethodSplicer {
 
  public:
   MethodSplicer(IRCode* mtcaller,
-                IRCode* mtcallee,
                 const RegMap& callee_reg_map,
                 DexPosition* invoke_position,
                 MethodItemEntry* active_catch)
       : m_mtcaller(mtcaller),
-        m_mtcallee(mtcallee),
         m_callee_reg_map(callee_reg_map),
         m_invoke_position(invoke_position),
         m_active_catch(active_catch) {}
@@ -2381,8 +2378,8 @@ void inline_method_unsafe(const DexMethod* caller_method,
                opcode::is_a_return(mei.insn->opcode());
       });
 
-  auto splice = MethodSplicer(caller_code, callee_code, *callee_reg_map,
-                              invoke_position, caller_catch);
+  auto splice = MethodSplicer(caller_code, *callee_reg_map, invoke_position,
+                              caller_catch);
   // Copy the callee up to the return. Everything else we push at the end
   // of the caller
   splice(pos, callee_code->begin(), ret_it);

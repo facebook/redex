@@ -30,9 +30,7 @@ ObjectInlinePlugin::ObjectInlinePlugin(
       m_field_swaps(field_swaps),
       m_srcs(srcs),
       m_value_reg(value_register),
-      m_caller_this_reg(caller_this),
-      m_callee_this_reg(callee_this),
-      m_callee_class(callee_type) {}
+      m_caller_this_reg(caller_this) {}
 
 boost::optional<const std::vector<reg_t>&> ObjectInlinePlugin::inline_srcs() {
   return m_srcs;

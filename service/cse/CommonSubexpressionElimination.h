@@ -145,7 +145,6 @@ class CommonSubexpressionElimination {
   std::vector<Forward> m_forward;
   // List of unique sets of earlier instructions to be forwarded
   std::vector<sparta::PatriciaTreeSet<const IRInstruction*>> m_earlier_insns;
-  SharedState* m_shared_state;
   cfg::ControlFlowGraph& m_cfg;
   Stats m_stats;
   bool m_is_static;

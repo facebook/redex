@@ -855,21 +855,21 @@ std::string show(const DexAnnotationDirectory* p) {
   }
   if (p->m_field) {
     ss << "field annotations:\n";
-    for (auto const pair : *p->m_field) {
+    for (auto const& pair : *p->m_field) {
       ss << show(pair.first->get_name()) << ": " << show(pair.second) << "\n";
     }
   }
   if (p->m_method) {
     ss << "method annotations:\n";
-    for (auto const pair : *p->m_method) {
+    for (auto const& pair : *p->m_method) {
       ss << show(pair.first->get_name()) << ": " << show(pair.second) << "\n";
     }
   }
   if (p->m_method_param) {
     ss << "method parameter annotations:\n";
-    for (auto const pair : *p->m_method_param) {
+    for (auto const& pair : *p->m_method_param) {
       ss << show(pair.first->get_name());
-      for (auto const parampair : *pair.second) {
+      for (auto const& parampair : *pair.second) {
         ss << "  " << parampair.first << ": " << show(parampair.second) << "\n";
       }
     }

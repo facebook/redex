@@ -345,7 +345,6 @@ class Forest {
     }
 
     s_expr trees_expr;
-    int32_t tree_count;
     s_patn({s_patn("forest")}, trees_expr)
         .must_match(expr, "Missing forest tag");
     always_assert(trees_expr.size() > 0);

@@ -20,6 +20,7 @@
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "InterDexPass.h"
+#include "Macros.h"
 #include "MethodProfiles.h"
 #include "MethodUtil.h"
 #include "PassManager.h"
@@ -348,7 +349,7 @@ void insert_dispatches(
   {
     auto params = cfg.get_param_instructions();
     size_t s = 0;
-    for (const auto& i : params) {
+    for (const auto& i ATTRIBUTE_UNUSED : params) {
       ++s;
     }
     invoke_template->set_srcs_size(s);

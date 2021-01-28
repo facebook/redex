@@ -1214,8 +1214,7 @@ CommonSubexpressionElimination::CommonSubexpressionElimination(
     bool is_init_or_clinit,
     DexType* declaring_type,
     DexTypeList* args)
-    : m_shared_state(shared_state),
-      m_cfg(cfg),
+    : m_cfg(cfg),
       m_is_static(is_static),
       m_declaring_type(declaring_type),
       m_args(args) {
