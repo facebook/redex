@@ -8,6 +8,7 @@
 #pragma once
 
 #include <memory>
+#include <ostream>
 #include <unordered_map>
 #include <vector>
 
@@ -360,6 +361,7 @@ struct result_t {
 
  private:
   friend struct flow_t;
+  friend std::ostream& operator<<(std::ostream&, const result_t&);
 
   /** result_t instances are only constructible by flow_t::find. */
   explicit result_t(detail::Locations results)

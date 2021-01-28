@@ -14,6 +14,8 @@
 
 #include "MonotonicFixpointIterator.h"
 #include "PatriciaTreeSetAbstractDomain.h"
+#include "Show.h"
+#include "Trace.h"
 
 namespace mf {
 namespace detail {
@@ -409,6 +411,8 @@ void DataFlowGraph::propagate_flow_constraints(
     auto part = analysis.get_exit_state_at(node);
 
     if (part.get(node_loc(node)).contains(node_insn(node))) {
+      TRACE(MFLOW, 6, "propagate_flow_constraints: %s inconsistent for L%d",
+            SHOW(node_insn(node)), node_loc(node));
       it = m_adjacencies.erase(it);
     } else {
       ++it;
@@ -454,12 +458,14 @@ DataFlowGraph instruction_graph(cfg::ControlFlowGraph& cfg,
     }
 
     auto& constraint = constraints.at(loc);
-    if (!constraint.insn_matcher->matches(insn)) {
+    if (constraint.insn_matcher->matches(insn)) {
+      TRACE(MFLOW, 6, "instruction_graph: L%d matching %s", loc, SHOW(insn));
+      graph.add_node(loc, insn);
+      return true;
+    } else {
+      TRACE(MFLOW, 8, "instruction_graph: L%d failing  %s", loc, SHOW(insn));
       return false;
     }
-
-    graph.add_node(loc, insn);
-    return true;
   };
 
   // Check whether `insn` could serve as the operand implied by the obligation:

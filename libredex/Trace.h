@@ -80,6 +80,7 @@ class DexType;
   TM(METH_DEDUP)     \
   TM(METH_MERGER)    \
   TM(METH_PROF)      \
+  TM(MFLOW)          \
   TM(MMINL)          \
   TM(MODULARITY)     \
   TM(MONITOR)        \
