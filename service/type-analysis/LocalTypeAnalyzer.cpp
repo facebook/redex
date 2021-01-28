@@ -20,19 +20,19 @@ namespace type_analyzer {
 
 namespace local {
 
-void traceEnvironment(DexTypeEnvironment* env) {
-  std::ostringstream out;
-  out << *env;
-  TRACE(TYPE, 9, "%s", out.str().c_str());
-}
+/*
+ * For debugging only
+ * void traceEnvironment(DexTypeEnvironment* env) {
+ *   std::ostringstream out;
+ *   out << *env;
+ *   TRACE(TYPE, 9, "%s", out.str().c_str());
+ * }
+ */
 
 void LocalTypeAnalyzer::analyze_instruction(const IRInstruction* insn,
                                             DexTypeEnvironment* env) const {
   TRACE(TYPE, 9, "Analyzing instruction: %s", SHOW(insn));
   m_insn_analyzer(insn, env);
-  if (traceEnabled(TYPE, 9)) {
-    traceEnvironment(env);
-  }
 }
 
 bool RegisterTypeAnalyzer::analyze_default(const IRInstruction* insn,
