@@ -750,6 +750,7 @@ class ControlFlowGraph {
   bool editable() const { return m_editable; }
 
   size_t num_blocks() const { return m_blocks.size(); }
+  size_t num_edges() const { return m_edges.size(); }
 
   /*
    * Traverse the graph, starting from the entry node. Return a bitset with IDs
