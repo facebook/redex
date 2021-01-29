@@ -8,6 +8,7 @@
 #pragma once
 
 #include "DexClass.h"
+#include "ShrinkerConfig.h"
 
 namespace inliner {
 
@@ -24,12 +25,7 @@ struct InlinerConfig {
   bool inline_small_non_deletables{true};
   bool use_constant_propagation_for_callee_size{true};
   bool use_cfg_inliner{false};
-  bool run_const_prop{false};
-  bool run_cse{false};
-  bool run_copy_prop{false};
-  bool run_local_dce{false};
-  bool run_reg_alloc{false};
-  bool run_dedup_blocks{false};
+  shrinker::ShrinkerConfig shrinker;
   bool shrink_other_methods{true};
   bool unique_inlined_registers{true};
   bool debug{false};

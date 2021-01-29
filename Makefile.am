@@ -198,6 +198,7 @@ libredex_la_SOURCES = \
 	service/regalloc/RegisterType.cpp \
 	service/regalloc/Split.cpp \
 	service/regalloc/VirtualRegistersFile.cpp \
+	service/shrinker/Shrinker.cpp \
 	service/switch-dispatch/SwitchDispatch.cpp \
 	service/switch-partitioning/SwitchEquivFinder.cpp \
 	service/switch-partitioning/SwitchMethodPartitioning.cpp \

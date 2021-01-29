@@ -16,12 +16,13 @@ void InlinerConfig::bind_config() {
   bind("multiple_callers", multiple_callers, multiple_callers);
   bind("inline_small_non_deletables", inline_small_non_deletables,
        inline_small_non_deletables);
-  bind("run_const_prop", run_const_prop, run_const_prop);
-  bind("run_cse", run_cse, run_cse);
-  bind("run_dedup_blocks", run_dedup_blocks, run_dedup_blocks);
-  bind("run_copy_prop", run_copy_prop, run_copy_prop);
-  bind("run_reg_alloc", run_reg_alloc, run_reg_alloc);
-  bind("run_local_dce", run_local_dce, run_local_dce);
+  bind("run_const_prop", shrinker.run_const_prop, shrinker.run_const_prop);
+  bind("run_cse", shrinker.run_cse, shrinker.run_cse);
+  bind("run_dedup_blocks", shrinker.run_dedup_blocks,
+       shrinker.run_dedup_blocks);
+  bind("run_copy_prop", shrinker.run_copy_prop, shrinker.run_copy_prop);
+  bind("run_reg_alloc", shrinker.run_reg_alloc, shrinker.run_reg_alloc);
+  bind("run_local_dce", shrinker.run_local_dce, shrinker.run_local_dce);
   bind("no_inline_annos", {}, m_no_inline_annos);
   bind("force_inline_annos", {}, m_force_inline_annos);
   bind("blocklist", {}, m_blocklist);

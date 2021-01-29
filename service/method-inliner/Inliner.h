@@ -10,23 +10,15 @@
 #include <atomic>
 #include <functional>
 #include <map>
-#include <set>
 #include <vector>
 
-#include "CommonSubexpressionElimination.h"
-#include "ConstantEnvironment.h"
-#include "ConstantPropagationTransform.h"
-#include "CopyPropagation.h"
-#include "DedupBlocks.h"
 #include "DexClass.h"
-#include "DexStore.h"
-#include "IPConstantPropagationAnalysis.h"
 #include "IRCode.h"
-#include "LocalDce.h"
 #include "MethodProfiles.h"
 #include "PatriciaTreeSet.h"
 #include "PriorityThreadPool.h"
 #include "Resolver.h"
+#include "Shrinker.h"
 
 class InlineForSpeed;
 
@@ -200,6 +192,8 @@ class MultiMethodInliner {
   ConcurrentSet<DexMethod*>& get_delayed_make_static() {
     return m_delayed_make_static;
   }
+
+  const shrinker::Shrinker& get_shrinker() const { return m_shrinker; }
 
  private:
   void caller_inline(DexMethod* caller,
@@ -462,11 +456,6 @@ class MultiMethodInliner {
   std::function<DexMethod*(DexMethodRef*, MethodSearch)> resolver;
 
   /**
-   * Checker for cross stores contaminations.
-   */
-  XStoreRefs xstores;
-
-  /**
    * Inlined methods.
    */
   ConcurrentSet<DexMethod*> m_inlined;
@@ -537,9 +526,6 @@ class MultiMethodInliner {
   ConcurrentMap<const DexMethod*, size_t>
       m_async_delayed_shrinking_callee_wait_counts;
 
-  // Whether any of const-prop/cs/copy-prop/local-dce are enabled.
-  bool m_shrinking_enabled{0};
-
   // Set of methods that need to be made static eventually. The destructor
   // of this class will do the necessary delayed work.
   ConcurrentSet<DexMethod*> m_delayed_make_static;
@@ -572,16 +558,6 @@ class MultiMethodInliner {
   // Cache of whether a constructor can be unconditionally inlined.
   mutable ConcurrentMap<const DexMethod*, boost::optional<bool>>
       m_can_inline_init;
-
-  constant_propagation::Transform::Stats m_const_prop_stats;
-  cse_impl::Stats m_cse_stats;
-  copy_propagation_impl::Stats m_copy_prop_stats;
-  LocalDce::Stats m_local_dce_stats;
-  dedup_blocks_impl::Stats m_dedup_blocks_stats;
-  size_t m_methods_shrunk{0};
-
-  // When mutating service stats while inlining in parallel
-  std::mutex m_stats_mutex;
 
  private:
   /**
@@ -634,14 +610,11 @@ class MultiMethodInliner {
   const std::unordered_map<const DexMethod*, size_t>*
       m_same_method_implementations;
 
-  std::unordered_set<DexMethodRef*> m_pure_methods;
-  std::unordered_set<DexString*> m_finalish_field_names;
-
   // Whether to do some deep analysis to determine if constructor candidates
   // can be safely inlined, and don't inline them otherwise.
   bool m_analyze_and_prune_inits;
 
-  std::unique_ptr<cse_impl::SharedState> m_cse_shared_state;
+  shrinker::Shrinker m_shrinker;
 
   const DexFieldRef* m_sdk_int_field =
       DexField::get_field("Landroid/os/Build$VERSION;.SDK_INT:I");
@@ -649,18 +622,6 @@ class MultiMethodInliner {
  public:
   const InliningInfo& get_info() { return info; }
 
-  const constant_propagation::Transform::Stats& get_const_prop_stats() {
-    return m_const_prop_stats;
-  }
-  const cse_impl::Stats& get_cse_stats() { return m_cse_stats; }
-  const copy_propagation_impl::Stats& get_copy_prop_stats() {
-    return m_copy_prop_stats;
-  }
-  const LocalDce::Stats& get_local_dce_stats() { return m_local_dce_stats; }
-  const dedup_blocks_impl::Stats& get_dedup_blocks_stats() {
-    return m_dedup_blocks_stats;
-  }
-  size_t get_methods_shrunk() { return m_methods_shrunk; }
   size_t get_callers() { return m_async_caller_wait_counts.size(); }
   size_t get_delayed_shrinking_callees() {
     return m_async_delayed_shrinking_callee_wait_counts.size();

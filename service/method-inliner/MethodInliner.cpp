@@ -418,6 +418,7 @@ void run_inliner(DexStoresVector& stores,
   TRACE(INLINE, 1, "%ld inlined calls over %ld methods and %ld methods removed",
         (size_t)inliner.get_info().calls_inlined, inlined_count, deleted);
 
+  const auto& shrinker = inliner.get_shrinker();
   mgr.incr_metric("recursive", inliner.get_info().recursive);
   mgr.incr_metric("max_call_stack_depth",
                   inliner.get_info().max_call_stack_depth);
@@ -444,25 +445,25 @@ void run_inliner(DexStoresVector& stores,
       inliner.get_info().constant_invoke_callees_unreachable_blocks);
   mgr.incr_metric("critical_path_length",
                   inliner.get_info().critical_path_length);
-  mgr.incr_metric("methods_shrunk", inliner.get_methods_shrunk());
+  mgr.incr_metric("methods_shrunk", shrinker.get_methods_shrunk());
   mgr.incr_metric("callers", inliner.get_callers());
   mgr.incr_metric("delayed_shrinking_callees",
                   inliner.get_delayed_shrinking_callees());
   mgr.incr_metric("instructions_eliminated_const_prop",
-                  inliner.get_const_prop_stats().branches_removed +
-                      inliner.get_const_prop_stats().branches_forwarded +
-                      inliner.get_const_prop_stats().materialized_consts +
-                      inliner.get_const_prop_stats().added_param_const +
-                      inliner.get_const_prop_stats().throws);
+                  shrinker.get_const_prop_stats().branches_removed +
+                      shrinker.get_const_prop_stats().branches_forwarded +
+                      shrinker.get_const_prop_stats().materialized_consts +
+                      shrinker.get_const_prop_stats().added_param_const +
+                      shrinker.get_const_prop_stats().throws);
   mgr.incr_metric("instructions_eliminated_cse",
-                  inliner.get_cse_stats().instructions_eliminated);
+                  shrinker.get_cse_stats().instructions_eliminated);
   mgr.incr_metric("instructions_eliminated_copy_prop",
-                  inliner.get_copy_prop_stats().moves_eliminated);
+                  shrinker.get_copy_prop_stats().moves_eliminated);
   mgr.incr_metric(
       "instructions_eliminated_localdce",
-      inliner.get_local_dce_stats().dead_instruction_count +
-          inliner.get_local_dce_stats().unreachable_instruction_count);
+      shrinker.get_local_dce_stats().dead_instruction_count +
+          shrinker.get_local_dce_stats().unreachable_instruction_count);
   mgr.incr_metric("blocks_eliminated_by_dedup_blocks",
-                  inliner.get_dedup_blocks_stats().blocks_removed);
+                  shrinker.get_dedup_blocks_stats().blocks_removed);
 }
 } // namespace inliner

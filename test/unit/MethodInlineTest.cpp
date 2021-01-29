@@ -486,8 +486,8 @@ TEST_F(MethodInlineTest, inline_beneficial_on_average_after_constant_prop) {
   inliner_config.populate(scope);
   inliner_config.use_cfg_inliner = true;
   inliner_config.throws_inline = true;
-  inliner_config.run_const_prop = true;
-  inliner_config.run_local_dce = true;
+  inliner_config.shrinker.run_const_prop = true;
+  inliner_config.shrinker.run_local_dce = true;
   check_method->get_code()->build_cfg(true);
   foo_main->get_code()->build_cfg(true);
   MultiMethodInliner inliner(scope,
@@ -558,8 +558,8 @@ TEST_F(MethodInlineTest,
   inliner_config.populate(scope);
   inliner_config.use_cfg_inliner = true;
   inliner_config.throws_inline = true;
-  inliner_config.run_const_prop = true;
-  inliner_config.run_local_dce = true;
+  inliner_config.shrinker.run_const_prop = true;
+  inliner_config.shrinker.run_local_dce = true;
   check_method->get_code()->build_cfg(true);
   foo_main->get_code()->build_cfg(true);
   MultiMethodInliner inliner(scope,

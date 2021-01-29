@@ -25,13 +25,11 @@
 #include "IRInstruction.h"
 #include "InlineForSpeed.h"
 #include "InlinerConfig.h"
-#include "LocalDce.h"
 #include "Macros.h"
 #include "MethodProfiles.h"
 #include "Mutators.h"
 #include "OptData.h"
 #include "Purity.h"
-#include "RegisterAllocation.h"
 #include "Resolver.h"
 #include "Timer.h"
 #include "Transform.h"
@@ -98,15 +96,17 @@ MultiMethodInliner::MultiMethodInliner(
     const std::unordered_set<DexMethodRef*>& configured_pure_methods,
     const std::unordered_set<DexString*>& configured_finalish_field_names)
     : resolver(std::move(resolve_fn)),
-      xstores(stores),
       m_scope(scope),
       m_config(config),
       m_mode(mode),
       m_inline_for_speed(inline_for_speed),
       m_same_method_implementations(same_method_implementations),
-      m_pure_methods(get_pure_methods()),
-      m_finalish_field_names(configured_finalish_field_names),
-      m_analyze_and_prune_inits(analyze_and_prune_inits) {
+      m_analyze_and_prune_inits(analyze_and_prune_inits),
+      m_shrinker(stores,
+                 scope,
+                 config.shrinker,
+                 configured_pure_methods,
+                 configured_finalish_field_names) {
   for (const auto& callee_callers : true_virtual_callers) {
     for (const auto& caller_insns : callee_callers.second) {
       for (auto insn : caller_insns.second) {
@@ -179,38 +179,6 @@ MultiMethodInliner::MultiMethodInliner(
         auto caller = caller_insns.first;
         callee_caller[callee].push_back(caller);
         caller_callee[caller].push_back(callee);
-      }
-    }
-  }
-
-  m_shrinking_enabled = m_config.run_const_prop || m_config.run_cse ||
-                        m_config.run_copy_prop || m_config.run_local_dce ||
-                        m_config.run_dedup_blocks;
-
-  if (m_config.run_cse || m_config.run_local_dce) {
-    m_pure_methods.insert(configured_pure_methods.begin(),
-                          configured_pure_methods.end());
-    auto immutable_getters = get_immutable_getters(scope);
-    m_pure_methods.insert(immutable_getters.begin(), immutable_getters.end());
-    if (m_config.run_cse) {
-      m_cse_shared_state = std::make_unique<cse_impl::SharedState>(
-          m_pure_methods, m_finalish_field_names);
-    }
-    if (m_config.run_local_dce) {
-      std::unique_ptr<const method_override_graph::Graph> owned_override_graph;
-      const method_override_graph::Graph* override_graph;
-      if (m_config.run_cse) {
-        override_graph = m_cse_shared_state->get_method_override_graph();
-      } else {
-        owned_override_graph = method_override_graph::build_graph(scope);
-        override_graph = owned_override_graph.get();
-      }
-      std::unordered_set<const DexMethod*> computed_no_side_effects_methods;
-      /* Returns computed_no_side_effects_methods_iterations */
-      compute_no_side_effects_methods(scope, override_graph, m_pure_methods,
-                                      &computed_no_side_effects_methods);
-      for (auto m : computed_no_side_effects_methods) {
-        m_pure_methods.insert(const_cast<DexMethod*>(m));
       }
     }
   }
@@ -405,7 +373,7 @@ void MultiMethodInliner::inline_methods() {
     }
   }
 
-  if (m_shrinking_enabled && m_config.shrink_other_methods) {
+  if (m_shrinker.enabled() && m_config.shrink_other_methods) {
     walk::code(m_scope, [&](DexMethod* method, IRCode& code) {
       // If a method is not tracked as a caller, and not already in the
       // processing pool because it's a callee, then process it.
@@ -812,7 +780,7 @@ void MultiMethodInliner::async_prioritized_method_execute(
 
 void MultiMethodInliner::async_postprocess_method(DexMethod* method) {
   if (m_async_callee_priorities.count(method) == 0 &&
-      (!m_shrinking_enabled || method->rstate.no_optimizations())) {
+      (!m_shrinker.enabled() || method->rstate.no_optimizations())) {
     return;
   }
 
@@ -820,144 +788,18 @@ void MultiMethodInliner::async_postprocess_method(DexMethod* method) {
       method, [method, this]() { postprocess_method(method); });
 }
 
-void MultiMethodInliner::shrink_method(DexMethod* method) {
-  auto code = method->get_code();
-  bool editable_cfg_built = code->editable_cfg_built();
-
-  constant_propagation::Transform::Stats const_prop_stats;
-  cse_impl::Stats cse_stats;
-  copy_propagation_impl::Stats copy_prop_stats;
-  LocalDce::Stats local_dce_stats;
-  dedup_blocks_impl::Stats dedup_blocks_stats;
-
-  if (m_config.run_const_prop) {
-    if (editable_cfg_built) {
-      code->clear_cfg();
-    }
-    if (!code->cfg_built()) {
-      code->build_cfg(/* editable */ false);
-    }
-    {
-      constant_propagation::intraprocedural::FixpointIterator fp_iter(
-          code->cfg(), constant_propagation::ConstantPrimitiveAnalyzer());
-      fp_iter.run(ConstantEnvironment());
-      constant_propagation::Transform::Config config;
-      constant_propagation::Transform tf(config);
-      const_prop_stats = tf.apply_on_uneditable_cfg(
-          fp_iter, constant_propagation::WholeProgramState(), code, &xstores,
-          method->get_class());
-    }
-    always_assert(!code->editable_cfg_built());
-    code->build_cfg(/* editable */ true);
-    code->cfg().calculate_exit_block();
-    {
-      constant_propagation::intraprocedural::FixpointIterator fp_iter(
-          code->cfg(), constant_propagation::ConstantPrimitiveAnalyzer());
-      fp_iter.run(ConstantEnvironment());
-      constant_propagation::Transform::Config config;
-      constant_propagation::Transform tf(config);
-      const_prop_stats += tf.apply(fp_iter, code->cfg(), method, &xstores);
-    }
-  }
-
-  if (m_config.run_cse) {
-    if (!code->editable_cfg_built()) {
-      code->build_cfg(/* editable */ true);
-    }
-
-    cse_impl::CommonSubexpressionElimination cse(
-        m_cse_shared_state.get(), code->cfg(), is_static(method),
-        method::is_init(method) || method::is_clinit(method),
-        method->get_class(), method->get_proto()->get_args());
-    cse.patch();
-    cse_stats = cse.get_stats();
-  }
-
-  if (m_config.run_copy_prop) {
-    copy_propagation_impl::Config config;
-    copy_propagation_impl::CopyPropagation copy_propagation(config);
-    copy_prop_stats = copy_propagation.run(code, method);
-  }
-
-  if (m_config.run_local_dce) {
-    // LocalDce doesn't care if editable_cfg_built
-    auto local_dce = LocalDce(m_pure_methods);
-    local_dce.dce(code);
-    local_dce_stats = local_dce.get_stats();
-  }
-
-  if (m_config.run_reg_alloc) {
-    auto get_features = [&code]() -> std::tuple<size_t, size_t, size_t> {
-      if (!traceEnabled(MMINL, 4)) {
-        return std::make_tuple(0u, 0u, 0u);
-      }
-      if (!code->editable_cfg_built()) {
-        code->build_cfg(/* editable= */ true);
-      }
-      const auto& cfg = code->cfg();
-
-      size_t regs_before = cfg.get_registers_size();
-      size_t insn_before = cfg.num_opcodes();
-      size_t blocks_before = cfg.num_blocks();
-      return std::make_tuple(regs_before, insn_before, blocks_before);
-    };
-
-    // It's OK to ensure we have an editable CFG, the allocator would build it,
-    // too.
-    auto before_features = get_features();
-
-    auto config = regalloc::graph_coloring::Allocator::Config{};
-    config.no_overwrite_this = true; // Downstream passes may rely on this.
-    regalloc::graph_coloring::allocate(config, method);
-    // After this, any CFG is gone.
-
-    // Assume that dedup will run, so building CFG is OK.
-    auto after_features = get_features();
-    TRACE(MMINL, 4, "Inliner.RegAlloc: %s: (%zu, %zu, %zu) -> (%zu, %zu, %zu)",
-          SHOW(method), std::get<0>(before_features),
-          std::get<1>(before_features), std::get<2>(before_features),
-          std::get<0>(after_features), std::get<1>(after_features),
-          std::get<2>(after_features));
-  }
-
-  if (m_config.run_dedup_blocks) {
-    if (!code->editable_cfg_built()) {
-      code->build_cfg(/* editable */ true);
-    }
-
-    dedup_blocks_impl::Config config;
-    dedup_blocks_impl::DedupBlocks dedup_blocks(&config, method);
-    dedup_blocks.run();
-    dedup_blocks_stats = dedup_blocks.get_stats();
-  }
-
-  if (editable_cfg_built && !code->editable_cfg_built()) {
-    code->build_cfg(/* editable */ true);
-  } else if (!editable_cfg_built && code->editable_cfg_built()) {
-    code->clear_cfg();
-  }
-
-  std::lock_guard<std::mutex> guard(m_stats_mutex);
-  m_const_prop_stats += const_prop_stats;
-  m_cse_stats += cse_stats;
-  m_copy_prop_stats += copy_prop_stats;
-  m_local_dce_stats += local_dce_stats;
-  m_dedup_blocks_stats += dedup_blocks_stats;
-  m_methods_shrunk++;
-}
-
 void MultiMethodInliner::postprocess_method(DexMethod* method) {
   TraceContext context(method);
   bool delayed_shrinking = false;
   bool is_callee = !!m_async_callee_priorities.count(method);
-  if (m_shrinking_enabled && !method->rstate.no_optimizations()) {
+  if (m_shrinker.enabled() && !method->rstate.no_optimizations()) {
     if (is_callee && should_inline_fast(method)) {
       // We know now that this method will get inlined regardless of the size
       // of its code. Therefore, we can delay shrinking, to unblock further
       // work more quickly.
       delayed_shrinking = true;
     } else {
-      shrink_method(method);
+      m_shrinker.shrink_method(method);
     }
   }
 
@@ -1012,7 +854,7 @@ void MultiMethodInliner::decrement_caller_wait_counts(
           auto& callees = m_async_caller_callees.at(caller);
           caller_inline(caller, callees);
           decrement_delayed_shrinking_callee_wait_counts(callees);
-          if (m_shrinking_enabled ||
+          if (m_shrinker.enabled() ||
               m_async_callee_priorities.count(caller) != 0) {
             postprocess_method(caller);
           }
@@ -1036,8 +878,8 @@ void MultiMethodInliner::decrement_delayed_shrinking_callee_wait_counts(
         });
     if (callee_ready) {
       int priority = std::numeric_limits<int>::min();
-      m_async_method_executor.post(priority,
-                                   [callee, this]() { shrink_method(callee); });
+      m_async_method_executor.post(
+          priority, [callee, this]() { m_shrinker.shrink_method(callee); });
     }
   }
 }
@@ -1530,9 +1372,7 @@ bool MultiMethodInliner::can_inline_init(const DexMethod* init_method) {
     return *opt_can_inline_init;
   }
 
-  const std::unordered_set<const DexField*>* finalizable_fields =
-      m_cse_shared_state ? &m_cse_shared_state->get_finalizable_fields()
-                         : nullptr;
+  const auto* finalizable_fields = m_shrinker.get_finalizable_fields();
   bool res =
       constructor_analysis::can_inline_init(init_method, finalizable_fields);
   m_can_inline_init.update(
@@ -2042,6 +1882,7 @@ CalleeCallerRefs MultiMethodInliner::get_callee_caller_refs(
 bool MultiMethodInliner::cross_store_reference(const DexMethod* caller,
                                                const DexMethod* callee) {
   auto callee_type_refs = get_callee_type_refs(callee);
+  const auto& xstores = m_shrinker.get_xstores();
   size_t store_idx = xstores.get_store_idx(caller->get_class());
   for (auto type : callee_type_refs) {
     if (xstores.illegal_ref(store_idx, type)) {
