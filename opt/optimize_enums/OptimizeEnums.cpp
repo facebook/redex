@@ -628,7 +628,7 @@ class OptimizeEnums {
       const GeneratedSwitchCases& generated_switch_cases) {
 
     namespace cp = constant_propagation;
-    walk::code(m_scope, [&](DexMethod*, IRCode& code) {
+    walk::parallel::code(m_scope, [&](DexMethod*, IRCode& code) {
       cfg::ScopedCFG cfg(&code);
       cfg->calculate_exit_block();
 
@@ -909,13 +909,13 @@ class OptimizeEnums {
     size_t num_enum_classes{0};
     size_t num_enum_objs{0};
     size_t num_int_objs{0};
-    size_t num_switch_equiv_finder_failures{0};
+    std::atomic<size_t> num_switch_equiv_finder_failures{0};
     size_t num_candidate_generated_methods{0};
     size_t num_removed_generated_methods{0};
   };
   Stats m_stats;
 
-  std::unordered_set<DexField*> m_lookup_tables_replaced;
+  ConcurrentSet<DexField*> m_lookup_tables_replaced;
   const DexMethod* m_java_enum_ctor;
   const ProguardMap& m_pg_map;
 };
