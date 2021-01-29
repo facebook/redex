@@ -66,10 +66,14 @@ void DedupStrings::run(DexStoresVector& stores) {
 
   // Compute set of non-load strings in each dex
   std::unordered_set<const DexString*> non_load_strings[dexen.size()];
-  for (size_t i = 0; i < dexen.size(); i++) {
+  auto wq = workqueue_foreach<size_t>([&](size_t i) {
     auto& strings = non_load_strings[i];
     gather_non_load_strings(dexen[i], &strings);
+  });
+  for (size_t i = 0; i < dexen.size(); i++) {
+    wq.add_item(i);
   }
+  wq.run_all();
 
   // For each string, figure out how many times it's loaded per dex
   ConcurrentMap<DexString*, std::unordered_map<size_t, size_t>> occurrences =
