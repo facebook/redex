@@ -110,8 +110,36 @@ Loop::subloop_iterator Loop::subloop_end() { return m_subloops.end(); }
  * control flow graph, and pruning the strongly connected components to find
  * the valid loops.
  */
-LoopInfo::LoopInfo(cfg::ControlFlowGraph& cfg) {
+LoopInfo::LoopInfo(const cfg::ControlFlowGraph& cfg) {
+  init(cfg, [](auto&, auto&, auto&) { return nullptr; });
+}
 
+LoopInfo::LoopInfo(cfg::ControlFlowGraph& cfg) {
+  init(cfg, [&](auto& cfg, auto block_set, auto loop_header) {
+    auto loop_header_preds = loop_header->preds();
+    auto loop_preheader = cfg.create_block();
+    for (auto edge : loop_header_preds) {
+      if (!block_set.count(edge->src())) {
+        cfg.set_edge_target(edge, loop_preheader);
+      }
+    }
+
+    // connect the preheader with the header
+    auto edge =
+        new cfg::Edge(loop_preheader, loop_header, cfg::EdgeType::EDGE_GOTO);
+    cfg.add_edge(edge);
+    return loop_preheader;
+  });
+}
+
+LoopInfo::~LoopInfo() {
+  for (auto* loop : m_loops) {
+    delete loop;
+  }
+}
+
+template <typename T, typename Fn>
+void LoopInfo::init(T& cfg, Fn preheader_fn) {
   sparta::WeakTopologicalOrdering<cfg::Block*> wto(
       cfg.entry_block(), [&](const cfg::Block* block) {
         std::vector<cfg::Block*> blocks;
@@ -166,19 +194,7 @@ LoopInfo::LoopInfo(cfg::ControlFlowGraph& cfg) {
 
     always_assert(!blocks_in_loop.empty());
     auto loop_header = blocks_in_loop.front();
-    auto loop_header_preds = loop_header->preds();
-    auto loop_preheader = cfg.create_block();
-
-    for (auto edge : loop_header_preds) {
-      if (!block_set.count(edge->src())) {
-        cfg.set_edge_target(edge, loop_preheader);
-      }
-    }
-
-    // connect the preheader with the header
-    auto edge =
-        new cfg::Edge(loop_preheader, loop_header, cfg::EdgeType::EDGE_GOTO);
-    cfg.add_edge(edge);
+    auto loop_preheader = preheader_fn(cfg, block_set, loop_header);
 
     auto loop = new Loop(blocks_in_loop, subloops, loop_preheader);
 

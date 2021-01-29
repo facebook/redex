@@ -482,6 +482,9 @@ class InstructionIteratorImpl {
     to_next_instruction();
   }
 
+  InstructionIteratorImpl(const InstructionIteratorImpl<false>& rhs)
+      : m_it(rhs.m_it), m_end(rhs.m_end) {}
+
   InstructionIteratorImpl& operator++() {
     ++m_it;
     to_next_instruction();
@@ -524,6 +527,9 @@ class InstructionIteratorImpl {
     m_it = it;
     to_next_instruction();
   }
+
+  template <bool kConst>
+  friend class InstructionIteratorImpl;
 };
 
 template <bool is_const>

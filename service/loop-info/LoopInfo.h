@@ -129,7 +129,9 @@ class LoopInfo {
  public:
   using iterator = std::vector<Loop*>::iterator;
   using reverse_iterator = std::vector<Loop*>::reverse_iterator;
+  explicit LoopInfo(const cfg::ControlFlowGraph& cfg);
   explicit LoopInfo(cfg::ControlFlowGraph& cfg);
+  ~LoopInfo();
   Loop* get_loop_for(cfg::Block* block);
   size_t num_loops();
   iterator begin();
@@ -138,6 +140,9 @@ class LoopInfo {
   reverse_iterator rend();
 
  private:
+  template <typename Cfg, typename Fn>
+  void init(Cfg& cfg, Fn fn);
+
   std::vector<Loop*> m_loops;
   std::unordered_map<cfg::Block*, int> m_loop_depth;
   std::unordered_map<cfg::Block*, Loop*> m_block_location;
