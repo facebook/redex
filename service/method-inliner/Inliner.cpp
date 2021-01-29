@@ -23,6 +23,7 @@
 #include "IRInstruction.h"
 #include "InlineForSpeed.h"
 #include "LocalDce.h"
+#include "LoopInfo.h"
 #include "Macros.h"
 #include "MethodProfiles.h"
 #include "Mutators.h"
@@ -644,6 +645,57 @@ bool MultiMethodInliner::inline_inlinables_need_deconstruct(DexMethod* method) {
   return m_config.use_cfg_inliner && !method->get_code()->editable_cfg_built();
 }
 
+namespace {
+
+// Helper method, as computing inline for a trace could be too expensive.
+std::string create_inlining_trace_msg(const DexMethod* caller,
+                                      const DexMethod* callee,
+                                      IRInstruction* invoke_insn) {
+  std::ostringstream oss;
+  oss << "inline " << show(callee) << " into " << show(caller) << " ";
+  auto features = [&oss](const DexMethod* m, IRInstruction* insn) {
+    auto code = m->get_code();
+    auto regs = code->cfg_built() ? code->cfg().get_registers_size()
+                                  : code->get_registers_size();
+    auto opcodes = code->count_opcodes();
+    auto blocks = code->cfg_built() ? code->cfg().num_blocks() : (size_t)0;
+    auto edges = code->cfg_built() ? code->cfg().num_edges() : (size_t)0;
+
+    oss << regs << "!" << opcodes << "!" << blocks << "!" << edges;
+
+    // Expensive...
+    if (code->cfg_built()) {
+      loop_impl::LoopInfo info(code->cfg());
+      oss << "!" << info.num_loops();
+      size_t max_depth{0};
+      for (auto* loop : info) {
+        max_depth = std::max(max_depth, (size_t)loop->get_loop_depth());
+      }
+      oss << "!" << max_depth;
+      if (insn != nullptr) {
+        auto it = code->cfg().find_insn(insn);
+        redex_assert(!it.is_end());
+        auto loop = info.get_loop_for(it.block());
+        if (loop != nullptr) {
+          oss << "!" << loop->get_loop_depth();
+        } else {
+          oss << "!" << 0;
+        }
+      } else {
+        oss << "!" << 0;
+      }
+    } else {
+      oss << "!0!0!0";
+    }
+  };
+  features(caller, invoke_insn);
+  oss << "!";
+  features(callee, nullptr);
+  return oss.str();
+}
+
+} // namespace
+
 void MultiMethodInliner::inline_inlinables(
     DexMethod* caller_method, const std::vector<Inlinable>& inlinables) {
 
@@ -719,9 +771,9 @@ void MultiMethodInliner::inline_inlinables(
     // the fact that we'll have to make some methods static.
     make_static_inlinable(make_static);
 
-    TRACE(MMINL, 4, "inline %s (%d) in %s (%d)", SHOW(callee),
-          caller->get_registers_size(), SHOW(caller),
-          callee->get_registers_size());
+    TRACE(MMINL, 4, "%s",
+          create_inlining_trace_msg(caller_method, callee_method, callsite_insn)
+              .c_str());
 
     if (m_config.use_cfg_inliner) {
       if (m_config.unique_inlined_registers) {

@@ -360,12 +360,17 @@ class Forest {
 
   size_t size() const { return m_trees.size(); }
 
-  bool accept(const MethodContext& caller, const MethodContext& callee) const {
+  bool accept(const MethodContext& caller,
+              const MethodContext& callee,
+              size_t* c = nullptr) const {
     size_t acc_count{0};
     for (const auto& dec_tree : m_trees) {
       if (dec_tree->accept(caller, callee)) {
         ++acc_count;
       }
+    }
+    if (c != nullptr) {
+      *c = acc_count;
     }
     return 2 * acc_count >= m_trees.size();
   }

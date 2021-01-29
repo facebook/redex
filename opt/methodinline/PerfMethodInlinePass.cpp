@@ -244,7 +244,43 @@ class InlineForSpeedDecisionTrees final : public InlineForSpeedBase {
     auto& caller_context = get_or_create(caller_method);
     auto& callee_context = get_or_create(callee_method);
 
-    return m_forest.accept(caller_context, callee_context);
+    size_t accepted;
+    if (!m_forest.accept(caller_context, callee_context, &accepted)) {
+      return false;
+    }
+    auto get_max_float = [](const std::vector<boost::optional<float>>& v) {
+      float max = -1;
+      for (const auto& opt : v) {
+        if (opt) {
+          max = std::max(max, *opt);
+        }
+      }
+      return max;
+    };
+    TRACE(METH_PROF,
+          5,
+          "[InlineForSpeedDecisionTrees] "
+          "%zu: %s!%u!%u!%1.5f!%u!%u!%u!%u!%s!%u!%u!%1.5f!%u!%u!%u!%u",
+          accepted,
+          // Caller
+          SHOW(caller_method),
+          caller_context.m_blocks,
+          caller_context.m_edges,
+          get_max_float(caller_context.m_hits),
+          caller_context.m_insns,
+          caller_context.m_regs,
+          caller_context.m_num_loops,
+          caller_context.m_deepest_loop,
+          // Callee
+          SHOW(callee_method),
+          callee_context.m_blocks,
+          callee_context.m_edges,
+          get_max_float(callee_context.m_hits),
+          callee_context.m_insns,
+          callee_context.m_regs,
+          callee_context.m_num_loops,
+          callee_context.m_deepest_loop);
+    return true;
   }
 
  private:
