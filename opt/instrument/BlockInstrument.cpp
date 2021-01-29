@@ -116,6 +116,16 @@ InstrumentedType get_instrumented_type(const MethodInfo& i) {
   }
 }
 
+bool compare_dexmethods_by_deobname(const DexMethodRef* a,
+                                    const DexMethodRef* b) {
+  const auto& name_a = show_deobfuscated(a);
+  const auto& name_b = show_deobfuscated(b);
+  always_assert_log(a == b || name_a != name_b,
+                    "Identical deobfuscated names were found: %s == %s",
+                    name_a.c_str(), name_b.c_str());
+  return name_a < name_b;
+}
+
 using MethodDictionary = std::unordered_map<const DexMethodRef*, size_t>;
 
 MethodDictionary create_method_dictionary(
@@ -131,7 +141,7 @@ MethodDictionary create_method_dictionary(
   }
   std::vector<const DexMethodRef*> methods(methods_set.begin(),
                                            methods_set.end());
-  std::sort(methods.begin(), methods.end(), compare_dexmethods);
+  std::sort(methods.begin(), methods.end(), compare_dexmethods_by_deobname);
   size_t idx{0};
 
   std::ofstream ofs(file_name, std::ofstream::out | std::ofstream::trunc);
@@ -248,7 +258,7 @@ void write_metadata(const ConfigFiles& cfg,
   std::transform(all_info.begin(), all_info.end(), std::back_inserter(sorted),
                  [](const MethodInfo& i) { return &i; });
   std::sort(sorted.begin(), sorted.end(), [](auto* lhs, auto* rhs) {
-    return compare_dexmethods(lhs->method, rhs->method);
+    return compare_dexmethods_by_deobname(lhs->method, rhs->method);
   });
   for (const auto* info : sorted) {
     write_source_blocks_for_method(sb_ofs, method_dictionary, *info);
