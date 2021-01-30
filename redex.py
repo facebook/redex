@@ -8,6 +8,7 @@ import argparse
 import enum
 import errno
 import glob
+import hashlib
 import itertools
 import json
 import logging
@@ -1076,14 +1077,28 @@ def finalize_redex(state):
     if state.args.enable_instrument_pass:
         log("Creating redex-instrument-metadata.zip")
         zipfile_path = join(dirname(state.args.out), "redex-instrument-metadata.zip")
-        with zipfile.ZipFile(zipfile_path, "w", compression=zipfile.ZIP_DEFLATED) as z:
+
+        FILES = [
+            join(dirname(state.args.out), f)
             for f in (
                 "redex-instrument-metadata.txt",
                 "redex-source-block-method-dictionary.csv",
-                "redex-block-bits-to-source-blocks.csv",
                 "redex-source-blocks.csv",
-            ):
-                z.write(join(dirname(state.args.out), f), f)
+            )
+        ]
+
+        # Write a checksum file.
+        hash = hashlib.md5()
+        for f in FILES:
+            hash.update(open(f, "rb").read())
+        checksum_path = join(dirname(state.args.out), "redex-instrument-checksum.txt")
+        with open(checksum_path, "w") as f:
+            f.write(f"{hash.hexdigest()}\n")
+
+        with zipfile.ZipFile(zipfile_path, "w", compression=zipfile.ZIP_DEFLATED) as z:
+            for f in [*FILES, checksum_path]:
+                z.write(f, os.path.basename(f))
+        os.remove(checksum_path)
 
     redex_stats_filename = state.config_dict.get("stats_output", "redex-stats.txt")
     redex_stats_file = join(dirname(meta_file_dir), redex_stats_filename)

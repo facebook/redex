@@ -142,6 +142,8 @@ MethodDictionary create_method_dictionary(
   size_t idx{0};
 
   std::ofstream ofs(file_name, std::ofstream::out | std::ofstream::trunc);
+  ofs << "type,version\nredex-source-block-method-dictionary,1\n";
+  ofs << "index,deob_name\n";
   MethodDictionary method_dictionary;
   for (const auto* m : methods) {
     method_dictionary.emplace(m, idx);
@@ -152,49 +154,11 @@ MethodDictionary create_method_dictionary(
   return method_dictionary;
 }
 
-std::ostream& print_source_blocks(
-    std::ostream& os,
-    const MethodDictionary& dict,
-    const std::vector<const SourceBlock*>& blocks) {
-  bool first = true;
-  for (auto* sb : blocks) {
-    if (first) {
-      first = false;
-    } else {
-      os << ";";
-    }
-    os << dict.at(sb->src) << "#" << sb->id;
-  }
-  return os;
-}
-
-std::ostream& write_source_blocks_for_method(std::ostream& os,
-                                             const MethodDictionary& dict,
-                                             const MethodInfo& info) {
-  os << dict.at(info.method);
-  for (const auto& v : info.bit_id_2_source_blocks) {
-    os << ",";
-    print_source_blocks(os, dict, v);
-  }
-  os << "\n";
-  return os;
-}
-
-std::ofstream create_bits_to_source_blocks_file(const ConfigFiles& cfg) {
-  std::ofstream sb_ofs(cfg.metafile("redex-block-bits-to-source-blocks.csv"),
-                       std::ofstream::out | std::ofstream::trunc);
-
-  sb_ofs << "# Block bits to source blocks v1\n";
-
-  return sb_ofs;
-}
-
 void write_metadata(const ConfigFiles& cfg,
                     const std::string& metadata_base_file_name,
                     const std::vector<MethodInfo>& all_info) {
-  auto method_dictionary = create_method_dictionary(
+  const auto method_dict = create_method_dictionary(
       cfg.metafile("redex-source-block-method-dictionary.csv"), all_info);
-  auto sb_ofs = create_bits_to_source_blocks_file(cfg);
 
   // Write a short metadata of this metadata file in the first two lines.
   auto file_name = cfg.metafile(metadata_base_file_name);
@@ -204,9 +168,10 @@ void write_metadata(const ConfigFiles& cfg,
       << all_info.size() << std::endl;
 
   // The real CSV-style metadata follows.
-  const std::array<std::string, 8> headers = {
-      "offset",  "name",      "instrument",        "non_entry_blocks",
-      "vectors", "signature", "bit_id_2_block_id", "rejected_blocks"};
+  const std::array<std::string, 9> headers = {
+      "offset",    "name",      "instrument",        "non_entry_blocks",
+      "vectors",   "signature", "bit_id_2_block_id", "rejected_blocks",
+      "src_blocks"};
   ofs << boost::algorithm::join(headers, ",") << "\n";
 
   auto write_block_id_map = [](const auto& bit_id_2_block_id) {
@@ -234,31 +199,42 @@ void write_metadata(const ConfigFiles& cfg,
     return ss.str();
   };
 
+  auto source_blocks = [&method_dict](const auto& bit_id_2_source_blocks) {
+    std::stringstream ss;
+    bool first1 = true;
+    for (const auto& v : bit_id_2_source_blocks) {
+      if (first1) {
+        first1 = false;
+      } else {
+        ss << ";";
+      }
+
+      bool first2 = true;
+      for (auto* sb : v) {
+        if (first2) {
+          first2 = false;
+        } else {
+          ss << "|";
+        }
+        ss << method_dict.at(sb->src) << "#" << sb->id;
+      }
+    }
+    return ss.str();
+  };
+
   for (const auto& info : all_info) {
-    const std::array<std::string, 8> fields = {
+    const std::array<std::string, 9> fields = {
         std::to_string(info.offset),
-        info.method->get_deobfuscated_name(),
+        std::to_string(method_dict.at(info.method)),
         std::to_string(static_cast<int>(get_instrumented_type(info))),
         std::to_string(info.num_non_entry_blocks),
         std::to_string(info.num_vectors),
         to_hex(info.signature),
         write_block_id_map(info.bit_id_2_block_id),
         rejected_blocks(info.rejected_blocks),
+        source_blocks(info.bit_id_2_source_blocks),
     };
     ofs << boost::algorithm::join(fields, ",") << "\n";
-  }
-
-  // The CSV looks nicer if we sort the methods, especially since they're only
-  // indexed.
-  std::vector<const MethodInfo*> sorted;
-  sorted.reserve(all_info.size());
-  std::transform(all_info.begin(), all_info.end(), std::back_inserter(sorted),
-                 [](const MethodInfo& i) { return &i; });
-  std::sort(sorted.begin(), sorted.end(), [](auto* lhs, auto* rhs) {
-    return compare_dexmethods_by_deobname(lhs->method, rhs->method);
-  });
-  for (const auto* info : sorted) {
-    write_source_blocks_for_method(sb_ofs, method_dictionary, *info);
   }
 
   TRACE(INSTRUMENT, 2, "Metadata file was written to: %s", SHOW(file_name));
