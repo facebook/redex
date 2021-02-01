@@ -42,6 +42,14 @@
  * UNIQUENESS:
  * The private constructor pattern enforces the uniqueness of
  * the pointer values of each type that has a uniqueness requirement.
+ *
+ *
+ *
+ * Gather methods:
+ * Most `gather_X` methods are templated over the container type.
+ * Currently only `std::vector` and `std::unordered_set` are supported.
+ * The definitions are not in the header so as to avoid overly broad
+ * imports.
  */
 
 class DexClass;
@@ -293,8 +301,10 @@ class DexFieldRef {
   const std::string& str() const { return get_name()->str(); }
   DexType* get_type() const { return m_spec.type; }
 
-  void gather_types_shallow(std::vector<DexType*>& ltype) const;
-  void gather_strings_shallow(std::vector<DexString*>& lstring) const;
+  template <typename C>
+  void gather_types_shallow(C& ltype) const;
+  template <typename C>
+  void gather_strings_shallow(C& lstring) const;
 
   void change(const DexFieldSpec& ref, bool rename_on_collision = false) {
     g_redex->mutate_field(this, ref, rename_on_collision);
@@ -427,10 +437,14 @@ class DexField : public DexFieldRef {
     m_anno = aset;
   }
 
-  void gather_types(std::vector<DexType*>& ltype) const;
-  void gather_strings(std::vector<DexString*>& lstring) const;
-  void gather_fields(std::vector<DexFieldRef*>& lfield) const;
-  void gather_methods(std::vector<DexMethodRef*>& lmethod) const;
+  template <typename C>
+  void gather_types(C& ltype) const;
+  template <typename C>
+  void gather_strings(C& lstring) const;
+  template <typename C>
+  void gather_fields(C& lfield) const;
+  template <typename C>
+  void gather_methods(C& lmethod) const;
 };
 
 /* Non-optimizing DexSpec compliant ordering */
@@ -508,7 +522,8 @@ class DexTypeList {
     }
   }
 
-  void gather_types(std::vector<DexType*>& ltype) const;
+  template <typename C>
+  void gather_types(C& ltype) const;
 
   bool equals(const std::vector<DexType*>& vec) const {
     return std::equal(m_list.begin(), m_list.end(), vec.begin(), vec.end());
@@ -568,8 +583,10 @@ class DexProto {
   DexString* get_shorty() const { return m_shorty; }
   bool is_void() const { return get_rtype() == DexType::make_type("V"); }
 
-  void gather_types(std::vector<DexType*>& ltype) const;
-  void gather_strings(std::vector<DexString*>& lstring) const;
+  template <typename C>
+  void gather_types(C& ltype) const;
+  template <typename C>
+  void gather_strings(C& lstring) const;
 };
 
 /* Non-optimizing DexSpec compliant ordering */
@@ -808,8 +825,10 @@ class DexMethodRef {
   const std::string& str() const { return get_name()->str(); }
   DexProto* get_proto() const { return m_spec.proto; }
 
-  void gather_types_shallow(std::vector<DexType*>& ltype) const;
-  void gather_strings_shallow(std::vector<DexString*>& lstring) const;
+  template <typename C>
+  void gather_types_shallow(C& ltype) const;
+  template <typename C>
+  void gather_strings_shallow(C& lstring) const;
 
   void change(const DexMethodSpec& ref, bool rename_on_collision) {
     g_redex->mutate_method(this, ref, rename_on_collision);
@@ -1056,14 +1075,20 @@ class DexMethod : public DexMethodRef {
     m_param_anno[paramno] = aset;
   }
 
-  void gather_types(std::vector<DexType*>& ltype) const;
-  void gather_fields(std::vector<DexFieldRef*>& lfield) const;
-  void gather_methods(std::vector<DexMethodRef*>& lmethod) const;
-  void gather_methods_from_annos(std::vector<DexMethodRef*>& lmethod) const;
-  void gather_strings(std::vector<DexString*>& lstring,
-                      bool exclude_loads = false) const;
-  void gather_callsites(std::vector<DexCallSite*>& lcallsite) const;
-  void gather_methodhandles(std::vector<DexMethodHandle*>& lmethodhandle) const;
+  template <typename C>
+  void gather_types(C& ltype) const;
+  template <typename C>
+  void gather_fields(C& lfield) const;
+  template <typename C>
+  void gather_methods(C& lmethod) const;
+  template <typename C>
+  void gather_methods_from_annos(C& lmethod) const;
+  template <typename C>
+  void gather_strings(C& lstring, bool exclude_loads = false) const;
+  template <typename C>
+  void gather_callsites(C& lcallsite) const;
+  template <typename C>
+  void gather_methodhandles(C& lmethodhandle) const;
 
   /*
    * DexCode <-> IRCode conversion methods.
@@ -1255,13 +1280,18 @@ class DexClass {
    */
   int encode(DexOutputIdx* dodx, dexcode_to_offset& dco, uint8_t* output);
 
-  void gather_types(std::vector<DexType*>& ltype) const;
-  void gather_strings(std::vector<DexString*>& lstring,
-                      bool exclude_loads = false) const;
-  void gather_fields(std::vector<DexFieldRef*>& lfield) const;
-  void gather_methods(std::vector<DexMethodRef*>& lmethod) const;
-  void gather_callsites(std::vector<DexCallSite*>& lcallsite) const;
-  void gather_methodhandles(std::vector<DexMethodHandle*>& lmethodhandle) const;
+  template <typename C>
+  void gather_types(C& ltype) const;
+  template <typename C>
+  void gather_strings(C& lstring, bool exclude_loads = false) const;
+  template <typename C>
+  void gather_fields(C& lfield) const;
+  template <typename C>
+  void gather_methods(C& lmethod) const;
+  template <typename C>
+  void gather_callsites(C& lcallsite) const;
+  template <typename C>
+  void gather_methodhandles(C& lmethodhandle) const;
 
   void gather_load_types(std::unordered_set<DexType*>& ltype) const;
 
