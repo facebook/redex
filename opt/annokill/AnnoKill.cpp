@@ -223,12 +223,19 @@ AnnoKill::AnnoSet AnnoKill::get_referenced_annos() {
     }
   });
 
+  AnnoKill::AnnoSet concurrent_referenced_annos;
+  auto add_concurrent_referenced_anno = [&](DexType* t) {
+    if (!referenced_annos.count(t)) {
+      concurrent_referenced_annos.insert(t);
+    }
+  };
   // mark an annotation as "unremovable" if any opcode references the annotation
   // type
-  walk::opcodes(
+  walk::parallel::opcodes(
       m_scope,
       [](DexMethod*) { return true; },
-      [&](DexMethod* meth, IRInstruction* insn) {
+      [&add_concurrent_referenced_anno, &all_annos](DexMethod* meth,
+                                                    IRInstruction* insn) {
         // don't look at methods defined on the annotation itself
         const auto meth_cls_type = meth->get_class();
         if (all_annos.count(meth_cls_type) > 0) {
@@ -242,7 +249,7 @@ AnnoKill::AnnoSet AnnoKill::get_referenced_annos() {
         if (insn->has_type()) {
           auto type = insn->get_type();
           if (all_annos.count(type) > 0) {
-            referenced_annos.insert(type);
+            add_concurrent_referenced_anno(type);
             TRACE(ANNO,
                   3,
                   "Annotation referenced in type opcode\n\t%s.%s:%s - %s",
@@ -263,12 +270,12 @@ AnnoKill::AnnoSet AnnoKill::get_referenced_annos() {
           auto owner = field->get_class();
           if (all_annos.count(owner) > 0) {
             referenced = true;
-            referenced_annos.insert(owner);
+            add_concurrent_referenced_anno(owner);
           }
           auto type = field->get_type();
           if (all_annos.count(type) > 0) {
             referenced = true;
-            referenced_annos.insert(type);
+            add_concurrent_referenced_anno(type);
           }
           if (referenced) {
             TRACE(ANNO,
@@ -289,19 +296,19 @@ AnnoKill::AnnoSet AnnoKill::get_referenced_annos() {
           auto owner = method->get_class();
           if (all_annos.count(owner) > 0) {
             referenced = true;
-            referenced_annos.insert(owner);
+            add_concurrent_referenced_anno(owner);
           }
           auto proto = method->get_proto();
           auto rtype = proto->get_rtype();
           if (all_annos.count(rtype) > 0) {
             referenced = true;
-            referenced_annos.insert(rtype);
+            add_concurrent_referenced_anno(rtype);
           }
           auto arg_list = proto->get_args();
           for (const auto& arg : arg_list->get_type_list()) {
             if (all_annos.count(arg) > 0) {
               referenced = true;
-              referenced_annos.insert(arg);
+              add_concurrent_referenced_anno(arg);
             }
           }
           if (referenced) {
@@ -315,6 +322,8 @@ AnnoKill::AnnoSet AnnoKill::get_referenced_annos() {
           }
         }
       });
+  referenced_annos.insert(concurrent_referenced_annos.begin(),
+                          concurrent_referenced_annos.end());
   return referenced_annos;
 }
 
