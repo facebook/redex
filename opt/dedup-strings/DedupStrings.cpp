@@ -9,6 +9,7 @@
 
 #include <vector>
 
+#include "CFGMutation.h"
 #include "ConcurrentContainers.h"
 #include "Creators.h"
 #include "DexAccess.h"
@@ -18,6 +19,7 @@
 #include "InstructionSequenceOutliner.h"
 #include "MethodProfiles.h"
 #include "PassManager.h"
+#include "ScopedCFG.h"
 #include "Show.h"
 #include "Walkers.h"
 #include "locator.h"
@@ -544,8 +546,10 @@ void DedupStrings::rewrite_const_string_instructions(
 
         // First, we collect all const-string instructions that we want to
         // rewrite
-        const auto ii = InstructionIterable(code);
-        std::vector<std::pair<IRInstruction*, reg_t>> const_strings;
+        cfg::ScopedCFG cfg(&code);
+        cfg::CFGMutation cfg_mut(*cfg);
+        auto ii = cfg::InstructionIterable(*cfg);
+        std::vector<std::pair<cfg::InstructionIterator, reg_t>> const_strings;
         for (auto it = ii.begin(); it != ii.end(); it++) {
           // do we have a sequence of const-string + move-pseudo-result
           // instruction?
@@ -553,9 +557,12 @@ void DedupStrings::rewrite_const_string_instructions(
           if (insn->opcode() != OPCODE_CONST_STRING) {
             continue;
           }
-          auto move_result_pseudo = ir_list::move_result_pseudo_of(it.unwrap());
+          auto move_result = cfg->move_result_of(it);
+          always_assert(move_result != ii.end());
+          always_assert(
+              opcode::is_a_move_result_pseudo(move_result->insn->opcode()));
 
-          const_strings.push_back({insn, move_result_pseudo->dest()});
+          const_strings.push_back({it, move_result->insn->dest()});
         }
 
         // Second, we actually rewrite them.
@@ -572,12 +579,13 @@ void DedupStrings::rewrite_const_string_instructions(
         // register v0, as that would change its type and cause type conflicts
         // in catch blocks, if any.
 
-        boost::optional<uint32_t> temp_reg;
+        boost::optional<reg_t> temp_reg;
         for (const auto& p : const_strings) {
-          const auto const_string = p.first;
+          const auto& const_string_it = p.first;
           const auto reg = p.second;
 
-          const auto it = strings_to_dedup.find(const_string->get_string());
+          const auto it =
+              strings_to_dedup.find(const_string_it->insn->get_string());
           if (it == strings_to_dedup.end()) {
             continue;
           }
@@ -587,7 +595,7 @@ void DedupStrings::rewrite_const_string_instructions(
           }
 
           if (!temp_reg) {
-            temp_reg = boost::optional<uint32_t>(code.allocate_temp());
+            temp_reg = boost::optional<reg_t>(cfg->allocate_temp());
           }
           std::vector<IRInstruction*> replacements;
 
@@ -607,9 +615,9 @@ void DedupStrings::rewrite_const_string_instructions(
           move_result_inst->set_dest(reg);
           replacements.push_back(move_result_inst);
 
-          // TODO: replace_opcode takes linear time!
-          code.replace_opcode(const_string, replacements);
+          cfg_mut.replace(const_string_it, replacements);
         }
+        cfg_mut.flush();
       });
 }
 
