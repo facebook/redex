@@ -388,27 +388,16 @@ class DexField : public DexFieldRef {
     m_external = true;
   }
 
-  /** return just the name of the field */
-  std::string get_simple_deobfuscated_name() const {
-    auto full_name = get_deobfuscated_name();
-    if (full_name.empty()) {
-      // This comes up for redex-created fields
-      return std::string(c_str());
-    }
-    auto dot_pos = full_name.find('.');
-    auto colon_pos = full_name.find(':');
-    if (dot_pos == std::string::npos || colon_pos == std::string::npos) {
-      return full_name;
-    }
-    return full_name.substr(dot_pos + 1, colon_pos - dot_pos - 1);
+  void set_deobfuscated_name(const std::string& name) {
+    m_deobfuscated_name = name;
   }
 
-  void set_deobfuscated_name(std::string name) {
-    m_deobfuscated_name = std::move(name);
-  }
   const std::string& get_deobfuscated_name() const {
     return m_deobfuscated_name;
   }
+
+  // Return just the name of the field.
+  std::string get_simple_deobfuscated_name() const;
 
   void set_value(DexEncodedValue* v) {
     always_assert_log(
@@ -977,9 +966,10 @@ class DexMethod : public DexMethodRef {
     return &m_param_anno;
   }
 
-  void set_deobfuscated_name(std::string name) {
-    m_deobfuscated_name = std::move(name);
+  void set_deobfuscated_name(const std::string& name) {
+    m_deobfuscated_name = name;
   }
+
   const std::string& get_deobfuscated_name() const {
     return m_deobfuscated_name;
   }
@@ -1223,6 +1213,7 @@ class DexClass {
   const std::string& get_deobfuscated_name() const {
     return m_deobfuscated_name;
   }
+
   // Returns the location of this class - can be dex/jar file.
   const std::string& get_location() const { return m_location; }
 

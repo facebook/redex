@@ -33,6 +33,45 @@
 #include <mutex>
 #include <unordered_map>
 
+namespace {
+// Why? get_deobfuscated_name and show_deobfuscated are not enough. deobfuscated
+// names could be empty, e.g., when Redex-created methods. So we need a better
+// job. And proto and type are still obfuscated in some cases. We also implement
+// show_deobfuscated for DexProto.
+std::string build_fully_deobfuscated_name(const DexMethod* m) {
+  string_builders::StaticStringBuilder<5> b;
+  DexClass* cls = type_class(m->get_class());
+  if (cls == nullptr) {
+    // Well, just for safety.
+    b << "<null>";
+  } else {
+    b << std::string(cls->get_deobfuscated_name().empty()
+                         ? cls->get_name()->str()
+                         : cls->get_deobfuscated_name());
+  }
+
+  b << "." << m->get_simple_deobfuscated_name() << ":"
+    << show_deobfuscated(m->get_proto());
+  return b.str();
+}
+
+// Return just the name of the method/field.
+template <typename T>
+std::string get_simple_deobf_name(const T* ref) {
+  auto full_name = ref->get_deobfuscated_name();
+  if (full_name.empty()) {
+    // This comes up for redex-created methods/fields.
+    return std::string(ref->c_str());
+  }
+  auto dot_pos = full_name.find('.');
+  auto colon_pos = full_name.find(':');
+  if (dot_pos == std::string::npos || colon_pos == std::string::npos) {
+    return full_name;
+  }
+  return full_name.substr(dot_pos + 1, colon_pos - dot_pos - 1);
+}
+} // namespace
+
 uint32_t DexString::length() const {
   if (is_simple()) {
     return size();
@@ -515,43 +554,6 @@ DexMethod::DexMethod(DexType* type, DexString* name, DexProto* proto)
 
 DexMethod::~DexMethod() = default;
 
-std::string DexMethod::get_simple_deobfuscated_name() const {
-  auto full_name = get_deobfuscated_name();
-  if (full_name.empty()) {
-    // This comes up for redex-created methods.
-    return std::string(c_str());
-  }
-  auto dot_pos = full_name.find('.');
-  auto colon_pos = full_name.find(':');
-  if (dot_pos == std::string::npos || colon_pos == std::string::npos) {
-    return full_name;
-  }
-  return full_name.substr(dot_pos + 1, colon_pos - dot_pos - 1);
-}
-
-// Why? get_deobfuscated_name and show_deobfuscated are not enough. deobfuscated
-// names could be empty, e.g., when Redex-created methods. So we need a better
-// job. And proto and type are still obfuscated in some cases. We also implement
-// show_deobfuscated for DexProto.
-namespace {
-std::string build_fully_deobfuscated_name(const DexMethod* m) {
-  string_builders::StaticStringBuilder<5> b;
-  DexClass* cls = type_class(m->get_class());
-  if (cls == nullptr) {
-    // Well, just for safety.
-    b << "<null>";
-  } else {
-    b << std::string(cls->get_deobfuscated_name().empty()
-                         ? cls->get_name()->str()
-                         : cls->get_deobfuscated_name());
-  }
-
-  b << "." << m->get_simple_deobfuscated_name() << ":"
-    << show_deobfuscated(m->get_proto());
-  return b.str();
-}
-} // namespace
-
 std::string DexMethod::get_fully_deobfuscated_name() const {
   if (get_deobfuscated_name() == show(this)) {
     return get_deobfuscated_name();
@@ -742,6 +744,10 @@ void DexMethod::make_non_concrete() {
   m_code.reset();
   m_virtual = false;
   m_param_anno.clear();
+}
+
+std::string DexMethod::get_simple_deobfuscated_name() const {
+  return get_simple_deobf_name(this);
 }
 
 /*
@@ -1374,6 +1380,10 @@ void DexField::gather_fields(std::vector<DexFieldRef*>& lfield) const {
 void DexField::gather_methods(std::vector<DexMethodRef*>& lmethod) const {
   if (m_value) m_value->gather_methods(lmethod);
   if (m_anno) m_anno->gather_methods(lmethod);
+}
+
+std::string DexField::get_simple_deobfuscated_name() const {
+  return get_simple_deobf_name(this);
 }
 
 void DexMethod::gather_types(std::vector<DexType*>& ltype) const {
