@@ -8,6 +8,9 @@
 -keep class com.facebook.redextest.BigEnum { *; }
 -keep class com.facebook.redextest.Foo { *; }
 
+-keep class com.facebook.redextest.kt.OptimizeEnumsTest { *; }
+-keep class com.facebook.redextest.kt.OptimizeEnumsTestKt { *; }
+
 # Don't muck with test infra
 -keep class org.fest.** { *; }
 -keep class org.junit.** { *; }
@@ -16,6 +19,3 @@
 -keep class android.test.** { *; }
 -keep class android.support.test.** { *; }
 -keep class androidx.test.** { *; }
-
-
-

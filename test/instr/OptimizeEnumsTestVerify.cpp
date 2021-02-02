@@ -35,7 +35,7 @@ std::unordered_set<size_t> collect_switch_cases(DexMethodRef* method_ref) {
 
 } // namespace
 
-TEST_F(PreVerify, GeneratedClass) {
+TEST_F(PreVerify, JavaGeneratedClass) {
   auto enumA = find_class_named(classes, ENUM_A);
   EXPECT_NE(nullptr, enumA);
 
@@ -76,7 +76,7 @@ TEST_F(PreVerify, GeneratedClass) {
       << show(code->cfg());
 }
 
-TEST_F(PostVerify, GeneratedClass) {
+TEST_F(PostVerify, JavaGeneratedClass) {
   auto enumA = find_class_named(classes, ENUM_A);
   EXPECT_NE(nullptr, enumA);
 
