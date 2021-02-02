@@ -414,15 +414,26 @@ size_t MultiMethodInliner::compute_caller_nonrecursive_callees_by_stack_depth(
 
   std::vector<DexMethod*> nonrecursive_callees;
   nonrecursive_callees.reserve(callees.size());
+  std::unordered_map<DexMethod*, size_t> unique_callees;
+  for (auto callee : callees) {
+    unique_callees[callee]++;
+  }
+  std::vector<DexMethod*> ordered_unique_callees;
+  ordered_unique_callees.reserve(unique_callees.size());
+  for (auto& p : unique_callees) {
+    ordered_unique_callees.push_back(p.first);
+  }
+  std::sort(ordered_unique_callees.begin(), ordered_unique_callees.end(),
+            compare_dexmethods);
   size_t stack_depth = 0;
   // recurse into the callees in case they have something to inline on
   // their own. We want to inline bottom up so that a callee is
   // completely resolved by the time it is inlined.
-  for (auto callee : callees) {
+  for (auto callee : ordered_unique_callees) {
     if (call_stack.contains(callee)) {
       // we've found recursion in the current call stack
       always_assert(visited->at(callee) == std::numeric_limits<size_t>::max());
-      info.recursive++;
+      info.recursive += unique_callees.at(callee);
       continue;
     }
     size_t callee_stack_depth = 0;
@@ -433,14 +444,15 @@ size_t MultiMethodInliner::compute_caller_nonrecursive_callees_by_stack_depth(
           caller_nonrecursive_callees_by_stack_depth);
     }
 
-    if (!for_speed()) {
-      nonrecursive_callees.push_back(callee);
-    } else if (m_inline_for_speed != nullptr &&
-               m_inline_for_speed->should_inline(caller, callee)) {
-      nonrecursive_callees.push_back(callee);
+    stack_depth = std::max(stack_depth, callee_stack_depth + 1);
+
+    if (for_speed() && !m_inline_for_speed->should_inline(caller, callee)) {
+      continue;
     }
 
-    stack_depth = std::max(stack_depth, callee_stack_depth + 1);
+    for (size_t i = 0; i < unique_callees.at(callee); i++) {
+      nonrecursive_callees.push_back(callee);
+    }
   }
 
   (*visited)[caller] = stack_depth;
