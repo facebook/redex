@@ -136,7 +136,7 @@ class DexInstruction : public Gatherable {
   /*
    * The number of shorts needed to encode the args.
    */
-  uint16_t count() { return m_count; }
+  uint16_t count() const { return m_count; }
 
   friend std::string show(const DexInstruction* insn);
 
