@@ -1098,7 +1098,9 @@ def finalize_redex(state):
         with zipfile.ZipFile(zipfile_path, "w", compression=zipfile.ZIP_DEFLATED) as z:
             for f in [*FILES, checksum_path]:
                 z.write(f, os.path.basename(f))
-        os.remove(checksum_path)
+
+        for f in [*FILES, checksum_path]:
+            os.remove(f)
 
     redex_stats_filename = state.config_dict.get("stats_output", "redex-stats.txt")
     redex_stats_file = join(dirname(meta_file_dir), redex_stats_filename)
