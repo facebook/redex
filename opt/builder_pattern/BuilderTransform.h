@@ -45,6 +45,7 @@ class BuilderTransform {
   const TypeSystem& m_type_system;
   const DexType* m_root;
   std::unique_ptr<MultiMethodInliner> m_inliner;
+  inliner::InlinerConfig m_inliner_config;
   MethodRefCache m_resolved_refs;
 
   // Used for tracking changes that we need to restore.
