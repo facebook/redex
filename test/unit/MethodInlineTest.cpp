@@ -281,9 +281,10 @@ TEST_F(MethodInlineTest, debugPositionsAfterReturn) {
 }
 
 TEST_F(MethodInlineTest, test_intra_dex_inlining) {
-  MethodRefCache resolve_cache;
-  auto resolver = [&resolve_cache](DexMethodRef* method, MethodSearch search) {
-    return resolve_method(method, search, resolve_cache);
+  ConcurrentMethodRefCache concurrent_resolve_cache;
+  auto concurrent_resolver = [&concurrent_resolve_cache](DexMethodRef* method,
+                                                         MethodSearch search) {
+    return resolve_method(method, search, concurrent_resolve_cache);
   };
 
   // Only inline methods within dex.
@@ -326,7 +327,7 @@ TEST_F(MethodInlineTest, test_intra_dex_inlining) {
   MultiMethodInliner inliner(scope,
                              stores,
                              canidates,
-                             resolver,
+                             concurrent_resolver,
                              inliner_config,
                              intra_dex ? IntraDex : InterDex);
   inliner.inline_methods();
@@ -338,9 +339,10 @@ TEST_F(MethodInlineTest, test_intra_dex_inlining) {
 }
 
 TEST_F(MethodInlineTest, minimal_self_loop_regression) {
-  MethodRefCache resolve_cache;
-  auto resolver = [&resolve_cache](DexMethodRef* method, MethodSearch search) {
-    return resolve_method(method, search, resolve_cache);
+  ConcurrentMethodRefCache concurrent_resolve_cache;
+  auto concurrent_resolver = [&concurrent_resolve_cache](DexMethodRef* method,
+                                                         MethodSearch search) {
+    return resolve_method(method, search, concurrent_resolve_cache);
   };
 
   bool intra_dex = false;
@@ -370,7 +372,7 @@ TEST_F(MethodInlineTest, minimal_self_loop_regression) {
   MultiMethodInliner inliner(scope,
                              stores,
                              candidates,
-                             resolver,
+                             concurrent_resolver,
                              inliner_config,
                              intra_dex ? IntraDex : InterDex);
   inliner.inline_methods();
@@ -382,9 +384,10 @@ TEST_F(MethodInlineTest, minimal_self_loop_regression) {
 }
 
 TEST_F(MethodInlineTest, non_unique_inlined_registers) {
-  MethodRefCache resolve_cache;
-  auto resolver = [&resolve_cache](DexMethodRef* method, MethodSearch search) {
-    return resolve_method(method, search, resolve_cache);
+  ConcurrentMethodRefCache concurrent_resolve_cache;
+  auto concurrent_resolver = [&concurrent_resolve_cache](DexMethodRef* method,
+                                                         MethodSearch search) {
+    return resolve_method(method, search, concurrent_resolve_cache);
   };
 
   bool intra_dex = false;
@@ -420,7 +423,7 @@ TEST_F(MethodInlineTest, non_unique_inlined_registers) {
   MultiMethodInliner inliner(scope,
                              stores,
                              candidates,
-                             resolver,
+                             concurrent_resolver,
                              inliner_config,
                              intra_dex ? IntraDex : InterDex);
   inliner.inline_methods();
@@ -445,9 +448,10 @@ TEST_F(MethodInlineTest, non_unique_inlined_registers) {
 }
 
 TEST_F(MethodInlineTest, inline_beneficial_on_average_after_constant_prop) {
-  MethodRefCache resolve_cache;
-  auto resolver = [&resolve_cache](DexMethodRef* method, MethodSearch search) {
-    return resolve_method(method, search, resolve_cache);
+  ConcurrentMethodRefCache concurrent_resolve_cache;
+  auto concurrent_resolver = [&concurrent_resolve_cache](DexMethodRef* method,
+                                                         MethodSearch search) {
+    return resolve_method(method, search, concurrent_resolve_cache);
   };
 
   bool intra_dex = false;
@@ -493,7 +497,7 @@ TEST_F(MethodInlineTest, inline_beneficial_on_average_after_constant_prop) {
   MultiMethodInliner inliner(scope,
                              stores,
                              candidates,
-                             resolver,
+                             concurrent_resolver,
                              inliner_config,
                              intra_dex ? IntraDex : InterDex);
   inliner.inline_methods();
@@ -517,9 +521,10 @@ TEST_F(MethodInlineTest, inline_beneficial_on_average_after_constant_prop) {
 
 TEST_F(MethodInlineTest,
        inline_beneficial_for_particular_instance_after_constant_prop) {
-  MethodRefCache resolve_cache;
-  auto resolver = [&resolve_cache](DexMethodRef* method, MethodSearch search) {
-    return resolve_method(method, search, resolve_cache);
+  ConcurrentMethodRefCache concurrent_resolve_cache;
+  auto concurrent_resolver = [&concurrent_resolve_cache](DexMethodRef* method,
+                                                         MethodSearch search) {
+    return resolve_method(method, search, concurrent_resolve_cache);
   };
 
   bool intra_dex = false;
@@ -565,7 +570,7 @@ TEST_F(MethodInlineTest,
   MultiMethodInliner inliner(scope,
                              stores,
                              candidates,
-                             resolver,
+                             concurrent_resolver,
                              inliner_config,
                              intra_dex ? IntraDex : InterDex);
   inliner.inline_methods();

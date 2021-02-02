@@ -46,7 +46,7 @@ class BuilderTransform {
   const DexType* m_root;
   std::unique_ptr<MultiMethodInliner> m_inliner;
   inliner::InlinerConfig m_inliner_config;
-  MethodRefCache m_resolved_refs;
+  ConcurrentMethodRefCache m_concurrent_resolved_refs;
 
   // Used for tracking changes that we need to restore.
   std::unordered_map<DexMethod*, DexMethod*> m_method_copy;

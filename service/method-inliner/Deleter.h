@@ -18,9 +18,10 @@
  * the method and the method is not marked as "do not delete".
  * Walks all opcodes in scope to check if the method is called.
  * A resolver must be provided to map a method reference to a method definition.
+ * The resolver must be thread-safe.
  */
 size_t delete_methods(
     std::vector<DexClass*>& scope,
     std::unordered_set<DexMethod*>& removable,
     ConcurrentSet<DexMethod*>& delayed_make_static,
-    std::function<DexMethod*(DexMethodRef*, MethodSearch)> resolver);
+    std::function<DexMethod*(DexMethodRef*, MethodSearch)> concurrent_resolver);

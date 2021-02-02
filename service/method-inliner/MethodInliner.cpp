@@ -341,9 +341,10 @@ void run_inliner(DexStoresVector& stores,
                                 &same_method_implementations);
   }
   // keep a map from refs to defs or nullptr if no method was found
-  MethodRefCache resolved_refs;
-  auto resolver = [&resolved_refs](DexMethodRef* method, MethodSearch search) {
-    return resolve_method(method, search, resolved_refs);
+  ConcurrentMethodRefCache concurrent_resolved_refs;
+  auto concurrent_resolver = [&concurrent_resolved_refs](DexMethodRef* method,
+                                                         MethodSearch search) {
+    return resolve_method(method, search, concurrent_resolved_refs);
   };
   if (inliner_config.use_cfg_inliner) {
     walk::parallel::code(scope, [](DexMethod*, IRCode& code) {
@@ -352,8 +353,8 @@ void run_inliner(DexStoresVector& stores,
   }
 
   // inline candidates
-  MultiMethodInliner inliner(scope, stores, methods, resolver, inliner_config,
-                             intra_dex ? IntraDex : InterDex,
+  MultiMethodInliner inliner(scope, stores, methods, concurrent_resolver,
+                             inliner_config, intra_dex ? IntraDex : InterDex,
                              true_virtual_callers, inline_for_speed,
                              &same_method_implementations,
                              analyze_and_prune_inits, conf.get_pure_methods());
@@ -385,7 +386,7 @@ void run_inliner(DexStoresVector& stores,
   ConcurrentSet<DexMethod*>& delayed_make_static =
       inliner.get_delayed_make_static();
   size_t deleted =
-      delete_methods(scope, inlined, delayed_make_static, resolver);
+      delete_methods(scope, inlined, delayed_make_static, concurrent_resolver);
 
   TRACE(INLINE, 3, "recursive %ld", inliner.get_info().recursive);
   TRACE(INLINE, 3, "max_call_stack_depth %ld",

@@ -100,13 +100,17 @@ class BuilderTransform {
     // Maybe we can refactor this part.
     m_inliner_config.throws_inline = throws_inline;
 
-    auto resolver = [&](DexMethodRef* method, MethodSearch search) {
-      return resolve_method(method, search, m_resolved_refs);
+    auto concurrent_resolver = [&](DexMethodRef* method, MethodSearch search) {
+      return resolve_method(method, search, m_concurrent_resolved_refs);
     };
 
     std::unordered_set<DexMethod*> no_default_inlinables;
-    m_inliner = std::unique_ptr<MultiMethodInliner>(new MultiMethodInliner(
-        scope, stores, no_default_inlinables, resolver, m_inliner_config));
+    m_inliner = std::unique_ptr<MultiMethodInliner>(
+        new MultiMethodInliner(scope,
+                               stores,
+                               no_default_inlinables,
+                               concurrent_resolver,
+                               m_inliner_config));
   }
 
   bool inline_methods(
@@ -118,7 +122,7 @@ class BuilderTransform {
  private:
   std::unique_ptr<MultiMethodInliner> m_inliner;
   inliner::InlinerConfig m_inliner_config;
-  MethodRefCache m_resolved_refs;
+  ConcurrentMethodRefCache m_concurrent_resolved_refs;
 };
 
 std::vector<DexMethod*> get_all_methods(IRCode* code, DexType* type);

@@ -17,7 +17,8 @@ size_t delete_methods(
     std::vector<DexClass*>& scope,
     std::unordered_set<DexMethod*>& removable,
     ConcurrentSet<DexMethod*>& delayed_make_static,
-    std::function<DexMethod*(DexMethodRef*, MethodSearch search)> resolver) {
+    std::function<DexMethod*(DexMethodRef*, MethodSearch search)>
+        concurrent_resolver) {
 
   // if a removable candidate is invoked do not delete
   ConcurrentSet<DexMethod*> removable_to_erase;
@@ -25,7 +26,8 @@ size_t delete_methods(
       scope, [](DexMethod* meth) { return true; },
       [&](DexMethod* meth, IRInstruction* insn) {
         if (opcode::is_an_invoke(insn->opcode())) {
-          auto callee = resolver(insn->get_method(), opcode_to_search(insn));
+          auto callee =
+              concurrent_resolver(insn->get_method(), opcode_to_search(insn));
           if (callee != nullptr && removable.count(callee)) {
             removable_to_erase.insert(callee);
           }

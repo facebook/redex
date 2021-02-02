@@ -96,8 +96,8 @@ VirtualMerging::VirtualMerging(DexStoresVector& stores,
       m_type_system(m_scope),
       m_max_overriding_method_instructions(max_overriding_method_instructions),
       m_inliner_config(inliner_config) {
-  auto resolver = [&](DexMethodRef* method, MethodSearch search) {
-    return resolve_method(method, search, m_resolved_refs);
+  auto concurrent_resolver = [&](DexMethodRef* method, MethodSearch search) {
+    return resolve_method(method, search, m_concurrent_resolved_refs);
   };
 
   std::unordered_set<DexMethod*> no_default_inlinables;
@@ -105,7 +105,7 @@ VirtualMerging::VirtualMerging(DexStoresVector& stores,
   // disable shrinking options, minimizing initialization time
   m_inliner_config.shrinker = shrinker::ShrinkerConfig();
   m_inliner.reset(new MultiMethodInliner(m_scope, stores, no_default_inlinables,
-                                         resolver, m_inliner_config,
+                                         concurrent_resolver, m_inliner_config,
                                          MultiMethodInlinerMode::None));
 }
 VirtualMerging::~VirtualMerging() {}

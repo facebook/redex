@@ -9,7 +9,6 @@
 
 #include <atomic>
 #include <functional>
-#include <map>
 #include <vector>
 
 #include "DexClass.h"
@@ -117,10 +116,9 @@ struct CalleeCallerRefs {
  * Helper class to inline a set of candidates.
  * Take a set of candidates and a scope and walk all instructions in scope
  * to find and inline all calls to candidate.
- * A resolver is used to map a method reference to a method definition.
- * Not all methods may be inlined both for restriction on the caller or the
- * callee.
- * Perform inlining bottom up.
+ * A resolver is used to map a method reference to a method definition, and must
+ * be thread-safe. Not all methods may be inlined both for restriction on the
+ * caller or the callee. Perform inlining bottom up.
  */
 class MultiMethodInliner {
  public:
@@ -133,7 +131,8 @@ class MultiMethodInliner {
       const std::vector<DexClass*>& scope,
       DexStoresVector& stores,
       const std::unordered_set<DexMethod*>& candidates,
-      std::function<DexMethod*(DexMethodRef*, MethodSearch)> resolve_fn,
+      std::function<DexMethod*(DexMethodRef*, MethodSearch)>
+          concurrent_resolve_fn,
       const inliner::InlinerConfig& config,
       MultiMethodInlinerMode mode = InterDex,
       const CalleeCallerInsns& true_virtual_callers = {},
@@ -452,9 +451,10 @@ class MultiMethodInliner {
 
  private:
   /**
-   * Resolver function to map a method reference to a method definition.
+   * Resolver function to map a method reference to a method definition. Must be
+   * thread-safe.
    */
-  std::function<DexMethod*(DexMethodRef*, MethodSearch)> resolver;
+  std::function<DexMethod*(DexMethodRef*, MethodSearch)> m_concurrent_resolver;
 
   /**
    * Inlined methods.
@@ -465,12 +465,10 @@ class MultiMethodInliner {
   // Maps from callee to callers and reverse map from caller to callees.
   // Those are used to perform bottom up inlining.
   //
-  std::map<const DexMethod*, std::vector<DexMethod*>, dexmethods_comparator>
-      callee_caller;
+  std::unordered_map<const DexMethod*, std::vector<DexMethod*>> callee_caller;
   // this map is ordered in order that we inline our methods in a repeatable
   // fashion so as to create reproducible binaries
-  std::map<DexMethod*, std::vector<DexMethod*>, dexmethods_comparator>
-      caller_callee;
+  std::unordered_map<DexMethod*, std::vector<DexMethod*>> caller_callee;
 
   std::unordered_map<DexMethod*, std::unordered_map<IRInstruction*, DexMethod*>>
       caller_virtual_callee;

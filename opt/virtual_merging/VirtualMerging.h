@@ -52,7 +52,7 @@ class VirtualMerging {
   XDexRefs m_xdexes;
   TypeSystem m_type_system;
   size_t m_max_overriding_method_instructions;
-  MethodRefCache m_resolved_refs;
+  ConcurrentMethodRefCache m_concurrent_resolved_refs;
   inliner::InlinerConfig m_inliner_config;
   std::unique_ptr<MultiMethodInliner> m_inliner;
   VirtualMergingStats m_stats;

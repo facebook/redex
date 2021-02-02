@@ -86,7 +86,8 @@ MultiMethodInliner::MultiMethodInliner(
     const std::vector<DexClass*>& scope,
     DexStoresVector& stores,
     const std::unordered_set<DexMethod*>& candidates,
-    std::function<DexMethod*(DexMethodRef*, MethodSearch)> resolve_fn,
+    std::function<DexMethod*(DexMethodRef*, MethodSearch)>
+        concurrent_resolve_fn,
     const inliner::InlinerConfig& config,
     MultiMethodInlinerMode mode /* default is InterDex */,
     const CalleeCallerInsns& true_virtual_callers,
@@ -96,7 +97,7 @@ MultiMethodInliner::MultiMethodInliner(
     bool analyze_and_prune_inits,
     const std::unordered_set<DexMethodRef*>& configured_pure_methods,
     const std::unordered_set<DexString*>& configured_finalish_field_names)
-    : resolver(std::move(resolve_fn)),
+    : m_concurrent_resolver(std::move(concurrent_resolve_fn)),
       m_scope(scope),
       m_config(config),
       m_mode(mode),
@@ -124,26 +125,40 @@ MultiMethodInliner::MultiMethodInliner(
   if (mode == IntraDex) {
     std::unordered_set<DexMethod*> candidate_callees(candidates.begin(),
                                                      candidates.end());
+    ConcurrentSet<DexMethod*> concurrent_candidate_callees_to_erase;
+    ConcurrentMap<const DexMethod*, std::vector<DexMethod*>>
+        concurrent_callee_caller;
     XDexRefs x_dex(stores);
-    walk::opcodes(
+    walk::parallel::opcodes(
         scope, [](DexMethod* caller) { return true; },
         [&](DexMethod* caller, IRInstruction* insn) {
           if (opcode::is_an_invoke(insn->opcode())) {
-            auto callee = resolver(insn->get_method(), opcode_to_search(insn));
+            auto callee = m_concurrent_resolver(insn->get_method(),
+                                                opcode_to_search(insn));
             if (callee != nullptr && callee->is_concrete() &&
                 candidate_callees.count(callee) &&
                 true_virtual_callers.count(callee) == 0) {
               if (x_dex.cross_dex_ref(caller, callee)) {
-                candidate_callees.erase(callee);
-                if (callee_caller.count(callee)) {
-                  callee_caller.erase(callee);
+                if (concurrent_candidate_callees_to_erase.insert(callee)) {
+                  concurrent_callee_caller.erase(callee);
                 }
-              } else {
-                callee_caller[callee].push_back(caller);
+              } else if (!concurrent_candidate_callees_to_erase.count(callee)) {
+                concurrent_callee_caller.update(
+                    callee,
+                    [caller](const DexMethod*, std::vector<DexMethod*>& v,
+                             bool) { v.push_back(caller); });
               }
             }
           }
         });
+    callee_caller.insert(concurrent_callee_caller.begin(),
+                         concurrent_callee_caller.end());
+    // While we already tried to do some cleanup during the parallel walk above,
+    // here we do a final sweep for correctness
+    for (auto callee : concurrent_candidate_callees_to_erase) {
+      candidate_callees.erase(callee);
+      callee_caller.erase(callee);
+    }
     for (const auto& callee_callers : true_virtual_callers) {
       auto callee = callee_callers.first;
       for (const auto& caller_insns : callee_callers.second) {
@@ -163,18 +178,34 @@ MultiMethodInliner::MultiMethodInliner(
       }
     }
   } else if (mode == InterDex) {
-    walk::opcodes(
+    ConcurrentMap<const DexMethod*, std::vector<DexMethod*>>
+        concurrent_callee_caller;
+    ConcurrentMap<DexMethod*, std::vector<DexMethod*>> concurrent_caller_callee;
+    walk::parallel::opcodes(
         scope, [](DexMethod* caller) { return true; },
         [&](DexMethod* caller, IRInstruction* insn) {
           if (opcode::is_an_invoke(insn->opcode())) {
-            auto callee = resolver(insn->get_method(), opcode_to_search(insn));
+            auto callee = m_concurrent_resolver(insn->get_method(),
+                                                opcode_to_search(insn));
             if (true_virtual_callers.count(callee) == 0 && callee != nullptr &&
                 callee->is_concrete() && candidates.count(callee)) {
-              callee_caller[callee].push_back(caller);
-              caller_callee[caller].push_back(callee);
+              concurrent_callee_caller.update(
+                  callee,
+                  [caller](const DexMethod*, std::vector<DexMethod*>& v, bool) {
+                    v.push_back(caller);
+                  });
+              concurrent_caller_callee.update(
+                  caller,
+                  [callee](const DexMethod*, std::vector<DexMethod*>& v, bool) {
+                    v.push_back(callee);
+                  });
             }
           }
         });
+    callee_caller.insert(concurrent_callee_caller.begin(),
+                         concurrent_callee_caller.end());
+    caller_callee.insert(concurrent_caller_callee.begin(),
+                         concurrent_caller_callee.end());
     for (const auto& callee_callers : true_virtual_callers) {
       auto callee = callee_callers.first;
       for (const auto& caller_insns : callee_callers.second) {
@@ -239,7 +270,8 @@ void MultiMethodInliner::compute_callee_constant_arguments() {
         }
         for (auto& p : res->invoke_constant_arguments) {
           auto insn = p.first->insn;
-          auto callee = resolver(insn->get_method(), opcode_to_search(insn));
+          auto callee =
+              m_concurrent_resolver(insn->get_method(), opcode_to_search(insn));
           const auto& constant_arguments = p.second;
           auto key = get_key(constant_arguments);
           concurrent_callee_constant_arguments.update(
@@ -307,15 +339,22 @@ void MultiMethodInliner::inline_methods() {
       caller_nonrecursive_callees_by_stack_depth;
   {
     Timer t("compute_caller_nonrecursive_callees_by_stack_depth");
-    for (const auto& it : caller_callee) {
-      auto caller = it.first;
+    std::vector<DexMethod*> ordered_callers;
+    ordered_callers.reserve(caller_callee.size());
+    for (auto& p : caller_callee) {
+      ordered_callers.push_back(p.first);
+    }
+    std::sort(ordered_callers.begin(), ordered_callers.end(),
+              compare_dexmethods);
+    for (const auto caller : ordered_callers) {
       TraceContext context(caller);
       // if the caller is not a top level keep going, it will be traversed
       // when inlining a top level caller
       if (callee_caller.find(caller) != callee_caller.end()) continue;
       sparta::PatriciaTreeSet<DexMethod*> call_stack;
+      const auto& callees = caller_callee.at(caller);
       auto stack_depth = compute_caller_nonrecursive_callees_by_stack_depth(
-          caller, it.second, call_stack, &visited,
+          caller, callees, call_stack, &visited,
           &caller_nonrecursive_callees_by_stack_depth);
       info.max_call_stack_depth =
           std::max(info.max_call_stack_depth, stack_depth);
@@ -510,7 +549,8 @@ MultiMethodInliner::get_invoke_constant_arguments(
     for (auto& mie : InstructionIterable(block)) {
       auto insn = mie.insn;
       if (opcode::is_an_invoke(insn->opcode())) {
-        auto callee = resolver(insn->get_method(), opcode_to_search(insn));
+        auto callee =
+            m_concurrent_resolver(insn->get_method(), opcode_to_search(insn));
         if (callees_set.count(callee)) {
           ConstantArguments constant_arguments;
           const auto& srcs = insn->srcs();
@@ -551,7 +591,8 @@ void MultiMethodInliner::inline_callees(
         if (!opcode::is_an_invoke(insn->opcode())) {
           return editable_cfg_adapter::LOOP_CONTINUE;
         }
-        auto callee = resolver(insn->get_method(), opcode_to_search(insn));
+        auto callee =
+            m_concurrent_resolver(insn->get_method(), opcode_to_search(insn));
         if (caller_virtual_callee.count(caller) &&
             caller_virtual_callee[caller].count(insn)) {
           callee = caller_virtual_callee[caller][insn];
@@ -615,7 +656,8 @@ void MultiMethodInliner::inline_callees(
       caller->get_code(), [&](const IRList::iterator& it) {
         auto insn = it->insn;
         if (insns.count(insn)) {
-          auto callee = resolver(insn->get_method(), opcode_to_search(insn));
+          auto callee =
+              m_concurrent_resolver(insn->get_method(), opcode_to_search(insn));
           if (caller_virtual_callee.count(caller) &&
               caller_virtual_callee[caller].count(insn)) {
             callee = caller_virtual_callee[caller][insn];
@@ -1744,7 +1786,8 @@ bool MultiMethodInliner::create_vmethod(IRInstruction* insn,
                                         std::vector<DexMethod*>* make_static) {
   auto opcode = insn->opcode();
   if (opcode == OPCODE_INVOKE_DIRECT) {
-    auto method = resolver(insn->get_method(), MethodSearch::Direct);
+    auto method =
+        m_concurrent_resolver(insn->get_method(), MethodSearch::Direct);
     if (method == nullptr) {
       info.need_vmethod++;
       return true;
@@ -1797,7 +1840,7 @@ bool MultiMethodInliner::nonrelocatable_invoke_super(IRInstruction* insn) {
 bool MultiMethodInliner::unknown_virtual(IRInstruction* insn) {
   if (insn->opcode() == OPCODE_INVOKE_VIRTUAL) {
     auto method = insn->get_method();
-    auto res_method = resolver(method, MethodSearch::Virtual);
+    auto res_method = m_concurrent_resolver(method, MethodSearch::Virtual);
     if (res_method == nullptr) {
       info.unresolved_methods++;
       if (unknown_virtuals::is_method_known_to_be_public(method)) {
