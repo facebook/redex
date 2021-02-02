@@ -285,7 +285,6 @@ libopt_la_SOURCES = \
 	opt/optimize_enums/EnumUpcastAnalysis.cpp \
 	opt/optimize_enums/OptimizeEnumsAnalysis.cpp \
 	opt/optimize_enums/OptimizeEnums.cpp \
-	opt/optimize_enums/OptimizeEnumsGeneratedAnalysis.cpp \
 	opt/original_name/OriginalNamePass.cpp \
 	opt/peephole/Peephole.cpp \
 	opt/peephole/RedundantCheckCastRemover.cpp \
