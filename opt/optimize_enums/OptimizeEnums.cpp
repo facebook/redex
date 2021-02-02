@@ -15,6 +15,7 @@
 #include "EnumTransformer.h"
 #include "EnumUpcastAnalysis.h"
 #include "IRCode.h"
+#include "MatchFlow.h"
 #include "OptimizeEnumsAnalysis.h"
 #include "OptimizeEnumsGeneratedAnalysis.h"
 #include "PassManager.h"
@@ -59,89 +60,6 @@ constexpr const char* METRIC_NUM_REMOVED_GENERATED_METHODS =
     "num_removed_generated_enum_methods";
 
 /**
- * Get the instruction containing the constructor call. It can either
- * be the constructor of the superclass or from the same class.
- */
-IRInstruction* get_ctor_call(const DexMethod* method,
-                             const DexMethod* java_enum_ctor) {
-  auto* code = method->get_code();
-  for (const auto& mie : InstructionIterable(code)) {
-    auto insn = mie.insn;
-    if (!opcode::is_invoke_direct(insn->opcode())) {
-      continue;
-    }
-
-    auto method_inv =
-        resolve_method(insn->get_method(), opcode_to_search(insn), method);
-    if (method_inv == java_enum_ctor) {
-      return insn;
-    }
-
-    if (method::is_init(method_inv) &&
-        method_inv->get_class() == method->get_class()) {
-      return insn;
-    }
-  }
-
-  return nullptr;
-}
-
-/**
- * Creates a map from register used to the associated argument.
- *
- * For example for :
- *  static void foo(int a, String b) {
- *    OPCODE_LOAD_PARAM <v_a>
- *    OPCODE_LOAD_PARAM_OBJECT <v_b>
- *    ...
- *  }
- *
- *  will return: {
- *    <v_a> -> 0
- *    <v_b> -> 1
- *  }
- */
-std::unordered_map<size_t, uint32_t> collect_reg_to_arg(
-    const DexMethod* method) {
-  auto* code = method->get_code();
-  auto params = code->get_param_instructions();
-  std::unordered_map<size_t, uint32_t> reg_to_arg;
-
-  size_t arg_index = 0;
-  for (const auto& mie : InstructionIterable(params)) {
-    auto load_insn = mie.insn;
-    always_assert(opcode::is_a_load_param(load_insn->opcode()));
-
-    reg_to_arg[load_insn->dest()] = arg_index++;
-  }
-
-  return reg_to_arg;
-}
-
-/**
- * Returns false if the given register is overwritten (aka is used
- * as the destination), except for the load param opcodes.
- */
-bool check_ordinal_usage(const DexMethod* method, size_t reg) {
-  always_assert(method && method->get_code());
-
-  auto code = method->get_code();
-  for (const auto& mie : InstructionIterable(code)) {
-    auto insn = mie.insn;
-    if (opcode::is_a_load_param(insn->opcode())) {
-      // Skip load params. We already analyzed those.
-      continue;
-    }
-
-    if (insn->has_dest() && insn->dest() == reg) {
-      return false;
-    }
-  }
-
-  return true;
-}
-
-/**
  * Simple analysis to determine which of the enums ctor argument
  * is passed for the ordinal.
  *
@@ -156,21 +74,40 @@ bool analyze_enum_ctors(
     const DexMethod* java_enum_ctor,
     std::unordered_map<const DexMethod*, uint32_t>& ctor_to_arg_ordinal) {
 
-  // For each ctor, get the initialization instruction (it might be a call
-  // to `Enum.<init>(String;I)` or to a different ctor of the same class.
-  std::deque<std::pair<DexMethod*, IRInstruction*>> ctor_to_enum_insn;
-  for (const auto& ctor : cls->get_ctors()) {
-    auto code = ctor->get_code();
-    if (!code) {
-      return false;
-    }
+  struct DelegatingCall {
+    DexMethod* ctor;
+    cfg::ScopedCFG cfg;
+    IRInstruction* invoke;
 
-    auto enum_insn = get_ctor_call(ctor, java_enum_ctor);
-    if (!enum_insn) {
-      return false;
-    }
+    DelegatingCall(DexMethod* ctor, cfg::ScopedCFG cfg, IRInstruction* invoke)
+        : ctor{ctor}, cfg{std::move(cfg)}, invoke{invoke} {}
+  };
 
-    ctor_to_enum_insn.emplace_back(ctor, enum_insn);
+  std::queue<DelegatingCall> delegating_calls;
+  { // Find delegate constructor calls and queue them up to be processed.  The
+    // call might be to `Enum.<init>(String;I)` or to a difference constructor
+    // of the same class.
+    mf::flow_t f;
+    auto inv = f.insn(m::invoke_direct_(m::has_method(m::resolve_method(
+        MethodSearch::Direct,
+        m::equals(java_enum_ctor) ||
+            m::is_constructor<DexMethod>() &&
+                m::member_of<DexMethod>(m::equals(cls->get_type()))))));
+
+    for (const auto& ctor : cls->get_ctors()) {
+      auto code = ctor->get_code();
+      if (!code) {
+        return false;
+      }
+
+      cfg::ScopedCFG cfg{code};
+      auto res = f.find(*cfg, inv);
+      if (auto* inv_insn = res.matching(inv).unique()) {
+        delegating_calls.emplace(ctor, std::move(cfg), inv_insn);
+      } else {
+        return false;
+      }
+    }
   }
 
   // Ordinal represents the third argument.
@@ -178,36 +115,47 @@ bool analyze_enum_ctors(
   ctor_to_arg_ordinal[java_enum_ctor] = 2;
 
   // TODO: We could order them instead of looping ...
-  while (!ctor_to_enum_insn.empty()) {
-    auto& pair = ctor_to_enum_insn.front();
-    ctor_to_enum_insn.pop_front();
+  for (; !delegating_calls.empty(); delegating_calls.pop()) {
+    auto dc = std::move(delegating_calls.front());
 
-    auto ctor = pair.first;
-    auto enum_insn = pair.second;
+    auto* delegate =
+        resolve_method(dc.invoke->get_method(), MethodSearch::Direct);
 
-    auto ctor_called =
-        resolve_method(enum_insn->get_method(), MethodSearch::Direct);
-    if (!ctor_to_arg_ordinal.count(ctor_called)) {
-      ctor_to_enum_insn.push_back(pair);
-      continue;
+    uint32_t delegate_ordinal;
+    { // Only proceed if the delegate constructor has already been processed.
+      auto it = ctor_to_arg_ordinal.find(delegate);
+      if (it == ctor_to_arg_ordinal.end()) {
+        delegating_calls.emplace(std::move(dc));
+        continue;
+      } else {
+        delegate_ordinal = it->second;
+      }
     }
 
-    auto ordinal_reg = enum_insn->src(ctor_to_arg_ordinal[ctor_called]);
+    // Track which param in dc.ctor flows into the ordinal arg of the delegate.
+    mf::flow_t f;
+    auto param = f.insn(m::load_param_());
+    auto invoke_delegate =
+        f.insn(m::equals(dc.invoke))
+            .src(delegate_ordinal, param, mf::unique | mf::alias);
 
-    // determine arg -> reg from IOPCODE_LOAD_* opcodes.
-    auto reg_to_arg = collect_reg_to_arg(ctor);
-    if (reg_to_arg.count(ordinal_reg) == 0) {
-      // TODO: A proper analysis wouldn't fail here.
+    auto res = f.find(*dc.cfg, invoke_delegate);
+
+    auto* load_ordinal = res.matching(param).unique();
+    if (!load_ordinal) {
+      // Couldn't find a unique parameter flowing into the ordinal argument.
       return false;
     }
 
-    // Check that the register used to store the ordinal
-    // is not overwritten.
-    if (!check_ordinal_usage(ctor, ordinal_reg)) {
-      return false;
+    // Figure out which param is being loaded.
+    uint32_t ctor_ordinal = 0;
+    auto ii = InstructionIterable(dc.cfg->get_param_instructions());
+    for (auto it = ii.begin(), end = ii.end();; ++it, ++ctor_ordinal) {
+      always_assert(it != end && "Unable to locate load_ordinal");
+      if (it->insn == load_ordinal) break;
     }
 
-    ctor_to_arg_ordinal[ctor] = reg_to_arg[ordinal_reg];
+    ctor_to_arg_ordinal[dc.ctor] = ctor_ordinal;
   }
 
   return true;
