@@ -108,6 +108,7 @@ MultiMethodInliner::MultiMethodInliner(
                  config.shrinker,
                  configured_pure_methods,
                  configured_finalish_field_names) {
+  Timer t("MultiMethodInliner construction");
   for (const auto& callee_callers : true_virtual_callers) {
     for (const auto& caller_insns : callee_callers.second) {
       for (auto insn : caller_insns.second) {
@@ -304,18 +305,21 @@ void MultiMethodInliner::inline_methods() {
   std::unordered_map<DexMethod*, size_t> visited;
   CallerNonrecursiveCalleesByStackDepth
       caller_nonrecursive_callees_by_stack_depth;
-  for (const auto& it : caller_callee) {
-    auto caller = it.first;
-    TraceContext context(caller);
-    // if the caller is not a top level keep going, it will be traversed
-    // when inlining a top level caller
-    if (callee_caller.find(caller) != callee_caller.end()) continue;
-    sparta::PatriciaTreeSet<DexMethod*> call_stack;
-    auto stack_depth = compute_caller_nonrecursive_callees_by_stack_depth(
-        caller, it.second, call_stack, &visited,
-        &caller_nonrecursive_callees_by_stack_depth);
-    info.max_call_stack_depth =
-        std::max(info.max_call_stack_depth, stack_depth);
+  {
+    Timer t("compute_caller_nonrecursive_callees_by_stack_depth");
+    for (const auto& it : caller_callee) {
+      auto caller = it.first;
+      TraceContext context(caller);
+      // if the caller is not a top level keep going, it will be traversed
+      // when inlining a top level caller
+      if (callee_caller.find(caller) != callee_caller.end()) continue;
+      sparta::PatriciaTreeSet<DexMethod*> call_stack;
+      auto stack_depth = compute_caller_nonrecursive_callees_by_stack_depth(
+          caller, it.second, call_stack, &visited,
+          &caller_nonrecursive_callees_by_stack_depth);
+      info.max_call_stack_depth =
+          std::max(info.max_call_stack_depth, stack_depth);
+    }
   }
 
   std::vector<size_t> ordered_stack_depths;
