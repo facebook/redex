@@ -100,6 +100,13 @@ commands:
             - ~/sdk
           key: android-build-tools-{{ checksum "cache_version.rev" }}
 
+  install-clang:
+    steps:
+      - run:
+          name: Install Clang (Deb Testing)
+          command: |
+            sudo apt-get install -y --no-install-recommends clang
+
   configure-and-build-w-make:
     parameters:
       configure_extra:
@@ -241,6 +248,18 @@ jobs:
       - checkout
       - setup-build-and-test-w-make-sdk
 
+  build-deb_testing-w-clang:
+    docker:
+      - image: circleci/buildpack-deps:testing
+    resource_class: large
+    environment:
+      CC: clang
+      CXX: clang++
+    steps:
+      - checkout
+      - install-clang
+      - setup-build-and-test-w-make-sdk
+
   build-windows:
     executor:
       name: win/default
@@ -315,6 +334,8 @@ workflows:
           filters: *filter-not-gh-pages-not-master
       - build-deb_testing:
           filters: *filter-not-gh-pages-not-master
+      - build-deb_testing-w-clang:
+          filters: *filter-not-gh-pages-not-master
       - build-windows:
           filters: *filter-not-gh-pages-not-master
 
@@ -327,4 +348,5 @@ workflows:
       - build-20_04
       - build-deb_stable
       - build-deb_testing
+      - build-deb_testing-w-clang
       - build-windows-artifacts
