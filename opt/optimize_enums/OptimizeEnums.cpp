@@ -217,12 +217,13 @@ class OptimizeEnums {
 
     for (const auto& generated_cls : generated_classes) {
       auto generated_clinit = generated_cls->get_clinit();
+      cfg::ScopedCFG clinit_cfg{generated_clinit->get_code()};
 
       for (const auto& sfield : generated_cls->get_sfields()) {
         // update stats.
         m_stats.num_lookup_tables++;
 
-        auto enum_type = get_enum_used(sfield);
+        auto enum_type = get_enum_used(*clinit_cfg, sfield);
         if (!enum_type || collected_enums.count(enum_type) == 0) {
           // Nothing to do if we couldn't determine enum ordinals.
           continue;
@@ -789,63 +790,53 @@ class OptimizeEnums {
   }
 
   /**
-   * Generated field names follow the format:
-   *   $SwitchMap$com$<part_of_path_1>$...$<enum_name>
-   * where Lcom/<part_of_path_1>/.../enum_name; is the actual enum.
+   * In the following example, `lookup_table` corresponds to `$SwitchMap$Foo`,
+   * and `clinit_cfg` is expected to be the body of the static initializer:
+   *
+   *   private static class $1 {
+   *     public static final synthetic int[] $SwitchMap$Foo;
+   *     static {
+   *       $SwitchMap$Foo = new int[Foo.values().length];
+   *       $SwitchMap$Foo[Foo.Bar.ordinal()] = 1;
+   *       $SwitchMap$Foo[Foo.Baz.ordinal()] = 2;
+   *       // ...
+   *     }
+   *   }
+   *
+   * This function finds the enum class corresponding to `lookup_table` (`Foo`
+   * in the example) by tracing back from its initialization:
+   *
+   *   invoke-static             {}, LFoo;.values:()[LFoo;   <- Find this,
+   *   move-result-object        v0
+   *   array-length              v0
+   *   move-result-pseudo        v1
+   *   new-array                 v1
+   *   move-result-pseudo-object v2
+   *   sput-object               v2, $1;.$SwitchMap$Foo:[I   <- Starting here.
+   *
+   * Returns a pointer to the enum class if it can be found, nullptr otherwise.
    */
-  DexType* get_enum_used(DexField* field) {
-    const auto& deobfuscated_name = field->get_deobfuscated_name();
-    const auto& name = deobfuscated_name.empty() ? field->get_name()->str()
-                                                 : deobfuscated_name;
+  DexType* get_enum_used(cfg::ControlFlowGraph& clinit_cfg,
+                         DexFieldRef* lookup_table) {
+    mf::flow_t f;
 
-    // Get the class path, by removing the first part of the field
-    // name ($SwitchMap$), adding 'L' and ';' and replacing '$' with '/'.
-    auto pos = name.find("SwitchMap");
-    always_assert(pos != std::string::npos);
-    auto start_index = pos + 10;
+    auto m__invoke_values =
+        m::invoke_static_(m::has_method(m::named<DexMethodRef>("values")));
+    auto m__sput_lookup =
+        m::sput_object_(m::has_field(m::equals(lookup_table)));
 
-    auto end = name.find(":[");
-    if (end == std::string::npos) {
-      end = name.size();
+    auto uniq = mf::alias | mf::unique;
+    auto vals = f.insn(m__invoke_values);
+    auto alen = f.insn(m::array_length_()).src(0, vals, uniq);
+    auto newa = f.insn(m::new_array_()).src(0, alen, uniq);
+    auto sput = f.insn(m__sput_lookup).src(0, newa, uniq);
+
+    auto res = f.find(clinit_cfg, sput);
+    if (auto* invoke = res.matching(vals).unique()) {
+      return invoke->get_method()->get_class();
+    } else {
+      return nullptr;
     }
-
-    std::string class_name =
-        "L" + name.substr(start_index, end - start_index) + ";";
-    std::replace(class_name.begin(), class_name.end(), '$', '/');
-
-    // We search for the enum type recursively. If the initial path doesn't
-    // correspond to an enum, we check if it is an inner class.
-    DexType* type = nullptr;
-    do {
-      type = DexType::get_type(class_name.c_str());
-
-      if (!type && !m_pg_map.empty()) {
-        const std::string& obfuscated_name =
-            m_pg_map.translate_class(class_name);
-
-        // Get type associated type from the obfuscated class name.
-        if (!obfuscated_name.empty()) {
-          type = DexType::get_type(obfuscated_name.c_str());
-        }
-      }
-
-      if (type) {
-        if (auto possible_enum_cls = type_class(type)) {
-          if (is_enum(possible_enum_cls)) {
-            return type;
-          }
-        }
-      }
-
-      std::size_t found = class_name.find_last_of('/');
-      if (found == std::string::npos) {
-        break;
-      }
-
-      class_name[found] = '$';
-    } while (true);
-
-    return nullptr;
   }
 
   Scope m_scope;
