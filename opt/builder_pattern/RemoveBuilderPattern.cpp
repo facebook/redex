@@ -239,9 +239,6 @@ class RemoveClasses {
 
       {
         copy_propagation_impl::Config copy_prop_config;
-        copy_prop_config.eliminate_const_classes = false;
-        copy_prop_config.eliminate_const_strings = false;
-        copy_prop_config.static_finals = false;
         copy_propagation_impl::CopyPropagation copy_propagation(
             copy_prop_config);
         copy_propagation.run(code, method);
