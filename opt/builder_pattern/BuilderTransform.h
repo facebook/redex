@@ -8,12 +8,11 @@
 #pragma once
 
 #include "DexClass.h"
+#include "Inliner.h"
 #include "InlinerConfig.h"
 #include "RemoveBuilderPattern.h"
 #include "Resolver.h"
 #include "TypeSystem.h"
-
-class MultiMethodInliner;
 
 namespace builder_pattern {
 
@@ -40,6 +39,8 @@ class BuilderTransform {
   void replace_fields(const InstantiationToUsage& usage, DexMethod* method);
 
   void cleanup();
+
+  shrinker::Shrinker& get_shrinker() { return m_inliner->get_shrinker(); }
 
  private:
   const TypeSystem& m_type_system;

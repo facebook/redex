@@ -193,7 +193,7 @@ class MultiMethodInliner {
     return m_delayed_make_static;
   }
 
-  const shrinker::Shrinker& get_shrinker() const { return m_shrinker; }
+  shrinker::Shrinker& get_shrinker() { return m_shrinker; }
 
  private:
   void caller_inline(DexMethod* caller,

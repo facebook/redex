@@ -27,8 +27,9 @@ class Shrinker {
       DexStoresVector& stores,
       const Scope& scope,
       const ShrinkerConfig& config,
-      const std::unordered_set<DexMethodRef*>& configured_pure_methods,
-      const std::unordered_set<DexString*>& configured_finalish_field_names);
+      const std::unordered_set<DexMethodRef*>& configured_pure_methods = {},
+      const std::unordered_set<DexString*>& configured_finalish_field_names =
+          {});
   void shrink_method(DexMethod* method);
   const constant_propagation::Transform::Stats& get_const_prop_stats() const {
     return m_const_prop_stats;

@@ -22,18 +22,20 @@ Shrinker::Shrinker(
       m_enabled(config.run_const_prop || config.run_cse ||
                 config.run_copy_prop || config.run_local_dce ||
                 config.run_reg_alloc || config.run_dedup_blocks),
-      m_pure_methods(get_pure_methods()),
+      m_pure_methods(configured_pure_methods),
       m_finalish_field_names(configured_finalish_field_names) {
   if (config.run_cse || config.run_local_dce) {
-    m_pure_methods.insert(configured_pure_methods.begin(),
-                          configured_pure_methods.end());
-    auto immutable_getters = get_immutable_getters(scope);
-    m_pure_methods.insert(immutable_getters.begin(), immutable_getters.end());
+    if (config.compute_pure_methods) {
+      const auto& pure_methods = get_pure_methods();
+      m_pure_methods.insert(pure_methods.begin(), pure_methods.end());
+      auto immutable_getters = get_immutable_getters(scope);
+      m_pure_methods.insert(immutable_getters.begin(), immutable_getters.end());
+    }
     if (config.run_cse) {
       m_cse_shared_state = std::make_unique<cse_impl::SharedState>(
           m_pure_methods, m_finalish_field_names);
     }
-    if (config.run_local_dce) {
+    if (config.run_local_dce && config.compute_pure_methods) {
       std::unique_ptr<const method_override_graph::Graph> owned_override_graph;
       const method_override_graph::Graph* override_graph;
       if (config.run_cse) {

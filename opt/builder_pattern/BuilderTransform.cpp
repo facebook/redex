@@ -27,8 +27,13 @@ BuilderTransform::BuilderTransform(const Scope& scope,
   };
 
   std::unordered_set<DexMethod*> no_default_inlinables;
-  // disable shrinking options, minimizing initialization time
+  // customize shrinking options
   m_inliner_config.shrinker = shrinker::ShrinkerConfig();
+  m_inliner_config.shrinker.run_const_prop = true;
+  m_inliner_config.shrinker.run_cse = true;
+  m_inliner_config.shrinker.run_copy_prop = true;
+  m_inliner_config.shrinker.run_local_dce = true;
+  m_inliner_config.shrinker.compute_pure_methods = false;
   m_inliner = std::unique_ptr<MultiMethodInliner>(new MultiMethodInliner(
       scope, stores, no_default_inlinables, concurrent_resolver,
       m_inliner_config, MultiMethodInlinerMode::None));

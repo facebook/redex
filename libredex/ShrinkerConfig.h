@@ -20,6 +20,10 @@ struct ShrinkerConfig {
   bool run_local_dce{false};
   bool run_reg_alloc{false};
   bool run_dedup_blocks{false};
+
+  // Internally used option that decides whether to compute pure methods with a
+  // relatively expensive analysis over the scope
+  bool compute_pure_methods{true};
 };
 
 } // namespace shrinker
