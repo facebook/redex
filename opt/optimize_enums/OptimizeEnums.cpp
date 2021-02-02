@@ -478,21 +478,28 @@ class OptimizeEnums {
       }
 
       auto& sfields = cls->get_sfields();
-
-      // We expect the generated classes to ONLY contain the lookup tables
-      // and the static initializer (<clinit>)
-      if (!sfields.empty() && cls->get_dmethods().size() == 1 &&
-          cls->get_vmethods().empty() && cls->get_ifields().empty()) {
-        auto all_sfields_lookup_tables =
-            std::all_of(sfields.begin(), sfields.end(), [](DexField* sfield) {
+      const auto all_sfield_names_contain = [&sfields](const char* sub) {
+        return std::all_of(
+            sfields.begin(), sfields.end(), [sub](DexField* sfield) {
               const auto& deobfuscated_name = sfield->get_deobfuscated_name();
               const auto& name = deobfuscated_name.empty()
                                      ? sfield->get_name()->str()
                                      : deobfuscated_name;
-              return name.find("$SwitchMap$") != std::string::npos;
+              return name.find(sub) != std::string::npos;
             });
+      };
 
-        if (all_sfields_lookup_tables) {
+      // We expect the generated classes to ONLY contain the lookup tables
+      // and the static initializer (<clinit>)
+      //
+      // Lookup tables for Java Enums all contain $SwitchMap$ in the field name
+      // and lookup tables for Kotlin Enums all contain $EnumSwitchMapping& in
+      // the field name.  The two are not expected to miss in a single generated
+      // class.
+      if (!sfields.empty() && cls->get_dmethods().size() == 1 &&
+          cls->get_vmethods().empty() && cls->get_ifields().empty()) {
+        if (all_sfield_names_contain("$SwitchMap$") ||
+            all_sfield_names_contain("$EnumSwitchMapping$")) {
           generated_classes.emplace_back(cls);
         }
       }

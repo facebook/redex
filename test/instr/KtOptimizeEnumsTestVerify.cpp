@@ -88,7 +88,7 @@ TEST_F(PostVerify, KotlinGeneratedClass) {
   EXPECT_NE(nullptr, cls_Big);
 
   auto* cls_WhenMappings = find_class_named(classes, name_WhenMappings);
-  EXPECT_NE(nullptr, cls_WhenMappings);
+  EXPECT_EQ(nullptr, cls_WhenMappings);
 
   auto* meth_useA = DexMethod::get_method(name_useA);
   auto* meth_useB = DexMethod::get_method(name_useB);
@@ -98,9 +98,9 @@ TEST_F(PostVerify, KotlinGeneratedClass) {
   auto switch_cases_B = collect_switch_cases(meth_useB);
   auto switch_cases_A_again = collect_switch_cases(meth_useAAgain);
 
-  std::unordered_set<size_t> expected_switch_cases_A{1, 2};
-  std::unordered_set<size_t> expected_switch_cases_B{1, 2};
-  std::unordered_set<size_t> expected_switch_cases_A_again{1, 2};
+  std::unordered_set<size_t> expected_switch_cases_A{0, 2};
+  std::unordered_set<size_t> expected_switch_cases_B{0, 2};
+  std::unordered_set<size_t> expected_switch_cases_A_again{0, 1};
 
   EXPECT_EQ(expected_switch_cases_A, switch_cases_A);
   EXPECT_EQ(expected_switch_cases_B, switch_cases_B);
