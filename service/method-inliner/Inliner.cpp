@@ -733,14 +733,35 @@ void MultiMethodInliner::inline_inlinables(
                                                "pgi_v1");
   }
 
+  size_t intermediate_shrinkings{0};
+  // We only try intermediate shrinking when using the cfg-inliner, as it will
+  // invalidate irlist iterators, which are used with the legacy
+  // non-cfg-inliner.
+  size_t last_intermediate_shrinking_inlined_callees{
+      m_config.use_cfg_inliner ? 0 : std::numeric_limits<size_t>::max()};
   for (const auto& inlinable : ordered_inlinables) {
     auto callee_method = inlinable.callee;
     auto callee = callee_method->get_code();
     auto callsite_insn = inlinable.insn;
 
     std::vector<DexMethod*> make_static;
-    if (!is_inlinable(caller_method, callee_method, callsite_insn,
-                      estimated_insn_size, &make_static)) {
+    bool caller_too_large;
+    auto not_inlinable =
+        !is_inlinable(caller_method, callee_method, callsite_insn,
+                      estimated_insn_size, &make_static, &caller_too_large);
+    if (not_inlinable && caller_too_large && m_shrinker.enabled() &&
+        inlined_callees.size() > last_intermediate_shrinking_inlined_callees) {
+      always_assert(m_config.use_cfg_inliner);
+      intermediate_shrinkings++;
+      last_intermediate_shrinking_inlined_callees = inlined_callees.size();
+      m_shrinker.shrink_method(caller_method);
+      cfg_next_caller_reg = caller->cfg().get_registers_size();
+      estimated_insn_size = caller->cfg().sum_opcode_sizes();
+      not_inlinable =
+          !is_inlinable(caller_method, callee_method, callsite_insn,
+                        estimated_insn_size, &make_static, &caller_too_large);
+    }
+    if (not_inlinable) {
       calls_not_inlinable++;
       continue;
     }
@@ -815,6 +836,9 @@ void MultiMethodInliner::inline_inlinables(
   }
   if (calls_not_inlined) {
     info.calls_not_inlined += calls_not_inlined;
+  }
+  if (intermediate_shrinkings) {
+    info.intermediate_shrinkings += intermediate_shrinkings;
   }
 }
 
@@ -941,8 +965,12 @@ bool MultiMethodInliner::is_inlinable(const DexMethod* caller,
                                       const DexMethod* callee,
                                       const IRInstruction* insn,
                                       size_t estimated_insn_size,
-                                      std::vector<DexMethod*>* make_static) {
+                                      std::vector<DexMethod*>* make_static,
+                                      bool* caller_too_large_) {
   TraceContext context{caller};
+  if (caller_too_large_) {
+    *caller_too_large_ = false;
+  }
   // don't inline cross store references
   if (cross_store_reference(caller, callee)) {
     if (insn) {
@@ -972,13 +1000,6 @@ bool MultiMethodInliner::is_inlinable(const DexMethod* caller,
     return false;
   }
   if (!callee->rstate.force_inline()) {
-    if (caller_too_large(caller->get_class(), estimated_insn_size, callee)) {
-      if (insn) {
-        log_nopt(INL_TOO_BIG, caller, insn);
-      }
-      return false;
-    }
-
     // Don't inline code into a method that doesn't have the same (or higher)
     // required API. We don't want to bring API specific code into a class
     // where it's not supported.
@@ -1001,6 +1022,16 @@ bool MultiMethodInliner::is_inlinable(const DexMethod* caller,
     if (callee->rstate.dont_inline()) {
       if (insn) {
         log_nopt(INL_DO_NOT_INLINE, caller, insn);
+      }
+      return false;
+    }
+
+    if (caller_too_large(caller->get_class(), estimated_insn_size, callee)) {
+      if (insn) {
+        log_nopt(INL_TOO_BIG, caller, insn);
+      }
+      if (caller_too_large_) {
+        *caller_too_large_ = true;
       }
       return false;
     }

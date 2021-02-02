@@ -185,7 +185,8 @@ class MultiMethodInliner {
                     const DexMethod* callee,
                     const IRInstruction* insn,
                     size_t estimated_insn_size,
-                    std::vector<DexMethod*>* make_static);
+                    std::vector<DexMethod*>* make_static,
+                    bool* caller_too_large_ = nullptr);
 
   void make_static_inlinable(std::vector<DexMethod*>& make_static);
 
@@ -574,6 +575,7 @@ class MultiMethodInliner {
     std::atomic<size_t> calls_inlined{0};
     std::atomic<size_t> calls_not_inlinable{0};
     std::atomic<size_t> calls_not_inlined{0};
+    std::atomic<size_t> intermediate_shrinkings{0};
     std::atomic<size_t> not_found{0};
     std::atomic<size_t> blocklisted{0};
     std::atomic<size_t> throws{0};

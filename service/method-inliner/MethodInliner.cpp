@@ -427,6 +427,8 @@ void run_inliner(DexStoresVector& stores,
   mgr.incr_metric("calls_inlined", inliner.get_info().calls_inlined);
   mgr.incr_metric("calls_not_inlinable",
                   inliner.get_info().calls_not_inlinable);
+  mgr.incr_metric("intermediate_shrinkings",
+                  inliner.get_info().intermediate_shrinkings);
   mgr.incr_metric("calls_not_inlined", inliner.get_info().calls_not_inlined);
   mgr.incr_metric("methods_removed", deleted);
   mgr.incr_metric("escaped_virtual", inliner.get_info().escaped_virtual);
