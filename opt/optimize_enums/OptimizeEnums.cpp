@@ -600,7 +600,6 @@ class OptimizeEnums {
           continue;
         }
         if (!check_lookup_table_usage(lookup_table_to_enum,
-                                      enum_field_to_ordinal,
                                       generated_switch_cases, info)) {
           continue;
         }
@@ -616,7 +615,6 @@ class OptimizeEnums {
    */
   bool check_lookup_table_usage(
       const std::unordered_map<DexField*, DexType*>& lookup_table_to_enum,
-      const std::unordered_map<DexField*, size_t>& enum_field_to_ordinal,
       const GeneratedSwitchCases& generated_switch_cases,
       const optimize_enums::Info& info) {
 
