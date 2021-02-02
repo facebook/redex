@@ -223,7 +223,7 @@ AnnoKill::AnnoSet AnnoKill::get_referenced_annos() {
     }
   });
 
-  AnnoKill::AnnoSet concurrent_referenced_annos;
+  ConcurrentSet<DexType*> concurrent_referenced_annos;
   auto add_concurrent_referenced_anno = [&](DexType* t) {
     if (!referenced_annos.count(t)) {
       concurrent_referenced_annos.insert(t);
