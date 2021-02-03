@@ -10,6 +10,8 @@
 void InlinerConfig::bind_config() {
   bind("true_virtual_inline", true_virtual_inline, true_virtual_inline);
   bind("use_cfg_inliner", use_cfg_inliner, use_cfg_inliner);
+  bind("intermediate_shrinking", intermediate_shrinking,
+       intermediate_shrinking);
   bind("enforce_method_size_limit", enforce_method_size_limit,
        enforce_method_size_limit);
   bind("throws", throws_inline, throws_inline);

@@ -25,6 +25,7 @@ struct InlinerConfig {
   bool inline_small_non_deletables{true};
   bool use_constant_propagation_for_callee_size{true};
   bool use_cfg_inliner{false};
+  bool intermediate_shrinking{false};
   shrinker::ShrinkerConfig shrinker;
   bool shrink_other_methods{true};
   bool unique_inlined_registers{true};

@@ -796,7 +796,9 @@ void MultiMethodInliner::inline_inlinables(
   // invalidate irlist iterators, which are used with the legacy
   // non-cfg-inliner.
   size_t last_intermediate_shrinking_inlined_callees{
-      m_config.use_cfg_inliner ? 0 : std::numeric_limits<size_t>::max()};
+      (m_config.use_cfg_inliner && m_config.intermediate_shrinking)
+          ? 0
+          : std::numeric_limits<size_t>::max()};
   if (exp) {
     // Intermediate shrinking rebuilds the cfg, which is not currently supported
     // by the AB experiment context. Thus, when an experiment is active, we
@@ -817,6 +819,7 @@ void MultiMethodInliner::inline_inlinables(
     if (not_inlinable && caller_too_large && m_shrinker.enabled() &&
         inlined_callees.size() > last_intermediate_shrinking_inlined_callees) {
       always_assert(m_config.use_cfg_inliner);
+      always_assert(m_config.intermediate_shrinking);
       intermediate_shrinkings++;
       last_intermediate_shrinking_inlined_callees = inlined_callees.size();
       m_shrinker.shrink_method(caller_method);

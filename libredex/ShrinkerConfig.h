@@ -13,7 +13,6 @@ namespace shrinker {
  * The global shrinker config.
  */
 struct ShrinkerConfig {
-  bool use_cfg_inliner{false};
   bool run_const_prop{false};
   bool run_cse{false};
   bool run_copy_prop{false};

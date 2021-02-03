@@ -217,6 +217,8 @@ void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
   jw.get("use_constant_propagation_for_callee_size", true,
          inliner_config->use_constant_propagation_for_callee_size);
   jw.get("use_cfg_inliner", true, inliner_config->use_cfg_inliner);
+  jw.get("intermediate_shrinking", false,
+         inliner_config->intermediate_shrinking);
   jw.get("multiple_callers", false, inliner_config->multiple_callers);
   jw.get("inline_small_non_deletables",
          true,
