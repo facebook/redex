@@ -797,6 +797,13 @@ void MultiMethodInliner::inline_inlinables(
   // non-cfg-inliner.
   size_t last_intermediate_shrinking_inlined_callees{
       m_config.use_cfg_inliner ? 0 : std::numeric_limits<size_t>::max()};
+  if (exp) {
+    // Intermediate shrinking rebuilds the cfg, which is not currently supported
+    // by the AB experiment context. Thus, when an experiment is active, we
+    // effectively disable i
+    last_intermediate_shrinking_inlined_callees =
+        std::numeric_limits<size_t>::max();
+  }
   for (const auto& inlinable : ordered_inlinables) {
     auto callee_method = inlinable.callee;
     auto callee = callee_method->get_code();
