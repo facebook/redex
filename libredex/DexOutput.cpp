@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <assert.h>
+#include <boost/filesystem.hpp>
 #include <exception>
 #include <fcntl.h>
 #include <fstream>
@@ -469,16 +470,16 @@ DexOutput::DexOutput(
 
   always_assert_log(
       dodx->method_to_idx().size() <= kMaxMethodRefs,
-      "Trying to encode too many method refs in dex %lu: %lu (limit: %lu). Run "
+      "Trying to encode too many method refs in dex %s: %lu (limit: %lu). Run "
       "with `-J ir_type_checker.check_num_of_refs=true`.",
-      dex_number,
+      boost::filesystem::path(path).filename().c_str(),
       dodx->method_to_idx().size(),
       kMaxMethodRefs);
   always_assert_log(
       dodx->field_to_idx().size() <= kMaxFieldRefs,
-      "Trying to encode too many field refs in dex %lu: %lu (limit: %lu). Run "
+      "Trying to encode too many field refs in dex %s: %lu (limit: %lu). Run "
       "with `-J ir_type_checker.check_num_of_refs=true`.",
-      dex_number,
+      boost::filesystem::path(path).filename().c_str(),
       dodx->field_to_idx().size(),
       kMaxFieldRefs);
 

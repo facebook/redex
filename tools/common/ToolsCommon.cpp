@@ -295,20 +295,6 @@ void load_classes_from_dexes_and_metadata(
 std::string get_dex_output_name(const std::string& output_dir,
                                 const DexStore& store,
                                 int index) {
-  std::ostringstream ss;
-  ss << output_dir << "/" << store.get_name();
-  if (store.get_name().compare("classes") == 0) {
-    // primary/secondary dex store, primary has no numeral and secondaries
-    // start at 2
-    if (index > 0) {
-      ss << (index + 1);
-    }
-  } else {
-    // other dex stores do not have a primary,
-    // so it makes sense to start at 2
-    ss << (index + 2);
-  }
-  ss << ".dex";
-  return ss.str();
+  return output_dir + "/" + dex_name(store, index);
 }
 } // namespace redex

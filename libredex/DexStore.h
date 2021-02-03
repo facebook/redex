@@ -317,3 +317,11 @@ class XDexRefs {
  * Squash the stores into a single dex.
  */
 void squash_into_one_dex(DexStoresVector& stores);
+
+/**
+ * Generate the name of the dex in format "${store_name}${new_id}.dex".
+ * Primary dex has no numeral `new_id`. Secondaries and other dex stores do not
+ * have a primary and their `new_id` start at 2.
+ * Example: classes.dex, classes2.dex, classes3.dex, secondstore2.dex.
+ */
+std::string dex_name(const DexStore& store, size_t dex_id);

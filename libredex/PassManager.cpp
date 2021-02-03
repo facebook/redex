@@ -134,7 +134,8 @@ struct CheckerConfig {
   static void ref_validation(const DexStoresVector& stores,
                              const std::string& pass_name) {
     Timer t("ref_validation");
-    auto check_ref_num = [pass_name](const DexClasses& classes) {
+    auto check_ref_num = [pass_name](const DexClasses& classes,
+                                     const DexStore& store, size_t dex_id) {
       constexpr size_t limit = 65536;
       std::unordered_set<DexMethodRef*> total_method_refs;
       std::unordered_set<DexFieldRef*> total_field_refs;
@@ -150,6 +151,9 @@ struct CheckerConfig {
         total_field_refs.insert(field_refs.begin(), field_refs.end());
         total_method_refs.insert(method_refs.begin(), method_refs.end());
       }
+      TRACE(PM, 1, "dex %s: method refs %zu, filed refs %zu, type refs %zu",
+            dex_name(store, dex_id).c_str(), total_method_refs.size(),
+            total_field_refs.size(), total_type_refs.size());
       always_assert_log(total_method_refs.size() <= limit,
                         "%s adds too many method refs", pass_name.c_str());
       always_assert_log(total_field_refs.size() <= limit,
@@ -158,8 +162,9 @@ struct CheckerConfig {
                         "%s adds too many type refs", pass_name.c_str());
     };
     for (const auto& store : stores) {
+      size_t dex_id = 0;
       for (const auto& classes : store.get_dexen()) {
-        check_ref_num(classes);
+        check_ref_num(classes, store, dex_id++);
       }
     }
   }
