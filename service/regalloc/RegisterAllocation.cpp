@@ -32,6 +32,7 @@ Stats allocate(const Config& allocator_config, DexMethod* m) {
   if (m->get_code() == nullptr) {
     return Stats();
   }
+  TraceContext context(m);
   auto& code = *m->get_code();
   auto scoped = at_scope_exit([&code]() { code.clear_cfg(); });
   TRACE(REG, 5, "regs:%d code:\n%s", code.get_registers_size(), SHOW(&code));
