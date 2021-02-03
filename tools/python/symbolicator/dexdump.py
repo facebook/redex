@@ -24,7 +24,7 @@ class DexdumpSymbolicator(object):
     CLS_CHUNK_HDR_REGEX = re.compile(r"  [A-Z]")
     CLS_HDR_REGEX = re.compile(r"Class #")
 
-    def __init__(self, symbol_maps):
+    def __init__(self, symbol_maps, all_line_info=False):
         self.symbol_maps = symbol_maps
         self.reading_methods = False
         self.current_class = None
@@ -32,6 +32,7 @@ class DexdumpSymbolicator(object):
         self.current_method = None
         self.last_lineno = None
         self.prev_line = None
+        self.all_line_info = all_line_info
 
     def class_replacer(self, matchobj):
         m = matchobj.group("class")
@@ -48,7 +49,12 @@ class DexdumpSymbolicator(object):
             lambda p: "%s:%d" % (p.file, p.line),
             self.symbol_maps.line_map.get_stack(lineno - 1),
         )
-        return matchobj.group("prefix") + ", ".join(positions)
+        if self.all_line_info:
+            line_info = str(lineno) + " (" + ", ".join(positions) + ")"
+        else:
+            line_info = ", ".join(positions)
+
+        return matchobj.group("prefix") + line_info
 
     def method_replacer(self, matchobj):
         m = matchobj.group(0)
@@ -110,7 +116,7 @@ class DexdumpSymbolicator(object):
                             lineno,
                         )
                         if mapped_line:
-                            if self.last_lineno:
+                            if self.last_lineno and not self.all_line_info:
                                 if self.last_lineno == mapped_line:
                                     # Don't emit duplicate line entries
                                     return None
@@ -119,12 +125,13 @@ class DexdumpSymbolicator(object):
                                 lambda p: "%s:%d" % (p.file, p.line),
                                 self.symbol_maps.line_map.get_stack(mapped_line - 1),
                             )
-                            return (
-                                "        "
-                                + match.group("prefix")
-                                + ", ".join(positions)
-                                + "\n"
-                            )
+
+                            if self.all_line_info:
+                                line_info = lineno + " (" + ", ".join(positions) + ")"
+                            else:
+                                line_info = ", ".join(positions)
+
+                            return "        " + match.group("prefix") + line_info + "\n"
                     no_debug_info = (
                         "positions     :" in self.prev_line
                         and "locals        :" in line
