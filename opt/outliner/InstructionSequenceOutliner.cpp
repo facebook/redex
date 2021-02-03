@@ -1938,15 +1938,12 @@ class DexState {
            size_t reserved_trefs,
            size_t reserved_mrefs)
       : m_mgr(mgr), m_dex(dex), m_dex_id(dex_id) {
-    std::vector<DexMethodRef*> method_refs;
-    std::vector<DexType*> type_refs;
+    std::unordered_set<DexMethodRef*> method_refs;
     for (auto cls : dex) {
       cls->gather_methods(method_refs);
-      cls->gather_types(type_refs);
+      cls->gather_types(m_type_refs);
     }
-    sort_unique(method_refs);
     m_method_refs_count = method_refs.size() + reserved_mrefs;
-    m_type_refs.insert(type_refs.begin(), type_refs.end());
 
     walk::classes(dex, [&class_ids = m_class_ids](DexClass* cls) {
       class_ids.emplace(cls->get_type(), class_ids.size());

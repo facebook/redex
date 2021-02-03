@@ -34,13 +34,17 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#define INSTANTIATE(METHOD, TYPE)                 \
-  template void METHOD(std::vector<TYPE>&) const; \
-  template void METHOD(std::unordered_set<TYPE>&) const;
+#define INSTANTIATE(METHOD, TYPE)                        \
+  template void METHOD(std::vector<TYPE>&) const;        \
+  template void METHOD(std::unordered_set<TYPE>&) const; \
+  template void METHOD(std::vector<const TYPE>&) const;  \
+  template void METHOD(std::unordered_set<const TYPE>&) const;
 
-#define INSTANTIATE2(METHOD, TYPE, OTYPE)                \
-  template void METHOD(std::vector<TYPE>&, OTYPE) const; \
-  template void METHOD(std::unordered_set<TYPE>&, OTYPE) const;
+#define INSTANTIATE2(METHOD, TYPE, OTYPE)                       \
+  template void METHOD(std::vector<TYPE>&, OTYPE) const;        \
+  template void METHOD(std::unordered_set<TYPE>&, OTYPE) const; \
+  template void METHOD(std::vector<const TYPE>&, OTYPE) const;  \
+  template void METHOD(std::unordered_set<const TYPE>&, OTYPE) const;
 
 namespace {
 
