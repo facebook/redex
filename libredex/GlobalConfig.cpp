@@ -46,6 +46,7 @@ void IRTypeCheckerConfig::bind_config() {
   bind("verify_moves", {}, verify_moves);
   bind("run_after_passes", {}, run_after_passes);
   bind("check_no_overwrite_this", {}, check_no_overwrite_this);
+  bind("check_num_of_refs", {}, check_num_of_refs);
 }
 
 void HasherConfig::bind_config() {

@@ -183,3 +183,21 @@ void squash_into_one_dex(DexStoresVector& stores) {
   }
   stores.erase(stores.begin() + 1, stores.end());
 }
+
+std::string dex_name(const DexStore& store, size_t dex_id) {
+  std::ostringstream ss;
+  ss << store.get_name();
+  if (store.get_name().compare("classes") == 0) {
+    // primary/secondary dex store, primary has no numeral and secondaries
+    // start at 2
+    if (dex_id > 0) {
+      ss << (dex_id + 1);
+    }
+  } else {
+    // other dex stores do not have a primary,
+    // so it makes sense to start at 2
+    ss << (dex_id + 2);
+  }
+  ss << ".dex";
+  return ss.str();
+}

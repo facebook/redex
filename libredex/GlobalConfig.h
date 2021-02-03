@@ -33,6 +33,7 @@ struct IRTypeCheckerConfig : public Configurable {
 
   bool run_after_each_pass;
   bool verify_moves;
+  bool check_num_of_refs;
   std::unordered_set<std::string> run_after_passes;
   bool check_no_overwrite_this;
 };
