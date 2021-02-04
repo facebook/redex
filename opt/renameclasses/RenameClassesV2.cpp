@@ -421,21 +421,49 @@ void RenameClassesPassV2::eval_classes(Scope& scope,
                                        ConfigFiles& conf,
                                        bool rename_annotations,
                                        PassManager& mgr) {
-  auto force_rename_hierarchies =
-      build_force_rename_hierarchies(mgr, scope, class_hierarchy);
+  std::unordered_map<const DexType*, std::string> force_rename_hierarchies;
+  std::unordered_set<const DexType*> dont_rename_serde_relationships;
+  std::unordered_set<std::string> dont_rename_class_name_literals;
+  std::unordered_set<std::string> dont_rename_class_for_types_with_reflection;
+  std::unordered_set<std::string> dont_rename_canaries;
+  std::unordered_map<const DexType*, std::string> dont_rename_hierarchies;
+  std::unordered_set<const DexType*> dont_rename_native_bindings;
+  std::unordered_set<const DexType*> dont_rename_annotated;
 
-  auto dont_rename_serde_relationships =
-      build_dont_rename_serde_relationships(scope);
-  auto dont_rename_class_name_literals =
-      build_dont_rename_class_name_literals(scope);
-  auto dont_rename_class_for_types_with_reflection =
-      build_dont_rename_for_types_with_reflection(scope,
-                                                  conf.get_proguard_map());
-  auto dont_rename_canaries = build_dont_rename_canaries(scope);
-  auto dont_rename_hierarchies =
-      build_dont_rename_hierarchies(mgr, scope, class_hierarchy);
-  auto dont_rename_native_bindings = build_dont_rename_native_bindings(scope);
-  auto dont_rename_annotated = build_dont_rename_annotated();
+  std::vector<std::function<void()>> fns{
+      [&] {
+        force_rename_hierarchies =
+            build_force_rename_hierarchies(mgr, scope, class_hierarchy);
+      },
+      [&] {
+        dont_rename_serde_relationships =
+            build_dont_rename_serde_relationships(scope);
+      },
+      [&] {
+        dont_rename_class_name_literals =
+            build_dont_rename_class_name_literals(scope);
+      },
+      [&] {
+        dont_rename_class_for_types_with_reflection =
+            build_dont_rename_for_types_with_reflection(
+                scope, conf.get_proguard_map());
+      },
+      [&] { dont_rename_canaries = build_dont_rename_canaries(scope); },
+      [&] {
+        dont_rename_hierarchies =
+            build_dont_rename_hierarchies(mgr, scope, class_hierarchy);
+      },
+      [&] {
+        dont_rename_native_bindings = build_dont_rename_native_bindings(scope);
+      },
+      [&] { dont_rename_annotated = build_dont_rename_annotated(); }};
+
+  auto wq = workqueue_foreach<std::function<void()>>(
+      [](std::function<void()>& fn) { fn(); });
+  for (const auto& fn : fns) {
+    wq.add_item(fn);
+  }
+  wq.run_all();
 
   std::string norule;
 
