@@ -97,37 +97,26 @@ void InterDexPass::bind_config() {
   trait(Traits::Pass::unique, true);
 }
 
-void InterDexPass::run_pass(const Scope& original_scope,
-                            const XStoreRefs& xstore_refs,
-                            DexStoresVector& stores,
-                            DexClassesVector& dexen,
-                            ConfigFiles& conf,
-                            PassManager& mgr) {
-  // Setup all external plugins.
-  InterDexRegistry* registry = static_cast<InterDexRegistry*>(
-      PluginRegistry::get().pass_registry(INTERDEX_PASS_NAME));
-
-  auto plugins = registry->create_plugins();
-  size_t reserve_frefs = m_reserved_frefs;
-  size_t reserve_trefs = m_reserved_trefs;
-  size_t reserve_mrefs = m_reserved_mrefs;
-  for (const auto& plugin : plugins) {
-    plugin->configure(original_scope, conf);
-    reserve_frefs += plugin->reserve_frefs();
-    reserve_trefs += plugin->reserve_trefs();
-    reserve_mrefs += plugin->reserve_mrefs();
-  }
-  mgr.set_metric(METRIC_RESERVED_FREFS, reserve_frefs);
-  mgr.set_metric(METRIC_RESERVED_TREFS, reserve_trefs);
-  mgr.set_metric(METRIC_RESERVED_MREFS, reserve_mrefs);
+void InterDexPass::run_pass(
+    const Scope& original_scope,
+    const XStoreRefs& xstore_refs,
+    DexStoresVector& stores,
+    DexClassesVector& dexen,
+    std::vector<std::unique_ptr<InterDexPassPlugin>>& plugins,
+    ConfigFiles& conf,
+    PassManager& mgr,
+    const ReserveRefsInfo& refs_info) {
+  mgr.set_metric(METRIC_RESERVED_FREFS, refs_info.frefs);
+  mgr.set_metric(METRIC_RESERVED_TREFS, refs_info.trefs);
+  mgr.set_metric(METRIC_RESERVED_MREFS, refs_info.mrefs);
 
   bool force_single_dex = conf.get_json_config().get("force_single_dex", false);
   InterDex interdex(original_scope, dexen, mgr.apk_manager(), conf, plugins,
                     m_linear_alloc_limit, m_static_prune, m_normal_primary_dex,
                     force_single_dex, m_emit_canaries,
                     m_minimize_cross_dex_refs, m_minimize_cross_dex_refs_config,
-                    m_cross_dex_relocator_config, reserve_frefs, reserve_trefs,
-                    reserve_mrefs, &xstore_refs,
+                    m_cross_dex_relocator_config, refs_info.frefs,
+                    refs_info.trefs, refs_info.mrefs, &xstore_refs,
                     mgr.get_redex_options().min_sdk, m_sort_remaining_classes);
 
   if (m_expect_order_list) {
@@ -188,13 +177,11 @@ void InterDexPass::run_pass_on_nonroot_store(const Scope& original_scope,
                                              const XStoreRefs& xstore_refs,
                                              DexClassesVector& dexen,
                                              ConfigFiles& conf,
-                                             PassManager& mgr) {
+                                             PassManager& mgr,
+                                             const ReserveRefsInfo& refs_info) {
   // Setup default configs for non-root store
-  // For now, no plugins configured for non-root stores
+  // For now, no plugins configured for non-root stores to run.
   std::vector<std::unique_ptr<InterDexPassPlugin>> plugins;
-  size_t reserve_frefs = m_reserved_frefs;
-  size_t reserve_trefs = m_reserved_trefs;
-  size_t reserve_mrefs = m_reserved_mrefs;
 
   // Cross dex ref minimizers are disabled for non-root stores
   // TODO: Make this logic cleaner when these features get enabled for non-root
@@ -207,8 +194,8 @@ void InterDexPass::run_pass_on_nonroot_store(const Scope& original_scope,
                     m_linear_alloc_limit, m_static_prune, m_normal_primary_dex,
                     false /* force single dex */, false /* emit canaries */,
                     false /* minimize_cross_dex_refs */, cross_dex_refs_config,
-                    cross_dex_relocator_config, reserve_frefs, reserve_trefs,
-                    reserve_mrefs, &xstore_refs,
+                    cross_dex_relocator_config, refs_info.frefs,
+                    refs_info.trefs, refs_info.mrefs, &xstore_refs,
                     mgr.get_redex_options().min_sdk, m_sort_remaining_classes);
 
   interdex.run_on_nonroot_store();
@@ -229,14 +216,28 @@ void InterDexPass::run_pass(DexStoresVector& stores,
   Scope original_scope = build_class_scope(stores);
   XStoreRefs xstore_refs(stores);
 
+  // Setup all external plugins.
+  InterDexRegistry* registry = static_cast<InterDexRegistry*>(
+      PluginRegistry::get().pass_registry(INTERDEX_PASS_NAME));
+  auto plugins = registry->create_plugins();
+
+  ReserveRefsInfo refs_info(m_reserved_frefs, m_reserved_trefs,
+                            m_reserved_mrefs);
+  for (const auto& plugin : plugins) {
+    plugin->configure(original_scope, conf);
+    refs_info.frefs += plugin->reserve_frefs();
+    refs_info.trefs += plugin->reserve_trefs();
+    refs_info.mrefs += plugin->reserve_mrefs();
+  }
+
   auto wq = workqueue_foreach<DexStore*>([&](DexStore* store) {
     run_pass_on_nonroot_store(original_scope, xstore_refs, store->get_dexen(),
-                              conf, mgr);
+                              conf, mgr, refs_info);
   });
   for (auto& store : stores) {
     if (store.is_root_store()) {
-      run_pass(original_scope, xstore_refs, stores, store.get_dexen(), conf,
-               mgr);
+      run_pass(original_scope, xstore_refs, stores, store.get_dexen(), plugins,
+               conf, mgr, refs_info);
     } else if (!store.is_generated()) {
       wq.add_item(&store);
     }
