@@ -48,6 +48,15 @@ constexpr const char* METRIC_RESERVED_FREFS = "reserved_frefs";
 constexpr const char* METRIC_RESERVED_TREFS = "reserved_trefs";
 constexpr const char* METRIC_RESERVED_MREFS = "reserved_mrefs";
 
+struct ReserveRefsInfo {
+  int64_t frefs;
+  int64_t trefs;
+  int64_t mrefs;
+
+  ReserveRefsInfo(int64_t _frefs, int64_t _trefs, int64_t _mrefs)
+      : frefs(_frefs), trefs(_trefs), mrefs(_mrefs) {}
+};
+
 class InterDexPass : public Pass {
  public:
   explicit InterDexPass(bool register_plugins = true)
@@ -92,14 +101,17 @@ class InterDexPass : public Pass {
                         const XStoreRefs&,
                         DexStoresVector&,
                         DexClassesVector&,
+                        std::vector<std::unique_ptr<InterDexPassPlugin>>&,
                         ConfigFiles&,
-                        PassManager&);
+                        PassManager&,
+                        const ReserveRefsInfo&);
 
   void run_pass_on_nonroot_store(const Scope&,
                                  const XStoreRefs&,
                                  DexClassesVector&,
                                  ConfigFiles&,
-                                 PassManager&);
+                                 PassManager&,
+                                 const ReserveRefsInfo&);
 };
 
 } // namespace interdex
