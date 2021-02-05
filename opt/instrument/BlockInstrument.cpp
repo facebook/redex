@@ -988,8 +988,28 @@ void BlockInstrumentHelper::do_basic_block_tracing(
   int blocklisted = 0;
   int rejected = 0;
   int block_instrumented = 0;
+  int non_root_store_methods = 0;
 
-  auto scope = build_class_scope(stores);
+  Scope scope;
+  if (options.instrument_only_root_store) {
+    DexStoresVector root;
+    for (const auto& store : stores) {
+      if (store.is_root_store()) {
+        root.push_back(store);
+      } else {
+        // We want to collect number of methods that are being excluded.
+        for (const auto& cls : build_class_scope({store})) {
+          non_root_store_methods +=
+              cls->get_dmethods().size() + cls->get_vmethods().size();
+        }
+      }
+    }
+    all_methods += non_root_store_methods;
+    scope = build_class_scope(root);
+  } else {
+    scope = build_class_scope(stores);
+  }
+
   walk::code(scope, [&](DexMethod* method, IRCode& code) {
     all_methods++;
     if (method == analysis_cls->get_clinit() || method == onMethodBegin) {
@@ -1068,6 +1088,7 @@ void BlockInstrumentHelper::do_basic_block_tracing(
   TRACE(INSTRUMENT, 4, "- All methods: %d", all_methods);
   TRACE(INSTRUMENT, 4, "- Eligible methods: %d", eligibles);
   TRACE(INSTRUMENT, 4, "  Uninstrumentable methods: %d", specials);
+  TRACE(INSTRUMENT, 4, "  Non-root methods: %d", non_root_store_methods);
   TRACE(INSTRUMENT, 4, "- Explicitly selected:");
   TRACE(INSTRUMENT, 4, "  Allow listed: %d", picked_by_allowlist);
   TRACE(INSTRUMENT, 4, "  Cold start: %d", picked_by_cs);
