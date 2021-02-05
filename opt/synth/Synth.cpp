@@ -438,8 +438,9 @@ void update_invoke(IRCode* transform, IRInstruction* insn, DexMethod* method) {
 bool can_update_wrappee(const ClassHierarchy& ch,
                         DexMethod* wrappee,
                         DexMethod* wrapper) {
-  if (is_native(wrappee)) {
-    // Can't change the signature of native methods.
+  if (is_native(wrappee) || !can_rename(wrappee)) {
+    // Can't change the signature of native methods, as well as
+    // unrenameable ones.
     return false;
   }
   DexProto* old_proto = wrappee->get_proto();
