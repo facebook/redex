@@ -18,6 +18,7 @@
 #include "LocalDce.h"
 #include "MethodProfiles.h"
 #include "ShrinkerConfig.h"
+#include "Timer.h"
 
 namespace shrinker {
 
@@ -55,6 +56,23 @@ class Shrinker {
 
   const XStoreRefs& get_xstores() const { return m_xstores; }
 
+  double get_const_prop_seconds() const {
+    return m_const_prop_timer.get_seconds();
+  }
+  double get_cse_seconds() const { return m_cse_timer.get_seconds(); }
+  double get_copy_prop_seconds() const {
+    return m_copy_prop_timer.get_seconds();
+  }
+  double get_local_dce_seconds() const {
+    return m_local_dce_timer.get_seconds();
+  }
+  double get_dedup_blocks_seconds() const {
+    return m_dedup_blocks_timer.get_seconds();
+  }
+  double get_reg_alloc_seconds() const {
+    return m_reg_alloc_timer.get_seconds();
+  }
+
  private:
   const XStoreRefs m_xstores;
   const ShrinkerConfig m_config;
@@ -66,11 +84,17 @@ class Shrinker {
 
   // THe mutex protects all other mutable (stats) fields.
   std::mutex m_stats_mutex;
+  AccumulatingTimer m_const_prop_timer;
   constant_propagation::Transform::Stats m_const_prop_stats;
+  AccumulatingTimer m_cse_timer;
   cse_impl::Stats m_cse_stats;
+  AccumulatingTimer m_copy_prop_timer;
   copy_propagation_impl::Stats m_copy_prop_stats;
+  AccumulatingTimer m_local_dce_timer;
   LocalDce::Stats m_local_dce_stats;
+  AccumulatingTimer m_dedup_blocks_timer;
   dedup_blocks_impl::Stats m_dedup_blocks_stats;
+  AccumulatingTimer m_reg_alloc_timer;
   size_t m_methods_shrunk{0};
 };
 

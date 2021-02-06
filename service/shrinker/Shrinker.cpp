@@ -66,6 +66,7 @@ void Shrinker::shrink_method(DexMethod* method) {
   dedup_blocks_impl::Stats dedup_blocks_stats;
 
   if (m_config.run_const_prop) {
+    auto timer = m_const_prop_timer.scope();
     if (editable_cfg_built) {
       code->clear_cfg();
     }
@@ -96,6 +97,7 @@ void Shrinker::shrink_method(DexMethod* method) {
   }
 
   if (m_config.run_cse) {
+    auto timer = m_cse_timer.scope();
     if (!code->editable_cfg_built()) {
       code->build_cfg(/* editable */ true);
     }
@@ -109,12 +111,14 @@ void Shrinker::shrink_method(DexMethod* method) {
   }
 
   if (m_config.run_copy_prop) {
+    auto timer = m_copy_prop_timer.scope();
     copy_propagation_impl::Config config;
     copy_propagation_impl::CopyPropagation copy_propagation(config);
     copy_prop_stats = copy_propagation.run(code, method);
   }
 
   if (m_config.run_local_dce) {
+    auto timer = m_local_dce_timer.scope();
     // LocalDce doesn't care if editable_cfg_built
     auto local_dce = LocalDce(m_pure_methods);
     local_dce.dce(code);
@@ -122,6 +126,7 @@ void Shrinker::shrink_method(DexMethod* method) {
   }
 
   if (m_config.run_reg_alloc) {
+    auto timer = m_reg_alloc_timer.scope();
     auto get_features = [&code]() -> std::tuple<size_t, size_t, size_t> {
       if (!traceEnabled(MMINL, 4)) {
         return std::make_tuple(0u, 0u, 0u);
@@ -156,6 +161,7 @@ void Shrinker::shrink_method(DexMethod* method) {
   }
 
   if (m_config.run_dedup_blocks) {
+    auto timer = m_dedup_blocks_timer.scope();
     if (!code->editable_cfg_built()) {
       code->build_cfg(/* editable */ true);
     }

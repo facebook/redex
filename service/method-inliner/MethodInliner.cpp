@@ -25,6 +25,8 @@
 #include "MethodProfiles.h"
 #include "ReachableClasses.h"
 #include "Resolver.h"
+#include "Shrinker.h"
+#include "Timer.h"
 #include "Walkers.h"
 
 namespace mog = method_override_graph;
@@ -468,5 +470,18 @@ void run_inliner(DexStoresVector& stores,
           shrinker.get_local_dce_stats().unreachable_instruction_count);
   mgr.incr_metric("blocks_eliminated_by_dedup_blocks",
                   shrinker.get_dedup_blocks_stats().blocks_removed);
+
+  // Expose the shrinking timers as Timers.
+  Timer::add_timer("Inliner.Shrinking.ConstantPropagation",
+                   shrinker.get_const_prop_seconds());
+  Timer::add_timer("Inliner.Shrinking.CSE", shrinker.get_cse_seconds());
+  Timer::add_timer("Inliner.Shrinking.CopyPropagation",
+                   shrinker.get_copy_prop_seconds());
+  Timer::add_timer("Inliner.Shrinking.LocalDCE",
+                   shrinker.get_local_dce_seconds());
+  Timer::add_timer("Inliner.Shrinking.DedupBlocks",
+                   shrinker.get_dedup_blocks_seconds());
+  Timer::add_timer("Inliner.Shrinking.RegAlloc",
+                   shrinker.get_reg_alloc_seconds());
 }
 } // namespace inliner
