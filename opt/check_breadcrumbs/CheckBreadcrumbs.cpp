@@ -89,6 +89,14 @@ const DexType* get_type_from_insn(const IRInstruction* insn) {
   return insn->get_type();
 }
 
+std::string get_store_name(const XStoreRefs& xstores, size_t idx) {
+  auto base_name = xstores.get_store(idx)->get_name();
+  if (idx > 0) {
+    base_name += std::to_string(idx);
+  }
+  return base_name;
+}
+
 std::string get_store_name(const XStoreRefs& xstores, const DexType* t) {
   std::string base_name = xstores.get_store(t)->get_name();
   size_t idx = xstores.get_store_idx(t);
@@ -605,7 +613,7 @@ bool Breadcrumbs::is_illegal_cross_store(const DexType* caller,
                                          const DexType* callee) {
   // Skip deleted types, as we don't know the store for those.
   if (m_classes.count(type_class(caller)) == 0 ||
-      m_classes.count(type_class(callee)) == 0) {
+      m_classes.count(type_class(callee)) == 0 || caller == callee) {
     return false;
   }
 
@@ -629,10 +637,13 @@ bool Breadcrumbs::is_illegal_cross_store(const DexType* caller,
     if (m_xstores.illegal_ref_between_stores(caller_store_idx,
                                              callee_store_idx)) {
       if (callee_to_check != callee) {
-        TRACE(BRCR, 4,
-              "Illegal reference from %s to class %s in type hierarchy of %s",
+        TRACE(BRCR, 2,
+              "Illegal reference from %s (%s) to class %s (%s) in type "
+              "hierarchy of %s",
               show_deobfuscated(caller).c_str(),
+              get_store_name(m_xstores, caller_store_idx).c_str(),
               show_deobfuscated(callee_to_check).c_str(),
+              get_store_name(m_xstores, callee_store_idx).c_str(),
               show_deobfuscated(callee).c_str());
       }
       return true;
@@ -817,11 +828,11 @@ void Breadcrumbs::check_field_opcode(const DexMethod* method,
 
   if (check_cross_store_ref) {
     auto cls = method->get_class();
-    if (is_illegal_cross_store(cls, field->get_class())) {
+    if (is_illegal_cross_store(cls, field->get_type())) {
       m_illegal_field_type[method].emplace_back(insn);
     }
 
-    if (is_illegal_cross_store(cls, field->get_type())) {
+    if (is_illegal_cross_store(cls, field->get_class())) {
       m_illegal_field_cls[method].emplace_back(insn);
     }
   }
