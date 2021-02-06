@@ -22,6 +22,8 @@ struct Timer {
   // there should be no currently running Timers when this function is called
   static const times_t& get_times() { return s_times; }
 
+  static void add_timer(std::string&& msg, double dur_s);
+
  private:
   static std::mutex s_lock;
   static times_t s_times;
@@ -64,6 +66,9 @@ class AccumulatingTimer {
   AccumulatingTimerScope scope() { return AccumulatingTimerScope(this); }
 
   uint64_t get_microseconds() const { return m_microseconds.load(); }
+  double get_seconds() const {
+    return ((double)m_microseconds.load()) / 1000000;
+  }
 
  private:
   std::atomic<uint64_t> m_microseconds;
