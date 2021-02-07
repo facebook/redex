@@ -1020,3 +1020,45 @@ TEST_F(CopyPropagationTest, lock_canonicalization) {
 )");
   EXPECT_CODE_EQ(code, expected_code.get());
 }
+
+TEST_F(CopyPropagationTest, check_cast_workaround_exc) {
+  // In this piece of code, instruction lowering will result in
+  //   move-object v1, v0
+  //   check-cast v0, "LCls;"
+  // The register allocator ensures/d that `v1` is not holding a live value to
+  // make that work. CopyProp must not replace `v2` with `v1` in the catch
+  // block.
+  auto code_str = R"(
+    (
+      (load-param v0)
+      (const v1 0)
+      (move v2 v1)
+      (.try_start a)
+      (check-cast v0 "LCls;")
+      (move-result-pseudo-object v1)
+      (return v1)
+      (.try_end a)
+
+      (.catch (a))
+      (add-int v2 v2 v2)
+      (const v2 0)
+      (return v2)
+    )
+  )";
+  auto method = assembler::method_from_string(
+      std::string("(method (public) \"LFoo;.bar:()Ljava/lang/Object;\" ") +
+      code_str + ")");
+
+  auto code = method->get_code();
+  code->set_registers_size(3);
+
+  copy_propagation_impl::Config config;
+  config.regalloc_has_run = true;
+  config.replace_with_representative = true;
+  config.eliminate_const_literals_with_same_type_demands = true;
+  CopyPropagation(config).run(code, method);
+
+  // Expect that `v2` is not replaced in `add-int`.
+  auto expected_code = assembler::ircode_from_string(code_str);
+  EXPECT_CODE_EQ(code, expected_code.get());
+}
