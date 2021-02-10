@@ -209,7 +209,7 @@ std::string show_method(const DexMethodRef* ref, bool deobfuscated) {
   return b.str();
 }
 
-std::string show_opcode(const DexInstruction* insn) {
+std::string show_opcode(const DexInstruction* insn, bool deobfuscated = false) {
   if (!insn) return "";
   std::ostringstream ss;
   auto opcode = insn->opcode();
@@ -494,156 +494,239 @@ std::string show_opcode(const DexInstruction* insn) {
     return "const-wide";
   // field opcode
   case DOPCODE_IGET:
-    ss << "iget " << show(((DexOpcodeField*)insn)->get_field());
+    ss << "iget ";
+    ss << show_field(static_cast<const DexOpcodeField*>(insn)->get_field(),
+                     deobfuscated);
     return ss.str();
   case DOPCODE_IGET_WIDE:
-    ss << "iget-wide " << show(((DexOpcodeField*)insn)->get_field());
+    ss << "iget-wide ";
+    ss << show_field(static_cast<const DexOpcodeField*>(insn)->get_field(),
+                     deobfuscated);
     return ss.str();
   case DOPCODE_IGET_OBJECT:
-    ss << "iget-object " << show(((DexOpcodeField*)insn)->get_field());
+    ss << "iget-object ";
+    ss << show_field(static_cast<const DexOpcodeField*>(insn)->get_field(),
+                     deobfuscated);
     return ss.str();
   case DOPCODE_IGET_BOOLEAN:
-    ss << "iget-boolean " << show(((DexOpcodeField*)insn)->get_field());
+    ss << "iget-boolean ";
+    ss << show_field(static_cast<const DexOpcodeField*>(insn)->get_field(),
+                     deobfuscated);
     return ss.str();
   case DOPCODE_IGET_BYTE:
-    ss << "iget-byte " << show(((DexOpcodeField*)insn)->get_field());
+    ss << "iget-byte ";
+    ss << show_field(static_cast<const DexOpcodeField*>(insn)->get_field(),
+                     deobfuscated);
     return ss.str();
   case DOPCODE_IGET_CHAR:
-    ss << "iget-char " << show(((DexOpcodeField*)insn)->get_field());
+    ss << "iget-char ";
+    ss << show_field(static_cast<const DexOpcodeField*>(insn)->get_field(),
+                     deobfuscated);
     return ss.str();
   case DOPCODE_IGET_SHORT:
-    ss << "iget-short " << show(((DexOpcodeField*)insn)->get_field());
+    ss << "iget-short ";
+    ss << show_field(static_cast<const DexOpcodeField*>(insn)->get_field(),
+                     deobfuscated);
     return ss.str();
   case DOPCODE_IPUT:
-    ss << "iput " << show(((DexOpcodeField*)insn)->get_field());
+    ss << "iput ";
+    ss << show_field(static_cast<const DexOpcodeField*>(insn)->get_field(),
+                     deobfuscated);
     return ss.str();
   case DOPCODE_IPUT_WIDE:
-    ss << "iput-wide " << show(((DexOpcodeField*)insn)->get_field());
+    ss << "iput-wide ";
+    ss << show_field(static_cast<const DexOpcodeField*>(insn)->get_field(),
+                     deobfuscated);
     return ss.str();
   case DOPCODE_IPUT_OBJECT:
-    ss << "iput-object " << show(((DexOpcodeField*)insn)->get_field());
+    ss << "iput-object ";
+    ss << show_field(static_cast<const DexOpcodeField*>(insn)->get_field(),
+                     deobfuscated);
     return ss.str();
   case DOPCODE_IPUT_BOOLEAN:
-    ss << "iput-boolean " << show(((DexOpcodeField*)insn)->get_field());
+    ss << "iput-boolean ";
+    ss << show_field(static_cast<const DexOpcodeField*>(insn)->get_field(),
+                     deobfuscated);
     return ss.str();
   case DOPCODE_IPUT_BYTE:
-    ss << "iput-byte " << show(((DexOpcodeField*)insn)->get_field());
+    ss << "iput-byte ";
+    ss << show_field(static_cast<const DexOpcodeField*>(insn)->get_field(),
+                     deobfuscated);
     return ss.str();
   case DOPCODE_IPUT_CHAR:
-    ss << "iput-char " << show(((DexOpcodeField*)insn)->get_field());
+    ss << "iput-char ";
+    ss << show_field(static_cast<const DexOpcodeField*>(insn)->get_field(),
+                     deobfuscated);
     return ss.str();
   case DOPCODE_IPUT_SHORT:
-    ss << "iput-short " << show(((DexOpcodeField*)insn)->get_field());
+    ss << "iput-short ";
+    ss << show_field(static_cast<const DexOpcodeField*>(insn)->get_field(),
+                     deobfuscated);
     return ss.str();
   case DOPCODE_SGET:
-    ss << "sget " << show(((DexOpcodeField*)insn)->get_field());
+    ss << "sget ";
+    ss << show_field(static_cast<const DexOpcodeField*>(insn)->get_field(),
+                     deobfuscated);
     return ss.str();
   case DOPCODE_SGET_WIDE:
-    ss << "sget-wide " << show(((DexOpcodeField*)insn)->get_field());
+    ss << "sget-wide ";
+    ss << show_field(static_cast<const DexOpcodeField*>(insn)->get_field(),
+                     deobfuscated);
     return ss.str();
   case DOPCODE_SGET_OBJECT:
-    ss << "sget-object " << show(((DexOpcodeField*)insn)->get_field());
+    ss << "sget-object ";
+    ss << show_field(static_cast<const DexOpcodeField*>(insn)->get_field(),
+                     deobfuscated);
     return ss.str();
   case DOPCODE_SGET_BOOLEAN:
-    ss << "sget-boolean " << show(((DexOpcodeField*)insn)->get_field());
+    ss << "sget-boolean ";
+    ss << show_field(static_cast<const DexOpcodeField*>(insn)->get_field(),
+                     deobfuscated);
     return ss.str();
   case DOPCODE_SGET_BYTE:
-    ss << "sget-byte " << show(((DexOpcodeField*)insn)->get_field());
+    ss << "sget-byte ";
+    ss << show_field(static_cast<const DexOpcodeField*>(insn)->get_field(),
+                     deobfuscated);
     return ss.str();
   case DOPCODE_SGET_CHAR:
-    ss << "sget-char " << show(((DexOpcodeField*)insn)->get_field());
+    ss << "sget-char ";
+    ss << show_field(static_cast<const DexOpcodeField*>(insn)->get_field(),
+                     deobfuscated);
     return ss.str();
   case DOPCODE_SGET_SHORT:
-    ss << "sget-short " << show(((DexOpcodeField*)insn)->get_field());
+    ss << "sget-short ";
+    ss << show_field(static_cast<const DexOpcodeField*>(insn)->get_field(),
+                     deobfuscated);
     return ss.str();
   case DOPCODE_SPUT:
-    ss << "sput " << show(((DexOpcodeField*)insn)->get_field());
+    ss << "sput ";
+    ss << show_field(static_cast<const DexOpcodeField*>(insn)->get_field(),
+                     deobfuscated);
     return ss.str();
   case DOPCODE_SPUT_WIDE:
-    ss << "sput-wide " << show(((DexOpcodeField*)insn)->get_field());
+    ss << "sput-wide ";
+    ss << show_field(static_cast<const DexOpcodeField*>(insn)->get_field(),
+                     deobfuscated);
     return ss.str();
   case DOPCODE_SPUT_OBJECT:
-    ss << "sput-object " << show(((DexOpcodeField*)insn)->get_field());
+    ss << "sput-object ";
+    ss << show_field(static_cast<const DexOpcodeField*>(insn)->get_field(),
+                     deobfuscated);
     return ss.str();
   case DOPCODE_SPUT_BOOLEAN:
-    ss << "sput-boolean " << show(((DexOpcodeField*)insn)->get_field());
+    ss << "sput-boolean ";
+    ss << show_field(static_cast<const DexOpcodeField*>(insn)->get_field(),
+                     deobfuscated);
     return ss.str();
   case DOPCODE_SPUT_BYTE:
-    ss << "sput-byte " << show(((DexOpcodeField*)insn)->get_field());
+    ss << "sput-byte ";
+    ss << show_field(static_cast<const DexOpcodeField*>(insn)->get_field(),
+                     deobfuscated);
     return ss.str();
   case DOPCODE_SPUT_CHAR:
-    ss << "sput-char " << show(((DexOpcodeField*)insn)->get_field());
+    ss << "sput-char ";
+    ss << show_field(static_cast<const DexOpcodeField*>(insn)->get_field(),
+                     deobfuscated);
     return ss.str();
   case DOPCODE_SPUT_SHORT:
-    ss << "sput-short " << show(((DexOpcodeField*)insn)->get_field());
+    ss << "sput-short ";
+    ss << show_field(static_cast<const DexOpcodeField*>(insn)->get_field(),
+                     deobfuscated);
     return ss.str();
   case DOPCODE_INVOKE_VIRTUAL:
-    ss << "invoke-virtual " << show(((DexOpcodeMethod*)insn)->get_method());
+    ss << "invoke-virtual ";
+    ss << show_method(static_cast<const DexOpcodeMethod*>(insn)->get_method(),
+                      deobfuscated);
     return ss.str();
   case DOPCODE_INVOKE_SUPER:
-    ss << "invoke-super " << show(((DexOpcodeMethod*)insn)->get_method());
+    ss << "invoke-super ";
+    ss << show_method(static_cast<const DexOpcodeMethod*>(insn)->get_method(),
+                      deobfuscated);
     return ss.str();
   case DOPCODE_INVOKE_DIRECT:
-    ss << "invoke-direct " << show(((DexOpcodeMethod*)insn)->get_method());
+    ss << "invoke-direct ";
+    ss << show_method(static_cast<const DexOpcodeMethod*>(insn)->get_method(),
+                      deobfuscated);
     return ss.str();
   case DOPCODE_INVOKE_STATIC:
-    ss << "invoke-static " << show(((DexOpcodeMethod*)insn)->get_method());
+    ss << "invoke-static ";
+    ss << show_method(static_cast<const DexOpcodeMethod*>(insn)->get_method(),
+                      deobfuscated);
     return ss.str();
   case DOPCODE_INVOKE_INTERFACE:
-    ss << "invoke-interface " << show(((DexOpcodeMethod*)insn)->get_method());
+    ss << "invoke-interface ";
+    ss << show_method(static_cast<const DexOpcodeMethod*>(insn)->get_method(),
+                      deobfuscated);
     return ss.str();
   case DOPCODE_INVOKE_VIRTUAL_RANGE:
-    ss << "invoke-virtual/range "
-       << show(((DexOpcodeMethod*)insn)->get_method());
+    ss << "invoke-virtual/range ";
+    ss << show_method(static_cast<const DexOpcodeMethod*>(insn)->get_method(),
+                      deobfuscated);
     return ss.str();
   case DOPCODE_INVOKE_SUPER_RANGE:
-    ss << "invoke-super/range " << show(((DexOpcodeMethod*)insn)->get_method());
+    ss << "invoke-super/range ";
+    ss << show_method(static_cast<const DexOpcodeMethod*>(insn)->get_method(),
+                      deobfuscated);
     return ss.str();
   case DOPCODE_INVOKE_DIRECT_RANGE:
-    ss << "invoke-direct/range "
-       << show(((DexOpcodeMethod*)insn)->get_method());
+    ss << "invoke-direct/range ";
+    ss << show_method(static_cast<const DexOpcodeMethod*>(insn)->get_method(),
+                      deobfuscated);
     return ss.str();
   case DOPCODE_INVOKE_STATIC_RANGE:
-    ss << "invoke-static/range "
-       << show(((DexOpcodeMethod*)insn)->get_method());
+    ss << "invoke-static/range ";
+    ss << show_method(static_cast<const DexOpcodeMethod*>(insn)->get_method(),
+                      deobfuscated);
     return ss.str();
   case DOPCODE_INVOKE_INTERFACE_RANGE:
-    ss << "invoke-interface/range "
-       << show(((DexOpcodeMethod*)insn)->get_method());
+    ss << "invoke-interface/range ";
+    ss << show_method(static_cast<const DexOpcodeMethod*>(insn)->get_method(),
+                      deobfuscated);
     return ss.str();
   case DOPCODE_CONST_STRING:
-    ss << "const-string " << show(((DexOpcodeString*)insn)->get_string());
+    ss << "const-string "
+       << show(static_cast<const DexOpcodeString*>(insn)->get_string());
     return ss.str();
   case DOPCODE_CONST_STRING_JUMBO:
-    ss << "const-string/jumbo " << show(((DexOpcodeString*)insn)->get_string());
+    ss << "const-string/jumbo "
+       << show(static_cast<const DexOpcodeString*>(insn)->get_string());
     return ss.str();
   case DOPCODE_CONST_CLASS:
-    ss << "const-class " << show(((DexOpcodeType*)insn)->get_type());
+    ss << "const-class ";
+    ss << show_type(static_cast<const DexOpcodeType*>(insn)->get_type(),
+                    deobfuscated);
     return ss.str();
   case DOPCODE_CHECK_CAST:
-    ss << "check-cast " << show(((DexOpcodeType*)insn)->get_type());
+    ss << "check-cast ";
+    ss << show_type(static_cast<const DexOpcodeType*>(insn)->get_type(),
+                    deobfuscated);
     return ss.str();
   case DOPCODE_INSTANCE_OF:
-    ss << "instance-of " << show(((DexOpcodeType*)insn)->get_type());
+    ss << "instance-of ";
+    ss << show_type(static_cast<const DexOpcodeType*>(insn)->get_type(),
+                    deobfuscated);
     return ss.str();
   case DOPCODE_NEW_INSTANCE:
-    ss << "new-instance " << show(((DexOpcodeType*)insn)->get_type());
+    ss << "new-instance ";
+    ss << show_type(static_cast<const DexOpcodeType*>(insn)->get_type(),
+                    deobfuscated);
     return ss.str();
   case DOPCODE_NEW_ARRAY:
-    ss << "new-array " << show(((DexOpcodeType*)insn)->get_type());
+    ss << "new-array ";
+    ss << show_type(static_cast<const DexOpcodeType*>(insn)->get_type(),
+                    deobfuscated);
     return ss.str();
   case DOPCODE_FILLED_NEW_ARRAY:
-    ss << "filled-new-array " << show(((DexOpcodeType*)insn)->get_type());
+    ss << "filled-new-array ";
+    ss << show_type(static_cast<const DexOpcodeType*>(insn)->get_type(),
+                    deobfuscated);
     return ss.str();
   case FOPCODE_PACKED_SWITCH:
-    ss << "packed-switch-payload";
-    return ss.str();
+    return "packed-switch-payload";
   case FOPCODE_SPARSE_SWITCH:
-    ss << "sparse-switch-payload";
-    return ss.str();
+    return "sparse-switch-payload";
   case FOPCODE_FILLED_ARRAY:
-    ss << "fill-array-data-payload";
-    return ss.str();
+    return "fill-array-data-payload";
   default:
     return "unknown_op_code";
   }
@@ -1049,10 +1132,10 @@ std::string show(const DexOpcodeData* insn) {
   return ss.str();
 }
 
-std::string show(const DexInstruction* insn) {
+std::string show_insn(const DexInstruction* insn, bool deobfuscated) {
   if (!insn) return "";
   std::ostringstream ss;
-  ss << show_opcode(insn);
+  ss << show_opcode(insn, deobfuscated);
   if (dex_opcode::is_fopcode(insn->opcode())) {
     ss << " " << show(static_cast<const DexOpcodeData*>(insn));
     return ss.str();
@@ -1077,6 +1160,8 @@ std::string show(const DexInstruction* insn) {
 }
 
 std::string show(const IRInstruction* insn) { return show_insn(insn, false); }
+
+std::string show(const DexInstruction* insn) { return show_insn(insn, false); }
 
 std::ostream& operator<<(std::ostream& o, const IRInstruction& insn) {
   o << show(&insn);
@@ -1386,6 +1471,10 @@ std::string show_deobfuscated(const DexMethodRef* ref) {
 }
 
 std::string show_deobfuscated(const IRInstruction* insn) {
+  return show_insn(insn, true);
+}
+
+std::string show_deobfuscated(const DexInstruction* insn) {
   return show_insn(insn, true);
 }
 
