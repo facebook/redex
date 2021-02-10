@@ -106,7 +106,7 @@ DefUses compute_def_uses(ControlFlowGraph& cfg) {
         auto src_reg = insn->src(i);
         auto defs = defs_in.get(src_reg);
         always_assert_log(!defs.is_top() && defs.size() > 0,
-                          "Found use without def when processing [0x%lx]%s",
+                          "Found use without def when processing [0x%p]%s",
                           &mie, SHOW(insn));
         for (auto def : defs.elements()) {
           res[def].insert(insn);

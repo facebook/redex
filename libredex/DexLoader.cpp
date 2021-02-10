@@ -50,7 +50,7 @@ static void validate_dex_header(const dex_header* dh,
                     dh->magic, support_dex_version);
   always_assert_log(
       dh->file_size == dexsize,
-      "Reported size in header (%z) does not match file size (%u)\n",
+      "Reported size in header (%zu) does not match file size (%u)\n",
       dexsize,
       dh->file_size);
   auto off = (uint64_t)dh->class_defs_off;

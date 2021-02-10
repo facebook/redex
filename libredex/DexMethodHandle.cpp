@@ -14,27 +14,28 @@
 DexMethodHandle::DexMethodHandle(MethodHandleType type,
                                  DexMethodRef* methodref) {
   always_assert_log(isInvokeType(type),
-                    "MethodHandleType %d invalid to use with methodref");
+                    "MethodHandleType %d invalid to use with methodref", type);
   m_type = type;
   m_methodref = methodref;
 }
 
 DexMethodHandle::DexMethodHandle(MethodHandleType type, DexFieldRef* fieldref) {
   always_assert_log(!isInvokeType(type),
-                    "MethodHandleType %d invalid to use with fieldref");
+                    "MethodHandleType %d invalid to use with fieldref", type);
   m_type = type;
   m_fieldref = fieldref;
 }
 
 DexMethodRef* DexMethodHandle::methodref() const {
   always_assert_log(isInvokeType(m_type),
-                    "MethodHandleType %d invalid to use with methodref");
+                    "MethodHandleType %d invalid to use with methodref",
+                    m_type);
   return m_methodref;
 }
 
 DexFieldRef* DexMethodHandle::fieldref() const {
   always_assert_log(!isInvokeType(m_type),
-                    "MethodHandleType %d invalid to use with fieldref");
+                    "MethodHandleType %d invalid to use with fieldref", m_type);
   return m_fieldref;
 }
 

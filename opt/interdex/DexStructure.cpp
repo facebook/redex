@@ -104,7 +104,7 @@ bool DexesStructure::add_class_to_current_dex(const MethodRefs& clazz_mrefs,
                                               const TypeRefs& clazz_trefs,
                                               DexClass* clazz) {
   always_assert_log(m_classes.count(clazz) == 0,
-                    "Can't emit the same class twice!\n", SHOW(clazz));
+                    "Can't emit the same class twice! %s", SHOW(clazz));
 
   if (m_current_dex.add_class_if_fits(
           clazz_mrefs, clazz_frefs, clazz_trefs, m_linear_alloc_limit,

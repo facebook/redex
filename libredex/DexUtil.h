@@ -263,8 +263,9 @@ inline std::string internal_to_external(const std::string& internal_name) {
     return internal_name;
   } else {
     auto maybe_external_name = primitive_desc_to_name(type);
-    always_assert_log(
-        maybe_external_name, "%s is not a valid primitive type.", type);
+    always_assert_log(maybe_external_name,
+                      "%s is not a valid primitive type.",
+                      component_name.c_str());
     return *maybe_external_name;
   }
 }

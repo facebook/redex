@@ -86,7 +86,7 @@ boost::optional<reg_t> SwitchMethodPartitioning::compute_prologue_blocks(
   for (const cfg::Block* b : cfg->blocks()) {
     always_assert_log(!b->is_catch(),
                       "SwitchMethodPartitioning does not support methods with "
-                      "catch blocks. %d has a catch block in %s",
+                      "catch blocks. %zu has a catch block in %s",
                       b->id(), SHOW(*cfg));
   }
 
@@ -216,7 +216,7 @@ SwitchMethodPartitioning::SwitchMethodPartitioning(IRCode* code,
       always_assert_log(last_insn_it != case_block->end() &&
                             last_insn_it->insn->opcode() == OPCODE_THROW,
                         "Could not determine key for block that does not look "
-                        "like it throws an IllegalArgumentException: %d in %s",
+                        "like it throws an IllegalArgumentException: %zu in %s",
                         case_block->id(), SHOW(cfg));
     } else if (!case_key.is_top()) {
       const auto& c = case_key.get_constant();

@@ -774,7 +774,7 @@ void RenameClassesPassV2::run_pass(DexStoresVector& stores,
   always_assert_log(scope.size() <
                         std::pow(Locator::global_class_index_digits_base,
                                  Locator::global_class_index_digits_max),
-                    "scope size %uz too large", scope.size());
+                    "scope size %zu too large", scope.size());
   int total_classes = scope.size();
 
   // encode the whole sequence as base 62: [0 - 9], [A - Z], [a - z]

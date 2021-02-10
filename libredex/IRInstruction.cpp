@@ -287,7 +287,7 @@ void IRInstruction::normalize_registers() {
     for (size_t args_idx = 0; args_idx < args.size(); ++args_idx) {
       always_assert_log(
           old_srcs_idx < srcs_size(),
-          "Invalid arg indices in %s args_idx %d old_srcs_idx %d\n",
+          "Invalid arg indices in %s args_idx %zu old_srcs_idx %zu",
           SHOW(this),
           args_idx,
           old_srcs_idx);

@@ -462,13 +462,13 @@ void OptDataMapper::init_nopt_messages() {
 
 void OptDataMapper::verify_opt(OptReason reason) {
   always_assert_log(m_opt_msg_map.find(reason) != m_opt_msg_map.end(),
-                    "Message not found for reason %s\n",
+                    "Message not found for reason %d\n",
                     reason);
 }
 
 void OptDataMapper::verify_nopt(NoptReason reason) {
   always_assert_log(m_nopt_msg_map.find(reason) != m_nopt_msg_map.end(),
-                    "Message not found for reason %s\n",
+                    "Message not found for reason %d\n",
                     reason);
 }
 

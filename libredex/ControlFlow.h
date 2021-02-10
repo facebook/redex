@@ -1342,7 +1342,7 @@ bool ControlFlowGraph::insert(const InstructionIterator& position,
         always_assert_log(!is_branch(existing_last_op) &&
                               !is_throw(existing_last_op) &&
                               !is_return(existing_last_op),
-                          "Can't add instructions after %s in Block %d in %s",
+                          "Can't add instructions after %s in Block %zu in %s",
                           SHOW(existing_last->insn), b->id(), SHOW(*this));
 
         // When inserting after an instruction that may throw, we need to start
@@ -1351,7 +1351,7 @@ bool ControlFlowGraph::insert(const InstructionIterator& position,
         if (!throws.empty()) {
           always_assert_log(!existing_last->insn->has_move_result_any(),
                             "Can't add instructions after throwing instruction "
-                            "%s with move-result in Block %d in %s",
+                            "%s with move-result in Block %zu in %s",
                             SHOW(existing_last->insn), b->id(), SHOW(*this));
           Block* new_block = create_block();
           if (opcode::may_throw(op)) {

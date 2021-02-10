@@ -276,7 +276,7 @@ bool SwitchEquivFinder::move_edges(
     cfg::Edge* edge = pair.first;
     cfg::Block* orig = edge->target();
     for (cfg::Edge* orig_succ : orig->succs()) {
-      always_assert_log(orig_succ != nullptr, "B%d in %s", orig->id(),
+      always_assert_log(orig_succ != nullptr, "B%zu in %s", orig->id(),
                         SHOW(*m_cfg));
       if (orig_succ->type() == cfg::EDGE_GOTO &&
           orig_succ->target()->starts_with_move_result()) {

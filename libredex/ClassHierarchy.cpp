@@ -53,7 +53,7 @@ void build_class_hierarchy(ClassHierarchy& hierarchy, const DexClass* cls) {
     hierarchy[super].insert(type);
   } else {
     always_assert_log(cls->get_type() == type::java_lang_Object(),
-                      SHOW(cls->get_type()));
+                      "%s", SHOW(cls->get_type()));
   }
 }
 

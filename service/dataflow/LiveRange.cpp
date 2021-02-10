@@ -94,7 +94,7 @@ void Chains::replay_analysis_with_callback(Fn f) const {
         auto src = insn->src(i);
         auto defs = defs_in.get(src);
         always_assert_log(!defs.is_top() && defs.size() > 0,
-                          "Found use without def when processing [0x%lx]%s",
+                          "Found use without def when processing [0x%p]%s",
                           &mie, SHOW(insn));
         f(use, defs);
       }
