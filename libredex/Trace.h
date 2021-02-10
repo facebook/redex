@@ -29,6 +29,7 @@ class DexType;
   TM(BRCR)           \
   TM(BRIDGE)         \
   TM(BUILDERS)       \
+  TM(CALLGRAPH)      \
   TM(CFG)            \
   TM(CFP)            \
   TM(CHECKRECURSION) \

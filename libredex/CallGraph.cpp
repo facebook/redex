@@ -12,6 +12,7 @@
 #include "ConcurrentContainers.h"
 #include "MethodOverrideGraph.h"
 #include "Show.h"
+#include "Trace.h"
 #include "Walkers.h"
 
 namespace mog = method_override_graph;
@@ -187,7 +188,8 @@ DexMethod* resolve_interface_virtual_callee(const IRInstruction* insn,
     if (callee == nullptr) {
       auto insn_method_cls = type_class(insn->get_method()->get_class());
       if (insn_method_cls != nullptr && !insn_method_cls->is_external()) {
-        fprintf(stderr, "Unexpected unresolved insn %s", SHOW(insn));
+        TRACE(CALLGRAPH, 1, "Unexpected unresolved insn %s in %s", SHOW(insn),
+              SHOW(caller));
       }
     }
   }
