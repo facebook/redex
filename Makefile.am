@@ -91,6 +91,7 @@ libredex_la_SOURCES = \
 	libredex/MethodUtil.cpp \
 	libredex/MonitorCount.cpp \
 	libredex/Mutators.cpp \
+	libredex/NativeNames.cpp \
 	libredex/NoOptimizationsMatcher.cpp \
 	libredex/NullnessDomain.cpp \
 	libredex/OptData.cpp \

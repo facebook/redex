@@ -75,6 +75,7 @@ check_PROGRAMS = \
     monitor_count_test \
     mutf8_compare_test \
     leb_test \
+    native_names_test \
     null_propagation_test \
     object_inliner_test \
     object_propagation_test \
@@ -266,6 +267,8 @@ monitor_count_test_SOURCES = MonitorCountTest.cpp
 mutf8_compare_test_SOURCES = Mutf8CompareTest.cpp
 
 leb_test_SOURCES = LebTest.cpp
+
+native_names_test_SOURCES = NativeNamesTest.cpp
 
 null_propagation_test_SOURCES = constant-propagation/NullPropagationTest.cpp
 
