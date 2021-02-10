@@ -727,8 +727,171 @@ std::string show_opcode(const DexInstruction* insn, bool deobfuscated = false) {
     return "sparse-switch-payload";
   case FOPCODE_FILLED_ARRAY:
     return "fill-array-data-payload";
-  default:
-    return "unknown_op_code";
+  case DOPCODE_FILLED_NEW_ARRAY_RANGE:
+    return "filled-new-array/range";
+  case DOPCODE_RETURN_VOID_NO_BARRIER:
+    return "return-void-no-barrier";
+  case DOPCODE_ADD_INT_2ADDR:
+    return "add-int/2addr";
+  case DOPCODE_SUB_INT_2ADDR:
+    return "sub-int/2addr";
+  case DOPCODE_MUL_INT_2ADDR:
+    return "mult-int/2addr";
+  case DOPCODE_DIV_INT_2ADDR:
+    return "div-int/2addr";
+  case DOPCODE_REM_INT_2ADDR:
+    return "rem-int/2addr";
+  case DOPCODE_AND_INT_2ADDR:
+    return "and-int/2addr";
+  case DOPCODE_OR_INT_2ADDR:
+    return "or-int/2addr";
+  case DOPCODE_XOR_INT_2ADDR:
+    return "xor-int/2addr";
+  case DOPCODE_SHL_INT_2ADDR:
+    return "shl-int/2addr";
+  case DOPCODE_SHR_INT_2ADDR:
+    return "shr-int/2addr";
+  case DOPCODE_USHR_INT_2ADDR:
+    return "ushr-int/2addr";
+  case DOPCODE_ADD_LONG_2ADDR:
+    return "add-long/2addr";
+  case DOPCODE_SUB_LONG_2ADDR:
+    return "sub-long/2addr";
+  case DOPCODE_MUL_LONG_2ADDR:
+    return "mul-long/2addr";
+  case DOPCODE_DIV_LONG_2ADDR:
+    return "div-long/2addr";
+  case DOPCODE_REM_LONG_2ADDR:
+    return "rem-long/2addr";
+  case DOPCODE_AND_LONG_2ADDR:
+    return "and-long/2addr";
+  case DOPCODE_OR_LONG_2ADDR:
+    return "or-long/2addr";
+  case DOPCODE_XOR_LONG_2ADDR:
+    return "xor-long/2addr";
+  case DOPCODE_SHL_LONG_2ADDR:
+    return "shl-long/2addr";
+  case DOPCODE_SHR_LONG_2ADDR:
+    return "shr-long/2addr";
+  case DOPCODE_USHR_LONG_2ADDR:
+    return "ushr-long/2addr";
+  case DOPCODE_ADD_FLOAT_2ADDR:
+    return "add-float/2addr";
+  case DOPCODE_SUB_FLOAT_2ADDR:
+    return "sub-float/2addr";
+  case DOPCODE_MUL_FLOAT_2ADDR:
+    return "mul-float/2addr";
+  case DOPCODE_DIV_FLOAT_2ADDR:
+    return "div-float/2addr";
+  case DOPCODE_REM_FLOAT_2ADDR:
+    return "rem-float/2addr";
+  case DOPCODE_ADD_DOUBLE_2ADDR:
+    return "add-double/2addr";
+  case DOPCODE_SUB_DOUBLE_2ADDR:
+    return "sub-double/2addr";
+  case DOPCODE_MUL_DOUBLE_2ADDR:
+    return "mul-double/2addr";
+  case DOPCODE_DIV_DOUBLE_2ADDR:
+    return "div-double/2addr";
+  case DOPCODE_REM_DOUBLE_2ADDR:
+    return "rem-double/2addr";
+  case DOPCODE_IGET_QUICK:
+    return "add-double/2addr";
+  case DOPCODE_IGET_WIDE_QUICK:
+    ss << "iget-wide-quick ";
+    ss << show_field(static_cast<const DexOpcodeField*>(insn)->get_field(),
+                     deobfuscated);
+    return ss.str();
+  case DOPCODE_IGET_OBJECT_QUICK:
+    ss << "iget-object-quick ";
+    ss << show_field(static_cast<const DexOpcodeField*>(insn)->get_field(),
+                     deobfuscated);
+    return ss.str();
+  case DOPCODE_IPUT_QUICK:
+    ss << "iput-quick ";
+    ss << show_field(static_cast<const DexOpcodeField*>(insn)->get_field(),
+                     deobfuscated);
+    return ss.str();
+  case DOPCODE_IPUT_WIDE_QUICK:
+    ss << "iput-wide-quick ";
+    ss << show_field(static_cast<const DexOpcodeField*>(insn)->get_field(),
+                     deobfuscated);
+    return ss.str();
+  case DOPCODE_IPUT_OBJECT_QUICK:
+    ss << "iput-object-quick ";
+    ss << show_field(static_cast<const DexOpcodeField*>(insn)->get_field(),
+                     deobfuscated);
+    return ss.str();
+  case DOPCODE_INVOKE_VIRTUAL_QUICK:
+    ss << "invoke-virtual-quick ";
+    ss << show_method(static_cast<const DexOpcodeMethod*>(insn)->get_method(),
+                      deobfuscated);
+    return ss.str();
+  case DOPCODE_INVOKE_VIRTUAL_RANGE_QUICK:
+    ss << "invoke-virtual/range-quick ";
+    ss << show_method(static_cast<const DexOpcodeMethod*>(insn)->get_method(),
+                      deobfuscated);
+    return ss.str();
+  case DOPCODE_IPUT_BOOLEAN_QUICK:
+    ss << "iput-boolean-quick ";
+    ss << show_field(static_cast<const DexOpcodeField*>(insn)->get_field(),
+                     deobfuscated);
+    return ss.str();
+  case DOPCODE_IPUT_BYTE_QUICK:
+    ss << "iput-byte-quick ";
+    ss << show_field(static_cast<const DexOpcodeField*>(insn)->get_field(),
+                     deobfuscated);
+    return ss.str();
+  case DOPCODE_IPUT_CHAR_QUICK:
+    ss << "iput-char-quick ";
+    ss << show_field(static_cast<const DexOpcodeField*>(insn)->get_field(),
+                     deobfuscated);
+    return ss.str();
+  case DOPCODE_IPUT_SHORT_QUICK:
+    ss << "iput-short-quick ";
+    ss << show_field(static_cast<const DexOpcodeField*>(insn)->get_field(),
+                     deobfuscated);
+    return ss.str();
+  case DOPCODE_IGET_BOOLEAN_QUICK:
+    ss << "iget-boolean-quick ";
+    ss << show_field(static_cast<const DexOpcodeField*>(insn)->get_field(),
+                     deobfuscated);
+    return ss.str();
+  case DOPCODE_IGET_BYTE_QUICK:
+    ss << "iget-byte-quick ";
+    ss << show_field(static_cast<const DexOpcodeField*>(insn)->get_field(),
+                     deobfuscated);
+    return ss.str();
+  case DOPCODE_IGET_CHAR_QUICK:
+    ss << "iget-char-quick ";
+    ss << show_field(static_cast<const DexOpcodeField*>(insn)->get_field(),
+                     deobfuscated);
+    return ss.str();
+  case DOPCODE_IGET_SHORT_QUICK:
+    ss << "iget-short-quick ";
+    ss << show_field(static_cast<const DexOpcodeField*>(insn)->get_field(),
+                     deobfuscated);
+    return ss.str();
+  case DOPCODE_INVOKE_POLYMORPHIC:
+    ss << "invoke-polymorphic ";
+    ss << show_method(static_cast<const DexOpcodeMethod*>(insn)->get_method(),
+                      deobfuscated);
+    return ss.str();
+  case DOPCODE_INVOKE_POLYMORPHIC_RANGE:
+    ss << "invoke-polymorphic/range ";
+    ss << show_method(static_cast<const DexOpcodeMethod*>(insn)->get_method(),
+                      deobfuscated);
+    return ss.str();
+  case DOPCODE_INVOKE_CUSTOM:
+    ss << "invoke-custom ";
+    ss << show_method(static_cast<const DexOpcodeMethod*>(insn)->get_method(),
+                      deobfuscated);
+    return ss.str();
+  case DOPCODE_INVOKE_CUSTOM_RANGE:
+    ss << "invoke-custom/range ";
+    ss << show_method(static_cast<const DexOpcodeMethod*>(insn)->get_method(),
+                      deobfuscated);
+    return ss.str();
   }
 }
 
