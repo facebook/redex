@@ -819,7 +819,7 @@ class OptimizeEnums {
 
       auto search = field_enum_map.find(*old_case_key);
       always_assert_log(search != field_enum_map.end(),
-                        "can't find case key %d leaving block %d\n%s\nin %s\n",
+                        "can't find case key %d leaving block %zu\n%s\nin %s\n",
                         *old_case_key, branch_block->id(), info.str().c_str(),
                         SHOW(cfg));
       auto field_enum = search->second;

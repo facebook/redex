@@ -1351,7 +1351,7 @@ bool ControlFlowGraph::insert(const InstructionIterator& position,
         always_assert_log(!opcode::is_branch(existing_last_op) &&
                               !opcode::is_throw(existing_last_op) &&
                               !opcode::is_a_return(existing_last_op),
-                          "Can't add instructions after %s in Block %d in %s",
+                          "Can't add instructions after %s in Block %zu in %s",
                           details::show_insn(existing_last->insn).c_str(),
                           b->id(), details::show_cfg(*this).c_str());
 
@@ -1361,7 +1361,7 @@ bool ControlFlowGraph::insert(const InstructionIterator& position,
         if (!throws.empty()) {
           always_assert_log(!existing_last->insn->has_move_result_any(),
                             "Can't add instructions after throwing instruction "
-                            "%s with move-result in Block %d in %s",
+                            "%s with move-result in Block %zu in %s",
                             details::show_insn(existing_last->insn).c_str(),
                             b->id(), details::show_cfg(*this).c_str());
           Block* new_block = create_block();

@@ -57,13 +57,23 @@ extern bool slow_invariants_debug;
       #e, __FILE__, __LINE__, __PRETTY_FUNCTION__, type, msg, ##__VA_ARGS__)
 #endif
 
+#ifdef __clang__
+#define ATTR_FORMAT(STR_INDEX, PARAM_INDEX) \
+  __attribute__((__format__(__printf__, STR_INDEX, PARAM_INDEX)))
+#elif defined(__GNUC__)
+#define ATTR_FORMAT(STR_INDEX, PARAM_INDEX) \
+  __attribute__((format(printf, STR_INDEX, PARAM_INDEX)));
+#else
+#define ATTR_FORMAT(...)
+#endif
+
 [[noreturn]] void assert_fail(const char* expr,
                               const char* file,
                               unsigned line,
                               const char* func,
                               RedexError type,
                               const char* fmt,
-                              ...);
+                              ...) ATTR_FORMAT(6, 7);
 
 #define assert_impl(cond, fail) \
   ((cond) ? static_cast<void>(0) : ((fail), static_cast<void>(0)))

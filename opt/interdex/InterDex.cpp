@@ -415,7 +415,7 @@ void InterDex::emit_primary_dex(
   // Double check only 1 dex was created.
   always_assert_log(
       m_dexes_structure.get_num_dexes() == 1,
-      "[error]: Primary dex doesn't fit in only 1 dex anymore :|, but in %d\n",
+      "[error]: Primary dex doesn't fit in only 1 dex anymore :|, but in %zu\n",
       m_dexes_structure.get_num_dexes());
 }
 
@@ -935,7 +935,7 @@ void InterDex::run() {
 
   always_assert_log(!m_emit_canaries ||
                         m_dexes_structure.get_num_dexes() < MAX_DEX_NUM,
-                    "Bailing, max dex number surpassed %d\n",
+                    "Bailing, max dex number surpassed %zu\n",
                     m_dexes_structure.get_num_dexes());
 
   print_stats(&m_dexes_structure);

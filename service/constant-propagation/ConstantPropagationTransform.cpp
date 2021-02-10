@@ -346,7 +346,7 @@ void Transform::eliminate_dead_branch(
 
   const auto& succs = cfg.get_succ_edges_if(
       block, [](const cfg::Edge* e) { return e->type() != cfg::EDGE_GHOST; });
-  always_assert_log(succs.size() == 2, "actually %d\n%s", succs.size(),
+  always_assert_log(succs.size() == 2, "actually %zu\n%s", succs.size(),
                     SHOW(InstructionIterable(*block)));
   for (auto& edge : succs) {
     // Check if the fixpoint analysis has determined the successors to be

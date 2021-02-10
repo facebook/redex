@@ -597,7 +597,7 @@ s_expr create_dbg_expr(const MethodItemEntry* mie) {
   }
   default:
     always_assert_log(DBG_FIRST_SPECIAL <= op && op <= DBG_LAST_SPECIAL,
-                      "Special opcode (%d) is out of range");
+                      "Special opcode (%d) is out of range", op);
     result.emplace_back("EMIT");
     result.emplace_back(std::to_string(dbg->opcode()));
     break;
@@ -715,7 +715,7 @@ s_expr to_s_expr(const IRCode* code) {
         always_assert(branch_target->type == BRANCH_SIMPLE);
         always_assert_log(
             label_strs.size() == 1,
-            "Expecting 1 label string, actually have %d. code:\n%s",
+            "Expecting 1 label string, actually have %zu. code:\n%s",
             label_strs.size(),
             SHOW(code));
         const s_expr& label = s_expr({s_expr(label_strs[0])});
@@ -759,7 +759,8 @@ std::unique_ptr<IRCode> ircode_from_s_expr(const s_expr& e) {
   auto code = std::make_unique<IRCode>();
   bool matched = s_patn({}, insns_expr).match_with(e);
   always_assert(matched);
-  always_assert_log(insns_expr.size() > 0, "Empty instruction list?! %s");
+  always_assert_log(insns_expr.size() > 0, "Empty instruction list?! %s",
+                    e.str().c_str());
   LabelDefs label_defs;
   LabelRefs label_refs;
   boost::optional<reg_t> max_reg;

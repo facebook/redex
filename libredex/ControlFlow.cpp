@@ -494,14 +494,14 @@ boost::optional<Edge::CaseKey> Block::remove_first_matching_target(
       boost::optional<Edge::CaseKey> result;
       if (mie.target->type == BRANCH_MULTI) {
         always_assert_log(opcode::is_switch(branch->insn->opcode()),
-                          "block %d in %s\n", id(), SHOW(*m_parent));
+                          "block %zu in %s\n", id(), SHOW(*m_parent));
         result = mie.target->case_key;
       }
       m_entries.erase_and_dispose(it);
       return result;
     }
   }
-  not_reached_log("block %d has no targets matching %s:\n%s",
+  not_reached_log("block %zu has no targets matching %s:\n%s",
                   id(),
                   SHOW(branch->insn),
                   SHOW(&m_entries));
@@ -979,7 +979,7 @@ void ControlFlowGraph::remove_empty_blocks() {
         b, [](const Edge* e) { return e->type() != EDGE_GHOST; });
     if (!succs.empty()) {
       always_assert_log(succs.size() == 1,
-                        "too many successors for empty block %d:\n%s",
+                        "too many successors for empty block %zu:\n%s",
                         it->first, SHOW(*this));
       const auto& succ_edge = succs[0];
       Block* succ = succ_edge->target();
@@ -1058,11 +1058,11 @@ void ControlFlowGraph::sanity_check() const {
         // No targets or gotos
         for (const auto& mie : *b) {
           always_assert_log(mie.type != MFLOW_TARGET,
-                            "failed to remove all targets. block %d in\n%s",
+                            "failed to remove all targets. block %zu in\n%s",
                             b->id(), SHOW(*this));
           if (mie.type == MFLOW_OPCODE) {
             always_assert_log(!opcode::is_goto(mie.insn->opcode()),
-                              "failed to remove all gotos. block %d in\n%s",
+                              "failed to remove all gotos. block %zu in\n%s",
                               b->id(), SHOW(*this));
           }
         }
@@ -1085,14 +1085,14 @@ void ControlFlowGraph::sanity_check() const {
         auto op = last_it->insn->opcode();
 
         if (opcode::is_a_conditional_branch(op)) {
-          always_assert_log(num_succs == 2, "block %d, %s", b->id(),
+          always_assert_log(num_succs == 2, "block %zu, %s", b->id(),
                             SHOW(*this));
         } else if (opcode::is_switch(op)) {
-          always_assert_log(num_succs > 1, "block %d, %s", b->id(),
+          always_assert_log(num_succs > 1, "block %zu, %s", b->id(),
                             SHOW(*this));
         } else if (opcode::is_a_return(op)) {
           // Make sure we don't have any outgoing edges (except EDGE_GHOST)
-          always_assert_log(num_succs == 0, "block %d, %s", b->id(),
+          always_assert_log(num_succs == 0, "block %zu, %s", b->id(),
                             SHOW(*this));
         } else if (opcode::is_throw(op)) {
           // A throw could end the method or go to a catch handler.
@@ -1100,7 +1100,7 @@ void ControlFlowGraph::sanity_check() const {
           auto non_throw_edge = get_succ_edge_if(b, [](const Edge* e) {
             return e->type() != EDGE_THROW && e->type() != EDGE_GHOST;
           });
-          always_assert_log(non_throw_edge == nullptr, "block %d, %s", b->id(),
+          always_assert_log(non_throw_edge == nullptr, "block %zu, %s", b->id(),
                             SHOW(*this));
         }
 
@@ -1108,20 +1108,20 @@ void ControlFlowGraph::sanity_check() const {
             !(opcode::is_a_return(op) || opcode::is_throw(op))) {
           // Control Flow shouldn't just fall off the end of a block, unless
           // it's an orphan block that's unreachable anyway
-          always_assert_log(num_succs > 0, "block %d, %s", b->id(),
+          always_assert_log(num_succs > 0, "block %zu, %s", b->id(),
                             SHOW(*this));
-          always_assert_log(num_goto_succs == 1, "block %d, %s", b->id(),
+          always_assert_log(num_goto_succs == 1, "block %zu, %s", b->id(),
                             SHOW(*this));
         }
       } else if (num_preds > 0 && b != exit_block()) {
         // no instructions in this block. Control Flow shouldn't just fall off
         // the end
-        always_assert_log(num_succs > 0, "block %d, %s", b->id(), SHOW(*this));
-        always_assert_log(num_goto_succs == 1, "block %d, %s", b->id(),
+        always_assert_log(num_succs > 0, "block %zu, %s", b->id(), SHOW(*this));
+        always_assert_log(num_goto_succs == 1, "block %zu, %s", b->id(),
                           SHOW(*this));
       }
 
-      always_assert_log(num_goto_succs < 2, "block %d, %s", b->id(),
+      always_assert_log(num_goto_succs < 2, "block %zu, %s", b->id(),
                         SHOW(*this));
     }
 
@@ -1145,14 +1145,14 @@ void ControlFlowGraph::sanity_check() const {
       const auto& reverse_edges = e->target()->preds();
       always_assert_log(std::find(reverse_edges.begin(), reverse_edges.end(),
                                   e) != reverse_edges.end(),
-                        "block %d -> %d, %s", b->id(), e->target()->id(),
+                        "block %zu -> %zu, %s", b->id(), e->target()->id(),
                         SHOW(*this));
     }
     for (const auto e : b->preds()) {
       const auto& forward_edges = e->src()->succs();
       always_assert_log(std::find(forward_edges.begin(), forward_edges.end(),
                                   e) != forward_edges.end(),
-                        "block %d -> %d, %s", e->src()->id(), b->id(),
+                        "block %zu -> %zu, %s", e->src()->id(), b->id(),
                         SHOW(*this));
     }
 
@@ -1164,7 +1164,7 @@ void ControlFlowGraph::sanity_check() const {
       if (!last) {
         always_assert_log(
             e->throw_info()->catch_type != nullptr,
-            "Can't have a catchall (%d -> %d) that isn't last. %s",
+            "Can't have a catchall (%zu -> %zu) that isn't last. %s",
             e->src()->id(), e->target()->id(), SHOW(*this));
       }
       last = false;
@@ -1517,8 +1517,8 @@ void ControlFlowGraph::build_chains(
       continue;
     }
 
-    always_assert_log(!DEBUG || !b->starts_with_move_result(), "%d is wrong %s",
-                      b->id(), SHOW(*this));
+    always_assert_log(!DEBUG || !b->starts_with_move_result(),
+                      "%zu is wrong %s", b->id(), SHOW(*this));
     auto unique = std::make_unique<Chain>();
     Chain* chain = unique.get();
     chains->push_back(std::move(unique));
@@ -1531,7 +1531,7 @@ void ControlFlowGraph::build_chains(
       // make sure we handle a chain of blocks that all start with move-results
       auto goto_block = goto_edge->target();
       always_assert_log(!DEBUG || m_blocks.count(goto_block->id()) > 0,
-                        "bogus block reference %d -> %d in %s",
+                        "bogus block reference %zu -> %zu in %s",
                         goto_edge->src()->id(), goto_block->id(), SHOW(*this));
       if (goto_block->starts_with_move_result() || goto_block->same_try(b)) {
         // If the goto edge leads to a block with a move-result(-pseudo), then
@@ -1619,7 +1619,7 @@ void ControlFlowGraph::insert_branches_and_targets(
     for (const Edge* edge : b->succs()) {
       if (edge->type() == EDGE_BRANCH) {
         auto branch_it = b->get_conditional_branch();
-        always_assert_log(branch_it != b->end(), "block %d %s", b->id(),
+        always_assert_log(branch_it != b->end(), "block %zu %s", b->id(),
                           SHOW(*this));
         auto& branch_mie = *branch_it;
 
@@ -2291,7 +2291,7 @@ void ControlFlowGraph::remove_insn(const InstructionIterator& it) {
           // CFG with multiple edges to a block beginning with a
           // move-result(-pseudo) is a malformed CFG.
           always_assert_log(move_result_block->preds().size() == 1,
-                            "Multiple edges to a move-result-pseudo in %d. %s",
+                            "Multiple edges to a move-result-pseudo in %zu. %s",
                             move_result_block->id(), SHOW(*this));
           move_result_block->m_entries.erase_and_dispose(first_it);
         }
@@ -2336,7 +2336,7 @@ void ControlFlowGraph::create_branch(
     always_assert_log(!(opcode::is_branch(last_op) ||
                         opcode::is_throw(last_op) ||
                         opcode::is_a_return(last_op)),
-                      "Can't add branch after %s in Block %d in %s",
+                      "Can't add branch after %s in Block %zu in %s",
                       SHOW(existing_last->insn), b->id(), SHOW(*this));
   }
 
@@ -2361,7 +2361,7 @@ void ControlFlowGraph::create_branch(
   } else {
     always_assert(opcode::is_a_conditional_branch(op));
     always_assert_log(case_to_block.size() == 1,
-                      "Wrong number of non-goto cases (%d) for %s",
+                      "Wrong number of non-goto cases (%zu) for %s",
                       case_to_block.size(), SHOW(op));
     const auto& entry = case_to_block[0];
     always_assert_log(entry.first == 1, "%s only has boolean case key values",
@@ -2451,7 +2451,7 @@ void ControlFlowGraph::remove_block(Block* block) {
   auto id = block->id();
   auto num_removed = m_blocks.erase(id);
   always_assert_log(num_removed == 1,
-                    "Block %d wasn't in CFG. Attempted double delete?", id);
+                    "Block %zu wasn't in CFG. Attempted double delete?", id);
   block->m_entries.clear_and_dispose();
   delete block;
 }

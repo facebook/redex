@@ -14,6 +14,7 @@
 #include <fcntl.h>
 #include <fstream>
 #include <functional>
+#include <inttypes.h>
 #include <list>
 #include <memory>
 #include <stdlib.h>
@@ -1064,10 +1065,10 @@ void DexOutput::check_method_instruction_size_limit(const ConfigFiles& conf,
   if (instruction_size_bitwidth_limit) {
     uint64_t hard_instruction_size_limit = 1L
                                            << instruction_size_bitwidth_limit;
-    always_assert_log(
-        ((uint64_t)size) <= hard_instruction_size_limit,
-        "Size of method exceeded limit. size: %d, limit: %d, method: %s\n",
-        size, hard_instruction_size_limit, method_name);
+    always_assert_log(((uint64_t)size) <= hard_instruction_size_limit,
+                      "Size of method exceeded limit. size: %d, limit: %" PRIu64
+                      ", method: %s\n",
+                      size, hard_instruction_size_limit, method_name);
   }
 }
 
