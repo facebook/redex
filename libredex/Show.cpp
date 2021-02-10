@@ -19,6 +19,7 @@
 #endif
 
 #include "ControlFlow.h"
+#include "CppUtil.h"
 #include "Creators.h"
 #include "DexAnnotation.h"
 #include "DexCallSite.h"
@@ -121,6 +122,91 @@ std::string show(DexAnnotationVisibility vis) {
   case DAV_SYSTEM:
     return "system";
   }
+}
+
+std::string show_type(const DexType* t, bool deobfuscated) {
+  return self_recursive_fn(
+      [&](auto self, const DexType* t) -> std::string {
+        if (t == nullptr) {
+          return std::string("");
+        }
+        auto name = t->get_name()->str();
+        if (!deobfuscated) {
+          return name;
+        }
+        if (name[0] == 'L') {
+          auto deobf_name = name;
+          auto cls = type_class(t);
+          if (cls != nullptr && !cls->get_deobfuscated_name().empty()) {
+            deobf_name = cls->get_deobfuscated_name();
+          }
+          return deobf_name;
+        } else if (name[0] == '[') {
+          std::ostringstream ss;
+          ss << '[' << self(self, DexType::get_type(name.substr(1)));
+          return ss.str();
+        }
+        return name;
+      },
+      t);
+}
+
+std::string show_field(const DexFieldRef* ref, bool deobfuscated) {
+  if (ref == nullptr) {
+    return "";
+  }
+
+  if (deobfuscated && ref->is_def()) {
+    auto name = ref->as_def()->get_deobfuscated_name();
+    if (!name.empty()) {
+      return name;
+    }
+  }
+  string_builders::StaticStringBuilder<5> b;
+  b << show_type(ref->get_class(), deobfuscated) << "." << show(ref->get_name())
+    << ":" << show_type(ref->get_type(), deobfuscated);
+  return b.str();
+}
+
+std::string show_type_list(const DexTypeList* l, bool deobfuscated) {
+  if (l == nullptr) {
+    return "";
+  }
+
+  const auto& type_list = l->get_type_list();
+  string_builders::DynamicStringBuilder b(type_list.size());
+  for (const auto& type : type_list) {
+    b << show_type(type, deobfuscated);
+  }
+  return b.str();
+}
+
+std::string show_proto(const DexProto* p, bool deobfuscated) {
+  if (p == nullptr) {
+    return "";
+  }
+  string_builders::StaticStringBuilder<4> b;
+  b << "(" << show_type_list(p->get_args(), deobfuscated) << ")"
+    << show_type(p->get_rtype(), deobfuscated);
+  return b.str();
+}
+
+std::string show_method(const DexMethodRef* ref, bool deobfuscated) {
+  if (ref == nullptr) {
+    return "";
+  }
+
+  if (deobfuscated && ref->is_def()) {
+    auto name = ref->as_def()->get_deobfuscated_name();
+    if (!name.empty()) {
+      return name;
+    }
+  }
+
+  string_builders::StaticStringBuilder<5> b;
+  b << show_type(ref->get_class(), deobfuscated) << "." << show(ref->get_name())
+    << ":" << show_proto(ref->get_proto(), deobfuscated);
+  return b.str();
 }
 
 std::string show_opcode(const DexInstruction* insn) {
@@ -662,20 +748,11 @@ inline std::string show(DexString* p) {
   return p->str();
 }
 
-inline std::string show(DexType* p) {
-  if (!p) return "";
-  return p->get_name()->str();
-}
+inline std::string show(const DexType* t) { return show_type(t, false); }
 
 // This format must match the proguard map format because it's used to look up
 // in the proguard map
-std::string show(const DexFieldRef* p) {
-  if (!p) return "";
-  string_builders::StaticStringBuilder<5> b;
-  b << show(p->get_class()) << "." << show(p->get_name()) << ":"
-    << show(p->get_type());
-  return b.str();
-}
+std::string show(const DexFieldRef* ref) { return show_field(ref, false); }
 
 std::ostream& operator<<(std::ostream& o, const DexFieldRef& p) {
   o << show(&p);
@@ -720,24 +797,11 @@ std::string vshow(const DexProto* p, bool include_ret_type = true) {
 
 // This format must match the proguard map format because it's used to look up
 // in the proguard map
-std::string show(const DexTypeList* p) {
-  if (!p) return "";
-  const auto& type_list = p->get_type_list();
-  string_builders::DynamicStringBuilder b(type_list.size());
-  for (auto const type : type_list) {
-    b << show(type);
-  }
-  return b.str();
-}
+std::string show(const DexTypeList* l) { return show_type_list(l, false); }
 
 // This format must match the proguard map format because it's used to look up
 // in the proguard map
-std::string show(const DexProto* p) {
-  if (!p) return "";
-  string_builders::StaticStringBuilder<4> b;
-  b << "(" << show(p->get_args()) << ")" << show(p->get_rtype());
-  return b.str();
-}
+std::string show(const DexProto* p) { return show_proto(p, false); }
 
 std::string show(const DexCode* code) {
   if (!code) return "";
@@ -755,13 +819,7 @@ std::string show(const DexCode* code) {
 
 // This format must match the proguard map format because it's used to look up
 // in the proguard map
-std::string show(const DexMethodRef* p) {
-  if (!p) return "";
-  string_builders::StaticStringBuilder<5> b;
-  b << show(p->get_class()) << "." << show(p->get_name()) << ":"
-    << show(p->get_proto());
-  return b.str();
-}
+std::string show(const DexMethodRef* ref) { return show_method(ref, false); }
 
 std::string vshow(uint32_t acc, bool is_method) {
   return accessibility(acc, is_method);
@@ -1320,33 +1378,11 @@ std::string show_deobfuscated(const DexClass* cls) {
 }
 
 std::string show_deobfuscated(const DexFieldRef* ref) {
-  if (ref->is_def()) {
-    const auto& name =
-        static_cast<const DexField*>(ref)->get_deobfuscated_name();
-    if (!name.empty()) {
-      return name;
-    }
-  }
-  return show(ref);
-}
-
-std::string show_deobfuscated_no_cache(const DexMethodRef* ref) {
-  string_builders::StaticStringBuilder<5> b;
-  b << show_deobfuscated(ref->get_class()) << "." << show(ref->get_name())
-    << ":" << show_deobfuscated(ref->get_proto());
-  return b.str();
+  return show_field(ref, true);
 }
 
 std::string show_deobfuscated(const DexMethodRef* ref) {
-  if (ref->is_def()) {
-    const DexMethod* m = static_cast<const DexMethod*>(ref);
-    const auto& name = m->get_deobfuscated_name();
-    if (!name.empty()) {
-      return name;
-    }
-  }
-
-  return show_deobfuscated_no_cache(ref);
+  return show_method(ref, true);
 }
 
 std::string show_deobfuscated(const IRInstruction* insn) {
@@ -1360,49 +1396,13 @@ std::string show_deobfuscated(const DexEncodedValue* ev) {
   return ev->show_deobfuscated();
 }
 
-std::string show_deobfuscated(const DexType* t) {
-  std::function<std::string(const DexType*)> f = [&f](const DexType* t) {
-    if (t == nullptr) {
-      return std::string("");
-    }
-    const auto& name = show(t);
-    if (name[0] == 'L') {
-      const DexClass* cls = type_class(t);
-      if (cls == nullptr || cls->get_deobfuscated_name().empty()) {
-        return name;
-      }
-      return cls->get_deobfuscated_name();
-    } else if (name[0] == '[') {
-      std::ostringstream ss;
-      ss << '[' << f(DexType::get_type(name.substr(1)));
-      return ss.str();
-    }
-    return name;
-  };
-  return f(t);
-}
+std::string show_deobfuscated(const DexType* t) { return show_type(t, true); }
 
 std::string show_deobfuscated(const DexTypeList* l) {
-  if (l == nullptr) {
-    return "";
-  }
-  const auto& type_list = l->get_type_list();
-  string_builders::DynamicStringBuilder b(type_list.size());
-  for (const auto& type : type_list) {
-    b << show_deobfuscated(type);
-  }
-  return b.str();
+  return show_type_list(l, true);
 }
 
-std::string show_deobfuscated(const DexProto* p) {
-  if (p == nullptr) {
-    return "";
-  }
-  string_builders::StaticStringBuilder<4> b;
-  b << "(" << show_deobfuscated(p->get_args()) << ")"
-    << show_deobfuscated(p->get_rtype());
-  return b.str();
-}
+std::string show_deobfuscated(const DexProto* p) { return show_proto(p, true); }
 
 std::string show_deobfuscated(const DexCallSite* callsite) {
   if (!callsite) {
