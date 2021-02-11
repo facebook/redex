@@ -594,8 +594,8 @@ class OptimizeEnums {
       // and the static initializer (<clinit>)
       //
       // Lookup tables for Java Enums all contain $SwitchMap$ in the field name
-      // and lookup tables for Kotlin Enums all contain $EnumSwitchMapping& in
-      // the field name.  The two are not expected to miss in a single generated
+      // and lookup tables for Kotlin Enums all contain $EnumSwitchMapping$ in
+      // the field name.  The two are not expected to mix in a single generated
       // class.
       if (!sfields.empty() && cls->get_dmethods().size() == 1 &&
           cls->get_vmethods().empty() && cls->get_ifields().empty()) {
