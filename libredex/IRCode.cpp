@@ -573,8 +573,8 @@ IRCode::~IRCode() {
 
 IRCode::IRCode(DexMethod* method) : m_ir_list(new IRList()) {
   auto* dc = method->get_dex_code();
-  generate_load_params(
-      method, dc->get_registers_size() - dc->get_ins_size(), this);
+  generate_load_params(method, dc->get_registers_size() - dc->get_ins_size(),
+                       this);
   balloon(const_cast<DexMethod*>(method), m_ir_list);
   m_dbg = dc->release_debug_item();
 }
@@ -603,8 +603,8 @@ void IRCode::cleanup_debug() { m_ir_list->cleanup_debug(); }
 
 void IRCode::build_cfg(bool editable) {
   clear_cfg();
-  m_cfg = std::make_unique<cfg::ControlFlowGraph>(
-      m_ir_list, m_registers_size, editable);
+  m_cfg = std::make_unique<cfg::ControlFlowGraph>(m_ir_list, m_registers_size,
+                                                  editable);
 }
 
 void IRCode::clear_cfg() {
@@ -907,8 +907,8 @@ bool IRCode::try_sync(DexCode* code) {
     auto& targets = multis[multiopcode];
     auto multi_insn = multiopcode->dex_insn;
     std::sort(targets.begin(), targets.end(), multi_target_compare_case_key);
-    always_assert_log(
-        !targets.empty(), "need to have targets for %s", SHOW(*multiopcode));
+    always_assert_log(!targets.empty(), "need to have targets for %s",
+                      SHOW(*multiopcode));
     if (multiopcode->dex_insn->opcode() == DOPCODE_SPARSE_SWITCH) {
       // Emit sparse.
       const size_t count = (targets.size() * 4) + 2;
@@ -1008,8 +1008,8 @@ bool IRCode::try_sync(DexCode* code) {
     auto try_start = active_try;
     active_try = nullptr;
 
-    always_assert_log(
-        try_start != nullptr, "unopened try_end found: %s", SHOW(*try_end));
+    always_assert_log(try_start != nullptr, "unopened try_end found: %s",
+                      SHOW(*try_end));
     always_assert_log(try_start->tentry->catch_start ==
                           try_end->tentry->catch_start,
                       "mismatched try start (%s) and end (%s)",
@@ -1120,4 +1120,15 @@ size_t IRCode::count_opcodes() const {
     return m_cfg->num_opcodes();
   }
   return m_ir_list->count_opcodes();
+}
+
+bool IRCode::has_try_blocks() const {
+  if (editable_cfg_built()) {
+    auto b = this->cfg().blocks();
+    return std::any_of(b.begin(), b.end(),
+                       [](auto* block) { return block->is_catch(); });
+  }
+
+  return std::any_of(this->begin(), this->end(),
+                     [](auto& mie) { return mie.type == MFLOW_TRY; });
 }

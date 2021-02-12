@@ -72,18 +72,6 @@ class InlineForSpeedMethodProfiles final : public InlineForSpeedBase {
 
 constexpr double MIN_APPEAR_PERCENT = 80.0;
 
-bool method_has_try_blocks(const DexMethod* method) {
-  const IRCode* code = method->get_code();
-  if (code->editable_cfg_built()) {
-    auto ii = cfg::ConstInstructionIterable(code->cfg());
-    return std::any_of(ii.begin(), ii.end(),
-                       [](auto& mie) { return mie.type == MFLOW_TRY; });
-  } else {
-    return std::any_of(code->begin(), code->end(),
-                       [](auto& mie) { return mie.type == MFLOW_TRY; });
-  }
-}
-
 void InlineForSpeedMethodProfiles::compute_hot_methods() {
   if (m_method_profiles == nullptr || !m_method_profiles->has_stats()) {
     return;
@@ -144,8 +132,8 @@ bool InlineForSpeedMethodProfiles::should_inline_impl(
     const DexMethod* caller_method, const DexMethod* callee_method) {
   // TODO(T80442770): Remove this restriction once the experimentation framework
   // can support methods with exceptions or we're done with the experiment.
-  if (method_has_try_blocks(caller_method) ||
-      method_has_try_blocks(callee_method)) {
+  if (caller_method->get_code()->has_try_blocks() ||
+      callee_method->get_code()->has_try_blocks()) {
     return false;
   }
 

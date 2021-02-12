@@ -262,6 +262,8 @@ class IRCode {
 
   void sanity_check() const { m_ir_list->sanity_check(); }
 
+  bool has_try_blocks() const;
+
   IRList::iterator begin() { return m_ir_list->begin(); }
   IRList::iterator end() { return m_ir_list->end(); }
   IRList::const_iterator begin() const { return m_ir_list->begin(); }
