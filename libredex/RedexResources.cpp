@@ -551,6 +551,7 @@ void extract_classes_from_layout(
 
   android::String16 name("name");
   android::String16 klazz("class");
+  android::String16 target_class("targetClass");
 
   if (parser.getError() != android::NO_ERROR) {
     return;
@@ -567,10 +568,14 @@ void extract_classes_from_layout(
       if (!strcmp(classname.c_str(), "fragment") ||
           !strcmp(classname.c_str(), "view") ||
           !strcmp(classname.c_str(), "dialog") ||
-          !strcmp(classname.c_str(), "activity")) {
+          !strcmp(classname.c_str(), "activity") ||
+          !strcmp(classname.c_str(), "intent")) {
         classname = get_string_attribute_value(parser, klazz);
         if (classname.empty()) {
           classname = get_string_attribute_value(parser, name);
+        }
+        if (classname.empty()) {
+          classname = get_string_attribute_value(parser, target_class);
         }
       }
       std::string converted = std::string("L") + classname + std::string(";");
