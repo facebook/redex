@@ -206,7 +206,7 @@ void print_allowed_violations_per_class(
         for (const auto insn : field_type_insns->second) {
           method_detail
               << "      Field type " << show_deobfuscated(insn) << " ("
-              << get_store_name(xstores, insn->get_field()->get_class()) << ")"
+              << get_store_name(xstores, insn->get_field()->get_type()) << ")"
               << std::endl;
         }
       }
@@ -215,7 +215,7 @@ void print_allowed_violations_per_class(
         for (const auto insn : field_cls_insns->second) {
           method_detail
               << "      Field class " << show_deobfuscated(insn) << " ("
-              << get_store_name(xstores, insn->get_field()->get_type()) << ")"
+              << get_store_name(xstores, insn->get_field()->get_class()) << ")"
               << std::endl;
         }
       }
