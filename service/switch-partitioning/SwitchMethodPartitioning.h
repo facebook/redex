@@ -45,8 +45,8 @@
  */
 class SwitchMethodPartitioning final {
  public:
-  explicit SwitchMethodPartitioning(IRCode* code,
-                                    bool verify_default_case = true);
+  static boost::optional<SwitchMethodPartitioning> create(
+      IRCode* code, bool verify_default_case = true);
 
   // Each SMP instance is responsible for clearing the CFG of m_code exactly
   // once, so we don't want to have multiple copies of it.
@@ -76,10 +76,13 @@ class SwitchMethodPartitioning final {
   const IRCode* get_code() const { return m_code; }
 
  private:
-  boost::optional<reg_t> compute_prologue_blocks(
-      cfg::ControlFlowGraph* cfg,
-      const constant_propagation::intraprocedural::FixpointIterator& fixpoint,
-      bool verify_default_case);
+  SwitchMethodPartitioning(
+      IRCode* code,
+      std::vector<cfg::Block*> prologue_blocks,
+      std::unordered_map<int32_t, cfg::Block*> key_to_block)
+      : m_prologue_blocks(std::move(prologue_blocks)),
+        m_key_to_block(std::move(key_to_block)),
+        m_code(code) {}
 
   std::vector<cfg::Block*> m_prologue_blocks;
   std::unordered_map<int32_t, cfg::Block*> m_key_to_block;

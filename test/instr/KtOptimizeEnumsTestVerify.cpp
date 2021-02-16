@@ -7,6 +7,7 @@
 
 #include <unordered_set>
 
+#include "Debug.h"
 #include "DexInstruction.h"
 #include "SwitchMap.h"
 #include "verify/VerifyUtil.h"
@@ -41,8 +42,10 @@ std::unordered_set<size_t> collect_switch_cases(DexMethodRef* method_ref) {
   auto code = method->get_code();
   std::unordered_set<size_t> switch_cases;
 
-  SwitchMethodPartitioning smp(code, /* verify_default_case */ false);
-  for (const auto& entry : smp.get_key_to_block()) {
+  auto smp =
+      SwitchMethodPartitioning::create(code, /* verify_default_case */ false);
+  redex_assert(smp);
+  for (const auto& entry : smp->get_key_to_block()) {
     switch_cases.insert(entry.first);
   }
   return switch_cases;
