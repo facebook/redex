@@ -23,6 +23,7 @@ class DedupBlocksPass : public Pass {
          m_config.block_split_min_opcode_count);
     bind("split_postfix", true, m_config.split_postfix);
     bind("debug", false, m_config.debug);
+    bind("dedup_throws", false, m_config.dedup_throws);
   }
 
  private:

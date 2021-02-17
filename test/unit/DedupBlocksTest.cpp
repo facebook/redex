@@ -50,12 +50,13 @@ struct DedupBlocksTest : public RedexTest {
     return method;
   }
 
-  void run_dedup_blocks() {
+  void run_dedup_blocks(bool dedup_throws = true) {
     walk::code(std::vector<DexClass*>{m_class},
                [&](DexMethod* method, IRCode& code) {
                  code.build_cfg(/* editable */ true);
                  auto& cfg = code.cfg();
                  dedup_blocks_impl::Config config;
+                 config.dedup_throws = dedup_throws;
                  dedup_blocks_impl::DedupBlocks impl(&config, method);
                  impl.run();
                  code.clear_cfg();
@@ -1063,7 +1064,7 @@ TEST_F(DedupBlocksTest, conditional_hashed_alike) {
   method->set_code(std::move(input_code));
   auto code = method->get_code();
 
-  run_dedup_blocks();
+  run_dedup_blocks(/* dedup_throws */ true);
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
@@ -1127,6 +1128,69 @@ TEST_F(DedupBlocksTest, conditional_hashed_not_alike) {
       (:b)
       (add-int v0 v2 v0)
       (goto :end)
+    )
+  )");
+
+  EXPECT_CODE_EQ(expected_code.get(), code);
+}
+
+// When dedup-throws option is off, don't dedup throws
+TEST_F(DedupBlocksTest, dont_dedup_throws) {
+  auto input_code = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (if-eqz v0 :a)
+      (goto :b)
+      (:a)
+      (throw v0)
+      (:b)
+      (throw v0)
+    )
+  )");
+  auto method = get_fresh_method("dont_dedup_throws");
+  method->set_code(std::move(input_code));
+  auto code = method->get_code();
+
+  run_dedup_blocks(/* dedup_throws */ false);
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (if-eqz v0 :a)
+      (throw v0)
+      (:a)
+      (throw v0)
+    )
+  )");
+
+  EXPECT_CODE_EQ(expected_code.get(), code);
+}
+
+// When dedup-throws option is on, dedup throws
+TEST_F(DedupBlocksTest, dedup_throws) {
+  auto input_code = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (if-eqz v0 :a)
+      (goto :b)
+      (:a)
+      (throw v0)
+      (:b)
+      (throw v0)
+    )
+  )");
+  auto method = get_fresh_method("dedup_throws");
+  method->set_code(std::move(input_code));
+  auto code = method->get_code();
+
+  run_dedup_blocks(/* dedup_throws */ true);
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (if-eqz v0 :a)
+      (:a)
+      (throw v0)
     )
   )");
 
