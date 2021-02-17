@@ -702,9 +702,14 @@ class DedupBlocksImpl {
     }
   }
 
-  static bool is_eligible(cfg::Block* block) {
+  bool is_eligible(cfg::Block* block) {
     // We can't split up move-result(-pseudo) instruction pairs
     if (begins_with_move_result(block)) {
+      return false;
+    }
+
+    // For debugability, we don't want to dedup blocks that end with a throw
+    if (!m_config->dedup_throws && ends_with_throw(block)) {
       return false;
     }
 
@@ -721,6 +726,15 @@ class DedupBlocksImpl {
     }
     auto first_op = first_mie_it->insn->opcode();
     return opcode::is_move_result_any(first_op);
+  }
+
+  static bool ends_with_throw(cfg::Block* block) {
+    const auto last_mie_it = block->get_last_insn();
+    if (last_mie_it == block->end()) {
+      return false;
+    }
+    auto last_op = last_mie_it->insn->opcode();
+    return is_throw(last_op);
   }
 
   // Deal with a verification error like this
