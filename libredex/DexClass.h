@@ -844,6 +844,8 @@ class DexMethodRef {
 
   DexMethod* make_concrete(DexAccessFlags access, bool is_virtual);
 
+  // This only removes the given method reference from the `RedexContext`, but
+  // does not free the method.
   static void erase_method(DexMethodRef* m) { return g_redex->erase_method(m); }
 };
 
@@ -1101,6 +1103,14 @@ class DexMethod : public DexMethodRef {
    */
   void balloon();
   void sync();
+
+  // This method frees the given `DexMethod` - different from `erase_method`,
+  // which removes the method from the `RedexContext`.
+  //
+  // BE SURE YOU REALLY WANT TO DO THIS! Many Redex passes and structures
+  // currently cache references and do not clean up, including global ones like
+  // `MethodProfiles` which maps `DexMethodRef`s to data.
+  static void delete_method_DO_NOT_USE(DexMethod* method) { delete method; }
 };
 
 using dexcode_to_offset = std::unordered_map<DexCode*, uint32_t>;
