@@ -18,15 +18,17 @@ class ControlFlowGraph;
 /// they can't be instantiated to simplify those mentions:
 ///
 ///  - If an instance method belongs to an uninstantiable class, its body can be
-///    replaced with `throw null;`.
+///    replaced with code that unconditionally throws a NullPointerException.
 ///  - `instance-of` with an uninstantiable type parameter always returns false.
 ///  - `invoke-virtual` and `invoke-direct` on methods whose class is
-///    uninstantiable can be replaced by a `throw null;`, because they can only
-///    be called on a `null` instance.
+///    uninstantiable can be replaced by code that unconditionally throws a
+///    NullPointerException, because they can only be called on a `null`
+///    instance.
 ///  - `check-cast` with an uninstantiable type parameter is equivalent to a
 ///    a test which throws a `ClassCastException` if the value is not null.
-///  - Field accesses on an uninstantiable class can be replaced by a `throw
-///    null;` for the same reason as above.
+///  - Field accesses on an uninstantiable class can be replaced by code that
+///    unconditionally throws a NullPointerException for the same reason as
+///    above.
 ///  - Field accesses returning an uninstantiable class will always return
 ///    `null`.
 class RemoveUninstantiablesPass : public Pass {

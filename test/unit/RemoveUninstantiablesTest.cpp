@@ -241,8 +241,12 @@ TEST_F(RemoveUninstantiablesTest, Invoke) {
                 ))",
                 /* EXPECTED */ R"((
                   (const v0 0)
-                  (const v2 0)
-                  (throw v2)
+                  (const-string "qux")
+                  (move-result-pseudo-object v2)
+                  (new-instance "Ljava/lang/NullPointerException;")
+                  (move-result-pseudo-object v3)
+                  (invoke-direct (v3 v2) "Ljava/lang/NullPointerException;.<init>:(Ljava/lang/String;)V")
+                  (throw v3)
                 ))");
   EXPECT_EQ(1, stats.invokes);
 
@@ -255,8 +259,12 @@ TEST_F(RemoveUninstantiablesTest, Invoke) {
                 ))",
                 /* EXPECTED */ R"((
                   (const v0 0)
-                  (const v1 0)
-                  (throw v1)
+                  (const-string "baz")
+                  (move-result-pseudo-object v1)
+                  (new-instance "Ljava/lang/NullPointerException;")
+                  (move-result-pseudo-object v2)
+                  (invoke-direct (v2 v1) "Ljava/lang/NullPointerException;.<init>:(Ljava/lang/String;)V")
+                  (throw v2)
                 ))");
   EXPECT_EQ(2, stats.invokes);
 
@@ -284,8 +292,12 @@ TEST_F(RemoveUninstantiablesTest, Invoke) {
                 ))",
                 /* EXPECTED */ R"((
                   (const v0 0)
-                  (const v2 0)
-                  (throw v2)
+                  (const-string "qux")
+                  (move-result-pseudo-object v2)
+                  (new-instance "Ljava/lang/NullPointerException;")
+                  (move-result-pseudo-object v3)
+                  (invoke-direct (v3 v2) "Ljava/lang/NullPointerException;.<init>:(Ljava/lang/String;)V")
+                  (throw v3)
                 ))");
   EXPECT_EQ(3, stats.invokes);
 
@@ -298,8 +310,12 @@ TEST_F(RemoveUninstantiablesTest, Invoke) {
                 ))",
                 /* EXPECTED */ R"((
                   (const v0 0)
-                  (const v1 0)
-                  (throw v1)
+                  (const-string "baz")
+                  (move-result-pseudo-object v1)
+                  (new-instance "Ljava/lang/NullPointerException;")
+                  (move-result-pseudo-object v2)
+                  (invoke-direct (v2 v1) "Ljava/lang/NullPointerException;.<init>:(Ljava/lang/String;)V")
+                  (throw v2)
                 ))");
   EXPECT_EQ(4, stats.invokes);
 
@@ -406,8 +422,12 @@ TEST_F(RemoveUninstantiablesTest, GetField) {
                   (const v0 0)
                   (iget v0 "LBar;.a:I")
                   (move-result-pseudo v1)
-                  (const v3 0)
-                  (throw v3)
+                  (const-string "a")
+                  (move-result-pseudo-object v3)
+                  (new-instance "Ljava/lang/NullPointerException;")
+                  (move-result-pseudo-object v4)
+                  (invoke-direct (v4 v3) "Ljava/lang/NullPointerException;.<init>:(Ljava/lang/String;)V")
+                  (throw v4)
                 ))");
   EXPECT_EQ(1, stats.field_accesses_on_uninstantiable);
 }
@@ -438,8 +458,12 @@ TEST_F(RemoveUninstantiablesTest, PutField) {
                   (const v1 0)
                   (iput v0 v1 "LBar;.a:I")
                   (const v2 0)
-                  (const v3 0)
-                  (throw v3)
+                  (const-string "a")
+                  (move-result-pseudo-object v3)
+                  (new-instance "Ljava/lang/NullPointerException;")
+                  (move-result-pseudo-object v4)
+                  (invoke-direct (v4 v3) "Ljava/lang/NullPointerException;.<init>:(Ljava/lang/String;)V")
+                  (throw v4)
                 ))");
   EXPECT_EQ(1, stats.field_accesses_on_uninstantiable);
 }
@@ -550,11 +574,19 @@ TEST_F(RemoveUninstantiablesTest, RunPass) {
                   (const v1 0)
                   (iput-object v1 v0 "LBar;.mFoo:LFoo;")
                   (if-eqz v1 :else)
-                  (const v5 0)
-                  (throw v5)
+                  (const-string "qux")
+                  (move-result-pseudo-object v5)
+                  (new-instance "Ljava/lang/NullPointerException;")
+                  (move-result-pseudo-object v6)
+                  (invoke-direct (v6 v5) "Ljava/lang/NullPointerException;.<init>:(Ljava/lang/String;)V")
+                  (throw v6)
                   (:else)
-                  (const v5 0)
-                  (throw v5)
+                  (const-string "mBar")
+                  (move-result-pseudo-object v5)
+                  (new-instance "Ljava/lang/NullPointerException;")
+                  (move-result-pseudo-object v6)
+                  (invoke-direct (v6 v5) "Ljava/lang/NullPointerException;.<init>:(Ljava/lang/String;)V")
+                  (throw v6)
                 ))");
 
   const auto& pass_infos = pm.get_pass_info();
@@ -654,8 +686,12 @@ TEST_F(RemoveUninstantiablesTest, InvokeInterfaceOnUninstantiable) {
                 ))",
                 /* EXPECTED */ R"((
                   (const v0 0)
-                  (const v1 0)
-                  (throw v1)
+                  (const-string "abs")
+                  (move-result-pseudo-object v1)
+                  (new-instance "Ljava/lang/NullPointerException;")
+                  (move-result-pseudo-object v2)
+                  (invoke-direct (v2 v1) "Ljava/lang/NullPointerException;.<init>:(Ljava/lang/String;)V")
+                  (throw v2)
                 ))");
   EXPECT_EQ(1, stats.invokes);
 }
@@ -680,8 +716,12 @@ TEST_F(RemoveUninstantiablesTest, InvokeSuperOnUninstantiable) {
                 ))",
                 /* EXPECTED */ R"((
                   (const v0 0)
-                  (const v1 0)
-                  (throw v1)
+                  (const-string "abs")
+                  (move-result-pseudo-object v1)
+                  (new-instance "Ljava/lang/NullPointerException;")
+                  (move-result-pseudo-object v2)
+                  (invoke-direct (v2 v1) "Ljava/lang/NullPointerException;.<init>:(Ljava/lang/String;)V")
+                  (throw v2)
                 ))");
   EXPECT_EQ(1, stats.invokes);
 }

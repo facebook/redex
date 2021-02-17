@@ -20,6 +20,7 @@
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "MethodOverrideGraph.h"
+#include "NullPointerExceptionUtil.h"
 #include "Purity.h"
 #include "ReachingDefinitions.h"
 #include "Resolver.h"
@@ -154,26 +155,20 @@ void LocalDce::dce(cfg::ControlFlowGraph& cfg) {
       npe_instructions.emplace_back(insn, b);
     } else {
       TRACE(DCE, 2, "DEAD: %s", SHOW(insn));
-      seen.emplace(insn);
       b->remove_insn(it);
     }
   }
   if (!npe_instructions.empty()) {
-    auto null_reg = cfg.allocate_temp();
+    npe::NullPointerExceptionCreator npe_creator(&cfg);
     for (auto pair : npe_instructions) {
-      auto it = cfg.find_insn(pair.first, pair.second);
+      auto invoke_insn = pair.first;
+      auto block = pair.second;
+      auto it = cfg.find_insn(invoke_insn, block);
       if (it.is_end()) {
-        // can happen if we replaced an earlier invocation with throw null.
+        // can happen if we removed an earlier invocation.
         continue;
       }
-      std::vector<IRInstruction*> insns;
-      auto const_insn = new IRInstruction(OPCODE_CONST);
-      const_insn->set_dest(null_reg)->set_literal(0);
-      insns.push_back(const_insn);
-      auto throw_insn = new IRInstruction(OPCODE_THROW);
-      throw_insn->set_src(0, null_reg);
-      insns.push_back(throw_insn);
-      cfg.replace_insns(it, insns);
+      cfg.replace_insns(it, npe_creator.get_insns(invoke_insn));
     }
   }
   auto unreachable_insn_count = cfg.remove_unreachable_blocks();
