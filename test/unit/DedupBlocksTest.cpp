@@ -11,35 +11,18 @@
 
 #include "ControlFlow.h"
 #include "Creators.h"
-#include "DedupBlocksPass.h"
+#include "DedupBlocks.h"
 #include "DexAsm.h"
 #include "DexUtil.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
 #include "RedexTest.h"
-#include "VirtualScope.h"
+#include "Walkers.h"
 
 struct Branch {
   MethodItemEntry* source;
   MethodItemEntry* target;
 };
-
-void run_passes(const std::vector<Pass*>& passes,
-                std::vector<DexClass*> classes) {
-  std::vector<DexStore> stores;
-  DexMetadata dm;
-  dm.set_id("classes");
-  DexStore store(dm);
-
-  store.add_classes(std::move(classes));
-  stores.emplace_back(std::move(store));
-  PassManager manager(passes);
-  manager.set_testing_mode();
-
-  Json::Value conf_obj = Json::nullValue;
-  ConfigFiles dummy_config(conf_obj);
-  manager.run_passes(stores, dummy_config);
-}
 
 struct DedupBlocksTest : public RedexTest {
   DexClass* m_class;
@@ -68,9 +51,15 @@ struct DedupBlocksTest : public RedexTest {
   }
 
   void run_dedup_blocks() {
-    std::vector<Pass*> passes = {new DedupBlocksPass()};
-    std::vector<DexClass*> classes = {m_class};
-    run_passes(passes, std::move(classes));
+    walk::code(std::vector<DexClass*>{m_class},
+               [&](DexMethod* method, IRCode& code) {
+                 code.build_cfg(/* editable */ true);
+                 auto& cfg = code.cfg();
+                 dedup_blocks_impl::Config config;
+                 dedup_blocks_impl::DedupBlocks impl(&config, method);
+                 impl.run();
+                 code.clear_cfg();
+               });
   }
 
   ~DedupBlocksTest() {}
