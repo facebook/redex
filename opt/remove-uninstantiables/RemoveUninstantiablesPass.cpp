@@ -11,6 +11,7 @@
 #include "ControlFlow.h"
 #include "DexUtil.h"
 #include "IRCode.h"
+#include "NullPointerExceptionUtil.h"
 #include "Trace.h"
 #include "Walkers.h"
 
@@ -160,16 +161,9 @@ RemoveUninstantiablesPass::replace_uninstantiable_refs(
     cfg::ControlFlowGraph& cfg) {
   cfg::CFGMutation m(cfg);
 
-  // Lazily generate a scratch register.
-  auto get_scratch = [&cfg, reg = boost::optional<uint32_t>()]() mutable {
-    if (!reg) {
-      reg = cfg.allocate_temp();
-    }
-    return *reg;
-  };
-
   Stats stats;
   auto ii = InstructionIterable(cfg);
+  npe::NullPointerExceptionCreator npe_creator(&cfg);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
     auto insn = it->insn;
     auto op = insn->opcode();
@@ -185,8 +179,7 @@ RemoveUninstantiablesPass::replace_uninstantiable_refs(
     case OPCODE_INVOKE_DIRECT:
     case OPCODE_INVOKE_VIRTUAL:
       if (scoped_uninstantiable_types.count(insn->get_method()->get_class())) {
-        auto tmp = get_scratch();
-        m.replace(it, {ir_const(tmp, 0), ir_throw(tmp)});
+        m.replace(it, npe_creator.get_insns(insn));
         stats.invokes++;
       }
       continue;
@@ -207,10 +200,16 @@ RemoveUninstantiablesPass::replace_uninstantiable_refs(
       break;
     }
 
-    if ((is_iget(op) || is_iput(op)) &&
+    if (is_iget(op) &&
         scoped_uninstantiable_types.count(insn->get_field()->get_class())) {
-      auto tmp = get_scratch();
-      m.replace(it, {ir_const(tmp, 0), ir_throw(tmp)});
+      m.replace(it, npe_creator.get_insns(insn));
+      stats.field_accesses_on_uninstantiable++;
+      continue;
+    }
+
+    if (is_iput(op) &&
+        scoped_uninstantiable_types.count(insn->get_field()->get_class())) {
+      m.replace(it, npe_creator.get_insns(insn));
       stats.field_accesses_on_uninstantiable++;
       continue;
     }

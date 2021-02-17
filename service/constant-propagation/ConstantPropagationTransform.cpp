@@ -365,10 +365,10 @@ void Transform::eliminate_dead_branch(
   }
 }
 
-bool Transform::replace_with_throw(const ConstantEnvironment& env,
-                                   const IRList::iterator& it,
-                                   IRCode* code,
-                                   boost::optional<int32_t>* temp_reg) {
+bool Transform::replace_with_throw(
+    const ConstantEnvironment& env,
+    const IRList::iterator& it,
+    npe::NullPointerExceptionCreator* npe_creator) {
   auto* insn = it->insn;
   auto dereferenced_object_src_index = get_dereferenced_object_src_index(insn);
   if (!dereferenced_object_src_index) {
@@ -382,23 +382,10 @@ bool Transform::replace_with_throw(const ConstantEnvironment& env,
     return false;
   }
 
-  // We'll replace this instruction with
-  //   const tmp, 0
-  //   throw tmp
-  // We do not reuse reg, even if it might be null, as we need a value that is
-  // throwable.
-  if (!*temp_reg) {
-    *temp_reg = code->allocate_temp();
-  }
+  // We'll replace this instruction with a different instruction sequence that
+  // unconditionally throws a null pointer exception.
 
-  IRInstruction* const_insn = new IRInstruction(OPCODE_CONST);
-  const_insn->set_dest(**temp_reg)->set_literal(0);
-  new_insns.emplace_back(const_insn);
-
-  IRInstruction* throw_insn = new IRInstruction(OPCODE_THROW);
-  throw_insn->set_src(0, **temp_reg);
-  new_insns.emplace_back(throw_insn);
-  m_replacements.emplace_back(insn, new_insns);
+  m_replacements.emplace_back(insn, npe_creator->get_insns(insn));
   m_rebuild_cfg = true;
   ++m_stats.throws;
 
@@ -443,7 +430,7 @@ Transform::Stats Transform::apply_on_uneditable_cfg(
     const XStoreRefs* xstores,
     const DexType* declaring_type) {
   auto& cfg = code->cfg();
-  boost::optional<int32_t> temp_reg;
+  npe::NullPointerExceptionCreator npe_creator(&cfg);
   for (const auto& block : cfg.blocks()) {
     auto env = intra_cp.get_entry_state_at(block);
     // This block is unreachable, no point mutating its instructions -- DCE
@@ -456,7 +443,7 @@ Transform::Stats Transform::apply_on_uneditable_cfg(
       auto it = code->iterator_to(mie);
       bool any_changes = eliminate_redundant_put(env, wps, it) ||
                          eliminate_redundant_null_check(env, wps, it) ||
-                         replace_with_throw(env, it, code, &temp_reg);
+                         replace_with_throw(env, it, &npe_creator);
       auto* insn = mie.insn;
       intra_cp.analyze_instruction(insn, &env, insn == last_insn->insn);
       if (!any_changes && !m_redundant_move_results.count(insn)) {

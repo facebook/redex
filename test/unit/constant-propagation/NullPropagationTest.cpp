@@ -42,8 +42,12 @@ TEST_F(NullPropagationTest, NullMonitorEnter) {
   auto expected_code = assembler::ircode_from_string(R"(
     (
       (const v0 0)
-      (const v1 0)
-      (throw v1)
+      (const-string "monitor-enter")
+      (move-result-pseudo-object v1)
+      (new-instance "Ljava/lang/NullPointerException;")
+      (move-result-pseudo-object v2)
+      (invoke-direct (v2 v1) "Ljava/lang/NullPointerException;.<init>:(Ljava/lang/String;)V")
+      (throw v2)
     )
 )");
 
@@ -65,8 +69,12 @@ TEST_F(NullPropagationTest, NullInvokeVirtual) {
   auto expected_code = assembler::ircode_from_string(R"(
     (
       (const v0 0)
-      (const v1 0)
-      (throw v1)
+      (const-string "booleanValue")
+      (move-result-pseudo-object v1)
+      (new-instance "Ljava/lang/NullPointerException;")
+      (move-result-pseudo-object v2)
+      (invoke-direct (v2 v1) "Ljava/lang/NullPointerException;.<init>:(Ljava/lang/String;)V")
+      (throw v2)
     )
 )");
 
@@ -91,8 +99,12 @@ TEST_F(NullPropagationTest, AputInvokeVirtual) {
       (const v0 0)
       (const v1 0)
       (const v2 0)
-      (const v3 0)
-      (throw v3)
+      (const-string "array access")
+      (move-result-pseudo-object v3)
+      (new-instance "Ljava/lang/NullPointerException;")
+      (move-result-pseudo-object v4)
+      (invoke-direct (v4 v3) "Ljava/lang/NullPointerException;.<init>:(Ljava/lang/String;)V")
+      (throw v4)
     )
 )");
 
