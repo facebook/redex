@@ -352,7 +352,6 @@ class Model {
   MergerType* build_mergers(const DexType* root);
   void exclude_types(const std::unordered_set<DexType*>& exclude_types);
   bool is_excluded(const DexType* type) const;
-  void find_non_mergeables(const Scope& scope, const TypeSet& generated);
 
   // MergerType creator helpers
   MergerType& create_dummy_merger(const DexType* type);
