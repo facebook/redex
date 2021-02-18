@@ -739,7 +739,7 @@ void run_impl(DexStoresVector& stores,
                 << " = " << stat << std::endl;
     }
   };
-  auto prof = conf.get_method_profiles();
+  const auto& prof = conf.get_method_profiles();
   if (!prof.has_stats()) {
     TRACE(LOCKS, 2, "No profiles available!");
   }
