@@ -140,7 +140,7 @@ inline InsertResult insert_source_blocks(DexMethod* method,
 
   auto block_start_fn = [&](Block* cur) {
     if (serialize) {
-      oss << "(";
+      oss << "(" << id;
     }
 
     source_blocks::impl::BlockAccessor::push_source_block(
