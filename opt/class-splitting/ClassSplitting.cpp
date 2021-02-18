@@ -99,6 +99,8 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
         if (it->second.appear_percent >=
             m_config.method_profiles_appear_percent_threshold) {
           m_sufficiently_popular_methods.insert(method);
+        } else {
+          m_insufficiently_popular_methods.insert(method);
         }
       });
     }
@@ -193,6 +195,10 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
       if (m_sufficiently_popular_methods.count(method)) {
         return;
       }
+      if (m_config.profile_only && !m_insufficiently_popular_methods.count(method)) {
+        return;
+      }
+
       bool requires_trampoline{false};
       if (!can_relocate(cls_has_problematic_clinit, method, /* log */ true,
                         &requires_trampoline)) {
@@ -296,6 +302,12 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
           m_stats.popular_methods++;
           return;
         }
+
+        if (m_config.profile_only && !m_insufficiently_popular_methods.count(method)) {
+          m_stats.non_relocated_methods++;
+          return;
+        }
+
         auto it = sc.relocatable_methods.find(method);
         if (it == sc.relocatable_methods.end()) {
           m_stats.non_relocated_methods++;
@@ -548,6 +560,9 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
 
  private:
   std::unordered_set<DexMethod*> m_sufficiently_popular_methods;
+  // Methods that appear in the profiles and whose frequency does not exceed
+  // the threashold.
+  std::unordered_set<DexMethod*> m_insufficiently_popular_methods;
 
   struct RelocatableMethodInfo {
     DexClass* target_cls;
