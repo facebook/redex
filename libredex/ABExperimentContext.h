@@ -66,7 +66,6 @@ class ABExperimentContext {
    */
   static void force_test_mode();
 
- private:
   /**
    * Forces all ABExperimentContext instances to ignore changes happening
    * to the CFG when flushing. This should only be used at the beginning of
