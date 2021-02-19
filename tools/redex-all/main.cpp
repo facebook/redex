@@ -1227,6 +1227,8 @@ int main(int argc, char* argv[]) {
 
     if (conf.get_json_config().get("force_ab_exp_test_mode", false)) {
       ab_test::ABExperimentContext::force_test_mode();
+    } else if (conf.get_json_config().get("force_ab_exp_control_mode", false)) {
+      ab_test::ABExperimentContext::force_control_mode();
     } else if (manager.get_redex_options().is_art_build ||
                !args.config.get("enable_ab_experiments", false).asBool()) {
       ab_test::ABExperimentContext::disable_ab_experiments();
