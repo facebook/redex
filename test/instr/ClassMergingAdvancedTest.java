@@ -363,6 +363,12 @@ class FieldRefDummy {
   int getA1() { return as[0].getA1(); }
 }
 
+class ModelConverter {
+  public static String convert(Class clazz) {
+    return clazz.getName();
+  }
+}
+
 public class ClassMergingAdvancedTest {
 
   @Test
@@ -527,5 +533,15 @@ public class ClassMergingAdvancedTest {
     assertThat(d.getStrings()).isEqualTo(new String[] {"D"});
     StringsGetter e = new E();
     assertThat(e.getStrings()).isEqualTo(new String[] {"E"});
+  }
+
+  @Test
+  public void testSafeConstClass() {
+    String s = ModelConverter.convert(A.class);
+    assertThat(s).isNotEqualTo("");
+    s = ModelConverter.convert(B.class);
+    assertThat(s).isNotEqualTo("");
+    s = ModelConverter.convert(C.class);
+    assertThat(s).isNotEqualTo("");
   }
 }

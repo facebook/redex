@@ -7,15 +7,29 @@
 
 #include "MergeabilityCheck.h"
 
+#include "LiveRange.h"
 #include "Model.h"
 #include "ReachableClasses.h"
 #include "RefChecker.h"
 #include "Resolver.h"
+#include "ScopedCFG.h"
 #include "Show.h"
 #include "Trace.h"
 #include "Walkers.h"
 
 using namespace class_merging;
+
+MergeabilityChecker::MergeabilityChecker(const Scope& scope,
+                                         const ModelSpec& spec,
+                                         const RefChecker& ref_checker,
+                                         const TypeSet& generated,
+                                         const TypeSet& to_merge)
+    : m_scope(scope),
+      m_spec(spec),
+      m_ref_checker(ref_checker),
+      m_generated(generated),
+      m_const_class_safe_types(spec.const_class_safe_types),
+      m_to_merge(to_merge) {}
 
 void MergeabilityChecker::exclude_cannot_delete(TypeSet& non_mergeables) {
   for (const auto& type : m_to_merge) {
@@ -45,59 +59,110 @@ void MergeabilityChecker::exclude_cannot_delete(TypeSet& non_mergeables) {
   }
 }
 
+TypeSet MergeabilityChecker::exclude_unsupported_bytecode_for(
+    DexMethod* method) {
+  TypeSet non_mergeables;
+  auto code = method->get_code();
+  if (!code || m_generated.count(method->get_class())) {
+    return non_mergeables;
+  }
+
+  bool has_type_tag = m_spec.has_type_tag();
+  std::vector<std::pair<IRInstruction*, const DexType*>>
+      const_classes_to_verify;
+  for (const auto& mie : InstructionIterable(code)) {
+    auto insn = mie.insn;
+
+    // Java language level enforcement recommended!
+    //
+    // For mergeables with type tags, it is not safe to merge those
+    // used with CONST_CLASS or NEW_ARRAY since we will lose
+    // granularity as we can't map to the old type anymore.
+    if (has_type_tag && insn->opcode() != OPCODE_CONST_CLASS &&
+        insn->opcode() != OPCODE_NEW_ARRAY) {
+      continue;
+    }
+
+    // Java language level enforcement recommended!
+    //
+    // For mergeables without a type tag, it is not safe to merge
+    // those used in an INSTANCE_OF, since we might lose granularity.
+    //
+    // Example where both <type_0> and <type_1> have the same shape
+    // (so end
+    //        up in the same merger)
+    //
+    //    INSTANCE_OF <v_result>, <v_obj> <type_0>
+    //    then label:
+    //      CHECK_CAST <type_0>
+    //    else labe:
+    //      CHECK_CAST <type_1>
+    if (!has_type_tag && insn->opcode() != OPCODE_INSTANCE_OF) {
+      continue;
+    }
+
+    const auto& type = type::get_element_type_if_array(insn->get_type());
+    if (m_to_merge.count(type) > 0) {
+
+      if (insn->opcode() != OPCODE_CONST_CLASS ||
+          m_const_class_safe_types.empty()) {
+        non_mergeables.insert(type);
+      } else {
+        // To verify the usages
+        const_classes_to_verify.emplace_back(insn, type);
+      }
+    }
+  }
+
+  if (const_classes_to_verify.empty()) {
+    return non_mergeables;
+  }
+
+  cfg::ScopedCFG cfg(code);
+  live_range::MoveAwareChains chains(*cfg);
+  live_range::DefUseChains du_chains = chains.get_def_use_chains();
+
+  for (const auto& pair : const_classes_to_verify) {
+    auto const_class_insn = pair.first;
+    auto referenced_type = pair.second;
+    auto use_set = du_chains[const_class_insn];
+    for (const auto use : use_set) {
+      auto use_insn = use.insn;
+      if (opcode::is_move(use_insn->opcode())) {
+        // Ignore moves
+        break;
+      }
+      if (!use_insn->has_method()) {
+        TRACE(CLMG,
+              5,
+              "[non mergeable] const class unsafe use %s",
+              SHOW(use_insn));
+        non_mergeables.insert(referenced_type);
+        break;
+      }
+      auto callee = use_insn->get_method();
+      auto callee_type = callee->get_class();
+      if (!m_const_class_safe_types.count(callee_type)) {
+        TRACE(CLMG,
+              5,
+              "[non mergeable] const class unsafe callee %s",
+              SHOW(callee));
+        non_mergeables.insert(referenced_type);
+        break;
+      }
+    }
+  }
+
+  return non_mergeables;
+}
+
 void MergeabilityChecker::exclude_unsupported_bytecode(
     TypeSet& non_mergeables) {
-  bool has_type_tag = m_spec.has_type_tag();
-  auto patcher = [has_type_tag, this](DexMethod* meth) {
-    TypeSet current_non_mergeables;
-    auto code = meth->get_code();
-    if (!code || m_generated.count(meth->get_class())) {
-      return current_non_mergeables;
-    }
-
-    for (const auto& mie : InstructionIterable(code)) {
-      auto insn = mie.insn;
-
-      // Java language level enforcement recommended!
-      //
-      // For mergeables with type tags, it is not safe to merge those used
-      // with CONST_CLASS or NEW_ARRAY since we will lose granularity as we
-      // can't map to the old type anymore.
-      if (has_type_tag && insn->opcode() != OPCODE_CONST_CLASS &&
-          insn->opcode() != OPCODE_NEW_ARRAY) {
-        continue;
-      }
-
-      // Java language level enforcement recommended!
-      //
-      // For mergeables without a type tag, it is not safe to merge
-      // those used in an INSTANCE_OF, since we might lose granularity.
-      //
-      // Example where both <type_0> and <type_1> have the same shape (so
-      // end
-      //        up in the same merger)
-      //
-      //    INSTANCE_OF <v_result>, <v_obj> <type_0>
-      //    then label:
-      //      CHECK_CAST <type_0>
-      //    else labe:
-      //      CHECK_CAST <type_1>
-      if (!has_type_tag && insn->opcode() != OPCODE_INSTANCE_OF) {
-        continue;
-      }
-
-      const auto& type = type::get_element_type_if_array(insn->get_type());
-      if (m_to_merge.count(type) > 0) {
-        current_non_mergeables.insert(type);
-      }
-    }
-
-    return current_non_mergeables;
-  };
-
   TypeSet non_mergeables_opcode =
-      walk::parallel::methods<TypeSet, MergeContainers<TypeSet>>(m_scope,
-                                                                 patcher);
+      walk::parallel::methods<TypeSet, MergeContainers<TypeSet>>(
+          m_scope, [this](DexMethod* meth) {
+            return exclude_unsupported_bytecode_for(meth);
+          });
 
   non_mergeables.insert(non_mergeables_opcode.begin(),
                         non_mergeables_opcode.end());

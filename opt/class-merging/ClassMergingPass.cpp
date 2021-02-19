@@ -196,6 +196,11 @@ void ClassMergingPass::bind_config() {
         gen_spec.get("annos", {}, gen_anno_names);
         load_types(gen_anno_names, model.gen_annos);
       }
+
+      std::vector<std::string> const_class_safe_names;
+      model_spec.get("const_class_safe_types", {}, const_class_safe_names);
+      load_types(const_class_safe_names, model.const_class_safe_types);
+
       model_spec.get("include_primary_dex", false, model.include_primary_dex);
 
       std::string merge_per_interdex_set;
