@@ -34,8 +34,8 @@ struct RedexTest : public testing::Test {
   static void force_experiments_control_mode() {
     ab_test::ABExperimentContext::force_control_mode();
   }
-  static void force_experiments_preferred_mode() {
-    ab_test::ABExperimentContext::force_preferred_mode();
+  static void disable_ab_experiments() {
+    ab_test::ABExperimentContext::disable_ab_experiments();
   }
   static void force_experiments_test_mode() {
     ab_test::ABExperimentContext::force_test_mode();
