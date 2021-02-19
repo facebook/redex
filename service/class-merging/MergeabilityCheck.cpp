@@ -1,0 +1,177 @@
+/*
+ * Copyright (c) Facebook, Inc. and its affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+#include "MergeabilityCheck.h"
+
+#include "Model.h"
+#include "ReachableClasses.h"
+#include "RefChecker.h"
+#include "Resolver.h"
+#include "Show.h"
+#include "Trace.h"
+#include "Walkers.h"
+
+using namespace class_merging;
+
+void MergeabilityChecker::exclude_cannot_delete(TypeSet& non_mergeables) {
+  for (const auto& type : m_to_merge) {
+    const auto& cls = type_class(type);
+    if (!can_delete(cls)) {
+      non_mergeables.insert(type);
+      TRACE(CLMG, 5, "Cannot delete %s", SHOW(type));
+      continue;
+    }
+    // Why uninstantiable classes are not mergeable?
+    // Class Merging is good at merging virtual methods horizontally by
+    // supporting virtual dispatches. There's no benefit to merge uninstantiable
+    // classes and no proper way to merge uninstatiable and instantiable classes
+    // together. Exclude the uninstantiable classes from ClassMerging and
+    // RemoveUninstantiablesPass should properly handle parts of them.
+    bool has_ctor = false;
+    for (const auto& method : cls->get_dmethods()) {
+      if (is_constructor(method) && method::is_init(method)) {
+        has_ctor = true;
+        break;
+      }
+    }
+    if (!has_ctor) {
+      non_mergeables.insert(type);
+      TRACE(CLMG, 5, "Has no ctor %s", SHOW(type));
+    }
+  }
+}
+
+void MergeabilityChecker::exclude_unsupported_bytecode(
+    TypeSet& non_mergeables) {
+  bool has_type_tag = m_spec.has_type_tag();
+  auto patcher = [has_type_tag, this](DexMethod* meth) {
+    TypeSet current_non_mergeables;
+    auto code = meth->get_code();
+    if (!code || m_generated.count(meth->get_class())) {
+      return current_non_mergeables;
+    }
+
+    for (const auto& mie : InstructionIterable(code)) {
+      auto insn = mie.insn;
+
+      // Java language level enforcement recommended!
+      //
+      // For mergeables with type tags, it is not safe to merge those used
+      // with CONST_CLASS or NEW_ARRAY since we will lose granularity as we
+      // can't map to the old type anymore.
+      if (has_type_tag && insn->opcode() != OPCODE_CONST_CLASS &&
+          insn->opcode() != OPCODE_NEW_ARRAY) {
+        continue;
+      }
+
+      // Java language level enforcement recommended!
+      //
+      // For mergeables without a type tag, it is not safe to merge
+      // those used in an INSTANCE_OF, since we might lose granularity.
+      //
+      // Example where both <type_0> and <type_1> have the same shape (so
+      // end
+      //        up in the same merger)
+      //
+      //    INSTANCE_OF <v_result>, <v_obj> <type_0>
+      //    then label:
+      //      CHECK_CAST <type_0>
+      //    else labe:
+      //      CHECK_CAST <type_1>
+      if (!has_type_tag && insn->opcode() != OPCODE_INSTANCE_OF) {
+        continue;
+      }
+
+      const auto& type = type::get_element_type_if_array(insn->get_type());
+      if (m_to_merge.count(type) > 0) {
+        current_non_mergeables.insert(type);
+      }
+    }
+
+    return current_non_mergeables;
+  };
+
+  TypeSet non_mergeables_opcode =
+      walk::parallel::methods<TypeSet, MergeContainers<TypeSet>>(m_scope,
+                                                                 patcher);
+
+  non_mergeables.insert(non_mergeables_opcode.begin(),
+                        non_mergeables_opcode.end());
+}
+
+void MergeabilityChecker::exclude_static_fields(TypeSet& non_mergeables) {
+  static const DexType* string_type = type::java_lang_String();
+
+  if (m_spec.merge_types_with_static_fields) {
+    return;
+  }
+
+  walk::fields(m_scope, [&non_mergeables, this](DexField* field) {
+    if (m_generated.count(field->get_class()) > 0) {
+      if (is_static(field)) {
+        auto rtype = type::get_element_type_if_array(field->get_type());
+        if (!type::is_primitive(rtype) && rtype != string_type) {
+          // If the type is either non-primitive or a list of
+          // non-primitive types (excluding Strings), then exclude it as
+          // we might change the initialization order.
+          TRACE(CLMG,
+                5,
+                "[non mergeable] %s as it contains a non-primitive "
+                "static field",
+                SHOW(field->get_class()));
+          non_mergeables.emplace(field->get_class());
+        }
+      }
+    }
+  });
+}
+
+void MergeabilityChecker::exclude_unsafe_sdk_and_store_refs(
+    TypeSet& non_mergeables) {
+  for (auto type : m_to_merge) {
+    if (non_mergeables.count(type)) {
+      continue;
+    }
+    auto cls = type_class(type);
+    if (!m_ref_checker.check_class(cls)) {
+      non_mergeables.insert(type);
+    }
+    if (!m_spec.include_primary_dex && m_ref_checker.is_in_primary_dex(type)) {
+      non_mergeables.insert(type);
+    }
+  }
+}
+
+TypeSet MergeabilityChecker::get_non_mergeables() {
+  TypeSet non_mergeables;
+  size_t prev_size = 0;
+
+  exclude_cannot_delete(non_mergeables);
+  TRACE(CLMG, 4, "Non mergeables (no delete) %ld", non_mergeables.size());
+  prev_size = non_mergeables.size();
+
+  exclude_unsupported_bytecode(non_mergeables);
+  TRACE(CLMG,
+        4,
+        "Non mergeables (opcodes) %ld",
+        non_mergeables.size() - prev_size);
+  prev_size = non_mergeables.size();
+
+  exclude_static_fields(non_mergeables);
+  TRACE(CLMG,
+        4,
+        "Non mergeables (static fields) %ld",
+        non_mergeables.size() - prev_size);
+  prev_size = non_mergeables.size();
+
+  exclude_unsafe_sdk_and_store_refs(non_mergeables);
+  TRACE(CLMG,
+        4,
+        "Non mergeables (unsafe refs) %ld",
+        non_mergeables.size() - prev_size);
+  return non_mergeables;
+}

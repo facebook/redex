@@ -147,6 +147,7 @@ libredex_la_SOURCES = \
 	service/class-merging/ApproximateShapeMerging.cpp \
 	service/class-merging/ClassAssemblingUtils.cpp \
 	service/class-merging/ClassMerging.cpp \
+	service/class-merging/MergeabilityCheck.cpp \
 	service/class-merging/MergerType.cpp \
 	service/class-merging/ModelMerger.cpp \
 	service/class-merging/ModelMethodMerger.cpp \
