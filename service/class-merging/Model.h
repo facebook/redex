@@ -121,6 +121,8 @@ struct ModelSpec {
   std::unordered_set<DexType*> gen_types;
   // set of annotations marking generated code
   std::unordered_set<DexType*> gen_annos;
+  // set of types safe to consume the class obj of merged classes
+  std::unordered_set<DexType*> const_class_safe_types;
   // Group splitting. This is looser than the per dex split and takes into
   // account the interdex order (if any provided).
   InterDexGroupingType merge_per_interdex_set{InterDexGroupingType::DISABLED};

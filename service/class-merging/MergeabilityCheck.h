@@ -23,12 +23,7 @@ class MergeabilityChecker {
                       const ModelSpec& spec,
                       const RefChecker& ref_checker,
                       const TypeSet& generated,
-                      const TypeSet& to_merge)
-      : m_scope(scope),
-        m_spec(spec),
-        m_ref_checker(ref_checker),
-        m_generated(generated),
-        m_to_merge(to_merge) {}
+                      const TypeSet& to_merge);
   /**
    * Try to identify types referenced by operations that Class Merging does not
    * support. Such operations include reflections, instanceof checks on
@@ -45,12 +40,15 @@ class MergeabilityChecker {
   const ModelSpec& m_spec;
   const RefChecker& m_ref_checker;
   const TypeSet& m_generated;
+  const std::unordered_set<DexType*>& m_const_class_safe_types;
   const TypeSet& m_to_merge;
 
   void exclude_cannot_delete(TypeSet& non_mergeables);
   void exclude_unsupported_bytecode(TypeSet& non_mergeables);
   void exclude_static_fields(TypeSet& non_mergeables);
   void exclude_unsafe_sdk_and_store_refs(TypeSet& non_mergeables);
+
+  TypeSet exclude_unsupported_bytecode_for(DexMethod* method);
 };
 
 } // namespace class_merging
