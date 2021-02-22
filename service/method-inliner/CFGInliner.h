@@ -54,14 +54,14 @@ class CFGInliner {
   /*
    * If `it` isn't already, make it the last instruction of its block
    */
-  static Block* maybe_split_block(ControlFlowGraph* caller,
-                                  const InstructionIterator& it);
+  static std::pair<Block*, Block*> maybe_split_block(
+      ControlFlowGraph* caller, const InstructionIterator& it);
 
   /*
    * If `it` isn't first, make it the first instruction of its block
    */
-  static Block* maybe_split_block_before(ControlFlowGraph* caller,
-                                         const InstructionIterator& it);
+  static std::pair<Block*, Block*> maybe_split_block_before(
+      ControlFlowGraph* caller, const InstructionIterator& it);
 
   /*
    * Change the register numbers to not overlap with caller.
