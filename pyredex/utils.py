@@ -9,6 +9,7 @@ import distutils.version
 import fnmatch
 import glob
 import json
+import logging
 import mmap
 import os
 import re
@@ -95,11 +96,11 @@ def find_android_build_tools_by_buck():
         raw = subprocess.check_output(cmd, cwd=cwd, stderr=subprocess.DEVNULL, env=env)
         return json.loads(raw)
 
-    log("Computing SDK path from buck")
+    logging.debug("Computing SDK path from buck")
     try:
         buckconfig = load_android_buckconfig_values()
     except BaseException as e:
-        log("Failed loading buckconfig: %s" % e)
+        logging.debug("Failed loading buckconfig: %s", e)
         return None
     if "android.sdk_path" not in buckconfig:
         return None
@@ -143,16 +144,18 @@ def find_android_build_tool(tool):
     global sdk_search_order
     for name, base_dir_fn in sdk_search_order:
         candidate = try_find(name, base_dir_fn)
+        logging.debug("Attempting %s to find %s", name, tool)
         if candidate:
             return candidate
 
     # By `PATH`.
+    logging.debug("Attempting PATH to find %s", tool)
     tool_path = shutil.which(tool)
     if tool_path is not None:
         return tool_path
     attempts.append("PATH")
 
-    raise RuntimeError("Could not find %s, searched %s" % (tool, ", ".join(attempts)))
+    raise RuntimeError(f'Could not find {tool}, searched {", ".join(attempts)}')
 
 
 def find_apksigner():

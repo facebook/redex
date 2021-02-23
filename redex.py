@@ -820,6 +820,12 @@ Given an APK, produce a better APK!
 
     parser.add_argument("--android-sdk-path", type=str, help="Path to Android SDK")
 
+    parser.add_argument(
+        "--log-level",
+        default="warning",
+        help="Specify the python logging level",
+    )
+
     return parser
 
 
@@ -879,6 +885,7 @@ def _check_android_sdk_api(args):
 
 
 def prepare_redex(args):
+    logging.debug("Preparing...")
     debug_mode = args.unpack_only or args.debug
 
     if args.android_sdk_path:
@@ -949,6 +956,7 @@ def prepare_redex(args):
             if e.errno != errno.EEXIST:
                 raise e
 
+    logging.debug("Unpacking...")
     unpack_start_time = timer()
     if not extracted_apk_dir:
         extracted_apk_dir = make_temp_dir(".redex_extracted_apk", debug_mode)
@@ -980,6 +988,7 @@ def prepare_redex(args):
         print("DEX: " + dex_dir)
         sys.exit()
 
+    logging.debug("Moving contents to expected structure...")
     # Move each dex to a separate temporary directory to be operated by
     # redex.
     dexen = move_dexen_to_directories(dex_dir, dex_glob(dex_dir))
@@ -1130,7 +1139,23 @@ def finalize_redex(state):
     )
 
 
+def _init_logging(level_str):
+    levels = {
+        "critical": logging.CRITICAL,
+        "error": logging.ERROR,
+        "warn": logging.WARNING,
+        "warning": logging.WARNING,
+        "info": logging.INFO,
+        "debug": logging.DEBUG,
+    }
+    level = levels[level_str]
+    logging.basicConfig(level=level)
+
+
 def run_redex(args, term_handler=None, exception_formatter=None):
+    # This is late, but hopefully early enough.
+    _init_logging(args.log_level)
+
     state = prepare_redex(args)
     if exception_formatter is None:
         exception_formatter = ExceptionMessageFormatter()
