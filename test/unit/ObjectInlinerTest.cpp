@@ -263,6 +263,7 @@ TEST_F(ObjectInlinerTest, class_inline_with_fields) {
     (
       (load-param v0)
       (load-param v1)
+      (const v4 0)
       (new-instance "LFoo;")
       (move-result-pseudo-object v2)
       (move v4 v1)
@@ -327,6 +328,7 @@ TEST_F(ObjectInlinerTest, class_inline_with_fields_and_swaps) {
     (
       (load-param v0)
       (load-param v1)
+      (const v4 0)
       (new-instance "LFoo;")
       (move-result-pseudo-object v2)
       (move v4 v1)
