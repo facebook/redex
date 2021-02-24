@@ -27,8 +27,8 @@
 #include "Walkers.h"
 
 struct DexOutputTestHelper {
-  static uint8_t* steal_output(DexOutput& output) {
-    return std::exchange(output.m_output, nullptr);
+  static std::unique_ptr<uint8_t[]> steal_output(DexOutput& output) {
+    return std::move(output.m_output);
   }
 };
 
@@ -103,10 +103,9 @@ class IODITest : public ::testing::Test {
       *iodi_data = sstream.str();
     }
     reset_redex();
-    uint8_t* data = DexOutputTestHelper::steal_output(output);
+    auto data = DexOutputTestHelper::steal_output(output);
     auto result = load_classes_from_dex(
-        reinterpret_cast<dex_header*>(data), "tmp.dex", false);
-    free(data);
+        reinterpret_cast<dex_header*>(data.get()), "tmp.dex", false);
     return result;
   }
 

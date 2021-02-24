@@ -435,7 +435,7 @@ namespace {
 // Leave 250K empty as a margin to not overrun.
 constexpr uint32_t k_output_red_zone = 250000;
 
-constexpr uint32_t k_max_dex_size = 16 * 1024 * 1024 + k_output_red_zone;
+constexpr uint32_t k_max_dex_size = 16 * 1024 * 1024;
 
 } // namespace
 
@@ -466,21 +466,24 @@ DexOutput::DexOutput(
     std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
     PostLowering const* post_lowering,
     int min_sdk)
-    : m_config_files(config_files), m_min_sdk(min_sdk) {
-  m_classes = classes;
-  m_iodi_metadata = iodi_metadata;
-  // Required because the BytecodeDebugger setting creates huge amounts
-  // of debug information (multiple dex debug entries per instruction)
-  if (debug_info_kind == DebugInfoKind::BytecodeDebugger) {
-    m_output = (uint8_t*)malloc(k_max_dex_size * 2);
-  } else {
-    m_output = (uint8_t*)malloc(k_max_dex_size);
-  }
-  memset(m_output, 0, k_max_dex_size);
-  m_offset = 0;
+    : m_classes(classes),
+      // Required because the BytecodeDebugger setting creates huge amounts
+      // of debug information (multiple dex debug entries per instruction)
+      m_output_size((debug_info_kind == DebugInfoKind::BytecodeDebugger
+                         ? k_max_dex_size * 2
+                         : k_max_dex_size) +
+                    k_output_red_zone),
+      m_output(std::make_unique<uint8_t[]>(m_output_size)),
+      m_offset(0),
+      m_iodi_metadata(iodi_metadata),
+      m_config_files(config_files),
+      m_min_sdk(min_sdk) {
+  // Ensure a clean slate.
+  memset(m_output.get(), 0, m_output_size);
+
   m_force_class_data_end_of_file = post_lowering != nullptr;
   m_gtypes = new GatheredTypes(classes, post_lowering);
-  dodx = m_gtypes->get_dodx(m_output);
+  dodx = m_gtypes->get_dodx(m_output.get());
 
   always_assert_log(
       dodx->method_to_idx().size() <= kMaxMethodRefs,
@@ -516,7 +519,6 @@ DexOutput::DexOutput(
 DexOutput::~DexOutput() {
   delete m_gtypes;
   delete dodx;
-  free(m_output);
 }
 
 void DexOutput::insert_map_item(uint16_t maptype,
@@ -617,9 +619,9 @@ void DexOutput::insert_map_item(uint16_t maptype,
 void DexOutput::emit_locator(Locator locator) {
   char buf[Locator::encoded_max];
   size_t locator_length = locator.encode(buf);
-  write_uleb128(m_output + m_offset, (uint32_t)locator_length);
+  write_uleb128(m_output.get() + m_offset, (uint32_t)locator_length);
   inc_offset(uleb128_encoding_size((uint32_t)locator_length));
-  memcpy(m_output + m_offset, buf, locator_length + 1);
+  memcpy(m_output.get() + m_offset, buf, locator_length + 1);
   inc_offset(locator_length + 1);
 }
 
@@ -688,7 +690,8 @@ void DexOutput::generate_string_data(SortMode mode) {
     TRACE(CUSTOMSORT, 2, "using default string pool sorting");
     string_order = m_gtypes->get_dexstring_emitlist();
   }
-  dex_string_id* stringids = (dex_string_id*)(m_output + hdr.string_ids_off);
+  dex_string_id* stringids =
+      (dex_string_id*)(m_output.get() + hdr.string_ids_off);
 
   std::unordered_set<DexString*> type_names = m_gtypes->index_type_names();
   unsigned locator_size = 0;
@@ -732,7 +735,7 @@ void DexOutput::generate_string_data(SortMode mode) {
     // Emit the string itself
     TRACE(CUSTOMSORT, 3, "str emit %s", SHOW(str));
     stringids[idx].offset = m_offset;
-    str->encode(m_output + m_offset);
+    str->encode(m_output.get() + m_offset);
     inc_offset(str->get_entry_size());
     m_stats.num_strings++;
   }
@@ -816,7 +819,7 @@ void DexOutput::generate_type_data() {
       get_max_type_refs(m_min_sdk),
       dodx->type_to_idx().size() - get_max_type_refs(m_min_sdk));
 
-  dex_type_id* typeids = (dex_type_id*)(m_output + hdr.type_ids_off);
+  dex_type_id* typeids = (dex_type_id*)(m_output.get() + hdr.type_ids_off);
   for (auto& p : dodx->type_to_idx()) {
     auto t = p.first;
     auto idx = p.second;
@@ -837,7 +840,7 @@ void DexOutput::generate_typelist_data() {
     ++num_tls;
     align_output();
     m_tl_emit_offsets[tl] = m_offset;
-    int size = tl->encode(dodx, (uint32_t*)(m_output + m_offset));
+    int size = tl->encode(dodx, (uint32_t*)(m_output.get() + m_offset));
     inc_offset(size);
     m_stats.num_type_lists++;
   }
@@ -847,7 +850,7 @@ void DexOutput::generate_typelist_data() {
 }
 
 void DexOutput::generate_proto_data() {
-  auto protoids = (dex_proto_id*)(m_output + hdr.proto_ids_off);
+  auto protoids = (dex_proto_id*)(m_output.get() + hdr.proto_ids_off);
   for (auto& it : dodx->proto_to_idx()) {
     auto proto = it.first;
     auto idx = it.second;
@@ -859,7 +862,7 @@ void DexOutput::generate_proto_data() {
 }
 
 void DexOutput::generate_field_data() {
-  auto fieldids = (dex_field_id*)(m_output + hdr.field_ids_off);
+  auto fieldids = (dex_field_id*)(m_output.get() + hdr.field_ids_off);
   for (auto& it : dodx->field_to_idx()) {
     auto field = it.first;
     auto idx = it.second;
@@ -871,7 +874,7 @@ void DexOutput::generate_field_data() {
 }
 
 void DexOutput::generate_method_data() {
-  auto methodids = (dex_method_id*)(m_output + hdr.method_ids_off);
+  auto methodids = (dex_method_id*)(m_output.get() + hdr.method_ids_off);
   for (auto& it : dodx->method_to_idx()) {
     auto method = it.first;
     auto idx = it.second;
@@ -883,7 +886,7 @@ void DexOutput::generate_method_data() {
 }
 
 void DexOutput::generate_class_data() {
-  dex_class_def* cdefs = (dex_class_def*)(m_output + hdr.class_defs_off);
+  dex_class_def* cdefs = (dex_class_def*)(m_output.get() + hdr.class_defs_off);
   for (uint32_t i = 0; i < hdr.class_defs_size; i++) {
     m_stats.num_classes++;
     DexClass* clz = m_classes->at(i);
@@ -918,16 +921,16 @@ void DexOutput::generate_class_data_items() {
   dexcode_to_offset dco;
   uint32_t cdi_start = m_offset;
   for (auto& it : m_code_item_emits) {
-    uint32_t offset = (uint32_t)(((uint8_t*)it.code_item) - m_output);
+    uint32_t offset = (uint32_t)(((uint8_t*)it.code_item) - m_output.get());
     dco[it.code] = offset;
   }
-  dex_class_def* cdefs = (dex_class_def*)(m_output + hdr.class_defs_off);
+  dex_class_def* cdefs = (dex_class_def*)(m_output.get() + hdr.class_defs_off);
   uint32_t count = 0;
   for (uint32_t i = 0; i < hdr.class_defs_size; i++) {
     DexClass* clz = m_classes->at(i);
     if (!clz->has_class_data()) continue;
     /* No alignment constraints for this data */
-    int size = clz->encode(dodx, dco, m_output + m_offset);
+    int size = clz->encode(dodx, dco, m_output.get() + m_offset);
     cdefs[i].class_data_offset = m_offset;
     inc_offset(size);
     count += 1;
@@ -1009,12 +1012,13 @@ void DexOutput::generate_code_items(const std::vector<SortMode>& mode) {
         "Undefined method in generate_code_items()\n\t prototype: %s\n",
         SHOW(meth));
     align_output();
-    int size = code->encode(dodx, (uint32_t*)(m_output + m_offset));
+    int size = code->encode(dodx, (uint32_t*)(m_output.get() + m_offset));
     check_method_instruction_size_limit(m_config_files, size, SHOW(meth));
     m_method_bytecode_offsets.emplace_back(meth->get_name()->c_str(), m_offset);
     m_code_item_emits.emplace_back(meth, code,
-                                   (dex_code_item*)(m_output + m_offset));
-    auto insns_size = ((const dex_code_item*)(m_output + m_offset))->insns_size;
+                                   (dex_code_item*)(m_output.get() + m_offset));
+    auto insns_size =
+        ((const dex_code_item*)(m_output.get() + m_offset))->insns_size;
     inc_offset(size);
     m_stats.num_instructions += code->get_instructions().size();
     m_stats.instruction_bytes += insns_size * 2;
@@ -1029,7 +1033,7 @@ void DexOutput::generate_callsite_data() {
       hdr.class_defs_off + hdr.class_defs_size * sizeof(dex_class_def);
 
   auto callsites = m_gtypes->get_dexcallsite_emitlist();
-  dex_callsite_id* dexcallsites = (dex_callsite_id*)(m_output + offset);
+  dex_callsite_id* dexcallsites = (dex_callsite_id*)(m_output.get() + offset);
   for (uint32_t i = 0; i < callsites.size(); i++) {
     m_stats.num_callsites++;
     DexCallSite* callsite = callsites.at(i);
@@ -1043,7 +1047,7 @@ void DexOutput::generate_methodhandle_data() {
                     hdr.class_defs_size * sizeof(dex_class_def) +
                     total_callsite_size;
   dex_methodhandle_id* dexmethodhandles =
-      (dex_methodhandle_id*)(m_output + offset);
+      (dex_methodhandle_id*)(m_output.get() + offset);
   for (auto it : dodx->methodhandle_to_idx()) {
     m_stats.num_methodhandles++;
     DexMethodHandle* methodhandle = it.first;
@@ -1096,7 +1100,7 @@ void DexOutput::generate_static_values() {
     if (enc_arrays.count(*deva)) {
       m_static_values[clz] = enc_arrays.at(*deva);
     } else {
-      uint8_t* output = m_output + m_offset;
+      uint8_t* output = m_output.get() + m_offset;
       uint8_t* outputsv = output;
       /* No alignment requirements */
       deva->encode(dodx, output);
@@ -1115,7 +1119,7 @@ void DexOutput::generate_static_values() {
       if (enc_arrays.count(eva)) {
         offset = m_call_site_items[callsite] = enc_arrays.at(eva);
       } else {
-        uint8_t* output = m_output + m_offset;
+        uint8_t* output = m_output.get() + m_offset;
         uint8_t* outputsv = output;
         eva.encode(dodx, output);
         enc_arrays.emplace(std::move(eva), m_offset);
@@ -1153,7 +1157,7 @@ void DexOutput::unique_annotations(annomap_t& annomap,
     annotation_byte_offsets[annotation_bytes] = m_offset;
     annomap[anno] = m_offset;
     /* Not a dupe, encode... */
-    uint8_t* annoout = (uint8_t*)(m_output + m_offset);
+    uint8_t* annoout = (uint8_t*)(m_output.get() + m_offset);
     memcpy(annoout, &annotation_bytes[0], annotation_bytes.size());
     inc_offset(annotation_bytes.size());
     annocnt++;
@@ -1184,7 +1188,7 @@ void DexOutput::unique_asets(annomap_t& annomap,
     aset_offsets[aset_bytes] = m_offset;
     asetmap[aset] = m_offset;
     /* Not a dupe, encode... */
-    uint8_t* asetout = (uint8_t*)(m_output + m_offset);
+    uint8_t* asetout = (uint8_t*)(m_output.get() + m_offset);
     memcpy(asetout, &aset_bytes[0], aset_bytes.size() * sizeof(uint32_t));
     inc_offset(aset_bytes.size() * sizeof(uint32_t));
     asetcnt++;
@@ -1220,7 +1224,7 @@ void DexOutput::unique_xrefs(asetmap_t& asetmap,
     xref_offsets[xref_bytes] = m_offset;
     xrefmap[xref] = m_offset;
     /* Not a dupe, encode... */
-    uint8_t* xrefout = (uint8_t*)(m_output + m_offset);
+    uint8_t* xrefout = (uint8_t*)(m_output.get() + m_offset);
     memcpy(xrefout, &xref_bytes[0], xref_bytes.size() * sizeof(uint32_t));
     inc_offset(xref_bytes.size() * sizeof(uint32_t));
     xrefcnt++;
@@ -1251,7 +1255,7 @@ void DexOutput::unique_adirs(asetmap_t& asetmap,
     adir_offsets[adir_bytes] = m_offset;
     adirmap[adir] = m_offset;
     /* Not a dupe, encode... */
-    uint8_t* adirout = (uint8_t*)(m_output + m_offset);
+    uint8_t* adirout = (uint8_t*)(m_output.get() + m_offset);
     memcpy(adirout, &adir_bytes[0], adir_bytes.size() * sizeof(uint32_t));
     inc_offset(adir_bytes.size() * sizeof(uint32_t));
     adircnt++;
@@ -1307,7 +1311,8 @@ void DexOutput::generate_annotations() {
   unique_adirs(asetmap, xrefmap, adirmap, lad);
   for (auto ad : lad) {
     int class_num = ad_to_classnum[ad];
-    dex_class_def* cdefs = (dex_class_def*)(m_output + hdr.class_defs_off);
+    dex_class_def* cdefs =
+        (dex_class_def*)(m_output.get() + hdr.class_defs_off);
     cdefs[class_num].annotations_off = adirmap[ad];
     delete ad;
   }
@@ -2249,7 +2254,7 @@ void DexOutput::generate_debug_items() {
         m_code_item_emits,
         *m_iodi_metadata,
         m_debug_info_kind == DebugInfoKind::InstructionOffsetsLayered,
-        m_output,
+        m_output.get(),
         m_offset,
         &dbgcount,
         m_code_debug_lines));
@@ -2267,8 +2272,8 @@ void DexOutput::generate_debug_items() {
       dbgcount++;
       size_t num_params = it.method->get_proto()->get_args()->size();
       inc_offset(emit_debug_info(dodx, emit_positions, dbg, dc, dci,
-                                 m_pos_mapper, m_output, m_offset, num_params,
-                                 m_code_debug_lines));
+                                 m_pos_mapper, m_output.get(), m_offset,
+                                 num_params, m_code_debug_lines));
     }
   }
   if (emit_positions) {
@@ -2281,7 +2286,7 @@ void DexOutput::generate_debug_items() {
 
 void DexOutput::generate_map() {
   align_output();
-  uint32_t* mapout = (uint32_t*)(m_output + m_offset);
+  uint32_t* mapout = (uint32_t*)(m_output.get() + m_offset);
   hdr.map_off = m_offset;
   insert_map_item(TYPE_MAP_LIST, 1, m_offset,
                   sizeof(uint32_t) + m_map_items.size() * sizeof(dex_map_item));
@@ -2406,18 +2411,18 @@ void DexOutput::finalize_header() {
   hdr.file_size = m_offset;
   int skip;
   skip = sizeof(hdr.magic) + sizeof(hdr.checksum) + sizeof(hdr.signature);
-  memcpy(m_output, &hdr, sizeof(hdr));
+  memcpy(m_output.get(), &hdr, sizeof(hdr));
   Sha1Context context;
   sha1_init(&context);
-  sha1_update(&context, m_output + skip, hdr.file_size - skip);
+  sha1_update(&context, m_output.get() + skip, hdr.file_size - skip);
   sha1_final(hdr.signature, &context);
-  memcpy(m_output, &hdr, sizeof(hdr));
+  memcpy(m_output.get(), &hdr, sizeof(hdr));
   uint32_t adler = (uint32_t)adler32(0L, Z_NULL, 0);
   skip = sizeof(hdr.magic) + sizeof(hdr.checksum);
-  adler = (uint32_t)adler32(adler, (const Bytef*)(m_output + skip),
+  adler = (uint32_t)adler32(adler, (const Bytef*)(m_output.get() + skip),
                             hdr.file_size - skip);
   hdr.checksum = adler;
-  memcpy(m_output, &hdr, sizeof(hdr));
+  memcpy(m_output.get(), &hdr, sizeof(hdr));
 }
 
 namespace {
@@ -2844,7 +2849,7 @@ void DexOutput::write() {
     perror("Error writing dex");
     return;
   }
-  ::write(fd, m_output, m_offset);
+  ::write(fd, m_output.get(), m_offset);
   if (0 == fstat(fd, &st)) {
     m_stats.num_bytes = st.st_size;
   }
@@ -2990,10 +2995,10 @@ dex_stats_t write_classes_to_dex(
 
   TRACE(OPUT, 2, "[write_classes_to_dex][filename] %s", filename.c_str());
 
-  DexOutput dout = DexOutput(
-      filename.c_str(), classes, locator_index, normal_primary_dex,
-      store_number, dex_number, redex_options.debug_info_kind, iodi_metadata,
-      conf, pos_mapper, method_to_id, code_debug_lines, post_lowering, min_sdk);
+  DexOutput dout(filename.c_str(), classes, locator_index, normal_primary_dex,
+                 store_number, dex_number, redex_options.debug_info_kind,
+                 iodi_metadata, conf, pos_mapper, method_to_id,
+                 code_debug_lines, post_lowering, min_sdk);
 
   dout.prepare(string_sort_mode, code_sort_mode, conf, dex_magic);
   dout.write();
@@ -3041,11 +3046,11 @@ LocatorIndex make_locator_index(DexStoresVector& stores) {
 
 void DexOutput::inc_offset(uint32_t v) {
   // If this asserts hits, we already wrote out of bounds.
-  always_assert(m_offset + v < k_max_dex_size);
+  always_assert(m_offset + v < m_output_size);
   // If this assert hits, we are too close.
-  always_assert_log(m_offset + v < k_max_dex_size - k_output_red_zone,
-                    "Running into output safety margin: %u of %u(%u)",
-                    m_offset + v, k_max_dex_size - k_output_red_zone,
-                    k_max_dex_size);
+  always_assert_log(m_offset + v < m_output_size - k_output_red_zone,
+                    "Running into output safety margin: %u of %zu(%zu)",
+                    m_offset + v, m_output_size - k_output_red_zone,
+                    m_output_size);
   m_offset += v;
 }

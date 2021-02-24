@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <memory>
 #include <unordered_map>
 
 #include <boost/optional/optional.hpp>
@@ -312,7 +313,8 @@ class DexOutput {
   DexClasses* m_classes;
   DexOutputIdx* dodx;
   GatheredTypes* m_gtypes;
-  uint8_t* m_output;
+  const size_t m_output_size;
+  std::unique_ptr<uint8_t[]> m_output;
   uint32_t m_offset;
   const char* m_filename;
   size_t m_store_number;
