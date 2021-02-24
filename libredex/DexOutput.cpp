@@ -430,7 +430,14 @@ void GatheredTypes::gather_components(PostLowering const* post_lowering) {
   }
 }
 
-constexpr uint32_t k_max_dex_size = 16 * 1024 * 1024;
+namespace {
+
+// Leave 250K empty as a margin to not overrun.
+constexpr uint32_t k_output_red_zone = 250000;
+
+constexpr uint32_t k_max_dex_size = 16 * 1024 * 1024 + k_output_red_zone;
+
+} // namespace
 
 CodeItemEmit::CodeItemEmit(DexMethod* meth, DexCode* c, dex_code_item* ci)
     : method(meth), code(c), code_item(ci) {}
@@ -611,9 +618,9 @@ void DexOutput::emit_locator(Locator locator) {
   char buf[Locator::encoded_max];
   size_t locator_length = locator.encode(buf);
   write_uleb128(m_output + m_offset, (uint32_t)locator_length);
-  m_offset += uleb128_encoding_size((uint32_t)locator_length);
+  inc_offset(uleb128_encoding_size((uint32_t)locator_length));
   memcpy(m_output + m_offset, buf, locator_length + 1);
-  m_offset += locator_length + 1;
+  inc_offset(locator_length + 1);
 }
 
 std::unique_ptr<Locator> DexOutput::locator_for_descriptor(
@@ -726,7 +733,7 @@ void DexOutput::generate_string_data(SortMode mode) {
     TRACE(CUSTOMSORT, 3, "str emit %s", SHOW(str));
     stringids[idx].offset = m_offset;
     str->encode(m_output + m_offset);
-    m_offset += str->get_entry_size();
+    inc_offset(str->get_entry_size());
     m_stats.num_strings++;
   }
 
@@ -831,7 +838,7 @@ void DexOutput::generate_typelist_data() {
     align_output();
     m_tl_emit_offsets[tl] = m_offset;
     int size = tl->encode(dodx, (uint32_t*)(m_output + m_offset));
-    m_offset += size;
+    inc_offset(size);
     m_stats.num_type_lists++;
   }
   /// insert_map_item returns early if num_tls is zero
@@ -922,7 +929,7 @@ void DexOutput::generate_class_data_items() {
     /* No alignment constraints for this data */
     int size = clz->encode(dodx, dco, m_output + m_offset);
     cdefs[i].class_data_offset = m_offset;
-    m_offset += size;
+    inc_offset(size);
     count += 1;
   }
   insert_map_item(TYPE_CLASS_DATA_ITEM, count, cdi_start, m_offset - cdi_start);
@@ -1008,7 +1015,7 @@ void DexOutput::generate_code_items(const std::vector<SortMode>& mode) {
     m_code_item_emits.emplace_back(meth, code,
                                    (dex_code_item*)(m_output + m_offset));
     auto insns_size = ((const dex_code_item*)(m_output + m_offset))->insns_size;
-    m_offset += size;
+    inc_offset(size);
     m_stats.num_instructions += code->get_instructions().size();
     m_stats.instruction_bytes += insns_size * 2;
   }
@@ -1095,7 +1102,7 @@ void DexOutput::generate_static_values() {
       deva->encode(dodx, output);
       enc_arrays.emplace(std::move(*deva.release()), m_offset);
       m_static_values[clz] = m_offset;
-      m_offset += output - outputsv;
+      inc_offset(output - outputsv);
       m_stats.num_static_values++;
     }
   }
@@ -1113,7 +1120,7 @@ void DexOutput::generate_static_values() {
         eva.encode(dodx, output);
         enc_arrays.emplace(std::move(eva), m_offset);
         offset = m_call_site_items[callsite] = m_offset;
-        m_offset += output - outputsv;
+        inc_offset(output - outputsv);
         m_stats.num_static_values++;
       }
     }
@@ -1148,7 +1155,7 @@ void DexOutput::unique_annotations(annomap_t& annomap,
     /* Not a dupe, encode... */
     uint8_t* annoout = (uint8_t*)(m_output + m_offset);
     memcpy(annoout, &annotation_bytes[0], annotation_bytes.size());
-    m_offset += annotation_bytes.size();
+    inc_offset(annotation_bytes.size());
     annocnt++;
   }
   if (annocnt) {
@@ -1179,7 +1186,7 @@ void DexOutput::unique_asets(annomap_t& annomap,
     /* Not a dupe, encode... */
     uint8_t* asetout = (uint8_t*)(m_output + m_offset);
     memcpy(asetout, &aset_bytes[0], aset_bytes.size() * sizeof(uint32_t));
-    m_offset += aset_bytes.size() * sizeof(uint32_t);
+    inc_offset(aset_bytes.size() * sizeof(uint32_t));
     asetcnt++;
   }
   if (asetcnt) {
@@ -1215,7 +1222,7 @@ void DexOutput::unique_xrefs(asetmap_t& asetmap,
     /* Not a dupe, encode... */
     uint8_t* xrefout = (uint8_t*)(m_output + m_offset);
     memcpy(xrefout, &xref_bytes[0], xref_bytes.size() * sizeof(uint32_t));
-    m_offset += xref_bytes.size() * sizeof(uint32_t);
+    inc_offset(xref_bytes.size() * sizeof(uint32_t));
     xrefcnt++;
   }
   if (xrefcnt) {
@@ -1246,7 +1253,7 @@ void DexOutput::unique_adirs(asetmap_t& asetmap,
     /* Not a dupe, encode... */
     uint8_t* adirout = (uint8_t*)(m_output + m_offset);
     memcpy(adirout, &adir_bytes[0], adir_bytes.size() * sizeof(uint32_t));
-    m_offset += adir_bytes.size() * sizeof(uint32_t);
+    inc_offset(adir_bytes.size() * sizeof(uint32_t));
     adircnt++;
   }
   if (adircnt) {
@@ -2236,7 +2243,7 @@ void DexOutput::generate_debug_items() {
   bool emit_positions = m_debug_info_kind != DebugInfoKind::NoPositions;
   bool use_iodi = is_iodi(m_debug_info_kind);
   if (use_iodi && m_iodi_metadata) {
-    m_offset += emit_instruction_offset_debug_info(
+    inc_offset(emit_instruction_offset_debug_info(
         dodx,
         m_pos_mapper,
         m_code_item_emits,
@@ -2245,7 +2252,7 @@ void DexOutput::generate_debug_items() {
         m_output,
         m_offset,
         &dbgcount,
-        m_code_debug_lines);
+        m_code_debug_lines));
   } else {
     if (use_iodi) {
       fprintf(stderr,
@@ -2259,9 +2266,9 @@ void DexOutput::generate_debug_items() {
       if (dbg == nullptr) continue;
       dbgcount++;
       size_t num_params = it.method->get_proto()->get_args()->size();
-      m_offset +=
-          emit_debug_info(dodx, emit_positions, dbg, dc, dci, m_pos_mapper,
-                          m_output, m_offset, num_params, m_code_debug_lines);
+      inc_offset(emit_debug_info(dodx, emit_positions, dbg, dc, dci,
+                                 m_pos_mapper, m_output, m_offset, num_params,
+                                 m_code_debug_lines));
     }
   }
   if (emit_positions) {
@@ -2283,7 +2290,7 @@ void DexOutput::generate_map() {
   for (auto const& mit : m_map_items) {
     *map++ = mit;
   }
-  m_offset += ((uint8_t*)map) - ((uint8_t*)mapout);
+  inc_offset(((uint8_t*)map) - ((uint8_t*)mapout));
 }
 
 /**
@@ -2339,53 +2346,53 @@ void DexOutput::init_header_offsets(const std::string& dex_magic) {
   insert_map_item(TYPE_STRING_ID_ITEM, (uint32_t)dodx->stringsize(), m_offset,
                   total_string_size);
 
-  m_offset += total_string_size;
+  inc_offset(total_string_size);
   hdr.type_ids_size = (uint32_t)dodx->typesize();
   hdr.type_ids_off = hdr.type_ids_size ? m_offset : 0;
   uint32_t total_type_size = dodx->typesize() * sizeof(dex_type_id);
   insert_map_item(TYPE_TYPE_ID_ITEM, (uint32_t)dodx->typesize(), m_offset,
                   total_type_size);
 
-  m_offset += total_type_size;
+  inc_offset(total_type_size);
   hdr.proto_ids_size = (uint32_t)dodx->protosize();
   hdr.proto_ids_off = hdr.proto_ids_size ? m_offset : 0;
   uint32_t total_proto_size = dodx->protosize() * sizeof(dex_proto_id);
   insert_map_item(TYPE_PROTO_ID_ITEM, (uint32_t)dodx->protosize(), m_offset,
                   total_proto_size);
 
-  m_offset += total_proto_size;
+  inc_offset(total_proto_size);
   hdr.field_ids_size = (uint32_t)dodx->fieldsize();
   hdr.field_ids_off = hdr.field_ids_size ? m_offset : 0;
   uint32_t total_field_size = dodx->fieldsize() * sizeof(dex_field_id);
   insert_map_item(TYPE_FIELD_ID_ITEM, (uint32_t)dodx->fieldsize(), m_offset,
                   total_field_size);
 
-  m_offset += total_field_size;
+  inc_offset(total_field_size);
   hdr.method_ids_size = (uint32_t)dodx->methodsize();
   hdr.method_ids_off = hdr.method_ids_size ? m_offset : 0;
   uint32_t total_method_size = dodx->methodsize() * sizeof(dex_method_id);
   insert_map_item(TYPE_METHOD_ID_ITEM, (uint32_t)dodx->methodsize(), m_offset,
                   total_method_size);
 
-  m_offset += total_method_size;
+  inc_offset(total_method_size);
   hdr.class_defs_size = (uint32_t)m_classes->size();
   hdr.class_defs_off = hdr.class_defs_size ? m_offset : 0;
   uint32_t total_class_size = m_classes->size() * sizeof(dex_class_def);
   insert_map_item(TYPE_CLASS_DEF_ITEM, (uint32_t)m_classes->size(), m_offset,
                   total_class_size);
 
-  m_offset += total_class_size;
+  inc_offset(total_class_size);
 
   uint32_t total_callsite_size = dodx->callsitesize() * sizeof(dex_callsite_id);
   insert_map_item(TYPE_CALL_SITE_ID_ITEM, (uint32_t)dodx->callsitesize(),
                   m_offset, total_callsite_size);
-  m_offset += total_callsite_size;
+  inc_offset(total_callsite_size);
 
   uint32_t total_methodhandle_size =
       dodx->methodhandlesize() * sizeof(dex_methodhandle_id);
   insert_map_item(TYPE_METHOD_HANDLE_ITEM, (uint32_t)dodx->methodhandlesize(),
                   m_offset, total_methodhandle_size);
-  m_offset += total_methodhandle_size;
+  inc_offset(total_methodhandle_size);
 
   hdr.data_off = m_offset;
   /* Todo... */
@@ -3030,4 +3037,15 @@ LocatorIndex make_locator_index(DexStoresVector& stores) {
   }
 
   return index;
+}
+
+void DexOutput::inc_offset(uint32_t v) {
+  // If this asserts hits, we already wrote out of bounds.
+  always_assert(m_offset + v < k_max_dex_size);
+  // If this assert hits, we are too close.
+  always_assert_log(m_offset + v < k_max_dex_size - k_output_red_zone,
+                    "Running into output safety margin: %u of %u(%u)",
+                    m_offset + v, k_max_dex_size - k_output_red_zone,
+                    k_max_dex_size);
+  m_offset += v;
 }
