@@ -435,7 +435,14 @@ namespace {
 // Leave 250K empty as a margin to not overrun.
 constexpr uint32_t k_output_red_zone = 250000;
 
-constexpr uint32_t k_max_dex_size = 16 * 1024 * 1024;
+constexpr uint32_t k_default_max_dex_size = 32 * 1024 * 1024;
+
+uint32_t get_dex_output_size(const ConfigFiles& conf) {
+  size_t output_size;
+  conf.get_json_config().get("dex_output_buffer_size", k_default_max_dex_size,
+                             output_size);
+  return (uint32_t)output_size;
+}
 
 } // namespace
 
@@ -470,8 +477,8 @@ DexOutput::DexOutput(
       // Required because the BytecodeDebugger setting creates huge amounts
       // of debug information (multiple dex debug entries per instruction)
       m_output_size((debug_info_kind == DebugInfoKind::BytecodeDebugger
-                         ? k_max_dex_size * 2
-                         : k_max_dex_size) +
+                         ? get_dex_output_size(config_files) * 2
+                         : get_dex_output_size(config_files)) +
                     k_output_red_zone),
       m_output(std::make_unique<uint8_t[]>(m_output_size)),
       m_offset(0),
@@ -3048,9 +3055,10 @@ void DexOutput::inc_offset(uint32_t v) {
   // If this asserts hits, we already wrote out of bounds.
   always_assert(m_offset + v < m_output_size);
   // If this assert hits, we are too close.
-  always_assert_log(m_offset + v < m_output_size - k_output_red_zone,
-                    "Running into output safety margin: %u of %zu(%zu)",
-                    m_offset + v, m_output_size - k_output_red_zone,
-                    m_output_size);
+  always_assert_log(
+      m_offset + v < m_output_size - k_output_red_zone,
+      "Running into output safety margin: %u of %zu(%zu). Increase the buffer "
+      "size with `-J dex_output_buffer_size=`.",
+      m_offset + v, m_output_size - k_output_red_zone, m_output_size);
   m_offset += v;
 }
