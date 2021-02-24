@@ -167,20 +167,21 @@ void InjectDebug::write_dex() {
     for (size_t i = 0; i < store.get_dexen().size(); ++i) {
       std::string filename =
           redex::get_dex_output_name(m_conf.get_outdir(), store, i);
-      DexOutput dout = DexOutput(filename.c_str(), // filename
-                                 &store.get_dexen()[i], // classes
-                                 nullptr, // locator_index
-                                 false, // normal_primary_dex
-                                 store_num,
-                                 i, // dex_number,
-                                 DebugInfoKind::BytecodeDebugger,
-                                 nullptr, // iodi_metadata
-                                 m_conf, // redex options config
-                                 pos_mapper.get(), // position_mapper
-                                 nullptr, // method_to_id
-                                 nullptr, // code_debug_lines
-                                 nullptr // post_lowering
-      );
+      DexOutput dout{
+          filename.c_str(), // filename
+          &store.get_dexen()[i], // classes
+          nullptr, // locator_index
+          false, // normal_primary_dex
+          store_num,
+          i, // dex_number,
+          DebugInfoKind::BytecodeDebugger,
+          nullptr, // iodi_metadata
+          m_conf, // redex options config
+          pos_mapper.get(), // position_mapper
+          nullptr, // method_to_id
+          nullptr, // code_debug_lines
+          nullptr // post_lowering
+      };
       dout.prepare(SortMode::DEFAULT, {SortMode::DEFAULT}, m_conf,
                    m_stores[0].get_dex_magic());
       dout.write();
