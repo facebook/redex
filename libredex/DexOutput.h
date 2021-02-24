@@ -377,6 +377,8 @@ class DexOutput {
   std::unique_ptr<Locator> locator_for_descriptor(
       const std::unordered_set<DexString*>& type_names, DexString* descriptor);
 
+  void inc_offset(uint32_t v);
+
   friend struct DexOutputTestHelper;
 
  public:
