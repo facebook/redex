@@ -1532,6 +1532,24 @@ void ControlFlowGraph::build_chains(
         const auto& pair = block_to_chain->emplace(goto_block, chain);
         bool was_already_there = !pair.second;
         if (was_already_there) {
+          if (goto_block->starts_with_move_result() &&
+              chain != block_to_chain->at(goto_block)) {
+            // We cannot allow this to be in a separate chain. The WTO (and its
+            // walk) cannot enforce the correct ordering, e.g., it might put a
+            // throw block in the middle.
+            TRACE(CFG, 5, "Need to collapse goto chain with move result!");
+            auto* goto_chain = block_to_chain->at(goto_block);
+            redex_assert(goto_chain->at(0) == goto_block);
+            for (auto* gcb : *goto_chain) {
+              chain->push_back(gcb);
+              (*block_to_chain)[gcb] = chain;
+            }
+            auto it = std::find_if(
+                chains->begin(), chains->end(),
+                [&](const auto& uptr) { return uptr.get() == goto_chain; });
+            redex_assert(it != chains->end());
+            chains->erase(it);
+          }
           break;
         }
         chain->push_back(goto_block);

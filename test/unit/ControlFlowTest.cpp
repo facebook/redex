@@ -2266,3 +2266,51 @@ TEST_F(ControlFlowTest, no_crash_on_remove_insn) {
 
   cfg.remove_insn(it); // Should not crash.
 }
+
+TEST_F(ControlFlowTest, move_result_chain) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (load-param v1)
+
+      (.try_start foo)
+      (add-int v0 v0 v1)
+      (invoke-static (v0) "LCls;.foo:(I)I")
+
+      (move-result v1)
+      (return v1)
+      (.try_end foo)
+
+      (.catch (foo))
+      (const v1 0)
+      (return v1)
+    )
+  )");
+  code->build_cfg(/* editable */ true);
+  auto& cfg = code->cfg();
+
+  // Find the add, break that block.
+  {
+    auto ii = cfg::InstructionIterable(cfg);
+    auto add_it = std::find_if(ii.begin(), ii.end(), [](const auto& mie) {
+      return mie.insn->opcode() == OPCODE_ADD_INT;
+    });
+    ASSERT_FALSE(add_it.is_end());
+
+    cfg.split_block(add_it);
+  }
+
+  code->clear_cfg();
+
+  // Ensure that the move-result is in the right location.
+  auto invoke_it =
+      std::find_if(code->begin(), code->end(), [](const auto& mie) {
+        return mie.type == MFLOW_OPCODE &&
+               mie.insn->opcode() == OPCODE_INVOKE_STATIC;
+      });
+  ASSERT_TRUE(invoke_it != code->end()) << show(code);
+  auto next_it = std::next(invoke_it);
+  ASSERT_TRUE(next_it != code->end()) << show(code);
+  ASSERT_EQ(next_it->type, MFLOW_OPCODE) << show(code);
+  EXPECT_EQ(next_it->insn->opcode(), OPCODE_MOVE_RESULT) << show(code);
+}
