@@ -87,30 +87,6 @@ using namespace cfg;
 
 namespace {
 
-const char* method_item_type_str(MethodItemType t) {
-  switch (t) {
-  case MFLOW_TRY:
-    return "try";
-  case MFLOW_CATCH:
-    return "catch";
-  case MFLOW_OPCODE:
-    return "opcode";
-  case MFLOW_DEX_OPCODE:
-    return "dex-opcode";
-  case MFLOW_TARGET:
-    return "target";
-  case MFLOW_DEBUG:
-    return "debug";
-  case MFLOW_POSITION:
-    return "position";
-  case MFLOW_SOURCE_BLOCK:
-    return "source-block";
-  case MFLOW_FALLTHROUGH:
-    return "fallthrough";
-  }
-  not_reached();
-}
-
 // A "container" that helps with formatting list. Use as a helper instance, add
 // elements to the stream given by next(), and create the final format with the
 // supplied operator<<.
@@ -292,7 +268,7 @@ class CodeVisualizer : public TaggedBase {
   }
 
   void mie_position(const MethodItemEntry& mie) {
-    m_output << method_item_type_str(mie.type);
+    m_output << mie.type;
     if (mie.pos) {
       m_output << " \"";
       DexPosition& pos = *mie.pos;
@@ -312,8 +288,7 @@ class CodeVisualizer : public TaggedBase {
   }
 
   void source_block(const SourceBlock& sb) {
-    m_output << method_item_type_str(MFLOW_SOURCE_BLOCK) << " \""
-             << show(sb.src) << "\"@" << sb.id;
+    m_output << MFLOW_SOURCE_BLOCK << " \"" << show(sb.src) << "\"@" << sb.id;
   }
 
   template <typename... Args>
@@ -325,7 +300,7 @@ class CodeVisualizer : public TaggedBase {
     case MFLOW_TARGET:
     case MFLOW_DEBUG:
     case MFLOW_FALLTHROUGH:
-      m_output << method_item_type_str(mie.type);
+      m_output << mie.type;
       return;
 
     case MFLOW_POSITION:

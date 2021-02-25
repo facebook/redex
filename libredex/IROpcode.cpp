@@ -13,6 +13,11 @@
 #include "DexOpcode.h"
 #include "DexUtil.h"
 
+std::ostream& operator<<(std::ostream& os, const IROpcode& op) {
+  os << show(op);
+  return os;
+}
+
 namespace opcode {
 
 // clang-format off

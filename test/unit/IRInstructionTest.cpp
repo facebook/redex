@@ -25,10 +25,6 @@ std::ostream& operator<<(std::ostream& os, const DexInstruction& to_show) {
   return os << show(&to_show);
 }
 
-std::ostream& operator<<(std::ostream& os, const IROpcode& to_show) {
-  return os << show(to_show);
-}
-
 bool is_move(DexOpcode op) {
   return op >= DOPCODE_MOVE && op <= DOPCODE_MOVE_OBJECT_16;
 }

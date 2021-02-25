@@ -9,6 +9,7 @@
 
 #include <boost/intrusive/list.hpp>
 #include <boost/range/sub_range.hpp>
+#include <iosfwd>
 #include <type_traits>
 
 #include "DexClass.h"
@@ -142,6 +143,8 @@ enum MethodItemType {
   // A no-op
   MFLOW_FALLTHROUGH,
 };
+
+std::ostream& operator<<(std::ostream&, const MethodItemType& type);
 
 struct MethodItemEntry {
   boost::intrusive::list_member_hook<> list_hook_;
