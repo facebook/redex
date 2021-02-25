@@ -36,6 +36,40 @@ bool BranchTarget::operator==(const BranchTarget& other) const {
   return *src == *other.src;
 }
 
+std::ostream& operator<<(std::ostream& os, const MethodItemType& type) {
+  switch (type) {
+  case MFLOW_TRY:
+    os << "try";
+    return os;
+  case MFLOW_CATCH:
+    os << "catch";
+    return os;
+  case MFLOW_OPCODE:
+    os << "opcode";
+    return os;
+  case MFLOW_DEX_OPCODE:
+    os << "dex-opcode";
+    return os;
+  case MFLOW_TARGET:
+    os << "target";
+    return os;
+  case MFLOW_DEBUG:
+    os << "debug";
+    return os;
+  case MFLOW_POSITION:
+    os << "position";
+    return os;
+  case MFLOW_SOURCE_BLOCK:
+    os << "source-block";
+    return os;
+  case MFLOW_FALLTHROUGH:
+    os << "fallthrough";
+    return os;
+  }
+  os << "unknown type " << (uint32_t)type;
+  return os;
+}
+
 MethodItemEntry::MethodItemEntry(std::unique_ptr<DexDebugInstruction> dbgop)
     : type(MFLOW_DEBUG), dbgop(std::move(dbgop)) {}
 

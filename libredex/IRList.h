@@ -10,6 +10,7 @@
 #include <boost/intrusive/list.hpp>
 #include <boost/range/sub_range.hpp>
 #include <functional>
+#include <iosfwd>
 #include <map>
 #include <memory>
 #include <set>
@@ -165,6 +166,8 @@ enum MethodItemType {
   // A no-op
   MFLOW_FALLTHROUGH,
 };
+
+std::ostream& operator<<(std::ostream&, const MethodItemType& type);
 
 struct MethodItemEntry {
   boost::intrusive::list_member_hook<> list_hook_;

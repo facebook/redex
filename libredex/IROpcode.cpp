@@ -14,6 +14,11 @@
 #include "DexUtil.h"
 #include "Show.h"
 
+std::ostream& operator<<(std::ostream& os, const IROpcode& op) {
+  os << show(op);
+  return os;
+}
+
 namespace opcode {
 
 // clang-format off
