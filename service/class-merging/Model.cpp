@@ -159,7 +159,6 @@ const TypeSet Model::empty_set = TypeSet();
 
 Model::Model(const Scope& scope,
              const ConfigFiles& conf,
-             const DexStoresVector& stores,
              const ModelSpec& spec,
              const TypeSystem& type_system,
              const RefChecker& refchecker)
@@ -1199,14 +1198,13 @@ std::string Model::print(const DexType* type, int nest) const {
 
 Model Model::build_model(const Scope& scope,
                          const ConfigFiles& conf,
-                         const DexStoresVector& stores,
                          const ModelSpec& spec,
                          const TypeSystem& type_system,
                          const RefChecker& refchecker) {
   Timer t("build_model");
 
   TRACE(CLMG, 3, "Build Model for %s", to_string(spec).c_str());
-  Model model(scope, conf, stores, spec, type_system, refchecker);
+  Model model(scope, conf, spec, type_system, refchecker);
   TRACE(CLMG, 3, "Model:\n%s\nBuild Model done", model.print().c_str());
 
   TRACE(CLMG, 3, "Shape Model");

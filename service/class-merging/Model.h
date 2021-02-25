@@ -197,7 +197,6 @@ class Model {
    */
   static Model build_model(const Scope& scope,
                            const ConfigFiles& conf,
-                           const DexStoresVector& stores,
                            const ModelSpec& spec,
                            const TypeSystem& type_system,
                            const RefChecker& refchecker);
@@ -341,7 +340,6 @@ class Model {
    */
   Model(const Scope& scope,
         const ConfigFiles& conf,
-        const DexStoresVector& stores,
         const ModelSpec& spec,
         const TypeSystem& type_system,
         const RefChecker& refchecker);

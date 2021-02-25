@@ -76,8 +76,7 @@ void merge_model(Scope& scope,
   int32_t min_sdk = mgr.get_redex_options().min_sdk;
   XStoreRefs xstores(stores);
   auto refchecker = ref_checker_for_root_store(&xstores, conf, min_sdk);
-  auto model =
-      Model::build_model(scope, conf, stores, spec, type_system, *refchecker);
+  auto model = Model::build_model(scope, conf, spec, type_system, *refchecker);
   model.update_redex_stats(mgr);
 
   ModelMerger mm;
