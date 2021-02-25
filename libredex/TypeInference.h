@@ -188,8 +188,11 @@ class TypeEnvironment final
 class TypeInference final
     : public ir_analyzer::BaseIRAnalyzer<TypeEnvironment> {
  public:
-  explicit TypeInference(const cfg::ControlFlowGraph& cfg)
-      : ir_analyzer::BaseIRAnalyzer<TypeEnvironment>(cfg), m_cfg(cfg) {}
+  explicit TypeInference(const cfg::ControlFlowGraph& cfg,
+                         bool skip_check_cast_to_intf = false)
+      : ir_analyzer::BaseIRAnalyzer<TypeEnvironment>(cfg),
+        m_cfg(cfg),
+        m_skip_check_cast_to_intf(skip_check_cast_to_intf) {}
 
   void run(const DexMethod* dex_method);
 
@@ -226,6 +229,7 @@ class TypeInference final
 
   const cfg::ControlFlowGraph& m_cfg;
   std::unordered_map<const IRInstruction*, TypeEnvironment> m_type_envs;
+  const bool m_skip_check_cast_to_intf;
 
   TypeDomain refine_type(const TypeDomain& type,
                          IRType expected,

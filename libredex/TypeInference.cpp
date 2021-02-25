@@ -534,7 +534,14 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
   }
   case OPCODE_CHECK_CAST: {
     refine_reference(current_state, insn->src(0));
-    set_reference(current_state, RESULT_REGISTER, insn->get_type());
+    auto to_type = insn->get_type();
+    auto to_cls = type_class(to_type);
+    if (m_skip_check_cast_to_intf && to_cls && is_interface(to_cls)) {
+      set_reference(current_state, RESULT_REGISTER,
+                    current_state->get_type_domain(insn->src(0)));
+    } else {
+      set_reference(current_state, RESULT_REGISTER, insn->get_type());
+    }
     break;
   }
   case OPCODE_INSTANCE_OF:
