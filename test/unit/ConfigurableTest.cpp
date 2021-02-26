@@ -421,9 +421,11 @@ struct MapBindings : public Base {
   void bind_config() override {
     bind("map_of_vector_of_strings_param", {}, m_map_of_vector_strings);
     bind("map_of_methods_param", {}, m_map_of_methods);
+    bind("map_of_strings_param", {}, m_map_of_strings);
   }
   MapOfVectorOfStrings m_map_of_vector_strings;
   MapOfMethods m_map_of_methods;
+  MapOfStrings m_map_of_strings;
 };
 
 TEST_F(ConfigurableTest, MapBindings) {
@@ -433,6 +435,7 @@ TEST_F(ConfigurableTest, MapBindings) {
     m.parse_config(JsonWrapper(json));
     EXPECT_EQ(0, m.m_map_of_vector_strings.size());
     EXPECT_EQ(0, m.m_map_of_methods.size());
+    EXPECT_EQ(0, m.m_map_of_strings.size());
   }
   {
     Json::Value map;
@@ -466,6 +469,16 @@ TEST_F(ConfigurableTest, MapBindings) {
     MapBindings m;
     m.parse_config(JsonWrapper(json));
     EXPECT_EQ(1, m.m_map_of_methods.size());
+  }
+  {
+    Json::Value map;
+    map["key"] = "value";
+
+    Json::Value json;
+    json["map_of_strings_param"] = map;
+    MapBindings m;
+    m.parse_config(JsonWrapper(json));
+    EXPECT_EQ(1, m.m_map_of_strings.size());
   }
 }
 

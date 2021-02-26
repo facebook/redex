@@ -143,6 +143,37 @@ void JsonWrapper::get(
   }
 }
 
+void JsonWrapper::get(
+    const char* name,
+    const std::unordered_map<std::string, std::string>& dflt,
+    std::unordered_map<std::string, std::string>& param) const {
+  auto cfg = (*m_config)[name];
+  param.clear();
+  // NOLINTNEXTLINE(readability-container-size-empty)
+  if (cfg == Json::nullValue) {
+    param = dflt;
+  } else {
+    if (!cfg.isObject()) {
+      throw std::runtime_error("Cannot convert JSON value to object: " +
+                               cfg.asString());
+    }
+    for (auto it = cfg.begin(); it != cfg.end(); ++it) {
+      auto key = it.key();
+      if (!key.isString()) {
+        throw std::runtime_error("Cannot convert JSON value to string: " +
+                                 key.asString());
+      }
+      auto val = *it;
+      if (!val.isString()) {
+        throw std::runtime_error("Cannot convert JSON value to string: " +
+                                 val.asString());
+      }
+
+      param[key.asString()] = val.asString();
+    }
+  }
+}
+
 void JsonWrapper::get(const char* name,
                       const Json::Value& dflt,
                       Json::Value& param) const {
