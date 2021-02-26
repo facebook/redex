@@ -467,6 +467,13 @@ Configurable::as<Configurable::MapOfVectorOfStrings>(const Json::Value& value,
 }
 
 template <>
+Configurable::MapOfStrings Configurable::as<Configurable::MapOfStrings>(
+    const Json::Value& value, bindflags_t bindflags) {
+  return parse_map(value, parse_str<true>, bindflags, parse_str<true>,
+                   bindflags);
+}
+
+template <>
 Json::Value Configurable::as<Json::Value>(const Json::Value& value,
                                           bindflags_t bindflags) {
   ASSERT_NO_BINDFLAGS(Json::Value);
@@ -549,6 +556,7 @@ IMPLEMENT_REFLECTOR_EX(std::unordered_set<DexClass*>, "set")
 IMPLEMENT_REFLECTOR_EX(std::unordered_set<DexMethod*>, "set")
 IMPLEMENT_REFLECTOR_EX(Configurable::MapOfVectorOfStrings, "dict")
 IMPLEMENT_REFLECTOR_EX(Configurable::MapOfMethods, "dict")
+IMPLEMENT_REFLECTOR_EX(Configurable::MapOfStrings, "dict")
 IMPLEMENT_REFLECTOR_EX(MethRefMap, "dict")
 IMPLEMENT_REFLECTOR_EX(TypeMap, "dict")
 
