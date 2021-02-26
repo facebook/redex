@@ -26,7 +26,7 @@ void change_called_method(DexMethod* m,
                           const std::string& new_method_name) {
   auto& cfg = m->get_code()->cfg();
   ab_test::ABExperimentContextImpl experiment(
-      &cfg, m, ab_test::ABExperimentPreferredMode::PREFER_TEST);
+      &cfg, m, "ab_experiment", ABExperimentPreferredMode::PREFER_TEST);
 
   for (const auto& mie : cfg::InstructionIterable(cfg)) {
     IRInstruction* insn = mie.insn;
@@ -52,7 +52,7 @@ TEST_F(ABExperimentContextTest, testCFGConstructorBasicFunctionality) {
   m->get_code()->build_cfg(/* editable */ true);
 
   ab_test::ABExperimentContextImpl experiment(
-      &m->get_code()->cfg(), m,
+      &m->get_code()->cfg(), m, "ab_experiment",
       ab_test::ABExperimentPreferredMode::PREFER_TEST);
   experiment.flush();
   ASSERT_TRUE(!m->get_code()->cfg_built());

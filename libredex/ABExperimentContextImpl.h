@@ -10,6 +10,8 @@
 #include "ABExperimentContext.h"
 #include "ControlFlow.h"
 
+enum class ABExperimentState;
+
 namespace ab_test {
 
 enum class ABGlobalMode { CONTROL, TEST, NONE };
@@ -20,6 +22,7 @@ class ABExperimentContextImpl : public ABExperimentContext {
 
   ABExperimentContextImpl(cfg::ControlFlowGraph* cfg,
                           DexMethod* m,
+                          const std::string& exp_name,
                           ABExperimentPreferredMode preferred_mode);
 
   ~ABExperimentContextImpl() override;
@@ -34,6 +37,7 @@ class ABExperimentContextImpl : public ABExperimentContext {
   std::unique_ptr<cfg::ControlFlowGraph> m_cloned_cfg{nullptr};
   bool m_flushed{false};
   ABExperimentPreferredMode m_preferred_mode;
+  ABExperimentState m_state;
 
   bool use_test();
   void setup_context();

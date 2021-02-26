@@ -16,7 +16,8 @@ std::unique_ptr<ABExperimentContext> ABExperimentContext::create(
     DexMethod* m,
     const std::string& exp_name,
     ABExperimentPreferredMode ab_experiment_mode) {
-  return std::make_unique<ABExperimentContextImpl>(cfg, m, ab_experiment_mode);
+  return std::make_unique<ABExperimentContextImpl>(
+      cfg, m, exp_name, ab_experiment_mode);
 }
 
 void ABExperimentContext::parse_experiments_states(

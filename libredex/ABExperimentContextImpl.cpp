@@ -44,9 +44,15 @@ void ABExperimentContextImpl::flush() {
 ABExperimentContextImpl::ABExperimentContextImpl(
     cfg::ControlFlowGraph* cfg,
     DexMethod* m,
+    const std::string& exp_name,
     ABExperimentPreferredMode preferred_mode)
     : m_original_method(m), m_cfg(cfg), m_preferred_mode(preferred_mode) {
   always_assert(cfg == &m->get_code()->cfg());
+
+  m_state = s_experiments_states.count(exp_name) == 0
+                ? ABExperimentState::CONTROL
+                : s_experiments_states[exp_name];
+
   setup_context();
 }
 
