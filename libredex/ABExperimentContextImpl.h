@@ -26,6 +26,8 @@ class ABExperimentContextImpl : public ABExperimentContext {
 
  private:
   static void set_global_mode(ABGlobalMode ab_global_mode = ABGlobalMode::NONE);
+  static void parse_experiments_states(
+      const std::unordered_map<std::string, std::string>& states);
 
   DexMethod* m_original_method{nullptr};
   cfg::ControlFlowGraph* m_cfg{nullptr};

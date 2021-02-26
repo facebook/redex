@@ -19,6 +19,11 @@ std::unique_ptr<ABExperimentContext> ABExperimentContext::create(
   return std::make_unique<ABExperimentContextImpl>(cfg, m, ab_experiment_mode);
 }
 
+void ABExperimentContext::parse_experiments_states(
+    const std::unordered_map<std::string, std::string>& states) {
+  ABExperimentContextImpl::parse_experiments_states(states);
+}
+
 void ABExperimentContext::force_test_mode() {
   ABExperimentContextImpl::set_global_mode(ABGlobalMode::TEST);
 }

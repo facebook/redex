@@ -1225,6 +1225,10 @@ int main(int argc, char* argv[]) {
     PassManager manager(passes, std::move(pg_config), args.config,
                         args.redex_options);
 
+    std::unordered_map<std::string, std::string> exp_states;
+    conf.get_json_config().get("ab_experiments_states", {}, exp_states);
+    ab_test::ABExperimentContext::parse_experiments_states(exp_states);
+
     if (conf.get_json_config().get("force_ab_exp_test_mode", false)) {
       ab_test::ABExperimentContext::force_test_mode();
     } else if (conf.get_json_config().get("force_ab_exp_control_mode", false)) {

@@ -45,6 +45,9 @@ class ABExperimentContext {
 
   virtual ~ABExperimentContext() {}
 
+  static void parse_experiments_states(
+      const std::unordered_map<std::string, std::string>& states);
+
   /**
    * Disables A/B experiments in this build of Redex.
    * When flushed, experiments will use their preferred mode instead of
