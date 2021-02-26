@@ -18,10 +18,6 @@ namespace {
 // experiment context instance exists.
 uint16_t INST_CNT{0};
 
-// Optional global mode, NONE falls back to the preferred_mode of each
-// experiment context instance.
-ABGlobalMode AB_GLOBAL_MODE = ABGlobalMode::NONE;
-
 std::unordered_map<std::string, ABExperimentState> s_experiments_states;
 } // namespace
 
@@ -41,12 +37,10 @@ void ABExperimentContextImpl::flush() {
   --INST_CNT;
 }
 
-ABExperimentContextImpl::ABExperimentContextImpl(
-    cfg::ControlFlowGraph* cfg,
-    DexMethod* m,
-    const std::string& exp_name,
-    ABExperimentPreferredMode preferred_mode)
-    : m_original_method(m), m_cfg(cfg), m_preferred_mode(preferred_mode) {
+ABExperimentContextImpl::ABExperimentContextImpl(cfg::ControlFlowGraph* cfg,
+                                                 DexMethod* m,
+                                                 const std::string& exp_name)
+    : m_original_method(m), m_cfg(cfg) {
   always_assert(cfg == &m->get_code()->cfg());
 
   m_state = s_experiments_states.count(exp_name) == 0
@@ -81,18 +75,7 @@ void ABExperimentContextImpl::parse_experiments_states(
 }
 
 bool ABExperimentContextImpl::use_test() {
-  return AB_GLOBAL_MODE == ABGlobalMode::TEST ||
-         (AB_GLOBAL_MODE == ABGlobalMode::NONE &&
-          m_preferred_mode == ABExperimentPreferredMode::PREFER_TEST);
-}
-
-void ABExperimentContextImpl::set_global_mode(ABGlobalMode ab_global_mode) {
-  if (AB_GLOBAL_MODE == ab_global_mode) {
-    return;
-  }
-  // no currently existing instance
-  always_assert(INST_CNT == 0);
-  AB_GLOBAL_MODE = ab_global_mode;
+  return m_state == ABExperimentState::TEST;
 }
 
 void ABExperimentContextImpl::setup_context() {

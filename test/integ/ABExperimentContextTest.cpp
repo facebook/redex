@@ -15,19 +15,15 @@
 namespace ab_test {
 
 struct ABExperimentContextTest : public RedexIntegrationTest {
-  static void set_global_mode(ABGlobalMode mode) {
-    ABExperimentContextImpl::set_global_mode(mode);
-  }
-
-  void SetUp() override { reset_ab_experiments_global_state(); }
+  void SetUp() override { ABExperimentContextImpl::reset_global_state(); }
 };
 
-void change_called_method(DexMethod* m,
+void change_called_method(const std::string& exp_name,
+                          DexMethod* m,
                           const std::string& original_method_name,
                           const std::string& new_method_name) {
   auto& cfg = m->get_code()->cfg();
-  ab_test::ABExperimentContextImpl experiment(
-      &cfg, m, "ab_experiment", ABExperimentPreferredMode::PREFER_TEST);
+  ab_test::ABExperimentContextImpl experiment(&cfg, m, exp_name);
 
   for (const auto& mie : cfg::InstructionIterable(cfg)) {
     IRInstruction* insn = mie.insn;
@@ -52,21 +48,23 @@ TEST_F(ABExperimentContextTest, testCFGConstructorBasicFunctionality) {
 
   m->get_code()->build_cfg(/* editable */ true);
 
-  ab_test::ABExperimentContextImpl experiment(
-      &m->get_code()->cfg(), m, "ab_experiment",
-      ab_test::ABExperimentPreferredMode::PREFER_TEST);
+  ab_test::ABExperimentContextImpl experiment(&m->get_code()->cfg(), m,
+                                              "ab_experiment");
   experiment.flush();
   ASSERT_TRUE(!m->get_code()->cfg_built());
 }
 
 TEST_F(ABExperimentContextTest, testTestingMode) {
-  set_global_mode(ABGlobalMode::TEST);
+  ab_test::ABExperimentContextImpl::parse_experiments_states(
+      {{"ab_experiment", "test"}});
+
   ASSERT_TRUE(classes);
   DexMethod* m =
       (*classes)[0]->find_method_from_simple_deobfuscated_name("getNum");
   ASSERT_TRUE(m != nullptr);
   m->get_code()->build_cfg(true);
-  change_called_method(m, "getSixPrivate", "amazingDirectMethod");
+  change_called_method("ab_experiment", m, "getSixPrivate",
+                       "amazingDirectMethod");
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
@@ -83,13 +81,15 @@ TEST_F(ABExperimentContextTest, testTestingMode) {
 }
 
 TEST_F(ABExperimentContextTest, testControlMode) {
-  set_global_mode(ABGlobalMode::CONTROL);
+  ab_test::ABExperimentContextImpl::parse_experiments_states(
+      {{"ab_experiment", "control"}});
   ASSERT_TRUE(classes);
   DexMethod* m =
       (*classes)[0]->find_method_from_simple_deobfuscated_name("getNum");
   ASSERT_TRUE(m != nullptr);
   m->get_code()->build_cfg(true);
-  change_called_method(m, "getSixPrivate", "amazingDirectMethod");
+  change_called_method("ab_experiment", m, "getSixPrivate",
+                       "amazingDirectMethod");
 
   auto expected_code = assembler::ircode_from_string(R"(
     (

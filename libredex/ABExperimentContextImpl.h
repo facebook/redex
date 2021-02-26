@@ -14,36 +14,32 @@ enum class ABExperimentState;
 
 namespace ab_test {
 
-enum class ABGlobalMode { CONTROL, TEST, NONE };
-
 class ABExperimentContextImpl : public ABExperimentContext {
  public:
   void flush() override;
 
   ABExperimentContextImpl(cfg::ControlFlowGraph* cfg,
                           DexMethod* m,
-                          const std::string& exp_name,
-                          ABExperimentPreferredMode preferred_mode);
+                          const std::string& exp_name);
 
   ~ABExperimentContextImpl() override;
 
- private:
-  static void set_global_mode(ABGlobalMode ab_global_mode = ABGlobalMode::NONE);
   static void parse_experiments_states(
       const std::unordered_map<std::string, std::string>& states);
+
+ private:
+  ABExperimentState m_state;
 
   DexMethod* m_original_method{nullptr};
   cfg::ControlFlowGraph* m_cfg{nullptr};
   std::unique_ptr<cfg::ControlFlowGraph> m_cloned_cfg{nullptr};
   bool m_flushed{false};
-  ABExperimentPreferredMode m_preferred_mode;
-  ABExperimentState m_state;
 
   bool use_test();
   void setup_context();
   static void reset_global_state();
 
-  friend class ABExperimentContext;
   friend struct ABExperimentContextTest;
+  friend class ABExperimentContext;
 };
 } // namespace ab_test

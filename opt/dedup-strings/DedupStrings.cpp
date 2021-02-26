@@ -586,9 +586,8 @@ void DedupStrings::rewrite_const_string_instructions(
         // Second, we actually rewrite them.
         std::unique_ptr<ab_test::ABExperimentContext> exp;
         if (!method_has_try_blocks(method)) {
-          exp = ab_test::ABExperimentContext::create(
-              cfg.get(), method, "dedup_strings",
-              ab_test::ABExperimentPreferredMode::PREFER_TEST);
+          exp = ab_test::ABExperimentContext::create(cfg.get(), method,
+                                                     "dedup_strings");
         }
         cfg::CFGMutation cfg_mut(*cfg);
 

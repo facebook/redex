@@ -34,16 +34,6 @@ struct RedexTest : public testing::Test {
   void reset_ab_experiments_global_state() {
     ab_test::ABExperimentContext::reset_global_state();
   }
-
-  static void force_experiments_control_mode() {
-    ab_test::ABExperimentContext::force_control_mode();
-  }
-  static void disable_ab_experiments() {
-    ab_test::ABExperimentContext::disable_ab_experiments();
-  }
-  static void force_experiments_test_mode() {
-    ab_test::ABExperimentContext::force_test_mode();
-  }
 };
 
 struct RedexIntegrationTest : public RedexTest {
