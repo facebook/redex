@@ -19,6 +19,7 @@ class TypeAnalysisAwareRemoveUnreachablePass
 
   void set_analysis_usage(AnalysisUsage& au) const override {
     au.add_required<GlobalTypeAnalysisPass>();
+    au.set_preserve_all();
   }
 
   std::unique_ptr<reachability::ReachableObjects> compute_reachable_objects(
