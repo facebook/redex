@@ -41,8 +41,9 @@ class ABExperimentContextImpl : public ABExperimentContext {
 
   bool use_test();
   void setup_context();
+  static void reset_global_state();
 
   friend class ABExperimentContext;
-  friend class ABExperimentContextTest;
+  friend struct ABExperimentContextTest;
 };
 } // namespace ab_test

@@ -81,5 +81,8 @@ class ABExperimentContext {
    * exists.
    */
   static void force_control_mode();
+
+ private:
+  static void reset_global_state();
 };
 } // namespace ab_test

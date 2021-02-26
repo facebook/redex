@@ -60,6 +60,8 @@ class InstructionSequenceOutlinerTest : public RedexIntegrationTest {
     RedexIntegrationTest::run_passes(passes, nullptr, m_cfg);
   }
 
+  void SetUp() override { reset_ab_experiments_global_state(); }
+
  private:
   Json::Value m_cfg;
 };

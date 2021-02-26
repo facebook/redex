@@ -14,11 +14,12 @@
 
 namespace ab_test {
 
-class ABExperimentContextTest : public RedexIntegrationTest {
- protected:
+struct ABExperimentContextTest : public RedexIntegrationTest {
   static void set_global_mode(ABGlobalMode mode) {
     ABExperimentContextImpl::set_global_mode(mode);
   }
+
+  void SetUp() override { reset_ab_experiments_global_state(); }
 };
 
 void change_called_method(DexMethod* m,

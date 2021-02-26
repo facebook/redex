@@ -107,3 +107,8 @@ void ABExperimentContextImpl::setup_context() {
   m_cloned_cfg = std::make_unique<cfg::ControlFlowGraph>();
   m_cfg->deep_copy(m_cloned_cfg.get());
 }
+
+void ABExperimentContextImpl::reset_global_state() {
+  s_experiments_states.clear();
+  INST_CNT = 0;
+}

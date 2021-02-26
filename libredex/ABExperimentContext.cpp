@@ -25,6 +25,10 @@ void ABExperimentContext::parse_experiments_states(
   ABExperimentContextImpl::parse_experiments_states(states);
 }
 
+void ABExperimentContext::reset_global_state() {
+  ABExperimentContextImpl::reset_global_state();
+}
+
 void ABExperimentContext::force_test_mode() {
   ABExperimentContextImpl::set_global_mode(ABGlobalMode::TEST);
 }

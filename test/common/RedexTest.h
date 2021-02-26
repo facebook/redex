@@ -31,6 +31,10 @@ struct RedexTest : public testing::Test {
 
   ~RedexTest() { delete g_redex; }
 
+  void reset_ab_experiments_global_state() {
+    ab_test::ABExperimentContext::reset_global_state();
+  }
+
   static void force_experiments_control_mode() {
     ab_test::ABExperimentContext::force_control_mode();
   }
