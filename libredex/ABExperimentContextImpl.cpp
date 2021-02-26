@@ -44,7 +44,7 @@ ABExperimentContextImpl::ABExperimentContextImpl(cfg::ControlFlowGraph* cfg,
   always_assert(cfg == &m->get_code()->cfg());
 
   m_state = s_experiments_states.count(exp_name) == 0
-                ? ABExperimentState::CONTROL
+                ? ABExperimentState::TEST
                 : s_experiments_states[exp_name];
 
   setup_context();
