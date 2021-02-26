@@ -182,16 +182,10 @@ TEST_F(InstructionSequenceOutlinerTest, in_try) {
 
   for (auto m : in_try_methods) {
     cfg::ScopedCFG scoped_cfg(m->get_code());
-    // TODO(T79690286): Change the number of expected println methods to 0 once
-    // we outline from methods with exceptions again
-    EXPECT_EQ(count_invokes(*scoped_cfg, println_method), 5);
+    EXPECT_EQ(count_invokes(*scoped_cfg, println_method), 0);
     auto outlined_method = find_invoked_method(*scoped_cfg, "$outline");
-    // TODO(T79690286): Change to EXPECT_NE once we outline from methods with
-    // exceptions again
-    EXPECT_EQ(outlined_method, nullptr);
-    // TODO(T79690286): Change the number of outlined methods to 1 once we
-    // outline from methods with exceptions again
-    EXPECT_EQ(count_invokes(*scoped_cfg, outlined_method), 0);
+    EXPECT_NE(outlined_method, nullptr);
+    EXPECT_EQ(count_invokes(*scoped_cfg, outlined_method), 1);
   }
 }
 
@@ -394,11 +388,9 @@ TEST_F(InstructionSequenceOutlinerTest, big_block_can_end_with_no_tries) {
   for (auto m : big_block_can_end_with_no_tries_methods) {
     cfg::ScopedCFG scoped_cfg(m->get_code());
     auto outlined_method = find_invoked_method(*scoped_cfg, "$outline");
-    // TODO(T82892854): Change to NE when fixing bug with D24905219 backed out
-    EXPECT_EQ(outlined_method, nullptr);
+    EXPECT_NE(outlined_method, nullptr);
     auto println_method_invokes = count_invokes(*scoped_cfg, println_method);
-    // TODO(T82892854): Change to EQ when fixing bug with D24905219 backed out
-    EXPECT_NE(println_method_invokes, 0);
+    EXPECT_EQ(println_method_invokes, 1);
   }
 }
 

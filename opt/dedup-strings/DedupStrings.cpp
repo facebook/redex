@@ -49,14 +49,6 @@ constexpr const char* METRIC_EXCLUDED_DUPLICATE_NON_LOAD_STRINGS =
 constexpr const char* METRIC_FACTORY_METHODS = "num_factory_methods";
 constexpr const char* METRIC_EXCLUDED_OUT_OF_FACTORY_METHODS_STRINGS =
     "num_excluded_out_of_factory_methods_strings";
-
-bool method_has_try_blocks(const DexMethod* method) {
-  const IRCode* code = method->get_code();
-  auto ii = cfg::ConstInstructionIterable(code->cfg());
-  return std::any_of(ii.begin(), ii.end(),
-                     [](auto& mie) { return mie.type == MFLOW_TRY; });
-}
-
 } // namespace
 
 void DedupStrings::run(DexStoresVector& stores) {
@@ -584,11 +576,9 @@ void DedupStrings::rewrite_const_string_instructions(
         }
 
         // Second, we actually rewrite them.
-        std::unique_ptr<ab_test::ABExperimentContext> exp;
-        if (!method_has_try_blocks(method)) {
-          exp = ab_test::ABExperimentContext::create(cfg.get(), method,
-                                                     "dedup_strings");
-        }
+        auto exp = ab_test::ABExperimentContext::create(cfg.get(), method,
+                                                        "dedup_strings");
+
         cfg::CFGMutation cfg_mut(*cfg);
 
         // From
@@ -634,9 +624,7 @@ void DedupStrings::rewrite_const_string_instructions(
           cfg_mut.replace(const_string_it, replacements);
         }
         cfg_mut.flush();
-        if (exp) {
-          exp->flush();
-        }
+        exp->flush();
       });
 }
 
