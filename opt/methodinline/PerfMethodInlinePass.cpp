@@ -130,13 +130,6 @@ void InlineForSpeedMethodProfiles::compute_hot_methods() {
 
 bool InlineForSpeedMethodProfiles::should_inline_impl(
     const DexMethod* caller_method, const DexMethod* callee_method) {
-  // TODO(T80442770): Remove this restriction once the experimentation framework
-  // can support methods with exceptions or we're done with the experiment.
-  if (caller_method->get_code()->has_try_blocks() ||
-      callee_method->get_code()->has_try_blocks()) {
-    return false;
-  }
-
   auto caller_insns = caller_method->get_code()->cfg().num_opcodes();
   // The cost of inlining large methods usually outweighs the benefits
   constexpr uint32_t MAX_NUM_INSNS = 240;

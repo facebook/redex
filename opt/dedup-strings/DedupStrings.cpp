@@ -18,7 +18,10 @@
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "InstructionSequenceOutliner.h"
+#include "MethodProfiles.h"
+#include "PassManager.h"
 #include "ScopedCFG.h"
+#include "Show.h"
 #include "Walkers.h"
 #include "locator.h"
 
@@ -46,14 +49,6 @@ constexpr const char* METRIC_EXCLUDED_DUPLICATE_NON_LOAD_STRINGS =
 constexpr const char* METRIC_FACTORY_METHODS = "num_factory_methods";
 constexpr const char* METRIC_EXCLUDED_OUT_OF_FACTORY_METHODS_STRINGS =
     "num_excluded_out_of_factory_methods_strings";
-
-bool method_has_try_blocks(const DexMethod* method) {
-  const IRCode* code = method->get_code();
-  auto ii = cfg::ConstInstructionIterable(code->cfg());
-  return std::any_of(ii.begin(), ii.end(),
-                     [](auto& mie) { return mie.type == MFLOW_TRY; });
-}
-
 } // namespace
 
 void DedupStrings::run(DexStoresVector& stores) {
@@ -73,10 +68,14 @@ void DedupStrings::run(DexStoresVector& stores) {
 
   // Compute set of non-load strings in each dex
   std::unordered_set<const DexString*> non_load_strings[dexen.size()];
-  for (size_t i = 0; i < dexen.size(); i++) {
+  auto wq = workqueue_foreach<size_t>([&](size_t i) {
     auto& strings = non_load_strings[i];
     gather_non_load_strings(dexen[i], &strings);
+  });
+  for (size_t i = 0; i < dexen.size(); i++) {
+    wq.add_item(i);
   }
+  wq.run_all();
 
   // For each string, figure out how many times it's loaded per dex
   ConcurrentMap<DexString*, std::unordered_map<size_t, size_t>> occurrences =
@@ -577,12 +576,9 @@ void DedupStrings::rewrite_const_string_instructions(
         }
 
         // Second, we actually rewrite them.
-        std::unique_ptr<ab_test::ABExperimentContext> exp;
-        if (!method_has_try_blocks(method)) {
-          exp = ab_test::ABExperimentContext::create(
-              cfg.get(), method, "dedup_strings",
-              ab_test::ABExperimentPreferredMode::PREFER_TEST);
-        }
+        auto exp = ab_test::ABExperimentContext::create(cfg.get(), method,
+                                                        "dedup_strings");
+
         cfg::CFGMutation cfg_mut(*cfg);
 
         // From
@@ -628,9 +624,7 @@ void DedupStrings::rewrite_const_string_instructions(
           cfg_mut.replace(const_string_it, replacements);
         }
         cfg_mut.flush();
-        if (exp) {
-          exp->flush();
-        }
+        exp->flush();
       });
 }
 

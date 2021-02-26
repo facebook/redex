@@ -1158,9 +1158,6 @@ static bool can_outline_from_method(
   if (sufficiently_hot_methods.count(method)) {
     return false;
   }
-  if (method->get_code() != nullptr && method->get_code()->has_try_blocks()) {
-    return false;
-  }
   return true;
 }
 

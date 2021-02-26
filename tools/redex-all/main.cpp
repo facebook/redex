@@ -1153,14 +1153,10 @@ int main(int argc, char* argv[]) {
     PassManager manager(passes, std::move(pg_config), args.config,
                         args.redex_options);
 
-    if (conf.get_json_config().get("force_ab_exp_test_mode", false)) {
-      ab_test::ABExperimentContext::force_test_mode();
-    } else if (conf.get_json_config().get("force_ab_exp_control_mode", false)) {
-      ab_test::ABExperimentContext::force_control_mode();
-    } else if (manager.get_redex_options().is_art_build ||
-               !args.config.get("enable_ab_experiments", false).asBool()) {
-      ab_test::ABExperimentContext::disable_ab_experiments();
-    }
+    std::unordered_map<std::string, std::string> exp_states;
+    conf.get_json_config().get("ab_experiments_states", {}, exp_states);
+    ab_test::ABExperimentContext::parse_experiments_states(
+        exp_states, manager.get_redex_options().is_art_build);
 
     {
       Timer t("Running optimization passes");
