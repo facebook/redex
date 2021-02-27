@@ -1228,7 +1228,7 @@ int main(int argc, char* argv[]) {
     std::unordered_map<std::string, std::string> exp_states;
     conf.get_json_config().get("ab_experiments_states", {}, exp_states);
     ab_test::ABExperimentContext::parse_experiments_states(
-        exp_states, manager.get_redex_options().is_art_build);
+        exp_states, !manager.get_redex_options().redacted);
 
     {
       Timer t("Running optimization passes");
