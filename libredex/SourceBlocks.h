@@ -43,7 +43,7 @@ struct BlockAccessor {
 };
 
 template <typename BlockStartFn, typename EdgeFn, typename BlockEndFn>
-void visit_in_order(ControlFlowGraph* cfg,
+void visit_in_order(const ControlFlowGraph* cfg,
                     const BlockStartFn& block_start_fn,
                     const EdgeFn& edge_fn,
                     const BlockEndFn& block_end_fn) {
