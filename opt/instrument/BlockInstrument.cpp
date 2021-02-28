@@ -12,6 +12,7 @@
 #include "GraphUtil.h"
 #include "MethodReference.h"
 #include "Show.h"
+#include "SourceBlocks.h"
 #include "TypeSystem.h"
 #include "Walkers.h"
 
@@ -522,24 +523,28 @@ BlockInfo create_block_info(cfg::Block* block, bool instrument_catches) {
 auto get_blocks_to_instrument(const cfg::ControlFlowGraph& cfg,
                               const size_t max_num_blocks,
                               bool instrument_catches) {
-  auto blocks = graph::postorder_sort<cfg::GraphInterface>(cfg);
+  // Collect basic blocks in the order of the source blocks (DFS).
+  std::vector<cfg::Block*> blocks;
 
-  // We don't instrument entry block.
-  //
-  // But there's an exceptional case. If the entry block is in a try-catch,
-  // which happens very rarely, inserting onMethodBegin will create an
-  // additional block because onMethodBegin may throw. The original entry block
-  // becomes non-entry. In this case, we still need to instrument the entry
-  // block at this moment. See testFunc10 in InstrumentBasicBlockTarget.java.
-  //
-  // So, remove entry block only if entry block isn't in any try-catch.
-  if (cfg.entry_block()->get_outgoing_throws_in_order().empty()) {
-    assert(blocks.back() == cfg.entry_block());
-    blocks.pop_back();
-  }
-
-  // Convert to reverse postorder (RPO).
-  std::reverse(blocks.begin(), blocks.end());
+  auto block_start_fn = [&](cfg::Block* b) {
+    // We don't instrument entry block.
+    //
+    // But there's an exceptional case. If the entry block is in a try-catch
+    // (which actually happens very rarely), inserting onMethodBegin will create
+    // an additional block because onMethodBegin may throw. The original entry
+    // block becomes non-entry. In this case, we still instrument the entry
+    // block at this moment. See testFunc10 in InstrumentBasicBlockTarget.java.
+    //
+    // So, don't add entry block if it is not in any try-catch.
+    if (cfg.entry_block() == b &&
+        cfg.entry_block()->get_outgoing_throws_in_order().empty()) {
+      return;
+    }
+    blocks.push_back(b);
+  };
+  source_blocks::impl::visit_in_order(
+      &cfg, block_start_fn, [](cfg::Block*, const cfg::Edge*) {},
+      [](cfg::Block*) {});
 
   // Future work: Pick minimal instrumentation candidates.
   std::vector<BlockInfo> block_info_list;
