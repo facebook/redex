@@ -293,6 +293,14 @@ IRList::iterator get_first_non_move_result_insn(cfg::Block* b) {
   return b->end();
 }
 
+IRList::iterator get_first_next_of_move_except(cfg::Block* b) {
+  IRList::iterator insert_pos = std::next(b->get_first_insn());
+  while (insert_pos != b->end() && insert_pos->type != MFLOW_OPCODE) {
+    insert_pos = std::next(insert_pos);
+  }
+  return insert_pos;
+}
+
 OnMethodExitMap build_onMethodExit_map(const DexClass& cls,
                                        const std::string& onMethodExit_name) {
   OnMethodExitMap onMethodExit_map;
@@ -483,10 +491,7 @@ BlockInfo create_block_info(cfg::Block* block,
     // move-exception must only ever occur as the first instruction of an
     // exception handler; anywhere else is invalid. So, take the next
     // instruction of the move-exception.
-    insert_pos = std::next(block->get_first_insn());
-    while (insert_pos != block->end() && insert_pos->type != MFLOW_OPCODE) {
-      insert_pos = std::next(insert_pos);
-    }
+    insert_pos = get_first_next_of_move_except(block);
     type = type | BlockType::MoveException;
   } else {
     insert_pos = block->get_first_non_param_loading_insn();
@@ -616,7 +621,11 @@ MethodInfo instrument_basic_blocks(IRCode& code,
       insert_prologue_insts(cfg, onMethodBegin, num_vectors, method_offset);
   const size_t after_prologue_num_non_entry_blocks = cfg.blocks().size() - 1;
 
-  // Step 3: Insert onMethodExit in exit block(s).
+  // Step 3: Insert block coverage update instructions to each blocks.
+  //
+  insert_block_coverage_computations(blocks, reg_vectors);
+
+  // Step 4: Insert onMethodExit in exit block(s).
   //
   // TODO: What about no exit blocks possibly due to infinite loops? Such case
   // is extremely rare in our apps. In this case, let us do method tracing by
@@ -624,10 +633,6 @@ MethodInfo instrument_basic_blocks(IRCode& code,
   const size_t num_exit_calls = insert_onMethodExit_calls(
       cfg, reg_vectors, method_offset, reg_method_offset, onMethodExit_map,
       max_vector_arity);
-
-  // Step 4: Insert block coverage update instructions to each blocks.
-  //
-  insert_block_coverage_computations(blocks, reg_vectors);
   cfg.recompute_registers_size();
 
   auto count = [&blocks](BlockType type) -> size_t {
