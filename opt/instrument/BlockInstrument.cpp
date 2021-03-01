@@ -95,7 +95,6 @@ struct MethodInfo {
   size_t num_non_entry_blocks = 0;
   size_t num_vectors = 0;
   size_t num_exit_calls = 0;
-  uint64_t signature = 0;
 
   size_t num_empty_blocks = 0;
   size_t num_useless_blocks = 0;
@@ -175,10 +174,10 @@ void write_metadata(const ConfigFiles& cfg,
       << all_info.size() << std::endl;
 
   // The real CSV-style metadata follows.
-  const std::array<std::string, 9> headers = {
-      "offset",    "name",      "instrument",        "non_entry_blocks",
-      "vectors",   "signature", "bit_id_2_block_id", "rejected_blocks",
-      "src_blocks"};
+  const std::array<std::string, 8> headers = {
+      "offset",           "name",      "instrument",
+      "non_entry_blocks", "vectors",   "bit_id_2_block_id",
+      "rejected_blocks",  "src_blocks"};
   ofs << boost::algorithm::join(headers, ",") << "\n";
 
   auto write_block_id_map = [](const auto& bit_id_2_block_id) {
@@ -230,13 +229,12 @@ void write_metadata(const ConfigFiles& cfg,
   };
 
   for (const auto& info : all_info) {
-    const std::array<std::string, 9> fields = {
+    const std::array<std::string, 8> fields = {
         std::to_string(info.offset),
         std::to_string(method_dict.at(info.method)),
         std::to_string(static_cast<int>(get_instrumented_type(info))),
         std::to_string(info.num_non_entry_blocks),
         std::to_string(info.num_vectors),
-        to_hex(info.signature),
         write_block_id_map(info.bit_id_2_block_id),
         rejected_blocks(info.rejected_blocks),
         source_blocks(info.bit_id_2_source_blocks),
@@ -245,29 +243,6 @@ void write_metadata(const ConfigFiles& cfg,
   }
 
   TRACE(INSTRUMENT, 2, "Metadata file was written to: %s", SHOW(file_name));
-}
-
-uint64_t compute_cfg_signature(const std::vector<BlockInfo>& blocks) {
-  // Blocks should be sorted in a deterministic way like a RPO.
-  // Encode block shapes with opcodes lists per block.
-  std::ostringstream serialized;
-  for (const auto& info : blocks) {
-    const cfg::Block* b = info.block;
-    serialized << b->id();
-    for (const auto& p : b->preds()) {
-      serialized << p->src()->id();
-    }
-    for (const auto& s : b->succs()) {
-      serialized << s->src()->id();
-    }
-    for (const auto& i : *b) {
-      if (i.type == MFLOW_OPCODE) {
-        // Don't write srcs and dests. Too much. Just opcode would be enough.
-        serialized << static_cast<uint16_t>(i.insn->opcode());
-      }
-    }
-  }
-  return std::hash<std::string>{}(serialized.str());
 }
 
 std::vector<cfg::Block*> only_terminal_return_or_throw_blocks(
@@ -668,8 +643,6 @@ MethodInfo instrument_basic_blocks(IRCode& code,
   info.num_non_entry_blocks = cfg.blocks().size() - 1;
   info.num_vectors = num_vectors;
   info.num_exit_calls = num_exit_calls;
-  // This CFG hash/signature is to merge data from different build ids.
-  info.signature = compute_cfg_signature(blocks);
   info.num_empty_blocks = count(BlockType::Empty);
   info.num_useless_blocks = count(BlockType::Useless);
   info.num_no_source_blocks = count(BlockType::NoSourceBlock);
@@ -710,12 +683,12 @@ MethodInfo instrument_basic_blocks(IRCode& code,
   // Check the post condition:
   //   num_instrumented_blocks == num_non_entry_blocks - num_rejected_blocks
   if (get_instrumented_type(info) != InstrumentedType::MethodOnly &&
-      info.bit_id_2_block_id.size() !=
+      num_to_instrument !=
           info.num_non_entry_blocks - info.rejected_blocks.size()) {
     TRACE(INSTRUMENT, 7, "Post condition violation! in %s", SHOW(method));
     TRACE(INSTRUMENT, 7, "- Instrumented type: %d",
           get_instrumented_type(info));
-    TRACE(INSTRUMENT, 7, "  %zu != %zu - %zu", info.bit_id_2_block_id.size(),
+    TRACE(INSTRUMENT, 7, "  %zu != %zu - %zu", num_to_instrument,
           info.num_non_entry_blocks, info.rejected_blocks.size());
     TRACE(INSTRUMENT, 7, "  original non-entry blocks: %zu",
           origin_num_non_entry_blocks);
