@@ -28,9 +28,8 @@ struct BlockAccessor {
   static void push_source_block(Block* b,
                                 std::unique_ptr<SourceBlock> src_block) {
     auto it = b->get_first_non_param_loading_insn();
-    if (it != b->end() &&
-        (opcode::is_move_result_pseudo(it->insn->opcode()) ||
-         opcode::is_move_result(it->insn->opcode()))) {
+    if (it != b->end() && (opcode::is_move_result_pseudo(it->insn->opcode()) ||
+                           opcode::is_move_result(it->insn->opcode()))) {
       ++it;
     }
     auto mie = new MethodItemEntry(std::move(src_block));
@@ -174,6 +173,27 @@ inline InsertResult insert_source_blocks(DexMethod* method,
   impl::visit_in_order(cfg, block_start_fn, edge_fn, block_end_fn);
 
   return {cfg->blocks().size(), oss.str()};
+}
+
+inline bool has_source_blocks(const cfg::Block* b) {
+  for (const auto& mie : *b) {
+    if (mie.type == MFLOW_SOURCE_BLOCK) {
+      return true;
+    }
+  }
+  return false;
+}
+
+inline std::vector<const SourceBlock*> gather_source_blocks(
+    const cfg::Block* b) {
+  std::vector<const SourceBlock*> ret;
+  for (const auto& mie : *b) {
+    if (mie.type != MFLOW_SOURCE_BLOCK) {
+      continue;
+    }
+    ret.push_back(mie.src_block.get());
+  }
+  return ret;
 }
 
 } // namespace source_blocks
