@@ -39,7 +39,7 @@ using namespace method_profiles;
 // is used for the `hits` of a method.
 class MethodContextContext {
  public:
-  const std::vector<std::string> m_interaction_list;
+  const std::vector<std::string> m_interaction_list{};
 
   // Actual data for a method.
   class MethodContext {
