@@ -176,4 +176,25 @@ inline InsertResult insert_source_blocks(DexMethod* method,
   return {cfg->blocks().size(), oss.str()};
 }
 
+inline bool has_source_blocks(const cfg::Block* b) {
+  for (const auto& mie : *b) {
+    if (mie.type == MFLOW_SOURCE_BLOCK) {
+      return true;
+    }
+  }
+  return false;
+}
+
+inline std::vector<const SourceBlock*> gather_source_blocks(
+    const cfg::Block* b) {
+  std::vector<const SourceBlock*> ret;
+  for (const auto& mie : *b) {
+    if (mie.type != MFLOW_SOURCE_BLOCK) {
+      continue;
+    }
+    ret.push_back(mie.src_block.get());
+  }
+  return ret;
+}
+
 } // namespace source_blocks

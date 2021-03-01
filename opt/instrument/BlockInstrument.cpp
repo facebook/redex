@@ -45,6 +45,7 @@ enum class BlockType {
   Normal = 1 << 3,
   Catch = 1 << 4,
   MoveException = 1 << 5,
+  NoSourceBlock = 1 << 6,
 };
 
 enum class InstrumentedType {
@@ -95,6 +96,8 @@ struct MethodInfo {
 
   size_t num_empty_blocks = 0;
   size_t num_useless_blocks = 0;
+  size_t num_no_source_blocks = 0;
+  size_t num_blocks_too_large = 0;
   size_t num_catches = 0;
   size_t num_instrumented_catches = 0;
   size_t num_instrumented_blocks = 0;
@@ -481,7 +484,8 @@ size_t insert_onMethodExit_calls(
   return exit_blocks.size();
 }
 
-BlockInfo create_block_info(cfg::Block* block, bool instrument_catches) {
+BlockInfo create_block_info(cfg::Block* block,
+                            const InstrumentPass::Options& options) {
   if (block->num_opcodes() == 0) {
     return {block, BlockType::Empty, {}};
   }
@@ -489,7 +493,7 @@ BlockInfo create_block_info(cfg::Block* block, bool instrument_catches) {
   // TODO: There is a potential register allocation issue when we instrument
   // extremely large number of basic blocks. We've found a case. So, for now,
   // we don't instrument catch blocks with the hope these blocks are cold.
-  if (block->is_catch() && !instrument_catches) {
+  if (block->is_catch() && !options.instrument_catches) {
     return {block, BlockType::Catch, {}};
   }
 
@@ -514,12 +518,20 @@ BlockInfo create_block_info(cfg::Block* block, bool instrument_catches) {
     return {block, BlockType::Useless | type, {}};
   }
 
+  // No source block? Then we can't map back block coverage data to source
+  // block. No need to instrument unless this block is exit block (no succs).
+  // Exit blocks will have onMethodEnd. We still need to instrument anyhow.
+  if (!options.instrument_blocks_without_source_block &&
+      !source_blocks::has_source_blocks(block) && !block->succs().empty()) {
+    return {block, BlockType::NoSourceBlock | type, {}};
+  }
+
   return {block, BlockType::Instrumentable | type, insert_pos};
 }
 
 auto get_blocks_to_instrument(const cfg::ControlFlowGraph& cfg,
                               const size_t max_num_blocks,
-                              bool instrument_catches) {
+                              const InstrumentPass::Options& options) {
   // Collect basic blocks in the order of the source blocks (DFS).
   std::vector<cfg::Block*> blocks;
 
@@ -548,10 +560,11 @@ auto get_blocks_to_instrument(const cfg::ControlFlowGraph& cfg,
   block_info_list.reserve(blocks.size());
   BitId id = 0;
   for (cfg::Block* b : blocks) {
-    block_info_list.emplace_back(create_block_info(b, instrument_catches));
+    block_info_list.emplace_back(create_block_info(b, options));
     auto& info = block_info_list.back();
     if ((info.type & BlockType::Instrumentable) == BlockType::Instrumentable) {
       if (id >= max_num_blocks) {
+        // This is effectively rejecting all blocks.
         return std::make_tuple(std::vector<BlockInfo>{}, BitId(0),
                                true /* too many block */);
       }
@@ -582,17 +595,6 @@ void insert_block_coverage_computations(const std::vector<BlockInfo>& blocks,
   }
 }
 
-std::vector<const SourceBlock*> gather_source_blocks(const cfg::Block* b) {
-  std::vector<const SourceBlock*> ret;
-  for (const auto& mie : *b) {
-    if (mie.type != MFLOW_SOURCE_BLOCK) {
-      continue;
-    }
-    ret.push_back(mie.src_block.get());
-  }
-  return ret;
-}
-
 MethodInfo instrument_basic_blocks(IRCode& code,
                                    DexMethod* method,
                                    DexMethod* onMethodBegin,
@@ -600,7 +602,7 @@ MethodInfo instrument_basic_blocks(IRCode& code,
                                    const size_t max_vector_arity,
                                    const size_t method_offset,
                                    const size_t max_num_blocks,
-                                   bool instrument_catches) {
+                                   const InstrumentPass::Options& options) {
   using namespace cfg;
 
   code.build_cfg(/*editable*/ true);
@@ -616,7 +618,7 @@ MethodInfo instrument_basic_blocks(IRCode& code,
   size_t num_to_instrument;
   bool too_many_blocks;
   std::tie(blocks, num_to_instrument, too_many_blocks) =
-      get_blocks_to_instrument(cfg, max_num_blocks, instrument_catches);
+      get_blocks_to_instrument(cfg, max_num_blocks, options);
 
   if (DEBUG_CFG) {
     TRACE(INSTRUMENT, 9, "BEFORE: %s, %s", show_deobfuscated(method).c_str(),
@@ -667,6 +669,8 @@ MethodInfo instrument_basic_blocks(IRCode& code,
   info.signature = compute_cfg_signature(blocks);
   info.num_empty_blocks = count(BlockType::Empty);
   info.num_useless_blocks = count(BlockType::Useless);
+  info.num_no_source_blocks = count(BlockType::NoSourceBlock);
+  info.num_blocks_too_large = too_many_blocks ? info.num_non_entry_blocks : 0;
   info.num_catches = count(BlockType::Catch);
   info.num_instrumented_catches =
       count(BlockType::Catch | BlockType::Instrumentable);
@@ -678,11 +682,21 @@ MethodInfo instrument_basic_blocks(IRCode& code,
   for (const auto& i : blocks) {
     if (i.is_instrumentable()) {
       info.bit_id_2_block_id.push_back(i.block->id());
-      info.bit_id_2_source_blocks.emplace_back(gather_source_blocks(i.block));
+      info.bit_id_2_source_blocks.emplace_back(
+          source_blocks::gather_source_blocks(i.block));
     } else {
       info.rejected_blocks[i.block->id()] = i.type;
     }
   }
+
+  const size_t num_rejected_blocks =
+      info.num_empty_blocks + info.num_useless_blocks +
+      info.num_no_source_blocks + info.num_blocks_too_large +
+      (info.num_catches - info.num_instrumented_catches);
+  always_assert(info.num_non_entry_blocks ==
+                info.num_instrumented_blocks + num_rejected_blocks);
+  always_assert(too_many_blocks ||
+                info.rejected_blocks.size() == num_rejected_blocks);
 
   if (DEBUG_CFG) {
     TRACE(INSTRUMENT, 9, "AFTER: %s, %s", show_deobfuscated(method).c_str(),
@@ -758,7 +772,7 @@ void print_stats(const std::vector<MethodInfo>& instrumented_methods,
   // ----- Print summary
   TRACE(INSTRUMENT, 4, "Maximum blocks for block instrumentation: %zu",
         max_num_blocks);
-  TRACE(INSTRUMENT, 4, "Total instrumented: %zu", total_instrumented);
+  TRACE(INSTRUMENT, 4, "Total instrumented methods: %zu", total_instrumented);
   TRACE(INSTRUMENT, 4, "- Block + method instrumented: %zu",
         total_block_instrumented);
   TRACE(INSTRUMENT, 4, "- Only method instrumented: %zu",
@@ -784,15 +798,15 @@ void print_stats(const std::vector<MethodInfo>& instrumented_methods,
     }
     TRACE(INSTRUMENT, 4, "Total/average bit vectors: %zu, %s",
           total_bit_vectors,
-          divide(total_bit_vectors, total_block_instrumented).c_str());
+          SHOW(divide(total_bit_vectors, total_block_instrumented)));
   }
 
   // ----- Instrumented block stats
   TRACE(INSTRUMENT, 4, "Instrumented / actual non-entry block stats:");
+  size_t total_instrumented_blocks = 0;
+  size_t total_non_entry_blocks = 0;
   {
     std::map<int, std::pair<size_t /*instrumented*/, size_t /*block*/>> dist;
-    size_t total_instrumented_blocks = 0;
-    size_t total_non_entry_blocks = 0;
     for (const auto& i : instrumented_methods) {
       if (i.too_many_blocks) {
         ++dist[-1].first;
@@ -811,23 +825,47 @@ void print_stats(const std::vector<MethodInfo>& instrumented_methods,
     }
     TRACE(INSTRUMENT, 4, "Total/average instrumented blocks: %zu, %s",
           total_instrumented_blocks,
-          divide(total_instrumented_blocks, total_block_instrumented).c_str());
+          SHOW(divide(total_instrumented_blocks, total_block_instrumented)));
     TRACE(INSTRUMENT, 4, "Total/average non-entry blocks: %zu, %s",
           total_non_entry_blocks,
-          divide(total_non_entry_blocks, total_instrumented).c_str());
+          SHOW(divide(total_non_entry_blocks, total_instrumented)));
   }
 
-  const int total_catches = std::accumulate(
-      instrumented_methods.begin(), instrumented_methods.end(), int(0),
+  const size_t total_catches = std::accumulate(
+      instrumented_methods.begin(), instrumented_methods.end(), size_t(0),
       [](int a, auto&& i) { return a + i.num_catches; });
-  const int total_instrumented_catches = std::accumulate(
-      instrumented_methods.begin(), instrumented_methods.end(), int(0),
+  const size_t total_instrumented_catches = std::accumulate(
+      instrumented_methods.begin(), instrumented_methods.end(), size_t(0),
       [](int a, auto&& i) { return a + i.num_instrumented_catches; });
-  TRACE(INSTRUMENT, 4, "Total catch blocks: %d", total_catches);
-  TRACE(INSTRUMENT, 4, "Instrumented catch blocks: %d",
-        total_instrumented_catches);
-  TRACE(INSTRUMENT, 4, "Ignored catch blocks: %d",
-        total_catches - total_instrumented_catches);
+
+  // ----- Instrumented/skipped block stats
+  auto print_ratio = [total_non_entry_blocks](size_t num) {
+    std::stringstream ss;
+    ss << num << std::fixed << std::setprecision(2) << " ("
+       << (num * 100. / total_non_entry_blocks) << "%)";
+    return ss.str();
+  };
+  TRACE(INSTRUMENT, 4, "Total non-entry blocks: %zu", total_non_entry_blocks);
+  TRACE(INSTRUMENT, 4, "- Instrumented blocks: %s",
+        SHOW(print_ratio(total_instrumented_blocks)));
+  TRACE(INSTRUMENT, 4, "- Skipped catch blocks: %s",
+        SHOW(print_ratio(total_catches - total_instrumented_catches)));
+  TRACE(INSTRUMENT, 4, "- Skipped due to no source block: %s",
+        SHOW(print_ratio(std::accumulate(
+            instrumented_methods.begin(), instrumented_methods.end(), size_t(0),
+            [](size_t a, auto&& i) { return a + i.num_no_source_blocks; }))));
+  TRACE(INSTRUMENT, 4, "- Skipped due to too large methods: %s",
+        SHOW(print_ratio(std::accumulate(
+            instrumented_methods.begin(), instrumented_methods.end(), size_t(0),
+            [](size_t a, auto&& i) { return a + i.num_blocks_too_large; }))));
+  TRACE(INSTRUMENT, 4, "- Skipped empty blocks: %s",
+        SHOW(print_ratio(std::accumulate(
+            instrumented_methods.begin(), instrumented_methods.end(), size_t(0),
+            [](size_t a, auto&& i) { return a + i.num_empty_blocks; }))));
+  TRACE(INSTRUMENT, 4, "- Skipped useless blocks: %s",
+        SHOW(print_ratio(std::accumulate(
+            instrumented_methods.begin(), instrumented_methods.end(), size_t(0),
+            [](size_t a, auto&& i) { return a + i.num_useless_blocks; }))));
 
   // ----- Instrumented exit block stats
   TRACE(INSTRUMENT, 4, "Instrumented exit block stats:");
@@ -851,7 +889,7 @@ void print_stats(const std::vector<MethodInfo>& instrumented_methods,
             SHOW(print(p.second, total_instrumented, acc)));
     }
     TRACE(INSTRUMENT, 4, "Total/average instrumented exits: %zu, %s",
-          total_exits, divide(total_exits, total_instrumented).c_str());
+          total_exits, SHOW(divide(total_exits, total_instrumented)));
   }
 
   // ----- Catch block stats
@@ -869,7 +907,7 @@ void print_stats(const std::vector<MethodInfo>& instrumented_methods,
             SHOW(print(p.second, total_instrumented, acc)));
     }
     TRACE(INSTRUMENT, 4, "Total/average catch blocks: %zu, %s", total,
-          divide(total, total_instrumented).c_str());
+          SHOW(divide(total, total_instrumented)));
   }
 
   auto print_two_dists = [&divide, &print, &instrumented_methods,
@@ -897,9 +935,9 @@ void print_stats(const std::vector<MethodInfo>& instrumented_methods,
             SHOW(print(p.second.second, total_instrumented, accs[1])));
     }
     TRACE(INSTRUMENT, 4, "Total/average %s blocks: %zu, %s", name1, total1,
-          divide(total1, total_block_instrumented).c_str());
+          SHOW(divide(total1, total_block_instrumented)));
     TRACE(INSTRUMENT, 4, "Total/average %s blocks: %zu, %s", name2, total2,
-          divide(total2, total_block_instrumented).c_str());
+          SHOW(divide(total2, total_block_instrumented)));
   };
 
   TRACE(INSTRUMENT, 4, "Empty / useless block stats:");
@@ -1054,7 +1092,7 @@ void BlockInstrumentHelper::do_basic_block_tracing(
 
     instrumented_methods.emplace_back(instrument_basic_blocks(
         code, method, onMethodBegin, onMethodExit_map, max_vector_arity,
-        method_offset, max_num_blocks, options.instrument_catches));
+        method_offset, max_num_blocks, options));
 
     const auto& method_info = instrumented_methods.back();
     if (method_info.too_many_blocks) {

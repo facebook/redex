@@ -527,6 +527,8 @@ void InstrumentPass::bind_config() {
   // 0 means the block tracing is effectively method-only tracing.
   bind("max_num_blocks", 0, m_options.max_num_blocks);
   bind("instrument_catches", false, m_options.instrument_catches);
+  bind("instrument_blocks_without_source_block", false,
+       m_options.instrument_blocks_without_source_block);
   bind("instrument_only_root_store", false,
        m_options.instrument_only_root_store);
 

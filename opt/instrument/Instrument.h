@@ -74,6 +74,7 @@ class InstrumentPass : public Pass {
     std::vector<std::string> analysis_method_names;
     int64_t max_num_blocks;
     bool instrument_catches;
+    bool instrument_blocks_without_source_block;
     bool instrument_only_root_store;
   };
 
