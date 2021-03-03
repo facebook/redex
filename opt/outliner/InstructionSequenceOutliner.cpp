@@ -2723,7 +2723,7 @@ PerfSensitivity parse_perf_sensitivity(const std::string& str) {
 } // namespace
 
 void InstructionSequenceOutliner::bind_config() {
-  bind("max_insns_size", m_config.min_insns_size, m_config.min_insns_size,
+  bind("min_insns_size", m_config.min_insns_size, m_config.min_insns_size,
        "Minimum number of instructions to be outlined in a sequence");
   bind("max_insns_size", m_config.max_insns_size, m_config.max_insns_size,
        "Maximum number of instructions to be outlined in a sequence");
