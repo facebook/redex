@@ -32,13 +32,14 @@ std::vector<MethodOrderedSet> group_similar_methods(
  * Note that there's no side affects other than the grouping here.
  */
 std::vector<MethodOrderedSet> group_identical_methods(
-    const std::vector<DexMethod*>&);
+    const std::vector<DexMethod*>&, bool dedup_throw_blocks);
 
 /**
  * Check if the given list of methods share the same signature and identical
  * code.
  */
-bool are_methods_identical(const std::vector<DexMethod*>&);
+bool are_deduplicatable(const std::vector<DexMethod*>&,
+                        bool dedup_throw_blocks);
 
 /**
  * Identify identical methods and replace references to all duplicated methods
@@ -50,6 +51,7 @@ bool are_methods_identical(const std::vector<DexMethod*>&);
 size_t dedup_methods(
     const Scope& scope,
     const std::vector<DexMethod*>& to_dedup,
+    bool dedup_throw_blocks,
     std::vector<DexMethod*>& replacements,
     boost::optional<std::unordered_map<DexMethod*, MethodOrderedSet>>&
         new_to_old);
