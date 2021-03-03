@@ -14,7 +14,7 @@
 #include "InlineForSpeed.h"
 #include "MethodInliner.h"
 #include "MethodProfiles.h"
-#include "RandomForest.h"
+#include "PGIForest.h"
 #include "Resolver.h"
 #include "Show.h"
 #include "Trace.h"
@@ -215,7 +215,7 @@ using namespace random_forest;
 class InlineForSpeedDecisionTrees final : public InlineForSpeedBase {
  public:
   InlineForSpeedDecisionTrees(const MethodProfiles* method_profiles,
-                              Forest&& forest)
+                              PGIForest&& forest)
       : m_method_context_context(method_profiles),
         m_forest(std::move(forest)) {}
 
@@ -277,7 +277,7 @@ class InlineForSpeedDecisionTrees final : public InlineForSpeedBase {
 
   MethodContextContext m_method_context_context;
   std::unordered_map<const DexMethod*, MethodContext> m_cache;
-  Forest m_forest;
+  PGIForest m_forest;
 };
 
 } // namespace
@@ -285,7 +285,7 @@ class InlineForSpeedDecisionTrees final : public InlineForSpeedBase {
 PerfMethodInlinePass::~PerfMethodInlinePass() {}
 
 struct PerfMethodInlinePass::Config {
-  boost::optional<random_forest::Forest> forest = boost::none;
+  boost::optional<random_forest::PGIForest> forest = boost::none;
 };
 
 void PerfMethodInlinePass::bind_config() {
@@ -303,8 +303,8 @@ void PerfMethodInlinePass::bind_config() {
       }
       // For simplicity, accept an empty file.
       if (!buffer.str().empty()) {
-        this->m_config->forest =
-            random_forest::Forest::deserialize(buffer.str());
+        this->m_config->forest = random_forest::PGIForest::deserialize(
+            buffer.str(), random_forest::get_default_feature_function_map());
         TRACE(METH_PROF, 1, "Loaded a forest with %zu decision trees.",
               this->m_config->forest->size());
       }
