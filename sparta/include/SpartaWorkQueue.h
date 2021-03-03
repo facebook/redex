@@ -257,7 +257,6 @@ void SpartaWorkQueue<Input, Executor>::add_item(Input task, size_t worker_id) {
  */
 template <class Input, typename Executor>
 void SpartaWorkQueue<Input, Executor>::run_all() {
-  std::vector<boost::thread> all_threads;
   m_state_counters.num_non_empty = 0;
   m_state_counters.num_running = 0;
   m_state_counters.waiter->take_all();
@@ -304,6 +303,9 @@ void SpartaWorkQueue<Input, Executor>::run_all() {
       ++m_state_counters.num_non_empty;
     }
   }
+
+  std::vector<boost::thread> all_threads;
+  all_threads.reserve(m_num_threads);
   for (size_t i = 0; i < m_num_threads; ++i) {
     boost::thread::attributes attrs;
     attrs.set_stack_size(8 * 1024 * 1024);
