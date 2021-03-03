@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include <string>
+
 namespace shrinker {
 
 /**
@@ -23,6 +25,9 @@ struct ShrinkerConfig {
   // Internally used option that decides whether to compute pure methods with a
   // relatively expensive analysis over the scope
   bool compute_pure_methods{true};
+
+  // Decide which functions to run register allocation on.
+  std::string reg_alloc_random_forest;
 };
 
 } // namespace shrinker

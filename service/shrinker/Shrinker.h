@@ -17,6 +17,7 @@
 #include "IPConstantPropagationAnalysis.h"
 #include "LocalDce.h"
 #include "MethodProfiles.h"
+#include "RandomForest.h"
 #include "ShrinkerConfig.h"
 #include "Timer.h"
 
@@ -46,6 +47,7 @@ class Shrinker {
     return m_dedup_blocks_stats;
   }
   size_t get_methods_shrunk() const { return m_methods_shrunk; }
+  size_t get_methods_reg_alloced() const { return m_methods_reg_alloced; }
 
   bool enabled() const { return m_enabled; }
 
@@ -73,7 +75,17 @@ class Shrinker {
     return m_reg_alloc_timer.get_seconds();
   }
 
+  struct MethodContext {
+    uint32_t m_regs{0};
+    uint32_t m_insns{0};
+    uint32_t m_blocks{0};
+    uint32_t m_edges{0};
+  };
+
+  using ShrinkerForest = ::random_forest::Forest<const MethodContext&>;
+
  private:
+  ShrinkerForest m_forest;
   const XStoreRefs m_xstores;
   const ShrinkerConfig m_config;
   const bool m_enabled;
@@ -96,6 +108,7 @@ class Shrinker {
   dedup_blocks_impl::Stats m_dedup_blocks_stats;
   AccumulatingTimer m_reg_alloc_timer;
   size_t m_methods_shrunk{0};
+  size_t m_methods_reg_alloced{0};
 };
 
 } // namespace shrinker

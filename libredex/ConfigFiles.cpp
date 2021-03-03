@@ -236,6 +236,8 @@ void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
   jw.get("blocklist", {}, inliner_config->m_blocklist);
   jw.get("caller_blocklist", {}, inliner_config->m_caller_blocklist);
   jw.get("intradex_allowlist", {}, inliner_config->m_intradex_allowlist);
+  jw.get("reg_alloc_random_forest", "",
+         shrinker_config.reg_alloc_random_forest);
 
   std::vector<std::string> no_inline_annos;
   jw.get("no_inline_annos", {}, no_inline_annos);

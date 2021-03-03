@@ -7,9 +7,64 @@
 
 #include "Shrinker.h"
 
+#include "RandomForest.h"
 #include "RegisterAllocation.h"
 
 namespace shrinker {
+
+namespace {
+
+inline Shrinker::ShrinkerForest::FeatureFunctionMap
+get_default_feature_function_map() {
+  return {
+      // Caller.
+      {"caller_insns",
+       [](const Shrinker::MethodContext& caller) { return caller.m_insns; }},
+      {"caller_regs",
+       [](const Shrinker::MethodContext& caller) { return caller.m_regs; }},
+      {"caller_blocks",
+       [](const Shrinker::MethodContext& caller) { return caller.m_blocks; }},
+      {"caller_edges",
+       [](const Shrinker::MethodContext& caller) { return caller.m_edges; }},
+  };
+}
+
+Shrinker::ShrinkerForest load(const std::string& filename) {
+  std::string content;
+  if (!filename.empty() && filename != "none") {
+    std::stringstream buffer;
+    {
+      std::ifstream ifs(filename);
+      always_assert(ifs);
+      buffer << ifs.rdbuf();
+      always_assert(!ifs.fail());
+    }
+    content = buffer.str();
+  }
+  if (content.empty()) {
+    std::cerr << "No shrinker forest: " << filename << std::endl;
+    return Shrinker::ShrinkerForest(); // Empty forest accepts everything.
+  }
+  return Shrinker::ShrinkerForest::deserialize(
+      content, get_default_feature_function_map());
+}
+
+bool should_shrink(IRCode* code, const Shrinker::ShrinkerForest& forest) {
+  if (!code->editable_cfg_built()) {
+    code->build_cfg(/* editable= */ true);
+  }
+  const auto& cfg = code->cfg();
+
+  size_t regs = cfg.get_registers_size();
+  size_t insn = cfg.num_opcodes();
+  size_t blocks = cfg.num_blocks();
+  size_t edges = cfg.num_edges();
+
+  return forest.accept(Shrinker::MethodContext{
+      (uint32_t)regs, (uint32_t)insn, (uint32_t)blocks, (uint32_t)edges});
+}
+
+} // namespace
 
 Shrinker::Shrinker(
     DexStoresVector& stores,
@@ -17,7 +72,8 @@ Shrinker::Shrinker(
     const ShrinkerConfig& config,
     const std::unordered_set<DexMethodRef*>& configured_pure_methods,
     const std::unordered_set<DexString*>& configured_finalish_field_names)
-    : m_xstores(stores),
+    : m_forest(load(config.reg_alloc_random_forest)),
+      m_xstores(stores),
       m_config(config),
       m_enabled(config.run_const_prop || config.run_cse ||
                 config.run_copy_prop || config.run_local_dce ||
@@ -125,39 +181,52 @@ void Shrinker::shrink_method(DexMethod* method) {
     local_dce_stats = local_dce.get_stats();
   }
 
+  using stats_t = std::tuple<size_t, size_t, size_t, size_t>;
+  auto get_features = [&code](size_t mminl_level) -> stats_t {
+    if (!traceEnabled(MMINL, mminl_level)) {
+      return stats_t{};
+    }
+    if (!code->editable_cfg_built()) {
+      code->build_cfg(/* editable= */ true);
+    }
+    const auto& cfg = code->cfg();
+
+    size_t regs_before = cfg.get_registers_size();
+    size_t insn_before = cfg.num_opcodes();
+    size_t blocks_before = cfg.num_blocks();
+    size_t edges = cfg.num_edges();
+    return stats_t{regs_before, insn_before, blocks_before, edges};
+  };
+
+  constexpr size_t kMMINLDataCollectionLevel = 10;
+  auto data_before_reg_alloc = get_features(kMMINLDataCollectionLevel);
+
+  size_t reg_alloc_inc{0};
   if (m_config.run_reg_alloc) {
-    auto timer = m_reg_alloc_timer.scope();
-    auto get_features = [&code]() -> std::tuple<size_t, size_t, size_t> {
-      if (!traceEnabled(MMINL, 4)) {
-        return std::make_tuple(0u, 0u, 0u);
-      }
-      if (!code->editable_cfg_built()) {
-        code->build_cfg(/* editable= */ true);
-      }
-      const auto& cfg = code->cfg();
+    if (should_shrink(code, m_forest) ||
+        traceEnabled(MMINL, kMMINLDataCollectionLevel)) {
+      auto timer = m_reg_alloc_timer.scope();
 
-      size_t regs_before = cfg.get_registers_size();
-      size_t insn_before = cfg.num_opcodes();
-      size_t blocks_before = cfg.num_blocks();
-      return std::make_tuple(regs_before, insn_before, blocks_before);
-    };
+      // It's OK to ensure we have an editable CFG, the allocator would build
+      // it, too.
+      auto before_features = get_features(4);
 
-    // It's OK to ensure we have an editable CFG, the allocator would build it,
-    // too.
-    auto before_features = get_features();
+      auto config = regalloc::graph_coloring::Allocator::Config{};
+      config.no_overwrite_this = true; // Downstream passes may rely on this.
+      regalloc::graph_coloring::allocate(config, method);
+      // After this, any CFG is gone.
 
-    auto config = regalloc::graph_coloring::Allocator::Config{};
-    config.no_overwrite_this = true; // Downstream passes may rely on this.
-    regalloc::graph_coloring::allocate(config, method);
-    // After this, any CFG is gone.
+      // Assume that dedup will run, so building CFG is OK.
+      auto after_features = get_features(4);
+      TRACE(MMINL, 4,
+            "Inliner.RegAlloc: %s: (%zu, %zu, %zu) -> (%zu, %zu, %zu)",
+            SHOW(method), std::get<0>(before_features),
+            std::get<1>(before_features), std::get<2>(before_features),
+            std::get<0>(after_features), std::get<1>(after_features),
+            std::get<2>(after_features));
 
-    // Assume that dedup will run, so building CFG is OK.
-    auto after_features = get_features();
-    TRACE(MMINL, 4, "Inliner.RegAlloc: %s: (%zu, %zu, %zu) -> (%zu, %zu, %zu)",
-          SHOW(method), std::get<0>(before_features),
-          std::get<1>(before_features), std::get<2>(before_features),
-          std::get<0>(after_features), std::get<1>(after_features),
-          std::get<2>(after_features));
+      reg_alloc_inc = 1;
+    }
   }
 
   if (m_config.run_dedup_blocks) {
@@ -170,6 +239,17 @@ void Shrinker::shrink_method(DexMethod* method) {
     dedup_blocks_impl::DedupBlocks dedup_blocks(&config, method);
     dedup_blocks.run();
     dedup_blocks_stats = dedup_blocks.get_stats();
+  }
+
+  auto data_after_dedup = get_features(kMMINLDataCollectionLevel);
+  if (traceEnabled(MMINL, kMMINLDataCollectionLevel)) {
+    TRACE(
+        MMINL, kMMINLDataCollectionLevel,
+        "Inliner.RegDedupe %zu|%zu|%zu|%zu|%zu|%zu|%zu|%zu",
+        std::get<0>(data_before_reg_alloc), std::get<1>(data_before_reg_alloc),
+        std::get<2>(data_before_reg_alloc), std::get<3>(data_before_reg_alloc),
+        std::get<0>(data_after_dedup), std::get<1>(data_after_dedup),
+        std::get<2>(data_after_dedup), std::get<3>(data_after_dedup));
   }
 
   if (editable_cfg_built && !code->editable_cfg_built()) {
@@ -185,6 +265,7 @@ void Shrinker::shrink_method(DexMethod* method) {
   m_local_dce_stats += local_dce_stats;
   m_dedup_blocks_stats += dedup_blocks_stats;
   m_methods_shrunk++;
+  m_methods_reg_alloced += reg_alloc_inc;
 }
 
 } // namespace shrinker
