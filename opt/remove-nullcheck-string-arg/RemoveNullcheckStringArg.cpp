@@ -123,6 +123,7 @@ DexMethod* RemoveNullcheckStringArg::get_wrapper_method(
   auto obj_arg = method_creator.get_local(0);
 
   auto main_block = method_creator.get_main_block();
+  auto if_block = main_block->if_testz(OPCODE_IF_NEZ, obj_arg);
   auto str_type = DexType::get_type("Ljava/lang/String;");
   if (!str_type) {
     return nullptr;
@@ -131,9 +132,10 @@ DexMethod* RemoveNullcheckStringArg::get_wrapper_method(
   auto str_const = method_creator.make_local(str_type);
 
   // const-string v2, "UNKNOWN"
-  main_block->load_const(str_const, DexString::make_string("UNKNOWN"));
+  if_block->load_const(str_const, DexString::make_string("UNKNOWN"));
 
-  main_block->invoke(OPCODE_INVOKE_STATIC, builtin, {obj_arg, str_const});
+  if_block->invoke(OPCODE_INVOKE_STATIC, builtin, {obj_arg, str_const});
+  if_block->ret_void();
   main_block->ret_void();
 
   auto new_method = method_creator.create();
@@ -194,35 +196,36 @@ DexMethod* RemoveNullcheckStringArg::get_wrapper_method_with_int_index(
   auto str_builder = method_creator.make_local(str_builder_type);
   auto str_const = method_creator.make_local(str_type);
   auto str_res = method_creator.make_local(str_type);
+  auto if_block = main_block->if_testz(OPCODE_IF_NEZ, obj_arg);
 
   // invoke-static {v3}, Ljava/lang/Integer;.toString:(I)Ljava/lang/String;
-  main_block->invoke(OPCODE_INVOKE_STATIC, to_str_method, {int_ind});
+  if_block->invoke(OPCODE_INVOKE_STATIC, to_str_method, {int_ind});
   // move-result-object v3
-  main_block->move_result(str_ind, str_type);
+  if_block->move_result(str_ind, str_type);
   // new-instance v1, Ljava/lang/StringBuilder;
-  main_block->new_instance(str_builder_type, str_builder);
+  if_block->new_instance(str_builder_type, str_builder);
   // invoke-direct {v1}, Ljava/lang/StringBuilder;.<init>:()V
-  main_block->invoke(OPCODE_INVOKE_DIRECT, str_builder_init_method,
-                     {str_builder});
+  if_block->invoke(OPCODE_INVOKE_DIRECT, str_builder_init_method,
+                   {str_builder});
   // const-string v2, "param index = "
-  main_block->load_const(str_const,
-                         DexString::make_string("param at index = "));
+  if_block->load_const(str_const, DexString::make_string("param at index = "));
   // invoke-virtual {v1, v2},
   // Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
-  main_block->invoke(OPCODE_INVOKE_VIRTUAL, append_method,
-                     {str_builder, str_const});
+  if_block->invoke(OPCODE_INVOKE_VIRTUAL, append_method,
+                   {str_builder, str_const});
   // invoke-virtual {v1, v3},
   // Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
-  main_block->invoke(OPCODE_INVOKE_VIRTUAL, append_method,
-                     {str_builder, str_ind});
+  if_block->invoke(OPCODE_INVOKE_VIRTUAL, append_method,
+                   {str_builder, str_ind});
   // invoke-virtual {v1},
   // Ljava/lang/StringBuilder;.toString:()Ljava/lang/String;
-  main_block->invoke(OPCODE_INVOKE_VIRTUAL, str_builder_to_str_method,
-                     {str_builder});
+  if_block->invoke(OPCODE_INVOKE_VIRTUAL, str_builder_to_str_method,
+                   {str_builder});
   // move-result-object v3
-  main_block->move_result(str_res, str_type);
+  if_block->move_result(str_res, str_type);
 
-  main_block->invoke(OPCODE_INVOKE_STATIC, builtin, {obj_arg, str_res});
+  if_block->invoke(OPCODE_INVOKE_STATIC, builtin, {obj_arg, str_res});
+  if_block->ret_void();
   main_block->ret_void();
 
   auto new_method = method_creator.create();
