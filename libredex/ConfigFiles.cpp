@@ -202,8 +202,10 @@ void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
   m_json.get("inliner", Json::nullValue, config);
   if (config.empty()) {
     m_json.get("MethodInlinePass", Json::nullValue, config);
-  }
-  if (config.empty()) {
+    always_assert_log(
+        config.empty(),
+        "MethodInlinePass is no longer used for inliner config, use "
+        "\"inliner\"");
     fprintf(stderr, "WARNING: No inliner config\n");
     return;
   }
