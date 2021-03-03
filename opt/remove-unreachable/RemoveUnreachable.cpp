@@ -193,9 +193,12 @@ void RemoveUnreachablePassBase::run_pass(DexStoresVector& stores,
                                     pm.get_current_pass_info()->repeat == 0;
   TRACE(RMU, 2, "RMU: output unreachable symbols %d",
         output_unreachable_symbols);
+  TRACE(RMU, 2, "RMU: remove_no_argument_constructors %d",
+        m_remove_no_argument_constructors);
   int num_ignore_check_strings = 0;
   auto reachables = this->compute_reachable_objects(
-      stores, pm, &num_ignore_check_strings, emit_graph_this_run);
+      stores, pm, &num_ignore_check_strings, emit_graph_this_run,
+      m_remove_no_argument_constructors);
 
   reachability::ObjectCounts before = reachability::count_objects(stores);
   TRACE(RMU, 1, "before: %lu classes, %lu fields, %lu methods",
@@ -276,12 +279,15 @@ void RemoveUnreachablePassBase::write_out_removed_symbols(
 }
 
 std::unique_ptr<reachability::ReachableObjects>
-RemoveUnreachablePass::compute_reachable_objects(const DexStoresVector& stores,
-                                                 PassManager& /* pm */,
-                                                 int* num_ignore_check_strings,
-                                                 bool emit_graph_this_run) {
+RemoveUnreachablePass::compute_reachable_objects(
+    const DexStoresVector& stores,
+    PassManager& /* pm */,
+    int* num_ignore_check_strings,
+    bool emit_graph_this_run,
+    bool remove_no_argument_constructors) {
   return reachability::compute_reachable_objects(
-      stores, m_ignore_sets, num_ignore_check_strings, emit_graph_this_run);
+      stores, m_ignore_sets, num_ignore_check_strings, emit_graph_this_run,
+      false, nullptr, remove_no_argument_constructors);
 }
 
 static RemoveUnreachablePass s_pass;

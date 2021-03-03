@@ -255,14 +255,16 @@ class TransitiveClosureMarker {
       ConditionallyMarked* cond_marked,
       ReachableObjects* reachable_objects,
       MarkWorkerState* worker_state,
-      Stats* stats)
+      Stats* stats,
+      bool remove_no_argument_constructors = false)
       : m_ignore_sets(ignore_sets),
         m_method_override_graph(method_override_graph),
         m_record_reachability(record_reachability),
         m_cond_marked(cond_marked),
         m_reachable_objects(reachable_objects),
         m_worker_state(worker_state),
-        m_stats(stats) {
+        m_stats(stats),
+        m_remove_no_argument_constructors(remove_no_argument_constructors) {
     if (s_class_forname == nullptr) {
       s_class_forname = DexMethod::get_method(
           "Ljava/lang/Class;.forName:(Ljava/lang/String;)Ljava/lang/Class;");
@@ -339,6 +341,7 @@ class TransitiveClosureMarker {
   ReachableObjects* m_reachable_objects;
   MarkWorkerState* m_worker_state;
   Stats* m_stats;
+  bool m_remove_no_argument_constructors;
 
   static DexMethodRef* s_class_forname;
 };
@@ -353,7 +356,8 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects(
     const std::unordered_set<const DexMethod*>& seeds,
     bool record_reachability = false,
     std::unique_ptr<const method_override_graph::Graph>*
-        out_method_override_graph = nullptr);
+        out_method_override_graph = nullptr,
+    bool remove_no_argument_constructors = false);
 
 /*
  * Compute all reachable objects from the existing configurations
@@ -366,7 +370,8 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects(
     bool record_reachability = false,
     bool should_mark_all_as_seed = false,
     std::unique_ptr<const method_override_graph::Graph>*
-        out_method_override_graph = nullptr);
+        out_method_override_graph = nullptr,
+    bool remove_no_argument_constructors = false);
 
 /*
  * Compute all reachable methods from the set of reachable objects.
