@@ -46,7 +46,7 @@ struct StaticReloV2Test : public RedexTest {
   void call(DexMethod* caller, DexMethod* callee) {
     IRInstruction* inst = new IRInstruction(OPCODE_INVOKE_STATIC);
     inst->set_method(callee);
-    caller->get_code()->push_back(MethodItemEntry(inst));
+    caller->get_code()->push_back(inst);
   }
 };
 
