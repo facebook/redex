@@ -682,7 +682,6 @@ TEST_F(IRTypeCheckerTest, joinDexTypesSharingCommonBaseSimple) {
   code->push_back(insns[8]);
   code->push_back(insns[9]);
 
-  add_code(insns);
   IRTypeChecker checker(m_method);
   checker.run();
   // Checks
@@ -793,7 +792,6 @@ TEST_F(IRTypeCheckerTest, joinCommonBaseWithConflictingInterface) {
   code->push_back(insns[8]);
   code->push_back(insns[9]);
 
-  add_code(insns);
   IRTypeChecker checker(m_method);
   checker.run();
   // Checks
@@ -905,7 +903,6 @@ TEST_F(IRTypeCheckerTest, joinCommonBaseWithMergableInterface) {
   code->push_back(insns[8]);
   code->push_back(insns[9]);
 
-  add_code(insns);
   IRTypeChecker checker(m_method);
   checker.run();
   // Checks
@@ -982,7 +979,6 @@ TEST_F(IRTypeCheckerTest, invokeInvalidObjectType) {
   code->push_back(insns[4]);
   code->push_back(insns[5]);
 
-  add_code(insns);
   IRTypeChecker checker(m_method);
   checker.run();
 
