@@ -28,17 +28,19 @@ struct IRInstructionList {
   IRInstructionList(IRInstructionList&&) = default;
   IRInstructionList& operator=(IRInstructionList&&) = default;
 
-  std::vector<std::unique_ptr<IRInstruction>> instructions;
+  std::vector<IRInstruction*> instructions;
+  std::vector<std::unique_ptr<IRInstruction>> instructions_owned;
 
-  IRInstructionList(std::initializer_list<IRInstruction*> in) {
+  /* implicit */ IRInstructionList(std::initializer_list<IRInstruction*> in) {
     for (IRInstruction* insn : in) {
-      instructions.emplace_back(insn); // moves insn into unique_ptr
+      instructions.emplace_back(insn);
+      instructions_owned.emplace_back(insn); // moves insn into unique_ptr
     }
   }
 
   explicit IRInstructionList(IRCode* mt) {
     for (auto& mie : InstructionIterable(mt)) {
-      instructions.emplace_back(mie.insn); // moves insn into unique_ptr
+      instructions.emplace_back(mie.insn);
     }
   }
 
@@ -47,10 +49,7 @@ struct IRInstructionList {
            std::equal(instructions.begin(),
                       instructions.end(),
                       rhs.instructions.begin(),
-                      [](const std::unique_ptr<IRInstruction>& a,
-                         const std::unique_ptr<IRInstruction>& b) {
-                        return *a == *b;
-                      });
+                      [](const auto& a, const auto& b) { return *a == *b; });
   }
 };
 
@@ -60,8 +59,8 @@ static void PrintTo(const IRInstructionList& insn_list, std::ostream* os) {
     *os << "(empty)\n";
     return;
   }
-  for (const auto& insn_ptr : insn_list.instructions) {
-    *os << "\n\t" << show(insn_ptr.get());
+  for (const auto& insn : insn_list.instructions) {
+    *os << "\n\t" << show(insn);
   }
 }
 
