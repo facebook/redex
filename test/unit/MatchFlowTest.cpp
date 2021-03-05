@@ -59,6 +59,22 @@ using ::testing::UnorderedElementsAre;
 
 class MatchFlowTest : public RedexTest {};
 
+struct IndexedWrapper {
+  const cfg::InstructionIterable& ii;
+
+  explicit IndexedWrapper(const cfg::InstructionIterable& ii) : ii(ii) {}
+
+  const MethodItemEntry& operator[](size_t idx) const {
+    auto it = ii.begin();
+    while (it != ii.end() && idx != 0) {
+      ++it;
+      --idx;
+    }
+    redex_assert(it != ii.end());
+    return *it;
+  }
+};
+
 using test_range = result_t::range<std::vector<IRInstruction*>::const_iterator>;
 
 TEST_F(MatchFlowTest, EmptyRange) {
@@ -96,7 +112,7 @@ TEST_F(MatchFlowTest, NoResults) {
 
   cfg::ScopedCFG cfg{code.get()};
   auto ii = InstructionIterable(*cfg);
-  std::vector<MethodItemEntry> mies{ii.begin(), ii.end()};
+  auto mies = IndexedWrapper{ii};
 
   ASSERT_INSN(sub_int, mies[1], OPCODE_SUB_INT);
 
@@ -121,7 +137,7 @@ TEST_F(MatchFlowTest, MultipleResults) {
 
   cfg::ScopedCFG cfg{code.get()};
   auto ii = InstructionIterable(*cfg);
-  std::vector<MethodItemEntry> mies{ii.begin(), ii.end()};
+  auto mies = IndexedWrapper{ii};
 
   ASSERT_INSN(const_0, mies[0], OPCODE_CONST);
   ASSERT_INSN(const_1, mies[1], OPCODE_CONST);
@@ -146,7 +162,7 @@ TEST_F(MatchFlowTest, Cycle) {
 
   cfg::ScopedCFG cfg{code.get()};
   auto ii = InstructionIterable(*cfg);
-  std::vector<MethodItemEntry> mies{ii.begin(), ii.end()};
+  auto mies = IndexedWrapper{ii};
 
   ASSERT_INSN(add_int, mies[2], OPCODE_ADD_INT);
 
@@ -173,7 +189,7 @@ TEST_F(MatchFlowTest, MatchingNotRoot) {
 
   cfg::ScopedCFG cfg{code.get()};
   auto ii = InstructionIterable(*cfg);
-  std::vector<MethodItemEntry> mies{ii.begin(), ii.end()};
+  auto mies = IndexedWrapper{ii};
 
   ASSERT_INSN(const_0, mies[0], OPCODE_CONST);
   ASSERT_INSN(const_1, mies[1], OPCODE_CONST);
@@ -200,7 +216,7 @@ TEST_F(MatchFlowTest, MatchingNotRootDiamond) {
 
   cfg::ScopedCFG cfg{code.get()};
   auto ii = InstructionIterable(*cfg);
-  std::vector<MethodItemEntry> mies{ii.begin(), ii.end()};
+  auto mies = IndexedWrapper{ii};
 
   ASSERT_INSN(const_0, mies[0], OPCODE_CONST);
 
@@ -223,7 +239,7 @@ TEST_F(MatchFlowTest, OnlyMatchingSource) {
 
   cfg::ScopedCFG cfg{code.get()};
   auto ii = InstructionIterable(*cfg);
-  std::vector<MethodItemEntry> mies{ii.begin(), ii.end()};
+  auto mies = IndexedWrapper{ii};
 
   ASSERT_INSN(const_0, mies[0], OPCODE_CONST);
   ASSERT_INSN(add_int_0, mies[1], OPCODE_ADD_INT);
@@ -258,7 +274,7 @@ TEST_F(MatchFlowTest, MultipleMatchingSource) {
 
   cfg::ScopedCFG cfg{code.get()};
   auto ii = InstructionIterable(*cfg);
-  std::vector<MethodItemEntry> mies{ii.begin(), ii.end()};
+  auto mies = IndexedWrapper{ii};
 
   ASSERT_INSN(const_0, mies[2], OPCODE_CONST);
   ASSERT_INSN(const_1, mies[3], OPCODE_CONST);
@@ -290,7 +306,7 @@ TEST_F(MatchFlowTest, VShapePredicate) {
 
   cfg::ScopedCFG cfg{code.get()};
   auto ii = InstructionIterable(*cfg);
-  std::vector<MethodItemEntry> mies{ii.begin(), ii.end()};
+  auto mies = IndexedWrapper{ii};
 
   ASSERT_INSN(const_0, mies[0], OPCODE_CONST);
   ASSERT_INSN(const_1, mies[1], OPCODE_CONST);
@@ -319,7 +335,7 @@ TEST_F(MatchFlowTest, FailAtLastHurdle) {
 
   cfg::ScopedCFG cfg{code.get()};
   auto ii = InstructionIterable(*cfg);
-  std::vector<MethodItemEntry> mies{ii.begin(), ii.end()};
+  auto mies = IndexedWrapper{ii};
 
   ASSERT_INSN(const_0, mies[0], OPCODE_CONST);
   ASSERT_INSN(new_ary, mies[1], OPCODE_NEW_ARRAY);
@@ -354,7 +370,7 @@ TEST_F(MatchFlowTest, AliasSrc) {
 
   cfg::ScopedCFG cfg{code.get()};
   auto ii = InstructionIterable(*cfg);
-  std::vector<MethodItemEntry> mies{ii.begin(), ii.end()};
+  auto mies = IndexedWrapper{ii};
 
   ASSERT_INSN(const_1, mies[1], OPCODE_CONST);
   ASSERT_INSN(const_2, mies[2], OPCODE_CONST);
@@ -386,7 +402,7 @@ TEST_F(MatchFlowTest, AliasFlagHidesMoves) {
 
   cfg::ScopedCFG cfg{code.get()};
   auto ii = InstructionIterable(*cfg);
-  std::vector<MethodItemEntry> mies{ii.begin(), ii.end()};
+  auto mies = IndexedWrapper{ii};
 
   ASSERT_INSN(const_0, mies[0], OPCODE_CONST);
   ASSERT_INSN(const_1, mies[1], OPCODE_CONST);
@@ -411,7 +427,7 @@ TEST_F(MatchFlowTest, ResultFlagHidesMoveResult) {
 
   cfg::ScopedCFG cfg{code.get()};
   auto ii = InstructionIterable(*cfg);
-  std::vector<MethodItemEntry> mies{ii.begin(), ii.end()};
+  auto mies = IndexedWrapper{ii};
 
   ASSERT_INSN(invoke, mies[0], OPCODE_INVOKE_STATIC);
   ASSERT_INSN(ret_0, mies[2], OPCODE_RETURN);
@@ -458,7 +474,7 @@ TEST_F(MatchFlowTest, ResultSrc) {
 
   cfg::ScopedCFG cfg{code.get()};
   auto ii = InstructionIterable(*cfg);
-  std::vector<MethodItemEntry> mies{ii.begin(), ii.end()};
+  auto mies = IndexedWrapper{ii};
 
   ASSERT_INSN(const_1, mies[3], OPCODE_CONST);
   ASSERT_INSN(invoke_src, mies[4], OPCODE_INVOKE_STATIC);
@@ -504,7 +520,7 @@ TEST_F(MatchFlowTest, ForallDirect) {
 
   cfg::ScopedCFG cfg{code.get()};
   auto ii = InstructionIterable(*cfg);
-  std::vector<MethodItemEntry> mies{ii.begin(), ii.end()};
+  auto mies = IndexedWrapper{ii};
 
   ASSERT_INSN(const_1_0, mies[2], OPCODE_CONST);
   ASSERT_INSN(const_2_2, mies[3], OPCODE_CONST);
@@ -567,7 +583,7 @@ TEST_F(MatchFlowTest, ForallTransitive) {
 
   cfg::ScopedCFG cfg{code.get()};
   auto ii = InstructionIterable(*cfg);
-  std::vector<MethodItemEntry> mies{ii.begin(), ii.end()};
+  auto mies = IndexedWrapper{ii};
 
   ASSERT_INSN(const_1, mies[1], OPCODE_CONST);
   ASSERT_INSN(const_2, mies[2], OPCODE_CONST);
@@ -607,7 +623,7 @@ TEST_F(MatchFlowTest, UniqueSrc) {
 
   cfg::ScopedCFG cfg{code.get()};
   auto ii = InstructionIterable(*cfg);
-  std::vector<MethodItemEntry> mies{ii.begin(), ii.end()};
+  auto mies = IndexedWrapper{ii};
 
   ASSERT_INSN(const_1, mies[1], OPCODE_CONST);
   ASSERT_INSN(add_int_3, mies[5], OPCODE_ADD_INT);
@@ -667,7 +683,7 @@ TEST_F(MatchFlowTest, InstructionGraph) {
   };
 
   auto ii = InstructionIterable(*cfg);
-  std::vector<MethodItemEntry> mies{ii.begin(), ii.end()};
+  auto mies = IndexedWrapper{ii};
 
   ASSERT_INSN(const_0, mies[0], OPCODE_CONST);
   ASSERT_INSN(const_1, mies[1], OPCODE_CONST);
@@ -719,7 +735,7 @@ TEST_F(MatchFlowTest, InstructionGraphNoFlowConstraint) {
   constraints.emplace_back(insn_matcher(m::const_()));
 
   auto ii = InstructionIterable(*cfg);
-  std::vector<MethodItemEntry> mies{ii.begin(), ii.end()};
+  auto mies = IndexedWrapper{ii};
 
   ASSERT_INSN(const_1, mies[1], OPCODE_CONST);
   ASSERT_INSN(add_int, mies[2], OPCODE_ADD_INT);
@@ -763,7 +779,7 @@ TEST_F(MatchFlowTest, InstructionGraphTransitiveFailure) {
       insn_matcher(m::const_(m::has_literal(m::equals<int64_t>(1)))));
 
   auto ii = InstructionIterable(*cfg);
-  std::vector<MethodItemEntry> mies{ii.begin(), ii.end()};
+  auto mies = IndexedWrapper{ii};
 
   ASSERT_INSN(const_1, mies[1], OPCODE_CONST);
   ASSERT_INSN(sub_int, mies[2], OPCODE_SUB_INT);

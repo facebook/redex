@@ -8,6 +8,7 @@
 #include "BlamingAnalysis.h"
 
 #include "IRAssembler.h"
+#include "Macros.h"
 #include "RedexTest.h"
 #include "ScopedCFG.h"
 #include "Show.h"
@@ -44,6 +45,30 @@ namespace {
 
 class BlamingEscapeTest : public RedexTest {};
 
+struct IndexedWrapper {
+  const ir_list::InstructionIterable& ii;
+
+  explicit IndexedWrapper(const ir_list::InstructionIterable& ii) : ii(ii) {}
+
+  const MethodItemEntry& operator[](size_t idx) const {
+    auto it = ii.begin();
+    while (it != ii.end() && idx != 0) {
+      ++it;
+      --idx;
+    }
+    redex_assert(it != ii.end());
+    return *it;
+  }
+
+  size_t size() const {
+    size_t count = 0;
+    for (const auto& mie ATTRIBUTE_UNUSED : ii) {
+      ++count;
+    }
+    return count;
+  }
+};
+
 TEST_F(BlamingEscapeTest, escapes) {
   auto code = assembler::ircode_from_string(R"((
     (new-instance "LFoo;")
@@ -70,7 +95,7 @@ TEST_F(BlamingEscapeTest, escapes) {
   ))");
 
   auto ii = InstructionIterable(code.get());
-  std::vector<MethodItemEntry> insns{ii.begin(), ii.end()};
+  auto insns = IndexedWrapper{ii};
 
   auto* const new_Foo = insns[0].insn;
   auto* const new_Bar = insns[2].insn;
@@ -104,7 +129,7 @@ TEST_F(BlamingEscapeTest, escapeThroughMove) {
   ))");
 
   auto ii = InstructionIterable(code.get());
-  std::vector<MethodItemEntry> insns{ii.begin(), ii.end()};
+  auto insns = IndexedWrapper{ii};
 
   auto* const new_Foo = insns[0].insn;
   auto* const init = insns[2].insn;
@@ -135,7 +160,7 @@ TEST_F(BlamingEscapeTest, potentiallyNull) {
   ))");
 
   auto ii = InstructionIterable(code.get());
-  std::vector<MethodItemEntry> insns{ii.begin(), ii.end()};
+  auto insns = IndexedWrapper{ii};
 
   auto* const new_Foo = insns[4].insn;
   auto* const init = insns[6].insn;
@@ -168,7 +193,7 @@ TEST_F(BlamingEscapeTest, mergedEscape) {
   ))");
 
   auto ii = InstructionIterable(code.get());
-  std::vector<MethodItemEntry> insns{ii.begin(), ii.end()};
+  auto insns = IndexedWrapper{ii};
 
   auto* const new_Foo_then = insns[2].insn;
   auto* const init_then = insns[4].insn;
@@ -201,7 +226,7 @@ TEST_F(BlamingEscapeTest, createAndEscapeInLoop) {
   ))");
 
   auto ii = InstructionIterable(code.get());
-  std::vector<MethodItemEntry> insns{ii.begin(), ii.end()};
+  auto insns = IndexedWrapper{ii};
 
   auto* const new_Foo = insns[0].insn;
   auto* const init = insns[2].insn;
@@ -235,7 +260,7 @@ TEST_F(BlamingEscapeTest, escapeInLoopAndAfter) {
   ))");
 
   auto ii = InstructionIterable(code.get());
-  std::vector<MethodItemEntry> insns{ii.begin(), ii.end()};
+  auto insns = IndexedWrapper{ii};
 
   auto* const new_Foo = insns[0].insn;
   auto* const init_Foo = insns[2].insn;
@@ -286,7 +311,7 @@ TEST_F(BlamingEscapeTest, filteredAllocators) {
   ))");
 
   auto ii = InstructionIterable(code.get());
-  std::vector<MethodItemEntry> insns{ii.begin(), ii.end()};
+  auto insns = IndexedWrapper{ii};
 
   auto* const new_Foo = insns[0].insn;
 
@@ -336,7 +361,7 @@ TEST_F(BlamingEscapeTest, safeMethods) {
   ))");
 
   auto ii = InstructionIterable(code.get());
-  std::vector<MethodItemEntry> insns{ii.begin(), ii.end()};
+  auto insns = IndexedWrapper{ii};
 
   auto* const new_Foo = insns[0].insn;
   auto* const new_Bar = insns[3].insn;
@@ -385,7 +410,7 @@ TEST_F(BlamingEscapeTest, notReachable) {
   ))");
 
   auto ii = InstructionIterable(code.get());
-  std::vector<MethodItemEntry> insns{ii.begin(), ii.end()};
+  auto insns = IndexedWrapper{ii};
 
   auto* const new_Foo = insns[0].insn;
   auto* const ret = insns[5].insn;
@@ -417,7 +442,7 @@ TEST_F(BlamingEscapeTest, nonEscaping) {
   ))");
 
   auto ii = InstructionIterable(code.get());
-  std::vector<MethodItemEntry> insns{ii.begin(), ii.end()};
+  auto insns = IndexedWrapper{ii};
 
   auto* const new_Foo = insns[0].insn;
 
@@ -445,7 +470,7 @@ TEST_F(BlamingEscapeTest, optionalEscape) {
   ))");
 
   auto ii = InstructionIterable(code.get());
-  std::vector<MethodItemEntry> insns{ii.begin(), ii.end()};
+  auto insns = IndexedWrapper{ii};
 
   auto* const new_Foo = insns[1].insn;
   auto* const sput = insns[4].insn;
@@ -494,7 +519,7 @@ TEST_F(BlamingEscapeTest, nestedBranchesEscapeAtEnd) {
   ))");
 
   auto ii = InstructionIterable(code.get());
-  std::vector<MethodItemEntry> insns{ii.begin(), ii.end()};
+  auto insns = IndexedWrapper{ii};
 
   auto* const new_Foo = insns[2].insn;
   auto* const iput = insns[insns.size() - 2].insn;
@@ -527,7 +552,7 @@ TEST_F(BlamingEscapeTest, loops) {
   ))");
 
   auto ii = InstructionIterable(code.get());
-  std::vector<MethodItemEntry> insns{ii.begin(), ii.end()};
+  auto insns = IndexedWrapper{ii};
 
   auto* const new_Foo = insns[1].insn;
   auto* const scall = insns[5].insn;
@@ -561,7 +586,7 @@ TEST_F(BlamingEscapeTest, diffBranchEscape) {
   ))");
 
   auto ii = InstructionIterable(code.get());
-  std::vector<MethodItemEntry> insns{ii.begin(), ii.end()};
+  auto insns = IndexedWrapper{ii};
 
   auto* const new_Foo = insns[1].insn;
   auto* const put_baz = insns[insns.size() - 4].insn;

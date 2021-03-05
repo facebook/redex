@@ -1288,12 +1288,18 @@ class InstructionIterableImpl {
   InstructionIteratorImpl<is_const> begin() {
     return InstructionIteratorImpl<is_const>(m_cfg, true);
   }
+  InstructionIteratorImpl<true> begin() const {
+    return InstructionIteratorImpl<true>(m_cfg, true);
+  }
 
   InstructionIteratorImpl<is_const> end() {
     return InstructionIteratorImpl<is_const>(m_cfg, false);
   }
+  InstructionIteratorImpl<true> end() const {
+    return InstructionIteratorImpl<true>(m_cfg, false);
+  }
 
-  bool empty() { return begin() == end(); }
+  bool empty() const { return begin() == end(); }
 };
 
 template <class ForwardIt>
