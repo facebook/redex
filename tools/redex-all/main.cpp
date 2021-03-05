@@ -853,7 +853,13 @@ void redex_frontend(ConfigFiles& conf, /* input */
   for (const auto& jar_path : args.jar_paths) {
     std::istringstream jar_stream(jar_path);
     std::string dependent_jar_path;
-    while (std::getline(jar_stream, dependent_jar_path, ':')) {
+    constexpr char kDelim =
+#if IS_WINDOWS
+        ';';
+#else
+        ':';
+#endif
+    while (std::getline(jar_stream, dependent_jar_path, kDelim)) {
       TRACE(MAIN,
             2,
             "Dependent JAR specified on command-line: %s",
