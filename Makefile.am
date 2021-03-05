@@ -125,6 +125,7 @@ libredex_la_SOURCES = \
 	libredex/RefChecker.cpp \
 	libredex/Resolver.cpp \
 	libredex/Show.cpp \
+	libredex/SourceBlocks.cpp \
 	libredex/Timer.cpp \
 	libredex/Trace.cpp \
 	libredex/Transform.cpp \
