@@ -15,12 +15,20 @@
 #include <vector>
 
 #include "Debug.h"
+#include "Macros.h"
 #include "ProguardLexer.h"
 
 namespace keep_rules {
 namespace proguard_parser {
 
 namespace {
+
+constexpr char kPathDelim =
+#if IS_WINDOWS
+    ';';
+#else
+    ':';
+#endif
 
 bool is_deliminator(char ch) {
   return isspace(ch) || ch == '{' || ch == '}' || ch == '(' || ch == ')' ||
@@ -75,7 +83,7 @@ boost::string_view read_path(boost::string_view& data, unsigned int* line) {
   size_t end = start;
   for (; end != data.size(); ++end) {
     char c = data[end];
-    if (c == ':' || (!has_quotes && isspace(c))) {
+    if (c == kPathDelim || (!has_quotes && isspace(c))) {
       break;
     }
     if (c == '"' && has_quotes) {
@@ -103,7 +111,7 @@ std::vector<std::pair<boost::string_view, unsigned int>> read_paths(
   std::vector<std::pair<boost::string_view, unsigned int>> paths;
   paths.push_back({read_path(data, line), *line});
   skip_whitespace(data, line);
-  while (!data.empty() && data[0] == ':') {
+  while (!data.empty() && data[0] == kPathDelim) {
     data = data.substr(1);
     paths.push_back({read_path(data, line), *line});
     skip_whitespace(data, line);
