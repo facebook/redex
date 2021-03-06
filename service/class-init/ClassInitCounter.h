@@ -468,7 +468,7 @@ class ClassInitCounter final {
                          std::unordered_map<DexMethod*, MergedUsedSet>>;
 
   ClassInitCounter(
-      DexType* parent_class,
+      const std::unordered_set<DexClass*>& classes_to_check,
       const std::unordered_set<DexMethodRef*>& safe_escapes,
       const std::unordered_set<DexClass*>& classes,
       boost::optional<DexString*> optional_method_name = boost::none);
@@ -507,9 +507,8 @@ class ClassInitCounter final {
       // Reference to data structure to store results in
       TypeToInit& type_to_init);
 
-  // Identifies and stores in type_to_inits all classes that extend parent
-  void find_children(DexType* parent,
-                     const std::unordered_set<DexClass*>& classes);
+  // Identifies and stores in type_to_inits all classes
+  void find_children(const std::unordered_set<DexClass*>& classes_to_check);
 
   // Walks all of the methods of the apk, updating type_to_inits
   void walk_methods(DexClass* container,

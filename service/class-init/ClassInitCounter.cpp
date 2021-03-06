@@ -1146,17 +1146,12 @@ void InitLocation::all_uses_from(DexClass* cls_impl,
 }
 
 ClassInitCounter::ClassInitCounter(
-    DexType* parent_class,
+    const std::unordered_set<DexClass*>& classes_to_check,
     const std::unordered_set<DexMethodRef*>& safe_escapes,
     const std::unordered_set<DexClass*>& classes,
     boost::optional<DexString*> optional_method_name)
     : m_optional_method(optional_method_name), m_safe_escapes{safe_escapes} {
-  find_children(parent_class, classes);
-  TRACE(CIC,
-        3,
-        "Found %zu children of parent %s",
-        m_type_to_inits.size(),
-        SHOW(parent_class));
+  find_children(classes_to_check);
   for (DexClass* current : classes) {
     for (DexMethod* method : current->get_vmethods()) {
       find_uses_within(current, method);
@@ -1168,12 +1163,10 @@ ClassInitCounter::ClassInitCounter(
 }
 
 void ClassInitCounter::find_children(
-    DexType* parent, const std::unordered_set<DexClass*>& classes) {
-  for (DexClass* current : classes) {
-    if (current->get_super_class() == parent) {
-      auto type = current->get_type();
-      m_type_to_inits.insert({type, InitLocation(type)});
-    }
+    const std::unordered_set<DexClass*>& classes_to_check) {
+  for (DexClass* current : classes_to_check) {
+    auto type = current->get_type();
+    m_type_to_inits.insert({type, InitLocation(type)});
   }
 }
 
