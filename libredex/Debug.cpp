@@ -63,10 +63,18 @@ void crash_backtrace() {
   backtrace_symbols_fd(buf, frames, STDERR_FILENO);
 #endif
 }
+
+std::atomic<size_t> g_crashing{0};
+
 }; // namespace
 
 void crash_backtrace_handler(int sig) {
-  crash_backtrace();
+  size_t crashing = g_crashing.fetch_add(1);
+  if (crashing == 0) {
+    crash_backtrace();
+  } else {
+    sleep(60); // Sleep a minute, then go on to die if we're still alive.
+  }
 
   signal(sig, SIG_DFL);
   raise(sig);
