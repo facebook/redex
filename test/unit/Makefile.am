@@ -109,6 +109,7 @@ check_PROGRAMS = \
     result_propagation_test \
     side_effects_summary_test \
     signed_constant_propagation_test \
+    source_blocks_test \
     split_huge_switch_test \
     static_relo_v2_test \
     strip_debug_info_test \
@@ -351,6 +352,8 @@ side_effects_summary_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 signed_constant_propagation_test_SOURCES = constant-propagation/SignedConstantPropagationTest.cpp
 signed_constant_propagation_test_CPPFLAGS = $(COMMON_INCLUDES) $(COMMON_TEST_INCLUDES) -I$(top_srcdir)/sparta/test
 
+source_blocks_test_SOURCES = SourceBlocksTest.cpp
+
 split_huge_switch_test_SOURCES = SplitHugeSwitchTest.cpp
 
 static_relo_v2_test_SOURCES = StaticReloV2Test.cpp
@@ -499,6 +502,7 @@ TESTS = \
     result_propagation_test \
     side_effects_summary_test \
     signed_constant_propagation_test \
+    source_blocks_test \
     split_huge_switch_test \
     static_relo_v2_test \
     strip_debug_info_test \
