@@ -31,6 +31,7 @@
   AF(SYNTHETIC,    synthetic,     0x1000)   \
   AF(ANNOTATION,   annotation,    0x2000)   \
   AF(ENUM,         enum,          0x4000)   \
+  AF(MODULE,       module,        0x8000)   \
   AF(CONSTRUCTOR,  constructor,  0x10000)   \
   AF(DECLARED_SYNCHRONIZED, declared_synchronized, 0x2000)
 // clang-format on
