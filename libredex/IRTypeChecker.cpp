@@ -987,6 +987,8 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
   case OPCODE_IGET_OBJECT: {
     assume_reference(current_state, insn->src(0));
     always_assert(insn->has_field());
+    const auto f_cls = insn->get_field()->get_class();
+    assume_assignable(current_state->get_dex_type(insn->src(0)), f_cls);
     break;
   }
   case OPCODE_IPUT: {
@@ -1015,6 +1017,12 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
   case OPCODE_IPUT_OBJECT: {
     assume_reference(current_state, insn->src(0));
     assume_reference(current_state, insn->src(1));
+    always_assert(insn->has_field());
+    const auto f_type = insn->get_field()->get_type();
+    assume_assignable(current_state->get_dex_type(insn->src(0)), f_type);
+    const auto f_cls = insn->get_field()->get_class();
+    assume_assignable(current_state->get_dex_type(insn->src(1)), f_cls);
+
     break;
   }
   case OPCODE_SGET: {
