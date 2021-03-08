@@ -108,8 +108,8 @@ DexMethod* RemoveNullcheckStringArg::get_wrapper_method(
     return nullptr;
   }
 
-  auto host_cls = type_class(builtin->get_class());
-  if (!host_cls) {
+  auto* host_cls = type_class(builtin->get_class());
+  if (!host_cls || host_cls->is_external()) {
     return nullptr;
   }
 
