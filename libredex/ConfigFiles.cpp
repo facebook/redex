@@ -216,8 +216,9 @@ void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
   jw.get("enforce_method_size_limit",
          true,
          inliner_config->enforce_method_size_limit);
-  jw.get("use_constant_propagation_for_callee_size", true,
-         inliner_config->use_constant_propagation_for_callee_size);
+  jw.get(
+      "use_constant_propagation_and_local_dce_for_callee_size", true,
+      inliner_config->use_constant_propagation_and_local_dce_for_callee_size);
   jw.get("use_cfg_inliner", true, inliner_config->use_cfg_inliner);
   jw.get("intermediate_shrinking", false,
          inliner_config->intermediate_shrinking);

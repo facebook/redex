@@ -22,9 +22,11 @@
 #include "DexPosition.h"
 #include "DexUtil.h"
 #include "EditableCfgAdapter.h"
+#include "GraphUtil.h"
 #include "IRInstruction.h"
 #include "InlineForSpeed.h"
 #include "InlinerConfig.h"
+#include "LocalDce.h"
 #include "LoopInfo.h"
 #include "Macros.h"
 #include "MethodProfiles.h"
@@ -251,7 +253,7 @@ static std::string get_key(const ConstantArguments& constant_arguments) {
 }
 
 void MultiMethodInliner::compute_callee_constant_arguments() {
-  if (!m_config.use_constant_propagation_for_callee_size) {
+  if (!m_config.use_constant_propagation_and_local_dce_for_callee_size) {
     return;
   }
 
@@ -1278,7 +1280,7 @@ static size_t get_inlined_cost(IRInstruction* insn) {
     if (op == OPCODE_MOVE_EXCEPTION) {
       cost += 8; // accounting for book-keeping overhead of throw-blocks
     } else if (insn->has_method() || insn->has_field() || insn->has_type() ||
-               insn->has_string() || opcode::is_a_conditional_branch(op)) {
+               insn->has_string()) {
       cost++;
     } else if (insn->has_data()) {
       cost += 4 + insn->get_data()->size();
@@ -1304,30 +1306,121 @@ static size_t get_inlined_cost(IRInstruction* insn) {
  * metadata) that exists for this block; this doesn't include the cost of
  * the instructions in the block, which are accounted for elsewhere.
  */
-static size_t get_inlined_cost(const std::vector<cfg::Block*>& blocks,
-                               size_t index) {
-  auto block = blocks.at(index);
+static size_t get_inlined_cost(const std::vector<cfg::Block*>& reachable_blocks,
+                               size_t index,
+                               const std::vector<cfg::Edge*>& feasible_succs) {
+  auto block = reachable_blocks.at(index);
   switch (block->branchingness()) {
-  case opcode::Branchingness::BRANCH_GOTO: {
-    auto target = block->goes_to();
-    always_assert(target != nullptr);
-    if (index == blocks.size() - 1 || blocks.at(index + 1) != target) {
-      // we have a non-fallthrough goto edge
-      size_t cost = 1;
-      TRACE(INLINE, 5, "  %u: BRANCH_GOTO", cost);
-      return cost;
-    }
-    break;
-  }
+  case opcode::Branchingness::BRANCH_GOTO:
+  case opcode::Branchingness::BRANCH_IF:
   case opcode::Branchingness::BRANCH_SWITCH: {
-    size_t cost = 4 + 3 * block->succs().size();
-    TRACE(INLINE, 5, "  %u: BRANCH_SWITCH", cost);
+    if (feasible_succs.empty()) {
+      return 0;
+    }
+    if (feasible_succs.size() > 2) {
+      // a switch
+      return 4 + 3 * feasible_succs.size();
+    }
+    // a (possibly conditional) branch; each feasible non-fallthrough edge has a
+    // cost
+    size_t cost{0};
+    auto next_block = index == reachable_blocks.size() - 1
+                          ? nullptr
+                          : reachable_blocks.at(index + 1);
+    for (auto succ : feasible_succs) {
+      always_assert(succ->target() != nullptr);
+      if (next_block != succ->target()) {
+        // we have a non-fallthrough edge
+        cost++;
+      }
+    }
     return cost;
   }
   default:
-    break;
+    return 0;
   }
-  return 0;
+}
+
+namespace {
+// Characterization of what remains of a cfg after applying constant propagation
+// and local-dce.
+struct ResidualCfgInfo {
+  std::vector<cfg::Block*> reachable_blocks;
+  std::unordered_map<cfg::Block*, std::vector<cfg::Edge*>> feasible_succs;
+  std::unordered_set<IRInstruction*> dead_instructions;
+};
+} // namespace
+
+static boost::optional<ResidualCfgInfo> get_residual_cfg_info(
+    bool is_static,
+    const IRCode* code,
+    const ConstantArguments* constant_arguments,
+    const std::unordered_set<DexMethodRef*>* pure_methods) {
+  auto& cfg = code->cfg();
+  if (!constant_arguments || constant_arguments->is_top()) {
+    return boost::none;
+  }
+
+  constant_propagation::intraprocedural::FixpointIterator intra_cp(
+      cfg, constant_propagation::ConstantPrimitiveAnalyzer());
+  ConstantEnvironment initial_env =
+      constant_propagation::interprocedural::env_with_params(
+          is_static, code, *constant_arguments);
+  intra_cp.run(initial_env);
+
+  ResidualCfgInfo res;
+  res.reachable_blocks = graph::postorder_sort<cfg::GraphInterface>(cfg);
+  bool found_unreachable_block_or_infeasible_edge{false};
+  for (auto it = res.reachable_blocks.begin();
+       it != res.reachable_blocks.end();) {
+    cfg::Block* block = *it;
+    if (intra_cp.get_entry_state_at(block).is_bottom()) {
+      // we found an unreachable block
+      found_unreachable_block_or_infeasible_edge = true;
+      it = res.reachable_blocks.erase(it);
+    } else {
+      auto env = intra_cp.get_exit_state_at(block);
+      std::vector<cfg::Edge*>& block_feasible_succs = res.feasible_succs[block];
+      for (auto succ : block->succs()) {
+        if (succ->type() == cfg::EDGE_GHOST) {
+          continue;
+        }
+        if (intra_cp.analyze_edge(succ, env).is_bottom()) {
+          // we found an infeasible edge
+          found_unreachable_block_or_infeasible_edge = true;
+          continue;
+        }
+        block_feasible_succs.push_back(succ);
+      }
+      ++it;
+    }
+  }
+  if (!found_unreachable_block_or_infeasible_edge) {
+    return boost::none;
+  }
+
+  static std::unordered_set<DexMethodRef*> no_pure_methods;
+  LocalDce dce(pure_methods ? *pure_methods : no_pure_methods);
+  for (auto &p : dce.get_dead_instructions(
+           cfg, res.reachable_blocks,
+           /* succs_fn */
+           [&](cfg::Block*block) -> const std::vector<cfg::Edge*>& {
+             return res.feasible_succs.at(block);
+           },
+           /* may_be_required_fn */
+           [&](cfg::Block*block, IRInstruction*insn) -> bool {
+             if (!opcode::is_switch(insn->opcode()) &&
+                 !opcode::is_a_conditional_branch(insn->opcode())) {
+               return true;
+             }
+             return res.feasible_succs.at(block).size() > 1;
+           })) {
+    res.dead_instructions.insert(p.second->insn);
+  }
+  // put reachable blocks back in ascending order
+  std::sort(res.reachable_blocks.begin(), res.reachable_blocks.end(),
+            [](cfg::Block* a, cfg::Block* b) { return a->id() < b->id(); });
+  return res;
 }
 
 struct InlinedCostAndDeadBlocks {
@@ -1343,14 +1436,9 @@ struct InlinedCostAndDeadBlocks {
 static InlinedCostAndDeadBlocks get_inlined_cost(
     bool is_static,
     const IRCode* code,
-    const ConstantArguments* constant_arguments = nullptr) {
-  auto& cfg = code->cfg();
-
+    const ConstantArguments* constant_arguments = nullptr,
+    const std::unordered_set<DexMethodRef*>* pure_methods = nullptr) {
   size_t cost{0};
-  // For each unreachable block, we'll give a small discount to
-  // reflect the fact that some incoming branch instruction also will get
-  // simplified or eliminated.
-  size_t conditional_branch_cost_discount{0};
   size_t dead_blocks{0};
   size_t returns{0};
   std::unordered_set<DexMethodRef*> method_refs_set;
@@ -1377,44 +1465,28 @@ static InlinedCostAndDeadBlocks get_inlined_cost(
     }
   };
   if (code->editable_cfg_built()) {
-    std::unique_ptr<constant_propagation::intraprocedural::FixpointIterator>
-        intra_cp;
-    if (constant_arguments && !constant_arguments->is_top()) {
-      intra_cp.reset(
-          new constant_propagation::intraprocedural::FixpointIterator(
-              cfg, constant_propagation::ConstantPrimitiveAnalyzer()));
-      ConstantEnvironment initial_env =
-          constant_propagation::interprocedural::env_with_params(
-              is_static, code, *constant_arguments);
-      intra_cp->run(initial_env);
-    }
+    auto rcfg = get_residual_cfg_info(is_static, code, constant_arguments,
+                                      pure_methods);
+    const auto& reachable_blocks =
+        rcfg ? rcfg->reachable_blocks : code->cfg().blocks();
+    dead_blocks += code->cfg().blocks().size() - reachable_blocks.size();
 
-    const auto blocks = code->cfg().blocks();
-    for (size_t i = 0; i < blocks.size(); ++i) {
-      auto block = blocks.at(i);
-      if (intra_cp && intra_cp->get_entry_state_at(block).is_bottom()) {
-        // we found an unreachable block
-        for (const auto edge : block->preds()) {
-          const auto& pred_env = intra_cp->get_entry_state_at(edge->src());
-          if (!pred_env.is_bottom() && edge->type() == cfg::EDGE_BRANCH) {
-            // A conditional branch instruction is going to disppear
-            // TODO: Simulate backwards LocalDCE run to find what instructions
-            // actually remain live
-            conditional_branch_cost_discount += 1;
-          }
-        }
-        dead_blocks++;
-        continue;
-      }
-      cost += get_inlined_cost(blocks, i);
+    for (size_t i = 0; i < reachable_blocks.size(); ++i) {
+      auto block = reachable_blocks.at(i);
       for (auto& mie : InstructionIterable(block)) {
         auto insn = mie.insn;
+        if (rcfg && rcfg->dead_instructions.count(insn)) {
+          continue;
+        }
         cost += get_inlined_cost(insn);
         if (opcode::is_a_return(insn->opcode())) {
           returns++;
         }
         analyze_refs(insn);
       }
+      const auto& feasible_succs =
+          rcfg ? rcfg->feasible_succs.at(block) : block->succs();
+      cost += get_inlined_cost(reachable_blocks, i, feasible_succs);
     }
   } else {
     editable_cfg_adapter::iterate(code, [&](const MethodItemEntry& mie) {
@@ -1433,9 +1505,7 @@ static InlinedCostAndDeadBlocks get_inlined_cost(
     cost += returns - 1;
   }
 
-  return {{cost - std::min(cost, conditional_branch_cost_discount),
-           method_refs_set.size(), other_refs_set.size()},
-          dead_blocks};
+  return {{cost, method_refs_set.size(), other_refs_set.size()}, dead_blocks};
 }
 
 InlinedCost MultiMethodInliner::get_inlined_cost(const DexMethod* callee) {
@@ -1460,8 +1530,10 @@ InlinedCost MultiMethodInliner::get_inlined_cost(const DexMethod* callee) {
       const auto& constant_arguments = cao.first;
       const auto count = cao.second;
       TRACE(INLINE, 5, "[too_many_callers] get_inlined_cost %s", SHOW(callee));
-      auto res = ::get_inlined_cost(is_static(callee), callee->get_code(),
-                                    &constant_arguments);
+      auto res = ::get_inlined_cost(
+          is_static(callee), callee->get_code(), &constant_arguments,
+          m_config.shrinker.run_local_dce ? &m_shrinker.get_pure_methods()
+                                          : nullptr);
       TRACE(INLINE, 4,
             "[too_many_callers] get_inlined_cost with %zu constant invoke "
             "params %s @ %s: cost %zu, method refs %zu, other refs %zu (dead "

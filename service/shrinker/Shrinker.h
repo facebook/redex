@@ -84,6 +84,10 @@ class Shrinker {
 
   using ShrinkerForest = ::random_forest::Forest<const MethodContext&>;
 
+  const std::unordered_set<DexMethodRef*>& get_pure_methods() const {
+    return m_pure_methods;
+  }
+
  private:
   ShrinkerForest m_forest;
   const XStoreRefs m_xstores;

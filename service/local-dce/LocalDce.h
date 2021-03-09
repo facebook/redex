@@ -18,6 +18,7 @@ class DexMethodRef;
 namespace cfg {
 class Block;
 class ControlFlowGraph;
+class Edge;
 } // namespace cfg
 
 class LocalDce {
@@ -77,6 +78,13 @@ class LocalDce {
 
   void dce(IRCode*);
   void dce(cfg::ControlFlowGraph&);
+  std::vector<std::pair<cfg::Block*, IRList::iterator>> get_dead_instructions(
+      const cfg::ControlFlowGraph& cfg,
+      const std::vector<cfg::Block*>& blocks,
+      const std::function<const std::vector<cfg::Edge*>&(cfg::Block*)>&
+          succs_fn,
+      const std::function<bool(cfg::Block*, IRInstruction*)>&
+          may_be_required_fn);
 
  private:
   const std::unordered_set<DexMethodRef*>& m_pure_methods;
@@ -84,7 +92,7 @@ class LocalDce {
   const bool m_may_allocate_registers;
   Stats m_stats;
 
-  bool is_required(cfg::ControlFlowGraph& cfg,
+  bool is_required(const cfg::ControlFlowGraph& cfg,
                    cfg::Block* b,
                    IRInstruction* inst,
                    const boost::dynamic_bitset<>& bliveness);
