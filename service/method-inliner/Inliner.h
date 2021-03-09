@@ -112,6 +112,12 @@ struct CalleeCallerRefs {
   size_t classes;
 };
 
+struct InlinedCost {
+  size_t code;
+  size_t method_refs;
+  size_t other_refs;
+};
+
 /**
  * Helper class to inline a set of candidates.
  * Take a set of candidates and a scope and walk all instructions in scope
@@ -349,11 +355,6 @@ class MultiMethodInliner {
   std::vector<DexType*> get_callee_type_refs(const DexMethod* callee);
 
   /**
-   * Gets the number of (internal) referenced methods in a callee.
-   */
-  size_t get_callee_method_refs(const DexMethod* callee);
-
-  /**
    * Computes information about callers of a method.
    */
   CalleeCallerRefs get_callee_caller_refs(const DexMethod* callee);
@@ -367,7 +368,7 @@ class MultiMethodInliner {
   /**
    * Estimate inlined cost for a single invocation of a method.
    */
-  size_t get_inlined_cost(const DexMethod* callee);
+  InlinedCost get_inlined_cost(const DexMethod* callee);
 
   /**
    * Change visibilities of methods, assuming that`m_change_visibility` is
@@ -475,14 +476,14 @@ class MultiMethodInliner {
 
   // Cache of the inlined costs of each method after all its eligible callsites
   // have been inlined.
-  mutable ConcurrentMap<const DexMethod*, boost::optional<size_t>>
+  mutable ConcurrentMap<const DexMethod*, boost::optional<InlinedCost>>
       m_inlined_costs;
 
   // Cache of the inlined costs of each method and each constant-arguments key
   // after all its eligible callsites have been inlined.
   mutable ConcurrentMap<
       const DexMethod*,
-      std::shared_ptr<std::unordered_map<std::string, size_t>>>
+      std::shared_ptr<std::unordered_map<std::string, InlinedCost>>>
       m_inlined_costs_keyed;
 
   /**
@@ -550,9 +551,6 @@ class MultiMethodInliner {
   // Optional cache for get_callee_caller_res function
   std::unique_ptr<ConcurrentMap<const DexMethod*, CalleeCallerRefs>>
       m_callee_caller_refs;
-
-  // Optional cache for get_callee_method_refs function
-  std::unique_ptr<ConcurrentMap<const DexMethod*, size_t>> m_callee_method_refs;
 
   // Cache of whether a constructor can be unconditionally inlined.
   mutable ConcurrentMap<const DexMethod*, boost::optional<bool>>
