@@ -28,6 +28,10 @@ struct ShrinkerConfig {
 
   // Decide which functions to run register allocation on.
   std::string reg_alloc_random_forest;
+
+  // Internally used option that decides whether to analyze constructors (only
+  // relevant when using constant-propagaation); requires cfg to be built
+  bool analyze_constructors{false};
 };
 
 } // namespace shrinker

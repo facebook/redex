@@ -17,7 +17,22 @@
 #include "InlinerConfig.h"
 #include "RedexTest.h"
 
-struct MethodInlineTest : public RedexTest {};
+struct MethodInlineTest : public RedexTest {
+  MethodInlineTest() {
+    DexMethod::make_method("Ljava/lang/Enum;.equals:(Ljava/lang/Object;)Z")
+        ->make_concrete(ACC_PUBLIC, true);
+
+    DexField::make_field("Ljava/lang/Boolean;.TRUE:Ljava/lang/Boolean;")
+        ->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_FINAL);
+    DexField::make_field("Ljava/lang/Boolean;.FALSE:Ljava/lang/Boolean;")
+        ->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_FINAL);
+
+    DexMethod::make_method("Ljava/lang/Boolean;.valueOf:(Z)Ljava/lang/Boolean;")
+        ->make_concrete(ACC_PUBLIC, true);
+    DexMethod::make_method("Ljava/lang/Boolean;.booleanValue:()Z")
+        ->make_concrete(ACC_PUBLIC, true);
+  }
+};
 
 void test_inliner(const std::string& caller_str,
                   const std::string& callee_str,
@@ -59,8 +74,8 @@ void create_runtime_exception_init() {
 DexMethod* make_a_method(DexClass* cls, const char* name, int val) {
   auto proto =
       DexProto::make_proto(type::_void(), DexTypeList::make_type_list({}));
-  auto ref = DexMethod::make_method(
-      cls->get_type(), DexString::make_string(name), proto);
+  auto ref = DexMethod::make_method(cls->get_type(),
+                                    DexString::make_string(name), proto);
   MethodCreator mc(ref, ACC_STATIC | ACC_PUBLIC);
   auto main_block = mc.get_main_block();
   auto loc = mc.make_local(type::_int());
@@ -80,8 +95,8 @@ DexMethod* make_a_method(DexClass* cls, const char* name, int val) {
 DexMethod* make_loopy_method(DexClass* cls, const char* name) {
   auto proto =
       DexProto::make_proto(type::_void(), DexTypeList::make_type_list({}));
-  auto ref = DexMethod::make_method(
-      cls->get_type(), DexString::make_string(name), proto);
+  auto ref = DexMethod::make_method(cls->get_type(),
+                                    DexString::make_string(name), proto);
   MethodCreator mc(ref, ACC_STATIC | ACC_PUBLIC);
   auto method = mc.create();
   method->set_code(assembler::ircode_from_string("((:begin) (goto :begin))"));
@@ -158,6 +173,40 @@ DexMethod* make_silly_precondition_method(DexClass* cls, const char* name) {
 }
 
 /**
+ * Create a method like
+ * public static void {{name}}(Boolean x) {
+ *   if (Boolean.booleanValue() != 0) {
+ *     throw new RuntimeException("bla");
+ *   }
+ * }
+ */
+DexMethod* make_unboxing_precondition_method(DexClass* cls, const char* name) {
+  auto method_name = cls->get_name()->str() + "." + name;
+  auto method = assembler::method_from_string(std::string("") + R"(
+    (method (public static) ")" + method_name +
+                                              R"(:(Ljava/lang/Boolean;)V"
+      (
+        (load-param-object v0)
+        (invoke-virtual (v0) "Ljava/lang/Boolean;.booleanValue:()Z")
+        (move-result v0)
+        (if-eqz v0 :fail)
+        (return-void)
+
+        (:fail)
+        (new-instance "Ljava/lang/RuntimeException;")
+        (move-result-pseudo-object v1)
+        (const-string "Bla")
+        (move-result-pseudo-object v2)
+        (invoke-direct (v1 v2) "Ljava/lang/RuntimeException;.<init>:(Ljava/lang/String;)V")
+        (throw v1)
+     )
+    )
+  )");
+  cls->add_method(method);
+  return method;
+}
+
+/**
  * Create a method calls other methods.
  * void {{name}}() {
  *   other1();
@@ -170,8 +219,8 @@ DexMethod* make_a_method_calls_others(DexClass* cls,
                                       const std::vector<DexMethod*>& methods) {
   auto proto =
       DexProto::make_proto(type::_void(), DexTypeList::make_type_list({}));
-  auto ref = DexMethod::make_method(
-      cls->get_type(), DexString::make_string(name), proto);
+  auto ref = DexMethod::make_method(cls->get_type(),
+                                    DexString::make_string(name), proto);
   MethodCreator mc(ref, ACC_STATIC | ACC_PUBLIC);
   auto main_block = mc.get_main_block();
   for (auto callee : methods) {
@@ -189,13 +238,34 @@ DexMethod* make_a_method_calls_others_with_arg(
     const std::vector<std::pair<DexMethod*, int32_t>>& methods) {
   auto proto =
       DexProto::make_proto(type::_void(), DexTypeList::make_type_list({}));
-  auto ref = DexMethod::make_method(
-      cls->get_type(), DexString::make_string(name), proto);
+  auto ref = DexMethod::make_method(cls->get_type(),
+                                    DexString::make_string(name), proto);
   MethodCreator mc(ref, ACC_STATIC | ACC_PUBLIC);
   auto main_block = mc.get_main_block();
   auto loc = mc.make_local(type::_int());
   for (auto& p : methods) {
     main_block->load_const(loc, p.second);
+    main_block->invoke(p.first, {loc});
+  }
+  main_block->ret_void();
+  auto method = mc.create();
+  cls->add_method(method);
+  return method;
+}
+
+DexMethod* make_a_method_calls_others_with_arg(
+    DexClass* cls,
+    const char* name,
+    const std::vector<std::pair<DexMethod*, DexField*>>& methods) {
+  auto proto =
+      DexProto::make_proto(type::_void(), DexTypeList::make_type_list({}));
+  auto ref = DexMethod::make_method(cls->get_type(),
+                                    DexString::make_string(name), proto);
+  MethodCreator mc(ref, ACC_STATIC | ACC_PUBLIC);
+  auto main_block = mc.get_main_block();
+  auto loc = mc.make_local(type::_int());
+  for (auto& p : methods) {
+    main_block->sget(p.second, loc);
     main_block->invoke(p.first, {loc});
   }
   main_block->ret_void();
@@ -713,6 +783,102 @@ TEST_F(
       (invoke-static (v0) "Lfoo;.check:(I)V")
       (const v0 0)
       (invoke-static (v0) "Lfoo;.check:(I)V")
+      (return-void)
+    )
+  )";
+  foo_main->get_code()->clear_cfg();
+  auto actual = foo_main->get_code();
+  auto expected = assembler::ircode_from_string(expected_str);
+  EXPECT_CODE_EQ(expected.get(), actual);
+}
+
+TEST_F(MethodInlineTest, boxed_boolean) {
+  ConcurrentMethodRefCache concurrent_resolve_cache;
+  auto concurrent_resolver = [&concurrent_resolve_cache](DexMethodRef* method,
+                                                         MethodSearch search) {
+    return resolve_method(method, search, concurrent_resolve_cache);
+  };
+
+  bool intra_dex = false;
+
+  DexStoresVector stores;
+  std::unordered_set<DexMethod*> candidates;
+  std::unordered_set<DexMethod*> expected_inlined;
+  auto foo_cls = create_a_class("Lfoo;");
+  {
+    DexStore store("root");
+    store.add_classes({});
+    store.add_classes({foo_cls});
+    stores.push_back(std::move(store));
+  }
+  DexMethod *check_method, *foo_main;
+  {
+    create_runtime_exception_init();
+    check_method = make_unboxing_precondition_method(foo_cls, "check");
+    candidates.insert(check_method);
+    // foo_main calls check_method a few times.
+    auto FALSE = (DexField*)DexField::get_field(
+        "Ljava/lang/Boolean;.FALSE:Ljava/lang/Boolean;");
+    always_assert(FALSE != nullptr);
+    auto TRUE = (DexField*)DexField::get_field(
+        "Ljava/lang/Boolean;.TRUE:Ljava/lang/Boolean;");
+    always_assert(TRUE != nullptr);
+    foo_main = make_a_method_calls_others_with_arg(foo_cls,
+                                                   "foo_main",
+                                                   {
+                                                       {check_method, FALSE},
+                                                       {check_method, FALSE},
+                                                       {check_method, TRUE},
+                                                       {check_method, FALSE},
+                                                       {check_method, FALSE},
+                                                       {check_method, FALSE},
+                                                   });
+    expected_inlined.insert(check_method);
+  }
+  auto scope = build_class_scope(stores);
+  api::LevelChecker::init(0, scope);
+  inliner::InlinerConfig inliner_config;
+  inliner_config.populate(scope);
+  inliner_config.use_cfg_inliner = true;
+  inliner_config.throws_inline = true;
+  inliner_config.shrinker.run_const_prop = true;
+  inliner_config.shrinker.run_local_dce = true;
+  inliner_config.shrinker.compute_pure_methods = false;
+  check_method->get_code()->build_cfg(true);
+  foo_main->get_code()->build_cfg(true);
+  std::unordered_set<DexMethodRef*> pure_methods{
+      DexMethod::get_method("Ljava/lang/Boolean;.booleanValue:()Z")};
+  MultiMethodInliner inliner(scope, stores, candidates, concurrent_resolver,
+                             inliner_config, intra_dex ? IntraDex : InterDex,
+                             /* true_virtual_callers */ {},
+                             /* inline_for_speed */ nullptr,
+                             /* same_method_implementations */ nullptr,
+                             /* analyze_and_prune_inits */ false, pure_methods);
+  inliner.inline_methods();
+  auto inlined = inliner.get_inlined();
+  EXPECT_EQ(inlined.size(), expected_inlined.size());
+  for (auto method : expected_inlined) {
+    EXPECT_EQ(inlined.count(method), 1);
+  }
+
+  const auto& expected_str = R"(
+    (
+      (.pos:dbg_0 "Lfoo;.foo_main:()V" UnknownSource 0)
+      (sget-object "Ljava/lang/Boolean;.FALSE:Ljava/lang/Boolean;")
+      (move-result-pseudo-object v0)
+      (invoke-static (v0) "Lfoo;.check:(Ljava/lang/Boolean;)V")
+      (sget-object "Ljava/lang/Boolean;.FALSE:Ljava/lang/Boolean;")
+      (move-result-pseudo-object v0)
+      (invoke-static (v0) "Lfoo;.check:(Ljava/lang/Boolean;)V")
+      (sget-object "Ljava/lang/Boolean;.FALSE:Ljava/lang/Boolean;")
+      (move-result-pseudo-object v0)
+      (invoke-static (v0) "Lfoo;.check:(Ljava/lang/Boolean;)V")
+      (sget-object "Ljava/lang/Boolean;.FALSE:Ljava/lang/Boolean;")
+      (move-result-pseudo-object v0)
+      (invoke-static (v0) "Lfoo;.check:(Ljava/lang/Boolean;)V")
+      (sget-object "Ljava/lang/Boolean;.FALSE:Ljava/lang/Boolean;")
+      (move-result-pseudo-object v0)
+      (invoke-static (v0) "Lfoo;.check:(Ljava/lang/Boolean;)V")
       (return-void)
     )
   )";

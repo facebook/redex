@@ -7,6 +7,7 @@
 
 #include "Shrinker.h"
 
+#include "ConstructorParams.h"
 #include "RandomForest.h"
 #include "RegisterAllocation.h"
 
@@ -109,6 +110,10 @@ Shrinker::Shrinker(
       }
     }
   }
+  if (config.run_const_prop && config.analyze_constructors) {
+    constant_propagation::immutable_state::analyze_constructors(
+        scope, &m_immut_analyzer_state);
+  }
 }
 
 void Shrinker::shrink_method(DexMethod* method) {
@@ -131,8 +136,12 @@ void Shrinker::shrink_method(DexMethod* method) {
     }
     {
       constant_propagation::intraprocedural::FixpointIterator fp_iter(
-          code->cfg(), constant_propagation::ConstantPrimitiveAnalyzer());
-      fp_iter.run(ConstantEnvironment());
+          code->cfg(),
+          constant_propagation::ConstantPrimitiveAndBoxedAnalyzer(
+              &m_immut_analyzer_state,
+              constant_propagation::EnumFieldAnalyzerState::get(),
+              constant_propagation::BoxedBooleanAnalyzerState::get(), nullptr));
+      fp_iter.run({});
       constant_propagation::Transform::Config config;
       constant_propagation::Transform tf(config);
       const_prop_stats = tf.apply_on_uneditable_cfg(
@@ -144,8 +153,12 @@ void Shrinker::shrink_method(DexMethod* method) {
     code->cfg().calculate_exit_block();
     {
       constant_propagation::intraprocedural::FixpointIterator fp_iter(
-          code->cfg(), constant_propagation::ConstantPrimitiveAnalyzer());
-      fp_iter.run(ConstantEnvironment());
+          code->cfg(),
+          constant_propagation::ConstantPrimitiveAndBoxedAnalyzer(
+              &m_immut_analyzer_state,
+              constant_propagation::EnumFieldAnalyzerState::get(),
+              constant_propagation::BoxedBooleanAnalyzerState::get(), nullptr));
+      fp_iter.run({});
       constant_propagation::Transform::Config config;
       constant_propagation::Transform tf(config);
       const_prop_stats += tf.apply(fp_iter, code->cfg(), method, &m_xstores);

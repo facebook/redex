@@ -352,6 +352,8 @@ void run_inliner(DexStoresVector& stores,
     walk::parallel::code(scope, [](DexMethod*, IRCode& code) {
       code.build_cfg(/* editable */ true);
     });
+    inliner_config.shrinker.analyze_constructors =
+        inliner_config.shrinker.run_const_prop;
   }
 
   // inline candidates

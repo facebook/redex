@@ -194,9 +194,7 @@ struct EnumFieldAnalyzerState {
 
   EnumFieldAnalyzerState()
       : enum_equals(static_cast<DexMethod*>(DexMethod::get_method(
-            "Ljava/lang/Enum;.equals:(Ljava/lang/Object;)Z"))) {
-    always_assert(enum_equals);
-  }
+            "Ljava/lang/Enum;.equals:(Ljava/lang/Object;)Z"))) {}
 };
 
 /*
@@ -464,5 +462,11 @@ ReturnState collect_return_state(IRCode* code,
  * instruction. A null object would cause an exception to be thrown.
  */
 boost::optional<size_t> get_dereferenced_object_src_index(const IRInstruction*);
+
+using ConstantPrimitiveAndBoxedAnalyzer =
+    InstructionAnalyzerCombiner<ImmutableAttributeAnalyzer,
+                                EnumFieldAnalyzer,
+                                BoxedBooleanAnalyzer,
+                                PrimitiveAnalyzer>;
 
 } // namespace constant_propagation

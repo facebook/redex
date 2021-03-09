@@ -220,33 +220,84 @@ MultiMethodInliner::MultiMethodInliner(
 }
 
 /*
- * The key of a constant-arguments data structure is a string representation
- * that approximates the constant arguments.
+ * The key of a constant-arguments data structure is a canonical string
+ * representation of the constant arguments. Usually, the string is quite small,
+ * it only rarely contains fields or methods.
  */
 static std::string get_key(const ConstantArguments& constant_arguments) {
   always_assert(!constant_arguments.is_bottom());
   if (constant_arguments.is_top()) {
     return "";
   }
-  // We'll normalize the order by putting things into a std::map
-  std::map<reg_t, SignedConstantDomain> bindings;
-  for (auto& p : constant_arguments.bindings()) {
-    always_assert(!p.second.is_top());
-    if (const auto& signed_value = p.second.maybe_get<SignedConstantDomain>()) {
-      bindings.emplace(p.first, *signed_value);
-    }
-  }
-  std::ostringstream oss;
+  const auto& bindings = constant_arguments.bindings();
+  std::vector<reg_t> ordered_arg_idxes;
   for (auto& p : bindings) {
-    if (p.first != bindings.begin()->first) {
+    ordered_arg_idxes.push_back(p.first);
+  }
+  always_assert(!ordered_arg_idxes.empty());
+  std::sort(ordered_arg_idxes.begin(), ordered_arg_idxes.end());
+  std::ostringstream oss;
+  for (auto arg_idx : ordered_arg_idxes) {
+    if (arg_idx != ordered_arg_idxes.front()) {
       oss << ",";
     }
-    oss << p.first << ":";
-    auto& d = p.second;
-    if (d.get_constant()) {
-      oss << *d.get_constant();
-    } else {
-      oss << d.interval();
+    oss << arg_idx << ":";
+    const auto& value = bindings.at(arg_idx);
+    if (const auto& signed_value = value.maybe_get<SignedConstantDomain>()) {
+      auto c = signed_value->get_constant();
+      if (c) {
+        oss << *c;
+      } else {
+        oss << signed_value->interval();
+      }
+    } else if (const auto& singleton_value =
+                   value.maybe_get<SingletonObjectDomain>()) {
+      auto field = *singleton_value->get_constant();
+      oss << show(field);
+    } else if (const auto& obj_or_none =
+                   value.maybe_get<ObjectWithImmutAttrDomain>()) {
+      auto object = *obj_or_none->get_constant();
+      auto ordered_attributes =
+          object->attributes; // intentionally making a copy
+      std::sort(ordered_attributes.begin(), ordered_attributes.end(),
+                [](const ImmutableAttr& a, const ImmutableAttr& b) {
+                  if (a.attr.is_field() != b.attr.is_field()) {
+                    return a.attr.is_field();
+                  }
+                  if (a.attr.is_field()) {
+                    always_assert(b.attr.is_field());
+                    return compare_dexfields(a.attr.field, b.attr.field);
+                  }
+                  always_assert(a.attr.is_method());
+                  always_assert(b.attr.is_method());
+                  return compare_dexmethods(a.attr.method, b.attr.method);
+                });
+      oss << "{";
+      bool first{true};
+      for (auto& attr : ordered_attributes) {
+        if (first) {
+          first = false;
+        } else {
+          oss << ",";
+        }
+        if (attr.attr.is_field()) {
+          oss << show(attr.attr.field);
+        } else {
+          always_assert(attr.attr.is_method());
+          oss << show(attr.attr.method);
+        }
+        oss << "=";
+        if (const auto& signed_value2 =
+                attr.value.maybe_get<SignedConstantDomain>()) {
+          auto c = signed_value2->get_constant();
+          if (c) {
+            oss << *c;
+          } else {
+            oss << signed_value->interval();
+          }
+        }
+      }
+      oss << "}";
     }
   }
   return oss.str();
@@ -534,9 +585,13 @@ MultiMethodInliner::get_invoke_constant_arguments(
   std::unordered_set<DexMethod*> callees_set(callees.begin(), callees.end());
   auto& cfg = code->cfg();
   constant_propagation::intraprocedural::FixpointIterator intra_cp(
-      cfg, constant_propagation::ConstantPrimitiveAnalyzer());
+      cfg,
+      constant_propagation::ConstantPrimitiveAndBoxedAnalyzer(
+          m_shrinker.get_immut_analyzer_state(),
+          constant_propagation::EnumFieldAnalyzerState::get(),
+          constant_propagation::BoxedBooleanAnalyzerState::get(), nullptr));
   auto initial_env = constant_propagation::interprocedural::env_with_params(
-      is_static(caller), code, ConstantArguments());
+      is_static(caller), code, {});
   intra_cp.run(initial_env);
   for (const auto& block : cfg.blocks()) {
     auto env = intra_cp.get_entry_state_at(block);
@@ -1355,14 +1410,20 @@ static boost::optional<ResidualCfgInfo> get_residual_cfg_info(
     bool is_static,
     const IRCode* code,
     const ConstantArguments* constant_arguments,
-    const std::unordered_set<DexMethodRef*>* pure_methods) {
+    const std::unordered_set<DexMethodRef*>* pure_methods,
+    constant_propagation::ImmutableAttributeAnalyzerState*
+        immut_analyzer_state) {
   auto& cfg = code->cfg();
   if (!constant_arguments || constant_arguments->is_top()) {
     return boost::none;
   }
 
   constant_propagation::intraprocedural::FixpointIterator intra_cp(
-      cfg, constant_propagation::ConstantPrimitiveAnalyzer());
+      cfg,
+      constant_propagation::ConstantPrimitiveAndBoxedAnalyzer(
+          immut_analyzer_state,
+          constant_propagation::EnumFieldAnalyzerState::get(),
+          constant_propagation::BoxedBooleanAnalyzerState::get(), nullptr));
   ConstantEnvironment initial_env =
       constant_propagation::interprocedural::env_with_params(
           is_static, code, *constant_arguments);
@@ -1437,7 +1498,9 @@ static InlinedCostAndDeadBlocks get_inlined_cost(
     bool is_static,
     const IRCode* code,
     const ConstantArguments* constant_arguments = nullptr,
-    const std::unordered_set<DexMethodRef*>* pure_methods = nullptr) {
+    const std::unordered_set<DexMethodRef*>* pure_methods = nullptr,
+    constant_propagation::ImmutableAttributeAnalyzerState*
+        immut_analyzer_state = nullptr) {
   size_t cost{0};
   size_t dead_blocks{0};
   size_t returns{0};
@@ -1466,7 +1529,7 @@ static InlinedCostAndDeadBlocks get_inlined_cost(
   };
   if (code->editable_cfg_built()) {
     auto rcfg = get_residual_cfg_info(is_static, code, constant_arguments,
-                                      pure_methods);
+                                      pure_methods, immut_analyzer_state);
     const auto& reachable_blocks =
         rcfg ? rcfg->reachable_blocks : code->cfg().blocks();
     dead_blocks += code->cfg().blocks().size() - reachable_blocks.size();
@@ -1530,10 +1593,10 @@ InlinedCost MultiMethodInliner::get_inlined_cost(const DexMethod* callee) {
       const auto& constant_arguments = cao.first;
       const auto count = cao.second;
       TRACE(INLINE, 5, "[too_many_callers] get_inlined_cost %s", SHOW(callee));
-      auto res = ::get_inlined_cost(
-          is_static(callee), callee->get_code(), &constant_arguments,
-          m_config.shrinker.run_local_dce ? &m_shrinker.get_pure_methods()
-                                          : nullptr);
+      auto res = ::get_inlined_cost(is_static(callee), callee->get_code(),
+                                    &constant_arguments,
+                                    &m_shrinker.get_pure_methods(),
+                                    m_shrinker.get_immut_analyzer_state());
       TRACE(INLINE, 4,
             "[too_many_callers] get_inlined_cost with %zu constant invoke "
             "params %s @ %s: cost %zu, method refs %zu, other refs %zu (dead "

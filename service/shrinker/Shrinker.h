@@ -88,6 +88,11 @@ class Shrinker {
     return m_pure_methods;
   }
 
+  constant_propagation::ImmutableAttributeAnalyzerState*
+  get_immut_analyzer_state() {
+    return &m_immut_analyzer_state;
+  }
+
  private:
   ShrinkerForest m_forest;
   const XStoreRefs m_xstores;
@@ -97,6 +102,8 @@ class Shrinker {
 
   std::unordered_set<DexMethodRef*> m_pure_methods;
   std::unordered_set<DexString*> m_finalish_field_names;
+
+  constant_propagation::ImmutableAttributeAnalyzerState m_immut_analyzer_state;
 
   // THe mutex protects all other mutable (stats) fields.
   std::mutex m_stats_mutex;
