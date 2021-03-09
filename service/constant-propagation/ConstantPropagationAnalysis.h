@@ -463,8 +463,22 @@ ReturnState collect_return_state(IRCode* code,
  */
 boost::optional<size_t> get_dereferenced_object_src_index(const IRInstruction*);
 
+/*
+ * Handle reading of static fields fXXX in $EnumUtils class.
+ */
+class EnumUtilsFieldAnalyzer final
+    : public InstructionAnalyzerBase<EnumUtilsFieldAnalyzer,
+                                     ConstantEnvironment,
+                                     ImmutableAttributeAnalyzerState*> {
+ public:
+  static bool analyze_sget(ImmutableAttributeAnalyzerState* state,
+                           const IRInstruction* insn,
+                           ConstantEnvironment* env);
+};
+
 using ConstantPrimitiveAndBoxedAnalyzer =
-    InstructionAnalyzerCombiner<ImmutableAttributeAnalyzer,
+    InstructionAnalyzerCombiner<EnumUtilsFieldAnalyzer,
+                                ImmutableAttributeAnalyzer,
                                 EnumFieldAnalyzer,
                                 BoxedBooleanAnalyzer,
                                 PrimitiveAnalyzer>;

@@ -329,6 +329,8 @@ struct EnumUtil {
    * Create a helper class for enums.
    */
   DexClass* make_enumutils_class(uint32_t fields_count) {
+    // Note that the EnumUtilsFieldAnalyzer does pattern matching on fields of
+    // the form $EnumUtils.fXXX, and should be kept in sync.
     std::string name = "Lredex/$EnumUtils;";
     DexType* type = DexType::get_type(name);
     while (type) {
@@ -375,6 +377,8 @@ struct EnumUtil {
    * Create a static final Integer field and update <clinit> code.
    */
   DexFieldRef* make_a_field(DexClass* cls, uint32_t value, IRCode* code) {
+    // Note that the EnumUtilsFieldAnalyzer does pattern matching on fields of
+    // the form $EnumUtils.fXXX, and should be kept in sync.
     auto name = DexString::make_string("f" + std::to_string(value));
     auto field = DexField::make_field(cls->get_type(), name, INTEGER_TYPE)
                      ->make_concrete(ACC_PUBLIC | ACC_FINAL | ACC_STATIC);

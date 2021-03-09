@@ -138,7 +138,7 @@ void Shrinker::shrink_method(DexMethod* method) {
       constant_propagation::intraprocedural::FixpointIterator fp_iter(
           code->cfg(),
           constant_propagation::ConstantPrimitiveAndBoxedAnalyzer(
-              &m_immut_analyzer_state,
+              &m_immut_analyzer_state, &m_immut_analyzer_state,
               constant_propagation::EnumFieldAnalyzerState::get(),
               constant_propagation::BoxedBooleanAnalyzerState::get(), nullptr));
       fp_iter.run({});
@@ -155,7 +155,7 @@ void Shrinker::shrink_method(DexMethod* method) {
       constant_propagation::intraprocedural::FixpointIterator fp_iter(
           code->cfg(),
           constant_propagation::ConstantPrimitiveAndBoxedAnalyzer(
-              &m_immut_analyzer_state,
+              &m_immut_analyzer_state, &m_immut_analyzer_state,
               constant_propagation::EnumFieldAnalyzerState::get(),
               constant_propagation::BoxedBooleanAnalyzerState::get(), nullptr));
       fp_iter.run({});

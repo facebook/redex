@@ -588,6 +588,7 @@ MultiMethodInliner::get_invoke_constant_arguments(
       cfg,
       constant_propagation::ConstantPrimitiveAndBoxedAnalyzer(
           m_shrinker.get_immut_analyzer_state(),
+          m_shrinker.get_immut_analyzer_state(),
           constant_propagation::EnumFieldAnalyzerState::get(),
           constant_propagation::BoxedBooleanAnalyzerState::get(), nullptr));
   auto initial_env = constant_propagation::interprocedural::env_with_params(
@@ -1421,7 +1422,7 @@ static boost::optional<ResidualCfgInfo> get_residual_cfg_info(
   constant_propagation::intraprocedural::FixpointIterator intra_cp(
       cfg,
       constant_propagation::ConstantPrimitiveAndBoxedAnalyzer(
-          immut_analyzer_state,
+          immut_analyzer_state, immut_analyzer_state,
           constant_propagation::EnumFieldAnalyzerState::get(),
           constant_propagation::BoxedBooleanAnalyzerState::get(), nullptr));
   ConstantEnvironment initial_env =

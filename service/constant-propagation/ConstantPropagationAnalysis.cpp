@@ -1009,7 +1009,8 @@ bool ImmutableAttributeAnalyzer::analyze_method_initialization(
       }
       auto cached_object = state->get_cached_boxed_object(method, *constant);
       if (cached_object) {
-        env->set(obj_reg, SingletonObjectWithImmutAttrDomain({cached_object}));
+        env->set(obj_reg, SingletonObjectWithImmutAttrDomain(
+                              {std::move(cached_object)}));
         return true;
       }
       object->write_value(initializer.attr, *signed_value);
@@ -1086,6 +1087,44 @@ ReturnState collect_return_state(
     }
   }
   return return_state;
+}
+
+bool EnumUtilsFieldAnalyzer::analyze_sget(
+    ImmutableAttributeAnalyzerState* state,
+    const IRInstruction* insn,
+    ConstantEnvironment* env) {
+  // The $EnumUtils class contains fields named fXXX, where XXX encodes a 32-bit
+  // number whose boxed value is stored as a java.lang.Integer instance in that
+  // field.
+  auto field = resolve_field(insn->get_field());
+  if (field == nullptr || !is_final(field) ||
+      field->get_type() != type::java_lang_Integer() || field->str().empty() ||
+      field->str()[0] != 'f' ||
+      field->get_class() != DexType::make_type("Lredex/$EnumUtils;")) {
+    return false;
+  }
+  auto valueOf = method::java_lang_Integer_valueOf();
+  auto it = state->method_initializers.find(valueOf);
+  if (it == state->method_initializers.end()) {
+    return false;
+  }
+  const auto& initializers = it->second;
+  always_assert(initializers.size() == 1);
+  const auto& initializer = initializers.front();
+  always_assert(initializer.insn_src_id_of_attr == 0);
+
+  const auto& name = field->str();
+  auto value = std::stoi(name.substr(1));
+  auto cached_object = state->get_cached_boxed_object(valueOf, value);
+  if (cached_object) {
+    env->set(RESULT_REGISTER,
+             SingletonObjectWithImmutAttrDomain({std::move(cached_object)}));
+  } else {
+    auto object = std::make_shared<ObjectWithImmutAttr>();
+    object->write_value(initializer.attr, SignedConstantDomain(value));
+    env->set(RESULT_REGISTER, ObjectWithImmutAttrDomain(object));
+  }
+  return true;
 }
 
 namespace intraprocedural {
