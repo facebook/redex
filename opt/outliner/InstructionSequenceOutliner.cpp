@@ -1697,6 +1697,7 @@ class OutlinedMethodCreator {
           if (dbg_pos != last_dbg_pos &&
               !opcode::is_a_move_result_pseudo(ci.core.opcode)) {
             auto cloned_dbg_pos = std::make_unique<DexPosition>(*dbg_pos);
+            TRACE(CSE, 1, "***");
             cloned_dbg_pos->parent = nullptr;
             code->push_back(std::move(cloned_dbg_pos));
             last_dbg_pos = dbg_pos;

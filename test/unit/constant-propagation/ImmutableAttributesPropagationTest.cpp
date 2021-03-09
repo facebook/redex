@@ -31,6 +31,7 @@ struct ImmutableTest : public ConstantPropagationTest {
     m_immut_analyzer_state.add_initializer(integer_valueOf, integer_intValue)
         .set_src_id_of_attr(0)
         .set_obj_to_dest();
+    m_immut_analyzer_state.add_cached_boxed_objects(integer_valueOf, -128, 128);
     m_analyzer = ImmutableAnalyzer(nullptr, &m_immut_analyzer_state, nullptr);
   }
 
@@ -58,6 +59,42 @@ TEST_F(ImmutableTest, integer) {
       (move-result v0)
       (invoke-virtual (v0) "Ljava/lang/Integer;.intValue:()I")
       (const v0 100)
+    )
+  )");
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+}
+
+TEST_F(ImmutableTest, cached_identity) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (const v0 100)
+      (invoke-static (v0) "Ljava/lang/Integer;.valueOf:(I)Ljava/lang/Integer;")
+      (move-result-object v1)
+      (invoke-static (v0) "Ljava/lang/Integer;.valueOf:(I)Ljava/lang/Integer;")
+      (move-result-object v2)
+      (if-eq v1 v2 :target)
+      (const v0 42)
+      (goto :end)
+      (:target)
+      (const v0 23)
+      (:end)
+    )
+  )");
+
+  do_const_prop(code.get(), m_analyzer, m_config);
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (const v0 100)
+      (invoke-static (v0) "Ljava/lang/Integer;.valueOf:(I)Ljava/lang/Integer;")
+      (move-result-object v1)
+      (invoke-static (v0) "Ljava/lang/Integer;.valueOf:(I)Ljava/lang/Integer;")
+      (move-result-object v2)
+      (goto :target)
+      (const v0 42)
+      (goto :end)
+      (:target)
+      (const v0 23)
+      (:end)
     )
   )");
   EXPECT_CODE_EQ(code.get(), expected_code.get());
