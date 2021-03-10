@@ -170,6 +170,15 @@ static void assert_dex_magic_consistency(const std::string& source,
                     "APK contains dex file of different versions: %s vs %s\n",
                     source.c_str(), target.c_str());
 }
+
+bool is_zip(const std::string& filename) {
+  char buffer[2];
+  std::ifstream infile(filename);
+  always_assert(infile);
+  infile.read(buffer, 2);
+  // the first two bytes of a ZIP file are usually "PK"
+  return buffer[0] == 'P' && buffer[1] == 'K';
+}
 } // namespace
 
 namespace redex {
@@ -268,6 +277,14 @@ void load_classes_from_dexes_and_metadata(
       input_totals += dex_stats;
       input_dexes_stats.push_back(dex_stats);
       stores[0].add_classes(std::move(classes));
+    } else if (is_zip(filename)) {
+      std::cerr << "error: Input files are expected to be DEX (with filename "
+                   "ending in "
+                   ".dex), or a JSON metadata file. However, \""
+                << filename
+                << "\" is a ZIP. If this is an APK, please extract "
+                   "the DEX files from it and pass those as the inputs.";
+      exit(EXIT_FAILURE);
     } else {
       DexMetadata store_metadata;
       store_metadata.parse(filename);
