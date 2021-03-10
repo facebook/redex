@@ -971,8 +971,9 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
   }
   case OPCODE_IGET: {
     assume_reference(current_state, insn->src(0));
-    const auto f_cls = insn->get_field()->get_class();
-    assume_assignable(current_state->get_dex_type(insn->src(0)), f_cls);
+    // T86372240
+    // const auto f_cls = insn->get_field()->get_class();
+    // assume_assignable(current_state->get_dex_type(insn->src(0)), f_cls);
     break;
   }
   case OPCODE_IGET_BOOLEAN:
