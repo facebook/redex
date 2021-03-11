@@ -33,6 +33,8 @@
 #include "ProguardReporting.h"
 #include "ReachableClasses.h"
 #include "Sanitizers.h"
+#include "ScopedCFG.h"
+#include "SourceBlocks.h"
 #include "Timer.h"
 #include "Walkers.h"
 
@@ -282,6 +284,42 @@ static void check_unique_deobfuscated_names(const char* pass_name,
     }
     field_names.emplace(dex_field->get_deobfuscated_name(), dex_field);
   });
+}
+
+struct SourceBlocksStats {
+  unsigned int total_blocks;
+  unsigned int source_blocks_present;
+
+  SourceBlocksStats& operator+=(const SourceBlocksStats& that) {
+    total_blocks += that.total_blocks;
+    source_blocks_present += that.source_blocks_present;
+    return *this;
+  }
+};
+
+void track_source_block_coverage(const DexStoresVector& stores) {
+  auto stats = walk::parallel::methods<SourceBlocksStats>(
+      build_class_scope(stores), [](DexMethod* m) -> SourceBlocksStats {
+        SourceBlocksStats ret{0u, 0u};
+        auto code = m->get_code();
+        if (!code) {
+          return ret;
+        }
+
+        cfg::ScopedCFG cfg(code);
+        for (auto block : cfg->blocks()) {
+          ret.total_blocks++;
+          if (source_blocks::has_source_blocks(block)) {
+            ret.source_blocks_present++;
+          }
+        }
+        return ret;
+      });
+
+  TRACE(INSTRUMENT, 4,
+        "Total Basic Blocks = %d, Basic Blocks with SourceBlock = %d (%.1f%%)",
+        stats.total_blocks, stats.source_blocks_present,
+        ((double)stats.source_blocks_present) * 100 / stats.total_blocks);
 }
 
 } // namespace
@@ -615,6 +653,10 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
     set_metric("~result~MethodProfiles~", conf.get_method_profiles().size());
     set_metric("~result~MethodProfiles~unresolved~",
                conf.get_method_profiles().unresolved_size());
+
+    if (traceEnabled(INSTRUMENT, 4)) {
+      track_source_block_coverage(stores);
+    }
 
     m_current_pass_info = nullptr;
   }
