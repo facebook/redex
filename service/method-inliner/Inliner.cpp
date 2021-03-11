@@ -298,6 +298,12 @@ static std::string get_key(const ConstantArguments& constant_arguments) {
         }
       }
       oss << "}";
+    } else if (const auto& singleton_obj_or_none =
+                   value.maybe_get<SingletonObjectWithImmutAttrDomain>()) {
+      auto object = (*singleton_obj_or_none->get_constant()).unwrapped_object;
+      oss << "singleton-immutable-object(" << (size_t)object.get() << ")";
+    } else {
+      not_reached_log("unexpected value: %s", SHOW(value));
     }
   }
   return oss.str();
