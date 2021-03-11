@@ -102,7 +102,7 @@ struct MethodInfo {
   size_t num_instrumented_blocks = 0;
 
   std::vector<cfg::BlockId> bit_id_2_block_id;
-  std::vector<std::vector<const SourceBlock*>> bit_id_2_source_blocks;
+  std::vector<std::vector<SourceBlock*>> bit_id_2_source_blocks;
   std::map<cfg::BlockId, BlockType> rejected_blocks;
 };
 

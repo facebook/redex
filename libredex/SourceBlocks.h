@@ -159,4 +159,15 @@ inline std::vector<const SourceBlock*> gather_source_blocks(
   return ret;
 }
 
+inline std::vector<SourceBlock*> gather_source_blocks(cfg::Block* b) {
+  std::vector<SourceBlock*> ret;
+  for (const auto& mie : *b) {
+    if (mie.type != MFLOW_SOURCE_BLOCK) {
+      continue;
+    }
+    ret.push_back(mie.src_block.get());
+  }
+  return ret;
+}
+
 } // namespace source_blocks

@@ -13,6 +13,7 @@
 #include "IRList.h"
 #include "IROpcode.h"
 #include "Show.h"
+#include "SourceBlocks.h"
 #include "Trace.h"
 
 namespace cfg {
@@ -31,6 +32,56 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
   inline_cfg(caller, callsite, callee_orig, next_caller_reg, base_plugin);
 }
 
+namespace {
+
+boost::optional<float> get_source_blocks_factor(
+    const InstructionIterator& inline_site,
+    const ControlFlowGraph& callee_cfg) {
+  auto caller_block = inline_site.block();
+  float caller_val;
+  {
+    auto sb_vec = source_blocks::gather_source_blocks(caller_block);
+    if (sb_vec.empty()) {
+      return boost::none;
+    }
+    caller_val = sb_vec[0]->val;
+  }
+  if (caller_val == 0) {
+    return 0.0f;
+  }
+
+  // Assume that integrity is guaranteed, so that val at entry is
+  // dominating all blocks.
+  float callee_val;
+  {
+    auto sb_vec = source_blocks::gather_source_blocks(callee_cfg.entry_block());
+    if (sb_vec.empty()) {
+      return boost::none;
+    }
+    callee_val = sb_vec[0]->val;
+  }
+  if (callee_val == 0) {
+    return 0.0f;
+  }
+
+  // Expectation would be that callee_val >= caller_val. But tracking might
+  // not be complete.
+
+  // This will normalize to the value at the callsite.
+  return caller_val / callee_val;
+}
+
+void normalize_source_blocks(ControlFlowGraph& cfg, float factor) {
+  for (auto* b : cfg.blocks()) {
+    auto sb_vec = source_blocks::gather_source_blocks(b);
+    for (auto* sb : sb_vec) {
+      sb->val *= factor;
+    }
+  }
+}
+
+} // namespace
+
 void CFGInliner::inline_cfg(ControlFlowGraph* caller,
                             const InstructionIterator& inline_site,
                             const ControlFlowGraph& callee_orig,
@@ -41,6 +92,13 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
   // copy the callee because we're going to move its contents into the caller
   ControlFlowGraph callee;
   callee_orig.deep_copy(&callee);
+
+  {
+    auto sb_factor = get_source_blocks_factor(inline_site, callee_orig);
+    if (sb_factor) {
+      normalize_source_blocks(callee, *sb_factor);
+    }
+  }
 
   remove_ghost_exit_block(&callee);
   cleanup_callee_debug(&callee);
