@@ -39,6 +39,7 @@ class DexField;
 struct DexFieldSpec;
 struct DexDebugEntry;
 struct DexPosition;
+class PositionPatternSwitchManager;
 struct RedexContext;
 namespace keep_rules {
 struct AssumeReturnValue;
@@ -108,8 +109,7 @@ struct RedexContext {
                      const DexMethodSpec& new_spec,
                      bool rename_on_collision);
 
-  DexDebugEntry* make_dbg_entry(DexDebugInstruction* opcode);
-  DexDebugEntry* make_dbg_entry(DexPosition* pos);
+  PositionPatternSwitchManager* get_position_pattern_switch_manager();
 
   // Return false on unique classes
   // Return true on benign duplicate classes
@@ -288,6 +288,9 @@ struct RedexContext {
   // DexMethod
   ConcurrentMap<DexMethodSpec, DexMethodRef*> s_method_map;
   std::mutex s_method_lock;
+
+  // DexPositionSwitch and DexPositionPattern
+  PositionPatternSwitchManager* m_position_pattern_switch_manager{nullptr};
 
   // Type-to-class map
   std::mutex m_type_system_mutex;

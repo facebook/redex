@@ -16,6 +16,7 @@
 #include "Debug.h"
 #include "DexCallSite.h"
 #include "DexClass.h"
+#include "DexPosition.h"
 #include "DuplicateClasses.h"
 #include "ProguardConfiguration.h"
 #include "Show.h"
@@ -71,6 +72,8 @@ RedexContext::~RedexContext() {
   for (const Task& t : m_destruction_tasks) {
     t();
   }
+
+  delete m_position_pattern_switch_manager;
 }
 
 /*
@@ -368,6 +371,14 @@ void RedexContext::mutate_method(DexMethodRef* method,
                       SHOW(r.cls), SHOW(r.name), SHOW(r.proto));
   }
   s_method_map.emplace(r, method);
+}
+
+PositionPatternSwitchManager*
+RedexContext::get_position_pattern_switch_manager() {
+  if (!m_position_pattern_switch_manager) {
+    m_position_pattern_switch_manager = new PositionPatternSwitchManager();
+  }
+  return m_position_pattern_switch_manager;
 }
 
 // Return false on unique classes
