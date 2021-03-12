@@ -84,4 +84,14 @@ public class InlineMainV2IODI2 {
           }
         });
   }
+
+  @Test
+  public void testOutlined() throws Exception {
+    itc.testOutlined();
+  }
+
+  @Test
+  public void testOutlinedInlined() throws Exception {
+    itc.testOutlinedInlined();
+  }
 }

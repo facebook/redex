@@ -62,4 +62,14 @@ public class InlineMainV2IODI {
   public void testElseThrowsOverload() throws Exception {
     itc.testElseThrowsOverload(null);
   }
+
+  @Test
+  public void testOutlined() throws Exception {
+    itc.testOutlined();
+  }
+
+  @Test
+  public void testOutlinedInlined() throws Exception {
+    itc.testOutlinedInlined();
+  }
 }

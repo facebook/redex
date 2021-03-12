@@ -1610,7 +1610,8 @@ class OutlinedMethodCreator {
 
   // The "best" representative set of debug position is that which provides
   // most detail, i.e. has the highest number of unique debug positions
-  using PositionMap = std::map<const CandidateInstruction*, DexPosition*>;
+  using PositionMap =
+      std::unordered_map<const CandidateInstruction*, DexPosition*>;
   PositionMap get_best_outlined_dbg_positions(const Candidate& c,
                                               const CandidateInfo& ci) {
     PositionMap best_positions;
@@ -1696,7 +1697,28 @@ class OutlinedMethodCreator {
       code->set_debug_item(std::make_unique<DexDebugItem>());
     }
     std::function<void(const CandidateNode& cn)> walk;
-    walk = [this, &code, &dbg_positions, &walk, &c](const CandidateNode& cn) {
+    std::unordered_map<DexPosition*, DexPosition*> cloned_dbg_positions;
+    std::function<DexPosition*(DexPosition*)> get_or_add_cloned_dbg_position;
+    get_or_add_cloned_dbg_position =
+        [this, &code, &get_or_add_cloned_dbg_position,
+         &cloned_dbg_positions](DexPosition* dbg_pos) -> DexPosition* {
+      auto it = cloned_dbg_positions.find(dbg_pos);
+      if (it != cloned_dbg_positions.end()) {
+        return it->second;
+      }
+      auto cloned_dbg_pos = std::make_unique<DexPosition>(*dbg_pos);
+      if (dbg_pos->parent) {
+        cloned_dbg_pos->parent =
+            get_or_add_cloned_dbg_position(dbg_pos->parent);
+      }
+      auto cloned_dbg_pos_ptr = cloned_dbg_pos.get();
+      code->push_back(std::move(cloned_dbg_pos));
+      m_outlined_method_positions++;
+      cloned_dbg_positions.emplace(dbg_pos, cloned_dbg_pos_ptr);
+      return cloned_dbg_pos_ptr;
+    };
+    walk = [this, &code, &dbg_positions, &walk, &c,
+            &get_or_add_cloned_dbg_position](const CandidateNode& cn) {
       m_outlined_method_nodes++;
       DexPosition* last_dbg_pos{nullptr};
       for (auto& ci : cn.insns) {
@@ -1704,11 +1726,8 @@ class OutlinedMethodCreator {
           DexPosition* dbg_pos = dbg_positions.at(&ci);
           if (dbg_pos != last_dbg_pos &&
               !opcode::is_a_move_result_pseudo(ci.core.opcode)) {
-            auto cloned_dbg_pos = std::make_unique<DexPosition>(*dbg_pos);
-            cloned_dbg_pos->parent = nullptr;
-            code->push_back(std::move(cloned_dbg_pos));
+            get_or_add_cloned_dbg_position(dbg_pos);
             last_dbg_pos = dbg_pos;
-            m_outlined_method_positions++;
           }
         }
         auto insn = new IRInstruction(ci.core.opcode);

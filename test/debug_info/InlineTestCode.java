@@ -274,110 +274,127 @@ public class InlineTestCode {
     }
   }
 
-  static int counter;
-
-  @NoInline
-  public static void wrapsThrow() throws Exception {
-    if (--counter == 0) {
-      throw new Exception("foo2");
-    }
-  }
-
-  @NoInline
-  public static void outlinedThrower() throws Exception {
-    wrapsThrow();
-    wrapsThrow();
-    wrapsThrow();
-    wrapsThrow();
-    wrapsThrow();
-    wrapsThrow();
-    wrapsThrow();
-    wrapsThrow();
-    wrapsThrow();
-    wrapsThrow();
-    wrapsThrow();
-    wrapsThrow();
-    wrapsThrow();
-    wrapsThrow();
-    wrapsThrow();
-    wrapsThrow();
-    wrapsThrow();
-    wrapsThrow();
-    wrapsThrow();
-    wrapsThrow();
-    wrapsThrow();
-    wrapsThrow();
-    wrapsThrow();
-    wrapsThrow();
-    wrapsThrow();
-    wrapsThrow();
-    wrapsThrow();
-    wrapsThrow();
-    wrapsThrow();
-    wrapsThrow();
-    wrapsThrow();
-    wrapsThrow();
-    wrapsThrow();
-    wrapsThrow();
-    wrapsThrow();
-    wrapsThrow();
-    wrapsThrow();
-    wrapsThrow();
-    wrapsThrow();
-    wrapsThrow();
-    wrapsThrow();
-    wrapsThrow();
-    wrapsThrow();
-    wrapsThrow();
-    wrapsThrow();
-    wrapsThrow();
-    wrapsThrow();
-    wrapsThrow();
-  }
-
   @NoInline
   @SuppressWarnings("CatchGeneralException")
   public void testOutlined() throws Exception {
     try {
-      counter = 1;
-      outlinedThrower();
+      InlineSeparateFileV2.counter = 1;
+      InlineSeparateFileV2.outlinedThrower();
     } catch (Exception e) {
       ArrayList<StackTraceElement> trace = lm.mapStackTrace(e.getStackTrace());
       assertThat(TraceUtil.traceToString(trace, 4))
           .isEqualTo(
               Arrays.asList(
-                  "com.facebook.redexlinemap.InlineTestCode.wrapsThrow(InlineTestCode.java:282)",
-                  "com.facebook.redexlinemap.InlineTestCode.outlinedThrower(InlineTestCode.java:288)",
-                  "com.redex.Outlined$0$0$0.$outlined$0$7e9323cbd1e08c98(RedexGenerated)", // ideally, we wouldn't see this
-                  "com.facebook.redexlinemap.InlineTestCode.testOutlined(InlineTestCode.java:343)"));
+                  "com.facebook.redexlinemap.InlineSeparateFileV2.wrapsThrow2(InlineSeparateFileV2.java:32)",
+                  "com.facebook.redexlinemap.InlineSeparateFileV2.outlinedThrower(InlineSeparateFileV2.java:38)",
+                  "com.redex.Outlined$0$0$0.$outlined$0$6dde6ce7db5fb2e0(RedexGenerated)", // ideally, we wouldn't see this
+                  "com.facebook.redexlinemap.InlineTestCode.testOutlined(InlineTestCode.java:282)"));
     }
 
     try {
-      counter = 2;
-      outlinedThrower();
+      InlineSeparateFileV2.counter = 2;
+      InlineSeparateFileV2.outlinedThrower();
     } catch (Exception e) {
       ArrayList<StackTraceElement> trace = lm.mapStackTrace(e.getStackTrace());
       assertThat(TraceUtil.traceToString(trace, 4))
           .isEqualTo(
               Arrays.asList(
-                  "com.facebook.redexlinemap.InlineTestCode.wrapsThrow(InlineTestCode.java:282)",
-                  "com.facebook.redexlinemap.InlineTestCode.outlinedThrower(InlineTestCode.java:289)",
-                  "com.redex.Outlined$0$0$0.$outlined$0$7e9323cbd1e08c98(RedexGenerated)",
-                  "com.facebook.redexlinemap.InlineTestCode.testOutlined(InlineTestCode.java:357)"));
+                  "com.facebook.redexlinemap.InlineSeparateFileV2.wrapsThrow2(InlineSeparateFileV2.java:32)",
+                  "com.facebook.redexlinemap.InlineSeparateFileV2.outlinedThrower(InlineSeparateFileV2.java:39)",
+                  "com.redex.Outlined$0$0$0.$outlined$0$6dde6ce7db5fb2e0(RedexGenerated)",
+                  "com.facebook.redexlinemap.InlineTestCode.testOutlined(InlineTestCode.java:296)"));
     }
 
     try {
-      counter = 3;
-      outlinedThrower();
+      InlineSeparateFileV2.counter = 3;
+      InlineSeparateFileV2.outlinedThrower();
     } catch (Exception e) {
       ArrayList<StackTraceElement> trace = lm.mapStackTrace(e.getStackTrace());
       assertThat(TraceUtil.traceToString(trace, 4))
           .isEqualTo(
               Arrays.asList(
-                  "com.facebook.redexlinemap.InlineTestCode.wrapsThrow(InlineTestCode.java:282)",
-                  "com.facebook.redexlinemap.InlineTestCode.outlinedThrower(InlineTestCode.java:290)",
-                  "com.redex.Outlined$0$0$0.$outlined$0$7e9323cbd1e08c98(RedexGenerated)",
-                  "com.facebook.redexlinemap.InlineTestCode.testOutlined(InlineTestCode.java:371)"));
+                  "com.facebook.redexlinemap.InlineSeparateFileV2.wrapsThrow2(InlineSeparateFileV2.java:32)",
+                  "com.facebook.redexlinemap.InlineSeparateFileV2.outlinedThrower(InlineSeparateFileV2.java:40)",
+                  "com.redex.Outlined$0$0$0.$outlined$0$6dde6ce7db5fb2e0(RedexGenerated)",
+                  "com.facebook.redexlinemap.InlineTestCode.testOutlined(InlineTestCode.java:310)"));
+    }
+
+    try {
+      InlineSeparateFileV2.counter = 42;
+      InlineSeparateFileV2.outlinedThrower();
+    } catch (Exception e) {
+      ArrayList<StackTraceElement> trace = lm.mapStackTrace(e.getStackTrace());
+      assertThat(TraceUtil.traceToString(trace, 4))
+          .isEqualTo(
+              Arrays.asList(
+                  "com.facebook.redexlinemap.InlineSeparateFileV2.wrapsThrow2(InlineSeparateFileV2.java:32)",
+                  "com.facebook.redexlinemap.InlineSeparateFileV2.outlinedThrower(InlineSeparateFileV2.java:55)", // <-- wrong, should be :79
+                  "com.redex.Outlined$0$0$0.$outlined$0$6dde6ce7db5fb2e0(RedexGenerated)",
+                  "com.facebook.redexlinemap.InlineTestCode.testOutlined(InlineTestCode.java:324)"));
+    }
+  }
+
+  @NoInline
+  @SuppressWarnings("CatchGeneralException")
+  public void testOutlinedInlined() throws Exception {
+    try {
+      InlineSeparateFileV2.counter = 1;
+      InlineSeparateFileV2.outlinedThrowerInlined();
+    } catch (Exception e) {
+      ArrayList<StackTraceElement> trace = lm.mapStackTrace(e.getStackTrace());
+      assertThat(TraceUtil.traceToString(trace, 5))
+          .isEqualTo(
+              Arrays.asList(
+                  "com.facebook.redexlinemap.InlineSeparateFileV2.wrapsThrow3(InlineSeparateFileV2.java:91)",
+                  "com.facebook.redexlinemap.InlineSeparateFileV2.wrapsThrowInline(InlineSeparateFileV2.java:97)",
+                  "com.facebook.redexlinemap.InlineSeparateFileV2.outlinedThrowerInlined(InlineSeparateFileV2.java:102)",
+                  "com.redex.Outlined$0$0$0.$outlined$0$bfeec5cff070a818(RedexGenerated)",
+                  "com.facebook.redexlinemap.InlineTestCode.testOutlinedInlined(InlineTestCode.java:342)"));
+    }
+
+    try {
+      InlineSeparateFileV2.counter = 2;
+      InlineSeparateFileV2.outlinedThrowerInlined();
+    } catch (Exception e) {
+      ArrayList<StackTraceElement> trace = lm.mapStackTrace(e.getStackTrace());
+      assertThat(TraceUtil.traceToString(trace, 5))
+          .isEqualTo(
+              Arrays.asList(
+                  "com.facebook.redexlinemap.InlineSeparateFileV2.wrapsThrow3(InlineSeparateFileV2.java:91)",
+                  "com.facebook.redexlinemap.InlineSeparateFileV2.wrapsThrowInline(InlineSeparateFileV2.java:97)",
+                  "com.facebook.redexlinemap.InlineSeparateFileV2.outlinedThrowerInlined(InlineSeparateFileV2.java:103)",
+                  "com.redex.Outlined$0$0$0.$outlined$0$bfeec5cff070a818(RedexGenerated)",
+                  "com.facebook.redexlinemap.InlineTestCode.testOutlinedInlined(InlineTestCode.java:357)"));
+    }
+
+    try {
+      InlineSeparateFileV2.counter = 3;
+      InlineSeparateFileV2.outlinedThrowerInlined();
+    } catch (Exception e) {
+      ArrayList<StackTraceElement> trace = lm.mapStackTrace(e.getStackTrace());
+      assertThat(TraceUtil.traceToString(trace, 5))
+          .isEqualTo(
+              Arrays.asList(
+                  "com.facebook.redexlinemap.InlineSeparateFileV2.wrapsThrow3(InlineSeparateFileV2.java:91)",
+                  "com.facebook.redexlinemap.InlineSeparateFileV2.wrapsThrowInline(InlineSeparateFileV2.java:97)",
+                  "com.facebook.redexlinemap.InlineSeparateFileV2.outlinedThrowerInlined(InlineSeparateFileV2.java:104)",
+                  "com.redex.Outlined$0$0$0.$outlined$0$bfeec5cff070a818(RedexGenerated)",
+                  "com.facebook.redexlinemap.InlineTestCode.testOutlinedInlined(InlineTestCode.java:372)"));
+    }
+
+    try {
+      InlineSeparateFileV2.counter = 42;
+      InlineSeparateFileV2.outlinedThrowerInlined();
+    } catch (Exception e) {
+      ArrayList<StackTraceElement> trace = lm.mapStackTrace(e.getStackTrace());
+      assertThat(TraceUtil.traceToString(trace, 5))
+          .isEqualTo(
+              Arrays.asList(
+                  "com.facebook.redexlinemap.InlineSeparateFileV2.wrapsThrow3(InlineSeparateFileV2.java:91)",
+                  "com.facebook.redexlinemap.InlineSeparateFileV2.wrapsThrowInline(InlineSeparateFileV2.java:97)",
+                  "com.facebook.redexlinemap.InlineSeparateFileV2.outlinedThrowerInlined(InlineSeparateFileV2.java:119)", // <-- wrong, should be :143
+                  "com.redex.Outlined$0$0$0.$outlined$0$bfeec5cff070a818(RedexGenerated)",
+                  "com.facebook.redexlinemap.InlineTestCode.testOutlinedInlined(InlineTestCode.java:387)"));
     }
   }
 }

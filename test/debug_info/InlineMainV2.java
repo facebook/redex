@@ -64,4 +64,9 @@ public class InlineMainV2 {
   public void testOutlined() throws Exception {
     itc.testOutlined();
   }
+
+  @Test
+  public void testOutlinedInlined() throws Exception {
+    itc.testOutlinedInlined();
+  }
 }
