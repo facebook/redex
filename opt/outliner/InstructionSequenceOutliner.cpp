@@ -1608,13 +1608,68 @@ class OutlinedMethodCreator {
   size_t m_outlined_method_nodes{0};
   size_t m_outlined_method_positions{0};
 
-  // The "best" representative set of debug position is that which provides
-  // most detail, i.e. has the highest number of unique debug positions
   using PositionMap =
       std::unordered_map<const CandidateInstruction*, DexPosition*>;
-  PositionMap get_best_outlined_dbg_positions(const Candidate& c,
-                                              const CandidateInfo& ci) {
-    PositionMap best_positions;
+  std::unique_ptr<PositionMap> get_outlined_dbg_positions(
+      const Candidate& c,
+      const CandidateMethodLocation& cml,
+      DexMethod* method) {
+    auto& cfg = method->get_code()->cfg();
+    auto root_insn_it = cfg.find_insn(cml.first_insn, cml.hint_block);
+    if (root_insn_it.is_end()) {
+      // Shouldn't happen, but we are not going to fight that here.
+      return nullptr;
+    }
+    auto root_dbg_pos = skip_fileless(cfg.get_dbg_pos(root_insn_it));
+    if (!root_dbg_pos) {
+      return nullptr;
+    }
+    auto positions = std::make_unique<PositionMap>();
+    std::function<void(DexPosition * dbg_pos, const CandidateNode& cn,
+                       big_blocks::Iterator it)>
+        walk;
+    walk = [&positions, &walk](DexPosition* dbg_pos,
+                               const CandidateNode& cn,
+                               big_blocks::Iterator it) {
+      cfg::Block* last_block{nullptr};
+      for (auto& csi : cn.insns) {
+        for (; it->type == MFLOW_POSITION || it->type == MFLOW_DEBUG ||
+               it->type == MFLOW_SOURCE_BLOCK;
+             it++) {
+          if (it->type == MFLOW_POSITION && it->pos->file) {
+            dbg_pos = it->pos.get();
+          }
+        }
+        always_assert(it->type == MFLOW_OPCODE);
+        always_assert(it->insn->opcode() == csi.core.opcode);
+        positions->emplace(&csi, dbg_pos);
+        last_block = it.block();
+        it++;
+      }
+      if (!cn.succs.empty()) {
+        always_assert(last_block != nullptr);
+        auto succs = get_ordered_goto_and_branch_succs(last_block);
+        always_assert(succs.size() == cn.succs.size());
+        for (size_t i = 0; i < succs.size(); i++) {
+          always_assert(normalize(succs.at(i)) == cn.succs.at(i).first);
+          auto& succ_cn = *cn.succs.at(i).second;
+          auto succ_block = succs.at(i)->target();
+          auto succ_it = big_blocks::Iterator(succ_block, succ_block->begin());
+          walk(dbg_pos, succ_cn, succ_it);
+        }
+      }
+    };
+    walk(root_dbg_pos, c.root,
+         big_blocks::Iterator(root_insn_it.block(), root_insn_it.unwrap(),
+                              /* ignore_throws */ true));
+    return positions;
+  }
+
+  // The "best" representative set of debug position is that which provides
+  // most detail, i.e. has the highest number of unique debug positions
+  std::unique_ptr<PositionMap> get_best_outlined_dbg_positions(
+      const Candidate& c, const CandidateInfo& ci) {
+    std::unique_ptr<PositionMap> best_positions;
     size_t best_unique_positions{0};
     std::vector<DexMethod*> ordered_methods;
     for (auto& p : ci.methods) {
@@ -1623,61 +1678,18 @@ class OutlinedMethodCreator {
     std::sort(ordered_methods.begin(), ordered_methods.end(),
               compare_dexmethods);
     for (auto method : ordered_methods) {
-      auto& cfg = method->get_code()->cfg();
       auto& cmls = ci.methods.at(method);
       for (auto& cml : cmls) {
-        auto root_insn_it = cfg.find_insn(cml.first_insn, cml.hint_block);
-        if (root_insn_it.is_end()) {
-          // Shouldn't happen, but we are not going to fight that here.
+        auto positions = get_outlined_dbg_positions(c, cml, method);
+        if (!positions) {
           continue;
         }
-        auto root_dbg_pos = skip_fileless(cfg.get_dbg_pos(root_insn_it));
-        if (!root_dbg_pos) {
-          continue;
-        }
-        PositionMap positions;
         std::unordered_set<DexPosition*> unique_positions;
-        std::function<void(DexPosition * dbg_pos, const CandidateNode& cn,
-                           big_blocks::Iterator it)>
-            walk;
-        walk = [&positions, &unique_positions, &walk](DexPosition* dbg_pos,
-                                                      const CandidateNode& cn,
-                                                      big_blocks::Iterator it) {
-          cfg::Block* last_block{nullptr};
-          for (auto& csi : cn.insns) {
-            for (; it->type == MFLOW_POSITION || it->type == MFLOW_DEBUG ||
-                   it->type == MFLOW_SOURCE_BLOCK;
-                 it++) {
-              if (it->type == MFLOW_POSITION && it->pos->file) {
-                dbg_pos = it->pos.get();
-              }
-            }
-            always_assert(it->type == MFLOW_OPCODE);
-            always_assert(it->insn->opcode() == csi.core.opcode);
-            positions.emplace(&csi, dbg_pos);
-            unique_positions.insert(dbg_pos);
-            last_block = it.block();
-            it++;
-          }
-          if (!cn.succs.empty()) {
-            always_assert(last_block != nullptr);
-            auto succs = get_ordered_goto_and_branch_succs(last_block);
-            always_assert(succs.size() == cn.succs.size());
-            for (size_t i = 0; i < succs.size(); i++) {
-              always_assert(normalize(succs.at(i)) == cn.succs.at(i).first);
-              auto& succ_cn = *cn.succs.at(i).second;
-              auto succ_block = succs.at(i)->target();
-              auto succ_it =
-                  big_blocks::Iterator(succ_block, succ_block->begin());
-              walk(dbg_pos, succ_cn, succ_it);
-            }
-          }
-        };
-        walk(root_dbg_pos, c.root,
-             big_blocks::Iterator(root_insn_it.block(), root_insn_it.unwrap(),
-                                  /* ignore_throws */ true));
+        for (auto& p : *positions) {
+          unique_positions.insert(p.second);
+        }
         if (unique_positions.size() > best_unique_positions) {
-          best_positions = positions;
+          best_positions = std::move(positions);
           best_unique_positions = unique_positions.size();
           if (best_unique_positions == c.root.insns.size()) {
             break;
@@ -1691,9 +1703,9 @@ class OutlinedMethodCreator {
   // Construct an IRCode datastructure from a candidate.
   std::unique_ptr<IRCode> get_outlined_code(DexMethod* outlined_method,
                                             const Candidate& c,
-                                            const PositionMap& dbg_positions) {
+                                            const PositionMap* dbg_positions) {
     auto code = std::make_unique<IRCode>(outlined_method, c.temp_regs);
-    if (!dbg_positions.empty()) {
+    if (dbg_positions) {
       code->set_debug_item(std::make_unique<DexDebugItem>());
     }
     std::function<void(const CandidateNode& cn)> walk;
@@ -1722,8 +1734,8 @@ class OutlinedMethodCreator {
       m_outlined_method_nodes++;
       DexPosition* last_dbg_pos{nullptr};
       for (auto& ci : cn.insns) {
-        if (!dbg_positions.empty()) {
-          DexPosition* dbg_pos = dbg_positions.at(&ci);
+        if (dbg_positions) {
+          DexPosition* dbg_pos = dbg_positions->at(&ci);
           if (dbg_pos != last_dbg_pos &&
               !opcode::is_a_move_result_pseudo(ci.core.opcode)) {
             get_or_add_cloned_dbg_position(dbg_pos);
@@ -1814,7 +1826,7 @@ class OutlinedMethodCreator {
             ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
     auto dbg_positions = get_best_outlined_dbg_positions(c, ci);
     outlined_method->set_code(
-        get_outlined_code(outlined_method, c, dbg_positions));
+        get_outlined_code(outlined_method, c, dbg_positions.get()));
     outlined_method->set_deobfuscated_name(show(outlined_method));
     outlined_method->rstate.set_dont_inline();
     outlined_method->rstate.set_outlined();
