@@ -1591,6 +1591,14 @@ class MethodNameGenerator {
   }
 };
 
+// This mimics what generate_debug_instructions(DexClass.cpp) does eventually:
+// ignoring positions that don't have a file.
+static DexPosition* skip_fileless(DexPosition* pos) {
+  for (; pos && !pos->file; pos = pos->parent) {
+  }
+  return pos;
+}
+
 class OutlinedMethodCreator {
  private:
   PassManager& m_mgr;
@@ -1622,8 +1630,8 @@ class OutlinedMethodCreator {
           // Shouldn't happen, but we are not going to fight that here.
           continue;
         }
-        auto dbg_pos = cfg.get_dbg_pos(root_insn_it);
-        if (!dbg_pos) {
+        auto root_dbg_pos = skip_fileless(cfg.get_dbg_pos(root_insn_it));
+        if (!root_dbg_pos) {
           continue;
         }
         PositionMap positions;
@@ -1631,24 +1639,22 @@ class OutlinedMethodCreator {
         std::function<void(DexPosition * dbg_pos, const CandidateNode& cn,
                            big_blocks::Iterator it)>
             walk;
-        walk = [&positions, &unique_positions, &walk](DexPosition* last_dbg_pos,
+        walk = [&positions, &unique_positions, &walk](DexPosition* dbg_pos,
                                                       const CandidateNode& cn,
                                                       big_blocks::Iterator it) {
           cfg::Block* last_block{nullptr};
           for (auto& csi : cn.insns) {
-            auto next_dbg_pos{last_dbg_pos};
             for (; it->type == MFLOW_POSITION || it->type == MFLOW_DEBUG ||
                    it->type == MFLOW_SOURCE_BLOCK;
                  it++) {
-              if (it->type == MFLOW_POSITION) {
-                next_dbg_pos = it->pos.get();
+              if (it->type == MFLOW_POSITION && it->pos->file) {
+                dbg_pos = it->pos.get();
               }
             }
             always_assert(it->type == MFLOW_OPCODE);
             always_assert(it->insn->opcode() == csi.core.opcode);
-            positions.emplace(&csi, last_dbg_pos);
-            unique_positions.insert(last_dbg_pos);
-            last_dbg_pos = next_dbg_pos;
+            positions.emplace(&csi, dbg_pos);
+            unique_positions.insert(dbg_pos);
             last_block = it.block();
             it++;
           }
@@ -1658,15 +1664,15 @@ class OutlinedMethodCreator {
             always_assert(succs.size() == cn.succs.size());
             for (size_t i = 0; i < succs.size(); i++) {
               always_assert(normalize(succs.at(i)) == cn.succs.at(i).first);
-              auto succ_cn = *cn.succs.at(i).second;
+              auto& succ_cn = *cn.succs.at(i).second;
               auto succ_block = succs.at(i)->target();
               auto succ_it =
                   big_blocks::Iterator(succ_block, succ_block->begin());
-              walk(last_dbg_pos, succ_cn, succ_it);
+              walk(dbg_pos, succ_cn, succ_it);
             }
           }
         };
-        walk(dbg_pos, c.root,
+        walk(root_dbg_pos, c.root,
              big_blocks::Iterator(root_insn_it.block(), root_insn_it.unwrap(),
                                   /* ignore_throws */ true));
         if (unique_positions.size() > best_unique_positions) {
@@ -1686,18 +1692,19 @@ class OutlinedMethodCreator {
                                             const Candidate& c,
                                             const PositionMap& dbg_positions) {
     auto code = std::make_unique<IRCode>(outlined_method, c.temp_regs);
+    if (!dbg_positions.empty()) {
+      code->set_debug_item(std::make_unique<DexDebugItem>());
+    }
     std::function<void(const CandidateNode& cn)> walk;
     walk = [this, &code, &dbg_positions, &walk, &c](const CandidateNode& cn) {
       m_outlined_method_nodes++;
       DexPosition* last_dbg_pos{nullptr};
       for (auto& ci : cn.insns) {
-        auto it = dbg_positions.find(&ci);
-        if (it != dbg_positions.end()) {
-          DexPosition* dbg_pos = it->second;
+        if (!dbg_positions.empty()) {
+          DexPosition* dbg_pos = dbg_positions.at(&ci);
           if (dbg_pos != last_dbg_pos &&
               !opcode::is_a_move_result_pseudo(ci.core.opcode)) {
             auto cloned_dbg_pos = std::make_unique<DexPosition>(*dbg_pos);
-            TRACE(CSE, 1, "***");
             cloned_dbg_pos->parent = nullptr;
             code->push_back(std::move(cloned_dbg_pos));
             last_dbg_pos = dbg_pos;
@@ -1757,7 +1764,6 @@ class OutlinedMethodCreator {
           }
           walk(*p.second);
         }
-        return;
       }
     };
     walk(c.root);
@@ -1832,6 +1838,7 @@ static void rewrite_at_location(DexMethod* outlined_method,
     // occurrences after processing a candidate.
     not_reached();
   }
+  auto last_dbg_pos = skip_fileless(cfg.get_dbg_pos(first_insn_it));
   cfg::CFGMutation cfg_mutation(cfg);
   const auto first_arg_reg = c.temp_regs;
   boost::optional<reg_t> last_arg_reg;
@@ -1847,11 +1854,13 @@ static void rewrite_at_location(DexMethod* outlined_method,
       arg_regs.push_back(reg);
     }
   };
-  walk = [&walk, &gather_arg_regs, &cml, &cfg_mutation](
+  walk = [&walk, &last_dbg_pos, &gather_arg_regs, &cml, &cfg, &cfg_mutation](
              const CandidateNode& cn, big_blocks::InstructionIterator it) {
     cfg::Block* last_block{nullptr};
+    boost::optional<cfg::InstructionIterator> last_insn_it;
     for (size_t insn_idx = 0; insn_idx < cn.insns.size();
-         last_block = it.block(), insn_idx++, it++) {
+         last_block = it.block(), last_insn_it = it.unwrap(), insn_idx++,
+                it++) {
       auto& ci = cn.insns.at(insn_idx);
       always_assert(it->insn->opcode() == ci.core.opcode);
       for (size_t i = 0; i < ci.srcs.size(); i++) {
@@ -1861,10 +1870,17 @@ static void rewrite_at_location(DexMethod* outlined_method,
         cfg_mutation.remove(it.unwrap());
       }
     }
-    if (cn.succs.empty() && cn.res_reg) {
-      gather_arg_regs(*cn.res_reg, *cml.out_reg);
-    }
-    if (!cn.succs.empty()) {
+    if (cn.succs.empty()) {
+      if (cn.res_reg) {
+        gather_arg_regs(*cn.res_reg, *cml.out_reg);
+      }
+      if (last_insn_it) {
+        auto dbg_pos = skip_fileless(cfg.get_dbg_pos(*last_insn_it));
+        if (dbg_pos) {
+          last_dbg_pos = dbg_pos;
+        }
+      }
+    } else {
       always_assert(last_block != nullptr);
       auto succs = get_ordered_goto_and_branch_succs(last_block);
       always_assert(succs.size() == cn.succs.size());
@@ -1891,14 +1907,32 @@ static void rewrite_at_location(DexMethod* outlined_method,
     invoke_insn->set_src(i, arg_regs.at(i));
   }
   outlined_method_invocation.push_back(invoke_insn);
+  IRInstruction* move_result_insn = nullptr;
   if (c.res_type) {
-    IRInstruction* move_result_insn =
+    move_result_insn =
         new IRInstruction(opcode::move_result_for_invoke(outlined_method));
     move_result_insn->set_dest(*cml.out_reg);
     outlined_method_invocation.push_back(move_result_insn);
   }
   cfg_mutation.insert_before(first_insn_it, outlined_method_invocation);
   cfg_mutation.flush();
+
+  // TODO: Instead inserting directly in the cfg via find_insn, enhance the
+  // CFGMutation class to support inserting positions before and after
+  // instructions.
+  auto dbg_pos_insertion_it = cfg.find_insn(invoke_insn, first_insn_it.block());
+  auto new_dbg_pos = std::make_unique<DexPosition>(0);
+  new_dbg_pos->bind(DexString::make_string(show(outlined_method)),
+                    DexString::make_string("RedexGenerated"));
+  cfg.insert_before(dbg_pos_insertion_it, std::move(new_dbg_pos));
+  if (last_dbg_pos) {
+    if (move_result_insn) {
+      dbg_pos_insertion_it =
+          cfg.find_insn(move_result_insn, first_insn_it.block());
+    }
+    cfg.insert_after(dbg_pos_insertion_it,
+                     std::make_unique<DexPosition>(*last_dbg_pos));
+  }
 };
 
 // Manages references and assigns numeric ids to classes
