@@ -66,16 +66,13 @@ class MethodProfiles {
       m_interaction_id = "";
       m_mode = NONE;
       bool success = parse_stats_file(csv_filename);
-      if (!success) {
-        TRACE(METH_PROF,
-              1,
-              "WARNING: parsing of %s failed",
-              csv_filename.c_str());
-      }
-      // FIXME re-enable this check
-      // always_assert_log(success,
-      //                   "Failed to parse %s. See stderr for more details",
-      //                   csv_filename.c_str());
+      always_assert_log(success,
+                        "Failed to parse %s. See stderr for more details",
+                        csv_filename.c_str());
+      always_assert_log(!m_method_stats.empty(),
+                        "No valid data found in the profile %s. See stderr "
+                        "for more details.",
+                        csv_filename.c_str());
     }
   }
 
