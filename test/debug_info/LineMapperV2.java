@@ -12,6 +12,7 @@ import java.io.InputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Collections;
 
 public class LineMapperV2 {
   String[] stringPool;
@@ -221,7 +222,9 @@ public class LineMapperV2 {
 
   public ArrayList<StackTraceElement> mapStackTrace(StackTraceElement[] trace) {
     ArrayList<StackTraceElement> newTrace = new ArrayList<>();
-    for (StackTraceElement el : trace) {
+    int lastPatternId = -1;
+    for (int traceIdx = trace.length - 1; traceIdx >= 0; traceIdx--) {
+      StackTraceElement el = trace[traceIdx];
       String fn = el.getFileName();
       if (fn == null || fn.equals("")) {
         int line = el.getLineNumber();
@@ -242,18 +245,60 @@ public class LineMapperV2 {
         }
 
         ArrayList<PositionV2> positions = getPositionsAt(line - 1);
-        for (PositionV2 pos : positions) {
+        for (int posIdx = positions.size() - 1; posIdx >= 0; posIdx--) {
+          PositionV2 pos = positions.get(posIdx);
+          String className = stringPool[pos.class_id];
+          String methodName = stringPool[pos.method_id];
+          if ("redex.$Position".equals(className)) {
+            if ("pattern".equals(methodName)) {
+              // We don't add a frame for this, but just remember the id
+              lastPatternId = pos.line;
+              continue;
+            }
+            if ("switch".equals(methodName)) {
+              // We'll find the matching case, and splice it in
+              PositionV2 countPos = mapping.get(pos.line);
+              String countClassName = stringPool[countPos.class_id];
+              String countMethodName = stringPool[countPos.method_id];
+              if ("redex.$Position".equals(countClassName) && "count".equals(countMethodName)) {
+                int count = countPos.line;
+                ArrayList<PositionV2> casePositions = null;
+                for (int i = 0; i < count; i++) {
+                  PositionV2 casePos = mapping.get(pos.line + 1 + i);
+                  String caseClassName = stringPool[casePos.class_id];
+                  String caseMethodName = stringPool[casePos.method_id];
+                  if ("redex.$Position".equals(caseClassName) && "case".equals(caseMethodName) &&
+                    casePos.line == lastPatternId) {
+                    positions.remove(posIdx);
+                    casePositions = getPositionsAt(casePos.parent - 1);
+                    break;
+                  }
+                }
+                if (casePositions != null) {
+                  positions.addAll(posIdx, casePositions);
+                  posIdx += casePositions.size();
+                  lastPatternId = -1;
+                  continue;
+                }
+              }
+              // If we get here, then something went wrong while matching the switch case pattern.
+              // That shouldn't happen, but we are not going to fight it, and by continuing,
+              // we'll just leave the special redex.$Position.switch frame here.
+            }
+          }
           newTrace.add(
               new StackTraceElement(
-                  stringPool[pos.class_id],
-                  stringPool[pos.method_id],
+                  className,
+                  methodName,
                   stringPool[pos.file_id],
                   pos.line));
+          lastPatternId = -1;
         }
       } else {
         newTrace.add(el);
       }
     }
+    Collections.reverse(newTrace);
     return newTrace;
   }
 }

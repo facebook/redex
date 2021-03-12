@@ -39,6 +39,7 @@ struct Config {
   size_t max_outlined_methods_per_class{100};
   size_t savings_threshold{10};
   bool outline_from_primary_dex{false};
+  bool full_dbg_positions{false};
 };
 
 } // namespace instruction_sequence_outliner
