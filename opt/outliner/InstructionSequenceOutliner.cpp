@@ -1608,9 +1608,7 @@ class OutlinedMethodCreator {
   size_t m_outlined_method_nodes{0};
   size_t m_outlined_method_positions{0};
 
-  using PositionMap =
-      std::unordered_map<const CandidateInstruction*, DexPosition*>;
-  std::unique_ptr<PositionMap> get_outlined_dbg_positions(
+  std::unique_ptr<PositionPattern> get_outlined_dbg_positions(
       const Candidate& c,
       const CandidateMethodLocation& cml,
       DexMethod* method) {
@@ -1624,7 +1622,7 @@ class OutlinedMethodCreator {
     if (!root_dbg_pos) {
       return nullptr;
     }
-    auto positions = std::make_unique<PositionMap>();
+    auto positions = std::make_unique<PositionPattern>();
     std::function<void(DexPosition * dbg_pos, const CandidateNode& cn,
                        big_blocks::Iterator it)>
         walk;
@@ -1642,7 +1640,7 @@ class OutlinedMethodCreator {
         }
         always_assert(it->type == MFLOW_OPCODE);
         always_assert(it->insn->opcode() == csi.core.opcode);
-        positions->emplace(&csi, dbg_pos);
+        positions->push_back(dbg_pos);
         last_block = it.block();
         it++;
       }
@@ -1667,9 +1665,9 @@ class OutlinedMethodCreator {
 
   // The "best" representative set of debug position is that which provides
   // most detail, i.e. has the highest number of unique debug positions
-  std::unique_ptr<PositionMap> get_best_outlined_dbg_positions(
+  std::unique_ptr<PositionPattern> get_best_outlined_dbg_positions(
       const Candidate& c, const CandidateInfo& ci) {
-    std::unique_ptr<PositionMap> best_positions;
+    std::unique_ptr<PositionPattern> best_positions;
     size_t best_unique_positions{0};
     std::vector<DexMethod*> ordered_methods;
     for (auto& p : ci.methods) {
@@ -1685,8 +1683,8 @@ class OutlinedMethodCreator {
           continue;
         }
         std::unordered_set<DexPosition*> unique_positions;
-        for (auto& p : *positions) {
-          unique_positions.insert(p.second);
+        for (auto pos : *positions) {
+          unique_positions.insert(pos);
         }
         if (unique_positions.size() > best_unique_positions) {
           best_positions = std::move(positions);
@@ -1701,9 +1699,10 @@ class OutlinedMethodCreator {
   }
 
   // Construct an IRCode datastructure from a candidate.
-  std::unique_ptr<IRCode> get_outlined_code(DexMethod* outlined_method,
-                                            const Candidate& c,
-                                            const PositionMap* dbg_positions) {
+  std::unique_ptr<IRCode> get_outlined_code(
+      DexMethod* outlined_method,
+      const Candidate& c,
+      const PositionPattern* dbg_positions) {
     auto code = std::make_unique<IRCode>(outlined_method, c.temp_regs);
     if (dbg_positions) {
       code->set_debug_item(std::make_unique<DexDebugItem>());
@@ -1729,13 +1728,16 @@ class OutlinedMethodCreator {
       cloned_dbg_positions.emplace(dbg_pos, cloned_dbg_pos_ptr);
       return cloned_dbg_pos_ptr;
     };
+    size_t dbg_positions_idx = 0;
     walk = [this, &code, &dbg_positions, &walk, &c,
-            &get_or_add_cloned_dbg_position](const CandidateNode& cn) {
+            &get_or_add_cloned_dbg_position,
+            &dbg_positions_idx](const CandidateNode& cn) {
       m_outlined_method_nodes++;
       DexPosition* last_dbg_pos{nullptr};
       for (auto& ci : cn.insns) {
         if (dbg_positions) {
-          DexPosition* dbg_pos = dbg_positions->at(&ci);
+          DexPosition* dbg_pos = dbg_positions->at(dbg_positions_idx++);
+          always_assert(dbg_pos);
           if (dbg_pos != last_dbg_pos &&
               !opcode::is_a_move_result_pseudo(ci.core.opcode)) {
             get_or_add_cloned_dbg_position(dbg_pos);
