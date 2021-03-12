@@ -5,7 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "RandomForest.h"
+// This is a hack. Simplify testing, and also test an important use case.
+#include "PGIForest.h"
 
 #include <sstream>
 
@@ -21,47 +22,54 @@ struct RandomForestTestHelper {
 
 struct RandomForestTest : public testing::Test {};
 
+namespace {
+
+PGIForest deserialize(const std::string& s) {
+  return PGIForest::deserialize(s, get_default_feature_function_map());
+}
+
+} // namespace
+
 TEST_F(RandomForestTest, deserialize_basic_fail) {
-  EXPECT_ANY_THROW(Forest::deserialize("(test)"));
+  EXPECT_ANY_THROW(deserialize("(test)"));
 }
 
 TEST_F(RandomForestTest, deserialize_forest) {
-  EXPECT_ANY_THROW(Forest::deserialize("(forest)"));
+  EXPECT_ANY_THROW(deserialize("(forest)"));
 }
 
 TEST_F(RandomForestTest, deserialize_acc) {
-  auto simple_acc_true1 = Forest::deserialize("(forest (acc 1 0))");
+  auto simple_acc_true1 = deserialize("(forest (acc 1 0))");
   EXPECT_EQ(simple_acc_true1.dump(), "(acc 1)");
-  auto simple_acc_true2 = Forest::deserialize("(forest (acc 1 1))");
+  auto simple_acc_true2 = deserialize("(forest (acc 1 1))");
   EXPECT_EQ(simple_acc_true2.dump(), "(acc 1)");
-  auto simple_acc_false = Forest::deserialize("(forest (acc 13 14))");
+  auto simple_acc_false = deserialize("(forest (acc 13 14))");
   EXPECT_EQ(simple_acc_false.dump(), "(acc 0)");
 
-  EXPECT_ANY_THROW(Forest::deserialize("(forest (acc))"));
-  EXPECT_ANY_THROW(Forest::deserialize("(forest (acc 0))"));
-  EXPECT_ANY_THROW(Forest::deserialize("(forest (acc 0 0))"));
-  EXPECT_ANY_THROW(Forest::deserialize("(forest (acc 0 0 1))"));
+  EXPECT_ANY_THROW(deserialize("(forest (acc))"));
+  EXPECT_ANY_THROW(deserialize("(forest (acc 0))"));
+  EXPECT_ANY_THROW(deserialize("(forest (acc 0 0))"));
+  EXPECT_ANY_THROW(deserialize("(forest (acc 0 0 1))"));
 
-  EXPECT_ANY_THROW(Forest::deserialize("(forest (acc 0a 0))"));
-  EXPECT_ANY_THROW(Forest::deserialize("(forest (acc 0 0b))"));
+  EXPECT_ANY_THROW(deserialize("(forest (acc 0a 0))"));
+  EXPECT_ANY_THROW(deserialize("(forest (acc 0 0b))"));
 }
 
 TEST_F(RandomForestTest, deserialize_feat) {
-  EXPECT_ANY_THROW(Forest::deserialize("(forest (feat))"));
-  EXPECT_ANY_THROW(Forest::deserialize("(forest (feat \"caller_hits\"))"));
-  EXPECT_ANY_THROW(Forest::deserialize("(forest (feat a))"));
-  EXPECT_ANY_THROW(Forest::deserialize("(forest (feat \"caller_hits\" b))"));
+  EXPECT_ANY_THROW(deserialize("(forest (feat))"));
+  EXPECT_ANY_THROW(deserialize("(forest (feat \"caller_hits\"))"));
+  EXPECT_ANY_THROW(deserialize("(forest (feat a))"));
+  EXPECT_ANY_THROW(deserialize("(forest (feat \"caller_hits\" b))"));
   EXPECT_ANY_THROW(
-      Forest::deserialize("(forest (feat \"caller_hits\" 1.5 (acc 0 1)))"));
-  EXPECT_ANY_THROW(Forest::deserialize(
-      "(forest (feat \"caller_hits\" 1.5 (acc 0 1) (acc)))"));
-  EXPECT_ANY_THROW(Forest::deserialize(
-      "(forest (feat \"caller_hits\" a (acc 0 1) (acc 1 0)))"));
+      deserialize("(forest (feat \"caller_hits\" 1.5 (acc 0 1)))"));
   EXPECT_ANY_THROW(
-      Forest::deserialize("(forest (feat a 1.5 (acc 0 1) (acc 1 0)))"));
+      deserialize("(forest (feat \"caller_hits\" 1.5 (acc 0 1) (acc)))"));
+  EXPECT_ANY_THROW(
+      deserialize("(forest (feat \"caller_hits\" a (acc 0 1) (acc 1 0)))"));
+  EXPECT_ANY_THROW(deserialize("(forest (feat a 1.5 (acc 0 1) (acc 1 0)))"));
 
-  auto forest = Forest::deserialize(
-      "(forest (feat \"caller_hits\" 5.5 (acc 1 0) (acc 0 1)))");
+  auto forest =
+      deserialize("(forest (feat \"caller_hits\" 5.5 (acc 1 0) (acc 0 1)))");
   EXPECT_EQ(forest.dump(), "(feat \"caller_hits\" 5.500000 (acc 1) (acc 0))");
 }
 
@@ -71,9 +79,8 @@ TEST_F(RandomForestTest, accept_acc) {
   auto& caller = mfth.caller;
   auto& callee = mfth.callee;
 
-  EXPECT_TRUE(Forest::deserialize("(forest (acc 1 0))").accept(caller, callee));
-  EXPECT_FALSE(
-      Forest::deserialize("(forest (acc 0 1))").accept(caller, callee));
+  EXPECT_TRUE(deserialize("(forest (acc 1 0))").accept(caller, callee));
+  EXPECT_FALSE(deserialize("(forest (acc 0 1))").accept(caller, callee));
 }
 
 TEST_F(RandomForestTest, accept_feat_caller) {
@@ -112,7 +119,7 @@ TEST_F(RandomForestTest, accept_feat_caller) {
         std::string serialized = "(forest (feat \"" + prefix + suffix + "\" " +
                                  std::to_string(threshold + i) +
                                  " (acc 1 0) (acc 0 1)))";
-        auto forest = Forest::deserialize(serialized);
+        auto forest = deserialize(serialized);
         // Test is "val <= threshold".
         EXPECT_EQ(forest.accept(caller, callee), i >= 0) << serialized;
       }
