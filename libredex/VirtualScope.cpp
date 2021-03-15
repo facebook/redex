@@ -889,13 +889,13 @@ void ClassScopes::build_interface_scopes() {
     }
     for (const auto& meth : intf_cls->get_vmethods()) {
       const auto& scopes = m_sig_map[meth->get_name()][meth->get_proto()];
-      always_assert(!scopes.empty()); // at least the method itself
+      // at least the method itself
+      always_assert_log(!scopes.empty(), "Scope empty for %s", SHOW(meth));
       auto& intf_scope = m_interface_scopes[intf_it.first];
       intf_scope.push_back({});
       for (const auto& scope : scopes) {
         if (scope.interfaces.count(intf_it.first) == 0) continue;
-        TRACE_NO_LINE(
-            VIRT, 9, "add interface scope for %s", SHOW(intf_it.first));
+        TRACE(VIRT, 9, "add interface scope for %s", SHOW(intf_it.first));
         intf_scope.back().push_back(&scope);
       }
     }
