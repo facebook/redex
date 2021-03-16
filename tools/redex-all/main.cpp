@@ -660,6 +660,12 @@ Json::Value get_lowering_stats(const instruction_lowering::Stats& stats) {
   return obj;
 }
 
+Json::Value get_position_stats(const PositionMapper* pos_mapper) {
+  Json::Value obj(Json::ValueType::objectValue);
+  obj["num_positions"] = Json::UInt(pos_mapper->size());
+  return obj;
+}
+
 Json::Value get_detailed_stats(const std::vector<dex_stats_t>& dexes_stats) {
   Json::Value dexes;
   int i = 0;
@@ -691,13 +697,15 @@ Json::Value get_output_stats(
     const dex_stats_t& stats,
     const std::vector<dex_stats_t>& dexes_stats,
     const PassManager& mgr,
-    const instruction_lowering::Stats& instruction_lowering_stats) {
+    const instruction_lowering::Stats& instruction_lowering_stats,
+    const PositionMapper* pos_mapper) {
   Json::Value d;
   d["total_stats"] = get_stats(stats);
   d["dexes_stats"] = get_detailed_stats(dexes_stats);
   d["pass_stats"] = get_pass_stats(mgr);
   d["pass_hashes"] = get_pass_hashes(mgr);
   d["lowering_stats"] = get_lowering_stats(instruction_lowering_stats);
+  d["position_stats"] = get_position_stats(pos_mapper);
   return d;
 }
 
@@ -1087,8 +1095,9 @@ void redex_backend(ConfigFiles& conf,
       iodi_metadata.write(iodi_metadata_filename, method_to_id);
     }
     pos_mapper->write_map();
-    stats["output_stats"] = get_output_stats(
-        output_totals, output_dexes_stats, manager, instruction_lowering_stats);
+    stats["output_stats"] =
+        get_output_stats(output_totals, output_dexes_stats, manager,
+                         instruction_lowering_stats, pos_mapper.get());
     print_warning_summary();
   }
 }

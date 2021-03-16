@@ -264,6 +264,8 @@ void RealPositionMapper::process_pattern_switch_positions() {
   }
 }
 
+uint32_t RealPositionMapper::size() const { return m_positions.size(); }
+
 void RealPositionMapper::write_map_v2() {
   // to ensure that the line numbers in the Dex are as compact as possible,
   // we put the emitted positions at the start of the list and rest at the end
