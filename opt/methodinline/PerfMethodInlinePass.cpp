@@ -215,15 +215,39 @@ using namespace random_forest;
 class InlineForSpeedDecisionTrees final : public InlineForSpeedBase {
  public:
   InlineForSpeedDecisionTrees(const MethodProfiles* method_profiles,
-                              PGIForest&& forest)
+                              PGIForest&& forest,
+                              float min_hits)
       : m_method_context_context(method_profiles),
-        m_forest(std::move(forest)) {}
+        m_forest(std::move(forest)),
+        m_min_hits(min_hits) {}
 
  protected:
   bool should_inline_impl(const DexMethod* caller_method,
                           const DexMethod* callee_method) override {
     auto& caller_context = get_or_create(caller_method);
     auto& callee_context = get_or_create(callee_method);
+
+    // Explicitly check that the callee seems to ever be called with the caller.
+    if (m_min_hits >= 0) {
+      auto has_matching_hits = [&]() {
+        for (size_t i = 0;
+             i != m_method_context_context.m_interaction_list.size();
+             ++i) {
+          if (caller_context.m_hits[i] &&
+              *caller_context.m_hits[i] > m_min_hits &&
+              callee_context.m_hits[i] &&
+              *callee_context.m_hits[i] > m_min_hits) {
+            return true;
+          }
+        }
+        return false;
+      }();
+      if (!has_matching_hits) {
+        TRACE(METH_PROF, 5, "%s calling %s: no samples together",
+              SHOW(caller_method), SHOW(callee_method));
+        return false;
+      }
+    }
 
     size_t accepted;
     if (!m_forest.accept(caller_context, callee_context, &accepted)) {
@@ -278,6 +302,7 @@ class InlineForSpeedDecisionTrees final : public InlineForSpeedBase {
   MethodContextContext m_method_context_context;
   std::unordered_map<const DexMethod*, MethodContext> m_cache;
   PGIForest m_forest;
+  float m_min_hits;
 };
 
 } // namespace
@@ -286,12 +311,15 @@ PerfMethodInlinePass::~PerfMethodInlinePass() {}
 
 struct PerfMethodInlinePass::Config {
   boost::optional<random_forest::PGIForest> forest = boost::none;
+  float min_hits = 0.0f;
 };
 
 void PerfMethodInlinePass::bind_config() {
   std::string random_forest_file;
   bind("random_forest_file", "", random_forest_file);
-  after_configuration([this, random_forest_file]() {
+  float min_hits;
+  bind("min_hits", 0.0f, min_hits);
+  after_configuration([this, random_forest_file, min_hits]() {
     this->m_config = std::make_unique<PerfMethodInlinePass::Config>();
     if (!random_forest_file.empty()) {
       std::stringstream buffer;
@@ -309,6 +337,7 @@ void PerfMethodInlinePass::bind_config() {
               this->m_config->forest->size());
       }
     }
+    this->m_config->min_hits = min_hits;
   });
 }
 
@@ -335,7 +364,8 @@ void PerfMethodInlinePass::run_pass(DexStoresVector& stores,
   // Unique pointer for indirection and single path.
   std::unique_ptr<InlineForSpeedBase> ifs{
       m_config->forest ? (InlineForSpeedBase*)(new InlineForSpeedDecisionTrees(
-                             &method_profiles, m_config->forest->clone()))
+                             &method_profiles, m_config->forest->clone(),
+                             m_config->min_hits))
                        : new InlineForSpeedMethodProfiles(&method_profiles)};
 
   inliner::run_inliner(stores, mgr, conf, /* intra_dex */ true,
