@@ -40,6 +40,7 @@ struct Config {
   size_t savings_threshold{10};
   bool outline_from_primary_dex{false};
   bool full_dbg_positions{false};
+  bool debug_make_crashing{false};
 };
 
 } // namespace instruction_sequence_outliner

@@ -1794,6 +1794,13 @@ class OutlinedMethodCreator {
           }
         }
         dbg_positions_idx++;
+        if (m_config.debug_make_crashing &&
+            opcode::is_an_iget(ci.core.opcode)) {
+          auto const_insn = new IRInstruction(OPCODE_CONST);
+          const_insn->set_literal(0);
+          const_insn->set_dest(ci.srcs.at(0));
+          code->push_back(const_insn);
+        }
         auto insn = new IRInstruction(ci.core.opcode);
         insn->set_srcs_size(ci.srcs.size());
         for (size_t i = 0; i < ci.srcs.size(); i++) {
@@ -2907,6 +2914,10 @@ void InstructionSequenceOutliner::bind_config() {
   bind("full_dbg_positions", m_config.full_dbg_positions,
        m_config.full_dbg_positions,
        "Whether to encode all possible outlined positions");
+  bind("debug_make_crashing", m_config.debug_make_crashing,
+       m_config.debug_make_crashing,
+       "Make outlined code crash, to harvest crashing stack traces involving "
+       "outlined code.");
   after_configuration([=]() {
     // TODO: Support both features together.
     always_assert(!m_config.reuse_outlined_methods_across_dexes ||
