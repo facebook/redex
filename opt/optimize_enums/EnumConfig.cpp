@@ -13,53 +13,84 @@
 #include "Walkers.h"
 #include <utility>
 
+#include "KotlinNullCheckMethods.h"
+
 namespace ptrs = local_pointers;
 
 namespace {
 // The structure is used for hardcoding external method param summaries.
 struct ExternalMethodData {
   std::string method_name;
-  boost::optional<reg_t> returned_param;
-  std::vector<reg_t> safe_params;
+  boost::optional<uint16_t> returned_param;
+  std::unordered_set<uint16_t> safe_params;
   ExternalMethodData(std::string name,
-                     boost::optional<reg_t> returned,
-                     std::initializer_list<reg_t> params)
+                     boost::optional<uint16_t> returned,
+                     std::initializer_list<uint16_t> params)
       : method_name(std::move(name)),
         returned_param(returned),
         safe_params(params) {}
 };
+
+void sanity_check_method_summary(const DexMethodRef* method,
+                                 const optimize_enums::ParamSummary& summary,
+                                 const DexType* object_type) {
+  auto args = method->get_proto()->get_args();
+  for (auto param : summary.safe_params) {
+    always_assert_log(param < args->size() &&
+                          *(args->begin() + param) == object_type,
+                      "%u is not Object;\n", param);
+  }
+  if (summary.returned_param) {
+    always_assert(summary.safe_params.count(*summary.returned_param) &&
+                  method->get_proto()->get_rtype() == object_type);
+  }
+  summary.print(method);
+  if (method->is_def() && !method->is_external()) {
+    // To improve:
+    // 1. `equals` method is final on Integer and Enum, we can specialize equals
+    // call.
+    // 2. Run the method summary analysis muliple times until no new discovery.
+    TRACE(ENUM, 9, "%s is not external but its method summary is hardcoded",
+          SHOW(method));
+    auto code = method->as_def()->get_code();
+    TRACE(ENUM, 9, "%s", (code ? SHOW(code) : "**no code**"));
+  }
+}
+
 /**
  * Hardcode some empirical summaries for some external methods.
  */
 void load_external_method_summaries(
     const DexType* object_type, optimize_enums::SummaryMap* param_summary_map) {
-  std::vector<ExternalMethodData> methods({ExternalMethodData(
-      "Lcom/google/common/base/Objects;.equal:(Ljava/lang/Object;Ljava/lang/"
-      "Object;)Z",
-      boost::none, {0, 1})});
+  std::vector<ExternalMethodData> methods(
+      {ExternalMethodData("Lcom/google/common/base/Objects;.equal:(Ljava/lang/"
+                          "Object;Ljava/lang/"
+                          "Object;)Z",
+                          boost::none, {0, 1})});
   for (auto& item : methods) {
     auto method = DexMethod::get_method(item.method_name);
     if (!method) {
       continue;
     }
-    // Simple verification.
     always_assert(!param_summary_map->count(method));
-    auto args = method->get_proto()->get_args();
-
-    optimize_enums::ParamSummary summary;
-    for (auto param : item.safe_params) {
-      always_assert_log(param < args->size() &&
-                            *(args->begin() + param) == object_type,
-                        "%u is not Object;\n", param);
-      summary.safe_params.insert(param);
-    }
-    if (item.returned_param) {
-      always_assert(summary.safe_params.count(*item.returned_param) &&
-                    method->get_proto()->get_rtype() == object_type);
-      summary.returned_param = *item.returned_param;
-    }
+    optimize_enums::ParamSummary summary(std::move(item.safe_params),
+                                         item.returned_param);
+    sanity_check_method_summary(method, summary, object_type);
     param_summary_map->emplace(method, summary);
-    summary.print(method);
+  }
+  // Load summaries for kotlin null assertion methods.
+  for (auto method : kotlin_nullcheck_wrapper::get_kotlin_null_assertions()) {
+    if (param_summary_map->count(method)) {
+      // The method is defined in the apk and their summaries are analyzed from
+      // the method code.
+      continue;
+    }
+    // Assume that kotlin assertions only check nullity of the first argument
+    // and return void.
+    optimize_enums::ParamSummary summary({0}, boost::none);
+    always_assert(method->get_proto()->get_rtype() == type::_void());
+    sanity_check_method_summary(method, summary, object_type);
+    param_summary_map->emplace(method, summary);
   }
 }
 } // namespace
