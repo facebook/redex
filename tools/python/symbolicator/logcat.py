@@ -20,12 +20,35 @@ class LogcatSymbolicator(object):
 
     def __init__(self, symbol_maps):
         self.symbol_maps = symbol_maps
+        self.pending_switches = []
 
     def class_replacer(self, matchobj):
         m = matchobj.group(0)
         if m in self.symbol_maps.class_map:
             return self.symbol_maps.class_map[m].origin_class
         return m
+
+    def find_case_positions(self, start, pattern_id):
+        count_positions = self.symbol_maps.line_map.get_stack(start)
+        assert len(count_positions) == 1
+        assert count_positions[0].method == "redex.$Position.count"
+        # The cases are stored in the immediately following lines,
+        # and are ordered by pattern-id, so we can do a binary search.
+        end = start + count_positions[0].line
+        start = start + 1
+        while start <= end:
+            middle = (start + end) // 2
+            case_positions = self.symbol_maps.line_map.get_stack(middle)
+            assert len(case_positions) >= 1
+            assert case_positions[0].method == "redex.$Position.case"
+            if case_positions[0].line == pattern_id:
+                case_positions.pop(0)
+                return case_positions
+            elif case_positions[0].line < pattern_id:
+                start = middle + 1
+            else:
+                end = middle - 1
+        return None
 
     def line_replacer(self, matchobj):
         lineno = int(matchobj.group("lineno"))
@@ -42,8 +65,26 @@ class LogcatSymbolicator(object):
         if cls in self.symbol_maps.class_map:
             cls = self.symbol_maps.class_map[cls]
         result = ""
-        for pos in positions:
-            if pos.method is None:
+        while positions:
+            pos = positions.pop(0)
+            if pos.method == "redex.$Position.switch":
+                self.pending_switches.append(
+                    {"prefix": matchobj.group("prefix"), "line": pos.line}
+                )
+            elif pos.method == "redex.$Position.pattern":
+                pattern_id = pos.line
+                if self.pending_switches:
+                    ps = self.pending_switches.pop()
+                    case_positions = self.find_case_positions(ps["line"], pattern_id)
+                    if case_positions:
+                        case_positions.extend(positions)
+                        positions = case_positions
+                        continue
+                result += "%s\t$(unresolved switch %d)\n" % (
+                    matchobj.group("prefix"),
+                    pattern_id,
+                )
+            elif pos.method is None:
                 result += "%s\tat %s.%s(%s:%d)\n" % (
                     matchobj.group("prefix"),
                     cls,
