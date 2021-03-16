@@ -547,7 +547,7 @@ void EnumFixpointIterator::analyze_instruction(const IRInstruction* insn,
     case OPCODE_AGET_OBJECT: {
       EnumTypes types;
       EnumTypes array_types = env->get(insn->src(0));
-      for (const auto& array_type : array_types.elements()) {
+      for (auto const array_type : array_types.elements()) {
         const auto type = type::get_array_element_type(array_type);
         if (type && !type::is_primitive(type)) {
           types.add(type);

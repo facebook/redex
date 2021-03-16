@@ -781,7 +781,7 @@ std::string vshow(const DexMethod* p, bool include_annotations /*=true*/) {
     }
     bool first = true;
     if (p->get_param_anno() != nullptr) {
-      for (auto const pair : *p->get_param_anno()) {
+      for (auto const& pair : *p->get_param_anno()) {
         if (first) {
           ss << "\n  param annotations:"
              << "\n";
@@ -868,7 +868,7 @@ std::string show(const DexAnnotationDirectory* p) {
     ss << "method parameter annotations:\n";
     for (const auto& pair : *p->m_method_param) {
       ss << show(pair.first->get_name());
-      for (auto const parampair : *pair.second) {
+      for (auto const& parampair : *pair.second) {
         ss << "  " << parampair.first << ": " << show(parampair.second) << "\n";
       }
     }
