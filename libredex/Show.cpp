@@ -1086,7 +1086,7 @@ std::string vshow(const DexMethod* p, bool include_annotations /*=true*/) {
     }
     bool first = true;
     if (p->get_param_anno() != nullptr) {
-      for (auto const pair : *p->get_param_anno()) {
+      for (auto const& pair : *p->get_param_anno()) {
         if (first) {
           ss << "\n  param annotations:"
              << "\n";

@@ -85,7 +85,7 @@ DexType* AnalysisImpl::get_and_check_single_impl(DexType* type) {
 void AnalysisImpl::create_single_impl(const TypeMap& single_impl,
                                       const TypeSet& intfs,
                                       const SingleImplConfig& config) {
-  for (const auto intf_it : single_impl) {
+  for (auto const& intf_it : single_impl) {
     auto intf = intf_it.first;
     auto intf_cls = type_class(intf);
     always_assert(intf_cls && !intf_cls->is_external());

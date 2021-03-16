@@ -811,7 +811,7 @@ std::string show_helper(const EncodedAnnotations* annos, bool deobfuscated) {
   }
   std::ostringstream ss;
   bool first = true;
-  for (auto const pair : *annos) {
+  for (auto const& pair : *annos) {
     if (!first) {
       ss << ", ";
     }

@@ -701,7 +701,7 @@ void remove_dead_methods(WrapperMethods& ssms,
     is_synthetic(meth) ? synth_removed++ : other_removed++;
   };
 
-  for (auto const gp : ssms.getters) {
+  for (auto const& gp : ssms.getters) {
     remove_meth(gp.first);
   }
   any_remove = any_remove || (synth_removed && other_removed);
@@ -723,7 +723,7 @@ void remove_dead_methods(WrapperMethods& ssms,
   synth_removed = 0;
   other_removed = 0;
   pub_meth = 0;
-  for (auto const wp : ssms.wrappers) {
+  for (auto const& wp : ssms.wrappers) {
     remove_meth(wp.first);
   }
   any_remove = any_remove || (synth_removed && other_removed);
@@ -742,7 +742,7 @@ void remove_dead_methods(WrapperMethods& ssms,
   synth_removed = 0;
   other_removed = 0;
   pub_meth = 0;
-  for (auto const ct : ssms.ctors) {
+  for (auto const& ct : ssms.ctors) {
     remove_meth(ct.first);
   }
   any_remove = any_remove || (synth_removed && other_removed);
