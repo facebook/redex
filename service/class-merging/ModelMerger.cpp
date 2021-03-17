@@ -70,28 +70,26 @@ DexField* scan_type_tag_field(const char* type_tag_field_name,
 }
 
 // If no type tags, the result is empty.
-MergerToField get_type_tag_fields(
-    const std::vector<const DexType*>& model_root_types,
-    const std::vector<const MergerType*>& mergers,
-    bool input_has_type_tag,
-    bool generate_type_tags) {
+MergerToField get_type_tag_fields(const std::vector<const MergerType*>& mergers,
+                                  bool input_has_type_tag,
+                                  bool generate_type_tags) {
   MergerToField merger_to_type_tag_field;
-  for (const auto model_root_type : model_root_types) {
+  for (auto merger : mergers) {
     DexField* field = nullptr;
     if (input_has_type_tag) {
-      field =
-          scan_type_tag_field(EXTERNAL_TYPE_TAG_FIELD_NAME, model_root_type);
+      field = scan_type_tag_field(EXTERNAL_TYPE_TAG_FIELD_NAME, merger->type);
+      always_assert(field);
       set_public(field);
+      merger_to_type_tag_field[merger] = field;
+    } else if (generate_type_tags) {
+      field = scan_type_tag_field(INTERNAL_TYPE_TAG_FIELD_NAME, merger->type);
+      merger_to_type_tag_field[merger] = field;
     }
-    for (auto merger : mergers) {
-      if (input_has_type_tag) {
-        always_assert(field);
-        merger_to_type_tag_field[merger] = field;
-      } else if (generate_type_tags) {
-        field = scan_type_tag_field(INTERNAL_TYPE_TAG_FIELD_NAME, merger->type);
-        merger_to_type_tag_field[merger] = field;
-      }
-    }
+    TRACE(CLMG,
+          5,
+          "type tag field: merger->type %s field %s",
+          SHOW(merger->type),
+          SHOW(field));
   }
   return merger_to_type_tag_field;
 }
@@ -591,10 +589,8 @@ std::vector<DexClass*> ModelMerger::merge_model(Scope& scope,
 
   TypeTags type_tags = input_has_type_tag ? collect_type_tags(to_materialize)
                                           : gen_type_tags(to_materialize);
-  auto type_tag_fields = get_type_tag_fields(model.get_roots(),
-                                             to_materialize,
-                                             input_has_type_tag,
-                                             model_spec.generate_type_tag());
+  auto type_tag_fields = get_type_tag_fields(
+      to_materialize, input_has_type_tag, model_spec.generate_type_tag());
   std::unordered_map<DexMethod*, std::string> method_debug_map;
   auto parent_to_children =
       model.get_type_system().get_class_scopes().get_parent_to_children();
