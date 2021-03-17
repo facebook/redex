@@ -26,7 +26,7 @@ void InlinerConfig::bind_config() {
   bind("blocklist", {}, m_blocklist);
   bind("blocklist", {}, m_blocklist);
   bind("caller_blocklist", {}, m_caller_blocklist);
-  bind("intradex_white_list", {}, m_intradex_white_list,
+  bind("intradex_allowlist", {}, m_intradex_allowlist,
        "The purpose of this white-list is to remove black-list entries when "
        "inlining after the InterDex pass has run. (This reduces the impact of "
        "black-list entries that avoid inlining conditional control-flow and "

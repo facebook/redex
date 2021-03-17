@@ -8,9 +8,12 @@
 #pragma once
 
 #include "DexClass.h"
-#include "Inliner.h"
+#include "InlinerConfig.h"
 #include "RemoveBuilderPattern.h"
+#include "Resolver.h"
 #include "TypeSystem.h"
+
+class MultiMethodInliner;
 
 namespace builder_pattern {
 
@@ -24,6 +27,7 @@ class BuilderTransform {
                    const DexType* root,
                    const inliner::InlinerConfig& inliner_config,
                    DexStoresVector& stores);
+  ~BuilderTransform();
 
   bool inline_super_calls_and_ctors(const DexType* type);
 

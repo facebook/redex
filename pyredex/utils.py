@@ -23,6 +23,7 @@ import pyredex.unpacker
 from pyredex.logger import log
 
 
+IS_WINDOWS = os.name == "nt"
 temp_dirs = []
 
 
@@ -155,7 +156,7 @@ def find_android_build_tool(tool):
 
 
 def find_apksigner():
-    return find_android_build_tool("apksigner")
+    return find_android_build_tool("apksigner.bat" if IS_WINDOWS else "apksigner")
 
 
 def remove_signature_files(extracted_apk_dir):

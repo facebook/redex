@@ -180,19 +180,46 @@ class ConcurrentContainer {
 
   boost::mutex& get_lock(size_t slot) const { return m_locks[slot]; }
 
- private:
+ protected:
   mutable boost::mutex m_locks[n_slots];
   Container m_slots[n_slots];
 };
+
+struct Identity {
+  template <typename T>
+  T&& operator()(T&& t) const {
+    return std::forward<T>(t);
+  }
+};
+
+// A concurrent container with map semantics.
+//
+// Note: `KeyProjection` allows to use a different key for the
+//       `ConcurrentMapContainer` vs the internal sharded storage.
+//
+//       This is in general possible without, but may have storage overhead.
+//       An example is a `pair` key, where the first component is
+//       used for sharding, and the second component for the internal
+//       map. This could be simulated by a `pair` key in the internal map
+//       and corresponding hash/compare/equals functions,
 
 template <typename MapContainer,
           typename Key,
           typename Value,
           typename Hash = std::hash<Key>,
+          typename KeyProjection = Identity,
           size_t n_slots = 31>
 class ConcurrentMapContainer
     : public ConcurrentContainer<MapContainer, Key, Hash, n_slots> {
  public:
+  using typename ConcurrentContainer<MapContainer, Key, Hash, n_slots>::
+      const_iterator;
+  using
+      typename ConcurrentContainer<MapContainer, Key, Hash, n_slots>::iterator;
+
+  using ConcurrentContainer<MapContainer, Key, Hash, n_slots>::m_slots;
+  using ConcurrentContainer<MapContainer, Key, Hash, n_slots>::end;
+
   ConcurrentMapContainer() = default;
 
   ConcurrentMapContainer(const ConcurrentMapContainer& container)
@@ -217,12 +244,30 @@ class ConcurrentMapContainer
   Value at(const Key& key) const {
     size_t slot = Hash()(key) % n_slots;
     boost::lock_guard<boost::mutex> lock(this->get_lock(slot));
-    return this->get_container(slot).at(key);
+    return this->get_container(slot).at(KeyProjection()(key));
   }
 
   const Value& at_unsafe(const Key& key) const {
     size_t slot = Hash()(key) % n_slots;
-    return this->get_container(slot).at(key);
+    return this->get_container(slot).at(KeyProjection()(key));
+  }
+
+  iterator find(const Key& key) {
+    size_t slot = Hash()(key) % n_slots;
+    const auto& it = m_slots[slot].find(KeyProjection()(key));
+    if (it == m_slots[slot].end()) {
+      return end();
+    }
+    return iterator(&m_slots[0], slot, it);
+  }
+
+  const_iterator find(const Key& key) const {
+    size_t slot = Hash()(key) % n_slots;
+    const auto& it = m_slots[slot].find(KeyProjection()(key));
+    if (it == m_slots[slot].end()) {
+      return end();
+    }
+    return const_iterator(&m_slots[0], slot, it);
   }
 
   /*
@@ -232,7 +277,7 @@ class ConcurrentMapContainer
     size_t slot = Hash()(key) % n_slots;
     boost::lock_guard<boost::mutex> lock(this->get_lock(slot));
     const auto& map = this->get_container(slot);
-    const auto& it = map.find(key);
+    const auto& it = map.find(KeyProjection()(key));
     if (it == map.end()) {
       return default_value;
     }
@@ -252,7 +297,9 @@ class ConcurrentMapContainer
     size_t slot = Hash()(entry.first) % n_slots;
     boost::lock_guard<boost::mutex> lock(this->get_lock(slot));
     auto& map = this->get_container(slot);
-    return map.insert(entry).second;
+    return map
+        .insert(std::make_pair(KeyProjection()(entry.first), entry.second))
+        .second;
   }
 
   /*
@@ -281,7 +328,7 @@ class ConcurrentMapContainer
     size_t slot = Hash()(entry.first) % n_slots;
     boost::lock_guard<boost::mutex> lock(this->get_lock(slot));
     auto& map = this->get_container(slot);
-    map[entry.first] = entry.second;
+    map[KeyProjection()(entry.first)] = entry.second;
   }
 
   /*
@@ -293,7 +340,10 @@ class ConcurrentMapContainer
     size_t slot = Hash()(entry.first) % n_slots;
     boost::lock_guard<boost::mutex> lock(this->get_lock(slot));
     auto& map = this->get_container(slot);
-    return map.emplace(std::move(entry)).second;
+    return map
+        .emplace(KeyProjection()(std::move(entry.first)),
+                 std::move(entry.second))
+        .second;
   }
 
   /*
@@ -307,9 +357,9 @@ class ConcurrentMapContainer
     size_t slot = Hash()(key) % n_slots;
     boost::lock_guard<boost::mutex> lock(this->get_lock(slot));
     auto& map = this->get_container(slot);
-    auto it = map.find(key);
+    auto it = map.find(KeyProjection()(key));
     if (it == map.end()) {
-      updater(key, map[key], false);
+      updater(KeyProjection()(key), map[KeyProjection()(key)], false);
     } else {
       updater(it->first, it->second, true);
     }
@@ -320,9 +370,9 @@ class ConcurrentMapContainer
   void update_unsafe(const Key& key, UpdateFn updater) {
     size_t slot = Hash()(key) % n_slots;
     auto& map = this->get_container(slot);
-    auto it = map.find(key);
+    auto it = map.find(KeyProjection()(key));
     if (it == map.end()) {
-      updater(key, map[key], false);
+      updater(KeyProjection()(key), map[KeyProjection()(key)], false);
     } else {
       updater(it->first, it->second, true);
     }
@@ -339,6 +389,7 @@ using ConcurrentMap =
                            Key,
                            Value,
                            Hash,
+                           Identity,
                            n_slots>;
 
 template <typename Key,

@@ -12,6 +12,8 @@
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "RedexTest.h"
+#include "Show.h"
+#include "Trace.h"
 #include "Transform.h"
 
 #include "ResultPropagation.h"
@@ -25,12 +27,13 @@ boost::optional<ParamIndex> find_return_param_index(
   cfg.calculate_exit_block();
   auto exit_block = cfg.exit_block();
   auto it = exit_block->rbegin();
-  if (it == exit_block->rend() || !is_return_value(it->insn->opcode()))
+  if (it == exit_block->rend() ||
+      !opcode::is_a_return_value(it->insn->opcode()))
     return boost::none;
   auto return_reg = it->insn->src(0);
   TRACE(RP, 2, "  returns v%d", return_reg);
   ++it;
-  if (it == exit_block->rend() || !is_move(it->insn->opcode()))
+  if (it == exit_block->rend() || !opcode::is_a_move(it->insn->opcode()))
     return boost::none;
   auto src_reg = it->insn->src(0);
   TRACE(RP, 2, "  move v%d, v%d", it->insn->dest(), src_reg);
@@ -40,7 +43,7 @@ boost::optional<ParamIndex> find_return_param_index(
   for (auto& mie : InstructionIterable(cfg)) {
     if (mie.insn->has_dest()) {
       if (mie.insn->dest() == src_reg) {
-        if (opcode::is_load_param(mie.insn->opcode())) {
+        if (opcode::is_a_load_param(mie.insn->opcode())) {
           load_param = mie.insn;
         } else {
           TRACE(RP, 2, "  move_reg clobbered");

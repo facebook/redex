@@ -7,6 +7,7 @@
 
 #include "DuplicateClasses.h"
 
+#include "Trace.h"
 #include <boost/algorithm/string/predicate.hpp>
 #include <vector>
 

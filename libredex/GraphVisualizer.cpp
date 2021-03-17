@@ -15,7 +15,9 @@
 
 #include "ControlFlow.h"
 #include "Debug.h"
+#include "DexPosition.h"
 #include "IRCode.h"
+#include "Show.h"
 
 // The "Hotspot Client Compiler Visualizer" (c1visualizer) is a tool consuming
 // Hotspot C1 compiler debug info to display control flow graphs of compilation
@@ -379,7 +381,7 @@ class CFGVisualizer : public CodeVisualizer<CFGVisualizer> {
   virtual ~CFGVisualizer() {}
 
   template <typename T>
-  void block_list(const std::string& name, const T& blocks) {
+  void blocklist(const std::string& name, const T& blocks) {
     indent();
     m_output << name;
     for (auto b : blocks) {
@@ -389,8 +391,8 @@ class CFGVisualizer : public CodeVisualizer<CFGVisualizer> {
   }
 
   void predecessors(Block* block) {
-    block_list("predecessors",
-               transform(block->preds(), [](Edge* e) { return e->src(); }));
+    blocklist("predecessors",
+              transform(block->preds(), [](Edge* e) { return e->src(); }));
   }
 
   static bool is_throw_edge(const Edge* e) { return e->type() == EDGE_THROW; }
@@ -402,21 +404,21 @@ class CFGVisualizer : public CodeVisualizer<CFGVisualizer> {
   }
 
   void successors(Block* block) {
-    block_list("successors",
-               transform(get_succ_edges(block, is_not_throw_edge),
-                         [](Edge* e) { return e->target(); }));
+    blocklist("successors",
+              transform(get_succ_edges(block, is_not_throw_edge),
+                        [](Edge* e) { return e->target(); }));
   }
 
   void exception_handlers(Block* block) {
-    block_list("xhandlers",
-               transform(get_succ_edges(block, is_throw_edge),
-                         [](Edge* e) { return e->target(); }));
+    blocklist("xhandlers",
+              transform(get_succ_edges(block, is_throw_edge),
+                        [](Edge* e) { return e->target(); }));
   }
 
   void instruction(IRInstruction* insn, Block* from) {
     CodeVisualizer::instruction(insn);
 
-    if (is_conditional_branch(insn->opcode())) {
+    if (opcode::is_a_conditional_branch(insn->opcode())) {
       auto edge = m_cfg->get_succ_edge_if(
           from, [](Edge* e) { return e->type() == EDGE_BRANCH; });
       redex_assert(edge);
@@ -498,26 +500,26 @@ class IRCodeVisualizer : public CodeVisualizer<IRCodeVisualizer> {
   }
   virtual ~IRCodeVisualizer() {}
 
-  void empty_block_list(const std::string& name) {
+  void empty_blocklist(const std::string& name) {
     indent();
     m_output << name;
     m_output << std::endl;
   }
 
-  void block_list(const std::string& name, size_t succ_id) {
+  void blocklist(const std::string& name, size_t succ_id) {
     indent();
     m_output << name;
     m_output << " \"B" << succ_id << "\" ";
     m_output << std::endl;
   }
 
-  void predecessors(IRCode*) { empty_block_list("predecessors"); }
-  void successors(IRCode*) { empty_block_list("successors"); }
-  void exception_handlers(IRCode*) { empty_block_list("xhandlers"); }
+  void predecessors(IRCode*) { empty_blocklist("predecessors"); }
+  void successors(IRCode*) { empty_blocklist("successors"); }
+  void exception_handlers(IRCode*) { empty_blocklist("xhandlers"); }
 
-  void predecessors(const std::string*) { empty_block_list("predecessors"); }
-  void successors(const std::string*) { block_list("successors", 0); }
-  void exception_handlers(const std::string*) { empty_block_list("xhandlers"); }
+  void predecessors(const std::string*) { empty_blocklist("predecessors"); }
+  void successors(const std::string*) { blocklist("successors", 0); }
+  void exception_handlers(const std::string*) { empty_blocklist("xhandlers"); }
 
   void instruction(IRInstruction* insn, IRCode*) {
     CodeVisualizer::instruction(insn);

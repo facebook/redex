@@ -9,6 +9,10 @@
 
 #include "Pass.h"
 
+namespace cfg {
+class ControlFlowGraph;
+} // namespace cfg
+
 class ReduceGotosPass : public Pass {
  public:
   struct Stats {

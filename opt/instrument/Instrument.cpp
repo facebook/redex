@@ -14,6 +14,7 @@
 #include "InterDexPassPlugin.h"
 #include "Match.h"
 #include "MethodReference.h"
+#include "PassManager.h"
 #include "Show.h"
 #include "TypeSystem.h"
 #include "Walkers.h"
@@ -21,6 +22,7 @@
 #include <boost/algorithm/string.hpp>
 #include <cmath>
 #include <fstream>
+#include <iostream>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -38,7 +40,7 @@ using namespace instrument;
  */
 namespace {
 
-static bool debug = false;
+constexpr bool instr_debug = false;
 
 constexpr const char* SIMPLE_METHOD_TRACING = "simple_method_tracing";
 constexpr const char* BASIC_BLOCK_TRACING = "basic_block_tracing";
@@ -131,7 +133,7 @@ void instrument_onMethodBegin(DexMethod* method,
       code->begin(), code->end(), [&](const MethodItemEntry& mie) {
         return mie.type == MFLOW_FALLTHROUGH ||
                (mie.type == MFLOW_OPCODE &&
-                opcode::is_load_param(mie.insn->opcode()));
+                opcode::is_a_load_param(mie.insn->opcode()));
       });
 
   if (insert_point == code->end()) {
@@ -155,7 +157,7 @@ void instrument_onMethodBegin(DexMethod* method,
   code->insert_before(code->insert_before(insert_point, invoke_inst),
                       const_inst);
 
-  if (debug) {
+  if (instr_debug) {
     for (auto it = code->begin(); it != code->end(); ++it) {
       if (it == insert_point) {
         TRACE(INSTRUMENT, 9, "<==== insertion");
@@ -424,10 +426,10 @@ void InstrumentPass::patch_array_size(DexClass* analysis_cls,
       // this const can affect other instructions. (Well, we might have a
       // unique const number though.) So, just create a new const load
       // instruction. LocalDCE can clean up the redundant instructions.
-      std::make_tuple(/* m::is_opcode(OPCODE_CONST), */
-                      m::is_opcode(OPCODE_NEW_ARRAY),
-                      m::is_opcode(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT),
-                      m::is_opcode(OPCODE_SPUT_OBJECT)),
+      std::make_tuple(/* m::const_(), */
+                      m::new_array_(),
+                      m::move_result_pseudo_object_(),
+                      m::sput_object_()),
       [&](DexMethod* method,
           cfg::Block*,
           const std::vector<IRInstruction*>& insts) {
@@ -514,8 +516,8 @@ void InstrumentPass::bind_config() {
   bind("blocklist_file_name", "", m_options.blocklist_file_name);
   bind("metadata_file_name", "redex-instrument-metadata.txt",
        m_options.metadata_file_name);
-  bind("num_stats_per_method", {1}, m_options.num_stats_per_method);
-  bind("num_shards", {1}, m_options.num_shards);
+  bind("num_stats_per_method", 1, m_options.num_stats_per_method);
+  bind("num_shards", 1, m_options.num_shards);
   // Note: only_cold_start_class is only used for block tracing.
   bind("only_cold_start_class", false, m_options.only_cold_start_class);
   bind("methods_replacement", {}, m_options.methods_replacement,
@@ -523,7 +525,7 @@ void InstrumentPass::bind_config() {
        Configurable::bindflags::methods::error_if_unresolvable);
   bind("analysis_method_names", {}, m_options.analysis_method_names);
   // 0 means the block tracing is effectively method-only tracing.
-  bind("max_num_blocks", {0}, m_options.max_num_blocks);
+  bind("max_num_blocks", 0, m_options.max_num_blocks);
   bind("instrument_catches", false, m_options.instrument_catches);
   bind("instrument_blocks_without_source_block", true,
        m_options.instrument_blocks_without_source_block);
@@ -633,7 +635,7 @@ InstrumentPass::generate_sharded_analysis_methods(
     bool patched = false;
     walk::matching_opcodes_in_block(
         *new_method,
-        std::make_tuple(m::is_opcode(OPCODE_SGET_OBJECT)),
+        std::make_tuple(m::sget_object_()),
         [&](DexMethod* method,
             cfg::Block*,
             const std::vector<IRInstruction*>& insts) {
@@ -686,9 +688,8 @@ InstrumentPass::patch_sharded_arrays(
   bool patched = false;
   walk::matching_opcodes_in_block(
       *clinit,
-      std::make_tuple(m::is_opcode(OPCODE_NEW_ARRAY),
-                      m::is_opcode(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT),
-                      m::is_opcode(OPCODE_SPUT_OBJECT)),
+      std::make_tuple(m::new_array_(), m::move_result_pseudo_object_(),
+                      m::sput_object_()),
       [&](DexMethod* method,
           cfg::Block*,
           const std::vector<IRInstruction*>& insts) {
@@ -770,9 +771,8 @@ InstrumentPass::patch_sharded_arrays(
   patched = false;
   walk::matching_opcodes_in_block(
       *clinit,
-      std::make_tuple(m::is_opcode(OPCODE_NEW_ARRAY),
-                      m::is_opcode(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT),
-                      m::is_opcode(OPCODE_SPUT_OBJECT)),
+      std::make_tuple(m::new_array_(), m::move_result_pseudo_object_(),
+                      m::sput_object_()),
       [&](DexMethod* method,
           cfg::Block*,
           const std::vector<IRInstruction*>& insts) {

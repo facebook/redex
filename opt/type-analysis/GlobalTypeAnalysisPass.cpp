@@ -7,8 +7,11 @@
 
 #include "GlobalTypeAnalysisPass.h"
 
+#include "ConfigFiles.h"
 #include "DexUtil.h"
 #include "GlobalTypeAnalyzer.h"
+#include "Show.h"
+#include "Trace.h"
 #include "TypeAnalysisTransform.h"
 #include "TypeInference.h"
 #include "Walkers.h"
@@ -83,7 +86,7 @@ void trace_analysis_diff(DexMethod* method,
         auto prefix = "field " + show(insn);
         found_improvement =
             trace_results_if_different(prefix, gparam, lparam, out);
-      } else if (is_invoke(insn->opcode())) {
+      } else if (opcode::is_an_invoke(insn->opcode())) {
         auto gparam = genv.get(RESULT_REGISTER);
         auto it = code->iterator_to(mie);
         auto callee = insn->get_method();
@@ -126,6 +129,7 @@ void GlobalTypeAnalysisPass::run_pass(DexStoresVector& stores,
   global::GlobalTypeAnalysis analysis(m_config.max_global_analysis_iteration);
   auto gta = analysis.analyze(scope);
   optimize(scope, *gta, null_assertion_set, mgr);
+  m_result = std::move(gta);
 }
 
 void GlobalTypeAnalysisPass::optimize(
@@ -148,6 +152,7 @@ void GlobalTypeAnalysisPass::optimize(
       Stats ra_stats;
       ra_stats.assert_stats =
           rat.apply(*lta, gta.get_whole_program_state(), method);
+      code->clear_cfg();
       return ra_stats;
     }
 
@@ -162,6 +167,7 @@ void GlobalTypeAnalysisPass::optimize(
             SHOW(method),
             SHOW(method->get_code()->cfg()));
     }
+    code->clear_cfg();
     return tr_stats;
   });
   stats.report(mgr);

@@ -10,6 +10,7 @@
 #include "ControlFlow.h"
 #include "DexClass.h"
 #include "IRCode.h"
+#include "PassManager.h"
 #include "Walkers.h"
 
 void SimplifyCFGPass::run_pass(DexStoresVector& stores,

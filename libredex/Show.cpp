@@ -27,6 +27,7 @@
 #include "DexIdx.h"
 #include "DexInstruction.h"
 #include "DexMethodHandle.h"
+#include "DexPosition.h"
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "IROpcode.h"
@@ -854,19 +855,19 @@ std::string show(const DexAnnotationDirectory* p) {
   }
   if (p->m_field) {
     ss << "field annotations:\n";
-    for (const auto& pair : *p->m_field) {
+    for (auto const& pair : *p->m_field) {
       ss << show(pair.first->get_name()) << ": " << show(pair.second) << "\n";
     }
   }
   if (p->m_method) {
     ss << "method annotations:\n";
-    for (const auto& pair : *p->m_method) {
+    for (auto const& pair : *p->m_method) {
       ss << show(pair.first->get_name()) << ": " << show(pair.second) << "\n";
     }
   }
   if (p->m_method_param) {
     ss << "method parameter annotations:\n";
-    for (const auto& pair : *p->m_method_param) {
+    for (auto const& pair : *p->m_method_param) {
       ss << show(pair.first->get_name());
       for (auto const& parampair : *pair.second) {
         ss << "  " << parampair.first << ": " << show(parampair.second) << "\n";
@@ -881,19 +882,11 @@ std::string show(IROpcode opcode) {
 #define OP(op, ...) \
   case OPCODE_##op: \
     return #op;
-    OPS
-#undef OP
-        case IOPCODE_LOAD_PARAM : return "IOPCODE_LOAD_PARAM";
-  case IOPCODE_LOAD_PARAM_OBJECT:
-    return "IOPCODE_LOAD_PARAM_OBJECT";
-  case IOPCODE_LOAD_PARAM_WIDE:
-    return "IOPCODE_LOAD_PARAM_WIDE";
-  case IOPCODE_MOVE_RESULT_PSEUDO:
-    return "IOPCODE_MOVE_RESULT_PSEUDO";
-  case IOPCODE_MOVE_RESULT_PSEUDO_OBJECT:
-    return "IOPCODE_MOVE_RESULT_PSEUDO_OBJECT";
-  case IOPCODE_MOVE_RESULT_PSEUDO_WIDE:
-    return "IOPCODE_MOVE_RESULT_PSEUDO_WIDE";
+#define IOP(op, ...) \
+  case IOPCODE_##op: \
+    return "IOPCODE_" #op;
+#define OPRANGE(...)
+#include "IROpcodes.def"
   }
   not_reached_log("Unknown opcode 0x%x", opcode);
 }

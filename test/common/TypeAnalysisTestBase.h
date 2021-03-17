@@ -53,6 +53,10 @@ class TypeAnalysisTestBase : public RedexIntegrationTest {
     return DexTypeDomain(DexType::make_type(DexString::make_string(type_name)));
   }
 
+  DexType* get_type_simple(const std::string& type_name) {
+    return DexType::make_type(DexString::make_string(type_name));
+  }
+
   DexType* get_type(const std::string& type_name) {
     std::string full_name = "Lcom/facebook/redextest/" + type_name + ";";
     return DexType::make_type(DexString::make_string(full_name));

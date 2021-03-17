@@ -7,7 +7,6 @@
 
 #pragma once
 
-#include <json/json.h>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -18,6 +17,10 @@
 #include "OptDataDefs.h"
 #include "Trace.h"
 #include "Util.h"
+
+namespace Json {
+class Value;
+} // namespace Json
 
 /**
  * Usage:

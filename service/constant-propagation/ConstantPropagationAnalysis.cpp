@@ -8,7 +8,10 @@
 #include "ConstantPropagationAnalysis.h"
 
 #include <boost/functional/hash.hpp>
+#include <mutex>
 #include <set>
+
+#include "RedexContext.h"
 
 // Note: MSVC STL doesn't implement std::isnan(Integral arg). We need to provide
 // an override of fpclassify for integral types.
@@ -22,6 +25,7 @@ std::enable_if_t<std::is_integral<T>::value, int> fpclassify(T x) {
 
 #include "DexUtil.h"
 #include "Resolver.h"
+#include "Trace.h"
 #include "Transform.h"
 #include "Walkers.h"
 
@@ -104,6 +108,37 @@ bool is_zero(boost::optional<SignedConstantDomain> src) {
 } // namespace
 
 namespace constant_propagation {
+
+namespace {
+
+std::mutex g_kotlin_mutex;
+std::unordered_set<DexMethodRef*>* g_kotlin_cache{nullptr};
+
+std::unordered_set<DexMethodRef*>* get_kotlin_null_assertions_internal() {
+  std::unique_lock<std::mutex> lock(g_kotlin_mutex);
+  if (g_kotlin_cache == nullptr) {
+    g_kotlin_cache = new std::unordered_set<DexMethodRef*>{
+        method::kotlin_jvm_internal_Intrinsics_checkParameterIsNotNull(),
+        kotlin_nullcheck_wrapper::
+            kotlin_jvm_internal_Intrinsics_WrCheckParameter(),
+        method::kotlin_jvm_internal_Intrinsics_checExpressionValueIsNotNull(),
+        kotlin_nullcheck_wrapper::
+            kotlin_jvm_internal_Intrinsics_WrCheckExpression()};
+
+    g_redex->add_destruction_task([]() {
+      std::unique_lock<std::mutex> lock(g_kotlin_mutex);
+      delete g_kotlin_cache;
+      g_kotlin_cache = nullptr;
+    });
+  }
+  return g_kotlin_cache;
+}
+
+} // namespace
+
+const std::unordered_set<DexMethodRef*>& get_kotlin_null_assertions() {
+  return *get_kotlin_null_assertions_internal();
+}
 
 boost::optional<size_t> get_null_check_object_index(
     const IRInstruction* insn,
@@ -269,7 +304,7 @@ bool LocalArrayAnalyzer::analyze_fill_array_data(const IRInstruction* insn,
 
 bool PrimitiveAnalyzer::analyze_default(const IRInstruction* insn,
                                         ConstantEnvironment* env) {
-  if (opcode::is_load_param(insn->opcode())) {
+  if (opcode::is_a_load_param(insn->opcode())) {
     return true;
   }
   switch (insn->opcode()) {
@@ -993,7 +1028,7 @@ ReturnState collect_return_state(
     for (auto& mie : InstructionIterable(b)) {
       auto* insn = mie.insn;
       fp_iter.analyze_instruction(insn, &env, insn == last_insn->insn);
-      if (is_return(insn->opcode())) {
+      if (opcode::is_a_return(insn->opcode())) {
         if (insn->opcode() != OPCODE_RETURN_VOID) {
           return_state.join_with(
               ReturnState(env.get(insn->dest()), env.get_heap()));
@@ -1008,6 +1043,13 @@ ReturnState collect_return_state(
 }
 
 namespace intraprocedural {
+
+FixpointIterator::FixpointIterator(
+    const cfg::ControlFlowGraph& cfg,
+    InstructionAnalyzer<ConstantEnvironment> insn_analyzer)
+    : MonotonicFixpointIterator(cfg),
+      m_insn_analyzer(std::move(insn_analyzer)),
+      m_kotlin_null_check_assertions(get_kotlin_null_assertions()) {}
 
 void FixpointIterator::analyze_instruction(const IRInstruction* insn,
                                            ConstantEnvironment* env,
@@ -1167,9 +1209,9 @@ ConstantEnvironment FixpointIterator::analyze_edge(
 
   auto insn = last_insn_it->insn;
   auto op = insn->opcode();
-  if (is_conditional_branch(op)) {
+  if (opcode::is_a_conditional_branch(op)) {
     analyze_if(insn, &env, edge->type() == cfg::EDGE_BRANCH);
-  } else if (is_switch(op)) {
+  } else if (opcode::is_switch(op)) {
     auto selector_val = env.get(insn->src(0));
     const auto& case_key = edge->case_key();
     if (case_key) {

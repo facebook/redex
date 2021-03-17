@@ -14,6 +14,8 @@
 #include "Mutators.h"
 #include "OptData.h"
 #include "Resolver.h"
+#include "Show.h"
+#include "StlUtil.h"
 #include "TypeReference.h"
 #include "UsedVarsAnalysis.h"
 #include "Walkers.h"
@@ -1442,38 +1444,31 @@ class EnumTransformer final {
     auto synth_field_access = synth_access();
     DexField* values_field = nullptr;
 
-    for (auto fit = sfields.begin(); fit != sfields.end();) {
-      auto field = *fit;
+    std20::erase_if(sfields, [&](auto it) {
+      auto field = *it;
       if (enum_constants.count(field)) {
-        fit = sfields.erase(fit);
-      } else if (check_required_access_flags(synth_field_access,
-                                             field->get_access())) {
+        return true;
+      }
+      if (check_required_access_flags(synth_field_access,
+                                      field->get_access())) {
         always_assert(!values_field);
         values_field = field;
-        fit = sfields.erase(fit);
-      } else {
-        ++fit;
+        return true;
       }
-    }
+      return false;
+    });
 
     always_assert(values_field);
     auto& dmethods = enum_cls->get_dmethods();
     // Delete <init>, values() and valueOf(String) methods, and clean <clinit>.
-    for (auto mit = dmethods.begin(); mit != dmethods.end();) {
-      auto method = *mit;
+    std20::erase_if(dmethods, [&, this](auto it) {
+      auto method = *it;
       if (method::is_clinit(method)) {
         clean_clinit(enum_constants, enum_cls, method, values_field);
-        if (empty(method->get_code())) {
-          mit = dmethods.erase(mit);
-        } else {
-          ++mit;
-        }
-      } else if (is_generated_enum_method(method)) {
-        mit = dmethods.erase(mit);
-      } else {
-        ++mit;
+        return empty(method->get_code());
       }
-    }
+      return this->is_generated_enum_method(method);
+    });
   }
 
   /**
@@ -1516,7 +1511,7 @@ class EnumTransformer final {
         continue;
       }
       auto insn = it->insn;
-      if (is_sput(insn->opcode())) {
+      if (opcode::is_an_sput(insn->opcode())) {
         auto field = resolve_field(insn->get_field());
         if (field && enum_constants.count(field)) {
           code->insert_before(it, dasm(OPCODE_SGET_OBJECT, field));
@@ -1527,7 +1522,7 @@ class EnumTransformer final {
         } else if (field == values_field) {
           it = code->erase(it);
         }
-      } else if (is_invoke_direct(insn->opcode()) &&
+      } else if (opcode::is_invoke_direct(insn->opcode()) &&
                  insn->get_method() == ctor) {
         summaries.emplace(insn, side_effects::Summary());
       }
@@ -1557,10 +1552,10 @@ class EnumTransformer final {
   /**
    * Only use for <clinit> code.
    */
-  bool empty(IRCode* code) {
+  static bool empty(IRCode* code) {
     auto iterable = InstructionIterable(code);
     auto begin = iterable.begin();
-    return is_return_void(begin->insn->opcode());
+    return opcode::is_return_void(begin->insn->opcode());
   }
 
   /**

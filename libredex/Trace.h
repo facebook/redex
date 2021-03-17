@@ -11,6 +11,7 @@
 #include <mutex>
 #include <string>
 
+#include "Macros.h"
 #include "Util.h"
 
 #define TMS          \
@@ -127,6 +128,7 @@
   TM(TIME)           \
   TM(TP)             \
   TM(TRACKRESOURCES) \
+  TM(TRMU)           \
   TM(TYPE)           \
   TM(TYPE_TRANSFORM) \
   TM(UCM)            \
@@ -171,10 +173,18 @@ void trace(
 
 struct TraceContext {
   explicit TraceContext(const std::string& current_method) {
+#if !IS_WINDOWS
     s_current_method = &current_method;
+#endif
   }
-  ~TraceContext() { s_current_method = nullptr; }
+  ~TraceContext() {
+#if !IS_WINDOWS
+    s_current_method = nullptr;
+#endif
+  }
 
+#if !IS_WINDOWS
   thread_local static const std::string* s_current_method;
+#endif
   static std::mutex s_trace_mutex;
 };

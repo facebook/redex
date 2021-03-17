@@ -36,7 +36,19 @@ enum class MethodSearch {
   Super, // invoke-super: vmethods up the hierarchy
   Any, // any method (vmethods or dmethods) in class and up the hierarchy
        // but not interfaces
-  Interface // invoke-interface: vmethods in interface class graph
+  Interface, // invoke-interface: vmethods in interface class graph
+  InterfaceVirtual // invoke-virtual but the final resolved method is interface
+                   // method. Fallback to interface search when virtual search
+                   // failed.
+                   // This is added because we don't have Miranda methods in
+                   // Redex but this case exist:
+                   // Interface a { something(); }
+                   // class b implements a {}
+                   // class c extends b { something(){} }
+                   // ... invoke-virtual b.something() ...
+                   // MethodSearch::Virtual will return nullptr. So we added
+                   // MethodSearch::InterfaceVirtual that can resolve to
+                   // a.something()
 };
 
 struct MethodRefCacheKey {
@@ -65,7 +77,7 @@ using MethodRefCache =
  * Helper to map an opcode to a MethodSearch rule.
  */
 inline MethodSearch opcode_to_search(const IROpcode opcode) {
-  always_assert(is_invoke(opcode));
+  always_assert(opcode::is_an_invoke(opcode));
   switch (opcode) {
   case OPCODE_INVOKE_DIRECT:
     return MethodSearch::Direct;
@@ -233,7 +245,7 @@ inline DexMethod* resolve_method(DexMethodRef* method,
   if (def != ref_cache.end()) {
     return def->second;
   }
-  auto mdef = resolve_method(method, search);
+  auto mdef = resolve_method(method, search, caller);
   if (mdef != nullptr) {
     ref_cache.emplace(MethodRefCacheKey{method, search}, mdef);
   }

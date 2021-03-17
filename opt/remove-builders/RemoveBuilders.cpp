@@ -10,9 +10,11 @@
 #include <boost/regex.hpp>
 #include <tuple>
 
+#include "ConfigFiles.h"
 #include "Dataflow.h"
 #include "DexUtil.h"
 #include "IRCode.h"
+#include "PassManager.h"
 #include "RemoveBuildersHelper.h"
 #include "Resolver.h"
 #include "Walkers.h"

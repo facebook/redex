@@ -8,22 +8,33 @@
 #pragma once
 
 #include <map>
+#include <memory>
 #include <string>
 #include <unordered_set>
 #include <vector>
 
-#include <json/json.h>
-
-#include "DexClass.h"
-#include "FrameworkApi.h"
-#include "InlinerConfig.h"
 #include "JsonWrapper.h"
-#include "MethodProfiles.h"
 #include "ProguardMap.h"
 
+class DexMethodRef;
 class DexType;
-using MethodTuple = std::tuple<DexString*, DexString*, DexString*>;
-using MethodMap = std::map<MethodTuple, DexClass*>;
+struct ProguardMap;
+
+namespace Json {
+class Value;
+} // namespace Json
+
+namespace api {
+class AndroidSDK;
+} // namespace api
+
+namespace inliner {
+struct InlinerConfig;
+} // namespace inliner
+
+namespace method_profiles {
+class MethodProfiles;
+} // namespace method_profiles
 
 /**
  * ConfigFiles should be a readonly structure
@@ -31,6 +42,7 @@ using MethodMap = std::map<MethodTuple, DexClass*>;
 struct ConfigFiles {
   explicit ConfigFiles(const Json::Value& config);
   ConfigFiles(const Json::Value& config, const std::string& outdir);
+  ~ConfigFiles();
 
   const std::vector<std::string>& get_coldstart_classes() {
     if (m_coldstart_classes.empty()) {
@@ -72,13 +84,10 @@ struct ConfigFiles {
 
   const method_profiles::MethodProfiles& get_method_profiles() {
     ensure_agg_method_stats_loaded();
-    return m_method_profiles;
+    return *m_method_profiles;
   }
 
-  void process_unresolved_method_profile_lines() {
-    ensure_agg_method_stats_loaded();
-    m_method_profiles.process_unresolved_lines();
-  }
+  void process_unresolved_method_profile_lines();
 
   const std::unordered_set<DexType*>& get_no_optimizations_annos();
   const std::unordered_set<DexMethodRef*>& get_pure_methods();
@@ -97,7 +106,10 @@ struct ConfigFiles {
 
   std::string get_outdir() const { return outdir; }
 
-  const ProguardMap& get_proguard_map() const { return m_proguard_map; }
+  // For development only!
+  void set_outdir(const std::string& new_outdir) { outdir = new_outdir; }
+
+  const ProguardMap& get_proguard_map() const;
 
   const std::string& get_printseeds() const { return m_printseeds; }
 
@@ -112,13 +124,7 @@ struct ConfigFiles {
    * such section, will also look up "MethodInlinePass" section for backward
    * compatibility.
    */
-  const inliner::InlinerConfig& get_inliner_config() {
-    if (m_inliner_config == nullptr) {
-      m_inliner_config = std::make_unique<inliner::InlinerConfig>();
-      load_inliner_config(m_inliner_config.get());
-    }
-    return *m_inliner_config;
-  }
+  const inliner::InlinerConfig& get_inliner_config();
 
   boost::optional<std::string> get_android_sdk_api_file(int32_t api_level) {
     std::string api_file;
@@ -131,17 +137,7 @@ struct ConfigFiles {
     return boost::optional<std::string>(api_file);
   }
 
-  const api::AndroidSDK& get_android_sdk_api(int32_t min_sdk_api) {
-    if (m_android_min_sdk_api == nullptr) {
-      always_assert(m_min_sdk_api_level == 0); // not set
-      m_min_sdk_api_level = min_sdk_api;
-      auto api_file = get_android_sdk_api_file(min_sdk_api);
-      m_android_min_sdk_api = std::make_unique<api::AndroidSDK>(api_file);
-    }
-
-    always_assert(min_sdk_api == m_min_sdk_api_level);
-    return *m_android_min_sdk_api;
-  }
+  const api::AndroidSDK& get_android_sdk_api(int32_t min_sdk_api);
 
   /**
    * Load configurations with the initial scope.
@@ -161,13 +157,13 @@ struct ConfigFiles {
   void load_inliner_config(inliner::InlinerConfig*);
 
   bool m_load_class_lists_attempted{false};
-  ProguardMap m_proguard_map;
+  std::unique_ptr<ProguardMap> m_proguard_map;
   std::string m_coldstart_class_filename;
   std::vector<std::string> m_coldstart_classes;
   std::unordered_map<std::string, std::vector<std::string>> m_class_lists;
   std::unordered_set<std::string> m_method_sorting_allowlisted_substrings;
   std::string m_printseeds; // Filename to dump computed seeds.
-  method_profiles::MethodProfiles m_method_profiles;
+  std::unique_ptr<method_profiles::MethodProfiles> m_method_profiles;
 
   // limits the output instruction size of any DexMethod to 2^n
   // 0 when limit is not present
@@ -178,8 +174,8 @@ struct ConfigFiles {
   // global pure methods
   std::unordered_set<DexMethodRef*> m_pure_methods;
   // Global inliner config.
-  std::unique_ptr<inliner::InlinerConfig> m_inliner_config{nullptr};
+  std::unique_ptr<inliner::InlinerConfig> m_inliner_config;
   // min_sdk AndroidAPI
   int32_t m_min_sdk_api_level = 0;
-  std::unique_ptr<api::AndroidSDK> m_android_min_sdk_api{nullptr};
+  std::unique_ptr<api::AndroidSDK> m_android_min_sdk_api;
 };

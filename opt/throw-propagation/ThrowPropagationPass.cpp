@@ -39,9 +39,11 @@
 #include "ControlFlow.h"
 #include "DexUtil.h"
 #include "IRCode.h"
+#include "PassManager.h"
 #include "Purity.h"
 #include "Resolver.h"
 #include "ScopedCFG.h"
+#include "Show.h"
 #include "Trace.h"
 #include "Walkers.h"
 
@@ -79,7 +81,7 @@ std::unordered_set<DexMethod*> ThrowPropagationPass::get_no_return_methods(
     bool can_return{false};
     editable_cfg_adapter::iterate_with_iterator(
         method->get_code(), [&can_return](const IRList::iterator& it) {
-          if (is_return(it->insn->opcode())) {
+          if (opcode::is_a_return(it->insn->opcode())) {
             can_return = true;
             return editable_cfg_adapter::LOOP_BREAK;
           } else {
@@ -103,7 +105,7 @@ ThrowPropagationPass::Stats ThrowPropagationPass::run(
   ThrowPropagationPass::Stats stats;
   cfg::ScopedCFG cfg(code);
   auto is_no_return_invoke = [&](IRInstruction* insn) {
-    if (!is_invoke(insn->opcode())) {
+    if (!opcode::is_an_invoke(insn->opcode())) {
       return false;
     }
     if (insn->opcode() == OPCODE_INVOKE_SUPER) {

@@ -23,6 +23,7 @@
 #include "ReducedProductAbstractDomain.h"
 #include "Resolver.h"
 #include "Show.h"
+#include "Trace.h"
 
 using namespace sparta;
 
@@ -478,7 +479,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
       AbstractObjectEnvironment* current_state) const override {
     AbstractObjectDomain callee_return;
     callee_return.set_to_bottom();
-    if (is_invoke(insn->opcode())) {
+    if (opcode::is_an_invoke(insn->opcode())) {
       CallingContext cc;
       auto srcs = insn->srcs();
       for (param_index_t i = 0; i < srcs.size(); i++) {
@@ -1173,7 +1174,7 @@ boost::optional<std::vector<DexType*>> ReflectionAnalysis::get_method_params(
     }
   }
   if (!move_result_insn ||
-      !opcode::is_move_result(move_result_insn->opcode())) {
+      !opcode::is_a_move_result(move_result_insn->opcode())) {
     return boost::none;
   }
   auto arg_param = get_abstract_object(RESULT_REGISTER, move_result_insn);

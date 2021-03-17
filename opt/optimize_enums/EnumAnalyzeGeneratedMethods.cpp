@@ -7,6 +7,9 @@
 
 #include "EnumAnalyzeGeneratedMethods.h"
 
+#include "Show.h"
+#include "Trace.h"
+
 using namespace optimize_enums;
 
 size_t EnumAnalyzeGeneratedMethods::transform_code(const Scope& scope) {

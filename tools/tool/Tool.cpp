@@ -12,6 +12,7 @@
 #include "DexLoader.h"
 #include "DexUtil.h"
 #include "JarLoader.h"
+#include "JsonWrapper.h"
 #include "ReachableClasses.h"
 #include "Tool.h"
 
@@ -157,7 +158,7 @@ DexStoresVector Tool::init(const std::string& system_jar_paths,
     std::cout << "Initializing reachable classes" << std::endl;
   }
   Scope scope = build_class_scope(stores);
-  JsonWrapper config(Json::nullValue);
+  JsonWrapper config;
   init_reachable_classes(scope, ReachableClassesConfig(config));
 
   return stores;

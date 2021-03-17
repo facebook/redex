@@ -9,14 +9,37 @@
 
 #include <boost/intrusive/list.hpp>
 #include <boost/range/sub_range.hpp>
+#include <functional>
 #include <iosfwd>
+#include <map>
+#include <memory>
+#include <set>
+#include <string>
 #include <type_traits>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
 
-#include "DexClass.h"
-#include "DexDebugInstruction.h"
-#include "IRInstruction.h"
+#include "Debug.h"
 
+class DexCallSite;
+class DexDebugInstruction;
+class DexFieldRef;
+class DexInstruction;
+class DexMethodHandle;
+class DexMethodRef;
+struct DexPosition;
+class DexString;
+class DexType;
+class IRCode;
+class IRInstruction;
 struct MethodItemEntry;
+
+using reg_t = uint32_t;
+
+namespace opcode {
+enum Branchingness : uint8_t;
+} // namespace opcode
 
 enum TryEntryType {
   TRY_START = 0,
@@ -179,10 +202,8 @@ struct MethodItemEntry {
     this->type = MFLOW_TARGET;
     this->target = bt;
   }
-  explicit MethodItemEntry(std::unique_ptr<DexDebugInstruction> dbgop)
-      : type(MFLOW_DEBUG), dbgop(std::move(dbgop)) {}
-  explicit MethodItemEntry(std::unique_ptr<DexPosition> pos)
-      : type(MFLOW_POSITION), pos(std::move(pos)) {}
+  explicit MethodItemEntry(std::unique_ptr<DexDebugInstruction> dbgop);
+  explicit MethodItemEntry(std::unique_ptr<DexPosition> pos);
   explicit MethodItemEntry(std::unique_ptr<SourceBlock> src_block);
 
   bool operator==(const MethodItemEntry&) const;

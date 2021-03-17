@@ -8,6 +8,7 @@
 #include "RegAlloc.h"
 
 #include <boost/functional/hash.hpp>
+#include <iostream>
 
 #include "Debug.h"
 #include "DexUtil.h"
@@ -16,11 +17,13 @@
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "LiveRange.h"
+#include "PassManager.h"
 #include "Show.h"
 #include "Transform.h"
 #include "Walkers.h"
 
 #include "JemallocUtil.h"
+#include "Trace.h"
 
 namespace regalloc {
 
@@ -61,6 +64,10 @@ Stats RegAllocPass::allocate(
   }
 }
 
+void RegAllocPass::eval_pass(DexStoresVector&, ConfigFiles&, PassManager&) {
+  ++m_eval;
+}
+
 void RegAllocPass::run_pass(DexStoresVector& stores,
                             ConfigFiles&,
                             PassManager& mgr) {
@@ -90,7 +97,13 @@ void RegAllocPass::run_pass(DexStoresVector& stores,
   mgr.incr_metric("coalesce_count", stats.moves_coalesced);
   mgr.incr_metric("net_moves", stats.net_moves());
 
-  mgr.record_running_regalloc();
+  ++m_run;
+  // For the last invocation, record that final register allocation has been
+  // done.
+  if (m_eval == m_run) {
+    TRACE(REG, 1, "Marking final register allocation");
+    mgr.record_running_regalloc();
+  }
 }
 
 static RegAllocPass s_pass;

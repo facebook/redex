@@ -10,7 +10,9 @@
 #include "CFGInliner.h"
 #include "ClassInitCounter.h"
 #include "IROpcode.h"
+#include "Show.h"
 
+#include "Trace.h"
 #include <unordered_set>
 
 using namespace cic;
@@ -59,7 +61,7 @@ bool ObjectInlinePlugin::update_before_reg_remap(ControlFlowGraph* caller,
       IRInstruction* insn = mie.insn;
       auto opcode = insn->opcode();
 
-      if (is_iput(opcode)) {
+      if (opcode::is_an_iput(opcode)) {
         auto current_reg = insn->srcs()[0];
         auto field = insn->get_field();
         auto field_set_to_move = m_initial_field_sets.find(field);
@@ -126,7 +128,7 @@ bool ObjectInlinePlugin::update_after_reg_remap(ControlFlowGraph*,
     for (auto it = iterator.begin(); it != iterator.end(); it++) {
       IRInstruction* insn = it->insn;
       auto opcode = insn->opcode();
-      if (is_iget(opcode)) {
+      if (opcode::is_an_iget(opcode)) {
         auto field = insn->get_field();
         bool is_self_call = this_refs.count(insn->src(0)) != 0;
         if (is_self_call) {
@@ -160,7 +162,7 @@ bool ObjectInlinePlugin::update_after_reg_remap(ControlFlowGraph*,
           it->insn = awaiting_dest_instr;
           continue;
         }
-      } else if (is_move(opcode)) {
+      } else if (opcode::is_a_move(opcode)) {
         // track this references to aid in redirection
         if (this_refs.count(insn->dest()) != 0 &&
             this_refs.count(insn->src(0)) != 0) {

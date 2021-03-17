@@ -9,7 +9,9 @@
 
 #include <boost/range/adaptor/reversed.hpp>
 
+#include "DexPosition.h"
 #include "IROpcode.h"
+#include "Show.h"
 #include "Transform.h"
 
 namespace {
@@ -33,6 +35,9 @@ DexProto* make_static_sig(DexMethod* meth) {
 
 } // namespace
 
+std::string ClassCreator::show_cls(const DexClass* cls) { return show(cls); }
+std::string ClassCreator::show_type(const DexType* type) { return show(type); }
+
 MethodBlock::MethodBlock(const IRList::iterator& iterator,
                          MethodCreator* creator)
     : mc(creator), curr(iterator) {
@@ -49,7 +54,7 @@ void MethodBlock::invoke(DexMethod* meth, const std::vector<Location>& args) {
 void MethodBlock::invoke(IROpcode opcode,
                          DexMethodRef* meth,
                          const std::vector<Location>& args) {
-  always_assert(is_invoke(opcode));
+  always_assert(opcode::is_an_invoke(opcode));
   auto invk = new IRInstruction(opcode);
   uint16_t arg_count = static_cast<uint16_t>(args.size());
   invk->set_method(meth)->set_srcs_size(arg_count);
@@ -160,8 +165,8 @@ void MethodBlock::ifield_op(IROpcode opcode,
                             DexField* field,
                             Location obj,
                             Location& src_or_dst) {
-  always_assert(is_ifield_op(opcode));
-  if (is_iget(opcode)) {
+  always_assert(opcode::is_an_ifield_op(opcode));
+  if (opcode::is_an_iget(opcode)) {
     auto iget = new IRInstruction(opcode);
     iget->set_field(field);
     src_or_dst.type = field->get_type();
@@ -252,8 +257,8 @@ void MethodBlock::sput(DexField* field, Location src) {
 void MethodBlock::sfield_op(IROpcode opcode,
                             DexField* field,
                             Location& src_or_dst) {
-  always_assert(is_sfield_op(opcode));
-  if (is_sget(opcode)) {
+  always_assert(opcode::is_an_sfield_op(opcode));
+  if (opcode::is_an_sget(opcode)) {
     auto sget = new IRInstruction(opcode);
     sget->set_field(field);
     src_or_dst.type = field->get_type();

@@ -135,6 +135,13 @@ void create_field_scope() {
  *
  * class D extends C
  *   void method()
+ *
+ * interface E
+ *   void method()
+ * abstract class F implements E
+ * abstract class G extends F
+ * class H extends G
+ *   void method()
  */
 void create_method_scope() {
   auto obj_t = DexType::make_type("Ljava/lang/Object;");
@@ -142,8 +149,14 @@ void create_method_scope() {
   auto b = DexType::make_type("B");
   auto c = DexType::make_type("C");
   auto d = DexType::make_type("D");
+  auto e = DexType::make_type("E");
+  auto f = DexType::make_type("F");
+  auto g = DexType::make_type("G");
+  auto h = DexType::make_type("H");
   std::vector<DexField*> no_fields{};
   std::vector<DexType*> interfaces_a{a};
+  std::vector<DexType*> no_interfaces{};
+  std::vector<DexType*> interfaces_e{e};
   auto interface_a =
       create_class(a, obj_t, no_fields, ACC_PUBLIC | ACC_INTERFACE);
   create_method(interface_a, "method", ACC_PUBLIC | ACC_INTERFACE);
@@ -153,6 +166,18 @@ void create_method_scope() {
   create_method(cls_c, "method", ACC_PUBLIC, /* concrete */ false);
   auto cls_d = create_class(d, c, interfaces_a, no_fields, ACC_PUBLIC);
   create_method(cls_d, "method", ACC_PUBLIC);
+
+  auto interface_e =
+      create_class(e, obj_t, no_fields, ACC_PUBLIC | ACC_INTERFACE);
+  create_method(interface_e, "method", ACC_PUBLIC | ACC_INTERFACE);
+  auto cls_f = create_class(f, obj_t, interfaces_e, no_fields,
+                            ACC_PUBLIC | ACC_ABSTRACT);
+  create_method(cls_f, "method", ACC_PUBLIC, /* concrete */ false);
+  auto cls_g =
+      create_class(g, f, no_interfaces, no_fields, ACC_PUBLIC | ACC_ABSTRACT);
+  create_method(cls_g, "method", ACC_PUBLIC, /* concrete */ false);
+  auto cls_h = create_class(h, g, no_interfaces, no_fields, ACC_PUBLIC);
+  create_method(cls_h, "method", ACC_PUBLIC);
 }
 
 class ResolverTest : public RedexTest {};
@@ -358,4 +383,28 @@ TEST_F(ResolverTest, ResolveMethod) {
               b_method);
   EXPECT_TRUE(resolve_method(c_method, MethodSearch::Interface, ref_cache) ==
               a_method);
+
+  auto e_method = DexMethod::get_method("E.method:()V");
+  EXPECT_TRUE(e_method != nullptr && e_method->is_def());
+
+  auto f_method = DexMethod::get_method("F.method:()V");
+  EXPECT_TRUE(f_method != nullptr && !f_method->is_def());
+
+  auto g_method = DexMethod::get_method("G.method:()V");
+  EXPECT_TRUE(g_method != nullptr && !g_method->is_def());
+
+  auto h_method = DexMethod::get_method("H.method:()V");
+  EXPECT_TRUE(h_method != nullptr && h_method->is_def());
+
+  EXPECT_TRUE(resolve_method(e_method, MethodSearch::Direct) == e_method);
+  EXPECT_TRUE(resolve_method(h_method, MethodSearch::Virtual) == h_method);
+  EXPECT_TRUE(resolve_method(h_method, MethodSearch::Any) == h_method);
+  EXPECT_TRUE(resolve_method(f_method, MethodSearch::Interface) == e_method);
+  EXPECT_TRUE(resolve_method(f_method, MethodSearch::Virtual) == nullptr);
+  EXPECT_TRUE(resolve_method(g_method, MethodSearch::Virtual) == nullptr);
+  EXPECT_TRUE(resolve_method(g_method, MethodSearch::Interface) == nullptr);
+  EXPECT_TRUE(resolve_method(f_method, MethodSearch::InterfaceVirtual) ==
+              e_method);
+  EXPECT_TRUE(resolve_method(g_method, MethodSearch::InterfaceVirtual) ==
+              e_method);
 }

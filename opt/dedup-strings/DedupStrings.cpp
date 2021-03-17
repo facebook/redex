@@ -600,7 +600,7 @@ void DedupStrings::rewrite_const_string_instructions(
           auto move_result = cfg->move_result_of(const_string_it);
           always_assert(move_result != ii.end());
           always_assert(
-              opcode::is_move_result_pseudo(move_result->insn->opcode()));
+              opcode::is_a_move_result_pseudo(move_result->insn->opcode()));
           const auto reg = move_result->insn->dest();
 
           std::vector<IRInstruction*> replacements;

@@ -10,6 +10,8 @@
 #include <utility>
 
 #include "ReachableClasses.h"
+#include "Show.h"
+#include "Trace.h"
 
 namespace ptrs = local_pointers;
 
@@ -237,7 +239,7 @@ std::vector<IRList::iterator> get_dead_instructions(
       if (!fp_iter.is_required(insn, used_vars)) {
         // move-result-pseudo instructions will be automatically removed
         // when their primary instruction is deleted.
-        if (!opcode::is_move_result_pseudo(insn->opcode())) {
+        if (!opcode::is_a_move_result_pseudo(insn->opcode())) {
           dead_instructions.emplace_back(code.iterator_to(*it));
         }
       }

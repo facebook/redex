@@ -32,6 +32,8 @@ class InlineForSpeed;
 
 namespace inliner {
 
+struct InlinerConfig;
+
 /*
  * Inline tail-called `callee` into `caller` at `pos`.
  *

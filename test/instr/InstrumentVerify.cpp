@@ -11,6 +11,7 @@
 #include "ControlFlow.h"
 #include "DexInstruction.h"
 #include "IRCode.h"
+#include "Show.h"
 #include "VerifyUtil.h"
 #include "Walkers.h"
 

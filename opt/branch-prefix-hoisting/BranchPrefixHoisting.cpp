@@ -17,6 +17,10 @@
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "IROpcode.h"
+#include "PassManager.h"
+#include "Show.h"
+#include "Trace.h"
+#include "Util.h"
 #include "Walkers.h"
 
 /**
@@ -51,19 +55,22 @@ namespace {
 constexpr const char* METRIC_INSTRUCTIONS_HOISTED = "num_instructions_hoisted";
 } // namespace
 
-bool BranchPrefixHoistingPass::has_side_effect_on_vregs(
-    const IRInstruction& insn, const std::unordered_set<reg_t>& vregs) {
+// Record critical registers that will be clobbered by the hoisted insns.
+void BranchPrefixHoistingPass::setup_side_effect_on_vregs(
+    const IRInstruction& insn, std::unordered_map<reg_t, bool>& vregs) {
   if (!insn.has_dest()) {
     // insn has no destination, can not have a side effect
-    return false; // we need to return here, otherwise dest() will throw
+    return; // we need to return here, otherwise dest() will throw
   }
 
   auto dest_reg = insn.dest();
-  if (insn.dest_is_wide()) {
-    return (vregs.find(dest_reg) != vregs.end()) ||
-           (vregs.find(dest_reg + 1) != vregs.end());
+  auto it = vregs.find(dest_reg);
+  if (it != vregs.end()) {
+    it->second = true;
   }
-  return vregs.find(dest_reg) != vregs.end();
+  if (insn.dest_is_wide() && vregs.find(dest_reg + 1) != vregs.end()) {
+    vregs.find(dest_reg + 1)->second = true;
+  }
 }
 
 // takes a list of iterators of the corresponding blocks, find if the
@@ -71,7 +78,8 @@ bool BranchPrefixHoistingPass::has_side_effect_on_vregs(
 boost::optional<IRInstruction> BranchPrefixHoistingPass::get_next_common_insn(
     std::vector<IRList::iterator> block_iters, // create a copy
     const std::vector<cfg::Block*>& blocks,
-    int iterator_offset) {
+    int iterator_offset,
+    constant_uses::ConstantUses& constant_uses) {
   const static auto irinsn_hash = [](const IRInstruction& insn) {
     return insn.hash();
   };
@@ -93,15 +101,33 @@ boost::optional<IRInstruction> BranchPrefixHoistingPass::get_next_common_insn(
 
   std::unordered_set<IRInstruction, decltype(irinsn_hash)> insns_at_iters(
       3, irinsn_hash);
+  // record the (const val) uses and make sure theey are the same
+  std::unordered_set<constant_uses::TypeDemand, EnumClassHash>
+      const_zero_use_types;
+
+  bool type_analysis_failed = false;
+
   for (unsigned i = 0; i < block_iters.size(); i++) {
     if (block_iters[i] == blocks[i]->end() ||
         block_iters[i]->type != MFLOW_OPCODE) {
       return boost::none;
     } else {
-      insns_at_iters.insert(*(block_iters[i]->insn));
+      auto insn = block_iters[i]->insn;
+      auto op = insn->opcode();
+      if (op == OPCODE_CONST && insn->has_literal()) {
+        // Makesure all the constant uses are of same type before hoisting.
+        auto type_demand = constant_uses.get_constant_type_demand(insn);
+        if (type_demand == constant_uses::TypeDemand::Error) {
+          type_analysis_failed = true;
+        } else {
+          const_zero_use_types.insert(type_demand);
+        }
+      }
+      insns_at_iters.insert(*insn);
     }
   }
-  if (insns_at_iters.size() == 1) {
+  if (insns_at_iters.size() == 1 && !type_analysis_failed &&
+      const_zero_use_types.size() <= 1) {
     return *(insns_at_iters.begin());
   } else {
     return boost::none;
@@ -126,18 +152,26 @@ std::vector<cfg::Block*> get_succ_blocks(cfg::Block* block) {
 
 bool BranchPrefixHoistingPass::is_insn_eligible(const IRInstruction& insn) {
   auto op = insn.opcode();
-  if (op == OPCODE_CONST && insn.has_literal() && insn.get_literal() == 0) {
-    // (const v 0) can either be moving number 0 or null pointer to a register
-    // we need to exclude this instruction because it causes IRTypeChecker
-    // to fail
-    return false;
-  }
-  return !is_branch(op) && !is_throw(op) && !is_return(op);
+  return !opcode::is_branch(op) && !opcode::is_throw(op);
 }
 
 // returns number of hoisted instructions
 int BranchPrefixHoistingPass::process_hoisting_for_block(
-    cfg::Block* block, cfg::ControlFlowGraph& cfg) {
+    cfg::Block* block,
+    cfg::ControlFlowGraph& cfg,
+    type_inference::TypeInference& type_inference,
+    constant_uses::ConstantUses& constant_uses) {
+
+  auto all_preds_are_same = [](const std::vector<cfg::Edge*>& edge_lst) {
+    if (edge_lst.size() == 1) {
+      return true;
+    }
+    std::set<cfg::Block*> count;
+    for (auto e : edge_lst) {
+      count.insert(e->src());
+    }
+    return count.size() == 1;
+  };
 
   if (!is_block_eligible(block)) {
     return 0;
@@ -150,27 +184,37 @@ int BranchPrefixHoistingPass::process_hoisting_for_block(
     return 0;
   }
   IRInstruction* last_insn = last_insn_it->insn;
-  const auto& srcs = last_insn->srcs();
-  std::unordered_set<reg_t> crit_regs(srcs.begin(), srcs.end());
+  // critical registers for hoisting and if they are clobbered.
+  // they all start as non-clobbered but if any hoisted insn clobbers it, it
+  // will be changed to true.
+  std::unordered_map<reg_t, bool> crit_regs;
+  for (size_t i = 0; i < last_insn->srcs_size(); i++) {
+    crit_regs.insert(std::make_pair(last_insn->src(i), false));
+    if (last_insn->src_is_wide(i)) {
+      crit_regs.insert(std::make_pair(last_insn->src(i) + 1, false));
+    }
+  }
 
   std::vector<cfg::Block*> succ_blocks = get_succ_blocks(block);
-
-  // make sure every successor has only one predecessor
+  // make sure every successor has same predecessor
   for (auto succ_block : succ_blocks) {
     const auto& preds_of_succ_block = succ_block->preds();
-    if (preds_of_succ_block.size() != 1) {
+    if (!all_preds_are_same(preds_of_succ_block)) {
       // we can only hoist the prefix if the block has only one incoming edge
       return 0;
     }
   }
-
-  auto insns_to_hoist = get_insns_to_hoist(succ_blocks, crit_regs);
-
+  auto insns_to_hoist =
+      get_insns_to_hoist(succ_blocks, crit_regs, constant_uses);
   if (!insns_to_hoist.empty()) {
     // do the mutation
-    hoist_insns_for_block(
-        block, last_insn_it, succ_blocks, cfg, insns_to_hoist);
-    return insns_to_hoist.size();
+    return hoist_insns_for_block(block,
+                                 last_insn_it,
+                                 succ_blocks,
+                                 cfg,
+                                 insns_to_hoist,
+                                 crit_regs,
+                                 type_inference);
   }
   return 0;
 }
@@ -184,7 +228,8 @@ void BranchPrefixHoistingPass::skip_pos_debug(IRList::iterator& it,
 
 std::vector<IRInstruction> BranchPrefixHoistingPass::get_insns_to_hoist(
     const std::vector<cfg::Block*>& succ_blocks,
-    const std::unordered_set<reg_t>& crit_regs) {
+    std::unordered_map<reg_t, bool>& crit_regs,
+    constant_uses::ConstantUses& constant_uses) {
   // get iterators that points to the beginning of each block
   std::vector<IRList::iterator> block_iters;
   block_iters.reserve(succ_blocks.size());
@@ -207,7 +252,7 @@ std::vector<IRInstruction> BranchPrefixHoistingPass::get_insns_to_hoist(
       }
     }
     boost::optional<IRInstruction> common_insn =
-        get_next_common_insn(block_iters, succ_blocks, 0);
+        get_next_common_insn(block_iters, succ_blocks, 0, constant_uses);
 
     if (common_insn && is_insn_eligible(*common_insn)) {
       IRInstruction only_insn = *common_insn;
@@ -218,20 +263,17 @@ std::vector<IRInstruction> BranchPrefixHoistingPass::get_insns_to_hoist(
         // 3. have no side effect on crit_regs
         // otherwise, stop here and do not proceed
         boost::optional<IRInstruction> next_common_insn =
-            get_next_common_insn(block_iters, succ_blocks, 1);
+            get_next_common_insn(block_iters, succ_blocks, 1, constant_uses);
         if (!next_common_insn) {
           // next one is not common, or at least one succ block reaches the end
           // give up on this instruction
           proceed = false;
-        } else if (has_side_effect_on_vregs(*next_common_insn, crit_regs)) {
-          proceed = false;
+        } else {
+          setup_side_effect_on_vregs(*next_common_insn, crit_regs);
         }
       }
 
-      if (has_side_effect_on_vregs(only_insn, crit_regs)) {
-        // insn can affect the branch taking decision
-        proceed = false;
-      }
+      setup_side_effect_on_vregs(only_insn, crit_regs);
       if (proceed) {
         // all conditions satisfied
         insns_to_hoist.push_back(only_insn);
@@ -248,15 +290,90 @@ std::vector<IRInstruction> BranchPrefixHoistingPass::get_insns_to_hoist(
   return insns_to_hoist;
 }
 
+// If critical registers are clobbered by hosited insns, make copy instructions
+// and insert them into heap_insn_objs (which will be before hosisted insns). We
+// also modify the critical insn to use the copied reg. RegAlloc will fix this
+// and will try to remove the copy.
+//
+bool BranchPrefixHoistingPass::create_move_and_fix_clobbered(
+    const IRList::iterator& pos,
+    std::vector<IRInstruction*>& heap_insn_objs,
+    cfg::Block* block,
+    cfg::ControlFlowGraph& cfg,
+    const std::unordered_map<reg_t, bool>& crit_regs,
+    type_inference::TypeInference& type_inference) {
+  std::unordered_map<reg_t, reg_t> reg_map;
+  auto it = block->to_cfg_instruction_iterator(pos);
+  auto cond_insn = it->insn;
+  auto& type_envs = type_inference.get_type_environments();
+  auto& env = type_envs.at(cond_insn);
+
+  // Go over the critical regs and make a copy before hoisted insns.
+  for (size_t i = 0; i < cond_insn->srcs_size(); i++) {
+    auto reg = cond_insn->src(i);
+    auto it_reg = crit_regs.find(reg);
+    if ((it_reg != crit_regs.end() && it_reg->second) ||
+        (cond_insn->src_is_wide(i) &&
+         crit_regs.find(reg + 1) != crit_regs.end() &&
+         crit_regs.find(reg + 1)->second)) {
+      auto type = env.get_type(reg);
+
+      // If type_inference cannot infer type, give-up.
+      if (type.is_top() || type.is_bottom()) {
+        for (auto insn_ptr : heap_insn_objs) {
+          delete insn_ptr;
+        }
+        return false;
+      }
+      reg_t tmp_reg;
+      if (cond_insn->src_is_wide(i)) {
+        tmp_reg = cfg.allocate_wide_temp();
+      } else {
+        tmp_reg = cfg.allocate_temp();
+      }
+
+      // Make a copy.
+      IRInstruction* copy_insn;
+      if (type.equals(type_inference::TypeDomain(REFERENCE))) {
+        copy_insn = new IRInstruction(OPCODE_MOVE_OBJECT);
+      } else if (cond_insn->src_is_wide(i)) {
+        copy_insn = new IRInstruction(OPCODE_MOVE_WIDE);
+      } else {
+        copy_insn = new IRInstruction(OPCODE_MOVE);
+      }
+      reg_map.insert(std::make_pair(reg, tmp_reg));
+      copy_insn->set_dest(tmp_reg)->set_src(0, reg);
+      heap_insn_objs.push_back(copy_insn);
+    }
+  }
+  // if we have made copy_insns, insert them before hosited insns and change the
+  // conditional insn to use the copied (un-clobbered) reg.
+  for (size_t i = 0; i < it->insn->srcs_size(); i++) {
+    auto reg = it->insn->src(i);
+    if (reg_map.find(reg) != reg_map.end()) {
+      it->insn->set_src(i, reg_map.find(reg)->second);
+    }
+  }
+  return true;
+}
+
 // This function is where the pass mutates the IR
-void BranchPrefixHoistingPass::hoist_insns_for_block(
+size_t BranchPrefixHoistingPass::hoist_insns_for_block(
     cfg::Block* block,
     const IRList::iterator& pos,
     const std::vector<cfg::Block*>& succ_blocks,
     cfg::ControlFlowGraph& cfg,
-    const std::vector<IRInstruction>& insns_to_hoist) {
+    const std::vector<IRInstruction>& insns_to_hoist,
+    const std::unordered_map<reg_t, bool>& crit_regs,
+    type_inference::TypeInference& type_inference) {
 
   std::vector<IRInstruction*> heap_insn_objs;
+  if (!create_move_and_fix_clobbered(
+          pos, heap_insn_objs, block, cfg, crit_regs, type_inference)) {
+    return 0;
+  }
+
+  // Make a copy of hoisted insns.
   heap_insn_objs.reserve(insns_to_hoist.size());
   for (const IRInstruction& insn : insns_to_hoist) {
     heap_insn_objs.push_back(new IRInstruction(insn));
@@ -268,7 +385,12 @@ void BranchPrefixHoistingPass::hoist_insns_for_block(
   auto it = block->to_cfg_instruction_iterator(pos);
   cfg.insert_before(it, heap_insn_objs);
 
+  std::unordered_set<cfg::Block*> proessed_blocks;
   for (auto succ_block : succ_blocks) {
+    if (proessed_blocks.count(succ_block)) {
+      continue;
+    }
+    proessed_blocks.insert(succ_block);
     auto to_remove =
         ir_list::InstructionIterator(succ_block->begin(), succ_block->end());
 
@@ -284,17 +406,25 @@ void BranchPrefixHoistingPass::hoist_insns_for_block(
           ir_list::InstructionIterator(succ_block->begin(), succ_block->end());
     }
   }
+  return insns_to_hoist.size();
 }
 
-int BranchPrefixHoistingPass::process_code(IRCode* code) {
+int BranchPrefixHoistingPass::process_code(IRCode* code, DexMethod* method) {
   code->build_cfg(true);
   auto& cfg = code->cfg();
-  int ret = process_cfg(cfg);
+  type_inference::TypeInference type_inference(cfg);
+  type_inference.run(method);
+  constant_uses::ConstantUses constant_uses(cfg, method);
+
+  int ret = process_cfg(cfg, type_inference, constant_uses);
   code->clear_cfg();
   return ret;
 }
 
-int BranchPrefixHoistingPass::process_cfg(cfg::ControlFlowGraph& cfg) {
+int BranchPrefixHoistingPass::process_cfg(
+    cfg::ControlFlowGraph& cfg,
+    type_inference::TypeInference& type_inference,
+    constant_uses::ConstantUses& constant_uses) {
   int ret_insns_hoisted = 0;
   bool performed_transformation = false;
   do {
@@ -304,7 +434,8 @@ int BranchPrefixHoistingPass::process_cfg(cfg::ControlFlowGraph& cfg) {
     // iterate from the back, may get to the optimal state quicker
     for (auto block : blocks) {
       // when we are processing hoist for one block, other blocks may be changed
-      int n_insn_hoisted = process_hoisting_for_block(block, cfg);
+      int n_insn_hoisted =
+          process_hoisting_for_block(block, cfg, type_inference, constant_uses);
       if (n_insn_hoisted) {
         performed_transformation = true;
         ret_insns_hoisted += n_insn_hoisted;
@@ -327,7 +458,8 @@ void BranchPrefixHoistingPass::run_pass(DexStoresVector& stores,
           return 0;
         }
 
-        int insns_hoisted = BranchPrefixHoistingPass::process_code(code);
+        int insns_hoisted =
+            BranchPrefixHoistingPass::process_code(code, method);
         if (insns_hoisted) {
           TRACE(BPH, 3,
                 "[branch prefix hoisting] Moved %u insns in method {%s}",

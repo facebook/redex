@@ -13,12 +13,12 @@
 #include <fstream>
 #include <gtest/gtest.h>
 #include <sstream>
-#include <string>
 
 #include "ControlFlow.h"
 #include "Debug.h"
 #include "DexInstruction.h"
 #include "IRCode.h"
+#include "Show.h"
 #include "VerifyUtil.h"
 #include "Walkers.h"
 
@@ -146,13 +146,15 @@ DexInstruction* find_instruction(DexMethod* m, DexOpcode opcode) {
 void verify_type_erased(const DexClass* cls, size_t num_dmethods) {
   ASSERT_NE(cls, nullptr);
   auto dmethods = cls->get_dmethods();
-  ASSERT_EQ(dmethods.size(), num_dmethods);
+  ASSERT_EQ(dmethods.size(), num_dmethods)
+      << show(cls) << " has " << dmethods.size() << " dmethods\n";
   for (auto m : dmethods) {
     ASSERT_FALSE(method::is_init(m));
     ASSERT_NE(m->c_str(), "<init>");
   }
   const auto& vmethods = cls->get_vmethods();
-  ASSERT_TRUE(vmethods.empty());
+  ASSERT_TRUE(vmethods.empty())
+      << show(cls) << " has " << vmethods.size() << " vmethods\n";
 }
 
 void dump_cfgs(bool is_prev_verify,

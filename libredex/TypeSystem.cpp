@@ -9,7 +9,9 @@
 
 #include "DexUtil.h"
 #include "Resolver.h"
+#include "Show.h"
 #include "Timer.h"
+#include "Trace.h"
 
 namespace {
 

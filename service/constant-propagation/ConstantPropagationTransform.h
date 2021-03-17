@@ -135,7 +135,7 @@ class Transform final {
   std::unordered_set<IRInstruction*> m_redundant_move_results;
   bool m_rebuild_cfg{0};
   Stats m_stats;
-  std::unordered_set<DexMethodRef*> m_kotlin_null_check_assertions;
+  const std::unordered_set<DexMethodRef*>& m_kotlin_null_check_assertions;
 };
 
 /*

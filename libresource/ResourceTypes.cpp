@@ -7217,7 +7217,6 @@ void ResTable::serializeSingleResType(
   Vector<char> serialized_entries;
   for (size_t i = 0; i < num_ids; i++) {
     auto id = source_ids[i];
-    auto offset_loc = serialized_entries.size();
 
     Entry out_entry;
     status_t err =

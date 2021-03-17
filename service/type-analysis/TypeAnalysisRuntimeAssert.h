@@ -9,7 +9,11 @@
 
 #include "DexClass.h"
 #include "LocalTypeAnalyzer.h"
+#include "PassManager.h"
+#include "Trace.h"
 #include "WholeProgramState.h"
+
+struct ProguardMap;
 
 namespace type_analyzer {
 

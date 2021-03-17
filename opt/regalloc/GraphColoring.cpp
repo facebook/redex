@@ -13,10 +13,12 @@
 
 #include "ControlFlow.h"
 #include "Debug.h"
+#include "DexOpcode.h"
 #include "DexUtil.h"
 #include "Dominators.h"
 #include "IRCode.h"
 #include "Show.h"
+#include "Trace.h"
 #include "Transform.h"
 #include "VirtualRegistersFile.h"
 
@@ -97,7 +99,7 @@ RangeSet init_range_set(IRCode* code) {
     bool is_range{false};
     if (op == OPCODE_FILLED_NEW_ARRAY) {
       is_range = insn->srcs_size() > dex_opcode::NON_RANGE_MAX;
-    } else if (is_invoke(op)) {
+    } else if (opcode::is_an_invoke(op)) {
       is_range = sum_src_sizes(insn) > dex_opcode::NON_RANGE_MAX;
     }
     if (is_range) {
@@ -367,7 +369,8 @@ bool Allocator::coalesce(interference::Graph* ig, IRCode* code) {
   for (auto it = ii.begin(); it != end; ++it) {
     auto insn = it->insn;
     auto op = insn->opcode();
-    if (!is_move(op) && !has_2addr_form(op) && op != OPCODE_CHECK_CAST) {
+    if (!opcode::is_a_move(op) && !has_2addr_form(op) &&
+        op != OPCODE_CHECK_CAST) {
       continue;
     }
     reg_t dest;
@@ -379,7 +382,7 @@ bool Allocator::coalesce(interference::Graph* ig, IRCode* code) {
     dest = aliases.find_set(dest);
     auto src = aliases.find_set(insn->src(0));
     if (dest == src) {
-      if (is_move(op)) {
+      if (opcode::is_a_move(op)) {
         ++m_stats.moves_coalesced;
         code->remove_opcode(it.unwrap());
       }
@@ -397,7 +400,7 @@ bool Allocator::coalesce(interference::Graph* ig, IRCode* code) {
       ig->combine(parent, child);
       TRACE(REG, 7, "Coalescing v%u and v%u because of %s", parent, child,
             SHOW(insn));
-      if (is_move(op)) {
+      if (opcode::is_a_move(op)) {
         ++m_stats.moves_coalesced;
         code->remove_opcode(it.unwrap());
       }
@@ -830,7 +833,7 @@ std::unordered_map<reg_t, IRList::iterator> Allocator::find_param_splits(
   auto end = ii.end();
   for (auto it = ii.begin(); it != end; ++it) {
     auto* insn = it->insn;
-    if (opcode::is_load_param(insn->opcode())) {
+    if (opcode::is_a_load_param(insn->opcode())) {
       continue;
     }
     if (insn->has_dest()) {
@@ -866,7 +869,8 @@ std::unordered_map<reg_t, IRList::iterator> Allocator::find_param_splits(
       // We need to check insn before end of block to make sure we didn't
       // insert load after branches.
       auto insn_it = idom->get_last_insn();
-      if (insn_it != idom->end() && !is_branch(insn_it->insn->opcode()) &&
+      if (insn_it != idom->end() &&
+          !opcode::is_branch(insn_it->insn->opcode()) &&
           !opcode::may_throw(insn_it->insn->opcode())) {
         ++insn_it;
       }

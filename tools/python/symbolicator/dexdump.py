@@ -28,8 +28,10 @@ class DexdumpSymbolicator(object):
         self.symbol_maps = symbol_maps
         self.reading_methods = False
         self.current_class = None
-        self.current_method_id = None
-        self.last_line = None
+        self.current_class_name = None
+        self.current_method = None
+        self.last_lineno = None
+        self.prev_line = None
 
     def class_replacer(self, matchobj):
         m = matchobj.group("class")
@@ -76,46 +78,43 @@ class DexdumpSymbolicator(object):
 
     def reset_state(self):
         self.current_class = None
-        self.current_method_id = None
-        self.last_line = None
+        self.current_class_name = None
+        self.current_method = None
+        self.last_lineno = None
+        self.prev_line = None
 
     def symbolicate(self, line):
-        extra = None
+        symbolicated_line = self._symbolicate(line)
+        self.prev_line = line
+        return symbolicated_line
 
-        def p(s):
-            nonlocal extra
-            if extra is None:
-                extra = s
-            else:
-                extra += ", " + s
-
-        if self.symbol_maps.iodi_metadata is not None:
+    def _symbolicate(self, line):
+        if self.symbol_maps.iodi_metadata:
             match = self.METHOD_CLS_HDR_REGEX.search(line)
-            if match is not None:
+            if match:
                 self.current_class = match.group("class")
-            elif self.current_class is not None:
+            elif self.current_class:
                 match = self.METHOD_REGEX.search(line)
-                if match is not None:
-                    current_method = match.group("method")
+                if match:
+                    self.current_method = match.group("method")
+                    self.current_class_name = self.current_class.replace("/", ".")
                     line = self.METHOD_REGEX.sub(self.method_replacer, line)
-                    qualified_method = (
-                        self.current_class.replace("/", ".") + "." + current_method
-                    )
-                    iodi_map = self.symbol_maps.iodi_metadata.entries
-                    if qualified_method in iodi_map:
-                        self.current_method_id = iodi_map[qualified_method]
-                elif self.current_method_id is not None:
+                elif self.current_method:
                     match = self.LINE_REGEX.search(line)
-                    if match is not None:
-                        mapped_line = self.symbol_maps.debug_line_map.find_line_number(
-                            self.current_method_id, match.group("lineno")
+                    if match:
+                        lineno = match.group("lineno")
+                        mapped_line, _ = self.symbol_maps.iodi_metadata.map_iodi(
+                            self.symbol_maps.debug_line_map,
+                            self.current_class_name,
+                            self.current_method,
+                            lineno,
                         )
                         if mapped_line:
-                            if self.last_line is not None:
-                                if self.last_line == mapped_line:
+                            if self.last_lineno:
+                                if self.last_lineno == mapped_line:
                                     # Don't emit duplicate line entries
                                     return None
-                            self.last_line = mapped_line
+                            self.last_lineno = mapped_line
                             positions = map(
                                 lambda p: "%s:%d" % (p.file, p.line),
                                 self.symbol_maps.line_map.get_stack(mapped_line - 1),
@@ -126,8 +125,36 @@ class DexdumpSymbolicator(object):
                                 + ", ".join(positions)
                                 + "\n"
                             )
+                    no_debug_info = (
+                        "positions     :" in self.prev_line
+                        and "locals        :" in line
+                    )
+                    if no_debug_info:
+                        mappings = self.symbol_maps.iodi_metadata.map_iodi_no_debug_to_mappings(
+                            self.symbol_maps.debug_line_map,
+                            self.current_class_name,
+                            self.current_method,
+                        )
+                        if mappings is None:
+                            return line
+                        result = ""
+                        for i, (pc, mapped_line) in enumerate(mappings):
+                            positions = map(
+                                lambda p: "%s:%d" % (p.file, p.line),
+                                self.symbol_maps.line_map.get_stack(mapped_line - 1),
+                            )
+                            if i == 0:
+                                pc = 0
+                            result += (
+                                "        "
+                                + "{0:#0{1}x}".format(pc, 6)
+                                + " line="
+                                + ", ".join(positions)
+                                + "\n"
+                            )
+                        return result + line
 
-            if self.CLS_CHUNK_HDR_REGEX.match(line) is not None:
+            if self.CLS_CHUNK_HDR_REGEX.match(line):
                 # If we match a header but its the wrong header then ignore the
                 # contents of this subsection until we hit a methods subsection
                 self.reading_methods = (
@@ -135,7 +162,7 @@ class DexdumpSymbolicator(object):
                 )
                 if not self.reading_methods:
                     self.reset_state()
-            elif self.CLS_HDR_REGEX.match(line) is not None:
+            elif self.CLS_HDR_REGEX.match(line):
                 self.reading_methods = False
                 self.reset_state()
 

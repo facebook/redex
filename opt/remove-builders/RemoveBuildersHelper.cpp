@@ -51,7 +51,7 @@ void fields_mapping(const IRList::iterator& it,
     }
   }
 
-  if (is_iput(insn->opcode())) {
+  if (opcode::is_an_iput(insn->opcode())) {
     auto field = resolve_field(insn->get_field(), FieldSearch::Instance);
 
     if (field != nullptr && field->get_class() == builder->get_type()) {
@@ -83,7 +83,7 @@ std::unique_ptr<std::unordered_map<IRInstruction*, FieldsRegs>> fields_setters(
 
 IROpcode get_move_opcode(const IRInstruction* insn) {
   always_assert(insn != nullptr);
-  always_assert(is_iget(insn->opcode()));
+  always_assert(opcode::is_an_iget(insn->opcode()));
 
   if (insn->opcode() == OPCODE_IGET_WIDE) {
     return OPCODE_MOVE_WIDE;
@@ -253,7 +253,7 @@ std::vector<DexMethod*> get_non_trivial_init_methods(IRCode* code,
   std::vector<DexMethod*> methods;
   for (auto const& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
-    if (is_invoke(insn->opcode())) {
+    if (opcode::is_an_invoke(insn->opcode())) {
       auto invoked = resolve_method(insn->get_method(), opcode_to_search(insn));
       if (invoked != nullptr && invoked->get_class() == type) {
         if (method::is_constructor(invoked) &&
@@ -280,7 +280,7 @@ std::unordered_set<IRInstruction*> get_super_class_initializations(
 
   for (auto& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
-    if (is_invoke(insn->opcode())) {
+    if (opcode::is_an_invoke(insn->opcode())) {
       auto invoked = resolve_method(insn->get_method(), opcode_to_search(insn));
       if (invoked != nullptr && invoked->get_class() == parent_type &&
           method::is_init(invoked)) {
@@ -323,7 +323,7 @@ std::vector<IRInstruction*> gather_move_builders_insn(
     auto insn = it.first;
     auto tainted = it.second.bits();
 
-    if (is_move(insn->opcode())) {
+    if (opcode::is_a_move(insn->opcode())) {
       if (tainted[insn->src(0)]) {
         insns.push_back(insn);
       }
@@ -444,14 +444,14 @@ bool remove_builder(DexMethod* method, DexClass* builder) {
 
       auto& fields_in_insn = fields_in->at(it->insn);
 
-      if (is_iput(opcode)) {
+      if (opcode::is_an_iput(opcode)) {
         auto field = resolve_field(insn->get_field(), FieldSearch::Instance);
         if (field != nullptr && field->get_class() == builder->get_type()) {
           deletes.push_back(insn);
           continue;
         }
 
-      } else if (is_iget(opcode)) {
+      } else if (opcode::is_an_iget(opcode)) {
         auto field = resolve_field(insn->get_field(), FieldSearch::Instance);
         if (field == nullptr) continue;
         if (field->get_class() == builder->get_type()) {
@@ -561,7 +561,7 @@ bool remove_builder(DexMethod* method, DexClass* builder) {
           continue;
         }
 
-      } else if (is_invoke(opcode)) {
+      } else if (opcode::is_an_invoke(opcode)) {
         auto invoked = insn->get_method();
         if (invoked->get_class() == builder->get_type() &&
             invoked->get_name() == init) {
@@ -610,6 +610,7 @@ IROpcode get_iget_type(DexField* field) {
   case DataType::Double:
     return OPCODE_IGET_WIDE;
   case DataType::Void:
+  default:
     not_reached();
   }
 }
@@ -634,7 +635,7 @@ bool params_change_regs(DexMethod* method) {
   for (DexType* arg : args) {
     std::function<void(IRList::iterator, TaintedRegs*)> trans =
         [&](const IRList::iterator& it, TaintedRegs* tregs) {
-          if (!opcode::is_load_param(it->insn->opcode())) {
+          if (!opcode::is_a_load_param(it->insn->opcode())) {
             transfer_object_reach(arg, regs_size, it->insn, tregs->m_reg_set);
           }
         };
@@ -650,11 +651,11 @@ bool params_change_regs(DexMethod* method) {
       auto insn_tainted = it.second.bits();
       auto op = insn->opcode();
 
-      if (opcode::is_load_param(op)) {
+      if (opcode::is_a_load_param(op)) {
         continue;
       }
 
-      if (is_iget(op)) {
+      if (opcode::is_an_iget(op)) {
         DexField* field =
             resolve_field(insn->get_field(), FieldSearch::Instance);
         if (field->get_class() == arg) {
@@ -761,12 +762,12 @@ DexMethod* create_fields_constr(DexMethod* method, DexClass* cls) {
     IRInstruction* insn = it->insn;
 
     // Delete old parameter loads.
-    if (opcode::is_load_param(insn->opcode())) {
+    if (opcode::is_a_load_param(insn->opcode())) {
       to_delete.emplace_back(it.unwrap());
       continue;
     }
 
-    if (is_iget(insn->opcode())) {
+    if (opcode::is_an_iget(insn->opcode())) {
       DexField* field = resolve_field(insn->get_field(), FieldSearch::Instance);
       if (field->get_class() == cls->get_type()) {
 
@@ -816,7 +817,7 @@ std::vector<IRList::iterator> get_invokes_for_method(IRCode* code,
   auto ii = InstructionIterable(code);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
     auto insn = it->insn;
-    if (is_invoke(insn->opcode())) {
+    if (opcode::is_an_invoke(insn->opcode())) {
       auto invoked = insn->get_method();
       auto def = resolve_method(invoked, MethodSearch::Any);
       if (def) {
@@ -961,12 +962,12 @@ void transfer_object_reach(DexType* obj,
   always_assert(insn != nullptr);
 
   auto op = insn->opcode();
-  if (is_move(op)) {
+  if (opcode::is_a_move(op)) {
     regs[insn->dest()] = regs[insn->src(0)];
-  } else if (opcode::is_move_result(op)) {
+  } else if (opcode::is_a_move_result(op)) {
     regs[insn->dest()] = regs[regs_size];
-  } else if (writes_result_register(op)) {
-    if (is_invoke(op)) {
+  } else if (opcode::writes_result_register(op)) {
+    if (opcode::is_an_invoke(op)) {
       auto invoked = insn->get_method();
       auto def = resolve_method(invoked, MethodSearch::Any);
       if (def) {
@@ -995,7 +996,7 @@ bool tainted_reg_escapes(
     auto insn = it.first;
     auto tainted = it.second.bits();
     auto op = insn->opcode();
-    if (is_invoke(op)) {
+    if (opcode::is_an_invoke(op)) {
       auto invoked = resolve_method(insn->get_method(), opcode_to_search(insn));
       size_t args_reg_start{0};
       if (invoked == nullptr) {
@@ -1004,7 +1005,7 @@ bool tainted_reg_escapes(
       }
 
       if (method::is_init(invoked) ||
-          (invoked->get_class() == ty && !is_invoke_static(op))) {
+          (invoked->get_class() == ty && !opcode::is_invoke_static(op))) {
         // if a builder is passed as the first arg to a virtual function or a
         // ctor, we can treat it as non-escaping, since we also check that
         // those methods don't allow the builder to escape.
@@ -1049,7 +1050,8 @@ bool tainted_reg_escapes(
         TRACE(BUILDERS, 5, "Escaping instruction: %s", SHOW(insn));
         return true;
       }
-    } else if (is_conditional_branch(op) || is_monitor(op)) {
+    } else if (opcode::is_a_conditional_branch(op) ||
+               opcode::is_a_monitor(op)) {
       if (tainted[insn->src(0)]) {
         // TODO(emmasevastian): Treat this case separate.
         return true;
@@ -1073,7 +1075,7 @@ get_tainted_regs(uint32_t regs_size,
         auto insn = it->insn;
         auto& regs = tregs->m_reg_set;
         auto op = insn->opcode();
-        if (opcode::is_move_result_pseudo(op) &&
+        if (opcode::is_a_move_result_pseudo(op) &&
             std::prev(it)->insn->opcode() == OPCODE_NEW_INSTANCE) {
           DexType* cls = std::prev(it)->insn->get_type();
           auto dest = it->insn->dest();
@@ -1123,7 +1125,7 @@ std::vector<DexMethod*> get_all_methods(IRCode* code, DexType* type) {
   std::vector<DexMethod*> methods;
   for (auto const& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
-    if (is_invoke(insn->opcode())) {
+    if (opcode::is_an_invoke(insn->opcode())) {
       auto invoked = resolve_method(insn->get_method(), opcode_to_search(insn));
       if (invoked != nullptr && invoked->get_class() == type) {
         methods.emplace_back(invoked);

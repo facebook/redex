@@ -10,9 +10,10 @@
 #include <boost/algorithm/string.hpp>
 
 #include "Creators.h"
-#include "DexStoreUtil.h"
 #include "DexUtil.h"
 #include "Model.h"
+#include "Show.h"
+#include "Trace.h"
 
 using namespace class_merging;
 
@@ -54,7 +55,7 @@ void change_super_class(DexClass* cls, DexType* super_type) {
     auto code = ctor->get_code();
     for (auto& mie : InstructionIterable(code)) {
       auto insn = mie.insn;
-      if (!is_invoke_direct(insn->opcode()) || !insn->has_method()) {
+      if (!opcode::is_invoke_direct(insn->opcode()) || !insn->has_method()) {
         continue;
       }
       // Replace "invoke_direct v0, old_super_type;.<init>:()V" with
@@ -78,64 +79,50 @@ std::string get_merger_package_name(const DexType* type) {
   // Avoid an Android OS like package name, which might confuse the custom class
   // loader.
   if (boost::starts_with(pkg_name, "Landroid") ||
-      boost::starts_with(pkg_name, "Ldalvik")) {
+      boost::starts_with(pkg_name, "Ldalvik") ||
+      boost::starts_with(pkg_name, "Ljava")) {
     return "Lcom/facebook/redex/";
   }
   return pkg_name;
 }
 
-DexType* create_empty_base_type(const ModelSpec& spec,
-                                const DexType* interface_root,
-                                const Scope& scope,
-                                const DexStoresVector& stores) {
-  auto cls = type_class(interface_root);
-  if (cls == nullptr) {
-    return nullptr;
-  }
-  if (!is_interface(cls)) {
-    TRACE(CLMG, 1, "root %s is not an interface!", SHOW(interface_root));
-    return nullptr;
-  }
-
-  ClassHierarchy ch = build_type_hierarchy(scope);
-  InterfaceMap intf_map = build_interface_map(ch);
-  std::unordered_map<const DexType*, TypeSet> implements;
-  for (const auto& pair : intf_map) {
-    for (const auto& type : pair.second) {
-      implements[type].emplace(pair.first);
-    }
-  }
-
-  // Create an empty base and add to the scope. Put the base class in the same
+/**
+ * Filter out the implementors who implement only the interface_root and extend
+ * java.lang.Object, and create an empty superclass for them. The new class
+ * will be used to represent the interface_root in the later analysis and
+ * merging process.
+ */
+DexType* create_empty_base_cls_for_intf_root(
+    const std::string& base_type_name,
+    const DexType* interface_root,
+    const TypeSet& all_implementors,
+    const std::unordered_set<const DexType*>& root_store_classes) {
+  // Create an empty base class and put the base class in the same
   // package as the root interface.
-  auto base_type = DexType::make_type(
-      DexString::make_string("L" + spec.class_name_prefix + "EmptyBase;"));
-  auto base_class = create_class(base_type,
-                                 type::java_lang_Object(),
-                                 get_merger_package_name(interface_root),
-                                 std::vector<DexField*>(),
-                                 TypeSet(),
-                                 true);
+  auto base_type = DexType::make_type(DexString::make_string(base_type_name));
+  create_class(base_type,
+               type::java_lang_Object(),
+               get_merger_package_name(interface_root),
+               std::vector<DexField*>(),
+               TypeSet(),
+               true);
 
-  TRACE(CLMG, 3, "Created an empty base class %s for interface %s.", SHOW(cls),
-        SHOW(interface_root));
+  TRACE(CLMG, 3, "Created an empty base class %s for interface %s.",
+        SHOW(base_type), SHOW(interface_root));
 
   // Set it as the super class of implementors.
   size_t num = 0;
-  XStoreRefs xstores(stores);
 
-  for (auto impl_type : get_all_implementors(intf_map, interface_root)) {
-    if (type_class(impl_type)->is_external()) {
-      TRACE(CLMG, 3, "Skip external implementer %s", SHOW(impl_type));
+  for (auto impl_type : all_implementors) {
+    auto impl_cls = type_class(impl_type);
+    if (impl_cls->is_external()) {
       continue;
     }
-    auto& ifcs = implements.at(impl_type);
+    auto* ifcs = impl_cls->get_interfaces();
     // Add an empty base class to qualified implementors
-    auto impl_cls = type_class(impl_type);
-    if (ifcs.size() == 1 && impl_cls &&
+    if (ifcs->size() == 1 && *ifcs->begin() == interface_root &&
         impl_cls->get_super_class() == type::java_lang_Object() &&
-        !is_in_non_root_store(impl_type, stores, xstores,
-                              spec.include_primary_dex)) {
+        root_store_classes.count(impl_type)) {
       change_super_class(impl_cls, base_type);
       num++;
     }
@@ -296,7 +283,7 @@ DexClass* create_merger_class(const DexType* type,
 void patch_iput(const IRList::iterator& it) {
   auto insn = it->insn;
   const auto op = insn->opcode();
-  always_assert(is_iput(op));
+  always_assert(opcode::is_an_iput(op));
   switch (op) {
   case OPCODE_IPUT_BYTE:
   case OPCODE_IPUT_CHAR:
@@ -313,7 +300,7 @@ void patch_iget(DexMethod* meth,
                 DexType* original_field_type) {
   auto insn = it->insn;
   const auto op = insn->opcode();
-  always_assert(is_iget(op));
+  always_assert(opcode::is_an_iget(op));
   switch (op) {
   case OPCODE_IGET_OBJECT: {
     auto dest = std::next(it)->insn->dest();
@@ -372,16 +359,33 @@ void add_class(DexClass* new_cls, Scope& scope, DexStoresVector& stores) {
 void handle_interface_as_root(ModelSpec& spec,
                               Scope& scope,
                               DexStoresVector& stores) {
-  TypeSet interface_roots;
+  std::vector<const DexType*> interface_roots;
   for (const auto root : spec.roots) {
-    if (is_interface(type_class(root))) {
-      interface_roots.insert(root);
+    auto cls = type_class(root);
+    if (is_interface(cls)) {
+      interface_roots.push_back(root);
     }
   }
+  if (interface_roots.empty()) {
+    return;
+  }
 
+  ClassHierarchy ch = build_type_hierarchy(scope);
+  InterfaceMap intf_map = build_interface_map(ch);
+
+  // The created base_type name would be `class_name_prefix` + "EmptyBase" +
+  // `id`.
+  std::string base_type_name = "L" + spec.class_name_prefix + "EmptyBase";
+  auto root_store_classes =
+      get_root_store_types(stores, spec.include_primary_dex);
+
+  size_t idx = 0;
   for (const auto interface_root : interface_roots) {
-    auto empty_base =
-        create_empty_base_type(spec, interface_root, scope, stores);
+    const auto all_implementors =
+        get_all_implementors(intf_map, interface_root);
+    auto name = base_type_name + (idx > 0 ? std::to_string(idx) : "") + ";";
+    auto empty_base = create_empty_base_cls_for_intf_root(
+        name, interface_root, all_implementors, root_store_classes);
     if (empty_base != nullptr) {
       TRACE(CLMG, 3, "Changing the root from %s to %s.", SHOW(interface_root),
             SHOW(empty_base));
@@ -390,6 +394,7 @@ void handle_interface_as_root(ModelSpec& spec,
     }
     // Remove interface roots regardless of whether an empty base was added.
     spec.roots.erase(interface_root);
+    ++idx;
   }
 }
 

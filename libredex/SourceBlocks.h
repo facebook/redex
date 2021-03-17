@@ -28,8 +28,8 @@ struct BlockAccessor {
   static void push_source_block(Block* b,
                                 std::unique_ptr<SourceBlock> src_block) {
     auto it = b->get_first_non_param_loading_insn();
-    if (it != b->end() && (opcode::is_move_result_pseudo(it->insn->opcode()) ||
-                           opcode::is_move_result(it->insn->opcode()))) {
+    if (it != b->end() && (opcode::is_a_move_result_pseudo(it->insn->opcode()) ||
+                           opcode::is_a_move_result(it->insn->opcode()))) {
       ++it;
     }
     auto mie = new MethodItemEntry(std::move(src_block));

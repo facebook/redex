@@ -67,6 +67,12 @@ DexMethod* resolve_method(const DexClass* cls,
     search = MethodSearch::Virtual;
   }
   while (cls) {
+    if (search == MethodSearch::InterfaceVirtual) {
+      auto try_intf = resolve_intf_method_ref(cls, name, proto);
+      if (try_intf) {
+        return try_intf;
+      }
+    }
     if (search == MethodSearch::Virtual || search == MethodSearch::Any) {
       for (auto& vmeth : cls->get_vmethods()) {
         if (match(name, proto, vmeth)) {
@@ -98,7 +104,10 @@ DexMethod* resolve_method_ref(const DexClass* cls,
     const auto& super = cls->get_super_class();
     if (super == nullptr) return nullptr;
     const auto& super_cls = type_class(super);
-    return resolve_method(super_cls, name, proto, search);
+    auto resolved = resolve_method(super_cls, name, proto, search);
+    if (resolved || search != MethodSearch::InterfaceVirtual) {
+      return resolved;
+    }
   }
   const auto& super_intfs = cls->get_interfaces()->get_type_list();
   for (const auto& super_intf : super_intfs) {

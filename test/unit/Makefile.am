@@ -14,6 +14,7 @@ LDADD = $(COMMON_TEST_LIBS)
 
 check_PROGRAMS = \
     aliased_registers_test \
+    analysis_usage_test \
     array_propagation_test \
     blaming_escape_test \
     boxed_boolean_propagation_test \
@@ -72,6 +73,7 @@ check_PROGRAMS = \
     method_merger_test \
     monitor_count_test \
     mutf8_compare_test \
+    leb_test \
     null_propagation_test \
     object_inliner_test \
     object_propagation_test \
@@ -100,6 +102,7 @@ check_PROGRAMS = \
     remove_unused_args_test \
     renamer_test \
     resolver_test \
+    resolve_proguard_value_test \
     result_propagation_test \
     side_effects_summary_test \
     signed_constant_propagation_test \
@@ -125,6 +128,8 @@ check_PROGRAMS = \
 
 aliased_registers_test_SOURCES = AliasedRegistersTest.cpp
 
+analysis_usage_test_SOURCES = AnalysisUsageTest.cpp
+
 array_propagation_test_SOURCES = constant-propagation/ArrayPropagationTest.cpp
 array_propagation_test_CPPFLAGS = $(COMMON_INCLUDES) $(COMMON_TEST_INCLUDES) -I$(top_srcdir)/sparta/test
 
@@ -133,7 +138,7 @@ blaming_escape_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
 boxed_boolean_propagation_test_SOURCES = constant-propagation/BoxedBooleanPropagationTest.cpp
 
-branch_prefix_hoisting_test_SOURCES = BranchPrefixHoistingTest.cpp
+branch_prefix_hoisting_test_SOURCES = BranchPrefixHoistingTest.cpp ScopeHelper.cpp
 
 cfg_inliner_test_SOURCES = CFGInlinerTest.cpp
 cfg_inliner_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
@@ -255,6 +260,8 @@ monitor_count_test_SOURCES = MonitorCountTest.cpp
 
 mutf8_compare_test_SOURCES = Mutf8CompareTest.cpp
 
+leb_test_SOURCES = LebTest.cpp
+
 null_propagation_test_SOURCES = constant-propagation/NullPropagationTest.cpp
 
 object_inliner_test_SOURCES = ObjectInlinerTest.cpp
@@ -322,6 +329,7 @@ remove_unused_args_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 renamer_test_SOURCES = RenamerTest.cpp VirtScopeHelper.cpp ScopeHelper.cpp
 
 resolver_test_SOURCES = ResolverTest.cpp
+resolve_proguard_value_test_SOURCES = ResolveProguardAssumeValuesTest.cpp ScopeHelper.cpp
 
 result_propagation_test_SOURCES = ResultPropagationTest.cpp
 result_propagation_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
@@ -383,8 +391,10 @@ work_queue_test_SOURCES = WorkQueueTest.cpp
 
 xstorerefs_test_SOURCES = XStoreRefsTest.cpp
 
+
 TESTS = \
     aliased_registers_test \
+    analysis_usage_test \
     array_propagation_test \
     blaming_escape_test \
     boxed_boolean_propagation_test \
@@ -442,6 +452,7 @@ TESTS = \
     method_merger_test \
     monitor_count_test \
     mutf8_compare_test \
+    leb_test \
     null_propagation_test \
     object_inliner_test \
     object_propagation_test \
@@ -470,6 +481,7 @@ TESTS = \
     remove_unused_args_test \
     renamer_test \
     resolver_test \
+    resolve_proguard_value_test \
     result_propagation_test \
     side_effects_summary_test \
     signed_constant_propagation_test \

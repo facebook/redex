@@ -8,6 +8,7 @@
 #include "SplitHugeSwitchPass.h"
 
 #include <algorithm>
+#include <iostream>
 #include <unordered_set>
 
 #include <boost/optional.hpp>
@@ -21,9 +22,11 @@
 #include "InterDexPass.h"
 #include "MethodProfiles.h"
 #include "MethodUtil.h"
+#include "PassManager.h"
 #include "PluginRegistry.h"
 #include "ReachingDefinitions.h"
 #include "ScopedCFG.h"
+#include "Show.h"
 #include "TypeUtil.h"
 #include "Walkers.h"
 
@@ -81,7 +84,7 @@ namespace {
 bool has_switch(IRCode* code) {
   for (const auto& mie : InstructionIterable(*code)) {
     auto opcode = mie.insn->opcode();
-    if (is_switch(opcode)) {
+    if (opcode::is_switch(opcode)) {
       return true;
     }
   }
@@ -92,7 +95,7 @@ cfg::InstructionIterator find_large_switch(cfg::ControlFlowGraph& cfg,
                                            size_t case_threshold) {
   auto it = cfg::InstructionIterator(cfg, /*is_begin=*/true);
   for (; !it.is_end(); ++it) {
-    if (!is_switch(it->insn->opcode())) {
+    if (!opcode::is_switch(it->insn->opcode())) {
       continue;
     }
     auto block = it.block();
@@ -179,7 +182,7 @@ ParamChain find_param_chain(cfg::ControlFlowGraph& cfg,
     seen.insert(src_insn);
 
     auto opcode = src_insn->opcode();
-    if (opcode::is_load_param(opcode)) {
+    if (opcode::is_a_load_param(opcode)) {
       return val;
     }
 
@@ -569,7 +572,7 @@ AnalysisData analyze(DexMethod* m,
   redex_assert(!switch_range.mid_cases.empty());
 
   const IRInstruction* load_param = param_chain->back();
-  if (!opcode::is_load_param(load_param->opcode())) {
+  if (!opcode::is_a_load_param(load_param->opcode())) {
     data.no_load_param_anchor = true;
     return data;
   }

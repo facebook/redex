@@ -8,6 +8,7 @@
 #include "DedupVirtualMethods.h"
 #include "AnnoUtils.h"
 #include "RedexTest.h"
+#include "Show.h"
 
 class DedupVirtualMethodsTest : public RedexIntegrationTest {};
 

@@ -10,6 +10,9 @@
 #include "ClassHierarchy.h"
 #include "ConcurrentContainers.h"
 #include "DexUtil.h"
+#include "PassManager.h"
+#include "Show.h"
+#include "Trace.h"
 #include "Walkers.h"
 
 /*

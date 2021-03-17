@@ -52,6 +52,12 @@ struct CallSite {
 };
 
 using CallSites = std::vector<CallSite>;
+using MethodSet = std::unordered_set<const DexMethod*>;
+
+struct RootAndDynamic {
+  std::vector<const DexMethod*> roots;
+  std::unordered_set<const DexMethod*> dynamic_methods;
+};
 
 /*
  * This class determines how the call graph is built. The Graph ctor will start
@@ -64,7 +70,7 @@ class BuildStrategy {
  public:
   virtual ~BuildStrategy() {}
 
-  virtual std::vector<const DexMethod*> get_roots() const = 0;
+  virtual RootAndDynamic get_roots() const = 0;
 
   virtual CallSites get_callsites(const DexMethod*) const = 0;
 };
@@ -134,6 +140,16 @@ class Graph final {
     return m_nodes.at(m);
   }
 
+  const std::unordered_map<const IRInstruction*,
+                           std::unordered_set<const DexMethod*>>&
+  get_insn_to_callee() const {
+    return m_insn_to_callee;
+  }
+
+  const std::unordered_set<const DexMethod*>& get_dynamic_methods() const {
+    return m_dynamic_methods;
+  }
+
  private:
   NodeId make_node(const DexMethod*);
 
@@ -144,49 +160,68 @@ class Graph final {
   std::shared_ptr<Node> m_entry;
   std::shared_ptr<Node> m_exit;
   std::unordered_map<const DexMethod*, NodeId> m_nodes;
+  std::unordered_map<const IRInstruction*, std::unordered_set<const DexMethod*>>
+      m_insn_to_callee;
+  // Methods that might have unknown inputs/outputs that we need special handle.
+  // Like external methods with internal overrides, they might have external
+  // implementation that we don't know about. Or methods that might have
+  // dynamically added implementations, created via Proxy.newProxyInstance.
+  // We are only collecting those for multiple callee callgraph because we
+  // need to avoid propagating method return values for those true virtual
+  // methods.
+  std::unordered_set<const DexMethod*> m_dynamic_methods;
 };
 
 class SingleCalleeStrategy : public BuildStrategy {
  public:
   explicit SingleCalleeStrategy(const Scope& scope);
   CallSites get_callsites(const DexMethod* method) const override;
-  std::vector<const DexMethod*> get_roots() const override;
+  RootAndDynamic get_roots() const override;
 
  protected:
   bool is_definitely_virtual(DexMethod* method) const;
+  virtual DexMethod* resolve_callee(const DexMethod* caller,
+                                    IRInstruction* invoke) const;
 
   const Scope& m_scope;
   std::unordered_set<DexMethod*> m_non_virtual;
   mutable MethodRefCache m_resolved_refs;
 };
 
-class CompleteCallGraphStrategy : public BuildStrategy {
+class MultipleCalleeBaseStrategy : public SingleCalleeStrategy {
  public:
-  explicit CompleteCallGraphStrategy(const Scope& scope);
-  CallSites get_callsites(const DexMethod* method) const override;
-  std::vector<const DexMethod*> get_roots() const override;
+  explicit MultipleCalleeBaseStrategy(const Scope& scope);
+
+  CallSites get_callsites(const DexMethod* method) const override = 0;
+  RootAndDynamic get_roots() const override;
 
  protected:
-  const Scope& m_scope;
-  mutable MethodRefCache m_resolved_refs;
+  virtual std::vector<const DexMethod*> get_additional_roots(
+      const MethodSet& /* existing_roots */) const {
+    // No additional roots by default.
+    return std::vector<const DexMethod*>();
+  }
+
   std::unique_ptr<const method_override_graph::Graph> m_method_override_graph;
 };
 
-class MultipleCalleeStrategy : public BuildStrategy {
+class CompleteCallGraphStrategy : public MultipleCalleeBaseStrategy {
+ public:
+  explicit CompleteCallGraphStrategy(const Scope& scope);
+  CallSites get_callsites(const DexMethod* method) const override;
+  RootAndDynamic get_roots() const override;
+};
+
+class MultipleCalleeStrategy : public MultipleCalleeBaseStrategy {
  public:
   explicit MultipleCalleeStrategy(const Scope& scope,
                                   uint32_t big_override_threshold);
   CallSites get_callsites(const DexMethod* method) const override;
-  std::vector<const DexMethod*> get_roots() const override;
 
  protected:
-  bool is_definitely_virtual(DexMethod* method) const;
-
-  const Scope& m_scope;
-  std::unordered_set<DexMethod*> m_non_virtual;
-  std::unique_ptr<const method_override_graph::Graph> m_method_override_graph;
-  std::unordered_set<const DexMethod*> m_big_override;
-  mutable MethodRefCache m_resolved_refs;
+  std::vector<const DexMethod*> get_additional_roots(
+      const MethodSet& existing_roots) const override;
+  MethodSet m_big_override;
 };
 
 // A static-method-only API for use with the monotonic fixpoint iterator.
@@ -212,8 +247,14 @@ class GraphInterface {
   }
 };
 
-std::unordered_set<const DexMethod*> resolve_callees_in_graph(
-    const Graph& graph, const DexMethod* method, const IRInstruction* insn);
+MethodSet resolve_callees_in_graph(const Graph& graph,
+                                   const DexMethod* method,
+                                   const IRInstruction* insn);
+
+MethodSet resolve_callees_in_graph(const Graph& graph,
+                                   const IRInstruction* insn);
+
+bool method_is_dynamic(const Graph& graph, const DexMethod* method);
 
 struct CallgraphStats {
   uint32_t num_nodes;

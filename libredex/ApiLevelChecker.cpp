@@ -10,6 +10,8 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 
+#include "Show.h"
+#include "Trace.h"
 #include "Walkers.h"
 
 namespace api {

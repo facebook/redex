@@ -73,8 +73,8 @@ class NullPointerExceptionCreator {
       } else {
         str = implicitly_throwing_npe_insn->get_method()->get_name()->str();
       }
-    } else if (is_aput(implicitly_throwing_npe_insn->opcode()) ||
-               is_aget(implicitly_throwing_npe_insn->opcode())) {
+    } else if (opcode::is_an_aput(implicitly_throwing_npe_insn->opcode()) ||
+               opcode::is_an_aget(implicitly_throwing_npe_insn->opcode())) {
       str = "array access";
     } else {
       // if there is no field or method, we show the instruction opcode,

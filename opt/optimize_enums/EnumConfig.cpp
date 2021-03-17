@@ -8,6 +8,8 @@
 #include "EnumConfig.h"
 
 #include "LocalPointersAnalysis.h"
+#include "Show.h"
+#include "Trace.h"
 #include "Walkers.h"
 #include <utility>
 

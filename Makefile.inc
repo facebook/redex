@@ -66,6 +66,7 @@ COMMON_INCLUDES = \
 	-I$(top_srcdir)/opt/remove-unused-args \
 	-I$(top_srcdir)/opt/renameclasses \
 	-I$(top_srcdir)/opt/reorder-interfaces \
+	-I$(top_srcdir)/opt/resolve-proguard-values \
 	-I$(top_srcdir)/opt/resolve-refs \
 	-I$(top_srcdir)/opt/result-propagation \
 	-I$(top_srcdir)/opt/shorten-srcstrings \

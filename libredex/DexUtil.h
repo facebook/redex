@@ -16,9 +16,9 @@
 #include "ClassUtil.h"
 #include "Debug.h"
 #include "DexClass.h"
+#include "DexStore.h"
 #include "IRInstruction.h"
 #include "MethodUtil.h"
-#include "PassManager.h"
 #include "TypeUtil.h"
 
 /**
@@ -263,9 +263,8 @@ inline std::string internal_to_external(const std::string& internal_name) {
     return internal_name;
   } else {
     auto maybe_external_name = primitive_desc_to_name(type);
-    always_assert_log(maybe_external_name,
-                      "%s is not a valid primitive type.",
-                      component_name.c_str());
+    always_assert_log(
+        maybe_external_name, "%c is not a valid primitive type.", type);
     return *maybe_external_name;
   }
 }

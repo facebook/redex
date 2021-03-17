@@ -9,17 +9,24 @@
 
 #include <fstream>
 #include <iostream>
+#include <json/json.h>
 #include <string>
 #include <vector>
 
 #include "Debug.h"
 #include "DexClass.h"
+#include "FrameworkApi.h"
+#include "InlinerConfig.h"
+#include "MethodProfiles.h"
+#include "ProguardMap.h"
 
 ConfigFiles::ConfigFiles(const Json::Value& config, const std::string& outdir)
     : m_json(config),
       outdir(outdir),
-      m_proguard_map(config.get("proguard_map", "").asString()),
-      m_printseeds(config.get("printseeds", "").asString()) {
+      m_proguard_map(
+          new ProguardMap(config.get("proguard_map", "").asString())),
+      m_printseeds(config.get("printseeds", "").asString()),
+      m_method_profiles(new method_profiles::MethodProfiles()) {
 
   m_coldstart_class_filename = config.get("coldstart_classes", "").asString();
   if (m_coldstart_class_filename.empty()) {
@@ -38,6 +45,10 @@ ConfigFiles::ConfigFiles(const Json::Value& config, const std::string& outdir)
 }
 
 ConfigFiles::ConfigFiles(const Json::Value& config) : ConfigFiles(config, "") {}
+
+ConfigFiles::~ConfigFiles() {
+  // Here so that we can use `unique_ptr` to hide full class defs in the header.
+}
 
 /**
  * This function relies on the g_redex.
@@ -105,7 +116,7 @@ std::vector<std::string> ConfigFiles::load_coldstart_classes() {
                       clzname.c_str(), file);
     clzname.replace(position, lentail, ";");
     coldstart_classes.emplace_back(
-        m_proguard_map.translate_class("L" + clzname));
+        m_proguard_map->translate_class("L" + clzname));
   }
   return coldstart_classes;
 }
@@ -147,7 +158,7 @@ ConfigFiles::load_class_lists() {
 }
 
 void ConfigFiles::load_method_sorting_allowlisted_substrings() {
-  const auto json_cfg = get_json_config();
+  const auto& json_cfg = get_json_config();
   Json::Value json_result;
   json_cfg.get("method_sorting_allowlisted_substrings", Json::nullValue,
                json_result);
@@ -161,10 +172,10 @@ void ConfigFiles::load_method_sorting_allowlisted_substrings() {
 void ConfigFiles::ensure_agg_method_stats_loaded() {
   std::vector<std::string> csv_filenames;
   get_json_config().get("agg_method_stats_files", {}, csv_filenames);
-  if (csv_filenames.empty() || m_method_profiles.is_initialized()) {
+  if (csv_filenames.empty() || m_method_profiles->is_initialized()) {
     return;
   }
-  m_method_profiles.initialize(csv_filenames);
+  m_method_profiles->initialize(csv_filenames);
 }
 
 void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
@@ -199,7 +210,7 @@ void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
   jw.get("debug", false, inliner_config->debug);
   jw.get("blocklist", {}, inliner_config->m_blocklist);
   jw.get("caller_blocklist", {}, inliner_config->m_caller_blocklist);
-  jw.get("intradex_white_list", {}, inliner_config->m_intradex_white_list);
+  jw.get("intradex_allowlist", {}, inliner_config->m_intradex_allowlist);
 
   std::vector<std::string> no_inline_annos;
   jw.get("no_inline_annos", {}, no_inline_annos);
@@ -226,9 +237,38 @@ void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
   }
 }
 
+const inliner::InlinerConfig& ConfigFiles::get_inliner_config() {
+  if (m_inliner_config == nullptr) {
+    m_inliner_config = std::make_unique<inliner::InlinerConfig>();
+    load_inliner_config(m_inliner_config.get());
+  }
+  return *m_inliner_config;
+}
+
 void ConfigFiles::load(const Scope& scope) {
   get_inliner_config();
   m_inliner_config->populate(scope);
+}
+
+void ConfigFiles::process_unresolved_method_profile_lines() {
+  ensure_agg_method_stats_loaded();
+  m_method_profiles->process_unresolved_lines();
+}
+
+const api::AndroidSDK& ConfigFiles::get_android_sdk_api(int32_t min_sdk_api) {
+  if (m_android_min_sdk_api == nullptr) {
+    always_assert(m_min_sdk_api_level == 0); // not set
+    m_min_sdk_api_level = min_sdk_api;
+    auto api_file = get_android_sdk_api_file(min_sdk_api);
+    m_android_min_sdk_api = std::make_unique<api::AndroidSDK>(api_file);
+  }
+
+  always_assert(min_sdk_api == m_min_sdk_api_level);
+  return *m_android_min_sdk_api;
+}
+
+const ProguardMap& ConfigFiles::get_proguard_map() const {
+  return *m_proguard_map;
 }
 
 bool ConfigFiles::force_single_dex() const {

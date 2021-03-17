@@ -13,6 +13,7 @@
 #include "DexUtil.h"
 #include "RedexTest.h"
 #include "ScopeHelper.h"
+#include "Show.h"
 #include "Trace.h"
 #include "VirtScopeHelper.h"
 #include "VirtualRenamer.h"

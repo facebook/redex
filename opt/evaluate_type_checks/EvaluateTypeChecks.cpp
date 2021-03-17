@@ -144,7 +144,8 @@ IRInstruction* find_single_terminal_use(IRInstruction* start,
       return nullptr;
     }
     auto opcode = insn->opcode();
-    if (!is_move(opcode) && !opcode::is_move_result_pseudo(opcode)) {
+    if (!opcode::is_a_move(opcode) &&
+        !opcode::is_a_move_result_pseudo(opcode)) {
       // Not a move. Don't know what happens to the value.
       ++res.non_move;
       return nullptr;
@@ -192,7 +193,7 @@ void analyze_true_instance_ofs(
     }
 
     auto opcode = insn->opcode();
-    if (!is_conditional_branch(opcode)) {
+    if (!opcode::is_a_conditional_branch(opcode)) {
       TRACE(EVALTC, 3, "Not a branch: %s", SHOW(insn));
       ++res.non_branch;
       continue;

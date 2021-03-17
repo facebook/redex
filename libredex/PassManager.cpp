@@ -10,9 +10,19 @@
 #include <boost/filesystem.hpp>
 #include <cinttypes>
 #include <cstdio>
+#include <cstdlib>
+#include <list>
+#include <thread>
 #include <typeinfo>
 #include <unordered_set>
 
+#ifdef __linux__
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
+#endif
+
+#include "AnalysisUsage.h"
 #include "ApiLevelChecker.h"
 #include "ApkManager.h"
 #include "CommandProfiling.h"
@@ -27,13 +37,16 @@
 #include "IRTypeChecker.h"
 #include "InstructionLowering.h"
 #include "JemallocUtil.h"
+#include "MethodProfiles.h"
 #include "OptData.h"
+#include "Pass.h"
 #include "PrintSeeds.h"
 #include "ProguardPrintConfiguration.h"
 #include "ProguardReporting.h"
 #include "ReachableClasses.h"
 #include "Sanitizers.h"
 #include "ScopedCFG.h"
+#include "Show.h"
 #include "SourceBlocks.h"
 #include "Timer.h"
 #include "Walkers.h"
@@ -42,7 +55,42 @@ namespace {
 
 const std::string PASS_ORDER_KEY = "pass_order";
 
-constexpr const char* CFG_DUMP_BASE_NAME = "redex-cfg-dumps.cfg";
+struct ProfilerInfo {
+  std::string command;
+  boost::optional<std::string> shutdown_cmd;
+  boost::optional<std::string> post_cmd;
+  const Pass* pass;
+  ProfilerInfo(const std::string& command,
+               const boost::optional<std::string>& shutdown_cmd,
+               const boost::optional<std::string>& post_cmd,
+               const Pass* pass)
+      : command(command),
+        shutdown_cmd(shutdown_cmd),
+        post_cmd(post_cmd),
+        pass(pass) {}
+
+  static boost::optional<ProfilerInfo> create(const PassManager& mgr) {
+    if (getenv("PROFILE_COMMAND") && getenv("PROFILE_PASS")) {
+      // Resolve the pass in the constructor so that any typos / references to
+      // nonexistent passes are caught as early as possible
+      auto pass = mgr.find_pass(getenv("PROFILE_PASS"));
+      always_assert(pass != nullptr);
+      boost::optional<std::string> shutdown_cmd = boost::none;
+      if (getenv("PROFILE_SHUTDOWN_COMMAND")) {
+        shutdown_cmd = std::string(getenv("PROFILE_SHUTDOWN_COMMAND"));
+      }
+      boost::optional<std::string> post_cmd = boost::none;
+      if (getenv("PROFILE_POST_COMMAND")) {
+        post_cmd = std::string(getenv("PROFILE_POST_COMMAND"));
+      }
+      auto ret = boost::make_optional<ProfilerInfo>(ProfilerInfo{
+          getenv("PROFILE_COMMAND"), shutdown_cmd, post_cmd, pass});
+      std::cerr << "Will run profiler for " << pass->name() << std::endl;
+      return ret;
+    }
+    return boost::none;
+  }
+};
 
 std::string get_apk_dir(const Json::Value& config) {
   auto apkdir = config["apk_dir"].asString();
@@ -229,62 +277,430 @@ struct CheckerConfig {
   bool check_num_of_refs;
 };
 
-struct ScopedVmHWM {
-  explicit ScopedVmHWM(bool enabled, bool reset) : enabled(enabled) {
+class ScopedVmHWM {
+ public:
+  explicit ScopedVmHWM(bool enabled, bool reset) : m_enabled(enabled) {
     if (enabled) {
       if (reset) {
         try_reset_hwm_mem_stat();
       }
-      before = get_mem_stats().vm_hwm;
+      m_before = get_mem_stats().vm_hwm;
     }
   }
 
   void trace_log(PassManager* mgr, const Pass* pass) {
-    if (enabled) {
+    if (m_enabled) {
       uint64_t after = get_mem_stats().vm_hwm;
       if (mgr != nullptr) {
         mgr->set_metric("vm_hwm_after", after);
-        mgr->set_metric("vm_hwm_delta", after - before);
+        mgr->set_metric("vm_hwm_delta", after - m_before);
       }
       TRACE(STATS, 1, "VmHWM for %s was %s (%s over start).",
             pass->name().c_str(), pretty_bytes(after).c_str(),
-            pretty_bytes(after - before).c_str());
+            pretty_bytes(after - m_before).c_str());
     }
   }
 
-  uint64_t before;
-  bool enabled;
+ private:
+  uint64_t m_before;
+  bool m_enabled;
 };
 
-static void check_unique_deobfuscated_names(const char* pass_name,
-                                            const Scope& scope) {
-  TRACE(PM, 1, "Running check_unique_deobfuscated_names...");
-  Timer t("check_unique_deobfuscated_names");
-  std::unordered_map<std::string, DexMethod*> method_names;
-  walk::methods(scope, [&method_names, pass_name](DexMethod* dex_method) {
-    auto it = method_names.find(dex_method->get_deobfuscated_name());
-    if (it != method_names.end()) {
-      fprintf(stderr,
-              "ABORT! [%s] Duplicate deobfuscated method name: %s\nfor %s\n vs "
-              "%s\n",
-              pass_name, it->first.c_str(), SHOW(dex_method), SHOW(it->second));
-      exit(EXIT_FAILURE);
+class CheckUniqueDeobfuscatedNames {
+ public:
+  bool m_after_each_pass{false};
+
+  explicit CheckUniqueDeobfuscatedNames(ConfigFiles& conf) {
+    const Json::Value& args =
+        conf.get_json_config()["check_unique_deobfuscated_names"];
+    m_after_each_pass = args.get("run_after_each_pass", false).asBool();
+    m_initially = args.get("run_initially", false).asBool();
+    m_finally = args.get("run_finally", false).asBool();
+  }
+
+  void run_initially(const Scope& scope) {
+    if (m_initially) {
+      check_unique_deobfuscated_names("<initial>", scope);
     }
-    method_names.emplace(dex_method->get_deobfuscated_name(), dex_method);
-  });
-  std::unordered_map<std::string, DexField*> field_names;
-  walk::fields(scope, [&field_names, pass_name](DexField* dex_field) {
-    auto it = field_names.find(dex_field->get_deobfuscated_name());
-    if (it != field_names.end()) {
-      fprintf(
-          stderr,
-          "ABORT! [%s] Duplicate deobfuscated field name: %s\nfor %s\n vs %s\n",
-          pass_name, it->first.c_str(), SHOW(dex_field), SHOW(it->second));
-      exit(EXIT_FAILURE);
+  }
+
+  void run_finally(const Scope& scope) {
+    if (m_finally) {
+      check_unique_deobfuscated_names("<final>", scope);
     }
-    field_names.emplace(dex_field->get_deobfuscated_name(), dex_field);
-  });
+  }
+
+  void run_after_pass(const Pass* pass, const Scope& scope) {
+    if (m_after_each_pass) {
+      check_unique_deobfuscated_names(pass->name().c_str(), scope);
+    }
+  }
+
+ private:
+  void check_unique_deobfuscated_names(const char* pass_name,
+                                       const Scope& scope) {
+    TRACE(PM, 1, "Running check_unique_deobfuscated_names...");
+    Timer t("check_unique_deobfuscated_names");
+    std::unordered_map<std::string, DexMethod*> method_names;
+    walk::methods(scope, [&method_names, pass_name](DexMethod* dex_method) {
+      auto it = method_names.find(dex_method->get_deobfuscated_name());
+      if (it != method_names.end()) {
+        fprintf(
+            stderr,
+            "ABORT! [%s] Duplicate deobfuscated method name: %s\nfor %s\n vs "
+            "%s\n",
+            pass_name, it->first.c_str(), SHOW(dex_method), SHOW(it->second));
+        exit(EXIT_FAILURE);
+      }
+      method_names.emplace(dex_method->get_deobfuscated_name(), dex_method);
+    });
+    std::unordered_map<std::string, DexField*> field_names;
+    walk::fields(scope, [&field_names, pass_name](DexField* dex_field) {
+      auto it = field_names.find(dex_field->get_deobfuscated_name());
+      if (it != field_names.end()) {
+        fprintf(stderr,
+                "ABORT! [%s] Duplicate deobfuscated field name: %s\nfor %s\n "
+                "vs %s\n",
+                pass_name, it->first.c_str(), SHOW(dex_field),
+                SHOW(it->second));
+        exit(EXIT_FAILURE);
+      }
+      field_names.emplace(dex_field->get_deobfuscated_name(), dex_field);
+    });
+  }
+
+  bool m_initially{false};
+  bool m_finally{false};
+};
+
+class VisualizerHelper {
+ public:
+  explicit VisualizerHelper(const ConfigFiles& conf)
+      : m_class_cfgs(conf.metafile(CFG_DUMP_BASE_NAME),
+                     conf.get_json_config().get("write_cfg_each_pass", false)) {
+    m_class_cfgs.add_all(
+        conf.get_json_config().get("dump_cfg_classes", std::string("")));
+  }
+
+  void add_pass(const Pass* pass, size_t i) {
+    m_class_cfgs.add_pass(
+        [&]() { return pass->name() + "(" + std::to_string(i) + ")"; },
+        VISUALIZER_PASS_OPTIONS);
+  }
+
+  void finalize() {
+    m_class_cfgs.add_pass("After all passes");
+    m_class_cfgs.write();
+  }
+
+ private:
+  static constexpr visualizer::Options VISUALIZER_PASS_OPTIONS =
+      (visualizer::Options)(visualizer::Options::SKIP_NO_CHANGE |
+                            visualizer::Options::FORCE_CFG);
+  static constexpr const char* CFG_DUMP_BASE_NAME = "redex-cfg-dumps.cfg";
+
+  visualizer::Classes m_class_cfgs;
+};
+
+class AnalysisUsageHelper {
+ public:
+  using PreservedMap = std::unordered_map<AnalysisID, Pass*>;
+
+  explicit AnalysisUsageHelper(PreservedMap& m)
+      : m_preserved_analysis_passes(m) {}
+
+  void pre_pass(Pass* pass) { pass->set_analysis_usage(m_analysis_usage); }
+
+  void post_pass(Pass* pass) {
+    // Invalidate existing preserved analyses according to policy set by each
+    // pass.
+    m_analysis_usage.do_pass_invalidation(&m_preserved_analysis_passes);
+
+    if (pass->is_analysis_pass()) {
+      // If the pass is an analysis pass, preserve it.
+      m_preserved_analysis_passes.emplace(get_analysis_id_by_pass(pass), pass);
+    }
+  }
+
+ private:
+  AnalysisUsage m_analysis_usage;
+  PreservedMap& m_preserved_analysis_passes;
+};
+
+void process_method_profiles(PassManager& mgr, ConfigFiles& conf) {
+  // New methods might have been introduced by this pass; process previously
+  // unresolved methods to see if we can match them now (so that future passes
+  // using method profiles benefit)
+  conf.process_unresolved_method_profile_lines();
+  mgr.set_metric("~result~MethodProfiles~", conf.get_method_profiles().size());
+  mgr.set_metric("~result~MethodProfiles~unresolved~",
+                 conf.get_method_profiles().unresolved_size());
 }
+
+void maybe_write_env_seeds_file(const ConfigFiles& conf, const Scope& scope) {
+  char* seeds_output_file = std::getenv("REDEX_SEEDS_FILE");
+  if (seeds_output_file) {
+    std::string seed_filename = seeds_output_file;
+    Timer t("Writing seeds file " + seed_filename);
+    std::ofstream seeds_file(seed_filename);
+    keep_rules::print_seeds(seeds_file, conf.get_proguard_map(), scope, false,
+                            false);
+  }
+}
+
+void maybe_print_seeds_incoming(
+    const ConfigFiles& conf,
+    const Scope& scope,
+    const std::unique_ptr<keep_rules::ProguardConfiguration>& pg_config) {
+  if (!conf.get_printseeds().empty()) {
+    Timer t("Writing seeds to file " + conf.get_printseeds());
+    std::ofstream seeds_file(conf.get_printseeds());
+    keep_rules::print_seeds(seeds_file, conf.get_proguard_map(), scope);
+    std::ofstream config_file(conf.get_printseeds() + ".pro");
+    redex_assert(pg_config != nullptr);
+    keep_rules::show_configuration(config_file, scope, *pg_config);
+    std::ofstream incoming(conf.get_printseeds() + ".incoming");
+    redex::print_classes(incoming, conf.get_proguard_map(), scope);
+    std::ofstream shrinking_file(conf.get_printseeds() + ".allowshrinking");
+    keep_rules::print_seeds(shrinking_file, conf.get_proguard_map(), scope,
+                            true, false);
+    std::ofstream obfuscation_file(conf.get_printseeds() + ".allowobfuscation");
+    keep_rules::print_seeds(obfuscation_file, conf.get_proguard_map(), scope,
+                            false, true);
+  }
+}
+
+void maybe_print_seeds_outgoing(const ConfigFiles& conf,
+                                const DexStoreClassesIterator& it) {
+  if (!conf.get_printseeds().empty()) {
+    Timer t("Writing outgoing classes to file " + conf.get_printseeds() +
+            ".outgoing");
+    // Recompute the scope.
+    auto scope = build_class_scope(it);
+    std::ofstream outgoing(conf.get_printseeds() + ".outgoing");
+    redex::print_classes(outgoing, conf.get_proguard_map(), scope);
+  }
+}
+
+void maybe_enable_opt_data(const ConfigFiles& conf) {
+  // Enable opt decision logging if specified in config.
+  const Json::Value& opt_decisions_args =
+      conf.get_json_config()["opt_decisions"];
+  if (opt_decisions_args.get("enable_logs", false).asBool()) {
+    opt_metadata::OptDataMapper::get_instance().enable_logs();
+  }
+}
+
+boost::optional<ScopedCommandProfiling> maybe_command_profile(
+    const boost::optional<ProfilerInfo>& profiler_info, const Pass* pass) {
+  if (!profiler_info || profiler_info->pass != pass) {
+    return boost::none;
+  }
+  return ScopedCommandProfiling{boost::make_optional(profiler_info->command),
+                                profiler_info->shutdown_cmd,
+                                profiler_info->post_cmd};
+}
+
+bool is_run_hasher_after_each_pass(const ConfigFiles& conf,
+                                   const RedexOptions& options) {
+  if (options.disable_dex_hasher) {
+    return false;
+  }
+
+  const Json::Value& hasher_args = conf.get_json_config()["hasher"];
+  return hasher_args.get("run_after_each_pass", true).asBool();
+}
+
+class AfterPassSizes {
+ private:
+  PassManager* m_mgr;
+
+  // Would be nice to do things multi-threaded, but then we cannot
+  // fork and can have only one job in flight. Instead store pids
+  // and use non-blocking waits.
+  struct Job {
+    PassManager::PassInfo* pass_info;
+    std::string tmp_dir;
+    pid_t pid;
+    Job(PassManager::PassInfo* pass_info, const std::string& tmp_dir, pid_t pid)
+        : pass_info(pass_info), tmp_dir(tmp_dir), pid(pid) {}
+  };
+  std::list<Job> m_open_jobs;
+
+  bool m_enabled{false};
+  bool m_run_interdex{true};
+  bool m_debug{false};
+  size_t m_max_jobs{4};
+
+ public:
+  AfterPassSizes(PassManager* mgr, const ConfigFiles& conf) : m_mgr(mgr) {
+    const auto& json = conf.get_json_config();
+    m_enabled = json.get("after_pass_size", m_enabled);
+    m_run_interdex = json.get("after_pass_size_interdex", m_run_interdex);
+    m_debug = json.get("after_pass_size_debug", m_debug);
+    json.get("after_pass_size_queue", m_max_jobs, m_max_jobs);
+  }
+
+  bool handle(PassManager::PassInfo* pass_info,
+              DexStoresVector* stores,
+              ConfigFiles* conf) {
+    if (!m_enabled) {
+      return false;
+    }
+
+#ifdef __linux__
+    for (;;) {
+      check_open_jobs(/*no_hang=*/true);
+      if (m_open_jobs.size() < m_max_jobs) {
+        break;
+      }
+      sleep(1); // Wait a bit.
+    }
+
+    // Create a temp dir.
+    std::string tmp_dir;
+    {
+      auto tmp_path = boost::filesystem::temp_directory_path();
+      tmp_path /= "redex.after_pass_size.XXXXXX";
+      const auto& tmp_str = tmp_path.string();
+      std::unique_ptr<char[]> c_str =
+          std::make_unique<char[]>(tmp_str.length() + 1);
+      strcpy(c_str.get(), tmp_str.c_str());
+      char* dir_name = mkdtemp(c_str.get());
+      if (dir_name == nullptr) {
+        std::cerr << "Could not create temporary directory!";
+        return false;
+      }
+      tmp_dir = dir_name;
+    }
+
+    pid_t p = fork();
+
+    if (p < 0) {
+      std::cerr << "Fork failed!" << strerror(errno) << std::endl;
+      return false;
+    }
+
+    if (p > 0) {
+      // Parent (=this).
+      m_open_jobs.emplace_back(pass_info, tmp_dir, p);
+      return false;
+    }
+
+    // Child.
+    return handle_child(tmp_dir, stores, conf);
+#else
+    (void)pass_info;
+    return false;
+#endif
+  }
+
+  void wait() {
+#ifdef __linux__
+    check_open_jobs(/*no_hang=*/false);
+#endif
+  }
+
+ private:
+#ifdef __linux__
+  void check_open_jobs(bool no_hang) {
+    for (auto it = m_open_jobs.begin(); it != m_open_jobs.end();) {
+      int stat;
+      pid_t wait_res;
+      for (;;) {
+        wait_res = waitpid(it->pid, &stat, no_hang ? WNOHANG : 0);
+        if (wait_res != -1 || errno != EINTR) {
+          break;
+        }
+      }
+      if (wait_res == 0) {
+        // Not done.
+        ++it;
+        continue;
+      }
+      if (wait_res == -1) {
+        std::cerr << "Failed " << it->pass_info->name << std::endl;
+      } else {
+        if (WIFEXITED(stat) && WEXITSTATUS(stat) == 0) {
+          handle_parent(*it);
+        } else {
+          std::cerr << "AfterPass child failed: " << std::hex << stat
+                    << std::dec << std::endl;
+        }
+      }
+      boost::filesystem::remove_all(it->tmp_dir);
+      it = m_open_jobs.erase(it);
+    }
+  }
+
+  void handle_parent(const Job& job) {
+    // Collect dex file sizes in the temp directory.
+    // Discover dex files
+    namespace fs = boost::filesystem;
+    auto end = fs::directory_iterator();
+    size_t sum{0};
+    for (fs::directory_iterator it{job.tmp_dir}; it != end; ++it) {
+      const auto& file = it->path();
+      if (fs::is_regular_file(file) &&
+          !file.extension().compare(std::string(".dex"))) {
+        sum += fs::file_size(file);
+      }
+    }
+    job.pass_info->metrics["after_pass_size"] = sum;
+    if (m_debug) {
+      std::cerr << "Got " << sum << " for " << job.pass_info->name << std::endl;
+    }
+  }
+
+  bool handle_child(const std::string& tmp_dir,
+                    DexStoresVector* stores,
+                    ConfigFiles* conf) {
+    // Change output directory.
+    if (m_debug) {
+      std::cerr << "After-pass-size to " << tmp_dir << std::endl;
+    }
+    conf->set_outdir(tmp_dir);
+    // Gotta ensure "meta" exists.
+    auto meta_path = boost::filesystem::path(tmp_dir) / "meta";
+    boost::filesystem::create_directory(meta_path);
+
+    // Close output. No noise. (Maybe make this configurable)
+    if (!m_debug) {
+      close(STDOUT_FILENO);
+      close(STDERR_FILENO);
+    }
+
+    auto maybe_run = [&](const char* pass_name) {
+      auto pass = m_mgr->find_pass(pass_name);
+      if (pass != nullptr) {
+        if (m_debug) {
+          std::cerr << "Running " << pass_name << std::endl;
+        }
+        pass->run_pass(*stores, *conf, *m_mgr);
+      }
+    };
+
+    // If configured with InterDexPass, better run that. Expensive, but may be
+    // required for dex constraints.
+    if (m_run_interdex && !m_mgr->interdex_has_run()) {
+      maybe_run("InterDexPass");
+    }
+    // Better run MakePublicPass.
+    maybe_run("MakePublicPass");
+    // May need register allocation.
+    if (!m_mgr->regalloc_has_run()) {
+      maybe_run("RegAllocPass");
+    }
+
+    // Ensure we do not wait for anything copied from the parent.
+    m_open_jobs.clear();
+    m_enabled = false;
+
+    // Make the PassManager skip further passes.
+    return true;
+  }
+#endif
+};
 
 struct SourceBlocksStats {
   unsigned int total_blocks;
@@ -328,11 +744,20 @@ std::unique_ptr<keep_rules::ProguardConfiguration> empty_pg_config() {
   return std::make_unique<keep_rules::ProguardConfiguration>();
 }
 
+PassManager::PassManager(const std::vector<Pass*>& passes)
+    : PassManager(passes, Json::Value(Json::objectValue), RedexOptions{}) {}
 PassManager::PassManager(const std::vector<Pass*>& passes,
                          const Json::Value& config,
                          const RedexOptions& options)
     : PassManager(passes, empty_pg_config(), config, options) {}
 
+PassManager::PassManager(
+    const std::vector<Pass*>& passes,
+    std::unique_ptr<keep_rules::ProguardConfiguration> pg_config)
+    : PassManager(passes,
+                  std::move(pg_config),
+                  Json::Value(Json::objectValue),
+                  RedexOptions{}) {}
 PassManager::PassManager(
     const std::vector<Pass*>& passes,
     std::unique_ptr<keep_rules::ProguardConfiguration> pg_config,
@@ -345,23 +770,6 @@ PassManager::PassManager(
       m_redex_options(options),
       m_testing_mode(false) {
   init(config);
-  if (getenv("PROFILE_COMMAND") && getenv("PROFILE_PASS")) {
-    // Resolve the pass in the constructor so that any typos / references to
-    // nonexistent passes are caught as early as possible
-    auto pass = find_pass(getenv("PROFILE_PASS"));
-    always_assert(pass != nullptr);
-    boost::optional<std::string> shutdown_cmd = boost::none;
-    if (getenv("PROFILE_SHUTDOWN_COMMAND")) {
-      shutdown_cmd = std::string(getenv("PROFILE_SHUTDOWN_COMMAND"));
-    }
-    boost::optional<std::string> post_cmd = boost::none;
-    if (getenv("PROFILE_POST_COMMAND")) {
-      post_cmd = std::string(getenv("PROFILE_POST_COMMAND"));
-    }
-    m_profiler_info =
-        ProfilerInfo(getenv("PROFILE_COMMAND"), shutdown_cmd, post_cmd, pass);
-    fprintf(stderr, "Will run profiler for %s\n", pass->name().c_str());
-  }
   if (getenv("MALLOC_PROFILE_PASS")) {
     m_malloc_profile_pass = find_pass(getenv("MALLOC_PROFILE_PASS"));
     always_assert(m_malloc_profile_pass != nullptr);
@@ -369,6 +777,8 @@ PassManager::PassManager(
             m_malloc_profile_pass->name().c_str());
   }
 }
+
+PassManager::~PassManager() {}
 
 void PassManager::init(const Json::Value& config) {
   if (config["redex"].isMember("passes")) {
@@ -445,7 +855,20 @@ hashing::DexHash PassManager::run_hasher(const char* pass_name,
   return hash;
 }
 
+void PassManager::eval_passes(DexStoresVector& stores, ConfigFiles& conf) {
+  for (size_t i = 0; i < m_activated_passes.size(); ++i) {
+    Pass* pass = m_activated_passes[i];
+    TRACE(PM, 1, "Evaluating %s...", pass->name().c_str());
+    Timer t(pass->name() + " (eval)");
+    m_current_pass_info = &m_pass_info[i];
+    pass->eval_pass(stores, conf, *this);
+    m_current_pass_info = nullptr;
+  }
+}
+
 void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
+  auto profiler_info = ProfilerInfo::create(*this);
+
   if (conf.force_single_dex()) {
     // Squash the dexes into one, so that the passes all see only one dex and
     // all the cross-dex reference checking are accurate.
@@ -463,71 +886,21 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
     api::LevelChecker::init(m_redex_options.min_sdk, scope);
   }
 
-  char* seeds_output_file = std::getenv("REDEX_SEEDS_FILE");
-  if (seeds_output_file) {
-    std::string seed_filename = seeds_output_file;
-    Timer t("Writing seeds file " + seed_filename);
-    std::ofstream seeds_file(seed_filename);
-    keep_rules::print_seeds(seeds_file, conf.get_proguard_map(), scope, false,
-                            false);
-  }
-  if (!conf.get_printseeds().empty()) {
-    Timer t("Writing seeds to file " + conf.get_printseeds());
-    std::ofstream seeds_file(conf.get_printseeds());
-    keep_rules::print_seeds(seeds_file, conf.get_proguard_map(), scope);
-    std::ofstream config_file(conf.get_printseeds() + ".pro");
-    keep_rules::show_configuration(config_file, scope, *m_pg_config);
-    std::ofstream incoming(conf.get_printseeds() + ".incoming");
-    redex::print_classes(incoming, conf.get_proguard_map(), scope);
-    std::ofstream shrinking_file(conf.get_printseeds() + ".allowshrinking");
-    keep_rules::print_seeds(shrinking_file, conf.get_proguard_map(), scope,
-                            true, false);
-    std::ofstream obfuscation_file(conf.get_printseeds() + ".allowobfuscation");
-    keep_rules::print_seeds(obfuscation_file, conf.get_proguard_map(), scope,
-                            false, true);
-  }
+  maybe_write_env_seeds_file(conf, scope);
+  maybe_print_seeds_incoming(conf, scope, m_pg_config);
 
-  // Enable opt decision logging if specified in config.
-  const Json::Value& opt_decisions_args =
-      conf.get_json_config()["opt_decisions"];
-  if (opt_decisions_args.get("enable_logs", false).asBool()) {
-    opt_metadata::OptDataMapper::get_instance().enable_logs();
-  }
+  maybe_enable_opt_data(conf);
 
   // Load configurations regarding the scope.
   conf.load(scope);
 
   sanitizers::lsan_do_recoverable_leak_check();
 
-  // TODO(fengliu) : Remove Pass::eval_pass API
-  for (size_t i = 0; i < m_activated_passes.size(); ++i) {
-    Pass* pass = m_activated_passes[i];
-    TRACE(PM, 1, "Evaluating %s...", pass->name().c_str());
-    Timer t(pass->name() + " (eval)");
-    m_current_pass_info = &m_pass_info[i];
-    pass->eval_pass(stores, conf, *this);
-    m_current_pass_info = nullptr;
-  }
+  eval_passes(stores, conf);
 
   // Retrieve the hasher's settings.
-  const Json::Value& hasher_args = conf.get_json_config()["hasher"];
   bool run_hasher_after_each_pass =
-      hasher_args.get("run_after_each_pass", true).asBool();
-
-  if (get_redex_options().disable_dex_hasher) {
-    run_hasher_after_each_pass = false;
-  }
-
-  // Retrieve check_unique_deobfuscated_names settings.
-  const Json::Value& check_unique_deobfuscated_names_args =
-      conf.get_json_config()["check_unique_deobfuscated_names"];
-  bool run_check_unique_deobfuscated_names_after_each_pass =
-      check_unique_deobfuscated_names_args.get("run_after_each_pass", false)
-          .asBool();
-  bool run_check_unique_deobfuscated_names_initially =
-      check_unique_deobfuscated_names_args.get("run_initially", false).asBool();
-  bool run_check_unique_deobfuscated_names_finally =
-      check_unique_deobfuscated_names_args.get("run_finally", false).asBool();
+      is_run_hasher_after_each_pass(conf, get_redex_options());
 
   // Retrieve the type checker's settings.
   CheckerConfig checker_conf{conf};
@@ -538,22 +911,13 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   conf.get_method_profiles();
 
   if (run_hasher_after_each_pass) {
-    m_initial_hash =
-        boost::optional<hashing::DexHash>(this->run_hasher(nullptr, scope));
+    m_initial_hash = run_hasher(nullptr, scope);
   }
 
-  if (run_check_unique_deobfuscated_names_initially) {
-    check_unique_deobfuscated_names("<initial>", scope);
-  }
+  CheckUniqueDeobfuscatedNames check_unique_deobfuscated{conf};
+  check_unique_deobfuscated.run_initially(scope);
 
-  // CFG visualizer infra. Dump all given classes.
-  visualizer::Classes class_cfgs(
-      conf.metafile(CFG_DUMP_BASE_NAME),
-      conf.get_json_config().get("write_cfg_each_pass", false));
-  class_cfgs.add_all(
-      conf.get_json_config().get("dump_cfg_classes", std::string("")));
-  constexpr visualizer::Options VISUALIZER_PASS_OPTIONS = (visualizer::Options)(
-      visualizer::Options::SKIP_NO_CHANGE | visualizer::Options::FORCE_CFG);
+  VisualizerHelper graph_visualizer(conf);
 
   sanitizers::lsan_do_recoverable_leak_check();
 
@@ -565,37 +929,14 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   size_t min_pass_idx_for_dex_ref_check =
       checker_conf.min_pass_idx_for_dex_ref_check(m_activated_passes);
 
-  for (size_t i = 0; i < m_activated_passes.size(); ++i) {
-    Pass* pass = m_activated_passes[i];
-    AnalysisUsage analysis_usage;
-    pass->set_analysis_usage(analysis_usage);
+  // Abort if the analysis pass dependencies are not satisfied.
+  AnalysisUsage::check_dependencies(m_activated_passes);
 
-    for (const auto& analysis_id : analysis_usage.get_required_passes()) {
-      always_assert_log(
-          m_preserved_analysis_passes.count(analysis_id),
-          "%s requires analysis results from %s, but it's not available.",
-          pass->name().c_str(), analysis_id.c_str());
-    }
+  AfterPassSizes after_pass_size(this, conf);
 
-    TRACE(PM, 1, "Running %s...", pass->name().c_str());
-    ScopedVmHWM vm_hwm{hwm_pass_stats, hwm_per_pass};
-    Timer t(pass->name() + " (run)");
-    m_current_pass_info = &m_pass_info[i];
+  // For core loop legibility, have a lambda here.
 
-    {
-      bool run_profiler = m_profiler_info && m_profiler_info->pass == pass;
-      ScopedCommandProfiling cmd_prof(
-          run_profiler ? boost::make_optional(m_profiler_info->command)
-                       : boost::none,
-          run_profiler ? m_profiler_info->shutdown_cmd : boost::none,
-          run_profiler ? m_profiler_info->post_cmd : boost::none);
-      jemalloc_util::ScopedProfiling malloc_prof(m_malloc_profile_pass == pass);
-      pass->run_pass(stores, conf, *this);
-    }
-
-    vm_hwm.trace_log(this, pass);
-
-    sanitizers::lsan_do_recoverable_leak_check();
+  auto post_pass_verifiers = [&](Pass* pass, size_t i) {
     walk::parallel::code(build_class_scope(stores), [](DexMethod* m,
                                                        IRCode& code) {
       // Ensure that pass authors deconstructed the editable CFG at the end of
@@ -604,15 +945,11 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       always_assert_log(!code.editable_cfg_built(), "%s has a cfg!", SHOW(m));
     });
 
-    class_cfgs.add_pass(
-        [&]() { return pass->name() + "(" + std::to_string(i) + ")"; },
-        VISUALIZER_PASS_OPTIONS);
-
     bool run_hasher = run_hasher_after_each_pass;
     bool run_type_checker = checker_conf.run_after_pass(pass);
 
     if (run_hasher || run_type_checker ||
-        run_check_unique_deobfuscated_names_after_each_pass) {
+        check_unique_deobfuscated.m_after_each_pass) {
       scope = build_class_scope(it);
       if (run_hasher) {
         m_current_pass_info->hash = boost::optional<hashing::DexHash>(
@@ -628,31 +965,49 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       if (i >= min_pass_idx_for_dex_ref_check) {
         CheckerConfig::ref_validation(stores, pass->name());
       }
-      if (run_check_unique_deobfuscated_names_after_each_pass) {
-        check_unique_deobfuscated_names(pass->name().c_str(), scope);
-      }
+      check_unique_deobfuscated.run_after_pass(pass, scope);
+    }
+  };
+
+  std::unordered_map<const Pass*, size_t> runs;
+
+  /////////////////////
+  // MAIN PASS LOOP. //
+  /////////////////////
+
+  for (size_t i = 0; i < m_activated_passes.size(); ++i) {
+    Pass* pass = m_activated_passes[i];
+    const size_t pass_run = ++runs[pass];
+    AnalysisUsageHelper analysis_usage_helper{m_preserved_analysis_passes};
+    analysis_usage_helper.pre_pass(pass);
+
+    TRACE(PM, 1, "Running %s...", pass->name().c_str());
+    ScopedVmHWM vm_hwm{hwm_pass_stats, hwm_per_pass};
+    Timer t(pass->name() + " " + std::to_string(pass_run) + " (run)");
+    m_current_pass_info = &m_pass_info[i];
+
+    {
+      auto scoped_command_prof = maybe_command_profile(profiler_info, pass);
+      jemalloc_util::ScopedProfiling malloc_prof(m_malloc_profile_pass == pass);
+      pass->run_pass(stores, conf, *this);
     }
 
-    if (!analysis_usage.get_preserve_status()) {
-      // Invalidate existing preserved analyses.
-      for (auto entry : m_preserved_analysis_passes) {
-        entry.second->destroy_analysis_result();
-      }
-      m_preserved_analysis_passes.clear();
-    }
+    vm_hwm.trace_log(this, pass);
 
-    if (pass->is_analysis_pass()) {
-      // If the pass is an analysis pass, preserve it.
-      m_preserved_analysis_passes.emplace(typeid(*pass).name(), pass);
-    }
+    sanitizers::lsan_do_recoverable_leak_check();
 
-    // New methods might have been introduced by this pass; process previously
-    // unresolved methods to see if we can match them now (so that future passes
-    // using method profiles benefit)
-    conf.process_unresolved_method_profile_lines();
-    set_metric("~result~MethodProfiles~", conf.get_method_profiles().size());
-    set_metric("~result~MethodProfiles~unresolved~",
-               conf.get_method_profiles().unresolved_size());
+    graph_visualizer.add_pass(pass, i);
+
+    post_pass_verifiers(pass, i);
+
+    analysis_usage_helper.post_pass(pass);
+
+    process_method_profiles(*this, conf);
+
+    if (after_pass_size.handle(m_current_pass_info, &stores, &conf)) {
+      // Measuring child. Return to write things out.
+      break;
+    }
 
     if (traceEnabled(INSTRUMENT, 4)) {
       track_source_block_coverage(stores);
@@ -661,27 +1016,19 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
     m_current_pass_info = nullptr;
   }
 
+  after_pass_size.wait();
+
   // Always run the type checker before generating the optimized dex code.
   scope = build_class_scope(it);
   CheckerConfig::run_verifier(scope, checker_conf.verify_moves,
                               get_redex_options().no_overwrite_this(),
                               /* validate_access */ true);
 
-  if (run_check_unique_deobfuscated_names_finally) {
-    check_unique_deobfuscated_names("<final>", scope);
-  }
+  check_unique_deobfuscated.run_finally(scope);
 
-  class_cfgs.add_pass("After all passes");
-  class_cfgs.write();
+  graph_visualizer.finalize();
 
-  if (!conf.get_printseeds().empty()) {
-    Timer t("Writing outgoing classes to file " + conf.get_printseeds() +
-            ".outgoing");
-    // Recompute the scope.
-    scope = build_class_scope(it);
-    std::ofstream outgoing(conf.get_printseeds() + ".outgoing");
-    redex::print_classes(outgoing, conf.get_proguard_map(), scope);
-  }
+  maybe_print_seeds_outgoing(conf, it);
 
   sanitizers::lsan_do_recoverable_leak_check();
 }

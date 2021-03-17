@@ -7,6 +7,7 @@
 
 #include "TypeStringRewriter.h"
 
+#include "Trace.h"
 #include "Walkers.h"
 
 namespace {

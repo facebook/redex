@@ -14,6 +14,7 @@
 #include "DexClass.h"
 #include "DexStore.h"
 #include "IRAssembler.h"
+#include "MethodProfiles.h"
 #include "RedexTest.h"
 #include "RegAlloc.h"
 #include "StripDebugInfo.h"

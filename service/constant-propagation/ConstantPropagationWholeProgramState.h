@@ -49,6 +49,12 @@ class WholeProgramState {
                     const std::unordered_set<DexMethod*>&,
                     const std::unordered_set<const DexType*>&);
 
+  WholeProgramState(const Scope&,
+                    const interprocedural::FixpointIterator&,
+                    const std::unordered_set<DexMethod*>&,
+                    const std::unordered_set<const DexType*>&,
+                    const call_graph::Graph& call_graph);
+
   /*
    * If we only have knowledge of the constant values in a single class --
    * instead of a view of the constants in the whole program -- we can still
@@ -105,6 +111,29 @@ class WholeProgramState {
     return m_method_partition;
   }
 
+  bool has_call_graph() const { return m_call_graph != boost::none; }
+
+  ConstantValue get_return_value_from_cg(const IRInstruction* insn) const {
+    auto callees =
+        call_graph::resolve_callees_in_graph(m_call_graph.get(), insn);
+    if (callees.empty()) {
+      return ConstantValue::top();
+    }
+    ConstantValue ret = ConstantValue::bottom();
+    for (const DexMethod* callee : callees) {
+      auto val = m_method_partition.get(callee);
+      ret.join_with(val);
+    }
+    if (ret == ConstantValue::bottom()) {
+      return ConstantValue::top();
+    }
+    return ret;
+  }
+
+  bool method_is_dynamic(const DexMethod* method) const {
+    return call_graph::method_is_dynamic(m_call_graph.get(), method);
+  }
+
  private:
   void collect(const Scope& scope,
                const interprocedural::FixpointIterator& fp_iter);
@@ -120,6 +149,8 @@ class WholeProgramState {
       const ConstantEnvironment& env,
       const DexMethod* method,
       ConcurrentMap<const DexMethod*, std::vector<ConstantValue>>* method_tmp);
+
+  boost::optional<call_graph::Graph> m_call_graph;
 
   // Unknown fields and methods will be treated as containing / returning Top.
   std::unordered_set<const DexField*> m_known_fields;

@@ -12,6 +12,14 @@
 
 #include <boost/dynamic_bitset.hpp>
 
+class DexMethod;
+class DexMethodRef;
+
+namespace cfg {
+class Block;
+class ControlFlowGraph;
+} // namespace cfg
+
 class LocalDce {
  public:
   struct Stats {

@@ -11,12 +11,16 @@
 #include "DexAccess.h"
 #include "DexDebugInstruction.h"
 #include "DexDefs.h"
+#include "DexIdx.h"
+#include "DexInstruction.h"
 #include "DexMemberRefs.h"
 #include "DexOutput.h"
+#include "DexPosition.h"
 #include "DexUtil.h"
 #include "DuplicateClasses.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
+#include "Show.h"
 #include "StringBuilder.h"
 #include "Util.h"
 #include "Walkers.h"
@@ -83,6 +87,13 @@ DexFieldRef* DexField::make_field(const std::string& full_descriptor) {
   return DexField::make_field(cls, name, type);
 }
 
+DexDebugEntry::DexDebugEntry(uint32_t addr,
+                             std::unique_ptr<DexDebugInstruction> insn)
+    : type(DexDebugEntryType::Instruction), addr(addr), insn(std::move(insn)) {}
+
+DexDebugEntry::DexDebugEntry(uint32_t addr, std::unique_ptr<DexPosition> pos)
+    : type(DexDebugEntryType::Position), addr(addr), pos(std::move(pos)) {}
+
 DexDebugEntry::DexDebugEntry(DexDebugEntry&& that) noexcept
     : type(that.type), addr(that.addr) {
   switch (type) {
@@ -103,6 +114,17 @@ DexDebugEntry::~DexDebugEntry() {
   case DexDebugEntryType::Instruction:
     insn.~unique_ptr<DexDebugInstruction>();
     break;
+  }
+}
+
+void DexDebugEntry::gather_strings(std::vector<DexString*>& lstring) const {
+  if (type == DexDebugEntryType::Instruction) {
+    insn->gather_strings(lstring);
+  }
+}
+void DexDebugEntry::gather_types(std::vector<DexType*>& ltype) const {
+  if (type == DexDebugEntryType::Instruction) {
+    insn->gather_types(ltype);
   }
 }
 
@@ -218,7 +240,8 @@ std::vector<std::unique_ptr<DexDebugInstruction>> generate_debug_instructions(
     DexDebugItem* debugitem,
     PositionMapper* pos_mapper,
     uint32_t* line_start,
-    std::vector<DebugLineItem>* line_info) {
+    std::vector<DebugLineItem>* line_info,
+    uint32_t line_addin) {
   std::vector<std::unique_ptr<DexDebugInstruction>> dbgops;
   uint32_t prev_addr = 0;
   boost::optional<uint32_t> prev_line;
@@ -250,8 +273,9 @@ std::vector<std::unique_ptr<DexDebugInstruction>> generate_debug_instructions(
     }
     // only emit the last position entry for a given address
     if (!positions.empty()) {
-      auto line = pos_mapper->position_to_line(positions.back());
-      line_info->emplace_back(DebugLineItem(it->addr, line));
+      auto line_base = pos_mapper->position_to_line(positions.back());
+      auto line = line_base | line_addin;
+      line_info->emplace_back(DebugLineItem(it->addr, line_base));
       int32_t line_delta;
       if (prev_line) {
         line_delta = line - *prev_line;
@@ -348,6 +372,14 @@ DexCode::DexCode(const DexCode& that)
   }
   if (that.m_dbg) {
     m_dbg.reset(new DexDebugItem(*that.m_dbg));
+  }
+}
+
+DexCode::~DexCode() {
+  if (m_insns) {
+    for (auto const& op : *m_insns) {
+      delete op;
+    }
   }
 }
 
@@ -1395,6 +1427,11 @@ void DexMethod::gather_fields(std::vector<DexFieldRef*>& lfield) const {
 
 void DexMethod::gather_methods(std::vector<DexMethodRef*>& lmethod) const {
   if (m_code) m_code->gather_methods(lmethod);
+  gather_methods_from_annos(lmethod);
+}
+
+void DexMethod::gather_methods_from_annos(
+    std::vector<DexMethodRef*>& lmethod) const {
   if (m_anno) m_anno->gather_methods(lmethod);
   auto param_anno = get_param_anno();
   if (param_anno) {
@@ -1527,3 +1564,7 @@ void gather_components(std::vector<DexString*>& lstring,
 
   sort_unique(lstring);
 }
+
+std::string DexField::self_show() const { return show(this); }
+std::string DexMethod::self_show() const { return show(this); }
+std::string DexClass::self_show() const { return show(m_self); }

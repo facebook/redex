@@ -8,6 +8,7 @@
 #include "ClassUtil.h"
 #include "DexAsm.h"
 #include "IRCode.h"
+#include "Show.h"
 #include "TypeUtil.h"
 
 namespace klass {

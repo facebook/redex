@@ -180,7 +180,7 @@ DelInitPass deletes unreferenced methods and fields that have no reachable
 constructor, as well as constructors for classes that can be removed or for
 classes that have another constructor that can be called.
 
-The scope of `DelInitPass` can be limited by a `package_white_list` in the
+The scope of `DelInitPass` can be limited by a `package_allowlist` in the
 [app's config file](config.md). Lacking a white list, `DelInitPass` works at
 global scope.
 
@@ -502,7 +502,7 @@ of loading.
 
 `RenameClassesPassV2` will not rename any class mentioned in resources, nor will
 it rename anything in blocklist either by direct class name or as part of
-excluded package.
+an excluded package.
 
 `RenameClassesPassV2` relies on the [app's config file](config.md), excluding 
 of the class or hierarchy, or use of reflection.

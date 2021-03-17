@@ -11,6 +11,7 @@
 
 #include "DexClass.h"
 #include "DexUtil.h"
+#include "JsonWrapper.h"
 
 struct ReachableClassesConfig {
   std::string apk_dir;

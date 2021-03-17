@@ -13,12 +13,15 @@
 #include <vector>
 
 #include "ApiLevelChecker.h"
+#include "ConfigFiles.h"
 #include "Debug.h"
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "IRInstruction.h"
 #include "PassManager.h"
 #include "Resolver.h"
+#include "Show.h"
+#include "Trace.h"
 #include "Util.h"
 #include "Walkers.h"
 
@@ -286,45 +289,13 @@ struct Rebinder {
 
 } // namespace
 
-void ReBindRefsPass::eval_pass(DexStoresVector&,
-                               ConfigFiles& conf,
-                               PassManager& mgr) {
-  int32_t min_sdk = mgr.get_redex_options().min_sdk;
-  bool explicitly_enabled_external = m_rebind_to_external;
-  // Disable rebind to external for API level older than
-  // m_supported_min_sdk_for_external_refs.
-  if (min_sdk < m_supported_min_sdk_for_external_refs) {
-    m_rebind_to_external = false;
-    TRACE(BIND, 2, "Disabling rebind to external for min_sdk %d", min_sdk);
-  }
-
-  // Load min_sdk API file
-  auto min_sdk_api_file = conf.get_android_sdk_api_file(min_sdk);
-  if (!min_sdk_api_file) {
-    TRACE(BIND, 2, "Android SDK API %d file cannot be found.", min_sdk);
-    m_rebind_to_external = false;
-    always_assert_log(
-        !explicitly_enabled_external ||
-            min_sdk < m_supported_min_sdk_for_external_refs,
-        "Android SDK API %d file can not be found but rebind_to_external is "
-        "explicitly enabled for this version. Please pass the api list to "
-        "Redex or turn off `rebind_to_external`.",
-        min_sdk);
-  } else {
-    TRACE(BIND, 2, "Android SDK API %d file found: %s", min_sdk,
-          min_sdk_api_file->c_str());
-  }
-
-  m_min_sdk_api = &conf.get_android_sdk_api(min_sdk);
-}
-
 void ReBindRefsPass::run_pass(DexStoresVector& stores,
                               ConfigFiles& /* conf */,
                               PassManager& mgr) {
 
   always_assert(m_min_sdk_api);
   Scope scope = build_class_scope(stores);
-  Rebinder rb(scope, m_rebind_to_external, m_excluded_externals,
+  Rebinder rb(scope, m_refine_to_external, m_excluded_externals,
               *m_min_sdk_api);
   auto stats = rb.rewrite_refs();
   stats.print(mgr);

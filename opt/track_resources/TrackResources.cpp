@@ -19,8 +19,10 @@
 #include "DexOutput.h"
 #include "DexUtil.h"
 #include "IRCode.h"
+#include "ProguardMap.h"
 #include "ReachableClasses.h"
 #include "Resolver.h"
+#include "Show.h"
 #include "Walkers.h"
 
 namespace {
@@ -106,23 +108,23 @@ void TrackResourcesPass::find_accessed_fields(
       inline_field.emplace(sfield);
     }
   }
-  walk::opcodes(fullscope,
-                [](DexMethod* method) { return true; },
-                [&](DexMethod* method, IRInstruction* insn) {
-                  if (insn->has_field() && is_sfield_op(insn->opcode())) {
-                    auto field =
-                        resolve_field(insn->get_field(), FieldSearch::Static);
-                    if (field == nullptr || !field->is_concrete()) return;
-                    if (inline_field.count(field) == 0) return;
-                    check_if_tracked_sget(method,
-                                          field,
-                                          classes_to_search,
-                                          classes_to_track,
-                                          num_field_references,
-                                          per_cls_refs,
-                                          recorded_fields);
-                  }
-                });
+  walk::opcodes(
+      fullscope,
+      [](DexMethod* method) { return true; },
+      [&](DexMethod* method, IRInstruction* insn) {
+        if (insn->has_field() && opcode::is_an_sfield_op(insn->opcode())) {
+          auto field = resolve_field(insn->get_field(), FieldSearch::Static);
+          if (field == nullptr || !field->is_concrete()) return;
+          if (inline_field.count(field) == 0) return;
+          check_if_tracked_sget(method,
+                                field,
+                                classes_to_search,
+                                classes_to_track,
+                                num_field_references,
+                                per_cls_refs,
+                                recorded_fields);
+        }
+      });
   TRACE(TRACKRESOURCES, 1, "found %d total sgets to tracked classes",
         num_field_references);
   for (auto& it : per_cls_refs) {

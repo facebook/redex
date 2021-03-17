@@ -16,15 +16,19 @@
 #include <unordered_set>
 #include <vector>
 
+#include "ConfigFiles.h"
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "IRInstruction.h"
+#include "PassManager.h"
 #include "ReachableClasses.h"
 #include "RedexResources.h"
+#include "Show.h"
 #include "TypeStringRewriter.h"
 #include "Walkers.h"
 #include "Warning.h"
 
+#include "Trace.h"
 #include <locator.h>
 using facebook::Locator;
 
@@ -589,7 +593,7 @@ void RenameClassesPassV2::eval_classes_post(
 void RenameClassesPassV2::eval_pass(DexStoresVector& stores,
                                     ConfigFiles& conf,
                                     PassManager& mgr) {
-  auto json = conf.get_json_config();
+  const auto& json = conf.get_json_config();
   json.get("apk_dir", "", m_apk_dir);
   TRACE(RENAME, 3, "APK Dir: %s", m_apk_dir.c_str());
   auto scope = build_class_scope(stores);

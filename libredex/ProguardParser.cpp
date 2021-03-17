@@ -602,6 +602,23 @@ void parse_member_specification(std::vector<Token>::iterator* it,
     arg += member_specification.descriptor;
     member_specification.descriptor = arg;
   }
+  // if with value, look for return
+  if ((*it)->type == TokenType::returns) {
+    ++(*it);
+    const auto& rident = (*it)->data;
+    if (rident == "true") {
+      member_specification.return_value.value_type =
+          AssumeReturnValue::ValueType::ValueBool;
+      member_specification.return_value.value.v = 1;
+      ++(*it);
+    }
+    if (rident == "false") {
+      member_specification.return_value.value_type =
+          AssumeReturnValue::ValueType::ValueBool;
+      member_specification.return_value.value.v = 0;
+      ++(*it);
+    }
+  }
   // Make sure member specification ends with a semicolon.
   gobble_semicolon(it, ok);
   if (!ok) {
@@ -1054,7 +1071,7 @@ void remove_blocklisted_rules(ProguardConfiguration* pg_config) {
   # fields. Since this is no longer true in our case, this rule is redundant and
   # hampers our optimizations.
   #
-  # I chose to blocklist this rule instead of unmarking all resource IDs so that
+  # I chose to exclude this rule instead of unmarking all resource IDs so that
   # if a resource ID really needs to be kept, the user can still keep it by
   # writing a keep rule that does a non-wildcard match.
   -keepclassmembers class **.R$* {

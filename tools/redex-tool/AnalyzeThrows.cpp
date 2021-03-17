@@ -115,7 +115,7 @@ void collect_throwing_blocks(DexMethod* meth, LogicalBlock& throwing_blocks) {
   for (const auto& block : blocks) {
     for (auto insn = block->rbegin(); insn != block->rend(); ++insn) {
       if (insn->type == MFLOW_OPCODE) {
-        if (is_return(insn->insn->opcode())) {
+        if (opcode::is_a_return(insn->insn->opcode())) {
           blocks_to_visit.push(block);
           no_throw_blocks.insert(block);
         }

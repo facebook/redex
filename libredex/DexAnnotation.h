@@ -9,17 +9,16 @@
 
 #include <boost/functional/hash.hpp>
 #include <deque>
-#include <list>
 #include <map>
-#include <sstream>
 #include <unordered_set>
+#include <vector>
 
 #include "Gatherable.h"
-#include "Show.h"
 
 class DexFieldRef;
-class DexMethodRef;
 class DexIdx;
+class DexMethod;
+class DexMethodRef;
 class DexOutputIdx;
 class DexString;
 class DexType;
@@ -117,7 +116,7 @@ class DexEncodedValueString : public DexEncodedValue {
   void gather_strings(std::vector<DexString*>& lstring) const override;
   void encode(DexOutputIdx* dodx, uint8_t*& encdata) override;
 
-  std::string show() const override { return ::show(m_string); }
+  std::string show() const override;
   bool operator==(const DexEncodedValue& that) const override {
     if (m_evtype != that.evtype()) {
       return false;
@@ -145,7 +144,7 @@ class DexEncodedValueType : public DexEncodedValue {
 
   DexType* type() const { return m_type; }
   void set_type(DexType* type) { m_type = type; }
-  std::string show() const override { return ::show(m_type); }
+  std::string show() const override;
   bool operator==(const DexEncodedValue& that) const override {
     if (m_evtype != that.evtype()) {
       return false;
@@ -173,10 +172,8 @@ class DexEncodedValueField : public DexEncodedValue {
 
   DexFieldRef* field() const { return m_field; }
   void set_field(DexFieldRef* field) { m_field = field; }
-  std::string show() const override { return ::show(m_field); }
-  std::string show_deobfuscated() const override {
-    return ::show_deobfuscated(m_field);
-  }
+  std::string show() const override;
+  std::string show_deobfuscated() const override;
   bool operator==(const DexEncodedValue& that) const override {
     if (m_evtype != that.evtype()) {
       return false;
@@ -204,10 +201,8 @@ class DexEncodedValueMethod : public DexEncodedValue {
 
   DexMethodRef* method() const { return m_method; }
   void set_method(DexMethodRef* method) { m_method = method; }
-  std::string show() const override { return ::show(m_method); }
-  std::string show_deobfuscated() const override {
-    return ::show_deobfuscated(m_method);
-  }
+  std::string show() const override;
+  std::string show_deobfuscated() const override;
   bool operator==(const DexEncodedValue& that) const override {
     if (m_evtype != that.evtype()) {
       return false;
@@ -236,10 +231,8 @@ class DexEncodedValueMethodType : public DexEncodedValue {
 
   DexProto* proto() const { return m_proto; }
   void set_proto(DexProto* proto) { m_proto = proto; }
-  std::string show() const override { return ::show(m_proto); }
-  std::string show_deobfuscated() const override {
-    return ::show_deobfuscated(m_proto);
-  }
+  std::string show() const override;
+  std::string show_deobfuscated() const override;
   bool operator==(const DexEncodedValue& that) const override {
     if (m_evtype != that.evtype()) {
       return false;
@@ -273,11 +266,8 @@ class DexEncodedValueMethodHandle : public DexEncodedValue {
   void set_methodhandle(DexMethodHandle* methodhandle) {
     m_methodhandle = methodhandle;
   }
-  std::string show() const override { return ::show(m_methodhandle); }
-  std::string show_deobfuscated() const override {
-    // TODO(T58570881) - fix deobfuscation
-    return ::show(m_methodhandle);
-  }
+  std::string show() const override;
+  std::string show_deobfuscated() const override;
   bool operator==(const DexEncodedValue& that) const override {
     if (m_evtype != that.evtype()) {
       return false;

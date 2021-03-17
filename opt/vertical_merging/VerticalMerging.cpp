@@ -12,6 +12,7 @@
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "IROpcode.h"
+#include "PassManager.h"
 #include "Resolver.h"
 #include "Trace.h"
 #include "TypeReference.h"
@@ -279,7 +280,7 @@ void record_code_reference(
         std::unordered_set<DexType*> types_to_check;
         if (insn->has_type()) {
           types_to_check.emplace(insn->get_type());
-          if (is_instance_of(insn->opcode())) {
+          if (opcode::is_instance_of(insn->opcode())) {
             // We don't want to merge class if either merger or
             // mergeable was ever accessed in instance_of to prevent
             // semantic error.

@@ -45,12 +45,12 @@ class GlobalTypeAnalysisPass : public Pass {
   };
 
   explicit GlobalTypeAnalysisPass(Config config)
-      : Pass("GlobalTypeAnalysisPass"), m_config(config) {}
+      : Pass("GlobalTypeAnalysisPass", Pass::ANALYSIS), m_config(config) {}
 
   GlobalTypeAnalysisPass() : GlobalTypeAnalysisPass(Config()) {}
 
   void bind_config() override {
-    bind("max_global_analysis_iteration", size_t(100),
+    bind("max_global_analysis_iteration", size_t(10),
          m_config.max_global_analysis_iteration,
          "Maximum number of global iterations the analysis runs");
     bind("insert_runtime_asserts", false, m_config.insert_runtime_asserts);
@@ -65,6 +65,13 @@ class GlobalTypeAnalysisPass : public Pass {
       const type_analyzer::Transform::NullAssertionSet& null_assertion_set,
       PassManager& mgr);
 
+  std::shared_ptr<type_analyzer::global::GlobalTypeAnalyzer> get_result() {
+    return m_result;
+  }
+
+  void destroy_analysis_result() override { m_result = nullptr; }
+
  private:
   Config m_config;
+  std::shared_ptr<type_analyzer::global::GlobalTypeAnalyzer> m_result = nullptr;
 };

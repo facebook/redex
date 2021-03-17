@@ -9,7 +9,7 @@
 
 #include "DexClass.h"
 #include "Inliner.h"
-#include "PassManager.h"
+#include "Pass.h"
 
 /**
  * Merge classes vertically. (see below situation)

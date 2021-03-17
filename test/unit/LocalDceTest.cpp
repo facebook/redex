@@ -17,6 +17,7 @@
 #include "Purity.h"
 #include "RedexTest.h"
 #include "ScopeHelper.h"
+#include "Show.h"
 #include "VirtualScope.h"
 
 struct LocalDceTryTest : public RedexTest {

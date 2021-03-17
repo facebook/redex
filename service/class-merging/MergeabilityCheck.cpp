@@ -128,7 +128,7 @@ TypeSet MergeabilityChecker::exclude_unsupported_bytecode_for(
     auto use_set = du_chains[const_class_insn];
     for (const auto use : use_set) {
       auto use_insn = use.insn;
-      if (opcode::is_move(use_insn->opcode())) {
+      if (opcode::is_a_move(use_insn->opcode())) {
         // Ignore moves
         break;
       }

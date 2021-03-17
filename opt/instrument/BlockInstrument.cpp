@@ -7,6 +7,7 @@
 
 #include "BlockInstrument.h"
 
+#include "ConfigFiles.h"
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "GraphUtil.h"
@@ -16,13 +17,9 @@
 #include "TypeSystem.h"
 #include "Walkers.h"
 
-#include <algorithm>
 #include <boost/algorithm/string/join.hpp>
-#include <cmath>
 #include <fstream>
-#include <functional>
 #include <map>
-#include <sstream>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>

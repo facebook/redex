@@ -6,6 +6,10 @@
  */
 
 #include "PrintSeeds.h"
+
+#include "DexUtil.h"
+#include "ProguardConfiguration.h"
+#include "ProguardMap.h"
 #include "ProguardReporting.h"
 #include "ReachableClasses.h"
 #include "ReferencedState.h"

@@ -12,6 +12,8 @@
 
 #include "ConstantPropagationAnalysis.h"
 #include "ReachingDefinitions.h"
+#include "StlUtil.h"
+#include "Trace.h"
 
 namespace {
 
@@ -35,7 +37,7 @@ bool is_leaf(cfg::ControlFlowGraph* cfg, cfg::Block* b, reg_t reg) {
   for (const auto& mie : InstructionIterable(b)) {
     auto insn = mie.insn;
     auto op = insn->opcode();
-    if (!(is_literal_const(op) || is_branch(op))) {
+    if (!(opcode::is_a_literal_const(op) || opcode::is_branch(op))) {
       // non-leaf nodes only have const and branch instructions
       return true;
     }
@@ -49,7 +51,8 @@ bool is_leaf(cfg::ControlFlowGraph* cfg, cfg::Block* b, reg_t reg) {
 
   auto last_insn = last->insn;
   auto last_op = last_insn->opcode();
-  if (is_branch(last_op) && SwitchEquivFinder::has_src(last_insn, reg)) {
+  if (opcode::is_branch(last_op) &&
+      SwitchEquivFinder::has_src(last_insn, reg)) {
     // The only non-leaf block is one that branches on the switching reg
     return false;
   }
@@ -117,7 +120,7 @@ SwitchEquivFinder::SwitchEquivFinder(
     // make sure the input is well-formed
     auto insn = m_root_branch->insn;
     auto op = insn->opcode();
-    always_assert(is_branch(op));
+    always_assert(opcode::is_branch(op));
     always_assert(has_src(insn, m_switching_reg));
   }
 
@@ -193,7 +196,7 @@ std::vector<cfg::Edge*> SwitchEquivFinder::find_leaves() {
           // lead to `leaf`.
           auto insn = mie.insn;
           auto op = insn->opcode();
-          if (is_literal_const(op)) {
+          if (opcode::is_a_literal_const(op)) {
             if (next_loads == boost::none) {
               // Copy loads here because we only want these loads to propagate
               // to successors of `next`, not any other successors of `b`
@@ -329,7 +332,7 @@ void SwitchEquivFinder::normalize_extra_loads(
   std::unordered_set<IRInstruction*> extra_loads;
   for (const auto& non_leaf : non_leaves) {
     for (const auto& mie : InstructionIterable(non_leaf)) {
-      if (is_literal_const(mie.insn->opcode())) {
+      if (opcode::is_a_literal_const(mie.insn->opcode())) {
         extra_loads.insert(mie.insn);
       }
     }
@@ -368,23 +371,13 @@ void SwitchEquivFinder::normalize_extra_loads(
   // Remove loads that aren't used outside the if-else chain blocks
   for (auto& block_and_insns : m_extra_loads) {
     InstructionSet& insns = block_and_insns.second;
-    for (auto it = insns.begin(); it != insns.end();) {
-      if (used_defs.count(it->second) == 0) {
-        it = insns.erase(it);
-      } else {
-        ++it;
-      }
-    }
+    std20::erase_if(insns, [&used_defs](auto it) {
+      return used_defs.count(it->second) == 0;
+    });
   }
 
   // Remove empty instruction lists from `m_extra_loads` (possibly emptying it)
-  for (auto it = m_extra_loads.begin(); it != m_extra_loads.end();) {
-    if (it->second.empty()) {
-      it = m_extra_loads.erase(it);
-    } else {
-      ++it;
-    }
-  }
+  std20::erase_if(m_extra_loads, [](auto it) { return it->second.empty(); });
 }
 
 // Use a sparta analysis to find the value of reg at the beginning of each leaf

@@ -10,6 +10,8 @@
 #include <algorithm>
 #include <boost/functional/hash.hpp>
 
+#include "StlUtil.h"
+
 namespace keep_rules {
 
 bool operator==(const MemberSpecification& lhs,
@@ -74,14 +76,13 @@ size_t hash_value(const KeepSpec& spec) {
 
 void KeepSpecSet::erase_if(const std::function<bool(const KeepSpec&)>& pred) {
   std::unordered_set<const KeepSpec*> erased;
-  for (auto it = m_unordered_set.begin(); it != m_unordered_set.end();) {
+  std20::erase_if(m_unordered_set, [&](auto it) {
     if (pred(**it)) {
       erased.emplace(it->get());
-      it = m_unordered_set.erase(it);
-    } else {
-      ++it;
+      return true;
     }
-  }
+    return false;
+  });
   m_ordered.erase(
       std::remove_if(m_ordered.begin(),
                      m_ordered.end(),

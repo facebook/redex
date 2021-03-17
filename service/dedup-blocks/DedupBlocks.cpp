@@ -48,8 +48,13 @@
 #include "DedupBlocks.h"
 #include "DedupBlockValueNumbering.h"
 
+#include "DexPosition.h"
 #include "Liveness.h"
+#include "PassManager.h"
 #include "ReachingDefinitions.h"
+#include "Show.h"
+#include "StlUtil.h"
+#include "Trace.h"
 #include "TypeInference.h"
 #include <boost/functional/hash.hpp>
 
@@ -530,16 +535,10 @@ class DedupBlocksImpl {
         auto& majority_count_group = insn_count[majority_insn];
 
         // Remove the iterators
-        for (auto it = block_iterator_map.begin();
-             it != block_iterator_map.end();) {
-          if (majority_count_group.blocks.find(it->first) ==
-              majority_count_group.blocks.end()) {
-            // Remove iterator that is not in the majority group
-            it = block_iterator_map.erase(it);
-          } else {
-            it++;
-          }
-        }
+        std20::erase_if(block_iterator_map, [&](auto it) {
+          return majority_count_group.blocks.find(it->first) ==
+                 majority_count_group.blocks.end();
+        });
 
         // Is this the best saving we've seen so far?
         // Note we only want at least block_split_min_opcode_count deep (config)
@@ -734,7 +733,7 @@ class DedupBlocksImpl {
       return false;
     }
     auto last_op = last_mie_it->insn->opcode();
-    return is_throw(last_op);
+    return opcode::is_throw(last_op);
   }
 
   // Deal with a verification error like this
@@ -787,7 +786,7 @@ class DedupBlocksImpl {
     std::unordered_set<IRInstruction*> block_insns;
     for (auto it = iterable.begin(); it != iterable.end(); it++) {
       auto insn = it->insn;
-      if (is_invoke_direct(insn->opcode()) &&
+      if (opcode::is_invoke_direct(insn->opcode()) &&
           method::is_init(insn->get_method())) {
         TRACE(DEDUP_BLOCKS, 5, "[dedup blocks] found init invocation: %s",
               SHOW(insn));
@@ -816,8 +815,8 @@ class DedupBlocksImpl {
         }
         auto def = *defs.elements().begin();
         auto def_opcode = def->opcode();
-        always_assert(is_new_instance(def_opcode) ||
-                      opcode::is_load_param(def_opcode));
+        always_assert(opcode::is_new_instance(def_opcode) ||
+                      opcode::is_a_load_param(def_opcode));
         // Log def instruction if it is not an earlier instruction from the
         // current block.
         if (!block_insns.count(def)) {
@@ -839,7 +838,7 @@ class DedupBlocksImpl {
       auto env = fixpoint_iter.get_entry_state_at(block);
       for (auto& mie : InstructionIterable(block)) {
         IRInstruction* insn = mie.insn;
-        if (is_invoke_direct(insn->opcode()) &&
+        if (opcode::is_invoke_direct(insn->opcode()) &&
             method::is_init(insn->get_method())) {
           auto defs = defs_in.get(insn->src(0));
           always_assert(!defs.is_top());
@@ -871,13 +870,8 @@ class DedupBlocksImpl {
   static void remove_if(
       std::unordered_map<TKey, TValue, THash, TPred>& duplicates,
       NeedToRemove need_to_remove) {
-    for (auto it = duplicates.begin(); it != duplicates.end();) {
-      if (need_to_remove(it->second)) {
-        it = duplicates.erase(it);
-      } else {
-        ++it;
-      }
-    }
+    std20::erase_if(duplicates,
+                    [&](auto it) { return need_to_remove(it->second); });
   }
 
   static bool is_singleton_or_inconsistent(

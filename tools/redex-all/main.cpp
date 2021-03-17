@@ -40,6 +40,7 @@
 #include "DexHasher.h"
 #include "DexLoader.h"
 #include "DexOutput.h"
+#include "DexPosition.h"
 #include "DuplicateClasses.h"
 #include "GlobalConfig.h"
 #include "IODIMetadata.h"
@@ -903,13 +904,13 @@ void redex_frontend(ConfigFiles& conf, /* input */
 /**
  * Post processing steps: write dex and collect stats
  */
-void redex_backend(const std::string& output_dir,
-                   ConfigFiles& conf,
+void redex_backend(ConfigFiles& conf,
                    PassManager& manager,
                    DexStoresVector& stores,
                    Json::Value& stats) {
   Timer redex_backend_timer("Redex_backend");
   const RedexOptions& redex_options = manager.get_redex_options();
+  const auto& output_dir = conf.get_outdir();
 
   instruction_lowering::Stats instruction_lowering_stats;
   {
@@ -948,7 +949,7 @@ void redex_backend(const std::string& output_dir,
                                                   : line_number_map_filename));
   std::unordered_map<DexMethod*, uint64_t> method_to_id;
   std::unordered_map<DexCode*, std::vector<DebugLineItem>> code_debug_lines;
-  IODIMetadata iodi_metadata;
+  IODIMetadata iodi_metadata(redex_options.min_sdk);
 
   std::unique_ptr<PostLowering> post_lowering =
       redex_options.redacted ? PostLowering::create() : nullptr;
@@ -1100,6 +1101,8 @@ int main(int argc, char* argv[]) {
 
   // Only log one assert.
   block_multi_asserts(/*block=*/true);
+  // For better stacks in abort dumps.
+  set_abort_if_not_this_thread();
 
   std::string stats_output_path;
   Json::Value stats;
@@ -1165,7 +1168,7 @@ int main(int argc, char* argv[]) {
 
     if (args.stop_pass_idx == boost::none) {
       // Call redex_backend by default
-      redex_backend(args.out_dir, conf, manager, stores, stats);
+      redex_backend(conf, manager, stores, stats);
       if (args.config.get("emit_class_method_info_map", false).asBool()) {
         dump_class_method_info_map(conf.metafile(CLASS_METHOD_INFO_MAP),
                                    stores);

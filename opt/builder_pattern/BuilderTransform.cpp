@@ -47,6 +47,8 @@ BuilderTransform::get_not_inlined_insns(
   return not_inlined_insns;
 }
 
+BuilderTransform::~BuilderTransform() {}
+
 /**
  * For all the methods of the given type, try inlining all super calls and
  * constructors of the super type. If any of them fails, return false.
@@ -73,7 +75,7 @@ bool BuilderTransform::inline_super_calls_and_ctors(const DexType* type) {
       auto insn = mie.insn;
       if (insn->opcode() == OPCODE_INVOKE_SUPER) {
         inlinable_insns.emplace(insn);
-      } else if (is_invoke_direct(insn->opcode())) {
+      } else if (opcode::is_invoke_direct(insn->opcode())) {
         auto callee = resolve_method(insn->get_method(), MethodSearch::Direct);
         if (super_ctors.count(callee)) {
           inlinable_insns.emplace(insn);
@@ -112,7 +114,7 @@ void BuilderTransform::update_virtual_calls(
     auto insn = pair.first;
     auto current_instance = pair.second;
 
-    if (is_invoke_virtual(insn->opcode())) {
+    if (opcode::is_invoke_virtual(insn->opcode())) {
       auto method = resolve_method(insn->get_method(), MethodSearch::Virtual);
       if (!method) {
         continue;
@@ -188,7 +190,8 @@ void BuilderTransform::replace_fields(const InstantiationToUsage& usage,
     std::map<DexField*, size_t, dexfields_comparator> field_to_reg;
     for (const auto& insn : usage.at(instantiation_insn)) {
 
-      if (is_iput(insn->opcode()) || is_iget(insn->opcode())) {
+      if (opcode::is_an_iput(insn->opcode()) ||
+          opcode::is_an_iget(insn->opcode())) {
         auto field = resolve_field(insn->get_field(), FieldSearch::Instance);
         always_assert(field);
 
@@ -208,7 +211,7 @@ void BuilderTransform::replace_fields(const InstantiationToUsage& usage,
           new_insn = new IRInstruction(OPCODE_MOVE_OBJECT);
         }
 
-        if (is_iput(insn->opcode())) {
+        if (opcode::is_an_iput(insn->opcode())) {
           new_insn->set_dest(field_to_reg[field]);
           new_insn->set_src(0, insn->src(0));
         } else {
@@ -227,7 +230,7 @@ void BuilderTransform::replace_fields(const InstantiationToUsage& usage,
         replacement[const_cast<IRInstruction*>(insn)] = new_insn;
       } else if (insn->opcode() == OPCODE_MOVE_OBJECT ||
                  insn->opcode() == IOPCODE_MOVE_RESULT_PSEUDO_OBJECT ||
-                 is_conditional_branch(insn->opcode())) {
+                 opcode::is_a_conditional_branch(insn->opcode())) {
         // Keep these instructions as is because we might not be able to clean
         // up all the paths where Object created instead of builder could
         // be used for checking if the builder was created or not.

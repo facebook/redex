@@ -7,7 +7,12 @@
 
 #include "IODIMetadata.h"
 
+#include <fstream>
+
+#include "DexOutput.h"
 #include "DexUtil.h"
+#include "Show.h"
+#include "StlUtil.h"
 #include "Trace.h"
 
 namespace {
@@ -21,6 +26,24 @@ std::string pretty_prefix_for_cls(const DexClass* cls) {
 }
 } // namespace
 
+std::string IODIMetadata::get_iodi_name(const DexMethod* m) {
+  std::string prefix = pretty_prefix_for_cls(type_class(m->get_class()));
+  prefix += m->str();
+  return prefix;
+}
+
+const std::string& IODIMetadata::get_layered_name(const std::string& base_name,
+                                                  size_t layer,
+                                                  std::string& storage) {
+  if (layer == 0) {
+    return base_name;
+  }
+  storage = base_name;
+  storage += "@";
+  storage += std::to_string(layer);
+  return storage;
+}
+
 void IODIMetadata::mark_methods(DexStoresVector& scope) {
   // Calculates which methods won't collide with other methods when printed
   // in a stack trace (e.g. due to method overloading or templating).
@@ -32,16 +55,32 @@ void IODIMetadata::mark_methods(DexStoresVector& scope) {
   //
   // We do this linearly for now because otherwise we need locks
 
+  std::unordered_map<std::string, DexMethod*> name_method_map;
+
+  std::unordered_map<std::string, const DexMethod*> name_map;
   auto emplace_entry = [&](const std::string& str, DexMethod* m) {
-    auto iter = m_iodi_methods.find(str);
-    if (iter != m_iodi_methods.end()) {
+    {
+      const DexMethod* canonical;
+      auto it = name_map.find(str);
+      if (it == name_map.end()) {
+        canonical = m;
+        name_map.emplace(str, m);
+      } else {
+        canonical = m_canonical.at(it->second);
+      }
+      m_canonical[m] = canonical;
+      m_name_clusters[canonical].insert(m);
+    }
+
+    auto iter = name_method_map.find(str);
+    if (iter != name_method_map.end()) {
       auto name_iter = m_method_to_name.find(iter->second);
       if (name_iter != m_method_to_name.end()) {
         m_method_to_name.erase(name_iter);
       }
       iter->second = nullptr;
     } else {
-      m_iodi_methods.emplace(str, m);
+      name_method_map.emplace(str, m);
       m_method_to_name.emplace(m, str);
     }
   };
@@ -59,47 +98,21 @@ void IODIMetadata::mark_methods(DexStoresVector& scope) {
       }
     }
   }
-  for (auto it = m_iodi_methods.begin(); it != m_iodi_methods.end();) {
-    if (it->second == nullptr) {
-      TRACE(IODI, 3, "[IODI] Method cannot use IODI due to name collisions: %s",
-            it->first.c_str());
-      it = m_iodi_methods.erase(it);
-    } else {
-      it++;
-    }
-  }
+
+  m_marked = true;
+}
+
+void IODIMetadata::set_iodi_layer(const DexMethod* method, size_t layer) {
+  m_iodi_method_layers.emplace(method,
+                               std::make_pair(get_iodi_name(method), layer));
+}
+size_t IODIMetadata::get_iodi_layer(const DexMethod* method) const {
+  auto it = m_iodi_method_layers.find(method);
+  return it != m_iodi_method_layers.end() ? it->second.second : 0u;
 }
 
 void IODIMetadata::mark_method_huge(const DexMethod* method) {
   m_huge_methods.insert(method);
-}
-
-// Returns whether we can symbolicate using IODI for the given method.
-bool IODIMetadata::can_safely_use_iodi(const DexMethod* method) const {
-  // We can use IODI if we don't have a collision, if the method isn't virtual
-  // and if it isn't too big.
-  //
-  // It turns out for some methods using IODI isn't beneficial. See
-  // comment in emit_instruction_offset_debug_info for more info.
-  if (m_huge_methods.count(method) > 0) {
-    return false;
-  }
-
-  std::string pretty_name;
-  {
-    auto iter = m_method_to_name.find(method);
-    if (iter == m_method_to_name.end()) {
-      TRACE(IODI, 4, "[IODI] Warning: didn't find %s in pretty map in %s",
-            SHOW(method), __PRETTY_FUNCTION__);
-      auto cls = type_class(method->get_class());
-      always_assert(cls);
-      pretty_name = pretty_prefix_for_cls(cls);
-      pretty_name += method->str();
-    } else {
-      pretty_name = iter->second;
-    }
-  }
-  return m_iodi_methods.find(pretty_name) != m_iodi_methods.end();
 }
 
 void IODIMetadata::write(
@@ -151,28 +164,32 @@ void IODIMetadata::write(
   } entry_hdr;
 
   uint32_t count = 0;
-  uint32_t huge_count = 0;
+  size_t max_layer{0};
+  size_t layered_count{0};
 
-  for (const auto& it : m_iodi_methods) {
-    if (!can_safely_use_iodi(it.second)) {
-      // This will occur if at some point a method was marked as huge during
-      // encoding.
-      huge_count += 1;
-      continue;
-    }
+  for (const auto& p : m_iodi_method_layers) {
     count += 1;
     always_assert_log(count != 0, "Too many entries found, overflowed");
-    always_assert(it.first.size() < UINT16_MAX);
-    entry_hdr.klen = it.first.size();
-    entry_hdr.method_id = method_to_id.at(const_cast<DexMethod*>(it.second));
+
+    auto* method = p.first;
+    const auto& name = p.second.first;
+    auto layer = p.second.second;
+    redex_assert(layer < DexOutput::kIODILayerBound);
+
+    std::string tmp;
+    const std::string& layered_name = get_layered_name(name, layer, tmp);
+
+    always_assert(layered_name.size() < UINT16_MAX);
+    entry_hdr.klen = layered_name.size();
+    entry_hdr.method_id = method_to_id.at(const_cast<DexMethod*>(method));
     ofs.write((const char*)&entry_hdr, sizeof(EntryHeader));
-    ofs << it.first;
+    ofs << layered_name;
   }
   // Rewind and write the header now that we know single/dup counts
   ofs.seekp(0);
   header.count = count;
   ofs.write((const char*)&header, sizeof(Header));
   TRACE(IODI, 1,
-        "[IODI] Emitted %u entries, %u ignored because they were too big.",
-        count, huge_count);
+        "[IODI] Emitted %u entries, %zu in layers (maximum layer %zu).", count,
+        layered_count, max_layer + 1);
 }

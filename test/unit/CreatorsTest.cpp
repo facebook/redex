@@ -10,7 +10,9 @@
 #include "Creators.h"
 #include "DexAsm.h"
 #include "DexClass.h"
+#include "DexInstruction.h"
 #include "RedexTest.h"
+#include "Show.h"
 
 using namespace dex_asm;
 

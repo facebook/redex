@@ -8,6 +8,9 @@
 #include "OriginalNamePass.h"
 #include "ClassHierarchy.h"
 #include "DexUtil.h"
+#include "PassManager.h"
+#include "Show.h"
+#include "Trace.h"
 
 #define METRIC_MISSING_ORIGINAL_NAME_ROOT "num_missing_original_name_root"
 #define METRIC_ORIGINAL_NAME_COUNT "num_original_name"

@@ -39,7 +39,7 @@ struct InlinerConfig {
   // Prefixes of classes not to inline from / into
   std::vector<std::string> m_blocklist;
   std::vector<std::string> m_caller_blocklist;
-  std::vector<std::string> m_intradex_white_list;
+  std::vector<std::string> m_intradex_allowlist;
 
   /**
    * 1. Populate m_blocklist m_caller_blocklist to blocklist and
@@ -59,9 +59,9 @@ struct InlinerConfig {
     return caller_blocklist;
   }
 
-  void apply_intradex_white_list() {
+  void apply_intradex_allowlist() {
     always_assert_log(m_populated, "Should populate allowlist\n");
-    for (auto type : intradex_white_list) {
+    for (auto type : intradex_allowlist) {
       blocklist.erase(type);
       caller_blocklist.erase(type);
     }
@@ -72,6 +72,6 @@ struct InlinerConfig {
   // The populated black lists.
   std::unordered_set<DexType*> blocklist;
   std::unordered_set<DexType*> caller_blocklist;
-  std::unordered_set<DexType*> intradex_white_list;
+  std::unordered_set<DexType*> intradex_allowlist;
 };
 } // namespace inliner

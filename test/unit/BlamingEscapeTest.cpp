@@ -10,6 +10,7 @@
 #include "IRAssembler.h"
 #include "RedexTest.h"
 #include "ScopedCFG.h"
+#include "Show.h"
 
 namespace ptrs = local_pointers::blaming;
 

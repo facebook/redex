@@ -7,6 +7,8 @@
 
 #include "DexUtil.h"
 #include "MethodOverrideGraph.h"
+#include "Show.h"
+#include "Trace.h"
 #include "Walkers.h"
 
 namespace {
@@ -23,11 +25,11 @@ bool eligible_code(const IRCode* code) {
   uint32_t count = 0;
   editable_cfg_adapter::iterate(code, [&](const MethodItemEntry& mie) {
     auto opcode = mie.insn->opcode();
-    if (is_invoke_super(opcode)) {
+    if (opcode::is_invoke_super(opcode)) {
       eligible = false;
       return editable_cfg_adapter::LOOP_BREAK;
     }
-    if (!opcode::is_internal(opcode)) {
+    if (!opcode::is_an_internal(opcode)) {
       count++;
     }
     if (count > MAX_NUM_INSTRUCTIONS) {

@@ -14,6 +14,8 @@
 #include "EditableCfgAdapter.h"
 #include "IRInstruction.h"
 #include "Resolver.h"
+#include "Show.h"
+#include "StlUtil.h"
 #include "Trace.h"
 #include "Walkers.h"
 #include "WeakTopologicalOrdering.h"
@@ -92,7 +94,8 @@ std::ostream& operator<<(std::ostream& o, const CseUnorderedLocationSet& ls) {
 }
 
 CseLocation get_field_location(IROpcode opcode, const DexField* field) {
-  always_assert(is_ifield_op(opcode) || is_sfield_op(opcode));
+  always_assert(opcode::is_an_ifield_op(opcode) ||
+                opcode::is_an_sfield_op(opcode));
   if (field != nullptr && !is_volatile(field)) {
     return CseLocation(field);
   }
@@ -101,10 +104,11 @@ CseLocation get_field_location(IROpcode opcode, const DexField* field) {
 }
 
 CseLocation get_field_location(IROpcode opcode, const DexFieldRef* field_ref) {
-  always_assert(is_ifield_op(opcode) || is_sfield_op(opcode));
-  DexField* field =
-      resolve_field(field_ref, is_sfield_op(opcode) ? FieldSearch::Static
-                                                    : FieldSearch::Instance);
+  always_assert(opcode::is_an_ifield_op(opcode) ||
+                opcode::is_an_sfield_op(opcode));
+  DexField* field = resolve_field(field_ref, opcode::is_an_sfield_op(opcode)
+                                                 ? FieldSearch::Static
+                                                 : FieldSearch::Instance);
   return get_field_location(opcode, field);
 }
 
@@ -130,9 +134,10 @@ CseLocation get_read_array_location(IROpcode opcode) {
 }
 
 CseLocation get_read_location(const IRInstruction* insn) {
-  if (is_aget(insn->opcode())) {
+  if (opcode::is_an_aget(insn->opcode())) {
     return get_read_array_location(insn->opcode());
-  } else if (is_iget(insn->opcode()) || is_sget(insn->opcode())) {
+  } else if (opcode::is_an_iget(insn->opcode()) ||
+             opcode::is_an_sget(insn->opcode())) {
     return get_field_location(insn->opcode(), insn->get_field());
   } else {
     return CseLocation(CseSpecialLocations::GENERAL_MEMORY_BARRIER);
@@ -666,13 +671,8 @@ size_t compute_locations_closure(
 
       // remove inverse dependency entries as appropriate
       auto& entries = idit->second;
-      for (auto it = entries.begin(); it != entries.end();) {
-        if (!method_lads.count(*it)) {
-          it = entries.erase(it);
-        } else {
-          it++;
-        }
-      }
+      std20::erase_if(entries,
+                      [&](auto it) { return !method_lads.count(*it); });
 
       if (entries.empty()) {
         // remove inverse dependency
@@ -783,10 +783,12 @@ static size_t analyze_read_locations(
                 unknown = true;
                 break;
               default:
-                if (is_aput(opcode) || is_iput(opcode) || is_sput(opcode)) {
+                if (opcode::is_an_aput(opcode) || opcode::is_an_iput(opcode) ||
+                    opcode::is_an_sput(opcode)) {
                   unknown = true;
-                } else if (is_aget(opcode) || is_iget(opcode) ||
-                           is_sget(opcode)) {
+                } else if (opcode::is_an_aget(opcode) ||
+                           opcode::is_an_iget(opcode) ||
+                           opcode::is_an_sget(opcode)) {
                   auto location = get_read_location(insn);
                   if (location ==
                       CseLocation(
@@ -795,7 +797,7 @@ static size_t analyze_read_locations(
                   } else if (compute_locations) {
                     lads.locations.insert(location);
                   }
-                } else if (is_invoke(opcode)) {
+                } else if (opcode::is_an_invoke(opcode)) {
                   auto invoke_method = resolve_method(
                       insn->get_method(), opcode_to_search(opcode), method);
                   if (!process_base_and_overriding_methods(

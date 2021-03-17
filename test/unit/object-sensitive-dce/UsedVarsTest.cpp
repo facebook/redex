@@ -77,7 +77,7 @@ TEST_F(UsedVarsTest, simple) {
   ptrs::InvokeToSummaryMap invoke_to_esc_summary_map;
   for (auto& mie : InstructionIterable(*code)) {
     auto insn = mie.insn;
-    if (is_invoke(insn->opcode()) &&
+    if (opcode::is_an_invoke(insn->opcode()) &&
         insn->get_method() == DexMethod::get_method("LFoo;.<init>:()V")) {
       invoke_to_eff_summary_map.emplace(insn, side_effects::Summary({0}));
       invoke_to_esc_summary_map.emplace(insn, ptrs::EscapeSummary{});
@@ -125,7 +125,8 @@ TEST_F(UsedVarsTest, join) {
   ptrs::InvokeToSummaryMap invoke_to_esc_summary_map;
   for (auto& mie : InstructionIterable(*code)) {
     auto insn = mie.insn;
-    if (is_invoke(insn->opcode()) && method::is_init(insn->get_method())) {
+    if (opcode::is_an_invoke(insn->opcode()) &&
+        method::is_init(insn->get_method())) {
       invoke_to_eff_summary_map.emplace(insn, side_effects::Summary({0}));
       invoke_to_esc_summary_map.emplace(insn, ptrs::EscapeSummary{});
     }
@@ -180,7 +181,8 @@ TEST_F(UsedVarsTest, noDeleteInit) {
   ptrs::InvokeToSummaryMap invoke_to_esc_summary_map;
   for (auto& mie : InstructionIterable(*code)) {
     auto insn = mie.insn;
-    if (is_invoke(insn->opcode()) && method::is_init(insn->get_method())) {
+    if (opcode::is_an_invoke(insn->opcode()) &&
+        method::is_init(insn->get_method())) {
       invoke_to_eff_summary_map.emplace(insn, side_effects::Summary({0}));
       invoke_to_esc_summary_map.emplace(insn, ptrs::EscapeSummary{});
     }
@@ -213,7 +215,8 @@ TEST_F(UsedVarsTest, noDeleteAliasedInit) {
   ptrs::InvokeToSummaryMap invoke_to_esc_summary_map;
   for (auto& mie : InstructionIterable(*code)) {
     auto insn = mie.insn;
-    if (is_invoke(insn->opcode()) && method::is_init(insn->get_method())) {
+    if (opcode::is_an_invoke(insn->opcode()) &&
+        method::is_init(insn->get_method())) {
       invoke_to_eff_summary_map.emplace(insn, side_effects::Summary({0}));
       invoke_to_esc_summary_map.emplace(insn, ptrs::EscapeSummary{});
     }
@@ -255,7 +258,7 @@ TEST_F(UsedVarsTest, noDeleteInitForUnreadObject) {
   ptrs::InvokeToSummaryMap invoke_to_esc_summary_map;
   for (auto& mie : InstructionIterable(*code)) {
     auto insn = mie.insn;
-    if (is_invoke(insn->opcode())) {
+    if (opcode::is_an_invoke(insn->opcode())) {
       auto method = insn->get_method();
       if (method::is_init(method)) {
         invoke_to_eff_summary_map.emplace(insn, side_effects::Summary({0}));
@@ -300,7 +303,7 @@ TEST_F(UsedVarsTest, noReturn) {
   ptrs::InvokeToSummaryMap invoke_to_esc_summary_map;
   for (auto& mie : InstructionIterable(*code)) {
     auto insn = mie.insn;
-    if (is_invoke(insn->opcode())) {
+    if (opcode::is_an_invoke(insn->opcode())) {
       auto callee = insn->get_method();
       if (callee == DexMethod::get_method("LFoo;.<init>:()V")) {
         invoke_to_eff_summary_map.emplace(insn, side_effects::Summary({0}));

@@ -15,6 +15,10 @@
 
 #include <boost/functional/hash.hpp>
 
+namespace cfg {
+class Block;
+} // namespace cfg
+
 /**
  * This analysis identifies class initializations descended from a base type
  * and tracks their uses across a method identifying per method created in:

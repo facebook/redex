@@ -90,6 +90,14 @@ class Block;
 class ControlFlowGraph;
 class CFGInliner;
 
+namespace details {
+
+// To avoid "Show.h" in the header.
+std::string show_cfg(const ControlFlowGraph& cfg);
+std::string show_insn(const IRInstruction* insn);
+
+} // namespace details
+
 struct ThrowInfo {
   // nullptr means catch all
   DexType* catch_type;
@@ -1231,16 +1239,17 @@ class InstructionIteratorImpl {
       return;
     }
     auto begin = InstructionIteratorImpl<is_const>(*m_cfg, true);
-    always_assert_log(*this != begin, "%s", SHOW(*m_cfg));
+    always_assert_log(*this != begin, "%s", details::show_cfg(*m_cfg).c_str());
   }
 
   void assert_not_end() const {
     if (!ControlFlowGraph::DEBUG) {
       return;
     }
-    always_assert_log(m_block != m_cfg->m_blocks.end(), "%s", SHOW(*m_cfg));
+    always_assert_log(m_block != m_cfg->m_blocks.end(), "%s",
+                      details::show_cfg(*m_cfg).c_str());
     always_assert_log(m_it != ir_list::InstructionIteratorImpl<is_const>(),
-                      "%s", SHOW(*m_cfg));
+                      "%s", details::show_cfg(*m_cfg).c_str());
   }
 
   bool is_end() const {
@@ -1339,11 +1348,12 @@ bool ControlFlowGraph::insert(const InstructionIterator& position,
         // This will abort if someone tries to insert after a returning or
         // throwing instruction.
         auto existing_last_op = existing_last->insn->opcode();
-        always_assert_log(!is_branch(existing_last_op) &&
-                              !is_throw(existing_last_op) &&
-                              !is_return(existing_last_op),
+        always_assert_log(!opcode::is_branch(existing_last_op) &&
+                              !opcode::is_throw(existing_last_op) &&
+                              !opcode::is_a_return(existing_last_op),
                           "Can't add instructions after %s in Block %zu in %s",
-                          SHOW(existing_last->insn), b->id(), SHOW(*this));
+                          details::show_insn(existing_last->insn).c_str(),
+                          b->id(), details::show_cfg(*this).c_str());
 
         // When inserting after an instruction that may throw, we need to start
         // a new block. We also copy over all throw-edges. See FIXME below for
@@ -1352,7 +1362,8 @@ bool ControlFlowGraph::insert(const InstructionIterator& position,
           always_assert_log(!existing_last->insn->has_move_result_any(),
                             "Can't add instructions after throwing instruction "
                             "%s with move-result in Block %zu in %s",
-                            SHOW(existing_last->insn), b->id(), SHOW(*this));
+                            details::show_insn(existing_last->insn).c_str(),
+                            b->id(), details::show_cfg(*this).c_str());
           Block* new_block = create_block();
           if (opcode::may_throw(op)) {
             copy_succ_edges_of_type(b, new_block, EDGE_THROW);
@@ -1367,12 +1378,12 @@ bool ControlFlowGraph::insert(const InstructionIterator& position,
       }
     }
 
-    always_assert_log(!is_branch(op),
+    always_assert_log(!opcode::is_branch(op),
                       "insert() does not support branch opcodes. Use "
                       "create_branch() instead");
 
     IRList::iterator new_inserted_it = b->m_entries.insert_before(pos, insn);
-    if (is_throw(op) || is_return(op)) {
+    if (opcode::is_throw(op) || opcode::is_a_return(op)) {
       // Stop adding instructions when we understand that op
       // is the end of the block.
       insns_it = std::prev(end_index);
@@ -1386,12 +1397,12 @@ bool ControlFlowGraph::insert(const InstructionIterator& position,
       }
       remove_dangling_parents(dangling);
 
-      if (is_return(op)) {
+      if (opcode::is_a_return(op)) {
         // This block now ends in a return, it must have no successors.
         delete_succ_edge_if(
             b, [](const Edge* e) { return e->type() != EDGE_GHOST; });
       } else {
-        always_assert(is_throw(op));
+        always_assert(opcode::is_throw(op));
         // The only valid way to leave this block is via a throw edge.
         delete_succ_edge_if(b, [](const Edge* e) {
           return !(e->type() == EDGE_THROW || e->type() == EDGE_GHOST);

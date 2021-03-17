@@ -10,6 +10,7 @@
 #include "BaseIRAnalyzer.h"
 #include "GlobalTypeAnalyzer.h"
 #include "Resolver.h"
+#include "Show.h"
 #include "Walkers.h"
 
 using namespace type_analyzer;
@@ -23,6 +24,27 @@ std::ostream& operator<<(std::ostream& out, const DexMethod* method) {
   out << SHOW(method);
   return out;
 }
+
+/* Map of method to known return type - Esepecially for the Boxed values. TODO
+ * construct the list.*/
+std::unordered_map<const char*, const char*> STATIC_METHOD_TO_TYPE_MAP = {
+    {"Ljava/lang/Boolean;.valueOf:(Z)Ljava/lang/Boolean;",
+     "Ljava/lang/Boolean;"},
+    {"Ljava/lang/Character;.valueOf:(C)Ljava/lang/Character;",
+     "Ljava/lang/Character;"},
+    {"Ljava/lang/Byte;.valueOf:(B)Ljava/lang/Byte;", "Ljava/lang/Byte;"},
+    {"Ljava/lang/Integer;.valueOf:(I)Ljava/lang/Integer;",
+     "Ljava/lang/Integer;"},
+    {"Ljava/lang/Long;.valueOf:(J)Ljava/lang/Long;", "Ljava/lang/Long;"},
+    {"Ljava/lang/Float;.valueOf:(F)Ljava/lang/Float;", "Ljava/lang/Float;"},
+    {"Ljava/lang/Double;.valueOf:(D)Ljava/lang/Double;", "Ljava/lang/Double;"},
+    {"Ljava/lang/String;.valueOf:(C)Ljava/lang/String;", "Ljava/lang/String;"},
+    {"Ljava/lang/String;.valueOf:(D)Ljava/lang/String;", "Ljava/lang/String;"},
+    {"Ljava/lang/String;.valueOf:(F)Ljava/lang/String;", "Ljava/lang/String;"},
+    {"Ljava/lang/String;.valueOf:(I)Ljava/lang/String;", "Ljava/lang/String;"},
+    {"Ljava/lang/String;.valueOf:(J)Ljava/lang/String;", "Ljava/lang/String;"},
+    {"Ljava/lang/String;.valueOf:(Z)Ljava/lang/String;", "Ljava/lang/String;"},
+};
 
 namespace {
 
@@ -137,9 +159,22 @@ WholeProgramState::WholeProgramState(
       m_known_methods.emplace(method);
     }
   });
-
+  setup_known_method_returns();
   analyze_clinits_and_ctors(scope, gta, &m_field_partition);
   collect(scope, gta);
+}
+
+std::string WholeProgramState::show_field(const DexField* f) { return show(f); }
+std::string WholeProgramState::show_method(const DexMethod* m) {
+  return show(m);
+}
+void WholeProgramState::setup_known_method_returns() {
+  for (auto& p : STATIC_METHOD_TO_TYPE_MAP) {
+    auto method = DexMethod::make_method(p.first);
+    auto type = DexTypeDomain(
+        DexType::make_type(DexString::make_string(p.second)), NOT_NULL);
+    m_known_method_returns.insert(std::make_pair(method, type));
+  }
 }
 
 /*
@@ -195,6 +230,7 @@ void WholeProgramState::collect(const Scope& scope,
                                 const global::GlobalTypeAnalyzer& gta) {
   ConcurrentMap<const DexField*, std::vector<DexTypeDomain>> fields_tmp;
   ConcurrentMap<const DexMethod*, std::vector<DexTypeDomain>> methods_tmp;
+
   walk::parallel::methods(scope, [&](DexMethod* method) {
     IRCode* code = method->get_code();
     if (code == nullptr) {
@@ -235,7 +271,8 @@ void WholeProgramState::collect_field_types(
     const IRInstruction* insn,
     const DexTypeEnvironment& env,
     ConcurrentMap<const DexField*, std::vector<DexTypeDomain>>* field_tmp) {
-  if (!is_sput(insn->opcode()) && !is_iput(insn->opcode())) {
+  if (!opcode::is_an_sput(insn->opcode()) &&
+      !opcode::is_an_iput(insn->opcode())) {
     return;
   }
   auto field = resolve_field(insn->get_field());
@@ -260,7 +297,7 @@ void WholeProgramState::collect_return_types(
     const DexMethod* method,
     ConcurrentMap<const DexMethod*, std::vector<DexTypeDomain>>* method_tmp) {
   auto op = insn->opcode();
-  if (!is_return(op)) {
+  if (!opcode::is_a_return(op)) {
     return;
   }
   if (!returns_reference(method)) {
@@ -380,6 +417,13 @@ bool WholeProgramAwareAnalyzer::analyze_invoke(
   if (whole_program_state == nullptr) {
     return false;
   }
+  auto known_type = whole_program_state->get_type_for_method_with_known_type(
+      insn->get_method());
+  if (known_type) {
+    env->set(RESULT_REGISTER, *known_type);
+    return true;
+  }
+
   auto method = resolve_method(insn->get_method(), opcode_to_search(insn));
   if (method == nullptr) {
     return false;

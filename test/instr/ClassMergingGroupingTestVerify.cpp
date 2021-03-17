@@ -20,7 +20,9 @@ TEST_F(PostVerify, MergeablesRemoval) {
   verify_type_erased(s3);
   verify_type_erased(s4);
   verify_type_erased(s5);
-  verify_type_erased(s6);
+  // s6 is not erased because the max_count is 5.
+  EXPECT_EQ(s6->get_vmethods().size(), 1);
+  EXPECT_EQ(s6->get_dmethods().size(), 1);
 
   auto q1 = find_class_named(classes, "Lcom/facebook/redextest/Q1;");
   auto q2 = find_class_named(classes, "Lcom/facebook/redextest/Q2;");
@@ -40,9 +42,9 @@ TEST_F(PostVerify, MergeablesRemoval) {
 
 TEST_F(PostVerify, ShapeWithGrouping) {
   // The 1st hierarhcy only produce one shape. The trailing subgroup of size 1
-  // is combined with the previous group to avoid a single mergeable group.
+  // is not merged.
   auto gb0 = find_class_named(
-      classes, "Lcom/facebook/redextest/GroupingBaseShape0S0000000_0;");
+      classes, "Lcom/facebook/redextest/GroupingBaseShape0S0000000;");
   ASSERT_NE(gb0, nullptr);
   auto gb1 = find_class_named(
       classes, "Lcom/facebook/redextest/GroupingBaseShape1S0000000_1;");
@@ -51,7 +53,7 @@ TEST_F(PostVerify, ShapeWithGrouping) {
   // The 2nd hierarchy produces two shapes. The size of the trailing subgroup is
   // greater than one.
   auto gs0 = find_class_named(
-      classes, "Lcom/facebook/redextest/GroupingSBaseShape1S0000000_0;");
+      classes, "Lcom/facebook/redextest/GroupingSBaseShape1S0000000;");
   ASSERT_NE(gs0, nullptr);
   auto gs1 = find_class_named(
       classes, "Lcom/facebook/redextest/GroupingSBaseShape2S0000000_1;");

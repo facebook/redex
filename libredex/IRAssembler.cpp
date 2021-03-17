@@ -13,35 +13,28 @@
 #include <string>
 #include <unordered_map>
 
+#include "DexPosition.h"
+#include "Show.h"
+
 using namespace sparta;
 
 namespace {
 
 // clang-format off
-#define OP(OP, KIND, STR) {OPCODE_##OP, STR},
 std::unordered_map<IROpcode, std::string, boost::hash<IROpcode>>
     opcode_to_string_table = {
-        OPS
-        {IOPCODE_LOAD_PARAM, "load-param"},
-        {IOPCODE_LOAD_PARAM_OBJECT, "load-param-object"},
-        {IOPCODE_LOAD_PARAM_WIDE, "load-param-wide"},
-        {IOPCODE_MOVE_RESULT_PSEUDO, "move-result-pseudo"},
-        {IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, "move-result-pseudo-object"},
-        {IOPCODE_MOVE_RESULT_PSEUDO_WIDE, "move-result-pseudo-wide"},
+#define OP(UC, LC, KIND, STR) {OPCODE_##UC, STR},
+#define IOP(UC, LC, KIND, STR) {IOPCODE_##UC, STR},
+#define OPRANGE(...)
+#include "IROpcodes.def"
 };
-#undef OP
 
-#define OP(OP, KIND, STR) {STR, OPCODE_##OP},
 std::unordered_map<std::string, IROpcode> string_to_opcode_table = {
-    OPS
-    {"load-param", IOPCODE_LOAD_PARAM},
-    {"load-param-object", IOPCODE_LOAD_PARAM_OBJECT},
-    {"load-param-wide", IOPCODE_LOAD_PARAM_WIDE},
-    {"move-result-pseudo", IOPCODE_MOVE_RESULT_PSEUDO},
-    {"move-result-pseudo-object", IOPCODE_MOVE_RESULT_PSEUDO_OBJECT},
-    {"move-result-pseudo-wide", IOPCODE_MOVE_RESULT_PSEUDO_WIDE},
+#define OP(UC, LC, KIND, STR) {STR, OPCODE_##UC},
+#define IOP(UC, LC, KIND, STR) {STR, IOPCODE_##UC},
+#define OPRANGE(...)
+#include "IROpcodes.def"
 };
-#undef OP
 // clang-format on
 
 using LabelDefs = std::unordered_map<std::string, MethodItemEntry*>;
@@ -104,9 +97,9 @@ s_expr to_s_expr(const IRInstruction* insn, const LabelRefs& label_refs) {
     break;
   }
 
-  if (is_branch(op)) {
+  if (opcode::is_branch(op)) {
     const auto& label_strs = label_refs.at(insn);
-    if (is_switch(op)) {
+    if (opcode::is_switch(op)) {
       // (switch v0 (:a :b :c))
       std::vector<s_expr> label_exprs;
       label_exprs.reserve(label_strs.size());
@@ -261,9 +254,9 @@ std::unique_ptr<IRInstruction> instruction_from_s_expr(
   }
   }
 
-  if (is_branch(op)) {
+  if (opcode::is_branch(op)) {
     std::string label_str;
-    if (is_switch(op)) {
+    if (opcode::is_switch(op)) {
       s_expr list;
       s_patn({s_patn(list)}, tail)
           .must_match(tail, "Expecting list of labels for " + opcode_str);
@@ -766,7 +759,8 @@ std::unique_ptr<IRCode> ircode_from_s_expr(const s_expr& e) {
   auto code = std::make_unique<IRCode>();
   bool matched = s_patn({}, insns_expr).match_with(e);
   always_assert(matched);
-  always_assert_log(insns_expr.size() > 0, "Empty instruction list?!");
+  always_assert_log(insns_expr.size() > 0, "Empty instruction list?! %s",
+                    e.str().c_str());
   LabelDefs label_defs;
   LabelRefs label_refs;
   boost::optional<reg_t> max_reg;

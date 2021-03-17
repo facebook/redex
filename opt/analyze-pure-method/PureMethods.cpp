@@ -7,10 +7,11 @@
 
 #include "PureMethods.h"
 #include "LocalPointersAnalysis.h"
-#include "Pass.h"
+#include "PassManager.h"
 #include "Purity.h"
 #include "SideEffectSummary.h"
 #include "SummarySerialization.h"
+#include "Trace.h"
 #include "Walkers.h"
 
 bool AnalyzePureMethodsPass::analyze_and_check_pure_method_helper(

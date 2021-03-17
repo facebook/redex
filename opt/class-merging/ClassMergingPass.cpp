@@ -10,6 +10,9 @@
 #include "ClassMerging.h"
 #include "ConfigFiles.h"
 #include "DexUtil.h"
+#include "MergingStrategies.h"
+#include "Show.h"
+#include "Trace.h"
 
 using namespace class_merging;
 
@@ -74,6 +77,8 @@ bool verify_model_spec(const ModelSpec& model_spec) {
                     model_spec.name.c_str());
 
   if (model_spec.roots.empty()) {
+    // To share the configurations easily across apps, we ignore the models
+    // without roots.
     TRACE(CLMG, 2,
           "[ClassMerging] Wrong specification: model %s must have \"roots\"",
           model_spec.name.c_str());
@@ -86,7 +91,6 @@ bool verify_model_spec(const ModelSpec& model_spec) {
         "[ClassMerging] Wrong specification: model %s must have \"roots\"",
         model_spec.name.c_str());
   }
-
   return true;
 }
 
@@ -253,6 +257,8 @@ void ClassMergingPass::run_pass(DexStoresVector& stores,
   if (m_model_specs.empty()) {
     return;
   }
+  strategy::set_merging_strategy(strategy::BY_CLASS_COUNT);
+
   auto scope = build_class_scope(stores);
   for (ModelSpec& model_spec : m_model_specs) {
     if (!model_spec.enabled) {

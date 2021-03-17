@@ -34,6 +34,9 @@ struct CallGraphTest : public RedexIntegrationTest {
   DexMethod* less_impl2_return;
   DexMethod* less_impl3_return;
   DexMethod* less_impl4_return;
+  DexMethod* pure_ref_intf_return;
+  DexMethod* pure_ref_3_return;
+  DexMethod* pure_ref_3_init;
 
   Scope scope;
   boost::optional<call_graph::Graph> complete_graph;
@@ -121,6 +124,16 @@ struct CallGraphTest : public RedexIntegrationTest {
     more_impl1_init = DexMethod::get_method(
                           "Lcom/facebook/redextest/MoreThan5Impl1;.<init>:()V")
                           ->as_def();
+    pure_ref_intf_return =
+        DexMethod::get_method("Lcom/facebook/redextest/PureRef;.returnNum:()I")
+            ->as_def();
+    pure_ref_3_return =
+        DexMethod::get_method(
+            "Lcom/facebook/redextest/PureRefImpl3;.returnNum:()I")
+            ->as_def();
+    pure_ref_3_init = DexMethod::get_method(
+                          "Lcom/facebook/redextest/PureRefImpl3;.<init>:()V")
+                          ->as_def();
   }
 
   std::vector<const DexMethod*> get_callees(const call_graph::Graph& graph,
@@ -144,7 +157,8 @@ TEST_F(CallGraphTest, test_resolve_static_callees) {
   IRInstruction* invoke_insn = nullptr;
   for (const auto& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
-    if (is_invoke(insn->opcode()) && insn->get_method()->str() == "foo") {
+    if (opcode::is_an_invoke(insn->opcode()) &&
+        insn->get_method()->str() == "foo") {
       invoke_insn = mie.insn;
     }
   }
@@ -158,7 +172,7 @@ TEST_F(CallGraphTest, test_resolve_virtual_callees) {
   IRCode* code = calls_returns_int->get_code();
   IRInstruction* invoke_insn = nullptr;
   for (const auto& mie : InstructionIterable(code)) {
-    if (is_invoke(mie.insn->opcode())) {
+    if (opcode::is_an_invoke(mie.insn->opcode())) {
       invoke_insn = mie.insn;
     }
   }
@@ -175,7 +189,6 @@ TEST_F(CallGraphTest, test_multiple_callee_graph_entry) {
   auto entry_callees = get_callees(multiple_graph->entry());
   EXPECT_THAT(entry_callees,
               ::testing::UnorderedElementsAre(clinit,
-                                              more_intf_return,
                                               more_impl1_return,
                                               more_impl2_return,
                                               more_impl3_return,
@@ -196,6 +209,13 @@ TEST_F(CallGraphTest, test_multiple_callee_graph_clinit) {
                                               less_impl2_return,
                                               less_impl3_return,
                                               less_impl4_return));
+}
+
+TEST_F(CallGraphTest, test_multiple_callee_graph_return4) {
+  auto impl4_callees = get_callees(*multiple_graph, less_impl4_return);
+  EXPECT_THAT(
+      impl4_callees,
+      ::testing::UnorderedElementsAre(pure_ref_3_init, pure_ref_3_return));
 }
 
 TEST_F(CallGraphTest, test_multiple_callee_graph_calls_returns_int) {

@@ -6,6 +6,13 @@
  */
 
 #include "InstructionLowering.h"
+
+#include "Debug.h"
+#include "DexInstruction.h"
+#include "DexOpcodeDefs.h"
+#include "DexStore.h"
+#include "IRInstruction.h"
+#include "Show.h"
 #include "Walkers.h"
 
 namespace instruction_lowering {
@@ -297,7 +304,7 @@ DexInstruction* create_dex_instruction(const IRInstruction* insn) {
 // with the associated 'primary' prefix instruction -- so we use this function
 // specifically for this purpose.
 void remove_move_result_pseudo(const IRList::iterator& it) {
-  always_assert(opcode::is_move_result_pseudo(it->insn->opcode()));
+  always_assert(opcode::is_a_move_result_pseudo(it->insn->opcode()));
   delete it->insn;
   it->insn = nullptr;
   it->type = MFLOW_FALLTHROUGH;
@@ -387,7 +394,7 @@ void lower_simple_instruction(DexMethod*, IRCode*, IRList::iterator* it_) {
   auto op = insn->opcode();
 
   DexInstruction* dex_insn;
-  if (is_move(op)) {
+  if (opcode::is_a_move(op)) {
     dex_insn = new DexInstruction(select_move_opcode(insn));
   } else if (op >= OPCODE_CONST && op <= OPCODE_CONST_WIDE) {
     dex_insn = new DexInstruction(select_const_opcode(insn));
@@ -456,7 +463,7 @@ Stats lower(DexMethod* method, bool lower_with_cfg) {
     auto op = insn->opcode();
     insn->denormalize_registers();
 
-    if (opcode::is_load_param(op)) {
+    if (opcode::is_a_load_param(op)) {
       code->remove_opcode(it);
     } else if (op == OPCODE_CHECK_CAST) {
       stats.move_for_check_cast += lower_check_cast(method, code, &it);

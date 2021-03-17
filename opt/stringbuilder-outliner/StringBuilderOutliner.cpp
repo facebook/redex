@@ -14,7 +14,9 @@
 #include "Creators.h"
 #include "DexAsm.h"
 #include "DexClass.h"
-#include "Pass.h"
+#include "PassManager.h"
+#include "Show.h"
+#include "Trace.h"
 #include "Walkers.h"
 
 using namespace stringbuilder_outliner;
@@ -74,7 +76,8 @@ void FixpointIterator::analyze_instruction(const IRInstruction* insn,
   ptrs::escape_heap_referenced_objects(insn, env);
 
   auto op = insn->opcode();
-  if (is_invoke(op) && insn->get_method()->get_class() == m_stringbuilder) {
+  if (opcode::is_an_invoke(op) &&
+      insn->get_method()->get_class() == m_stringbuilder) {
     auto method = insn->get_method();
     if (method == m_stringbuilder_init_with_string ||
         is_eligible_append(method)) {
@@ -378,7 +381,6 @@ void Outliner::transform(IRCode* code) {
 
     size_t idx{0};
     for (auto* insn : state) {
-      auto callee = insn->get_method();
       reg_t reg;
       if (insns_to_insert.count(insn)) {
         // An instruction can occur in more than one BuilderState if the

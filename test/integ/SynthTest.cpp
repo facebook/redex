@@ -23,7 +23,9 @@
 
 #include "LocalDcePass.h"
 #include "ReBindRefs.h"
+#include "Show.h"
 #include "Synth.h"
+#include "Trace.h"
 
 #include "Match.h"
 
@@ -51,7 +53,7 @@ class SynthTest1 : public RedexIntegrationTest {
  protected:
   template <typename P>
   bool assert_classes(const DexClasses& classes,
-                      const m::match_t<DexClass, P>& p) {
+                      const m::match_t<DexClass*, P>& p) {
     for (const auto& cls : classes) {
       if (p.matches(cls)) {
         return true;
@@ -88,7 +90,7 @@ TEST_F(SynthTest1, synthetic) {
         for (auto& mie : InstructionIterable(code->cfg())) {
           auto insn = mie.insn;
           std::cout << SHOW(insn) << std::endl;
-          if (is_invoke(insn->opcode())) {
+          if (opcode::is_an_invoke(insn->opcode())) {
             const auto clazz =
                 insn->get_method()->get_class()->get_name()->c_str();
             const auto n = insn->get_method()->get_name()->c_str();

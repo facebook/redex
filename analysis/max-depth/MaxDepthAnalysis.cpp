@@ -139,7 +139,7 @@ class MaxDepthFunctionAnalyzer : public Base {
   }
 
   void analyze_insn(IRInstruction* insn) {
-    if (is_invoke(insn->opcode())) {
+    if (opcode::is_an_invoke(insn->opcode())) {
       analyze_invoke(insn);
     }
   }

@@ -5,10 +5,13 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include "IRAssembler.h"
+
 #include <gtest/gtest.h>
 
-#include "IRAssembler.h"
+#include "DexPosition.h"
 #include "RedexTest.h"
+#include "Show.h"
 
 struct IRAssemblerTest : public RedexTest {};
 

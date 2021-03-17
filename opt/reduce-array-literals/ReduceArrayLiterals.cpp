@@ -17,11 +17,13 @@
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "InterDexPass.h"
+#include "PassManager.h"
 #include "PatriciaTreeMap.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "PatriciaTreeSet.h"
 #include "PluginRegistry.h"
 #include "Resolver.h"
+#include "Show.h"
 #include "Walkers.h"
 
 using namespace sparta;
@@ -609,7 +611,7 @@ size_t ReduceArrayLiterals::patch_new_array_chunk(
   bool is_component_type_primitive = type::is_primitive(component_type);
   for (size_t index = chunk_start; index < chunk_end; index++) {
     const IRInstruction* aput_insn = aput_insns[index];
-    always_assert(is_aput(aput_insn->opcode()));
+    always_assert(opcode::is_an_aput(aput_insn->opcode()));
     always_assert(aput_insn->src(1) == overall_dest);
     it = aput_insns_iterators.at(aput_insn);
     auto dest = filled_new_array_insn->src(index - chunk_start);

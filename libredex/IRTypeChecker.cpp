@@ -13,6 +13,7 @@
 #include "Match.h"
 #include "Resolver.h"
 #include "Show.h"
+#include "Trace.h"
 
 using namespace sparta;
 using namespace type_inference;
@@ -292,7 +293,7 @@ static bool has_move_result_pseudo(const MethodItemEntry& mie) {
 
 static bool is_move_result_pseudo(const MethodItemEntry& mie) {
   return mie.type == MFLOW_OPCODE &&
-         opcode::is_move_result_pseudo(mie.insn->opcode());
+         opcode::is_a_move_result_pseudo(mie.insn->opcode());
 }
 
 Result check_load_params(const DexMethod* method) {
@@ -345,7 +346,7 @@ Result check_load_params(const DexMethod* method) {
   for (const auto& mie :
        InstructionIterable(method->get_code()->cfg().entry_block())) {
     IRInstruction* insn = mie.insn;
-    if (!opcode::is_load_param(insn->opcode())) {
+    if (!opcode::is_a_load_param(insn->opcode())) {
       non_load_param_seen = true;
       continue;
     }
@@ -419,7 +420,7 @@ Result check_uninitialized(const DexMethod* method) {
       continue;
     }
 
-    if (is_move(op) && !opcode::is_move_result_any(op)) {
+    if (opcode::is_a_move(op) && !opcode::is_move_result_any(op)) {
       assert(insn->srcs().size() > 0);
       auto src = insn->srcs()[0];
       auto dest = insn->dest();
@@ -512,11 +513,11 @@ Result check_structure(const DexMethod* method, bool check_no_overwrite_this) {
     auto* insn = it->insn;
     auto op = insn->opcode();
 
-    if (has_seen_non_load_param_opcode && opcode::is_load_param(op)) {
+    if (has_seen_non_load_param_opcode && opcode::is_a_load_param(op)) {
       return Result::make_error("Encountered " + show(*it) +
                                 " not at the start of the method");
     }
-    has_seen_non_load_param_opcode = !opcode::is_load_param(op);
+    has_seen_non_load_param_opcode = !opcode::is_a_load_param(op);
 
     if (check_no_overwrite_this) {
       if (op == IOPCODE_LOAD_PARAM_OBJECT && this_insn == nullptr) {
@@ -529,7 +530,7 @@ Result check_structure(const DexMethod* method, bool check_no_overwrite_this) {
 
     // The instruction immediately before a move-result instruction must be
     // either an invoke-* or a filled-new-array instruction.
-    if (opcode::is_move_result(op)) {
+    if (opcode::is_a_move_result(op)) {
       auto prev = it;
       while (prev != code->begin()) {
         --prev;
@@ -542,14 +543,15 @@ Result check_structure(const DexMethod* method, bool check_no_overwrite_this) {
                                   " at start of the method");
       }
       auto prev_op = prev->insn->opcode();
-      if (!(is_invoke(prev_op) || is_filled_new_array(prev_op))) {
+      if (!(opcode::is_an_invoke(prev_op) ||
+            opcode::is_filled_new_array(prev_op))) {
         return Result::make_error(
             "Encountered " + show(*it) +
             " without appropriate prefix "
             "instruction. Expected invoke or filled-new-array, got " +
             show(prev->insn));
       }
-    } else if (opcode::is_move_result_pseudo(insn->opcode()) &&
+    } else if (opcode::is_a_move_result_pseudo(insn->opcode()) &&
                (it == code->begin() ||
                 !has_move_result_pseudo(*std::prev(it)))) {
       return Result::make_error("Encountered " + show(*it) +
@@ -1270,8 +1272,9 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
   }
   }
   if (insn->has_field() && m_validate_access) {
-    auto search = is_sfield_op(insn->opcode()) ? FieldSearch::Static
-                                               : FieldSearch::Instance;
+    auto search = opcode::is_an_sfield_op(insn->opcode())
+                      ? FieldSearch::Static
+                      : FieldSearch::Instance;
     auto resolved = resolve_field(insn->get_field(), search);
     validate_access(m_dex_method, resolved);
   }

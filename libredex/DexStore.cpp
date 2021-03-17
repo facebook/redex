@@ -12,6 +12,7 @@
 #include "CppUtil.h"
 #include "DexStore.h"
 #include "DexUtil.h"
+#include "Show.h"
 
 constexpr const char* ROOT_STORE_NAME = "classes";
 
@@ -60,6 +61,20 @@ void DexMetadata::parse(const std::string& path) {
   }
 }
 
+std::unordered_set<const DexType*> get_root_store_types(
+    const DexStoresVector& stores, bool include_primary_dex) {
+  std::unordered_set<const DexType*> types;
+  redex_assert(!stores.empty());
+  const auto& root_dexen = stores[0].get_dexen();
+  size_t index = include_primary_dex ? 0 : 1;
+  for (; index < root_dexen.size(); index++) {
+    for (const auto cls : root_dexen[index]) {
+      types.insert(cls->get_type());
+    }
+  }
+  return types;
+}
+
 XStoreRefs::XStoreRefs(const DexStoresVector& stores) {
   m_xstores.push_back(std::unordered_set<const DexType*>());
   m_stores.push_back(&stores[0]);
@@ -99,6 +114,8 @@ bool XStoreRefs::illegal_ref_load_types(const DexType* location,
   }
   return false;
 }
+
+std::string XStoreRefs::show_type(const DexType* type) { return show(type); }
 
 XDexRefs::XDexRefs(const DexStoresVector& stores) {
   size_t dex_nr = 0;

@@ -22,6 +22,7 @@ libredex_la_SOURCES = \
 	liblocator/locator.cpp \
 	libredex/ABExperimentContext.cpp \
 	libredex/ABExperimentContextImpl.cpp \
+	libredex/AnalysisUsage.cpp \
 	libredex/AnnoUtils.cpp \
 	libredex/ApiLevelChecker.cpp \
 	libredex/ApkManager.cpp \
@@ -41,7 +42,6 @@ libredex_la_SOURCES = \
 	libredex/DexCallSite.cpp \
 	libredex/DexClass.cpp \
 	libredex/DexDebugInstruction.cpp \
-	libredex/DexEncoding.cpp \
 	libredex/DexHasher.cpp \
 	libredex/DexIdx.cpp \
 	libredex/DexInstruction.cpp \
@@ -147,8 +147,10 @@ libredex_la_SOURCES = \
 	service/class-merging/ApproximateShapeMerging.cpp \
 	service/class-merging/ClassAssemblingUtils.cpp \
 	service/class-merging/ClassMerging.cpp \
+	service/class-merging/AnonymousModelGenerator.cpp \
 	service/class-merging/MergeabilityCheck.cpp \
 	service/class-merging/MergerType.cpp \
+	service/class-merging/MergingStrategies.cpp \
 	service/class-merging/ModelMerger.cpp \
 	service/class-merging/ModelMethodMerger.cpp \
 	service/class-merging/Model.cpp \
@@ -199,6 +201,7 @@ libredex_la_SOURCES = \
 	service/type-analysis/TypeAnalysisRuntimeAssert.cpp \
 	service/type-string-rewriter/TypeStringRewriter.cpp \
 	shared/DexDefs.cpp \
+	shared/DexEncoding.cpp \
 	shared/file-utils.cpp \
 	util/CommandProfiling.cpp \
 	util/JemallocUtil.cpp \
@@ -234,6 +237,7 @@ libopt_la_SOURCES = \
 	opt/bridge/Bridge.cpp \
 	opt/check_breadcrumbs/CheckBreadcrumbs.cpp \
 	opt/check-recursion/CheckRecursion.cpp \
+	opt/class-merging/AnonymousClassMergingPass.cpp \
 	opt/class-merging/ClassMergingPass.cpp \
 	opt/class-splitting/ClassSplitting.cpp \
 	opt/constant-propagation/ConstantPropagationPass.cpp \
@@ -295,6 +299,7 @@ libopt_la_SOURCES = \
 	opt/remove_redundant_check_casts/RemoveRedundantCheckCasts.cpp \
 	opt/remove-uninstantiables/RemoveUninstantiablesPass.cpp \
 	opt/remove-unreachable/RemoveUnreachable.cpp \
+	opt/remove-unreachable/TypeAnalysisAwareRemoveUnreachable.cpp \
 	opt/remove-nullcheck-string-arg/RemoveNullcheckStringArg.cpp \
 	opt/remove-unused-fields/RemoveUnusedFields.cpp \
 	opt/remove_empty_classes/RemoveEmptyClasses.cpp \
@@ -305,7 +310,9 @@ libopt_la_SOURCES = \
 	opt/reduce-array-literals/ReduceArrayLiterals.cpp \
 	opt/reduce-gotos/ReduceGotos.cpp \
 	opt/resolve-refs/ResolveRefsPass.cpp \
+	opt/resolve-refs/ExternalRefsManglingPass.cpp \
 	opt/result-propagation/ResultPropagation.cpp \
+	opt/resolve-proguard-values/ResolveProguardAssumeValues.cpp \
 	opt/shorten-srcstrings/Shorten.cpp \
 	opt/make-public/MakePublicPass.cpp \
 	opt/methodinline/IntraDexInlinePass.cpp \
@@ -328,6 +335,7 @@ libopt_la_SOURCES = \
 	opt/track_resources/TrackResources.cpp \
 	opt/throw-propagation/ThrowPropagationPass.cpp \
 	opt/type-analysis/GlobalTypeAnalysisPass.cpp \
+	opt/type-analysis/TypeAnalysisCallGraphGenerationPass.cpp \
 	opt/unreferenced_interfaces/UnreferencedInterfaces.cpp \
 	opt/unmark_proguard_keep/UnmarkProguardKeep.cpp \
 	opt/up-code-motion/UpCodeMotion.cpp \

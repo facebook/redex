@@ -12,25 +12,16 @@
 #include <functional>
 #include <initializer_list>
 #include <limits>
-#include <list>
-#include <map>
 #include <memory>
-#include <sstream>
 #include <string>
 #include <utility>
 
 #include "DexAccess.h"
 #include "DexAnnotation.h"
-#include "DexDebugInstruction.h"
 #include "DexDefs.h"
 #include "DexEncoding.h"
-#include "DexIdx.h"
-#include "DexInstruction.h"
-#include "DexPosition.h"
 #include "RedexContext.h"
 #include "ReferencedState.h"
-#include "Show.h"
-#include "Trace.h"
 #include "Util.h"
 
 /*
@@ -55,9 +46,14 @@
 
 class DexClass;
 class DexDebugInstruction;
+class DexField;
+class DexIdx;
+class DexInstruction;
 class DexOutputIdx;
+struct DexPosition;
 class DexString;
 class DexType;
+class PositionMapper;
 
 using Scope = std::vector<DexClass*>;
 
@@ -328,6 +324,8 @@ class DexField : public DexFieldRef {
     m_value = nullptr;
   }
 
+  std::string self_show() const; // To avoid "Show.h" in the header.
+
  public:
   ReferencedState rstate; // Tracks whether this field can be deleted or renamed
 
@@ -379,14 +377,14 @@ class DexField : public DexFieldRef {
 
   void set_access(DexAccessFlags access) {
     always_assert_log(!m_external, "Unexpected external field %s\n",
-                      SHOW(this));
+                      self_show().c_str());
     m_access = access;
   }
 
   void set_external() {
     always_assert_log(!m_concrete, "Unexpected concrete field %s\n",
-                      SHOW(this));
-    m_deobfuscated_name = show(this);
+                      self_show().c_str());
+    m_deobfuscated_name = self_show();
     m_external = true;
   }
 
@@ -624,27 +622,15 @@ struct DexDebugEntry final {
     std::unique_ptr<DexPosition> pos;
     std::unique_ptr<DexDebugInstruction> insn;
   };
-  DexDebugEntry(uint32_t addr, std::unique_ptr<DexPosition> pos)
-      : type(DexDebugEntryType::Position), addr(addr), pos(std::move(pos)) {}
-  DexDebugEntry(uint32_t addr, std::unique_ptr<DexDebugInstruction> insn)
-      : type(DexDebugEntryType::Instruction),
-        addr(addr),
-        insn(std::move(insn)) {}
+  DexDebugEntry(uint32_t addr, std::unique_ptr<DexPosition> pos);
+  DexDebugEntry(uint32_t addr, std::unique_ptr<DexDebugInstruction> insn);
   // should only be copied via DexDebugItem's copy ctor, which is responsible
   // for remapping DexPositions' parent pointer
   DexDebugEntry(const DexDebugEntry&) = delete;
   DexDebugEntry(DexDebugEntry&& other) noexcept;
   ~DexDebugEntry();
-  void gather_strings(std::vector<DexString*>& lstring) const {
-    if (type == DexDebugEntryType::Instruction) {
-      insn->gather_strings(lstring);
-    }
-  }
-  void gather_types(std::vector<DexType*>& ltype) const {
-    if (type == DexDebugEntryType::Instruction) {
-      insn->gather_types(ltype);
-    }
-  }
+  void gather_strings(std::vector<DexString*>& lstring) const;
+  void gather_types(std::vector<DexType*>& ltype) const;
 };
 
 class DexDebugItem {
@@ -688,7 +674,8 @@ std::vector<std::unique_ptr<DexDebugInstruction>> generate_debug_instructions(
     DexDebugItem* debugitem,
     PositionMapper* pos_mapper,
     uint32_t* line_start,
-    std::vector<DebugLineItem>* line_info);
+    std::vector<DebugLineItem>* line_info,
+    uint32_t line_addin);
 
 using DexCatches = std::vector<std::pair<DexType*, uint32_t>>;
 
@@ -730,13 +717,7 @@ class DexCode {
 
   DexCode(const DexCode&);
 
-  ~DexCode() {
-    if (m_insns) {
-      for (auto const& op : *m_insns) {
-        delete op;
-      }
-    }
-  }
+  ~DexCode();
 
  public:
   const DexDebugItem* get_debug_item() const { return m_dbg.get(); }
@@ -880,6 +861,8 @@ class DexMethod : public DexMethodRef {
     void operator()(DexMethod* m) { delete m; }
   };
 
+  std::string self_show() const; // To avoid "Show.h" in the header.
+
  public:
   // Tracks whether this method can be deleted or renamed
   ReferencedState rstate;
@@ -1010,20 +993,20 @@ class DexMethod : public DexMethodRef {
 
   void set_access(DexAccessFlags access) {
     always_assert_log(!m_external, "Unexpected external method %s\n",
-                      SHOW(this));
+                      self_show().c_str());
     m_access = access;
   }
 
   void set_virtual(bool is_virtual) {
     always_assert_log(!m_external, "Unexpected external method %s\n",
-                      SHOW(this));
+                      self_show().c_str());
     m_virtual = is_virtual;
   }
 
   void set_external() {
     always_assert_log(!m_concrete, "Unexpected concrete method %s\n",
-                      SHOW(this));
-    m_deobfuscated_name = show(this);
+                      self_show().c_str());
+    m_deobfuscated_name = self_show();
     m_external = true;
   }
   void set_dex_code(std::unique_ptr<DexCode> code) {
@@ -1067,23 +1050,26 @@ class DexMethod : public DexMethodRef {
   void add_load_params(size_t num_add_loads);
   void attach_annotation_set(DexAnnotationSet* aset) {
     always_assert_type_log(!m_concrete, RedexError::BAD_ANNOTATION,
-                           "method %s is concrete\n", SHOW(this));
+                           "method %s is concrete\n", self_show().c_str());
     always_assert_type_log(!m_anno, RedexError::BAD_ANNOTATION,
-                           "method %s annotation exists\n", SHOW(this));
+                           "method %s annotation exists\n",
+                           self_show().c_str());
     m_anno = aset;
   }
   void attach_param_annotation_set(int paramno, DexAnnotationSet* aset) {
     always_assert_type_log(!m_concrete, RedexError::BAD_ANNOTATION,
-                           "method %s is concrete\n", SHOW(this));
-    always_assert_type_log(
-        m_param_anno.count(paramno) == 0, RedexError::BAD_ANNOTATION,
-        "param %d annotation to method %s exists\n", paramno, SHOW(this));
+                           "method %s is concrete\n", self_show().c_str());
+    always_assert_type_log(m_param_anno.count(paramno) == 0,
+                           RedexError::BAD_ANNOTATION,
+                           "param %d annotation to method %s exists\n", paramno,
+                           self_show().c_str());
     m_param_anno[paramno] = aset;
   }
 
   void gather_types(std::vector<DexType*>& ltype) const;
   void gather_fields(std::vector<DexFieldRef*>& lfield) const;
   void gather_methods(std::vector<DexMethodRef*>& lmethod) const;
+  void gather_methods_from_annos(std::vector<DexMethodRef*>& lmethod) const;
   void gather_strings(std::vector<DexString*>& lstring,
                       bool exclude_loads = false) const;
   void gather_callsites(std::vector<DexCallSite*>& ltype) const;
@@ -1132,6 +1118,8 @@ class DexClass {
   // This constructor is private on purpose, use DexClass::create instead
   DexClass(DexIdx* idx, const dex_class_def* cdef, const std::string& location);
 
+  std::string self_show() const; // To avoid "Show.h" in the header.
+
  public:
   ReferencedState rstate;
 
@@ -1143,13 +1131,13 @@ class DexClass {
   const std::vector<DexMethod*>& get_dmethods() const { return m_dmethods; }
   std::vector<DexMethod*>& get_dmethods() {
     always_assert_log(!m_external, "Unexpected external class %s\n",
-                      SHOW(m_self));
+                      self_show().c_str());
     return m_dmethods;
   }
   const std::vector<DexMethod*>& get_vmethods() const { return m_vmethods; }
   std::vector<DexMethod*>& get_vmethods() {
     always_assert_log(!m_external, "Unexpected external class %s\n",
-                      SHOW(m_self));
+                      self_show().c_str());
     return m_vmethods;
   }
 
@@ -1240,13 +1228,13 @@ class DexClass {
 
   void set_access(DexAccessFlags access) {
     always_assert_log(!m_external, "Unexpected external class %s\n",
-                      SHOW(m_self));
+                      self_show().c_str());
     m_access_flags = access;
   }
 
   void set_super_class(DexType* super_class) {
     always_assert_log(!m_external, "Unexpected external class %s\n",
-                      SHOW(m_self));
+                      self_show().c_str());
     m_super_class = super_class;
   }
 
@@ -1263,7 +1251,7 @@ class DexClass {
 
   void set_interfaces(DexTypeList* intfs) {
     always_assert_log(!m_external, "Unexpected external class %s\n",
-                      SHOW(m_self));
+                      self_show().c_str());
     m_interfaces = intfs;
   }
 

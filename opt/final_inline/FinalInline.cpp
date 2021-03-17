@@ -21,8 +21,10 @@
 #include "DexOutput.h"
 #include "DexUtil.h"
 #include "IRCode.h"
+#include "PassManager.h"
 #include "ReachableClasses.h"
 #include "Resolver.h"
+#include "Show.h"
 #include "Walkers.h"
 
 namespace {
@@ -201,7 +203,7 @@ class FinalInlineImpl {
         "static constructor doesn't have the proper access bits set\n");
     for (auto& mie : InstructionIterable(clinit->get_code())) {
       auto opcode = mie.insn;
-      if (opcode->has_field() && is_sput(opcode->opcode())) {
+      if (opcode->has_field() && opcode::is_an_sput(opcode->opcode())) {
         auto field = resolve_field(opcode->get_field(), FieldSearch::Static);
         if (field == nullptr || !field->is_concrete() ||
             field->get_class() != clazz->get_type()) {
@@ -249,7 +251,7 @@ class FinalInlineImpl {
           auto ii = InstructionIterable(code);
           for (auto it = ii.begin(); it != ii.end(); ++it) {
             auto* insn = it->insn;
-            if (!is_sget(insn->opcode())) {
+            if (!opcode::is_an_sget(insn->opcode())) {
               continue;
             }
             auto field = resolve_field(insn->get_field(), FieldSearch::Static);
@@ -281,7 +283,7 @@ class FinalInlineImpl {
    * const op into an encoded value.
    */
   bool validate_const_for_encoded_value(IRInstruction* op) {
-    if (!is_const(op->opcode())) {
+    if (!opcode::is_a_const(op->opcode())) {
       return false;
     }
     switch (op->opcode()) {
@@ -299,7 +301,7 @@ class FinalInlineImpl {
    */
   bool validate_sput_for_encoded_value(const DexClass* clazz,
                                        IRInstruction* insn) {
-    if (!(insn->has_field() && is_sput(insn->opcode()))) {
+    if (!(insn->has_field() && opcode::is_an_sput(insn->opcode()))) {
       return false;
     }
     auto field = resolve_field(insn->get_field(), FieldSearch::Static);
@@ -554,7 +556,7 @@ class FinalInlineImpl {
       // Check the code, bail out if there is branch instruction in clinit
       // because that may make the following pattern matching problematic.
       // We have control flow analysis in FinalInlineV2.
-      if (is_branch(it->insn->opcode())) {
+      if (opcode::is_branch(it->insn->opcode())) {
         return;
       }
     }

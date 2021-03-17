@@ -12,6 +12,7 @@
 #include "ProguardConfiguration.h"
 #include "ProguardParser.h"
 #include "ReachableClasses.h"
+#include "Show.h"
 #include "Tool.h"
 #include "Walkers.h"
 

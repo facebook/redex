@@ -15,6 +15,7 @@
 #include "MethodOverrideGraph.h"
 #include "RedexTest.h"
 #include "ScopeHelper.h"
+#include "Show.h"
 
 namespace mog = method_override_graph;
 

@@ -11,6 +11,10 @@
 #include "Pass.h"
 #include "Resolver.h"
 
+namespace cfg {
+class ControlFlowGraph;
+} // namespace cfg
+
 /*
  * An index into the list of load-param instructions.
  */

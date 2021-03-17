@@ -7,11 +7,18 @@
 
 #pragma once
 
-#include <sstream>
-#include <stdexcept>
-
 #include <stdint.h>
 #include <string>
+
+namespace dex_encoding {
+namespace details {
+
+// Hide throw details.
+[[noreturn]] void throw_invalid(const char* msg);
+[[noreturn]] void throw_invalid(const char* msg, uint32_t size);
+
+} // namespace details
+} // namespace dex_encoding
 
 /*
  * LEB128 is a DEX data type.  It was borrowed by DEX from the DWARF3
@@ -161,7 +168,7 @@ inline uint32_t mutf8_next_code_point(const char*& s) {
   uint8_t v2 = *s++;
   if ((v2 & 0xc0) != 0x80) {
     /* Invalid string. */
-    throw std::invalid_argument("Invalid 2nd byte on mutf8 string");
+    dex_encoding::details::throw_invalid("Invalid 2nd byte on mutf8 string");
   }
   /* Two byte code point */
   if ((v & 0xe0) == 0xc0) {
@@ -172,12 +179,12 @@ inline uint32_t mutf8_next_code_point(const char*& s) {
     uint8_t v3 = *s++;
     if ((v2 & 0xc0) != 0x80) {
       /* Invalid string. */
-      throw std::invalid_argument("Invalid 3rd byte on mutf8 string");
+      dex_encoding::details::throw_invalid("Invalid 3rd byte on mutf8 string");
     }
     return (v & 0x1f) << 12 | (v2 & 0x3f) << 6 | (v3 & 0x3f);
   }
   /* Invalid string. */
-  throw std::invalid_argument("Invalid size encoding mutf8 string");
+  dex_encoding::details::throw_invalid("Invalid size encoding mutf8 string");
 }
 
 inline uint32_t length_of_utf8_string(const char* s) {
@@ -227,7 +234,7 @@ inline std::string encode_utf8_char_to_mutf8_string(const int32_t ival) {
   int idx = 0;
   if (size == 1) {
     if (ival > 0x7F) {
-      throw std::invalid_argument(
+      dex_encoding::details::throw_invalid(
           "Invalid utf8_char for encoding to mutf8 string");
     }
     if (ival == 0x00) { // \u0000 in 2 bytes
@@ -249,9 +256,7 @@ inline std::string encode_utf8_char_to_mutf8_string(const int32_t ival) {
     buf[idx++] = byte2;
     buf[idx++] = byte3;
   } else {
-    std::ostringstream exception_message;
-    exception_message << "Unexpected char size: " << size;
-    throw std::invalid_argument(exception_message.str());
+    dex_encoding::details::throw_invalid("Unexpected char size: ", size);
   }
 
   buf[idx] = 0x00;

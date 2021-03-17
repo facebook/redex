@@ -11,6 +11,7 @@
 #include "BaseIRAnalyzer.h"
 #include "ConstantAbstractDomain.h"
 #include "ControlFlow.h"
+#include "DexClass.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "MethodUtil.h"
@@ -128,11 +129,11 @@ class Analyzer final : public BaseIRAnalyzer<ConstructorAnalysisEnvironment> {
     };
 
     auto opcode = insn->opcode();
-    if (opcode::is_move(opcode)) {
+    if (opcode::is_a_move(opcode)) {
       const auto value = current_state->get_params().get(insn->src(0));
       set_current_state_at(insn->dest(), insn->dest_is_wide(), value);
       return;
-    } else if (is_iput(opcode)) {
+    } else if (opcode::is_an_iput(opcode)) {
       auto field_ref = insn->get_field();
       DexField* field = resolve_field(field_ref, FieldSearch::Instance);
       if (field == nullptr || field->get_class() == m_declaring_type) {
@@ -230,7 +231,7 @@ bool can_inline_init(const DexMethod* init_method) {
   }
   for (const auto& mie : InstructionIterable(cfg)) {
     auto insn = mie.insn;
-    if (is_iput(insn->opcode())) {
+    if (opcode::is_an_iput(insn->opcode())) {
       auto field_ref = insn->get_field();
       DexField* field = resolve_field(field_ref, FieldSearch::Instance);
       if (field == nullptr ||

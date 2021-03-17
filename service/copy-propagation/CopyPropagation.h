@@ -8,6 +8,7 @@
 #pragma once
 
 #include "IRCode.h"
+#include "Trace.h"
 
 namespace copy_propagation_impl {
 

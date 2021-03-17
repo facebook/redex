@@ -11,6 +11,10 @@
 #include "Pass.h"
 #include "PluginRegistry.h"
 
+namespace method_profiles {
+class MethodProfiles;
+} // namespace method_profiles
+
 class DedupStrings {
  public:
   struct Stats {

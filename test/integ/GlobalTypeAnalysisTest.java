@@ -295,3 +295,10 @@ class TestI {
     two.yield();
   }
 }
+
+class TestJ {
+
+  static byte[] createByteArray() { return new byte[5]; }
+
+  static void main() { byte[] ba = createByteArray(); }
+}

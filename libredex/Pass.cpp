@@ -7,7 +7,22 @@
 
 #include "Pass.h"
 
+#include "AnalysisUsage.h"
+#include "Debug.h"
 #include "DexUtil.h"
+#include "PassRegistry.h"
+
+Pass::Pass(const std::string& name, Kind kind) : m_name(name), m_kind(kind) {
+  PassRegistry::get().register_pass(this);
+}
+
+void Pass::set_analysis_usage(AnalysisUsage& analysis_usage) const {
+  // By default, analysis passes preserves all existing analysis while
+  // transformation passes preserves none.
+  if (m_kind == ANALYSIS) {
+    analysis_usage.set_preserve_all();
+  }
+}
 
 Configurable::Reflection Pass::reflect() {
   auto cr = Configurable::reflect();

@@ -33,6 +33,9 @@
 #include "IRInstruction.h"
 #include "IROpcode.h"
 #include "Liveness.h"
+#include "PassManager.h"
+#include "Show.h"
+#include "Trace.h"
 #include "Walkers.h"
 
 namespace {
@@ -109,7 +112,6 @@ void ReduceGotosPass::process_code_switches(cfg::ControlFlowGraph& cfg,
     auto it = b->get_last_insn();
     always_assert(it != b->end());
     auto insn = it->insn;
-    auto opcode = insn->opcode();
     cfg::Block* goto_target = b->goes_to();
 
     std::unordered_set<cfg::Edge*> fallthrough_edges;
@@ -331,7 +333,7 @@ std::tuple<bool, size_t, size_t> process_code_ifs_impl(
           //   return $dest
           // instruction we found earlier.
           IRInstruction* src_last_insn = src_last_mie_it->insn;
-          if (is_move(src_last_insn->opcode()) &&
+          if (opcode::is_a_move(src_last_insn->opcode()) &&
               src_last_insn->dest() == cloned_insn->src(0) &&
               src_last_insn->is_wide() == cloned_insn->is_wide()) {
             // Found a matching move! We'll rewrite the (cloned) return
@@ -420,7 +422,7 @@ void ReduceGotosPass::process_code_ifs(cfg::ControlFlowGraph& cfg,
     always_assert(it != b->end());
     auto insn = it->insn;
     auto opcode = insn->opcode();
-    always_assert(is_conditional_branch(opcode));
+    always_assert(opcode::is_a_conditional_branch(opcode));
     cfg::Edge* goto_edge = cfg.get_succ_edge_of_type(b, cfg::EDGE_GOTO);
     cfg::Edge* branch_edge = cfg.get_succ_edge_of_type(b, cfg::EDGE_BRANCH);
     always_assert(goto_edge != nullptr);
@@ -453,7 +455,7 @@ void ReduceGotosPass::process_code_ifs(cfg::ControlFlowGraph& cfg,
     {
       auto return_res = process_code_ifs_impl(
           cfg.order(), cfg, [](const cfg::Block* b) { return false; },
-          [](IROpcode op) { return is_return(op); },
+          [](IROpcode op) { return opcode::is_a_return(op); },
           [](const cfg::Block* to, const cfg::Block* from) { return false; });
       rerun = std::get<0>(return_res);
       stats.removed_trailing_moves += std::get<1>(return_res);

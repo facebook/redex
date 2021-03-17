@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "ClassHierarchy.h"
+#include "ConfigFiles.h"
 #include "Deleter.h"
 #include "DexClass.h"
 #include "DexUtil.h"
@@ -311,7 +312,7 @@ void run_inliner(DexStoresVector& stores,
   // Gather all inlinable candidates.
   auto inliner_config = conf.get_inliner_config();
   if (intra_dex) {
-    inliner_config.apply_intradex_white_list();
+    inliner_config.apply_intradex_allowlist();
   }
 
   if (inline_for_speed != nullptr) {

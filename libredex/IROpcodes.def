@@ -1,0 +1,243 @@
+/*
+ * Copyright (c) Facebook, Inc. and its affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+#ifndef OP
+#error "Please define OP(UC, LC, REF, NAME)"
+#endif // OP
+
+#ifndef IOP
+#error "Please define IOP(UC, LC, REF, NAME)"
+#endif // IOP
+
+#ifndef OPRANGE
+#error "Please define OPRANGE(NAME, FST, LST)"
+#endif // OPRANGE
+
+// clang-format off
+OP(NOP               , nop               , Ref::None, "nop")
+
+OPRANGE(a_move, OPCODE_MOVE, OPCODE_MOVE_OBJECT)
+OP(MOVE              , move              , Ref::None, "move")
+OP(MOVE_WIDE         , move_wide         , Ref::None, "move-wide")
+OP(MOVE_OBJECT       , move_object       , Ref::None, "move-object")
+
+OPRANGE(a_move_result, OPCODE_MOVE_RESULT, OPCODE_MOVE_RESULT_OBJECT)
+OP(MOVE_RESULT       , move_result       , Ref::None, "move-result")
+OP(MOVE_RESULT_WIDE  , move_result_wide  , Ref::None, "move-result-wide")
+OP(MOVE_RESULT_OBJECT, move_result_object, Ref::None, "move-result-object")
+
+OP(MOVE_EXCEPTION    , move_exception    , Ref::None, "move-exception")
+
+OPRANGE(a_return, OPCODE_RETURN_VOID, OPCODE_RETURN_OBJECT)
+OP(RETURN_VOID       , return_void       , Ref::None, "return-void")
+
+OPRANGE(a_return_value, OPCODE_RETURN, OPCODE_RETURN_OBJECT)
+OP(RETURN            , return            , Ref::None, "return")
+OP(RETURN_WIDE       , return_wide       , Ref::None, "return-wide")
+OP(RETURN_OBJECT     , return_object     , Ref::None, "return-object")
+
+OPRANGE(a_const        , OPCODE_CONST, OPCODE_CONST_CLASS)
+OPRANGE(a_literal_const, OPCODE_CONST, OPCODE_CONST_WIDE)
+OP(CONST             , const             , Ref::Literal, "const")
+OP(CONST_WIDE        , const_wide        , Ref::Literal, "const-wide")
+
+OP(CONST_STRING      , const_string      , Ref::String, "const-string")
+OP(CONST_CLASS       , const_class       , Ref::Type, "const-class")
+
+OPRANGE(a_monitor, OPCODE_MONITOR_ENTER, OPCODE_MONITOR_EXIT)
+OP(MONITOR_ENTER     , monitor_enter     , Ref::None, "monitor-enter")
+OP(MONITOR_EXIT      , monitor_exit      , Ref::None, "monitor-exit")
+
+OP(CHECK_CAST        , check_cast        , Ref::Type, "check-cast")
+OP(INSTANCE_OF       , instance_of       , Ref::Type, "instance-of")
+OP(ARRAY_LENGTH      , array_length      , Ref::None, "array-length")
+OP(NEW_INSTANCE      , new_instance      , Ref::Type, "new-instance")
+OP(NEW_ARRAY         , new_array         , Ref::Type, "new-array")
+OP(FILLED_NEW_ARRAY  , filled_new_array  , Ref::Type, "filled-new-array")
+OP(FILL_ARRAY_DATA   , fill_array_data   , Ref::Data, "fill-array-data")
+OP(THROW             , throw             , Ref::None, "throw")
+OP(GOTO              , goto              , Ref::None, "goto")
+OP(SWITCH            , switch            , Ref::None, "switch")
+
+OPRANGE(a_cmp, OPCODE_CMPL_FLOAT, OPCODE_CMP_LONG)
+OP(CMPL_FLOAT        , cmpl_float        , Ref::None, "cmpl-float")
+OP(CMPG_FLOAT        , cmpg_float        , Ref::None, "cmpg-float")
+OP(CMPL_DOUBLE       , cmpl_double       , Ref::None, "cmpl-double")
+OP(CMPG_DOUBLE       , cmpg_double       , Ref::None, "cmpg-double")
+OP(CMP_LONG          , cmp_long          , Ref::None, "cmp-long")
+
+OPRANGE(a_conditional_branch, OPCODE_IF_EQ, OPCODE_IF_LEZ)
+OP(IF_EQ             , if_eq             , Ref::None, "if-eq")
+OP(IF_NE             , if_ne             , Ref::None, "if-ne")
+OP(IF_LT             , if_lt             , Ref::None, "if-lt")
+OP(IF_GE             , if_ge             , Ref::None, "if-ge")
+OP(IF_GT             , if_gt             , Ref::None, "if-gt")
+OP(IF_LE             , if_le             , Ref::None, "if-le")
+
+OPRANGE(a_testz_branch, OPCODE_IF_EQZ, OPCODE_IF_LEZ)
+OP(IF_EQZ            , if_eqz            , Ref::None, "if-eqz")
+OP(IF_NEZ            , if_nez            , Ref::None, "if-nez")
+OP(IF_LTZ            , if_ltz            , Ref::None, "if-ltz")
+OP(IF_GEZ            , if_gez            , Ref::None, "if-gez")
+OP(IF_GTZ            , if_gtz            , Ref::None, "if-gtz")
+OP(IF_LEZ            , if_lez            , Ref::None, "if-lez")
+
+OPRANGE(an_aget, OPCODE_AGET, OPCODE_AGET_SHORT)
+OP(AGET              , aget              , Ref::None, "aget")
+OP(AGET_WIDE         , aget_wide         , Ref::None, "aget-wide")
+OP(AGET_OBJECT       , aget_object       , Ref::None, "aget-object")
+OP(AGET_BOOLEAN      , aget_boolean      , Ref::None, "aget-boolean")
+OP(AGET_BYTE         , aget_byte         , Ref::None, "aget-byte")
+OP(AGET_CHAR         , aget_char         , Ref::None, "aget-char")
+OP(AGET_SHORT        , aget_short        , Ref::None, "aget-short")
+
+OPRANGE(an_aput, OPCODE_APUT, OPCODE_APUT_SHORT)
+OP(APUT              , aput              , Ref::None, "aput")
+OP(APUT_WIDE         , aput_wide         , Ref::None, "aput-wide")
+OP(APUT_OBJECT       , aput_object       , Ref::None, "aput-object")
+OP(APUT_BOOLEAN      , aput_boolean      , Ref::None, "aput-boolean")
+OP(APUT_BYTE         , aput_byte         , Ref::None, "aput-byte")
+OP(APUT_CHAR         , aput_char         , Ref::None, "aput-char")
+OP(APUT_SHORT        , aput_short        , Ref::None, "aput-short")
+
+OPRANGE(an_ifield_op, OPCODE_IGET, OPCODE_IPUT_SHORT)
+OPRANGE(an_iget     , OPCODE_IGET, OPCODE_IGET_SHORT)
+OP(IGET              , iget              , Ref::Field, "iget")
+OP(IGET_WIDE         , iget_wide         , Ref::Field, "iget-wide")
+OP(IGET_OBJECT       , iget_object       , Ref::Field, "iget-object")
+OP(IGET_BOOLEAN      , iget_boolean      , Ref::Field, "iget-boolean")
+OP(IGET_BYTE         , iget_byte         , Ref::Field, "iget-byte")
+OP(IGET_CHAR         , iget_char         , Ref::Field, "iget-char")
+OP(IGET_SHORT        , iget_short        , Ref::Field, "iget-short")
+
+OPRANGE(an_iput, OPCODE_IPUT, OPCODE_IPUT_SHORT)
+OP(IPUT              , iput              , Ref::Field, "iput")
+OP(IPUT_WIDE         , iput_wide         , Ref::Field, "iput-wide")
+OP(IPUT_OBJECT       , iput_object       , Ref::Field, "iput-object")
+OP(IPUT_BOOLEAN      , iput_boolean      , Ref::Field, "iput-boolean")
+OP(IPUT_BYTE         , iput_byte         , Ref::Field, "iput-byte")
+OP(IPUT_CHAR         , iput_char         , Ref::Field, "iput-char")
+OP(IPUT_SHORT        , iput_short        , Ref::Field, "iput-short")
+
+OPRANGE(an_sfield_op, OPCODE_SGET, OPCODE_SPUT_SHORT)
+OPRANGE(an_sget     , OPCODE_SGET, OPCODE_SGET_SHORT)
+OP(SGET              , sget              , Ref::Field, "sget")
+OP(SGET_WIDE         , sget_wide         , Ref::Field, "sget-wide")
+OP(SGET_OBJECT       , sget_object       , Ref::Field, "sget-object")
+OP(SGET_BOOLEAN      , sget_boolean      , Ref::Field, "sget-boolean")
+OP(SGET_BYTE         , sget_byte         , Ref::Field, "sget-byte")
+OP(SGET_CHAR         , sget_char         , Ref::Field, "sget-char")
+OP(SGET_SHORT        , sget_short        , Ref::Field, "sget-short")
+
+OPRANGE(an_sput, OPCODE_SPUT, OPCODE_SPUT_SHORT)
+OP(SPUT              , sput              , Ref::Field, "sput")
+OP(SPUT_WIDE         , sput_wide         , Ref::Field, "sput-wide")
+OP(SPUT_OBJECT       , sput_object       , Ref::Field, "sput-object")
+OP(SPUT_BOOLEAN      , sput_boolean      , Ref::Field, "sput-boolean")
+OP(SPUT_BYTE         , sput_byte         , Ref::Field, "sput-byte")
+OP(SPUT_CHAR         , sput_char         , Ref::Field, "sput-char")
+OP(SPUT_SHORT        , sput_short        , Ref::Field, "sput-short")
+
+OPRANGE(an_invoke, OPCODE_INVOKE_VIRTUAL, OPCODE_INVOKE_INTERFACE)
+OP(INVOKE_VIRTUAL    , invoke_virtual    , Ref::Method, "invoke-virtual")
+OP(INVOKE_SUPER      , invoke_super      , Ref::Method, "invoke-super")
+OP(INVOKE_DIRECT     , invoke_direct     , Ref::Method, "invoke-direct")
+OP(INVOKE_STATIC     , invoke_static     , Ref::Method, "invoke-static")
+OP(INVOKE_INTERFACE  , invoke_interface  , Ref::Method, "invoke-interface")
+
+OP(INVOKE_POLYMORPHIC, invoke_polymorphic, Ref::MethodHandle, "invoke-polymorphic")
+OP(INVOKE_CUSTOM     , invoke_custom     , Ref::CallSite, "invoke-custom")
+OP(NEG_INT           , neg_int           , Ref::None, "neg-int")
+OP(NOT_INT           , not_int           , Ref::None, "not-int")
+OP(NEG_LONG          , neg_long          , Ref::None, "neg-long")
+OP(NOT_LONG          , not_long          , Ref::None, "not-long")
+OP(NEG_FLOAT         , neg_float         , Ref::None, "neg-float")
+OP(NEG_DOUBLE        , neg_double        , Ref::None, "neg-double")
+OP(INT_TO_LONG       , int_to_long       , Ref::None, "int-to-long")
+OP(INT_TO_FLOAT      , int_to_float      , Ref::None, "int-to-float")
+OP(INT_TO_DOUBLE     , int_to_double     , Ref::None, "int-to-double")
+OP(LONG_TO_INT       , long_to_int       , Ref::None, "long-to-int")
+OP(LONG_TO_FLOAT     , long_to_float     , Ref::None, "long-to-float")
+OP(LONG_TO_DOUBLE    , long_to_double    , Ref::None, "long-to-double")
+OP(FLOAT_TO_INT      , float_to_int      , Ref::None, "float-to-int")
+OP(FLOAT_TO_LONG     , float_to_long     , Ref::None, "float-to-long")
+OP(FLOAT_TO_DOUBLE   , float_to_double   , Ref::None, "float-to-double")
+OP(DOUBLE_TO_INT     , double_to_int     , Ref::None, "double-to-int")
+OP(DOUBLE_TO_LONG    , double_to_long    , Ref::None, "double-to-long")
+OP(DOUBLE_TO_FLOAT   , double_to_float   , Ref::None, "double-to-float")
+OP(INT_TO_BYTE       , int_to_byte       , Ref::None, "int-to-byte")
+OP(INT_TO_CHAR       , int_to_char       , Ref::None, "int-to-char")
+OP(INT_TO_SHORT      , int_to_short      , Ref::None, "int-to-short")
+OP(ADD_INT           , add_int           , Ref::None, "add-int")
+OP(SUB_INT           , sub_int           , Ref::None, "sub-int")
+OP(MUL_INT           , mul_int           , Ref::None, "mul-int")
+OP(DIV_INT           , div_int           , Ref::None, "div-int")
+OP(REM_INT           , rem_int           , Ref::None, "rem-int")
+OP(AND_INT           , and_int           , Ref::None, "and-int")
+OP(OR_INT            , or_int            , Ref::None, "or-int")
+OP(XOR_INT           , xor_int           , Ref::None, "xor-int")
+OP(SHL_INT           , shl_int           , Ref::None, "shl-int")
+OP(SHR_INT           , shr_int           , Ref::None, "shr-int")
+OP(USHR_INT          , ushr_int          , Ref::None, "ushr-int")
+OP(ADD_LONG          , add_long          , Ref::None, "add-long")
+OP(SUB_LONG          , sub_long          , Ref::None, "sub-long")
+OP(MUL_LONG          , mul_long          , Ref::None, "mul-long")
+OP(DIV_LONG          , div_long          , Ref::None, "div-long")
+OP(REM_LONG          , rem_long          , Ref::None, "rem-long")
+OP(AND_LONG          , and_long          , Ref::None, "and-long")
+OP(OR_LONG           , or_long           , Ref::None, "or-long")
+OP(XOR_LONG          , xor_long          , Ref::None, "xor-long")
+OP(SHL_LONG          , shl_long          , Ref::None, "shl-long")
+OP(SHR_LONG          , shr_long          , Ref::None, "shr-long")
+OP(USHR_LONG         , ushr_long         , Ref::None, "ushr-long")
+OP(ADD_FLOAT         , add_float         , Ref::None, "add-float")
+OP(SUB_FLOAT         , sub_float         , Ref::None, "sub-float")
+OP(MUL_FLOAT         , mul_float         , Ref::None, "mul-float")
+OP(DIV_FLOAT         , div_float         , Ref::None, "div-float")
+OP(REM_FLOAT         , rem_float         , Ref::None, "rem-float")
+OP(ADD_DOUBLE        , add_double        , Ref::None, "add-double")
+OP(SUB_DOUBLE        , sub_double        , Ref::None, "sub-double")
+OP(MUL_DOUBLE        , mul_double        , Ref::None, "mul-double")
+OP(DIV_DOUBLE        , div_double        , Ref::None, "div-double")
+OP(REM_DOUBLE        , rem_double        , Ref::None, "rem-double")
+OP(ADD_INT_LIT16     , add_int_lit16     , Ref::Literal, "add-int/lit16")
+OP(RSUB_INT          , rsub_int          , Ref::Literal, "rsub-int")
+OP(MUL_INT_LIT16     , mul_int_lit16     , Ref::Literal, "mul-int/lit16")
+OP(DIV_INT_LIT16     , div_int_lit16     , Ref::Literal, "div-int/lit16")
+OP(REM_INT_LIT16     , rem_int_lit16     , Ref::Literal, "rem-int/lit16")
+OP(AND_INT_LIT16     , and_int_lit16     , Ref::Literal, "and-int/lit16")
+OP(OR_INT_LIT16      , or_int_lit16      , Ref::Literal, "or-int/lit16")
+OP(XOR_INT_LIT16     , xor_int_lit16     , Ref::Literal, "xor-int/lit16")
+OP(ADD_INT_LIT8      , add_int_lit8      , Ref::Literal, "add-int/lit8")
+OP(RSUB_INT_LIT8     , rsub_int_lit8     , Ref::Literal, "rsub-int/lit8")
+OP(MUL_INT_LIT8      , mul_int_lit8      , Ref::Literal, "mul-int/lit8")
+OP(DIV_INT_LIT8      , div_int_lit8      , Ref::Literal, "div-int/lit8")
+OP(REM_INT_LIT8      , rem_int_lit8      , Ref::Literal, "rem-int/lit8")
+OP(AND_INT_LIT8      , and_int_lit8      , Ref::Literal, "and-int/lit8")
+OP(OR_INT_LIT8       , or_int_lit8       , Ref::Literal, "or-int/lit8")
+OP(XOR_INT_LIT8      , xor_int_lit8      , Ref::Literal, "xor-int/lit8")
+OP(SHL_INT_LIT8      , shl_int_lit8      , Ref::Literal, "shl-int/lit8")
+OP(SHR_INT_LIT8      , shr_int_lit8      , Ref::Literal, "shr-int/lit8")
+OP(USHR_INT_LIT8     , ushr_int_lit8     , Ref::Literal, "ushr-int/lit8")
+
+// Internal opcodes cannot be mapped to a corresponding DexOpcode.
+OPRANGE(an_internal , IOPCODE_LOAD_PARAM, IOPCODE_MOVE_RESULT_PSEUDO_WIDE)
+OPRANGE(a_load_param, IOPCODE_LOAD_PARAM, IOPCODE_LOAD_PARAM_WIDE)
+IOP(LOAD_PARAM                , load_param                , Ref::None, "load-param")
+IOP(LOAD_PARAM_OBJECT         , load_param_object         , Ref::None, "load-param-object")
+IOP(LOAD_PARAM_WIDE           , load_param_wide           , Ref::None, "load-param-wide")
+
+OPRANGE(a_move_result_pseudo, IOPCODE_MOVE_RESULT_PSEUDO, IOPCODE_MOVE_RESULT_PSEUDO_WIDE)
+IOP(MOVE_RESULT_PSEUDO        , move_result_pseudo        , Ref::None, "move-result-pseudo")
+IOP(MOVE_RESULT_PSEUDO_OBJECT , move_result_pseudo_object , Ref::None, "move-result-pseudo-object")
+IOP(MOVE_RESULT_PSEUDO_WIDE   , move_result_pseudo_wide   , Ref::None, "move-result-pseudo-wide")
+
+// clang-format on
+
+#undef OP
+#undef IOP
+#undef OPRANGE

@@ -7,6 +7,8 @@
 
 #include "RedexOptions.h"
 
+#include <json/value.h>
+
 #include "Debug.h"
 
 void RedexOptions::serialize(Json::Value& entry_data) const {
@@ -73,6 +75,8 @@ DebugInfoKind parse_debug_info_kind(const std::string& raw_kind) {
     return DebugInfoKind::NoPositions;
   } else if (raw_kind == "iodi") {
     return DebugInfoKind::InstructionOffsets;
+  } else if (raw_kind == "iodi2") {
+    return DebugInfoKind::InstructionOffsetsLayered;
   } else if (raw_kind == "bytecode_debugger") {
     return DebugInfoKind::BytecodeDebugger;
   } else {
@@ -101,6 +105,8 @@ std::string debug_info_kind_to_string(const DebugInfoKind& kind) {
     return "no_positions";
   case DebugInfoKind::InstructionOffsets:
     return "iodi";
+  case DebugInfoKind::InstructionOffsetsLayered:
+    return "iodi2";
   case DebugInfoKind::BytecodeDebugger:
     return "bytecode_debugger";
   case DebugInfoKind::Size:
@@ -109,5 +115,6 @@ std::string debug_info_kind_to_string(const DebugInfoKind& kind) {
 }
 
 bool is_iodi(const DebugInfoKind& kind) {
-  return kind == DebugInfoKind::InstructionOffsets;
+  return kind == DebugInfoKind::InstructionOffsets ||
+         kind == DebugInfoKind::InstructionOffsetsLayered;
 }

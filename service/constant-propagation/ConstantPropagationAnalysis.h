@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <unordered_set>
 #include <utility>
 
 #include "ConstantEnvironment.h"
@@ -16,20 +17,15 @@
 #include "MethodUtil.h"
 #include "MonotonicFixpointIterator.h"
 
+class DexMethodRef;
+
 namespace constant_propagation {
 
 // This returns methods that are used in Kotlin null assertion.
 // These null assertions will take the object that they are checking for
 // nullness as first argument and returns void. The value of the object will
 // not be null beyond this program point in the execution path.
-inline std::unordered_set<DexMethodRef*> get_kotlin_null_assertions() {
-  return {method::kotlin_jvm_internal_Intrinsics_checkParameterIsNotNull(),
-          kotlin_nullcheck_wrapper::
-              kotlin_jvm_internal_Intrinsics_WrCheckParameter(),
-          method::kotlin_jvm_internal_Intrinsics_checExpressionValueIsNotNull(),
-          kotlin_nullcheck_wrapper::
-              kotlin_jvm_internal_Intrinsics_WrCheckExpression()};
-}
+const std::unordered_set<DexMethodRef*>& get_kotlin_null_assertions();
 
 boost::optional<size_t> get_null_check_object_index(
     const IRInstruction* insn,
@@ -45,12 +41,8 @@ class FixpointIterator final
    * The fixpoint iterator takes an optional WholeProgramState argument that
    * it will use to determine the static field values and method return values.
    */
-  explicit FixpointIterator(
-      const cfg::ControlFlowGraph& cfg,
-      InstructionAnalyzer<ConstantEnvironment> insn_analyzer)
-      : MonotonicFixpointIterator(cfg),
-        m_insn_analyzer(std::move(insn_analyzer)),
-        m_kotlin_null_check_assertions(get_kotlin_null_assertions()) {}
+  FixpointIterator(const cfg::ControlFlowGraph& cfg,
+                   InstructionAnalyzer<ConstantEnvironment> insn_analyzer);
 
   ConstantEnvironment analyze_edge(
       const EdgeId&,
@@ -68,7 +60,7 @@ class FixpointIterator final
 
  private:
   InstructionAnalyzer<ConstantEnvironment> m_insn_analyzer;
-  std::unordered_set<DexMethodRef*> m_kotlin_null_check_assertions;
+  const std::unordered_set<DexMethodRef*>& m_kotlin_null_check_assertions;
 };
 
 } // namespace intraprocedural

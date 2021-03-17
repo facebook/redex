@@ -17,6 +17,9 @@
 #include "DexCallSite.h"
 #include "DexClass.h"
 #include "DuplicateClasses.h"
+#include "ProguardConfiguration.h"
+#include "Show.h"
+#include "Trace.h"
 
 RedexContext* g_redex;
 
@@ -25,8 +28,10 @@ RedexContext::RedexContext(bool allow_class_duplicates)
 
 RedexContext::~RedexContext() {
   // Delete DexStrings.
-  for (auto const& p : s_string_map) {
-    delete p.second;
+  for (auto& segment : s_string_map) {
+    for (auto const& p : segment) {
+      delete p.second;
+    }
   }
   // Delete DexTypes.  NB: This table intentionally contains aliases (multiple
   // DexStrings map to the same DexType), so we have to dedup the set of types
@@ -94,7 +99,10 @@ static StoredValue* try_insert(Key key,
 
 DexString* RedexContext::make_string(const char* nstr, uint32_t utfsize) {
   always_assert(nstr != nullptr);
-  auto rv = s_string_map.get(nstr, nullptr);
+  auto p = std::make_pair(nstr, utfsize);
+  auto& segment = s_string_map.at(p);
+
+  auto rv = segment.get(p, nullptr);
   if (rv != nullptr) {
     return rv;
   }
@@ -103,14 +111,17 @@ DexString* RedexContext::make_string(const char* nstr, uint32_t utfsize) {
   // non-const function is called on the string (but note the std::string itself
   // is const)
   auto dexstring = new DexString(nstr, utfsize);
-  return try_insert(dexstring->c_str(), dexstring, &s_string_map);
+  auto p2 = std::make_pair(dexstring->c_str(), utfsize);
+  return try_insert(p2, dexstring, &segment);
 }
 
 DexString* RedexContext::get_string(const char* nstr, uint32_t utfsize) {
   if (nstr == nullptr) {
     return nullptr;
   }
-  return s_string_map.get(nstr, nullptr);
+  auto p = std::make_pair(nstr, utfsize);
+  auto& segment = s_string_map.at(p);
+  return segment.get(p, nullptr);
 }
 
 DexType* RedexContext::make_type(const DexString* dstring) {
@@ -351,7 +362,6 @@ void RedexContext::mutate_method(DexMethodRef* method,
 
   // We might still miss name collision cases. As of now, let's just assert.
   if (s_method_map.count(r)) {
-    auto& m = *s_method_map.find(r)->second;
     always_assert_log(!s_method_map.count(r),
                       "Another method of the same signature already exists %s"
                       " %s %s",
@@ -433,4 +443,41 @@ void run_rethrow_first_aggregate(const std::function<void()>& f) {
     // Rethrow the first one.
     std::rethrow_exception(ae.m_exceptions.at(0));
   }
+}
+
+void RedexContext::set_field_value(DexField* field,
+                                   keep_rules::AssumeReturnValue& val) {
+  field_values.emplace(field,
+                       std::make_unique<keep_rules::AssumeReturnValue>(val));
+}
+
+keep_rules::AssumeReturnValue* RedexContext::get_field_value(DexField* field) {
+  auto it = field_values.find(field);
+  if (it != field_values.end()) {
+    return it->second.get();
+  }
+  return nullptr;
+}
+
+void RedexContext::unset_field_value(DexField* method) {
+  field_values.erase(method);
+}
+
+void RedexContext::set_return_value(DexMethod* method,
+                                    keep_rules::AssumeReturnValue& val) {
+  method_return_values.emplace(
+      method, std::make_unique<keep_rules::AssumeReturnValue>(val));
+}
+
+keep_rules::AssumeReturnValue* RedexContext::get_return_value(
+    DexMethod* method) {
+  auto it = method_return_values.find(method);
+  if (it != method_return_values.end()) {
+    return it->second.get();
+  }
+  return nullptr;
+}
+
+void RedexContext::unset_return_value(DexMethod* method) {
+  method_return_values.erase(method);
 }

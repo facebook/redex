@@ -9,6 +9,8 @@
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "ReachableClasses.h"
+#include "Show.h"
+#include "Trace.h"
 #include "Walkers.h"
 
 size_t delete_methods(
@@ -20,7 +22,7 @@ size_t delete_methods(
   // if a removable candidate is invoked do not delete
   walk::opcodes(scope, [](DexMethod* meth) { return true; },
                 [&](DexMethod* meth, IRInstruction* insn) {
-                  if (is_invoke(insn->opcode())) {
+                  if (opcode::is_an_invoke(insn->opcode())) {
                     auto callee =
                         resolver(insn->get_method(), opcode_to_search(insn));
                     if (callee != nullptr) {

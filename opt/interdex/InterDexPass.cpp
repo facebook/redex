@@ -11,6 +11,8 @@
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "PassManager.h"
+#include "Show.h"
+#include "StlUtil.h"
 #include "WorkQueue.h"
 
 namespace {
@@ -22,15 +24,13 @@ namespace {
  */
 void treat_generated_stores(DexStoresVector& stores,
                             interdex::InterDex* interdex) {
-  auto store_it = stores.begin();
-  while (store_it != stores.end()) {
-    if (store_it->is_generated()) {
-      interdex->add_dexes_from_store(*store_it);
-      store_it = stores.erase(store_it);
-    } else {
-      store_it++;
+  std20::erase_if(stores, [&](auto it) {
+    if (it->is_generated()) {
+      interdex->add_dexes_from_store(*it);
+      return true;
     }
-  }
+    return false;
+  });
 }
 
 } // namespace
@@ -243,6 +243,12 @@ void InterDexPass::run_pass(DexStoresVector& stores,
     }
   }
   wq.run_all();
+
+  ++m_run;
+  // For the last invocation, record that final interdex has been done.
+  if (m_eval == m_run) {
+    mgr.record_running_interdex();
+  }
 }
 
 static InterDexPass s_pass;

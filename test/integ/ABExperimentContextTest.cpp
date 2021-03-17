@@ -27,7 +27,8 @@ void change_called_method(const std::string& exp_name,
 
   for (const auto& mie : cfg::InstructionIterable(cfg)) {
     IRInstruction* insn = mie.insn;
-    if (is_invoke(insn->opcode())) {
+    if (opcode::is_an_invoke(insn->opcode())) {
+
       auto m_ref = insn->get_method();
       if (m_ref->get_name()->str() == original_method_name) {
         DexString* name = DexString::make_string(new_method_name);

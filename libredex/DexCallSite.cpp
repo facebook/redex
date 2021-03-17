@@ -6,6 +6,7 @@
  */
 
 #include "DexCallSite.h"
+
 #include "DexAnnotation.h"
 #include "DexClass.h"
 #include "DexIdx.h"

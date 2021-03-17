@@ -13,10 +13,12 @@
 
 #include "BinarySerialization.h"
 #include "DexUtil.h"
-#include "Pass.h"
+#include "ProguardConfiguration.h"
 #include "ReachableClasses.h"
 #include "Resolver.h"
+#include "Show.h"
 #include "Timer.h"
+#include "Trace.h"
 #include "Walkers.h"
 #include "WorkQueue.h"
 
@@ -28,34 +30,6 @@ namespace mog = method_override_graph;
 namespace {
 
 static ReachableObject SEED_SINGLETON{};
-
-DexMethod* resolve(const DexMethodRef* method, const DexClass* cls) {
-  if (!cls) return nullptr;
-  for (auto const& m : cls->get_vmethods()) {
-    if (method::signatures_match(method, m)) {
-      return m;
-    }
-  }
-  for (auto const& m : cls->get_dmethods()) {
-    if (method::signatures_match(method, m)) {
-      return m;
-    }
-  }
-  {
-    auto const& superclass = type_class(cls->get_super_class());
-    auto const resolved = resolve(method, superclass);
-    if (resolved) {
-      return resolved;
-    }
-  }
-  for (auto const& interface : cls->get_interfaces()->get_type_list()) {
-    auto const resolved = resolve(method, type_class(interface));
-    if (resolved) {
-      return resolved;
-    }
-  }
-  return nullptr;
-}
 
 /*
  * Setup the algorithm's seeds using setup_root and computes all reachable
@@ -278,10 +252,10 @@ void TransitiveClosureMarker::visit(const ReachableObject& obj) {
     visit_cls(obj.cls);
     break;
   case ReachableObjectType::FIELD:
-    visit(obj.field);
+    visit_field_ref(obj.field);
     break;
   case ReachableObjectType::METHOD:
-    visit(obj.method);
+    visit_method_ref(obj.method);
     break;
   case ReachableObjectType::ANNO:
   case ReachableObjectType::SEED:
@@ -300,6 +274,12 @@ void TransitiveClosureMarker::push(const Parent* parent,
 
 template <class Parent>
 void TransitiveClosureMarker::push(const Parent* parent, const DexType* type) {
+  type = type::get_element_type_if_array(type);
+  push(parent, type_class(type));
+}
+
+void TransitiveClosureMarker::push(const DexMethodRef* parent,
+                                   const DexType* type) {
   type = type::get_element_type_if_array(type);
   push(parent, type_class(type));
 }
@@ -352,6 +332,11 @@ void TransitiveClosureMarker::push(const Parent* parent,
   }
   m_reachable_objects->mark(method);
   m_worker_state->push_task(ReachableObject(method));
+}
+
+void TransitiveClosureMarker::push(const DexMethodRef* parent,
+                                   const DexMethodRef* method) {
+  this->template push<DexMethodRef>(parent, method);
 }
 
 void TransitiveClosureMarker::push_cond(const DexMethod* method) {
@@ -433,6 +418,9 @@ void TransitiveClosureMarker::gather_and_push(DexMethod* meth) {
   push(meth, refs.types.begin(), refs.types.end());
   push(meth, refs.fields.begin(), refs.fields.end());
   push(meth, refs.methods.begin(), refs.methods.end());
+  for (auto* cond_meth : refs.cond_methods) {
+    push_cond(cond_meth);
+  }
 }
 
 template <typename T>
@@ -511,7 +499,7 @@ void TransitiveClosureMarker::visit_cls(const DexClass* cls) {
   }
 }
 
-void TransitiveClosureMarker::visit(const DexFieldRef* field) {
+void TransitiveClosureMarker::visit_field_ref(const DexFieldRef* field) {
   TRACE(REACH, 4, "Visiting field: %s", SHOW(field));
   if (!field->is_concrete()) {
     auto const& realfield =
@@ -522,9 +510,40 @@ void TransitiveClosureMarker::visit(const DexFieldRef* field) {
   push(field, field->get_type());
 }
 
-void TransitiveClosureMarker::visit(const DexMethodRef* method) {
+DexMethod* TransitiveClosureMarker::resolve_without_context(
+    const DexMethodRef* method, const DexClass* cls) {
+  if (!cls) return nullptr;
+  for (auto const& m : cls->get_vmethods()) {
+    if (method::signatures_match(method, m)) {
+      return m;
+    }
+  }
+  for (auto const& m : cls->get_dmethods()) {
+    if (method::signatures_match(method, m)) {
+      return m;
+    }
+  }
+  {
+    auto const& superclass = type_class(cls->get_super_class());
+    auto const resolved = resolve_without_context(method, superclass);
+    if (resolved) {
+      return resolved;
+    }
+  }
+  for (auto const& interface : cls->get_interfaces()->get_type_list()) {
+    auto const resolved =
+        resolve_without_context(method, type_class(interface));
+    if (resolved) {
+      return resolved;
+    }
+  }
+  return nullptr;
+}
+
+void TransitiveClosureMarker::visit_method_ref(const DexMethodRef* method) {
   TRACE(REACH, 4, "Visiting method: %s", SHOW(method));
-  auto resolved_method = resolve(method, type_class(method->get_class()));
+  auto resolved_method =
+      resolve_without_context(method, type_class(method->get_class()));
   if (resolved_method != nullptr) {
     TRACE(REACH, 5, "    Resolved to: %s", SHOW(resolved_method));
     push(method, resolved_method);

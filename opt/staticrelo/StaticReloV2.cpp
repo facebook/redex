@@ -9,7 +9,10 @@
 
 #include "ApiLevelChecker.h"
 #include "ClassHierarchy.h"
+#include "PassManager.h"
 #include "Resolver.h"
+#include "Show.h"
+#include "Trace.h"
 #include "Walkers.h"
 
 /**

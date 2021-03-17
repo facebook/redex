@@ -7,6 +7,7 @@
 
 #include "ConstantPropagationRuntimeAssert.h"
 
+#include "ProguardMap.h"
 #include "Walkers.h"
 
 namespace constant_propagation {
@@ -112,7 +113,7 @@ ir_list::InstructionIterator RuntimeAssertTransform::insert_field_assert(
     ir_list::InstructionIterator it) {
   auto* insn = it->insn;
   auto op = insn->opcode();
-  if (!is_sget(op)) {
+  if (!opcode::is_an_sget(op)) {
     return it;
   }
   auto* field = resolve_field(insn->get_field());
@@ -194,7 +195,7 @@ ir_list::InstructionIterator RuntimeAssertTransform::insert_return_value_assert(
   };
   auto cst = wps.get_return_value(callee);
   if (cst.is_bottom()) {
-    if (opcode::is_move_result(std::next(it)->insn->opcode())) {
+    if (opcode::is_a_move_result(std::next(it)->insn->opcode())) {
       ++it;
     }
     it.reset(insert_assertion(it.unwrap()));
@@ -202,7 +203,7 @@ ir_list::InstructionIterator RuntimeAssertTransform::insert_return_value_assert(
   }
 
   ++it;
-  if (!opcode::is_move_result(it->insn->opcode())) {
+  if (!opcode::is_a_move_result(it->insn->opcode())) {
     return it;
   }
   auto reg = it->insn->dest();

@@ -12,6 +12,8 @@
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "RedexTest.h"
+#include "Show.h"
+#include "Trace.h"
 
 #include "LocalDcePass.h"
 #include "Peephole.h"

@@ -31,7 +31,6 @@ DexIdx::DexIdx(const dex_header* dh) {
   dex_map_list* map_list = (dex_map_list*)(m_dexbase + dh->map_off);
   for (uint32_t i = 0; i < map_list->size; i++) {
     auto& item = map_list->items[i];
-    const uint8_t* encdata = get_uleb_data(item.offset);
     switch (item.type) {
     case TYPE_CALL_SITE_ID_ITEM: {
       dex_callsite_id* callsite_ids =

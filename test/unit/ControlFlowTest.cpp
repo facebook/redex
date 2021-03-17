@@ -13,6 +13,8 @@
 #include "IRAssembler.h"
 #include "IRCode.h"
 #include "RedexTest.h"
+#include "Show.h"
+#include "Trace.h"
 
 namespace cfg {
 
@@ -1245,7 +1247,7 @@ TEST_F(ControlFlowTest, insertion) {
   auto ii = cfg::InstructionIterable(cfg);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
     auto insn = it->insn;
-    if (is_const(insn->opcode())) {
+    if (opcode::is_a_const(insn->opcode())) {
       auto new_insn = new IRInstruction(add);
       new_insn->set_src(0, insn->dest());
       new_insn->set_dest(insn->dest());
@@ -1298,7 +1300,7 @@ TEST_F(ControlFlowTest, insertion_it) {
   auto ii = cfg::InstructionIterable(cfg);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
     auto insn = it->insn;
-    if (is_const(insn->opcode())) {
+    if (opcode::is_a_const(insn->opcode())) {
       auto new_insn = new IRInstruction(add);
       new_insn->set_src(0, insn->dest());
       new_insn->set_dest(insn->dest());
@@ -1357,7 +1359,7 @@ TEST_F(ControlFlowTest, insertion_after_may_throw) {
   auto ii = cfg::InstructionIterable(cfg);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
     auto insn = it->insn;
-    if (is_aput(insn->opcode())) {
+    if (opcode::is_an_aput(insn->opcode())) {
       auto new_insn = new IRInstruction(*insn);
       cfg.insert_after(it, new_insn);
       break;
@@ -1406,7 +1408,7 @@ TEST_F(ControlFlowTest, insertion_after_may_throw_with_move_result) {
   auto ii = cfg::InstructionIterable(cfg);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
     auto insn = it->insn;
-    if (is_aput(insn->opcode())) {
+    if (opcode::is_an_aput(insn->opcode())) {
       std::vector<IRInstruction*> new_insns;
       auto new_insn = new IRInstruction(OPCODE_DIV_INT);
       new_insn->set_srcs_size(2);
@@ -1465,7 +1467,7 @@ TEST_F(ControlFlowTest, add_sget) {
   auto ii = cfg::InstructionIterable(cfg);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
     auto insn = it->insn;
-    if (is_conditional_branch(insn->opcode())) {
+    if (opcode::is_a_conditional_branch(insn->opcode())) {
       IRInstruction* sget = new IRInstruction(OPCODE_SGET);
       sget->set_field(DexField::make_field("LFoo;.field:I"));
       IRInstruction* move_res = new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO);
@@ -1520,7 +1522,7 @@ TEST_F(ControlFlowTest, add_return) {
   auto ii = cfg::InstructionIterable(cfg);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
     auto insn = it->insn;
-    if (is_conditional_branch(insn->opcode())) {
+    if (opcode::is_a_conditional_branch(insn->opcode())) {
       auto ret = new IRInstruction(OPCODE_RETURN_VOID);
       cfg.insert_before(it, ret);
       break;
@@ -1568,7 +1570,7 @@ TEST_F(ControlFlowTest, add_throw) {
   auto ii = cfg::InstructionIterable(cfg);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
     auto insn = it->insn;
-    if (is_sget(insn->opcode())) {
+    if (opcode::is_an_sget(insn->opcode())) {
       auto thr = new IRInstruction(OPCODE_THROW);
       cfg.insert_before(it, thr);
       break;
@@ -2083,7 +2085,7 @@ TEST_F(ControlFlowTest, replace_if_with_return) {
 
   auto ii = cfg::InstructionIterable(cfg);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
-    if (is_conditional_branch(it->insn->opcode())) {
+    if (opcode::is_a_conditional_branch(it->insn->opcode())) {
       auto ret = new IRInstruction(OPCODE_RETURN);
       ret->set_src(0, 0);
       cfg.replace_insn(it, ret);

@@ -10,6 +10,8 @@
 #include "MethodOverrideGraph.h"
 #include "Mutators.h"
 #include "Resolver.h"
+#include "Show.h"
+#include "Trace.h"
 #include "Walkers.h"
 
 namespace mog = method_override_graph;
@@ -36,14 +38,14 @@ void patch_call_site(DexMethod* callee,
                      IRInstruction* method_inst,
                      CallCounter& counter) {
   auto op = method_inst->opcode();
-  if (is_invoke_virtual(op)) {
+  if (opcode::is_invoke_virtual(op)) {
     method_inst->set_opcode(OPCODE_INVOKE_STATIC);
     counter.virtuals++;
-  } else if (is_invoke_super(op)) {
+  } else if (opcode::is_invoke_super(op)) {
     method_inst->set_opcode(OPCODE_INVOKE_STATIC);
     counter.supers++;
   } else {
-    redex_assert(is_invoke_direct(op));
+    redex_assert(opcode::is_invoke_direct(op));
     method_inst->set_opcode(OPCODE_INVOKE_STATIC);
     counter.directs++;
   }
@@ -74,7 +76,7 @@ void fix_call_sites(const std::vector<DexClass*>& scope,
         continue;
       }
 
-      always_assert(drop_this || !is_invoke_static(insn->opcode()));
+      always_assert(drop_this || !opcode::is_invoke_static(insn->opcode()));
       patch_call_site(method, insn, call_counter);
 
       if (drop_this) {

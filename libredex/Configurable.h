@@ -18,6 +18,7 @@
 #include <vector>
 
 #include <boost/optional.hpp>
+#include <json/value.h>
 
 #include "Debug.h"
 #include "JsonWrapper.h"
@@ -310,8 +311,13 @@ class Configurable {
                      T value);
 
   template <typename T>
+  struct IdentityType {
+    using type = T;
+  };
+
+  template <typename T>
   void bind(const std::string& name,
-            T defaultValue,
+            typename IdentityType<T>::type defaultValue,
             T& dest,
             const std::string& doc = default_doc(),
             bindflags_t bindflags = 0) {

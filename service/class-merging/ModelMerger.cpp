@@ -8,15 +8,19 @@
 #include "ModelMerger.h"
 
 #include "ClassAssemblingUtils.h"
+#include "ConfigFiles.h"
 #include "DexUtil.h"
 #include "MethodReference.h"
 #include "PassManager.h"
 #include "Resolver.h"
+#include "Show.h"
+#include "StlUtil.h"
 #include "TypeReference.h"
 #include "TypeStringRewriter.h"
 #include "TypeTagUtils.h"
 #include "Walkers.h"
 
+#include <fstream>
 #include <sstream>
 
 using namespace class_merging;
@@ -195,10 +199,10 @@ void update_refs_to_mergeable_fields(
       if (!insn->has_field()) {
         continue;
       }
-      const auto field =
-          resolve_field(insn->get_field(),
-                        is_ifield_op(insn->opcode()) ? FieldSearch::Instance
-                                                     : FieldSearch::Static);
+      const auto field = resolve_field(insn->get_field(),
+                                       opcode::is_an_ifield_op(insn->opcode())
+                                           ? FieldSearch::Instance
+                                           : FieldSearch::Static);
       if (field == nullptr) {
         continue;
       }
@@ -216,13 +220,13 @@ void update_refs_to_mergeable_fields(
       if (field->get_type() == new_field->get_type()) {
         continue;
       }
-      if (is_iget(insn->opcode())) {
+      if (opcode::is_an_iget(insn->opcode())) {
         auto field_type = field->get_type();
         field_type = mergeable_to_merger.count(field_type) > 0
                          ? mergeable_to_merger.at(field_type)
                          : field_type;
         patch_iget(meth, it.unwrap(), field_type);
-      } else if (is_iput(insn->opcode())) {
+      } else if (opcode::is_an_iput(insn->opcode())) {
         patch_iput(it.unwrap());
       }
     }
@@ -441,15 +445,13 @@ void trim_method_debug_map(
     std::unordered_map<DexMethod*, std::string>& method_debug_map) {
   TRACE(CLMG, 5, "Method debug map un-trimmed %d", method_debug_map.size());
   size_t trimmed_cnt = 0;
-  for (auto it = method_debug_map.begin(); it != method_debug_map.end();) {
-    auto owner_type = it->first->get_class();
-    if (mergeable_to_merger.count(owner_type) == 0) {
-      it = method_debug_map.erase(it);
+  std20::erase_if(method_debug_map, [&](auto it) {
+    if (mergeable_to_merger.count(it->first->get_class())) {
       ++trimmed_cnt;
-    } else {
-      ++it;
+      return true;
     }
-  }
+    return false;
+  });
 
   TRACE(CLMG, 5, "Method debug map trimmed %d", trimmed_cnt);
 }

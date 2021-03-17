@@ -98,12 +98,12 @@ class InitFixpointIterator final
   void analyze_instruction(const IRInstruction* insn,
                            Environment* env) const override {
     auto opcode = insn->opcode();
-    if (opcode::is_load_param(opcode)) {
+    if (opcode::is_a_load_param(opcode)) {
       return;
-    } else if (is_move(opcode)) {
+    } else if (opcode::is_a_move(opcode)) {
       env->set(insn->dest(), env->get(insn->src(0)));
       return;
-    } else if (is_iput(opcode)) {
+    } else if (opcode::is_an_iput(opcode)) {
       // Is writing to `this` pointer.
       const auto& obj_domain = env->get(insn->src(1));
       if (obj_domain.is_value() && *obj_domain.get_constant() == 0) {
@@ -117,7 +117,7 @@ class InitFixpointIterator final
         env->set(field, env->get(insn->src(0)));
       }
       return;
-    } else if (is_invoke_direct(opcode) &&
+    } else if (opcode::is_invoke_direct(opcode) &&
                method::is_init(insn->get_method())) {
       // Another construction invocation on `this` pointer.
       const auto& obj_domain = env->get(insn->src(0));
@@ -182,7 +182,7 @@ std::vector<std::pair<ImmutableAttr::Attr, size_t>> analyze_initializer(
     for (auto& mie : InstructionIterable(block)) {
       auto* insn = mie.insn;
       fp_iter.analyze_instruction(insn, &env);
-      if (is_return(insn->opcode())) {
+      if (opcode::is_a_return(insn->opcode())) {
         return_env.join_with(env);
       }
     }

@@ -16,16 +16,19 @@
 #ifdef __GNUC__
 #pragma GCC diagnostic pop
 #endif
+#include <iostream>
 #include <json/json.h>
 
 #include "CommentFilter.h"
 #include "DexLoader.h"
 #include "DexOutput.h"
+#include "DexPosition.h"
 #include "DexUtil.h"
 #include "IRMetaIO.h"
 #include "InstructionLowering.h"
 #include "JarLoader.h"
 #include "Macros.h"
+#include "Show.h"
 #include "Timer.h"
 #include "Walkers.h"
 

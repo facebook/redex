@@ -22,6 +22,7 @@
 #include "RedexContext.h"
 #include "RedexTestUtils.h"
 #include "SanitizersConfig.h"
+#include "Show.h"
 #include "Walkers.h"
 
 using CallSitePredicate = const std::function<bool(DexCallSite*)>&;

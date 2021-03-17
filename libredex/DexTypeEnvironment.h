@@ -138,26 +138,10 @@ class SingletonDexTypeDomain final
   }
 
   friend std::ostream& operator<<(std::ostream& out,
-                                  const SingletonDexTypeDomain& x) {
-    using namespace sparta;
-    switch (x.kind()) {
-    case AbstractValueKind::Bottom: {
-      out << "_|_";
-      break;
-    }
-    case AbstractValueKind::Top: {
-      out << "T";
-      break;
-    }
-    case AbstractValueKind::Value: {
-      auto type = x.get_dex_type();
-      out << (type ? show(*type) : std::string("<NONE>"));
-      break;
-    }
-    }
-    return out;
-  }
+                                  const SingletonDexTypeDomain& x);
 };
+
+std::ostream& operator<<(std::ostream& out, const SingletonDexTypeDomain& x);
 
 std::ostream& operator<<(std::ostream& output, const DexType* dex_type);
 
@@ -341,6 +325,15 @@ class DexTypeDomain
 
   boost::optional<const DexType*> get_dex_type() const {
     return get<1>().get_dex_type();
+  }
+
+  boost::optional<const DexClass*> get_dex_cls() const {
+    auto dex_type = get<1>().get_dex_type();
+    if (!dex_type) {
+      return boost::none;
+    }
+    auto dex_cls = type_class(*dex_type);
+    return dex_cls ? boost::optional<const DexClass*>(dex_cls) : boost::none;
   }
 
   SmallSetDexTypeDomain get_set_domain() { return get<2>(); }

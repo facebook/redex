@@ -14,7 +14,7 @@ void process_no_optimizations_rules(
     const std::unordered_set<DexType*>& no_optimizations_annos,
     const Scope& scope) {
   auto match = m::any_annos<DexMethod>(
-      m::as_type<DexAnnotation>(m::in<DexType>(&no_optimizations_annos)));
+      m::as_type<DexAnnotation>(m::in<DexType*>(no_optimizations_annos)));
 
   walk::parallel::methods(scope, [&](DexMethod* method) {
     if (match.matches(method)) {

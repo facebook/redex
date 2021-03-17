@@ -7,9 +7,7 @@
 
 #pragma once
 
-#include <assert.h>
 #include <cstring>
-#include <list>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -24,6 +22,7 @@
 
 class DexIdx;
 class DexOutputIdx;
+class DexString;
 
 class DexInstruction : public Gatherable {
  protected:
@@ -364,175 +363,3 @@ DexOpcodeData* encode_fill_array_data_payload(const std::vector<IntType>& vec) {
  * Return a copy of the instruction passed in.
  */
 DexInstruction* copy_insn(DexInstruction* insn);
-
-////////////////////////////////////////////////////////////////////////////////
-// Convenient predicates for opcode classes.
-
-inline bool is_iget(IROpcode op) {
-  return op >= OPCODE_IGET && op <= OPCODE_IGET_SHORT;
-}
-
-inline bool is_iput(IROpcode op) {
-  return op >= OPCODE_IPUT && op <= OPCODE_IPUT_SHORT;
-}
-
-inline bool is_ifield_op(IROpcode op) {
-  return op >= OPCODE_IGET && op <= OPCODE_IPUT_SHORT;
-}
-
-inline bool is_sget(IROpcode op) {
-  return op >= OPCODE_SGET && op <= OPCODE_SGET_SHORT;
-}
-
-inline bool is_sput(IROpcode op) {
-  return op >= OPCODE_SPUT && op <= OPCODE_SPUT_SHORT;
-}
-
-inline bool is_sfield_op(IROpcode op) {
-  return op >= OPCODE_SGET && op <= OPCODE_SPUT_SHORT;
-}
-
-inline bool is_aget(IROpcode op) {
-  return op >= OPCODE_AGET && op <= OPCODE_AGET_SHORT;
-}
-
-inline bool is_aput(IROpcode op) {
-  return op >= OPCODE_APUT && op <= OPCODE_APUT_SHORT;
-}
-
-inline bool is_move(IROpcode op) {
-  return op >= OPCODE_MOVE && op <= OPCODE_MOVE_OBJECT;
-}
-
-inline bool is_return_void(IROpcode op) { return op == OPCODE_RETURN_VOID; }
-
-inline bool is_return(IROpcode op) {
-  return op >= OPCODE_RETURN_VOID && op <= OPCODE_RETURN_OBJECT;
-}
-
-inline bool is_return_value(IROpcode op) {
-  // OPCODE_RETURN_VOID is deliberately excluded because void isn't a "value".
-  return op >= OPCODE_RETURN && op <= OPCODE_RETURN_OBJECT;
-}
-
-inline bool is_throw(IROpcode op) { return op == OPCODE_THROW; }
-
-inline bool is_invoke(IROpcode op) {
-  return op >= OPCODE_INVOKE_VIRTUAL && op <= OPCODE_INVOKE_INTERFACE;
-}
-
-inline bool is_invoke_virtual(IROpcode op) {
-  return op == OPCODE_INVOKE_VIRTUAL;
-}
-
-inline bool is_invoke_interface(IROpcode op) {
-  return op == OPCODE_INVOKE_INTERFACE;
-}
-
-inline bool is_invoke_super(IROpcode op) { return op == OPCODE_INVOKE_SUPER; }
-
-inline bool is_invoke_direct(IROpcode op) { return op == OPCODE_INVOKE_DIRECT; }
-
-inline bool is_invoke_static(IROpcode op) { return op == OPCODE_INVOKE_STATIC; }
-
-inline bool is_new_instance(IROpcode op) { return op == OPCODE_NEW_INSTANCE; }
-
-inline bool is_filled_new_array(IROpcode op) {
-  return op == OPCODE_FILLED_NEW_ARRAY;
-}
-
-inline bool writes_result_register(IROpcode op) {
-  return is_invoke(op) || is_filled_new_array(op);
-}
-
-inline bool is_branch(IROpcode op) {
-  switch (op) {
-  case OPCODE_SWITCH:
-  case OPCODE_IF_EQ:
-  case OPCODE_IF_NE:
-  case OPCODE_IF_LT:
-  case OPCODE_IF_GE:
-  case OPCODE_IF_GT:
-  case OPCODE_IF_LE:
-  case OPCODE_IF_EQZ:
-  case OPCODE_IF_NEZ:
-  case OPCODE_IF_LTZ:
-  case OPCODE_IF_GEZ:
-  case OPCODE_IF_GTZ:
-  case OPCODE_IF_LEZ:
-  case OPCODE_GOTO:
-    return true;
-  default:
-    return false;
-  }
-}
-
-inline bool is_conditional_branch(IROpcode op) {
-  switch (op) {
-  case OPCODE_IF_EQ:
-  case OPCODE_IF_NE:
-  case OPCODE_IF_LT:
-  case OPCODE_IF_GE:
-  case OPCODE_IF_GT:
-  case OPCODE_IF_LE:
-  case OPCODE_IF_EQZ:
-  case OPCODE_IF_NEZ:
-  case OPCODE_IF_LTZ:
-  case OPCODE_IF_GEZ:
-  case OPCODE_IF_GTZ:
-  case OPCODE_IF_LEZ:
-    return true;
-  default:
-    return false;
-  }
-}
-
-inline bool is_testz_branch(IROpcode op) {
-  switch (op) {
-  case OPCODE_IF_EQZ:
-  case OPCODE_IF_NEZ:
-  case OPCODE_IF_LTZ:
-  case OPCODE_IF_GEZ:
-  case OPCODE_IF_GTZ:
-  case OPCODE_IF_LEZ:
-    return true;
-  default:
-    return false;
-  }
-}
-
-inline bool is_goto(IROpcode op) { return op == OPCODE_GOTO; }
-
-inline bool is_switch(IROpcode op) { return op == OPCODE_SWITCH; }
-
-inline bool is_literal_const(IROpcode op) {
-  return op >= OPCODE_CONST && op <= OPCODE_CONST_WIDE;
-}
-
-inline bool is_const(IROpcode op) {
-  return op >= OPCODE_CONST && op <= OPCODE_CONST_CLASS;
-}
-
-inline bool is_monitor(IROpcode op) {
-  return op == OPCODE_MONITOR_ENTER || op == OPCODE_MONITOR_EXIT;
-}
-
-inline bool is_instance_of(IROpcode op) { return op == OPCODE_INSTANCE_OF; }
-
-inline bool is_div_int_lit(IROpcode op) {
-  return op == OPCODE_DIV_INT_LIT16 || op == OPCODE_DIV_INT_LIT8;
-}
-
-inline bool is_rem_int_lit(IROpcode op) {
-  return op == OPCODE_REM_INT_LIT16 || op == OPCODE_REM_INT_LIT8;
-}
-
-inline bool is_div_int_or_long(IROpcode op) {
-  return op == OPCODE_DIV_INT || op == OPCODE_DIV_LONG;
-}
-
-inline bool is_rem_int_or_long(IROpcode op) {
-  return op == OPCODE_REM_INT || op == OPCODE_REM_LONG;
-}
-
-inline bool is_check_cast(IROpcode op) { return op == OPCODE_CHECK_CAST; }

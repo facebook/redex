@@ -15,6 +15,7 @@ std::vector<DexOpcode> all_dex_opcodes{
 
 std::vector<IROpcode> all_opcodes{
 #define OP(op, ...) OPCODE_##op,
-    OPS
-#undef OP
+#define IOP(...)
+#define OPRANGE(...)
+#include "IROpcodes.def"
 };

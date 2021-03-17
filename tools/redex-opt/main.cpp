@@ -8,6 +8,7 @@
 #include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
 #include <iostream>
+#include <json/json.h>
 
 #include "DexClass.h"
 #include "DexLoader.h"

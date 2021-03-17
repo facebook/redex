@@ -11,8 +11,10 @@
 #include "DexMemberRefs.h"
 #include "DexUtil.h"
 #include "JavaParserUtil.h"
+#include "Show.h"
 
 #include <deque>
+#include <fstream>
 #include <json/json.h>
 
 template <class DexMember>

@@ -18,6 +18,7 @@
 #include "DexLoader.h"
 #include "EditableCfgAdapter.h"
 #include "Resolver.h"
+#include "Trace.h"
 #include "UnknownVirtuals.h"
 
 DexAccessFlags merge_visibility(uint32_t vis1, uint32_t vis2) {
@@ -233,10 +234,10 @@ bool can_change_visibility_for_relocation(
             res = false;
             return editable_cfg_adapter::LOOP_BREAK;
           }
-          auto field =
-              resolve_field(insn->get_field(), is_sfield_op(insn->opcode())
-                                                   ? FieldSearch::Static
-                                                   : FieldSearch::Instance);
+          auto field = resolve_field(insn->get_field(),
+                                     opcode::is_an_sfield_op(insn->opcode())
+                                         ? FieldSearch::Static
+                                         : FieldSearch::Instance);
           if (field == nullptr || (field->is_external() && !is_public(field))) {
             res = false;
             return editable_cfg_adapter::LOOP_BREAK;
@@ -319,10 +320,10 @@ void change_visibility(IRCode* code,
           if (cls != nullptr && !cls->is_external()) {
             set_public(cls);
           }
-          auto field =
-              resolve_field(insn->get_field(), is_sfield_op(insn->opcode())
-                                                   ? FieldSearch::Static
-                                                   : FieldSearch::Instance);
+          auto field = resolve_field(insn->get_field(),
+                                     opcode::is_an_sfield_op(insn->opcode())
+                                         ? FieldSearch::Static
+                                         : FieldSearch::Instance);
           if (field != nullptr && field->is_concrete()) {
             set_public(field);
             set_public(type_class(field->get_class()));
@@ -382,7 +383,7 @@ bool gather_invoked_methods_that_prevent_relocation(
   for (const auto& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
     auto opcode = insn->opcode();
-    if (is_invoke(opcode)) {
+    if (opcode::is_an_invoke(opcode)) {
       auto meth =
           resolve_method(insn->get_method(), opcode_to_search(insn), method);
       if (!meth && opcode == OPCODE_INVOKE_VIRTUAL &&

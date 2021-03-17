@@ -100,6 +100,71 @@ commands:
             - ~/sdk
           key: android-build-tools-{{ checksum "cache_version.rev" }}
 
+  # Special version of the above to work around Debian Testing package issues.
+  #
+  # Note: CircleCI does not allow to drop existing caches (in case they are
+  #       outdated, for example). The expectation is that the "cache key"
+  #       changes, for example via the checksum of a dependency file.
+  #
+  #       This does not apply to our setup. So we use an environment variable
+  #       defined in the project settings. If a cache needs to be invalidated,
+  #       update the variable value.
+  #
+  #       However, at the same time the project settings values cannot be used
+  #       directly. So use a file as an intermediate.
+  #
+  #       See:
+  #       * [https://support.circleci.com/hc/en-us/articles/115015426888-Clear-project-dependency-cache]
+  #       * [https://devops.stackexchange.com/questions/9147/how-to-get-other-than-no-value-when-interpolating-environment-some-var]
+  test-build-setup-sdk:
+    steps:
+      - run:
+          name: Setup for tests (Deb Testing)
+          command: |
+            sudo apt-get install -y --no-install-recommends default-jdk-headless
+
+      - run:
+          name: Create cache key file
+          command: |
+            echo "Cache key is: ${CACHE_VERSION}"
+            echo "${CACHE_VERSION}" > cache_version.rev
+
+      - restore_cache:
+          keys:
+            - android-build-tools-{{ checksum "cache_version.rev" }}
+
+      # We have to emulate cache behavior. Skip downloads if files exist.
+      - run:
+          name: Check/Install (SDK)
+          command: |
+            if [ -e ~/sdk/build-tools/25.0.3/dx ] ; then
+              echo "Found SDK."
+              exit 0
+            fi
+            echo "SDK missing, downloading..."
+            rm -rf ~/sdk 2>/dev/null
+            wget https://dl.google.com/android/repository/commandlinetools-linux-6609375_latest.zip
+            mkdir -p ~/sdk/cmdline-tools
+            unzip commandlinetools-linux-6609375_latest.zip -d ~/sdk/cmdline-tools/
+            pushd ~/sdk/cmdline-tools/tools/bin >/dev/null
+            echo 'y' | ./sdkmanager --install 'build-tools;25.0.3'
+            popd >/dev/null
+
+      - run:
+          name: Check/Install (Symlink)
+          command: |
+            if [ -L /usr/local/bin/dx ] ; then
+              echo "Found symlink."
+              exit 0
+            fi
+            echo "Adding symlink..."
+            sudo ln -s ~/sdk/build-tools/25.0.3/dx /usr/local/bin/dx
+
+      - save_cache:
+          paths:
+            - ~/sdk
+          key: android-build-tools-{{ checksum "cache_version.rev" }}
+
   configure-and-build-w-make:
     parameters:
       configure_extra:
@@ -147,6 +212,21 @@ commands:
     steps:
       - base-build-setup
       - test-build-setup
+
+      - configure-and-build-w-make:
+          configure_extra: << parameters.configure_extra >>
+
+      - test-w-make
+
+  setup-build-and-test-w-make-sdk:
+    description: "Prepare, build and test ReDex"
+    parameters:
+      configure_extra:
+        default: ""
+        type: string
+    steps:
+      - base-build-setup
+      - test-build-setup-sdk
 
       - configure-and-build-w-make:
           configure_extra: << parameters.configure_extra >>
@@ -230,7 +310,7 @@ jobs:
     resource_class: large
     steps:
       - checkout
-      - setup-build-and-test-w-make
+      - setup-build-and-test-w-make-sdk
 
   build-deb_testing:
     docker:

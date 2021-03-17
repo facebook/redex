@@ -10,6 +10,7 @@
 #include <boost/filesystem.hpp>
 #include <chrono>
 #include <fstream>
+#include <iostream>
 #include <sstream>
 #include <string>
 #include <unordered_set>
@@ -20,7 +21,9 @@
 #include "Match.h"
 #include "RedexResources.h"
 #include "ReflectionAnalysis.h"
+#include "Show.h"
 #include "StringUtil.h"
+#include "Trace.h"
 #include "TypeSystem.h"
 #include "Walkers.h"
 
@@ -76,7 +79,7 @@ void blocklist_field(DexMethod* reflecting_method,
     if (!is_public(t) && !declared) {
       return;
     }
-    TRACE(PGR, 4, "SRA BLOCKLIST: %s", SHOW(t));
+    TRACE(PGR, 4, "SRA BLOCK_LIST: %s", SHOW(t));
     t->rstate.set_root(keep_reason::REFLECTION, reflecting_method);
   };
   DexItemIter<DexField*, decltype(yield)>::iterate(cls, yield);
@@ -107,7 +110,7 @@ void blocklist_method(DexMethod* reflecting_method,
     if (!is_public(t) && !declared) {
       return;
     }
-    TRACE(PGR, 4, "SRA BLOCKLIST: %s", SHOW(t));
+    TRACE(PGR, 4, "SRA BLOCK_LIST: %s", SHOW(t));
     t->rstate.set_root(keep_reason::REFLECTION, reflecting_method);
   };
   DexItemIter<DexMethod*, decltype(yield)>::iterate(cls, yield);
@@ -190,7 +193,7 @@ void analyze_reflection(const Scope& scope) {
     std::unique_ptr<ReflectionAnalysis> analysis = nullptr;
     for (auto& mie : InstructionIterable(code)) {
       IRInstruction* insn = mie.insn;
-      if (!is_invoke(insn->opcode())) {
+      if (!opcode::is_an_invoke(insn->opcode())) {
         continue;
       }
 

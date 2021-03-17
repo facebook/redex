@@ -14,6 +14,8 @@
 #include "ControlFlow.h"
 #include "IRCode.h"
 #include "ScopedCFG.h"
+#include "Show.h"
+#include "Trace.h"
 
 using namespace cic;
 
@@ -707,12 +709,12 @@ std::vector<std::pair<IRInstruction*, reg_t>> Escapes::get_escape_instructions()
   }
 
   for (const auto& v_call : via_vmethod_call) {
-    for (const auto& i_reg : v_call.second.call_sites) {
+    for (const auto i_reg : v_call.second.call_sites) {
       escapes.emplace_back(i_reg);
     }
   }
   for (const auto& s_call : via_smethod_call) {
-    for (const auto& i_reg : s_call.second.call_sites) {
+    for (const auto i_reg : s_call.second.call_sites) {
       escapes.emplace_back(i_reg);
     }
   }
@@ -1231,19 +1233,18 @@ void ClassInitCounter::analyze_block(
     bool clear_dest = i->has_dest();
     const auto& srcs = i->srcs();
 
-    if (opcode::is_move_result(opcode) ||
-        opcode::is_move_result_pseudo(opcode)) {
+    if (opcode::is_move_result_any(opcode)) {
       if (!registers.is_empty(RESULT_REGISTER)) {
         registers.insert(dest, registers.get(RESULT_REGISTER));
         registers.clear(RESULT_REGISTER);
         clear_dest = false;
       }
-    } else if (is_move(opcode)) {
+    } else if (opcode::is_a_move(opcode)) {
       if (!registers.is_empty(srcs[0])) {
         registers.insert(dest, registers.get(srcs[0]));
         clear_dest = false;
       }
-    } else if (is_new_instance(opcode)) {
+    } else if (opcode::is_new_instance(opcode)) {
       DexType* typ = i->get_type();
       registers.clear(RESULT_REGISTER);
       if ((tracked_set.empty() || tracked_set.count(i) != 0) &&
@@ -1253,7 +1254,7 @@ void ClassInitCounter::analyze_block(
             container, method, i, block_id, instruction_count);
         registers.insert(RESULT_REGISTER, use);
       }
-    } else if (is_iput(opcode)) {
+    } else if (opcode::is_an_iput(opcode)) {
       auto field = i->get_field();
       if (!registers.is_empty(srcs[1])) {
         registers.get(srcs[1])->fields_set.add_field(field, srcs[0], i);
@@ -1261,27 +1262,27 @@ void ClassInitCounter::analyze_block(
       if (!registers.is_empty(srcs[0])) {
         registers.get(srcs[0])->escapes.add_field_set(field, srcs[0], i);
       }
-    } else if (is_iget(opcode)) {
+    } else if (opcode::is_an_iget(opcode)) {
       if (!registers.is_empty(srcs[0])) {
         registers.get(srcs[0])->fields_read.add_field(i->get_field());
       }
       registers.clear(RESULT_REGISTER);
-    } else if (is_sput(opcode)) {
+    } else if (opcode::is_an_sput(opcode)) {
       auto field = i->get_field();
       if (!registers.is_empty(srcs[0])) {
         registers.get(srcs[0])->escapes.add_field_set(field, srcs[0], i);
       }
-    } else if (is_aput(opcode)) {
+    } else if (opcode::is_an_aput(opcode)) {
       if (!registers.is_empty(srcs[0])) {
         registers.get(srcs[0])->escapes.add_array(i);
       }
-    } else if (is_filled_new_array(opcode)) {
+    } else if (opcode::is_filled_new_array(opcode)) {
       for (const auto src : srcs) {
         if (!registers.is_empty(src)) {
           registers.get(src)->escapes.add_array(i);
         }
       }
-    } else if (is_invoke_static(opcode)) {
+    } else if (opcode::is_invoke_static(opcode)) {
       auto curr_method = i->get_method();
       registers.clear(RESULT_REGISTER);
       if (m_optional_method && curr_method->get_name() == m_optional_method) {
@@ -1302,7 +1303,7 @@ void ClassInitCounter::analyze_block(
           }
         }
       }
-    } else if (is_invoke(opcode)) {
+    } else if (opcode::is_an_invoke(opcode)) {
       auto target_reg = srcs[0];
       auto curr_method = i->get_method();
       if (!registers.is_empty(target_reg)) {
@@ -1319,7 +1320,7 @@ void ClassInitCounter::analyze_block(
         }
       }
       registers.clear(RESULT_REGISTER);
-    } else if (is_return_value(opcode)) {
+    } else if (opcode::is_a_return_value(opcode)) {
       if (srcs.size() == 1 && !(registers.is_empty(srcs[0]))) {
         registers.get(srcs[0])->escapes.add_return(i);
       }

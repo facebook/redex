@@ -12,6 +12,8 @@
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "Match.h"
+#include "Show.h"
+#include "Trace.h"
 #include "Walkers.h"
 
 RedundantCheckCastRemover::RedundantCheckCastRemover(
@@ -19,10 +21,10 @@ RedundantCheckCastRemover::RedundantCheckCastRemover(
     : m_mgr(mgr), m_scope(scope) {}
 
 void RedundantCheckCastRemover::run() {
-  auto match = std::make_tuple(m::invoke(),
-                               m::is_opcode(OPCODE_MOVE_RESULT_OBJECT),
-                               m::is_opcode(OPCODE_CHECK_CAST),
-                               m::is_opcode(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT));
+  auto match = std::make_tuple(m::an_invoke(),
+                               m::move_result_object_(),
+                               m::check_cast_(),
+                               m::move_result_pseudo_object_());
 
   std::unordered_map<DexMethod*, std::vector<IRInstruction*>> to_remove;
 

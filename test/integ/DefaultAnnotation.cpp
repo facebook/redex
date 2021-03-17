@@ -13,6 +13,8 @@
 #include "IRCode.h"
 #include "RedexTest.h"
 #include "RemoveEmptyClasses.h"
+#include "Show.h"
+#include "Trace.h"
 
 /*
  * This test verifies if default annotation values can be parsed correctly

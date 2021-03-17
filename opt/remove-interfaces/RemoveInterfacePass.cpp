@@ -10,8 +10,11 @@
 #include "Creators.h"
 #include "DexStoreUtil.h"
 #include "DexUtil.h"
+#include "PassManager.h"
 #include "Resolver.h"
+#include "Show.h"
 #include "SwitchDispatch.h"
+#include "Trace.h"
 #include "TypeReference.h"
 #include "TypeSystem.h"
 #include "Walkers.h"
@@ -348,7 +351,7 @@ size_t exclude_unremovables(const Scope& scope,
 DexMethod* find_matching_virtual_method(const TypeSystem& type_system,
                                         const DexType* owner,
                                         const VirtualScope* scope) {
-  for (const auto& vmeth : scope->methods) {
+  for (const auto vmeth : scope->methods) {
     auto method = vmeth.first;
     if (!method->is_def() || !is_public(method)) {
       continue;

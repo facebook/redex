@@ -11,7 +11,7 @@
 
 #include "ConcurrentContainers.h"
 #include "LocalDce.h"
-#include "PassManager.h"
+#include "Pass.h"
 
 namespace remove_unused_args {
 

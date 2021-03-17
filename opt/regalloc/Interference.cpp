@@ -8,9 +8,11 @@
 #include "Interference.h"
 
 #include "ControlFlow.h"
+#include "DexOpcode.h"
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "MonotonicFixpointIterator.h"
+#include "Show.h"
 
 namespace regalloc {
 
@@ -137,7 +139,7 @@ void Graph::remove_node(reg_t u) {
 size_t dest_bit_width(const IRList::iterator& it) {
   auto insn = it->insn;
   auto op = insn->opcode();
-  if (opcode::is_move_result_pseudo(op)) {
+  if (opcode::is_a_move_result_pseudo(op)) {
     auto primary_op =
         ir_list::primary_instruction_of_move_result_pseudo(it)->opcode();
     if (primary_op == OPCODE_CHECK_CAST) {
@@ -145,10 +147,10 @@ size_t dest_bit_width(const IRList::iterator& it) {
     } else {
       return dex_opcode::dest_bit_width(opcode::to_dex_opcode(primary_op));
     }
-  } else if (opcode::is_internal(op) || is_move(op)) {
+  } else if (opcode::is_an_internal(op) || opcode::is_a_move(op)) {
     // move-* opcodes can always be encoded as move-*/16
     return 16;
-  } else if (is_literal_const(op)) {
+  } else if (opcode::is_a_literal_const(op)) {
     // const opcodes can always be encoded in a form that addresses 8-bit regs
     return 8;
   } else {
@@ -158,7 +160,7 @@ size_t dest_bit_width(const IRList::iterator& it) {
 
 size_t src_bit_width(IROpcode op, int i) {
   // move-* opcodes can always be encoded as move-*/16
-  if (is_move(op)) {
+  if (opcode::is_a_move(op)) {
     return 16;
   }
   return dex_opcode::src_bit_width(opcode::to_dex_opcode(op), i);
@@ -172,7 +174,7 @@ vreg_t max_value_for_src(const IRInstruction* insn,
   if (opcode::has_range_form(op) && insn->srcs_size() == 1) {
     // An `invoke {v0}` opcode can always be rewritten as `invoke/range {v0}`
     return max_unsigned_value(16);
-  } else if (is_invoke(op) && src_is_wide) {
+  } else if (opcode::is_an_invoke(op) && src_is_wide) {
     // invoke instructions need to address both pairs of a wide register in
     // their denormalized form. We are dealing with the normalized form
     // here, so we need to reserve one register for denormalization. I.e.
@@ -191,7 +193,7 @@ void GraphBuilder::update_node_constraints(const IRList::iterator& it,
   if (insn->has_dest()) {
     auto dest = insn->dest();
     auto& node = graph->m_nodes[dest];
-    if (opcode::is_load_param(op)) {
+    if (opcode::is_a_load_param(op)) {
       node.m_props.set(Node::PARAM);
     }
     node.m_type_domain.meet_with(RegisterTypeDomain(dest_reg_type(insn)));
@@ -289,7 +291,7 @@ Graph GraphBuilder::build(const LivenessFixpointIterator& fixpoint_iter,
       }
       if (insn->has_dest()) {
         for (auto reg : live_out.elements()) {
-          if (is_move(op) && reg == insn->src(0)) {
+          if (opcode::is_a_move(op) && reg == insn->src(0)) {
             continue;
           }
           graph.add_edge(insn->dest(), reg);

@@ -7,8 +7,17 @@
 
 #pragma once
 
+#include <vector>
+
+#include "IRInstruction.h" // For reg_t.
 #include "Pass.h"
-#include "PassManager.h"
+#include "RedexOptions.h" // For Architecture.
+
+class DexType;
+
+namespace cfg {
+class ControlFlowGraph;
+} // namespace cfg
 
 class ReduceArrayLiterals {
  public:

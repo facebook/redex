@@ -12,18 +12,20 @@
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
-#include <json/json.h>
+#include <json/value.h>
 #include <mutex>
 #include <string>
 #include <unordered_map>
 #include <utility>
 
 #include "DexClass.h"
+#include "DexPosition.h"
 #include "DexUtil.h"
 #include "EditableCfgAdapter.h"
 #include "IRCode.h"
 #include "OptDataDefs.h"
 #include "Resolver.h"
+#include "Show.h"
 #include "Trace.h"
 
 namespace {
@@ -435,8 +437,8 @@ void OptDataMapper::init_nopt_messages() {
       {INL_CROSS_STORE_REFS,
        "Didn''t inline: callee references a DexMember in a dex store different "
        "from the caller''s"},
-      {INL_BLOCKLISTED_CALLEE, "Didn''t inline blocklisted method"},
-      {INL_BLOCKLISTED_CALLER, "Didn''t inline into blocklisted method"},
+      {INL_BLOCK_LISTED_CALLEE, "Didn''t inline blocklisted method"},
+      {INL_BLOCK_LISTED_CALLER, "Didn''t inline into blocklisted method"},
       {INL_EXTERN_CATCH,
        "Didn''t inline: callee has a non-public external catch type"},
       {INL_TOO_BIG, "Didn''t inline: estimated inlined method size is too big"},

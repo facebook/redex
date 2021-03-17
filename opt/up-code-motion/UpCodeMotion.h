@@ -9,6 +9,7 @@
 
 #include "ControlFlow.h"
 #include "Pass.h"
+#include "Trace.h"
 
 class UpCodeMotionPass : public Pass {
  public:

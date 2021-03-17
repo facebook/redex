@@ -9,13 +9,14 @@
 
 #include <fstream>
 #include <string>
-#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "Match.h"
 #include "Show.h"
+#include "Trace.h"
 #include "Walkers.h"
 
 /*

@@ -14,7 +14,7 @@ class DelInitPass : public Pass {
   DelInitPass() : Pass("DelInitPass") {}
 
   void bind_config() override {
-    bind("package_white_list", {}, m_package_filter);
+    bind("package_allowlist", {}, m_package_filter);
   }
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 

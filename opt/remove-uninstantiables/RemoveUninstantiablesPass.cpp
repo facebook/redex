@@ -12,6 +12,7 @@
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "NullPointerExceptionUtil.h"
+#include "PassManager.h"
 #include "Trace.h"
 #include "Walkers.h"
 
@@ -200,21 +201,21 @@ RemoveUninstantiablesPass::replace_uninstantiable_refs(
       break;
     }
 
-    if (is_iget(op) &&
+    if (opcode::is_an_iget(op) &&
         scoped_uninstantiable_types.count(insn->get_field()->get_class())) {
       m.replace(it, npe_creator.get_insns(insn));
       stats.field_accesses_on_uninstantiable++;
       continue;
     }
 
-    if (is_iput(op) &&
+    if (opcode::is_an_iput(op) &&
         scoped_uninstantiable_types.count(insn->get_field()->get_class())) {
       m.replace(it, npe_creator.get_insns(insn));
       stats.field_accesses_on_uninstantiable++;
       continue;
     }
 
-    if ((is_iget(op) || is_sget(op)) &&
+    if ((opcode::is_an_iget(op) || opcode::is_an_sget(op)) &&
         scoped_uninstantiable_types.count(insn->get_field()->get_type())) {
       auto dest = cfg.move_result_of(it)->insn->dest();
       m.replace(it, {ir_const(dest, 0)});

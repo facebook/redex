@@ -14,6 +14,7 @@
 #include "CanonicalizeLocks.h"
 #include "ConstantUses.h"
 #include "ControlFlow.h"
+#include "DexOpcode.h"
 #include "DexUtil.h"
 #include "IRInstruction.h"
 #include "IROpcode.h"
@@ -21,6 +22,7 @@
 #include "MonotonicFixpointIterator.h"
 #include "Resolver.h"
 #include "ScopedCFG.h"
+#include "Show.h"
 #include "Walkers.h"
 
 using namespace sparta;
@@ -146,7 +148,7 @@ class AliasFixpointIterator final
           if (mutation != nullptr) {
             ++moves_eliminated;
             auto cfg_it = block->to_cfg_instruction_iterator(it);
-            if (opcode::is_move_result_pseudo(op)) {
+            if (opcode::is_a_move_result_pseudo(op)) {
               // WARNING: This assumes that the primary instruction of a
               // move-result-pseudo has no side effects.
               const auto& primary =
@@ -213,7 +215,7 @@ class AliasFixpointIterator final
         // The ART verifier checks that monitor-{enter,exit} instructions use
         // the same register:
         // http://androidxref.com/6.0.0_r5/xref/art/runtime/verifier/register_line.h#325
-        !is_monitor(op)) {
+        !opcode::is_a_monitor(op)) {
       reg_t max_addressable = RESULT_REGISTER;
       for (size_t i = 0; i < insn->srcs_size(); ++i) {
         reg_t r = insn->src(i);
@@ -272,7 +274,8 @@ class AliasFixpointIterator final
       //
       // Normally, RegAlloc handles this case, but CopyProp can run after
       // RegAlloc
-      bool upper_is_addressable = is_invoke(op) && insn->src_is_wide(src_index);
+      bool upper_is_addressable =
+          opcode::is_an_invoke(op) && insn->src_is_wide(src_index);
       return max_addressable_reg - (upper_is_addressable ? 1 : 0);
     }
     return max_addressable_reg;

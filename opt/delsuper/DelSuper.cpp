@@ -15,7 +15,10 @@
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "IRInstruction.h"
+#include "PassManager.h"
 #include "ReachableClasses.h"
+#include "Show.h"
+#include "Trace.h"
 #include "Walkers.h"
 
 namespace {
@@ -152,7 +155,7 @@ class DelSuper {
     // container of instructions
     std::vector<IRInstruction*> insns;
     for (const auto& mie : InstructionIterable(meth->get_code())) {
-      if (opcode::is_load_param(mie.insn->opcode())) {
+      if (opcode::is_a_load_param(mie.insn->opcode())) {
         continue;
       }
       insns.emplace_back(mie.insn);
@@ -290,7 +293,7 @@ class DelSuper {
       walk::opcodes(m_scope,
                     [](DexMethod* meth) { return true; },
                     [&](DexMethod* meth, IRInstruction* insn) {
-                      if (is_invoke(insn->opcode())) {
+                      if (opcode::is_an_invoke(insn->opcode())) {
                         auto method = insn->get_method()->as_def();
                         if (!method) {
                           return;

@@ -20,9 +20,11 @@
 #include "IPConstantPropagationAnalysis.h"
 #include "IRCode.h"
 #include "LocalDce.h"
+#include "PassManager.h"
 #include "Purity.h"
 #include "Resolver.h"
 #include "Timer.h"
+#include "Trace.h"
 #include "TypeSystem.h"
 #include "TypeUtil.h"
 #include "Walkers.h"
@@ -76,7 +78,7 @@ Scope reverse_tsort_by_clinit_deps(const Scope& scope) {
     if (clinit != nullptr && clinit->get_code() != nullptr) {
       for (auto& mie : InstructionIterable(clinit->get_code())) {
         auto insn = mie.insn;
-        if (is_sget(insn->opcode())) {
+        if (opcode::is_an_sget(insn->opcode())) {
           auto dependee_cls = type_class(insn->get_field()->get_class());
           if (dependee_cls == nullptr || dependee_cls == cls) {
             continue;
@@ -129,7 +131,7 @@ Scope reverse_tsort_by_init_deps(const Scope& scope) {
       if (ctor != nullptr && ctor->get_code() != nullptr) {
         for (auto& mie : InstructionIterable(ctor->get_code())) {
           auto insn = mie.insn;
-          if (is_iget(insn->opcode())) {
+          if (opcode::is_an_iget(insn->opcode())) {
             auto dependee_cls = type_class(insn->get_field()->get_class());
             if (dependee_cls == nullptr || dependee_cls == cls) {
               continue;
@@ -230,15 +232,16 @@ class ClassInitStrategy final : public call_graph::SingleCalleeStrategy {
   explicit ClassInitStrategy(const Scope& scope)
       : call_graph::SingleCalleeStrategy(scope) {}
 
-  std::vector<const DexMethod*> get_roots() const override {
-    std::vector<const DexMethod*> roots;
+  call_graph::RootAndDynamic get_roots() const override {
+    call_graph::RootAndDynamic root_and_dynamic;
+    auto& roots = root_and_dynamic.roots;
 
     walk::methods(m_scope, [&](DexMethod* method) {
       if (method::is_clinit(method)) {
         roots.emplace_back(method);
       }
     });
-    return roots;
+    return root_and_dynamic;
   }
 };
 
@@ -338,7 +341,7 @@ StaticFieldReadAnalysis::Result StaticFieldReadAnalysis::analyze(
   Result ret{};
   for (auto& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
-    if (is_sget(insn->opcode())) {
+    if (opcode::is_an_sget(insn->opcode())) {
       ret.add(insn->get_field());
     }
   }
@@ -350,7 +353,7 @@ StaticFieldReadAnalysis::Result StaticFieldReadAnalysis::analyze(
 
   for (auto& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
-    if (is_invoke(insn->opcode())) {
+    if (opcode::is_an_invoke(insn->opcode())) {
       auto callee_method_def =
           resolve_method(insn->get_method(), opcode_to_search(insn), method);
       if (!callee_method_def || callee_method_def->is_external() ||
@@ -562,7 +565,7 @@ class ThisObjectAnalysis final
       for (auto it = ii.begin(); it != ii.end(); it++) {
         IRInstruction* insn = it->insn;
         auto op = insn->opcode();
-        if (is_invoke(op)) {
+        if (opcode::is_an_invoke(op)) {
           bool use_this = false;
           for (auto src : insn->srcs()) {
             auto this_info = env.get(src).get_constant();
@@ -685,14 +688,14 @@ bool get_ifields_read(
   }
   for (auto& mie : InstructionIterable(method->get_code())) {
     auto insn = mie.insn;
-    if (is_iget(insn->opcode())) {
+    if (opcode::is_an_iget(insn->opcode())) {
       // Meet accessing of a ifield in a method called from <init>, add
       // to blocklist.
       auto field = resolve_field(insn->get_field(), FieldSearch::Instance);
       if (field != nullptr && field->get_class() == ifield_cls->get_type()) {
         blocklist_ifields->emplace(field);
       }
-    } else if (is_invoke(insn->opcode())) {
+    } else if (opcode::is_an_invoke(insn->opcode())) {
       auto insn_method = insn->get_method();
       auto callee = resolve_method(insn_method, opcode_to_search(insn), method);
       if (insn->opcode() == OPCODE_INVOKE_DIRECT ||
@@ -843,7 +846,7 @@ cp::EligibleIfields gather_ifield_candidates(
     for (auto& mie : InstructionIterable(code)) {
       auto insn = mie.insn;
       auto op = insn->opcode();
-      if (is_iput(op)) {
+      if (opcode::is_an_iput(op)) {
         auto field = resolve_field(insn->get_field(), FieldSearch::Instance);
         if (field == nullptr || (method::is_init(method) &&
                                  method->get_class() == field->get_class())) {
@@ -895,7 +898,7 @@ size_t inline_final_gets(
       auto it = code.iterator_to(mie);
       auto insn = mie.insn;
       auto op = insn->opcode();
-      if (is_iget(op) || is_sget(op)) {
+      if (opcode::is_an_iget(op) || opcode::is_an_sget(op)) {
         auto field = resolve_field(insn->get_field());
         if (field == nullptr || blocklist_types.count(field->get_class())) {
           continue;

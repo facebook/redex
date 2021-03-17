@@ -14,6 +14,7 @@
 #include "IRCode.h"
 #include "RedexTest.h"
 #include "RemoveGotos.h"
+#include "Show.h"
 
 struct RemoveGotosTest : public RedexTest {
   DexMethod* m_method;

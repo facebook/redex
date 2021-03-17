@@ -12,11 +12,12 @@
 #include "IRAssembler.h"
 #include "IRCode.h"
 #include "RedexTest.h"
+#include "Show.h"
 
 cfg::InstructionIterator get_invoke(cfg::ControlFlowGraph* cfg) {
   auto iterable = cfg::InstructionIterable(*cfg);
   for (auto it = iterable.begin(); it != iterable.end(); ++it) {
-    if (is_invoke(it->insn->opcode())) {
+    if (opcode::is_an_invoke(it->insn->opcode())) {
       return it;
     }
   }

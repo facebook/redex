@@ -25,8 +25,8 @@ reg_t find_determining_reg(
   auto last_it = b->get_last_insn();
   always_assert_log(last_it != b->end(), "non-leaf nodes should not be empty");
   auto last = last_it->insn;
-  always_assert_log(is_branch(last->opcode()), "%s is not a branch instruction",
-                    SHOW(last));
+  always_assert_log(opcode::is_branch(last->opcode()),
+                    "%s is not a branch instruction", SHOW(last));
   boost::optional<reg_t> candidate_reg;
   auto srcs_size = last->srcs_size();
   if (srcs_size == 1) {
@@ -106,13 +106,13 @@ boost::optional<reg_t> SwitchMethodPartitioning::compute_prologue_blocks(
     // be no branch opcode -- the method will always throw an
     // IllegalArgumentException, or return when the switch is optimized.
     auto op = last_prologue_insn->opcode();
-    always_assert_log(!verify_default_case || is_branch(op) || is_return(op) ||
-                          op == OPCODE_THROW,
+    always_assert_log(!verify_default_case || opcode::is_branch(op) ||
+                          opcode::is_a_return(op) || op == OPCODE_THROW,
                       "%s in %s", SHOW(last_prologue_insn), SHOW(*cfg));
 
-    if (!is_branch(op)) {
+    if (!opcode::is_branch(op)) {
       return boost::none;
-    } else if (is_switch(op)) {
+    } else if (opcode::is_switch(op)) {
       // switch or if-else tree. Not both.
       return last_prologue_insn->src(0);
     }
@@ -154,7 +154,8 @@ boost::optional<reg_t> SwitchMethodPartitioning::compute_prologue_blocks(
         for (const auto& mie : InstructionIterable(b)) {
           auto insn = mie.insn;
           auto op = insn->opcode();
-          always_assert_log(is_const(op) || is_conditional_branch(op),
+          always_assert_log(opcode::is_a_const(op) ||
+                                opcode::is_a_conditional_branch(op),
                             "Unexpected instruction in if-else tree %s",
                             SHOW(insn));
         }

@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <iostream>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -17,8 +18,10 @@
 #include "DexUtil.h"
 #include "ReachableClasses.h"
 #include "Resolver.h"
+#include "Show.h"
 #include "SingleImpl.h"
 #include "SingleImplDefs.h"
+#include "StlUtil.h"
 #include "Trace.h"
 #include "Walkers.h"
 
@@ -163,8 +166,8 @@ void AnalysisImpl::filter_by_annotations(
  * White lists come first, then black lists.
  */
 void AnalysisImpl::filter_single_impl(const SingleImplConfig& config) {
-  filter_list(config.white_list, true);
-  filter_list(config.package_white_list, true);
+  filter_list(config.allowlist, true);
+  filter_list(config.package_allowlist, true);
   filter_list(config.blocklist, false);
   filter_list(config.package_blocklist, false);
   filter_by_annotations(config.anno_blocklist);
@@ -305,14 +308,8 @@ void AnalysisImpl::escape_cross_stores() {
  * Clean up the single impl map.
  */
 void AnalysisImpl::remove_escaped() {
-  auto it = single_impls.begin();
-  while (it != single_impls.end()) {
-    if (it->second.is_escaped()) {
-      it = single_impls.erase(it);
-    } else {
-      ++it;
-    }
-  }
+  std20::erase_if(single_impls,
+                  [](auto it) { return it->second.is_escaped(); });
 }
 
 /**

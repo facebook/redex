@@ -8,6 +8,7 @@
 #include "TypeAnalysisTransform.h"
 
 #include "DexInstruction.h"
+#include "Show.h"
 
 namespace {
 
@@ -81,7 +82,7 @@ void Transform::remove_redundant_null_checks(const DexTypeEnvironment& env,
     return;
   }
   auto last_insn = insn_it->insn;
-  if (!is_testz_branch(last_insn->opcode())) {
+  if (!opcode::is_a_testz_branch(last_insn->opcode())) {
     return;
   }
   auto domain = env.get(last_insn->src(0));
@@ -147,6 +148,7 @@ Transform::Stats Transform::apply(
     DexMethod* method,
     const NullAssertionSet& null_assertion_set) {
   auto code = method->get_code();
+  TRACE(TYPE_TRANSFORM, 4, "Processing %s", SHOW(method));
   Transform::Stats stats{};
   bool can_use_nullness_results = wps.can_use_nullness_results(method);
   for (const auto& block : code->cfg().blocks()) {
@@ -178,19 +180,19 @@ Transform::Stats Transform::apply(
         remove_redundant_type_checks(env, it, stats);
       }
     }
-
     if (m_config.remove_redundant_null_checks && can_use_nullness_results) {
       remove_redundant_null_checks(env, block, stats);
     }
   }
-  apply_changes(code);
+  apply_changes(method);
   return stats;
 }
 
-void Transform::apply_changes(IRCode* code) {
+void Transform::apply_changes(DexMethod* method) {
+  auto* code = method->get_code();
   for (auto const& p : m_replacements) {
     IRInstruction* old_op = p.first;
-    if (is_branch(old_op->opcode())) {
+    if (opcode::is_branch(old_op->opcode())) {
       code->replace_branch(old_op, p.second);
     } else {
       code->replace_opcode(old_op, p.second);

@@ -11,6 +11,7 @@
 #include <boost/bimap/bimap.hpp>
 #include <boost/bimap/unordered_set_of.hpp>
 #include <boost/numeric/conversion/cast.hpp>
+#include <iostream>
 #include <limits>
 #include <list>
 #include <memory>
@@ -20,10 +21,14 @@
 #include "Debug.h"
 #include "DexClass.h"
 #include "DexDebugInstruction.h"
+#include "DexInstruction.h"
+#include "DexPosition.h"
 #include "DexUtil.h"
 #include "IRInstruction.h"
 #include "IROpcode.h"
 #include "InstructionLowering.h"
+#include "Show.h"
+#include "Trace.h"
 #include "Transform.h"
 #include "Util.h"
 

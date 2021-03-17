@@ -8,6 +8,7 @@
 #include <gtest/gtest.h>
 
 #include "Resolver.h"
+#include "Show.h"
 #include "VerifyUtil.h"
 
 namespace {
@@ -16,7 +17,7 @@ namespace {
 void check_callsite_regs(DexMethod* method, int num_args_expected) {
   for (const auto& mie : InstructionIterable(method->get_code())) {
     auto insn = mie.insn;
-    if (is_invoke(insn->opcode())) {
+    if (opcode::is_an_invoke(insn->opcode())) {
       auto actual_method = insn->get_method();
       EXPECT_EQ(insn->srcs_size(), num_args_expected) << show(actual_method);
       break;
@@ -28,8 +29,8 @@ void check_callsite_regs(DexMethod* method, int num_args_expected) {
 void check_return(DexMethod* method, bool value) {
   for (const auto& mie : InstructionIterable(method->get_code())) {
     auto insn = mie.insn;
-    if (is_return(insn->opcode())) {
-      EXPECT_EQ(is_return_value(insn->opcode()), value);
+    if (opcode::is_a_return(insn->opcode())) {
+      EXPECT_EQ(opcode::is_a_return_value(insn->opcode()), value);
       break;
     }
   }

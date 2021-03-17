@@ -9,6 +9,10 @@
 
 #include "Pass.h"
 
+namespace cfg {
+class ControlFlowGraph;
+} // namespace cfg
+
 /**
  * Kotlin has null safety checks which adds runtime assertions. These assertions
  * takes the object and the identifier name which is holding the object

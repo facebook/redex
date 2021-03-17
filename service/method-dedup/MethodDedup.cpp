@@ -9,6 +9,8 @@
 
 #include "IRCode.h"
 #include "MethodReference.h"
+#include "Show.h"
+#include "Trace.h"
 
 namespace {
 

@@ -78,10 +78,13 @@
 #include "BigBlocks.h"
 #include "CFGMutation.h"
 #include "ConcurrentContainers.h"
+#include "ConfigFiles.h"
 #include "Creators.h"
 #include "Debug.h"
 #include "DexClass.h"
+#include "DexInstruction.h"
 #include "DexLimits.h"
+#include "DexPosition.h"
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
@@ -89,12 +92,16 @@
 #include "Lazy.h"
 #include "Liveness.h"
 #include "Macros.h"
+#include "MethodProfiles.h"
 #include "MutablePriorityQueue.h"
 #include "OutlinerTypeAnalysis.h"
 #include "PartialCandidates.h"
+#include "PassManager.h"
 #include "ReachingInitializeds.h"
 #include "RefChecker.h"
 #include "Resolver.h"
+#include "Show.h"
+#include "StlUtil.h"
 #include "Trace.h"
 #include "Walkers.h"
 
@@ -633,7 +640,7 @@ static bool append_to_partial_candidate(
   }
   pcn->insns.push_back(insn);
   pc->insns_size++;
-  if (!opcode::is_move(opcode)) {
+  if (!opcode::is_a_move(opcode)) {
     // Moves are likely still eliminated by reg-alloc or other opts
     pc->size += insn->size();
   }
@@ -672,8 +679,8 @@ static bool can_outline_insn(const RefChecker& ref_checker,
     if (!ref_checker.check_field(field)) {
       return false;
     }
-    if (is_final(field) &&
-        (is_iput(insn->opcode()) || is_sput(insn->opcode()))) {
+    if (is_final(field) && (opcode::is_an_iput(insn->opcode()) ||
+                            opcode::is_an_sput(insn->opcode()))) {
       return false;
     }
   } else if (insn->has_type()) {
@@ -700,8 +707,8 @@ static bool is_uniquely_reached_via_pred(cfg::Block* block) {
 // the leaf blocks would unconditionally go to.
 static std::unordered_set<cfg::Block*> get_eventual_targets_after_outlining(
     cfg::Block* first_block, const cfg::InstructionIterator& it) {
-  always_assert(is_conditional_branch(it->insn->opcode()) ||
-                is_switch(it->insn->opcode()));
+  always_assert(opcode::is_a_conditional_branch(it->insn->opcode()) ||
+                opcode::is_switch(it->insn->opcode()));
   auto get_targets =
       [first_block](
           cfg::Block* start_block) -> std::unordered_set<cfg::Block*> {
@@ -715,8 +722,8 @@ static std::unordered_set<cfg::Block*> get_eventual_targets_after_outlining(
         auto last_block = big_block->get_last_block();
         auto last_insn_it = last_block->get_last_insn();
         if (last_insn_it != last_block->end() &&
-            (is_conditional_branch(last_insn_it->insn->opcode()) ||
-             is_switch(last_insn_it->insn->opcode()))) {
+            (opcode::is_a_conditional_branch(last_insn_it->insn->opcode()) ||
+             opcode::is_switch(last_insn_it->insn->opcode()))) {
           auto last_insn_cfg_it =
               last_block->to_cfg_instruction_iterator(last_insn_it);
           auto more_targets = get_eventual_targets_after_outlining(
@@ -743,13 +750,8 @@ static std::unordered_set<cfg::Block*> get_eventual_targets_after_outlining(
   auto targets = get_targets((*succs_it)->target());
   for (succs_it++; succs_it != succs.end() && !targets.empty(); succs_it++) {
     auto other_targets = get_targets((*succs_it)->target());
-    for (auto targets_it = targets.begin(); targets_it != targets.end();) {
-      if (other_targets.count(*targets_it)) {
-        targets_it++;
-      } else {
-        targets_it = targets.erase(targets_it);
-      }
-    }
+    std20::erase_if(targets,
+                    [&](auto it) { return !other_targets.count(*it); });
   }
   return targets;
 }
@@ -806,7 +808,8 @@ static bool explore_candidates_from(
     if (!append_to_partial_candidate(reaching_initializeds, insn, pc, pcn)) {
       return false;
     }
-    if (is_conditional_branch(insn->opcode()) || is_switch(insn->opcode())) {
+    if (opcode::is_a_conditional_branch(insn->opcode()) ||
+        opcode::is_switch(insn->opcode())) {
       // If the branching structure is such that there's a tree where all
       // leaves nodes unconditionally goto a common block, then we'll attempt
       // to gather a partial candidate tree.
@@ -869,7 +872,7 @@ static bool explore_candidates_from(
     // a trailing consts tends to lead to better results and a faster outliner.)
     if (insn->opcode() == OPCODE_CONST || insn->opcode() == OPCODE_CONST_WIDE ||
         (insn->opcode() == IOPCODE_MOVE_RESULT_PSEUDO_OBJECT && prev_opcode &&
-         is_const(*prev_opcode))) {
+         opcode::is_a_const(*prev_opcode))) {
       continue;
     }
     if (explored_callback) {
@@ -1158,6 +1161,7 @@ static bool can_outline_from_method(
   if (sufficiently_hot_methods.count(method)) {
     return false;
   }
+
   return true;
 }
 
@@ -1690,7 +1694,7 @@ class OutlinedMethodCreator {
         if (it != dbg_positions.end()) {
           DexPosition* dbg_pos = it->second;
           if (dbg_pos != last_dbg_pos &&
-              !opcode::is_move_result_pseudo(ci.core.opcode)) {
+              !opcode::is_a_move_result_pseudo(ci.core.opcode)) {
             auto cloned_dbg_pos = std::make_unique<DexPosition>(*dbg_pos);
             cloned_dbg_pos->parent = nullptr;
             code->push_back(std::move(cloned_dbg_pos));
@@ -2366,18 +2370,16 @@ static NewlyOutlinedMethods outline(
         auto& other_c = candidates_with_infos->at(other_id);
         for (auto& cml : cmls) {
           auto& other_cmls = other_c.info.methods.at(method);
-          for (auto it = other_cmls.begin(); it != other_cmls.end();) {
-            auto& other_cml = *it;
-            if (ranges_overlap(cml.ranges, other_cml.ranges)) {
-              it = other_cmls.erase(it);
+          std20::erase_if(other_cmls, [&](auto it) {
+            if (ranges_overlap(cml.ranges, it->ranges)) {
               other_c.info.count--;
               if (other_id != id) {
                 other_candidate_ids_with_changes.insert(other_id);
               }
-            } else {
-              ++it;
+              return true;
             }
-          }
+            return false;
+          });
         }
       }
     }

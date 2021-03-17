@@ -7,9 +7,12 @@
 
 #include "ProguardMap.h"
 
+#include "DexPosition.h"
 #include "DexUtil.h"
 #include "IRCode.h"
+#include "Show.h"
 #include "Timer.h"
+#include "Trace.h"
 #include "WorkQueue.h"
 
 namespace {

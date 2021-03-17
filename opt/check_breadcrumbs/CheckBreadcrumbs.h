@@ -15,6 +15,8 @@
 #include "DexStore.h" // XStoreRefs.
 #include "Pass.h"
 
+class IRInstruction;
+
 /**
  * This pass only makes sense when applied at the end of a redex optimization
  * run. It does not work on its own when applied to a "random" apk.

@@ -28,6 +28,7 @@
 #include "PassManager.h"
 #include "ReachableClasses.h"
 #include "Resolver.h"
+#include "Show.h"
 #include "SynthConfig.h"
 #include "Walkers.h"
 
@@ -73,17 +74,17 @@ DexField* trivial_get_field_wrapper(DexMethod* m) {
   auto ii = InstructionIterable(code);
   auto it = ii.begin();
   auto end = ii.end();
-  while (it != end && opcode::is_load_param(it->insn->opcode())) {
+  while (it != end && opcode::is_a_load_param(it->insn->opcode())) {
     ++it;
   }
 
-  if (!is_iget(it->insn->opcode())) return nullptr;
+  if (!opcode::is_an_iget(it->insn->opcode())) return nullptr;
 
   auto iget = it->insn;
   reg_t iget_dest = ir_list::move_result_pseudo_of(it.unwrap())->dest();
   std::advance(it, 2);
 
-  if (!is_return_value(it->insn->opcode())) return nullptr;
+  if (!opcode::is_a_return_value(it->insn->opcode())) return nullptr;
 
   reg_t ret_reg = it->insn->src(0);
   if (ret_reg != iget_dest) return nullptr;
@@ -114,17 +115,17 @@ DexField* trivial_get_static_field_wrapper(DexMethod* m) {
   auto ii = InstructionIterable(code);
   auto it = ii.begin();
   auto end = ii.end();
-  while (it != end && opcode::is_load_param(it->insn->opcode())) {
+  while (it != end && opcode::is_a_load_param(it->insn->opcode())) {
     ++it;
   }
 
-  if (!is_sget(it->insn->opcode())) return nullptr;
+  if (!opcode::is_an_sget(it->insn->opcode())) return nullptr;
 
   auto sget = it->insn;
   reg_t sget_dest = ir_list::move_result_pseudo_of(it.unwrap())->dest();
   std::advance(it, 2);
 
-  if (!is_return_value(it->insn->opcode())) return nullptr;
+  if (!opcode::is_a_return_value(it->insn->opcode())) return nullptr;
 
   reg_t ret_reg = it->insn->src(0);
   if (ret_reg != sget_dest) return nullptr;
@@ -155,7 +156,7 @@ DexMethod* trivial_method_wrapper(DexMethod* m, const ClassHierarchy& ch) {
   auto ii = InstructionIterable(code);
   auto it = ii.begin();
   auto end = ii.end();
-  while (it != end && opcode::is_load_param(it->insn->opcode())) {
+  while (it != end && opcode::is_a_load_param(it->insn->opcode())) {
     ++it;
   }
 
@@ -193,10 +194,10 @@ DexMethod* trivial_method_wrapper(DexMethod* m, const ClassHierarchy& ch) {
   ++it;
   if (it == end) return nullptr;
 
-  if (opcode::is_move_result(it->insn->opcode())) {
+  if (opcode::is_a_move_result(it->insn->opcode())) {
     ++it;
     if (it == end) return nullptr;
-    if (!is_return_value(it->insn->opcode())) return nullptr;
+    if (!opcode::is_a_return_value(it->insn->opcode())) return nullptr;
     ++it;
     if (it != end) return nullptr; // exception handling code
     return method_def;
@@ -220,7 +221,7 @@ DexMethod* trivial_ctor_wrapper(DexMethod* m) {
   auto ii = InstructionIterable(code);
   auto it = ii.begin();
   auto end = ii.end();
-  while (it != end && opcode::is_load_param(it->insn->opcode())) {
+  while (it != end && opcode::is_a_load_param(it->insn->opcode())) {
     ++it;
   }
 
@@ -537,7 +538,7 @@ void replace_wrappers(const ClassHierarchy& ch,
       if (found_get != ssms.getters.end()) {
         auto next_it = std::next(it);
         auto const move_result = next_it->insn;
-        if (!opcode::is_move_result(move_result->opcode())) {
+        if (!opcode::is_a_move_result(move_result->opcode())) {
           ssms.keepers.emplace(callee);
           continue;
         }
@@ -566,7 +567,7 @@ void replace_wrappers(const ClassHierarchy& ch,
       if (found_get != ssms.getters.end()) {
         auto next_it = std::next(it);
         auto const move_result = next_it->insn;
-        if (!opcode::is_move_result(move_result->opcode())) {
+        if (!opcode::is_a_move_result(move_result->opcode())) {
           ssms.keepers.emplace(callee);
           continue;
         }

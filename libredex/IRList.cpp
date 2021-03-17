@@ -10,8 +10,13 @@
 #include <iterator>
 #include <vector>
 
+#include "DexClass.h"
+#include "DexDebugInstruction.h"
+#include "DexInstruction.h"
+#include "DexPosition.h"
 #include "DexUtil.h"
 #include "IRInstruction.h"
+#include "Show.h"
 
 bool TryEntry::operator==(const TryEntry& other) const {
   return type == other.type && *catch_start == *other.catch_start;
@@ -64,6 +69,12 @@ std::ostream& operator<<(std::ostream& os, const MethodItemType& type) {
   os << "unknown type " << (uint32_t)type;
   return os;
 }
+
+MethodItemEntry::MethodItemEntry(std::unique_ptr<DexDebugInstruction> dbgop)
+    : type(MFLOW_DEBUG), dbgop(std::move(dbgop)) {}
+
+MethodItemEntry::MethodItemEntry(std::unique_ptr<DexPosition> pos)
+    : type(MFLOW_POSITION), pos(std::move(pos)) {}
 
 MethodItemEntry::MethodItemEntry(std::unique_ptr<SourceBlock> src_block)
     : type(MFLOW_SOURCE_BLOCK), src_block(std::move(src_block)) {}
@@ -166,15 +177,14 @@ void MethodItemEntry::gather_methods(
   case MFLOW_TARGET:
   // SourceBlock does not keep the method reachable.
   case MFLOW_SOURCE_BLOCK:
+  // DexDebugInstruction does not have method reference.
+  case MFLOW_DEBUG:
     break;
   case MFLOW_OPCODE:
     insn->gather_methods(lmethod);
     break;
   case MFLOW_DEX_OPCODE:
     dex_insn->gather_methods(lmethod);
-    break;
-  case MFLOW_DEBUG:
-    dbgop->gather_methods(lmethod);
     break;
   }
 }
@@ -438,7 +448,7 @@ void IRList::replace_opcode(IRInstruction* to_delete,
 }
 
 void IRList::replace_opcode(IRInstruction* from, IRInstruction* to) {
-  always_assert_log(!is_branch(to->opcode()),
+  always_assert_log(!opcode::is_branch(to->opcode()),
                     "You may want replace_branch instead");
   replace_opcode(from, std::vector<IRInstruction*>{to});
 }
@@ -449,7 +459,7 @@ void IRList::replace_opcode_with_infinite_loop(IRInstruction* from) {
   for (; miter != m_list.end(); miter++) {
     MethodItemEntry* mentry = &*miter;
     if (mentry->type == MFLOW_OPCODE && mentry->insn == from) {
-      if (is_branch(from->opcode())) {
+      if (opcode::is_branch(from->opcode())) {
         remove_branch_targets(from);
       }
       mentry->insn = to;
@@ -466,8 +476,8 @@ void IRList::replace_opcode_with_infinite_loop(IRInstruction* from) {
 }
 
 void IRList::replace_branch(IRInstruction* from, IRInstruction* to) {
-  always_assert(is_branch(from->opcode()));
-  always_assert(is_branch(to->opcode()));
+  always_assert(opcode::is_branch(from->opcode()));
+  always_assert(opcode::is_branch(to->opcode()));
   for (auto& mentry : m_list) {
     if (mentry.type == MFLOW_OPCODE && mentry.insn == from) {
       mentry.insn = to;
@@ -521,19 +531,19 @@ IRList::iterator IRList::insert_after(const IRList::iterator& position,
 void IRList::remove_opcode(const IRList::iterator& it) {
   always_assert(it->type == MFLOW_OPCODE);
   auto insn = it->insn;
-  always_assert(!opcode::is_move_result_pseudo(insn->opcode()));
+  always_assert(!opcode::is_a_move_result_pseudo(insn->opcode()));
   if (insn->has_move_result_pseudo()) {
     auto move_it = std::next(it);
     always_assert_log(
         move_it->type == MFLOW_OPCODE &&
-            opcode::is_move_result_pseudo(move_it->insn->opcode()),
+            opcode::is_a_move_result_pseudo(move_it->insn->opcode()),
         "No move-result-pseudo found for %s",
         SHOW(insn));
     delete move_it->insn;
     move_it->type = MFLOW_FALLTHROUGH;
     move_it->insn = nullptr;
   }
-  if (is_branch(insn->opcode())) {
+  if (opcode::is_branch(insn->opcode())) {
     remove_branch_targets(insn);
   }
   it->type = MFLOW_FALLTHROUGH;
@@ -565,7 +575,8 @@ size_t IRList::sum_opcode_sizes() const {
 size_t IRList::count_opcodes() const {
   size_t count{0};
   for (const auto& mie : m_list) {
-    if (mie.type == MFLOW_OPCODE && !opcode::is_internal(mie.insn->opcode())) {
+    if (mie.type == MFLOW_OPCODE &&
+        !opcode::is_an_internal(mie.insn->opcode())) {
       ++count;
     }
   }
@@ -589,7 +600,7 @@ void IRList::sanity_check() const {
  * replaced by another instruction.
  */
 void IRList::remove_branch_targets(IRInstruction* branch_inst) {
-  always_assert_log(is_branch(branch_inst->opcode()),
+  always_assert_log(opcode::is_branch(branch_inst->opcode()),
                     "Instruction is not a branch instruction.");
   for (auto miter = m_list.begin(); miter != m_list.end(); miter++) {
     MethodItemEntry* mentry = &*miter;
@@ -697,7 +708,7 @@ boost::sub_range<IRList> IRList::get_param_instructions() {
       m_list.begin(), m_list.end(), [&](const MethodItemEntry& mie) {
         return mie.type == MFLOW_FALLTHROUGH ||
                (mie.type == MFLOW_OPCODE &&
-                opcode::is_load_param(mie.insn->opcode()));
+                opcode::is_a_load_param(mie.insn->opcode()));
       });
   return boost::sub_range<IRList>(m_list.begin(), params_end);
 }
@@ -840,7 +851,7 @@ IRInstruction* primary_instruction_of_move_result(IRList::iterator it) {
 IRInstruction* move_result_pseudo_of(IRList::iterator it) {
   ++it;
   always_assert(it->type == MFLOW_OPCODE &&
-                opcode::is_move_result_pseudo(it->insn->opcode()));
+                opcode::is_a_move_result_pseudo(it->insn->opcode()));
   return it->insn;
 }
 

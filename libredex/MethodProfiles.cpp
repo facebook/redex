@@ -13,7 +13,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "Trace.h"
+#include "Show.h"
 
 using namespace method_profiles;
 
@@ -472,8 +472,7 @@ bool dexmethods_profiled_comparator::operator()(DexMethod* a, DexMethod* b) {
     double w = get_method_sort_num(m);
     if (w == VERY_END) {
       // For methods not included in the profiled methods file, move them to
-      // the top section anyway if they match one of the allowed
-      // substrings.
+      // the top section anyway if they match one of the allowed substrings.
       w = get_method_sort_num_override(m);
     }
 

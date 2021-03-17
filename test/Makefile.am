@@ -19,9 +19,9 @@ googletest-release-1.8.0/googletest/src/gtest_main.cc \
 googletest-release-1.8.0/googlemock/src/gmock-all.cc \
 googletest-release-1.8.0/googlemock/src/gmock_main.cc: setup_gtest
 
-.PHONY: setup_gtest
 setup_gtest:
 	./setup.sh
+	touch setup_gtest
 
 check_SCRIPTS = check_num_passes.sh
 # _DEPENDENCIES does not seem to work for SCRIPTS

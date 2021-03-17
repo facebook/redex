@@ -13,6 +13,8 @@
 #include "DexStore.h"
 #include "IRInstruction.h"
 
+struct MethodItemEntry;
+
 namespace method_reference {
 
 // A callsite instruction in caller. mie should always contain an IRInstruction.

@@ -8,6 +8,7 @@
 #include <boost/algorithm/string.hpp>
 #include <gtest/gtest.h>
 
+#include "Show.h"
 #include "VerifyUtil.h"
 
 namespace {

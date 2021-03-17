@@ -501,7 +501,7 @@ struct MethodCreator {
 struct ClassCreator {
   explicit ClassCreator(DexType* type, const std::string& location = "") {
     always_assert_log(type_class(type) == nullptr,
-                      "class already exists for %s\n", SHOW(type));
+                      "class already exists for %s\n", show_type(type).c_str());
     m_cls = new DexClass(location);
     m_cls->m_self = type;
     m_cls->m_access_flags = (DexAccessFlags)0;
@@ -543,7 +543,7 @@ struct ClassCreator {
    * Set the external bit for the DexClass.
    */
   void set_external() {
-    m_cls->m_deobfuscated_name = show(m_cls);
+    m_cls->m_deobfuscated_name = show_cls(m_cls);
     m_cls->m_external = true;
   }
 
@@ -575,7 +575,7 @@ struct ClassCreator {
     if (m_cls->m_super_class == NULL) {
       if (m_cls->m_self != type::java_lang_Object()) {
         always_assert_log(m_cls->m_super_class, "No supertype found for %s",
-                          SHOW(m_cls->m_self));
+                          show_type(m_cls->m_self).c_str());
       }
     }
     m_cls->m_interfaces = DexTypeList::make_type_list(std::move(m_interfaces));
@@ -584,6 +584,10 @@ struct ClassCreator {
   }
 
  private:
+  // To avoid "Show.h" in the header.
+  static std::string show_cls(const DexClass* cls);
+  static std::string show_type(const DexType* type);
+
   DexClass* m_cls;
   std::deque<DexType*> m_interfaces;
 };

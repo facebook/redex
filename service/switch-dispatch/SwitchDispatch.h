@@ -119,6 +119,8 @@ struct DispatchMethod {
       : main_dispatch(main), sub_dispatches(std::move(subs)) {}
 };
 
+using SwitchIndices = std::set<int>;
+
 /**
  * A high level API that assesses the size of the switch dispatch needed and
  * potentially split it when necessary.

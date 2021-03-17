@@ -8,6 +8,7 @@
 #include "ConstantPropagationWholeProgramState.h"
 
 #include "IPConstantPropagationAnalysis.h"
+#include "Trace.h"
 #include "Walkers.h"
 
 using namespace constant_propagation;
@@ -53,7 +54,6 @@ void analyze_clinits(const Scope& scope,
                      const interprocedural::FixpointIterator& fp_iter,
                      ConstantFieldPartition* field_partition) {
   for (DexClass* cls : scope) {
-    auto& dmethods = cls->get_dmethods();
     auto clinit = cls->get_clinit();
     if (clinit == nullptr) {
       // If there is no class initializer, then the initial field values are
@@ -149,6 +149,15 @@ WholeProgramState::WholeProgramState(
   collect(scope, fp_iter);
 }
 
+WholeProgramState::WholeProgramState(
+    const Scope& scope,
+    const interprocedural::FixpointIterator& fp_iter,
+    const std::unordered_set<DexMethod*>& non_true_virtuals,
+    const std::unordered_set<const DexType*>& field_blocklist,
+    const call_graph::Graph& call_graph)
+    : WholeProgramState(scope, fp_iter, non_true_virtuals, field_blocklist) {
+  m_call_graph = call_graph;
+}
 /*
  * Walk over the entire program, doing a join over the values written to each
  * field, as well as a join over the values returned by each method.
@@ -210,12 +219,14 @@ void WholeProgramState::collect_field_values(
     const DexType* clinit_cls,
     ConcurrentMap<const DexField*, std::vector<ConstantValue>>*
         fields_value_tmp) {
-  if (!is_sput(insn->opcode()) && !is_iput(insn->opcode())) {
+  if (!opcode::is_an_sput(insn->opcode()) &&
+      !opcode::is_an_iput(insn->opcode())) {
     return;
   }
   auto field = resolve_field(insn->get_field());
   if (field != nullptr && m_known_fields.count(field)) {
-    if (is_sput(insn->opcode()) && field->get_class() == clinit_cls) {
+    if (opcode::is_an_sput(insn->opcode()) &&
+        field->get_class() == clinit_cls) {
       return;
     }
     auto value = env.get(insn->src(0));
@@ -240,7 +251,7 @@ void WholeProgramState::collect_return_values(
     ConcurrentMap<const DexMethod*, std::vector<ConstantValue>>*
         methods_value_tmp) {
   auto op = insn->opcode();
-  if (!is_return(op)) {
+  if (!opcode::is_a_return(op)) {
     return;
   }
   if (op == OPCODE_RETURN_VOID) {
@@ -320,6 +331,25 @@ bool WholeProgramAwareAnalyzer::analyze_invoke(
     ConstantEnvironment* env) {
   if (whole_program_state == nullptr) {
     return false;
+  }
+  if (whole_program_state->has_call_graph()) {
+    auto method = resolve_method(insn->get_method(), opcode_to_search(insn));
+    if (method == nullptr && opcode_to_search(insn) == MethodSearch::Virtual) {
+      method =
+          resolve_method(insn->get_method(), MethodSearch::InterfaceVirtual);
+    }
+    if (method == nullptr) {
+      return false;
+    }
+    if (whole_program_state->method_is_dynamic(method)) {
+      return false;
+    }
+    auto value = whole_program_state->get_return_value_from_cg(insn);
+    if (value.is_top()) {
+      return false;
+    }
+    env->set(RESULT_REGISTER, value);
+    return true;
   }
   auto op = insn->opcode();
   if (op != OPCODE_INVOKE_DIRECT && op != OPCODE_INVOKE_STATIC &&

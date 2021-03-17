@@ -15,10 +15,11 @@
 #include <sys/types.h>
 #include <unordered_set>
 
-#include <json/json.h>
+#include <json/value.h>
 
 #include "DexLoader.h"
 #include "DexOutput.h"
+#include "DexPosition.h"
 #include "IRCode.h"
 #include "InstructionLowering.h"
 #include "RedexTestUtils.h"

@@ -36,7 +36,7 @@ bool clinit_may_have_side_effects(const DexClass* cls) {
     editable_cfg_adapter::iterate_with_iterator(
         clinit->get_code(), [&non_trivial, cls](const IRList::iterator& it) {
           auto insn = it->insn;
-          if (is_invoke(insn->opcode()) ||
+          if (opcode::is_an_invoke(insn->opcode()) ||
               insn->opcode() == OPCODE_NEW_INSTANCE ||
               (insn->has_field() &&
                insn->get_field()->get_class() != cls->get_type())) {

@@ -9,6 +9,8 @@
 
 #include "CallGraph.h"
 #include "ConcurrentContainers.h"
+#include "Show.h"
+#include "Trace.h"
 #include "Walkers.h"
 
 using namespace side_effects;
@@ -118,7 +120,7 @@ void SummaryBuilder::analyze_instruction_effects(
       if (def.is_top() ||
           std::any_of(def.elements().begin(), def.elements().end(),
                       [&](auto insn) {
-                        return !opcode::is_load_param(insn->opcode());
+                        return !opcode::is_a_load_param(insn->opcode());
                       })) {
         summary->may_read_external = true;
       }

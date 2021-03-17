@@ -7,8 +7,12 @@
 
 #include "IRInstruction.h"
 
+#include "DexCallSite.h"
 #include "DexClass.h"
+#include "DexInstruction.h"
+#include "DexMethodHandle.h"
 #include "DexUtil.h"
+#include "Show.h"
 
 #include <boost/range/any_range.hpp>
 #include <cstring>
@@ -146,7 +150,7 @@ IRInstruction* IRInstruction::set_srcs_size(size_t count) {
 
 uint16_t IRInstruction::size() const {
   auto op = m_opcode;
-  if (opcode::is_internal(op)) {
+  if (opcode::is_an_internal(op)) {
     return 0;
   }
   static int args[] = {
@@ -204,7 +208,7 @@ bool IRInstruction::invoke_src_is_wide(src_index_t i) const {
 
   // virtual methods have `this` as the 0th register argument, but the
   // arg list does NOT include `this`
-  if (!is_invoke_static(m_opcode)) {
+  if (!opcode::is_invoke_static(m_opcode)) {
     if (i == 0) {
       // reference to `this`. References are never wide
       return false;
@@ -220,7 +224,7 @@ bool IRInstruction::invoke_src_is_wide(src_index_t i) const {
 bool IRInstruction::src_is_wide(src_index_t i) const {
   always_assert(i < srcs_size());
 
-  if (is_invoke(m_opcode)) {
+  if (opcode::is_an_invoke(m_opcode)) {
     return invoke_src_is_wide(i);
   }
 
@@ -276,7 +280,7 @@ bool IRInstruction::src_is_wide(src_index_t i) const {
 }
 
 void IRInstruction::normalize_registers() {
-  if (is_invoke(opcode())) {
+  if (opcode::is_an_invoke(opcode())) {
     auto& args = get_method()->get_proto()->get_args()->get_type_list();
     size_t old_srcs_idx{0};
     size_t srcs_idx{0};
@@ -300,7 +304,7 @@ void IRInstruction::normalize_registers() {
 }
 
 void IRInstruction::denormalize_registers() {
-  if (is_invoke(m_opcode)) {
+  if (opcode::is_an_invoke(m_opcode)) {
     auto& args = get_method()->get_proto()->get_args()->get_type_list();
     bool has_wide = false;
     for (const auto& arg : args) {
@@ -358,7 +362,7 @@ bool needs_range_conversion(const IRInstruction* insn) {
   if (insn->srcs_size() > dex_opcode::NON_RANGE_MAX) {
     return true;
   }
-  always_assert(!opcode::is_internal(op));
+  always_assert(!opcode::is_an_internal(op));
   auto dex_op = opcode::to_dex_opcode(op);
   for (size_t i = 0; i < insn->srcs_size(); ++i) {
     if (required_bit_width(insn->src(i)) >
@@ -429,3 +433,39 @@ void IRInstruction::gather_types(std::vector<DexType*>& ltype) const {
     break;
   }
 }
+
+void IRInstruction::gather_fields(std::vector<DexFieldRef*>& lfield) const {
+  if (has_field()) {
+    lfield.push_back(m_field);
+  }
+  if (has_callsite()) {
+    m_callsite->gather_fields(lfield);
+  }
+  if (has_methodhandle()) {
+    m_methodhandle->gather_fields(lfield);
+  }
+}
+
+void IRInstruction::gather_methods(std::vector<DexMethodRef*>& lmethod) const {
+  if (has_method()) {
+    lmethod.push_back(m_method);
+  }
+  if (has_callsite()) {
+    m_callsite->gather_methods(lmethod);
+  }
+  if (has_methodhandle()) {
+    m_methodhandle->gather_methods(lmethod);
+  }
+}
+
+void IRInstruction::gather_methodhandles(
+    std::vector<DexMethodHandle*>& lmethodhandle) const {
+  if (has_methodhandle()) {
+    lmethodhandle.push_back(m_methodhandle);
+  }
+  if (has_callsite()) {
+    m_callsite->gather_methodhandles(lmethodhandle);
+  }
+}
+
+std::string IRInstruction::show_opcode() const { return show(m_opcode); }

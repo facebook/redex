@@ -262,3 +262,19 @@ TEST_F(GlobalTypeAnalysisTest, IFieldsNullnessTest) {
   EXPECT_EQ(ftype.get_single_domain(),
             SingletonDexTypeDomain(get_type("TestI$Foo")));
 }
+
+TEST_F(GlobalTypeAnalysisTest, PrimitiveArrayTest) {
+  auto scope = build_class_scope(stores);
+  set_root_method("Lcom/facebook/redextest/TestJ;.main:()V");
+  GlobalTypeAnalysis analysis;
+  auto gta = analysis.analyze(scope);
+  auto wps = gta->get_whole_program_state();
+
+  auto create_byte_array = get_method("TestJ;.createByteArray", "", "[B");
+  auto rtype = wps.get_return_type(create_byte_array);
+  EXPECT_FALSE(rtype.is_top());
+  EXPECT_TRUE(rtype.is_not_null());
+  EXPECT_EQ(rtype.get_single_domain(),
+            SingletonDexTypeDomain(get_type_simple("[B")));
+  EXPECT_TRUE(rtype.get_array_nullness().is_top());
+}

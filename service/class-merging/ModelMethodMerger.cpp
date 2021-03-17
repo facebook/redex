@@ -81,7 +81,7 @@ void fix_visibility_helper(DexMethod* method, T& vmethods_created) {
   for (auto& mie : InstructionIterable(method->get_code())) {
     auto insn = mie.insn;
     auto opcode = insn->opcode();
-    if (!is_invoke_direct(opcode)) {
+    if (!opcode::is_invoke_direct(opcode)) {
       continue;
     }
     auto callee = resolve_method(insn->get_method(), MethodSearch::Direct);
@@ -129,7 +129,7 @@ cfg::Block* find_single_switch(const cfg::ControlFlowGraph& cfg) {
 
   for (const auto& block : cfg.blocks()) {
     for (auto& mei : InstructionIterable(block)) {
-      if (is_switch(mei.insn->opcode())) {
+      if (opcode::is_switch(mei.insn->opcode())) {
         if (!switch_block) {
           switch_block = block;
         } else {
@@ -165,14 +165,14 @@ static void find_common_ctor_invocations(
       return;
     }
     auto last_non_goto_insn = target->get_last_insn();
-    if (is_goto(last_non_goto_insn->insn->opcode())) {
+    if (opcode::is_goto(last_non_goto_insn->insn->opcode())) {
       do {
         assert_log(last_non_goto_insn != target->get_first_insn(),
                    "Should have at least one non-goto opcode!");
         last_non_goto_insn = std::prev(last_non_goto_insn);
       } while (last_non_goto_insn->type != MFLOW_OPCODE);
     }
-    if (!is_invoke_direct(last_non_goto_insn->insn->opcode())) {
+    if (!opcode::is_invoke_direct(last_non_goto_insn->insn->opcode())) {
       invocations.clear();
       return;
     }
@@ -330,7 +330,7 @@ void ModelMethodMerger::fix_visibility() {
       method_reference::collect_call_refs(m_scope, vmethods_created);
   for (const auto& callsite : call_sites) {
     auto insn = callsite.mie->insn;
-    always_assert(is_invoke_direct(insn->opcode()));
+    always_assert(opcode::is_invoke_direct(insn->opcode()));
     insn->set_opcode(OPCODE_INVOKE_VIRTUAL);
   }
 }

@@ -7,12 +7,15 @@
 
 #include "IPConstantPropagation.h"
 
+#include "ConfigFiles.h"
 #include "ConstantEnvironment.h"
 #include "ConstantPropagationAnalysis.h"
 #include "ConstructorParams.h"
 #include "IPConstantPropagationAnalysis.h"
 #include "MethodOverrideGraph.h"
+#include "PassManager.h"
 #include "Timer.h"
+#include "Trace.h"
 #include "Walkers.h"
 
 namespace mog = method_override_graph;
@@ -113,8 +116,13 @@ std::unique_ptr<FixpointIterator> PassImpl::analyze(
   auto non_true_virtuals = mog::get_non_true_virtuals(scope);
   for (size_t i = 0; i < m_config.max_heap_analysis_iterations; ++i) {
     // Build an approximation of all the field values and method return values.
-    auto wps = std::make_unique<WholeProgramState>(
-        scope, *fp_iter, non_true_virtuals, m_config.field_blocklist);
+    auto wps =
+        m_config.use_multiple_callee_callgraph
+            ? std::make_unique<WholeProgramState>(scope, *fp_iter,
+                                                  non_true_virtuals,
+                                                  m_config.field_blocklist, cg)
+            : std::make_unique<WholeProgramState>(
+                  scope, *fp_iter, non_true_virtuals, m_config.field_blocklist);
     // If this approximation is not better than the previous one, we are done.
     if (fp_iter->get_whole_program_state().leq(*wps)) {
       break;

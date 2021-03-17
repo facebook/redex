@@ -138,7 +138,7 @@ IRList::iterator RuntimeAssertTransform::insert_field_assert(
     Stats& stats) {
   auto* insn = it->insn;
   auto op = insn->opcode();
-  if (!is_sget(op) && !is_iget(op)) {
+  if (!opcode::is_an_sget(op) && !opcode::is_an_iget(op)) {
     return it;
   }
   auto* field = resolve_field(insn->get_field());
@@ -153,7 +153,7 @@ IRList::iterator RuntimeAssertTransform::insert_field_assert(
     return it;
   }
   ++it;
-  if (!opcode::is_move_result_pseudo(it->insn->opcode())) {
+  if (!opcode::is_a_move_result_pseudo(it->insn->opcode())) {
     return it;
   }
   auto mov_res_it = it;
@@ -226,7 +226,7 @@ IRList::iterator RuntimeAssertTransform::insert_return_value_assert(
     IRList::iterator& it,
     Stats& stats) {
   auto* insn = it->insn;
-  if (!is_invoke(insn->opcode())) {
+  if (!opcode::is_an_invoke(insn->opcode())) {
     return it;
   }
   auto* callee = resolve_method(insn->get_method(), opcode_to_search(insn));
@@ -242,7 +242,7 @@ IRList::iterator RuntimeAssertTransform::insert_return_value_assert(
     return it;
   }
   ++it;
-  if (!opcode::is_move_result(it->insn->opcode())) {
+  if (!opcode::is_a_move_result(it->insn->opcode())) {
     return it;
   }
   auto mov_res_it = it;

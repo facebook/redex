@@ -12,6 +12,8 @@
 #include "IRCode.h"
 #include "MethodReference.h"
 #include "Resolver.h"
+#include "Show.h"
+#include "Trace.h"
 #include "TypeReference.h"
 #include "TypeTags.h"
 

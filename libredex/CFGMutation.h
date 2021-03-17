@@ -186,7 +186,8 @@ inline void CFGMutation::remove(const cfg::InstructionIterator& anchor) {
 }
 
 inline bool CFGMutation::is_terminal(IROpcode op) {
-  return is_branch(op) || is_throw(op) || is_return(op);
+  return opcode::is_branch(op) || opcode::is_throw(op) ||
+         opcode::is_a_return(op);
 }
 
 } // namespace cfg

@@ -7,12 +7,16 @@
 
 #include "IPReflectionAnalysis.h"
 
+#include <fstream>
+
 #include "AbstractDomain.h"
 #include "CallGraph.h"
+#include "ConfigFiles.h"
 #include "MethodOverrideGraph.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "PatriciaTreeMapAbstractPartition.h"
 #include "Resolver.h"
+#include "Show.h"
 #include "SpartaInterprocedural.h"
 
 namespace {
@@ -170,7 +174,7 @@ class ReflectionAnalyzer : public Base {
         &this->get_analysis_parameters()->refl_meta_cache);
 
     m_summary.set_value(analysis.get_return_value());
-    m_summary.set_reflection_sites(analysis.get_reflection_sites());
+    m_summary.set_reflection_sites(std::move(analysis.get_reflection_sites()));
 
     auto partition = analysis.get_calling_context_partition();
     if (!partition.is_top() && !partition.is_bottom()) {
@@ -178,7 +182,7 @@ class ReflectionAnalyzer : public Base {
         auto insn = entry.first;
         auto calling_context = entry.second;
         auto op = insn->opcode();
-        always_assert(is_invoke(op));
+        always_assert(opcode::is_an_invoke(op));
 
         auto callees = call_graph::resolve_callees_in_graph(
             *this->get_call_graph(), m_method, insn);

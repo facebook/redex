@@ -153,7 +153,7 @@ std::vector<Info> Iterator::collect() const {
       auto insn = it->insn;
       auto op = insn->opcode();
       const auto& cfg_it = b->to_cfg_instruction_iterator(it);
-      if (is_branch(op)) {
+      if (opcode::is_branch(op)) {
         auto info = get_enum_reg(env, insn);
         if (info && info->branch == boost::none) {
           // We check to make sure info.branch is none because we want to only

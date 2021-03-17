@@ -13,6 +13,7 @@
 #include <utility>
 #include <vector>
 
+#include "Debug.h"
 #include "DexClass.h"
 
 class DexStore;
@@ -131,6 +132,13 @@ class DexStoreClassesIterator
 };
 
 /**
+ * Return all the root store types if `include_primary_dex` is true, otherwise
+ * return all the types from secondary dexes.
+ */
+std::unordered_set<const DexType*> get_root_store_types(
+    const DexStoresVector& stores, bool include_primary_dex = true);
+
+/**
  * Provide an API to determine whether an illegal cross DexStore
  * reference/dependency is created.
  * TODO: this probably need to rely on metadata to be correct. Right now it
@@ -155,6 +163,9 @@ class XStoreRefs {
    */
   size_t m_root_stores;
 
+  static std::string show_type(const DexType* type); // To avoid "Show.h" in the
+                                                     // header.
+
  public:
   explicit XStoreRefs(const DexStoresVector& stores);
 
@@ -172,7 +183,7 @@ class XStoreRefs {
     for (size_t store_idx = 0; store_idx < m_xstores.size(); store_idx++) {
       if (m_xstores[store_idx].count(type) > 0) return store_idx;
     }
-    not_reached_log("type %s not in the current APK", SHOW(type));
+    not_reached_log("type %s not in the current APK", show_type(type).c_str());
   }
 
   /**

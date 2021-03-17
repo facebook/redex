@@ -7,7 +7,10 @@
 
 #include "MethodReference.h"
 
+#include "IRList.h"
 #include "Resolver.h"
+#include "Show.h"
+#include "Trace.h"
 #include "Walkers.h"
 
 namespace {
@@ -108,11 +111,11 @@ void update_call_refs_simple(
       TRACE(REFU, 9, " Updated call %s to %s", SHOW(insn), SHOW(new_callee));
       insn->set_method(new_callee);
       if (new_callee->is_virtual()) {
-        always_assert_log(is_invoke_virtual(insn->opcode()),
+        always_assert_log(opcode::is_invoke_virtual(insn->opcode()),
                           "invalid callsite %s\n",
                           SHOW(insn));
       } else if (is_static(new_callee)) {
-        always_assert_log(is_invoke_static(insn->opcode()),
+        always_assert_log(opcode::is_invoke_static(insn->opcode()),
                           "invalid callsite %s\n",
                           SHOW(insn));
       }

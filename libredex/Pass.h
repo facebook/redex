@@ -8,20 +8,16 @@
 #pragma once
 
 #include <algorithm>
-#include <functional>
-#include <iostream>
-#include <json/json.h>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
-#include "AnalysisUsage.h"
-#include "ConfigFiles.h"
 #include "Configurable.h"
-#include "DexClass.h"
 #include "DexStore.h"
-#include "PassRegistry.h"
 #include "Traits.h"
 
+class AnalysisUsage;
+struct ConfigFiles;
 class PassManager;
 
 class Pass : public Configurable {
@@ -31,10 +27,7 @@ class Pass : public Configurable {
     ANALYSIS,
   };
 
-  explicit Pass(const std::string& name, Kind kind = TRANSFORMATION)
-      : m_name(name), m_kind(kind) {
-    PassRegistry::get().register_pass(this);
-  }
+  explicit Pass(const std::string& name, Kind kind = TRANSFORMATION);
 
   std::string name() const { return m_name; }
 
@@ -42,7 +35,11 @@ class Pass : public Configurable {
 
   bool is_analysis_pass() const { return m_kind == ANALYSIS; }
 
-  virtual void destroy_analysis_result() {}
+  virtual void destroy_analysis_result() {
+    always_assert_log(m_kind != ANALYSIS,
+                      "destroy_analysis_result not implemented for %s",
+                      m_name.c_str());
+  }
 
   /**
    * All passes' eval_pass are run, and then all passes' run_pass are run. This
@@ -59,18 +56,7 @@ class Pass : public Configurable {
                         ConfigFiles& conf,
                         PassManager& mgr) = 0;
 
-  virtual void set_analysis_usage(AnalysisUsage& analysis_usage) const {
-    switch (m_kind) {
-    case TRANSFORMATION:
-      analysis_usage.set_preserve_none();
-      break;
-    case ANALYSIS:
-      analysis_usage.set_preserve_all();
-      break;
-    default:
-      not_reached();
-    }
-  }
+  virtual void set_analysis_usage(AnalysisUsage& analysis_usage) const;
 
   Configurable::Reflection reflect() override;
 

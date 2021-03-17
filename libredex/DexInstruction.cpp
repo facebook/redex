@@ -13,6 +13,7 @@
 #include "DexMethodHandle.h"
 #include "DexOutput.h"
 #include "Macros.h"
+#include "Show.h"
 #include "Warning.h"
 
 unsigned DexInstruction::count_from_opcode() const {

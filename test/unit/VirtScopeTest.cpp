@@ -14,6 +14,7 @@
 #include "DexUtil.h"
 #include "RedexTest.h"
 #include "ScopeHelper.h"
+#include "Show.h"
 #include "TypeSystem.h"
 #include "VirtScopeHelper.h"
 #include "VirtualScope.h"

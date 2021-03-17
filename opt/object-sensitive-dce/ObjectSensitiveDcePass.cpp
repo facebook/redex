@@ -7,12 +7,14 @@
 
 #include "ObjectSensitiveDcePass.h"
 
+#include <fstream>
 #include <functional>
 
 #include "ConcurrentContainers.h"
 #include "DexUtil.h"
 #include "HierarchyUtil.h"
 #include "LocalPointersAnalysis.h"
+#include "PassManager.h"
 #include "SummarySerialization.h"
 #include "Transform.h"
 #include "Walkers.h"
@@ -54,7 +56,7 @@ class CallGraphStrategy final : public call_graph::BuildStrategy {
     }
     for (auto& mie : InstructionIterable(code)) {
       auto insn = mie.insn;
-      if (is_invoke(insn->opcode())) {
+      if (opcode::is_an_invoke(insn->opcode())) {
         auto callee = resolve_method(insn->get_method(), opcode_to_search(insn),
                                      m_resolved_refs, method);
         if (callee == nullptr || may_be_overridden(callee)) {
@@ -72,13 +74,14 @@ class CallGraphStrategy final : public call_graph::BuildStrategy {
   // which means that the dead code removal will not optimize them fully. I'm
   // not sure why these "unreachable" methods are not ultimately removed by RMU,
   // but as it stands, properly optimizing them is a size win for us.
-  std::vector<const DexMethod*> get_roots() const override {
-    std::vector<const DexMethod*> roots;
+  call_graph::RootAndDynamic get_roots() const override {
+    call_graph::RootAndDynamic root_and_dynamic;
+    auto& roots = root_and_dynamic.roots;
 
     walk::code(m_scope, [&](DexMethod* method, IRCode& code) {
       roots.emplace_back(method);
     });
-    return roots;
+    return root_and_dynamic;
   }
 
  private:

@@ -6,7 +6,9 @@
  */
 
 #include "DexAsm.h"
+
 #include "IRInstruction.h"
+#include "Show.h"
 
 namespace dex_asm {
 

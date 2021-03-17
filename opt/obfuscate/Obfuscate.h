@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include "PassManager.h"
+#include "Pass.h"
 
 class ObfuscatePass : public Pass {
  public:

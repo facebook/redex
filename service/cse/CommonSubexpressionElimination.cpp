@@ -63,6 +63,9 @@
 #include "PatriciaTreeSetAbstractDomain.h"
 #include "ReducedProductAbstractDomain.h"
 #include "Resolver.h"
+#include "Show.h"
+#include "StlUtil.h"
+#include "Trace.h"
 #include "TypeInference.h"
 #include "Walkers.h"
 
@@ -194,9 +197,10 @@ static Barrier make_barrier(const IRInstruction* insn) {
   Barrier b;
   b.opcode = insn->opcode();
   if (insn->has_field()) {
-    b.field = resolve_field(insn->get_field(), is_sfield_op(insn->opcode())
-                                                   ? FieldSearch::Static
-                                                   : FieldSearch::Instance);
+    b.field =
+        resolve_field(insn->get_field(), opcode::is_an_sfield_op(insn->opcode())
+                                             ? FieldSearch::Static
+                                             : FieldSearch::Instance);
   } else if (insn->has_method()) {
     b.method = resolve_method(insn->get_method(), opcode_to_search(insn));
   }
@@ -225,9 +229,10 @@ CseLocation get_written_array_location(IROpcode opcode) {
 }
 
 CseLocation get_written_location(const Barrier& barrier) {
-  if (is_aput(barrier.opcode)) {
+  if (opcode::is_an_aput(barrier.opcode)) {
     return get_written_array_location(barrier.opcode);
-  } else if (is_iput(barrier.opcode) || is_sput(barrier.opcode)) {
+  } else if (opcode::is_an_iput(barrier.opcode) ||
+             opcode::is_an_sput(barrier.opcode)) {
     return get_field_location(barrier.opcode, barrier.field);
   } else {
     return CseLocation(CseSpecialLocations::GENERAL_MEMORY_BARRIER);
@@ -264,7 +269,7 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
       if (location !=
           CseLocation(CseSpecialLocations::GENERAL_MEMORY_BARRIER)) {
         read_location_counts[location]++;
-      } else if (is_invoke(insn->opcode()) &&
+      } else if (opcode::is_an_invoke(insn->opcode()) &&
                  shared_state->has_pure_method(insn)) {
         for (auto l :
              shared_state->get_read_locations_of_conditionally_pure_method(
@@ -557,16 +562,17 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
     }
     value_id_t id = m_value_ids.size() * ValueIdFlags::BASE;
     always_assert(id / ValueIdFlags::BASE == m_value_ids.size());
-    if (is_aget(value.opcode)) {
+    if (opcode::is_an_aget(value.opcode)) {
       id |= get_location_value_id_mask(get_read_array_location(value.opcode));
-    } else if (is_iget(value.opcode) || is_sget(value.opcode)) {
+    } else if (opcode::is_an_iget(value.opcode) ||
+               opcode::is_an_sget(value.opcode)) {
       auto location = get_field_location(value.opcode, value.field);
       if (location ==
           CseLocation(CseSpecialLocations::GENERAL_MEMORY_BARRIER)) {
         return boost::none;
       }
       id |= get_location_value_id_mask(location);
-    } else if (is_invoke(value.opcode)) {
+    } else if (opcode::is_an_invoke(value.opcode)) {
       id |= get_invoke_value_id_mask(value);
     }
     if (value.opcode != IOPCODE_PRE_STATE_SRC) {
@@ -593,13 +599,13 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
   boost::optional<IRValue> get_equivalent_put_value(
       const IRInstruction* insn, CseEnvironment* current_state) const {
     const auto& ref_env = current_state->get_ref_env();
-    if (is_sput(insn->opcode())) {
+    if (opcode::is_an_sput(insn->opcode())) {
       always_assert(insn->srcs_size() == 1);
       IRValue value;
       value.opcode = (IROpcode)(insn->opcode() - OPCODE_SPUT + OPCODE_SGET);
       value.field = insn->get_field();
       return value;
-    } else if (is_iput(insn->opcode())) {
+    } else if (opcode::is_an_iput(insn->opcode())) {
       always_assert(insn->srcs_size() == 2);
       auto src1 = ref_env.get(insn->src(1)).get_constant();
       if (src1) {
@@ -616,7 +622,7 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
       // TODO: Allow this here, but also insert a check-cast instead of a simple
       // move-object in this case, using type inference on the array argument of
       // the aget-object instruction.
-    } else if (is_aput(insn->opcode())) {
+    } else if (opcode::is_an_aput(insn->opcode())) {
       always_assert(insn->srcs_size() == 3);
       auto src1 = ref_env.get(insn->src(1)).get_constant();
       auto src2 = ref_env.get(insn->src(2)).get_constant();
@@ -734,7 +740,7 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
   }
 
   value_id_t get_invoke_value_id_mask(const IRValue& value) const {
-    always_assert(is_invoke(value.opcode));
+    always_assert(opcode::is_an_invoke(value.opcode));
     value_id_t mask = 0;
     for (auto l :
          m_shared_state->get_read_locations_of_conditionally_pure_method(
@@ -930,7 +936,7 @@ void SharedState::init_method_barriers(const Scope& scope) {
           auto* insn = mie.insn;
           if (may_be_barrier(insn, nullptr /* exact_virtual_scope */)) {
             auto barrier = make_barrier(insn);
-            if (!is_invoke(barrier.opcode)) {
+            if (!opcode::is_an_invoke(barrier.opcode)) {
               auto location = get_written_location(barrier);
               if (location ==
                   CseLocation(CseSpecialLocations::GENERAL_MEMORY_BARRIER)) {
@@ -1002,7 +1008,7 @@ CseUnorderedLocationSet SharedState::get_relevant_written_locations(
     DexType* exact_virtual_scope,
     const CseUnorderedLocationSet& read_locations) {
   if (may_be_barrier(insn, exact_virtual_scope)) {
-    if (is_invoke(insn->opcode())) {
+    if (opcode::is_an_invoke(insn->opcode())) {
       return get_relevant_written_locations(insn, read_locations);
     } else {
       auto barrier = make_barrier(insn);
@@ -1023,13 +1029,14 @@ bool SharedState::may_be_barrier(const IRInstruction* insn,
   case OPCODE_FILL_ARRAY_DATA:
     return true;
   default:
-    if (is_aput(opcode) || is_iput(opcode) || is_sput(opcode)) {
+    if (opcode::is_an_aput(opcode) || opcode::is_an_iput(opcode) ||
+        opcode::is_an_sput(opcode)) {
       return true;
-    } else if (is_invoke(opcode)) {
+    } else if (opcode::is_an_invoke(opcode)) {
       return !is_invoke_safe(insn, exact_virtual_scope);
     }
     if (insn->has_field()) {
-      always_assert(is_iget(opcode) || is_sget(opcode));
+      always_assert(opcode::is_an_iget(opcode) || opcode::is_an_sget(opcode));
       if (get_field_location(opcode, insn->get_field()) ==
           CseLocation(CseSpecialLocations::GENERAL_MEMORY_BARRIER)) {
         return true;
@@ -1042,7 +1049,7 @@ bool SharedState::may_be_barrier(const IRInstruction* insn,
 
 bool SharedState::is_invoke_safe(const IRInstruction* insn,
                                  DexType* exact_virtual_scope) {
-  always_assert(is_invoke(insn->opcode()));
+  always_assert(opcode::is_an_invoke(insn->opcode()));
   auto method_ref = insn->get_method();
   auto opcode = insn->opcode();
 
@@ -1082,7 +1089,7 @@ bool SharedState::is_invoke_safe(const IRInstruction* insn,
 
 CseUnorderedLocationSet SharedState::get_relevant_written_locations(
     const IRInstruction* insn, const CseUnorderedLocationSet& read_locations) {
-  always_assert(is_invoke(insn->opcode()));
+  always_assert(opcode::is_an_invoke(insn->opcode()));
 
   auto opcode = insn->opcode();
   if (opcode == OPCODE_INVOKE_SUPER) {
@@ -1108,13 +1115,9 @@ CseUnorderedLocationSet SharedState::get_relevant_written_locations(
   }
 
   // Remove written locations that are not read
-  for (auto it = written_locations.begin(); it != written_locations.end();) {
-    if (!read_locations.count(*it)) {
-      it = written_locations.erase(it);
-    } else {
-      it++;
-    }
-  }
+  std20::erase_if(written_locations, [&read_locations](auto it) {
+    return !read_locations.count(*it);
+  });
 
   return written_locations;
 }
@@ -1182,9 +1185,10 @@ void SharedState::cleanup() {
   for (const auto& p : ordered_barriers) {
     auto& b = p.first;
     auto c = p.second;
-    if (is_invoke(b.opcode)) {
+    if (opcode::is_an_invoke(b.opcode)) {
       TRACE(CSE, 2, "%s %s x %u", SHOW(b.opcode), SHOW(b.method), c);
-    } else if (is_ifield_op(b.opcode) || is_sfield_op(b.opcode)) {
+    } else if (opcode::is_an_ifield_op(b.opcode) ||
+               opcode::is_an_sfield_op(b.opcode)) {
       TRACE(CSE, 2, "%s %s x %u", SHOW(b.opcode), SHOW(b.field), c);
     } else {
       TRACE(CSE, 2, "%s x %u", SHOW(b.opcode), c);
@@ -1251,7 +1255,8 @@ CommonSubexpressionElimination::CommonSubexpressionElimination(
       IRInstruction* insn = mie.insn;
       analyzer.analyze_instruction(insn, &env);
       auto opcode = insn->opcode();
-      if (!insn->has_dest() || is_move(opcode) || is_const(opcode)) {
+      if (!insn->has_dest() || opcode::is_a_move(opcode) ||
+          opcode::is_a_const(opcode)) {
         continue;
       }
       auto ref_c = env.get_ref_env().get(insn->dest()).get_constant();
@@ -1269,11 +1274,11 @@ CommonSubexpressionElimination::CommonSubexpressionElimination(
       bool skip{false};
       for (auto earlier_insn : earlier_insns) {
         auto earlier_opcode = earlier_insn->opcode();
-        if (opcode::is_load_param(earlier_opcode)) {
+        if (opcode::is_a_load_param(earlier_opcode)) {
           skip = true;
           break;
         }
-        if (opcode::is_cmp(opcode) || opcode::is_cmp(earlier_opcode)) {
+        if (opcode::is_a_cmp(opcode) || opcode::is_a_cmp(earlier_opcode)) {
           // See T46241704. We never de-duplicate cmp instructions due to an
           // apparent bug in various Dalvik (and ART?) versions. Also see this
           // documentation in the r8 source code:
@@ -1301,9 +1306,9 @@ static IROpcode get_move_opcode(const IRInstruction* earlier_insn) {
   } else if (earlier_insn->opcode() == OPCODE_NEW_ARRAY) {
     return OPCODE_MOVE;
   } else {
-    always_assert(is_aput(earlier_insn->opcode()) ||
-                  is_iput(earlier_insn->opcode()) ||
-                  is_sput(earlier_insn->opcode()));
+    always_assert(opcode::is_an_aput(earlier_insn->opcode()) ||
+                  opcode::is_an_iput(earlier_insn->opcode()) ||
+                  opcode::is_an_sput(earlier_insn->opcode()));
     return earlier_insn->src_is_wide(0)
                ? OPCODE_MOVE_WIDE
                : (earlier_insn->opcode() == OPCODE_APUT_OBJECT ||
@@ -1361,9 +1366,9 @@ bool CommonSubexpressionElimination::patch(bool runtime_assertions) {
     } else if (earlier_insn->opcode() == OPCODE_NEW_ARRAY) {
       m_stats.array_lengths_captured++;
     } else {
-      always_assert(is_aput(earlier_insn->opcode()) ||
-                    is_iput(earlier_insn->opcode()) ||
-                    is_sput(earlier_insn->opcode()));
+      always_assert(opcode::is_an_aput(earlier_insn->opcode()) ||
+                    opcode::is_an_iput(earlier_insn->opcode()) ||
+                    opcode::is_an_sput(earlier_insn->opcode()));
       m_stats.stores_captured++;
     }
   }
@@ -1404,7 +1409,7 @@ bool CommonSubexpressionElimination::patch(bool runtime_assertions) {
 
     if (opcode::is_move_result_any(insn->opcode())) {
       insn = m_cfg.primary_instruction_of_move_result(it)->insn;
-      if (is_invoke(insn->opcode())) {
+      if (opcode::is_an_invoke(insn->opcode())) {
         TRACE(CSE, 3, "[CSE] eliminating invocation of %s",
               SHOW(insn->get_method()));
       }

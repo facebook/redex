@@ -10,8 +10,10 @@
 #include <boost/optional.hpp>
 
 #include "ControlFlow.h"
+#include "PassManager.h"
 #include "ReachingDefinitions.h"
 #include "ScopedCFG.h"
+#include "Show.h"
 #include "Walkers.h"
 
 namespace {
@@ -195,7 +197,7 @@ size_t analyze_and_rewrite(
     }
     auto* insn = it->insn;
     IROpcode op = insn->opcode();
-    if (!is_conditional_branch(op)) {
+    if (!opcode::is_a_conditional_branch(op)) {
       continue;
     }
 

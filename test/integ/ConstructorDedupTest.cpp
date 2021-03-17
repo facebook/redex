@@ -9,6 +9,7 @@
 #include "IRTypeChecker.h"
 #include "NormalizeConstructor.h"
 #include "RedexTest.h"
+#include "Show.h"
 #include "Walkers.h"
 
 class ConstructorDedupTest : public RedexIntegrationTest {};

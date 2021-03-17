@@ -45,6 +45,11 @@ class DexClass;
 namespace method_dedup {
 
 /**
+ * Return the estimated code size reduction from constructor deduplication.
+ */
+uint32_t estimate_deduplicatable_ctor_code_size(const DexClass* cls);
+
+/**
  * Deduplicate non-root constructors for each class and fix all the callsites.
  */
 uint32_t dedup_constructors(const std::vector<DexClass*>& classes,

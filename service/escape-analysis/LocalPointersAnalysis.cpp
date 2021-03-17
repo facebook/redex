@@ -331,9 +331,9 @@ void escape_invoke_params(const IRInstruction* insn,
 void default_instruction_handler(const IRInstruction* insn,
                                  EnvironmentWithStore* env) {
   auto op = insn->opcode();
-  if (is_invoke(op)) {
+  if (opcode::is_an_invoke(op)) {
     analyze_generic_invoke(insn, env);
-  } else if (is_move(op)) {
+  } else if (opcode::is_a_move(op)) {
     env->set_pointers(insn->dest(), env->get_pointers(insn->src(0)));
   } else if (op == OPCODE_CHECK_CAST) {
     env->set_pointers(RESULT_REGISTER, env->get_pointers(insn->src(0)));
@@ -351,7 +351,7 @@ void FixpointIterator::analyze_instruction(const IRInstruction* insn,
   escape_heap_referenced_objects(insn, env);
 
   auto op = insn->opcode();
-  if (is_invoke(op)) {
+  if (opcode::is_an_invoke(op)) {
     if (m_invoke_to_summary_map.count(insn)) {
       const auto& summary = m_invoke_to_summary_map.at(insn);
       analyze_invoke_with_summary(summary, insn, env);
@@ -462,7 +462,7 @@ void collect_exiting_pointers(const FixpointIterator& fp_iter,
     auto insn = last_insn_it->insn;
     const auto& state =
         fp_iter.get_exit_state_at(const_cast<cfg::Block*>(block));
-    if (is_return_value(insn->opcode())) {
+    if (opcode::is_a_return_value(insn->opcode())) {
       returned_ptrs->join_with(state.get_pointers(insn->src(0)));
     } else if (insn->opcode() == OPCODE_THROW) {
       thrown_ptrs->join_with(state.get_pointers(insn->src(0)));

@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <deque>
+#include <fstream>
 #include <iomanip>
 #include <iterator>
 #include <limits>
@@ -40,6 +41,7 @@
 #include "PatriciaTreeSetAbstractDomain.h"
 #include "PointsToSemanticsUtils.h"
 #include "RedexContext.h"
+#include "Show.h"
 #include "Trace.h"
 #include "Walkers.h"
 

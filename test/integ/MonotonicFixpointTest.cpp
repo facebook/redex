@@ -18,10 +18,12 @@
 
 #include "ControlFlow.h"
 #include "DexInstruction.h"
+#include "DexPosition.h"
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "RedexTest.h"
+#include "Show.h"
 
 #include "HashedSetAbstractDomain.h"
 

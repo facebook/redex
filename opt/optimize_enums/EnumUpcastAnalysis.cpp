@@ -9,6 +9,8 @@
 
 #include "EnumClinitAnalysis.h"
 #include "Resolver.h"
+#include "Show.h"
+#include "Trace.h"
 #include "Walkers.h"
 
 namespace {
@@ -305,7 +307,6 @@ class EnumUpcastDetector {
       ConcurrentSet<DexType*>* rejected_enums) const {
     always_assert(insn->opcode() == OPCODE_INVOKE_VIRTUAL);
     const DexMethodRef* method = insn->get_method();
-    const DexProto* proto = method->get_proto();
     DexType* container = method->get_class();
 
     // Class is Enum or a candidate enum class.

@@ -114,6 +114,63 @@ class NoChangeNameIntfImpl implements NoChangeNameIntf {
   }
 }
 
+interface AllReturn2Intf {
+  public int calculate(int input);
+  public int return2();
+}
+
+class AllReturn2Impl1 implements AllReturn2Intf {
+  public int calculate(int input) { return 5 - input; }
+  public int return2() { return 2; }
+}
+
+class AllReturn2Impl2 implements AllReturn2Intf {
+  public int calculate(int input) { return input - 1; }
+  public int return2() { return 2; }
+}
+
+interface MayReturn2Intf {
+  public int return2();
+  public int returnSomething();
+}
+
+class MayReturn2Impl1 implements MayReturn2Intf {
+  public int return2() { return 2; }
+  public int returnSomething() { return 2; }
+}
+
+class MayReturn2Impl2 implements MayReturn2Intf {
+  public int return2() {
+    if (Math.random() >= 0) {
+      return 2;
+    }
+    return 3;
+  }
+  public int returnSomething() { return 3; }
+}
+
+class OverrideWithSameValue {
+  public int return3() { return 3; }
+}
+
+class OverrideWithSameValue2 extends OverrideWithSameValue {
+  @Override
+  public int return3() {
+    return 3;
+  }
+}
+
+class OverrideWithDifferentValue {
+  public int returnSomething() { return 4; }
+}
+
+class OverrideWithDifferentValue2 extends OverrideWithDifferentValue {
+  @Override
+  public int returnSomething() {
+    return 5;
+  }
+}
+
 public class IPConstantPropagationTest {
 
   // CHECK: method: virtual redex.IPConstantPropagationTest.two_ctors
@@ -205,5 +262,71 @@ public class IPConstantPropagationTest {
   public void true_virtuals_no_rename() {
     NoChangeNameIntf a = new NoChangeNameIntfImpl();
     assertThat(a.calculate(3)).isEqualTo(6);
+  }
+
+  // CHECK: method: virtual redex.IPConstantPropagationTest.true_virtuals_all_return_2
+  @Test
+  public void true_virtuals_all_return_2() {
+    AllReturn2Intf a;
+    if (Math.random() > 0.5) {
+      a = new AllReturn2Impl1();
+    } else {
+      a = new AllReturn2Impl2();
+    }
+    assertThat(a.calculate(3)).isEqualTo(2);
+    assertThat(a.return2()).isEqualTo(2);
+    if (a.calculate(3) != 2 || a.return2() != 2) {
+      // CHECK-NOT: return-void
+      // PRECHECK: invoke-virtual {{.*}} org.fest.assertions.api.BooleanAssert.isTrue
+      // POSTCHECK-NOT: invoke-virtual {{.*}} org.fest.assertions.api.BooleanAssert.isTrue
+      assertThat(false).isTrue();
+    }
+    // CHECK: return-void
+  }
+
+  // CHECK: method: virtual redex.IPConstantPropagationTest.true_virtuals_may_return_2
+  @Test
+  public void true_virtuals_may_return_2() {
+    MayReturn2Intf a;
+    if (Math.random() >= 0) {
+      a = new MayReturn2Impl1();
+    } else {
+      a = new MayReturn2Impl2();
+    }
+    assertThat(a.return2()).isEqualTo(2);
+    assertThat(a.returnSomething()).isEqualTo(2);
+    // CHECK-NOT: return-void
+    // CHECK: invoke-virtual {{.*}} org.fest.assertions.api.BooleanAssert.isTrue
+    if (a.return2() != 2 || a.returnSomething() != 2) {
+      assertThat(false).isTrue();
+    }
+    // CHECK: return-void
+  }
+
+  // CHECK: method: virtual redex.IPConstantPropagationTest.true_virtuals_override_same_return
+  @Test
+  public void true_virtuals_override_same_return() {
+    OverrideWithSameValue a = new OverrideWithSameValue();
+    assertThat(a.return3()).isEqualTo(3);
+    // CHECK-NOT: return-void
+    // PRECHECK: invoke-virtual {{.*}} org.fest.assertions.api.BooleanAssert.isTrue
+    // POSTCHECK-NOT: invoke-virtual {{.*}} org.fest.assertions.api.BooleanAssert.isTrue
+    if (a.return3() != 3) {
+      assertThat(false).isTrue();
+    }
+    // CHECK: return-void
+  }
+
+  // CHECK: method: virtual redex.IPConstantPropagationTest.true_virtuals_override_different_return
+  @Test
+  public void true_virtuals_override_different_return() {
+    OverrideWithDifferentValue a = new OverrideWithDifferentValue();
+    assertThat(a.returnSomething()).isEqualTo(4);
+    // CHECK-NOT: return-void
+    // CHECK: invoke-virtual {{.*}} org.fest.assertions.api.BooleanAssert.isTrue
+    if (a.returnSomething() != 4) {
+      assertThat(false).isTrue();
+    }
+    // CHECK: return-void
   }
 }

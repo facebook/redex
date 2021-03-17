@@ -14,8 +14,10 @@
 #include "ControlFlow.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
+#include "PassManager.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "Resolver.h"
+#include "Trace.h"
 #include "Walkers.h"
 
 using namespace sparta;
@@ -236,7 +238,7 @@ std::unordered_map<const IRInstruction*, ParamIndex> get_load_param_map(
   ParamIndex index = 0;
   for (auto it = param_insns.begin(); it != param_insns.end(); it++) {
     const auto insn = it->insn;
-    always_assert(opcode::is_load_param(insn->opcode()));
+    always_assert(opcode::is_a_load_param(insn->opcode()));
     map.insert({insn, index++});
   }
   return map;
@@ -247,7 +249,7 @@ boost::optional<ParamIndex> ReturnParamResolver::get_return_param_index(
     const std::unordered_map<const DexMethod*, ParamIndex>&
         methods_which_return_parameter,
     MethodRefCache& resolved_refs) const {
-  always_assert(is_invoke(insn->opcode()));
+  always_assert(opcode::is_an_invoke(insn->opcode()));
   const auto method = insn->get_method();
   const auto proto = method->get_proto();
   if (proto->is_void()) {
@@ -414,7 +416,7 @@ boost::optional<ParamIndex> ReturnParamResolver::get_return_param_index(
   // return instruction
   for (const auto block : cfg.blocks()) {
     const auto& last = block->get_last_insn();
-    if (last == block->end() || !is_return(last->insn->opcode())) {
+    if (last == block->end() || !opcode::is_a_return(last->insn->opcode())) {
       continue;
     }
     const auto env = analyzer.get_exit_state_at(block);
@@ -434,7 +436,7 @@ void ResultPropagation::patch(PassManager& mgr, IRCode* code) {
   for (auto it = ii.begin(); it != ii.end(); it++) {
     // do we have a sequence of invoke + move-result instruction?
     const auto insn = it->insn;
-    if (!is_invoke(insn->opcode())) {
+    if (!opcode::is_an_invoke(insn->opcode())) {
       continue;
     }
     const auto next = std::next(it);
@@ -442,7 +444,7 @@ void ResultPropagation::patch(PassManager& mgr, IRCode* code) {
       continue;
     }
     const auto peek = next->insn;
-    if (!opcode::is_move_result(peek->opcode())) {
+    if (!opcode::is_a_move_result(peek->opcode())) {
       continue;
     }
     // do we know the invoked method always returns a particular parameter?

@@ -10,17 +10,21 @@
 #include <bitset>
 #include <boost/optional.hpp>
 #include <boost/variant.hpp>
+#include <iostream>
 #include <limits>
 
 #include "BaseIRAnalyzer.h"
 #include "CFGMutation.h"
+#include "ConfigFiles.h"
 #include "ConstantAbstractDomain.h"
 #include "ControlFlow.h"
 #include "IRInstruction.h"
 #include "MethodProfiles.h"
+#include "PassManager.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "ReachingDefinitions.h"
 #include "ScopedCFG.h"
+#include "Show.h"
 #include "Trace.h"
 #include "Walkers.h"
 
@@ -151,7 +155,7 @@ struct LocksIterator : public ir_analyzer::BaseIRAnalyzer<LockEnvironment> {
         return exit_state_at_source;
       }
 
-      if (!is_monitor(last_it->insn->opcode())) {
+      if (!opcode::is_a_monitor(last_it->insn->opcode())) {
         return exit_state_at_source;
       }
       monitor_insn = last_it->insn;
@@ -198,7 +202,7 @@ struct LocksIterator : public ir_analyzer::BaseIRAnalyzer<LockEnvironment> {
 
   void analyze_instruction(const IRInstruction* insn,
                            LockEnvironment* current_state) const override {
-    if (!is_monitor(insn->opcode())) {
+    if (!opcode::is_a_monitor(insn->opcode())) {
       return;
     }
     if (!current_state->is_value()) {
@@ -309,7 +313,7 @@ boost::optional<RDefs> compute_rdefs(ControlFlowGraph& cfg) {
         continue;
       }
       block_map.emplace(mie.insn, b);
-      if (is_monitor(mie.insn->opcode())) {
+      if (opcode::is_a_monitor(mie.insn->opcode())) {
         monitor_insns.push_back(mie.insn);
       }
     }
@@ -554,7 +558,7 @@ size_t remove(ControlFlowGraph& cfg, AnalysisResult& analysis) {
     }
 
     for (const auto& insn_it : ir_list::InstructionIterable{b}) {
-      if (is_monitor(insn_it.insn->opcode())) {
+      if (opcode::is_a_monitor(insn_it.insn->opcode())) {
         auto it = analysis.rdefs.find(insn_it.insn);
         redex_assert(it != analysis.rdefs.end());
         auto def = it->second;
@@ -659,7 +663,7 @@ struct Stats {
 
 bool has_monitor_ops(const IRCode* code) {
   for (const auto& mie : ir_list::InstructionIterableImpl<true>(code)) {
-    if (is_monitor(mie.insn->opcode())) {
+    if (opcode::is_a_monitor(mie.insn->opcode())) {
       return true;
     }
   }

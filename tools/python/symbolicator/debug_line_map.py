@@ -73,3 +73,9 @@ class DebugLineMap(object):
                     break
             return result
         return None
+
+    def get_mappings(self, method_id):
+        method_id = int(method_id)
+        if method_id in self.method_id_map:
+            return self.method_id_map[method_id]
+        return None

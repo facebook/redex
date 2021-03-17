@@ -14,6 +14,8 @@
 #include "Liveness.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "Resolver.h"
+#include "Show.h"
+#include "Trace.h"
 
 using namespace sparta;
 
@@ -337,7 +339,7 @@ BuilderAnalysis::get_vinvokes_to_this_infered_type() {
   std::unordered_map<IRInstruction*, DexType*> result;
 
   for (const auto& pair : m_usage) {
-    if (is_invoke_virtual(pair.first->opcode())) {
+    if (opcode::is_invoke_virtual(pair.first->opcode())) {
       always_assert(!result.count(const_cast<IRInstruction*>(pair.first)));
 
       auto current_instance = get_instantiated_type(pair.first);
@@ -345,7 +347,7 @@ BuilderAnalysis::get_vinvokes_to_this_infered_type() {
     }
 
     for (auto& insn : pair.second) {
-      if (is_invoke_virtual(insn->opcode())) {
+      if (opcode::is_invoke_virtual(insn->opcode())) {
         auto this_reg = insn->src(0);
         auto val = m_insn_to_env->at(insn).get(this_reg).get_constant();
 
@@ -367,12 +369,12 @@ std::unordered_set<IRInstruction*> BuilderAnalysis::get_all_inlinable_insns() {
   std::unordered_set<IRInstruction*> result;
 
   for (const auto& pair : m_usage) {
-    if (is_invoke(pair.first->opcode())) {
+    if (opcode::is_an_invoke(pair.first->opcode())) {
       result.emplace(const_cast<IRInstruction*>(pair.first));
     }
 
     for (auto& insn : pair.second) {
-      if (is_invoke(insn->opcode())) {
+      if (opcode::is_an_invoke(insn->opcode())) {
         result.emplace(const_cast<IRInstruction*>(insn));
       }
     }
@@ -459,7 +461,7 @@ std::unordered_set<DexType*> BuilderAnalysis::non_removable_types() {
     }
 
     for (const IRInstruction* insn : pair.second) {
-      if (is_monitor(insn->opcode())) {
+      if (opcode::is_a_monitor(insn->opcode())) {
         non_removable_types.emplace(current_instance);
         break;
       }
@@ -483,7 +485,7 @@ std::unordered_set<DexType*> BuilderAnalysis::escape_types() {
 
     for (const auto& insn : pair.second) {
       // If there is any invoke here, it is because we couldn't inline it.
-      if (is_invoke(insn->opcode())) {
+      if (opcode::is_an_invoke(insn->opcode())) {
         // We accept Object.<init> calls.
         if (insn->get_method() == acceptable_method) {
           continue;
@@ -498,9 +500,10 @@ std::unordered_set<DexType*> BuilderAnalysis::escape_types() {
         TRACE(BLD_PATTERN, 2, "Excluding type %s since instanceof used",
               SHOW(current_instance));
         escape_types.emplace(current_instance);
-      } else if (is_iput(insn->opcode()) || is_sput(insn->opcode()) ||
+      } else if (opcode::is_an_iput(insn->opcode()) ||
+                 opcode::is_an_sput(insn->opcode()) ||
                  insn->opcode() == OPCODE_APUT_OBJECT ||
-                 is_return(insn->opcode())) {
+                 opcode::is_a_return(insn->opcode())) {
         auto src = insn->src(0);
 
         auto escaped = m_insn_to_env->at(insn).get(src).get_constant();
