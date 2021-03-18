@@ -6,6 +6,7 @@
 
 import json
 import os
+import shlex
 import shutil
 import subprocess
 import tempfile
@@ -26,8 +27,8 @@ class ArtifactsTestFixture(unittest.TestCase):
             json.dump(self.config, f)
 
         subprocess.check_call(
-            [
-                os.environ["REDEX_SCRIPT"],
+            shlex.split(os.environ["REDEX_SCRIPT"])
+            + [
                 "-P",
                 os.environ["PG_CONFIG"],
                 "-c",
