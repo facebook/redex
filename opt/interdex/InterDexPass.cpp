@@ -41,6 +41,10 @@ void InterDexPass::bind_config() {
   bind("static_prune", false, m_static_prune);
   bind("emit_canaries", true, m_emit_canaries);
   bind("normal_primary_dex", false, m_normal_primary_dex);
+  bind("keep_primary_order", true, m_keep_primary_order);
+  always_assert_log(m_keep_primary_order || m_normal_primary_dex,
+                    "We always need to respect primary dex order if we treat "
+                    "the primary dex as a special dex.");
   bind("linear_alloc_limit", 11600 * 1024, m_linear_alloc_limit);
 
   bind("reserved_frefs", 0, m_reserved_frefs,
@@ -113,7 +117,7 @@ void InterDexPass::run_pass(
   bool force_single_dex = conf.get_json_config().get("force_single_dex", false);
   InterDex interdex(original_scope, dexen, mgr.apk_manager(), conf, plugins,
                     m_linear_alloc_limit, m_static_prune, m_normal_primary_dex,
-                    force_single_dex, m_emit_canaries,
+                    m_keep_primary_order, force_single_dex, m_emit_canaries,
                     m_minimize_cross_dex_refs, m_minimize_cross_dex_refs_config,
                     m_cross_dex_relocator_config, refs_info.frefs,
                     refs_info.trefs, refs_info.mrefs, &xstore_refs,
@@ -195,7 +199,8 @@ void InterDexPass::run_pass_on_nonroot_store(const Scope& original_scope,
   // Initialize interdex and run for nonroot store
   InterDex interdex(original_scope, dexen, mgr.apk_manager(), conf, plugins,
                     m_linear_alloc_limit, m_static_prune, m_normal_primary_dex,
-                    false /* force single dex */, false /* emit canaries */,
+                    m_keep_primary_order, false /* force single dex */,
+                    false /* emit canaries */,
                     false /* minimize_cross_dex_refs */, cross_dex_refs_config,
                     cross_dex_relocator_config, refs_info.frefs,
                     refs_info.trefs, refs_info.mrefs, &xstore_refs,

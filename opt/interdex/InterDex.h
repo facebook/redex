@@ -33,6 +33,7 @@ class InterDex {
            int64_t linear_alloc_limit,
            bool static_prune_classes,
            bool normal_primary_dex,
+           bool keep_primary_order,
            bool force_single_dex,
            bool emit_canaries,
            bool minimize_cross_dex_refs,
@@ -50,6 +51,7 @@ class InterDex {
         m_plugins(plugins),
         m_static_prune_classes(static_prune_classes),
         m_normal_primary_dex(normal_primary_dex),
+        m_keep_primary_order(keep_primary_order),
         m_force_single_dex(force_single_dex),
         m_emit_canaries(emit_canaries),
         m_minimize_cross_dex_refs(minimize_cross_dex_refs),
@@ -155,8 +157,10 @@ class InterDex {
   ApkManager& m_apk_manager;
   ConfigFiles& m_conf;
   std::vector<std::unique_ptr<InterDexPassPlugin>>& m_plugins;
+  // TODO: Encapsulate (primary|all) dex flags under one config.
   bool m_static_prune_classes;
   bool m_normal_primary_dex;
+  bool m_keep_primary_order;
   bool m_force_single_dex;
   bool m_emit_canaries;
   bool m_minimize_cross_dex_refs;

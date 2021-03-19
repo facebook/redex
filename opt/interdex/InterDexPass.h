@@ -82,6 +82,7 @@ class InterDexPass : public Pass {
   bool m_static_prune;
   bool m_emit_canaries;
   bool m_normal_primary_dex;
+  bool m_keep_primary_order;
   int64_t m_linear_alloc_limit;
   int64_t m_reserved_frefs;
   int64_t m_reserved_trefs;

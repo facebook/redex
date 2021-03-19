@@ -888,13 +888,14 @@ void InterDex::run() {
   // we can't touch the primary dex.
   if (!m_normal_primary_dex) {
     emit_primary_dex(primary_dex, m_interdex_types, unreferenced_classes);
-  }
-
-  // NOTE: If primary dex is treated as a normal dex, we are going to modify
-  //       it too, based on coldstart classes. Because of that, we need to
-  //       update the coldstart list to respect the primary dex.
-  if (m_normal_primary_dex && !m_interdex_types.empty()) {
-    update_interdexorder(primary_dex, &m_interdex_types);
+  } else {
+    // NOTE: If primary dex is treated as a normal dex, we are going to modify
+    //       it too, based on coldstart classes. If we can't remove the classes
+    //       from the primary dex, we need to update the coldstart list to
+    //       respect the primary dex.
+    if (m_keep_primary_order && !m_interdex_types.empty()) {
+      update_interdexorder(primary_dex, &m_interdex_types);
+    }
   }
 
   // Emit interdex classes, if any.
