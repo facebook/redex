@@ -102,6 +102,8 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
         if (it->second.appear_percent >=
             m_config.method_profiles_appear_percent_threshold) {
           m_sufficiently_popular_methods.insert(method);
+        } else {
+          m_insufficiently_popular_methods.insert(method);
         }
       });
     }
@@ -196,6 +198,10 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
       if (m_sufficiently_popular_methods.count(method)) {
         return;
       }
+      if (m_config.profile_only && !m_insufficiently_popular_methods.count(method)) {
+        return;
+      }
+
       bool requires_trampoline{false};
       if (!can_relocate(cls_has_problematic_clinit, method, /* log */ true,
                         &requires_trampoline)) {
@@ -299,6 +305,12 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
           m_stats.popular_methods++;
           return;
         }
+
+        if (m_config.profile_only && !m_insufficiently_popular_methods.count(method)) {
+          m_stats.non_relocated_methods++;
+          return;
+        }
+
         auto it = sc.relocatable_methods.find(method);
         if (it == sc.relocatable_methods.end()) {
           m_stats.non_relocated_methods++;
@@ -551,6 +563,9 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
 
  private:
   std::unordered_set<DexMethod*> m_sufficiently_popular_methods;
+  // Methods that appear in the profiles and whose frequency does not exceed
+  // the threashold.
+  std::unordered_set<DexMethod*> m_insufficiently_popular_methods;
 
   struct RelocatableMethodInfo {
     DexClass* target_cls;
@@ -717,7 +732,11 @@ void update_coldstart_classes_order(
     auto initial_type = str.substr(0, str.size() - 11) + ";";
 
     auto type = DexType::get_type(initial_type.c_str());
-    always_assert(type);
+    if (type == nullptr) {
+      TRACE(CS, 2, "[class splitting] Cannot find previously relocated type %s in cold-start classes", initial_type.c_str());
+      mgr.incr_metric("num_missing_initial_types", 1);
+      continue;
+    }
 
     if (!coldstart_types.count(type)) {
       replacement[str] = initial_type;

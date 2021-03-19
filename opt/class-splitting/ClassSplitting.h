@@ -23,6 +23,8 @@ struct ClassSplittingConfig {
   bool trampolines{true};
   unsigned int trampoline_size_threshold{100};
   std::vector<std::string> blocklist_types;
+  // If true, only consider methods that appear in the profiles for relocation.
+  bool profile_only{false};
 };
 
 class ClassSplittingPass : public Pass {
@@ -61,6 +63,9 @@ class ClassSplittingPass : public Pass {
          {},
          m_config.blocklist_types,
          "List of types for classes to not split.");
+    bind("profile_only",
+         m_config.profile_only,
+         m_config.profile_only);
     always_assert(!m_config.relocate_true_virtual_methods ||
                   m_config.trampolines);
     always_assert(!m_config.trampolines ||
