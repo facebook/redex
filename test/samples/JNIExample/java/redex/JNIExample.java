@@ -12,5 +12,6 @@ public class JNIExample {
     System.loadLibrary("jniexample");
   }
 
-  public native void hello();
+  public native void missing();
+  public native void implemented();
 }
