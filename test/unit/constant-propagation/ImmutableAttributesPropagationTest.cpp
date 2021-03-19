@@ -14,11 +14,13 @@
 #include "Creators.h"
 #include "IRAssembler.h"
 #include "JarLoader.h"
+#include "S_Expression.h"
 
 using ImmutableAnalyzer =
     InstructionAnalyzerCombiner<cp::StringAnalyzer,
                                 cp::ImmutableAttributeAnalyzer,
                                 cp::PrimitiveAnalyzer>;
+using namespace sparta;
 
 struct ImmutableTest : public ConstantPropagationTest {
  public:
@@ -47,21 +49,82 @@ struct ImmutableTest : public ConstantPropagationTest {
 
   static ObjectWithImmutAttrDomain create_integer_abstract_value(long value,
                                                                  bool cached) {
-    ObjectWithImmutAttr integer(type::java_lang_Integer(), 1);
-    integer.jvm_cached_singleton = cached;
-    integer.write_value(
-        ImmutableAttr::Attr(method::java_lang_Integer_intValue()),
-        SignedConstantDomain(value));
-    return ObjectWithImmutAttrDomain(std::move(integer));
+    return create_object(R"((
+    "Ljava/lang/Integer;" 
+    (
+      ("intValue:()I" )" + std::to_string(value) +
+                             R"()
+    )
+    ))",
+                         cached);
   }
 
-  static ObjectWithImmutAttrDomain create_char_abstract_value() {
-    auto char_type = type::java_lang_Character();
-    ObjectWithImmutAttr char_obj(char_type, 1);
-    char_obj.write_value(ImmutableAttr::Attr(static_cast<DexMethod*>(
-                             type::get_unboxing_method_for_type(char_type))),
-                         SignedConstantDomain(100));
-    return ObjectWithImmutAttrDomain(std::move(char_obj));
+  static ObjectWithImmutAttrDomain create_char_100() {
+    return create_object(R"((
+    "Ljava/lang/Character;" 
+    (
+      ("charValue:()C" 100)
+    )
+    ))");
+  }
+
+  /**
+   * Example :
+   * ( "ClassName" (
+   *    ( "FieldName1" "Value1" )
+   *    ( "FieldName2" "Value2" )
+   *  )
+   * )
+   */
+  static ObjectWithImmutAttrDomain create_object(const std::string& s,
+                                                 bool cached = false) {
+    std::istringstream input(s);
+    s_expr_istream s_expr_input(input);
+    s_expr expr;
+    s_expr_input >> expr;
+    std::string class_name;
+    s_expr fields_expr;
+    s_patn({s_patn(&class_name), s_patn(fields_expr)})
+        .must_match(expr, "Need a class name");
+    auto type = DexType::make_type(DexString::make_string(class_name));
+    ObjectWithImmutAttr obj(type, fields_expr.size());
+    obj.jvm_cached_singleton = cached;
+    for (size_t i = 0; i < fields_expr.size(); i++) {
+      std::string member_name;
+      s_expr value;
+      auto matched =
+          s_patn({s_patn(&member_name)}, value).match_with(fields_expr[i]);
+      always_assert_log(matched,
+                        "Need a pair of field_name(or method_name) and value");
+      ImmutableAttr::Attr attr;
+      auto it = member_name.find(":(");
+      if (it == std::string::npos) {
+        auto field = static_cast<DexField*>(
+            DexField::make_field(class_name + "." + member_name));
+        attr.kind = ImmutableAttr::Attr::Kind::Field;
+        attr.field = field;
+      } else {
+        auto method = static_cast<DexMethod*>(
+            DexMethod::make_method(class_name + "." + member_name));
+        attr.kind = ImmutableAttr::Attr::Kind::Method;
+        attr.method = method;
+      }
+      always_assert_log(value.size() == 1, "Only accept string or integer");
+      if (value[0].is_int32()) {
+        obj.write_value(attr, SignedConstantDomain(value[0].get_int32()));
+      } else if (value[0].is_string()) {
+        auto value_s = value[0].get_string();
+        // "T" is special, it means Top.
+        if (value_s == "T") {
+          obj.write_value(attr, AttrDomain::top());
+        } else {
+          obj.write_value(attr, StringDomain(DexString::make_string(value_s)));
+        }
+      } else {
+        always_assert_log(false, "value is not supported");
+      }
+    }
+    return ObjectWithImmutAttrDomain(std::move(obj));
   }
 };
 
@@ -95,6 +158,52 @@ TEST_F(ImmutableTest, abstract_domain) {
     integer_200.meet_with(cached_integer_100);
     EXPECT_TRUE(integer_200.is_bottom());
   }
+  {
+    auto a_1_b_2 = create_object(R"((
+      "LX;" (
+        ("a:I" 1)
+        ("b:I" 2)
+      )
+    ))");
+    auto a_1_b_3 = create_object(R"((
+      "LX;" (
+        ("a:I" 1)
+        ("b:I" 3)
+      )
+    ))");
+    a_1_b_2.meet_with(a_1_b_3);
+    EXPECT_TRUE(a_1_b_2.is_bottom());
+    EXPECT_TRUE(a_1_b_3.is_value());
+    auto obj = a_1_b_3.get_constant();
+    auto y_object = create_object(R"((
+      "LY;" (
+        ("a:I" 1)
+        ("b:I" 3)
+      )
+    ))");
+    y_object.meet_with(a_1_b_3);
+    // Different types, we don't know their relationship.
+    EXPECT_TRUE(y_object.is_top());
+  }
+  {
+    auto a_1_c_1 = create_object(R"((
+      "LX;" (
+        ("a:I" 1)
+        ("c:I" 1)
+      )
+    ))");
+    // We don't know if X class has other instance fields or not.
+    EXPECT_TRUE(a_1_c_1.get_constant()->runtime_equals(
+                    *a_1_c_1.get_constant()) == TriState::Unknown);
+    auto b_1_c_2 = create_object(R"((
+      "LX;" (
+        ("b:I" 1)
+        ("c:I" 2)
+      )
+    ))");
+    EXPECT_TRUE(a_1_c_1.get_constant()->runtime_equals(
+                    *b_1_c_2.get_constant()) == TriState::False);
+  }
   // join
   {
     // Integer{100} join CachedInteger{100} => Integer{100}
@@ -119,9 +228,40 @@ TEST_F(ImmutableTest, abstract_domain) {
   {
     // Integer{100} join Char{100} => top
     auto integer_100 = create_integer_abstract_value(100, false);
-    auto char_100 = create_char_abstract_value();
+    auto char_100 = create_char_100();
     integer_100.join_with(char_100);
     EXPECT_TRUE(integer_100.is_top());
+  }
+  {
+    auto a_1_b_2 = create_object(R"((
+      "LX;" (
+        ("a:I" 1)
+        ("b:I" 2)
+      )
+    ))");
+    auto a_1_b_3 = create_object(R"((
+      "LX;" (
+        ("a:I" 1)
+        ("b:I" 3)
+      )
+    ))");
+    a_1_b_2.join_with(a_1_b_3);
+    EXPECT_TRUE(a_1_b_2.is_value());
+    auto expect = create_object(R"((
+      "LX;" (
+        ("a:I" 1)
+        ("b:I" "T")
+      )
+    ))");
+    EXPECT_TRUE(a_1_b_2.equals(expect));
+    auto y_object = create_object(R"((
+      "LY;" (
+        ("a:I" 1)
+        ("b:I" 3)
+      )
+    ))");
+    y_object.join_with(a_1_b_3);
+    EXPECT_TRUE(y_object.is_top());
   }
 }
 
