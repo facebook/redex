@@ -52,29 +52,6 @@ using StringDomain = sparta::ConstantAbstractDomain<const DexString*>;
 using ConstantClassObjectDomain =
     sparta::ConstantAbstractDomain<const DexType*>;
 
-/**
- * This domain stores an object with **immutable** attributes. The
- * attributes must be immutable, for example, final primitive instance fields
- * that are never changed after initialization, regardless of whether the object
- * may escape.
- */
-using ObjectWithImmutAttrDomain =
-    sparta::ConstantAbstractDomain<std::shared_ptr<ObjectWithImmutAttr>>;
-
-/**
- * SingletonObjectWithImmutAttrDomain is similar to ObjectWithImmutAttrDomain,
- * but the contained (wrapped) object with immutable attr actually has a
- * meaningful identity.
- */
-struct SingletonObjectWithImmutAttr {
-  std::shared_ptr<ObjectWithImmutAttr> unwrapped_object;
-  bool operator==(const SingletonObjectWithImmutAttr& other) const {
-    return unwrapped_object == other.unwrapped_object;
-  }
-};
-using SingletonObjectWithImmutAttrDomain =
-    sparta::ConstantAbstractDomain<SingletonObjectWithImmutAttr>;
-
 /*
  * This represents a new-instance or new-array instruction.
  */
@@ -91,7 +68,6 @@ using ConstantValue =
                                         StringDomain,
                                         ConstantClassObjectDomain,
                                         ObjectWithImmutAttrDomain,
-                                        SingletonObjectWithImmutAttrDomain,
                                         AbstractHeapPointer>;
 
 // For storing non-escaping static and instance fields.
@@ -319,6 +295,3 @@ class ReturnState : public sparta::ReducedProductAbstractDomain<ReturnState,
 // custom meet AND JOIN that knows about the relationship of NEZ and certain
 // non-null custom object domains.
 ConstantValue meet(const ConstantValue& left, const ConstantValue& right);
-
-std::ostream& operator<<(std::ostream& output,
-                         const SingletonObjectWithImmutAttr& wrapper);

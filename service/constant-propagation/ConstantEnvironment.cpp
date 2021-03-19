@@ -77,9 +77,3 @@ ConstantValue meet(const ConstantValue& left, const ConstantValue& right) {
   // disjoint domains.
   return left.meet(right);
 }
-
-std::ostream& operator<<(std::ostream& output,
-                         const SingletonObjectWithImmutAttr& wrapper) {
-  output << "singleton " << wrapper.unwrapped_object;
-  return output;
-}

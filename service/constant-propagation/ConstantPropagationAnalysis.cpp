@@ -850,35 +850,21 @@ void ImmutableAttributeAnalyzerState::add_cached_boxed_objects(
                                CachedBoxedObjects{begin, end});
 }
 
-std::shared_ptr<ObjectWithImmutAttr>
-ImmutableAttributeAnalyzerState::get_cached_boxed_object(
+bool ImmutableAttributeAnalyzerState::is_jvm_cached_object(
     DexMethod* initialize_method, long value) const {
   auto it = cached_boxed_objects.find(initialize_method);
   if (it == cached_boxed_objects.end()) {
-    return nullptr;
+    return false;
   }
+  auto& cached_objects = it->second;
+  return value >= cached_objects.begin && value < cached_objects.end;
+}
 
-  auto& cbo = const_cast<CachedBoxedObjects&>(it->second);
-  if (value < cbo.begin || value >= cbo.end) {
-    return nullptr;
-  }
-
-  std::shared_ptr<ObjectWithImmutAttr> object;
-  cbo.objects.update(
-      value,
-      [&object, initialize_method,
-       this](int val, std::shared_ptr<ObjectWithImmutAttr>& loc, bool exists) {
-        if (!exists) {
-          auto& initializers = method_initializers.at_unsafe(initialize_method);
-          always_assert(initializers.size() == 1);
-          const auto& initializer = initializers.front();
-          always_assert(initializer.insn_src_id_of_attr == 0);
-          loc = std::make_shared<ObjectWithImmutAttr>();
-          loc->write_value(initializer.attr, SignedConstantDomain(val));
-        }
-        object = loc;
-      });
-  return object;
+DexType* ImmutableAttributeAnalyzerState::initialized_type(
+    const DexMethod* initialize_method) {
+  return method::is_init(initialize_method)
+             ? initialize_method->get_class()
+             : initialize_method->get_proto()->get_rtype();
 }
 
 bool ImmutableAttributeAnalyzer::analyze_iget(
@@ -897,7 +883,9 @@ bool ImmutableAttributeAnalyzer::analyze_iget(
   if (this_domain.is_top() || this_domain.is_bottom()) {
     return false;
   }
-  auto helper = [&](const std::shared_ptr<ObjectWithImmutAttr>& object) {
+  if (const auto& obj_or_none =
+          this_domain.maybe_get<ObjectWithImmutAttrDomain>()) {
+    auto object = obj_or_none->get_constant();
     auto value = object->get_value(field);
     if (value && !value->is_top()) {
       if (const auto& string_value = value->maybe_get<StringDomain>()) {
@@ -910,13 +898,6 @@ bool ImmutableAttributeAnalyzer::analyze_iget(
       }
     }
     return false;
-  };
-  if (const auto& obj_or_none =
-          this_domain.maybe_get<ObjectWithImmutAttrDomain>()) {
-    return helper(*obj_or_none->get_constant());
-  } else if (const auto& singleton_obj_or_none =
-                 this_domain.maybe_get<SingletonObjectWithImmutAttrDomain>()) {
-    return helper((*singleton_obj_or_none->get_constant()).unwrapped_object);
   } else {
     return false;
   }
@@ -957,7 +938,9 @@ bool ImmutableAttributeAnalyzer::analyze_method_attr(
   if (this_domain.is_top() || this_domain.is_bottom()) {
     return false;
   }
-  auto helper = [&](const std::shared_ptr<ObjectWithImmutAttr>& object) {
+  if (const auto& obj_or_none =
+          this_domain.maybe_get<ObjectWithImmutAttrDomain>()) {
+    auto object = obj_or_none->get_constant();
     auto value = object->get_value(method);
     if (value && !value->is_top()) {
       if (const auto& string_value = value->maybe_get<StringDomain>()) {
@@ -970,13 +953,6 @@ bool ImmutableAttributeAnalyzer::analyze_method_attr(
       }
     }
     return false;
-  };
-  if (const auto& obj_or_none =
-          this_domain.maybe_get<ObjectWithImmutAttrDomain>()) {
-    return helper(*obj_or_none->get_constant());
-  } else if (const auto& singleton_obj_or_none =
-                 this_domain.maybe_get<SingletonObjectWithImmutAttrDomain>()) {
-    return helper((*singleton_obj_or_none->get_constant()).unwrapped_object);
   } else {
     return false;
   }
@@ -991,12 +967,14 @@ bool ImmutableAttributeAnalyzer::analyze_method_initialization(
   if (it == state->method_initializers.end()) {
     return false;
   }
-  std::shared_ptr<ObjectWithImmutAttr> object =
-      std::make_shared<ObjectWithImmutAttr>();
+  ObjectWithImmutAttr object(
+      ImmutableAttributeAnalyzerState::initialized_type(method),
+      it->second.size());
   // Only support one register for the object, can be easily extended. For
   // example, virtual method may return `this` pointer, so two registers are
   // holding the same heap object.
   reg_t obj_reg;
+  bool has_value = false;
   for (auto& initializer : it->second) {
     obj_reg = initializer.obj_is_dest()
                   ? RESULT_REGISTER
@@ -1005,32 +983,34 @@ bool ImmutableAttributeAnalyzer::analyze_method_initialization(
     if (const auto& signed_value = domain.maybe_get<SignedConstantDomain>()) {
       auto constant = signed_value->get_constant();
       if (!constant) {
+        object.write_value(initializer.attr, SignedConstantDomain::top());
         continue;
       }
-      auto cached_object = state->get_cached_boxed_object(method, *constant);
-      if (cached_object) {
-        env->set(obj_reg, SingletonObjectWithImmutAttrDomain(
-                              {std::move(cached_object)}));
-        return true;
-      }
-      object->write_value(initializer.attr, *signed_value);
+      object.jvm_cached_singleton =
+          state->is_jvm_cached_object(method, *constant);
+      object.write_value(initializer.attr, *signed_value);
+      has_value = true;
     } else if (const auto& string_value = domain.maybe_get<StringDomain>()) {
       if (!string_value->is_value()) {
+        object.write_value(initializer.attr, StringDomain::top());
         continue;
       }
-      object->write_value(initializer.attr, *string_value);
+      object.write_value(initializer.attr, *string_value);
+      has_value = true;
     } else if (const auto& type_value =
                    domain.maybe_get<ConstantClassObjectDomain>()) {
       if (!type_value->is_value()) {
+        object.write_value(initializer.attr, ConstantClassObjectDomain::top());
         continue;
       }
-      object->write_value(initializer.attr, *type_value);
+      object.write_value(initializer.attr, *type_value);
+      has_value = true;
     }
   }
-  if (object->empty()) {
+  if (!has_value || object.empty()) {
     return false;
   }
-  env->set(obj_reg, ObjectWithImmutAttrDomain(object));
+  env->set(obj_reg, ObjectWithImmutAttrDomain(std::move(object)));
   return true;
 }
 
@@ -1095,10 +1075,11 @@ bool EnumUtilsFieldAnalyzer::analyze_sget(
     ConstantEnvironment* env) {
   // The $EnumUtils class contains fields named fXXX, where XXX encodes a 32-bit
   // number whose boxed value is stored as a java.lang.Integer instance in that
-  // field.
+  // field. These fields are initialized through Integer.valueOf(...).
+  auto integer_type = type::java_lang_Integer();
   auto field = resolve_field(insn->get_field());
   if (field == nullptr || !is_final(field) ||
-      field->get_type() != type::java_lang_Integer() || field->str().empty() ||
+      field->get_type() != integer_type || field->str().empty() ||
       field->str()[0] != 'f' ||
       field->get_class() != DexType::make_type("Lredex/$EnumUtils;")) {
     return false;
@@ -1115,15 +1096,10 @@ bool EnumUtilsFieldAnalyzer::analyze_sget(
 
   const auto& name = field->str();
   auto value = std::stoi(name.substr(1));
-  auto cached_object = state->get_cached_boxed_object(valueOf, value);
-  if (cached_object) {
-    env->set(RESULT_REGISTER,
-             SingletonObjectWithImmutAttrDomain({std::move(cached_object)}));
-  } else {
-    auto object = std::make_shared<ObjectWithImmutAttr>();
-    object->write_value(initializer.attr, SignedConstantDomain(value));
-    env->set(RESULT_REGISTER, ObjectWithImmutAttrDomain(object));
-  }
+  ObjectWithImmutAttr object(integer_type, 1);
+  object.write_value(initializer.attr, SignedConstantDomain(value));
+  object.jvm_cached_singleton = state->is_jvm_cached_object(valueOf, value);
+  env->set(RESULT_REGISTER, ObjectWithImmutAttrDomain(std::move(object)));
   return true;
 }
 

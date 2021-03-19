@@ -28,6 +28,7 @@ struct EnumUtilsFieldTest : public ConstantPropagationTest {
     m_immut_analyzer_state.add_initializer(integer_valueOf, integer_intValue)
         .set_src_id_of_attr(0)
         .set_obj_to_dest();
+    m_immut_analyzer_state.add_cached_boxed_objects(integer_valueOf, -128, 128);
     m_analyzer = AnalyzerUnderTest(&m_immut_analyzer_state,
                                    &m_immut_analyzer_state, nullptr);
   }

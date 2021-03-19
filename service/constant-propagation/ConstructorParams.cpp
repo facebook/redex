@@ -159,6 +159,9 @@ class InitFixpointIterator final
   }
 };
 
+/**
+ * Return an ordered vector, ordered by address of Attr.
+ */
 std::vector<std::pair<ImmutableAttr::Attr, size_t>> analyze_initializer(
     const DexMethod* method,
     const constant_propagation::ImmutableAttributeAnalyzerState& state,
@@ -213,6 +216,7 @@ std::vector<std::pair<ImmutableAttr::Attr, size_t>> analyze_initializer(
       }
     }
   }
+  std::sort(usage.begin(), usage.end());
   return usage;
 }
 } // namespace

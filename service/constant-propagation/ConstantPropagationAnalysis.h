@@ -253,7 +253,6 @@ struct ImmutableAttributeAnalyzerState {
   struct CachedBoxedObjects {
     long begin;
     long end;
-    ConcurrentMap<long, std::shared_ptr<ObjectWithImmutAttr>> objects{};
   };
 
   ConcurrentMap<DexMethod*, std::vector<Initializer>> method_initializers;
@@ -270,8 +269,9 @@ struct ImmutableAttributeAnalyzerState {
   void add_cached_boxed_objects(DexMethod* initialize_method,
                                 long begin,
                                 long end);
-  std::shared_ptr<ObjectWithImmutAttr> get_cached_boxed_object(
-      DexMethod* initialize_method, long value) const;
+  bool is_jvm_cached_object(DexMethod* initialize_method, long value) const;
+
+  static DexType* initialized_type(const DexMethod* initialize_method);
 };
 
 class ImmutableAttributeAnalyzer final
@@ -380,14 +380,22 @@ class runtime_equals_visitor : public boost::static_visitor<bool> {
                 template_util::contains<Constant,
                                         const DexField*,
                                         const DexString*,
-                                        const DexType*,
-                                        SingletonObjectWithImmutAttr>::value>>
+                                        const DexType*>::value>>
   bool operator()(const sparta::ConstantAbstractDomain<Constant>& d1,
                   const sparta::ConstantAbstractDomain<Constant>& d2) const {
     if (!(d1.is_value() && d2.is_value())) {
       return false;
     }
     return *d1.get_constant() == *d2.get_constant();
+  }
+
+  bool operator()(const ObjectWithImmutAttrDomain& d1,
+                  const ObjectWithImmutAttrDomain& d2) const {
+    if (!(d1.is_value() && d2.is_value())) {
+      return false;
+    }
+    return d1.get_constant()->runtime_equals(*d2.get_constant()) ==
+           TriState::True;
   }
 
   template <typename Domain, typename OtherDomain>

@@ -248,7 +248,7 @@ static std::string get_key(const ConstantArguments& constant_arguments) {
       if (c) {
         oss << *c;
       } else {
-        oss << signed_value->interval();
+        oss << show(*signed_value);
       }
     } else if (const auto& singleton_value =
                    value.maybe_get<SingletonObjectDomain>()) {
@@ -256,25 +256,13 @@ static std::string get_key(const ConstantArguments& constant_arguments) {
       oss << show(field);
     } else if (const auto& obj_or_none =
                    value.maybe_get<ObjectWithImmutAttrDomain>()) {
-      auto object = *obj_or_none->get_constant();
-      auto ordered_attributes =
-          object->attributes; // intentionally making a copy
-      std::sort(ordered_attributes.begin(), ordered_attributes.end(),
-                [](const ImmutableAttr& a, const ImmutableAttr& b) {
-                  if (a.attr.is_field() != b.attr.is_field()) {
-                    return a.attr.is_field();
-                  }
-                  if (a.attr.is_field()) {
-                    always_assert(b.attr.is_field());
-                    return compare_dexfields(a.attr.field, b.attr.field);
-                  }
-                  always_assert(a.attr.is_method());
-                  always_assert(b.attr.is_method());
-                  return compare_dexmethods(a.attr.method, b.attr.method);
-                });
+      auto object = obj_or_none->get_constant();
+      if (object->jvm_cached_singleton) {
+        oss << "(cached)";
+      }
       oss << "{";
       bool first{true};
-      for (auto& attr : ordered_attributes) {
+      for (auto& attr : object->attributes) {
         if (first) {
           first = false;
         } else {
@@ -293,15 +281,11 @@ static std::string get_key(const ConstantArguments& constant_arguments) {
           if (c) {
             oss << *c;
           } else {
-            oss << signed_value->interval();
+            oss << show(*signed_value2);
           }
         }
       }
       oss << "}";
-    } else if (const auto& singleton_obj_or_none =
-                   value.maybe_get<SingletonObjectWithImmutAttrDomain>()) {
-      auto object = (*singleton_obj_or_none->get_constant()).unwrapped_object;
-      oss << "singleton-immutable-object(" << (size_t)object.get() << ")";
     } else {
       not_reached_log("unexpected value: %s", SHOW(value));
     }
