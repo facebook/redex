@@ -859,6 +859,8 @@ bool ImmutableAttributeAnalyzer::analyze_iget(
     const ImmutableAttributeAnalyzerState* state,
     const IRInstruction* insn,
     ConstantEnvironment* env) {
+  // TODO: ImmutableAttributeAnalyzer has a bug, T86281813 will fix it.
+  return false;
   auto field_ref = insn->get_field();
   DexField* field = resolve_field(field_ref, FieldSearch::Instance);
   if (!field) {
@@ -893,6 +895,8 @@ bool ImmutableAttributeAnalyzer::analyze_invoke(
     const ImmutableAttributeAnalyzerState* state,
     const IRInstruction* insn,
     ConstantEnvironment* env) {
+  // TODO: ImmutableAttributeAnalyzer has a bug, T86281813 will fix it.
+  return false;
   auto method_ref = insn->get_method();
   DexMethod* method = resolve_method(method_ref, opcode_to_search(insn));
   if (!method) {
