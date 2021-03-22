@@ -24,8 +24,8 @@ std::string implemented(facebook::jni::alias_ref<jobject> thiz,
                         int value);
 
 std::string unused(facebook::jni::alias_ref<jobject> thiz,
-                        std::string name,
-                        int value);
-}
+                   std::string name,
+                   int value);
+} // namespace samples
 } // namespace redex
 } // namespace facebook

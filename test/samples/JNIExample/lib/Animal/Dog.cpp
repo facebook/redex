@@ -21,8 +21,8 @@ std::string implemented(facebook::jni::alias_ref<jobject> thiz,
 }
 
 std::string unused(facebook::jni::alias_ref<jobject> thiz,
-                        std::string name,
-                        int value) {
+                   std::string name,
+                   int value) {
   std::cout << name << std::endl;
   return std::to_string(value);
 }
