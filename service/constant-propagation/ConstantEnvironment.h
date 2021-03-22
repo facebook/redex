@@ -52,15 +52,6 @@ using StringDomain = sparta::ConstantAbstractDomain<const DexString*>;
 using ConstantClassObjectDomain =
     sparta::ConstantAbstractDomain<const DexType*>;
 
-/**
- * This domain stores an object with **immutable** attributes. The
- * attributes must be immutable, for example, final primitive instance fields
- * that are never changed after initialization, regardless of whether the object
- * may escape.
- */
-using ObjectWithImmutAttrDomain =
-    sparta::ConstantAbstractDomain<std::shared_ptr<ObjectWithImmutAttr>>;
-
 /*
  * This represents a new-instance or new-array instruction.
  */

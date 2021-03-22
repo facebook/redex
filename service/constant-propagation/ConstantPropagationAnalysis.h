@@ -268,6 +268,8 @@ struct ImmutableAttributeAnalyzerState {
   Initializer& add_initializer(DexMethod* initialize_method, DexField* attr);
   Initializer& add_initializer(DexMethod* initialize_method,
                                const ImmutableAttr::Attr& attr);
+
+  static DexType* initialized_type(const DexMethod* initialize_method);
 };
 
 class ImmutableAttributeAnalyzer final
@@ -383,6 +385,15 @@ class runtime_equals_visitor : public boost::static_visitor<bool> {
       return false;
     }
     return *d1.get_constant() == *d2.get_constant();
+  }
+
+  bool operator()(const ObjectWithImmutAttrDomain& d1,
+                  const ObjectWithImmutAttrDomain& d2) const {
+    if (!(d1.is_value() && d2.is_value())) {
+      return false;
+    }
+    return d1.get_constant()->runtime_equals(*d2.get_constant()) ==
+           TriState::True;
   }
 
   template <typename Domain, typename OtherDomain>

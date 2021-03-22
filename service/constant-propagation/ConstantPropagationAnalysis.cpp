@@ -855,12 +855,17 @@ ImmutableAttributeAnalyzerState::ImmutableAttributeAnalyzerState() {
   }
 }
 
+DexType* ImmutableAttributeAnalyzerState::initialized_type(
+    const DexMethod* initialize_method) {
+  return method::is_init(initialize_method)
+             ? initialize_method->get_class()
+             : initialize_method->get_proto()->get_rtype();
+}
+
 bool ImmutableAttributeAnalyzer::analyze_iget(
     const ImmutableAttributeAnalyzerState* state,
     const IRInstruction* insn,
     ConstantEnvironment* env) {
-  // TODO: ImmutableAttributeAnalyzer has a bug, T86281813 will fix it.
-  return false;
   auto field_ref = insn->get_field();
   DexField* field = resolve_field(field_ref, FieldSearch::Instance);
   if (!field) {
@@ -875,7 +880,7 @@ bool ImmutableAttributeAnalyzer::analyze_iget(
   }
   if (const auto& obj_or_none =
           this_domain.maybe_get<ObjectWithImmutAttrDomain>()) {
-    auto object = *obj_or_none->get_constant();
+    auto object = obj_or_none->get_constant();
     auto value = object->get_value(field);
     if (value && !value->is_top()) {
       if (const auto& string_value = value->maybe_get<StringDomain>()) {
@@ -887,16 +892,16 @@ bool ImmutableAttributeAnalyzer::analyze_iget(
         return true;
       }
     }
+    return false;
+  } else {
+    return false;
   }
-  return false;
 }
 
 bool ImmutableAttributeAnalyzer::analyze_invoke(
     const ImmutableAttributeAnalyzerState* state,
     const IRInstruction* insn,
     ConstantEnvironment* env) {
-  // TODO: ImmutableAttributeAnalyzer has a bug, T86281813 will fix it.
-  return false;
   auto method_ref = insn->get_method();
   DexMethod* method = resolve_method(method_ref, opcode_to_search(insn));
   if (!method) {
@@ -930,7 +935,7 @@ bool ImmutableAttributeAnalyzer::analyze_method_attr(
   }
   if (const auto& obj_or_none =
           this_domain.maybe_get<ObjectWithImmutAttrDomain>()) {
-    auto object = *obj_or_none->get_constant();
+    auto object = obj_or_none->get_constant();
     auto value = object->get_value(method);
     if (value && !value->is_top()) {
       if (const auto& string_value = value->maybe_get<StringDomain>()) {
@@ -942,8 +947,10 @@ bool ImmutableAttributeAnalyzer::analyze_method_attr(
         return true;
       }
     }
+    return false;
+  } else {
+    return false;
   }
-  return false;
 }
 
 bool ImmutableAttributeAnalyzer::analyze_method_initialization(
@@ -955,39 +962,48 @@ bool ImmutableAttributeAnalyzer::analyze_method_initialization(
   if (it == state->method_initializers.end()) {
     return false;
   }
-  std::shared_ptr<ObjectWithImmutAttr> object =
-      std::make_shared<ObjectWithImmutAttr>();
+  ObjectWithImmutAttr object(
+      ImmutableAttributeAnalyzerState::initialized_type(method),
+      it->second.size());
   // Only support one register for the object, can be easily extended. For
   // example, virtual method may return `this` pointer, so two registers are
   // holding the same heap object.
   reg_t obj_reg;
+  bool has_value = false;
   for (auto& initializer : it->second) {
     obj_reg = initializer.obj_is_dest()
                   ? RESULT_REGISTER
                   : insn->src(*initializer.insn_src_id_of_obj);
     const auto& domain = env->get(insn->src(initializer.insn_src_id_of_attr));
     if (const auto& signed_value = domain.maybe_get<SignedConstantDomain>()) {
-      if (!signed_value->get_constant()) {
+      auto constant = signed_value->get_constant();
+      if (!constant) {
+        object.write_value(initializer.attr, SignedConstantDomain::top());
         continue;
       }
-      object->write_value(initializer.attr, *signed_value);
+      object.write_value(initializer.attr, *signed_value);
+      has_value = true;
     } else if (const auto& string_value = domain.maybe_get<StringDomain>()) {
       if (!string_value->is_value()) {
+        object.write_value(initializer.attr, StringDomain::top());
         continue;
       }
-      object->write_value(initializer.attr, *string_value);
+      object.write_value(initializer.attr, *string_value);
+      has_value = true;
     } else if (const auto& type_value =
                    domain.maybe_get<ConstantClassObjectDomain>()) {
       if (!type_value->is_value()) {
+        object.write_value(initializer.attr, ConstantClassObjectDomain::top());
         continue;
       }
-      object->write_value(initializer.attr, *type_value);
+      object.write_value(initializer.attr, *type_value);
+      has_value = true;
     }
   }
-  if (object->empty()) {
+  if (!has_value || object.empty()) {
     return false;
   }
-  env->set(obj_reg, ObjectWithImmutAttrDomain(object));
+  env->set(obj_reg, ObjectWithImmutAttrDomain(std::move(object)));
   return true;
 }
 

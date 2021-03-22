@@ -64,6 +64,10 @@ class IntegerHolder {
   public static Integer f0 = Integer.valueOf(0);
   public static Integer f1 = Integer.valueOf(1);
   public static Integer f2 = Integer.valueOf(2);
+
+  static Integer not_cached_int() {
+    return Integer.valueOf(1000);
+  }
 }
 
 class ObjectWithImmutField {
@@ -223,14 +227,34 @@ public class IPConstantPropagationTest {
     // POSTCHECK-NOT: sget-object {{.*}} redex.IntegerHolder.f1:
     Integer f1 = IntegerHolder.f1;
     assertThat(f1.intValue()).isEqualTo(1);
+
     Integer obj;
-    // Can improve.
+    // PRECHECK: if
+    // POSTCHECK-NOT: if
+    // The branches are all removed.
     if (Math.random() > 0) {
+      // PRECHECK: sget-object {{.*}} redex.IntegerHolder.f2:
+      // POSTCHECK-NOT: sget-object {{.*}} redex.IntegerHolder.f2:
       obj = IntegerHolder.f2;
     } else {
       obj = Integer.valueOf(2);
     }
     assertThat(obj.intValue()).isEqualTo(2);
+
+    // For noncached integer, the equality check is not evaluated and the conditonal branches are not removed.
+    // CHECK: invoke-static {{.*}} redex.IntegerHolder.not_cached_int
+    f0 = IntegerHolder.not_cached_int();
+    // CHECK: invoke-static {{.*}} redex.IntegerHolder.not_cached_int
+    f1 = IntegerHolder.not_cached_int();
+    // CHECK: if
+    // This Java code should be UB. Redex does the right thing to not evaluate the reference equality here.
+    if (f0 == f1) {
+      obj = f0;
+    } else {
+      obj = f1;
+    }
+    // CHECK: const{{.*}} #int 1000
+    assertThat(obj.intValue()).isEqualTo(1000);
   }
 
   // CHECK: method: virtual redex.IPConstantPropagationTest.immutable_instance_field

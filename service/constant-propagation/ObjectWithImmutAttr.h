@@ -12,6 +12,7 @@
 #include "SignedConstantDomain.h"
 
 #include "Show.h"
+#include "TemplateUtil.h"
 #include "TypeUtil.h"
 
 class DexField;
@@ -24,6 +25,43 @@ using AttrDomain =
     sparta::DisjointUnionAbstractDomain<SignedConstantDomain,
                                         StringDomain,
                                         ConstantClassObjectDomain>;
+
+enum TriState { True, False, Unknown };
+
+class tristate_runtime_equals_visitor : public boost::static_visitor<TriState> {
+ public:
+  TriState operator()(const SignedConstantDomain& scd_left,
+                      const SignedConstantDomain& scd_right) const {
+    auto cst_left = scd_left.get_constant();
+    auto cst_right = scd_right.get_constant();
+    if (!(cst_left && cst_right)) {
+      return TriState::Unknown;
+    }
+    return *cst_left == *cst_right ? TriState::True : TriState::False;
+  }
+
+  // ConstantClassObjectDomain and StringDomains are equal iff their
+  // respective constants are equal.
+  template <
+      typename Constant,
+      typename = typename std::enable_if_t<
+          template_util::contains<Constant, const DexString*, const DexType*>::
+              value>>
+  TriState operator()(
+      const sparta::ConstantAbstractDomain<Constant>& d1,
+      const sparta::ConstantAbstractDomain<Constant>& d2) const {
+    if (!(d1.is_value() && d2.is_value())) {
+      return TriState::Unknown;
+    }
+    return *d1.get_constant() == *d2.get_constant() ? TriState::True
+                                                    : TriState::False;
+  }
+
+  template <typename Domain, typename OtherDomain>
+  TriState operator()(const Domain&, const OtherDomain&) const {
+    return TriState::Unknown;
+  }
+};
 
 /**
  * Object with immutable primitive attributes.
@@ -54,7 +92,7 @@ struct ImmutableAttr {
     union {
       DexField* field;
       DexMethod* method;
-      void* member; // Debug only.
+      void* member;
     };
     explicit Attr(DexField* f) : kind(Field), field(f) {
       always_assert(!field->is_def() || (!is_static(field) && is_final(field)));
@@ -67,9 +105,20 @@ struct ImmutableAttr {
 
     bool is_method() const { return kind == Method; }
     bool is_field() const { return kind == Field; }
+
+    bool operator==(const Attr& other) const {
+      return kind == other.kind && member == other.member;
+    }
+    bool operator!=(const Attr& other) const { return !operator==(other); }
+    // Compare pointer address for simplicity. The comparison is used
+    // for keeping the constructed attributes of an object in order and easy to
+    // be compared.
+    bool operator<(const Attr& other) const { return member < other.member; }
   } attr;
   AttrDomain value;
 
+  ImmutableAttr(const Attr& attr, const AttrDomain& value)
+      : attr(attr), value(value) {}
   ImmutableAttr(const Attr& attr, const SignedConstantDomain& value)
       : attr(attr), value(value) {}
 
@@ -78,17 +127,137 @@ struct ImmutableAttr {
 
   ImmutableAttr(const Attr& attr, const ConstantClassObjectDomain& value)
       : attr(attr), value(value) {}
+
+  TriState runtime_equals(const ImmutableAttr& other) const {
+    return AttrDomain::apply_visitor(
+        tristate_runtime_equals_visitor(), value, other.value);
+  }
+
+  bool value_is_constant() const {
+    return AttrDomain::apply_visitor(tristate_runtime_equals_visitor(),
+                                     value,
+                                     value) == TriState::True;
+  }
+
+  bool operator==(const ImmutableAttr& other) const {
+    return attr == other.attr && value == other.value;
+  }
+
+  bool same_key(const ImmutableAttr& other) const { return attr == other.attr; }
 };
 
 struct ObjectWithImmutAttr {
+  // This is true only for cached boxed objects. When it's true, it means the
+  // attributes contain all the instance fields of the type and their runtime
+  // equality can be determined.
+  bool jvm_cached_singleton;
+  const DexType* type;
+  // The attributes contains part of the instance fields of the type which
+  // should be already sorted by Attr.
   std::vector<ImmutableAttr> attributes;
 
-  ObjectWithImmutAttr() {}
+  ObjectWithImmutAttr(const DexType* type, uint32_t size)
+      : jvm_cached_singleton(false), type(type) {
+    attributes.reserve(size);
+  }
 
   /**
-   * We just return false and assume that objects are different.
+   * Check Java object reference equality.
+   * Example:
+   * 1. False: Integer{1} and Integer{2} is not equal.
+   * 2. Unknown: Two boxed Integer object with intValue be 1, they are equal iff
+   * they are cached, otherwise their equality is not determined.
+   * 3. True: Cached boxed Integer{1} is equal to another cached boxed
+   * Integer{1}.
    */
-  bool operator==(const ObjectWithImmutAttr&) const { return false; }
+  TriState runtime_equals(const ObjectWithImmutAttr& other) const {
+    if (type != other.type) {
+      if (jvm_cached_singleton && other.jvm_cached_singleton) {
+        return TriState::False;
+      }
+      // Can do more type checking on the two types but might not worthy.
+      return TriState::Unknown;
+    }
+    size_t i = 0, j = 0;
+    bool all_equal = true;
+    for (; i < attributes.size() && j < other.attributes.size();) {
+      const auto& attr1 = attributes[i];
+      const auto& attr2 = other.attributes[j];
+      if (attr1.attr == attr2.attr) {
+        auto attr_equality = attr1.runtime_equals(attr2);
+        if (attr_equality == TriState::False) {
+          return TriState::False;
+        } else if (attr_equality == TriState::Unknown) {
+          all_equal = false;
+        }
+        i++;
+        j++;
+      } else if (attr1.attr < attr2.attr) {
+        all_equal = false;
+        i++;
+      } else {
+        all_equal = false;
+        j++;
+      }
+    }
+    if (i < attributes.size() || j < other.attributes.size()) {
+      return TriState::Unknown;
+    }
+    return all_equal && jvm_cached_singleton && other.jvm_cached_singleton
+               ? TriState::True
+               : TriState::Unknown;
+  }
+
+  TriState same_type(const ObjectWithImmutAttr& other) const {
+    if (type == other.type) {
+      return TriState::True;
+    }
+    // Can do more type checking on the two types but might not worthy.
+    return TriState::Unknown;
+  }
+
+  bool same_attrs(const ObjectWithImmutAttr& other) const {
+    if (same_type(other) != TriState::True ||
+        attributes.size() != other.attributes.size()) {
+      return false;
+    }
+    for (size_t idx = 0; idx < attributes.size(); idx++) {
+      auto& attr1 = attributes[idx];
+      const auto& attr2 = other.attributes[idx];
+      if (attr1.attr != attr2.attr) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  void join_with(const ObjectWithImmutAttr& other) {
+    redex_assert(type == other.type);
+    bool is_all_constant = true;
+    for (size_t idx = 0; idx < attributes.size(); idx++) {
+      auto& attr1 = attributes[idx];
+      const auto& attr2 = other.attributes[idx];
+      attr1.value.join_with(attr2.value);
+      is_all_constant = is_all_constant && attr1.value_is_constant();
+    }
+    jvm_cached_singleton =
+        jvm_cached_singleton && other.jvm_cached_singleton && is_all_constant;
+  }
+
+  bool operator==(const ObjectWithImmutAttr& other) const {
+    if (jvm_cached_singleton != other.jvm_cached_singleton ||
+        type != other.type || attributes.size() != other.attributes.size()) {
+      return false;
+    }
+    for (size_t idx = 0; idx < attributes.size(); idx++) {
+      const auto& attr1 = attributes[idx];
+      const auto& attr2 = other.attributes[idx];
+      if (attr1.attr != attr2.attr || attr1.value != attr2.value) {
+        return false;
+      }
+    }
+    return true;
+  }
 
   template <typename ValueType>
   void write_value(const ImmutableAttr::Attr& attr, ValueType value) {
@@ -128,4 +297,154 @@ struct ObjectWithImmutAttr {
     }
     return boost::none;
   }
+};
+
+/**
+ * This domain stores an object with **immutable** attributes. The
+ * attributes must be immutable, for example, final primitive instance fields
+ * that are never changed after initialization, regardless of whether the object
+ * may escape.
+ * +----------------+-----------------------------------+
+ * |                | Boxed primitive objects           |
+ * |                +----------------------+            |
+ * | Normal Objects | Cached Boxed objects |            |
+ * | T1{x}          +~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ +~ ~ ~ ~ ~ ~ +
+ * | T2{y}          | Integer{1}           | Integer{1} |
+ * |                +~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ +~ ~ ~ ~ ~ ~ +
+ * |                | Integer{0}           | Integer{0} |
+ * |                +----------------------+~ ~ ~ ~ ~ ~ +
+ * |                |                                   |
+ * +----------------+----------------------+------------+
+ */
+class ObjectWithImmutAttrDomain final
+    : public sparta::AbstractDomain<ObjectWithImmutAttrDomain> {
+ public:
+  ObjectWithImmutAttrDomain() { this->set_to_top(); }
+
+  explicit ObjectWithImmutAttrDomain(ObjectWithImmutAttr&& obj)
+      : m_kind(sparta::AbstractValueKind::Value), m_value(std::move(obj)) {}
+
+  boost::optional<ObjectWithImmutAttr> get_constant() const { return m_value; }
+
+  bool is_bottom() const override {
+    return m_kind == sparta::AbstractValueKind::Bottom;
+  }
+
+  bool is_value() const { return m_kind == sparta::AbstractValueKind::Value; }
+
+  bool is_top() const override {
+    return m_kind == sparta::AbstractValueKind::Top;
+  }
+
+  void set_to_bottom() override {
+    m_kind = sparta::AbstractValueKind::Bottom;
+    m_value = boost::none;
+  }
+
+  void set_to_top() override {
+    m_kind = sparta::AbstractValueKind::Top;
+    m_value = boost::none;
+  }
+
+  bool leq(const ObjectWithImmutAttrDomain& other) const override {
+    return equals(other);
+  }
+
+  bool equals(const ObjectWithImmutAttrDomain& other) const override {
+    if (is_bottom()) {
+      return other.is_bottom();
+    }
+    if (is_top()) {
+      return other.is_top();
+    }
+    if (other.m_kind != sparta::AbstractValueKind::Value) {
+      return false;
+    }
+    return *m_value == *other.m_value;
+  }
+
+  void join_with(const ObjectWithImmutAttrDomain& other) override {
+    if (is_top() || other.is_bottom()) {
+      return;
+    }
+    if (other.is_top()) {
+      set_to_top();
+      return;
+    }
+    if (is_bottom()) {
+      m_kind = other.m_kind;
+      m_value = other.m_value;
+      return;
+    }
+    if (m_value->same_attrs(*other.m_value)) {
+      m_value->join_with(*other.m_value);
+    } else {
+      set_to_top();
+    }
+  }
+
+  void widen_with(const ObjectWithImmutAttrDomain& other) override {
+    join_with(other);
+  }
+
+  void meet_with(const ObjectWithImmutAttrDomain& other) override {
+    if (is_bottom() || other.is_top()) {
+      return;
+    }
+    if (other.is_bottom()) {
+      set_to_bottom();
+      return;
+    }
+    if (is_top()) {
+      m_kind = other.m_kind;
+      m_value = other.m_value;
+      return;
+    }
+    auto equality = m_value->runtime_equals(*other.m_value);
+    if (equality == TriState::True) {
+      return;
+    } else if (equality == TriState::False) {
+      set_to_bottom();
+    } else {
+      set_to_top();
+    }
+  }
+
+  void narrow_with(const ObjectWithImmutAttrDomain& other) override {
+    meet_with(other);
+  }
+
+  friend std::ostream& operator<<(std::ostream& out,
+                                  const ObjectWithImmutAttrDomain& x) {
+    using namespace sparta;
+    switch (x.m_kind) {
+    case sparta::AbstractValueKind::Bottom: {
+      out << "_|_";
+      break;
+    }
+    case sparta::AbstractValueKind::Top: {
+      out << "T";
+      break;
+    }
+    case sparta::AbstractValueKind::Value: {
+      out << (x.m_value->jvm_cached_singleton ? "[c]" : "")
+          << type::get_simple_name(x.m_value->type) << "{";
+      for (auto& attr : x.m_value->attributes) {
+        if (attr.attr.is_field()) {
+          out << attr.attr.field->str();
+        } else {
+          out << attr.attr.method->str();
+        }
+        out << "=" << show(attr.value) << ",";
+      }
+      out << "}";
+      break;
+    }
+    }
+    return out;
+  }
+
+ private:
+  sparta::AbstractValueKind m_kind;
+  boost::optional<ObjectWithImmutAttr> m_value;
 };
