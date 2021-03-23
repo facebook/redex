@@ -82,10 +82,9 @@ uint32_t PositionPatternSwitchManager::make_pattern(
 
 uint32_t PositionPatternSwitchManager::make_switch(PositionSwitch pos_switch) {
   for (auto& c : pos_switch) {
-    if (c.position) {
-      always_assert(c.position->file);
-      c.position = internalize(c.position);
-    }
+    always_assert(c.position);
+    always_assert(c.position->file);
+    c.position = internalize(c.position);
   }
   auto it = m_switches_map.find(pos_switch);
   if (it == m_switches_map.end()) {
@@ -145,6 +144,7 @@ void RealPositionMapper::process_pattern_switch_positions() {
   std::unordered_map<uint32_t, std::vector<PositionCase>> pending;
   std::function<void(DexPosition*)> visit;
   visit = [&](DexPosition* pos) {
+    always_assert(pos);
     for (; pos && visited.insert(pos).second; pos = pos->parent) {
       if (manager->is_pattern_position(pos)) {
         if (reachable_patterns.insert(pos->line).second) {
@@ -235,17 +235,16 @@ void RealPositionMapper::process_pattern_switch_positions() {
       auto case_pos =
           new DexPosition(case_string, unknown_source_string, c.pattern_id);
       m_owned_auxiliary_positions.emplace_back(case_pos);
-      if (c.position) {
-        always_assert(c.position->file);
-        case_pos->parent = c.position;
-        if (!PositionPatternSwitchManager::
-                CAN_OUTLINED_METHOD_INVOKE_OUTLINED_METHOD) {
-          // TODO: Remove the following check that ensures that the inliner and
-          // outliner never produce an outlined method that invokes an outlined
-          // method, a limitation imposed by symbolication infrastructure.
-          for (auto q = c.position; q; q = q->parent) {
-            always_assert(!manager->is_pattern_position(q));
-          }
+      always_assert(c.position);
+      always_assert(c.position->file);
+      case_pos->parent = c.position;
+      if (!PositionPatternSwitchManager::
+              CAN_OUTLINED_METHOD_INVOKE_OUTLINED_METHOD) {
+        // TODO: Remove the following check that ensures that the inliner and
+        // outliner never produce an outlined method that invokes an outlined
+        // method, a limitation imposed by symbolication infrastructure.
+        for (auto q = c.position; q; q = q->parent) {
+          always_assert(!manager->is_pattern_position(q));
         }
       }
       auto idx = m_positions.size();

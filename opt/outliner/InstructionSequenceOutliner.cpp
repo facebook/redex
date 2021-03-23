@@ -1618,6 +1618,8 @@ class OutlinedMethodCreator {
   size_t m_outlined_method_nodes{0};
   size_t m_outlined_method_positions{0};
   CallSitePatternIds m_call_site_pattern_ids;
+  std::unordered_map<DexMethod*, std::unique_ptr<DexPosition>>
+      m_unique_entry_positions;
 
   PositionPattern get_outlined_dbg_positions(const Candidate& c,
                                              const CandidateMethodLocation& cml,
@@ -1634,7 +1636,25 @@ class OutlinedMethodCreator {
     PositionPattern positions;
     auto root_dbg_pos = skip_fileless(cfg.get_dbg_pos(root_insn_it));
     if (!root_dbg_pos) {
-      return positions;
+      if (!m_config.full_dbg_positions) {
+        return positions;
+      }
+      // We'll provide a "synthetic entry position" as the root. Copies of that
+      // position will be made later when it's actually needed. For now, we just
+      // need to obtain a template instance, and we need to store it somewhere
+      // so that we don't leak it.
+      auto it = m_unique_entry_positions.find(method);
+      if (it == m_unique_entry_positions.end()) {
+        it = m_unique_entry_positions
+                 .emplace(method,
+                          DexPosition::make_synthetic_entry_position(method))
+                 .first;
+      }
+      root_dbg_pos = it->second.get();
+      TRACE(ISO, 6,
+            "[instruction sequence outliner] using synthetic position for "
+            "outlined code within %s",
+            SHOW(method));
     }
     std::function<void(DexPosition * dbg_pos, const CandidateNode& cn,
                        big_blocks::Iterator it)>
