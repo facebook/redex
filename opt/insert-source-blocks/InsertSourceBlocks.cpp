@@ -29,16 +29,18 @@ namespace {
 source_blocks::InsertResult source_blocks(DexMethod* method,
                                           IRCode* code,
                                           const std::string* profile,
-                                          bool serialize) {
+                                          bool serialize,
+                                          bool exc_inject) {
   ScopedCFG cfg(code);
   return source_blocks::insert_source_blocks(
-      method, cfg.get(), profile, serialize);
+      method, cfg.get(), profile, serialize, exc_inject);
 }
 
 void run_source_blocks(DexStoresVector& stores,
                        ConfigFiles& conf,
                        PassManager& mgr,
-                       bool serialize) {
+                       bool serialize,
+                       bool exc_inject) {
   auto scope = build_class_scope(stores);
 
   std::mutex serialized_guard;
@@ -47,7 +49,8 @@ void run_source_blocks(DexStoresVector& stores,
   walk::parallel::methods(scope, [&](DexMethod* method) {
     auto code = method->get_code();
     if (code != nullptr) {
-      auto res = source_blocks(method, code, /*profile=*/nullptr, serialize);
+      auto res = source_blocks(
+          method, code, /*profile=*/nullptr, serialize, exc_inject);
       std::unique_lock<std::mutex> lock(serialized_guard);
       serialized.emplace_back(method, std::move(res.serialized));
       blocks += res.block_count;
@@ -80,6 +83,7 @@ void InsertSourceBlocksPass::bind_config() {
        m_force_serialize_,
        m_force_serialize_,
        "Force serialization of the CFGs. Testing only.");
+  bind("insert_after_excs", m_insert_after_excs, m_insert_after_excs);
 }
 
 void InsertSourceBlocksPass::run_pass(DexStoresVector& stores,
@@ -97,7 +101,8 @@ void InsertSourceBlocksPass::run_pass(DexStoresVector& stores,
                     conf,
                     mgr,
                     mgr.get_redex_options().instrument_pass_enabled ||
-                        m_force_serialize_);
+                        m_force_serialize_,
+                    m_insert_after_excs);
 }
 
 static InsertSourceBlocksPass s_pass;
