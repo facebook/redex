@@ -32,6 +32,7 @@
 #include "MethodProfiles.h"
 #include "Mutators.h"
 #include "OptData.h"
+#include "OutlinedMethods.h"
 #include "Purity.h"
 #include "Resolver.h"
 #include "Timer.h"
@@ -41,6 +42,7 @@
 #include "WorkQueue.h"
 
 using namespace opt_metadata;
+using namespace instruction_sequence_outliner;
 
 namespace {
 
@@ -1891,6 +1893,10 @@ bool MultiMethodInliner::cannot_inline_opcodes(
           can_inline = false;
           return editable_cfg_adapter::LOOP_BREAK;
         }
+        if (outlined_invoke_outlined(insn, caller)) {
+          can_inline = false;
+          return editable_cfg_adapter::LOOP_BREAK;
+        }
         // if the caller and callee are in the same class, we don't have to
         // worry about invoke supers, or unknown virtuals -- private /
         // protected methods will remain accessible
@@ -1988,6 +1994,16 @@ bool MultiMethodInliner::create_vmethod(IRInstruction* insn,
       info.need_vmethod++;
       return true;
     }
+  }
+  return false;
+}
+
+bool MultiMethodInliner::outlined_invoke_outlined(IRInstruction* insn,
+                                                  const DexMethod* caller) {
+  if (insn->opcode() == OPCODE_INVOKE_STATIC && is_outlined_method(caller) &&
+      is_outlined_method(insn->get_method())) {
+    // TODO: Remove this limitation imposed by symbolication infrastructure.
+    return true;
   }
   return false;
 }

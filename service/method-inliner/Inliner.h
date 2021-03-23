@@ -265,6 +265,12 @@ class MultiMethodInliner {
                       std::vector<DexMethod*>* make_static);
 
   /**
+   * Return true if we would create an invocation within an outlined method to
+   * another outlined method.
+   */
+  bool outlined_invoke_outlined(IRInstruction* insn, const DexMethod* caller);
+
+  /**
    * Return true if a callee contains an invoke super to a different method
    * in the hierarchy.
    * invoke-super can only exist within the class the call lives in.

@@ -94,6 +94,7 @@
 #include "Macros.h"
 #include "MethodProfiles.h"
 #include "MutablePriorityQueue.h"
+#include "OutlinedMethods.h"
 #include "OutlinerTypeAnalysis.h"
 #include "PartialCandidates.h"
 #include "PassManager.h"
@@ -666,6 +667,10 @@ static bool can_outline_insn(const RefChecker& ref_checker,
     auto rabbit_type =
         DexType::make_type("Lcom/facebook/redex/RabbitRuntimeHelper;");
     if (method->get_class() == rabbit_type) {
+      return false;
+    }
+    if (insn->opcode() == OPCODE_INVOKE_STATIC && is_outlined_method(method)) {
+      // TODO: Remove this limitation imposed by symbolication infrastructure.
       return false;
     }
   } else if (insn->has_field()) {
@@ -1572,7 +1577,7 @@ class MethodNameGenerator {
     StableHash stable_hash = stable_hash_value(c);
     auto unique_method_id = m_unique_method_ids[stable_hash]++;
     m_max_unique_method_id = std::max(m_max_unique_method_id, unique_method_id);
-    std::string name("$outlined$");
+    std::string name(OUTLINED_METHOD_NAME_PREFIX);
     name += std::to_string(m_iteration) + "$";
     name += (boost::format("%08x") % stable_hash).str();
     if (unique_method_id > 0) {

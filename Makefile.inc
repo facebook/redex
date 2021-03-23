@@ -104,6 +104,7 @@ COMMON_INCLUDES = \
 	-I$(top_srcdir)/service/loop-info \
 	-I$(top_srcdir)/service/method-dedup \
 	-I$(top_srcdir)/service/method-inliner \
+	-I$(top_srcdir)/service/method-outliner \
 	-I$(top_srcdir)/service/method-merger \
 	-I$(top_srcdir)/service/reference-update \
 	-I$(top_srcdir)/service/regalloc \
