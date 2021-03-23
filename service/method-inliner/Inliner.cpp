@@ -2000,7 +2000,9 @@ bool MultiMethodInliner::create_vmethod(IRInstruction* insn,
 
 bool MultiMethodInliner::outlined_invoke_outlined(IRInstruction* insn,
                                                   const DexMethod* caller) {
-  if (insn->opcode() == OPCODE_INVOKE_STATIC && is_outlined_method(caller) &&
+  if (!PositionPatternSwitchManager::
+          CAN_OUTLINED_METHOD_INVOKE_OUTLINED_METHOD &&
+      insn->opcode() == OPCODE_INVOKE_STATIC && is_outlined_method(caller) &&
       is_outlined_method(insn->get_method())) {
     // TODO: Remove this limitation imposed by symbolication infrastructure.
     return true;

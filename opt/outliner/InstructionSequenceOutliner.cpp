@@ -669,7 +669,9 @@ static bool can_outline_insn(const RefChecker& ref_checker,
     if (method->get_class() == rabbit_type) {
       return false;
     }
-    if (insn->opcode() == OPCODE_INVOKE_STATIC && is_outlined_method(method)) {
+    if (!PositionPatternSwitchManager::
+            CAN_OUTLINED_METHOD_INVOKE_OUTLINED_METHOD &&
+        insn->opcode() == OPCODE_INVOKE_STATIC && is_outlined_method(method)) {
       // TODO: Remove this limitation imposed by symbolication infrastructure.
       return false;
     }
@@ -1935,6 +1937,7 @@ class OutlinedMethodCreator {
 // method instead.
 static void rewrite_at_location(DexMethod* outlined_method,
                                 const CallSitePatternIds* call_site_pattern_ids,
+                                DexMethod* method,
                                 cfg::ControlFlowGraph& cfg,
                                 const Candidate& c,
                                 const CandidateMethodLocation& cml) {
@@ -2041,14 +2044,20 @@ static void rewrite_at_location(DexMethod* outlined_method,
                       DexString::make_string("RedexGenerated"));
   }
   cfg.insert_before(dbg_pos_insertion_it, std::move(new_dbg_pos));
-  if (last_dbg_pos) {
-    if (move_result_insn) {
-      dbg_pos_insertion_it =
-          cfg.find_insn(move_result_insn, first_insn_it.block());
-    }
-    cfg.insert_after(dbg_pos_insertion_it,
-                     std::make_unique<DexPosition>(*last_dbg_pos));
+  if (move_result_insn) {
+    dbg_pos_insertion_it =
+        cfg.find_insn(move_result_insn, first_insn_it.block());
   }
+  if (last_dbg_pos) {
+    new_dbg_pos = std::make_unique<DexPosition>(*last_dbg_pos);
+  } else {
+    new_dbg_pos = DexPosition::make_synthetic_entry_position(method);
+    TRACE(
+        ISO, 6,
+        "[instruction sequence outliner] reverting to synthetic position in %s",
+        SHOW(method));
+  }
+  cfg.insert_after(dbg_pos_insertion_it, std::move(new_dbg_pos));
 };
 
 // Manages references and assigns numeric ids to classes
@@ -2416,7 +2425,8 @@ bool outline_candidate(
     TRACE(ISO, 7, "[invoke sequence outliner] before outlined %s from %s\n%s",
           SHOW(outlined_method), SHOW(method), SHOW(cfg));
     for (auto& cml : p.second) {
-      rewrite_at_location(outlined_method, call_site_pattern_ids, cfg, c, cml);
+      rewrite_at_location(outlined_method, call_site_pattern_ids, method, cfg,
+                          c, cml);
     }
     TRACE(ISO, 6, "[invoke sequence outliner] after outlined %s from %s\n%s",
           SHOW(outlined_method), SHOW(method), SHOW(cfg));

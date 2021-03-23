@@ -71,6 +71,11 @@ class PositionPatternSwitchManager {
  public:
   PositionPatternSwitchManager();
 
+  // TODO: Enable the following flag. It's off for now to ensures that the
+  // inliner and outliner never produce an outlined method that invokes an
+  // outlined method, a limitation imposed by symbolication infrastructure.
+  static constexpr bool CAN_OUTLINED_METHOD_INVOKE_OUTLINED_METHOD = false;
+
   // Returns a value that uniquely identifies the pattern.
   uint32_t make_pattern(PositionPattern pos_pattern);
 
