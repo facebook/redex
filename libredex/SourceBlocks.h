@@ -9,14 +9,14 @@
 
 #include <cstdint>
 #include <memory>
-#include <sstream>
 #include <unordered_set>
 
 #include "ControlFlow.h"
 #include "CppUtil.h"
 #include "Debug.h"
-#include "DexClass.h"
 #include "IRList.h"
+
+class DexMethod;
 
 namespace source_blocks {
 
@@ -131,49 +131,9 @@ struct InsertResult {
   std::string serialized;
 };
 
-inline InsertResult insert_source_blocks(DexMethod* method,
-                                         ControlFlowGraph* cfg,
-                                         bool serialize = true) {
-  uint32_t id{0};
-  std::ostringstream oss;
-
-  auto block_start_fn = [&](Block* cur) {
-    if (serialize) {
-      oss << "(" << id;
-    }
-
-    source_blocks::impl::BlockAccessor::push_source_block(
-        cur, std::make_unique<SourceBlock>(method, id, 0.0f));
-    ++id;
-  };
-  auto edge_fn = [&](Block* /* cur */, const Edge* e) {
-    if (serialize) {
-      auto get_edge_char = [e]() {
-        switch (e->type()) {
-        case EDGE_BRANCH:
-          return 'b';
-        case EDGE_GOTO:
-          return 'g';
-        case EDGE_THROW:
-          return 't';
-        case EDGE_GHOST:
-        case EDGE_TYPE_SIZE:
-          not_reached();
-        }
-        not_reached(); // For GCC.
-      };
-      oss << " " << get_edge_char();
-    }
-  };
-  auto block_end_fn = [&](Block* /* cur */) {
-    if (serialize) {
-      oss << ")";
-    }
-  };
-  impl::visit_in_order(cfg, block_start_fn, edge_fn, block_end_fn);
-
-  return {cfg->blocks().size(), oss.str()};
-}
+InsertResult insert_source_blocks(DexMethod* method,
+                                  ControlFlowGraph* cfg,
+                                  bool serialize = true);
 
 inline bool has_source_blocks(const cfg::Block* b) {
   for (const auto& mie : *b) {
