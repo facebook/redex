@@ -39,6 +39,14 @@ struct BlockAccessor {
       b->m_entries.insert_before(it, *mie);
     }
   }
+
+  static IRList::iterator insert_source_block_after(
+      Block* b,
+      const IRList::iterator& it,
+      std::unique_ptr<SourceBlock> src_block) {
+    auto mie = new MethodItemEntry(std::move(src_block));
+    return b->m_entries.insert_after(it, *mie);
+  }
 };
 
 template <typename BlockStartFn, typename EdgeFn, typename BlockEndFn>
@@ -135,7 +143,8 @@ struct InsertResult {
 InsertResult insert_source_blocks(DexMethod* method,
                                   ControlFlowGraph* cfg,
                                   const std::string* profile = nullptr,
-                                  bool serialize = true);
+                                  bool serialize = true,
+                                  bool insert_after_excs = false);
 
 inline bool has_source_blocks(const cfg::Block* b) {
   for (const auto& mie : *b) {

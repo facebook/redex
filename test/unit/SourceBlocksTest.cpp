@@ -269,3 +269,83 @@ B4: LFoo;.bar:()V@3(0))");
     strip_source_blocks(cfg);
   }
 }
+
+TEST_F(SourceBlocksTest, serialize_exc_injected) {
+  auto foo_method = create_method("LFoo");
+
+  constexpr const char* kCode = R"(
+    (
+      (const v0 0)
+      (invoke-static () "LFooX;.bar:()V")
+      (invoke-static () "LFooX;.bar2:()I")
+      (move-result v1)
+      (invoke-static () "LFooX;.bar:()V")
+
+      (if-eqz v0 :true)
+      (goto :end)
+
+      (:true)
+      (invoke-static () "LBarX;.bar:()I")
+
+      (:end)
+
+      (return-void)
+    )
+  )";
+
+  foo_method->set_code(assembler::ircode_from_string(
+      replace_all(kCode, "LFooX;", show(foo_method->get_class()))));
+
+  foo_method->get_code()->build_cfg();
+  auto& foo_cfg = foo_method->get_code()->cfg();
+  auto res =
+      insert_source_blocks(foo_method, &foo_cfg, /*profile=*/nullptr,
+                           /*serialize=*/true, /*insert_after_excs=*/true);
+  EXPECT_EQ(res.serialized, "(0(1)(2)(3) g(4) b(5 g))");
+  EXPECT_EQ(
+      get_blocks_as_txt(foo_cfg.blocks()),
+      R"(B0: LFoo;.bar:()V@0(0) LFoo;.bar:()V@1(0) LFoo;.bar:()V@2(0) LFoo;.bar:()V@3(0)
+B2: LFoo;.bar:()V@5(0)
+B3: LFoo;.bar:()V@4(0))");
+}
+
+TEST_F(SourceBlocksTest, deserialize_exc_injected) {
+  auto foo_method = create_method("LFoo");
+
+  constexpr const char* kCode = R"(
+    (
+      (const v0 0)
+      (invoke-static () "LFooX;.bar:()V")
+      (invoke-static () "LFooX;.bar2:()I")
+      (move-result v1)
+      (invoke-static () "LFooX;.bar:()V")
+
+      (if-eqz v0 :true)
+      (goto :end)
+
+      (:true)
+      (invoke-static () "LBarX;.bar:()I")
+
+      (:end)
+
+      (return-void)
+    )
+  )";
+
+  foo_method->set_code(assembler::ircode_from_string(
+      replace_all(kCode, "LFooX;", show(foo_method->get_class()))));
+
+  foo_method->get_code()->build_cfg();
+  auto& foo_cfg = foo_method->get_code()->cfg();
+  std::string profile = "(1(2)(3)(4) g(5) b(6 g))";
+  auto res =
+      insert_source_blocks(foo_method, &foo_cfg, &profile,
+                           /*serialize=*/true, /*insert_after_excs=*/true);
+  EXPECT_TRUE(res.profile_success);
+  EXPECT_EQ(res.serialized, "(0(1)(2)(3) g(4) b(5 g))");
+  EXPECT_EQ(
+      get_blocks_as_txt(foo_cfg.blocks()),
+      R"(B0: LFoo;.bar:()V@0(1) LFoo;.bar:()V@1(2) LFoo;.bar:()V@2(3) LFoo;.bar:()V@3(4)
+B2: LFoo;.bar:()V@5(6)
+B3: LFoo;.bar:()V@4(5))");
+}

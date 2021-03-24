@@ -11,6 +11,7 @@
 
 #include "Debug.h"
 #include "DexClass.h"
+#include "IROpcode.h"
 #include "S_Expression.h"
 #include "Show.h"
 #include "Trace.h"
@@ -27,13 +28,19 @@ struct InsertHelper {
   uint32_t id{0};
   std::ostringstream oss;
   bool serialize;
+  bool insert_after_excs;
 
   s_expr root_expr;
   std::vector<s_expr> expr_stack;
   bool had_profile_failure{false};
 
-  InsertHelper(DexMethod* method, const std::string* profile, bool serialize)
-      : method(method), serialize(serialize) {
+  InsertHelper(DexMethod* method,
+               const std::string* profile,
+               bool serialize,
+               bool insert_after_excs)
+      : method(method),
+        serialize(serialize),
+        insert_after_excs(insert_after_excs) {
     if (profile != nullptr) {
       std::istringstream iss{*profile};
       s_expr_istream s_expr_input(iss);
@@ -57,6 +64,88 @@ struct InsertHelper {
     source_blocks::impl::BlockAccessor::push_source_block(
         cur, std::make_unique<SourceBlock>(method, id, val));
     ++id;
+
+    if (insert_after_excs) {
+      if (cur->cfg().get_succ_edge_of_type(cur, EdgeType::EDGE_THROW) !=
+          nullptr) {
+        // Nothing to do.
+        return;
+      }
+      for (auto it = cur->begin(); it != cur->end(); ++it) {
+        if (it->type != MFLOW_OPCODE) {
+          continue;
+        }
+        if (!opcode::can_throw(it->insn->opcode())) {
+          continue;
+        }
+        // Exclude throws (explicitly).
+        if (it->insn->opcode() == OPCODE_THROW) {
+          continue;
+        }
+        // Get to the next instruction.
+        auto next_it = std::next(it);
+        while (next_it != cur->end() && next_it->type != MFLOW_OPCODE) {
+          ++next_it;
+        }
+        if (next_it == cur->end()) {
+          break;
+        }
+
+        auto insert_after =
+            opcode::is_move_result_any(next_it->insn->opcode()) ? next_it : it;
+
+        // This is not really what the structure looks like, but easy to
+        // parse and write. Otherwise, we would need to remember that
+        // we had a nesting.
+
+        if (serialize) {
+          oss << "(" << id << ")";
+        }
+
+        float nested_val = [this]() {
+          if (had_profile_failure) {
+            return 0.0f;
+          }
+          if (root_expr.is_nil()) {
+            return 0.0f;
+          }
+          redex_assert(!expr_stack.empty());
+
+          std::string val_str;
+          const s_expr& e = expr_stack.back();
+          s_expr tail, inner_tail;
+          if (!s_patn({s_patn({s_patn(&val_str)}, inner_tail)}, tail)
+                   .match_with(e)) {
+            had_profile_failure = true;
+            TRACE(MMINL, 3,
+                  "Failed profile matching for %s: cannot match string for %s",
+                  SHOW(method), e.str().c_str());
+            return 0.0f;
+          }
+          redex_assert(inner_tail.is_nil());
+          size_t after_idx;
+          float nested_val = std::stof(val_str, &after_idx); // May throw.
+          always_assert_log(after_idx == val_str.size(),
+                            "Could not parse %s as float",
+                            val_str.c_str());
+          TRACE(MMINL,
+                5,
+                "Exception-induced block with val=%f. Popping %s, pushing %s",
+                nested_val,
+                e.str().c_str(),
+                tail.str().c_str());
+          expr_stack.pop_back();
+          expr_stack.push_back(tail);
+          return nested_val;
+        }();
+
+        it = source_blocks::impl::BlockAccessor::insert_source_block_after(
+            cur, insert_after,
+            std::make_unique<SourceBlock>(method, id, nested_val));
+
+        ++id;
+      }
+    }
   }
 
   float start_profile(Block* cur) {
@@ -197,8 +286,9 @@ struct InsertHelper {
 InsertResult insert_source_blocks(DexMethod* method,
                                   ControlFlowGraph* cfg,
                                   const std::string* profile,
-                                  bool serialize) {
-  InsertHelper helper(method, profile, serialize);
+                                  bool serialize,
+                                  bool insert_after_excs) {
+  InsertHelper helper(method, profile, serialize, insert_after_excs);
 
   impl::visit_in_order(
       cfg, [&](Block* cur) { helper.start(cur); },
@@ -215,7 +305,7 @@ InsertResult insert_source_blocks(DexMethod* method,
     }
   }
 
-  return {cfg->blocks().size(), helper.oss.str(), !helper.had_profile_failure};
+  return {helper.id, helper.oss.str(), !helper.had_profile_failure};
 }
 
 } // namespace source_blocks
