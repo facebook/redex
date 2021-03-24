@@ -79,7 +79,7 @@ DexMethod* FbjniMarker::process_method(DexType* type,
   method_tokens_internal.cls = type->str();
   method_tokens_internal.name = method_tokens.name;
   method_tokens_internal.rtype = to_internal_type(method_tokens.rtype);
-  for (auto str : method_tokens.args) {
+  for (const auto& str : method_tokens.args) {
     method_tokens_internal.args.push_back(to_internal_type(str));
   }
 
@@ -126,7 +126,7 @@ std::string FbjniMarker::to_internal_type(const std::string& str) {
 
     // error: No matching type
     not_reached_log("Can not resolve type %s", str.c_str());
-    return nullptr;
+    return "";
   }
 }
 

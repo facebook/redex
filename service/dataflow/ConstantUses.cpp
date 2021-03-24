@@ -82,7 +82,7 @@ ConstantUses::ConstantUses(const cfg::ControlFlowGraph& cfg, DexMethod* method)
       IRInstruction* insn = mie.insn;
       for (size_t src_index = 0; src_index < insn->srcs_size(); src_index++) {
         auto src = insn->src(src_index);
-        auto defs = env.get(src);
+        const auto& defs = env.get(src);
         if (!defs.is_top() && !defs.is_bottom()) {
           for (auto def : defs.elements()) {
             auto def_opcode = def->opcode();

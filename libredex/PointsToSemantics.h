@@ -188,7 +188,7 @@ I  PTS_OP(PTS_RETURN,           false,   false,  false,  false    ) \
 I  PTS_OP(PTS_DISJUNCTION,      false,   false,  false,  false    )
 // clang-format on
 
-#define MAX_PTS_OPS sizeof(unsigned long long) * 8
+#define MAX_PTS_OPS (sizeof(unsigned long long) * 8)
 
 #define PTS_OP(OP, ...) OP
 #define I ,
@@ -240,7 +240,8 @@ struct PointsToOperation {
 
   bool is_load() const {
 #define PTS_OP(OP, is_load, is_get, is_put, is_invoke) \
-  (is_load ? (1ULL << OP) : 0)
+  ((is_load) ? (1ULL << (OP)) : 0)
+// NOLINTNEXTLINE(bugprone-macro-parentheses)
 #define I |
     static const std::bitset<MAX_PTS_OPS> load_operations(PTS_OPS);
 #undef I
@@ -254,7 +255,8 @@ struct PointsToOperation {
 
   bool is_get() const {
 #define PTS_OP(OP, is_load, is_get, is_put, is_invoke) \
-  (is_get ? (1ULL << OP) : 0)
+  ((is_get) ? (1ULL << (OP)) : 0)
+// NOLINTNEXTLINE(bugprone-macro-parentheses)
 #define I |
     static const std::bitset<MAX_PTS_OPS> get_operations(PTS_OPS);
 #undef I
@@ -266,7 +268,8 @@ struct PointsToOperation {
 
   bool is_put() const {
 #define PTS_OP(OP, is_load, is_get, is_put, is_invoke) \
-  (is_put ? (1ULL << OP) : 0)
+  ((is_put) ? (1ULL << (OP)) : 0)
+// NOLINTNEXTLINE(bugprone-macro-parentheses)
 #define I |
     static const std::bitset<MAX_PTS_OPS> put_operations(PTS_OPS);
 #undef I
@@ -278,7 +281,8 @@ struct PointsToOperation {
 
   bool is_invoke() const {
 #define PTS_OP(OP, is_load, is_get, is_put, is_invoke) \
-  (is_invoke ? (1ULL << OP) : 0)
+  ((is_invoke) ? (1ULL << (OP)) : 0)
+// NOLINTNEXTLINE(bugprone-macro-parentheses)
 #define I |
     static const std::bitset<MAX_PTS_OPS> invoke_operations(PTS_OPS);
 #undef I

@@ -101,7 +101,7 @@ bool may_throw(IROpcode);
  *   inline bool is_load_param(IROpcode); // IOP(LOAD_PARAM, load_param, ...)
  */
 #define OPRANGE(NAME, FST, LST) \
-  inline bool is_##NAME(IROpcode op) { return FST <= op && op <= LST; }
+  inline bool is_##NAME(IROpcode op) { return (FST) <= op && op <= (LST); }
 #define OP(UC, LC, ...) \
   inline bool is_##LC(IROpcode op) { return op == OPCODE_##UC; }
 #define IOP(UC, LC, ...) \

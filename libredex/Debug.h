@@ -91,7 +91,7 @@ extern bool slow_invariants_debug;
 // A common definition for non-always asserts. Ensures that there won't be
 // "-Wunused" warnings. The `!debug` should be optimized away since it is a
 // constexpr.
-#define redex_assert(e) always_assert(!debug || e)
+#define redex_assert(e) always_assert(!debug || (e))
 #define assert_log(e, msg, ...) \
   always_assert_log(!debug || e, msg, ##__VA_ARGS__)
 #define assert_type_log(e, type, msg, ...) \

@@ -83,7 +83,7 @@ void replay_analysis_with_callback(const cfg::ControlFlowGraph& cfg,
       for (src_index_t i = 0; i < insn->srcs_size(); ++i) {
         Use use{insn, i};
         auto src = insn->src(i);
-        auto defs = defs_in.get(src);
+        const auto& defs = defs_in.get(src);
         always_assert_log(!defs.is_top() && defs.size() > 0,
                           "Found use without def when processing [0x%p]%s",
                           &mie, SHOW(insn));

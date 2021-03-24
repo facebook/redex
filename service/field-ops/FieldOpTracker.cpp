@@ -75,7 +75,7 @@ FieldWrites analyze_writes(const Scope& scope) {
             continue;
           }
           auto src = insn->src(src_idx);
-          auto src_defs = env.get(src);
+          const auto& src_defs = env.get(src);
           always_assert(!src_defs.is_bottom());
           always_assert(!src_defs.is_top());
           for (auto* def : src_defs.elements()) {

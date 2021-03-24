@@ -1518,7 +1518,7 @@ DexPattern mul_lit(Register src, Register dst) {
 }
 
 DexPattern mul_literal_kind(Register src, Register dst, Literal lit) {
-  return {{OPCODE_MUL_INT_LIT8, OPCODE_MUL_INT_LIT16}, {src}, {dst}, {lit}};
+  return {{OPCODE_MUL_INT_LIT8, OPCODE_MUL_INT_LIT16}, {src}, {dst}, lit};
 }
 
 std::vector<DexPattern> div_lit(Register src, Register dst) {
@@ -1529,7 +1529,7 @@ std::vector<DexPattern> div_lit(Register src, Register dst) {
 std::vector<DexPattern> div_literal_kind(Register src,
                                          Register dst,
                                          Literal lit) {
-  return {{{OPCODE_DIV_INT_LIT8, OPCODE_DIV_INT_LIT16}, {src}, {}, {lit}},
+  return {{{OPCODE_DIV_INT_LIT8, OPCODE_DIV_INT_LIT16}, {src}, {}, lit},
           {{IOPCODE_MOVE_RESULT_PSEUDO}, {}, {dst}}};
 }
 

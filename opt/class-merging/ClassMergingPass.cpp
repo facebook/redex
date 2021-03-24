@@ -133,7 +133,7 @@ void ClassMergingPass::bind_config() {
   bool process_method_meta;
   bind("process_method_meta", false, process_method_meta);
   int64_t max_num_dispatch_target;
-  bind("max_num_dispatch_target", {0}, max_num_dispatch_target);
+  bind("max_num_dispatch_target", 0, max_num_dispatch_target);
   bool merge_static_methods_within_shape;
   bind("merge_static_methods_within_shape", false,
        merge_static_methods_within_shape);

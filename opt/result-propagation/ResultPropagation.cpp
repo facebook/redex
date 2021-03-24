@@ -100,7 +100,7 @@ class Analyzer final : public BaseIRAnalyzer<ParamDomainEnvironment> {
     // functions to ensure that wide values are properly handled.
 
     const auto get_current_state_at = [&](reg_t reg, bool wide) {
-      const auto low = current_state->get(reg);
+      const auto& low = current_state->get(reg);
       if (!wide) {
         return isNotHigh(low) ? low : ParamDomain::top();
       }
@@ -153,7 +153,7 @@ class Analyzer final : public BaseIRAnalyzer<ParamDomainEnvironment> {
     case OPCODE_MOVE_RESULT:
     case OPCODE_MOVE_RESULT_OBJECT:
     case OPCODE_MOVE_RESULT_WIDE: {
-      const auto value = current_state->get(RESULT_REGISTER);
+      const auto& value = current_state->get(RESULT_REGISTER);
       set_current_state_at(insn->dest(), insn->dest_is_wide(), value);
       break;
     }
@@ -420,7 +420,7 @@ boost::optional<ParamIndex> ReturnParamResolver::get_return_param_index(
       continue;
     }
     const auto env = analyzer.get_exit_state_at(block);
-    const auto block_return_param_index = env.get(RETURN_VALUE);
+    const auto& block_return_param_index = env.get(RETURN_VALUE);
     return_param_index.join_with(block_return_param_index);
   }
 

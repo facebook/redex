@@ -36,7 +36,7 @@
 // clang-format on
 
 enum DexAccessFlags : uint32_t {
-#define AF(uc, lc, val) ACC_##uc = val,
+#define AF(uc, lc, val) ACC_##uc = (val),
   ACCESSFLAGS
 #undef AF
 };

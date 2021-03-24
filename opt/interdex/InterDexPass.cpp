@@ -41,37 +41,37 @@ void InterDexPass::bind_config() {
   bind("static_prune", false, m_static_prune);
   bind("emit_canaries", true, m_emit_canaries);
   bind("normal_primary_dex", false, m_normal_primary_dex);
-  bind("linear_alloc_limit", {11600 * 1024}, m_linear_alloc_limit);
+  bind("linear_alloc_limit", 11600 * 1024, m_linear_alloc_limit);
 
-  bind("reserved_frefs", {0}, m_reserved_frefs,
+  bind("reserved_frefs", 0, m_reserved_frefs,
        "A relief valve for field refs within each dex in case a legacy "
        "optimization introduces a new field reference without declaring it "
        "explicitly to the InterDex pass");
-  bind("reserved_trefs", {0}, m_reserved_trefs,
+  bind("reserved_trefs", 0, m_reserved_trefs,
        "A relief valve for type refs within each dex in case a legacy "
        "optimization introduces a new type reference without declaring it "
        "explicitly to the InterDex pass");
-  bind("reserved_mrefs", {0}, m_reserved_mrefs,
+  bind("reserved_mrefs", 0, m_reserved_mrefs,
        "A relief valve for methods refs within each dex in case a legacy "
        "optimization introduces a new method reference without declaring it "
        "explicitly to the InterDex pass");
 
   bind("minimize_cross_dex_refs", false, m_minimize_cross_dex_refs);
-  bind("minimize_cross_dex_refs_method_ref_weight", {100},
+  bind("minimize_cross_dex_refs_method_ref_weight", 100,
        m_minimize_cross_dex_refs_config.method_ref_weight);
-  bind("minimize_cross_dex_refs_field_ref_weight", {90},
+  bind("minimize_cross_dex_refs_field_ref_weight", 90,
        m_minimize_cross_dex_refs_config.field_ref_weight);
-  bind("minimize_cross_dex_refs_type_ref_weight", {100},
+  bind("minimize_cross_dex_refs_type_ref_weight", 100,
        m_minimize_cross_dex_refs_config.type_ref_weight);
-  bind("minimize_cross_dex_refs_string_ref_weight", {90},
+  bind("minimize_cross_dex_refs_string_ref_weight", 90,
        m_minimize_cross_dex_refs_config.string_ref_weight);
-  bind("minimize_cross_dex_refs_method_seed_weight", {100},
+  bind("minimize_cross_dex_refs_method_seed_weight", 100,
        m_minimize_cross_dex_refs_config.method_seed_weight);
-  bind("minimize_cross_dex_refs_field_seed_weight", {20},
+  bind("minimize_cross_dex_refs_field_seed_weight", 20,
        m_minimize_cross_dex_refs_config.field_seed_weight);
-  bind("minimize_cross_dex_refs_type_ref_weight", {30},
+  bind("minimize_cross_dex_refs_type_ref_weight", 30,
        m_minimize_cross_dex_refs_config.type_seed_weight);
-  bind("minimize_cross_dex_refs_string_ref_weight", {20},
+  bind("minimize_cross_dex_refs_string_ref_weight", 20,
        m_minimize_cross_dex_refs_config.string_seed_weight);
   bind("minimize_cross_dex_refs_relocate_static_methods", false,
        m_cross_dex_relocator_config.relocate_static_methods);
@@ -83,7 +83,7 @@ void InterDexPass::bind_config() {
   // The actual number of relocated methods per class tends to be just a
   // fraction of this number, as relocated methods get re-relocated back into
   // their original class when they end up in the same dex.
-  bind("max_relocated_methods_per_class", {200},
+  bind("max_relocated_methods_per_class", 200,
        m_cross_dex_relocator_config.max_relocated_methods_per_class);
 
   bind("can_touch_coldstart_cls", false, m_can_touch_coldstart_cls);

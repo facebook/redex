@@ -356,7 +356,7 @@ void SwitchEquivFinder::normalize_extra_loads(
       auto insn = mie.insn;
       for (size_t i = 0; i < insn->srcs_size(); ++i) {
         auto src = insn->src(i);
-        auto defs = defs_in.get(src);
+        const auto& defs = defs_in.get(src);
         always_assert_log(!defs.is_top(), "Undefined register v%u", src);
         for (IRInstruction* def : defs.elements()) {
           if (extra_loads.count(def)) {

@@ -16,7 +16,7 @@ class SynthPass : public Pass {
   SynthPass() : Pass("SynthPass") {}
 
   void bind_config() override {
-    bind("max_passes", {5}, m_pass_config.max_passes);
+    bind("max_passes", 5, m_pass_config.max_passes);
     bind("synth_only", false, m_pass_config.synth_only);
     bind("remove_pub", true, m_pass_config.remove_pub);
     bind("remove_constructors", true, m_pass_config.remove_constructors);

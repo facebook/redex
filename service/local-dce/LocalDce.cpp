@@ -264,7 +264,7 @@ void LocalDce::normalize_new_instances(cfg::ControlFlowGraph& cfg) {
       }
       auto type = insn->get_method()->get_class();
       auto reg = insn->src(0);
-      auto defs = env.get(reg);
+      const auto& defs = env.get(reg);
       always_assert(!defs.is_top());
       always_assert(!defs.is_bottom());
       IRInstruction* old_new_instance_insn{nullptr};

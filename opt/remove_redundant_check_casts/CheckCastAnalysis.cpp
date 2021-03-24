@@ -384,7 +384,7 @@ CheckCastAnalysis::CheckCastAnalysis(const CheckCastConfig& config,
       IRInstruction* insn = mie.insn;
       for (size_t src_index = 0; src_index < insn->srcs_size(); src_index++) {
         auto src = insn->src(src_index);
-        auto defs = env.get(src);
+        const auto& defs = env.get(src);
         always_assert(!defs.is_bottom() && !defs.is_top());
         for (auto def : defs.elements()) {
           auto def_opcode = def->opcode();

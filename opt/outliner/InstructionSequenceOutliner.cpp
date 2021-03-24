@@ -894,6 +894,7 @@ static bool explore_candidates_from(
   FOR_EACH(loop)
 
 struct FindCandidatesStats {
+// NOLINTNEXTLINE(bugprone-macro-parentheses)
 #define FOR_EACH(name) std::atomic<size_t> name{0};
   STATS
 #undef FOR_EACH
