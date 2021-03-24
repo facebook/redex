@@ -129,10 +129,12 @@ void visit_in_order(const ControlFlowGraph* cfg,
 struct InsertResult {
   size_t block_count;
   std::string serialized;
+  bool profile_success;
 };
 
 InsertResult insert_source_blocks(DexMethod* method,
                                   ControlFlowGraph* cfg,
+                                  const std::string* profile = nullptr,
                                   bool serialize = true);
 
 inline bool has_source_blocks(const cfg::Block* b) {

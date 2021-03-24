@@ -28,9 +28,11 @@ namespace {
 
 source_blocks::InsertResult source_blocks(DexMethod* method,
                                           IRCode* code,
+                                          const std::string* profile,
                                           bool serialize) {
   ScopedCFG cfg(code);
-  return source_blocks::insert_source_blocks(method, cfg.get(), serialize);
+  return source_blocks::insert_source_blocks(
+      method, cfg.get(), profile, serialize);
 }
 
 void run_source_blocks(DexStoresVector& stores,
@@ -45,7 +47,7 @@ void run_source_blocks(DexStoresVector& stores,
   walk::parallel::methods(scope, [&](DexMethod* method) {
     auto code = method->get_code();
     if (code != nullptr) {
-      auto res = source_blocks(method, code, serialize);
+      auto res = source_blocks(method, code, /*profile=*/nullptr, serialize);
       std::unique_lock<std::mutex> lock(serialized_guard);
       serialized.emplace_back(method, std::move(res.serialized));
       blocks += res.block_count;
