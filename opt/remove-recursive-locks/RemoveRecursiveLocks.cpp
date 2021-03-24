@@ -524,7 +524,7 @@ AnalysisResult analyze(ControlFlowGraph& cfg) {
   size_t sources_count;
   {
     auto env = analysis::create_start(ret.rdefs);
-    sources_count = env.is_top() ? 0 : env.bindings().size();
+    sources_count = env.bindings().size();
     ret.iter->run(env);
   }
 
