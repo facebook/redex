@@ -8,6 +8,7 @@
 #include "SourceBlocks.h"
 
 #include <atomic>
+#include <regex>
 #include <sstream>
 
 #include <gtest/gtest.h>
@@ -17,6 +18,8 @@
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "IRAssembler.h"
+#include "Inliner.h"
+#include "InlinerConfig.h"
 #include "RedexTest.h"
 #include "Show.h"
 
@@ -25,19 +28,18 @@ using namespace source_blocks;
 
 class SourceBlocksTest : public RedexTest {
  public:
-  static DexMethod* create_method() {
+  static DexMethod* create_method(const std::string& class_name = "LFoo",
+                                  const std::string& code = "((return-void))") {
     // Create a totally new class.
     size_t c = s_counter.fetch_add(1);
-    std::string name = std::string("LFoo") + std::to_string(c) + ";";
+    std::string name = class_name + std::to_string(c) + ";";
     ClassCreator cc{DexType::make_type(name.c_str())};
     cc.set_super(type::java_lang_Object());
-
-    constexpr const char* kCode = "((return-void))";
 
     // Empty code isn't really legal. But it does not matter for us.
     auto m = DexMethod::make_method(name + ".bar:()V")
                  ->make_concrete(ACC_PUBLIC | ACC_STATIC,
-                                 assembler::ircode_from_string(kCode), false);
+                                 assembler::ircode_from_string(code), false);
     cc.add_method(m);
 
     cc.create();
@@ -45,7 +47,7 @@ class SourceBlocksTest : public RedexTest {
     return m;
   }
 
-  static std::string get_blocks_as_txt(std::initializer_list<Block*> l) {
+  static std::string get_blocks_as_txt(const std::vector<Block*>& l) {
     std::ostringstream oss;
     bool first = true;
     for (auto* block : l) {
@@ -64,26 +66,16 @@ class SourceBlocksTest : public RedexTest {
   }
 
   static std::string remove_count(const std::string& str) {
-    const std::string needle = "LFoo";
+    std::regex re("L[A-Z][a-z]*\\([0-9][0-9]*\\);", std::regex::basic);
     std::string res = str;
-    size_t i = 0;
-    for (;;) {
-      i = res.find(needle, i);
-      if (i == std::string::npos) {
+    for (size_t i = 0; i != 100; ++i) {
+      std::smatch match;
+      if (!std::regex_search(res, match, re)) {
         break;
       }
-      i += needle.size();
-      size_t j = i;
-      while (j < res.size() && res[j] != ';') {
-        ++j;
-      }
-      if (j == res.size()) {
-        break;
-      }
-      if (i == j) {
-        continue;
-      }
-      res.replace(i, j - i, "");
+      size_t pos = match.position(1);
+      size_t length = match.length(1);
+      res.replace(pos, length, "");
     }
     return res;
   }
@@ -100,6 +92,19 @@ class SourceBlocksTest : public RedexTest {
         ++it;
       }
     }
+  }
+
+  static std::string replace_all(std::string in,
+                                 const std::string& txt_in,
+                                 const std::string& txt_out) {
+    for (;;) {
+      size_t pos = in.find(txt_in);
+      if (pos == std::string::npos) {
+        break;
+      }
+      in.replace(pos, txt_in.size(), txt_out);
+    }
+    return in;
   }
 
  private:
