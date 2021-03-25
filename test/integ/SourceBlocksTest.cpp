@@ -24,6 +24,9 @@
 class SourceBlocksTest : public RedexIntegrationTest {
  protected:
   void enable_pass(InsertSourceBlocksPass& isbp) { isbp.m_force_run = true; }
+  void set_insert_after_excs(InsertSourceBlocksPass& isbp, bool val) {
+    isbp.m_insert_after_excs = val;
+  }
 };
 
 TEST_F(SourceBlocksTest, source_blocks) {
@@ -48,6 +51,7 @@ TEST_F(SourceBlocksTest, source_blocks) {
   {
     InsertSourceBlocksPass isbp{};
     enable_pass(isbp);
+    set_insert_after_excs(isbp, false);
     run_passes({&isbp});
 
     for (auto* m : cls->get_all_methods()) {
@@ -149,5 +153,76 @@ TEST_F(SourceBlocksTest, source_blocks) {
     auto code = assembler::ircode_from_string(bar_str);
     auto code_str = assembler::to_string(code.get());
     EXPECT_EQ(bar_str, code_str);
+  }
+}
+
+TEST_F(SourceBlocksTest, source_blocks_insert_after_exc) {
+  auto type = DexType::get_type("Lcom/facebook/redextest/SourceBlocksTest;");
+  ASSERT_NE(type, nullptr);
+  auto cls = type_class(type);
+  ASSERT_NE(cls, nullptr);
+
+  // Check that no code has source blocks so far.
+  {
+    for (const auto* m : cls->get_all_methods()) {
+      if (m->get_code() == nullptr) {
+        continue;
+      }
+      for (const auto& mie : *m->get_code()) {
+        ASSERT_NE(mie.type, MFLOW_SOURCE_BLOCK);
+      }
+    }
+  }
+
+  // Run the pass, check that each block has some SourceBlocks.
+  {
+    InsertSourceBlocksPass isbp{};
+    enable_pass(isbp);
+    set_insert_after_excs(isbp, true);
+    run_passes({&isbp});
+  }
+
+  const std::unordered_map<std::string, size_t> kMaxSeen = {
+      {"Lcom/facebook/redextest/SourceBlocksTest;.bar:()V", 3},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.foo:()V", 4},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.<init>:()V", 3},
+      {"Lcom/facebook/redextest/SourceBlocksTest;.baz:(Ljava/lang/String;)V",
+       2},
+  };
+
+  for (auto* m : cls->get_all_methods()) {
+    if (m->get_code() == nullptr) {
+      continue;
+    }
+    cfg::ScopedCFG cfg{m->get_code()};
+    std::unordered_set<uint32_t> seen_ids;
+    size_t max_seen{0};
+    for (const auto* b : cfg->blocks()) {
+      bool seen_source_block_in_b{false};
+      size_t b_seen{0};
+      for (const auto& mie : *b) {
+        if (mie.type != MFLOW_SOURCE_BLOCK) {
+          continue;
+        }
+
+        ++b_seen;
+
+        ASSERT_TRUE(mie.src_block != nullptr);
+
+        EXPECT_EQ(seen_ids.count(mie.src_block->id), 0u);
+        seen_ids.insert(mie.src_block->id);
+
+        EXPECT_EQ(mie.src_block->src, m);
+      }
+      EXPECT_GT(b_seen, 0u);
+      max_seen = std::max(max_seen, b_seen);
+    }
+    auto it = kMaxSeen.find(show(m));
+    if (it == kMaxSeen.end()) {
+      ADD_FAILURE() << "Could not find expectation for " << show(m) << ": "
+                    << max_seen;
+      continue;
+    }
+    EXPECT_EQ(max_seen, it->second);
   }
 }
