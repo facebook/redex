@@ -119,7 +119,7 @@ commands:
           # The old Travis limit. Hopefully ensures GCC does
           # not die.
           command: |
-            make -j4
+            make -j4 V=0
 
   # Build & run tests.
   test-w-make:
@@ -128,13 +128,13 @@ commands:
       - run:
           name: Build tests
           command: |
-            make -j4 check TESTS=
+            make -j4 check TESTS= V=0
       - run:
           name: Run tests
           command: |
             mkdir -p /tmp/test-results
             export GTEST_OUTPUT=xml:/tmp/test-results/
-            make -j4 check
+            make -j4 check V=0
       - store_test_results:
           path: /tmp/test-results
 
@@ -187,7 +187,7 @@ commands:
       - run:
           name: Build
           shell: c:/tools/msys64/msys2_shell.cmd -defterm -no-start -mingw64 -full-path -here -c
-          command: mkdir build && cd build && cmake -G "MSYS Makefiles" .. && make -j 4
+          command: mkdir build && cd build && cmake -G "MSYS Makefiles" .. && make -j 4 V=0
 
       - run:
           name: Minimal Test
@@ -198,7 +198,7 @@ commands:
       - run:
           name: Package
           shell: c:/tools/msys64/msys2_shell.cmd -defterm -no-start -mingw64 -full-path -here -c
-          command: cd build && make -j 4 package
+          command: cd build && make -j 4 package V=0
 
 jobs:
   build-16_04:

@@ -32,7 +32,7 @@ function install_python36_from_source {
     pushd Python-3.6.10
 
     ./configure
-    make && make install
+    make V=0 && make install V=0
 }
 
 function install_boost_from_source {
