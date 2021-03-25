@@ -8,6 +8,7 @@
 #include "Debug.h"
 
 #include <atomic>
+#include <cstring>
 #include <exception>
 #include <fstream>
 #include <iomanip>
@@ -172,7 +173,9 @@ void assert_fail(const char* expr,
   std::string msg = format2string(
       "%s:%u: %s: assertion `%s' failed.\n", file, line, func, expr);
 
-  msg += v_format2string(fmt, ap);
+  if (strcmp(fmt, " ") != 0) {
+    msg += v_format2string(fmt, ap);
+  }
 
   va_end(ap);
 
