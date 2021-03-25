@@ -7,6 +7,7 @@
 
 #include "Synth.h"
 
+#include <memory>
 #include <signal.h>
 #include <stdio.h>
 #include <string>
@@ -36,17 +37,16 @@ constexpr const char* METRIC_GETTERS_REMOVED = "getter_methods_removed_count";
 constexpr const char* METRIC_WRAPPERS_REMOVED = "wrapper_methods_removed_count";
 constexpr const char* METRIC_CTORS_REMOVED = "constructors_removed_count";
 constexpr const char* METRIC_PASSES = "passes_count";
+constexpr const char* METRIC_METHODS_STATICIZED = "methods_staticized_count";
+constexpr const char* METRIC_PATCHED_INVOKES = "patched_invokes_count";
 
 namespace {
 struct SynthMetrics {
-  SynthMetrics()
-      : getters_removed_count(0),
-        wrappers_removed_count(0),
-        ctors_removed_count(0) {}
-
-  size_t getters_removed_count;
-  size_t wrappers_removed_count;
-  size_t ctors_removed_count;
+  size_t getters_removed_count{0};
+  size_t wrappers_removed_count{0};
+  size_t ctors_removed_count{0};
+  size_t methods_staticized_count{0};
+  size_t patched_invokes_count{0};
 };
 } // anonymous namespace
 
@@ -247,12 +247,11 @@ DexMethod* trivial_ctor_wrapper(DexMethod* m) {
 }
 
 struct WrapperMethods {
-  std::unordered_map<DexMethod*, DexField*> getters;
-  std::unordered_map<DexMethod*, DexMethod*> wrappers;
-  std::unordered_map<DexMethod*, DexMethod*> ctors;
-  std::unordered_map<DexMethod*, std::pair<DexMethod*, int>> wrapped;
-  std::unordered_set<DexMethod*> keepers;
-  std::unordered_set<DexMethod*> methods_to_update;
+  ConcurrentMap<DexMethod*, DexField*> getters;
+  ConcurrentMap<DexMethod*, DexMethod*> wrappers;
+  ConcurrentMap<DexMethod*, DexMethod*> ctors;
+  ConcurrentMap<DexMethod*, std::pair<DexMethod*, int>> wrapped;
+  ConcurrentSet<DexMethod*> keepers;
   std::unordered_set<DexMethod*> promoted_to_static;
   bool next_pass = false;
 };
@@ -264,10 +263,10 @@ struct WrapperMethods {
 void purge_wrapped_wrappers(WrapperMethods& ssms) {
   std::vector<DexMethod*> remove;
   for (auto& p : ssms.wrappers) {
-    if (ssms.wrappers.count(p.second)) {
+    if (ssms.wrappers.count_unsafe(p.second)) {
       remove.emplace_back(p.second);
     }
-    if (ssms.getters.count(p.second)) {
+    if (ssms.getters.count_unsafe(p.second)) {
       // a getter is a leaf so we remove it and we'll likely pick
       // it up next pass
       TRACE(SYNT, 5, "Removing wrapped getter: %s", SHOW(p.second));
@@ -276,11 +275,16 @@ void purge_wrapped_wrappers(WrapperMethods& ssms) {
     }
   }
   for (auto meth : remove) {
-    auto wrapped = ssms.wrapped.find(ssms.wrappers[meth]);
+    auto wrapper = ssms.wrappers.find(meth);
+    if (wrapper == ssms.wrappers.end()) {
+      // Might have been a duplidate we already erased
+      continue;
+    }
+    auto wrapped = ssms.wrapped.find(wrapper->second);
     if (wrapped != ssms.wrapped.end()) {
       if (--wrapped->second.second == 0) {
-        TRACE(SYNT, 5, "Removing wrapped: %s", SHOW(ssms.wrappers[meth]));
-        ssms.wrapped.erase(wrapped);
+        TRACE(SYNT, 5, "Removing wrapped: %s", SHOW(wrapper->second));
+        ssms.wrapped.erase(wrapper->second);
       }
     }
     TRACE(SYNT, 5, "Removing wrapper: %s", SHOW(meth));
@@ -292,10 +296,11 @@ void purge_wrapped_wrappers(WrapperMethods& ssms) {
 WrapperMethods analyze(const ClassHierarchy& ch,
                        const std::vector<DexClass*>& classes,
                        const SynthConfig& synthConfig) {
+  Timer timer("analyze");
   WrapperMethods ssms;
-  for (auto cls : classes) {
+  walk::parallel::classes(classes, [&](DexClass* cls) {
     if (synthConfig.blocklist_types.count(cls->get_type())) {
-      continue;
+      return;
     }
     for (auto dmethod : cls->get_dmethods()) {
       if (dmethod->rstate.dont_inline()) continue;
@@ -343,12 +348,15 @@ WrapperMethods analyze(const ClassHierarchy& ch,
           TRACE(SYNT, 2, "  Calls method: %s", SHOW(method));
           ssms.wrappers.emplace(dmethod, method);
           if (!is_static(method)) {
-            auto wrapped = ssms.wrapped.find(method);
-            if (wrapped == ssms.wrapped.end()) {
-              ssms.wrapped.emplace(method, std::make_pair(dmethod, 1));
-            } else {
-              wrapped->second.second++;
-            }
+            ssms.wrapped.update(
+                method,
+                [&](DexMethod*, std::pair<DexMethod*, int>& p, bool exists) {
+                  if (!exists) {
+                    p = std::make_pair(dmethod, 1);
+                  } else {
+                    p.second++;
+                  }
+                });
           }
         }
       }
@@ -360,7 +368,7 @@ WrapperMethods analyze(const ClassHierarchy& ch,
         redex_assert(!is_static_synthetic(vmethod));
       }
     }
-  }
+  });
   purge_wrapped_wrappers(ssms);
   return ssms;
 }
@@ -399,13 +407,20 @@ IRInstruction* make_sget(DexField* field) {
   return (new IRInstruction(opcode))->set_field(field);
 }
 
-void replace_getter_wrapper(IRCode* transform,
-                            IRInstruction* insn,
-                            IRInstruction* move_result,
-                            DexField* field) {
-  TRACE(SYNT, 2, "Optimizing getter wrapper call: %s", SHOW(insn));
+void replace_getter_wrapper_sequential(IRInstruction* insn, DexField* field) {
+  TRACE(SYNT, 2, "Optimizing getter wrapper call (sequential): %s", SHOW(insn));
   redex_assert(field->is_concrete());
   set_public(field);
+  always_assert(is_public(field));
+}
+
+void replace_getter_wrapper_concurrent(IRCode* transform,
+                                       IRInstruction* insn,
+                                       IRInstruction* move_result,
+                                       DexField* field) {
+  TRACE(SYNT, 2, "Optimizing getter wrapper call (concurrent): %s", SHOW(insn));
+  redex_assert(field->is_concrete());
+  always_assert(is_public(field));
 
   auto new_get =
       is_static(field) ? make_sget(field) : make_iget(field, insn->src(0));
@@ -418,7 +433,10 @@ void replace_getter_wrapper(IRCode* transform,
   transform->remove_opcode(move_result);
 }
 
-void update_invoke(IRCode* transform, IRInstruction* insn, DexMethod* method) {
+void replace_method_wrapper_concurrent(IRCode* transform,
+                                       IRInstruction* insn,
+                                       DexMethod* method) {
+  TRACE(SYNT, 2, "Optimizing method wrapper (sequential): %s", SHOW(insn));
   auto op = insn->opcode();
   auto new_invoke = [&] {
     redex_assert(op == OPCODE_INVOKE_STATIC || op == OPCODE_INVOKE_DIRECT);
@@ -466,13 +484,12 @@ bool can_update_wrappee(const ClassHierarchy& ch,
   return true;
 }
 
-bool replace_method_wrapper(const ClassHierarchy& ch,
-                            IRCode* transform,
-                            IRInstruction* insn,
-                            DexMethod* wrapper,
-                            DexMethod* wrappee,
-                            WrapperMethods& ssms) {
-  TRACE(SYNT, 2, "Optimizing method wrapper: %s", SHOW(insn));
+void replace_method_wrapper_sequential(const ClassHierarchy& ch,
+                                       IRInstruction* insn,
+                                       DexMethod* wrapper,
+                                       DexMethod* wrappee,
+                                       WrapperMethods& ssms) {
+  TRACE(SYNT, 2, "Optimizing method wrapper (sequential): %s", SHOW(insn));
   TRACE(SYNT, 3, "  wrapper:%p wrappee:%p", wrapper, wrappee);
   TRACE(SYNT, 3, "  wrapper: %s", SHOW(wrapper));
   TRACE(SYNT, 3, "  wrappee: %s", SHOW(wrappee));
@@ -489,17 +506,22 @@ bool replace_method_wrapper(const ClassHierarchy& ch,
       set_public(type_class(wrappee->get_class()));
     }
   }
-
-  update_invoke(transform, insn, wrappee);
-  return true;
 }
 
-void replace_ctor_wrapper(IRCode* transform,
-                          IRInstruction* ctor_insn,
-                          DexMethod* ctor) {
-  TRACE(SYNT, 2, "Optimizing static ctor: %s", SHOW(ctor_insn));
+void replace_ctor_wrapper_sequential(IRInstruction* ctor_insn,
+                                     DexMethod* ctor) {
+  TRACE(SYNT, 2, "Optimizing static ctor (sequential): %s", SHOW(ctor_insn));
   redex_assert(ctor->is_concrete());
   set_public(ctor);
+  always_assert(is_public(ctor));
+}
+
+void replace_ctor_wrapper_concurrent(IRCode* transform,
+                                     IRInstruction* ctor_insn,
+                                     DexMethod* ctor) {
+  TRACE(SYNT, 2, "Optimizing static ctor (concurrent): %s", SHOW(ctor_insn));
+  redex_assert(ctor->is_concrete());
+  always_assert(is_public(ctor));
 
   auto op = ctor_insn->opcode();
   auto new_ctor_call = [&] {
@@ -516,16 +538,18 @@ void replace_ctor_wrapper(IRCode* transform,
   transform->replace_opcode(ctor_insn, new_ctor_call);
 }
 
-void replace_wrappers(const ClassHierarchy& ch,
-                      DexMethod* caller_method,
-                      WrapperMethods& ssms) {
+struct MethodAnalysisResult {
   std::vector<std::tuple<IRInstruction*, IRInstruction*, DexField*>>
       getter_calls;
-  std::vector<std::pair<IRInstruction*, DexMethod*>> wrapper_calls;
-  std::vector<std::pair<IRInstruction*, DexMethod*>> wrapped_calls;
+  std::vector<std::tuple<IRInstruction*, DexMethod*, DexMethod*>> wrapper_calls;
+  std::vector<std::tuple<IRInstruction*, DexMethod*, DexMethod*>> wrapped_calls;
   std::vector<std::pair<IRInstruction*, DexMethod*>> ctor_calls;
+};
 
-  TRACE(SYNT, 4, "Replacing wrappers in %s", SHOW(caller_method));
+std::unique_ptr<MethodAnalysisResult> analyze_method_concurrent(
+    DexMethod* caller_method, WrapperMethods& ssms) {
+  auto mar = std::make_unique<MethodAnalysisResult>();
+  TRACE(SYNT, 4, "Analyzing %s", SHOW(caller_method));
   auto ii = InstructionIterable(caller_method->get_code());
   for (auto it = ii.begin(); it != ii.end(); ++it) {
     auto insn = it->insn;
@@ -544,14 +568,14 @@ void replace_wrappers(const ClassHierarchy& ch,
           continue;
         }
         auto field = found_get->second;
-        getter_calls.emplace_back(insn, move_result, field);
+        mar->getter_calls.emplace_back(insn, move_result, field);
         continue;
       }
 
       auto const found_wrap = ssms.wrappers.find(callee);
       if (found_wrap != ssms.wrappers.end()) {
         auto method = found_wrap->second;
-        wrapper_calls.emplace_back(insn, method);
+        mar->wrapper_calls.emplace_back(insn, callee, method);
         continue;
       }
       always_assert_log(ssms.wrapped.find(callee) == ssms.wrapped.end(),
@@ -573,47 +597,56 @@ void replace_wrappers(const ClassHierarchy& ch,
           continue;
         }
         auto field = found_get->second;
-        getter_calls.emplace_back(insn, move_result, field);
+        mar->getter_calls.emplace_back(insn, move_result, field);
         continue;
       }
 
       auto const found_wrap = ssms.wrappers.find(callee);
       if (found_wrap != ssms.wrappers.end()) {
         auto method = found_wrap->second;
-        wrapper_calls.emplace_back(insn, method);
+        mar->wrapper_calls.emplace_back(insn, callee, method);
         continue;
       }
 
       auto const found_wrappee = ssms.wrapped.find(callee);
       if (found_wrappee != ssms.wrapped.end()) {
         auto wrapper = found_wrappee->second.first;
-        wrapped_calls.emplace_back(insn, wrapper);
+        mar->wrapped_calls.emplace_back(insn, callee, wrapper);
         continue;
       }
 
       auto const found_ctor = ssms.ctors.find(callee);
       if (found_ctor != ssms.ctors.end()) {
         auto ctor = found_ctor->second;
-        ctor_calls.emplace_back(insn, ctor);
+        mar->ctor_calls.emplace_back(insn, ctor);
         continue;
       }
     }
   }
+  return mar;
+}
+
+void replace_wrappers_sequential(const ClassHierarchy& ch,
+                                 DexMethod* caller_method,
+                                 WrapperMethods& ssms,
+                                 MethodAnalysisResult* mar) {
+  using std::get;
+  TRACE(SYNT, 4, "Replacing wrappers (sequential) in %s", SHOW(caller_method));
   // Prune out wrappers that are invalid due to naming conflicts.
   std::unordered_set<DexMethod*> bad_wrappees;
   std::unordered_multimap<DexMethod*, DexMethod*> wrappees_to_wrappers;
-  for (auto wpair : wrapper_calls) {
-    auto call_inst = wpair.first;
+  for (const auto& wtriple : mar->wrapper_calls) {
+    auto call_inst = get<0>(wtriple);
     auto wrapper = static_cast<DexMethod*>(call_inst->get_method());
-    auto wrappee = wpair.second;
+    auto wrappee = get<2>(wtriple);
     wrappees_to_wrappers.emplace(wrappee, wrapper);
     if (!can_update_wrappee(ch, wrappee, wrapper)) {
       bad_wrappees.emplace(wrappee);
     }
   }
-  for (auto wpair : wrapped_calls) {
-    auto call_inst = wpair.first;
-    auto wrapper = wpair.second;
+  for (const auto& wtriple : mar->wrapped_calls) {
+    auto call_inst = get<0>(wtriple);
+    auto wrapper = get<2>(wtriple);
     auto wrappee = static_cast<DexMethod*>(call_inst->get_method());
     wrappees_to_wrappers.emplace(wrappee, wrapper);
     if (!can_update_wrappee(ch, wrappee, wrapper)) {
@@ -626,51 +659,63 @@ void replace_wrappers(const ClassHierarchy& ch,
       ssms.keepers.emplace(it->second);
     }
   }
-  wrapper_calls.erase(
-      std::remove_if(wrapper_calls.begin(), wrapper_calls.end(),
-                     [&](const std::pair<IRInstruction*, DexMethod*>& p) {
-                       return bad_wrappees.count(p.second);
-                     }),
-      wrapper_calls.end());
-  wrapped_calls.erase(
-      std::remove_if(wrapped_calls.begin(), wrapped_calls.end(),
-                     [&](const std::pair<IRInstruction*, DexMethod*>& p) {
+  mar->wrapper_calls.erase(
+      std::remove_if(
+          mar->wrapper_calls.begin(),
+          mar->wrapper_calls.end(),
+          [&](const std::tuple<IRInstruction*, DexMethod*, DexMethod*>&
+                  wtriple) { return bad_wrappees.count(get<2>(wtriple)); }),
+      mar->wrapper_calls.end());
+  mar->wrapped_calls.erase(
+      std::remove_if(mar->wrapped_calls.begin(),
+                     mar->wrapped_calls.end(),
+                     [&](const std::tuple<IRInstruction*, DexMethod*,
+                                          DexMethod*>& wtriple) {
+                       auto call_inst = get<0>(wtriple);
                        return bad_wrappees.count(
-                           static_cast<DexMethod*>(p.first->get_method()));
+                           static_cast<DexMethod*>(call_inst->get_method()));
                      }),
-      wrapped_calls.end());
+      mar->wrapped_calls.end());
   // Fix up everything left.
-  if (getter_calls.empty() && wrapper_calls.empty() && ctor_calls.empty() &&
-      wrapped_calls.empty()) {
-    return;
+  for (const auto& g : mar->getter_calls) {
+    replace_getter_wrapper_sequential(get<0>(g), get<2>(g));
   }
+  for (const auto& wtriple : mar->wrapper_calls) {
+    auto call_inst = get<0>(wtriple);
+    auto wrapper = get<1>(wtriple);
+    auto wrappee = get<2>(wtriple);
+    replace_method_wrapper_sequential(ch, call_inst, wrapper, wrappee, ssms);
+  }
+  for (const auto& wtriple : mar->wrapped_calls) {
+    auto call_inst = get<0>(wtriple);
+    auto wrappee = get<1>(wtriple);
+    auto wrapper = get<2>(wtriple);
+    replace_method_wrapper_sequential(ch, call_inst, wrapper, wrappee, ssms);
+  }
+  for (const auto& cpair : mar->ctor_calls) {
+    replace_ctor_wrapper_sequential(cpair.first, cpair.second);
+  }
+}
+
+void replace_wrappers_concurrent(DexMethod* caller_method,
+                                 const MethodAnalysisResult* mar) {
+  using std::get;
   auto code = caller_method->get_code();
-  for (auto g : getter_calls) {
-    using std::get;
-    replace_getter_wrapper(code, get<0>(g), get<1>(g), get<2>(g));
+  for (const auto& g : mar->getter_calls) {
+    replace_getter_wrapper_concurrent(code, get<0>(g), get<1>(g), get<2>(g));
   }
-  for (auto wpair : wrapper_calls) {
-    auto call_inst = wpair.first;
-    auto wrapper = resolve_method(call_inst->get_method(), MethodSearch::Any);
-    auto wrappee = wpair.second;
-    auto success =
-        replace_method_wrapper(ch, &*code, call_inst, wrapper, wrappee, ssms);
-    if (!success) {
-      ssms.keepers.emplace(static_cast<DexMethod*>(wpair.first->get_method()));
-    }
+  for (const auto& wtriple : mar->wrapper_calls) {
+    auto call_inst = get<0>(wtriple);
+    auto wrappee = get<2>(wtriple);
+    replace_method_wrapper_concurrent(code, call_inst, wrappee);
   }
-  for (auto wpair : wrapped_calls) {
-    auto call_inst = wpair.first;
-    auto wrapper = wpair.second;
-    auto wrappee = resolve_method(call_inst->get_method(), MethodSearch::Any);
-    auto success =
-        replace_method_wrapper(ch, &*code, call_inst, wrapper, wrappee, ssms);
-    if (!success) {
-      ssms.keepers.emplace(static_cast<DexMethod*>(wpair.first->get_method()));
-    }
+  for (const auto& wtriple : mar->wrapped_calls) {
+    auto call_inst = get<0>(wtriple);
+    auto wrappee = get<1>(wtriple);
+    replace_method_wrapper_concurrent(code, call_inst, wrappee);
   }
-  for (auto cpair : ctor_calls) {
-    replace_ctor_wrapper(&*code, cpair.first, cpair.second);
+  for (const auto& cpair : mar->ctor_calls) {
+    replace_ctor_wrapper_concurrent(code, cpair.first, cpair.second);
   }
 }
 
@@ -681,6 +726,8 @@ void remove_dead_methods(WrapperMethods& ssms,
   size_t synth_removed = 0;
   size_t other_removed = 0;
   size_t pub_meth = 0;
+  std::unordered_map<DexClass*, std::unordered_set<DexMethod*>>
+      methods_to_remove_by_class;
   auto remove_meth = [&](DexMethod* meth) {
     redex_assert(meth->is_concrete());
     if (!can_remove(meth, synthConfig)) {
@@ -698,7 +745,7 @@ void remove_dead_methods(WrapperMethods& ssms,
     TRACE(SYNT, 2, "Removing method: %s", SHOW(meth));
     if (is_public(meth)) pub_meth++;
     auto cls = type_class(meth->get_class());
-    cls->remove_method(meth);
+    methods_to_remove_by_class[cls].insert(meth);
     is_synthetic(meth) ? synth_removed++ : other_removed++;
   };
 
@@ -758,6 +805,17 @@ void remove_dead_methods(WrapperMethods& ssms,
 
   redex_assert(other_removed == 0);
   ssms.next_pass = ssms.next_pass && any_remove;
+
+  std::vector<DexClass*> classes;
+  classes.reserve(methods_to_remove_by_class.size());
+  for (auto& p : methods_to_remove_by_class) {
+    classes.push_back(p.first);
+  }
+  walk::parallel::classes(classes, [&](DexClass* clazz) {
+    for (auto m : methods_to_remove_by_class.at(clazz)) {
+      clazz->remove_method(m);
+    }
+  });
 }
 
 void do_transform(const ClassHierarchy& ch,
@@ -765,25 +823,36 @@ void do_transform(const ClassHierarchy& ch,
                   WrapperMethods& ssms,
                   const SynthConfig& synthConfig,
                   SynthMetrics& metrics) {
+  Timer timer("do_transform");
   // remove wrappers.  build a vector ahead of time to ensure we only visit each
   // method once, even if we mutate the class method lists such that we'd hit
   // something a second time.
   std::vector<DexMethod*> methods;
-  for (auto const& cls : classes) {
-    for (auto const& dm : cls->get_dmethods()) {
-      methods.emplace_back(dm);
-    }
-    for (auto const& vm : cls->get_vmethods()) {
-      methods.emplace_back(vm);
-    }
+  std::unordered_map<DexMethod*, std::unique_ptr<MethodAnalysisResult>>
+      method_analysis_results;
+  walk::code(classes, [&](DexMethod* meth, IRCode&) {
+    methods.emplace_back(meth);
+    method_analysis_results.emplace(meth,
+                                    std::unique_ptr<MethodAnalysisResult>());
+  });
+
+  // Analyze methods in parallel (no mutation)
+  walk::parallel::code(classes, [&](DexMethod* meth, IRCode&) {
+    method_analysis_results.at(meth) = analyze_method_concurrent(meth, ssms);
+  });
+
+  // Mutate method signatures (sequentially, as they are subtle dependencies)
+  for (auto const& meth : methods) {
+    auto* mar = method_analysis_results.at(meth).get();
+    replace_wrappers_sequential(ch, meth, ssms, mar);
   }
-  for (auto const& m : methods) {
-    if (m->get_code()) {
-      replace_wrappers(ch, m, ssms);
-    }
-  }
-  // check that invokes to promoted static method is correct
+
+  // Mutate method bodies (concurrently), and check that invokes to promoted
+  // static method are correct
+  std::atomic<size_t> patched_invokes{0};
   walk::parallel::code(classes, [&](DexMethod* meth, IRCode& code) {
+    auto* mar = method_analysis_results.at(meth).get();
+    replace_wrappers_concurrent(meth, mar);
     for (auto& mie : InstructionIterable(code)) {
       auto* insn = mie.insn;
       auto opcode = insn->opcode();
@@ -798,9 +867,12 @@ void do_transform(const ClassHierarchy& ch,
       insn->set_opcode(OPCODE_INVOKE_STATIC);
       TRACE(SYNT, 3, "Updated invoke on promoted to static %s\n in method %s",
             SHOW(wrappee), SHOW(meth));
+      patched_invokes++;
     }
   });
   remove_dead_methods(ssms, synthConfig, metrics);
+  metrics.methods_staticized_count += ssms.promoted_to_static.size();
+  metrics.patched_invokes_count += (size_t)patched_invokes;
 }
 
 bool trace_analysis(WrapperMethods& ssms) {
@@ -868,6 +940,8 @@ void SynthPass::run_pass(DexStoresVector& stores,
   mgr.incr_metric(METRIC_GETTERS_REMOVED, metrics.getters_removed_count);
   mgr.incr_metric(METRIC_WRAPPERS_REMOVED, metrics.wrappers_removed_count);
   mgr.incr_metric(METRIC_CTORS_REMOVED, metrics.ctors_removed_count);
+  mgr.incr_metric(METRIC_METHODS_STATICIZED, metrics.methods_staticized_count);
+  mgr.incr_metric(METRIC_PATCHED_INVOKES, metrics.patched_invokes_count);
   mgr.incr_metric(METRIC_PASSES, passes);
 }
 
