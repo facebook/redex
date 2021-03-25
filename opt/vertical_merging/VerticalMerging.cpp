@@ -440,6 +440,37 @@ void remove_both_have_clinit(
 }
 
 /**
+ * Remove pair of classes from merging if they both have init function with
+ * same signature.
+ */
+void remove_both_have_same_init(
+    const std::unordered_set<DexMethod*>& referenced_methods,
+    std::unordered_map<DexClass*, DexClass*>* mergeable_to_merger) {
+  std::vector<DexClass*> to_delete;
+  for (const auto& pair : *mergeable_to_merger) {
+    DexClass* merger = pair.second;
+    DexClass* mergeable = pair.first;
+    DexType* merger_type = merger->get_type();
+    if (merger->get_super_class() != mergeable->get_type()) {
+      continue;
+    }
+    auto mergeable_ctors = mergeable->get_ctors();
+    for (auto ctor : mergeable_ctors) {
+      if (DexMethod::get_method(merger_type, ctor->get_name(),
+                                ctor->get_proto()) != nullptr &&
+          referenced_methods.count(ctor)) {
+        TRACE(VMERGE, 5, "Found ctor might have conflict: %s", SHOW(ctor));
+        to_delete.emplace_back(mergeable);
+        break;
+      }
+    }
+  }
+  for (DexClass* cls : to_delete) {
+    mergeable_to_merger->erase(cls);
+  }
+}
+
+/**
  * Don't merge a class if it is a field's type and this field can't be
  * renamed.
  */
@@ -792,6 +823,7 @@ void VerticalMergingPass::run_pass(DexStoresVector& stores,
   std::unordered_map<DexClass*, DexClass*> mergeable_to_merger;
   collect_can_merge(scope, xstores, dont_merge_status, &mergeable_to_merger);
   remove_both_have_clinit(&mergeable_to_merger);
+  remove_both_have_same_init(referenced_methods, &mergeable_to_merger);
 
   change_super_calls(mergeable_to_merger);
 
