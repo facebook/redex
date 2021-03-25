@@ -35,6 +35,7 @@
 constexpr const char* METRIC_GETTERS_REMOVED = "getter_methods_removed_count";
 constexpr const char* METRIC_WRAPPERS_REMOVED = "wrapper_methods_removed_count";
 constexpr const char* METRIC_CTORS_REMOVED = "constructors_removed_count";
+constexpr const char* METRIC_PASSES = "passes_count";
 
 namespace {
 struct SynthMetrics {
@@ -867,6 +868,7 @@ void SynthPass::run_pass(DexStoresVector& stores,
   mgr.incr_metric(METRIC_GETTERS_REMOVED, metrics.getters_removed_count);
   mgr.incr_metric(METRIC_WRAPPERS_REMOVED, metrics.wrappers_removed_count);
   mgr.incr_metric(METRIC_CTORS_REMOVED, metrics.ctors_removed_count);
+  mgr.incr_metric(METRIC_PASSES, passes);
 }
 
 static SynthPass s_pass;
