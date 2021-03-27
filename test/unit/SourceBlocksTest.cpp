@@ -270,6 +270,64 @@ B4: LFoo;.bar:()V@3(0))");
   }
 }
 
+TEST_F(SourceBlocksTest, inline_normalization) {
+  auto foo_method = create_method("LFoo");
+  auto bar_method = create_method("LBar");
+
+  constexpr const char* kCode = R"(
+    (
+      (const v0 0)
+      (if-eqz v0 :true)
+      (goto :end)
+
+      (:true)
+      (invoke-static () "LBarX;.bar:()I")
+
+      (:end)
+      (return-void)
+    )
+  )";
+
+  foo_method->set_code(assembler::ircode_from_string(
+      replace_all(kCode, "LBarX;", show(bar_method->get_class()))));
+
+  foo_method->get_code()->build_cfg();
+  auto& foo_cfg = foo_method->get_code()->cfg();
+  std::string foo_profile = "(1.0 g(0.6) b(0.5 g))";
+  auto res = insert_source_blocks(foo_method, &foo_cfg, &foo_profile,
+                                  /*serialize=*/true);
+  EXPECT_TRUE(res.profile_success);
+
+  bar_method->set_code(assembler::ircode_from_string(
+      replace_all(kCode, "LBarX;", show(bar_method->get_class()))));
+
+  bar_method->get_code()->build_cfg();
+  auto& bar_cfg = bar_method->get_code()->cfg();
+  std::string bar_profile = "(1 g(0.4) b(0.2 g))";
+  auto bar_res = insert_source_blocks(bar_method, &bar_cfg, &bar_profile,
+                                      /*serialize=*/true);
+  EXPECT_TRUE(bar_res.profile_success);
+
+  IRInstruction* invoke_insn = nullptr;
+  for (auto& mie : cfg::InstructionIterable(foo_cfg)) {
+    if (mie.insn->opcode() == OPCODE_INVOKE_STATIC) {
+      invoke_insn = mie.insn;
+      break;
+    }
+  }
+  ASSERT_NE(invoke_insn, nullptr);
+  inliner::inline_with_cfg(foo_method, bar_method, invoke_insn, 1);
+
+  // Values of LBar; should be halved.
+
+  EXPECT_EQ(get_blocks_as_txt(foo_cfg.blocks()), R"(B0: LFoo;.bar:()V@0(1)
+B2: LFoo;.bar:()V@2(0.5)
+B3: LFoo;.bar:()V@1(0.6)
+B4: LBar;.bar:()V@0(0.5)
+B5: LBar;.bar:()V@2(0.1)
+B6: LBar;.bar:()V@1(0.2))");
+}
+
 TEST_F(SourceBlocksTest, serialize_exc_injected) {
   auto foo_method = create_method("LFoo");
 
