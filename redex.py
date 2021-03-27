@@ -164,14 +164,17 @@ def get_stop_pass_idx(passes_list, pass_name_and_num):
     )
 
 
+_BACKTRACE_PATTERN = re.compile(r"^([^(]+)(?:\((.*)\))?\[(0x[0-9a-f]+)\]$")
+
+
 def maybe_addr2line(lines):
-    backtrace_pattern = re.compile(r"^([^(]+)(?:\((.*)\))?\[(0x[0-9a-f]+)\]$")
+    global _BACKTRACE_PATTERN
 
     # Generate backtrace lines.
     def find_matches():
         for line in lines:
             stripped_line = line.strip()
-            m = backtrace_pattern.fullmatch(stripped_line)
+            m = _BACKTRACE_PATTERN.fullmatch(stripped_line)
             if m is not None:
                 yield m
 
@@ -220,10 +223,10 @@ def maybe_addr2line(lines):
     sys.stderr.write("\n")
 
 
-def maybe_reprint_error(lines, term_handler):
+def find_abort_error(lines):
     terminate_lines = []
     for line in lines:
-        stripped_line = line.strip()
+        stripped_line = line.rstrip()
 
         if stripped_line.startswith("terminate called"):
             terminate_lines.append(stripped_line)
@@ -238,25 +241,34 @@ def maybe_reprint_error(lines, term_handler):
             continue
 
     if not terminate_lines:
-        return
+        return None
 
     if len(terminate_lines) >= 3:
-        # See if we have an empty line.
-        try:
-            empty_index = terminate_lines.index("")
-            terminate_lines = terminate_lines[0:empty_index]
-        except ValueError:
+        # Try to find the first line matching a backtrace.
+        backtrace_idx = None
+        global _BACKTRACE_PATTERN
+        for i in range(2, len(terminate_lines)):
+            m = _BACKTRACE_PATTERN.fullmatch(terminate_lines[i])
+            if m is not None:
+                backtrace_idx = i
+                break
+
+        if backtrace_idx:
+            terminate_lines = terminate_lines[:backtrace_idx]
+        else:
             # Probably not one of ours, or with a very detailed error, just
             # print two lines.
             terminate_lines = terminate_lines[0:2]
 
-    if term_handler is not None:
-        term_handler(terminate_lines)
-        return
+    # Remove trailing newlines.
+    while terminate_lines:
+        if terminate_lines[-1] == "":
+            terminate_lines.pop()
+        else:
+            break
 
-    for line in terminate_lines:
-        print("%s" % line)
-    print()  # An empty line to separate.
+    # Add space to offset.
+    return "\n".join(" " + line for line in terminate_lines)
 
 
 def run_and_stream_stderr(args, env, pass_fds):
@@ -367,7 +379,7 @@ class ExceptionMessageFormatter:
         )
 
 
-def run_redex_binary(state, term_handler, exception_formatter):
+def run_redex_binary(state, exception_formatter):
     if state.args.redex_binary is None:
         state.args.redex_binary = shutil.which("redex-all")
 
@@ -486,11 +498,16 @@ def run_redex_binary(state, term_handler, exception_formatter):
                 # Check for crash traces.
                 maybe_addr2line(err_out)
 
+                abort_error = None
                 if returncode == -6:  # SIGABRT
-                    maybe_reprint_error(err_out, term_handler)
+                    abort_error = find_abort_error(err_out)
+                if abort_error is not None:
+                    abort_error = "\n" + abort_error
+                else:
+                    abort_error = ""
 
-                default_error_msg = "redex-all crashed with exit code {}!".format(
-                    returncode
+                default_error_msg = "redex-all crashed with exit code {}!{}".format(
+                    returncode, abort_error
                 )
                 if IS_WINDOWS:
                     raise RuntimeError(default_error_msg)
@@ -1229,14 +1246,14 @@ def _init_logging(level_str):
     logging.basicConfig(level=level)
 
 
-def run_redex(args, term_handler=None, exception_formatter=None):
+def run_redex(args, exception_formatter=None):
     # This is late, but hopefully early enough.
     _init_logging(args.log_level)
 
     state = prepare_redex(args)
     if exception_formatter is None:
         exception_formatter = ExceptionMessageFormatter()
-    run_redex_binary(state, term_handler, exception_formatter)
+    run_redex_binary(state, exception_formatter)
 
     if args.stop_pass:
         # Do not remove temp dirs
