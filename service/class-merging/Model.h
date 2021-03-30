@@ -20,6 +20,8 @@ struct ConfigFiles;
 class PassManager;
 class RefChecker;
 
+using ConstTypeHashSet = std::unordered_set<const DexType*>;
+
 namespace class_merging {
 
 using TypeToTypeSet = std::unordered_map<const DexType*, TypeSet>;
@@ -106,6 +108,8 @@ struct ModelSpec {
   std::string name;
   // set of roots from which to find all model types
   TypeSet roots;
+  // A set of types to be merged, they should be subtypes of the roots.
+  ConstTypeHashSet merging_targets;
   // types to exclude from the model
   std::unordered_set<DexType*> exclude_types;
   // prefixes of types to exclude from the model
@@ -346,6 +350,7 @@ class Model {
         const ModelSpec& spec,
         const TypeSystem& type_system,
         const RefChecker& refchecker);
+
   void init(const Scope& scope,
             const ModelSpec& spec,
             const TypeSystem& type_system);

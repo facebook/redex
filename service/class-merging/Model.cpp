@@ -163,13 +163,11 @@ Model::Model(const Scope& scope,
              const TypeSystem& type_system,
              const RefChecker& refchecker)
     : m_spec(spec),
+      m_types(spec.merging_targets.begin(), spec.merging_targets.end()),
       m_type_system(type_system),
       m_ref_checker(refchecker),
       m_scope(scope),
       m_conf(conf) {
-  for (const auto root : spec.roots) {
-    m_type_system.get_all_children(root, m_types);
-  }
   init(scope, spec, type_system);
 }
 
@@ -192,7 +190,6 @@ void Model::init(const Scope& scope,
   load_generated_types(spec, scope, type_system, m_types, generated);
   TRACE(CLMG, 4, "Generated types %ld", generated.size());
   exclude_types(spec.exclude_types);
-  // find_non_mergeables(scope, generated);
   MergeabilityChecker checker(scope, spec, m_ref_checker, generated, m_types);
   m_non_mergeables = checker.get_non_mergeables();
   TRACE(CLMG, 3, "Non mergeables %ld", m_non_mergeables.size());
@@ -585,7 +582,6 @@ void Model::break_by_interface(const MergerType& merger,
 namespace {
 
 using TypeHashSet = std::unordered_set<DexType*>;
-using ConstTypeHashSet = std::unordered_set<const DexType*>;
 
 DexType* check_current_instance(const ConstTypeHashSet& types,
                                 IRInstruction* insn) {
