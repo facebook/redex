@@ -59,7 +59,10 @@ class SourceBlocksTest : public RedexTest {
       oss << "B" << block->id() << ":";
       auto vec = gather_source_blocks(block);
       for (auto* sb : vec) {
-        oss << " " << show(sb->src) << "@" << sb->id << "(" << sb->val << ")";
+        oss << " " << show(sb->src) << "@" << sb->id;
+        if (sb->val) {
+          oss << "(" << *sb->val << ")";
+        }
       }
     }
     return remove_count(oss.str());
@@ -152,11 +155,11 @@ TEST_F(SourceBlocksTest, complex_serialize) {
 
   EXPECT_EQ(res.block_count, 5u);
   EXPECT_EQ(res.serialized, "(0 g(1 g(2) t(3 g)) b(4 g))");
-  EXPECT_EQ(get_blocks_as_txt({b, b1, b2, b3, b4}), R"(B0: LFoo;.bar:()V@0(0)
-B1: LFoo;.bar:()V@1(0)
-B2: LFoo;.bar:()V@4(0)
-B3: LFoo;.bar:()V@2(0)
-B4: LFoo;.bar:()V@3(0))");
+  EXPECT_EQ(get_blocks_as_txt({b, b1, b2, b3, b4}), R"(B0: LFoo;.bar:()V@0
+B1: LFoo;.bar:()V@1
+B2: LFoo;.bar:()V@4
+B3: LFoo;.bar:()V@2
+B4: LFoo;.bar:()V@3)");
 }
 
 TEST_F(SourceBlocksTest, complex_deserialize) {
@@ -362,9 +365,9 @@ TEST_F(SourceBlocksTest, serialize_exc_injected) {
   EXPECT_EQ(res.serialized, "(0(1)(2)(3) g(4) b(5 g))");
   EXPECT_EQ(
       get_blocks_as_txt(foo_cfg.blocks()),
-      R"(B0: LFoo;.bar:()V@0(0) LFoo;.bar:()V@1(0) LFoo;.bar:()V@2(0) LFoo;.bar:()V@3(0)
-B2: LFoo;.bar:()V@5(0)
-B3: LFoo;.bar:()V@4(0))");
+      R"(B0: LFoo;.bar:()V@0 LFoo;.bar:()V@1 LFoo;.bar:()V@2 LFoo;.bar:()V@3
+B2: LFoo;.bar:()V@5
+B3: LFoo;.bar:()V@4)");
 }
 
 TEST_F(SourceBlocksTest, deserialize_exc_injected) {
