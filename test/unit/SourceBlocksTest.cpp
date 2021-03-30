@@ -410,3 +410,39 @@ TEST_F(SourceBlocksTest, deserialize_exc_injected) {
 B2: LFoo;.bar:()V@5(6)
 B3: LFoo;.bar:()V@4(5))");
 }
+
+TEST_F(SourceBlocksTest, deserialize_x) {
+  auto method = create_method();
+  method->get_code()->build_cfg();
+  auto& cfg = method->get_code()->cfg();
+
+  ASSERT_EQ(cfg.blocks().size(), 1u);
+  auto b = cfg.blocks()[0];
+
+  // We're gonna just focus on blocks and edges, no instruction constraints.
+  auto b1 = cfg.create_block();
+  auto b2 = cfg.create_block();
+  auto b3 = cfg.create_block();
+  auto b4 = cfg.create_block();
+
+  cfg.add_edge(b, b1, EDGE_GOTO);
+  cfg.add_edge(b, b2, EDGE_BRANCH);
+  cfg.add_edge(b1, b3, EDGE_GOTO);
+  cfg.add_edge(b2, b3, EDGE_GOTO);
+  cfg.add_edge(b1, b4, method->get_class(), 0);
+  cfg.add_edge(b4, b3, EDGE_GOTO);
+
+  std::string profile = "(0.1 g(x g(x) t(0.4 g)) b(x g))";
+
+  auto res = insert_source_blocks(method, &cfg, &profile,
+                                  /*serialize=*/true);
+
+  EXPECT_EQ(res.block_count, 5u);
+  EXPECT_EQ(res.serialized, "(0 g(1 g(2) t(3 g)) b(4 g))");
+  EXPECT_TRUE(res.profile_success);
+  EXPECT_EQ(get_blocks_as_txt({b, b1, b2, b3, b4}), R"(B0: LFoo;.bar:()V@0(0.1)
+B1: LFoo;.bar:()V@1
+B2: LFoo;.bar:()V@4
+B3: LFoo;.bar:()V@2
+B4: LFoo;.bar:()V@3(0.4))");
+}
