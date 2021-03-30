@@ -44,10 +44,11 @@ boost::optional<float> get_source_blocks_factor(
     if (sb_vec.empty()) {
       return boost::none;
     }
-    if (!sb_vec[0]->val) {
+    auto val = sb_vec[0]->get_val();
+    if (!val) {
       return boost::none;
     }
-    caller_val = *sb_vec[0]->val;
+    caller_val = *val;
   }
   if (caller_val == 0) {
     return 0.0f;
@@ -61,10 +62,11 @@ boost::optional<float> get_source_blocks_factor(
     if (sb_vec.empty()) {
       return boost::none;
     }
-    if (!sb_vec[0]->val) {
+    auto val = sb_vec[0]->get_val();
+    if (!val) {
       return boost::none;
     }
-    callee_val = *sb_vec[0]->val;
+    callee_val = *val;
   }
   if (callee_val == 0) {
     return 0.0f;
@@ -82,7 +84,7 @@ void normalize_source_blocks(ControlFlowGraph& cfg, float factor) {
     auto sb_vec = source_blocks::gather_source_blocks(b);
     for (auto* sb : sb_vec) {
       if (sb->val) {
-        *sb->val *= factor;
+        sb->val->val *= factor;
       }
     }
   }

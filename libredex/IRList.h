@@ -119,14 +119,28 @@ struct SourceBlock {
   // Large methods exist, but a 32-bit integer is safe.
   uint32_t id{0};
   // Float has enough precision.
-  boost::optional<float> val{boost::none};
+  struct Val {
+    float val{0};
+    float appear100{0};
+    bool operator==(const Val& other) const {
+      return val == other.val && appear100 == other.appear100;
+    }
+  };
+  boost::optional<Val> val{boost::none};
 
   SourceBlock() = default;
   SourceBlock(DexMethodRef* src, size_t id)
       : src(src), id(id), val(boost::none) {}
-  SourceBlock(DexMethodRef* src, size_t id, boost::optional<float> v)
+  SourceBlock(DexMethodRef* src, size_t id, boost::optional<Val> v)
       : src(src), id(id), val(v) {}
   SourceBlock(const SourceBlock&) = default;
+
+  boost::optional<float> get_val() const {
+    return val ? boost::optional<float>(val->val) : boost::none;
+  }
+  boost::optional<float> get_appear100() const {
+    return val ? boost::optional<float>(val->appear100) : boost::none;
+  }
 
   bool operator==(const SourceBlock& other) const {
     return src == other.src && id == other.id && val == other.val;
