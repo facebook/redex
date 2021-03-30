@@ -24,6 +24,7 @@ using namespace sparta;
 namespace {
 
 const boost::optional<float> kFailVal = boost::none;
+const boost::optional<float> kXVal = boost::none;
 
 struct InsertHelper {
   DexMethod* method;
@@ -54,6 +55,18 @@ struct InsertHelper {
                         s_expr_input.what().c_str());
       expr_stack.push_back(s_expr({root_expr}));
     }
+  }
+
+  static boost::optional<float> parse_val(const std::string& val_str) {
+    if (val_str == "x") {
+      return kXVal;
+    }
+    size_t after_idx;
+    float nested_val = std::stof(val_str, &after_idx); // May throw.
+    always_assert_log(after_idx == val_str.size(),
+                      "Could not parse %s as float",
+                      val_str.c_str());
+    return nested_val;
   }
 
   void start(Block* cur) {
@@ -125,11 +138,7 @@ struct InsertHelper {
             return kFailVal;
           }
           redex_assert(inner_tail.is_nil());
-          size_t after_idx;
-          float nested_val = std::stof(val_str, &after_idx); // May throw.
-          always_assert_log(after_idx == val_str.size(),
-                            "Could not parse %s as float",
-                            val_str.c_str());
+          auto nested_val = parse_val(val_str);
           TRACE(MMINL,
                 5,
                 "Exception-induced block with val=%f. Popping %s, pushing %s",
@@ -174,11 +183,7 @@ struct InsertHelper {
             SHOW(method), e.str().c_str());
       return kFailVal;
     }
-    size_t after_idx;
-    float val = std::stof(val_str, &after_idx); // May throw.
-    always_assert_log(after_idx == val_str.size(),
-                      "Could not parse %s as float",
-                      val_str.c_str());
+    auto val = parse_val(val_str);
     TRACE(MMINL,
           5,
           "Started block with val=%f. Popping %s, pushing %s + %s",
