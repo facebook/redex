@@ -20,32 +20,7 @@
 
 #include "androidfw/ResourceTypes.h"
 
-namespace boost {
-namespace iostreams {
-class mapped_file;
-} // namespace iostreams
-} // namespace boost
-
-struct RedexMappedFile {
-  std::unique_ptr<boost::iostreams::mapped_file> file;
-  std::string filename;
-  bool read_only;
-
-  RedexMappedFile(std::unique_ptr<boost::iostreams::mapped_file> in_file,
-                  std::string in_filename,
-                  bool read_only);
-  ~RedexMappedFile();
-
-  RedexMappedFile(RedexMappedFile&& other) noexcept;
-  RedexMappedFile& operator=(RedexMappedFile&& rhs) noexcept;
-
-  RedexMappedFile(const RedexMappedFile&) = delete;
-  RedexMappedFile& operator=(const RedexMappedFile&) = delete;
-
-  const char* const_data() const;
-  char* data() const;
-  size_t size() const;
-};
+#include "RedexMappedFile.h"
 
 const char* const ONCLICK_ATTRIBUTE = "android:onClick";
 

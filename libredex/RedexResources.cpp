@@ -56,36 +56,6 @@
 #undef NO_ERROR
 #endif
 
-RedexMappedFile::RedexMappedFile(
-    std::unique_ptr<boost::iostreams::mapped_file> file,
-    std::string filename,
-    bool read_only)
-    : file(std::move(file)),
-      filename(std::move(filename)),
-      read_only(read_only) {}
-
-RedexMappedFile::~RedexMappedFile() {}
-
-RedexMappedFile::RedexMappedFile(RedexMappedFile&& other) noexcept {
-  file = std::move(other.file);
-  filename = std::move(other.filename);
-  read_only = other.read_only;
-}
-
-RedexMappedFile& RedexMappedFile::operator=(RedexMappedFile&& rhs) noexcept {
-  file = std::move(rhs.file);
-  filename = std::move(rhs.filename);
-  read_only = rhs.read_only;
-  return *this;
-}
-
-const char* RedexMappedFile::const_data() const { return file->const_data(); }
-char* RedexMappedFile::data() const {
-  redex_assert(!read_only);
-  return file->data();
-}
-size_t RedexMappedFile::size() const { return file->size(); }
-
 namespace {
 
 constexpr size_t MIN_CLASSNAME_LENGTH = 10;
@@ -1280,15 +1250,8 @@ std::unordered_set<std::string> get_native_classes(
 }
 
 RedexMappedFile map_file(const char* path, bool mode_write) {
-  auto map = std::make_unique<boost::iostreams::mapped_file>();
-  std::ios_base::openmode mode = (std::ios_base::openmode)(
-      std::ios_base::in | (mode_write ? std::ios_base::out : 0));
-  map->open(path, mode);
-  if (!map->is_open()) {
-    throw std::runtime_error(std::string("Could not map ") + path);
-  }
-
-  return RedexMappedFile(std::move(map), path, !mode_write);
+  // For backwards compat callers.
+  return RedexMappedFile::open(path, !mode_write);
 }
 
 void unmap_and_close(RedexMappedFile map ATTRIBUTE_UNUSED) {}
