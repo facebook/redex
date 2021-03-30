@@ -632,6 +632,25 @@ std::vector<DexClass*> ModelMerger::merge_model(Scope& scope,
     post_process(model, type_tags, mergeable_to_merger_ctor);
   }
 
+  // Properly update merged classes or even remove them.
+  auto no_interface = DexTypeList::make_type_list({});
+  scope.erase(
+      std::remove_if(scope.begin(),
+                     scope.end(),
+                     [&mergeable_to_merger, &no_interface](DexClass* cls) {
+                       if (mergeable_to_merger.count(cls->get_type())) {
+                         cls->set_interfaces(no_interface);
+                         cls->set_super_class(type::java_lang_Object());
+                         redex_assert(cls->get_vmethods().empty());
+                         if (!cls->get_clinit() && cls->get_sfields().empty()) {
+                           redex_assert(cls->get_dmethods().empty());
+                           return true;
+                         }
+                       }
+                       return false;
+                     }),
+      scope.end());
+
   TRACE(CLMG, 3, "created %d merger classes", merger_classes.size());
   m_stats.m_num_generated_classes = merger_classes.size();
   return merger_classes;
