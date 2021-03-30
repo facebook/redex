@@ -304,6 +304,10 @@ InsertResult insert_source_blocks(DexMethod* method,
         }
       }
     }
+    if (traceEnabled(MMINL, 3) && serialize) {
+      TRACE(MMINL, 3, "For %s, expected profile of the form %s", SHOW(method),
+            helper.oss.str().c_str());
+    }
   }
 
   return {helper.id, helper.oss.str(), !helper.had_profile_failure};
