@@ -426,19 +426,26 @@ std::unique_ptr<SourceBlock> source_block_from_s_expr(const s_expr& e) {
     std::istringstream in(id_str);
     in >> id;
   }
-  boost::optional<float> opt_val = boost::none;
+  boost::optional<SourceBlock::Val> opt_val = boost::none;
   if (!val_expr.is_nil()) {
     std::string val_str;
+    std::string appear_str;
     s_patn({
                s_patn(&val_str),
+               s_patn(&appear_str),
            })
-        .must_match(val_expr, "Expected 3rd arg to be a value string");
+        .must_match(val_expr, "Expected 3rd and 4th arg to be a value string");
     float val;
     {
       std::istringstream in(val_str);
       in >> val;
     }
-    opt_val = val;
+    float appear;
+    {
+      std::istringstream in(appear_str);
+      in >> appear;
+    }
+    opt_val = SourceBlock::Val{val, appear};
   }
   return std::make_unique<SourceBlock>(method, id, opt_val);
 }
@@ -620,7 +627,8 @@ s_expr create_source_block_expr(const MethodItemEntry* mie) {
   result.emplace_back(s_expr(show(src->src)));
   result.emplace_back(std::to_string(src->id));
   if (src->val) {
-    result.emplace_back(std::to_string(*src->val));
+    result.emplace_back(std::to_string((*src->val).val));
+    result.emplace_back(std::to_string((*src->val).appear100));
   }
 
   return s_expr(result);

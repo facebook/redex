@@ -7,7 +7,9 @@
 
 #include "SourceBlocks.h"
 
+#include <limits>
 #include <sstream>
+#include <string>
 
 #include "Debug.h"
 #include "DexClass.h"
@@ -23,8 +25,8 @@ using namespace sparta;
 
 namespace {
 
-const boost::optional<float> kFailVal = boost::none;
-const boost::optional<float> kXVal = boost::none;
+const boost::optional<SourceBlock::Val> kFailVal = boost::none;
+const boost::optional<SourceBlock::Val> kXVal = boost::none;
 
 struct InsertHelper {
   DexMethod* method;
@@ -57,16 +59,31 @@ struct InsertHelper {
     }
   }
 
-  static boost::optional<float> parse_val(const std::string& val_str) {
+  static boost::optional<SourceBlock::Val> parse_val(
+      const std::string& val_str) {
     if (val_str == "x") {
       return kXVal;
     }
     size_t after_idx;
     float nested_val = std::stof(val_str, &after_idx); // May throw.
-    always_assert_log(after_idx == val_str.size(),
-                      "Could not parse %s as float",
+    always_assert_log(after_idx > 0,
+                      "Could not parse first part of %s as float",
                       val_str.c_str());
-    return nested_val;
+    always_assert_log(after_idx + 1 < val_str.size(),
+                      "Could not find separator of %s",
+                      val_str.c_str());
+    always_assert_log(val_str[after_idx] == ':',
+                      "Did not find separating ':' in %s",
+                      val_str.c_str());
+    // This isn't efficient, but let's not play with low-level char* view.
+    // Small-string optimization is likely enough.
+    auto appear_part = val_str.substr(after_idx + 1);
+    float appear100 = std::stof(appear_part, &after_idx);
+    always_assert_log(after_idx == appear_part.size(),
+                      "Could not parse second part of %s as float",
+                      val_str.c_str());
+
+    return SourceBlock::Val{nested_val, appear100};
   }
 
   void start(Block* cur) {
@@ -117,39 +134,7 @@ struct InsertHelper {
           oss << "(" << id << ")";
         }
 
-        auto nested_val = [this]() -> boost::optional<float> {
-          if (had_profile_failure) {
-            return kFailVal;
-          }
-          if (root_expr.is_nil()) {
-            return kFailVal;
-          }
-          redex_assert(!expr_stack.empty());
-
-          std::string val_str;
-          const s_expr& e = expr_stack.back();
-          s_expr tail, inner_tail;
-          if (!s_patn({s_patn({s_patn(&val_str)}, inner_tail)}, tail)
-                   .match_with(e)) {
-            had_profile_failure = true;
-            TRACE(MMINL, 3,
-                  "Failed profile matching for %s: cannot match string for %s",
-                  SHOW(method), e.str().c_str());
-            return kFailVal;
-          }
-          redex_assert(inner_tail.is_nil());
-          auto nested_val = parse_val(val_str);
-          TRACE(MMINL,
-                5,
-                "Exception-induced block with val=%f. Popping %s, pushing %s",
-                nested_val,
-                e.str().c_str(),
-                tail.str().c_str());
-          expr_stack.pop_back();
-          expr_stack.push_back(tail);
-          return nested_val;
-        }();
-
+        auto nested_val = start_profile(cur, /*empty_inner_tail=*/true);
         it = source_blocks::impl::BlockAccessor::insert_source_block_after(
             cur, insert_after,
             std::make_unique<SourceBlock>(method, id, nested_val));
@@ -159,7 +144,8 @@ struct InsertHelper {
     }
   }
 
-  boost::optional<float> start_profile(Block* cur) {
+  boost::optional<SourceBlock::Val> start_profile(
+      Block* cur, bool empty_inner_tail = false) {
     if (had_profile_failure) {
       return kFailVal;
     }
@@ -183,17 +169,23 @@ struct InsertHelper {
             SHOW(method), e.str().c_str());
       return kFailVal;
     }
+    if (empty_inner_tail) {
+      redex_assert(inner_tail.is_nil());
+    }
     auto val = parse_val(val_str);
     TRACE(MMINL,
           5,
-          "Started block with val=%f. Popping %s, pushing %s + %s",
-          val,
+          "Started block with val=%f/%f. Popping %s, pushing %s + %s",
+          val ? val->val : std::numeric_limits<float>::quiet_NaN(),
+          val ? val->appear100 : std::numeric_limits<float>::quiet_NaN(),
           e.str().c_str(),
           tail.str().c_str(),
           inner_tail.str().c_str());
     expr_stack.pop_back();
     expr_stack.push_back(tail);
-    expr_stack.push_back(inner_tail);
+    if (!empty_inner_tail) {
+      expr_stack.push_back(inner_tail);
+    }
     return val;
   }
 
@@ -307,7 +299,9 @@ InsertResult insert_source_blocks(DexMethod* method,
     for (auto* b : cfg->blocks()) {
       auto vec = gather_source_blocks(b);
       for (auto* sb : vec) {
-        const_cast<SourceBlock*>(sb)->val = 0.0f;
+        if (sb->val) {
+          const_cast<SourceBlock*>(sb)->val = boost::none;
+        }
       }
     }
   }

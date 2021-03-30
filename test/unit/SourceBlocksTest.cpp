@@ -61,7 +61,7 @@ class SourceBlocksTest : public RedexTest {
       for (auto* sb : vec) {
         oss << " " << show(sb->src) << "@" << sb->id;
         if (sb->val) {
-          oss << "(" << *sb->val << ")";
+          oss << "(" << (*sb->val).val << ":" << (*sb->val).appear100 << ")";
         }
       }
     }
@@ -183,7 +183,8 @@ TEST_F(SourceBlocksTest, complex_deserialize) {
   cfg.add_edge(b1, b4, method->get_class(), 0);
   cfg.add_edge(b4, b3, EDGE_GOTO);
 
-  std::string profile = "(0.1 g(0.2 g(0.3) t(0.4 g)) b(0.5 g))";
+  std::string profile =
+      "(0.1:0.5 g(0.2:0.4 g(0.3:0.3) t(0.4:0.2 g)) b(0.5:0.1 g))";
 
   auto res = insert_source_blocks(method, &cfg, &profile,
                                   /*serialize=*/true);
@@ -191,11 +192,12 @@ TEST_F(SourceBlocksTest, complex_deserialize) {
   EXPECT_EQ(res.block_count, 5u);
   EXPECT_EQ(res.serialized, "(0 g(1 g(2) t(3 g)) b(4 g))");
   EXPECT_TRUE(res.profile_success);
-  EXPECT_EQ(get_blocks_as_txt({b, b1, b2, b3, b4}), R"(B0: LFoo;.bar:()V@0(0.1)
-B1: LFoo;.bar:()V@1(0.2)
-B2: LFoo;.bar:()V@4(0.5)
-B3: LFoo;.bar:()V@2(0.3)
-B4: LFoo;.bar:()V@3(0.4))");
+  EXPECT_EQ(get_blocks_as_txt({b, b1, b2, b3, b4}),
+            R"(B0: LFoo;.bar:()V@0(0.1:0.5)
+B1: LFoo;.bar:()V@1(0.2:0.4)
+B2: LFoo;.bar:()V@4(0.5:0.1)
+B3: LFoo;.bar:()V@2(0.3:0.3)
+B4: LFoo;.bar:()V@3(0.4:0.2))");
 }
 
 TEST_F(SourceBlocksTest, complex_deserialize_failure) {
@@ -219,57 +221,113 @@ TEST_F(SourceBlocksTest, complex_deserialize_failure) {
   cfg.add_edge(b1, b4, method->get_class(), 0);
   cfg.add_edge(b4, b3, EDGE_GOTO);
 
+  const std::string kSerializedExp = R"(B0: LFoo;.bar:()V@0
+B1: LFoo;.bar:()V@1
+B2: LFoo;.bar:()V@4
+B3: LFoo;.bar:()V@2
+B4: LFoo;.bar:()V@3)";
+
   // Change the profiles a bit so they should not match.
   {
-    std::string profile = "(0.1 b(0.2 g(0.3) t(0.4 g)) b(0.5 g))";
+    std::string profile =
+        "(0.1:0.0 b(0.2:0.0 g(0.3:0.0) t(0.4:0.0 g)) b(0.5:0.0 g))";
     auto res = insert_source_blocks(method, &cfg, &profile,
                                     /*serialize=*/true);
     EXPECT_FALSE(res.profile_success);
-    EXPECT_EQ(get_blocks_as_txt({b, b1, b2, b3, b4}), R"(B0: LFoo;.bar:()V@0(0)
-B1: LFoo;.bar:()V@1(0)
-B2: LFoo;.bar:()V@4(0)
-B3: LFoo;.bar:()V@2(0)
-B4: LFoo;.bar:()V@3(0))");
+    EXPECT_EQ(get_blocks_as_txt({b, b1, b2, b3, b4}), kSerializedExp);
     strip_source_blocks(cfg);
   }
 
   {
-    std::string profile = "(0.1 g(0.2 t(0.3) t(0.4 g)) b(0.5 g))";
+    std::string profile =
+        "(0.1:0.0 g(0.2:0.0 t(0.3:0.0) t(0.4:0.0 g)) b(0.5:0.0 g))";
     auto res = insert_source_blocks(method, &cfg, &profile,
                                     /*serialize=*/true);
     EXPECT_FALSE(res.profile_success);
-    EXPECT_EQ(get_blocks_as_txt({b, b1, b2, b3, b4}), R"(B0: LFoo;.bar:()V@0(0)
-B1: LFoo;.bar:()V@1(0)
-B2: LFoo;.bar:()V@4(0)
-B3: LFoo;.bar:()V@2(0)
-B4: LFoo;.bar:()V@3(0))");
+    EXPECT_EQ(get_blocks_as_txt({b, b1, b2, b3, b4}), kSerializedExp);
     strip_source_blocks(cfg);
   }
 
   {
-    std::string profile = "(0.1 g(0.2 g(0.3)) b(0.5 g))";
+    std::string profile = "(0.1:0.0 g(0.2:0.0 g(0.3:0.0)) b(0.5:0.0 g))";
     auto res = insert_source_blocks(method, &cfg, &profile,
                                     /*serialize=*/true);
     EXPECT_FALSE(res.profile_success);
-    EXPECT_EQ(get_blocks_as_txt({b, b1, b2, b3, b4}), R"(B0: LFoo;.bar:()V@0(0)
-B1: LFoo;.bar:()V@1(0)
-B2: LFoo;.bar:()V@4(0)
-B3: LFoo;.bar:()V@2(0)
-B4: LFoo;.bar:()V@3(0))");
+    EXPECT_EQ(get_blocks_as_txt({b, b1, b2, b3, b4}), kSerializedExp);
     strip_source_blocks(cfg);
   }
 
+  {
+    std::string profile = "(0.1:0.0 g(0.2:0.0 g(0.3:0.0) t(0.4:0.0 g)))";
+    auto res = insert_source_blocks(method, &cfg, &profile,
+                                    /*serialize=*/true);
+    EXPECT_FALSE(res.profile_success);
+    EXPECT_EQ(get_blocks_as_txt({b, b1, b2, b3, b4}), kSerializedExp);
+    strip_source_blocks(cfg);
+  }
+
+  // We want the exception message, not the abort line.
+  auto extract_exc_msg = [](const std::exception& e) {
+    std::string s(e.what());
+    auto idx = s.find('\n');
+    if (idx == std::string::npos) {
+      return s;
+    }
+    return s.substr(idx + 1);
+  };
+
+  // Nothing parseable as float (and not 'x').
+  {
+    std::string profile = "(hello:world g(0.2 g(0.3) t(0.4 g)))";
+    try {
+      insert_source_blocks(method, &cfg, &profile, /*serialize=*/true);
+      ADD_FAILURE() << "Expected exception.";
+    } catch (const std::exception& e) {
+      // This is not ours, but from std::stof. Message is not well-specified, I
+      // think.
+    }
+  }
+  // Not fully parseable as float (and not 'x').
+  {
+    std::string profile = "(0hello:world g(0.2 g(0.3) t(0.4 g)))";
+    try {
+      insert_source_blocks(method, &cfg, &profile, /*serialize=*/true);
+      ADD_FAILURE() << "Expected exception.";
+    } catch (const std::exception& e) {
+      EXPECT_EQ(extract_exc_msg(e),
+                "Did not find separating ':' in 0hello:world");
+    }
+  }
+  // Missing appear100.
   {
     std::string profile = "(0.1 g(0.2 g(0.3) t(0.4 g)))";
-    auto res = insert_source_blocks(method, &cfg, &profile,
-                                    /*serialize=*/true);
-    EXPECT_FALSE(res.profile_success);
-    EXPECT_EQ(get_blocks_as_txt({b, b1, b2, b3, b4}), R"(B0: LFoo;.bar:()V@0(0)
-B1: LFoo;.bar:()V@1(0)
-B2: LFoo;.bar:()V@4(0)
-B3: LFoo;.bar:()V@2(0)
-B4: LFoo;.bar:()V@3(0))");
-    strip_source_blocks(cfg);
+    try {
+      insert_source_blocks(method, &cfg, &profile, /*serialize=*/true);
+      ADD_FAILURE() << "Expected exception.";
+    } catch (const std::exception& e) {
+      EXPECT_EQ(extract_exc_msg(e), "Could not find separator of 0.1");
+    }
+  }
+  // Wrong character.
+  {
+    std::string profile = "(0.1/0.0 g(0.2/0 g(0.3/0) t(0.4/0 g)))";
+    try {
+      insert_source_blocks(method, &cfg, &profile, /*serialize=*/true);
+      ADD_FAILURE() << "Expected exception.";
+    } catch (const std::exception& e) {
+      EXPECT_EQ(extract_exc_msg(e), "Did not find separating ':' in 0.1/0.0");
+    }
+  }
+  // Not a float in appear.
+  {
+    std::string profile = "(0:0world g(0.2 g(0.3) t(0.4 g)))";
+    try {
+      insert_source_blocks(method, &cfg, &profile, /*serialize=*/true);
+      ADD_FAILURE() << "Expected exception.";
+    } catch (const std::exception& e) {
+      EXPECT_EQ(extract_exc_msg(e),
+                "Could not parse second part of 0:0world as float");
+    }
   }
 }
 
@@ -296,7 +354,7 @@ TEST_F(SourceBlocksTest, inline_normalization) {
 
   foo_method->get_code()->build_cfg();
   auto& foo_cfg = foo_method->get_code()->cfg();
-  std::string foo_profile = "(1.0 g(0.6) b(0.5 g))";
+  std::string foo_profile = "(1.0:0.1 g(0.6:0.2) b(0.5:0.3 g))";
   auto res = insert_source_blocks(foo_method, &foo_cfg, &foo_profile,
                                   /*serialize=*/true);
   EXPECT_TRUE(res.profile_success);
@@ -306,7 +364,7 @@ TEST_F(SourceBlocksTest, inline_normalization) {
 
   bar_method->get_code()->build_cfg();
   auto& bar_cfg = bar_method->get_code()->cfg();
-  std::string bar_profile = "(1 g(0.4) b(0.2 g))";
+  std::string bar_profile = "(1:0.1 g(0.4:0.2) b(0.2:0.3 g))";
   auto bar_res = insert_source_blocks(bar_method, &bar_cfg, &bar_profile,
                                       /*serialize=*/true);
   EXPECT_TRUE(bar_res.profile_success);
@@ -323,12 +381,12 @@ TEST_F(SourceBlocksTest, inline_normalization) {
 
   // Values of LBar; should be halved.
 
-  EXPECT_EQ(get_blocks_as_txt(foo_cfg.blocks()), R"(B0: LFoo;.bar:()V@0(1)
-B2: LFoo;.bar:()V@2(0.5)
-B3: LFoo;.bar:()V@1(0.6)
-B4: LBar;.bar:()V@0(0.5)
-B5: LBar;.bar:()V@2(0.1)
-B6: LBar;.bar:()V@1(0.2))");
+  EXPECT_EQ(get_blocks_as_txt(foo_cfg.blocks()), R"(B0: LFoo;.bar:()V@0(1:0.1)
+B2: LFoo;.bar:()V@2(0.5:0.3)
+B3: LFoo;.bar:()V@1(0.6:0.2)
+B4: LBar;.bar:()V@0(0.5:0.1)
+B5: LBar;.bar:()V@2(0.1:0.3)
+B6: LBar;.bar:()V@1(0.2:0.2))");
 }
 
 TEST_F(SourceBlocksTest, serialize_exc_injected) {
@@ -398,7 +456,7 @@ TEST_F(SourceBlocksTest, deserialize_exc_injected) {
 
   foo_method->get_code()->build_cfg();
   auto& foo_cfg = foo_method->get_code()->cfg();
-  std::string profile = "(1(2)(3)(4) g(5) b(6 g))";
+  std::string profile = "(1:0(2:0)(3:0)(4:0) g(5:0) b(6:0 g))";
   auto res =
       insert_source_blocks(foo_method, &foo_cfg, &profile,
                            /*serialize=*/true, /*insert_after_excs=*/true);
@@ -406,9 +464,9 @@ TEST_F(SourceBlocksTest, deserialize_exc_injected) {
   EXPECT_EQ(res.serialized, "(0(1)(2)(3) g(4) b(5 g))");
   EXPECT_EQ(
       get_blocks_as_txt(foo_cfg.blocks()),
-      R"(B0: LFoo;.bar:()V@0(1) LFoo;.bar:()V@1(2) LFoo;.bar:()V@2(3) LFoo;.bar:()V@3(4)
-B2: LFoo;.bar:()V@5(6)
-B3: LFoo;.bar:()V@4(5))");
+      R"(B0: LFoo;.bar:()V@0(1:0) LFoo;.bar:()V@1(2:0) LFoo;.bar:()V@2(3:0) LFoo;.bar:()V@3(4:0)
+B2: LFoo;.bar:()V@5(6:0)
+B3: LFoo;.bar:()V@4(5:0))");
 }
 
 TEST_F(SourceBlocksTest, deserialize_x) {
@@ -432,7 +490,7 @@ TEST_F(SourceBlocksTest, deserialize_x) {
   cfg.add_edge(b1, b4, method->get_class(), 0);
   cfg.add_edge(b4, b3, EDGE_GOTO);
 
-  std::string profile = "(0.1 g(x g(x) t(0.4 g)) b(x g))";
+  std::string profile = "(0.1:0.1 g(x g(x) t(0.4:0.2 g)) b(x g))";
 
   auto res = insert_source_blocks(method, &cfg, &profile,
                                   /*serialize=*/true);
@@ -440,9 +498,10 @@ TEST_F(SourceBlocksTest, deserialize_x) {
   EXPECT_EQ(res.block_count, 5u);
   EXPECT_EQ(res.serialized, "(0 g(1 g(2) t(3 g)) b(4 g))");
   EXPECT_TRUE(res.profile_success);
-  EXPECT_EQ(get_blocks_as_txt({b, b1, b2, b3, b4}), R"(B0: LFoo;.bar:()V@0(0.1)
+  EXPECT_EQ(get_blocks_as_txt({b, b1, b2, b3, b4}),
+            R"(B0: LFoo;.bar:()V@0(0.1:0.1)
 B1: LFoo;.bar:()V@1
 B2: LFoo;.bar:()V@4
 B3: LFoo;.bar:()V@2
-B4: LFoo;.bar:()V@3(0.4))");
+B4: LFoo;.bar:()V@3(0.4:0.2))");
 }
