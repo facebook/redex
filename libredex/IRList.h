@@ -8,6 +8,7 @@
 #pragma once
 
 #include <boost/intrusive/list.hpp>
+#include <boost/optional.hpp>
 #include <boost/range/sub_range.hpp>
 #include <functional>
 #include <iosfwd>
@@ -117,12 +118,13 @@ struct SourceBlock {
   DexMethodRef* src{nullptr};
   // Large methods exist, but a 32-bit integer is safe.
   uint32_t id{0};
-  // Use float over double to have a struct without padding. Additional
-  // precision is unnecessary.
-  float val{0};
+  // Float has enough precision.
+  boost::optional<float> val{boost::none};
 
   SourceBlock() = default;
-  SourceBlock(DexMethodRef* src, size_t id, float v)
+  SourceBlock(DexMethodRef* src, size_t id)
+      : src(src), id(id), val(boost::none) {}
+  SourceBlock(DexMethodRef* src, size_t id, boost::optional<float> v)
       : src(src), id(id), val(v) {}
   SourceBlock(const SourceBlock&) = default;
 

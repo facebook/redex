@@ -1162,6 +1162,9 @@ std::ostream& operator<<(std::ostream& o, const MethodItemEntry& mie) {
   case MFLOW_SOURCE_BLOCK:
     o << "SOURCE-BLOCK: " << show(mie.src_block->src) << "@"
       << mie.src_block->id;
+    if (mie.src_block->val) {
+      o << "(" << *mie.src_block->val << ")";
+    }
     break;
   case MFLOW_FALLTHROUGH:
     o << "FALLTHROUGH";

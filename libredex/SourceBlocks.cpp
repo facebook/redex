@@ -23,6 +23,8 @@ using namespace sparta;
 
 namespace {
 
+const boost::optional<float> kFailVal = boost::none;
+
 struct InsertHelper {
   DexMethod* method;
   uint32_t id{0};
@@ -59,7 +61,7 @@ struct InsertHelper {
       oss << "(" << id;
     }
 
-    float val = start_profile(cur);
+    auto val = start_profile(cur);
 
     source_blocks::impl::BlockAccessor::push_source_block(
         cur, std::make_unique<SourceBlock>(method, id, val));
@@ -102,12 +104,12 @@ struct InsertHelper {
           oss << "(" << id << ")";
         }
 
-        float nested_val = [this]() {
+        auto nested_val = [this]() -> boost::optional<float> {
           if (had_profile_failure) {
-            return 0.0f;
+            return kFailVal;
           }
           if (root_expr.is_nil()) {
-            return 0.0f;
+            return kFailVal;
           }
           redex_assert(!expr_stack.empty());
 
@@ -120,7 +122,7 @@ struct InsertHelper {
             TRACE(MMINL, 3,
                   "Failed profile matching for %s: cannot match string for %s",
                   SHOW(method), e.str().c_str());
-            return 0.0f;
+            return kFailVal;
           }
           redex_assert(inner_tail.is_nil());
           size_t after_idx;
@@ -148,19 +150,19 @@ struct InsertHelper {
     }
   }
 
-  float start_profile(Block* cur) {
+  boost::optional<float> start_profile(Block* cur) {
     if (had_profile_failure) {
-      return 0.0f;
+      return kFailVal;
     }
     if (root_expr.is_nil()) {
-      return 0.0f;
+      return kFailVal;
     }
     if (expr_stack.empty()) {
       had_profile_failure = true;
       TRACE(MMINL, 3,
             "Failed profile matching for %s: missing element for block %zu",
             SHOW(method), cur->id());
-      return 0.0f;
+      return kFailVal;
     }
     std::string val_str;
     const s_expr& e = expr_stack.back();
@@ -170,7 +172,7 @@ struct InsertHelper {
       TRACE(MMINL, 3,
             "Failed profile matching for %s: cannot match string for %s",
             SHOW(method), e.str().c_str());
-      return 0.0f;
+      return kFailVal;
     }
     size_t after_idx;
     float val = std::stof(val_str, &after_idx); // May throw.

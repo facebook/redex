@@ -412,28 +412,35 @@ std::unique_ptr<DexPosition> position_from_s_expr(
 std::unique_ptr<SourceBlock> source_block_from_s_expr(const s_expr& e) {
   std::string method_str;
   std::string id_str;
-  std::string val_str;
-  s_expr parent_expr;
+  s_expr val_expr;
   s_patn(
       {
           s_patn(&method_str),
           s_patn(&id_str),
-          s_patn(&val_str),
       },
-      parent_expr)
-      .must_match(e, "Expected 3 args for src_block directive");
+      val_expr)
+      .must_match(e, "Expected 2+ args for src_block directive");
   auto* method = DexMethod::make_method(method_str);
   uint32_t id;
   {
     std::istringstream in(id_str);
     in >> id;
   }
-  float val;
-  {
-    std::istringstream in(val_str);
-    in >> val;
+  boost::optional<float> opt_val = boost::none;
+  if (!val_expr.is_nil()) {
+    std::string val_str;
+    s_patn({
+               s_patn(&val_str),
+           })
+        .must_match(val_expr, "Expected 3rd arg to be a value string");
+    float val;
+    {
+      std::istringstream in(val_str);
+      in >> val;
+    }
+    opt_val = val;
   }
-  return std::make_unique<SourceBlock>(method, id, val);
+  return std::make_unique<SourceBlock>(method, id, opt_val);
 }
 
 /*
@@ -612,7 +619,9 @@ s_expr create_source_block_expr(const MethodItemEntry* mie) {
 
   result.emplace_back(s_expr(show(src->src)));
   result.emplace_back(std::to_string(src->id));
-  result.emplace_back(std::to_string(src->val));
+  if (src->val) {
+    result.emplace_back(std::to_string(*src->val));
+  }
 
   return s_expr(result);
 }
