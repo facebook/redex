@@ -112,6 +112,7 @@ libredex_la_SOURCES = \
 	libredex/Purity.cpp \
 	libredex/Reachability.cpp \
 	libredex/ReachableClasses.cpp \
+	libredex/RedexMappedFile.cpp \
 	libredex/ReadMaybeMapped.cpp \
 	libredex/RedexContext.cpp \
 	libredex/RedexException.cpp \
