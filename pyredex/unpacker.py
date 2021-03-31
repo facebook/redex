@@ -11,6 +11,7 @@ import os
 import re
 import shutil
 import subprocess
+import tarfile
 import zipfile
 from os.path import basename, dirname, getsize, isdir, isfile, join
 
@@ -388,6 +389,20 @@ class SubdirDexMode(BaseDexMode):
         jar_meta_path = join(dex_dir, "metadata.txt")
         metadata.write(jar_meta_path)
         shutil.move(jar_meta_path, join(extracted_apk_dir, self._secondary_dir))
+
+
+def unpack_tar_xz(input, output_dir):
+    # See whether the `xz` binary exists. It may be faster because of multithreaded decoding.
+    if shutil.which("xz") and shutil.which("tar"):
+        cmd = f'XZ_OPT=-T6 tar xf "{input}" -C "{output_dir}"'
+        subprocess.check_call(cmd, shell=True)  # noqa: P204
+        return
+
+    _warn_xz()
+
+    with tarfile.open(name=input, mode="r:xz") as t:
+        os.makedirs(output_dir, exist_ok=True)
+        t.extractall(output_dir)
 
 
 class XZSDexMode(BaseDexMode):
