@@ -1,3 +1,6 @@
+interaction,appear#
+ColdStart,4
+name,profiled_srcblks_exprs
 Lcom/facebook/redextest/SourceBlocksTest;.bar:()V,(0.1:0.2)
 Lcom/facebook/redextest/SourceBlocksTest;.foo:()V,(0.2:0.3)
 Lcom/facebook/redextest/SourceBlocksTest;.<init>:()V,(0.3:0.4)

@@ -7,6 +7,7 @@
 
 #include "InsertSourceBlocks.h"
 
+#include <boost/algorithm/string.hpp>
 #include <boost/multi_index/hashed_index.hpp>
 #include <boost/multi_index/member.hpp>
 #include <boost/multi_index_container.hpp>
@@ -95,6 +96,32 @@ struct ProfileFile {
 
     boost::string_view data{file.const_data(), file.size()};
     size_t pos = 0;
+
+    // Read header.
+    {
+      auto next_line_fn = [&data, &pos]() {
+        always_assert(pos < data.size());
+        size_t newline_pos = data.find('\n', pos);
+        always_assert(newline_pos != std::string::npos);
+        auto ret = data.substr(pos, newline_pos - pos);
+        pos = newline_pos + 1;
+        return ret;
+      };
+      auto check_components = [](const auto& line, size_t num = 0,
+                                 const std::vector<std::string>& exp = {}) {
+        std::vector<std::string> split_vec;
+        boost::split(split_vec, line, [](const auto& c) { return c == ','; });
+        always_assert_log(num == 0 ? split_vec == exp : split_vec.size() == num,
+                          "Unexpected line: %s (%s). Expected %s/%zu.",
+                          line.to_string().c_str(),
+                          boost::join(split_vec, "'").c_str(),
+                          boost::join(exp, ",").c_str(), num);
+        return split_vec;
+      };
+      check_components(next_line_fn(), 0, {"interaction", "appear#"});
+      check_components(next_line_fn(), 2); // TODO: Read for name.
+      check_components(next_line_fn(), 0, {"name", "profiled_srcblks_exprs"});
+    }
 
     while (pos < data.length()) {
       const size_t src_pos = pos;
