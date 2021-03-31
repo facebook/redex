@@ -1076,7 +1076,8 @@ std::string vshow(const DexType* t) { return humanize(show(t)); }
 std::string vshow(const DexMethod* p, bool include_annotations /*=true*/) {
   if (!p) return "";
   std::ostringstream ss;
-  ss << accessibility(p->get_access(), true)
+  ss << (p->is_def() ? accessibility(p->get_access(), true)
+                     : std::string("(?)"))
      << vshow(p->get_proto()->get_rtype()) << " "
      << humanize(show(p->get_class())) << "." << show(p->get_name())
      << vshow(p->get_proto(), false);
