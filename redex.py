@@ -29,6 +29,7 @@ from pipes import quote
 
 import pyredex.logger as logger
 from pyredex.logger import log
+from pyredex.unpacker import unpack_tar_xz
 from pyredex.utils import (
     LibraryManager,
     UnpackManager,
@@ -850,6 +851,12 @@ Given an APK, produce a better APK!
         help="Specify the python logging level",
     )
 
+    parser.add_argument(
+        "--packed-profiles",
+        type=str,
+        help="Path to packed profiles (expects tar.xz)",
+    )
+
     return parser
 
 
@@ -975,6 +982,26 @@ def _check_android_sdk_api(args):
         logging.warning("No embedded files, please add manually!")
 
 
+def _handle_profiles(args, debug_mode):
+    if not args.packed_profiles:
+        return
+
+    directory = make_temp_dir(".redex_profiles", False)
+    unpack_tar_xz(args.packed_profiles, directory)
+
+    # Create input for method profiles.
+    method_profiles_str = ", ".join(
+        f'"{f.path}"'
+        for f in os.scandir(directory)
+        if f.is_file() and "method_stats" in f.name
+    )
+    if method_profiles_str:
+        logging.debug("Found method profiles: %s", method_profiles_str)
+        args.passthru_json.append(f"agg_method_stats_files=[{method_profiles_str}]")
+    else:
+        logging.info("No method profiles found in %s", args.packed_profiles)
+
+
 def prepare_redex(args):
     logging.debug("Preparing...")
     debug_mode = args.unpack_only or args.debug
@@ -1078,6 +1105,9 @@ def prepare_redex(args):
         print("APK: " + extracted_apk_dir)
         print("DEX: " + dex_dir)
         sys.exit()
+
+    # Unpack profiles, if they exist.
+    _handle_profiles(args, debug_mode)
 
     logging.debug("Moving contents to expected structure...")
     # Move each dex to a separate temporary directory to be operated by

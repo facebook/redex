@@ -13,6 +13,7 @@ import os
 import re
 import shutil
 import subprocess
+import tarfile
 import zipfile
 from os.path import basename, dirname, getsize, isdir, isfile, join
 
@@ -459,6 +460,20 @@ def pack_xz(input, output, compression_level=9, threads=6, check=lzma.CHECK_CRC3
                 output_f.write(c_buf)
         end_buf = c.flush()
         output_f.write(end_buf)
+
+
+def unpack_tar_xz(input, output_dir):
+    # See whether the `xz` binary exists. It may be faster because of multithreaded decoding.
+    if shutil.which("xz") and shutil.which("tar"):
+        cmd = f'XZ_OPT=-T6 tar xf "{input}" -C "{output_dir}"'
+        subprocess.check_call(cmd, shell=True)  # noqa: P204
+        return
+
+    _warn_xz()
+
+    with tarfile.open(name=input, mode="r:xz") as t:
+        os.makedirs(output_dir, exist_ok=True)
+        t.extractall(output_dir)
 
 
 class XZSDexMode(BaseDexMode):
