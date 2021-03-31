@@ -69,15 +69,18 @@ void OriginalNamePass::run_pass(DexStoresVector& stores,
     DexClass* cls = type_class(cls_type);
     auto external_name =
         java_names::internal_to_external(cls->get_deobfuscated_name());
-    auto external_name_s = DexString::make_string(external_name.c_str());
+    auto lastDot = external_name.find_last_of('.');
+    auto simple_name = (lastDot != std::string::npos)
+                           ? external_name.substr(lastDot + 1)
+                           : external_name;
+    auto simple_name_s = DexString::make_string(simple_name.c_str());
     always_assert_log(DexField::get_field(cls_type, field_name, string_type) ==
                           nullptr,
                       "field %s already exists!",
                       redex_field_name);
-    DexField* f =
-        DexField::make_field(cls_type, field_name, string_type)
-            ->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_FINAL,
-                            new DexEncodedValueString(external_name_s));
+    DexField* f = DexField::make_field(cls_type, field_name, string_type)
+                      ->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_FINAL,
+                                      new DexEncodedValueString(simple_name_s));
     // These fields are accessed reflectively, so make sure we do not remove
     // them.
     f->rstate.set_root();
