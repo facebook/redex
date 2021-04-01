@@ -955,6 +955,47 @@ def _check_android_sdk(args):
         logging.warning("Could not find an SDK jar: %s", e)
 
 
+def _has_config_val(args, path):
+    try:
+        with open(args.config, "r") as f:
+            json_obj = json.load(f)
+        for item in path:
+            if item not in json_obj:
+                logging.error("Did not find %s in %s", item, json_obj)
+                return False
+            json_obj = json_obj[item]
+        return True
+    except BaseException as e:
+        logging.error("%s", e)
+        return False
+
+
+def _check_shrinker_heuristics(args):
+    arg_template = "inliner.reg_alloc_random_forest="
+    for arg in args.passthru:
+        if arg.startswith(arg_template):
+            return
+
+    if _has_config_val(args, ["inliner", "reg_alloc_random_forest"]):
+        return
+
+    # Nothing found, check whether we have files embedded
+    logging.warning("No shrinking heuristic found, searching for default!")
+    try:
+        from generated_shrinker_regalloc_heuristics import SHRINKER_HEURISTICS_FILE
+
+        logging.info("Found embedded shrinker heuristics")
+        tmp_dir = make_temp_dir("shrinker_heuristics")
+        filename = os.path.join(tmp_dir, "shrinker.forest")
+        logging.info("Writing shrinker heuristics to %s", filename)
+        with open(filename, "wb") as f:
+            f.write(SHRINKER_HEURISTICS_FILE)
+        arg = arg_template + filename
+        args.passthru.append(arg)
+    except ImportError:
+        logging.warning("No embedded files, please add manually!")
+
+
 def _check_android_sdk_api(args):
     arg_template = "android_sdk_api_{level}_file="
     arg_re = re.compile("^" + arg_template.format(level="(\\d+)"))
@@ -1165,6 +1206,8 @@ def prepare_redex(args):
 
     # Scan for framework files. If not found, warn and add them if available.
     _check_android_sdk_api(args)
+    # Check for shrinker heuristics.
+    _check_shrinker_heuristics(args)
 
     # Scan for SDK jar. If not found, warn and add if available.
     _check_android_sdk(args)
