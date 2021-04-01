@@ -314,6 +314,33 @@ TEST_F(EvaluateTypeChecksTest,
   EXPECT_TRUE(run("LTest;", method_str, code, code));
 }
 
+TEST_F(EvaluateTypeChecksTest, instance_of_multi_def) {
+  auto code = R"(
+       (
+        (load-param v0)
+        (load-param v1)
+        (load-param-object v2)
+
+        (if-eqz v0 :L1)
+
+        (instance-of v2 "LBar;")
+        (move-result-pseudo v1)
+
+        (:L1)
+        (if-nez v1 :L2)
+        (const v0 0)
+        (return v0)
+
+        (:L2)
+        (const v0 1)
+        (return v0)
+       )
+      )";
+  auto method_str = "method (private static) \"LTest;.test:(ZILBar;)I\"";
+
+  EXPECT_TRUE(run("LTest;", method_str, code, code));
+}
+
 TEST_F(EvaluateTypeChecksTest, check_cast_no_optimize) {
   auto code = R"(
        (
