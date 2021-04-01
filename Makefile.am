@@ -181,6 +181,7 @@ libredex_la_SOURCES = \
 	service/escape-analysis/BlamingAnalysis.cpp \
 	service/escape-analysis/LocalPointersAnalysis.cpp \
 	service/field-ops/FieldOpTracker.cpp \
+	service/kotlin-instance-rewrite/KotlinInstanceRewriter.cpp \
 	service/local-dce/LocalDce.cpp \
 	service/loop-info/LoopInfo.cpp \
 	service/method-dedup/ConstantLifting.cpp \
@@ -273,6 +274,7 @@ libopt_la_SOURCES = \
 	opt/interdex/DexStructure.cpp \
 	opt/interdex/InterDex.cpp \
 	opt/interdex/InterDexPass.cpp \
+	opt/kotlin-lambda/RewriteKotlinSingletonInstance.cpp \
 	opt/layout-reachability/LayoutReachabilityPass.cpp \
 	opt/local-dce/LocalDcePass.cpp \
 	opt/merge_interface/MergeInterface.cpp \
