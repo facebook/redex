@@ -993,7 +993,7 @@ def _handle_profiles(args, debug_mode):
     method_profiles_str = ", ".join(
         f'"{f.path}"'
         for f in os.scandir(directory)
-        if f.is_file() and "method_stats" in f.name
+        if f.is_file() and ("method_stats" in f.name or "agg_stats" in f.name)
     )
     if method_profiles_str:
         logging.debug("Found method profiles: %s", method_profiles_str)
