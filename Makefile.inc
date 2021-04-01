@@ -50,6 +50,7 @@ COMMON_INCLUDES = \
 	-I$(top_srcdir)/opt/print-members \
 	-I$(top_srcdir)/opt/rebindrefs \
 	-I$(top_srcdir)/opt/reduce-array-literals \
+	-I$(top_srcdir)/opt/reduce-boolean-branches \
 	-I$(top_srcdir)/opt/reduce-gotos \
 	-I$(top_srcdir)/opt/redundant_move_elimination \
 	-I$(top_srcdir)/opt/regalloc \
@@ -107,6 +108,7 @@ COMMON_INCLUDES = \
 	-I$(top_srcdir)/service/method-outliner \
 	-I$(top_srcdir)/service/method-merger \
 	-I$(top_srcdir)/service/kotlin-instance-rewrite \
+	-I$(top_srcdir)/service/reduce-boolean-branches \
 	-I$(top_srcdir)/service/reference-update \
 	-I$(top_srcdir)/service/regalloc \
 	-I$(top_srcdir)/service/shrinker \

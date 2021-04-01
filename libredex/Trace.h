@@ -104,6 +104,7 @@ class DexType;
   TM(QUICK)           \
   TM(RABBIT)          \
   TM(RAL)             \
+  TM(RBB)             \
   TM(REACH)           \
   TM(REFL)            \
   TM(REFU)            \
