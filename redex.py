@@ -924,7 +924,7 @@ def _handle_profiles(args, debug_mode):
     # Create input for basic blocks.
     # Note: at the moment, only look for ColdStart.
     block_profiles_str = ", ".join(
-        f'"{f.path}"'
+        f"{f.path}"
         for f in os.scandir(directory)
         if f.is_file()
         and f.name.startswith("block_profiles_")
