@@ -89,6 +89,7 @@ check_PROGRAMS = \
     random_forest_test \
     reaching_definitions_test \
     reduce_array_literals_test \
+    reduce_boolean_branches_test \
     reduce_gotos_test \
     reflection_analysis_test \
     reg_alloc_test \
@@ -299,6 +300,9 @@ reaching_definitions_test_SOURCES = ReachingDefinitionsTest.cpp
 reduce_array_literals_test_SOURCES = ReduceArrayLiteralsTest.cpp
 reduce_array_literals_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
+reduce_boolean_branches_test_SOURCES = ReduceBooleanBranchesTest.cpp VirtScopeHelper.cpp ScopeHelper.cpp
+reduce_boolean_branches_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
+
 reduce_gotos_test_SOURCES = ReduceGotosTest.cpp
 reduce_gotos_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
@@ -471,6 +475,7 @@ TESTS = \
     random_forest_test \
     reaching_definitions_test \
     reduce_array_literals_test \
+    reduce_boolean_branches_test \
     reduce_gotos_test \
     reflection_analysis_test \
     reg_alloc_test \

@@ -191,6 +191,7 @@ libredex_la_SOURCES = \
 	service/method-inliner/MethodInliner.cpp \
 	service/method-inliner/ObjectInlinePlugin.cpp \
 	service/method-merger/MethodMerger.cpp \
+	service/reduce-boolean-branches/ReduceBooleanBranches.cpp \
 	service/reference-update/MethodReference.cpp \
 	service/reference-update/TypeReference.cpp \
 	service/switch-dispatch/SwitchDispatch.cpp \
@@ -310,6 +311,7 @@ libopt_la_SOURCES = \
 	opt/renameclasses/RenameClassesV2.cpp \
 	opt/reorder-interfaces-decl/ReorderInterfacesDecl.cpp \
 	opt/reduce-array-literals/ReduceArrayLiterals.cpp \
+	opt/reduce-boolean-branches/ReduceBooleanBranchesPass.cpp \
 	opt/reduce-gotos/ReduceGotos.cpp \
 	opt/resolve-refs/ResolveRefsPass.cpp \
 	opt/resolve-refs/ExternalRefsManglingPass.cpp \
