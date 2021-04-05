@@ -525,6 +525,9 @@ class InstructionIteratorImpl {
   InstructionIteratorImpl(const InstructionIteratorImpl<false>& rhs)
       : m_it(rhs.m_it), m_end(rhs.m_end) {}
 
+  InstructionIteratorImpl& operator=(const InstructionIteratorImpl& other) =
+      default;
+
   InstructionIteratorImpl& operator++() {
     ++m_it;
     to_next_instruction();
