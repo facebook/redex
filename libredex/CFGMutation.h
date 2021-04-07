@@ -8,6 +8,7 @@
 #pragma once
 
 #include "ControlFlow.h"
+#include "DexPosition.h"
 #include "IRInstruction.h"
 
 #include <unordered_map>
@@ -51,7 +52,7 @@ class CFGMutation {
 
   /// Insert a new change before \p anchor.
   /// Mutation may have multiple changes associated with \c anchor.
-  ///     insert_before preserves the anchor instruction and add the
+  ///     insert_before preserves the anchor instruction and adds the
   ///     instructions before it.
   /// \p anchor is the instruction that the change is made relative to. If at
   ///     the time the change is applied, the anchor does not exist, the change
@@ -61,10 +62,22 @@ class CFGMutation {
   void insert_before(const cfg::InstructionIterator& anchor,
                      std::vector<IRInstruction*> instructions);
 
+  /// Insert a new change before \p anchor.
+  /// Mutation may have multiple changes associated with \c anchor.
+  ///     insert_before preserves the anchor instruction and adds the
+  ///     position before it.
+  /// \p anchor is the instruction that the change is made relative to. If at
+  ///     the time the change is applied, the anchor does not exist, the change
+  ///     will be ignored.
+  /// \p position is the debug position that is inserted as part of the
+  ///     change.
+  void insert_before(const cfg::InstructionIterator& anchor,
+                     std::unique_ptr<DexPosition> position);
+
   /// Insert a new change after \p anchor.
   /// \p anchor is the instruction that the change is made relative to. If at
   ///     the time the change is applied, the anchor does not exist, the change
-  ///     will be ignored. This preserve the anchor instruction and add the
+  ///     will be ignored. This preserves the anchor instruction and adds the
   ///     instructions after it.
   /// \p instructions are the instructions that are inserted as part of the
   ///     change.
@@ -73,6 +86,16 @@ class CFGMutation {
   ///    replacing it. This can be an empty list.
   void insert_after(const cfg::InstructionIterator& anchor,
                     std::vector<IRInstruction*> instructions);
+
+  /// Insert a new change after \p anchor.
+  /// \p anchor is the instruction that the change is made relative to. If at
+  ///     the time the change is applied, the anchor does not exist, the change
+  ///     will be ignored. This preserves the anchor instruction and adds the
+  ///     position after it.
+  /// \p position is the debug position that is inserted as part of the
+  ///     change.
+  void insert_after(const cfg::InstructionIterator& anchor,
+                    std::unique_ptr<DexPosition> position);
 
   /// Replace with a new change at this \p anchor.
   /// replace behaves like either Before or After followed by removing the
@@ -116,11 +139,14 @@ class CFGMutation {
     ///    after the anchor's initial position.
     ///  - Note the iterator may not be moved at all, even if the change is
     ///    applied.
-    void apply(ControlFlowGraph& cfg, InstructionIterator& it) const;
+    void apply(ControlFlowGraph& cfg, InstructionIterator& it);
 
     /// Accumulates changes for a specific instruction.
     /// Check \link CFGMutation::add_change \endlink for more details
     void add_change(Insert where, std::vector<IRInstruction*> insn_change);
+
+    /// Accumulates position changes for a specific instruction.
+    void add_position(Insert where, std::unique_ptr<DexPosition> pos_change);
 
     /// Free the instructions owned by this ChangeSet.  Leaves the ChangeSet
     /// empty (so applying it would be a nop).
@@ -130,6 +156,9 @@ class CFGMutation {
     std::vector<IRInstruction*> m_insert_before;
     boost::optional<std::vector<IRInstruction*>> m_replace;
     std::vector<IRInstruction*> m_insert_after;
+
+    std::vector<std::unique_ptr<DexPosition>> m_insert_pos_before;
+    std::vector<std::unique_ptr<DexPosition>> m_insert_pos_after;
   };
 
   cfg::ControlFlowGraph& m_cfg;
@@ -159,6 +188,22 @@ inline void CFGMutation::ChangeSet::add_change(
   }
 }
 
+inline void CFGMutation::ChangeSet::add_position(
+    Insert where, std::unique_ptr<DexPosition> pos_change) {
+
+  switch (where) {
+  case Insert::Before:
+    m_insert_pos_before.push_back(std::move(pos_change));
+    break;
+  case Insert::After:
+    m_insert_pos_after.push_back(std::move(pos_change));
+    break;
+  case Insert::Replacing:
+    always_assert_log(false, "Cannot replace dex positions.");
+    break;
+  }
+}
+
 inline void CFGMutation::insert_before(
     const cfg::InstructionIterator& anchor,
     std::vector<IRInstruction*> instructions) {
@@ -173,6 +218,20 @@ inline void CFGMutation::insert_after(
   always_assert(!anchor.is_end());
   m_changes[anchor->insn].add_change(ChangeSet::Insert::After,
                                      std::move(instructions));
+}
+
+inline void CFGMutation::insert_before(const cfg::InstructionIterator& anchor,
+                                       std::unique_ptr<DexPosition> position) {
+  always_assert(!anchor.is_end());
+  m_changes[anchor->insn].add_position(ChangeSet::Insert::Before,
+                                       std::move(position));
+}
+
+inline void CFGMutation::insert_after(const cfg::InstructionIterator& anchor,
+                                      std::unique_ptr<DexPosition> position) {
+  always_assert(!anchor.is_end());
+  m_changes[anchor->insn].add_position(ChangeSet::Insert::After,
+                                       std::move(position));
 }
 
 inline void CFGMutation::replace(const cfg::InstructionIterator& anchor,
