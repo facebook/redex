@@ -2047,12 +2047,7 @@ static void rewrite_at_location(DexMethod* outlined_method,
     outlined_method_invocation.push_back(move_result_insn);
   }
   cfg_mutation.insert_before(first_insn_it, outlined_method_invocation);
-  cfg_mutation.flush();
 
-  // TODO: Instead inserting directly in the cfg via find_insn, enhance the
-  // CFGMutation class to support inserting positions before and after
-  // instructions.
-  auto dbg_pos_insertion_it = cfg.find_insn(invoke_insn, first_insn_it.block());
   std::unique_ptr<DexPosition> new_dbg_pos;
   if (call_site_pattern_ids) {
     auto manager = g_redex->get_position_pattern_switch_manager();
@@ -2063,11 +2058,8 @@ static void rewrite_at_location(DexMethod* outlined_method,
     new_dbg_pos->bind(DexString::make_string(show(outlined_method)),
                       DexString::make_string("RedexGenerated"));
   }
-  cfg.insert_before(dbg_pos_insertion_it, std::move(new_dbg_pos));
-  if (move_result_insn) {
-    dbg_pos_insertion_it =
-        cfg.find_insn(move_result_insn, first_insn_it.block());
-  }
+
+  cfg_mutation.insert_before(first_insn_it, std::move(new_dbg_pos));
   if (last_dbg_pos) {
     new_dbg_pos = std::make_unique<DexPosition>(*last_dbg_pos);
   } else {
@@ -2077,8 +2069,9 @@ static void rewrite_at_location(DexMethod* outlined_method,
         "[instruction sequence outliner] reverting to synthetic position in %s",
         SHOW(method));
   }
-  cfg.insert_after(dbg_pos_insertion_it, std::move(new_dbg_pos));
-};
+  cfg_mutation.insert_after(first_insn_it, std::move(new_dbg_pos));
+  cfg_mutation.flush();
+}
 
 // Manages references and assigns numeric ids to classes
 // We don't want to use more methods or types than are available, so we gather
