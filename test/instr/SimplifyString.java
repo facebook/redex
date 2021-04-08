@@ -23,42 +23,6 @@ public class SimplifyString {
     assertThat(a.toString()).isEqualTo("foobar");
   }
 
-  @Test
-  public void test_Coalesce_AppendString_AppendString() {
-    StringBuilder a;
-    a = new StringBuilder("f"); // Don't trigger InitVoid_AppendString
-    a.append("oo").append("bar"); // Match
-    assertThat(a.toString()).isEqualTo("foobar");
-
-    a = new StringBuilder("a"); // Don't trigger InitVoid_AppendString
-    // It matches only one time. So does PG.
-    a.append("bc").append("def").append("ghi"); // Match
-    assertThat(a.toString()).isEqualTo("abcdefghi");
-
-    a = new StringBuilder("f"); // Don't trigger InitVoid_AppendString
-    a.append("oo").append("\uAE40\uBBFC\uC7A5");
-    // Intentionally we don't have "foo\uAE40..." to test DexString concatenation.
-    // Declaring "foo\uAE40\uBBFC\uC7A5" here would allocate the correct DexString.
-    assertThat(a.toString().substring(0, 3)).isEqualTo("foo");
-    assertThat(a.toString().substring(3)).isEqualTo("\uAE40\uBBFC\uC7A5");
-  }
-
-  @Test
-  public void test_CompileTime_StringLength() {
-    int a;
-    a = "".length();
-    assertThat(a).isEqualTo(0);
-    a = "abc".length();
-    assertThat(a).isEqualTo(3);
-    a = "abcdef".length();
-    assertThat(a).isEqualTo(6);
-
-    // https://phabricator.intern.facebook.com/diffusion/FBS/browse/master/fbandroid/third-party/java/guava/guava-gwt/src-super/com/google/common/base/super/com/google/common/base/CharMatcher.java
-    // private static final class Digit extends RangesMatcher
-    a = ("0\u0660\u06f0\u07c0\u0966\u09e6\u0a66\u0ae6\u0b66\u0be6\u0c66\u0ce6\u0d66\u0e50\u0ed0\u0f20\u1040\u1090\u17e0\u1810\u1946\u19d0\u1b50\u1bb0\u1c40\u1c50\ua620\ua8d0\ua900\uaa50\uff10").length();
-    assertThat(a).isEqualTo(31);
-  }
-
   private int string_hash_code(String s) {
     // Since `s` is a variable, `String.hashCode()` will not be optimized away
     return s.hashCode();
@@ -198,23 +162,6 @@ public class SimplifyString {
     a.append("\uABCD\u0ABC").append(424242424242L);
     assertThat(a.toString()).startsWith("\uABCD\u0ABC");
     assertThat(a.toString().substring(2)).isEqualTo("424242424242");
-  }
-
-  @Test
-  public void test_CompileTime_StringCompare() {
-    Boolean a;
-    a = "".equals("");
-    assertThat(a).isTrue();
-    a = "abc".equals("abc");
-    assertThat(a).isTrue();
-    a = "abc".equals("xyz");
-    assertThat(a).isFalse();
-    a = "abc".equals("abcd");
-    assertThat(a).isFalse();
-    a = "\uAE40\uBBFC\uC7A5".equals("\uAE40\uBBFC\uC7A5");
-    assertThat(a).isTrue();
-    a = "\uAE40\uBBFC\uC7A5".equals("\u91D1\u73C9\u58EF");
-    assertThat(a).isFalse();
   }
 
   @Test
