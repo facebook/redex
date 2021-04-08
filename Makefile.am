@@ -149,7 +149,6 @@ libredex_la_SOURCES = \
 	libresource/Unicode.cpp \
 	libresource/VectorImpl.cpp \
 	service/api-levels/ApiLevelsUtils.cpp \
-	service/class-init/ClassInitCounter.cpp \
 	service/class-merging/ApproximateShapeMerging.cpp \
 	service/class-merging/ClassAssemblingUtils.cpp \
 	service/class-merging/ClassMerging.cpp \
