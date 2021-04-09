@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <boost/thread/thread.hpp>
 #include <exception>
 
 #include "SpartaWorkQueue.h"
@@ -44,10 +45,10 @@ struct WithStateWorkQueueHelper {
 
 } // namespace redex_workqueue_impl
 
-// Simple forward to keep changes minimal for the time being.
 namespace redex_parallel {
 inline size_t default_num_threads() {
-  return sparta::parallel::default_num_threads();
+  // We prefer boost over std.
+  return std::max(1u, boost::thread::physical_concurrency());
 }
 } // namespace redex_parallel
 
@@ -59,7 +60,7 @@ sparta::SpartaWorkQueue<Input,
                         redex_workqueue_impl::NoStateWorkQueueHelper<Input, Fn>>
 workqueue_foreach(
     const Fn& fn,
-    unsigned int num_threads = sparta::parallel::default_num_threads(),
+    unsigned int num_threads = redex_parallel::default_num_threads(),
     bool push_tasks_while_running = false) {
   return sparta::SpartaWorkQueue<
       Input,
@@ -76,7 +77,7 @@ sparta::SpartaWorkQueue<
     redex_workqueue_impl::WithStateWorkQueueHelper<Input, Fn>>
 workqueue_foreach(
     const Fn& fn,
-    unsigned int num_threads = sparta::parallel::default_num_threads(),
+    unsigned int num_threads = redex_parallel::default_num_threads(),
     bool push_tasks_while_running = false) {
   return sparta::SpartaWorkQueue<
       Input,
@@ -84,4 +85,85 @@ workqueue_foreach(
       redex_workqueue_impl::WithStateWorkQueueHelper<Input, Fn>{fn},
       num_threads,
       push_tasks_while_running);
+}
+
+template <class Input,
+          typename Fn,
+          typename Items,
+          typename std::enable_if<sparta::Arity<Fn>::value == 1, int>::type = 0>
+void workqueue_run(
+    const Fn& fn,
+    Items& items,
+    unsigned int num_threads = redex_parallel::default_num_threads(),
+    bool push_tasks_while_running = false) {
+  auto wq = sparta::SpartaWorkQueue<
+      Input,
+      redex_workqueue_impl::NoStateWorkQueueHelper<Input, Fn>>(
+      redex_workqueue_impl::NoStateWorkQueueHelper<Input, Fn>{fn},
+      num_threads,
+      push_tasks_while_running);
+  for (auto& item : items) {
+    wq.add_item(item);
+  }
+  wq.run_all();
+}
+template <class Input,
+          typename Fn,
+          typename Items,
+          typename std::enable_if<sparta::Arity<Fn>::value == 1, int>::type = 0>
+void workqueue_run(
+    const Fn& fn,
+    const Items& items,
+    unsigned int num_threads = redex_parallel::default_num_threads(),
+    bool push_tasks_while_running = false) {
+  auto wq = sparta::SpartaWorkQueue<
+      Input,
+      redex_workqueue_impl::NoStateWorkQueueHelper<Input, Fn>>(
+      redex_workqueue_impl::NoStateWorkQueueHelper<Input, Fn>{fn},
+      num_threads,
+      push_tasks_while_running);
+  for (auto& item : items) {
+    wq.add_item(item);
+  }
+  wq.run_all();
+}
+template <class Input,
+          typename Fn,
+          typename Items,
+          typename std::enable_if<sparta::Arity<Fn>::value == 2, int>::type = 0>
+void workqueue_run(
+    const Fn& fn,
+    Items& items,
+    unsigned int num_threads = redex_parallel::default_num_threads(),
+    bool push_tasks_while_running = false) {
+  auto wq = sparta::SpartaWorkQueue<
+      Input,
+      redex_workqueue_impl::WithStateWorkQueueHelper<Input, Fn>>(
+      redex_workqueue_impl::WithStateWorkQueueHelper<Input, Fn>{fn},
+      num_threads,
+      push_tasks_while_running);
+  for (auto& item : items) {
+    wq.add_item(item);
+  }
+  wq.run_all();
+}
+template <class Input,
+          typename Fn,
+          typename Items,
+          typename std::enable_if<sparta::Arity<Fn>::value == 2, int>::type = 0>
+void workqueue_run(
+    const Fn& fn,
+    const Items& items,
+    unsigned int num_threads = redex_parallel::default_num_threads(),
+    bool push_tasks_while_running = false) {
+  auto wq = sparta::SpartaWorkQueue<
+      Input,
+      redex_workqueue_impl::WithStateWorkQueueHelper<Input, Fn>>(
+      redex_workqueue_impl::WithStateWorkQueueHelper<Input, Fn>{fn},
+      num_threads,
+      push_tasks_while_running);
+  for (auto& item : items) {
+    wq.add_item(item);
+  }
+  wq.run_all();
 }

@@ -282,11 +282,7 @@ void OptimizationImpl::set_method_defs(const DexType* intf,
 template <typename T, typename Fn>
 void for_all_methods(const T& methods, Fn fn, bool parallel = true) {
   if (parallel) {
-    auto wq = workqueue_foreach<DexMethod*>(fn);
-    for (auto* m : methods) {
-      wq.add_item(const_cast<DexMethod*>(m));
-    }
-    wq.run_all();
+    workqueue_run<const DexMethod*>(fn, methods);
   } else {
     for (auto* m : methods) {
       fn(const_cast<DexMethod*>(m));
@@ -329,7 +325,8 @@ CheckCastSet OptimizationImpl::fix_instructions(const DexType* intf,
 
   for_all_methods(
       methods,
-      [&](DexMethod* caller) {
+      [&](const DexMethod* caller_const) {
+        auto caller = const_cast<DexMethod*>(caller_const);
         std::vector<reg_t> temps; // Cached temps.
         auto code = caller->get_code();
         redex_assert(!code->editable_cfg_built());
@@ -781,7 +778,8 @@ void OptimizationImpl::post_process(
   // parallel.
   for_all_methods(
       methods,
-      [](DexMethod* m) {
+      [](const DexMethod* m_const) {
+        auto m = const_cast<DexMethod*>(m_const);
         auto code = m->get_code();
         if (code->cfg_built()) {
           code->clear_cfg();

@@ -458,12 +458,8 @@ void RenameClassesPassV2::eval_classes(Scope& scope,
       },
       [&] { dont_rename_annotated = build_dont_rename_annotated(); }};
 
-  auto wq = workqueue_foreach<std::function<void()>>(
-      [](std::function<void()>& fn) { fn(); });
-  for (const auto& fn : fns) {
-    wq.add_item(fn);
-  }
-  wq.run_all();
+  workqueue_run<std::function<void()>>([](std::function<void()>& fn) { fn(); },
+                                       fns);
 
   std::string norule;
 

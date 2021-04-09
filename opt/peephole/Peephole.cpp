@@ -1848,7 +1848,7 @@ void PeepholePass::run_pass(DexStoresVector& stores,
         mgr, pats, config.disabled_peepholes));
   }
 
-  auto wq = workqueue_foreach<DexClass*>(
+  workqueue_run<DexClass*>(
       [&peephole_optimizers](sparta::SpartaWorkerState<DexClass*>* state,
                              DexClass* cls) {
         auto& ph = peephole_optimizers[state->worker_id()];
@@ -1861,11 +1861,8 @@ void PeepholePass::run_pass(DexStoresVector& stores,
           ph->run_method(m);
         }
       },
+      scope,
       num_threads);
-  for (const auto& cls : scope) {
-    wq.add_item(cls);
-  }
-  wq.run_all();
 
   for (size_t i = 0; i < num_threads; ++i) {
     peephole_optimizers[i]->incr_all_metrics();

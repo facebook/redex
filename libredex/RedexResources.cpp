@@ -63,9 +63,8 @@ constexpr size_t MAX_CLASSNAME_LENGTH = 500;
 
 const uint32_t PACKAGE_RESID_START = 0x7f000000;
 
-constexpr decltype(sparta::parallel::default_num_threads()) kReadXMLThreads =
-    4u;
-constexpr decltype(sparta::parallel::default_num_threads()) kReadNativeThreads =
+constexpr decltype(redex_parallel::default_num_threads()) kReadXMLThreads = 4u;
+constexpr decltype(redex_parallel::default_num_threads()) kReadNativeThreads =
     2u;
 
 using path_t = boost::filesystem::path;
@@ -1097,7 +1096,7 @@ void collect_layout_classes_and_attributes(
     std::unordered_multimap<std::string, std::string>& out_attributes) {
   auto collect_fn = [&](const std::vector<std::string>& prefixes) {
     std::mutex out_mutex;
-    auto wq = workqueue_foreach<std::string>(
+    workqueue_run<std::string>(
         [&](sparta::SpartaWorkerState<std::string>* worker_state,
             const std::string& input) {
           if (input.empty()) {
@@ -1124,10 +1123,9 @@ void collect_layout_classes_and_attributes(
                                   local_out_attributes.end());
           }
         },
-        std::min(sparta::parallel::default_num_threads(), kReadXMLThreads),
+        std::vector<std::string>{""},
+        std::min(redex_parallel::default_num_threads(), kReadXMLThreads),
         /*push_tasks_while_running=*/true);
-    wq.add_item("");
-    wq.run_all();
   };
 
   collect_fn({
@@ -1217,7 +1215,7 @@ std::unordered_set<std::string> get_native_classes(
     const std::string& apk_directory) {
   std::mutex out_mutex;
   std::unordered_set<std::string> all_classes;
-  auto wq = workqueue_foreach<std::string>(
+  workqueue_run<std::string>(
       [&](sparta::SpartaWorkerState<std::string>* worker_state,
           const std::string& input) {
         if (input.empty()) {
@@ -1242,10 +1240,9 @@ std::unordered_set<std::string> get_native_classes(
             },
             64 * 1024);
       },
-      std::min(sparta::parallel::default_num_threads(), kReadNativeThreads),
+      std::vector<std::string>{""},
+      std::min(redex_parallel::default_num_threads(), kReadNativeThreads),
       /*push_tasks_while_running=*/true);
-  wq.add_item("");
-  wq.run_all();
   return all_classes;
 }
 

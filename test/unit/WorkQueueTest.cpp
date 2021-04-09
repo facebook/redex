@@ -7,9 +7,13 @@
 
 #include "WorkQueue.h"
 
+#include <array>
+#include <atomic>
 #include <chrono>
 #include <gtest/gtest.h>
 #include <random>
+
+#include "Macros.h"
 
 constexpr unsigned int NUM_STRINGS = 100'000;
 constexpr unsigned int NUM_INTS = 1000;
@@ -20,13 +24,26 @@ constexpr unsigned int NUM_INTS = 1000;
 //==========
 
 TEST(WorkQueueTest, EmptyQueue) {
-  auto wq =
-      workqueue_foreach<std::string>([](const std::string& a) { return 0; });
+  std::atomic<size_t> inv{0};
+  auto wq = workqueue_foreach<std::string>(
+      [&inv](const std::string& a ATTRIBUTE_UNUSED) {
+        inv += 1;
+        return 0;
+      });
   wq.run_all();
+  EXPECT_EQ(0u, inv.load());
+}
+
+TEST(WorkQueueTest, EmptyQueueRun) {
+  std::atomic<size_t> inv{0};
+  workqueue_run<std::string>(
+      [&inv](const std::string& a ATTRIBUTE_UNUSED) { inv += 1; },
+      std::vector<std::string>{});
+  EXPECT_EQ(0u, inv.load());
 }
 
 TEST(WorkQueueTest, foreachTest) {
-  int array[NUM_INTS] = {0};
+  std::array<int, NUM_INTS> array{};
 
   auto wq = workqueue_foreach<int*>([](int* a) { (*a)++; });
 
@@ -34,8 +51,24 @@ TEST(WorkQueueTest, foreachTest) {
     wq.add_item(&array[idx]);
   }
   wq.run_all();
-  for (int idx = 0; idx < NUM_INTS; ++idx) {
-    ASSERT_EQ(1, array[idx]);
+
+  for (const auto& e : array) {
+    EXPECT_EQ(1, e);
+  }
+}
+
+TEST(WorkQueueTest, RunTest) {
+  std::array<int, NUM_INTS> array{};
+
+  std::vector<int*> items;
+  items.reserve(NUM_INTS);
+  std::transform(array.begin(), array.end(), std::back_inserter(items),
+                 [](auto& i) { return &i; });
+
+  workqueue_run<int*>([](int* a) { (*a)++; }, items);
+
+  for (const auto& e : array) {
+    EXPECT_EQ(1, e);
   }
 }
 

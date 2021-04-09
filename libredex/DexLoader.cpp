@@ -59,11 +59,6 @@ static void validate_dex_header(const dex_header* dh,
   always_assert_log(limit <= dexsize, "invalid class_defs_size");
 }
 
-struct class_load_work {
-  DexLoader* dl;
-  int num;
-};
-
 void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
   if (!stats) {
     return;
@@ -487,38 +482,35 @@ DexClasses DexLoader::load_dex(const dex_header* dh, dex_stats_t* stats) {
   DexClasses classes(dh->class_defs_size);
   m_classes = &classes;
 
-  auto lwork = new class_load_work[dh->class_defs_size];
-  auto num_threads = redex_parallel::default_num_threads();
-  std::vector<std::vector<std::exception_ptr>> exceptions_vec(num_threads);
-  auto wq = workqueue_foreach<class_load_work*>(
-      [&exceptions_vec](sparta::SpartaWorkerState<class_load_work*>* state,
-                        class_load_work* clw) {
-        try {
-          clw->dl->load_dex_class(clw->num);
-        } catch (const std::exception& exc) {
-          TRACE(MAIN, 1, "Worker throw the exception:%s", exc.what());
-          exceptions_vec[state->worker_id()].emplace_back(
-              std::current_exception());
-        }
-      },
-      num_threads);
-  for (uint32_t i = 0; i < dh->class_defs_size; i++) {
-    lwork[i].dl = this;
-    lwork[i].num = i;
-    wq.add_item(&lwork[i]);
-  }
-  wq.run_all();
-  delete[] lwork;
+  {
+    auto num_threads = redex_parallel::default_num_threads();
+    std::vector<std::vector<std::exception_ptr>> exceptions_vec(num_threads);
+    std::vector<size_t> indices(dh->class_defs_size);
+    std::iota(indices.begin(), indices.end(), 0);
+    workqueue_run<size_t>(
+        [&exceptions_vec, this](sparta::SpartaWorkerState<size_t>* state,
+                                size_t num) {
+          try {
+            load_dex_class(num);
+          } catch (const std::exception& exc) {
+            TRACE(MAIN, 1, "Worker throw the exception:%s", exc.what());
+            exceptions_vec[state->worker_id()].emplace_back(
+                std::current_exception());
+          }
+        },
+        indices,
+        num_threads);
 
-  std::vector<std::exception_ptr> all_exceptions;
-  for (auto& exceptions : exceptions_vec) {
-    all_exceptions.insert(all_exceptions.end(), exceptions.begin(),
-                          exceptions.end());
-  }
-  if (!all_exceptions.empty()) {
-    // At least one of the workers raised an exception
-    aggregate_exception ae(all_exceptions);
-    throw ae;
+    std::vector<std::exception_ptr> all_exceptions;
+    for (auto& exceptions : exceptions_vec) {
+      all_exceptions.insert(all_exceptions.end(), exceptions.begin(),
+                            exceptions.end());
+    }
+    if (!all_exceptions.empty()) {
+      // At least one of the workers raised an exception
+      aggregate_exception ae(all_exceptions);
+      throw ae;
+    }
   }
 
   gather_input_stats(stats, dh);
@@ -532,14 +524,11 @@ DexClasses DexLoader::load_dex(const dex_header* dh, dex_stats_t* stats) {
 }
 
 static void balloon_all(const Scope& scope) {
-  auto wq = workqueue_foreach<DexMethod*>(
-      [](DexMethod* method) { method->balloon(); });
-  walk::methods(scope, [&](DexMethod* m) {
+  walk::parallel::methods(scope, [&](DexMethod* m) {
     if (m->get_dex_code()) {
-      wq.add_item(m);
+      m->balloon();
     }
   });
-  wq.run_all();
 }
 
 DexClasses load_classes_from_dex(const char* location,

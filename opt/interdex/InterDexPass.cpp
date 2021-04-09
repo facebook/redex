@@ -238,19 +238,22 @@ void InterDexPass::run_pass(DexStoresVector& stores,
     refs_info.mrefs += plugin->reserve_mrefs();
   }
 
-  auto wq = workqueue_foreach<DexStore*>([&](DexStore* store) {
-    run_pass_on_nonroot_store(original_scope, xstore_refs, store->get_dexen(),
-                              conf, mgr, refs_info);
-  });
+  std::vector<DexStore*> parallel_stores;
   for (auto& store : stores) {
     if (store.is_root_store()) {
       run_pass(original_scope, xstore_refs, stores, store.get_dexen(), plugins,
                conf, mgr, refs_info);
     } else if (!store.is_generated()) {
-      wq.add_item(&store);
+      parallel_stores.push_back(&store);
     }
   }
-  wq.run_all();
+
+  workqueue_run<DexStore*>(
+      [&](DexStore* store) {
+        run_pass_on_nonroot_store(original_scope, xstore_refs,
+                                  store->get_dexen(), conf, mgr, refs_info);
+      },
+      parallel_stores);
 
   ++m_run;
   // For the last invocation, record that final interdex has been done.
