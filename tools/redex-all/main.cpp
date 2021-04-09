@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <boost/thread/thread.hpp>
 #include <cinttypes>
 #include <cstring>
 #include <fstream>
@@ -67,6 +68,7 @@
 #include "ToolsCommon.h"
 #include "Walkers.h"
 #include "Warning.h"
+#include "WorkQueue.h" // For concurrency.
 
 namespace {
 
@@ -709,6 +711,14 @@ Json::Value get_output_stats(
   return d;
 }
 
+Json::Value get_threads_stats() {
+  Json::Value d;
+  d["used"] = (Json::UInt64)redex_parallel::default_num_threads();
+  d["hardware"] = (Json::UInt64)boost::thread::hardware_concurrency();
+  d["physical"] = (Json::UInt64)boost::thread::physical_concurrency();
+  return d;
+}
+
 void write_debug_line_mapping(
     const std::string& debug_line_map_filename,
     const std::unordered_map<DexMethod*, uint64_t>& method_to_id,
@@ -1273,10 +1283,14 @@ int main(int argc, char* argv[]) {
   }
   // now that all the timers are done running, we can collect the data
   stats["output_stats"]["time_stats"] = get_times();
+
   auto vm_stats = get_mem_stats();
   stats["output_stats"]["mem_stats"]["vm_peak"] =
       (Json::UInt64)vm_stats.vm_peak;
   stats["output_stats"]["mem_stats"]["vm_hwm"] = (Json::UInt64)vm_stats.vm_peak;
+
+  stats["output_stats"]["threads"] = get_threads_stats();
+
   {
     std::ofstream out(stats_output_path);
     out << stats;
