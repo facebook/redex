@@ -488,23 +488,27 @@ void ModelMethodMerger::sink_common_ctor_to_return_block(DexMethod* dispatch) {
   //
   // Redundent moves should be cleaned up by opt passes like copy propagation.
   std::vector<reg_t> new_srcs;
-  auto param_insns =
-      InstructionIterable(common_ctor->get_code()->get_param_instructions());
-  auto param_it = param_insns.begin(), param_end = param_insns.end();
-  for (; param_it != param_end; ++param_it) {
-    if (param_it->insn->opcode() == IOPCODE_LOAD_PARAM_WIDE) {
-      new_srcs.push_back(dispatch_code->allocate_wide_temp());
-    } else {
-      new_srcs.push_back(dispatch_code->allocate_temp());
-    }
+  auto common_ctor_args = common_ctor->get_proto()->get_args();
+  new_srcs.reserve(1 + common_ctor_args->size());
+  // For "this" pointer which should be an object reference and is not a wide
+  // register.
+  new_srcs.push_back(dispatch_code->allocate_temp());
+  for (auto arg_type : *common_ctor_args) {
+    new_srcs.push_back(type::is_wide_type(arg_type)
+                           ? dispatch_code->allocate_wide_temp()
+                           : dispatch_code->allocate_temp());
   }
 
   for (const auto& invocation : invocations) {
-    param_it = param_insns.begin();
-    for (size_t i = 0; i < invocation->insn->srcs_size(); ++i, ++param_it) {
-      always_assert(param_it != param_end);
-      auto mov = (new IRInstruction(
-                      opcode::load_param_to_move(param_it->insn->opcode())))
+    // For "this" pointer.
+    dispatch_code->insert_before(invocation,
+                                 (new IRInstruction(OPCODE_MOVE_OBJECT))
+                                     ->set_src(0, invocation->insn->src(0))
+                                     ->set_dest(new_srcs[0]));
+    auto arg_it = common_ctor_args->begin();
+    for (size_t i = 1; i < invocation->insn->srcs_size(); ++i, ++arg_it) {
+      redex_assert(arg_it != common_ctor_args->end());
+      auto mov = (new IRInstruction(opcode::move_opcode(*arg_it)))
                      ->set_src(0, invocation->insn->src(i))
                      ->set_dest(new_srcs[i]);
       dispatch_code->insert_before(invocation, mov);
