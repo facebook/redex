@@ -30,6 +30,35 @@ bool maybe_anonymous_class(const DexClass* cls) {
          name.find(LAMBDA_CLASS_NAME_PREFIX) != std::string::npos;
 }
 
+/**
+ * The methods may have associated keeping rules, exclude the classes if they or
+ * their methods are not deleteable. For example, methods annotated
+ * with @android.webkit.JavascriptInterface are invoked reflectively, and we
+ * should keep them.
+ *
+ * Why not check the constructors and fields?
+ * Some of the constructors and fields are marked as non-deletable but the class
+ * is apparently mergeable.
+ */
+bool can_delete_class_or_nonctor_methods(const DexClass* cls) {
+  if (!can_delete(cls)) {
+    return false;
+  }
+  auto& vmethods = cls->get_vmethods();
+  if (std::any_of(vmethods.begin(), vmethods.end(), [](const DexMethod* m) {
+        return !can_delete(m);
+      })) {
+    return false;
+  }
+  auto& dmethods = cls->get_dmethods();
+  if (std::any_of(dmethods.begin(), dmethods.end(), [](const DexMethod* m) {
+        return !is_constructor(m) && !can_delete(m);
+      })) {
+    return false;
+  }
+  return true;
+}
+
 } // namespace
 
 namespace class_merging {
@@ -44,12 +73,12 @@ void discover_mergeable_anonymous_classes(const DexStoresVector& stores,
   std::unordered_map<const DexType*, std::vector<const DexType*>> parents;
   for (auto* type : root_store_classes) {
     auto cls = type_class(type);
-    if (!can_delete(cls)) {
-      continue;
-    }
     auto* itfs = cls->get_interfaces();
     if (is_interface(cls) || itfs->size() > 1 || !maybe_anonymous_class(cls) ||
         cls->get_clinit()) {
+      continue;
+    }
+    if (!can_delete_class_or_nonctor_methods(cls)) {
       continue;
     }
     auto super_cls = cls->get_super_class();
