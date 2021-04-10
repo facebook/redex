@@ -28,6 +28,11 @@ void AnonymousClassMergingPass::bind_config() {
        "Strip out interfaces or supertypes with less than min_eligible "
        "implementors or subclasses");
   bind("include_primary_dex", false, m_merging_spec.include_primary_dex);
+  bind("allowed_packages",
+       {},
+       allowed_packages,
+       "Packages of types that are allowed to be merged, default is all "
+       "pakcages");
 }
 
 void AnonymousClassMergingPass::run_pass(DexStoresVector& stores,
@@ -47,7 +52,7 @@ void AnonymousClassMergingPass::run_pass(DexStoresVector& stores,
   m_merging_spec.dedup_throw_blocks = false;
 
   discover_mergeable_anonymous_classes(
-      stores, m_min_eligible_classes, &m_merging_spec, &mgr);
+      stores, allowed_packages, m_min_eligible_classes, &m_merging_spec, &mgr);
   if (!m_merging_spec.roots.empty()) {
     strategy::set_merging_strategy(strategy::BY_CODE_SIZE);
 

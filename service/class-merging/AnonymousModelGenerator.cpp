@@ -59,14 +59,31 @@ bool can_delete_class_or_nonctor_methods(const DexClass* cls) {
   return true;
 }
 
+bool is_from_allowed_packages(
+    const std::unordered_set<std::string>& allowed_packages,
+    const DexClass* cls) {
+  if (allowed_packages.empty()) {
+    return true;
+  }
+  const auto& name = cls->get_deobfuscated_name();
+  for (auto& prefix : allowed_packages) {
+    if (boost::starts_with(name, prefix)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 } // namespace
 
 namespace class_merging {
 
-void discover_mergeable_anonymous_classes(const DexStoresVector& stores,
-                                          size_t min_implementors,
-                                          ModelSpec* merging_spec,
-                                          PassManager* mgr) {
+void discover_mergeable_anonymous_classes(
+    const DexStoresVector& stores,
+    const std::unordered_set<std::string>& allowed_packages,
+    size_t min_implementors,
+    ModelSpec* merging_spec,
+    PassManager* mgr) {
   auto root_store_classes =
       get_root_store_types(stores, merging_spec->include_primary_dex);
   const auto object_type = type::java_lang_Object();
@@ -75,7 +92,7 @@ void discover_mergeable_anonymous_classes(const DexStoresVector& stores,
     auto cls = type_class(type);
     auto* itfs = cls->get_interfaces();
     if (is_interface(cls) || itfs->size() > 1 || !maybe_anonymous_class(cls) ||
-        cls->get_clinit()) {
+        cls->get_clinit() || !is_from_allowed_packages(allowed_packages, cls)) {
       continue;
     }
     if (!can_delete_class_or_nonctor_methods(cls)) {
