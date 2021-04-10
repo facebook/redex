@@ -373,9 +373,9 @@ void handle_interface_as_root(ModelSpec& spec,
   ClassHierarchy ch = build_type_hierarchy(scope);
   InterfaceMap intf_map = build_interface_map(ch);
 
-  // The created base_type name would be `class_name_prefix` + "EmptyBase" +
-  // `id`.
-  std::string base_type_name = "L" + spec.class_name_prefix + "EmptyBase";
+  // The created base_type name would be "LEmptyBase" + class_name_prefix +
+  // id + name_tag.
+  std::string prefix = "LEmptyBase" + spec.class_name_prefix;
   auto root_store_classes =
       get_root_store_types(stores, spec.include_primary_dex);
 
@@ -386,9 +386,12 @@ void handle_interface_as_root(ModelSpec& spec,
   for (const auto interface_root : interface_roots) {
     const auto all_implementors =
         get_all_implementors(intf_map, interface_root);
-    auto name = base_type_name + (idx > 0 ? std::to_string(idx) : "") + ";";
+    auto type_name_tag = get_root_type_name_tag(interface_root);
+    auto base_type_name =
+        prefix + std::to_string(idx) +
+        (type_name_tag == spec.class_name_prefix ? "" : type_name_tag) + ";";
     auto empty_base = create_empty_base_cls_for_intf_root(
-        name, interface_root, all_implementors, eligible_set);
+        base_type_name, interface_root, all_implementors, eligible_set);
     if (empty_base != nullptr) {
       TRACE(CLMG, 3, "Changing the root from %s to %s.", SHOW(interface_root),
             SHOW(empty_base));
