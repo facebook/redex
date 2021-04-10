@@ -394,7 +394,7 @@ void Model::create_mergers_helper(
  * intention of adding them as excluded types in the config, and exclude them
  * from the merging transformation.
  */
-void Model::exclude_types(const std::unordered_set<DexType*>& exclude_types) {
+void Model::exclude_types(const ConstTypeHashSet& exclude_types) {
   for (const auto& type : exclude_types) {
     const auto& cls = type_class(type);
     redex_assert(cls != nullptr);

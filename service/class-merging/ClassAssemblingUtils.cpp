@@ -90,13 +90,13 @@ std::string get_merger_package_name(const DexType* type) {
  * Filter out the implementors who implement only the interface_root and extend
  * java.lang.Object, and create an empty superclass for them. The new class
  * will be used to represent the interface_root in the later analysis and
- * merging process.
+ * merging process. Use an eligible_set to filter the implementors.
  */
 DexType* create_empty_base_cls_for_intf_root(
     const std::string& base_type_name,
     const DexType* interface_root,
     const TypeSet& all_implementors,
-    const std::unordered_set<const DexType*>& root_store_classes) {
+    const ConstTypeHashSet& eligible_set) {
   // Create an empty base class and put the base class in the same
   // package as the root interface.
   auto base_type = DexType::make_type(DexString::make_string(base_type_name));
@@ -122,7 +122,7 @@ DexType* create_empty_base_cls_for_intf_root(
     // Add an empty base class to qualified implementors
     if (ifcs->size() == 1 && *ifcs->begin() == interface_root &&
         impl_cls->get_super_class() == type::java_lang_Object() &&
-        root_store_classes.count(impl_type)) {
+        eligible_set.count(impl_type)) {
       change_super_class(impl_cls, base_type);
       num++;
     }
@@ -379,13 +379,16 @@ void handle_interface_as_root(ModelSpec& spec,
   auto root_store_classes =
       get_root_store_types(stores, spec.include_primary_dex);
 
+  ConstTypeHashSet& eligible_set =
+      spec.merging_targets.empty() ? root_store_classes : spec.merging_targets;
+
   size_t idx = 0;
   for (const auto interface_root : interface_roots) {
     const auto all_implementors =
         get_all_implementors(intf_map, interface_root);
     auto name = base_type_name + (idx > 0 ? std::to_string(idx) : "") + ";";
     auto empty_base = create_empty_base_cls_for_intf_root(
-        name, interface_root, all_implementors, root_store_classes);
+        name, interface_root, all_implementors, eligible_set);
     if (empty_base != nullptr) {
       TRACE(CLMG, 3, "Changing the root from %s to %s.", SHOW(interface_root),
             SHOW(empty_base));

@@ -111,7 +111,7 @@ struct ModelSpec {
   // A set of types to be merged, they should be subtypes of the roots.
   ConstTypeHashSet merging_targets;
   // types to exclude from the model
-  std::unordered_set<DexType*> exclude_types;
+  ConstTypeHashSet exclude_types;
   // prefixes of types to exclude from the model
   std::unordered_set<std::string> exclude_prefixes;
   // prefix for class generation
@@ -358,7 +358,7 @@ class Model {
   void build_hierarchy(const TypeSet& roots);
   void build_interface_map(const DexType* type, TypeSet implemented);
   MergerType* build_mergers(const DexType* root);
-  void exclude_types(const std::unordered_set<DexType*>& exclude_types);
+  void exclude_types(const ConstTypeHashSet& exclude_types);
   bool is_excluded(const DexType* type) const;
 
   // MergerType creator helpers

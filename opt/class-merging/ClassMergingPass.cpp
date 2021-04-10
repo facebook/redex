@@ -38,7 +38,7 @@ std::vector<DexType*> get_types(const std::vector<std::string>& target_types) {
 }
 
 void load_types_and_prefixes(const std::vector<std::string>& type_names,
-                             std::unordered_set<DexType*>& types,
+                             std::unordered_set<const DexType*>& types,
                              std::unordered_set<std::string>& prefixes) {
   for (const auto& type_s : type_names) {
     auto target_type = get_type(type_s);

@@ -22,10 +22,12 @@ void AnonymousClassMergingPass::bind_config() {
        {},
        m_merging_spec.exclude_types,
        "Do not merge the classes or its implementors");
-  bind("min_implementors",
+  bind("min_eligible",
        500,
-       m_min_implementor_size,
-       "Strip out interfaces with less than min_implementors implementors");
+       m_min_eligible_classes,
+       "Strip out interfaces or supertypes with less than min_eligible "
+       "implementors or subclasses");
+  bind("include_primary_dex", false, m_merging_spec.include_primary_dex);
 }
 
 void AnonymousClassMergingPass::run_pass(DexStoresVector& stores,
@@ -35,20 +37,21 @@ void AnonymousClassMergingPass::run_pass(DexStoresVector& stores,
     TRACE(CLMG, 1, "AnonymousClassMergingPass is enabled only for art builds");
     return;
   }
-  auto scope = build_class_scope(stores);
+  // Fill the merging configurations.
+  m_merging_spec.name = "Anonymous Classes";
+  m_merging_spec.class_name_prefix = "Anon";
+  m_merging_spec.merge_per_interdex_set = InterDexGroupingType::NON_ORDERED_SET;
+  if (conf.force_single_dex()) {
+    m_merging_spec.include_primary_dex = true;
+  }
+  m_merging_spec.dedup_throw_blocks = false;
+
   discover_mergeable_anonymous_classes(
-      scope, m_min_implementor_size, &m_merging_spec, &mgr);
+      stores, m_min_eligible_classes, &m_merging_spec, &mgr);
   if (!m_merging_spec.roots.empty()) {
-    // Finishing the merging configurations.
-    m_merging_spec.name = "Anonymous Classes";
-    m_merging_spec.class_name_prefix = "Anon";
-    m_merging_spec.merge_per_interdex_set =
-        InterDexGroupingType::NON_ORDERED_SET;
-    m_merging_spec.include_primary_dex =
-        conf.get_json_config().get("force_single_dex", false);
-    m_merging_spec.dedup_throw_blocks = false;
     strategy::set_merging_strategy(strategy::BY_CODE_SIZE);
 
+    auto scope = build_class_scope(stores);
     class_merging::merge_model(scope, conf, mgr, stores, m_merging_spec);
     post_dexen_changes(scope, stores);
   } else {
