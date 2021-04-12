@@ -101,7 +101,7 @@ void discover_mergeable_anonymous_classes(
     auto super_cls = cls->get_super_class();
     if (itfs->size() == 1) {
       auto* intf = *itfs->begin();
-      if (auto intf_def = type_class(intf)) {
+      if (type_class(intf)) {
         if (itfs->size() == 1) {
           parents[intf].push_back(cls->get_type());
           continue;
