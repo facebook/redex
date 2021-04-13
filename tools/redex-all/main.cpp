@@ -8,6 +8,7 @@
 #include <boost/thread/thread.hpp>
 #include <cinttypes>
 #include <cstring>
+#include <ctime>
 #include <fstream>
 #include <iostream>
 #include <memory>
@@ -677,12 +678,17 @@ Json::Value get_detailed_stats(const std::vector<dex_stats_t>& dexes_stats) {
   return dexes;
 }
 
-Json::Value get_times() {
+Json::Value get_times(double cpu_time_s) {
   Json::Value list(Json::arrayValue);
   for (const auto& t : Timer::get_times()) {
     Json::Value element;
     element[t.first] = std::round(t.second * 10) / 10.0;
     list.append(element);
+  }
+  {
+    Json::Value cpu_element;
+    cpu_element["cpu_time"] = std::round(cpu_time_s * 10) / 10.0;
+    list.append(cpu_element);
   }
   return list;
 }
@@ -1196,6 +1202,7 @@ int main(int argc, char* argv[]) {
 
   std::string stats_output_path;
   Json::Value stats;
+  double cpu_time_s;
   {
     Timer redex_all_main_timer("redex-all main()");
 
@@ -1280,9 +1287,10 @@ int main(int argc, char* argv[]) {
       Timer t("Freeing global memory");
       delete g_redex;
     }
+    cpu_time_s = ((double)std::clock()) / CLOCKS_PER_SEC;
   }
   // now that all the timers are done running, we can collect the data
-  stats["output_stats"]["time_stats"] = get_times();
+  stats["output_stats"]["time_stats"] = get_times(cpu_time_s);
 
   auto vm_stats = get_mem_stats();
   stats["output_stats"]["mem_stats"]["vm_peak"] =
