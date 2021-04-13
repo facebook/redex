@@ -47,8 +47,9 @@ struct WithStateWorkQueueHelper {
 
 namespace redex_parallel {
 inline size_t default_num_threads() {
-  // We prefer boost over std.
-  return std::max(1u, boost::thread::physical_concurrency());
+  // We prefer boost over std. Use hardware over physical concurrency
+  // to take advantage of SMT.
+  return std::max(1u, boost::thread::hardware_concurrency());
 }
 } // namespace redex_parallel
 
