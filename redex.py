@@ -28,7 +28,6 @@ from os.path import abspath, dirname, getsize, isdir, isfile, join
 from pipes import quote
 
 import pyredex.logger as logger
-from pyredex.logger import log
 from pyredex.unpacker import unpack_tar_xz
 from pyredex.utils import (
     LibraryManager,
@@ -396,7 +395,7 @@ def run_redex_binary(state, exception_formatter):
         sys.exit(
             "redex-all is not found or is not executable: " + state.args.redex_binary
         )
-    log("Running redex binary at " + state.args.redex_binary)
+    logging.debug("Running redex binary at %s", state.args.redex_binary)
 
     args = [state.args.redex_binary] + [
         "--apkdir",
@@ -539,7 +538,7 @@ def run_redex_binary(state, exception_formatter):
         if run():
             break
 
-    log("Dex processing finished in {:.2f} seconds".format(timer() - start))
+    logging.debug("Dex processing finished in {:.2f} seconds".format(timer() - start))
 
 
 def zipalign(unaligned_apk_path, output_apk_path, ignore_zipalign, page_align):
@@ -610,10 +609,8 @@ def copy_file_to_out_dir(tmp, apk_output_path, name, human_name, out_name):
     tmp_path = tmp + "/" + name
     if os.path.isfile(tmp_path):
         shutil.copy2(tmp_path, output_path)
-        log("Copying " + human_name + " map to output dir")
         logging.warning("Copying " + human_name + " map to output_dir: " + output_path)
     else:
-        log("Skipping " + human_name + " copy, since no file found to copy")
         logging.warning("Skipping " + human_name + " copy, since no file found to copy")
 
 
@@ -1104,8 +1101,8 @@ def prepare_redex(args):
 
     config = args.config
     binary = args.redex_binary
-    log("Using config " + (config if config is not None else "(default)"))
-    log("Using binary " + (binary if binary is not None else "(default)"))
+    logging.debug("Using config %s", config if config is not None else "(default)")
+    logging.debug("Using binary %s", binary if binary is not None else "(default)")
 
     if args.unpack_only or config is None:
         config_dict = {}
@@ -1174,7 +1171,9 @@ def prepare_redex(args):
     dexen = move_dexen_to_directories(dex_dir, dex_glob(dex_dir))
     for store in sorted(store_files):
         dexen.append(store)
-    log("Unpacking APK finished in {:.2f} seconds".format(timer() - unpack_start_time))
+    logging.debug(
+        "Unpacking APK finished in {:.2f} seconds".format(timer() - unpack_start_time)
+    )
 
     if args.side_effect_summaries is not None:
         args.passthru_json.append(
@@ -1190,17 +1189,21 @@ def prepare_redex(args):
     for key_value_str in args.passthru_json:
         key_value = key_value_str.split("=", 1)
         if len(key_value) != 2:
-            log(
-                "Json Pass through %s is not valid. Split len: %s"
-                % (key_value_str, len(key_value))
+            logging.debug(
+                "Json Pass through %s is not valid. Split len: %s",
+                key_value_str,
+                len(key_value),
             )
             continue
         key = key_value[0]
         value = key_value[1]
         prev_value = config_dict.get(key, "(No previous value)")
-        log(
-            "Got Override %s = %s from %s. Previous %s"
-            % (key, value, key_value_str, prev_value)
+        logging.debug(
+            "Got Override %s = %s from %s. Previous %s",
+            key,
+            value,
+            key_value_str,
+            prev_value,
         )
         config_dict[key] = json.loads(value)
 
@@ -1212,7 +1215,7 @@ def prepare_redex(args):
     # Scan for SDK jar. If not found, warn and add if available.
     _check_android_sdk(args)
 
-    log("Running redex-all on {} dex files ".format(len(dexen)))
+    logging.debug("Running redex-all on %d dex files ", len(dexen))
     if args.lldb:
         debugger = "lldb"
     elif args.gdb:
@@ -1255,7 +1258,7 @@ def finalize_redex(state):
         state.args.page_align_libs,
     )
 
-    log(
+    logging.debug(
         "Creating output APK finished in {:.2f} seconds".format(
             timer() - repack_start_time
         )
@@ -1269,7 +1272,7 @@ def finalize_redex(state):
     )
 
     if state.args.enable_instrument_pass:
-        log("Creating redex-instrument-metadata.zip")
+        logging.debug("Creating redex-instrument-metadata.zip")
         zipfile_path = join(dirname(state.args.out), "redex-instrument-metadata.zip")
 
         FILES = [
