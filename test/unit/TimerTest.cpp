@@ -13,6 +13,8 @@
 
 #include "Timer.h"
 
+#include "Sanitizers.h"
+
 namespace {
 
 constexpr size_t NUM_THREADS = 10;
@@ -26,6 +28,11 @@ constexpr uint64_t kAllowedDelta = 250 * 1000;
 ::testing::AssertionResult is_close(uint64_t expected,
                                     uint64_t actual,
                                     uint64_t multiplier = 1) {
+  // Ignore result with sanitization.
+  if (sanitizers::kIsAsan) {
+    return ::testing::AssertionSuccess();
+  }
+
   uint64_t delta = expected < actual ? actual - expected : expected - actual;
   uint64_t allowed = kAllowedDelta * multiplier;
   if (delta <= allowed) {
