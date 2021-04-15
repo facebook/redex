@@ -56,10 +56,17 @@ bool ObjectInlinePlugin::update_before_reg_remap(ControlFlowGraph* caller,
   bool allocated = false;
   cfg::CFGMutation m(*caller);
 
-  // Allocate registers for all the fields sets that are not field swap.
-  // These fields will be removed and the new rgisters will take their place.
+  // Order fields by names
+  std::vector<DexFieldRef*> ordered_fields;
+  ordered_fields.reserve(m_initial_field_sets.size());
   for (auto& it : m_initial_field_sets) {
     auto* field = it.first;
+    ordered_fields.push_back(field);
+  }
+  std::sort(ordered_fields.begin(), ordered_fields.end(), compare_dexfields);
+  // Allocate registers for all the fields sets that are not field swap.
+  // These fields will be removed and the new rgisters will take their place.
+  for (auto* field : ordered_fields) {
     if (m_field_swaps.count(field)) {
       continue;
     }
@@ -81,7 +88,7 @@ bool ObjectInlinePlugin::update_before_reg_remap(ControlFlowGraph* caller,
         set_default->set_dest(assign_reg);
       }
       auto st = caller->entry_block();
-      auto field_set_data = it.second;
+      auto field_set_data = m_initial_field_sets.find(field)->second;
       if (st->get_first_non_param_loading_insn() != st->end()) {
         m.insert_before(
             caller->find_insn(st->get_first_non_param_loading_insn()->insn),
