@@ -10,6 +10,7 @@
 #include "ConstructorParams.h"
 #include "RandomForest.h"
 #include "RegisterAllocation.h"
+#include "Trace.h"
 
 namespace shrinker {
 
@@ -43,7 +44,7 @@ Shrinker::ShrinkerForest load(const std::string& filename) {
     content = buffer.str();
   }
   if (content.empty()) {
-    std::cerr << "No shrinker forest: " << filename << std::endl;
+    TRACE(MMINL, 1, "No shrinker forest: %s", filename.c_str());
     return Shrinker::ShrinkerForest(); // Empty forest accepts everything.
   }
   return Shrinker::ShrinkerForest::deserialize(
