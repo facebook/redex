@@ -5,17 +5,41 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <Dog.h>
+#include "Dog.h"
 #include <fb/fbjni.h>
+
+// The template arguments here are merely for forwarding to the
+// // exceptionWrapJNIMethod function
+// template <typename F, F func0>
+// JNINativeMethod makeNativeMethod2Impl(char const* name, F func) {
+//   return {
+//       const_cast<char*>(name),
+//       const_cast<char*>(::facebook::jni::detail::makeDescriptor(func).c_str()),
+//       ::facebook::jni::detail::exceptionWrapJNIMethod<F, func0>(func)};
+// }
+
+// template <typename F, F func0>
+// JNINativeMethod makeNativeMethod3Impl(char const* name,
+//                                       char const* desc,
+//                                       F func) {
+//   return {const_cast<char*>(name), const_cast<char*>(desc),
+//           ::facebook::jni::detail::exceptionWrapJNIMethod<F, func0>(func)};
+//}
+
+// this just wraps the above method so that you don't have to write out the
+// `func` argument 3 times
+// #define makeNativeMethodX(name, func) \
+  // makeNativeMethod2Impl<decltype(func), func>(name, func)
 
 JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void* reserved) {
   return facebook::jni::initialize(vm, [] {
     facebook::jni::registerNatives(
-        "com/facebook/redex/samples",
+        "redex/jni/example/MainActivity",
         {
             makeNativeMethod("implemented",
                              facebook::redex::samples::implemented),
-            makeNativeMethod("unused", facebook::redex::samples::unused),
+            makeNativeMethod("implementedButUnused",
+                             facebook::redex::samples::implementedButUnused),
         });
   });
 }

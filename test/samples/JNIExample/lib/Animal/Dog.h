@@ -23,6 +23,9 @@ std::string implemented(facebook::jni::alias_ref<jobject> thiz,
                         std::string name,
                         int value);
 
+std::string implementedButUnused(const facebook::jni::alias_ref<jobject> thiz,
+                                 int value);
+
 std::string unused(facebook::jni::alias_ref<jobject> thiz,
                    std::string name,
                    int value);
