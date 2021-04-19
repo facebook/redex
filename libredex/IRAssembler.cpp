@@ -426,7 +426,7 @@ std::unique_ptr<SourceBlock> source_block_from_s_expr(const s_expr& e) {
     std::istringstream in(id_str);
     in >> id;
   }
-  boost::optional<SourceBlock::Val> opt_val = boost::none;
+  SourceBlock::Val opt_val = SourceBlock::Val::none();
   if (!val_expr.is_nil()) {
     std::string val_str;
     std::string appear_str;
@@ -627,8 +627,8 @@ s_expr create_source_block_expr(const MethodItemEntry* mie) {
   result.emplace_back(s_expr(show(src->src)));
   result.emplace_back(std::to_string(src->id));
   if (src->val) {
-    result.emplace_back(std::to_string((*src->val).val));
-    result.emplace_back(std::to_string((*src->val).appear100));
+    result.emplace_back(std::to_string(src->val->val));
+    result.emplace_back(std::to_string(src->val->appear100));
   }
 
   return s_expr(result);

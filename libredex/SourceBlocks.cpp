@@ -25,8 +25,8 @@ using namespace sparta;
 
 namespace {
 
-const boost::optional<SourceBlock::Val> kFailVal = boost::none;
-const boost::optional<SourceBlock::Val> kXVal = boost::none;
+constexpr SourceBlock::Val kFailVal = SourceBlock::Val::none();
+constexpr SourceBlock::Val kXVal = SourceBlock::Val::none();
 
 struct InsertHelper {
   DexMethod* method;
@@ -59,8 +59,7 @@ struct InsertHelper {
     }
   }
 
-  static boost::optional<SourceBlock::Val> parse_val(
-      const std::string& val_str) {
+  static SourceBlock::Val parse_val(const std::string& val_str) {
     if (val_str == "x") {
       return kXVal;
     }
@@ -144,8 +143,7 @@ struct InsertHelper {
     }
   }
 
-  boost::optional<SourceBlock::Val> start_profile(
-      Block* cur, bool empty_inner_tail = false) {
+  SourceBlock::Val start_profile(Block* cur, bool empty_inner_tail = false) {
     if (had_profile_failure) {
       return kFailVal;
     }
@@ -300,7 +298,7 @@ InsertResult insert_source_blocks(DexMethod* method,
       auto vec = gather_source_blocks(b);
       for (auto* sb : vec) {
         if (sb->val) {
-          const_cast<SourceBlock*>(sb)->val = boost::none;
+          const_cast<SourceBlock*>(sb)->val = SourceBlock::Val::none();
         }
       }
     }

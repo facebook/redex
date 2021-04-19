@@ -12,6 +12,7 @@
 #include <boost/range/sub_range.hpp>
 #include <functional>
 #include <iosfwd>
+#include <limits>
 #include <map>
 #include <memory>
 #include <set>
@@ -119,19 +120,56 @@ struct SourceBlock {
   // Large methods exist, but a 32-bit integer is safe.
   uint32_t id{0};
   // Float has enough precision.
-  struct Val {
-    float val{0};
-    float appear100{0};
+  class Val {
+    static constexpr float kNoneVal = std::numeric_limits<float>::quiet_NaN();
+
+   public:
+    constexpr Val(float v, float a) noexcept : m_val({v, a}) {}
+
+    static constexpr Val none() { return Val(kNoneVal, kNoneVal); }
+
+    // NOLINTNEXTLINE
+    /* implicit */ operator bool() const { return m_val.val == m_val.val; };
+
     bool operator==(const Val& other) const {
-      return val == other.val && appear100 == other.appear100;
+      return (m_val.val == other.m_val.val &&
+              m_val.appear100 == other.m_val.appear100) ||
+             (m_val.val != m_val.val && other.m_val.val != other.m_val.val);
     }
+
+    // To access like an `optional`.
+
+    struct ValPair {
+      float val;
+      float appear100;
+    };
+
+    ValPair& operator*() {
+      redex_assert(operator bool());
+      return m_val;
+    }
+    const ValPair& operator*() const {
+      redex_assert(operator bool());
+      return m_val;
+    }
+
+    ValPair* operator->() {
+      redex_assert(operator bool());
+      return &m_val;
+    }
+    const ValPair* operator->() const {
+      redex_assert(operator bool());
+      return &m_val;
+    }
+
+   private:
+    ValPair m_val;
   };
-  boost::optional<Val> val{boost::none};
+  Val val{Val::none()};
 
   SourceBlock() = default;
-  SourceBlock(DexMethodRef* src, size_t id)
-      : src(src), id(id), val(boost::none) {}
-  SourceBlock(DexMethodRef* src, size_t id, boost::optional<Val> v)
+  SourceBlock(DexMethodRef* src, size_t id) : src(src), id(id) {}
+  SourceBlock(DexMethodRef* src, size_t id, const Val& v)
       : src(src), id(id), val(v) {}
   SourceBlock(const SourceBlock&) = default;
 
