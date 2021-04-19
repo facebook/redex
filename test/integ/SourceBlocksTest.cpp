@@ -29,7 +29,7 @@ class SourceBlocksTest : public RedexIntegrationTest {
     isbp.m_insert_after_excs = val;
   }
   void set_profile(InsertSourceBlocksPass& isbp, std::string&& val) {
-    isbp.m_profile_file = val;
+    isbp.m_profile_files = val;
   }
   void set_force_serialize(InsertSourceBlocksPass& isbp) {
     isbp.m_force_serialize = true;
@@ -48,8 +48,21 @@ class SourceBlocksTest : public RedexIntegrationTest {
       auto vec = source_blocks::gather_source_blocks(block);
       for (auto* sb : vec) {
         oss << " " << sb->id;
-        if (sb->val) {
-          oss << "(" << sb->val->val << ":" << sb->val->appear100 << ")";
+        if (!sb->vals.empty()) {
+          oss << "(";
+          bool first_val = true;
+          for (const auto& val : sb->vals) {
+            if (!first_val) {
+              oss << "|";
+            }
+            first_val = false;
+            if (val) {
+              oss << val->val << ":" << val->appear100;
+            } else {
+              oss << "x";
+            }
+          }
+          oss << ")";
         }
       }
     }
@@ -163,13 +176,13 @@ TEST_F(SourceBlocksTest, source_blocks) {
               "((load-param-object v1) (.dbg DBG_SET_PROLOGUE_END) (.pos:dbg_0 "
               "\"Lcom/facebook/redextest/SourceBlocksTest;.bar:()V\" "
               "SourceBlocksTest.java 18) (.src_block "
-              "\"Lcom/facebook/redextest/SourceBlocksTest;.bar:()V\" 0)"
+              "\"Lcom/facebook/redextest/SourceBlocksTest;.bar:()V\" 0 ())"
               " (const-string World) (move-result-pseudo-object v0) "
               "(move-object v2 v1) (move-object v3 v0) (.pos:dbg_1 "
               "\"Lcom/facebook/redextest/SourceBlocksTest;.baz:(Ljava/lang/"
               "String;)V\" SourceBlocksTest.java 22 dbg_0) (.src_block "
               "\"Lcom/facebook/redextest/SourceBlocksTest;.baz:(Ljava/lang/"
-              "String;)V\" 0) (iput-object v3 v2 "
+              "String;)V\" 0 ()) (iput-object v3 v2 "
               "\"Lcom/facebook/redextest/SourceBlocksTest;.mHello:Ljava/lang/"
               "String;\") (.pos:dbg_2 "
               "\"Lcom/facebook/redextest/SourceBlocksTest;.baz:(Ljava/lang/"

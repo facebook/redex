@@ -426,28 +426,40 @@ std::unique_ptr<SourceBlock> source_block_from_s_expr(const s_expr& e) {
     std::istringstream in(id_str);
     in >> id;
   }
-  SourceBlock::Val opt_val = SourceBlock::Val::none();
-  if (!val_expr.is_nil()) {
-    std::string val_str;
-    std::string appear_str;
-    s_patn({
-               s_patn(&val_str),
-               s_patn(&appear_str),
-           })
+  std::vector<SourceBlock::Val> vals;
+  s_expr tail;
+  for (; !val_expr.is_nil(); val_expr = tail) {
+    s_expr head;
+    s_patn({s_patn(head)}, tail)
         .must_match(val_expr, "Expected 3rd and 4th arg to be a value string");
-    float val;
-    {
-      std::istringstream in(val_str);
-      in >> val;
+    redex_assert(head.is_list() || head.is_nil());
+    if (head.is_nil()) {
+      break; // Should only happen first loop.
     }
-    float appear;
-    {
-      std::istringstream in(appear_str);
-      in >> appear;
+    if (head.size() == 0) {
+      vals.emplace_back(SourceBlock::Val::none());
+    } else {
+      std::string val_str;
+      std::string appear_str;
+      s_patn({
+                 s_patn(&val_str),
+                 s_patn(&appear_str),
+             })
+          .must_match(head, "Expected pair");
+      float val;
+      {
+        std::istringstream in(val_str);
+        in >> val;
+      }
+      float appear;
+      {
+        std::istringstream in(appear_str);
+        in >> appear;
+      }
+      vals.emplace_back(val, appear);
     }
-    opt_val = SourceBlock::Val{val, appear};
   }
-  return std::make_unique<SourceBlock>(method, id, opt_val);
+  return std::make_unique<SourceBlock>(method, id, vals);
 }
 
 /*
@@ -626,10 +638,18 @@ s_expr create_source_block_expr(const MethodItemEntry* mie) {
 
   result.emplace_back(s_expr(show(src->src)));
   result.emplace_back(std::to_string(src->id));
-  if (src->val) {
-    result.emplace_back(std::to_string(src->val->val));
-    result.emplace_back(std::to_string(src->val->appear100));
+
+  std::vector<s_expr> vals;
+  for (const auto& val : src->vals) {
+    if (val) {
+      vals.emplace_back(
+          std::vector<s_expr>{s_expr(std::to_string(val->val)),
+                              s_expr(std::to_string(val->appear100))});
+    } else {
+      vals.emplace_back(s_expr());
+    }
   }
+  result.emplace_back(std::move(vals));
 
   return s_expr(result);
 }

@@ -1041,18 +1041,17 @@ def _handle_profiles(args, debug_mode):
 
     # Create input for basic blocks.
     # Note: at the moment, only look for ColdStart.
-    block_profiles_str = ", ".join(
+    join_str = ";" if IS_WINDOWS else ":"
+    block_profiles_str = join_str.join(
         f"{f.path}"
         for f in os.scandir(directory)
-        if f.is_file()
-        and f.name.startswith("block_profiles_")
-        and "ColdStart" in f.name
+        if f.is_file() and f.name.startswith("block_profiles_")
     )
     if block_profiles_str:
         logging.debug("Found block profiles: %s", block_profiles_str)
         # Assume there's at most one.
         args.passthru.append(
-            f"InsertSourceBlocksPass.profile_file={block_profiles_str}"
+            f"InsertSourceBlocksPass.profile_files={block_profiles_str}"
         )
     else:
         logging.info("No block profiles found in %s", args.packed_profiles)

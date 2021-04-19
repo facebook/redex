@@ -141,11 +141,12 @@ struct InsertResult {
   bool profile_success;
 };
 
-InsertResult insert_source_blocks(DexMethod* method,
-                                  ControlFlowGraph* cfg,
-                                  const std::string* profile = nullptr,
-                                  bool serialize = true,
-                                  bool insert_after_excs = false);
+InsertResult insert_source_blocks(
+    DexMethod* method,
+    ControlFlowGraph* cfg,
+    const std::vector<boost::optional<std::string>>& profiles = {},
+    bool serialize = true,
+    bool insert_after_excs = false);
 
 inline bool has_source_blocks(const cfg::Block* b) {
   for (const auto& mie : *b) {

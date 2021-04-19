@@ -497,3 +497,8 @@ void RedexContext::add_destruction_task(const Task& t) {
   std::unique_lock<std::mutex> lock{m_destruction_tasks_lock};
   m_destruction_tasks.push_back(t);
 }
+
+void RedexContext::set_sb_interaction_index(
+    const std::unordered_map<std::string, size_t>& input) {
+  m_sb_interaction_indices = input;
+}
