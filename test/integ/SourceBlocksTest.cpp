@@ -49,7 +49,7 @@ class SourceBlocksTest : public RedexIntegrationTest {
       for (auto* sb : vec) {
         oss << " " << sb->id;
         if (sb->val) {
-          oss << "(" << (*sb->val).val << ":" << (*sb->val).appear100 << ")";
+          oss << "(" << sb->val->val << ":" << sb->val->appear100 << ")";
         }
       }
     }

@@ -61,7 +61,7 @@ class SourceBlocksTest : public RedexTest {
       for (auto* sb : vec) {
         oss << " " << show(sb->src) << "@" << sb->id;
         if (sb->val) {
-          oss << "(" << (*sb->val).val << ":" << (*sb->val).appear100 << ")";
+          oss << "(" << sb->val->val << ":" << sb->val->appear100 << ")";
         }
       }
     }
@@ -69,10 +69,12 @@ class SourceBlocksTest : public RedexTest {
   }
 
   static std::string remove_count(const std::string& str) {
+    // NOLINTNEXTLINE
     std::regex re("L[A-Z][a-z]*\\([0-9][0-9]*\\);", std::regex::basic);
     std::string res = str;
     for (size_t i = 0; i != 100; ++i) {
       std::smatch match;
+      // NOLINTNEXTLINE
       if (!std::regex_search(res, match, re)) {
         break;
       }
