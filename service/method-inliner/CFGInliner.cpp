@@ -34,9 +34,30 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
 
 namespace {
 
+// Maybe replace this with a RedexContext API.
+size_t num_interactions(const InstructionIterator& inline_site,
+                        const ControlFlowGraph& callee_cfg) {
+  {
+    auto sb_vec = source_blocks::gather_source_blocks(inline_site.block());
+    if (!sb_vec.empty()) {
+      return sb_vec[0]->vals.size();
+    }
+  }
+
+  {
+    auto sb_vec = source_blocks::gather_source_blocks(callee_cfg.entry_block());
+    if (!sb_vec.empty()) {
+      return sb_vec[0]->vals.size();
+    }
+  }
+
+  return 0;
+}
+
 boost::optional<float> get_source_blocks_factor(
     const InstructionIterator& inline_site,
-    const ControlFlowGraph& callee_cfg) {
+    const ControlFlowGraph& callee_cfg,
+    size_t idx) {
   auto caller_block = inline_site.block();
   float caller_val;
   {
@@ -44,7 +65,7 @@ boost::optional<float> get_source_blocks_factor(
     if (sb_vec.empty()) {
       return boost::none;
     }
-    auto val = sb_vec[0]->get_val();
+    auto val = sb_vec[0]->get_val(idx);
     if (!val) {
       return boost::none;
     }
@@ -62,7 +83,7 @@ boost::optional<float> get_source_blocks_factor(
     if (sb_vec.empty()) {
       return boost::none;
     }
-    auto val = sb_vec[0]->get_val();
+    auto val = sb_vec[0]->get_val(idx);
     if (!val) {
       return boost::none;
     }
@@ -79,12 +100,12 @@ boost::optional<float> get_source_blocks_factor(
   return caller_val / callee_val;
 }
 
-void normalize_source_blocks(ControlFlowGraph& cfg, float factor) {
+void normalize_source_blocks(ControlFlowGraph& cfg, float factor, size_t idx) {
   for (auto* b : cfg.blocks()) {
     auto sb_vec = source_blocks::gather_source_blocks(b);
     for (auto* sb : sb_vec) {
-      if (sb->val) {
-        sb->val->val *= factor;
+      if (sb->vals[idx]) {
+        sb->vals[idx]->val *= factor;
       }
     }
   }
@@ -104,9 +125,12 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
   callee_orig.deep_copy(&callee);
 
   {
-    auto sb_factor = get_source_blocks_factor(inline_site, callee_orig);
-    if (sb_factor) {
-      normalize_source_blocks(callee, *sb_factor);
+    auto num = num_interactions(inline_site, callee_orig);
+    for (size_t i = 0; i < num; ++i) {
+      auto sb_factor = get_source_blocks_factor(inline_site, callee_orig, i);
+      if (sb_factor) {
+        normalize_source_blocks(callee, *sb_factor, i);
+      }
     }
   }
 

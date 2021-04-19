@@ -165,23 +165,23 @@ struct SourceBlock {
    private:
     ValPair m_val;
   };
-  Val val{Val::none()};
+  std::vector<Val> vals;
 
   SourceBlock() = default;
   SourceBlock(DexMethodRef* src, size_t id) : src(src), id(id) {}
-  SourceBlock(DexMethodRef* src, size_t id, const Val& v)
-      : src(src), id(id), val(v) {}
+  SourceBlock(DexMethodRef* src, size_t id, std::vector<Val> v)
+      : src(src), id(id), vals(std::move(v)) {}
   SourceBlock(const SourceBlock&) = default;
 
-  boost::optional<float> get_val() const {
-    return val ? boost::optional<float>(val->val) : boost::none;
+  boost::optional<float> get_val(size_t i) const {
+    return vals[i] ? boost::optional<float>(vals[i]->val) : boost::none;
   }
-  boost::optional<float> get_appear100() const {
-    return val ? boost::optional<float>(val->appear100) : boost::none;
+  boost::optional<float> get_appear100(size_t i) const {
+    return vals[i] ? boost::optional<float>(vals[i]->appear100) : boost::none;
   }
 
   bool operator==(const SourceBlock& other) const {
-    return src == other.src && id == other.id && val == other.val;
+    return src == other.src && id == other.id && vals == other.vals;
   }
 };
 

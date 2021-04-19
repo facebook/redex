@@ -12,6 +12,7 @@
 #include <cstring>
 #include <deque>
 #include <functional>
+#include <limits>
 #include <list>
 #include <map>
 #include <mutex>
@@ -167,6 +168,16 @@ struct RedexContext {
   keep_rules::AssumeReturnValue* get_return_value(DexMethod* method);
   void unset_return_value(DexMethod* method);
 
+  size_t get_sb_interaction_index(const std::string& interaction) const {
+    auto it = m_sb_interaction_indices.find(interaction);
+    if (it == m_sb_interaction_indices.end()) {
+      return std::numeric_limits<size_t>::max();
+    }
+    return it->second;
+  }
+  void set_sb_interaction_index(
+      const std::unordered_map<std::string, size_t>& input);
+
  private:
   struct Strcmp;
   struct TruncatedStringHash;
@@ -292,6 +303,8 @@ struct RedexContext {
 
   // These functions will be called when ~RedexContext() is called
   std::vector<Task> m_destruction_tasks;
+
+  std::unordered_map<std::string, size_t> m_sb_interaction_indices;
 
   bool m_record_keep_reasons{false};
   bool m_allow_class_duplicates;

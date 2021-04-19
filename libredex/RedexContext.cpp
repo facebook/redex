@@ -481,3 +481,8 @@ keep_rules::AssumeReturnValue* RedexContext::get_return_value(
 void RedexContext::unset_return_value(DexMethod* method) {
   method_return_values.erase(method);
 }
+
+void RedexContext::set_sb_interaction_index(
+    const std::unordered_map<std::string, size_t>& input) {
+  m_sb_interaction_indices = input;
+}
