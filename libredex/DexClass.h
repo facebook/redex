@@ -854,11 +854,14 @@ class DexMethod : public DexMethodRef {
   friend class DexMethodRef;
 
   /* Concrete method members */
+
+  // Place these first to avoid/fill padding from DexMethodRef.
+  bool m_virtual{false};
+  DexAccessFlags m_access;
+
   DexAnnotationSet* m_anno;
   std::unique_ptr<DexCode> m_dex_code;
   std::unique_ptr<IRCode> m_code;
-  DexAccessFlags m_access;
-  bool m_virtual;
   ParamAnnotations m_param_anno;
   std::string m_deobfuscated_name;
 
