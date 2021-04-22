@@ -7,14 +7,33 @@
 
 #include "Native.h"
 
+#include <boost/optional.hpp>
 #include <fstream>
 #include <json/json.h>
+#include <json/value.h>
 
+#include "Debug.h"
 #include "NativeNames.h"
 #include "Show.h"
+#include "Trace.h"
 #include "Walkers.h"
 
 namespace fs = boost::filesystem;
+
+namespace {
+
+boost::optional<Json::Value> read_json_from_file(const std::string& filename) {
+  std::ifstream file_stream(filename);
+  if (!file_stream) {
+    return boost::none;
+  }
+  Json::Value json;
+  file_stream >> json;
+  file_stream.close();
+  return json;
+}
+
+} // anonymous namespace
 
 namespace native {
 
@@ -49,18 +68,55 @@ std::vector<CompilationUnit> get_compilation_units(const fs::path& path) {
 
 void CompilationUnit::populate_functions(
     const std::unordered_map<std::string, DexMethod*>& expected_names_to_decl) {
-  auto jni_json_path = m_infodir_path / "jni.json";
-  std::ifstream jni_json_stream(jni_json_path.string());
-  always_assert_log(
-      jni_json_stream, "Cannot find file %s", jni_json_path.string().c_str());
-  Json::Value json;
-  jni_json_stream >> json;
-  for (Json::Value::ArrayIndex i = 0; i < json.size(); i++) {
-    std::string function_name = json[i].asString();
+  auto jni_json_path = (m_infodir_path / "jni.json").string();
+  auto jni_json_opt = read_json_from_file(jni_json_path);
+
+  always_assert_log(jni_json_opt, "Cannot find file %s", jni_json_path.c_str());
+
+  for (Json::Value::ArrayIndex i = 0; i < jni_json_opt->size(); i++) {
+    std::string function_name = (*jni_json_opt)[i].asString();
     auto decl_it = expected_names_to_decl.find(function_name);
     DexMethod* decl =
         decl_it == expected_names_to_decl.end() ? nullptr : decl_it->second;
     m_functions.emplace_back(std::move(function_name), decl);
+  }
+
+  // Alternatively, native methods can be registered with RegisterNatives calls.
+  // Use specific analyses to extract information.
+
+  auto registered_natives_path =
+      (m_infodir_path / "registered_natives.json").string();
+  auto registered_natives_opt = read_json_from_file(registered_natives_path);
+
+  if (registered_natives_opt) {
+    for (Json::Value::ArrayIndex i = 0; i < registered_natives_opt->size();
+         i++) {
+      auto klass = (*registered_natives_opt)[i];
+      std::string class_name = klass["class_name"].asString();
+      auto methods = klass["registered_functions"];
+      for (Json::Value::ArrayIndex j = 0; j < methods.size(); j++) {
+        auto method = methods[j];
+        std::string method_name = method["method_name"].asString();
+        std::string desc = method["desc"].asString();
+        std::string function = method["function"].asString();
+
+        DexMethodRef* m =
+            DexMethod::get_method(class_name + "." + method_name + ":" + desc);
+        if (m) {
+          DexMethod* decl = m->as_def();
+          always_assert_log(decl,
+                            "Attempting to bind non-concrete native method.");
+          m_functions.emplace_back(std::move(function), decl);
+        } else {
+          TRACE(NATIVE,
+                2,
+                "Method %s%s%s not found in Java code.",
+                class_name.c_str(),
+                method_name.c_str(),
+                desc.c_str());
+        }
+      }
+    }
   }
 }
 

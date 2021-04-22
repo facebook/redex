@@ -1,0 +1,9 @@
+[
+  {
+    "class_name": "Lredex/JNIExample;",
+    "registered_functions": [
+      { "method_name": "initHybrid", "desc": "()V", "function": "init_hybrid_impl" },
+      { "method_name": "foo", "desc": "(II)I", "function": "foo_impl" }
+    ]
+  }
+]

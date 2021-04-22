@@ -87,6 +87,7 @@ class DexType;
   TM(MONITOR)         \
   TM(MORTIROLO)       \
   TM(MTRANS)          \
+  TM(NATIVE)          \
   TM(NULLCHECK)       \
   TM(OBFUSCATE)       \
   TM(OPTRES)          \
