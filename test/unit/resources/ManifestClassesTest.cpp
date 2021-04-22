@@ -39,7 +39,7 @@ TEST(ManifestClassesTest, exported) {
 
   EXPECT_EQ(tag_infos[4].tag, ComponentTag::Provider);
   EXPECT_EQ(tag_infos[4].classname, "Lcom/example/x/Foo;");
-  EXPECT_EQ(tag_infos[4].is_exported == BooleanXMLAttribute::Undefined);
+  EXPECT_EQ(tag_infos[4].is_exported, BooleanXMLAttribute::Undefined);
   EXPECT_THAT(tag_infos[4].authority_classes,
               ::testing::UnorderedElementsAre("Lcom/example/x/Foo;",
                                               "Lcom/example/y/Bar;"));
