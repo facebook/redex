@@ -90,6 +90,7 @@ void GlobalConfig::bind_config() {
   bind("default_coldstart_classes", "", string_param);
   bind("emit_class_method_info_map", false, bool_param);
   bind("emit_locator_strings", {}, bool_param);
+  bind("iodi_disable_min_sdk_opt", false, bool_param);
   bind("ab_experiments_states", {}, string_map_param);
   bind("force_single_dex", false, bool_param);
   bind("instruction_size_bitwidth_limit", 0u, uint32_param);

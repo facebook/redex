@@ -1041,7 +1041,11 @@ void redex_backend(ConfigFiles& conf,
                                                   : line_number_map_filename));
   std::unordered_map<DexMethod*, uint64_t> method_to_id;
   std::unordered_map<DexCode*, std::vector<DebugLineItem>> code_debug_lines;
-  IODIMetadata iodi_metadata(redex_options.min_sdk);
+
+  bool iodi_disable_min_sdk_opt;
+  conf.get_json_config().get("iodi_disable_min_sdk_opt", false,
+                             iodi_disable_min_sdk_opt);
+  IODIMetadata iodi_metadata(redex_options.min_sdk, iodi_disable_min_sdk_opt);
 
   std::unique_ptr<PostLowering> post_lowering =
       redex_options.redacted ? PostLowering::create() : nullptr;
