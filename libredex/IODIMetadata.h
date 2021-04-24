@@ -32,12 +32,16 @@ class IODIMetadata {
  public:
   uint32_t min_sdk{0};
 
+  /// Emit debug info regardless of min_sdk
+  bool disable_min_sdk_opt;
+
   // We can initialize this guy for free. If this feature is enabled then
   // invoke the methods below.
   IODIMetadata() {}
 
   // Android builds with min_sdk >= 26 don't need IODI to emit debug info
-  explicit IODIMetadata(uint32_t min_sdk) : min_sdk{min_sdk} {}
+  explicit IODIMetadata(uint32_t min_sdk, bool disable_min_sdk_opt = false)
+      : min_sdk{min_sdk}, disable_min_sdk_opt{disable_min_sdk_opt} {}
 
   // This fills the internal map of stack trace name -> method. This must be
   // called after the last pass and before anything starts to get lowered.
