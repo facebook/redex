@@ -94,9 +94,7 @@ class CustomSort {
   }
 };
 
-GatheredTypes::GatheredTypes(DexClasses* classes,
-                             PostLowering const* post_lowering)
-    : m_classes(classes) {
+GatheredTypes::GatheredTypes(DexClasses* classes) : m_classes(classes) {
   // ensure that the string id table contains the empty string, which is used
   // for the DexPosition mapping
   m_lstring.push_back(DexString::make_string(""));
@@ -106,7 +104,8 @@ GatheredTypes::GatheredTypes(DexClasses* classes,
   build_cls_map();
   build_method_map();
 
-  gather_components(post_lowering);
+  gather_components(m_lstring, m_ltype, m_lfield, m_lmethod, m_lcallsite,
+                    m_lmethodhandle, *m_classes);
 }
 
 std::unordered_set<DexString*> GatheredTypes::index_type_names() {
@@ -413,23 +412,6 @@ void GatheredTypes::build_method_map() {
   }
 }
 
-void GatheredTypes::gather_components(PostLowering const* post_lowering) {
-  ::gather_components(m_lstring, m_ltype, m_lfield, m_lmethod, m_lcallsite,
-                      m_lmethodhandle, *m_classes);
-  if (post_lowering) {
-    // TODO(T59333341) - need to consider how dex038 works with ditto post
-    // lowering
-    post_lowering->gather_components(m_lstring,
-                                     m_ltype,
-                                     m_lfield,
-                                     m_lmethod,
-                                     m_lcallsite,
-                                     m_lmethodhandle,
-                                     m_additional_ltypelists,
-                                     *m_classes);
-  }
-}
-
 namespace {
 
 // Leave 250K empty as a margin to not overrun.
@@ -471,7 +453,6 @@ DexOutput::DexOutput(
     PositionMapper* pos_mapper,
     std::unordered_map<DexMethod*, uint64_t>* method_to_id,
     std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
-    PostLowering const* post_lowering,
     int min_sdk)
     : m_classes(classes),
       // Required because the BytecodeDebugger setting creates huge amounts
@@ -488,8 +469,7 @@ DexOutput::DexOutput(
   // Ensure a clean slate.
   memset(m_output.get(), 0, m_output_size);
 
-  m_force_class_data_end_of_file = post_lowering != nullptr;
-  m_gtypes = new GatheredTypes(classes, post_lowering);
+  m_gtypes = new GatheredTypes(classes);
   dodx = m_gtypes->get_dodx(m_output.get());
 
   always_assert_log(
@@ -2960,7 +2940,6 @@ dex_stats_t write_classes_to_dex(
     std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
     IODIMetadata* iodi_metadata,
     const std::string& dex_magic,
-    PostLowering const* post_lowering,
     int min_sdk,
     bool disable_method_similarity_order) {
   const JsonWrapper& json_cfg = conf.get_json_config();
@@ -3006,7 +2985,7 @@ dex_stats_t write_classes_to_dex(
   DexOutput dout(filename.c_str(), classes, locator_index, normal_primary_dex,
                  store_number, dex_number, redex_options.debug_info_kind,
                  iodi_metadata, conf, pos_mapper, method_to_id,
-                 code_debug_lines, post_lowering, min_sdk);
+                 code_debug_lines, min_sdk);
 
   dout.prepare(string_sort_mode, code_sort_mode, conf, dex_magic);
   dout.write();

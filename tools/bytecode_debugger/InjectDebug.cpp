@@ -181,7 +181,6 @@ void InjectDebug::write_dex() {
           pos_mapper.get(), // position_mapper
           nullptr, // method_to_id
           nullptr, // code_debug_lines
-          nullptr // post_lowering
       };
       dout.prepare(SortMode::DEFAULT, {SortMode::DEFAULT}, m_conf,
                    m_stores[0].get_dex_magic());

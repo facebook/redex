@@ -1075,7 +1075,6 @@ void redex_backend(ConfigFiles& conf,
                                needs_addresses ? &code_debug_lines : nullptr,
                                is_iodi(dik) ? &iodi_metadata : nullptr,
                                stores[0].get_dex_magic(),
-                               post_lowering.get(),
                                manager.get_redex_options().min_sdk,
                                disable_method_similarity_order);
 

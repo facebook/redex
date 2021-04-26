@@ -19,14 +19,6 @@ class PostLowering {
   static std::unique_ptr<PostLowering> create();
 
   virtual void sync() = 0;
-  virtual void gather_components(std::vector<DexString*>&,
-                                 std::vector<DexType*>&,
-                                 std::vector<DexFieldRef*>&,
-                                 std::vector<DexMethodRef*>&,
-                                 std::vector<DexCallSite*>&,
-                                 std::vector<DexMethodHandle*>&,
-                                 std::vector<DexTypeList*>&,
-                                 const std::vector<DexClass*>&) const = 0;
   virtual void run(const DexStoresVector& stores) = 0;
   virtual void finalize(ApkManager& mgr) = 0;
 

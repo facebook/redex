@@ -10,14 +10,6 @@
 class NoopPostLowering : public PostLowering {
  public:
   void sync() override {}
-  void gather_components(std::vector<DexString*>&,
-                         std::vector<DexType*>&,
-                         std::vector<DexFieldRef*>&,
-                         std::vector<DexMethodRef*>&,
-                         std::vector<DexCallSite*>&,
-                         std::vector<DexMethodHandle*>&,
-                         std::vector<DexTypeList*>&,
-                         const std::vector<DexClass*>&) const override {}
   void run(const DexStoresVector& stores) override {}
   void finalize(ApkManager& mgr) override {}
 };
