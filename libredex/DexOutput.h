@@ -335,7 +335,6 @@ class DexOutput {
   LocatorIndex* m_locator_index;
   bool m_normal_primary_dex;
   const ConfigFiles& m_config_files;
-  bool m_force_class_data_end_of_file;
   int m_min_sdk;
 
   void insert_map_item(uint16_t maptype,

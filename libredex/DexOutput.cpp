@@ -2810,9 +2810,7 @@ void DexOutput::prepare(SortMode string_mode,
   generate_typelist_data();
   generate_string_data(string_mode);
   generate_code_items(code_mode);
-  if (!m_force_class_data_end_of_file) {
-    generate_class_data_items();
-  }
+  generate_class_data_items();
   generate_type_data();
   generate_proto_data();
   generate_field_data();
@@ -2822,9 +2820,6 @@ void DexOutput::prepare(SortMode string_mode,
   generate_methodhandle_data();
   generate_annotations();
   generate_debug_items();
-  if (m_force_class_data_end_of_file) {
-    generate_class_data_items();
-  }
   generate_map();
   finalize_header();
   compute_method_to_id_map(dodx, m_classes, hdr.signature, m_method_to_id);
