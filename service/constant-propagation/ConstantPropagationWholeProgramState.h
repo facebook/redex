@@ -121,7 +121,10 @@ class WholeProgramState {
     }
     ConstantValue ret = ConstantValue::bottom();
     for (const DexMethod* callee : callees) {
-      auto val = m_method_partition.get(callee);
+      auto val = ConstantValue::top();
+      if (callee->get_code()) {
+        val = m_method_partition.get(callee);
+      }
       ret.join_with(val);
     }
     if (ret == ConstantValue::bottom()) {

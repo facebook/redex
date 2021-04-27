@@ -1321,6 +1321,165 @@ TEST_F(InterproceduralConstantPropagationTest, RootVirtualMethodReturnValue) {
   EXPECT_CODE_EQ(m1->get_code(), expected_code.get());
 }
 
+TEST_F(InterproceduralConstantPropagationTest, NativeImplementReturnValue) {
+  auto cls1_ty = DexType::make_type("LFoo;");
+  ClassCreator creator(cls1_ty);
+  creator.set_super(type::java_lang_Object());
+  creator.set_access(creator.get_access() | ACC_NATIVE);
+
+  auto m1 = assembler::method_from_string(R"(
+    (method (public static) "LFoo;.bar:(LFoo;)V"
+     (
+      (load-param-object v0)
+      (invoke-virtual (v0) "LFoo;.virtualMethod:()I")
+      (move-result v0) ; Not propagating value because virtualMethod is root
+      (if-eqz v0 :label)
+      (const v0 1)
+      (:label)
+      (return-void)
+     )
+    )
+  )");
+  m1->rstate.set_root();
+  creator.add_method(m1);
+  auto cls1 = creator.create();
+  auto void_int =
+      DexProto::make_proto(type::_int(), DexTypeList::make_type_list({}));
+  auto method_base = static_cast<DexMethod*>(DexMethod::make_method(
+      cls1_ty, DexString::make_string("virtualMethod"), void_int));
+  method_base->make_concrete(
+      ACC_PUBLIC | ACC_ABSTRACT, std::unique_ptr<IRCode>(nullptr), true);
+  cls1->add_method(method_base);
+
+  auto cls2_ty = DexType::make_type("LBoo;");
+  ClassCreator creator2(cls2_ty);
+  creator2.set_super(cls1_ty);
+  creator2.set_access(creator2.get_access() | ACC_NATIVE);
+  auto m2 = assembler::method_from_string(R"(
+    (method (public) "LBoo;.virtualMethod:()I"
+     (
+      (const v0 0)
+      (return v0)
+     )
+    )
+  )");
+  creator2.add_method(m2);
+  auto cls2 = creator2.create();
+
+  auto cls3_ty = DexType::make_type("LBar;");
+  ClassCreator creator3(cls3_ty);
+  creator3.set_super(cls1_ty);
+  creator3.set_access(creator3.get_access() | ACC_NATIVE);
+  DexMethodRef* m3_ref = DexMethod::make_method("LBar;.virtualMethod:()I");
+  auto m3 = m3_ref->make_concrete(ACC_PUBLIC | ACC_NATIVE, true);
+  creator3.add_method(m3);
+  auto cls3 = creator3.create();
+
+  Scope scope{cls1, cls2, cls3};
+  walk::code(scope, [](DexMethod*, IRCode& code) {
+    code.build_cfg(/* editable */ false);
+  });
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+     (load-param-object v0)
+     (invoke-virtual (v0) "LFoo;.virtualMethod:()I")
+     (move-result v0)
+     (if-eqz v0 :label)
+     (const v0 1)
+     (:label)
+     (return-void)
+    )
+  )");
+
+  InterproceduralConstantPropagationPass::Config config;
+  config.max_heap_analysis_iterations = 1;
+  config.use_multiple_callee_callgraph = true;
+  InterproceduralConstantPropagationPass(config).run(make_simple_stores(scope));
+  EXPECT_CODE_EQ(m1->get_code(), expected_code.get());
+}
+
+TEST_F(InterproceduralConstantPropagationTest,
+       NativeInterfaceImplementReturnValue) {
+  auto cls1_ty = DexType::make_type("LFoo;");
+  ClassCreator creator(cls1_ty);
+  creator.set_super(type::java_lang_Object());
+  creator.set_access(creator.get_access() | ACC_NATIVE | ACC_INTERFACE);
+
+  auto m1 = assembler::method_from_string(R"(
+    (method (public static) "LFoo;.bar:(LFoo;)V"
+     (
+      (load-param-object v0)
+      (invoke-virtual (v0) "LFoo;.virtualMethod:()I")
+      (move-result v0) ; Not propagating value because virtualMethod is root
+      (if-eqz v0 :label)
+      (const v0 1)
+      (:label)
+      (return-void)
+     )
+    )
+  )");
+  m1->rstate.set_root();
+  creator.add_method(m1);
+  auto cls1 = creator.create();
+  auto void_int =
+      DexProto::make_proto(type::_int(), DexTypeList::make_type_list({}));
+  auto method_base = static_cast<DexMethod*>(DexMethod::make_method(
+      cls1_ty, DexString::make_string("virtualMethod"), void_int));
+  method_base->make_concrete(
+      ACC_PUBLIC | ACC_INTERFACE, std::unique_ptr<IRCode>(nullptr), true);
+  cls1->add_method(method_base);
+
+  auto cls2_ty = DexType::make_type("LBoo;");
+  ClassCreator creator2(cls2_ty);
+  creator2.set_super(type::java_lang_Object());
+  creator2.add_interface(cls1_ty);
+  creator2.set_access(creator2.get_access() | ACC_NATIVE);
+  auto m2 = assembler::method_from_string(R"(
+    (method (public) "LBoo;.virtualMethod:()I"
+     (
+      (const v0 0)
+      (return v0)
+     )
+    )
+  )");
+  creator2.add_method(m2);
+  auto cls2 = creator2.create();
+
+  auto cls3_ty = DexType::make_type("LBar;");
+  ClassCreator creator3(cls3_ty);
+  creator3.set_super(type::java_lang_Object());
+  creator3.add_interface(cls1_ty);
+  creator3.set_access(creator3.get_access() | ACC_NATIVE);
+  DexMethodRef* m3_ref = DexMethod::make_method("LBar;.virtualMethod:()I");
+  auto m3 = m3_ref->make_concrete(ACC_PUBLIC | ACC_NATIVE, true);
+  creator3.add_method(m3);
+  auto cls3 = creator3.create();
+
+  Scope scope{cls1, cls2, cls3};
+  walk::code(scope, [](DexMethod*, IRCode& code) {
+    code.build_cfg(/* editable */ false);
+  });
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+     (load-param-object v0)
+     (invoke-virtual (v0) "LFoo;.virtualMethod:()I")
+     (move-result v0)
+     (if-eqz v0 :label)
+     (const v0 1)
+     (:label)
+     (return-void)
+    )
+  )");
+
+  InterproceduralConstantPropagationPass::Config config;
+  config.max_heap_analysis_iterations = 1;
+  config.use_multiple_callee_callgraph = true;
+  InterproceduralConstantPropagationPass(config).run(make_simple_stores(scope));
+  EXPECT_CODE_EQ(m1->get_code(), expected_code.get());
+}
+
 TEST_F(InterproceduralConstantPropagationTest,
        OverrideVirtualMethodReturnValue) {
   auto cls_ty = DexType::make_type("LFoo;");
