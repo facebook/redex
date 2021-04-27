@@ -36,7 +36,7 @@ constexpr const char* NEW_CHECK_EXPR_NULL_SIGNATURE =
 // require name of the parameter.
 inline DexMethod* kotlin_jvm_internal_Intrinsics_WrCheckParameter() {
   return static_cast<DexMethod*>(
-      DexMethod::make_method(NEW_CHECK_PARAM_NULL_SIGNATURE));
+      DexMethod::get_method(NEW_CHECK_PARAM_NULL_SIGNATURE));
 }
 
 // Wrapper for Kotlin null safety check
@@ -44,7 +44,7 @@ inline DexMethod* kotlin_jvm_internal_Intrinsics_WrCheckParameter() {
 // require name of the expression.
 inline DexMethod* kotlin_jvm_internal_Intrinsics_WrCheckExpression() {
   return static_cast<DexMethod*>(
-      DexMethod::make_method(NEW_CHECK_EXPR_NULL_SIGNATURE));
+      DexMethod::get_method(NEW_CHECK_EXPR_NULL_SIGNATURE));
 }
 
 // This returns methods that are used in Kotlin null assertion.
@@ -52,14 +52,36 @@ inline DexMethod* kotlin_jvm_internal_Intrinsics_WrCheckExpression() {
 // nullness as first argument and returns void. The value of the object will
 // not be null beyond this program point in the execution path.
 inline std::unordered_set<DexMethodRef*> get_kotlin_null_assertions() {
-  return {method::kotlin_jvm_internal_Intrinsics_checkParameterIsNotNull(),
-          method::kotlin_jvm_internal_Intrinsics_checkNotNullParameter(),
-          kotlin_nullcheck_wrapper::
-              kotlin_jvm_internal_Intrinsics_WrCheckParameter(),
-          method::kotlin_jvm_internal_Intrinsics_checExpressionValueIsNotNull(),
-          method::kotlin_jvm_internal_Intrinsics_checkNotNullExpressionValue(),
-          kotlin_nullcheck_wrapper::
-              kotlin_jvm_internal_Intrinsics_WrCheckExpression()};
+  std::unordered_set<DexMethodRef*> null_check_methods;
+  DexMethodRef* method;
+  method = method::kotlin_jvm_internal_Intrinsics_checkParameterIsNotNull();
+  if (method) {
+    null_check_methods.emplace(method);
+  }
+  method = method::kotlin_jvm_internal_Intrinsics_checkNotNullParameter();
+  if (method) {
+    null_check_methods.emplace(method);
+  }
+  method = kotlin_nullcheck_wrapper::
+      kotlin_jvm_internal_Intrinsics_WrCheckParameter();
+  if (method) {
+    null_check_methods.emplace(method);
+  }
+  method =
+      method::kotlin_jvm_internal_Intrinsics_checExpressionValueIsNotNull();
+  if (method) {
+    null_check_methods.emplace(method);
+  }
+  method = method::kotlin_jvm_internal_Intrinsics_checkNotNullExpressionValue();
+  if (method) {
+    null_check_methods.emplace(method);
+  }
+  method = kotlin_nullcheck_wrapper::
+      kotlin_jvm_internal_Intrinsics_WrCheckExpression();
+  if (method) {
+    null_check_methods.emplace(method);
+  }
+  return null_check_methods;
 }
 
 } // namespace kotlin_nullcheck_wrapper
