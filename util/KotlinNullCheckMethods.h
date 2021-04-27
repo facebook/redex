@@ -10,8 +10,14 @@
 #include "MethodUtil.h"
 
 namespace kotlin_nullcheck_wrapper {
-constexpr const char* WRAPPER_CHECK_PARAM_NULL_METHOD = "$WrCheckParameter";
-constexpr const char* WRAPPER_CHECK_EXPR_NULL_METHOD = "$WrCheckExpression";
+constexpr const char* WRAPPER_CHECK_PARAM_NULL_METHOD_V1_3 =
+    "$WrCheckParameter_V1_3";
+constexpr const char* WRAPPER_CHECK_PARAM_NULL_METHOD_V1_4 =
+    "$WrCheckParameter_V1_4";
+constexpr const char* WRAPPER_CHECK_EXPR_NULL_METHOD_V1_3 =
+    "$WrCheckExpression_V1_3";
+constexpr const char* WRAPPER_CHECK_EXPR_NULL_METHOD_V1_4 =
+    "$WrCheckExpression_V1_4";
 
 constexpr const char* CHECK_PARAM_NULL_SIGNATURE_V1_3 =
     "Lkotlin/jvm/internal/Intrinsics;.checkParameterIsNotNull:(Ljava/lang/"
@@ -26,25 +32,44 @@ constexpr const char* CHECK_EXPR_NULL_SIGNATURE_V1_4 =
     "Lkotlin/jvm/internal/Intrinsics;.checkNotNullExpressionValue:(Ljava/"
     "lang/Object;Ljava/lang/String;)V";
 
-constexpr const char* NEW_CHECK_PARAM_NULL_SIGNATURE =
-    "Lkotlin/jvm/internal/Intrinsics;.$WrCheckParameter:(Ljava/lang/Object;I)V";
-constexpr const char* NEW_CHECK_EXPR_NULL_SIGNATURE =
-    "Lkotlin/jvm/internal/Intrinsics;.$WrCheckExpression:(Ljava/lang/Object;)V";
+constexpr const char* NEW_CHECK_PARAM_NULL_SIGNATURE_V1_3 =
+    "Lkotlin/jvm/internal/Intrinsics;.$WrCheckParameter_V1_3:(Ljava/lang/"
+    "Object;I)V";
+constexpr const char* NEW_CHECK_EXPR_NULL_SIGNATURE_V1_3 =
+    "Lkotlin/jvm/internal/Intrinsics;.$WrCheckExpression_V1_3:(Ljava/lang/"
+    "Object;)V";
+
+constexpr const char* NEW_CHECK_PARAM_NULL_SIGNATURE_V1_4 =
+    "Lkotlin/jvm/internal/Intrinsics;.$WrCheckParameter_V1_4:(Ljava/lang/"
+    "Object;I)V";
+constexpr const char* NEW_CHECK_EXPR_NULL_SIGNATURE_V1_4 =
+    "Lkotlin/jvm/internal/Intrinsics;.$WrCheckExpression_V1_4:(Ljava/lang/"
+    "Object;)V";
 
 // Wrapper for Kotlin null safety check
 // Lkotlin/jvm/internal/Intrinsics;.checkParameterIsNotNull which does not
 // require name of the parameter.
-inline DexMethod* kotlin_jvm_internal_Intrinsics_WrCheckParameter() {
+inline DexMethod* kotlin_jvm_internal_Intrinsics_WrCheckParameter_V1_3() {
   return static_cast<DexMethod*>(
-      DexMethod::get_method(NEW_CHECK_PARAM_NULL_SIGNATURE));
+      DexMethod::get_method(NEW_CHECK_PARAM_NULL_SIGNATURE_V1_3));
+}
+
+inline DexMethod* kotlin_jvm_internal_Intrinsics_WrCheckParameter_V1_4() {
+  return static_cast<DexMethod*>(
+      DexMethod::get_method(NEW_CHECK_PARAM_NULL_SIGNATURE_V1_4));
 }
 
 // Wrapper for Kotlin null safety check
 // Lkotlin/jvm/internal/Intrinsics;.checkExpressionValueIsNotNull which does not
 // require name of the expression.
-inline DexMethod* kotlin_jvm_internal_Intrinsics_WrCheckExpression() {
+inline DexMethod* kotlin_jvm_internal_Intrinsics_WrCheckExpression_V1_3() {
   return static_cast<DexMethod*>(
-      DexMethod::get_method(NEW_CHECK_EXPR_NULL_SIGNATURE));
+      DexMethod::get_method(NEW_CHECK_EXPR_NULL_SIGNATURE_V1_3));
+}
+
+inline DexMethod* kotlin_jvm_internal_Intrinsics_WrCheckExpression_V1_4() {
+  return static_cast<DexMethod*>(
+      DexMethod::get_method(NEW_CHECK_EXPR_NULL_SIGNATURE_V1_4));
 }
 
 // This returns methods that are used in Kotlin null assertion.
@@ -63,7 +88,12 @@ inline std::unordered_set<DexMethodRef*> get_kotlin_null_assertions() {
     null_check_methods.emplace(method);
   }
   method = kotlin_nullcheck_wrapper::
-      kotlin_jvm_internal_Intrinsics_WrCheckParameter();
+      kotlin_jvm_internal_Intrinsics_WrCheckParameter_V1_3();
+  if (method) {
+    null_check_methods.emplace(method);
+  }
+  method = kotlin_nullcheck_wrapper::
+      kotlin_jvm_internal_Intrinsics_WrCheckParameter_V1_4();
   if (method) {
     null_check_methods.emplace(method);
   }
@@ -77,7 +107,12 @@ inline std::unordered_set<DexMethodRef*> get_kotlin_null_assertions() {
     null_check_methods.emplace(method);
   }
   method = kotlin_nullcheck_wrapper::
-      kotlin_jvm_internal_Intrinsics_WrCheckExpression();
+      kotlin_jvm_internal_Intrinsics_WrCheckExpression_V1_3();
+  if (method) {
+    null_check_methods.emplace(method);
+  }
+  method = kotlin_nullcheck_wrapper::
+      kotlin_jvm_internal_Intrinsics_WrCheckExpression_V1_4();
   if (method) {
     null_check_methods.emplace(method);
   }

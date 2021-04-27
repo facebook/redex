@@ -67,8 +67,8 @@ TEST_F(RemoveNullcheckStringArgTest, simple) {
      (const-string "args")
      (move-result-pseudo-object v1)
      (const v2 0)
-     (invoke-static (v0 v2) "Lkotlin/jvm/internal/Intrinsics;.$WrCheckParameter:(Ljava/lang/Object;I)V")
-     (invoke-static (v0) "Lkotlin/jvm/internal/Intrinsics;.$WrCheckExpression:(Ljava/lang/Object;)V")
+     (invoke-static (v0 v2) "Lkotlin/jvm/internal/Intrinsics;.$WrCheckParameter_V1_3:(Ljava/lang/Object;I)V")
+     (invoke-static (v0) "Lkotlin/jvm/internal/Intrinsics;.$WrCheckExpression_V1_3:(Ljava/lang/Object;)V")
      (return-void)
     )
   )";
@@ -107,8 +107,8 @@ TEST_F(RemoveNullcheckStringArgTest, simpleVirtual) {
      (const-string "args")
      (move-result-pseudo-object v2)
      (const v3 0)
-     (invoke-static (v1 v3) "Lkotlin/jvm/internal/Intrinsics;.$WrCheckParameter:(Ljava/lang/Object;I)V")
-     (invoke-static (v1) "Lkotlin/jvm/internal/Intrinsics;.$WrCheckExpression:(Ljava/lang/Object;)V")
+     (invoke-static (v1 v3) "Lkotlin/jvm/internal/Intrinsics;.$WrCheckParameter_V1_3:(Ljava/lang/Object;I)V")
+     (invoke-static (v1) "Lkotlin/jvm/internal/Intrinsics;.$WrCheckExpression_V1_3:(Ljava/lang/Object;)V")
      (return-void)
     )
   )";
@@ -149,8 +149,8 @@ TEST_F(RemoveNullcheckStringArgTest, simpleiVirtualiCpy) {
      (move-result-pseudo-object v2)
      (move v3 v1)
      (const v4 0)
-     (invoke-static (v3 v4) "Lkotlin/jvm/internal/Intrinsics;.$WrCheckParameter:(Ljava/lang/Object;I)V")
-     (invoke-static (v3) "Lkotlin/jvm/internal/Intrinsics;.$WrCheckExpression:(Ljava/lang/Object;)V")
+     (invoke-static (v3 v4) "Lkotlin/jvm/internal/Intrinsics;.$WrCheckParameter_V1_3:(Ljava/lang/Object;I)V")
+     (invoke-static (v3) "Lkotlin/jvm/internal/Intrinsics;.$WrCheckExpression_V1_3:(Ljava/lang/Object;)V")
      (return-void)
     )
   )";
@@ -189,8 +189,8 @@ TEST_F(RemoveNullcheckStringArgTest, simpleStatic) {
      (const-string "args")
      (move-result-pseudo-object v2)
      (const v3 1)
-     (invoke-static (v1 v3) "Lkotlin/jvm/internal/Intrinsics;.$WrCheckParameter:(Ljava/lang/Object;I)V")
-     (invoke-static (v1) "Lkotlin/jvm/internal/Intrinsics;.$WrCheckExpression:(Ljava/lang/Object;)V")
+     (invoke-static (v1 v3) "Lkotlin/jvm/internal/Intrinsics;.$WrCheckParameter_V1_3:(Ljava/lang/Object;I)V")
+     (invoke-static (v1) "Lkotlin/jvm/internal/Intrinsics;.$WrCheckExpression_V1_3:(Ljava/lang/Object;)V")
      (return-void)
     )
   )";
