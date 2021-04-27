@@ -142,23 +142,36 @@ RootAndDynamic MultipleCalleeBaseStrategy::get_roots() const {
       add_root_method_overrides(overiden_method);
     }
   });
-  // Gather methods that override or implement external methods as well.
+  // Gather methods that override or implement external or native methods
+  // as well.
   for (auto& pair : m_method_override_graph.nodes()) {
     auto method = pair.first;
-    if (!method->is_external()) {
-      continue;
-    }
-    dynamic_methods.emplace(method);
-    const auto& overriding_methods =
-        mog::get_overriding_methods(m_method_override_graph, method);
-    for (auto* overriding : overriding_methods) {
-      if (overriding->is_external()) {
-        dynamic_methods.emplace(method);
+    if (method->is_external()) {
+      dynamic_methods.emplace(method);
+      const auto& overriding_methods =
+          mog::get_overriding_methods(m_method_override_graph, method);
+      for (auto* overriding : overriding_methods) {
+        if (overriding->is_external()) {
+          dynamic_methods.emplace(overriding);
+        }
+        if (!overriding->is_external() && !emplaced_methods.count(overriding) &&
+            overriding->get_code()) {
+          roots.emplace_back(overriding);
+          emplaced_methods.emplace(overriding);
+        }
       }
-      if (!overriding->is_external() && !emplaced_methods.count(overriding) &&
-          overriding->get_code()) {
-        roots.emplace_back(overriding);
-        emplaced_methods.emplace(overriding);
+    }
+    if (is_native(method)) {
+      dynamic_methods.emplace(method);
+      const auto& overriding_methods =
+          mog::get_overriding_methods(m_method_override_graph, method, true);
+      for (auto m : overriding_methods) {
+        dynamic_methods.emplace(m);
+      }
+      const auto& overiden_methods =
+          mog::get_overridden_methods(m_method_override_graph, method, true);
+      for (auto m : overiden_methods) {
+        dynamic_methods.emplace(m);
       }
     }
   }

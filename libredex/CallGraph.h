@@ -171,6 +171,7 @@ class Graph final {
   // Like external methods with internal overrides, they might have external
   // implementation that we don't know about. Or methods that might have
   // dynamically added implementations, created via Proxy.newProxyInstance.
+  // Or methods with native implementation.
   // We are only collecting those for multiple callee callgraph because we
   // need to avoid propagating method return values for those true virtual
   // methods.
