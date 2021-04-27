@@ -291,8 +291,9 @@ void record_code_reference(
         } else if (insn->has_field()) {
           DexField* field = resolve_field(insn->get_field());
           if (field != nullptr) {
-            if (field->get_class() != insn->get_field()->get_class() ||
-                !can_rename(field)) {
+            bool resolve_differently =
+                field->get_class() != insn->get_field()->get_class();
+            if (resolve_differently || !can_rename(field)) {
               // If a field reference need to be resolved, don't merge as
               // renaming it might cause problems.
               // If a field that can't be renamed is being referenced. Don't
@@ -301,6 +302,10 @@ void record_code_reference(
               // TODO(suree404): can improve.
               record_dont_merge_state(field->get_class(), kConditional,
                                       dont_merge_status);
+              if (resolve_differently) {
+                record_dont_merge_state(insn->get_field()->get_class(),
+                                        kConditional, dont_merge_status);
+              }
             }
           } else {
             record_dont_merge_state(insn->get_field()->get_class(),
