@@ -13,123 +13,390 @@
 #include "ControlFlow.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
+#include "Lazy.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "ReachingDefinitions.h"
 #include "Resolver.h"
 #include "ScopedCFG.h"
+#include "TypeInference.h"
 #include "Walkers.h"
 
-namespace field_op_tracker {
+namespace {
 
-FieldWrites analyze_writes(const Scope& scope) {
-  ConcurrentSet<DexField*> concurrent_non_zero_written_fields;
-  ConcurrentSet<DexField*> concurrent_non_vestigial_objects_written_fields;
-  walk::parallel::code(scope, [&](const DexMethod*, const IRCode& code) {
-    auto& cfg = code.cfg();
+// How a value can escape
+struct Escapes {
+  // Fields in which the value was stored
+  std::unordered_set<DexField*> put_value_fields;
+  // Constructors to which the value was passed as the first argument
+  std::unordered_set<DexMethod*> invoked_ctors;
+  // Value may have a (relevant) lifetime and escaped otherwise, or an object /
+  // array in which a field / array element with a (relevant) lifetime type was
+  // written to with a non-zero value.
+  bool other{false};
+};
 
-    // First, we'll build up some information about which values (represented by
-    // instructions that create them) escape by being stored in fields, or,
-    // represented as the nullptr field, escape otherwise.
+// Escape information for instructions define a value
+using InstructionEscapes = std::unordered_map<IRInstruction*, Escapes>;
+
+class WritesAnalyzer {
+ private:
+  const field_op_tracker::TypeLifetimes* m_type_lifetimes;
+  const field_op_tracker::FieldStatsMap& m_field_stats;
+  std::unordered_map<const DexMethod*, InstructionEscapes>
+      m_method_insn_escapes;
+  // We track the set of actively analyzed methods to find recursive cases.
+  std::unordered_set<const DexMethod*> m_active;
+
+  bool has_lifetime(const DexType* t) {
+    return (!m_type_lifetimes && type::is_object(t)) ||
+           m_type_lifetimes->has_lifetime(t);
+  }
+
+  // Compute information about which values (represented by
+  // instructions that create them) escape by being stored in fields, array
+  // elements, passed as the first argument to a constructor, or escape
+  // otherwise. We also record writing a non-zero value to a field / array
+  // element with a (relevant) lifetime type as an "other" escape.
+  InstructionEscapes compute_insn_escapes(const DexMethod* method) {
+    auto& cfg = method->get_code()->cfg();
+    Lazy<type_inference::TypeInference> type_inference([&cfg, method] {
+      auto res = std::make_unique<type_inference::TypeInference>(cfg);
+      res->run(method);
+      return res;
+    });
+
     reaching_defs::MoveAwareFixpointIterator fp_iter(cfg);
     fp_iter.run({});
-    std::unordered_map<IRInstruction*, std::unordered_set<DexField*>>
-        escaped_non_zero_values;
+    InstructionEscapes insn_escapes;
+    auto escape = [&insn_escapes](
+                      const sparta::PatriciaTreeSet<IRInstruction*>& defs,
+                      DexField* put_value_field, DexMethod* invoked_ctor,
+                      bool other) {
+      always_assert_log(
+          !!put_value_field + !!invoked_ctor + other == 1,
+          "One and only one of put_value_field, invoked_ctor, other is set.");
+      for (auto* def : defs) {
+        auto& escapes = insn_escapes[def];
+        if (invoked_ctor) {
+          escapes.invoked_ctors.insert(invoked_ctor);
+        } else if (put_value_field) {
+          escapes.put_value_fields.insert(put_value_field);
+        } else {
+          escapes.other = true;
+        }
+      }
+    };
     for (auto* block : cfg.blocks()) {
       auto env = fp_iter.get_entry_state_at(block);
       if (env.is_bottom()) {
         continue;
       }
+      auto get_non_zero_defs = [&env](reg_t reg) {
+        const auto& src_defs = env.get(reg);
+        always_assert(!src_defs.is_bottom());
+        always_assert(!src_defs.is_top());
+        auto copy = src_defs.elements();
+        for (auto* def : src_defs.elements()) {
+          if ((def->opcode() == OPCODE_CONST ||
+               def->opcode() == OPCODE_CONST_WIDE) &&
+              def->get_literal() == 0) {
+            copy.remove(def);
+          }
+        }
+        return copy;
+      };
       auto insns = InstructionIterable(block);
       for (auto it = insns.begin(); it != insns.end();
            fp_iter.analyze_instruction(it++->insn, &env)) {
         auto* insn = it->insn;
+        // Helper function to check if the formal type and the inferred type
+        // have a (relevant) lifetime.
+        auto has_lifetime =
+            [this, &type_inference, insn](
+                reg_t reg, const boost::optional<const DexType*>& formal_type) {
+              if (formal_type && !this->has_lifetime(*formal_type)) {
+                // If the formal type has no lifetime, then we can stop here.
+                // More precise type information of the value actually flowing
+                // in, i.e. a subtype, cannot change this.
+                return false;
+              }
+              const auto& type_env =
+                  type_inference->get_type_environments().at(insn);
+              const auto& inferred_type = type_env.get_dex_type(reg);
+              if (inferred_type && !this->has_lifetime(*inferred_type)) {
+                return false;
+              }
+              return true;
+            };
         auto op = insn->opcode();
-        if (opcode::is_a_move(op) || opcode::is_an_iget(op) ||
-            opcode::is_an_aget(op) || opcode::is_a_conditional_branch(op) ||
-            opcode::is_a_monitor(op) || op == OPCODE_ARRAY_LENGTH ||
-            op == OPCODE_CHECK_CAST || op == OPCODE_INSTANCE_OF ||
-            op == OPCODE_FILL_ARRAY_DATA) {
-          // these operations don't let an object/array reference escape
-          continue;
-        }
-        for (size_t src_idx = 0; src_idx < insn->srcs_size(); src_idx++) {
-          DexField* put_value_field{nullptr};
-          if (opcode::is_an_iput(op) || opcode::is_an_sput(op)) {
-            if (src_idx == 1) {
-              // writing to a field of an object doesn't let the object
-              // reference escape
-              continue;
-            }
-            put_value_field = resolve_field(insn->get_field());
-          }
-          if (opcode::is_an_aput(op) && op != OPCODE_APUT_OBJECT &&
-              src_idx == 1) {
-            // writing to an element of an array doesn't let the array reference
-            // escape; however, for aput-object, we'll register an escape of the
-            // array definition, so that we'll prevent that array from being
-            // regarded as vestigial
+        if (opcode::is_an_iput(op) || opcode::is_an_sput(op)) {
+          auto non_zero_value_defs = get_non_zero_defs(insn->src(0));
+          if (non_zero_value_defs.empty()) {
             continue;
           }
-          auto src = insn->src(src_idx);
-          const auto& src_defs = env.get(src);
-          always_assert(!src_defs.is_bottom());
-          always_assert(!src_defs.is_top());
-          for (auto* def : src_defs.elements()) {
-            if ((def->opcode() == OPCODE_CONST ||
-                 def->opcode() == OPCODE_CONST_WIDE) &&
-                def->get_literal() == 0) {
-              continue;
-            }
-            escaped_non_zero_values[def].insert(put_value_field);
+          DexField* field;
+          bool other = !(field = resolve_field(insn->get_field()));
+          escape(non_zero_value_defs, field, nullptr, other);
+          if (op != OPCODE_IPUT_OBJECT ||
+              !has_lifetime(insn->src(0), insn->get_field()->get_type())) {
+            continue;
           }
-        }
-      }
-    }
-
-    // Next, we'll determine which fields are being written to with
-    // (potentially) non-zero values, and which fields are being written to with
-    // non-vestigial object. Right now, we only consider as vestigial objects
-    // newly created arrays which do not contain any other objects and
-    // which escape to a single field.
-    // TODO: Also consider OPCODE_NEW_INSTANCE when the lifetime of the instance
-    // does not matter. Note that all newly created objects would go through a
-    // constructor call, which would need further escape analysis.
-    std::unordered_set<DexField*> non_zero_written_fields;
-    std::unordered_set<DexField*> non_vestigial_objects_written_fields;
-    for (auto& p : escaped_non_zero_values) {
-      auto& fields = p.second;
-      auto insn = p.first;
-      auto op = insn->opcode();
-      auto is_vestigial_object =
-          fields.size() == 1 && !fields.count(nullptr) &&
-          (op == OPCODE_NEW_ARRAY ||
-           (op == OPCODE_FILLED_NEW_ARRAY &&
-            (!type::is_object(
-                 type::get_array_component_type(insn->get_type())) ||
-             insn->srcs_size() == 0)));
-      for (auto field : fields) {
-        if (field == nullptr) {
+          if (opcode::is_an_iput(op)) {
+            // All (non-zero) definitions whose fields are written to are
+            // considered to have escaped to ensure that an object that may be
+            // relevant for lifetime purposes is not discarded.
+            auto non_zero_obj_defs = get_non_zero_defs(insn->src(1));
+            escape(non_zero_obj_defs, nullptr, nullptr, true);
+          }
           continue;
         }
-        non_zero_written_fields.insert(field);
-        if (!is_vestigial_object && type::is_object(field->get_type())) {
-          non_vestigial_objects_written_fields.insert(field);
+        if (op == OPCODE_APUT_OBJECT) {
+          auto non_zero_value_defs = get_non_zero_defs(insn->src(0));
+          if (non_zero_value_defs.empty()) {
+            continue;
+          }
+          const auto& type_env =
+              type_inference->get_type_environments().at(insn);
+          const auto& array_type = type_env.get_dex_type(insn->src(1));
+          boost::optional<const DexType*> component_type;
+          if (array_type && type::is_array(*array_type)) {
+            component_type = type::get_array_component_type(*array_type);
+          }
+          if (!has_lifetime(insn->src(0), component_type)) {
+            continue;
+          }
+          escape(non_zero_value_defs, nullptr, nullptr, true);
+          // All (non-zero) definitions whose fields are written to are
+          // considered to have escaped to ensure that an object that may be
+          // relevant for lifetime purposes is not discarded.
+          auto non_zero_obj_defs = get_non_zero_defs(insn->src(1));
+          escape(non_zero_obj_defs, nullptr, nullptr, true);
+          continue;
+        }
+        if (insn->has_method()) {
+          const auto& type_list =
+              insn->get_method()->get_proto()->get_args()->get_type_list();
+          bool is_instance = op != OPCODE_INVOKE_STATIC;
+          for (size_t src_idx = 0; src_idx < insn->srcs_size(); src_idx++) {
+            auto non_zero_value_defs = get_non_zero_defs(insn->src(src_idx));
+            if (non_zero_value_defs.empty()) {
+              continue;
+            }
+            DexType* arg_type;
+            if (src_idx == 0 && is_instance) {
+              arg_type = insn->get_method()->get_class();
+            } else {
+              arg_type = type_list.at(src_idx - is_instance);
+            }
+            if (!has_lifetime(insn->src(src_idx), arg_type)) {
+              continue;
+            }
+            DexMethod* invoked_ctor{nullptr};
+            bool other = src_idx != 0 || op != OPCODE_INVOKE_DIRECT ||
+                         !method::is_init(insn->get_method()) ||
+                         !(invoked_ctor = resolve_method(insn->get_method(),
+                                                         MethodSearch::Direct));
+            escape(non_zero_value_defs, nullptr, invoked_ctor, other);
+          }
+          continue;
+        }
+        if (op == OPCODE_RETURN_OBJECT) {
+          auto non_zero_value_defs = get_non_zero_defs(insn->src(0));
+          if (non_zero_value_defs.empty()) {
+            continue;
+          }
+          auto rtype = method->get_proto()->get_rtype();
+          if (!has_lifetime(insn->src(0), rtype)) {
+            continue;
+          }
+          escape(non_zero_value_defs, nullptr, nullptr, true);
+          continue;
         }
       }
     }
-    for (auto f : non_zero_written_fields) {
-      concurrent_non_zero_written_fields.insert(f);
+    return insn_escapes;
+  }
+
+  // Whether a constructor can store any values with (relevant) lifetimes
+  bool may_capture(const DexMethodRef* method) {
+    always_assert(method::is_init(method));
+    auto type = method->get_class();
+    if (type == type::java_lang_Object()) {
+      return false;
     }
-    for (auto f : non_vestigial_objects_written_fields) {
-      concurrent_non_vestigial_objects_written_fields.insert(f);
+    if (method->is_external()) {
+      return true;
     }
+    auto cls = type_class(type);
+    if (cls == nullptr || cls->is_external()) {
+      return true;
+    }
+    std::unordered_set<DexField*> non_vestigial_objects_written_fields;
+    std::unordered_set<DexMethod*> invoked_base_ctors;
+    bool other_escapes{false};
+    if (!get_writes(method->as_def(),
+                    /* non_zero_written_fields */ nullptr,
+                    &non_vestigial_objects_written_fields, &invoked_base_ctors,
+                    &other_escapes)) {
+      // mutual recursion across constructor invocations, which can happen when
+      // a constructor creates a new object of some other type
+      return true;
+    }
+    if (other_escapes || !non_vestigial_objects_written_fields.empty() ||
+        (std::find_if(invoked_base_ctors.begin(), invoked_base_ctors.end(),
+                      [this](DexMethod* invoked_base_ctor) {
+                        return may_capture(invoked_base_ctor);
+                      }) != invoked_base_ctors.end())) {
+      return true;
+    }
+    return false;
+  }
+
+  // Whether a newly created object may capture any values with (relevant)
+  // lifetimes, or itself, as part of its creation
+  bool may_capture(const IRInstruction* insn,
+                   const std::unordered_set<DexMethod*>& invoked_ctors) {
+    switch (insn->opcode()) {
+    case OPCODE_NEW_ARRAY:
+      return false;
+    case OPCODE_FILLED_NEW_ARRAY: {
+      auto component_type = type::get_array_component_type(insn->get_type());
+      return insn->srcs_size() > 0 && has_lifetime(component_type);
+    }
+    case OPCODE_NEW_INSTANCE:
+      always_assert(!invoked_ctors.empty());
+      for (auto method : invoked_ctors) {
+        always_assert(method->get_class() == insn->get_type());
+        if (may_capture(method)) {
+          return true;
+        }
+      }
+      return false;
+    default:
+      not_reached();
+    }
+  }
+
+ public:
+  explicit WritesAnalyzer(const Scope& scope,
+                          const field_op_tracker::FieldStatsMap& field_stats,
+                          const field_op_tracker::TypeLifetimes* type_lifetimes)
+      : m_type_lifetimes(type_lifetimes), m_field_stats(field_stats) {
+    walk::code(scope, [this](const DexMethod* method, const IRCode&) {
+      m_method_insn_escapes[method];
+    });
+    walk::parallel::code(scope, [&](const DexMethod* method, const IRCode&) {
+      m_method_insn_escapes.at(method) = compute_insn_escapes(method);
+    });
+  }
+
+  bool any_read(const std::unordered_set<DexField*>& fields) {
+    for (auto field : fields) {
+      if (m_field_stats.at(field).reads != 0) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // Result indicates whether we ran into a recursive case.
+  bool get_writes(
+      const DexMethod* method,
+      std::unordered_set<DexField*>* non_zero_written_fields,
+      std::unordered_set<DexField*>* non_vestigial_objects_written_fields,
+      std::unordered_set<DexMethod*>* invoked_base_ctors,
+      bool* other_escapes) {
+    if (!m_active.insert(method).second) {
+      return false;
+    }
+    auto& insn_escapes = m_method_insn_escapes.at(method);
+    auto init_load_param_this =
+        method::is_init(method)
+            ? method->get_code()->cfg().get_param_instructions().front().insn
+            : nullptr;
+
+    // We'll determine which fields are being written to with
+    // (potentially) non-zero values, and which fields are being written to with
+    // an non-vestigial value. Right now, we only consider as vestigial values
+    // newly created objects and arrays which escape only to unread fields and
+    // contain no non-vestigial objects.
+    for (auto& p : insn_escapes) {
+      auto insn = p.first;
+      auto& escapes = p.second;
+      auto is_vestigial_object =
+          opcode::is_a_new(insn->opcode()) &&
+          !(any_read(escapes.put_value_fields) || escapes.other) &&
+          !(has_lifetime(insn->get_type()) &&
+            may_capture(insn, escapes.invoked_ctors));
+      for (auto field : escapes.put_value_fields) {
+        always_assert(field != nullptr);
+        if (non_zero_written_fields) {
+          non_zero_written_fields->insert(field);
+        }
+        if (!is_vestigial_object && has_lifetime(field->get_type())) {
+          non_vestigial_objects_written_fields->insert(field);
+        }
+      }
+      if (!escapes.invoked_ctors.empty() && invoked_base_ctors &&
+          insn == init_load_param_this) {
+        invoked_base_ctors->insert(escapes.invoked_ctors.begin(),
+                                   escapes.invoked_ctors.end());
+      }
+      if (other_escapes && escapes.other) {
+        *other_escapes = true;
+      }
+    }
+    m_active.erase(method);
+    return true;
+  }
+};
+
+} // namespace
+
+namespace field_op_tracker {
+
+TypeLifetimes::TypeLifetimes()
+    : m_ignored_types({type::java_lang_String(), type::java_lang_Class(),
+                       type::java_lang_Boolean(), type::java_lang_Byte(),
+                       type::java_lang_Short(), type::java_lang_Character(),
+                       type::java_lang_Integer(), type::java_lang_Long(),
+                       type::java_lang_Float(), type::java_lang_Double()}),
+      m_java_lang_Enum(type::java_lang_Enum()) {}
+
+bool TypeLifetimes::has_lifetime(const DexType* t) const {
+  // Fields of primitive types can never hold on to references
+  if (type::is_primitive(t)) {
+    return false;
+  }
+
+  // Nobody should ever rely on the lifetime of strings, classes, boxed
+  // values, or enum values
+  if (m_ignored_types.count(t)) {
+    return false;
+  }
+  if (type::is_subclass(m_java_lang_Enum, t)) {
+    return false;
+  }
+
+  return true;
+}
+
+FieldWrites analyze_writes(const Scope& scope,
+                           const FieldStatsMap& field_stats,
+                           const TypeLifetimes* type_lifetimes) {
+  std::unordered_set<DexField*> non_zero_written_fields;
+  std::unordered_set<DexField*> non_vestigial_objects_written_fields;
+  WritesAnalyzer analyzer(scope, field_stats, type_lifetimes);
+  walk::code(scope, [&](const DexMethod* method, const IRCode&) {
+    auto success = analyzer.get_writes(method,
+                                       &non_zero_written_fields,
+                                       &non_vestigial_objects_written_fields,
+                                       /* invoked_base_ctors */ nullptr,
+                                       /* other_escapes */ nullptr);
+    always_assert(success);
   });
-  return FieldWrites{
-      std::unordered_set<DexField*>(concurrent_non_zero_written_fields.begin(),
-                                    concurrent_non_zero_written_fields.end()),
-      std::unordered_set<DexField*>(
-          concurrent_non_vestigial_objects_written_fields.begin(),
-          concurrent_non_vestigial_objects_written_fields.end())};
+  return FieldWrites{non_zero_written_fields,
+                     non_vestigial_objects_written_fields};
 };
 
 FieldStatsMap analyze(const Scope& scope) {

@@ -70,6 +70,11 @@ bool no_invoke_super(const DexMethod* method) {
   return true;
 }
 
+DexMethod* java_lang_Object_ctor() {
+  return static_cast<DexMethod*>(
+      DexMethod::make_method("Ljava/lang/Object;.<init>:()V"));
+}
+
 DexMethod* java_lang_Enum_ctor() {
   return static_cast<DexMethod*>(
       DexMethod::make_method("Ljava/lang/Enum;.<init>:(Ljava/lang/String;I)V"));

@@ -40,15 +40,7 @@ bool has_non_zero_static_value(DexField* field) {
 class RemoveUnusedFields final {
  public:
   RemoveUnusedFields(const Config& config, const Scope& scope)
-      : m_config(config),
-        m_scope(scope),
-        m_remove_unread_field_put_types_allowlist(
-            {type::java_lang_String(), type::java_lang_Class(),
-             type::java_lang_Boolean(), type::java_lang_Byte(),
-             type::java_lang_Short(), type::java_lang_Character(),
-             type::java_lang_Integer(), type::java_lang_Long(),
-             type::java_lang_Float(), type::java_lang_Double()}),
-        m_java_lang_Enum(type::java_lang_Enum()) {
+      : m_config(config), m_scope(scope) {
     analyze();
     transform();
   }
@@ -92,17 +84,9 @@ class RemoveUnusedFields final {
       return true;
     }
 
-    // Fields of primitive types can never hold on to references
-    if (type::is_primitive(t)) {
-      return true;
-    }
-
-    // Nobody should ever rely on the lifetime of strings, classes, boxed
-    // values, or enum values
-    if (m_remove_unread_field_put_types_allowlist.count(t)) {
-      return true;
-    }
-    if (type::is_subclass(m_java_lang_Enum, t)) {
+    // Certain types don't have lifetimes, or at least nobody should depend on
+    // them.
+    if (!m_type_lifetimes.has_lifetime(t)) {
       return true;
     }
 
@@ -126,7 +110,10 @@ class RemoveUnusedFields final {
     boost::optional<field_op_tracker::FieldWrites> field_writes;
     if (m_config.remove_zero_written_fields ||
         m_config.remove_vestigial_objects_written_fields) {
-      field_writes = field_op_tracker::analyze_writes(m_scope);
+      field_writes = field_op_tracker::analyze_writes(
+          m_scope, field_stats,
+          m_config.remove_vestigial_objects_written_fields ? &m_type_lifetimes
+                                                           : nullptr);
     }
 
     for (auto& pair : field_stats) {
@@ -184,7 +171,7 @@ class RemoveUnusedFields final {
         bool replace_insn = false;
         bool remove_insn = false;
         if (m_unread_fields.count(field)) {
-          if (m_config.unsafe || can_remove_unread_field_put(field)) {
+          if (can_remove_unread_field_put(field)) {
             always_assert(opcode::is_an_iput(insn->opcode()) ||
                           opcode::is_an_sput(insn->opcode()));
             TRACE(RMUF, 5, "Removing %s", SHOW(insn));
@@ -234,8 +221,7 @@ class RemoveUnusedFields final {
   std::unordered_set<const DexField*> m_unwritten_fields;
   std::unordered_set<const DexField*> m_zero_written_fields;
   std::unordered_set<const DexField*> m_vestigial_objects_written_fields;
-  std::unordered_set<DexType*> m_remove_unread_field_put_types_allowlist;
-  DexType* m_java_lang_Enum;
+  field_op_tracker::TypeLifetimes m_type_lifetimes;
   std::atomic<size_t> m_unremovable_unread_field_puts{0};
 };
 

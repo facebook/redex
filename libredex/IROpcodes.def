@@ -55,9 +55,12 @@ OP(MONITOR_EXIT      , monitor_exit      , Ref::None, "monitor-exit")
 OP(CHECK_CAST        , check_cast        , Ref::Type, "check-cast")
 OP(INSTANCE_OF       , instance_of       , Ref::Type, "instance-of")
 OP(ARRAY_LENGTH      , array_length      , Ref::None, "array-length")
+
+OPRANGE(a_new, OPCODE_NEW_INSTANCE, OPCODE_FILLED_NEW_ARRAY)
 OP(NEW_INSTANCE      , new_instance      , Ref::Type, "new-instance")
 OP(NEW_ARRAY         , new_array         , Ref::Type, "new-array")
 OP(FILLED_NEW_ARRAY  , filled_new_array  , Ref::Type, "filled-new-array")
+
 OP(FILL_ARRAY_DATA   , fill_array_data   , Ref::Data, "fill-array-data")
 OP(THROW             , throw             , Ref::None, "throw")
 OP(GOTO              , goto              , Ref::None, "goto")

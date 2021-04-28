@@ -93,6 +93,8 @@ inline bool signatures_match(const DexMethodRef* a, const DexMethodRef* b) {
   return a->get_name() == b->get_name() && a->get_proto() == b->get_proto();
 }
 
+DexMethod* java_lang_Object_ctor();
+
 DexMethod* java_lang_Enum_ctor();
 
 DexMethod* java_lang_Enum_ordinal();
