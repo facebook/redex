@@ -24,7 +24,7 @@ namespace {
 
 bool is_deliminator(char ch) {
   return isspace(ch) || ch == '{' || ch == '}' || ch == '(' || ch == ')' ||
-         ch == ',' || ch == ';' || ch == ':' || ch == EOF;
+         ch == ',' || ch == ';' || ch == ':' || ch == EOF || ch == '#';
 }
 
 // An identifier can refer to a class name, a field name or a package name.

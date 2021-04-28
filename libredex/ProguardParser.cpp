@@ -1021,11 +1021,13 @@ void parse(const boost::string_view& config,
       std::string spelling ATTRIBUTE_UNUSED = tok.data.to_string();
       ok = false;
     }
-    // std::cout << tok->show() << " at line " << tok->line << std::endl;
+    // std::cout << tok.show() << " at line " << tok.line << std::endl;
   }
   unsigned int parse_errors = 0;
   if (ok) {
     parse(tokens.begin(), tokens.end(), pg_config, &parse_errors, filename);
+  } else {
+    std::cerr << "Found unkown tokens in " << filename << "\n";
   }
 
   if (parse_errors == 0) {

@@ -51,7 +51,9 @@ TEST(ProguardLexerTest, assortment) {
       "-dontwarn\n"
       "-verbose -someothercommand\n"
       "class com.google.android.gms.measurement.AppMeasurementService\n"
-      "<init>(...);\n";
+      "<init>(...);\n"
+      "-keep class *#-keepnames class *\n"
+      "-dontobfuscate\n";
   std::vector<std::pair<unsigned, TokenType>> expected = {
       {1, TokenType::openCurlyBracket},
       {1, TokenType::closeCurlyBracket},
@@ -139,7 +141,11 @@ TEST(ProguardLexerTest, assortment) {
       {21, TokenType::identifier},
       {21, TokenType::closeBracket},
       {21, TokenType::semiColon},
-      {22, TokenType::eof_token},
+      {22, TokenType::keep},
+      {22, TokenType::classToken},
+      {22, TokenType::identifier},
+      {23, TokenType::dontobfuscate},
+      {24, TokenType::eof_token},
   };
   std::vector<Token> tokens = lex(s);
   EXPECT_EQ(tokens.size(), expected.size());
