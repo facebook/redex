@@ -174,4 +174,3 @@ bool RefChecker::check_field_internal(const DexField* field) const {
 bool RefChecker::is_in_primary_dex(const DexType* type) const {
   return m_xstores && m_xstores->is_in_primary_dex(type);
 }
-
