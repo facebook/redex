@@ -46,6 +46,11 @@ void FixpointIterator::analyze_node(call_graph::NodeId const& node,
   if (code == nullptr) {
     return;
   }
+  if (!code->cfg_built()) {
+    // This can happen when there are dangling references to methods that can
+    // never run.
+    return;
+  }
   auto& cfg = code->cfg();
   auto intra_cp = get_intraprocedural_analysis(method);
   const auto outgoing_edges =
