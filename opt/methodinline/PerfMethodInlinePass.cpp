@@ -7,6 +7,8 @@
 
 #include "PerfMethodInlinePass.h"
 
+#include <boost/optional.hpp>
+#include <limits>
 #include <queue>
 
 #include "ConfigFiles.h"
@@ -216,7 +218,7 @@ class InlineForSpeedDecisionTrees final : public InlineForSpeedBase {
  public:
   InlineForSpeedDecisionTrees(const MethodProfiles* method_profiles,
                               PGIForest&& forest,
-                              float min_hits)
+                              const boost::optional<float>& min_hits)
       : m_method_context_context(method_profiles),
         m_forest(std::move(forest)),
         m_min_hits(min_hits) {}
@@ -228,15 +230,16 @@ class InlineForSpeedDecisionTrees final : public InlineForSpeedBase {
     auto& callee_context = get_or_create(callee_method);
 
     // Explicitly check that the callee seems to ever be called with the caller.
-    if (m_min_hits >= 0) {
+    if (m_min_hits) {
+      auto min_hits = *m_min_hits;
       auto has_matching_hits = [&]() {
         for (size_t i = 0;
              i != m_method_context_context.m_interaction_list.size();
              ++i) {
           if (caller_context.m_hits[i] &&
-              *caller_context.m_hits[i] > m_min_hits &&
+              *caller_context.m_hits[i] >= min_hits &&
               callee_context.m_hits[i] &&
-              *callee_context.m_hits[i] > m_min_hits) {
+              *callee_context.m_hits[i] >= min_hits) {
             return true;
           }
         }
@@ -302,7 +305,7 @@ class InlineForSpeedDecisionTrees final : public InlineForSpeedBase {
   MethodContextContext m_method_context_context;
   std::unordered_map<const DexMethod*, MethodContext> m_cache;
   PGIForest m_forest;
-  float m_min_hits;
+  boost::optional<float> m_min_hits;
 };
 
 } // namespace
@@ -311,14 +314,16 @@ PerfMethodInlinePass::~PerfMethodInlinePass() {}
 
 struct PerfMethodInlinePass::Config {
   boost::optional<random_forest::PGIForest> forest = boost::none;
-  float min_hits = 0.0f;
+  boost::optional<float> min_hits = std::numeric_limits<float>::min();
 };
 
 void PerfMethodInlinePass::bind_config() {
   std::string random_forest_file;
   bind("random_forest_file", "", random_forest_file);
   float min_hits;
-  bind("min_hits", 0.0f, min_hits);
+  bind("min_hits", std::numeric_limits<float>::min(), min_hits,
+       "Threshold for caller and callee method call-count to consider "
+       "inlining. A negative value elides the check.");
   after_configuration([this, random_forest_file, min_hits]() {
     this->m_config = std::make_unique<PerfMethodInlinePass::Config>();
     if (!random_forest_file.empty()) {
@@ -337,7 +342,11 @@ void PerfMethodInlinePass::bind_config() {
               this->m_config->forest->size());
       }
     }
-    this->m_config->min_hits = min_hits;
+    if (min_hits < 0) {
+      this->m_config->min_hits = boost::none;
+    } else {
+      this->m_config->min_hits = min_hits;
+    }
   });
 }
 
