@@ -528,7 +528,8 @@ size_t MultiMethodInliner::compute_caller_nonrecursive_callees_by_stack_depth(
 
     stack_depth = std::max(stack_depth, callee_stack_depth + 1);
 
-    if (for_speed() && !m_inline_for_speed->should_inline(caller, callee)) {
+    if (for_speed() &&
+        !m_inline_for_speed->should_inline_generic(caller, callee)) {
       continue;
     }
 
@@ -858,6 +859,21 @@ void MultiMethodInliner::inline_inlinables(
     auto callee_method = inlinable.callee;
     auto callee = callee_method->get_code();
     auto callsite_insn = inlinable.insn;
+
+    if (for_speed()) {
+      // This is expensive, but with shrinking/non-cfg inlining prep there's no
+      // better way. Needs an explicit check to see whether the instruction has
+      // already been shrunk away.
+      auto callsite_it = caller->cfg().find_insn(callsite_insn);
+      if (!callsite_it.is_end()) {
+        auto* block = callsite_it.block();
+        if (!m_inline_for_speed->should_inline_callsite(caller_method,
+                                                        callee_method, block)) {
+          calls_not_inlinable++;
+          continue;
+        }
+      }
+    }
 
     std::vector<DexMethod*> make_static;
     bool caller_too_large;

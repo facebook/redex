@@ -180,6 +180,9 @@ struct RedexContext {
   keep_rules::AssumeReturnValue* get_return_value(DexMethod* method);
   void unset_return_value(DexMethod* method);
 
+  size_t num_sb_interaction_indices() const {
+    return m_sb_interaction_indices.size();
+  }
   size_t get_sb_interaction_index(const std::string& interaction) const {
     auto it = m_sb_interaction_indices.find(interaction);
     if (it == m_sb_interaction_indices.end()) {
