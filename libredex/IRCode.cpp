@@ -607,14 +607,26 @@ IRCode::IRCode(const IRCode& code) {
 void IRCode::cleanup_debug() { m_ir_list->cleanup_debug(); }
 
 void IRCode::build_cfg(bool editable) {
+  always_assert_log(
+      !editable || !m_cfg_serialized_with_custom_strategy,
+      "Cannot build edible CFG after being serialized with custom strategy. "
+      "Rebuilding CFG will can cause problems with basic block ordering.");
   clear_cfg();
   m_cfg = std::make_unique<cfg::ControlFlowGraph>(m_ir_list, m_registers_size,
                                                   editable);
 }
 
-void IRCode::clear_cfg() {
+void IRCode::clear_cfg(
+    const std::unique_ptr<cfg::LinearizationStrategy>& custom_strategy) {
   if (!m_cfg) {
     return;
+  }
+
+  if (custom_strategy) {
+    always_assert_log(
+        m_cfg->editable(),
+        "Cannot linearize non-editable CFG with custom strategy!");
+    m_cfg_serialized_with_custom_strategy = true;
   }
 
   if (m_cfg->editable()) {
@@ -623,7 +635,7 @@ void IRCode::clear_cfg() {
       m_ir_list->clear_and_dispose();
       delete m_ir_list;
     }
-    m_ir_list = m_cfg->linearize();
+    m_ir_list = m_cfg->linearize(custom_strategy);
   }
 
   m_cfg.reset();

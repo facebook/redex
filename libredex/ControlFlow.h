@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "IRCode.h"
+#include "WeakTopologicalOrdering.h"
 
 /**
  * A Control Flow Graph is a directed graph of Basic Blocks.
@@ -426,6 +427,15 @@ struct DominatorInfo {
   size_t postorder;
 };
 
+using BlockChain = std::vector<Block*>;
+
+struct LinearizationStrategy {
+  virtual ~LinearizationStrategy() {}
+  virtual std::vector<Block*> order(
+      cfg::ControlFlowGraph& cfg,
+      sparta::WeakTopologicalOrdering<BlockChain*> wto) = 0;
+};
+
 class ControlFlowGraph {
 
  public:
@@ -443,8 +453,10 @@ class ControlFlowGraph {
 
   /*
    * convert from the graph representation to a list of MethodItemEntries
+   * Using custom_strategy allows custom order linearization of the CFG.
    */
-  IRList* linearize();
+  IRList* linearize(
+      const std::unique_ptr<LinearizationStrategy>& custom_strategy = nullptr);
 
   // Return the blocks of this CFG in an arbitrary order.
   //
@@ -834,7 +846,8 @@ class ControlFlowGraph {
                                      Block* hint = nullptr) const;
 
   // choose an order of blocks for output
-  std::vector<Block*> order();
+  std::vector<Block*> order(
+      const std::unique_ptr<LinearizationStrategy>& custom_strategy = nullptr);
 
   /*
    * Find the first debug position preceding an instruction
@@ -879,11 +892,12 @@ class ControlFlowGraph {
   void remove_try_catch_markers();
 
   // helper functions
-  using Chain = std::vector<Block*>;
-  void build_chains(std::vector<std::unique_ptr<Chain>>* chains,
-                    std::unordered_map<Block*, Chain*>* block_to_chain);
+  void build_chains(std::vector<std::unique_ptr<BlockChain>>* chains,
+                    std::unordered_map<Block*, BlockChain*>* block_to_chain);
+  sparta::WeakTopologicalOrdering<BlockChain*> build_wto(
+      const std::unordered_map<Block*, BlockChain*>& block_to_chain);
   std::vector<Block*> wto_chains(
-      const std::unordered_map<Block*, Chain*>& block_to_chain);
+      sparta::WeakTopologicalOrdering<BlockChain*> wto);
 
   // Materialize target instructions and gotos corresponding to control-flow
   // edges. Used while turning back into a linear representation.

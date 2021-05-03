@@ -20,6 +20,7 @@
 
 namespace cfg {
 class ControlFlowGraph;
+struct LinearizationStrategy;
 } // namespace cfg
 
 // TODO(jezng): IRCode currently contains too many methods that shouldn't
@@ -43,6 +44,8 @@ class IRCode {
   std::unique_ptr<cfg::ControlFlowGraph> m_cfg;
 
   reg_t m_registers_size{0};
+  bool m_cfg_serialized_with_custom_strategy = false;
+
   // TODO(jezng): we shouldn't be storing / exposing the DexDebugItem... just
   // exposing the param names should be enough
   std::unique_ptr<DexDebugItem> m_dbg;
@@ -155,7 +158,9 @@ class IRCode {
   void build_cfg(bool editable = true);
 
   // if the cfg was editable, linearize it back into m_ir_list
-  void clear_cfg();
+  // custom_strategy controls the linearization of the CFG.
+  void clear_cfg(const std::unique_ptr<cfg::LinearizationStrategy>&
+                     custom_strategy = nullptr);
 
   bool cfg_built() const;
   bool editable_cfg_built() const;
