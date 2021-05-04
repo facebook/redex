@@ -1,7 +1,7 @@
 include $(top_srcdir)/Makefile.inc
 include $(top_srcdir)/test/Makefile.inc
 
-AM_CXXFLAGS = --std=gnu++14
+AM_CXXFLAGS = --std=gnu++17
 AM_CPPFLAGS = $(COMMON_INCLUDES) $(COMMON_TEST_INCLUDES)
 
 LDADD = $(COMMON_MOCK_TEST_LIBS)

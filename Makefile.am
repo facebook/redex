@@ -3,7 +3,7 @@ AUTOMAKE_OPTIONS = foreign
 SUBDIRS = . test
 
 ACLOCAL_AMFLAGS = -I m4
-AM_CXXFLAGS = --std=gnu++14 -O3 -Wall -g
+AM_CXXFLAGS = --std=gnu++17 -O3 -Wall -g
 
 include $(top_srcdir)/Makefile.inc
 

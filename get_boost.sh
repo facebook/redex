@@ -6,7 +6,7 @@
 
 set -e
 
-wget https://dl.bintray.com/boostorg/release/1.71.0/source/boost_1_71_0.tar.bz2
+wget https://boostorg.jfrog.io/artifactory/main/release/1.71.0/source/boost_1_71_0.tar.bz2
 tar --bzip2 -xf boost_1_71_0.tar.bz2
 cd boost_1_71_0
 ./bootstrap.sh --with-libraries=filesystem,iostreams,program_options,regex,system,thread
