@@ -21,10 +21,10 @@ brew install boost jsoncpp
 ```
 
 ### Ubuntu/Debian (64-bit)
-Base requirements are automake & libtool, GCC >= 5, Python >= 3.6 and Boost >= 1.71.0, as well as
+Base requirements are automake & libtool, GCC >= 7, Python >= 3.6 and Boost >= 1.71.0, as well as
 development versions of `iberty`, `jemalloc`, `jsoncpp`, `lz4`, `lzma`, and `zlib`.
-#### Ubuntu 16.04+, Debian 10(Buster)+
-The minimum supported Ubntu version is 16.04. The minimum supported Debian version is 10.
+#### Ubuntu 18.04+, Debian 10(Buster)+
+The minimum supported Ubuntu version is 18.04. The minimum supported Debian version is 10.
 
 A [convenience script](https://github.com/facebook/redex/blob/master/setup_oss_toolchain.sh)
 will set up the build environment. This may include downloading Python 3.6 and Boost 1.71.0
