@@ -12,6 +12,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #endif
+#include <cstdlib>
 #include <cstring>
 #include <iostream>
 #include <sstream>
@@ -84,15 +85,18 @@ void run_and_wait(const std::string& cmd) {
 } // namespace
 
 ScopedCommandProfiling::ScopedCommandProfiling(
-    boost::optional<std::string> cmd,
+    const std::string& cmd,
     boost::optional<std::string> shutdown_cmd,
-    boost::optional<std::string> post_cmd) {
-  if (cmd) {
-    m_shutdown_cmd = std::move(shutdown_cmd);
-    m_post_cmd = std::move(post_cmd);
-    fprintf(stderr, "Running profiler...\n");
-    m_profiler = spawn_profiler(*cmd);
+    boost::optional<std::string> post_cmd,
+    const char* log_str) {
+  m_shutdown_cmd = std::move(shutdown_cmd);
+  m_post_cmd = std::move(post_cmd);
+  if (log_str != nullptr) {
+    std::cerr << "Running profiler " << log_str << "..." << std::endl;
+  } else {
+    std::cerr << "Running profiler..." << std::endl;
   }
+  m_profiler = spawn_profiler(cmd);
 }
 
 ScopedCommandProfiling::~ScopedCommandProfiling() {
@@ -124,3 +128,40 @@ ScopedCommandProfiling& ScopedCommandProfiling::operator=(
 
   return *this;
 }
+
+boost::optional<ScopedCommandProfiling::ProfilerInfo>
+ScopedCommandProfiling::maybe_info_from_env(const std::string& prefix) {
+  auto get_env_str =
+      [](const std::string& key) -> boost::optional<std::string> {
+    auto val = getenv(key.c_str());
+    if (val == nullptr) {
+      return boost::none;
+    }
+    return std::string(val);
+  };
+
+  std::string profiler_key = prefix + "PROFILE_COMMAND";
+  if (getenv(profiler_key.c_str()) == nullptr) {
+    return boost::none;
+  }
+
+  return boost::make_optional<ProfilerInfo>(
+      ProfilerInfo{getenv(profiler_key.c_str()),
+                   get_env_str(prefix + "PROFILE_SHUTDOWN_COMMAND"),
+                   get_env_str(prefix + "PROFILE_POST_COMMAND")});
+}
+
+template <typename T>
+boost::optional<ScopedCommandProfiling> ScopedCommandProfiling::maybe_from_info(
+    const boost::optional<ProfilerInfo>& info, const T* log_str) {
+  if (!info) {
+    return boost::none;
+  }
+  return ScopedCommandProfiling(*info, log_str);
+}
+template boost::optional<ScopedCommandProfiling>
+ScopedCommandProfiling::maybe_from_info<>(
+    const boost::optional<ProfilerInfo>& info, const std::string* log_str);
+template boost::optional<ScopedCommandProfiling>
+ScopedCommandProfiling::maybe_from_info<>(
+    const boost::optional<ProfilerInfo>& info, const char* log_str);

@@ -17,12 +17,12 @@ devirtualization of methods: `AccessMarkingPass` devirtualizes methods not using
 calls.
 
 The [app's config file](config.md) can override `AccessMarkingPass` behavior.
-`finalize_methods`, `finalize_classes`, and `privatize_methods` default to
-`true`. `finalize_fields` defaults to `false`.
+`finalize_methods`, `finalize_unwritten_fields`, `finalize_classes`, and
+`privatize_methods` default to `true`. `finalize_written_fields` defaults to `false`.
 
 ```
 "AccessMarkingPass": {
-  "finalize_fields": true
+  "finalize_written_fields": true
 },
 ```
 
@@ -504,7 +504,7 @@ of loading.
 it rename anything in blocklist either by direct class name or as part of
 an excluded package.
 
-`RenameClassesPassV2` relies on the [app's config file](config.md), excluding 
+`RenameClassesPassV2` relies on the [app's config file](config.md), excluding
 of the class or hierarchy, or use of reflection.
 
 Logview and bug reports are configured to automatically undo this renaming.

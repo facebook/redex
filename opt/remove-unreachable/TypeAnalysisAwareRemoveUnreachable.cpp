@@ -224,7 +224,8 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects_with_type_anaysis(
     const IgnoreSets& ignore_sets,
     int* num_ignore_check_strings,
     bool record_reachability,
-    std::shared_ptr<type_analyzer::global::GlobalTypeAnalyzer> gta) {
+    std::shared_ptr<type_analyzer::global::GlobalTypeAnalyzer> gta,
+    bool /*unused*/) {
   Timer t("Marking");
   auto scope = build_class_scope(stores);
   // Rebuild uneditable CFGs.
@@ -279,16 +280,17 @@ TypeAnalysisAwareRemoveUnreachablePass::compute_reachable_objects(
     const DexStoresVector& stores,
     PassManager& pm,
     int* num_ignore_check_strings,
-    bool emit_graph_this_run) {
+    bool emit_graph_this_run,
+    bool remove_no_argument_constructors) {
   // Fetch analysis result
   auto analysis = pm.template get_preserved_analysis<GlobalTypeAnalysisPass>();
   always_assert(analysis);
   auto gta = analysis->get_result();
   always_assert(gta);
 
-  return compute_reachable_objects_with_type_anaysis(stores, m_ignore_sets,
-                                                     num_ignore_check_strings,
-                                                     emit_graph_this_run, gta);
+  return compute_reachable_objects_with_type_anaysis(
+      stores, m_ignore_sets, num_ignore_check_strings, emit_graph_this_run, gta,
+      remove_no_argument_constructors);
 }
 
 static TypeAnalysisAwareRemoveUnreachablePass s_pass;

@@ -65,6 +65,10 @@ class IntegerHolder {
   public static Integer f1 = Integer.valueOf(1);
   public static Integer f2 = Integer.valueOf(2);
 
+  static Integer cached_int() {
+    return Integer.valueOf(100);
+  }
+
   static Integer not_cached_int() {
     return Integer.valueOf(1000);
   }
@@ -240,6 +244,19 @@ public class IPConstantPropagationTest {
       obj = Integer.valueOf(2);
     }
     assertThat(obj.intValue()).isEqualTo(2);
+
+    // For cached integer, the equality check is evaluated and the conditonal branch is removed.
+    // PRECHECK: invoke-static {{.*}} redex.IntegerHolder.cached_int
+    // POSTCHECK-NOT: invoke-static {{.*}} redex.IntegerHolder.cached_int
+    f0 = IntegerHolder.cached_int();
+    f1 = IntegerHolder.cached_int();
+    // PRECHECK: if
+    // POSTCHECK-NOT: if
+    if (f0 != f1) {
+      // PRECHECK: const{{.*}} #int 100
+      // POSTCHECK-NOT: const{{.*}} #int 100
+      assertThat(f0.intValue()).isEqualTo(100);
+    }
 
     // For noncached integer, the equality check is not evaluated and the conditonal branches are not removed.
     // CHECK: invoke-static {{.*}} redex.IntegerHolder.not_cached_int

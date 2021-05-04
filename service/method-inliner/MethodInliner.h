@@ -18,7 +18,7 @@ namespace inliner {
  */
 void run_inliner(DexStoresVector& stores,
                  PassManager& mgr,
-                 ConfigFiles& inliner_config,
+                 ConfigFiles& conf,
                  bool intra_dex = false,
                  InlineForSpeed* inline_for_speed = nullptr);
 } // namespace inliner

@@ -29,7 +29,7 @@ Transform::Stats ConstantPropagation::run(DexMethod* method,
   {
     intraprocedural::FixpointIterator fp_iter(code->cfg(),
                                               ConstantPrimitiveAnalyzer());
-    fp_iter.run(ConstantEnvironment());
+    fp_iter.run({});
     constant_propagation::Transform tf(m_config.transform);
     local_stats = tf.apply_on_uneditable_cfg(
         fp_iter, WholeProgramState(), code, xstores, method->get_class());
@@ -41,7 +41,7 @@ Transform::Stats ConstantPropagation::run(DexMethod* method,
     {
       intraprocedural::FixpointIterator fp_iter(code->cfg(),
                                                 ConstantPrimitiveAnalyzer());
-      fp_iter.run(ConstantEnvironment());
+      fp_iter.run({});
       constant_propagation::Transform tf(m_config.transform);
       local_stats += tf.apply(fp_iter, code->cfg(), method, xstores);
     }

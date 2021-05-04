@@ -28,8 +28,9 @@ std::unique_ptr<const Graph> build_graph(const Scope&);
 /*
  * Returns all the methods that override :method. The set does *not* include
  * :method itself.
+ * While represented as a vector, the result is conceptually an unordered sets.
  */
-std::unordered_set<const DexMethod*> get_overriding_methods(
+std::vector<const DexMethod*> get_overriding_methods(
     const Graph& graph,
     const DexMethod* method,
     bool include_interfaces = false);
@@ -37,8 +38,9 @@ std::unordered_set<const DexMethod*> get_overriding_methods(
 /*
  * Returns all the methods that are overridden by :method. The set does *not*
  * include the :method itself.
+ * While represented as a vector, the result is conceptually an unordered sets.
  */
-std::unordered_set<const DexMethod*> get_overridden_methods(
+std::vector<const DexMethod*> get_overridden_methods(
     const Graph& graph,
     const DexMethod* method,
     bool include_interfaces = false);
@@ -56,11 +58,6 @@ bool is_true_virtual(const Graph& graph, const DexMethod* method);
  */
 std::unordered_set<DexMethod*> get_non_true_virtuals(const Graph& graph,
                                                      const Scope& scope);
-
-inline std::unordered_set<DexMethod*> get_non_true_virtuals(
-    const Scope& scope) {
-  return get_non_true_virtuals(*build_graph(scope), scope);
-}
 
 /*
  * The `children` edges point to the overriders / implementors of the current

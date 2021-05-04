@@ -9,6 +9,7 @@ import distutils.version
 import fnmatch
 import glob
 import json
+import logging
 import mmap
 import os
 import re
@@ -17,7 +18,7 @@ import subprocess
 import sys
 import tempfile
 import zipfile
-from os.path import basename, isfile, join
+from os.path import basename, dirname, isfile, join
 
 import pyredex.unpacker
 from pyredex.logger import log
@@ -65,18 +66,44 @@ def _find_biggest_build_tools_version(base):
     VERSION_REGEXP = r"\d+\.\d+\.\d+$"
     build_tools = join(base, "build-tools")
     version = max(
-        (d for d in os.listdir(build_tools) if re.match(VERSION_REGEXP, d)),
+        (
+            "0.0.1",
+            *[d for d in os.listdir(build_tools) if re.match(VERSION_REGEXP, d)],
+        ),
         key=distutils.version.StrictVersion,
     )
+    if version == "0.0.1":
+        return None
     return join(build_tools, version)
 
 
-def find_android_build_tools_by_env():
-    if "ANDROID_SDK" in os.environ:
-        return _find_biggest_build_tools_version(os.environ["ANDROID_SDK"])
-    if "ANDROID_HOME" in os.environ:
-        return _find_biggest_build_tools_version(os.environ["ANDROID_HOME"])
+def _filter_none_not_exists_ret_none(input):
+    if input is None:
+        return None
+    filtered = [p for p in input if p and os.path.exists(p)]
+    if filtered:
+        return filtered
     return None
+
+
+def find_android_path_by_env():
+    return _filter_none_not_exists_ret_none(
+        [
+            os.environ[key]
+            for key in ["ANDROID_SDK", "ANDROID_HOME"]
+            if key in os.environ
+        ]
+    )
+
+
+def find_android_build_tools_by_env():
+    base = find_android_path_by_env()
+    if not base:
+        return None
+
+    return _filter_none_not_exists_ret_none(
+        [_find_biggest_build_tools_version(p) for p in base]
+    )
 
 
 # If the script isn't run in a directory that buck recognizes, set this
@@ -84,22 +111,35 @@ def find_android_build_tools_by_env():
 root_dir_for_buck = None
 
 
-def find_android_build_tools_by_buck():
-    def load_android_buckconfig_values():
-        cmd = ["buck", "audit", "config", "android", "--json"]
-        global root_dir_for_buck
-        cwd = root_dir_for_buck if root_dir_for_buck is not None else os.getcwd()
-        # Set NO_BUCKD to minimize disruption to any currently running buckd
-        env = dict(os.environ)
-        env["NO_BUCKD"] = "1"
-        raw = subprocess.check_output(cmd, cwd=cwd, stderr=subprocess.DEVNULL, env=env)
-        return json.loads(raw)
+def _load_android_buckconfig_values():
+    cmd = ["buck", "audit", "config", "android", "--json"]
+    global root_dir_for_buck
+    cwd = root_dir_for_buck if root_dir_for_buck is not None else os.getcwd()
+    # Set NO_BUCKD to minimize disruption to any currently running buckd
+    env = dict(os.environ)
+    env["NO_BUCKD"] = "1"
+    raw = subprocess.check_output(cmd, cwd=cwd, stderr=subprocess.DEVNULL, env=env)
+    return json.loads(raw)
 
-    log("Computing SDK path from buck")
+
+def find_android_path_by_buck():
+    logging.debug("Computing SDK path from buck")
     try:
-        buckconfig = load_android_buckconfig_values()
+        buckconfig = _load_android_buckconfig_values()
     except BaseException as e:
-        log("Failed loading buckconfig: %s" % e)
+        logging.debug("Failed loading buckconfig: %s", e)
+        return None
+    if "android.sdk_path" not in buckconfig:
+        return None
+    return _filter_none_not_exists_ret_none([buckconfig.get("android.sdk_path")])
+
+
+def find_android_build_tools_by_buck():
+    logging.debug("Computing SDK path from buck")
+    try:
+        buckconfig = _load_android_buckconfig_values()
+    except BaseException as e:
+        logging.debug("Failed loading buckconfig: %s", e)
         return None
     if "android.sdk_path" not in buckconfig:
         return None
@@ -108,17 +148,61 @@ def find_android_build_tools_by_buck():
     if "android.build_tools_version" in buckconfig:
         version = buckconfig["android.build_tools_version"]
         assert isinstance(sdk_path, str)
-        return join(sdk_path, "build-tools", version)
+        return _filter_none_not_exists_ret_none(
+            [join(sdk_path, "build-tools", version)]
+        )
     else:
-        return _find_biggest_build_tools_version(sdk_path)
+        return _filter_none_not_exists_ret_none(
+            [_find_biggest_build_tools_version(sdk_path)]
+        )
 
 
 # This order is not necessarily equivalent to buck's. We prefer environment
 # variables as they are a lot cheaper.
-sdk_search_order = [
-    ("Env", find_android_build_tools_by_env),
-    ("Buck", find_android_build_tools_by_buck),
+_sdk_search_order = [
+    ("Env", find_android_path_by_env, find_android_build_tools_by_env),
+    ("Buck", find_android_path_by_buck, find_android_build_tools_by_buck),
 ]
+
+
+def add_android_sdk_path(path):
+    global _sdk_search_order
+    _sdk_search_order.insert(
+        0,
+        (
+            f"Path:{path}",
+            lambda: _filter_none_not_exists_ret_none(
+                [
+                    # For backwards compatibility
+                    *[
+                        dirname(dirname(p))
+                        for p in [path]
+                        if basename(dirname(p)) == "build-tools"
+                    ],
+                    path,
+                ]
+            ),
+            lambda: _filter_none_not_exists_ret_none(
+                [
+                    _find_biggest_build_tools_version(path),
+                    path,  # For backwards compatibility.
+                ]
+            ),
+        ),
+    )
+
+
+def get_android_sdk_path():
+    attempts = []
+    global _sdk_search_order
+    for name, base_dir_fn, _ in _sdk_search_order:
+        logging.debug("Attempting %s to find SDK path", name)
+        candidate = base_dir_fn()
+        if candidate:
+            return candidate[0]
+        attempts.append(name)
+
+    raise RuntimeError(f'Could not find SDK path, searched {", ".join(attempts)}')
 
 
 def find_android_build_tool(tool):
@@ -128,31 +212,34 @@ def find_android_build_tool(tool):
         try:
             if base_dir_fn is None:
                 return None
-            base_dir = base_dir_fn()
-            if not base_dir:
+            base_dirs = base_dir_fn()
+            if not base_dirs:
                 attempts.append(name + ":<Nothing>")
                 return None
-            attempts.append(name + ":" + base_dir)
-            candidate = join(base_dir, tool)
-            if os.path.exists(candidate):
-                return candidate
+            for base_dir in base_dirs:
+                candidate = join(base_dir, tool)
+                if os.path.exists(candidate):
+                    return candidate
+                attempts.append(name + ":" + base_dir)
         except BaseException:
             pass
         return None
 
-    global sdk_search_order
-    for name, base_dir_fn in sdk_search_order:
-        candidate = try_find(name, base_dir_fn)
+    global _sdk_search_order
+    for name, _, base_tools_fn in _sdk_search_order:
+        logging.debug("Attempting %s to find %s", name, tool)
+        candidate = try_find(name, base_tools_fn)
         if candidate:
             return candidate
 
     # By `PATH`.
+    logging.debug("Attempting PATH to find %s", tool)
     tool_path = shutil.which(tool)
     if tool_path is not None:
         return tool_path
     attempts.append("PATH")
 
-    raise RuntimeError("Could not find %s, searched %s" % (tool, ", ".join(attempts)))
+    raise RuntimeError(f'Could not find {tool}, searched {", ".join(attempts)}')
 
 
 def find_apksigner():
@@ -468,10 +555,10 @@ class LibraryManager:
             for i, lib_to_extract in enumerate(libs_to_extract):
                 extract_path = join(extracted_dir, "lib_{}.so".format(i))
                 if lib_to_extract.endswith(xz_lib_name):
-                    cmd = "xz -d --stdout {} > {}".format(lib_to_extract, extract_path)
+                    pyredex.unpacker.unpack_xz(lib_to_extract, extract_path)
                 else:
-                    cmd = "zstd -d {} -o {}".format(lib_to_extract, extract_path)
-                subprocess.check_call(cmd, shell=True)  # noqa: P204
+                    cmd = 'zstd -d "{}" -o "{}"'.format(lib_to_extract, extract_path)
+                    subprocess.check_call(cmd, shell=True)  # noqa: P204
 
     def __exit__(self, *args):
         # This dir was just here so we could scan it for classnames, but we don't

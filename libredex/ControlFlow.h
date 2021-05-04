@@ -642,6 +642,11 @@ class ControlFlowGraph {
   // edges.
   void remove_insn(const InstructionIterator& it);
 
+  void insert_before(const InstructionIterator& it,
+                     std::unique_ptr<DexPosition> pos);
+  void insert_after(const InstructionIterator& it,
+                    std::unique_ptr<DexPosition> pos);
+
   // Insertion Methods (insert_before/after and push_front/back):
   //  * These methods add instructions to the CFG
   //  * They do not add branch (if-*, switch-*) instructions to the cfg (use
@@ -1291,12 +1296,18 @@ class InstructionIterableImpl {
   InstructionIteratorImpl<is_const> begin() {
     return InstructionIteratorImpl<is_const>(m_cfg, true);
   }
+  InstructionIteratorImpl<true> begin() const {
+    return InstructionIteratorImpl<true>(m_cfg, true);
+  }
 
   InstructionIteratorImpl<is_const> end() {
     return InstructionIteratorImpl<is_const>(m_cfg, false);
   }
+  InstructionIteratorImpl<true> end() const {
+    return InstructionIteratorImpl<true>(m_cfg, false);
+  }
 
-  bool empty() { return begin() == end(); }
+  bool empty() const { return begin() == end(); }
 };
 
 template <class ForwardIt>

@@ -46,7 +46,8 @@ TEST(TraceMultithreadingTest, localThreadContext) {
   for (size_t idx = 0; idx < NUM_THREADS; ++idx) {
     threads.emplace_back(boost::thread([]() {
       for (int j = 0; j < NUM_ITERS; ++j) {
-        TraceContext context("thread context");
+        std::string context_str = "thread context";
+        TraceContext context(&context_str);
         TRACE(TIME, 1, "Test output count %d", j);
         TRACE(TIME, 1, "Test output count %d", j);
         TRACE(TIME, 1, "Test output count %d", j);

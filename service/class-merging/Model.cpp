@@ -159,7 +159,6 @@ const TypeSet Model::empty_set = TypeSet();
 
 Model::Model(const Scope& scope,
              const ConfigFiles& conf,
-             const DexStoresVector& stores,
              const ModelSpec& spec,
              const TypeSystem& type_system,
              const RefChecker& refchecker)
@@ -384,7 +383,7 @@ void Model::create_mergers_helper(
     const boost::optional<size_t>& max_mergeables_count,
     size_t min_mergeables_count) {
   InterdexSubgroupIdx subgroup_cnt = 0;
-  strategy::split_groups(
+  strategy::apply_grouping(
       group_values, min_mergeables_count, max_mergeables_count,
       [&](const std::vector<const DexType*>& group) {
         create_merger_helper(merger_type, shape, intf_set, group,
@@ -467,10 +466,10 @@ void Model::shape_model() {
   TRACE(CLMG, 4, "Excluded types total %ld", m_excluded.size());
 }
 
-void Model::shape_merger(const MergerType& merger,
+void Model::shape_merger(const MergerType& root,
                          MergerType::ShapeCollector& shapes) {
   // if the root has got no children there is nothing to "shape"
-  const auto& children = m_hierarchy.find(merger.type);
+  const auto& children = m_hierarchy.find(root.type);
   if (children == m_hierarchy.end()) {
     return;
   }
@@ -1199,14 +1198,13 @@ std::string Model::print(const DexType* type, int nest) const {
 
 Model Model::build_model(const Scope& scope,
                          const ConfigFiles& conf,
-                         const DexStoresVector& stores,
                          const ModelSpec& spec,
                          const TypeSystem& type_system,
                          const RefChecker& refchecker) {
   Timer t("build_model");
 
   TRACE(CLMG, 3, "Build Model for %s", to_string(spec).c_str());
-  Model model(scope, conf, stores, spec, type_system, refchecker);
+  Model model(scope, conf, spec, type_system, refchecker);
   TRACE(CLMG, 3, "Model:\n%s\nBuild Model done", model.print().c_str());
 
   TRACE(CLMG, 3, "Shape Model");

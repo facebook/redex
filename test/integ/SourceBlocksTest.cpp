@@ -130,9 +130,9 @@ TEST_F(SourceBlocksTest, source_blocks) {
     auto scope = build_class_scope(stores);
     conf.populate(scope);
 
-    MethodRefCache m_resolved_refs;
-    auto resolver = [&](DexMethodRef* method, MethodSearch search) {
-      return resolve_method(method, search, m_resolved_refs);
+    ConcurrentMethodRefCache m_concurrent_resolved_refs;
+    auto concurrent_resolver = [&](DexMethodRef* method, MethodSearch search) {
+      return resolve_method(method, search, m_concurrent_resolved_refs);
     };
 
     auto baz_ref = DexMethod::get_method(
@@ -142,7 +142,8 @@ TEST_F(SourceBlocksTest, source_blocks) {
     ASSERT_NE(baz, nullptr);
     std::unordered_set<DexMethod*> def_inlinables{baz};
 
-    MultiMethodInliner inliner(scope, stores, def_inlinables, resolver, conf,
+    MultiMethodInliner inliner(scope, stores, def_inlinables,
+                               concurrent_resolver, conf,
                                MultiMethodInlinerMode::IntraDex);
     inliner.inline_methods();
     ASSERT_EQ(inliner.get_inlined().size(), 1u);

@@ -94,6 +94,7 @@
 #include "Macros.h"
 #include "MethodProfiles.h"
 #include "MutablePriorityQueue.h"
+#include "OutlinedMethods.h"
 #include "OutlinerTypeAnalysis.h"
 #include "PartialCandidates.h"
 #include "PassManager.h"
@@ -666,6 +667,12 @@ static bool can_outline_insn(const RefChecker& ref_checker,
     auto rabbit_type =
         DexType::make_type("Lcom/facebook/redex/RabbitRuntimeHelper;");
     if (method->get_class() == rabbit_type) {
+      return false;
+    }
+    if (!PositionPatternSwitchManager::
+            CAN_OUTLINED_METHOD_INVOKE_OUTLINED_METHOD &&
+        insn->opcode() == OPCODE_INVOKE_STATIC && is_outlined_method(method)) {
+      // TODO: Remove this limitation imposed by symbolication infrastructure.
       return false;
     }
   } else if (insn->has_field()) {
@@ -1572,7 +1579,7 @@ class MethodNameGenerator {
     StableHash stable_hash = stable_hash_value(c);
     auto unique_method_id = m_unique_method_ids[stable_hash]++;
     m_max_unique_method_id = std::max(m_max_unique_method_id, unique_method_id);
-    std::string name("$outlined$");
+    std::string name(OUTLINED_METHOD_NAME_PREFIX);
     name += std::to_string(m_iteration) + "$";
     name += (boost::format("%08x") % stable_hash).str();
     if (unique_method_id > 0) {
@@ -1591,117 +1598,235 @@ class MethodNameGenerator {
   }
 };
 
+// This mimics what generate_debug_instructions(DexClass.cpp) does eventually:
+// ignoring positions that don't have a file.
+static DexPosition* skip_fileless(DexPosition* pos) {
+  for (; pos && !pos->file; pos = pos->parent) {
+  }
+  return pos;
+}
+
+using CallSitePatternIds = std::unordered_map<IRInstruction*, uint32_t>;
+
 class OutlinedMethodCreator {
  private:
+  const Config& m_config;
   PassManager& m_mgr;
   MethodNameGenerator& m_method_name_generator;
   size_t m_outlined_methods{0};
   size_t m_outlined_method_instructions{0};
   size_t m_outlined_method_nodes{0};
   size_t m_outlined_method_positions{0};
+  CallSitePatternIds m_call_site_pattern_ids;
+  std::unordered_map<DexMethod*, std::unique_ptr<DexPosition>>
+      m_unique_entry_positions;
 
-  // The "best" representative set of debug position is that which provides
-  // most detail, i.e. has the highest number of unique debug positions
-  using PositionMap = std::map<const CandidateInstruction*, DexPosition*>;
-  PositionMap get_best_outlined_dbg_positions(const Candidate& c,
-                                              const CandidateInfo& ci) {
-    PositionMap best_positions;
-    size_t best_unique_positions{0};
+  PositionPattern get_outlined_dbg_positions(const Candidate& c,
+                                             const CandidateMethodLocation& cml,
+                                             DexMethod* method) {
+    auto& cfg = method->get_code()->cfg();
+    auto root_insn_it = cfg.find_insn(cml.first_insn, cml.hint_block);
+    if (root_insn_it.is_end()) {
+      // This should not happen, as for each candidate we never produce
+      // overlapping locations in a method, and overlaps across selected
+      // candidates are prevented by meticulously removing remaining overlapping
+      // occurrences after processing a candidate.
+      not_reached();
+    }
+    PositionPattern positions;
+    auto root_dbg_pos = skip_fileless(cfg.get_dbg_pos(root_insn_it));
+    if (!root_dbg_pos) {
+      if (!m_config.full_dbg_positions) {
+        return positions;
+      }
+      // We'll provide a "synthetic entry position" as the root. Copies of that
+      // position will be made later when it's actually needed. For now, we just
+      // need to obtain a template instance, and we need to store it somewhere
+      // so that we don't leak it.
+      auto it = m_unique_entry_positions.find(method);
+      if (it == m_unique_entry_positions.end()) {
+        it = m_unique_entry_positions
+                 .emplace(method,
+                          DexPosition::make_synthetic_entry_position(method))
+                 .first;
+      }
+      root_dbg_pos = it->second.get();
+      TRACE(ISO, 6,
+            "[instruction sequence outliner] using synthetic position for "
+            "outlined code within %s",
+            SHOW(method));
+    }
+    std::function<void(DexPosition * dbg_pos, const CandidateNode& cn,
+                       big_blocks::Iterator it)>
+        walk;
+    walk = [&positions, &walk](DexPosition* dbg_pos,
+                               const CandidateNode& cn,
+                               big_blocks::Iterator it) {
+      cfg::Block* last_block{nullptr};
+      for (auto& csi : cn.insns) {
+        for (; it->type == MFLOW_POSITION || it->type == MFLOW_DEBUG ||
+               it->type == MFLOW_SOURCE_BLOCK;
+             it++) {
+          if (it->type == MFLOW_POSITION && it->pos->file) {
+            dbg_pos = it->pos.get();
+          }
+        }
+        always_assert(it->type == MFLOW_OPCODE);
+        always_assert(it->insn->opcode() == csi.core.opcode);
+        positions.push_back(dbg_pos);
+        last_block = it.block();
+        it++;
+      }
+      if (!cn.succs.empty()) {
+        always_assert(last_block != nullptr);
+        auto succs = get_ordered_goto_and_branch_succs(last_block);
+        always_assert(succs.size() == cn.succs.size());
+        for (size_t i = 0; i < succs.size(); i++) {
+          always_assert(normalize(succs.at(i)) == cn.succs.at(i).first);
+          auto& succ_cn = *cn.succs.at(i).second;
+          auto succ_block = succs.at(i)->target();
+          auto succ_it = big_blocks::Iterator(succ_block, succ_block->begin());
+          walk(dbg_pos, succ_cn, succ_it);
+        }
+      }
+    };
+    walk(root_dbg_pos, c.root,
+         big_blocks::Iterator(root_insn_it.block(), root_insn_it.unwrap(),
+                              /* ignore_throws */ true));
+    return positions;
+  }
+
+  // Gets the set of unique dbg-position patterns.
+  std::set<uint32_t> get_outlined_dbg_positions_patterns(
+      const Candidate& c, const CandidateInfo& ci) {
     std::vector<DexMethod*> ordered_methods;
     for (auto& p : ci.methods) {
       ordered_methods.push_back(p.first);
     }
+    // Sort methods to make sure we get deterministic pattern-ids.
     std::sort(ordered_methods.begin(), ordered_methods.end(),
               compare_dexmethods);
+    std::set<uint32_t> pattern_ids;
+    auto manager = g_redex->get_position_pattern_switch_manager();
     for (auto method : ordered_methods) {
-      auto& cfg = method->get_code()->cfg();
       auto& cmls = ci.methods.at(method);
       for (auto& cml : cmls) {
-        auto root_insn_it = cfg.find_insn(cml.first_insn, cml.hint_block);
-        if (root_insn_it.is_end()) {
-          // Shouldn't happen, but we are not going to fight that here.
-          continue;
+        auto positions = get_outlined_dbg_positions(c, cml, method);
+        auto pattern_id = manager->make_pattern(positions);
+        if (m_config.full_dbg_positions) {
+          m_call_site_pattern_ids.emplace(cml.first_insn, pattern_id);
         }
-        auto dbg_pos = cfg.get_dbg_pos(root_insn_it);
-        if (!dbg_pos) {
-          continue;
-        }
-        PositionMap positions;
-        std::unordered_set<DexPosition*> unique_positions;
-        std::function<void(DexPosition * dbg_pos, const CandidateNode& cn,
-                           big_blocks::Iterator it)>
-            walk;
-        walk = [&positions, &unique_positions, &walk](DexPosition* last_dbg_pos,
-                                                      const CandidateNode& cn,
-                                                      big_blocks::Iterator it) {
-          cfg::Block* last_block{nullptr};
-          for (auto& csi : cn.insns) {
-            auto next_dbg_pos{last_dbg_pos};
-            for (; it->type == MFLOW_POSITION || it->type == MFLOW_DEBUG ||
-                   it->type == MFLOW_SOURCE_BLOCK;
-                 it++) {
-              if (it->type == MFLOW_POSITION) {
-                next_dbg_pos = it->pos.get();
-              }
-            }
-            always_assert(it->type == MFLOW_OPCODE);
-            always_assert(it->insn->opcode() == csi.core.opcode);
-            positions.emplace(&csi, last_dbg_pos);
-            unique_positions.insert(last_dbg_pos);
-            last_dbg_pos = next_dbg_pos;
-            last_block = it.block();
-            it++;
-          }
-          if (!cn.succs.empty()) {
-            always_assert(last_block != nullptr);
-            auto succs = get_ordered_goto_and_branch_succs(last_block);
-            always_assert(succs.size() == cn.succs.size());
-            for (size_t i = 0; i < succs.size(); i++) {
-              always_assert(normalize(succs.at(i)) == cn.succs.at(i).first);
-              auto succ_cn = *cn.succs.at(i).second;
-              auto succ_block = succs.at(i)->target();
-              auto succ_it =
-                  big_blocks::Iterator(succ_block, succ_block->begin());
-              walk(last_dbg_pos, succ_cn, succ_it);
-            }
-          }
-        };
-        walk(dbg_pos, c.root,
-             big_blocks::Iterator(root_insn_it.block(), root_insn_it.unwrap(),
-                                  /* ignore_throws */ true));
-        if (unique_positions.size() > best_unique_positions) {
-          best_positions = positions;
-          best_unique_positions = unique_positions.size();
-          if (best_unique_positions == c.root.insns.size()) {
-            break;
-          }
-        }
+        pattern_ids.insert(pattern_id);
       }
     }
-    return best_positions;
+    always_assert(!pattern_ids.empty());
+    if (!m_config.full_dbg_positions) {
+      // Find the "best" representative set of debug position, that is the one
+      // which provides most detail, i.e. has the highest number of unique debug
+      // positions
+      uint32_t best_pattern_id = *pattern_ids.begin();
+      size_t best_unique_positions{0};
+      const auto& all_managed_patterns = manager->get_patterns();
+      for (auto pattern_id : pattern_ids) {
+        std::unordered_set<DexPosition*> unique_positions;
+        for (auto pos : all_managed_patterns.at(pattern_id)) {
+          unique_positions.insert(pos);
+        }
+        if (unique_positions.size() > best_unique_positions) {
+          best_pattern_id = pattern_id;
+          best_unique_positions = unique_positions.size();
+        }
+      }
+      return {best_pattern_id};
+    }
+    return pattern_ids;
   }
 
   // Construct an IRCode datastructure from a candidate.
-  std::unique_ptr<IRCode> get_outlined_code(DexMethod* outlined_method,
-                                            const Candidate& c,
-                                            const PositionMap& dbg_positions) {
+  std::unique_ptr<IRCode> get_outlined_code(
+      DexMethod* outlined_method,
+      const Candidate& c,
+      const std::set<uint32_t>& current_pattern_ids) {
+    auto manager = g_redex->get_position_pattern_switch_manager();
+    std::map<uint32_t, const PositionPattern*> current_patterns;
+    bool any_positions = false;
+    const auto& all_managed_patterns = manager->get_patterns();
+    for (auto pattern_id : current_pattern_ids) {
+      auto pattern = &all_managed_patterns.at(pattern_id);
+      current_patterns.emplace(pattern_id, pattern);
+      if (!pattern->empty()) {
+        any_positions = true;
+      }
+    }
     auto code = std::make_unique<IRCode>(outlined_method, c.temp_regs);
+    if (any_positions) {
+      code->set_debug_item(std::make_unique<DexDebugItem>());
+    }
     std::function<void(const CandidateNode& cn)> walk;
-    walk = [this, &code, &dbg_positions, &walk, &c](const CandidateNode& cn) {
+    std::unordered_map<DexPosition*, DexPosition*> cloned_dbg_positions;
+    std::function<DexPosition*(DexPosition*)> get_or_add_cloned_dbg_position;
+    get_or_add_cloned_dbg_position =
+        [this, &code, &get_or_add_cloned_dbg_position,
+         &cloned_dbg_positions](DexPosition* dbg_pos) -> DexPosition* {
+      always_assert(dbg_pos);
+      auto it = cloned_dbg_positions.find(dbg_pos);
+      if (it != cloned_dbg_positions.end()) {
+        return it->second;
+      }
+      auto cloned_dbg_pos = std::make_unique<DexPosition>(*dbg_pos);
+      if (dbg_pos->parent) {
+        cloned_dbg_pos->parent =
+            get_or_add_cloned_dbg_position(dbg_pos->parent);
+      }
+      auto cloned_dbg_pos_ptr = cloned_dbg_pos.get();
+      code->push_back(std::move(cloned_dbg_pos));
+      m_outlined_method_positions++;
+      cloned_dbg_positions.emplace(dbg_pos, cloned_dbg_pos_ptr);
+      return cloned_dbg_pos_ptr;
+    };
+    size_t dbg_positions_idx = 0;
+    walk = [this, manager, &code, &current_patterns, any_positions, &walk, &c,
+            &get_or_add_cloned_dbg_position,
+            &dbg_positions_idx](const CandidateNode& cn) {
       m_outlined_method_nodes++;
-      DexPosition* last_dbg_pos{nullptr};
+      std::unordered_map<uint32_t, DexPosition*> last_dbg_poses;
+      for (auto& p : current_patterns) {
+        last_dbg_poses.emplace(p.first, nullptr);
+      }
       for (auto& ci : cn.insns) {
-        auto it = dbg_positions.find(&ci);
-        if (it != dbg_positions.end()) {
-          DexPosition* dbg_pos = it->second;
-          if (dbg_pos != last_dbg_pos &&
-              !opcode::is_a_move_result_pseudo(ci.core.opcode)) {
-            auto cloned_dbg_pos = std::make_unique<DexPosition>(*dbg_pos);
-            cloned_dbg_pos->parent = nullptr;
-            code->push_back(std::move(cloned_dbg_pos));
-            last_dbg_pos = dbg_pos;
-            m_outlined_method_positions++;
+        if (!opcode::is_a_move_result_pseudo(ci.core.opcode) && any_positions) {
+          PositionSwitch position_switch;
+          bool any_changed = false;
+          for (auto& p : current_patterns) {
+            auto pattern_id = p.first;
+            auto& pattern = p.second;
+            DexPosition* dbg_pos =
+                pattern->empty() ? nullptr : pattern->at(dbg_positions_idx);
+            position_switch.push_back({pattern_id, dbg_pos});
+            auto& last_dbg_pos = last_dbg_poses.at(pattern_id);
+            if (dbg_pos != last_dbg_pos) {
+              always_assert(dbg_pos);
+              any_changed = true;
+              last_dbg_pos = dbg_pos;
+            }
           }
+          if (any_changed) {
+            if (current_patterns.size() == 1) {
+              get_or_add_cloned_dbg_position(position_switch.front().position);
+            } else {
+              always_assert(position_switch.size() >= 2);
+              auto switch_id = manager->make_switch(position_switch);
+              code->push_back(manager->make_switch_position(switch_id));
+            }
+          }
+        }
+        dbg_positions_idx++;
+        if (m_config.debug_make_crashing &&
+            opcode::is_an_iget(ci.core.opcode)) {
+          auto const_insn = new IRInstruction(OPCODE_CONST);
+          const_insn->set_literal(0);
+          const_insn->set_dest(ci.srcs.at(0));
+          code->push_back(const_insn);
         }
         auto insn = new IRInstruction(ci.core.opcode);
         insn->set_srcs_size(ci.srcs.size());
@@ -1729,11 +1854,10 @@ class OutlinedMethodCreator {
       m_outlined_method_instructions += cn.insns.size();
       if (cn.succs.empty()) {
         if (c.res_type != nullptr) {
-          IROpcode ret_opcode = type::is_object(c.res_type)
-                                    ? OPCODE_RETURN_OBJECT
-                                    : type::is_wide_type(c.res_type)
-                                          ? OPCODE_RETURN_WIDE
-                                          : OPCODE_RETURN;
+          IROpcode ret_opcode =
+              type::is_object(c.res_type)      ? OPCODE_RETURN_OBJECT
+              : type::is_wide_type(c.res_type) ? OPCODE_RETURN_WIDE
+                                               : OPCODE_RETURN;
           auto ret_insn = new IRInstruction(ret_opcode);
           ret_insn->set_src(0, *cn.res_reg);
           code->push_back(ret_insn);
@@ -1757,7 +1881,6 @@ class OutlinedMethodCreator {
           }
           walk(*p.second);
         }
-        return;
       }
     };
     walk(c.root);
@@ -1768,9 +1891,12 @@ class OutlinedMethodCreator {
   OutlinedMethodCreator() = delete;
   OutlinedMethodCreator(const OutlinedMethodCreator&) = delete;
   OutlinedMethodCreator& operator=(const OutlinedMethodCreator&) = delete;
-  explicit OutlinedMethodCreator(PassManager& mgr,
+  explicit OutlinedMethodCreator(const Config& config,
+                                 PassManager& mgr,
                                  MethodNameGenerator& method_name_generator)
-      : m_mgr(mgr), m_method_name_generator(method_name_generator) {}
+      : m_config(config),
+        m_mgr(mgr),
+        m_method_name_generator(method_name_generator) {}
 
   // Obtain outlined method for a candidate.
   DexMethod* create_outlined_method(const Candidate& c,
@@ -1787,9 +1913,10 @@ class OutlinedMethodCreator {
     auto outlined_method =
         DexMethod::make_method(const_cast<DexType*>(host_class), name, proto)
             ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
-    auto dbg_positions = get_best_outlined_dbg_positions(c, ci);
+    auto position_pattern_ids = get_outlined_dbg_positions_patterns(c, ci);
+    always_assert(!position_pattern_ids.empty());
     outlined_method->set_code(
-        get_outlined_code(outlined_method, c, dbg_positions));
+        get_outlined_code(outlined_method, c, position_pattern_ids));
     outlined_method->set_deobfuscated_name(show(outlined_method));
     outlined_method->rstate.set_dont_inline();
     outlined_method->rstate.set_outlined();
@@ -1800,6 +1927,15 @@ class OutlinedMethodCreator {
           SHOW(outlined_method), SHOW(outlined_method->get_code()));
     m_outlined_methods++;
     return outlined_method;
+  }
+
+  const CallSitePatternIds* get_call_site_pattern_ids() {
+    if (m_config.full_dbg_positions) {
+      return &m_call_site_pattern_ids;
+    } else {
+      always_assert(m_call_site_pattern_ids.empty());
+      return nullptr;
+    }
   }
 
   ~OutlinedMethodCreator() {
@@ -1820,6 +1956,8 @@ class OutlinedMethodCreator {
 // Rewrite instructions in existing method to invoke an outlined
 // method instead.
 static void rewrite_at_location(DexMethod* outlined_method,
+                                const CallSitePatternIds* call_site_pattern_ids,
+                                DexMethod* method,
                                 cfg::ControlFlowGraph& cfg,
                                 const Candidate& c,
                                 const CandidateMethodLocation& cml) {
@@ -1832,6 +1970,7 @@ static void rewrite_at_location(DexMethod* outlined_method,
     // occurrences after processing a candidate.
     not_reached();
   }
+  auto last_dbg_pos = skip_fileless(cfg.get_dbg_pos(first_insn_it));
   cfg::CFGMutation cfg_mutation(cfg);
   const auto first_arg_reg = c.temp_regs;
   boost::optional<reg_t> last_arg_reg;
@@ -1847,11 +1986,13 @@ static void rewrite_at_location(DexMethod* outlined_method,
       arg_regs.push_back(reg);
     }
   };
-  walk = [&walk, &gather_arg_regs, &cml, &cfg_mutation](
+  walk = [&walk, &last_dbg_pos, &gather_arg_regs, &cml, &cfg, &cfg_mutation](
              const CandidateNode& cn, big_blocks::InstructionIterator it) {
     cfg::Block* last_block{nullptr};
+    boost::optional<cfg::InstructionIterator> last_insn_it;
     for (size_t insn_idx = 0; insn_idx < cn.insns.size();
-         last_block = it.block(), insn_idx++, it++) {
+         last_block = it.block(), last_insn_it = it.unwrap(), insn_idx++,
+                it++) {
       auto& ci = cn.insns.at(insn_idx);
       always_assert(it->insn->opcode() == ci.core.opcode);
       for (size_t i = 0; i < ci.srcs.size(); i++) {
@@ -1861,10 +2002,17 @@ static void rewrite_at_location(DexMethod* outlined_method,
         cfg_mutation.remove(it.unwrap());
       }
     }
-    if (cn.succs.empty() && cn.res_reg) {
-      gather_arg_regs(*cn.res_reg, *cml.out_reg);
-    }
-    if (!cn.succs.empty()) {
+    if (cn.succs.empty()) {
+      if (cn.res_reg) {
+        gather_arg_regs(*cn.res_reg, *cml.out_reg);
+      }
+      if (last_insn_it) {
+        auto dbg_pos = skip_fileless(cfg.get_dbg_pos(*last_insn_it));
+        if (dbg_pos) {
+          last_dbg_pos = dbg_pos;
+        }
+      }
+    } else {
       always_assert(last_block != nullptr);
       auto succs = get_ordered_goto_and_branch_succs(last_block);
       always_assert(succs.size() == cn.succs.size());
@@ -1891,14 +2039,45 @@ static void rewrite_at_location(DexMethod* outlined_method,
     invoke_insn->set_src(i, arg_regs.at(i));
   }
   outlined_method_invocation.push_back(invoke_insn);
+  IRInstruction* move_result_insn = nullptr;
   if (c.res_type) {
-    IRInstruction* move_result_insn =
+    move_result_insn =
         new IRInstruction(opcode::move_result_for_invoke(outlined_method));
     move_result_insn->set_dest(*cml.out_reg);
     outlined_method_invocation.push_back(move_result_insn);
   }
   cfg_mutation.insert_before(first_insn_it, outlined_method_invocation);
   cfg_mutation.flush();
+
+  // TODO: Instead inserting directly in the cfg via find_insn, enhance the
+  // CFGMutation class to support inserting positions before and after
+  // instructions.
+  auto dbg_pos_insertion_it = cfg.find_insn(invoke_insn, first_insn_it.block());
+  std::unique_ptr<DexPosition> new_dbg_pos;
+  if (call_site_pattern_ids) {
+    auto manager = g_redex->get_position_pattern_switch_manager();
+    auto pattern_id = call_site_pattern_ids->at(cml.first_insn);
+    new_dbg_pos = manager->make_pattern_position(pattern_id);
+  } else {
+    new_dbg_pos = std::make_unique<DexPosition>(0);
+    new_dbg_pos->bind(DexString::make_string(show(outlined_method)),
+                      DexString::make_string("RedexGenerated"));
+  }
+  cfg.insert_before(dbg_pos_insertion_it, std::move(new_dbg_pos));
+  if (move_result_insn) {
+    dbg_pos_insertion_it =
+        cfg.find_insn(move_result_insn, first_insn_it.block());
+  }
+  if (last_dbg_pos) {
+    new_dbg_pos = std::make_unique<DexPosition>(*last_dbg_pos);
+  } else {
+    new_dbg_pos = DexPosition::make_synthetic_entry_position(method);
+    TRACE(
+        ISO, 6,
+        "[instruction sequence outliner] reverting to synthetic position in %s",
+        SHOW(method));
+  }
+  cfg.insert_after(dbg_pos_insertion_it, std::move(new_dbg_pos));
 };
 
 // Manages references and assigns numeric ids to classes
@@ -1924,17 +2103,14 @@ class DexState {
            size_t reserved_trefs,
            size_t reserved_mrefs)
       : m_mgr(mgr), m_dex(dex), m_dex_id(dex_id) {
-    std::vector<DexMethodRef*> method_refs;
-    std::vector<DexType*> type_refs;
+    std::unordered_set<DexMethodRef*> method_refs;
     for (auto cls : dex) {
       cls->gather_methods(method_refs);
-      cls->gather_types(type_refs);
+      cls->gather_types(m_type_refs);
     }
-    sort_unique(method_refs);
     m_method_refs_count = method_refs.size() + reserved_mrefs;
-    m_type_refs.insert(type_refs.begin(), type_refs.end());
 
-    walk::classes(dex, [& class_ids = m_class_ids](DexClass* cls) {
+    walk::classes(dex, [&class_ids = m_class_ids](DexClass* cls) {
       class_ids.emplace(cls->get_type(), class_ids.size());
     });
 
@@ -2256,6 +2432,8 @@ bool outline_candidate(
     }
   }
   dex_state->insert_type_refs(type_refs_to_insert);
+  auto call_site_pattern_ids =
+      outlined_method_creator->get_call_site_pattern_ids();
   for (auto& p : ci.methods) {
     auto method = p.first;
     auto& cfg = method->get_code()->cfg();
@@ -2267,7 +2445,8 @@ bool outline_candidate(
     TRACE(ISO, 7, "[invoke sequence outliner] before outlined %s from %s\n%s",
           SHOW(outlined_method), SHOW(method), SHOW(cfg));
     for (auto& cml : p.second) {
-      rewrite_at_location(outlined_method, cfg, c, cml);
+      rewrite_at_location(outlined_method, call_site_pattern_ids, method, cfg,
+                          c, cml);
     }
     TRACE(ISO, 6, "[invoke sequence outliner] after outlined %s from %s\n%s",
           SHOW(outlined_method), SHOW(method), SHOW(cfg));
@@ -2290,7 +2469,8 @@ static NewlyOutlinedMethods outline(
     ConcurrentMap<DexMethod*, std::shared_ptr<ab_test::ABExperimentContext>>*
         experiments_contexts) {
   MethodNameGenerator method_name_generator(mgr, iteration);
-  OutlinedMethodCreator outlined_method_creator(mgr, method_name_generator);
+  OutlinedMethodCreator outlined_method_creator(config, mgr,
+                                                method_name_generator);
   HostClassSelector host_class_selector(config, mgr, dex_state, min_sdk,
                                         iteration);
   // While we have a set of beneficial candidates, many are overlapping each
@@ -2766,7 +2946,17 @@ void InstructionSequenceOutliner::bind_config() {
   bind("outline_from_primary_dex", m_config.outline_from_primary_dex,
        m_config.outline_from_primary_dex,
        "Whether to outline from primary dex");
+  bind("full_dbg_positions", m_config.full_dbg_positions,
+       m_config.full_dbg_positions,
+       "Whether to encode all possible outlined positions");
+  bind("debug_make_crashing", m_config.debug_make_crashing,
+       m_config.debug_make_crashing,
+       "Make outlined code crash, to harvest crashing stack traces involving "
+       "outlined code.");
   after_configuration([=]() {
+    // TODO: Support both features together.
+    always_assert(!m_config.reuse_outlined_methods_across_dexes ||
+                  !m_config.full_dbg_positions);
     always_assert(m_config.min_insns_size >= MIN_INSNS_SIZE);
     always_assert(m_config.max_insns_size >= m_config.min_insns_size);
     always_assert(m_config.max_outlined_methods_per_class > 0);

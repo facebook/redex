@@ -166,7 +166,7 @@ TEST_F(ObjectInlinerTest, simple_class_inline) {
   test_object_inliner(caller_str,
                       callee_str,
                       "LFoo;",
-                      "LBoo;",
+                      "LBar;",
                       "((invoke-virtual (v2 v1) \"LBar;.child:(LFoo;)LBaz;\"))",
                       2,
                       0,
@@ -209,11 +209,12 @@ TEST_F(ObjectInlinerTest, simple_class_inline_with_cfg) {
       (move-result-pseudo-object v2)
       (const v3 0)
       (if-eq v2 v3 :L0)
+      (.pos:dbg_0 "LBar;.fumble:()V" "Bar" "22")
+      (nop)
       (move v4 v0)
       (new-instance "LBaz;")
       (move-result-pseudo-object v5)
       (move v2 v5)
-      (.pos:dbg_0 "LBar;.fumble:()V" "Bar" "22")
       (invoke-virtual (v2 v1) "LBar;.child:(LFoo;)LBaz;")
       (:L0)
       (return v2)
@@ -262,6 +263,7 @@ TEST_F(ObjectInlinerTest, class_inline_with_fields) {
     (
       (load-param v0)
       (load-param v1)
+      (const v4 0)
       (new-instance "LFoo;")
       (move-result-pseudo-object v2)
       (move v4 v1)
@@ -276,7 +278,6 @@ TEST_F(ObjectInlinerTest, class_inline_with_fields) {
       (move-result-pseudo-object v7)
       (iput v6 v7 "LBaz;.wide:I")
       (move v2 v7)
-      (.pos:dbg_2 "LBar;.fumble:()V" Bar 22)
       (invoke-virtual (v3 v2) "LBar;.child:(LFoo;)LBaz;")
       (return v3)
     )
@@ -327,6 +328,7 @@ TEST_F(ObjectInlinerTest, class_inline_with_fields_and_swaps) {
     (
       (load-param v0)
       (load-param v1)
+      (const v4 0)
       (new-instance "LFoo;")
       (move-result-pseudo-object v2)
       (move v4 v1)
@@ -344,7 +346,6 @@ TEST_F(ObjectInlinerTest, class_inline_with_fields_and_swaps) {
       (iput v6 v7 "LBaz;.wide:I")
       (iput v6 v8 "LBaz;.push:I")
       (move v2 v7)
-      (.pos:dbg_2 "LBar;.fumble:()V" Bar 22)
       (invoke-virtual (v3 v2) "LBar;.child:(LFoo;)LBaz;")
       (return v3)
     )

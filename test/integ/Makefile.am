@@ -78,6 +78,9 @@ EXTRA_default_annotation_test_DEPENDENCIES = default_annotation_test-class.dex
 final_inline_analysis_test_SOURCES = FinalInlineAnalysisTest.cpp
 EXTRA_final_inline_analysis_test_DEPENDENCIES = final_inline_analysis_test-class.dex
 
+access_marking_test_SOURCES = AccessMarkingTest.cpp
+EXTRA_access_marking_test_DEPENDENCIES = access_marking_test-class.dex
+
 global_type_analysis_test_SOURCES = GlobalTypeAnalysisTest.cpp
 EXTRA_global_type_analysis_test_DEPENDENCIES = global_type_analysis_test-class.dex
 

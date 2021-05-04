@@ -7,6 +7,9 @@
 
 #pragma once
 
+#include <unordered_set>
+
+class DexField;
 class DexMethod;
 class IRInstruction;
 
@@ -18,7 +21,9 @@ namespace constructor_analysis {
 // - the constructor refers to a method of the same class, and
 // - there are no assignments to any final fields.
 // Under these conditions, a constructor is universally inlinable.
-bool can_inline_init(const DexMethod* init_method);
+bool can_inline_init(
+    const DexMethod* init_method,
+    const std::unordered_set<const DexField*>* finalizable_fields = nullptr);
 
 // Checks that the invocation of one constructor within another constructor
 // of the same class can be inlined, either for a particular or for all

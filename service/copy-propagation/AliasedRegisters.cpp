@@ -347,9 +347,8 @@ vertex_t AliasedRegisters::find_or_create(const Value& r) {
 
 // return a vector of `v` and all the vertices in the same tree
 // (with the root first)
-std::vector<vertex_t> AliasedRegisters::vertices_in_group(
-    vertex_t input) const {
-  vertex_t root = find_root(input);
+std::vector<vertex_t> AliasedRegisters::vertices_in_group(vertex_t v) const {
+  vertex_t root = find_root(v);
   const auto& in_adj = boost::inv_adjacent_vertices(root, m_graph);
   const auto& in_begin = in_adj.first;
   const auto& in_end = in_adj.second;

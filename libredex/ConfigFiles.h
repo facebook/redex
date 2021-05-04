@@ -13,6 +13,7 @@
 #include <unordered_set>
 #include <vector>
 
+#include "GlobalConfig.h"
 #include "JsonWrapper.h"
 #include "ProguardMap.h"
 
@@ -91,6 +92,7 @@ struct ConfigFiles {
 
   const std::unordered_set<DexType*>& get_no_optimizations_annos();
   const std::unordered_set<DexMethodRef*>& get_pure_methods();
+  const std::unordered_set<DexString*>& get_finalish_field_names();
 
   const std::unordered_set<std::string>&
   get_method_sorting_allowlisted_substrings() const {
@@ -118,6 +120,7 @@ struct ConfigFiles {
   }
 
   const JsonWrapper& get_json_config() const { return m_json; }
+  const GlobalConfig& get_global_config() const { return m_global_config; }
 
   /**
    * Get the global inliner config from the "inliner" section. If there is not
@@ -139,6 +142,8 @@ struct ConfigFiles {
 
   const api::AndroidSDK& get_android_sdk_api(int32_t min_sdk_api);
 
+  void parse_global_config();
+
   /**
    * Load configurations with the initial scope.
    */
@@ -149,6 +154,7 @@ struct ConfigFiles {
  private:
   JsonWrapper m_json;
   std::string outdir;
+  GlobalConfig m_global_config;
 
   std::vector<std::string> load_coldstart_classes();
   std::unordered_map<std::string, std::vector<std::string>> load_class_lists();
@@ -173,6 +179,9 @@ struct ConfigFiles {
   std::unordered_set<DexType*> m_no_optimizations_annos;
   // global pure methods
   std::unordered_set<DexMethodRef*> m_pure_methods;
+  // names of fields that behave similar to final fields, i.e. written once
+  // before use
+  std::unordered_set<DexString*> m_finalish_field_names;
   // Global inliner config.
   std::unique_ptr<inliner::InlinerConfig> m_inliner_config;
   // min_sdk AndroidAPI

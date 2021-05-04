@@ -20,19 +20,19 @@ namespace type_analyzer {
 
 namespace local {
 
-void traceEnvironment(DexTypeEnvironment* env) {
-  std::ostringstream out;
-  out << *env;
-  TRACE(TYPE, 9, "%s", out.str().c_str());
-}
+/*
+ * For debugging only
+ * void traceEnvironment(DexTypeEnvironment* env) {
+ *   std::ostringstream out;
+ *   out << *env;
+ *   TRACE(TYPE, 9, "%s", out.str().c_str());
+ * }
+ */
 
 void LocalTypeAnalyzer::analyze_instruction(const IRInstruction* insn,
                                             DexTypeEnvironment* env) const {
   TRACE(TYPE, 9, "Analyzing instruction: %s", SHOW(insn));
   m_insn_analyzer(insn, env);
-  if (traceEnabled(TYPE, 9)) {
-    traceEnvironment(env);
-  }
 }
 
 bool RegisterTypeAnalyzer::analyze_default(const IRInstruction* insn,
@@ -383,16 +383,71 @@ bool ClinitFieldAnalyzer::analyze_sput(const DexType* class_under_init,
   return field_put_helper(class_under_init, insn, env);
 }
 
+bool CtorFieldAnalyzer::analyze_default(const DexType* class_under_init,
+                                        const IRInstruction* insn,
+                                        DexTypeEnvironment* env) {
+  if (!class_under_init) {
+    return false;
+  }
+  if (insn->has_dest()) {
+    env->set_this_ptr(insn->dest(), IsDomain::top());
+    if (insn->dest_is_wide()) {
+      env->set_this_ptr(insn->dest() + 1, IsDomain::top());
+    }
+  } else if (insn->has_move_result_any()) {
+    env->set_this_ptr(RESULT_REGISTER, IsDomain::top());
+  }
+  return false;
+}
+
+bool CtorFieldAnalyzer::analyze_load_param(const DexType* class_under_init,
+                                           const IRInstruction* insn,
+                                           DexTypeEnvironment* env) {
+  if (!class_under_init || insn->opcode() != IOPCODE_LOAD_PARAM_OBJECT) {
+    return false;
+  }
+  if (env->get_this_ptr_environment().is_top()) {
+    env->set_this_ptr(insn->dest(), IsDomain(true));
+  }
+  return false;
+}
+
 bool CtorFieldAnalyzer::analyze_iget(const DexType* class_under_init,
                                      const IRInstruction* insn,
                                      DexTypeEnvironment* env) {
+  if (!env->is_this_ptr(insn->src(0))) {
+    return false;
+  }
   return field_get_helper(class_under_init, insn, env);
 }
 
 bool CtorFieldAnalyzer::analyze_iput(const DexType* class_under_init,
                                      const IRInstruction* insn,
                                      DexTypeEnvironment* env) {
+  if (!env->is_this_ptr(insn->src(1))) {
+    return false;
+  }
   return field_put_helper(class_under_init, insn, env);
+}
+
+bool CtorFieldAnalyzer::analyze_move(const DexType* class_under_init,
+                                     const IRInstruction* insn,
+                                     DexTypeEnvironment* env) {
+  if (!class_under_init) {
+    return false;
+  }
+  env->set_this_ptr(insn->dest(), env->get_this_ptr(insn->src(0)));
+  return false;
+}
+
+bool CtorFieldAnalyzer::analyze_move_result(const DexType* class_under_init,
+                                            const IRInstruction* insn,
+                                            DexTypeEnvironment* env) {
+  if (!class_under_init) {
+    return false;
+  }
+  env->set_this_ptr(insn->dest(), env->get_this_ptr(RESULT_REGISTER));
+  return false;
 }
 
 } // namespace local

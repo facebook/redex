@@ -56,9 +56,9 @@ void VirtualRegistersFile::alloc_at(vreg_t pos, size_t width) {
   }
 }
 
-void VirtualRegistersFile::free(vreg_t n, size_t width) {
+void VirtualRegistersFile::free(vreg_t pos, size_t width) {
   for (size_t i = 0; i < width; ++i) {
-    m_free.set(n + i);
+    m_free.set(pos + i);
   }
 }
 

@@ -65,8 +65,8 @@ void group_by_cls_count(const TypeSet& mergeable_types,
 size_t estimate_vmethods_code_size(const DexClass* cls);
 
 /**
- * Note it does only check the code size on the classes and it does not aware of
- * how latter optimizations would change the code.
+ * Note it does only check the virtual methods code size on the classes and it
+ * is not aware of how latter optimizations would change the code.
  */
 template <typename WalkerFn>
 void group_by_code_size(const TypeSet& mergeable_types, WalkerFn walker) {
@@ -76,6 +76,8 @@ void group_by_code_size(const TypeSet& mergeable_types, WalkerFn walker) {
 
   size_t estimated_merged_code_size = 0;
   for (auto it = mergeable_types.begin(); it != mergeable_types.end(); ++it) {
+    // Only check the code size of vmethods because these vmethods will be
+    // merged into a large dispatch, dmethods will be relocated.
     auto vmethod_code_size = estimate_vmethods_code_size(type_class(*it));
     if (estimated_merged_code_size + vmethod_code_size > max_instruction_size) {
       TRACE(CLMG, 9, "\tgroup_by_code_size %d classes", current_group.size());
@@ -97,10 +99,10 @@ void group_by_code_size(const TypeSet& mergeable_types, WalkerFn walker) {
 }
 
 template <typename WalkerFn>
-void split_groups(const TypeSet& mergeable_types,
-                  size_t min_mergeables_count,
-                  const boost::optional<size_t>& max_mergeables_count,
-                  WalkerFn walker) {
+void apply_grouping(const TypeSet& mergeable_types,
+                    size_t min_mergeables_count,
+                    const boost::optional<size_t>& max_mergeables_count,
+                    WalkerFn walker) {
   switch (g_strategy) {
   case BY_CLASS_COUNT:
     group_by_cls_count(mergeable_types, min_mergeables_count,

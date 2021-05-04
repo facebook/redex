@@ -141,6 +141,8 @@ class CrossDexRefMinimizer {
   void erase(DexClass* cls, bool emitted, bool reset);
   const CrossDexRefMinimizerConfig& get_config() const { return m_config; }
   const CrossDexRefMinimizerStats& stats() const { return m_stats; }
+  size_t get_applied_refs() const { return m_applied_refs.size(); }
+  size_t get_unapplied_refs(DexClass* cls);
 };
 
 } // namespace interdex

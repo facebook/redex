@@ -138,7 +138,7 @@ void CrossDexRefMinimizer::sample(DexClass* cls) {
   std::vector<DexType*> types;
   std::vector<DexString*> strings;
   gather_refs(cls, method_refs, field_refs, types, strings);
-  auto increment = [& ref_counts = m_ref_counts,
+  auto increment = [&ref_counts = m_ref_counts,
                     &max_ref_count = m_max_ref_count](void* ref) {
     size_t& count = ref_counts[ref];
     if (count < std::numeric_limits<size_t>::max() && ++count > max_ref_count) {
@@ -183,7 +183,7 @@ void CrossDexRefMinimizer::insert(DexClass* cls) {
   uint64_t& refs_weight = class_info.refs_weight;
   uint64_t& seed_weight = class_info.seed_weight;
 
-  auto add_weight = [& ref_counts = m_ref_counts,
+  auto add_weight = [&ref_counts = m_ref_counts,
                      max_ref_count = m_max_ref_count, &refs, &refs_weight,
                      &seed_weight](void* ref, size_t item_weight,
                                    size_t item_seed_weight) {
@@ -414,6 +414,20 @@ void CrossDexRefMinimizer::erase(DexClass* cls, bool emitted, bool reset) {
           m_applied_refs.size() - old_applied_refs, m_applied_refs.size());
   }
   reprioritize(affected_classes);
+}
+
+size_t CrossDexRefMinimizer::get_unapplied_refs(DexClass* cls) {
+  auto it = m_class_infos.find(cls);
+  if (it == m_class_infos.end()) {
+    return 0;
+  }
+  size_t unapplied_refs{0};
+  for (auto& p : it->second.refs) {
+    if (!m_applied_refs.count(p.first)) {
+      unapplied_refs++;
+    }
+  }
+  return unapplied_refs;
 }
 
 } // namespace interdex

@@ -21,6 +21,7 @@
 #include <vector>
 
 #include "ConcurrentContainers.h"
+#include "Debug.h"
 #include "DexMemberRefs.h"
 #include "FrequentlyUsedPointersCache.h"
 #include "KeepReason.h"
@@ -39,6 +40,7 @@ class DexField;
 struct DexFieldSpec;
 struct DexDebugEntry;
 struct DexPosition;
+class PositionPatternSwitchManager;
 struct RedexContext;
 namespace keep_rules {
 struct AssumeReturnValue;
@@ -108,8 +110,7 @@ struct RedexContext {
                      const DexMethodSpec& new_spec,
                      bool rename_on_collision);
 
-  DexDebugEntry* make_dbg_entry(DexDebugInstruction* opcode);
-  DexDebugEntry* make_dbg_entry(DexPosition* pos);
+  PositionPatternSwitchManager* get_position_pattern_switch_manager();
 
   // Return false on unique classes
   // Return true on benign duplicate classes
@@ -152,9 +153,20 @@ struct RedexContext {
   // Add a lambda to be called when RedexContext is destructed. This is
   // especially useful for resetting caches/singletons in tests.
   using Task = std::function<void(void)>;
-  void add_destruction_task(const Task& t) { m_destruction_tasks.push_back(t); }
+  void add_destruction_task(const Task& t);
 
-  FrequentlyUsedPointers pointers_cache() { return m_pointers_cache; }
+  static constexpr bool kDebugPointersCacheLoad = false;
+  void load_pointers_cache() {
+    m_pointers_cache.load();
+    m_pointers_cache_loaded = true;
+  }
+  const FrequentlyUsedPointers& pointers_cache() {
+    if (!m_pointers_cache_loaded) {
+      redex_assert(!kDebugPointersCacheLoad);
+      load_pointers_cache();
+    }
+    return m_pointers_cache;
+  }
 
   // Set and return field values keep_rules::AssumeReturnValue provided by
   // proguard rules.
@@ -288,6 +300,9 @@ struct RedexContext {
   ConcurrentMap<DexMethodSpec, DexMethodRef*> s_method_map;
   std::mutex s_method_lock;
 
+  // DexPositionSwitch and DexPositionPattern
+  PositionPatternSwitchManager* m_position_pattern_switch_manager{nullptr};
+
   // Type-to-class map
   std::mutex m_type_system_mutex;
   std::unordered_map<const DexType*, DexClass*> m_type_to_class;
@@ -302,6 +317,7 @@ struct RedexContext {
       s_keep_reasons;
 
   // These functions will be called when ~RedexContext() is called
+  std::mutex m_destruction_tasks_lock;
   std::vector<Task> m_destruction_tasks;
 
   std::unordered_map<std::string, size_t> m_sb_interaction_indices;
@@ -309,6 +325,7 @@ struct RedexContext {
   bool m_record_keep_reasons{false};
   bool m_allow_class_duplicates;
 
+  bool m_pointers_cache_loaded{false};
   FrequentlyUsedPointers m_pointers_cache;
 
   // Field values map specified by Proguard assume value

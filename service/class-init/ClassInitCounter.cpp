@@ -1146,17 +1146,12 @@ void InitLocation::all_uses_from(DexClass* cls_impl,
 }
 
 ClassInitCounter::ClassInitCounter(
-    DexType* parent_class,
+    const std::unordered_set<DexClass*>& classes_to_check,
     const std::unordered_set<DexMethodRef*>& safe_escapes,
     const std::unordered_set<DexClass*>& classes,
     boost::optional<DexString*> optional_method_name)
     : m_optional_method(optional_method_name), m_safe_escapes{safe_escapes} {
-  find_children(parent_class, classes);
-  TRACE(CIC,
-        3,
-        "Found %zu children of parent %s",
-        m_type_to_inits.size(),
-        SHOW(parent_class));
+  find_children(classes_to_check);
   for (DexClass* current : classes) {
     for (DexMethod* method : current->get_vmethods()) {
       find_uses_within(current, method);
@@ -1168,20 +1163,18 @@ ClassInitCounter::ClassInitCounter(
 }
 
 void ClassInitCounter::find_children(
-    DexType* parent, const std::unordered_set<DexClass*>& classes) {
-  for (DexClass* current : classes) {
-    if (current->get_super_class() == parent) {
-      auto type = current->get_type();
-      m_type_to_inits.insert({type, InitLocation(type)});
-    }
+    const std::unordered_set<DexClass*>& classes_to_check) {
+  for (DexClass* current : classes_to_check) {
+    auto type = current->get_type();
+    m_type_to_inits.insert({type, InitLocation(type)});
   }
 }
 
 void ClassInitCounter::analyze_block(
     DexClass* container,
     DexMethod* method,
-    TypeToInit& type_to_inits,
-    const std::unordered_set<IRInstruction*>& tracked_set,
+    TypeToInit& populating_inits,
+    const std::unordered_set<IRInstruction*>& tracked_instructions,
     cfg::Block* prev_block,
     cfg::Block* block) {
   bool first_visit = true;
@@ -1247,10 +1240,11 @@ void ClassInitCounter::analyze_block(
     } else if (opcode::is_new_instance(opcode)) {
       DexType* typ = i->get_type();
       registers.clear(RESULT_REGISTER);
-      if ((tracked_set.empty() || tracked_set.count(i) != 0) &&
-          (type_to_inits.count(typ) != 0)) {
+      if ((tracked_instructions.empty() ||
+           tracked_instructions.count(i) != 0) &&
+          (populating_inits.count(typ) != 0)) {
         TRACE(CIC, 5, "Adding an init for type %s", SHOW(typ));
-        std::shared_ptr<ObjectUses> use = type_to_inits[typ].add_init(
+        std::shared_ptr<ObjectUses> use = populating_inits[typ].add_init(
             container, method, i, block_id, instruction_count);
         registers.insert(RESULT_REGISTER, use);
       }
@@ -1287,9 +1281,10 @@ void ClassInitCounter::analyze_block(
       registers.clear(RESULT_REGISTER);
       if (m_optional_method && curr_method->get_name() == m_optional_method) {
         auto ret_typ = curr_method->get_proto()->get_rtype();
-        if ((tracked_set.empty() || tracked_set.count(i) != 0) &&
-            type_to_inits.count(ret_typ) != 0) {
-          std::shared_ptr<ObjectUses> use = type_to_inits[ret_typ].add_init(
+        if ((tracked_instructions.empty() ||
+             tracked_instructions.count(i) != 0) &&
+            populating_inits.count(ret_typ) != 0) {
+          std::shared_ptr<ObjectUses> use = populating_inits[ret_typ].add_init(
               container, method, i, block_id, instruction_count);
           registers.insert(RESULT_REGISTER, use);
         }
@@ -1367,7 +1362,8 @@ void ClassInitCounter::analyze_block(
   for (auto* edge : block->succs()) {
     cfg::Block* next = edge->target();
     TRACE(CIC, 8, "making call from %zu to block %zu", block->id(), next->id());
-    analyze_block(container, method, type_to_inits, tracked_set, block, next);
+    analyze_block(container, method, populating_inits, tracked_instructions,
+                  block, next);
     assert(visited_blocks[next]->final_result_registers);
 
     TRACE(CIC, 8, "Combining paths after looking at block %zu from %zu",

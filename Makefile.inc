@@ -50,7 +50,6 @@ COMMON_INCLUDES = \
 	-I$(top_srcdir)/opt/print-members \
 	-I$(top_srcdir)/opt/rebindrefs \
 	-I$(top_srcdir)/opt/reduce-array-literals \
-	-I$(top_srcdir)/opt/reduce-boolean-branches \
 	-I$(top_srcdir)/opt/reduce-gotos \
 	-I$(top_srcdir)/opt/redundant_move_elimination \
 	-I$(top_srcdir)/opt/regalloc \
@@ -105,9 +104,11 @@ COMMON_INCLUDES = \
 	-I$(top_srcdir)/service/loop-info \
 	-I$(top_srcdir)/service/method-dedup \
 	-I$(top_srcdir)/service/method-inliner \
+	-I$(top_srcdir)/service/method-outliner \
 	-I$(top_srcdir)/service/method-merger \
-	-I$(top_srcdir)/service/reduce-boolean-branches \
 	-I$(top_srcdir)/service/reference-update \
+	-I$(top_srcdir)/service/regalloc \
+	-I$(top_srcdir)/service/shrinker \
 	-I$(top_srcdir)/service/switch-dispatch \
 	-I$(top_srcdir)/service/switch-partitioning \
 	-I$(top_srcdir)/service/type-analysis \

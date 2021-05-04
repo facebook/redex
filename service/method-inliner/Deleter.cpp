@@ -17,19 +17,25 @@ size_t delete_methods(
     std::vector<DexClass*>& scope,
     std::unordered_set<DexMethod*>& removable,
     ConcurrentSet<DexMethod*>& delayed_make_static,
-    std::function<DexMethod*(DexMethodRef*, MethodSearch search)> resolver) {
+    std::function<DexMethod*(DexMethodRef*, MethodSearch search)>
+        concurrent_resolver) {
 
   // if a removable candidate is invoked do not delete
-  walk::opcodes(scope, [](DexMethod* meth) { return true; },
-                [&](DexMethod* meth, IRInstruction* insn) {
-                  if (opcode::is_an_invoke(insn->opcode())) {
-                    auto callee =
-                        resolver(insn->get_method(), opcode_to_search(insn));
-                    if (callee != nullptr) {
-                      removable.erase(callee);
-                    }
-                  }
-                });
+  ConcurrentSet<DexMethod*> removable_to_erase;
+  walk::parallel::opcodes(
+      scope, [](DexMethod* meth) { return true; },
+      [&](DexMethod* meth, IRInstruction* insn) {
+        if (opcode::is_an_invoke(insn->opcode())) {
+          auto callee =
+              concurrent_resolver(insn->get_method(), opcode_to_search(insn));
+          if (callee != nullptr && removable.count(callee)) {
+            removable_to_erase.insert(callee);
+          }
+        }
+      });
+  for (auto method : removable_to_erase) {
+    removable.erase(method);
+  }
 
   // if a removable candidate is referenced by an annotation do not delete
   walk::annotations(scope, [&](DexAnnotation* anno) {

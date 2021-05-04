@@ -57,7 +57,8 @@ class IODIMetadata {
 
   // Write to disk, pretty usual. Does nothing if filename len is 0.
   using MethodToIdMap = std::unordered_map<DexMethod*, uint64_t>;
-  void write(const std::string& file, const MethodToIdMap& method_to_id);
+  void write(const std::string& iodi_metadata_filename,
+             const MethodToIdMap& method_to_id);
 
   // Write to out. Underlying logic used by write(const std::string&, ...)
   // but exposed for testing.

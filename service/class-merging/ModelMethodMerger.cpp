@@ -383,7 +383,8 @@ std::map<SwitchIndices, DexMethod*> ModelMethodMerger::get_dedupped_indices_map(
 
   // Find equivalent methods.
   std::vector<MethodOrderedSet> duplicates =
-      method_dedup::group_identical_methods(targets);
+      method_dedup::group_identical_methods(targets,
+                                            m_model_spec.dedup_throw_blocks);
   for (const auto& duplicate : duplicates) {
     SwitchIndices switch_indices;
     for (auto& meth : duplicate) {
@@ -803,7 +804,8 @@ void ModelMethodMerger::dedup_non_ctor_non_virt_methods() {
         boost::optional<std::unordered_map<DexMethod*, MethodOrderedSet>>(
             new_to_old);
     m_stats.m_num_static_non_virt_dedupped += method_dedup::dedup_methods(
-        m_scope, to_dedup, replacements, new_to_old_optional);
+        m_scope, to_dedup, m_model_spec.dedup_throw_blocks, replacements,
+        new_to_old_optional);
 
     // Relocate the remainders.
     std::set<DexMethod*, dexmethods_comparator> to_relocate(

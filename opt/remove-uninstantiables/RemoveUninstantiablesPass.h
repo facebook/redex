@@ -40,7 +40,10 @@ class RemoveUninstantiablesPass : public Pass {
     int instance_ofs = 0;
     int invokes = 0;
     int field_accesses_on_uninstantiable = 0;
-    int instance_methods_of_uninstantiable = 0;
+    int throw_null_methods = 0;
+    int abstracted_classes = 0;
+    int abstracted_vmethods = 0;
+    int removed_vmethods = 0;
     int get_uninstantiables = 0;
     int check_casts = 0;
 
@@ -53,7 +56,9 @@ class RemoveUninstantiablesPass : public Pass {
   };
 
   static std::unordered_set<DexType*> compute_scoped_uninstantiable_types(
-      const Scope& scope);
+      const Scope& scope,
+      std::unordered_map<DexType*, std::unordered_set<DexType*>>*
+          instantiable_children = nullptr);
 
   /// Look for mentions of uninstantiable classes in \p cfg and modify them
   /// in-place.

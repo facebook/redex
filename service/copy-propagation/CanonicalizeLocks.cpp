@@ -26,7 +26,11 @@ struct MonitorData {
   IRInstruction* source{nullptr};
   IRInstruction* immediate_in{nullptr};
 };
-using RDefs = std::unordered_map<IRInstruction*, MonitorData>;
+
+struct RDefs {
+  std::unordered_map<IRInstruction*, MonitorData> data;
+  std::unordered_map<IRInstruction*, size_t> ordering;
+};
 
 boost::optional<RDefs> compute_rdefs(ControlFlowGraph& cfg) {
   // Do not use MoveAware, we want to track the moves.
@@ -78,6 +82,7 @@ boost::optional<RDefs> compute_rdefs(ControlFlowGraph& cfg) {
   }
 
   RDefs ret;
+  size_t idx{0};
   for (auto* monitor_insn : monitor_insns) {
     auto find_root_def = [&](IRInstruction* cur) -> IRInstruction* {
       for (;;) {
@@ -133,22 +138,43 @@ boost::optional<RDefs> compute_rdefs(ControlFlowGraph& cfg) {
       return boost::none;
     }
 
-    ret.emplace(monitor_insn,
-                MonitorData{monitor_insn, root_rdef, immediate_rdef});
+    ret.data.emplace(monitor_insn,
+                     MonitorData{monitor_insn, root_rdef, immediate_rdef});
+    if (!ret.ordering.count(monitor_insn)) {
+      ret.ordering[monitor_insn] = idx++;
+    }
+    if (!ret.ordering.count(root_rdef)) {
+      ret.ordering[root_rdef] = idx++;
+    }
   }
 
   return ret;
 }
 
 using MonitorGroups =
-    std::unordered_map<IRInstruction*, std::unordered_set<MonitorData*>>;
+    std::vector<std::pair<IRInstruction*, std::vector<MonitorData*>>>;
 
 MonitorGroups create_groups(RDefs& rdefs) {
-  MonitorGroups ret;
-  for (const auto& p : rdefs) {
-    MonitorData& data = rdefs[p.first];
-    ret[data.source].insert(&data);
+  std::unordered_map<IRInstruction*, std::vector<MonitorData*>> tmp;
+  for (const auto& p : rdefs.data) {
+    MonitorData& data = rdefs.data[p.first];
+    tmp[data.source].push_back(&data);
   }
+  // Sort for determinism, use the instruction order from the data.
+  MonitorGroups ret;
+  ret.reserve(tmp.size());
+  for (auto& p : tmp) {
+    std::sort(p.second.begin(),
+              p.second.end(),
+              [&](const auto& lhs, const auto& rhs) {
+                return rdefs.ordering.at(lhs->insn) <
+                       rdefs.ordering.at(rhs->insn);
+              });
+    ret.emplace_back(p.first, std::move(p.second));
+  }
+  std::sort(ret.begin(), ret.end(), [&](const auto& lhs, const auto& rhs) {
+    return rdefs.ordering.at(lhs.first) < rdefs.ordering.at(rhs.first);
+  });
   return ret;
 }
 
@@ -163,7 +189,7 @@ Result run(cfg::ControlFlowGraph& cfg) {
     res.non_singleton_rdefs = true;
     return res;
   }
-  if (rdefs_opt->empty()) {
+  if (rdefs_opt->data.empty()) {
     return res;
   }
   res.has_locks = true;

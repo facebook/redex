@@ -104,8 +104,13 @@ class InterDex {
   void run_on_nonroot_store();
   void add_dexes_from_store(const DexStore& store);
   void cleanup(const Scope& final_scope);
+
   const std::vector<DexType*>& get_interdex_types() const {
     return m_interdex_types;
+  }
+
+  size_t get_current_classes_when_emitting_remaining() const {
+    return m_current_classes_when_emitting_remaining;
   }
 
  private:
@@ -175,6 +180,7 @@ class InterDex {
   std::vector<DexType*> m_interdex_types;
   const XStoreRefs* m_xstore_refs;
   bool m_sort_remaining_classes;
+  size_t m_current_classes_when_emitting_remaining{0};
 };
 
 } // namespace interdex

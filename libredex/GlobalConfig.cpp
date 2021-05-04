@@ -10,17 +10,21 @@
 void InlinerConfig::bind_config() {
   bind("true_virtual_inline", true_virtual_inline, true_virtual_inline);
   bind("use_cfg_inliner", use_cfg_inliner, use_cfg_inliner);
+  bind("intermediate_shrinking", intermediate_shrinking,
+       intermediate_shrinking);
   bind("enforce_method_size_limit", enforce_method_size_limit,
        enforce_method_size_limit);
   bind("throws", throws_inline, throws_inline);
   bind("multiple_callers", multiple_callers, multiple_callers);
   bind("inline_small_non_deletables", inline_small_non_deletables,
        inline_small_non_deletables);
-  bind("run_const_prop", run_const_prop, run_const_prop);
-  bind("run_cse", run_cse, run_cse);
-  bind("run_dedup_blocks", run_dedup_blocks, run_dedup_blocks);
-  bind("run_copy_prop", run_copy_prop, run_copy_prop);
-  bind("run_local_dce", run_local_dce, run_local_dce);
+  bind("run_const_prop", shrinker.run_const_prop, shrinker.run_const_prop);
+  bind("run_cse", shrinker.run_cse, shrinker.run_cse);
+  bind("run_dedup_blocks", shrinker.run_dedup_blocks,
+       shrinker.run_dedup_blocks);
+  bind("run_copy_prop", shrinker.run_copy_prop, shrinker.run_copy_prop);
+  bind("run_reg_alloc", shrinker.run_reg_alloc, shrinker.run_reg_alloc);
+  bind("run_local_dce", shrinker.run_local_dce, shrinker.run_local_dce);
   bind("no_inline_annos", {}, m_no_inline_annos);
   bind("force_inline_annos", {}, m_force_inline_annos);
   bind("blocklist", {}, m_blocklist);
@@ -104,7 +108,9 @@ void GlobalConfig::bind_config() {
   bind("proguard_map", "", string_param);
   bind("prune_unexported_components", {}, string_vector_param);
   bind("pure_methods", {}, string_vector_param);
+  bind("finalish_field_names", {}, string_vector_param);
   bind("record_keep_reasons", {}, bool_param);
+  bind("dump_keep_reasons", {}, bool_param);
   bind("string_sort_mode", "", string_param);
   bind("write_cfg_each_pass", false, bool_param);
   bind("dump_cfg_classes", "", string_param);
@@ -130,9 +136,4 @@ GlobalConfigRegistry& GlobalConfig::default_registry() {
       register_as<OptDecisionsConfig>("opt_decisions"),
   };
   return registry;
-}
-
-GlobalConfig& GlobalConfig::get() {
-  static GlobalConfig gc(default_registry());
-  return gc;
 }

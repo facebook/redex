@@ -82,6 +82,8 @@ libredex_la_SOURCES = \
 	libredex/JsonWrapper.cpp \
 	libredex/KeepReason.cpp \
 	libredex/Match.cpp \
+	libredex/MatchFlow.cpp \
+	libredex/MatchFlowDetail.cpp \
 	libredex/MethodDevirtualizer.cpp \
 	libredex/MethodOverrideGraph.cpp \
 	libredex/MethodProfiles.cpp \
@@ -89,6 +91,8 @@ libredex_la_SOURCES = \
 	libredex/MethodUtil.cpp \
 	libredex/MonitorCount.cpp \
 	libredex/Mutators.cpp \
+	libredex/Native.cpp \
+	libredex/NativeNames.cpp \
 	libredex/NoOptimizationsMatcher.cpp \
 	libredex/NullnessDomain.cpp \
 	libredex/OptData.cpp \
@@ -191,9 +195,15 @@ libredex_la_SOURCES = \
 	service/method-inliner/MethodInliner.cpp \
 	service/method-inliner/ObjectInlinePlugin.cpp \
 	service/method-merger/MethodMerger.cpp \
-	service/reduce-boolean-branches/ReduceBooleanBranches.cpp \
 	service/reference-update/MethodReference.cpp \
 	service/reference-update/TypeReference.cpp \
+	service/regalloc/GraphColoring.cpp \
+	service/regalloc/Interference.cpp \
+	service/regalloc/RegisterAllocation.cpp \
+	service/regalloc/RegisterType.cpp \
+	service/regalloc/Split.cpp \
+	service/regalloc/VirtualRegistersFile.cpp \
+	service/shrinker/Shrinker.cpp \
 	service/switch-dispatch/SwitchDispatch.cpp \
 	service/switch-partitioning/SwitchEquivFinder.cpp \
 	service/switch-partitioning/SwitchMethodPartitioning.cpp \
@@ -280,18 +290,12 @@ libopt_la_SOURCES = \
 	opt/optimize_enums/EnumUpcastAnalysis.cpp \
 	opt/optimize_enums/OptimizeEnumsAnalysis.cpp \
 	opt/optimize_enums/OptimizeEnums.cpp \
-	opt/optimize_enums/OptimizeEnumsGeneratedAnalysis.cpp \
 	opt/original_name/OriginalNamePass.cpp \
 	opt/peephole/Peephole.cpp \
 	opt/peephole/RedundantCheckCastRemover.cpp \
 	opt/print-members/PrintMembers.cpp \
 	opt/rebindrefs/ReBindRefs.cpp \
-	opt/regalloc/GraphColoring.cpp \
-	opt/regalloc/Interference.cpp \
 	opt/regalloc/RegAlloc.cpp \
-	opt/regalloc/RegisterType.cpp \
-	opt/regalloc/Split.cpp \
-	opt/regalloc/VirtualRegistersFile.cpp \
 	opt/remove-apilevel-checks/RemoveApiLevelChecks.cpp \
 	opt/remove-builders/RemoveBuilders.cpp \
 	opt/remove-builders/RemoveBuildersHelper.cpp \
@@ -311,7 +315,6 @@ libopt_la_SOURCES = \
 	opt/renameclasses/RenameClassesV2.cpp \
 	opt/reorder-interfaces-decl/ReorderInterfacesDecl.cpp \
 	opt/reduce-array-literals/ReduceArrayLiterals.cpp \
-	opt/reduce-boolean-branches/ReduceBooleanBranchesPass.cpp \
 	opt/reduce-gotos/ReduceGotos.cpp \
 	opt/resolve-refs/ResolveRefsPass.cpp \
 	opt/resolve-refs/ExternalRefsManglingPass.cpp \

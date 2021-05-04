@@ -25,8 +25,10 @@ Timer::~Timer() {
   TRACE(TIME, 1, "%*s%s completed in %.1lf seconds", 4 * s_indent, "",
         m_msg.c_str(), duration_s);
 
-  {
-    std::lock_guard<std::mutex> guard(s_lock);
-    s_times.push_back({std::move(m_msg), duration_s});
-  }
+  Timer::add_timer(std::move(m_msg), duration_s);
+}
+
+void Timer::add_timer(std::string&& msg, double dur_s) {
+  std::lock_guard<std::mutex> guard(s_lock);
+  s_times.emplace_back(std::move(msg), dur_s);
 }

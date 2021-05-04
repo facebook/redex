@@ -29,7 +29,7 @@ class Pass : public Configurable {
 
   explicit Pass(const std::string& name, Kind kind = TRANSFORMATION);
 
-  std::string name() const { return m_name; }
+  const std::string& name() const { return m_name; }
 
   std::string get_config_name() override { return name(); };
 
@@ -61,7 +61,7 @@ class Pass : public Configurable {
   Configurable::Reflection reflect() override;
 
  private:
-  std::string m_name;
+  const std::string m_name;
   Kind m_kind;
 };
 

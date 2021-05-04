@@ -105,7 +105,7 @@ class GlobalConfig : public Configurable {
   }
 
   template <typename ConfigType>
-  ConfigType* get_config_by_name(const std::string& name) {
+  ConfigType* get_config_by_name(const std::string& name) const {
     auto& type = m_global_configs.at(name);
     return static_cast<ConfigType*>(type.get());
   }
@@ -128,8 +128,6 @@ class GlobalConfig : public Configurable {
   }
 
   static GlobalConfigRegistry& default_registry();
-
-  static GlobalConfig& get();
 
  private:
   std::unordered_map<std::string, std::unique_ptr<Configurable>>

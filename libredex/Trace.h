@@ -14,6 +14,9 @@
 #include "Macros.h"
 #include "Util.h"
 
+class DexMethodRef;
+class DexType;
+
 #define TMS          \
   TM(ACCESS)         \
   TM(ANNO)           \
@@ -26,6 +29,7 @@
   TM(BRCR)           \
   TM(BRIDGE)         \
   TM(BUILDERS)       \
+  TM(CALLGRAPH)      \
   TM(CFG)            \
   TM(CFP)            \
   TM(CHECKRECURSION) \
@@ -52,6 +56,7 @@
   TM(EVALTC)         \
   TM(FINALINLINE)    \
   TM(GETTER)         \
+  TM(GQL)            \
   TM(HASHER)         \
   TM(ICONSTP)        \
   TM(IDEX)           \
@@ -76,6 +81,7 @@
   TM(METH_DEDUP)     \
   TM(METH_MERGER)    \
   TM(METH_PROF)      \
+  TM(MFLOW)          \
   TM(MMINL)          \
   TM(MODULARITY)     \
   TM(MONITOR)        \
@@ -98,7 +104,6 @@
   TM(QUICK)          \
   TM(RABBIT)         \
   TM(RAL)            \
-  TM(RBB)            \
   TM(REACH)          \
   TM(REFL)           \
   TM(REFU)           \
@@ -172,20 +177,50 @@ void trace(
     }                                                                        \
   } while (0)
 
-struct TraceContext {
-  explicit TraceContext(const std::string& current_method) {
+class TraceContext {
+ public:
+  explicit TraceContext(const DexMethodRef* current_method) {
 #if !IS_WINDOWS
-    s_current_method = &current_method;
+    last_context = s_context;
+    s_context = this;
+    method = current_method;
+    string_value = &string_value_cache;
+#endif
+  }
+  explicit TraceContext(const DexType* current_type) {
+#if !IS_WINDOWS
+    last_context = s_context;
+    s_context = this;
+    type = current_type;
+    string_value = &string_value_cache;
+#endif
+  }
+  explicit TraceContext(const std::string* string_value) {
+#if !IS_WINDOWS
+    last_context = s_context;
+    s_context = this;
+    this->string_value = string_value;
 #endif
   }
   ~TraceContext() {
 #if !IS_WINDOWS
-    s_current_method = nullptr;
+    s_context = last_context;
 #endif
   }
 
 #if !IS_WINDOWS
-  thread_local static const std::string* s_current_method;
+  const std::string& get_string_value() const;
 #endif
-  static std::mutex s_trace_mutex;
+
+ private:
+#if !IS_WINDOWS
+  thread_local static const TraceContext* s_context;
+  const TraceContext* last_context{nullptr};
+  const DexMethodRef* method{nullptr};
+  const DexType* type{nullptr};
+  const std::string* string_value{nullptr};
+  mutable std::string string_value_cache;
+#endif
+
+  friend struct TraceContextAccess;
 };

@@ -36,6 +36,23 @@ void check_return(DexMethod* method, bool value) {
   }
 }
 
+// Finds vmethod with particular name and proto
+DexMethod* find_vmethod(const DexClass& cls,
+                        const char* name,
+                        const char* proto) {
+  auto vmethods = cls.get_vmethods();
+  fprintf(stderr, "===\n");
+  for (auto m : vmethods) {
+    fprintf(stderr, "%s %s\n", SHOW(m->get_name()), SHOW(m->get_proto()));
+  }
+  auto it = std::find_if(vmethods.begin(), vmethods.end(),
+                         [name, proto](DexMethod* m) {
+                           return strcmp(name, m->get_name()->c_str()) == 0 &&
+                                  strcmp(proto, SHOW(m->get_proto())) == 0;
+                         });
+  return it == vmethods.end() ? nullptr : *it;
+}
+
 // Sanity check: three foo constructors are defined
 TEST_F(PreVerify, CtorsDefined) {
   auto foo = find_class_named(classes, "Lcom/facebook/redex/test/instr/Foo;");
@@ -418,6 +435,139 @@ TEST_F(PostVerify, ProtectedNonVirtualsUnusedArgs) {
   use_non_virtual2->balloon();
 
   check_callsite_regs(use_non_virtual2, 1);
+}
+
+// Check argument reordering
+TEST_F(PreVerify, Reorderables) {
+  auto reorderables =
+      find_class_named(classes, "Lcom/facebook/redex/test/instr/Reorderables;");
+  ASSERT_NE(nullptr, reorderables);
+
+  auto reorderable1 =
+      find_vmethod(*reorderables, "reorderable1", "(ILjava/lang/Object;D)V");
+  ASSERT_NE(nullptr, reorderable1);
+
+  auto reorderable2 =
+      find_vmethod(*reorderables, "reorderable2", "(DILjava/lang/Object;)V");
+  ASSERT_NE(nullptr, reorderable2);
+
+  auto reorderable2alt =
+      find_vmethod(*reorderables, "reorderable2", "(Ljava/lang/Object;DI)V");
+  ASSERT_NE(nullptr, reorderable2alt);
+
+  auto reorderable2altalt =
+      find_vmethod(*reorderables, "reorderable2", "(Ljava/lang/Object;ID)V");
+  ASSERT_NE(nullptr, reorderable2altalt);
+}
+
+TEST_F(PostVerify, Reorderables) {
+  auto reorderables =
+      find_class_named(classes, "Lcom/facebook/redex/test/instr/Reorderables;");
+  ASSERT_NE(nullptr, reorderables);
+
+  auto reorderable1 = find_vmethod(*reorderables, "reorderable1$rvp0$0",
+                                   "(Ljava/lang/Object;DI)V");
+  ASSERT_NE(nullptr, reorderable1);
+
+  auto reorderable2 =
+      find_vmethod(*reorderables, "reorderable2", "(Ljava/lang/Object;DI)V");
+  ASSERT_NE(nullptr, reorderable2);
+
+  auto reorderable2alt = find_vmethod(*reorderables, "reorderable2$rvp0$0",
+                                      "(Ljava/lang/Object;DI)V");
+  ASSERT_NE(nullptr, reorderable2alt);
+
+  auto reorderable2altalt = find_vmethod(*reorderables, "reorderable2$rvp0$1",
+                                         "(Ljava/lang/Object;DI)V");
+  ASSERT_NE(nullptr, reorderable2altalt);
+}
+
+TEST_F(PreVerify, ReorderablesInterface) {
+  auto reorderables = find_class_named(
+      classes, "Lcom/facebook/redex/test/instr/ReorderablesInterface;");
+  ASSERT_NE(nullptr, reorderables);
+
+  auto reorderable1 =
+      find_vmethod(*reorderables, "reorderable1", "(ILjava/lang/Object;D)V");
+  ASSERT_NE(nullptr, reorderable1);
+
+  auto reorderable2 =
+      find_vmethod(*reorderables, "reorderable2", "(DILjava/lang/Object;)V");
+  ASSERT_NE(nullptr, reorderable2);
+
+  auto reorderable2alt =
+      find_vmethod(*reorderables, "reorderable2", "(Ljava/lang/Object;DI)V");
+  ASSERT_NE(nullptr, reorderable2alt);
+
+  auto reorderable2altalt =
+      find_vmethod(*reorderables, "reorderable2", "(Ljava/lang/Object;ID)V");
+  ASSERT_NE(nullptr, reorderable2altalt);
+}
+
+TEST_F(PostVerify, ReorderablesInterface) {
+  auto reorderables = find_class_named(
+      classes, "Lcom/facebook/redex/test/instr/ReorderablesInterface;");
+  ASSERT_NE(nullptr, reorderables);
+
+  auto reorderable1 = find_vmethod(*reorderables, "reorderable1$rvp0$0",
+                                   "(Ljava/lang/Object;DI)V");
+  ASSERT_NE(nullptr, reorderable1);
+
+  auto reorderable2 =
+      find_vmethod(*reorderables, "reorderable2", "(Ljava/lang/Object;DI)V");
+  ASSERT_NE(nullptr, reorderable2);
+
+  auto reorderable2alt = find_vmethod(*reorderables, "reorderable2$rvp0$0",
+                                      "(Ljava/lang/Object;DI)V");
+  ASSERT_NE(nullptr, reorderable2alt);
+
+  auto reorderable2altalt = find_vmethod(*reorderables, "reorderable2$rvp0$1",
+                                         "(Ljava/lang/Object;DI)V");
+  ASSERT_NE(nullptr, reorderable2altalt);
+}
+
+TEST_F(PreVerify, SubReorderables) {
+  auto reorderables = find_class_named(
+      classes, "Lcom/facebook/redex/test/instr/SubReorderables;");
+  ASSERT_NE(nullptr, reorderables);
+
+  auto reorderable1 =
+      find_vmethod(*reorderables, "reorderable1", "(ILjava/lang/Object;D)V");
+  ASSERT_NE(nullptr, reorderable1);
+
+  auto reorderable2 =
+      find_vmethod(*reorderables, "reorderable2", "(DILjava/lang/Object;)V");
+  ASSERT_NE(nullptr, reorderable2);
+
+  auto reorderable2alt =
+      find_vmethod(*reorderables, "reorderable2", "(Ljava/lang/Object;DI)V");
+  ASSERT_NE(nullptr, reorderable2alt);
+
+  auto reorderable2altalt =
+      find_vmethod(*reorderables, "reorderable2", "(Ljava/lang/Object;ID)V");
+  ASSERT_NE(nullptr, reorderable2altalt);
+}
+
+TEST_F(PostVerify, SubReorderables) {
+  auto reorderables = find_class_named(
+      classes, "Lcom/facebook/redex/test/instr/SubReorderables;");
+  ASSERT_NE(nullptr, reorderables);
+
+  auto reorderable1 = find_vmethod(*reorderables, "reorderable1$rvp0$0",
+                                   "(Ljava/lang/Object;DI)V");
+  ASSERT_NE(nullptr, reorderable1);
+
+  auto reorderable2 =
+      find_vmethod(*reorderables, "reorderable2", "(Ljava/lang/Object;DI)V");
+  ASSERT_NE(nullptr, reorderable2);
+
+  auto reorderable2alt = find_vmethod(*reorderables, "reorderable2$rvp0$0",
+                                      "(Ljava/lang/Object;DI)V");
+  ASSERT_NE(nullptr, reorderable2alt);
+
+  auto reorderable2altalt = find_vmethod(*reorderables, "reorderable2$rvp0$1",
+                                         "(Ljava/lang/Object;DI)V");
+  ASSERT_NE(nullptr, reorderable2altalt);
 }
 
 } // namespace

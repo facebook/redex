@@ -51,8 +51,8 @@ void DexEncodedValueMethodHandle::gather_fields(
 }
 
 void DexEncodedValueMethodHandle::gather_methodhandles(
-    std::vector<DexMethodHandle*>& lmethodhandle) const {
-  lmethodhandle.push_back(m_methodhandle);
+    std::vector<DexMethodHandle*>& lhandles) const {
+  lhandles.push_back(m_methodhandle);
 }
 
 void DexEncodedValueArray::gather_strings(

@@ -11,17 +11,10 @@
 
 #include "BuilderAnalysis.h"
 #include "BuilderTransform.h"
-#include "CommonSubexpressionElimination.h"
 #include "ConfigFiles.h"
-#include "ConstantPropagationAnalysis.h"
-#include "ConstantPropagationTransform.h"
-#include "ConstantPropagationWholeProgramState.h"
-#include "CopyPropagation.h"
 #include "DexClass.h"
 #include "DexUtil.h"
-#include "LocalDce.h"
 #include "PassManager.h"
-#include "ScopedCFG.h"
 #include "Show.h"
 #include "Trace.h"
 #include "TypeSystem.h"
@@ -191,65 +184,10 @@ class RemoveClasses {
 
   void shrink_methods(const std::vector<DexMethod*>& methods) {
     // Run shrinking opts to optimize the changed methods.
-
-    XStoreRefs xstores(m_stores);
-    std::unordered_set<DexMethodRef*> pure; // Don't assume anything;
-    cse_impl::SharedState shared_state(pure);
+    Timer t("shrink_methods");
 
     auto post_process = [&](DexMethod* method) {
-      auto code = method->get_code();
-
-      {
-        if (code->editable_cfg_built()) {
-          code->clear_cfg();
-        }
-        code->build_cfg(/*editable=*/false);
-        constant_propagation::intraprocedural::FixpointIterator fp_iter(
-            code->cfg(), constant_propagation::ConstantPrimitiveAnalyzer());
-        fp_iter.run(ConstantEnvironment());
-        constant_propagation::Transform::Config config;
-        constant_propagation::Transform tf(config);
-        tf.apply_on_uneditable_cfg(fp_iter,
-                                   constant_propagation::WholeProgramState(),
-                                   code, &xstores, method->get_class());
-        code->clear_cfg();
-      }
-
-      always_assert(!code->editable_cfg_built());
-      cfg::ScopedCFG cfg(code);
-      cfg->calculate_exit_block();
-      {
-        constant_propagation::intraprocedural::FixpointIterator fp_iter(
-            *cfg, constant_propagation::ConstantPrimitiveAnalyzer());
-        fp_iter.run(ConstantEnvironment());
-        constant_propagation::Transform::Config config;
-        constant_propagation::Transform tf(config);
-        tf.apply(fp_iter, *cfg, method, &xstores);
-      }
-
-      {
-        cse_impl::CommonSubexpressionElimination cse(
-            &shared_state, *cfg, is_static(method),
-            method::is_init(method) || method::is_clinit(method),
-            method->get_class(), method->get_proto()->get_args());
-        cse.patch();
-      }
-
-      {
-        copy_propagation_impl::Config copy_prop_config;
-        copy_prop_config.eliminate_const_classes = false;
-        copy_prop_config.eliminate_const_strings = false;
-        copy_prop_config.static_finals = false;
-        copy_propagation_impl::CopyPropagation copy_propagation(
-            copy_prop_config);
-        copy_propagation.run(code, method);
-      }
-
-      {
-        LocalDce dce(pure, /* no mog */ nullptr,
-                     /*may_allocate_registers=*/true);
-        dce.dce(*cfg);
-      }
+      m_transform.get_shrinker().shrink_method(method);
     };
 
     // Walkers are over classes, so need to do this "manually."
@@ -442,7 +380,6 @@ void RemoveBuilderPatternPass::run_pass(DexStoresVector& stores,
                                         ConfigFiles& conf,
                                         PassManager& mgr) {
   auto scope = build_class_scope(stores);
-
   for (const auto& root : m_roots) {
     RemoveClasses rm_builder_pattern(root, scope, conf.get_inliner_config(),
                                      m_blocklist, m_propagate_escape_results,

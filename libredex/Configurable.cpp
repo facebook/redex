@@ -414,12 +414,12 @@ template <>
 std::unordered_set<const DexType*>
 Configurable::as<std::unordered_set<const DexType*>>(const Json::Value& value,
                                                      bindflags_t bindflags) {
-  return std::move(*parse_set(value,
-                              [](const Json::Value& v, bindflags_t b) {
-                                return boost::optional<const DexType*>(
-                                    parse_type(v, b));
-                              },
-                              bindflags));
+  return std::move(*parse_set(
+      value,
+      [](const Json::Value& v, bindflags_t b) {
+        return boost::optional<const DexType*>(parse_type(v, b));
+      },
+      bindflags));
 }
 
 using TypeMap = std::unordered_map<DexType*, DexType*>;

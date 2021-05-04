@@ -71,18 +71,20 @@ void update_liveness(const IRInstruction* inst,
 
 ////////////////////////////////////////////////////////////////////////////////
 
-void LocalDce::dce(cfg::ControlFlowGraph& cfg) {
-  normalize_new_instances(cfg);
-  const auto& blocks = graph::postorder_sort<cfg::GraphInterface>(cfg);
+std::vector<std::pair<cfg::Block*, IRList::iterator>>
+LocalDce::get_dead_instructions(
+    const cfg::ControlFlowGraph& cfg,
+    const std::vector<cfg::Block*>& blocks,
+    const std::function<const std::vector<cfg::Edge*>&(cfg::Block*)>& succs_fn,
+    const std::function<bool(cfg::Block*, IRInstruction*)>&
+        may_be_required_fn) {
   auto regs = cfg.get_registers_size();
   std::unordered_map<cfg::BlockId, boost::dynamic_bitset<>> liveness;
-  for (cfg::Block* b : blocks) {
+  for (cfg::Block* b : cfg.blocks()) {
     liveness.emplace(b->id(), boost::dynamic_bitset<>(regs + 1));
   }
   bool changed;
   std::vector<std::pair<cfg::Block*, IRList::iterator>> dead_instructions;
-
-  TRACE(DCE, 5, "%s", SHOW(cfg));
 
   // Iterate liveness analysis to a fixed point.
   do {
@@ -95,7 +97,7 @@ void LocalDce::dce(cfg::ControlFlowGraph& cfg) {
       TRACE(DCE, 5, "B%lu: %s", b->id(), show(bliveness).c_str());
 
       // Compute live-out for this block from its successors.
-      for (auto& s : b->succs()) {
+      for (auto& s : succs_fn(b)) {
         if (s->target()->id() == b->id()) {
           bliveness |= prev_liveness;
         }
@@ -113,7 +115,8 @@ void LocalDce::dce(cfg::ControlFlowGraph& cfg) {
         if (it->type != MFLOW_OPCODE) {
           continue;
         }
-        bool required = is_required(cfg, b, it->insn, bliveness);
+        bool required = may_be_required_fn(b, it->insn) &&
+                        is_required(cfg, b, it->insn, bliveness);
         if (required) {
           update_liveness(it->insn, bliveness);
         } else {
@@ -132,6 +135,21 @@ void LocalDce::dce(cfg::ControlFlowGraph& cfg) {
       }
     }
   } while (changed);
+  return dead_instructions;
+}
+
+void LocalDce::dce(cfg::ControlFlowGraph& cfg) {
+  normalize_new_instances(cfg);
+  TRACE(DCE, 5, "%s", SHOW(cfg));
+  const auto& blocks = graph::postorder_sort<cfg::GraphInterface>(cfg);
+  std::vector<std::pair<cfg::Block*, IRList::iterator>> dead_instructions =
+      get_dead_instructions(
+          cfg, blocks, /* succs_fn */
+          [](cfg::Block* block) -> const std::vector<cfg::Edge*>& {
+            return block->succs();
+          },
+          /* may_be_required_fn */
+          [](cfg::Block*, IRInstruction*) -> bool { return true; });
 
   // Remove dead instructions.
   std::unordered_set<IRInstruction*> seen;
@@ -191,7 +209,7 @@ void LocalDce::dce(IRCode* code) {
  * An instruction is required (i.e., live) if it has side effects or if its
  * destination register is live.
  */
-bool LocalDce::is_required(cfg::ControlFlowGraph& cfg,
+bool LocalDce::is_required(const cfg::ControlFlowGraph& cfg,
                            cfg::Block* b,
                            IRInstruction* inst,
                            const boost::dynamic_bitset<>& bliveness) {

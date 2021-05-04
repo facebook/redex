@@ -19,6 +19,7 @@
 #include "IRInstruction.h"
 #include "MethodUtil.h"
 #include "ReachableClasses.h"
+#include "Resolver.h"
 
 namespace m {
 
@@ -412,6 +413,15 @@ inline auto has_string(match_t<DexString*, P> p) {
 
 inline auto has_string() { return has_string(any<DexString*>()); }
 
+template <typename P>
+inline auto has_literal(match_t<int64_t, P> p) {
+  return matcher<IRInstruction*>([p = std::move(p)](const IRInstruction* insn) {
+    return insn->has_literal() && p.matches(insn->get_literal());
+  });
+}
+
+inline auto has_literal() { return has_literal(any<int64_t>()); }
+
 /** Match types which can be assigned to the given type */
 inline auto is_assignable_to(const DexType* parent) {
   return matcher<DexType*>([parent](const DexType* child) {
@@ -424,6 +434,18 @@ template <typename Member, typename P>
 inline auto member_of(match_t<DexType*, P> p) {
   return matcher<Member*>([p = std::move(p)](const Member* member) {
     return p.matches(member->get_class());
+  });
+}
+
+/** Predicate on a method after it is resolved. */
+template <typename P>
+inline auto resolve_method(MethodSearch ms, match_t<DexMethod*, P> p) {
+  return matcher<DexMethodRef*>([ms, p = std::move(p)](const DexMethodRef* mr) {
+    // resolve_method accepts a non-const DexMethodRef* to return a non-const
+    // DexMethod*.  const_cast is safe to get around that as the return value
+    // is treated as const.
+    const auto* m = resolve_method(const_cast<DexMethodRef*>(mr), ms);
+    return m && p.matches(m);
   });
 }
 

@@ -10,6 +10,7 @@
 #include "ConfigFiles.h"
 #include "DexUtil.h"
 #include "GlobalTypeAnalyzer.h"
+#include "KotlinNullCheckMethods.h"
 #include "Show.h"
 #include "Trace.h"
 #include "TypeAnalysisTransform.h"
@@ -123,8 +124,8 @@ void GlobalTypeAnalysisPass::run_pass(DexStoresVector& stores,
         RuntimeAssertTransform::Config(config.get_proguard_map());
   }
 
-  type_analyzer::Transform::NullAssertionSet null_assertion_set;
-  Transform::setup(null_assertion_set);
+  type_analyzer::Transform::NullAssertionSet null_assertion_set =
+      kotlin_nullcheck_wrapper::get_kotlin_null_assertions();
   Scope scope = build_class_scope(stores);
   global::GlobalTypeAnalysis analysis(m_config.max_global_analysis_iteration);
   auto gta = analysis.analyze(scope);

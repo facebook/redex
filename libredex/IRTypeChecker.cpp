@@ -971,6 +971,9 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
   }
   case OPCODE_IGET: {
     assume_reference(current_state, insn->src(0));
+    // T86372240
+    // const auto f_cls = insn->get_field()->get_class();
+    // assume_assignable(current_state->get_dex_type(insn->src(0)), f_cls);
     break;
   }
   case OPCODE_IGET_BOOLEAN:
@@ -978,6 +981,8 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
   case OPCODE_IGET_CHAR:
   case OPCODE_IGET_SHORT: {
     assume_reference(current_state, insn->src(0));
+    const auto f_cls = insn->get_field()->get_class();
+    assume_assignable(current_state->get_dex_type(insn->src(0)), f_cls);
     break;
   }
   case OPCODE_IGET_WIDE: {
@@ -987,6 +992,8 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
   case OPCODE_IGET_OBJECT: {
     assume_reference(current_state, insn->src(0));
     always_assert(insn->has_field());
+    const auto f_cls = insn->get_field()->get_class();
+    assume_assignable(current_state->get_dex_type(insn->src(0)), f_cls);
     break;
   }
   case OPCODE_IPUT: {
@@ -997,6 +1004,8 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
       assume_integer(current_state, insn->src(0));
     }
     assume_reference(current_state, insn->src(1));
+    const auto f_cls = insn->get_field()->get_class();
+    assume_assignable(current_state->get_dex_type(insn->src(1)), f_cls);
     break;
   }
   case OPCODE_IPUT_BOOLEAN:
@@ -1005,6 +1014,8 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
   case OPCODE_IPUT_SHORT: {
     assume_integer(current_state, insn->src(0));
     assume_reference(current_state, insn->src(1));
+    const auto f_cls = insn->get_field()->get_class();
+    assume_assignable(current_state->get_dex_type(insn->src(1)), f_cls);
     break;
   }
   case OPCODE_IPUT_WIDE: {
@@ -1015,6 +1026,12 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
   case OPCODE_IPUT_OBJECT: {
     assume_reference(current_state, insn->src(0));
     assume_reference(current_state, insn->src(1));
+    always_assert(insn->has_field());
+    const auto f_type = insn->get_field()->get_type();
+    assume_assignable(current_state->get_dex_type(insn->src(0)), f_type);
+    const auto f_cls = insn->get_field()->get_class();
+    assume_assignable(current_state->get_dex_type(insn->src(1)), f_cls);
+
     break;
   }
   case OPCODE_SGET: {

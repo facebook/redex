@@ -42,6 +42,7 @@ struct Stats {
 struct SharedStateStats {
   size_t method_barriers{0};
   size_t method_barriers_iterations{0};
+  size_t finalizable_fields{0};
   size_t conditionally_pure_methods{0};
   size_t conditionally_pure_methods_iterations{0};
 };
@@ -68,7 +69,9 @@ struct BarrierHasher {
 
 class SharedState {
  public:
-  explicit SharedState(const std::unordered_set<DexMethodRef*>& pure_methods);
+  explicit SharedState(
+      const std::unordered_set<DexMethodRef*>& pure_methods,
+      const std::unordered_set<DexString*>& finalish_field_names);
   void init_scope(const Scope&);
   CseUnorderedLocationSet get_relevant_written_locations(
       const IRInstruction* insn,
@@ -76,6 +79,7 @@ class SharedState {
       const CseUnorderedLocationSet& read_locations);
   void log_barrier(const Barrier& barrier);
   bool has_pure_method(const IRInstruction* insn) const;
+  bool is_finalish(const DexField* field) const;
   void cleanup();
   const CseUnorderedLocationSet&
   get_read_locations_of_conditionally_pure_method(
@@ -85,9 +89,13 @@ class SharedState {
     return m_pure_methods;
   }
   const method_override_graph::Graph* get_method_override_graph() const;
+  const std::unordered_set<const DexField*>& get_finalizable_fields() const {
+    return m_finalizable_fields;
+  }
 
  private:
   void init_method_barriers(const Scope& scope);
+  void init_finalizable_fields(const Scope& scope);
   bool may_be_barrier(const IRInstruction* insn, DexType* exact_virtual_scope);
   bool is_invoke_safe(const IRInstruction* insn, DexType* exact_virtual_scope);
   CseUnorderedLocationSet get_relevant_written_locations(
@@ -98,6 +106,8 @@ class SharedState {
   std::unordered_set<DexMethodRef*> m_safe_methods;
   // subset of safe methods which are in fact defs
   std::unordered_set<const DexMethod*> m_safe_method_defs;
+  const std::unordered_set<DexString*>& m_finalish_field_names;
+  std::unordered_set<const DexField*> m_finalizable_fields;
   std::unique_ptr<ConcurrentMap<Barrier, size_t, BarrierHasher>> m_barriers;
   std::unordered_map<const DexMethod*, CseUnorderedLocationSet>
       m_method_written_locations;
@@ -135,7 +145,6 @@ class CommonSubexpressionElimination {
   std::vector<Forward> m_forward;
   // List of unique sets of earlier instructions to be forwarded
   std::vector<sparta::PatriciaTreeSet<const IRInstruction*>> m_earlier_insns;
-  SharedState* m_shared_state;
   cfg::ControlFlowGraph& m_cfg;
   Stats m_stats;
   bool m_is_static;

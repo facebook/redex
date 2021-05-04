@@ -109,8 +109,8 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
     }
 
     if (m_config.relocate_non_true_virtual_methods) {
-      m_non_true_virtual_methods =
-          method_override_graph::get_non_true_virtuals(scope);
+      m_non_true_virtual_methods = method_override_graph::get_non_true_virtuals(
+          *method_override_graph::build_graph(scope), scope);
     }
   };
 

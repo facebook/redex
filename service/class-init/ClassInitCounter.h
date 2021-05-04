@@ -398,7 +398,8 @@ class RegisterSet {
   // Potentially lifting ObjectUses into MergedUses, and expanding existing
   // MergedUses to more cover more ObjectUses.
   // Any newly created MergedUses are stored globally
-  void merge_registers(const RegisterSet& other, MergedUsedSet& stored);
+  void merge_registers(const RegisterSet& comes_after,
+                       MergedUsedSet& merge_store);
 
   // Merge m_all_uses from successor(s) to the current, PO earlier uses
   void merge_effects(const RegisterSet& other);
@@ -467,7 +468,7 @@ class ClassInitCounter final {
                          std::unordered_map<DexMethod*, MergedUsedSet>>;
 
   ClassInitCounter(
-      DexType* common_parent,
+      const std::unordered_set<DexClass*>& classes_to_check,
       const std::unordered_set<DexMethodRef*>& safe_escapes,
       const std::unordered_set<DexClass*>& classes,
       boost::optional<DexString*> optional_method_name = boost::none);
@@ -506,9 +507,8 @@ class ClassInitCounter final {
       // Reference to data structure to store results in
       TypeToInit& type_to_init);
 
-  // Identifies and stores in type_to_inits all classes that extend parent
-  void find_children(DexType* parent,
-                     const std::unordered_set<DexClass*>& classes);
+  // Identifies and stores in type_to_inits all classes
+  void find_children(const std::unordered_set<DexClass*>& classes_to_check);
 
   // Walks all of the methods of the apk, updating type_to_inits
   void walk_methods(DexClass* container,

@@ -136,7 +136,7 @@ class AliasedRegisters final : public sparta::AbstractValue<AliasedRegisters> {
 
   // Each alias group has one representative register
   reg_t get_representative(
-      const Value& r,
+      const Value& orig,
       const boost::optional<reg_t>& max_addressable = boost::none) const;
 
   // ---- extends AbstractValue ----

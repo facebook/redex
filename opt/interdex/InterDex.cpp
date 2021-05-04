@@ -69,28 +69,29 @@ std::unordered_set<DexClass*> find_unrefenced_coldstart_classes(
     old_no_ref = new_no_ref;
     new_no_ref = 0;
     cold_cold_references.clear();
-    walk::code(input_scope,
-               [&](DexMethod* meth) {
-                 return coldstart_classes.count(meth->get_class()) > 0;
-               },
-               [&](DexMethod* meth, const IRCode& code) {
-                 auto base_cls = meth->get_class();
-                 for (auto& mie : InstructionIterable(meth->get_code())) {
-                   auto inst = mie.insn;
-                   DexType* called_cls = nullptr;
-                   if (inst->has_method()) {
-                     called_cls = inst->get_method()->get_class();
-                   } else if (inst->has_field()) {
-                     called_cls = inst->get_field()->get_class();
-                   } else if (inst->has_type()) {
-                     called_cls = inst->get_type();
-                   }
-                   if (called_cls != nullptr && base_cls != called_cls &&
-                       coldstart_classes.count(called_cls) > 0) {
-                     cold_cold_references.insert(called_cls);
-                   }
-                 }
-               });
+    walk::code(
+        input_scope,
+        [&](DexMethod* meth) {
+          return coldstart_classes.count(meth->get_class()) > 0;
+        },
+        [&](DexMethod* meth, const IRCode& code) {
+          auto base_cls = meth->get_class();
+          for (auto& mie : InstructionIterable(meth->get_code())) {
+            auto inst = mie.insn;
+            DexType* called_cls = nullptr;
+            if (inst->has_method()) {
+              called_cls = inst->get_method()->get_class();
+            } else if (inst->has_field()) {
+              called_cls = inst->get_field()->get_class();
+            } else if (inst->has_type()) {
+              called_cls = inst->get_type();
+            }
+            if (called_cls != nullptr && base_cls != called_cls &&
+                coldstart_classes.count(called_cls) > 0) {
+              cold_cold_references.insert(called_cls);
+            }
+          }
+        });
     for (const auto& cls : scope) {
       // Make sure we don't drop classes which might be
       // called from native code.
@@ -366,8 +367,8 @@ bool InterDex::emit_class(DexInfo& dex_info,
 
 void InterDex::emit_primary_dex(
     const DexClasses& primary_dex,
-    const std::vector<DexType*>& interdex_types,
-    const std::unordered_set<DexClass*>& unreferenced_cls) {
+    const std::vector<DexType*>& interdex_order,
+    const std::unordered_set<DexClass*>& unreferenced_classes) {
 
   std::unordered_set<DexClass*> primary_dex_set(primary_dex.begin(),
                                                 primary_dex.end());
@@ -381,14 +382,14 @@ void InterDex::emit_primary_dex(
   // Sort the primary dex according to interdex order (aka emit first the
   // primary classes that appear in the interdex order, in the order that
   // they appear there).
-  for (DexType* type : interdex_types) {
+  for (DexType* type : interdex_order) {
     DexClass* cls = type_class(type);
     if (!cls) {
       continue;
     }
 
     if (primary_dex_set.count(cls) > 0) {
-      if (unreferenced_cls.count(cls) > 0) {
+      if (unreferenced_classes.count(cls) > 0) {
         TRACE(IDEX, 5, "[primary dex]: %s no longer linked to coldstart set.",
               SHOW(cls));
         coldstart_classes_skipped_in_primary++;
@@ -744,9 +745,22 @@ void InterDex::init_cross_dex_ref_minimizer_and_relocate_methods() {
   for (DexClass* cls : classes_to_insert) {
     m_cross_dex_ref_minimizer.insert(cls);
   }
+
+  // A few classes might have already been emitted to the current dex which we
+  // are about to fill up. Make it so that the minimizer knows that all the refs
+  // of those classes have already been emitted.
+  for (auto cls : m_dexes_structure.get_current_dex_classes()) {
+    m_cross_dex_ref_minimizer.sample(cls);
+    m_cross_dex_ref_minimizer.insert(cls);
+    m_cross_dex_ref_minimizer.erase(cls, /* emitted */ true,
+                                    /* overflowed */ false);
+  }
 }
 
 void InterDex::emit_remaining_classes(DexInfo& dex_info) {
+  m_current_classes_when_emitting_remaining =
+      m_dexes_structure.get_current_dex_classes().size();
+
   if (!m_minimize_cross_dex_refs) {
     for (DexClass* cls : m_scope) {
       emit_class(dex_info, cls, /* check_if_skip */ true,
@@ -766,8 +780,22 @@ void InterDex::emit_remaining_classes(DexInfo& dex_info) {
   //   refs
   bool pick_worst = true;
   while (!m_cross_dex_ref_minimizer.empty()) {
-    DexClass* cls = pick_worst ? m_cross_dex_ref_minimizer.worst()
-                               : m_cross_dex_ref_minimizer.front();
+    DexClass* cls{nullptr};
+    if (pick_worst) {
+      // Figure out which class has the most unapplied references
+      auto worst = m_cross_dex_ref_minimizer.worst();
+      // Use that worst class if it has more unapplied refs than already applied
+      // refs
+      if (m_cross_dex_ref_minimizer.get_unapplied_refs(worst) >
+          m_cross_dex_ref_minimizer.get_applied_refs()) {
+        cls = worst;
+      }
+    }
+    if (!cls) {
+      // Default case
+      cls = m_cross_dex_ref_minimizer.front();
+    }
+
     std::vector<DexClass*> erased_classes;
     bool emitted = emit_class(dex_info, cls, /* check_if_skip */ false,
                               /* perf_sensitive */ false, &erased_classes);

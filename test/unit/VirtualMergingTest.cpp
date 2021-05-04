@@ -16,7 +16,7 @@
 #include "IRAssembler.h"
 #include "MethodProfiles.h"
 #include "RedexTest.h"
-#include "RegAlloc.h"
+#include "RegisterAllocation.h"
 #include "StripDebugInfo.h"
 #include "VirtualMerging.h"
 
@@ -109,7 +109,7 @@ class VirtualMergingTest : public RedexTest {
 
   void post_process(DexMethod* m) {
     // Run RegAlloc to get registers somewhat under control.
-    regalloc::RegAllocPass::allocate({}, m);
+    regalloc::graph_coloring::allocate({}, m);
 
     // Strip debug info.
     StripDebugInfoPass::Config cf;

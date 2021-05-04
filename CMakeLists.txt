@@ -54,6 +54,16 @@ include_directories(
         ${ZLIB_INCLUDE_DIRS}
         ${includes})
 
+install(DIRECTORY libredex util libresource shared
+        DESTINATION include/redex
+        FILES_MATCHING PATTERN "*.h" PATTERN "*.def")
+install(DIRECTORY sparta/include/
+        DESTINATION include/redex/sparta
+        FILES_MATCHING PATTERN "*.h")
+install(DIRECTORY tools/common tools/tool
+        DESTINATION include/redex/tools
+        FILES_MATCHING PATTERN "*.h")
+
 file(GLOB_RECURSE redex_srcs
         "analysis/max-depth/*.cpp"
         "analysis/max-depth/*.h"
@@ -83,6 +93,8 @@ file(GLOB_RECURSE redex_srcs
 
 add_library(redex STATIC ${redex_srcs})
 
+install(TARGETS redex ARCHIVE DESTINATION lib LIBRARY DESTINATION lib)
+
 file(GLOB_RECURSE tool_srcs
         "tools/tool/*.cpp"
         "tools/tool/*.h"
@@ -90,12 +102,16 @@ file(GLOB_RECURSE tool_srcs
 
 add_library(tool STATIC ${tool_srcs})
 
+install(TARGETS tool ARCHIVE DESTINATION lib LIBRARY DESTINATION lib)
+
 file(GLOB_RECURSE resource_srcs
         "libresource/*.cpp"
         "libresource/*.h"
         )
 
 add_library(resource STATIC ${resource_srcs})
+
+install(TARGETS resource ARCHIVE DESTINATION lib LIBRARY DESTINATION lib)
 
 file(GLOB redex_all_srcs
         "tools/redex-all/*.cpp"
@@ -127,26 +143,26 @@ target_compile_definitions(redex-all PRIVATE)
 
 set_link_whole(redex-all redex)
 
-install(TARGETS redex-all DESTINATION .)
+install(TARGETS redex-all DESTINATION bin)
 
 # redex.py things...
 
-install(FILES redex.py DESTINATION .)
-install(DIRECTORY pyredex DESTINATION .)
+install(FILES redex.py DESTINATION bin)
+install(DIRECTORY pyredex DESTINATION bin)
 
 file(GLOB gen_packed_apilevels "gen_packed_apilevels.py")
 file(GLOB api_level_srcs "service/api-levels/framework_classes_api_*.txt")
 
 add_custom_command(
     OUTPUT  generated_apilevels.py
-    COMMAND python3 ${gen_packed_apilevels} -o ${CMAKE_CURRENT_BINARY_DIR}/generated_apilevels.py ${api_level_srcs}
+    COMMAND python3 ${gen_packed_apilevels} -o generated_apilevels.py ${api_level_srcs}
     DEPENDS ${api_level_srcs} ${gen_packed_apilevels}
 )
 add_custom_target(generated_apilevels ALL DEPENDS generated_apilevels.py)
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/generated_apilevels.py DESTINATION .)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/generated_apilevels.py DESTINATION bin)
 
 # Misc stuff, for good measure.
-install(FILES LICENSE README.md config/default.config DESTINATION .)
+install(FILES LICENSE README.md config/default.config DESTINATION share/doc/redex)
 
 set(CPACK_INCLUDE_TOPLEVEL_DIRECTORY OFF)
 set(CPACK_GENERATOR "ZIP")

@@ -46,6 +46,7 @@ function install_from_apt {
         automake
         binutils-dev
         bzip2
+        ca-certificates
         g++
         libiberty-dev
         libjemalloc-dev

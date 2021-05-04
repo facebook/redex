@@ -145,13 +145,15 @@ class WholeProgramState {
       const IRInstruction* insn,
       const ConstantEnvironment& env,
       const DexType* clinit_cls,
-      ConcurrentMap<const DexField*, std::vector<ConstantValue>>* field_tmp);
+      ConcurrentMap<const DexField*, std::vector<ConstantValue>>*
+          fields_value_tmp);
 
   void collect_return_values(
       const IRInstruction* insn,
       const ConstantEnvironment& env,
       const DexMethod* method,
-      ConcurrentMap<const DexMethod*, std::vector<ConstantValue>>* method_tmp);
+      ConcurrentMap<const DexMethod*, std::vector<ConstantValue>>*
+          methods_value_tmp);
 
   boost::optional<call_graph::Graph> m_call_graph;
 

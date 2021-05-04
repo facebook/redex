@@ -33,7 +33,8 @@ void test(const Scope& scope,
           bool is_static = true,
           bool is_init_or_clinit = false,
           DexType* declaring_type = nullptr,
-          DexTypeList* args = DexTypeList::make_type_list({})) {
+          DexTypeList* args = DexTypeList::make_type_list({}),
+          const std::unordered_set<DexString*>& finalish_field_names = {}) {
   auto field_a = DexField::make_field("LFoo;.a:I")->make_concrete(ACC_PUBLIC);
 
   auto field_b = DexField::make_field("LFoo;.b:I")->make_concrete(ACC_PUBLIC);
@@ -59,7 +60,7 @@ void test(const Scope& scope,
   });
 
   auto pure_methods = get_pure_methods();
-  cse_impl::SharedState shared_state(pure_methods);
+  cse_impl::SharedState shared_state(pure_methods, finalish_field_names);
   shared_state.init_scope(scope);
   cse_impl::CommonSubexpressionElimination cse(&shared_state, code->cfg(),
                                                is_static, is_init_or_clinit,
@@ -1369,11 +1370,25 @@ TEST_F(CommonSubexpressionEliminationTest,
                         ->make_concrete(ACC_PUBLIC, true /* is_virtual */);
   get_method->set_code(assembler::ircode_from_string(R"(
     (
-      (iget v2 "LO;.x:I")
-      (return v2)
+      (load-param-object v0)
+      (iget v0 "LO;.x:I")
+      (move-result-pseudo v1)
+      (return v1)
     )
   )"));
   o_creator.add_method(get_method);
+  // set_method exists so that it cannot be inferred that x is finalizable
+  auto set_method = DexMethod::make_method("LO;.setX:(I)V")
+                        ->make_concrete(ACC_PUBLIC, true /* is_virtual */);
+  set_method->set_code(assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+      (load-param v1)
+      (iput v1 v0 "LO;.x:I")
+      (return-void)
+    )
+  )"));
+  o_creator.add_method(set_method);
 
   auto code_str = R"(
     (
@@ -1718,4 +1733,93 @@ TEST_F(CommonSubexpressionEliminationTest, no_phi_node) {
   )";
   auto expected_str = code_str;
   test(Scope{type_class(type::java_lang_Object())}, code_str, expected_str, 0);
+}
+
+TEST_F(CommonSubexpressionEliminationTest, untracked_finalish_field) {
+  ClassCreator bar_creator(DexType::make_type("LBar;"));
+  bar_creator.set_super(type::java_lang_Object());
+
+  auto finalish_field =
+      DexField::make_field("LBar;.x:I")->make_concrete(ACC_PUBLIC);
+
+  auto code_str = R"(
+    (
+      (load-param-object v0)
+      (iget v0 "LBar;.x:I")
+      (move-result-pseudo v1)
+      (invoke-static () "LWhat;.ever:()V")
+      (iget v0 "LBar;.x:I")
+      (move-result-pseudo v1)
+    )
+  )";
+  auto expected_str = R"(
+    (
+      (load-param-object v0)
+      (iget v0 "LBar;.x:I")
+      (move-result-pseudo v1)
+        (move v2 v1)
+      (invoke-static () "LWhat;.ever:()V")
+      (iget v0 "LBar;.x:I")
+      (move-result-pseudo v1)
+      (move v1 v2)
+    )
+  )";
+  bool is_static = false;
+  bool is_init_or_clinit = false;
+  auto declaring_type = bar_creator.create()->get_type();
+  auto args = DexTypeList::make_type_list({});
+  auto finalish_field_name = finalish_field->get_name();
+  test(Scope{type_class(type::java_lang_Object()), type_class(declaring_type)},
+       code_str, expected_str, 1, is_static, is_init_or_clinit, declaring_type,
+       args, {finalish_field_name});
+}
+
+TEST_F(CommonSubexpressionEliminationTest, finalizable) {
+  // CSE still happens for finalizable fields across barriers
+  ClassCreator o_creator(DexType::make_type("LO;"));
+  o_creator.set_super(type::java_lang_Object());
+
+  // CSE will infer that x is finalizable
+  auto field_x = DexField::make_field("LO;.x:I")->make_concrete(ACC_PRIVATE);
+
+  auto init_method =
+      DexMethod::make_method("LO;.<init>:()V")
+          ->make_concrete(ACC_PUBLIC | ACC_CONSTRUCTOR, false /* is_virtual */);
+  init_method->set_code(assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+      (invoke-direct (v0) "Ljava/lang/Object;.<init>:()V")
+      (const v1 0)
+      (iput v1 v0 "LO;.x:I")
+      (return-void)
+    )
+  )"));
+  o_creator.add_method(init_method);
+
+  auto code_str = R"(
+    (
+      (const v0 0)
+      (iget v0 "LO;.x:I")
+      (move-result-pseudo v1)
+      (invoke-static () "LWhat;.ever:()V")
+      (iget v0 "LO;.x:I")
+      (move-result-pseudo v2)
+    )
+  )";
+  auto expected_str = R"(
+    (
+      (const v0 0)
+      (iget v0 "LO;.x:I")
+      (move-result-pseudo v1)
+      (move v3 v1)
+      (invoke-static () "LWhat;.ever:()V")
+      (iget v0 "LO;.x:I")
+      (move-result-pseudo v2)
+      (move v2 v3)
+    )
+  )";
+  test(Scope{type_class(type::java_lang_Object()), o_creator.create()},
+       code_str,
+       expected_str,
+       1);
 }

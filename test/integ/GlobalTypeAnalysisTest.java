@@ -302,3 +302,41 @@ class TestJ {
 
   static void main() { byte[] ba = createByteArray(); }
 }
+
+class TestK {
+  static class A {}
+  static class B extends A {}
+
+  static class Foo {
+    A f;
+    Foo() {
+      f = new B();
+    }
+    Foo(Foo other) {
+      f = new A();
+      other.f = new B();
+    }
+  }
+  static void main() {
+    Foo f1 = new Foo();
+    Foo f2 = new Foo(f1);
+  }
+}
+
+class TestL {
+  static class A {}
+
+  static class Foo {
+    A f;
+    Foo() {
+      f = new A();
+    }
+    Foo(Foo other) {
+      other.f = new A();
+    }
+  }
+  static void main() {
+    Foo f1 = new Foo();
+    Foo f2 = new Foo(f1);
+  }
+}

@@ -8,17 +8,12 @@
 #include "TypeAnalysisTransform.h"
 
 #include "DexInstruction.h"
+#include "KotlinNullCheckMethods.h"
 #include "Show.h"
 
+using namespace kotlin_nullcheck_wrapper;
+
 namespace {
-
-constexpr const char* CHECK_PARAM_NULL_SIGNATURE =
-    "Lkotlin/jvm/internal/Intrinsics;.checkParameterIsNotNull:(Ljava/lang/"
-    "Object;Ljava/lang/String;)V";
-constexpr const char* CHECK_EXPR_NULL_SIGNATURE =
-    "Lkotlin/jvm/internal/Intrinsics;.checkExpressionValueIsNotNull:(Ljava/"
-    "lang/Object;Ljava/lang/String;)V";
-
 enum BranchResult {
   ALWAYS_TAKEN,
   NEVER_TAKEN,
@@ -164,7 +159,6 @@ Transform::Stats Transform::apply(
       if (m_config.remove_kotlin_null_check_assertions &&
           insn->opcode() == OPCODE_INVOKE_STATIC &&
           null_assertion_set.count(insn->get_method())) {
-
         auto parm = env.get(insn->src(0));
         if (parm.is_top() || parm.is_bottom()) {
           continue;
@@ -201,17 +195,6 @@ void Transform::apply_changes(DexMethod* method) {
   for (const auto& it : m_deletes) {
     TRACE(TYPE_TRANSFORM, 9, "Removing instruction %s", SHOW(it->insn));
     code->remove_opcode(it);
-  }
-}
-
-void Transform::setup(NullAssertionSet& null_assertion_set) {
-  auto check_param_method = DexMethod::get_method(CHECK_PARAM_NULL_SIGNATURE);
-  if (check_param_method) {
-    null_assertion_set.insert(check_param_method);
-  }
-  auto check_expr_method = DexMethod::get_method(CHECK_EXPR_NULL_SIGNATURE);
-  if (check_expr_method) {
-    null_assertion_set.insert(check_expr_method);
   }
 }
 

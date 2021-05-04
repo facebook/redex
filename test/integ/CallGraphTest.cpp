@@ -10,6 +10,7 @@
 
 #include "CallGraph.h"
 #include "DexClass.h"
+#include "MethodOverrideGraph.h"
 #include "RedexTest.h"
 
 struct CallGraphTest : public RedexIntegrationTest {
@@ -39,6 +40,7 @@ struct CallGraphTest : public RedexIntegrationTest {
   DexMethod* pure_ref_3_init;
 
   Scope scope;
+  std::unique_ptr<const method_override_graph::Graph> method_override_graph;
   boost::optional<call_graph::Graph> complete_graph;
   boost::optional<call_graph::Graph> multiple_graph;
 
@@ -46,8 +48,11 @@ struct CallGraphTest : public RedexIntegrationTest {
   CallGraphTest() {}
   void SetUp() override {
     scope = build_class_scope(stores);
-    complete_graph = call_graph::complete_call_graph(scope);
-    multiple_graph = call_graph::multiple_callee_graph(scope, 5);
+    method_override_graph = method_override_graph::build_graph(scope);
+    complete_graph =
+        call_graph::complete_call_graph(*method_override_graph, scope);
+    multiple_graph =
+        call_graph::multiple_callee_graph(*method_override_graph, scope, 5);
     clinit = DexMethod::get_method(
                  "Lcom/facebook/redextest/CallGraphTest;.<clinit>:()V")
                  ->as_def();

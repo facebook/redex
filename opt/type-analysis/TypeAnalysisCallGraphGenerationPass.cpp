@@ -47,9 +47,11 @@ MethodSearch get_method_search(const DexClass* analysis_cls,
 class TypeAnalysisBasedStrategy : public MultipleCalleeBaseStrategy {
  public:
   explicit TypeAnalysisBasedStrategy(
+      const mog::Graph& method_override_graph,
       const Scope& scope,
       std::shared_ptr<type_analyzer::global::GlobalTypeAnalyzer> gta)
-      : MultipleCalleeBaseStrategy(scope), m_gta(std::move(gta)) {
+      : MultipleCalleeBaseStrategy(method_override_graph, scope),
+        m_gta(std::move(gta)) {
     walk::parallel::code(scope, [](DexMethod*, IRCode& code) {
       code.build_cfg(/* editable */ false);
       code.cfg().calculate_exit_block();
@@ -128,7 +130,7 @@ class TypeAnalysisBasedStrategy : public MultipleCalleeBaseStrategy {
     }
     always_assert(!opcode::is_invoke_super(insn->opcode()));
     const auto& overriding_methods =
-        mog::get_overriding_methods(*m_method_override_graph, resolved_callee);
+        mog::get_overriding_methods(m_method_override_graph, resolved_callee);
     for (auto overriding_method : overriding_methods) {
       callsites.emplace_back(overriding_method, code->iterator_to(invoke));
     }
@@ -149,7 +151,7 @@ void TypeAnalysisCallGraphGenerationPass::run_pass(DexStoresVector& stores,
 
   Scope scope = build_class_scope(stores);
   m_result = std::make_shared<call_graph::Graph>(
-      TypeAnalysisBasedStrategy(scope, gta));
+      TypeAnalysisBasedStrategy(*mog::build_graph(scope), scope, gta));
   always_assert(m_result);
   report_stats(*m_result, mgr);
 }

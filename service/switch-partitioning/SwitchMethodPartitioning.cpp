@@ -7,6 +7,7 @@
 
 #include "SwitchMethodPartitioning.h"
 
+#include <boost/variant.hpp>
 #include <queue>
 
 #include "ConstantPropagationAnalysis.h"
@@ -72,17 +73,19 @@ reg_t find_determining_reg(
       SHOW(b));
 }
 
-} // namespace
-
 /**
- * Fill `m_prologue_blocks` and return the register that we're "switching" on
- * (even if it's not a real switch statement)
+ * Fill `prologue_blocks` and derive the structure of the method. Return
+ * Return a `reg_t` of the register if the method is a switch or if-else
+ * chain over said register.
+ * Return a `bool` otherwise, which is `true` iff the prologue ends with a
+ * throw (indicative of a an "empty switch" that only throws
+ * `IllegalArgumentException`).
  */
-boost::optional<reg_t> SwitchMethodPartitioning::compute_prologue_blocks(
+boost::variant<reg_t, bool> compute_prologue_blocks(
     cfg::ControlFlowGraph* cfg,
     const cp::intraprocedural::FixpointIterator& fixpoint,
-    bool verify_default_case) {
-
+    bool verify_default_case,
+    std::vector<cfg::Block*>& prologue_blocks) {
   for (const cfg::Block* b : cfg->blocks()) {
     always_assert_log(!b->is_catch(),
                       "SwitchMethodPartitioning does not support methods with "
@@ -94,11 +97,11 @@ boost::optional<reg_t> SwitchMethodPartitioning::compute_prologue_blocks(
   // case block selection blocks (a switch or an if-else tree) begin.
   for (cfg::Block* b = cfg->entry_block(); b != nullptr;
        b = b->goes_to_only_edge()) {
-    m_prologue_blocks.push_back(b);
+    prologue_blocks.push_back(b);
   }
 
   {
-    auto last_prologue_block = m_prologue_blocks.back();
+    auto last_prologue_block = prologue_blocks.back();
     auto last_prologue_insn_it = last_prologue_block->get_last_insn();
     always_assert(last_prologue_insn_it != last_prologue_block->end());
     auto last_prologue_insn = last_prologue_insn_it->insn;
@@ -111,7 +114,7 @@ boost::optional<reg_t> SwitchMethodPartitioning::compute_prologue_blocks(
                       "%s in %s", SHOW(last_prologue_insn), SHOW(*cfg));
 
     if (!opcode::is_branch(op)) {
-      return boost::none;
+      return opcode::is_throw(op);
     } else if (opcode::is_switch(op)) {
       // switch or if-else tree. Not both.
       return last_prologue_insn->src(0);
@@ -136,7 +139,7 @@ boost::optional<reg_t> SwitchMethodPartitioning::compute_prologue_blocks(
   // blocks and stopping before we reach a leaf.
   boost::optional<reg_t> determining_reg = boost::none;
   std::queue<cfg::Block*> to_visit;
-  to_visit.push(m_prologue_blocks.back());
+  to_visit.push(prologue_blocks.back());
   while (!to_visit.empty()) {
     auto b = to_visit.front();
     to_visit.pop();
@@ -146,8 +149,8 @@ boost::optional<reg_t> SwitchMethodPartitioning::compute_prologue_blocks(
     if (b->succs().size() >= 2) {
       // The linear check above and this tree check both account for the
       // top-most node in the tree. Make sure we don't duplicate it
-      if (b != m_prologue_blocks.back()) {
-        m_prologue_blocks.push_back(b);
+      if (b != prologue_blocks.back()) {
+        prologue_blocks.push_back(b);
 
         // Verify there aren't extra instructions in here that we may lose track
         // of
@@ -178,14 +181,15 @@ boost::optional<reg_t> SwitchMethodPartitioning::compute_prologue_blocks(
   }
   always_assert_log(determining_reg != boost::none,
                     "Couldn't find determining register in %s", SHOW(*cfg));
-  return determining_reg;
+  return *determining_reg;
 }
 
-SwitchMethodPartitioning::SwitchMethodPartitioning(IRCode* code,
-                                                   bool verify_default_case)
-    : m_code(code) {
-  m_code->build_cfg(/* editable */ true);
-  auto& cfg = m_code->cfg();
+} // namespace
+
+boost::optional<SwitchMethodPartitioning> SwitchMethodPartitioning::create(
+    IRCode* code, bool verify_default_case) {
+  code->build_cfg(/* editable */ true);
+  auto& cfg = code->cfg();
   // Note that a single-case switch can be compiled as either a switch opcode or
   // a series of if-* opcodes. We can use constant propagation to handle these
   // cases uniformly: to determine the case key, we use the inferred value of
@@ -194,24 +198,40 @@ SwitchMethodPartitioning::SwitchMethodPartitioning(IRCode* code,
       cfg, cp::ConstantPrimitiveAnalyzer());
   fixpoint.run(ConstantEnvironment());
 
-  auto determining_reg =
-      compute_prologue_blocks(&cfg, fixpoint, verify_default_case);
+  std::vector<cfg::Block*> prologue_blocks;
+  auto res = compute_prologue_blocks(&cfg, fixpoint, verify_default_case,
+                                     prologue_blocks);
+
+  reg_t determining_reg{0};
+  if (res.which() == 1) {
+    if (!boost::get<bool>(res)) {
+      return boost::none;
+    }
+  } else {
+    determining_reg = boost::get<reg_t>(res);
+  }
 
   // Find all the outgoing edges from the prologue blocks
   std::vector<cfg::Edge*> cases;
-  for (const cfg::Block* prologue : m_prologue_blocks) {
+  for (const cfg::Block* prologue : prologue_blocks) {
     for (cfg::Edge* e : prologue->succs()) {
-      if (std::find(m_prologue_blocks.begin(), m_prologue_blocks.end(),
-                    e->target()) == m_prologue_blocks.end()) {
+      if (std::find(prologue_blocks.begin(), prologue_blocks.end(),
+                    e->target()) == prologue_blocks.end()) {
         cases.push_back(e);
       }
     }
   }
 
+  if (res.which() == 1 && !cases.empty()) {
+    // This does not look like the simple throw function we expect!
+    return boost::none;
+  }
+
+  std::unordered_map<int32_t, cfg::Block*> key_to_block;
   for (auto edge : cases) {
     auto case_block = edge->target();
     auto env = fixpoint.get_entry_state_at(case_block);
-    auto case_key = env.get<SignedConstantDomain>(*determining_reg);
+    auto case_key = env.get<SignedConstantDomain>(determining_reg);
     if (case_key.is_top() && verify_default_case) {
       auto last_insn_it = case_block->get_last_insn();
       always_assert_log(last_insn_it != case_block->end() &&
@@ -222,7 +242,7 @@ SwitchMethodPartitioning::SwitchMethodPartitioning(IRCode* code,
     } else if (!case_key.is_top()) {
       const auto& c = case_key.get_constant();
       if (c != boost::none) {
-        m_key_to_block[*c] = case_block;
+        key_to_block[*c] = case_block;
       } else {
         // handle multiple case keys that map to a single block
         const auto& edge_case_key = edge->case_key();
@@ -239,8 +259,11 @@ SwitchMethodPartitioning::SwitchMethodPartitioning(IRCode* code,
         }
         always_assert(edge->type() == cfg::EDGE_BRANCH);
         always_assert(edge_case_key != boost::none);
-        m_key_to_block[*edge_case_key] = case_block;
+        key_to_block[*edge_case_key] = case_block;
       }
     }
   }
+
+  return SwitchMethodPartitioning(code, std::move(prologue_blocks),
+                                  std::move(key_to_block));
 }

@@ -83,10 +83,11 @@ public class DisabledLineMapOutliningTest {
       // outlined helper method.
       // The long number is a stable hash of the outlined instruction sequence.
       List<StackTraceElement> trace = Arrays.asList(e.getStackTrace());
-      assertThat(TraceUtil.traceToString(trace, 3)).isEqualTo(Arrays.asList(
+      assertThat(TraceUtil.traceToString(trace, 4)).isEqualTo(Arrays.asList(
        "com.facebook.redexlinemap.DisabledLineMapOutliningTest.wrapsThrow(DisabledLineMapOutliningTest.java:20)",
-       "com.redex.Outlined$0$0$0.$outlined$0$626959d2b9a059a0(Unknown Source)",
-       "com.facebook.redexlinemap.DisabledLineMapOutliningTest.outlinedThrower(DisabledLineMapOutliningTest.java:25)"));
+       "com.redex.Outlined$0$0$0.$outlined$0$626959d2b9a059a0(Unknown Source:25)",
+       "com.facebook.redexlinemap.DisabledLineMapOutliningTest.outlinedThrower(DisabledLineMapOutliningTest.java)",
+       "com.facebook.redexlinemap.DisabledLineMapOutliningTest.testStackTraceWithoutLineMap(DisabledLineMapOutliningTest.java:78)"));
     }
   }
 }

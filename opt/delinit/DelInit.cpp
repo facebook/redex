@@ -451,13 +451,11 @@ void DeadRefs::track_callers(Scope& scope) {
           return;
         }
         if (insn->has_field()) {
-          auto field =
-              resolve_field(insn->get_field(),
-                            opcode::is_an_ifield_op(insn->opcode())
-                                ? FieldSearch::Instance
-                                : opcode::is_an_sfield_op(insn->opcode())
-                                      ? FieldSearch::Static
-                                      : FieldSearch::Any);
+          auto field = resolve_field(
+              insn->get_field(),
+              opcode::is_an_ifield_op(insn->opcode())   ? FieldSearch::Instance
+              : opcode::is_an_sfield_op(insn->opcode()) ? FieldSearch::Static
+                                                        : FieldSearch::Any);
           if (field == nullptr || !field->is_concrete()) return;
           to_erase.update(
               field->get_class(),

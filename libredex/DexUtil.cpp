@@ -268,7 +268,7 @@ bool can_change_visibility_for_relocation(
             return editable_cfg_adapter::LOOP_BREAK;
           }
           cls = type_class(current_method->get_class());
-          if (cls->is_external() && !is_public(cls)) {
+          if (cls == nullptr || (cls->is_external() && !is_public(cls))) {
             res = false;
             return editable_cfg_adapter::LOOP_BREAK;
           }
@@ -342,8 +342,9 @@ void change_visibility(IRCode* code,
               (scope == nullptr || current_method->get_class() != scope)) {
             set_public(current_method);
             cls = type_class(current_method->get_class());
-            always_assert(cls != nullptr);
-            set_public(cls);
+            if (cls != nullptr && !cls->is_external()) {
+              set_public(cls);
+            }
             // FIXME no point in rewriting opcodes in the method
             insn->set_method(current_method);
           }

@@ -176,7 +176,7 @@ void MergeabilityChecker::exclude_static_fields(TypeSet& non_mergeables) {
   }
 
   walk::fields(m_scope, [&non_mergeables, this](DexField* field) {
-    if (m_generated.count(field->get_class()) > 0) {
+    if (m_to_merge.count(field->get_class())) {
       if (is_static(field)) {
         auto rtype = type::get_element_type_if_array(field->get_type());
         if (!type::is_primitive(rtype) && rtype != string_type) {

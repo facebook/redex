@@ -23,6 +23,7 @@
 ConfigFiles::ConfigFiles(const Json::Value& config, const std::string& outdir)
     : m_json(config),
       outdir(outdir),
+      m_global_config(GlobalConfig::default_registry()),
       m_proguard_map(
           new ProguardMap(config.get("proguard_map", "").asString())),
       m_printseeds(config.get("printseeds", "").asString()),
@@ -85,6 +86,24 @@ const std::unordered_set<DexMethodRef*>& ConfigFiles::get_pure_methods() {
     }
   }
   return m_pure_methods;
+}
+
+/**
+ * This function relies on the g_redex.
+ */
+const std::unordered_set<DexString*>& ConfigFiles::get_finalish_field_names() {
+  if (m_finalish_field_names.empty()) {
+    Json::Value finalish_field_names;
+    m_json.get("finalish_field_names", Json::nullValue, finalish_field_names);
+    if (!finalish_field_names.empty()) {
+      for (auto const& field_name : finalish_field_names) {
+        std::string name = field_name.asString();
+        DexString* str = DexString::make_string(name);
+        if (str) m_finalish_field_names.insert(str);
+      }
+    }
+  }
+  return m_finalish_field_names;
 }
 
 /**
@@ -183,8 +202,10 @@ void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
   m_json.get("inliner", Json::nullValue, config);
   if (config.empty()) {
     m_json.get("MethodInlinePass", Json::nullValue, config);
-  }
-  if (config.empty()) {
+    always_assert_log(
+        config.empty(),
+        "MethodInlinePass is no longer used for inliner config, use "
+        "\"inliner\"");
     fprintf(stderr, "WARNING: No inliner config\n");
     return;
   }
@@ -195,22 +216,29 @@ void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
   jw.get("enforce_method_size_limit",
          true,
          inliner_config->enforce_method_size_limit);
-  jw.get("use_constant_propagation_for_callee_size", true,
-         inliner_config->use_constant_propagation_for_callee_size);
+  jw.get(
+      "use_constant_propagation_and_local_dce_for_callee_size", true,
+      inliner_config->use_constant_propagation_and_local_dce_for_callee_size);
   jw.get("use_cfg_inliner", true, inliner_config->use_cfg_inliner);
+  jw.get("intermediate_shrinking", false,
+         inliner_config->intermediate_shrinking);
   jw.get("multiple_callers", false, inliner_config->multiple_callers);
   jw.get("inline_small_non_deletables",
          true,
          inliner_config->inline_small_non_deletables);
-  jw.get("run_const_prop", false, inliner_config->run_const_prop);
-  jw.get("run_cse", false, inliner_config->run_cse);
-  jw.get("run_copy_prop", false, inliner_config->run_copy_prop);
-  jw.get("run_local_dce", false, inliner_config->run_local_dce);
-  jw.get("run_dedup_blocks", false, inliner_config->run_dedup_blocks);
+  auto& shrinker_config = inliner_config->shrinker;
+  jw.get("run_const_prop", false, shrinker_config.run_const_prop);
+  jw.get("run_cse", false, shrinker_config.run_cse);
+  jw.get("run_copy_prop", false, shrinker_config.run_copy_prop);
+  jw.get("run_local_dce", false, shrinker_config.run_local_dce);
+  jw.get("run_reg_alloc", false, shrinker_config.run_reg_alloc);
+  jw.get("run_dedup_blocks", false, shrinker_config.run_dedup_blocks);
   jw.get("debug", false, inliner_config->debug);
   jw.get("blocklist", {}, inliner_config->m_blocklist);
   jw.get("caller_blocklist", {}, inliner_config->m_caller_blocklist);
   jw.get("intradex_allowlist", {}, inliner_config->m_intradex_allowlist);
+  jw.get("reg_alloc_random_forest", "",
+         shrinker_config.reg_alloc_random_forest);
 
   std::vector<std::string> no_inline_annos;
   jw.get("no_inline_annos", {}, no_inline_annos);
@@ -243,6 +271,10 @@ const inliner::InlinerConfig& ConfigFiles::get_inliner_config() {
     load_inliner_config(m_inliner_config.get());
   }
   return *m_inliner_config;
+}
+
+void ConfigFiles::parse_global_config() {
+  m_global_config.parse_config(m_json);
 }
 
 void ConfigFiles::load(const Scope& scope) {

@@ -24,7 +24,7 @@ class DexdumpSymbolicator(object):
     CLS_CHUNK_HDR_REGEX = re.compile(r"  [A-Z]")
     CLS_HDR_REGEX = re.compile(r"Class #")
 
-    def __init__(self, symbol_maps):
+    def __init__(self, symbol_maps, all_line_info=False):
         self.symbol_maps = symbol_maps
         self.reading_methods = False
         self.current_class = None
@@ -32,6 +32,7 @@ class DexdumpSymbolicator(object):
         self.current_method = None
         self.last_lineno = None
         self.prev_line = None
+        self.all_line_info = all_line_info
 
     def class_replacer(self, matchobj):
         m = matchobj.group("class")
@@ -42,13 +43,41 @@ class DexdumpSymbolicator(object):
             )
         return "L%s;" % m
 
+    def decode_positions_at(self, idx):
+        positions = self.symbol_maps.line_map.get_stack(idx)
+        results = []
+        for pos in positions:
+            if pos.method == "redex.$Position.pattern":
+                pattern_id = pos.line
+                results.append("pattern %d" % pattern_id)
+            elif pos.method == "redex.$Position.switch":
+                start = pos.line
+                count_positions = self.symbol_maps.line_map.get_stack(start)
+                assert len(count_positions) == 1
+                assert count_positions[0].method == "redex.$Position.count"
+                count = count_positions[0].line
+                switch_results = []
+                for i in range(count):
+                    switch_results.append(
+                        "{%s}" % (", ".join(self.decode_positions_at(start + 1 + i)))
+                    )
+                results.append("switch {%s}" % (", ".join(switch_results)))
+            elif pos.method == "redex.$Position.case":
+                pattern_id = pos.line
+                results.append("case(pattern %d)" % pattern_id)
+            else:
+                results.append("%s:%d" % (pos.file, pos.line))
+        return results
+
     def line_replacer(self, matchobj):
         lineno = int(matchobj.group("lineno"))
-        positions = map(
-            lambda p: "%s:%d" % (p.file, p.line),
-            self.symbol_maps.line_map.get_stack(lineno - 1),
-        )
-        return matchobj.group("prefix") + ", ".join(positions)
+        decoded_positions = self.decode_positions_at(lineno - 1)
+        if self.all_line_info:
+            line_info = str(lineno) + " (" + ", ".join(decoded_positions) + ")"
+        else:
+            line_info = ", ".join(decoded_positions)
+
+        return matchobj.group("prefix") + line_info
 
     def method_replacer(self, matchobj):
         m = matchobj.group(0)
@@ -110,21 +139,23 @@ class DexdumpSymbolicator(object):
                             lineno,
                         )
                         if mapped_line:
-                            if self.last_lineno:
+                            if self.last_lineno and not self.all_line_info:
                                 if self.last_lineno == mapped_line:
                                     # Don't emit duplicate line entries
                                     return None
                             self.last_lineno = mapped_line
-                            positions = map(
-                                lambda p: "%s:%d" % (p.file, p.line),
-                                self.symbol_maps.line_map.get_stack(mapped_line - 1),
+                            decoded_positions = self.decode_positions_at(
+                                mapped_line - 1
                             )
-                            return (
-                                "        "
-                                + match.group("prefix")
-                                + ", ".join(positions)
-                                + "\n"
-                            )
+
+                            if self.all_line_info:
+                                line_info = (
+                                    lineno + " (" + ", ".join(decoded_positions) + ")"
+                                )
+                            else:
+                                line_info = ", ".join(decoded_positions)
+
+                            return "        " + match.group("prefix") + line_info + "\n"
                     no_debug_info = (
                         "positions     :" in self.prev_line
                         and "locals        :" in line
@@ -139,9 +170,8 @@ class DexdumpSymbolicator(object):
                             return line
                         result = ""
                         for i, (pc, mapped_line) in enumerate(mappings):
-                            positions = map(
-                                lambda p: "%s:%d" % (p.file, p.line),
-                                self.symbol_maps.line_map.get_stack(mapped_line - 1),
+                            decoded_positions = self.decode_positions_at(
+                                mapped_line - 1
                             )
                             if i == 0:
                                 pc = 0
@@ -149,7 +179,7 @@ class DexdumpSymbolicator(object):
                                 "        "
                                 + "{0:#0{1}x}".format(pc, 6)
                                 + " line="
-                                + ", ".join(positions)
+                                + ", ".join(decoded_positions)
                                 + "\n"
                             )
                         return result + line

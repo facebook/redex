@@ -56,6 +56,7 @@
 #include "BaseIRAnalyzer.h"
 #include "ConstantAbstractDomain.h"
 #include "ControlFlow.h"
+#include "FieldOpTracker.h"
 #include "HashedSetAbstractDomain.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
@@ -73,25 +74,6 @@ using namespace sparta;
 using namespace cse_impl;
 
 namespace {
-
-constexpr const char* METRIC_RESULTS_CAPTURED = "num_results_captured";
-constexpr const char* METRIC_STORES_CAPTURED = "num_stores_captured";
-constexpr const char* METRIC_ARRAY_LENGTHS_CAPTURED =
-    "num_array_lengths_captured";
-constexpr const char* METRIC_ELIMINATED_INSTRUCTIONS =
-    "num_eliminated_instructions";
-constexpr const char* METRIC_MAX_VALUE_IDS = "max_value_ids";
-constexpr const char* METRIC_METHODS_USING_OTHER_TRACKED_LOCATION_BIT =
-    "methods_using_other_tracked_location_bit";
-constexpr const char* METRIC_INSTR_PREFIX = "instr_";
-constexpr const char* METRIC_METHOD_BARRIERS = "num_method_barriers";
-constexpr const char* METRIC_METHOD_BARRIERS_ITERATIONS =
-    "num_method_barriers_iterations";
-constexpr const char* METRIC_CONDITIONALLY_PURE_METHODS =
-    "num_conditionally_pure_methods";
-constexpr const char* METRIC_CONDITIONALLY_PURE_METHODS_ITERATIONS =
-    "num_conditionally_pure_methods_iterations";
-constexpr const char* METRIC_MAX_ITERATIONS = "num_max_iterations";
 
 using value_id_t = uint64_t;
 constexpr size_t TRACKED_LOCATION_BITS = 42; // leaves 20 bits for running index
@@ -284,7 +266,8 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
          it != read_location_counts.end();) {
       auto location = it->first;
       // If we are reading a final field...
-      if (location.has_field() && is_final(location.get_field()) &&
+      if (location.has_field() &&
+          shared_state->is_finalish(location.get_field()) &&
           !root(location.get_field()) && can_rename(location.get_field()) &&
           can_delete(location.get_field()) &&
           !location.get_field()->is_external()) {
@@ -783,8 +766,12 @@ namespace cse_impl {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-SharedState::SharedState(const std::unordered_set<DexMethodRef*>& pure_methods)
-    : m_pure_methods(pure_methods), m_safe_methods(pure_methods) {
+SharedState::SharedState(
+    const std::unordered_set<DexMethodRef*>& pure_methods,
+    const std::unordered_set<DexString*>& finalish_field_names)
+    : m_pure_methods(pure_methods),
+      m_safe_methods(pure_methods),
+      m_finalish_field_names(finalish_field_names) {
   // The following methods are...
   // - static, or
   // - direct (constructors), or
@@ -980,6 +967,24 @@ void SharedState::init_method_barriers(const Scope& scope) {
   }
 }
 
+void SharedState::init_finalizable_fields(const Scope& scope) {
+  Timer t("init_finalizable_fields");
+  field_op_tracker::FieldStatsMap field_stats =
+      field_op_tracker::analyze(scope);
+
+  for (auto& pair : field_stats) {
+    auto* field = pair.first;
+    auto& stats = pair.second;
+    // We are checking a subset of what the AccessMarking pass is checking for
+    // finalization, as that's what CSE really cares about.
+    if (stats.init_writes == stats.writes && can_rename(field) &&
+        !is_final(field) && !is_volatile(field) && !field->is_external()) {
+      m_finalizable_fields.insert(field);
+    }
+  }
+  m_stats.finalizable_fields = m_finalizable_fields.size();
+}
+
 void SharedState::init_scope(const Scope& scope) {
   always_assert(!m_method_override_graph);
   m_method_override_graph = method_override_graph::build_graph(scope);
@@ -1001,6 +1006,7 @@ void SharedState::init_scope(const Scope& scope) {
   }
 
   init_method_barriers(scope);
+  init_finalizable_fields(scope);
 }
 
 CseUnorderedLocationSet SharedState::get_relevant_written_locations(
@@ -1169,6 +1175,11 @@ bool SharedState::has_pure_method(const IRInstruction* insn) const {
   return false;
 }
 
+bool SharedState::is_finalish(const DexField* field) const {
+  return is_final(field) || !!m_finalizable_fields.count(field) ||
+         !!m_finalish_field_names.count(field->get_name());
+}
+
 void SharedState::cleanup() {
   if (!m_barriers) {
     return;
@@ -1203,8 +1214,7 @@ CommonSubexpressionElimination::CommonSubexpressionElimination(
     bool is_init_or_clinit,
     DexType* declaring_type,
     DexTypeList* args)
-    : m_shared_state(shared_state),
-      m_cfg(cfg),
+    : m_cfg(cfg),
       m_is_static(is_static),
       m_declaring_type(declaring_type),
       m_args(args) {
@@ -1299,40 +1309,27 @@ CommonSubexpressionElimination::CommonSubexpressionElimination(
 
 static IROpcode get_move_opcode(const IRInstruction* earlier_insn) {
   if (earlier_insn->has_dest()) {
-    return earlier_insn->dest_is_wide()
-               ? OPCODE_MOVE_WIDE
-               : earlier_insn->dest_is_object() ? OPCODE_MOVE_OBJECT
-                                                : OPCODE_MOVE;
+    return earlier_insn->dest_is_wide()     ? OPCODE_MOVE_WIDE
+           : earlier_insn->dest_is_object() ? OPCODE_MOVE_OBJECT
+                                            : OPCODE_MOVE;
   } else if (earlier_insn->opcode() == OPCODE_NEW_ARRAY) {
     return OPCODE_MOVE;
   } else {
     always_assert(opcode::is_an_aput(earlier_insn->opcode()) ||
                   opcode::is_an_iput(earlier_insn->opcode()) ||
                   opcode::is_an_sput(earlier_insn->opcode()));
-    return earlier_insn->src_is_wide(0)
-               ? OPCODE_MOVE_WIDE
-               : (earlier_insn->opcode() == OPCODE_APUT_OBJECT ||
-                  earlier_insn->opcode() == OPCODE_IPUT_OBJECT ||
-                  earlier_insn->opcode() == OPCODE_SPUT_OBJECT)
-                     ? OPCODE_MOVE_OBJECT
-                     : OPCODE_MOVE;
+    return earlier_insn->src_is_wide(0) ? OPCODE_MOVE_WIDE
+           : (earlier_insn->opcode() == OPCODE_APUT_OBJECT ||
+              earlier_insn->opcode() == OPCODE_IPUT_OBJECT ||
+              earlier_insn->opcode() == OPCODE_SPUT_OBJECT)
+               ? OPCODE_MOVE_OBJECT
+               : OPCODE_MOVE;
   }
 }
 
 bool CommonSubexpressionElimination::patch(bool runtime_assertions) {
   if (m_forward.empty()) {
     return false;
-  }
-
-  unsigned int max_dest = 0;
-  for (const auto& mie : cfg::InstructionIterable(m_cfg)) {
-    if (mie.insn->has_dest() && mie.insn->dest() > max_dest) {
-      max_dest = mie.insn->dest();
-    }
-  };
-  for (const auto& earlier_insns : m_earlier_insns) {
-    IROpcode move_opcode = get_move_opcode(*earlier_insns.begin());
-    max_dest += (move_opcode == OPCODE_MOVE_WIDE) ? 2 : 1;
   }
 
   TRACE(CSE, 5, "[CSE] before:\n%s", SHOW(m_cfg));

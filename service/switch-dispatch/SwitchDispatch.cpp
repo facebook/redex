@@ -616,7 +616,7 @@ DexMethod* create_simple_dispatch(
   for (auto& p : indices_to_callee) {
     cases[p.first] = nullptr;
   }
-  auto default_block = main_block->switch_op(method_tag_loc, cases);
+  /* default_block = */ main_block->switch_op(method_tag_loc, cases);
   bool has_return_value = (return_type != type::_void());
   auto res_loc =
       has_return_value ? mc.make_local(return_type) : Location::empty();

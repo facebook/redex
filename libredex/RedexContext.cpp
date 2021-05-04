@@ -16,6 +16,7 @@
 #include "Debug.h"
 #include "DexCallSite.h"
 #include "DexClass.h"
+#include "DexPosition.h"
 #include "DuplicateClasses.h"
 #include "ProguardConfiguration.h"
 #include "Show.h"
@@ -71,6 +72,8 @@ RedexContext::~RedexContext() {
   for (const Task& t : m_destruction_tasks) {
     t();
   }
+
+  delete m_position_pattern_switch_manager;
 }
 
 /*
@@ -370,6 +373,14 @@ void RedexContext::mutate_method(DexMethodRef* method,
   s_method_map.emplace(r, method);
 }
 
+PositionPatternSwitchManager*
+RedexContext::get_position_pattern_switch_manager() {
+  if (!m_position_pattern_switch_manager) {
+    m_position_pattern_switch_manager = new PositionPatternSwitchManager();
+  }
+  return m_position_pattern_switch_manager;
+}
+
 // Return false on unique classes
 // Return true on benign duplicate classes
 // Throw RedexException on problematic duplicate classes
@@ -459,8 +470,8 @@ keep_rules::AssumeReturnValue* RedexContext::get_field_value(DexField* field) {
   return nullptr;
 }
 
-void RedexContext::unset_field_value(DexField* method) {
-  field_values.erase(method);
+void RedexContext::unset_field_value(DexField* field) {
+  field_values.erase(field);
 }
 
 void RedexContext::set_return_value(DexMethod* method,
@@ -480,6 +491,11 @@ keep_rules::AssumeReturnValue* RedexContext::get_return_value(
 
 void RedexContext::unset_return_value(DexMethod* method) {
   method_return_values.erase(method);
+}
+
+void RedexContext::add_destruction_task(const Task& t) {
+  std::unique_lock<std::mutex> lock{m_destruction_tasks_lock};
+  m_destruction_tasks.push_back(t);
 }
 
 void RedexContext::set_sb_interaction_index(

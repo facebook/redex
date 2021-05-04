@@ -71,7 +71,8 @@ class MethodProfiles {
                         csv_filename.c_str());
       always_assert_log(!m_method_stats.empty(),
                         "No valid data found in the profile %s. See stderr "
-                        "for more details.", csv_filename.c_str());
+                        "for more details.",
+                        csv_filename.c_str());
     }
   }
 

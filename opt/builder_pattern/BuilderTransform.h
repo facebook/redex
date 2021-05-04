@@ -8,12 +8,11 @@
 #pragma once
 
 #include "DexClass.h"
+#include "Inliner.h"
 #include "InlinerConfig.h"
 #include "RemoveBuilderPattern.h"
 #include "Resolver.h"
 #include "TypeSystem.h"
-
-class MultiMethodInliner;
 
 namespace builder_pattern {
 
@@ -35,17 +34,20 @@ class BuilderTransform {
       DexMethod* caller, const std::unordered_set<IRInstruction*>& insns);
 
   void update_virtual_calls(
-      const std::unordered_map<IRInstruction*, DexType*>& insns);
+      const std::unordered_map<IRInstruction*, DexType*>& insn_to_type);
 
   void replace_fields(const InstantiationToUsage& usage, DexMethod* method);
 
   void cleanup();
 
+  shrinker::Shrinker& get_shrinker() { return m_inliner->get_shrinker(); }
+
  private:
   const TypeSystem& m_type_system;
   const DexType* m_root;
   std::unique_ptr<MultiMethodInliner> m_inliner;
-  MethodRefCache m_resolved_refs;
+  inliner::InlinerConfig m_inliner_config;
+  ConcurrentMethodRefCache m_concurrent_resolved_refs;
 
   // Used for tracking changes that we need to restore.
   std::unordered_map<DexMethod*, DexMethod*> m_method_copy;

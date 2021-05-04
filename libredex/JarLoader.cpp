@@ -87,6 +87,7 @@ struct cp_method_info {
 
 /* clang-format off */
 
+// Java Virtual Machine Specification Chapter 4, Section 4.4
 #define CP_CONST_UTF8         (1)
 #define CP_CONST_INT          (3)
 #define CP_CONST_FLOAT        (4)
@@ -98,9 +99,15 @@ struct cp_method_info {
 #define CP_CONST_METHOD      (10)
 #define CP_CONST_INTERFACE   (11)
 #define CP_CONST_NAMEANDTYPE (12)
+
+// Since Java 7
 #define CP_CONST_METHHANDLE  (15)
 #define CP_CONST_METHTYPE    (16)
 #define CP_CONST_INVOKEDYN   (18)
+
+// Since Java 9
+#define CP_CONST_MODULE      (19)
+#define CP_CONST_PACKAGE     (20)
 
 /* clang-format on */
 
@@ -110,6 +117,8 @@ static bool parse_cp_entry(uint8_t*& buffer, cp_entry& cpe) {
   case CP_CONST_CLASS:
   case CP_CONST_STRING:
   case CP_CONST_METHTYPE:
+  case CP_CONST_MODULE:
+  case CP_CONST_PACKAGE:
     cpe.s0 = read16(buffer);
     return true;
   case CP_CONST_FIELD:
@@ -377,6 +386,16 @@ bool parse_class(uint8_t* buffer,
   uint16_t clazz = read16(buffer);
   uint16_t super = read16(buffer);
   uint16_t ifcount = read16(buffer);
+
+  if (is_module((DexAccessFlags)aflags)) {
+    // Classes with the ACC_MODULE access flag are special.  They contain
+    // metadata for the module/package system and don't have a superclass.
+    // Ignore them for now.
+    TRACE(MAIN, 5, "Warning: ignoring module-info class in jar '%s'",
+          jar_location.c_str());
+    return true;
+  }
+
   DexType* self = make_dextype_from_cref(cpool, clazz);
   DexClass* cls = type_class(self);
   if (cls) {

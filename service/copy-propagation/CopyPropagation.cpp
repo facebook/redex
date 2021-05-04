@@ -85,20 +85,23 @@ class AliasFixpointIterator final
   const std::unordered_set<const IRInstruction*>& m_range_set;
   Stats& m_stats;
   mutable std::unique_ptr<constant_uses::ConstantUses> m_constant_uses;
+  const bool m_break_exc_edges;
 
   AliasFixpointIterator(
       cfg::ControlFlowGraph& cfg,
       DexMethod* method,
       const Config& config,
       const std::unordered_set<const IRInstruction*>& range_set,
-      Stats& stats)
+      Stats& stats,
+      bool break_exc_edges)
       : MonotonicFixpointIterator<cfg::GraphInterface, AliasDomain>(
             cfg, cfg.blocks().size()),
         m_cfg(cfg),
         m_method(method),
         m_config(config),
         m_range_set(range_set),
-        m_stats(stats) {}
+        m_stats(stats),
+        m_break_exc_edges(break_exc_edges) {}
 
   constant_uses::TypeDemand get_constant_type_demand(
       IRInstruction* insn) const {
@@ -159,10 +162,27 @@ class AliasFixpointIterator final
             }
           }
         } else {
-          // move dst into src's alias group
-          aliases.move(dst.lower, src.lower);
-          if (dst.upper != src.upper) { // Don't ask `aliases` about Value::none
-            aliases.move(dst.upper, src.upper);
+          if (src.upper.is_register() && src.lower.reg() != RESULT_REGISTER) {
+            // Be careful about wide copies.
+            redex_assert(dst.upper.is_register());
+            redex_assert(dst.lower.reg() != RESULT_REGISTER);
+            reg_t src_reg = src.lower.reg();
+            reg_t dst_reg = dst.lower.reg();
+            if (src_reg + 1 == dst_reg) {
+              aliases.move(dst.upper, src.upper);
+              aliases.move(dst.lower, src.lower);
+            } else {
+              // Also correct for "if (src_reg == dst_reg + 1)"
+              aliases.move(dst.lower, src.lower);
+              aliases.move(dst.upper, src.upper);
+            }
+          } else {
+            // move dst into src's alias group
+            aliases.move(dst.lower, src.lower);
+            if (dst.upper != src.upper) { // Don't ask `aliases` about
+                                          // Value::none
+              aliases.move(dst.upper, src.upper);
+            }
           }
         }
       } else if (!dst.lower.is_none()) {
@@ -407,7 +427,11 @@ class AliasFixpointIterator final
   }
 
   AliasDomain analyze_edge(
-      const EdgeId&, const AliasDomain& exit_state_at_source) const override {
+      const EdgeId& edge,
+      const AliasDomain& exit_state_at_source) const override {
+    if (m_break_exc_edges && edge->type() == cfg::EdgeType::EDGE_THROW) {
+      return AliasDomain::top();
+    }
     return exit_state_at_source;
   }
 };
@@ -488,7 +512,8 @@ Stats CopyPropagation::run(IRCode* code, DexMethod* method) {
     }
   }
 
-  AliasFixpointIterator fixpoint(*cfg, method, m_config, range_set, stats);
+  AliasFixpointIterator fixpoint(
+      *cfg, method, m_config, range_set, stats, m_config.regalloc_has_run);
   fixpoint.run(AliasDomain());
 
   cfg::CFGMutation mutation{*cfg};

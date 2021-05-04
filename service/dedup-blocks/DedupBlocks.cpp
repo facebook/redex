@@ -333,8 +333,8 @@ class DedupBlocksImpl {
   // remove all but one of a duplicate set. Reroute the predecessors to the
   // canonical block
   void deduplicate(const Duplicates& dups, cfg::ControlFlowGraph& cfg) {
-    fix_dex_pos_pointers(dups.begin(), dups.end(),
-                         [](auto it) { return it->second; }, cfg);
+    fix_dex_pos_pointers(
+        dups.begin(), dups.end(), [](auto it) { return it->second; }, cfg);
 
     // Copy the BlockSets into a vector so that we're not reading the map while
     // editing the CFG.

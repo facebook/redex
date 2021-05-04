@@ -55,11 +55,12 @@ class ReorderInterfacesDeclImpl {
  */
 void ReorderInterfacesDeclImpl::run() {
   // Check out each instruction and process if it is a function invoke
-  walk::opcodes(m_scope,
-                [](DexMethod*) { return true; },
-                [this](DexMethod* /* unused */, IRInstruction* insn) {
-                  compute_call_frequencies(insn);
-                });
+  walk::opcodes(
+      m_scope,
+      [](DexMethod*) { return true; },
+      [this](DexMethod* /* unused */, IRInstruction* insn) {
+        compute_call_frequencies(insn);
+      });
 
   // Now that we have the invoke frequencies for each Interface,
   // reorder the list of Interfaces for each Class.

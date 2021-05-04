@@ -534,7 +534,14 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
   }
   case OPCODE_CHECK_CAST: {
     refine_reference(current_state, insn->src(0));
-    set_reference(current_state, RESULT_REGISTER, insn->get_type());
+    auto to_type = insn->get_type();
+    auto to_cls = type_class(to_type);
+    if (m_skip_check_cast_to_intf && to_cls && is_interface(to_cls)) {
+      set_reference(current_state, RESULT_REGISTER,
+                    current_state->get_type_domain(insn->src(0)));
+    } else {
+      set_reference(current_state, RESULT_REGISTER, insn->get_type());
+    }
     break;
   }
   case OPCODE_INSTANCE_OF:
@@ -1059,6 +1066,12 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
     set_integer(current_state, RESULT_REGISTER);
     break;
   }
+  }
+
+  // If the opcode does not set the RESULT_REGISTER, clear it.
+  if (!insn->has_move_result_any()) {
+    set_type(current_state, RESULT_REGISTER, TypeDomain::top());
+    current_state->reset_dex_type(RESULT_REGISTER);
   }
 }
 

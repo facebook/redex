@@ -19,11 +19,13 @@ class TypeAnalysisAwareRemoveUnreachablePass
 
   void set_analysis_usage(AnalysisUsage& au) const override {
     au.add_required<GlobalTypeAnalysisPass>();
+    au.set_preserve_all();
   }
 
   std::unique_ptr<reachability::ReachableObjects> compute_reachable_objects(
       const DexStoresVector& stores,
       PassManager& pm,
       int* num_ignore_check_strings,
-      bool emit_graph_this_run) override;
+      bool emit_graph_this_run,
+      bool remove_no_argument_constructors) override;
 };

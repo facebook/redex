@@ -21,12 +21,6 @@ class DexMethodRef;
 
 namespace constant_propagation {
 
-// This returns methods that are used in Kotlin null assertion.
-// These null assertions will take the object that they are checking for
-// nullness as first argument and returns void. The value of the object will
-// not be null beyond this program point in the execution path.
-const std::unordered_set<DexMethodRef*>& get_kotlin_null_assertions();
-
 boost::optional<size_t> get_null_check_object_index(
     const IRInstruction* insn,
     const std::unordered_set<DexMethodRef*>& kotlin_null_check_assertions);
@@ -49,7 +43,7 @@ class FixpointIterator final
       const ConstantEnvironment& exit_state_at_source) const override;
 
   void analyze_instruction(const IRInstruction* insn,
-                           ConstantEnvironment* current_state,
+                           ConstantEnvironment* env,
                            bool is_last) const;
 
   void analyze_instruction_no_throw(const IRInstruction* insn,
@@ -200,9 +194,7 @@ struct EnumFieldAnalyzerState {
 
   EnumFieldAnalyzerState()
       : enum_equals(static_cast<DexMethod*>(DexMethod::get_method(
-            "Ljava/lang/Enum;.equals:(Ljava/lang/Object;)Z"))) {
-    always_assert(enum_equals);
-  }
+            "Ljava/lang/Enum;.equals:(Ljava/lang/Object;)Z"))) {}
 };
 
 /*
@@ -258,9 +250,15 @@ struct ImmutableAttributeAnalyzerState {
     }
   };
 
+  struct CachedBoxedObjects {
+    long begin;
+    long end;
+  };
+
   ConcurrentMap<DexMethod*, std::vector<Initializer>> method_initializers;
   ConcurrentSet<DexMethod*> attribute_methods;
   ConcurrentSet<DexField*> attribute_fields;
+  std::unordered_map<DexMethod*, CachedBoxedObjects> cached_boxed_objects;
 
   ImmutableAttributeAnalyzerState();
 
@@ -268,6 +266,10 @@ struct ImmutableAttributeAnalyzerState {
   Initializer& add_initializer(DexMethod* initialize_method, DexField* attr);
   Initializer& add_initializer(DexMethod* initialize_method,
                                const ImmutableAttr::Attr& attr);
+  void add_cached_boxed_objects(DexMethod* initialize_method,
+                                long begin,
+                                long end);
+  bool is_jvm_cached_object(DexMethod* initialize_method, long value) const;
 
   static DexType* initialized_type(const DexMethod* initialize_method);
 };
@@ -468,5 +470,25 @@ ReturnState collect_return_state(IRCode* code,
  * instruction. A null object would cause an exception to be thrown.
  */
 boost::optional<size_t> get_dereferenced_object_src_index(const IRInstruction*);
+
+/*
+ * Handle reading of static fields fXXX in $EnumUtils class.
+ */
+class EnumUtilsFieldAnalyzer final
+    : public InstructionAnalyzerBase<EnumUtilsFieldAnalyzer,
+                                     ConstantEnvironment,
+                                     ImmutableAttributeAnalyzerState*> {
+ public:
+  static bool analyze_sget(ImmutableAttributeAnalyzerState* state,
+                           const IRInstruction* insn,
+                           ConstantEnvironment* env);
+};
+
+using ConstantPrimitiveAndBoxedAnalyzer =
+    InstructionAnalyzerCombiner<EnumUtilsFieldAnalyzer,
+                                ImmutableAttributeAnalyzer,
+                                EnumFieldAnalyzer,
+                                BoxedBooleanAnalyzer,
+                                PrimitiveAnalyzer>;
 
 } // namespace constant_propagation

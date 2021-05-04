@@ -15,8 +15,8 @@
 #include "EnumTransformer.h"
 #include "EnumUpcastAnalysis.h"
 #include "IRCode.h"
+#include "MatchFlow.h"
 #include "OptimizeEnumsAnalysis.h"
-#include "OptimizeEnumsGeneratedAnalysis.h"
 #include "PassManager.h"
 #include "ProguardMap.h"
 #include "Resolver.h"
@@ -41,6 +41,27 @@
 
 namespace {
 
+// Map the field holding the lookup table to its associated enum type.
+using LookupTableToEnum = std::unordered_map<DexField*, DexType*>;
+
+// Map the static fields holding enumerands to their ordinal number (passed in
+// to their constructor).
+using EnumFieldToOrdinal = std::unordered_map<DexField*, size_t>;
+
+// Sets of types.  Intended to be sub-classes of Ljava/lang/Enum; but not
+// guaranteed by the type.
+using EnumTypes = std::unordered_set<DexType*>;
+
+// Lookup tables in generated classes map enum ordinals to the integers they
+// are represented by in switch statements using that lookup table:
+//
+//   lookup[enum.ordinal()] = case;
+//
+// GeneratedSwitchCases represent the reverse mapping for a lookup table:
+//
+//   gsc[lookup][case] = enum
+//
+// with lookup and enum identified by their fields.
 using GeneratedSwitchCases =
     std::unordered_map<DexField*, std::unordered_map<size_t, DexField*>>;
 
@@ -59,89 +80,6 @@ constexpr const char* METRIC_NUM_REMOVED_GENERATED_METHODS =
     "num_removed_generated_enum_methods";
 
 /**
- * Get the instruction containing the constructor call. It can either
- * be the constructor of the superclass or from the same class.
- */
-IRInstruction* get_ctor_call(const DexMethod* method,
-                             const DexMethod* java_enum_ctor) {
-  auto* code = method->get_code();
-  for (const auto& mie : InstructionIterable(code)) {
-    auto insn = mie.insn;
-    if (!opcode::is_invoke_direct(insn->opcode())) {
-      continue;
-    }
-
-    auto method_inv =
-        resolve_method(insn->get_method(), opcode_to_search(insn), method);
-    if (method_inv == java_enum_ctor) {
-      return insn;
-    }
-
-    if (method::is_init(method_inv) &&
-        method_inv->get_class() == method->get_class()) {
-      return insn;
-    }
-  }
-
-  return nullptr;
-}
-
-/**
- * Creates a map from register used to the associated argument.
- *
- * For example for :
- *  static void foo(int a, String b) {
- *    OPCODE_LOAD_PARAM <v_a>
- *    OPCODE_LOAD_PARAM_OBJECT <v_b>
- *    ...
- *  }
- *
- *  will return: {
- *    <v_a> -> 0
- *    <v_b> -> 1
- *  }
- */
-std::unordered_map<size_t, uint32_t> collect_reg_to_arg(
-    const DexMethod* method) {
-  auto* code = method->get_code();
-  auto params = code->get_param_instructions();
-  std::unordered_map<size_t, uint32_t> reg_to_arg;
-
-  size_t arg_index = 0;
-  for (const auto& mie : InstructionIterable(params)) {
-    auto load_insn = mie.insn;
-    always_assert(opcode::is_a_load_param(load_insn->opcode()));
-
-    reg_to_arg[load_insn->dest()] = arg_index++;
-  }
-
-  return reg_to_arg;
-}
-
-/**
- * Returns false if the given register is overwritten (aka is used
- * as the destination), except for the load param opcodes.
- */
-bool check_ordinal_usage(const DexMethod* method, size_t reg) {
-  always_assert(method && method->get_code());
-
-  auto code = method->get_code();
-  for (const auto& mie : InstructionIterable(code)) {
-    auto insn = mie.insn;
-    if (opcode::is_a_load_param(insn->opcode())) {
-      // Skip load params. We already analyzed those.
-      continue;
-    }
-
-    if (insn->has_dest() && insn->dest() == reg) {
-      return false;
-    }
-  }
-
-  return true;
-}
-
-/**
  * Simple analysis to determine which of the enums ctor argument
  * is passed for the ordinal.
  *
@@ -156,21 +94,40 @@ bool analyze_enum_ctors(
     const DexMethod* java_enum_ctor,
     std::unordered_map<const DexMethod*, uint32_t>& ctor_to_arg_ordinal) {
 
-  // For each ctor, get the initialization instruction (it might be a call
-  // to `Enum.<init>(String;I)` or to a different ctor of the same class.
-  std::deque<std::pair<DexMethod*, IRInstruction*>> ctor_to_enum_insn;
-  for (const auto& ctor : cls->get_ctors()) {
-    auto code = ctor->get_code();
-    if (!code) {
-      return false;
-    }
+  struct DelegatingCall {
+    DexMethod* ctor;
+    cfg::ScopedCFG cfg;
+    IRInstruction* invoke;
 
-    auto enum_insn = get_ctor_call(ctor, java_enum_ctor);
-    if (!enum_insn) {
-      return false;
-    }
+    DelegatingCall(DexMethod* ctor, cfg::ScopedCFG cfg, IRInstruction* invoke)
+        : ctor{ctor}, cfg{std::move(cfg)}, invoke{invoke} {}
+  };
 
-    ctor_to_enum_insn.emplace_back(ctor, enum_insn);
+  std::queue<DelegatingCall> delegating_calls;
+  { // Find delegate constructor calls and queue them up to be processed.  The
+    // call might be to `Enum.<init>(String;I)` or to a difference constructor
+    // of the same class.
+    mf::flow_t f;
+    auto inv = f.insn(m::invoke_direct_(m::has_method(m::resolve_method(
+        MethodSearch::Direct,
+        m::equals(java_enum_ctor) ||
+            m::is_constructor<DexMethod>() &&
+                m::member_of<DexMethod>(m::equals(cls->get_type()))))));
+
+    for (const auto& ctor : cls->get_ctors()) {
+      auto code = ctor->get_code();
+      if (!code) {
+        return false;
+      }
+
+      cfg::ScopedCFG cfg{code};
+      auto res = f.find(*cfg, inv);
+      if (auto* inv_insn = res.matching(inv).unique()) {
+        delegating_calls.emplace(ctor, std::move(cfg), inv_insn);
+      } else {
+        return false;
+      }
+    }
   }
 
   // Ordinal represents the third argument.
@@ -178,60 +135,159 @@ bool analyze_enum_ctors(
   ctor_to_arg_ordinal[java_enum_ctor] = 2;
 
   // TODO: We could order them instead of looping ...
-  while (!ctor_to_enum_insn.empty()) {
-    auto& pair = ctor_to_enum_insn.front();
-    ctor_to_enum_insn.pop_front();
+  for (; !delegating_calls.empty(); delegating_calls.pop()) {
+    auto dc = std::move(delegating_calls.front());
 
-    auto ctor = pair.first;
-    auto enum_insn = pair.second;
+    auto* delegate =
+        resolve_method(dc.invoke->get_method(), MethodSearch::Direct);
 
-    auto ctor_called =
-        resolve_method(enum_insn->get_method(), MethodSearch::Direct);
-    if (!ctor_to_arg_ordinal.count(ctor_called)) {
-      ctor_to_enum_insn.push_back(pair);
-      continue;
+    uint32_t delegate_ordinal;
+    { // Only proceed if the delegate constructor has already been processed.
+      auto it = ctor_to_arg_ordinal.find(delegate);
+      if (it == ctor_to_arg_ordinal.end()) {
+        delegating_calls.emplace(std::move(dc));
+        continue;
+      } else {
+        delegate_ordinal = it->second;
+      }
     }
 
-    auto ordinal_reg = enum_insn->src(ctor_to_arg_ordinal[ctor_called]);
+    // Track which param in dc.ctor flows into the ordinal arg of the delegate.
+    mf::flow_t f;
+    auto param = f.insn(m::load_param_());
+    auto invoke_delegate =
+        f.insn(m::equals(dc.invoke))
+            .src(delegate_ordinal, param, mf::unique | mf::alias);
 
-    // determine arg -> reg from IOPCODE_LOAD_* opcodes.
-    auto reg_to_arg = collect_reg_to_arg(ctor);
-    if (reg_to_arg.count(ordinal_reg) == 0) {
-      // TODO: A proper analysis wouldn't fail here.
+    auto res = f.find(*dc.cfg, invoke_delegate);
+
+    auto* load_ordinal = res.matching(param).unique();
+    if (!load_ordinal) {
+      // Couldn't find a unique parameter flowing into the ordinal argument.
       return false;
     }
 
-    // Check that the register used to store the ordinal
-    // is not overwritten.
-    if (!check_ordinal_usage(ctor, ordinal_reg)) {
-      return false;
+    // Figure out which param is being loaded.
+    uint32_t ctor_ordinal = 0;
+    auto ii = InstructionIterable(dc.cfg->get_param_instructions());
+    for (auto it = ii.begin(), end = ii.end();; ++it, ++ctor_ordinal) {
+      always_assert(it != end && "Unable to locate load_ordinal");
+      if (it->insn == load_ordinal) break;
     }
 
-    ctor_to_arg_ordinal[ctor] = reg_to_arg[ordinal_reg];
+    ctor_to_arg_ordinal[dc.ctor] = ctor_ordinal;
   }
 
   return true;
 }
 
 /**
- * Collect enum fields to switch case.
+ * Discover the mapping from enums to cases in lookup tables defined on
+ * `generated_cls` by detecting the following patterns in its `<clinit>` (modulo
+ * ordering and interleaved unrelated instructions):
  *
- * Background: `lookup_table` is bound to a list of integers, that maps from
- * enum field ordinal to a switch case. `<clinit>` initializes this field as:
- * `aput <v_case>, <v_field>, <v_ordinal>` where <v_case> holds the switch case,
- * <v_field> a reference to `field` and <v_ordinal> holds the ordinal of an enum
- * field.
+ *   sget-object               <lookup>
+ *   move-result-pseudo-object v0
+ *
+ * Or:
+ *
+ *   new-array                 ..., [I
+ *   move-result-pseudo-object v0
+ *   sput-object               v0, <lookup>
+ *
+ * Followed by:
+ *
+ *   sget-object               <enum>
+ *   move-result-pseudo-object v1
+ *   invoke-virtual            {v1}, Ljava/lang/Enum;.ordinal:()I
+ *   move-result               v2
+ *   const                     v3, <kase>
+ *   aput                      v3, v0, v2
+ *
+ * For each instance of the pattern found, a `generated_switch_cases` entry is
+ * added:
+ *
+ *   generated_switch_cases[lookup][kase] = enum;
  */
 void collect_generated_switch_cases(
-    GeneratedSwitchCases& generated_switch_cases,
-    DexMethod* method,
-    DexType* enum_type,
-    DexField* lookup_table) {
+    DexClass* generated_cls,
+    cfg::ControlFlowGraph& clinit_cfg,
+    const EnumTypes& collected_enums,
+    GeneratedSwitchCases& generated_switch_cases) {
+  mf::flow_t f;
 
-  auto generated_cls = type_class(method->get_class());
-  optimize_enums::OptimizeEnumsGeneratedAnalysis analysis(generated_cls,
-                                                          enum_type);
-  analysis.collect_generated_switch_cases(generated_switch_cases);
+  DexMethod* Enum_ordinal =
+      resolve_method(DexMethod::get_method("Ljava/lang/Enum;.ordinal:()I"),
+                     MethodSearch::Virtual);
+  always_assert(Enum_ordinal);
+
+  auto m__generated_field = m::has_field(
+      m::member_of<DexFieldRef>(m::equals(generated_cls->get_type())));
+  auto m__lookup = m::sget_object_(m__generated_field) || m::new_array_();
+  auto m__sget_enum = m::sget_object_(m::has_field(
+      m::member_of<DexFieldRef>(m::in<DexType*>(collected_enums))));
+  auto m__invoke_ordinal = m::invoke_virtual_(m::has_method(
+      m::resolve_method(MethodSearch::Virtual, m::equals(Enum_ordinal))));
+
+  auto uniq = mf::alias | mf::unique;
+  auto look = f.insn(m__lookup);
+  auto gete = f.insn(m__sget_enum);
+  auto kase = f.insn(m::const_());
+  auto ordi = f.insn(m__invoke_ordinal).src(0, gete, uniq);
+  auto aput = f.insn(m::aput_())
+                  .src(0, kase, uniq)
+                  .src(1, look, uniq)
+                  .src(2, ordi, uniq);
+
+  auto res = f.find(clinit_cfg, aput);
+
+  std::unordered_map<IRInstruction*, IRInstruction*> new_array_to_sput;
+  for (auto* insn_look : res.matching(look)) {
+    if (opcode::is_new_array(insn_look->opcode())) {
+      new_array_to_sput.emplace(insn_look, nullptr);
+    }
+  }
+
+  // Some lookup tables are accessed fresh rather than via an sget-object, so
+  // look at where the new arrays are put to determine the field.
+  if (!new_array_to_sput.empty()) {
+    mf::flow_t g;
+
+    auto m__sput_lookup = m::sput_object_(m__generated_field);
+
+    auto newa = g.insn(m::in<IRInstruction*>(new_array_to_sput));
+    auto sput = g.insn(m__sput_lookup).src(0, newa, uniq);
+
+    auto res_sputs = g.find(clinit_cfg, sput);
+    for (auto* insn_sput : res_sputs.matching(sput)) {
+      auto* insn_newa = res_sputs.matching(sput, insn_sput, 0).unique();
+      new_array_to_sput[insn_newa] = insn_sput;
+    }
+  }
+
+  for (auto* insn_aput : res.matching(aput)) {
+    auto* insn_kase = res.matching(aput, insn_aput, 0).unique();
+    auto* insn_look = res.matching(aput, insn_aput, 1).unique();
+    auto* insn_ordi = res.matching(aput, insn_aput, 2).unique();
+    auto* insn_gete = res.matching(ordi, insn_ordi, 0).unique();
+
+    if (opcode::is_new_array(insn_look->opcode())) {
+      // If the array being assigned to came from a new-array, look for the sput
+      // it flowed into.
+      insn_look = new_array_to_sput.at(insn_look);
+    }
+
+    auto switch_case = insn_kase->get_literal();
+    auto* lookup_table =
+        resolve_field(insn_look->get_field(), FieldSearch::Static);
+    auto* enum_field =
+        resolve_field(insn_gete->get_field(), FieldSearch::Static);
+
+    always_assert(lookup_table);
+    always_assert(enum_field && is_enum(enum_field));
+
+    generated_switch_cases[lookup_table].emplace(switch_case, enum_field);
+  }
 }
 
 /**
@@ -259,31 +315,25 @@ class OptimizeEnums {
     auto generated_classes = collect_generated_classes();
     auto enum_field_to_ordinal = collect_enum_field_ordinals();
 
-    std::unordered_set<DexType*> collected_enums;
+    EnumTypes collected_enums;
     for (const auto& pair : enum_field_to_ordinal) {
       collected_enums.emplace(pair.first->get_class());
     }
 
-    std::unordered_map<DexField*, DexType*> lookup_table_to_enum;
+    LookupTableToEnum lookup_table_to_enum;
     GeneratedSwitchCases generated_switch_cases;
 
     for (const auto& generated_cls : generated_classes) {
       auto generated_clinit = generated_cls->get_clinit();
+      cfg::ScopedCFG clinit_cfg{generated_clinit->get_code()};
 
-      for (const auto& sfield : generated_cls->get_sfields()) {
-        // update stats.
-        m_stats.num_lookup_tables++;
+      associate_lookup_tables_to_enums(generated_cls, *clinit_cfg,
+                                       collected_enums, lookup_table_to_enum);
+      collect_generated_switch_cases(generated_cls, *clinit_cfg,
+                                     collected_enums, generated_switch_cases);
 
-        auto enum_type = get_enum_used(sfield);
-        if (!enum_type || collected_enums.count(enum_type) == 0) {
-          // Nothing to do if we couldn't determine enum ordinals.
-          continue;
-        }
-
-        lookup_table_to_enum[sfield] = enum_type;
-        collect_generated_switch_cases(generated_switch_cases, generated_clinit,
-                                       enum_type, sfield);
-      }
+      // update stats.
+      m_stats.num_lookup_tables += generated_cls->get_sfields().size();
     }
 
     remove_generated_classes_usage(lookup_table_to_enum, enum_field_to_ordinal,
@@ -529,21 +579,28 @@ class OptimizeEnums {
       }
 
       auto& sfields = cls->get_sfields();
-
-      // We expect the generated classes to ONLY contain the lookup tables
-      // and the static initializer (<clinit>)
-      if (!sfields.empty() && cls->get_dmethods().size() == 1 &&
-          cls->get_vmethods().empty() && cls->get_ifields().empty()) {
-        auto all_sfields_lookup_tables =
-            std::all_of(sfields.begin(), sfields.end(), [](DexField* sfield) {
+      const auto all_sfield_names_contain = [&sfields](const char* sub) {
+        return std::all_of(
+            sfields.begin(), sfields.end(), [sub](DexField* sfield) {
               const auto& deobfuscated_name = sfield->get_deobfuscated_name();
               const auto& name = deobfuscated_name.empty()
                                      ? sfield->get_name()->str()
                                      : deobfuscated_name;
-              return name.find("$SwitchMap$") != std::string::npos;
+              return name.find(sub) != std::string::npos;
             });
+      };
 
-        if (all_sfields_lookup_tables) {
+      // We expect the generated classes to ONLY contain the lookup tables
+      // and the static initializer (<clinit>)
+      //
+      // Lookup tables for Java Enums all contain $SwitchMap$ in the field name
+      // and lookup tables for Kotlin Enums all contain $EnumSwitchMapping$ in
+      // the field name.  The two are not expected to mix in a single generated
+      // class.
+      if (!sfields.empty() && cls->get_dmethods().size() == 1 &&
+          cls->get_vmethods().empty() && cls->get_ifields().empty()) {
+        if (all_sfield_names_contain("$SwitchMap$") ||
+            all_sfield_names_contain("$EnumSwitchMapping$")) {
           generated_classes.emplace_back(cls);
         }
       }
@@ -555,8 +612,8 @@ class OptimizeEnums {
     return generated_classes;
   }
 
-  std::unordered_map<DexField*, size_t> collect_enum_field_ordinals() {
-    std::unordered_map<DexField*, size_t> enum_field_to_ordinal;
+  EnumFieldToOrdinal collect_enum_field_ordinals() {
+    EnumFieldToOrdinal enum_field_to_ordinal;
 
     for (const auto& cls : m_scope) {
       if (is_enum(cls)) {
@@ -570,9 +627,8 @@ class OptimizeEnums {
   /**
    * Collect enum fields to ordinal, if <clinit> is defined.
    */
-  void collect_enum_field_ordinals(
-      const DexClass* cls,
-      std::unordered_map<DexField*, size_t>& enum_field_to_ordinal) {
+  void collect_enum_field_ordinals(const DexClass* cls,
+                                   EnumFieldToOrdinal& enum_field_to_ordinal) {
     if (!cls) {
       return;
     }
@@ -623,12 +679,12 @@ class OptimizeEnums {
    * }
    */
   void remove_generated_classes_usage(
-      const std::unordered_map<DexField*, DexType*>& lookup_table_to_enum,
-      const std::unordered_map<DexField*, size_t>& enum_field_to_ordinal,
+      const LookupTableToEnum& lookup_table_to_enum,
+      const EnumFieldToOrdinal& enum_field_to_ordinal,
       const GeneratedSwitchCases& generated_switch_cases) {
 
     namespace cp = constant_propagation;
-    walk::code(m_scope, [&](DexMethod*, IRCode& code) {
+    walk::parallel::code(m_scope, [&](DexMethod*, IRCode& code) {
       cfg::ScopedCFG cfg(&code);
       cfg->calculate_exit_block();
 
@@ -644,7 +700,6 @@ class OptimizeEnums {
           continue;
         }
         if (!check_lookup_table_usage(lookup_table_to_enum,
-                                      enum_field_to_ordinal,
                                       generated_switch_cases, info)) {
           continue;
         }
@@ -659,8 +714,7 @@ class OptimizeEnums {
    * optimization.
    */
   bool check_lookup_table_usage(
-      const std::unordered_map<DexField*, DexType*>& lookup_table_to_enum,
-      const std::unordered_map<DexField*, size_t>& enum_field_to_ordinal,
+      const LookupTableToEnum& lookup_table_to_enum,
       const GeneratedSwitchCases& generated_switch_cases,
       const optimize_enums::Info& info) {
 
@@ -711,7 +765,7 @@ class OptimizeEnums {
    *       being conservative.
    */
   void remove_lookup_table_usage(
-      const std::unordered_map<DexField*, size_t>& enum_field_to_ordinal,
+      const EnumFieldToOrdinal& enum_field_to_ordinal,
       const GeneratedSwitchCases& generated_switch_cases,
       const optimize_enums::Info& info) {
     auto& cfg = info.branch->cfg();
@@ -841,63 +895,65 @@ class OptimizeEnums {
   }
 
   /**
-   * Generated field names follow the format:
-   *   $SwitchMap$com$<part_of_path_1>$...$<enum_name>
-   * where Lcom/<part_of_path_1>/.../enum_name; is the actual enum.
+   * In the following example, `lookup_table` corresponds to `$SwitchMap$Foo`,
+   * and `clinit_cfg` is expected to be the body of the static initializer:
+   *
+   *   private static class $1 {
+   *     public static final synthetic int[] $SwitchMap$Foo;
+   *     static {
+   *       $SwitchMap$Foo = new int[Foo.values().length];
+   *       $SwitchMap$Foo[Foo.Bar.ordinal()] = 1;
+   *       $SwitchMap$Foo[Foo.Baz.ordinal()] = 2;
+   *       // ...
+   *     }
+   *   }
+   *
+   * This function finds the enum class corresponding to `lookup_table` (`Foo`
+   * in the example) by tracing back from its initialization:
+   *
+   *   invoke-static             {}, LFoo;.values:()[LFoo;   <- Find this,
+   *   move-result-object        v0
+   *   array-length              v0
+   *   move-result-pseudo        v1
+   *   new-array                 v1
+   *   move-result-pseudo-object v2
+   *   sput-object               v2, $1;.$SwitchMap$Foo:[I   <- Starting here.
+   *
+   * Populates `mapping` with all the Enum types corresponding to lookup table
+   * fields initialised in the provided CFG.
    */
-  DexType* get_enum_used(DexField* field) {
-    const auto& deobfuscated_name = field->get_deobfuscated_name();
-    const auto& name = deobfuscated_name.empty() ? field->get_name()->str()
-                                                 : deobfuscated_name;
+  void associate_lookup_tables_to_enums(DexClass* generated_cls,
+                                        cfg::ControlFlowGraph& clinit_cfg,
+                                        const EnumTypes& collected_enums,
+                                        LookupTableToEnum& mapping) {
+    mf::flow_t f;
 
-    // Get the class path, by removing the first part of the field
-    // name ($SwitchMap$), adding 'L' and ';' and replacing '$' with '/'.
-    auto pos = name.find("SwitchMap");
-    always_assert(pos != std::string::npos);
-    auto start_index = pos + 10;
+    auto m__invoke_values = m::invoke_static_(m::has_method(
+        m::named<DexMethodRef>("values") &&
+        m::member_of<DexMethodRef>(m::in<DexType*>(collected_enums))));
+    auto m__sput_lookup = m::sput_object_(m::has_field(
+        m::member_of<DexFieldRef>(m::equals(generated_cls->get_type()))));
 
-    auto end = name.find(":[");
-    if (end == std::string::npos) {
-      end = name.size();
+    auto uniq = mf::alias | mf::unique;
+    auto vals = f.insn(m__invoke_values);
+    auto alen = f.insn(m::array_length_()).src(0, vals, uniq);
+    auto newa = f.insn(m::new_array_()).src(0, alen, uniq);
+    auto sput = f.insn(m__sput_lookup).src(0, newa, uniq);
+
+    auto res = f.find(clinit_cfg, sput);
+    for (auto* insn_sput : res.matching(sput)) {
+      auto* insn_newa = res.matching(sput, insn_sput, 0).unique();
+      auto* insn_alen = res.matching(newa, insn_newa, 0).unique();
+      auto* insn_vals = res.matching(alen, insn_alen, 0).unique();
+      always_assert(insn_vals && "sput only valid if unique vals exists.");
+
+      auto* lookup_field =
+          resolve_field(insn_sput->get_field(), FieldSearch::Static);
+      auto* enum_type = insn_vals->get_method()->get_class();
+
+      always_assert(lookup_field);
+      mapping.emplace(lookup_field, enum_type);
     }
-
-    std::string class_name =
-        "L" + name.substr(start_index, end - start_index) + ";";
-    std::replace(class_name.begin(), class_name.end(), '$', '/');
-
-    // We search for the enum type recursively. If the initial path doesn't
-    // correspond to an enum, we check if it is an inner class.
-    DexType* type = nullptr;
-    do {
-      type = DexType::get_type(class_name.c_str());
-
-      if (!type && !m_pg_map.empty()) {
-        const std::string& obfuscated_name =
-            m_pg_map.translate_class(class_name);
-
-        // Get type associated type from the obfuscated class name.
-        if (!obfuscated_name.empty()) {
-          type = DexType::get_type(obfuscated_name.c_str());
-        }
-      }
-
-      if (type) {
-        if (auto possible_enum_cls = type_class(type)) {
-          if (is_enum(possible_enum_cls)) {
-            return type;
-          }
-        }
-      }
-
-      std::size_t found = class_name.find_last_of('/');
-      if (found == std::string::npos) {
-        break;
-      }
-
-      class_name[found] = '$';
-    } while (true);
-
-    return nullptr;
   }
 
   Scope m_scope;
@@ -909,13 +965,13 @@ class OptimizeEnums {
     size_t num_enum_classes{0};
     size_t num_enum_objs{0};
     size_t num_int_objs{0};
-    size_t num_switch_equiv_finder_failures{0};
+    std::atomic<size_t> num_switch_equiv_finder_failures{0};
     size_t num_candidate_generated_methods{0};
     size_t num_removed_generated_methods{0};
   };
   Stats m_stats;
 
-  std::unordered_set<DexField*> m_lookup_tables_replaced;
+  ConcurrentSet<DexField*> m_lookup_tables_replaced;
   const DexMethod* m_java_enum_ctor;
   const ProguardMap& m_pg_map;
 };

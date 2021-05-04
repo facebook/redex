@@ -16,12 +16,15 @@
 #include "MethodOverrideGraph.h"
 #include "PassManager.h"
 #include "ReachableClasses.h"
+#include "Show.h"
 #include "Trace.h"
 #include "Walkers.h"
 
 namespace {
 const std::string UNREACHABLE_SYMBOLS_FILENAME =
     "redex-unreachable-removed-symbols.txt";
+const std::string REMOVED_SYMBOLS_REFERENCES_FILENAME =
+    "redex-unreachable-removed-symbols-references.txt";
 
 void root_metrics(DexStoresVector& stores, PassManager& pm) {
   auto scope = build_class_scope(stores);
@@ -61,6 +64,107 @@ void root_metrics(DexStoresVector& stores, PassManager& pm) {
   pm.set_metric("root_fields", root_fields.load());
 }
 
+using ConcurrentReferencesMap =
+    ConcurrentMap<std::string, std::unordered_set<std::string>>;
+
+template <class Container>
+void update_references(Container& c,
+                       std::unordered_set<std::string>& references) {
+  for (auto i = c.begin(); i != c.end(); i++) {
+    references.insert(show_deobfuscated(*i));
+  }
+}
+
+template <class Container>
+void gather_references(const reachability::ReachableObjects& reachables,
+                       Container* c,
+                       ConcurrentReferencesMap& references) {
+  auto p = [&](const auto& m) {
+    if (reachables.marked_unsafe(m) == 0) {
+      return false;
+    }
+    return true;
+  };
+  const auto it = std::partition(c->begin(), c->end(), p);
+
+  for (auto elem = it; elem != c->end(); elem++) {
+    std::unordered_set<std::string> current_references;
+
+    std::unordered_set<DexMethodRef*> mrefs;
+    (*elem)->gather_methods(mrefs);
+
+    std::unordered_set<DexFieldRef*> frefs;
+    (*elem)->gather_fields(frefs);
+
+    std::unordered_set<DexType*> trefs;
+    (*elem)->gather_types(trefs);
+
+    update_references(mrefs, current_references);
+    update_references(frefs, current_references);
+    update_references(trefs, current_references);
+    references.emplace(show_deobfuscated(*elem), current_references);
+  }
+}
+
+void gather_references_from_removed_symbols(
+    const DexStoresVector& stores,
+    const reachability::ReachableObjects& reachables,
+    ConcurrentReferencesMap& references) {
+  for (auto& dex : DexStoreClassesIterator(stores)) {
+    gather_references(reachables, &dex, references);
+    walk::parallel::classes(dex, [&](DexClass* cls) {
+      gather_references(reachables, &cls->get_ifields(), references);
+      gather_references(reachables, &cls->get_sfields(), references);
+      gather_references(reachables, &cls->get_dmethods(), references);
+      gather_references(reachables, &cls->get_vmethods(), references);
+    });
+  }
+}
+
+void write_out_removed_symbols_references(
+    const std::string& filepath,
+    const ConcurrentSet<std::string>& removed_symbols,
+    const ConcurrentReferencesMap& references) {
+  std::fstream out(filepath, std::ios_base::app);
+  if (!out.is_open()) {
+    fprintf(stderr,
+            "Unable to write the removed symbols references into file %s\n",
+            filepath.c_str());
+    return;
+  }
+  TRACE(RMU, 4, "Writing %d removed symbols references to %s",
+        removed_symbols.size(), filepath.c_str());
+
+  struct StringPtrComparator {
+    bool operator()(const std::string* s1, const std::string* s2) const {
+      return *s1 < *s2;
+    }
+  };
+  std::set<const std::string*, StringPtrComparator> sorted;
+  std::transform(removed_symbols.begin(), removed_symbols.end(),
+                 std::inserter(sorted, sorted.end()),
+                 [](const std::string& s) { return &s; });
+
+  std::unordered_map<std::string, std::unordered_set<std::string>>
+      referenced_to_references;
+  for (const auto& pair : references) {
+    for (const auto& elem : pair.second) {
+      referenced_to_references[elem].emplace(pair.first);
+    }
+  }
+
+  for (auto s_ptr : sorted) {
+    if (referenced_to_references.count(*s_ptr) == 0) {
+      continue;
+    }
+
+    out << *s_ptr << std::endl;
+    for (const auto& ref : referenced_to_references.at(*s_ptr)) {
+      out << "\t" << ref << std::endl;
+    }
+  }
+}
+
 } // namespace
 
 namespace mog = method_override_graph;
@@ -85,10 +189,16 @@ void RemoveUnreachablePassBase::run_pass(DexStoresVector& stores,
       m_emit_graph_on_run &&
       static_cast<int64_t>(pm.get_current_pass_info()->repeat + 1) ==
           *m_emit_graph_on_run;
-  bool output_unreachable_symbols = pm.get_current_pass_info()->repeat == 0;
+  bool output_unreachable_symbols = m_always_emit_unreachable_symbols ||
+                                    pm.get_current_pass_info()->repeat == 0;
+  TRACE(RMU, 2, "RMU: output unreachable symbols %d",
+        output_unreachable_symbols);
+  TRACE(RMU, 2, "RMU: remove_no_argument_constructors %d",
+        m_remove_no_argument_constructors);
   int num_ignore_check_strings = 0;
   auto reachables = this->compute_reachable_objects(
-      stores, pm, &num_ignore_check_strings, emit_graph_this_run);
+      stores, pm, &num_ignore_check_strings, emit_graph_this_run,
+      m_remove_no_argument_constructors);
 
   reachability::ObjectCounts before = reachability::count_objects(stores);
   TRACE(RMU, 1, "before: %lu classes, %lu fields, %lu methods",
@@ -100,6 +210,12 @@ void RemoveUnreachablePassBase::run_pass(DexStoresVector& stores,
   pm.set_metric("marked_fields", reachables->num_marked_fields());
   pm.set_metric("marked_methods", reachables->num_marked_methods());
 
+  ConcurrentReferencesMap references;
+  if (output_unreachable_symbols && m_emit_removed_symbols_references) {
+    // Before actually cleaning things up, keep track, if requested, of
+    // references of removed symbols (which, of course, will be from dead code).
+    gather_references_from_removed_symbols(stores, *reachables, references);
+  }
   reachability::sweep(stores, *reachables,
                       output_unreachable_symbols ? &removed_symbols : nullptr);
 
@@ -114,6 +230,13 @@ void RemoveUnreachablePassBase::run_pass(DexStoresVector& stores,
   if (output_unreachable_symbols) {
     std::string filepath = conf.metafile(UNREACHABLE_SYMBOLS_FILENAME);
     write_out_removed_symbols(filepath, removed_symbols);
+
+    if (m_emit_removed_symbols_references) {
+      std::string references_filepath =
+          conf.metafile(REMOVED_SYMBOLS_REFERENCES_FILENAME);
+      write_out_removed_symbols_references(references_filepath, removed_symbols,
+                                           references);
+    }
   }
   if (emit_graph_this_run) {
     {
@@ -156,12 +279,15 @@ void RemoveUnreachablePassBase::write_out_removed_symbols(
 }
 
 std::unique_ptr<reachability::ReachableObjects>
-RemoveUnreachablePass::compute_reachable_objects(const DexStoresVector& stores,
-                                                 PassManager& /* pm */,
-                                                 int* num_ignore_check_strings,
-                                                 bool emit_graph_this_run) {
+RemoveUnreachablePass::compute_reachable_objects(
+    const DexStoresVector& stores,
+    PassManager& /* pm */,
+    int* num_ignore_check_strings,
+    bool emit_graph_this_run,
+    bool remove_no_argument_constructors) {
   return reachability::compute_reachable_objects(
-      stores, m_ignore_sets, num_ignore_check_strings, emit_graph_this_run);
+      stores, m_ignore_sets, num_ignore_check_strings, emit_graph_this_run,
+      false, nullptr, remove_no_argument_constructors);
 }
 
 static RemoveUnreachablePass s_pass;

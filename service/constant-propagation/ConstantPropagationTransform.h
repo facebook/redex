@@ -55,7 +55,8 @@ class Transform final {
 
   explicit Transform(Config config = Config())
       : m_config(config),
-        m_kotlin_null_check_assertions(get_kotlin_null_assertions()) {}
+        m_kotlin_null_check_assertions(
+            kotlin_nullcheck_wrapper::get_kotlin_null_assertions()) {}
 
   // Apply transformations on uneditable cfg
   // TODO: Migrate all to use editable cfg via `apply` method
@@ -135,7 +136,7 @@ class Transform final {
   std::unordered_set<IRInstruction*> m_redundant_move_results;
   bool m_rebuild_cfg{0};
   Stats m_stats;
-  const std::unordered_set<DexMethodRef*>& m_kotlin_null_check_assertions;
+  const std::unordered_set<DexMethodRef*> m_kotlin_null_check_assertions;
 };
 
 /*

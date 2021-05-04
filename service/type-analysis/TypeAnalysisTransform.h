@@ -26,7 +26,7 @@ class Transform final {
   using NullAssertionSet = std::unordered_set<DexMethodRef*>;
   struct Config {
     bool remove_redundant_null_checks{true};
-    bool remove_kotlin_null_check_assertions{false};
+    bool remove_kotlin_null_check_assertions{true};
     bool remove_redundant_type_checks{true};
     Config() {}
   };
@@ -79,7 +79,6 @@ class Transform final {
               const WholeProgramState& wps,
               DexMethod* method,
               const NullAssertionSet& null_assertion_set);
-  static void setup(NullAssertionSet& null_assertion_set);
 
  private:
   void apply_changes(DexMethod* method);

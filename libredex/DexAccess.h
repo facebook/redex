@@ -31,6 +31,7 @@
   AF(SYNTHETIC,    synthetic,     0x1000)   \
   AF(ANNOTATION,   annotation,    0x2000)   \
   AF(ENUM,         enum,          0x4000)   \
+  AF(MODULE,       module,        0x8000)   \
   AF(CONSTRUCTOR,  constructor,  0x10000)   \
   AF(DECLARED_SYNCHRONIZED, declared_synchronized, 0x2000)
 // clang-format on
@@ -112,7 +113,7 @@ void loosen_access_modifier_except_vmethods(DexClass* clazz);
  * Loosen access modifier of classes and @InnerClass annotations without needing
  * change opcodes.
  */
-void loosen_access_modifier(const DexClasses& clazz);
+void loosen_access_modifier(const DexClasses& classes);
 
 template <class DexMember>
 void set_public(DexMember* m) {

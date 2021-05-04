@@ -35,14 +35,15 @@ from pyredex.utils import (
     UnpackManager,
     ZipManager,
     ZipReset,
+    add_android_sdk_path,
     argparse_yes_no_flag,
     dex_glob,
     find_android_build_tool,
+    get_android_sdk_path,
     get_file_ext,
     make_temp_dir,
     move_dexen_to_directories,
     remove_comments,
-    sdk_search_order,
     sign_apk,
     with_temp_cleanup,
 )
@@ -839,6 +840,18 @@ Given an APK, produce a better APK!
     parser.add_argument("--android-sdk-path", type=str, help="Path to Android SDK")
 
     parser.add_argument(
+        "--suppress-android-jar-check",
+        action="store_true",
+        help="Do not look for an `android.jar` in the jar paths",
+    )
+
+    parser.add_argument(
+        "--log-level",
+        default="warning",
+        help="Specify the python logging level",
+    )
+
+    parser.add_argument(
         "--packed-profiles",
         type=str,
         help="Path to packed profiles (expects tar.xz)",
@@ -873,6 +886,73 @@ class State(object):
         self.lib_manager = lib_manager
         self.unpack_manager = unpack_manager
         self.zip_manager = zip_manager
+
+
+def _has_android_library_jars(pg_file):
+    # We do not tokenize properly here. Minimum effort.
+    def _gen():
+        with open(pg_file, "r") as f:
+            for line in f:
+                yield line.strip()
+
+    gen = _gen()
+    for line in gen:
+        if line == "-libraryjars":
+            line = next(gen, "a")
+            parts = line.split(":")
+            for p in parts:
+                if p.endswith("android.jar"):
+                    return True
+    return False
+
+
+def _check_android_sdk(args):
+    if args.suppress_android_jar_check:
+        logging.debug("No SDK jar check done")
+        return
+
+    for jarpath in args.jarpaths:
+        if jarpath.endswith("android.jar"):
+            logging.debug("Found an SDK-looking jar: %s", jarpath)
+            return
+
+    for pg_config in args.proguard_configs:
+        if _has_android_library_jars(pg_config):
+            logging.debug("Found an SDK-looking jar in PG file %s", pg_config)
+            return
+
+    # Check whether we can find and add one.
+    logging.warning(
+        "No SDK jar found, attempting to find one. If the detection is wrong, add `--suppress-android-jar-check`."
+    )
+
+    try:
+        sdk_path = get_android_sdk_path()
+        logging.debug("SDK path is %s", sdk_path)
+        platforms = join(sdk_path, "platforms")
+        if not os.path.exists(platforms):
+            raise RuntimeError("platforms directory does not exist")
+        VERSION_REGEXP = r"android-(\d+)"
+        version = max(
+            (
+                -1,
+                *[
+                    int(m.group(1))
+                    for d in os.listdir(platforms)
+                    for m in [re.match(VERSION_REGEXP, d)]
+                    if m
+                ],
+            ),
+        )
+        if version == -1:
+            raise RuntimeError(f"No android jar directories found in {platforms}")
+        jar_path = join(platforms, f"android-{version}", "android.jar")
+        if not os.path.exists(jar_path):
+            raise RuntimeError(f"{jar_path} not found")
+        logging.info("Adding SDK jar path %s", jar_path)
+        args.jarpaths.append(jar_path)
+    except BaseException as e:
+        logging.warning("Could not find an SDK jar: %s", e)
 
 
 def _check_android_sdk_api(args):
@@ -940,10 +1020,11 @@ def _handle_profiles(args, debug_mode):
 
 
 def prepare_redex(args):
+    logging.debug("Preparing...")
     debug_mode = args.unpack_only or args.debug
 
     if args.android_sdk_path:
-        sdk_search_order.insert(0, lambda x: args.android_sdk_path)
+        add_android_sdk_path(args.android_sdk_path)
 
     # avoid accidentally mixing up file formats since we now support
     # both apk files and Android bundle files
@@ -1010,6 +1091,7 @@ def prepare_redex(args):
             if e.errno != errno.EEXIST:
                 raise e
 
+    logging.debug("Unpacking...")
     unpack_start_time = timer()
     if not extracted_apk_dir:
         extracted_apk_dir = make_temp_dir(".redex_extracted_apk", debug_mode)
@@ -1044,6 +1126,7 @@ def prepare_redex(args):
     # Unpack profiles, if they exist.
     _handle_profiles(args, debug_mode)
 
+    logging.debug("Moving contents to expected structure...")
     # Move each dex to a separate temporary directory to be operated by
     # redex.
     dexen = move_dexen_to_directories(dex_dir, dex_glob(dex_dir))
@@ -1081,6 +1164,9 @@ def prepare_redex(args):
 
     # Scan for framework files. If not found, warn and add them if available.
     _check_android_sdk_api(args)
+
+    # Scan for SDK jar. If not found, warn and add if available.
+    _check_android_sdk(args)
 
     log("Running redex-all on {} dex files ".format(len(dexen)))
     if args.lldb:
@@ -1194,7 +1280,23 @@ def finalize_redex(state):
     )
 
 
+def _init_logging(level_str):
+    levels = {
+        "critical": logging.CRITICAL,
+        "error": logging.ERROR,
+        "warn": logging.WARNING,
+        "warning": logging.WARNING,
+        "info": logging.INFO,
+        "debug": logging.DEBUG,
+    }
+    level = levels[level_str]
+    logging.basicConfig(level=level)
+
+
 def run_redex(args, exception_formatter=None):
+    # This is late, but hopefully early enough.
+    _init_logging(args.log_level)
+
     state = prepare_redex(args)
     if exception_formatter is None:
         exception_formatter = ExceptionMessageFormatter()

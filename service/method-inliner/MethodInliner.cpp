@@ -25,6 +25,8 @@
 #include "MethodProfiles.h"
 #include "ReachableClasses.h"
 #include "Resolver.h"
+#include "Shrinker.h"
+#include "Timer.h"
 #include "Walkers.h"
 
 namespace mog = method_override_graph;
@@ -35,8 +37,8 @@ namespace {
  * Collect all non virtual methods and make all small methods candidates
  * for inlining.
  */
-std::unordered_set<DexMethod*> gather_non_virtual_methods(Scope& scope,
-                                                          bool virtual_inline) {
+std::unordered_set<DexMethod*> gather_non_virtual_methods(
+    Scope& scope, const mog::Graph* method_override_graph) {
   // trace counter
   size_t all_methods = 0;
   size_t direct_methods = 0;
@@ -74,8 +76,9 @@ std::unordered_set<DexMethod*> gather_non_virtual_methods(Scope& scope,
 
     methods.insert(method);
   });
-  if (virtual_inline) {
-    auto non_virtual = mog::get_non_true_virtuals(scope);
+  if (method_override_graph) {
+    auto non_virtual =
+        mog::get_non_true_virtuals(*method_override_graph, scope);
     non_virt_methods = non_virtual.size();
     for (const auto& vmeth : non_virtual) {
       auto code = vmeth->get_code();
@@ -192,14 +195,14 @@ using CallerInsns =
  * return an object type.
  */
 void gather_true_virtual_methods(
+    const mog::Graph& method_override_graph,
     const Scope& scope,
     CalleeCallerInsns* true_virtual_callers,
     std::unordered_set<DexMethod*>* methods,
     std::unordered_map<const DexMethod*, size_t>* same_method_implementations) {
-  auto method_override_graph = mog::build_graph(scope);
-  auto non_virtual = mog::get_non_true_virtuals(*method_override_graph, scope);
+  auto non_virtual = mog::get_non_true_virtuals(method_override_graph, scope);
   auto same_implementation_map = get_same_implementation_map(
-      scope, *method_override_graph, same_method_implementations);
+      scope, method_override_graph, same_method_implementations);
   std::unordered_set<DexMethod*> non_virtual_set{non_virtual.begin(),
                                                  non_virtual.end()};
   // Add mapping from callee to monomorphic callsites.
@@ -251,7 +254,7 @@ void gather_true_virtual_methods(
         continue;
       }
       const auto& overriding_methods =
-          mog::get_overriding_methods(*method_override_graph, callee);
+          mog::get_overriding_methods(method_override_graph, callee);
       if (!callee->is_external()) {
         if (overriding_methods.empty()) {
           // There is no override for this method
@@ -321,8 +324,12 @@ void run_inliner(DexStoresVector& stores,
 
   inliner_config.unique_inlined_registers = false;
 
-  auto methods =
-      gather_non_virtual_methods(scope, inliner_config.virtual_inline);
+  std::unique_ptr<const mog::Graph> method_override_graph;
+  if (inliner_config.virtual_inline) {
+    method_override_graph = mog::build_graph(scope);
+  }
+
+  auto methods = gather_non_virtual_methods(scope, method_override_graph.get());
 
   // The methods list computed above includes all constructors, regardless of
   // whether it's safe to inline them or not. We'll let the inliner decide
@@ -331,23 +338,27 @@ void run_inliner(DexStoresVector& stores,
 
   std::unordered_map<const DexMethod*, size_t> same_method_implementations;
   if (inliner_config.virtual_inline && inliner_config.true_virtual_inline) {
-    gather_true_virtual_methods(scope, &true_virtual_callers, &methods,
+    gather_true_virtual_methods(*method_override_graph, scope,
+                                &true_virtual_callers, &methods,
                                 &same_method_implementations);
   }
   // keep a map from refs to defs or nullptr if no method was found
-  MethodRefCache resolved_refs;
-  auto resolver = [&resolved_refs](DexMethodRef* method, MethodSearch search) {
-    return resolve_method(method, search, resolved_refs);
+  ConcurrentMethodRefCache concurrent_resolved_refs;
+  auto concurrent_resolver = [&concurrent_resolved_refs](DexMethodRef* method,
+                                                         MethodSearch search) {
+    return resolve_method(method, search, concurrent_resolved_refs);
   };
   if (inliner_config.use_cfg_inliner) {
     walk::parallel::code(scope, [](DexMethod*, IRCode& code) {
       code.build_cfg(/* editable */ true);
     });
+    inliner_config.shrinker.analyze_constructors =
+        inliner_config.shrinker.run_const_prop;
   }
 
   // inline candidates
-  MultiMethodInliner inliner(scope, stores, methods, resolver, inliner_config,
-                             intra_dex ? IntraDex : InterDex,
+  MultiMethodInliner inliner(scope, stores, methods, concurrent_resolver,
+                             inliner_config, intra_dex ? IntraDex : InterDex,
                              true_virtual_callers, inline_for_speed,
                              &same_method_implementations,
                              analyze_and_prune_inits, conf.get_pure_methods());
@@ -379,7 +390,7 @@ void run_inliner(DexStoresVector& stores,
   ConcurrentSet<DexMethod*>& delayed_make_static =
       inliner.get_delayed_make_static();
   size_t deleted =
-      delete_methods(scope, inlined, delayed_make_static, resolver);
+      delete_methods(scope, inlined, delayed_make_static, concurrent_resolver);
 
   TRACE(INLINE, 3, "recursive %ld", inliner.get_info().recursive);
   TRACE(INLINE, 3, "max_call_stack_depth %ld",
@@ -412,6 +423,7 @@ void run_inliner(DexStoresVector& stores,
   TRACE(INLINE, 1, "%ld inlined calls over %ld methods and %ld methods removed",
         (size_t)inliner.get_info().calls_inlined, inlined_count, deleted);
 
+  const auto& shrinker = inliner.get_shrinker();
   mgr.incr_metric("recursive", inliner.get_info().recursive);
   mgr.incr_metric("max_call_stack_depth",
                   inliner.get_info().max_call_stack_depth);
@@ -420,6 +432,8 @@ void run_inliner(DexStoresVector& stores,
   mgr.incr_metric("calls_inlined", inliner.get_info().calls_inlined);
   mgr.incr_metric("calls_not_inlinable",
                   inliner.get_info().calls_not_inlinable);
+  mgr.incr_metric("intermediate_shrinkings",
+                  inliner.get_info().intermediate_shrinkings);
   mgr.incr_metric("calls_not_inlined", inliner.get_info().calls_not_inlined);
   mgr.incr_metric("methods_removed", deleted);
   mgr.incr_metric("escaped_virtual", inliner.get_info().escaped_virtual);
@@ -438,25 +452,39 @@ void run_inliner(DexStoresVector& stores,
       inliner.get_info().constant_invoke_callees_unreachable_blocks);
   mgr.incr_metric("critical_path_length",
                   inliner.get_info().critical_path_length);
-  mgr.incr_metric("methods_shrunk", inliner.get_methods_shrunk());
+  mgr.incr_metric("methods_shrunk", shrinker.get_methods_shrunk());
   mgr.incr_metric("callers", inliner.get_callers());
   mgr.incr_metric("delayed_shrinking_callees",
                   inliner.get_delayed_shrinking_callees());
   mgr.incr_metric("instructions_eliminated_const_prop",
-                  inliner.get_const_prop_stats().branches_removed +
-                      inliner.get_const_prop_stats().branches_forwarded +
-                      inliner.get_const_prop_stats().materialized_consts +
-                      inliner.get_const_prop_stats().added_param_const +
-                      inliner.get_const_prop_stats().throws);
+                  shrinker.get_const_prop_stats().branches_removed +
+                      shrinker.get_const_prop_stats().branches_forwarded +
+                      shrinker.get_const_prop_stats().materialized_consts +
+                      shrinker.get_const_prop_stats().added_param_const +
+                      shrinker.get_const_prop_stats().throws);
   mgr.incr_metric("instructions_eliminated_cse",
-                  inliner.get_cse_stats().instructions_eliminated);
+                  shrinker.get_cse_stats().instructions_eliminated);
   mgr.incr_metric("instructions_eliminated_copy_prop",
-                  inliner.get_copy_prop_stats().moves_eliminated);
+                  shrinker.get_copy_prop_stats().moves_eliminated);
   mgr.incr_metric(
       "instructions_eliminated_localdce",
-      inliner.get_local_dce_stats().dead_instruction_count +
-          inliner.get_local_dce_stats().unreachable_instruction_count);
+      shrinker.get_local_dce_stats().dead_instruction_count +
+          shrinker.get_local_dce_stats().unreachable_instruction_count);
   mgr.incr_metric("blocks_eliminated_by_dedup_blocks",
-                  inliner.get_dedup_blocks_stats().blocks_removed);
+                  shrinker.get_dedup_blocks_stats().blocks_removed);
+  mgr.incr_metric("methods_reg_alloced", shrinker.get_methods_reg_alloced());
+
+  // Expose the shrinking timers as Timers.
+  Timer::add_timer("Inliner.Shrinking.ConstantPropagation",
+                   shrinker.get_const_prop_seconds());
+  Timer::add_timer("Inliner.Shrinking.CSE", shrinker.get_cse_seconds());
+  Timer::add_timer("Inliner.Shrinking.CopyPropagation",
+                   shrinker.get_copy_prop_seconds());
+  Timer::add_timer("Inliner.Shrinking.LocalDCE",
+                   shrinker.get_local_dce_seconds());
+  Timer::add_timer("Inliner.Shrinking.DedupBlocks",
+                   shrinker.get_dedup_blocks_seconds());
+  Timer::add_timer("Inliner.Shrinking.RegAlloc",
+                   shrinker.get_reg_alloc_seconds());
 }
 } // namespace inliner

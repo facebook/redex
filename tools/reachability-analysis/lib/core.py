@@ -69,8 +69,8 @@ class ReachableObject(object):
     def __init__(self, type, name):
         self.type = type
         self.name = name
-        self.preds = []
-        self.succs = []
+        self.preds = {}
+        self.succs = {}
 
     def __str__(self):
         return "%s: %s\n" % (ReachableObjectType.to_string(self.type), self.name)
@@ -78,9 +78,9 @@ class ReachableObject(object):
     def __repr__(self):
         ret = "%s: %s\n" % (ReachableObjectType.to_string(self.type), self.name)
         ret += "Reachable from %d predecessor(s):\n" % len(self.preds)
-        ret += show_list_with_idx(self.preds)
+        ret += show_list_with_idx(list(self.preds.keys()))
         ret += "Reaching %d successor(s):\n" % len(self.succs)
-        ret += show_list_with_idx(self.succs)
+        ret += show_list_with_idx(list(self.succs.keys()))
         return ret
 
 
@@ -194,10 +194,13 @@ class ReachabilityGraph(AbstractGraph):
     @staticmethod
     def add_edge(n1, n2):
         if n1 not in n2.succs:
-            n2.succs.append(n1)
+            # We store the edges as a dictionary because lookup times are much
+            # faster with dictionaries than with lists.
+            # The value isn't important - a None would do
+            n2.succs[n1] = None
 
         if n2 not in n1.preds:
-            n1.preds.append(n2)
+            n1.preds[n2] = None
 
     def get_node(self, node_name):
         if is_method(node_name):

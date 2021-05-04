@@ -96,14 +96,16 @@ VirtualMerging::VirtualMerging(DexStoresVector& stores,
       m_type_system(m_scope),
       m_max_overriding_method_instructions(max_overriding_method_instructions),
       m_inliner_config(inliner_config) {
-  auto resolver = [&](DexMethodRef* method, MethodSearch search) {
-    return resolve_method(method, search, m_resolved_refs);
+  auto concurrent_resolver = [&](DexMethodRef* method, MethodSearch search) {
+    return resolve_method(method, search, m_concurrent_resolved_refs);
   };
 
   std::unordered_set<DexMethod*> no_default_inlinables;
   m_inliner_config.use_cfg_inliner = true;
+  // disable shrinking options, minimizing initialization time
+  m_inliner_config.shrinker = shrinker::ShrinkerConfig();
   m_inliner.reset(new MultiMethodInliner(m_scope, stores, no_default_inlinables,
-                                         resolver, m_inliner_config,
+                                         concurrent_resolver, m_inliner_config,
                                          MultiMethodInlinerMode::None));
 }
 VirtualMerging::~VirtualMerging() {}
@@ -738,19 +740,19 @@ void VirtualMerging::remove_methods() {
 // Part 6: Remap all invoke-virtual instructions where the associated method got
 // removed
 void VirtualMerging::remap_invoke_virtuals() {
-  walk::parallel::opcodes(m_scope,
-                          [](const DexMethod*) { return true; },
-                          [&](const DexMethod*, IRInstruction* insn) {
-                            if (insn->opcode() == OPCODE_INVOKE_VIRTUAL) {
-                              auto method_ref = insn->get_method();
-                              auto method = resolve_method(
-                                  method_ref, MethodSearch::Virtual);
-                              auto it = m_virtual_methods_to_remap.find(method);
-                              if (it != m_virtual_methods_to_remap.end()) {
-                                insn->set_method(it->second);
-                              }
-                            }
-                          });
+  walk::parallel::opcodes(
+      m_scope,
+      [](const DexMethod*) { return true; },
+      [&](const DexMethod*, IRInstruction* insn) {
+        if (insn->opcode() == OPCODE_INVOKE_VIRTUAL) {
+          auto method_ref = insn->get_method();
+          auto method = resolve_method(method_ref, MethodSearch::Virtual);
+          auto it = m_virtual_methods_to_remap.find(method);
+          if (it != m_virtual_methods_to_remap.end()) {
+            insn->set_method(it->second);
+          }
+        }
+      });
 }
 
 void VirtualMerging::run(const method_profiles::MethodProfiles& profiles) {

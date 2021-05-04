@@ -8,7 +8,6 @@
 #include "GlobalTypeAnalyzer.h"
 
 #include "ConcurrentContainers.h"
-#include "MethodOverrideGraph.h"
 #include "Resolver.h"
 #include "Show.h"
 #include "Trace.h"
@@ -75,14 +74,14 @@ void scan_any_init_reachables(
       continue;
     }
     if (!cg.has_node(method)) {
-      TRACE(
-          TYPE, 5, "[any init reachables] missing node in cg %s", SHOW(method));
+      TRACE(TYPE, 5, "[any init reachables] missing node in cg %s",
+            SHOW(method));
       continue;
     }
     auto callees = resolve_callees_in_graph(cg, method, insn);
     for (const DexMethod* callee : callees) {
-      scan_any_init_reachables(
-          cg, method_override_graph, callee, false, reachables);
+      scan_any_init_reachables(cg, method_override_graph, callee, false,
+                               reachables);
     }
   }
   if (!trace_callbacks) {
@@ -103,8 +102,8 @@ void scan_any_init_reachables(
       }
     }
     if (overrides_external) {
-      scan_any_init_reachables(
-          cg, method_override_graph, vmethod, false, reachables);
+      scan_any_init_reachables(cg, method_override_graph, vmethod, false,
+                               reachables);
     }
   }
 }
@@ -329,9 +328,10 @@ bool is_leaking_this_in_ctor(const DexMethod* caller, const DexMethod* callee) {
  * complex field value flow analysis, since we don't understand the value of
  * doing that at this point. But we can extend this solution at a later point.
  */
-void GlobalTypeAnalysis::find_any_init_reachables(const Scope& scope,
-                                                  const call_graph::Graph& cg) {
-  auto method_override_graph = mog::build_graph(scope);
+void GlobalTypeAnalysis::find_any_init_reachables(
+    const method_override_graph::Graph& method_override_graph,
+    const Scope& scope,
+    const call_graph::Graph& cg) {
   walk::parallel::methods(scope, [&](DexMethod* method) {
     if (!method::is_any_init(method)) {
       return;
@@ -363,7 +363,7 @@ void GlobalTypeAnalysis::find_any_init_reachables(const Scope& scope,
         bool trace_callbacks_in_callee_cls =
             is_leaking_this_in_ctor(method, callee);
         scan_any_init_reachables(cg,
-                                 *method_override_graph,
+                                 method_override_graph,
                                  callee,
                                  trace_callbacks_in_callee_cls,
                                  m_any_init_reachables);
@@ -379,15 +379,15 @@ void GlobalTypeAnalysis::find_any_init_reachables(const Scope& scope,
     for (const auto* vmethod : cls->get_vmethods()) {
       bool overrides_external = false;
       const auto& overridens =
-          mog::get_overridden_methods(*method_override_graph, vmethod);
+          mog::get_overridden_methods(method_override_graph, vmethod);
       for (auto overriden : overridens) {
         if (overriden->is_external()) {
           overrides_external = true;
         }
       }
       if (overrides_external) {
-        scan_any_init_reachables(
-            cg, *method_override_graph, vmethod, false, m_any_init_reachables);
+        scan_any_init_reachables(cg, method_override_graph, vmethod, false,
+                                 m_any_init_reachables);
       }
     }
   });
@@ -396,7 +396,9 @@ void GlobalTypeAnalysis::find_any_init_reachables(const Scope& scope,
 
 std::unique_ptr<GlobalTypeAnalyzer> GlobalTypeAnalysis::analyze(
     const Scope& scope) {
-  call_graph::Graph cg = call_graph::single_callee_graph(scope);
+  auto method_override_graph = mog::build_graph(scope);
+  call_graph::Graph cg =
+      call_graph::single_callee_graph(*method_override_graph, scope);
   // Rebuild all CFGs here -- this should be more efficient than doing them
   // within FixpointIterator::analyze_node(), since that can get called
   // multiple times for a given method
@@ -406,14 +408,15 @@ std::unique_ptr<GlobalTypeAnalyzer> GlobalTypeAnalysis::analyze(
     }
     code.cfg().calculate_exit_block();
   });
-  find_any_init_reachables(scope, cg);
+  find_any_init_reachables(*method_override_graph, scope, cg);
 
   // Run the bootstrap. All field value and method return values are
   // represented by Top.
   TRACE(TYPE, 2, "[global] Bootstrap run");
   auto gta = std::make_unique<GlobalTypeAnalyzer>(cg);
   gta->run({{CURRENT_PARTITION_LABEL, ArgumentTypeEnvironment()}});
-  auto non_true_virtuals = mog::get_non_true_virtuals(scope);
+  auto non_true_virtuals =
+      mog::get_non_true_virtuals(*method_override_graph, scope);
   size_t iteration_cnt = 0;
 
   for (size_t i = 0; i < m_max_global_analysis_iteration; ++i) {

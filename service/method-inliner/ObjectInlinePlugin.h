@@ -56,6 +56,4 @@ class ObjectInlinePlugin : public CFGInlinerPlugin {
   std::vector<reg_t> m_srcs;
   reg_t m_value_reg;
   boost::optional<reg_t> m_caller_this_reg;
-  reg_t m_callee_this_reg;
-  DexType* m_callee_class;
 };

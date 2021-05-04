@@ -8,6 +8,7 @@
 #include "EnumUpcastAnalysis.h"
 
 #include "EnumClinitAnalysis.h"
+#include "Macros.h"
 #include "Resolver.h"
 #include "Show.h"
 #include "Trace.h"
@@ -584,7 +585,7 @@ EnumTypeEnvironment EnumFixpointIterator::gen_env(const DexMethod* method) {
   const DexTypeList* args = method->get_proto()->get_args();
   const bool has_this_pointer = !is_static(method);
   size_t load_param_inst_size = 0;
-  for (const auto& mie : InstructionIterable(code)) {
+  for (const auto& mie ATTRIBUTE_UNUSED : InstructionIterable(code)) {
     ++load_param_inst_size;
   }
   always_assert(load_param_inst_size == args->size() + has_this_pointer);

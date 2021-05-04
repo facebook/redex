@@ -109,37 +109,6 @@ bool is_zero(boost::optional<SignedConstantDomain> src) {
 
 namespace constant_propagation {
 
-namespace {
-
-std::mutex g_kotlin_mutex;
-std::unordered_set<DexMethodRef*>* g_kotlin_cache{nullptr};
-
-std::unordered_set<DexMethodRef*>* get_kotlin_null_assertions_internal() {
-  std::unique_lock<std::mutex> lock(g_kotlin_mutex);
-  if (g_kotlin_cache == nullptr) {
-    g_kotlin_cache = new std::unordered_set<DexMethodRef*>{
-        method::kotlin_jvm_internal_Intrinsics_checkParameterIsNotNull(),
-        kotlin_nullcheck_wrapper::
-            kotlin_jvm_internal_Intrinsics_WrCheckParameter(),
-        method::kotlin_jvm_internal_Intrinsics_checExpressionValueIsNotNull(),
-        kotlin_nullcheck_wrapper::
-            kotlin_jvm_internal_Intrinsics_WrCheckExpression()};
-
-    g_redex->add_destruction_task([]() {
-      std::unique_lock<std::mutex> lock(g_kotlin_mutex);
-      delete g_kotlin_cache;
-      g_kotlin_cache = nullptr;
-    });
-  }
-  return g_kotlin_cache;
-}
-
-} // namespace
-
-const std::unordered_set<DexMethodRef*>& get_kotlin_null_assertions() {
-  return *get_kotlin_null_assertions_internal();
-}
-
 boost::optional<size_t> get_null_check_object_index(
     const IRInstruction* insn,
     const std::unordered_set<DexMethodRef*>& kotlin_null_check_assertions) {
@@ -838,21 +807,57 @@ ImmutableAttributeAnalyzerState::ImmutableAttributeAnalyzerState() {
   //  invoke-static v0 Ljava/lang/Integer;.valueOf:(I)Ljava/lang/Integer;
   // clang-format on
   // Other boxed types are similar.
-  std::array<DexType*, 8> boxed_types = {
-      type::java_lang_Boolean(), type::java_lang_Byte(),
-      type::java_lang_Short(),   type::java_lang_Character(),
-      type::java_lang_Integer(), type::java_lang_Long(),
-      type::java_lang_Float(),   type::java_lang_Double()};
-  for (auto type : boxed_types) {
-    auto valueOf = type::get_value_of_method_for_type(type);
-    auto getter_method = type::get_unboxing_method_for_type(type);
+  struct BoxedTypeInfo {
+    DexType* type;
+    long begin;
+    long end;
+  };
+  // See e.g.
+  // https://cs.android.com/android/platform/superproject/+/master:libcore/ojluni/src/main/java/java/lang/Integer.java
+  // for what is actually cached on Android. Note:
+  // - We don't handle java.lang.Boolean here, as that's more appropriate
+  // handled by the
+  //   BoxedBooleanAnalyzer, which also knows about the FALSE and TRUE fields.
+  // - The actual upper bound of cached Integers is actually configurable. We
+  //   just use the minimum value here.
+  std::array<BoxedTypeInfo, 7> boxed_type_infos = {
+      BoxedTypeInfo{type::java_lang_Byte(), -128, 128},
+      BoxedTypeInfo{type::java_lang_Short(), -128, 128},
+      BoxedTypeInfo{type::java_lang_Character(), 0, 128},
+      BoxedTypeInfo{type::java_lang_Integer(), -128, 128},
+      BoxedTypeInfo{type::java_lang_Long(), -128, 128},
+      BoxedTypeInfo{type::java_lang_Float(), 0, 0},
+      BoxedTypeInfo{type::java_lang_Double(), 0, 0}};
+  for (auto& bti : boxed_type_infos) {
+    auto valueOf = type::get_value_of_method_for_type(bti.type);
+    auto getter_method = type::get_unboxing_method_for_type(bti.type);
     if (valueOf && getter_method && valueOf->is_def() &&
         getter_method->is_def()) {
       add_initializer(valueOf->as_def(), getter_method->as_def())
           .set_src_id_of_attr(0)
           .set_obj_to_dest();
+      if (bti.end > bti.begin) {
+        add_cached_boxed_objects(valueOf->as_def(), bti.begin, bti.end);
+      }
     }
   }
+}
+
+void ImmutableAttributeAnalyzerState::add_cached_boxed_objects(
+    DexMethod* initialize_method, long begin, long end) {
+  always_assert(begin < end);
+  cached_boxed_objects.emplace(initialize_method,
+                               CachedBoxedObjects{begin, end});
+}
+
+bool ImmutableAttributeAnalyzerState::is_jvm_cached_object(
+    DexMethod* initialize_method, long value) const {
+  auto it = cached_boxed_objects.find(initialize_method);
+  if (it == cached_boxed_objects.end()) {
+    return false;
+  }
+  auto& cached_objects = it->second;
+  return value >= cached_objects.begin && value < cached_objects.end;
 }
 
 DexType* ImmutableAttributeAnalyzerState::initialized_type(
@@ -981,6 +986,8 @@ bool ImmutableAttributeAnalyzer::analyze_method_initialization(
         object.write_value(initializer.attr, SignedConstantDomain::top());
         continue;
       }
+      object.jvm_cached_singleton =
+          state->is_jvm_cached_object(method, *constant);
       object.write_value(initializer.attr, *signed_value);
       has_value = true;
     } else if (const auto& string_value = domain.maybe_get<StringDomain>()) {
@@ -1062,7 +1069,70 @@ ReturnState collect_return_state(
   return return_state;
 }
 
+bool EnumUtilsFieldAnalyzer::analyze_sget(
+    ImmutableAttributeAnalyzerState* state,
+    const IRInstruction* insn,
+    ConstantEnvironment* env) {
+  // The $EnumUtils class contains fields named fXXX, where XXX encodes a 32-bit
+  // number whose boxed value is stored as a java.lang.Integer instance in that
+  // field. These fields are initialized through Integer.valueOf(...).
+  auto integer_type = type::java_lang_Integer();
+  auto field = resolve_field(insn->get_field());
+  if (field == nullptr || !is_final(field) ||
+      field->get_type() != integer_type || field->str().empty() ||
+      field->str()[0] != 'f' ||
+      field->get_class() != DexType::make_type("Lredex/$EnumUtils;")) {
+    return false;
+  }
+  auto valueOf = method::java_lang_Integer_valueOf();
+  auto it = state->method_initializers.find(valueOf);
+  if (it == state->method_initializers.end()) {
+    return false;
+  }
+  const auto& initializers = it->second;
+  always_assert(initializers.size() == 1);
+  const auto& initializer = initializers.front();
+  always_assert(initializer.insn_src_id_of_attr == 0);
+
+  const auto& name = field->str();
+  auto value = std::stoi(name.substr(1));
+  ObjectWithImmutAttr object(integer_type, 1);
+  object.write_value(initializer.attr, SignedConstantDomain(value));
+  object.jvm_cached_singleton = state->is_jvm_cached_object(valueOf, value);
+  env->set(RESULT_REGISTER, ObjectWithImmutAttrDomain(std::move(object)));
+  return true;
+}
+
 namespace intraprocedural {
+
+namespace {
+
+std::atomic<std::unordered_set<DexMethodRef*>*> kotlin_null_assertions{nullptr};
+const std::unordered_set<DexMethodRef*>& get_kotlin_null_assertions() {
+  for (;;) {
+    auto* ptr = kotlin_null_assertions.load();
+    if (ptr != nullptr) {
+      return *ptr;
+    }
+    auto uptr = std::make_unique<std::unordered_set<DexMethodRef*>>(
+        kotlin_nullcheck_wrapper::get_kotlin_null_assertions());
+    if (kotlin_null_assertions.compare_exchange_strong(ptr, uptr.get())) {
+      // Add a task to delete stuff.
+      g_redex->add_destruction_task([]() {
+        auto* ptr = kotlin_null_assertions.load();
+        if (ptr != nullptr) {
+          auto old_ptr = ptr;
+          if (kotlin_null_assertions.compare_exchange_strong(ptr, nullptr)) {
+            delete old_ptr;
+          }
+        }
+      });
+      return *uptr.release();
+    }
+  }
+}
+
+} // namespace
 
 FixpointIterator::FixpointIterator(
     const cfg::ControlFlowGraph& cfg,

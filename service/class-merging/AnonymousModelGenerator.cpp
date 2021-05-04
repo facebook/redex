@@ -38,7 +38,7 @@ namespace class_merging {
  * Analyze type hierarchy to find anonymous classes to merge.
  */
 void discover_mergeable_anonymous_classes(const Scope& scope,
-                                          size_t min_implementor_size,
+                                          size_t min_implementors,
                                           ModelSpec* merging_spec,
                                           PassManager* mgr) {
   const auto object_type = type::java_lang_Object();
@@ -62,7 +62,7 @@ void discover_mergeable_anonymous_classes(const Scope& scope,
   for (const auto& pair : interfaces) {
     auto intf = pair.first;
     if (!merging_spec->exclude_types.count(intf) &&
-        pair.second >= min_implementor_size) {
+        pair.second >= min_implementors) {
       mgr->incr_metric("impls_" + show(intf), pair.second);
       TRACE(CLMG, 9, "discovered new root %s", SHOW(pair.first));
       merging_spec->roots.insert(pair.first);

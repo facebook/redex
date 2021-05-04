@@ -10,6 +10,7 @@
 #include "CallGraph.h"
 #include "Creators.h"
 #include "IRAssembler.h"
+#include "MethodOverrideGraph.h"
 #include "RedexTest.h"
 #include "Walkers.h"
 
@@ -83,7 +84,8 @@ TEST_F(GlobalTypeAnalysisTest, SimpleArgumentPassingTest) {
   creator.add_method(meth_foo);
   scope.push_back(creator.create());
 
-  call_graph::Graph cg = call_graph::single_callee_graph(scope);
+  call_graph::Graph cg = call_graph::single_callee_graph(
+      *method_override_graph::build_graph(scope), scope);
   walk::code(scope, [](DexMethod*, IRCode& code) {
     code.build_cfg(/* editable */ false);
   });
@@ -145,7 +147,8 @@ TEST_F(GlobalTypeAnalysisTest, ArgumentPassingJoinWithNullTest) {
   creator.add_method(meth_foo);
   scope.push_back(creator.create());
 
-  call_graph::Graph cg = call_graph::single_callee_graph(scope);
+  call_graph::Graph cg = call_graph::single_callee_graph(
+      *method_override_graph::build_graph(scope), scope);
   walk::code(scope, [](DexMethod*, IRCode& code) {
     code.build_cfg(/* editable */ false);
   });
@@ -200,7 +203,8 @@ TEST_F(GlobalTypeAnalysisTest, ReturnTypeTest) {
   creator.add_method(meth_foo);
   scope.push_back(creator.create());
 
-  call_graph::Graph cg = call_graph::single_callee_graph(scope);
+  call_graph::Graph cg = call_graph::single_callee_graph(
+      *method_override_graph::build_graph(scope), scope);
   walk::code(scope, [](DexMethod*, IRCode& code) {
     code.build_cfg(/* editable */ false);
   });
@@ -269,7 +273,8 @@ TEST_F(GlobalTypeAnalysisTest, SimpleFieldTypeTest) {
   creator.add_method(meth_foo);
   scope.push_back(creator.create());
 
-  call_graph::Graph cg = call_graph::single_callee_graph(scope);
+  call_graph::Graph cg = call_graph::single_callee_graph(
+      *method_override_graph::build_graph(scope), scope);
   walk::code(scope, [](DexMethod*, IRCode& code) {
     code.build_cfg(/* editable */ false);
   });
@@ -348,7 +353,8 @@ TEST_F(GlobalTypeAnalysisTest, ClinitSimpleTest) {
   creator.add_method(meth_foo);
   scope.push_back(creator.create());
 
-  call_graph::Graph cg = call_graph::single_callee_graph(scope);
+  call_graph::Graph cg = call_graph::single_callee_graph(
+      *method_override_graph::build_graph(scope), scope);
   walk::code(scope, [](DexMethod*, IRCode& code) {
     code.build_cfg(/* editable */ false);
   });

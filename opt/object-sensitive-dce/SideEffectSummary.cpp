@@ -280,16 +280,16 @@ void analyze_scope(
     const call_graph::Graph& call_graph,
     const ConcurrentMap<const DexMethodRef*, ptrs::FixpointIterator*>&
         ptrs_fp_iter_map,
-    SummaryMap* summary_map) {
+    SummaryMap* effect_summaries) {
   // This method is special: the bytecode verifier requires that this method
   // be called before a newly-allocated object gets used in any way. We can
   // model this by treating the method as modifying its `this` parameter --
   // changing it from uninitialized to initialized.
-  (*summary_map)[DexMethod::get_method("Ljava/lang/Object;.<init>:()V")] =
+  (*effect_summaries)[DexMethod::get_method("Ljava/lang/Object;.<init>:()V")] =
       Summary({0});
 
   SummaryConcurrentMap summary_cmap;
-  for (auto& pair : *summary_map) {
+  for (auto& pair : *effect_summaries) {
     summary_cmap.insert(pair);
   }
 
@@ -300,7 +300,7 @@ void analyze_scope(
   });
 
   for (auto& pair : summary_cmap) {
-    summary_map->insert(pair);
+    effect_summaries->insert(pair);
   }
 }
 

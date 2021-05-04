@@ -73,6 +73,9 @@ struct MethodRefCacheKeyHash {
 using MethodRefCache =
     std::unordered_map<MethodRefCacheKey, DexMethod*, MethodRefCacheKeyHash>;
 
+using ConcurrentMethodRefCache =
+    ConcurrentMap<MethodRefCacheKey, DexMethod*, MethodRefCacheKeyHash>;
+
 /**
  * Helper to map an opcode to a MethodSearch rule.
  */
@@ -248,6 +251,34 @@ inline DexMethod* resolve_method(DexMethodRef* method,
   auto mdef = resolve_method(method, search, caller);
   if (mdef != nullptr) {
     ref_cache.emplace(MethodRefCacheKey{method, search}, mdef);
+  }
+  return mdef;
+}
+
+/**
+ * Resolve a method and cache the mapping. This method has the same behavior as
+ * the other resolve_method with a cache, but this method is thread-safe.
+ */
+inline DexMethod* resolve_method(DexMethodRef* method,
+                                 MethodSearch search,
+                                 ConcurrentMethodRefCache& concurrent_ref_cache,
+                                 const DexMethod* caller = nullptr) {
+  if (search == MethodSearch::Super) {
+    // We don't have cache for that since caller might be different.
+    return resolve_method(method, search, caller);
+  }
+  auto m = method->as_def();
+  if (m) {
+    return m;
+  }
+  auto def =
+      concurrent_ref_cache.get(MethodRefCacheKey{method, search}, nullptr);
+  if (def != nullptr) {
+    return def;
+  }
+  auto mdef = resolve_method(method, search, caller);
+  if (mdef != nullptr) {
+    concurrent_ref_cache.emplace(MethodRefCacheKey{method, search}, mdef);
   }
   return mdef;
 }

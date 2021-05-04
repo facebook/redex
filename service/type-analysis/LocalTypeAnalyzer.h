@@ -28,7 +28,7 @@ class LocalTypeAnalyzer final
         m_insn_analyzer(std::move(insn_analyer)) {}
 
   void analyze_instruction(const IRInstruction* insn,
-                           DexTypeEnvironment* current_state) const override;
+                           DexTypeEnvironment* env) const override;
 
  private:
   InstructionAnalyzer<DexTypeEnvironment> m_insn_analyzer;
@@ -117,12 +117,23 @@ class ClinitFieldAnalyzer final
  * the ctor is under. When collecting the WholeProgramState, we first collect
  * the end state of the FieldTypeEnvironment for all ctors. We use that as the
  * initial type mapping for all instance fields.
+ *
+ * Note that we only update Field type mapping for operations on `this` obj. We
+ * do not want to collect field type update on another instance of the same
+ * class. That's not correct. As a result, we might incorrectly initialize the
+ * nullness of a field without the instance tracking.
  */
 class CtorFieldAnalyzer final
     : public InstructionAnalyzerBase<CtorFieldAnalyzer,
                                      DexTypeEnvironment,
                                      DexType* /* class_under_init */> {
  public:
+  static bool analyze_default(const DexType* class_under_init,
+                              const IRInstruction* insn,
+                              DexTypeEnvironment* env);
+  static bool analyze_load_param(const DexType* class_under_init,
+                                 const IRInstruction* insn,
+                                 DexTypeEnvironment* env);
   static bool analyze_iget(const DexType* class_under_init,
                            const IRInstruction* insn,
                            DexTypeEnvironment* env);
@@ -130,6 +141,14 @@ class CtorFieldAnalyzer final
   static bool analyze_iput(const DexType* class_under_init,
                            const IRInstruction* insn,
                            DexTypeEnvironment* env);
+
+  static bool analyze_move(const DexType* class_under_init,
+                           const IRInstruction* insn,
+                           DexTypeEnvironment* env);
+
+  static bool analyze_move_result(const DexType* class_under_init,
+                                  const IRInstruction* insn,
+                                  DexTypeEnvironment* env);
 };
 
 } // namespace local

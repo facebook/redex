@@ -243,11 +243,11 @@ class walk {
   template <typename WalkerFn>
   static void iterate_methods(const DexClass* cls, const WalkerFn& walker) {
     for (auto dmethod : cls->get_dmethods()) {
-      TraceContext context(dmethod->get_deobfuscated_name());
+      TraceContext context(dmethod);
       walker(dmethod);
     }
     for (auto vmethod : cls->get_vmethods()) {
-      TraceContext context(vmethod->get_deobfuscated_name());
+      TraceContext context(vmethod);
       walker(vmethod);
     }
   }
@@ -466,11 +466,11 @@ class walk {
           [&](sparta::SpartaWorkerState<DexClass*>* state, DexClass* cls) {
             Accumulator& acc = acc_vec[state->worker_id()];
             for (auto dmethod : cls->get_dmethods()) {
-              TraceContext context(dmethod->get_deobfuscated_name());
+              TraceContext context(dmethod);
               walker(dmethod, &acc);
             }
             for (auto vmethod : cls->get_vmethods()) {
-              TraceContext context(vmethod->get_deobfuscated_name());
+              TraceContext context(vmethod);
               walker(vmethod, &acc);
             }
           },

@@ -46,6 +46,7 @@ void AnonymousClassMergingPass::run_pass(DexStoresVector& stores,
         InterDexGroupingType::NON_ORDERED_SET;
     m_merging_spec.include_primary_dex =
         conf.get_json_config().get("force_single_dex", false);
+    m_merging_spec.dedup_throw_blocks = false;
     strategy::set_merging_strategy(strategy::BY_CODE_SIZE);
 
     class_merging::merge_model(scope, conf, mgr, stores, m_merging_spec);

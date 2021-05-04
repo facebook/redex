@@ -156,9 +156,10 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
       inline_after ? nullptr : inline_site.cfg().get_dbg_pos(inline_site);
 
   // make the invoke last of its block or first based on inline_after
-  Block* split_on_inline = inline_after
-                               ? maybe_split_block(caller, inline_site)
-                               : maybe_split_block_before(caller, inline_site);
+  auto split = inline_after ? maybe_split_block(caller, inline_site)
+                            : maybe_split_block_before(caller, inline_site);
+  Block* split_on_inline = split.first;
+  Block* callsite_blk = split.second;
   TRACE(CFG, 3, "split caller %s : %s", inline_after ? "after" : "before",
         SHOW(*caller));
 
@@ -172,7 +173,9 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
     // ensure that the caller's code after the inlined method retain their
     // original position
     const auto& first = split_on_inline->begin();
-    if (first == split_on_inline->end() || first->type != MFLOW_POSITION) {
+    // inserting debug insn before param load insn does not work
+    if (split_on_inline != inline_site.cfg().entry_block() &&
+        (first == split_on_inline->end() || first->type != MFLOW_POSITION)) {
       // but don't add if there's already a position at the front of this
       // block
       split_on_inline->m_entries.push_front(*(new MethodItemEntry(
@@ -213,11 +216,10 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
   TRACE(CFG, 3, "callee after remap %s", SHOW(callee));
 
   bool need_reg_size_recompute = plugin.update_after_reg_remap(caller, &callee);
-
   // redirect to callee
   const std::vector<Block*> callee_blocks = callee.blocks();
-  steal_contents(caller, inline_site.block(), &callee);
-  connect_cfgs(inline_after, caller, inline_site.block(), callee_blocks,
+  steal_contents(caller, callsite_blk, &callee);
+  connect_cfgs(inline_after, caller, callsite_blk, callee_blocks,
                callee_entry_block, callee_return_blocks, split_on_inline);
   if (need_reg_size_recompute) {
     caller->recompute_registers_size();
@@ -259,10 +261,11 @@ void CFGInliner::remove_ghost_exit_block(ControlFlowGraph* cfg) {
 
 /*
  * If it isn't already, make `it` the last instruction of its block
- * return the block that should be run after the callee
+ * return the block that should be run after the callee and blk containing
+ * callsite as a pair.
  */
-Block* CFGInliner::maybe_split_block(ControlFlowGraph* caller,
-                                     const InstructionIterator& it) {
+std::pair<Block*, Block*> CFGInliner::maybe_split_block(
+    ControlFlowGraph* caller, const InstructionIterator& it) {
   always_assert(caller->editable());
   always_assert(!it.block()->empty());
 
@@ -276,28 +279,34 @@ Block* CFGInliner::maybe_split_block(ControlFlowGraph* caller,
   // No need to change the code, just return the next block
   Block* goto_block = old_block->goes_to();
   always_assert(goto_block != nullptr);
-  return goto_block;
+  return std::make_pair(goto_block, old_block);
 }
 
 // Insert a new block if needed to make `it` the first instruction of a block.
-Block* CFGInliner::maybe_split_block_before(ControlFlowGraph* caller,
-                                            const InstructionIterator& it) {
+// return the block that should be run before the callee and the block that
+// should contain the callsite as a pair.
+std::pair<Block*, Block*> CFGInliner::maybe_split_block_before(
+    ControlFlowGraph* caller, const InstructionIterator& it) {
   always_assert(caller->editable());
   always_assert(!it.block()->empty());
 
   const IRList::iterator& raw_it = it.unwrap();
   Block* old_block = it.block();
-  if (raw_it == old_block->get_first_insn()) {
-    // Insertion point is already the first instruction, so return its block
-    return old_block;
+  auto preds = old_block->preds();
+  if (raw_it == old_block->get_first_insn() && preds.size() == 1) {
+    Block* single_pred_block = preds.at(0)->src();
+    if (single_pred_block->succs().size() == 1) {
+      // If we already have a block.
+      return std::make_pair(single_pred_block, old_block);
+    }
   }
-  // Else inject an instruction and then split so 'it' is first of block
+
+  // Inject an instruction and then split so 'it' is first of block
   auto dummy_end_instruction = new IRInstruction(OPCODE_NOP);
   caller->insert_before(it, dummy_end_instruction);
-  caller->split_block(caller->find_insn(dummy_end_instruction, old_block));
-  Block* goto_block = old_block->goes_to();
-  always_assert(goto_block != nullptr);
-  return goto_block;
+  auto new_blk = caller->split_block(
+      old_block, caller->find_insn(dummy_end_instruction).unwrap());
+  return std::make_pair(old_block, new_blk);
 }
 
 /*
@@ -373,16 +382,18 @@ void CFGInliner::connect_cfgs(bool inline_after,
         callsite, [](const Edge* e) { return e->type() == EDGE_GOTO; });
     connect({callsite}, callee_entry);
   } else {
-    std::vector<Block*> callsite_split_preds;
-    for (auto e : callsite_split->preds()) {
-      callsite_split_preds.push_back(e->src());
-    }
-    connect(callsite_split_preds, callee_entry);
     // Remove the preds into callsite, having moved them to entry
-    cfg->delete_pred_edges(callsite_split);
+    cfg->delete_succ_edges(callsite_split);
+    connect({callsite_split}, callee_entry);
   }
   // TODO: tail call optimization (if callsite_split is a return & inline_after)
-  connect(callee_exits, callsite_split);
+
+  if (inline_after) {
+    connect(callee_exits, callsite_split);
+  } else {
+    cfg->delete_pred_edges(callsite);
+    connect(callee_exits, callsite);
+  }
 }
 
 /*

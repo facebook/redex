@@ -1853,11 +1853,11 @@ void PeepholePass::run_pass(DexStoresVector& stores,
                              DexClass* cls) {
         auto& ph = peephole_optimizers[state->worker_id()];
         for (const auto& m : cls->get_dmethods()) {
-          TraceContext context(m->get_deobfuscated_name());
+          TraceContext context(m);
           ph->run_method(m);
         }
         for (const auto& m : cls->get_vmethods()) {
-          TraceContext context(m->get_deobfuscated_name());
+          TraceContext context(m);
           ph->run_method(m);
         }
       },

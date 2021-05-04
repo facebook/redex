@@ -322,7 +322,7 @@ FixpointIteratorMapPtr analyze_scope(const Scope&,
 void collect_exiting_pointers(const FixpointIterator& fp_iter,
                               const IRCode& code,
                               PointerSet* returned_ptrs,
-                              PointerSet* thrown_pointers);
+                              PointerSet* thrown_ptrs);
 
 /*
  * Summarize the effect a method has on its input parameters -- e.g. whether

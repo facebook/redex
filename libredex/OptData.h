@@ -76,7 +76,6 @@ class InsnOptData {
   InsnOptData(const DexMethod* method, const IRInstruction* insn);
 
  private:
-  const DexMethod* m_method;
   std::string m_insn_orig;
   bool m_has_line_num{false};
   size_t m_line_num{0};

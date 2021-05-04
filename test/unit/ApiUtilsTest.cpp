@@ -71,8 +71,8 @@ TEST(ApiUtilsTest, testParseInputFormat) {
   g_redex = new RedexContext();
 
   Scope scope = create_scope(false);
-  api::ApiLevelsUtils api_utils(scope, std::getenv("api_utils_easy_input_path"),
-                                21);
+  api::ApiLevelsUtils api_utils(scope,
+                                std::getenv("api_utils_easy_input_path"));
   const auto& framework_cls_to_api = api_utils.get_framework_classes();
   EXPECT_EQ(framework_cls_to_api.size(), 6);
 
@@ -96,8 +96,8 @@ TEST(ApiUtilsTest, testEasyInput_EasyReleaseLibraries) {
   g_redex = new RedexContext();
 
   Scope scope = create_scope(false);
-  api::ApiLevelsUtils api_utils(scope, std::getenv("api_utils_easy_input_path"),
-                                21);
+  api::ApiLevelsUtils api_utils(scope,
+                                std::getenv("api_utils_easy_input_path"));
 
   const auto& types_to_framework_api = api_utils.get_types_to_framework_api();
   EXPECT_EQ(types_to_framework_api.size(), 3);
@@ -119,8 +119,8 @@ TEST(ApiUtilsTest, testEasyInput_SubClassMissingInReleaseLibraries) {
   g_redex = new RedexContext();
 
   Scope scope = create_scope(true);
-  api::ApiLevelsUtils api_utils(scope, std::getenv("api_utils_easy_input_path"),
-                                21);
+  api::ApiLevelsUtils api_utils(scope,
+                                std::getenv("api_utils_easy_input_path"));
 
   const auto& types_to_framework_api = api_utils.get_types_to_framework_api();
   EXPECT_EQ(types_to_framework_api.size(), 2);
@@ -153,8 +153,8 @@ TEST(ApiUtilsTest, testEasyInput_MethodMissingButNotTruePrivate) {
   auto a_cls = type_class(a_release);
   a_cls->add_method(method);
 
-  api::ApiLevelsUtils api_utils(scope, std::getenv("api_utils_easy_input_path"),
-                                21);
+  api::ApiLevelsUtils api_utils(scope,
+                                std::getenv("api_utils_easy_input_path"));
 
   const auto& types_to_framework_api = api_utils.get_types_to_framework_api();
   EXPECT_EQ(types_to_framework_api.size(), 3);
@@ -187,8 +187,8 @@ TEST(ApiUtilsTest, testEasyInput_MethodMissing) {
   // considered missing.
   add_usage(&scope, method);
 
-  api::ApiLevelsUtils api_utils(scope, std::getenv("api_utils_easy_input_path"),
-                                21);
+  api::ApiLevelsUtils api_utils(scope,
+                                std::getenv("api_utils_easy_input_path"));
 
   const auto& types_to_framework_api = api_utils.get_types_to_framework_api();
   EXPECT_EQ(types_to_framework_api.size(), 1);
@@ -203,8 +203,8 @@ TEST(ApiUtilsTest, testHasMethod) {
 
   Scope scope = create_scope(false);
 
-  api::ApiLevelsUtils api_utils(scope, std::getenv("api_utils_easy_input_path"),
-                                21);
+  api::ApiLevelsUtils api_utils(scope,
+                                std::getenv("api_utils_easy_input_path"));
   const auto& framework_cls_to_api = api_utils.get_framework_classes();
   EXPECT_EQ(framework_cls_to_api.size(), 6);
 

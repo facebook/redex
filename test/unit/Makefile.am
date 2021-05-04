@@ -68,12 +68,15 @@ check_PROGRAMS = \
     local_pointers_test \
     loop_info_test \
     loosen_access_modifier_test \
+    match_flow_test \
     match_test \
     method_inline_test \
     method_merger_test \
     monitor_count_test \
     mutf8_compare_test \
     leb_test \
+    native_test \
+    native_names_test \
     null_propagation_test \
     object_inliner_test \
     object_propagation_test \
@@ -89,7 +92,6 @@ check_PROGRAMS = \
     random_forest_test \
     reaching_definitions_test \
     reduce_array_literals_test \
-    reduce_boolean_branches_test \
     reduce_gotos_test \
     reflection_analysis_test \
     reg_alloc_test \
@@ -112,6 +114,7 @@ check_PROGRAMS = \
     static_relo_v2_test \
     strip_debug_info_test \
     switch_dispatch_test \
+    timer_test \
     trace_multithreading_test \
     true_virtuals_test \
     type_analysis_transform_test \
@@ -254,6 +257,9 @@ loosen_access_modifier_test_SOURCES = LoosenAccessModifierTest.cpp
 
 match_test_SOURCES = MatchTest.cpp
 
+match_flow_test_SOURCES = MatchFlowTest.cpp
+match_flow_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
+
 method_inline_test_SOURCES = MethodInlineTest.cpp
 
 method_merger_test_SOURCES = MethodMergerTest.cpp
@@ -263,6 +269,10 @@ monitor_count_test_SOURCES = MonitorCountTest.cpp
 mutf8_compare_test_SOURCES = Mutf8CompareTest.cpp
 
 leb_test_SOURCES = LebTest.cpp
+
+native_test_SOURCES = NativeTest.cpp
+
+native_names_test_SOURCES = NativeNamesTest.cpp
 
 null_propagation_test_SOURCES = constant-propagation/NullPropagationTest.cpp
 
@@ -300,9 +310,6 @@ reaching_definitions_test_SOURCES = ReachingDefinitionsTest.cpp
 reduce_array_literals_test_SOURCES = ReduceArrayLiteralsTest.cpp
 reduce_array_literals_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
-reduce_boolean_branches_test_SOURCES = ReduceBooleanBranchesTest.cpp VirtScopeHelper.cpp ScopeHelper.cpp
-reduce_boolean_branches_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
-
 reduce_gotos_test_SOURCES = ReduceGotosTest.cpp
 reduce_gotos_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
@@ -325,7 +332,7 @@ remove_recursive_locks_test_SOURCES = RemoveRecursiveLocksTest.cpp
 
 remove_redundant_check_casts_test_SOURCES = RemoveRedundantCheckCastsTest.cpp VirtScopeHelper.cpp ScopeHelper.cpp
 
-remove_uninstantiables_test_SOURCES = RemoveUninstantiablesTest.cpp
+remove_uninstantiables_test_SOURCES = RemoveUninstantiablesTest.cpp ScopeHelper.cpp
 remove_uninstantiables_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
 remove_unused_args_test_SOURCES = RemoveUnusedArgsTest.cpp ScopeHelper.cpp
@@ -359,6 +366,8 @@ switch_dispatch_test_SOURCES = SwitchDispatchTest.cpp
 
 # throw_propagation_test_SOURCES = ThrowPropagationTest.cpp
 # throw_propagation_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
+
+timer_test_SOURCES = TimerTest.cpp
 
 trace_multithreading_test_SOURCES = TraceMultithreadingTest.cpp
 trace_multithreading_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
@@ -454,6 +463,7 @@ TESTS = \
     local_pointers_test \
     loop_info_test \
     loosen_access_modifier_test \
+    match_flow_test \
     match_test \
     method_inline_test \
     method_merger_test \
@@ -475,7 +485,6 @@ TESTS = \
     random_forest_test \
     reaching_definitions_test \
     reduce_array_literals_test \
-    reduce_boolean_branches_test \
     reduce_gotos_test \
     reflection_analysis_test \
     reg_alloc_test \
@@ -498,6 +507,7 @@ TESTS = \
     static_relo_v2_test \
     strip_debug_info_test \
     switch_dispatch_test \
+    timer_test \
     trace_multithreading_test \
     true_virtuals_test \
     type_analysis_transform_test \

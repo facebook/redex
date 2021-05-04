@@ -54,14 +54,14 @@ class CFGInliner {
   /*
    * If `it` isn't already, make it the last instruction of its block
    */
-  static Block* maybe_split_block(ControlFlowGraph* caller,
-                                  const InstructionIterator& it);
+  static std::pair<Block*, Block*> maybe_split_block(
+      ControlFlowGraph* caller, const InstructionIterator& it);
 
   /*
    * If `it` isn't first, make it the first instruction of its block
    */
-  static Block* maybe_split_block_before(ControlFlowGraph* caller,
-                                         const InstructionIterator& it);
+  static std::pair<Block*, Block*> maybe_split_block_before(
+      ControlFlowGraph* caller, const InstructionIterator& it);
 
   /*
    * Change the register numbers to not overlap with caller.
@@ -81,13 +81,13 @@ class CFGInliner {
    * into callsite to the entry point and from the exit points to the block
    * after.
    */
-  static void connect_cfgs(bool insert_after,
+  static void connect_cfgs(bool inline_after,
                            ControlFlowGraph* cfg,
                            Block* callsite,
                            const std::vector<Block*>& callee_blocks,
                            Block* callee_entry,
                            const std::vector<Block*>& callee_exits,
-                           Block* after_callsite);
+                           Block* callsite_split);
 
   /*
    * Convert load-params to moves, from a set of sources.

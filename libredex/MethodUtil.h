@@ -107,5 +107,9 @@ DexMethod* java_lang_Integer_intValue();
 
 DexMethod* kotlin_jvm_internal_Intrinsics_checkParameterIsNotNull();
 
+DexMethod* kotlin_jvm_internal_Intrinsics_checkNotNullParameter();
+
 DexMethod* kotlin_jvm_internal_Intrinsics_checExpressionValueIsNotNull();
+
+DexMethod* kotlin_jvm_internal_Intrinsics_checkNotNullExpressionValue();
 }; // namespace method

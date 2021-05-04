@@ -329,11 +329,12 @@ class BridgeRemover {
       m_bridges_to_bridgees.erase(kill);
     }
 
-    walk::code(*m_scope,
-               [](DexMethod*) { return true; },
-               [&](DexMethod* m, IRCode& code) {
-                 exclude_referenced_bridgee(m, code);
-               });
+    walk::code(
+        *m_scope,
+        [](DexMethod*) { return true; },
+        [&](DexMethod* m, IRCode& code) {
+          exclude_referenced_bridgee(m, code);
+        });
   }
 
   void inline_bridges() {

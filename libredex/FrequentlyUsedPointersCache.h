@@ -17,18 +17,21 @@ class DexFieldRef;
   DexType* m_type_##func_name = nullptr; \
                                          \
  public:                                 \
-  DexType* type_##func_name();
+  DexType* type_##func_name() const { return m_type_##func_name; }
 
 #define STORE_FIELDREF(func_name, _)          \
  private:                                     \
   DexFieldRef* m_field_##func_name = nullptr; \
                                               \
  public:                                      \
-  DexFieldRef* field_##func_name();
+  DexFieldRef* field_##func_name() const { return m_field_##func_name; }
 
 // The class is designed to cache frequently used pointers while invalidate them
 // when RedexContext lifetime is over.
 class FrequentlyUsedPointers {
+ public:
+  void load();
+
 #define FOR_EACH STORE_TYPE
   WELL_KNOWN_TYPES
 #undef FOR_EACH

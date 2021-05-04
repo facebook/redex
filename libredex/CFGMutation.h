@@ -139,20 +139,22 @@ class CFGMutation {
 inline CFGMutation::CFGMutation(cfg::ControlFlowGraph& cfg) : m_cfg(cfg) {}
 
 inline void CFGMutation::ChangeSet::add_change(
-    Insert where, std::vector<IRInstruction*> insns) {
+    Insert where, std::vector<IRInstruction*> insn_change) {
 
   switch (where) {
   case Insert::Before:
-    m_insert_before.insert(m_insert_before.end(), insns.begin(), insns.end());
+    m_insert_before.insert(
+        m_insert_before.end(), insn_change.begin(), insn_change.end());
     break;
   case Insert::After:
-    m_insert_after.insert(m_insert_after.end(), insns.begin(), insns.end());
+    m_insert_after.insert(
+        m_insert_after.end(), insn_change.begin(), insn_change.end());
     break;
   case Insert::Replacing:
     always_assert_log(!m_replace.has_value(),
                       "It's not possible to have two Replacing instructions "
                       "for a single anchor.");
-    m_replace = std::move(insns);
+    m_replace = std::move(insn_change);
     break;
   }
 }

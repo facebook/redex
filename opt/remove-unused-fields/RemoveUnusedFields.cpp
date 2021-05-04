@@ -134,10 +134,9 @@ class RemoveUnusedFields final {
       auto& stats = pair.second;
       TRACE(RMUF,
             3,
-            "%s: %lu %lu %lu %d",
+            "%s: %lu %lu %d",
             SHOW(field),
             stats.reads,
-            stats.reads_outside_init,
             stats.writes,
             is_synthetic(field));
       if (can_remove(field) && !is_blocklisted(field) &&

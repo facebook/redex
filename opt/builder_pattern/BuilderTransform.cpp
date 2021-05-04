@@ -19,14 +19,24 @@ BuilderTransform::BuilderTransform(const Scope& scope,
                                    const DexType* root,
                                    const inliner::InlinerConfig& inliner_config,
                                    DexStoresVector& stores)
-    : m_type_system(type_system), m_root(root) {
-  auto resolver = [&](DexMethodRef* method, MethodSearch search) {
-    return resolve_method(method, search, m_resolved_refs);
+    : m_type_system(type_system),
+      m_root(root),
+      m_inliner_config(inliner_config) {
+  auto concurrent_resolver = [&](DexMethodRef* method, MethodSearch search) {
+    return resolve_method(method, search, m_concurrent_resolved_refs);
   };
 
   std::unordered_set<DexMethod*> no_default_inlinables;
+  // customize shrinking options
+  m_inliner_config.shrinker = shrinker::ShrinkerConfig();
+  m_inliner_config.shrinker.run_const_prop = true;
+  m_inliner_config.shrinker.run_cse = true;
+  m_inliner_config.shrinker.run_copy_prop = true;
+  m_inliner_config.shrinker.run_local_dce = true;
+  m_inliner_config.shrinker.compute_pure_methods = false;
   m_inliner = std::unique_ptr<MultiMethodInliner>(new MultiMethodInliner(
-      scope, stores, no_default_inlinables, resolver, inliner_config));
+      scope, stores, no_default_inlinables, concurrent_resolver,
+      m_inliner_config, MultiMethodInlinerMode::None));
 }
 
 std::unordered_set<const IRInstruction*>

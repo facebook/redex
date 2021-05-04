@@ -501,18 +501,18 @@ void collect_refs(Scope& scope, RefsMap& def_refs) {
  * Rename virtual methods.
  */
 size_t rename_virtuals(
-    Scope& classes,
+    Scope& scope,
     bool avoid_stack_trace_collision,
     const std::unordered_map<const DexClass*, int>& next_dmethod_seeds) {
   // build a ClassScope a RefsMap and a VirtualRenamer
-  ClassScopes class_scopes(classes);
+  ClassScopes class_scopes(scope);
   scope_info(class_scopes);
   RefsMap def_refs;
-  collect_refs(classes, def_refs);
+  collect_refs(scope, def_refs);
   std::unordered_map<std::string, uint32_t> stack_trace_elements;
   std::unordered_map<const DexType*, std::string> external_cache;
   if (avoid_stack_trace_collision) {
-    for (const auto& cls : classes) {
+    for (const auto& cls : scope) {
       std::string pref = java_names::internal_to_external(cls->str()) + ".";
       auto emp_res = external_cache.emplace(cls->get_type(), pref);
       always_assert(emp_res.second);
