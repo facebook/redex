@@ -208,18 +208,14 @@ commands:
           command: cd build && make -j 4 package V=0
 
 jobs:
-  build-16_04:
+  build-18_04:
     docker:
-      - image: circleci/buildpack-deps:xenial
+      - image: circleci/buildpack-deps:bionic
     # GCC is hungry.
     resource_class: large
-    # Tell everyone we're using GCC 5.
-    environment:
-      CXX: g++-5
     steps:
       - checkout
-      - setup-build-and-test-w-make:
-          configure_extra: "CXX='g++-5'"
+      - setup-build-and-test-w-make
 
   build-20_04:
     docker:
@@ -313,7 +309,7 @@ workflows:
   version: 2.1
   build_master:
     jobs:
-      - build-16_04:
+      - build-18_04:
           filters: *filter-only-master
       - build-windows:
           filters: *filter-only-master
@@ -325,7 +321,7 @@ workflows:
     jobs:
       # Note: only filter gh-pages for 'build_other' so that pull
       #       requests/stable get checked.
-      - build-16_04:
+      - build-18_04:
           filters: *filter-not-gh-pages-not-master
       - build-20_04:
           filters: *filter-not-gh-pages-not-master
