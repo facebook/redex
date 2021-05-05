@@ -647,6 +647,11 @@ class ControlFlowGraph {
   void insert_after(const InstructionIterator& it,
                     std::unique_ptr<DexPosition> pos);
 
+  void insert_before(const InstructionIterator& it,
+                     std::unique_ptr<SourceBlock> sb);
+  void insert_after(const InstructionIterator& it,
+                    std::unique_ptr<SourceBlock> sb);
+
   // Insertion Methods (insert_before/after and push_front/back):
   //  * These methods add instructions to the CFG
   //  * They do not add branch (if-*, switch-*) instructions to the cfg (use
