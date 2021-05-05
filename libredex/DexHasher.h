@@ -30,6 +30,7 @@ namespace hashing {
 std::string hash_to_string(size_t hash);
 
 struct DexHash {
+  size_t positions_hash;
   size_t registers_hash;
   size_t code_hash;
   size_t signature_hash;
@@ -99,6 +100,7 @@ class DexClassHasher final {
   size_t m_hash{0};
   size_t m_code_hash{0};
   size_t m_registers_hash{0};
+  size_t m_positions_hash{0};
 };
 
 } // namespace hashing

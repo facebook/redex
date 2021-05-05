@@ -32,6 +32,7 @@ DexHash DexScopeHasher::run() {
   walk::classes(m_scope, [&](DexClass* cls) {
     class_indices.emplace(cls, class_indices.size());
   });
+  std::vector<size_t> class_positions_hashes(class_indices.size());
   std::vector<size_t> class_registers_hashes(class_indices.size());
   std::vector<size_t> class_code_hashes(class_indices.size());
   std::vector<size_t> class_signature_hashes(class_indices.size());
@@ -39,12 +40,14 @@ DexHash DexScopeHasher::run() {
     DexClassHasher class_hasher(cls);
     DexHash class_hash = class_hasher.run();
     auto index = class_indices.at(cls);
+    class_positions_hashes.at(index) = class_hash.positions_hash;
     class_registers_hashes.at(index) = class_hash.registers_hash;
     class_code_hashes.at(index) = class_hash.code_hash;
     class_signature_hashes.at(index) = class_hash.signature_hash;
   });
 
-  return DexHash{boost::hash_value(class_registers_hashes),
+  return DexHash{boost::hash_value(class_positions_hashes),
+                 boost::hash_value(class_registers_hashes),
                  boost::hash_value(class_code_hashes),
                  boost::hash_value(class_signature_hashes)};
 }
@@ -145,41 +148,55 @@ void DexClassHasher::hash(const IRCode* c) {
 
   hash(c->get_registers_size());
   for (const MethodItemEntry& mie : *c) {
-    hash((uint8_t)mie.type);
     switch (mie.type) {
     case MFLOW_OPCODE:
+      hash((uint8_t)MFLOW_OPCODE);
       hash(mie.insn);
       break;
     case MFLOW_TRY:
+      hash((uint8_t)MFLOW_TRY);
       hash((uint8_t)mie.tentry->type);
       hash(get_id(mie.tentry->catch_start));
       break;
     case MFLOW_CATCH:
+      hash((uint8_t)MFLOW_CATCH);
       if (mie.centry->catch_type) hash(mie.centry->catch_type);
       hash(get_id(mie.centry->next));
       break;
     case MFLOW_TARGET:
+      hash((uint8_t)MFLOW_TARGET);
       hash((uint8_t)mie.target->type);
       hash(get_id(mie.target->src));
       break;
     case MFLOW_DEBUG:
+      hash((uint8_t)MFLOW_DEBUG);
       hash(mie.dbgop->opcode());
       hash(mie.dbgop->uvalue());
       break;
-    case MFLOW_POSITION:
+    case MFLOW_POSITION: {
+      auto old_hash2 = m_hash;
+      m_hash = 0;
+      hash((uint8_t)MFLOW_POSITION);
       if (mie.pos->method) hash(mie.pos->method);
       if (mie.pos->file) hash(mie.pos->file);
       hash(mie.pos->line);
+      boost::hash_combine(m_positions_hash, m_hash);
+      m_hash = old_hash2;
       break;
+    }
     case MFLOW_SOURCE_BLOCK:
+      hash((uint8_t)MFLOW_SOURCE_BLOCK);
       if (mie.src_block) {
         hash(mie.src_block->src);
         hash(mie.src_block->id);
       }
       break;
     case MFLOW_FALLTHROUGH:
+      hash((uint8_t)MFLOW_FALLTHROUGH);
       break;
     case MFLOW_DEX_OPCODE:
+      not_reached();
+    default:
       not_reached();
     }
   }
@@ -330,7 +347,7 @@ DexHash DexClassHasher::run() {
   TRACE(HASHER, 3, "[hasher] === ifields: %zu", m_cls->get_ifields().size());
   hash(m_cls->get_ifields());
 
-  return DexHash{m_registers_hash, m_code_hash, m_hash};
+  return DexHash{m_positions_hash, m_registers_hash, m_code_hash, m_hash};
 }
 
 } // namespace hashing
