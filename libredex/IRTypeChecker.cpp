@@ -9,6 +9,7 @@
 
 #include <boost/optional/optional.hpp>
 
+#include "DexPosition.h"
 #include "DexUtil.h"
 #include "Match.h"
 #include "Resolver.h"
@@ -567,6 +568,39 @@ Result check_structure(const DexMethod* method, bool check_no_overwrite_this) {
   return check_uninitialized(method);
 }
 
+/*
+ * Do a linear pass to sanity-check the structure of the positions.
+ */
+Result check_positions(const DexMethod* method) {
+  auto code = method->get_code();
+  std::unordered_set<DexPosition*> positions;
+  for (auto it = code->begin(); it != code->end(); ++it) {
+    if (it->type != MFLOW_POSITION) {
+      continue;
+    }
+    auto pos = it->pos.get();
+    if (!positions.insert(pos).second) {
+      return Result::make_error("Duplicate position " + show(pos));
+    }
+  }
+  std::unordered_set<DexPosition*> visited_parents;
+  for (auto pos : positions) {
+    if (!pos->parent) {
+      continue;
+    }
+    if (!positions.count(pos->parent)) {
+      return Result::make_error("Missing parent " + show(pos));
+    }
+    for (auto p = pos; p; p = p->parent) {
+      if (!visited_parents.insert(p).second) {
+        return Result::make_error("Cyclic parents around " + show(pos));
+      }
+    }
+    visited_parents.clear();
+  }
+  return Result::Ok();
+}
+
 /**
  * Validate if the caller has the permit to call a method or access a field.
  *
@@ -690,6 +724,15 @@ void IRTypeChecker::run() {
       return;
     }
   }
+
+  auto positions_result = check_positions(m_dex_method);
+  if (positions_result != Result::Ok()) {
+    m_complete = true;
+    m_good = false;
+    m_what = positions_result.error_message();
+    return;
+  }
+
   m_complete = true;
 
   if (traceEnabled(TYPE, 9)) {
