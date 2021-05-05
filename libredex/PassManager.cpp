@@ -806,15 +806,20 @@ hashing::DexHash PassManager::run_hasher(const char* pass_name,
                hash.code_hash & ((((size_t)1) << 52) - 1));
     set_metric("~result~registers~hash~",
                hash.registers_hash & ((((size_t)1) << 52) - 1));
+    set_metric("~result~positions~hash~",
+               hash.positions_hash & ((((size_t)1) << 52) - 1));
     set_metric("~result~signature~hash~",
                hash.signature_hash & ((((size_t)1) << 52) - 1));
   }
+  auto positions_hash_string = hashing::hash_to_string(hash.positions_hash);
   auto registers_hash_string = hashing::hash_to_string(hash.registers_hash);
   auto code_hash_string = hashing::hash_to_string(hash.code_hash);
   auto signature_hash_string = hashing::hash_to_string(hash.signature_hash);
-  TRACE(PM, 3, "[scope hash] %s: registers#%s, code#%s, signature#%s",
-        pass_name ? pass_name : "(initial)", registers_hash_string.c_str(),
-        code_hash_string.c_str(), signature_hash_string.c_str());
+  TRACE(PM, 3,
+        "[scope hash] %s: positions#%s, registers#%s, code#%s, signature#%s",
+        pass_name ? pass_name : "(initial)", positions_hash_string.c_str(),
+        registers_hash_string.c_str(), code_hash_string.c_str(),
+        signature_hash_string.c_str());
   return hash;
 }
 
