@@ -48,6 +48,7 @@ COMMON_INCLUDES = \
 	-I$(top_srcdir)/opt/outliner \
 	-I$(top_srcdir)/opt/peephole \
 	-I$(top_srcdir)/opt/print-members \
+	-I$(top_srcdir)/opt/print-kotlin-stats \
 	-I$(top_srcdir)/opt/rebindrefs \
 	-I$(top_srcdir)/opt/reduce-array-literals \
 	-I$(top_srcdir)/opt/reduce-boolean-branches \

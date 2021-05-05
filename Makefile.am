@@ -296,6 +296,7 @@ libopt_la_SOURCES = \
 	opt/original_name/OriginalNamePass.cpp \
 	opt/peephole/Peephole.cpp \
 	opt/peephole/RedundantCheckCastRemover.cpp \
+	opt/print-kotlin-stats/PrintKotlinStats.cpp \ 
 	opt/print-members/PrintMembers.cpp \
 	opt/rebindrefs/ReBindRefs.cpp \
 	opt/regalloc/RegAlloc.cpp \

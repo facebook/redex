@@ -147,6 +147,7 @@ class DexType;
   TM(VM)              \
   TM(VMERGE)          \
   TM(KOTLIN_INSTANCE) \
+  TM(KOTLIN_STATS)    \
   /* End of list */
 
 enum TraceModule : int {
