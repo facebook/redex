@@ -45,6 +45,7 @@ struct Tracer {
     const char* show_tracemodule = getenv("SHOW_TRACEMODULE");
     m_method_filter = getenv("TRACE_METHOD_FILTER");
     if (!traceenv) {
+      init_trace_file(nullptr);
       return;
     }
 
