@@ -251,11 +251,13 @@ class InlineForSpeedDecisionTrees final : public InlineForSpeedBase {
   InlineForSpeedDecisionTrees(const MethodProfiles* method_profiles,
                               PGIForest&& forest,
                               const boost::optional<float>& min_method_hits,
-                              const boost::optional<float>& min_block_hits)
+                              const boost::optional<float>& min_block_hits,
+                              const boost::optional<float>& min_block_appear)
       : m_method_context_context(method_profiles),
         m_forest(std::move(forest)),
         m_min_method_hits(min_method_hits),
-        m_min_block_hits(min_block_hits) {}
+        m_min_block_hits(min_block_hits),
+        m_min_block_appear(min_block_appear) {}
 
  protected:
   bool should_inline_impl(const DexMethod* caller_method,
@@ -329,24 +331,41 @@ class InlineForSpeedDecisionTrees final : public InlineForSpeedBase {
       const DexMethod* caller_method ATTRIBUTE_UNUSED,
       const DexMethod* callee_method ATTRIBUTE_UNUSED,
       const cfg::Block* caller_block) final {
-    if (!m_min_block_hits) {
-      return true;
-    }
-    auto min_hits = *m_min_block_hits;
-    auto sb_vec = source_blocks::gather_source_blocks(caller_block);
-    if (sb_vec.empty()) {
+    auto compute_res = [&](const auto& threshold,
+                           const auto& feature_fn) -> boost::optional<bool> {
+      if (!threshold) {
+        return boost::none;
+      }
+      auto min_hits = *threshold;
+      auto sb_vec = source_blocks::gather_source_blocks(caller_block);
+      if (sb_vec.empty()) {
+        return false;
+      }
+      // Check all interactions.
+      size_t num = g_redex->num_sb_interaction_indices();
+      const auto* sb = sb_vec[0];
+      for (size_t i = 0; i != num; ++i) {
+        auto val = feature_fn(sb, i);
+        if (val && val >= min_hits) {
+          return true;
+        }
+      }
+      return false;
+    };
+    auto inline_hits =
+        compute_res(m_min_block_hits,
+                    [](const auto* sb, size_t i) { return sb->get_val(i); });
+    if (inline_hits && !*inline_hits) {
       return false;
     }
-    // Check all interactions.
-    size_t num = g_redex->num_sb_interaction_indices();
-    const auto* sb = sb_vec[0];
-    for (size_t i = 0; i != num; ++i) {
-      auto val = sb->get_val(i);
-      if (val && val >= min_hits) {
-        return true;
-      }
+    auto inline_appear =
+        compute_res(m_min_block_appear, [](const auto* sb, size_t i) {
+          return sb->get_appear100(i);
+        });
+    if (inline_appear && !*inline_appear) {
+      return false;
     }
-    return false;
+    return true;
   }
 
  private:
@@ -365,6 +384,7 @@ class InlineForSpeedDecisionTrees final : public InlineForSpeedBase {
   PGIForest m_forest;
   boost::optional<float> m_min_method_hits;
   boost::optional<float> m_min_block_hits;
+  boost::optional<float> m_min_block_appear;
 };
 
 } // namespace
@@ -375,6 +395,7 @@ struct PerfMethodInlinePass::Config {
   boost::optional<random_forest::PGIForest> forest = boost::none;
   boost::optional<float> min_method_hits = std::numeric_limits<float>::min();
   boost::optional<float> min_block_hits = boost::none;
+  boost::optional<float> min_block_appear = boost::none;
 };
 
 void PerfMethodInlinePass::bind_config() {
@@ -388,7 +409,12 @@ void PerfMethodInlinePass::bind_config() {
   bind("min_block_hits", -1.0f, min_block_hits,
        "Threshold for caller source-block value to consider inlining. A "
        "negative value elides the check.");
-  after_configuration([this, random_forest_file, min_hits, min_block_hits]() {
+  float min_block_appear;
+  bind("min_block_appear", -1.0f, min_block_appear,
+       "Threshold for caller source-block appear100 to consider inlining. A "
+       "negative value elides the check.");
+  after_configuration([this, random_forest_file, min_hits, min_block_hits,
+                       min_block_appear]() {
     this->m_config = std::make_unique<PerfMethodInlinePass::Config>();
     if (!random_forest_file.empty()) {
       std::stringstream buffer;
@@ -406,16 +432,12 @@ void PerfMethodInlinePass::bind_config() {
               this->m_config->forest->size());
       }
     }
-    if (min_hits < 0) {
-      this->m_config->min_method_hits = boost::none;
-    } else {
-      this->m_config->min_method_hits = min_hits;
-    }
-    if (min_block_hits < 0) {
-      this->m_config->min_block_hits = boost::none;
-    } else {
-      this->m_config->min_block_hits = min_hits;
-    }
+    auto assign_opt = [](float v) -> boost::optional<float> {
+      return v < 0 ? boost::none : boost::optional<float>(v);
+    };
+    this->m_config->min_method_hits = assign_opt(min_hits);
+    this->m_config->min_block_hits = assign_opt(min_block_hits);
+    this->m_config->min_block_appear = assign_opt(min_block_appear);
   });
 }
 
@@ -444,7 +466,8 @@ void PerfMethodInlinePass::run_pass(DexStoresVector& stores,
       m_config->forest
           ? (InlineForSpeedBase*)(new InlineForSpeedDecisionTrees(
                 &method_profiles, m_config->forest->clone(),
-                m_config->min_method_hits, m_config->min_block_hits))
+                m_config->min_method_hits, m_config->min_block_hits,
+                m_config->min_block_appear))
           : new InlineForSpeedMethodProfiles(&method_profiles)};
 
   inliner::run_inliner(stores, mgr, conf, /* intra_dex */ true,
