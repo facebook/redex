@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <boost/optional.hpp>
+#include <boost/optional/optional.hpp>
 #include <fstream>
 #include <functional>
 #include <memory>
@@ -47,7 +48,12 @@ class MethodContextContext {
    public:
     const MethodContextContext& m_context;
 
-    const std::vector<boost::optional<float>> m_hits;
+    struct Vals {
+      std::vector<boost::optional<float>> hits;
+      std::vector<boost::optional<float>> appear100;
+    };
+    const boost::optional<Vals> m_vals;
+
     uint32_t m_regs{0};
     uint32_t m_insns{0};
     uint32_t m_blocks{0};
@@ -57,8 +63,8 @@ class MethodContextContext {
 
    private:
     MethodContext(const MethodContextContext& context,
-                  std::vector<boost::optional<float>>&& hits)
-        : m_context(context), m_hits(std::move(hits)) {}
+                  boost::optional<Vals>&& vals)
+        : m_context(context), m_vals(std::move(vals)) {}
 
     friend class MethodContextContext;
     friend struct RandomForestTestHelper;
@@ -70,16 +76,25 @@ class MethodContextContext {
 
   MethodContext create(const DexMethod* m) {
     std::vector<boost::optional<float>> hits;
+    std::vector<boost::optional<float>> appear;
+    bool has_data = false;
+    boost::optional<MethodContext::Vals> vals = boost::none;
     for (const auto& i : m_interaction_list) {
       auto maybe_stat = m_profiles->get_method_stat(i, m);
       if (maybe_stat) {
+        has_data = true;
         hits.emplace_back(maybe_stat->call_count);
+        appear.emplace_back(maybe_stat->appear_percent);
       } else {
         hits.push_back(boost::none);
+        appear.push_back(boost::none);
       }
     }
+    if (has_data) {
+      vals = boost::make_optional(MethodContext::Vals({hits, appear}));
+    }
 
-    MethodContext res{*this, std::move(hits)};
+    MethodContext res{*this, std::move(vals)};
 
     using namespace cfg;
 
@@ -125,8 +140,11 @@ using MethodContext = MethodContextContext::MethodContext;
 using PGIForest = Forest<const MethodContext&, const MethodContext&>;
 
 inline float get_max_hits_or_zero(const MethodContext& context) {
+  if (!context.m_vals) {
+    return 0;
+  }
   boost::optional<float> max = boost::none;
-  for (const auto& v : context.m_hits) {
+  for (const auto& v : context.m_vals->hits) {
     if (v) {
       if (!max) {
         max = v;

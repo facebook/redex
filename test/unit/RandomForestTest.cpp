@@ -16,8 +16,12 @@ namespace random_forest {
 
 struct RandomForestTestHelper {
   MethodContextContext context{};
-  MethodContext caller{context, {3.5, boost::none, 7}};
-  MethodContext callee{context, {2.5, boost::none, 5}};
+  MethodContext caller{
+      context, MethodContext::Vals{{3.5, boost::none, 7},
+                                   {boost::none, boost::none, boost::none}}};
+  MethodContext callee{
+      context, MethodContext::Vals{{2.5, boost::none, 5},
+                                   {boost::none, boost::none, boost::none}}};
 };
 
 struct RandomForestTest : public testing::Test {};
