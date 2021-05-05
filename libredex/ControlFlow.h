@@ -642,6 +642,13 @@ class ControlFlowGraph {
   // edges.
   void remove_insn(const InstructionIterator& it);
 
+  void insert_before(Block* block,
+                     const IRList::iterator& it,
+                     std::unique_ptr<DexPosition> pos);
+  void insert_after(Block* block,
+                    const IRList::iterator& it,
+                    std::unique_ptr<DexPosition> pos);
+
   void insert_before(const InstructionIterator& it,
                      std::unique_ptr<DexPosition> pos);
   void insert_after(const InstructionIterator& it,

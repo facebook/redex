@@ -2329,6 +2329,20 @@ void ControlFlowGraph::remove_insn(const InstructionIterator& it) {
   block->m_entries.erase_and_dispose(it.unwrap());
 }
 
+void ControlFlowGraph::insert_before(Block* block,
+                                     const IRList::iterator& it,
+                                     std::unique_ptr<DexPosition> pos) {
+  always_assert(m_editable);
+  block->m_entries.insert_before(it, std::move(pos));
+}
+
+void ControlFlowGraph::insert_after(Block* block,
+                                    const IRList::iterator& it,
+                                    std::unique_ptr<DexPosition> pos) {
+  always_assert(m_editable);
+  block->m_entries.insert_after(it, std::move(pos));
+}
+
 void ControlFlowGraph::insert_before(const InstructionIterator& it,
                                      std::unique_ptr<DexPosition> pos) {
   always_assert(m_editable);
