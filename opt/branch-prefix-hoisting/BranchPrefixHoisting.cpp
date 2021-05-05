@@ -345,6 +345,12 @@ size_t hoist_insns_for_block(cfg::Block* block,
     std::transform(succ_blocks_set.begin(), succ_blocks_set.end(),
                    std::back_inserter(ret),
                    [](auto* b) { return std::make_pair(b, b->begin()); });
+
+    // Need to order in some way for stable insertion of source blocks.
+    std::sort(ret.begin(), ret.end(), [](const auto& lhs, const auto& rhs) {
+      return lhs.first->id() < rhs.first->id();
+    });
+
     return ret;
   }();
 
