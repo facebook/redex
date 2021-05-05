@@ -643,59 +643,66 @@ class DedupBlocksImpl {
                             IteratorType end,
                             GetBlock get_blocks,
                             cfg::ControlFlowGraph& cfg) {
-    // A map from the DexPositions we're about to delete to the equivalent
-    // DexPosition in the canonical block.
+    // A map from the DexPositions we're about to delete to their replacements,
+    // if needed.
     std::unordered_map<DexPosition*, DexPosition*> position_replace_map;
+    std::unordered_set<cfg::Block*> non_canonical_blocks;
 
     for (IteratorType it = begin; it != end; ++it) {
       const auto& blocks = get_blocks(it);
 
-      // canon is block with lowest id.
-      cfg::Block* canon = *blocks.begin();
-
-      std::vector<DexPosition*> canon_positions;
-      for (auto& mie : *canon) {
-        if (mie.type == MFLOW_POSITION) {
-          canon_positions.push_back(mie.pos.get());
-        }
-      }
-
-      for (cfg::Block* block : blocks) {
-        if (block != canon) {
-          // All of `block`s positions are about to be deleted. Add the mapping
-          // from this position to the equivalent canonical position.
-          size_t i = 0;
-          for (auto& mie : *block) {
-            if (mie.type == MFLOW_POSITION) {
-              // If canon has no DexPositions, clear out parent pointers
-              auto replacement =
-                  !canon_positions.empty() ? canon_positions.at(i) : nullptr;
-              position_replace_map.emplace(mie.pos.get(), replacement);
-
-              ++i;
-              if (i >= canon_positions.size()) {
-                // block has more DexPositions than canon.
-                // keep re-using the last one, I guess? FIXME
-                //
-                // TODO: Maybe we could associate DexPositions with their
-                // closest IRInstruction, then combine the DexPositions that
-                // share the same deduped IRInstruction.
-                i = canon_positions.size() - 1;
-              }
-            }
+      // We start after canon block with lowest id.
+      for (auto it2 = std::next(blocks.begin()); it2 != blocks.end(); it2++) {
+        auto block = *it2;
+        non_canonical_blocks.insert(block);
+        // All of `block`s positions are about to be deleted.
+        for (auto& mie : *block) {
+          if (mie.type == MFLOW_POSITION) {
+            position_replace_map.emplace(mie.pos.get(), nullptr);
           }
         }
       }
     }
 
-    // Search for dangling parent pointers and replace them
-    for (cfg::Block* b : cfg.blocks()) {
-      for (auto& mie : *b) {
-        if (mie.type == MFLOW_POSITION && mie.pos->parent != nullptr) {
-          auto it = position_replace_map.find(mie.pos->parent);
-          if (it != position_replace_map.end()) {
-            mie.pos->parent = it->second;
-          }
+    // Helper function to produce (and insert) replacement positions, as needed.
+    std::function<DexPosition*(cfg::Block*, const IRList::iterator&,
+                               DexPosition*)>
+        get_replacement;
+    get_replacement = [&](cfg::Block* block, const IRList::iterator& it,
+                          DexPosition* pos) -> DexPosition* {
+      if (!pos) {
+        return nullptr;
+      }
+      auto it2 = position_replace_map.find(pos);
+      if (it2 == position_replace_map.end()) {
+        return nullptr;
+      }
+      if (it2->second) {
+        return it2->second;
+      }
+      auto new_pos = std::make_unique<DexPosition>(*pos);
+      auto replacement_parent = get_replacement(block, it, pos->parent);
+      if (replacement_parent) {
+        new_pos->parent = replacement_parent;
+      }
+      auto new_pos_ptr = new_pos.get();
+      cfg.insert_before(block, it, std::move(new_pos));
+      it2->second = new_pos_ptr;
+      return new_pos_ptr;
+    };
+
+    // Search for dangling parent pointers and fix them
+    for (cfg::Block* block : cfg.blocks()) {
+      if (non_canonical_blocks.count(block)) {
+        continue;
+      }
+      for (auto it = block->begin(); it != block->end(); it++) {
+        if (it->type != MFLOW_POSITION) {
+          continue;
+        }
+        auto replacement_parent = get_replacement(block, it, it->pos->parent);
+        if (replacement_parent) {
+          it->pos->parent = replacement_parent;
         }
       }
     }
