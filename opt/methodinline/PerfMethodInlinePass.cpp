@@ -12,13 +12,17 @@
 #include <queue>
 
 #include "ConfigFiles.h"
+#include "ControlFlow.h"
 #include "IRCode.h"
 #include "InlineForSpeed.h"
+#include "Macros.h"
 #include "MethodInliner.h"
 #include "MethodProfiles.h"
 #include "PGIForest.h"
+#include "RedexContext.h"
 #include "Resolver.h"
 #include "Show.h"
+#include "SourceBlocks.h"
 #include "Trace.h"
 
 namespace {
@@ -27,8 +31,8 @@ using namespace method_profiles;
 
 class InlineForSpeedBase : public InlineForSpeed {
  public:
-  bool should_inline(const DexMethod* caller_method,
-                     const DexMethod* callee_method) final {
+  bool should_inline_generic(const DexMethod* caller_method,
+                             const DexMethod* callee_method) final {
     bool accept = should_inline_impl(caller_method, callee_method);
     ++m_num_choices;
     if (accept) {
@@ -40,12 +44,33 @@ class InlineForSpeedBase : public InlineForSpeed {
   size_t get_num_choices() const { return m_num_choices; }
   size_t get_num_accepted() const { return m_num_accepted; }
 
+  bool should_inline_callsite(const DexMethod* caller_method,
+                              const DexMethod* callee_method,
+                              const cfg::Block* caller_block) final {
+    bool accept =
+        should_inline_callsite_impl(caller_method, callee_method, caller_block);
+    ++m_num_callsite_choices;
+    if (accept) {
+      ++m_num_callsite_accepted;
+    }
+    return accept;
+  }
+
+  size_t get_num_callsite_choices() const { return m_num_callsite_choices; }
+  size_t get_num_callsite_accepted() const { return m_num_callsite_accepted; }
+
  protected:
   virtual bool should_inline_impl(const DexMethod* caller_method,
                                   const DexMethod* callee_method) = 0;
+  virtual bool should_inline_callsite_impl(const DexMethod* caller_method,
+                                           const DexMethod* callee_method,
+                                           const cfg::Block* caller_block) = 0;
 
   size_t m_num_choices{0};
   size_t m_num_accepted{0};
+
+  size_t m_num_callsite_choices{0};
+  size_t m_num_callsite_accepted{0};
 };
 
 class InlineForSpeedMethodProfiles final : public InlineForSpeedBase {
@@ -58,6 +83,13 @@ class InlineForSpeedMethodProfiles final : public InlineForSpeedBase {
  protected:
   bool should_inline_impl(const DexMethod* caller_method,
                           const DexMethod* callee_method) override;
+
+  bool should_inline_callsite_impl(
+      const DexMethod* caller_method ATTRIBUTE_UNUSED,
+      const DexMethod* callee_method ATTRIBUTE_UNUSED,
+      const cfg::Block* caller_block ATTRIBUTE_UNUSED) final {
+    return true;
+  }
 
  private:
   void compute_hot_methods();
@@ -218,10 +250,12 @@ class InlineForSpeedDecisionTrees final : public InlineForSpeedBase {
  public:
   InlineForSpeedDecisionTrees(const MethodProfiles* method_profiles,
                               PGIForest&& forest,
-                              const boost::optional<float>& min_hits)
+                              const boost::optional<float>& min_method_hits,
+                              const boost::optional<float>& min_block_hits)
       : m_method_context_context(method_profiles),
         m_forest(std::move(forest)),
-        m_min_hits(min_hits) {}
+        m_min_method_hits(min_method_hits),
+        m_min_block_hits(min_block_hits) {}
 
  protected:
   bool should_inline_impl(const DexMethod* caller_method,
@@ -230,8 +264,8 @@ class InlineForSpeedDecisionTrees final : public InlineForSpeedBase {
     auto& callee_context = get_or_create(callee_method);
 
     // Explicitly check that the callee seems to ever be called with the caller.
-    if (m_min_hits) {
-      auto min_hits = *m_min_hits;
+    if (m_min_method_hits) {
+      auto min_hits = *m_min_method_hits;
       auto has_matching_hits = [&]() {
         for (size_t i = 0;
              i != m_method_context_context.m_interaction_list.size();
@@ -291,6 +325,30 @@ class InlineForSpeedDecisionTrees final : public InlineForSpeedBase {
     return true;
   }
 
+  bool should_inline_callsite_impl(
+      const DexMethod* caller_method ATTRIBUTE_UNUSED,
+      const DexMethod* callee_method ATTRIBUTE_UNUSED,
+      const cfg::Block* caller_block) final {
+    if (!m_min_block_hits) {
+      return true;
+    }
+    auto min_hits = *m_min_block_hits;
+    auto sb_vec = source_blocks::gather_source_blocks(caller_block);
+    if (sb_vec.empty()) {
+      return false;
+    }
+    // Check all interactions.
+    size_t num = g_redex->num_sb_interaction_indices();
+    const auto* sb = sb_vec[0];
+    for (size_t i = 0; i != num; ++i) {
+      auto val = sb->get_val(i);
+      if (val && val >= min_hits) {
+        return true;
+      }
+    }
+    return false;
+  }
+
  private:
   const MethodContext& get_or_create(const DexMethod* m) {
     auto it = m_cache.find(m);
@@ -305,7 +363,8 @@ class InlineForSpeedDecisionTrees final : public InlineForSpeedBase {
   MethodContextContext m_method_context_context;
   std::unordered_map<const DexMethod*, MethodContext> m_cache;
   PGIForest m_forest;
-  boost::optional<float> m_min_hits;
+  boost::optional<float> m_min_method_hits;
+  boost::optional<float> m_min_block_hits;
 };
 
 } // namespace
@@ -314,7 +373,8 @@ PerfMethodInlinePass::~PerfMethodInlinePass() {}
 
 struct PerfMethodInlinePass::Config {
   boost::optional<random_forest::PGIForest> forest = boost::none;
-  boost::optional<float> min_hits = std::numeric_limits<float>::min();
+  boost::optional<float> min_method_hits = std::numeric_limits<float>::min();
+  boost::optional<float> min_block_hits = boost::none;
 };
 
 void PerfMethodInlinePass::bind_config() {
@@ -324,7 +384,11 @@ void PerfMethodInlinePass::bind_config() {
   bind("min_hits", std::numeric_limits<float>::min(), min_hits,
        "Threshold for caller and callee method call-count to consider "
        "inlining. A negative value elides the check.");
-  after_configuration([this, random_forest_file, min_hits]() {
+  float min_block_hits;
+  bind("min_block_hits", -1.0f, min_block_hits,
+       "Threshold for caller source-block value to consider inlining. A "
+       "negative value elides the check.");
+  after_configuration([this, random_forest_file, min_hits, min_block_hits]() {
     this->m_config = std::make_unique<PerfMethodInlinePass::Config>();
     if (!random_forest_file.empty()) {
       std::stringstream buffer;
@@ -343,9 +407,14 @@ void PerfMethodInlinePass::bind_config() {
       }
     }
     if (min_hits < 0) {
-      this->m_config->min_hits = boost::none;
+      this->m_config->min_method_hits = boost::none;
     } else {
-      this->m_config->min_hits = min_hits;
+      this->m_config->min_method_hits = min_hits;
+    }
+    if (min_block_hits < 0) {
+      this->m_config->min_block_hits = boost::none;
+    } else {
+      this->m_config->min_block_hits = min_hits;
     }
   });
 }
@@ -372,10 +441,11 @@ void PerfMethodInlinePass::run_pass(DexStoresVector& stores,
 
   // Unique pointer for indirection and single path.
   std::unique_ptr<InlineForSpeedBase> ifs{
-      m_config->forest ? (InlineForSpeedBase*)(new InlineForSpeedDecisionTrees(
-                             &method_profiles, m_config->forest->clone(),
-                             m_config->min_hits))
-                       : new InlineForSpeedMethodProfiles(&method_profiles)};
+      m_config->forest
+          ? (InlineForSpeedBase*)(new InlineForSpeedDecisionTrees(
+                &method_profiles, m_config->forest->clone(),
+                m_config->min_method_hits, m_config->min_block_hits))
+          : new InlineForSpeedMethodProfiles(&method_profiles)};
 
   inliner::run_inliner(stores, mgr, conf, /* intra_dex */ true,
                        /* inline_for_speed= */ ifs.get());
@@ -384,6 +454,10 @@ void PerfMethodInlinePass::run_pass(DexStoresVector& stores,
         ifs->get_num_accepted(), ifs->get_num_choices());
   mgr.set_metric("pgi_inline_choices", ifs->get_num_choices());
   mgr.set_metric("pgi_inline_choices_accepted", ifs->get_num_accepted());
+  mgr.set_metric("pgi_inline_callsite_choices",
+                 ifs->get_num_callsite_choices());
+  mgr.set_metric("pgi_inline_callsite_choices_accepted",
+                 ifs->get_num_callsite_accepted());
   mgr.set_metric("pgi_use_random_forest", m_config->forest ? 1 : 0);
 }
 
