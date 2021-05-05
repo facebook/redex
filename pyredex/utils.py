@@ -38,7 +38,7 @@ def abs_glob(directory, pattern="*"):
 
 
 def make_temp_dir(name="", debug=False):
-    """ Make a temporary directory which will be automatically deleted """
+    """Make a temporary directory which will be automatically deleted"""
     global temp_dirs
     directory = tempfile.mkdtemp(name)
     if not debug:
