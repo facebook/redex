@@ -441,7 +441,7 @@ void fix_existing_merger_cls(const Model& model,
 void trim_method_debug_map(
     const std::unordered_map<const DexType*, DexType*>& mergeable_to_merger,
     std::unordered_map<DexMethod*, std::string>& method_debug_map) {
-  TRACE(CLMG, 5, "Method debug map un-trimmed %d", method_debug_map.size());
+  TRACE(CLMG, 5, "Method debug map un-trimmed %zu", method_debug_map.size());
   size_t trimmed_cnt = 0;
   std20::erase_if(method_debug_map, [&](auto it) {
     if (mergeable_to_merger.count(it->first->get_class())) {
@@ -451,7 +451,7 @@ void trim_method_debug_map(
     return false;
   });
 
-  TRACE(CLMG, 5, "Method debug map trimmed %d", trimmed_cnt);
+  TRACE(CLMG, 5, "Method debug map trimmed %zu", trimmed_cnt);
 }
 
 void write_out_type_mapping(
@@ -482,7 +482,7 @@ void write_out_type_mapping(
   os << out.str();
   TRACE(CLMG,
         4,
-        "Dumped type mapping (%d) to %s",
+        "Dumped type mapping (%zu) to %s",
         out.str().size(),
         mapping_file.c_str());
 }
@@ -651,7 +651,7 @@ std::vector<DexClass*> ModelMerger::merge_model(Scope& scope,
                      }),
       scope.end());
 
-  TRACE(CLMG, 3, "created %d merger classes", merger_classes.size());
+  TRACE(CLMG, 3, "created %zu merger classes", merger_classes.size());
   m_stats.m_num_generated_classes = merger_classes.size();
   return merger_classes;
 }

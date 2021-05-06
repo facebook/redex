@@ -275,7 +275,7 @@ uint32_t dedup_constructors(const std::vector<DexClass*>& classes,
       if (!representative) {
         TRACE(METH_DEDUP,
               2,
-              "%d constructors in %s are the same but not deduplicated.",
+              "%zu constructors in %s are the same but not deduplicated.",
               methods.size(),
               SHOW(cls->get_type()));
         continue;
@@ -311,7 +311,8 @@ uint32_t dedup_constructors(const std::vector<DexClass*>& classes,
     spec.proto = pair.second;
     method->change(spec, /* rename_on_collision */ false);
   }
-  TRACE(METH_DEDUP, 2, "normalized-deduped constructors %d", old_to_new.size());
+  TRACE(METH_DEDUP, 2, "normalized-deduped constructors %zu",
+        old_to_new.size());
   return old_to_new.size();
 }
 } // namespace method_dedup

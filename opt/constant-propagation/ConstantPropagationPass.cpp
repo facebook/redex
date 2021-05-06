@@ -28,12 +28,12 @@ void ConstantPropagationPass::run_pass(DexStoresVector& stores,
   mgr.incr_metric("num_materialized_consts", stats.materialized_consts);
   mgr.incr_metric("num_throws", stats.throws);
 
-  TRACE(CONSTP, 1, "num_branch_propagated: %d", stats.branches_removed);
+  TRACE(CONSTP, 1, "num_branch_propagated: %zu", stats.branches_removed);
   TRACE(CONSTP,
         1,
-        "num_moves_replaced_by_const_loads: %d",
+        "num_moves_replaced_by_const_loads: %zu",
         stats.materialized_consts);
-  TRACE(CONSTP, 1, "num_throws: %d", stats.throws);
+  TRACE(CONSTP, 1, "num_throws: %zu", stats.throws);
 }
 
 static ConstantPropagationPass s_pass;

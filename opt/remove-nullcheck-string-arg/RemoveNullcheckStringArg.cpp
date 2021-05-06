@@ -323,7 +323,7 @@ void RemoveNullcheckStringArg::Stats::report(PassManager& mgr) const {
   TRACE(NULLCHECK, 2, "RemoveNullcheckStringArgPass Stats:");
   TRACE(NULLCHECK,
         2,
-        "RemoveNullcheckStringArgPass insns changed = %u",
+        "RemoveNullcheckStringArgPass insns changed = %zu",
         null_check_insns_changed);
 }
 

@@ -429,8 +429,8 @@ class DedupBlocksImpl {
     }
 
     TRACE(DEDUP_BLOCKS, 4,
-          "split_postfix: partitioned %d blocks into %d groups", blocks.size(),
-          splitGroupMap.size());
+          "split_postfix: partitioned %zu blocks into %zu groups",
+          blocks.size(), splitGroupMap.size());
 
     struct CountGroup {
       size_t count = 0;
@@ -448,7 +448,7 @@ class DedupBlocksImpl {
       }
 
       TRACE(DEDUP_BLOCKS, 4,
-            "split_postfix: current group (succs=%d, blocks=%d)",
+            "split_postfix: current group (succs=%zu, blocks=%zu)",
             b->succs().size(), succ_blocks.size());
 
       // Keep track of best we've seen so far.
@@ -468,7 +468,7 @@ class DedupBlocksImpl {
       // Find the best common blocks
       size_t cur_insn_index = 0;
       while (true) {
-        TRACE(DEDUP_BLOCKS, 4, "split_postfix: scanning instruction at %d",
+        TRACE(DEDUP_BLOCKS, 4, "split_postfix: scanning instruction at %zu",
               cur_insn_index);
 
         // For each "iteration" - we count the distinct instructions and select
@@ -556,7 +556,7 @@ class DedupBlocksImpl {
 
       // Update the current group with the best savings
       TRACE(DEDUP_BLOCKS, 4,
-            "split_postfix: best block group.size() = %d, instruction at %d",
+            "split_postfix: best block group.size() = %zu, instruction at %zu",
             best_blocks.size(), best_insn_count);
       split_group.postfix_block_its = std::move(best_block_its);
       split_group.postfix_blocks = std::move(best_blocks);
@@ -566,7 +566,7 @@ class DedupBlocksImpl {
     remove_if(splitGroupMap,
               [&](auto& entry) { return entry.postfix_blocks.size() <= 1; });
 
-    TRACE(DEDUP_BLOCKS, 4, "split_postfix: total split groups = %d",
+    TRACE(DEDUP_BLOCKS, 4, "split_postfix: total split groups = %zu",
           splitGroupMap.size());
     return splitGroupMap;
   }
@@ -578,7 +578,7 @@ class DedupBlocksImpl {
     for (const PostfixSplitGroupMap::value_type* entry : get_id_order(dups)) {
       const auto& group = entry->second;
       TRACE(DEDUP_BLOCKS, 4,
-            "split_postfix: splitting blocks.size() = %d, instruction at %d",
+            "split_postfix: splitting blocks.size() = %zu, instruction at %zu",
             group.postfix_blocks.size(), group.insn_count);
 
       // Split the blocks at the reverse iterator where we determine to be
@@ -625,7 +625,7 @@ class DedupBlocksImpl {
         auto split_block =
             cfg.split_block(block->to_cfg_instruction_iterator(fwd_it));
         TRACE(DEDUP_BLOCKS, 4,
-              "split_postfix: split block : old = %d, new = %d", block->id(),
+              "split_postfix: split block : old = %zu, new = %zu", block->id(),
               split_block->id());
         ++m_stats.blocks_split;
       }
@@ -816,7 +816,7 @@ class DedupBlocksImpl {
         }
         if (defs.elements().size() > 1) {
           // should never happen, but we are not going to fight that here
-          TRACE(DEDUP_BLOCKS, 5, "[dedup blocks] defs.elements().size() = %u",
+          TRACE(DEDUP_BLOCKS, 5, "[dedup blocks] defs.elements().size() = %zu",
                 defs.elements().size());
           return boost::none;
         }
@@ -999,7 +999,7 @@ class DedupBlocksImpl {
           DEDUP_BLOCKS, 4, "  hash = %lu",
           DedupBlkValueNumbering::BlockValueHasher{}(*entry.first.block_value));
       for (cfg::Block* b : entry.second) {
-        TRACE(DEDUP_BLOCKS, 4, "    block %d", b->id());
+        TRACE(DEDUP_BLOCKS, 4, "    block %zu", b->id());
         for (const MethodItemEntry& mie : *b) {
           TRACE(DEDUP_BLOCKS, 4, "      %s", SHOW(mie));
         }

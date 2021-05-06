@@ -779,7 +779,8 @@ void ControlFlowGraph::connect_blocks(BranchToTargets& branch_to_targets) {
     auto next = std::next(it);
     if (fallthrough && next != m_blocks.end()) {
       Block* next_b = next->second;
-      TRACE(CFG, 6, "adding fallthrough goto %d -> %d", b->id(), next_b->id());
+      TRACE(CFG, 6, "adding fallthrough goto %zu -> %zu", b->id(),
+            next_b->id());
       add_edge(b, next_b, EDGE_GOTO);
     }
   }
@@ -855,7 +856,7 @@ void ControlFlowGraph::remove_unreachable_succ_edges() {
       continue;
     }
 
-    TRACE(CFG, 5, "  build: removing succ edges from block %d", b->id());
+    TRACE(CFG, 5, "  build: removing succ edges from block %zu", b->id());
     delete_succ_edges(b);
   }
   TRACE(CFG, 5, "  build: unreachables removed");

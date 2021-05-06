@@ -337,7 +337,7 @@ class MethodNameGenerator : public NameGenerator<DexMethod*> {
                                      wrap->get()->get_proto()) != nullptr);
       // Keep spinning on a name until you find one that isn't used at all
       TRACE(OBFUSCATE, 2,
-            "\tIntending to rename method %s (%s) to %s ids to avoid %d/%d",
+            "\tIntending to rename method %s (%s) to %s ids to avoid %zu",
             SHOW(wrap->get()), SHOW(wrap->get()->get_name()), wrap->get_name(),
             ids_to_avoid.size());
     }
@@ -575,7 +575,7 @@ class DexElemManager {
           }
           auto elem = wrap->get();
           TRACE(OBFUSCATE, 2,
-                "\tRenaming the elem 0x%x %s%s to %s external: %s can_rename: "
+                "\tRenaming the elem 0x%p %s%s to %s external: %s can_rename: "
                 "%s\n",
                 elem, SHOW(sig_getter_fn(elem)), SHOW(elem), wrap->get_name(),
                 type_class(elem->get_class())->is_external() ? "true" : "false",

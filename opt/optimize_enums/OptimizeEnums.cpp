@@ -343,7 +343,7 @@ class OptimizeEnums {
   void stats(PassManager& mgr) {
     const auto& report = [&mgr](const char* name, size_t stat) {
       mgr.set_metric(name, stat);
-      TRACE(ENUM, 1, "\t%s : %u", name, stat);
+      TRACE(ENUM, 1, "\t%s : %zu", name, stat);
     };
     report(METRIC_NUM_SYNTHETIC_CLASSES, m_stats.num_synthetic_classes);
     report(METRIC_NUM_LOOKUP_TABLES, m_stats.num_lookup_tables);
@@ -805,7 +805,7 @@ class OptimizeEnums {
             // null instruction pointers are used to signify the upper half of a
             // wide load.
             auto copy = new IRInstruction(*insn);
-            TRACE(ENUM, 4, "adding %s to B%d", SHOW(copy), leaf->id());
+            TRACE(ENUM, 4, "adding %s to B%zu", SHOW(copy), leaf->id());
             leaf->push_front(copy);
           }
         }

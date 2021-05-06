@@ -23,7 +23,7 @@
 class DefaultAnnotationTest : public RedexIntegrationTest {};
 
 TEST_F(DefaultAnnotationTest, defaultAnnotation) {
-  TRACE(ANNO, 9, "Loaded classes: %d \n", classes->size());
+  TRACE(ANNO, 9, "Loaded classes: %zu \n", classes->size());
   for (const auto& dex_class : *classes) {
     TRACE(ANNO, 9, "Class %s\n", SHOW(dex_class));
     TRACE(ANNO, 9, "%s\n", SHOW(dex_class->get_anno_set()));

@@ -95,7 +95,7 @@ void analyze_compare(const IRInstruction* insn, ConstantEnvironment* env) {
     TRACE(CONSTP, 5,
           "Propagated constant in branch instruction %s, "
           "Operands [%d] [%d] -> Result: [%d]",
-          SHOW(insn), l_val, r_val, result);
+          SHOW(insn), (int)l_val, (int)r_val, result);
     env->set(insn->dest(), SignedConstantDomain(result));
   } else {
     env->set(insn->dest(), SignedConstantDomain::top());
@@ -378,7 +378,7 @@ bool PrimitiveAnalyzer::analyze_binop_lit(
     const IRInstruction* insn, ConstantEnvironment* env) NO_UBSAN_ARITH {
   auto op = insn->opcode();
   int32_t lit = insn->get_literal();
-  TRACE(CONSTP, 5, "Attempting to fold %s with literal %lu", SHOW(insn), lit);
+  TRACE(CONSTP, 5, "Attempting to fold %s with literal %d", SHOW(insn), lit);
   auto cst = env->get<SignedConstantDomain>(insn->src(0)).get_constant();
   boost::optional<int64_t> result = boost::none;
   if (cst) {
@@ -1176,7 +1176,7 @@ void FixpointIterator::analyze_instruction_no_throw(
 
 void FixpointIterator::analyze_node(const NodeId& block,
                                     ConstantEnvironment* state_at_entry) const {
-  TRACE(CONSTP, 5, "Analyzing block: %d", block->id());
+  TRACE(CONSTP, 5, "Analyzing block: %zu", block->id());
   auto last_insn = block->get_last_insn();
   for (auto& mie : InstructionIterable(block)) {
     auto insn = mie.insn;

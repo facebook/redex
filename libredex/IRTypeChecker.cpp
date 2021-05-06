@@ -645,7 +645,7 @@ void validate_access(const DexMethod* accessor, const DexMember* accessee) {
   // TODO(fengliu): We should enforce the correctness when visiting external dex
   // members.
   if (accessee->is_external()) {
-    TRACE(TYPE, 2, out.str().c_str());
+    TRACE(TYPE, 2, "%s", out.str().c_str());
     return;
   }
 

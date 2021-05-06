@@ -411,7 +411,7 @@ void DataFlowGraph::propagate_flow_constraints(
     auto part = analysis.get_exit_state_at(node);
 
     if (part.get(node_loc(node)).contains(node_insn(node))) {
-      TRACE(MFLOW, 6, "propagate_flow_constraints: %s inconsistent for L%d",
+      TRACE(MFLOW, 6, "propagate_flow_constraints: %s inconsistent for L%zu",
             SHOW(node_insn(node)), node_loc(node));
       it = m_adjacencies.erase(it);
     } else {
@@ -459,11 +459,11 @@ DataFlowGraph instruction_graph(cfg::ControlFlowGraph& cfg,
 
     auto& constraint = constraints.at(loc);
     if (constraint.insn_matcher->matches(insn)) {
-      TRACE(MFLOW, 6, "instruction_graph: L%d matching %s", loc, SHOW(insn));
+      TRACE(MFLOW, 6, "instruction_graph: L%zu matching %s", loc, SHOW(insn));
       graph.add_node(loc, insn);
       return true;
     } else {
-      TRACE(MFLOW, 8, "instruction_graph: L%d failing  %s", loc, SHOW(insn));
+      TRACE(MFLOW, 8, "instruction_graph: L%zu failing  %s", loc, SHOW(insn));
       return false;
     }
   };

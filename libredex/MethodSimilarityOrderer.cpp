@@ -143,11 +143,12 @@ DexMethod* MethodSimilarityOrderer::get_next() {
       }
     }
     if (best_candidate_score) {
-      TRACE(OPUT, 3,
-            "[method-similarity-orderer]   selected %s with %d = %d - %d - %d",
-            SHOW(m_methods.at(*best_candidate_index)),
-            best_candidate_score->value(), best_candidate_score->shared,
-            best_candidate_score->missing, best_candidate_score->additional);
+      TRACE(
+          OPUT, 3,
+          "[method-similarity-orderer]   selected %s with %d = %zu - %zu - %zu",
+          SHOW(m_methods.at(*best_candidate_index)),
+          best_candidate_score->value(), best_candidate_score->shared,
+          best_candidate_score->missing, best_candidate_score->additional);
     }
   }
   if (!best_candidate_index) {

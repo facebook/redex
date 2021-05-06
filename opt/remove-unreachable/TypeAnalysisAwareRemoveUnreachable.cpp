@@ -95,8 +95,8 @@ class TypeAnaysisAwareClosureMarker final
       const auto& overriding_methods =
           mog::get_overriding_methods(m_method_override_graph, m);
       if (!overriding_methods.empty()) {
-        TRACE(REACH, 3, "root with overrides: %u %s", overriding_methods.size(),
-              SHOW(m));
+        TRACE(REACH, 3, "root with overrides: %zu %s",
+              overriding_methods.size(), SHOW(m));
       }
       for (auto* overriding : overriding_methods) {
         push_cond(overriding);

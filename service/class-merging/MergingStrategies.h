@@ -80,7 +80,7 @@ void group_by_code_size(const TypeSet& mergeable_types, WalkerFn walker) {
     // merged into a large dispatch, dmethods will be relocated.
     auto vmethod_code_size = estimate_vmethods_code_size(type_class(*it));
     if (estimated_merged_code_size + vmethod_code_size > max_instruction_size) {
-      TRACE(CLMG, 9, "\tgroup_by_code_size %d classes", current_group.size());
+      TRACE(CLMG, 9, "\tgroup_by_code_size %zu classes", current_group.size());
       if (current_group.size() > 1) {
         walker(current_group);
       }
@@ -92,7 +92,7 @@ void group_by_code_size(const TypeSet& mergeable_types, WalkerFn walker) {
     }
   }
   if (current_group.size() > 1) {
-    TRACE(CLMG, 9, "\tgroup_by_code_size %d classes at the end",
+    TRACE(CLMG, 9, "\tgroup_by_code_size %zu classes at the end",
           current_group.size());
     walker(current_group);
   }

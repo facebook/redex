@@ -256,7 +256,7 @@ void analyze_method_recursive(const DexMethod* method,
   summary_cmap->emplace(method, summary);
 
   if (traceEnabled(OSDCE, 3)) {
-    TRACE(OSDCE, 3, "%s %s unknown side effects (%u)", SHOW(method),
+    TRACE(OSDCE, 3, "%s %s unknown side effects (%zu)", SHOW(method),
           summary.effects != EFF_NONE ? "has" : "does not have",
           summary.effects);
     if (!summary.modified_params.empty()) {

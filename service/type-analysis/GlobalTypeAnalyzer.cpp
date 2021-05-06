@@ -391,7 +391,8 @@ void GlobalTypeAnalysis::find_any_init_reachables(
       }
     }
   });
-  TRACE(TYPE, 2, "[any init reachables] size %d", m_any_init_reachables.size());
+  TRACE(TYPE, 2, "[any init reachables] size %zu",
+        m_any_init_reachables.size());
 }
 
 std::unique_ptr<GlobalTypeAnalyzer> GlobalTypeAnalysis::analyze(
@@ -441,7 +442,7 @@ std::unique_ptr<GlobalTypeAnalyzer> GlobalTypeAnalysis::analyze(
 
   TRACE(TYPE,
         1,
-        "[global] Finished in %d global iterations (max %d)",
+        "[global] Finished in %zu global iterations (max %zu)",
         iteration_cnt,
         m_max_global_analysis_iteration);
   return gta;
@@ -453,7 +454,7 @@ void GlobalTypeAnalysis::trace_stats(WholeProgramState& wps) {
   }
   TRACE(TYPE,
         2,
-        "[global] wps stats: fields resolved %d; methods resolved %d",
+        "[global] wps stats: fields resolved %zu; methods resolved %zu",
         wps.get_num_resolved_fields(),
         wps.get_num_resolved_methods());
 }

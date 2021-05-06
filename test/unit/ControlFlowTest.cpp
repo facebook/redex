@@ -280,7 +280,7 @@ TEST_F(ControlFlowTest, iterate2) {
   for (const auto& entry : times_encountered) {
     EXPECT_EQ(1, entry.second);
   }
-  TRACE(CFG, 1, SHOW(code->cfg()));
+  TRACE(CFG, 1, "%s", SHOW(code->cfg()));
 }
 
 TEST_F(ControlFlowTest, iterate3) {

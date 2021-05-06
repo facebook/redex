@@ -23,7 +23,7 @@ void fix_colliding_dmethods(
     return;
   }
   // Fix colliding methods by appending an additional param.
-  TRACE(REFU, 9, "sig: colliding_methods %d", colliding_methods.size());
+  TRACE(REFU, 9, "sig: colliding_methods %zu", colliding_methods.size());
   std::unordered_map<DexMethod*, size_t> num_additional_args;
   for (auto it : colliding_methods) {
     auto meth = it.first;
@@ -55,7 +55,7 @@ void fix_colliding_dmethods(
     }
     TRACE(REFU,
           9,
-          "sig: patching colliding method %s with %d additional args",
+          "sig: patching colliding method %s with %zu additional args",
           SHOW(meth),
           arg_count);
   }

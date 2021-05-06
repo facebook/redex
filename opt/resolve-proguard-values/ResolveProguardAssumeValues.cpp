@@ -32,11 +32,11 @@ void ResolveProguardAssumeValuesPass::run_pass(DexStoresVector& stores,
   stats.report(mgr);
   TRACE(PGR,
         2,
-        "ResolveProguardAssumeValuesPass return values changed: %ul",
+        "ResolveProguardAssumeValuesPass return values changed: %zu",
         stats.method_return_values_changed);
   TRACE(PGR,
         2,
-        "ResolveProguardAssumeValuesPass field values changed: %ul",
+        "ResolveProguardAssumeValuesPass field values changed: %zu",
         stats.field_values_changed);
 }
 

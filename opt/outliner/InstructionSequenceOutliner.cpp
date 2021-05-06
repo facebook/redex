@@ -2392,7 +2392,7 @@ static NewlyOutlinedMethods outline(
     outlined_sequences_count++;
 
     TRACE(ISO, 3,
-          "[invoke sequence outliner] %4ux(%3u) [%zu]: %zu byte savings",
+          "[invoke sequence outliner] %4zx(%3zu) [%zu]: %zu byte savings",
           cwi.info.count, cwi.info.methods.size(), cwi.candidate.size,
           2 * savings);
     if (outline_candidate(cwi.candidate, cwi.info, outlined_methods,

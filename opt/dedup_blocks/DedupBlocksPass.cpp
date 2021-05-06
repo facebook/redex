@@ -63,7 +63,7 @@ void DedupBlocksPass::report_stats(PassManager& mgr,
   for (const auto& entry : stats.dup_sizes) {
     TRACE(DEDUP_BLOCKS,
           2,
-          "found %d duplicate blocks with %d instructions",
+          "found %zu duplicate blocks with %zu instructions",
           entry.second,
           entry.first);
   }

@@ -166,8 +166,12 @@ constexpr bool traceEnabled(TraceModule, int) { return false; }
 bool traceEnabled(TraceModule module, int level);
 #endif // NDEBUG
 
-void trace(
-    TraceModule module, int level, bool suppress_newline, const char* fmt, ...);
+void trace(TraceModule module,
+           int level,
+           bool suppress_newline,
+           const char* fmt,
+           ...) ATTR_FORMAT(4, 5);
+
 #define TRACE(module, level, fmt, ...)                                        \
   do {                                                                        \
     if (traceEnabled(module, level)) {                                        \

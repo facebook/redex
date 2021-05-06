@@ -127,7 +127,7 @@ size_t trim_shapes(MergerType::ShapeCollector& shapes, size_t min_count) {
  */
 size_t trim_groups(MergerType::ShapeCollector& shapes, size_t min_count) {
   size_t num_trimmed_types = 0;
-  TRACE(CLMG, 5, "Trim groups with min_count %d", min_count);
+  TRACE(CLMG, 5, "Trim groups with min_count %zu", min_count);
   for (auto& shape_it : shapes) {
     std::vector<TypeSet> groups_to_remove;
     for (const auto& group_it : shape_it.second.groups) {
@@ -789,11 +789,11 @@ void Model::map_fields(MergerType& merger,
       fields[index] = static_cast<DexField*>(DexField::make_field(
           type, DexString::make_string(ss.str()), field_type));
       TRACE(CLMG, 9,
-            "  -- A hole found at index %d, created a placeholder field of "
+            "  -- A hole found at index %zu, created a placeholder field of "
             "type %s",
             index, field_type->c_str());
     }
-    TRACE(CLMG, 8, "Add field map item [%ld]", fields.size());
+    TRACE(CLMG, 8, "Add field map item [%zu]", fields.size());
     merger.field_map[type] = fields;
   }
 }

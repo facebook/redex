@@ -592,7 +592,7 @@ void Transform::forward_targets(
         continue;
       }
       TRACE(CONSTP, 2,
-            "forward_targets rewrites target, skipping %zu targets, discharged "
+            "forward_targets rewrites target, skipping %d targets, discharged "
             "%zu assigned regs",
             i, unconditional_target.assigned_regs.size());
       return unconditional_target.target;

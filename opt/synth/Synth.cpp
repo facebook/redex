@@ -754,8 +754,8 @@ void remove_dead_methods(WrapperMethods& ssms,
   }
   any_remove = any_remove || (synth_removed && other_removed);
   TRACE(SYNT, 3, "any_remove = %d", any_remove);
-  TRACE(SYNT, 3, "synth_removed = %d", synth_removed);
-  TRACE(SYNT, 3, "other_removed = %d", other_removed);
+  TRACE(SYNT, 3, "synth_removed = %zu", synth_removed);
+  TRACE(SYNT, 3, "other_removed = %zu", other_removed);
   if (synth_removed) {
     TRACE(SYNT, 1, "Synthetic getters removed %ld", synth_removed);
   }

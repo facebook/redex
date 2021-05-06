@@ -77,7 +77,7 @@ void scope_info(const ClassScopes& class_scopes) {
   const auto by_meth_count = [](const char* msg, std::map<int, int> map) {
     TRACE(OBFUSCATE, 2, "%s", msg);
     for (auto it = map.rbegin(); it != map.rend(); ++it) {
-      TRACE(OBFUSCATE, 2, "%ld <= %ld", it->first, it->second);
+      TRACE(OBFUSCATE, 2, "%d <= %d", it->first, it->second);
     }
   };
   TRACE(OBFUSCATE, 2,

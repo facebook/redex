@@ -226,11 +226,11 @@ void MethodStats::print(const std::string& model_name,
   }
   TRACE(CLMG,
         8,
-        "==== methods stats for %s (%d) ====",
+        "==== methods stats for %s (%u) ====",
         model_name.c_str(),
         num_mergeables);
   for (auto& mm : merged_methods) {
-    TRACE(CLMG, 8, " %4d %s", mm.count, mm.name.c_str());
+    TRACE(CLMG, 8, " %4zu %s", mm.count, mm.name.c_str());
     if (mm.count > 1) {
       for (const auto& sample : mm.samples) {
         TRACE(CLMG, 9, "%s", sample.c_str());
@@ -363,7 +363,7 @@ dispatch::DispatchMethod ModelMethodMerger::create_dispatch_method(
   always_assert(targets.size());
   TRACE(CLMG,
         5,
-        "creating dispatch %s.%s for targets of size %d",
+        "creating dispatch %s.%s for targets of size %zu",
         SHOW(spec.owner_type),
         spec.name.c_str(),
         targets.size());
@@ -674,7 +674,7 @@ void ModelMethodMerger::merge_ctors() {
     always_assert(!proto_to_ctors.empty());
     TRACE(CLMG,
           4,
-          " Merging ctors for %s with %d different protos",
+          " Merging ctors for %s with %zu different protos",
           SHOW(target_type),
           proto_to_ctors.size());
     std::unordered_set<DexMethod*> dispatches;
@@ -875,7 +875,7 @@ void ModelMethodMerger::dedup_non_ctor_non_virt_methods() {
         non_vmethods.end());
     TRACE(CLMG,
           8,
-          "dedup: clean up static|non_virt remainders %d",
+          "dedup: clean up static|non_virt remainders %zu",
           before - non_ctors.size() - non_vmethods.size());
   }
 }

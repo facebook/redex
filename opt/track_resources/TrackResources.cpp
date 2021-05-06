@@ -7,6 +7,7 @@
 
 #include "TrackResources.h"
 
+#include <cinttypes>
 #include <stdio.h>
 #include <string>
 #include <unordered_map>
@@ -74,8 +75,9 @@ void check_if_tracked_sget(
     always_assert_log(target_field->is_concrete(), "Must be a concrete field");
     if (type::is_primitive(target_field->get_type())) {
       auto value = target_field->get_static_value();
-      TRACE(TRACKRESOURCES, 3, "value %d, sget to %s from %s", value,
-            SHOW(target_field), SHOW(src_method));
+      TRACE(TRACKRESOURCES, 3, "value %" PRIu64 ", sget to %s from %s",
+            value != nullptr ? value->value() : 0, SHOW(target_field),
+            SHOW(src_method));
     } else {
       TRACE(TRACKRESOURCES, 3, "(non-primitive) sget to %s from %s",
             SHOW(target_field), SHOW(src_method));
@@ -125,7 +127,7 @@ void TrackResourcesPass::find_accessed_fields(
                                 recorded_fields);
         }
       });
-  TRACE(TRACKRESOURCES, 1, "found %d total sgets to tracked classes",
+  TRACE(TRACKRESOURCES, 1, "found %zu total sgets to tracked classes",
         num_field_references);
   for (auto& it : per_cls_refs) {
     TRACE(TRACKRESOURCES, 3, "%d sgets to %s ", it.second,

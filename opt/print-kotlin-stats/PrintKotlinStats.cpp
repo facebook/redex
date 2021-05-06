@@ -192,25 +192,25 @@ void PrintKotlinStats::Stats::report(PassManager& mgr) const {
   mgr.incr_metric("kotlin_companion_class", kotlin_companion_class);
   mgr.incr_metric("di_generated_class", di_generated_class);
 
-  TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_null_check_insns = %u",
+  TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_null_check_insns = %zu",
         kotlin_null_check_insns);
-  TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: java_public_param_objects = %u",
+  TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: java_public_param_objects = %zu",
         java_public_param_objects);
-  TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_public_param_objects = %u",
+  TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_public_param_objects = %zu",
         kotlin_public_param_objects);
-  TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: no_of_delegates = %u",
+  TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: no_of_delegates = %zu",
         kotlin_delegates);
-  TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_lambdas = %u", kotlin_lambdas);
-  TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_non_capturing_lambda = %u",
+  TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_lambdas = %zu", kotlin_lambdas);
+  TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_non_capturing_lambda = %zu",
         kotlin_non_capturing_lambda);
-  TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_class_with_instance = %u",
+  TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_class_with_instance = %zuu",
         kotlin_class_with_instance);
-  TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_class = %u", kotlin_class);
-  TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_anonymous_class = %u",
+  TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_class = %zu", kotlin_class);
+  TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_anonymous_class = %zu",
         kotlin_anonymous_class);
-  TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_companion_class = %u",
+  TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_companion_class = %zu",
         kotlin_companion_class);
-  TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: di_generated_class = %u",
+  TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: di_generated_class = %zu",
         di_generated_class);
 }
 

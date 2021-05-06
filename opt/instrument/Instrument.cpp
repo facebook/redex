@@ -201,7 +201,7 @@ void do_simple_method_tracing(DexClass* analysis_cls,
   ofs << "#,simple-method-tracing,1.0" << std::endl;
 
   size_t method_id = 0;
-  int excluded = 0;
+  size_t excluded = 0;
   std::unordered_set<std::string> method_names;
   std::vector<DexMethod*> to_instrument;
 
@@ -355,7 +355,7 @@ void do_simple_method_tracing(DexClass* analysis_cls,
 
   TRACE(INSTRUMENT,
         1,
-        "%d methods were instrumented (%d methods were excluded)",
+        "%zu methods were instrumented (%zu methods were excluded)",
         method_id,
         excluded);
 

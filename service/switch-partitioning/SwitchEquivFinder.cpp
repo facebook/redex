@@ -181,7 +181,7 @@ std::vector<cfg::Edge*> SwitchEquivFinder::find_leaves() {
               m_extra_loads.emplace(copy, loads);
             } else {
               TRACE(SWITCH_EQUIV, 2, "Failure Reason: divergent entry states");
-              TRACE(SWITCH_EQUIV, 3, "B%d in %s", next->id(), SHOW(*m_cfg));
+              TRACE(SWITCH_EQUIV, 3, "B%zu in %s", next->id(), SHOW(*m_cfg));
               return false;
             }
           }
@@ -254,7 +254,7 @@ std::vector<cfg::Edge*> SwitchEquivFinder::find_leaves() {
         TRACE(SWITCH_EQUIV, 2,
               "Failure Reason: Additional ways to reach blocks");
         TRACE(SWITCH_EQUIV, 3,
-              "  B%d has %d preds but was hit %d times in \n%s", b->id(),
+              "  B%zu has %zu preds but was hit %d times in \n%s", b->id(),
               b->preds().size(), count, SHOW(*m_cfg));
         return bail();
       }

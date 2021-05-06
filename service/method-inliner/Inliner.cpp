@@ -1361,7 +1361,7 @@ static size_t get_inlined_cost(IRInstruction* insn) {
       }
     }
   }
-  TRACE(INLINE, 5, "  %u: %s", cost, SHOW(insn));
+  TRACE(INLINE, 5, "  %zu: %s", cost, SHOW(insn));
   return cost;
 }
 
@@ -1744,7 +1744,7 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
 
   size_t invoke_cost = get_invoke_cost(callee);
   TRACE(INLINE, 3,
-        "[too_many_callers] %u calls to %s; cost: inlined %u, invoke %u",
+        "[too_many_callers] %zu calls to %s; cost: inlined %zu, invoke %zu",
         caller_count, SHOW(callee), inlined_cost.code, invoke_cost);
 
   // 3. Assess whether we should not inline

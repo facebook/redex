@@ -232,7 +232,7 @@ std::vector<DexField*> create_merger_fields(
     cnt++;
   }
 
-  TRACE(CLMG, 8, "  created merger fields %d ", res.size());
+  TRACE(CLMG, 8, "  created merger fields %zu ", res.size());
   return res;
 }
 
@@ -337,7 +337,7 @@ void add_class(DexClass* new_cls, Scope& scope, DexStoresVector& stores) {
   scope.push_back(new_cls);
   TRACE(CLMG,
         4,
-        " ClassMerging Adding class %s to scope %d ",
+        " ClassMerging Adding class %s to scope %zu ",
         SHOW(new_cls),
         scope.size());
 

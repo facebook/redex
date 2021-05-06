@@ -362,12 +362,12 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
                 // in case of a tie, still ensure a deterministic total ordering
                 return a < b;
               });
-    TRACE(CSE, 4, "[CSE] relevant locations: %u %s",
+    TRACE(CSE, 4, "[CSE] relevant locations: %zu %s",
           read_and_written_locations.size(),
           read_and_written_locations.size() > 13 ? "(HUGE!)" : "");
     value_id_t next_bit = ValueIdFlags::IS_FIRST_TRACKED_LOCATION;
     for (auto l : read_and_written_locations) {
-      TRACE(CSE, 4, "[CSE]   %s: %u reads, %u writes",
+      TRACE(CSE, 4, "[CSE]   %s: %zu reads, %zu writes",
             l.special_location < CseSpecialLocations::END ? "array element"
                                                           : SHOW(l.field),
             read_location_counts.at(l), written_location_counts.at(l));
@@ -1197,12 +1197,12 @@ void SharedState::cleanup() {
     auto& b = p.first;
     auto c = p.second;
     if (opcode::is_an_invoke(b.opcode)) {
-      TRACE(CSE, 2, "%s %s x %u", SHOW(b.opcode), SHOW(b.method), c);
+      TRACE(CSE, 2, "%s %s x %zu", SHOW(b.opcode), SHOW(b.method), c);
     } else if (opcode::is_an_ifield_op(b.opcode) ||
                opcode::is_an_sfield_op(b.opcode)) {
-      TRACE(CSE, 2, "%s %s x %u", SHOW(b.opcode), SHOW(b.field), c);
+      TRACE(CSE, 2, "%s %s x %zu", SHOW(b.opcode), SHOW(b.field), c);
     } else {
-      TRACE(CSE, 2, "%s x %u", SHOW(b.opcode), c);
+      TRACE(CSE, 2, "%s x %zu", SHOW(b.opcode), c);
     }
   }
 }

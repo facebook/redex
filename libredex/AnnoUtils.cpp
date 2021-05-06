@@ -7,6 +7,7 @@
 
 #include "AnnoUtils.h"
 
+#include <cinttypes>
 #include <utility>
 
 #include "Show.h"
@@ -30,7 +31,7 @@ const DexEncodedValue* parse_anno_value_helper(const DexAnnotationSet* anno_set,
       auto& elem = elems[0];
       always_assert(elem.encoded_value->evtype() == type);
       auto val = elem.encoded_value->value();
-      TRACE(ANNO, 9, " parsed annotation value: %d", val);
+      TRACE(ANNO, 9, " parsed annotation value: %" PRIu64, val);
       return elem.encoded_value;
     }
 
@@ -39,7 +40,7 @@ const DexEncodedValue* parse_anno_value_helper(const DexAnnotationSet* anno_set,
         continue;
       }
       always_assert(elem.encoded_value->evtype() == type);
-      TRACE(ANNO, 9, " parsed annotation elem: %d", SHOW(elem.encoded_value));
+      TRACE(ANNO, 9, " parsed annotation elem: %s", SHOW(elem.encoded_value));
       return elem.encoded_value;
     }
 

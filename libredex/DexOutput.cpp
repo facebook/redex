@@ -731,7 +731,7 @@ void DexOutput::generate_string_data(SortMode mode) {
                   m_offset - str_data_start);
 
   if (m_locator_index != nullptr) {
-    TRACE(LOC, 2, "Used %u bytes for %u locator strings", locator_size,
+    TRACE(LOC, 2, "Used %u bytes for %zu locator strings", locator_size,
           locators);
   }
 }
@@ -768,7 +768,8 @@ void DexOutput::emit_magic_locators() {
     }
   }
 
-  TRACE(LOC, 2, "Global class indices for store %u, dex %u: first %u, last %u",
+  TRACE(LOC, 2,
+        "Global class indices for store %zu, dex %zu: first %u, last %u",
         m_store_number, m_dex_number, global_class_indices_first,
         global_class_indices_last);
 
@@ -1745,7 +1746,7 @@ uint32_t emit_instruction_offset_debug_info(
       size_t total_ignored = std::distance(sizes.begin(), best_iter);
       if (!dry_run) {
         TRACE(IODI, 3,
-              "[IODI] (%u) Ignored %u methods because they inflated too much",
+              "[IODI] (%u) Ignored %zu methods because they inflated too much",
               param_size, total_ignored);
       }
 
@@ -1898,7 +1899,8 @@ uint32_t emit_instruction_offset_debug_info(
       // 2.2) Emit IODI programs (other debug programs will be emitted below)
       if (requires_iodi_programs) {
         TRACE(IODI, 2,
-              "[IODI] @%u(%u): Of %u methods %u were too big, %u at biggest %u",
+              "[IODI] @%u(%u): Of %zu methods %zu were too big, %zu at biggest "
+              "%zu",
               offset, param_size, sizes.size(), num_big, num_small_enough,
               insns_size);
         if (num_small_enough == 0) {
@@ -1908,15 +1910,15 @@ uint32_t emit_instruction_offset_debug_info(
         auto& buckets = bucket_res.first;
         total_inflated_size = bucket_res.second;
         TRACE(IODI, 3,
-              "[IODI][Buckets] Bucketed %u arity methods into %u buckets with "
+              "[IODI][Buckets] Bucketed %u arity methods into %zu buckets with "
               "total"
-              " inflated size %u:\n",
+              " inflated size %zu:\n",
               param_size, buckets.size(), total_inflated_size);
         auto& size_to_offset = param_size_to_oset[param_size];
         for (auto& bucket : buckets) {
           auto bucket_size = bucket.first;
-          TRACE(IODI, 3, "  - %u methods in bucket size %u @ %lu",
-                bucket.second, bucket_size, offset);
+          TRACE(IODI, 3, "  - %u methods in bucket size %u @ %u", bucket.second,
+                bucket_size, offset);
           size_to_offset.emplace(bucket_size, offset);
           std::vector<std::unique_ptr<DexDebugInstruction>> dbgops;
           if (bucket_size > 0) {

@@ -351,9 +351,9 @@ void UpCodeMotionPass::run_pass(DexStoresVector& stores,
                                        method->get_proto()->get_args(), code);
     if (stats.instructions_moved || stats.branches_moved_over) {
       TRACE(UCM, 3,
-            "[up code motion] Moved %u instructions over %u conditional "
-            "branches while inverting %u conditional branches and dealing "
-            "with %u clobbered registers in {%s}",
+            "[up code motion] Moved %zu instructions over %zu conditional "
+            "branches while inverting %zu conditional branches and dealing "
+            "with %zu clobbered registers in {%s}",
             stats.instructions_moved, stats.branches_moved_over,
             stats.inverted_conditional_branches, stats.clobbered_registers,
             SHOW(method));
@@ -366,12 +366,13 @@ void UpCodeMotionPass::run_pass(DexStoresVector& stores,
   mgr.incr_metric(METRIC_INVERTED_CONDITIONAL_BRANCHES,
                   stats.inverted_conditional_branches);
   mgr.incr_metric(METRIC_CLOBBERED_REGISTERS, stats.clobbered_registers);
-  TRACE(UCM, 1,
-        "[up code motion] Moved %u instructions over %u conditional branches "
-        "while inverting %u conditional branches and dealing with %u clobbered "
-        "registers in total",
-        stats.instructions_moved, stats.branches_moved_over,
-        stats.inverted_conditional_branches, stats.clobbered_registers);
+  TRACE(
+      UCM, 1,
+      "[up code motion] Moved %zu instructions over %zu conditional branches "
+      "while inverting %zu conditional branches and dealing with %zu clobbered "
+      "registers in total",
+      stats.instructions_moved, stats.branches_moved_over,
+      stats.inverted_conditional_branches, stats.clobbered_registers);
 }
 
 static UpCodeMotionPass s_pass;

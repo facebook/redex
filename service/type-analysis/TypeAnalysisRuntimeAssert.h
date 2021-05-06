@@ -51,19 +51,19 @@ class RuntimeAssertTransform {
       TRACE(TYPE, 2, "[type-analysis] RuntimeAssert Stats:");
       TRACE(TYPE,
             2,
-            "[type-analysis] field_nullness_check_inserted = %u",
+            "[type-analysis] field_nullness_check_inserted = %zu",
             field_nullness_check_inserted);
       TRACE(TYPE,
             2,
-            "[type-analysis] return_nullness_check_inserted = %u",
+            "[type-analysis] return_nullness_check_inserted = %zu",
             return_nullness_check_inserted);
       TRACE(TYPE,
             2,
-            "[type-analysis] field_type_check_inserted = %u",
+            "[type-analysis] field_type_check_inserted = %zu",
             field_type_check_inserted);
       TRACE(TYPE,
             2,
-            "[type-analysis] return_type_check_inserted = %u",
+            "[type-analysis] return_type_check_inserted = %zu",
             return_type_check_inserted);
     }
   };

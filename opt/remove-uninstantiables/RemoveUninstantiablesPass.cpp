@@ -7,6 +7,8 @@
 
 #include "RemoveUninstantiablesPass.h"
 
+#include <cinttypes>
+
 #include "CFGMutation.h"
 #include "ControlFlow.h"
 #include "DexUtil.h"
@@ -253,10 +255,11 @@ RemoveUninstantiablesPass::Stats RemoveUninstantiablesPass::Stats::operator+(
 }
 
 void RemoveUninstantiablesPass::Stats::report(PassManager& mgr) const {
-#define REPORT(STAT)                                                       \
-  do {                                                                     \
-    mgr.incr_metric(#STAT, STAT);                                          \
-    TRACE(RMUNINST, 2, "  " #STAT ": %d/%d", STAT, mgr.get_metric(#STAT)); \
+#define REPORT(STAT)                                                           \
+  do {                                                                         \
+    mgr.incr_metric(#STAT, STAT);                                              \
+    TRACE(                                                                     \
+        RMUNINST, 2, "  " #STAT ": %d/%" PRId64, STAT, mgr.get_metric(#STAT)); \
   } while (0)
 
   TRACE(RMUNINST, 2, "RemoveUninstantiablesPass Stats:");

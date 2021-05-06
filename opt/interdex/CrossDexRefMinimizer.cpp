@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <cinttypes>
 #include <cmath>
 #include <numeric>
 
@@ -72,7 +73,7 @@ uint64_t CrossDexRefMinimizer::ClassInfo::get_priority() const {
 void CrossDexRefMinimizer::reprioritize(
     const std::unordered_map<DexClass*, CrossDexRefMinimizer::ClassInfoDelta>&
         affected_classes) {
-  TRACE(IDEX, 4, "[dex ordering] Reprioritizing %u classes",
+  TRACE(IDEX, 4, "[dex ordering] Reprioritizing %zu classes",
         affected_classes.size());
   for (auto p : affected_classes) {
     ++m_stats.reprioritizations;
@@ -90,9 +91,10 @@ void CrossDexRefMinimizer::reprioritize(
     m_prioritized_classes.update_priority(affected_class, priority);
     TRACE(
         IDEX, 5,
-        "[dex ordering] Reprioritized class {%s} with priority %016lx; "
-        "index %u; %u (delta %d) applied refs weight, %s (delta %s) infrequent "
-        "refs weights, %u total refs",
+        "[dex ordering] Reprioritized class {%s} with priority %016lx; index "
+        "%u; %" PRIu64 " (delta %" PRId64
+        ") applied refs weight, %s (delta %s) infrequent refs weights, %zu "
+        "total refs",
         SHOW(affected_class), priority, affected_class_info.index,
         affected_class_info.applied_refs_weight, delta.applied_refs_weight,
         format_infrequent_refs_array(affected_class_info.infrequent_refs_weight)
@@ -262,7 +264,7 @@ void CrossDexRefMinimizer::insert(DexClass* cls) {
   m_prioritized_classes.insert(cls, priority);
   TRACE(IDEX, 4,
         "[dex ordering] Inserting class {%s} with priority %016lx; index %u; "
-        "%s infrequent refs weights, %u total refs",
+        "%s infrequent refs weights, %zu total refs",
         SHOW(cls), priority, class_info.index,
         format_infrequent_refs_array(class_info.infrequent_refs_weight).c_str(),
         refs.size());
@@ -312,8 +314,8 @@ DexClass* CrossDexRefMinimizer::worst(bool generated) {
   }
 
   TRACE(IDEX, 3,
-        "[dex ordering] Picked worst class {%s} with seed %u; "
-        "index %u",
+        "[dex ordering] Picked worst class {%s} with seed %" PRIu64
+        "; index %u",
         SHOW(max_it->first), max_value, max_it->second.index);
   m_stats.worst_classes.emplace_back(max_it->first, max_value);
   return max_it->first;
@@ -338,9 +340,10 @@ void CrossDexRefMinimizer::erase(DexClass* cls, bool emitted, bool reset) {
   always_assert(class_info_it != m_class_infos.end());
   const CrossDexRefMinimizer::ClassInfo& class_info = class_info_it->second;
   TRACE(IDEX, 3,
-        "[dex ordering] Processing class {%s} with priority %016lx; "
-        "index %u; %u applied refs weight, %s infrequent refs weights, %u "
-        "total refs; emitted %d",
+        "[dex ordering] Processing class {%s} with priority %016lx; index %u; "
+        "%" PRIu64
+        " applied refs weight, %s infrequent refs weights, %zu total refs; "
+        "emitted %d",
         SHOW(cls), class_info.get_priority(), class_info.index,
         class_info.applied_refs_weight,
         format_infrequent_refs_array(class_info.infrequent_refs_weight).c_str(),
@@ -410,8 +413,9 @@ void CrossDexRefMinimizer::erase(DexClass* cls, bool emitted, bool reset) {
     }
   }
   if (emitted) {
-    TRACE(IDEX, 4, "[dex ordering] %u + %u = %u applied refs", old_applied_refs,
-          m_applied_refs.size() - old_applied_refs, m_applied_refs.size());
+    TRACE(IDEX, 4, "[dex ordering] %zu + %zu = %zu applied refs",
+          old_applied_refs, m_applied_refs.size() - old_applied_refs,
+          m_applied_refs.size());
   }
   reprioritize(affected_classes);
 }

@@ -506,9 +506,9 @@ void ReduceGotosPass::run_pass(DexStoresVector& stores,
     if (stats.replaced_gotos_with_returns ||
         stats.inverted_conditional_branches) {
       TRACE(RG, 3,
-            "[reduce gotos] Replaced %u gotos with returns, "
-            "removed %u trailing moves, "
-            "inverted %u conditional branches in {%s}",
+            "[reduce gotos] Replaced %zu gotos with returns, "
+            "removed %zu trailing moves, "
+            "inverted %zu conditional branches in {%s}",
             stats.replaced_gotos_with_returns, stats.removed_trailing_moves,
             stats.inverted_conditional_branches, SHOW(method));
     }
@@ -536,7 +536,7 @@ void ReduceGotosPass::run_pass(DexStoresVector& stores,
   mgr.incr_metric(METRIC_NUM_GOTOS_REPLACED_WITH_THROWS,
                   stats.replaced_gotos_with_throws);
   TRACE(RG, 1,
-        "[reduce gotos] Replaced %u gotos with returns, inverted %u "
+        "[reduce gotos] Replaced %zu gotos with returns, inverted %zu "
         "conditional brnaches in total",
         stats.replaced_gotos_with_returns, stats.inverted_conditional_branches);
 }

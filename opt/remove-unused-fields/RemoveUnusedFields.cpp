@@ -145,12 +145,12 @@ class RemoveUnusedFields final {
         }
       }
     }
-    TRACE(RMUF, 2, "unread_fields %u", m_unread_fields.size());
-    TRACE(RMUF, 2, "unwritten_fields %u", m_unwritten_fields.size());
-    TRACE(RMUF, 2, "zero written_fields %u", m_zero_written_fields.size());
+    TRACE(RMUF, 2, "unread_fields %zu", m_unread_fields.size());
+    TRACE(RMUF, 2, "unwritten_fields %zu", m_unwritten_fields.size());
+    TRACE(RMUF, 2, "zero written_fields %zu", m_zero_written_fields.size());
     TRACE(RMUF,
           2,
-          "vestigial objects written_fields %u",
+          "vestigial objects written_fields %zu",
           m_vestigial_objects_written_fields.size());
   }
 

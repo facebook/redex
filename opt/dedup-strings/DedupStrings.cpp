@@ -369,7 +369,7 @@ DedupStrings::get_strings_to_dedup(
         // We could try a bit harder to determine the optimal set of hosts,
         // but the best fix in this case is probably to raise the limit
         TRACE(DS, 4,
-              "[dedup strings] non perf sensitive string: {%s} dex #%u cannot "
+              "[dedup strings] non perf sensitive string: {%s} dex #%zu cannot "
               "be used as dedup strings max factory methods limit reached",
               SHOW(s), dexnr);
         ++m_stats.excluded_out_of_factory_methods_strings;
@@ -385,14 +385,14 @@ DedupStrings::get_strings_to_dedup(
       const auto size_reduction = get_size_reduction(s, dexnr, loads);
       if (!host_info || size_reduction < host_info->size_reduction) {
         TRACE(DS, 4,
-              "[dedup strings] non perf sensitive string: {%s} dex #%u can "
-              "host with size reduction %u",
+              "[dedup strings] non perf sensitive string: {%s} dex #%zu can "
+              "host with size reduction %zu",
               SHOW(s), dexnr, size_reduction);
         host_info = (HostInfo){dexnr, size_reduction};
       } else {
         TRACE(DS, 4,
-              "[dedup strings] non perf sensitive string: {%s} dex #%u won't "
-              "host due insufficient size reduction %u",
+              "[dedup strings] non perf sensitive string: {%s} dex #%zu won't "
+              "host due insufficient size reduction %zu",
               SHOW(s), dexnr, size_reduction);
       }
     }
@@ -423,8 +423,8 @@ DedupStrings::get_strings_to_dedup(
       if (non_load_strings[dexnr].count(s) != 0) {
         always_assert(size_reduction == 0);
         TRACE(DS, 4,
-              "[dedup strings] non perf sensitive string: {%s}*%u is a "
-              "non-load string in non-hosting dex #%u",
+              "[dedup strings] non perf sensitive string: {%s}*%zu is a "
+              "non-load string in non-hosting dex #%zu",
               SHOW(s), loads, dexnr);
         ++m_stats.excluded_duplicate_non_load_strings;
         // No point in rewriting const-string instructions for this string
@@ -446,7 +446,7 @@ DedupStrings::get_strings_to_dedup(
     // this particular string
     if (total_size_reduction < hosting_code_size_increase) {
       TRACE(DS, 3,
-            "[dedup strings] non perf sensitive string: {%s} ignored as %u < "
+            "[dedup strings] non perf sensitive string: {%s} ignored as %zu < "
             "%u",
             SHOW(s), total_size_reduction, hosting_code_size_increase);
       continue;
@@ -476,14 +476,13 @@ DedupStrings::get_strings_to_dedup(
     strings_to_dedup.emplace(s, std::move(dedup_string_info));
     strings_in_dexes[hosting_dexnr].push_back(s);
 
-    TRACE(
-        DS, 3,
-        "[dedup strings] non perf sensitive string: {%s} is deduped in %u "
-        "dexes, saving %u string table bytes, transforming %u string loads, %u "
-        "expected size reduction",
-        SHOW(s), dexes_to_dedup.size(),
-        (4 + entry_size) * dexes_to_dedup.size(), duplicate_string_loads,
-        total_size_reduction - hosting_code_size_increase);
+    TRACE(DS, 3,
+          "[dedup strings] non perf sensitive string: {%s} is deduped in %zu "
+          "dexes, saving %zu string table bytes, transforming %zu string "
+          "loads, %zu expected size reduction",
+          SHOW(s), dexes_to_dedup.size(),
+          (4 + entry_size) * dexes_to_dedup.size(), duplicate_string_loads,
+          total_size_reduction - hosting_code_size_increase);
   }
 
   // Order strings to give more often used strings smaller indices;
@@ -509,9 +508,10 @@ DedupStrings::get_strings_to_dedup(
       auto const s = strings[i];
       auto& info = strings_to_dedup[s];
 
-      TRACE(DS, 2,
-            "[dedup strings] hosting dex %u index %u dup-loads %u string {%s}",
-            dexnr, i, info.duplicate_string_loads, SHOW(s));
+      TRACE(
+          DS, 2,
+          "[dedup strings] hosting dex %zu index %u dup-loads %zu string {%s}",
+          dexnr, i, info.duplicate_string_loads, SHOW(s));
 
       redex_assert(info.index == 0xFFFFFFFF);
       redex_assert(info.const_string_method == nullptr);
@@ -689,13 +689,13 @@ void DedupStringsPass::run_pass(DexStoresVector& stores,
   mgr.incr_metric(METRIC_PERF_SENSITIVE_STRINGS, stats.perf_sensitive_strings);
   mgr.incr_metric(METRIC_NON_PERF_SENSITIVE_STRINGS,
                   stats.non_perf_sensitive_strings);
-  TRACE(DS, 1, "[dedup strings] perf sensitive strings: %u vs %u",
+  TRACE(DS, 1, "[dedup strings] perf sensitive strings: %zu vs %zu",
         stats.perf_sensitive_strings, stats.non_perf_sensitive_strings);
 
   mgr.incr_metric(METRIC_PERF_SENSITIVE_METHODS, stats.perf_sensitive_methods);
   mgr.incr_metric(METRIC_NON_PERF_SENSITIVE_METHODS,
                   stats.non_perf_sensitive_methods);
-  TRACE(DS, 1, "[dedup strings] perf sensitive methods: %u vs %u",
+  TRACE(DS, 1, "[dedup strings] perf sensitive methods: %zu vs %zu",
         stats.perf_sensitive_methods, stats.non_perf_sensitive_methods);
 
   mgr.incr_metric(METRIC_DUPLICATE_STRINGS, stats.duplicate_strings);
@@ -710,11 +710,11 @@ void DedupStringsPass::run_pass(DexStoresVector& stores,
   mgr.incr_metric(METRIC_EXCLUDED_OUT_OF_FACTORY_METHODS_STRINGS,
                   stats.excluded_out_of_factory_methods_strings);
   TRACE(DS, 1,
-        "[dedup strings] duplicate strings: %u, size: %u, loads: %u; "
-        "expected size reduction: %u; "
-        "dexes without host: %u; "
-        "excluded duplicate non-load strings: %u; factory methods: %u; "
-        "excluded out of factory methods strings: %u",
+        "[dedup strings] duplicate strings: %zu, size: %zu, loads: %zu; "
+        "expected size reduction: %zu; "
+        "dexes without host: %zu; "
+        "excluded duplicate non-load strings: %zu; factory methods: %zu; "
+        "excluded out of factory methods strings: %zu",
         stats.duplicate_strings, stats.duplicate_strings_size,
         stats.duplicate_string_loads, stats.expected_size_reduction,
         stats.dexes_without_host_cls, stats.excluded_duplicate_non_load_strings,

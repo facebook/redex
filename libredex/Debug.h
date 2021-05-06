@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "Macros.h" // For ATTR_FORMAT.
 #include "RedexException.h"
 
 #include <iosfwd>
@@ -55,16 +56,6 @@ extern bool slow_invariants_debug;
 #define assert_fail_impl(e, type, msg, ...) \
   assert_fail(                              \
       #e, __FILE__, __LINE__, __PRETTY_FUNCTION__, type, msg, ##__VA_ARGS__)
-#endif
-
-#ifdef __clang__
-#define ATTR_FORMAT(STR_INDEX, PARAM_INDEX) \
-  __attribute__((__format__(__printf__, STR_INDEX, PARAM_INDEX)))
-#elif defined(__GNUC__)
-#define ATTR_FORMAT(STR_INDEX, PARAM_INDEX) \
-  __attribute__((format(printf, STR_INDEX, PARAM_INDEX)));
-#else
-#define ATTR_FORMAT(...)
 #endif
 
 [[noreturn]] void assert_fail(const char* expr,

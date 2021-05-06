@@ -390,21 +390,21 @@ void RemoveBuildersPass::run_pass(DexStoresVector& stores,
   mgr.incr_metric(METRIC_FIELDS_REMOVED, b_counter.fields_removed);
   mgr.incr_metric(METRIC_METHODS_CLEARED, b_counter.methods_cleared);
 
-  TRACE(BUILDERS, 1, "Total builders: %d", m_builders.size());
-  TRACE(BUILDERS, 1, "Stack-only builders: %d", stack_only_builders.size());
+  TRACE(BUILDERS, 1, "Total builders: %zu", m_builders.size());
+  TRACE(BUILDERS, 1, "Stack-only builders: %zu", stack_only_builders.size());
   TRACE(BUILDERS,
         1,
-        "Stack-only builders that don't let `this` escape: %d",
+        "Stack-only builders that don't let `this` escape: %zu",
         no_escapes.size());
   TRACE(BUILDERS, 1, "Stats for unescaping builders:");
-  TRACE(BUILDERS, 1, "\tdmethods: %d", dmethod_count);
-  TRACE(BUILDERS, 1, "\tvmethods: %d", vmethod_count);
-  TRACE(BUILDERS, 1, "\tbuild methods: %d", build_count);
-  TRACE(BUILDERS, 1, "Trivial builders: %d", trivial_builders.size());
-  TRACE(BUILDERS, 1, "Classes removed: %d", b_counter.classes_removed);
-  TRACE(BUILDERS, 1, "Methods removed: %d", b_counter.methods_removed);
-  TRACE(BUILDERS, 1, "Fields removed: %d", b_counter.fields_removed);
-  TRACE(BUILDERS, 1, "Methods cleared: %d", b_counter.methods_cleared);
+  TRACE(BUILDERS, 1, "\tdmethods: %zu", dmethod_count);
+  TRACE(BUILDERS, 1, "\tvmethods: %zu", vmethod_count);
+  TRACE(BUILDERS, 1, "\tbuild methods: %zu", build_count);
+  TRACE(BUILDERS, 1, "Trivial builders: %zu", trivial_builders.size());
+  TRACE(BUILDERS, 1, "Classes removed: %zu", b_counter.classes_removed);
+  TRACE(BUILDERS, 1, "Methods removed: %zu", b_counter.methods_removed);
+  TRACE(BUILDERS, 1, "Fields removed: %zu", b_counter.fields_removed);
+  TRACE(BUILDERS, 1, "Methods cleared: %zu", b_counter.methods_cleared);
 }
 
 static RemoveBuildersPass s_pass;

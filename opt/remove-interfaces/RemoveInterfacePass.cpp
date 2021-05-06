@@ -87,7 +87,7 @@ DexMethod* generate_dispatch(const DexType* base_type,
   auto dispatch_name =
       dispatch::gen_dispatch_name(dispatch_owner, new_proto, orig_name);
 
-  TRACE(RM_INTF, 9, "generating dispatch %s.%s for targets of size %d",
+  TRACE(RM_INTF, 9, "generating dispatch %s.%s for targets of size %zu",
         SHOW(dispatch_owner), dispatch_name->c_str(), targets.size());
   auto anno_set = get_anno_set(dispatch_anno);
   auto mc =
@@ -286,7 +286,7 @@ size_t exclude_unremovables(const Scope& scope,
   for (auto intf : intf_list) {
     const auto& impls = type_system.get_implementors(intf);
     if (impls.size() <= 1) {
-      TRACE(RM_INTF, 5, "Excluding %s with impls of size %d", SHOW(intf),
+      TRACE(RM_INTF, 5, "Excluding %s with impls of size %zu", SHOW(intf),
             impls.size());
       candidates.erase(intf);
       count++;
@@ -418,7 +418,7 @@ void include_parent_interfaces(const DexType* root, TypeSet& interfaces) {
   }
   size_t size_before = interfaces.size();
   interfaces.insert(parent_interfaces.begin(), parent_interfaces.end());
-  TRACE(RM_INTF, 5, "Found parent interfaces %d",
+  TRACE(RM_INTF, 5, "Found parent interfaces %zu",
         interfaces.size() - size_before);
 }
 
