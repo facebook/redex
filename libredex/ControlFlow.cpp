@@ -21,7 +21,6 @@
 #include "Show.h"
 #include "Trace.h"
 #include "Transform.h"
-#include "WeakTopologicalOrdering.h"
 
 namespace {
 
@@ -1483,7 +1482,8 @@ ConstInstructionIterator ControlFlowGraph::find_insn(IRInstruction* insn,
   return iterable.end();
 }
 
-std::vector<Block*> ControlFlowGraph::order() {
+std::vector<Block*> ControlFlowGraph::order(
+    const std::unique_ptr<LinearizationStrategy>& custom_strategy) {
   // We must simplify first to remove any unreachable blocks
   simplify();
 
@@ -1494,13 +1494,15 @@ std::vector<Block*> ControlFlowGraph::order() {
 
   // hold the chains of blocks here, though they mostly will be accessed via the
   // map
-  std::vector<std::unique_ptr<Chain>> chains;
+  std::vector<std::unique_ptr<BlockChain>> chains;
   // keep track of which blocks are in each chain, for quick lookup.
-  std::unordered_map<Block*, Chain*> block_to_chain;
+  std::unordered_map<Block*, BlockChain*> block_to_chain;
   block_to_chain.reserve(m_blocks.size());
 
   build_chains(&chains, &block_to_chain);
-  const auto& result = wto_chains(block_to_chain);
+  auto wto = build_wto(block_to_chain);
+  auto result = custom_strategy ? custom_strategy->order(*this, std::move(wto))
+                                : wto_chains(std::move(wto));
 
   always_assert_log(result.size() == m_blocks.size(),
                     "result has %lu blocks, m_blocks has %lu", result.size(),
@@ -1509,8 +1511,8 @@ std::vector<Block*> ControlFlowGraph::order() {
 }
 
 void ControlFlowGraph::build_chains(
-    std::vector<std::unique_ptr<Chain>>* chains,
-    std::unordered_map<Block*, Chain*>* block_to_chain) {
+    std::vector<std::unique_ptr<BlockChain>>* chains,
+    std::unordered_map<Block*, BlockChain*>* block_to_chain) {
   for (const auto& entry : m_blocks) {
     Block* b = entry.second;
     if (block_to_chain->count(b) != 0) {
@@ -1519,8 +1521,8 @@ void ControlFlowGraph::build_chains(
 
     always_assert_log(!DEBUG || !b->starts_with_move_result(),
                       "%zu is wrong %s", b->id(), SHOW(*this));
-    auto unique = std::make_unique<Chain>();
-    Chain* chain = unique.get();
+    auto unique = std::make_unique<BlockChain>();
+    BlockChain* chain = unique.get();
     chains->push_back(std::move(unique));
 
     chain->push_back(b);
@@ -1574,15 +1576,16 @@ void ControlFlowGraph::build_chains(
   }
 }
 
-std::vector<Block*> ControlFlowGraph::wto_chains(
-    const std::unordered_map<Block*, Chain*>& block_to_chain) {
-  sparta::WeakTopologicalOrdering<Chain*> wto(
-      block_to_chain.at(entry_block()), [&block_to_chain](Chain* const& chain) {
+sparta::WeakTopologicalOrdering<BlockChain*> ControlFlowGraph::build_wto(
+    const std::unordered_map<Block*, BlockChain*>& block_to_chain) {
+  return sparta::WeakTopologicalOrdering<BlockChain*>(
+      block_to_chain.at(entry_block()),
+      [&block_to_chain](BlockChain* const& chain) {
         // The chain successor function returns all the outgoing edges' target
         // chains. Where outgoing means that the edge does not go to this chain.
         //
         // FIXME: this algorithm ignores real infinite loops in the block graph
-        std::vector<Chain*> result;
+        std::vector<BlockChain*> result;
         result.reserve(chain->size());
 
         // TODO: Sort the outputs by edge type, case key, and throw index
@@ -1615,16 +1618,23 @@ std::vector<Block*> ControlFlowGraph::wto_chains(
         }
         return result;
       });
+}
 
-  // TODO: would breadth first be better?
-  std::vector<Block*> wto_order;
-  wto_order.reserve(m_blocks.size());
-  wto.visit_depth_first([&wto_order](Chain* c) {
+std::vector<Block*> ControlFlowGraph::wto_chains(
+    sparta::WeakTopologicalOrdering<BlockChain*> wto) {
+
+  std::vector<Block*> main_order;
+  main_order.reserve(this->blocks().size());
+
+  auto chain_order = [&main_order](BlockChain* c) {
     for (Block* b : *c) {
-      wto_order.push_back(b);
+      main_order.push_back(b);
     }
-  });
-  return wto_order;
+  };
+
+  wto.visit_depth_first(chain_order);
+
+  return main_order;
 }
 
 // Add an MFLOW_TARGET at the end of each edge.
@@ -1677,14 +1687,16 @@ void ControlFlowGraph::remove_try_catch_markers() {
   }
 }
 
-IRList* ControlFlowGraph::linearize() {
+IRList* ControlFlowGraph::linearize(
+    const std::unique_ptr<LinearizationStrategy>& custom_strategy) {
   always_assert(m_editable);
   sanity_check();
   IRList* result = new IRList;
 
   TRACE_NO_LINE(CFG, 5, "before linearize:\n%s", SHOW(*this));
 
-  const std::vector<Block*>& ordering = order();
+  auto ordering = this->order(custom_strategy);
+
   insert_branches_and_targets(ordering);
   insert_try_catch_markers(ordering);
 
