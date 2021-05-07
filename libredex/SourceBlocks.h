@@ -180,4 +180,42 @@ inline std::vector<SourceBlock*> gather_source_blocks(cfg::Block* b) {
   return ret;
 }
 
+template <typename Fn>
+inline void foreach_source_block(cfg::Block* b, const Fn& fn) {
+  for (const auto& mie : *b) {
+    if (mie.type != MFLOW_SOURCE_BLOCK) {
+      continue;
+    }
+    fn(mie.src_block.get());
+  }
+}
+template <typename Fn>
+inline void foreach_source_block(const cfg::Block* b, const Fn& fn) {
+  for (const auto& mie : *b) {
+    if (mie.type != MFLOW_SOURCE_BLOCK) {
+      continue;
+    }
+    fn(mie.src_block.get());
+  }
+}
+
+inline SourceBlock* get_first_source_block(cfg::Block* b) {
+  for (const auto& mie : *b) {
+    if (mie.type != MFLOW_SOURCE_BLOCK) {
+      continue;
+    }
+    return mie.src_block.get();
+  }
+  return nullptr;
+}
+inline const SourceBlock* get_first_source_block(const cfg::Block* b) {
+  for (const auto& mie : *b) {
+    if (mie.type != MFLOW_SOURCE_BLOCK) {
+      continue;
+    }
+    return mie.src_block.get();
+  }
+  return nullptr;
+}
+
 } // namespace source_blocks

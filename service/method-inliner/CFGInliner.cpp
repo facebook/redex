@@ -61,11 +61,11 @@ boost::optional<float> get_source_blocks_factor(
   auto caller_block = inline_site.block();
   float caller_val;
   {
-    auto sb_vec = source_blocks::gather_source_blocks(caller_block);
-    if (sb_vec.empty()) {
+    auto* sb = source_blocks::get_first_source_block(caller_block);
+    if (sb == nullptr) {
       return boost::none;
     }
-    auto val = sb_vec[0]->get_val(idx);
+    auto val = sb->get_val(idx);
     if (!val) {
       return boost::none;
     }
@@ -79,11 +79,11 @@ boost::optional<float> get_source_blocks_factor(
   // dominating all blocks.
   float callee_val;
   {
-    auto sb_vec = source_blocks::gather_source_blocks(callee_cfg.entry_block());
-    if (sb_vec.empty()) {
+    auto sb = source_blocks::get_first_source_block(callee_cfg.entry_block());
+    if (sb == nullptr) {
       return boost::none;
     }
-    auto val = sb_vec[0]->get_val(idx);
+    auto val = sb->get_val(idx);
     if (!val) {
       return boost::none;
     }
@@ -102,12 +102,11 @@ boost::optional<float> get_source_blocks_factor(
 
 void normalize_source_blocks(ControlFlowGraph& cfg, float factor, size_t idx) {
   for (auto* b : cfg.blocks()) {
-    auto sb_vec = source_blocks::gather_source_blocks(b);
-    for (auto* sb : sb_vec) {
+    source_blocks::foreach_source_block(b, [&](auto* sb) {
       if (sb->vals[idx]) {
         sb->vals[idx]->val *= factor;
       }
-    }
+    });
   }
 }
 
