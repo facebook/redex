@@ -244,7 +244,6 @@ libopt_la_SOURCES = \
 	opt/annokill/AnnoKill.cpp \
 	opt/analyze-pure-method/PureMethods.cpp \
 	opt/basic-block/BasicBlockProfile.cpp \
-	opt/basic_block_reordering/BasicBlockReordering.cpp \
 	opt/builder_pattern/BuilderAnalysis.cpp \
 	opt/builder_pattern/BuilderTransform.cpp \
 	opt/builder_pattern/RemoveBuilderPattern.cpp \
