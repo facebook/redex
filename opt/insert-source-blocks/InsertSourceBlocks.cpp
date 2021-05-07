@@ -181,6 +181,7 @@ void run_source_blocks(
     PassManager& mgr,
     bool serialize,
     bool exc_inject,
+    bool always_inject,
     std::vector<std::unique_ptr<ProfileFile>>& profile_files) {
   auto scope = build_class_scope(stores);
 
@@ -188,6 +189,9 @@ void run_source_blocks(
   std::vector<std::pair<const DexMethod*, std::string>> serialized;
   size_t blocks{0};
   size_t profile_count{0};
+
+  std::atomic<size_t> skipped{0};
+
   auto find_profiles = [&profile_files](const DexMethodRef* mref) {
     if (profile_files.empty()) {
       return std::make_pair(std::vector<boost::optional<std::string>>(), false);
@@ -214,6 +218,11 @@ void run_source_blocks(
     auto code = method->get_code();
     if (code != nullptr) {
       auto profiles = find_profiles(method);
+      if (!profiles.second && !always_inject) {
+        // Skip without profile.
+        skipped.fetch_add(1);
+        return;
+      }
       auto res =
           source_blocks(method, code, profiles.first, serialize, exc_inject);
       std::unique_lock<std::mutex> lock(serialized_guard);
@@ -224,6 +233,7 @@ void run_source_blocks(
   });
   mgr.set_metric("inserted_source_blocks", blocks);
   mgr.set_metric("handled_methods", serialized.size());
+  mgr.set_metric("skipped_methods", skipped.load());
   mgr.set_metric("methods_with_profiles", profile_count);
 
   if (!serialize) {
@@ -245,6 +255,10 @@ void run_source_blocks(
 } // namespace
 
 void InsertSourceBlocksPass::bind_config() {
+  bind("always_inject",
+       m_always_inject,
+       m_always_inject,
+       "Always inject source blocks, even if profiles are missing.");
   bind("force_run", m_force_run, m_force_run);
   bind("force_serialize",
        m_force_serialize,
@@ -304,12 +318,14 @@ void InsertSourceBlocksPass::run_pass(DexStoresVector& stores,
     g_redex->set_sb_interaction_index(indices);
   }
 
+  bool is_instr_mode = mgr.get_redex_options().instrument_pass_enabled;
   run_source_blocks(stores,
                     conf,
                     mgr,
-                    mgr.get_redex_options().instrument_pass_enabled ||
-                        m_force_serialize,
+                    /* serialize= */ m_force_serialize || is_instr_mode,
                     m_insert_after_excs,
+                    /* always_inject= */ m_always_inject || m_force_serialize ||
+                        is_instr_mode,
                     profile_files);
 }
 

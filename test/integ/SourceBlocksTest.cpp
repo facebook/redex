@@ -24,7 +24,10 @@
 
 class SourceBlocksTest : public RedexIntegrationTest {
  protected:
-  void enable_pass(InsertSourceBlocksPass& isbp) { isbp.m_force_run = true; }
+  void enable_pass(InsertSourceBlocksPass& isbp) {
+    isbp.m_force_run = true;
+    isbp.m_always_inject = true;
+  }
   void set_insert_after_excs(InsertSourceBlocksPass& isbp, bool val) {
     isbp.m_insert_after_excs = val;
   }
