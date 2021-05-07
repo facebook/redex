@@ -245,6 +245,7 @@ void run_source_blocks(
 } // namespace
 
 void InsertSourceBlocksPass::bind_config() {
+  bind("force_run", m_force_run, m_force_run);
   bind("force_serialize",
        m_force_serialize,
        m_force_serialize,
