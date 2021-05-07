@@ -116,7 +116,19 @@ boost::optional<size_t> get_null_check_object_index(
   case OPCODE_INVOKE_STATIC: {
     auto method = insn->get_method();
     if (kotlin_null_check_assertions.count(method)) {
-      return 0;
+      // Note: We are not assuming here that the first argument is the checked
+      // argument of type object, as it might not be. For example,
+      // RemoveUnusedArgs may have removed or otherwise reordered the arguments.
+      // TODO: Don't mattern match at all, but make this a deep semantic
+      // analysis, as even this remaining pattern matching is brittle once we
+      // might start doing argument type weakening / strengthening
+      // optimizations.
+      auto& args = *method->get_proto()->get_args();
+      for (size_t i = 0; i < args.size(); i++) {
+        if (args.at(i) == type::java_lang_Object()) {
+          return i;
+        }
+      }
     }
     break;
   }
