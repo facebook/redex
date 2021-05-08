@@ -471,7 +471,7 @@ bool is_run_hasher_after_each_pass(const ConfigFiles& conf,
   }
 
   const Json::Value& hasher_args = conf.get_json_config()["hasher"];
-  return hasher_args.get("run_after_each_pass", true).asBool();
+  return hasher_args.get("run_after_each_pass", false).asBool();
 }
 
 class AfterPassSizes {
