@@ -873,6 +873,7 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
     TRACE(INSTRUMENT, 1,
           "--enable-instrument-pass (or \"instrument_pass_enabled\": true) is "
           "not specified.");
+    pm.set_metric("skipped_pass", 1);
     return;
   }
 
@@ -882,6 +883,7 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
       m_options.blocklist.insert(e);
     }
   }
+  pm.set_metric("blocklist_size", m_options.blocklist.size());
 
   if (m_options.analysis_class_name.empty()) {
     std::cerr << "[InstrumentPass] error: empty analysis class name."
