@@ -117,6 +117,7 @@ struct BranchTarget {
  */
 struct SourceBlock {
   DexMethodRef* src{nullptr};
+  std::unique_ptr<SourceBlock> next;
   // Large methods exist, but a 32-bit integer is safe.
   uint32_t id{0};
   // Float has enough precision.
@@ -171,7 +172,11 @@ struct SourceBlock {
   SourceBlock(DexMethodRef* src, size_t id) : src(src), id(id) {}
   SourceBlock(DexMethodRef* src, size_t id, std::vector<Val> v)
       : src(src), id(id), vals(std::move(v)) {}
-  SourceBlock(const SourceBlock&) = default;
+  SourceBlock(const SourceBlock& other)
+      : src(other.src),
+        next(other.next == nullptr ? nullptr : new SourceBlock(*other.next)),
+        id(other.id),
+        vals(other.vals) {}
 
   boost::optional<float> get_val(size_t i) const {
     return vals[i] ? boost::optional<float>(vals[i]->val) : boost::none;
@@ -182,6 +187,14 @@ struct SourceBlock {
 
   bool operator==(const SourceBlock& other) const {
     return src == other.src && id == other.id && vals == other.vals;
+  }
+
+  void append(std::unique_ptr<SourceBlock> sb) {
+    SourceBlock* last = this;
+    while (last->next != nullptr) {
+      last = last->next.get();
+    }
+    last->next = std::move(sb);
   }
 };
 

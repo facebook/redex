@@ -164,7 +164,9 @@ inline std::vector<const SourceBlock*> gather_source_blocks(
     if (mie.type != MFLOW_SOURCE_BLOCK) {
       continue;
     }
-    ret.push_back(mie.src_block.get());
+    for (auto* sb = mie.src_block.get(); sb != nullptr; sb = sb->next.get()) {
+      ret.push_back(sb);
+    }
   }
   return ret;
 }
@@ -175,7 +177,9 @@ inline std::vector<SourceBlock*> gather_source_blocks(cfg::Block* b) {
     if (mie.type != MFLOW_SOURCE_BLOCK) {
       continue;
     }
-    ret.push_back(mie.src_block.get());
+    for (auto* sb = mie.src_block.get(); sb != nullptr; sb = sb->next.get()) {
+      ret.push_back(sb);
+    }
   }
   return ret;
 }
