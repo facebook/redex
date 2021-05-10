@@ -455,8 +455,25 @@ Stats lower(DexMethod* method, bool lower_with_cfg) {
     std::sort(entry.second.begin(), entry.second.end());
   }
 
-  for (auto it = code->begin(); it != code->end(); ++it) {
+  // Remove any source blocks. We do not need or handle them in dex code.
+  // Pre-loop in case the head is a source block;
+  auto code_begin = code->begin();
+  while (code_begin != code->end() && code_begin->type == MFLOW_SOURCE_BLOCK) {
+    code->erase_and_dispose(code_begin);
+    code_begin = code->begin();
+  }
+
+  for (auto it = code_begin; it != code->end(); ++it) {
     if (it->type != MFLOW_OPCODE) {
+      // Remove any source blocks. They are no longer necessary and slow down
+      // iteration.
+      if (it->type == MFLOW_SOURCE_BLOCK) {
+        redex_assert(it != code->begin());
+        auto prev = std::prev(it);
+        code->erase_and_dispose(it);
+        it = prev;
+      }
+
       continue;
     }
     auto* insn = it->insn;
