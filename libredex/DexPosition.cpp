@@ -243,9 +243,9 @@ void RealPositionMapper::process_pattern_switch_positions() {
         // TODO: Remove the following check that ensures that the inliner and
         // outliner never produce an outlined method that invokes an outlined
         // method, a limitation imposed by symbolication infrastructure.
-        for (auto q = c.position; q; q = q->parent) {
-          always_assert(!manager->is_pattern_position(q));
-        }
+        // for (auto q = c.position; q; q = q->parent) {
+        //   always_assert(!manager->is_pattern_position(q));
+        // }
       }
       auto idx = m_positions.size();
       m_positions.emplace_back(case_pos);
