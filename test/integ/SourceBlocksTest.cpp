@@ -91,9 +91,10 @@ TEST_F(SourceBlocksTest, source_blocks) {
   // Run the pass, check that each block has a SourceBlock.
   {
     InsertSourceBlocksPass isbp{};
-    enable_pass(isbp);
-    set_insert_after_excs(isbp, false);
-    run_passes({&isbp});
+    run_passes({&isbp}, nullptr, Json::nullValue, [&](const auto&) {
+      enable_pass(isbp);
+      set_insert_after_excs(isbp, false);
+    });
 
     for (auto* m : cls->get_all_methods()) {
       if (m->get_code() == nullptr) {
@@ -218,9 +219,10 @@ TEST_F(SourceBlocksTest, source_blocks_insert_after_exc) {
   // Run the pass, check that each block has some SourceBlocks.
   {
     InsertSourceBlocksPass isbp{};
-    enable_pass(isbp);
-    set_insert_after_excs(isbp, true);
-    run_passes({&isbp});
+    run_passes({&isbp}, nullptr, Json::nullValue, [&](const auto&) {
+      enable_pass(isbp);
+      set_insert_after_excs(isbp, true);
+    });
   }
 
   const std::unordered_map<std::string, size_t> kMaxSeen = {
@@ -291,11 +293,12 @@ TEST_F(SourceBlocksTest, source_blocks_profile) {
 
   // Run the pass, check that each block has a SourceBlock.
   InsertSourceBlocksPass isbp{};
-  enable_pass(isbp);
-  set_insert_after_excs(isbp, false);
-  set_profile(isbp, profile_path);
-  set_force_serialize(isbp);
-  run_passes({&isbp});
+  run_passes({&isbp}, nullptr, Json::nullValue, [&](const auto&) {
+    enable_pass(isbp);
+    set_insert_after_excs(isbp, false);
+    set_profile(isbp, profile_path);
+    set_force_serialize(isbp);
+  });
 
   std::unordered_map<std::string, std::string> kExpectations = {
       {"Lcom/facebook/redextest/SourceBlocksTest;.bar:()V", "B0: 0(0.1:0.2)"},
@@ -344,11 +347,12 @@ TEST_F(SourceBlocksTest, source_blocks_profile_exc) {
 
   // Run the pass, check that each block has a SourceBlock.
   InsertSourceBlocksPass isbp{};
-  enable_pass(isbp);
-  set_insert_after_excs(isbp, true);
-  set_profile(isbp, profile_path);
-  set_force_serialize(isbp);
-  run_passes({&isbp});
+  run_passes({&isbp}, nullptr, Json::nullValue, [&](const auto&) {
+    enable_pass(isbp);
+    set_insert_after_excs(isbp, true);
+    set_profile(isbp, profile_path);
+    set_force_serialize(isbp);
+  });
 
   std::unordered_map<std::string, std::string> kExpectations = {
       {"Lcom/facebook/redextest/SourceBlocksTest;.bar:()V",
