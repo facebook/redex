@@ -970,9 +970,7 @@ TEST_F(ControlFlowTest, exit_blocks_change) {
       to_delete.push_back(it.block());
     }
   }
-  for (Block* b : to_delete) {
-    cfg.remove_block(b);
-  }
+  cfg.remove_blocks(to_delete);
   cfg.recompute_registers_size();
 
   EXPECT_EQ(1, cfg.real_exit_blocks().size());

@@ -315,21 +315,6 @@ class DedupBlocksImpl {
     return duplicates;
   }
 
-  // Replace duplicated blocks with the "canon" (block with lowest ID).
-  void dedup_blocks(cfg::ControlFlowGraph& cfg, const BlockSet& blocks) {
-    // canon is block with lowest id.
-    cfg::Block* canon = *blocks.begin();
-
-    for (cfg::Block* block : blocks) {
-      if (block != canon) {
-        always_assert(canon->id() < block->id());
-
-        cfg.replace_block(block, canon);
-        ++m_stats.blocks_removed;
-      }
-    }
-  }
-
   // remove all but one of a duplicate set. Reroute the predecessors to the
   // canonical block
   void deduplicate(const Duplicates& dups, cfg::ControlFlowGraph& cfg) {
@@ -343,9 +328,22 @@ class DedupBlocksImpl {
       order.push_back(entry->second);
     }
 
+    // Replace duplicated blocks with the "canon" (block with lowest ID).
+    std::vector<std::pair<cfg::Block*, cfg::Block*>> blocks_to_replace;
     for (const BlockSet& group : order) {
-      dedup_blocks(cfg, group);
+      // canon is block with lowest id.
+      cfg::Block* canon = *group.begin();
+
+      for (cfg::Block* block : group) {
+        if (block != canon) {
+          always_assert(canon->id() < block->id());
+
+          blocks_to_replace.emplace_back(block, canon);
+          ++m_stats.blocks_removed;
+        }
+      }
     }
+    cfg.replace_blocks(blocks_to_replace);
   }
 
   // The algorithm below identifies the best groups of blocks that share the

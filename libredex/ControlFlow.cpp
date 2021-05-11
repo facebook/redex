@@ -2571,38 +2571,48 @@ bool ControlFlowGraph::push_back(Block* b, IRInstruction* insn) {
   return push_back(b, std::vector<IRInstruction*>{insn});
 }
 
-void ControlFlowGraph::remove_block(Block* block) {
-  if (block == entry_block()) {
-    always_assert(block->succs().size() == 1);
-    set_entry_block(block->succs()[0]->target());
-  }
-  delete_pred_edges(block);
-  delete_succ_edges(block);
-
+void ControlFlowGraph::remove_blocks(const std::vector<Block*>& blocks) {
   std::vector<std::unique_ptr<DexPosition>> dangling;
-  for (auto& mie : *block) {
-    if (mie.type == MFLOW_POSITION) {
-      dangling.push_back(std::move(mie.pos));
-    }
-  }
 
-  auto id = block->id();
-  auto num_removed = m_blocks.erase(id);
-  always_assert_log(num_removed == 1,
-                    "Block %zu wasn't in CFG. Attempted double delete?", id);
-  block->m_entries.clear_and_dispose();
-  delete block;
+  for (auto block : blocks) {
+    if (block == entry_block()) {
+      always_assert(block->succs().size() == 1);
+      set_entry_block(block->succs()[0]->target());
+    }
+    delete_pred_edges(block);
+    delete_succ_edges(block);
+
+    for (auto& mie : *block) {
+      if (mie.type == MFLOW_POSITION) {
+        dangling.push_back(std::move(mie.pos));
+      }
+    }
+
+    auto id = block->id();
+    auto num_removed = m_blocks.erase(id);
+    always_assert_log(num_removed == 1,
+                      "Block %zu wasn't in CFG. Attempted double delete?", id);
+    block->m_entries.clear_and_dispose();
+    delete block;
+  }
 
   fix_dangling_parents(std::move(dangling));
 }
 
 // delete old_block and reroute its predecessors to new_block
-void ControlFlowGraph::replace_block(Block* old_block, Block* new_block) {
-  std::vector<Edge*> to_redirect = old_block->preds();
-  for (auto e : to_redirect) {
-    set_edge_target(e, new_block);
+void ControlFlowGraph::replace_blocks(
+    const std::vector<std::pair<Block*, Block*>>& old_new_blocks) {
+  std::vector<Block*> blocks_to_remove;
+  for (auto& p : old_new_blocks) {
+    auto old_block = p.first;
+    auto new_block = p.second;
+    std::vector<Edge*> to_redirect = old_block->preds();
+    for (auto e : to_redirect) {
+      set_edge_target(e, new_block);
+    }
+    blocks_to_remove.push_back(old_block);
   }
-  remove_block(old_block);
+  remove_blocks(blocks_to_remove);
 }
 
 std::ostream& ControlFlowGraph::write_dot_format(std::ostream& o) const {

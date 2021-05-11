@@ -213,9 +213,10 @@ UpCodeMotionPass::Stats UpCodeMotionPass::process_code(bool is_static,
   auto& cfg = code->cfg();
 
   std::unique_ptr<type_inference::TypeInference> type_inference;
-  std::unordered_set<cfg::Block*> blocks_to_remove;
+  std::unordered_set<cfg::Block*> blocks_to_remove_set;
+  std::vector<cfg::Block*> blocks_to_remove;
   for (cfg::Block* b : cfg.blocks()) {
-    if (blocks_to_remove.count(b)) {
+    if (blocks_to_remove_set.count(b)) {
       continue;
     }
 
@@ -321,15 +322,15 @@ UpCodeMotionPass::Stats UpCodeMotionPass::process_code(bool is_static,
       cfg.insert_before(it, insn);
     }
     cfg.set_edge_target(branch_edge, branch_block->goes_to());
-    blocks_to_remove.insert(branch_block);
+    always_assert(!blocks_to_remove_set.count(branch_block));
+    blocks_to_remove_set.insert(branch_block);
+    blocks_to_remove.push_back(branch_block);
 
     stats.instructions_moved += instructions_to_insert.size();
     stats.branches_moved_over++;
   }
 
-  for (cfg::Block* b : blocks_to_remove) {
-    cfg.remove_block(b);
-  }
+  cfg.remove_blocks(blocks_to_remove);
 
   code->clear_cfg();
   return stats;

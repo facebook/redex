@@ -229,10 +229,12 @@ std::vector<cfg::Edge*> SwitchEquivFinder::find_leaves() {
     // comment on m_leaf_duplication_threshold for more details). If we did not
     // successfully find a switch equivalent here, we need to remove those
     // blocks.
+    std::vector<cfg::Block*> blocks_to_remove;
     for (const auto& pair : edges_to_move) {
       cfg::Block* copy = pair.second;
-      m_cfg->remove_block(copy);
+      blocks_to_remove.push_back(copy);
     }
+    m_cfg->remove_blocks(blocks_to_remove);
     leaves.clear();
     return leaves;
   };
@@ -291,6 +293,7 @@ bool SwitchEquivFinder::move_edges(
       }
     }
   }
+  std::vector<cfg::Block*> blocks_to_remove;
   for (const auto& pair : edges_to_move) {
     cfg::Edge* edge = pair.first;
     cfg::Block* orig = edge->target();
@@ -306,7 +309,7 @@ bool SwitchEquivFinder::move_edges(
       // When we normalized the extra loads, the copy and original may have
       // converged to the same state. We don't need the duplicate block anymore
       // in this case.
-      m_cfg->remove_block(copy);
+      blocks_to_remove.push_back(copy);
       continue;
     }
     // copy on purpose so we can alter in the loop
@@ -319,6 +322,7 @@ bool SwitchEquivFinder::move_edges(
     }
     m_cfg->set_edge_target(edge, copy);
   }
+  m_cfg->remove_blocks(blocks_to_remove);
   return true;
 }
 
