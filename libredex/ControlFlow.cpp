@@ -77,23 +77,6 @@ bool ends_with_may_throw(cfg::Block* p) {
 }
 
 /*
- * Return true if the block does not contain anything we need.
- */
-bool is_effectively_empty(
-    cfg::Block* b, const std::unordered_set<DexPosition*>& keep_positions) {
-  if (b->get_first_insn() != b->end()) {
-    return false;
-  }
-  for (const auto& mie : *b) {
-    if (mie.type == MFLOW_POSITION &&
-        keep_positions.count(mie.pos.get()) != 0) {
-      return false;
-    }
-  }
-  return true;
-}
-
-/*
  * Return an iterator to the first instruction (except move-result* and goto) if
  * it occurs before the first position. Otherwise return end.
  */
@@ -1024,19 +1007,10 @@ void ControlFlowGraph::fix_dangling_parents(
 
 void ControlFlowGraph::remove_empty_blocks() {
   always_assert(editable());
-  std::unordered_set<DexPosition*> keep_positions;
-  for (auto it = m_blocks.begin(); it != m_blocks.end(); ++it) {
-    Block* b = it->second;
-    for (auto& mie : *b) {
-      if (mie.type == MFLOW_POSITION && mie.pos->parent != nullptr) {
-        keep_positions.insert(mie.pos->parent);
-      }
-    }
-  }
   std::vector<std::unique_ptr<DexPosition>> dangling;
   for (auto it = m_blocks.begin(); it != m_blocks.end();) {
     Block* b = it->second;
-    if (!is_effectively_empty(b, keep_positions) || b == exit_block()) {
+    if (b->get_first_insn() != b->end() || b == exit_block()) {
       ++it;
       continue;
     }

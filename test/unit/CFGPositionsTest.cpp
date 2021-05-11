@@ -68,11 +68,34 @@ TEST_F(CFGMutationTest, RemoveAllButLastPositon) {
       ))");
 }
 
+TEST_F(CFGMutationTest, SimplificationRemovesEmptyBlockWithPosition) {
+  EXPECT_MUTATION([](ControlFlowGraph& cfg) { cfg.simplify(); },
+                  /* ACTUAL */ R"((
+        (.pos:dbg_parent method_name RedexGenerated 0)
+        (goto :Loop)
+
+        (:Loop)
+        (.pos:dbg_child method_name RedexGenerated 0 dbg_parent)
+        (const v0 0)
+        (.pos:dbg_child method_name RedexGenerated 1 dbg_parent)
+        (goto :Loop)
+      ))",
+                  /* EXPECTED */ R"((
+        (:Loop)
+        (.pos:dbg_parent method_name RedexGenerated 0)
+        (.pos:dbg_child method_name RedexGenerated 0 dbg_parent)
+        (const v0 0)
+        (.pos:dbg_child method_name RedexGenerated 1 dbg_parent)
+        (goto :Loop)
+      ))");
+}
+
 TEST_F(CFGMutationTest, RetainParentWhenRemovingBlock) {
   EXPECT_MUTATION(
       [](ControlFlowGraph& cfg) { cfg.remove_block(cfg.blocks().at(0)); },
       /* ACTUAL */ R"((
         (.pos:dbg_parent method_name RedexGenerated 0)
+        (const v0 0)
         (goto :Loop)
 
         (:Loop)
@@ -98,6 +121,7 @@ TEST_F(CFGMutationTest, RetainParentWhenReplacingBlock) {
       },
       /* ACTUAL */ R"((
         (.pos:dbg_parent method_name RedexGenerated 0)
+        (const v0 0)
         (goto :Loop)
 
         (:Loop)
@@ -122,6 +146,7 @@ TEST_F(CFGMutationTest, RetainParentsWhenRemovingBlock) {
       /* ACTUAL */ R"((
         (.pos:dbg_parent_parent method_name RedexGenerated 0)
         (.pos:dbg_parent method_name RedexGenerated 0 dbg_parent_parent)
+        (const v0 0)
         (goto :Loop)
 
         (:Loop)
