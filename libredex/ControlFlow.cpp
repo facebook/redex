@@ -931,15 +931,15 @@ void ControlFlowGraph::simplify() {
 uint32_t ControlFlowGraph::remove_unreachable_blocks() {
   uint32_t num_insns_removed = 0;
   remove_unreachable_succ_edges();
-  std::unordered_set<DexPosition*> deleted_positions;
+  std::vector<std::unique_ptr<DexPosition>> dangling;
   bool need_register_size_fix = false;
   for (auto it = m_blocks.begin(); it != m_blocks.end();) {
     Block* b = it->second;
     const auto& preds = b->preds();
     if (preds.empty() && b != entry_block()) {
-      for (const auto& mie : *b) {
+      for (auto& mie : *b) {
         if (mie.type == MFLOW_POSITION) {
-          deleted_positions.insert(mie.pos.get());
+          dangling.push_back(std::move(mie.pos));
         } else if (mie.type == MFLOW_OPCODE) {
           auto insn = mie.insn;
           if (insn->has_dest()) {
@@ -969,25 +969,59 @@ uint32_t ControlFlowGraph::remove_unreachable_blocks() {
   if (need_register_size_fix) {
     recompute_registers_size();
   }
-  remove_dangling_parents(deleted_positions);
+  fix_dangling_parents(std::move(dangling));
 
   return num_insns_removed;
 }
 
-void ControlFlowGraph::remove_dangling_parents(
-    const std::unordered_set<DexPosition*>& deleted_positions) {
-  // We don't want to leave any dangling dex parent pointers behind
-  if (!deleted_positions.empty()) {
-    for (const auto& entry : m_blocks) {
-      for (const auto& mie : *entry.second) {
-        if (mie.type == MFLOW_POSITION && mie.pos->parent != nullptr &&
-            deleted_positions.count(mie.pos->parent)) {
-          mie.pos->parent = nullptr;
-        }
+void ControlFlowGraph::fix_dangling_parents(
+    std::vector<std::unique_ptr<DexPosition>> dangling) {
+  if (dangling.empty()) {
+    return;
+  }
+
+  // We move all dangling positions into a map that allows us to quickly find a
+  // position by its pointer value while maintaining ownership of the position
+  // in the associated unique_ptr. We'll use this map later try to find parent
+  // positions.
+  std::unordered_map<DexPosition*, std::unique_ptr<DexPosition>> map;
+  for (auto& pos : dangling) {
+    auto pos_ptr = pos.get();
+    map.emplace(pos_ptr, std::move(pos));
+  }
+
+  // Helper function to insert parent positions, as
+  // needed.
+  std::function<void(cfg::Block*, const IRList::iterator&, DexPosition*)>
+      materialize;
+  materialize = [&](cfg::Block* block, const IRList::iterator& it,
+                    DexPosition* pos) {
+    if (!pos) {
+      return;
+    }
+    auto it2 = map.find(pos);
+    if (it2 == map.end()) {
+      return;
+    }
+    materialize(block, it, pos->parent);
+    insert_before(block, it, std::move(it2->second));
+    map.erase(it2);
+  };
+
+  // Search for dangling parent pointers and fix them
+  for (cfg::Block* block : blocks()) {
+    for (auto it = block->begin(); it != block->end(); it++) {
+      if (it->type != MFLOW_POSITION) {
+        continue;
       }
+      materialize(block, it, it->pos->parent);
     }
   }
+
+  // Note that the memory of those mapped position that didn't get used up will
+  // get released at this point
 }
+
 void ControlFlowGraph::remove_empty_blocks() {
   always_assert(editable());
   std::unordered_set<DexPosition*> keep_positions;
@@ -999,7 +1033,7 @@ void ControlFlowGraph::remove_empty_blocks() {
       }
     }
   }
-  std::unordered_set<DexPosition*> deleted_positions;
+  std::vector<std::unique_ptr<DexPosition>> dangling;
   for (auto it = m_blocks.begin(); it != m_blocks.end();) {
     Block* b = it->second;
     if (!is_effectively_empty(b, keep_positions) || b == exit_block()) {
@@ -1052,16 +1086,16 @@ void ControlFlowGraph::remove_empty_blocks() {
       continue;
     }
 
-    for (const auto& mie : *b) {
+    for (auto& mie : *b) {
       if (mie.type == MFLOW_POSITION) {
-        deleted_positions.insert(mie.pos.get());
+        dangling.push_back(std::move(mie.pos));
       }
     }
     b->free();
     delete b;
     it = m_blocks.erase(it);
   }
-  remove_dangling_parents(deleted_positions);
+  fix_dangling_parents(std::move(dangling));
 }
 
 void ControlFlowGraph::no_unreferenced_edges() const {
@@ -2545,13 +2579,12 @@ void ControlFlowGraph::remove_block(Block* block) {
   delete_pred_edges(block);
   delete_succ_edges(block);
 
-  std::unordered_set<DexPosition*> deleted_positions;
-  for (const auto& mie : *block) {
+  std::vector<std::unique_ptr<DexPosition>> dangling;
+  for (auto& mie : *block) {
     if (mie.type == MFLOW_POSITION) {
-      deleted_positions.insert(mie.pos.get());
+      dangling.push_back(std::move(mie.pos));
     }
   }
-  remove_dangling_parents(deleted_positions);
 
   auto id = block->id();
   auto num_removed = m_blocks.erase(id);
@@ -2559,6 +2592,8 @@ void ControlFlowGraph::remove_block(Block* block) {
                     "Block %zu wasn't in CFG. Attempted double delete?", id);
   block->m_entries.clear_and_dispose();
   delete block;
+
+  fix_dangling_parents(std::move(dangling));
 }
 
 // delete old_block and reroute its predecessors to new_block

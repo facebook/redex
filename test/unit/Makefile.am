@@ -21,6 +21,7 @@ check_PROGRAMS = \
     branch_prefix_hoisting_test \
     cfg_inliner_test \
     cfg_mutation_test \
+    cfg_positions_test \
     check_breadcrumbs_test \
     check_cast_analysis_test \
     concurrent_containers_test \
@@ -152,6 +153,9 @@ cfg_inliner_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
 cfg_mutation_test_SOURCES = CFGMutationTest.cpp
 cfg_mutation_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
+
+cfg_positions_test_SOURCES = CFGPositionsTest.cpp
+cfg_positions_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
 check_breadcrumbs_test_SOURCES = CheckBreadCrumbsTest.cpp
 
@@ -424,6 +428,7 @@ TESTS = \
     branch_prefix_hoisting_test \
     cfg_inliner_test \
     cfg_mutation_test \
+    cfg_positions_test \
     check_breadcrumbs_test \
     check_cast_analysis_test \
     concurrent_containers_test \

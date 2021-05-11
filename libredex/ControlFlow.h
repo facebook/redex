@@ -15,6 +15,7 @@
 #include <utility>
 #include <vector>
 
+#include "DexPosition.h"
 #include "IRCode.h"
 #include "WeakTopologicalOrdering.h"
 
@@ -937,9 +938,10 @@ class ControlFlowGraph {
   // remove blocks with no entries
   void remove_empty_blocks();
 
-  // remove any parent pointer that was passed in as an arg (e.g. for when
-  // you delete the supplied positions)
-  void remove_dangling_parents(const std::unordered_set<DexPosition*>&);
+  // Re-insert any parent pointer that got deleted. This is a useful
+  // method to invoke just after removing positions to avoid leaving
+  // behind dangling parents.
+  void fix_dangling_parents(std::vector<std::unique_ptr<DexPosition>>);
 
   // Assert if there are edges that are never a predecessor or successor of a
   // block
@@ -1427,15 +1429,15 @@ bool ControlFlowGraph::insert(const InstructionIterator& position,
       // Stop adding instructions when we understand that op
       // is the end of the block.
       insns_it = std::prev(end_index);
-      std::unordered_set<DexPosition*> dangling;
+      std::vector<std::unique_ptr<DexPosition>> dangling;
       for (auto it = pos; it != b->m_entries.end();) {
         if (it->type == MFLOW_POSITION) {
-          dangling.insert(it->pos.get());
+          dangling.push_back(std::move(it->pos));
         }
         it = b->m_entries.erase_and_dispose(it);
         invalidated_its = true;
       }
-      remove_dangling_parents(dangling);
+      fix_dangling_parents(std::move(dangling));
 
       if (opcode::is_a_return(op)) {
         // This block now ends in a return, it must have no successors.
