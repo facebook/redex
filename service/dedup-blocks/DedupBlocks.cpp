@@ -318,9 +318,6 @@ class DedupBlocksImpl {
   // remove all but one of a duplicate set. Reroute the predecessors to the
   // canonical block
   void deduplicate(const Duplicates& dups, cfg::ControlFlowGraph& cfg) {
-    fix_dex_pos_pointers(
-        dups.begin(), dups.end(), [](auto it) { return it->second; }, cfg);
-
     // Copy the BlockSets into a vector so that we're not reading the map while
     // editing the CFG.
     std::vector<BlockSet> order;
@@ -343,6 +340,8 @@ class DedupBlocksImpl {
         }
       }
     }
+
+    // Note that replace_blocks also fixes any arising dangling parents.
     cfg.replace_blocks(blocks_to_replace);
   }
 
@@ -626,82 +625,6 @@ class DedupBlocksImpl {
               "split_postfix: split block : old = %zu, new = %zu", block->id(),
               split_block->id());
         ++m_stats.blocks_split;
-      }
-    }
-  }
-
-  // DexPositions have `parent` pointers to other DexPositions inside the same
-  // method. We will delete some of these DexPositions, which would create
-  // dangling pointers.
-  //
-  // This method changes those parent pointers to the equivalent DexPosition
-  // in the canonical block
-  template <typename IteratorType, typename GetBlock>
-  void fix_dex_pos_pointers(IteratorType begin,
-                            IteratorType end,
-                            GetBlock get_blocks,
-                            cfg::ControlFlowGraph& cfg) {
-    // A map from the DexPositions we're about to delete to their replacements,
-    // if needed.
-    std::unordered_map<DexPosition*, DexPosition*> position_replace_map;
-    std::unordered_set<cfg::Block*> non_canonical_blocks;
-
-    for (IteratorType it = begin; it != end; ++it) {
-      const auto& blocks = get_blocks(it);
-
-      // We start after canon block with lowest id.
-      for (auto it2 = std::next(blocks.begin()); it2 != blocks.end(); it2++) {
-        auto block = *it2;
-        non_canonical_blocks.insert(block);
-        // All of `block`s positions are about to be deleted.
-        for (auto& mie : *block) {
-          if (mie.type == MFLOW_POSITION) {
-            position_replace_map.emplace(mie.pos.get(), nullptr);
-          }
-        }
-      }
-    }
-
-    // Helper function to produce (and insert) replacement positions, as needed.
-    std::function<DexPosition*(cfg::Block*, const IRList::iterator&,
-                               DexPosition*)>
-        get_replacement;
-    get_replacement = [&](cfg::Block* block, const IRList::iterator& it,
-                          DexPosition* pos) -> DexPosition* {
-      if (!pos) {
-        return nullptr;
-      }
-      auto it2 = position_replace_map.find(pos);
-      if (it2 == position_replace_map.end()) {
-        return nullptr;
-      }
-      if (it2->second) {
-        return it2->second;
-      }
-      auto new_pos = std::make_unique<DexPosition>(*pos);
-      auto replacement_parent = get_replacement(block, it, pos->parent);
-      if (replacement_parent) {
-        new_pos->parent = replacement_parent;
-      }
-      auto new_pos_ptr = new_pos.get();
-      cfg.insert_before(block, it, std::move(new_pos));
-      it2->second = new_pos_ptr;
-      return new_pos_ptr;
-    };
-
-    // Search for dangling parent pointers and fix them
-    for (cfg::Block* block : cfg.blocks()) {
-      if (non_canonical_blocks.count(block)) {
-        continue;
-      }
-      for (auto it = block->begin(); it != block->end(); it++) {
-        if (it->type != MFLOW_POSITION) {
-          continue;
-        }
-        auto replacement_parent = get_replacement(block, it, it->pos->parent);
-        if (replacement_parent) {
-          it->pos->parent = replacement_parent;
-        }
       }
     }
   }
