@@ -23,6 +23,7 @@ class DexType;
   TM(API_UTILS)       \
   TM(ARGS)            \
   TM(BBPROFILE)       \
+  TM(BBREORDERING)    \
   TM(BIND)            \
   TM(BLD_PATTERN)     \
   TM(BPH)             \
