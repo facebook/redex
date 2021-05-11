@@ -802,6 +802,7 @@ hashing::DexHash PassManager::run_hasher(const char* pass_name,
                                          const Scope& scope) {
   TRACE(PM, 2, "Running hasher...");
   Timer t("Hasher");
+  auto timer = m_hashers_timer.scope();
   hashing::DexScopeHasher hasher(scope);
   auto hash = hasher.run();
   if (pass_name) {
@@ -915,13 +916,15 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   // For core loop legibility, have a lambda here.
 
   auto post_pass_verifiers = [&](Pass* pass, size_t i) {
-    walk::parallel::code(build_class_scope(stores), [](DexMethod* m,
-                                                       IRCode& code) {
-      // Ensure that pass authors deconstructed the editable CFG at the end of
-      // their pass. Currently, passes assume the incoming code will be in
-      // IRCode form
-      always_assert_log(!code.editable_cfg_built(), "%s has a cfg!", SHOW(m));
-    });
+    walk::parallel::code(build_class_scope(stores),
+                         [](DexMethod* m, IRCode& code) {
+                           // Ensure that pass authors deconstructed the
+                           // editable CFG at the end of their pass.
+                           // Currently, passes assume the incoming code
+                           // will be in IRCode form
+                           always_assert_log(!code.editable_cfg_built(),
+                                             "%s has a cfg!", SHOW(m));
+                         });
 
     bool run_hasher = run_hasher_after_each_pass;
     bool run_type_checker = checker_conf.run_after_pass(pass);
@@ -943,6 +946,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       if (i >= min_pass_idx_for_dex_ref_check) {
         CheckerConfig::ref_validation(stores, pass->name());
       }
+      auto timer = m_check_unique_deobfuscateds_timer.scope();
       check_unique_deobfuscated.run_after_pass(pass, scope);
     }
   };
@@ -1014,6 +1018,10 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   maybe_print_seeds_outgoing(conf, it);
 
   sanitizers::lsan_do_recoverable_leak_check();
+
+  Timer::add_timer("PassManager.Hashers", m_hashers_timer.get_seconds());
+  Timer::add_timer("PassManager.CheckUniqueDeobfuscateds",
+                   m_check_unique_deobfuscateds_timer.get_seconds());
 }
 
 void PassManager::activate_pass(const std::string& name,
