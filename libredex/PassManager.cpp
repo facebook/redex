@@ -770,6 +770,10 @@ void PassManager::init(const Json::Value& config) {
   } else {
     // If config isn't set up, run all registered passes.
     m_activated_passes = m_registered_passes;
+    // But do not forget to initialize them.
+    for (auto* pass : m_activated_passes) {
+      pass->parse_config(JsonWrapper(config[pass->name()]));
+    }
   }
 
   // Count the number of appearances of each pass name.

@@ -54,82 +54,99 @@ class StripDebugInfoTest : public RedexIntegrationTest {
     }
   }
 
-  void run_test_pass(Pass* pass, DexClassesCallback const& callback) {
-    std::vector<Pass*> passes = {pass};
-    run_passes(passes);
+  template <typename Fn>
+  void run_test_pass(Pass& pass,
+                     DexClassesCallback const& callback,
+                     const Fn& fn) {
+    std::vector<Pass*> passes = {&pass};
+    run_passes(passes, nullptr, Json::nullValue, fn);
     callback(*classes);
   }
 
-  void run_test_pass(Pass* pass, MethodItemCallback const& callback) {
-    run_test_pass(pass, [&](const DexClasses& classes) {
-      foreach_method_entry_item(classes, callback);
-    });
+  template <typename Fn>
+  void run_test_pass(Pass& pass,
+                     MethodItemCallback const& callback,
+                     const Fn& fn) {
+    run_test_pass(
+        pass,
+        [&](const DexClasses& classes) {
+          foreach_method_entry_item(classes, callback);
+        },
+        fn);
   }
 };
 
 TEST_F(StripDebugInfoTest, StripPrologueEnd) {
   // Test that we can remove all DBG_SET_PROLOGUE_END ops.
-  auto pass = new StripDebugInfoPass();
-  pass->set_drop_prologue_end(true);
+  auto pass = StripDebugInfoPass();
 
-  run_test_pass(pass, [&](const MethodItemEntry& mei) {
-    if (mei.type == MFLOW_DEBUG) {
-      DexDebugInstruction* dbgop = mei.dbgop.get();
-      auto op = dbgop->opcode();
-      EXPECT_NE(DBG_SET_PROLOGUE_END, op);
-    }
-  });
+  run_test_pass(
+      pass,
+      [&](const MethodItemEntry& mei) {
+        if (mei.type == MFLOW_DEBUG) {
+          DexDebugInstruction* dbgop = mei.dbgop.get();
+          auto op = dbgop->opcode();
+          EXPECT_NE(DBG_SET_PROLOGUE_END, op);
+        }
+      },
+      [&](const auto&) { pass.set_drop_prologue_end(true); });
 }
 
 TEST_F(StripDebugInfoTest, StripEpilogueBegin) {
   // Test that we can remove all DBG_SET_EPILOGUE_BEGIN ops.
-  auto pass = new StripDebugInfoPass();
-  pass->set_drop_epilogue_begin(true);
+  auto pass = StripDebugInfoPass();
 
-  run_test_pass(pass, [&](const MethodItemEntry& mei) {
-    if (mei.type == MFLOW_DEBUG) {
-      DexDebugInstruction* dbgop = mei.dbgop.get();
-      auto op = dbgop->opcode();
-      EXPECT_NE(DBG_SET_EPILOGUE_BEGIN, op);
-    }
-  });
+  run_test_pass(
+      pass,
+      [&](const MethodItemEntry& mei) {
+        if (mei.type == MFLOW_DEBUG) {
+          DexDebugInstruction* dbgop = mei.dbgop.get();
+          auto op = dbgop->opcode();
+          EXPECT_NE(DBG_SET_EPILOGUE_BEGIN, op);
+        }
+      },
+      [&](const auto&) { pass.set_drop_epilogue_begin(true); });
 }
 
 TEST_F(StripDebugInfoTest, StripLocals) {
   // Test that we can remove all DBG_*LOCAL* ops.
-  auto pass = new StripDebugInfoPass();
-  pass->set_drop_local_variables(true);
+  auto pass = StripDebugInfoPass();
 
-  run_test_pass(pass, [&](const MethodItemEntry& mei) {
-    if (mei.type == MFLOW_DEBUG) {
-      DexDebugInstruction* dbgop = mei.dbgop.get();
-      auto op = dbgop->opcode();
-      // Make sure all DBG_*LOCAL* ops were removed.
-      EXPECT_NE(DBG_START_LOCAL, op);
-      EXPECT_NE(DBG_START_LOCAL_EXTENDED, op);
-      EXPECT_NE(DBG_END_LOCAL, op);
-      EXPECT_NE(DBG_RESTART_LOCAL, op);
-    }
-  });
+  run_test_pass(
+      pass,
+      [&](const MethodItemEntry& mei) {
+        if (mei.type == MFLOW_DEBUG) {
+          DexDebugInstruction* dbgop = mei.dbgop.get();
+          auto op = dbgop->opcode();
+          // Make sure all DBG_*LOCAL* ops were removed.
+          EXPECT_NE(DBG_START_LOCAL, op);
+          EXPECT_NE(DBG_START_LOCAL_EXTENDED, op);
+          EXPECT_NE(DBG_END_LOCAL, op);
+          EXPECT_NE(DBG_RESTART_LOCAL, op);
+        }
+      },
+      [&](const auto&) { pass.set_drop_local_variables(true); });
 }
 
 TEST_F(StripDebugInfoTest, StripAllDebugInfo) {
   // Test that we can remove all debug info.
-  auto pass = new StripDebugInfoPass();
-  pass->set_drop_all_debug_info(true);
+  auto pass = StripDebugInfoPass();
 
-  run_test_pass(pass, [&](const MethodItemEntry& mei) {
-    EXPECT_NE(MFLOW_DEBUG, mei.type);
-    EXPECT_NE(MFLOW_POSITION, mei.type);
-  });
+  run_test_pass(
+      pass,
+      [&](const MethodItemEntry& mei) {
+        EXPECT_NE(MFLOW_DEBUG, mei.type);
+        EXPECT_NE(MFLOW_POSITION, mei.type);
+      },
+      [&](const auto&) { pass.set_drop_all_debug_info(true); });
 }
 
 TEST_F(StripDebugInfoTest, StripAllLineNumbers) {
   // Test that we can remove all line number information.
-  auto pass = new StripDebugInfoPass();
-  pass->set_drop_line_numbers(true);
+  auto pass = StripDebugInfoPass();
 
-  run_test_pass(pass, [&](const MethodItemEntry& mei) {
-    EXPECT_NE(MFLOW_POSITION, mei.type);
-  });
+  run_test_pass(
+      pass,
+      [&](const MethodItemEntry& mei) { EXPECT_NE(MFLOW_POSITION, mei.type); },
+      [&](const auto&) { pass.set_drop_line_numbers(true); });
 }

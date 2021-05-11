@@ -67,7 +67,14 @@ struct RedexIntegrationTest : public RedexTest {
       const std::vector<Pass*>& passes,
       std::unique_ptr<keep_rules::ProguardConfiguration> pg_config = nullptr,
       const Json::Value& json_conf = Json::nullValue) {
+    run_passes(passes, std::move(pg_config), json_conf, [](const auto&) {});
+  }
 
+  template <typename Fn>
+  void run_passes(const std::vector<Pass*>& passes,
+                  std::unique_ptr<keep_rules::ProguardConfiguration> pg_config,
+                  const Json::Value& json_conf,
+                  const Fn& fn) {
     std::unique_ptr<PassManager> manager = nullptr;
     if (pg_config) {
       manager = std::make_unique<PassManager>(passes, std::move(pg_config),
@@ -75,6 +82,9 @@ struct RedexIntegrationTest : public RedexTest {
     } else {
       manager = std::make_unique<PassManager>(passes, json_conf);
     }
+
+    fn(*manager);
+
     manager->set_testing_mode();
     ConfigFiles conf(json_conf);
     manager->run_passes(stores, conf);
