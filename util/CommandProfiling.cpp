@@ -12,20 +12,26 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #endif
+#include <chrono>
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
 #include <sstream>
+#include <thread>
 
 #include "Debug.h"
 
 namespace {
+
+using namespace std::chrono_literals;
 
 pid_t spawn(const std::string& cmd) {
 #ifdef _POSIX_VERSION
   auto child = fork();
   always_assert_log(child != -1, "Failed to fork");
   if (child != 0) {
+    // Wait a little bit to let the spawn catch up.
+    std::this_thread::sleep_for(250ms);
     return child;
   } else {
     int ret = execl("/bin/sh", "/bin/sh", "-c", cmd.c_str(), nullptr);
