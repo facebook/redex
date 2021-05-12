@@ -16,7 +16,6 @@ import com.facebook.soloader.SoLoader;
 import com.facebook.soloader.annotation.SoLoaderLibrary;
 
 @SoLoaderLibrary("Animal")
-@DoNotOptimize
 public class MainActivity extends Activity {
   public static native String implementedButUnused(int value);
   public static native String implemented(String name, int value);
