@@ -83,9 +83,8 @@ void setup_side_effect_on_vregs(const IRInstruction& insn,
 // takes a list of iterators of the corresponding blocks, find if the
 // instruction is common across different blocks at it + iterator_offset
 boost::optional<IRInstruction> get_next_common_insn(
-    std::vector<IRList::iterator> block_iters, // create a copy
+    const std::vector<IRList::iterator>& block_iters,
     const std::vector<cfg::Block*>& blocks,
-    int iterator_offset,
     constant_uses::ConstantUses& constant_uses) {
   const static auto irinsn_hash = [](const IRInstruction& insn) {
     return insn.hash();
@@ -94,19 +93,6 @@ boost::optional<IRInstruction> get_next_common_insn(
   if (block_iters.empty()) {
     // the common of nothing is not defined
     return boost::none;
-  }
-
-  for (size_t i = 0; i < block_iters.size(); i++) {
-    for (int j = 0; j < iterator_offset; j++) {
-      if (block_iters[i] == blocks[i]->end()) {
-        // make sure don't go beyond the end
-        return boost::none;
-      }
-      if (block_iters[i]->type != MFLOW_OPCODE) {
-        return boost::none;
-      }
-      block_iters[i]++;
-    }
   }
 
   std::unordered_set<IRInstruction, decltype(irinsn_hash)> insns_at_iters(
@@ -198,15 +184,46 @@ std::vector<IRInstruction> get_insns_to_hoist(
   std::vector<IRInstruction> insns_to_hoist;
   while (proceed) {
     // skip pos and debug info and check if at least one block reaches the end
-    for (unsigned i = 0; i < block_iters.size(); i++) {
-      skip_handled_method_item_entries(block_iters[i], succ_blocks[i]->end());
-      if (block_iters[i] == succ_blocks[i]->end()) {
-        // at least one block is empty, we are done
-        return insns_to_hoist;
+    enum ItersState { kInconsistent, kAllAtEnd, kAllOngoing };
+    auto skip_and_check_end = [&succ_blocks](auto& iters, size_t advance) {
+      auto check_one = [advance](auto& it, const auto& end) {
+        if (it == end) {
+          return false;
+        }
+        for (size_t j = 0; j != advance; ++j) {
+          ++it;
+          if (it == end) {
+            return false;
+          }
+        }
+        skip_handled_method_item_entries(it, end);
+        if (it == end) {
+          return false;
+        }
+        return true;
+      };
+
+      size_t at_end = 0;
+      for (size_t i = 0; i < iters.size(); i++) {
+        if (!check_one(iters[i], succ_blocks[i]->end())) {
+          ++at_end;
+        }
       }
+      return at_end == 0              ? kAllOngoing
+             : at_end == iters.size() ? kAllAtEnd
+                                      : kInconsistent;
+    };
+
+    if (skip_and_check_end(block_iters, /*advance=*/0) != kAllOngoing) {
+      TRACE(BPH, 5, "At least one successor is at end");
+      return insns_to_hoist;
     }
+
     boost::optional<IRInstruction> common_insn =
-        get_next_common_insn(block_iters, succ_blocks, 0, constant_uses);
+        get_next_common_insn(block_iters, succ_blocks, constant_uses);
+    if (common_insn) {
+      TRACE(BPH, 5, "Next common instruction: %s", SHOW(*common_insn));
+    }
 
     if (common_insn && is_insn_eligible(*common_insn)) {
       IRInstruction only_insn = *common_insn;
@@ -216,14 +233,34 @@ std::vector<IRInstruction> get_insns_to_hoist(
         // 2. be identical
         // 3. have no side effect on crit_regs
         // otherwise, stop here and do not proceed
-        boost::optional<IRInstruction> next_common_insn =
-            get_next_common_insn(block_iters, succ_blocks, 1, constant_uses);
-        if (!next_common_insn) {
-          // next one is not common, or at least one succ block reaches the end
-          // give up on this instruction
+        auto copy = block_iters;
+        auto iters_state = skip_and_check_end(copy, /*advance=*/1);
+        switch (iters_state) {
+        case kInconsistent:
+          // TODO: If the existing continuitions are not move-results, and the
+          // blocks at end do not have the move-result in their successors, we
+          // can hoist, still (as there is no move-result, then).
+          TRACE(BPH, 5, "Successors in inconsistent end state.");
           proceed = false;
-        } else {
+          break;
+        case kAllAtEnd:
+          // TODO: If the successors of the successors do not contain
+          // move-results, then we can still hoist (as there is no move-result,
+          // then).
+          TRACE(BPH, 5, "All successors at end.");
+          proceed = false;
+          break;
+        case kAllOngoing: {
+          boost::optional<IRInstruction> next_common_insn =
+              get_next_common_insn(copy, succ_blocks, constant_uses);
+          if (!next_common_insn) {
+            TRACE(BPH, 5, "No common successor for move-result-any opcode.");
+            proceed = false;
+            break;
+          }
+          // This is OK, but should really only be done for a move-result.
           setup_side_effect_on_vregs(*next_common_insn, crit_regs);
+        } break;
         }
       }
 
@@ -472,13 +509,26 @@ size_t process_hoisting_for_block(cfg::Block* block,
       get_insns_to_hoist(succ_blocks, crit_regs, constant_uses);
   if (!insns_to_hoist.empty()) {
     // do the mutation
-    return hoist_insns_for_block(block,
-                                 last_insn_it,
-                                 succ_blocks,
-                                 cfg,
-                                 insns_to_hoist,
-                                 crit_regs,
-                                 type_inference);
+    auto hoisted = hoist_insns_for_block(block,
+                                         last_insn_it,
+                                         succ_blocks,
+                                         cfg,
+                                         insns_to_hoist,
+                                         crit_regs,
+                                         type_inference);
+    TRACE(
+        BPH, 5, "Hoisted %zu/%zu instruction from %s into B%zu", hoisted,
+        insns_to_hoist.size(),
+        [&]() {
+          std::ostringstream oss;
+          for (auto& insn : insns_to_hoist) {
+            oss << show(insn) << " | ";
+          }
+          return oss.str();
+        }()
+            .c_str(),
+        block->id());
+    return hoisted;
   }
   return 0;
 }
@@ -488,6 +538,7 @@ size_t process_hoisting_for_block(cfg::Block* block,
 size_t BranchPrefixHoistingPass::process_code(IRCode* code, DexMethod* method) {
   code->build_cfg(true);
   auto& cfg = code->cfg();
+  TRACE(BPH, 5, "%s", SHOW(cfg));
   type_inference::TypeInference type_inference(cfg);
   type_inference.run(method);
   constant_uses::ConstantUses constant_uses(cfg, method);
@@ -533,6 +584,7 @@ void BranchPrefixHoistingPass::run_pass(DexStoresVector& stores,
         if (!code) {
           return 0;
         }
+        TraceContext context{method};
 
         int insns_hoisted =
             BranchPrefixHoistingPass::process_code(code, method);
