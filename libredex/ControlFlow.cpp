@@ -77,24 +77,6 @@ bool ends_with_may_throw(cfg::Block* p) {
 }
 
 /*
- * Return an iterator to the first instruction (except move-result* and goto) if
- * it occurs before the first position. Otherwise return end.
- */
-IRList::iterator insn_before_position(cfg::Block* b) {
-  for (auto it = b->begin(); it != b->end(); ++it) {
-    if (it->type == MFLOW_OPCODE) {
-      auto op = it->insn->opcode();
-      if (!opcode::is_move_result_any(op) && !opcode::is_goto(op)) {
-        return it;
-      }
-    } else if (it->type == MFLOW_POSITION) {
-      return b->end();
-    }
-  }
-  return b->end();
-}
-
-/*
  * Given an output ordering, Find adjacent positions that are exact duplicates
  * and delete the extras. Make sure not to delete any positions that are
  * referenced by a parent pointer.
@@ -372,6 +354,20 @@ IRList::iterator Block::get_first_non_param_loading_insn() {
     }
     if (!opcode::is_a_load_param(it->insn->opcode())) {
       return it;
+    }
+  }
+  return end();
+}
+
+IRList::iterator Block::get_first_insn_before_position() {
+  for (auto it = begin(); it != end(); ++it) {
+    if (it->type == MFLOW_OPCODE) {
+      auto op = it->insn->opcode();
+      if (!opcode::is_move_result_any(op) && !opcode::is_goto(op)) {
+        return it;
+      }
+    } else if (it->type == MFLOW_POSITION) {
+      return end();
     }
   }
   return end();
@@ -684,7 +680,7 @@ void ControlFlowGraph::find_block_boundaries(IRList* ir,
       block->m_entries.splice_selection(block->m_entries.end(), *ir,
                                         block_begin, next);
       if (last_pos_before_this_block != nullptr) {
-        auto first_insn = insn_before_position(block);
+        auto first_insn = block->get_first_insn_before_position();
         if (first_insn != block->end()) {
           // DexPositions apply to every instruction in the linear stream until
           // the next DexPosition. Because we're breaking up the linear stream
@@ -1051,6 +1047,18 @@ void ControlFlowGraph::remove_empty_blocks() {
 
       if (b == entry_block()) {
         m_entry_block = succ;
+      }
+
+      // Move positions if succ doesn't have any
+      auto first_it = succ->get_first_insn_before_position();
+      if (first_it != succ->end()) {
+        always_assert(
+            !opcode::is_a_move_result_pseudo(first_it->insn->opcode()));
+        for (auto& mie : *b) {
+          if (mie.type == MFLOW_POSITION) {
+            succ->m_entries.insert_before(first_it, std::move(mie.pos));
+          }
+        }
       }
     }
     if (b == m_entry_block) {
