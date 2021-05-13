@@ -16,6 +16,7 @@
 #include "ScopedCFG.h"
 
 #include "InstructionSequenceOutliner.h"
+#include "Trace.h"
 
 DexMethodRef* find_invoked_method(const cfg::ControlFlowGraph& cfg,
                                   const std::string& name) {
@@ -47,6 +48,7 @@ size_t count_invokes(const cfg::ControlFlowGraph& cfg,
 
 class InstructionSequenceOutlinerTest : public RedexIntegrationTest {
  public:
+  boost::optional<DexClasses&> classes;
   InstructionSequenceOutlinerTest() {
     auto config_file_env = std::getenv("config_file");
     always_assert_log(config_file_env,
@@ -54,6 +56,11 @@ class InstructionSequenceOutlinerTest : public RedexIntegrationTest {
 
     std::ifstream config_file(config_file_env, std::ifstream::binary);
     config_file >> m_cfg;
+    // use a local copy of classes always pointing
+    // to the first dex. It keeps the
+    // existing test consistent when introduces
+    // the secondary dex.
+    classes = stores.back().get_dexen().front();
   }
 
   void run_passes(const std::vector<Pass*>& passes) {
@@ -922,5 +929,80 @@ TEST_F(InstructionSequenceOutlinerTest, colocate_with_refs) {
     EXPECT_EQ(
         m->get_class()->get_name()->str(),
         "Lcom/facebook/redextest/InstructionSequenceOutlinerTest$Nested3;");
+  }
+}
+
+TEST_F(InstructionSequenceOutlinerTest, reuse_outlined_methods) {
+  // It tests the reuse of the outlined methods across dexes.
+  // Secondary dex reuses the println methods defined in primary dex.
+  // Supposedly, after the ISO the println should be outlined and the
+  // outlined method resides in the primary dex.
+  std::vector<DexMethodRef*> println_methods;
+  std::vector<DexMethod*> basic_methods;
+  std::vector<DexMethod*> methods_in_secondary_dex;
+
+  for (auto iter_store = stores.rbegin(); iter_store != stores.rend();
+       ++iter_store) {
+    const auto& dex = iter_store->get_dexen();
+    for (const auto& classes : dex) {
+      for (const auto& cls : classes) {
+        for (const auto& m : cls->get_vmethods()) {
+          if (m->get_name()->str().find("basic") != std::string::npos ||
+              m->get_name()->str().find("secondary") != std::string::npos) {
+
+            IRCode* code = m->get_code();
+            cfg::ScopedCFG scoped_cfg(code);
+            auto println_method = find_invoked_method(*scoped_cfg, "println");
+            EXPECT_NE(println_method, nullptr);
+            println_methods.push_back(println_method);
+            EXPECT_EQ(count_invokes(code->cfg(), println_method), 5);
+
+            if (m->get_name()->str().find("basic") != std::string::npos) {
+              // from primary dex
+              basic_methods.push_back(m);
+            } else {
+              // from secondary dex
+              methods_in_secondary_dex.push_back(m);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // check methods before pass run
+  sort_unique(println_methods);
+  EXPECT_EQ(println_methods.size(), 1);
+  auto println_method = println_methods.front();
+  EXPECT_EQ(methods_in_secondary_dex.size(), 2);
+
+  std::vector<Pass*> passes = {
+      new InstructionSequenceOutliner(),
+  };
+  run_passes(passes);
+
+  std::vector<DexMethod*> outlined_methods;
+  // check methods in secondary dex
+  for (auto m : methods_in_secondary_dex) {
+    cfg::ScopedCFG scoped_cfg(m->get_code());
+    EXPECT_EQ(count_invokes(*scoped_cfg, println_method), 0);
+    auto outlined_method = find_invoked_method(*scoped_cfg, "$outline");
+    EXPECT_NE(outlined_method, nullptr);
+    // The reused outlined method should reside in the primary class
+    EXPECT_EQ(outlined_method->get_class(), basic_methods.front()->get_class());
+    EXPECT_EQ(count_invokes(*scoped_cfg, outlined_method), 1);
+    outlined_methods.push_back(outlined_method->as_def());
+  }
+
+  // check outlined methods
+  sort_unique(outlined_methods);
+  EXPECT_EQ(outlined_methods.size(), 1);
+  for (auto m : outlined_methods) {
+    EXPECT_TRUE(is_static(m));
+    auto proto = m->get_proto();
+    EXPECT_EQ(proto->get_rtype(), type::_void());
+    EXPECT_EQ(proto->get_args()->size(), 0);
+    cfg::ScopedCFG scoped_cfg(m->get_code());
+    EXPECT_EQ(count_invokes(*scoped_cfg, println_method), 5);
   }
 }
