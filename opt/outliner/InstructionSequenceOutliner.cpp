@@ -103,6 +103,7 @@
 #include "RefChecker.h"
 #include "Resolver.h"
 #include "Show.h"
+#include "SourceBlocks.h"
 #include "StlUtil.h"
 #include "Trace.h"
 #include "Walkers.h"
@@ -649,6 +650,95 @@ static bool append_to_partial_candidate(
   return true;
 }
 
+class CanOutlineBlockDecider {
+ private:
+  const Config& m_config;
+  bool m_sufficiently_warm;
+  bool m_sufficiently_hot;
+  mutable std::unique_ptr<LazyUnorderedMap<cfg::Block*, bool>> m_is_in_loop;
+
+ public:
+  CanOutlineBlockDecider(const Config& config,
+                         bool sufficiently_warm,
+                         bool sufficiently_hot)
+      : m_config(config),
+        m_sufficiently_warm(sufficiently_warm),
+        m_sufficiently_hot(sufficiently_hot) {}
+
+  enum class Result {
+    CanOutline,
+    BlockExceedsThresholds,
+    WarmLoop,
+    WarmLoopExceedsThresholds,
+    Hot,
+    HotExceedsThresholds,
+  };
+
+  Result can_outline_from_big_block(
+      const big_blocks::BigBlock& big_block) const {
+    if (!m_sufficiently_hot && !m_sufficiently_warm) {
+      return Result::CanOutline;
+    }
+    if (!m_sufficiently_hot) {
+      always_assert(m_sufficiently_warm);
+      // Make sure m_is_in_loop is initialized
+      if (!m_is_in_loop) {
+        m_is_in_loop.reset(
+            new LazyUnorderedMap<cfg::Block*, bool>([](cfg::Block* block) {
+              std::unordered_set<cfg::Block*> visited;
+              std::queue<cfg::Block*> work_queue;
+              for (auto e : block->succs()) {
+                work_queue.push(e->target());
+              }
+              while (!work_queue.empty()) {
+                auto other_block = work_queue.front();
+                work_queue.pop();
+                if (visited.insert(other_block).second) {
+                  if (block == other_block) {
+                    return true;
+                  }
+                  for (auto e : other_block->succs()) {
+                    work_queue.push(e->target());
+                  }
+                }
+              }
+              return false;
+            }));
+      }
+      if (!(*m_is_in_loop)[big_block.get_first_block()]) {
+        return Result::CanOutline;
+      }
+    }
+    // If we get here,
+    // - the method is hot, or
+    // - the method is not hot but warm, and the big block is in a loop
+    if (m_config.block_profiles_appear_percent < 0 ||
+        m_config.block_profiles_hits < 0) {
+      return m_sufficiently_hot ? Result::Hot : Result::WarmLoop;
+    }
+    for (auto block : big_block.get_blocks()) {
+      auto source_blocks = source_blocks::gather_source_blocks(block);
+      if (source_blocks.empty()) {
+        continue;
+      }
+      auto representative = *(source_blocks.begin());
+      size_t num = g_redex->num_sb_interaction_indices();
+      for (size_t i = 0; i < num; i++) {
+        boost::optional<float> val = representative->get_appear100(i);
+        if (val && *val > m_config.block_profiles_appear_percent) {
+          val = representative->get_val(i);
+          if (val && *val > m_config.block_profiles_hits) {
+            return m_sufficiently_hot ? Result::HotExceedsThresholds
+                                      : Result::WarmLoopExceedsThresholds;
+          }
+        }
+      }
+      break;
+    }
+    return Result::CanOutline;
+  }
+};
+
 static bool can_outline_insn(const RefChecker& ref_checker,
                              IRInstruction* insn) {
   if (!can_outline_opcode(insn->opcode())) {
@@ -890,16 +980,19 @@ static bool explore_candidates_from(
   return true;
 }
 
-#define STATS                        \
-  FOR_EACH(live_out_to_throw_edge)   \
-  FOR_EACH(live_out_multiple)        \
-  FOR_EACH(live_out_initialized_not) \
-  FOR_EACH(arg_type_not_computed)    \
-  FOR_EACH(arg_type_illegal)         \
-  FOR_EACH(res_type_not_computed)    \
-  FOR_EACH(res_type_illegal)         \
-  FOR_EACH(overlap)                  \
-  FOR_EACH(loop)
+#define STATS                                  \
+  FOR_EACH(live_out_to_throw_edge)             \
+  FOR_EACH(live_out_multiple)                  \
+  FOR_EACH(live_out_initialized_not)           \
+  FOR_EACH(arg_type_not_computed)              \
+  FOR_EACH(arg_type_illegal)                   \
+  FOR_EACH(res_type_not_computed)              \
+  FOR_EACH(res_type_illegal)                   \
+  FOR_EACH(overlap)                            \
+  FOR_EACH(loop)                               \
+  FOR_EACH(block_warm_loop_exceeds_thresholds) \
+  FOR_EACH(block_hot)                          \
+  FOR_EACH(block_hot_exceeds_thresholds)
 
 struct FindCandidatesStats {
 // NOLINTNEXTLINE(bugprone-macro-parentheses)
@@ -914,7 +1007,7 @@ struct FindCandidatesStats {
 static MethodCandidates find_method_candidates(
     const Config& config,
     const RefChecker& ref_checker,
-    bool skip_loops,
+    const CanOutlineBlockDecider& block_decider,
     DexMethod* method,
     cfg::ControlFlowGraph& cfg,
     const CandidateInstructionCoresSet& recurring_cores,
@@ -961,26 +1054,6 @@ static MethodCandidates find_method_candidates(
       }
     }
     return res;
-  });
-  LazyUnorderedMap<cfg::Block*, bool> is_in_loop([](cfg::Block* block) {
-    std::unordered_set<cfg::Block*> visited;
-    std::queue<cfg::Block*> work_queue;
-    for (auto e : block->succs()) {
-      work_queue.push(e->target());
-    }
-    while (!work_queue.empty()) {
-      auto other_block = work_queue.front();
-      work_queue.pop();
-      if (visited.insert(other_block).second) {
-        if (block == other_block) {
-          return true;
-        }
-        for (auto e : other_block->succs()) {
-          work_queue.push(e->target());
-        }
-      }
-    }
-    return false;
   });
   OutlinerTypeAnalysis type_analysis(method);
   auto big_blocks = big_blocks::get_big_blocks(cfg);
@@ -1103,12 +1176,26 @@ static MethodCandidates find_method_candidates(
             lstats.res_type_illegal++;
             return;
           }
-          if (skip_loops && is_in_loop[first_block]) {
+          auto result = block_decider.can_outline_from_big_block(big_block);
+          if (result != CanOutlineBlockDecider::Result::CanOutline) {
             // We could bail out on this way earlier, but doing it last gives us
             // better statistics on what the damage really is
-            TRACE(ISO, 4, "[invoke sequence outliner] [bail out] Loop");
-            lstats.loop++;
-            return;
+            switch (result) {
+            case CanOutlineBlockDecider::Result::WarmLoop:
+              lstats.loop++;
+              return;
+            case CanOutlineBlockDecider::Result::WarmLoopExceedsThresholds:
+              lstats.block_warm_loop_exceeds_thresholds++;
+              return;
+            case CanOutlineBlockDecider::Result::Hot:
+              lstats.block_hot++;
+              return;
+            case CanOutlineBlockDecider::Result::HotExceedsThresholds:
+              lstats.block_hot_exceeds_thresholds++;
+              return;
+            default:
+              not_reached();
+            }
           }
           auto& cmls = candidates[c];
           std::map<size_t, size_t> ranges;
@@ -1161,13 +1248,8 @@ static MethodCandidates find_method_candidates(
 // get_recurring_cores
 ////////////////////////////////////////////////////////////////////////////////
 
-static bool can_outline_from_method(
-    DexMethod* method,
-    const std::unordered_set<DexMethod*>& sufficiently_hot_methods) {
+static bool can_outline_from_method(DexMethod* method) {
   if (method->rstate.no_optimizations() || method->rstate.outlined()) {
-    return false;
-  }
-  if (sufficiently_hot_methods.count(method)) {
     return false;
   }
 
@@ -1178,24 +1260,35 @@ static bool can_outline_from_method(
 // sequences that are outlinable. Note that all longer recurring outlinable
 // instruction sequences must be comprised of shorter recurring ones.
 static void get_recurring_cores(
+    const Config& config,
     PassManager& mgr,
     const Scope& scope,
+    const std::unordered_set<DexMethod*>& sufficiently_warm_methods,
     const std::unordered_set<DexMethod*>& sufficiently_hot_methods,
     const RefChecker& ref_checker,
-    CandidateInstructionCoresSet* recurring_cores) {
+    CandidateInstructionCoresSet* recurring_cores,
+    ConcurrentMap<DexMethod*, CanOutlineBlockDecider>* block_deciders) {
   ConcurrentMap<CandidateInstructionCores, size_t,
                 CandidateInstructionCoresHasher>
       concurrent_cores;
   walk::parallel::code(
-      scope, [&ref_checker, &sufficiently_hot_methods,
-              &concurrent_cores](DexMethod* method, IRCode& code) {
-        if (!can_outline_from_method(method, sufficiently_hot_methods)) {
+      scope, [&config, &ref_checker, &sufficiently_warm_methods,
+              &sufficiently_hot_methods, &concurrent_cores,
+              block_deciders](DexMethod* method, IRCode& code) {
+        if (!can_outline_from_method(method)) {
           return;
         }
         code.build_cfg(/* editable */ true);
         code.cfg().calculate_exit_block();
+        CanOutlineBlockDecider block_decider(
+            config, sufficiently_warm_methods.count(method),
+            sufficiently_hot_methods.count(method));
         auto& cfg = code.cfg();
         for (auto& big_block : big_blocks::get_big_blocks(cfg)) {
+          if (block_decider.can_outline_from_big_block(big_block) !=
+              CanOutlineBlockDecider::Result::CanOutline) {
+            continue;
+          }
           CandidateInstructionCoresBuilder cores_builder;
           for (auto& mie : big_blocks::InstructionIterable(big_block)) {
             auto insn = mie.insn;
@@ -1212,6 +1305,7 @@ static void get_recurring_cores(
             }
           }
         }
+        block_deciders->emplace(method, std::move(block_decider));
       });
   size_t singleton_cores{0};
   for (auto& p : concurrent_cores) {
@@ -1435,10 +1529,9 @@ static void get_beneficial_candidates(
     const Config& config,
     PassManager& mgr,
     const Scope& scope,
-    const std::unordered_set<DexMethod*>& sufficiently_warm_methods,
-    const std::unordered_set<DexMethod*>& sufficiently_hot_methods,
     const RefChecker& ref_checker,
     const CandidateInstructionCoresSet& recurring_cores,
+    const ConcurrentMap<DexMethod*, CanOutlineBlockDecider>& block_deciders,
     const ReusableOutlinedMethods* outlined_methods,
     std::vector<CandidateWithInfo>* candidates_with_infos,
     std::unordered_map<DexMethod*, std::unordered_set<CandidateId>>*
@@ -1446,17 +1539,15 @@ static void get_beneficial_candidates(
   ConcurrentMap<Candidate, CandidateInfo, CandidateHasher>
       concurrent_candidates;
   FindCandidatesStats stats;
-  walk::parallel::code(scope, [&config, &sufficiently_warm_methods,
-                               &sufficiently_hot_methods, &ref_checker,
-                               &recurring_cores, &concurrent_candidates,
+  walk::parallel::code(scope, [&config, &ref_checker, &recurring_cores,
+                               &concurrent_candidates, &block_deciders,
                                &stats](DexMethod* method, IRCode& code) {
-    if (!can_outline_from_method(method, sufficiently_hot_methods)) {
+    if (!can_outline_from_method(method)) {
       return;
     }
-    bool skip_loops = !!sufficiently_warm_methods.count(method);
-    for (auto& p :
-         find_method_candidates(config, ref_checker, skip_loops, method,
-                                code.cfg(), recurring_cores, &stats)) {
+    for (auto& p : find_method_candidates(
+             config, ref_checker, block_deciders.at_unsafe(method), method,
+             code.cfg(), recurring_cores, &stats)) {
       std::vector<CandidateMethodLocation>& cmls = p.second;
       concurrent_candidates.update(p.first,
                                    [method, &cmls](const Candidate&,
@@ -2637,14 +2728,12 @@ void reorder_with_method_profiles(
 
 static size_t clear_cfgs(
     const Scope& scope,
-    const std::unordered_set<DexMethod*>& sufficiently_hot_methods,
     ConcurrentMap<DexMethod*, std::shared_ptr<ab_test::ABExperimentContext>>*
         experiments_contexts) {
   std::atomic<size_t> methods{0};
   walk::parallel::code(
-      scope, [&sufficiently_hot_methods, &methods,
-              experiments_contexts](DexMethod* method, IRCode& code) {
-        if (!can_outline_from_method(method, sufficiently_hot_methods)) {
+      scope, [&methods, experiments_contexts](DexMethod* method, IRCode& code) {
+        if (!can_outline_from_method(method)) {
           return;
         }
 
@@ -3013,6 +3102,14 @@ void InstructionSequenceOutliner::bind_config() {
        "Loops are not outlined from warm methods");
   std::string perf_sensitivity_str;
   bind("perf_sensitivity", "always-hot", perf_sensitivity_str);
+  bind("block_profiles_appear_percent",
+       m_config.block_profiles_appear_percent,
+       m_config.block_profiles_appear_percent,
+       "Cut off when a block profile in a hot method is deemed relevant");
+  bind("block_profiles_hits",
+       m_config.block_profiles_hits,
+       m_config.block_profiles_hits,
+       "No code is outlined out of hot blocks in hot methods");
   bind("reuse_outlined_methods_across_dexes",
        m_config.reuse_outlined_methods_across_dexes,
        m_config.reuse_outlined_methods_across_dexes,
@@ -3128,14 +3225,15 @@ void InstructionSequenceOutliner::run_pass(DexStoresVector& stores,
       last_store_idx = store_idx;
       RefChecker ref_checker{&xstores, store_idx, min_sdk_api};
       CandidateInstructionCoresSet recurring_cores;
-      get_recurring_cores(mgr, dex, sufficiently_hot_methods, ref_checker,
-                          &recurring_cores);
+      ConcurrentMap<DexMethod*, CanOutlineBlockDecider> block_deciders;
+      get_recurring_cores(m_config, mgr, dex, sufficiently_warm_methods,
+                          sufficiently_hot_methods, ref_checker,
+                          &recurring_cores, &block_deciders);
       std::vector<CandidateWithInfo> candidates_with_infos;
       std::unordered_map<DexMethod*, std::unordered_set<CandidateId>>
           candidate_ids_by_methods;
       get_beneficial_candidates(
-          m_config, mgr, dex, sufficiently_warm_methods,
-          sufficiently_hot_methods, ref_checker, recurring_cores,
+          m_config, mgr, dex, ref_checker, recurring_cores, block_deciders,
           &outlined_methods, &candidates_with_infos, &candidate_ids_by_methods);
 
       // TODO: Merge candidates that are equivalent except that one returns
@@ -3149,8 +3247,7 @@ void InstructionSequenceOutliner::run_pass(DexStoresVector& stores,
                   &experiments_contexts, &num_reused_methods);
       outlined_methods_to_reorder.push_back({&dex, newly_outlined_methods});
       auto affected_methods = count_affected_methods(newly_outlined_methods);
-      auto total_methods =
-          clear_cfgs(dex, sufficiently_hot_methods, &experiments_contexts);
+      auto total_methods = clear_cfgs(dex, &experiments_contexts);
       if (total_methods > 0) {
         mgr.incr_metric(std::string("percent_methods_affected_in_Dex") +
                             std::to_string(dex_id),
