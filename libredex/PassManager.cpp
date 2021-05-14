@@ -6,6 +6,7 @@
  */
 
 #include "PassManager.h"
+#include "DexAssessments.h"
 
 #include <boost/filesystem.hpp>
 #include <cinttypes>
@@ -474,6 +475,17 @@ bool is_run_hasher_after_each_pass(const ConfigFiles& conf,
   return hasher_args.get("run_after_each_pass", false).asBool();
 }
 
+AssessorConfig get_assessor_config(const ConfigFiles& conf,
+                                   const RedexOptions&) {
+  const Json::Value& assessor_args = conf.get_json_config()["assessor"];
+  AssessorConfig res;
+  res.run_after_each_pass =
+      assessor_args.get("run_after_each_pass", false).asBool();
+  res.run_initially = assessor_args.get("run_initially", false).asBool();
+  res.run_finally = assessor_args.get("run_finally", false).asBool();
+  return res;
+}
+
 class AfterPassSizes {
  private:
   PassManager* m_mgr;
@@ -701,6 +713,19 @@ void track_source_block_coverage(const DexStoresVector& stores) {
         ((double)stats.source_blocks_present) * 100 / stats.total_blocks);
 }
 
+void run_assessor(PassManager& pm, const Scope& scope, bool initially = false) {
+  TRACE(PM, 2, "Running assessor...");
+  Timer t("Assessor");
+  assessments::DexScopeAssessor assessor(scope);
+  auto assessment = assessor.run();
+  std::string prefix =
+      std::string("~") + (initially ? "PRE" : "") + "assessment~";
+  // log metric value in a way that fits into JSON number value
+  for (auto& p : assessments::order(assessment)) {
+    pm.set_metric(prefix + p.first, p.second);
+  }
+}
+
 } // namespace
 
 std::unique_ptr<keep_rules::ProguardConfiguration> empty_pg_config() {
@@ -881,6 +906,9 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   bool run_hasher_after_each_pass =
       is_run_hasher_after_each_pass(conf, get_redex_options());
 
+  // Retrieve the assessor's settings.
+  auto assessor_config = get_assessor_config(conf, get_redex_options());
+
   // Retrieve the type checker's settings.
   CheckerConfig checker_conf{conf};
   checker_conf.on_input(scope);
@@ -915,26 +943,35 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
 
   // For core loop legibility, have a lambda here.
 
-  auto post_pass_verifiers = [&](Pass* pass, size_t i) {
-    walk::parallel::code(build_class_scope(stores),
-                         [](DexMethod* m, IRCode& code) {
-                           // Ensure that pass authors deconstructed the
-                           // editable CFG at the end of their pass.
-                           // Currently, passes assume the incoming code
-                           // will be in IRCode form
-                           always_assert_log(!code.editable_cfg_built(),
-                                             "%s has a cfg!", SHOW(m));
-                         });
+  auto pre_pass_verifiers = [&](Pass* pass, size_t i) {
+    if (i == 0 && assessor_config.run_initially) {
+      ::run_assessor(*this, scope, /* initially */ true);
+    }
+  };
+
+  auto post_pass_verifiers = [&](Pass* pass, size_t i, size_t size) {
+    walk::parallel::code(build_class_scope(stores), [](DexMethod* m,
+                                                       IRCode& code) {
+      // Ensure that pass authors deconstructed the editable CFG at the end of
+      // their pass. Currently, passes assume the incoming code will be in
+      // IRCode form
+      always_assert_log(!code.editable_cfg_built(), "%s has a cfg!", SHOW(m));
+    });
 
     bool run_hasher = run_hasher_after_each_pass;
+    bool run_assessor = assessor_config.run_after_each_pass ||
+                        (assessor_config.run_finally && i == size - 1);
     bool run_type_checker = checker_conf.run_after_pass(pass);
 
-    if (run_hasher || run_type_checker ||
+    if (run_hasher || run_assessor || run_type_checker ||
         check_unique_deobfuscated.m_after_each_pass) {
       scope = build_class_scope(it);
       if (run_hasher) {
         m_current_pass_info->hash = boost::optional<hashing::DexHash>(
             this->run_hasher(pass->name().c_str(), scope));
+      }
+      if (run_assessor) {
+        ::run_assessor(*this, scope);
       }
       if (run_type_checker) {
         // It's OK to overwrite the `this` register if we are not yet at the
@@ -968,6 +1005,8 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
     Timer t(pass->name() + " " + std::to_string(pass_run) + " (run)");
     m_current_pass_info = &m_pass_info[i];
 
+    pre_pass_verifiers(pass, i);
+
     {
       auto scoped_command_prof = profiler_info_pass == pass
                                      ? ScopedCommandProfiling::maybe_from_info(
@@ -985,7 +1024,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
 
     graph_visualizer.add_pass(pass, i);
 
-    post_pass_verifiers(pass, i);
+    post_pass_verifiers(pass, i, m_activated_passes.size());
 
     analysis_usage_helper.post_pass(pass);
 

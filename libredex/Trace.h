@@ -22,6 +22,7 @@ class DexType;
   TM(ANNO)            \
   TM(API_UTILS)       \
   TM(ARGS)            \
+  TM(ASSESSOR)        \
   TM(BBPROFILE)       \
   TM(BBREORDERING)    \
   TM(BIND)            \

@@ -37,6 +37,7 @@ libredex_la_SOURCES = \
 	libredex/Creators.cpp \
 	libredex/Debug.cpp \
 	libredex/DexAccess.cpp \
+	libredex/DexAssessments.cpp \
 	libredex/DexAnnotation.cpp \
 	libredex/DexAsm.cpp \
 	libredex/DexCallSite.cpp \
@@ -295,7 +296,7 @@ libopt_la_SOURCES = \
 	opt/original_name/OriginalNamePass.cpp \
 	opt/peephole/Peephole.cpp \
 	opt/peephole/RedundantCheckCastRemover.cpp \
-	opt/print-kotlin-stats/PrintKotlinStats.cpp \ 
+	opt/print-kotlin-stats/PrintKotlinStats.cpp \
 	opt/print-members/PrintMembers.cpp \
 	opt/rebindrefs/ReBindRefs.cpp \
 	opt/regalloc/RegAlloc.cpp \

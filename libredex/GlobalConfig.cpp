@@ -55,6 +55,12 @@ void HasherConfig::bind_config() {
   bind("run_after_each_pass", {}, run_after_each_pass);
 }
 
+void AssessorConfig::bind_config() {
+  bind("run_after_each_pass", run_after_each_pass, run_after_each_pass);
+  bind("run_initially", run_initially, run_initially);
+  bind("run_finally", run_finally, run_finally);
+}
+
 void CheckUniqueDeobfuscatedNamesConfig::bind_config() {
   bind("run_after_each_pass", run_after_each_pass, run_after_each_pass);
   bind("run_initially", run_initially, run_initially);
@@ -131,6 +137,7 @@ GlobalConfigRegistry& GlobalConfig::default_registry() {
       register_as<InlinerConfig>("inliner"),
       register_as<IRTypeCheckerConfig>("ir_type_checker"),
       register_as<HasherConfig>("hasher"),
+      register_as<AssessorConfig>("assessor"),
       register_as<CheckUniqueDeobfuscatedNamesConfig>(
           "check_unique_deobfuscated_names"),
       register_as<OptDecisionsConfig>("opt_decisions"),
