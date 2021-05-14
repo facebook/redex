@@ -91,7 +91,7 @@ struct NativeContext {
 
 }; // namespace native
 
-extern native::NativeContext* g_native_context;
+extern std::unique_ptr<native::NativeContext> g_native_context;
 
 namespace native {
 

@@ -51,7 +51,6 @@
 #include "JarLoader.h"
 #include "Macros.h"
 #include "MonitorCount.h"
-#include "Native.h"
 #include "NoOptimizationsMatcher.h"
 #include "OptData.h"
 #include "PassRegistry.h"
@@ -80,7 +79,6 @@ constexpr const char* DEBUG_LINE_MAP = "redex-debug-line-map-v2";
 constexpr const char* IODI_METADATA = "iodi-metadata";
 constexpr const char* OPT_DECISIONS = "redex-opt-decisions.json";
 constexpr const char* CLASS_METHOD_INFO_MAP = "redex-class-method-info-map.txt";
-constexpr const char* REMOVABLE_NATIVES = "redex-removable-natives.txt";
 
 const std::string k_usage_header = "usage: redex-all [options...] dex-files...";
 
@@ -1271,52 +1269,9 @@ int main(int argc, char* argv[]) {
     ab_test::ABExperimentContext::parse_experiments_states(
         exp_states, !manager.get_redex_options().redacted);
 
-    std::unordered_set<native::Function*> removable_natives;
-    {
-      Scope scope = build_class_scope(stores);
-      g_native_context = new native::NativeContext(
-          native::NativeContext::build("/tmp/JNI_OUTPUT/", scope));
-
-      // Before running any passes, treat everything as removable.
-      walk::methods(scope, [&removable_natives](DexMethod* m) {
-        if (is_native(m)) {
-          auto native_func = native::get_native_function_for_dex_method(m);
-          if (native_func) {
-            removable_natives.emplace(native_func);
-          }
-        }
-      });
-    }
-
     {
       Timer t("Running optimization passes");
       manager.run_passes(stores, conf);
-    }
-
-    {
-      Scope scope = build_class_scope(stores);
-      // After running all passes, walk through the removable functions and
-      // remove the ones should remain.
-      walk::methods(scope, [&removable_natives](DexMethod* m) {
-        if (is_native(m)) {
-          auto native_func = native::get_native_function_for_dex_method(m);
-          if (native_func) {
-            auto it = removable_natives.find(native_func);
-            if (it != removable_natives.end()) {
-              removable_natives.erase(it);
-            }
-          }
-        }
-      });
-    }
-
-    {
-      auto removable_natives_file_name = conf.metafile(REMOVABLE_NATIVES);
-      std::ofstream out(removable_natives_file_name);
-      // Might be non-deterministic in order
-      for (auto func : removable_natives) {
-        out << func->get_name() << std::endl;
-      }
     }
 
     if (args.stop_pass_idx == boost::none) {
@@ -1339,7 +1294,6 @@ int main(int argc, char* argv[]) {
     {
       Timer t("Freeing global memory");
       delete g_redex;
-      delete g_native_context;
     }
     cpu_time_s = ((double)std::clock()) / CLOCKS_PER_SEC;
   }

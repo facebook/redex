@@ -39,6 +39,7 @@
 #include "InstructionLowering.h"
 #include "JemallocUtil.h"
 #include "MethodProfiles.h"
+#include "Native.h"
 #include "OptData.h"
 #include "Pass.h"
 #include "PrintSeeds.h"
@@ -54,6 +55,8 @@
 
 namespace {
 
+constexpr const char* JNI_OUTPUT_DIR = "/tmp/JNI_OUTPUT/";
+constexpr const char* REMOVABLE_NATIVES = "redex-removable-natives.txt";
 const std::string PASS_ORDER_KEY = "pass_order";
 
 const Pass* get_profiled_pass(const PassManager& mgr) {
@@ -399,6 +402,69 @@ class AnalysisUsageHelper {
  private:
   AnalysisUsage m_analysis_usage;
   PreservedMap& m_preserved_analysis_passes;
+};
+
+class JNINativeContextHelper {
+ public:
+  explicit JNINativeContextHelper(const Scope& scope) {
+    // TODO (T90874859): Remove the hardcoded path and use a program option
+    // instead. Currently we don't have full integration with the build system
+    // and we need to make changes to the build step to pass this piece of
+    // information in from native build toolchain.
+    //
+    // Currently, if the path is not found, the native context is going to be
+    // empty.
+    g_native_context = std::make_unique<native::NativeContext>(
+        native::NativeContext::build(JNI_OUTPUT_DIR, scope));
+
+    // Before running any passes, treat everything as removable.
+    walk::methods(scope, [this](DexMethod* m) {
+      if (is_native(m)) {
+        auto native_func = native::get_native_function_for_dex_method(m);
+        if (native_func) {
+          m_removable_natives.emplace(native_func);
+        }
+      }
+    });
+  }
+
+  void post_passes(const Scope& scope, ConfigFiles& conf) {
+    // After running all passes, walk through the removable functions and
+    // remove the ones should remain.
+    walk::methods(scope, [this](DexMethod* m) {
+      if (is_native(m)) {
+        auto native_func = native::get_native_function_for_dex_method(m);
+        if (native_func) {
+          auto it = m_removable_natives.find(native_func);
+          if (it != m_removable_natives.end()) {
+            m_removable_natives.erase(it);
+          }
+        }
+      }
+    });
+
+    auto removable_natives_file_name = conf.metafile(REMOVABLE_NATIVES);
+    std::vector<std::string> output_symbols;
+    output_symbols.reserve(m_removable_natives.size());
+
+    // Might be non-deterministic in order, put them in a vector and sort.
+    for (auto func : m_removable_natives) {
+      output_symbols.push_back(func->get_name());
+    }
+
+    std::sort(output_symbols.begin(), output_symbols.end());
+
+    std::ofstream out(removable_natives_file_name);
+
+    for (const auto& name : output_symbols) {
+      out << name << std::endl;
+    }
+
+    g_native_context.reset();
+  }
+
+ private:
+  std::unordered_set<native::Function*> m_removable_natives;
 };
 
 void process_method_profiles(PassManager& mgr, ConfigFiles& conf) {
@@ -988,6 +1054,8 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
     }
   };
 
+  JNINativeContextHelper jni_native_context_helper(scope);
+
   std::unordered_map<const Pass*, size_t> runs;
 
   /////////////////////
@@ -1049,6 +1117,8 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   CheckerConfig::run_verifier(scope, checker_conf.verify_moves,
                               get_redex_options().no_overwrite_this(),
                               /* validate_access */ true);
+
+  jni_native_context_helper.post_passes(scope, conf);
 
   check_unique_deobfuscated.run_finally(scope);
 

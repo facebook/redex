@@ -171,4 +171,4 @@ NativeContext NativeContext::build(const std::string& path_to_native_results,
 
 } // namespace native
 
-native::NativeContext* g_native_context;
+std::unique_ptr<native::NativeContext> g_native_context;
