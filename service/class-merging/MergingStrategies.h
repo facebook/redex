@@ -75,10 +75,14 @@ void group_by_code_size(const TypeSet& mergeable_types, WalkerFn walker) {
   std::vector<const DexType*> current_group;
 
   size_t estimated_merged_code_size = 0;
-  for (auto it = mergeable_types.begin(); it != mergeable_types.end(); ++it) {
+  for (auto type : mergeable_types) {
     // Only check the code size of vmethods because these vmethods will be
     // merged into a large dispatch, dmethods will be relocated.
-    auto vmethod_code_size = estimate_vmethods_code_size(type_class(*it));
+    auto vmethod_code_size = estimate_vmethods_code_size(type_class(type));
+    if (vmethod_code_size > max_instruction_size) {
+      // This class will never make it into any group; skip it
+      continue;
+    }
     if (estimated_merged_code_size + vmethod_code_size > max_instruction_size) {
       TRACE(CLMG, 9, "\tgroup_by_code_size %zu classes", current_group.size());
       if (current_group.size() > 1) {
@@ -86,10 +90,9 @@ void group_by_code_size(const TypeSet& mergeable_types, WalkerFn walker) {
       }
       current_group.clear();
       estimated_merged_code_size = 0;
-    } else {
-      current_group.push_back(*it);
-      estimated_merged_code_size += vmethod_code_size;
     }
+    current_group.push_back(type);
+    estimated_merged_code_size += vmethod_code_size;
   }
   if (current_group.size() > 1) {
     TRACE(CLMG, 9, "\tgroup_by_code_size %zu classes at the end",
