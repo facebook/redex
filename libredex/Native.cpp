@@ -137,6 +137,10 @@ NativeContext NativeContext::build(const std::string& path_to_native_results,
   NativeContext ret;
   fs::path path(path_to_native_results);
 
+  if (!fs::exists(path)) {
+    return ret;
+  }
+
   std::unordered_map<std::string, DexMethod*> expected_names_to_decl;
   walk::methods(java_scope, [&](DexMethod* m) {
     if (is_native(m)) {
@@ -166,3 +170,5 @@ NativeContext NativeContext::build(const std::string& path_to_native_results,
 }
 
 } // namespace native
+
+native::NativeContext* g_native_context;

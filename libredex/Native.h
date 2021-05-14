@@ -90,3 +90,16 @@ struct NativeContext {
 };
 
 }; // namespace native
+
+extern native::NativeContext* g_native_context;
+
+namespace native {
+
+inline Function* get_native_function_for_dex_method(DexMethod* m) {
+  auto it = g_native_context->java_declaration_to_function.find(m);
+  if (it != g_native_context->java_declaration_to_function.end()) {
+    return it->second;
+  }
+  return nullptr;
+}
+} // namespace native
