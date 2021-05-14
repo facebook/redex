@@ -19,7 +19,7 @@ TEST_F(NativeTest, testJNIOutputParsing) {
       "JNI_OUTPUT");
 
   std::unordered_set<std::string> unit_names;
-  for (const auto& unit : comp_units) {
+  for (const auto& [_, unit] : comp_units) {
     unit_names.emplace(unit.get_name());
   }
 
@@ -66,15 +66,23 @@ TEST_F(NativeTest, testBuildingContext) {
       native::NativeContext::build(path_to_native_results.string(), java_scope);
 
   {
-    EXPECT_EQ(3, context.name_to_function.size());
+    EXPECT_EQ(2, context.name_to_compilation_units.size());
 
-    auto java_decl_of = [&](const std::string& native_func) {
-      return context.name_to_function.at(native_func)->get_java_declaration();
+    auto java_decl_of =
+        [&](const std::string& native_func) -> std::unordered_set<DexMethod*> {
+      for (auto& [_, cu] : context.name_to_compilation_units) {
+        auto f = cu.get_function(native_func);
+        if (f) {
+          return f->get_java_declarations();
+        }
+      }
+      return {};
     };
 
-    EXPECT_EQ(implemented, java_decl_of("Java_redex_JNIExample_implemented"));
-    EXPECT_EQ(init_hybrid, java_decl_of("init_hybrid_impl"));
-    EXPECT_EQ(foo, java_decl_of("foo_impl"));
+    EXPECT_EQ(implemented,
+              *java_decl_of("Java_redex_JNIExample_implemented").begin());
+    EXPECT_EQ(init_hybrid, *java_decl_of("init_hybrid_impl").begin());
+    EXPECT_EQ(foo, *java_decl_of("foo_impl").begin());
   }
 
   {

@@ -37,9 +37,10 @@ boost::optional<Json::Value> read_json_from_file(const std::string& filename) {
 
 namespace native {
 
-void get_compilation_units_impl(std::vector<CompilationUnit>& compilation_units,
-                                const std::string& location_prefix,
-                                const fs::path& path) {
+void get_compilation_units_impl(
+    std::unordered_map<std::string, CompilationUnit>& compilation_units,
+    const std::string& location_prefix,
+    const fs::path& path) {
 
   if (!fs::is_directory(path)) {
     return;
@@ -47,7 +48,8 @@ void get_compilation_units_impl(std::vector<CompilationUnit>& compilation_units,
 
   if (fs::is_regular_file(path / "jni.json")) {
     // We found a compilation unit.
-    compilation_units.emplace_back(location_prefix, path);
+    compilation_units.emplace(location_prefix,
+                              CompilationUnit{location_prefix, path});
     return;
   }
 
@@ -60,8 +62,9 @@ void get_compilation_units_impl(std::vector<CompilationUnit>& compilation_units,
   }
 }
 
-std::vector<CompilationUnit> get_compilation_units(const fs::path& path) {
-  std::vector<CompilationUnit> ret;
+std::unordered_map<std::string, CompilationUnit> get_compilation_units(
+    const fs::path& path) {
+  std::unordered_map<std::string, CompilationUnit> ret;
   get_compilation_units_impl(ret, "", path);
   return ret;
 }
@@ -78,7 +81,8 @@ void CompilationUnit::populate_functions(
     auto decl_it = expected_names_to_decl.find(function_name);
     DexMethod* decl =
         decl_it == expected_names_to_decl.end() ? nullptr : decl_it->second;
-    m_functions.emplace_back(std::move(function_name), decl);
+    m_name_to_functions.emplace(function_name,
+                                Function{this, function_name, decl});
   }
 
   // Alternatively, native methods can be registered with RegisterNatives calls.
@@ -98,7 +102,7 @@ void CompilationUnit::populate_functions(
         auto method = methods[j];
         std::string method_name = method["method_name"].asString();
         std::string desc = method["desc"].asString();
-        std::string function = method["function"].asString();
+        std::string function_name = method["function"].asString();
 
         DexMethodRef* m =
             DexMethod::get_method(class_name + "." + method_name + ":" + desc);
@@ -106,7 +110,15 @@ void CompilationUnit::populate_functions(
           DexMethod* decl = m->as_def();
           always_assert_log(decl,
                             "Attempting to bind non-concrete native method.");
-          m_functions.emplace_back(std::move(function), decl);
+          // When using RegisterNatives, we allow binding the same
+          // implementation to multiple definitions.
+          auto function_it = m_name_to_functions.find(function_name);
+          if (function_it == m_name_to_functions.end()) {
+            m_name_to_functions.emplace(function_name,
+                                        Function{this, function_name, decl});
+          } else {
+            function_it->second.add_java_declaration(decl);
+          }
         } else {
           TRACE(NATIVE,
                 2,
@@ -136,22 +148,16 @@ NativeContext NativeContext::build(const std::string& path_to_native_results,
     }
   });
 
-  ret.compilation_units = get_compilation_units(path);
-  for (auto& unit : ret.compilation_units) {
+  ret.name_to_compilation_units = get_compilation_units(path);
+  for (auto& [cu_name, unit] : ret.name_to_compilation_units) {
     unit.populate_functions(expected_names_to_decl);
-    for (auto& function : unit.get_functions()) {
-      auto name = function.get_name();
-      always_assert_log(ret.name_to_function.count(name) == 0,
-                        "Duplicate symbol {%s} in native code!",
-                        name.c_str());
-      ret.name_to_function[name] = &function;
-      auto java_declaration = function.get_java_declaration();
-      if (java_declaration) {
+    for (auto& [fn_name, function] : unit.get_functions()) {
+      auto java_declarations = function.get_java_declarations();
+      for (DexMethod* java_declaration : java_declarations) {
         always_assert_log(
             ret.java_declaration_to_function.count(java_declaration) == 0,
             "More than one implementation for native Java method {%s}!",
             SHOW(java_declaration));
-
         ret.java_declaration_to_function[java_declaration] = &function;
       }
     }
