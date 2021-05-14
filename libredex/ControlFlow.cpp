@@ -1556,16 +1556,19 @@ std::vector<Block*> ControlFlowGraph::order(
   always_assert_log(result.size() == m_blocks.size(),
                     "result has %lu blocks, m_blocks has %lu", result.size(),
                     m_blocks.size());
+
+  // The entry block must always be first.
+  redex_assert(m_entry_block == result.at(0));
+
   return result;
 }
 
 void ControlFlowGraph::build_chains(
     std::vector<std::unique_ptr<BlockChain>>* chains,
     std::unordered_map<Block*, BlockChain*>* block_to_chain) {
-  for (const auto& entry : m_blocks) {
-    Block* b = entry.second;
+  auto handle_block = [&](Block* b) {
     if (block_to_chain->count(b) != 0) {
-      continue;
+      return;
     }
 
     always_assert_log(!DEBUG || !b->starts_with_move_result(),
@@ -1622,6 +1625,20 @@ void ControlFlowGraph::build_chains(
         break;
       }
     }
+  };
+
+  // It is important to always start with the entry block. Otherwise it may
+  // be incorrectly merged into a chain.
+  redex_assert(m_entry_block != nullptr);
+  if (DEBUG) {
+    auto it = m_blocks.find(m_entry_block->id());
+    redex_assert(it != m_blocks.end());
+    redex_assert(it->second == m_entry_block);
+  }
+  handle_block(m_entry_block);
+
+  for (const auto& entry : m_blocks) {
+    handle_block(entry.second);
   }
 }
 

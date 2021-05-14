@@ -7,12 +7,14 @@
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
+#include <regex>
 
 #include "ControlFlow.h"
 #include "DexAsm.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
 #include "RedexTest.h"
+#include "ScopedCFG.h"
 #include "Show.h"
 #include "Trace.h"
 
@@ -2313,4 +2315,74 @@ TEST_F(ControlFlowTest, move_result_chain) {
   ASSERT_TRUE(next_it != code->end()) << show(code);
   ASSERT_EQ(next_it->type, MFLOW_OPCODE) << show(code);
   EXPECT_EQ(next_it->insn->opcode(), OPCODE_MOVE_RESULT) << show(code);
+}
+
+namespace {
+
+std::string sanitize(const std::string& s) {
+  return std::regex_replace(
+      std::regex_replace(std::regex_replace(s, std::regex("0x[0-9a-f]+"), ""),
+                         std::regex(R"((^|\n)\[\] +)"),
+                         "$1"),
+      std::regex(R"( +($|\n))"), "$1");
+}
+
+} // namespace
+
+// Chains are created in block order. Ensure that chains are created correctly
+// when the entry block is not first block on destruction.
+TEST_F(ControlFlowTest, entry_not_first_block_order_first) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (goto :loop)
+
+      (:true)
+      (add-int/lit8 v0 v0 1)
+
+      (:loop)
+      (if-eqz v0 :true)
+
+      (:exit)
+      (return-void)
+    )
+  )");
+
+  {
+    ScopedCFG cfg(code.get());
+    cfg->set_entry_block(cfg->blocks().at(2));
+    cfg->simplify();
+    EXPECT_EQ(cfg->order().at(0), cfg->entry_block()) << show(*cfg);
+  }
+}
+
+TEST_F(ControlFlowTest, entry_not_first_block_order_first_linearization) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (goto :loop)
+
+      (:true)
+      (add-int/lit8 v0 v0 1)
+
+      (:loop)
+      (if-eqz v0 :true)
+
+      (:exit)
+      (return-void)
+    )
+  )");
+
+  {
+    ScopedCFG cfg(code.get());
+    cfg->entry_block()->remove_insn(cfg->entry_block()->get_first_insn());
+  }
+
+  EXPECT_EQ(sanitize(show(code.get())), R"(TARGET: SIMPLE
+OPCODE: IF_EQZ v0
+OPCODE: RETURN_VOID
+TARGET: SIMPLE
+OPCODE: ADD_INT_LIT8 v0, v0, 1
+OPCODE: GOTO
+)");
 }

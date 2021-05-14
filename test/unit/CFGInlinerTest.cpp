@@ -303,15 +303,15 @@ TEST_F(CFGInlinerTest, multi_return_object) {
       (new-instance "LFoo;")
       (move-result-pseudo-object v1)
       (move-object v0 v1)
-      (goto :exit)
+
+      (:exit)
+      (return-object v0)
 
       (:true)
       (new-instance "LBar;")
       (move-result-pseudo-object v1)
       (move-object v0 v1)
-
-      (:exit)
-      (return-object v0)
+      (goto :exit)
     )
   )";
   test_inliner(caller_str, callee_str, expected_str);
