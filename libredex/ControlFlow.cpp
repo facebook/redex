@@ -1060,6 +1060,24 @@ void ControlFlowGraph::remove_empty_blocks() {
           }
         }
       }
+
+      // Move all source blocks.
+      // Note: the order of source blocks does not really matter.
+      {
+        bool first = true;
+        for (auto& mie : *b) {
+          if (mie.type == MFLOW_SOURCE_BLOCK) {
+            if (first) {
+              succ->m_entries.insert_before(succ->begin(),
+                                            std::move(mie.src_block));
+            } else {
+              succ->m_entries.insert_after(succ->begin(),
+                                           std::move(mie.src_block));
+            }
+            first = false;
+          }
+        }
+      }
     }
     if (b == m_entry_block) {
       // Don't delete the entry block. If it was empty and had a successor,
