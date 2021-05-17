@@ -14,7 +14,7 @@
 #include "Show.h"
 #include "Trace.h"
 
-namespace interdex {
+namespace cross_dex_ref_minimizer {
 
 template <class Value, size_t N>
 std::string format_infrequent_refs_array(const std::array<Value, N>& array) {
@@ -434,4 +434,4 @@ size_t CrossDexRefMinimizer::get_unapplied_refs(DexClass* cls) {
   return unapplied_refs;
 }
 
-} // namespace interdex
+} // namespace cross_dex_ref_minimizer

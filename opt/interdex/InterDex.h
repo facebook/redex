@@ -37,7 +37,8 @@ class InterDex {
            bool force_single_dex,
            bool emit_canaries,
            bool minimize_cross_dex_refs,
-           const CrossDexRefMinimizerConfig& cross_dex_refs_config,
+           const cross_dex_ref_minimizer::CrossDexRefMinimizerConfig&
+               cross_dex_refs_config,
            const CrossDexRelocatorConfig& cross_dex_relocator_config,
            size_t reserve_frefs,
            size_t reserve_trefs,
@@ -84,7 +85,8 @@ class InterDex {
     return m_dexes_structure.get_num_scroll_dexes();
   }
 
-  const CrossDexRefMinimizerStats& get_cross_dex_ref_minimizer_stats() const {
+  const cross_dex_ref_minimizer::CrossDexRefMinimizerStats&
+  get_cross_dex_ref_minimizer_stats() const {
     return m_cross_dex_ref_minimizer.stats();
   }
 
@@ -176,7 +178,7 @@ class InterDex {
   std::vector<DexType*> m_end_markers;
   std::vector<DexType*> m_scroll_markers;
 
-  CrossDexRefMinimizer m_cross_dex_ref_minimizer;
+  cross_dex_ref_minimizer::CrossDexRefMinimizer m_cross_dex_ref_minimizer;
   const CrossDexRelocatorConfig m_cross_dex_relocator_config;
   const Scope& m_original_scope;
   CrossDexRelocator* m_cross_dex_relocator{nullptr};

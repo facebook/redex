@@ -97,6 +97,7 @@ COMMON_INCLUDES = \
 	-I$(top_srcdir)/service/class-merging \
 	-I$(top_srcdir)/service/constant-propagation \
 	-I$(top_srcdir)/service/copy-propagation \
+	-I$(top_srcdir)/service/cross-dex-ref-minimizer \
 	-I$(top_srcdir)/service/cse \
 	-I$(top_srcdir)/service/dataflow \
 	-I$(top_srcdir)/service/dedup-blocks \

@@ -161,6 +161,7 @@ libredex_la_SOURCES = \
 	service/class-merging/ModelMethodMerger.cpp \
 	service/class-merging/Model.cpp \
 	service/class-merging/TypeTagUtils.cpp \
+	service/cross-dex-ref-minimizer/CrossDexRefMinimizer.cpp \
 	service/constant-propagation/ConstantEnvironment.cpp \
 	service/constant-propagation/ConstantPropagationAnalysis.cpp \
 	service/constant-propagation/ConstantPropagation.cpp \
@@ -173,6 +174,7 @@ libredex_la_SOURCES = \
 	service/copy-propagation/AliasedRegisters.cpp \
 	service/copy-propagation/CanonicalizeLocks.cpp \
 	service/copy-propagation/CopyPropagation.cpp \
+	service/cross-dex-ref-minimizer/CrossDexRefMinimizer.cpp \
 	service/cse/CommonSubexpressionElimination.cpp \
 	service/dataflow/LiveRange.cpp \
 	service/dataflow/ConstantUses.cpp \
@@ -270,7 +272,6 @@ libopt_la_SOURCES = \
 	opt/insert-source-blocks/InsertSourceBlocks.cpp \
 	opt/instrument/BlockInstrument.cpp \
 	opt/instrument/Instrument.cpp \
-	opt/interdex/CrossDexRefMinimizer.cpp \
 	opt/interdex/CrossDexRelocator.cpp \
 	opt/interdex/DexStructure.cpp \
 	opt/interdex/InterDex.cpp \

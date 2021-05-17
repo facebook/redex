@@ -61,21 +61,29 @@ void InterDexPass::bind_config() {
        "explicitly to the InterDex pass");
 
   bind("minimize_cross_dex_refs", false, m_minimize_cross_dex_refs);
-  bind("minimize_cross_dex_refs_method_ref_weight", 100,
+  bind("minimize_cross_dex_refs_method_ref_weight",
+       m_minimize_cross_dex_refs_config.method_ref_weight,
        m_minimize_cross_dex_refs_config.method_ref_weight);
-  bind("minimize_cross_dex_refs_field_ref_weight", 90,
+  bind("minimize_cross_dex_refs_field_ref_weight",
+       m_minimize_cross_dex_refs_config.field_ref_weight,
        m_minimize_cross_dex_refs_config.field_ref_weight);
-  bind("minimize_cross_dex_refs_type_ref_weight", 100,
+  bind("minimize_cross_dex_refs_type_ref_weight",
+       m_minimize_cross_dex_refs_config.type_ref_weight,
        m_minimize_cross_dex_refs_config.type_ref_weight);
-  bind("minimize_cross_dex_refs_string_ref_weight", 90,
+  bind("minimize_cross_dex_refs_string_ref_weight",
+       m_minimize_cross_dex_refs_config.string_ref_weight,
        m_minimize_cross_dex_refs_config.string_ref_weight);
-  bind("minimize_cross_dex_refs_method_seed_weight", 100,
+  bind("minimize_cross_dex_refs_method_seed_weight",
+       m_minimize_cross_dex_refs_config.method_seed_weight,
        m_minimize_cross_dex_refs_config.method_seed_weight);
-  bind("minimize_cross_dex_refs_field_seed_weight", 20,
+  bind("minimize_cross_dex_refs_field_seed_weight",
+       m_minimize_cross_dex_refs_config.field_seed_weight,
        m_minimize_cross_dex_refs_config.field_seed_weight);
-  bind("minimize_cross_dex_refs_type_ref_weight", 30,
+  bind("minimize_cross_dex_refs_type_ref_weight",
+       m_minimize_cross_dex_refs_config.type_seed_weight,
        m_minimize_cross_dex_refs_config.type_seed_weight);
-  bind("minimize_cross_dex_refs_string_ref_weight", 20,
+  bind("minimize_cross_dex_refs_string_ref_weight",
+       m_minimize_cross_dex_refs_config.string_seed_weight,
        m_minimize_cross_dex_refs_config.string_seed_weight);
   bind("minimize_cross_dex_refs_relocate_static_methods", false,
        m_cross_dex_relocator_config.relocate_static_methods);
@@ -193,7 +201,7 @@ void InterDexPass::run_pass_on_nonroot_store(const Scope& original_scope,
   // Cross dex ref minimizers are disabled for non-root stores
   // TODO: Make this logic cleaner when these features get enabled for non-root
   //       stores. Would also need to clean up after it.
-  CrossDexRefMinimizerConfig cross_dex_refs_config;
+  cross_dex_ref_minimizer::CrossDexRefMinimizerConfig cross_dex_refs_config;
   CrossDexRelocatorConfig cross_dex_relocator_config;
 
   // Initialize interdex and run for nonroot store
