@@ -186,9 +186,9 @@ void DexClassHasher::hash(const IRCode* c) {
     }
     case MFLOW_SOURCE_BLOCK:
       hash((uint8_t)MFLOW_SOURCE_BLOCK);
-      if (mie.src_block) {
-        hash(mie.src_block->src);
-        hash(mie.src_block->id);
+      for (auto* sb = mie.src_block.get(); sb != nullptr; sb = sb->next.get()) {
+        hash(sb->src);
+        hash(sb->id);
       }
       break;
     case MFLOW_FALLTHROUGH:

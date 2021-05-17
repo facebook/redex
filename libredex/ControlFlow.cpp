@@ -18,6 +18,7 @@
 #include "DexPosition.h"
 #include "DexUtil.h"
 #include "GraphUtil.h"
+#include "IRList.h"
 #include "Show.h"
 #include "Trace.h"
 #include "Transform.h"
@@ -885,6 +886,33 @@ boost::dynamic_bitset<> ControlFlowGraph::visit() const {
   return visited;
 }
 
+namespace {
+
+void chain_consecutive_source_blocks(IRList& list) {
+  boost::optional<IRList::iterator> last_it = boost::none;
+  for (auto it = list.begin(); it != list.end(); ++it) {
+    if (it->type == MFLOW_POSITION || it->type == MFLOW_DEBUG) {
+      // We can move over debug info. Otherwise, reset.
+      continue;
+    }
+    if (it->type != MFLOW_SOURCE_BLOCK) {
+      last_it = boost::none;
+      continue;
+    }
+
+    if (last_it) {
+      auto prev = std::prev(it);
+      (*last_it)->src_block->append(std::move(it->src_block));
+      list.erase_and_dispose(it);
+      it = prev;
+    } else {
+      last_it = it;
+    }
+  }
+}
+
+} // namespace
+
 void ControlFlowGraph::simplify() {
   remove_unreachable_blocks();
   // FIXME: "Empty" blocks with only `DexPosition`s should be merged
@@ -892,6 +920,10 @@ void ControlFlowGraph::simplify() {
   //        `remove_empty_blocks` will remove them, which it will not
   //        if they are at the head of a non-empty block.
   remove_empty_blocks();
+
+  for (auto& p : m_blocks) {
+    chain_consecutive_source_blocks(p.second->m_entries);
+  }
 }
 
 // remove blocks with no predecessors

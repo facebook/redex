@@ -527,3 +527,100 @@ B2: LFoo;.bar:()V@4(x)
 B3: LFoo;.bar:()V@2(x)
 B4: LFoo;.bar:()V@3(0.4:0.2))");
 }
+
+TEST_F(SourceBlocksTest, coalesce) {
+  auto foo_method = create_method("LFoo");
+
+  constexpr const char* kCode = R"(
+    (
+      (const v0 0)
+      (invoke-static () "LFooX;.bar:()V")
+      (invoke-static () "LFooX;.bar2:()I")
+      (move-result v1)
+      (invoke-static () "LFooX;.bar:()V")
+
+      (if-eqz v0 :true)
+      (goto :end)
+
+      (:true)
+      (invoke-static () "LBarX;.bar:()I")
+
+      (:end)
+
+      (return-void)
+    )
+  )";
+
+  foo_method->set_code(assembler::ircode_from_string(
+      replace_all(kCode, "LFooX;", show(foo_method->get_class()))));
+
+  foo_method->get_code()->build_cfg();
+  {
+    auto& foo_cfg = foo_method->get_code()->cfg();
+    auto profile = single_profile("(1:0(2:0)(3:0)(4:0) g(5:0) b(6:0 g))");
+    auto res =
+        insert_source_blocks(foo_method, &foo_cfg, profile,
+                             /*serialize=*/true, /*insert_after_excs=*/true);
+    EXPECT_TRUE(res.profile_success);
+    EXPECT_EQ(res.serialized, "(0(1)(2)(3) g(4) b(5 g))");
+
+    EXPECT_EQ(
+        get_blocks_as_txt(foo_cfg.blocks()),
+        R"(B0: LFoo;.bar:()V@0(1:0) LFoo;.bar:()V@1(2:0) LFoo;.bar:()V@2(3:0) LFoo;.bar:()V@3(4:0)
+B2: LFoo;.bar:()V@5(6:0)
+B3: LFoo;.bar:()V@4(5:0))");
+  }
+
+  auto count_coalesced = [](auto* b) {
+    size_t cnt{0};
+    size_t sum{0};
+    for (const auto& mie : *b) {
+      if (mie.type != MFLOW_SOURCE_BLOCK) {
+        continue;
+      }
+      size_t sb_cnt{0};
+      for (auto* sb = mie.src_block.get(); sb != nullptr; sb = sb->next.get()) {
+        ++sb_cnt;
+      }
+      sum += sb_cnt;
+      if (sb_cnt > 1) {
+        ++cnt;
+      }
+    }
+    return std::make_pair(cnt, sum);
+  };
+
+  // Should not have coalesced.
+  foo_method->get_code()->clear_cfg();
+  foo_method->get_code()->build_cfg();
+  {
+    auto& foo_cfg = foo_method->get_code()->cfg();
+    auto no_coalesced = count_coalesced(foo_cfg.entry_block());
+    EXPECT_EQ(no_coalesced.first, 0);
+    EXPECT_EQ(no_coalesced.second, 4);
+  }
+
+  // Delete the invokes.
+  {
+    auto& foo_cfg = foo_method->get_code()->cfg();
+    auto* entry = foo_cfg.entry_block();
+    std::vector<IRInstruction*> to_delete;
+    for (auto& mie : ir_list::InstructionIterable(entry)) {
+      if (mie.insn->opcode() == OPCODE_INVOKE_STATIC) {
+        to_delete.push_back(mie.insn);
+      }
+    }
+    ASSERT_FALSE(to_delete.empty());
+    for (auto* insn : to_delete) {
+      entry->remove_insn(foo_cfg.find_insn(insn, entry));
+    }
+  }
+  // Clear & rebuild.
+  foo_method->get_code()->clear_cfg();
+  foo_method->get_code()->build_cfg();
+  auto& foo_cfg = foo_method->get_code()->cfg();
+  // Should have coalesced.
+  auto coalesced = count_coalesced(foo_cfg.entry_block());
+  EXPECT_EQ(coalesced.first, 1);
+  EXPECT_EQ(coalesced.second, 4);
+}
