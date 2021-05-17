@@ -2388,3 +2388,97 @@ OPCODE: ADD_INT_LIT8 v0, v0, 1
 OPCODE: GOTO
 )");
 }
+
+TEST_F(ControlFlowTest, empty_block_move_pos) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (.pos "LFoo;.m:()V" "Foo.java" 1)
+      (goto :loop)
+
+      (:true)
+      (add-int/lit8 v0 v0 1)
+
+      (:loop)
+      (if-eqz v0 :true)
+
+      (:exit)
+      (return-void)
+    )
+  )");
+
+  {
+    ScopedCFG cfg(code.get());
+    cfg->entry_block()->remove_insn(cfg->entry_block()->get_first_insn());
+  }
+
+  EXPECT_EQ(sanitize(show(code.get())), R"(TARGET: SIMPLE
+POSITION: LFoo;.m:()V(Foo.java:1)
+OPCODE: IF_EQZ v0
+OPCODE: RETURN_VOID
+TARGET: SIMPLE
+OPCODE: ADD_INT_LIT8 v0, v0, 1
+OPCODE: GOTO
+)");
+}
+
+TEST_F(ControlFlowTest, empty_block_do_not_move_into_block_with_pos) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (.pos "LFoo;.m:()V" "Foo.java" 1)
+      (goto :next)
+
+      (:next)
+      (.pos "LFoo;.m:()V" "Foo.java" 2)
+      (return-void)
+    )
+  )");
+
+  {
+    ScopedCFG cfg(code.get());
+    cfg->entry_block()->remove_insn(cfg->entry_block()->get_first_insn());
+  }
+
+  EXPECT_EQ(sanitize(show(code.get())), R"(POSITION: LFoo;.m:()V(Foo.java:2)
+OPCODE: RETURN_VOID
+)");
+}
+
+TEST_F(ControlFlowTest, empty_block_do_not_move_into_block_with_pos_complex) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (.pos "LFoo;.m:()V" "Foo.java" 1)
+      (goto :loop)
+
+      (:true)
+      (add-int/lit8 v0 v0 1)
+
+      (:loop)
+      (.pos "LFoo;.m:()V" "Foo.java" 2)
+      (if-eqz v0 :true)
+
+      (:exit)
+      (return-void)
+    )
+  )");
+
+  {
+    ScopedCFG cfg(code.get());
+    cfg->entry_block()->remove_insn(cfg->entry_block()->get_first_insn());
+  }
+
+  // TODO: This is really a weird case. It is not clear why this is shifted
+  //       there.
+
+  EXPECT_EQ(sanitize(show(code.get())), R"(TARGET: SIMPLE
+POSITION: LFoo;.m:()V(Foo.java:2)
+OPCODE: IF_EQZ v0
+OPCODE: RETURN_VOID
+TARGET: SIMPLE
+POSITION: LFoo;.m:()V(Foo.java:1)
+OPCODE: ADD_INT_LIT8 v0, v0, 1
+OPCODE: GOTO
+)");
+}
