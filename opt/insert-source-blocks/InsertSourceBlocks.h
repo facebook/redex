@@ -26,6 +26,7 @@ class InsertSourceBlocksPass : public Pass {
   bool m_force_serialize{false};
   bool m_force_run{false};
   bool m_insert_after_excs{true};
+  bool m_always_inject{false};
 
   friend class SourceBlocksTest;
 };
