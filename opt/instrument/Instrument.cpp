@@ -10,6 +10,7 @@
 #include "BlockInstrument.h"
 #include "DexClass.h"
 #include "DexUtil.h"
+#include "IRList.h"
 #include "InterDexPass.h"
 #include "InterDexPassPlugin.h"
 #include "Match.h"
@@ -405,6 +406,48 @@ std::unordered_set<std::string> load_blocklist_file(
   TRACE(INSTRUMENT, 3, "Loaded %zu blocklist entries from %s", ret.size(),
         SHOW(file_name));
   return ret;
+}
+
+void count_source_block_chain_length(DexStoresVector& stores, PassManager& pm) {
+  std::atomic<size_t> longest_list{0};
+  std::atomic<size_t> sum{0};
+  std::atomic<size_t> count{0};
+  walk::parallel::methods(build_class_scope(stores), [&](DexMethod* m) {
+    auto* code = m->get_code();
+    if (code == nullptr) {
+      return;
+    }
+    boost::optional<size_t> last_known = boost::none;
+    for (auto& mie : *code) {
+      if (mie.type == MFLOW_SOURCE_BLOCK) {
+        size_t len = 0;
+        for (auto* sb = mie.src_block.get(); sb != nullptr;
+             sb = sb->next.get()) {
+          ++len;
+        }
+        count.fetch_add(1);
+        sum.fetch_add(len);
+
+        if (last_known && *last_known >= len) {
+          continue;
+        }
+        for (;;) {
+          auto cur = longest_list.load();
+          if (cur >= len) {
+            last_known = cur;
+            break;
+          }
+          if (longest_list.compare_exchange_strong(cur, len)) {
+            last_known = len;
+            break;
+          }
+        }
+      }
+    }
+  });
+  pm.set_metric("longest_sb_chain", longest_list.load());
+  pm.set_metric("average100_sb_chain",
+                count.load() > 0 ? 100 * sum.load() / count.load() : 0);
 }
 
 } // namespace
@@ -822,6 +865,8 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
     pm.set_metric("wrapped_invocations", num_wrapped_invocations);
     return;
   }
+
+  count_source_block_chain_length(stores, pm);
 
   if (!cfg.get_json_config().get("instrument_pass_enabled", false) &&
       !pm.get_redex_options().instrument_pass_enabled) {
