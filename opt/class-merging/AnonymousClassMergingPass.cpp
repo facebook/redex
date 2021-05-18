@@ -38,10 +38,6 @@ void AnonymousClassMergingPass::bind_config() {
 void AnonymousClassMergingPass::run_pass(DexStoresVector& stores,
                                          ConfigFiles& conf,
                                          PassManager& mgr) {
-  if (!mgr.get_redex_options().is_art_build) {
-    TRACE(CLMG, 1, "AnonymousClassMergingPass is enabled only for art builds");
-    return;
-  }
   // Fill the merging configurations.
   m_merging_spec.name = "Anonymous Classes";
   m_merging_spec.class_name_prefix = "Anon";
