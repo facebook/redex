@@ -54,7 +54,7 @@ void AnonymousClassMergingPass::run_pass(DexStoresVector& stores,
   discover_mergeable_anonymous_classes(
       stores, allowed_packages, m_min_eligible_classes, &m_merging_spec, &mgr);
   if (!m_merging_spec.roots.empty()) {
-    strategy::set_merging_strategy(strategy::BY_CODE_SIZE);
+    strategy::set_merging_strategy(strategy::BY_REFS);
 
     auto scope = build_class_scope(stores);
     class_merging::merge_model(scope, conf, mgr, stores, m_merging_spec);

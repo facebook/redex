@@ -28,8 +28,16 @@ namespace class_merging {
 namespace strategy {
 
 enum Strategy {
+  // Starts a new group when a configurable number of merged classes is exceeded
   BY_CLASS_COUNT = 0,
+
+  // Starts a new group when merged (virtual) methods become large
   BY_CODE_SIZE = 1,
+
+  // Aggregates classes by shared references, and starts a new group when the
+  // combined number of references becomes large, or when merged (virtual)
+  // methods become large
+  BY_REFS = 2,
 };
 
 extern Strategy g_strategy;
@@ -67,10 +75,43 @@ size_t estimate_vmethods_code_size(const DexClass* cls);
 
 /**
  * Note it does only check the virtual methods code size on the classes and it
- * is not aware of how latter optimizations would change the code.
+ * is not aware of how later optimizations would change the code.
  */
 template <typename WalkerFn>
 void group_by_code_size(const TypeSet& mergeable_types, WalkerFn walker) {
+  constexpr size_t max_instruction_size = 1 << 15;
+
+  std::vector<const DexType*> current_group;
+
+  size_t estimated_merged_code_size = 0;
+  for (auto type : mergeable_types) {
+    // Only check the code size of vmethods because these vmethods will be
+    // merged into a large dispatch, dmethods will be relocated.
+    auto vmethod_code_size = estimate_vmethods_code_size(type_class(type));
+    if (vmethod_code_size > max_instruction_size) {
+      // This class will never make it into any group; skip it
+      continue;
+    }
+    if (estimated_merged_code_size + vmethod_code_size > max_instruction_size) {
+      TRACE(CLMG, 9, "\tgroup_by_code_size %zu classes", current_group.size());
+      if (current_group.size() > 1) {
+        walker(current_group);
+      }
+      current_group.clear();
+      estimated_merged_code_size = 0;
+    }
+    current_group.push_back(type);
+    estimated_merged_code_size += vmethod_code_size;
+  }
+  if (current_group.size() > 1) {
+    TRACE(CLMG, 9, "\tgroup_by_code_size %zu classes at the end",
+          current_group.size());
+    walker(current_group);
+  }
+}
+
+template <typename WalkerFn>
+void group_by_refs(const TypeSet& mergeable_types, WalkerFn walker) {
   constexpr size_t max_instruction_size = 1 << 15;
   // TODO: Consider making this configurable. It represents the maximum number
   // of non-trivial references (fields, methods, etc.) a group can have before
@@ -102,7 +143,7 @@ void group_by_code_size(const TypeSet& mergeable_types, WalkerFn walker) {
     bool reset = false;
     if (estimated_merged_code_size + vmethod_code_size > max_instruction_size ||
         cross_dex_ref_minimizer.get_applied_refs() > max_applied_refs) {
-      TRACE(CLMG, 9, "\tgroup_by_code_size %zu classes", current_group.size());
+      TRACE(CLMG, 9, "\tgroup_by_refs %zu classes", current_group.size());
       if (current_group.size() > 1) {
         walker(current_group);
       }
@@ -115,7 +156,7 @@ void group_by_code_size(const TypeSet& mergeable_types, WalkerFn walker) {
     cross_dex_ref_minimizer.erase(cls, /* emitted */ true, reset);
   }
   if (current_group.size() > 1) {
-    TRACE(CLMG, 9, "\tgroup_by_code_size %zu classes at the end",
+    TRACE(CLMG, 9, "\tgroup_by_refs %zu classes at the end",
           current_group.size());
     walker(current_group);
   }
@@ -133,6 +174,9 @@ void apply_grouping(const TypeSet& mergeable_types,
     break;
   case BY_CODE_SIZE:
     group_by_code_size(mergeable_types, walker);
+    break;
+  case BY_REFS:
+    group_by_refs(mergeable_types, walker);
     break;
   default:
     not_reached();
