@@ -609,8 +609,8 @@ void IRCode::cleanup_debug() { m_ir_list->cleanup_debug(); }
 void IRCode::build_cfg(bool editable) {
   always_assert_log(
       !editable || !m_cfg_serialized_with_custom_strategy,
-      "Cannot build edible CFG after being serialized with custom strategy. "
-      "Rebuilding CFG will can cause problems with basic block ordering.");
+      "Cannot build editable CFG after being serialized with custom strategy. "
+      "Rebuilding CFG will cause problems with basic block ordering.");
   clear_cfg();
   m_cfg = std::make_unique<cfg::ControlFlowGraph>(m_ir_list, m_registers_size,
                                                   editable);

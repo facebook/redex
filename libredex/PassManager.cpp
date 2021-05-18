@@ -685,13 +685,15 @@ void track_source_block_coverage(const DexStoresVector& stores) {
           return ret;
         }
 
-        cfg::ScopedCFG cfg(code);
-        for (auto block : cfg->blocks()) {
+        code->build_cfg(/* editable */ false);
+        auto& cfg = code->cfg();
+        for (auto block : cfg.blocks()) {
           ret.total_blocks++;
           if (source_blocks::has_source_blocks(block)) {
             ret.source_blocks_present++;
           }
         }
+        code->clear_cfg();
         return ret;
       });
 
