@@ -17,11 +17,11 @@ import static org.fest.assertions.api.Assertions.*;
 class E1 extends Error {}
 class E2 extends Error {}
 
-class ControlFlowTest {
+public class ControlFlowTest {
   Random rand = new Random();
 
   @Test
-  void simplest() {
+  public void simplest() {
     boolean caught = false;
     try {
       throw new E1();
@@ -32,7 +32,7 @@ class ControlFlowTest {
   }
 
   @Test
-  void nested1() {
+  public void nested1() {
     boolean caught1 = false;
     boolean caught2 = false;
     try {
@@ -53,7 +53,7 @@ class ControlFlowTest {
   }
 
   @Test
-  void nested2() {
+  public void nested2() {
     boolean caught1 = false;
     boolean caught2 = false;
     try {
@@ -74,7 +74,7 @@ class ControlFlowTest {
   }
 
   @Test
-  void rethrow() {
+  public void rethrow() {
     boolean caught = false;
     boolean caught_again = false;
     try {
@@ -92,7 +92,7 @@ class ControlFlowTest {
   }
 
   @Test
-  void callMayThrow1() {
+  public void callMayThrow1() {
     boolean caught1 = false;
     boolean caught2 = false;
     boolean ran_finally = false;
@@ -115,7 +115,7 @@ class ControlFlowTest {
   }
 
   @Test
-  void callMayThrow2() {
+  public void callMayThrow2() {
     boolean caught1 = false;
     boolean caught2 = false;
     boolean ran_finally = false;
@@ -138,7 +138,7 @@ class ControlFlowTest {
   }
 
   @Test
-  void callMayThrowWithRethrow() {
+  public void callMayThrowWithRethrow() {
     boolean caught1 = false;
     boolean caught2 = false;
     boolean ran_finally = false;
@@ -160,7 +160,7 @@ class ControlFlowTest {
   }
 
   @Test
-  void tryWithResources() throws Exception {
+  public void tryWithResources() throws Exception {
     boolean caught = false;
     boolean caught_again = false;
     try (InputStream s1 = new ByteArrayInputStream("foo".getBytes())) {
