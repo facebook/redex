@@ -9,9 +9,11 @@
 
 #include <atomic>
 #include <boost/optional.hpp>
+#include <limits>
 #include <mutex>
 #include <string>
 
+#include "Debug.h"
 #include "KeepReason.h"
 #include "RedexContext.h"
 
@@ -30,7 +32,7 @@ using InterdexSubgroupIdx = uint32_t;
 class ReferencedState {
  private:
   struct InnerStruct {
-    int32_t m_api_level{-1};
+    int8_t m_api_level{-1};
 
     // Whether this DexMember is referenced by one of the strings in the native
     // libraries. Note that this doesn't allow us to distinguish
@@ -122,7 +124,9 @@ class ReferencedState {
 
   // InterDex subgroup, if any.
   // NOTE: Will be set ONLY for generated classes.
-  boost::optional<InterdexSubgroupIdx> m_interdex_subgroup{boost::none};
+  static constexpr InterdexSubgroupIdx kNoSubgroup =
+      std::numeric_limits<InterdexSubgroupIdx>::max();
+  InterdexSubgroupIdx m_interdex_subgroup{kNoSubgroup};
 
   // Going through hoops here to reduce the size of ReferencedState while
   // keeping memory requirements still small in non-default case.
@@ -325,18 +329,21 @@ class ReferencedState {
 
   void set_interdex_subgroup(
       const boost::optional<InterdexSubgroupIdx>& interdex_subgroup) {
-    m_interdex_subgroup = interdex_subgroup;
+    m_interdex_subgroup = interdex_subgroup ? *interdex_subgroup : kNoSubgroup;
   }
   InterdexSubgroupIdx get_interdex_subgroup() const {
-    return m_interdex_subgroup.get();
+    return m_interdex_subgroup;
   }
   bool has_interdex_subgroup() const {
-    return m_interdex_subgroup != boost::none;
+    return m_interdex_subgroup != kNoSubgroup;
   }
 
   // -1 means unknown, e.g. for a method created by Redex
-  int32_t get_api_level() const { return inner_struct.m_api_level; }
-  void set_api_level(int api_level) { inner_struct.m_api_level = api_level; }
+  int8_t get_api_level() const { return inner_struct.m_api_level; }
+  void set_api_level(int32_t api_level) {
+    redex_assert(api_level <= std::numeric_limits<int8_t>::max());
+    inner_struct.m_api_level = api_level;
+  }
 
   bool no_optimizations() const { return inner_struct.m_no_optimizations; }
   void set_no_optimizations() { inner_struct.m_no_optimizations = true; }

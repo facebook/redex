@@ -167,7 +167,8 @@ void propagate_levels(const ClassHierarchy& ch,
     for (auto* intf : interfaces) {
       auto* intf_cls = type_class(intf);
       if (intf_cls) {
-        min_level = std::max(min_level, intf_cls->rstate.get_api_level());
+        min_level =
+            std::max(min_level, (int32_t)intf_cls->rstate.get_api_level());
       }
     }
   }
