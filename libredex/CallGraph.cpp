@@ -160,6 +160,13 @@ RootAndDynamic MultipleCalleeBaseStrategy::get_roots() const {
           emplaced_methods.emplace(overriding);
         }
       }
+      // Internal methods might be overriden by external methods. Add such
+      // methods to dynamic methods to avoid return value propagation as well.
+      const auto& overiden_methods =
+          mog::get_overridden_methods(m_method_override_graph, method, true);
+      for (auto m : overiden_methods) {
+        dynamic_methods.emplace(m);
+      }
     }
     if (is_native(method)) {
       dynamic_methods.emplace(method);
