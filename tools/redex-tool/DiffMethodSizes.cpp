@@ -291,10 +291,14 @@ class DiffMethodSizes : public Tool {
         "dexendir,d",
         po::value<std::vector<std::string>>()->multitoken(),
         "dump all method sizes in the given dexen directory; if two dexen "
-        "directories are given, compare the method sizes")(
-        "show-moves,s",
-        po::value<std::vector<std::string>>()->multitoken(),
-        "show number of move code and their size for each methods");
+        "directories are given, compare the method sizes")("show-moves,s",
+                                                           po::value<std::vector<
+                                                               std::string>>()
+                                                               ->multitoken(),
+                                                           "show number of "
+                                                           "move code and "
+                                                           "their size for "
+                                                           "each methods");
   }
 
   void run(const po::variables_map& options) override {

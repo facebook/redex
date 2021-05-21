@@ -515,8 +515,9 @@ void RemoveUninstantiablesPass::run_pass(DexStoresVector& stores,
         cls->set_access((cls->get_access() & ~ACC_FINAL) | ACC_ABSTRACT);
       }
       for (auto method : cpp.abstract_vmethods) {
-        method->set_access((DexAccessFlags)(
-            (method->get_access() & ~ACC_FINAL) | ACC_ABSTRACT));
+        method->set_access(
+            (DexAccessFlags)((method->get_access() & ~ACC_FINAL) |
+                             ACC_ABSTRACT));
         method->set_code(nullptr);
       }
     }

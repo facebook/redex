@@ -37,8 +37,9 @@ RedexMappedFile& RedexMappedFile::operator=(RedexMappedFile&& rhs) noexcept {
 
 RedexMappedFile RedexMappedFile::open(std::string path, bool read_only) {
   auto map = std::make_unique<boost::iostreams::mapped_file>();
-  std::ios_base::openmode mode = (std::ios_base::openmode)(
-      std::ios_base::in | (read_only ? 0 : std::ios_base::out));
+  std::ios_base::openmode mode =
+      (std::ios_base::openmode)(std::ios_base::in |
+                                (read_only ? 0 : std::ios_base::out));
   map->open(path, mode);
   if (!map->is_open()) {
     throw std::runtime_error(std::string("Could not map ") + path);
