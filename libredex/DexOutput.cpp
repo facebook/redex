@@ -453,6 +453,7 @@ DexOutput::DexOutput(
     PositionMapper* pos_mapper,
     std::unordered_map<DexMethod*, uint64_t>* method_to_id,
     std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
+    PostLowering* post_lowering,
     int min_sdk)
     : m_classes(classes),
       // Required because the BytecodeDebugger setting creates huge amounts
@@ -501,6 +502,9 @@ DexOutput::DexOutput(
   m_locator_index = locator_index;
   m_normal_primary_dex = normal_primary_dex;
   m_debug_info_kind = debug_info_kind;
+  if (post_lowering) {
+    m_detached_methods = post_lowering->get_detached_methods();
+  }
 }
 
 DexOutput::~DexOutput() {
@@ -2586,7 +2590,11 @@ const char* deobf_primitive(char type) {
   }
 }
 
-void write_pg_mapping(const std::string& filename, DexClasses* classes) {
+void write_pg_mapping(
+    const std::string& filename,
+    DexClasses* classes,
+    const std::unordered_map<DexClass*, std::vector<DexMethod*>>*
+        detached_methods) {
   if (filename.empty()) return;
 
   auto deobf_class = [&](DexClass* cls) {
@@ -2715,6 +2723,16 @@ void write_pg_mapping(const std::string& filename, DexClasses* classes) {
       auto deobf = deobf_meth(meth);
       ofs << "    " << deobf << " -> " << meth->c_str() << std::endl;
     }
+    if (detached_methods) {
+      auto it = detached_methods->find(cls);
+      if (it != detached_methods->end()) {
+        ofs << "    --- detached methods ---" << std::endl;
+        for (auto meth : it->second) {
+          auto deobf = deobf_meth(meth);
+          ofs << "    " << deobf << " -> " << meth->c_str() << std::endl;
+        }
+      }
+    }
   }
 }
 
@@ -2772,7 +2790,7 @@ void DexOutput::write_symbol_files() {
                         hdr.class_defs_size, hdr.signature);
     // XXX: should write_bytecode_offset_mapping be included here too?
   }
-  write_pg_mapping(m_pg_mapping_filename, m_classes);
+  write_pg_mapping(m_pg_mapping_filename, m_classes, &m_detached_methods);
   write_full_mapping(m_full_mapping_filename, m_classes);
   write_bytecode_offset_mapping(m_bytecode_offset_filename,
                                 m_method_bytecode_offsets);
@@ -2873,6 +2891,7 @@ void DexOutput::metrics() {
     s_unique_references.total_fields_size = 0;
     s_unique_references.total_methods_size = 0;
   }
+  memcpy(m_stats.signature, hdr.signature, 20);
 
   for (auto& p : dodx->string_to_idx()) {
     s_unique_references.strings.insert(p.first);
@@ -2937,6 +2956,7 @@ dex_stats_t write_classes_to_dex(
     std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
     IODIMetadata* iodi_metadata,
     const std::string& dex_magic,
+    PostLowering* post_lowering,
     int min_sdk,
     bool disable_method_similarity_order) {
   const JsonWrapper& json_cfg = conf.get_json_config();
@@ -2982,7 +3002,7 @@ dex_stats_t write_classes_to_dex(
   DexOutput dout(filename.c_str(), classes, locator_index, normal_primary_dex,
                  store_number, dex_number, redex_options.debug_info_kind,
                  iodi_metadata, conf, pos_mapper, method_to_id,
-                 code_debug_lines, min_sdk);
+                 code_debug_lines, post_lowering, min_sdk);
 
   dout.prepare(string_sort_mode, code_sort_mode, conf, dex_magic);
   dout.write();

@@ -734,7 +734,8 @@ void write_debug_line_mapping(
     const std::unordered_map<DexMethod*, uint64_t>& method_to_id,
     const std::unordered_map<DexCode*, std::vector<DebugLineItem>>&
         code_debug_lines,
-    DexStoresVector& stores) {
+    DexStoresVector& stores,
+    const std::vector<DexMethod*>& needs_debug_line_mapping) {
   /*
    * Binary file format:
    * magic number 0xfaceb000 (4 byte)
@@ -767,11 +768,17 @@ void write_debug_line_mapping(
   std::ostringstream line_out;
 
   auto scope = build_class_scope(stores);
-  walk::methods(scope, [&](DexMethod* method) {
+  std::vector<DexMethod*> all_methods(std::begin(needs_debug_line_mapping),
+                                      std::end(needs_debug_line_mapping));
+  walk::methods(scope,
+                [&](DexMethod* method) { all_methods.push_back(method); });
+  std::stable_sort(all_methods.begin(), all_methods.end(), compare_dexmethods);
+
+  for (auto* method : all_methods) {
     auto dex_code = method->get_dex_code();
     if (dex_code == nullptr ||
         code_debug_lines.find(dex_code) == code_debug_lines.end()) {
-      return;
+      continue;
     }
 
     uint64_t method_id = method_to_id.at(method);
@@ -792,7 +799,7 @@ void write_debug_line_mapping(
       line_out.write((const char*)&it->offset, bit_32_size);
       line_out.write((const char*)&it->line, bit_32_size);
     }
-  });
+  }
   ofs << line_out.str();
 }
 
@@ -1051,6 +1058,7 @@ void redex_backend(ConfigFiles& conf,
                              iodi_disable_min_sdk_opt);
   IODIMetadata iodi_metadata(redex_options.min_sdk, iodi_disable_min_sdk_opt);
 
+  std::set<uint32_t> signatures;
   std::unique_ptr<PostLowering> post_lowering =
       redex_options.redacted ? PostLowering::create() : nullptr;
 
@@ -1079,15 +1087,25 @@ void redex_backend(ConfigFiles& conf,
                                needs_addresses ? &code_debug_lines : nullptr,
                                is_iodi(dik) ? &iodi_metadata : nullptr,
                                stores[0].get_dex_magic(),
+                               post_lowering.get(),
                                manager.get_redex_options().min_sdk,
                                disable_method_similarity_order);
 
       output_totals += this_dex_stats;
       output_dexes_stats.push_back(this_dex_stats);
+      signatures.insert(*reinterpret_cast<uint32_t*>(this_dex_stats.signature));
     }
   }
 
+  std::vector<DexMethod*> needs_debug_line_mapping;
   if (post_lowering) {
+    post_lowering->emit_symbolication_metadata(
+        pos_mapper.get(),
+        needs_addresses ? &method_to_id : nullptr,
+        needs_addresses ? &code_debug_lines : nullptr,
+        is_iodi(dik) ? &iodi_metadata : nullptr,
+        needs_debug_line_mapping,
+        signatures);
     post_lowering->run(stores);
     post_lowering->finalize(manager.apk_manager());
   }
@@ -1112,7 +1130,8 @@ void redex_backend(ConfigFiles& conf,
         conf.metafile(json_config.get("method_move_map", std::string()));
     if (needs_addresses) {
       write_debug_line_mapping(debug_line_map_filename, method_to_id,
-                               code_debug_lines, stores);
+                               code_debug_lines, stores,
+                               needs_debug_line_mapping);
     }
     if (is_iodi(dik)) {
       iodi_metadata.write(iodi_metadata_filename, method_to_id);

@@ -85,6 +85,7 @@ class IODIMetadata {
 
   void set_iodi_layer(const DexMethod* method, size_t layer);
   size_t get_iodi_layer(const DexMethod* method) const;
+  bool has_iodi_layer(const DexMethod* method) const;
 
  private:
   std::unordered_map<const DexMethod*, std::unordered_set<const DexMethod*>>

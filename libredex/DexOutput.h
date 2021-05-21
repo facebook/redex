@@ -18,6 +18,7 @@
 #include "DexStats.h"
 #include "DexUtil.h"
 #include "Pass.h"
+#include "PostLowering.h"
 #include "ProguardMap.h"
 #include "RedexOptions.h"
 #include "Trace.h"
@@ -140,6 +141,7 @@ dex_stats_t write_classes_to_dex(
     std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
     IODIMetadata* iodi_metadata,
     const std::string& dex_magic,
+    PostLowering* post_lowering = nullptr,
     int min_sdk = 0,
     bool disable_method_similarity_order = false);
 
@@ -330,6 +332,7 @@ class DexOutput {
   std::vector<std::pair<std::string, uint32_t>> m_method_bytecode_offsets;
   std::unordered_map<DexClass*, uint32_t> m_static_values;
   std::unordered_map<DexCallSite*, uint32_t> m_call_site_items;
+  std::unordered_map<DexClass*, std::vector<DexMethod*>> m_detached_methods;
   dex_header hdr;
   std::vector<dex_map_item> m_map_items;
   LocatorIndex* m_locator_index;
@@ -401,6 +404,7 @@ class DexOutput {
             std::unordered_map<DexMethod*, uint64_t>* method_to_id,
             std::unordered_map<DexCode*, std::vector<DebugLineItem>>*
                 code_debug_lines,
+            PostLowering* post_lowering = nullptr,
             int min_sdk = 0);
   ~DexOutput();
   void prepare(SortMode string_mode,

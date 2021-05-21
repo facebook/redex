@@ -51,7 +51,7 @@ static const char* VOID_RETURN_STRING_PROTO = "()Ljava/lang/String;";
 
 void testReadDex(const char* dexfile) {
   DexLoader dl(dexfile);
-  dex_stats_t stats{0};
+  dex_stats_t stats{{0}};
   auto classes = dl.load_dex(dexfile, &stats, 38);
   auto idx = dl.get_idx();
 
