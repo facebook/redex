@@ -2342,6 +2342,15 @@ bool outline_candidate(
       return false;
     }
 
+    auto& pairs = outlined_methods->map.at(c);
+    auto it = std::find_if(
+        pairs.begin(), pairs.end(),
+        [&outlined_method](
+            const std::pair<DexMethod*, std::set<uint32_t>>& pair) {
+          return pair.first == outlined_method;
+        });
+    auto& pattern_ids = it->second;
+
     (*num_reused_methods)++;
     for (auto& p : ci.methods) {
       auto method = p.first;
@@ -2352,6 +2361,7 @@ bool outline_candidate(
             outlined_method_creator->get_outlined_dbg_positions(c, cml, method);
         auto pattern_id = manager->make_pattern(positions);
         call_site_pattern_ids->emplace(cml.first_insn, pattern_id);
+        pattern_ids.insert(pattern_id);
       }
     }
 
