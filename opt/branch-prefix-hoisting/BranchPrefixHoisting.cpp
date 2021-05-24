@@ -391,8 +391,9 @@ size_t hoist_insns_for_block(cfg::Block* block,
     return ret;
   }();
 
+  DexPosition* last_position = nullptr;
   for (const auto& insn : insns_to_hoist) {
-    // Check if any source blocks precede instructions.
+    // Check if any source blocks or positions precede instructions.
     if (!opcode::is_move_result_any(insn.opcode())) {
       for (auto& p : succs) {
         auto* b = p.first;
@@ -404,18 +405,34 @@ size_t hoist_insns_for_block(cfg::Block* block,
           if (it->type == MFLOW_OPCODE) {
             break;
           }
-          // Leave position and debug in the block.
-          if (it->type == MFLOW_DEBUG || it->type == MFLOW_POSITION) {
+          // Leave debug in the block.
+          if (it->type == MFLOW_DEBUG) {
             continue;
           }
-          // Hoist source blocks.
+          // Hoist source blocks and clone positions.
           // TODO: Collapse equivalent source blocks?
-          redex_assert(it->type == MFLOW_SOURCE_BLOCK);
-          cfg.insert_before(insert_it, std::move(it->src_block));
-          b->remove_mie(it);
+          switch (it->type) {
+          case MFLOW_SOURCE_BLOCK:
+            cfg.insert_before(insert_it, std::move(it->src_block));
+            b->remove_mie(it);
+            break;
+          case MFLOW_POSITION:
+            last_position = it->pos.get();
+            break;
+          default:
+            not_reached();
+          }
         }
         redex_assert(it != b->end());
       }
+    }
+
+    if (opcode::may_throw(insn.opcode()) && last_position) {
+      // We clone positions instead of moving, so that we don't move away
+      // any initial positions from the sacrificial block. In case of
+      // adjacent positions, the cfg will clean up obvious redundancy.
+      cfg.insert_before(insert_it,
+                        std::make_unique<DexPosition>(*last_position));
     }
 
     // Insert instruction.
