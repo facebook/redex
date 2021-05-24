@@ -146,8 +146,17 @@ class Assessor {
     std::unordered_set<DexPosition*> positions;
     std::unordered_set<DexPosition*> parents;
     bool any_unknown_source_position = false;
+    // We are working with a *non-editable* cfg here. A key difference between
+    // an editable and an uneditable cfg is that the latter has not been
+    // enriched with trailing positions in all blocks
+    // (ControlFlowGraph::find_block_boundaries), while linearlization (via
+    // remove_duplicate_positions) removes redundant positions across block
+    // boundaries. This, we keep track of last positions across blocks, just as
+    // the cfg would when building an editable cfg (and just as symbolication
+    // would when going backwards to find the position relevant to an
+    // instruction offset).
+    DexPosition* last_position = nullptr;
     for (auto block : cfg.blocks()) {
-      DexPosition* last_position = nullptr;
       bool block_without_position_reported = false;
       for (auto it = block->begin(); it != block->end(); it++) {
         if (it->type == MFLOW_POSITION) {
@@ -293,6 +302,7 @@ DexAssessment DexScopeAssessor::run() {
           return assessment;
         }
 
+        always_assert(!code->editable_cfg_built());
         if (!code->cfg_built()) {
           code->build_cfg(/*editable*/ false);
         }
