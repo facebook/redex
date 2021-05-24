@@ -1166,33 +1166,71 @@ TEST_F(DedupBlocksTest, dont_dedup_throws) {
   EXPECT_CODE_EQ(expected_code.get(), code);
 }
 
-// When dedup-throws option is on, dedup throws
-TEST_F(DedupBlocksTest, dedup_throws) {
-  auto input_code = assembler::ircode_from_string(R"(
+TEST_F(DedupBlocksTest, retainPositionWhenMayThrow) {
+  using namespace dex_asm;
+  DexMethod* method = get_fresh_method("postfixSwitchCase");
+
+  auto str = R"(
     (
+      (.pos:dbg_0 "LFoo;.caller:()V" "Foo.java" 10)
       (const v0 0)
-      (if-eqz v0 :a)
-      (goto :b)
-      (:a)
-      (throw v0)
-      (:b)
-      (throw v0)
+      (const v1 1)
+      (switch v0 (:a :b :c))
+
+      (:a 0)
+      (return v0)
+
+      (:b 1)
+      (const v1 1)
+      (invoke-static () "LMay;.throw:()V")
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (return v1)
+
+      (:c 2)
+      (.pos:dbg_1 "LFoo;.caller:()V" "Foo.java" 20)
+      (const v0 0)
+      (invoke-static () "LMay;.throw:()V")
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (return v1)
     )
-  )");
-  auto method = get_fresh_method("dedup_throws");
-  method->set_code(std::move(input_code));
-  auto code = method->get_code();
+  )";
 
-  run_dedup_blocks(/* dedup_throws */ true);
+  auto code = assembler::ircode_from_string(str);
+  method->set_code(std::move(code));
 
-  auto expected_code = assembler::ircode_from_string(R"(
+  run_dedup_blocks();
+
+  auto expected_str = R"(
     (
+      (.pos:dbg_0 "LFoo;.caller:()V" "Foo.java" 10)
       (const v0 0)
-      (if-eqz v0 :a)
-      (:a)
-      (throw v0)
-    )
-  )");
+      (const v1 1)
+      (switch v0 (:a :b :c))
 
-  EXPECT_CODE_EQ(expected_code.get(), code);
+      (:a 0)
+      (return v0)
+
+      (:c 2)
+      (.pos:dbg_1 "LFoo;.caller:()V" "Foo.java" 20)
+      (const v0 0)
+      (goto :d)
+
+      (:b 1)
+      (.pos:dbg_0 "LFoo;.caller:()V" "Foo.java" 10)
+      (const v1 1)
+
+      (:d)
+      (invoke-static () "LMay;.throw:()V")
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (return v1)
+    )
+  )";
+  auto expected_code = assembler::ircode_from_string(expected_str);
+  EXPECT_CODE_EQ(expected_code.get(), method->get_code());
 }

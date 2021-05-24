@@ -192,6 +192,27 @@ std::vector<Entry*> get_id_order(UnorderedMap& umap) {
   return order;
 }
 
+// Will the split block have a position before the first
+// instruction, or do we need to insert one?
+bool needs_pos(const IRList::iterator& begin, const IRList::iterator& end) {
+  for (auto it = begin; it != end; it++) {
+    switch (it->type) {
+    case MFLOW_OPCODE: {
+      auto op = it->insn->opcode();
+      if (opcode::may_throw(op) || opcode::is_throw(op)) {
+        return true;
+      }
+      continue;
+    }
+    case MFLOW_POSITION:
+      return false;
+    default:
+      continue;
+    }
+  }
+  return true;
+}
+
 } // namespace
 
 namespace dedup_blocks_impl {
@@ -618,12 +639,25 @@ class DedupBlocksImpl {
           continue;
         }
 
+        auto cfg_it = block->to_cfg_instruction_iterator(fwd_it);
         // Split the block
-        auto split_block =
-            cfg.split_block(block->to_cfg_instruction_iterator(fwd_it));
+        auto split_block = cfg.split_block(cfg_it);
+
         TRACE(DEDUP_BLOCKS, 4,
               "split_postfix: split block : old = %zu, new = %zu", block->id(),
               split_block->id());
+
+        // Position of first instruction of split-off successor block
+        if (needs_pos(split_block->begin(), split_block->end())) {
+          auto pos = cfg.get_dbg_pos(cfg_it);
+          if (pos) {
+            // Make sure new block gets proper position
+            cfg.insert_before(split_block, split_block->begin(),
+                              std::make_unique<DexPosition>(*pos));
+            ++m_stats.positions_inserted;
+          }
+        }
+
         ++m_stats.blocks_split;
       }
     }
@@ -949,6 +983,7 @@ Stats& Stats::operator+=(const Stats& that) {
   eligible_blocks += that.eligible_blocks;
   blocks_removed += that.blocks_removed;
   blocks_split += that.blocks_split;
+  positions_inserted += that.positions_inserted;
   for (auto& p : that.dup_sizes) {
     dup_sizes[p.first] += p.second;
   }
