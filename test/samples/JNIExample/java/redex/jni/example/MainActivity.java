@@ -11,31 +11,24 @@ import android.app.Activity;
 import android.os.Bundle;
 import android.widget.TextView;
 
-import com.facebook.soloader.DoNotOptimize;
-import com.facebook.soloader.SoLoader;
-import com.facebook.soloader.annotation.SoLoaderLibrary;
-
-@SoLoaderLibrary("Animal")
 public class MainActivity extends Activity {
-  public static native String implementedButUnused(int value);
-  public static native String implemented(String name, int value);
-  public static native String missing(String name, int value);
   @Override
   public void onCreate(Bundle savedInstanceState) {
-    SoLoader.init(this, false);
-    SoLoader.loadLibrary("Animal");
     super.onCreate(savedInstanceState);
+
+    FBJNIExample f = new FBJNIExample(this);
+    // BasicJNIExample b = new BasicJNIExample();  --- we probably don't need this, leave it out
+    SimpleJNIExample s = new SimpleJNIExample(this);
+    HybridJNIExample h = new HybridJNIExample();
 
     setTitle(R.string.app_name);
     setContentView(R.layout.hello);
     TextView textView = (TextView) findViewById(R.id.hello_text);
     try {
-      String s = implemented("Hello", 99);
-      textView.setText(s);
+      int a = f.doThing() + s.doThing() + h.doThing();
+      textView.setText("Hello " + a);
     } catch (Exception e) {
-      textView.setText(String.format(
-              "Unable to load jni library! %s",
-              e.getMessage()));
+      textView.setText(String.format("Unable to load jni library! %s", e.getMessage()));
     }
   }
 }

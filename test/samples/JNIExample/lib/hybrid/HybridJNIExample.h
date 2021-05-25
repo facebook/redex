@@ -10,17 +10,21 @@
 #include <fb/fbjni.h>
 
 namespace facebook {
-class HybridClassExampleJni final
-    : public jni::HybridClass<HybridClassExampleJni> {
+class HybridJNIExample final : public jni::HybridClass<HybridJNIExample> {
  public:
-  constexpr static auto kJavaDescriptor = "Lredex/HybridClassExample;";
+  constexpr static auto kJavaDescriptor =
+      "Lredex/jni/example/HybridJNIExample;";
 
-  explicit HybridClassExampleJni(int i);
+  explicit HybridJNIExample(int i);
 
-  ~HybridClassExampleJni();
+  ~HybridJNIExample();
 
   static facebook::jni::local_ref<jhybriddata> initHybrid(
       jni::alias_ref<jclass>, const int i);
+
+  int implementedRegisteredDeclaredUsed();
+  int implementedRegisteredDeclared();
+  int implementedRegistered();
 
   static void registerNatives();
 

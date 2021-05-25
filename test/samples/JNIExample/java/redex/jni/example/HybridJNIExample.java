@@ -5,22 +5,33 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-package redex;
+package redex.jni.example;
 
 import com.facebook.jni.HybridData;
+import com.facebook.soloader.DoNotOptimize;
 import com.facebook.proguard.annotations.DoNotStrip;
 import com.facebook.soloader.SoLoader;
 
-public class HybridClassExample {
+@DoNotOptimize
+public class HybridJNIExample {
   static {
-    SoLoader.loadLibrary("libhybridclassexample.so");
+    SoLoader.loadLibrary("hybridjniexample");
   }
 
   @DoNotStrip private final HybridData mHybridData;
 
-  public HybridClassExample(int i) {
-    mHybridData = initHybrid(i);
+  public int doThing() {
+    int a = implementedRegisteredDeclaredUsed();
+    return a;
+  }
+
+  public HybridJNIExample() {
+    mHybridData = initHybrid(0);
   }
 
   private static native HybridData initHybrid(int i);
+
+  public native int implementedRegisteredDeclaredUsed();
+
+  public native int implementedRegisteredDeclared();
 }
