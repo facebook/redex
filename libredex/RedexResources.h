@@ -102,6 +102,9 @@ class AndroidResources {
       std::unordered_set<std::string>* out_classes,
       std::unordered_multimap<std::string, std::string>* out_attributes) = 0;
 
+  // Classnames present in native libraries (lib/*/*.so)
+  std::unordered_set<std::string> get_native_classes();
+
   virtual ~AndroidResources() {}
 
  protected:
@@ -109,6 +112,7 @@ class AndroidResources {
       : m_directory(directory) {}
 
   virtual std::vector<std::string> find_res_directories() = 0;
+  virtual std::vector<std::string> find_lib_directories() = 0;
 
   // Mutate the given file based on the rename map, returning whether or not it
   // worked with some potentially meaningless out params for size metrics.
@@ -127,9 +131,6 @@ std::unique_ptr<AndroidResources> create_resource_reader(
 // For testing only!
 std::unordered_set<std::string> extract_classes_from_native_lib(
     const std::string& lib_contents);
-
-std::unordered_set<std::string> get_native_classes(
-    const std::string& apk_directory);
 
 std::unordered_set<std::string> get_files_by_suffix(
     const std::string& directory, const std::string& suffix);

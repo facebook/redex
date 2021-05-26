@@ -71,6 +71,7 @@ class ApkResources : public AndroidResources {
 
  protected:
   std::vector<std::string> find_res_directories() override;
+  std::vector<std::string> find_lib_directories() override;
 
   // Replaces all strings in the ResStringPool for the given file with their
   // replacements. Writes all changes to disk, clobbering the given file.

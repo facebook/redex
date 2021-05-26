@@ -435,6 +435,7 @@ class UnpackManager:
         debug_mode=False,
         fast_repackage=False,
         reset_timestamps=True,
+        is_bundle=False,
     ):
         self.input_apk = input_apk
         self.extracted_apk_dir = extracted_apk_dir
@@ -443,7 +444,7 @@ class UnpackManager:
         self.debug_mode = debug_mode
         self.fast_repackage = fast_repackage
         self.reset_timestamps = reset_timestamps or debug_mode
-        self.is_bundle = isfile(join(self.extracted_apk_dir, "BundleConfig.pb"))
+        self.is_bundle = is_bundle
 
     def __enter__(self):
         self.dex_mode = pyredex.unpacker.detect_secondary_dex_mode(
@@ -517,8 +518,9 @@ class LibraryManager:
 
     temporary_libs_dir = None
 
-    def __init__(self, extracted_apk_dir):
+    def __init__(self, extracted_apk_dir, is_bundle=False):
         self.extracted_apk_dir = extracted_apk_dir
+        self.is_bundle = is_bundle
 
     def __enter__(self):
         # Some of the native libraries can be concatenated together into one
@@ -536,9 +538,13 @@ class LibraryManager:
                 if os.path.getsize(fullpath) > 0:
                     libs_to_extract.append(fullpath)
         if len(libs_to_extract) > 0:
-            libs_dir = join(self.extracted_apk_dir, "lib")
+            libs_dir = (
+                join(self.extracted_apk_dir, "base", "lib")
+                if self.is_bundle
+                else join(self.extracted_apk_dir, "lib")
+            )
             extracted_dir = join(libs_dir, "__extracted_libs__")
-            # Ensure both directories exist.
+            # Ensure all directories exist.
             self.temporary_libs_dir = ensure_libs_dir(libs_dir, extracted_dir)
             for i, lib_to_extract in enumerate(libs_to_extract):
                 extract_path = join(extracted_dir, "lib_{}.so".format(i))

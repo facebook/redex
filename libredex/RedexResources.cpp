@@ -328,8 +328,7 @@ namespace {
  * Return a list of all the .so files in /lib
  */
 template <typename Fn>
-void find_native_library_files(const std::string& apk_directory, Fn handler) {
-  std::string lib_root = apk_directory + std::string("/lib");
+void find_native_library_files(const std::string& lib_root, Fn handler) {
   std::string library_extension(".so");
 
   path_t lib(lib_root);
@@ -341,6 +340,7 @@ void find_native_library_files(const std::string& apk_directory, Fn handler) {
       if (is_regular_file(entry_path) &&
           ends_with(entry_path.filename().string().c_str(),
                     library_extension.c_str())) {
+        TRACE(RES, 9, "Checking lib: %s", entry_path.string().c_str());
         handler(entry_path.string());
       }
     }
@@ -352,8 +352,7 @@ void find_native_library_files(const std::string& apk_directory, Fn handler) {
 /**
  * Return all potential java class names located in native libraries.
  */
-std::unordered_set<std::string> get_native_classes(
-    const std::string& apk_directory) {
+std::unordered_set<std::string> AndroidResources::get_native_classes() {
   std::mutex out_mutex;
   std::unordered_set<std::string> all_classes;
   workqueue_run<std::string>(
@@ -361,9 +360,14 @@ std::unordered_set<std::string> get_native_classes(
           const std::string& input) {
         if (input.empty()) {
           // Dispatcher, find files and create tasks.
-          find_native_library_files(
-              apk_directory,
-              [&](const std::string& file) { worker_state->push_task(file); });
+          auto directories = find_lib_directories();
+          for (const auto& dir : directories) {
+            TRACE(RES, 9, "Scanning %s for so files for class names",
+                  dir.c_str());
+            find_native_library_files(dir, [&](const std::string& file) {
+              worker_state->push_task(file);
+            });
+          }
           return;
         }
 

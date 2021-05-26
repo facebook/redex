@@ -401,17 +401,30 @@ bool BundleResources::rename_classes_in_layout(
   return !write_failed;
 }
 
-std::vector<std::string> BundleResources::find_res_directories() {
+namespace {
+
+std::vector<std::string> find_subdir_in_modules(
+    const std::string& extracted_dir, const std::string& subdir) {
   std::vector<std::string> dirs;
-  boost::filesystem::path dir(m_directory);
+  boost::filesystem::path dir(extracted_dir);
   for (auto& entry : boost::make_iterator_range(
            boost::filesystem::directory_iterator(dir), {})) {
-    auto res_dir = entry.path() / "res";
-    if (boost::filesystem::exists(res_dir)) {
-      dirs.emplace_back(res_dir.string());
+    auto maybe = entry.path() / subdir;
+    if (boost::filesystem::exists(maybe)) {
+      dirs.emplace_back(maybe.string());
     }
   }
   return dirs;
+}
+
+} // namespace
+
+std::vector<std::string> BundleResources::find_res_directories() {
+  return find_subdir_in_modules(m_directory, "res");
+}
+
+std::vector<std::string> BundleResources::find_lib_directories() {
+  return find_subdir_in_modules(m_directory, "lib");
 }
 
 namespace {

@@ -1145,6 +1145,7 @@ def prepare_redex(args):
     if not dex_dir:
         dex_dir = make_temp_dir(".redex_dexen", debug_mode)
 
+    is_bundle = isfile(join(extracted_apk_dir, "BundleConfig.pb"))
     unpack_manager = UnpackManager(
         args.input_apk,
         extracted_apk_dir,
@@ -1153,10 +1154,11 @@ def prepare_redex(args):
         debug_mode=debug_mode,
         fast_repackage=args.dev,
         reset_timestamps=args.reset_zip_timestamps or args.dev,
+        is_bundle=is_bundle,
     )
     store_files = unpack_manager.__enter__()
 
-    lib_manager = LibraryManager(extracted_apk_dir)
+    lib_manager = LibraryManager(extracted_apk_dir, is_bundle=is_bundle)
     lib_manager.__enter__()
 
     if args.unpack_only:

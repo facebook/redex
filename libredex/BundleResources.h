@@ -33,6 +33,7 @@ class BundleResources : public AndroidResources {
 
  protected:
   std::vector<std::string> find_res_directories() override;
+  std::vector<std::string> find_lib_directories() override;
 
   bool rename_classes_in_layout(
       const std::string& file_path,

@@ -669,7 +669,8 @@ void init_reachable_classes(const Scope& scope,
     if (config.analyze_native_lib_reachability) {
       Timer t{"Computing native reachability"};
       // Classnames present in native libraries (lib/*/*.so)
-      for (const std::string& classname : get_native_classes(config.apk_dir)) {
+      auto resources = create_resource_reader(config.apk_dir);
+      for (const std::string& classname : resources->get_native_classes()) {
         auto type = DexType::get_type(classname.c_str());
         if (type == nullptr) continue;
         TRACE(PGR, 3, "native_lib: %s", classname.c_str());
