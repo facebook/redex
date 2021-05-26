@@ -24,9 +24,6 @@
 
 const char* const ONCLICK_ATTRIBUTE = "android:onClick";
 
-std::string read_entire_file(const std::string& filename);
-void write_entire_file(const std::string& filename,
-                       const std::string& contents);
 size_t write_serialized_data(const android::Vector<char>& cVec,
                              RedexMappedFile f);
 

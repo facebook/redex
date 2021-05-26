@@ -44,6 +44,7 @@
 #include "utils/TypeHelpers.h"
 
 #include "Debug.h"
+#include "IOUtil.h"
 #include "Macros.h"
 #include "ReadMaybeMapped.h"
 #include "StringUtil.h"
@@ -203,7 +204,6 @@ std::unordered_set<uint32_t> extract_xml_reference_attributes(
 
   return result;
 }
-
 } // namespace
 
 /**
@@ -566,15 +566,6 @@ std::unordered_set<std::string> extract_classes_from_native_lib(
   return classes;
 }
 
-} // namespace
-
-// For external testing.
-std::unordered_set<std::string> extract_classes_from_native_lib(
-    const std::string& lib_contents) {
-  return extract_classes_from_native_lib(lib_contents.data(),
-                                         lib_contents.size());
-}
-
 /*
  * Reads an entire file into a std::string. Returns an empty string if
  * anything went wrong (e.g. file not found).
@@ -586,11 +577,13 @@ std::string read_entire_file(const std::string& filename) {
   redex_assert(!in.bad());
   return sstr.str();
 }
+} // namespace
 
-void write_entire_file(const std::string& filename,
-                       const std::string& contents) {
-  std::ofstream out(filename, std::ofstream::binary);
-  out << contents;
+// For external testing.
+std::unordered_set<std::string> extract_classes_from_native_lib(
+    const std::string& lib_contents) {
+  return extract_classes_from_native_lib(lib_contents.data(),
+                                         lib_contents.size());
 }
 
 boost::optional<int32_t> get_min_sdk(const std::string& manifest_filename) {
@@ -800,7 +793,7 @@ int inline_xml_reference_attributes(
            type != android::ResXMLParser::END_DOCUMENT);
 
   if (made_change) {
-    write_entire_file(filename, file_contents);
+    write_string_to_file(filename, file_contents);
   }
 
   return num_values_inlined;
@@ -860,7 +853,7 @@ void remap_xml_reference_attributes(
            type != android::ResXMLParser::END_DOCUMENT);
 
   if (made_change) {
-    write_entire_file(filename, file_contents);
+    write_string_to_file(filename, file_contents);
   }
 }
 
