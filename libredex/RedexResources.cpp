@@ -7,39 +7,17 @@
 
 #include "RedexResources.h"
 
-#include <boost/algorithm/string.hpp>
-#include <boost/algorithm/string/predicate.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/operations.hpp>
-#include <boost/iostreams/device/mapped_file.hpp>
-#include <boost/optional.hpp>
-#include <boost/regex.hpp>
-#include <cstdio>
-#include <cstdlib>
-#include <fcntl.h>
-#include <fstream>
 #include <map>
 #include <mutex>
-#include <sstream>
 #include <string>
-#include <sys/stat.h>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
-#include "BundleResources.h"
-#include "Macros.h"
-
-#include "androidfw/ResourceTypes.h"
-#include "utils/ByteOrder.h"
-#include "utils/Errors.h"
-#include "utils/Log.h"
-#include "utils/Serialize.h"
-#include "utils/String16.h"
-#include "utils/String8.h"
-#include "utils/TypeHelpers.h"
-
 #include "ApkResources.h"
+#include "BundleResources.h"
 #include "Debug.h"
 #include "IOUtil.h"
 #include "Macros.h"
