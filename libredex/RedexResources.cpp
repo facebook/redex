@@ -27,6 +27,7 @@
 #include <unordered_set>
 #include <vector>
 
+#include "BundleResources.h"
 #include "Macros.h"
 #if IS_WINDOWS
 #include "CompatWindows.h"
@@ -43,6 +44,7 @@
 #include "utils/String8.h"
 #include "utils/TypeHelpers.h"
 
+#include "ApkResources.h"
 #include "Debug.h"
 #include "IOUtil.h"
 #include "Macros.h"
@@ -205,6 +207,17 @@ std::unordered_set<uint32_t> extract_xml_reference_attributes(
   return result;
 }
 } // namespace
+
+std::unique_ptr<AndroidResources> create_resource_reader(
+    const std::string& directory) {
+  std::string bundle_config =
+      (boost::filesystem::path(directory) / "BundleConfig.pb").string();
+  if (boost::filesystem::exists(bundle_config)) {
+    return std::make_unique<BundleResources>(directory);
+  } else {
+    return std::make_unique<ApkResources>(directory);
+  }
+}
 
 /**
  * Follows the reference links for a resource for all configurations.

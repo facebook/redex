@@ -24,6 +24,20 @@
 
 const char* const ONCLICK_ATTRIBUTE = "android:onClick";
 
+class AndroidResources {
+ public:
+  virtual boost::optional<int32_t> get_min_sdk() = 0;
+  virtual ~AndroidResources() {}
+
+ protected:
+  explicit AndroidResources(const std::string& directory)
+      : m_directory(directory) {}
+  const std::string& m_directory;
+};
+
+std::unique_ptr<AndroidResources> create_resource_reader(
+    const std::string& directory);
+
 size_t write_serialized_data(const android::Vector<char>& cVec,
                              RedexMappedFile f);
 
