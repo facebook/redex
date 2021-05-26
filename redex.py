@@ -1068,10 +1068,11 @@ def prepare_redex(args):
 
     # avoid accidentally mixing up file formats since we now support
     # both apk files and Android bundle files
+    file_ext = get_file_ext(args.input_apk)
     if not args.unpack_only:
-        assert get_file_ext(args.input_apk) == get_file_ext(args.out), (
+        assert file_ext == get_file_ext(args.out), (
             'Input file extension ("'
-            + get_file_ext(args.input_apk)
+            + file_ext
             + '") should be the same as output file extension ("'
             + get_file_ext(args.out)
             + '")'
@@ -1137,7 +1138,7 @@ def prepare_redex(args):
         extracted_apk_dir = make_temp_dir(".redex_extracted_apk", debug_mode)
 
     directory = make_temp_dir(".redex_unaligned", False)
-    unaligned_apk_path = join(directory, "redex-unaligned.apk")
+    unaligned_apk_path = join(directory, "redex-unaligned." + file_ext)
     zip_manager = ZipManager(args.input_apk, extracted_apk_dir, unaligned_apk_path)
     zip_manager.__enter__()
 
