@@ -47,8 +47,6 @@ bool has_raw_attribute_value(const android::ResXMLTree& parser,
                              const android::String16& attribute_name,
                              android::Res_value& out_value);
 
-boost::optional<int32_t> get_min_sdk(const std::string& manifest_filename);
-
 int get_int_attribute_or_default_value(const android::ResXMLTree& parser,
                                        const android::String16& attribute_name,
                                        int32_t default_value);
@@ -59,7 +57,6 @@ bool has_bool_attribute(const android::ResXMLTree& parser,
 bool get_bool_attribute_value(const android::ResXMLTree& parser,
                               const android::String16& attribute_name,
                               bool default_value);
-
 /*
  * These are all the components which may contain references to Java classes in
  * their attributes.

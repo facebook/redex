@@ -7,6 +7,9 @@
 
 #pragma once
 
+// TODO (T91001948): Integrate protobuf dependency in supported platforms for
+// open source
+#ifdef HAS_PROTOBUF
 #include "RedexResources.h"
 
 class BundleResources : public AndroidResources {
@@ -15,3 +18,4 @@ class BundleResources : public AndroidResources {
       : AndroidResources(directory) {}
   boost::optional<int32_t> get_min_sdk() override;
 };
+#endif // HAS_PROTOBUF

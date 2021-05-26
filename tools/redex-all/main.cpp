@@ -1268,9 +1268,10 @@ int main(int argc, char* argv[]) {
 
     std::string apk_dir;
     conf.get_json_config().get("apk_dir", "", apk_dir);
-    const std::string& manifest_filename = apk_dir + "/AndroidManifest.xml";
-    boost::optional<int32_t> maybe_sdk = get_min_sdk(manifest_filename);
+    auto resources = create_resource_reader(apk_dir);
+    boost::optional<int32_t> maybe_sdk = resources->get_min_sdk();
     if (maybe_sdk != boost::none) {
+      TRACE(MAIN, 2, "parsed minSdkVersion = %d", *maybe_sdk);
       args.redex_options.min_sdk = *maybe_sdk;
     }
 

@@ -210,6 +210,9 @@ std::unordered_set<uint32_t> extract_xml_reference_attributes(
 
 std::unique_ptr<AndroidResources> create_resource_reader(
     const std::string& directory) {
+// TODO (T91001948): Integrate protobuf dependency in supported platforms for
+// open source
+#ifdef HAS_PROTOBUF
   std::string bundle_config =
       (boost::filesystem::path(directory) / "BundleConfig.pb").string();
   if (boost::filesystem::exists(bundle_config)) {
@@ -217,6 +220,9 @@ std::unique_ptr<AndroidResources> create_resource_reader(
   } else {
     return std::make_unique<ApkResources>(directory);
   }
+#else
+  return std::make_unique<ApkResources>(directory);
+#endif // HAS_PROTOBUF
 }
 
 /**
@@ -597,47 +603,6 @@ std::unordered_set<std::string> extract_classes_from_native_lib(
     const std::string& lib_contents) {
   return extract_classes_from_native_lib(lib_contents.data(),
                                          lib_contents.size());
-}
-
-boost::optional<int32_t> get_min_sdk(const std::string& manifest_filename) {
-  const std::string& manifest = read_entire_file(manifest_filename);
-
-  if (manifest.empty()) {
-    fprintf(stderr, "WARNING: Cannot find/read the manifest file %s\n",
-            manifest_filename.c_str());
-    return boost::none;
-  }
-
-  android::ResXMLTree parser;
-  parser.setTo(manifest.data(), manifest.size());
-
-  if (parser.getError() != android::NO_ERROR) {
-    fprintf(stderr, "WARNING: Failed to parse the manifest file %s\n",
-            manifest_filename.c_str());
-    return boost::none;
-  }
-
-  const android::String16 uses_sdk("uses-sdk");
-  const android::String16 min_sdk("minSdkVersion");
-  android::ResXMLParser::event_code_t event_code;
-  do {
-    event_code = parser.next();
-    if (event_code == android::ResXMLParser::START_TAG) {
-      size_t outLen;
-      auto el_name = android::String16(parser.getElementName(&outLen));
-      if (el_name == uses_sdk) {
-        android::Res_value raw_value;
-        if (has_raw_attribute_value(parser, min_sdk, raw_value) &&
-            (raw_value.dataType & android::Res_value::TYPE_INT_DEC)) {
-          return boost::optional<int32_t>(static_cast<int32_t>(raw_value.data));
-        } else {
-          return boost::none;
-        }
-      }
-    }
-  } while ((event_code != android::ResXMLParser::END_DOCUMENT) &&
-           (event_code != android::ResXMLParser::BAD_DOCUMENT));
-  return boost::none;
 }
 
 ManifestClassInfo get_manifest_class_info(const std::string& apk_dir) {
