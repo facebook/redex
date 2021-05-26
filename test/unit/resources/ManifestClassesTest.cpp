@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "RedexResources.h"
+#include "ApkResources.h"
 #include "RedexTestUtils.h"
 
 #include <gmock/gmock.h>
@@ -22,7 +22,9 @@ TEST(ManifestClassesTest, exported) {
     std::ofstream dest_stream(dest, std::ios::binary);
     dest_stream << src_stream.rdbuf();
   }
-  const auto& class_info = get_manifest_class_info(tmp_dir.path);
+
+  ApkResources resources(tmp_dir.path);
+  const auto& class_info = resources.get_manifest_class_info();
 
   const auto& tag_infos = class_info.component_tags;
   EXPECT_EQ(tag_infos.size(), 5);

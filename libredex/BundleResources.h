@@ -17,5 +17,6 @@ class BundleResources : public AndroidResources {
   explicit BundleResources(const std::string& directory)
       : AndroidResources(directory) {}
   boost::optional<int32_t> get_min_sdk() override;
+  ManifestClassInfo get_manifest_class_info() override;
 };
 #endif // HAS_PROTOBUF

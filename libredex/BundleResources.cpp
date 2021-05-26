@@ -112,4 +112,10 @@ boost::optional<int32_t> BundleResources::get_min_sdk() {
       });
   return result;
 }
+
+ManifestClassInfo BundleResources::get_manifest_class_info() {
+  ManifestClassInfo manifest_classes;
+  // TODO
+  return manifest_classes;
+}
 #endif // HAS_PROTOBUF

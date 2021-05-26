@@ -24,20 +24,6 @@
 
 const char* const ONCLICK_ATTRIBUTE = "android:onClick";
 
-class AndroidResources {
- public:
-  virtual boost::optional<int32_t> get_min_sdk() = 0;
-  virtual ~AndroidResources() {}
-
- protected:
-  explicit AndroidResources(const std::string& directory)
-      : m_directory(directory) {}
-  const std::string& m_directory;
-};
-
-std::unique_ptr<AndroidResources> create_resource_reader(
-    const std::string& directory);
-
 size_t write_serialized_data(const android::Vector<char>& cVec,
                              RedexMappedFile f);
 
@@ -107,7 +93,20 @@ struct ManifestClassInfo {
   std::vector<ComponentTagInfo> component_tags;
 };
 
-ManifestClassInfo get_manifest_class_info(const std::string& filename);
+class AndroidResources {
+ public:
+  virtual boost::optional<int32_t> get_min_sdk() = 0;
+  virtual ManifestClassInfo get_manifest_class_info() = 0;
+  virtual ~AndroidResources() {}
+
+ protected:
+  explicit AndroidResources(const std::string& directory)
+      : m_directory(directory) {}
+  const std::string& m_directory;
+};
+
+std::unique_ptr<AndroidResources> create_resource_reader(
+    const std::string& directory);
 
 // For testing only!
 std::unordered_set<std::string> extract_classes_from_native_lib(

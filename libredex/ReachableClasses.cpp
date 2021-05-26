@@ -460,7 +460,8 @@ void analyze_reachable_from_manifest(
 
   auto manifest_class_info = [&apk_dir]() {
     try {
-      return get_manifest_class_info(apk_dir);
+      auto resources = create_resource_reader(apk_dir);
+      return resources->get_manifest_class_info();
     } catch (const std::exception& e) {
       std::cerr << "Error reading manifest: " << e.what() << std::endl;
       return ManifestClassInfo{};

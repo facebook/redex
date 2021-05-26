@@ -15,6 +15,7 @@ class ApkResources : public AndroidResources {
       : AndroidResources(directory),
         m_manifest(directory + "/AndroidManifest.xml") {}
   boost::optional<int32_t> get_min_sdk() override;
+  ManifestClassInfo get_manifest_class_info() override;
 
  private:
   const std::string m_manifest;
