@@ -114,9 +114,6 @@ std::unordered_set<std::string> extract_classes_from_native_lib(
 std::unordered_set<std::string> get_native_classes(
     const std::string& apk_directory);
 
-std::unordered_set<std::string> get_layout_classes(
-    const std::string& apk_directory);
-
 std::unordered_set<std::string> get_files_by_suffix(
     const std::string& directory, const std::string& suffix);
 std::unordered_set<std::string> get_xml_files(const std::string& directory);

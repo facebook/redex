@@ -487,17 +487,6 @@ void collect_layout_classes_and_attributes(
   }
 }
 
-std::unordered_set<std::string> get_layout_classes(
-    const std::string& apk_directory) {
-  std::unordered_set<std::string> out_classes;
-  // No attributes to read, empty set
-  std::unordered_set<std::string> attributes_to_read;
-  std::unordered_multimap<std::string, std::string> unused;
-  collect_layout_classes_and_attributes(apk_directory, attributes_to_read,
-                                        out_classes, unused);
-  return out_classes;
-}
-
 std::set<std::string> multimap_values_to_set(
     const std::unordered_multimap<std::string, std::string>& map,
     const std::string& key) {
