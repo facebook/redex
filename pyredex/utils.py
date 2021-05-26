@@ -443,21 +443,21 @@ class UnpackManager:
         self.debug_mode = debug_mode
         self.fast_repackage = fast_repackage
         self.reset_timestamps = reset_timestamps or debug_mode
+        self.is_bundle = isfile(join(self.extracted_apk_dir, "BundleConfig.pb"))
 
     def __enter__(self):
-        dex_file_path = self.get_dex_file_path(self.input_apk, self.extracted_apk_dir)
-
-        self.dex_mode = pyredex.unpacker.detect_secondary_dex_mode(dex_file_path)
-        log("Detected dex mode " + str(type(self.dex_mode).__name__))
+        self.dex_mode = pyredex.unpacker.detect_secondary_dex_mode(
+            self.extracted_apk_dir, self.is_bundle
+        )
         log("Unpacking dex files")
-        self.dex_mode.unpackage(dex_file_path, self.dex_dir)
+        self.dex_mode.unpackage(self.extracted_apk_dir, self.dex_dir)
 
         log("Detecting Application Modules")
         store_metadata_dir = make_temp_dir(
             ".application_module_metadata", self.debug_mode
         )
         self.application_modules = pyredex.unpacker.ApplicationModule.detect(
-            self.extracted_apk_dir
+            self.extracted_apk_dir, self.is_bundle
         )
         store_files = []
         for module in self.application_modules:
@@ -483,7 +483,7 @@ class UnpackManager:
         log("Emit Locator Strings: %s" % self.have_locators)
 
         self.dex_mode.repackage(
-            self.get_dex_file_path(self.input_apk, self.extracted_apk_dir),
+            self.extracted_apk_dir,
             self.dex_dir,
             self.have_locators,
             fast_repackage=self.fast_repackage,
@@ -507,18 +507,6 @@ class UnpackManager:
                 reset_timestamps=self.reset_timestamps,
             )
             locator_store_id = locator_store_id + 1
-
-    def get_dex_file_path(self, input_apk, extracted_apk_dir):
-        # base on file extension check if input is
-        # an apk file (".apk") or an Android bundle file (".aab")
-        # TODO: support loadable modules (at this point only
-        # very basic support is provided - in case of Android bundles
-        # "regular" apk file content is moved to the "base"
-        # sub-directory of the bundle archive)
-        if get_file_ext(input_apk) == ".aab":
-            return join(extracted_apk_dir, "base", "dex")
-        else:
-            return extracted_apk_dir
 
 
 class LibraryManager:
