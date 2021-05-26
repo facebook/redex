@@ -8,6 +8,7 @@
 #include <array>
 #include <gtest/gtest.h>
 
+#include "ApkResources.h"
 #include "Debug.h"
 #include "RedexMappedFile.h"
 #include "RedexResources.h"
@@ -151,7 +152,8 @@ TEST(ResStringPool, ReplaceStringsInXmlLayout) {
 
   android::Vector<char> serialized;
   size_t num_renamed = 0;
-  replace_in_xml_string_pool(
+  ApkResources resources("");
+  resources.replace_in_xml_string_pool(
       f.const_data(), f.size(), shortened_names, &serialized, &num_renamed);
 
   EXPECT_EQ(num_renamed, 3);

@@ -16,6 +16,14 @@
 #include <boost/iostreams/device/mapped_file.hpp>
 #include <boost/optional.hpp>
 #include <boost/regex.hpp>
+#include <map>
+
+#include "Macros.h"
+#if IS_WINDOWS
+#include "CompatWindows.h"
+#include <io.h>
+#include <share.h>
+#endif
 
 #include "androidfw/ResourceTypes.h"
 #include "utils/ByteOrder.h"
@@ -31,6 +39,7 @@
 #include "IOUtil.h"
 #include "Macros.h"
 #include "ReadMaybeMapped.h"
+#include "Trace.h"
 
 // Workaround for inclusion order, when compiling on Windows (#defines NO_ERROR
 // as 0).
@@ -39,6 +48,28 @@
 #endif
 
 namespace {
+size_t write_serialized_data(const android::Vector<char>& cVec,
+                             RedexMappedFile f) {
+  size_t vec_size = cVec.size();
+  size_t f_size = f.size();
+  if (vec_size > 0) {
+    memcpy(f.data(), &(cVec[0]), vec_size);
+  }
+  f.file.reset(); // Close the map.
+#if IS_WINDOWS
+  int fd;
+  auto open_res =
+      _sopen_s(&fd, f.filename.c_str(), _O_BINARY | _O_RDWR, _SH_DENYRW, 0);
+  redex_assert(open_res == 0);
+  auto trunc_res = _chsize_s(fd, vec_size);
+  _close(fd);
+#else
+  auto trunc_res = truncate(f.filename.c_str(), vec_size);
+#endif
+  redex_assert(trunc_res == 0);
+  return vec_size > 0 ? vec_size : f_size;
+}
+
 /*
  * Look for <search_tag> within the descendants of the current node in the XML
  * tree.
@@ -260,6 +291,145 @@ ManifestClassInfo ApkResources::get_manifest_class_info() {
     });
   }
   return classes;
+}
+
+int ApkResources::replace_in_xml_string_pool(
+    const void* data,
+    const size_t len,
+    const std::map<std::string, std::string>& rename_map,
+    android::Vector<char>* out_data,
+    size_t* out_num_renamed) {
+  const auto chunk_size = sizeof(android::ResChunk_header);
+  const auto pool_header_size = (uint16_t)sizeof(android::ResStringPool_header);
+
+  // Validate the given bytes.
+  if (len < chunk_size + pool_header_size) {
+    return android::NOT_ENOUGH_DATA;
+  }
+
+  // Layout XMLs will have a ResChunk_header, followed by ResStringPool
+  // representing each XML tag and attribute string.
+  auto chunk = (android::ResChunk_header*)data;
+  LOG_FATAL_IF(dtohl(chunk->size) != len, "Can't read header size");
+
+  auto pool_ptr = (android::ResStringPool_header*)((char*)data + chunk_size);
+  if (dtohs(pool_ptr->header.type) != android::RES_STRING_POOL_TYPE) {
+    return android::BAD_TYPE;
+  }
+
+  size_t num_replaced = 0;
+  android::ResStringPool pool(pool_ptr, dtohl(pool_ptr->header.size));
+
+  // Straight copy of everything after the string pool.
+  android::Vector<char> serialized_nodes;
+  auto start = chunk_size + pool_ptr->header.size;
+  auto remaining = len - start;
+  serialized_nodes.resize(remaining);
+  void* start_ptr = ((char*)data) + start;
+  memcpy((void*)&serialized_nodes[0], start_ptr, remaining);
+
+  // Rewrite the strings
+  android::Vector<char> serialized_pool;
+  auto num_strings = pool_ptr->stringCount;
+
+  // Make an empty pool.
+  auto new_pool_header = android::ResStringPool_header{
+      {// Chunk type
+       htods(android::RES_STRING_POOL_TYPE),
+       // Header size
+       htods(pool_header_size),
+       // Total size (no items yet, equal to the header size)
+       htodl(pool_header_size)},
+      // String count
+      0,
+      // Style count
+      0,
+      // Flags (valid combinations of UTF8_FLAG, SORTED_FLAG)
+      pool.isUTF8() ? htodl(android::ResStringPool_header::UTF8_FLAG)
+                    : (uint32_t)0,
+      // Offset from header to string data
+      0,
+      // Offset from header to style data
+      0};
+  android::ResStringPool new_pool(&new_pool_header, pool_header_size);
+
+  for (size_t i = 0; i < num_strings; i++) {
+    // Public accessors for strings are a bit of a foot gun. string8ObjectAt
+    // does not reliably return lengths with chars outside the BMP. Work around
+    // to get a proper String8.
+    size_t u16_len;
+    auto wide_chars = pool.stringAt(i, &u16_len);
+    android::String16 s16(wide_chars, u16_len);
+    android::String8 string8(s16);
+    std::string existing_str(string8.string());
+
+    auto replacement = rename_map.find(existing_str);
+    if (replacement == rename_map.end()) {
+      new_pool.appendString(string8);
+    } else {
+      android::String8 replacement8(replacement->second.c_str());
+      new_pool.appendString(replacement8);
+      num_replaced++;
+    }
+  }
+
+  new_pool.serialize(serialized_pool);
+
+  // Assemble
+  push_short(*out_data, android::RES_XML_TYPE);
+  push_short(*out_data, chunk_size);
+  auto total_size =
+      chunk_size + serialized_nodes.size() + serialized_pool.size();
+  push_long(*out_data, total_size);
+
+  out_data->appendVector(serialized_pool);
+  out_data->appendVector(serialized_nodes);
+
+  *out_num_renamed = num_replaced;
+  return android::OK;
+}
+
+int ApkResources::rename_classes_in_layout(
+    const std::string& file_path,
+    const std::map<std::string, std::string>& rename_map,
+    size_t* out_num_renamed,
+    ssize_t* out_size_delta) {
+  RedexMappedFile f = RedexMappedFile::open(file_path, /* read_only= */ false);
+  size_t len = f.size();
+
+  android::Vector<char> serialized;
+  auto status = replace_in_xml_string_pool(f.data(), f.size(), rename_map,
+                                           &serialized, out_num_renamed);
+
+  if (*out_num_renamed == 0 || status != android::OK) {
+    return status;
+  }
+
+  write_serialized_data(serialized, std::move(f));
+  *out_size_delta = serialized.size() - len;
+  return android::OK;
+}
+
+void ApkResources::rename_classes_in_layouts(
+    const std::map<std::string, std::string>& rename_map) {
+  ssize_t layout_bytes_delta = 0;
+  size_t num_layout_renamed = 0;
+  auto xml_files = get_xml_files(m_directory + "/res");
+  for (const auto& path : xml_files) {
+    if (is_raw_resource(path)) {
+      continue;
+    }
+    size_t num_renamed = 0;
+    ssize_t out_delta = 0;
+    TRACE(RES, 3, "Begin rename Views in layout %s", path.c_str());
+    rename_classes_in_layout(path, rename_map, &num_renamed, &out_delta);
+    TRACE(RES, 3, "Renamed %zu ResStringPool entries in layout %s", num_renamed,
+          path.c_str());
+    layout_bytes_delta += out_delta;
+    num_layout_renamed += num_renamed;
+  }
+  TRACE(RES, 2, "Renamed %zu ResStringPool entries, delta %zi bytes",
+        num_layout_renamed, layout_bytes_delta);
 }
 
 ResourcesArscFile::ResourcesArscFile(const std::string& path)

@@ -24,9 +24,6 @@
 
 const char* const ONCLICK_ATTRIBUTE = "android:onClick";
 
-size_t write_serialized_data(const android::Vector<char>& cVec,
-                             RedexMappedFile f);
-
 std::string get_string_attribute_value(const android::ResXMLTree& parser,
                                        const android::String16& attribute_name);
 bool has_raw_attribute_value(const android::ResXMLTree& parser,
@@ -97,6 +94,8 @@ class AndroidResources {
  public:
   virtual boost::optional<int32_t> get_min_sdk() = 0;
   virtual ManifestClassInfo get_manifest_class_info() = 0;
+  virtual void rename_classes_in_layouts(
+      const std::map<std::string, std::string>& rename_map) = 0;
   virtual ~AndroidResources() {}
 
  protected:
@@ -156,26 +155,6 @@ void collect_layout_classes_and_attributes_for_file(
 std::set<std::string> multimap_values_to_set(
     const std::unordered_multimap<std::string, std::string>& map,
     const std::string& key);
-
-// Given the bytes of a binary XML file, replace the entries (if any) in the
-// ResStringPool. Writes result to the given Vector output param.
-// Returns android::NO_ERROR (0) on success, or one of the corresponding
-// android:: error codes for failure conditions/bad input data.
-int replace_in_xml_string_pool(
-    const void* data,
-    const size_t len,
-    const std::map<std::string, std::string>& shortened_names,
-    android::Vector<char>* out_data,
-    size_t* out_num_renamed);
-
-// Replaces all strings in the ResStringPool for the given file with their
-// replacements. Writes all changes to disk, clobbering the given file.
-// Same return codes as replace_in_xml_string_pool.
-int rename_classes_in_layout(
-    const std::string& file_path,
-    const std::map<std::string, std::string>& shortened_names,
-    size_t* out_num_renamed,
-    ssize_t* out_size_delta);
 
 /**
  * Follows the reference links for a resource for all configurations.

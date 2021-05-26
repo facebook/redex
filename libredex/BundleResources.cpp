@@ -14,6 +14,7 @@
 #include <boost/optional.hpp>
 #include <fstream>
 #include <iostream>
+#include <map>
 #include <string>
 
 #include "ReadMaybeMapped.h"
@@ -117,5 +118,10 @@ ManifestClassInfo BundleResources::get_manifest_class_info() {
   ManifestClassInfo manifest_classes;
   // TODO
   return manifest_classes;
+}
+
+void BundleResources::rename_classes_in_layouts(
+    const std::map<std::string, std::string>& rename_map) {
+  // TODO
 }
 #endif // HAS_PROTOBUF
