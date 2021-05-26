@@ -156,14 +156,4 @@ std::set<std::string> multimap_values_to_set(
     const std::unordered_multimap<std::string, std::string>& map,
     const std::string& key);
 
-/**
- * Follows the reference links for a resource for all configurations.
- * Outputs all the nodes visited, as well as all the string values seen.
- */
-void walk_references_for_resource(
-    const android::ResTable& table,
-    uint32_t resID,
-    std::unordered_set<uint32_t>* nodes_visited,
-    std::unordered_set<std::string>* leaf_string_values);
-
 const int TYPE_INDEX_BIT_SHIFT = 16;

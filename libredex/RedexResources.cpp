@@ -222,57 +222,6 @@ std::unique_ptr<AndroidResources> create_resource_reader(
 #endif // HAS_PROTOBUF
 }
 
-/**
- * Follows the reference links for a resource for all configurations.
- * Outputs all the nodes visited, as well as all the string values seen.
- */
-void walk_references_for_resource(
-    const android::ResTable& table,
-    uint32_t resID,
-    std::unordered_set<uint32_t>* nodes_visited,
-    std::unordered_set<std::string>* leaf_string_values) {
-  if (nodes_visited->find(resID) != nodes_visited->end()) {
-    return;
-  }
-  nodes_visited->emplace(resID);
-
-  ssize_t pkg_index = table.getResourcePackageIndex(resID);
-
-  android::Vector<android::Res_value> initial_values;
-  table.getAllValuesForResource(resID, initial_values);
-
-  std::stack<android::Res_value> nodes_to_explore;
-  for (size_t index = 0; index < initial_values.size(); ++index) {
-    nodes_to_explore.push(initial_values[index]);
-  }
-
-  while (!nodes_to_explore.empty()) {
-    android::Res_value r = nodes_to_explore.top();
-    nodes_to_explore.pop();
-
-    if (r.dataType == android::Res_value::TYPE_STRING) {
-      android::String8 str = table.getString8FromIndex(pkg_index, r.data);
-      leaf_string_values->insert(std::string(str.string()));
-      continue;
-    }
-
-    // Skip any non-references or already visited nodes
-    if ((r.dataType != android::Res_value::TYPE_REFERENCE &&
-         r.dataType != android::Res_value::TYPE_ATTRIBUTE) ||
-        r.data <= PACKAGE_RESID_START ||
-        nodes_visited->find(r.data) != nodes_visited->end()) {
-      continue;
-    }
-
-    nodes_visited->insert(r.data);
-    android::Vector<android::Res_value> inner_values;
-    table.getAllValuesForResource(r.data, inner_values);
-    for (size_t index = 0; index < inner_values.size(); ++index) {
-      nodes_to_explore.push(inner_values[index]);
-    }
-  }
-}
-
 namespace {
 std::string read_attribute_name_at_idx(const android::ResXMLTree& parser,
                                        size_t idx) {
