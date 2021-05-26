@@ -126,3 +126,29 @@ TEST(BundleResources, TestReadManifestClasses) {
     EXPECT_TRUE(found_alias);
   });
 }
+
+TEST(BundleResources, ReadLayout) {
+  setup_resources_and_run(
+      [&](const std::string& extract_dir, BundleResources* resources) {
+        std::unordered_set<std::string> layout_classes;
+        std::unordered_set<std::string> attrs_to_read;
+        attrs_to_read.emplace(ONCLICK_ATTRIBUTE);
+        std::unordered_multimap<std::string, std::string> attribute_values;
+        resources->collect_layout_classes_and_attributes_for_file(
+            std::getenv("test_layout_path"),
+            attrs_to_read,
+            &layout_classes,
+            &attribute_values);
+        EXPECT_EQ(layout_classes.size(), 2);
+        EXPECT_EQ(layout_classes.count("Lcom/fb/bundles/WickedCoolButton;"), 1);
+        EXPECT_EQ(layout_classes.count("Lcom/fb/bundles/NiftyViewGroup;"), 1);
+
+        auto range = attribute_values.equal_range(ONCLICK_ATTRIBUTE);
+        size_t found_method_names = 0;
+        for (auto it = range.first; it != range.second; ++it) {
+          found_method_names++;
+          EXPECT_TRUE(it->second == "performFoo" || it->second == "performBar");
+        }
+        EXPECT_EQ(found_method_names, 2);
+      });
+}

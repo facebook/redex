@@ -345,14 +345,99 @@ std::vector<std::string> BundleResources::find_res_directories() {
   return dirs;
 }
 
+namespace {
+const std::unordered_set<std::string> NON_CLASS_ELEMENTS = {
+    "fragment", "view", "dialog", "activity", "intent",
+};
+const std::vector<std::string> CLASS_XML_ATTRIBUTES = {
+    "class",
+    "name",
+    "targetClass",
+};
+
+void collect_layout_classes_and_attributes_for_element(
+    const aapt::pb::XmlElement& element,
+    const std::unordered_map<std::string, std::string>& ns_uri_to_prefix,
+    const std::unordered_set<std::string>& attributes_to_read,
+    std::unordered_set<std::string>* out_classes,
+    std::unordered_multimap<std::string, std::string>* out_attributes) {
+  const auto& element_name = element.name();
+  if (NON_CLASS_ELEMENTS.count(element_name) > 0) {
+    for (const auto& attr : CLASS_XML_ATTRIBUTES) {
+      auto classname = get_string_attribute_value(element, attr);
+      if (!classname.empty() && classname.find('.') != std::string::npos) {
+        auto internal = java_names::external_to_internal(classname);
+        TRACE(RES, 9,
+              "Considering %s as possible class in XML "
+              "resource from element %s",
+              internal.c_str(), element_name.c_str());
+        out_classes->emplace(internal);
+        break;
+      }
+    }
+  } else if (element_name.find('.') != std::string::npos) {
+    // Consider the element name itself as a possible class in the application
+    auto internal = java_names::external_to_internal(element_name);
+    TRACE(RES, 9, "Considering %s as possible class in XML resource",
+          internal.c_str());
+    out_classes->emplace(internal);
+  }
+
+  if (!attributes_to_read.empty()) {
+    for (const aapt::pb::XmlAttribute& pb_attr : element.attribute()) {
+      const auto& attr_name = pb_attr.name();
+      const auto& uri = pb_attr.namespace_uri();
+      std::string fully_qualified =
+          ns_uri_to_prefix.count(uri) == 0
+              ? attr_name
+              : (ns_uri_to_prefix.at(uri) + ":" + attr_name);
+      if (attributes_to_read.count(fully_qualified) > 0) {
+        always_assert_log(!pb_attr.has_compiled_item(),
+                          "Only supporting string values for attributes. "
+                          "Given attribute: %s",
+                          fully_qualified.c_str());
+        auto value = pb_attr.value();
+        out_attributes->emplace(fully_qualified, value);
+      }
+    }
+  }
+}
+} // namespace
+
 void BundleResources::collect_layout_classes_and_attributes_for_file(
     const std::string& file_path,
     const std::unordered_set<std::string>& attributes_to_read,
     std::unordered_set<std::string>* out_classes,
     std::unordered_multimap<std::string, std::string>* out_attributes) {
+  if (is_raw_resource(file_path)) {
+    return;
+  }
   TRACE(RES,
         9,
         "BundleResources collecting classes and attributes for file: %s",
         file_path.c_str());
+  read_protobuf_file_contents(
+      file_path,
+      [&](google::protobuf::io::CodedInputStream& input, size_t size) {
+        aapt::pb::XmlNode pb_node;
+        if (pb_node.ParseFromCodedStream(&input)) {
+          if (pb_node.has_element()) {
+            const auto& root = pb_node.element();
+            std::unordered_map<std::string, std::string> ns_uri_to_prefix;
+            for (const auto& ns_decl : root.namespace_declaration()) {
+              if (!ns_decl.uri().empty() && !ns_decl.prefix().empty()) {
+                ns_uri_to_prefix.emplace(ns_decl.uri(), ns_decl.prefix());
+              }
+            }
+            traverse_element_and_children(
+                root, [&](const aapt::pb::XmlElement& element) {
+                  collect_layout_classes_and_attributes_for_element(
+                      element, ns_uri_to_prefix, attributes_to_read,
+                      out_classes, out_attributes);
+                  return true;
+                });
+          }
+        }
+      });
 }
 #endif // HAS_PROTOBUF
