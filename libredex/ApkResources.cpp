@@ -256,7 +256,87 @@ ManifestClassInfo extract_classes_from_manifest(const char* data, size_t size) {
 
   return manifest_classes;
 }
+
+// TODO: Deduplicate. This thing will only live in 1 place and is not needed as
+// part of a header file. Will be removed once RedexResources.cpp is gutted.
+std::string convert_from_string16(const android::String16& string16) {
+  android::String8 string8(string16);
+  std::string converted(string8.string());
+  return converted;
+}
 } // namespace
+
+// Returns the attribute with the given name for the current XML element
+std::string get_string_attribute_value(
+    const android::ResXMLTree& parser,
+    const android::String16& attribute_name) {
+
+  const size_t attr_count = parser.getAttributeCount();
+
+  for (size_t i = 0; i < attr_count; ++i) {
+    size_t len;
+    android::String16 key(parser.getAttributeName(i, &len));
+    if (key == attribute_name) {
+      const char16_t* p = parser.getAttributeStringValue(i, &len);
+      if (p != nullptr) {
+        android::String16 target(p, len);
+        std::string converted = convert_from_string16(target);
+        return converted;
+      }
+    }
+  }
+  return std::string("");
+}
+
+bool has_raw_attribute_value(const android::ResXMLTree& parser,
+                             const android::String16& attribute_name,
+                             android::Res_value& out_value) {
+  const size_t attr_count = parser.getAttributeCount();
+
+  for (size_t i = 0; i < attr_count; ++i) {
+    size_t len;
+    android::String16 key(parser.getAttributeName(i, &len));
+    if (key == attribute_name) {
+      parser.getAttributeValue(i, &out_value);
+      return true;
+    }
+  }
+
+  return false;
+}
+
+bool has_bool_attribute(const android::ResXMLTree& parser,
+                        const android::String16& attribute_name) {
+  android::Res_value raw_value;
+  if (has_raw_attribute_value(parser, attribute_name, raw_value)) {
+    return raw_value.dataType == android::Res_value::TYPE_INT_BOOLEAN;
+  }
+  return false;
+}
+
+bool get_bool_attribute_value(const android::ResXMLTree& parser,
+                              const android::String16& attribute_name,
+                              bool default_value) {
+  android::Res_value raw_value;
+  if (has_raw_attribute_value(parser, attribute_name, raw_value)) {
+    if (raw_value.dataType == android::Res_value::TYPE_INT_BOOLEAN) {
+      return static_cast<bool>(raw_value.data);
+    }
+  }
+  return default_value;
+}
+
+int get_int_attribute_or_default_value(const android::ResXMLTree& parser,
+                                       const android::String16& attribute_name,
+                                       int32_t default_value) {
+  android::Res_value raw_value;
+  if (has_raw_attribute_value(parser, attribute_name, raw_value)) {
+    if (raw_value.dataType == android::Res_value::TYPE_INT_DEC) {
+      return static_cast<int>(raw_value.data);
+    }
+  }
+  return default_value;
+}
 
 boost::optional<int32_t> ApkResources::get_min_sdk() {
   auto file = RedexMappedFile::open(m_manifest);
