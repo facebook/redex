@@ -45,6 +45,10 @@ enum class BooleanXMLAttribute {
   Undefined,
 };
 
+// Populate the ComponentTagInfo list of authority class names
+void parse_authorities(const std::string& text,
+                       std::unordered_set<std::string>* authority_classes);
+
 struct ComponentTagInfo {
   ComponentTag tag;
   std::string classname;

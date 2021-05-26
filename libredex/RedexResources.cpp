@@ -19,6 +19,7 @@
 #include "ApkResources.h"
 #include "BundleResources.h"
 #include "Debug.h"
+#include "DexUtil.h"
 #include "IOUtil.h"
 #include "Macros.h"
 #include "ReadMaybeMapped.h"
@@ -113,6 +114,19 @@ std::unordered_set<std::string> extract_classes_from_native_lib(
   return classes;
 }
 } // namespace
+
+void parse_authorities(const std::string& text,
+                       std::unordered_set<std::string>* authority_classes) {
+  size_t start = 0;
+  size_t end = 0;
+  while ((end = text.find(';', start)) != std::string::npos) {
+    authority_classes->insert(
+        java_names::external_to_internal(text.substr(start, end - start)));
+    start = end + 1;
+  }
+  authority_classes->insert(
+      java_names::external_to_internal(text.substr(start)));
+}
 
 // For external testing.
 std::unordered_set<std::string> extract_classes_from_native_lib(

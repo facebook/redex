@@ -235,15 +235,7 @@ ManifestClassInfo extract_classes_from_manifest(const char* data, size_t size) {
 
         if (tag == provider) {
           std::string text = get_string_attribute_value(parser, authorities);
-          size_t start = 0;
-          size_t end = 0;
-          while ((end = text.find(';', start)) != std::string::npos) {
-            tag_info.authority_classes.insert(java_names::external_to_internal(
-                text.substr(start, end - start)));
-            start = end + 1;
-          }
-          tag_info.authority_classes.insert(
-              java_names::external_to_internal(text.substr(start)));
+          parse_authorities(text, &tag_info.authority_classes);
         } else {
           tag_info.has_intent_filters = find_nested_tag(intent_filter, &parser);
         }
