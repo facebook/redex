@@ -222,6 +222,9 @@ void AndroidResources::collect_layout_classes_and_attributes(
             // Dispatcher, find files and create tasks.
             auto directories = find_res_directories();
             for (const auto& dir : directories) {
+              TRACE(RES, 9,
+                    "Scanning %s for xml files for classes and attributes",
+                    dir.c_str());
               find_resource_xml_files(dir, prefixes,
                                       [&](const std::string& file) {
                                         worker_state->push_task(file);

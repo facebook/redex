@@ -334,8 +334,14 @@ void BundleResources::rename_classes_in_layouts(
 
 std::vector<std::string> BundleResources::find_res_directories() {
   std::vector<std::string> dirs;
-  // TODO fill the rest of this out
-  dirs.emplace_back(m_directory + "/base/res");
+  boost::filesystem::path dir(m_directory);
+  for (auto& entry : boost::make_iterator_range(
+           boost::filesystem::directory_iterator(dir), {})) {
+    auto res_dir = entry.path() / "res";
+    if (boost::filesystem::exists(res_dir)) {
+      dirs.emplace_back(res_dir.string());
+    }
+  }
   return dirs;
 }
 
@@ -344,6 +350,9 @@ void BundleResources::collect_layout_classes_and_attributes_for_file(
     const std::unordered_set<std::string>& attributes_to_read,
     std::unordered_set<std::string>* out_classes,
     std::unordered_multimap<std::string, std::string>* out_attributes) {
-  // TODO
+  TRACE(RES,
+        9,
+        "BundleResources collecting classes and attributes for file: %s",
+        file_path.c_str());
 }
 #endif // HAS_PROTOBUF
