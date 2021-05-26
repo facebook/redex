@@ -390,4 +390,3 @@ std::unordered_set<std::string> AndroidResources::get_native_classes() {
       /*push_tasks_while_running=*/true);
   return all_classes;
 }
-

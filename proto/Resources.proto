@@ -22,10 +22,9 @@ package aapt.pb;
 
 option java_package = "com.android.aapt";
 
-// A string pool that wraps the binary form of the C++ class android::ResStringPool.
-message StringPool {
-  bytes data = 1;
-}
+// A string pool that wraps the binary form of the C++ class
+// android::ResStringPool.
+message StringPool { bytes data = 1; }
 
 // The position of a declared entity within a file.
 message SourcePosition {
@@ -33,9 +32,11 @@ message SourcePosition {
   uint32 column_number = 2;
 }
 
-// Developer friendly source file information for an entity in the resource table.
+// Developer friendly source file information for an entity in the resource
+// table.
 message Source {
-  // The index of the string path within the source string pool of a ResourceTable.
+  // The index of the string path within the source string pool of a
+  // ResourceTable.
   uint32 path_idx = 1;
   SourcePosition position = 2;
 }
@@ -48,8 +49,8 @@ message ToolFingerprint {
 
 // Top level message representing a resource table.
 message ResourceTable {
-  // The string pool containing source paths referenced throughout the resource table. This does
-  // not end up in the final binary ARSC file.
+  // The string pool containing source paths referenced throughout the resource
+  // table. This does not end up in the final binary ARSC file.
   StringPool source_pool = 1;
 
   // Resource definitions corresponding to an Android package.
@@ -63,19 +64,19 @@ message ResourceTable {
 }
 
 // A package ID in the range [0x00, 0xff].
-message PackageId {
-  uint32 id = 1;
-}
+message PackageId { uint32 id = 1; }
 
 // Defines resources for an Android package.
 message Package {
   // The package ID of this package, in the range [0x00, 0xff].
-  // - ID 0x00 is reserved for shared libraries, or when the ID is assigned at run-time.
+  // - ID 0x00 is reserved for shared libraries, or when the ID is assigned at
+  // run-time.
   // - ID 0x01 is reserved for the 'android' package (framework).
-  // - ID range [0x02, 0x7f) is reserved for auto-assignment to shared libraries at run-time.
+  // - ID range [0x02, 0x7f) is reserved for auto-assignment to shared libraries
+  // at run-time.
   // - ID 0x7f is reserved for the application package.
-  // - IDs > 0x7f are reserved for the application as well and are treated as feature splits.
-  // This may not be set if no ID was assigned.
+  // - IDs > 0x7f are reserved for the application as well and are treated as
+  // feature splits. This may not be set if no ID was assigned.
   PackageId package_id = 1;
 
   // The Java compatible Android package name of the app.
@@ -86,18 +87,18 @@ message Package {
 }
 
 // A type ID in the range [0x01, 0xff].
-message TypeId {
-  uint32 id = 1;
-}
+message TypeId { uint32 id = 1; }
 
-// A set of resources grouped under a common type. Such types include string, layout, xml, dimen,
-// attr, etc. This maps to the second part of a resource identifier in Java (R.type.entry).
+// A set of resources grouped under a common type. Such types include string,
+// layout, xml, dimen, attr, etc. This maps to the second part of a resource
+// identifier in Java (R.type.entry).
 message Type {
   // The ID of the type. This may not be set if no ID was assigned.
   TypeId type_id = 1;
 
-  // The name of the type. This corresponds to the 'type' part of a full resource name of the form
-  // package:type/entry. The set of legal type names is listed in Resource.cpp.
+  // The name of the type. This corresponds to the 'type' part of a full
+  // resource name of the form package:type/entry. The set of legal type names
+  // is listed in Resource.cpp.
   string name = 2;
 
   // The entries defined for this type.
@@ -108,20 +109,22 @@ message Type {
 message Visibility {
   // The visibility of the resource outside of its package.
   enum Level {
-    // No visibility was explicitly specified. This is typically treated as private.
-    // The distinction is important when two separate R.java files are generated: a public and
-    // private one. An unknown visibility, in this case, would cause the resource to be omitted
-    // from either R.java.
+    // No visibility was explicitly specified. This is typically treated as
+    // private. The distinction is important when two separate R.java files are
+    // generated: a public and private one. An unknown visibility, in this case,
+    // would cause the resource to be omitted from either R.java.
     UNKNOWN = 0;
 
-    // A resource was explicitly marked as private. This means the resource can not be accessed
-    // outside of its package unless the @*package:type/entry notation is used (the asterisk being
-    // the private accessor). If two R.java files are generated (private + public), the resource
-    // will only be emitted to the private R.java file.
+    // A resource was explicitly marked as private. This means the resource can
+    // not be accessed outside of its package unless the @*package:type/entry
+    // notation is used (the asterisk being the private accessor). If two R.java
+    // files are generated (private + public), the resource will only be emitted
+    // to the private R.java file.
     PRIVATE = 1;
 
-    // A resource was explicitly marked as public. This means the resource can be accessed
-    // from any package, and is emitted into all R.java files, public and private.
+    // A resource was explicitly marked as public. This means the resource can
+    // be accessed from any package, and is emitted into all R.java files,
+    // public and private.
     PUBLIC = 2;
   }
 
@@ -134,8 +137,8 @@ message Visibility {
   string comment = 3;
 }
 
-// Whether a resource comes from a compile-time overlay and is explicitly allowed to not overlay an
-// existing resource.
+// Whether a resource comes from a compile-time overlay and is explicitly
+// allowed to not overlay an existing resource.
 message AllowNew {
   // Where this was defined in source.
   Source source = 1;
@@ -152,7 +155,8 @@ message Overlayable {
   // The location of the <overlayable> declaration in the source.
   Source source = 2;
 
-  // The component responsible for enabling and disabling overlays targeting this <overlayable>.
+  // The component responsible for enabling and disabling overlays targeting
+  // this <overlayable>.
   string actor = 3;
 }
 
@@ -178,35 +182,33 @@ message OverlayableItem {
   // The policy defined by the enclosing <policy> tag of this <item>.
   repeated Policy policy = 3;
 
-  // The index into overlayable list that points to the <overlayable> tag that contains
-  // this <item>.
+  // The index into overlayable list that points to the <overlayable> tag that
+  // contains this <item>.
   uint32 overlayable_idx = 4;
 }
 
 // An entry ID in the range [0x0000, 0xffff].
-message EntryId {
-  uint32 id = 1;
-}
+message EntryId { uint32 id = 1; }
 
-// An entry declaration. An entry has a full resource ID that is the combination of package ID,
-// type ID, and its own entry ID. An entry on its own has no value, but values are defined for
-// various configurations/variants.
+// An entry declaration. An entry has a full resource ID that is the combination
+// of package ID, type ID, and its own entry ID. An entry on its own has no
+// value, but values are defined for various configurations/variants.
 message Entry {
-  // The ID of this entry. Together with the package ID and type ID, this forms a full resource ID
-  // of the form 0xPPTTEEEE, where PP is the package ID, TT is the type ID, and EEEE is the entry
-  // ID.
-  // This may not be set if no ID was assigned.
+  // The ID of this entry. Together with the package ID and type ID, this forms
+  // a full resource ID of the form 0xPPTTEEEE, where PP is the package ID, TT
+  // is the type ID, and EEEE is the entry ID. This may not be set if no ID was
+  // assigned.
   EntryId entry_id = 1;
 
-  // The name of this entry. This corresponds to the 'entry' part of a full resource name of the
-  // form package:type/entry.
+  // The name of this entry. This corresponds to the 'entry' part of a full
+  // resource name of the form package:type/entry.
   string name = 2;
 
   // The visibility of this entry (public, private, undefined).
   Visibility visibility = 3;
 
-  // Whether this resource, when originating from a compile-time overlay, is allowed to NOT overlay
-  // any existing resources.
+  // Whether this resource, when originating from a compile-time overlay, is
+  // allowed to NOT overlay any existing resources.
   AllowNew allow_new = 4;
 
   // Whether this resource can be overlaid by a runtime resource overlay (RRO).
@@ -241,9 +243,10 @@ message Value {
   }
 }
 
-// An Item is an abstract type. It represents a value that can appear inline in many places, such
-// as XML attribute values or on the right hand side of style attribute definitions. The concrete
-// type is one of the types below. Only one can be set.
+// An Item is an abstract type. It represents a value that can appear inline in
+// many places, such as XML attribute values or on the right hand side of style
+// attribute definitions. The concrete type is one of the types below. Only one
+// can be set.
 message Item {
   oneof value {
     Reference ref = 1;
@@ -256,9 +259,9 @@ message Item {
   }
 }
 
-// A CompoundValue is an abstract type. It represents a value that is a made of other values.
-// These can only usually appear as top-level resources. The concrete type is one of the types
-// below. Only one can be set.
+// A CompoundValue is an abstract type. It represents a value that is a made of
+// other values. These can only usually appear as top-level resources. The
+// concrete type is one of the types below. Only one can be set.
 message CompoundValue {
   oneof value {
     Attribute attr = 1;
@@ -270,11 +273,10 @@ message CompoundValue {
 }
 
 // Message holding a boolean, so it can be optionally encoded.
-message Boolean {
-  bool value = 1;
-}
+message Boolean { bool value = 1; }
 
-// A value that is a reference to another resource. This reference can be by name or resource ID.
+// A value that is a reference to another resource. This reference can be by
+// name or resource ID.
 message Reference {
   enum Type {
     // A plain reference (@package:type/entry).
@@ -286,37 +288,37 @@ message Reference {
 
   Type type = 1;
 
-  // The resource ID (0xPPTTEEEE) of the resource being referred. This is optional.
+  // The resource ID (0xPPTTEEEE) of the resource being referred. This is
+  // optional.
   uint32 id = 2;
 
-  // The name of the resource being referred. This is optional if the resource ID is set.
+  // The name of the resource being referred. This is optional if the resource
+  // ID is set.
   string name = 3;
 
-  // Whether this reference is referencing a private resource (@*package:type/entry).
+  // Whether this reference is referencing a private resource
+  // (@*package:type/entry).
   bool private = 4;
 
   // Whether this reference is dynamic.
   Boolean is_dynamic = 5;
 }
 
-// A value that represents an ID. This is just a placeholder, as ID values are used to occupy a
-// resource ID (0xPPTTEEEE) as a unique identifier. Their value is unimportant.
-message Id {
-}
+// A value that represents an ID. This is just a placeholder, as ID values are
+// used to occupy a resource ID (0xPPTTEEEE) as a unique identifier. Their value
+// is unimportant.
+message Id {}
 
 // A value that is a string.
-message String {
-  string value = 1;
-}
+message String { string value = 1; }
 
-// A value that is a raw string, which is unescaped/uninterpreted. This is typically used to
-// represent the value of a style attribute before the attribute is compiled and the set of
-// allowed values is known.
-message RawString {
-  string value = 1;
-}
+// A value that is a raw string, which is unescaped/uninterpreted. This is
+// typically used to represent the value of a style attribute before the
+// attribute is compiled and the set of allowed values is known.
+message RawString { string value = 1; }
 
-// A string with styling information, like html tags that specify boldness, italics, etc.
+// A string with styling information, like html tags that specify boldness,
+// italics, etc.
 message StyledString {
   // The raw text of the string.
   string value = 1;
@@ -357,10 +359,8 @@ message FileReference {
 // A value that represents a primitive data type (float, int, boolean, etc.).
 // Refer to Res_value in ResourceTypes.h for info on types and formatting
 message Primitive {
-  message NullType {
-  }
-  message EmptyType {
-  }
+  message NullType {}
+  message EmptyType {}
   oneof oneof_value {
     NullType null_value = 1;
     EmptyType empty_value = 2;
@@ -374,8 +374,8 @@ message Primitive {
     uint32 color_rgb8_value = 10;
     uint32 color_argb4_value = 11;
     uint32 color_rgb4_value = 12;
-    float dimension_value_deprecated = 4 [deprecated=true];
-    float fraction_value_deprecated = 5 [deprecated=true];
+    float dimension_value_deprecated = 4 [ deprecated = true ];
+    float fraction_value_deprecated = 5 [ deprecated = true ];
   }
 }
 
@@ -389,8 +389,8 @@ message Attribute {
     // Any comments associated with the enum or flag.
     string comment = 2;
 
-    // The name of the enum/flag as a reference. Enums/flag items are generated as ID resource
-    // values.
+    // The name of the enum/flag as a reference. Enums/flag items are generated
+    // as ID resource values.
     Reference name = 3;
 
     // The value of the enum/flag.
@@ -402,36 +402,37 @@ message Attribute {
 
   // Bitmask of formats allowed for an attribute.
   enum FormatFlags {
-    NONE = 0x0;          // Proto3 requires a default of 0.
-    ANY = 0x0000ffff;    // Allows any type except ENUM and FLAGS.
-    REFERENCE = 0x01;    // Allows Reference values.
-    STRING = 0x02;       // Allows String/StyledString values.
-    INTEGER = 0x04;      // Allows any integer BinaryPrimitive values.
-    BOOLEAN = 0x08;      // Allows any boolean BinaryPrimitive values.
-    COLOR = 0x010;       // Allows any color BinaryPrimitive values.
-    FLOAT = 0x020;       // Allows any float BinaryPrimitive values.
-    DIMENSION = 0x040;   // Allows any dimension BinaryPrimitive values.
-    FRACTION = 0x080;    // Allows any fraction BinaryPrimitive values.
-    ENUM = 0x00010000;   // Allows enums that are defined in the Attribute's symbols.
-                         // ENUM and FLAGS cannot BOTH be set.
-    FLAGS = 0x00020000;  // Allows flags that are defined in the Attribute's symbols.
-                         // ENUM and FLAGS cannot BOTH be set.
+    NONE = 0x0; // Proto3 requires a default of 0.
+    ANY = 0x0000ffff; // Allows any type except ENUM and FLAGS.
+    REFERENCE = 0x01; // Allows Reference values.
+    STRING = 0x02; // Allows String/StyledString values.
+    INTEGER = 0x04; // Allows any integer BinaryPrimitive values.
+    BOOLEAN = 0x08; // Allows any boolean BinaryPrimitive values.
+    COLOR = 0x010; // Allows any color BinaryPrimitive values.
+    FLOAT = 0x020; // Allows any float BinaryPrimitive values.
+    DIMENSION = 0x040; // Allows any dimension BinaryPrimitive values.
+    FRACTION = 0x080; // Allows any fraction BinaryPrimitive values.
+    ENUM = 0x00010000; // Allows enums that are defined in the Attribute's
+                       // symbols. ENUM and FLAGS cannot BOTH be set.
+    FLAGS = 0x00020000; // Allows flags that are defined in the Attribute's
+                        // symbols. ENUM and FLAGS cannot BOTH be set.
   }
 
-  // A bitmask of types that this XML attribute accepts. Corresponds to the flags in the
-  // enum FormatFlags.
+  // A bitmask of types that this XML attribute accepts. Corresponds to the
+  // flags in the enum FormatFlags.
   uint32 format_flags = 1;
 
-  // The smallest integer allowed for this XML attribute. Only makes sense if the format includes
-  // FormatFlags::INTEGER.
+  // The smallest integer allowed for this XML attribute. Only makes sense if
+  // the format includes FormatFlags::INTEGER.
   int32 min_int = 2;
 
-  // The largest integer allowed for this XML attribute. Only makes sense if the format includes
-  // FormatFlags::INTEGER.
+  // The largest integer allowed for this XML attribute. Only makes sense if the
+  // format includes FormatFlags::INTEGER.
   int32 max_int = 3;
 
-  // The set of enums/flags defined in this attribute. Only makes sense if the format includes
-  // either FormatFlags::ENUM or FormatFlags::FLAGS. Having both is an error.
+  // The set of enums/flags defined in this attribute. Only makes sense if the
+  // format includes either FormatFlags::ENUM or FormatFlags::FLAGS. Having both
+  // is an error.
   repeated Symbol symbol = 4;
 }
 
@@ -462,8 +463,9 @@ message Style {
   repeated Entry entry = 3;
 }
 
-// A value that represents a <declare-styleable> XML resource. These are not real resources and
-// only end up as Java fields in the generated R.java. They do not end up in the binary ARSC file.
+// A value that represents a <declare-styleable> XML resource. These are not
+// real resources and only end up as Java fields in the generated R.java. They
+// do not end up in the binary ARSC file.
 message Styleable {
   // An attribute defined for this styleable.
   message Entry {
