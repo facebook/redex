@@ -10,6 +10,7 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/filesystem.hpp>
+#include <boost/filesystem/operations.hpp>
 #include <boost/iostreams/device/mapped_file.hpp>
 #include <boost/optional.hpp>
 #include <boost/regex.hpp>
@@ -703,15 +704,20 @@ boost::optional<int32_t> get_min_sdk(const std::string& manifest_filename) {
   return boost::none;
 }
 
-ManifestClassInfo get_manifest_class_info(const std::string& filename) {
+ManifestClassInfo get_manifest_class_info(const std::string& apk_dir) {
+  std::string manifest =
+      (boost::filesystem::path(apk_dir) / "AndroidManifest.xml").string();
   ManifestClassInfo classes;
-  redex::read_file_with_contents(filename, [&](const char* data, size_t size) {
-    if (size == 0) {
-      fprintf(stderr, "Unable to read manifest file: %s\n", filename.c_str());
-      return;
-    }
-    classes = extract_classes_from_manifest(data, size);
-  });
+  if (boost::filesystem::exists(manifest)) {
+    redex::read_file_with_contents(manifest, [&](const char* data,
+                                                 size_t size) {
+      if (size == 0) {
+        fprintf(stderr, "Unable to read manifest file: %s\n", manifest.c_str());
+        return;
+      }
+      classes = extract_classes_from_manifest(data, size);
+    });
+  }
   return classes;
 }
 

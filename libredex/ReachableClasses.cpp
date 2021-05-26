@@ -460,9 +460,7 @@ void analyze_reachable_from_manifest(
 
   auto manifest_class_info = [&apk_dir]() {
     try {
-      std::string manifest =
-          (boost::filesystem::path(apk_dir) / "AndroidManifest.xml").string();
-      return get_manifest_class_info(manifest);
+      return get_manifest_class_info(apk_dir);
     } catch (const std::exception& e) {
       std::cerr << "Error reading manifest: " << e.what() << std::endl;
       return ManifestClassInfo{};

@@ -6,13 +6,23 @@
  */
 
 #include "RedexResources.h"
+#include "RedexTestUtils.h"
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include <boost/filesystem.hpp>
+
 TEST(ManifestClassesTest, exported) {
-  const auto& manifest_filename = std::getenv("test_manifest_path");
-  const auto& class_info = get_manifest_class_info(manifest_filename);
+  // Setup a normal looking apk directory
+  auto tmp_dir = redex::make_tmp_dir("ManifestClassesTest%%%%%%%%");
+  std::ifstream src_stream(std::getenv("test_manifest_path"), std::ios::binary);
+  auto dest = tmp_dir.path + "/AndroidManifest.xml";
+  {
+    std::ofstream dest_stream(dest, std::ios::binary);
+    dest_stream << src_stream.rdbuf();
+  }
+  const auto& class_info = get_manifest_class_info(tmp_dir.path);
 
   const auto& tag_infos = class_info.component_tags;
   EXPECT_EQ(tag_infos.size(), 5);
