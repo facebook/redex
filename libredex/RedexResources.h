@@ -113,6 +113,8 @@ std::unordered_set<std::string> get_native_classes(
 std::unordered_set<std::string> get_layout_classes(
     const std::string& apk_directory);
 
+std::unordered_set<std::string> get_files_by_suffix(
+    const std::string& directory, const std::string& suffix);
 std::unordered_set<std::string> get_xml_files(const std::string& directory);
 std::unordered_set<uint32_t> get_xml_reference_attributes(
     const std::string& filename);
@@ -179,11 +181,6 @@ void walk_references_for_resource(
     uint32_t resID,
     std::unordered_set<uint32_t>* nodes_visited,
     std::unordered_set<std::string>* leaf_string_values);
-
-std::unordered_set<uint32_t> get_js_resources(
-    const std::string& directory,
-    const std::vector<std::string>& js_assets_lists,
-    const std::map<std::string, std::vector<uint32_t>>& name_to_ids);
 
 std::unordered_set<uint32_t> get_resources_by_name_prefix(
     const std::vector<std::string>& prefixes,

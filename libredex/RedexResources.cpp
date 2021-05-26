@@ -42,7 +42,6 @@
 #include "utils/String16.h"
 #include "utils/String8.h"
 #include "utils/TypeHelpers.h"
-#include <json/json.h>
 
 #include "Debug.h"
 #include "Macros.h"
@@ -162,75 +161,6 @@ std::string dotname_to_dexname(const std::string& classname) {
   dexname += ';';
   std::replace(dexname.begin(), dexname.end(), '.', '/');
   return dexname;
-}
-
-void extract_by_pattern(const std::string& string_to_search,
-                        const boost::regex& regex,
-                        std::unordered_set<std::string>& result) {
-  boost::smatch m;
-  std::string s = string_to_search;
-  while (boost::regex_search(s, m, regex)) {
-    if (m.size() > 1) {
-      result.insert(m[1].str());
-    }
-    s = m.suffix().str();
-  }
-}
-
-void extract_js_sounds(const std::string& file_contents,
-                       std::unordered_set<std::string>& result) {
-  static boost::regex sound_regex("\"([^\\\"]+)\\.(m4a|ogg)\"");
-  extract_by_pattern(file_contents, sound_regex, result);
-}
-
-void extract_js_uris(const std::string& file_contents,
-                     std::unordered_set<std::string>& result) {
-  static boost::regex uri_regex("\\buri:\\s*\"([^\\\"]+)\"");
-  extract_by_pattern(file_contents, uri_regex, result);
-}
-
-void extract_js_asset_registrations(const std::string& file_contents,
-                                    std::unordered_set<std::string>& result) {
-  static boost::regex register_regex("registerAsset\\((.+?)\\)");
-  static boost::regex name_regex("name:\\\"(.+?)\\\"");
-  static boost::regex location_regex(
-      "httpServerLocation:\\\"/assets/(.+?)\\\"");
-  static boost::regex special_char_regex("[^a-z0-9_]");
-  std::unordered_set<std::string> registrations;
-  extract_by_pattern(file_contents, register_regex, registrations);
-  for (const std::string& registration : registrations) {
-    boost::smatch m;
-    if (!boost::regex_search(registration, m, location_regex) || m.empty()) {
-      continue;
-    }
-    std::ostringstream asset_path;
-    asset_path << m[1].str() << '/'; // location
-    if (!boost::regex_search(registration, m, name_regex) || m.empty()) {
-      continue;
-    }
-    asset_path << m[1].str(); // name
-    std::string full_path = asset_path.str();
-    boost::replace_all(full_path, "/", "_");
-    ;
-    boost::algorithm::to_lower(full_path);
-
-    std::ostringstream stripped_asset_path;
-    std::ostream_iterator<char, char> oi(stripped_asset_path);
-    boost::regex_replace(oi, full_path.begin(), full_path.end(),
-                         special_char_regex, "",
-                         boost::match_default | boost::format_all);
-
-    result.emplace(stripped_asset_path.str());
-  }
-}
-
-std::unordered_set<std::string> extract_js_resources(
-    const std::string& file_contents) {
-  std::unordered_set<std::string> result;
-  extract_js_sounds(file_contents, result);
-  extract_js_uris(file_contents, result);
-  extract_js_asset_registrations(file_contents, result);
-  return result;
 }
 
 bool is_binary_xml(const void* data, size_t size) {
@@ -721,8 +651,6 @@ ManifestClassInfo get_manifest_class_info(const std::string& apk_dir) {
   return classes;
 }
 
-namespace {
-
 std::unordered_set<std::string> get_files_by_suffix(
     const std::string& directory, const std::string& suffix) {
   std::unordered_set<std::string> files;
@@ -749,113 +677,8 @@ std::unordered_set<std::string> get_files_by_suffix(
   return files;
 }
 
-} // namespace
-
 std::unordered_set<std::string> get_xml_files(const std::string& directory) {
   return get_files_by_suffix(directory, ".xml");
-}
-
-namespace {
-
-std::unordered_set<std::string> get_js_files(const std::string& directory) {
-  return get_files_by_suffix(directory, ".js");
-}
-
-std::unordered_set<std::string> get_candidate_js_resources_from_bundle(
-    const std::string& filename) {
-  std::string file_contents = read_entire_file(filename);
-  std::unordered_set<std::string> js_candidate_resources;
-  if (!file_contents.empty()) {
-    js_candidate_resources = extract_js_resources(file_contents);
-  } else {
-    fprintf(stderr, "Unable to read file: %s\n", filename.data());
-  }
-  return js_candidate_resources;
-}
-
-std::unordered_set<std::string> get_candidate_js_resources_from_assets_list(
-    const std::string& filename) {
-  std::ifstream inbuf(filename);
-  Json::Value json;
-  inbuf >> json;
-  const auto& assets_list = json["ids"];
-
-  std::unordered_set<std::string> js_candidate_resources;
-  for (const auto& asset : assets_list) {
-    js_candidate_resources.insert(asset.asString());
-  }
-
-  return js_candidate_resources;
-}
-
-std::unordered_set<uint32_t> get_apk_resources_from_candidates(
-    const std::unordered_set<std::string>& candidate_resources,
-    std::map<std::string, std::vector<uint32_t>> name_to_ids) {
-  // The actual resources are the intersection of the real resources and the
-  // candidate resources (since our current javascript processing produces
-  // a few potential resource names that are not actually valid).
-  // Look through the smaller set and compare it to the larger to efficiently
-  // compute the intersection.
-  std::unordered_set<uint32_t> apk_resources;
-  if (name_to_ids.size() < candidate_resources.size()) {
-    for (auto& p : name_to_ids) {
-      if (candidate_resources.find(p.first) != candidate_resources.end()) {
-        apk_resources.insert(p.second.begin(), p.second.end());
-      }
-    }
-  } else {
-    for (auto& name : candidate_resources) {
-      if (name_to_ids.find(name) != name_to_ids.end()) {
-        apk_resources.insert(name_to_ids[name].begin(),
-                             name_to_ids[name].end());
-      }
-    }
-  }
-
-  return apk_resources;
-}
-
-// Uses an explicitly provided file to list resources referenced in js.
-std::unordered_set<uint32_t> get_js_resources_from_assets_lists(
-    const std::vector<std::string>& js_assets_lists,
-    const std::map<std::string, std::vector<uint32_t>>& name_to_ids) {
-  std::unordered_set<std::string> js_candidate_resources;
-  for (const auto& f : js_assets_lists) {
-    auto c = get_candidate_js_resources_from_assets_list(f);
-    js_candidate_resources.insert(c.begin(), c.end());
-  }
-  return get_apk_resources_from_candidates(js_candidate_resources, name_to_ids);
-}
-
-// Parses the content of all .js files and extracts all resources referenced.
-std::unordered_set<uint32_t> get_js_resources_by_parsing(
-    const std::string& directory,
-    const std::map<std::string, std::vector<uint32_t>>& name_to_ids) {
-  std::unordered_set<std::string> js_candidate_resources;
-  for (auto& f : get_js_files(directory)) {
-    auto c = get_candidate_js_resources_from_bundle(f);
-    js_candidate_resources.insert(c.begin(), c.end());
-  }
-
-  return get_apk_resources_from_candidates(js_candidate_resources, name_to_ids);
-}
-
-} // namespace
-
-std::unordered_set<uint32_t> get_js_resources(
-    const std::string& directory,
-    const std::vector<std::string>& js_assets_lists,
-    const std::map<std::string, std::vector<uint32_t>>& name_to_ids) {
-  std::unordered_set<uint32_t> assets_from_js_files =
-      get_js_resources_by_parsing(directory, name_to_ids);
-  std::unordered_set<uint32_t> assets_from_js_list_files =
-      get_js_resources_from_assets_lists(js_assets_lists, name_to_ids);
-
-  std::unordered_set<uint32_t> js_assets;
-  js_assets.insert(assets_from_js_files.begin(), assets_from_js_files.end());
-  js_assets.insert(assets_from_js_list_files.begin(),
-                   assets_from_js_list_files.end());
-  return js_assets;
 }
 
 std::unordered_set<uint32_t> get_resources_by_name_prefix(
