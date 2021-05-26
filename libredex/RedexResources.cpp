@@ -456,22 +456,6 @@ std::unordered_set<std::string> get_xml_files(const std::string& directory) {
   return get_files_by_suffix(directory, ".xml");
 }
 
-std::unordered_set<uint32_t> get_resources_by_name_prefix(
-    const std::vector<std::string>& prefixes,
-    const std::map<std::string, std::vector<uint32_t>>& name_to_ids) {
-  std::unordered_set<uint32_t> found_resources;
-
-  for (const auto& pair : name_to_ids) {
-    for (const auto& prefix : prefixes) {
-      if (boost::algorithm::starts_with(pair.first, prefix)) {
-        found_resources.insert(pair.second.begin(), pair.second.end());
-      }
-    }
-  }
-
-  return found_resources;
-}
-
 namespace {
 
 void ensure_file_contents(const std::string& file_contents,

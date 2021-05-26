@@ -166,8 +166,4 @@ void walk_references_for_resource(
     std::unordered_set<uint32_t>* nodes_visited,
     std::unordered_set<std::string>* leaf_string_values);
 
-std::unordered_set<uint32_t> get_resources_by_name_prefix(
-    const std::vector<std::string>& prefixes,
-    const std::map<std::string, std::vector<uint32_t>>& name_to_ids);
-
 const int TYPE_INDEX_BIT_SHIFT = 16;
