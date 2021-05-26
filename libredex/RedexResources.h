@@ -192,30 +192,3 @@ std::unordered_set<uint32_t> get_resources_by_name_prefix(
     const std::map<std::string, std::vector<uint32_t>>& name_to_ids);
 
 const int TYPE_INDEX_BIT_SHIFT = 16;
-
-class ResourcesArscFile {
- public:
-  ResourcesArscFile(const ResourcesArscFile&) = delete;
-  ResourcesArscFile& operator=(const ResourcesArscFile&) = delete;
-
-  android::ResTable res_table;
-  android::SortedVector<uint32_t> sorted_res_ids;
-  std::map<uint32_t, std::string> id_to_name;
-  std::map<std::string, std::vector<uint32_t>> name_to_ids;
-
-  explicit ResourcesArscFile(const std::string& path);
-  std::vector<std::string> get_resource_strings_by_name(
-      const std::string& res_name);
-  void remap_ids(const std::map<uint32_t, uint32_t>& old_to_remapped_ids);
-  std::unordered_set<uint32_t> get_types_by_name(
-      const std::unordered_set<std::string>& type_names);
-  size_t serialize();
-  ~ResourcesArscFile();
-
-  size_t get_length() const;
-
- private:
-  RedexMappedFile m_f;
-  size_t m_arsc_len;
-  bool m_file_closed = false;
-};
