@@ -285,6 +285,32 @@ void AndroidResources::collect_layout_classes_and_attributes(
   }
 }
 
+void AndroidResources::rename_classes_in_layouts(
+    const std::map<std::string, std::string>& rename_map) {
+  ssize_t layout_bytes_delta = 0;
+  size_t num_layout_renamed = 0;
+  auto directories = find_res_directories();
+  // Do this in parallel?
+  for (const auto& dir : directories) {
+    auto xml_files = get_xml_files(dir);
+    for (const auto& path : xml_files) {
+      if (is_raw_resource(path)) {
+        continue;
+      }
+      size_t num_renamed = 0;
+      ssize_t out_delta = 0;
+      TRACE(RES, 3, "Begin rename Views in layout %s", path.c_str());
+      rename_classes_in_layout(path, rename_map, &num_renamed, &out_delta);
+      TRACE(RES, 3, "Renamed %zu class names in file %s", num_renamed,
+            path.c_str());
+      layout_bytes_delta += out_delta;
+      num_layout_renamed += num_renamed;
+    }
+  }
+  TRACE(RES, 2, "Renaming %zu entries, saved %zi bytes", num_layout_renamed,
+        layout_bytes_delta);
+}
+
 std::set<std::string> multimap_values_to_set(
     const std::unordered_multimap<std::string, std::string>& map,
     const std::string& key) {

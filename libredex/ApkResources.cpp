@@ -601,7 +601,7 @@ int ApkResources::replace_in_xml_string_pool(
   return android::OK;
 }
 
-int ApkResources::rename_classes_in_layout(
+bool ApkResources::rename_classes_in_layout(
     const std::string& file_path,
     const std::map<std::string, std::string>& rename_map,
     size_t* out_num_renamed,
@@ -613,35 +613,15 @@ int ApkResources::rename_classes_in_layout(
   auto status = replace_in_xml_string_pool(f.data(), f.size(), rename_map,
                                            &serialized, out_num_renamed);
 
-  if (*out_num_renamed == 0 || status != android::OK) {
-    return status;
+  if (*out_num_renamed == 0) {
+    return true;
   }
-
+  if (status != android::OK) {
+    return false;
+  }
   write_serialized_data(serialized, std::move(f));
   *out_size_delta = serialized.size() - len;
-  return android::OK;
-}
-
-void ApkResources::rename_classes_in_layouts(
-    const std::map<std::string, std::string>& rename_map) {
-  ssize_t layout_bytes_delta = 0;
-  size_t num_layout_renamed = 0;
-  auto xml_files = get_xml_files(m_directory + "/res");
-  for (const auto& path : xml_files) {
-    if (is_raw_resource(path)) {
-      continue;
-    }
-    size_t num_renamed = 0;
-    ssize_t out_delta = 0;
-    TRACE(RES, 3, "Begin rename Views in layout %s", path.c_str());
-    rename_classes_in_layout(path, rename_map, &num_renamed, &out_delta);
-    TRACE(RES, 3, "Renamed %zu ResStringPool entries in layout %s", num_renamed,
-          path.c_str());
-    layout_bytes_delta += out_delta;
-    num_layout_renamed += num_renamed;
-  }
-  TRACE(RES, 2, "Renamed %zu ResStringPool entries, delta %zi bytes",
-        num_layout_renamed, layout_bytes_delta);
+  return true;
 }
 
 namespace {

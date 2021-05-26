@@ -327,9 +327,78 @@ ManifestClassInfo BundleResources::get_manifest_class_info() {
   return manifest_classes;
 }
 
-void BundleResources::rename_classes_in_layouts(
-    const std::map<std::string, std::string>& rename_map) {
-  // TODO
+namespace {
+void apply_rename_map(const std::map<std::string, std::string>& rename_map,
+                      aapt::pb::XmlNode* node,
+                      size_t* out_num_renamed) {
+  // NOTE: The implementation that follows is not at all similar to ApkResources
+  // though this is likely sufficient. ApkResources, when renaming will simply
+  // iterate through a string pool, picking up anything wherever it might be in
+  // the document. This is simply checking tag names, attribute values and text.
+  if (node->has_element()) {
+    auto element = node->mutable_element();
+    {
+      auto search = rename_map.find(element->name());
+      if (search != rename_map.end()) {
+        element->set_name(search->second);
+        (*out_num_renamed)++;
+      }
+    }
+    auto attr_size = element->attribute_size();
+    for (int i = 0; i < attr_size; i++) {
+      auto pb_attr = element->mutable_attribute(i);
+      auto search = rename_map.find(pb_attr->value());
+      if (search != rename_map.end()) {
+        pb_attr->set_value(search->second);
+        (*out_num_renamed)++;
+      }
+    }
+    auto child_size = element->child_size();
+    for (int i = 0; i < child_size; i++) {
+      auto child = element->mutable_child(i);
+      apply_rename_map(rename_map, child, out_num_renamed);
+    }
+  } else {
+    auto search = rename_map.find(node->text());
+    if (search != rename_map.end()) {
+      node->set_text(search->second);
+      (*out_num_renamed)++;
+    }
+  }
+}
+} // namespace
+
+bool BundleResources::rename_classes_in_layout(
+    const std::string& file_path,
+    const std::map<std::string, std::string>& rename_map,
+    size_t* out_num_renamed,
+    ssize_t* out_size_delta) {
+  bool write_failed = false;
+  read_protobuf_file_contents(
+      file_path,
+      [&](google::protobuf::io::CodedInputStream& input, size_t size) {
+        aapt::pb::XmlNode pb_node;
+        if (pb_node.ParseFromCodedStream(&input)) {
+          size_t num_renamed = 0;
+          apply_rename_map(rename_map, &pb_node, &num_renamed);
+          if (num_renamed > 0) {
+            std::ofstream out(file_path, std::ofstream::binary);
+            if (pb_node.SerializeToOstream(&out)) {
+              TRACE(RES, 5, "Successfully renamed %zu items in %s", num_renamed,
+                    file_path.c_str());
+              *out_num_renamed = *out_num_renamed + num_renamed;
+              // TODO: either stat the result file and compute delta, or
+              // determine this is a useless metric if it isn't necessarily
+              // related to the resulting compiled XML format.
+            } else {
+              TRACE(RES, 5, "Failed to rename in file %s", file_path.c_str());
+              write_failed = true;
+            }
+          }
+        }
+      });
+
+  return !write_failed;
 }
 
 std::vector<std::string> BundleResources::find_res_directories() {

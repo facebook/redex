@@ -152,3 +152,26 @@ TEST(BundleResources, ReadLayout) {
         EXPECT_EQ(found_method_names, 2);
       });
 }
+
+TEST(BundleResources, RenameLayout) {
+  setup_resources_and_run(
+      [&](const std::string& extract_dir, BundleResources* resources) {
+        std::map<std::string, std::string> rename_map;
+        rename_map.emplace("com.fb.bundles.WickedCoolButton", "X.001");
+        rename_map.emplace("com.fb.bundles.NiftyViewGroup", "X.002");
+        resources->rename_classes_in_layouts(rename_map);
+
+        // Read the file again to see it take effect
+        std::unordered_set<std::string> layout_classes;
+        std::unordered_set<std::string> attrs_to_read;
+        std::unordered_multimap<std::string, std::string> attribute_values;
+        resources->collect_layout_classes_and_attributes_for_file(
+            extract_dir + "/base/res/layout/activity_main.xml",
+            attrs_to_read,
+            &layout_classes,
+            &attribute_values);
+        EXPECT_EQ(layout_classes.size(), 2);
+        EXPECT_EQ(layout_classes.count("LX/001;"), 1);
+        EXPECT_EQ(layout_classes.count("LX/002;"), 1);
+      });
+}

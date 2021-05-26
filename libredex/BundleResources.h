@@ -24,8 +24,6 @@ class BundleResources : public AndroidResources {
       : AndroidResources(directory) {}
   boost::optional<int32_t> get_min_sdk() override;
   ManifestClassInfo get_manifest_class_info() override;
-  void rename_classes_in_layouts(
-      const std::map<std::string, std::string>& rename_map) override;
   void collect_layout_classes_and_attributes_for_file(
       const std::string& file_path,
       const std::unordered_set<std::string>& attributes_to_read,
@@ -35,5 +33,11 @@ class BundleResources : public AndroidResources {
 
  protected:
   std::vector<std::string> find_res_directories() override;
+
+  bool rename_classes_in_layout(
+      const std::string& file_path,
+      const std::map<std::string, std::string>& rename_map,
+      size_t* out_num_renamed,
+      ssize_t* out_size_delta) override;
 };
 #endif // HAS_PROTOBUF

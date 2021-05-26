@@ -82,8 +82,10 @@ class AndroidResources {
  public:
   virtual boost::optional<int32_t> get_min_sdk() = 0;
   virtual ManifestClassInfo get_manifest_class_info() = 0;
-  virtual void rename_classes_in_layouts(
-      const std::map<std::string, std::string>& rename_map) = 0;
+  // Rewrites all tag names/attribute values that are in the given map, for
+  // every non-raw XML file in the directory.
+  void rename_classes_in_layouts(
+      const std::map<std::string, std::string>& rename_map);
   // Iterates through all layouts in the given directory. Adds all class names
   // to the output set, and allows for any specified attribute values to be
   // returned as well. Attribute names should specify their namespace, if any
@@ -107,6 +109,14 @@ class AndroidResources {
       : m_directory(directory) {}
 
   virtual std::vector<std::string> find_res_directories() = 0;
+
+  // Mutate the given file based on the rename map, returning whether or not it
+  // worked with some potentially meaningless out params for size metrics.
+  virtual bool rename_classes_in_layout(
+      const std::string& file_path,
+      const std::map<std::string, std::string>& rename_map,
+      size_t* out_num_renamed,
+      ssize_t* out_size_delta) = 0;
 
   const std::string& m_directory;
 };

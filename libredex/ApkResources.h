@@ -45,14 +45,6 @@ class ApkResources : public AndroidResources {
         m_manifest(directory + "/AndroidManifest.xml") {}
   boost::optional<int32_t> get_min_sdk() override;
   ManifestClassInfo get_manifest_class_info() override;
-  // Replaces all strings in the ResStringPool for the given file with their
-  // replacements. Writes all changes to disk, clobbering the given file.
-  // Same return codes as replace_in_xml_string_pool.
-  int rename_classes_in_layout(
-      const std::string& file_path,
-      const std::map<std::string, std::string>& rename_map,
-      size_t* out_num_renamed,
-      ssize_t* out_size_delta);
   void collect_layout_classes_and_attributes_for_file(
       const std::string& file_path,
       const std::unordered_set<std::string>& attributes_to_read,
@@ -69,8 +61,6 @@ class ApkResources : public AndroidResources {
       const std::map<std::string, std::string>& rename_map,
       android::Vector<char>* out_data,
       size_t* out_num_renamed);
-  void rename_classes_in_layouts(
-      const std::map<std::string, std::string>& rename_map) override;
 
   int inline_xml_reference_attributes(
       const std::string& filename,
@@ -81,6 +71,14 @@ class ApkResources : public AndroidResources {
 
  protected:
   std::vector<std::string> find_res_directories() override;
+
+  // Replaces all strings in the ResStringPool for the given file with their
+  // replacements. Writes all changes to disk, clobbering the given file.
+  bool rename_classes_in_layout(
+      const std::string& file_path,
+      const std::map<std::string, std::string>& rename_map,
+      size_t* out_num_renamed,
+      ssize_t* out_size_delta) override;
 
  private:
   const std::string m_manifest;
