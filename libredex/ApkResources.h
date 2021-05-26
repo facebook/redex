@@ -10,6 +10,7 @@
 #include <boost/optional.hpp>
 #include <map>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -52,6 +53,12 @@ class ApkResources : public AndroidResources {
       const std::map<std::string, std::string>& rename_map,
       size_t* out_num_renamed,
       ssize_t* out_size_delta);
+  void collect_layout_classes_and_attributes_for_file(
+      const std::string& file_path,
+      const std::unordered_set<std::string>& attributes_to_read,
+      std::unordered_set<std::string>* out_classes,
+      std::unordered_multimap<std::string, std::string>* out_attributes)
+      override;
   // Given the bytes of a binary XML file, replace the entries (if any) in the
   // ResStringPool. Writes result to the given Vector output param.
   // Returns android::NO_ERROR (0) on success, or one of the corresponding
@@ -71,6 +78,9 @@ class ApkResources : public AndroidResources {
   void remap_xml_reference_attributes(
       const std::string& filename,
       const std::map<uint32_t, uint32_t>& kept_to_remapped_ids);
+
+ protected:
+  std::vector<std::string> find_res_directories() override;
 
  private:
   const std::string m_manifest;

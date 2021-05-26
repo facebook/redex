@@ -66,20 +66,6 @@ constexpr decltype(redex_parallel::default_num_threads()) kReadNativeThreads =
 using path_t = boost::filesystem::path;
 using dir_iterator = boost::filesystem::directory_iterator;
 using rdir_iterator = boost::filesystem::recursive_directory_iterator;
-
-std::string convert_from_string16(const android::String16& string16) {
-  android::String8 string8(string16);
-  std::string converted(string8.string());
-  return converted;
-}
-
-bool is_binary_xml(const void* data, size_t size) {
-  if (size < sizeof(android::ResChunk_header)) {
-    return false;
-  }
-  return dtohs(((android::ResChunk_header*)data)->type) ==
-         android::RES_XML_TYPE;
-}
 } // namespace
 
 std::unique_ptr<AndroidResources> create_resource_reader(
@@ -100,101 +86,6 @@ std::unique_ptr<AndroidResources> create_resource_reader(
 }
 
 namespace {
-std::string read_attribute_name_at_idx(const android::ResXMLTree& parser,
-                                       size_t idx) {
-  size_t len;
-  auto name_chars = parser.getAttributeName8(idx, &len);
-  if (name_chars != nullptr) {
-    return std::string(name_chars);
-  } else {
-    auto wide_chars = parser.getAttributeName(idx, &len);
-    android::String16 s16(wide_chars, len);
-    auto converted = convert_from_string16(s16);
-    return converted;
-  }
-}
-
-void extract_classes_from_layout(
-    const char* data,
-    size_t size,
-    const std::unordered_set<std::string>& attributes_to_read,
-    std::unordered_set<std::string>& out_classes,
-    std::unordered_multimap<std::string, std::string>& out_attributes) {
-  if (!is_binary_xml(data, size)) {
-    return;
-  }
-
-  android::ResXMLTree parser;
-  parser.setTo(data, size);
-
-  android::String16 name("name");
-  android::String16 klazz("class");
-  android::String16 target_class("targetClass");
-
-  if (parser.getError() != android::NO_ERROR) {
-    return;
-  }
-
-  std::unordered_map<int, std::string> namespace_prefix_map;
-  android::ResXMLParser::event_code_t type;
-  do {
-    type = parser.next();
-    if (type == android::ResXMLParser::START_TAG) {
-      size_t len;
-      android::String16 tag(parser.getElementName(&len));
-      std::string classname = convert_from_string16(tag);
-      if (!strcmp(classname.c_str(), "fragment") ||
-          !strcmp(classname.c_str(), "view") ||
-          !strcmp(classname.c_str(), "dialog") ||
-          !strcmp(classname.c_str(), "activity") ||
-          !strcmp(classname.c_str(), "intent")) {
-        classname = get_string_attribute_value(parser, klazz);
-        if (classname.empty()) {
-          classname = get_string_attribute_value(parser, name);
-        }
-        if (classname.empty()) {
-          classname = get_string_attribute_value(parser, target_class);
-        }
-      }
-      std::string converted = std::string("L") + classname + std::string(";");
-
-      bool is_classname = converted.find('.') != std::string::npos;
-      if (is_classname) {
-        std::replace(converted.begin(), converted.end(), '.', '/');
-        out_classes.insert(converted);
-      }
-      if (!attributes_to_read.empty()) {
-        for (size_t i = 0; i < parser.getAttributeCount(); i++) {
-          auto ns_id = parser.getAttributeNamespaceID(i);
-          std::string attr_name = read_attribute_name_at_idx(parser, i);
-          std::string fully_qualified;
-          if (ns_id >= 0) {
-            fully_qualified = namespace_prefix_map[ns_id] + ":" + attr_name;
-          } else {
-            fully_qualified = attr_name;
-          }
-          if (attributes_to_read.count(fully_qualified) != 0) {
-            auto val = parser.getAttributeStringValue(i, &len);
-            if (val != nullptr) {
-              android::String16 s16(val, len);
-              out_attributes.emplace(fully_qualified,
-                                     convert_from_string16(s16));
-            }
-          }
-        }
-      }
-    } else if (type == android::ResXMLParser::START_NAMESPACE) {
-      auto id = parser.getNamespaceUriID();
-      size_t len;
-      auto prefix = parser.getNamespacePrefix(&len);
-      ;
-      namespace_prefix_map.emplace(
-          id, convert_from_string16(android::String16(prefix, len)));
-    }
-  } while (type != android::ResXMLParser::BAD_DOCUMENT &&
-           type != android::ResXMLParser::END_DOCUMENT);
-}
-
 /*
  * Returns all strings that look like java class names from a native library.
  *
@@ -288,14 +179,11 @@ bool is_raw_resource(const std::string& filename) {
 }
 
 namespace {
-
 template <typename Fn>
-void find_resource_xml_files(const std::string& apk_directory,
+void find_resource_xml_files(const std::string& dir,
                              const std::vector<std::string>& skip_dirs_prefixes,
                              Fn handler) {
-  std::string root = apk_directory + std::string("/res");
-  path_t res(root);
-
+  path_t res(dir);
   if (exists(res) && is_directory(res)) {
     for (auto it = dir_iterator(res); it != dir_iterator(); ++it) {
       auto const& entry = *it;
@@ -327,25 +215,12 @@ void find_resource_xml_files(const std::string& apk_directory,
     }
   }
 }
-
 } // namespace
 
-void collect_layout_classes_and_attributes_for_file(
-    const std::string& file_path,
+void AndroidResources::collect_layout_classes_and_attributes(
     const std::unordered_set<std::string>& attributes_to_read,
-    std::unordered_set<std::string>& out_classes,
-    std::unordered_multimap<std::string, std::string>& out_attributes) {
-  redex::read_file_with_contents(file_path, [&](const char* data, size_t size) {
-    extract_classes_from_layout(data, size, attributes_to_read, out_classes,
-                                out_attributes);
-  });
-}
-
-void collect_layout_classes_and_attributes(
-    const std::string& apk_directory,
-    const std::unordered_set<std::string>& attributes_to_read,
-    std::unordered_set<std::string>& out_classes,
-    std::unordered_multimap<std::string, std::string>& out_attributes) {
+    std::unordered_set<std::string>* out_classes,
+    std::unordered_multimap<std::string, std::string>* out_attributes) {
   auto collect_fn = [&](const std::vector<std::string>& prefixes) {
     std::mutex out_mutex;
     workqueue_run<std::string>(
@@ -353,10 +228,14 @@ void collect_layout_classes_and_attributes(
             const std::string& input) {
           if (input.empty()) {
             // Dispatcher, find files and create tasks.
-            find_resource_xml_files(apk_directory, prefixes,
-                                    [&](const std::string& file) {
-                                      worker_state->push_task(file);
-                                    });
+            auto directories = find_res_directories();
+            for (const auto& dir : directories) {
+              find_resource_xml_files(dir, prefixes,
+                                      [&](const std::string& file) {
+                                        worker_state->push_task(file);
+                                      });
+            }
+
             return;
           }
 
@@ -364,15 +243,15 @@ void collect_layout_classes_and_attributes(
           std::unordered_multimap<std::string, std::string>
               local_out_attributes;
           collect_layout_classes_and_attributes_for_file(
-              input, attributes_to_read, local_out_classes,
-              local_out_attributes);
+              input, attributes_to_read, &local_out_classes,
+              &local_out_attributes);
           if (!local_out_classes.empty() || !local_out_attributes.empty()) {
             std::unique_lock<std::mutex> lock(out_mutex);
             // C++17: use merge to avoid copies.
-            out_classes.insert(local_out_classes.begin(),
-                               local_out_classes.end());
-            out_attributes.insert(local_out_attributes.begin(),
-                                  local_out_attributes.end());
+            out_classes->insert(local_out_classes.begin(),
+                                local_out_classes.end());
+            out_attributes->insert(local_out_attributes.begin(),
+                                   local_out_attributes.end());
           }
         },
         std::vector<std::string>{""},
@@ -395,17 +274,17 @@ void collect_layout_classes_and_attributes(
   if (slow_invariants_debug) {
     TRACE(RES, 1,
           "Checking collect_layout_classes_and_attributes filter assumption");
-    size_t out_classes_size = out_classes.size();
-    size_t out_attributes_size = out_attributes.size();
+    size_t out_classes_size = out_classes->size();
+    size_t out_attributes_size = out_attributes->size();
 
     // Comparison is complicated, as out_attributes is a multi-map.
     // Assume that the inputs were empty, for simplicity.
-    out_classes.clear();
-    out_attributes.clear();
+    out_classes->clear();
+    out_attributes->clear();
 
     collect_fn({});
-    size_t new_out_classes_size = out_classes.size();
-    size_t new_out_attributes_size = out_attributes.size();
+    size_t new_out_classes_size = out_classes->size();
+    size_t new_out_attributes_size = out_attributes->size();
     redex_assert(out_classes_size == new_out_classes_size);
     redex_assert(out_attributes_size == new_out_attributes_size);
   }

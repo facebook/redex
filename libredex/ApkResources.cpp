@@ -7,8 +7,6 @@
 
 #include "ApkResources.h"
 
-#include "RedexMappedFile.h"
-#include "RedexResources.h"
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/filesystem.hpp>
@@ -37,9 +35,11 @@
 #include "Debug.h"
 #include "DexUtil.h"
 #include "IOUtil.h"
-#include "Macros.h"
 #include "ReadMaybeMapped.h"
+#include "RedexMappedFile.h"
+#include "RedexResources.h"
 #include "Trace.h"
+#include "WorkQueue.h"
 
 // Workaround for inclusion order, when compiling on Windows (#defines NO_ERROR
 // as 0).
@@ -257,8 +257,6 @@ ManifestClassInfo extract_classes_from_manifest(const char* data, size_t size) {
   return manifest_classes;
 }
 
-// TODO: Deduplicate. This thing will only live in 1 place and is not needed as
-// part of a header file. Will be removed once RedexResources.cpp is gutted.
 std::string convert_from_string16(const android::String16& string16) {
   android::String8 string8(string16);
   std::string converted(string8.string());
@@ -336,6 +334,125 @@ int get_int_attribute_or_default_value(const android::ResXMLTree& parser,
     }
   }
   return default_value;
+}
+
+std::vector<std::string> ApkResources::find_res_directories() {
+  return {m_directory + "/res"};
+}
+
+namespace {
+bool is_binary_xml(const void* data, size_t size) {
+  if (size < sizeof(android::ResChunk_header)) {
+    return false;
+  }
+  return dtohs(((android::ResChunk_header*)data)->type) ==
+         android::RES_XML_TYPE;
+}
+
+std::string read_attribute_name_at_idx(const android::ResXMLTree& parser,
+                                       size_t idx) {
+  size_t len;
+  auto name_chars = parser.getAttributeName8(idx, &len);
+  if (name_chars != nullptr) {
+    return std::string(name_chars);
+  } else {
+    auto wide_chars = parser.getAttributeName(idx, &len);
+    android::String16 s16(wide_chars, len);
+    auto converted = convert_from_string16(s16);
+    return converted;
+  }
+}
+
+void extract_classes_from_layout(
+    const char* data,
+    size_t size,
+    const std::unordered_set<std::string>& attributes_to_read,
+    std::unordered_set<std::string>* out_classes,
+    std::unordered_multimap<std::string, std::string>* out_attributes) {
+  if (!is_binary_xml(data, size)) {
+    return;
+  }
+
+  android::ResXMLTree parser;
+  parser.setTo(data, size);
+
+  android::String16 name("name");
+  android::String16 klazz("class");
+  android::String16 target_class("targetClass");
+
+  if (parser.getError() != android::NO_ERROR) {
+    return;
+  }
+
+  std::unordered_map<int, std::string> namespace_prefix_map;
+  android::ResXMLParser::event_code_t type;
+  do {
+    type = parser.next();
+    if (type == android::ResXMLParser::START_TAG) {
+      size_t len;
+      android::String16 tag(parser.getElementName(&len));
+      std::string classname = convert_from_string16(tag);
+      if (!strcmp(classname.c_str(), "fragment") ||
+          !strcmp(classname.c_str(), "view") ||
+          !strcmp(classname.c_str(), "dialog") ||
+          !strcmp(classname.c_str(), "activity") ||
+          !strcmp(classname.c_str(), "intent")) {
+        classname = get_string_attribute_value(parser, klazz);
+        if (classname.empty()) {
+          classname = get_string_attribute_value(parser, name);
+        }
+        if (classname.empty()) {
+          classname = get_string_attribute_value(parser, target_class);
+        }
+      }
+      std::string converted = std::string("L") + classname + std::string(";");
+
+      bool is_classname = converted.find('.') != std::string::npos;
+      if (is_classname) {
+        std::replace(converted.begin(), converted.end(), '.', '/');
+        out_classes->insert(converted);
+      }
+      if (!attributes_to_read.empty()) {
+        for (size_t i = 0; i < parser.getAttributeCount(); i++) {
+          auto ns_id = parser.getAttributeNamespaceID(i);
+          std::string attr_name = read_attribute_name_at_idx(parser, i);
+          std::string fully_qualified;
+          if (ns_id >= 0) {
+            fully_qualified = namespace_prefix_map[ns_id] + ":" + attr_name;
+          } else {
+            fully_qualified = attr_name;
+          }
+          if (attributes_to_read.count(fully_qualified) != 0) {
+            auto val = parser.getAttributeStringValue(i, &len);
+            if (val != nullptr) {
+              android::String16 s16(val, len);
+              out_attributes->emplace(fully_qualified,
+                                      convert_from_string16(s16));
+            }
+          }
+        }
+      }
+    } else if (type == android::ResXMLParser::START_NAMESPACE) {
+      auto id = parser.getNamespaceUriID();
+      size_t len;
+      auto prefix = parser.getNamespacePrefix(&len);
+      namespace_prefix_map.emplace(
+          id, convert_from_string16(android::String16(prefix, len)));
+    }
+  } while (type != android::ResXMLParser::BAD_DOCUMENT &&
+           type != android::ResXMLParser::END_DOCUMENT);
+}
+} // namespace
+
+void ApkResources::collect_layout_classes_and_attributes_for_file(
+    const std::string& file_path,
+    const std::unordered_set<std::string>& attributes_to_read,
+    std::unordered_set<std::string>* out_classes,
+    std::unordered_multimap<std::string, std::string>* out_attributes) {
+  redex::read_file_with_contents(file_path, [&](const char* data, size_t size) {
+    extract_classes_from_layout(data, size, attributes_to_read, out_classes,
+                                out_attributes);
+  });
 }
 
 boost::optional<int32_t> ApkResources::get_min_sdk() {

@@ -80,11 +80,30 @@ class AndroidResources {
   virtual ManifestClassInfo get_manifest_class_info() = 0;
   virtual void rename_classes_in_layouts(
       const std::map<std::string, std::string>& rename_map) = 0;
+  // Iterates through all layouts in the given directory. Adds all class names
+  // to the output set, and allows for any specified attribute values to be
+  // returned as well. Attribute names should specify their namespace, if any
+  // (so android:onClick instead of just onClick)
+  void collect_layout_classes_and_attributes(
+      const std::unordered_set<std::string>& attributes_to_read,
+      std::unordered_set<std::string>* out_classes,
+      std::unordered_multimap<std::string, std::string>* out_attributes);
+
+  // Same as above, for single file.
+  virtual void collect_layout_classes_and_attributes_for_file(
+      const std::string& file_path,
+      const std::unordered_set<std::string>& attributes_to_read,
+      std::unordered_set<std::string>* out_classes,
+      std::unordered_multimap<std::string, std::string>* out_attributes) = 0;
+
   virtual ~AndroidResources() {}
 
  protected:
   explicit AndroidResources(const std::string& directory)
       : m_directory(directory) {}
+
+  virtual std::vector<std::string> find_res_directories() = 0;
+
   const std::string& m_directory;
 };
 
@@ -105,23 +124,6 @@ std::unordered_set<std::string> get_xml_files(const std::string& directory);
 // for resource remapping, class name extraction, etc. These files don't follow
 // binary XML format, and thus are out of scope for many optimizations.
 bool is_raw_resource(const std::string& filename);
-
-// Iterates through all layouts in the given directory. Adds all class names to
-// the output set, and allows for any specified attribute values to be returned
-// as well. Attribute names should specify their namespace, if any (so
-// android:onClick instead of just onClick)
-void collect_layout_classes_and_attributes(
-    const std::string& apk_directory,
-    const std::unordered_set<std::string>& attributes_to_read,
-    std::unordered_set<std::string>& out_classes,
-    std::unordered_multimap<std::string, std::string>& out_attributes);
-
-// Same as above, for single file.
-void collect_layout_classes_and_attributes_for_file(
-    const std::string& file_path,
-    const std::unordered_set<std::string>& attributes_to_read,
-    std::unordered_set<std::string>& out_classes,
-    std::unordered_multimap<std::string, std::string>& out_attributes);
 
 // Convenience method for copying values in a multimap to a set, for a
 // particular key.

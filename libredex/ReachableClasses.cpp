@@ -535,8 +535,9 @@ void analyze_reachable_from_xml_layouts(const Scope& scope,
   // Method names used by reflection
   attrs_to_read.emplace(ONCLICK_ATTRIBUTE);
   std::unordered_multimap<std::string, std::string> attribute_values;
-  collect_layout_classes_and_attributes(apk_dir, attrs_to_read, layout_classes,
-                                        attribute_values);
+  auto resources = create_resource_reader(apk_dir);
+  resources->collect_layout_classes_and_attributes(
+      attrs_to_read, &layout_classes, &attribute_values);
   for (const std::string& classname : layout_classes) {
     TRACE(PGR, 3, "xml_layout: %s", classname.c_str());
     mark_reachable_by_xml(classname);

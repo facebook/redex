@@ -124,4 +124,19 @@ void BundleResources::rename_classes_in_layouts(
     const std::map<std::string, std::string>& rename_map) {
   // TODO
 }
+
+std::vector<std::string> BundleResources::find_res_directories() {
+  std::vector<std::string> dirs;
+  // TODO fill the rest of this out
+  dirs.emplace_back(m_directory + "/base/res");
+  return dirs;
+}
+
+void BundleResources::collect_layout_classes_and_attributes_for_file(
+    const std::string& file_path,
+    const std::unordered_set<std::string>& attributes_to_read,
+    std::unordered_set<std::string>* out_classes,
+    std::unordered_multimap<std::string, std::string>* out_attributes) {
+  // TODO
+}
 #endif // HAS_PROTOBUF
