@@ -45,7 +45,7 @@ class ApplicationModule(object):
                         dependencies.append(tokens[1])
                     if tokens[0][0] != ".":
                         canary_match = re.search(
-                            "([A-Za-z0-9]*)[.]dex[0-9]+[.]Canary", tokens[2]
+                            "([A-Za-z0-9]*)[.]dex[0-9][0-9_]*[.]Canary", tokens[2]
                         )
                         if canary_match is not None:
                             canary_prefix = canary_match.group(1)
