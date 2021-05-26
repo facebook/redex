@@ -1075,13 +1075,6 @@ std::unordered_set<std::string> get_native_classes(
   return all_classes;
 }
 
-RedexMappedFile map_file(const char* path, bool mode_write) {
-  // For backwards compat callers.
-  return RedexMappedFile::open(path, !mode_write);
-}
-
-void unmap_and_close(RedexMappedFile map ATTRIBUTE_UNUSED) {}
-
 size_t write_serialized_data(const android::Vector<char>& cVec,
                              RedexMappedFile f) {
   size_t vec_size = cVec.size();
@@ -1205,7 +1198,7 @@ int rename_classes_in_layout(
     const std::map<std::string, std::string>& shortened_names,
     size_t* out_num_renamed,
     ssize_t* out_size_delta) {
-  RedexMappedFile f = map_file(file_path.c_str(), /*mode_write=*/true);
+  RedexMappedFile f = RedexMappedFile::open(file_path, /* read_only= */ false);
   size_t len = f.size();
 
   android::Vector<char> serialized;
@@ -1213,7 +1206,6 @@ int rename_classes_in_layout(
                                            &serialized, out_num_renamed);
 
   if (*out_num_renamed == 0 || status != android::OK) {
-    unmap_and_close(std::move(f));
     return status;
   }
 
@@ -1223,7 +1215,7 @@ int rename_classes_in_layout(
 }
 
 ResourcesArscFile::ResourcesArscFile(const std::string& path)
-    : m_f(map_file(path.c_str(), /*mode_write=*/true)) {
+    : m_f(RedexMappedFile::open(path, /* read_only= */ false)) {
   m_arsc_len = m_f.size();
   int error = res_table.add(m_f.const_data(), m_f.size(), /* cookie */ -1,
                             /* copyData*/ true);

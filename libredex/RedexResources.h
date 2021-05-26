@@ -27,10 +27,8 @@ const char* const ONCLICK_ATTRIBUTE = "android:onClick";
 std::string read_entire_file(const std::string& filename);
 void write_entire_file(const std::string& filename,
                        const std::string& contents);
-RedexMappedFile map_file(const char* path, bool mode_write = false);
 size_t write_serialized_data(const android::Vector<char>& cVec,
                              RedexMappedFile f);
-void unmap_and_close(RedexMappedFile map);
 
 std::string get_string_attribute_value(const android::ResXMLTree& parser,
                                        const android::String16& attribute_name);

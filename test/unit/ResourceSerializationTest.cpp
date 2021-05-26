@@ -9,6 +9,7 @@
 #include <gtest/gtest.h>
 
 #include "Debug.h"
+#include "RedexMappedFile.h"
 #include "RedexResources.h"
 #include "SanitizersConfig.h"
 #include "androidfw/ResourceTypes.h"
@@ -140,7 +141,7 @@ TEST(ResStringPool, ReplaceStringsInXmlLayout) {
   // Given layout file should have a series of View subclasses in the XML, which
   // we will rename. Parse the resulting binary data, and make sure all tags are
   // right.
-  auto f = map_file(std::getenv("test_layout_path"));
+  auto f = RedexMappedFile::open(std::getenv("test_layout_path"));
 
   std::map<std::string, std::string> shortened_names;
   shortened_names.emplace("com.example.test.CustomViewGroup", "Z.a");
@@ -182,8 +183,6 @@ TEST(ResStringPool, ReplaceStringsInXmlLayout) {
   } while (type != android::ResXMLParser::BAD_DOCUMENT &&
            type != android::ResXMLParser::END_DOCUMENT);
   EXPECT_EQ(tag_count, 5);
-
-  unmap_and_close(std::move(f));
 }
 
 void assert_serialized_data(const void* original,
@@ -197,18 +196,17 @@ void assert_serialized_data(const void* original,
 }
 
 TEST(ResTable, TestRoundTrip) {
-  auto f = map_file(std::getenv("test_arsc_path"));
+  auto f = RedexMappedFile::open(std::getenv("test_arsc_path"));
   android::ResTable table;
   ASSERT_EQ(table.add(f.const_data(), f.size()), 0);
   // Just invoke the serialize method to ensure the same data comes back
   android::Vector<char> serialized;
   table.serialize(serialized, 0);
   assert_serialized_data(f.const_data(), f.size(), serialized);
-  unmap_and_close(std::move(f));
 }
 
 TEST(ResTable, AppendNewType) {
-  auto f = map_file(std::getenv("test_arsc_path"));
+  auto f = RedexMappedFile::open(std::getenv("test_arsc_path"));
   android::ResTable table;
   ASSERT_EQ(table.add(f.const_data(), f.size()), 0);
   // Read the number of original types.
@@ -274,6 +272,4 @@ TEST(ResTable, AppendNewType) {
   android::Vector<android::String8> type_names;
   round_trip.getTypeNamesForPackage(0, &type_names);
   ASSERT_EQ(type_names.size(), original_type_names.size() + 1);
-
-  unmap_and_close(std::move(f));
 }
