@@ -46,6 +46,13 @@ class ApkResources : public AndroidResources {
   void rename_classes_in_layouts(
       const std::map<std::string, std::string>& rename_map) override;
 
+  int inline_xml_reference_attributes(
+      const std::string& filename,
+      const std::map<uint32_t, android::Res_value>& id_to_inline_value);
+  void remap_xml_reference_attributes(
+      const std::string& filename,
+      const std::map<uint32_t, uint32_t>& kept_to_remapped_ids);
+
  private:
   const std::string m_manifest;
 };

@@ -124,12 +124,6 @@ std::unordered_set<std::string> get_xml_files(const std::string& directory);
 // for resource remapping, class name extraction, etc. These files don't follow
 // binary XML format, and thus are out of scope for many optimizations.
 bool is_raw_resource(const std::string& filename);
-int inline_xml_reference_attributes(
-    const std::string& filename,
-    const std::map<uint32_t, android::Res_value>& id_to_inline_value);
-void remap_xml_reference_attributes(
-    const std::string& filename,
-    const std::map<uint32_t, uint32_t>& kept_to_remapped_ids);
 
 // Iterates through all layouts in the given directory. Adds all class names to
 // the output set, and allows for any specified attribute values to be returned

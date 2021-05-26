@@ -48,6 +48,29 @@
 #endif
 
 namespace {
+
+const uint32_t PACKAGE_RESID_START = 0x7f000000;
+
+void ensure_file_contents(const std::string& file_contents,
+                          const std::string& filename) {
+  if (file_contents.empty()) {
+    fprintf(stderr, "Unable to read file: %s\n", filename.data());
+    throw std::runtime_error("Unable to read file: " + filename);
+  }
+}
+
+/*
+ * Reads an entire file into a std::string. Returns an empty string if
+ * anything went wrong (e.g. file not found).
+ */
+std::string read_entire_file(const std::string& filename) {
+  std::ifstream in(filename, std::ios::in | std::ios::binary);
+  std::ostringstream sstr;
+  sstr << in.rdbuf();
+  redex_assert(!in.bad());
+  return sstr.str();
+}
+
 size_t write_serialized_data(const android::Vector<char>& cVec,
                              RedexMappedFile f) {
   size_t vec_size = cVec.size();
@@ -430,6 +453,143 @@ void ApkResources::rename_classes_in_layouts(
   }
   TRACE(RES, 2, "Renamed %zu ResStringPool entries, delta %zi bytes",
         num_layout_renamed, layout_bytes_delta);
+}
+
+namespace {
+bool is_drawable_attribute(android::ResXMLTree& parser, size_t attr_index) {
+  size_t name_size;
+  const char* attr_name_8 = parser.getAttributeName8(attr_index, &name_size);
+  if (attr_name_8 != nullptr) {
+    std::string name_str = std::string(attr_name_8, name_size);
+    if (name_str.compare("drawable") == 0) {
+      return true;
+    }
+  }
+
+  const char16_t* attr_name_16 =
+      parser.getAttributeName(attr_index, &name_size);
+  if (attr_name_16 != nullptr) {
+    android::String8 name_str_8 = android::String8(attr_name_16, name_size);
+    std::string name_str = std::string(name_str_8.string(), name_size);
+    if (name_str.compare("drawable") == 0) {
+      return true;
+    }
+  }
+
+  return false;
+}
+} // namespace
+
+int ApkResources::inline_xml_reference_attributes(
+    const std::string& filename,
+    const std::map<uint32_t, android::Res_value>& id_to_inline_value) {
+  int num_values_inlined = 0;
+  std::string file_contents = read_entire_file(filename);
+  ensure_file_contents(file_contents, filename);
+  bool made_change = false;
+
+  android::ResXMLTree parser;
+  parser.setTo(file_contents.data(), file_contents.size());
+  if (parser.getError() != android::NO_ERROR) {
+    throw std::runtime_error("Unable to read file: " + filename);
+  }
+
+  android::ResXMLParser::event_code_t type;
+  do {
+    type = parser.next();
+    if (type == android::ResXMLParser::START_TAG) {
+      const size_t attr_count = parser.getAttributeCount();
+      for (size_t i = 0; i < attr_count; ++i) {
+        // Older versions of Android (below V5) do not allow inlining into
+        // android:drawable attributes.
+        if (is_drawable_attribute(parser, i)) {
+          continue;
+        }
+
+        if (parser.getAttributeDataType(i) ==
+            android::Res_value::TYPE_REFERENCE) {
+          android::Res_value outValue;
+          parser.getAttributeValue(i, &outValue);
+          if (outValue.data <= PACKAGE_RESID_START) {
+            continue;
+          }
+
+          auto p = id_to_inline_value.find(outValue.data);
+          if (p != id_to_inline_value.end()) {
+            android::Res_value new_value = p->second;
+            parser.setAttribute(i, new_value);
+            ++num_values_inlined;
+            made_change = true;
+          }
+        }
+      }
+    }
+  } while (type != android::ResXMLParser::BAD_DOCUMENT &&
+           type != android::ResXMLParser::END_DOCUMENT);
+
+  if (made_change) {
+    write_string_to_file(filename, file_contents);
+  }
+
+  return num_values_inlined;
+}
+
+void ApkResources::remap_xml_reference_attributes(
+    const std::string& filename,
+    const std::map<uint32_t, uint32_t>& kept_to_remapped_ids) {
+  if (is_raw_resource(filename)) {
+    return;
+  }
+  std::string file_contents = read_entire_file(filename);
+  ensure_file_contents(file_contents, filename);
+  bool made_change = false;
+
+  android::ResXMLTree parser;
+  parser.setTo(file_contents.data(), file_contents.size());
+  if (parser.getError() != android::NO_ERROR) {
+    throw std::runtime_error("Unable to read file: " + filename);
+  }
+
+  // Update embedded resource ID array
+  size_t resIdCount = 0;
+  uint32_t* resourceIds = parser.getResourceIds(&resIdCount);
+  for (size_t i = 0; i < resIdCount; ++i) {
+    auto id_search = kept_to_remapped_ids.find(resourceIds[i]);
+    if (id_search != kept_to_remapped_ids.end()) {
+      resourceIds[i] = id_search->second;
+      made_change = true;
+    }
+  }
+
+  android::ResXMLParser::event_code_t type;
+  do {
+    type = parser.next();
+    if (type == android::ResXMLParser::START_TAG) {
+      const size_t attr_count = parser.getAttributeCount();
+      for (size_t i = 0; i < attr_count; ++i) {
+        if (parser.getAttributeDataType(i) ==
+                android::Res_value::TYPE_REFERENCE ||
+            parser.getAttributeDataType(i) ==
+                android::Res_value::TYPE_ATTRIBUTE) {
+          android::Res_value outValue;
+          parser.getAttributeValue(i, &outValue);
+          if (outValue.data > PACKAGE_RESID_START &&
+              kept_to_remapped_ids.count(outValue.data)) {
+            uint32_t new_value = kept_to_remapped_ids.at(outValue.data);
+            if (new_value != outValue.data) {
+              parser.setAttributeData(i, new_value);
+              made_change = true;
+            }
+          }
+        }
+      }
+    }
+  } while (type != android::ResXMLParser::BAD_DOCUMENT &&
+           type != android::ResXMLParser::END_DOCUMENT);
+
+  if (made_change) {
+    write_string_to_file(filename, file_contents);
+  }
 }
 
 ResourcesArscFile::ResourcesArscFile(const std::string& path)
