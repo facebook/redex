@@ -159,39 +159,6 @@ bool is_binary_xml(const void* data, size_t size) {
          android::RES_XML_TYPE;
 }
 
-std::unordered_set<uint32_t> extract_xml_reference_attributes(
-    const std::string& file_contents, const std::string& filename) {
-  android::ResXMLTree parser;
-  parser.setTo(file_contents.data(), file_contents.size());
-  std::unordered_set<uint32_t> result;
-  if (parser.getError() != android::NO_ERROR) {
-    throw std::runtime_error("Unable to read file: " + filename);
-  }
-
-  android::ResXMLParser::event_code_t type;
-  do {
-    type = parser.next();
-    if (type == android::ResXMLParser::START_TAG) {
-      const size_t attr_count = parser.getAttributeCount();
-      for (size_t i = 0; i < attr_count; ++i) {
-        if (parser.getAttributeDataType(i) ==
-                android::Res_value::TYPE_REFERENCE ||
-            parser.getAttributeDataType(i) ==
-                android::Res_value::TYPE_ATTRIBUTE) {
-          android::Res_value outValue;
-          parser.getAttributeValue(i, &outValue);
-          if (outValue.data > PACKAGE_RESID_START) {
-            result.emplace(outValue.data);
-          }
-        }
-      }
-    }
-  } while (type != android::ResXMLParser::BAD_DOCUMENT &&
-           type != android::ResXMLParser::END_DOCUMENT);
-
-  return result;
-}
-
 /*
  * Reads an entire file into a std::string. Returns an empty string if
  * anything went wrong (e.g. file not found).
@@ -420,17 +387,6 @@ void ensure_file_contents(const std::string& file_contents,
 bool is_raw_resource(const std::string& filename) {
   return filename.find("/res/raw/") != std::string::npos ||
          filename.find("/res/raw-") != std::string::npos;
-}
-
-std::unordered_set<uint32_t> get_xml_reference_attributes(
-    const std::string& filename) {
-  if (is_raw_resource(filename)) {
-    std::unordered_set<uint32_t> empty;
-    return empty;
-  }
-  std::string file_contents = read_entire_file(filename);
-  ensure_file_contents(file_contents, filename);
-  return extract_xml_reference_attributes(file_contents, filename);
 }
 
 namespace {

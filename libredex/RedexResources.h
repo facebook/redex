@@ -120,8 +120,6 @@ std::unordered_set<std::string> get_layout_classes(
 std::unordered_set<std::string> get_files_by_suffix(
     const std::string& directory, const std::string& suffix);
 std::unordered_set<std::string> get_xml_files(const std::string& directory);
-std::unordered_set<uint32_t> get_xml_reference_attributes(
-    const std::string& filename);
 // Checks if the file is in a res/raw folder. Such a file won't be considered
 // for resource remapping, class name extraction, etc. These files don't follow
 // binary XML format, and thus are out of scope for many optimizations.
