@@ -376,12 +376,13 @@ void Model::create_mergers_helper(
     const MergerType::Shape& shape,
     const TypeSet& intf_set,
     const TypeSet& group_values,
+    const strategy::Strategy strategy,
     const boost::optional<InterdexSubgroupIdx>& interdex_subgroup_idx,
     const boost::optional<size_t>& max_mergeables_count,
     size_t min_mergeables_count) {
   InterdexSubgroupIdx subgroup_cnt = 0;
   strategy::apply_grouping(
-      group_values, min_mergeables_count, max_mergeables_count,
+      strategy, group_values, min_mergeables_count, max_mergeables_count,
       [&](const std::vector<const DexType*>& group) {
         create_merger_helper(merger_type, shape, intf_set, group,
                              interdex_subgroup_idx, subgroup_cnt++);
@@ -742,12 +743,13 @@ void Model::flatten_shapes(const MergerType& merger,
           }
 
           create_mergers_helper(merger.type, *shape, *intf_set,
-                                new_groups[gindex], gindex, m_spec.max_count,
-                                m_spec.min_count);
+                                new_groups[gindex], m_spec.strategy, gindex,
+                                m_spec.max_count, m_spec.min_count);
         }
       } else {
         create_mergers_helper(merger.type, *shape, *intf_set, group_values,
-                              boost::none, m_spec.max_count, m_spec.min_count);
+                              m_spec.strategy, boost::none, m_spec.max_count,
+                              m_spec.min_count);
       }
     }
   }

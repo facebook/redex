@@ -13,6 +13,7 @@
 #include "ApproximateShapeMerging.h"
 #include "DexClass.h"
 #include "MergerType.h"
+#include "MergingStrategies.h"
 #include "Trace.h"
 #include "TypeSystem.h"
 
@@ -127,6 +128,8 @@ struct ModelSpec {
   std::unordered_set<DexType*> gen_annos;
   // set of types safe to consume the class obj of merged classes
   std::unordered_set<DexType*> const_class_safe_types;
+  // The merging strategy of the model
+  strategy::Strategy strategy{strategy::BY_CLASS_COUNT};
   // Group splitting. This is looser than the per dex split and takes into
   // account the interdex order (if any provided).
   InterDexGroupingType merge_per_interdex_set{InterDexGroupingType::DISABLED};
@@ -381,6 +384,7 @@ class Model {
       const MergerType::Shape& shape,
       const TypeSet& intf_set,
       const TypeSet& group_values,
+      const strategy::Strategy strategy,
       const boost::optional<InterdexSubgroupIdx>& interdex_subgroup_idx,
       const boost::optional<size_t>& max_mergeables_count,
       size_t min_mergeables_count);

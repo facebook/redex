@@ -40,10 +40,6 @@ enum Strategy {
   BY_REFS = 2,
 };
 
-extern Strategy g_strategy;
-
-void set_merging_strategy(const Strategy);
-
 template <typename WalkerFn>
 void group_by_cls_count(const TypeSet& mergeable_types,
                         size_t min_mergeables_count,
@@ -163,11 +159,12 @@ void group_by_refs(const TypeSet& mergeable_types, WalkerFn walker) {
 }
 
 template <typename WalkerFn>
-void apply_grouping(const TypeSet& mergeable_types,
+void apply_grouping(const Strategy strategy,
+                    const TypeSet& mergeable_types,
                     size_t min_mergeables_count,
                     const boost::optional<size_t>& max_mergeables_count,
                     WalkerFn walker) {
-  switch (g_strategy) {
+  switch (strategy) {
   case BY_CLASS_COUNT:
     group_by_cls_count(mergeable_types, min_mergeables_count,
                        max_mergeables_count, walker);

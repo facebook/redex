@@ -109,6 +109,20 @@ InterDexGroupingType get_merge_per_interdex_type(
   return string_to_grouping.at(merge_per_interdex_set);
 }
 
+strategy::Strategy get_merging_strategy(const std::string& merging_strategy) {
+  const static std::unordered_map<std::string, strategy::Strategy>
+      string_to_strategy = {
+          {"by_cls_count", strategy::Strategy::BY_CLASS_COUNT},
+          {"by_code_size", strategy::Strategy::BY_CODE_SIZE},
+          {"by_refs", strategy::Strategy::BY_REFS}};
+
+  always_assert_log(string_to_strategy.count(merging_strategy) > 0,
+                    "Merging strategy %s not found. Please check the list"
+                    " of accepted values.",
+                    merging_strategy.c_str());
+  return string_to_strategy.at(merging_strategy);
+}
+
 TypeTagConfig get_type_tag_config(const std::string& type_tag_config) {
   const static std::unordered_map<std::string, TypeTagConfig> string_to_config =
       {{"none", TypeTagConfig::NONE},
@@ -207,6 +221,11 @@ void ClassMergingPass::bind_config() {
 
       model_spec.get("include_primary_dex", false, model.include_primary_dex);
 
+      // Merging strategy is by default `by_cls_count`.
+      std::string merging_strategy;
+      model_spec.get("merging_strategy", "by_cls_count", merging_strategy);
+      model.strategy = get_merging_strategy(merging_strategy);
+
       std::string merge_per_interdex_set;
       model_spec.get("merge_per_interdex_set", "disabled",
                      merge_per_interdex_set);
@@ -257,7 +276,6 @@ void ClassMergingPass::run_pass(DexStoresVector& stores,
   if (m_model_specs.empty()) {
     return;
   }
-  strategy::set_merging_strategy(strategy::BY_CLASS_COUNT);
 
   auto scope = build_class_scope(stores);
   for (ModelSpec& model_spec : m_model_specs) {
