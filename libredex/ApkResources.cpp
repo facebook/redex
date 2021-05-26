@@ -14,6 +14,7 @@
 #include <boost/iostreams/device/mapped_file.hpp>
 #include <boost/optional.hpp>
 #include <boost/regex.hpp>
+#include <fcntl.h>
 #include <map>
 
 #include "Macros.h"
