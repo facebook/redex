@@ -8,6 +8,7 @@
 #include "ConstantPropagationAnalysis.h"
 
 #include <boost/functional/hash.hpp>
+#include <cinttypes>
 #include <mutex>
 #include <set>
 
@@ -321,7 +322,7 @@ bool PrimitiveAnalyzer::analyze_default(const IRInstruction* insn,
 
 bool PrimitiveAnalyzer::analyze_const(const IRInstruction* insn,
                                       ConstantEnvironment* env) {
-  TRACE(CONSTP, 5, "Discovered new constant for reg: %d value: %ld",
+  TRACE(CONSTP, 5, "Discovered new constant for reg: %d value: %" PRIu64,
         insn->dest(), insn->get_literal());
   env->set(insn->dest(), SignedConstantDomain(insn->get_literal()));
   return true;

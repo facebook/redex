@@ -685,8 +685,10 @@ void InterDex::init_cross_dex_ref_minimizer_and_relocate_methods() {
 
     TRACE(IDEX, 2,
           "[dex ordering] Cross-dex-relocator active, max relocated methods "
-          "per class: %zu, relocating static methods: %s, non-static direct "
-          "methods: %s, virtual methods: %s",
+          "per class: %" PRIu64
+          ", relocating static methods: %s"
+          ", non-static direct methods: %s"
+          ", virtual methods: %s",
           m_cross_dex_relocator_config.max_relocated_methods_per_class,
           m_cross_dex_relocator_config.relocate_static_methods ? "yes" : "no",
           m_cross_dex_relocator_config.relocate_non_static_direct_methods

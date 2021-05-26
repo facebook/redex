@@ -91,8 +91,8 @@ void CrossDexRefMinimizer::reprioritize(
     m_prioritized_classes.update_priority(affected_class, priority);
     TRACE(
         IDEX, 5,
-        "[dex ordering] Reprioritized class {%s} with priority %016lx; index "
-        "%u; %" PRIu64 " (delta %" PRId64
+        "[dex ordering] Reprioritized class {%s} with priority %016" PRIu64
+        "; index %u; %" PRIu64 " (delta %" PRId64
         ") applied refs weight, %s (delta %s) infrequent refs weights, %zu "
         "total refs",
         SHOW(affected_class), priority, affected_class_info.index,
@@ -263,8 +263,8 @@ void CrossDexRefMinimizer::insert(DexClass* cls) {
   const auto priority = class_info.get_priority();
   m_prioritized_classes.insert(cls, priority);
   TRACE(IDEX, 4,
-        "[dex ordering] Inserting class {%s} with priority %016lx; index %u; "
-        "%s infrequent refs weights, %zu total refs",
+        "[dex ordering] Inserting class {%s} with priority %016" PRIu64
+        "; index %u; %s infrequent refs weights, %zu total refs",
         SHOW(cls), priority, class_info.index,
         format_infrequent_refs_array(class_info.infrequent_refs_weight).c_str(),
         refs.size());
@@ -340,8 +340,8 @@ void CrossDexRefMinimizer::erase(DexClass* cls, bool emitted, bool reset) {
   always_assert(class_info_it != m_class_infos.end());
   const CrossDexRefMinimizer::ClassInfo& class_info = class_info_it->second;
   TRACE(IDEX, 3,
-        "[dex ordering] Processing class {%s} with priority %016lx; index %u; "
-        "%" PRIu64
+        "[dex ordering] Processing class {%s} with priority %016" PRIu64
+        "; index %u; %" PRIu64
         " applied refs weight, %s infrequent refs weights, %zu total refs; "
         "emitted %d",
         SHOW(cls), class_info.get_priority(), class_info.index,

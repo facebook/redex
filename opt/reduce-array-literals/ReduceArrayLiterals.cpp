@@ -7,6 +7,7 @@
 
 #include "ReduceArrayLiterals.h"
 
+#include <cinttypes>
 #include <vector>
 
 #include "BaseIRAnalyzer.h"
@@ -261,7 +262,7 @@ class Analyzer final : public BaseIRAnalyzer<TrackedDomainEnvironment> {
       const auto length = get_singleton(current_state->get(insn->src(0)));
       if (length && is_literal(*length)) {
         auto length_literal = get_literal(*length);
-        TRACE(RAL, 4, "[RAL]     with length %ld", length_literal);
+        TRACE(RAL, 4, "[RAL]     with length %" PRId64, length_literal);
         always_assert(length_literal >= 0 && length_literal <= 2147483647);
         current_state->set(RESULT_REGISTER,
                            TrackedDomain(make_array(length_literal, insn)));
@@ -294,7 +295,8 @@ class Analyzer final : public BaseIRAnalyzer<TrackedDomainEnvironment> {
       if (array && is_new_array(*array) && !is_array_literal(*array) && index &&
           is_literal(*index)) {
         int64_t index_literal = get_literal(*index);
-        TRACE(RAL, 4, "[RAL]    index %ld of %u", index_literal, array->length);
+        TRACE(RAL, 4, "[RAL]    index %" PRIu64 " of %u", index_literal,
+              array->length);
         if (is_next_index(*array, index_literal)) {
           TRACE(RAL, 4, "[RAL]    is next");
           TrackedValue new_array = *array;

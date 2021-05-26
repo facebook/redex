@@ -7,6 +7,7 @@
 
 #include "FinalInline.h"
 
+#include <cinttypes>
 #include <stdio.h>
 #include <string>
 #include <unordered_map>
@@ -390,7 +391,7 @@ class FinalInlineImpl {
       } else {
         TRACE(FINALINLINE,
               9,
-              "- Integer Field: %s, %lu",
+              "- Integer Field: %s, %" PRIu64,
               SHOW(field),
               static_cast<uint64_t>(const_op->get_literal()));
         ev = DexEncodedValue::zero_for_type(field->get_type());

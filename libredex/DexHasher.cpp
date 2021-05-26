@@ -7,6 +7,8 @@
 
 #include "DexHasher.h"
 
+#include <cinttypes>
+
 #include "DexAccess.h"
 #include "DexClass.h"
 #include "DexInstruction.h"
@@ -64,22 +66,22 @@ void DexClassHasher::hash(bool value) {
   boost::hash_combine(m_hash, value);
 }
 void DexClassHasher::hash(uint8_t value) {
-  TRACE(HASHER, 4, "[hasher] %u", value);
+  TRACE(HASHER, 4, "[hasher] %" PRIu8, value);
   boost::hash_combine(m_hash, value);
 }
 
 void DexClassHasher::hash(uint16_t value) {
-  TRACE(HASHER, 4, "[hasher] %u", value);
+  TRACE(HASHER, 4, "[hasher] %" PRIu16, value);
   boost::hash_combine(m_hash, value);
 }
 
 void DexClassHasher::hash(uint32_t value) {
-  TRACE(HASHER, 4, "[hasher] %u", value);
+  TRACE(HASHER, 4, "[hasher] %" PRIu32, value);
   boost::hash_combine(m_hash, value);
 }
 
 void DexClassHasher::hash(uint64_t value) {
-  TRACE(HASHER, 4, "[hasher] %lu", value);
+  TRACE(HASHER, 4, "[hasher] %" PRIu64, value);
   boost::hash_combine(m_hash, value);
 }
 
