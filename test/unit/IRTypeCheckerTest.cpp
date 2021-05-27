@@ -2084,205 +2084,104 @@ TEST_F(IRTypeCheckerTest, getInstanceSuccess) {
  * v1 not compatible with field class
  *
  * class A { short f; } -> v1
- * short 2              -> v0
+ * short 1              -> v3
  * class B { short f; }
  *
- * iput-short 2 (v0), A (v1), "LB;.f:S;"
+ * iput-short 1 (v3), A (v1), "LB;.f:S;"
  *
  */
 TEST_F(IRTypeCheckerTest, putShortFieldIncompatibleClassFail) {
-  const auto type_a = DexType::make_type("LA;");
-  const auto type_b = DexType::make_type("LB;");
 
-  ClassCreator cls_a_creator(type_a);
-  cls_a_creator.set_super(type::java_lang_Object());
-  auto a_ctor = DexMethod::make_method("LA;.<init>:()V")
-                    ->make_concrete(ACC_PUBLIC, false);
-  cls_a_creator.add_method(a_ctor);
-  auto a_f = DexField::make_field("LA;.f:S;")->make_concrete(ACC_PUBLIC);
-  cls_a_creator.add_field(a_f);
-  cls_a_creator.create();
+  const std::string exp_fail_str =
+      "^Type error in method testMethod at instruction "
+      "'IPUT_SHORT v3, v1, LB;.f:S;' "
+      "@ 0x[0-9a-f]+ for : LA; is not assignable to LB;\n";
 
-  ClassCreator cls_b_creator(type_b);
-  cls_b_creator.set_super(type::java_lang_Object());
-  auto b_ctor = DexMethod::make_method("LB;.<init>:()V")
-                    ->make_concrete(ACC_PUBLIC, false);
-  cls_b_creator.add_method(b_ctor);
-  auto b_f = DexField::make_field("LB;.f:S;")->make_concrete(ACC_PUBLIC);
-  cls_b_creator.add_field(b_f);
-  cls_b_creator.create();
+  IROpcode op = OPCODE_IPUT_SHORT;
+  const auto dex_type_a = DexType::make_type("LA;");
+  const auto dex_type_b = DexType::make_type("LB;");
 
-  using namespace dex_asm;
-  std::vector<IRInstruction*> insns = {
-      // literal 2
-      dasm(OPCODE_CONST, {0_v, 2_L}),
-      // type a
-      dasm(OPCODE_NEW_INSTANCE, type_a),
-      dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {1_v}),
-      dasm(OPCODE_INVOKE_DIRECT, a_ctor, {1_v}),
-      // type b
-      dasm(OPCODE_NEW_INSTANCE, type_b),
-      dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {2_v}),
-      dasm(OPCODE_INVOKE_DIRECT, b_ctor, {2_v}),
+  TestValueType a_type(dex_type_a, type::java_lang_Object(), "LA;.<init>:()V",
+                       "LA;.f:S;");
+  TestValueType b_type(dex_type_b, type::java_lang_Object(), "LB;.<init>:()V",
+                       "LB;.f:S;");
 
-      dasm(OPCODE_IPUT_SHORT, b_f, {0_v, 1_v}),
-
-      dasm(OPCODE_RETURN_VOID),
-  };
-
-  add_code(insns);
-  IRTypeChecker checker(m_method);
-  checker.run();
-  EXPECT_TRUE(checker.fail());
-  EXPECT_THAT(
-      checker.what(),
-      MatchesRegex("^Type error in method testMethod at instruction "
-                   "'IPUT_SHORT v0, v1, LB;.f:S;' "
-                   "@ 0x[0-9a-f]+ for : LA; is not assignable to LB;\n"));
+  field_incompatible_fail_helper(a_type, b_type, exp_fail_str, op, true, SHORT,
+                                 m_method);
 }
 
 /**
  * iput-short success
  *
  * class A { short f; } -> v1
- * short 2              -> v0
+ * short 1              -> v3
  *
- * iput-short 2 (v0), A (v1), "LA;.f:S;"
+ * iput-short 1 (v3), A (v1), "LA;.f:S;"
  *
  */
 TEST_F(IRTypeCheckerTest, putShortSuccess) {
-  const auto type_a = DexType::make_type("LA;");
 
-  ClassCreator cls_a_creator(type_a);
-  cls_a_creator.set_super(type::java_lang_Object());
-  auto a_ctor = DexMethod::make_method("LA;.<init>:()V")
-                    ->make_concrete(ACC_PUBLIC, false);
-  cls_a_creator.add_method(a_ctor);
-  auto a_f = DexField::make_field("LA;.f:S;")->make_concrete(ACC_PUBLIC);
-  cls_a_creator.add_field(a_f);
-  cls_a_creator.create();
+  IROpcode op = OPCODE_IPUT_SHORT;
+  const auto dex_type_a = DexType::make_type("LA;");
+  const auto dex_type_asub = DexType::make_type("LAsub;");
 
-  using namespace dex_asm;
-  std::vector<IRInstruction*> insns = {
-      // literal 2
-      dasm(OPCODE_CONST, {0_v, 2_L}),
-      // type a
-      dasm(OPCODE_NEW_INSTANCE, type_a),
-      dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {1_v}),
-      dasm(OPCODE_INVOKE_DIRECT, a_ctor, {1_v}),
+  TestValueType a_type(dex_type_a, type::java_lang_Object(), "LA;.<init>:()V",
+                       "LA;.f:S;");
+  TestValueType sub_type(dex_type_asub, dex_type_a, "LAsub;.<init>:()V",
+                         "LAsub;.f:S;");
 
-      dasm(OPCODE_IPUT_SHORT, a_f, {0_v, 1_v}),
-
-      dasm(OPCODE_RETURN_VOID),
-  };
-
-  add_code(insns);
-  IRTypeChecker checker(m_method);
-  checker.run();
-  EXPECT_TRUE(checker.good());
+  field_compatible_success_helper(a_type, sub_type, op, true, SHORT, m_method);
 }
 
 /**
  * v1 not compatible with field class
  *
- * class A { short f = 2; } -> v1
+ * class A { short f = 1; } -> v1
  *
  * class B { short f; }
  *
- * iget-short v0, A (v1), "LB;.f:S;"
+ * iget-short v3, A (v1), "LB;.f:S;"
  *
  */
 TEST_F(IRTypeCheckerTest, getShortFieldIncompatibleClassFail) {
-  const auto type_a = DexType::make_type("LA;");
-  const auto type_b = DexType::make_type("LB;");
 
-  ClassCreator cls_a_creator(type_a);
-  cls_a_creator.set_super(type::java_lang_Object());
-  auto a_ctor = DexMethod::make_method("LA;.<init>:(S)V")
-                    ->make_concrete(ACC_PUBLIC, false);
-  cls_a_creator.add_method(a_ctor);
-  auto a_f = DexField::make_field("LA;.f:S;")->make_concrete(ACC_PUBLIC);
-  cls_a_creator.add_field(a_f);
-  cls_a_creator.create();
+  const std::string exp_fail_str =
+      "^Type error in method testMethod at instruction "
+      "'IGET_SHORT v1, LB;.f:S;' "
+      "@ 0x[0-9a-f]+ for : LA; is not assignable to LB;\n";
+  IROpcode op = OPCODE_IGET_SHORT;
+  const auto dex_type_a = DexType::make_type("LA;");
+  const auto dex_type_b = DexType::make_type("LB;");
 
-  ClassCreator cls_b_creator(type_b);
-  cls_b_creator.set_super(type::java_lang_Object());
-  auto b_ctor = DexMethod::make_method("LB;.<init>:()V")
-                    ->make_concrete(ACC_PUBLIC, false);
-  cls_b_creator.add_method(b_ctor);
-  auto b_f = DexField::make_field("LB;.f:S;")->make_concrete(ACC_PUBLIC);
-  cls_b_creator.add_field(b_f);
-  cls_b_creator.create();
+  TestValueType a_type(dex_type_a, type::java_lang_Object(), "LA;.<init>:(S)V",
+                       "LA;.f:S;");
+  TestValueType b_type(dex_type_b, type::java_lang_Object(), "LB;.<init>:()V",
+                       "LB;.f:S;");
 
-  using namespace dex_asm;
-  std::vector<IRInstruction*> insns = {
-      // literal 2
-      dasm(OPCODE_CONST, {3_v, 2_L}),
-      // type a
-      dasm(OPCODE_NEW_INSTANCE, type_a),
-      dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {1_v}),
-      dasm(OPCODE_INVOKE_DIRECT, a_ctor, {1_v, 3_v}),
-      // type b
-      dasm(OPCODE_NEW_INSTANCE, type_b),
-      dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {2_v}),
-      dasm(OPCODE_INVOKE_DIRECT, b_ctor, {2_v}),
-
-      dasm(OPCODE_IGET_SHORT, b_f, {1_v}),
-      dasm(IOPCODE_MOVE_RESULT_PSEUDO, {0_v}),
-
-      dasm(OPCODE_RETURN_VOID),
-  };
-
-  add_code(insns);
-  IRTypeChecker checker(m_method);
-  checker.run();
-  EXPECT_TRUE(checker.fail());
-  EXPECT_THAT(
-      checker.what(),
-      MatchesRegex("^Type error in method testMethod at instruction "
-                   "'IGET_SHORT v1, LB;.f:S;' "
-                   "@ 0x[0-9a-f]+ for : LA; is not assignable to LB;\n"));
+  field_incompatible_fail_helper(a_type, b_type, exp_fail_str, op, false, SHORT,
+                                 m_method);
 }
 
 /**
  * iget-short success
  *
- * class A { short f = 2; } -> v1
+ * class A { short f = 1; } -> v1
  *
- * iget-short v0, A (v1), "LA;.f:S;"
+ * iget-short v3, A (v1), "LA;.f:S;"
  *
  */
 TEST_F(IRTypeCheckerTest, getShortSuccess) {
-  const auto type_a = DexType::make_type("LA;");
 
-  ClassCreator cls_a_creator(type_a);
-  cls_a_creator.set_super(type::java_lang_Object());
-  auto a_ctor = DexMethod::make_method("LA;.<init>:(S)V")
-                    ->make_concrete(ACC_PUBLIC, false);
-  cls_a_creator.add_method(a_ctor);
-  auto a_f = DexField::make_field("LA;.f:S;")->make_concrete(ACC_PUBLIC);
-  cls_a_creator.add_field(a_f);
-  cls_a_creator.create();
+  IROpcode op = OPCODE_IGET_SHORT;
+  const auto dex_type_a = DexType::make_type("LA;");
+  const auto dex_type_asub = DexType::make_type("LAsub;");
 
-  using namespace dex_asm;
-  std::vector<IRInstruction*> insns = {
-      // literal 2
-      dasm(OPCODE_CONST, {3_v, 2_L}),
-      // type a
-      dasm(OPCODE_NEW_INSTANCE, type_a),
-      dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {1_v}),
-      dasm(OPCODE_INVOKE_DIRECT, a_ctor, {1_v, 3_v}),
+  TestValueType a_type(dex_type_a, type::java_lang_Object(), "LA;.<init>:(S)V",
+                       "LA;.f:S;");
+  TestValueType sub_type(dex_type_asub, dex_type_a, "LAsub;.<init>:(S)V",
+                         "LAsub;.f:S;");
 
-      dasm(OPCODE_IGET_SHORT, a_f, {1_v}),
-      dasm(IOPCODE_MOVE_RESULT_PSEUDO, {0_v}),
-
-      dasm(OPCODE_RETURN_VOID),
-  };
-
-  add_code(insns);
-  IRTypeChecker checker(m_method);
-  checker.run();
-  EXPECT_TRUE(checker.good());
+  field_compatible_success_helper(a_type, sub_type, op, false, SHORT, m_method);
 }
 
 /**
