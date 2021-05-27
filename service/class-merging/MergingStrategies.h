@@ -179,5 +179,6 @@ void apply_grouping(const Strategy strategy,
     not_reached();
   }
 }
+
 } // namespace strategy
 } // namespace class_merging
