@@ -343,6 +343,11 @@ if(NOT JSONCPP_FOUND)
 		endif()
 	endif() # end of old logic
 
+	set(_JSONCPP_STATIC_LIB_NAMES "")
+	foreach(name ${_JSONCPP_LIB_NAMES})
+		list(APPEND _JSONCPP_STATIC_LIB_NAMES "lib${name}.a")
+	endforeach()
+
 	# Actually go looking.
 	find_path(JsonCpp_INCLUDE_DIR
 		NAMES
@@ -352,6 +357,12 @@ if(NOT JSONCPP_FOUND)
 	find_library(JsonCpp_LIBRARY
 		NAMES
 		${_JSONCPP_LIB_NAMES}
+		PATHS libs
+		PATH_SUFFIXES ${_JSONCPP_PATHSUFFIXES}
+		HINTS ${_JSONCPP_LIB_HINTS})
+	find_library(JsonCpp_STATIC_LIBRARY
+		NAMES
+		${_JSONCPP_STATIC_LIB_NAMES}
 		PATHS libs
 		PATH_SUFFIXES ${_JSONCPP_PATHSUFFIXES}
 		HINTS ${_JSONCPP_LIB_HINTS})
@@ -377,6 +388,12 @@ if(NOT JSONCPP_FOUND)
 		set(JSONCPP_LIBRARY "${JsonCpp_LIBRARY}")
 		set(JSONCPP_INCLUDE_DIRS "${JsonCpp_INCLUDE_DIR}")
 		unset(JSONCPP_LIBRARY_IS_SHARED)
+
+		if(JsonCpp_STATIC_LIBRARY)
+			set(JSONCPP_LIBRARY_STATIC "${JsonCpp_STATIC_LIBRARY}")
+		else()
+			unset(JSONCPP_LIBRARY_STATIC)
+		endif()
 
 		if(__jsoncpp_have_interface_support AND NOT TARGET jsoncpp_interface)
 			add_library(jsoncpp_interface INTERFACE)

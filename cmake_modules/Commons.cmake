@@ -55,12 +55,15 @@ macro(add_dependent_packages_for_redex)
     print_dirs("${JSONCPP_INCLUDE_DIRS}" "JSONCPP_INCLUDE_DIRS")
 
     if(ENABLE_STATIC)
-        set(REDEX_JSONCPP_LIBRARY ${JSONCPP_LIBRARY_STATIC})
-        if (MINGW)
+        if (MINGW AND (EXISTS "${JSONCPP_INCLUDE_DIRS}/../lib/libjsoncpp.a"))
             # MSYS's JSONCPP only gets detected as shared, leaving the value
             # above empty. Hardcode as a workaround.
             set(REDEX_JSONCPP_LIBRARY ${JSONCPP_INCLUDE_DIRS}/../lib/libjsoncpp.a)
-        endif (MINGW)
+        elseif (JSONCPP_LIBRARY_STATIC)
+            set(REDEX_JSONCPP_LIBRARY ${JSONCPP_LIBRARY_STATIC})
+        else ()
+            message(FATAL_ERROR "Could not find a static library for JsonCpp.")
+        endif()
     else()
         set(REDEX_JSONCPP_LIBRARY ${JSONCPP_LIBRARY})
     endif()
