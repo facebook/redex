@@ -14,6 +14,8 @@
 #include "Liveness.h"
 #include "NullPointerExceptionUtil.h"
 
+class ScopedMetrics;
+
 namespace constant_propagation {
 
 /**
@@ -42,6 +44,8 @@ class Transform final {
     size_t materialized_consts{0};
     size_t added_param_const{0};
     size_t throws{0};
+    size_t null_checks{0};
+    size_t null_checks_method_calls{0};
 
     Stats& operator+=(const Stats& that) {
       branches_removed += that.branches_removed;
@@ -49,8 +53,12 @@ class Transform final {
       materialized_consts += that.materialized_consts;
       added_param_const += that.added_param_const;
       throws += that.throws;
+      null_checks += that.null_checks;
+      null_checks_method_calls += that.null_checks_method_calls;
       return *this;
     }
+
+    void log_metrics(ScopedMetrics& sm, bool with_scope = true) const;
   };
 
   explicit Transform(Config config = Config())

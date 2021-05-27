@@ -14,6 +14,7 @@
 #include "IPConstantPropagationAnalysis.h"
 #include "MethodOverrideGraph.h"
 #include "PassManager.h"
+#include "ScopedMetrics.h"
 #include "Timer.h"
 #include "Trace.h"
 #include "Walkers.h"
@@ -237,11 +238,10 @@ void PassImpl::run_pass(DexStoresVector& stores,
   }
 
   run(stores);
-  mgr.incr_metric("branches_forwarded", m_transform_stats.branches_forwarded);
-  mgr.incr_metric("branches_removed", m_transform_stats.branches_removed);
-  mgr.incr_metric("materialized_consts", m_transform_stats.materialized_consts);
-  mgr.incr_metric("throws", m_transform_stats.throws);
-  mgr.incr_metric("added_param_const", m_transform_stats.added_param_const);
+
+  ScopedMetrics sm(mgr);
+  m_transform_stats.log_metrics(sm, /* with_scope= */ false);
+
   mgr.incr_metric("constant_fields", m_stats.constant_fields);
   mgr.incr_metric("constant_methods", m_stats.constant_methods);
   mgr.incr_metric("callgraph_edges", m_stats.callgraph_edges);

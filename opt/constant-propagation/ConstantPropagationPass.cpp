@@ -9,6 +9,7 @@
 
 #include "ConstantPropagation.h"
 #include "PassManager.h"
+#include "ScopedMetrics.h"
 #include "Trace.h"
 #include "Walkers.h"
 
@@ -23,10 +24,8 @@ void ConstantPropagationPass::run_pass(DexStoresVector& stores,
   ConstantPropagation impl(m_config);
   auto stats = impl.run(scope, &xstores);
 
-  mgr.incr_metric("num_branches_forwarded", stats.branches_forwarded);
-  mgr.incr_metric("num_branch_propagated", stats.branches_removed);
-  mgr.incr_metric("num_materialized_consts", stats.materialized_consts);
-  mgr.incr_metric("num_throws", stats.throws);
+  ScopedMetrics sm(mgr);
+  stats.log_metrics(sm, /* with_scope= */ false);
 
   TRACE(CONSTP, 1, "num_branch_propagated: %zu", stats.branches_removed);
   TRACE(CONSTP,

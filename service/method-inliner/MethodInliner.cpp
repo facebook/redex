@@ -25,6 +25,7 @@
 #include "MethodProfiles.h"
 #include "ReachableClasses.h"
 #include "Resolver.h"
+#include "ScopedMetrics.h"
 #include "Shrinker.h"
 #include "Timer.h"
 #include "Walkers.h"
@@ -461,7 +462,13 @@ void run_inliner(DexStoresVector& stores,
                       shrinker.get_const_prop_stats().branches_forwarded +
                       shrinker.get_const_prop_stats().materialized_consts +
                       shrinker.get_const_prop_stats().added_param_const +
-                      shrinker.get_const_prop_stats().throws);
+                      shrinker.get_const_prop_stats().throws +
+                      shrinker.get_const_prop_stats().null_checks);
+  {
+    ScopedMetrics sm(mgr);
+    auto sm_scope = sm.scope("inliner");
+    shrinker.log_metrics(sm);
+  }
   mgr.incr_metric("instructions_eliminated_cse",
                   shrinker.get_cse_stats().instructions_eliminated);
   mgr.incr_metric("instructions_eliminated_copy_prop",
