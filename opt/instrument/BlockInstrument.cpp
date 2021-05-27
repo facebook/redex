@@ -12,6 +12,7 @@
 #include "DexUtil.h"
 #include "GraphUtil.h"
 #include "MethodReference.h"
+#include "ScopedMetrics.h"
 #include "Show.h"
 #include "SourceBlocks.h"
 #include "TypeSystem.h"
@@ -719,66 +720,6 @@ std::unordered_set<std::string> get_cold_start_classes(ConfigFiles& cfg) {
   }
   return cold_start_classes;
 }
-
-struct ScopedMetrics {
-  std::vector<std::string> segments;
-  PassManager& pm;
-
-  explicit ScopedMetrics(PassManager& pm) : pm(pm) {}
-
-  struct Scope {
-    explicit Scope(ScopedMetrics* parent) : parent(parent) {}
-    ~Scope() {
-      if (parent != nullptr) {
-        parent->pop();
-      }
-    }
-
-    Scope(const Scope&) = delete;
-    Scope& operator=(const Scope&) = delete;
-
-    Scope(Scope&& other) : parent(other.parent) { other.parent = nullptr; }
-    Scope& operator=(Scope&& other) {
-      if (parent != nullptr) {
-        parent->pop();
-      }
-      parent = other.parent;
-      other.parent = nullptr;
-      return *this;
-    }
-
-    ScopedMetrics* parent;
-  };
-
-  Scope scope(std::string key) {
-    segments.emplace_back(std::move(key));
-    return Scope(this);
-  }
-  void pop() {
-    redex_assert(!segments.empty());
-    segments.pop_back();
-  }
-
-  std::string cur_path() {
-    std::string ret;
-    for (const auto& s : segments) {
-      if (!ret.empty()) {
-        ret.append(".");
-      }
-      ret.append(s);
-    }
-    return ret;
-  }
-
-  void set_metric(const std::string& key, int64_t value) {
-    auto full_key = cur_path();
-    if (!full_key.empty()) {
-      full_key.append(".");
-    }
-    full_key.append(key);
-    pm.set_metric(full_key, value);
-  }
-};
 
 void print_stats(ScopedMetrics& sm,
                  const std::vector<MethodInfo>& instrumented_methods,
