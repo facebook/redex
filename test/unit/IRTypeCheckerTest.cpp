@@ -25,6 +25,278 @@
 
 using namespace testing;
 
+/**
+ * This enum is used in the iput/iget test
+ * helper functions to check the suffix of the
+ * IR operand. e.g iget-boolean vs iget-wide.
+ * SHORT includes boolean, byte, char, short.
+ */
+enum OperandType { WIDE, SHORT, REF };
+
+/**
+ * This struct is used to describe the type of
+ * the value in the iput/iget IR. It is used as
+ * the argument for test helper functions.
+ *
+ * param value_type:         the DexType of this type;
+ * param value_super_type:   super type;
+ * param ctor_str:           string to create ctor for type;
+ * param field_str:          string to create field for type;
+ */
+struct TestValueType {
+  TestValueType(DexType* value_type,
+                DexType* value_super_type,
+                const std::string& ctor_str,
+                const std::string& field_str) {
+    this->value_type = value_type;
+    this->value_super_type = value_super_type;
+    this->ctor =
+        DexMethod::make_method(ctor_str)->make_concrete(ACC_PUBLIC, false);
+    this->field = DexField::make_field(field_str)->make_concrete(ACC_PUBLIC);
+    // create class
+    ClassCreator cls_creator(value_type);
+    cls_creator.set_super(value_super_type);
+    cls_creator.add_method(ctor);
+    cls_creator.add_field(field);
+    cls_creator.create();
+  }
+
+  DexType* value_type = nullptr;
+  DexType* value_super_type = nullptr;
+  DexMethod* ctor = nullptr;
+  DexField* field = nullptr;
+};
+
+/**
+ * Helper function for input-* / iget-* IR
+ * Used for the failed tests
+ *
+ * param a_type:          struct instance to describe type a;
+ * param b_type:          struct instance to describe type b;
+ * param exp_fail_str:    the expected output for failed tests;
+ * param opcode_to_test:  specify the instruction to test;
+ * param is_put:          flag to tell whether it's a put IR
+ * param ir_suffix:       suffix of the iget/iput IR
+ *                        options: WIDE, REF, SHORT
+                                 SHORT (byte, boolean, short, char)
+ * param method:          pointer to DexMethod from IRTypeChecker;
+ *
+ * skeleton:
+ * (const v3, 1) / (const-wide v3, 1)
+ * (new-instance "LA;")
+ * (move-result-pseudo-object v1)
+ * (new-instance "LB;")
+ * (move-result-pseudo-object v2)
+ * (invoke-direct (v1) a_ctor)
+ * (invoke-direct (v2) b_ctor)
+ * (iput/iget [v0] v1 b_f)
+ * [For iget] (move-result-pseudo v0) / (move-result-pseudo-wide v0)
+ * (return-void)
+ */
+void field_incompatible_fail_helper(const TestValueType& a_type,
+                                    const TestValueType& b_type,
+                                    const internal::string& exp_fail_str,
+                                    IROpcode opcode_to_test,
+                                    bool is_put,
+                                    OperandType ir_suffix,
+                                    DexMethod* method) {
+
+  using namespace dex_asm;
+  // these instructions differ from each IR
+  // const initialize
+  IRInstruction* init_literal = nullptr;
+  // invoke type a
+  IRInstruction* a_invoke_insn = nullptr;
+  // target IR to test
+  IRInstruction* ir_to_test = nullptr;
+  // move result pseudo for iget-*
+  IRInstruction* extra_insn = nullptr;
+
+  if (is_put) {
+    // put-* IR
+    a_invoke_insn = dasm(OPCODE_INVOKE_DIRECT, a_type.ctor, {1_v});
+
+    switch (ir_suffix) {
+    case SHORT: {
+      // short, byte, boolean, char
+      init_literal = dasm(OPCODE_CONST, {3_v, 1_L});
+      break;
+    }
+    case WIDE: {
+      init_literal = dasm(OPCODE_CONST_WIDE, {3_v, 1_L});
+      break;
+    }
+    case REF:
+      not_reached();
+    }
+
+    ir_to_test = dasm(opcode_to_test, b_type.field, {3_v, 1_v});
+
+  } else {
+    // get-* IR
+    a_invoke_insn = dasm(OPCODE_INVOKE_DIRECT, a_type.ctor, {1_v, 3_v});
+
+    switch (ir_suffix) {
+    case SHORT: {
+      // short, byte, boolean, char
+      init_literal = dasm(OPCODE_CONST, {3_v, 1_L});
+      extra_insn = dasm(IOPCODE_MOVE_RESULT_PSEUDO, {0_v});
+      break;
+    }
+    case WIDE: {
+      init_literal = dasm(OPCODE_CONST_WIDE, {3_v, 1_L});
+      extra_insn = dasm(IOPCODE_MOVE_RESULT_PSEUDO_WIDE, {5_v});
+      break;
+    }
+    case REF:
+      not_reached();
+    }
+
+    ir_to_test = dasm(opcode_to_test, b_type.field, {1_v});
+  }
+
+  // alternative to add_code
+  // to avoid using function pointer
+  // to a member of an abstract class
+  IRCode* code = method->get_code();
+
+  code->push_back(init_literal);
+  // type a
+  code->push_back(dasm(OPCODE_NEW_INSTANCE, a_type.value_type));
+  code->push_back(dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {1_v}));
+  code->push_back(a_invoke_insn);
+  // type b
+  code->push_back(dasm(OPCODE_NEW_INSTANCE, b_type.value_type));
+  code->push_back(dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {2_v}));
+  code->push_back(dasm(OPCODE_INVOKE_DIRECT, b_type.ctor, {2_v}));
+  // test ir
+  code->push_back(ir_to_test);
+  // MOVE_RESULT_PSEUDO
+  if (extra_insn) {
+    code->push_back(extra_insn);
+  }
+  // return
+  code->push_back(dasm(OPCODE_RETURN_VOID));
+
+  IRTypeChecker checker(method);
+  checker.run();
+  EXPECT_TRUE(checker.fail());
+  EXPECT_THAT(checker.what(), MatchesRegex(exp_fail_str));
+}
+
+/**
+ * Helper function for input-* / iget-* IR
+ * Used for the success tests
+ *
+ * param a_type:          struct instance to describe type a;
+ * param b_type:          struct instance to describe type b;
+ * param opcode_to_test:  specify the instruction to run;
+ * param is_put:          flag to tell whether it's a put IR
+ * param ir_suffix:       suffix of the iget/iput IR
+ *                        options: WIDE, REF, SHORT
+ * param method:          pointer to DexMethod from IRTypeChecker;
+ *
+ * skeleton:
+ * (const v0, 1) / (const-wide v0, 1)
+ * (new-instance "LA;")
+ * (move-result-pseudo-object v1)
+ * (new-instance "LAsub;")
+ * (move-result-pseudo-object v2)
+ * (invoke-direct (v1) a_ctor)
+ * (invoke-direct (v2) sub_ctor)
+ * (iput/iget [v0] v1 a_f)
+ * [For iget] (move-result-pseudo v0) / (move-result-pseudo-wide v5)
+ * (return-void)
+ */
+void field_compatible_success_helper(const TestValueType& a_type,
+                                     const TestValueType& b_type,
+                                     IROpcode opcode_to_test,
+                                     bool is_put,
+                                     OperandType ir_suffix,
+                                     DexMethod* method) {
+
+  using namespace dex_asm;
+  // these instructions differ from each IR
+  // const initialize
+  IRInstruction* init_literal = nullptr;
+  // invoke type a
+  IRInstruction* a_invoke_insn = nullptr;
+  // invoke type sub a
+  IRInstruction* asub_invoke_insn = nullptr;
+  // target IR to test
+  IRInstruction* ir_to_test = nullptr;
+  // move result pseudo for iget-*
+  IRInstruction* extra_insn = nullptr;
+
+  if (is_put) {
+    // put-* IR
+    a_invoke_insn = dasm(OPCODE_INVOKE_DIRECT, a_type.ctor, {1_v});
+    asub_invoke_insn = dasm(OPCODE_INVOKE_DIRECT, b_type.ctor, {2_v});
+
+    switch (ir_suffix) {
+    case SHORT: {
+      // short, byte, boolean, char
+      init_literal = dasm(OPCODE_CONST, {3_v, 1_L});
+      break;
+    }
+    case WIDE: {
+      init_literal = dasm(OPCODE_CONST_WIDE, {3_v, 1_L});
+      break;
+    }
+    case REF:
+      not_reached();
+    }
+
+    ir_to_test = dasm(opcode_to_test, a_type.field, {3_v, 2_v});
+
+  } else {
+    // get-* IR
+    a_invoke_insn = dasm(OPCODE_INVOKE_DIRECT, a_type.ctor, {1_v, 3_v});
+    asub_invoke_insn = dasm(OPCODE_INVOKE_DIRECT, b_type.ctor, {2_v, 3_v});
+
+    switch (ir_suffix) {
+    case SHORT: {
+      // short, byte, boolean, char
+      init_literal = dasm(OPCODE_CONST, {3_v, 1_L});
+      extra_insn = dasm(IOPCODE_MOVE_RESULT_PSEUDO, {0_v});
+      break;
+    }
+    case WIDE: {
+      init_literal = dasm(OPCODE_CONST_WIDE, {3_v, 1_L});
+      extra_insn = dasm(IOPCODE_MOVE_RESULT_PSEUDO_WIDE, {5_v});
+      break;
+    }
+    case REF:
+      not_reached();
+    }
+
+    ir_to_test = dasm(opcode_to_test, a_type.field, {2_v});
+  }
+
+  IRCode* code = method->get_code();
+  code->push_back(init_literal);
+  // type a
+  code->push_back(dasm(OPCODE_NEW_INSTANCE, a_type.value_type));
+  code->push_back(dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {1_v}));
+  code->push_back(a_invoke_insn);
+  // type asub
+  code->push_back(dasm(OPCODE_NEW_INSTANCE, b_type.value_type));
+  code->push_back(dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {2_v}));
+  code->push_back(asub_invoke_insn);
+  // test ir
+  code->push_back(ir_to_test);
+  // MOVE_RESULT_PSEUDO
+  if (extra_insn) {
+    code->push_back(extra_insn);
+  }
+  // return
+  code->push_back(dasm(OPCODE_RETURN_VOID));
+
+  IRTypeChecker checker(method);
+  checker.run();
+  EXPECT_TRUE(checker.good());
+}
+
 class IRTypeCheckerTest : public RedexTest {
  public:
   ~IRTypeCheckerTest() {}
@@ -2009,278 +2281,6 @@ TEST_F(IRTypeCheckerTest, getShortSuccess) {
 
   add_code(insns);
   IRTypeChecker checker(m_method);
-  checker.run();
-  EXPECT_TRUE(checker.good());
-}
-
-/**
- * This enum is used in the iput/iget test
- * helper functions to check the suffix of the
- * IR operand. e.g iget-boolean vs iget-wide.
- * SHORT includes boolean, byte, char, short.
- */
-enum OperandType { WIDE, SHORT, REF };
-
-/**
- * This struct is used to describe the type of
- * the value in the iput/iget IR. It is used as
- * the argument for test helper functions.
- *
- * param value_type:         the DexType of this type;
- * param value_super_type:   super type;
- * param ctor_str:           string to create ctor for type;
- * param field_str:          string to create field for type;
- */
-struct TestValueType {
-  TestValueType(DexType* value_type,
-                DexType* value_super_type,
-                const std::string& ctor_str,
-                const std::string& field_str) {
-    this->value_type = value_type;
-    this->value_super_type = value_super_type;
-    this->ctor =
-        DexMethod::make_method(ctor_str)->make_concrete(ACC_PUBLIC, false);
-    this->field = DexField::make_field(field_str)->make_concrete(ACC_PUBLIC);
-    // create class
-    ClassCreator cls_creator(value_type);
-    cls_creator.set_super(value_super_type);
-    cls_creator.add_method(ctor);
-    cls_creator.add_field(field);
-    cls_creator.create();
-  }
-
-  DexType* value_type = nullptr;
-  DexType* value_super_type = nullptr;
-  DexMethod* ctor = nullptr;
-  DexField* field = nullptr;
-};
-
-/**
- * Helper function for input-* / iget-* IR
- * Used for the failed tests
- *
- * param a_type:          struct instance to describe type a;
- * param b_type:          struct instance to describe type b;
- * param exp_fail_str:    the expected output for failed tests;
- * param opcode_to_test:  specify the instruction to test;
- * param is_put:          flag to tell whether it's a put IR
- * param ir_suffix:       suffix of the iget/iput IR
- *                        options: WIDE, REF, SHORT
-                                 SHORT (byte, boolean, short, char)
- * param method:          pointer to DexMethod from IRTypeChecker;
- *
- * skeleton:
- * (const v3, 1) / (const-wide v3, 1)
- * (new-instance "LA;")
- * (move-result-pseudo-object v1)
- * (new-instance "LB;")
- * (move-result-pseudo-object v2)
- * (invoke-direct (v1) a_ctor)
- * (invoke-direct (v2) b_ctor)
- * (iput/iget [v0] v1 b_f)
- * [For iget] (move-result-pseudo v0) / (move-result-pseudo-wide v0)
- * (return-void)
- */
-void field_incompatible_fail_helper(const TestValueType& a_type,
-                                    const TestValueType& b_type,
-                                    const internal::string& exp_fail_str,
-                                    IROpcode opcode_to_test,
-                                    bool is_put,
-                                    OperandType ir_suffix,
-                                    DexMethod* method) {
-
-  using namespace dex_asm;
-  // these instructions differ from each IR
-  // const initialize
-  IRInstruction* init_literal = nullptr;
-  // invoke type a
-  IRInstruction* a_invoke_insn = nullptr;
-  // target IR to test
-  IRInstruction* ir_to_test = nullptr;
-  // move result pseudo for iget-*
-  IRInstruction* extra_insn = nullptr;
-
-  if (is_put) {
-    // put-* IR
-    a_invoke_insn = dasm(OPCODE_INVOKE_DIRECT, a_type.ctor, {1_v});
-
-    switch (ir_suffix) {
-    case SHORT: {
-      // short, byte, boolean, char
-      init_literal = dasm(OPCODE_CONST, {3_v, 1_L});
-      break;
-    }
-    case WIDE: {
-      init_literal = dasm(OPCODE_CONST_WIDE, {3_v, 1_L});
-      break;
-    }
-    case REF:
-      not_reached();
-    }
-
-    ir_to_test = dasm(opcode_to_test, b_type.field, {3_v, 1_v});
-
-  } else {
-    // get-* IR
-    a_invoke_insn = dasm(OPCODE_INVOKE_DIRECT, a_type.ctor, {1_v, 3_v});
-
-    switch (ir_suffix) {
-    case SHORT: {
-      // short, byte, boolean, char
-      init_literal = dasm(OPCODE_CONST, {3_v, 1_L});
-      extra_insn = dasm(IOPCODE_MOVE_RESULT_PSEUDO, {0_v});
-      break;
-    }
-    case WIDE: {
-      init_literal = dasm(OPCODE_CONST_WIDE, {3_v, 1_L});
-      extra_insn = dasm(IOPCODE_MOVE_RESULT_PSEUDO_WIDE, {5_v});
-      break;
-    }
-    case REF:
-      not_reached();
-    }
-
-    ir_to_test = dasm(opcode_to_test, b_type.field, {1_v});
-  }
-
-  // alternative to add_code
-  // to avoid using function pointer
-  // to a member of an abstract class
-  IRCode* code = method->get_code();
-
-  code->push_back(init_literal);
-  // type a
-  code->push_back(dasm(OPCODE_NEW_INSTANCE, a_type.value_type));
-  code->push_back(dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {1_v}));
-  code->push_back(a_invoke_insn);
-  // type b
-  code->push_back(dasm(OPCODE_NEW_INSTANCE, b_type.value_type));
-  code->push_back(dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {2_v}));
-  code->push_back(dasm(OPCODE_INVOKE_DIRECT, b_type.ctor, {2_v}));
-  // test ir
-  code->push_back(ir_to_test);
-  // MOVE_RESULT_PSEUDO
-  if (extra_insn) {
-    code->push_back(extra_insn);
-  }
-  // return
-  code->push_back(dasm(OPCODE_RETURN_VOID));
-
-  IRTypeChecker checker(method);
-  checker.run();
-  EXPECT_TRUE(checker.fail());
-  EXPECT_THAT(checker.what(), MatchesRegex(exp_fail_str));
-}
-
-/**
- * Helper function for input-* / iget-* IR
- * Used for the success tests
- *
- * param a_type:          struct instance to describe type a;
- * param b_type:          struct instance to describe type b;
- * param opcode_to_test:  specify the instruction to run;
- * param is_put:          flag to tell whether it's a put IR
- * param ir_suffix:       suffix of the iget/iput IR
- *                        options: WIDE, REF, SHORT
- * param method:          pointer to DexMethod from IRTypeChecker;
- *
- * skeleton:
- * (const v0, 1) / (const-wide v0, 1)
- * (new-instance "LA;")
- * (move-result-pseudo-object v1)
- * (new-instance "LAsub;")
- * (move-result-pseudo-object v2)
- * (invoke-direct (v1) a_ctor)
- * (invoke-direct (v2) sub_ctor)
- * (iput/iget [v0] v1 a_f)
- * [For iget] (move-result-pseudo v0) / (move-result-pseudo-wide v5)
- * (return-void)
- */
-void field_compatible_success_helper(const TestValueType& a_type,
-                                     const TestValueType& b_type,
-                                     IROpcode opcode_to_test,
-                                     bool is_put,
-                                     OperandType ir_suffix,
-                                     DexMethod* method) {
-
-  using namespace dex_asm;
-  // these instructions differ from each IR
-  // const initialize
-  IRInstruction* init_literal = nullptr;
-  // invoke type a
-  IRInstruction* a_invoke_insn = nullptr;
-  // invoke type sub a
-  IRInstruction* asub_invoke_insn = nullptr;
-  // target IR to test
-  IRInstruction* ir_to_test = nullptr;
-  // move result pseudo for iget-*
-  IRInstruction* extra_insn = nullptr;
-
-  if (is_put) {
-    // put-* IR
-    a_invoke_insn = dasm(OPCODE_INVOKE_DIRECT, a_type.ctor, {1_v});
-    asub_invoke_insn = dasm(OPCODE_INVOKE_DIRECT, b_type.ctor, {2_v});
-
-    switch (ir_suffix) {
-    case SHORT: {
-      // short, byte, boolean, char
-      init_literal = dasm(OPCODE_CONST, {3_v, 1_L});
-      break;
-    }
-    case WIDE: {
-      init_literal = dasm(OPCODE_CONST_WIDE, {3_v, 1_L});
-      break;
-    }
-    case REF:
-      not_reached();
-    }
-
-    ir_to_test = dasm(opcode_to_test, a_type.field, {3_v, 2_v});
-
-  } else {
-    // get-* IR
-    a_invoke_insn = dasm(OPCODE_INVOKE_DIRECT, a_type.ctor, {1_v, 3_v});
-    asub_invoke_insn = dasm(OPCODE_INVOKE_DIRECT, b_type.ctor, {2_v, 3_v});
-
-    switch (ir_suffix) {
-    case SHORT: {
-      // short, byte, boolean, char
-      init_literal = dasm(OPCODE_CONST, {3_v, 1_L});
-      extra_insn = dasm(IOPCODE_MOVE_RESULT_PSEUDO, {0_v});
-      break;
-    }
-    case WIDE: {
-      init_literal = dasm(OPCODE_CONST_WIDE, {3_v, 1_L});
-      extra_insn = dasm(IOPCODE_MOVE_RESULT_PSEUDO_WIDE, {5_v});
-      break;
-    }
-    case REF:
-      not_reached();
-    }
-
-    ir_to_test = dasm(opcode_to_test, a_type.field, {2_v});
-  }
-
-  IRCode* code = method->get_code();
-  code->push_back(init_literal);
-  // type a
-  code->push_back(dasm(OPCODE_NEW_INSTANCE, a_type.value_type));
-  code->push_back(dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {1_v}));
-  code->push_back(a_invoke_insn);
-  // type asub
-  code->push_back(dasm(OPCODE_NEW_INSTANCE, b_type.value_type));
-  code->push_back(dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {2_v}));
-  code->push_back(asub_invoke_insn);
-  // test ir
-  code->push_back(ir_to_test);
-  // MOVE_RESULT_PSEUDO
-  if (extra_insn) {
-    code->push_back(extra_insn);
-  }
-  // return
-  code->push_back(dasm(OPCODE_RETURN_VOID));
-
-  IRTypeChecker checker(method);
   checker.run();
   EXPECT_TRUE(checker.good());
 }
