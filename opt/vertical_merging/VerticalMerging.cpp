@@ -220,9 +220,11 @@ void collect_can_merge(
     const Scope& scope,
     const XStoreRefs& xstores,
     const std::unordered_map<const DexType*, DontMergeState>& dont_merge_status,
+    size_t* num_single_extend_pairs,
     std::unordered_map<DexClass*, DexClass*>* mergeable_to_merger) {
   ClassHierarchy ch = build_type_hierarchy(scope);
   auto throwables = get_all_children(ch, type::java_lang_Throwable());
+  *num_single_extend_pairs = 0;
   for (DexClass* cls : scope) {
     if (cls && !cls->is_external() && !is_interface(cls) && can_delete(cls) &&
         can_rename(cls) && !throwables.count(cls->get_type())) {
@@ -248,6 +250,7 @@ void collect_can_merge(
       }
       DexClass* child_cls = type_class_internal(child_type);
       if (child_cls) {
+        (*num_single_extend_pairs)++;
         check_dont_merge_list(dont_merge_status, child_cls, cls,
                               mergeable_to_merger);
       }
@@ -826,7 +829,9 @@ void VerticalMergingPass::run_pass(DexStoresVector& stores,
                     &referenced_methods);
   XStoreRefs xstores(stores);
   std::unordered_map<DexClass*, DexClass*> mergeable_to_merger;
-  collect_can_merge(scope, xstores, dont_merge_status, &mergeable_to_merger);
+  size_t num_single_extend;
+  collect_can_merge(scope, xstores, dont_merge_status, &num_single_extend,
+                    &mergeable_to_merger);
   remove_both_have_clinit(&mergeable_to_merger);
   remove_both_have_same_init(referenced_methods, &mergeable_to_merger);
 
@@ -835,7 +840,8 @@ void VerticalMergingPass::run_pass(DexStoresVector& stores,
   merge_classes(scope, mergeable_to_merger, referenced_methods);
   remove_merged(scope, mergeable_to_merger);
   post_dexen_changes(scope, stores);
-  mgr.set_metric("num_pair_to_merge", mergeable_to_merger.size());
+  mgr.set_metric("num_single_extend", num_single_extend);
+  mgr.set_metric("num_merged", mergeable_to_merger.size());
 }
 
 static VerticalMergingPass s_pass;
