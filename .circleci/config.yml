@@ -18,6 +18,14 @@ orbs:
   win: circleci/windows@2.2.0
 
 commands:
+  # Setup container.
+  debian-based-image-build-setup:
+    steps:
+      - run:
+          name: Update Apt Data
+          command: |
+            sudo apt-get update
+
   # Setup. Includes boost.
   base-build-setup:
     parameters:
@@ -239,6 +247,7 @@ jobs:
     resource_class: large
     steps:
       - checkout
+      - debian-based-image-build-setup
       - setup-build-and-test-w-make
 
   build-20_04:
@@ -248,6 +257,7 @@ jobs:
     resource_class: large
     steps:
       - checkout
+      - debian-based-image-build-setup
       - setup-build-and-test-w-make:
           save_boost_cache: true
 
@@ -258,6 +268,7 @@ jobs:
     resource_class: large
     steps:
       - checkout
+      - debian-based-image-build-setup
       - setup-build-and-test-w-make
 
   build-deb_testing:
@@ -267,6 +278,7 @@ jobs:
     resource_class: large
     steps:
       - checkout
+      - debian-based-image-build-setup
       - setup-build-and-test-w-make-sdk
 
   build-deb_testing-w-clang:
@@ -278,6 +290,7 @@ jobs:
       CXX: clang++
     steps:
       - checkout
+      - debian-based-image-build-setup
       - install-clang
       - setup-build-and-test-w-make-sdk
 
