@@ -385,11 +385,10 @@ class CandidateInstructionCoresBuilder {
 // Normalization of partial candidate sequence to candidate sequence
 ////////////////////////////////////////////////////////////////////////////////
 
-using ReachingInitializedsEnvironments =
-    std::unordered_map<const IRInstruction*,
-                       reaching_initializeds::Environment>;
 using LazyReachingInitializedsEnvironments =
-    Lazy<ReachingInitializedsEnvironments>;
+    Lazy<reaching_initializeds::ReachingInitializedsEnvironments>;
+using OptionalReachingInitializedsEnvironments =
+    boost::optional<reaching_initializeds::ReachingInitializedsEnvironments>;
 
 static std::vector<cfg::Edge*> get_ordered_goto_and_branch_succs(
     cfg::Block* block) {
@@ -593,7 +592,7 @@ static bool can_outline_opcode(IROpcode opcode) {
 // indicates whether attempt was successful. If not, then the partial
 // candidate sequence should be abandoned.
 static bool append_to_partial_candidate(
-    LazyReachingInitializedsEnvironments& reaching_initializeds,
+    LazyReachingInitializedsEnvironments& reaching_initialized_new_instances,
     IRInstruction* insn,
     PartialCandidate* pc,
     PartialCandidateNode* pcn) {
@@ -624,7 +623,8 @@ static bool append_to_partial_candidate(
       if (it != pcn->defined_regs.end()) {
         defined_reg = it->second;
       } else {
-        auto initialized = reaching_initializeds->at(insn).get(insn->src(0));
+        auto initialized =
+            reaching_initialized_new_instances->at(insn).get(insn->src(0));
         if (!initialized.get_constant() || !*initialized.get_constant()) {
           return false;
         }
@@ -649,6 +649,8 @@ static bool append_to_partial_candidate(
 }
 
 static bool can_outline_insn(const RefChecker& ref_checker,
+                             const OptionalReachingInitializedsEnvironments&
+                                 reaching_initialized_init_first_param,
                              IRInstruction* insn) {
   if (!can_outline_opcode(insn->opcode())) {
     return false;
@@ -697,6 +699,18 @@ static bool can_outline_insn(const RefChecker& ref_checker,
         return false;
       }
       if (!ref_checker.check_type(insn->get_type())) {
+        return false;
+      }
+    }
+  }
+  if (reaching_initialized_init_first_param) {
+    // In a constructor, we cannot outline instructions that access the first
+    // parameter before the base constructor was called on it.
+    auto& env = reaching_initialized_init_first_param->at(insn);
+    for (size_t i = 0; i < insn->srcs_size(); i++) {
+      auto reg = insn->src(i);
+      const auto& initialized = env.get(reg);
+      if (!initialized.get_constant() || !*initialized.get_constant()) {
         return false;
       }
     }
@@ -785,7 +799,9 @@ using ExploredCallback =
 // particular point in a big block.
 // Result indicates whether the big block was successfully explored to the end.
 static bool explore_candidates_from(
-    LazyReachingInitializedsEnvironments& reaching_initializeds,
+    LazyReachingInitializedsEnvironments& reaching_initialized_new_instances,
+    const OptionalReachingInitializedsEnvironments&
+        reaching_initialized_init_first_param,
     const Config& config,
     const RefChecker& ref_checker,
     const CandidateInstructionCoresSet& recurring_cores,
@@ -804,7 +820,8 @@ static bool explore_candidates_from(
     }
     auto insn = it->insn;
     if (pcn->insns.size() + 1 < MIN_INSNS_SIZE &&
-        !can_outline_insn(ref_checker, insn)) {
+        !can_outline_insn(ref_checker, reaching_initialized_init_first_param,
+                          insn)) {
       return false;
     }
     cores_builder.push_back(insn);
@@ -812,7 +829,8 @@ static bool explore_candidates_from(
         !recurring_cores.count(cores_builder.get_value())) {
       return false;
     }
-    if (!append_to_partial_candidate(reaching_initializeds, insn, pc, pcn)) {
+    if (!append_to_partial_candidate(reaching_initialized_new_instances, insn,
+                                     pc, pcn)) {
       return false;
     }
     if (opcode::is_a_conditional_branch(insn->opcode()) ||
@@ -846,9 +864,11 @@ static bool explore_candidates_from(
           always_assert(
               is_uniquely_reached_via_pred(succ_big_block->get_first_block()));
           auto succ_ii = big_blocks::InstructionIterable(*succ_big_block);
-          if (!explore_candidates_from(
-                  reaching_initializeds, config, ref_checker, recurring_cores,
-                  pc, succ_pcn.get(), succ_ii.begin(), succ_ii.end())) {
+          if (!explore_candidates_from(reaching_initialized_new_instances,
+                                       reaching_initialized_init_first_param,
+                                       config, ref_checker, recurring_cores, pc,
+                                       succ_pcn.get(), succ_ii.begin(),
+                                       succ_ii.end())) {
             return false;
           }
         }
@@ -947,20 +967,18 @@ static MethodCandidates find_method_candidates(
         }
         return res;
       });
-  LazyReachingInitializedsEnvironments reaching_initializeds([method, &cfg]() {
-    reaching_initializeds::FixpointIterator fp_iter(cfg,
-                                                    method::is_init(method));
-    fp_iter.run({});
-    ReachingInitializedsEnvironments res;
-    for (auto block : cfg.blocks()) {
-      auto env = fp_iter.get_entry_state_at(block);
-      for (auto& mie : InstructionIterable(block)) {
-        res[mie.insn] = env;
-        fp_iter.analyze_instruction(mie.insn, &env);
-      }
-    }
-    return res;
-  });
+  LazyReachingInitializedsEnvironments reaching_initialized_new_instances(
+      [&cfg]() {
+        return reaching_initializeds::get_reaching_initializeds(
+            cfg, reaching_initializeds::Mode::NewInstances);
+      });
+  OptionalReachingInitializedsEnvironments
+      reaching_initialized_init_first_param;
+  if (method::is_init(method)) {
+    reaching_initialized_init_first_param =
+        reaching_initializeds::get_reaching_initializeds(
+            cfg, reaching_initializeds::Mode::FirstLoadParam);
+  }
   LazyUnorderedMap<cfg::Block*, bool> is_in_loop([](cfg::Block* block) {
     std::unordered_set<cfg::Block*> visited;
     std::queue<cfg::Block*> work_queue;
@@ -1143,9 +1161,10 @@ static MethodCandidates find_method_candidates(
         continue;
       }
       PartialCandidate pc;
-      explore_candidates_from(reaching_initializeds, config, ref_checker,
-                              recurring_cores, &pc, &pc.root, it, end,
-                              &explored_callback);
+      explore_candidates_from(reaching_initialized_new_instances,
+                              reaching_initialized_init_first_param, config,
+                              ref_checker, recurring_cores, &pc, &pc.root, it,
+                              end, &explored_callback);
     }
   }
 
@@ -1194,11 +1213,19 @@ static void get_recurring_cores(
         code.build_cfg(/* editable */ true);
         code.cfg().calculate_exit_block();
         auto& cfg = code.cfg();
+        OptionalReachingInitializedsEnvironments
+            reaching_initialized_init_first_param;
+        if (method::is_init(method)) {
+          reaching_initialized_init_first_param =
+              reaching_initializeds::get_reaching_initializeds(
+                  cfg, reaching_initializeds::Mode::FirstLoadParam);
+        }
         for (auto& big_block : big_blocks::get_big_blocks(cfg)) {
           CandidateInstructionCoresBuilder cores_builder;
           for (auto& mie : big_blocks::InstructionIterable(big_block)) {
             auto insn = mie.insn;
-            if (!can_outline_insn(ref_checker, insn)) {
+            if (!can_outline_insn(
+                    ref_checker, reaching_initialized_init_first_param, insn)) {
               cores_builder.clear();
               continue;
             }
@@ -2338,8 +2365,8 @@ class HostClassSelector {
     }
 
     // If an outlined code snippet occurs in many unrelated classes, but always
-    // references some types that share a common base type, then that
-    // common base type is a reasonable place where to put the outlined code.
+    // references some types that share a common base type, then that common
+    // base type is a reasonable place where to put the outlined code.
     auto referenced_types = get_referenced_types(c);
     host_class = get_direct_or_base_class(
         referenced_types, get_super_classes,

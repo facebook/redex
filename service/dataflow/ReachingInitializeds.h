@@ -24,12 +24,21 @@ using Domain = sparta::ConstantAbstractDomain<bool>;
  **/
 using Environment = sparta::PatriciaTreeMapAbstractEnvironment<reg_t, Domain>;
 
+enum class Mode {
+  // only track the initialized-state of the first parameter
+  FirstLoadParam,
+  // only track the initialized-state of new-instance results.
+  NewInstances,
+};
+
 class FixpointIterator final : public ir_analyzer::BaseIRAnalyzer<Environment> {
  public:
-  FixpointIterator(const cfg::ControlFlowGraph& cfg, bool is_init)
+  FixpointIterator(const cfg::ControlFlowGraph& cfg, Mode mode)
       : ir_analyzer::BaseIRAnalyzer<Environment>(cfg),
         m_first_init_load_param_insn(
-            is_init ? cfg.get_param_instructions().begin()->insn : nullptr) {}
+            mode == Mode::FirstLoadParam
+                ? cfg.get_param_instructions().begin()->insn
+                : nullptr) {}
 
   void analyze_instruction(const IRInstruction* insn,
                            Environment* current_state) const override {
@@ -44,7 +53,8 @@ class FixpointIterator final : public ir_analyzer::BaseIRAnalyzer<Environment> {
       current_state->set(insn->dest(), current_state->get(RESULT_REGISTER));
       current_state->set(RESULT_REGISTER, Domain::top());
     } else if (insn->has_move_result_any()) {
-      const auto value = Domain(opcode != OPCODE_NEW_INSTANCE);
+      const auto value = Domain(!!m_first_init_load_param_insn ||
+                                opcode != OPCODE_NEW_INSTANCE);
       current_state->set(RESULT_REGISTER, value);
     } else if (insn->has_dest()) {
       current_state->set(insn->dest(), Domain(true));
@@ -54,5 +64,24 @@ class FixpointIterator final : public ir_analyzer::BaseIRAnalyzer<Environment> {
  private:
   IRInstruction* m_first_init_load_param_insn;
 };
+
+using ReachingInitializedsEnvironments =
+    std::unordered_map<const IRInstruction*,
+                       reaching_initializeds::Environment>;
+
+inline ReachingInitializedsEnvironments get_reaching_initializeds(
+    cfg::ControlFlowGraph& cfg, Mode mode) {
+  reaching_initializeds::FixpointIterator fp_iter(cfg, mode);
+  fp_iter.run({});
+  ReachingInitializedsEnvironments res;
+  for (auto block : cfg.blocks()) {
+    auto env = fp_iter.get_entry_state_at(block);
+    for (auto& mie : InstructionIterable(block)) {
+      res[mie.insn] = env;
+      fp_iter.analyze_instruction(mie.insn, &env);
+    }
+  }
+  return res;
+}
 
 } // namespace reaching_initializeds
