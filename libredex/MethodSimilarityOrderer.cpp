@@ -83,6 +83,11 @@ void MethodSimilarityOrderer::insert(DexMethod* method) {
   m_method_indices.emplace(method, index);
 
   auto& code_hash_ids = m_method_code_hash_ids[method];
+
+  if (type_class(method->get_class())->is_perf_sensitive()) {
+    return;
+  }
+
   auto* code = method->get_dex_code();
   if (code) {
     gather_code_hash_ids(code, code_hash_ids);
@@ -98,7 +103,14 @@ DexMethod* MethodSimilarityOrderer::get_next() {
     return nullptr;
   }
   boost::optional<size_t> best_candidate_index;
-  if (!m_last_code_hash_ids.empty()) {
+
+  // If the next method is part of a perf sensitive class,
+  // then do not look for a candidate, just preserve the
+  // original order.
+  auto* next_method = m_methods.begin()->second;
+  bool is_next_perf_sensitive = m_method_code_hash_ids[next_method].empty();
+
+  if (!is_next_perf_sensitive && !m_last_code_hash_ids.empty()) {
     // Similarity score for each candidate method, based on the number of
     // shared, missing and additional hash ids when compared to the previously
     // chosen method.
@@ -126,11 +138,12 @@ DexMethod* MethodSimilarityOrderer::get_next() {
       p.second.additional = other_code_hash_ids_size - p.second.shared;
       p.second.missing = last_code_hash_ids_size - p.second.shared;
     }
-    // Then we'll find the best matching candidate with a non-negative score.
+    // Then we'll find the best matching candidate with a non-negative score
+    // that is not perf sensitive.
     boost::optional<Score> best_candidate_score;
     for (auto& p : candidate_scores) {
       auto& score = p.second;
-      if (score.value() < 0) {
+      if (score.value() < 0 || m_method_code_hash_ids[p.first].empty()) {
         continue;
       }
       if (!best_candidate_score ||

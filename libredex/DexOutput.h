@@ -296,6 +296,8 @@ struct CodeItemEmit {
 struct DexOutputTestHelper;
 
 class DexOutput {
+  friend class DexOutputTest;
+
  public:
   dex_stats_t m_stats;
 
