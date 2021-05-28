@@ -54,6 +54,7 @@ check_PROGRAMS = \
     global_type_analysis_test \
     graph_util_test \
     hierarchy_util_test \
+    instruction_sequence_outliner_test \
     interprocedural_constant_propagation_test \
     intraprocedural_constant_propagation_test \
     ir_assembler_test \
@@ -220,6 +221,8 @@ graph_util_test_SOURCES = GraphUtilTest.cpp
 
 hierarchy_util_test_SOURCES = HierarchyUtilTest.cpp
 hierarchy_util_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
+
+instruction_sequence_outliner_test_SOURCES = InstructionSequenceOutlinerTest.cpp ScopeHelper.cpp
 
 interprocedural_constant_propagation_test_SOURCES = constant-propagation/IPConstantPropagationTest.cpp
 
@@ -449,6 +452,7 @@ TESTS = \
     global_type_analysis_test \
     graph_util_test \
     hierarchy_util_test \
+    instruction_sequence_outliner_test \
     interprocedural_constant_propagation_test \
     intraprocedural_constant_propagation_test \
     ir_assembler_test \
