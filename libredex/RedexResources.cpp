@@ -287,8 +287,6 @@ void AndroidResources::collect_layout_classes_and_attributes(
 
 void AndroidResources::rename_classes_in_layouts(
     const std::map<std::string, std::string>& rename_map) {
-  ssize_t layout_bytes_delta = 0;
-  size_t num_layout_renamed = 0;
   auto directories = find_res_directories();
   // Do this in parallel?
   for (const auto& dir : directories) {
@@ -298,17 +296,12 @@ void AndroidResources::rename_classes_in_layouts(
         continue;
       }
       size_t num_renamed = 0;
-      ssize_t out_delta = 0;
       TRACE(RES, 3, "Begin rename Views in layout %s", path.c_str());
-      rename_classes_in_layout(path, rename_map, &num_renamed, &out_delta);
-      TRACE(RES, 3, "Renamed %zu class names in file %s", num_renamed,
-            path.c_str());
-      layout_bytes_delta += out_delta;
-      num_layout_renamed += num_renamed;
+      bool result = rename_classes_in_layout(path, rename_map, &num_renamed);
+      TRACE(RES, 3, "%sRenamed %zu class names in file %s",
+            (result ? "" : "FAILED: "), num_renamed, path.c_str());
     }
   }
-  TRACE(RES, 2, "Renaming %zu entries, saved %zi bytes", num_layout_renamed,
-        layout_bytes_delta);
 }
 
 std::set<std::string> multimap_values_to_set(

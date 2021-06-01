@@ -371,8 +371,7 @@ void apply_rename_map(const std::map<std::string, std::string>& rename_map,
 bool BundleResources::rename_classes_in_layout(
     const std::string& file_path,
     const std::map<std::string, std::string>& rename_map,
-    size_t* out_num_renamed,
-    ssize_t* out_size_delta) {
+    size_t* out_num_renamed) {
   bool write_failed = false;
   read_protobuf_file_contents(
       file_path,
@@ -384,20 +383,13 @@ bool BundleResources::rename_classes_in_layout(
           if (num_renamed > 0) {
             std::ofstream out(file_path, std::ofstream::binary);
             if (pb_node.SerializeToOstream(&out)) {
-              TRACE(RES, 5, "Successfully renamed %zu items in %s", num_renamed,
-                    file_path.c_str());
-              *out_num_renamed = *out_num_renamed + num_renamed;
-              // TODO: either stat the result file and compute delta, or
-              // determine this is a useless metric if it isn't necessarily
-              // related to the resulting compiled XML format.
+              *out_num_renamed = num_renamed;
             } else {
-              TRACE(RES, 5, "Failed to rename in file %s", file_path.c_str());
               write_failed = true;
             }
           }
         }
       });
-
   return !write_failed;
 }
 

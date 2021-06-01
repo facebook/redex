@@ -78,8 +78,7 @@ class ApkResources : public AndroidResources {
   bool rename_classes_in_layout(
       const std::string& file_path,
       const std::map<std::string, std::string>& rename_map,
-      size_t* out_num_renamed,
-      ssize_t* out_size_delta) override;
+      size_t* out_num_renamed) override;
 
  private:
   const std::string m_manifest;

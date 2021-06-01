@@ -609,8 +609,7 @@ int ApkResources::replace_in_xml_string_pool(
 bool ApkResources::rename_classes_in_layout(
     const std::string& file_path,
     const std::map<std::string, std::string>& rename_map,
-    size_t* out_num_renamed,
-    ssize_t* out_size_delta) {
+    size_t* out_num_renamed) {
   RedexMappedFile f = RedexMappedFile::open(file_path, /* read_only= */ false);
   size_t len = f.size();
 
@@ -625,7 +624,6 @@ bool ApkResources::rename_classes_in_layout(
     return false;
   }
   write_serialized_data(serialized, std::move(f));
-  *out_size_delta = serialized.size() - len;
   return true;
 }
 
