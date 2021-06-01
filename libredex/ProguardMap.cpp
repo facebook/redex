@@ -83,7 +83,8 @@ bool isseparator(uint32_t cp) {
          cp == '(' || cp == ')';
 }
 
-bool id(const char*& p, std::string& s) {
+template <typename F>
+bool id(const char*& p, std::string& s, F isseparator) {
   auto b = p;
   auto first = mutf8_next_code_point(p);
   if (isdigit(first)) return false;
@@ -98,6 +99,8 @@ bool id(const char*& p, std::string& s) {
   }
 }
 
+bool id(const char*& p, std::string& s) { return id(p, s, isseparator); }
+
 bool literal(const char*& p, const char* s) {
   auto len = strlen(s);
   bool rv = !strncmp(p, s, len);
@@ -111,6 +114,70 @@ bool literal(const char*& p, char s) {
     return true;
   }
   return false;
+}
+
+bool field_full_format(const char*& p, std::string& s) {
+  std::string class_name;
+  std::string field_name;
+  std::string type;
+
+  if (!id(p, class_name, [](uint32_t s) { return s == ';'; })) {
+    return false;
+  }
+  if (!literal(p, ";.")) {
+    return false;
+  }
+  if (!id(p, field_name, [](uint32_t s) { return s == ':'; })) {
+    return false;
+  }
+  if (!literal(p, ":")) {
+    return false;
+  }
+  if (!id(p, type, [](uint32_t s) {
+        return s == ' ' || s == '\n' || s == '\0';
+      })) {
+    return false;
+  }
+
+  s = class_name + ";." + field_name + ":" + type;
+  return true;
+}
+
+bool method_full_format(const char*& p, std::string& s) {
+  std::string class_name;
+  std::string method_name;
+  std::string args;
+  std::string rtype;
+
+  if (!id(p, class_name, [](uint32_t s) { return s == ';'; })) {
+    return false;
+  }
+  if (!literal(p, ";.")) {
+    return false;
+  }
+  if (!id(p, method_name, [](uint32_t s) { return s == ':'; })) {
+    return false;
+  }
+  if (!literal(p, ":(")) {
+    return false;
+  }
+  if (!literal(p, ')')) {
+    if (!id(p, args, [](uint32_t s) { return s == ')'; })) {
+      return false;
+    }
+    if (!literal(p, ')')) {
+      return false;
+    }
+  }
+
+  if (!id(p, rtype, [](uint32_t s) {
+        return s == ' ' || s == '\n' || s == '\0';
+      })) {
+    return false;
+  }
+
+  s = class_name + ";." + method_name + ":(" + args + ")" + rtype;
+  return true;
 }
 
 bool comment(const std::string& line) {
@@ -147,11 +214,17 @@ bool is_maybe_proguard_generated_member(const std::string& s) {
 }
 } // namespace
 
-ProguardMap::ProguardMap(const std::string& filename) {
-  if (!filename.empty()) {
-    Timer t("Parsing proguard map");
-    std::ifstream fp(filename);
-    always_assert_log(fp, "Can't open proguard map: %s\n", filename.c_str());
+ProguardMap::ProguardMap(const std::string& filename, bool use_new_rename_map) {
+  if (filename.empty()) {
+    return;
+  }
+  Timer t("Parsing proguard map");
+  std::ifstream fp(filename);
+  always_assert_log(fp, "Can't open proguard map: %s\n", filename.c_str());
+
+  if (use_new_rename_map) {
+    parse_full_map(fp);
+  } else {
     parse_proguard_map(fp);
   }
 }
@@ -237,6 +310,105 @@ void ProguardMap::parse_proguard_map(std::istream& fp) {
     not_reached_log("Bogus line encountered in proguard map: %s\n",
                     line.c_str());
   }
+}
+
+void ProguardMap::parse_full_map(std::istream& fp) {
+  std::string line;
+  fp.seekg(0);
+  assert_log(!fp.fail(),
+             "Can't use the full rename map with non-seekable stream");
+  while (std::getline(fp, line)) {
+    if (parse_class_full_format(line)) {
+      continue;
+    }
+    if (parse_field_full_format(line)) {
+      continue;
+    }
+    if (parse_method_full_format(line)) {
+      continue;
+    }
+    if (comment(line)) {
+      continue;
+    }
+    not_reached_log("Bogus line encountered in the full map: %s\n",
+                    line.c_str());
+  }
+}
+
+bool ProguardMap::parse_class_full_format(const std::string& line) {
+  std::string old_class_name;
+  std::string new_class_name;
+  auto p = line.c_str();
+  if (!literal(p, "type ")) return false;
+  if (!id(p, old_class_name)) return false;
+  if (!literal(p, " -> ")) return false;
+  if (!id(p, new_class_name)) return false;
+
+  m_currClass = old_class_name;
+  m_currNewClass = new_class_name;
+  m_classMap[m_currClass] = m_currNewClass;
+  m_obfClassMap[m_currNewClass] = m_currClass;
+  return true;
+}
+
+bool ProguardMap::parse_field_full_format(const std::string& line) {
+  std::string old_field_name;
+  std::string new_field_name;
+
+  auto p = line.c_str();
+  if (!literal(p, "ifield ")) {
+    // Reset the field pointer.
+    p = line.c_str();
+    if (!literal(p, "sfield ")) {
+      return false;
+    }
+  }
+
+  if (!field_full_format(p, old_field_name)) {
+    return false;
+  }
+  if (!literal(p, " -> ")) {
+    return false;
+  }
+  if (!field_full_format(p, new_field_name)) {
+    return false;
+  }
+
+  auto pgnew = new_field_name;
+  auto pgold = old_field_name;
+
+  m_fieldMap[pgold] = pgnew;
+  m_obfFieldMap[pgnew] = pgold;
+  return true;
+}
+
+bool ProguardMap::parse_method_full_format(const std::string& line) {
+  std::string old_method_name;
+  std::string new_method_name;
+  auto p = line.c_str();
+  if (!literal(p, "dmethod ")) {
+    // Reset the method pointer.
+    p = line.c_str();
+    if (!literal(p, "vmethod ")) {
+      return false;
+    }
+  }
+
+  if (!method_full_format(p, old_method_name)) {
+    return false;
+  }
+  if (!literal(p, " -> ")) {
+    return false;
+  }
+  if (!method_full_format(p, new_method_name)) {
+    return false;
+  }
+
+  auto pgold = old_method_name;
+  auto pgnew = new_method_name;
+  m_methodMap[pgold] = pgnew;
+  m_obfMethodMap[pgnew] = pgold;
+  return true;
 }
 
 bool ProguardMap::parse_class(const std::string& line) {

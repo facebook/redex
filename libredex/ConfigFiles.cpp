@@ -25,7 +25,8 @@ ConfigFiles::ConfigFiles(const Json::Value& config, const std::string& outdir)
       outdir(outdir),
       m_global_config(GlobalConfig::default_registry()),
       m_proguard_map(
-          new ProguardMap(config.get("proguard_map", "").asString())),
+          new ProguardMap(config.get("proguard_map", "").asString(),
+                          config.get("use_new_rename_map", 0).asBool())),
       m_printseeds(config.get("printseeds", "").asString()),
       m_method_profiles(new method_profiles::MethodProfiles()) {
 

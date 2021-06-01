@@ -47,7 +47,8 @@ struct ProguardMap {
   /**
    * Construct map from the given file.
    */
-  explicit ProguardMap(const std::string& filename);
+  explicit ProguardMap(const std::string& filename,
+                       bool use_new_rename_map = false);
 
   /**
    * Construct map from a given stream.
@@ -112,10 +113,15 @@ struct ProguardMap {
 
  private:
   void parse_proguard_map(std::istream& fp);
+  void parse_full_map(std::istream& fp);
 
   bool parse_class(const std::string& line);
   bool parse_field(const std::string& line);
   bool parse_method(const std::string& line);
+
+  bool parse_class_full_format(const std::string& line);
+  bool parse_field_full_format(const std::string& line);
+  bool parse_method_full_format(const std::string& line);
 
  private:
   // Unobfuscated to obfuscated maps
