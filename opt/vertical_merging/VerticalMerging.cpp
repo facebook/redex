@@ -19,6 +19,8 @@
 #include "Walkers.h"
 
 namespace {
+using ClassMap = std::unordered_map<DexClass*, DexClass*>;
+using MethodRefMap = std::unordered_map<DexMethodRef*, DexMethodRef*>;
 
 /**
  * If DontMergeState is kStrict, then don't merge no matter this
@@ -51,7 +53,7 @@ void check_dont_merge_list(
     const std::unordered_map<const DexType*, DontMergeState>& dont_merge_status,
     DexClass* child_cls,
     DexClass* parent_cls,
-    std::unordered_map<DexClass*, DexClass*>* mergeable_to_merger) {
+    ClassMap* mergeable_to_merger) {
   const auto& find_parent = dont_merge_status.find(parent_cls->get_type());
   const auto& find_child = dont_merge_status.find(child_cls->get_type());
   const auto& find_end = dont_merge_status.end();
@@ -108,18 +110,10 @@ void get_call_to_super(
           insn_method_def->get_class() == mergeable->get_type()) {
         if (method::is_init(insn_method_def)) {
           (*init_callers)[insn_method_def].emplace(method->get_code());
-          TRACE(VMERGE,
-                5,
-                "Changing init call %s:\n %s",
-                SHOW(insn),
-                SHOW(insn_method_def->get_code()));
+          TRACE(VMERGE, 5, "Changing init call %s", SHOW(insn));
         } else {
           (*callee_to_insns)[insn_method_def].emplace(insn);
-          TRACE(VMERGE,
-                5,
-                "Replacing super call %s:\n %s",
-                SHOW(insn),
-                SHOW(insn_method_def->get_code()));
+          TRACE(VMERGE, 5, "Replacing super call %s", SHOW(insn));
         }
       }
     }
@@ -216,12 +210,12 @@ void handle_invoke_init(
  *      in any don't merge state.
  *   6. Classes are not throwable.
  */
-void collect_can_merge(
+ClassMap collect_can_merge(
     const Scope& scope,
     const XStoreRefs& xstores,
     const std::unordered_map<const DexType*, DontMergeState>& dont_merge_status,
-    size_t* num_single_extend_pairs,
-    std::unordered_map<DexClass*, DexClass*>* mergeable_to_merger) {
+    size_t* num_single_extend_pairs) {
+  ClassMap mergeable_to_merger;
   ClassHierarchy ch = build_type_hierarchy(scope);
   auto throwables = get_all_children(ch, type::java_lang_Throwable());
   *num_single_extend_pairs = 0;
@@ -252,10 +246,11 @@ void collect_can_merge(
       if (child_cls) {
         (*num_single_extend_pairs)++;
         check_dont_merge_list(dont_merge_status, child_cls, cls,
-                              mergeable_to_merger);
+                              &mergeable_to_merger);
       }
     }
   }
+  return mergeable_to_merger;
 }
 
 void record_annotation(
@@ -433,8 +428,7 @@ void record_blocklist(
 /**
  * Remove pair of classes from merging if they both have clinit function.
  */
-void remove_both_have_clinit(
-    std::unordered_map<DexClass*, DexClass*>* mergeable_to_merger) {
+void remove_both_have_clinit(ClassMap* mergeable_to_merger) {
   std::vector<DexClass*> to_delete;
   for (const auto& pair : *mergeable_to_merger) {
     if (pair.first->get_clinit() != nullptr &&
@@ -453,7 +447,7 @@ void remove_both_have_clinit(
  */
 void remove_both_have_same_init(
     const std::unordered_set<DexMethod*>& referenced_methods,
-    std::unordered_map<DexClass*, DexClass*>* mergeable_to_merger) {
+    ClassMap* mergeable_to_merger) {
   std::vector<DexClass*> to_delete;
   for (const auto& pair : *mergeable_to_merger) {
     DexClass* merger = pair.second;
@@ -507,7 +501,8 @@ void record_referenced(
 
 void move_fields(DexClass* from_cls, DexClass* to_cls) {
   DexType* target_cls_type = to_cls->get_type();
-  auto move_field = [&](DexField* field) {
+  auto fields = from_cls->get_all_fields();
+  for (DexField* field : fields) {
     TRACE(VMERGE, 5, "move field : %s ", SHOW(field));
     from_cls->remove_field(field);
     DexFieldSpec field_spec;
@@ -516,21 +511,12 @@ void move_fields(DexClass* from_cls, DexClass* to_cls) {
 
     TRACE(VMERGE, 5, "field after : %s ", SHOW(field));
     to_cls->add_field(field);
-  };
-  auto sfields = from_cls->get_sfields();
-  auto ifields = from_cls->get_ifields();
-  for (DexField* field : sfields) {
-    move_field(field);
-  }
-  for (DexField* field : ifields) {
-    move_field(field);
   }
 }
 
 void update_references(const Scope& scope,
                        const std::unordered_map<DexType*, DexType*>& update_map,
-                       const std::unordered_map<DexMethodRef*, DexMethodRef*>&
-                           methodref_update_map) {
+                       const MethodRefMap& methodref_update_map) {
   walk::opcodes(
       scope,
       [](DexMethod* method) { return true; },
@@ -605,6 +591,9 @@ void update_references(const Scope& scope,
           }
         }
       });
+  // Update type refs in all field or method specs.
+  type_reference::TypeRefUpdater updater(update_map);
+  updater.update_methods_fields(scope);
 }
 
 void update_implements(DexClass* from_cls, DexClass* to_cls) {
@@ -629,9 +618,7 @@ void update_implements(DexClass* from_cls, DexClass* to_cls) {
   to_cls->set_interfaces(implements);
 }
 
-void remove_merged(
-    Scope& scope,
-    const std::unordered_map<DexClass*, DexClass*>& mergeable_to_merger) {
+void remove_merged(Scope& scope, const ClassMap& mergeable_to_merger) {
   if (mergeable_to_merger.empty()) {
     return;
   }
@@ -658,7 +645,7 @@ void remove_merged(
  * we move the method to merger class and change invoke call.
  */
 void VerticalMergingPass::change_super_calls(
-    const std::unordered_map<DexClass*, DexClass*>& mergeable_to_merger) {
+    const ClassMap& mergeable_to_merger) {
   auto process_subclass_methods = [&](DexClass* merger, DexClass* mergeable) {
     std::unordered_map<DexMethod*, std::unordered_set<IRInstruction*>>
         callee_to_insns;
@@ -687,7 +674,7 @@ void VerticalMergingPass::move_methods(
     DexClass* to_cls,
     bool is_merging_super_to_sub,
     const std::unordered_set<DexMethod*>& referenced_methods,
-    std::unordered_map<DexMethodRef*, DexMethodRef*>* methodref_update_map) {
+    MethodRefMap* methodref_update_map) {
   DexType* target_cls_type = to_cls->get_type();
   auto move_method = [&](DexMethod* method) {
     TRACE(VMERGE, 5, "%s | %s | %s", SHOW(from_cls), SHOW(to_cls),
@@ -772,24 +759,22 @@ void VerticalMergingPass::move_methods(
       return;
     }
   };
-  auto dmethod = from_cls->get_dmethods();
-  auto vmethod = from_cls->get_vmethods();
-  for (DexMethod* method : dmethod) {
-    TRACE(VMERGE, 5, "dmethods:");
-    move_method(method);
-  }
-  for (DexMethod* method : vmethod) {
-    TRACE(VMERGE, 5, "vmethods:");
+  auto all_methods = from_cls->get_all_methods();
+  for (DexMethod* method : all_methods) {
     move_method(method);
   }
 }
 
 void VerticalMergingPass::merge_classes(
     const Scope& scope,
-    const std::unordered_map<DexClass*, DexClass*>& mergeable_to_merger,
+    const ClassMap& mergeable_to_merger,
     const std::unordered_set<DexMethod*>& referenced_methods) {
   std::unordered_map<DexType*, DexType*> update_map;
-  std::unordered_map<DexMethodRef*, DexMethodRef*> methodref_update_map;
+  // To store the needed changes from `Mergeable.method` to `Merger.method`.
+  MethodRefMap methodref_update_map;
+
+  change_super_calls(mergeable_to_merger);
+
   for (const auto& pair : mergeable_to_merger) {
     DexClass* merger = pair.second;
     DexClass* mergeable = pair.first;
@@ -814,8 +799,6 @@ void VerticalMergingPass::merge_classes(
     merger->rstate.join_with(mergeable->rstate);
   }
   update_references(scope, update_map, methodref_update_map);
-  type_reference::TypeRefUpdater updater(update_map);
-  updater.update_methods_fields(scope);
 }
 
 void VerticalMergingPass::run_pass(DexStoresVector& stores,
@@ -828,14 +811,12 @@ void VerticalMergingPass::run_pass(DexStoresVector& stores,
   record_referenced(scope, &dont_merge_status, m_blocklist,
                     &referenced_methods);
   XStoreRefs xstores(stores);
-  std::unordered_map<DexClass*, DexClass*> mergeable_to_merger;
   size_t num_single_extend;
-  collect_can_merge(scope, xstores, dont_merge_status, &num_single_extend,
-                    &mergeable_to_merger);
+  auto mergeable_to_merger =
+      collect_can_merge(scope, xstores, dont_merge_status, &num_single_extend);
+
   remove_both_have_clinit(&mergeable_to_merger);
   remove_both_have_same_init(referenced_methods, &mergeable_to_merger);
-
-  change_super_calls(mergeable_to_merger);
 
   merge_classes(scope, mergeable_to_merger, referenced_methods);
   remove_merged(scope, mergeable_to_merger);
