@@ -287,21 +287,31 @@ void AndroidResources::collect_layout_classes_and_attributes(
 
 void AndroidResources::rename_classes_in_layouts(
     const std::map<std::string, std::string>& rename_map) {
-  auto directories = find_res_directories();
-  // Do this in parallel?
-  for (const auto& dir : directories) {
-    auto xml_files = get_xml_files(dir);
-    for (const auto& path : xml_files) {
-      if (is_raw_resource(path)) {
-        continue;
-      }
-      size_t num_renamed = 0;
-      TRACE(RES, 3, "Begin rename Views in layout %s", path.c_str());
-      bool result = rename_classes_in_layout(path, rename_map, &num_renamed);
-      TRACE(RES, 3, "%sRenamed %zu class names in file %s",
-            (result ? "" : "FAILED: "), num_renamed, path.c_str());
-    }
-  }
+  workqueue_run<std::string>(
+      [&](sparta::SpartaWorkerState<std::string>* worker_state,
+          const std::string& input) {
+        if (input.empty()) {
+          // Dispatcher, find files and create tasks.
+          auto directories = find_res_directories();
+          for (const auto& dir : directories) {
+            auto xml_files = get_xml_files(dir);
+            for (const auto& path : xml_files) {
+              if (!is_raw_resource(path)) {
+                worker_state->push_task(path);
+              }
+            }
+          }
+          return;
+        }
+        size_t num_renamed = 0;
+        TRACE(RES, 3, "Begin rename Views in layout %s", input.c_str());
+        bool result = rename_classes_in_layout(input, rename_map, &num_renamed);
+        TRACE(RES, 3, "%sRenamed %zu class names in file %s",
+              (result ? "" : "FAILED: "), num_renamed, input.c_str());
+      },
+      std::vector<std::string>{""},
+      std::min(redex_parallel::default_num_threads(), kReadXMLThreads),
+      /*push_tasks_while_running=*/true);
 }
 
 std::set<std::string> multimap_values_to_set(
