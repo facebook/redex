@@ -13,7 +13,6 @@ import com.facebook.soloader.SoLoader;
 import com.facebook.soloader.annotation.SoLoaderLibrary;
 
 @SoLoaderLibrary("simplejniexample")
-@DoNotOptimize
 public class SimpleJNIExample {
   public SimpleJNIExample(Activity a) {
     SoLoader.init(a, false);

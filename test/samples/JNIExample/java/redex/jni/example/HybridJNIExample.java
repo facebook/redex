@@ -12,7 +12,6 @@ import com.facebook.soloader.DoNotOptimize;
 import com.facebook.proguard.annotations.DoNotStrip;
 import com.facebook.soloader.SoLoader;
 
-@DoNotOptimize
 public class HybridJNIExample {
   static {
     SoLoader.loadLibrary("hybridjniexample");
