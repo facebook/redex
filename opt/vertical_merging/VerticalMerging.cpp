@@ -93,9 +93,9 @@ void check_dont_merge_list(
 void get_call_to_super(
     DexMethod* method,
     DexClass* mergeable,
-    std::unordered_map<DexMethod*, std::unordered_set<IRInstruction*>>*
+    std::unordered_map<DexMethod*, std::vector<IRInstruction*>>*
         callee_to_insns,
-    std::unordered_map<DexMethod*, std::unordered_set<IRCode*>>* init_callers) {
+    std::unordered_map<DexMethod*, std::vector<IRCode*>>* init_callers) {
   if (!method->get_code()) {
     return;
   }
@@ -109,10 +109,10 @@ void get_call_to_super(
       if (insn_method_def &&
           insn_method_def->get_class() == mergeable->get_type()) {
         if (method::is_init(insn_method_def)) {
-          (*init_callers)[insn_method_def].emplace(method->get_code());
+          (*init_callers)[insn_method_def].push_back(method->get_code());
           TRACE(VMERGE, 5, "Changing init call %s", SHOW(insn));
         } else {
-          (*callee_to_insns)[insn_method_def].emplace(insn);
+          (*callee_to_insns)[insn_method_def].push_back(insn);
           TRACE(VMERGE, 5, "Replacing super call %s", SHOW(insn));
         }
       }
@@ -125,7 +125,7 @@ void get_call_to_super(
  * class. Modify IRInstruction accordingly.
  */
 void handle_invoke_super(
-    const std::unordered_map<DexMethod*, std::unordered_set<IRInstruction*>>&
+    const std::unordered_map<DexMethod*, std::vector<IRInstruction*>>&
         callee_to_insns,
     DexClass* merger,
     DexClass* mergeable) {
@@ -151,8 +151,7 @@ void handle_invoke_super(
  * call to ctors and modify IRinstruction accordingly.
  */
 void handle_invoke_init(
-    const std::unordered_map<DexMethod*, std::unordered_set<IRCode*>>&
-        init_callers,
+    const std::unordered_map<DexMethod*, std::vector<IRCode*>>& init_callers,
     DexClass* merger,
     DexClass* mergeable) {
   for (const auto& callee_to_insn : init_callers) {
@@ -647,9 +646,8 @@ void remove_merged(Scope& scope, const ClassMap& mergeable_to_merger) {
 void VerticalMergingPass::change_super_calls(
     const ClassMap& mergeable_to_merger) {
   auto process_subclass_methods = [&](DexClass* merger, DexClass* mergeable) {
-    std::unordered_map<DexMethod*, std::unordered_set<IRInstruction*>>
-        callee_to_insns;
-    std::unordered_map<DexMethod*, std::unordered_set<IRCode*>> init_callers;
+    std::unordered_map<DexMethod*, std::vector<IRInstruction*>> callee_to_insns;
+    std::unordered_map<DexMethod*, std::vector<IRCode*>> init_callers;
     for (DexMethod* method : merger->get_dmethods()) {
       get_call_to_super(method, mergeable, &callee_to_insns, &init_callers);
     }
