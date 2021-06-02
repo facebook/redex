@@ -718,7 +718,7 @@ void IRTypeChecker::run() {
       std::ostringstream out;
       out << "Type error in method " << m_dex_method->get_deobfuscated_name()
           << " at instruction '" << SHOW(insn) << "' @ " << std::hex
-          << static_cast<const void*>(&mie) << " for " << e.what() << std::endl;
+          << static_cast<const void*>(&mie) << " for " << e.what();
       m_what = out.str();
       if (m_class_skip_list.count(m_dex_method->get_class()->get_name()->str()) <= 0) {
           m_good = false;
