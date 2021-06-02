@@ -17,8 +17,7 @@ namespace {
 
 void fix_colliding_dmethods(
     const Scope& scope,
-    const std::map<DexMethod*, DexProto*, dexmethods_comparator>&
-        colliding_methods) {
+    const std::vector<std::pair<DexMethod*, DexProto*>>& colliding_methods) {
   if (colliding_methods.empty()) {
     return;
   }
@@ -71,7 +70,7 @@ void fix_colliding_dmethods(
           insn->get_method(),
           opcode_to_search(const_cast<IRInstruction*>(insn)), meth);
       if (callee == nullptr ||
-          colliding_methods.find(callee) == colliding_methods.end()) {
+          num_additional_args.find(callee) == num_additional_args.end()) {
         continue;
       }
       callsites.emplace_back(meth, &mie, callee);
@@ -319,7 +318,7 @@ void TypeRefUpdater::update_methods_fields(const Scope& scope) {
 
   std::map<DexMethod*, DexProto*, dexmethods_comparator> inits(m_inits.begin(),
                                                                m_inits.end());
-  std::map<DexMethod*, DexProto*, dexmethods_comparator> colliding_inits;
+  std::vector<std::pair<DexMethod*, DexProto*>> colliding_inits;
   for (auto& pair : inits) {
     auto* method = pair.first;
     auto* new_proto = pair.second;
@@ -330,7 +329,7 @@ void TypeRefUpdater::update_methods_fields(const Scope& scope) {
       method->change(spec, false /* rename on collision */);
       TRACE(REFU, 9, "Update ctor %s ", SHOW(method));
     } else {
-      colliding_inits.emplace(method->as_def(), new_proto);
+      colliding_inits.emplace_back(std::make_pair(method->as_def(), new_proto));
     }
   }
   fix_colliding_dmethods(scope, colliding_inits);
@@ -552,8 +551,8 @@ void update_method_signature_type_references(
   // The key is the hash of signature and an old type reference. Group the
   // methods by key.
   VMethodsGroups vmethods_groups;
-  // Direct methods.
-  std::map<DexMethod*, DexProto*, dexmethods_comparator> colliding_directs;
+  // Colliding direct methods.
+  std::vector<std::pair<DexMethod*, DexProto*>> colliding_directs;
 
   // Callback for updating method debug map.
   std::function<void(DexMethod*)> update_method_debug_map = [](DexMethod*) {};
@@ -588,7 +587,7 @@ void update_method_signature_type_references(
         spec.proto = new_proto;
         method->change(spec, true /* rename on collision */);
       } else {
-        colliding_directs[method] = new_proto;
+        colliding_directs.emplace_back(std::make_pair(method, new_proto));
       }
       return;
     }
