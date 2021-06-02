@@ -483,23 +483,26 @@ void move_fields(DexClass* from_cls, DexClass* to_cls) {
 void update_references(const Scope& scope,
                        const std::unordered_map<DexType*, DexType*>& update_map,
                        const MethodRefMap& methodref_update_map) {
-  walk::opcodes(
+  walk::parallel::opcodes(
       scope,
-      [](DexMethod* method) { return true; },
+      [&update_map](DexMethod* method) {
+        // Ignore references in methods in classes that are going to be
+        // removed.
+        return !update_map.count(method->get_class());
+      },
       [&](DexMethod* method, IRInstruction* insn) {
-        if (update_map.count(method->get_class())) {
-          // Ignore references in methods in classes that are going to be
-          // removed.
-          return;
-        }
         if (insn->has_type()) {
           auto ref_type = insn->get_type();
           DexType* type =
               const_cast<DexType*>(type::get_element_type_if_array(ref_type));
-          if (update_map.count(type) == 0) {
+          auto find_mergeable = update_map.find(type);
+          if (find_mergeable == update_map.end()) {
             return;
           }
-          auto merger_type = update_map.at(type);
+          always_assert_log(insn->opcode() != OPCODE_NEW_INSTANCE,
+                            "Vertical Merging: type reference still exists %s",
+                            SHOW(insn));
+          auto merger_type = find_mergeable->second;
           if (type::is_array(ref_type)) {
             auto array_merger_type = type::make_array_type(merger_type);
             insn->set_type(array_merger_type);
@@ -507,53 +510,20 @@ void update_references(const Scope& scope,
             insn->set_type(const_cast<DexType*>(merger_type));
           }
         } else if (insn->has_field()) {
-          DexField* field = resolve_field(insn->get_field());
-          if (field != nullptr) {
-            always_assert_log(
-                update_map.count(field->get_class()) == 0,
-                "Vertical Merging: Field reference still exist\n");
-          }
-          always_assert_log(update_map.count(insn->get_field()->get_class()) ==
-                                0,
-                            "Vertical Merging: Field reference still exist\n");
+          auto insn_field = insn->get_field();
+          always_assert_log(!update_map.count(insn_field->get_class()),
+                            "Vertical Merging: Field reference still exists %s",
+                            SHOW(insn));
         } else if (insn->has_method()) {
-          DexMethodRef* insn_method = insn->get_method();
-          DexMethod* callee = resolve_method(insn_method, MethodSearch::Any);
-          if (callee != nullptr) {
-            auto find = methodref_update_map.find(callee);
-            if (find != methodref_update_map.end()) {
-              insn->set_method(find->second);
-              return;
-            }
-            always_assert_log(
-                update_map.count(callee->get_class()) == 0,
-                "Vertical Merging: Method reference still exist: %s\nin %s\n",
-                SHOW(insn), SHOW(method));
-          }
+          auto insn_method = insn->get_method();
           auto find = methodref_update_map.find(insn_method);
           if (find != methodref_update_map.end()) {
             insn->set_method(find->second);
           } else {
-            auto find_mergeable = update_map.find(insn_method->get_class());
-            if (find_mergeable != update_map.end()) {
-              always_assert_log(
-                  type_class(find_mergeable->second)->get_super_class() ==
-                      type_class(insn_method->get_class())->get_super_class(),
-                  "Vertical Merging: subclass ref exist %s\nin %s\n",
-                  SHOW(insn),
-                  SHOW(method));
-              if (insn->opcode() == OPCODE_INVOKE_SUPER) {
-                insn->set_method(DexMethod::make_method(
-                    type_class(insn_method->get_class())->get_super_class(),
-                    insn_method->get_name(),
-                    insn_method->get_proto()));
-              } else {
-                insn->set_method(
-                    DexMethod::make_method(find_mergeable->second,
-                                           insn_method->get_name(),
-                                           insn_method->get_proto()));
-              }
-            }
+            always_assert_log(
+                !update_map.count(insn_method->get_class()),
+                "Vertical Merging: Method reference still exists %s",
+                SHOW(insn));
           }
         }
       });
