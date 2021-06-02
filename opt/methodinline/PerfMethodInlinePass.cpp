@@ -7,6 +7,7 @@
 
 #include "PerfMethodInlinePass.h"
 
+#include <boost/algorithm/string.hpp>
 #include <boost/optional.hpp>
 #include <limits>
 #include <queue>
@@ -248,18 +249,21 @@ using namespace random_forest;
 
 class InlineForSpeedDecisionTrees final : public InlineForSpeedBase {
  public:
-  InlineForSpeedDecisionTrees(const MethodProfiles* method_profiles,
-                              PGIForest&& forest,
-                              const boost::optional<float>& min_method_hits,
-                              const boost::optional<float>& min_method_appear,
-                              const boost::optional<float>& min_block_hits,
-                              const boost::optional<float>& min_block_appear)
+  InlineForSpeedDecisionTrees(
+      const MethodProfiles* method_profiles,
+      PGIForest&& forest,
+      const boost::optional<float>& min_method_hits,
+      const boost::optional<float>& min_method_appear,
+      const boost::optional<float>& min_block_hits,
+      const boost::optional<float>& min_block_appear,
+      const boost::optional<std::vector<size_t>>& interactions)
       : m_method_context_context(method_profiles),
         m_forest(std::move(forest)),
         m_min_method_hits(min_method_hits),
         m_min_method_appear(min_method_appear),
         m_min_block_hits(min_block_hits),
-        m_min_block_appear(min_block_appear) {}
+        m_min_block_appear(min_block_appear),
+        m_interaction_indices(interactions) {}
 
  protected:
   bool should_inline_impl(const DexMethod* caller_method,
@@ -271,13 +275,27 @@ class InlineForSpeedDecisionTrees final : public InlineForSpeedBase {
       if (!caller_context.m_vals || !callee_context.m_vals) {
         return false;
       }
-      for (size_t i = 0;
-           i != m_method_context_context.m_interaction_list.size();
-           ++i) {
-        const auto& caller_val = selector_fn(*caller_context.m_vals, i);
-        const auto& callee_val = selector_fn(*callee_context.m_vals, i);
-        if (caller_val && *caller_val >= min_hits && callee_val &&
-            *callee_val >= min_hits) {
+
+      auto check_interaction = [&](size_t idx) {
+        const auto& caller_val = selector_fn(*caller_context.m_vals, idx);
+        const auto& callee_val = selector_fn(*callee_context.m_vals, idx);
+        return caller_val && *caller_val >= min_hits && callee_val &&
+               *callee_val >= min_hits;
+      };
+
+      if (!m_interaction_indices) {
+        for (size_t i = 0;
+             i != m_method_context_context.m_interaction_list.size();
+             ++i) {
+          if (check_interaction(i)) {
+            return true;
+          }
+        }
+        return false;
+      }
+
+      for (size_t idx : *m_interaction_indices) {
+        if (check_interaction(idx)) {
           return true;
         }
       }
@@ -363,10 +381,21 @@ class InlineForSpeedDecisionTrees final : public InlineForSpeedBase {
         return false;
       }
       // Check all interactions.
-      size_t num = g_redex->num_sb_interaction_indices();
       const auto* sb = sb_vec[0];
-      for (size_t i = 0; i != num; ++i) {
-        auto val = feature_fn(sb, i);
+
+      if (!m_interaction_indices) {
+        size_t num = g_redex->num_sb_interaction_indices();
+        for (size_t i = 0; i != num; ++i) {
+          auto val = feature_fn(sb, i);
+          if (val && val >= min_hits) {
+            return true;
+          }
+        }
+        return false;
+      }
+
+      for (size_t idx : *m_interaction_indices) {
+        auto val = feature_fn(sb, idx);
         if (val && val >= min_hits) {
           return true;
         }
@@ -407,6 +436,7 @@ class InlineForSpeedDecisionTrees final : public InlineForSpeedBase {
   boost::optional<float> m_min_method_appear;
   boost::optional<float> m_min_block_hits;
   boost::optional<float> m_min_block_appear;
+  boost::optional<std::vector<size_t>> m_interaction_indices;
 };
 
 } // namespace
@@ -419,6 +449,26 @@ struct PerfMethodInlinePass::Config {
   boost::optional<float> min_method_appear = 1.0f; // 1% cutoff
   boost::optional<float> min_block_hits = boost::none;
   boost::optional<float> min_block_appear = boost::none;
+  std::string interactions_str;
+
+  boost::optional<std::vector<size_t>> get_interactions(
+      const RedexContext& ctx) {
+    if (interactions_str.empty()) {
+      return boost::none;
+    }
+    const auto& map = ctx.get_sb_interaction_indices();
+    std::vector<std::string> split;
+    boost::split(split, interactions_str, boost::is_any_of(","));
+    std::vector<size_t> indices;
+    indices.reserve(split.size());
+    for (const auto& str : split) {
+      auto it = map.find(str);
+      always_assert_log(it != map.end(), "%s not found!", str.c_str());
+      indices.push_back(it->second);
+    }
+
+    return indices;
+  }
 };
 
 void PerfMethodInlinePass::bind_config() {
@@ -440,8 +490,12 @@ void PerfMethodInlinePass::bind_config() {
   bind("min_block_appear", -1.0f, min_block_appear,
        "Threshold for caller source-block appear100 to consider inlining. A "
        "negative value elides the check.");
+  std::string interactions_str;
+  bind("interactions", "", interactions_str,
+       "Comma-separated list of interactions to use. An empty value uses all "
+       "interactions.");
   after_configuration([this, random_forest_file, min_hits, min_appear,
-                       min_block_hits, min_block_appear]() {
+                       min_block_hits, min_block_appear, interactions_str]() {
     this->m_config = std::make_unique<PerfMethodInlinePass::Config>();
     if (!random_forest_file.empty()) {
       std::stringstream buffer;
@@ -466,6 +520,7 @@ void PerfMethodInlinePass::bind_config() {
     this->m_config->min_method_appear = assign_opt(min_appear);
     this->m_config->min_block_hits = assign_opt(min_block_hits);
     this->m_config->min_block_appear = assign_opt(min_block_appear);
+    this->m_config->interactions_str = interactions_str;
   });
 }
 
@@ -495,7 +550,8 @@ void PerfMethodInlinePass::run_pass(DexStoresVector& stores,
           ? (InlineForSpeedBase*)(new InlineForSpeedDecisionTrees(
                 &method_profiles, m_config->forest->clone(),
                 m_config->min_method_hits, m_config->min_method_appear,
-                m_config->min_block_hits, m_config->min_block_appear))
+                m_config->min_block_hits, m_config->min_block_appear,
+                m_config->get_interactions(*g_redex)))
           : new InlineForSpeedMethodProfiles(&method_profiles)};
 
   inliner::run_inliner(stores, mgr, conf, /* intra_dex */ true,
@@ -510,6 +566,12 @@ void PerfMethodInlinePass::run_pass(DexStoresVector& stores,
   mgr.set_metric("pgi_inline_callsite_choices_accepted",
                  ifs->get_num_callsite_accepted());
   mgr.set_metric("pgi_use_random_forest", m_config->forest ? 1 : 0);
+  if (m_config->forest) {
+    auto opt = m_config->get_interactions(*g_redex);
+    mgr.set_metric("pgi_interactions",
+                   opt ? opt->size()
+                       : g_redex->get_sb_interaction_indices().size());
+  }
 }
 
 static PerfMethodInlinePass s_pass;

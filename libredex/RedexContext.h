@@ -190,6 +190,10 @@ struct RedexContext {
     }
     return it->second;
   }
+  const std::unordered_map<std::string, size_t>& get_sb_interaction_indices()
+      const {
+    return m_sb_interaction_indices;
+  }
   void set_sb_interaction_index(
       const std::unordered_map<std::string, size_t>& input);
 
