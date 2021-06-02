@@ -817,21 +817,21 @@ TEST_F(MethodInlineTest, boxed_boolean) {
     check_method = make_unboxing_precondition_method(foo_cls, "check");
     candidates.insert(check_method);
     // foo_main calls check_method a few times.
-    auto FALSE = (DexField*)DexField::get_field(
+    auto FALSE_field = (DexField*)DexField::get_field(
         "Ljava/lang/Boolean;.FALSE:Ljava/lang/Boolean;");
-    always_assert(FALSE != nullptr);
-    auto TRUE = (DexField*)DexField::get_field(
+    always_assert(FALSE_field != nullptr);
+    auto TRUE_field = (DexField*)DexField::get_field(
         "Ljava/lang/Boolean;.TRUE:Ljava/lang/Boolean;");
-    always_assert(TRUE != nullptr);
+    always_assert(TRUE_field != nullptr);
     foo_main = make_a_method_calls_others_with_arg(foo_cls,
                                                    "foo_main",
                                                    {
-                                                       {check_method, FALSE},
-                                                       {check_method, FALSE},
-                                                       {check_method, TRUE},
-                                                       {check_method, FALSE},
-                                                       {check_method, FALSE},
-                                                       {check_method, FALSE},
+                                                       {check_method, FALSE_field},
+                                                       {check_method, FALSE_field},
+                                                       {check_method, TRUE_field},
+                                                       {check_method, FALSE_field},
+                                                       {check_method, FALSE_field},
+                                                       {check_method, FALSE_field},
                                                    });
     expected_inlined.insert(check_method);
   }

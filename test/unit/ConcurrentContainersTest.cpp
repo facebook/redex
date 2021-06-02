@@ -53,7 +53,8 @@ class ConcurrentContainersTest : public ::testing::Test {
   std::vector<uint32_t> generate_random_subset(
       const std::vector<uint32_t>& data) {
     auto new_data = data;
-    std::random_shuffle(new_data.begin(), new_data.end());
+    unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
+    std::shuffle(new_data.begin(), new_data.end(), std::default_random_engine(seed));
     new_data.erase(new_data.begin(), new_data.begin() + m_size / 2);
     return new_data;
   }
