@@ -30,13 +30,11 @@ class VerticalMergingPass : public Pass {
 
  private:
   void merge_classes(const Scope&,
-                     const std::unordered_map<DexClass*, DexClass*>&,
-                     const std::unordered_set<DexMethod*>&);
+                     const std::unordered_map<DexClass*, DexClass*>&);
 
   void move_methods(DexClass*,
                     DexClass*,
                     bool,
-                    const std::unordered_set<DexMethod*>&,
                     std::unordered_map<DexMethodRef*, DexMethodRef*>*);
   void change_super_calls(const std::unordered_map<DexClass*, DexClass*>&);
   std::vector<std::string> m_blocklist;
