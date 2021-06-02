@@ -92,8 +92,8 @@ void CompilationUnit::populate_functions(
     }
   }
 
-  // Alternatively, native methods can be registered with RegisterNatives calls.
-  // Use specific analyses to extract information.
+  // Alternatively, native methods can be registered with RegisterNatives
+  // calls. Use specific analyses to extract information.
 
   auto registered_natives_path =
       (m_infodir_path / "registered_natives.json").string();
@@ -165,11 +165,9 @@ NativeContext NativeContext::build(const std::string& path_to_native_results,
     for (auto& [fn_name, function] : unit.get_functions()) {
       auto java_declarations = function.get_java_declarations();
       for (DexMethod* java_declaration : java_declarations) {
-        always_assert_log(
-            ret.java_declaration_to_function.count(java_declaration) == 0,
-            "More than one implementation for native Java method {%s}!",
-            SHOW(java_declaration));
-        ret.java_declaration_to_function[java_declaration] = &function;
+        if (ret.java_declaration_to_function.count(java_declaration) == 0) {
+          ret.java_declaration_to_function[java_declaration] = &function;
+        }
       }
     }
   }
