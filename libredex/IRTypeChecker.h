@@ -32,7 +32,10 @@ class IRTypeChecker final {
   // definition must be located after the definition of TypeInference.
   ~IRTypeChecker();
 
-  explicit IRTypeChecker(DexMethod* dex_method, bool validate_access = false);
+  explicit IRTypeChecker(DexMethod* dex_method,
+                         bool validate_access = false,
+                         std::unordered_set<std::string> class_skip_list = {
+                             ""});
 
   IRTypeChecker(const IRTypeChecker&) = delete;
 
@@ -133,6 +136,7 @@ class IRTypeChecker final {
   bool m_good;
   std::string m_what;
   std::unique_ptr<type_inference::TypeInference> m_type_inference;
+  std::unordered_set<std::string> m_class_skip_list;
 
   friend std::ostream& operator<<(std::ostream&, const IRTypeChecker&);
 };

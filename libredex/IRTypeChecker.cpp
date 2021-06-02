@@ -656,14 +656,15 @@ void validate_access(const DexMethod* accessor, const DexMember* accessee) {
 
 IRTypeChecker::~IRTypeChecker() {}
 
-IRTypeChecker::IRTypeChecker(DexMethod* dex_method, bool validate_access)
+IRTypeChecker::IRTypeChecker(DexMethod* dex_method, bool validate_access, std::unordered_set<std::string> class_skip_list)
     : m_dex_method(dex_method),
       m_validate_access(validate_access),
       m_complete(false),
       m_verify_moves(false),
       m_check_no_overwrite_this(false),
       m_good(true),
-      m_what("OK") {}
+      m_what("OK"),
+      m_class_skip_list(class_skip_list) {}
 
 void IRTypeChecker::run() {
   IRCode* code = m_dex_method->get_code();
@@ -714,14 +715,16 @@ void IRTypeChecker::run() {
           it != type_envs.end(), "%s in:\n%s", SHOW(mie), SHOW(code));
       check_instruction(insn, &it->second);
     } catch (const TypeCheckingException& e) {
-      m_good = false;
       std::ostringstream out;
       out << "Type error in method " << m_dex_method->get_deobfuscated_name()
           << " at instruction '" << SHOW(insn) << "' @ " << std::hex
-          << static_cast<const void*>(&mie) << " for " << e.what();
+          << static_cast<const void*>(&mie) << " for " << e.what() << std::endl;
       m_what = out.str();
-      m_complete = true;
-      return;
+      if (m_class_skip_list.count(m_dex_method->get_class()->get_name()->str()) <= 0) {
+          m_good = false;
+          m_complete = true;
+          return;
+      }
     }
   }
 

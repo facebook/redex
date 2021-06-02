@@ -94,6 +94,10 @@ struct CheckerConfig {
     for (auto& trigger_pass : type_checker_args["run_after_passes"]) {
       type_checker_trigger_passes.insert(trigger_pass.asString());
     }
+    for (auto& skip_class: type_checker_args["class_skip_list"]) {
+      class_skip_list.insert(skip_class.asString());
+    }
+
   }
 
   void on_input(const Scope& scope) {
@@ -104,6 +108,7 @@ struct CheckerConfig {
     auto res = run_verifier(scope, verify_moves,
                             /* check_no_overwrite_this= */ false,
                             /* validate_access= */ true,
+                            class_skip_list,
                             /* exit_on_fail= */ false);
     if (!res) {
       return; // No issues.
@@ -122,6 +127,7 @@ struct CheckerConfig {
     res = run_verifier(scope, verify_moves,
                        /* check_no_overwrite_this= */ false,
                        /* validate_access= */ false,
+                       class_skip_list,
                        /* exit_on_fail= */ false);
     if (!res) {
       std::cerr << "Warning: input has accessibility issues. Continuing."
@@ -201,13 +207,14 @@ struct CheckerConfig {
                                                    bool verify_moves,
                                                    bool check_no_overwrite_this,
                                                    bool validate_access,
+                                                   const std::unordered_set<std::string> class_skip_list,
                                                    bool exit_on_fail = true) {
     TRACE(PM, 1, "Running IRTypeChecker...");
     Timer t("IRTypeChecker");
     std::atomic<size_t> errors{0};
     boost::optional<std::string> first_error_msg;
     walk::parallel::methods(scope, [&](DexMethod* dex_method) {
-      IRTypeChecker checker(dex_method, validate_access);
+      IRTypeChecker checker(dex_method, validate_access, class_skip_list);
       if (verify_moves) {
         checker.verify_moves();
       }
@@ -252,6 +259,7 @@ struct CheckerConfig {
   bool verify_moves;
   bool check_no_overwrite_this;
   bool check_num_of_refs;
+  std::unordered_set<std::string> class_skip_list;
 };
 
 class ScopedVmHWM {
@@ -1046,7 +1054,8 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
         // output phase -- the register allocator can fix it up later.
         CheckerConfig::run_verifier(scope, checker_conf.verify_moves,
                                     /* check_no_overwrite_this */ false,
-                                    /* validate_access */ false);
+                                    /* validate_access */ false,
+                                    checker_conf.class_skip_list);
       }
       if (i >= min_pass_idx_for_dex_ref_check) {
         CheckerConfig::ref_validation(stores, pass->name());
@@ -1118,7 +1127,8 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   scope = build_class_scope(it);
   CheckerConfig::run_verifier(scope, checker_conf.verify_moves,
                               get_redex_options().no_overwrite_this(),
-                              /* validate_access */ true);
+                              /* validate_access */ true,
+                              checker_conf.class_skip_list);
 
   jni_native_context_helper.post_passes(scope, conf);
 
