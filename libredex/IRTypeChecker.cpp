@@ -656,7 +656,7 @@ void validate_access(const DexMethod* accessor, const DexMember* accessee) {
 
 IRTypeChecker::~IRTypeChecker() {}
 
-IRTypeChecker::IRTypeChecker(DexMethod* dex_method, bool validate_access, std::unordered_set<std::string> class_skip_list)
+IRTypeChecker::IRTypeChecker(DexMethod* dex_method, bool validate_access, const std::unordered_set<std::string>& class_skip_list)
     : m_dex_method(dex_method),
       m_validate_access(validate_access),
       m_complete(false),
