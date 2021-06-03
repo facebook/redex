@@ -34,7 +34,7 @@ class IRTypeChecker final {
 
   explicit IRTypeChecker(DexMethod* dex_method,
                          bool validate_access = false,
-                         std::unordered_set<std::string> class_skip_list = {
+                         const std::unordered_set<std::string>& class_skip_list = {
                              ""});
 
   IRTypeChecker(const IRTypeChecker&) = delete;
