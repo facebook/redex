@@ -391,6 +391,10 @@ size_t hoist_insns_for_block(cfg::Block* block,
     return ret;
   }();
 
+  const bool any_throw = std::any_of(
+      insns_to_hoist.begin(), insns_to_hoist.end(),
+      [](const auto& insn) { return opcode::can_throw(insn.opcode()); });
+
   for (const auto& insn : insns_to_hoist) {
     // Check if any source blocks precede instructions.
     if (!opcode::is_move_result_any(insn.opcode())) {
@@ -410,9 +414,34 @@ size_t hoist_insns_for_block(cfg::Block* block,
           }
           // Hoist source blocks.
           // TODO: Collapse equivalent source blocks?
+          // TODO: Deal with duplication.
           redex_assert(it->type == MFLOW_SOURCE_BLOCK);
-          cfg.insert_before(insert_it, std::move(it->src_block));
-          b->remove_mie(it);
+          // The situation is complicated (besides not tracking control flow
+          // correctly, being approximative), as inlining may have produced
+          // straight code where avoiding that duplication is not obvious. For
+          // example:
+          //
+          // SB1 - NT1 - T1 - SB2 - NT2 | T2 - SB3
+          //
+          // In this case, it would be best to leave SB2 in the block, as it
+          // gives better information than SB3 (or may be necessary to have
+          // any SB in the remaining block!).
+          //
+          // For simplicity, if any instruction to hoist throws, we *copy*
+          // *all* source blocks we encounter. This will duplicate every SB,
+          // but avoids complicated tracking of what to hoist, clone, or leave
+          // alone. Duplication is not an issue for coverage profiling, but
+          // for counting.
+          // TODO: Revisit.
+          //
+          // If all hoisted instructions do not throw, just move the
+          // instructions. It is safe to do so, as no "additional" control
+          // flow is being introduced, such that the SBs in the old block will
+          // give the precise information.
+          if (any_throw) {
+            cfg.insert_before(insert_it,
+                              std::make_unique<SourceBlock>(*it->src_block));
+          }
         }
         redex_assert(it != b->end());
       }
@@ -450,7 +479,8 @@ size_t hoist_insns_for_block(cfg::Block* block,
   for (const auto& p : succs) {
     const auto& end = p.second;
     for (auto it = p.first->begin(); it != end; ++it) {
-      redex_assert(it->type == MFLOW_DEBUG || it->type == MFLOW_POSITION);
+      redex_assert(it->type == MFLOW_DEBUG || it->type == MFLOW_POSITION ||
+                   it->type == MFLOW_SOURCE_BLOCK);
     }
   }
 
