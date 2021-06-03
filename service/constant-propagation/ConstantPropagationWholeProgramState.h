@@ -44,6 +44,10 @@ class WholeProgramState {
   // By default, the field and method partitions are initialized to Bottom.
   WholeProgramState() = default;
 
+  explicit WholeProgramState(
+      const std::unordered_set<const DexType*>& field_blocklist)
+      : m_field_blocklist(field_blocklist) {}
+
   WholeProgramState(const Scope&,
                     const interprocedural::FixpointIterator&,
                     const std::unordered_set<DexMethod*>&,
@@ -160,6 +164,8 @@ class WholeProgramState {
   // Unknown fields and methods will be treated as containing / returning Top.
   std::unordered_set<const DexField*> m_known_fields;
   std::unordered_set<const DexMethod*> m_known_methods;
+
+  std::unordered_set<const DexType*> m_field_blocklist;
 
   // A partition represents a set of execution paths that reach certain control
   // points (like invoke/return statements). The abstract information

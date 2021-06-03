@@ -411,9 +411,10 @@ StaticFieldReadAnalysis::Result StaticFieldReadAnalysis::analyze(
 cp::WholeProgramState analyze_and_simplify_clinits(
     const Scope& scope,
     const XStoreRefs* xstores,
+    const std::unordered_set<const DexType*>& blocklist_types,
     const std::unordered_set<std::string>& allowed_opaque_callee_names) {
   const std::unordered_set<DexMethodRef*> pure_methods = get_pure_methods();
-  cp::WholeProgramState wps;
+  cp::WholeProgramState wps(blocklist_types);
 
   auto method_override_graph = method_override_graph::build_graph(scope);
   auto graph =
@@ -481,9 +482,10 @@ cp::WholeProgramState analyze_and_simplify_clinits(
 cp::WholeProgramState analyze_and_simplify_inits(
     const Scope& scope,
     const XStoreRefs* xstores,
+    const std::unordered_set<const DexType*>& blocklist_types,
     const cp::EligibleIfields& eligible_ifields) {
   const std::unordered_set<DexMethodRef*> pure_methods = get_pure_methods();
-  cp::WholeProgramState wps;
+  cp::WholeProgramState wps(blocklist_types);
   for (DexClass* cls : reverse_tsort_by_init_deps(scope)) {
     if (cls->is_external()) {
       continue;
@@ -939,7 +941,8 @@ size_t FinalInlinePassV2::run(const Scope& scope,
                               const XStoreRefs* xstores,
                               const Config& config) {
   try {
-    auto wps = final_inline::analyze_and_simplify_clinits(scope, xstores);
+    auto wps = final_inline::analyze_and_simplify_clinits(
+        scope, xstores, config.blocklist_types);
     return inline_final_gets(scope, xstores, wps, config.blocklist_types,
                              cp::FieldType::STATIC);
   } catch (final_inline::class_initialization_cycle& e) {
@@ -953,8 +956,8 @@ size_t FinalInlinePassV2::run_inline_ifields(
     const XStoreRefs* xstores,
     const cp::EligibleIfields& eligible_ifields,
     const Config& config) {
-  auto wps = final_inline::analyze_and_simplify_inits(scope, xstores,
-                                                      eligible_ifields);
+  auto wps = final_inline::analyze_and_simplify_inits(
+      scope, xstores, config.blocklist_types, eligible_ifields);
   return inline_final_gets(scope, xstores, wps, config.blocklist_types,
                            cp::FieldType::INSTANCE);
 }

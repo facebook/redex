@@ -117,7 +117,9 @@ WholeProgramState::WholeProgramState(
     const Scope& scope,
     const interprocedural::FixpointIterator& fp_iter,
     const std::unordered_set<DexMethod*>& non_true_virtuals,
-    const std::unordered_set<const DexType*>& field_blocklist) {
+    const std::unordered_set<const DexType*>& field_blocklist)
+    : m_field_blocklist(field_blocklist) {
+
   walk::fields(scope, [&](DexField* field) {
     // We exclude those marked by keep rules: keep-marked fields may be
     // written to by non-Dex bytecode.
@@ -277,7 +279,8 @@ void WholeProgramState::collect_return_values(
 void WholeProgramState::collect_static_finals(const DexClass* cls,
                                               FieldEnvironment field_env) {
   for (auto* field : cls->get_sfields()) {
-    if (is_static(field) && is_final(field) && !field->is_external()) {
+    if (is_static(field) && is_final(field) && !field->is_external() &&
+        m_field_blocklist.count(field->get_class()) == 0) {
       m_known_fields.emplace(field);
     } else {
       field_env.set(field, ConstantValue::top());
@@ -300,7 +303,8 @@ void WholeProgramState::collect_instance_finals(
     }
   } else {
     for (auto* field : cls->get_ifields()) {
-      if (eligible_ifields.count(field)) {
+      if (eligible_ifields.count(field) &&
+          m_field_blocklist.count(field->get_class()) == 0) {
         m_known_fields.emplace(field);
       } else {
         field_env.set(field, ConstantValue::top());
