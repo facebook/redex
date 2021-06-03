@@ -190,7 +190,9 @@ inline void foreach_source_block(cfg::Block* b, const Fn& fn) {
     if (mie.type != MFLOW_SOURCE_BLOCK) {
       continue;
     }
-    fn(mie.src_block.get());
+    for (auto* sb = mie.src_block.get(); sb != nullptr; sb = sb->next.get()) {
+      fn(sb);
+    }
   }
 }
 template <typename Fn>
@@ -199,7 +201,9 @@ inline void foreach_source_block(const cfg::Block* b, const Fn& fn) {
     if (mie.type != MFLOW_SOURCE_BLOCK) {
       continue;
     }
-    fn(mie.src_block.get());
+    for (auto* sb = mie.src_block.get(); sb != nullptr; sb = sb->next.get()) {
+      fn(sb);
+    }
   }
 }
 
