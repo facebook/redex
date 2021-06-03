@@ -207,7 +207,7 @@ struct CheckerConfig {
                                                    bool verify_moves,
                                                    bool check_no_overwrite_this,
                                                    bool validate_access,
-                                                   const std::unordered_set<std::string> class_skip_list,
+                                                   const std::unordered_set<std::string>& class_skip_list,
                                                    bool exit_on_fail = true) {
     TRACE(PM, 1, "Running IRTypeChecker...");
     Timer t("IRTypeChecker");
