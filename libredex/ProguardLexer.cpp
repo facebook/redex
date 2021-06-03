@@ -35,7 +35,15 @@ bool is_deliminator(char ch) {
          ch == ',' || ch == ';' || ch == ':' || ch == EOF || ch == '#';
 }
 
+bool is_not_idenfitier_character(char ch) {
+  return ch == '=' || ch == '+' || ch == '|' || ch == '@' || ch == '#' ||
+         ch == '^' || ch == '&' || ch == '"' || ch == '\'' || ch == '`' ||
+         ch == '~' || ch == '-';
+}
+
 // An identifier can refer to a class name, a field name or a package name.
+// Unused: need to fully implement to java spec before using again.
+// https://docs.oracle.com/javase/specs/jls/se16/html/jls-3.html#jls-JavaLetter
 bool is_identifier_character(char ch) {
   return isalnum(ch) || ch == '_' || ch == '$' || ch == '*' || ch == '.' ||
          ch == '\'' || ch == '[' || ch == ']' || ch == '<' || ch == '>' ||
@@ -44,7 +52,11 @@ bool is_identifier_character(char ch) {
 
 bool is_identifier(const boost::string_view& ident) {
   for (const char& ch : ident) {
-    if (!is_identifier_character(ch)) {
+    // java identifiers can be multi-lingual so membership testing is complex.
+    // much simpler to test for what is definitely not an identifier and then
+    // assume everything else is a legal identifier char, accepting that we
+    // will have false positives.
+    if (is_deliminator(ch) || is_not_idenfitier_character(ch)) {
       return false;
     }
   }
@@ -305,6 +317,8 @@ std::string Token::show() const {
     return "-include";
   case TokenType::basedirectory:
     return "-basedirectory";
+  case TokenType::dump:
+    return "-dump";
   case TokenType::injars:
     return "-injars ";
   case TokenType::outjars:
@@ -447,6 +461,7 @@ bool Token::is_command() const {
   // Input/Output Options
   case TokenType::include:
   case TokenType::basedirectory:
+  case TokenType::dump:
   case TokenType::injars:
   case TokenType::outjars:
   case TokenType::libraryjars:
@@ -595,6 +610,7 @@ std::vector<Token> lex(const boost::string_view& in) {
       // Input/Output Options
       {"include", TokenType::include},
       {"basedirectory", TokenType::basedirectory},
+      {"dump", TokenType::dump},
       {"printmapping", TokenType::printmapping},
       {"printconfiguration", TokenType::printconfiguration},
       {"printseeds", TokenType::printseeds},
