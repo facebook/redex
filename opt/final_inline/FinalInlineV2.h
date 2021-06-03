@@ -67,6 +67,7 @@ class class_initialization_cycle : public std::exception {
 constant_propagation::WholeProgramState analyze_and_simplify_clinits(
     const Scope& scope,
     const XStoreRefs* xstores,
+    const std::unordered_set<const DexType*>& blocklist_types = {},
     const std::unordered_set<std::string>& allowed_opaque_callee_names = {});
 
 class StaticFieldReadAnalysis {
