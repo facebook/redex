@@ -87,6 +87,7 @@
 #include "DexLimits.h"
 #include "DexPosition.h"
 #include "DexUtil.h"
+#include "Dominators.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "InterDexPass.h"
@@ -658,6 +659,8 @@ class CanOutlineBlockDecider {
   mutable std::unique_ptr<LazyUnorderedMap<cfg::Block*, bool>> m_is_in_loop;
   mutable std::unique_ptr<LazyUnorderedMap<cfg::Block*, boost::optional<float>>>
       m_max_vals;
+  mutable std::unique_ptr<dominators::SimpleFastDominators<cfg::GraphInterface>>
+      m_dominators;
 
  public:
   CanOutlineBlockDecider(const Config& config,
@@ -750,6 +753,27 @@ class CanOutlineBlockDecider {
           break;
         }
       }
+    }
+    // Let's also look back at dominators. It's beneficial if we can tighten the
+    // minimum.
+    auto block = big_block.get_first_block();
+    auto& cfg = block->cfg();
+    auto entry_block = cfg.entry_block();
+    if (block != entry_block && (!min_val || *min_val != 0)) {
+      if (!m_dominators) {
+        m_dominators.reset(
+            new dominators::SimpleFastDominators<cfg::GraphInterface>(cfg));
+      }
+      do {
+        block = m_dominators->get_idom(block);
+        auto val = (*m_max_vals)[block];
+        if (!min_val || (val && *val < *min_val)) {
+          min_val = val;
+          if (min_val && *min_val == 0) {
+            break;
+          }
+        }
+      } while (block != entry_block);
     }
     if (!min_val) {
       return m_sufficiently_hot ? Result::HotNoSourceBlocks
