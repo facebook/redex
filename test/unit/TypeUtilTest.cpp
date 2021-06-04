@@ -8,7 +8,6 @@
 #include "TypeUtil.h"
 
 #include "RedexTest.h"
-#include <gtest/gtest.h>
 
 class TypeUtilTest : public RedexTest {
 

@@ -317,6 +317,9 @@ inline std::string external_to_internal(const std::string& external_name) {
 // Example: "[Ljava/lang/String;" --> "String[]"
 // Example: "I" --> "int"
 // Example: "[I" --> "int[]"
+// Example: "LA$B$C;" --> "C"
+// Example: "[LA$B;" --> "B[]"
+// Note: Anonymous class is not handled properly here.
 inline std::string internal_to_simple(const std::string& internal_name) {
   int array_level = std::count(internal_name.begin(), internal_name.end(), '[');
   std::string component_name = internal_name.substr(array_level);
@@ -328,6 +331,10 @@ inline std::string internal_to_simple(const std::string& internal_name) {
     component_simple_name = component_external_name;
   } else {
     component_simple_name = component_external_name.substr(last_dot + 1);
+  }
+  std::size_t last_dollar = component_simple_name.rfind('$');
+  if (last_dollar != std::string::npos) {
+    component_simple_name = component_simple_name.substr(last_dollar + 1);
   }
   // append a pair of [] for each array level.
   std::string array_suffix;

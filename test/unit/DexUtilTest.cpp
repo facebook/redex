@@ -7,7 +7,6 @@
 
 #include "DexUtil.h"
 #include "RedexTest.h"
-#include <gtest/gtest.h>
 
 class DexUtilTest : public RedexTest {};
 
@@ -56,6 +55,9 @@ TEST_F(DexUtilTest, test_java_name_internal_to_simple) {
   EXPECT_EQ("MyClass", internal_to_simple("LMyClass;"));
   EXPECT_EQ("MyClass[]", internal_to_simple("[LMyClass;"));
   EXPECT_EQ("MyClass[][]", internal_to_simple("[[LMyClass;"));
+  EXPECT_EQ("MyClass", internal_to_simple("Lcom/facebook/OuterClass$MyClass;"));
+  EXPECT_EQ("MyClass", internal_to_simple("LOuterClassA$OuterClassB$MyClass;"));
+  EXPECT_EQ("MyClass[][]", internal_to_simple("[[LOuterClass$MyClass;"));
 }
 
 TEST_F(DexUtilTest, is_valid_identifier) {
