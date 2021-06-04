@@ -656,6 +656,8 @@ class CanOutlineBlockDecider {
   bool m_sufficiently_warm;
   bool m_sufficiently_hot;
   mutable std::unique_ptr<LazyUnorderedMap<cfg::Block*, bool>> m_is_in_loop;
+  mutable std::unique_ptr<LazyUnorderedMap<cfg::Block*, boost::optional<float>>>
+      m_max_vals;
 
  public:
   CanOutlineBlockDecider(const Config& config,
@@ -670,8 +672,10 @@ class CanOutlineBlockDecider {
     BlockExceedsThresholds,
     WarmLoop,
     WarmLoopExceedsThresholds,
+    WarmLoopNoSourceBlocks,
     Hot,
     HotExceedsThresholds,
+    HotNoSourceBlocks,
   };
 
   Result can_outline_from_big_block(
@@ -712,28 +716,48 @@ class CanOutlineBlockDecider {
     // If we get here,
     // - the method is hot, or
     // - the method is not hot but warm, and the big block is in a loop
-    if (m_config.block_profiles_appear_percent < 0 ||
-        m_config.block_profiles_hits < 0) {
+    if (m_config.block_profiles_hits < 0) {
       return m_sufficiently_hot ? Result::Hot : Result::WarmLoop;
     }
+    // Make sure m_max_vals is initialized
+    if (!m_max_vals) {
+      m_max_vals.reset(
+          new LazyUnorderedMap<cfg::Block*, boost::optional<float>>(
+              [](cfg::Block* block) -> boost::optional<float> {
+                auto* sb = source_blocks::get_first_source_block(block);
+                if (sb == nullptr) {
+                  return boost::none;
+                }
+                boost::optional<float> max_val;
+                size_t num = g_redex->num_sb_interaction_indices();
+                for (size_t i = 0; i < num; i++) {
+                  boost::optional<float> val = sb->get_val(i);
+                  if (!max_val || (val && *val > *max_val)) {
+                    max_val = val;
+                  }
+                }
+                return max_val;
+              }));
+    }
+    // Via m_max_vals, we consider the maximum hit number for each block.
+    // Across all blocks, we are gathering the *minimum* of those hit numbers.
+    boost::optional<float> min_val;
     for (auto block : big_block.get_blocks()) {
-      auto source_blocks = source_blocks::gather_source_blocks(block);
-      if (source_blocks.empty()) {
-        continue;
-      }
-      auto representative = *(source_blocks.begin());
-      size_t num = g_redex->num_sb_interaction_indices();
-      for (size_t i = 0; i < num; i++) {
-        boost::optional<float> val = representative->get_appear100(i);
-        if (val && *val > m_config.block_profiles_appear_percent) {
-          val = representative->get_val(i);
-          if (val && *val > m_config.block_profiles_hits) {
-            return m_sufficiently_hot ? Result::HotExceedsThresholds
-                                      : Result::WarmLoopExceedsThresholds;
-          }
+      auto val = (*m_max_vals)[block];
+      if (!min_val || (val && *val < *min_val)) {
+        min_val = val;
+        if (min_val && *min_val == 0) {
+          break;
         }
       }
-      break;
+    }
+    if (!min_val) {
+      return m_sufficiently_hot ? Result::HotNoSourceBlocks
+                                : Result::WarmLoopNoSourceBlocks;
+    }
+    if (*min_val > m_config.block_profiles_hits) {
+      return m_sufficiently_hot ? Result::HotExceedsThresholds
+                                : Result::WarmLoopExceedsThresholds;
     }
     return Result::CanOutline;
   }
@@ -1011,8 +1035,10 @@ static bool explore_candidates_from(
   FOR_EACH(overlap)                            \
   FOR_EACH(loop)                               \
   FOR_EACH(block_warm_loop_exceeds_thresholds) \
+  FOR_EACH(block_warm_loop_no_source_blocks)   \
   FOR_EACH(block_hot)                          \
-  FOR_EACH(block_hot_exceeds_thresholds)
+  FOR_EACH(block_hot_exceeds_thresholds)       \
+  FOR_EACH(block_hot_no_source_blocks)
 
 struct FindCandidatesStats {
 // NOLINTNEXTLINE(bugprone-macro-parentheses)
@@ -1205,11 +1231,17 @@ static MethodCandidates find_method_candidates(
             case CanOutlineBlockDecider::Result::WarmLoopExceedsThresholds:
               lstats.block_warm_loop_exceeds_thresholds++;
               return;
+            case CanOutlineBlockDecider::Result::WarmLoopNoSourceBlocks:
+              lstats.block_warm_loop_no_source_blocks++;
+              return;
             case CanOutlineBlockDecider::Result::Hot:
               lstats.block_hot++;
               return;
             case CanOutlineBlockDecider::Result::HotExceedsThresholds:
               lstats.block_hot_exceeds_thresholds++;
+              return;
+            case CanOutlineBlockDecider::Result::HotNoSourceBlocks:
+              lstats.block_hot_no_source_blocks++;
               return;
             default:
               not_reached();
@@ -3139,10 +3171,6 @@ void InstructionSequenceOutliner::bind_config() {
        "Loops are not outlined from warm methods");
   std::string perf_sensitivity_str;
   bind("perf_sensitivity", "always-hot", perf_sensitivity_str);
-  bind("block_profiles_appear_percent",
-       m_config.block_profiles_appear_percent,
-       m_config.block_profiles_appear_percent,
-       "Cut off when a block profile in a hot method is deemed relevant");
   bind("block_profiles_hits",
        m_config.block_profiles_hits,
        m_config.block_profiles_hits,
