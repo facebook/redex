@@ -32,10 +32,10 @@ class IRTypeChecker final {
   // definition must be located after the definition of TypeInference.
   ~IRTypeChecker();
 
-  explicit IRTypeChecker(DexMethod* dex_method,
-                         bool validate_access = false,
-                         const std::unordered_set<std::string>& class_skip_list = {
-                             ""});
+  explicit IRTypeChecker(
+      DexMethod* dex_method,
+      bool validate_access = false,
+      const std::unordered_set<std::string>& class_skip_list = {});
 
   IRTypeChecker(const IRTypeChecker&) = delete;
 
