@@ -656,7 +656,10 @@ void validate_access(const DexMethod* accessor, const DexMember* accessee) {
 
 IRTypeChecker::~IRTypeChecker() {}
 
-IRTypeChecker::IRTypeChecker(DexMethod* dex_method, bool validate_access, const std::unordered_set<std::string>& class_skip_list)
+IRTypeChecker::IRTypeChecker(
+    DexMethod* dex_method,
+    bool validate_access,
+    const std::unordered_set<std::string>& class_skip_list)
     : m_dex_method(dex_method),
       m_validate_access(validate_access),
       m_complete(false),
@@ -720,10 +723,11 @@ void IRTypeChecker::run() {
           << " at instruction '" << SHOW(insn) << "' @ " << std::hex
           << static_cast<const void*>(&mie) << " for " << e.what();
       m_what = out.str();
-      if (m_class_skip_list.count(m_dex_method->get_class()->get_name()->str()) <= 0) {
-          m_good = false;
-          m_complete = true;
-          return;
+      if (m_class_skip_list.count(
+              m_dex_method->get_class()->get_name()->str()) <= 0) {
+        m_good = false;
+        m_complete = true;
+        return;
       }
     }
   }
