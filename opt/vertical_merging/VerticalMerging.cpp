@@ -145,6 +145,9 @@ void get_call_to_super(
   }
 }
 
+using SuperCall = std::pair<DexMethodRef*, std::vector<IRInstruction*>>;
+using InitCall = std::pair<DexMethod*, std::vector<IRCode*>>;
+
 /**
  * Relocate callee methods in IRInstruction from mergeable class to merger
  * class. Modify IRInstruction accordingly.
@@ -154,7 +157,13 @@ void handle_invoke_super(
         callee_to_insns,
     DexClass* merger,
     DexClass* parent_mergeable) {
-  for (const auto& callee_to_insn : callee_to_insns) {
+  std::vector<SuperCall> super_calls(callee_to_insns.begin(),
+                                     callee_to_insns.end());
+  std::sort(super_calls.begin(), super_calls.end(),
+            [](const SuperCall& call1, SuperCall& call2) {
+              return compare_dexmethods(call1.first, call2.first);
+            });
+  for (const auto& callee_to_insn : super_calls) {
     auto callee_ref = callee_to_insn.first;
     if (is_internal_def(callee_ref)) {
       //  invoke-super Parent.v => invoke-virtual Child.relocated_parent_v
@@ -191,7 +200,12 @@ void handle_invoke_init(
     const std::unordered_map<DexMethod*, std::vector<IRCode*>>& init_callers,
     DexClass* merger,
     DexClass* mergeable) {
-  for (const auto& callee_to_insn : init_callers) {
+  std::vector<InitCall> initcalls(init_callers.begin(), init_callers.end());
+  std::sort(initcalls.begin(), initcalls.end(),
+            [](const InitCall& call1, const InitCall& call2) {
+              return compare_dexmethods(call1.first, call2.first);
+            });
+  for (const auto& callee_to_insn : initcalls) {
     DexMethod* callee = callee_to_insn.first;
     size_t num_orig_args = callee->get_proto()->get_args()->size();
     DexProto* new_proto = merger->get_type()->get_non_overlapping_proto(
