@@ -927,7 +927,7 @@ void InterDex::run() {
   }
 
   // Emit dex info manifest
-  if (m_asset_manager.has_asset_dir()) {
+  if (m_asset_manager.has_secondary_dex_dir()) {
     auto mixed_mode_file = m_asset_manager.new_asset_file("dex_manifest.txt");
     auto mixed_mode_fh = FileHandle(*mixed_mode_file);
     mixed_mode_fh.seek_end();

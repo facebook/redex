@@ -33,7 +33,7 @@ class AssetManager {
     }
   }
 
-  bool has_asset_dir();
+  bool has_secondary_dex_dir();
   std::shared_ptr<FILE*> new_asset_file(
       const char* filename,
       const char* dir_path = "/assets/secondary-program-dex-jars/",

@@ -33,7 +33,7 @@ void check_directory(std::string& dir) {
 
 } // namespace
 
-bool AssetManager::has_asset_dir() {
+bool AssetManager::has_secondary_dex_dir() {
   if (m_base_dir.empty()) {
     return false;
   }
