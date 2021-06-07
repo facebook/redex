@@ -12,6 +12,8 @@
 #include <sstream>
 #include <stdexcept>
 
+#include "DetectBundle.h"
+
 namespace {
 
 void create_directories_if_not_exists(std::string& dir) {
@@ -32,6 +34,14 @@ void check_directory(std::string& dir) {
 }
 
 } // namespace
+
+AssetManager::AssetManager(const std::string& dir) {
+  if (has_bundle_config(dir)) {
+    m_base_dir = (boost::filesystem::path(dir) / "base").string();
+  } else {
+    m_base_dir = dir;
+  }
+}
 
 bool AssetManager::has_secondary_dex_dir() {
   if (m_base_dir.empty()) {
