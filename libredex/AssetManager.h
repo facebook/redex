@@ -7,13 +7,22 @@
 
 #pragma once
 
+#include <boost/filesystem.hpp>
 #include <memory>
 #include <string>
 #include <vector>
 
+#include "RedexResources.h"
+
 class AssetManager {
  public:
-  explicit AssetManager(std::string apk_dir) : m_apk_dir(std::move(apk_dir)) {}
+  explicit AssetManager(std::string dir) {
+    if (has_bundle_config(dir)) {
+      m_base_dir = (boost::filesystem::path(dir) / "base").string();
+    } else {
+      m_base_dir = dir;
+    }
+  }
 
   virtual ~AssetManager() {
     for (auto& fd : m_files) {
@@ -32,5 +41,5 @@ class AssetManager {
 
  private:
   std::vector<std::shared_ptr<FILE*>> m_files;
-  std::string m_apk_dir;
+  std::string m_base_dir;
 };

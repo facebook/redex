@@ -34,12 +34,12 @@ void check_directory(std::string& dir) {
 } // namespace
 
 bool AssetManager::has_asset_dir() {
-  if (m_apk_dir.empty()) {
+  if (m_base_dir.empty()) {
     return false;
   }
-  check_directory(m_apk_dir);
+  check_directory(m_base_dir);
   std::ostringstream path;
-  path << m_apk_dir << "/assets/secondary-program-dex-jars/";
+  path << m_base_dir << "/assets/secondary-program-dex-jars/";
   std::string assets_dir = path.str();
   return boost::filesystem::is_directory(assets_dir.c_str());
 }
@@ -47,9 +47,9 @@ bool AssetManager::has_asset_dir() {
 std::shared_ptr<FILE*> AssetManager::new_asset_file(const char* filename,
                                                     const char* dir_path,
                                                     bool new_dir) {
-  check_directory(m_apk_dir);
+  check_directory(m_base_dir);
   std::ostringstream path;
-  path << m_apk_dir << dir_path;
+  path << m_base_dir << dir_path;
   std::string assets_dir = path.str();
   if (new_dir) {
     create_directories_if_not_exists(assets_dir);

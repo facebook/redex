@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include <boost/filesystem.hpp>
+#include <boost/filesystem/operations.hpp>
 #include <boost/noncopyable.hpp>
 #include <boost/optional.hpp>
 #include <map>
@@ -123,6 +125,12 @@ class AndroidResources {
 
   const std::string& m_directory;
 };
+
+inline bool has_bundle_config(const std::string& dir) {
+  std::string bundle_config =
+      (boost::filesystem::path(dir) / "BundleConfig.pb").string();
+  return boost::filesystem::exists(bundle_config);
+}
 
 std::unique_ptr<AndroidResources> create_resource_reader(
     const std::string& directory);
