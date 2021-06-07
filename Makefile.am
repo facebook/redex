@@ -25,8 +25,8 @@ libredex_la_SOURCES = \
 	libredex/AnalysisUsage.cpp \
 	libredex/AnnoUtils.cpp \
 	libredex/ApiLevelChecker.cpp \
-	libredex/ApkManager.cpp \
 	libredex/ApkResources.cpp \
+	libredex/AssetManager.cpp \
 	libredex/BigBlocks.cpp \
 	libredex/BundleResources.cpp \
 	libredex/CFGMutation.cpp \

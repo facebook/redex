@@ -25,7 +25,7 @@
 
 #include "AnalysisUsage.h"
 #include "ApiLevelChecker.h"
-#include "ApkManager.h"
+#include "AssetManager.h"
 #include "CommandProfiling.h"
 #include "ConfigFiles.h"
 #include "Debug.h"
@@ -819,7 +819,7 @@ PassManager::PassManager(
     std::unique_ptr<keep_rules::ProguardConfiguration> pg_config,
     const Json::Value& config,
     const RedexOptions& options)
-    : m_apk_mgr(get_apk_dir(config)),
+    : m_asset_mgr(get_apk_dir(config)),
       m_registered_passes(passes),
       m_current_pass_info(nullptr),
       m_pg_config(std::move(pg_config)),

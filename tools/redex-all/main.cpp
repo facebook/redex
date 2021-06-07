@@ -1112,7 +1112,7 @@ void redex_backend(ConfigFiles& conf,
           signatures);
     }
     post_lowering->run(stores);
-    post_lowering->finalize(manager.apk_manager());
+    post_lowering->finalize(manager.asset_manager());
   }
 
   {

@@ -927,8 +927,8 @@ void InterDex::run() {
   }
 
   // Emit dex info manifest
-  if (m_apk_manager.has_asset_dir()) {
-    auto mixed_mode_file = m_apk_manager.new_asset_file("dex_manifest.txt");
+  if (m_asset_manager.has_asset_dir()) {
+    auto mixed_mode_file = m_asset_manager.new_asset_file("dex_manifest.txt");
     auto mixed_mode_fh = FileHandle(*mixed_mode_file);
     mixed_mode_fh.seek_end();
     std::stringstream ss;

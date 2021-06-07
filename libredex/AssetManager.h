@@ -11,11 +11,11 @@
 #include <string>
 #include <vector>
 
-class ApkManager {
+class AssetManager {
  public:
-  explicit ApkManager(std::string apk_dir) : m_apk_dir(std::move(apk_dir)) {}
+  explicit AssetManager(std::string apk_dir) : m_apk_dir(std::move(apk_dir)) {}
 
-  virtual ~ApkManager() {
+  virtual ~AssetManager() {
     for (auto& fd : m_files) {
       if (*fd != nullptr) {
         fclose(*fd);

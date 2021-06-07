@@ -10,7 +10,7 @@
 #include <boost/optional/optional.hpp>
 #include <string>
 
-#include "ApkManager.h"
+#include "AssetManager.h"
 #include "DexClass.h"
 #include "DexStore.h"
 #include "IODIMetadata.h"
@@ -21,7 +21,7 @@ class PostLowering {
 
   virtual void sync() = 0;
   virtual void run(const DexStoresVector& stores) = 0;
-  virtual void finalize(ApkManager& mgr) = 0;
+  virtual void finalize(AssetManager& mgr) = 0;
 
   virtual std::unordered_map<DexClass*, std::vector<DexMethod*>>
   get_detached_methods() = 0;

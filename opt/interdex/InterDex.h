@@ -9,7 +9,7 @@
 
 #include <unordered_set>
 
-#include "ApkManager.h"
+#include "AssetManager.h"
 #include "CrossDexRefMinimizer.h"
 #include "CrossDexRelocator.h"
 #include "DexClass.h"
@@ -27,7 +27,7 @@ class InterDex {
  public:
   InterDex(const Scope& original_scope,
            const DexClassesVector& dexen,
-           ApkManager& apk_manager,
+           AssetManager& asset_manager,
            ConfigFiles& conf,
            std::vector<std::unique_ptr<InterDexPassPlugin>>& plugins,
            int64_t linear_alloc_limit,
@@ -47,7 +47,7 @@ class InterDex {
            int min_sdk,
            bool sort_remaining_classes)
       : m_dexen(dexen),
-        m_apk_manager(apk_manager),
+        m_asset_manager(asset_manager),
         m_conf(conf),
         m_plugins(plugins),
         m_static_prune_classes(static_prune_classes),
@@ -156,7 +156,7 @@ class InterDex {
 
   const DexClassesVector& m_dexen;
   DexClassesVector m_outdex;
-  ApkManager& m_apk_manager;
+  AssetManager& m_asset_manager;
   ConfigFiles& m_conf;
   std::vector<std::unique_ptr<InterDexPassPlugin>>& m_plugins;
   // TODO: Encapsulate (primary|all) dex flags under one config.

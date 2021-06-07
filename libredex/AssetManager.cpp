@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "ApkManager.h"
+#include "AssetManager.h"
 
 #include <boost/filesystem.hpp>
 #include <iostream>
@@ -33,7 +33,7 @@ void check_directory(std::string& dir) {
 
 } // namespace
 
-bool ApkManager::has_asset_dir() {
+bool AssetManager::has_asset_dir() {
   if (m_apk_dir.empty()) {
     return false;
   }
@@ -44,9 +44,9 @@ bool ApkManager::has_asset_dir() {
   return boost::filesystem::is_directory(assets_dir.c_str());
 }
 
-std::shared_ptr<FILE*> ApkManager::new_asset_file(const char* filename,
-                                                  const char* dir_path,
-                                                  bool new_dir) {
+std::shared_ptr<FILE*> AssetManager::new_asset_file(const char* filename,
+                                                    const char* dir_path,
+                                                    bool new_dir) {
   check_directory(m_apk_dir);
   std::ostringstream path;
   path << m_apk_dir << dir_path;

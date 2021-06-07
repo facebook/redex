@@ -123,7 +123,7 @@ void InterDexPass::run_pass(
   mgr.set_metric(METRIC_RESERVED_MREFS, refs_info.mrefs);
 
   bool force_single_dex = conf.get_json_config().get("force_single_dex", false);
-  InterDex interdex(original_scope, dexen, mgr.apk_manager(), conf, plugins,
+  InterDex interdex(original_scope, dexen, mgr.asset_manager(), conf, plugins,
                     m_linear_alloc_limit, m_static_prune, m_normal_primary_dex,
                     m_keep_primary_order, force_single_dex, m_emit_canaries,
                     m_minimize_cross_dex_refs, m_minimize_cross_dex_refs_config,
@@ -205,7 +205,7 @@ void InterDexPass::run_pass_on_nonroot_store(const Scope& original_scope,
   CrossDexRelocatorConfig cross_dex_relocator_config;
 
   // Initialize interdex and run for nonroot store
-  InterDex interdex(original_scope, dexen, mgr.apk_manager(), conf, plugins,
+  InterDex interdex(original_scope, dexen, mgr.asset_manager(), conf, plugins,
                     m_linear_alloc_limit, m_static_prune, m_normal_primary_dex,
                     m_keep_primary_order, false /* force single dex */,
                     false /* emit canaries */,
