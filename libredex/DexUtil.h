@@ -319,22 +319,29 @@ inline std::string external_to_internal(const std::string& external_name) {
 // Example: "[I" --> "int[]"
 // Example: "LA$B$C;" --> "C"
 // Example: "[LA$B;" --> "B[]"
-// Note: Anonymous class is not handled properly here.
+// Example: "Ljava/lang$1;" --> ""
+// Note: kotlin anonymous class is not handled properly here.
 inline std::string internal_to_simple(const std::string& internal_name) {
   int array_level = std::count(internal_name.begin(), internal_name.end(), '[');
   std::string component_name = internal_name.substr(array_level);
   std::string component_external_name = internal_to_external(component_name);
   std::size_t last_dot = component_external_name.rfind('.');
+  std::size_t last_dollar = component_external_name.rfind('$');
   std::string component_simple_name;
-  if (last_dot == std::string::npos) {
-    // No dot was found, the name is already simple.
+  if (last_dot == std::string::npos && last_dollar == std::string::npos) {
     component_simple_name = component_external_name;
-  } else {
+  } else if (last_dot == std::string::npos) {
+    component_simple_name = component_external_name.substr(last_dollar + 1);
+  } else if (last_dollar == std::string::npos) {
     component_simple_name = component_external_name.substr(last_dot + 1);
+  } else {
+    size_t simple_begin = (last_dot < last_dollar) ? last_dollar : last_dot;
+    component_simple_name = component_external_name.substr(simple_begin + 1);
   }
-  std::size_t last_dollar = component_simple_name.rfind('$');
-  if (last_dollar != std::string::npos) {
-    component_simple_name = component_simple_name.substr(last_dollar + 1);
+  if (std::all_of(component_simple_name.begin(),
+                  component_simple_name.end(),
+                  isdigit)) {
+    component_simple_name = "";
   }
   // append a pair of [] for each array level.
   std::string array_suffix;

@@ -58,6 +58,9 @@ TEST_F(DexUtilTest, test_java_name_internal_to_simple) {
   EXPECT_EQ("MyClass", internal_to_simple("Lcom/facebook/OuterClass$MyClass;"));
   EXPECT_EQ("MyClass", internal_to_simple("LOuterClassA$OuterClassB$MyClass;"));
   EXPECT_EQ("MyClass[][]", internal_to_simple("[[LOuterClass$MyClass;"));
+  EXPECT_EQ("", internal_to_simple("Lcom/facebook/packagename$1;"));
+  EXPECT_EQ("NonAnonClass1", internal_to_simple("LOuterClass$NonAnonClass1;"));
+  EXPECT_EQ("1NonAnonClass", internal_to_simple("LOuterClass$1NonAnonClass;"));
 }
 
 TEST_F(DexUtilTest, is_valid_identifier) {
