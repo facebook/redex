@@ -19,6 +19,7 @@
 #include "ApkResources.h"
 #include "BundleResources.h"
 #include "Debug.h"
+#include "DetectBundle.h"
 #include "DexUtil.h"
 #include "IOUtil.h"
 #include "Macros.h"

@@ -12,17 +12,9 @@
 #include <string>
 #include <vector>
 
-#include "RedexResources.h"
-
 class AssetManager {
  public:
-  explicit AssetManager(std::string dir) {
-    if (has_bundle_config(dir)) {
-      m_base_dir = (boost::filesystem::path(dir) / "base").string();
-    } else {
-      m_base_dir = dir;
-    }
-  }
+  explicit AssetManager(const std::string& dir);
 
   virtual ~AssetManager() {
     for (auto& fd : m_files) {
