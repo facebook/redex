@@ -99,19 +99,26 @@ TEST_F(EvaluateTypeChecksTest, same_type) {
 TEST_F(EvaluateTypeChecksTest, external_external) {
   auto obj = java_lang_Object();
   auto str = java_lang_String();
+  auto cls = java_lang_Class();
+
+  // Object is special.
+  EXPECT_EQ(1, evaluate(str, obj));
 
   // For now, we expect this to not be resolved.
   EXPECT_EQ(-1, evaluate(obj, str));
-  EXPECT_EQ(-1, evaluate(str, obj));
+  EXPECT_EQ(-1, evaluate(str, cls));
+  EXPECT_EQ(-1, evaluate(cls, str));
 }
 
 TEST_F(EvaluateTypeChecksTest, external_internal) {
   auto obj = java_lang_Object();
   auto str = java_lang_String();
 
+  // Object is special.
+  EXPECT_EQ(1, evaluate(m_foo, obj));
+
   // For now, we expect this to not be resolved.
   EXPECT_EQ(-1, evaluate(obj, m_foo));
-  EXPECT_EQ(-1, evaluate(m_foo, obj));
   EXPECT_EQ(-1, evaluate(str, m_foo));
   EXPECT_EQ(-1, evaluate(m_foo, str));
 }

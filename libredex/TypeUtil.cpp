@@ -450,6 +450,11 @@ boost::optional<int32_t> evaluate_type_check(const DexType* src_type,
     return 1;
   }
 
+  // Early optimization: always true for test_type = java.lang.Object.
+  if (test_type == java_lang_Object()) {
+    return 1;
+  }
+
   auto test_cls = type_class(test_type);
   if (test_cls == nullptr) {
     return boost::none;
