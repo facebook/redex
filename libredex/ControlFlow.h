@@ -881,6 +881,8 @@ class ControlFlowGraph {
    */
   DexPosition* get_dbg_pos(const cfg::InstructionIterator& it);
 
+  std::size_t opcode_hash() const;
+
  private:
   using BranchToTargets =
       std::unordered_map<MethodItemEntry*, std::vector<Block*>>;
