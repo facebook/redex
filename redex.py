@@ -281,7 +281,7 @@ def run_and_stream_stderr(args, env, pass_fds):
             args, env=env, pass_fds=pass_fds, stderr=subprocess.PIPE
         )
 
-    def stream_and_return():
+    def stream_and_return(line_handler=None):
         err_out = []
         # Copy and stash the output.
         for line in proc.stderr:
@@ -289,6 +289,8 @@ def run_and_stream_stderr(args, env, pass_fds):
                 str_line = line.decode(sys.stdout.encoding)
             except UnicodeDecodeError:
                 str_line = "<UnicodeDecodeError>\n"
+            if line_handler:
+                str_line = line_handler(str_line)
             sys.stderr.write(str_line)
             err_out.append(str_line)
             if len(err_out) > 1000:
@@ -380,7 +382,7 @@ class ExceptionMessageFormatter:
         )
 
 
-def run_redex_binary(state, exception_formatter):
+def run_redex_binary(state, exception_formatter, output_line_handler):
     if state.args.redex_binary is None:
         state.args.redex_binary = shutil.which("redex-all")
 
@@ -491,7 +493,7 @@ def run_redex_binary(state, exception_formatter):
             sigint_handler.set_proc(proc)
             sigint_handler.set_state(RedexState.STARTED)
 
-            returncode, err_out = handler()
+            returncode, err_out = handler(output_line_handler)
 
             sigint_handler.set_state(RedexState.POSTPROCESSING)
 
@@ -1293,14 +1295,14 @@ def _init_logging(level_str):
     logging.basicConfig(level=level)
 
 
-def run_redex(args, exception_formatter=None):
+def run_redex(args, exception_formatter=None, output_line_handler=None):
     # This is late, but hopefully early enough.
     _init_logging(args.log_level)
 
     state = prepare_redex(args)
     if exception_formatter is None:
         exception_formatter = ExceptionMessageFormatter()
-    run_redex_binary(state, exception_formatter)
+    run_redex_binary(state, exception_formatter, output_line_handler)
 
     if args.stop_pass:
         # Do not remove temp dirs
