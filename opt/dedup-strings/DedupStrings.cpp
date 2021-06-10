@@ -51,7 +51,9 @@ constexpr const char* METRIC_EXCLUDED_OUT_OF_FACTORY_METHODS_STRINGS =
     "num_excluded_out_of_factory_methods_strings";
 } // namespace
 
-void DedupStrings::run(DexStoresVector& stores) {
+void DedupStrings::run(
+    DexStoresVector& stores,
+    std::unique_ptr<ab_test::ABExperimentContext>& ab_experiment_context) {
   // For now, we are only trying to optimize strings in the first store.
   // (It should be possible to generalize in the future.)
   DexClassesVector& dexen = stores[0].get_dexen();
@@ -91,7 +93,8 @@ void DedupStrings::run(DexStoresVector& stores) {
 
   // Rewrite const-string instructions
   rewrite_const_string_instructions(scope, methods_to_dex,
-                                    perf_sensitive_methods, strings_to_dedup);
+                                    perf_sensitive_methods, strings_to_dedup,
+                                    ab_experiment_context);
 }
 
 std::unordered_set<const DexMethod*> DedupStrings::get_perf_sensitive_methods(
@@ -531,11 +534,12 @@ void DedupStrings::rewrite_const_string_instructions(
     const std::unordered_map<const DexMethod*, size_t>& methods_to_dex,
     const std::unordered_set<const DexMethod*>& perf_sensitive_methods,
     const std::unordered_map<DexString*, DedupStrings::DedupStringInfo>&
-        strings_to_dedup) {
+        strings_to_dedup,
+    std::unique_ptr<ab_test::ABExperimentContext>& ab_experiment_context) {
 
   walk::parallel::code(
-      scope, [&methods_to_dex, &strings_to_dedup,
-              &perf_sensitive_methods](DexMethod* method, IRCode& code) {
+      scope, [&methods_to_dex, &strings_to_dedup, &perf_sensitive_methods,
+              &ab_experiment_context](DexMethod* method, IRCode& code) {
         if (perf_sensitive_methods.count(method) != 0) {
           // We don't rewrite methods in the primary dex or other perf-sensitive
           // methods.
@@ -575,10 +579,8 @@ void DedupStrings::rewrite_const_string_instructions(
           return;
         }
 
+        ab_experiment_context->try_register_method(method);
         // Second, we actually rewrite them.
-        auto exp = ab_test::ABExperimentContext::create(cfg.get(), method,
-                                                        "dedup_strings");
-
         cfg::CFGMutation cfg_mut(*cfg);
 
         // From
@@ -624,7 +626,6 @@ void DedupStrings::rewrite_const_string_instructions(
           cfg_mut.replace(const_string_it, replacements);
         }
         cfg_mut.flush();
-        exp->flush();
       });
 }
 
@@ -681,10 +682,16 @@ void DedupStringsPass::bind_config() {
 void DedupStringsPass::run_pass(DexStoresVector& stores,
                                 ConfigFiles& conf,
                                 PassManager& mgr) {
+  auto ab_experiment_context =
+      ab_test::ABExperimentContext::create("dedup_strings");
+  if (ab_experiment_context->use_control()) {
+    return;
+  }
+
   DedupStrings ds(m_max_factory_methods,
                   m_method_profiles_appear_percent_threshold,
                   conf.get_method_profiles());
-  ds.run(stores);
+  ds.run(stores, ab_experiment_context);
   const auto stats = ds.get_stats();
   mgr.incr_metric(METRIC_PERF_SENSITIVE_STRINGS, stats.perf_sensitive_strings);
   mgr.incr_metric(METRIC_NON_PERF_SENSITIVE_STRINGS,
@@ -719,6 +726,7 @@ void DedupStringsPass::run_pass(DexStoresVector& stores,
         stats.duplicate_string_loads, stats.expected_size_reduction,
         stats.dexes_without_host_cls, stats.excluded_duplicate_non_load_strings,
         stats.factory_methods, stats.excluded_out_of_factory_methods_strings);
+  ab_experiment_context->flush();
 }
 
 static DedupStringsPass s_pass;

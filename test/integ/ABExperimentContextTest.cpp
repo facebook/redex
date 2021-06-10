@@ -22,9 +22,15 @@ void change_called_method(const std::string& exp_name,
                           DexMethod* m,
                           const std::string& original_method_name,
                           const std::string& new_method_name) {
-  auto& cfg = m->get_code()->cfg();
-  ab_test::ABExperimentContextImpl experiment(&cfg, m, exp_name);
+  ab_test::ABExperimentContextImpl experiment(exp_name);
+  if (experiment.use_control()) {
+    return;
+  }
 
+  experiment.try_register_method(m);
+
+  m->get_code()->build_cfg();
+  auto& cfg = m->get_code()->cfg();
   for (const auto& mie : cfg::InstructionIterable(cfg)) {
     IRInstruction* insn = mie.insn;
     if (opcode::is_an_invoke(insn->opcode())) {
@@ -39,6 +45,8 @@ void change_called_method(const std::string& exp_name,
       }
     }
   }
+  m->get_code()->clear_cfg();
+  experiment.flush();
 }
 
 TEST_F(ABExperimentContextTest, testCFGConstructorBasicFunctionality) {
@@ -46,12 +54,10 @@ TEST_F(ABExperimentContextTest, testCFGConstructorBasicFunctionality) {
       (*classes)[0]->find_method_from_simple_deobfuscated_name("basicMethod");
   ASSERT_TRUE(m != nullptr);
 
-  m->get_code()->build_cfg(/* editable */ true);
-
-  ab_test::ABExperimentContextImpl experiment(&m->get_code()->cfg(), m,
-                                              "ab_experiment");
+  ab_test::ABExperimentContextImpl experiment("ab_experiment");
+  experiment.try_register_method(m);
+  m->get_code()->build_cfg();
   experiment.flush();
-  ASSERT_TRUE(!m->get_code()->cfg_built());
 }
 
 TEST_F(ABExperimentContextTest, testTestingMode) {
@@ -62,7 +68,7 @@ TEST_F(ABExperimentContextTest, testTestingMode) {
   DexMethod* m =
       (*classes)[0]->find_method_from_simple_deobfuscated_name("getNum");
   ASSERT_TRUE(m != nullptr);
-  m->get_code()->build_cfg(true);
+
   change_called_method("ab_experiment", m, "getSixPrivate",
                        "amazingDirectMethod");
 
@@ -87,7 +93,7 @@ TEST_F(ABExperimentContextTest, testControlMode) {
   DexMethod* m =
       (*classes)[0]->find_method_from_simple_deobfuscated_name("getNum");
   ASSERT_TRUE(m != nullptr);
-  m->get_code()->build_cfg(true);
+
   change_called_method("ab_experiment", m, "getSixPrivate",
                        "amazingDirectMethod");
 

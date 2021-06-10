@@ -25,32 +25,17 @@ void ABExperimentContextImpl::flush() {
   if (m_flushed) {
     return;
   }
-  m_flushed = true;
 
-  if (!use_test()) {
-    // control should only keep the original cfg, not the modified one
-    m_cloned_cfg->deep_copy(m_cfg);
-  } // else do nothing
-
-  // Clean up
-  m_original_method->get_code()->clear_cfg();
-  --INST_CNT;
+  always_assert_log(use_test(), "Should not flush unless in test mode.");
 }
 
-ABExperimentContextImpl::ABExperimentContextImpl(cfg::ControlFlowGraph* cfg,
-                                                 DexMethod* m,
-                                                 const std::string& exp_name)
-    : m_original_method(m), m_cfg(cfg) {
-  always_assert(cfg == &m->get_code()->cfg());
-
+ABExperimentContextImpl::ABExperimentContextImpl(const std::string& exp_name) {
   m_state = s_experiments_states.count(exp_name) == 0
                 ? ABExperimentState::TEST
                 : s_experiments_states[exp_name];
 
-  setup_context();
+  ++INST_CNT;
 }
-
-ABExperimentContextImpl::~ABExperimentContextImpl() { flush(); }
 
 void ABExperimentContextImpl::parse_experiments_states(
     const std::unordered_map<std::string, std::string>& states) {
@@ -78,17 +63,8 @@ bool ABExperimentContextImpl::use_test() {
   return m_state == ABExperimentState::TEST;
 }
 
-void ABExperimentContextImpl::setup_context() {
-  always_assert(m_cfg->editable());
-  ++INST_CNT;
-
-  if (use_test()) {
-    return;
-  }
-
-  // Clone the original content of the CFG
-  m_cloned_cfg = std::make_unique<cfg::ControlFlowGraph>();
-  m_cfg->deep_copy(m_cloned_cfg.get());
+bool ABExperimentContextImpl::use_control() {
+  return m_state == ABExperimentState::CONTROL;
 }
 
 void ABExperimentContextImpl::reset_global_state() {

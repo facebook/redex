@@ -23,7 +23,12 @@ class ABExperimentContext {
 
  public:
   static std::unique_ptr<ABExperimentContext> create(
-      cfg::ControlFlowGraph* cfg, DexMethod* m, const std::string& exp_name);
+      const std::string& exp_name);
+
+  virtual void try_register_method(DexMethod* m) = 0;
+
+  virtual bool use_control() = 0;
+  virtual bool use_test() = 0;
 
   /**
    * Decide which version (CONTROL/TEST) of code will be applied and also clears
