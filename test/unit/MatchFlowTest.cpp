@@ -94,6 +94,10 @@ TEST_F(MatchFlowTest, RangeUnique) {
   test_range rone{one.cbegin(), one.cend()};
   test_range rtwo{two.cbegin(), two.cend()};
 
+  EXPECT_FALSE(rzero);
+  EXPECT_TRUE(rone);
+  EXPECT_TRUE(rtwo);
+
   EXPECT_EQ(rzero.unique(), nullptr);
   EXPECT_EQ(rone.unique(), add.get());
   EXPECT_EQ(rtwo.unique(), nullptr);

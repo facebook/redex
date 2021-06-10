@@ -296,6 +296,8 @@ struct result_t {
       return {it, it};
     }
 
+    explicit operator bool() const { return m_begin != m_end; }
+
     /**
      * If the range contains precisely one instruction, returns it, otherwise
      * returns nullptr.
