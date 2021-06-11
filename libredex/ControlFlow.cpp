@@ -2680,3 +2680,53 @@ DexPosition* ControlFlowGraph::get_dbg_pos(const cfg::InstructionIterator& it) {
 }
 
 } // namespace cfg
+
+namespace {
+template <typename InternalIterator>
+class IteratorMapper {
+ public:
+  using difference_type = IROpcode;
+  using value_type = IROpcode;
+  using pointer = IROpcode*;
+  using reference = IROpcode&;
+  using iterator_category = std::random_access_iterator_tag;
+
+  explicit IteratorMapper(const InternalIterator& it) : m_internal_it(it) {}
+  IteratorMapper(const IteratorMapper<InternalIterator>& other)
+      : m_internal_it(other.m_internal_it) {}
+  ~IteratorMapper() {}
+  IteratorMapper& operator=(const IteratorMapper<InternalIterator>& other) {
+    m_internal_it = other.m_internal_it;
+    return *this;
+  }
+
+  IteratorMapper& operator++() {
+    m_internal_it++;
+    return *this;
+  }
+
+  bool operator!=(const IteratorMapper<InternalIterator>& other) {
+    return m_internal_it != other.m_internal_it;
+  }
+
+  IROpcode& operator*() {
+    m_opcode = m_internal_it->insn->opcode();
+    return m_opcode;
+  }
+
+ private:
+  InternalIterator m_internal_it;
+  IROpcode m_opcode;
+};
+
+} // namespace
+
+namespace cfg {
+
+std::size_t ControlFlowGraph::opcode_hash() const {
+  auto ii = cfg::ConstInstructionIterable(*this);
+  return boost::hash_range(IteratorMapper(ii.begin()),
+                           IteratorMapper(ii.end()));
+}
+
+} // namespace cfg
