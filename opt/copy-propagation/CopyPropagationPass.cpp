@@ -15,7 +15,7 @@
 using namespace copy_propagation_impl;
 
 void CopyPropagationPass::run_pass(DexStoresVector& stores,
-                                   ConfigFiles& /* unused */,
+                                   ConfigFiles& conf,
                                    PassManager& mgr) {
   auto scope = build_class_scope(stores);
 
@@ -31,7 +31,7 @@ void CopyPropagationPass::run_pass(DexStoresVector& stores,
   m_config.regalloc_has_run = mgr.regalloc_has_run();
 
   CopyPropagation impl(m_config);
-  auto stats = impl.run(scope);
+  auto stats = impl.run(scope, conf);
   mgr.incr_metric("redundant_moves_eliminated", stats.moves_eliminated);
   mgr.incr_metric("source_regs_replaced_with_representative",
                   stats.replaced_sources);

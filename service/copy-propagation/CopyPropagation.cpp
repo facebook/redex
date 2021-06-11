@@ -12,6 +12,7 @@
 #include "AliasedRegisters.h"
 #include "CFGMutation.h"
 #include "CanonicalizeLocks.h"
+#include "ConfigFiles.h"
 #include "ConstantUses.h"
 #include "ControlFlow.h"
 #include "DexOpcode.h"
@@ -449,10 +450,18 @@ Stats& Stats::operator+=(const Stats& that) {
   return *this;
 }
 
-Stats CopyPropagation::run(const Scope& scope) {
+Stats CopyPropagation::run(const Scope& scope, const ConfigFiles& conf) {
+  // Use same class skip config as the actual type check.
+  const Json::Value& type_checker_args =
+      conf.get_json_config()["ir_type_checker"];
+  std::unordered_set<std::string> class_skip_list;
+  for (auto& skip_class: type_checker_args["class_skip_list"]) {
+    class_skip_list.insert(skip_class.asString());
+  }
+
   return walk::parallel::methods<Stats>(
       scope,
-      [this](DexMethod* m) {
+      [this, class_skip_list](DexMethod* m) {
         IRCode* code = m->get_code();
         if (code == nullptr) {
           return Stats();
@@ -464,7 +473,7 @@ Stats CopyPropagation::run(const Scope& scope) {
 
         if (m_config.debug) {
           // Run the IR type checker
-          IRTypeChecker checker(m);
+          IRTypeChecker checker(m, true, class_skip_list);
           checker.run();
           if (!checker.good()) {
             const std::string& msg = checker.what();

@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "ConfigFiles.h"
 #include "IRCode.h"
 #include "Trace.h"
 
@@ -45,7 +46,7 @@ class CopyPropagation final {
  public:
   explicit CopyPropagation(const Config& config) : m_config(config) {}
 
-  Stats run(const Scope& scope);
+  Stats run(const Scope& scope, const ConfigFiles& conf);
 
   Stats run(IRCode*, DexMethod* = nullptr);
 
