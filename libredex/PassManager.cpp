@@ -423,6 +423,10 @@ class JNINativeContextHelper {
         auto native_func = native::get_native_function_for_dex_method(m);
         if (native_func) {
           m_removable_natives.emplace(native_func);
+        } else {
+          // There's a native method which we don't find. Let's be conservative
+          // and ask Redex not to remove it.
+          m->rstate.set_root();
         }
       }
     });
