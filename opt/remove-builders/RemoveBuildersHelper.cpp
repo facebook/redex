@@ -879,7 +879,7 @@ bool update_buildee_constructor(DexMethod* method, DexClass* builder) {
       auto fields = builder->get_ifields();
       insn->set_method(fields_constr);
       // 'Make room' for the reg arguments.
-      insn->set_srcs_size(2 * fields.size() + 1);
+      insn->set_srcs_size(fields.size() + 1);
 
       // Loading each of the fields before passing them to the method.
       // `invoke-direct {v_class, v_builder}` ->
@@ -897,12 +897,10 @@ bool update_buildee_constructor(DexMethod* method, DexClass* builder) {
             new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
         move_result_pseudo->set_dest(new_regs_size);
         code->insert_before(it, move_result_pseudo);
-
         insn->set_src(index++, new_regs_size);
         new_regs_size += type::is_wide_type(field->get_type()) ? 2 : 1;
       }
 
-      insn->set_srcs_size(new_regs_size - regs_size + 1);
       code->set_registers_size(new_regs_size);
     }
   }
