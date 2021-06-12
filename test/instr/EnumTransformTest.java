@@ -78,6 +78,12 @@ enum SCORE {
   public String toString() {
     return this.myOtherField;
   }
+
+  // POSTCHECK-DAG: method: virtual redex.SCORE.cast_to_enum_array$REDEX${{.*}}:()java.lang.Integer[]
+  public SCORE[] cast_to_enum_array() {
+    Object result = SCORE.values();
+    return (SCORE[]) result;
+  }
 }
 
 interface Intf {
@@ -240,6 +246,19 @@ enum ENUM_TYPE_2 {
     } else if (selector == 1) {
       assertThat(res).isEqualTo(1);
     }
+  }
+}
+
+// CHECK: class: redex.CAST_ENUM_ARRAY_TO_OBJECT
+// CHECK-NEXT: Access flags:
+// CHECK-NEXT: Superclass: java.lang.Enum
+enum CAST_ENUM_ARRAY_TO_OBJECT {
+  ONE;
+  public static String method() {
+    StringBuilder sb = new StringBuilder();
+    sb.append(CAST_ENUM_ARRAY_TO_OBJECT.values());
+    sb.append(String.valueOf(CAST_ENUM_ARRAY_TO_OBJECT.values()));
+    return sb.toString();
   }
 }
 

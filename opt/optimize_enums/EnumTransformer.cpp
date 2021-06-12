@@ -669,7 +669,8 @@ class CodeTransformer final {
     } break;
     case OPCODE_CHECK_CAST: {
       auto type = insn->get_type();
-      if (try_convert_to_int_type(type)) {
+      auto new_type = try_convert_to_int_type(type);
+      if (new_type) {
         auto possible_src_types = env.get(insn->src(0));
         if (possible_src_types.size() != 0) {
           DexType* candidate_type =
@@ -677,10 +678,7 @@ class CodeTransformer final {
           always_assert(candidate_type == type);
         }
         // Empty src_types means the src register holds null object.
-        m_replacements.push_back(
-            InsnReplacement(cfg, block, mie,
-                            dasm(OPCODE_CHECK_CAST, m_enum_util->INTEGER_TYPE,
-                                 {{VREG, insn->src(0)}})));
+        insn->set_type(new_type);
       } else if (type == m_enum_util->ENUM_TYPE) {
         always_assert(!extract_candidate_enum_type(env.get(insn->src(0))));
       }
@@ -998,7 +996,7 @@ class CodeTransformer final {
   DexType* infer_candidate_type(const EnumTypes& reg_types,
                                 DexType* target_type) {
     DexType* candidate_type = nullptr;
-    if (m_enum_attributes_map.count(target_type)) {
+    if (is_a_candidate(target_type)) {
       candidate_type = target_type;
     } else if (!m_enum_util->is_super_type_of_candidate_enum(target_type)) {
       return nullptr;
@@ -1014,11 +1012,10 @@ class CodeTransformer final {
       return candidate_type;
     } else if (type_set.size() == 1) {
       candidate_type = *type_set.begin();
-      return m_enum_attributes_map.count(candidate_type) ? candidate_type
-                                                         : nullptr;
+      return is_a_candidate(candidate_type) ? candidate_type : nullptr;
     } else {
       for (auto t : type_set) {
-        always_assert_log(!m_enum_attributes_map.count(t), "%s\n", SHOW(t));
+        always_assert_log(!is_a_candidate(t), "%s\n", SHOW(t));
       }
       return nullptr;
     }
@@ -1036,6 +1033,12 @@ class CodeTransformer final {
 
   DexType* try_convert_to_int_type(DexType* type) {
     return m_enum_util->try_convert_to_int_type(m_enum_attributes_map, type);
+  }
+
+  bool is_a_candidate(DexType* type) const {
+    auto elem_type =
+        const_cast<DexType*>(type::get_element_type_if_array(type));
+    return m_enum_attributes_map.count(elem_type);
   }
 
   inline reg_t allocate_temp() {
@@ -1169,7 +1172,7 @@ class EnumTransformer final {
           }
         } else if (insn->has_type()) {
           auto type_ref = insn->get_type();
-          always_assert_log(!m_enum_attributes_map.count(type_ref),
+          always_assert_log(!try_convert_to_int_type(type_ref),
                             "Invalid insn %s in %s\n", SHOW(insn),
                             SHOW(method));
         }
