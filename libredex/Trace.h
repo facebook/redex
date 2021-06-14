@@ -57,6 +57,7 @@ class DexType;
   TM(ENUM)            \
   TM(EVALTC)          \
   TM(FINALINLINE)     \
+  TM(FREG)            \
   TM(GETTER)          \
   TM(GQL)             \
   TM(HASHER)          \
