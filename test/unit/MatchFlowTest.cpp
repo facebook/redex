@@ -228,6 +228,33 @@ TEST_F(MatchFlowTest, MatchingNotRootDiamond) {
   EXPECT_INSNS(res.matching(lit), const_0);
 }
 
+TEST_F(MatchFlowTest, MatchingMultipleRoots) {
+  flow_t f;
+
+  auto lit = f.insn(m::const_());
+  auto add = f.insn(m::add_int_()).src(0, lit).src(1, lit);
+  auto sub = f.insn(m::sub_int_()).src(0, lit).src(1, lit);
+
+  auto code = assembler::ircode_from_string(R"((
+    (const v0 0)
+    (const v1 1)
+    (const v2 2)
+    (add-int v3 v0 v1)
+    (sub-int v4 v1 v2)
+  ))");
+
+  cfg::ScopedCFG cfg{code.get()};
+  auto ii = InstructionIterable(*cfg);
+  auto mies = IndexedWrapper{ii};
+
+  ASSERT_INSN(const_0, mies[0], OPCODE_CONST);
+  ASSERT_INSN(const_1, mies[1], OPCODE_CONST);
+  ASSERT_INSN(const_2, mies[2], OPCODE_CONST);
+
+  auto res = f.find(*cfg, {add, sub});
+  EXPECT_INSNS(res.matching(lit), const_0, const_1, const_2);
+}
+
 TEST_F(MatchFlowTest, OnlyMatchingSource) {
   flow_t f;
 
@@ -696,7 +723,7 @@ TEST_F(MatchFlowTest, InstructionGraph) {
   ASSERT_EQ(const_0->get_literal(), 0);
   ASSERT_EQ(const_1->get_literal(), 1);
 
-  auto graph = instruction_graph(*cfg, constraints, 0);
+  auto graph = instruction_graph(*cfg, constraints, {0});
 
   EXPECT_THAT(graph.inbound(0, add_int),
               UnorderedElementsAre(Edge(0, add_int, 0, 0, add_int),
@@ -745,7 +772,7 @@ TEST_F(MatchFlowTest, InstructionGraphNoFlowConstraint) {
   ASSERT_INSN(add_int, mies[2], OPCODE_ADD_INT);
   ASSERT_EQ(const_1->get_literal(), 1);
 
-  auto graph = instruction_graph(*cfg, constraints, 0);
+  auto graph = instruction_graph(*cfg, constraints, {0});
 
   EXPECT_THAT(graph.inbound(0, add_int),
               UnorderedElementsAre(Edge(1, const_1, 1, 0, add_int)));
@@ -790,7 +817,7 @@ TEST_F(MatchFlowTest, InstructionGraphTransitiveFailure) {
   ASSERT_INSN(add_int, mies[3], OPCODE_ADD_INT);
   ASSERT_EQ(const_1->get_literal(), 1);
 
-  auto graph = instruction_graph(*cfg, constraints, 0);
+  auto graph = instruction_graph(*cfg, constraints, {0});
 
   EXPECT_THAT(graph.inbound(0, add_int),
               UnorderedElementsAre(Edge(1, sub_int, 0, 0, add_int),
@@ -813,7 +840,7 @@ TEST_F(MatchFlowTest, InstructionGraphTransitiveFailure) {
   EXPECT_FALSE(graph.has_node(1, sub_int));
   EXPECT_TRUE(graph.has_node(2, const_1));
 
-  auto locs = graph.locations(0);
+  auto locs = graph.locations({0});
 
   // Although const_1 existed in the graph, it isn't reachable from a root node.
   EXPECT_EQ(locs.at(2), nullptr);

@@ -243,7 +243,9 @@ void InstructionConstraintAnalysis::analyze_instruction(
     }
   }
 
-  propagate(m_root);
+  for (auto root : m_roots) {
+    propagate(root);
+  }
 }
 
 DataFlowGraph::DataFlowGraph() {
@@ -327,7 +329,8 @@ const std::vector<DataFlowGraph::Edge>& DataFlowGraph::outbound(
   return it->second.out;
 }
 
-Locations DataFlowGraph::locations(LocationIx root) const {
+Locations DataFlowGraph::locations(
+    const std::unordered_set<LocationIx>& roots) const {
   Locations locations;
 
   // Exist to avoid creating a temporary for potentially unnecessary
@@ -362,7 +365,7 @@ Locations DataFlowGraph::locations(LocationIx root) const {
     auto& n = adj.first;
     auto loc = node_loc(n);
 
-    if (loc == root) {
+    if (roots.count(loc)) {
       frontier.push(n);
     }
 
@@ -438,14 +441,14 @@ void DataFlowGraph::propagate_flow_constraints(
 
 DataFlowGraph instruction_graph(cfg::ControlFlowGraph& cfg,
                                 const std::vector<Constraint>& constraints,
-                                LocationIx root) {
+                                const std::unordered_set<LocationIx>& roots) {
   if (!cfg.exit_block()) {
     // The instruction constraint analysis runs backwards and so requires a
     // single exit block to start from.
     cfg.calculate_exit_block();
   }
 
-  InstructionConstraintAnalysis analysis{cfg, constraints, root};
+  InstructionConstraintAnalysis analysis{cfg, constraints, roots};
   analysis.run({});
 
   DataFlowGraph graph;
@@ -508,7 +511,9 @@ DataFlowGraph instruction_graph(cfg::ControlFlowGraph& cfg,
       }
 
       auto* insn = it->insn;
-      test_node(root, insn);
+      for (auto root : roots) {
+        test_node(root, insn);
+      }
 
       if (auto d = dest(insn)) {
         const ICADomain& obligations = env.get(*d);

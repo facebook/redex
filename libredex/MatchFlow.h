@@ -130,10 +130,13 @@ struct result_t;
  * A predicate is applied over a CFG using `find`:
  *
  *   result_t flow_t::find(ControlFlowGraph& cfg, location_t l)
+ *   result_t flow_t::find(ControlFlowGraph& cfg,
+ *                         std::initializer_list<location_t> ls)
  *
  * The result is a sub-graph of the data-flow graph reachable by following edges
- * matching flow constraints, backwards starting from instructions matching the
- * root location, `l`.  This data structure can be queried in two ways:
+ * matching flow constraints, backwards starting from instructions matching root
+ * locations.  There can be a single root location (`l`), or multiple (`ls`).
+ * This data structure can be queried in two ways:
  *
  *   result_t::matching(location_t l)
  *   result_t::matching(location_t l, IRInstruction* insn, src_index_t ix)
@@ -214,11 +217,13 @@ struct flow_t {
 
   /**
    * Search for sub-trees originating from instructions matching the constraints
-   * at l, in the given control-flow graph.  This operation requires that a
-   * unique exit block exists in `cfg`, and will calculate one (mutating the
+   * at ls or l, in the given control-flow graph.  This operation requires that
+   * a unique exit block exists in `cfg`, and will calculate one (mutating the
    * CFG) if it does not exist.
    */
   result_t find(cfg::ControlFlowGraph& cfg, location_t l) const;
+  result_t find(cfg::ControlFlowGraph& cfg,
+                std::initializer_list<location_t> ls) const;
 
  private:
   friend struct location_t;

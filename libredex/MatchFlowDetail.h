@@ -126,15 +126,15 @@ struct InstructionConstraintAnalysis
 
   InstructionConstraintAnalysis(const cfg::ControlFlowGraph& cfg,
                                 const std::vector<Constraint>& constraints,
-                                LocationIx root)
-      : Base(cfg), m_constraints(constraints), m_root(root) {}
+                                const std::unordered_set<LocationIx>& roots)
+      : Base(cfg), m_constraints(constraints), m_roots(roots) {}
 
   void analyze_instruction(IRInstruction* insn,
                            ICAPartition* env) const override;
 
  private:
   const std::vector<Constraint>& m_constraints;
-  LocationIx m_root;
+  const std::unordered_set<LocationIx>& m_roots;
 };
 
 /**
@@ -232,11 +232,11 @@ struct DataFlowGraph {
   const std::vector<Edge>& outbound(LocationIx loc, IRInstruction* insn) const;
 
   /**
-   * Copy the sub-graph flowing into root (i.e. reachable transitively via
+   * Copy the sub-graph flowing into roots (i.e. reachable transitively via
    * inbound edges), converting it into the Locations data structure (internal
    * representation of mf::result_t).
    */
-  Locations locations(LocationIx root) const;
+  Locations locations(const std::unordered_set<LocationIx>& roots) const;
 
   /** Add (loc, insn) as a node in the graph. */
   void add_node(LocationIx loc, IRInstruction* insn);
@@ -303,8 +303,8 @@ struct DataFlowGraph {
 
 /**
  * Calculate the use-def graph modulo instruction constraints in `constraints`,
- * transitively reachable from instructions matching the `root`-th constraint in
- * `cfg`.
+ * transitively reachable from instructions matching the constraint in `roots`
+ * in `cfg`.
  *
  * - Nodes in the graph are (loc, insn) pairs -- an instruction and the location
  *   referring to an instruction constraint it matches.
@@ -316,7 +316,7 @@ struct DataFlowGraph {
  */
 DataFlowGraph instruction_graph(cfg::ControlFlowGraph& cfg,
                                 const std::vector<Constraint>& constraints,
-                                LocationIx root);
+                                const std::unordered_set<LocationIx>& roots);
 
 } // namespace detail
 } // namespace mf
