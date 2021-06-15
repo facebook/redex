@@ -56,10 +56,9 @@ TEST_F(MatchTest, IputBasic) {
   iput->set_src(1, 1);
   iput->set_field(field);
 
-  std::vector<IRInstruction*> input{iput.get()};
-  std::vector<IRInstruction*> match;
+  std::vector<MethodItemEntry> input{MethodItemEntry(iput.get())};
+  auto match = m::find_insn_match(input, m::an_iput());
 
-  m::find_insn_match(input, m::an_iput(), match);
   ASSERT_EQ(match.size(), 1);
   EXPECT_EQ(match[0], iput.get());
 }
@@ -73,10 +72,9 @@ TEST_F(MatchTest, IgetBasic) {
   iget->set_src(0, 0);
   iget->set_field(field);
 
-  std::vector<IRInstruction*> input{iget.get()};
-  std::vector<IRInstruction*> match;
+  std::vector<MethodItemEntry> input{MethodItemEntry(iget.get())};
+  auto match = m::find_insn_match(input, m::an_iget());
 
-  m::find_insn_match(input, m::an_iget(), match);
   ASSERT_EQ(match.size(), 1);
   EXPECT_EQ(match[0], iget.get());
 }
@@ -90,10 +88,9 @@ TEST_F(MatchTest, InvokeBasic) {
   auto invoke = std::make_unique<IRInstruction>(OPCODE_INVOKE_VIRTUAL);
   invoke->set_method(method);
 
-  std::vector<IRInstruction*> input{invoke.get()};
-  std::vector<IRInstruction*> match;
+  std::vector<MethodItemEntry> input{MethodItemEntry(invoke.get())};
+  auto match = m::find_insn_match(input, m::an_invoke());
 
-  m::find_insn_match(input, m::an_invoke(), match);
   ASSERT_EQ(match.size(), 1);
   EXPECT_EQ(match[0], invoke.get());
 }
@@ -104,10 +101,9 @@ TEST_F(MatchTest, opcode_string) {
   IRInstruction* load_str = new IRInstruction(OPCODE_CONST_STRING);
   load_str->set_string(str);
 
-  std::vector<IRInstruction*> input = {load_str};
-  std::vector<IRInstruction*> match;
+  std::vector<MethodItemEntry> input{MethodItemEntry(load_str)};
+  auto match = m::find_insn_match(input, m::has_string(m::equals(str)));
 
-  m::find_insn_match(input, m::has_string(m::equals(str)), match);
   EXPECT_EQ(match[0], load_str);
   delete load_str;
 }
@@ -148,10 +144,13 @@ TEST_F(MatchTest, NotAllMatch) {
   auto invoke = std::make_unique<IRInstruction>(OPCODE_INVOKE_VIRTUAL);
   invoke->set_method(method);
 
-  std::vector<IRInstruction*> input{iget.get(), iput.get(), invoke.get()};
-  std::vector<IRInstruction*> match;
+  std::vector<MethodItemEntry> input{
+      MethodItemEntry(iget.get()),
+      MethodItemEntry(iput.get()),
+      MethodItemEntry(invoke.get()),
+  };
+  auto match = m::find_insn_match(input, m::an_iput());
 
-  m::find_insn_match(input, m::an_iput(), match);
   ASSERT_EQ(match.size(), 1);
   EXPECT_EQ(match[0], iput.get());
 }
@@ -176,11 +175,13 @@ TEST_F(MatchTest, SameFieldMatch) {
   auto invoke = std::make_unique<IRInstruction>(OPCODE_INVOKE_VIRTUAL);
   invoke->set_method(method);
 
-  std::vector<IRInstruction*> input{iget.get(), iput.get(), invoke.get()};
-  std::vector<IRInstruction*> match;
-
-  m::find_insn_match(
-      input, m::has_field(m::member_of<DexFieldRef>(m::equals(ty))), match);
+  std::vector<MethodItemEntry> input{
+      MethodItemEntry(iget.get()),
+      MethodItemEntry(iput.get()),
+      MethodItemEntry(invoke.get()),
+  };
+  auto match = m::find_insn_match(
+      input, m::has_field(m::member_of<DexFieldRef>(m::equals(ty))));
   EXPECT_EQ(match.size(), 2);
 }
 
@@ -204,10 +205,13 @@ TEST_F(MatchTest, SameMethodMatch) {
   auto invoke = std::make_unique<IRInstruction>(OPCODE_INVOKE_VIRTUAL);
   invoke->set_method(method);
 
-  std::vector<IRInstruction*> input = {iget.get(), iput.get(), invoke.get()};
-  std::vector<IRInstruction*> match;
+  std::vector<MethodItemEntry> input{
+      MethodItemEntry(iget.get()),
+      MethodItemEntry(iput.get()),
+      MethodItemEntry(invoke.get()),
+  };
+  auto match = m::find_insn_match(
+      input, m::has_method(m::member_of<DexMethodRef>(m::equals(ty))));
 
-  m::find_insn_match(
-      input, m::has_method(m::member_of<DexMethodRef>(m::equals(ty))), match);
   EXPECT_EQ(match.size(), 1);
 }
