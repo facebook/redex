@@ -664,6 +664,104 @@ TEST_F(MatchFlowTest, UniqueSrc) {
   EXPECT_INSNS(res.matching(add, add_int_3, 0), const_1);
 }
 
+TEST_F(MatchFlowTest, RangeConstraint) {
+  flow_t f;
+
+  auto liti = f.insn(m::const_());
+  auto call = f.insn(m::invoke_static_()).srcs_from(1, liti);
+
+  auto code = assembler::ircode_from_string(R"((
+    (const v0 0)
+    (add-int v1 v0 v0)
+    (invoke-static (v1) "LFoo;.bar:(I)V")
+    (invoke-static (v1 v0) "LFoo;.bar:(II)V")
+    (invoke-static (v0 v0 v0) "LFoo;.bar:(III)V")
+    (invoke-static (v0 v0 v1) "LFoo;.bar:(III)V")
+    (invoke-static (v0 v1 v0) "LFoo;.bar:(III)V")
+    (invoke-static (v0 v1 v1) "LFoo;.bar:(III)V")
+    (invoke-static (v1 v0 v0) "LFoo;.bar:(III)V")
+    (invoke-static (v1 v0 v1) "LFoo;.bar:(III)V")
+    (invoke-static (v1 v1 v0) "LFoo;.bar:(III)V")
+    (invoke-static (v1 v1 v1) "LFoo;.bar:(III)V")
+  ))");
+
+  cfg::ScopedCFG cfg{code.get()};
+  auto ii = InstructionIterable(*cfg);
+  auto mies = IndexedWrapper{ii};
+
+  ASSERT_INSN(i1xx, mies[2], OPCODE_INVOKE_STATIC);
+  ASSERT_INSN(i10x, mies[3], OPCODE_INVOKE_STATIC);
+  ASSERT_INSN(i000, mies[4], OPCODE_INVOKE_STATIC);
+  ASSERT_INSN(i100, mies[8], OPCODE_INVOKE_STATIC);
+
+  auto res = f.find(*cfg, call);
+  EXPECT_INSNS(res.matching(call), i1xx, i10x, i000, i100);
+}
+
+TEST_F(MatchFlowTest, RangeOverlapRange) {
+  flow_t f;
+
+  auto liti = f.insn(m::const_());
+  auto addi = f.insn(m::add_int_());
+  auto call = f.insn(m::invoke_static_()).srcs_from(1, liti).srcs_from(3, addi);
+
+  auto code = assembler::ircode_from_string(R"((
+    (const v0 0)
+    (add-int v1 v0 v0)
+    (invoke-static (v1) "LFoo;.bar:(I)V")
+    (invoke-static (v1 v0) "LFoo;.bar:(II)V")
+    (invoke-static (v1 v1) "LFoo;.bar:(II)V")
+    (invoke-static (v1 v0 v0) "LFoo;.bar:(III)V")
+    (invoke-static (v1 v0 v1) "LFoo;.bar:(III)V")
+    (invoke-static (v1 v0 v0 v0) "LFoo;.bar:(IIII)V")
+    (invoke-static (v1 v0 v0 v1) "LFoo;.bar:(IIII)V")
+    (invoke-static (v1 v0 v0 v1 v0) "LFoo;.bar:(IIIII)V")
+    (invoke-static (v1 v0 v0 v1 v1) "LFoo;.bar:(IIIII)V")
+  ))");
+
+  cfg::ScopedCFG cfg{code.get()};
+  auto ii = InstructionIterable(*cfg);
+  auto mies = IndexedWrapper{ii};
+
+  ASSERT_INSN(i1xxxx, mies[2], OPCODE_INVOKE_STATIC);
+  ASSERT_INSN(i10xxx, mies[3], OPCODE_INVOKE_STATIC);
+  ASSERT_INSN(i100xx, mies[5], OPCODE_INVOKE_STATIC);
+  ASSERT_INSN(i1001x, mies[8], OPCODE_INVOKE_STATIC);
+  ASSERT_INSN(i10011, mies[10], OPCODE_INVOKE_STATIC);
+
+  auto res = f.find(*cfg, call);
+  EXPECT_INSNS(res.matching(call), i1xxxx, i10xxx, i100xx, i1001x, i10011);
+}
+
+TEST_F(MatchFlowTest, IndividualOverlapRange) {
+  flow_t f;
+
+  auto liti = f.insn(m::const_());
+  auto addi = f.insn(m::add_int_());
+  auto call =
+      f.insn(m::invoke_static_()).src(1, addi).srcs_from(0, liti).src(3, addi);
+
+  auto code = assembler::ircode_from_string(R"((
+    (const v0 0)
+    (add-int v1 v0 v0)
+    (invoke-static (v0 v1 v0 v1) "LFoo;.bar:(IIII)V")
+    (invoke-static (v0 v1 v1 v1) "LFoo;.bar:(IIII)V")
+    (invoke-static (v1 v1 v0 v1) "LFoo;.bar:(IIII)V")
+    (invoke-static (v0 v1 v0 v1 v0) "LFoo;.bar:(IIIII)V")
+    (invoke-static (v0 v1 v0 v1 v1) "LFoo;.bar:(IIIII)V")
+  ))");
+
+  cfg::ScopedCFG cfg{code.get()};
+  auto ii = InstructionIterable(*cfg);
+  auto mies = IndexedWrapper{ii};
+
+  ASSERT_INSN(i0101x, mies[2], OPCODE_INVOKE_STATIC);
+  ASSERT_INSN(i01010, mies[5], OPCODE_INVOKE_STATIC);
+
+  auto res = f.find(*cfg, call);
+  EXPECT_INSNS(res.matching(call), i0101x, i01010);
+}
+
 TEST_F(MatchFlowTest, DFGSize) {
   using namespace detail;
   DataFlowGraph graph;
@@ -708,10 +806,8 @@ TEST_F(MatchFlowTest, InstructionGraph) {
 
   // First operand is constrained by the first constraint (i.e. itself), second
   // operand is constrained by second constraint (the const).
-  constraints[0].srcs = {
-      {0, AliasFlag::dest, QuantFlag::exists},
-      {1, AliasFlag::dest, QuantFlag::exists},
-  };
+  constraints[0].add_src(0, 0, AliasFlag::dest, QuantFlag::exists);
+  constraints[0].add_src(1, 1, AliasFlag::dest, QuantFlag::exists);
 
   auto ii = InstructionIterable(*cfg);
   auto mies = IndexedWrapper{ii};
@@ -758,10 +854,8 @@ TEST_F(MatchFlowTest, InstructionGraphNoFlowConstraint) {
   std::vector<Constraint> constraints;
 
   constraints.emplace_back(insn_matcher(m::add_int_()));
-  constraints[0].srcs = {
-      {NO_LOC, AliasFlag::dest, QuantFlag::exists},
-      {1, AliasFlag::dest, QuantFlag::exists},
-  };
+  constraints[0].add_src(0, NO_LOC, AliasFlag::dest, QuantFlag::exists);
+  constraints[0].add_src(1, 1, AliasFlag::dest, QuantFlag::exists);
 
   constraints.emplace_back(insn_matcher(m::const_()));
 
@@ -795,16 +889,12 @@ TEST_F(MatchFlowTest, InstructionGraphTransitiveFailure) {
   std::vector<Constraint> constraints;
 
   constraints.emplace_back(insn_matcher(m::add_int_()));
-  constraints[0].srcs = {
-      {1, AliasFlag::dest, QuantFlag::exists},
-      {2, AliasFlag::dest, QuantFlag::exists},
-  };
+  constraints[0].add_src(0, 1, AliasFlag::dest, QuantFlag::exists);
+  constraints[0].add_src(1, 2, AliasFlag::dest, QuantFlag::exists);
 
   constraints.emplace_back(insn_matcher(m::sub_int_()));
-  constraints[1].srcs = {
-      {2, AliasFlag::dest, QuantFlag::exists},
-      {2, AliasFlag::dest, QuantFlag::exists},
-  };
+  constraints[1].add_src(0, 2, AliasFlag::dest, QuantFlag::exists);
+  constraints[1].add_src(1, 2, AliasFlag::dest, QuantFlag::exists);
 
   constraints.emplace_back(
       insn_matcher(m::const_(m::has_literal(m::equals<int64_t>(1)))));

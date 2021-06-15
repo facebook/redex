@@ -97,14 +97,16 @@ struct InconsistentDFGNodesAnalysis
       return;
     }
 
-    auto& srcs = m_constraints.at(node_loc(n)).srcs;
-    std::vector<size_t> consistent_edges(srcs.size(), 0);
-    std::vector<size_t> inconsistent_edges(srcs.size(), 0);
+    auto& constraint = m_constraints.at(node_loc(n));
+
+    const auto srcs = node_insn(n)->srcs_size();
+    std::vector<size_t> consistent_edges(srcs, 0);
+    std::vector<size_t> inconsistent_edges(srcs, 0);
 
     // Sources without constraints are implicitly consistent and sources with
     // inconsistencies are inconsistent.
-    for (size_t i = 0; i < srcs.size(); ++i) {
-      if (srcs[i].loc == NO_LOC) {
+    for (size_t i = 0; i < srcs; ++i) {
+      if (constraint.src(i).loc == NO_LOC) {
         consistent_edges.at(i)++;
       } else if (m_dfg.has_inconsistency(node_loc(n), node_insn(n), i)) {
         inconsistent_edges.at(i)++;
@@ -113,7 +115,7 @@ struct InconsistentDFGNodesAnalysis
 
     for (const auto& e : m_dfg.inbound(node_loc(n), node_insn(n))) {
       if (node_loc(e.from) == NO_LOC) {
-        // Skip sentinel nodes.
+        // Skip sentinel edges.
         continue;
       }
 
@@ -127,11 +129,12 @@ struct InconsistentDFGNodesAnalysis
     }
 
     bool is_consistent = true;
-    for (size_t i = 0; is_consistent && i < srcs.size(); ++i) {
+    for (size_t i = 0; is_consistent && i < srcs; ++i) {
+      auto& src = constraint.src(i);
       auto consistent_srcs = consistent_edges.at(i);
       auto inconsistent_srcs = inconsistent_edges.at(i);
 
-      switch (srcs.at(i).quant) {
+      switch (src.quant) {
       case QuantFlag::exists:
         is_consistent = consistent_srcs > 0;
         break;
@@ -171,6 +174,21 @@ struct InconsistentDFGNodesAnalysis
 
 InstructionMatcher::~InstructionMatcher() = default;
 
+const Constraint::Src& Constraint::src(src_index_t ix) const {
+  if (ix < m_srcs.size()) {
+    if (auto& src = m_srcs[ix]; src.loc != NO_LOC) {
+      return src;
+    }
+  }
+
+  auto it = m_src_ranges.upper_bound(ix);
+  if (it == m_src_ranges.begin()) {
+    return UNCONSTRAINED_SRC;
+  } else {
+    return std::prev(it)->second;
+  }
+}
+
 void InstructionConstraintAnalysis::analyze_instruction(
     IRInstruction* insn, ICAPartition* env) const {
 
@@ -196,10 +214,8 @@ void InstructionConstraintAnalysis::analyze_instruction(
       return;
     }
 
-    size_t srcs = insn->srcs_size();
-    size_t edges = constraint.srcs.size();
-    for (size_t ix = 0; ix < std::min(srcs, edges); ++ix) {
-      if (constraint.srcs[ix].loc == NO_LOC) {
+    for (size_t ix = 0; ix < insn->srcs_size(); ++ix) {
+      if (constraint.src(ix).loc == NO_LOC) {
         continue;
       }
 
@@ -223,7 +239,7 @@ void InstructionConstraintAnalysis::analyze_instruction(
         auto to_loc = std::get<0>(o);
         auto to_src = std::get<2>(o);
 
-        const auto& from_src = m_constraints.at(to_loc).srcs.at(to_src);
+        const auto& from_src = m_constraints.at(to_loc).src(to_src);
 
         if (opcode::is_a_move(insn->opcode())) {
           if (from_src.alias == AliasFlag::alias) {
@@ -479,7 +495,7 @@ DataFlowGraph instruction_graph(cfg::ControlFlowGraph& cfg,
     auto to_insn = std::get<1>(o);
     auto to_src = std::get<2>(o);
 
-    auto& from_src = constraints.at(to_loc).srcs.at(to_src);
+    auto& from_src = constraints.at(to_loc).src(to_src);
 
     if (opcode::is_a_move(insn->opcode())) {
       if (from_src.alias == AliasFlag::alias) {
