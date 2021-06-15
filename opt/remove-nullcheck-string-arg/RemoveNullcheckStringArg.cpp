@@ -274,7 +274,11 @@ RemoveNullcheckStringArg::Stats RemoveNullcheckStringArg::change_in_cfg(
         // We could have params copied via intermediate registers.
         auto defs = env.get(insn->src(0));
         always_assert(!defs.is_bottom() && !defs.is_top());
-        always_assert(defs.elements().size() == 1);
+        if (defs.elements().size() != 1){
+          TRACE(NULLCHECK, 5, "Multiple defs for %s\n In CFG: %s", SHOW(insn),
+              SHOW(cfg));
+          continue;
+        }
         auto def = *defs.elements().begin();
         auto def_op = def->opcode();
         always_assert(def_op == IOPCODE_LOAD_PARAM ||
