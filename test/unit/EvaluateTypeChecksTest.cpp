@@ -290,7 +290,7 @@ TEST_F(EvaluateTypeChecksTest,
         (move-result-pseudo v0)
 
         (move v1 v0)
-        (move v2 v0)
+        (xor-int/lit8 v2 v0 1)
 
         (if-nez v1 :L1)
         (const v0 0)
@@ -304,6 +304,67 @@ TEST_F(EvaluateTypeChecksTest,
   auto method_str = "method (private static) \"LTest;.test:(LBaz;)I\"";
 
   EXPECT_TRUE(run("LTest;", method_str, code, code));
+}
+
+TEST_F(EvaluateTypeChecksTest,
+       instance_of_optimize_always_succeed_nez_multi_use_yes) {
+  auto code = R"(
+       (
+        (load-param-object v0)
+        (load-param-object v1)
+        (instance-of v0 "LFoo;")
+        (move-result-pseudo v2)
+
+        (move v3 v2)
+
+        (if-nez v1 :L1)
+
+        (if-nez v3 :L0)
+        (const v0 0)
+        (return v0)
+
+        (:L0)
+        (const v0 1)
+        (return v0)
+
+        (:L1)
+        (if-eqz v2 :L2)
+        (const v0 2)
+        (return v0)
+
+        (:L2)
+        (const v0 3)
+        (return v0)
+       )
+      )";
+  auto method_str = "method (private static) \"LTest;.test:(LBaz;I)I\"";
+
+  auto expected = R"(
+      (
+       (load-param-object v0)
+       (load-param-object v1)
+
+       (if-nez v1 :L1)
+
+       (if-nez v0 :L0)
+       (const v0 0)
+       (return v0)
+
+       (:L0)
+       (const v0 1)
+       (return v0)
+
+       (:L1)
+       (if-eqz v0 :L2)
+       (const v0 2)
+       (return v0)
+
+       (:L2)
+       (const v0 3)
+       (return v0)
+      )
+     )";
+  EXPECT_TRUE(run("LTest;", method_str, code, expected));
 }
 
 TEST_F(EvaluateTypeChecksTest,

@@ -8,6 +8,7 @@
 #include "EvaluateTypeChecks.h"
 
 #include <sstream>
+#include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -23,10 +24,12 @@
 #include "DexStore.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
+#include "LiveRange.h"
 #include "LocalDce.h"
 #include "PassManager.h"
 #include "ReachingDefinitions.h"
 #include "ScopedCFG.h"
+#include "StlUtil.h"
 #include "Trace.h"
 #include "TypeInference.h"
 #include "TypeUtil.h"
@@ -68,7 +71,6 @@ struct RemoveResult {
   size_t def_use_loop{0};
   size_t multi_use{0};
   size_t multi_def{0};
-  size_t non_move{0};
   size_t non_branch{0};
   size_t non_supported_branch{0};
   ssize_t insn_delta{0};
@@ -82,7 +84,6 @@ struct RemoveResult {
     def_use_loop += rhs.def_use_loop;
     multi_use += rhs.multi_use;
     multi_def += rhs.multi_def;
-    non_move += rhs.non_move;
     non_branch += rhs.non_branch;
     non_supported_branch += rhs.non_supported_branch;
     insn_delta += rhs.insn_delta;
@@ -91,80 +92,6 @@ struct RemoveResult {
 };
 
 namespace instance_of {
-
-using DefUses =
-    std::unordered_map<IRInstruction*, std::unordered_set<IRInstruction*>>;
-using UseDefs = std::unordered_map<IRInstruction*, size_t>;
-
-DefUses compute_def_uses(ControlFlowGraph& cfg) {
-  using namespace reaching_defs;
-  FixpointIterator fixpoint_iter{cfg};
-  fixpoint_iter.run(Environment());
-  DefUses res;
-  for (auto block : cfg.blocks()) {
-    auto defs_in = fixpoint_iter.get_entry_state_at(block);
-    for (const auto& mie : ir_list::InstructionIterable(block)) {
-      auto insn = mie.insn;
-      for (size_t i = 0; i < insn->srcs_size(); ++i) {
-        auto src_reg = insn->src(i);
-        const auto& defs = defs_in.get(src_reg);
-        always_assert_log(!defs.is_top() && defs.size() > 0,
-                          "Found use without def when processing [0x%p]%s",
-                          &mie, SHOW(insn));
-        for (auto def : defs.elements()) {
-          res[def].insert(insn);
-        }
-      }
-      fixpoint_iter.analyze_instruction(insn, &defs_in);
-    }
-  }
-  return res;
-}
-
-// Follow def-use chains. Find a terminal use. Only allow moves along
-// the chain. Don't consider uses with more than one definition.
-IRInstruction* find_single_terminal_use_without_multiple_defs(
-    IRInstruction* start,
-    const DefUses& def_uses,
-    const UseDefs& use_defs,
-    RemoveResult& res) {
-  IRInstruction* insn = start;
-  std::unordered_set<IRInstruction*> seen;
-  for (;;) {
-    if (seen.count(insn) != 0) {
-      ++res.def_use_loop;
-      return nullptr;
-      break;
-    }
-
-    seen.insert(insn);
-    auto it = def_uses.find(insn);
-    if (it == def_uses.end() || it->second.empty()) {
-      // Terminal use.
-      return insn;
-    }
-    if (it->second.size() > 1) {
-      // Register is used by multiple instructions, not a simple chain.
-      ++res.multi_use;
-      return nullptr;
-    }
-    auto opcode = insn->opcode();
-    if (!opcode::is_a_move(opcode) &&
-        !opcode::is_a_move_result_pseudo(opcode)) {
-      // Not a move. Don't know what happens to the value.
-      ++res.non_move;
-      return nullptr;
-    }
-
-    auto next_insn = *it->second.begin();
-    if (use_defs.count(next_insn) && use_defs.at(next_insn) > 1) {
-      ++res.multi_def;
-      return nullptr;
-    }
-    insn = next_insn;
-  }
-  not_reached();
-}
 
 // If we know that an instance-of will always be true (if the value is not
 // null), then it may be beneficial to rewrite the code. The instance-of is
@@ -189,13 +116,11 @@ void analyze_true_instance_ofs(
   if (true_modulo_nulls.empty()) {
     return;
   }
-  auto def_uses = compute_def_uses(cfg);
-  UseDefs use_defs;
-  for (auto& p : def_uses) {
-    for (auto use : p.second) {
-      use_defs[use]++;
-    }
-  }
+
+  live_range::MoveAwareChains chains(cfg);
+  auto du_chains = chains.get_def_use_chains();
+  auto ud_chains = chains.get_use_def_chains();
+
   for (const auto* mie : true_modulo_nulls) {
     auto def_it = cfg.find_insn(mie->insn);
     auto move_it = cfg.move_result_of(def_it);
@@ -203,21 +128,75 @@ void analyze_true_instance_ofs(
       continue;
     }
 
-    IRInstruction* insn = find_single_terminal_use_without_multiple_defs(
-        move_it->insn, def_uses, use_defs, res);
-    if (insn == nullptr) {
+    auto du_it = du_chains.find(mie->insn);
+    if (du_it == du_chains.end()) {
+      continue;
+    }
+    const auto* uses = &du_it->second;
+    if (uses->empty()) {
       continue;
     }
 
-    auto opcode = insn->opcode();
-    if (!opcode::is_a_conditional_branch(opcode)) {
-      TRACE(EVALTC, 3, "Not a branch: %s", SHOW(insn));
+    auto print_uses = [&uses]() {
+      std::ostringstream oss;
+      for (const auto& v : *uses) {
+        oss << show(v.insn) << ",";
+      }
+      return oss.str();
+    };
+
+    bool any_multi_def = std::any_of(
+        uses->begin(), uses->end(), [&ud_chains, &mie](const auto& use) {
+          auto it = ud_chains.find(use);
+          if (it == ud_chains.end()) {
+            // Weird, fail.
+            return true;
+          }
+          if (it->second.size() != 1) {
+            return true;
+          }
+          // Just an integrity check.
+          redex_assert(*it->second.begin() == mie->insn);
+          return false;
+        });
+    if (any_multi_def) {
+      TRACE(EVALTC, 3, "Not all single-def: %s", print_uses().c_str());
+      ++res.multi_def;
+      continue;
+    }
+
+    // Filter out moves.
+    bool has_moves =
+        std::any_of(uses->begin(), uses->end(), [](const auto& use) {
+          return opcode::is_a_move(use.insn->opcode());
+        });
+    std::remove_cv_t<std::remove_pointer_t<decltype(uses)>> filtered_uses;
+    if (has_moves) {
+      filtered_uses = *uses;
+      std20::erase_if(filtered_uses, [](const auto& it) {
+        return opcode::is_a_move(it->insn->opcode());
+      });
+      uses = &filtered_uses;
+    }
+
+    bool non_branch_uses =
+        std::any_of(uses->begin(), uses->end(), [](const auto& use) {
+          return !opcode::is_a_conditional_branch(use.insn->opcode()) &&
+                 !opcode::is_a_move(use.insn->opcode());
+        });
+    if (non_branch_uses) {
+      TRACE(EVALTC, 3, "Not all a branch: %s", print_uses().c_str());
       ++res.non_branch;
       continue;
     }
 
-    if (opcode != OPCODE_IF_EQZ && opcode != OPCODE_IF_NEZ) {
-      TRACE(EVALTC, 2, "Unexpected branch type: %s", SHOW(insn));
+    bool non_supp_branches =
+        std::any_of(uses->begin(), uses->end(), [](const auto& use) {
+          auto opcode = use.insn->opcode();
+          return opcode != OPCODE_IF_EQZ && opcode != OPCODE_IF_NEZ;
+        });
+    if (non_supp_branches) {
+      TRACE(EVALTC, 2, "Unexpected branch types: %s", print_uses().c_str());
       ++res.non_supported_branch;
       continue;
     }
@@ -234,10 +213,12 @@ void analyze_true_instance_ofs(
       copy_reg_insn->set_dest(src_tmp);
       mutation.insert_before(def_it, {copy_reg_insn});
     }
-    // Rewrite the conditional's input.
-    insn->set_src(0, src_tmp);
-    ++res.class_always_succeed_or_null_repl;
-    ++res.overrides;
+    // Rewrite the conditionals' input.
+    for (const auto& use : *uses) {
+      use.insn->set_src(0, src_tmp);
+      ++res.class_always_succeed_or_null_repl;
+      ++res.overrides;
+    }
   }
 }
 
@@ -606,7 +587,8 @@ void EvaluateTypeChecksPass::run_pass(DexStoresVector& stores,
   mgr.set_metric("num_def_use_loop", stats.def_use_loop);
   mgr.set_metric("num_multi_use", stats.multi_use);
   mgr.set_metric("num_multi_use", stats.multi_def);
-  mgr.set_metric("num_non_move", stats.non_move);
+  mgr.set_metric("num_non_branch", stats.non_branch);
+  mgr.set_metric("num_not_supported_branch", stats.non_supported_branch);
 }
 
 static EvaluateTypeChecksPass s_pass;
