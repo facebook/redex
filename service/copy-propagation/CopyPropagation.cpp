@@ -239,7 +239,7 @@ class AliasFixpointIterator final
       reg_t max_addressable = RESULT_REGISTER;
       for (size_t i = 0; i < insn->srcs_size(); ++i) {
         reg_t r = insn->src(i);
-        if (m_config.regalloc_has_run) {
+        if (!m_config.regalloc_will_fix) {
           max_addressable = get_max_addressable(insn, i);
         }
         reg_t rep = get_rep(r, aliases, max_addressable);
@@ -281,7 +281,7 @@ class AliasFixpointIterator final
         dex_opcode::src_bit_width(opcode::to_dex_opcode(op), src_index);
     // 2 ** width - 1
     reg_t max_addressable_reg = (1 << src_bit_width) - 1;
-    if (m_config.regalloc_has_run) {
+    if (!m_config.regalloc_will_fix) {
       // We have to be careful not to create an instruction like this
       //
       //   invoke-virtual v15 Lcom;.foo:(J)V
@@ -488,7 +488,7 @@ Stats CopyPropagation::run(IRCode* code, DexMethod* method) {
   Stats stats;
   cfg::ScopedCFG cfg(code);
 
-  if (m_config.canonicalize_locks && !m_config.regalloc_has_run) {
+  if (m_config.canonicalize_locks && m_config.regalloc_will_fix) {
     auto res = locks::run(*cfg);
     stats.lock_fixups = res.fixups;
     stats.non_singleton_lock_rdefs = res.non_singleton_rdefs ? 1 : 0;
@@ -499,7 +499,7 @@ Stats CopyPropagation::run(IRCode* code, DexMethod* method) {
   // which instructions are in this category is by temporarily denormalizing
   // the registers.
   std::unordered_set<const IRInstruction*> range_set;
-  if (m_config.regalloc_has_run) {
+  if (!m_config.regalloc_will_fix) {
     for (auto& mie : InstructionIterable(*cfg)) {
       auto* insn = mie.insn;
       if (opcode::has_range_form(insn->opcode())) {
@@ -513,7 +513,7 @@ Stats CopyPropagation::run(IRCode* code, DexMethod* method) {
   }
 
   AliasFixpointIterator fixpoint(
-      *cfg, method, m_config, range_set, stats, m_config.regalloc_has_run);
+      *cfg, method, m_config, range_set, stats, !m_config.regalloc_will_fix);
   fixpoint.run(AliasDomain());
 
   cfg::CFGMutation mutation{*cfg};
