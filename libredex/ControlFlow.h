@@ -768,27 +768,31 @@ class ControlFlowGraph {
       const std::vector<std::pair<int32_t, Block*>>& case_to_block);
 
   // delete old blocks and reroute its predecessors to new blocks
-  void replace_blocks(
+  // Returns number of removed instructions.
+  uint32_t replace_blocks(
       const std::vector<std::pair<Block*, Block*>>& old_new_blocks);
 
   // delete old_block and reroute its predecessors to new_block
   // Note that replacing blocks is relatively expensive as it scans and fixes up
   // dangling parent positions in all other blocks; consider calling
   // remove_blocks to remove multiple blocks at once.
-  void replace_block(Block* old_block, Block* new_block) {
-    replace_blocks({{old_block, new_block}});
+  // Returns number of removed instructions.
+  uint32_t replace_block(Block* old_block, Block* new_block) {
+    return replace_blocks({{old_block, new_block}});
   }
 
   // Remove blocks from the graph and release associated memory.
   // Remove all incoming and outgoing edges.
-  void remove_blocks(const std::vector<Block*>& blocks);
+  // Returns number of removed instructions.
+  uint32_t remove_blocks(const std::vector<Block*>& blocks);
 
   // Remove this block from the graph and release associated memory.
   // Remove all incoming and outgoing edges.
   // Note that removing blocks is relatively expensive as it scans and fixes up
   // dangling parent positions in all other blocks; consider calling
   // remove_blocks to remove multiple blocks at once.
-  void remove_block(Block* block) { remove_blocks({block}); }
+  // Returns number of removed instructions.
+  uint32_t remove_block(Block* block) { return remove_blocks({block}); }
 
   /*
    * Print the graph in the DOT graph description language.

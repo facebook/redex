@@ -363,7 +363,7 @@ class DedupBlocksImpl {
     }
 
     // Note that replace_blocks also fixes any arising dangling parents.
-    cfg.replace_blocks(blocks_to_replace);
+    m_stats.insns_removed += cfg.replace_blocks(blocks_to_replace);
   }
 
   // The algorithm below identifies the best groups of blocks that share the
@@ -982,6 +982,7 @@ void DedupBlocks::run() {
 Stats& Stats::operator+=(const Stats& that) {
   eligible_blocks += that.eligible_blocks;
   blocks_removed += that.blocks_removed;
+  insns_removed += that.insns_removed;
   blocks_split += that.blocks_split;
   positions_inserted += that.positions_inserted;
   for (auto& p : that.dup_sizes) {

@@ -497,6 +497,8 @@ void run_inliner(DexStoresVector& stores,
           shrinker.get_local_dce_stats().unreachable_instruction_count);
   mgr.incr_metric("instructions_eliminated_unreachable",
                   inliner.get_info().unreachable_insns);
+  mgr.incr_metric("instructions_eliminated_dedup_blocks",
+                  shrinker.get_dedup_blocks_stats().insns_removed);
   mgr.incr_metric("blocks_eliminated_by_dedup_blocks",
                   shrinker.get_dedup_blocks_stats().blocks_removed);
   mgr.incr_metric("methods_reg_alloced", shrinker.get_methods_reg_alloced());
