@@ -812,6 +812,8 @@ class ControlFlowGraph {
    */
   boost::dynamic_bitset<> visit() const;
 
+  cfg::Block* get_block(BlockId id) const { return m_blocks.at(id); }
+
   // remove blocks with no predecessors
   // returns pair of 1) the number of instructions removed, and 2) whether an
   // instruction with the destination of the last register was removed, and thus

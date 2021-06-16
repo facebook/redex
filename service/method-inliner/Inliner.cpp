@@ -649,8 +649,9 @@ void MultiMethodInliner::inline_callees(
         if (callee == nullptr) {
           return editable_cfg_adapter::LOOP_CONTINUE;
         }
-        bool optional{false};
+        const std::unordered_set<cfg::Block*>* dead_blocks{nullptr};
         bool no_return{false};
+        size_t insn_size{0};
         if (std::find(callees.begin(), callees.end(), callee) ==
             callees.end()) {
           // If a callee wasn't in the list of general callees, that means that
@@ -659,14 +660,15 @@ void MultiMethodInliner::inline_callees(
           // callsite, taking into account constant-arguments (if any).
           if (std::find(optional_callees.begin(), optional_callees.end(),
                         callee) != optional_callees.end() &&
-              should_inline_optional(caller, insn, callee, &no_return)) {
-            optional = true;
+              should_inline_optional(caller, insn, callee, &no_return,
+                                     &dead_blocks, &insn_size)) {
+            always_assert(dead_blocks);
             no_return = false; // we'll inline anyway
           } else if (!no_return) {
             return editable_cfg_adapter::LOOP_CONTINUE;
           }
         }
-        always_assert(!optional || !no_return);
+        always_assert(dead_blocks || !no_return);
         always_assert(callee->is_concrete());
         if (m_analyze_and_prune_inits && method::is_init(callee)) {
           if (!callee->get_code()->editable_cfg_built()) {
@@ -684,7 +686,7 @@ void MultiMethodInliner::inline_callees(
         }
 
         inlinables.push_back(
-            (Inlinable){callee, it, insn, optional, no_return});
+            (Inlinable){callee, it, insn, no_return, dead_blocks, insn_size});
         if (++found == max) {
           return editable_cfg_adapter::LOOP_BREAK;
         }
@@ -718,7 +720,8 @@ void MultiMethodInliner::inline_callees(
             return editable_cfg_adapter::LOOP_CONTINUE;
           }
           always_assert(callee->is_concrete());
-          inlinables.push_back((Inlinable){callee, it, insn});
+          inlinables.push_back((Inlinable){callee, it, insn, false, nullptr,
+                                           get_callee_insn_size(callee)});
         }
         return editable_cfg_adapter::LOOP_CONTINUE;
       });
@@ -821,13 +824,12 @@ void MultiMethodInliner::inline_inlinables(
                      // (potentially) selected with a global cost model, taking
                      // into account the savings achieved when eliminating all
                      // calls
-                     if (a.optional != b.optional) {
-                       return a.optional < b.optional;
+                     if (a.optional() != b.optional()) {
+                       return a.optional() < b.optional();
                      }
                      // Third, prefer smaller methods, to avoid hitting size
                      // limits too soon
-                     return get_callee_insn_size(a.callee) <
-                            get_callee_insn_size(b.callee);
+                     return a.insn_size < b.insn_size;
                    });
 
   std::vector<DexMethod*> inlined_callees;
@@ -1001,8 +1003,9 @@ void MultiMethodInliner::inline_inlinables(
       if (m_config.unique_inlined_registers) {
         cfg_next_caller_reg = caller->cfg().get_registers_size();
       }
-      bool success = inliner::inline_with_cfg(
-          caller_method, callee_method, callsite_insn, *cfg_next_caller_reg);
+      bool success =
+          inliner::inline_with_cfg(caller_method, callee_method, callsite_insn,
+                                   *cfg_next_caller_reg, inlinable.dead_blocks);
       if (!success) {
         calls_not_inlined++;
         continue;
@@ -1020,7 +1023,7 @@ void MultiMethodInliner::inline_inlinables(
     TRACE(INL, 2, "caller: %s\tcallee: %s",
           caller->cfg_built() ? SHOW(caller->cfg()) : SHOW(caller),
           SHOW(callee));
-    estimated_insn_size += get_callee_insn_size(callee_method);
+    estimated_insn_size += inlinable.insn_size;
 
     inlined_callees.push_back(callee_method);
   }
@@ -1587,17 +1590,12 @@ static boost::optional<ResidualCfgInfo> get_residual_cfg_info(
   return res;
 }
 
-struct InlinedCostAndDeadBlocks {
-  InlinedCost inlined_cost;
-  size_t dead_blocks;
-};
-
 /*
  * Try to estimate number of code units (2 bytes each) of code. Also take
  * into account costs arising from control-flow overhead and constant
  * arguments, if any
  */
-static InlinedCostAndDeadBlocks get_inlined_cost(
+static InlinedCost get_inlined_cost(
     bool is_static,
     const IRCode* code,
     const ConstantArguments* constant_arguments = nullptr,
@@ -1605,7 +1603,7 @@ static InlinedCostAndDeadBlocks get_inlined_cost(
     constant_propagation::ImmutableAttributeAnalyzerState*
         immut_analyzer_state = nullptr) {
   size_t cost{0};
-  size_t dead_blocks{0};
+  std::unordered_set<cfg::Block*> dead_blocks;
   size_t returns{0};
   std::unordered_set<DexMethodRef*> method_refs_set;
   std::unordered_set<const void*> other_refs_set;
@@ -1630,15 +1628,26 @@ static InlinedCostAndDeadBlocks get_inlined_cost(
       }
     }
   };
+  size_t insn_size{0};
   if (code->editable_cfg_built()) {
     auto rcfg = get_residual_cfg_info(is_static, code, constant_arguments,
                                       pure_methods, immut_analyzer_state);
     const auto& reachable_blocks =
         rcfg ? rcfg->reachable_blocks : code->cfg().blocks();
-    dead_blocks += code->cfg().blocks().size() - reachable_blocks.size();
+    auto cfg_blocks = code->cfg().blocks();
+    if (reachable_blocks.size() < cfg_blocks.size()) {
+      std::unordered_set<cfg::Block*> reachable_block_set(
+          reachable_blocks.begin(), reachable_blocks.end());
+      for (auto block : cfg_blocks) {
+        if (!reachable_block_set.count(block)) {
+          dead_blocks.insert(block);
+        }
+      }
+    }
 
     for (size_t i = 0; i < reachable_blocks.size(); ++i) {
       auto block = reachable_blocks.at(i);
+      insn_size += block->sum_opcode_sizes();
       for (auto& mie : InstructionIterable(block)) {
         auto insn = mie.insn;
         if (rcfg && rcfg->dead_instructions.count(insn)) {
@@ -1664,6 +1673,7 @@ static InlinedCostAndDeadBlocks get_inlined_cost(
       analyze_refs(insn);
       return editable_cfg_adapter::LOOP_CONTINUE;
     });
+    insn_size = code->sum_opcode_sizes();
   }
   if (returns > 1) {
     // if there's more than one return, gotos will get introduced to merge
@@ -1671,8 +1681,8 @@ static InlinedCostAndDeadBlocks get_inlined_cost(
     cost += returns - 1;
   }
 
-  return {{cost, method_refs_set.size(), other_refs_set.size(), !returns},
-          dead_blocks};
+  return {cost,     method_refs_set.size(), other_refs_set.size(),
+          !returns, std::move(dead_blocks), insn_size};
 }
 
 InlinedCost MultiMethodInliner::get_inlined_cost(const DexMethod* callee) {
@@ -1686,7 +1696,7 @@ InlinedCost MultiMethodInliner::get_inlined_cost(const DexMethod* callee) {
   size_t callees_unreachable_blocks{0};
   size_t callees_no_return{0};
   InlinedCost inlined_cost{
-      ::get_inlined_cost(is_static(callee), callee->get_code()).inlined_cost};
+      ::get_inlined_cost(is_static(callee), callee->get_code())};
   std::unordered_map<std::string, InlinedCost> inlined_costs_keyed;
   auto callee_constant_arguments_it = m_callee_constant_arguments.find(callee);
   if (callee_constant_arguments_it != m_callee_constant_arguments.end() &&
@@ -1705,25 +1715,26 @@ InlinedCost MultiMethodInliner::get_inlined_cost(const DexMethod* callee) {
       TRACE(INLINE, 4,
             "[too_many_callers] get_inlined_cost with %zu constant invoke "
             "params %s @ %s: cost %zu, method refs %zu, other refs %zu (dead "
-            "blocks: %zu), %s",
+            "blocks: %zu), %s, insn_size %zu",
             constant_arguments.is_top() ? 0 : constant_arguments.size(),
-            get_key(constant_arguments).c_str(), SHOW(callee),
-            res.inlined_cost.code, res.inlined_cost.method_refs,
-            res.inlined_cost.other_refs, res.dead_blocks,
-            res.inlined_cost.no_return ? "no_return" : "return");
+            get_key(constant_arguments).c_str(), SHOW(callee), res.code,
+            res.method_refs, res.other_refs, res.dead_blocks.size(),
+            res.no_return ? "no_return" : "return", res.insn_size);
       std::lock_guard<std::mutex> lock_guard(mutex);
-      callees_unreachable_blocks += res.dead_blocks * count;
-      inlined_cost.code += res.inlined_cost.code * count;
-      inlined_cost.method_refs += res.inlined_cost.method_refs * count;
-      inlined_cost.other_refs += res.inlined_cost.other_refs * count;
-      if (res.inlined_cost.no_return) {
+      callees_unreachable_blocks += res.dead_blocks.size() * count;
+      inlined_cost.code += res.code * count;
+      inlined_cost.method_refs += res.method_refs * count;
+      inlined_cost.other_refs += res.other_refs * count;
+      if (res.no_return) {
         callees_no_return++;
       } else {
         inlined_cost.no_return = false;
       }
+      if (res.insn_size > inlined_cost.insn_size) {
+        inlined_cost.insn_size = res.insn_size;
+      }
       callees_analyzed += count;
-      inlined_costs_keyed.emplace(get_key(constant_arguments),
-                                  res.inlined_cost);
+      inlined_costs_keyed.emplace(get_key(constant_arguments), std::move(res));
     };
 
     if (callee_constant_arguments.size() > 1 &&
@@ -1732,13 +1743,13 @@ InlinedCost MultiMethodInliner::get_inlined_cost(const DexMethod* callee) {
       // TODO: This parallelization happens independently (in addition to) the
       // parallelization via m_async_method_executor. This should be combined,
       // using a single thread pool.
-      inlined_cost = {0, 0, 0, true};
+      inlined_cost = {0, 0, 0, true, {}, 0};
       auto num_threads = std::min(redex_parallel::default_num_threads(),
                                   callee_constant_arguments.size());
       workqueue_run<ConstantArgumentsOccurrences>(
           process_key, callee_constant_arguments, num_threads);
     } else {
-      inlined_cost = {0, 0, 0, true};
+      inlined_cost = {0, 0, 0, true, {}, 0};
       for (auto& p : callee_constant_arguments) {
         process_key(p);
       }
@@ -1750,15 +1761,19 @@ InlinedCost MultiMethodInliner::get_inlined_cost(const DexMethod* callee) {
         (inlined_cost.code + callees_analyzed - 1) / callees_analyzed,
         (inlined_cost.method_refs + callees_analyzed - 1) / callees_analyzed,
         (inlined_cost.other_refs + callees_analyzed - 1) / callees_analyzed,
-        inlined_cost.no_return};
+        inlined_cost.no_return,
+        {},
+        inlined_cost.insn_size,
+    };
     m_inlined_costs_keyed.emplace(
         callee, std::make_shared<std::unordered_map<std::string, InlinedCost>>(
-                    inlined_costs_keyed.begin(), inlined_costs_keyed.end()));
+                    std::move(inlined_costs_keyed)));
   }
-  TRACE(INLINE, 4, "[too_many_callers] get_inlined_cost %s: {%zu,%zu,%zu,%s}",
-        SHOW(callee), inlined_cost.code, inlined_cost.method_refs,
-        inlined_cost.other_refs,
-        inlined_cost.no_return ? "no_return" : "return");
+  TRACE(
+      INLINE, 4, "[too_many_callers] get_inlined_cost %s: {%zu,%zu,%zu,%s,%zu}",
+      SHOW(callee), inlined_cost.code, inlined_cost.method_refs,
+      inlined_cost.other_refs, inlined_cost.no_return ? "no_return" : "return",
+      inlined_cost.insn_size);
   m_inlined_costs.update(
       callee,
       [&](const DexMethod*, boost::optional<InlinedCost>& value, bool exists) {
@@ -1768,6 +1783,7 @@ InlinedCost MultiMethodInliner::get_inlined_cost(const DexMethod* callee) {
           always_assert(value->method_refs == inlined_cost.method_refs);
           always_assert(value->other_refs == inlined_cost.other_refs);
           always_assert(value->no_return == inlined_cost.no_return);
+          always_assert(value->insn_size == inlined_cost.insn_size);
           return;
         }
         value = inlined_cost;
@@ -1928,7 +1944,9 @@ bool MultiMethodInliner::should_inline_optional(
     DexMethod* caller,
     const IRInstruction* invoke_insn,
     DexMethod* callee,
-    bool* no_return) {
+    bool* no_return,
+    const std::unordered_set<cfg::Block*>** dead_blocks,
+    size_t* insn_size) {
   *no_return = false;
   if (!m_call_constant_arguments.count_unsafe(invoke_insn)) {
     return false;
@@ -1944,9 +1962,12 @@ bool MultiMethodInliner::should_inline_optional(
   if (it == opt_inlined_costs_keyed->end()) {
     return false;
   }
-  auto inlined_cost = it->second;
+  const auto& inlined_cost = it->second;
   *no_return = inlined_cost.no_return;
+  *dead_blocks = &inlined_cost.dead_blocks;
+  *insn_size = inlined_cost.insn_size;
 
+  auto inlined_cost_code = inlined_cost.code;
   if (m_mode != IntraDex && !is_private(callee) &&
       caller->get_class() != callee->get_class()) {
     // Inlining methods into different classes might lead to worse
@@ -1955,11 +1976,11 @@ bool MultiMethodInliner::should_inline_optional(
     if (inlined_cost.method_refs + inlined_cost.other_refs > 0) {
       cross_dex_penalty++;
     }
-    inlined_cost.code += cross_dex_penalty;
+    inlined_cost_code += cross_dex_penalty;
   }
 
   size_t invoke_cost = get_invoke_cost(callee);
-  if (inlined_cost.code > invoke_cost) {
+  if (inlined_cost_code > invoke_cost) {
     return false;
   }
 
@@ -2772,7 +2793,8 @@ struct BlockAccessor {
 bool inline_with_cfg(DexMethod* caller_method,
                      DexMethod* callee_method,
                      IRInstruction* callsite,
-                     size_t next_caller_reg) {
+                     size_t next_caller_reg,
+                     const std::unordered_set<cfg::Block*>* dead_blocks) {
 
   auto caller_code = caller_method->get_code();
   always_assert(caller_code->editable_cfg_built());
@@ -2805,7 +2827,7 @@ bool inline_with_cfg(DexMethod* caller_method,
   auto callee_code = callee_method->get_code();
   always_assert(callee_code->editable_cfg_built());
   cfg::CFGInliner::inline_cfg(&caller_cfg, callsite_it, callee_code->cfg(),
-                              next_caller_reg);
+                              next_caller_reg, dead_blocks);
 
   return true;
 }

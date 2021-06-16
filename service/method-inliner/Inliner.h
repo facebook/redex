@@ -68,10 +68,12 @@ void inline_method(DexMethod* caller,
  * Use the editable CFG instead of IRCode to do the inlining. Return true on
  * success. Registers starting with next_caller_reg must be available
  */
-bool inline_with_cfg(DexMethod* caller_method,
-                     DexMethod* callee_method,
-                     IRInstruction* callsite,
-                     size_t next_caller_reg);
+bool inline_with_cfg(
+    DexMethod* caller_method,
+    DexMethod* callee_method,
+    IRInstruction* callsite,
+    size_t next_caller_reg,
+    const std::unordered_set<cfg::Block*>* dead_blocks = nullptr);
 
 } // namespace inliner
 
@@ -104,8 +106,10 @@ struct Inlinable {
   DexMethod* callee;
   IRList::iterator iterator;
   IRInstruction* insn;
-  bool optional{true};
+  bool optional() const { return !!dead_blocks; }
   bool no_return{false};
+  const std::unordered_set<cfg::Block*>* dead_blocks;
+  size_t insn_size;
 };
 
 struct CalleeCallerRefs {
@@ -118,6 +122,8 @@ struct InlinedCost {
   size_t method_refs;
   size_t other_refs;
   bool no_return;
+  std::unordered_set<cfg::Block*> dead_blocks;
+  size_t insn_size;
 };
 
 /**
@@ -341,10 +347,13 @@ class MultiMethodInliner {
   /**
    * Whether it's beneficial to inline the callee at a particular callsite.
    */
-  bool should_inline_optional(DexMethod* caller,
-                              const IRInstruction* invoke_insn,
-                              DexMethod* callee,
-                              bool* no_return);
+  bool should_inline_optional(
+      DexMethod* caller,
+      const IRInstruction* invoke_insn,
+      DexMethod* callee,
+      bool* no_return,
+      const std::unordered_set<cfg::Block*>** dead_blocks,
+      size_t* insn_size);
 
   /**
    * should_inline_fast will return true for a subset of methods compared to

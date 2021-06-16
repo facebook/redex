@@ -954,3 +954,91 @@ TEST_F(MethodInlineTest, boxed_boolean) {
   auto expected = assembler::ircode_from_string(expected_str);
   EXPECT_CODE_EQ(expected.get(), actual);
 }
+
+TEST_F(MethodInlineTest, boxed_boolean_without_shrinking) {
+  ConcurrentMethodRefCache concurrent_resolve_cache;
+  auto concurrent_resolver = [&concurrent_resolve_cache](DexMethodRef* method,
+                                                         MethodSearch search) {
+    return resolve_method(method, search, concurrent_resolve_cache);
+  };
+
+  bool intra_dex = false;
+
+  DexStoresVector stores;
+  std::unordered_set<DexMethod*> candidates;
+  std::unordered_set<DexMethod*> expected_inlined;
+  auto foo_cls = create_a_class("Lfoo;");
+  {
+    DexStore store("root");
+    store.add_classes({});
+    store.add_classes({foo_cls});
+    stores.push_back(std::move(store));
+  }
+  DexMethod *check_method, *foo_main;
+  {
+    create_runtime_exception_init();
+    check_method = make_unboxing_precondition_method(foo_cls, "check");
+    candidates.insert(check_method);
+    // foo_main calls check_method a few times.
+    auto FALSE_field = (DexField*)DexField::get_field(
+        "Ljava/lang/Boolean;.FALSE:Ljava/lang/Boolean;");
+    always_assert(FALSE_field != nullptr);
+    auto TRUE_field = (DexField*)DexField::get_field(
+        "Ljava/lang/Boolean;.TRUE:Ljava/lang/Boolean;");
+    always_assert(TRUE_field != nullptr);
+    foo_main =
+        make_a_method_calls_others_with_arg(foo_cls,
+                                            "foo_main",
+                                            {
+                                                {check_method, TRUE_field},
+                                                {check_method, FALSE_field},
+                                            });
+    expected_inlined.insert(check_method);
+  }
+  auto scope = build_class_scope(stores);
+  api::LevelChecker::init(0, scope);
+  inliner::InlinerConfig inliner_config;
+  inliner_config.populate(scope);
+  inliner_config.use_cfg_inliner = true;
+  inliner_config.throws_inline = true;
+  check_method->get_code()->build_cfg(true);
+  foo_main->get_code()->build_cfg(true);
+  std::unordered_set<DexMethodRef*> pure_methods{
+      DexMethod::get_method("Ljava/lang/Boolean;.booleanValue:()Z")};
+  MultiMethodInliner inliner(scope, stores, candidates, concurrent_resolver,
+                             inliner_config, intra_dex ? IntraDex : InterDex,
+                             /* true_virtual_callers */ {},
+                             /* inline_for_speed */ nullptr,
+                             /* same_method_implementations */ nullptr,
+                             /* analyze_and_prune_inits */ false, pure_methods);
+  inliner.inline_methods();
+  auto inlined = inliner.get_inlined();
+  EXPECT_EQ(inlined.size(), expected_inlined.size());
+  for (auto method : expected_inlined) {
+    EXPECT_EQ(inlined.count(method), 1);
+  }
+
+  const auto& expected_str = R"(
+    (
+      (.pos:dbg_0 "Lfoo;.foo_main:()V" UnknownSource 0)
+      (sget-object "Ljava/lang/Boolean;.TRUE:Ljava/lang/Boolean;")
+      (move-result-pseudo-object v0)
+      (move-object v1 v0)
+      (invoke-virtual (v1) "Ljava/lang/Boolean;.booleanValue:()Z")
+      (move-result v1)
+      (if-eqz v1 :THROW)
+      (sget-object "Ljava/lang/Boolean;.FALSE:Ljava/lang/Boolean;")
+      (move-result-pseudo-object v0)
+      (invoke-static (v0) "Lfoo;.check:(Ljava/lang/Boolean;)V")
+      (return-void)
+      (:THROW)
+      (const v1 0)
+      (throw v1)
+    )
+  )";
+
+  foo_main->get_code()->clear_cfg();
+  auto actual = foo_main->get_code();
+  auto expected = assembler::ircode_from_string(expected_str);
+  EXPECT_CODE_EQ(expected.get(), actual);
+}
