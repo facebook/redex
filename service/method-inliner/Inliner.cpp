@@ -1551,7 +1551,8 @@ static InlinedCostAndDeadBlocks get_inlined_cost(
     cost += returns - 1;
   }
 
-  return {{cost, method_refs_set.size(), other_refs_set.size()}, dead_blocks};
+  return {{cost, method_refs_set.size(), other_refs_set.size(), !returns},
+          dead_blocks};
 }
 
 InlinedCost MultiMethodInliner::get_inlined_cost(const DexMethod* callee) {
@@ -1563,6 +1564,7 @@ InlinedCost MultiMethodInliner::get_inlined_cost(const DexMethod* callee) {
   std::mutex mutex;
   size_t callees_analyzed{0};
   size_t callees_unreachable_blocks{0};
+  size_t callees_no_return{0};
   InlinedCost inlined_cost{
       ::get_inlined_cost(is_static(callee), callee->get_code()).inlined_cost};
   std::unordered_map<std::string, InlinedCost> inlined_costs_keyed;
@@ -1583,16 +1585,22 @@ InlinedCost MultiMethodInliner::get_inlined_cost(const DexMethod* callee) {
       TRACE(INLINE, 4,
             "[too_many_callers] get_inlined_cost with %zu constant invoke "
             "params %s @ %s: cost %zu, method refs %zu, other refs %zu (dead "
-            "blocks: %zu)",
+            "blocks: %zu), %s",
             constant_arguments.is_top() ? 0 : constant_arguments.size(),
             get_key(constant_arguments).c_str(), SHOW(callee),
             res.inlined_cost.code, res.inlined_cost.method_refs,
-            res.inlined_cost.other_refs, res.dead_blocks);
+            res.inlined_cost.other_refs, res.dead_blocks,
+            res.inlined_cost.no_return ? "no_return" : "return");
       std::lock_guard<std::mutex> lock_guard(mutex);
       callees_unreachable_blocks += res.dead_blocks * count;
       inlined_cost.code += res.inlined_cost.code * count;
       inlined_cost.method_refs += res.inlined_cost.method_refs * count;
       inlined_cost.other_refs += res.inlined_cost.other_refs * count;
+      if (res.inlined_cost.no_return) {
+        callees_no_return++;
+      } else {
+        inlined_cost.no_return = false;
+      }
       callees_analyzed += count;
       inlined_costs_keyed.emplace(get_key(constant_arguments),
                                   res.inlined_cost);
@@ -1604,13 +1612,13 @@ InlinedCost MultiMethodInliner::get_inlined_cost(const DexMethod* callee) {
       // TODO: This parallelization happens independently (in addition to) the
       // parallelization via m_async_method_executor. This should be combined,
       // using a single thread pool.
-      inlined_cost = {0, 0, 0};
+      inlined_cost = {0, 0, 0, true};
       auto num_threads = std::min(redex_parallel::default_num_threads(),
                                   callee_constant_arguments.size());
       workqueue_run<ConstantArgumentsOccurrences>(
           process_key, callee_constant_arguments, num_threads);
     } else {
-      inlined_cost = {0, 0, 0};
+      inlined_cost = {0, 0, 0, true};
       for (auto& p : callee_constant_arguments) {
         process_key(p);
       }
@@ -1621,14 +1629,16 @@ InlinedCost MultiMethodInliner::get_inlined_cost(const DexMethod* callee) {
     inlined_cost = {
         (inlined_cost.code + callees_analyzed - 1) / callees_analyzed,
         (inlined_cost.method_refs + callees_analyzed - 1) / callees_analyzed,
-        (inlined_cost.other_refs + callees_analyzed - 1) / callees_analyzed};
+        (inlined_cost.other_refs + callees_analyzed - 1) / callees_analyzed,
+        inlined_cost.no_return};
     m_inlined_costs_keyed.emplace(
         callee, std::make_shared<std::unordered_map<std::string, InlinedCost>>(
                     inlined_costs_keyed.begin(), inlined_costs_keyed.end()));
   }
-  TRACE(INLINE, 4, "[too_many_callers] get_inlined_cost %s: {%zu,%zu,%zu}",
+  TRACE(INLINE, 4, "[too_many_callers] get_inlined_cost %s: {%zu,%zu,%zu,%s}",
         SHOW(callee), inlined_cost.code, inlined_cost.method_refs,
-        inlined_cost.other_refs);
+        inlined_cost.other_refs,
+        inlined_cost.no_return ? "no_return" : "return");
   m_inlined_costs.update(
       callee,
       [&](const DexMethod*, boost::optional<InlinedCost>& value, bool exists) {
@@ -1637,6 +1647,7 @@ InlinedCost MultiMethodInliner::get_inlined_cost(const DexMethod* callee) {
           always_assert(value->code == inlined_cost.code);
           always_assert(value->method_refs == inlined_cost.method_refs);
           always_assert(value->other_refs == inlined_cost.other_refs);
+          always_assert(value->no_return == inlined_cost.no_return);
           return;
         }
         value = inlined_cost;
@@ -1646,6 +1657,7 @@ InlinedCost MultiMethodInliner::get_inlined_cost(const DexMethod* callee) {
         info.constant_invoke_callees_analyzed += callees_analyzed;
         info.constant_invoke_callees_unreachable_blocks +=
             callees_unreachable_blocks;
+        info.constant_invoke_callees_no_return += callees_no_return;
       });
   return inlined_cost;
 }

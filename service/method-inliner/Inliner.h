@@ -116,6 +116,7 @@ struct InlinedCost {
   size_t code;
   size_t method_refs;
   size_t other_refs;
+  bool no_return;
 };
 
 /**
@@ -597,6 +598,7 @@ class MultiMethodInliner {
     std::atomic<size_t> constant_invoke_callers_unreachable_blocks{0};
     std::atomic<size_t> constant_invoke_callees_analyzed{0};
     std::atomic<size_t> constant_invoke_callees_unreachable_blocks{0};
+    std::atomic<size_t> constant_invoke_callees_no_return{0};
   };
   InliningInfo info;
 

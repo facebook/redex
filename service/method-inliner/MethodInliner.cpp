@@ -448,6 +448,8 @@ void run_inliner(DexStoresVector& stores,
       inliner.get_info().constant_invoke_callers_unreachable_blocks);
   mgr.incr_metric("constant_invoke_callees_analyzed",
                   inliner.get_info().constant_invoke_callees_analyzed);
+  mgr.incr_metric("constant_invoke_callees_no_return",
+                  inliner.get_info().constant_invoke_callees_no_return);
   mgr.incr_metric(
       "constant_invoke_callees_unreachable_blocks",
       inliner.get_info().constant_invoke_callees_unreachable_blocks);
