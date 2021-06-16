@@ -20,6 +20,7 @@ struct InlinerConfig {
   bool virtual_inline{true};
   bool true_virtual_inline{false};
   bool throws_inline{false};
+  bool throw_after_no_return{false};
   bool enforce_method_size_limit{true};
   bool multiple_callers{false};
   bool inline_small_non_deletables{true};

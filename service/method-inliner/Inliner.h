@@ -105,6 +105,7 @@ struct Inlinable {
   IRList::iterator iterator;
   IRInstruction* insn;
   bool optional{true};
+  bool no_return{false};
 };
 
 struct CalleeCallerRefs {
@@ -342,7 +343,8 @@ class MultiMethodInliner {
    */
   bool should_inline_optional(DexMethod* caller,
                               const IRInstruction* invoke_insn,
-                              DexMethod* callee);
+                              DexMethod* callee,
+                              bool* no_return);
 
   /**
    * should_inline_fast will return true for a subset of methods compared to
@@ -578,6 +580,8 @@ class MultiMethodInliner {
     std::atomic<size_t> calls_inlined{0};
     std::atomic<size_t> calls_not_inlinable{0};
     std::atomic<size_t> calls_not_inlined{0};
+    std::atomic<size_t> no_returns{0};
+    std::atomic<size_t> unreachable_insns{0};
     std::atomic<size_t> intermediate_shrinkings{0};
     std::atomic<size_t> not_found{0};
     std::atomic<size_t> blocklisted{0};

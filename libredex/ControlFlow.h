@@ -809,8 +809,10 @@ class ControlFlowGraph {
   boost::dynamic_bitset<> visit() const;
 
   // remove blocks with no predecessors
-  // returns the number of instructions removed
-  uint32_t remove_unreachable_blocks();
+  // returns pair of 1) the number of instructions removed, and 2) whether an
+  // instruction with the destination of the last register was removed, and thus
+  // a call to recompute_registers_size might be beneficial.
+  std::pair<uint32_t, bool> remove_unreachable_blocks();
 
   // transform the CFG to an equivalent but more canonical state
   // Assumes m_editable is true

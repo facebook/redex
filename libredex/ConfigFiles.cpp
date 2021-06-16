@@ -214,6 +214,7 @@ void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
   jw.get("virtual", true, inliner_config->virtual_inline);
   jw.get("true_virtual_inline", false, inliner_config->true_virtual_inline);
   jw.get("throws", false, inliner_config->throws_inline);
+  jw.get("throw_after_no_return", false, inliner_config->throw_after_no_return);
   jw.get("enforce_method_size_limit",
          true,
          inliner_config->enforce_method_size_limit);

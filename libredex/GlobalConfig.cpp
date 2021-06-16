@@ -15,6 +15,7 @@ void InlinerConfig::bind_config() {
   bind("enforce_method_size_limit", enforce_method_size_limit,
        enforce_method_size_limit);
   bind("throws", throws_inline, throws_inline);
+  bind("throw_after_no_return", throw_after_no_return, throw_after_no_return);
   bind("multiple_callers", multiple_callers, multiple_callers);
   bind("inline_small_non_deletables", inline_small_non_deletables,
        inline_small_non_deletables);

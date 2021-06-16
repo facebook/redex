@@ -894,7 +894,10 @@ void chain_consecutive_source_blocks(IRList& list) {
 } // namespace
 
 void ControlFlowGraph::simplify() {
-  remove_unreachable_blocks();
+  auto registers_size_possibly_reduced = remove_unreachable_blocks().second;
+  if (registers_size_possibly_reduced) {
+    recompute_registers_size();
+  }
   // FIXME: "Empty" blocks with only `DexPosition`s should be merged
   //        into their successors for consistency. Otherwise
   //        `remove_empty_blocks` will remove them, which it will not
@@ -907,11 +910,11 @@ void ControlFlowGraph::simplify() {
 }
 
 // remove blocks with no predecessors
-uint32_t ControlFlowGraph::remove_unreachable_blocks() {
+std::pair<uint32_t, bool> ControlFlowGraph::remove_unreachable_blocks() {
   uint32_t num_insns_removed = 0;
   remove_unreachable_succ_edges();
   std::vector<std::unique_ptr<DexPosition>> dangling;
-  bool need_register_size_fix = false;
+  bool registers_size_possibly_reduced = false;
   for (auto it = m_blocks.begin(); it != m_blocks.end();) {
     Block* b = it->second;
     const auto& preds = b->preds();
@@ -927,7 +930,7 @@ uint32_t ControlFlowGraph::remove_unreachable_blocks() {
             if (size_required >= m_registers_size) {
               // We're deleting an instruction that may have been the max
               // register of the entire function.
-              need_register_size_fix = true;
+              registers_size_possibly_reduced = true;
             }
           }
         }
@@ -945,12 +948,9 @@ uint32_t ControlFlowGraph::remove_unreachable_blocks() {
     }
   }
 
-  if (need_register_size_fix) {
-    recompute_registers_size();
-  }
   fix_dangling_parents(std::move(dangling));
 
-  return num_insns_removed;
+  return std::make_pair(num_insns_removed, registers_size_possibly_reduced);
 }
 
 void ControlFlowGraph::fix_dangling_parents(

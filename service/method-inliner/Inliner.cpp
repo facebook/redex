@@ -650,6 +650,7 @@ void MultiMethodInliner::inline_callees(
           return editable_cfg_adapter::LOOP_CONTINUE;
         }
         bool optional{false};
+        bool no_return{false};
         if (std::find(callees.begin(), callees.end(), callee) ==
             callees.end()) {
           // If a callee wasn't in the list of general callees, that means that
@@ -658,12 +659,14 @@ void MultiMethodInliner::inline_callees(
           // callsite, taking into account constant-arguments (if any).
           if (std::find(optional_callees.begin(), optional_callees.end(),
                         callee) != optional_callees.end() &&
-              should_inline_optional(caller, insn, callee)) {
+              should_inline_optional(caller, insn, callee, &no_return)) {
             optional = true;
-          } else {
+            no_return = false; // we'll inline anyway
+          } else if (!no_return) {
             return editable_cfg_adapter::LOOP_CONTINUE;
           }
         }
+        always_assert(!optional || !no_return);
         always_assert(callee->is_concrete());
         if (m_analyze_and_prune_inits && method::is_init(callee)) {
           if (!callee->get_code()->editable_cfg_built()) {
@@ -680,7 +683,8 @@ void MultiMethodInliner::inline_callees(
           }
         }
 
-        inlinables.push_back((Inlinable){callee, it, insn, optional});
+        inlinables.push_back(
+            (Inlinable){callee, it, insn, optional, no_return});
         if (++found == max) {
           return editable_cfg_adapter::LOOP_BREAK;
         }
@@ -808,14 +812,19 @@ void MultiMethodInliner::inline_inlinables(
 
   std::stable_sort(ordered_inlinables.begin(), ordered_inlinables.end(),
                    [&](const Inlinable& a, const Inlinable& b) {
-                     // First, prefer non-optional inlinables, as they were
+                     // First, prefer no-return inlinable, as they cut off
+                     // control-flow and thus other inlinables.
+                     if (a.no_return != b.no_return) {
+                       return a.no_return > b.no_return;
+                     }
+                     // Second, prefer non-optional inlinables, as they were
                      // (potentially) selected with a global cost model, taking
                      // into account the savings achieved when eliminating all
                      // calls
                      if (a.optional != b.optional) {
                        return a.optional < b.optional;
                      }
-                     // Second, prefer smaller methods, to avoid hitting size
+                     // Third, prefer smaller methods, to avoid hitting size
                      // limits too soon
                      return get_callee_insn_size(a.callee) <
                             get_callee_insn_size(b.callee);
@@ -826,7 +835,8 @@ void MultiMethodInliner::inline_inlinables(
   if (m_config.use_cfg_inliner && !m_config.unique_inlined_registers) {
     cfg_next_caller_reg = caller->cfg().get_registers_size();
   }
-  size_t calls_not_inlinable{0}, calls_not_inlined{0};
+  size_t calls_not_inlinable{0}, calls_not_inlined{0}, no_returns{0},
+      unreachable_insns{0};
 
   size_t intermediate_shrinkings{0};
   // We only try intermediate shrinking when using the cfg-inliner, as it will
@@ -837,10 +847,86 @@ void MultiMethodInliner::inline_inlinables(
           ? 0
           : std::numeric_limits<size_t>::max()};
 
+  // Once blocks might have been freed, which can happen via
+  // remove_unreachable_blocks and shrinking, callsite pointers are no longer
+  // valid.
+  std::unique_ptr<std::unordered_set<const IRInstruction*>> remaining_callsites;
+  auto recompute_remaining_callsites = [caller, &remaining_callsites,
+                                        &ordered_inlinables]() {
+    if (!remaining_callsites) {
+      remaining_callsites =
+          std::make_unique<std::unordered_set<const IRInstruction*>>();
+      for (const auto& inlinable : ordered_inlinables) {
+        remaining_callsites->insert(inlinable.insn);
+      }
+    }
+    std::unordered_set<const IRInstruction*> new_remaining_callsites;
+    for (auto& mie : InstructionIterable(caller->cfg())) {
+      if (mie.insn->has_method() && remaining_callsites->count(mie.insn)) {
+        new_remaining_callsites.insert(mie.insn);
+      }
+    }
+    always_assert(new_remaining_callsites.size() <=
+                  remaining_callsites->size());
+    *remaining_callsites = std::move(new_remaining_callsites);
+  };
+
   for (const auto& inlinable : ordered_inlinables) {
     auto callee_method = inlinable.callee;
     auto callee = callee_method->get_code();
     auto callsite_insn = inlinable.insn;
+
+    if (remaining_callsites && !remaining_callsites->count(callsite_insn)) {
+      if (!inlinable.no_return) {
+        calls_not_inlined++;
+      }
+      continue;
+    }
+
+    if (inlinable.no_return) {
+      always_assert(m_config.use_cfg_inliner);
+      if (!m_config.throw_after_no_return) {
+        continue;
+      }
+      // we are not actually inlining, but just cutting off control-flow
+      // afterwards, inserting an (unreachable) "throw null" instruction
+      // sequence.
+      auto& caller_cfg = caller->cfg();
+      auto callsite_it = caller_cfg.find_insn(callsite_insn);
+      if (!callsite_it.is_end()) {
+        if (m_config.unique_inlined_registers) {
+          cfg_next_caller_reg = caller_cfg.get_registers_size();
+        }
+        auto temp_reg = *cfg_next_caller_reg;
+        if (temp_reg >= caller_cfg.get_registers_size()) {
+          caller_cfg.set_registers_size(temp_reg + 1);
+        }
+        // Copying to avoid cfg limitation
+        auto* callsite_copy = new IRInstruction(*callsite_it->insn);
+        auto* const_insn = (new IRInstruction(OPCODE_CONST))
+                               ->set_dest(temp_reg)
+                               ->set_literal(0);
+        auto* throw_insn =
+            (new IRInstruction(OPCODE_THROW))->set_src(0, temp_reg);
+        caller_cfg.replace_insns(callsite_it,
+                                 {callsite_copy, const_insn, throw_insn});
+        auto p = caller_cfg.remove_unreachable_blocks();
+        auto unreachable_insn_count = p.first;
+        auto registers_size_possibly_reduced = p.second;
+        if (registers_size_possibly_reduced &&
+            m_config.unique_inlined_registers) {
+          caller_cfg.recompute_registers_size();
+          cfg_next_caller_reg = caller_cfg.get_registers_size();
+        }
+        if (unreachable_insn_count) {
+          unreachable_insns += unreachable_insn_count;
+          recompute_remaining_callsites();
+        }
+        estimated_insn_size = caller_cfg.sum_opcode_sizes();
+        no_returns++;
+      }
+      continue;
+    }
 
     if (for_speed()) {
       // This is expensive, but with shrinking/non-cfg inlining prep there's no
@@ -871,6 +957,11 @@ void MultiMethodInliner::inline_inlinables(
       m_shrinker.shrink_method(caller_method);
       cfg_next_caller_reg = caller->cfg().get_registers_size();
       estimated_insn_size = caller->cfg().sum_opcode_sizes();
+      recompute_remaining_callsites();
+      if (!remaining_callsites->count(callsite_insn)) {
+        calls_not_inlined++;
+        continue;
+      }
       not_inlinable =
           !is_inlinable(caller_method, callee_method, callsite_insn,
                         estimated_insn_size, &make_static, &caller_too_large);
@@ -942,6 +1033,12 @@ void MultiMethodInliner::inline_inlinables(
   }
   if (calls_not_inlined) {
     info.calls_not_inlined += calls_not_inlined;
+  }
+  if (no_returns) {
+    info.no_returns += no_returns;
+  }
+  if (unreachable_insns) {
+    info.unreachable_insns += unreachable_insns;
   }
   if (intermediate_shrinkings) {
     info.intermediate_shrinkings += intermediate_shrinkings;
@@ -1805,7 +1902,11 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
 }
 
 bool MultiMethodInliner::should_inline_optional(
-    DexMethod* caller, const IRInstruction* invoke_insn, DexMethod* callee) {
+    DexMethod* caller,
+    const IRInstruction* invoke_insn,
+    DexMethod* callee,
+    bool* no_return) {
+  *no_return = false;
   if (!m_call_constant_arguments.count_unsafe(invoke_insn)) {
     return false;
   }
@@ -1821,6 +1922,7 @@ bool MultiMethodInliner::should_inline_optional(
     return false;
   }
   auto inlined_cost = it->second;
+  *no_return = inlined_cost.no_return;
 
   if (m_mode != IntraDex && !is_private(callee) &&
       caller->get_class() != callee->get_class()) {

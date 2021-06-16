@@ -433,6 +433,7 @@ void run_inliner(DexStoresVector& stores,
   mgr.incr_metric("calls_inlined", inliner.get_info().calls_inlined);
   mgr.incr_metric("calls_not_inlinable",
                   inliner.get_info().calls_not_inlinable);
+  mgr.incr_metric("no_returns", inliner.get_info().no_returns);
   mgr.incr_metric("intermediate_shrinkings",
                   inliner.get_info().intermediate_shrinkings);
   mgr.incr_metric("calls_not_inlined", inliner.get_info().calls_not_inlined);
@@ -479,6 +480,8 @@ void run_inliner(DexStoresVector& stores,
       "instructions_eliminated_localdce",
       shrinker.get_local_dce_stats().dead_instruction_count +
           shrinker.get_local_dce_stats().unreachable_instruction_count);
+  mgr.incr_metric("instructions_eliminated_unreachable",
+                  inliner.get_info().unreachable_insns);
   mgr.incr_metric("blocks_eliminated_by_dedup_blocks",
                   shrinker.get_dedup_blocks_stats().blocks_removed);
   mgr.incr_metric("methods_reg_alloced", shrinker.get_methods_reg_alloced());

@@ -792,6 +792,72 @@ TEST_F(
   EXPECT_CODE_EQ(expected.get(), actual);
 }
 
+TEST_F(MethodInlineTest, throw_after_no_return) {
+  ConcurrentMethodRefCache concurrent_resolve_cache;
+  auto concurrent_resolver = [&concurrent_resolve_cache](DexMethodRef* method,
+                                                         MethodSearch search) {
+    return resolve_method(method, search, concurrent_resolve_cache);
+  };
+
+  bool intra_dex = false;
+
+  DexStoresVector stores;
+  std::unordered_set<DexMethod*> candidates;
+  auto foo_cls = create_a_class("Lfoo;");
+  {
+    DexStore store("root");
+    store.add_classes({});
+    store.add_classes({foo_cls});
+    stores.push_back(std::move(store));
+  }
+  DexMethod *check_method, *foo_main;
+  {
+    create_runtime_exception_init();
+    check_method = make_silly_precondition_method(foo_cls, "check");
+    candidates.insert(check_method);
+    // foo_main calls check_method a few times. Already the first call is one
+    // that will always throw.
+    foo_main = make_a_method_calls_others_with_arg(foo_cls,
+                                                   "foo_main",
+                                                   {
+                                                       {check_method, 0},
+                                                       {check_method, 0},
+                                                       {check_method, 1},
+                                                   });
+  }
+  auto scope = build_class_scope(stores);
+  api::LevelChecker::init(0, scope);
+  inliner::InlinerConfig inliner_config;
+  inliner_config.populate(scope);
+  inliner_config.use_cfg_inliner = true;
+  inliner_config.throws_inline = true;
+  inliner_config.throw_after_no_return = true;
+  check_method->get_code()->build_cfg(true);
+  foo_main->get_code()->build_cfg(true);
+  MultiMethodInliner inliner(scope,
+                             stores,
+                             candidates,
+                             concurrent_resolver,
+                             inliner_config,
+                             intra_dex ? IntraDex : InterDex);
+  inliner.inline_methods();
+  auto inlined = inliner.get_inlined();
+  EXPECT_EQ(inlined.size(), 0);
+
+  const auto& expected_str = R"(
+    (
+      (const v0 0)
+      (invoke-static (v0) "Lfoo;.check:(I)V")
+      (const v1 0)
+      (throw v1)
+    )
+  )";
+  foo_main->get_code()->clear_cfg();
+  auto actual = foo_main->get_code();
+  auto expected = assembler::ircode_from_string(expected_str);
+  EXPECT_CODE_EQ(expected.get(), actual);
+}
+
 TEST_F(MethodInlineTest, boxed_boolean) {
   ConcurrentMethodRefCache concurrent_resolve_cache;
   auto concurrent_resolver = [&concurrent_resolve_cache](DexMethodRef* method,

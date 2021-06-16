@@ -189,7 +189,7 @@ void LocalDce::dce(cfg::ControlFlowGraph& cfg) {
       cfg.replace_insns(it, npe_creator.get_insns(invoke_insn));
     }
   }
-  auto unreachable_insn_count = cfg.remove_unreachable_blocks();
+  auto unreachable_insn_count = cfg.remove_unreachable_blocks().first;
   cfg.recompute_registers_size();
 
   m_stats.npe_instruction_count += npe_instructions.size();
