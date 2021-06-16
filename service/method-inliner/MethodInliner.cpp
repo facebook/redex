@@ -330,9 +330,10 @@ void run_inliner(DexStoresVector& stores,
     method_override_graph = mog::build_graph(scope);
   }
 
-  auto methods = gather_non_virtual_methods(scope, method_override_graph.get());
+  auto candidates =
+      gather_non_virtual_methods(scope, method_override_graph.get());
 
-  // The methods list computed above includes all constructors, regardless of
+  // The candidates list computed above includes all constructors, regardless of
   // whether it's safe to inline them or not. We'll let the inliner decide
   // what to do with constructors.
   bool analyze_and_prune_inits = true;
@@ -340,7 +341,7 @@ void run_inliner(DexStoresVector& stores,
   std::unordered_map<const DexMethod*, size_t> same_method_implementations;
   if (inliner_config.virtual_inline && inliner_config.true_virtual_inline) {
     gather_true_virtual_methods(*method_override_graph, scope,
-                                &true_virtual_callers, &methods,
+                                &true_virtual_callers, &candidates,
                                 &same_method_implementations);
   }
   // keep a map from refs to defs or nullptr if no method was found
@@ -358,7 +359,7 @@ void run_inliner(DexStoresVector& stores,
   }
 
   // inline candidates
-  MultiMethodInliner inliner(scope, stores, methods, concurrent_resolver,
+  MultiMethodInliner inliner(scope, stores, candidates, concurrent_resolver,
                              inliner_config, intra_dex ? IntraDex : InterDex,
                              true_virtual_callers, inline_for_speed,
                              &same_method_implementations,
@@ -380,18 +381,30 @@ void run_inliner(DexStoresVector& stores,
     }
   }
 
+  std::unordered_set<DexMethod*> delete_candidates =
+      inliner_config.delete_any_candidate ? candidates : inlined;
   // Do not erase true virtual methods that are inlined because we are only
   // inlining callsites that are monomorphic, for polymorphic callsite we
   // didn't inline, but in run time the callsite may still be resolved to
   // those methods that are inlined. We are relying on RMU to clean up
   // true virtual methods that are not referenced.
   for (const auto& pair : true_virtual_callers) {
-    inlined.erase(pair.first);
+    delete_candidates.erase(pair.first);
+  }
+  // Do not erase the parameterless constructor, in case it's constructed via
+  // .class or Class.forName(). Also see RMU.
+  for (auto it = delete_candidates.begin(); it != delete_candidates.end();) {
+    if (method::is_init(*it) &&
+        (*it)->get_proto()->get_args()->get_type_list().empty()) {
+      it = delete_candidates.erase(it);
+    } else {
+      it++;
+    }
   }
   ConcurrentSet<DexMethod*>& delayed_make_static =
       inliner.get_delayed_make_static();
-  size_t deleted =
-      delete_methods(scope, inlined, delayed_make_static, concurrent_resolver);
+  size_t deleted = delete_methods(scope, delete_candidates, delayed_make_static,
+                                  concurrent_resolver);
 
   TRACE(INLINE, 3, "recursive %ld", inliner.get_info().recursive);
   TRACE(INLINE, 3, "max_call_stack_depth %ld",

@@ -228,6 +228,7 @@ void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
   jw.get("inline_small_non_deletables",
          true,
          inliner_config->inline_small_non_deletables);
+  jw.get("delete_any_candidate", false, inliner_config->delete_any_candidate);
   auto& shrinker_config = inliner_config->shrinker;
   jw.get("run_const_prop", false, shrinker_config.run_const_prop);
   jw.get("run_cse", false, shrinker_config.run_cse);
