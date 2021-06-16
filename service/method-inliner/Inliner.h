@@ -583,6 +583,7 @@ class MultiMethodInliner {
     std::atomic<size_t> no_returns{0};
     std::atomic<size_t> unreachable_insns{0};
     std::atomic<size_t> intermediate_shrinkings{0};
+    std::atomic<size_t> intermediate_remove_unreachable_blocks{0};
     std::atomic<size_t> not_found{0};
     std::atomic<size_t> blocklisted{0};
     std::atomic<size_t> throws{0};

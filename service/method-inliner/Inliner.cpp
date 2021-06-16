@@ -839,13 +839,12 @@ void MultiMethodInliner::inline_inlinables(
       unreachable_insns{0};
 
   size_t intermediate_shrinkings{0};
-  // We only try intermediate shrinking when using the cfg-inliner, as it will
-  // invalidate irlist iterators, which are used with the legacy
-  // non-cfg-inliner.
-  size_t last_intermediate_shrinking_inlined_callees{
-      (m_config.use_cfg_inliner && m_config.intermediate_shrinking)
-          ? 0
-          : std::numeric_limits<size_t>::max()};
+  size_t intermediate_remove_unreachable_blocks{0};
+  // We only try intermediate remove-unreachable-blocks or shrinking when using
+  // the cfg-inliner, as it will invalidate irlist iterators, which are used
+  // with the legacy non-cfg-inliner.
+  size_t last_intermediate_inlined_callees{
+      m_config.use_cfg_inliner ? 0 : std::numeric_limits<size_t>::max()};
 
   // Once blocks might have been freed, which can happen via
   // remove_unreachable_blocks and shrinking, callsite pointers are no longer
@@ -948,14 +947,19 @@ void MultiMethodInliner::inline_inlinables(
     auto not_inlinable =
         !is_inlinable(caller_method, callee_method, callsite_insn,
                       estimated_insn_size, &make_static, &caller_too_large);
-    if (not_inlinable && caller_too_large && m_shrinker.enabled() &&
-        inlined_callees.size() > last_intermediate_shrinking_inlined_callees) {
+    if (not_inlinable && caller_too_large &&
+        inlined_callees.size() > last_intermediate_inlined_callees) {
       always_assert(m_config.use_cfg_inliner);
-      always_assert(m_config.intermediate_shrinking);
-      intermediate_shrinkings++;
-      last_intermediate_shrinking_inlined_callees = inlined_callees.size();
-      m_shrinker.shrink_method(caller_method);
-      cfg_next_caller_reg = caller->cfg().get_registers_size();
+      intermediate_remove_unreachable_blocks++;
+      last_intermediate_inlined_callees = inlined_callees.size();
+      auto p = caller->cfg().remove_unreachable_blocks();
+      unreachable_insns += p.first;
+      auto registers_size_possibly_reduced = p.second;
+      if (registers_size_possibly_reduced &&
+          m_config.unique_inlined_registers) {
+        caller->cfg().recompute_registers_size();
+        cfg_next_caller_reg = caller->cfg().get_registers_size();
+      }
       estimated_insn_size = caller->cfg().sum_opcode_sizes();
       recompute_remaining_callsites();
       if (!remaining_callsites->count(callsite_insn)) {
@@ -965,6 +969,21 @@ void MultiMethodInliner::inline_inlinables(
       not_inlinable =
           !is_inlinable(caller_method, callee_method, callsite_insn,
                         estimated_insn_size, &make_static, &caller_too_large);
+      if (!not_inlinable && m_config.intermediate_shrinking &&
+          m_shrinker.enabled()) {
+        intermediate_shrinkings++;
+        m_shrinker.shrink_method(caller_method);
+        cfg_next_caller_reg = caller->cfg().get_registers_size();
+        estimated_insn_size = caller->cfg().sum_opcode_sizes();
+        recompute_remaining_callsites();
+        if (!remaining_callsites->count(callsite_insn)) {
+          calls_not_inlined++;
+          continue;
+        }
+        not_inlinable =
+            !is_inlinable(caller_method, callee_method, callsite_insn,
+                          estimated_insn_size, &make_static, &caller_too_large);
+      }
     }
     if (not_inlinable) {
       calls_not_inlinable++;
@@ -1042,6 +1061,10 @@ void MultiMethodInliner::inline_inlinables(
   }
   if (intermediate_shrinkings) {
     info.intermediate_shrinkings += intermediate_shrinkings;
+  }
+  if (intermediate_remove_unreachable_blocks) {
+    info.intermediate_remove_unreachable_blocks +=
+        intermediate_remove_unreachable_blocks;
   }
 }
 
