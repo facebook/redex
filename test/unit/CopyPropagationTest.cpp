@@ -94,7 +94,7 @@ TEST_F(CopyPropagationTest, noRemapRange) {
   code->set_registers_size(7);
 
   copy_propagation_impl::Config config;
-  config.regalloc_has_run = true;
+  config.regalloc_will_fix = false;
   CopyPropagation(config).run(code.get());
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -842,7 +842,7 @@ TEST_F(CopyPropagationTest, wideInvokeSources) {
   copy_propagation_impl::Config config;
   config.replace_with_representative = true;
   config.wide_registers = true;
-  config.regalloc_has_run = true;
+  config.regalloc_will_fix = false;
   CopyPropagation(config).run(code.get());
 
   auto expected_code = assembler::ircode_from_string(no_change);
@@ -929,7 +929,7 @@ TEST_F(CopyPropagationTest, ResueConst) {
   code->set_registers_size(4);
 
   copy_propagation_impl::Config config;
-  config.regalloc_has_run = false;
+  config.regalloc_will_fix = true;
   CopyPropagation(config).run(code, method);
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -1004,6 +1004,7 @@ TEST_F(CopyPropagationTest, lock_canonicalization) {
   code->set_registers_size(2);
 
   copy_propagation_impl::Config config;
+  config.regalloc_will_fix = true;
   CopyPropagation(config).run(code, method);
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -1053,7 +1054,7 @@ TEST_F(CopyPropagationTest, check_cast_workaround_exc) {
   code->set_registers_size(3);
 
   copy_propagation_impl::Config config;
-  config.regalloc_has_run = true;
+  config.regalloc_will_fix = false;
   config.replace_with_representative = true;
   config.eliminate_const_literals_with_same_type_demands = true;
   CopyPropagation(config).run(code, method);
