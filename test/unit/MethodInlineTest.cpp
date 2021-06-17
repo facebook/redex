@@ -1042,3 +1042,238 @@ TEST_F(MethodInlineTest, boxed_boolean_without_shrinking) {
   auto expected = assembler::ircode_from_string(expected_str);
   EXPECT_CODE_EQ(expected.get(), actual);
 }
+
+TEST_F(MethodInlineTest, visibility_change_static_invoke) {
+  auto foo_cls = create_a_class("LFoo;");
+  auto bar_cls = create_a_class("LBar;");
+
+  DexMethod* caller =
+      static_cast<DexMethod*>(DexMethod::make_method("LBar;.caller:()V"));
+  caller->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
+
+  DexMethod* callee =
+      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.callee:()V"));
+  callee->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
+  DexMethod* nested_callee = static_cast<DexMethod*>(
+      DexMethod::make_method("LFoo;.nested_callee:()V"));
+  nested_callee->make_concrete(ACC_PRIVATE, /* is_virtual */ true);
+
+  DexMethod* caller_inside = static_cast<DexMethod*>(
+      DexMethod::make_method("LFoo;.caller_inside:()V"));
+  caller_inside->make_concrete(ACC_PRIVATE,
+                               /* is_virtual */ true);
+
+  DexMethod* nested_callee_2 = static_cast<DexMethod*>(
+      DexMethod::make_method("LFoo;.nested_callee_2:()V"));
+  nested_callee_2->make_concrete(ACC_PRIVATE, /* is_virtual */ true);
+
+  DexMethod* init =
+      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.<init>:()V"));
+  init->make_concrete(ACC_CONSTRUCTOR | ACC_PUBLIC, /* is_virtual */ false);
+
+  bar_cls->add_method(caller);
+
+  foo_cls->add_method(init);
+  foo_cls->add_method(callee);
+  foo_cls->add_method(nested_callee);
+  foo_cls->add_method(nested_callee_2);
+  foo_cls->add_method(caller_inside);
+
+  const auto& caller_str = R"(
+    (
+      (const v0 0)
+      (invoke-static () "LFoo;.callee:()V")
+      (return-void)
+    )
+  )";
+
+  caller->set_code(assembler::ircode_from_string(caller_str));
+
+  const auto& callee_str = R"(
+    (
+      (const v0 1)
+
+      (new-instance "LFoo;")
+      (move-result-pseudo-object v1)
+      (invoke-direct (v1) "LFoo;.<init>:()V")
+      (invoke-direct (v1) "LFoo;.nested_callee:()V")
+
+      (if-eqz v0 :after)
+
+      (:exit)
+      (const v1 2)
+      (return-void)
+
+      (:after)
+      (const v2 3)
+      (goto :exit)
+    )
+  )";
+
+  const auto& caller_inside_str = R"(
+    (
+      (load-param-object v1)
+      (invoke-direct (v1) "LFoo;.nested_callee:()V")
+      (const v0 0)
+      (return-void)
+    )
+  )";
+
+  const auto& nested_callee_str = R"(
+    (
+      (load-param-object v1)
+      (invoke-direct (v1) "LFoo;.nested_callee_2:()V")
+      (const v0 0)
+      (return-void)
+    )
+  )";
+
+  const auto& nested_callee_2_str = R"(
+    (
+      (load-param-object v1)
+      (const v0 0)
+      (return-void)
+    )
+  )";
+
+  const auto& init_str = R"(
+    (
+      (load-param-object v0)
+      (invoke-direct (v0) "Ljava/lang/Object;.<init>:()V")
+      (return-void)
+    )
+  )";
+
+  callee->set_code(assembler::ircode_from_string(callee_str));
+  nested_callee->set_code(assembler::ircode_from_string(nested_callee_str));
+  caller_inside->set_code(assembler::ircode_from_string(caller_inside_str));
+  nested_callee_2->set_code(assembler::ircode_from_string(nested_callee_2_str));
+  init->set_code(assembler::ircode_from_string(init_str));
+
+  ConcurrentMethodRefCache concurrent_resolve_cache;
+  auto concurrent_resolver = [&concurrent_resolve_cache](DexMethodRef* method,
+                                                         MethodSearch search) {
+    return resolve_method(method, search, concurrent_resolve_cache);
+  };
+
+  bool intra_dex = false;
+
+  DexStoresVector stores;
+  std::unordered_set<DexMethod*> candidates;
+  std::unordered_set<DexMethod*> expected_inlined;
+  {
+    DexStore store("root");
+    store.add_classes({});
+    store.add_classes({foo_cls, bar_cls});
+    stores.push_back(std::move(store));
+  }
+  {
+    candidates.insert(callee);
+    candidates.insert(nested_callee);
+    expected_inlined.insert(callee);
+    expected_inlined.insert(nested_callee);
+  }
+  auto scope = build_class_scope(stores);
+  api::LevelChecker::init(0, scope);
+  inliner::InlinerConfig inliner_config;
+  inliner_config.populate(scope);
+  inliner_config.use_cfg_inliner = true;
+  inliner_config.throws_inline = true;
+  inliner_config.shrinker.run_const_prop = false;
+  inliner_config.shrinker.run_local_dce = false;
+  inliner_config.shrinker.compute_pure_methods = false;
+
+  caller->get_code()->build_cfg(true);
+  callee->get_code()->build_cfg(true);
+  nested_callee->get_code()->build_cfg(true);
+  caller_inside->get_code()->build_cfg(true);
+  nested_callee_2->get_code()->build_cfg(true);
+  init->get_code()->build_cfg(true);
+
+  {
+    MultiMethodInliner inliner(scope, stores, candidates, concurrent_resolver,
+                               inliner_config, intra_dex ? IntraDex : InterDex,
+                               /* true_virtual_callers */ {},
+                               /* inline_for_speed */ nullptr,
+                               /* same_method_implementations */ nullptr,
+                               /* analyze_and_prune_inits */ false, {});
+    inliner.inline_methods();
+
+    auto inlined = inliner.get_inlined();
+    EXPECT_EQ(inlined.size(), expected_inlined.size());
+    for (auto method : expected_inlined) {
+      EXPECT_EQ(inlined.count(method), 1);
+    }
+  }
+
+  caller->get_code()->clear_cfg();
+  callee->get_code()->clear_cfg();
+  nested_callee->get_code()->clear_cfg();
+  caller_inside->get_code()->clear_cfg();
+  nested_callee_2->get_code()->clear_cfg();
+  init->get_code()->clear_cfg();
+
+  EXPECT_TRUE(is_public(nested_callee_2));
+
+  // visibility does not change, as the call to nested_callee is
+  // futher inlined to nested_callee's code
+  EXPECT_TRUE(is_private(nested_callee));
+
+  const auto& caller_expected_str = R"(
+    (
+      (.pos:dbg_0 "LBar;.caller:()V" UnknownSource 0)
+      (const v0 0)
+      (.pos:dbg_1 "LFoo;.callee:()V" UnknownSource 0 dbg_0)
+      (const v1 1)
+      (new-instance "LFoo;")
+      (move-result-pseudo-object v2)
+      (invoke-direct (v2) "LFoo;.<init>:()V")
+      (move-object v5 v2)
+      (invoke-static (v5) "LFoo;.nested_callee_2:(LFoo;)V")
+      (const v4 0)
+      (if-eqz v1 :L1)
+      (:L0)
+      (const v2 2)
+      (.pos:dbg_2 "LBar;.caller:()V" UnknownSource 0)
+      (return-void)
+      (:L1)
+      (const v3 3)
+      (goto :L0)
+    )
+  )";
+
+  auto caller_actual = caller->get_code();
+  auto caller_expected = assembler::ircode_from_string(caller_expected_str);
+  EXPECT_CODE_EQ(caller_actual, caller_expected.get());
+
+  const auto& caller_inside_expected_str = R"(
+    (
+      (load-param-object v1)
+      (.pos:dbg_0 "LFoo;.caller_inside:()V" UnknownSource 0)
+      (move-object v3 v1)
+      (invoke-static (v3) "LFoo;.nested_callee_2:(LFoo;)V")
+      (const v2 0)
+      (const v0 0)
+      (return-void)
+    )
+  )";
+
+  auto caller_inside_actual = caller_inside->get_code();
+  auto caller_inside_expected =
+      assembler::ircode_from_string(caller_inside_expected_str);
+  EXPECT_CODE_EQ(caller_inside_actual, caller_inside_expected.get());
+
+  const auto& nested_callee_expected_str = R"(
+    (
+      (load-param-object v1)
+      (invoke-static (v1) "LFoo;.nested_callee_2:(LFoo;)V")
+      (const v0 0)
+      (return-void)
+    )
+  )";
+
+  auto nested_callee_actual = nested_callee->get_code();
+  auto nested_callee_expected =
+      assembler::ircode_from_string(nested_callee_expected_str);
+  EXPECT_CODE_EQ(nested_callee_actual, nested_callee_expected.get());
+}
