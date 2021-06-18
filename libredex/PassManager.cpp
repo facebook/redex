@@ -758,7 +758,8 @@ struct SourceBlocksStats {
   }
 };
 
-void track_source_block_coverage(const DexStoresVector& stores) {
+void track_source_block_coverage(PassManager& mgr,
+                                 const DexStoresVector& stores) {
   auto stats = walk::parallel::methods<SourceBlocksStats>(
       build_class_scope(stores), [](DexMethod* m) -> SourceBlocksStats {
         SourceBlocksStats ret{0u, 0u};
@@ -778,6 +779,9 @@ void track_source_block_coverage(const DexStoresVector& stores) {
         code->clear_cfg();
         return ret;
       });
+
+  mgr.set_metric("~blocks~count", stats.total_blocks);
+  mgr.set_metric("~blocks~with~source~blocks", stats.source_blocks_present);
 
   TRACE(INSTRUMENT, 4,
         "Total Basic Blocks = %d, Basic Blocks with SourceBlock = %d (%.1f%%)",
@@ -1109,8 +1113,8 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       break;
     }
 
-    if (traceEnabled(INSTRUMENT, 4)) {
-      track_source_block_coverage(stores);
+    if (assessor_config.run_after_each_pass) {
+      track_source_block_coverage(*this, stores);
     }
 
     m_current_pass_info = nullptr;
