@@ -172,6 +172,7 @@ void CFGInliner::inline_cfg(
   // copy the callee because we're going to move its contents into the caller
   ControlFlowGraph callee;
   callee_orig.deep_copy(&callee);
+  remove_ghost_exit_block(&callee);
 
   if (dead_blocks && !dead_blocks->empty()) {
     normalize_dead_blocks(callee_orig, *dead_blocks, &callee);
@@ -187,7 +188,6 @@ void CFGInliner::inline_cfg(
     }
   }
 
-  remove_ghost_exit_block(&callee);
   cleanup_callee_debug(&callee);
 
   TRACE(CFG, 3, "caller %s", SHOW(*caller));
