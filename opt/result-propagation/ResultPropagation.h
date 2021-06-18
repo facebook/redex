@@ -111,9 +111,11 @@ class ResultPropagation {
 
   ResultPropagation(const std::unordered_map<const DexMethod*, ParamIndex>&
                         methods_which_return_parameter,
-                    const ReturnParamResolver& resolver)
+                    const ReturnParamResolver& resolver,
+                    const std::unordered_set<DexMethod*>& callee_blocklist)
       : m_methods_which_return_parameter(methods_which_return_parameter),
-        m_resolver(resolver) {}
+        m_resolver(resolver),
+        m_callee_blocklist(callee_blocklist) {}
 
   const Stats& get_stats() const { return m_stats; }
 
@@ -128,6 +130,7 @@ class ResultPropagation {
   const ReturnParamResolver& m_resolver;
   mutable Stats m_stats;
   mutable MethodRefCache m_resolved_refs;
+  const std::unordered_set<DexMethod*>& m_callee_blocklist;
 };
 
 /*
@@ -142,9 +145,17 @@ class ResultPropagationPass : public Pass {
  public:
   ResultPropagationPass() : Pass("ResultPropagationPass") {}
 
+  void bind_config() override {
+    bind("callee_blocklist",
+         {},
+         m_callee_blocklist,
+         "Skip propagating results from selected callees.");
+  }
+
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
+  std::unordered_set<DexMethod*> m_callee_blocklist;
   /*
    * Via a fixed point computation that repeatedly inspects all methods,
    * figure out all methods which return an incoming parameter, taking into

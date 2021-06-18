@@ -473,6 +473,11 @@ void ResultPropagation::patch(PassManager& mgr, IRCode* code) {
       }
     }
 
+    if (m_callee_blocklist.count(resolve_method(
+            insn->get_method(), opcode_to_search(insn), m_resolved_refs))) {
+      continue;
+    }
+
     // rewrite instruction
     const auto source_reg = insn->src(*param_index);
     if (peek->dest() == source_reg) {
@@ -504,7 +509,8 @@ void ResultPropagationPass::run_pass(DexStoresVector& stores,
           return ResultPropagation::Stats();
         }
 
-        ResultPropagation rp(methods_which_return_parameter, resolver);
+        ResultPropagation rp(methods_which_return_parameter, resolver,
+                             m_callee_blocklist);
         rp.patch(mgr, code);
         return rp.get_stats();
       });
