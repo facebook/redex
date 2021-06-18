@@ -22,6 +22,8 @@ constexpr const char* RW_PROP_SIGNATURE =
 constexpr const char* KPROPERTY_ARRAY = "[Lkotlin/reflect/KProperty;";
 constexpr const char* KOTLIN_LAMBDA = "Lkotlin/jvm/internal/Lambda;";
 constexpr const char* DI_BASE = "Lcom/facebook/inject/AbstractLibraryModule;";
+constexpr const char* CONTINUATION_IMPL =
+    "Lkotlin/coroutines/jvm/internal/ContinuationImpl;";
 
 // Check if cls is from Kotlin source
 bool is_kotlin_class(DexClass* cls) {
@@ -55,6 +57,7 @@ void PrintKotlinStats::setup() {
   m_kotlin_null_assertions =
       kotlin_nullcheck_wrapper::get_kotlin_null_assertions();
   m_kotlin_lambdas_base = DexType::get_type(KOTLIN_LAMBDA);
+  m_kotlin_coroutin_continuation_base = DexType::get_type(CONTINUATION_IMPL);
   m_di_base = DexType::get_type(DI_BASE);
   m_instance = DexString::make_string("INSTANCE");
 }
@@ -77,9 +80,13 @@ void PrintKotlinStats::run_pass(DexStoresVector& stores,
                                 PassManager& mgr) {
   Scope scope = build_class_scope(stores);
   std::unordered_set<DexType*> delegate_types{
-      DexType::get_type(LAZY_SIGNATURE),   DexType::get_type(R_PROP_SIGNATURE),
-      DexType::get_type(W_PROP_SIGNATURE), DexType::get_type(RW_PROP_SIGNATURE),
       DexType::get_type(KPROPERTY_ARRAY),
+      DexType::get_type(R_PROP_SIGNATURE),
+      DexType::get_type(W_PROP_SIGNATURE),
+      DexType::get_type(RW_PROP_SIGNATURE),
+  };
+  std::unordered_set<DexType*> lazy_delegate_types{
+      DexType::get_type(LAZY_SIGNATURE),
   };
 
   // Handle methods
@@ -90,6 +97,9 @@ void PrintKotlinStats::run_pass(DexStoresVector& stores,
   // Count delegated properties
   walk::fields(scope, [&](DexField* field) {
     auto typ = field->get_type();
+    if (lazy_delegate_types.count(typ)) {
+      m_stats.kotlin_lazy_delegates++;
+    }
     if (delegate_types.count(typ)) {
       m_stats.kotlin_delegates++;
     }
@@ -112,6 +122,9 @@ PrintKotlinStats::Stats PrintKotlinStats::handle_class(DexClass* cls) {
     stats.kotlin_lambdas++;
     is_lambda = true;
   }
+  if (cls->get_super_class() == m_kotlin_coroutin_continuation_base) {
+    stats.kotlin_coroutine_continuation_base++;
+  }
 
   if (cls->get_super_class() == m_di_base) {
     stats.di_generated_class++;
@@ -128,6 +141,11 @@ PrintKotlinStats::Stats PrintKotlinStats::handle_class(DexClass* cls) {
   }
   if (cls->rstate.is_cls_kotlin()) {
     stats.kotlin_class++;
+    for (auto* method : cls->get_all_methods()) {
+      if (boost::algorithm::ends_with(method->get_name()->str(), "$default")) {
+        stats.kotlin_default_arg_method++;
+      }
+    }
     if (is_anonymous(cls->get_name()->str())) {
       stats.kotlin_anonymous_class++;
     }
@@ -184,6 +202,7 @@ void PrintKotlinStats::Stats::report(PassManager& mgr) const {
   mgr.incr_metric("java_public_param_objects", java_public_param_objects);
   mgr.incr_metric("kotlin_public_param_objects", kotlin_public_param_objects);
   mgr.incr_metric("no_of_delegates", kotlin_delegates);
+  mgr.incr_metric("no_of_lazy_delegates", kotlin_lazy_delegates);
   mgr.incr_metric("kotlin_lambdas", kotlin_lambdas);
   mgr.incr_metric("kotlin_non_capturing_lambda", kotlin_non_capturing_lambda);
   mgr.incr_metric("kotlin_classes_with_instance", kotlin_class_with_instance);
@@ -191,6 +210,9 @@ void PrintKotlinStats::Stats::report(PassManager& mgr) const {
   mgr.incr_metric("Kotlin_anonymous_classes", kotlin_anonymous_class);
   mgr.incr_metric("kotlin_companion_class", kotlin_companion_class);
   mgr.incr_metric("di_generated_class", di_generated_class);
+  mgr.incr_metric("kotlin_default_arg_method", kotlin_default_arg_method);
+  mgr.incr_metric("kotlin_coroutine_continuation_base",
+                  kotlin_coroutine_continuation_base);
 
   TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_null_check_insns = %zu",
         kotlin_null_check_insns);
@@ -200,6 +222,8 @@ void PrintKotlinStats::Stats::report(PassManager& mgr) const {
         kotlin_public_param_objects);
   TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: no_of_delegates = %zu",
         kotlin_delegates);
+  TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: no_of_lazy_delegates = %zu",
+        kotlin_lazy_delegates);
   TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_lambdas = %zu", kotlin_lambdas);
   TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_non_capturing_lambda = %zu",
         kotlin_non_capturing_lambda);
@@ -212,6 +236,11 @@ void PrintKotlinStats::Stats::report(PassManager& mgr) const {
         kotlin_companion_class);
   TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: di_generated_class = %zu",
         di_generated_class);
+  TRACE(KOTLIN_STATS, 1, "KOTLIN_STATS: kotlin_default_arg_method = %zu",
+        kotlin_default_arg_method);
+  TRACE(KOTLIN_STATS, 1,
+        "KOTLIN_STATS: kotlin_coroutine_continuation_base = %zu",
+        kotlin_coroutine_continuation_base);
 }
 
 static PrintKotlinStats s_pass;

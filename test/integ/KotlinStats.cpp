@@ -30,7 +30,8 @@ TEST_F(KotlinStatsTest, MethodHasNoEqDefined) {
   // LExample;.$$delegatedProperties:[Lkotlin/reflect/KProperty;
   // LFooDelagates;.lazyValue$delegate:Lkotlin/Lazy;
   // Lfoo;.unsafeLazy:Lkotlin/Lazy;
-  ASSERT_EQ(stats.kotlin_delegates, 3);
+  ASSERT_EQ(stats.kotlin_delegates, 1);
+  ASSERT_EQ(stats.kotlin_lazy_delegates, 2);
 
   // LKotlinLambdaInline$foo$1;
   // LFooDelagates$lazyValue$2;

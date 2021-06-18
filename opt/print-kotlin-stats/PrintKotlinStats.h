@@ -20,6 +20,7 @@ class PrintKotlinStats : public Pass {
     size_t java_public_param_objects{0};
     size_t kotlin_public_param_objects{0};
     size_t kotlin_delegates{0};
+    size_t kotlin_lazy_delegates{0};
     size_t kotlin_lambdas{0};
     size_t kotlin_non_capturing_lambda{0};
     size_t kotlin_class_with_instance{0};
@@ -27,6 +28,8 @@ class PrintKotlinStats : public Pass {
     size_t kotlin_anonymous_class{0};
     size_t kotlin_companion_class{0};
     size_t di_generated_class{0};
+    size_t kotlin_default_arg_method{0};
+    size_t kotlin_coroutine_continuation_base{0};
 
     Stats& operator+=(const Stats& that) {
       unknown_null_check_insns += that.unknown_null_check_insns;
@@ -34,6 +37,7 @@ class PrintKotlinStats : public Pass {
       java_public_param_objects += that.java_public_param_objects;
       kotlin_public_param_objects += that.kotlin_public_param_objects;
       kotlin_delegates += that.kotlin_delegates;
+      kotlin_lazy_delegates += that.kotlin_lazy_delegates;
       kotlin_lambdas += that.kotlin_lambdas;
       kotlin_non_capturing_lambda += that.kotlin_non_capturing_lambda;
       kotlin_class_with_instance += that.kotlin_class_with_instance;
@@ -41,6 +45,9 @@ class PrintKotlinStats : public Pass {
       kotlin_anonymous_class += that.kotlin_anonymous_class;
       kotlin_companion_class += that.kotlin_companion_class;
       di_generated_class += that.di_generated_class;
+      kotlin_default_arg_method += that.kotlin_default_arg_method;
+      kotlin_coroutine_continuation_base +=
+          that.kotlin_coroutine_continuation_base;
       return *this;
     }
 
@@ -59,6 +66,7 @@ class PrintKotlinStats : public Pass {
  private:
   std::unordered_set<DexMethodRef*> m_kotlin_null_assertions;
   DexType* m_kotlin_lambdas_base = nullptr;
+  DexType* m_kotlin_coroutin_continuation_base = nullptr;
   DexString* m_instance = nullptr;
   DexType* m_di_base = nullptr;
   Stats m_stats;
