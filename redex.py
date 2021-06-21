@@ -924,7 +924,7 @@ def _check_android_sdk(args):
             return
 
     # Check whether we can find and add one.
-    logging.warning(
+    logging.info(
         "No SDK jar found, attempting to find one. If the detection is wrong, add `--suppress-android-jar-check`."
     )
 
@@ -965,7 +965,7 @@ def _check_android_sdk_api(args):
             return
 
     # Nothing found, check whether we have files embedded
-    logging.warning("No android_sdk_api_XX_file parameters found!")
+    logging.info("No android_sdk_api_XX_file parameters found!")
     try:
         import generated_apilevels as ga
 
