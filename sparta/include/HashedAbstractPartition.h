@@ -20,7 +20,7 @@
 namespace sparta {
 
 /*
- * A partition is a mapping from a set of of labels to elements in an abstract
+ * A partition is a mapping from a set of labels to elements in an abstract
  * domain. It denotes a union of properties. A partition is Bottom iff all its
  * bindings are set to Bottom, and it is Top iff all its bindings are set to
  * Top.
