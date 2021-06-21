@@ -118,7 +118,8 @@ void normalize_source_blocks(ControlFlowGraph& cfg, float factor, size_t idx) {
 static void normalize_dead_blocks(
     const ControlFlowGraph& callee_orig,
     const std::unordered_set<cfg::Block*>& dead_blocks,
-    ControlFlowGraph* callee) {
+    ControlFlowGraph* callee,
+    const boost::optional<BlockId>& ghost_exit_block_id) {
   // not unordered_map because C++...
   std::map<std::vector<std::pair<cfg::Block*, DexType*>>, cfg::Block*>
       canonical_throw_nulls;
@@ -132,9 +133,16 @@ static void normalize_dead_blocks(
   };
   for (auto block : callee_orig.blocks()) {
     if (!dead_blocks.count(block)) {
+      // We keep blocks that are not dead
+      continue;
+    }
+    if (ghost_exit_block_id && *ghost_exit_block_id == block->id()) {
+      // The ghost exist block was removed from the callee graph earlier, but
+      // the callee_orig graph might still have it.
       continue;
     }
     auto callee_block = callee->get_block(block->id());
+    always_assert(callee_block != callee->entry_block());
     auto first_it = callee_block->get_first_insn();
     if (first_it != callee_block->end() &&
         opcode::is_move_result_pseudo(first_it->insn->opcode())) {
@@ -172,10 +180,11 @@ void CFGInliner::inline_cfg(
   // copy the callee because we're going to move its contents into the caller
   ControlFlowGraph callee;
   callee_orig.deep_copy(&callee);
-  remove_ghost_exit_block(&callee);
+  auto ghost_exit_block_id = remove_ghost_exit_block(&callee);
 
   if (dead_blocks && !dead_blocks->empty()) {
-    normalize_dead_blocks(callee_orig, *dead_blocks, &callee);
+    normalize_dead_blocks(callee_orig, *dead_blocks, &callee,
+                          ghost_exit_block_id);
   }
 
   {
@@ -304,12 +313,16 @@ void CFGInliner::cleanup_callee_debug(ControlFlowGraph* cfg) {
   }
 }
 
-void CFGInliner::remove_ghost_exit_block(ControlFlowGraph* cfg) {
-  auto ext = cfg->exit_block();
-  if (ext && cfg->get_pred_edge_of_type(ext, EDGE_GHOST)) {
-    cfg->remove_block(ext);
+boost::optional<BlockId> CFGInliner::remove_ghost_exit_block(
+    ControlFlowGraph* cfg) {
+  boost::optional<BlockId> ghost_exit_block_id;
+  auto exit_block = cfg->exit_block();
+  if (exit_block && cfg->get_pred_edge_of_type(exit_block, EDGE_GHOST)) {
+    ghost_exit_block_id = exit_block->id();
+    cfg->remove_block(exit_block);
     cfg->set_exit_block(nullptr);
   }
+  return ghost_exit_block_id;
 }
 
 /*
