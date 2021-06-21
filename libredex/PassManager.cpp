@@ -1113,7 +1113,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       break;
     }
 
-    if (assessor_config.run_after_each_pass) {
+    if (run_assessor) {
       track_source_block_coverage(*this, stores);
     }
 
