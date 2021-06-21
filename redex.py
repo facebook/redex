@@ -921,7 +921,7 @@ def _check_android_sdk(args):
             return
 
     # Check whether we can find and add one.
-    logging.warning(
+    logging.info(
         "No SDK jar found, attempting to find one. If the detection is wrong, add `--suppress-android-jar-check`."
     )
 
@@ -960,7 +960,7 @@ def _has_config_val(args, path):
             json_obj = json.load(f)
         for item in path:
             if item not in json_obj:
-                logging.error("Did not find %s in %s", item, json_obj)
+                logging.debug("Did not find %s in %s", item, json_obj)
                 return False
             json_obj = json_obj[item]
         return True
@@ -979,7 +979,7 @@ def _check_shrinker_heuristics(args):
         return
 
     # Nothing found, check whether we have files embedded
-    logging.warning("No shrinking heuristic found, searching for default!")
+    logging.info("No shrinking heuristic found, searching for default.")
     try:
         from generated_shrinker_regalloc_heuristics import SHRINKER_HEURISTICS_FILE
 
@@ -992,7 +992,7 @@ def _check_shrinker_heuristics(args):
         arg = arg_template + filename
         args.passthru.append(arg)
     except ImportError:
-        logging.warning("No embedded files, please add manually!")
+        logging.info("No embedded files, please add manually!")
 
 
 def _check_android_sdk_api(args):
@@ -1003,7 +1003,7 @@ def _check_android_sdk_api(args):
             return
 
     # Nothing found, check whether we have files embedded
-    logging.warning("No android_sdk_api_XX_file parameters found!")
+    logging.info("No android_sdk_api_XX_file parameters found.")
     try:
         import generated_apilevels as ga
 
