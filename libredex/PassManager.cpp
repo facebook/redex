@@ -705,9 +705,6 @@ class AfterPassSizes {
       std::cerr << "After-pass-size to " << tmp_dir << std::endl;
     }
     conf->set_outdir(tmp_dir);
-    // Gotta ensure "meta" exists.
-    auto meta_path = boost::filesystem::path(tmp_dir) / "meta";
-    boost::filesystem::create_directory(meta_path);
 
     // Close output. No noise. (Maybe make this configurable)
     if (!m_debug) {

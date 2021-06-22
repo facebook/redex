@@ -7,6 +7,7 @@
 
 #include "ConfigFiles.h"
 
+#include <boost/filesystem.hpp>
 #include <fstream>
 #include <iostream>
 #include <json/json.h>
@@ -308,4 +309,11 @@ const ProguardMap& ConfigFiles::get_proguard_map() const {
 
 bool ConfigFiles::force_single_dex() const {
   return m_json.get("force_single_dex", false);
+}
+
+void ConfigFiles::set_outdir(const std::string& new_outdir) {
+  // Gotta ensure "meta" exists.
+  auto meta_path = boost::filesystem::path(new_outdir) / "meta";
+  boost::filesystem::create_directory(meta_path);
+  outdir = new_outdir;
 }
