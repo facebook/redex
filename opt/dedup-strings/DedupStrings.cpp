@@ -51,7 +51,9 @@ constexpr const char* METRIC_EXCLUDED_OUT_OF_FACTORY_METHODS_STRINGS =
     "num_excluded_out_of_factory_methods_strings";
 } // namespace
 
-void DedupStrings::run(DexStoresVector& stores) {
+void DedupStrings::run(
+    DexStoresVector& stores,
+    std::unique_ptr<ab_test::ABExperimentContext>& ab_experiment_context) {
   // For now, we are only trying to optimize strings in the first store.
   // (It should be possible to generalize in the future.)
   DexClassesVector& dexen = stores[0].get_dexen();
@@ -91,7 +93,8 @@ void DedupStrings::run(DexStoresVector& stores) {
 
   // Rewrite const-string instructions
   rewrite_const_string_instructions(scope, methods_to_dex,
-                                    perf_sensitive_methods, strings_to_dedup);
+                                    perf_sensitive_methods, strings_to_dedup,
+                                    ab_experiment_context);
 }
 
 std::unordered_set<const DexMethod*> DedupStrings::get_perf_sensitive_methods(
@@ -369,7 +372,7 @@ DedupStrings::get_strings_to_dedup(
         // We could try a bit harder to determine the optimal set of hosts,
         // but the best fix in this case is probably to raise the limit
         TRACE(DS, 4,
-              "[dedup strings] non perf sensitive string: {%s} dex #%u cannot "
+              "[dedup strings] non perf sensitive string: {%s} dex #%zu cannot "
               "be used as dedup strings max factory methods limit reached",
               SHOW(s), dexnr);
         ++m_stats.excluded_out_of_factory_methods_strings;
@@ -385,14 +388,14 @@ DedupStrings::get_strings_to_dedup(
       const auto size_reduction = get_size_reduction(s, dexnr, loads);
       if (!host_info || size_reduction < host_info->size_reduction) {
         TRACE(DS, 4,
-              "[dedup strings] non perf sensitive string: {%s} dex #%u can "
-              "host with size reduction %u",
+              "[dedup strings] non perf sensitive string: {%s} dex #%zu can "
+              "host with size reduction %zu",
               SHOW(s), dexnr, size_reduction);
         host_info = (HostInfo){dexnr, size_reduction};
       } else {
         TRACE(DS, 4,
-              "[dedup strings] non perf sensitive string: {%s} dex #%u won't "
-              "host due insufficient size reduction %u",
+              "[dedup strings] non perf sensitive string: {%s} dex #%zu won't "
+              "host due insufficient size reduction %zu",
               SHOW(s), dexnr, size_reduction);
       }
     }
@@ -423,8 +426,8 @@ DedupStrings::get_strings_to_dedup(
       if (non_load_strings[dexnr].count(s) != 0) {
         always_assert(size_reduction == 0);
         TRACE(DS, 4,
-              "[dedup strings] non perf sensitive string: {%s}*%u is a "
-              "non-load string in non-hosting dex #%u",
+              "[dedup strings] non perf sensitive string: {%s}*%zu is a "
+              "non-load string in non-hosting dex #%zu",
               SHOW(s), loads, dexnr);
         ++m_stats.excluded_duplicate_non_load_strings;
         // No point in rewriting const-string instructions for this string
@@ -446,7 +449,7 @@ DedupStrings::get_strings_to_dedup(
     // this particular string
     if (total_size_reduction < hosting_code_size_increase) {
       TRACE(DS, 3,
-            "[dedup strings] non perf sensitive string: {%s} ignored as %u < "
+            "[dedup strings] non perf sensitive string: {%s} ignored as %zu < "
             "%u",
             SHOW(s), total_size_reduction, hosting_code_size_increase);
       continue;
@@ -476,14 +479,13 @@ DedupStrings::get_strings_to_dedup(
     strings_to_dedup.emplace(s, std::move(dedup_string_info));
     strings_in_dexes[hosting_dexnr].push_back(s);
 
-    TRACE(
-        DS, 3,
-        "[dedup strings] non perf sensitive string: {%s} is deduped in %u "
-        "dexes, saving %u string table bytes, transforming %u string loads, %u "
-        "expected size reduction",
-        SHOW(s), dexes_to_dedup.size(),
-        (4 + entry_size) * dexes_to_dedup.size(), duplicate_string_loads,
-        total_size_reduction - hosting_code_size_increase);
+    TRACE(DS, 3,
+          "[dedup strings] non perf sensitive string: {%s} is deduped in %zu "
+          "dexes, saving %zu string table bytes, transforming %zu string "
+          "loads, %zu expected size reduction",
+          SHOW(s), dexes_to_dedup.size(),
+          (4 + entry_size) * dexes_to_dedup.size(), duplicate_string_loads,
+          total_size_reduction - hosting_code_size_increase);
   }
 
   // Order strings to give more often used strings smaller indices;
@@ -509,9 +511,10 @@ DedupStrings::get_strings_to_dedup(
       auto const s = strings[i];
       auto& info = strings_to_dedup[s];
 
-      TRACE(DS, 2,
-            "[dedup strings] hosting dex %u index %u dup-loads %u string {%s}",
-            dexnr, i, info.duplicate_string_loads, SHOW(s));
+      TRACE(
+          DS, 2,
+          "[dedup strings] hosting dex %zu index %u dup-loads %zu string {%s}",
+          dexnr, i, info.duplicate_string_loads, SHOW(s));
 
       redex_assert(info.index == 0xFFFFFFFF);
       redex_assert(info.const_string_method == nullptr);
@@ -531,11 +534,12 @@ void DedupStrings::rewrite_const_string_instructions(
     const std::unordered_map<const DexMethod*, size_t>& methods_to_dex,
     const std::unordered_set<const DexMethod*>& perf_sensitive_methods,
     const std::unordered_map<DexString*, DedupStrings::DedupStringInfo>&
-        strings_to_dedup) {
+        strings_to_dedup,
+    std::unique_ptr<ab_test::ABExperimentContext>& ab_experiment_context) {
 
   walk::parallel::code(
-      scope, [&methods_to_dex, &strings_to_dedup,
-              &perf_sensitive_methods](DexMethod* method, IRCode& code) {
+      scope, [&methods_to_dex, &strings_to_dedup, &perf_sensitive_methods,
+              &ab_experiment_context](DexMethod* method, IRCode& code) {
         if (perf_sensitive_methods.count(method) != 0) {
           // We don't rewrite methods in the primary dex or other perf-sensitive
           // methods.
@@ -575,10 +579,8 @@ void DedupStrings::rewrite_const_string_instructions(
           return;
         }
 
+        ab_experiment_context->try_register_method(method);
         // Second, we actually rewrite them.
-        auto exp = ab_test::ABExperimentContext::create(cfg.get(), method,
-                                                        "dedup_strings");
-
         cfg::CFGMutation cfg_mut(*cfg);
 
         // From
@@ -624,7 +626,6 @@ void DedupStrings::rewrite_const_string_instructions(
           cfg_mut.replace(const_string_it, replacements);
         }
         cfg_mut.flush();
-        exp->flush();
       });
 }
 
@@ -681,21 +682,27 @@ void DedupStringsPass::bind_config() {
 void DedupStringsPass::run_pass(DexStoresVector& stores,
                                 ConfigFiles& conf,
                                 PassManager& mgr) {
+  auto ab_experiment_context =
+      ab_test::ABExperimentContext::create("dedup_strings");
+  if (ab_experiment_context->use_control()) {
+    return;
+  }
+
   DedupStrings ds(m_max_factory_methods,
                   m_method_profiles_appear_percent_threshold,
                   conf.get_method_profiles());
-  ds.run(stores);
+  ds.run(stores, ab_experiment_context);
   const auto stats = ds.get_stats();
   mgr.incr_metric(METRIC_PERF_SENSITIVE_STRINGS, stats.perf_sensitive_strings);
   mgr.incr_metric(METRIC_NON_PERF_SENSITIVE_STRINGS,
                   stats.non_perf_sensitive_strings);
-  TRACE(DS, 1, "[dedup strings] perf sensitive strings: %u vs %u",
+  TRACE(DS, 1, "[dedup strings] perf sensitive strings: %zu vs %zu",
         stats.perf_sensitive_strings, stats.non_perf_sensitive_strings);
 
   mgr.incr_metric(METRIC_PERF_SENSITIVE_METHODS, stats.perf_sensitive_methods);
   mgr.incr_metric(METRIC_NON_PERF_SENSITIVE_METHODS,
                   stats.non_perf_sensitive_methods);
-  TRACE(DS, 1, "[dedup strings] perf sensitive methods: %u vs %u",
+  TRACE(DS, 1, "[dedup strings] perf sensitive methods: %zu vs %zu",
         stats.perf_sensitive_methods, stats.non_perf_sensitive_methods);
 
   mgr.incr_metric(METRIC_DUPLICATE_STRINGS, stats.duplicate_strings);
@@ -710,15 +717,16 @@ void DedupStringsPass::run_pass(DexStoresVector& stores,
   mgr.incr_metric(METRIC_EXCLUDED_OUT_OF_FACTORY_METHODS_STRINGS,
                   stats.excluded_out_of_factory_methods_strings);
   TRACE(DS, 1,
-        "[dedup strings] duplicate strings: %u, size: %u, loads: %u; "
-        "expected size reduction: %u; "
-        "dexes without host: %u; "
-        "excluded duplicate non-load strings: %u; factory methods: %u; "
-        "excluded out of factory methods strings: %u",
+        "[dedup strings] duplicate strings: %zu, size: %zu, loads: %zu; "
+        "expected size reduction: %zu; "
+        "dexes without host: %zu; "
+        "excluded duplicate non-load strings: %zu; factory methods: %zu; "
+        "excluded out of factory methods strings: %zu",
         stats.duplicate_strings, stats.duplicate_strings_size,
         stats.duplicate_string_loads, stats.expected_size_reduction,
         stats.dexes_without_host_cls, stats.excluded_duplicate_non_load_strings,
         stats.factory_methods, stats.excluded_out_of_factory_methods_strings);
+  ab_experiment_context->flush();
 }
 
 static DedupStringsPass s_pass;

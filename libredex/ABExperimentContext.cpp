@@ -12,8 +12,8 @@
 using namespace ab_test;
 
 std::unique_ptr<ABExperimentContext> ABExperimentContext::create(
-    cfg::ControlFlowGraph* cfg, DexMethod* m, const std::string& exp_name) {
-  return std::make_unique<ABExperimentContextImpl>(cfg, m, exp_name);
+    const std::string& exp_name) {
+  return std::make_unique<ABExperimentContextImpl>(exp_name);
 }
 
 void ABExperimentContext::parse_experiments_states(

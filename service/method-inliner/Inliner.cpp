@@ -10,7 +10,6 @@
 #include <cstdint>
 #include <utility>
 
-#include "ABExperimentContext.h"
 #include "ApiLevelChecker.h"
 #include "CFGInliner.h"
 #include "ConcurrentContainers.h"
@@ -829,17 +828,6 @@ void MultiMethodInliner::inline_inlinables(
   }
   size_t calls_not_inlinable{0}, calls_not_inlined{0};
 
-  std::unique_ptr<ab_test::ABExperimentContext> exp;
-  bool caller_had_editable_cfg = caller->editable_cfg_built();
-
-  if (for_speed()) {
-    if (!caller_had_editable_cfg) {
-      caller->build_cfg();
-    }
-    exp = ab_test::ABExperimentContext::create(&caller->cfg(), caller_method,
-                                               "pgi_v1");
-  }
-
   size_t intermediate_shrinkings{0};
   // We only try intermediate shrinking when using the cfg-inliner, as it will
   // invalidate irlist iterators, which are used with the legacy
@@ -848,13 +836,6 @@ void MultiMethodInliner::inline_inlinables(
       (m_config.use_cfg_inliner && m_config.intermediate_shrinking)
           ? 0
           : std::numeric_limits<size_t>::max()};
-  if (exp) {
-    // Intermediate shrinking rebuilds the cfg, which is not currently supported
-    // by the AB experiment context. Thus, when an experiment is active, we
-    // effectively disable i
-    last_intermediate_shrinking_inlined_callees =
-        std::numeric_limits<size_t>::max();
-  }
   for (const auto& inlinable : ordered_inlinables) {
     auto callee_method = inlinable.callee;
     auto callee = callee_method->get_code();
@@ -952,14 +933,6 @@ void MultiMethodInliner::inline_inlinables(
 
   for (IRCode* code : need_deconstruct) {
     code->clear_cfg();
-  }
-
-  if (exp != nullptr) {
-    caller->cfg().simplify(); // Remove unreachable code.
-    exp->flush();
-    if (caller_had_editable_cfg) {
-      caller->build_cfg();
-    }
   }
 
   info.calls_inlined += inlined_callees.size();
@@ -1361,7 +1334,7 @@ static size_t get_inlined_cost(IRInstruction* insn) {
       }
     }
   }
-  TRACE(INLINE, 5, "  %u: %s", cost, SHOW(insn));
+  TRACE(INLINE, 5, "  %zu: %s", cost, SHOW(insn));
   return cost;
 }
 
@@ -1748,7 +1721,7 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
 
   size_t invoke_cost = get_invoke_cost(callee);
   TRACE(INLINE, 3,
-        "[too_many_callers] %u calls to %s; cost: inlined %u, invoke %u",
+        "[too_many_callers] %zu calls to %s; cost: inlined %zu, invoke %zu",
         caller_count, SHOW(callee), inlined_cost.code, invoke_cost);
 
   // 3. Assess whether we should not inline

@@ -2418,8 +2418,7 @@ bool outline_candidate(
     DexState* dex_state,
     HostClassSelector* host_class_selector,
     OutlinedMethodCreator* outlined_method_creator,
-    ConcurrentMap<DexMethod*, std::shared_ptr<ab_test::ABExperimentContext>>*
-        experiments_contexts) {
+    std::unique_ptr<ab_test::ABExperimentContext>& ab_experiment_context) {
   // Before attempting to create or reuse an outlined method that hasn't been
   // referenced in this dex before, we'll make sure that all the involved
   // type refs can be added to the dex. We collect those type refs.
@@ -2478,11 +2477,9 @@ bool outline_candidate(
   for (auto& p : ci.methods) {
     auto method = p.first;
     auto& cfg = method->get_code()->cfg();
-    if (experiments_contexts->count(method) == 0) {
-      auto exp =
-          ab_test::ABExperimentContext::create(&cfg, method, "outliner_v1");
-      experiments_contexts->insert({method, std::move(exp)});
-    }
+
+    ab_experiment_context->try_register_method(method);
+
     TRACE(ISO, 7, "[invoke sequence outliner] before outlined %s from %s\n%s",
           SHOW(outlined_method), SHOW(method), SHOW(cfg));
     for (auto& cml : p.second) {
@@ -2507,8 +2504,7 @@ static NewlyOutlinedMethods outline(
         candidate_ids_by_methods,
     ReusableOutlinedMethods* reusable_outlined_methods,
     size_t iteration,
-    ConcurrentMap<DexMethod*, std::shared_ptr<ab_test::ABExperimentContext>>*
-        experiments_contexts) {
+    std::unique_ptr<ab_test::ABExperimentContext>& ab_experiment_context) {
   MethodNameGenerator method_name_generator(mgr, iteration);
   OutlinedMethodCreator outlined_method_creator(config, mgr,
                                                 method_name_generator);
@@ -2573,7 +2569,7 @@ static NewlyOutlinedMethods outline(
     if (outline_candidate(cwi.candidate, cwi.info, reusable_outlined_methods,
                           &newly_outlined_methods, &dex_state,
                           &host_class_selector, &outlined_method_creator,
-                          experiments_contexts)) {
+                          ab_experiment_context)) {
       dex_state.insert_method_ref();
     } else {
       TRACE(ISO, 3, "[invoke sequence outliner] could not ouline");
@@ -2812,29 +2808,19 @@ void reorder_with_method_profiles(
 
 static size_t clear_cfgs(
     const Scope& scope,
-    const std::unordered_set<DexMethod*>& sufficiently_hot_methods,
-    ConcurrentMap<DexMethod*, std::shared_ptr<ab_test::ABExperimentContext>>*
-        experiments_contexts) {
+    const std::unordered_set<DexMethod*>& sufficiently_hot_methods) {
   std::atomic<size_t> methods{0};
-  walk::parallel::code(
-      scope, [&sufficiently_hot_methods, &methods,
-              experiments_contexts](DexMethod* method, IRCode& code) {
-        if (!can_outline_from_method(method, sufficiently_hot_methods)) {
-          return;
-        }
+  walk::parallel::code(scope, [&sufficiently_hot_methods,
+                               &methods](DexMethod* method, IRCode& code) {
+    if (!can_outline_from_method(method, sufficiently_hot_methods)) {
+      return;
+    }
 
-        auto exp = experiments_contexts->get(method, nullptr);
-        if (exp) {
-          exp->flush();
-          experiments_contexts->erase(method);
-        } else {
-          code.clear_cfg();
-        }
+    code.clear_cfg();
 
-        methods++;
-      });
+    methods++;
+  });
 
-  always_assert(experiments_contexts->size() == 0);
   return (size_t)methods;
 }
 
@@ -3009,6 +2995,12 @@ void InstructionSequenceOutliner::bind_config() {
 void InstructionSequenceOutliner::run_pass(DexStoresVector& stores,
                                            ConfigFiles& config,
                                            PassManager& mgr) {
+  auto ab_experiment_context =
+      ab_test::ABExperimentContext::create("outliner_v1");
+  if (ab_experiment_context->use_control()) {
+    return;
+  }
+
   int32_t min_sdk = mgr.get_redex_options().min_sdk;
   mgr.incr_metric("min_sdk", min_sdk);
   TRACE(ISO, 2, "[invoke sequence outliner] min_sdk: %d", min_sdk);
@@ -3097,19 +3089,16 @@ void InstructionSequenceOutliner::run_pass(DexStoresVector& stores,
       // TODO: Merge candidates that are equivalent except that one returns
       // something and the other doesn't. Affects around 1.5% of candidates.
       DexState dex_state(mgr, dex, dex_id++, reserved_trefs, reserved_mrefs);
-      ConcurrentMap<DexMethod*, std::shared_ptr<ab_test::ABExperimentContext>>
-          experiments_contexts;
       auto newly_outlined_methods =
           outline(m_config, mgr, dex_state, min_sdk, &candidates_with_infos,
                   &candidate_ids_by_methods, reusable_outlined_methods.get(),
-                  iteration, &experiments_contexts);
+                  iteration, ab_experiment_context);
 
       reorder_with_method_profiles(m_config, mgr, dex, methods_global_order,
                                    newly_outlined_methods);
       auto affected_methods = count_affected_methods(newly_outlined_methods);
 
-      auto total_methods =
-          clear_cfgs(dex, sufficiently_hot_methods, &experiments_contexts);
+      auto total_methods = clear_cfgs(dex, sufficiently_hot_methods);
       if (total_methods > 0) {
         mgr.incr_metric(std::string("percent_methods_affected_in_Dex") +
                             std::to_string(dex_id),
@@ -3117,6 +3106,7 @@ void InstructionSequenceOutliner::run_pass(DexStoresVector& stores,
       }
     }
   }
+  ab_experiment_context->flush();
 }
 
 static InstructionSequenceOutliner s_pass;
