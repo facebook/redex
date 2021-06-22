@@ -86,6 +86,10 @@ class RemoveUnusedFields final {
       return true;
     }
 
+    if (m_config.allowlist_types.count(t)) {
+      return true;
+    }
+
     // We don't have to worry about lifetimes of harmless objects
     if (m_vestigial_objects_written_fields.count(field)) {
       return true;

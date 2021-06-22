@@ -36,6 +36,7 @@ struct Config {
   bool remove_vestigial_objects_written_fields;
   std::unordered_set<const DexType*> blocklist_types;
   std::unordered_set<const DexType*> blocklist_classes;
+  std::unordered_set<const DexType*> allowlist_types;
 };
 
 class PassImpl : public Pass {
@@ -59,6 +60,11 @@ class PassImpl : public Pass {
          {},
          m_config.blocklist_classes,
          "Fields in these classes will never be removed.");
+    bind("allowlist_types",
+         {},
+         m_config.allowlist_types,
+         "Fields with these types that are otherwise eligible to be removed "
+         "will be removed regardless of their lifetime dependencies.");
 
     // These options make it a bit more convenient to bisect the list of removed
     // fields to isolate one that's causing issues.
