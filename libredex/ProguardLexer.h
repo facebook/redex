@@ -68,6 +68,7 @@ enum class TokenType {
   // Input/Output Options
   include,
   basedirectory,
+  dump,
   injars,
   outjars,
   libraryjars,
