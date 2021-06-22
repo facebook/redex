@@ -54,7 +54,7 @@ TEST(ProguardLexerTest, assortment) {
       "<init>(...);\n"
       "-keep class *#-keepnames class *\n"
       "-dontobfuscate\n"
-      "-dump some/path/dumpя.txt";
+      "-dump some/path/dumpя.txt\n";
   std::vector<std::pair<unsigned, TokenType>> expected = {
       {1, TokenType::openCurlyBracket},
       {1, TokenType::closeCurlyBracket},
@@ -146,7 +146,9 @@ TEST(ProguardLexerTest, assortment) {
       {22, TokenType::classToken},
       {22, TokenType::identifier},
       {23, TokenType::dontobfuscate},
-      {24, TokenType::eof_token},
+      {24, TokenType::dump},
+      {24, TokenType::filepath},
+      {25, TokenType::eof_token},
   };
   std::vector<Token> tokens = lex(s);
   EXPECT_EQ(tokens.size(), expected.size());
