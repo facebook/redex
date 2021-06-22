@@ -13,8 +13,10 @@
 #include "IRCode.h"
 #include "ObjectInlinePlugin.h"
 #include "RedexTest.h"
+#include "ScopedCFG.h"
 #include "Show.h"
 
+using namespace object_inliner_plugin;
 cfg::InstructionIterator find_instruction_matching(cfg::ControlFlowGraph* cfg,
                                                    IRInstruction* i) {
   auto iterable = cfg::InstructionIterable(*cfg);
@@ -58,7 +60,8 @@ void test_object_inliner(
     const std::vector<std::pair<std::string, uint16_t>>& fields,
     const std::vector<std::pair<std::string, std::string>>& swap_fields,
     const std::vector<uint16_t>& srcs,
-    const std::string& expected_str) {
+    const std::string& expected_str,
+    boost::optional<const std::string> callee_ctor_str = boost::none) {
   DexType* callee_type = DexType::make_type(callee_class.c_str());
   DexType* caller_type = DexType::make_type(caller_class.c_str());
 
@@ -78,45 +81,68 @@ void test_object_inliner(
     field_swap_refs.emplace(callee_field, caller_field);
   }
 
-  cic::FieldSetMap field_map = {};
+  FieldSetMap field_map = {};
 
   auto field_b =
       DexField::make_field("LBaz;.wide:I")->make_concrete(ACC_PUBLIC);
+  std::string final_cfg;
 
   auto caller_code = assembler::ircode_from_string(caller_str);
-  caller_code->build_cfg(true);
-  auto& caller = caller_code->cfg();
+  {
+    ScopedCFG caller(caller_code.get());
 
-  auto callee_code = assembler::ircode_from_string(callee_str);
-  callee_code->build_cfg(true);
-  auto& callee = callee_code->cfg();
+    auto callee_code = assembler::ircode_from_string(callee_str);
+    callee_code->build_cfg(true);
+    auto& callee = callee_code->cfg();
 
-  auto instr_code = assembler::ircode_from_string(insert_before_instr);
-  auto insn = instr_code->begin()->insn;
+    for (size_t i = 0; i < fields.size(); i++) {
+      auto field = field_refs[i];
+      auto field_data = fields[i];
+      field_map.emplace(
+          field,
+          (FieldSet){
+              {field_data.second, {find_put(caller.get(), field)}},
+          });
+    }
 
-  for (size_t i = 0; i < fields.size(); i++) {
-    auto field = field_refs[i];
-    auto field_data = fields[i];
-    field_map.emplace(
-        field,
-        (cic::FieldSet){{{field_data.second, {find_put(&caller, field)}}},
-                        cic::AllPaths,
-                        cic::OneReg});
+    auto instr_code = assembler::ircode_from_string(insert_before_instr);
+    auto insn = instr_code->begin()->insn;
+    auto it = find_instruction_matching(caller.get(), insn);
+
+    if (callee_ctor_str) {
+      auto callee_ctor_code = assembler::ircode_from_string(*callee_ctor_str);
+      ScopedCFG callee_ctor(callee_ctor_code.get());
+      for (size_t i = 0; i < fields.size(); i++) {
+        auto field = field_refs[i];
+        auto field_data = fields[i];
+        field_map.emplace(
+            field,
+            (FieldSet){
+                {field_data.second, {find_put(callee_ctor.get(), field)}},
+            });
+      }
+
+      ObjectInlinePlugin plugin = ObjectInlinePlugin(
+          field_map, field_swap_refs, {0}, result_reg, 0, callee_type);
+      cfg::CFGInliner::inline_cfg(caller.get(), it, *callee_ctor,
+                                  caller->get_registers_size(), plugin);
+      insn = instr_code->begin()->insn;
+      it = find_instruction_matching(caller.get(), insn);
+      cfg::CFGInliner::inline_cfg(caller.get(), it, callee,
+                                  caller->get_registers_size(), plugin);
+    } else {
+      object_inliner_plugin::ObjectInlinePlugin plugin =
+          object_inliner_plugin::ObjectInlinePlugin(
+              field_map, field_swap_refs, {0}, result_reg, 0, callee_type);
+      cfg::CFGInliner::inline_cfg(caller.get(), it, callee,
+                                  caller->get_registers_size(), plugin);
+    }
+
+    caller->simplify();
+    final_cfg = show(*caller);
   }
-
-  ObjectInlinePlugin plugin = ObjectInlinePlugin(
-      field_map, field_swap_refs, {0}, result_reg, 0, 0, callee_type);
-
-  cfg::CFGInliner::inline_cfg(&caller, find_instruction_matching(&caller, insn),
-                              callee,
-
-                              caller.get_registers_size(), plugin);
-
-  auto expected_code = assembler::ircode_from_string(expected_str);
-
-  caller.simplify();
-  const std::string& final_cfg = show(caller);
   caller_code->clear_cfg();
+  auto expected_code = assembler::ircode_from_string(expected_str);
 
   EXPECT_EQ(assembler::to_string(expected_code.get()),
             assembler::to_string(caller_code.get()))
@@ -361,4 +387,96 @@ TEST_F(ObjectInlinerTest, class_inline_with_fields_and_swaps) {
                       {{".nonprop:I", ".nonprop:I"}},
                       {},
                       expected_str);
+}
+
+TEST_F(ObjectInlinerTest, full_class_inline_with_fields_and_swaps) {
+  const auto& caller_str = R"(
+    (
+    (load-param v0)
+    (load-param v1)
+    (new-instance "LFoo;")
+    (move-result-pseudo-object v2)
+    (iput v1 v2 "LFoo;.prop:I")
+    (new-instance "LBar;")
+    (move-result-pseudo-object v3)
+    (.pos:0 "LBar;.fumble:()V" "Bar" "22")
+    (invoke-virtual (v3 v2) "LBar;.child:(LFoo;)LBaz;")
+    (return v3)
+    )
+  )";
+
+  // Constructor
+  const std::string callee_ctor_str = R"(
+    ( (load-param v0)
+      (const v2 0)
+      (iput v2 v0 "LFoo;.nonprop:I")
+      (const v3 1)
+      (iput v3 v0 "LFoo;.prop:I")
+      (return-void)
+    )
+  )";
+
+  const auto& callee_str = R"(
+    ( (load-param v0)
+      (.pos:1 "LFoo;.create:()V" "Foo" "23")
+      (iget v0 "LFoo;.prop:I")
+      (move-result-pseudo v1)
+      (iget v0 "LFoo;.nonprop:I")
+      (move-result-pseudo v3)
+      (new-instance "LBaz;")
+      (move-result-pseudo-object v2)
+      (iput v1 v2 "LBaz;.wide:I")
+      (iput v1 v3 "LBaz;.push:I")
+      (return v2)
+    )
+  )";
+
+  const auto& expected_str = R"(
+    (
+      ;; "LFoo;.prop:I" gets v4. All writes and reads gets mapped to v4
+      (load-param v0)
+      (load-param v1)
+      (const v4 0)
+      (new-instance "LFoo;")
+      (move-result-pseudo-object v2)
+      (move v4 v1)
+      (new-instance "LBar;")
+      (move-result-pseudo-object v3)
+      (.pos:dbg_0 "LBar;.fumble:()V" Bar 22)
+      (nop)
+
+      ;; Constructor
+      (move v5 v0)
+      (const v7 0)
+      (iput v7 v0 "LBoo;.newnonprop:I")
+      (const v8 1)
+      (move v4 v8)
+
+      ;; Other callee
+      (move v9 v0)
+      (.pos:1 "LFoo;.create:()V" "Foo" "23" dbg_0)
+      (move v10 v4)
+      (iget v0 "LBoo;.newnonprop:I")
+      (move-result-pseudo v12)
+      (new-instance "LBaz;")
+      (move-result-pseudo-object v11)
+      (iput v10 v11 "LBaz;.wide:I")
+      (iput v10 v12 "LBaz;.push:I")
+      (move v2 v11)
+      (invoke-virtual (v3 v2) "LBar;.child:(LFoo;)LBaz;")
+      (return v3)
+    )
+  )";
+  test_object_inliner(caller_str,
+                      callee_str,
+                      "LFoo;",
+                      "LBoo;",
+                      "((invoke-virtual (v3 v2) \"LBar;.child:(LFoo;)LBaz;\"))",
+                      2,
+                      0,
+                      {{".prop:I", 1}},
+                      {{".nonprop:I", ".newnonprop:I"}},
+                      {},
+                      expected_str,
+                      callee_ctor_str);
 }

@@ -57,12 +57,34 @@ struct result_t;
  * supplied by an instruction matching the constraint at `l`, subject to the
  * modifiers imposed by the `flags` (see "Flags", below).
  *
- * A reference to the target location is returned, to allow calls to `src` to
- * be chained:
+ *   location_t
+ *   location_t::srcs_from(src_index_t lb, location_t l, flag_t flags)
  *
- *   auto x = f.insn(...);
- *   auto y = f.insn(...);
- *   auto z = f.insn(...).src(0, x).src(1, y);
+ * is a variant of `srcs` that introduces a flow constraint for all operands
+ * with indices greater than or equal to `lb`.
+ *
+ * A reference to the target location is returned, to allow calls to `src` and
+ * `srcs_from` to be chained:
+ *
+ *   auto a = f.insn(...)
+ *       .src(2, z)
+ *       .src(0, x)
+ *       .src(2, y)
+ *       .srcs_from(4, z)
+ *       .srcs_from(1, w)
+ *
+ * Flow constraints have a precedence order.  Constraints on individual operands
+ * have highest precedence, followed by range constraints introduced by
+ * `srcs_from`, in order of distance from the operand in question.  In the
+ * chaining example above, instructions satisfying `a` will have operands
+ * satisfying the following constraints:
+ *
+ *   0 1 2 3 4 5 ...
+ *   x w y w z z ...
+ *
+ * The order in which constraints are introduced only affects precedence for
+ * two constraints impacting precisely the same set of operands, in which case
+ * the later constraint takes precedence.
  *
  * It is not possible to share locations that originate from different `flow_t`
  * instances.  This will throw an exception at runtime.
@@ -130,10 +152,13 @@ struct result_t;
  * A predicate is applied over a CFG using `find`:
  *
  *   result_t flow_t::find(ControlFlowGraph& cfg, location_t l)
+ *   result_t flow_t::find(ControlFlowGraph& cfg,
+ *                         std::initializer_list<location_t> ls)
  *
  * The result is a sub-graph of the data-flow graph reachable by following edges
- * matching flow constraints, backwards starting from instructions matching the
- * root location, `l`.  This data structure can be queried in two ways:
+ * matching flow constraints, backwards starting from instructions matching root
+ * locations.  There can be a single root location (`l`), or multiple (`ls`).
+ * This data structure can be queried in two ways:
  *
  *   result_t::matching(location_t l)
  *   result_t::matching(location_t l, IRInstruction* insn, src_index_t ix)
@@ -214,11 +239,13 @@ struct flow_t {
 
   /**
    * Search for sub-trees originating from instructions matching the constraints
-   * at l, in the given control-flow graph.  This operation requires that a
-   * unique exit block exists in `cfg`, and will calculate one (mutating the
+   * at ls or l, in the given control-flow graph.  This operation requires that
+   * a unique exit block exists in `cfg`, and will calculate one (mutating the
    * CFG) if it does not exist.
    */
   result_t find(cfg::ControlFlowGraph& cfg, location_t l) const;
+  result_t find(cfg::ControlFlowGraph& cfg,
+                std::initializer_list<location_t> ls) const;
 
  private:
   friend struct location_t;
@@ -274,6 +301,13 @@ struct location_t {
    */
   location_t src(src_index_t ix, location_t l, flag_t flags = {});
 
+  /**
+   * Add a data-flow constraint to operands with indices at or above lb.
+   *
+   * See location_t::src for an explanation of the l and flags parameters.
+   */
+  location_t srcs_from(src_index_t lb, location_t l, flag_t flags = {});
+
  private:
   friend struct flow_t;
   friend struct result_t;
@@ -295,6 +329,8 @@ struct result_t {
       It it;
       return {it, it};
     }
+
+    explicit operator bool() const { return m_begin != m_end; }
 
     /**
      * If the range contains precisely one instruction, returns it, otherwise
@@ -382,13 +418,16 @@ inline location_t flow_t::insn(m::match_t<IRInstruction*, M> m) {
 inline location_t location_t::src(src_index_t ix, location_t l, flag_t flags) {
   always_assert(m_owner != nullptr && m_owner == l.m_owner &&
                 "location_t shared between flow_t instances.");
+  constraint().add_src(ix, l.m_ix, flags.m_alias, flags.m_quant);
+  return *this;
+}
 
-  auto& src_locs = constraint().srcs;
-  if (src_locs.size() <= ix) {
-    src_locs.resize(ix + 1, {detail::NO_LOC, {}, {}});
-  }
-
-  src_locs[ix] = {l.m_ix, flags.m_alias, flags.m_quant};
+inline location_t location_t::srcs_from(src_index_t lb,
+                                        location_t l,
+                                        flag_t flags) {
+  always_assert(m_owner != nullptr && m_owner == l.m_owner &&
+                "location_t shared between flow_t instances.");
+  constraint().add_src_range(lb, l.m_ix, flags.m_alias, flags.m_quant);
   return *this;
 }
 

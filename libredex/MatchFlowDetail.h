@@ -10,6 +10,7 @@
 #include <boost/functional/hash.hpp>
 #include <cstddef>
 #include <limits>
+#include <map>
 #include <memory>
 #include <unordered_map>
 #include <unordered_set>
@@ -100,14 +101,46 @@ struct Constraint {
   explicit Constraint(std::unique_ptr<InstructionMatcher> insn_matcher)
       : insn_matcher(std::move(insn_matcher)) {}
 
+  /**
+   * Returns a reference to the source constraint for the ix-th operand.
+   */
+  const Src& src(src_index_t ix) const;
+
+  /**
+   * Add a source operand constraint, either at an individual index -- ix -- or
+   * at all indices from lb upwards.
+   */
+  void add_src(src_index_t ix,
+               LocationIx loc,
+               AliasFlag alias,
+               QuantFlag quant);
+  void add_src_range(src_index_t lb,
+                     LocationIx loc,
+                     AliasFlag alias,
+                     QuantFlag quant);
+
   // Wraps a m::match_t<IRInstruction*, M>
   std::unique_ptr<InstructionMatcher> insn_matcher;
+
+ private:
+  // The default source constraint to return a reference to, in case a specific
+  // constraint does not exist.
+  static constexpr Src UNCONSTRAINED_SRC{NO_LOC, {}, {}};
 
   // References to constraints for instructions supplying values to the various
   // source operands, along with any modifiers (flags) for this edge.  This
   // vector can contain "holes", represented by a Src whose loc is NO_LOC.  Such
   // a hole implies no constraint for that instruction operand.
-  std::vector<Src> srcs;
+  std::vector<Src> m_srcs;
+
+  // Like srcs but applying to ranges of instructions. src_ranges[i] references
+  // the constraint applying to instructions supplying values to operands at
+  // index j, where:
+  //
+  // - i <= j
+  // - j < k, where k is the next highest index in src_ranges.
+  // - j >= srcs.size() || srcs[j] == NO_LOC
+  std::map<src_index_t, Src> m_src_ranges;
 };
 
 // Types for InstructionConstraintAnalysis' (ICA) Abstract State.
@@ -126,15 +159,15 @@ struct InstructionConstraintAnalysis
 
   InstructionConstraintAnalysis(const cfg::ControlFlowGraph& cfg,
                                 const std::vector<Constraint>& constraints,
-                                LocationIx root)
-      : Base(cfg), m_constraints(constraints), m_root(root) {}
+                                const std::unordered_set<LocationIx>& roots)
+      : Base(cfg), m_constraints(constraints), m_roots(roots) {}
 
   void analyze_instruction(IRInstruction* insn,
                            ICAPartition* env) const override;
 
  private:
   const std::vector<Constraint>& m_constraints;
-  LocationIx m_root;
+  const std::unordered_set<LocationIx>& m_roots;
 };
 
 /**
@@ -232,11 +265,11 @@ struct DataFlowGraph {
   const std::vector<Edge>& outbound(LocationIx loc, IRInstruction* insn) const;
 
   /**
-   * Copy the sub-graph flowing into root (i.e. reachable transitively via
+   * Copy the sub-graph flowing into roots (i.e. reachable transitively via
    * inbound edges), converting it into the Locations data structure (internal
    * representation of mf::result_t).
    */
-  Locations locations(LocationIx root) const;
+  Locations locations(const std::unordered_set<LocationIx>& roots) const;
 
   /** Add (loc, insn) as a node in the graph. */
   void add_node(LocationIx loc, IRInstruction* insn);
@@ -303,8 +336,8 @@ struct DataFlowGraph {
 
 /**
  * Calculate the use-def graph modulo instruction constraints in `constraints`,
- * transitively reachable from instructions matching the `root`-th constraint in
- * `cfg`.
+ * transitively reachable from instructions matching the constraint in `roots`
+ * in `cfg`.
  *
  * - Nodes in the graph are (loc, insn) pairs -- an instruction and the location
  *   referring to an instruction constraint it matches.
@@ -316,7 +349,24 @@ struct DataFlowGraph {
  */
 DataFlowGraph instruction_graph(cfg::ControlFlowGraph& cfg,
                                 const std::vector<Constraint>& constraints,
-                                LocationIx root);
+                                const std::unordered_set<LocationIx>& roots);
+
+inline void Constraint::add_src(src_index_t ix,
+                                LocationIx loc,
+                                AliasFlag alias,
+                                QuantFlag quant) {
+  if (m_srcs.size() <= ix) {
+    m_srcs.resize(ix + 1, UNCONSTRAINED_SRC);
+  }
+  m_srcs[ix] = {loc, alias, quant};
+}
+
+inline void Constraint::add_src_range(src_index_t lb,
+                                      LocationIx loc,
+                                      AliasFlag alias,
+                                      QuantFlag quant) {
+  m_src_ranges[lb] = {loc, alias, quant};
+}
 
 } // namespace detail
 } // namespace mf

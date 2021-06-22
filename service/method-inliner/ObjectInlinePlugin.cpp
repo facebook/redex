@@ -8,25 +8,23 @@
 #include "ObjectInlinePlugin.h"
 
 #include "CFGInliner.h"
-#include "ClassInitCounter.h"
-#include "IROpcode.h"
-#include "Show.h"
-#include "TypeUtil.h"
-
 #include "CFGMutation.h"
+#include "IROpcode.h"
+#include "MethodUtil.h"
+#include "Show.h"
 #include "Trace.h"
+#include "TypeUtil.h"
 #include <unordered_set>
 
-using namespace cic;
 using namespace cfg;
+using namespace object_inliner_plugin;
 
 ObjectInlinePlugin::ObjectInlinePlugin(
     const FieldSetMap& field_sets,
     const std::unordered_map<DexFieldRef*, DexFieldRef*>& field_swaps,
     const std::vector<reg_t>& srcs,
-    reg_t value_register,
+    boost::optional<reg_t> value_register,
     boost::optional<reg_t> caller_this,
-    reg_t callee_this,
     DexType* callee_type)
     : m_initial_field_sets(field_sets),
       m_field_swaps(field_swaps),
@@ -58,6 +56,51 @@ bool ObjectInlinePlugin::update_before_reg_remap(ControlFlowGraph* caller,
   bool allocated = false;
   cfg::CFGMutation m(*caller);
 
+  // Order fields by names
+  std::vector<DexFieldRef*> ordered_fields;
+  ordered_fields.reserve(m_initial_field_sets.size());
+  for (auto& it : m_initial_field_sets) {
+    auto* field = it.first;
+    ordered_fields.push_back(field);
+  }
+  std::sort(ordered_fields.begin(), ordered_fields.end(), compare_dexfields);
+  // Allocate registers for all the fields sets that are not field swap.
+  // These fields will be removed and the new rgisters will take their place.
+  for (auto* field : ordered_fields) {
+    if (m_field_swaps.count(field)) {
+      continue;
+    }
+    auto final_field = m_set_field_sets.find(field);
+    if (final_field == m_set_field_sets.end()) {
+      allocated = true;
+      IRInstruction* set_default = nullptr;
+      reg_t assign_reg;
+
+      if (type::is_wide_type(field->get_type())) {
+        assign_reg = caller->allocate_wide_temp();
+        set_default = new IRInstruction(OPCODE_CONST_WIDE);
+        set_default->set_literal(0);
+        set_default->set_dest(assign_reg);
+      } else {
+        assign_reg = caller->allocate_temp();
+        set_default = new IRInstruction(OPCODE_CONST);
+        set_default->set_literal(0);
+        set_default->set_dest(assign_reg);
+      }
+      auto st = caller->entry_block();
+      auto field_set_data = m_initial_field_sets.find(field)->second;
+      if (st->get_first_non_param_loading_insn() != st->end()) {
+        m.insert_before(
+            caller->find_insn(st->get_first_non_param_loading_insn()->insn),
+            {set_default});
+      } else {
+        m.insert_after(caller->find_insn(st->get_last_insn()->insn),
+                       {set_default});
+      }
+      m_set_field_sets[field] = {{{assign_reg, {}}}};
+    }
+  }
+
   auto iterable = cfg::InstructionIterable(*caller);
   for (auto insn_it = iterable.begin(); insn_it != iterable.end(); ++insn_it) {
     IRInstruction* insn = insn_it->insn;
@@ -72,8 +115,8 @@ bool ObjectInlinePlugin::update_before_reg_remap(ControlFlowGraph* caller,
         continue;
       }
       auto field_set_data = field_set_to_move->second;
-      auto reg = field_set_data.regs.find(current_reg);
-      if (reg == field_set_data.regs.end()) {
+      auto reg = field_set_data.find(current_reg);
+      if (reg == field_set_data.end()) {
         // can't be the instruction we want to replace
         continue;
       }
@@ -83,41 +126,11 @@ bool ObjectInlinePlugin::update_before_reg_remap(ControlFlowGraph* caller,
       }
       auto move = new IRInstruction(opcode::iput_to_move(opcode));
       move->set_src(0, current_reg);
-      if (final_field == m_set_field_sets.end()) {
-        allocated = true;
-        IRInstruction* set_default = nullptr;
-        reg_t assign_reg;
-
-        if (insn->src_is_wide(0)) {
-          assign_reg = caller->allocate_wide_temp();
-          set_default = new IRInstruction(OPCODE_CONST_WIDE);
-          set_default->set_literal(0);
-          set_default->set_dest(assign_reg);
-        } else {
-          assign_reg = caller->allocate_temp();
-          set_default = new IRInstruction(OPCODE_CONST);
-          set_default->set_literal(0);
-          set_default->set_dest(assign_reg);
-        }
-        auto st = caller->entry_block();
-        if (st->get_first_non_param_loading_insn() != st->end()) {
-          m.insert_before(
-              caller->find_insn(st->get_first_non_param_loading_insn()->insn),
-              {set_default});
-        } else {
-          m.insert_after(caller->find_insn(st->get_last_insn()->insn),
-                         {set_default});
-        }
-        m_set_field_sets[field] = {
-            {{assign_reg, {}}}, field_set_data.set, cic::OneReg};
-        move->set_dest(assign_reg);
-      } else {
-        // There will be only one, so the loop is just to pull out the first
-        for (const auto& assign_reg : final_field->second.regs) {
-          move->set_dest(assign_reg.first);
-          break;
-        }
-      }
+      assert(final_field != m_set_field_sets.end());
+      // There will be only one, so the loop is just to pull out the first
+      assert(final_field->second.size() == 1);
+      const auto& assign_reg = *final_field->second.begin();
+      move->set_dest(assign_reg.first);
       m.replace(insn_it, {move});
       continue;
     }
@@ -131,8 +144,6 @@ bool ObjectInlinePlugin::update_before_reg_remap(ControlFlowGraph* caller,
  * m_set_field_sets.
  * If a field is extracted but was not set, introduce a const 0
  * instruction as a default (likely null) value.
- * Store unaccessed fields in m_unaccessed_field_sets for others to
- * handle
  */
 bool ObjectInlinePlugin::update_after_reg_remap(ControlFlowGraph*,
                                                 ControlFlowGraph* callee) {
@@ -149,7 +160,34 @@ bool ObjectInlinePlugin::update_after_reg_remap(ControlFlowGraph*,
   for (auto insn_it = iterable.begin(); insn_it != iterable.end(); ++insn_it) {
     IRInstruction* insn = insn_it->insn;
     auto opcode = insn->opcode();
-    if (opcode::is_an_iget(opcode)) {
+    if (opcode == OPCODE_INVOKE_DIRECT && method::is_init(insn->get_method()) &&
+        this_refs.count(insn->src(0))) {
+      m.remove(insn_it);
+    } else if (opcode::is_an_iput(opcode)) {
+      auto field = insn->get_field();
+      bool is_self_call = this_refs.count(insn->src(1)) != 0;
+      if (is_self_call) {
+        auto no_field_needed = m_set_field_sets.find(field);
+        auto swap_field = m_field_swaps.find(field);
+        if (swap_field != m_field_swaps.end()) {
+          assert(m_caller_this_reg);
+          insn->set_field(swap_field->second);
+          insn->set_src(1, m_caller_this_reg.value());
+          used_fields.emplace(swap_field->first);
+          continue;
+        }
+
+        assert(no_field_needed != m_set_field_sets.end());
+        no_field_needed = m_set_field_sets.find(field);
+        auto move = new IRInstruction(opcode::iput_to_move(opcode));
+        assert(no_field_needed->second.size() == 1);
+        // Extract the solo reg, and set as src.
+        move->set_dest(no_field_needed->second.begin()->first);
+        move->set_src(0, insn->src(0));
+        used_fields.emplace(field);
+        m.replace(insn_it, {move});
+      }
+    } else if (opcode::is_an_iget(opcode)) {
       auto field = insn->get_field();
       bool is_self_call = this_refs.count(insn->src(0)) != 0;
       if (is_self_call) {
@@ -168,7 +206,6 @@ bool ObjectInlinePlugin::update_after_reg_remap(ControlFlowGraph*,
           continue;
         }
         if (no_field_needed == m_set_field_sets.end()) {
-
           IRInstruction* set_default = nullptr;
           auto move_result = callee->move_result_of(callee->find_insn(insn));
           if (move_result->insn->dest_is_wide()) {
@@ -180,39 +217,26 @@ bool ObjectInlinePlugin::update_after_reg_remap(ControlFlowGraph*,
           }
           set_default->set_dest(move_result->insn->dest());
           m.remove(move_result);
-
           m.replace(insn_it, {set_default});
         } else {
           auto move = new IRInstruction(opcode::iget_to_move(opcode));
-          assert(no_field_needed->second.regs.size() == 1);
+          assert(no_field_needed->second.size() == 1);
           // Extract the solo reg, and set as src.
           auto move_result = callee->move_result_of(callee->find_insn(insn));
-          move->set_src(0, no_field_needed->second.regs.begin()->first);
+          move->set_src(0, no_field_needed->second.begin()->first);
           move->set_dest(move_result->insn->dest());
           m.remove(move_result);
           used_fields.emplace(field);
           m.replace(insn_it, {move});
         }
-        continue;
       }
-    } else if (opcode::is_a_move(opcode)) {
-      // track this references to aid in redirection
-      if (this_refs.count(insn->dest()) != 0 &&
-          this_refs.count(insn->src(0)) != 0) {
-        // No change move
-      } else if (insn != original_load_this &&
-                 this_refs.count(insn->dest()) != 0 &&
-                 this_refs.count(insn->src(0)) == 0) {
-        this_refs.erase(insn->dest());
-      } else if (this_refs.count(insn->src(0)) != 0) {
-        this_refs.insert(insn->dest());
-      }
-    } else if (opcode::is_move_result_any(opcode)) {
     }
-  }
-  for (const auto& fs : m_set_field_sets) {
-    if (used_fields.count(fs.first) == 0) {
-      m_unaccessed_field_sets.insert(fs);
+    if (insn != original_load_this && insn->has_dest()) {
+      if (opcode::is_a_move(opcode) && this_refs.count(insn->src(0))) {
+        this_refs.insert(insn->dest());
+      } else {
+        this_refs.erase(insn->dest());
+      }
     }
   }
   m.flush();

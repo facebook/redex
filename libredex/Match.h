@@ -12,6 +12,7 @@
 #include <type_traits>
 #include <vector>
 
+#include "ControlFlow.h"
 #include "DexAccess.h"
 #include "DexClass.h"
 #include "DexUtil.h"
@@ -88,18 +89,6 @@ void find_matches(const std::vector<IRInstruction*>& insns,
   }
 }
 
-// Find all instructions in `insns` that match `p`
-template <typename P>
-void find_insn_match(const std::vector<IRInstruction*>& insns,
-                     const P& p,
-                     std::vector<IRInstruction*>& matches) {
-  for (auto insn : insns) {
-    if (p.matches(insn)) {
-      matches.emplace_back(insn);
-    }
-  }
-}
-
 /**
  * Maps domain of matching predicate to the type expected by `matches`. Provides
  * an immutable type -- `val` -- use as a parameter, and its mutable equivalent
@@ -148,6 +137,32 @@ struct match_t {
  private:
   P m_fn;
 };
+
+/**
+ * Find all instructions from `insns` matching predicate `p`.  `insns` is a
+ * `MethodItemEntry` iterable, but expects those entries to only contain
+ * `MFLOW_OPCODE`s.
+ *
+ * Returns a vector of pointers to matching instructions.
+ */
+template <typename Insns, typename P>
+std::vector<IRInstruction*> find_insn_match(
+    const Insns& insns, const match_t<IRInstruction*, P>& p) {
+  std::vector<IRInstruction*> matches;
+  for (const MethodItemEntry& mie : insns) {
+    auto* insn = mie.insn;
+    if (p.matches(insn)) {
+      matches.emplace_back(insn);
+    }
+  }
+  return matches;
+}
+
+template <typename P>
+std::vector<IRInstruction*> find_insn_match(
+    const cfg::ControlFlowGraph& cfg, const match_t<IRInstruction*, P>& p) {
+  return find_insn_match(cfg::ConstInstructionIterable(cfg), p);
+}
 
 /**
  * Create a match_t from a matching function, fn, of type `const T* -> bool`.

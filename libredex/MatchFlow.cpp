@@ -10,20 +10,30 @@
 #include "Trace.h"
 
 #include <ostream>
+#include <unordered_set>
 
 namespace mf {
 
 result_t flow_t::find(cfg::ControlFlowGraph& cfg, location_t l) const {
-  always_assert(this == l.m_owner && "location_t from another flow_t");
+  return find(cfg, {l});
+}
+
+result_t flow_t::find(cfg::ControlFlowGraph& cfg,
+                      std::initializer_list<location_t> ls) const {
+  std::unordered_set<detail::LocationIx> lixs(ls.size());
+  for (auto l : ls) {
+    always_assert(this == l.m_owner && "location_t from another flow_t");
+    lixs.insert(l.m_ix);
+  }
 
   TRACE(MFLOW, 6, "find: Building Instruction Graph");
-  auto dfg = detail::instruction_graph(cfg, m_constraints, l.m_ix);
+  auto dfg = detail::instruction_graph(cfg, m_constraints, lixs);
 
   TRACE(MFLOW, 6, "find: Propagating Flow Constraints");
   dfg.propagate_flow_constraints(m_constraints);
 
   TRACE(MFLOW, 6, "find: Done.");
-  return result_t{dfg.locations(l.m_ix)};
+  return result_t{dfg.locations(lixs)};
 }
 
 result_t::insn_range result_t::matching(location_t l) const {
