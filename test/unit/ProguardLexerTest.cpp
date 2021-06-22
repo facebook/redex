@@ -32,11 +32,11 @@ TEST(ProguardLexerTest, assortment) {
       "strictfp synthetic bridge varargs wombat <init> <fields>\n"
       "<methods> []\n"
       "-target 1.8 \n"
-      "-include /alpha/beta.pro\n"
-      "-basedirectory /alpha/beta\n"
-      "-injars gamma.pro\n"
-      "-outjars delta.pro:/epsilon/iota.pro\n"
-      "-libraryjars /alpha/zeta.pro\n"
+      "-include /alpha/betaя.pro\n"
+      "-basedirectory /alphaя/beta\n"
+      "-injars gammaя.pro\n"
+      "-outjars delta.pro:/epsilon/iotaя.pro\n"
+      "-libraryjars /alpha/zetaя.pro\n"
       "-keepdirectories mydir/**\n"
       "-keep -keepclassmembernames -keepnames -keepnames "
       "-keepclasseswithmembernames\n"
@@ -50,10 +50,11 @@ TEST(ProguardLexerTest, assortment) {
       "-dontusemixedcaseclassnames -dontpreverify -printconfiguration "
       "-dontwarn\n"
       "-verbose -someothercommand\n"
-      "class com.google.android.gms.measurement.AppMeasurementService\n"
+      "class com.google.android.gms.measurement.AppяMeasurementService\n"
       "<init>(...);\n"
       "-keep class *#-keepnames class *\n"
-      "-dontobfuscate\n";
+      "-dontobfuscate\n"
+      "-dump some/path/dumpя.txt";
   std::vector<std::pair<unsigned, TokenType>> expected = {
       {1, TokenType::openCurlyBracket},
       {1, TokenType::closeCurlyBracket},
