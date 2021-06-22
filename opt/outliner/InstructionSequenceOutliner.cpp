@@ -1188,7 +1188,21 @@ static bool can_outline_from_method(
   if (sufficiently_hot_methods.count(method)) {
     return false;
   }
-
+  bool has_monitor{false};
+  editable_cfg_adapter::iterate_with_iterator(
+      method->get_code(), [&](const IRList::iterator& it) {
+        auto insn = it->insn;
+        if (opcode::is_a_monitor(insn->opcode())) {
+          has_monitor = true;
+          return editable_cfg_adapter::LOOP_BREAK;
+        }
+        return editable_cfg_adapter::LOOP_CONTINUE;
+      });
+  if (has_monitor) {
+    // TODO: Properly deal with this Android Verifier check:
+    // https://cs.android.com/android/platform/superproject/+/android-11.0.0_r1:art/runtime/verifier/method_verifier.cc;l=3642
+    return false;
+  }
   return true;
 }
 
