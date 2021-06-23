@@ -8,6 +8,7 @@
 #include "SourceBlocks.h"
 
 #include <limits>
+#include <optional>
 #include <sstream>
 #include <string>
 
@@ -40,40 +41,65 @@ struct InsertHelper {
     s_expr root_expr;
     std::vector<s_expr> expr_stack;
     bool had_profile_failure{false};
+    boost::optional<SourceBlock::Val> default_val;
+    boost::optional<SourceBlock::Val> error_val;
     ProfileParserState(s_expr root_expr,
                        std::vector<s_expr> expr_stack,
-                       bool had_profile_failure)
+                       bool had_profile_failure,
+                       const boost::optional<SourceBlock::Val>& default_val,
+                       const boost::optional<SourceBlock::Val>& error_val)
         : root_expr(std::move(root_expr)),
           expr_stack(std::move(expr_stack)),
-          had_profile_failure(had_profile_failure) {}
+          had_profile_failure(had_profile_failure),
+          default_val(default_val),
+          error_val(error_val) {}
   };
   std::vector<ProfileParserState> parser_state;
 
   InsertHelper(DexMethod* method,
-               const std::vector<boost::optional<std::string>>& profiles,
+               const std::vector<ProfileData>& profiles,
                bool serialize,
                bool insert_after_excs)
       : method(method),
         serialize(serialize),
         insert_after_excs(insert_after_excs) {
-    for (const auto& opt : profiles) {
-      if (opt) {
-        const std::string& profile = *opt;
-        std::istringstream iss{profile};
-        s_expr_istream s_expr_input(iss);
-        s_expr root_expr;
-        s_expr_input >> root_expr;
-        always_assert_log(!s_expr_input.fail(),
-                          "Failed parsing profile %s for %s: %s",
-                          profile.c_str(),
-                          SHOW(method),
-                          s_expr_input.what().c_str());
-        std::vector<s_expr> expr_stack;
-        expr_stack.push_back(s_expr({root_expr}));
-        parser_state.emplace_back(std::move(root_expr), std::move(expr_stack),
-                                  false);
-      } else {
-        parser_state.emplace_back(s_expr(), std::vector<s_expr>(), false);
+    for (const auto& p : profiles) {
+      switch (p.index()) {
+      case 0:
+        // Nothing.
+        parser_state.emplace_back(s_expr(), std::vector<s_expr>(), false,
+                                  boost::none, boost::none);
+        break;
+
+      case 1:
+        // Profile string.
+        {
+          const auto& pair = std::get<1>(p);
+          const std::string& profile = pair.first;
+          std::istringstream iss{profile};
+          s_expr_istream s_expr_input(iss);
+          s_expr root_expr;
+          s_expr_input >> root_expr;
+          always_assert_log(!s_expr_input.fail(),
+                            "Failed parsing profile %s for %s: %s",
+                            profile.c_str(),
+                            SHOW(method),
+                            s_expr_input.what().c_str());
+          std::vector<s_expr> expr_stack;
+          expr_stack.push_back(s_expr({root_expr}));
+          parser_state.emplace_back(std::move(root_expr), std::move(expr_stack),
+                                    false, boost::none, pair.second);
+          break;
+        }
+
+      case 2:
+        // A default Val.
+        parser_state.emplace_back(s_expr(), std::vector<s_expr>(), false,
+                                  std::get<2>(p), boost::none);
+        break;
+
+      default:
+        not_reached();
       }
     }
   }
@@ -178,6 +204,9 @@ struct InsertHelper {
       return kFailVal;
     }
     if (p_state.root_expr.is_nil()) {
+      if (p_state.default_val) {
+        return *p_state.default_val;
+      }
       return kFailVal;
     }
     if (p_state.expr_stack.empty()) {
@@ -336,12 +365,12 @@ struct InsertHelper {
         TRACE(MMINL, 3, "For %s, expected profile of the form %s", SHOW(method),
               oss.str().c_str());
       }
+      auto val =
+          p_state.error_val ? *p_state.error_val : SourceBlock::Val::none();
       for (auto* b : cfg.blocks()) {
         auto vec = gather_source_blocks(b);
         for (auto* sb : vec) {
-          if (sb->vals[i]) {
-            const_cast<SourceBlock*>(sb)->vals[i] = SourceBlock::Val::none();
-          }
+          const_cast<SourceBlock*>(sb)->vals[i] = val;
         }
       }
     }
@@ -351,12 +380,11 @@ struct InsertHelper {
 
 } // namespace
 
-InsertResult insert_source_blocks(
-    DexMethod* method,
-    ControlFlowGraph* cfg,
-    const std::vector<boost::optional<std::string>>& profiles,
-    bool serialize,
-    bool insert_after_excs) {
+InsertResult insert_source_blocks(DexMethod* method,
+                                  ControlFlowGraph* cfg,
+                                  const std::vector<ProfileData>& profiles,
+                                  bool serialize,
+                                  bool insert_after_excs) {
   InsertHelper helper(method, profiles, serialize, insert_after_excs);
 
   impl::visit_in_order(

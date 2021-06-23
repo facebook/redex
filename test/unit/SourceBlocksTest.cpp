@@ -125,9 +125,9 @@ class SourceBlocksTest : public RedexTest {
     return in;
   }
 
-  static std::vector<boost::optional<std::string>> single_profile(
+  static std::vector<source_blocks::ProfileData> single_profile(
       const std::string& p) {
-    return std::vector<boost::optional<std::string>>({p});
+    return std::vector<ProfileData>{std::make_pair(p, boost::none)};
   }
 
  private:
@@ -218,6 +218,43 @@ B1: LFoo;.bar:()V@1(0.2:0.4)
 B2: LFoo;.bar:()V@4(0.5:0.1)
 B3: LFoo;.bar:()V@2(0.3:0.3)
 B4: LFoo;.bar:()V@3(0.4:0.2))");
+}
+
+TEST_F(SourceBlocksTest, complex_deserialize_default) {
+  auto method = create_method();
+  method->get_code()->build_cfg();
+  auto& cfg = method->get_code()->cfg();
+
+  ASSERT_EQ(cfg.blocks().size(), 1u);
+  auto b = cfg.blocks()[0];
+
+  // We're gonna just focus on blocks and edges, no instruction constraints.
+  auto b1 = cfg.create_block();
+  auto b2 = cfg.create_block();
+  auto b3 = cfg.create_block();
+  auto b4 = cfg.create_block();
+
+  cfg.add_edge(b, b1, EDGE_GOTO);
+  cfg.add_edge(b, b2, EDGE_BRANCH);
+  cfg.add_edge(b1, b3, EDGE_GOTO);
+  cfg.add_edge(b2, b3, EDGE_GOTO);
+  cfg.add_edge(b1, b4, method->get_class(), 0);
+  cfg.add_edge(b4, b3, EDGE_GOTO);
+
+  auto profile = std::vector<ProfileData>{SourceBlock::Val(123, 456)};
+
+  auto res = insert_source_blocks(method, &cfg, profile,
+                                  /*serialize=*/true);
+
+  EXPECT_EQ(res.block_count, 5u);
+  EXPECT_EQ(res.serialized, "(0 g(1 g(2) t(3 g)) b(4 g))");
+  EXPECT_TRUE(res.profile_success);
+  EXPECT_EQ(get_blocks_as_txt({b, b1, b2, b3, b4}),
+            R"(B0: LFoo;.bar:()V@0(123:456)
+B1: LFoo;.bar:()V@1(123:456)
+B2: LFoo;.bar:()V@4(123:456)
+B3: LFoo;.bar:()V@2(123:456)
+B4: LFoo;.bar:()V@3(123:456))");
 }
 
 TEST_F(SourceBlocksTest, complex_deserialize_failure) {
@@ -351,6 +388,42 @@ B4: LFoo;.bar:()V@3(x))";
                 "Could not parse second part of 0:0world as float");
     }
   }
+}
+
+TEST_F(SourceBlocksTest, complex_deserialize_failure_error_val) {
+  auto method = create_method();
+  method->get_code()->build_cfg();
+  auto& cfg = method->get_code()->cfg();
+
+  ASSERT_EQ(cfg.blocks().size(), 1u);
+  auto b = cfg.blocks()[0];
+
+  // We're gonna just focus on blocks and edges, no instruction constraints.
+  auto b1 = cfg.create_block();
+  auto b2 = cfg.create_block();
+  auto b3 = cfg.create_block();
+  auto b4 = cfg.create_block();
+
+  cfg.add_edge(b, b1, EDGE_GOTO);
+  cfg.add_edge(b, b2, EDGE_BRANCH);
+  cfg.add_edge(b1, b3, EDGE_GOTO);
+  cfg.add_edge(b2, b3, EDGE_GOTO);
+  cfg.add_edge(b1, b4, method->get_class(), 0);
+  cfg.add_edge(b4, b3, EDGE_GOTO);
+
+  const std::string kSerializedExp = R"(B0: LFoo;.bar:()V@0(123:456)
+B1: LFoo;.bar:()V@1(123:456)
+B2: LFoo;.bar:()V@4(123:456)
+B3: LFoo;.bar:()V@2(123:456)
+B4: LFoo;.bar:()V@3(123:456))";
+
+  auto profile = std::vector<ProfileData>{std::make_pair(
+      std::string("(0.1:0.0 b(0.2:0.0 g(0.3:0.0) t(0.4:0.0 g)) b(0.5:0.0 g))"),
+      SourceBlock::Val(123, 456))};
+  auto res = insert_source_blocks(method, &cfg, profile,
+                                  /*serialize=*/true);
+  EXPECT_FALSE(res.profile_success);
+  EXPECT_EQ(get_blocks_as_txt({b, b1, b2, b3, b4}), kSerializedExp);
 }
 
 TEST_F(SourceBlocksTest, inline_normalization) {
