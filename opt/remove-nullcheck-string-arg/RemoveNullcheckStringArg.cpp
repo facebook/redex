@@ -274,17 +274,24 @@ RemoveNullcheckStringArg::Stats RemoveNullcheckStringArg::change_in_cfg(
         // We could have params copied via intermediate registers.
         auto defs = env.get(insn->src(0));
         always_assert(!defs.is_bottom() && !defs.is_top());
-        if (defs.elements().size() != 1){
-          TRACE(NULLCHECK, 5, "Multiple defs for %s\n In CFG: %s", SHOW(insn),
-              SHOW(cfg));
+        IRInstruction* param_load_insn = nullptr;
+        for (auto* def : defs.elements()) {
+          if (!opcode::is_a_load_param(def->opcode())) {
+            continue;
+          }
+          if (param_load_insn) {
+            /* Multiple param load insns. Should never happen.*/
+            param_load_insn = nullptr;
+            break;
+          }
+          param_load_insn = def;
+        }
+        if (!param_load_insn) {
+          /* No param load insn. Should never happen. In any case, skipping this
+           * insn is OK. */
           continue;
         }
-        auto def = *defs.elements().begin();
-        auto def_op = def->opcode();
-        always_assert(def_op == IOPCODE_LOAD_PARAM ||
-                      def_op == IOPCODE_LOAD_PARAM_OBJECT ||
-                      def_op == IOPCODE_LOAD_PARAM_OBJECT);
-        auto param_iter = param_index.find(def->dest());
+        auto param_iter = param_index.find(param_load_insn->dest());
         always_assert(param_iter != param_index.end());
         auto index = param_iter->second;
         auto tmp_reg = cfg.allocate_temp();
