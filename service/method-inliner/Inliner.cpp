@@ -764,8 +764,10 @@ std::string create_inlining_trace_msg(const DexMethod* caller,
       oss << "!" << max_depth;
       if (insn != nullptr) {
         auto it = code->cfg().find_insn(insn);
-        redex_assert(!it.is_end());
-        auto loop = info.get_loop_for(it.block());
+        loop_impl::Loop* loop{nullptr};
+        if (!it.is_end()) {
+          loop = info.get_loop_for(it.block());
+        }
         if (loop != nullptr) {
           oss << "!" << loop->get_loop_depth();
         } else {
