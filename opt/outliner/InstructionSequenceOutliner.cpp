@@ -732,13 +732,14 @@ class CanOutlineBlockDecider {
                   return boost::none;
                 }
                 boost::optional<float> max_val;
-                size_t num = g_redex->num_sb_interaction_indices();
-                for (size_t i = 0; i < num; i++) {
-                  boost::optional<float> val = sb->get_val(i);
-                  if (!max_val || (val && *val > *max_val)) {
-                    max_val = val;
+                sb->foreach_val([&](const auto& val_pair) {
+                  if (!val_pair) {
+                    return;
                   }
-                }
+                  if (!max_val || (val_pair && val_pair->val > *max_val)) {
+                    max_val = val_pair->val;
+                  }
+                });
                 return max_val;
               }));
     }
