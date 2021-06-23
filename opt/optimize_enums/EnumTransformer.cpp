@@ -224,7 +224,6 @@ struct EnumUtil {
     } else {
       auto method = resolve_method(method_ref, MethodSearch::Virtual);
       always_assert(method);
-      m_instance_methods.insert(method);
       return method_ref;
     }
   }
@@ -977,7 +976,6 @@ class CodeTransformer final {
     } else {
       auto method = resolve_method(method_ref, opcode_to_search(insn));
       always_assert(method);
-      m_enum_util->m_instance_methods.insert(method);
       auto new_insn = (new IRInstruction(*insn))
                           ->set_opcode(OPCODE_INVOKE_STATIC)
                           ->set_method(method);
@@ -1113,6 +1111,10 @@ class EnumTransformer final {
           });
         },
         [&](DexMethod* method, IRCode& code) {
+          if (m_enum_attributes_map.count(method->get_class()) &&
+              (!is_constructor(method) && !is_static(method))) {
+            m_enum_util->m_instance_methods.insert(method);
+          }
           CodeTransformer code_updater(m_enum_attributes_map, m_enum_util.get(),
                                        method);
           code_updater.run();

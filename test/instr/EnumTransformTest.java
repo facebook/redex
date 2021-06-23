@@ -79,7 +79,12 @@ enum SCORE {
     return this.myOtherField;
   }
 
-  // POSTCHECK-DAG: method: virtual redex.SCORE.cast_to_enum_array$REDEX${{.*}}:()java.lang.Integer[]
+  // POSTCHECK-DAG: method: direct redex.SCORE.getString$REDEX${{.*}}:(java.lang.Integer)java.lang.String
+  public String getString() {
+    return this.myOtherField;
+  }
+
+  // POSTCHECK-DAG: method: direct redex.SCORE.cast_to_enum_array$REDEX${{.*}}:(java.lang.Integer)java.lang.Integer[]
   public SCORE[] cast_to_enum_array() {
     Object result = SCORE.values();
     return (SCORE[]) result;
