@@ -250,12 +250,55 @@ CallSites CompleteCallGraphStrategy::get_callsites(
 
 RootAndDynamic CompleteCallGraphStrategy::get_roots() const {
   RootAndDynamic root_and_dynamic;
+  MethodSet emplaced_methods;
   auto& roots = root_and_dynamic.roots;
+  auto add_root_method_overrides = [&](const DexMethod* method) {
+    if (!root(method) && !emplaced_methods.count(method)) {
+      // No need to add root methods, they will be added anyway.
+      roots.emplace_back(method);
+      emplaced_methods.emplace(method);
+    }
+  };
   walk::methods(m_scope, [&](DexMethod* method) {
     if (root(method) || method::is_clinit(method)) {
-      roots.emplace_back(method);
+      if (!emplaced_methods.count(method)) {
+        roots.emplace_back(method);
+        emplaced_methods.emplace(method);
+      }
+    }
+    if (!root(method) && !(method->is_virtual() &&
+                           is_interface(type_class(method->get_class())) &&
+                           !can_rename(method))) {
+      // For root methods and dynamically added classes, created via
+      // Proxy.newProxyInstance, we need to add them and their overrides and
+      // overriden to roots.
+      return;
+    }
+    const auto& overriding_methods =
+        mog::get_overriding_methods(m_method_override_graph, method);
+    for (auto overriding_method : overriding_methods) {
+      add_root_method_overrides(overriding_method);
+    }
+    const auto& overiden_methods =
+        mog::get_overridden_methods(m_method_override_graph, method);
+    for (auto overiden_method : overiden_methods) {
+      add_root_method_overrides(overiden_method);
     }
   });
+  // Gather methods that override or implement external methods
+  for (auto& pair : m_method_override_graph.nodes()) {
+    auto method = pair.first;
+    if (method->is_external()) {
+      const auto& overriding_methods =
+          mog::get_overriding_methods(m_method_override_graph, method, true);
+      for (auto* overriding : overriding_methods) {
+        if (!emplaced_methods.count(overriding)) {
+          roots.emplace_back(overriding);
+          emplaced_methods.emplace(overriding);
+        }
+      }
+    }
+  }
   return root_and_dynamic;
 }
 
