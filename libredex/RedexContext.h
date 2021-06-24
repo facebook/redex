@@ -161,6 +161,7 @@ struct RedexContext {
     m_pointers_cache_loaded = true;
   }
   const FrequentlyUsedPointers& pointers_cache() {
+    std::lock_guard<std::mutex> lock(s_field_lock);
     if (!m_pointers_cache_loaded) {
       redex_assert(!kDebugPointersCacheLoad);
       load_pointers_cache();

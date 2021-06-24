@@ -81,8 +81,20 @@ bool check_cast_helper(const DexType* from, const DexType* to) {
     always_assert(!type::check_cast(from, to));
     return false;
   }
-  // If we have any external types (aside from Object), allow it
-  if (!type_class_internal(from) || !type_class_internal(to)) {
+  // If we have any external types (aside from Object and the other well known
+  // types), allow them.
+  auto from_cls = type_class(from);
+  auto to_cls = type_class(to);
+  if (!from_cls || !to_cls) {
+    return true;
+  }
+  // Assume the type hierarchies of the well known external types are stable
+  // across Android versions. When their class definitions present, perform the
+  // regular type inheritance check.
+  if ((from_cls->is_external() &&
+       !g_redex->pointers_cache().m_well_known_types.count(from)) ||
+      (to_cls->is_external() &&
+       !g_redex->pointers_cache().m_well_known_types.count(to))) {
     return true;
   }
   return type::check_cast(from, to);
