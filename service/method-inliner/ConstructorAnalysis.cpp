@@ -19,6 +19,7 @@
 #include "ReachingDefinitions.h"
 #include "ReducedProductAbstractDomain.h"
 #include "Resolver.h"
+#include "Show.h"
 
 using namespace sparta;
 
@@ -228,7 +229,12 @@ bool can_inline_init(
         // Shouldn't happen, but we play it safe.
         return false;
       }
-      always_assert(*initialized.get_constant());
+      always_assert_log(*initialized.get_constant(),
+                        "%s returns at %p without having called an appropriate "
+                        "constructor from the same or its immediate super "
+                        "class. This indicates malformed DEX code.\n%s",
+                        SHOW(init_method), block->get_last_insn()->insn,
+                        SHOW(cfg));
     }
   }
   for (const auto& mie : InstructionIterable(cfg)) {
