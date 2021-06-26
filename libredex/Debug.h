@@ -93,6 +93,7 @@ extern bool slow_invariants_debug;
 void print_stack_trace(std::ostream& os, const std::exception& e);
 
 void crash_backtrace_handler(int sig);
+void debug_backtrace_handler(int sig);
 
 // If `block` is true, only a single assert will be logged. All following
 // asserts will sleep forever.
