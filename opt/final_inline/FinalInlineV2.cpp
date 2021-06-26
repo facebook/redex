@@ -946,6 +946,9 @@ size_t inline_final_gets(
       code.replace_opcode(p.first, p.second);
     }
     if (!replacements.empty() && maybe_shrinker) {
+      // We need to rebuild the cfg.
+      code.build_cfg(/* editable */);
+      code.clear_cfg();
       maybe_shrinker->shrink_method(method);
     }
     inlined_count.fetch_add(replacements.size());
