@@ -1045,6 +1045,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       }
       if (run_assessor) {
         ::run_assessor(*this, scope);
+        track_source_block_coverage(*this, stores);
       }
       if (run_type_checker) {
         // It's OK to overwrite the `this` register if we are not yet at the
@@ -1108,10 +1109,6 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
     if (after_pass_size.handle(m_current_pass_info, &stores, &conf)) {
       // Measuring child. Return to write things out.
       break;
-    }
-
-    if (assessor_config.run_after_each_pass) {
-      track_source_block_coverage(*this, stores);
     }
 
     m_current_pass_info = nullptr;
