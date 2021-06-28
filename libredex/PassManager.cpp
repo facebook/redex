@@ -33,6 +33,7 @@
 #include "DexLoader.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
+#include "Dominators.h"
 #include "GraphVisualizer.h"
 #include "IRCode.h"
 #include "IRTypeChecker.h"
@@ -747,43 +748,83 @@ class AfterPassSizes {
 struct SourceBlocksStats {
   unsigned int total_blocks;
   unsigned int source_blocks_present;
+  unsigned int flow_violation_idom;
 
   SourceBlocksStats& operator+=(const SourceBlocksStats& that) {
     total_blocks += that.total_blocks;
     source_blocks_present += that.source_blocks_present;
+    flow_violation_idom += that.flow_violation_idom;
     return *this;
   }
 };
 
+bool is_source_block_hot(SourceBlock* sb) {
+  if (sb != nullptr) {
+    boost::optional<float> val = sb->get_val(0);
+    if (val && (*val > 0.0f)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 void track_source_block_coverage(PassManager& mgr,
                                  const DexStoresVector& stores) {
+  Timer opt_timer("Calculate SourceBlock Coverage");
   auto stats = walk::parallel::methods<SourceBlocksStats>(
       build_class_scope(stores), [](DexMethod* m) -> SourceBlocksStats {
-        SourceBlocksStats ret{0u, 0u};
+        SourceBlocksStats ret{0u, 0u, 0u};
         auto code = m->get_code();
         if (!code) {
           return ret;
         }
 
-        code->build_cfg(/* editable */ false);
+        code->build_cfg(/* editable */ true);
         auto& cfg = code->cfg();
+        auto dominators =
+            dominators::SimpleFastDominators<cfg::GraphInterface>(cfg);
+
         for (auto block : cfg.blocks()) {
           ret.total_blocks++;
           if (source_blocks::has_source_blocks(block)) {
             ret.source_blocks_present++;
           }
+          if (block != cfg.entry_block()) {
+            auto immediate_dominator = dominators.get_idom(block);
+            if (!immediate_dominator) {
+              continue;
+            }
+            auto* first_sb_immediate_dominator =
+                source_blocks::get_first_source_block(immediate_dominator);
+            auto* first_sb_current_b =
+                source_blocks::get_first_source_block(block);
+
+            bool is_idom_hot =
+                is_source_block_hot(first_sb_immediate_dominator);
+            bool is_curr_block_hot = is_source_block_hot(first_sb_current_b);
+
+            if (!is_idom_hot && is_curr_block_hot) {
+              ret.flow_violation_idom++;
+            }
+          }
         }
+
         code->clear_cfg();
         return ret;
       });
 
   mgr.set_metric("~blocks~count", stats.total_blocks);
   mgr.set_metric("~blocks~with~source~blocks", stats.source_blocks_present);
+  mgr.set_metric("~flow~violation~idom", stats.flow_violation_idom);
 
-  TRACE(INSTRUMENT, 4,
-        "Total Basic Blocks = %d, Basic Blocks with SourceBlock = %d (%.1f%%)",
-        stats.total_blocks, stats.source_blocks_present,
-        ((double)stats.source_blocks_present) * 100 / stats.total_blocks);
+  TRACE(
+      INSTRUMENT, 4,
+      "Total Basic Blocks = %d, Basic Blocks with SourceBlock = %d (%.1f%%), "
+      "Total flow idom violations = %d (%.1f%%), ",
+      stats.total_blocks, stats.source_blocks_present,
+      ((double)stats.source_blocks_present) * 100 / stats.total_blocks,
+      stats.flow_violation_idom,
+      ((double)stats.flow_violation_idom) * 100 / stats.source_blocks_present);
 }
 
 void run_assessor(PassManager& pm, const Scope& scope, bool initially = false) {
