@@ -7,7 +7,10 @@
 
 #include "FastRegAlloc.h"
 
+#include "DexUtil.h"
+#include "LinearScan.h"
 #include "Trace.h"
+#include "Walkers.h"
 
 namespace fastregalloc {
 
@@ -19,6 +22,11 @@ void FastRegAllocPass::run_pass(DexStoresVector& stores,
                                 ConfigFiles&,
                                 PassManager& mgr) {
   TRACE(FREG, 1, "FastRegAllocPass reached!");
+  auto scope = build_class_scope(stores);
+  walk::parallel::methods(scope, [&](DexMethod* m) {
+    LinearScanAllocator allocator(m);
+    allocator.allocate();
+  });
   ++m_run;
 }
 
