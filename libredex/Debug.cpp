@@ -55,14 +55,19 @@
 bool slow_invariants_debug{debug};
 
 namespace {
-void crash_backtrace() {
+
+// This is a macro to avoid extra frames for symbolization.
 #if !IS_WINDOWS
-  constexpr int max_bt_frames = 256;
-  void* buf[max_bt_frames];
-  auto frames = backtrace(buf, max_bt_frames);
-  backtrace_symbols_fd(buf, frames, STDERR_FILENO);
+#define CRASH_BACKTRACE()                             \
+  do {                                                \
+    constexpr int max_bt_frames = 256;                \
+    void* buf[max_bt_frames];                         \
+    auto frames = backtrace(buf, max_bt_frames);      \
+    backtrace_symbols_fd(buf, frames, STDERR_FILENO); \
+  } while (0)
+#else
+#define CRASH_BACKTRACE()
 #endif
-}
 
 std::atomic<size_t> g_crashing{0};
 
@@ -71,7 +76,20 @@ std::atomic<size_t> g_crashing{0};
 void crash_backtrace_handler(int sig) {
   size_t crashing = g_crashing.fetch_add(1);
   if (crashing == 0) {
-    crash_backtrace();
+    CRASH_BACKTRACE();
+  } else {
+    sleep(60); // Sleep a minute, then go on to die if we're still alive.
+  }
+
+  signal(sig, SIG_DFL);
+  raise(sig);
+}
+
+// Exists purely so that the type of crash can be distinguished in the wrapper.
+void debug_backtrace_handler(int sig) {
+  size_t crashing = g_crashing.fetch_add(1);
+  if (crashing == 0) {
+    CRASH_BACKTRACE();
   } else {
     sleep(60); // Sleep a minute, then go on to die if we're still alive.
   }

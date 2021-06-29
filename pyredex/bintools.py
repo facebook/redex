@@ -20,7 +20,64 @@ IS_WINDOWS = os.name == "nt"
 _BACKTRACE_PATTERN = re.compile(r"^([^(]+)(?:\((.*)\))?\[(0x[0-9a-f]+)\]$")
 
 
-def maybe_addr2line(lines):
+_IGNORE_EXACT_LINES = {
+    # No function or line information.
+    "??",
+    "??:0",
+}
+_IGNORE_LINES_WITH_SUBSTR = [
+    # libc
+    "libc.so.6(abort",
+    "libc.so.6(gsignal",
+    "libc.so.6(__libc_start_main",
+    # libc without name
+    "libc.so.6(+0x",
+    # libstdc++
+    "_ZN9__gnu_cxx27__verbose_terminate_handlerEv",
+    "_ZSt9terminatev",
+    "libstdc++.so.6(__cxa_throw",
+    # libstdc++ without name
+    "libstdc++.so.6(+0x",
+    # Redex crash handler
+    "redex-all(_Z23debug_backtrace_handleri",
+]
+
+
+def _should_skip_line(line):
+    global _IGNORE_EXACT_LINES, _IGNORE_LINES_WITH_SUBSTR
+    if line in _IGNORE_EXACT_LINES:
+        return True
+    if any(item in line for item in _IGNORE_LINES_WITH_SUBSTR):
+        return True
+    return False
+
+
+# Check whether addr2line is available
+def _has_addr2line():
+    try:
+        subprocess.check_call(
+            ["addr2line", "-v"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        return True
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return False
+
+
+_ADDR2LINE_BASE = ["addr2line", "-f", "-i", "-C", "-e"]
+
+
+def _symbolize(filename, offset):
+    # It's good enough not to use server mode.
+    try:
+        output = subprocess.check_output(_ADDR2LINE_BASE + [filename, offset])
+        return output.decode(sys.stderr.encoding).splitlines()
+    except subprocess.CalledProcessError:
+        return ["<addr2line error>"]
+
+
+def maybe_addr2line(lines, out=sys.stderr):
     global _BACKTRACE_PATTERN
 
     # Generate backtrace lines.
@@ -38,42 +95,25 @@ def maybe_addr2line(lines):
         return
     matches_gen = itertools.chain([first_elem], matches_gen)
 
-    # Check whether addr2line is available
-    def has_addr2line():
-        try:
-            subprocess.check_call(
-                ["addr2line", "-v"],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-            return True
-        except (subprocess.CalledProcessError, FileNotFoundError):
-            return False
-
-    if not has_addr2line():
-        sys.stderr.write("Addr2line not found!\n")
+    if not _has_addr2line():
+        out.write("Addr2line not found!\n")
         return
-    sys.stderr.write("\n")
-
-    addr2line_base = ["addr2line", "-f", "-i", "-C", "-e"]
-
-    def symbolize(filename, offset):
-        # It's good enough not to use server mode.
-        try:
-            output = subprocess.check_output(addr2line_base + [filename, offset])
-            return output.decode(sys.stderr.encoding).splitlines()
-        except subprocess.CalledProcessError:
-            return ["<addr2line error>"]
+    out.write("\n")
 
     for m in matches_gen:
-        sys.stderr.write("%s(%s)[%s]\n" % (m.group(1), m.group(2), m.group(3)))
-        decoded = symbolize(m.group(1), m.group(3))
-        odd_line = True
-        for line in decoded:
-            sys.stderr.write("%s%s\n" % ("  " * (1 if odd_line else 2), line.strip()))
-            odd_line = not odd_line
+        if _should_skip_line(m.string):
+            continue
 
-    sys.stderr.write("\n")
+        out.write("%s(%s)[%s]\n" % (m.group(1), m.group(2), m.group(3)))
+        decoded = _symbolize(m.group(1), m.group(3))
+        for idx, line in enumerate(decoded):
+            line = line.strip()
+            if _should_skip_line(line):
+                continue
+
+            out.write(f'{"  " * (1 if idx % 2 == 0 else 2)}{line}\n')
+
+    out.write("\n")
 
 
 def find_abort_error(lines):

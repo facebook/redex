@@ -1175,9 +1175,9 @@ void dump_class_method_info_map(const std::string& file_path,
 } // namespace
 
 int main(int argc, char* argv[]) {
+  signal(SIGABRT, debug_backtrace_handler);
+  signal(SIGINT, debug_backtrace_handler);
   signal(SIGSEGV, crash_backtrace_handler);
-  signal(SIGABRT, crash_backtrace_handler);
-  signal(SIGINT, crash_backtrace_handler);
 #if !IS_WINDOWS
   signal(SIGBUS, crash_backtrace_handler);
 #endif
