@@ -179,8 +179,8 @@ class MultiMethodInliner {
    * Inline callees in the caller if is_inlinable below returns true.
    */
   void inline_callees(DexMethod* caller,
-                      const std::vector<DexMethod*>& callees,
-                      const std::vector<DexMethod*>& optional_callees = {});
+                      const std::unordered_set<DexMethod*>& callees,
+                      bool filter_via_should_inline = false);
 
   /**
    * Inline callees in the given instructions in the caller, if is_inlinable
@@ -210,12 +210,9 @@ class MultiMethodInliner {
   shrinker::Shrinker& get_shrinker() { return m_shrinker; }
 
  private:
-  void caller_inline(DexMethod* caller,
-                     const std::vector<DexMethod*>& nonrecursive_callees);
-
   using CallerNonrecursiveCalleesByStackDepth = std::unordered_map<
       size_t,
-      std::vector<std::pair<DexMethod*, std::vector<DexMethod*>>>>;
+      std::vector<std::pair<DexMethod*, std::unordered_set<DexMethod*>>>>;
 
   /**
    * Determine order in which to inline.
@@ -437,14 +434,15 @@ class MultiMethodInliner {
    * For callers waiting for callees to become ready, decrement their wait
    * counter, and if zero, initiate inlining and postprocessing.
    */
-  void decrement_caller_wait_counts(const std::vector<DexMethod*>& callers);
+  void decrement_caller_wait_counts(
+      const std::unordered_set<DexMethod*>& callers);
 
   /**
    * If a callee has been registered for delayed shrinking, decrement the wait
    * counter, and if zero, initiate shrinking asynchronously.
    */
   void decrement_delayed_shrinking_callee_wait_counts(
-      const std::vector<DexMethod*>& callees);
+      const std::unordered_set<DexMethod*>& callees);
 
   /**
    * Whether inline_inlinables needs to deconstruct the caller's and callees'
@@ -527,12 +525,12 @@ class MultiMethodInliner {
 
   // For parallel execution, callee-callers relationships. The induced tree
   // has been pruned of recursive relationships.
-  std::unordered_map<const DexMethod*, std::vector<DexMethod*>>
+  std::unordered_map<const DexMethod*, std::unordered_set<DexMethod*>>
       m_async_callee_callers;
 
   // For parallel execution, caller-callees relationships. The induced tree
   // has been pruned of recursive relationships.
-  std::unordered_map<const DexMethod*, std::vector<DexMethod*>>
+  std::unordered_map<const DexMethod*, std::unordered_set<DexMethod*>>
       m_async_caller_callees;
 
   // For parallel execution, number of remaining callees any given caller is

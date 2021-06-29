@@ -439,7 +439,7 @@ void MultiMethodInliner::inline_methods() {
       for (auto callee : callees) {
         auto& callee_priority = m_async_callee_priorities[callee];
         callee_priority = std::max(callee_priority, caller_priority + 1);
-        m_async_callee_callers[callee].push_back(caller);
+        m_async_callee_callers[callee].insert(caller);
       }
       m_async_caller_wait_counts.emplace(caller, callees.size());
       m_async_caller_callees.emplace(caller, callees);
@@ -500,7 +500,7 @@ size_t MultiMethodInliner::compute_caller_nonrecursive_callees_by_stack_depth(
   visited->emplace(caller, std::numeric_limits<size_t>::max());
   call_stack.insert(caller);
 
-  std::vector<DexMethod*> nonrecursive_callees;
+  std::unordered_set<DexMethod*> nonrecursive_callees;
   nonrecursive_callees.reserve(callees.size());
   std::unordered_map<DexMethod*, size_t> unique_callees;
   for (auto callee : callees) {
@@ -539,9 +539,7 @@ size_t MultiMethodInliner::compute_caller_nonrecursive_callees_by_stack_depth(
       continue;
     }
 
-    for (size_t i = 0; i < unique_callees.at(callee); i++) {
-      nonrecursive_callees.push_back(callee);
-    }
+    nonrecursive_callees.insert(callee);
   }
 
   (*visited)[caller] = stack_depth;
@@ -550,26 +548,6 @@ size_t MultiMethodInliner::compute_caller_nonrecursive_callees_by_stack_depth(
         std::make_pair(caller, nonrecursive_callees));
   }
   return stack_depth;
-}
-
-void MultiMethodInliner::caller_inline(
-    DexMethod* caller, const std::vector<DexMethod*>& nonrecursive_callees) {
-  TraceContext context(caller);
-  // We select callees to inline into this caller
-  std::vector<DexMethod*> selected_callees;
-  std::vector<DexMethod*> optional_selected_callees;
-  selected_callees.reserve(nonrecursive_callees.size());
-  for (auto callee : nonrecursive_callees) {
-    if (should_inline(callee)) {
-      selected_callees.push_back(callee);
-    } else {
-      optional_selected_callees.push_back(callee);
-    }
-  }
-
-  if (!selected_callees.empty() || !optional_selected_callees.empty()) {
-    inline_callees(caller, selected_callees, optional_selected_callees);
-  }
 }
 
 boost::optional<InvokeConstantArgumentsAndDeadBlocks>
@@ -631,15 +609,14 @@ MultiMethodInliner::get_invoke_constant_arguments(
 
 void MultiMethodInliner::inline_callees(
     DexMethod* caller,
-    const std::vector<DexMethod*>& callees,
-    const std::vector<DexMethod*>& optional_callees) {
+    const std::unordered_set<DexMethod*>& callees,
+    bool filter_via_should_inline) {
   TraceContext context{caller};
   size_t found = 0;
 
   // walk the caller opcodes collecting all candidates to inline
   // Build a callee to opcode map
   std::vector<Inlinable> inlinables;
-  auto max = callees.size() + optional_callees.size();
   editable_cfg_adapter::iterate_with_iterator(
       caller->get_code(), [&](const IRList::iterator& it) {
         auto insn = it->insn;
@@ -653,22 +630,16 @@ void MultiMethodInliner::inline_callees(
           callee = caller_virtual_callee[caller][insn];
           always_assert(callee);
         }
-        if (callee == nullptr) {
+        if (callee == nullptr || !callees.count(callee)) {
           return editable_cfg_adapter::LOOP_CONTINUE;
         }
         const std::unordered_set<cfg::Block*>* dead_blocks{nullptr};
         bool no_return{false};
         size_t insn_size{0};
-        if (std::find(callees.begin(), callees.end(), callee) ==
-            callees.end()) {
-          // If a callee wasn't in the list of general callees, that means that
-          // it's not beneficial on average (across all callsites) to inline the
-          // callee. However, let's see if it's beneficial for this particular
-          // callsite, taking into account constant-arguments (if any).
-          if (std::find(optional_callees.begin(), optional_callees.end(),
-                        callee) != optional_callees.end() &&
-              should_inline_optional(caller, insn, callee, &no_return,
-                                     &dead_blocks, &insn_size)) {
+        if (filter_via_should_inline) {
+          if (should_inline(callee)) {
+          } else if (should_inline_optional(caller, insn, callee, &no_return,
+                                            &dead_blocks, &insn_size)) {
             always_assert(dead_blocks);
             no_return = false; // we'll inline anyway
           } else if (!no_return) {
@@ -694,15 +665,8 @@ void MultiMethodInliner::inline_callees(
 
         inlinables.push_back(
             (Inlinable){callee, it, insn, no_return, dead_blocks, insn_size});
-        if (++found == max) {
-          return editable_cfg_adapter::LOOP_BREAK;
-        }
         return editable_cfg_adapter::LOOP_CONTINUE;
       });
-  if (found != max) {
-    always_assert(found <= max);
-    info.not_found += max - found;
-  }
 
   if (!inlinables.empty()) {
     inline_inlinables(caller, inlinables);
@@ -1141,7 +1105,7 @@ void MultiMethodInliner::postprocess_method(DexMethod* method) {
 }
 
 void MultiMethodInliner::decrement_caller_wait_counts(
-    const std::vector<DexMethod*>& callers) {
+    const std::unordered_set<DexMethod*>& callers) {
   for (auto caller : callers) {
     bool caller_ready = false;
     m_async_caller_wait_counts.update(
@@ -1152,14 +1116,14 @@ void MultiMethodInliner::decrement_caller_wait_counts(
       if (inline_inlinables_need_deconstruct(caller)) {
         // TODO: Support parallel execution without pre-deconstructed cfgs.
         auto& callees = m_async_caller_callees.at(caller);
-        caller_inline(caller, callees);
+        inline_callees(caller, callees, /* filter_via_should_inline */ true);
         decrement_delayed_shrinking_callee_wait_counts(callees);
         async_postprocess_method(caller);
       } else {
         // We can process inlining concurrently!
         async_prioritized_method_execute(caller, [caller, this]() {
           auto& callees = m_async_caller_callees.at(caller);
-          caller_inline(caller, callees);
+          inline_callees(caller, callees, /* filter_via_should_inline */ true);
           decrement_delayed_shrinking_callee_wait_counts(callees);
           if (m_shrinker.enabled() ||
               m_async_callee_priorities.count(caller) != 0) {
@@ -1172,7 +1136,7 @@ void MultiMethodInliner::decrement_caller_wait_counts(
 }
 
 void MultiMethodInliner::decrement_delayed_shrinking_callee_wait_counts(
-    const std::vector<DexMethod*>& callees) {
+    const std::unordered_set<DexMethod*>& callees) {
   for (auto callee : callees) {
     if (!m_async_delayed_shrinking_callee_wait_counts.count(callee)) {
       continue;

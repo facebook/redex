@@ -116,7 +116,7 @@ class BuilderTransform {
   bool inline_methods(
       DexMethod* method,
       DexType* type,
-      const std::function<std::vector<DexMethod*>(IRCode*, DexType*)>&
+      const std::function<std::unordered_set<DexMethod*>(IRCode*, DexType*)>&
           get_methods_to_inline);
 
  private:
@@ -125,9 +125,10 @@ class BuilderTransform {
   ConcurrentMethodRefCache m_concurrent_resolved_refs;
 };
 
-std::vector<DexMethod*> get_all_methods(IRCode* code, DexType* type);
+std::unordered_set<DexMethod*> get_all_methods(IRCode* code, DexType* type);
 
-std::vector<DexMethod*> get_non_init_methods(IRCode* code, DexType* type);
+std::unordered_set<DexMethod*> get_non_init_methods(IRCode* code,
+                                                    DexType* type);
 
 bool has_builder_name(DexType* type);
 
