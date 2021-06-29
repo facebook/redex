@@ -104,11 +104,18 @@ using ConstantArgumentsOccurrences = std::pair<ConstantArguments, size_t>;
 
 struct Inlinable {
   DexMethod* callee;
+  // Only used when not using cfg; iterator to invoke instruction to callee
   IRList::iterator iterator;
+  // Invoke instruction to callee
   IRInstruction* insn;
   bool optional() const { return !!dead_blocks; }
+  // Whether the invocation at a particular call-site is guaranteed to not
+  // return normally, and instead of inlining, a throw statement should be
+  // inserted afterwards.
   bool no_return{false};
+  // Dead-blocks in the callee at a particular call-site
   const std::unordered_set<cfg::Block*>* dead_blocks;
+  // Estimated size of callee, possibly reduced by call-site specific knowledge
   size_t insn_size;
 };
 
@@ -117,12 +124,22 @@ struct CalleeCallerRefs {
   size_t classes;
 };
 
+// The average or call-site specific inlined costs, depending on how it is
+// retrieved
 struct InlinedCost {
+  // Full code costs of the original callee
+  size_t full_code;
+  // Average or call-site specific code costs of the callee after pruning
   size_t code;
+  // Average or call-site specific method-refs count of the callee after pruning
   size_t method_refs;
+  // Average or call-site specific others-refs count of the callee after pruning
   size_t other_refs;
+  // Whether all or a specific call-site is guaranteed to not return normally
   bool no_return;
+  // For a specific call-site, a set of known dead blocks in the callee
   std::unordered_set<cfg::Block*> dead_blocks;
+  // Maximum or call-site specific estimated callee size after pruning
   size_t insn_size;
 };
 

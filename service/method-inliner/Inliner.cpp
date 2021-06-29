@@ -1654,8 +1654,13 @@ static InlinedCost get_inlined_cost(
     cost += returns - 1;
   }
 
-  return {cost,     method_refs_set.size(), other_refs_set.size(),
-          !returns, std::move(dead_blocks), insn_size};
+  return {cost,
+          cost,
+          method_refs_set.size(),
+          other_refs_set.size(),
+          !returns,
+          std::move(dead_blocks),
+          insn_size};
 }
 
 InlinedCost MultiMethodInliner::get_inlined_cost(const DexMethod* callee) {
@@ -1716,13 +1721,13 @@ InlinedCost MultiMethodInliner::get_inlined_cost(const DexMethod* callee) {
       // TODO: This parallelization happens independently (in addition to) the
       // parallelization via m_async_method_executor. This should be combined,
       // using a single thread pool.
-      inlined_cost = {0, 0, 0, true, {}, 0};
+      inlined_cost = {inlined_cost.full_code, 0, 0, 0, true, {}, 0};
       auto num_threads = std::min(redex_parallel::default_num_threads(),
                                   callee_constant_arguments.size());
       workqueue_run<ConstantArgumentsOccurrences>(
           process_key, callee_constant_arguments, num_threads);
     } else {
-      inlined_cost = {0, 0, 0, true, {}, 0};
+      inlined_cost = {inlined_cost.full_code, 0, 0, 0, true, {}, 0};
       for (auto& p : callee_constant_arguments) {
         process_key(p);
       }
@@ -1731,6 +1736,7 @@ InlinedCost MultiMethodInliner::get_inlined_cost(const DexMethod* callee) {
     always_assert(callees_analyzed > 0);
     // compute average costs, rounding up to be conservative
     inlined_cost = {
+        inlined_cost.full_code,
         (inlined_cost.code + callees_analyzed - 1) / callees_analyzed,
         (inlined_cost.method_refs + callees_analyzed - 1) / callees_analyzed,
         (inlined_cost.other_refs + callees_analyzed - 1) / callees_analyzed,
@@ -1752,6 +1758,7 @@ InlinedCost MultiMethodInliner::get_inlined_cost(const DexMethod* callee) {
       [&](const DexMethod*, boost::optional<InlinedCost>& value, bool exists) {
         if (exists) {
           // We wasted some work, and some other thread beat us. Oh well...
+          always_assert(value->full_code == inlined_cost.full_code);
           always_assert(value->code == inlined_cost.code);
           always_assert(value->method_refs == inlined_cost.method_refs);
           always_assert(value->other_refs == inlined_cost.other_refs);
@@ -1831,7 +1838,6 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
           (inlined_cost.method_refs + inlined_cost.other_refs) > 0) {
         cross_dex_penalty++;
       }
-      inlined_cost.code += cross_dex_penalty;
     }
   }
 
@@ -1847,14 +1853,14 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
   if (root(callee)) {
     if (m_config.inline_small_non_deletables) {
       // Let's just consider this particular inlining opportunity
-      return inlined_cost.code > invoke_cost;
+      return inlined_cost.code + cross_dex_penalty > invoke_cost;
     } else {
       return true;
     }
   }
 
   // Let's just consider this particular inlining opportunity
-  if (inlined_cost.code <= invoke_cost) {
+  if (inlined_cost.code + cross_dex_penalty <= invoke_cost) {
     return false;
   }
 
@@ -1886,14 +1892,13 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
 
     // The cost of keeping a method amounts of somewhat fixed metadata overhead,
     // plus the method body, which we approximate with the inlined cost.
-    size_t method_cost = COST_METHOD + get_inlined_cost(callee).code;
+    size_t method_cost = COST_METHOD + inlined_cost.full_code;
     auto methods_cost = method_cost * same_method_implementations;
 
     // If we inline invocations to this method everywhere, we could delete the
     // method. Is this worth it, given the number of callsites and costs
     // involved?
-    if ((inlined_cost.code - cross_dex_penalty) * caller_count +
-            classes * cross_dex_penalty >
+    if (inlined_cost.code * caller_count + classes * cross_dex_penalty >
         invoke_cost * caller_count + methods_cost) {
       return true;
     }
@@ -1940,20 +1945,19 @@ bool MultiMethodInliner::should_inline_optional(
   *dead_blocks = &inlined_cost.dead_blocks;
   *insn_size = inlined_cost.insn_size;
 
-  auto inlined_cost_code = inlined_cost.code;
+  size_t cross_dex_penalty{0};
   if (m_mode != IntraDex && !is_private(callee) &&
       caller->get_class() != callee->get_class()) {
     // Inlining methods into different classes might lead to worse
     // cross-dex-ref minimization results.
-    size_t cross_dex_penalty = inlined_cost.method_refs;
+    cross_dex_penalty = inlined_cost.method_refs;
     if (inlined_cost.method_refs + inlined_cost.other_refs > 0) {
       cross_dex_penalty++;
     }
-    inlined_cost_code += cross_dex_penalty;
   }
 
   size_t invoke_cost = get_invoke_cost(callee);
-  if (inlined_cost_code > invoke_cost) {
+  if (inlined_cost.code + cross_dex_penalty > invoke_cost) {
     return false;
   }
 
