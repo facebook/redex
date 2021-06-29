@@ -130,11 +130,11 @@ struct InlinedCost {
   // Full code costs of the original callee
   size_t full_code;
   // Average or call-site specific code costs of the callee after pruning
-  size_t code;
+  float code;
   // Average or call-site specific method-refs count of the callee after pruning
-  size_t method_refs;
+  float method_refs;
   // Average or call-site specific others-refs count of the callee after pruning
-  size_t other_refs;
+  float other_refs;
   // Whether all or a specific call-site is guaranteed to not return normally
   bool no_return;
   // For a specific call-site, a set of known dead blocks in the callee

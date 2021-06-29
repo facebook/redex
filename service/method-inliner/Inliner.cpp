@@ -1655,9 +1655,9 @@ static InlinedCost get_inlined_cost(
   }
 
   return {cost,
-          cost,
-          method_refs_set.size(),
-          other_refs_set.size(),
+          (float)cost,
+          (float)method_refs_set.size(),
+          (float)other_refs_set.size(),
           !returns,
           std::move(dead_blocks),
           insn_size};
@@ -1692,7 +1692,7 @@ InlinedCost MultiMethodInliner::get_inlined_cost(const DexMethod* callee) {
                                     m_shrinker.get_immut_analyzer_state());
       TRACE(INLINE, 4,
             "[too_many_callers] get_inlined_cost with %zu constant invoke "
-            "params %s @ %s: cost %zu, method refs %zu, other refs %zu (dead "
+            "params %s @ %s: cost %f, method refs %f, other refs %f (dead "
             "blocks: %zu), %s, insn_size %zu",
             constant_arguments.is_top() ? 0 : constant_arguments.size(),
             get_key(constant_arguments).c_str(), SHOW(callee), res.code,
@@ -1734,12 +1734,12 @@ InlinedCost MultiMethodInliner::get_inlined_cost(const DexMethod* callee) {
     }
 
     always_assert(callees_analyzed > 0);
-    // compute average costs, rounding up to be conservative
+    // compute average costs
     inlined_cost = {
         inlined_cost.full_code,
-        (inlined_cost.code + callees_analyzed - 1) / callees_analyzed,
-        (inlined_cost.method_refs + callees_analyzed - 1) / callees_analyzed,
-        (inlined_cost.other_refs + callees_analyzed - 1) / callees_analyzed,
+        inlined_cost.code / callees_analyzed,
+        inlined_cost.method_refs / callees_analyzed,
+        inlined_cost.other_refs / callees_analyzed,
         inlined_cost.no_return,
         {},
         inlined_cost.insn_size,
@@ -1748,11 +1748,11 @@ InlinedCost MultiMethodInliner::get_inlined_cost(const DexMethod* callee) {
         callee, std::make_shared<std::unordered_map<std::string, InlinedCost>>(
                     std::move(inlined_costs_keyed)));
   }
-  TRACE(
-      INLINE, 4, "[too_many_callers] get_inlined_cost %s: {%zu,%zu,%zu,%s,%zu}",
-      SHOW(callee), inlined_cost.code, inlined_cost.method_refs,
-      inlined_cost.other_refs, inlined_cost.no_return ? "no_return" : "return",
-      inlined_cost.insn_size);
+  TRACE(INLINE, 4, "[too_many_callers] get_inlined_cost %s: {%f,%f,%f,%s,%zu}",
+        SHOW(callee), inlined_cost.code, inlined_cost.method_refs,
+        inlined_cost.other_refs,
+        inlined_cost.no_return ? "no_return" : "return",
+        inlined_cost.insn_size);
   m_inlined_costs.update(
       callee,
       [&](const DexMethod*, boost::optional<InlinedCost>& value, bool exists) {
@@ -1825,7 +1825,7 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
   auto inlined_cost = get_inlined_cost(callee);
 
   boost::optional<CalleeCallerRefs> callee_caller_refs;
-  size_t cross_dex_penalty{0};
+  float cross_dex_penalty{0};
   if (m_mode != IntraDex && !is_private(callee)) {
     callee_caller_refs = get_callee_caller_refs(callee);
     if (callee_caller_refs->same_class) {
@@ -1845,8 +1845,9 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
 
   size_t invoke_cost = get_invoke_cost(callee);
   TRACE(INLINE, 3,
-        "[too_many_callers] %zu calls to %s; cost: inlined %zu, invoke %zu",
-        caller_count, SHOW(callee), inlined_cost.code, invoke_cost);
+        "[too_many_callers] %zu calls to %s; cost: inlined %f + %f, invoke %zu",
+        caller_count, SHOW(callee), inlined_cost.code, cross_dex_penalty,
+        invoke_cost);
 
   // 3. Assess whether we should not inline
 
@@ -1945,7 +1946,7 @@ bool MultiMethodInliner::should_inline_optional(
   *dead_blocks = &inlined_cost.dead_blocks;
   *insn_size = inlined_cost.insn_size;
 
-  size_t cross_dex_penalty{0};
+  float cross_dex_penalty{0};
   if (m_mode != IntraDex && !is_private(callee) &&
       caller->get_class() != callee->get_class()) {
     // Inlining methods into different classes might lead to worse
