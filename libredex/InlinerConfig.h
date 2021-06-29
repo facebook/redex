@@ -23,7 +23,6 @@ struct InlinerConfig {
   bool throw_after_no_return{false};
   bool enforce_method_size_limit{true};
   bool multiple_callers{false};
-  bool inline_small_non_deletables{true};
   bool delete_any_candidate{false};
   bool use_constant_propagation_and_local_dce_for_callee_size{true};
   bool use_cfg_inliner{false};

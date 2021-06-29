@@ -1851,18 +1851,12 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
 
   // 3. Assess whether we should not inline
 
-  if (root(callee)) {
-    if (m_config.inline_small_non_deletables) {
-      // Let's just consider this particular inlining opportunity
-      return inlined_cost.code + cross_dex_penalty > invoke_cost;
-    } else {
-      return true;
-    }
-  }
-
   // Let's just consider this particular inlining opportunity
   if (inlined_cost.code + cross_dex_penalty <= invoke_cost) {
     return false;
+  }
+  if (root(callee)) {
+    return true;
   }
 
   std::unordered_set<DexMethod*> callers_set(callers.begin(), callers.end());
