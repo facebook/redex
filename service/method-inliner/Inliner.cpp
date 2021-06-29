@@ -261,6 +261,7 @@ static std::string get_key(const ConstantArguments& constant_arguments) {
       if (object->jvm_cached_singleton) {
         oss << "(cached)";
       }
+      oss << show(object->type);
       oss << "{";
       bool first{true};
       for (auto& attr : object->attributes) {
@@ -320,7 +321,13 @@ void MultiMethodInliner::compute_callee_constant_arguments() {
           auto key = get_key(constant_arguments);
           concurrent_callee_constant_arguments.update(
               callee, [&](const DexMethod*, CalleeInfo& ci, bool /* exists */) {
-                ci.constant_arguments.emplace(key, constant_arguments);
+                auto q = ci.constant_arguments.emplace(key, constant_arguments);
+                if (!q.second) {
+                  always_assert_log(q.first->second.equals(constant_arguments),
+                                    "same key %s for\n    %s\nvs. %s",
+                                    key.c_str(), SHOW(q.first->second),
+                                    SHOW(constant_arguments));
+                }
                 ++ci.occurrences[key];
               });
           m_call_constant_arguments.emplace(insn, constant_arguments);
