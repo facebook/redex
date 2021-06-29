@@ -72,17 +72,6 @@ const size_t MIN_COST_FOR_PARALLELIZATION = 1977;
  */
 constexpr uint64_t HARD_MAX_INSTRUCTION_SIZE = UINT64_C(1) << 32;
 
-/*
- * Some versions of ART (5.0.0 - 5.0.2) will fail to verify a method if it
- * is too large. See https://code.google.com/p/android/issues/detail?id=66655.
- *
- * The verifier rounds up to the next power of two, and doesn't support any
- * size greater than 16. See
- * http://androidxref.com/5.0.0_r2/xref/art/compiler/dex/verified_method.cc#107
- */
-constexpr uint32_t SOFT_MAX_INSTRUCTION_SIZE = 1 << 15;
-constexpr uint32_t INSTRUCTION_BUFFER = 1 << 12;
-
 } // namespace
 
 MultiMethodInliner::MultiMethodInliner(
@@ -637,18 +626,28 @@ void MultiMethodInliner::inline_callees(
         bool no_return{false};
         size_t insn_size{0};
         if (filter_via_should_inline) {
-          if (should_inline(callee)) {
-          } else if (should_inline_optional(caller, insn, callee, &no_return,
-                                            &dead_blocks, &insn_size)) {
-            always_assert(dead_blocks);
-            no_return = false; // we'll inline anyway
-          } else if (!no_return) {
+          // Cost model is based on fully inlining callee everywhere; let's
+          // see if we can get more detailed call-site specific information
+          if (should_inline_at_call_site(caller, insn, callee, &no_return,
+                                         &dead_blocks, &insn_size)) {
+            always_assert(!no_return);
+            // Yes, we know might have dead_blocks and a refined insn_size
+          } else if (should_inline_always(callee)) {
+            // We'll fully inline the callee without any adjustments
+            no_return = false;
+            insn_size = get_callee_insn_size(callee);
+          } else if (no_return) {
+            always_assert(insn_size == 0);
+            always_assert(!dead_blocks);
+          } else {
             return editable_cfg_adapter::LOOP_CONTINUE;
           }
+        } else {
+          insn_size = get_callee_insn_size(callee);
         }
-        always_assert(dead_blocks || !no_return);
         always_assert(callee->is_concrete());
-        if (m_analyze_and_prune_inits && method::is_init(callee)) {
+        if (m_analyze_and_prune_inits && method::is_init(callee) &&
+            !no_return) {
           if (!callee->get_code()->editable_cfg_built()) {
             return editable_cfg_adapter::LOOP_CONTINUE;
           }
@@ -777,9 +776,9 @@ void MultiMethodInliner::inline_inlinables(
   }
 
   // attempt to inline all inlinable candidates
-  size_t estimated_insn_size = caller->editable_cfg_built()
-                                   ? caller->cfg().sum_opcode_sizes()
-                                   : caller->sum_opcode_sizes();
+  size_t estimated_caller_size = caller->editable_cfg_built()
+                                     ? caller->cfg().sum_opcode_sizes()
+                                     : caller->sum_opcode_sizes();
 
   // Prefer inlining smaller methods first, so that we are less likely to hit
   // overall size limit.
@@ -793,14 +792,7 @@ void MultiMethodInliner::inline_inlinables(
                      if (a.no_return != b.no_return) {
                        return a.no_return > b.no_return;
                      }
-                     // Second, prefer non-optional inlinables, as they were
-                     // (potentially) selected with a global cost model, taking
-                     // into account the savings achieved when eliminating all
-                     // calls
-                     if (a.optional() != b.optional()) {
-                       return a.optional() < b.optional();
-                     }
-                     // Third, prefer smaller methods, to avoid hitting size
+                     // Second, prefer smaller methods, to avoid hitting size
                      // limits too soon
                      return a.insn_size < b.insn_size;
                    });
@@ -896,7 +888,7 @@ void MultiMethodInliner::inline_inlinables(
           unreachable_insns += unreachable_insn_count;
           recompute_remaining_callsites();
         }
-        estimated_insn_size = caller_cfg.sum_opcode_sizes();
+        estimated_caller_size = caller_cfg.sum_opcode_sizes();
         no_returns++;
       }
       continue;
@@ -919,9 +911,9 @@ void MultiMethodInliner::inline_inlinables(
 
     std::vector<DexMethod*> make_static;
     bool caller_too_large;
-    auto not_inlinable =
-        !is_inlinable(caller_method, callee_method, callsite_insn,
-                      estimated_insn_size, &make_static, &caller_too_large);
+    auto not_inlinable = !is_inlinable(
+        caller_method, callee_method, callsite_insn, estimated_caller_size,
+        inlinable.insn_size, &make_static, &caller_too_large);
     if (not_inlinable && caller_too_large &&
         inlined_callees.size() > last_intermediate_inlined_callees) {
       always_assert(m_config.use_cfg_inliner);
@@ -935,29 +927,29 @@ void MultiMethodInliner::inline_inlinables(
         caller->cfg().recompute_registers_size();
         cfg_next_caller_reg = caller->cfg().get_registers_size();
       }
-      estimated_insn_size = caller->cfg().sum_opcode_sizes();
+      estimated_caller_size = caller->cfg().sum_opcode_sizes();
       recompute_remaining_callsites();
       if (!remaining_callsites->count(callsite_insn)) {
         calls_not_inlined++;
         continue;
       }
-      not_inlinable =
-          !is_inlinable(caller_method, callee_method, callsite_insn,
-                        estimated_insn_size, &make_static, &caller_too_large);
+      not_inlinable = !is_inlinable(caller_method, callee_method, callsite_insn,
+                                    estimated_caller_size, inlinable.insn_size,
+                                    &make_static, &caller_too_large);
       if (!not_inlinable && m_config.intermediate_shrinking &&
           m_shrinker.enabled()) {
         intermediate_shrinkings++;
         m_shrinker.shrink_method(caller_method);
         cfg_next_caller_reg = caller->cfg().get_registers_size();
-        estimated_insn_size = caller->cfg().sum_opcode_sizes();
+        estimated_caller_size = caller->cfg().sum_opcode_sizes();
         recompute_remaining_callsites();
         if (!remaining_callsites->count(callsite_insn)) {
           calls_not_inlined++;
           continue;
         }
-        not_inlinable =
-            !is_inlinable(caller_method, callee_method, callsite_insn,
-                          estimated_insn_size, &make_static, &caller_too_large);
+        not_inlinable = !is_inlinable(
+            caller_method, callee_method, callsite_insn, estimated_caller_size,
+            inlinable.insn_size, &make_static, &caller_too_large);
       }
     }
     if (not_inlinable) {
@@ -996,7 +988,7 @@ void MultiMethodInliner::inline_inlinables(
     TRACE(INL, 2, "caller: %s\tcallee: %s",
           caller->cfg_built() ? SHOW(caller->cfg()) : SHOW(caller),
           SHOW(callee));
-    estimated_insn_size += inlinable.insn_size;
+    estimated_caller_size += inlinable.insn_size;
 
     inlined_callees.push_back(callee_method);
   }
@@ -1085,13 +1077,9 @@ void MultiMethodInliner::postprocess_method(DexMethod* method) {
     return;
   }
 
-  // This pre-populates the
-  // - m_should_inline,
-  // - m_callee_insn_sizes, and
-  // - m_callee_type_refs
-  // - m_callee_caller_refs
-  // caches.
-  if (should_inline(method)) {
+  // Pre-populate various caches.
+  get_inlined_cost(method);
+  if (should_inline_always(method)) {
     get_callee_insn_size(method);
     get_callee_type_refs(method);
   }
@@ -1161,7 +1149,8 @@ void MultiMethodInliner::decrement_delayed_shrinking_callee_wait_counts(
 bool MultiMethodInliner::is_inlinable(const DexMethod* caller,
                                       const DexMethod* callee,
                                       const IRInstruction* insn,
-                                      size_t estimated_insn_size,
+                                      uint64_t estimated_caller_size,
+                                      uint64_t estimated_callee_size,
                                       std::vector<DexMethod*>* make_static,
                                       bool* caller_too_large_) {
   TraceContext context{caller};
@@ -1223,7 +1212,8 @@ bool MultiMethodInliner::is_inlinable(const DexMethod* caller,
       return false;
     }
 
-    if (caller_too_large(caller->get_class(), estimated_insn_size, callee)) {
+    if (caller_too_large(caller->get_class(), estimated_caller_size,
+                         estimated_callee_size)) {
       if (insn) {
         log_nopt(INL_TOO_BIG, caller, insn);
       }
@@ -1266,13 +1256,13 @@ bool MultiMethodInliner::is_blocklisted(const DexMethod* callee) {
 }
 
 bool MultiMethodInliner::is_estimate_over_max(uint64_t estimated_caller_size,
-                                              const DexMethod* callee,
+                                              uint64_t estimated_callee_size,
                                               uint64_t max) {
   // INSTRUCTION_BUFFER is added because the final method size is often larger
   // than our estimate -- during the sync phase, we may have to pick larger
   // branch opcodes to encode large jumps.
-  auto callee_size = get_callee_insn_size(callee);
-  if (estimated_caller_size + callee_size > max - INSTRUCTION_BUFFER) {
+  if (estimated_caller_size + estimated_callee_size >
+      max - std::min(m_config.instruction_size_buffer, max)) {
     info.caller_too_large++;
     return true;
   }
@@ -1280,9 +1270,9 @@ bool MultiMethodInliner::is_estimate_over_max(uint64_t estimated_caller_size,
 }
 
 bool MultiMethodInliner::caller_too_large(DexType* caller_type,
-                                          size_t estimated_caller_size,
-                                          const DexMethod* callee) {
-  if (is_estimate_over_max(estimated_caller_size, callee,
+                                          uint64_t estimated_caller_size,
+                                          uint64_t estimated_callee_size) {
+  if (is_estimate_over_max(estimated_caller_size, estimated_callee_size,
                            HARD_MAX_INSTRUCTION_SIZE)) {
     return true;
   }
@@ -1295,8 +1285,8 @@ bool MultiMethodInliner::caller_too_large(DexType* caller_type,
     return false;
   }
 
-  if (is_estimate_over_max(estimated_caller_size, callee,
-                           SOFT_MAX_INSTRUCTION_SIZE)) {
+  if (is_estimate_over_max(estimated_caller_size, estimated_callee_size,
+                           m_config.soft_max_instruction_size)) {
     return true;
   }
 
@@ -1329,7 +1319,7 @@ bool MultiMethodInliner::should_inline_fast(const DexMethod* callee) {
   return false;
 }
 
-bool MultiMethodInliner::should_inline(const DexMethod* callee) {
+bool MultiMethodInliner::should_inline_always(const DexMethod* callee) {
   if (should_inline_fast(callee)) {
     return true;
   }
@@ -1814,11 +1804,38 @@ bool MultiMethodInliner::can_inline_init(const DexMethod* init_method) {
 }
 
 bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
+  if (root(callee) || !m_config.multiple_callers) {
+    return true;
+  }
+
   const auto& callers = callee_caller.at(callee);
   auto caller_count = callers.size();
   always_assert(caller_count > 0);
   auto same_method_implementations = get_same_method_implementations(callee);
   always_assert(caller_count > same_method_implementations || root(callee));
+
+  std::unordered_set<DexMethod*> callers_set(callers.begin(), callers.end());
+
+  // Can we inline the init-callee into all callers?
+  // If not, then we can give up, as there's no point in making the case that
+  // we can eliminate the callee method based on pervasive inlining.
+  if (m_analyze_and_prune_inits && method::is_init(callee)) {
+    if (!callee->get_code()->editable_cfg_built()) {
+      return true;
+    }
+    if (!can_inline_init(callee)) {
+      for (auto caller : callers_set) {
+        if (!method::is_init(caller) ||
+            caller->get_class() != callee->get_class() ||
+            !caller->get_code()->editable_cfg_built() ||
+            !constructor_analysis::can_inline_inits_in_same_class(
+                caller, callee,
+                /* callsite_insn */ nullptr)) {
+          return true;
+        }
+      }
+    }
+  }
 
   // 1. Determine costs of inlining
 
@@ -1849,78 +1866,45 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
         caller_count, SHOW(callee), inlined_cost.code, cross_dex_penalty,
         invoke_cost);
 
-  // 3. Assess whether we should not inline
+  size_t classes = callee_caller_refs ? callee_caller_refs->classes : 0;
 
-  // Let's just consider this particular inlining opportunity
-  if (inlined_cost.code + cross_dex_penalty <= invoke_cost) {
-    return false;
-  }
-  if (root(callee)) {
+  // The cost of keeping a method amounts of somewhat fixed metadata overhead,
+  // plus the method body, which we approximate with the inlined cost.
+  size_t method_cost = COST_METHOD + inlined_cost.full_code;
+  auto methods_cost = method_cost * same_method_implementations;
+
+  // If we inline invocations to this method everywhere, we could delete the
+  // method. Is this worth it, given the number of callsites and costs
+  // involved?
+  if (inlined_cost.code * caller_count + classes * cross_dex_penalty >
+      invoke_cost * caller_count + methods_cost) {
     return true;
   }
 
-  std::unordered_set<DexMethod*> callers_set(callers.begin(), callers.end());
-
-  // Can we inline the init-callee into all callers?
-  // If not, then we can give up, as there's no point in making the case that
-  // we can eliminate the callee method based on pervasive inlining.
-  if (m_analyze_and_prune_inits && method::is_init(callee)) {
-    if (!callee->get_code()->editable_cfg_built()) {
+  // We can't eliminate the method entirely if it's not inlinable
+  for (auto caller : callers_set) {
+    // We can't account here in detail for the caller and callee size. We hope
+    // for the best, and assume that the caller is empty, and we'll use the
+    // (maximum) insn_size for all inlined-costs. We'll check later again at
+    // each individual call-site whether the size limits hold.
+    if (!is_inlinable(caller, callee, /* insn */ nullptr,
+                      /* estimated_caller_size */ 0,
+                      /* estimated_callee_size */ inlined_cost.insn_size,
+                      /* make_static */ nullptr)) {
       return true;
-    }
-    if (!can_inline_init(callee)) {
-      for (auto caller : callers_set) {
-        if (!method::is_init(caller) ||
-            caller->get_class() != callee->get_class() ||
-            !caller->get_code()->editable_cfg_built() ||
-            !constructor_analysis::can_inline_inits_in_same_class(
-                caller, callee,
-                /* callsite_insn */ nullptr)) {
-          return true;
-        }
-      }
     }
   }
 
-  if (m_config.multiple_callers) {
-    size_t classes = callee_caller_refs ? callee_caller_refs->classes : 0;
-
-    // The cost of keeping a method amounts of somewhat fixed metadata overhead,
-    // plus the method body, which we approximate with the inlined cost.
-    size_t method_cost = COST_METHOD + inlined_cost.full_code;
-    auto methods_cost = method_cost * same_method_implementations;
-
-    // If we inline invocations to this method everywhere, we could delete the
-    // method. Is this worth it, given the number of callsites and costs
-    // involved?
-    if (inlined_cost.code * caller_count + classes * cross_dex_penalty >
-        invoke_cost * caller_count + methods_cost) {
-      return true;
-    }
-
-    // We can't eliminate the method entirely if it's not inlinable
-    for (auto caller : callers_set) {
-      if (!is_inlinable(caller, callee, /* insn */ nullptr,
-                        /* estimated_insn_size */ 0,
-                        /* make_static */ nullptr)) {
-        return true;
-      }
-    }
-
-    return false;
-  }
-
-  return true;
+  return false;
 }
 
-bool MultiMethodInliner::should_inline_optional(
+bool MultiMethodInliner::should_inline_at_call_site(
     DexMethod* caller,
     const IRInstruction* invoke_insn,
     DexMethod* callee,
     bool* no_return,
     const std::unordered_set<cfg::Block*>** dead_blocks,
     size_t* insn_size) {
-  *no_return = false;
   if (!m_call_constant_arguments.count_unsafe(invoke_insn)) {
     return false;
   }
@@ -1936,9 +1920,6 @@ bool MultiMethodInliner::should_inline_optional(
     return false;
   }
   const auto& inlined_cost = it->second;
-  *no_return = inlined_cost.no_return;
-  *dead_blocks = &inlined_cost.dead_blocks;
-  *insn_size = inlined_cost.insn_size;
 
   float cross_dex_penalty{0};
   if (m_mode != IntraDex && !is_private(callee) &&
@@ -1953,9 +1934,12 @@ bool MultiMethodInliner::should_inline_optional(
 
   size_t invoke_cost = get_invoke_cost(callee);
   if (inlined_cost.code + cross_dex_penalty > invoke_cost) {
+    *no_return = inlined_cost.no_return;
     return false;
   }
 
+  *dead_blocks = &inlined_cost.dead_blocks;
+  *insn_size = inlined_cost.insn_size;
   return true;
 }
 

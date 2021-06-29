@@ -497,8 +497,9 @@ void VirtualMerging::merge_methods() {
       auto overridden_method = const_cast<DexMethod*>(q.first);
       auto overriding_method = const_cast<DexMethod*>(q.second);
 
-      if (overriding_method->get_code()->sum_opcode_sizes() >
-          m_max_overriding_method_instructions) {
+      size_t estimated_callee_size =
+          overriding_method->get_code()->sum_opcode_sizes();
+      if (estimated_callee_size > m_max_overriding_method_instructions) {
         TRACE(VM,
               5,
               "[VM] %s is too large to be merged into %s",
@@ -507,14 +508,15 @@ void VirtualMerging::merge_methods() {
         m_stats.huge_methods++;
         continue;
       }
-      size_t estimated_insn_size =
+      size_t estimated_caller_size =
           is_abstract(overridden_method)
               ? 64 // we'll need some extra instruction; 64 is conservative
               : overridden_method->get_code()->sum_opcode_sizes();
       std::vector<DexMethod*> make_static;
       if (!m_inliner->is_inlinable(overridden_method, overriding_method,
                                    nullptr /* invoke_virtual_insn */,
-                                   estimated_insn_size, &make_static)) {
+                                   estimated_caller_size, estimated_callee_size,
+                                   &make_static)) {
         TRACE(VM,
               3,
               "[VM] Cannot inline %s into %s",

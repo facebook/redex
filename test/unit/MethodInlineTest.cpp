@@ -444,6 +444,52 @@ TEST_F(MethodInlineTest, test_intra_dex_inlining) {
   }
 }
 
+// Don't inline when it would exceed (configured) size
+TEST_F(MethodInlineTest, size_limit) {
+  ConcurrentMethodRefCache concurrent_resolve_cache;
+  auto concurrent_resolver = [&concurrent_resolve_cache](DexMethodRef* method,
+                                                         MethodSearch search) {
+    return resolve_method(method, search, concurrent_resolve_cache);
+  };
+
+  DexStoresVector stores;
+  std::unordered_set<DexMethod*> canidates;
+  std::unordered_set<DexMethod*> expected_inlined;
+  auto foo_cls = create_a_class("Lfoo;");
+  auto bar_cls = create_a_class("Lbar;");
+  {
+    // foo is in dex 2, bar is in dex 3.
+    DexStore store("root");
+    store.add_classes({});
+    store.add_classes({foo_cls});
+    store.add_classes({bar_cls});
+    stores.push_back(std::move(store));
+  }
+  {
+    auto foo_m1 = make_a_method(foo_cls, "foo_m1", 1);
+    auto bar_m1 = make_a_method(bar_cls, "bar_m1", 2001);
+    auto bar_m2 = make_a_method(bar_cls, "bar_m2", 2002);
+    canidates.insert(foo_m1);
+    canidates.insert(bar_m1);
+    canidates.insert(bar_m2);
+    // foo_main calls foo_m1 and bar_m2.
+    make_a_method_calls_others(foo_cls, "foo_main", {foo_m1, bar_m2});
+    // bar_main calls bar_m1.
+    make_a_method_calls_others(bar_cls, "bar_main", {bar_m1});
+  }
+  auto scope = build_class_scope(stores);
+  api::LevelChecker::init(0, scope);
+
+  inliner::InlinerConfig inliner_config;
+  inliner_config.soft_max_instruction_size = 0;
+  inliner_config.populate(scope);
+  MultiMethodInliner inliner(scope, stores, canidates, concurrent_resolver,
+                             inliner_config, IntraDex);
+  inliner.inline_methods();
+  auto inlined = inliner.get_inlined();
+  EXPECT_EQ(inlined.size(), 0);
+}
+
 TEST_F(MethodInlineTest, minimal_self_loop_regression) {
   ConcurrentMethodRefCache concurrent_resolve_cache;
   auto concurrent_resolver = [&concurrent_resolve_cache](DexMethodRef* method,

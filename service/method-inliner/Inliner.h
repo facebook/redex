@@ -108,7 +108,6 @@ struct Inlinable {
   IRList::iterator iterator;
   // Invoke instruction to callee
   IRInstruction* insn;
-  bool optional() const { return !!dead_blocks; }
   // Whether the invocation at a particular call-site is guaranteed to not
   // return normally, and instead of inlining, a throw statement should be
   // inserted afterwards.
@@ -214,7 +213,8 @@ class MultiMethodInliner {
   bool is_inlinable(const DexMethod* caller,
                     const DexMethod* callee,
                     const IRInstruction* insn,
-                    size_t estimated_insn_size,
+                    uint64_t estimated_caller_size,
+                    uint64_t estimated_callee_size,
                     std::vector<DexMethod*>* make_static,
                     bool* caller_too_large_ = nullptr);
 
@@ -328,7 +328,7 @@ class MultiMethodInliner {
   bool cross_store_reference(const DexMethod* caller, const DexMethod* callee);
 
   bool is_estimate_over_max(uint64_t estimated_caller_size,
-                            const DexMethod* callee,
+                            uint64_t estimated_callee_size,
                             uint64_t max);
 
   /**
@@ -340,8 +340,8 @@ class MultiMethodInliner {
    * registers.
    */
   bool caller_too_large(DexType* caller_type,
-                        size_t estimated_caller_size,
-                        const DexMethod* callee);
+                        uint64_t estimated_caller_size,
+                        uint64_t estimated_callee_size);
 
   /**
    * Return whether the callee should be inlined into the caller. This differs
@@ -356,12 +356,14 @@ class MultiMethodInliner {
    * a call to `inline_methods()`, but not if `inline_callees()` is invoked
    * directly.
    */
-  bool should_inline(const DexMethod* callee);
+  bool should_inline_always(const DexMethod* callee);
 
   /**
    * Whether it's beneficial to inline the callee at a particular callsite.
+   * no_return may be set to true when the return value is false.
+   * dead_blocks and insn_size are set when the return value is true.
    */
-  bool should_inline_optional(
+  bool should_inline_at_call_site(
       DexMethod* caller,
       const IRInstruction* invoke_insn,
       DexMethod* callee,

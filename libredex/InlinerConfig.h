@@ -31,6 +31,21 @@ struct InlinerConfig {
   bool shrink_other_methods{true};
   bool unique_inlined_registers{true};
   bool debug{false};
+
+  /*
+   * Some versions of ART (5.0.0 - 5.0.2) will fail to verify a method if it
+   * is too large. See https://code.google.com/p/android/issues/detail?id=66655.
+   *
+   * The verifier rounds up to the next power of two, and doesn't support any
+   * size greater than 16. See
+   * http://androidxref.com/5.0.0_r2/xref/art/compiler/dex/verified_method.cc#107
+   */
+  uint64_t soft_max_instruction_size{1 << 15};
+  // INSTRUCTION_BUFFER is added because the final method size is often larger
+  // than our estimate -- during the sync phase, we may have to pick larger
+  // branch opcodes to encode large jumps.
+  uint64_t instruction_size_buffer{1 << 12};
+
   std::unordered_set<DexType*> allowlist_no_method_limit;
   // We will populate the information to rstate of classes and methods.
   std::unordered_set<DexType*> m_no_inline_annos;
