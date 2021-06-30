@@ -18,12 +18,14 @@ class UpCodeMotionPass : public Pass {
     size_t branches_moved_over{0};
     size_t inverted_conditional_branches{0};
     size_t clobbered_registers{0};
+    size_t skipped_branches{0};
 
     Stats& operator+=(const Stats& that) {
       instructions_moved += that.instructions_moved;
       branches_moved_over += that.branches_moved_over;
       inverted_conditional_branches += that.inverted_conditional_branches;
       clobbered_registers += that.clobbered_registers;
+      skipped_branches += that.skipped_branches;
       return *this;
     }
   };
@@ -44,4 +46,5 @@ class UpCodeMotionPass : public Pass {
       cfg::Edge* branch_edge,
       cfg::Edge* goto_edge,
       std::vector<IRInstruction*>* instructions_to_insert);
+  static bool is_hot(cfg::Block* b);
 };
