@@ -40,6 +40,7 @@
 #include "RedexContext.h"
 #include "Show.h"
 #include "SourceBlocks.h"
+#include "Trace.h"
 #include "TypeInference.h"
 #include "Walkers.h"
 
@@ -227,10 +228,12 @@ bool UpCodeMotionPass::gather_instructions_to_insert(
   return true;
 }
 
-UpCodeMotionPass::Stats UpCodeMotionPass::process_code(bool is_static,
-                                                       DexType* declaring_type,
-                                                       DexTypeList* args,
-                                                       IRCode* code) {
+UpCodeMotionPass::Stats UpCodeMotionPass::process_code(
+    bool is_static,
+    DexType* declaring_type,
+    DexTypeList* args,
+    IRCode* code,
+    bool is_branch_hot_check) {
   Stats stats;
 
   code->build_cfg(/* editable = true*/);
@@ -284,10 +287,12 @@ UpCodeMotionPass::Stats UpCodeMotionPass::process_code(bool is_static,
       stats.inverted_conditional_branches++;
     }
 
-    if (is_hot(b)) {
-      if (!is_hot(branch_edge->target())) {
-        stats.skipped_branches++;
-        continue;
+    if (is_branch_hot_check) {
+      if (is_hot(b)) {
+        if (!is_hot(branch_edge->target())) {
+          stats.skipped_branches++;
+          continue;
+        }
       }
     }
     // We want to insert the (cloned) movable instructions of the branch edge
@@ -370,15 +375,15 @@ void UpCodeMotionPass::run_pass(DexStoresVector& stores,
                                 PassManager& mgr) {
   auto scope = build_class_scope(stores);
 
-  Stats stats = walk::parallel::methods<Stats>(scope, [](DexMethod* method) {
+  Stats stats = walk::parallel::methods<Stats>(scope, [&](DexMethod* method) {
     const auto code = method->get_code();
     if (!code) {
       return Stats{};
     }
 
-    Stats stats_lambda =
-        UpCodeMotionPass::process_code(is_static(method), method->get_class(),
-                                       method->get_proto()->get_args(), code);
+    Stats stats_lambda = UpCodeMotionPass::process_code(
+        is_static(method), method->get_class(), method->get_proto()->get_args(),
+        code, m_check_if_branch_is_hot);
     if (stats_lambda.instructions_moved || stats_lambda.branches_moved_over) {
       TRACE(UCM, 3,
             "[up code motion] Moved %zu instructions over %zu conditional "

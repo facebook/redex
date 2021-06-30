@@ -20,7 +20,8 @@ void test(const std::string& code_str,
           size_t expected_instructions_moved,
           size_t expected_branches_moved_over,
           size_t expected_inverted_conditional_branches,
-          size_t expected_clobbered_registers) {
+          size_t expected_clobbered_registers,
+          bool branch_hotness_check = true) {
   auto code = assembler::ircode_from_string(code_str);
   auto expected = assembler::ircode_from_string(expected_str);
 
@@ -28,7 +29,7 @@ void test(const std::string& code_str,
   DexTypeList* args = DexTypeList::make_type_list({});
   DexType* declaring_type = nullptr;
   UpCodeMotionPass::Stats stats = UpCodeMotionPass::process_code(
-      is_static, declaring_type, args, code.get());
+      is_static, declaring_type, args, code.get(), branch_hotness_check);
   EXPECT_EQ(expected_instructions_moved, stats.instructions_moved);
   EXPECT_EQ(expected_branches_moved_over, stats.branches_moved_over);
   EXPECT_EQ(expected_inverted_conditional_branches,
