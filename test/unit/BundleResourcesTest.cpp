@@ -73,7 +73,7 @@ TEST(BundleResources, TestReadManifestClasses) {
     EXPECT_EQ(app_classes.count("Lcom/fb/bundles/MyAppComponentFactory;"), 1);
 
     EXPECT_EQ(manifest_info.instrumentation_classes.count(
-                  "Lcom/fb/bundles/MyInstrumentation;"),
+                  "Landroidx/test/runner/AndroidJUnitRunner;"),
               1);
 
     auto provider = find_component_info(manifest_info.component_tags,
