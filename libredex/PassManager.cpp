@@ -759,13 +759,14 @@ struct SourceBlocksStats {
 };
 
 bool is_source_block_hot(SourceBlock* sb) {
+  bool is_hot = false;
   if (sb != nullptr) {
-    boost::optional<float> val = sb->get_val(0);
-    if (val && (*val > 0.0f)) {
-      return true;
-    }
+    sb->foreach_val_early([&is_hot](const auto& val) {
+      is_hot = val && val->val > 0.0f;
+      return is_hot;
+    });
   }
-  return false;
+  return is_hot;
 }
 
 void track_source_block_coverage(PassManager& mgr,
