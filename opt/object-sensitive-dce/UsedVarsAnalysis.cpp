@@ -52,7 +52,7 @@ FixpointIterator::FixpointIterator(
 
 void FixpointIterator::analyze_instruction(IRInstruction* insn,
                                            UsedVarsSet* used_vars) const {
-  TRACE(OSDCE, 5, "Before %s : %s : %s", SHOW(insn), SHOW(*used_vars));
+  TRACE(OSDCE, 5, "Before %s : %s", SHOW(insn), SHOW(*used_vars));
   bool required = is_required(insn, *used_vars);
   auto op = insn->opcode();
   if (ptrs::may_alloc(op)) {
