@@ -68,7 +68,18 @@ class DexTypeValue final : public sparta::AbstractValue<DexTypeValue> {
   sparta::AbstractValueKind join_with(const DexTypeValue& other) override;
 
   sparta::AbstractValueKind widen_with(const DexTypeValue& other) override {
-    return join_with(other);
+    if (equals(other)) {
+      return kind();
+    }
+    if (is_none()) {
+      m_dex_type = other.get_dex_type();
+      return sparta::AbstractValueKind::Value;
+    } else if (other.is_none()) {
+      return sparta::AbstractValueKind::Value;
+    }
+    // Converge to Top earlier than join_with.
+    clear();
+    return sparta::AbstractValueKind::Top;
   }
 
   sparta::AbstractValueKind meet_with(const DexTypeValue& other) override {
