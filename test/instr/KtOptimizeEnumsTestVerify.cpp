@@ -71,13 +71,11 @@ TEST_F(PreVerify, KotlinGeneratedClass) {
   auto switch_cases_B = collect_switch_cases(meth_useB);
   auto switch_cases_A_again = collect_switch_cases(meth_useAAgain);
 
-  std::unordered_set<size_t> expected_switch_cases_A{1, 2};
-  std::unordered_set<size_t> expected_switch_cases_B{1, 2};
-  std::unordered_set<size_t> expected_switch_cases_A_again{1, 2};
-
-  EXPECT_EQ(expected_switch_cases_A, switch_cases_A);
-  EXPECT_EQ(expected_switch_cases_B, switch_cases_B);
-  EXPECT_EQ(expected_switch_cases_A_again, switch_cases_A_again);
+  // Note: Different versions of compilers (javac/kotlinc/d8) can generate
+  // different keys. So we don't check the values of the keys in PreVerify.
+  EXPECT_EQ(switch_cases_A.size(), 2);
+  EXPECT_EQ(switch_cases_B.size(), 2);
+  EXPECT_EQ(switch_cases_A_again.size(), 2);
 }
 
 TEST_F(PostVerify, KotlinGeneratedClass) {
@@ -101,6 +99,8 @@ TEST_F(PostVerify, KotlinGeneratedClass) {
   auto switch_cases_B = collect_switch_cases(meth_useB);
   auto switch_cases_A_again = collect_switch_cases(meth_useAAgain);
 
+  // OptimizeEnumsPass replaces the old keys with ordinals. Here we check if the
+  // keys are expected.
   std::unordered_set<size_t> expected_switch_cases_A{0, 2};
   std::unordered_set<size_t> expected_switch_cases_B{0, 2};
   std::unordered_set<size_t> expected_switch_cases_A_again{0, 1};
