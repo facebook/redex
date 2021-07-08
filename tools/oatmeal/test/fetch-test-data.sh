@@ -10,20 +10,20 @@
 #
 # $ ./fetch-test-data.sh
 
-cd $(dirname "$0")
+cd "$(dirname "$0")"
 
-commit=`grep 'TESTDATA_COMMIT =' BUCK | awk '{print $3}'|sed 's/"//g'`
-temp_dir=`mktemp -d`
-tar_file=$temp_dir/test-data.tar.gz
+commit=7b81421c26124ab77061feb27cf1e17470dda27a
+
+temp_dir=$(mktemp -d)
+tar_file=$temp_dir/test-data.$commit.tar.xz
 
 echo "Fetching $commit to $temp_dir"
 
-dewey cat --project fbsource --commit $commit --tag oatmeal/test-data \
-      --dest $tar_file --path test-data.tar.gz
+manifold get "oatmeal/tree/test-data.$commit.tar.xz" "$tar_file"
 
-tar -C $temp_dir -zxf $tar_file
+tar -C "$temp_dir" -xf "$tar_file"
 
-rm $tar_file
+rm "$tar_file"
 
 echo "Test data extracted to $temp_dir"
 echo ""
