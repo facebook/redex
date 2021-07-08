@@ -726,21 +726,21 @@ void RemoveUnusedArgsPass::run_pass(DexStoresVector& stores,
 
   TRACE(ARGS,
         1,
-        "Removed %d redundant callsite arguments",
+        "Removed %zu redundant callsite arguments",
         num_callsite_args_removed);
   TRACE(ARGS,
         1,
-        "Removed %d redundant method parameters",
+        "Removed %zu redundant method parameters",
         num_method_params_removed);
   TRACE(ARGS,
         1,
-        "Removed %d redundant method results",
+        "Removed %zu redundant method results",
         num_method_results_removed_count);
-  TRACE(ARGS, 1, "Reordered %d method protos",
+  TRACE(ARGS, 1, "Reordered %zu method protos",
         num_method_protos_reordered_count);
   TRACE(ARGS,
         1,
-        "Updated %d methods with redundant parameters",
+        "Updated %zu methods with redundant parameters",
         num_methods_updated);
 
   mgr.set_metric(METRIC_CALLSITE_ARGS_REMOVED, num_callsite_args_removed);

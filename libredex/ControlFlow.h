@@ -15,6 +15,7 @@
 #include <utility>
 #include <vector>
 
+#include "DexPosition.h"
 #include "IRCode.h"
 #include "WeakTopologicalOrdering.h"
 
@@ -321,6 +322,9 @@ class Block final {
   // return an iterator to the first non-param-loading MFLOW_OPCODE, or end() if
   // there are none.
   IRList::iterator get_first_non_param_loading_insn();
+  // return an iterator to the first instruction (except move-result* and goto)
+  // if it occurs before the first position, or end() if there are none.
+  IRList::iterator get_first_insn_before_position();
 
   // including move-result-pseudo
   bool starts_with_move_result();
@@ -654,16 +658,16 @@ class ControlFlowGraph {
   // edges.
   void remove_insn(const InstructionIterator& it);
 
+  void insert_before(const InstructionIterator& it,
+                     std::unique_ptr<DexPosition> pos);
+  void insert_after(const InstructionIterator& it,
+                    std::unique_ptr<DexPosition> pos);
+
   void insert_before(Block* block,
                      const IRList::iterator& it,
                      std::unique_ptr<DexPosition> pos);
   void insert_after(Block* block,
                     const IRList::iterator& it,
-                    std::unique_ptr<DexPosition> pos);
-
-  void insert_before(const InstructionIterator& it,
-                     std::unique_ptr<DexPosition> pos);
-  void insert_after(const InstructionIterator& it,
                     std::unique_ptr<DexPosition> pos);
 
   void insert_before(const InstructionIterator& it,
@@ -763,12 +767,28 @@ class ControlFlowGraph {
       Block* goto_block,
       const std::vector<std::pair<int32_t, Block*>>& case_to_block);
 
+  // delete old blocks and reroute its predecessors to new blocks
+  void replace_blocks(
+      const std::vector<std::pair<Block*, Block*>>& old_new_blocks);
+
   // delete old_block and reroute its predecessors to new_block
-  void replace_block(Block* old_block, Block* new_block);
+  // Note that replacing blocks is relatively expensive as it scans and fixes up
+  // dangling parent positions in all other blocks; consider calling
+  // remove_blocks to remove multiple blocks at once.
+  void replace_block(Block* old_block, Block* new_block) {
+    replace_blocks({{old_block, new_block}});
+  }
+
+  // Remove blocks from the graph and release associated memory.
+  // Remove all incoming and outgoing edges.
+  void remove_blocks(const std::vector<Block*>& blocks);
 
   // Remove this block from the graph and release associated memory.
   // Remove all incoming and outgoing edges.
-  void remove_block(Block* block);
+  // Note that removing blocks is relatively expensive as it scans and fixes up
+  // dangling parent positions in all other blocks; consider calling
+  // remove_blocks to remove multiple blocks at once.
+  void remove_block(Block* block) { remove_blocks({block}); }
 
   /*
    * Print the graph in the DOT graph description language.
@@ -939,9 +959,10 @@ class ControlFlowGraph {
   // remove blocks with no entries
   void remove_empty_blocks();
 
-  // remove any parent pointer that was passed in as an arg (e.g. for when
-  // you delete the supplied positions)
-  void remove_dangling_parents(const std::unordered_set<DexPosition*>&);
+  // Re-insert any parent pointer that got deleted. This is a useful
+  // method to invoke just after removing positions to avoid leaving
+  // behind dangling parents.
+  void fix_dangling_parents(std::vector<std::unique_ptr<DexPosition>>);
 
   // Assert if there are edges that are never a predecessor or successor of a
   // block
@@ -1429,15 +1450,15 @@ bool ControlFlowGraph::insert(const InstructionIterator& position,
       // Stop adding instructions when we understand that op
       // is the end of the block.
       insns_it = std::prev(end_index);
-      std::unordered_set<DexPosition*> dangling;
+      std::vector<std::unique_ptr<DexPosition>> dangling;
       for (auto it = pos; it != b->m_entries.end();) {
         if (it->type == MFLOW_POSITION) {
-          dangling.insert(it->pos.get());
+          dangling.push_back(std::move(it->pos));
         }
         it = b->m_entries.erase_and_dispose(it);
         invalidated_its = true;
       }
-      remove_dangling_parents(dangling);
+      fix_dangling_parents(std::move(dangling));
 
       if (opcode::is_a_return(op)) {
         // This block now ends in a return, it must have no successors.

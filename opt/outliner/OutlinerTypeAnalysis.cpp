@@ -836,9 +836,10 @@ const DexType* OutlinerTypeAnalysis::get_const_insns_type_demand(
   // 1. Let's see if we can get something out of the constant-uses analysis.
   constant_uses::TypeDemand type_demand{constant_uses::TypeDemand::None};
   for (auto insn : const_insns) {
-    type_demand = (constant_uses::TypeDemand)(
-        type_demand & m_constant_uses->get_constant_type_demand(
-                          const_cast<IRInstruction*>(insn)));
+    type_demand =
+        (constant_uses::TypeDemand)(type_demand &
+                                    m_constant_uses->get_constant_type_demand(
+                                        const_cast<IRInstruction*>(insn)));
     if (type_demand == constant_uses::TypeDemand::Error) {
       return nullptr;
     }

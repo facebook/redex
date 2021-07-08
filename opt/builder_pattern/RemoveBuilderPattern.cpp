@@ -191,11 +191,7 @@ class RemoveClasses {
     };
 
     // Walkers are over classes, so need to do this "manually."
-    auto wq = workqueue_foreach<DexMethod*>(post_process);
-    for (auto* m : methods) {
-      wq.add_item(m);
-    }
-    wq.run_all();
+    workqueue_run<DexMethod*>(post_process, methods);
   }
 
   void collect_excluded_types() {

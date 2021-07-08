@@ -12,6 +12,7 @@
 #include "DexUtil.h"
 #include "GraphUtil.h"
 #include "MethodReference.h"
+#include "ScopedMetrics.h"
 #include "Show.h"
 #include "SourceBlocks.h"
 #include "TypeSystem.h"
@@ -720,7 +721,8 @@ std::unordered_set<std::string> get_cold_start_classes(ConfigFiles& cfg) {
   return cold_start_classes;
 }
 
-void print_stats(const std::vector<MethodInfo>& instrumented_methods,
+void print_stats(ScopedMetrics& sm,
+                 const std::vector<MethodInfo>& instrumented_methods,
                  const size_t max_num_blocks) {
   const size_t total_instrumented = instrumented_methods.size();
   const size_t total_block_instrumented =
@@ -748,13 +750,29 @@ void print_stats(const std::vector<MethodInfo>& instrumented_methods,
   };
 
   // ----- Print summary
-  TRACE(INSTRUMENT, 4, "Maximum blocks for block instrumentation: %zu",
-        max_num_blocks);
-  TRACE(INSTRUMENT, 4, "Total instrumented methods: %zu", total_instrumented);
-  TRACE(INSTRUMENT, 4, "- Block + method instrumented: %zu",
-        total_block_instrumented);
-  TRACE(INSTRUMENT, 4, "- Only method instrumented: %zu",
-        only_method_instrumented);
+  {
+    auto summary_scope = sm.scope("summary");
+    TRACE(INSTRUMENT, 4, "Maximum blocks for block instrumentation: %zu",
+          max_num_blocks);
+    sm.set_metric("max_num_blocks", max_num_blocks);
+    TRACE(INSTRUMENT, 4, "Total instrumented methods: %zu", total_instrumented);
+    sm.set_metric("total_instrumented", total_instrumented);
+    TRACE(INSTRUMENT, 4, "- Block + method instrumented: %zu",
+          total_block_instrumented);
+    sm.set_metric("block_and_method_instrumented", total_block_instrumented);
+    TRACE(INSTRUMENT, 4, "- Only method instrumented: %zu",
+          only_method_instrumented);
+    sm.set_metric("method_instrumented_only", only_method_instrumented);
+  }
+
+  auto scope_total_avg = [&](const std::string& key, size_t num, size_t denom) {
+    auto scope = sm.scope(key);
+    sm.set_metric("total", num);
+    if (denom != 0) {
+      sm.set_metric("average100", 100 * num / denom);
+    }
+    return scope;
+  };
 
   // ----- Bit-vector stats
   TRACE(INSTRUMENT, 4, "Bit-vector stats for block instrumented methods:");
@@ -777,6 +795,7 @@ void print_stats(const std::vector<MethodInfo>& instrumented_methods,
     TRACE(INSTRUMENT, 4, "Total/average bit vectors: %zu, %s",
           total_bit_vectors,
           SHOW(divide(total_bit_vectors, total_block_instrumented)));
+    scope_total_avg("bit_vectors", total_bit_vectors, total_block_instrumented);
   }
 
   // ----- Instrumented block stats
@@ -804,9 +823,13 @@ void print_stats(const std::vector<MethodInfo>& instrumented_methods,
     TRACE(INSTRUMENT, 4, "Total/average instrumented blocks: %zu, %s",
           total_instrumented_blocks,
           SHOW(divide(total_instrumented_blocks, total_block_instrumented)));
+    scope_total_avg("instrumented_blocks", total_instrumented_blocks,
+                    total_block_instrumented);
     TRACE(INSTRUMENT, 4, "Total/average non-entry blocks: %zu, %s",
           total_non_entry_blocks,
           SHOW(divide(total_non_entry_blocks, total_instrumented)));
+    scope_total_avg("non_entry_blocks", total_non_entry_blocks,
+                    total_block_instrumented);
   }
 
   const size_t total_catches = std::accumulate(
@@ -823,33 +846,61 @@ void print_stats(const std::vector<MethodInfo>& instrumented_methods,
        << (num * 100. / total_non_entry_blocks) << "%)";
     return ss.str();
   };
-  TRACE(INSTRUMENT, 4, "Total non-entry blocks: %zu", total_non_entry_blocks);
-  TRACE(INSTRUMENT, 4, "- Instrumented blocks: %s",
-        SHOW(print_ratio(total_instrumented_blocks)));
-  TRACE(INSTRUMENT, 4, "- Skipped catch blocks: %s",
-        SHOW(print_ratio(total_catches - total_instrumented_catches)));
-  TRACE(INSTRUMENT, 4, "- Skipped due to no source block: %s",
-        SHOW(print_ratio(std::accumulate(
-            instrumented_methods.begin(), instrumented_methods.end(), size_t(0),
-            [](size_t a, auto&& i) { return a + i.num_no_source_blocks; }))));
-  TRACE(INSTRUMENT, 4, "- Skipped due to too large methods: %s",
-        SHOW(print_ratio(std::accumulate(
-            instrumented_methods.begin(), instrumented_methods.end(), size_t(0),
-            [](size_t a, auto&& i) { return a + i.num_blocks_too_large; }))));
-  TRACE(INSTRUMENT, 4, "- Skipped empty blocks: %s",
-        SHOW(print_ratio(std::accumulate(
-            instrumented_methods.begin(), instrumented_methods.end(), size_t(0),
-            [](size_t a, auto&& i) { return a + i.num_empty_blocks; }))));
-  TRACE(INSTRUMENT, 4, "- Skipped useless blocks: %s",
-        SHOW(print_ratio(std::accumulate(
-            instrumented_methods.begin(), instrumented_methods.end(), size_t(0),
-            [](size_t a, auto&& i) { return a + i.num_useless_blocks; }))));
+  auto metric_ratio = [&sm, total_non_entry_blocks](const std::string& sub_key,
+                                                    size_t num) {
+    if (total_non_entry_blocks == 0) {
+      return;
+    }
+    sm.set_metric(sub_key, num);
+    sm.set_metric(sub_key + ".ratio100.00",
+                  10000 * num / total_non_entry_blocks);
+  };
+
+  {
+    auto non_entry_scope = sm.scope("non_entry_blocks_stats");
+    TRACE(INSTRUMENT, 4, "Total non-entry blocks: %zu", total_non_entry_blocks);
+    sm.set_metric("total", total_non_entry_blocks);
+    TRACE(INSTRUMENT, 4, "- Instrumented blocks: %s",
+          SHOW(print_ratio(total_instrumented_blocks)));
+    metric_ratio("total_instrumented_blocks", total_instrumented_blocks);
+    TRACE(INSTRUMENT, 4, "- Skipped catch blocks: %s",
+          SHOW(print_ratio(total_catches - total_instrumented_catches)));
+    {
+      auto skipped_scope = sm.scope("skipped");
+      metric_ratio("catch_blocks", total_catches - total_instrumented_catches);
+      auto no_sb = std::accumulate(
+          instrumented_methods.begin(), instrumented_methods.end(), size_t(0),
+          [](size_t a, auto&& i) { return a + i.num_no_source_blocks; });
+      TRACE(INSTRUMENT, 4, "- Skipped due to no source block: %s",
+            SHOW(print_ratio(no_sb)));
+      metric_ratio("no_source_blocks", no_sb);
+      auto too_large_methods = std::accumulate(
+          instrumented_methods.begin(), instrumented_methods.end(), size_t(0),
+          [](size_t a, auto&& i) { return a + i.num_blocks_too_large; });
+      TRACE(INSTRUMENT, 4, "- Skipped due to too large methods: %s",
+            SHOW(print_ratio(too_large_methods)));
+      metric_ratio("too_large_methods", too_large_methods);
+      auto empty_blocks = std::accumulate(
+          instrumented_methods.begin(), instrumented_methods.end(), size_t(0),
+          [](size_t a, auto&& i) { return a + i.num_empty_blocks; });
+      TRACE(INSTRUMENT, 4, "- Skipped empty blocks: %s",
+            SHOW(print_ratio(empty_blocks)));
+      metric_ratio("empty_blocks", empty_blocks);
+      auto useless_blocks = std::accumulate(
+          instrumented_methods.begin(), instrumented_methods.end(), size_t(0),
+          [](size_t a, auto&& i) { return a + i.num_useless_blocks; });
+      TRACE(INSTRUMENT, 4, "- Skipped useless blocks: %s",
+            SHOW(print_ratio(useless_blocks)));
+      metric_ratio("useless_blocks", useless_blocks);
+    }
+  }
 
   // ----- Instrumented exit block stats
   TRACE(INSTRUMENT, 4, "Instrumented exit block stats:");
   {
     size_t acc = 0;
     size_t total_exits = 0;
+    size_t no_exit = 0;
     std::map<int /*num_vectors*/, size_t /*num_methods*/> dist;
     TRACE(INSTRUMENT, 4, "No onMethodExit but 1+ non-entry blocks:");
     int k = 0;
@@ -858,6 +909,7 @@ void print_stats(const std::vector<MethodInfo>& instrumented_methods,
           i.num_non_entry_blocks != 0) {
         TRACE(INSTRUMENT, 4, "- %d: %zu, %s", ++k, i.num_non_entry_blocks,
               show_deobfuscated(i.method).c_str());
+        ++no_exit;
       }
       ++dist[i.num_exit_calls];
       total_exits += i.num_exit_calls;
@@ -868,6 +920,9 @@ void print_stats(const std::vector<MethodInfo>& instrumented_methods,
     }
     TRACE(INSTRUMENT, 4, "Total/average instrumented exits: %zu, %s",
           total_exits, SHOW(divide(total_exits, total_instrumented)));
+    auto exit_scope =
+        scope_total_avg("instrumented_exits", total_exits, total_instrumented);
+    sm.set_metric("methods_without_exit_calls", no_exit);
   }
 
   // ----- Catch block stats
@@ -886,6 +941,7 @@ void print_stats(const std::vector<MethodInfo>& instrumented_methods,
     }
     TRACE(INSTRUMENT, 4, "Total/average catch blocks: %zu, %s", total,
           SHOW(divide(total, total_instrumented)));
+    scope_total_avg("catch_blocks", total, total_instrumented);
   }
 
   auto print_two_dists = [&divide, &print, &instrumented_methods,
@@ -958,7 +1014,7 @@ void BlockInstrumentHelper::do_basic_block_tracing(
     DexClass* analysis_cls,
     DexStoresVector& stores,
     ConfigFiles& cfg,
-    PassManager&,
+    PassManager& pm,
     const InstrumentPass::Options& options) {
   // I'm too lazy to support sharding in block instrumentation. Future work.
   const size_t NUM_SHARDS = options.num_shards;
@@ -1103,17 +1159,37 @@ void BlockInstrumentHelper::do_basic_block_tracing(
 
   write_metadata(cfg, options.metadata_file_name, instrumented_methods);
 
-  print_stats(instrumented_methods, max_num_blocks);
+  ScopedMetrics sm(pm);
+  auto block_instr_scope = sm.scope("block_instr");
 
-  TRACE(INSTRUMENT, 4, "Instrumentation selection stats:");
-  TRACE(INSTRUMENT, 4, "- All methods: %d", all_methods);
-  TRACE(INSTRUMENT, 4, "- Eligible methods: %d", eligibles);
-  TRACE(INSTRUMENT, 4, "  Uninstrumentable methods: %d", specials);
-  TRACE(INSTRUMENT, 4, "  Non-root methods: %d", non_root_store_methods);
-  TRACE(INSTRUMENT, 4, "- Explicitly selected:");
-  TRACE(INSTRUMENT, 4, "  Allow listed: %d", picked_by_allowlist);
-  TRACE(INSTRUMENT, 4, "  Cold start: %d", picked_by_cs);
-  TRACE(INSTRUMENT, 4, "- Explicitly rejected:");
-  TRACE(INSTRUMENT, 4, "  Not in allow or cold start set: %d", rejected);
-  TRACE(INSTRUMENT, 4, "  Block listed: %d", blocklisted);
+  print_stats(sm, instrumented_methods, max_num_blocks);
+
+  {
+    auto methods_scope = sm.scope("methods");
+    TRACE(INSTRUMENT, 4, "Instrumentation selection stats:");
+    TRACE(INSTRUMENT, 4, "- All methods: %d", all_methods);
+    sm.set_metric("all", all_methods);
+    TRACE(INSTRUMENT, 4, "- Eligible methods: %d", eligibles);
+    sm.set_metric("eligible", eligibles);
+    TRACE(INSTRUMENT, 4, "  Uninstrumentable methods: %d", specials);
+    sm.set_metric("special", specials);
+    TRACE(INSTRUMENT, 4, "  Non-root methods: %d", non_root_store_methods);
+    sm.set_metric("non_root", non_root_store_methods);
+  }
+  {
+    auto sel_scope = sm.scope("selected");
+    TRACE(INSTRUMENT, 4, "- Explicitly selected:");
+    TRACE(INSTRUMENT, 4, "  Allow listed: %d", picked_by_allowlist);
+    sm.set_metric("allow_list", picked_by_allowlist);
+    TRACE(INSTRUMENT, 4, "  Cold start: %d", picked_by_cs);
+    sm.set_metric("cold_start", picked_by_cs);
+  }
+  {
+    auto rej_scope = sm.scope("rejected");
+    TRACE(INSTRUMENT, 4, "- Explicitly rejected:");
+    TRACE(INSTRUMENT, 4, "  Not in allow or cold start set: %d", rejected);
+    sm.set_metric("not_allow_or_cold_start", rejected);
+    TRACE(INSTRUMENT, 4, "  Block listed: %d", blocklisted);
+    sm.set_metric("block_list", blocklisted);
+  }
 }

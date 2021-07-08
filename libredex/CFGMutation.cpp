@@ -41,7 +41,7 @@ void CFGMutation::flush() {
 }
 
 void CFGMutation::ChangeSet::apply(ControlFlowGraph& cfg,
-                                   InstructionIterator& it) const {
+                                   InstructionIterator& it) {
   always_assert_log(
       !is_terminal(it->insn->opcode()) || m_replace.has_value() ||
           m_insert_after.empty(),
@@ -50,6 +50,15 @@ void CFGMutation::ChangeSet::apply(ControlFlowGraph& cfg,
   // Save in case of iterator invalidation.
   Block* b = it.block();
   bool invalidated = false;
+
+  // The iterator does not get invalidated when inserting
+  // positions as it only walks through IRInstructions.
+  for (auto&& pos : m_insert_pos_before) {
+    cfg.insert_before(it, std::move(pos));
+  }
+  for (auto&& pos : m_insert_pos_after) {
+    cfg.insert_after(it, std::move(pos));
+  }
 
   if (!m_replace.has_value() && m_insert_after.empty()) {
     invalidated = cfg.insert_before(it, m_insert_before);

@@ -14,7 +14,7 @@ class LogcatSymbolicator(object):
 
     TRACE_REGEX = re.compile(
         r"^(?P<prefix>.*)\s+at (?P<class>[A-Za-z][0-9A-Za-z_$]*\.[0-9A-Za-z_$.]+)"
-        r"\.(?P<method>[0-9A-Za-z_$<>]+)\((Unknown Source)?:(?P<lineno>\d+)\)\s*\n",
+        r"\.(?P<method>[0-9A-Za-z_$<>]+)\(((Unknown Source)?:(?P<lineno>\d+))?\)\s*\n",
         re.MULTILINE,
     )
 
@@ -50,7 +50,27 @@ class LogcatSymbolicator(object):
                 end = middle - 1
         return None
 
+    # If there's no debug info item, stack traces have no line number e.g.
+    #   at X.OPu.A04()
+    # Just deobfuscate the class/method name
+    def line_replacer_no_lineno(self, matchobj):
+        class_name = matchobj.group("class")
+        method_name = matchobj.group("method")
+        if class_name in self.symbol_maps.class_map:
+            class_map = self.symbol_maps.class_map[class_name]
+            deobf_class_name = class_map.origin_class
+            deobf_method_name = class_map.method_mapping[method_name]
+            return "%s\tat %s.%s()\n" % (
+                matchobj.group("prefix"),
+                deobf_class_name,
+                deobf_method_name,
+            )
+        return matchobj.string
+
     def line_replacer(self, matchobj):
+        if not matchobj.group("lineno"):
+            return self.line_replacer_no_lineno(matchobj)
+
         lineno = int(matchobj.group("lineno"))
         cls = matchobj.group("class")
         if self.symbol_maps.iodi_metadata is not None:

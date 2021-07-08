@@ -1,0 +1,7 @@
+<resources>
+  <string name="app_name">Much app, wow</string>
+  <string name="log_msg">Hello from MyApplication!!</string>
+  <string name="welcome">Welcome to this fine application! Here you will find several used Android resources, and several unused ones. Oh my!</string>
+  <string name="unused_str">Delete me ;)</string>
+  <string name="button_txt">That\'s cool</string>
+</resources>

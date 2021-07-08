@@ -458,12 +458,8 @@ void RenameClassesPassV2::eval_classes(Scope& scope,
       },
       [&] { dont_rename_annotated = build_dont_rename_annotated(); }};
 
-  auto wq = workqueue_foreach<std::function<void()>>(
-      [](std::function<void()>& fn) { fn(); });
-  for (const auto& fn : fns) {
-    wq.add_item(fn);
-  }
-  wq.run_all();
+  workqueue_run<std::function<void()>>([](std::function<void()>& fn) { fn(); },
+                                       fns);
 
   std::string norule;
 
@@ -748,26 +744,8 @@ void RenameClassesPassV2::rename_classes_in_layouts(
         java_names::internal_to_external(apair.first->str()),
         java_names::internal_to_external(apair.second->str()));
   }
-  ssize_t layout_bytes_delta = 0;
-  size_t num_layout_renamed = 0;
-  auto xml_files = get_xml_files(m_apk_dir + "/res");
-  for (const auto& path : xml_files) {
-    if (is_raw_resource(path)) {
-      continue;
-    }
-    size_t num_renamed = 0;
-    ssize_t out_delta = 0;
-    TRACE(RENAME, 6, "Begin rename Views in layout %s", path.c_str());
-    rename_classes_in_layout(path, aliases_for_layouts, &num_renamed,
-                             &out_delta);
-    TRACE(RENAME, 3, "Renamed %zu ResStringPool entries in layout %s",
-          num_renamed, path.c_str());
-    layout_bytes_delta += out_delta;
-    num_layout_renamed += num_renamed;
-  }
-  mgr.incr_metric("layout_bytes_delta", layout_bytes_delta);
-  TRACE(RENAME, 2, "Renamed %zu ResStringPool entries, delta %zi bytes",
-        num_layout_renamed, layout_bytes_delta);
+  auto resources = create_resource_reader(m_apk_dir);
+  resources->rename_classes_in_layouts(aliases_for_layouts);
 }
 
 std::string RenameClassesPassV2::prepend_package_prefix(

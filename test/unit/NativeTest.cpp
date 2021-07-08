@@ -19,7 +19,7 @@ TEST_F(NativeTest, testJNIOutputParsing) {
       "JNI_OUTPUT");
 
   std::unordered_set<std::string> unit_names;
-  for (const auto& unit : comp_units) {
+  for (const auto& [_, unit] : comp_units) {
     unit_names.emplace(unit.get_name());
   }
 
@@ -37,11 +37,26 @@ TEST_F(NativeTest, testBuildingContext) {
   ClassCreator creator(type);
   creator.set_super(type::java_lang_Object());
 
-  DexMethodRef* mref =
+  DexMethodRef* implemented_ref =
       DexMethod::make_method("Lredex/JNIExample;.implemented:()V");
-  auto m = mref->make_concrete(ACC_PUBLIC | ACC_NATIVE, false);
+  auto implemented =
+      implemented_ref->make_concrete(ACC_PUBLIC | ACC_NATIVE, false);
 
-  creator.add_method(m);
+  creator.add_method(implemented);
+
+  DexMethodRef* init_hybrid_ref =
+      DexMethod::make_method("Lredex/JNIExample;.initHybrid:()V");
+  auto init_hybrid =
+      init_hybrid_ref->make_concrete(ACC_PUBLIC | ACC_NATIVE, false);
+
+  creator.add_method(init_hybrid);
+
+  DexMethodRef* foo_ref =
+      DexMethod::make_method("Lredex/JNIExample;.foo:(II)I");
+  auto foo = foo_ref->make_concrete(ACC_PUBLIC | ACC_NATIVE, false);
+
+  creator.add_method(foo);
+
   auto cls = creator.create();
 
   Scope java_scope;
@@ -51,21 +66,34 @@ TEST_F(NativeTest, testBuildingContext) {
       native::NativeContext::build(path_to_native_results.string(), java_scope);
 
   {
-    EXPECT_EQ(1, context.name_to_function.size());
+    EXPECT_EQ(2, context.name_to_compilation_units.size());
 
-    auto func_it =
-        context.name_to_function.find("Java_redex_JNIExample_implemented");
+    auto java_decl_of =
+        [&](const std::string& native_func) -> std::unordered_set<DexMethod*> {
+      for (auto& [_, cu] : context.name_to_compilation_units) {
+        auto f = cu.get_function(native_func);
+        if (f) {
+          return f->get_java_declarations();
+        }
+      }
+      return {};
+    };
 
-    ASSERT_TRUE(func_it != context.name_to_function.end());
-    native::Function* func = func_it->second;
-    EXPECT_EQ(m, func->get_java_declaration());
+    EXPECT_EQ(implemented,
+              *java_decl_of("Java_redex_JNIExample_implemented").begin());
+    EXPECT_EQ(init_hybrid, *java_decl_of("init_hybrid_impl").begin());
+    EXPECT_EQ(foo, *java_decl_of("foo_impl").begin());
   }
 
   {
-    EXPECT_EQ(1, context.java_declaration_to_function.size());
-    auto func_it = context.java_declaration_to_function.find(m);
-    ASSERT_TRUE(func_it != context.java_declaration_to_function.end());
-    native::Function* func = func_it->second;
-    EXPECT_EQ("Java_redex_JNIExample_implemented", func->get_name());
+    EXPECT_EQ(3, context.java_declaration_to_function.size());
+
+    auto native_impl_of = [&](DexMethod* method) {
+      return context.java_declaration_to_function.at(method)->get_name();
+    };
+
+    EXPECT_EQ("Java_redex_JNIExample_implemented", native_impl_of(implemented));
+    EXPECT_EQ("init_hybrid_impl", native_impl_of(init_hybrid));
+    EXPECT_EQ("foo_impl", native_impl_of(foo));
   }
 }

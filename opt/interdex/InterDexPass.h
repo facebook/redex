@@ -82,6 +82,7 @@ class InterDexPass : public Pass {
   bool m_static_prune;
   bool m_emit_canaries;
   bool m_normal_primary_dex;
+  bool m_keep_primary_order;
   int64_t m_linear_alloc_limit;
   int64_t m_reserved_frefs;
   int64_t m_reserved_trefs;
@@ -89,7 +90,8 @@ class InterDexPass : public Pass {
   bool m_can_touch_coldstart_cls;
   bool m_can_touch_coldstart_extended_cls;
   bool m_minimize_cross_dex_refs;
-  CrossDexRefMinimizerConfig m_minimize_cross_dex_refs_config;
+  cross_dex_ref_minimizer::CrossDexRefMinimizerConfig
+      m_minimize_cross_dex_refs_config;
   CrossDexRelocatorConfig m_cross_dex_relocator_config;
   bool m_expect_order_list;
   bool m_sort_remaining_classes;

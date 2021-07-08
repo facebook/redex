@@ -8,6 +8,7 @@
 #include "Peephole.h"
 
 #include <algorithm>
+#include <cinttypes>
 #include <cmath>
 #include <iostream>
 #include <numeric>
@@ -1805,18 +1806,18 @@ class alignas(CACHE_LINE_SIZE) PeepholeOptimizer {
           1,
           "%d net instruction change",
           m_stats_inserted - m_stats_removed);
-    int num_patterns_matched = 0;
+    int64_t num_patterns_matched = 0;
     for (size_t i = 0; i < m_matchers.size(); ++i) {
       num_patterns_matched += m_mgr.get_metric(m_matchers[i].pattern.name);
     }
-    TRACE(PEEPHOLE, 1, "%lu patterns matched and replaced",
+    TRACE(PEEPHOLE, 1, "%" PRId64 " patterns matched and replaced",
           num_patterns_matched);
     TRACE(PEEPHOLE, 5, "Detailed pattern match stats:");
     for (size_t i = 0; i < m_matchers.size(); ++i) {
       std::string current_pattern_name = m_matchers[i].pattern.name;
       TRACE(PEEPHOLE,
             5,
-            "%s: %d",
+            "%s: %" PRId64,
             current_pattern_name.c_str(),
             m_mgr.get_metric(current_pattern_name));
     }
@@ -1848,7 +1849,7 @@ void PeepholePass::run_pass(DexStoresVector& stores,
         mgr, pats, config.disabled_peepholes));
   }
 
-  auto wq = workqueue_foreach<DexClass*>(
+  workqueue_run<DexClass*>(
       [&peephole_optimizers](sparta::SpartaWorkerState<DexClass*>* state,
                              DexClass* cls) {
         auto& ph = peephole_optimizers[state->worker_id()];
@@ -1861,11 +1862,8 @@ void PeepholePass::run_pass(DexStoresVector& stores,
           ph->run_method(m);
         }
       },
+      scope,
       num_threads);
-  for (const auto& cls : scope) {
-    wq.add_item(cls);
-  }
-  wq.run_all();
 
   for (size_t i = 0; i < num_threads; ++i) {
     peephole_optimizers[i]->incr_all_metrics();

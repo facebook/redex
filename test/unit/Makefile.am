@@ -21,6 +21,7 @@ check_PROGRAMS = \
     branch_prefix_hoisting_test \
     cfg_inliner_test \
     cfg_mutation_test \
+    cfg_positions_test \
     check_breadcrumbs_test \
     check_cast_analysis_test \
     concurrent_containers_test \
@@ -85,6 +86,7 @@ check_PROGRAMS = \
     outliner_type_analysis_test \
     partial_pass_test \
     peephole_test \
+    print_kotlin_stats_test \
     proguard_lexer_test \
     proguard_map_test \
     proguard_parser_test \
@@ -93,6 +95,7 @@ check_PROGRAMS = \
     random_forest_test \
     reaching_definitions_test \
     reduce_array_literals_test \
+    reduce_boolean_branches_test \
     reduce_gotos_test \
     reflection_analysis_test \
     reg_alloc_test \
@@ -151,6 +154,9 @@ cfg_inliner_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
 cfg_mutation_test_SOURCES = CFGMutationTest.cpp
 cfg_mutation_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
+
+cfg_positions_test_SOURCES = CFGPositionsTest.cpp
+cfg_positions_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
 check_breadcrumbs_test_SOURCES = CheckBreadCrumbsTest.cpp
 
@@ -294,6 +300,8 @@ partial_pass_test_SOURCES = PartialPassTest.cpp
 
 peephole_test_SOURCES = PeepholeTest.cpp
 
+print_kotlin_stats_test_SOURCES = PrintKotlinStatsTest.cpp
+
 proguard_lexer_test_SOURCES = ProguardLexerTest.cpp
 
 proguard_map_test_SOURCES = ProguardMapTest.cpp
@@ -312,6 +320,9 @@ reaching_definitions_test_SOURCES = ReachingDefinitionsTest.cpp
 
 reduce_array_literals_test_SOURCES = ReduceArrayLiteralsTest.cpp
 reduce_array_literals_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
+
+reduce_boolean_branches_test_SOURCES = ReduceBooleanBranchesTest.cpp VirtScopeHelper.cpp ScopeHelper.cpp
+reduce_boolean_branches_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
 reduce_gotos_test_SOURCES = ReduceGotosTest.cpp
 reduce_gotos_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
@@ -420,6 +431,7 @@ TESTS = \
     branch_prefix_hoisting_test \
     cfg_inliner_test \
     cfg_mutation_test \
+    cfg_positions_test \
     check_breadcrumbs_test \
     check_cast_analysis_test \
     concurrent_containers_test \
@@ -481,6 +493,7 @@ TESTS = \
     outliner_type_analysis_test \
     partial_pass_test \
     peephole_test \
+    print_kotlin_stats_test \
     proguard_lexer_test \
     proguard_map_test \
     proguard_parser_test \
@@ -489,6 +502,7 @@ TESTS = \
     random_forest_test \
     reaching_definitions_test \
     reduce_array_literals_test \
+    reduce_boolean_branches_test \
     reduce_gotos_test \
     reflection_analysis_test \
     reg_alloc_test \

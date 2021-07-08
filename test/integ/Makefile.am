@@ -14,7 +14,6 @@ AM_LOG_FLAGS = -c 'dexfile=$0-class.dex $0'
 check_PROGRAMS = \
     ab_experiment_context_test \
     call_graph_test \
-    class_init_counter_test \
     clinit_side_effect_test \
     constant_propagation_test \
     constructor_dedup_test_test \
@@ -51,9 +50,6 @@ EXTRA_ab_experiment_context_test_DEPENDENCIES = ab_experiment_context_test-class
 
 call_graph_test_SOURCES = CallGraphTest.cpp
 EXTRA_call_graph_test_DEPENDENCIES = call_graph_test-class.dex
-
-class_init_counter_test_SOURCES = ClassInitCounterTest.cpp
-EXTRA_class_init_counter_test_DEPENDENCIES = class_init_counter_test-class.dex
 
 clinit_side_effect_test_SOURCES = ClinitSideEffect.cpp
 EXTRA_clinit_side_effect_test_DEPENDENCIES = clinit_side_effect_test-class.dex
@@ -160,9 +156,6 @@ ab_experiment_context_test-class.jar: ABExperimentContextTest.java
 	$(create_jar)
 
 call_graph_test-class.jar: CallGraphTest.java
-	$(create_jar)
-
-class_init_counter_test-class.jar: ClassInitHierarchy.java
 	$(create_jar)
 
 clinit_side_effect_test-class.jar: ClinitSideEffect.java

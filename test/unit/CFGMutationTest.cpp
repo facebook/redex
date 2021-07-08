@@ -336,6 +336,40 @@ TEST_F(CFGMutationTest, MultipleChanges) {
       ))");
 }
 
+TEST_F(CFGMutationTest, Positions) {
+  EXPECT_MUTATION(
+      [](ControlFlowGraph& cfg) {
+        CFGMutation m(cfg);
+
+        auto dbg_pos = std::make_unique<DexPosition>(1);
+        dbg_pos->bind(DexString::make_string("method_name"),
+                      DexString::make_string("RedexGenerated"));
+
+        m.insert_after(nth_insn(cfg, 0), std::move(dbg_pos));
+
+        dbg_pos = std::make_unique<DexPosition>(0);
+        dbg_pos->bind(DexString::make_string("method_name"),
+                      DexString::make_string("RedexGenerated"));
+        m.insert_before(nth_insn(cfg, 0), std::move(dbg_pos));
+
+        m.insert_before(nth_insn(cfg, 1), {dasm(OPCODE_CONST, {2_v, 2_L})});
+        m.replace(nth_insn(cfg, 0), {dasm(OPCODE_CONST, {1_v, 1_L})});
+
+        m.flush();
+      },
+      /* ACTUAL */ R"((
+        (const v0 0)
+        (return-void)
+      ))",
+      /* EXPECTED */ R"((
+        (.pos:dbg_0 method_name RedexGenerated 0)
+        (const v1 1)
+        (.pos:dbg_1 method_name RedexGenerated 1)
+        (const v2 2)
+        (return-void)
+      ))");
+}
+
 TEST_F(CFGMutationTest, InsertBeforeInstanceOf) {
   EXPECT_MUTATION(
       [](ControlFlowGraph& cfg) {

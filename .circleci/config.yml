@@ -18,13 +18,37 @@ orbs:
   win: circleci/windows@2.2.0
 
 commands:
+  # Setup container.
+  debian-based-image-build-setup:
+    steps:
+      - run:
+          name: Update Apt Data
+          command: |
+            sudo apt-get update
+
   # Setup. Includes boost.
   base-build-setup:
+    parameters:
+      save_boost_cache:
+        type: boolean
+        default: false
     steps:
+      # It is OK to generically restore boost, even if it is not used.
+      - restore_cache:
+          keys:
+            - boost-1-71-0-v1
       - run:
           name: Setup
           command: |
             sudo ./setup_oss_toolchain.sh
+      # Only save the cache when asked, e.g., hopefully when it was populated.
+      - when:
+          condition: << parameters.save_boost_cache >>
+          steps:
+            - save_cache:
+                paths:
+                  - boost_cache
+                key: boost-1-71-0-v1
 
   # For testing, need additional dependencies not provided by the image.
   test-build-setup:
@@ -151,8 +175,12 @@ commands:
       configure_extra:
         default: ""
         type: string
+      save_boost_cache:
+        type: boolean
+        default: false
     steps:
-      - base-build-setup
+      - base-build-setup:
+          save_boost_cache: << parameters.save_boost_cache >>
       - test-build-setup
 
       - configure-and-build-w-make:
@@ -166,8 +194,12 @@ commands:
       configure_extra:
         default: ""
         type: string
+      save_boost_cache:
+        type: boolean
+        default: false
     steps:
-      - base-build-setup
+      - base-build-setup:
+          save_boost_cache: << parameters.save_boost_cache >>
       - test-build-setup-sdk
 
       - configure-and-build-w-make:
@@ -215,6 +247,7 @@ jobs:
     resource_class: large
     steps:
       - checkout
+      - debian-based-image-build-setup
       - setup-build-and-test-w-make
 
   build-20_04:
@@ -224,7 +257,9 @@ jobs:
     resource_class: large
     steps:
       - checkout
-      - setup-build-and-test-w-make
+      - debian-based-image-build-setup
+      - setup-build-and-test-w-make:
+          save_boost_cache: true
 
   build-deb_stable:
     docker:
@@ -233,6 +268,7 @@ jobs:
     resource_class: large
     steps:
       - checkout
+      - debian-based-image-build-setup
       - setup-build-and-test-w-make
 
   build-deb_testing:
@@ -242,6 +278,7 @@ jobs:
     resource_class: large
     steps:
       - checkout
+      - debian-based-image-build-setup
       - setup-build-and-test-w-make-sdk
 
   build-deb_testing-w-clang:
@@ -253,6 +290,7 @@ jobs:
       CXX: clang++
     steps:
       - checkout
+      - debian-based-image-build-setup
       - install-clang
       - setup-build-and-test-w-make-sdk
 

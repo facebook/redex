@@ -9,9 +9,11 @@
 
 #include <atomic>
 #include <boost/optional.hpp>
+#include <limits>
 #include <mutex>
 #include <string>
 
+#include "Debug.h"
 #include "KeepReason.h"
 #include "RedexContext.h"
 
@@ -30,7 +32,7 @@ using InterdexSubgroupIdx = uint32_t;
 class ReferencedState {
  private:
   struct InnerStruct {
-    int32_t m_api_level{-1};
+    int8_t m_api_level{-1};
 
     // Whether this DexMember is referenced by one of the strings in the native
     // libraries. Note that this doesn't allow us to distinguish
@@ -85,6 +87,9 @@ class ReferencedState {
     // Whether this member is an outlined class or method.
     bool m_outlined : 1;
 
+    // Is this member is a kotlin class or method
+    bool m_is_kotlin : 1;
+
     bool m_name_used : 1;
     InnerStruct() {
       // Initializers in bit fields are C++20...
@@ -111,6 +116,7 @@ class ReferencedState {
       m_immutable_getter = false;
       m_pure_method = false;
       m_outlined = false;
+      m_is_kotlin = false;
 
       m_name_used = false;
     }
@@ -118,7 +124,9 @@ class ReferencedState {
 
   // InterDex subgroup, if any.
   // NOTE: Will be set ONLY for generated classes.
-  boost::optional<InterdexSubgroupIdx> m_interdex_subgroup{boost::none};
+  static constexpr InterdexSubgroupIdx kNoSubgroup =
+      std::numeric_limits<InterdexSubgroupIdx>::max();
+  InterdexSubgroupIdx m_interdex_subgroup{kNoSubgroup};
 
   // Going through hoops here to reduce the size of ReferencedState while
   // keeping memory requirements still small in non-default case.
@@ -184,6 +192,8 @@ class ReferencedState {
           other.inner_struct.m_immutable_getter;
       this->inner_struct.m_pure_method =
           this->inner_struct.m_pure_method & other.inner_struct.m_pure_method;
+      this->inner_struct.m_is_kotlin =
+          this->inner_struct.m_is_kotlin & other.inner_struct.m_is_kotlin;
       this->inner_struct.m_outlined =
           this->inner_struct.m_outlined & other.inner_struct.m_outlined;
     }
@@ -319,18 +329,21 @@ class ReferencedState {
 
   void set_interdex_subgroup(
       const boost::optional<InterdexSubgroupIdx>& interdex_subgroup) {
-    m_interdex_subgroup = interdex_subgroup;
+    m_interdex_subgroup = interdex_subgroup ? *interdex_subgroup : kNoSubgroup;
   }
   InterdexSubgroupIdx get_interdex_subgroup() const {
-    return m_interdex_subgroup.get();
+    return m_interdex_subgroup;
   }
   bool has_interdex_subgroup() const {
-    return m_interdex_subgroup != boost::none;
+    return m_interdex_subgroup != kNoSubgroup;
   }
 
   // -1 means unknown, e.g. for a method created by Redex
-  int32_t get_api_level() const { return inner_struct.m_api_level; }
-  void set_api_level(int api_level) { inner_struct.m_api_level = api_level; }
+  int8_t get_api_level() const { return inner_struct.m_api_level; }
+  void set_api_level(int32_t api_level) {
+    redex_assert(api_level <= std::numeric_limits<int8_t>::max());
+    inner_struct.m_api_level = api_level;
+  }
 
   bool no_optimizations() const { return inner_struct.m_no_optimizations; }
   void set_no_optimizations() { inner_struct.m_no_optimizations = true; }
@@ -355,6 +368,8 @@ class ReferencedState {
   bool outlined() const { return inner_struct.m_outlined; }
   void set_outlined() { inner_struct.m_outlined = true; }
   void reset_outlined() { inner_struct.m_outlined = false; }
+  bool is_cls_kotlin() const { return inner_struct.m_is_kotlin; }
+  void set_cls_kotlin() { inner_struct.m_is_kotlin = true; }
   void set_name_used() { inner_struct.m_name_used = true; }
   bool name_used() { return inner_struct.m_name_used; }
 

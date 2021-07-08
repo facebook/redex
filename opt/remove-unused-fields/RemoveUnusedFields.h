@@ -34,7 +34,6 @@ struct Config {
   bool remove_unwritten_fields;
   bool remove_zero_written_fields;
   bool remove_vestigial_objects_written_fields;
-  bool unsafe;
   std::unordered_set<const DexType*> blocklist_types;
   std::unordered_set<const DexType*> blocklist_classes;
   boost::optional<std::unordered_set<DexField*>> allowlist;
@@ -52,10 +51,6 @@ class PassImpl : public Pass {
          m_config.remove_zero_written_fields);
     bind("remove_vestigial_objects_written_fields", true,
          m_config.remove_vestigial_objects_written_fields);
-    bind("unsafe", false, m_config.unsafe,
-         "If set, RUF will remove stores to fields that affect object "
-         "lifetimes, observable via weak references, typically used in "
-         "observer patterns.");
     bind("blocklist_types",
          {},
          m_config.blocklist_types,

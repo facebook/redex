@@ -95,8 +95,8 @@ class TypeAnaysisAwareClosureMarker final
       const auto& overriding_methods =
           mog::get_overriding_methods(m_method_override_graph, m);
       if (!overriding_methods.empty()) {
-        TRACE(REACH, 3, "root with overrides: %u %s", overriding_methods.size(),
-              SHOW(m));
+        TRACE(REACH, 3, "root with overrides: %zu %s",
+              overriding_methods.size(), SHOW(m));
       }
       for (auto* overriding : overriding_methods) {
         push_cond(overriding);
@@ -248,7 +248,7 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects_with_type_anaysis(
 
   size_t num_threads = redex_parallel::default_num_threads();
   auto stats_arr = std::make_unique<Stats[]>(num_threads);
-  auto work_queue = workqueue_foreach<ReachableObject>(
+  workqueue_run<ReachableObject>(
       [&](MarkWorkerState* worker_state, const ReachableObject& obj) {
         TypeAnaysisAwareClosureMarker transitive_closure_marker(
             ignore_sets, *method_override_graph, record_reachability,
@@ -257,12 +257,9 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects_with_type_anaysis(
         transitive_closure_marker.visit(obj);
         return nullptr;
       },
+      root_set,
       num_threads,
       /*push_tasks_while_running=*/true);
-  for (const auto& obj : root_set) {
-    work_queue.add_item(obj);
-  }
-  work_queue.run_all();
 
   if (num_ignore_check_strings != nullptr) {
     for (size_t i = 0; i < num_threads; ++i) {

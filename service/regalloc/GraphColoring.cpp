@@ -865,7 +865,7 @@ std::unordered_map<reg_t, IRList::iterator> Allocator::find_param_splits(
       for (size_t index = 1; index < block_uses.size(); ++index) {
         idom = doms.intersect(idom, block_uses[index]);
       }
-      TRACE(REG, 5, "Inserting param load of v%u in B%u", param, idom->id());
+      TRACE(REG, 5, "Inserting param load of v%u in B%zu", param, idom->id());
       // We need to check insn before end of block to make sure we didn't
       // insert load after branches.
       auto insn_it = idom->get_last_insn();
@@ -876,7 +876,7 @@ std::unordered_map<reg_t, IRList::iterator> Allocator::find_param_splits(
       }
       load_locations[param] = insn_it;
     } else {
-      TRACE(REG, 5, "Inserting param load of v%u in B%u", param,
+      TRACE(REG, 5, "Inserting param load of v%u in B%zu", param,
             block_uses[0]->id());
       load_locations[param] = find_first_use_in_block(param, block_uses[0]);
     }

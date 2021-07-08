@@ -645,7 +645,7 @@ void validate_access(const DexMethod* accessor, const DexMember* accessee) {
   // TODO(fengliu): We should enforce the correctness when visiting external dex
   // members.
   if (accessee->is_external()) {
-    TRACE(TYPE, 2, out.str().c_str());
+    TRACE(TYPE, 2, "%s", out.str().c_str());
     return;
   }
 
@@ -1014,22 +1014,18 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
   }
   case OPCODE_IGET: {
     assume_reference(current_state, insn->src(0));
-    // T86372240
-    // const auto f_cls = insn->get_field()->get_class();
-    // assume_assignable(current_state->get_dex_type(insn->src(0)), f_cls);
+    const auto f_cls = insn->get_field()->get_class();
+    assume_assignable(current_state->get_dex_type(insn->src(0)), f_cls);
     break;
   }
   case OPCODE_IGET_BOOLEAN:
   case OPCODE_IGET_BYTE:
   case OPCODE_IGET_CHAR:
-  case OPCODE_IGET_SHORT: {
+  case OPCODE_IGET_SHORT:
+  case OPCODE_IGET_WIDE: {
     assume_reference(current_state, insn->src(0));
     const auto f_cls = insn->get_field()->get_class();
     assume_assignable(current_state->get_dex_type(insn->src(0)), f_cls);
-    break;
-  }
-  case OPCODE_IGET_WIDE: {
-    assume_reference(current_state, insn->src(0));
     break;
   }
   case OPCODE_IGET_OBJECT: {
@@ -1064,6 +1060,8 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
   case OPCODE_IPUT_WIDE: {
     assume_wide_scalar(current_state, insn->src(0));
     assume_reference(current_state, insn->src(1));
+    const auto f_cls = insn->get_field()->get_class();
+    assume_assignable(current_state->get_dex_type(insn->src(1)), f_cls);
     break;
   }
   case OPCODE_IPUT_OBJECT: {

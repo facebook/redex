@@ -1,0 +1,8 @@
+<resources>
+  <dimen name="unused_dimen_1">8sp</dimen>
+  <dimen name="unused_dimen_2">16dp</dimen>
+  <dimen name="margin_top">24dp</dimen>
+  <dimen name="padding_left">16dp</dimen>
+  <dimen name="padding_right">16dp</dimen>
+  <dimen name="welcome_text_size">18sp</dimen>
+</resources>

@@ -141,7 +141,7 @@ dex_stats_t write_classes_to_dex(
     std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
     IODIMetadata* iodi_metadata,
     const std::string& dex_magic,
-    PostLowering const* post_lowering = nullptr,
+    PostLowering* post_lowering = nullptr,
     int min_sdk = 0,
     bool disable_method_similarity_order = false);
 
@@ -229,7 +229,6 @@ class GatheredTypes {
       m_method_sorting_allowlisted_substrings{nullptr};
   bool m_legacy_order{true};
 
-  void gather_components(PostLowering const* post_lowering);
   dexstring_to_idx* get_string_index(cmp_dstring cmp = compare_dexstrings);
   dextype_to_idx* get_type_index(cmp_dtype cmp = compare_dextypes);
   dexproto_to_idx* get_proto_index(cmp_dproto cmp = compare_dexprotos);
@@ -247,8 +246,7 @@ class GatheredTypes {
   void build_method_map();
 
  public:
-  explicit GatheredTypes(DexClasses* classes,
-                         PostLowering const* post_lowering = nullptr);
+  explicit GatheredTypes(DexClasses* classes);
 
   DexOutputIdx* get_dodx(const uint8_t* base);
   template <class T = decltype(compare_dexstrings)>
@@ -336,12 +334,12 @@ class DexOutput {
   std::vector<std::pair<std::string, uint32_t>> m_method_bytecode_offsets;
   std::unordered_map<DexClass*, uint32_t> m_static_values;
   std::unordered_map<DexCallSite*, uint32_t> m_call_site_items;
+  std::unordered_map<DexClass*, std::vector<DexMethod*>> m_detached_methods;
   dex_header hdr;
   std::vector<dex_map_item> m_map_items;
   LocatorIndex* m_locator_index;
   bool m_normal_primary_dex;
   const ConfigFiles& m_config_files;
-  bool m_force_class_data_end_of_file;
   int m_min_sdk;
 
   void insert_map_item(uint16_t maptype,
@@ -408,7 +406,7 @@ class DexOutput {
             std::unordered_map<DexMethod*, uint64_t>* method_to_id,
             std::unordered_map<DexCode*, std::vector<DebugLineItem>>*
                 code_debug_lines,
-            PostLowering const* post_lowering = nullptr,
+            PostLowering* post_lowering = nullptr,
             int min_sdk = 0);
   ~DexOutput();
   void prepare(SortMode string_mode,

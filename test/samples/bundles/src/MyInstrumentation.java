@@ -5,4 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-int foo() { return 1; }
+package com.fb.bundles;
+
+import android.app.Instrumentation;
+
+public class MyInstrumentation extends Instrumentation {}

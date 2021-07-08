@@ -7,6 +7,8 @@
 
 #include "CopyPropagationPass.h"
 
+#include <cinttypes>
+
 #include "DexUtil.h"
 #include "PassManager.h"
 
@@ -38,15 +40,15 @@ void CopyPropagationPass::run_pass(DexStoresVector& stores,
   mgr.incr_metric("non_singleton_lock_rdefs", stats.non_singleton_lock_rdefs);
   TRACE(RME,
         1,
-        "%d redundant moves eliminated",
+        "%" PRId64 " redundant moves eliminated",
         mgr.get_metric("redundant_moves_eliminated"));
   TRACE(RME,
         1,
-        "%d source registers replaced with representative",
+        "%" PRId64 " source registers replaced with representative",
         mgr.get_metric("source_regs_replaced_with_representative"));
   TRACE(RME,
         1,
-        "%d methods had type inference computed",
+        "%" PRId64 " methods had type inference computed",
         mgr.get_metric("method_type_inferences"));
 }
 

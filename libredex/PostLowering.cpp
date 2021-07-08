@@ -10,16 +10,21 @@
 class NoopPostLowering : public PostLowering {
  public:
   void sync() override {}
-  void gather_components(std::vector<DexString*>&,
-                         std::vector<DexType*>&,
-                         std::vector<DexFieldRef*>&,
-                         std::vector<DexMethodRef*>&,
-                         std::vector<DexCallSite*>&,
-                         std::vector<DexMethodHandle*>&,
-                         std::vector<DexTypeList*>&,
-                         const std::vector<DexClass*>&) const override {}
   void run(const DexStoresVector& stores) override {}
   void finalize(ApkManager& mgr) override {}
+
+  std::unordered_map<DexClass*, std::vector<DexMethod*>> get_detached_methods()
+      override {
+    return std::unordered_map<DexClass*, std::vector<DexMethod*>>();
+  }
+  void emit_symbolication_metadata(
+      PositionMapper* pos_mapper,
+      std::unordered_map<DexMethod*, uint64_t>* method_to_id,
+      std::unordered_map<DexCode*, std::vector<DebugLineItem>>*
+          code_debug_lines,
+      IODIMetadata* iodi_metadata,
+      std::vector<DexMethod*>& needs_debug_line_mapping,
+      std::set<uint32_t>& signatures) override{};
 };
 
 std::unique_ptr<PostLowering> PostLowering::create() {

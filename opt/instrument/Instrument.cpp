@@ -202,7 +202,7 @@ void do_simple_method_tracing(DexClass* analysis_cls,
   ofs << "#,simple-method-tracing,1.0" << std::endl;
 
   size_t method_id = 0;
-  int excluded = 0;
+  size_t excluded = 0;
   std::unordered_set<std::string> method_names;
   std::vector<DexMethod*> to_instrument;
 
@@ -356,7 +356,7 @@ void do_simple_method_tracing(DexClass* analysis_cls,
 
   TRACE(INSTRUMENT,
         1,
-        "%d methods were instrumented (%d methods were excluded)",
+        "%zu methods were instrumented (%zu methods were excluded)",
         method_id,
         excluded);
 
@@ -873,6 +873,7 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
     TRACE(INSTRUMENT, 1,
           "--enable-instrument-pass (or \"instrument_pass_enabled\": true) is "
           "not specified.");
+    pm.set_metric("skipped_pass", 1);
     return;
   }
 
@@ -882,6 +883,7 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
       m_options.blocklist.insert(e);
     }
   }
+  pm.set_metric("blocklist_size", m_options.blocklist.size());
 
   if (m_options.analysis_class_name.empty()) {
     std::cerr << "[InstrumentPass] error: empty analysis class name."

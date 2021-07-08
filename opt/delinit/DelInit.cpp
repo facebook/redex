@@ -596,11 +596,11 @@ void DelInitPass::run_pass(DexStoresVector& stores,
   find_referenced_classes(scope);
   DeadRefs drefs;
   drefs.delinit(scope);
-  TRACE(DELINIT, 1, "Removed %d <init> methods",
+  TRACE(DELINIT, 1, "Removed %zu <init> methods",
         drefs.del_init_res.deleted_inits);
-  TRACE(DELINIT, 1, "Removed %d vmethods", drefs.del_init_res.deleted_vmeths);
-  TRACE(DELINIT, 1, "Removed %d ifields", drefs.del_init_res.deleted_ifields);
-  TRACE(DELINIT, 1, "Removed %d dmethods", drefs.del_init_res.deleted_dmeths);
+  TRACE(DELINIT, 1, "Removed %zu vmethods", drefs.del_init_res.deleted_vmeths);
+  TRACE(DELINIT, 1, "Removed %zu ifields", drefs.del_init_res.deleted_ifields);
+  TRACE(DELINIT, 1, "Removed %zu dmethods", drefs.del_init_res.deleted_dmeths);
 
   mgr.incr_metric(METRIC_INIT_METHODS_REMOVED,
                   drefs.del_init_res.deleted_inits);

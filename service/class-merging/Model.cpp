@@ -127,7 +127,7 @@ size_t trim_shapes(MergerType::ShapeCollector& shapes, size_t min_count) {
  */
 size_t trim_groups(MergerType::ShapeCollector& shapes, size_t min_count) {
   size_t num_trimmed_types = 0;
-  TRACE(CLMG, 5, "Trim groups with min_count %d", min_count);
+  TRACE(CLMG, 5, "Trim groups with min_count %zu", min_count);
   for (auto& shape_it : shapes) {
     std::vector<TypeSet> groups_to_remove;
     for (const auto& group_it : shape_it.second.groups) {
@@ -163,13 +163,11 @@ Model::Model(const Scope& scope,
              const TypeSystem& type_system,
              const RefChecker& refchecker)
     : m_spec(spec),
+      m_types(spec.merging_targets.begin(), spec.merging_targets.end()),
       m_type_system(type_system),
       m_ref_checker(refchecker),
       m_scope(scope),
       m_conf(conf) {
-  for (const auto root : spec.roots) {
-    m_type_system.get_all_children(root, m_types);
-  }
   init(scope, spec, type_system);
 }
 
@@ -192,7 +190,6 @@ void Model::init(const Scope& scope,
   load_generated_types(spec, scope, type_system, m_types, generated);
   TRACE(CLMG, 4, "Generated types %ld", generated.size());
   exclude_types(spec.exclude_types);
-  // find_non_mergeables(scope, generated);
   MergeabilityChecker checker(scope, spec, m_ref_checker, generated, m_types);
   m_non_mergeables = checker.get_non_mergeables();
   TRACE(CLMG, 3, "Non mergeables %ld", m_non_mergeables.size());
@@ -379,12 +376,13 @@ void Model::create_mergers_helper(
     const MergerType::Shape& shape,
     const TypeSet& intf_set,
     const TypeSet& group_values,
+    const strategy::Strategy strategy,
     const boost::optional<InterdexSubgroupIdx>& interdex_subgroup_idx,
     const boost::optional<size_t>& max_mergeables_count,
     size_t min_mergeables_count) {
   InterdexSubgroupIdx subgroup_cnt = 0;
   strategy::apply_grouping(
-      group_values, min_mergeables_count, max_mergeables_count,
+      strategy, group_values, min_mergeables_count, max_mergeables_count,
       [&](const std::vector<const DexType*>& group) {
         create_merger_helper(merger_type, shape, intf_set, group,
                              interdex_subgroup_idx, subgroup_cnt++);
@@ -397,7 +395,7 @@ void Model::create_mergers_helper(
  * intention of adding them as excluded types in the config, and exclude them
  * from the merging transformation.
  */
-void Model::exclude_types(const std::unordered_set<DexType*>& exclude_types) {
+void Model::exclude_types(const ConstTypeHashSet& exclude_types) {
   for (const auto& type : exclude_types) {
     const auto& cls = type_class(type);
     redex_assert(cls != nullptr);
@@ -585,7 +583,6 @@ void Model::break_by_interface(const MergerType& merger,
 namespace {
 
 using TypeHashSet = std::unordered_set<DexType*>;
-using ConstTypeHashSet = std::unordered_set<const DexType*>;
 
 DexType* check_current_instance(const ConstTypeHashSet& types,
                                 IRInstruction* insn) {
@@ -746,12 +743,13 @@ void Model::flatten_shapes(const MergerType& merger,
           }
 
           create_mergers_helper(merger.type, *shape, *intf_set,
-                                new_groups[gindex], gindex, m_spec.max_count,
-                                m_spec.min_count);
+                                new_groups[gindex], m_spec.strategy, gindex,
+                                m_spec.max_count, m_spec.min_count);
         }
       } else {
         create_mergers_helper(merger.type, *shape, *intf_set, group_values,
-                              boost::none, m_spec.max_count, m_spec.min_count);
+                              m_spec.strategy, boost::none, m_spec.max_count,
+                              m_spec.min_count);
       }
     }
   }
@@ -793,11 +791,11 @@ void Model::map_fields(MergerType& merger,
       fields[index] = static_cast<DexField*>(DexField::make_field(
           type, DexString::make_string(ss.str()), field_type));
       TRACE(CLMG, 9,
-            "  -- A hole found at index %d, created a placeholder field of "
+            "  -- A hole found at index %zu, created a placeholder field of "
             "type %s",
             index, field_type->c_str());
     }
-    TRACE(CLMG, 8, "Add field map item [%ld]", fields.size());
+    TRACE(CLMG, 8, "Add field map item [%zu]", fields.size());
     merger.field_map[type] = fields;
   }
 }

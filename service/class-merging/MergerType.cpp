@@ -11,7 +11,7 @@
 #include <sstream>
 #include <string>
 
-namespace {
+namespace class_merging {
 
 /**
  * Extract a minimal but identifiable name tag from the given root type.
@@ -56,10 +56,6 @@ std::string get_root_type_name_tag(const DexType* root_type) {
   TRACE(CLMG, 7, "  root_name_tag %s", root_name_tag_str.c_str());
   return root_name_tag_str;
 }
-
-} // namespace
-
-namespace class_merging {
 
 std::string MergerType::Shape::build_type_name(
     const std::string& prefix,

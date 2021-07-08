@@ -521,9 +521,9 @@ void ResultPropagationPass::run_pass(DexStoresVector& stores,
   mgr.incr_metric(METRIC_UNVERIFIABLE_MOVE_RESULTS,
                   stats.unverifiable_move_results);
   TRACE(RP, 1,
-        "result propagation --- potential methods: %d, erased moves: %d, "
-        "patched moves: %d, "
-        "unverifiable moves: %d",
+        "result propagation --- potential methods: %zu, erased moves: %zu, "
+        "patched moves: %zu, "
+        "unverifiable moves: %zu",
         methods_which_return_parameter.size(), stats.erased_move_results,
         stats.patched_move_results, stats.unverifiable_move_results);
 }

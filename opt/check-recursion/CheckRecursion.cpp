@@ -103,11 +103,18 @@ static CheckRecursionResult do_check_recursion(DexMethod* method,
  * This isn't a real optimisation pass. This pass tests for self recursion that
  * might cause problems on the device due to massive dex2oat memory usage for
  * self-recursive function, see https://r8-review.googlesource.com/c/r8/+/25743/
- * for more details. The workwarond is to inserts try/catch to prevent inlining.
+ * for more details. The workaround is to inserts try/catch to prevent inlining.
  */
 void CheckRecursionPass::run_pass(DexStoresVector& stores,
                                   ConfigFiles& /* unused */,
                                   PassManager& mgr) {
+  auto min_sdk = mgr.get_redex_options().min_sdk;
+  constexpr int32_t kAndroidN = 24;
+  if (min_sdk >= kAndroidN) {
+    mgr.set_metric("skipped_for_min_sdk_version", 1);
+    return;
+  }
+
   std::atomic_int num_methods_detected{0};
   std::atomic_int num_methods_patched{0};
 

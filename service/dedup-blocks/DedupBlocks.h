@@ -25,6 +25,7 @@ struct Stats {
   int eligible_blocks{0};
   int blocks_removed{0};
   int blocks_split{0};
+  int positions_inserted{0};
   // map from block size to number of blocks with that size
   std::unordered_map<size_t, size_t> dup_sizes;
   Stats& operator+=(const Stats& that);

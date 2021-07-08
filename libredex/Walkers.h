@@ -423,10 +423,10 @@ class walk {
         Classes const& classes,
         const WalkerFn& walker,
         size_t num_threads = redex_parallel::default_num_threads()) {
-      auto wq = workqueue_foreach<DexClass*>( // over-parallelized maybe
+      workqueue_run<DexClass*>( // over-parallelized maybe
           [&walker](DexClass* cls) { walker(cls); },
+          classes,
           num_threads);
-      run_all(wq, classes);
     }
 
     // Call `walker` on all methods in `classes` in parallel.
@@ -436,10 +436,10 @@ class walk {
         const Classes& classes,
         const WalkerFn& walker,
         size_t num_threads = redex_parallel::default_num_threads()) {
-      auto wq = workqueue_foreach<DexClass*>(
+      workqueue_run<DexClass*>(
           [&walker](DexClass* cls) { walk::iterate_methods(cls, walker); },
+          classes,
           num_threads);
-      run_all(wq, classes);
     }
 
     // Call `walker` on all methods in `classes` in parallel. Then combine the
@@ -462,7 +462,7 @@ class walk {
         Accumulator init = Accumulator()) {
       std::vector<CacheAligned<Accumulator>> acc_vec(num_threads, init);
 
-      auto wq = workqueue_foreach<DexClass*>(
+      workqueue_run<DexClass*>(
           [&](sparta::SpartaWorkerState<DexClass*>* state, DexClass* cls) {
             Accumulator& acc = acc_vec[state->worker_id()];
             for (auto dmethod : cls->get_dmethods()) {
@@ -474,8 +474,8 @@ class walk {
               walker(vmethod, &acc);
             }
           },
+          classes,
           num_threads);
-      run_all(wq, classes);
 
       auto reduce = Reduce();
       for (Accumulator& acc : acc_vec) {
@@ -520,10 +520,10 @@ class walk {
         const Classes& classes,
         const WalkerFn& walker,
         size_t num_threads = redex_parallel::default_num_threads()) {
-      auto wq = workqueue_foreach<DexClass*>(
+      workqueue_run<DexClass*>(
           [&walker](DexClass* cls) { walk::iterate_fields(cls, walker); },
+          classes,
           num_threads);
-      run_all(wq, classes);
     }
 
     // Call `walker` on all code (of methods approved by `filter`) in `classes`
@@ -536,12 +536,12 @@ class walk {
         const FilterFn& filter,
         const WalkerFn& walker,
         size_t num_threads = redex_parallel::default_num_threads()) {
-      auto wq = workqueue_foreach<DexClass*>(
+      workqueue_run<DexClass*>(
           [&filter, &walker](DexClass* cls) {
             walk::iterate_code(cls, filter, walker);
           },
+          classes,
           num_threads);
-      run_all(wq, classes);
     }
 
     // Same as `code()` but with a filter function that accepts all methods
@@ -563,12 +563,12 @@ class walk {
         const FilterFn& filter,
         const WalkerFn& walker,
         size_t num_threads = redex_parallel::default_num_threads()) {
-      auto wq = workqueue_foreach<DexClass*>(
+      workqueue_run<DexClass*>(
           [&filter, &walker](DexClass* cls) {
             walk::iterate_opcodes(cls, filter, walker);
           },
+          classes,
           num_threads);
-      run_all(wq, classes);
     }
 
     // Same as `opcodes()` but with a filter function that accepts all methods
@@ -587,10 +587,10 @@ class walk {
         const Classes& classes,
         const WalkerFn& walker,
         size_t num_threads = redex_parallel::default_num_threads()) {
-      auto wq = workqueue_foreach<DexClass*>(
+      workqueue_run<DexClass*>(
           [&walker](DexClass* cls) { walk::iterate_annotations(cls, walker); },
+          classes,
           num_threads);
-      run_all(wq, classes);
     }
 
     // Call `walker` on all matching opcodes (according to `predicate`) in
@@ -606,12 +606,12 @@ class walk {
         const Predicate& predicate,
         const Walker& walker,
         size_t num_threads = redex_parallel::default_num_threads()) {
-      auto wq = workqueue_foreach<DexClass*>(
+      workqueue_run<DexClass*>(
           [&predicate, &walker](DexClass* cls) {
             walk::iterate_matching(cls, predicate, walker);
           },
+          classes,
           num_threads);
-      run_all(wq, classes);
     }
 
     // Call `walker` on all matching opcodes (according to `predicate`) in
@@ -629,12 +629,12 @@ class walk {
         const Predicate& predicate,
         const WalkerFn& walker,
         size_t num_threads = redex_parallel::default_num_threads()) {
-      auto wq = workqueue_foreach<DexClass*>(
+      workqueue_run<DexClass*>(
           [&predicate, &walker](DexClass* cls) {
             walk::iterate_matching_block(cls, predicate, walker);
           },
+          classes,
           num_threads);
-      run_all(wq, classes);
     }
 
     // Call `walker` on all given virtual scopes in parallel.
@@ -644,17 +644,7 @@ class walk {
         const VirtualScopes& virtual_scopes,
         const WalkerFn& walker,
         size_t num_threads = redex_parallel::default_num_threads()) {
-      auto wq = workqueue_foreach<const VirtualScope*>(walker, num_threads);
-      run_all(wq, virtual_scopes);
-    }
-
-   private:
-    template <class WQ, class Classes>
-    static void run_all(WQ& wq, const Classes& classes) {
-      for (const auto& cls : classes) {
-        wq.add_item(cls);
-      };
-      wq.run_all();
+      workqueue_run<const VirtualScope*>(walker, virtual_scopes, num_threads);
     }
   };
 };

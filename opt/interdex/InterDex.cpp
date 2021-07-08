@@ -10,6 +10,7 @@
 #include <boost/algorithm/string/predicate.hpp>
 
 #include <algorithm>
+#include <cinttypes>
 #include <string>
 #include <unordered_set>
 #include <vector>
@@ -157,14 +158,14 @@ void gather_refs(
 
 void print_stats(interdex::DexesStructure* dexes_structure) {
   TRACE(IDEX, 2, "InterDex Stats:");
-  TRACE(IDEX, 2, "\t dex count: %d", dexes_structure->get_num_dexes());
-  TRACE(IDEX, 2, "\t secondary dex count: %d",
+  TRACE(IDEX, 2, "\t dex count: %zu", dexes_structure->get_num_dexes());
+  TRACE(IDEX, 2, "\t secondary dex count: %zu",
         dexes_structure->get_num_secondary_dexes());
-  TRACE(IDEX, 2, "\t coldstart dex count: %d",
+  TRACE(IDEX, 2, "\t coldstart dex count: %zu",
         dexes_structure->get_num_coldstart_dexes());
-  TRACE(IDEX, 2, "\t extendex dex count: %d",
+  TRACE(IDEX, 2, "\t extendex dex count: %zu",
         dexes_structure->get_num_extended_dexes());
-  TRACE(IDEX, 2, "\t scroll dex count: %d",
+  TRACE(IDEX, 2, "\t scroll dex count: %zu",
         dexes_structure->get_num_scroll_dexes());
 
   TRACE(IDEX, 2, "Global stats:");
@@ -408,11 +409,11 @@ void InterDex::emit_primary_dex(
                /* perf_sensitive */ false);
   }
   TRACE(IDEX, 2,
-        "[primary dex]: %d out of %d classes in primary dex "
+        "[primary dex]: %zu out of %zu classes in primary dex "
         "from interdex list.",
         coldstart_classes_in_primary, primary_dex.size());
   TRACE(IDEX, 2,
-        "[primary dex]: %d out of %d classes in primary dex skipped "
+        "[primary dex]: %zu out of %zu classes in primary dex skipped "
         "from interdex list.",
         coldstart_classes_skipped_in_primary, primary_dex.size());
 
@@ -454,7 +455,7 @@ void InterDex::emit_interdex_classes(
             !m_emitting_bg_set,
             "Scroll start marker discovered between background set markers");
         m_emitting_scroll_set = true;
-        TRACE(IDEX, 2, "Marking dex as scroll at betamap entry %d",
+        TRACE(IDEX, 2, "Marking dex as scroll at betamap entry %zu",
               std::distance(interdex_types.begin(), it));
         dex_info.scroll = true;
       } else if (boost::algorithm::starts_with(type->get_name()->str(),
@@ -471,7 +472,7 @@ void InterDex::emit_interdex_classes(
         always_assert_log(
             !m_emitting_scroll_set,
             "Background start marker discovered between scroll set markers");
-        TRACE(IDEX, 2, "Marking dex as background at betamap entry %d",
+        TRACE(IDEX, 2, "Marking dex as background at betamap entry %zu",
               std::distance(interdex_types.begin(), it));
         m_emitting_bg_set = true;
         dex_info.background = true;
@@ -531,8 +532,8 @@ void InterDex::emit_interdex_classes(
   }
 
   TRACE(IDEX, 3,
-        "[interdex order]: %d classes are unreferenced from the interdex order "
-        "in secondary dexes.",
+        "[interdex order]: %zu classes are unreferenced from the interdex "
+        "order in secondary dexes.",
         cls_skipped_in_secondary);
 
   // TODO: check for unterminated markers
@@ -662,9 +663,10 @@ void InterDex::update_interdexorder(const DexClasses& dex,
 void InterDex::init_cross_dex_ref_minimizer_and_relocate_methods() {
   TRACE(IDEX, 2,
         "[dex ordering] Cross-dex-ref-minimizer active with method ref weight "
-        "%d, field ref weight %d, type ref weight %d, string ref weight %d, "
-        "method seed weight %d, field seed weight %d, type seed weight %d, "
-        "string seed weight %d.",
+        "%" PRIu64 ", field ref weight %" PRIu64 ", type ref weight %" PRIu64
+        ", string ref weight %" PRIu64 ", method seed weight %" PRIu64
+        ", field seed weight %" PRIu64 ", type seed weight %" PRIu64
+        ", string seed weight %" PRIu64 ".",
         m_cross_dex_ref_minimizer.get_config().method_ref_weight,
         m_cross_dex_ref_minimizer.get_config().field_ref_weight,
         m_cross_dex_ref_minimizer.get_config().type_ref_weight,
@@ -683,8 +685,10 @@ void InterDex::init_cross_dex_ref_minimizer_and_relocate_methods() {
 
     TRACE(IDEX, 2,
           "[dex ordering] Cross-dex-relocator active, max relocated methods "
-          "per class: %zu, relocating static methods: %s, non-static direct "
-          "methods: %s, virtual methods: %s",
+          "per class: %" PRIu64
+          ", relocating static methods: %s"
+          ", non-static direct methods: %s"
+          ", virtual methods: %s",
           m_cross_dex_relocator_config.max_relocated_methods_per_class,
           m_cross_dex_relocator_config.relocate_static_methods ? "yes" : "no",
           m_cross_dex_relocator_config.relocate_non_static_direct_methods
@@ -868,7 +872,7 @@ void InterDex::run_in_force_single_dex_mode() {
     flush_out_dex(dex_info);
   }
 
-  TRACE(IDEX, 7, "IDEX: force_single_dex dex number: %d",
+  TRACE(IDEX, 7, "IDEX: force_single_dex dex number: %zu",
         m_dexes_structure.get_num_dexes());
   print_stats(&m_dexes_structure);
 }
@@ -888,13 +892,14 @@ void InterDex::run() {
   // we can't touch the primary dex.
   if (!m_normal_primary_dex) {
     emit_primary_dex(primary_dex, m_interdex_types, unreferenced_classes);
-  }
-
-  // NOTE: If primary dex is treated as a normal dex, we are going to modify
-  //       it too, based on coldstart classes. Because of that, we need to
-  //       update the coldstart list to respect the primary dex.
-  if (m_normal_primary_dex && !m_interdex_types.empty()) {
-    update_interdexorder(primary_dex, &m_interdex_types);
+  } else {
+    // NOTE: If primary dex is treated as a normal dex, we are going to modify
+    //       it too, based on coldstart classes. If we can't remove the classes
+    //       from the primary dex, we need to update the coldstart list to
+    //       respect the primary dex.
+    if (m_keep_primary_order && !m_interdex_types.empty()) {
+      update_interdexorder(primary_dex, &m_interdex_types);
+    }
   }
 
   // Emit interdex classes, if any.
@@ -980,13 +985,13 @@ void InterDex::flush_out_dex(DexInfo& dex_info) {
 
   int dexnum = m_dexes_structure.get_num_dexes();
   if (dex_info.primary) {
-    TRACE(IDEX, 2, "Writing out primary dex with %d classes.",
+    TRACE(IDEX, 2, "Writing out primary dex with %zu classes.",
           m_dexes_structure.get_current_dex_classes().size());
   } else {
     TRACE(IDEX, 2,
-          "Writing out secondary dex number %d, which is %s of coldstart, "
+          "Writing out secondary dex number %zu, which is %s of coldstart, "
           "%s of extended set, %s of background set, %s scroll "
-          "classes and has %d classes.",
+          "classes and has %zu classes.",
           m_dexes_structure.get_num_secondary_dexes() + 1,
           (dex_info.coldstart ? "part of" : "not part of"),
           (dex_info.extended ? "part of" : "not part of"),

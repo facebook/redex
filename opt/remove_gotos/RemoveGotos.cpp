@@ -89,7 +89,7 @@ class RemoveGotos {
         if (chain.size() > 1) {
           TRACE_NO_LINE(RMGOTO, 3, "Found optimizing chain: { ");
           for (const auto& b : chain) {
-            TRACE_NO_LINE(RMGOTO, 3, "%d ", b->id());
+            TRACE_NO_LINE(RMGOTO, 3, "%zu ", b->id());
           }
           TRACE(RMGOTO, 3, "}");
 
@@ -97,7 +97,8 @@ class RemoveGotos {
           auto prev = chain.rend();
           for (auto it = chain.rbegin(); it != chain.rend(); prev = it++) {
             if (prev != chain.rend()) {
-              TRACE(RMGOTO, 3, "merge %d into %d", (*prev)->id(), (*it)->id());
+              TRACE(RMGOTO, 3, "merge %zu into %zu", (*prev)->id(),
+                    (*it)->id());
               // merge *prev into *it
               cfg.merge_blocks(*it, *prev);
             }
@@ -116,7 +117,7 @@ class RemoveGotos {
     TRACE(RMGOTO, 4, "Class: %s", SHOW(method->get_class()));
     TRACE(RMGOTO, 3, "Method: %s", SHOW(method->get_name()));
     auto init_opcode_count = code->count_opcodes();
-    TRACE(RMGOTO, 4, "Initial opcode count: %d", init_opcode_count);
+    TRACE(RMGOTO, 4, "Initial opcode count: %zu", init_opcode_count);
 
     TRACE(RMGOTO, 3, "input code\n%s", SHOW(code));
     code->build_cfg(/* editable */ true);
@@ -126,21 +127,21 @@ class RemoveGotos {
 
     size_t num_goto_removed = merge_blocks(cfg);
 
-    TRACE(RMGOTO, 3, "%d blocks merged", num_goto_removed);
+    TRACE(RMGOTO, 3, "%zu blocks merged", num_goto_removed);
     TRACE(RMGOTO, 3, "after %s", SHOW(cfg));
-    TRACE(RMGOTO, 5, "Opcode count: %d", code->count_opcodes());
+    TRACE(RMGOTO, 5, "Opcode count: %zu", code->count_opcodes());
 
     code->clear_cfg();
     auto final_opcode_count = code->count_opcodes();
     if (final_opcode_count > init_opcode_count) {
       TRACE(RMGOTO,
             3,
-            "method %s got larger: (%d -> %d)",
+            "method %s got larger: (%zu -> %zu)",
             SHOW(method),
             init_opcode_count,
             final_opcode_count);
     }
-    TRACE(RMGOTO, 4, "Final opcode count: %d", code->count_opcodes());
+    TRACE(RMGOTO, 4, "Final opcode count: %zu", code->count_opcodes());
     TRACE(RMGOTO, 3, "output code\n%s", SHOW(code));
     return num_goto_removed;
   }
@@ -165,7 +166,7 @@ void RemoveGotosPass::run_pass(DexStoresVector& stores,
       });
 
   mgr.incr_metric(METRIC_GOTO_REMOVED, total_gotos_removed);
-  TRACE(RMGOTO, 1, "Number of unnecessary gotos removed: %d",
+  TRACE(RMGOTO, 1, "Number of unnecessary gotos removed: %zu",
         total_gotos_removed);
 }
 

@@ -460,9 +460,8 @@ void analyze_reachable_from_manifest(
 
   auto manifest_class_info = [&apk_dir]() {
     try {
-      std::string manifest =
-          (boost::filesystem::path(apk_dir) / "AndroidManifest.xml").string();
-      return get_manifest_class_info(manifest);
+      auto resources = create_resource_reader(apk_dir);
+      return resources->get_manifest_class_info();
     } catch (const std::exception& e) {
       std::cerr << "Error reading manifest: " << e.what() << std::endl;
       return ManifestClassInfo{};
@@ -536,8 +535,9 @@ void analyze_reachable_from_xml_layouts(const Scope& scope,
   // Method names used by reflection
   attrs_to_read.emplace(ONCLICK_ATTRIBUTE);
   std::unordered_multimap<std::string, std::string> attribute_values;
-  collect_layout_classes_and_attributes(apk_dir, attrs_to_read, layout_classes,
-                                        attribute_values);
+  auto resources = create_resource_reader(apk_dir);
+  resources->collect_layout_classes_and_attributes(
+      attrs_to_read, &layout_classes, &attribute_values);
   for (const std::string& classname : layout_classes) {
     TRACE(PGR, 3, "xml_layout: %s", classname.c_str());
     mark_reachable_by_xml(classname);
@@ -669,7 +669,8 @@ void init_reachable_classes(const Scope& scope,
     if (config.analyze_native_lib_reachability) {
       Timer t{"Computing native reachability"};
       // Classnames present in native libraries (lib/*/*.so)
-      for (const std::string& classname : get_native_classes(config.apk_dir)) {
+      auto resources = create_resource_reader(config.apk_dir);
+      for (const std::string& classname : resources->get_native_classes()) {
         auto type = DexType::get_type(classname.c_str());
         if (type == nullptr) continue;
         TRACE(PGR, 3, "native_lib: %s", classname.c_str());

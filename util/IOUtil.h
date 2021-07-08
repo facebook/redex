@@ -16,3 +16,9 @@ inline void open_or_die(const std::string& filename, std::ofstream* os) {
     exit(EXIT_FAILURE);
   }
 }
+
+inline void write_string_to_file(const std::string& filename,
+                                 const std::string& contents) {
+  std::ofstream out(filename, std::ofstream::binary);
+  out << contents;
+}

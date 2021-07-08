@@ -94,9 +94,7 @@ class CustomSort {
   }
 };
 
-GatheredTypes::GatheredTypes(DexClasses* classes,
-                             PostLowering const* post_lowering)
-    : m_classes(classes) {
+GatheredTypes::GatheredTypes(DexClasses* classes) : m_classes(classes) {
   // ensure that the string id table contains the empty string, which is used
   // for the DexPosition mapping
   m_lstring.push_back(DexString::make_string(""));
@@ -106,7 +104,8 @@ GatheredTypes::GatheredTypes(DexClasses* classes,
   build_cls_map();
   build_method_map();
 
-  gather_components(post_lowering);
+  gather_components(m_lstring, m_ltype, m_lfield, m_lmethod, m_lcallsite,
+                    m_lmethodhandle, *m_classes);
 }
 
 std::unordered_set<DexString*> GatheredTypes::index_type_names() {
@@ -413,23 +412,6 @@ void GatheredTypes::build_method_map() {
   }
 }
 
-void GatheredTypes::gather_components(PostLowering const* post_lowering) {
-  ::gather_components(m_lstring, m_ltype, m_lfield, m_lmethod, m_lcallsite,
-                      m_lmethodhandle, *m_classes);
-  if (post_lowering) {
-    // TODO(T59333341) - need to consider how dex038 works with ditto post
-    // lowering
-    post_lowering->gather_components(m_lstring,
-                                     m_ltype,
-                                     m_lfield,
-                                     m_lmethod,
-                                     m_lcallsite,
-                                     m_lmethodhandle,
-                                     m_additional_ltypelists,
-                                     *m_classes);
-  }
-}
-
 namespace {
 
 // Leave 250K empty as a margin to not overrun.
@@ -471,7 +453,7 @@ DexOutput::DexOutput(
     PositionMapper* pos_mapper,
     std::unordered_map<DexMethod*, uint64_t>* method_to_id,
     std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
-    PostLowering const* post_lowering,
+    PostLowering* post_lowering,
     int min_sdk)
     : m_classes(classes),
       // Required because the BytecodeDebugger setting creates huge amounts
@@ -488,8 +470,7 @@ DexOutput::DexOutput(
   // Ensure a clean slate.
   memset(m_output.get(), 0, m_output_size);
 
-  m_force_class_data_end_of_file = post_lowering != nullptr;
-  m_gtypes = new GatheredTypes(classes, post_lowering);
+  m_gtypes = new GatheredTypes(classes);
   dodx = m_gtypes->get_dodx(m_output.get());
 
   always_assert_log(
@@ -521,6 +502,9 @@ DexOutput::DexOutput(
   m_locator_index = locator_index;
   m_normal_primary_dex = normal_primary_dex;
   m_debug_info_kind = debug_info_kind;
+  if (post_lowering) {
+    m_detached_methods = post_lowering->get_detached_methods();
+  }
 }
 
 DexOutput::~DexOutput() {
@@ -751,7 +735,7 @@ void DexOutput::generate_string_data(SortMode mode) {
                   m_offset - str_data_start);
 
   if (m_locator_index != nullptr) {
-    TRACE(LOC, 2, "Used %u bytes for %u locator strings", locator_size,
+    TRACE(LOC, 2, "Used %u bytes for %zu locator strings", locator_size,
           locators);
   }
 }
@@ -788,7 +772,8 @@ void DexOutput::emit_magic_locators() {
     }
   }
 
-  TRACE(LOC, 2, "Global class indices for store %u, dex %u: first %u, last %u",
+  TRACE(LOC, 2,
+        "Global class indices for store %zu, dex %zu: first %u, last %u",
         m_store_number, m_dex_number, global_class_indices_first,
         global_class_indices_last);
 
@@ -947,19 +932,18 @@ void DexOutput::generate_class_data_items() {
 
 static void sync_all(const Scope& scope) {
   constexpr bool serial = false; // for debugging
-  auto wq = workqueue_foreach<DexMethod*>([](DexMethod* m) { m->sync(); });
-  walk::code(
-      scope,
-      [](DexMethod*) { return true; },
-      [&](DexMethod* m, IRCode&) {
-        if (serial) {
-          TRACE(MTRANS, 2, "Syncing %s", SHOW(m));
-          m->sync();
-        } else {
-          wq.add_item(m);
-        }
-      });
-  wq.run_all();
+  auto fn = [&](DexMethod* m, IRCode&) {
+    if (serial) {
+      TRACE(MTRANS, 2, "Syncing %s", SHOW(m));
+    }
+    m->sync();
+  };
+
+  if (serial) {
+    walk::code(scope, fn);
+  } else {
+    walk::parallel::code(scope, fn);
+  }
 }
 
 void DexOutput::generate_code_items(const std::vector<SortMode>& mode) {
@@ -1766,7 +1750,7 @@ uint32_t emit_instruction_offset_debug_info(
       size_t total_ignored = std::distance(sizes.begin(), best_iter);
       if (!dry_run) {
         TRACE(IODI, 3,
-              "[IODI] (%u) Ignored %u methods because they inflated too much",
+              "[IODI] (%u) Ignored %zu methods because they inflated too much",
               param_size, total_ignored);
       }
 
@@ -1919,7 +1903,8 @@ uint32_t emit_instruction_offset_debug_info(
       // 2.2) Emit IODI programs (other debug programs will be emitted below)
       if (requires_iodi_programs) {
         TRACE(IODI, 2,
-              "[IODI] @%u(%u): Of %u methods %u were too big, %u at biggest %u",
+              "[IODI] @%u(%u): Of %zu methods %zu were too big, %zu at biggest "
+              "%zu",
               offset, param_size, sizes.size(), num_big, num_small_enough,
               insns_size);
         if (num_small_enough == 0) {
@@ -1929,15 +1914,15 @@ uint32_t emit_instruction_offset_debug_info(
         auto& buckets = bucket_res.first;
         total_inflated_size = bucket_res.second;
         TRACE(IODI, 3,
-              "[IODI][Buckets] Bucketed %u arity methods into %u buckets with "
+              "[IODI][Buckets] Bucketed %u arity methods into %zu buckets with "
               "total"
-              " inflated size %u:\n",
+              " inflated size %zu:\n",
               param_size, buckets.size(), total_inflated_size);
         auto& size_to_offset = param_size_to_oset[param_size];
         for (auto& bucket : buckets) {
           auto bucket_size = bucket.first;
-          TRACE(IODI, 3, "  - %u methods in bucket size %u @ %lu",
-                bucket.second, bucket_size, offset);
+          TRACE(IODI, 3, "  - %u methods in bucket size %u @ %u", bucket.second,
+                bucket_size, offset);
           size_to_offset.emplace(bucket_size, offset);
           std::vector<std::unique_ptr<DexDebugInstruction>> dbgops;
           if (bucket_size > 0) {
@@ -2605,7 +2590,11 @@ const char* deobf_primitive(char type) {
   }
 }
 
-void write_pg_mapping(const std::string& filename, DexClasses* classes) {
+void write_pg_mapping(
+    const std::string& filename,
+    DexClasses* classes,
+    const std::unordered_map<DexClass*, std::vector<DexMethod*>>*
+        detached_methods) {
   if (filename.empty()) return;
 
   auto deobf_class = [&](DexClass* cls) {
@@ -2734,6 +2723,16 @@ void write_pg_mapping(const std::string& filename, DexClasses* classes) {
       auto deobf = deobf_meth(meth);
       ofs << "    " << deobf << " -> " << meth->c_str() << std::endl;
     }
+    if (detached_methods) {
+      auto it = detached_methods->find(cls);
+      if (it != detached_methods->end()) {
+        ofs << "    --- detached methods ---" << std::endl;
+        for (auto meth : it->second) {
+          auto deobf = deobf_meth(meth);
+          ofs << "    " << deobf << " -> " << meth->c_str() << std::endl;
+        }
+      }
+    }
   }
 }
 
@@ -2791,7 +2790,7 @@ void DexOutput::write_symbol_files() {
                         hdr.class_defs_size, hdr.signature);
     // XXX: should write_bytecode_offset_mapping be included here too?
   }
-  write_pg_mapping(m_pg_mapping_filename, m_classes);
+  write_pg_mapping(m_pg_mapping_filename, m_classes, &m_detached_methods);
   write_full_mapping(m_full_mapping_filename, m_classes);
   write_bytecode_offset_mapping(m_bytecode_offset_filename,
                                 m_method_bytecode_offsets);
@@ -2831,9 +2830,7 @@ void DexOutput::prepare(SortMode string_mode,
   generate_typelist_data();
   generate_string_data(string_mode);
   generate_code_items(code_mode);
-  if (!m_force_class_data_end_of_file) {
-    generate_class_data_items();
-  }
+  generate_class_data_items();
   generate_type_data();
   generate_proto_data();
   generate_field_data();
@@ -2843,9 +2840,6 @@ void DexOutput::prepare(SortMode string_mode,
   generate_methodhandle_data();
   generate_annotations();
   generate_debug_items();
-  if (m_force_class_data_end_of_file) {
-    generate_class_data_items();
-  }
   generate_map();
   finalize_header();
   compute_method_to_id_map(dodx, m_classes, hdr.signature, m_method_to_id);
@@ -2897,6 +2891,7 @@ void DexOutput::metrics() {
     s_unique_references.total_fields_size = 0;
     s_unique_references.total_methods_size = 0;
   }
+  memcpy(m_stats.signature, hdr.signature, 20);
 
   for (auto& p : dodx->string_to_idx()) {
     s_unique_references.strings.insert(p.first);
@@ -2961,7 +2956,7 @@ dex_stats_t write_classes_to_dex(
     std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
     IODIMetadata* iodi_metadata,
     const std::string& dex_magic,
-    PostLowering const* post_lowering,
+    PostLowering* post_lowering,
     int min_sdk,
     bool disable_method_similarity_order) {
   const JsonWrapper& json_cfg = conf.get_json_config();

@@ -119,14 +119,14 @@ void write_intermediate_dex(const RedexOptions& redex_options,
       write_classes_to_dex(redex_options,
                            filename,
                            &store.get_dexen()[i],
-                           nullptr /* locator_index */,
+                           /* locator_index= */ nullptr,
                            store_number,
                            i,
                            conf,
                            pos_mapper.get(),
-                           nullptr,
-                           nullptr,
-                           nullptr /* IODIMetadata* */,
+                           /* method_to_id= */ nullptr,
+                           /* code_debug_lines= */ nullptr,
+                           /* iodi_metadata= */ nullptr,
                            stores[0].get_dex_magic());
       auto basename = boost::filesystem::path(filename).filename().string();
       store_files["list"].append(basename);

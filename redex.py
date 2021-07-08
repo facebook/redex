@@ -29,7 +29,6 @@ from pipes import quote
 
 import pyredex.bintools as bintools
 import pyredex.logger as logger
-from pyredex.logger import log
 from pyredex.unpacker import unpack_tar_xz
 from pyredex.utils import (
     LibraryManager,
@@ -197,7 +196,7 @@ def run_redex_binary(state, exception_formatter, output_line_handler):
         sys.exit(
             "redex-all is not found or is not executable: " + state.args.redex_binary
         )
-    log("Running redex binary at " + state.args.redex_binary)
+    logging.debug("Running redex binary at %s", state.args.redex_binary)
 
     args = [state.args.redex_binary] + [
         "--apkdir",
@@ -332,7 +331,7 @@ def run_redex_binary(state, exception_formatter, output_line_handler):
                 continue
             raise err
 
-    log("Dex processing finished in {:.2f} seconds".format(timer() - start))
+    logging.debug("Dex processing finished in {:.2f} seconds".format(timer() - start))
 
 
 def zipalign(unaligned_apk_path, output_apk_path, ignore_zipalign, page_align):
@@ -403,10 +402,8 @@ def copy_file_to_out_dir(tmp, apk_output_path, name, human_name, out_name):
     tmp_path = tmp + "/" + name
     if os.path.isfile(tmp_path):
         shutil.copy2(tmp_path, output_path)
-        log("Copying " + human_name + " map to output dir")
         logging.warning("Copying " + human_name + " map to output_dir: " + output_path)
     else:
-        log("Skipping " + human_name + " copy, since no file found to copy")
         logging.warning("Skipping " + human_name + " copy, since no file found to copy")
 
 
@@ -748,6 +745,47 @@ def _check_android_sdk(args):
         logging.warning("Could not find an SDK jar: %s", e)
 
 
+def _has_config_val(args, path):
+    try:
+        with open(args.config, "r") as f:
+            json_obj = json.load(f)
+        for item in path:
+            if item not in json_obj:
+                logging.debug("Did not find %s in %s", item, json_obj)
+                return False
+            json_obj = json_obj[item]
+        return True
+    except BaseException as e:
+        logging.error("%s", e)
+        return False
+
+
+def _check_shrinker_heuristics(args):
+    arg_template = "inliner.reg_alloc_random_forest="
+    for arg in args.passthru:
+        if arg.startswith(arg_template):
+            return
+
+    if _has_config_val(args, ["inliner", "reg_alloc_random_forest"]):
+        return
+
+    # Nothing found, check whether we have files embedded
+    logging.info("No shrinking heuristic found, searching for default.")
+    try:
+        from generated_shrinker_regalloc_heuristics import SHRINKER_HEURISTICS_FILE
+
+        logging.info("Found embedded shrinker heuristics")
+        tmp_dir = make_temp_dir("shrinker_heuristics")
+        filename = os.path.join(tmp_dir, "shrinker.forest")
+        logging.info("Writing shrinker heuristics to %s", filename)
+        with open(filename, "wb") as f:
+            f.write(SHRINKER_HEURISTICS_FILE)
+        arg = arg_template + filename
+        args.passthru.append(arg)
+    except ImportError:
+        logging.info("No embedded files, please add manually!")
+
+
 def _check_android_sdk_api(args):
     arg_template = "android_sdk_api_{level}_file="
     arg_re = re.compile("^" + arg_template.format(level="(\\d+)"))
@@ -756,7 +794,7 @@ def _check_android_sdk_api(args):
             return
 
     # Nothing found, check whether we have files embedded
-    logging.info("No android_sdk_api_XX_file parameters found!")
+    logging.info("No android_sdk_api_XX_file parameters found.")
     try:
         import generated_apilevels as ga
 
@@ -821,10 +859,11 @@ def prepare_redex(args):
 
     # avoid accidentally mixing up file formats since we now support
     # both apk files and Android bundle files
+    file_ext = get_file_ext(args.input_apk)
     if not args.unpack_only:
-        assert get_file_ext(args.input_apk) == get_file_ext(args.out), (
+        assert file_ext == get_file_ext(args.out), (
             'Input file extension ("'
-            + get_file_ext(args.input_apk)
+            + file_ext
             + '") should be the same as output file extension ("'
             + get_file_ext(args.out)
             + '")'
@@ -855,8 +894,8 @@ def prepare_redex(args):
 
     config = args.config
     binary = args.redex_binary
-    log("Using config " + (config if config is not None else "(default)"))
-    log("Using binary " + (binary if binary is not None else "(default)"))
+    logging.debug("Using config %s", config if config is not None else "(default)")
+    logging.debug("Using binary %s", binary if binary is not None else "(default)")
 
     if args.unpack_only or config is None:
         config_dict = {}
@@ -890,13 +929,14 @@ def prepare_redex(args):
         extracted_apk_dir = make_temp_dir(".redex_extracted_apk", debug_mode)
 
     directory = make_temp_dir(".redex_unaligned", False)
-    unaligned_apk_path = join(directory, "redex-unaligned.apk")
+    unaligned_apk_path = join(directory, "redex-unaligned." + file_ext)
     zip_manager = ZipManager(args.input_apk, extracted_apk_dir, unaligned_apk_path)
     zip_manager.__enter__()
 
     if not dex_dir:
         dex_dir = make_temp_dir(".redex_dexen", debug_mode)
 
+    is_bundle = isfile(join(extracted_apk_dir, "BundleConfig.pb"))
     unpack_manager = UnpackManager(
         args.input_apk,
         extracted_apk_dir,
@@ -905,10 +945,11 @@ def prepare_redex(args):
         debug_mode=debug_mode,
         fast_repackage=args.dev,
         reset_timestamps=args.reset_zip_timestamps or args.dev,
+        is_bundle=is_bundle,
     )
     store_files = unpack_manager.__enter__()
 
-    lib_manager = LibraryManager(extracted_apk_dir)
+    lib_manager = LibraryManager(extracted_apk_dir, is_bundle=is_bundle)
     lib_manager.__enter__()
 
     if args.unpack_only:
@@ -925,7 +966,9 @@ def prepare_redex(args):
     dexen = move_dexen_to_directories(dex_dir, dex_glob(dex_dir))
     for store in sorted(store_files):
         dexen.append(store)
-    log("Unpacking APK finished in {:.2f} seconds".format(timer() - unpack_start_time))
+    logging.debug(
+        "Unpacking APK finished in {:.2f} seconds".format(timer() - unpack_start_time)
+    )
 
     if args.side_effect_summaries is not None:
         args.passthru_json.append(
@@ -941,27 +984,33 @@ def prepare_redex(args):
     for key_value_str in args.passthru_json:
         key_value = key_value_str.split("=", 1)
         if len(key_value) != 2:
-            log(
-                "Json Pass through %s is not valid. Split len: %s"
-                % (key_value_str, len(key_value))
+            logging.debug(
+                "Json Pass through %s is not valid. Split len: %s",
+                key_value_str,
+                len(key_value),
             )
             continue
         key = key_value[0]
         value = key_value[1]
         prev_value = config_dict.get(key, "(No previous value)")
-        log(
-            "Got Override %s = %s from %s. Previous %s"
-            % (key, value, key_value_str, prev_value)
+        logging.debug(
+            "Got Override %s = %s from %s. Previous %s",
+            key,
+            value,
+            key_value_str,
+            prev_value,
         )
         config_dict[key] = json.loads(value)
 
     # Scan for framework files. If not found, warn and add them if available.
     _check_android_sdk_api(args)
+    # Check for shrinker heuristics.
+    _check_shrinker_heuristics(args)
 
     # Scan for SDK jar. If not found, warn and add if available.
     _check_android_sdk(args)
 
-    log("Running redex-all on {} dex files ".format(len(dexen)))
+    logging.debug("Running redex-all on %d dex files ", len(dexen))
     if args.lldb:
         debugger = "lldb"
     elif args.gdb:
@@ -1004,7 +1053,7 @@ def finalize_redex(state):
         state.args.page_align_libs,
     )
 
-    log(
+    logging.debug(
         "Creating output APK finished in {:.2f} seconds".format(
             timer() - repack_start_time
         )
@@ -1018,7 +1067,7 @@ def finalize_redex(state):
     )
 
     if state.args.enable_instrument_pass:
-        log("Creating redex-instrument-metadata.zip")
+        logging.debug("Creating redex-instrument-metadata.zip")
         zipfile_path = join(dirname(state.args.out), "redex-instrument-metadata.zip")
 
         FILES = [

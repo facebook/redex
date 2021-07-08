@@ -542,6 +542,11 @@ AnalysisResult analyze(ControlFlowGraph& cfg) {
 
   ret.method_with_locks = true;
   ret.rdefs = std::move(rdefs_res.rdefs);
+  // Possible with unreachable code.
+  if (ret.rdefs.empty()) {
+    ret.method_with_locks = false;
+    return ret;
+  }
 
   // 3) Run our iterator.
   ret.iter = std::make_unique<analysis::LocksIterator>(cfg, ret.rdefs);

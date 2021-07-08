@@ -22,7 +22,7 @@ void fix_colliding_dmethods(
     return;
   }
   // Fix colliding methods by appending an additional param.
-  TRACE(REFU, 9, "sig: colliding_methods %d", colliding_methods.size());
+  TRACE(REFU, 9, "sig: colliding_methods %zu", colliding_methods.size());
   std::unordered_map<DexMethod*, size_t> num_additional_args;
   for (auto it : colliding_methods) {
     auto meth = it.first;
@@ -54,7 +54,7 @@ void fix_colliding_dmethods(
     }
     TRACE(REFU,
           9,
-          "sig: patching colliding method %s with %d additional args",
+          "sig: patching colliding method %s with %zu additional args",
           SHOW(meth),
           arg_count);
   }
@@ -311,22 +311,10 @@ void TypeRefUpdater::update_methods_fields(const Scope& scope) {
       }
     }
   });
-  {
-    auto wq = workqueue_foreach<DexFieldRef*>(
-        [this](DexFieldRef* field) { mangling(field); });
-    for (auto field : fields) {
-      wq.add_item(field);
-    }
-    wq.run_all();
-  }
-  {
-    auto wq = workqueue_foreach<DexMethodRef*>(
-        [this](DexMethodRef* method) { mangling(method); });
-    for (auto method : methods) {
-      wq.add_item(method);
-    }
-    wq.run_all();
-  }
+  workqueue_run<DexFieldRef*>([this](DexFieldRef* field) { mangling(field); },
+                              fields);
+  workqueue_run<DexMethodRef*>(
+      [this](DexMethodRef* method) { mangling(method); }, methods);
 
   std::map<DexMethod*, DexProto*, dexmethods_comparator> inits(m_inits.begin(),
                                                                m_inits.end());

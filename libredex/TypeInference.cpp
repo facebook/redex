@@ -831,7 +831,7 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
         dex_method->get_proto()->get_args()->get_type_list();
     size_t expected_args =
         (insn->opcode() != OPCODE_INVOKE_STATIC ? 1 : 0) + arg_types.size();
-    always_assert(insn->srcs_size() == expected_args);
+    always_assert_log(insn->srcs_size() == expected_args, "%s", SHOW(insn));
 
     size_t src_idx{0};
     if (insn->opcode() != OPCODE_INVOKE_STATIC) {

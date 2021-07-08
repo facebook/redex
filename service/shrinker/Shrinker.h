@@ -21,6 +21,8 @@
 #include "ShrinkerConfig.h"
 #include "Timer.h"
 
+class ScopedMetrics;
+
 namespace shrinker {
 
 class Shrinker {
@@ -92,6 +94,8 @@ class Shrinker {
   get_immut_analyzer_state() {
     return &m_immut_analyzer_state;
   }
+
+  void log_metrics(ScopedMetrics& sm) const;
 
  private:
   ShrinkerForest m_forest;

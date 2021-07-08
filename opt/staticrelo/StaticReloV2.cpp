@@ -278,7 +278,7 @@ void StaticReloPassV2::run_pass(DexStoresVector& stores,
                                 PassManager& mgr) {
   Scope scope = build_class_scope(stores);
   std::vector<DexClass*> candidate_classes = gen_candidates(scope);
-  TRACE(STATIC_RELO, 2, "candidate_classes %d", candidate_classes.size());
+  TRACE(STATIC_RELO, 2, "candidate_classes %zu", candidate_classes.size());
 
   int relocated_methods = run_relocation(scope, candidate_classes);
   int empty_classes = 0;

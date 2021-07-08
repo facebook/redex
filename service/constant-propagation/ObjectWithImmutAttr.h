@@ -94,6 +94,8 @@ struct ImmutableAttr {
       DexMethod* method;
       void* member;
     };
+    // Only used by test cases.
+    Attr() {}
     explicit Attr(DexField* f) : kind(Field), field(f) {
       always_assert(!field->is_def() || (!is_static(field) && is_final(field)));
     }

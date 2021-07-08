@@ -144,7 +144,17 @@ DexInstruction* find_instruction(DexMethod* m, DexOpcode opcode) {
 }
 
 void verify_type_erased(const DexClass* cls, size_t num_dmethods) {
-  ASSERT_NE(cls, nullptr);
+  if (!cls) {
+    ASSERT_EQ(num_dmethods, 0)
+        << "cls is null, can not have " << num_dmethods << " dmethods\n";
+    return;
+  }
+  ASSERT_EQ(cls->get_interfaces()->size(), 0)
+      << "cls " << show(cls) << " has interfaces "
+      << show(cls->get_interfaces()) << "\n";
+  ASSERT_EQ(cls->get_super_class(), type::java_lang_Object())
+      << "cls " << show(cls) << " has super_cls "
+      << show(cls->get_super_class()) << "\n";
   auto dmethods = cls->get_dmethods();
   ASSERT_EQ(dmethods.size(), num_dmethods)
       << show(cls) << " has " << dmethods.size() << " dmethods\n";

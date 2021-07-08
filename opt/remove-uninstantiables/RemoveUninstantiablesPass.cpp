@@ -7,6 +7,8 @@
 
 #include "RemoveUninstantiablesPass.h"
 
+#include <cinttypes>
+
 #include "CFGMutation.h"
 #include "ControlFlow.h"
 #include "DexUtil.h"
@@ -253,10 +255,11 @@ RemoveUninstantiablesPass::Stats RemoveUninstantiablesPass::Stats::operator+(
 }
 
 void RemoveUninstantiablesPass::Stats::report(PassManager& mgr) const {
-#define REPORT(STAT)                                                       \
-  do {                                                                     \
-    mgr.incr_metric(#STAT, STAT);                                          \
-    TRACE(RMUNINST, 2, "  " #STAT ": %d/%d", STAT, mgr.get_metric(#STAT)); \
+#define REPORT(STAT)                                                           \
+  do {                                                                         \
+    mgr.incr_metric(#STAT, STAT);                                              \
+    TRACE(                                                                     \
+        RMUNINST, 2, "  " #STAT ": %d/%" PRId64, STAT, mgr.get_metric(#STAT)); \
   } while (0)
 
   TRACE(RMUNINST, 2, "RemoveUninstantiablesPass Stats:");
@@ -512,8 +515,9 @@ void RemoveUninstantiablesPass::run_pass(DexStoresVector& stores,
         cls->set_access((cls->get_access() & ~ACC_FINAL) | ACC_ABSTRACT);
       }
       for (auto method : cpp.abstract_vmethods) {
-        method->set_access((DexAccessFlags)(
-            (method->get_access() & ~ACC_FINAL) | ACC_ABSTRACT));
+        method->set_access(
+            (DexAccessFlags)((method->get_access() & ~ACC_FINAL) |
+                             ACC_ABSTRACT));
         method->set_code(nullptr);
       }
     }

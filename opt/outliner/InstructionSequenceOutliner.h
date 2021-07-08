@@ -35,6 +35,7 @@ struct Config {
   float method_profiles_warm_call_count{1};
   PerfSensitivity perf_sensitivity{PerfSensitivity::kAlwaysHot};
   bool reorder_with_method_profiles{true};
+  float block_profiles_hits{-1};
   bool reuse_outlined_methods_across_dexes{true};
   size_t max_outlined_methods_per_class{100};
   size_t savings_threshold{10};

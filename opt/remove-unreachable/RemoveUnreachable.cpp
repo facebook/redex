@@ -132,7 +132,7 @@ void write_out_removed_symbols_references(
             filepath.c_str());
     return;
   }
-  TRACE(RMU, 4, "Writing %d removed symbols references to %s",
+  TRACE(RMU, 4, "Writing %zu removed symbols references to %s",
         removed_symbols.size(), filepath.c_str());
 
   struct StringPtrComparator {
@@ -262,7 +262,7 @@ void RemoveUnreachablePassBase::write_out_removed_symbols(
             filepath.c_str());
     return;
   }
-  TRACE(RMU, 4, "Writing %d removed symbols to %s", removed_symbols.size(),
+  TRACE(RMU, 4, "Writing %zu removed symbols to %s", removed_symbols.size(),
         filepath.c_str());
   struct StringPtrComparator {
     bool operator()(const std::string* s1, const std::string* s2) const {

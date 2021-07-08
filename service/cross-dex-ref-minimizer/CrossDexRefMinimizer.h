@@ -14,7 +14,7 @@
 #include "DexClass.h"
 #include "MutablePriorityQueue.h"
 
-namespace interdex {
+namespace cross_dex_ref_minimizer {
 
 // For each (remaining) class, we are tracking (the weight of) each of its
 // *refs for which there are only 1, 2, 3, or 4 classes left that also have
@@ -35,15 +35,15 @@ struct CrossDexRefMinimizerStats {
 };
 
 struct CrossDexRefMinimizerConfig {
-  uint64_t method_ref_weight;
-  uint64_t field_ref_weight;
-  uint64_t type_ref_weight;
-  uint64_t string_ref_weight;
+  uint64_t method_ref_weight{100};
+  uint64_t field_ref_weight{90};
+  uint64_t type_ref_weight{100};
+  uint64_t string_ref_weight{90};
 
-  uint64_t method_seed_weight;
-  uint64_t field_seed_weight;
-  uint64_t type_seed_weight;
-  uint64_t string_seed_weight;
+  uint64_t method_seed_weight{100};
+  uint64_t field_seed_weight{20};
+  uint64_t type_seed_weight{30};
+  uint64_t string_seed_weight{20};
 };
 
 // Helper class that maintains a set of dex classes with associated priorities
@@ -145,4 +145,4 @@ class CrossDexRefMinimizer {
   size_t get_unapplied_refs(DexClass* cls);
 };
 
-} // namespace interdex
+} // namespace cross_dex_ref_minimizer

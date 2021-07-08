@@ -38,7 +38,7 @@ def abs_glob(directory, pattern="*"):
 
 
 def make_temp_dir(name="", debug=False):
-    """ Make a temporary directory which will be automatically deleted """
+    """Make a temporary directory which will be automatically deleted"""
     global temp_dirs
     directory = tempfile.mkdtemp(name)
     if not debug:
@@ -435,6 +435,7 @@ class UnpackManager:
         debug_mode=False,
         fast_repackage=False,
         reset_timestamps=True,
+        is_bundle=False,
     ):
         self.input_apk = input_apk
         self.extracted_apk_dir = extracted_apk_dir
@@ -443,21 +444,21 @@ class UnpackManager:
         self.debug_mode = debug_mode
         self.fast_repackage = fast_repackage
         self.reset_timestamps = reset_timestamps or debug_mode
+        self.is_bundle = is_bundle
 
     def __enter__(self):
-        dex_file_path = self.get_dex_file_path(self.input_apk, self.extracted_apk_dir)
-
-        self.dex_mode = pyredex.unpacker.detect_secondary_dex_mode(dex_file_path)
-        log("Detected dex mode " + str(type(self.dex_mode).__name__))
+        self.dex_mode = pyredex.unpacker.detect_secondary_dex_mode(
+            self.extracted_apk_dir, self.is_bundle
+        )
         log("Unpacking dex files")
-        self.dex_mode.unpackage(dex_file_path, self.dex_dir)
+        self.dex_mode.unpackage(self.extracted_apk_dir, self.dex_dir)
 
         log("Detecting Application Modules")
         store_metadata_dir = make_temp_dir(
             ".application_module_metadata", self.debug_mode
         )
         self.application_modules = pyredex.unpacker.ApplicationModule.detect(
-            self.extracted_apk_dir
+            self.extracted_apk_dir, self.is_bundle
         )
         store_files = []
         for module in self.application_modules:
@@ -483,7 +484,7 @@ class UnpackManager:
         log("Emit Locator Strings: %s" % self.have_locators)
 
         self.dex_mode.repackage(
-            self.get_dex_file_path(self.input_apk, self.extracted_apk_dir),
+            self.extracted_apk_dir,
             self.dex_dir,
             self.have_locators,
             fast_repackage=self.fast_repackage,
@@ -508,18 +509,6 @@ class UnpackManager:
             )
             locator_store_id = locator_store_id + 1
 
-    def get_dex_file_path(self, input_apk, extracted_apk_dir):
-        # base on file extension check if input is
-        # an apk file (".apk") or an Android bundle file (".aab")
-        # TODO: support loadable modules (at this point only
-        # very basic support is provided - in case of Android bundles
-        # "regular" apk file content is moved to the "base"
-        # sub-directory of the bundle archive)
-        if get_file_ext(input_apk) == ".aab":
-            return join(extracted_apk_dir, "base", "dex")
-        else:
-            return extracted_apk_dir
-
 
 class LibraryManager:
     """
@@ -529,8 +518,9 @@ class LibraryManager:
 
     temporary_libs_dir = None
 
-    def __init__(self, extracted_apk_dir):
+    def __init__(self, extracted_apk_dir, is_bundle=False):
         self.extracted_apk_dir = extracted_apk_dir
+        self.is_bundle = is_bundle
 
     def __enter__(self):
         # Some of the native libraries can be concatenated together into one
@@ -548,9 +538,13 @@ class LibraryManager:
                 if os.path.getsize(fullpath) > 0:
                     libs_to_extract.append(fullpath)
         if len(libs_to_extract) > 0:
-            libs_dir = join(self.extracted_apk_dir, "lib")
+            libs_dir = (
+                join(self.extracted_apk_dir, "base", "lib")
+                if self.is_bundle
+                else join(self.extracted_apk_dir, "lib")
+            )
             extracted_dir = join(libs_dir, "__extracted_libs__")
-            # Ensure both directories exist.
+            # Ensure all directories exist.
             self.temporary_libs_dir = ensure_libs_dir(libs_dir, extracted_dir)
             for i, lib_to_extract in enumerate(libs_to_extract):
                 extract_path = join(extracted_dir, "lib_{}.so".format(i))

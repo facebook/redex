@@ -38,7 +38,8 @@ bool is_empty_class(DexClass* cls,
   TRACE(EMPTY, 4, "   can delete: %d", can_delete(cls));
   TRACE(EMPTY, 4, "   not interface: %d",
         !(access & DexAccessFlags::ACC_INTERFACE));
-  TRACE(EMPTY, 4, "   references: %d", class_references.count(cls->get_type()));
+  TRACE(EMPTY, 4, "   references: %zu",
+        class_references.count(cls->get_type()));
   bool remove = empty_class && can_delete(cls) &&
                 !(access & DexAccessFlags::ACC_INTERFACE) &&
                 class_references.count(cls->get_type()) == 0;

@@ -213,9 +213,10 @@ UpCodeMotionPass::Stats UpCodeMotionPass::process_code(bool is_static,
   auto& cfg = code->cfg();
 
   std::unique_ptr<type_inference::TypeInference> type_inference;
-  std::unordered_set<cfg::Block*> blocks_to_remove;
+  std::unordered_set<cfg::Block*> blocks_to_remove_set;
+  std::vector<cfg::Block*> blocks_to_remove;
   for (cfg::Block* b : cfg.blocks()) {
-    if (blocks_to_remove.count(b)) {
+    if (blocks_to_remove_set.count(b)) {
       continue;
     }
 
@@ -321,15 +322,15 @@ UpCodeMotionPass::Stats UpCodeMotionPass::process_code(bool is_static,
       cfg.insert_before(it, insn);
     }
     cfg.set_edge_target(branch_edge, branch_block->goes_to());
-    blocks_to_remove.insert(branch_block);
+    always_assert(!blocks_to_remove_set.count(branch_block));
+    blocks_to_remove_set.insert(branch_block);
+    blocks_to_remove.push_back(branch_block);
 
     stats.instructions_moved += instructions_to_insert.size();
     stats.branches_moved_over++;
   }
 
-  for (cfg::Block* b : blocks_to_remove) {
-    cfg.remove_block(b);
-  }
+  cfg.remove_blocks(blocks_to_remove);
 
   code->clear_cfg();
   return stats;
@@ -351,9 +352,9 @@ void UpCodeMotionPass::run_pass(DexStoresVector& stores,
                                        method->get_proto()->get_args(), code);
     if (stats.instructions_moved || stats.branches_moved_over) {
       TRACE(UCM, 3,
-            "[up code motion] Moved %u instructions over %u conditional "
-            "branches while inverting %u conditional branches and dealing "
-            "with %u clobbered registers in {%s}",
+            "[up code motion] Moved %zu instructions over %zu conditional "
+            "branches while inverting %zu conditional branches and dealing "
+            "with %zu clobbered registers in {%s}",
             stats.instructions_moved, stats.branches_moved_over,
             stats.inverted_conditional_branches, stats.clobbered_registers,
             SHOW(method));
@@ -366,12 +367,13 @@ void UpCodeMotionPass::run_pass(DexStoresVector& stores,
   mgr.incr_metric(METRIC_INVERTED_CONDITIONAL_BRANCHES,
                   stats.inverted_conditional_branches);
   mgr.incr_metric(METRIC_CLOBBERED_REGISTERS, stats.clobbered_registers);
-  TRACE(UCM, 1,
-        "[up code motion] Moved %u instructions over %u conditional branches "
-        "while inverting %u conditional branches and dealing with %u clobbered "
-        "registers in total",
-        stats.instructions_moved, stats.branches_moved_over,
-        stats.inverted_conditional_branches, stats.clobbered_registers);
+  TRACE(
+      UCM, 1,
+      "[up code motion] Moved %zu instructions over %zu conditional branches "
+      "while inverting %zu conditional branches and dealing with %zu clobbered "
+      "registers in total",
+      stats.instructions_moved, stats.branches_moved_over,
+      stats.inverted_conditional_branches, stats.clobbered_registers);
 }
 
 static UpCodeMotionPass s_pass;

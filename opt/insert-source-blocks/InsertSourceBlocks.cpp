@@ -273,6 +273,7 @@ void InsertSourceBlocksPass::run_pass(DexStoresVector& stores,
                                       PassManager& mgr) {
   std::vector<std::unique_ptr<ProfileFile>> profile_files;
   if (!m_profile_files.empty()) {
+    Timer t("reading files");
     std::vector<std::string> files;
     boost::split(files, m_profile_files, [](const auto& c) {
       constexpr char separator =
@@ -283,11 +284,18 @@ void InsertSourceBlocksPass::run_pass(DexStoresVector& stores,
 #endif
       return c == separator;
     });
-    for (const auto& file : files) {
-      profile_files.emplace_back(ProfileFile::prepare_profile_file(file));
-      TRACE(METH_PROF, 1, "Loaded basic block profile %s",
-            profile_files.back()->interaction.c_str());
-    }
+
+    profile_files.resize(files.size());
+    std::vector<size_t> indices(files.size());
+    std::iota(indices.begin(), indices.end(), 0);
+    workqueue_run<size_t>(
+        [&](size_t i) {
+          profile_files.at(i) = ProfileFile::prepare_profile_file(files.at(i));
+          TRACE(METH_PROF, 1, "Loaded basic block profile %s",
+                profile_files.at(i)->interaction.c_str());
+        },
+        indices);
+
     // Sort the interactions.
     std::sort(profile_files.begin(), profile_files.end(),
               [](const auto& lhs, const auto& rhs) {
@@ -302,11 +310,11 @@ void InsertSourceBlocksPass::run_pass(DexStoresVector& stores,
                 }
                 return lhs->interaction < rhs->interaction;
               });
-    std::unordered_map<std::string, size_t> indices;
+    std::unordered_map<std::string, size_t> interaction_indices;
     for (size_t i = 0; i != profile_files.size(); ++i) {
-      indices[profile_files[i]->interaction] = i;
+      interaction_indices[profile_files[i]->interaction] = i;
     }
-    g_redex->set_sb_interaction_index(indices);
+    g_redex->set_sb_interaction_index(interaction_indices);
   }
 
   bool is_instr_mode = mgr.get_redex_options().instrument_pass_enabled;

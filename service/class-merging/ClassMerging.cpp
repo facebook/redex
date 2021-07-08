@@ -51,8 +51,8 @@ std::unique_ptr<RefChecker> ref_checker_for_root_store(XStoreRefs* xstores,
   // RefChecker store_idx is initialized with `largest_root_store_id()`, so that
   // it rejects all the references from stores with id larger than the largest
   // root_store id.
-  return std::make_unique<RefChecker>(
-      xstores, xstores->largest_root_store_id(), min_sdk_api);
+  return std::make_unique<RefChecker>(xstores, xstores->largest_root_store_id(),
+                                      min_sdk_api);
 }
 
 } // namespace
@@ -76,6 +76,15 @@ void merge_model(Scope& scope,
   int32_t min_sdk = mgr.get_redex_options().min_sdk;
   XStoreRefs xstores(stores);
   auto refchecker = ref_checker_for_root_store(&xstores, conf, min_sdk);
+  if (spec.merging_targets.empty()) {
+    // TODO: change to unordered set.
+    TypeSet merging_targets_set;
+    for (const auto root : spec.roots) {
+      type_system.get_all_children(root, merging_targets_set);
+    }
+    spec.merging_targets.insert(merging_targets_set.begin(),
+                                merging_targets_set.end());
+  }
   auto model = Model::build_model(scope, conf, spec, type_system, *refchecker);
   model.update_redex_stats(mgr);
 

@@ -238,15 +238,6 @@ void RealPositionMapper::process_pattern_switch_positions() {
       always_assert(c.position);
       always_assert(c.position->file);
       case_pos->parent = c.position;
-      if (!PositionPatternSwitchManager::
-              CAN_OUTLINED_METHOD_INVOKE_OUTLINED_METHOD) {
-        // TODO: Remove the following check that ensures that the inliner and
-        // outliner never produce an outlined method that invokes an outlined
-        // method, a limitation imposed by symbolication infrastructure.
-        // for (auto q = c.position; q; q = q->parent) {
-        //   always_assert(!manager->is_pattern_position(q));
-        // }
-      }
       auto idx = m_positions.size();
       m_positions.emplace_back(case_pos);
       m_pos_line_map[case_pos] = idx;
@@ -271,6 +262,8 @@ void RealPositionMapper::process_pattern_switch_positions() {
     }
   }
 }
+
+uint32_t RealPositionMapper::size() const { return m_positions.size(); }
 
 void RealPositionMapper::write_map_v2() {
   // to ensure that the line numbers in the Dex are as compact as possible,

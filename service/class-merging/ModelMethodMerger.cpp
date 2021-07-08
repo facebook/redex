@@ -226,11 +226,11 @@ void MethodStats::print(const std::string& model_name,
   }
   TRACE(CLMG,
         8,
-        "==== methods stats for %s (%d) ====",
+        "==== methods stats for %s (%u) ====",
         model_name.c_str(),
         num_mergeables);
   for (auto& mm : merged_methods) {
-    TRACE(CLMG, 8, " %4d %s", mm.count, mm.name.c_str());
+    TRACE(CLMG, 8, " %4zu %s", mm.count, mm.name.c_str());
     if (mm.count > 1) {
       for (const auto& sample : mm.samples) {
         TRACE(CLMG, 9, "%s", sample.c_str());
@@ -363,7 +363,7 @@ dispatch::DispatchMethod ModelMethodMerger::create_dispatch_method(
   always_assert(targets.size());
   TRACE(CLMG,
         5,
-        "creating dispatch %s.%s for targets of size %d",
+        "creating dispatch %s.%s for targets of size %zu",
         SHOW(spec.owner_type),
         spec.name.c_str(),
         targets.size());
@@ -488,23 +488,27 @@ void ModelMethodMerger::sink_common_ctor_to_return_block(DexMethod* dispatch) {
   //
   // Redundent moves should be cleaned up by opt passes like copy propagation.
   std::vector<reg_t> new_srcs;
-  auto param_insns =
-      InstructionIterable(common_ctor->get_code()->get_param_instructions());
-  auto param_it = param_insns.begin(), param_end = param_insns.end();
-  for (; param_it != param_end; ++param_it) {
-    if (param_it->insn->opcode() == IOPCODE_LOAD_PARAM_WIDE) {
-      new_srcs.push_back(dispatch_code->allocate_wide_temp());
-    } else {
-      new_srcs.push_back(dispatch_code->allocate_temp());
-    }
+  auto common_ctor_args = common_ctor->get_proto()->get_args();
+  new_srcs.reserve(1 + common_ctor_args->size());
+  // For "this" pointer which should be an object reference and is not a wide
+  // register.
+  new_srcs.push_back(dispatch_code->allocate_temp());
+  for (auto arg_type : *common_ctor_args) {
+    new_srcs.push_back(type::is_wide_type(arg_type)
+                           ? dispatch_code->allocate_wide_temp()
+                           : dispatch_code->allocate_temp());
   }
 
   for (const auto& invocation : invocations) {
-    param_it = param_insns.begin();
-    for (size_t i = 0; i < invocation->insn->srcs_size(); ++i, ++param_it) {
-      always_assert(param_it != param_end);
-      auto mov = (new IRInstruction(
-                      opcode::load_param_to_move(param_it->insn->opcode())))
+    // For "this" pointer.
+    dispatch_code->insert_before(invocation,
+                                 (new IRInstruction(OPCODE_MOVE_OBJECT))
+                                     ->set_src(0, invocation->insn->src(0))
+                                     ->set_dest(new_srcs[0]));
+    auto arg_it = common_ctor_args->begin();
+    for (size_t i = 1; i < invocation->insn->srcs_size(); ++i, ++arg_it) {
+      redex_assert(arg_it != common_ctor_args->end());
+      auto mov = (new IRInstruction(opcode::move_opcode(*arg_it)))
                      ->set_src(0, invocation->insn->src(i))
                      ->set_dest(new_srcs[i]);
       dispatch_code->insert_before(invocation, mov);
@@ -670,7 +674,7 @@ void ModelMethodMerger::merge_ctors() {
     always_assert(!proto_to_ctors.empty());
     TRACE(CLMG,
           4,
-          " Merging ctors for %s with %d different protos",
+          " Merging ctors for %s with %zu different protos",
           SHOW(target_type),
           proto_to_ctors.size());
     std::unordered_set<DexMethod*> dispatches;
@@ -871,7 +875,7 @@ void ModelMethodMerger::dedup_non_ctor_non_virt_methods() {
         non_vmethods.end());
     TRACE(CLMG,
           8,
-          "dedup: clean up static|non_virt remainders %d",
+          "dedup: clean up static|non_virt remainders %zu",
           before - non_ctors.size() - non_vmethods.size());
   }
 }

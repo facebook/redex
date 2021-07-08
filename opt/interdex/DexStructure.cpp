@@ -200,7 +200,7 @@ bool DexStructure::add_class_if_fits(const MethodRefs& clazz_mrefs,
   if (m_mrefs.size() + extra_mrefs.size() >= method_refs_limit) {
     TRACE(IDEX, 6,
           "[warning]: Class won't fit current dex since it will go "
-          "over the method refs limit: %d >= %d: %s",
+          "over the method refs limit: %zu >= %zu: %s",
           m_mrefs.size() + extra_mrefs.size(), method_refs_limit, SHOW(clazz));
     return false;
   }
@@ -208,7 +208,7 @@ bool DexStructure::add_class_if_fits(const MethodRefs& clazz_mrefs,
   if (m_frefs.size() + extra_frefs.size() >= field_refs_limit) {
     TRACE(IDEX, 6,
           "[warning]: Class won't fit current dex since it will go "
-          "over the field refs limit: %d >= %d: %s",
+          "over the field refs limit: %zu >= %zu: %s",
           m_frefs.size() + extra_frefs.size(), field_refs_limit, SHOW(clazz));
     return false;
   }
@@ -216,7 +216,7 @@ bool DexStructure::add_class_if_fits(const MethodRefs& clazz_mrefs,
   if (m_trefs.size() + extra_trefs.size() >= type_refs_limit) {
     TRACE(IDEX, 6,
           "[warning]: Class won't fit current dex since it will go "
-          "over the type refs limit: %d >= %d: %s",
+          "over the type refs limit: %zu >= %zu: %s",
           m_trefs.size() + extra_trefs.size(), type_refs_limit, SHOW(clazz));
     return false;
   }

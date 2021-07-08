@@ -212,7 +212,7 @@ bool validate_result(const DexClass* cls,
       }
       uint32_t ordinal = it->second.ordinal;
       if (ordinal > ordinals.size()) {
-        TRACE(ENUM, 2, "\tUnexpected ordinal %u on %s", SHOW(ordinal),
+        TRACE(ENUM, 2, "\tUnexpected ordinal %u on %s", ordinal,
               SHOW(enum_sfield));
         return false;
       }

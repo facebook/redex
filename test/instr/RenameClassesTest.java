@@ -40,7 +40,7 @@ public class RenameClassesTest {
                    .getDeclaredField("__redex_internal_original_name")
                    .get(this))
       .isEqualTo(
-        Utils.demangle("com_facebook_redex_test_instr_RenameClassesTest"));
+        Utils.demangle("RenameClassesTest"));
   }
 
   @Test

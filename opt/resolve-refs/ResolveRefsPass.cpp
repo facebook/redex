@@ -32,19 +32,19 @@ struct RefStats {
   size_t num_invoke_super_removed = 0;
 
   void print(PassManager* mgr) {
-    TRACE(RESO, 1, "[ref reso] method ref resolved %d", num_mref_resolved);
-    TRACE(RESO, 1, "[ref reso] field ref resolved %d", num_fref_resolved);
+    TRACE(RESO, 1, "[ref reso] method ref resolved %zu", num_mref_resolved);
+    TRACE(RESO, 1, "[ref reso] field ref resolved %zu", num_fref_resolved);
     TRACE(RESO,
           1,
-          "[ref reso] invoke-virtual refined %d",
+          "[ref reso] invoke-virtual refined %zu",
           num_invoke_virtual_refined);
     TRACE(RESO,
           1,
-          "[ref reso] invoke-interface replaced %d",
+          "[ref reso] invoke-interface replaced %zu",
           num_invoke_interface_replaced);
     TRACE(RESO,
           1,
-          "[ref reso] invoke-super removed %d",
+          "[ref reso] invoke-super removed %zu",
           num_invoke_super_removed);
     mgr->incr_metric("method_refs_resolved", num_mref_resolved);
     mgr->incr_metric("field_refs_resolved", num_fref_resolved);

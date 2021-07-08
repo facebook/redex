@@ -1613,12 +1613,8 @@ InlinedCost MultiMethodInliner::get_inlined_cost(const DexMethod* callee) {
       inlined_cost = {0, 0, 0};
       auto num_threads = std::min(redex_parallel::default_num_threads(),
                                   callee_constant_arguments.size());
-      auto wq = workqueue_foreach<ConstantArgumentsOccurrences>(process_key,
-                                                                num_threads);
-      for (auto& p : callee_constant_arguments) {
-        wq.add_item(p);
-      }
-      wq.run_all();
+      workqueue_run<ConstantArgumentsOccurrences>(
+          process_key, callee_constant_arguments, num_threads);
     } else {
       inlined_cost = {0, 0, 0};
       for (auto& p : callee_constant_arguments) {

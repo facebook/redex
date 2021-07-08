@@ -242,11 +242,11 @@ void print_allowed_violations_per_class(
             get_store_name(xstores, type).c_str());
       if (!fields_detail_str.empty()) {
         TRACE(BRCR, 3, "  Fields:");
-        TRACE(BRCR, 3, fields_detail_str.c_str());
+        TRACE(BRCR, 3, "%s", fields_detail_str.c_str());
       }
       if (!methods_detail_str.empty()) {
         TRACE(BRCR, 3, "  Methods:");
-        TRACE(BRCR, 3, methods_detail_str.c_str());
+        TRACE(BRCR, 3, "%s", methods_detail_str.c_str());
       }
     }
   }

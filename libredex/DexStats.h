@@ -5,9 +5,13 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <inttypes.h>
+
 #pragma once
 
 struct dex_stats_t {
+  uint8_t signature[20];
+
   int num_types = 0;
   int num_classes = 0;
   int num_methods = 0;

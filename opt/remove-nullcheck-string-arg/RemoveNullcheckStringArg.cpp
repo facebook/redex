@@ -51,50 +51,63 @@ void RemoveNullcheckStringArg::run_pass(DexStoresVector& stores,
 bool RemoveNullcheckStringArg::setup(
     TransferMap& transfer_map, std::unordered_set<DexMethod*>& new_methods) {
 
-  bool is_param_check_V1_4 = false;
-  DexMethodRef* builtin_param =
+  DexMethodRef* builtin_param_V1_3 =
       DexMethod::get_method(CHECK_PARAM_NULL_SIGNATURE_V1_3);
-  if (!builtin_param) {
-    is_param_check_V1_4 = true;
-    builtin_param = DexMethod::get_method(CHECK_PARAM_NULL_SIGNATURE_V1_4);
-  }
-  /* If we didn't find the method, giveup. */
-  if (!builtin_param) {
-    return false;
-  }
-
-  bool is_expr_check_V1_4 = false;
-  DexMethodRef* builtin_expr =
+  DexMethodRef* builtin_param_V1_4 =
+      DexMethod::get_method(CHECK_PARAM_NULL_SIGNATURE_V1_4);
+  DexMethodRef* builtin_expr_V1_3 =
       DexMethod::get_method(CHECK_EXPR_NULL_SIGNATURE_V1_3);
-  if (!builtin_expr) {
-    is_expr_check_V1_4 = true;
-    builtin_expr = DexMethod::get_method(CHECK_EXPR_NULL_SIGNATURE_V1_4);
+  DexMethodRef* builtin_expr_V1_4 =
+      DexMethod::get_method(CHECK_EXPR_NULL_SIGNATURE_V1_4);
+
+  if (builtin_param_V1_3) {
+    auto new_check_param_method = get_wrapper_method_with_int_index(
+        NEW_CHECK_PARAM_NULL_SIGNATURE_V1_3,
+        WRAPPER_CHECK_PARAM_NULL_METHOD_V1_3, builtin_param_V1_3);
+    if (new_check_param_method) {
+      transfer_map[builtin_param_V1_3] =
+          std::make_pair(new_check_param_method, true);
+      new_methods.insert(new_check_param_method);
+    }
   }
-  if (!builtin_expr) {
-    return false;
+  if (builtin_param_V1_4) {
+    auto new_check_param_method = get_wrapper_method_with_int_index(
+        NEW_CHECK_PARAM_NULL_SIGNATURE_V1_4,
+        WRAPPER_CHECK_PARAM_NULL_METHOD_V1_4, builtin_param_V1_4);
+    if (new_check_param_method) {
+      transfer_map[builtin_param_V1_4] =
+          std::make_pair(new_check_param_method, true);
+      new_methods.insert(new_check_param_method);
+    }
   }
 
-  if (is_expr_check_V1_4 != is_param_check_V1_4) {
-    /* We have V1_3 and v1_4 mthods. */
-    TRACE(NULLCHECK, 1, "We have Kotlin 1.3 and 1.4 NULLCHECK assertions");
-    return false;
+  if (builtin_expr_V1_3) {
+    auto new_check_expr_method = get_wrapper_method(
+        NEW_CHECK_EXPR_NULL_SIGNATURE_V1_3, WRAPPER_CHECK_EXPR_NULL_METHOD_V1_3,
+        builtin_expr_V1_3);
+    if (new_check_expr_method) {
+      transfer_map[builtin_expr_V1_3] =
+          std::make_pair(new_check_expr_method, false);
+      new_methods.insert(new_check_expr_method);
+    }
   }
 
-  auto new_check_param_method = get_wrapper_method_with_int_index(
-      NEW_CHECK_PARAM_NULL_SIGNATURE, WRAPPER_CHECK_PARAM_NULL_METHOD,
-      builtin_param);
-  auto new_check_expr_method =
-      get_wrapper_method(NEW_CHECK_EXPR_NULL_SIGNATURE,
-                         WRAPPER_CHECK_EXPR_NULL_METHOD, builtin_expr);
+  if (builtin_expr_V1_4) {
+    auto new_check_expr_method = get_wrapper_method(
+        NEW_CHECK_EXPR_NULL_SIGNATURE_V1_4, WRAPPER_CHECK_EXPR_NULL_METHOD_V1_4,
+        builtin_expr_V1_4);
+    if (new_check_expr_method) {
+      transfer_map[builtin_expr_V1_4] =
+          std::make_pair(new_check_expr_method, false);
+      new_methods.insert(new_check_expr_method);
+    }
+  }
+
   /* If we could not generate suitable wrapper method, giveup. */
-  if (!new_check_param_method || !new_check_expr_method) {
+  if (new_methods.empty()) {
     return false;
   }
-  transfer_map[builtin_param] = std::make_pair(new_check_param_method, true);
-  transfer_map[builtin_expr] = std::make_pair(new_check_expr_method, false);
 
-  new_methods.insert(new_check_expr_method);
-  new_methods.insert(new_check_param_method);
   return true;
 }
 
@@ -321,7 +334,7 @@ void RemoveNullcheckStringArg::Stats::report(PassManager& mgr) const {
   TRACE(NULLCHECK, 2, "RemoveNullcheckStringArgPass Stats:");
   TRACE(NULLCHECK,
         2,
-        "RemoveNullcheckStringArgPass insns changed = %u",
+        "RemoveNullcheckStringArgPass insns changed = %zu",
         null_check_insns_changed);
 }
 

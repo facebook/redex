@@ -8,6 +8,7 @@
 #include "ConstantPropagationTransform.h"
 
 #include "ReachingDefinitions.h"
+#include "ScopedMetrics.h"
 #include "Trace.h"
 #include "Transform.h"
 #include "TypeInference.h"
@@ -68,9 +69,11 @@ bool Transform::eliminate_redundant_null_check(
   case OPCODE_INVOKE_STATIC: {
     if (auto index =
             get_null_check_object_index(insn, m_kotlin_null_check_assertions)) {
+      ++m_stats.null_checks_method_calls;
       auto val = env.get(insn->src(*index)).maybe_get<SignedConstantDomain>();
       if (val && val->interval() == sign_domain::Interval::NEZ) {
         m_deletes.push_back(it);
+        ++m_stats.null_checks;
         return true;
       }
     }
@@ -592,7 +595,7 @@ void Transform::forward_targets(
         continue;
       }
       TRACE(CONSTP, 2,
-            "forward_targets rewrites target, skipping %zu targets, discharged "
+            "forward_targets rewrites target, skipping %d targets, discharged "
             "%zu assigned regs",
             i, unconditional_target.assigned_regs.size());
       return unconditional_target.target;
@@ -739,6 +742,20 @@ Transform::Stats Transform::apply(
     forward_targets(intra_cp, env, cfg, block, liveness_fixpoint_iter);
   }
   return m_stats;
+}
+
+void Transform::Stats::log_metrics(ScopedMetrics& sm, bool with_scope) const {
+  using OptScope = boost::optional<ScopedMetrics::Scope>;
+  OptScope scope = with_scope ? OptScope(sm.scope("const_prop")) : boost::none;
+  sm.set_metric("branches_forwarded", branches_forwarded);
+  sm.set_metric("branch_propagated", branches_removed);
+  sm.set_metric("materialized_consts", materialized_consts);
+  sm.set_metric("throws", throws);
+  sm.set_metric("null_checks", null_checks);
+  sm.set_metric("null_checks_method_calls", null_checks_method_calls);
+  TRACE(CONSTP, 3, "Null checks removed: %zu(%zu)", null_checks,
+        null_checks_method_calls);
+  sm.set_metric("added_param_const", added_param_const);
 }
 
 } // namespace constant_propagation

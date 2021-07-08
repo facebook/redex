@@ -8,19 +8,29 @@
 #pragma once
 
 #include <cstddef>
+#include <string>
+#include <unordered_set>
 #include <vector>
 
 class DexClass;
-using Scope = std::vector<DexClass*>;
+class DexType;
 class PassManager;
+class DexStore;
+using DexStoresVector = std::vector<DexStore>;
 
 namespace class_merging {
 
 struct ModelSpec;
 
-void discover_mergeable_anonymous_classes(const Scope& scope,
-                                          size_t min_implementors,
-                                          ModelSpec* merging_spec,
-                                          PassManager* mgr);
+/**
+ * Analyze type hierarchy to find anonymous classes to merge.
+ * Fill the merging_spec with roots and merging_targets.
+ */
+void discover_mergeable_anonymous_classes(
+    const DexStoresVector& stores,
+    const std::unordered_set<std::string>& allowed_packages,
+    size_t min_implementors,
+    ModelSpec* merging_spec,
+    PassManager* mgr);
 
 } // namespace class_merging

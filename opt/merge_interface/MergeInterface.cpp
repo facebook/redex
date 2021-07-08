@@ -90,12 +90,12 @@ std::vector<DexClassSet> collect_can_merge(
       const TypeSet& implementors =
           type_system.get_implementors(cls->get_type());
       TRACE_NO_LINE(MEINT, 7, "implementors : ");
-      TRACE(MEINT, 7, SHOW(implementors));
+      TRACE(MEINT, 7, "%s", SHOW(implementors));
       // Need to find common interfaces that implement this interface too.
       const TypeSet& intf_children =
           type_system.get_interface_children(cls->get_type());
       TRACE_NO_LINE(MEINT, 7, "children intfs : ");
-      TRACE(MEINT, 7, SHOW(intf_children));
+      TRACE(MEINT, 7, "%s", SHOW(intf_children));
       TypeSet implementors_and_intfs;
       // TODO(suree404): This merge interfaces that have same implementors and
       // interface children. But if there are interfaces that have same
@@ -105,7 +105,7 @@ std::vector<DexClassSet> collect_can_merge(
       implementors_and_intfs.insert(intf_children.begin(), intf_children.end());
       interface_class_map[implementors_and_intfs].emplace(cls);
     }
-    TRACE(MEINT, 5, SHOW(interface_class_map));
+    TRACE(MEINT, 5, "%s", SHOW(interface_class_map));
 
     // Collect interfaces that we need to merge.
     for (const auto& pair : interface_class_map) {
@@ -132,7 +132,7 @@ std::vector<DexClassSet> collect_can_merge(
       }
     }
   });
-  TRACE(MEINT, 4, SHOW(interface_set));
+  TRACE(MEINT, 4, "%s", SHOW(interface_set));
   return interface_set;
 }
 
@@ -199,7 +199,7 @@ void strip_out_collision(const Scope& scope,
       DexMethodRef* fake_new_meth =
           DexMethod::make_method(type, name, new_proto);
       TRACE(MEINT, 7, "Making fake method");
-      TRACE(MEINT, 7, SHOW(fake_new_meth));
+      TRACE(MEINT, 7, "%s", SHOW(fake_new_meth));
       TRACE(MEINT, 7, "");
       fake_sets.emplace(fake_new_meth);
       return;
@@ -220,7 +220,7 @@ void strip_out_collision(const Scope& scope,
   walk::methods(scope, fake_update);
   for (DexMethodRef* fake_method : fake_sets) {
     TRACE(MEINT, 7, "Erasing fake method");
-    TRACE(MEINT, 7, SHOW(fake_method));
+    TRACE(MEINT, 7, "%s", SHOW(fake_method));
     TRACE(MEINT, 7, "");
     DexMethod::erase_method(fake_method);
   }
@@ -334,7 +334,7 @@ void move_methods_to_interface(
                         "Interface vmethod %s has implementation.",
                         SHOW(existed_method));
       TRACE(MEINT, 7, "Virtual method existed:");
-      TRACE(MEINT, 7, SHOW(existed_method));
+      TRACE(MEINT, 7, "%s", SHOW(existed_method));
       TRACE(MEINT, 7, "");
       // Keep track of mapping of kept DexMethod and deleted DexMethod
       // so that we can also replace the deleted DexMethodRef in code.
@@ -342,7 +342,7 @@ void move_methods_to_interface(
       continue;
     }
     TRACE(MEINT, 7, "Virtual method moved:");
-    TRACE(MEINT, 7, SHOW(method_to_move));
+    TRACE(MEINT, 7, "%s", SHOW(method_to_move));
     TRACE(MEINT, 7, "");
     DexMethodRef* methodref_in_context =
         DexMethod::get_method(target_intf_type,
@@ -369,7 +369,7 @@ void move_fields_to_interface(DexClass* from_interface,
   auto sfields = from_interface->get_sfields();
   for (DexField* field : sfields) {
     TRACE_NO_LINE(MEINT, 7, "Moving field ");
-    TRACE(MEINT, 7, SHOW(field));
+    TRACE(MEINT, 7, "%s", SHOW(field));
     TRACE(MEINT, 7, "");
     from_interface->remove_field(field);
     set_public(field);
@@ -400,7 +400,7 @@ std::unordered_map<const DexType*, DexType*> merge_interfaces(
     auto set_start = intf_set.begin();
     DexClass* merge_to_intf = *set_start;
     TRACE(MEINT, 3, "merger:   %p\n    ", merge_to_intf->get_type());
-    TRACE(MEINT, 3, SHOW(merge_to_intf));
+    TRACE(MEINT, 3, "%s", SHOW(merge_to_intf));
     TRACE(MEINT, 3, "");
 
     // Get original interfaces of target interface and use that as the start
@@ -415,7 +415,7 @@ std::unordered_map<const DexType*, DexType*> merge_interfaces(
     for (auto set_it = set_start; set_it != intf_set.end(); ++set_it) {
       DexClass* interface_to_copy = (*set_it);
       TRACE_NO_LINE(MEINT, 3, "merged:   %p", interface_to_copy->get_type());
-      TRACE(MEINT, 3, SHOW(interface_to_copy));
+      TRACE(MEINT, 3, "%s", SHOW(interface_to_copy));
       TRACE(MEINT, 3, "");
       intf_merge_map[interface_to_copy->get_type()] = merge_to_intf->get_type();
       // copy the methods

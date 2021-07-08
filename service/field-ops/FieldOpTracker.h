@@ -32,6 +32,18 @@ struct FieldStats {
   }
 };
 
+// Certain types don't have lifetimes, or at least nobody should depend on them.
+class TypeLifetimes {
+ private:
+  std::unordered_set<const DexType*> m_ignored_types;
+  const DexType* m_java_lang_Enum;
+  mutable ConcurrentMap<const DexMethodRef*, boost::optional<bool>> m_cache;
+
+ public:
+  TypeLifetimes();
+  bool has_lifetime(const DexType* t) const;
+};
+
 using FieldStatsMap = std::unordered_map<DexField*, FieldStats>;
 
 FieldStatsMap analyze(const Scope& scope);
@@ -49,5 +61,7 @@ struct FieldWrites {
   std::unordered_set<DexField*> non_vestigial_objects_written_fields;
 };
 
-FieldWrites analyze_writes(const Scope& scope);
+FieldWrites analyze_writes(const Scope& scope,
+                           const FieldStatsMap& field_stats,
+                           const TypeLifetimes* type_lifetimes = nullptr);
 } // namespace field_op_tracker

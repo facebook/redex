@@ -5,14 +5,26 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "RedexResources.h"
+#include "ApkResources.h"
+#include "RedexTestUtils.h"
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include <boost/filesystem.hpp>
+
 TEST(ManifestClassesTest, exported) {
-  const auto& manifest_filename = std::getenv("test_manifest_path");
-  const auto& class_info = get_manifest_class_info(manifest_filename);
+  // Setup a normal looking apk directory
+  auto tmp_dir = redex::make_tmp_dir("ManifestClassesTest%%%%%%%%");
+  std::ifstream src_stream(std::getenv("test_manifest_path"), std::ios::binary);
+  auto dest = tmp_dir.path + "/AndroidManifest.xml";
+  {
+    std::ofstream dest_stream(dest, std::ios::binary);
+    dest_stream << src_stream.rdbuf();
+  }
+
+  ApkResources resources(tmp_dir.path);
+  const auto& class_info = resources.get_manifest_class_info();
 
   const auto& tag_infos = class_info.component_tags;
   EXPECT_EQ(tag_infos.size(), 5);
@@ -39,7 +51,7 @@ TEST(ManifestClassesTest, exported) {
 
   EXPECT_EQ(tag_infos[4].tag, ComponentTag::Provider);
   EXPECT_EQ(tag_infos[4].classname, "Lcom/example/x/Foo;");
-  EXPECT_EQ(tag_infos[4].is_exported == BooleanXMLAttribute::Undefined);
+  EXPECT_EQ(tag_infos[4].is_exported, BooleanXMLAttribute::Undefined);
   EXPECT_THAT(tag_infos[4].authority_classes,
               ::testing::UnorderedElementsAre("Lcom/example/x/Foo;",
                                               "Lcom/example/y/Bar;"));

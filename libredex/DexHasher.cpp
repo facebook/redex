@@ -7,6 +7,8 @@
 
 #include "DexHasher.h"
 
+#include <cinttypes>
+
 #include "DexAccess.h"
 #include "DexClass.h"
 #include "DexInstruction.h"
@@ -64,22 +66,22 @@ void DexClassHasher::hash(bool value) {
   boost::hash_combine(m_hash, value);
 }
 void DexClassHasher::hash(uint8_t value) {
-  TRACE(HASHER, 4, "[hasher] %u", value);
+  TRACE(HASHER, 4, "[hasher] %" PRIu8, value);
   boost::hash_combine(m_hash, value);
 }
 
 void DexClassHasher::hash(uint16_t value) {
-  TRACE(HASHER, 4, "[hasher] %u", value);
+  TRACE(HASHER, 4, "[hasher] %" PRIu16, value);
   boost::hash_combine(m_hash, value);
 }
 
 void DexClassHasher::hash(uint32_t value) {
-  TRACE(HASHER, 4, "[hasher] %u", value);
+  TRACE(HASHER, 4, "[hasher] %" PRIu32, value);
   boost::hash_combine(m_hash, value);
 }
 
 void DexClassHasher::hash(uint64_t value) {
-  TRACE(HASHER, 4, "[hasher] %lu", value);
+  TRACE(HASHER, 4, "[hasher] %" PRIu64, value);
   boost::hash_combine(m_hash, value);
 }
 
@@ -134,14 +136,26 @@ void DexClassHasher::hash(const IRCode* c) {
   auto old_hash = m_hash;
   m_hash = 0;
 
-  std::unordered_map<MethodItemEntry*, uint32_t> ids;
-  auto get_id = [&ids](MethodItemEntry* mie) {
-    auto it = ids.find(mie);
-    if (it != ids.end()) {
+  std::unordered_map<const MethodItemEntry*, uint32_t> mie_ids;
+  auto get_mie_id = [&mie_ids](const MethodItemEntry* mie) {
+    auto it = mie_ids.find(mie);
+    if (it != mie_ids.end()) {
       return it->second;
     } else {
-      auto id = (uint32_t)ids.size();
-      ids.emplace(mie, id);
+      auto id = (uint32_t)mie_ids.size();
+      mie_ids.emplace(mie, id);
+      return id;
+    }
+  };
+
+  std::unordered_map<DexPosition*, uint32_t> pos_ids;
+  auto get_pos_id = [&pos_ids](DexPosition* pos) {
+    auto it = pos_ids.find(pos);
+    if (it != pos_ids.end()) {
+      return it->second;
+    } else {
+      auto id = (uint32_t)pos_ids.size();
+      pos_ids.emplace(pos, id);
       return id;
     }
   };
@@ -156,17 +170,17 @@ void DexClassHasher::hash(const IRCode* c) {
     case MFLOW_TRY:
       hash((uint8_t)MFLOW_TRY);
       hash((uint8_t)mie.tentry->type);
-      hash(get_id(mie.tentry->catch_start));
+      hash(get_mie_id(mie.tentry->catch_start));
       break;
     case MFLOW_CATCH:
       hash((uint8_t)MFLOW_CATCH);
       if (mie.centry->catch_type) hash(mie.centry->catch_type);
-      hash(get_id(mie.centry->next));
+      hash(get_mie_id(mie.centry->next));
       break;
     case MFLOW_TARGET:
       hash((uint8_t)MFLOW_TARGET);
       hash((uint8_t)mie.target->type);
-      hash(get_id(mie.target->src));
+      hash(get_mie_id(mie.target->src));
       break;
     case MFLOW_DEBUG:
       hash((uint8_t)MFLOW_DEBUG);
@@ -180,6 +194,7 @@ void DexClassHasher::hash(const IRCode* c) {
       if (mie.pos->method) hash(mie.pos->method);
       if (mie.pos->file) hash(mie.pos->file);
       hash(mie.pos->line);
+      if (mie.pos->parent) hash(get_pos_id(mie.pos->parent));
       boost::hash_combine(m_positions_hash, m_hash);
       m_hash = old_hash2;
       break;
@@ -199,6 +214,27 @@ void DexClassHasher::hash(const IRCode* c) {
     default:
       not_reached();
     }
+  }
+
+  uint32_t mie_index = 0;
+  for (const MethodItemEntry& mie : *c) {
+    auto it = mie_ids.find(&mie);
+    if (it != mie_ids.end()) {
+      hash(it->second);
+      hash(mie_index);
+    }
+    if (mie.type == MFLOW_POSITION) {
+      auto it2 = pos_ids.find(mie.pos.get());
+      if (it2 != pos_ids.end()) {
+        auto old_hash2 = m_hash;
+        m_hash = 0;
+        hash(it2->second);
+        hash(mie_index);
+        boost::hash_combine(m_positions_hash, m_hash);
+        m_hash = old_hash2;
+      }
+    }
+    mie_index++;
   }
 
   boost::hash_combine(m_code_hash, m_hash);

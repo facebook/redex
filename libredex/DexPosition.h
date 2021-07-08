@@ -141,6 +141,7 @@ class PositionMapper {
   virtual uint32_t position_to_line(DexPosition*) = 0;
   virtual void register_position(DexPosition* pos) = 0;
   virtual void write_map() = 0;
+  virtual uint32_t size() const = 0;
   static PositionMapper* make(const std::string& map_filename_v2);
 };
 
@@ -170,6 +171,7 @@ class RealPositionMapper : public PositionMapper {
   uint32_t position_to_line(DexPosition*) override;
   void register_position(DexPosition* pos) override;
   void write_map() override;
+  uint32_t size() const override;
 };
 
 class NoopPositionMapper : public PositionMapper {
@@ -178,4 +180,5 @@ class NoopPositionMapper : public PositionMapper {
   uint32_t position_to_line(DexPosition* pos) override { return pos->line; }
   void register_position(DexPosition* pos) override {}
   void write_map() override {}
+  uint32_t size() const override { return 0; }
 };

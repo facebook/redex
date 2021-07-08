@@ -17,13 +17,6 @@
 namespace class_merging {
 namespace strategy {
 
-Strategy g_strategy = BY_CLASS_COUNT;
-
-void set_merging_strategy(const Strategy strategy) {
-  g_strategy = strategy;
-  TRACE(CLMG, 9, "Set Merging Strategy to %d", strategy);
-}
-
 size_t estimate_vmethods_code_size(const DexClass* cls) {
   size_t estimated_size = 0;
   for (auto method : cls->get_vmethods()) {

@@ -60,16 +60,18 @@ class Transform final {
       mgr.incr_metric("null_check_only_type_checks",
                       null_check_only_type_checks);
       TRACE(TYPE_TRANSFORM, 2, "TypeAnalysisTransform Stats:");
-      TRACE(TYPE_TRANSFORM, 2, " null checks removed = %u", null_check_removed);
-      TRACE(TYPE_TRANSFORM, 2, " unsupported branch = %u", unsupported_branch);
+      TRACE(
+          TYPE_TRANSFORM, 2, " null checks removed = %zu", null_check_removed);
+      TRACE(TYPE_TRANSFORM, 2, " unsupported branch = %zu", unsupported_branch);
       TRACE(TYPE_TRANSFORM,
             2,
-            " Kotlin null checks removed = %u",
+            " Kotlin null checks removed = %zu",
             kotlin_null_check_removed);
-      TRACE(TYPE_TRANSFORM, 2, " type checks removed = %u", type_check_removed);
+      TRACE(
+          TYPE_TRANSFORM, 2, " type checks removed = %zu", type_check_removed);
       TRACE(TYPE_TRANSFORM,
             2,
-            " null check only type checks = %u",
+            " null check only type checks = %zu",
             null_check_only_type_checks);
     }
   };

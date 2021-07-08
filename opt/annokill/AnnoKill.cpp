@@ -51,7 +51,7 @@ AnnoKill::AnnoKill(
         m_only_force_kill,
         kill_bad_signatures);
   // Load annotations that should not be deleted.
-  TRACE(ANNO, 2, "Keep annotations count %d", keep.size());
+  TRACE(ANNO, 2, "Keep annotations count %zu", keep.size());
   for (const auto& anno_name : keep) {
     auto anno_type = DexType::get_type(anno_name.c_str());
     TRACE(ANNO, 2, "Keep annotation type string %s", anno_name.c_str());
@@ -691,43 +691,43 @@ void AnnoKillPass::run_pass(DexStoresVector& stores,
   TRACE(ANNO, 1, "AnnoKill report killed/total");
   TRACE(ANNO,
         1,
-        "Annotations: %d/%d",
+        "Annotations: %zu/%zu",
         stats.annotations_killed,
         stats.annotations);
   TRACE(ANNO,
         1,
-        "Class Asets: %d/%d",
+        "Class Asets: %zu/%zu",
         stats.class_asets_cleared,
         stats.class_asets);
   TRACE(ANNO,
         1,
-        "Method Asets: %d/%d",
+        "Method Asets: %zu/%zu",
         stats.method_asets_cleared,
         stats.method_asets);
   TRACE(ANNO,
         1,
-        "MethodParam Asets: %d/%d",
+        "MethodParam Asets: %zu/%zu",
         stats.method_param_asets_cleared,
         stats.method_param_asets);
   TRACE(ANNO,
         1,
-        "Field Asets: %d/%d",
+        "Field Asets: %zu/%zu",
         stats.field_asets_cleared,
         stats.field_asets);
 
   TRACE(ANNO,
         3,
-        "Total referenced Build Annos: %d",
+        "Total referenced Build Annos: %zu",
         stats.visibility_build_count);
   TRACE(ANNO,
         3,
-        "Total referenced Runtime Annos: %d",
+        "Total referenced Runtime Annos: %zu",
         stats.visibility_runtime_count);
   TRACE(ANNO,
         3,
-        "Total referenced System Annos: %d",
+        "Total referenced System Annos: %zu",
         stats.visibility_system_count);
-  TRACE(ANNO, 1, "@Signatures Killed: %d", stats.signatures_killed);
+  TRACE(ANNO, 1, "@Signatures Killed: %zu", stats.signatures_killed);
 
   mgr.incr_metric(METRIC_ANNO_KILLED, stats.annotations_killed);
   mgr.incr_metric(METRIC_ANNO_TOTAL, stats.annotations);

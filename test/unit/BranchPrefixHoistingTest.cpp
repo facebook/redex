@@ -17,9 +17,12 @@
 
 class BranchPrefixHoistingTest : public RedexTest {};
 
+// TODO: "full_validation" should always be true, but some existing (broken?)
+// legacy tests don't meet this bar
 void test(const std::string& code_str,
           const std::string& expected_str,
-          size_t expected_instructions_hoisted) {
+          size_t expected_instructions_hoisted,
+          bool full_validation = false) {
 
   DexType* type = DexType::make_type("testClass");
   auto cls = create_class(type, type::java_lang_Object(), {}, ACC_PUBLIC);
@@ -48,6 +51,10 @@ void test(const std::string& code_str,
   expected_ptr->build_cfg();
   auto& expected_cfg = expected_ptr->cfg();
   std::cerr << "expected:" << std::endl << SHOW(expected_cfg);
+  if (full_validation) {
+    code->clear_cfg();
+    expected_ptr->clear_cfg();
+  }
 
   EXPECT_EQ(assembler::to_s_expr(code), assembler::to_s_expr(expected.get()));
 }
@@ -628,4 +635,114 @@ TEST_F(BranchPrefixHoistingTest, branch_with_const_zero_2) {
     )
   )";
   test(code_str, code_str, 0);
+}
+
+TEST_F(BranchPrefixHoistingTest, positions_no_throw) {
+  const auto& code_str = R"(
+    (
+      (load-param v0)
+      (if-eqz v0 :true)
+      (.pos:dbg_0 "LFoo;.caller:()V" "Foo.java" 10)
+      (const v1 1)
+      (const v2 2)
+      (const v3 3)
+      (const v4 4)
+      (const v5 5)
+      (const v6 6)
+      (goto :end)
+      (:true)
+      (.pos:dbg_1 "LFoo;.caller:()V" "Foo.java" 20)
+      (const v1 1)
+      (const v2 2)
+      (.pos:dbg_2 "LFoo;.caller:()V" "Foo.java" 30)
+      (const v3 3)
+      (const v4 4)
+      (const v5 5)
+      (const v6 7)
+      (:end)
+      (.pos:dbg_3 "LFoo;.caller:()V" "Foo.java" 40)
+      (return-void)
+    )
+  )";
+  const auto& expected_str = R"(
+    (
+      (load-param v0)
+      (const v1 1)
+      (const v2 2)
+      (const v3 3)
+      (const v4 4)
+      (const v5 5)
+      (if-eqz v0 :true)
+      (.pos:dbg_0 "LFoo;.caller:()V" "Foo.java" 10)
+      (const v6 6)
+      (goto :end)
+      (:true)
+      (.pos:dbg_1 "LFoo;.caller:()V" "Foo.java" 20)
+      (.pos:dbg_2 "LFoo;.caller:()V" "Foo.java" 30)
+      (const v6 7)
+      (:end)
+      (.pos:dbg_3 "LFoo;.caller:()V" "Foo.java" 40)
+      (return-void)
+    )
+  )";
+  test(code_str, expected_str, 5, /* full_validation */ true);
+}
+
+TEST_F(BranchPrefixHoistingTest, positions_may_throw) {
+  const auto& code_str = R"(
+    (
+      (load-param v0)
+      (if-eqz v0 :true)
+      (.pos:dbg_0 "LFoo;.caller:()V" "Foo.java" 10)
+      (const v1 1)
+      (invoke-static () "LWhat;.ever:()V")
+      (const v2 2)
+      (const v3 3)
+      (const v4 4)
+      (invoke-static () "LWhat;.ever:()V")
+      (const v5 5)
+      (const v6 6)
+      (goto :end)
+      (:true)
+      (.pos:dbg_1 "LFoo;.caller:()V" "Foo.java" 20)
+      (const v1 1)
+      (invoke-static () "LWhat;.ever:()V")
+      (const v2 2)
+      (.pos:dbg_2 "LFoo;.caller:()V" "Foo.java" 30)
+      (const v3 3)
+      (const v4 4)
+      (invoke-static () "LWhat;.ever:()V")
+      (const v5 5)
+      (const v6 7)
+      (:end)
+      (.pos:dbg_3 "LFoo;.caller:()V" "Foo.java" 40)
+      (return-void)
+    )
+  )";
+  const auto& expected_str = R"(
+    (
+      (load-param v0)
+      (const v1 1)
+      (.pos:dbg_0 "LFoo;.caller:()V" "Foo.java" 20)
+      (invoke-static () "LWhat;.ever:()V")
+      (const v2 2)
+      (const v3 3)
+      (const v4 4)
+      (.pos:dbg_1 "LFoo;.caller:()V" "Foo.java" 30)
+      (invoke-static () "LWhat;.ever:()V")
+      (const v5 5)
+      (if-eqz v0 :true)
+      (.pos:dbg_2 "LFoo;.caller:()V" "Foo.java" 10)
+      (const v6 6)
+      (goto :end)
+      (:true)
+      (.pos:dbg_3 "LFoo;.caller:()V" "Foo.java" 20)
+      (.pos:dbg_4 "LFoo;.caller:()V" "Foo.java" 30)
+      (const v6 7)
+      (:end)
+      (.pos:dbg_5 "LFoo;.caller:()V" "Foo.java" 40)
+      (return-void)
+    )
+  )";
+  test(code_str, expected_str, 7, /* full_validation */ true);
 }

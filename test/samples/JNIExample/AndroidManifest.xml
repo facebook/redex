@@ -7,8 +7,8 @@
       android:debuggable="false"
       android:allowBackup="false">
     <activity
-        android:name=".Main"
-        android:label="Main" >
+        android:name="redex.jni.example.MainActivity"
+        android:label="MainActivity" >
       <intent-filter>
         <action android:name="android.intent.action.MAIN"/>
         <category android:name="android.intent.category.LAUNCHER"/>

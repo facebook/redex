@@ -6,6 +6,7 @@
  */
 
 #include "PassManager.h"
+#include "DexAssessments.h"
 
 #include <boost/filesystem.hpp>
 #include <cinttypes>
@@ -38,6 +39,7 @@
 #include "InstructionLowering.h"
 #include "JemallocUtil.h"
 #include "MethodProfiles.h"
+#include "Native.h"
 #include "OptData.h"
 #include "Pass.h"
 #include "PrintSeeds.h"
@@ -53,6 +55,8 @@
 
 namespace {
 
+constexpr const char* JNI_OUTPUT_DIR = "/tmp/JNI_OUTPUT/";
+constexpr const char* REMOVABLE_NATIVES = "redex-removable-natives.txt";
 const std::string PASS_ORDER_KEY = "pass_order";
 
 const Pass* get_profiled_pass(const PassManager& mgr) {
@@ -400,6 +404,69 @@ class AnalysisUsageHelper {
   PreservedMap& m_preserved_analysis_passes;
 };
 
+class JNINativeContextHelper {
+ public:
+  explicit JNINativeContextHelper(const Scope& scope) {
+    // TODO (T90874859): Remove the hardcoded path and use a program option
+    // instead. Currently we don't have full integration with the build system
+    // and we need to make changes to the build step to pass this piece of
+    // information in from native build toolchain.
+    //
+    // Currently, if the path is not found, the native context is going to be
+    // empty.
+    g_native_context = std::make_unique<native::NativeContext>(
+        native::NativeContext::build(JNI_OUTPUT_DIR, scope));
+
+    // Before running any passes, treat everything as removable.
+    walk::methods(scope, [this](DexMethod* m) {
+      if (is_native(m)) {
+        auto native_func = native::get_native_function_for_dex_method(m);
+        if (native_func) {
+          m_removable_natives.emplace(native_func);
+        }
+      }
+    });
+  }
+
+  void post_passes(const Scope& scope, ConfigFiles& conf) {
+    // After running all passes, walk through the removable functions and
+    // remove the ones should remain.
+    walk::methods(scope, [this](DexMethod* m) {
+      if (is_native(m)) {
+        auto native_func = native::get_native_function_for_dex_method(m);
+        if (native_func) {
+          auto it = m_removable_natives.find(native_func);
+          if (it != m_removable_natives.end()) {
+            m_removable_natives.erase(it);
+          }
+        }
+      }
+    });
+
+    auto removable_natives_file_name = conf.metafile(REMOVABLE_NATIVES);
+    std::vector<std::string> output_symbols;
+    output_symbols.reserve(m_removable_natives.size());
+
+    // Might be non-deterministic in order, put them in a vector and sort.
+    for (auto func : m_removable_natives) {
+      output_symbols.push_back(func->get_name());
+    }
+
+    std::sort(output_symbols.begin(), output_symbols.end());
+
+    std::ofstream out(removable_natives_file_name);
+
+    for (const auto& name : output_symbols) {
+      out << name << std::endl;
+    }
+
+    g_native_context.reset();
+  }
+
+ private:
+  std::unordered_set<native::Function*> m_removable_natives;
+};
+
 void process_method_profiles(PassManager& mgr, ConfigFiles& conf) {
   // New methods might have been introduced by this pass; process previously
   // unresolved methods to see if we can match them now (so that future passes
@@ -472,6 +539,17 @@ bool is_run_hasher_after_each_pass(const ConfigFiles& conf,
 
   const Json::Value& hasher_args = conf.get_json_config()["hasher"];
   return hasher_args.get("run_after_each_pass", false).asBool();
+}
+
+AssessorConfig get_assessor_config(const ConfigFiles& conf,
+                                   const RedexOptions&) {
+  const Json::Value& assessor_args = conf.get_json_config()["assessor"];
+  AssessorConfig res;
+  res.run_after_each_pass =
+      assessor_args.get("run_after_each_pass", false).asBool();
+  res.run_initially = assessor_args.get("run_initially", false).asBool();
+  res.run_finally = assessor_args.get("run_finally", false).asBool();
+  return res;
 }
 
 class AfterPassSizes {
@@ -703,6 +781,19 @@ void track_source_block_coverage(const DexStoresVector& stores) {
         ((double)stats.source_blocks_present) * 100 / stats.total_blocks);
 }
 
+void run_assessor(PassManager& pm, const Scope& scope, bool initially = false) {
+  TRACE(PM, 2, "Running assessor...");
+  Timer t("Assessor");
+  assessments::DexScopeAssessor assessor(scope);
+  auto assessment = assessor.run();
+  std::string prefix =
+      std::string("~") + (initially ? "PRE" : "") + "assessment~";
+  // log metric value in a way that fits into JSON number value
+  for (auto& p : assessments::order(assessment)) {
+    pm.set_metric(prefix + p.first, p.second);
+  }
+}
+
 } // namespace
 
 std::unique_ptr<keep_rules::ProguardConfiguration> empty_pg_config() {
@@ -804,6 +895,7 @@ hashing::DexHash PassManager::run_hasher(const char* pass_name,
                                          const Scope& scope) {
   TRACE(PM, 2, "Running hasher...");
   Timer t("Hasher");
+  auto timer = m_hashers_timer.scope();
   hashing::DexScopeHasher hasher(scope);
   auto hash = hasher.run();
   if (pass_name) {
@@ -882,6 +974,9 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   bool run_hasher_after_each_pass =
       is_run_hasher_after_each_pass(conf, get_redex_options());
 
+  // Retrieve the assessor's settings.
+  auto assessor_config = get_assessor_config(conf, get_redex_options());
+
   // Retrieve the type checker's settings.
   CheckerConfig checker_conf{conf};
   checker_conf.on_input(scope);
@@ -916,7 +1011,13 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
 
   // For core loop legibility, have a lambda here.
 
-  auto post_pass_verifiers = [&](Pass* pass, size_t i) {
+  auto pre_pass_verifiers = [&](Pass* pass, size_t i) {
+    if (i == 0 && assessor_config.run_initially) {
+      ::run_assessor(*this, scope, /* initially */ true);
+    }
+  };
+
+  auto post_pass_verifiers = [&](Pass* pass, size_t i, size_t size) {
     walk::parallel::code(build_class_scope(stores), [](DexMethod* m,
                                                        IRCode& code) {
       // Ensure that pass authors deconstructed the editable CFG at the end of
@@ -926,14 +1027,19 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
     });
 
     bool run_hasher = run_hasher_after_each_pass;
+    bool run_assessor = assessor_config.run_after_each_pass ||
+                        (assessor_config.run_finally && i == size - 1);
     bool run_type_checker = checker_conf.run_after_pass(pass);
 
-    if (run_hasher || run_type_checker ||
+    if (run_hasher || run_assessor || run_type_checker ||
         check_unique_deobfuscated.m_after_each_pass) {
       scope = build_class_scope(it);
       if (run_hasher) {
         m_current_pass_info->hash = boost::optional<hashing::DexHash>(
             this->run_hasher(pass->name().c_str(), scope));
+      }
+      if (run_assessor) {
+        ::run_assessor(*this, scope);
       }
       if (run_type_checker) {
         // It's OK to overwrite the `this` register if we are not yet at the
@@ -945,9 +1051,12 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       if (i >= min_pass_idx_for_dex_ref_check) {
         CheckerConfig::ref_validation(stores, pass->name());
       }
+      auto timer = m_check_unique_deobfuscateds_timer.scope();
       check_unique_deobfuscated.run_after_pass(pass, scope);
     }
   };
+
+  JNINativeContextHelper jni_native_context_helper(scope);
 
   std::unordered_map<const Pass*, size_t> runs;
 
@@ -966,6 +1075,8 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
     Timer t(pass->name() + " " + std::to_string(pass_run) + " (run)");
     m_current_pass_info = &m_pass_info[i];
 
+    pre_pass_verifiers(pass, i);
+
     {
       auto scoped_command_prof = profiler_info_pass == pass
                                      ? ScopedCommandProfiling::maybe_from_info(
@@ -983,7 +1094,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
 
     graph_visualizer.add_pass(pass, i);
 
-    post_pass_verifiers(pass, i);
+    post_pass_verifiers(pass, i, m_activated_passes.size());
 
     analysis_usage_helper.post_pass(pass);
 
@@ -1009,6 +1120,8 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
                               get_redex_options().no_overwrite_this(),
                               /* validate_access */ true);
 
+  jni_native_context_helper.post_passes(scope, conf);
+
   check_unique_deobfuscated.run_finally(scope);
 
   graph_visualizer.finalize();
@@ -1016,6 +1129,10 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   maybe_print_seeds_outgoing(conf, it);
 
   sanitizers::lsan_do_recoverable_leak_check();
+
+  Timer::add_timer("PassManager.Hashers", m_hashers_timer.get_seconds());
+  Timer::add_timer("PassManager.CheckUniqueDeobfuscateds",
+                   m_check_unique_deobfuscateds_timer.get_seconds());
 }
 
 void PassManager::activate_pass(const std::string& name,

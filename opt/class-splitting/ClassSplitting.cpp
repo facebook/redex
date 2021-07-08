@@ -198,7 +198,8 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
       if (m_sufficiently_popular_methods.count(method)) {
         return;
       }
-      if (m_config.profile_only && !m_insufficiently_popular_methods.count(method)) {
+      if (m_config.profile_only &&
+          !m_insufficiently_popular_methods.count(method)) {
         return;
       }
 
@@ -306,7 +307,8 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
           return;
         }
 
-        if (m_config.profile_only && !m_insufficiently_popular_methods.count(method)) {
+        if (m_config.profile_only &&
+            !m_insufficiently_popular_methods.count(method)) {
           m_stats.non_relocated_methods++;
           return;
         }
@@ -733,7 +735,10 @@ void update_coldstart_classes_order(
 
     auto type = DexType::get_type(initial_type.c_str());
     if (type == nullptr) {
-      TRACE(CS, 2, "[class splitting] Cannot find previously relocated type %s in cold-start classes", initial_type.c_str());
+      TRACE(CS, 2,
+            "[class splitting] Cannot find previously relocated type %s in "
+            "cold-start classes",
+            initial_type.c_str());
       mgr.incr_metric("num_missing_initial_types", 1);
       continue;
     }

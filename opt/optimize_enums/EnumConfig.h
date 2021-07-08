@@ -23,6 +23,10 @@ struct ParamSummary {
 
   ParamSummary() : returned_param(boost::none) {}
 
+  ParamSummary(std::unordered_set<uint16_t>&& safe_params,
+               boost::optional<uint16_t> returned_param)
+      : safe_params(std::move(safe_params)), returned_param(returned_param) {}
+
   void print(const DexMethodRef* method) const;
 };
 

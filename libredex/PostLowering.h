@@ -13,22 +13,25 @@
 #include "ApkManager.h"
 #include "DexClass.h"
 #include "DexStore.h"
+#include "IODIMetadata.h"
 
 class PostLowering {
  public:
   static std::unique_ptr<PostLowering> create();
 
   virtual void sync() = 0;
-  virtual void gather_components(std::vector<DexString*>&,
-                                 std::vector<DexType*>&,
-                                 std::vector<DexFieldRef*>&,
-                                 std::vector<DexMethodRef*>&,
-                                 std::vector<DexCallSite*>&,
-                                 std::vector<DexMethodHandle*>&,
-                                 std::vector<DexTypeList*>&,
-                                 const std::vector<DexClass*>&) const = 0;
   virtual void run(const DexStoresVector& stores) = 0;
   virtual void finalize(ApkManager& mgr) = 0;
 
+  virtual std::unordered_map<DexClass*, std::vector<DexMethod*>>
+  get_detached_methods() = 0;
+  virtual void emit_symbolication_metadata(
+      PositionMapper* pos_mapper,
+      std::unordered_map<DexMethod*, uint64_t>* method_to_id,
+      std::unordered_map<DexCode*, std::vector<DebugLineItem>>*
+          code_debug_lines,
+      IODIMetadata* iodi_metadata,
+      std::vector<DexMethod*>& needs_debug_line_mapping,
+      std::set<uint32_t>& signatures) = 0;
   virtual ~PostLowering(){};
 };

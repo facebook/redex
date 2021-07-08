@@ -13,12 +13,15 @@
 #include "ApproximateShapeMerging.h"
 #include "DexClass.h"
 #include "MergerType.h"
+#include "MergingStrategies.h"
 #include "Trace.h"
 #include "TypeSystem.h"
 
 struct ConfigFiles;
 class PassManager;
 class RefChecker;
+
+using ConstTypeHashSet = std::unordered_set<const DexType*>;
 
 namespace class_merging {
 
@@ -106,8 +109,10 @@ struct ModelSpec {
   std::string name;
   // set of roots from which to find all model types
   TypeSet roots;
+  // A set of types to be merged, they should be subtypes of the roots.
+  ConstTypeHashSet merging_targets;
   // types to exclude from the model
-  std::unordered_set<DexType*> exclude_types;
+  ConstTypeHashSet exclude_types;
   // prefixes of types to exclude from the model
   std::unordered_set<std::string> exclude_prefixes;
   // prefix for class generation
@@ -123,6 +128,8 @@ struct ModelSpec {
   std::unordered_set<DexType*> gen_annos;
   // set of types safe to consume the class obj of merged classes
   std::unordered_set<DexType*> const_class_safe_types;
+  // The merging strategy of the model
+  strategy::Strategy strategy{strategy::BY_CLASS_COUNT};
   // Group splitting. This is looser than the per dex split and takes into
   // account the interdex order (if any provided).
   InterDexGroupingType merge_per_interdex_set{InterDexGroupingType::DISABLED};
@@ -346,6 +353,7 @@ class Model {
         const ModelSpec& spec,
         const TypeSystem& type_system,
         const RefChecker& refchecker);
+
   void init(const Scope& scope,
             const ModelSpec& spec,
             const TypeSystem& type_system);
@@ -353,7 +361,7 @@ class Model {
   void build_hierarchy(const TypeSet& roots);
   void build_interface_map(const DexType* type, TypeSet implemented);
   MergerType* build_mergers(const DexType* root);
-  void exclude_types(const std::unordered_set<DexType*>& exclude_types);
+  void exclude_types(const ConstTypeHashSet& exclude_types);
   bool is_excluded(const DexType* type) const;
 
   // MergerType creator helpers
@@ -376,6 +384,7 @@ class Model {
       const MergerType::Shape& shape,
       const TypeSet& intf_set,
       const TypeSet& group_values,
+      const strategy::Strategy strategy,
       const boost::optional<InterdexSubgroupIdx>& interdex_subgroup_idx,
       const boost::optional<size_t>& max_mergeables_count,
       size_t min_mergeables_count);

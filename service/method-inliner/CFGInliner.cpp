@@ -369,7 +369,7 @@ void CFGInliner::connect_cfgs(bool inline_after,
 
   auto connect = [&cfg](const std::vector<Block*>& preds, Block* succ) {
     for (Block* pred : preds) {
-      TRACE(CFG, 4, "connecting %d, %d in %s", pred->id(), succ->id(),
+      TRACE(CFG, 4, "connecting %zu, %zu in %s", pred->id(), succ->id(),
             SHOW(*cfg));
       cfg->add_edge(pred, succ, EDGE_GOTO);
     }

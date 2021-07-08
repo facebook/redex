@@ -10,6 +10,7 @@
 #include "ConstructorParams.h"
 #include "RandomForest.h"
 #include "RegisterAllocation.h"
+#include "ScopedMetrics.h"
 #include "Trace.h"
 
 namespace shrinker {
@@ -280,6 +281,11 @@ void Shrinker::shrink_method(DexMethod* method) {
   m_dedup_blocks_stats += dedup_blocks_stats;
   m_methods_shrunk++;
   m_methods_reg_alloced += reg_alloc_inc;
+}
+
+void Shrinker::log_metrics(ScopedMetrics& sm) const {
+  auto scope = sm.scope("shrinker");
+  m_const_prop_stats.log_metrics(sm);
 }
 
 } // namespace shrinker

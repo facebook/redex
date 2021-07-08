@@ -22,7 +22,9 @@ class AnonymousClassMergingPass : public Pass {
 
  private:
   ModelSpec m_merging_spec;
-  size_t m_min_implementor_size;
+  size_t m_min_eligible_classes;
+  size_t m_min_count;
+  std::unordered_set<std::string> allowed_packages;
 };
 
 } // namespace class_merging

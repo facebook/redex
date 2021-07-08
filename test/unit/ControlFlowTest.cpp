@@ -282,7 +282,7 @@ TEST_F(ControlFlowTest, iterate2) {
   for (const auto& entry : times_encountered) {
     EXPECT_EQ(1, entry.second);
   }
-  TRACE(CFG, 1, SHOW(code->cfg()));
+  TRACE(CFG, 1, "%s", SHOW(code->cfg()));
 }
 
 TEST_F(ControlFlowTest, iterate3) {
@@ -972,9 +972,7 @@ TEST_F(ControlFlowTest, exit_blocks_change) {
       to_delete.push_back(it.block());
     }
   }
-  for (Block* b : to_delete) {
-    cfg.remove_block(b);
-  }
+  cfg.remove_blocks(to_delete);
   cfg.recompute_registers_size();
 
   EXPECT_EQ(1, cfg.real_exit_blocks().size());

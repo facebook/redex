@@ -11,6 +11,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#include "ApkResources.h"
 #include "Debug.h"
 #include "RedexResources.h"
 #include "androidfw/ResourceTypes.h"
@@ -24,11 +25,12 @@ TEST(RedexResources, ReadXmlTagsAndAttributes) {
   std::unordered_set<std::string> classes;
   std::unordered_multimap<std::string, std::string> attribute_values;
 
-  collect_layout_classes_and_attributes_for_file(
+  ApkResources resources("");
+  resources.collect_layout_classes_and_attributes_for_file(
       std::getenv("test_layout_path"),
       attributes_to_find,
-      classes,
-      attribute_values);
+      &classes,
+      &attribute_values);
 
   EXPECT_EQ(classes.size(), 3);
   EXPECT_EQ(classes.count("Lcom/example/test/CustomViewGroup;"), 1);

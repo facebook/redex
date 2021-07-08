@@ -63,9 +63,7 @@ class ClassSplittingPass : public Pass {
          {},
          m_config.blocklist_types,
          "List of types for classes to not split.");
-    bind("profile_only",
-         m_config.profile_only,
-         m_config.profile_only);
+    bind("profile_only", m_config.profile_only, m_config.profile_only);
     always_assert(!m_config.relocate_true_virtual_methods ||
                   m_config.trampolines);
     always_assert(!m_config.trampolines ||

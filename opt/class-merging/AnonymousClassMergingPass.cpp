@@ -22,33 +22,41 @@ void AnonymousClassMergingPass::bind_config() {
        {},
        m_merging_spec.exclude_types,
        "Do not merge the classes or its implementors");
-  bind("min_implementors",
+  bind("min_eligible",
        500,
-       m_min_implementor_size,
-       "Strip out interfaces with less than min_implementors implementors");
+       m_min_eligible_classes,
+       "Strip out interfaces or supertypes with less than min_eligible "
+       "implementors or subclasses");
+  bind("include_primary_dex", false, m_merging_spec.include_primary_dex);
+  bind("allowed_packages",
+       {},
+       allowed_packages,
+       "Packages of types that are allowed to be merged, default is all "
+       "pakcages");
+  bind("min_count",
+       2,
+       m_min_count,
+       "Minimum mergeable class count per merging group");
 }
 
 void AnonymousClassMergingPass::run_pass(DexStoresVector& stores,
                                          ConfigFiles& conf,
                                          PassManager& mgr) {
-  if (!mgr.get_redex_options().is_art_build) {
-    TRACE(CLMG, 1, "AnonymousClassMergingPass is enabled only for art builds");
-    return;
+  // Fill the merging configurations.
+  m_merging_spec.name = "Anonymous Classes";
+  m_merging_spec.class_name_prefix = "Anon";
+  m_merging_spec.strategy = strategy::BY_REFS;
+  m_merging_spec.merge_per_interdex_set = InterDexGroupingType::NON_ORDERED_SET;
+  if (conf.force_single_dex()) {
+    m_merging_spec.include_primary_dex = true;
   }
-  auto scope = build_class_scope(stores);
-  discover_mergeable_anonymous_classes(
-      scope, m_min_implementor_size, &m_merging_spec, &mgr);
-  if (!m_merging_spec.roots.empty()) {
-    // Finishing the merging configurations.
-    m_merging_spec.name = "Anonymous Classes";
-    m_merging_spec.class_name_prefix = "Anon";
-    m_merging_spec.merge_per_interdex_set =
-        InterDexGroupingType::NON_ORDERED_SET;
-    m_merging_spec.include_primary_dex =
-        conf.get_json_config().get("force_single_dex", false);
-    m_merging_spec.dedup_throw_blocks = false;
-    strategy::set_merging_strategy(strategy::BY_CODE_SIZE);
+  m_merging_spec.dedup_throw_blocks = false;
+  m_merging_spec.min_count = m_min_count;
 
+  discover_mergeable_anonymous_classes(
+      stores, allowed_packages, m_min_eligible_classes, &m_merging_spec, &mgr);
+  if (!m_merging_spec.roots.empty()) {
+    auto scope = build_class_scope(stores);
     class_merging::merge_model(scope, conf, mgr, stores, m_merging_spec);
     post_dexen_changes(scope, stores);
   } else {

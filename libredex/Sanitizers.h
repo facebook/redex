@@ -15,6 +15,8 @@ namespace sanitizers {
 
 #if __has_feature(address_sanitizer)
 
+static constexpr bool kIsAsan = true;
+
 #include <sanitizer/lsan_interface.h>
 
 inline void lsan_do_leak_check() { __lsan_do_leak_check(); }
@@ -23,6 +25,8 @@ inline int lsan_do_recoverable_leak_check() {
 }
 
 #else
+
+static constexpr bool kIsAsan = false;
 
 inline void lsan_do_leak_check() {}
 inline int lsan_do_recoverable_leak_check() { return 0; }

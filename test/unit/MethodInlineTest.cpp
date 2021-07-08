@@ -539,12 +539,12 @@ TEST_F(MethodInlineTest, non_unique_inlined_registers) {
     EXPECT_EQ(inlined.count(method), 1);
   }
 
-  // Note: the position in the middle is an artifact and may get cleaned up.
+  // Note: the position is an artifact and may get cleaned up.
   const auto& expected_str = R"(
     (
+      (.pos:dbg_0 "Lfoo;.foo_main:()V" UnknownSource 0)
       (const v0 1)
       (const v0 2)
-      (.pos:dbg_0 "Lfoo;.foo_main:()V" UnknownSource 0)
       (return-void)
     )
   )";

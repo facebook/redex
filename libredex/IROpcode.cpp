@@ -1189,6 +1189,12 @@ IROpcode load_opcode(const DexType* type) {
                                   : IOPCODE_LOAD_PARAM;
 }
 
+IROpcode move_opcode(const DexType* type) {
+  return type::is_wide_type(type) ? OPCODE_MOVE_WIDE
+         : type::is_object(type)  ? OPCODE_MOVE_OBJECT
+                                  : OPCODE_MOVE;
+}
+
 IROpcode move_result_to_move(IROpcode op) {
   switch (op) {
   case OPCODE_MOVE_RESULT:

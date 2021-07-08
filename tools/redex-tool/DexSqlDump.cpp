@@ -393,10 +393,10 @@ class DexSqlDump : public Tool {
         "path to a rename map")(
         "output,o",
         po::value<std::string>()->value_name("dex.sql"),
-        "path to output sql dump file (defaults to stdout)")(
-        "table-prefix,t",
-        po::value<std::string>()->value_name("pre_"),
-        "prefix to use on all table names");
+        "path to output sql dump file (defaults to "
+        "stdout)")("table-prefix,t",
+                   po::value<std::string>()->value_name("pre_"),
+                   "prefix to use on all table names");
   }
 
   void run(const po::variables_map& options) override {

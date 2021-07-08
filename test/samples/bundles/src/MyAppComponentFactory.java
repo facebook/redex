@@ -5,12 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-package redex;
+package com.fb.bundles;
 
-public class JNIExample {
-  static {
-    System.loadLibrary("jniexample");
-  }
+import android.app.AppComponentFactory;
 
-  public native void hello();
-}
+public class MyAppComponentFactory extends AppComponentFactory {}

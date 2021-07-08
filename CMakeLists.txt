@@ -137,6 +137,7 @@ target_link_libraries(redex-all
         redex
         resource
         ${MINGW_EXTRA_LIBS}
+        m
         )
 
 target_compile_definitions(redex-all PRIVATE)

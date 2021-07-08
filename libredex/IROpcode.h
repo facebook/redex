@@ -174,6 +174,8 @@ IROpcode return_opcode(const DexType* type);
 
 IROpcode load_opcode(const DexType* type);
 
+IROpcode move_opcode(const DexType* type);
+
 IROpcode move_result_to_move(IROpcode);
 
 IROpcode return_to_move(IROpcode);

@@ -102,10 +102,15 @@ void Tool::add_standard_options(po::options_description& options) const {
       po::value<std::string>()
           ->value_name("/tmp/redex_extracted_apk")
           ->required(),
-      "path of an apk dir obtained from redex.py -u")(
-      "dexendir,d",
-      po::value<std::string>()->value_name("/tmp/redex_dexen")->required(),
-      "path of a dexen dir obtained from redex.py -u");
+      "path of an apk dir obtained from redex.py -u")("dexendir,d",
+                                                      po::value<std::string>()
+                                                          ->value_name(
+                                                              "/tmp/"
+                                                              "redex_dexen")
+                                                          ->required(),
+                                                      "path of a dexen dir "
+                                                      "obtained from redex.py "
+                                                      "-u");
 }
 
 DexStoresVector Tool::init(const std::string& system_jar_paths,

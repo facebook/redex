@@ -26,7 +26,9 @@ libredex_la_SOURCES = \
 	libredex/AnnoUtils.cpp \
 	libredex/ApiLevelChecker.cpp \
 	libredex/ApkManager.cpp \
+	libredex/ApkResources.cpp \
 	libredex/BigBlocks.cpp \
+	libredex/BundleResources.cpp \
 	libredex/CFGMutation.cpp \
 	libredex/CallGraph.cpp \
 	libredex/ClassHierarchy.cpp \
@@ -37,6 +39,7 @@ libredex_la_SOURCES = \
 	libredex/Creators.cpp \
 	libredex/Debug.cpp \
 	libredex/DexAccess.cpp \
+	libredex/DexAssessments.cpp \
 	libredex/DexAnnotation.cpp \
 	libredex/DexAsm.cpp \
 	libredex/DexCallSite.cpp \
@@ -125,6 +128,7 @@ libredex_la_SOURCES = \
 	libredex/ReflectionAnalysis.cpp \
 	libredex/RefChecker.cpp \
 	libredex/Resolver.cpp \
+	libredex/ScopedMetrics.cpp \
 	libredex/Show.cpp \
 	libredex/SourceBlocks.cpp \
 	libredex/Timer.cpp \
@@ -149,7 +153,6 @@ libredex_la_SOURCES = \
 	libresource/Unicode.cpp \
 	libresource/VectorImpl.cpp \
 	service/api-levels/ApiLevelsUtils.cpp \
-	service/class-init/ClassInitCounter.cpp \
 	service/class-merging/ApproximateShapeMerging.cpp \
 	service/class-merging/ClassAssemblingUtils.cpp \
 	service/class-merging/ClassMerging.cpp \
@@ -161,6 +164,7 @@ libredex_la_SOURCES = \
 	service/class-merging/ModelMethodMerger.cpp \
 	service/class-merging/Model.cpp \
 	service/class-merging/TypeTagUtils.cpp \
+	service/cross-dex-ref-minimizer/CrossDexRefMinimizer.cpp \
 	service/constant-propagation/ConstantEnvironment.cpp \
 	service/constant-propagation/ConstantPropagationAnalysis.cpp \
 	service/constant-propagation/ConstantPropagation.cpp \
@@ -173,6 +177,7 @@ libredex_la_SOURCES = \
 	service/copy-propagation/AliasedRegisters.cpp \
 	service/copy-propagation/CanonicalizeLocks.cpp \
 	service/copy-propagation/CopyPropagation.cpp \
+	service/cross-dex-ref-minimizer/CrossDexRefMinimizer.cpp \
 	service/cse/CommonSubexpressionElimination.cpp \
 	service/dataflow/LiveRange.cpp \
 	service/dataflow/ConstantUses.cpp \
@@ -181,6 +186,7 @@ libredex_la_SOURCES = \
 	service/escape-analysis/BlamingAnalysis.cpp \
 	service/escape-analysis/LocalPointersAnalysis.cpp \
 	service/field-ops/FieldOpTracker.cpp \
+	service/kotlin-instance-rewrite/KotlinInstanceRewriter.cpp \
 	service/local-dce/LocalDce.cpp \
 	service/loop-info/LoopInfo.cpp \
 	service/method-dedup/ConstantLifting.cpp \
@@ -195,6 +201,7 @@ libredex_la_SOURCES = \
 	service/method-inliner/MethodInliner.cpp \
 	service/method-inliner/ObjectInlinePlugin.cpp \
 	service/method-merger/MethodMerger.cpp \
+	service/reduce-boolean-branches/ReduceBooleanBranches.cpp \
 	service/reference-update/MethodReference.cpp \
 	service/reference-update/TypeReference.cpp \
 	service/regalloc/GraphColoring.cpp \
@@ -268,11 +275,11 @@ libopt_la_SOURCES = \
 	opt/insert-source-blocks/InsertSourceBlocks.cpp \
 	opt/instrument/BlockInstrument.cpp \
 	opt/instrument/Instrument.cpp \
-	opt/interdex/CrossDexRefMinimizer.cpp \
 	opt/interdex/CrossDexRelocator.cpp \
 	opt/interdex/DexStructure.cpp \
 	opt/interdex/InterDex.cpp \
 	opt/interdex/InterDexPass.cpp \
+	opt/kotlin-lambda/RewriteKotlinSingletonInstance.cpp \
 	opt/layout-reachability/LayoutReachabilityPass.cpp \
 	opt/local-dce/LocalDcePass.cpp \
 	opt/merge_interface/MergeInterface.cpp \
@@ -293,6 +300,7 @@ libopt_la_SOURCES = \
 	opt/original_name/OriginalNamePass.cpp \
 	opt/peephole/Peephole.cpp \
 	opt/peephole/RedundantCheckCastRemover.cpp \
+	opt/print-kotlin-stats/PrintKotlinStats.cpp \
 	opt/print-members/PrintMembers.cpp \
 	opt/rebindrefs/ReBindRefs.cpp \
 	opt/regalloc/RegAlloc.cpp \
@@ -315,6 +323,7 @@ libopt_la_SOURCES = \
 	opt/renameclasses/RenameClassesV2.cpp \
 	opt/reorder-interfaces-decl/ReorderInterfacesDecl.cpp \
 	opt/reduce-array-literals/ReduceArrayLiterals.cpp \
+	opt/reduce-boolean-branches/ReduceBooleanBranchesPass.cpp \
 	opt/reduce-gotos/ReduceGotos.cpp \
 	opt/resolve-refs/ResolveRefsPass.cpp \
 	opt/resolve-refs/ExternalRefsManglingPass.cpp \

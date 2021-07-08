@@ -14,6 +14,8 @@
 
 namespace class_merging {
 
+std::string get_root_type_name_tag(const DexType* root_type);
+
 using FieldsMap = std::unordered_map<const DexType*, std::vector<DexField*>>;
 
 /**

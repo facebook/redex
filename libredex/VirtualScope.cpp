@@ -417,7 +417,7 @@ void merge(const BaseSigs& base_sigs,
               scope.methods.size());
         TRACE(VIRT,
               4,
-              "-- is interface 0x%X %d",
+              "-- is interface 0x%p %d",
               scope.type,
               scope.type != type::java_lang_Object() &&
                   is_interface(type_class(scope.type)));

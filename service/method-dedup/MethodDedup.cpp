@@ -165,7 +165,7 @@ size_t dedup_methods_helper(
       dedup_count += group.size() - 1;
       TRACE(METH_DEDUP,
             9,
-            "dedup: group %d replacement %s",
+            "dedup: group %zu replacement %s",
             group.size(),
             SHOW(replacement));
     }
@@ -184,12 +184,14 @@ size_t dedup_methods(
   size_t total_dedup_count = 0;
   auto to_dedup_temp = to_dedup;
   while (true) {
-    TRACE(
-        METH_DEDUP, 8, "dedup: static|non_virt input %d", to_dedup_temp.size());
+    TRACE(METH_DEDUP,
+          8,
+          "dedup: static|non_virt input %zu",
+          to_dedup_temp.size());
     size_t dedup_count = dedup_methods_helper(
         scope, to_dedup_temp, dedup_throw_blocks, replacements, new_to_old);
     total_dedup_count += dedup_count;
-    TRACE(METH_DEDUP, 8, "dedup: static|non_virt dedupped %d", dedup_count);
+    TRACE(METH_DEDUP, 8, "dedup: static|non_virt dedupped %zu", dedup_count);
     if (dedup_count == 0) {
       break;
     }

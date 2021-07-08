@@ -378,9 +378,9 @@ void ApiLevelsUtils::gather_non_private_members(const Scope& scope) {
     }
   }
 
-  TRACE(API_UTILS, 4, "We have %d methods that are actually non private",
+  TRACE(API_UTILS, 4, "We have %zu methods that are actually non private",
         m_methods_non_private.size());
-  TRACE(API_UTILS, 4, "We have %d fields that are actually non private",
+  TRACE(API_UTILS, 4, "We have %zu fields that are actually non private",
         m_fields_non_private.size());
 }
 

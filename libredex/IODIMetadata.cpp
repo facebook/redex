@@ -106,9 +106,15 @@ void IODIMetadata::set_iodi_layer(const DexMethod* method, size_t layer) {
   m_iodi_method_layers.emplace(method,
                                std::make_pair(get_iodi_name(method), layer));
 }
+
 size_t IODIMetadata::get_iodi_layer(const DexMethod* method) const {
   auto it = m_iodi_method_layers.find(method);
   return it != m_iodi_method_layers.end() ? it->second.second : 0u;
+}
+
+bool IODIMetadata::has_iodi_layer(const DexMethod* method) const {
+  auto it = m_iodi_method_layers.find(method);
+  return it != m_iodi_method_layers.end();
 }
 
 void IODIMetadata::mark_method_huge(const DexMethod* method) {
