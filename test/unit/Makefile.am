@@ -119,6 +119,7 @@ check_PROGRAMS = \
     static_relo_v2_test \
     strip_debug_info_test \
     switch_dispatch_test \
+    switch_partitioning_test \
     timer_test \
     trace_multithreading_test \
     true_virtuals_test \
@@ -381,6 +382,8 @@ strip_debug_info_test_SOURCES = StripDebugInfoTest.cpp
 
 switch_dispatch_test_SOURCES = SwitchDispatchTest.cpp
 
+switch_partitioning_test_SOURCES = SwitchPartitioningTest.cpp
+
 # throw_propagation_test_SOURCES = ThrowPropagationTest.cpp
 # throw_propagation_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
@@ -528,6 +531,7 @@ TESTS = \
     static_relo_v2_test \
     strip_debug_info_test \
     switch_dispatch_test \
+    switch_partitioning_test \
     timer_test \
     trace_multithreading_test \
     true_virtuals_test \
