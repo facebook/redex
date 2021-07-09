@@ -53,7 +53,7 @@ TEST_F(OutlinerTypeAnalysisTest, get_result_type_primitive) {
     // result type of 'add-int' is int
     auto insn = find_insn(foo_method, OPCODE_ADD_INT);
     auto result_type =
-        ota.get_result_type({insn}, /* optional_extra_type */ nullptr);
+        ota.get_result_type(nullptr, {insn}, /* optional_extra_type */ nullptr);
     EXPECT_EQ(result_type, type::_int());
   }
 
@@ -61,7 +61,7 @@ TEST_F(OutlinerTypeAnalysisTest, get_result_type_primitive) {
     // result type of 'move' of 'add-int' is int
     auto insn = find_insn(foo_method, OPCODE_MOVE);
     auto result_type =
-        ota.get_result_type({insn}, /* optional_extra_type */ nullptr);
+        ota.get_result_type(nullptr, {insn}, /* optional_extra_type */ nullptr);
     EXPECT_EQ(result_type, type::_int());
   }
 
@@ -69,7 +69,7 @@ TEST_F(OutlinerTypeAnalysisTest, get_result_type_primitive) {
     // result type of 'or-int' of 'move' of 'add-int' is int
     auto insn = find_insn(foo_method, OPCODE_OR_INT);
     auto result_type =
-        ota.get_result_type({insn}, /* optional_extra_type */ nullptr);
+        ota.get_result_type(nullptr, {insn}, /* optional_extra_type */ nullptr);
     EXPECT_EQ(result_type, type::_int());
   }
 
@@ -77,7 +77,7 @@ TEST_F(OutlinerTypeAnalysisTest, get_result_type_primitive) {
     // result type of first 'load-param' is int due to method signature
     auto insn = find_insn(foo_method, IOPCODE_LOAD_PARAM);
     auto result_type =
-        ota.get_result_type({insn}, /* optional_extra_type */ nullptr);
+        ota.get_result_type(nullptr, {insn}, /* optional_extra_type */ nullptr);
     EXPECT_EQ(result_type, type::_int());
   }
 
@@ -85,7 +85,7 @@ TEST_F(OutlinerTypeAnalysisTest, get_result_type_primitive) {
     // result type of second 'load-param' is boolean due to method signature
     auto insn = find_insn(foo_method, IOPCODE_LOAD_PARAM, 2);
     auto result_type =
-        ota.get_result_type({insn}, /* optional_extra_type */ nullptr);
+        ota.get_result_type(nullptr, {insn}, /* optional_extra_type */ nullptr);
     EXPECT_EQ(result_type, type::_boolean());
   }
 
@@ -93,7 +93,7 @@ TEST_F(OutlinerTypeAnalysisTest, get_result_type_primitive) {
     // result type of 'xor-int' of boolean 'load-param' is boolean
     auto insn = find_insn(foo_method, OPCODE_XOR_INT);
     auto result_type =
-        ota.get_result_type({insn}, /* optional_extra_type */ nullptr);
+        ota.get_result_type(nullptr, {insn}, /* optional_extra_type */ nullptr);
     EXPECT_EQ(result_type, type::_boolean());
   }
 
@@ -101,8 +101,8 @@ TEST_F(OutlinerTypeAnalysisTest, get_result_type_primitive) {
     // the combined result type of int and boolean is int
     auto insn1 = find_insn(foo_method, IOPCODE_LOAD_PARAM);
     auto insn2 = find_insn(foo_method, IOPCODE_LOAD_PARAM, 2);
-    auto result_type =
-        ota.get_result_type({insn1, insn2}, /* optional_extra_type */ nullptr);
+    auto result_type = ota.get_result_type(nullptr, {insn1, insn2},
+                                           /* optional_extra_type */ nullptr);
     EXPECT_EQ(result_type, type::_int());
   }
 
@@ -110,8 +110,8 @@ TEST_F(OutlinerTypeAnalysisTest, get_result_type_primitive) {
     // the combined result type of boolean and the optional_extra_type int is
     // int
     auto insn = find_insn(foo_method, IOPCODE_LOAD_PARAM);
-    auto result_type =
-        ota.get_result_type({insn}, /* optional_extra_type */ type::_int());
+    auto result_type = ota.get_result_type(
+        nullptr, {insn}, /* optional_extra_type */ type::_int());
     EXPECT_EQ(result_type, type::_int());
   }
 }
@@ -140,7 +140,7 @@ TEST_F(OutlinerTypeAnalysisTest, get_result_type_object) {
   {
     // result type of first 'load-param-object' is Foo
     auto insn = find_insn(foo_method, IOPCODE_LOAD_PARAM_OBJECT);
-    auto result_type = ota.get_result_type({insn},
+    auto result_type = ota.get_result_type(nullptr, {insn},
                                            /* optional_extra_type */ nullptr);
     EXPECT_EQ(result_type, foo_type);
   }
@@ -149,7 +149,7 @@ TEST_F(OutlinerTypeAnalysisTest, get_result_type_object) {
     // result type of second 'load-param-object' is Object
     auto insn = find_insn(foo_method, IOPCODE_LOAD_PARAM_OBJECT, 2);
     auto result_type =
-        ota.get_result_type({insn}, /* optional_extra_type */ nullptr);
+        ota.get_result_type(nullptr, {insn}, /* optional_extra_type */ nullptr);
     EXPECT_EQ(result_type, type::java_lang_Object());
   }
 
@@ -157,7 +157,7 @@ TEST_F(OutlinerTypeAnalysisTest, get_result_type_object) {
     // result type of third 'load-param-object' is Bar
     auto insn = find_insn(foo_method, IOPCODE_LOAD_PARAM_OBJECT, 3);
     auto result_type =
-        ota.get_result_type({insn}, /* optional_extra_type */ nullptr);
+        ota.get_result_type(nullptr, {insn}, /* optional_extra_type */ nullptr);
     EXPECT_EQ(result_type, bar_type);
   }
 
@@ -165,8 +165,8 @@ TEST_F(OutlinerTypeAnalysisTest, get_result_type_object) {
     // the combined result type of Foo and Object is Object
     auto insn1 = find_insn(foo_method, IOPCODE_LOAD_PARAM_OBJECT);
     auto insn2 = find_insn(foo_method, IOPCODE_LOAD_PARAM_OBJECT, 2);
-    auto result_type =
-        ota.get_result_type({insn1, insn2}, /* optional_extra_type */ nullptr);
+    auto result_type = ota.get_result_type(nullptr, {insn1, insn2},
+                                           /* optional_extra_type */ nullptr);
     EXPECT_EQ(result_type, type::java_lang_Object());
   }
 
@@ -174,8 +174,8 @@ TEST_F(OutlinerTypeAnalysisTest, get_result_type_object) {
     // the combined result type of Foo and Bar is Object
     auto insn1 = find_insn(foo_method, IOPCODE_LOAD_PARAM_OBJECT, 1);
     auto insn2 = find_insn(foo_method, IOPCODE_LOAD_PARAM_OBJECT, 3);
-    auto result_type =
-        ota.get_result_type({insn1, insn2}, /* optional_extra_type */ nullptr);
+    auto result_type = ota.get_result_type(nullptr, {insn1, insn2},
+                                           /* optional_extra_type */ nullptr);
     EXPECT_EQ(result_type, type::java_lang_Object());
   }
 }
@@ -217,7 +217,7 @@ TEST_F(OutlinerTypeAnalysisTest, get_result_type_object_with_interfaces) {
     // result type of first 'load-param-object' is Foo
     auto insn = find_insn(foo_method, IOPCODE_LOAD_PARAM_OBJECT, 1);
     auto result_type =
-        ota.get_result_type({insn}, /* optional_extra_type */ nullptr);
+        ota.get_result_type(nullptr, {insn}, /* optional_extra_type */ nullptr);
     EXPECT_EQ(result_type, foo_type);
   }
 
@@ -225,7 +225,7 @@ TEST_F(OutlinerTypeAnalysisTest, get_result_type_object_with_interfaces) {
     // result type of second 'load-param-object' is Bar
     auto insn = find_insn(foo_method, IOPCODE_LOAD_PARAM_OBJECT, 2);
     auto result_type =
-        ota.get_result_type({insn}, /* optional_extra_type */ nullptr);
+        ota.get_result_type(nullptr, {insn}, /* optional_extra_type */ nullptr);
     EXPECT_EQ(result_type, bar_type);
   }
 
@@ -234,8 +234,8 @@ TEST_F(OutlinerTypeAnalysisTest, get_result_type_object_with_interfaces) {
     // type Object does not implement the common interfaces I and J
     auto insn1 = find_insn(foo_method, IOPCODE_LOAD_PARAM_OBJECT, 1);
     auto insn2 = find_insn(foo_method, IOPCODE_LOAD_PARAM_OBJECT, 2);
-    auto result_type =
-        ota.get_result_type({insn1, insn2}, /* optional_extra_type */ nullptr);
+    auto result_type = ota.get_result_type(nullptr, {insn1, insn2},
+                                           /* optional_extra_type */ nullptr);
     EXPECT_EQ(result_type, nullptr);
   }
 }

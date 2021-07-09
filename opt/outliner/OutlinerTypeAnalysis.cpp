@@ -42,10 +42,11 @@ OutlinerTypeAnalysis::OutlinerTypeAnalysis(DexMethod* method)
       }) {}
 
 const DexType* OutlinerTypeAnalysis::get_result_type(
+    const PartialCandidate* pc,
     const std::unordered_set<const IRInstruction*>& insns,
     const DexType* optional_extra_type) {
   auto defs = get_defs(insns);
-  return defs ? get_type_of_defs(*defs, optional_extra_type)
+  return defs ? get_type_of_defs(pc, *defs, optional_extra_type)
               : optional_extra_type;
 }
 
@@ -77,14 +78,14 @@ const DexType* OutlinerTypeAnalysis::get_inferred_type(
   case SCALAR:
   case SCALAR1:
     // Can't figure out exact type via type inference; let's try reaching-defs
-    return get_type_of_reaching_defs(insn, reg);
+    return get_type_of_reaching_defs(nullptr, insn, reg);
   case REFERENCE: {
     auto dex_type = env.get_dex_type(reg);
     return dex_type ? *dex_type : nullptr;
   }
   case INT:
     // Could actually be boolean, byte, short; let's try reaching-defs
-    return get_type_of_reaching_defs(insn, reg);
+    return get_type_of_reaching_defs(nullptr, insn, reg);
   case FLOAT:
     return type::_float();
   case LONG1:
@@ -415,12 +416,13 @@ const DexType* OutlinerTypeAnalysis::get_result_type_helper(
 }
 
 const DexType* OutlinerTypeAnalysis::get_type_of_reaching_defs(
-    IRInstruction* insn, reg_t reg) {
+    const PartialCandidate* pc, IRInstruction* insn, reg_t reg) {
   auto defs = m_reaching_defs_environments->at(insn).get(reg);
   if (defs.is_bottom() || defs.is_top()) {
     return nullptr;
   }
-  return get_type_of_defs(std::vector<const IRInstruction*>(
+  return get_type_of_defs(pc,
+                          std::vector<const IRInstruction*>(
                               defs.elements().begin(), defs.elements().end()),
                           /* optional_extra_type */ nullptr);
 }
@@ -831,6 +833,7 @@ void OutlinerTypeAnalysis::get_type_demand_helper(
 }
 
 const DexType* OutlinerTypeAnalysis::get_const_insns_type_demand(
+    const PartialCandidate* pc,
     const std::unordered_set<const IRInstruction*>& const_insns) {
   always_assert(!const_insns.empty());
   // 1. Let's see if we can get something out of the constant-uses analysis.
@@ -876,9 +879,23 @@ const DexType* OutlinerTypeAnalysis::get_const_insns_type_demand(
   // 2. Let's go over all constant-uses, and use our own judgement.
   std::unordered_set<const DexType*> type_demands;
   bool not_object{false};
+  std::unordered_set<IRInstruction*> pc_insns;
+  std::function<void(const PartialCandidateNode&)> gather_pc_insns;
+  gather_pc_insns = [&](const PartialCandidateNode& pcn) {
+    pc_insns.insert(pcn.insns.begin(), pcn.insns.end());
+    for (auto& p : pcn.succs) {
+      gather_pc_insns(*p.second);
+    }
+  };
+  if (pc) {
+    gather_pc_insns(pc->root);
+  }
   for (auto insn : const_insns) {
     for (auto& p :
          m_constant_uses->get_constant_uses(const_cast<IRInstruction*>(insn))) {
+      if (pc_insns.count(p.first)) {
+        continue;
+      }
       switch (p.first->opcode()) {
       case OPCODE_AND_INT:
       case OPCODE_OR_INT:
@@ -959,6 +976,7 @@ static const DexType* compute_joined_type(
 
 // Compute the (widened) type of all given definitions.
 const DexType* OutlinerTypeAnalysis::get_type_of_defs(
+    const PartialCandidate* pc,
     const std::vector<const IRInstruction*>& defs,
     const DexType* optional_extra_type) {
   std::unordered_set<const DexType*> types;
@@ -1029,7 +1047,7 @@ const DexType* OutlinerTypeAnalysis::get_type_of_defs(
 
   if (types.empty()) {
     always_assert(!const_insns.empty());
-    return get_const_insns_type_demand(const_insns);
+    return get_const_insns_type_demand(pc, const_insns);
   }
 
   // Stricter primitive types can be removed

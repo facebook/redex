@@ -509,8 +509,8 @@ static Candidate normalize(
       out_reg_assignment_insns.erase(nullptr);
     }
     if (!out_reg_assignment_insns.empty()) {
-      c.res_type =
-          type_analysis.get_result_type(out_reg_assignment_insns, c.res_type);
+      c.res_type = type_analysis.get_result_type(&pc, out_reg_assignment_insns,
+                                                 c.res_type);
     }
   }
   for (auto reg : arg_regs) {
