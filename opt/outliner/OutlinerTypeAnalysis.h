@@ -38,6 +38,7 @@ class OutlinerTypeAnalysis {
   // and possibly another incoming type. The return value nullptr indicates that
   // the result type could not be determined.
   const DexType* get_result_type(
+      const PartialCandidate* pc,
       const std::unordered_set<const IRInstruction*>& insns,
       const DexType* optional_extra_type);
 
@@ -69,7 +70,9 @@ class OutlinerTypeAnalysis {
 
   const DexType* get_result_type_helper(const IRInstruction* insn);
 
-  const DexType* get_type_of_reaching_defs(IRInstruction* insn, reg_t reg);
+  const DexType* get_type_of_reaching_defs(const PartialCandidate* pc,
+                                           IRInstruction* insn,
+                                           reg_t reg);
 
   const DexType* get_if_insn_type_demand(IRInstruction* insn);
 
@@ -85,9 +88,11 @@ class OutlinerTypeAnalysis {
                               std::unordered_set<const DexType*>* type_demands);
 
   const DexType* get_const_insns_type_demand(
+      const PartialCandidate* pc,
       const std::unordered_set<const IRInstruction*>& const_insns);
 
-  const DexType* get_type_of_defs(const std::vector<const IRInstruction*>& defs,
+  const DexType* get_type_of_defs(const PartialCandidate* pc,
+                                  const std::vector<const IRInstruction*>& defs,
                                   const DexType* optional_extra_type);
 }; // class OutlinerTypeAnalysis
 
