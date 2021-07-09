@@ -62,6 +62,7 @@ KotlinInstanceRewriter::Stats KotlinInstanceRewriter::remove_escaping_instance(
     ConcurrentMap<DexFieldRef*,
                   std::set<std::pair<IRInstruction*, DexMethod*>>>&
         concurrent_instance_map) {
+  ConcurrentSet<DexFieldRef*> remove_list;
   // Get all the single uses of the INSTANCE variables
   KotlinInstanceRewriter::Stats total_stats =
       walk::parallel::methods<KotlinInstanceRewriter::Stats>(
@@ -86,6 +87,9 @@ KotlinInstanceRewriter::Stats KotlinInstanceRewriter::remove_escaping_instance(
               if (!concurrent_instance_map.count(field)) {
                 continue;
               }
+              if (remove_list.count(field)) {
+                continue;
+              }
               // If there is more SPUT otherthan the initial one.
               if (opcode::is_an_sput(insn->opcode())) {
                 if (method::is_clinit(method) &&
@@ -93,7 +97,7 @@ KotlinInstanceRewriter::Stats KotlinInstanceRewriter::remove_escaping_instance(
                   continue;
                 }
                 // Erase if the field is written elsewhere.
-                concurrent_instance_map.erase(field);
+                remove_list.insert(field);
                 continue;
               }
 
@@ -109,6 +113,9 @@ KotlinInstanceRewriter::Stats KotlinInstanceRewriter::remove_escaping_instance(
             }
             return stats;
           });
+  for (auto* field : remove_list) {
+    concurrent_instance_map.erase(field);
+  }
   return total_stats;
 }
 
