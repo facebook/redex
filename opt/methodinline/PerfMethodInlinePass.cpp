@@ -261,6 +261,7 @@ class InlineForSpeedDecisionTrees final : public InlineForSpeedBase {
     boost::optional<size_t> exp_force_top_x_entries_min_callee_size =
         boost::none;
     boost::optional<float> exp_force_top_x_entries_min_appear100 = boost::none;
+    size_t accept_threshold{0};
   };
 
   InlineForSpeedDecisionTrees(const MethodProfiles* method_profiles,
@@ -283,7 +284,7 @@ class InlineForSpeedDecisionTrees final : public InlineForSpeedBase {
     size_t accepted{0};
     // While "normal" is more expensive, do it first anyways to fill `accepted`.
     if (!should_inline_normal(caller_method, callee_method, caller_context,
-                              callee_context, &accepted) &&
+                              callee_context, accepted) &&
         !should_inline_exp(caller_method, callee_method, caller_context,
                            callee_context)) {
       return false;
@@ -388,7 +389,7 @@ class InlineForSpeedDecisionTrees final : public InlineForSpeedBase {
                             const DexMethod* callee_method,
                             const MethodContext& caller_context,
                             const MethodContext& callee_context,
-                            size_t* accepted) {
+                            size_t& accepted) {
     auto has_matching = [&](const auto& selector_fn, auto min_hits) {
       if (!caller_context.m_vals || !callee_context.m_vals) {
         return false;
@@ -424,7 +425,12 @@ class InlineForSpeedDecisionTrees final : public InlineForSpeedBase {
       }
     }
 
-    return m_forest.accept(caller_context, callee_context, accepted);
+    bool default_ret =
+        m_forest.accept(caller_context, callee_context, &accepted);
+    if (m_config.accept_threshold == 0) {
+      return default_ret;
+    }
+    return accepted >= m_config.accept_threshold;
   }
 
  protected:
@@ -557,6 +563,10 @@ struct PerfMethodInlinePass::Config {
 void PerfMethodInlinePass::bind_config() {
   std::string random_forest_file;
   bind("random_forest_file", "", random_forest_file);
+  size_t accept_threshold;
+  bind("accept_threshold", 0, accept_threshold,
+       "Threshold of trees to accept an inlining decision. 0 uses default "
+       "(half).");
   float min_hits;
   bind("min_hits", std::numeric_limits<float>::min(), min_hits,
        "Threshold for caller and callee method call-count to consider "
@@ -593,9 +603,9 @@ void PerfMethodInlinePass::bind_config() {
        "For experiments: If non-negative, restrict always-accept caller/callee "
        "pairs from exp_force_top_x_entries to callers and callees that appear "
        "at least this amount.");
-  after_configuration([this, random_forest_file, min_hits, min_appear,
-                       min_block_hits, min_block_appear, interactions_str,
-                       exp_force_top_x_entries,
+  after_configuration([this, random_forest_file, accept_threshold, min_hits,
+                       min_appear, min_block_hits, min_block_appear,
+                       interactions_str, exp_force_top_x_entries,
                        exp_force_top_x_entries_min_callee_size,
                        exp_force_top_x_entries_min_appear100]() {
     this->m_config = std::make_unique<PerfMethodInlinePass::Config>();
@@ -619,6 +629,7 @@ void PerfMethodInlinePass::bind_config() {
       return v < 0 ? boost::none : boost::optional<float>(v);
     };
     auto& dec_trees_config = this->m_config->dec_trees_config;
+    dec_trees_config.accept_threshold = accept_threshold;
     dec_trees_config.min_method_hits = assign_opt(min_hits);
     dec_trees_config.min_method_appear = assign_opt(min_appear);
     dec_trees_config.min_block_hits = assign_opt(min_block_hits);
