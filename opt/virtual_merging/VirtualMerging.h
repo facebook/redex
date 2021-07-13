@@ -36,7 +36,32 @@ struct VirtualMergingStats {
   size_t unabstracted_methods{0};
   size_t uninlinable_methods{0};
   size_t huge_methods{0};
+  size_t caller_size_removed_methods{0};
   size_t removed_virtual_methods{0};
+
+  VirtualMergingStats& operator+=(const VirtualMergingStats& rhs) {
+    invoke_super_methods += rhs.invoke_super_methods;
+    invoke_super_methods_refs += rhs.invoke_super_methods_refs;
+    invoke_super_unresolved_method_refs +=
+        rhs.invoke_super_unresolved_method_refs;
+    mergeable_virtual_methods += rhs.mergeable_virtual_methods;
+    annotated_methods += rhs.annotated_methods;
+    cross_store_refs += rhs.cross_store_refs;
+    cross_dex_refs += rhs.cross_dex_refs;
+    unavailable_overridden_methods += rhs.unavailable_overridden_methods;
+    inconcrete_overridden_methods += rhs.inconcrete_overridden_methods;
+    abstract_overridden_methods += rhs.abstract_overridden_methods;
+    mergeable_scope_methods += rhs.mergeable_scope_methods;
+    mergeable_pairs += rhs.mergeable_pairs;
+    virtual_scopes_with_mergeable_pairs +=
+        rhs.virtual_scopes_with_mergeable_pairs;
+    unabstracted_methods += rhs.unabstracted_methods;
+    uninlinable_methods += rhs.uninlinable_methods;
+    huge_methods += rhs.huge_methods;
+    caller_size_removed_methods += rhs.caller_size_removed_methods;
+    removed_virtual_methods += rhs.removed_virtual_methods;
+    return *this;
+  }
 };
 
 class VirtualMerging {
@@ -66,14 +91,14 @@ class VirtualMerging {
   ConcurrentMap<const VirtualScope*, std::unordered_set<const DexMethod*>>
       m_mergeable_scope_methods;
 
-  void compute_mergeable_pairs_by_virtual_scopes(
-      const method_profiles::MethodProfiles&);
-  std::map<const VirtualScope*,
-           std::vector<std::pair<const DexMethod*, const DexMethod*>>,
-           virtualscopes_comparator>
-      m_mergeable_pairs_by_virtual_scopes;
+  using MergablePairsByVirtualScope =
+      std::map<const VirtualScope*,
+               std::vector<std::pair<const DexMethod*, const DexMethod*>>,
+               virtualscopes_comparator>;
+  MergablePairsByVirtualScope compute_mergeable_pairs_by_virtual_scopes(
+      const method_profiles::MethodProfiles&, VirtualMergingStats& stats) const;
 
-  void merge_methods();
+  void merge_methods(const MergablePairsByVirtualScope& mergable_pairs);
   std::unordered_map<DexClass*, std::vector<const DexMethod*>>
       m_virtual_methods_to_remove;
   std::unordered_map<DexMethod*, DexMethod*> m_virtual_methods_to_remap;
