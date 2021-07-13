@@ -235,7 +235,7 @@ class CodeVisualizer : public TaggedBase {
   virtual ~CodeVisualizer() {}
 
   static void dex_string(std::ostream& os, const DexString* s) {
-    os << (s ? "<null>" : s->str());
+    os << (s ? s->str() : "<null>");
   }
 
   void instruction(IRInstruction* insn) {
