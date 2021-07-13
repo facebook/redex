@@ -185,8 +185,11 @@ void read_single_manifest(const std::string& manifest,
             {"service", ComponentTag::Service},
         };
         aapt::pb::XmlNode pb_node;
-        if (pb_node.ParseFromCodedStream(&input) && pb_node.has_element() &&
-            pb_node.element().name() == "manifest") {
+
+        bool read_finish = pb_node.ParseFromCodedStream(&input);
+        always_assert_log(read_finish, "BundleResoource failed to read %s",
+                          manifest.c_str());
+        if (pb_node.has_element() && pb_node.element().name() == "manifest") {
           const auto& manifest_element = pb_node.element();
           auto package_name =
               get_string_attribute_value(manifest_element, "package");
@@ -288,22 +291,22 @@ boost::optional<int32_t> BundleResources::get_min_sdk() {
       base_manifest,
       [&](google::protobuf::io::CodedInputStream& input, size_t size) {
         aapt::pb::XmlNode pb_node;
-        if (pb_node.ParseFromCodedStream(&input)) {
-          if (pb_node.has_element()) {
-            const auto& manifest_element = pb_node.element();
-            for (const aapt::pb::XmlNode& pb_child : manifest_element.child()) {
-              if (pb_child.node_case() ==
-                  aapt::pb::XmlNode::NodeCase::kElement) {
-                const auto& pb_element = pb_child.element();
-                if (pb_element.name() == "uses-sdk") {
-                  if (has_primitive_attribute(
-                          pb_element,
-                          "minSdkVersion",
-                          aapt::pb::Primitive::kIntDecimalValue)) {
-                    result = boost::optional<int32_t>(
-                        get_int_attribute_value(pb_element, "minSdkVersion"));
-                    return;
-                  }
+        bool read_finish = pb_node.ParseFromCodedStream(&input);
+        always_assert_log(read_finish, "BundleResoource failed to read %s",
+                          base_manifest.c_str());
+        if (pb_node.has_element()) {
+          const auto& manifest_element = pb_node.element();
+          for (const aapt::pb::XmlNode& pb_child : manifest_element.child()) {
+            if (pb_child.node_case() == aapt::pb::XmlNode::NodeCase::kElement) {
+              const auto& pb_element = pb_child.element();
+              if (pb_element.name() == "uses-sdk") {
+                if (has_primitive_attribute(
+                        pb_element,
+                        "minSdkVersion",
+                        aapt::pb::Primitive::kIntDecimalValue)) {
+                  result = boost::optional<int32_t>(
+                      get_int_attribute_value(pb_element, "minSdkVersion"));
+                  return;
                 }
               }
             }
@@ -376,16 +379,17 @@ bool BundleResources::rename_classes_in_layout(
       file_path,
       [&](google::protobuf::io::CodedInputStream& input, size_t size) {
         aapt::pb::XmlNode pb_node;
-        if (pb_node.ParseFromCodedStream(&input)) {
-          size_t num_renamed = 0;
-          apply_rename_map(rename_map, &pb_node, &num_renamed);
-          if (num_renamed > 0) {
-            std::ofstream out(file_path, std::ofstream::binary);
-            if (pb_node.SerializeToOstream(&out)) {
-              *out_num_renamed = num_renamed;
-            } else {
-              write_failed = true;
-            }
+        bool read_finish = pb_node.ParseFromCodedStream(&input);
+        always_assert_log(read_finish, "BundleResoource failed to read %s",
+                          file_path.c_str());
+        size_t num_renamed = 0;
+        apply_rename_map(rename_map, &pb_node, &num_renamed);
+        if (num_renamed > 0) {
+          std::ofstream out(file_path, std::ofstream::binary);
+          if (pb_node.SerializeToOstream(&out)) {
+            *out_num_renamed = num_renamed;
+          } else {
+            write_failed = true;
           }
         }
       });
@@ -656,23 +660,24 @@ void BundleResources::collect_layout_classes_and_attributes_for_file(
       file_path,
       [&](google::protobuf::io::CodedInputStream& input, size_t size) {
         aapt::pb::XmlNode pb_node;
-        if (pb_node.ParseFromCodedStream(&input)) {
-          if (pb_node.has_element()) {
-            const auto& root = pb_node.element();
-            std::unordered_map<std::string, std::string> ns_uri_to_prefix;
-            for (const auto& ns_decl : root.namespace_declaration()) {
-              if (!ns_decl.uri().empty() && !ns_decl.prefix().empty()) {
-                ns_uri_to_prefix.emplace(ns_decl.uri(), ns_decl.prefix());
-              }
+        bool read_finish = pb_node.ParseFromCodedStream(&input);
+        always_assert_log(read_finish, "BundleResoource failed to read %s",
+                          file_path.c_str());
+        if (pb_node.has_element()) {
+          const auto& root = pb_node.element();
+          std::unordered_map<std::string, std::string> ns_uri_to_prefix;
+          for (const auto& ns_decl : root.namespace_declaration()) {
+            if (!ns_decl.uri().empty() && !ns_decl.prefix().empty()) {
+              ns_uri_to_prefix.emplace(ns_decl.uri(), ns_decl.prefix());
             }
-            traverse_element_and_children(
-                root, [&](const aapt::pb::XmlElement& element) {
-                  collect_layout_classes_and_attributes_for_element(
-                      element, ns_uri_to_prefix, attributes_to_read,
-                      out_classes, out_attributes);
-                  return true;
-                });
           }
+          traverse_element_and_children(
+              root, [&](const aapt::pb::XmlElement& element) {
+                collect_layout_classes_and_attributes_for_element(
+                    element, ns_uri_to_prefix, attributes_to_read, out_classes,
+                    out_attributes);
+                return true;
+              });
         }
       });
 }
@@ -692,13 +697,14 @@ size_t BundleResources::remap_xml_reference_attributes(
       filename,
       [&](google::protobuf::io::CodedInputStream& input, size_t /* unused */) {
         aapt::pb::XmlNode pb_node;
-        if (pb_node.ParseFromCodedStream(&input)) {
-          change_resource_id_in_xml_references(kept_to_remapped_ids, &pb_node,
-                                               &num_changed);
-          if (num_changed > 0) {
-            std::ofstream out(filename, std::ofstream::binary);
-            always_assert(pb_node.SerializeToOstream(&out));
-          }
+        bool read_finish = pb_node.ParseFromCodedStream(&input);
+        always_assert_log(read_finish, "BundleResoource failed to read %s",
+                          filename.c_str());
+        change_resource_id_in_xml_references(kept_to_remapped_ids, &pb_node,
+                                             &num_changed);
+        if (num_changed > 0) {
+          std::ofstream out(filename, std::ofstream::binary);
+          always_assert(pb_node.SerializeToOstream(&out));
         }
       });
   return num_changed;
@@ -746,21 +752,22 @@ void ResourcesPbFile::remap_res_ids_and_serialize(
         [&](google::protobuf::io::CodedInputStream& input,
             size_t /* unused */) {
           aapt::pb::ResourceTable pb_restable;
-          if (pb_restable.ParseFromCodedStream(&input)) {
-            int package_size = pb_restable.package_size();
-            for (int i = 0; i < package_size; i++) {
-              auto package = pb_restable.mutable_package(i);
-              auto current_package_id = package->package_id().id();
-              int type_size = package->type_size();
-              for (int j = 0; j < type_size; j++) {
-                auto type = package->mutable_type(j);
-                remove_or_change_resource_ids(m_ids_to_remove, old_to_new,
-                                              current_package_id, type);
-              }
+          bool read_finish = pb_restable.ParseFromCodedStream(&input);
+          always_assert_log(read_finish, "BundleResoource failed to read %s",
+                            resources_pb_path.c_str());
+          int package_size = pb_restable.package_size();
+          for (int i = 0; i < package_size; i++) {
+            auto package = pb_restable.mutable_package(i);
+            auto current_package_id = package->package_id().id();
+            int type_size = package->type_size();
+            for (int j = 0; j < type_size; j++) {
+              auto type = package->mutable_type(j);
+              remove_or_change_resource_ids(m_ids_to_remove, old_to_new,
+                                            current_package_id, type);
             }
-            std::ofstream out(resources_pb_path, std::ofstream::binary);
-            always_assert(pb_restable.SerializeToOstream(&out));
           }
+          std::ofstream out(resources_pb_path, std::ofstream::binary);
+          always_assert(pb_restable.SerializeToOstream(&out));
         });
   }
 }
@@ -775,46 +782,45 @@ void ResourcesPbFile::collect_resource_data_for_file(
       resources_pb_path,
       [&](google::protobuf::io::CodedInputStream& input, size_t /* unused */) {
         aapt::pb::ResourceTable pb_restable;
-        if (pb_restable.ParseFromCodedStream(&input)) {
-          for (const aapt::pb::Package& pb_package : pb_restable.package()) {
-            auto current_package_id = pb_package.package_id().id();
-            TRACE(RES, 9, "Package: %s %X", pb_package.package_name().c_str(),
-                  current_package_id);
-            for (const aapt::pb::Type& pb_type : pb_package.type()) {
-              auto current_type_id = pb_type.type_id().id();
-              const auto& current_type_name = pb_type.name();
-              TRACE(RES, 9, "  Type: %s %X", current_type_name.c_str(),
-                    current_type_id);
-              always_assert(m_type_id_to_names.count(current_type_id) == 0 ||
-                            m_type_id_to_names.at(current_type_id) ==
-                                current_type_name);
-              m_type_id_to_names[current_type_id] = current_type_name;
-              for (const aapt::pb::Entry& pb_entry : pb_type.entry()) {
-                if (m_package_id == 0xFFFFFFFF) {
-                  m_package_id = current_package_id;
-                }
-                always_assert_log(
-                    m_package_id == current_package_id,
-                    "Broken assumption for only one package for resources.");
-                std::string name_string = pb_entry.name();
-                auto current_entry_id = pb_entry.entry_id().id();
-                auto current_resource_id =
-                    (PACKAGE_MASK_BIT &
-                     (current_package_id << PACKAGE_INDEX_BIT_SHIFT)) |
-                    (TYPE_MASK_BIT &
-                     (current_type_id << TYPE_INDEX_BIT_SHIFT)) |
-                    (ENTRY_MASK_BIT & current_entry_id);
-                TRACE(RES, 9, "    Entry: %s %X %X", pb_entry.name().c_str(),
-                      current_entry_id, current_resource_id);
-                sorted_res_ids.add(current_resource_id);
-                always_assert(m_existed_res_ids.count(current_resource_id) ==
-                              0);
-                m_existed_res_ids.emplace(current_resource_id);
-                id_to_name.emplace(current_resource_id, name_string);
-                name_to_ids[name_string].push_back(current_resource_id);
-                m_res_id_to_configvalue.emplace(current_resource_id,
-                                                pb_entry.config_value());
+        bool read_finish = pb_restable.ParseFromCodedStream(&input);
+        always_assert_log(read_finish, "BundleResoource failed to read %s",
+                          resources_pb_path.c_str());
+        for (const aapt::pb::Package& pb_package : pb_restable.package()) {
+          auto current_package_id = pb_package.package_id().id();
+          TRACE(RES, 9, "Package: %s %X", pb_package.package_name().c_str(),
+                current_package_id);
+          for (const aapt::pb::Type& pb_type : pb_package.type()) {
+            auto current_type_id = pb_type.type_id().id();
+            const auto& current_type_name = pb_type.name();
+            TRACE(RES, 9, "  Type: %s %X", current_type_name.c_str(),
+                  current_type_id);
+            always_assert(m_type_id_to_names.count(current_type_id) == 0 ||
+                          m_type_id_to_names.at(current_type_id) ==
+                              current_type_name);
+            m_type_id_to_names[current_type_id] = current_type_name;
+            for (const aapt::pb::Entry& pb_entry : pb_type.entry()) {
+              if (m_package_id == 0xFFFFFFFF) {
+                m_package_id = current_package_id;
               }
+              always_assert_log(
+                  m_package_id == current_package_id,
+                  "Broken assumption for only one package for resources.");
+              std::string name_string = pb_entry.name();
+              auto current_entry_id = pb_entry.entry_id().id();
+              auto current_resource_id =
+                  (PACKAGE_MASK_BIT &
+                   (current_package_id << PACKAGE_INDEX_BIT_SHIFT)) |
+                  (TYPE_MASK_BIT & (current_type_id << TYPE_INDEX_BIT_SHIFT)) |
+                  (ENTRY_MASK_BIT & current_entry_id);
+              TRACE(RES, 9, "    Entry: %s %X %X", pb_entry.name().c_str(),
+                    current_entry_id, current_resource_id);
+              sorted_res_ids.add(current_resource_id);
+              always_assert(m_existed_res_ids.count(current_resource_id) == 0);
+              m_existed_res_ids.emplace(current_resource_id);
+              id_to_name.emplace(current_resource_id, name_string);
+              name_to_ids[name_string].push_back(current_resource_id);
+              m_res_id_to_configvalue.emplace(current_resource_id,
+                                              pb_entry.config_value());
             }
           }
         }
