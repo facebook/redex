@@ -10,8 +10,20 @@
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/operations.hpp>
 
+#include "JsonWrapper.h"
+
 inline bool has_bundle_config(const std::string& dir) {
   std::string bundle_config =
       (boost::filesystem::path(dir) / "BundleConfig.pb").string();
   return boost::filesystem::exists(bundle_config);
+}
+
+inline bool is_apk_or_new_bundle_support_enabled(const std::string& dir,
+                                                 const JsonWrapper& config) {
+  if (!has_bundle_config(dir)) {
+    return true;
+  }
+  bool result;
+  config.get("enable_bleeding_edge_app_bundle_support", true, result);
+  return result;
 }
