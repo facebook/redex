@@ -118,6 +118,7 @@ InlineForSpeedData = namedtuple(
         "callee_regs",
         "callee_num_loops",
         "callee_deepest_loop",
+        "interaction",
     ],
 )
 
@@ -136,7 +137,7 @@ def _gen_profile_decisions(iterator):
 
         data = line.data[line.data.index(":") + 1 :]
         data_parts = data.split("!")
-        if len(data_parts) != 2 * 8:
+        if len(data_parts) != 2 * 8 + 1:
             raise ValueError(f"{line}: {data_parts}")
 
         try:
@@ -157,6 +158,7 @@ def _gen_profile_decisions(iterator):
                 int(data_parts[13].strip()),
                 int(data_parts[14].strip()),
                 int(data_parts[15].strip()),
+                data_parts[16].strip(),
             )
         except BaseException as e:
             raise ValueError(f"{line}: {e}")
@@ -228,29 +230,30 @@ def _fill_inline_maps(data, caller_map, callee_map, inline_data_map):
 
 
 # Common column description for CSV files.
-def _write_csv_header(csv_writer):
-    csv_writer.writerow(
-        (
-            "caller",
-            "callee",
-            "caller_insns",
-            "caller_regs",
-            "caller_blocks",
-            "caller_edges",
-            "caller_num_loops",
-            "caller_deepest_loop",
-            "callee_insns",
-            "callee_regs",
-            "callee_blocks",
-            "callee_edges",
-            "callee_num_loops",
-            "callee_deepest_loop",
-            "caller_hits",
-            "callee_hits",
-            "inline_count",
-            "inline_max_loop_depth",
-        )
-    )
+def _write_csv_header(csv_writer, extra=None):
+    header = [
+        "caller",
+        "callee",
+        "caller_insns",
+        "caller_regs",
+        "caller_blocks",
+        "caller_edges",
+        "caller_num_loops",
+        "caller_deepest_loop",
+        "callee_insns",
+        "callee_regs",
+        "callee_blocks",
+        "callee_edges",
+        "callee_num_loops",
+        "callee_deepest_loop",
+        "caller_hits",
+        "callee_hits",
+        "inline_count",
+        "inline_max_loop_depth",
+    ]
+    if extra is not None:
+        header = header + list(extra)
+    csv_writer.writerow(header)
 
 
 class MaybePrintDot:
@@ -362,9 +365,10 @@ class MethodInlinerPassHandler:
 
 
 class PGIHandler:
-    def __init__(self):
+    def __init__(self, aggregate_ifs):
         self._run = 0
         self._printer = MaybePrintDot(1000)
+        self._aggregate_ifs = aggregate_ifs
         pass
 
     def start(self):
@@ -399,18 +403,43 @@ class PGIHandler:
             f"PGI run {self._run}: IFS lines={len(self._inline_for_speed_list)} Inlines={len(ifs_inlined)}"
         )
 
-        ifs_inlined.sort(key=lambda ifs: ifs.caller + "#" + ifs.callee)
+        def ifs_key(ifs):
+            return ifs.caller + "#" + ifs.callee
+
+        if self._aggregate_ifs:
+            ifs_map = {}
+            for ifs in ifs_inlined:
+                ifs_map.setdefault(ifs_key(ifs), set()).add(ifs)
+
+            def combine_max(ifs_set):
+                max_pair = (
+                    max(ifs.caller_hits for ifs in ifs_set),
+                    max(ifs.callee_hits for ifs in ifs_set),
+                )
+                ifs = next(iter(ifs_set))
+                return ifs._replace(
+                    caller_hits=max_pair[0],
+                    callee_hits=max_pair[1],
+                )
+
+            old_size = len(ifs_inlined)
+            ifs_inlined = [combine_max(ifs_set) for ifs_set in ifs_map.values()]
+            new_size = len(ifs_inlined)
+            print(f"Aggregated IFS inlines: {old_size} -> {new_size}")
+
+        ifs_inlined.sort(key=ifs_key)
 
         printer = MaybePrintDot(1000, "!")
         with open(f"pgi-{self._run}.csv", "w", newline="") as out_file:
             csv_writer = csv.writer(out_file, delimiter=",")
-            _write_csv_header(csv_writer)
+            header_extra = None if self._aggregate_ifs else ["interaction"]
+            _write_csv_header(csv_writer, extra=header_extra)
 
             for ifs in ifs_inlined:
                 caller_data = self._caller_map[ifs.caller]
                 callee_data = self._callee_map[ifs.callee]
                 inline_data = self._inline_data_map[ifs.caller][ifs.callee]
-                row = (
+                row = [
                     ifs.caller,
                     ifs.callee,
                     caller_data.insns,
@@ -429,7 +458,7 @@ class PGIHandler:
                     ifs.callee_hits,
                     inline_data.count,
                     inline_data.max_loop_depth,
-                )
+                ] + ([] if self._aggregate_ifs else [ifs.interaction])
 
                 csv_writer.writerow(row)
                 printer.maybe_print(1)
@@ -441,6 +470,8 @@ class PGIHandler:
 if __name__ == "__main__":
     filename = sys.argv[1]
 
+    aggregate_ifs = len(sys.argv) > 2 and sys.argv[2] == "--aggregate-ifs"
+
     gen = _gen_lines(filename)
     gen = _gen_raw_inline_pairs(gen)
     records_parsed = _gen_profile_decisions(gen)
@@ -451,7 +482,7 @@ if __name__ == "__main__":
     gen = _gen_pass(
         gen, "IntraDexInlinePass", MethodInlinerPassHandler("intradex-inline")
     )
-    passes = _gen_pass(gen, "PerfMethodInlinePass", PGIHandler())
+    passes = _gen_pass(gen, "PerfMethodInlinePass", PGIHandler(aggregate_ifs))
 
     # Drain the stream.
     for _ in passes:

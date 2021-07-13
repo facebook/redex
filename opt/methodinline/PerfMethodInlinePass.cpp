@@ -289,41 +289,49 @@ class InlineForSpeedDecisionTrees final : public InlineForSpeedBase {
       return false;
     }
 
-    auto get_max_hit_float = [](const auto& vals) {
-      if (!vals) {
-        return -1.0f;
+    if (traceEnabled(METH_PROF, 5)) {
+      for (size_t i = 0;
+           i != m_method_context_context.m_interaction_list.size();
+           ++i) {
+
+        auto get_val = [](const auto& vals, size_t i) {
+          if (!vals) {
+            return -1.0f;
+          }
+          if (!vals->hits[i]) {
+            return -1.0f;
+          }
+          return *vals->hits[i];
+        };
+        auto caller_val = get_val(caller_context.m_vals, i);
+        auto callee_val = get_val(callee_context.m_vals, i);
+
+        TRACE(METH_PROF,
+              5,
+              "[InlineForSpeedDecisionTrees] "
+              "%zu: %s!%u!%u!%1.5f!%u!%u!%u!%u!%s!%u!%u!%1.5f!%u!%u!%u!%u!%s",
+              accepted,
+              // Caller
+              SHOW(caller_method),
+              caller_context.m_blocks,
+              caller_context.m_edges,
+              caller_val,
+              caller_context.m_insns,
+              caller_context.m_regs,
+              caller_context.m_num_loops,
+              caller_context.m_deepest_loop,
+              // Callee
+              SHOW(callee_method),
+              callee_context.m_blocks,
+              callee_context.m_edges,
+              callee_val,
+              callee_context.m_insns,
+              callee_context.m_regs,
+              callee_context.m_num_loops,
+              callee_context.m_deepest_loop,
+              m_method_context_context.m_interaction_list[i].c_str());
       }
-      float max = -1;
-      for (const auto& opt : vals->hits) {
-        if (opt) {
-          max = std::max(max, *opt);
-        }
-      }
-      return max;
-    };
-    TRACE(METH_PROF,
-          5,
-          "[InlineForSpeedDecisionTrees] "
-          "%zu: %s!%u!%u!%1.5f!%u!%u!%u!%u!%s!%u!%u!%1.5f!%u!%u!%u!%u",
-          accepted,
-          // Caller
-          SHOW(caller_method),
-          caller_context.m_blocks,
-          caller_context.m_edges,
-          get_max_hit_float(caller_context.m_vals),
-          caller_context.m_insns,
-          caller_context.m_regs,
-          caller_context.m_num_loops,
-          caller_context.m_deepest_loop,
-          // Callee
-          SHOW(callee_method),
-          callee_context.m_blocks,
-          callee_context.m_edges,
-          get_max_hit_float(callee_context.m_vals),
-          callee_context.m_insns,
-          callee_context.m_regs,
-          callee_context.m_num_loops,
-          callee_context.m_deepest_loop);
+    }
     return true;
   }
 
