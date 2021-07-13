@@ -80,6 +80,32 @@ struct ManifestClassInfo {
   std::vector<ComponentTagInfo> component_tags;
 };
 
+class ResourceTableFile {
+ public:
+  virtual ~ResourceTableFile() {}
+
+  virtual std::vector<uint32_t> get_res_ids_by_name(
+      const std::string& name) = 0;
+  virtual void collect_resid_values_and_hashes(
+      const std::vector<uint32_t>& ids,
+      std::map<size_t, std::vector<uint32_t>>* res_by_hash) = 0;
+  virtual bool resource_value_identical(uint32_t a_id, uint32_t b_id) = 0;
+  virtual std::unordered_set<uint32_t> get_types_by_name(
+      const std::unordered_set<std::string>& type_names) = 0;
+  virtual void delete_resource(uint32_t red_id) = 0;
+
+  virtual void remap_res_ids_and_serialize(
+      const std::vector<std::string>& resource_files,
+      const std::map<uint32_t, uint32_t>& old_to_new) = 0;
+
+  android::SortedVector<uint32_t> sorted_res_ids;
+  std::map<uint32_t, std::string> id_to_name;
+  std::map<std::string, std::vector<uint32_t>> name_to_ids;
+
+ protected:
+  ResourceTableFile() {}
+};
+
 class AndroidResources {
  public:
   virtual boost::optional<int32_t> get_min_sdk() = 0;
@@ -103,7 +129,12 @@ class AndroidResources {
       const std::unordered_set<std::string>& attributes_to_read,
       std::unordered_set<std::string>* out_classes,
       std::unordered_multimap<std::string, std::string>* out_attributes) = 0;
-
+  virtual std::unique_ptr<ResourceTableFile> load_res_table() = 0;
+  virtual size_t remap_xml_reference_attributes(
+      const std::string& filename,
+      const std::map<uint32_t, uint32_t>& kept_to_remapped_ids) = 0;
+  virtual std::unordered_set<std::string> find_all_xml_files() = 0;
+  virtual std::vector<std::string> find_resources_files() = 0;
   // Classnames present in native libraries (lib/*/*.so)
   std::unordered_set<std::string> get_native_classes();
 

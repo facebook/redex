@@ -183,17 +183,17 @@ TEST(BundleResources, RenameLayout) {
 TEST(BundleResources, ReadResource) {
   setup_resources_and_run([&](const std::string& /* extract_dir */,
                               BundleResources* resources) {
-    resources->collect_resource_data_for_file();
-    auto padding_left_ids = resources->get_res_ids_by_name("padding_left");
+    auto res_table = resources->load_res_table();
+    auto padding_left_ids = res_table->get_res_ids_by_name("padding_left");
     EXPECT_EQ(padding_left_ids.size(), 1);
-    const auto& id_to_name = resources->get_res_id_to_name();
+    const auto& id_to_name = res_table->id_to_name;
     auto obtain_resource_name_back = id_to_name.at(padding_left_ids[0]);
     EXPECT_EQ(obtain_resource_name_back, "padding_left");
-    auto bg_grey = resources->get_res_ids_by_name("bg_grey");
+    auto bg_grey = res_table->get_res_ids_by_name("bg_grey");
     EXPECT_EQ(bg_grey.size(), 1);
     obtain_resource_name_back = id_to_name.at(bg_grey[0]);
     EXPECT_EQ(obtain_resource_name_back, "bg_grey");
-    auto drawable_type_id = resources->get_types_by_name({"drawable"});
+    auto drawable_type_id = res_table->get_types_by_name({"drawable"});
     EXPECT_EQ(drawable_type_id.size(), 1);
     std::unordered_set<std::string> drawable_res_names;
     for (const auto& pair : id_to_name) {
@@ -206,81 +206,83 @@ TEST(BundleResources, ReadResource) {
     EXPECT_EQ(drawable_res_names.count("icon"), 1);
     EXPECT_EQ(drawable_res_names.count("prickly"), 1);
 
-    auto padding_right_ids = resources->get_res_ids_by_name("padding_right");
+    auto padding_right_ids = res_table->get_res_ids_by_name("padding_right");
     EXPECT_EQ(padding_right_ids.size(), 1);
-    EXPECT_EQ(resources->resource_value_identical(padding_left_ids[0],
+    EXPECT_EQ(res_table->resource_value_identical(padding_left_ids[0],
                                                   padding_right_ids[0]),
               true);
 
-    auto unused_dimen_2_ids = resources->get_res_ids_by_name("unused_dimen_2");
+    auto unused_dimen_2_ids = res_table->get_res_ids_by_name("unused_dimen_2");
     EXPECT_EQ(unused_dimen_2_ids.size(), 1);
-    EXPECT_EQ(resources->resource_value_identical(padding_left_ids[0],
+    EXPECT_EQ(res_table->resource_value_identical(padding_left_ids[0],
                                                   unused_dimen_2_ids[0]),
               true);
 
-    auto margin_top_ids = resources->get_res_ids_by_name("margin_top");
+    auto margin_top_ids = res_table->get_res_ids_by_name("margin_top");
     EXPECT_EQ(margin_top_ids.size(), 1);
-    EXPECT_EQ(resources->resource_value_identical(padding_left_ids[0],
+    EXPECT_EQ(res_table->resource_value_identical(padding_left_ids[0],
                                                   margin_top_ids[0]),
               false);
 
-    auto prickly_ids = resources->get_res_ids_by_name("prickly");
+    auto prickly_ids = res_table->get_res_ids_by_name("prickly");
     EXPECT_EQ(prickly_ids.size(), 1);
-    EXPECT_EQ(resources->resource_value_identical(padding_left_ids[0],
+    EXPECT_EQ(res_table->resource_value_identical(padding_left_ids[0],
                                                   prickly_ids[0]),
               false);
-    const auto& id_to_configvalue = resources->get_res_id_to_configvalue();
-    EXPECT_EQ(resources->get_hash_from_values(
+    const auto& res_table_pb = static_cast<ResourcesPbFile*>(res_table.get());
+    const auto& id_to_configvalue = res_table_pb->get_res_id_to_configvalue();
+    EXPECT_EQ(res_table_pb->get_hash_from_values(
                   id_to_configvalue.at(padding_left_ids[0])),
-              resources->get_hash_from_values(
+              res_table_pb->get_hash_from_values(
                   id_to_configvalue.at(padding_right_ids[0])));
-    EXPECT_EQ(resources->get_hash_from_values(
+    EXPECT_EQ(res_table_pb->get_hash_from_values(
                   id_to_configvalue.at(padding_left_ids[0])),
-              resources->get_hash_from_values(
+              res_table_pb->get_hash_from_values(
                   id_to_configvalue.at(unused_dimen_2_ids[0])));
-    EXPECT_NE(resources->get_hash_from_values(
+    EXPECT_NE(res_table_pb->get_hash_from_values(
                   id_to_configvalue.at(padding_left_ids[0])),
-              resources->get_hash_from_values(
+              res_table_pb->get_hash_from_values(
                   id_to_configvalue.at(margin_top_ids[0])));
-    EXPECT_NE(
-        resources->get_hash_from_values(
-            id_to_configvalue.at(padding_left_ids[0])),
-        resources->get_hash_from_values(id_to_configvalue.at(prickly_ids[0])));
+    EXPECT_NE(res_table_pb->get_hash_from_values(
+                  id_to_configvalue.at(padding_left_ids[0])),
+              res_table_pb->get_hash_from_values(
+                  id_to_configvalue.at(prickly_ids[0])));
   });
 }
 
 TEST(BundleResources, WriteResource) {
-  setup_resources_and_run([&](const std::string& /* extract_dir */,
+  setup_resources_and_run([&](const std::string& extract_dir,
                               BundleResources* resources) {
-    resources->collect_resource_data_for_file();
-    auto padding_left_ids = resources->get_res_ids_by_name("padding_left");
+    auto res_table = resources->load_res_table();
+    auto padding_left_ids = res_table->get_res_ids_by_name("padding_left");
     EXPECT_EQ(padding_left_ids.size(), 1);
     auto padding_left_id = padding_left_ids[0];
-    auto padding_right_ids = resources->get_res_ids_by_name("padding_right");
+    auto padding_right_ids = res_table->get_res_ids_by_name("padding_right");
     EXPECT_EQ(padding_right_ids.size(), 1);
     auto padding_right_id = padding_right_ids[0];
-    auto unused_dimen_1_ids = resources->get_res_ids_by_name("unused_dimen_1");
+    auto unused_dimen_1_ids = res_table->get_res_ids_by_name("unused_dimen_1");
     EXPECT_EQ(unused_dimen_1_ids.size(), 1);
     auto unused_dimen_1_id = unused_dimen_1_ids[0];
-    auto unused_dimen_2_ids = resources->get_res_ids_by_name("unused_dimen_2");
+    auto unused_dimen_2_ids = res_table->get_res_ids_by_name("unused_dimen_2");
     EXPECT_EQ(unused_dimen_2_ids.size(), 1);
     auto unused_dimen_2_id = unused_dimen_2_ids[0];
 
-    std::set<uint32_t> to_remove = {unused_dimen_1_id, unused_dimen_2_id};
+    res_table->delete_resource(unused_dimen_1_id);
+    res_table->delete_resource(unused_dimen_2_id);
     std::map<uint32_t, uint32_t> to_replace;
     to_replace[padding_left_id] = unused_dimen_1_id;
     to_replace[padding_right_id] = unused_dimen_2_id;
 
-    resources->alter_resource_data_for_file(to_remove, to_replace);
-    resources->clear_restable();
-    resources->collect_resource_data_for_file();
+    res_table->remap_res_ids_and_serialize({extract_dir + "/base/resources.pb"},
+                                           to_replace);
+    auto res_table_new = resources->load_res_table();
 
-    EXPECT_EQ(resources->get_res_ids_by_name("unused_dimen_2").size(), 0);
-    EXPECT_EQ(resources->get_res_ids_by_name("unused_dimen_1").size(), 0);
-    padding_left_ids = resources->get_res_ids_by_name("padding_left");
+    EXPECT_EQ(res_table_new->get_res_ids_by_name("unused_dimen_2").size(), 0);
+    EXPECT_EQ(res_table_new->get_res_ids_by_name("unused_dimen_1").size(), 0);
+    padding_left_ids = res_table_new->get_res_ids_by_name("padding_left");
     EXPECT_EQ(padding_left_ids.size(), 1);
     EXPECT_EQ(padding_left_ids[0], unused_dimen_1_id);
-    padding_right_ids = resources->get_res_ids_by_name("padding_right");
+    padding_right_ids = res_table_new->get_res_ids_by_name("padding_right");
     EXPECT_EQ(padding_right_ids.size(), 1);
     EXPECT_EQ(padding_right_ids[0], unused_dimen_2_id);
   });

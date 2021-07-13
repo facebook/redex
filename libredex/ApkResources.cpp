@@ -627,6 +627,16 @@ bool ApkResources::rename_classes_in_layout(
   return true;
 }
 
+std::unordered_set<std::string> ApkResources::find_all_xml_files() {
+  std::string manifest_path = m_directory + "/AndroidManifest.xml";
+  std::unordered_set<std::string> all_xml_files;
+  all_xml_files.emplace(manifest_path);
+  for (const std::string& path : get_xml_files(m_directory + "/res")) {
+    all_xml_files.emplace(path);
+  }
+  return all_xml_files;
+}
+
 namespace {
 bool is_drawable_attribute(android::ResXMLTree& parser, size_t attr_index) {
   size_t name_size;
@@ -650,6 +660,15 @@ bool is_drawable_attribute(android::ResXMLTree& parser, size_t attr_index) {
 
   return false;
 }
+
+size_t getHashFromValues(const android::Vector<android::Res_value>& values) {
+  size_t hash = 0;
+  for (size_t i = 0; i < values.size(); ++i) {
+    boost::hash_combine(hash, values[i].data);
+  }
+  return hash;
+}
+
 } // namespace
 
 int ApkResources::inline_xml_reference_attributes(
@@ -706,11 +725,11 @@ int ApkResources::inline_xml_reference_attributes(
   return num_values_inlined;
 }
 
-void ApkResources::remap_xml_reference_attributes(
+size_t ApkResources::remap_xml_reference_attributes(
     const std::string& filename,
     const std::map<uint32_t, uint32_t>& kept_to_remapped_ids) {
   if (is_raw_resource(filename)) {
-    return;
+    return 0;
   }
   std::string file_contents = read_entire_file(filename);
   ensure_file_contents(file_contents, filename);
@@ -762,6 +781,52 @@ void ApkResources::remap_xml_reference_attributes(
   if (made_change) {
     write_string_to_file(filename, file_contents);
   }
+  return made_change;
+}
+
+std::unique_ptr<ResourceTableFile> ApkResources::load_res_table() {
+  std::string arsc_path = m_directory + std::string("/resources.arsc");
+  return std::make_unique<ResourcesArscFile>(arsc_path);
+}
+
+std::vector<std::string> ApkResources::find_resources_files() {
+  return {m_directory + std::string("/resources.arsc")};
+}
+
+void ResourcesArscFile::remap_res_ids_and_serialize(
+    const std::vector<std::string>& /* resource_files */,
+    const std::map<uint32_t, uint32_t>& old_to_new) {
+  remap_ids(old_to_new);
+  serialize();
+}
+
+void ResourcesArscFile::delete_resource(uint32_t res_id) {
+  res_table.deleteResource(res_id);
+}
+
+std::vector<uint32_t> ResourcesArscFile::get_res_ids_by_name(
+    const std::string& name) {
+  return name_to_ids[name];
+}
+
+void ResourcesArscFile::collect_resid_values_and_hashes(
+    const std::vector<uint32_t>& ids,
+    std::map<size_t, std::vector<uint32_t>>* res_by_hash) {
+  tmp_id_to_values.clear();
+  for (uint32_t id : ids) {
+    android::Vector<android::Res_value> row_values;
+    res_table.getAllValuesForResource(id, row_values);
+    (*res_by_hash)[getHashFromValues(row_values)].push_back(id);
+    tmp_id_to_values[id] = row_values;
+  }
+}
+
+bool ResourcesArscFile::resource_value_identical(uint32_t a_id, uint32_t b_id) {
+  if (tmp_id_to_values[a_id].size() != tmp_id_to_values[b_id].size()) {
+    return false;
+  }
+
+  return res_table.areResourceValuesIdentical(a_id, b_id);
 }
 
 ResourcesArscFile::ResourcesArscFile(const std::string& path)
