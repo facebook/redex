@@ -749,11 +749,14 @@ struct SourceBlocksStats {
   unsigned int total_blocks;
   unsigned int source_blocks_present;
   unsigned int flow_violation_idom;
+  unsigned int flow_violation_direct_predecessors;
 
   SourceBlocksStats& operator+=(const SourceBlocksStats& that) {
     total_blocks += that.total_blocks;
     source_blocks_present += that.source_blocks_present;
     flow_violation_idom += that.flow_violation_idom;
+    flow_violation_direct_predecessors +=
+        that.flow_violation_direct_predecessors;
     return *this;
   }
 };
@@ -774,7 +777,7 @@ void track_source_block_coverage(PassManager& mgr,
   Timer opt_timer("Calculate SourceBlock Coverage");
   auto stats = walk::parallel::methods<SourceBlocksStats>(
       build_class_scope(stores), [](DexMethod* m) -> SourceBlocksStats {
-        SourceBlocksStats ret{0u, 0u, 0u};
+        SourceBlocksStats ret{0u, 0u, 0u, 0u};
         auto code = m->get_code();
         if (!code) {
           return ret;
@@ -807,6 +810,24 @@ void track_source_block_coverage(PassManager& mgr,
             if (!is_idom_hot && is_curr_block_hot) {
               ret.flow_violation_idom++;
             }
+
+            // If current block is hot, one of its predecessors must also be
+            // hot.
+            if (is_curr_block_hot) {
+              auto found_hot_pred = [&]() {
+                for (auto predecessor : block->preds()) {
+                  auto* first_sb_pred =
+                      source_blocks::get_first_source_block(predecessor->src());
+                  if (is_source_block_hot(first_sb_pred)) {
+                    return true;
+                  }
+                }
+                return false;
+              }();
+              if (!found_hot_pred) {
+                ret.flow_violation_direct_predecessors++;
+              }
+            }
           }
         }
 
@@ -817,15 +838,20 @@ void track_source_block_coverage(PassManager& mgr,
   mgr.set_metric("~blocks~count", stats.total_blocks);
   mgr.set_metric("~blocks~with~source~blocks", stats.source_blocks_present);
   mgr.set_metric("~flow~violation~idom", stats.flow_violation_idom);
+  mgr.set_metric("~flow~violation~direct~predecessors",
+                 stats.flow_violation_direct_predecessors);
 
-  TRACE(
-      INSTRUMENT, 4,
-      "Total Basic Blocks = %d, Basic Blocks with SourceBlock = %d (%.1f%%), "
-      "Total flow idom violations = %d (%.1f%%), ",
-      stats.total_blocks, stats.source_blocks_present,
-      ((double)stats.source_blocks_present) * 100 / stats.total_blocks,
-      stats.flow_violation_idom,
-      ((double)stats.flow_violation_idom) * 100 / stats.source_blocks_present);
+  TRACE(INSTRUMENT, 4,
+        "Total Basic Blocks = %d, Basic Blocks with SourceBlock = %d (%.1f%%), "
+        "Total flow idom violations = %d (%.1f%%), "
+        "Total flow direct predecessor violations = %d (%.1f%%)",
+        stats.total_blocks, stats.source_blocks_present,
+        ((double)stats.source_blocks_present) * 100 / stats.total_blocks,
+        stats.flow_violation_idom,
+        ((double)stats.flow_violation_idom) * 100 / stats.source_blocks_present,
+        stats.flow_violation_direct_predecessors,
+        ((double)stats.flow_violation_direct_predecessors) * 100 /
+            stats.source_blocks_present);
 }
 
 void run_assessor(PassManager& pm, const Scope& scope, bool initially = false) {
