@@ -148,3 +148,7 @@ std::set<std::string> multimap_values_to_set(
     const std::string& key);
 
 const int TYPE_INDEX_BIT_SHIFT = 16;
+const int PACKAGE_INDEX_BIT_SHIFT = 24;
+const uint32_t PACKAGE_MASK_BIT = 0xFF000000;
+const uint32_t TYPE_MASK_BIT = 0x00FF0000;
+const uint32_t ENTRY_MASK_BIT = 0x0000FFFF;
