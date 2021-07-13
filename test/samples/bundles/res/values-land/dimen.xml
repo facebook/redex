@@ -1,0 +1,4 @@
+<resources>
+  <dimen name="foo">@dimen/medium</dimen>
+  <dimen name="bar">@dimen/medium</dimen>
+</resources>

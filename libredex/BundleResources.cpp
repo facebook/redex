@@ -590,9 +590,6 @@ void remove_or_change_resource_ids(
                         copy_entry->DebugString().c_str());
       auto entry_id = copy_entry->mutable_entry_id();
       entry_id->set_id(new_entry_id);
-      // TODO: add test case for this.
-      // Not sure if I am getting this correctly, I saw this checked in
-      // arsc's ResTable
       auto config_value_size = copy_entry->config_value_size();
       for (int i = 0; i < config_value_size; ++i) {
         auto config_value = copy_entry->mutable_config_value(i);

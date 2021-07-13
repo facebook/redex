@@ -229,6 +229,25 @@ TEST(BundleResources, ReadResource) {
     EXPECT_EQ(res_table->resource_value_identical(padding_left_ids[0],
                                                   prickly_ids[0]),
               false);
+
+    auto foo_ids = res_table->get_res_ids_by_name("foo");
+    EXPECT_EQ(foo_ids.size(), 1);
+    auto bar_ids = res_table->get_res_ids_by_name("bar");
+    EXPECT_EQ(bar_ids.size(), 1);
+    auto far_ids = res_table->get_res_ids_by_name("far");
+    EXPECT_EQ(far_ids.size(), 1);
+    auto baz_ids = res_table->get_res_ids_by_name("baz");
+    EXPECT_EQ(baz_ids.size(), 1);
+    auto boo_ids = res_table->get_res_ids_by_name("boo");
+    EXPECT_EQ(boo_ids.size(), 1);
+
+    EXPECT_EQ(res_table->resource_value_identical(foo_ids[0], bar_ids[0]),
+              true);
+    EXPECT_EQ(res_table->resource_value_identical(bar_ids[0], far_ids[0]),
+              false);
+    EXPECT_EQ(res_table->resource_value_identical(baz_ids[0], boo_ids[0]),
+              false);
+
     const auto& res_table_pb = static_cast<ResourcesPbFile*>(res_table.get());
     const auto& id_to_configvalue = res_table_pb->get_res_id_to_configvalue();
     EXPECT_EQ(res_table_pb->get_hash_from_values(
@@ -247,6 +266,15 @@ TEST(BundleResources, ReadResource) {
                   id_to_configvalue.at(padding_left_ids[0])),
               res_table_pb->get_hash_from_values(
                   id_to_configvalue.at(prickly_ids[0])));
+    EXPECT_EQ(
+        res_table_pb->get_hash_from_values(id_to_configvalue.at(foo_ids[0])),
+        res_table_pb->get_hash_from_values(id_to_configvalue.at(bar_ids[0])));
+    EXPECT_NE(
+        res_table_pb->get_hash_from_values(id_to_configvalue.at(far_ids[0])),
+        res_table_pb->get_hash_from_values(id_to_configvalue.at(bar_ids[0])));
+    EXPECT_NE(
+        res_table_pb->get_hash_from_values(id_to_configvalue.at(baz_ids[0])),
+        res_table_pb->get_hash_from_values(id_to_configvalue.at(boo_ids[0])));
   });
 }
 
@@ -289,14 +317,27 @@ TEST(BundleResources, WriteResource) {
 }
 
 TEST(BundleResources, ChangeResourceIdInLayout) {
-  setup_resources_and_run(
-      [&](const std::string& extract_dir, BundleResources* resources) {
-        std::map<uint32_t, uint32_t> kept_to_remapped_ids;
-        kept_to_remapped_ids[0x7F030001] = 0x7F030000;
-        kept_to_remapped_ids[0x7F020000] = 0x7F020005;
-        auto changed = resources->remap_xml_reference_attributes(
-            extract_dir + "/base/res/layout/activity_main.xml",
-            kept_to_remapped_ids);
-        EXPECT_EQ(changed, 4);
-      });
+  setup_resources_and_run([&](const std::string& extract_dir,
+                              BundleResources* resources) {
+    auto res_table = resources->load_res_table();
+    auto margin_top_ids = res_table->get_res_ids_by_name("margin_top");
+    EXPECT_EQ(margin_top_ids.size(), 1);
+    auto margin_top_id = margin_top_ids[0];
+    auto padding_right_ids = res_table->get_res_ids_by_name("padding_right");
+    EXPECT_EQ(padding_right_ids.size(), 1);
+    auto padding_right_id = padding_right_ids[0];
+    auto prickly_ids = res_table->get_res_ids_by_name("prickly");
+    EXPECT_EQ(prickly_ids.size(), 1);
+    auto prickly_id = prickly_ids[0];
+    auto icon_ids = res_table->get_res_ids_by_name("icon");
+    EXPECT_EQ(icon_ids.size(), 1);
+    auto icon_id = icon_ids[0];
+    std::map<uint32_t, uint32_t> kept_to_remapped_ids;
+    kept_to_remapped_ids[prickly_id] = icon_id;
+    kept_to_remapped_ids[margin_top_id] = padding_right_id;
+    auto changed = resources->remap_xml_reference_attributes(
+        extract_dir + "/base/res/layout/activity_main.xml",
+        kept_to_remapped_ids);
+    EXPECT_EQ(changed, 4);
+  });
 }
