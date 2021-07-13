@@ -90,17 +90,22 @@ using CalleeCallerInsns = std::unordered_map<
     DexMethod*,
     std::unordered_map<DexMethod*, std::unordered_set<IRInstruction*>>>;
 
-using ConstantArguments = constant_propagation::interprocedural::ArgumentDomain;
+using CallSiteArguments = constant_propagation::interprocedural::ArgumentDomain;
 
-using InvokeConstantArguments =
-    std::vector<std::pair<IRList::iterator, ConstantArguments>>;
+struct CallSiteSummary {
+  CallSiteArguments arguments;
+  bool result_used;
+};
 
-struct InvokeConstantArgumentsAndDeadBlocks {
-  InvokeConstantArguments invoke_constant_arguments;
+using InvokeCallSiteSummaries =
+    std::vector<std::pair<IRList::iterator, CallSiteSummary>>;
+
+struct InvokeCallSiteSummariesAndDeadBlocks {
+  InvokeCallSiteSummaries invoke_call_site_summaries;
   size_t dead_blocks{0};
 };
 
-using ConstantArgumentsOccurrences = std::pair<ConstantArguments, size_t>;
+using CallSiteSummaryOccurrences = std::pair<CallSiteSummary, size_t>;
 
 struct Inlinable {
   DexMethod* callee;
@@ -136,6 +141,8 @@ struct InlinedCost {
   float other_refs;
   // Whether all or a specific call-site is guaranteed to not return normally
   bool no_return;
+  // Average or call-site specific value indicating whether result is used
+  float result_used;
   // For a specific call-site, a set of known dead blocks in the callee
   std::unordered_set<cfg::Block*> dead_blocks;
   // Maximum or call-site specific estimated callee size after pruning
@@ -424,14 +431,14 @@ class MultiMethodInliner {
    * information about their arguments, i.e. whether particular arguments
    * are constants.
    */
-  boost::optional<InvokeConstantArgumentsAndDeadBlocks>
-  get_invoke_constant_arguments(DexMethod* caller,
-                                const std::vector<DexMethod*>&);
+  boost::optional<InvokeCallSiteSummariesAndDeadBlocks>
+  get_invoke_call_site_summaries(DexMethod* caller,
+                                 const std::vector<DexMethod*>&);
 
   /**
    * Build up constant-arguments information for all invoked methods.
    */
-  void compute_callee_constant_arguments();
+  void compute_call_site_summaries();
 
   /**
    * Initiate post-processing a method asynchronously.
@@ -525,14 +532,14 @@ class MultiMethodInliner {
    * For all (reachable) invoked methods, list of constant arguments
    */
   mutable std::unordered_map<const DexMethod*,
-                             std::vector<ConstantArgumentsOccurrences>>
-      m_callee_constant_arguments;
+                             std::vector<CallSiteSummaryOccurrences>>
+      m_callee_call_site_summary_occurrences;
 
   /**
    * For all (reachable) invoke instructions, constant arguments
    */
-  mutable ConcurrentMap<const IRInstruction*, ConstantArguments>
-      m_call_constant_arguments;
+  mutable ConcurrentMap<const IRInstruction*, CallSiteSummary>
+      m_invoke_call_site_summaries;
 
   // Priority thread pool to handle parallel processing of methods, either
   // shrinking initially / after inlining into them, or even to inline in
@@ -629,6 +636,7 @@ class MultiMethodInliner {
     std::atomic<size_t> constant_invoke_callers_unreachable_blocks{0};
     std::atomic<size_t> constant_invoke_callees_analyzed{0};
     std::atomic<size_t> constant_invoke_callees_unreachable_blocks{0};
+    std::atomic<size_t> constant_invoke_callees_unused_results{0};
     std::atomic<size_t> constant_invoke_callees_no_return{0};
   };
   InliningInfo info;

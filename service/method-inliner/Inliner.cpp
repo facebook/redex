@@ -47,13 +47,11 @@ namespace {
 
 // The following costs are in terms of code-units (2 bytes).
 
-// Typical overhead of calling a method with a result. This isn't just the
-// overhead of the invoke instruction itself, but possibly some setup and
-// consumption of result.
-const size_t COST_INVOKE_WITH_RESULT = 5;
+// Typical overhead of calling a method, without move-result overhead.
+const float COST_INVOKE = 3.7f;
 
-// Typical overhead of calling a method without a result.
-const size_t COST_INVOKE_WITHOUT_RESULT = 3;
+// Typical overhead of having move-result instruction.
+const float COST_MOVE_RESULT = 3.0f;
 
 // Overhead of having a method and its metadata.
 const size_t COST_METHOD = 16;
@@ -210,16 +208,17 @@ MultiMethodInliner::MultiMethodInliner(
 }
 
 /*
- * The key of a constant-arguments data structure is a canonical string
- * representation of the constant arguments. Usually, the string is quite small,
- * it only rarely contains fields or methods.
+ * The key of a call-site-summary is a canonical string representation of the
+ * constant arguments. Usually, the string is quite small, it only rarely
+ * contains fields or methods.
  */
-static std::string get_key(const ConstantArguments& constant_arguments) {
-  always_assert(!constant_arguments.is_bottom());
-  if (constant_arguments.is_top()) {
-    return "";
+static std::string get_key(const CallSiteSummary& call_site_summary) {
+  always_assert(!call_site_summary.arguments.is_bottom());
+  static std::array<std::string, 2> result_used_strs = {"-", "+"};
+  if (call_site_summary.arguments.is_top()) {
+    return result_used_strs[call_site_summary.result_used];
   }
-  const auto& bindings = constant_arguments.bindings();
+  const auto& bindings = call_site_summary.arguments.bindings();
   std::vector<reg_t> ordered_arg_idxes;
   for (auto& p : bindings) {
     ordered_arg_idxes.push_back(p.first);
@@ -227,6 +226,7 @@ static std::string get_key(const ConstantArguments& constant_arguments) {
   always_assert(!ordered_arg_idxes.empty());
   std::sort(ordered_arg_idxes.begin(), ordered_arg_idxes.end());
   std::ostringstream oss;
+  oss << result_used_strs[call_site_summary.result_used];
   for (auto arg_idx : ordered_arg_idxes) {
     if (arg_idx != ordered_arg_idxes.front()) {
       oss << ",";
@@ -284,42 +284,48 @@ static std::string get_key(const ConstantArguments& constant_arguments) {
   return oss.str();
 }
 
-void MultiMethodInliner::compute_callee_constant_arguments() {
-  if (!m_config.use_constant_propagation_and_local_dce_for_callee_size) {
+void MultiMethodInliner::compute_call_site_summaries() {
+  if (!m_config.use_call_site_summaries) {
     return;
   }
 
-  Timer t("compute_callee_constant_arguments");
+  Timer t("compute_call_site_summaries");
   struct CalleeInfo {
-    std::unordered_map<std::string, ConstantArguments> constant_arguments;
+    std::unordered_map<std::string, CallSiteSummary> call_site_summaries;
     std::unordered_map<std::string, size_t> occurrences;
   };
-  ConcurrentMap<DexMethod*, CalleeInfo> concurrent_callee_constant_arguments;
+  ConcurrentMap<DexMethod*, CalleeInfo> concurrent_callee_infos;
   auto wq = workqueue_foreach<DexMethod*>(
       [&](DexMethod* caller) {
         auto& callees = caller_callee.at(caller);
-        auto res = get_invoke_constant_arguments(caller, callees);
+        auto res = get_invoke_call_site_summaries(caller, callees);
         if (!res) {
           return;
         }
-        for (auto& p : res->invoke_constant_arguments) {
+        for (auto& p : res->invoke_call_site_summaries) {
           auto insn = p.first->insn;
           auto callee =
               m_concurrent_resolver(insn->get_method(), opcode_to_search(insn));
-          const auto& constant_arguments = p.second;
-          auto key = get_key(constant_arguments);
-          concurrent_callee_constant_arguments.update(
-              callee, [&](const DexMethod*, CalleeInfo& ci, bool /* exists */) {
-                auto q = ci.constant_arguments.emplace(key, constant_arguments);
-                if (!q.second) {
-                  always_assert_log(q.first->second.equals(constant_arguments),
-                                    "same key %s for\n    %s\nvs. %s",
-                                    key.c_str(), SHOW(q.first->second),
-                                    SHOW(constant_arguments));
-                }
-                ++ci.occurrences[key];
-              });
-          m_call_constant_arguments.emplace(insn, constant_arguments);
+          const auto& call_site_summary = p.second;
+          auto key = get_key(call_site_summary);
+          concurrent_callee_infos.update(callee, [&](const DexMethod*,
+                                                     CalleeInfo& ci,
+                                                     bool /* exists */) {
+            auto q = ci.call_site_summaries.emplace(key, call_site_summary);
+            if (!q.second) {
+              always_assert_log(
+                  q.first->second.result_used == call_site_summary.result_used,
+                  "same key %s for\n    %d\nvs. %d", key.c_str(),
+                  q.first->second.result_used, call_site_summary.result_used);
+              always_assert_log(
+                  q.first->second.arguments.equals(call_site_summary.arguments),
+                  "same key %s for\n    %s\nvs. %s", key.c_str(),
+                  SHOW(q.first->second.arguments),
+                  SHOW(call_site_summary.arguments));
+            }
+            ++ci.occurrences[key];
+          });
+          m_invoke_call_site_summaries.emplace(insn, call_site_summary);
         }
         info.constant_invoke_callers_analyzed++;
         info.constant_invoke_callers_unreachable_blocks += res->dead_blocks;
@@ -329,19 +335,19 @@ void MultiMethodInliner::compute_callee_constant_arguments() {
     wq.add_item(p.first);
   };
   wq.run_all();
-  for (auto& p : concurrent_callee_constant_arguments) {
-    auto& v = m_callee_constant_arguments[p.first];
+  for (auto& p : concurrent_callee_infos) {
+    auto& v = m_callee_call_site_summary_occurrences[p.first];
     const auto& ci = p.second;
     for (const auto& q : ci.occurrences) {
       const auto& key = q.first;
-      const auto& constant_arguments = q.second;
-      v.emplace_back(ci.constant_arguments.at(key), constant_arguments);
+      const auto& count = q.second;
+      v.emplace_back(ci.call_site_summaries.at(key), count);
     }
   }
 }
 
 void MultiMethodInliner::inline_methods() {
-  compute_callee_constant_arguments();
+  compute_call_site_summaries();
 
   // Inlining and shrinking initiated from within this method will be done
   // in parallel.
@@ -539,15 +545,15 @@ size_t MultiMethodInliner::compute_caller_nonrecursive_callees_by_stack_depth(
   return stack_depth;
 }
 
-boost::optional<InvokeConstantArgumentsAndDeadBlocks>
-MultiMethodInliner::get_invoke_constant_arguments(
+boost::optional<InvokeCallSiteSummariesAndDeadBlocks>
+MultiMethodInliner::get_invoke_call_site_summaries(
     DexMethod* caller, const std::vector<DexMethod*>& callees) {
   IRCode* code = caller->get_code();
   if (!code->editable_cfg_built()) {
     return boost::none;
   }
 
-  InvokeConstantArgumentsAndDeadBlocks res;
+  InvokeCallSiteSummariesAndDeadBlocks res;
   std::unordered_set<DexMethod*> callees_set(callees.begin(), callees.end());
   auto& cfg = code->cfg();
   constant_propagation::intraprocedural::FixpointIterator intra_cp(
@@ -568,21 +574,26 @@ MultiMethodInliner::get_invoke_constant_arguments(
       continue;
     }
     auto last_insn = block->get_last_insn();
-    for (auto& mie : InstructionIterable(block)) {
-      auto insn = mie.insn;
+    auto iterable = InstructionIterable(block);
+    for (auto it = iterable.begin(); it != iterable.end(); it++) {
+      auto insn = it->insn;
       if (opcode::is_an_invoke(insn->opcode())) {
         auto callee =
             m_concurrent_resolver(insn->get_method(), opcode_to_search(insn));
         if (callees_set.count(callee)) {
-          ConstantArguments constant_arguments;
+          CallSiteSummary call_site_summary;
           const auto& srcs = insn->srcs();
           for (size_t i = is_static(callee) ? 0 : 1; i < srcs.size(); ++i) {
             auto val = env.get(srcs[i]);
             always_assert(!val.is_bottom());
-            constant_arguments.set(i, val);
+            call_site_summary.arguments.set(i, val);
           }
-          res.invoke_constant_arguments.emplace_back(code->iterator_to(mie),
-                                                     constant_arguments);
+          call_site_summary.result_used =
+              !callee->get_proto()->is_void() &&
+              !cfg.move_result_of(block->to_cfg_instruction_iterator(it))
+                   .is_end();
+          res.invoke_call_site_summaries.emplace_back(
+              it.unwrap(), std::move(call_site_summary));
         }
       }
       intra_cp.analyze_instruction(insn, &env, insn == last_insn->insn);
@@ -1375,10 +1386,8 @@ static size_t get_inlined_regs_cost(size_t regs) {
   return cost;
 }
 
-static size_t get_invoke_cost(const DexMethod* callee) {
-  size_t invoke_cost = callee->get_proto()->is_void()
-                           ? COST_INVOKE_WITHOUT_RESULT
-                           : COST_INVOKE_WITH_RESULT;
+static float get_invoke_cost(const DexMethod* callee, float result_used) {
+  float invoke_cost = COST_INVOKE + result_used * COST_MOVE_RESULT;
   invoke_cost += get_inlined_regs_cost(callee->get_proto()->get_args()->size());
   return invoke_cost;
 }
@@ -1477,56 +1486,72 @@ struct ResidualCfgInfo {
 
 static boost::optional<ResidualCfgInfo> get_residual_cfg_info(
     bool is_static,
+    bool has_result,
     const IRCode* code,
-    const ConstantArguments* constant_arguments,
+    const CallSiteSummary* call_site_summary,
     const std::unordered_set<DexMethodRef*>* pure_methods,
     constant_propagation::ImmutableAttributeAnalyzerState*
         immut_analyzer_state) {
-  auto& cfg = code->cfg();
-  if (!constant_arguments || constant_arguments->is_top()) {
+  if (!call_site_summary) {
     return boost::none;
   }
 
-  constant_propagation::intraprocedural::FixpointIterator intra_cp(
-      cfg,
-      constant_propagation::ConstantPrimitiveAndBoxedAnalyzer(
-          immut_analyzer_state, immut_analyzer_state,
-          constant_propagation::EnumFieldAnalyzerState::get(),
-          constant_propagation::BoxedBooleanAnalyzerState::get(), nullptr));
-  ConstantEnvironment initial_env =
-      constant_propagation::interprocedural::env_with_params(
-          is_static, code, *constant_arguments);
-  intra_cp.run(initial_env);
-
-  ResidualCfgInfo res;
-  res.reachable_blocks = graph::postorder_sort<cfg::GraphInterface>(cfg);
-  bool found_unreachable_block_or_infeasible_edge{false};
-  for (auto it = res.reachable_blocks.begin();
-       it != res.reachable_blocks.end();) {
-    cfg::Block* block = *it;
-    if (intra_cp.get_entry_state_at(block).is_bottom()) {
-      // we found an unreachable block
-      found_unreachable_block_or_infeasible_edge = true;
-      it = res.reachable_blocks.erase(it);
-    } else {
-      auto env = intra_cp.get_exit_state_at(block);
-      std::vector<cfg::Edge*>& block_feasible_succs = res.feasible_succs[block];
-      for (auto succ : block->succs()) {
-        if (succ->type() == cfg::EDGE_GHOST) {
-          continue;
-        }
-        if (intra_cp.analyze_edge(succ, env).is_bottom()) {
-          // we found an infeasible edge
-          found_unreachable_block_or_infeasible_edge = true;
-          continue;
-        }
-        block_feasible_succs.push_back(succ);
-      }
-      ++it;
+  auto& cfg = code->cfg();
+  if (call_site_summary->arguments.is_top()) {
+    if (!has_result || call_site_summary->result_used) {
+      return boost::none;
     }
   }
-  if (!found_unreachable_block_or_infeasible_edge) {
-    return boost::none;
+
+  ResidualCfgInfo res;
+  if (call_site_summary->arguments.is_top()) {
+    res.reachable_blocks = cfg.blocks();
+    for (auto block : res.reachable_blocks) {
+      res.feasible_succs.emplace(block, block->succs());
+    }
+  } else {
+    constant_propagation::intraprocedural::FixpointIterator intra_cp(
+        cfg,
+        constant_propagation::ConstantPrimitiveAndBoxedAnalyzer(
+            immut_analyzer_state, immut_analyzer_state,
+            constant_propagation::EnumFieldAnalyzerState::get(),
+            constant_propagation::BoxedBooleanAnalyzerState::get(), nullptr));
+    ConstantEnvironment initial_env =
+        constant_propagation::interprocedural::env_with_params(
+            is_static, code, call_site_summary->arguments);
+    intra_cp.run(initial_env);
+
+    res.reachable_blocks = graph::postorder_sort<cfg::GraphInterface>(cfg);
+    bool found_unreachable_block_or_infeasible_edge{false};
+    for (auto it = res.reachable_blocks.begin();
+         it != res.reachable_blocks.end();) {
+      cfg::Block* block = *it;
+      if (intra_cp.get_entry_state_at(block).is_bottom()) {
+        // we found an unreachable block
+        found_unreachable_block_or_infeasible_edge = true;
+        it = res.reachable_blocks.erase(it);
+      } else {
+        auto env = intra_cp.get_exit_state_at(block);
+        std::vector<cfg::Edge*>& block_feasible_succs =
+            res.feasible_succs[block];
+        for (auto succ : block->succs()) {
+          if (succ->type() == cfg::EDGE_GHOST) {
+            continue;
+          }
+          if (intra_cp.analyze_edge(succ, env).is_bottom()) {
+            // we found an infeasible edge
+            found_unreachable_block_or_infeasible_edge = true;
+            continue;
+          }
+          block_feasible_succs.push_back(succ);
+        }
+        ++it;
+      }
+    }
+    if (!found_unreachable_block_or_infeasible_edge &&
+        (!has_result || call_site_summary->result_used)) {
+      return boost::none;
+    }
   }
 
   static std::unordered_set<DexMethodRef*> no_pure_methods;
@@ -1539,11 +1564,15 @@ static boost::optional<ResidualCfgInfo> get_residual_cfg_info(
            },
            /* may_be_required_fn */
            [&](cfg::Block*block, IRInstruction*insn) -> bool {
-             if (!opcode::is_switch(insn->opcode()) &&
-                 !opcode::is_a_conditional_branch(insn->opcode())) {
-               return true;
+             if (opcode::is_switch(insn->opcode()) ||
+                 opcode::is_a_conditional_branch(insn->opcode())) {
+               return res.feasible_succs.at(block).size() > 1;
              }
-             return res.feasible_succs.at(block).size() > 1;
+             if (opcode::is_a_return(insn->opcode()) &&
+                 !call_site_summary->result_used) {
+               return false;
+             }
+             return true;
            })) {
     res.dead_instructions.insert(p.second->insn);
   }
@@ -1560,8 +1589,9 @@ static boost::optional<ResidualCfgInfo> get_residual_cfg_info(
  */
 static InlinedCost get_inlined_cost(
     bool is_static,
+    bool has_result,
     const IRCode* code,
-    const ConstantArguments* constant_arguments = nullptr,
+    const CallSiteSummary* call_site_summary = nullptr,
     const std::unordered_set<DexMethodRef*>* pure_methods = nullptr,
     constant_propagation::ImmutableAttributeAnalyzerState*
         immut_analyzer_state = nullptr) {
@@ -1593,8 +1623,9 @@ static InlinedCost get_inlined_cost(
   };
   size_t insn_size{0};
   if (code->editable_cfg_built()) {
-    auto rcfg = get_residual_cfg_info(is_static, code, constant_arguments,
-                                      pure_methods, immut_analyzer_state);
+    auto rcfg =
+        get_residual_cfg_info(is_static, has_result, code, call_site_summary,
+                              pure_methods, immut_analyzer_state);
     const auto& reachable_blocks =
         rcfg ? rcfg->reachable_blocks : code->cfg().blocks();
     auto cfg_blocks = code->cfg().blocks();
@@ -1610,21 +1641,21 @@ static InlinedCost get_inlined_cost(
 
     for (size_t i = 0; i < reachable_blocks.size(); ++i) {
       auto block = reachable_blocks.at(i);
-      insn_size += block->sum_opcode_sizes();
       for (auto& mie : InstructionIterable(block)) {
         auto insn = mie.insn;
         if (rcfg && rcfg->dead_instructions.count(insn)) {
           continue;
         }
         cost += get_inlined_cost(insn);
-        if (opcode::is_a_return(insn->opcode())) {
-          returns++;
-        }
         analyze_refs(insn);
+        insn_size += insn->size();
       }
       const auto& feasible_succs =
           rcfg ? rcfg->feasible_succs.at(block) : block->succs();
       cost += get_inlined_cost(reachable_blocks, i, feasible_succs);
+      if (block->branchingness() == opcode::Branchingness::BRANCH_RETURN) {
+        returns++;
+      }
     }
   } else {
     editable_cfg_adapter::iterate(code, [&](const MethodItemEntry& mie) {
@@ -1644,11 +1675,15 @@ static InlinedCost get_inlined_cost(
     cost += returns - 1;
   }
 
+  auto result_used =
+      call_site_summary ? call_site_summary->result_used : has_result;
+
   return {cost,
           (float)cost,
           (float)method_refs_set.size(),
           (float)other_refs_set.size(),
           !returns,
+          (float)result_used,
           std::move(dead_blocks),
           insn_size};
 }
@@ -1662,37 +1697,50 @@ InlinedCost MultiMethodInliner::get_inlined_cost(const DexMethod* callee) {
   std::mutex mutex;
   size_t callees_analyzed{0};
   size_t callees_unreachable_blocks{0};
+  size_t callees_unused_results{0};
   size_t callees_no_return{0};
-  InlinedCost inlined_cost{
-      ::get_inlined_cost(is_static(callee), callee->get_code())};
+  bool callee_is_static = is_static(callee);
+  bool callee_has_result = !callee->get_proto()->is_void();
+  InlinedCost inlined_cost{::get_inlined_cost(
+      callee_is_static, callee_has_result, callee->get_code())};
   std::unordered_map<std::string, InlinedCost> inlined_costs_keyed;
-  auto callee_constant_arguments_it = m_callee_constant_arguments.find(callee);
-  if (callee_constant_arguments_it != m_callee_constant_arguments.end() &&
-      inlined_cost.code <= MAX_COST_FOR_CONSTANT_PROPAGATION) {
-    const auto& callee_constant_arguments =
-        callee_constant_arguments_it->second;
-    auto process_key = [&](const ConstantArgumentsOccurrences& cao) {
+  auto callee_call_site_summary_occurrences_it =
+      m_callee_call_site_summary_occurrences.find(callee);
+  if (callee_call_site_summary_occurrences_it !=
+          m_callee_call_site_summary_occurrences.end() &&
+      inlined_cost.full_code <= MAX_COST_FOR_CONSTANT_PROPAGATION) {
+    const auto& callee_call_site_summary_occurrences =
+        callee_call_site_summary_occurrences_it->second;
+    auto process_key = [&](const CallSiteSummaryOccurrences& csso) {
       TraceContext context(callee);
-      const auto& constant_arguments = cao.first;
-      const auto count = cao.second;
+      const auto& call_site_summary = csso.first;
+      const auto count = csso.second;
       TRACE(INLINE, 5, "[too_many_callers] get_inlined_cost %s", SHOW(callee));
-      auto res = ::get_inlined_cost(is_static(callee), callee->get_code(),
-                                    &constant_arguments,
+      auto res = ::get_inlined_cost(callee_is_static, callee_has_result,
+                                    callee->get_code(), &call_site_summary,
                                     &m_shrinker.get_pure_methods(),
                                     m_shrinker.get_immut_analyzer_state());
       TRACE(INLINE, 4,
             "[too_many_callers] get_inlined_cost with %zu constant invoke "
-            "params %s @ %s: cost %f, method refs %f, other refs %f (dead "
+            "params %s %s @ %s: cost %f, method refs %f, other refs %f (dead "
             "blocks: %zu), %s, insn_size %zu",
-            constant_arguments.is_top() ? 0 : constant_arguments.size(),
-            get_key(constant_arguments).c_str(), SHOW(callee), res.code,
-            res.method_refs, res.other_refs, res.dead_blocks.size(),
-            res.no_return ? "no_return" : "return", res.insn_size);
+            call_site_summary.arguments.is_top()
+                ? 0
+                : call_site_summary.arguments.size(),
+            get_key(call_site_summary).c_str(),
+            call_site_summary.result_used ? "result-used" : "result-unused",
+            SHOW(callee), res.code, res.method_refs, res.other_refs,
+            res.dead_blocks.size(), res.no_return ? "no-return" : "return",
+            res.insn_size);
       std::lock_guard<std::mutex> lock_guard(mutex);
       callees_unreachable_blocks += res.dead_blocks.size() * count;
+      if (callee_has_result && !call_site_summary.result_used) {
+        callees_unused_results += count;
+      }
       inlined_cost.code += res.code * count;
       inlined_cost.method_refs += res.method_refs * count;
       inlined_cost.other_refs += res.other_refs * count;
+      inlined_cost.result_used += res.result_used * count;
       if (res.no_return) {
         callees_no_return++;
       } else {
@@ -1702,23 +1750,25 @@ InlinedCost MultiMethodInliner::get_inlined_cost(const DexMethod* callee) {
         inlined_cost.insn_size = res.insn_size;
       }
       callees_analyzed += count;
-      inlined_costs_keyed.emplace(get_key(constant_arguments), std::move(res));
+      inlined_costs_keyed.emplace(get_key(call_site_summary), std::move(res));
     };
 
-    if (callee_constant_arguments.size() > 1 &&
-        callee_constant_arguments.size() * inlined_cost.code >=
+    if (callee_call_site_summary_occurrences.size() > 1 &&
+        callee_call_site_summary_occurrences.size() * inlined_cost.full_code >=
             MIN_COST_FOR_PARALLELIZATION) {
       // TODO: This parallelization happens independently (in addition to) the
       // parallelization via m_async_method_executor. This should be combined,
       // using a single thread pool.
-      inlined_cost = {inlined_cost.full_code, 0, 0, 0, true, {}, 0};
+      inlined_cost = {
+          inlined_cost.full_code, 0.0f, 0.0f, 0.0f, true, 0.0f, {}, 0};
       auto num_threads = std::min(redex_parallel::default_num_threads(),
-                                  callee_constant_arguments.size());
-      workqueue_run<ConstantArgumentsOccurrences>(
-          process_key, callee_constant_arguments, num_threads);
+                                  callee_call_site_summary_occurrences.size());
+      workqueue_run<CallSiteSummaryOccurrences>(
+          process_key, callee_call_site_summary_occurrences, num_threads);
     } else {
-      inlined_cost = {inlined_cost.full_code, 0, 0, 0, true, {}, 0};
-      for (auto& p : callee_constant_arguments) {
+      inlined_cost = {
+          inlined_cost.full_code, 0.0f, 0.0f, 0.0f, true, 0.0f, {}, 0};
+      for (auto& p : callee_call_site_summary_occurrences) {
         process_key(p);
       }
     }
@@ -1731,6 +1781,7 @@ InlinedCost MultiMethodInliner::get_inlined_cost(const DexMethod* callee) {
         inlined_cost.method_refs / callees_analyzed,
         inlined_cost.other_refs / callees_analyzed,
         inlined_cost.no_return,
+        inlined_cost.result_used / callees_analyzed,
         {},
         inlined_cost.insn_size,
     };
@@ -1753,6 +1804,7 @@ InlinedCost MultiMethodInliner::get_inlined_cost(const DexMethod* callee) {
           always_assert(value->method_refs == inlined_cost.method_refs);
           always_assert(value->other_refs == inlined_cost.other_refs);
           always_assert(value->no_return == inlined_cost.no_return);
+          always_assert(value->result_used == inlined_cost.result_used);
           always_assert(value->insn_size == inlined_cost.insn_size);
           return;
         }
@@ -1763,6 +1815,7 @@ InlinedCost MultiMethodInliner::get_inlined_cost(const DexMethod* callee) {
         info.constant_invoke_callees_analyzed += callees_analyzed;
         info.constant_invoke_callees_unreachable_blocks +=
             callees_unreachable_blocks;
+        info.constant_invoke_callees_unused_results += callees_unused_results;
         info.constant_invoke_callees_no_return += callees_no_return;
       });
   return inlined_cost;
@@ -1860,9 +1913,9 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
 
   // 2. Determine costs of keeping the invoke instruction
 
-  size_t invoke_cost = get_invoke_cost(callee);
+  float invoke_cost = get_invoke_cost(callee, inlined_cost.result_used);
   TRACE(INLINE, 3,
-        "[too_many_callers] %zu calls to %s; cost: inlined %f + %f, invoke %zu",
+        "[too_many_callers] %zu calls to %s; cost: inlined %f + %f, invoke %f",
         caller_count, SHOW(callee), inlined_cost.code, cross_dex_penalty,
         invoke_cost);
 
@@ -1905,16 +1958,16 @@ bool MultiMethodInliner::should_inline_at_call_site(
     bool* no_return,
     const std::unordered_set<cfg::Block*>** dead_blocks,
     size_t* insn_size) {
-  if (!m_call_constant_arguments.count_unsafe(invoke_insn)) {
+  if (!m_invoke_call_site_summaries.count_unsafe(invoke_insn)) {
     return false;
   }
-  auto& constant_arguments = m_call_constant_arguments.at_unsafe(invoke_insn);
+  auto& call_site_summary = m_invoke_call_site_summaries.at_unsafe(invoke_insn);
   auto opt_inlined_costs_keyed = m_inlined_costs_keyed.get(
       callee, std::shared_ptr<std::unordered_map<std::string, InlinedCost>>());
   if (!opt_inlined_costs_keyed) {
     return false;
   }
-  auto key = get_key(constant_arguments);
+  auto key = get_key(call_site_summary);
   auto it = opt_inlined_costs_keyed->find(key);
   if (it == opt_inlined_costs_keyed->end()) {
     return false;
@@ -1932,7 +1985,7 @@ bool MultiMethodInliner::should_inline_at_call_site(
     }
   }
 
-  size_t invoke_cost = get_invoke_cost(callee);
+  float invoke_cost = get_invoke_cost(callee, inlined_cost.result_used);
   if (inlined_cost.code + cross_dex_penalty > invoke_cost) {
     *no_return = inlined_cost.no_return;
     return false;

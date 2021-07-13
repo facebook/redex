@@ -1323,3 +1323,122 @@ TEST_F(MethodInlineTest, visibility_change_static_invoke) {
       assembler::ircode_from_string(nested_callee_expected_str);
   EXPECT_CODE_EQ(nested_callee_actual, nested_callee_expected.get());
 }
+
+TEST_F(MethodInlineTest, unused_result) {
+  auto foo_cls = create_a_class("LFoo;");
+  auto bar_cls = create_a_class("LBar;");
+
+  DexMethod* caller =
+      static_cast<DexMethod*>(DexMethod::make_method("LBar;.caller:()V"));
+  caller->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
+
+  DexMethod* callee =
+      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.callee:(I)I"));
+  callee->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
+
+  bar_cls->add_method(caller);
+
+  foo_cls->add_method(callee);
+
+  const auto& caller_str = R"(
+    (
+      (const v0 0)
+      (invoke-static (v0) "LFoo;.callee:(I)I")
+      (invoke-static (v0) "LFoo;.callee:(I)I")
+      (invoke-static (v0) "LFoo;.callee:(I)I")
+      (invoke-static (v0) "LFoo;.callee:(I)I")
+      (invoke-static (v0) "LFoo;.callee:(I)I")
+      (invoke-static (v0) "LFoo;.callee:(I)I")
+      (invoke-static (v0) "LFoo;.callee:(I)I")
+      (invoke-static (v0) "LFoo;.callee:(I)I")
+      (invoke-static (v0) "LFoo;.callee:(I)I")
+      (invoke-static (v0) "LFoo;.callee:(I)I")
+      (return-void)
+    )
+  )";
+
+  caller->set_code(assembler::ircode_from_string(caller_str));
+
+  const auto& callee_str = R"(
+    (
+      (load-param v0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (return v0)
+    )
+  )";
+
+  callee->set_code(assembler::ircode_from_string(callee_str));
+
+  ConcurrentMethodRefCache concurrent_resolve_cache;
+  auto concurrent_resolver = [&concurrent_resolve_cache](DexMethodRef* method,
+                                                         MethodSearch search) {
+    return resolve_method(method, search, concurrent_resolve_cache);
+  };
+
+  bool intra_dex = false;
+
+  DexStoresVector stores;
+  std::unordered_set<DexMethod*> candidates;
+  std::unordered_set<DexMethod*> expected_inlined;
+  {
+    DexStore store("root");
+    store.add_classes({});
+    store.add_classes({foo_cls, bar_cls});
+    stores.push_back(std::move(store));
+  }
+  {
+    candidates.insert(callee);
+    expected_inlined.insert(callee);
+  }
+  auto scope = build_class_scope(stores);
+  api::LevelChecker::init(0, scope);
+  inliner::InlinerConfig inliner_config;
+  inliner_config.populate(scope);
+  inliner_config.use_cfg_inliner = true;
+  inliner_config.multiple_callers = true;
+  inliner_config.use_call_site_summaries = true;
+  inliner_config.shrinker.run_local_dce = true;
+  inliner_config.shrinker.compute_pure_methods = false;
+
+  caller->get_code()->build_cfg(true);
+  callee->get_code()->build_cfg(true);
+
+  {
+    MultiMethodInliner inliner(scope, stores, candidates, concurrent_resolver,
+                               inliner_config, intra_dex ? IntraDex : InterDex,
+                               /* true_virtual_callers */ {},
+                               /* inline_for_speed */ nullptr,
+                               /* same_method_implementations */ nullptr,
+                               /* analyze_and_prune_inits */ false, {});
+    inliner.inline_methods();
+
+    auto inlined = inliner.get_inlined();
+    EXPECT_EQ(inlined.size(), expected_inlined.size());
+    for (auto method : expected_inlined) {
+      EXPECT_EQ(inlined.count(method), 1);
+    }
+  }
+
+  caller->get_code()->clear_cfg();
+  callee->get_code()->clear_cfg();
+
+  const auto& caller_expected_str = R"(
+    (
+      (.pos:dbg_0 "LBar;.caller:()V" UnknownSource 0)
+      (return-void)
+    )
+  )";
+
+  auto caller_actual = caller->get_code();
+  auto caller_expected = assembler::ircode_from_string(caller_expected_str);
+  EXPECT_CODE_EQ(caller_actual, caller_expected.get());
+}

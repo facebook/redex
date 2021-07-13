@@ -469,6 +469,8 @@ void run_inliner(DexStoresVector& stores,
   mgr.incr_metric(
       "constant_invoke_callees_unreachable_blocks",
       inliner.get_info().constant_invoke_callees_unreachable_blocks);
+  mgr.incr_metric("constant_invoke_callees_unused_results",
+                  inliner.get_info().constant_invoke_callees_unused_results);
   mgr.incr_metric("critical_path_length",
                   inliner.get_info().critical_path_length);
   mgr.incr_metric("methods_shrunk", shrinker.get_methods_shrunk());
