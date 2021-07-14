@@ -369,11 +369,10 @@ void MultiMethodInliner::inline_methods() {
   m_delayed_change_visibilities = std::make_unique<
       ConcurrentMap<DexMethod*, std::unordered_set<DexType*>>>();
 
-  // we want to inline bottom up, so as a first step we identify all the
-  // top level callers, then we recurse into all inlinable callees until we
-  // hit a leaf and we start inlining from there.
-  // First, we just gather data on caller/non-recursive-callees pairs for each
-  // stack depth.
+  // we want to inline bottom up, so as a first step, for all callers, we
+  // recurse into all inlinable callees until we hit a leaf and we start
+  // inlining from there. First, we just gather data on
+  // caller/non-recursive-callees pairs for each stack depth.
   std::unordered_map<DexMethod*, size_t> visited;
   CallerNonrecursiveCalleesByStackDepth
       caller_nonrecursive_callees_by_stack_depth;
@@ -388,9 +387,6 @@ void MultiMethodInliner::inline_methods() {
               compare_dexmethods);
     for (const auto caller : ordered_callers) {
       TraceContext context(caller);
-      // if the caller is not a top level keep going, it will be traversed
-      // when inlining a top level caller
-      if (callee_caller.find(caller) != callee_caller.end()) continue;
       const auto& callees = caller_callee.at(caller);
       auto stack_depth = compute_caller_nonrecursive_callees_by_stack_depth(
           caller, callees, &visited,
