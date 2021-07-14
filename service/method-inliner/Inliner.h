@@ -147,6 +147,13 @@ struct InlinedCost {
   std::unordered_set<cfg::Block*> dead_blocks;
   // Maximum or call-site specific estimated callee size after pruning
   size_t insn_size;
+
+  bool operator==(const InlinedCost& other) {
+    return full_code == other.full_code && code == other.code &&
+           method_refs == other.method_refs && other_refs == other.other_refs &&
+           no_return == other.no_return && result_used == other.result_used &&
+           dead_blocks == other.dead_blocks && insn_size == other.insn_size;
+  }
 };
 
 /**
@@ -407,9 +414,28 @@ class MultiMethodInliner {
   bool too_many_callers(const DexMethod* callee);
 
   /**
-   * Estimate inlined cost for a single invocation of a method.
+   * Estimate inlined cost for fully inlining a callee without using any
+   * summaries for pruning.
    */
-  InlinedCost get_inlined_cost(const DexMethod* callee);
+  const InlinedCost* get_fully_inlined_cost(const DexMethod* callee);
+
+  /**
+   * Estimate average inlined cost when inlining a callee, considering all
+   * call-site summaries for pruning.
+   */
+  const InlinedCost* get_average_inlined_cost(const DexMethod* callee);
+
+  /**
+   * Estimate inlined cost for a particular call-site, if available.
+   */
+  const InlinedCost* get_call_site_inlined_cost(
+      const IRInstruction* invoke_insn, const DexMethod* callee);
+
+  /**
+   * Estimate inlined cost for a particular call-site summary, if available.
+   */
+  const InlinedCost* get_call_site_inlined_cost(
+      const CallSiteSummary& call_site_summary, const DexMethod* callee);
 
   /**
    * Change visibilities of methods, assuming that`m_change_visibility` is
@@ -516,17 +542,19 @@ class MultiMethodInliner {
   std::unordered_map<DexMethod*, std::unordered_map<IRInstruction*, DexMethod*>>
       caller_virtual_callee;
 
-  // Cache of the inlined costs of each method after all its eligible callsites
-  // have been inlined.
-  mutable ConcurrentMap<const DexMethod*, boost::optional<InlinedCost>>
-      m_inlined_costs;
+  // Cache of the inlined costs of fully inlining a calle without using any
+  // summaries for pruning.
+  mutable ConcurrentMap<const DexMethod*, std::shared_ptr<InlinedCost>>
+      m_fully_inlined_costs;
+
+  // Cache of the average inlined costs of each method.
+  mutable ConcurrentMap<const DexMethod*, std::shared_ptr<InlinedCost>>
+      m_average_inlined_costs;
 
   // Cache of the inlined costs of each method and each constant-arguments key
-  // after all its eligible callsites have been inlined.
-  mutable ConcurrentMap<
-      const DexMethod*,
-      std::shared_ptr<std::unordered_map<std::string, InlinedCost>>>
-      m_inlined_costs_keyed;
+  // after pruning.
+  mutable ConcurrentMap<std::string, std::shared_ptr<InlinedCost>>
+      m_call_site_inlined_costs;
 
   /**
    * For all (reachable) invoked methods, list of constant arguments
