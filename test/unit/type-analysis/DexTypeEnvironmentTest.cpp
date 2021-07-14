@@ -70,6 +70,10 @@ struct DexTypeEnvironmentTest : public RedexTest {
     creator.set_super(m_type_a);
     creator.create();
 
+    m_a_array = type::make_array_type(m_type_a);
+    m_a1_array = type::make_array_type(m_type_a1);
+    m_a2_array = type::make_array_type(m_type_a2);
+
     m_type_a21 = DexType::make_type("LA21");
     creator = ClassCreator(m_type_a21);
     creator.set_super(m_type_a2);
@@ -187,6 +191,9 @@ struct DexTypeEnvironmentTest : public RedexTest {
   DexType* m_type_a2;
   DexType* m_type_a21;
   DexType* m_type_a211;
+  DexType* m_a_array;
+  DexType* m_a1_array;
+  DexType* m_a2_array;
 
   DexType* m_type_b;
   DexType* m_type_b1;
@@ -457,6 +464,74 @@ TEST_F(DexTypeEnvironmentTest, ArrayJoinTest) {
   sub1_array.join_with(sub3_nested_array);
   EXPECT_TRUE(sub1_array.is_top());
   EXPECT_FALSE(sub3_nested_array.is_top());
+}
+
+TEST_F(DexTypeEnvironmentTest, SingletonDexTypeDomainLeqTest) {
+  // top and bottom
+  auto top = SingletonDexTypeDomain::top();
+  auto domain_a = SingletonDexTypeDomain(m_type_a);
+  EXPECT_TRUE(top.is_top());
+  EXPECT_FALSE(top.is_bottom());
+  EXPECT_TRUE(domain_a.leq(top));
+  EXPECT_TRUE(SingletonDexTypeDomain::bottom().leq(domain_a));
+  domain_a.set_to_bottom();
+  EXPECT_TRUE(domain_a.is_bottom());
+  EXPECT_FALSE(domain_a.is_top());
+  EXPECT_TRUE(domain_a.leq(SingletonDexTypeDomain::top()));
+
+  // classes
+  domain_a = SingletonDexTypeDomain(m_type_a);
+  auto domain_a1 = SingletonDexTypeDomain(m_type_a1);
+  EXPECT_FALSE(domain_a.is_bottom());
+  EXPECT_FALSE(domain_a.is_top());
+  EXPECT_TRUE(domain_a1.leq(domain_a));
+  EXPECT_FALSE(domain_a.leq(domain_a1));
+
+  auto domain_a21 = SingletonDexTypeDomain(m_type_a21);
+  EXPECT_FALSE(domain_a21.is_bottom());
+  EXPECT_FALSE(domain_a21.is_top());
+  EXPECT_TRUE(domain_a21.leq(domain_a));
+  EXPECT_FALSE(domain_a.leq(domain_a21));
+
+  // interfaces
+  auto sub1 = SingletonDexTypeDomain(m_type_sub1);
+  auto if1 = SingletonDexTypeDomain(m_type_if1);
+  EXPECT_FALSE(sub1.is_bottom());
+  EXPECT_FALSE(sub1.is_top());
+  EXPECT_FALSE(if1.is_bottom());
+  EXPECT_FALSE(if1.is_top());
+  auto join = sub1.join(if1);
+  EXPECT_EQ(join, SingletonDexTypeDomain(if1));
+  EXPECT_TRUE(sub1.leq(if1));
+  EXPECT_TRUE(sub1.leq(join));
+  join = if1.join(sub1);
+  EXPECT_EQ(join, SingletonDexTypeDomain(if1));
+  EXPECT_TRUE(if1.leq(join));
+  EXPECT_FALSE(if1.leq(sub1));
+  auto obj = SingletonDexTypeDomain(type::java_lang_Object());
+  EXPECT_TRUE(sub1.leq(obj));
+  EXPECT_TRUE(if1.leq(obj));
+
+  // none
+  auto none = SingletonDexTypeDomain(nullptr);
+  EXPECT_FALSE(none.is_bottom());
+  EXPECT_FALSE(none.is_top());
+  EXPECT_TRUE(none.is_none());
+  EXPECT_TRUE(none.leq(obj));
+  EXPECT_FALSE(obj.leq(none));
+
+  // array
+  auto a_array = SingletonDexTypeDomain(m_a_array);
+  auto a1_array = SingletonDexTypeDomain(m_a1_array);
+  auto array_join = a_array.join(a1_array);
+  EXPECT_EQ(array_join, SingletonDexTypeDomain(m_a_array));
+  EXPECT_TRUE(a_array.leq(array_join));
+
+  a1_array = SingletonDexTypeDomain(m_a1_array);
+  auto a2_array = SingletonDexTypeDomain(m_a2_array);
+  array_join = a1_array.join(a2_array);
+  EXPECT_EQ(array_join, SingletonDexTypeDomain(m_a_array));
+  EXPECT_TRUE(a1_array.leq(array_join));
 }
 
 TEST_F(DexTypeEnvironmentTest, NullableDexTypeDomainTest) {
