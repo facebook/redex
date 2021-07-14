@@ -490,13 +490,6 @@ class MultiMethodInliner {
       const std::unordered_set<DexMethod*>& callers);
 
   /**
-   * If a callee has been registered for delayed shrinking, decrement the wait
-   * counter, and if zero, initiate shrinking asynchronously.
-   */
-  void decrement_delayed_shrinking_callee_wait_counts(
-      const std::unordered_set<DexMethod*>& callees);
-
-  /**
    * Whether inline_inlinables needs to deconstruct the caller's and callees'
    * code.
    */
@@ -590,11 +583,6 @@ class MultiMethodInliner {
   // For parallel execution, number of remaining callees any given caller is
   // still waiting for.
   ConcurrentMap<const DexMethod*, size_t> m_async_caller_wait_counts;
-
-  // For parallel execution, number of remaining callers any given delayed
-  // shrinking callee is still waiting for.
-  ConcurrentMap<const DexMethod*, size_t>
-      m_async_delayed_shrinking_callee_wait_counts;
 
   // Set of methods that need to be made static eventually. The destructor
   // of this class will do the necessary delayed work.
@@ -696,7 +684,4 @@ class MultiMethodInliner {
   const InliningInfo& get_info() { return info; }
 
   size_t get_callers() { return m_async_caller_wait_counts.size(); }
-  size_t get_delayed_shrinking_callees() {
-    return m_async_delayed_shrinking_callee_wait_counts.size();
-  }
 };

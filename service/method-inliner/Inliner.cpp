@@ -1065,22 +1065,13 @@ void MultiMethodInliner::async_postprocess_method(DexMethod* method) {
 
 void MultiMethodInliner::postprocess_method(DexMethod* method) {
   TraceContext context(method);
-  bool delayed_shrinking = false;
   bool is_callee = !!m_async_callee_priorities.count(method);
   if (m_shrinker.enabled() && !method->rstate.no_optimizations()) {
-    if (is_callee && should_inline_fast(method)) {
-      // We know now that this method will get inlined regardless of the size
-      // of its code. Therefore, we can delay shrinking, to unblock further
-      // work more quickly.
-      delayed_shrinking = true;
-    } else {
-      m_shrinker.shrink_method(method);
-    }
+    m_shrinker.shrink_method(method);
   }
 
   if (!is_callee) {
     // This method isn't the callee of another caller, so we can stop here.
-    always_assert(!delayed_shrinking);
     return;
   }
 
@@ -1093,10 +1084,6 @@ void MultiMethodInliner::postprocess_method(DexMethod* method) {
   }
 
   auto& callers = m_async_callee_callers.at(method);
-  if (delayed_shrinking) {
-    m_async_delayed_shrinking_callee_wait_counts.emplace(method,
-                                                         callers.size());
-  }
   decrement_caller_wait_counts(callers);
 }
 
@@ -1113,40 +1100,18 @@ void MultiMethodInliner::decrement_caller_wait_counts(
         // TODO: Support parallel execution without pre-deconstructed cfgs.
         auto& callees = m_async_caller_callees.at(caller);
         inline_callees(caller, callees, /* filter_via_should_inline */ true);
-        decrement_delayed_shrinking_callee_wait_counts(callees);
         async_postprocess_method(caller);
       } else {
         // We can process inlining concurrently!
         async_prioritized_method_execute(caller, [caller, this]() {
           auto& callees = m_async_caller_callees.at(caller);
           inline_callees(caller, callees, /* filter_via_should_inline */ true);
-          decrement_delayed_shrinking_callee_wait_counts(callees);
           if (m_shrinker.enabled() ||
               m_async_callee_priorities.count(caller) != 0) {
             postprocess_method(caller);
           }
         });
       }
-    }
-  }
-}
-
-void MultiMethodInliner::decrement_delayed_shrinking_callee_wait_counts(
-    const std::unordered_set<DexMethod*>& callees) {
-  for (auto callee : callees) {
-    if (!m_async_delayed_shrinking_callee_wait_counts.count(callee)) {
-      continue;
-    }
-
-    bool callee_ready = false;
-    m_async_delayed_shrinking_callee_wait_counts.update(
-        callee, [&](const DexMethod*, size_t& value, bool /*exists*/) {
-          callee_ready = --value == 0;
-        });
-    if (callee_ready) {
-      int priority = std::numeric_limits<int>::min();
-      m_async_method_executor.post(
-          priority, [callee, this]() { m_shrinker.shrink_method(callee); });
     }
   }
 }
