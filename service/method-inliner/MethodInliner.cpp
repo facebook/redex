@@ -457,9 +457,16 @@ void run_inliner(DexStoresVector& stores,
                   inliner.get_info().known_public_methods);
   mgr.incr_metric("constant_invoke_callers_analyzed",
                   inliner.get_info().constant_invoke_callers_analyzed);
+  mgr.incr_metric("constant_invoke_callers_unreachable",
+                  inliner.get_info().constant_invoke_callers_unreachable);
+  mgr.incr_metric("constant_invoke_callers_incomplete",
+                  inliner.get_info().constant_invoke_callers_incomplete);
   mgr.incr_metric(
       "constant_invoke_callers_unreachable_blocks",
       inliner.get_info().constant_invoke_callers_unreachable_blocks);
+  mgr.incr_metric(
+      "constant_invoke_callers_critical_path_length",
+      inliner.get_info().constant_invoke_callers_critical_path_length);
   mgr.incr_metric("constant_invoke_callees_analyzed",
                   inliner.get_info().constant_invoke_callees_analyzed);
   mgr.incr_metric("constant_invoke_callees_no_return",

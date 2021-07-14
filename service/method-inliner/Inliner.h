@@ -451,7 +451,9 @@ class MultiMethodInliner {
    * are constants.
    */
   InvokeCallSiteSummariesAndDeadBlocks get_invoke_call_site_summaries(
-      DexMethod* caller, const std::unordered_map<DexMethod*, size_t>& callees);
+      DexMethod* caller,
+      const std::unordered_map<DexMethod*, size_t>& callees,
+      const ConstantEnvironment& initial_env);
 
   /**
    * Build up constant-arguments information for all invoked methods.
@@ -619,11 +621,14 @@ class MultiMethodInliner {
     std::atomic<size_t> cross_store{0};
     std::atomic<size_t> caller_too_large{0};
     std::atomic<size_t> constant_invoke_callers_analyzed{0};
+    std::atomic<size_t> constant_invoke_callers_unreachable{0};
+    std::atomic<size_t> constant_invoke_callers_incomplete{0};
     std::atomic<size_t> constant_invoke_callers_unreachable_blocks{0};
     std::atomic<size_t> constant_invoke_callees_analyzed{0};
     std::atomic<size_t> constant_invoke_callees_unreachable_blocks{0};
     std::atomic<size_t> constant_invoke_callees_unused_results{0};
     std::atomic<size_t> constant_invoke_callees_no_return{0};
+    std::atomic<size_t> constant_invoke_callers_critical_path_length{0};
   };
   InliningInfo info;
 

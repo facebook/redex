@@ -121,9 +121,11 @@ class PriorityThreadPoolDAGScheduler {
 
  public:
   explicit PriorityThreadPoolDAGScheduler(
-      Executor executor,
+      Executor executor = [](Task) {},
       int num_threads = redex_parallel::default_num_threads())
       : m_priority_thread_pool(num_threads), m_executor(executor) {}
+
+  void set_executor(Executor executor) { m_executor = std::move(executor); }
 
   PriorityThreadPool& get_thread_pool() { return m_priority_thread_pool; }
 

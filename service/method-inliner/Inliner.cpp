@@ -308,20 +308,80 @@ void MultiMethodInliner::compute_call_site_summaries() {
     std::unordered_map<std::string, CallSiteSummary> call_site_summaries;
     std::unordered_map<std::string, size_t> occurrences;
   };
-  ConcurrentMap<DexMethod*, CalleeInfo> concurrent_callee_infos;
-  auto wq = workqueue_foreach<DexMethod*>(
-      [&](DexMethod* caller) {
-        auto& callees = caller_callee.at(caller);
-        auto res = get_invoke_call_site_summaries(caller, callees);
-        for (auto& p : res.invoke_call_site_summaries) {
-          auto insn = p.first->insn;
-          auto callee = get_callee(caller, insn);
-          const auto& call_site_summary = p.second;
-          auto key = get_key(call_site_summary);
-          concurrent_callee_infos.update(callee, [&](const DexMethod*,
-                                                     CalleeInfo& ci,
-                                                     bool /* exists */) {
-            auto q = ci.call_site_summaries.emplace(key, call_site_summary);
+
+  // We'll do a top-down traversal of all call-sites, in order to propagate
+  // call-site information from outer call-sites to nested call-sites, improving
+  // the precision of the analysis. This is effectively an inter-procedural
+  // constant-propagation analysis, but we are operating on a reduced call-graph
+  // as recursion has been broken by eliminating some call-sites from
+  // consideration, and we are only considering those methods that are involved
+  // in an inlinable caller-callee relationship, which excludes much of true
+  // virtual methods.
+  PriorityThreadPoolDAGScheduler<DexMethod*> summaries_scheduler;
+
+  ConcurrentMap<DexMethod*, std::shared_ptr<CalleeInfo>>
+      concurrent_callee_infos;
+
+  // Helper function to retrieve a list of callers of a callee such that all
+  // possible call-sites to the callee are in the returned callers.
+  auto get_dependencies =
+      [&](DexMethod* callee) -> std::unordered_map<DexMethod*, size_t>* {
+    auto it = callee_caller.find(callee);
+    if (it == callee_caller.end() || m_recursive_callees.count(callee) ||
+        root(callee) || !can_rename(callee) ||
+        true_virtual_callees.count(callee)) {
+      return nullptr;
+    }
+    // If we get here, then we know all possible call-sites to the callee, and
+    // they reside in the known list of callers.
+    return &it->second;
+  };
+
+  summaries_scheduler.set_executor([&](DexMethod* method) {
+    CallSiteArguments arguments;
+    if (!get_dependencies(method)) {
+      // There are no relevant callers from which we could gather incoming
+      // constant arguments.
+      arguments = CallSiteArguments::top();
+    } else {
+      auto ci = concurrent_callee_infos.get(method, nullptr);
+      if (!ci) {
+        // All callers were unreachable
+        arguments = CallSiteArguments::bottom();
+      } else {
+        // The only way to call this method is by going through a set of known
+        // call-sites. We join together all those incoming constant arguments.
+        always_assert(!ci->call_site_summaries.empty());
+        auto it = ci->call_site_summaries.begin();
+        arguments = it->second.arguments;
+        for (it++; it != ci->call_site_summaries.end(); it++) {
+          arguments.join_with(it->second.arguments);
+        }
+      }
+    }
+
+    if (arguments.is_bottom()) {
+      // unreachable
+      info.constant_invoke_callers_unreachable++;
+      return;
+    }
+    auto& callees = caller_callee.at(method);
+    ConstantEnvironment initial_env =
+        constant_propagation::interprocedural::env_with_params(
+            is_static(method), method->get_code(), arguments);
+    auto res = get_invoke_call_site_summaries(method, callees, initial_env);
+    for (auto& p : res.invoke_call_site_summaries) {
+      auto insn = p.first->insn;
+      auto callee = get_callee(method, insn);
+      auto call_site_summary = std::move(p.second);
+      auto key = get_key(call_site_summary);
+      concurrent_callee_infos.update(
+          callee, [&](const DexMethod*, std::shared_ptr<CalleeInfo>& ci,
+                      bool /* exists */) {
+            if (!ci) {
+              ci = std::make_shared<CalleeInfo>();
+            }
+            auto q = ci->call_site_summaries.emplace(key, call_site_summary);
             if (!q.second) {
               always_assert_log(
                   q.first->second.result_used == call_site_summary.result_used,
@@ -333,25 +393,35 @@ void MultiMethodInliner::compute_call_site_summaries() {
                   SHOW(q.first->second.arguments),
                   SHOW(call_site_summary.arguments));
             }
-            ++ci.occurrences[key];
+            ++ci->occurrences[key];
           });
-          m_invoke_call_site_summaries.emplace(insn, call_site_summary);
-        }
-        info.constant_invoke_callers_analyzed++;
-        info.constant_invoke_callers_unreachable_blocks += res.dead_blocks;
-      },
-      redex_parallel::default_num_threads());
+      m_invoke_call_site_summaries.emplace(insn, std::move(call_site_summary));
+    }
+    info.constant_invoke_callers_analyzed++;
+    info.constant_invoke_callers_unreachable_blocks += res.dead_blocks;
+  });
+
+  std::vector<DexMethod*> callers;
   for (auto& p : caller_callee) {
-    wq.add_item(p.first);
-  };
-  wq.run_all();
+    auto method = p.first;
+    callers.push_back(method);
+    auto dependencies = get_dependencies(method);
+    if (dependencies) {
+      for (auto& q : *dependencies) {
+        summaries_scheduler.add_dependency(method, q.first);
+      }
+    }
+  }
+  info.constant_invoke_callers_critical_path_length =
+      summaries_scheduler.run(callers.begin(), callers.end());
+
   for (auto& p : concurrent_callee_infos) {
     auto& v = m_callee_call_site_summary_occurrences[p.first];
-    const auto& ci = p.second;
-    for (const auto& q : ci.occurrences) {
+    auto ci = p.second;
+    for (const auto& q : ci->occurrences) {
       const auto& key = q.first;
       const auto& count = q.second;
-      v.emplace_back(ci.call_site_summaries.at(key), count);
+      v.emplace_back(ci->call_site_summaries.at(key), count);
     }
   }
 }
@@ -378,8 +448,6 @@ void MultiMethodInliner::inline_methods(bool methods_need_deconstruct) {
           need_deconstruct);
     }
   }
-
-  compute_call_site_summaries();
 
   // Inlining and shrinking initiated from within this method will be done
   // in parallel.
@@ -428,6 +496,8 @@ void MultiMethodInliner::inline_methods(bool methods_need_deconstruct) {
           std::max(info.max_call_stack_depth, stack_depth);
     }
   }
+
+  compute_call_site_summaries();
 
   // Second, compute caller priorities --- the callers get a priority assigned
   // that reflects how many other callers will be waiting for them.
@@ -525,7 +595,9 @@ size_t MultiMethodInliner::compute_caller_nonrecursive_callees(
 
 InvokeCallSiteSummariesAndDeadBlocks
 MultiMethodInliner::get_invoke_call_site_summaries(
-    DexMethod* caller, const std::unordered_map<DexMethod*, size_t>& callees) {
+    DexMethod* caller,
+    const std::unordered_map<DexMethod*, size_t>& callees,
+    const ConstantEnvironment& initial_env) {
   IRCode* code = caller->get_code();
 
   InvokeCallSiteSummariesAndDeadBlocks res;
@@ -537,8 +609,6 @@ MultiMethodInliner::get_invoke_call_site_summaries(
           m_shrinker.get_immut_analyzer_state(),
           constant_propagation::EnumFieldAnalyzerState::get(),
           constant_propagation::BoxedBooleanAnalyzerState::get(), nullptr));
-  auto initial_env = constant_propagation::interprocedural::env_with_params(
-      is_static(caller), code, {});
   intra_cp.run(initial_env);
   for (const auto& block : cfg.blocks()) {
     auto env = intra_cp.get_entry_state_at(block);
