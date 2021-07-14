@@ -21,6 +21,7 @@
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "Inliner.h"
+#include "LiveRange.h"
 #include "MethodOverrideGraph.h"
 #include "MethodProfiles.h"
 #include "ReachableClasses.h"
@@ -29,6 +30,7 @@
 #include "Shrinker.h"
 #include "Timer.h"
 #include "Walkers.h"
+#include "WorkQueue.h"
 
 namespace mog = method_override_graph;
 
@@ -268,26 +270,35 @@ void gather_true_virtual_methods(const mog::Graph& method_override_graph,
   });
 
   // Post processing candidates.
-  std::for_each(meth_caller.begin(), meth_caller.end(), [&](const auto& pair) {
-    DexMethod* callee = pair.first;
-    auto& caller_to_invocations = pair.second;
-    always_assert_log(methods->count(callee) == 0, "%s\n", SHOW(callee));
-    always_assert(callee->get_code());
-    // Not considering candidates that accessed type in their method body
-    // or returning a non primitive type.
-    if (!type::is_primitive(type::get_element_type_if_array(
-            callee->get_proto()->get_rtype()))) {
-      return;
-    }
-    for (auto& mie : InstructionIterable(callee->get_code())) {
-      auto insn = mie.insn;
-      if (insn->has_type() || insn->has_method() || insn->has_field()) {
-        return;
-      }
-    }
-    methods->insert(callee);
-    (*true_virtual_callers)[callee] = caller_to_invocations;
-  });
+  std::mutex mutex;
+  using WorkItem = std::pair<DexMethod*, CallerInsns>;
+  workqueue_run<WorkItem>(
+      [&](sparta::SpartaWorkerState<WorkItem>*, const WorkItem& pair) {
+        DexMethod* callee = pair.first;
+        auto& caller_to_invocations = pair.second;
+        always_assert_log(methods->count(callee) == 0, "%s\n", SHOW(callee));
+        auto code = callee->get_code();
+        always_assert(code);
+        // Not considering candidates that use the receiver.
+        // TODO: Instead, insert casts as necessary during inlining, and account
+        // for them in cost functions.
+        code->build_cfg(/* editable */ true);
+        live_range::Chains chains(code->cfg());
+        auto du_chains = chains.get_def_use_chains();
+        auto first_load_param =
+            InstructionIterable(code->cfg().get_param_instructions())
+                .begin()
+                ->insn;
+        code->clear_cfg();
+        if (du_chains.count(first_load_param)) {
+          return;
+        }
+
+        std::lock_guard<std::mutex> lock_guard(mutex);
+        methods->insert(callee);
+        (*true_virtual_callers)[callee] = caller_to_invocations;
+      },
+      meth_caller);
 }
 
 } // namespace
