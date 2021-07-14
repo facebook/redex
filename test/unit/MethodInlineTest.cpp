@@ -958,7 +958,6 @@ TEST_F(MethodInlineTest, boxed_boolean) {
                              inliner_config, intra_dex ? IntraDex : InterDex,
                              /* true_virtual_callers */ {},
                              /* inline_for_speed */ nullptr,
-                             /* same_method_implementations */ nullptr,
                              /* analyze_and_prune_inits */ false, pure_methods);
   inliner.inline_methods();
   auto inlined = inliner.get_inlined();
@@ -1047,7 +1046,6 @@ TEST_F(MethodInlineTest, boxed_boolean_without_shrinking) {
                              inliner_config, intra_dex ? IntraDex : InterDex,
                              /* true_virtual_callers */ {},
                              /* inline_for_speed */ nullptr,
-                             /* same_method_implementations */ nullptr,
                              /* analyze_and_prune_inits */ false, pure_methods);
   inliner.inline_methods();
   auto inlined = inliner.get_inlined();
@@ -1232,7 +1230,6 @@ TEST_F(MethodInlineTest, visibility_change_static_invoke) {
                                inliner_config, intra_dex ? IntraDex : InterDex,
                                /* true_virtual_callers */ {},
                                /* inline_for_speed */ nullptr,
-                               /* same_method_implementations */ nullptr,
                                /* analyze_and_prune_inits */ false, {});
     inliner.inline_methods();
 
@@ -1407,7 +1404,6 @@ TEST_F(MethodInlineTest, unused_result) {
                                inliner_config, intra_dex ? IntraDex : InterDex,
                                /* true_virtual_callers */ {},
                                /* inline_for_speed */ nullptr,
-                               /* same_method_implementations */ nullptr,
                                /* analyze_and_prune_inits */ false, {});
     inliner.inline_methods();
 

@@ -78,8 +78,6 @@ MultiMethodInliner::MultiMethodInliner(
     MultiMethodInlinerMode mode /* default is InterDex */,
     const CalleeCallerInsns& true_virtual_callers,
     InlineForSpeed* inline_for_speed,
-    const std::unordered_map<const DexMethod*, size_t>*
-        same_method_implementations,
     bool analyze_and_prune_inits,
     const std::unordered_set<DexMethodRef*>& configured_pure_methods,
     const std::unordered_set<DexString*>& configured_finalish_field_names)
@@ -88,7 +86,6 @@ MultiMethodInliner::MultiMethodInliner(
       m_config(config),
       m_mode(mode),
       m_inline_for_speed(inline_for_speed),
-      m_same_method_implementations(same_method_implementations),
       m_analyze_and_prune_inits(analyze_and_prune_inits),
       m_shrinker(stores,
                  scope,
@@ -1309,11 +1306,9 @@ bool MultiMethodInliner::should_inline_fast(const DexMethod* callee) {
   auto caller_count = callers.size();
   always_assert(caller_count > 0);
 
-  // non-root methods that are only ever called as often as there are
-  // "same methods" (usually once) should always be inlined,
+  // non-root methods that are only ever called once should always be inlined,
   // as the method can be removed afterwards
-  if (caller_count <= get_same_method_implementations(callee) &&
-      !root(callee)) {
+  if (caller_count <= 1 && !root(callee)) {
     return true;
   }
 
@@ -1858,19 +1853,6 @@ const InlinedCost* MultiMethodInliner::get_average_inlined_cost(
   return inlined_cost.get();
 }
 
-size_t MultiMethodInliner::get_same_method_implementations(
-    const DexMethod* callee) {
-  if (m_same_method_implementations == nullptr) {
-    return 1;
-  }
-
-  auto it = m_same_method_implementations->find(callee);
-  if (it != m_same_method_implementations->end()) {
-    return it->second;
-  }
-  return 1;
-}
-
 bool MultiMethodInliner::can_inline_init(const DexMethod* init_method) {
   auto opt_can_inline_init = m_can_inline_init.get(init_method, boost::none);
   if (opt_can_inline_init) {
@@ -1902,8 +1884,6 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
   const auto& callers = callee_caller.at(callee);
   auto caller_count = callers.size();
   always_assert(caller_count > 0);
-  auto same_method_implementations = get_same_method_implementations(callee);
-  always_assert(caller_count > same_method_implementations || root(callee));
 
   std::unordered_set<DexMethod*> callers_set(callers.begin(), callers.end());
 
@@ -1963,7 +1943,7 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
   // The cost of keeping a method amounts of somewhat fixed metadata overhead,
   // plus the method body, which we approximate with the inlined cost.
   size_t method_cost = COST_METHOD + inlined_cost->full_code;
-  auto methods_cost = method_cost * same_method_implementations;
+  auto methods_cost = method_cost;
 
   // If we inline invocations to this method everywhere, we could delete the
   // method. Is this worth it, given the number of callsites and costs

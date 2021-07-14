@@ -116,9 +116,7 @@ std::unordered_set<DexMethod*> gather_non_virtual_methods(
  * one of its implementor.
  */
 std::unordered_map<const DexMethod*, DexMethod*> get_same_implementation_map(
-    const Scope& scope,
-    const mog::Graph& method_override_graph,
-    std::unordered_map<const DexMethod*, size_t>* same_method_implementations) {
+    const Scope& scope, const mog::Graph& method_override_graph) {
   std::unordered_map<const DexMethod*, DexMethod*> method_to_implementations;
   walk::methods(scope, [&](DexMethod* method) {
     if (method->is_external() || root(method) || !method->is_virtual() ||
@@ -171,10 +169,6 @@ std::unordered_map<const DexMethod*, DexMethod*> get_same_implementation_map(
           [&](const DexMethod* method_to_update,
               DexMethod* representative_method) {
             method_to_implementations[method_to_update] = representative_method;
-            if (filtered_methods.size() > 1) {
-              auto& count = (*same_method_implementations)[method_to_update];
-              count = std::max(count, filtered_methods.size());
-            }
           };
       update_method_to_implementations(method, comparing_method);
       for (auto overriding_method : overriding_methods) {
@@ -195,16 +189,14 @@ using CallerInsns =
  * We are currently ruling out candidates that access field/methods or
  * return an object type.
  */
-void gather_true_virtual_methods(
-    const mog::Graph& method_override_graph,
-    const Scope& scope,
-    CalleeCallerInsns* true_virtual_callers,
-    std::unordered_set<DexMethod*>* methods,
-    std::unordered_map<const DexMethod*, size_t>* same_method_implementations) {
+void gather_true_virtual_methods(const mog::Graph& method_override_graph,
+                                 const Scope& scope,
+                                 CalleeCallerInsns* true_virtual_callers,
+                                 std::unordered_set<DexMethod*>* methods) {
   Timer t("gather_true_virtual_methods");
   auto non_virtual = mog::get_non_true_virtuals(method_override_graph, scope);
-  auto same_implementation_map = get_same_implementation_map(
-      scope, method_override_graph, same_method_implementations);
+  auto same_implementation_map =
+      get_same_implementation_map(scope, method_override_graph);
   std::unordered_set<DexMethod*> non_virtual_set{non_virtual.begin(),
                                                  non_virtual.end()};
   // Add mapping from callee to monomorphic callsites.
@@ -339,11 +331,9 @@ void run_inliner(DexStoresVector& stores,
   // what to do with constructors.
   bool analyze_and_prune_inits = true;
 
-  std::unordered_map<const DexMethod*, size_t> same_method_implementations;
   if (inliner_config.virtual_inline && inliner_config.true_virtual_inline) {
     gather_true_virtual_methods(*method_override_graph, scope,
-                                &true_virtual_callers, &candidates,
-                                &same_method_implementations);
+                                &true_virtual_callers, &candidates);
   }
   // keep a map from refs to defs or nullptr if no method was found
   ConcurrentMethodRefCache concurrent_resolved_refs;
@@ -362,7 +352,6 @@ void run_inliner(DexStoresVector& stores,
   MultiMethodInliner inliner(scope, stores, candidates, concurrent_resolver,
                              inliner_config, intra_dex ? IntraDex : InterDex,
                              true_virtual_callers, inline_for_speed,
-                             &same_method_implementations,
                              analyze_and_prune_inits, conf.get_pure_methods());
   inliner.inline_methods();
 

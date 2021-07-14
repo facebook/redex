@@ -181,8 +181,6 @@ class MultiMethodInliner {
       MultiMethodInlinerMode mode = InterDex,
       const CalleeCallerInsns& true_virtual_callers = {},
       InlineForSpeed* inline_for_speed = nullptr,
-      const std::unordered_map<const DexMethod*, size_t>*
-          same_method_implementations = nullptr,
       bool analyze_and_prune_inits = false,
       const std::unordered_set<DexMethodRef*>& configured_pure_methods = {},
       const std::unordered_set<DexString*>& configured_finalish_field_names =
@@ -512,8 +510,6 @@ class MultiMethodInliner {
   void async_prioritized_method_execute(DexMethod* method,
                                         const std::function<void()>& f);
 
-  size_t get_same_method_implementations(const DexMethod* callee);
-
   // Checks that...
   // - there are no assignments to (non-inherited) instance fields before
   //   a constructor call, and
@@ -682,11 +678,6 @@ class MultiMethodInliner {
 
   // Non-const to allow for caching behavior.
   InlineForSpeed* m_inline_for_speed;
-
-  // Represents the size of the largest same-method-implementation group that a
-  // method belongs in; the default value is 1.
-  const std::unordered_map<const DexMethod*, size_t>*
-      m_same_method_implementations;
 
   // Whether to do some deep analysis to determine if constructor candidates
   // can be safely inlined, and don't inline them otherwise.
