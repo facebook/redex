@@ -364,7 +364,7 @@ void run_inliner(DexStoresVector& stores,
                              inliner_config, intra_dex ? IntraDex : InterDex,
                              true_virtual_callers, inline_for_speed,
                              analyze_and_prune_inits, conf.get_pure_methods());
-  inliner.inline_methods();
+  inliner.inline_methods(/* need_deconstruct */ false);
 
   walk::parallel::code(scope,
                        [](DexMethod*, IRCode& code) { code.clear_cfg(); });

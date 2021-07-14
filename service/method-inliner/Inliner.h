@@ -191,7 +191,7 @@ class MultiMethodInliner {
   /**
    * attempt inlining for all candidates.
    */
-  void inline_methods();
+  void inline_methods(bool methods_need_deconstruct = true);
 
   /**
    * Return the set of unique inlined methods.
@@ -456,8 +456,7 @@ class MultiMethodInliner {
    * information about their arguments, i.e. whether particular arguments
    * are constants.
    */
-  boost::optional<InvokeCallSiteSummariesAndDeadBlocks>
-  get_invoke_call_site_summaries(
+  InvokeCallSiteSummariesAndDeadBlocks get_invoke_call_site_summaries(
       DexMethod* caller, const std::unordered_map<DexMethod*, size_t>& callees);
 
   /**

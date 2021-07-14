@@ -296,10 +296,7 @@ void MultiMethodInliner::compute_call_site_summaries() {
       [&](DexMethod* caller) {
         auto& callees = caller_callee.at(caller);
         auto res = get_invoke_call_site_summaries(caller, callees);
-        if (!res) {
-          return;
-        }
-        for (auto& p : res->invoke_call_site_summaries) {
+        for (auto& p : res.invoke_call_site_summaries) {
           auto insn = p.first->insn;
           auto callee = get_callee(caller, insn);
           const auto& call_site_summary = p.second;
@@ -324,7 +321,7 @@ void MultiMethodInliner::compute_call_site_summaries() {
           m_invoke_call_site_summaries.emplace(insn, call_site_summary);
         }
         info.constant_invoke_callers_analyzed++;
-        info.constant_invoke_callers_unreachable_blocks += res->dead_blocks;
+        info.constant_invoke_callers_unreachable_blocks += res.dead_blocks;
       },
       redex_parallel::default_num_threads());
   for (auto& p : caller_callee) {
@@ -342,7 +339,29 @@ void MultiMethodInliner::compute_call_site_summaries() {
   }
 }
 
-void MultiMethodInliner::inline_methods() {
+void MultiMethodInliner::inline_methods(bool methods_need_deconstruct) {
+  std::unordered_set<IRCode*> need_deconstruct;
+  if (methods_need_deconstruct) {
+    for (auto& p : caller_callee) {
+      need_deconstruct.insert(const_cast<IRCode*>(p.first->get_code()));
+    }
+    for (auto& p : callee_caller) {
+      need_deconstruct.insert(const_cast<IRCode*>(p.first->get_code()));
+    }
+    for (auto it = need_deconstruct.begin(); it != need_deconstruct.end();) {
+      if ((*it)->editable_cfg_built()) {
+        it = need_deconstruct.erase(it);
+      } else {
+        it++;
+      }
+    }
+    if (!need_deconstruct.empty()) {
+      workqueue_run<IRCode*>(
+          [](IRCode* code) { code->build_cfg(/* editable */ true); },
+          need_deconstruct);
+    }
+  }
+
   compute_call_site_summaries();
 
   // Inlining and shrinking initiated from within this method will be done
@@ -466,6 +485,11 @@ void MultiMethodInliner::inline_methods() {
   m_async_method_executor.join();
   delayed_change_visibilities();
   info.waited_seconds = m_async_method_executor.get_waited_seconds();
+
+  if (!need_deconstruct.empty()) {
+    workqueue_run<IRCode*>([](IRCode* code) { code->clear_cfg(); },
+                           need_deconstruct);
+  }
 }
 
 size_t MultiMethodInliner::compute_caller_nonrecursive_callees_by_stack_depth(
@@ -529,13 +553,10 @@ size_t MultiMethodInliner::compute_caller_nonrecursive_callees_by_stack_depth(
   return stack_depth;
 }
 
-boost::optional<InvokeCallSiteSummariesAndDeadBlocks>
+InvokeCallSiteSummariesAndDeadBlocks
 MultiMethodInliner::get_invoke_call_site_summaries(
     DexMethod* caller, const std::unordered_map<DexMethod*, size_t>& callees) {
   IRCode* code = caller->get_code();
-  if (!code->editable_cfg_built()) {
-    return boost::none;
-  }
 
   InvokeCallSiteSummariesAndDeadBlocks res;
   auto& cfg = code->cfg();
@@ -1095,22 +1116,16 @@ void MultiMethodInliner::decrement_caller_wait_counts(
           caller_ready = --value == 0;
         });
     if (caller_ready) {
-      if (inline_inlinables_need_deconstruct(caller)) {
-        // TODO: Support parallel execution without pre-deconstructed cfgs.
+      always_assert(!inline_inlinables_need_deconstruct(caller));
+      // We can process inlining concurrently!
+      async_prioritized_method_execute(caller, [caller, this]() {
         auto& callees = m_async_caller_callees.at(caller);
         inline_callees(caller, callees, /* filter_via_should_inline */ true);
-        async_postprocess_method(caller);
-      } else {
-        // We can process inlining concurrently!
-        async_prioritized_method_execute(caller, [caller, this]() {
-          auto& callees = m_async_caller_callees.at(caller);
-          inline_callees(caller, callees, /* filter_via_should_inline */ true);
-          if (m_shrinker.enabled() ||
-              m_async_callee_priorities.count(caller) != 0) {
-            postprocess_method(caller);
-          }
-        });
-      }
+        if (m_shrinker.enabled() ||
+            m_async_callee_priorities.count(caller) != 0) {
+          postprocess_method(caller);
+        }
+      });
     }
   }
 }
