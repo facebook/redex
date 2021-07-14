@@ -507,6 +507,7 @@ size_t MultiMethodInliner::compute_caller_nonrecursive_callees_by_stack_depth(
     if (callee_stack_depth == std::numeric_limits<size_t>::max()) {
       // we've found recursion in the current call stack
       info.recursive += callees.at(callee);
+      m_recursive_callees.insert(callee);
       continue;
     }
 
@@ -1290,11 +1291,11 @@ bool MultiMethodInliner::should_inline_fast(const DexMethod* callee) {
     return true;
   }
 
-  const auto& callers = callee_caller.at(callee);
-
   // non-root methods that are only ever called once should always be inlined,
   // as the method can be removed afterwards
-  if (callers.size() == 1 && callers.begin()->second == 1 && !root(callee)) {
+  const auto& callers = callee_caller.at(callee);
+  if (callers.size() == 1 && callers.begin()->second == 1 && !root(callee) &&
+      !m_recursive_callees.count(callee)) {
     return true;
   }
 
@@ -1862,8 +1863,8 @@ bool MultiMethodInliner::can_inline_init(const DexMethod* init_method) {
 }
 
 bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
-  if (root(callee) || true_virtual_callees.count(callee) ||
-      !m_config.multiple_callers) {
+  if (root(callee) || m_recursive_callees.count(callee) ||
+      true_virtual_callees.count(callee) || !m_config.multiple_callers) {
     return true;
   }
 
