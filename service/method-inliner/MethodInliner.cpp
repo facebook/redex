@@ -201,6 +201,7 @@ void gather_true_virtual_methods(
     CalleeCallerInsns* true_virtual_callers,
     std::unordered_set<DexMethod*>* methods,
     std::unordered_map<const DexMethod*, size_t>* same_method_implementations) {
+  Timer t("gather_true_virtual_methods");
   auto non_virtual = mog::get_non_true_virtuals(method_override_graph, scope);
   auto same_implementation_map = get_same_implementation_map(
       scope, method_override_graph, same_method_implementations);
