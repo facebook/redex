@@ -546,6 +546,8 @@ class MultiMethodInliner {
   std::unordered_map<DexMethod*, std::unordered_map<IRInstruction*, DexMethod*>>
       caller_virtual_callee;
 
+  std::unordered_set<const DexMethod*> true_virtual_callees;
+
   // Cache of the inlined costs of fully inlining a calle without using any
   // summaries for pruning.
   mutable ConcurrentMap<const DexMethod*, std::shared_ptr<InlinedCost>>

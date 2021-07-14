@@ -97,9 +97,11 @@ MultiMethodInliner::MultiMethodInliner(
                  configured_finalish_field_names) {
   Timer t("MultiMethodInliner construction");
   for (const auto& callee_callers : true_virtual_callers) {
+    auto callee = callee_callers.first;
+    true_virtual_callees.insert(callee);
     for (const auto& caller_insns : callee_callers.second) {
       for (auto insn : caller_insns.second) {
-        caller_virtual_callee[caller_insns.first][insn] = callee_callers.first;
+        caller_virtual_callee[caller_insns.first][insn] = callee;
       }
     }
   }
@@ -1892,7 +1894,8 @@ bool MultiMethodInliner::can_inline_init(const DexMethod* init_method) {
 }
 
 bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
-  if (root(callee) || !m_config.multiple_callers) {
+  if (root(callee) || true_virtual_callees.count(callee) ||
+      !m_config.multiple_callers) {
     return true;
   }
 
