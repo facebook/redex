@@ -18,6 +18,7 @@
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "PatriciaTreeSet.h"
 #include "ReducedProductAbstractDomain.h"
+#include "TypeUtil.h"
 
 namespace dtv_impl {
 
@@ -59,7 +60,20 @@ class DexTypeValue final : public sparta::AbstractValue<DexTypeValue> {
    */
   bool is_none() const { return m_dex_type == nullptr; }
 
-  bool leq(const DexTypeValue& other) const override { return equals(other); }
+  bool leq(const DexTypeValue& other) const override {
+    if (equals(other)) {
+      return true;
+    }
+    if (is_none()) {
+      return true;
+    }
+    if (other.is_none()) {
+      return false;
+    }
+    auto l = get_dex_type();
+    auto r = other.get_dex_type();
+    return type::check_cast(l, r);
+  }
 
   bool equals(const DexTypeValue& other) const override {
     return m_dex_type == other.get_dex_type();
