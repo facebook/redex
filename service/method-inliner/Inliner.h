@@ -15,7 +15,7 @@
 #include "IRCode.h"
 #include "MethodProfiles.h"
 #include "PatriciaTreeSet.h"
-#include "PriorityThreadPool.h"
+#include "PriorityThreadPoolDAGScheduler.h"
 #include "Resolver.h"
 #include "Shrinker.h"
 
@@ -239,21 +239,15 @@ class MultiMethodInliner {
   shrinker::Shrinker& get_shrinker() { return m_shrinker; }
 
  private:
-  using CallerNonrecursiveCalleesByStackDepth = std::unordered_map<
-      size_t,
-      std::vector<std::pair<DexMethod*, std::unordered_set<DexMethod*>>>>;
-
   /**
    * Determine order in which to inline.
    * Recurse in a callee if that has inlinable candidates of its own.
    * Inlining is bottom up.
    */
-  size_t compute_caller_nonrecursive_callees_by_stack_depth(
+  size_t compute_caller_nonrecursive_callees(
       DexMethod* caller,
       const std::unordered_map<DexMethod*, size_t>& callees,
-      std::unordered_map<DexMethod*, size_t>* visited,
-      CallerNonrecursiveCalleesByStackDepth*
-          caller_nonrecursive_callees_by_stack_depth);
+      std::unordered_map<DexMethod*, size_t>* visited);
 
   DexMethod* get_callee(DexMethod* caller, IRInstruction* insn);
 
@@ -465,14 +459,9 @@ class MultiMethodInliner {
   void compute_call_site_summaries();
 
   /**
-   * Initiate post-processing a method asynchronously.
-   */
-  void async_postprocess_method(DexMethod* method);
-
-  /**
    * Initiate computation of various callee costs asynchronously.
    */
-  void async_compute_callee_costs(DexMethod* method);
+  void compute_callee_costs(DexMethod* method);
 
   /**
    * Post-processing a method synchronously.
@@ -486,29 +475,10 @@ class MultiMethodInliner {
   void shrink_method(DexMethod* method);
 
   /**
-   * For callers waiting for callees to become ready, decrement their wait
-   * counter, and if zero, initiate inlining and postprocessing.
-   */
-  void decrement_caller_wait_counts(
-      const std::unordered_set<DexMethod*>& callers);
-
-  /**
-   * For callees waiting for various callee costs to become ready, decrement
-   * their wait counter, and if zero, initiate inlining.
-   */
-  void decrement_callee_costs_wait_counts(DexMethod* callee);
-
-  /**
    * Whether inline_inlinables needs to deconstruct the caller's and callees'
    * code.
    */
   bool inline_inlinables_need_deconstruct(DexMethod* method);
-
-  /**
-   * Execute asynchronously using a method's priority.
-   */
-  void async_prioritized_method_execute(DexMethod* method,
-                                        const std::function<void()>& f);
 
   // Checks that...
   // - there are no assignments to (non-inherited) instance fields before
@@ -539,6 +509,11 @@ class MultiMethodInliner {
 
   std::unordered_map<DexMethod*, std::unordered_map<DexMethod*, size_t>>
       caller_callee;
+
+  std::unordered_map<DexMethod*, std::unordered_set<DexMethod*>>
+      m_caller_nonrecursive_callee;
+
+  std::unordered_set<DexMethod*> m_nonrecursive_callees;
 
   std::unordered_map<DexMethod*, std::unordered_map<IRInstruction*, DexMethod*>>
       caller_virtual_callee;
@@ -577,28 +552,7 @@ class MultiMethodInliner {
   // Priority thread pool to handle parallel processing of methods, either
   // shrinking initially / after inlining into them, or even to inline in
   // parallel. By default, parallelism is disabled num_threads = 0).
-  PriorityThreadPool m_async_method_executor{0};
-
-  // For parallel execution, priorities for methods, to minimize waiting.
-  std::unordered_map<const DexMethod*, int> m_async_callee_priorities;
-
-  // For parallel execution, callee-callers relationships. The induced tree
-  // has been pruned of recursive relationships.
-  std::unordered_map<const DexMethod*, std::unordered_set<DexMethod*>>
-      m_async_callee_callers;
-
-  // For parallel execution, caller-callees relationships. The induced tree
-  // has been pruned of recursive relationships.
-  std::unordered_map<const DexMethod*, std::unordered_set<DexMethod*>>
-      m_async_caller_callees;
-
-  // For parallel execution, number of remaining callees any given caller is
-  // still waiting for.
-  ConcurrentMap<const DexMethod*, size_t> m_async_caller_wait_counts;
-
-  // For parallel execution, number of remaining call-site-inlined-costs any
-  // given callee is still waiting for.
-  ConcurrentMap<const DexMethod*, size_t> m_async_callee_costs_wait_counts;
+  PriorityThreadPoolDAGScheduler<DexMethod*> m_scheduler;
 
   // Set of methods that need to be made static eventually. The destructor
   // of this class will do the necessary delayed work.
@@ -694,5 +648,5 @@ class MultiMethodInliner {
  public:
   const InliningInfo& get_info() { return info; }
 
-  size_t get_callers() { return m_async_caller_wait_counts.size(); }
+  size_t get_callers() { return m_caller_nonrecursive_callee.size(); }
 };

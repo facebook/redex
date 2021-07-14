@@ -82,6 +82,23 @@ MultiMethodInliner::MultiMethodInliner(
     const std::unordered_set<DexMethodRef*>& configured_pure_methods,
     const std::unordered_set<DexString*>& configured_finalish_field_names)
     : m_concurrent_resolver(std::move(concurrent_resolve_fn)),
+      m_scheduler(
+          [this](DexMethod* method) {
+            auto it = m_caller_nonrecursive_callee.find(method);
+            if (it != m_caller_nonrecursive_callee.end()) {
+              always_assert(!inline_inlinables_need_deconstruct(method));
+              auto& callees = it->second;
+              inline_callees(method, callees,
+                             /* filter_via_should_inline */ true);
+              // We schedule the post-processing, to allow other unlocked
+              // higher-priority tasks take precedence
+              m_scheduler.augment(
+                  method, [this, method] { postprocess_method(method); });
+            } else {
+              postprocess_method(method);
+            }
+          },
+          0),
       m_scope(scope),
       m_config(config),
       m_mode(mode),
@@ -366,7 +383,7 @@ void MultiMethodInliner::inline_methods(bool methods_need_deconstruct) {
 
   // Inlining and shrinking initiated from within this method will be done
   // in parallel.
-  m_async_method_executor.set_num_threads(
+  m_scheduler.get_thread_pool().set_num_threads(
       m_config.debug ? 1 : redex_parallel::default_num_threads());
 
   // The order in which we inline is such that once a callee is considered to
@@ -393,8 +410,6 @@ void MultiMethodInliner::inline_methods(bool methods_need_deconstruct) {
   // inlining from there. First, we just gather data on
   // caller/non-recursive-callees pairs for each stack depth.
   std::unordered_map<DexMethod*, size_t> visited;
-  CallerNonrecursiveCalleesByStackDepth
-      caller_nonrecursive_callees_by_stack_depth;
   {
     Timer t("compute_caller_nonrecursive_callees_by_stack_depth");
     std::vector<DexMethod*> ordered_callers;
@@ -407,84 +422,41 @@ void MultiMethodInliner::inline_methods(bool methods_need_deconstruct) {
     for (const auto caller : ordered_callers) {
       TraceContext context(caller);
       const auto& callees = caller_callee.at(caller);
-      auto stack_depth = compute_caller_nonrecursive_callees_by_stack_depth(
-          caller, callees, &visited,
-          &caller_nonrecursive_callees_by_stack_depth);
+      auto stack_depth =
+          compute_caller_nonrecursive_callees(caller, callees, &visited);
       info.max_call_stack_depth =
           std::max(info.max_call_stack_depth, stack_depth);
     }
   }
 
-  std::vector<size_t> ordered_stack_depths;
-  for (auto& p : caller_nonrecursive_callees_by_stack_depth) {
-    ordered_stack_depths.push_back(p.first);
-  }
-  std::sort(ordered_stack_depths.begin(), ordered_stack_depths.end());
-
   // Second, compute caller priorities --- the callers get a priority assigned
   // that reflects how many other callers will be waiting for them.
-  // We also compute the set of callers and some other auxiliary data structures
-  // along the way.
-  // TODO: Instead of just considering the length of the critical path as the
-  // priority, consider some variations, e.g. include the fan-out of the
-  // dependencies divided by the number of threads.
-  for (int i = ((int)ordered_stack_depths.size()) - 1; i >= 0; i--) {
-    auto stack_depth = ordered_stack_depths.at(i);
-    auto& caller_nonrecursive_callees =
-        caller_nonrecursive_callees_by_stack_depth.at(stack_depth);
-    for (auto& p : caller_nonrecursive_callees) {
-      auto caller = p.first;
-      auto& callees = p.second;
-      always_assert(!callees.empty());
-      int caller_priority = 0;
-      auto method_priorities_it = m_async_callee_priorities.find(caller);
-      if (method_priorities_it != m_async_callee_priorities.end()) {
-        caller_priority = method_priorities_it->second;
-      }
-      for (auto callee : callees) {
-        auto& callee_priority = m_async_callee_priorities[callee];
-        callee_priority = std::max(callee_priority, caller_priority + 1);
-        m_async_callee_callers[callee].insert(caller);
-      }
-      m_async_caller_wait_counts.emplace(caller, callees.size());
-      m_async_caller_callees.emplace(caller, callees);
-    }
-  }
-  for (auto& p : m_async_callee_callers) {
-    auto callee = p.first;
-    auto& callers = p.second;
-    auto& callee_priority = m_async_callee_priorities[callee];
-    info.critical_path_length =
-        std::max(info.critical_path_length, callee_priority);
-    callee_priority = (callee_priority << 16) + callers.size();
-  }
-
-  // Kick off (shrinking and) pre-computing the should-inline cache.
-  // Once all callees of a caller have been processed, then postprocessing
-  // will in turn kick off processing of the caller.
-  for (auto& p : m_async_callee_priorities) {
-    auto callee = p.first;
-    auto priority = p.second;
-    always_assert(priority > 0);
-    if (m_async_caller_callees.count(callee) == 0) {
-      async_postprocess_method(const_cast<DexMethod*>(callee));
+  std::unordered_set<DexMethod*> methods_to_schedule;
+  for (auto& p : m_caller_nonrecursive_callee) {
+    auto caller = p.first;
+    for (auto callee : p.second) {
+      m_scheduler.add_dependency(caller, callee);
+      m_nonrecursive_callees.insert(callee);
     }
   }
 
+  // Third, schedule and run tasks for all selected methods.
   if (m_shrinker.enabled() && m_config.shrink_other_methods) {
     walk::code(m_scope, [&](DexMethod* method, IRCode& code) {
-      // If a method is not tracked as a caller, and not already in the
-      // processing pool because it's a callee, then process it.
-      if (m_async_caller_callees.count(method) == 0 &&
-          m_async_callee_priorities.count(method) == 0) {
-        async_postprocess_method(const_cast<DexMethod*>(method));
-      }
+      methods_to_schedule.insert(method);
     });
+  } else {
+    for (auto& p : m_caller_nonrecursive_callee) {
+      methods_to_schedule.insert(p.first);
+    }
+    methods_to_schedule.insert(m_nonrecursive_callees.begin(),
+                               m_nonrecursive_callees.end());
   }
 
-  m_async_method_executor.join();
+  info.critical_path_length =
+      m_scheduler.run(methods_to_schedule.begin(), methods_to_schedule.end());
   delayed_change_visibilities();
-  info.waited_seconds = m_async_method_executor.get_waited_seconds();
+  info.waited_seconds = m_scheduler.get_thread_pool().get_waited_seconds();
 
   if (!need_deconstruct.empty()) {
     workqueue_run<IRCode*>([](IRCode* code) { code->clear_cfg(); },
@@ -492,12 +464,10 @@ void MultiMethodInliner::inline_methods(bool methods_need_deconstruct) {
   }
 }
 
-size_t MultiMethodInliner::compute_caller_nonrecursive_callees_by_stack_depth(
+size_t MultiMethodInliner::compute_caller_nonrecursive_callees(
     DexMethod* caller,
     const std::unordered_map<DexMethod*, size_t>& callees,
-    std::unordered_map<DexMethod*, size_t>* visited,
-    CallerNonrecursiveCalleesByStackDepth*
-        caller_nonrecursive_callees_by_stack_depth) {
+    std::unordered_map<DexMethod*, size_t>* visited) {
   always_assert(!callees.empty());
 
   auto visited_it = visited->find(caller);
@@ -524,9 +494,8 @@ size_t MultiMethodInliner::compute_caller_nonrecursive_callees_by_stack_depth(
     size_t callee_stack_depth = 0;
     auto maybe_caller = caller_callee.find(callee);
     if (maybe_caller != caller_callee.end()) {
-      callee_stack_depth = compute_caller_nonrecursive_callees_by_stack_depth(
-          callee, maybe_caller->second, visited,
-          caller_nonrecursive_callees_by_stack_depth);
+      callee_stack_depth = compute_caller_nonrecursive_callees(
+          callee, maybe_caller->second, visited);
     }
     if (callee_stack_depth == std::numeric_limits<size_t>::max()) {
       // we've found recursion in the current call stack
@@ -547,8 +516,9 @@ size_t MultiMethodInliner::compute_caller_nonrecursive_callees_by_stack_depth(
 
   (*visited)[caller] = stack_depth;
   if (!nonrecursive_callees.empty()) {
-    (*caller_nonrecursive_callees_by_stack_depth)[stack_depth].push_back(
-        std::make_pair(caller, nonrecursive_callees));
+    always_assert(!m_caller_nonrecursive_callee.count(caller));
+    m_caller_nonrecursive_callee.emplace(caller,
+                                         std::move(nonrecursive_callees));
   }
   return stack_depth;
 }
@@ -1038,46 +1008,25 @@ void MultiMethodInliner::inline_inlinables(
   }
 }
 
-void MultiMethodInliner::async_prioritized_method_execute(
-    DexMethod* method, const std::function<void()>& f) {
-  int priority = std::numeric_limits<int>::min();
-  auto it = m_async_callee_priorities.find(method);
-  if (it != m_async_callee_priorities.end()) {
-    priority = it->second;
-  }
-  m_async_method_executor.post(priority, f);
-}
-
-void MultiMethodInliner::async_postprocess_method(DexMethod* method) {
-  if (m_async_callee_priorities.count(method) == 0 &&
-      (!m_shrinker.enabled() || method->rstate.no_optimizations())) {
-    return;
-  }
-
-  async_prioritized_method_execute(
-      method, [method, this]() { postprocess_method(method); });
-}
-
 void MultiMethodInliner::postprocess_method(DexMethod* method) {
   TraceContext context(method);
-  bool is_callee = !!m_async_callee_priorities.count(method);
   if (m_shrinker.enabled() && !method->rstate.no_optimizations()) {
     m_shrinker.shrink_method(method);
   }
 
+  bool is_callee = !!m_nonrecursive_callees.count(method);
   if (!is_callee) {
     // This method isn't the callee of another caller, so we can stop here.
     return;
   }
 
-  async_compute_callee_costs(method);
+  compute_callee_costs(method);
 }
 
-void MultiMethodInliner::async_compute_callee_costs(DexMethod* method) {
+void MultiMethodInliner::compute_callee_costs(DexMethod* method) {
   auto fully_inlined_cost = get_fully_inlined_cost(method);
   always_assert(fully_inlined_cost);
 
-  std::vector<std::function<void()>> fs;
   auto callee_call_site_summary_occurrences_it =
       m_callee_call_site_summary_occurrences.find(method);
   if (callee_call_site_summary_occurrences_it !=
@@ -1086,63 +1035,31 @@ void MultiMethodInliner::async_compute_callee_costs(DexMethod* method) {
     const auto& callee_call_site_summary_occurrences =
         callee_call_site_summary_occurrences_it->second;
     for (auto& p : callee_call_site_summary_occurrences) {
-      fs.push_back([this, call_site_summary = p.first, method]() {
+      m_scheduler.augment(
+          method, [this, call_site_summary = p.first, method]() {
+            TraceContext context(method);
+            // Populate cache
+            get_call_site_inlined_cost(call_site_summary, method);
+          });
+    }
+  }
+
+  m_scheduler.augment(method, [this, method]() {
+    // Populate caches
+    get_callee_insn_size(method);
+    get_callee_type_refs(method);
+  });
+
+  // The should_inline_always caching depends on all other caches, so we augment
+  // it as a "continuation".
+  m_scheduler.augment(
+      method,
+      [this, method] {
         TraceContext context(method);
         // Populate cache
-        get_call_site_inlined_cost(call_site_summary, method);
-        decrement_callee_costs_wait_counts(method);
-      });
-    }
-  }
-  always_assert(!m_async_callee_costs_wait_counts.count(method));
-  m_async_callee_costs_wait_counts.emplace(method, fs.size() + 1);
-  auto priority = m_async_callee_priorities.at(method);
-  for (auto& f : fs) {
-    m_async_method_executor.post(priority, f);
-  }
-
-  // Populate caches
-  get_callee_insn_size(method);
-  get_callee_type_refs(method);
-  decrement_callee_costs_wait_counts(method);
-}
-
-void MultiMethodInliner::decrement_caller_wait_counts(
-    const std::unordered_set<DexMethod*>& callers) {
-  for (auto caller : callers) {
-    bool caller_ready = false;
-    m_async_caller_wait_counts.update(
-        caller, [&](const DexMethod*, size_t& value, bool /*exists*/) {
-          caller_ready = --value == 0;
-        });
-    if (caller_ready) {
-      always_assert(!inline_inlinables_need_deconstruct(caller));
-      // We can process inlining concurrently!
-      async_prioritized_method_execute(caller, [caller, this]() {
-        auto& callees = m_async_caller_callees.at(caller);
-        inline_callees(caller, callees, /* filter_via_should_inline */ true);
-        if (m_shrinker.enabled() ||
-            m_async_callee_priorities.count(caller) != 0) {
-          postprocess_method(caller);
-        }
-      });
-    }
-  }
-}
-
-void MultiMethodInliner::decrement_callee_costs_wait_counts(DexMethod* callee) {
-  bool callee_ready = false;
-  m_async_callee_costs_wait_counts.update(
-      callee, [&](const DexMethod*, size_t& value, bool /*exists*/) {
-        callee_ready = --value == 0;
-      });
-  if (callee_ready) {
-    // Populate cache
-    should_inline_always(callee);
-
-    auto& callers = m_async_callee_callers.at(callee);
-    decrement_caller_wait_counts(callers);
-  }
+        should_inline_always(method);
+      },
+      /* continuation */ true);
 }
 
 /**
