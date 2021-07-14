@@ -390,10 +390,9 @@ void MultiMethodInliner::inline_methods() {
       // if the caller is not a top level keep going, it will be traversed
       // when inlining a top level caller
       if (callee_caller.find(caller) != callee_caller.end()) continue;
-      sparta::PatriciaTreeSet<DexMethod*> call_stack;
       const auto& callees = caller_callee.at(caller);
       auto stack_depth = compute_caller_nonrecursive_callees_by_stack_depth(
-          caller, callees, call_stack, &visited,
+          caller, callees, &visited,
           &caller_nonrecursive_callees_by_stack_depth);
       info.max_call_stack_depth =
           std::max(info.max_call_stack_depth, stack_depth);
@@ -475,7 +474,6 @@ void MultiMethodInliner::inline_methods() {
 size_t MultiMethodInliner::compute_caller_nonrecursive_callees_by_stack_depth(
     DexMethod* caller,
     const std::vector<DexMethod*>& callees,
-    sparta::PatriciaTreeSet<DexMethod*> call_stack,
     std::unordered_map<DexMethod*, size_t>* visited,
     CallerNonrecursiveCalleesByStackDepth*
         caller_nonrecursive_callees_by_stack_depth) {
@@ -488,7 +486,6 @@ size_t MultiMethodInliner::compute_caller_nonrecursive_callees_by_stack_depth(
 
   // We'll only know the exact call stack depth at the end.
   visited->emplace(caller, std::numeric_limits<size_t>::max());
-  call_stack.insert(caller);
 
   std::unordered_set<DexMethod*> nonrecursive_callees;
   nonrecursive_callees.reserve(callees.size());
@@ -508,18 +505,17 @@ size_t MultiMethodInliner::compute_caller_nonrecursive_callees_by_stack_depth(
   // their own. We want to inline bottom up so that a callee is
   // completely resolved by the time it is inlined.
   for (auto callee : ordered_unique_callees) {
-    if (call_stack.contains(callee)) {
-      // we've found recursion in the current call stack
-      always_assert(visited->at(callee) == std::numeric_limits<size_t>::max());
-      info.recursive += unique_callees.at(callee);
-      continue;
-    }
     size_t callee_stack_depth = 0;
     auto maybe_caller = caller_callee.find(callee);
     if (maybe_caller != caller_callee.end()) {
       callee_stack_depth = compute_caller_nonrecursive_callees_by_stack_depth(
-          callee, maybe_caller->second, call_stack, visited,
+          callee, maybe_caller->second, visited,
           caller_nonrecursive_callees_by_stack_depth);
+    }
+    if (callee_stack_depth == std::numeric_limits<size_t>::max()) {
+      // we've found recursion in the current call stack
+      info.recursive += unique_callees.at(callee);
+      continue;
     }
 
     stack_depth = std::max(stack_depth, callee_stack_depth + 1);

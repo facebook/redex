@@ -251,7 +251,6 @@ class MultiMethodInliner {
   size_t compute_caller_nonrecursive_callees_by_stack_depth(
       DexMethod* caller,
       const std::vector<DexMethod*>& callees,
-      sparta::PatriciaTreeSet<DexMethod*> call_stack,
       std::unordered_map<DexMethod*, size_t>* visited,
       CallerNonrecursiveCalleesByStackDepth*
           caller_nonrecursive_callees_by_stack_depth);
