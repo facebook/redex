@@ -301,8 +301,7 @@ void MultiMethodInliner::compute_call_site_summaries() {
         }
         for (auto& p : res->invoke_call_site_summaries) {
           auto insn = p.first->insn;
-          auto callee =
-              m_concurrent_resolver(insn->get_method(), opcode_to_search(insn));
+          auto callee = get_callee(caller, insn);
           const auto& call_site_summary = p.second;
           auto key = get_key(call_site_summary);
           concurrent_callee_infos.update(callee, [&](const DexMethod*,
@@ -564,24 +563,21 @@ MultiMethodInliner::get_invoke_call_site_summaries(
     auto iterable = InstructionIterable(block);
     for (auto it = iterable.begin(); it != iterable.end(); it++) {
       auto insn = it->insn;
-      if (opcode::is_an_invoke(insn->opcode())) {
-        auto callee =
-            m_concurrent_resolver(insn->get_method(), opcode_to_search(insn));
-        if (callees.count(callee)) {
-          CallSiteSummary call_site_summary;
-          const auto& srcs = insn->srcs();
-          for (size_t i = is_static(callee) ? 0 : 1; i < srcs.size(); ++i) {
-            auto val = env.get(srcs[i]);
-            always_assert(!val.is_bottom());
-            call_site_summary.arguments.set(i, val);
-          }
-          call_site_summary.result_used =
-              !callee->get_proto()->is_void() &&
-              !cfg.move_result_of(block->to_cfg_instruction_iterator(it))
-                   .is_end();
-          res.invoke_call_site_summaries.emplace_back(
-              it.unwrap(), std::move(call_site_summary));
+      auto callee = get_callee(caller, insn);
+      if (callee && callees.count(callee)) {
+        CallSiteSummary call_site_summary;
+        const auto& srcs = insn->srcs();
+        for (size_t i = is_static(callee) ? 0 : 1; i < srcs.size(); ++i) {
+          auto val = env.get(srcs[i]);
+          always_assert(!val.is_bottom());
+          call_site_summary.arguments.set(i, val);
         }
+        call_site_summary.result_used =
+            !callee->get_proto()->is_void() &&
+            !cfg.move_result_of(block->to_cfg_instruction_iterator(it))
+                 .is_end();
+        res.invoke_call_site_summaries.emplace_back(
+            it.unwrap(), std::move(call_site_summary));
       }
       intra_cp.analyze_instruction(insn, &env, insn == last_insn->insn);
       if (env.is_bottom()) {
@@ -592,6 +588,24 @@ MultiMethodInliner::get_invoke_call_site_summaries(
   }
 
   return res;
+}
+
+DexMethod* MultiMethodInliner::get_callee(DexMethod* caller,
+                                          IRInstruction* insn) {
+  if (!opcode::is_an_invoke(insn->opcode())) {
+    return nullptr;
+  }
+  auto callee =
+      m_concurrent_resolver(insn->get_method(), opcode_to_search(insn));
+  auto it = caller_virtual_callee.find(caller);
+  if (it == caller_virtual_callee.end()) {
+    return callee;
+  }
+  auto it2 = it->second.find(insn);
+  if (it2 == it->second.end()) {
+    return callee;
+  }
+  return it2->second;
 }
 
 void MultiMethodInliner::inline_callees(
@@ -607,17 +621,8 @@ void MultiMethodInliner::inline_callees(
   editable_cfg_adapter::iterate_with_iterator(
       caller->get_code(), [&](const IRList::iterator& it) {
         auto insn = it->insn;
-        if (!opcode::is_an_invoke(insn->opcode())) {
-          return editable_cfg_adapter::LOOP_CONTINUE;
-        }
-        auto callee =
-            m_concurrent_resolver(insn->get_method(), opcode_to_search(insn));
-        if (caller_virtual_callee.count(caller) &&
-            caller_virtual_callee[caller].count(insn)) {
-          callee = caller_virtual_callee[caller][insn];
-          always_assert(callee);
-        }
-        if (callee == nullptr || !callees.count(callee)) {
+        auto callee = get_callee(caller, insn);
+        if (!callee || !callees.count(callee)) {
           return editable_cfg_adapter::LOOP_CONTINUE;
         }
         const std::unordered_set<cfg::Block*>* dead_blocks{nullptr};
@@ -678,12 +683,7 @@ void MultiMethodInliner::inline_callees(
       caller->get_code(), [&](const IRList::iterator& it) {
         auto insn = it->insn;
         if (insns.count(insn)) {
-          auto callee =
-              m_concurrent_resolver(insn->get_method(), opcode_to_search(insn));
-          if (caller_virtual_callee.count(caller) &&
-              caller_virtual_callee[caller].count(insn)) {
-            callee = caller_virtual_callee[caller][insn];
-          }
+          auto callee = get_callee(caller, insn);
           if (callee == nullptr) {
             return editable_cfg_adapter::LOOP_CONTINUE;
           }

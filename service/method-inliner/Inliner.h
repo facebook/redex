@@ -255,6 +255,8 @@ class MultiMethodInliner {
       CallerNonrecursiveCalleesByStackDepth*
           caller_nonrecursive_callees_by_stack_depth);
 
+  DexMethod* get_callee(DexMethod* caller, IRInstruction* insn);
+
   void inline_inlinables(DexMethod* caller,
                          const std::vector<Inlinable>& inlinables);
 
