@@ -472,6 +472,11 @@ class MultiMethodInliner {
   void async_postprocess_method(DexMethod* method);
 
   /**
+   * Initiate computation of various callee costs asynchronously.
+   */
+  void async_compute_callee_costs(DexMethod* method);
+
+  /**
    * Post-processing a method synchronously.
    */
   void postprocess_method(DexMethod* method);
@@ -488,6 +493,12 @@ class MultiMethodInliner {
    */
   void decrement_caller_wait_counts(
       const std::unordered_set<DexMethod*>& callers);
+
+  /**
+   * For callees waiting for various callee costs to become ready, decrement
+   * their wait counter, and if zero, initiate inlining.
+   */
+  void decrement_callee_costs_wait_counts(DexMethod* callee);
 
   /**
    * Whether inline_inlinables needs to deconstruct the caller's and callees'
@@ -583,6 +594,10 @@ class MultiMethodInliner {
   // For parallel execution, number of remaining callees any given caller is
   // still waiting for.
   ConcurrentMap<const DexMethod*, size_t> m_async_caller_wait_counts;
+
+  // For parallel execution, number of remaining call-site-inlined-costs any
+  // given callee is still waiting for.
+  ConcurrentMap<const DexMethod*, size_t> m_async_callee_costs_wait_counts;
 
   // Set of methods that need to be made static eventually. The destructor
   // of this class will do the necessary delayed work.

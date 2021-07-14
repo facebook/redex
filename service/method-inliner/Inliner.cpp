@@ -1075,16 +1075,41 @@ void MultiMethodInliner::postprocess_method(DexMethod* method) {
     return;
   }
 
-  // Pre-populate various caches.
-  get_fully_inlined_cost(method);
-  get_average_inlined_cost(method);
-  if (should_inline_always(method)) {
-    get_callee_insn_size(method);
-    get_callee_type_refs(method);
+  async_compute_callee_costs(method);
+}
+
+void MultiMethodInliner::async_compute_callee_costs(DexMethod* method) {
+  auto fully_inlined_cost = get_fully_inlined_cost(method);
+  always_assert(fully_inlined_cost);
+
+  std::vector<std::function<void()>> fs;
+  auto callee_call_site_summary_occurrences_it =
+      m_callee_call_site_summary_occurrences.find(method);
+  if (callee_call_site_summary_occurrences_it !=
+          m_callee_call_site_summary_occurrences.end() &&
+      fully_inlined_cost->full_code <= MAX_COST_FOR_CONSTANT_PROPAGATION) {
+    const auto& callee_call_site_summary_occurrences =
+        callee_call_site_summary_occurrences_it->second;
+    for (auto& p : callee_call_site_summary_occurrences) {
+      fs.push_back([this, call_site_summary = p.first, method]() {
+        TraceContext context(method);
+        // Populate cache
+        get_call_site_inlined_cost(call_site_summary, method);
+        decrement_callee_costs_wait_counts(method);
+      });
+    }
+  }
+  always_assert(!m_async_callee_costs_wait_counts.count(method));
+  m_async_callee_costs_wait_counts.emplace(method, fs.size() + 1);
+  auto priority = m_async_callee_priorities.at(method);
+  for (auto& f : fs) {
+    m_async_method_executor.post(priority, f);
   }
 
-  auto& callers = m_async_callee_callers.at(method);
-  decrement_caller_wait_counts(callers);
+  // Populate caches
+  get_callee_insn_size(method);
+  get_callee_type_refs(method);
+  decrement_callee_costs_wait_counts(method);
 }
 
 void MultiMethodInliner::decrement_caller_wait_counts(
@@ -1113,6 +1138,21 @@ void MultiMethodInliner::decrement_caller_wait_counts(
         });
       }
     }
+  }
+}
+
+void MultiMethodInliner::decrement_callee_costs_wait_counts(DexMethod* callee) {
+  bool callee_ready = false;
+  m_async_callee_costs_wait_counts.update(
+      callee, [&](const DexMethod*, size_t& value, bool /*exists*/) {
+        callee_ready = --value == 0;
+      });
+  if (callee_ready) {
+    // Populate cache
+    should_inline_always(callee);
+
+    auto& callers = m_async_callee_callers.at(callee);
+    decrement_caller_wait_counts(callers);
   }
 }
 
