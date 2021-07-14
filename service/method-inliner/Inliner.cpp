@@ -709,7 +709,7 @@ void MultiMethodInliner::inline_callees(
 bool MultiMethodInliner::inline_inlinables_need_deconstruct(DexMethod* method) {
   // The mixed CFG, IRCode is used by Switch Inline (only?) where the caller is
   // an IRCode and the callee is a CFG.
-  return m_config.use_cfg_inliner && !method->get_code()->editable_cfg_built();
+  return !method->get_code()->editable_cfg_built();
 }
 
 namespace {
@@ -806,7 +806,7 @@ void MultiMethodInliner::inline_inlinables(
 
   std::vector<DexMethod*> inlined_callees;
   boost::optional<reg_t> cfg_next_caller_reg;
-  if (m_config.use_cfg_inliner && !m_config.unique_inlined_registers) {
+  if (!m_config.unique_inlined_registers) {
     cfg_next_caller_reg = caller->cfg().get_registers_size();
   }
   size_t calls_not_inlinable{0}, calls_not_inlined{0}, no_returns{0},
@@ -817,8 +817,7 @@ void MultiMethodInliner::inline_inlinables(
   // We only try intermediate remove-unreachable-blocks or shrinking when using
   // the cfg-inliner, as it will invalidate irlist iterators, which are used
   // with the legacy non-cfg-inliner.
-  size_t last_intermediate_inlined_callees{
-      m_config.use_cfg_inliner ? 0 : std::numeric_limits<size_t>::max()};
+  size_t last_intermediate_inlined_callees{0};
 
   // Once blocks might have been freed, which can happen via
   // remove_unreachable_blocks and shrinking, callsite pointers are no longer
@@ -857,7 +856,6 @@ void MultiMethodInliner::inline_inlinables(
     }
 
     if (inlinable.no_return) {
-      always_assert(m_config.use_cfg_inliner);
       if (!m_config.throw_after_no_return) {
         continue;
       }
@@ -923,7 +921,6 @@ void MultiMethodInliner::inline_inlinables(
         inlinable.insn_size, &make_static, &caller_too_large);
     if (not_inlinable && caller_too_large &&
         inlined_callees.size() > last_intermediate_inlined_callees) {
-      always_assert(m_config.use_cfg_inliner);
       intermediate_remove_unreachable_blocks++;
       last_intermediate_inlined_callees = inlined_callees.size();
       auto p = caller->cfg().remove_unreachable_blocks();
@@ -971,26 +968,15 @@ void MultiMethodInliner::inline_inlinables(
           create_inlining_trace_msg(caller_method, callee_method, callsite_insn)
               .c_str());
 
-    if (m_config.use_cfg_inliner) {
-      if (m_config.unique_inlined_registers) {
-        cfg_next_caller_reg = caller->cfg().get_registers_size();
-      }
-      bool success =
-          inliner::inline_with_cfg(caller_method, callee_method, callsite_insn,
-                                   *cfg_next_caller_reg, inlinable.dead_blocks);
-      if (!success) {
-        calls_not_inlined++;
-        continue;
-      }
-    } else {
-      // Logging before the call to inline_method to get the most relevant line
-      // number near callsite before callsite gets replaced. Should be ok as
-      // inline_method does not fail to inline.
-      log_opt(INLINED, caller_method, callsite_insn);
-
-      auto callsite = inlinable.iterator;
-      always_assert(callsite->insn == callsite_insn);
-      inliner::inline_method_unsafe(caller_method, caller, callee, callsite);
+    if (m_config.unique_inlined_registers) {
+      cfg_next_caller_reg = caller->cfg().get_registers_size();
+    }
+    bool success =
+        inliner::inline_with_cfg(caller_method, callee_method, callsite_insn,
+                                 *cfg_next_caller_reg, inlinable.dead_blocks);
+    if (!success) {
+      calls_not_inlined++;
+      continue;
     }
     TRACE(INL, 2, "caller: %s\tcallee: %s",
           caller->cfg_built() ? SHOW(caller->cfg()) : SHOW(caller),
@@ -2073,7 +2059,6 @@ bool MultiMethodInliner::cannot_inline_opcodes(
     const DexMethod* callee,
     const IRInstruction* invk_insn,
     std::vector<DexMethod*>* make_static) {
-  int ret_count = 0;
   bool can_inline = true;
   editable_cfg_adapter::iterate(
       callee->get_code(), [&](const MethodItemEntry& mie) {
@@ -2124,25 +2109,8 @@ bool MultiMethodInliner::cannot_inline_opcodes(
           can_inline = false;
           return editable_cfg_adapter::LOOP_BREAK;
         }
-        if (opcode::is_a_return(insn->opcode())) {
-          ++ret_count;
-        }
         return editable_cfg_adapter::LOOP_CONTINUE;
       });
-  // The IRCode inliner can't handle callees with more than one return
-  // statement (normally one, the way dx generates code). That allows us to
-  // make a simple inline strategy where we don't have to worry about creating
-  // branches from the multiple returns to the main code
-  //
-  // d8 however, generates code with multiple return statements in general.
-  // The CFG inliner can handle multiple return callees.
-  if (ret_count > 1 && !m_config.use_cfg_inliner) {
-    info.multi_ret++;
-    if (invk_insn) {
-      log_nopt(INL_MULTIPLE_RETURNS, callee);
-    }
-    can_inline = false;
-  }
   return !can_inline;
 }
 

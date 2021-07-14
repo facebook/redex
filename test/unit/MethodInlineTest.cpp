@@ -520,7 +520,6 @@ TEST_F(MethodInlineTest, minimal_self_loop_regression) {
   api::LevelChecker::init(0, scope);
   inliner::InlinerConfig inliner_config;
   inliner_config.populate(scope);
-  inliner_config.use_cfg_inliner = true;
   MultiMethodInliner inliner(scope,
                              stores,
                              candidates,
@@ -570,7 +569,6 @@ TEST_F(MethodInlineTest, non_unique_inlined_registers) {
   api::LevelChecker::init(0, scope);
   inliner::InlinerConfig inliner_config;
   inliner_config.populate(scope);
-  inliner_config.use_cfg_inliner = true;
   inliner_config.unique_inlined_registers = false;
   MultiMethodInliner inliner(scope,
                              stores,
@@ -640,7 +638,6 @@ TEST_F(MethodInlineTest, inline_beneficial_on_average_after_constant_prop) {
   api::LevelChecker::init(0, scope);
   inliner::InlinerConfig inliner_config;
   inliner_config.populate(scope);
-  inliner_config.use_cfg_inliner = true;
   inliner_config.throws_inline = true;
   inliner_config.shrinker.run_const_prop = true;
   inliner_config.shrinker.run_local_dce = true;
@@ -713,7 +710,6 @@ TEST_F(MethodInlineTest,
   api::LevelChecker::init(0, scope);
   inliner::InlinerConfig inliner_config;
   inliner_config.populate(scope);
-  inliner_config.use_cfg_inliner = true;
   inliner_config.throws_inline = true;
   inliner_config.shrinker.run_const_prop = true;
   inliner_config.shrinker.run_local_dce = true;
@@ -797,7 +793,6 @@ TEST_F(
   api::LevelChecker::init(0, scope);
   inliner::InlinerConfig inliner_config;
   inliner_config.populate(scope);
-  inliner_config.use_cfg_inliner = true;
   inliner_config.throws_inline = true;
   inliner_config.shrinker.run_const_prop = true;
   inliner_config.shrinker.run_local_dce = true;
@@ -875,7 +870,6 @@ TEST_F(MethodInlineTest, throw_after_no_return) {
   api::LevelChecker::init(0, scope);
   inliner::InlinerConfig inliner_config;
   inliner_config.populate(scope);
-  inliner_config.use_cfg_inliner = true;
   inliner_config.throws_inline = true;
   inliner_config.throw_after_no_return = true;
   check_method->get_code()->build_cfg(true);
@@ -952,7 +946,6 @@ TEST_F(MethodInlineTest, boxed_boolean) {
   api::LevelChecker::init(0, scope);
   inliner::InlinerConfig inliner_config;
   inliner_config.populate(scope);
-  inliner_config.use_cfg_inliner = true;
   inliner_config.throws_inline = true;
   inliner_config.shrinker.run_const_prop = true;
   inliner_config.shrinker.run_local_dce = true;
@@ -1045,7 +1038,6 @@ TEST_F(MethodInlineTest, boxed_boolean_without_shrinking) {
   api::LevelChecker::init(0, scope);
   inliner::InlinerConfig inliner_config;
   inliner_config.populate(scope);
-  inliner_config.use_cfg_inliner = true;
   inliner_config.throws_inline = true;
   check_method->get_code()->build_cfg(true);
   foo_main->get_code()->build_cfg(true);
@@ -1223,7 +1215,6 @@ TEST_F(MethodInlineTest, visibility_change_static_invoke) {
   api::LevelChecker::init(0, scope);
   inliner::InlinerConfig inliner_config;
   inliner_config.populate(scope);
-  inliner_config.use_cfg_inliner = true;
   inliner_config.throws_inline = true;
   inliner_config.shrinker.run_const_prop = false;
   inliner_config.shrinker.run_local_dce = false;
@@ -1403,7 +1394,6 @@ TEST_F(MethodInlineTest, unused_result) {
   api::LevelChecker::init(0, scope);
   inliner::InlinerConfig inliner_config;
   inliner_config.populate(scope);
-  inliner_config.use_cfg_inliner = true;
   inliner_config.multiple_callers = true;
   inliner_config.use_call_site_summaries = true;
   inliner_config.shrinker.run_local_dce = true;

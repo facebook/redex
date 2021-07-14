@@ -25,7 +25,6 @@ struct InlinerConfig {
   bool multiple_callers{false};
   bool delete_any_candidate{false};
   bool use_call_site_summaries{true};
-  bool use_cfg_inliner{false};
   bool intermediate_shrinking{false};
   shrinker::ShrinkerConfig shrinker;
   bool shrink_other_methods{true};

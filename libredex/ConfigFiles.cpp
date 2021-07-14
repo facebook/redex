@@ -221,7 +221,6 @@ void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
          inliner_config->enforce_method_size_limit);
   jw.get("use_call_site_summaries", true,
          inliner_config->use_call_site_summaries);
-  jw.get("use_cfg_inliner", true, inliner_config->use_cfg_inliner);
   jw.get("intermediate_shrinking", false,
          inliner_config->intermediate_shrinking);
   jw.get("multiple_callers", false, inliner_config->multiple_callers);

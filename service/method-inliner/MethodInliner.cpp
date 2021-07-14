@@ -350,13 +350,12 @@ void run_inliner(DexStoresVector& stores,
                                                          MethodSearch search) {
     return resolve_method(method, search, concurrent_resolved_refs);
   };
-  if (inliner_config.use_cfg_inliner) {
-    walk::parallel::code(scope, [](DexMethod*, IRCode& code) {
-      code.build_cfg(/* editable */ true);
-    });
-    inliner_config.shrinker.analyze_constructors =
-        inliner_config.shrinker.run_const_prop;
-  }
+
+  walk::parallel::code(scope, [](DexMethod*, IRCode& code) {
+    code.build_cfg(/* editable */ true);
+  });
+  inliner_config.shrinker.analyze_constructors =
+      inliner_config.shrinker.run_const_prop;
 
   // inline candidates
   MultiMethodInliner inliner(scope, stores, candidates, concurrent_resolver,
@@ -366,10 +365,8 @@ void run_inliner(DexStoresVector& stores,
                              analyze_and_prune_inits, conf.get_pure_methods());
   inliner.inline_methods();
 
-  if (inliner_config.use_cfg_inliner) {
-    walk::parallel::code(scope,
-                         [](DexMethod*, IRCode& code) { code.clear_cfg(); });
-  }
+  walk::parallel::code(scope,
+                       [](DexMethod*, IRCode& code) { code.clear_cfg(); });
 
   // delete all methods that can be deleted
   auto inlined = inliner.get_inlined();

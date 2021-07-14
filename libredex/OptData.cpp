@@ -454,8 +454,6 @@ void OptDataMapper::init_nopt_messages() {
        "virtual method"},
       {INL_UNKNOWN_FIELD,
        "Didn''t inline: callee references a field unknown to the caller"},
-      {INL_MULTIPLE_RETURNS,
-       "Didn''t inline: callee has multiple return points"},
       {INL_TOO_MANY_CALLERS,
        "Didn''t inline: this method has too many callers"},
       {INL_DO_NOT_INLINE, "Didn''t inline: the callee should not be inlined"}};

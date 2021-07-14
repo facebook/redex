@@ -134,7 +134,6 @@ TEST_F(SourceBlocksTest, source_blocks) {
   // Run inliner, check that we have mix now.
   {
     inliner::InlinerConfig conf{};
-    conf.use_cfg_inliner = true;
     auto scope = build_class_scope(stores);
     conf.populate(scope);
 
