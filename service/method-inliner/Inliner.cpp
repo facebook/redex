@@ -111,7 +111,7 @@ MultiMethodInliner::MultiMethodInliner(
     std::unordered_set<DexMethod*> candidate_callees(candidates.begin(),
                                                      candidates.end());
     ConcurrentSet<DexMethod*> concurrent_candidate_callees_to_erase;
-    ConcurrentMap<const DexMethod*, std::vector<DexMethod*>>
+    ConcurrentMap<const DexMethod*, std::unordered_map<DexMethod*, size_t>>
         concurrent_callee_caller;
     XDexRefs x_dex(stores);
     walk::parallel::opcodes(
@@ -130,8 +130,9 @@ MultiMethodInliner::MultiMethodInliner(
               } else if (!concurrent_candidate_callees_to_erase.count(callee)) {
                 concurrent_callee_caller.update(
                     callee,
-                    [caller](const DexMethod*, std::vector<DexMethod*>& v,
-                             bool) { v.push_back(caller); });
+                    [caller](const DexMethod*,
+                             std::unordered_map<DexMethod*, size_t>& v,
+                             bool) { ++v[caller]; });
               }
             }
           }
@@ -152,20 +153,21 @@ MultiMethodInliner::MultiMethodInliner(
           callee_caller.erase(callee);
           break;
         }
-        callee_caller[callee].push_back(caller);
+        ++callee_caller[callee][caller];
       }
     }
     for (auto& pair : callee_caller) {
       DexMethod* callee = const_cast<DexMethod*>(pair.first);
       const auto& callers = pair.second;
-      for (auto caller : callers) {
-        caller_callee[caller].push_back(callee);
+      for (auto& p : callers) {
+        caller_callee[p.first][callee] += p.second;
       }
     }
   } else if (mode == InterDex) {
-    ConcurrentMap<const DexMethod*, std::vector<DexMethod*>>
+    ConcurrentMap<const DexMethod*, std::unordered_map<DexMethod*, size_t>>
         concurrent_callee_caller;
-    ConcurrentMap<DexMethod*, std::vector<DexMethod*>> concurrent_caller_callee;
+    ConcurrentMap<DexMethod*, std::unordered_map<DexMethod*, size_t>>
+        concurrent_caller_callee;
     walk::parallel::opcodes(
         scope, [](DexMethod* caller) { return true; },
         [&](DexMethod* caller, IRInstruction* insn) {
@@ -176,14 +178,14 @@ MultiMethodInliner::MultiMethodInliner(
                 callee->is_concrete() && candidates.count(callee)) {
               concurrent_callee_caller.update(
                   callee,
-                  [caller](const DexMethod*, std::vector<DexMethod*>& v, bool) {
-                    v.push_back(caller);
-                  });
+                  [caller](const DexMethod*,
+                           std::unordered_map<DexMethod*, size_t>& v,
+                           bool) { ++v[caller]; });
               concurrent_caller_callee.update(
                   caller,
-                  [callee](const DexMethod*, std::vector<DexMethod*>& v, bool) {
-                    v.push_back(callee);
-                  });
+                  [callee](const DexMethod*,
+                           std::unordered_map<DexMethod*, size_t>& v,
+                           bool) { ++v[callee]; });
             }
           }
         });
@@ -195,8 +197,8 @@ MultiMethodInliner::MultiMethodInliner(
       auto callee = callee_callers.first;
       for (const auto& caller_insns : callee_callers.second) {
         auto caller = caller_insns.first;
-        callee_caller[callee].push_back(caller);
-        caller_callee[caller].push_back(callee);
+        ++callee_caller[callee][caller];
+        ++caller_callee[caller][callee];
       }
     }
   }
@@ -473,7 +475,7 @@ void MultiMethodInliner::inline_methods() {
 
 size_t MultiMethodInliner::compute_caller_nonrecursive_callees_by_stack_depth(
     DexMethod* caller,
-    const std::vector<DexMethod*>& callees,
+    const std::unordered_map<DexMethod*, size_t>& callees,
     std::unordered_map<DexMethod*, size_t>* visited,
     CallerNonrecursiveCalleesByStackDepth*
         caller_nonrecursive_callees_by_stack_depth) {
@@ -489,22 +491,17 @@ size_t MultiMethodInliner::compute_caller_nonrecursive_callees_by_stack_depth(
 
   std::unordered_set<DexMethod*> nonrecursive_callees;
   nonrecursive_callees.reserve(callees.size());
-  std::unordered_map<DexMethod*, size_t> unique_callees;
-  for (auto callee : callees) {
-    unique_callees[callee]++;
+  std::vector<DexMethod*> ordered_callees;
+  ordered_callees.reserve(callees.size());
+  for (auto& p : callees) {
+    ordered_callees.push_back(p.first);
   }
-  std::vector<DexMethod*> ordered_unique_callees;
-  ordered_unique_callees.reserve(unique_callees.size());
-  for (auto& p : unique_callees) {
-    ordered_unique_callees.push_back(p.first);
-  }
-  std::sort(ordered_unique_callees.begin(), ordered_unique_callees.end(),
-            compare_dexmethods);
+  std::sort(ordered_callees.begin(), ordered_callees.end(), compare_dexmethods);
   size_t stack_depth = 0;
   // recurse into the callees in case they have something to inline on
   // their own. We want to inline bottom up so that a callee is
   // completely resolved by the time it is inlined.
-  for (auto callee : ordered_unique_callees) {
+  for (auto callee : ordered_callees) {
     size_t callee_stack_depth = 0;
     auto maybe_caller = caller_callee.find(callee);
     if (maybe_caller != caller_callee.end()) {
@@ -514,7 +511,7 @@ size_t MultiMethodInliner::compute_caller_nonrecursive_callees_by_stack_depth(
     }
     if (callee_stack_depth == std::numeric_limits<size_t>::max()) {
       // we've found recursion in the current call stack
-      info.recursive += unique_callees.at(callee);
+      info.recursive += callees.at(callee);
       continue;
     }
 
@@ -538,14 +535,13 @@ size_t MultiMethodInliner::compute_caller_nonrecursive_callees_by_stack_depth(
 
 boost::optional<InvokeCallSiteSummariesAndDeadBlocks>
 MultiMethodInliner::get_invoke_call_site_summaries(
-    DexMethod* caller, const std::vector<DexMethod*>& callees) {
+    DexMethod* caller, const std::unordered_map<DexMethod*, size_t>& callees) {
   IRCode* code = caller->get_code();
   if (!code->editable_cfg_built()) {
     return boost::none;
   }
 
   InvokeCallSiteSummariesAndDeadBlocks res;
-  std::unordered_set<DexMethod*> callees_set(callees.begin(), callees.end());
   auto& cfg = code->cfg();
   constant_propagation::intraprocedural::FixpointIterator intra_cp(
       cfg,
@@ -571,7 +567,7 @@ MultiMethodInliner::get_invoke_call_site_summaries(
       if (opcode::is_an_invoke(insn->opcode())) {
         auto callee =
             m_concurrent_resolver(insn->get_method(), opcode_to_search(insn));
-        if (callees_set.count(callee)) {
+        if (callees.count(callee)) {
           CallSiteSummary call_site_summary;
           const auto& srcs = insn->srcs();
           for (size_t i = is_static(callee) ? 0 : 1; i < srcs.size(); ++i) {
@@ -1299,12 +1295,10 @@ bool MultiMethodInliner::should_inline_fast(const DexMethod* callee) {
   }
 
   const auto& callers = callee_caller.at(callee);
-  auto caller_count = callers.size();
-  always_assert(caller_count > 0);
 
   // non-root methods that are only ever called once should always be inlined,
   // as the method can be removed afterwards
-  if (caller_count <= 1 && !root(callee)) {
+  if (callers.size() == 1 && callers.begin()->second == 1 && !root(callee)) {
     return true;
   }
 
@@ -1878,10 +1872,6 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
   }
 
   const auto& callers = callee_caller.at(callee);
-  auto caller_count = callers.size();
-  always_assert(caller_count > 0);
-
-  std::unordered_set<DexMethod*> callers_set(callers.begin(), callers.end());
 
   // Can we inline the init-callee into all callers?
   // If not, then we can give up, as there's no point in making the case that
@@ -1891,7 +1881,8 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
       return true;
     }
     if (!can_inline_init(callee)) {
-      for (auto caller : callers_set) {
+      for (auto& p : callers) {
+        auto caller = p.first;
         if (!method::is_init(caller) ||
             caller->get_class() != callee->get_class() ||
             !caller->get_code()->editable_cfg_built() ||
@@ -1928,6 +1919,10 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
 
   // 2. Determine costs of keeping the invoke instruction
 
+  size_t caller_count{0};
+  for (auto& p : callers) {
+    caller_count += p.second;
+  }
   float invoke_cost = get_invoke_cost(callee, inlined_cost->result_used);
   TRACE(INLINE, 3,
         "[too_many_callers] %zu calls to %s; cost: inlined %f + %f, invoke %f",
@@ -1950,7 +1945,8 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
   }
 
   // We can't eliminate the method entirely if it's not inlinable
-  for (auto caller : callers_set) {
+  for (auto& p : callers) {
+    auto caller = p.first;
     // We can't account here in detail for the caller and callee size. We hope
     // for the best, and assume that the caller is empty, and we'll use the
     // (maximum) insn_size for all inlined-costs. We'll check later again at
@@ -2307,7 +2303,8 @@ CalleeCallerRefs MultiMethodInliner::get_callee_caller_refs(
 
   const auto& callers = callee_caller.at(callee);
   std::unordered_set<DexType*> caller_classes;
-  for (auto caller : callers) {
+  for (auto& p : callers) {
+    auto caller = p.first;
     caller_classes.insert(caller->get_class());
   }
   auto callee_class = callee->get_class();

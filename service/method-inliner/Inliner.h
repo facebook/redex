@@ -250,7 +250,7 @@ class MultiMethodInliner {
    */
   size_t compute_caller_nonrecursive_callees_by_stack_depth(
       DexMethod* caller,
-      const std::vector<DexMethod*>& callees,
+      const std::unordered_map<DexMethod*, size_t>& callees,
       std::unordered_map<DexMethod*, size_t>* visited,
       CallerNonrecursiveCalleesByStackDepth*
           caller_nonrecursive_callees_by_stack_depth);
@@ -455,8 +455,8 @@ class MultiMethodInliner {
    * are constants.
    */
   boost::optional<InvokeCallSiteSummariesAndDeadBlocks>
-  get_invoke_call_site_summaries(DexMethod* caller,
-                                 const std::vector<DexMethod*>&);
+  get_invoke_call_site_summaries(
+      DexMethod* caller, const std::unordered_map<DexMethod*, size_t>& callees);
 
   /**
    * Build up constant-arguments information for all invoked methods.
@@ -533,10 +533,11 @@ class MultiMethodInliner {
   // Maps from callee to callers and reverse map from caller to callees.
   // Those are used to perform bottom up inlining.
   //
-  std::unordered_map<const DexMethod*, std::vector<DexMethod*>> callee_caller;
-  // this map is ordered in order that we inline our methods in a repeatable
-  // fashion so as to create reproducible binaries
-  std::unordered_map<DexMethod*, std::vector<DexMethod*>> caller_callee;
+  std::unordered_map<const DexMethod*, std::unordered_map<DexMethod*, size_t>>
+      callee_caller;
+
+  std::unordered_map<DexMethod*, std::unordered_map<DexMethod*, size_t>>
+      caller_callee;
 
   std::unordered_map<DexMethod*, std::unordered_map<IRInstruction*, DexMethod*>>
       caller_virtual_callee;
