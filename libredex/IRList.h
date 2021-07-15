@@ -540,8 +540,6 @@ class IRList {
     return m_list.iterator_to(mie);
   }
 
-  IRList::difference_type index_of(const MethodItemEntry& mie) const;
-
   friend std::string show(const IRCode*);
 };
 

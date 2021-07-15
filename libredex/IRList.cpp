@@ -615,25 +615,41 @@ void IRList::remove_branch_targets(IRInstruction* branch_inst) {
   }
 }
 
-IRList::difference_type IRList::index_of(const MethodItemEntry& mie) const {
-  return std::distance(iterator_to(mie), begin());
-}
-
 bool IRList::structural_equals(
     const IRList& other, const InstructionEquality& instruction_equals) const {
   auto it1 = m_list.begin();
   auto it2 = other.begin();
 
+  std::unordered_map<const MethodItemEntry*, const MethodItemEntry*> matches;
+  std::unordered_map<const MethodItemEntry*, const MethodItemEntry*>
+      delayed_matches;
+  auto may_match = [&](const MethodItemEntry* mie1,
+                       const MethodItemEntry* mie2) {
+    always_assert(mie1 && mie1->type != MFLOW_DEBUG &&
+                  mie1->type != MFLOW_POSITION &&
+                  mie1->type != MFLOW_SOURCE_BLOCK);
+    always_assert(mie2 && mie2->type != MFLOW_DEBUG &&
+                  mie2->type != MFLOW_POSITION &&
+                  mie2->type != MFLOW_SOURCE_BLOCK);
+    auto it = matches.find(mie1);
+    if (it != matches.end()) {
+      return it->second == mie2;
+    }
+    auto p = delayed_matches.emplace(mie1, mie2);
+    return p.second || p.first->second == mie2;
+  };
   for (; it1 != m_list.end() && it2 != other.end();) {
     always_assert(it1->type != MFLOW_DEX_OPCODE);
     always_assert(it2->type != MFLOW_DEX_OPCODE);
-    // Skip debug and position
-    if (it1->type == MFLOW_DEBUG || it1->type == MFLOW_POSITION) {
+    // Skip debug, position, and source block
+    if (it1->type == MFLOW_DEBUG || it1->type == MFLOW_POSITION ||
+        it1->type == MFLOW_SOURCE_BLOCK) {
       ++it1;
       continue;
     }
 
-    if (it2->type == MFLOW_DEBUG || it2->type == MFLOW_POSITION) {
+    if (it2->type == MFLOW_DEBUG || it2->type == MFLOW_POSITION ||
+        it2->type == MFLOW_SOURCE_BLOCK) {
       ++it2;
       continue;
     }
@@ -641,6 +657,15 @@ bool IRList::structural_equals(
     if (it1->type != it2->type) {
       return false;
     }
+
+    auto it = delayed_matches.find(&*it1);
+    if (it != delayed_matches.end()) {
+      if (it->second != &*it2) {
+        return false;
+      }
+      delayed_matches.erase(it);
+    }
+    matches.emplace(&*it1, &*it2);
 
     if (it1->type == MFLOW_OPCODE) {
       if (!instruction_equals(*it1->insn, *it2->insn)) {
@@ -660,7 +685,7 @@ bool IRList::structural_equals(
       }
 
       // Do these targets point back to the same branch instruction?
-      if (this->index_of(*target1->src) != other.index_of(*target2->src)) {
+      if (!may_match(target1->src, target2->src)) {
         return false;
       }
 
@@ -673,8 +698,7 @@ bool IRList::structural_equals(
       }
 
       // Do these `try`s correspond to the same catch block?
-      if (this->index_of(*try1->catch_start) !=
-          other.index_of(*try2->catch_start)) {
+      if (!may_match(try1->catch_start, try2->catch_start)) {
         return false;
       }
     } else if (it1->type == MFLOW_CATCH) {
@@ -691,8 +715,7 @@ bool IRList::structural_equals(
       }
 
       // Do these `catch`es have the same catch after them?
-      if (catch1->next != nullptr &&
-          this->index_of(*catch1->next) != other.index_of(*catch2->next)) {
+      if (catch1->next != nullptr && may_match(catch1->next, catch2->next)) {
         return false;
       }
     }
@@ -700,7 +723,11 @@ bool IRList::structural_equals(
     ++it2;
   }
 
-  return it1 == this->end() && it2 == other.end();
+  if (it1 == this->end() && it2 == other.end()) {
+    always_assert(delayed_matches.empty());
+    return true;
+  }
+  return false;
 }
 
 boost::sub_range<IRList> IRList::get_param_instructions() {
