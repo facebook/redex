@@ -198,12 +198,14 @@ def run_redex_binary(state, exception_formatter, output_line_handler):
         )
     logging.debug("Running redex binary at %s", state.args.redex_binary)
 
-    args = [state.args.redex_binary] + [
-        "--apkdir",
-        state.extracted_apk_dir,
-        "--outdir",
-        state.dex_dir,
-    ]
+    args = [state.args.redex_binary]
+
+    args += (
+        (["--dex-files"] + state.args.dex_files)
+        if state.args.dex_files
+        else ["--apkdir", state.extracted_apk_dir]
+    )
+    args += ["--outdir", state.dex_dir]
 
     if state.args.cmd_prefix is not None:
         args = shlex.split(state.args.cmd_prefix) + args
@@ -436,7 +438,7 @@ Given an APK, produce a better APK!
         formatter_class=argparse.RawDescriptionHelpFormatter, description=description
     )
 
-    parser.add_argument("input_apk", help="Input APK file")
+    parser.add_argument("input_apk", nargs="?", help="Input APK file")
     parser.add_argument(
         "-o",
         "--out",
@@ -646,6 +648,10 @@ Given an APK, produce a better APK!
         type=str,
         help="Path to packed profiles (expects tar.xz)",
     )
+
+    # Passthrough mode.
+    parser.add_argument("--outdir", type=str)
+    parser.add_argument("--dex-files", nargs="+", default=[])
 
     return parser
 
@@ -1135,9 +1141,34 @@ def _init_logging(level_str):
     logging.basicConfig(level=level)
 
 
+def run_redex_passthrough(args, exception_formatter, output_line_handler):
+    assert args.outdir
+    assert args.dex_files
+
+    state = State(
+        args=args,
+        config_dict={},
+        debugger=None,
+        dex_dir=args.outdir,
+        dexen=[],
+        extracted_apk_dir=None,
+        stop_pass_idx=-1,
+        lib_manager=None,
+        unpack_manager=None,
+        zip_manager=None,
+    )
+    run_redex_binary(state, exception_formatter, output_line_handler)
+
+
 def run_redex(args, exception_formatter=None, output_line_handler=None):
     # This is late, but hopefully early enough.
     _init_logging(args.log_level)
+
+    if args.outdir or args.dex_files:
+        run_redex_passthrough(args, exception_formatter, output_line_handler)
+        return
+    else:
+        assert args.input_apk
 
     state = prepare_redex(args)
     if exception_formatter is None:
