@@ -345,10 +345,11 @@ dexmethods_profiled_comparator::dexmethods_profiled_comparator(
     const std::vector<DexMethod*>& initial_order,
     const method_profiles::MethodProfiles* method_profiles,
     const std::unordered_set<std::string>* allowlisted_substrings,
-    bool legacy_order)
+    bool legacy_order, double min_appear_percent)
     : m_method_profiles(method_profiles),
       m_allowlisted_substrings(allowlisted_substrings),
-      m_legacy_order(legacy_order) {
+      m_legacy_order(legacy_order),
+      m_min_appear_percent(min_appear_percent) {
   always_assert(m_method_profiles != nullptr);
   always_assert(m_allowlisted_substrings != nullptr);
 
@@ -425,7 +426,7 @@ double dexmethods_profiled_comparator::get_method_sort_num(
       const auto& stat = it->second;
       if (m_legacy_order && stat.appear_percent >= 95.0) {
         return range_begin + RANGE_SIZE / 2;
-      } else if (!m_legacy_order && stat.appear_percent >= 10.0) {
+      } else if (!m_legacy_order && stat.appear_percent >= m_min_appear_percent) {
         // Prefer high appearance percents and low order percents. This
         // intentionally doesn't strictly order methods by appear_percent then
         // order_percent, rather both values are used and with greater weight
@@ -456,6 +457,16 @@ double dexmethods_profiled_comparator::get_method_sort_num_override(
   return VERY_END;
 }
 
+  double dexmethods_profiled_comparator::get_overall_method_sort_num(const DexMethod* m) {
+    double w = get_method_sort_num(m);
+    if (w == VERY_END) {
+      // For methods not included in the profiled methods file, move them to
+      // the top section anyway if they match one of the allowed substrings.
+      w = get_method_sort_num_override(m);
+    }
+    return w;
+  }
+
 bool dexmethods_profiled_comparator::operator()(DexMethod* a, DexMethod* b) {
   if (a == nullptr) {
     return b != nullptr;
@@ -469,12 +480,7 @@ bool dexmethods_profiled_comparator::operator()(DexMethod* a, DexMethod* b) {
       return search->second;
     }
 
-    double w = get_method_sort_num(m);
-    if (w == VERY_END) {
-      // For methods not included in the profiled methods file, move them to
-      // the top section anyway if they match one of the allowed substrings.
-      w = get_method_sort_num_override(m);
-    }
+    double w = get_overall_method_sort_num(m);
 
     m_cache.emplace(m, w);
     return w;

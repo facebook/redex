@@ -169,6 +169,7 @@ class dexmethods_profiled_comparator {
   const std::unordered_set<std::string>* m_allowlisted_substrings;
   std::unordered_map<DexMethod*, double> m_cache;
   bool m_legacy_order;
+  double m_min_appear_percent;
   std::vector<std::string> m_interactions;
 
   const DexMethod* m_coldstart_start_marker;
@@ -186,17 +187,20 @@ class dexmethods_profiled_comparator {
   static constexpr double RANGE_SIZE = 1.0;
   static constexpr double RANGE_STRIDE = 2.0;
   static constexpr double COLD_START_RANGE_BEGIN = 0.0;
-  static constexpr double VERY_END = std::numeric_limits<double>::max();
 
   double get_method_sort_num_override(const DexMethod* method);
   double get_method_sort_num(const DexMethod* method);
 
  public:
+  static constexpr double VERY_END = std::numeric_limits<double>::max();
+  double get_overall_method_sort_num(const DexMethod* method);
+
   dexmethods_profiled_comparator(
       const std::vector<DexMethod*>& initial_order,
       const method_profiles::MethodProfiles* method_profiles,
       const std::unordered_set<std::string>* allowlisted_substrings,
-      bool legacy_order);
+      bool legacy_order,
+      double min_appear_percent = 10.0);
 
   // See class comment.
   dexmethods_profiled_comparator(const dexmethods_profiled_comparator&) =

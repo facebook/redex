@@ -24,6 +24,7 @@
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "InterDexPassPlugin.h"
+#include "MethodProfiles.h"
 #include "ReachableClasses.h"
 #include "Show.h"
 #include "StringUtil.h"
@@ -212,9 +213,9 @@ void do_order_classes(const std::vector<std::string>& coldstart_class_names,
 
 // Compare two classes for sorting in a way that is best for compression.
 bool compare_dexclasses_for_compressed_size(DexClass* c1, DexClass* c2) {
-  // Canary classes go first
+  // Canary classes go last
   if (interdex::is_canary(c1) != interdex::is_canary(c2)) {
-    return (interdex::is_canary(c1) ? 1 : 0) >
+    return (interdex::is_canary(c1) ? 1 : 0) <
            (interdex::is_canary(c2) ? 1 : 0);
   }
   // Interfaces go after non-interfaces
@@ -238,38 +239,34 @@ bool compare_dexclasses_for_compressed_size(DexClass* c1, DexClass* c2) {
     return compare_dextypelists(c1->get_interfaces(), c2->get_interfaces());
   }
 
-  // The tie-breakers have been removed for experimentation. Uncommenting would
-  // bring some compressed size wins.
 
-  // // Tie-breaker: fields/methods count distance
-  // int dmethods_distance =
-  //     (int)c1->get_dmethods().size() - (int)c2->get_dmethods().size();
-  // if (dmethods_distance != 0) {
-  //   return dmethods_distance < 0;
-  // }
-  // int vmethods_distance =
-  //     (int)c1->get_vmethods().size() - (int)c2->get_vmethods().size();
-  // if (vmethods_distance != 0) {
-  //   return vmethods_distance < 0;
-  // }
-  // int ifields_distance =
-  //     (int)c1->get_ifields().size() - (int)c2->get_ifields().size();
-  // if (ifields_distance != 0) {
-  //   return ifields_distance < 0;
-  // }
-  // int sfields_distance =
-  //     (int)c1->get_sfields().size() - (int)c2->get_sfields().size();
-  // if (sfields_distance != 0) {
-  //   return sfields_distance < 0;
-  // }
-  // // Tie-breaker: has-class-data
-  // if (c1->has_class_data() != c2->has_class_data()) {
-  //   return (c1->has_class_data() ? 1 : 0) < (c2->has_class_data() ? 1 : 0);
-  // }
-  // // Final tie-breaker: Compare types, which means names
-  // return compare_dextypes(c1->get_type(), c2->get_type());
-
-  return false;
+   // Tie-breaker: fields/methods count distance
+   int dmethods_distance =
+       (int)c1->get_dmethods().size() - (int)c2->get_dmethods().size();
+   if (dmethods_distance != 0) {
+     return dmethods_distance < 0;
+   }
+   int vmethods_distance =
+       (int)c1->get_vmethods().size() - (int)c2->get_vmethods().size();
+   if (vmethods_distance != 0) {
+     return vmethods_distance < 0;
+   }
+   int ifields_distance =
+       (int)c1->get_ifields().size() - (int)c2->get_ifields().size();
+   if (ifields_distance != 0) {
+     return ifields_distance < 0;
+   }
+   int sfields_distance =
+       (int)c1->get_sfields().size() - (int)c2->get_sfields().size();
+   if (sfields_distance != 0) {
+     return sfields_distance < 0;
+   }
+   // Tie-breaker: has-class-data
+   if (c1->has_class_data() != c2->has_class_data()) {
+     return (c1->has_class_data() ? 1 : 0) < (c2->has_class_data() ? 1 : 0);
+   }
+   // Final tie-breaker: Compare types, which means names
+   return compare_dextypes(c1->get_type(), c2->get_type());
 }
 
 } // namespace
@@ -1047,24 +1044,53 @@ void InterDex::flush_out_dex(DexInfo& dex_info) {
   {
     auto classes = m_dexes_structure.end_dex(dex_info);
     if (m_sort_remaining_classes) {
-      auto begin = classes.begin(), end = classes.end();
-      auto is_ordered = [&additional_classes](DexClass* cls) {
-        // Perf-sensitive classes, i.e. those in the primary dex and those from
-        // betamap-ordered classes are ordered; however, additional classes are
-        // not (they used to always just go at the very end; at the time of
-        // writing, we are talking about a single switch-inline dispatcher
-        // class).
-        return cls->is_perf_sensitive() && !additional_classes.count(cls);
-      };
-      // We skip over any initial ordered classes, and only order the rest.
-      for (; begin != end && is_ordered(*begin); begin++) {
+      std::vector<DexClass*> perf_sensitive_classes;
+      using DexClassWithSortNum = std::pair<DexClass*, double>;
+      std::vector<DexClassWithSortNum> classes_with_sort_num;
+      std::vector<DexClass*> remaining_classes;
+      using namespace method_profiles;
+      dexmethods_profiled_comparator comparator(
+          {},
+          &m_conf.get_method_profiles(),
+          &m_conf.get_method_sorting_allowlisted_substrings(),
+          /* legacy_order */ false,
+          /* min_appear_percent */ 1.0);
+      for (auto cls : classes) {
+        if (cls->is_perf_sensitive()) {
+          perf_sensitive_classes.push_back(cls);
+          continue;
+        }
+        double cls_sort_num = dexmethods_profiled_comparator::VERY_END;
+        walk::methods(std::vector<DexClass*>{cls}, [&](DexMethod* method) {
+          auto method_sort_num = comparator.get_overall_method_sort_num(method);
+          if (method_sort_num < cls_sort_num) {
+            cls_sort_num = method_sort_num;
+          }
+        });
+        if (cls_sort_num < dexmethods_profiled_comparator::VERY_END) {
+          classes_with_sort_num.emplace_back(cls, cls_sort_num);
+          continue;
+        }
+        remaining_classes.push_back(cls);
       }
-      TRACE(IDEX, 2, "Skipping %zu and sorting %zu classes",
-            std::distance(classes.begin(), begin), std::distance(begin, end));
-      // All remaining classes are unordered
-      always_assert(std::find_if(begin, end, is_ordered) == end);
-      // So then we sort
-      std::stable_sort(begin, end, compare_dexclasses_for_compressed_size);
+      always_assert(perf_sensitive_classes.size() + classes_with_sort_num.size() + remaining_classes.size() == classes.size());
+
+      TRACE(IDEX, 2, "Skipping %zu perf sensitive, ordering %zu by method profiles, and sorting %zu classes",
+            perf_sensitive_classes.size(), classes_with_sort_num.size(), remaining_classes.size());
+      std::stable_sort(classes_with_sort_num.begin(), classes_with_sort_num.end(), [](const DexClassWithSortNum& a, const DexClassWithSortNum& b) {
+        return a.second < b.second;
+      });
+      std::sort(remaining_classes.begin(), remaining_classes.end(), compare_dexclasses_for_compressed_size);
+      // Rearrange classes so that...
+      // - perf_sensitive_classes go first, then
+      // - classes_with_sort_num that got ordered by the method profiles, and finally
+      // - remaining_classes
+      classes.clear();
+      classes.insert(classes.end(), perf_sensitive_classes.begin(), perf_sensitive_classes.end());
+      for (auto& p : classes_with_sort_num) {
+        classes.push_back(p.first);
+      }
+      classes.insert(classes.end(), remaining_classes.begin(), remaining_classes.end());
     }
     m_outdex.emplace_back(std::move(classes));
   }
