@@ -453,6 +453,10 @@ void ApkResources::collect_layout_classes_and_attributes_for_file(
 }
 
 boost::optional<int32_t> ApkResources::get_min_sdk() {
+  if (!boost::filesystem::exists(m_manifest)) {
+    return boost::none;
+  }
+
   auto file = RedexMappedFile::open(m_manifest);
 
   if (file.size() == 0) {
