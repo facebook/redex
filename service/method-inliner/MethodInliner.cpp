@@ -193,14 +193,11 @@ using CallerInsns =
  */
 void gather_true_virtual_methods(const mog::Graph& method_override_graph,
                                  const Scope& scope,
-                                 CalleeCallerInsns* true_virtual_callers,
-                                 std::unordered_set<DexMethod*>* methods) {
+                                 CalleeCallerInsns* true_virtual_callers) {
   Timer t("gather_true_virtual_methods");
   auto non_virtual = mog::get_non_true_virtuals(method_override_graph, scope);
   auto same_implementation_map =
       get_same_implementation_map(scope, method_override_graph);
-  std::unordered_set<DexMethod*> non_virtual_set{non_virtual.begin(),
-                                                 non_virtual.end()};
   // Add mapping from callee to monomorphic callsites.
   auto update_monomorphic_callsite =
       [](DexMethod* caller, IRInstruction* callsite, DexMethod* callee,
@@ -215,7 +212,7 @@ void gather_true_virtual_methods(const mog::Graph& method_override_graph,
       };
 
   ConcurrentMap<DexMethod*, CallerInsns> meth_caller;
-  walk::parallel::code(scope, [&non_virtual_set, &method_override_graph,
+  walk::parallel::code(scope, [&non_virtual, &method_override_graph,
                                &meth_caller, &update_monomorphic_callsite,
                                &same_implementation_map](DexMethod* method,
                                                          IRCode& code) {
@@ -235,36 +232,37 @@ void gather_true_virtual_methods(const mog::Graph& method_override_graph,
       if (callee == nullptr) {
         continue;
       }
-      if (non_virtual_set.count(callee) != 0) {
+      if (non_virtual.count(callee) != 0) {
         // Not true virtual, no need to continue;
         continue;
       }
       always_assert_log(callee->is_def(), "Resolved method not def %s",
                         SHOW(callee));
-      if (same_implementation_map.count(callee)) {
+      auto it = same_implementation_map.find(callee);
+      if (it != same_implementation_map.end()) {
         // We can find the resolved callee in same_implementation_map,
         // just use that piece of info because we know the implementors are all
         // the same
-        update_monomorphic_callsite(
-            method, insn, same_implementation_map[callee], &meth_caller);
+        update_monomorphic_callsite(method, insn, it->second, &meth_caller);
+        continue;
+      }
+      if (callee->is_external()) {
         continue;
       }
       const auto& overriding_methods =
           mog::get_overriding_methods(method_override_graph, callee);
-      if (!callee->is_external()) {
-        if (overriding_methods.empty()) {
-          // There is no override for this method
-          update_monomorphic_callsite(
-              method, insn, static_cast<DexMethod*>(callee), &meth_caller);
-        } else if (is_abstract(callee) && overriding_methods.size() == 1) {
-          // The method is an abstract method, the only override is its
-          // implementation.
-          auto implementing_method =
-              const_cast<DexMethod*>(*(overriding_methods.begin()));
+      if (overriding_methods.empty()) {
+        // There is no override for this method
+        update_monomorphic_callsite(
+            method, insn, static_cast<DexMethod*>(callee), &meth_caller);
+      } else if (is_abstract(callee) && overriding_methods.size() == 1) {
+        // The method is an abstract method, the only override is its
+        // implementation.
+        auto implementing_method =
+            const_cast<DexMethod*>(*(overriding_methods.begin()));
 
-          update_monomorphic_callsite(method, insn, implementing_method,
-                                      &meth_caller);
-        }
+        update_monomorphic_callsite(method, insn, implementing_method,
+                                    &meth_caller);
       }
     }
   });
@@ -276,7 +274,6 @@ void gather_true_virtual_methods(const mog::Graph& method_override_graph,
       [&](sparta::SpartaWorkerState<WorkItem>*, const WorkItem& pair) {
         DexMethod* callee = pair.first;
         auto& caller_to_invocations = pair.second;
-        always_assert_log(methods->count(callee) == 0, "%s\n", SHOW(callee));
         auto code = callee->get_code();
         always_assert(code);
         // Not considering candidates that use the receiver.
@@ -295,7 +292,6 @@ void gather_true_virtual_methods(const mog::Graph& method_override_graph,
         }
 
         std::lock_guard<std::mutex> lock_guard(mutex);
-        methods->insert(callee);
         (*true_virtual_callers)[callee] = caller_to_invocations;
       },
       meth_caller);
@@ -344,7 +340,10 @@ void run_inliner(DexStoresVector& stores,
 
   if (inliner_config.virtual_inline && inliner_config.true_virtual_inline) {
     gather_true_virtual_methods(*method_override_graph, scope,
-                                &true_virtual_callers, &candidates);
+                                &true_virtual_callers);
+    for (auto& p : true_virtual_callers) {
+      candidates.insert(p.first);
+    }
   }
   // keep a map from refs to defs or nullptr if no method was found
   ConcurrentMethodRefCache concurrent_resolved_refs;
