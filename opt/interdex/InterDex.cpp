@@ -239,34 +239,33 @@ bool compare_dexclasses_for_compressed_size(DexClass* c1, DexClass* c2) {
     return compare_dextypelists(c1->get_interfaces(), c2->get_interfaces());
   }
 
-
-   // Tie-breaker: fields/methods count distance
-   int dmethods_distance =
-       (int)c1->get_dmethods().size() - (int)c2->get_dmethods().size();
-   if (dmethods_distance != 0) {
-     return dmethods_distance < 0;
-   }
-   int vmethods_distance =
-       (int)c1->get_vmethods().size() - (int)c2->get_vmethods().size();
-   if (vmethods_distance != 0) {
-     return vmethods_distance < 0;
-   }
-   int ifields_distance =
-       (int)c1->get_ifields().size() - (int)c2->get_ifields().size();
-   if (ifields_distance != 0) {
-     return ifields_distance < 0;
-   }
-   int sfields_distance =
-       (int)c1->get_sfields().size() - (int)c2->get_sfields().size();
-   if (sfields_distance != 0) {
-     return sfields_distance < 0;
-   }
-   // Tie-breaker: has-class-data
-   if (c1->has_class_data() != c2->has_class_data()) {
-     return (c1->has_class_data() ? 1 : 0) < (c2->has_class_data() ? 1 : 0);
-   }
-   // Final tie-breaker: Compare types, which means names
-   return compare_dextypes(c1->get_type(), c2->get_type());
+  // Tie-breaker: fields/methods count distance
+  int dmethods_distance =
+      (int)c1->get_dmethods().size() - (int)c2->get_dmethods().size();
+  if (dmethods_distance != 0) {
+    return dmethods_distance < 0;
+  }
+  int vmethods_distance =
+      (int)c1->get_vmethods().size() - (int)c2->get_vmethods().size();
+  if (vmethods_distance != 0) {
+    return vmethods_distance < 0;
+  }
+  int ifields_distance =
+      (int)c1->get_ifields().size() - (int)c2->get_ifields().size();
+  if (ifields_distance != 0) {
+    return ifields_distance < 0;
+  }
+  int sfields_distance =
+      (int)c1->get_sfields().size() - (int)c2->get_sfields().size();
+  if (sfields_distance != 0) {
+    return sfields_distance < 0;
+  }
+  // Tie-breaker: has-class-data
+  if (c1->has_class_data() != c2->has_class_data()) {
+    return (c1->has_class_data() ? 1 : 0) < (c2->has_class_data() ? 1 : 0);
+  }
+  // Final tie-breaker: Compare types, which means names
+  return compare_dextypes(c1->get_type(), c2->get_type());
 }
 
 } // namespace
@@ -1073,24 +1072,36 @@ void InterDex::flush_out_dex(DexInfo& dex_info) {
         }
         remaining_classes.push_back(cls);
       }
-      always_assert(perf_sensitive_classes.size() + classes_with_sort_num.size() + remaining_classes.size() == classes.size());
+      always_assert(perf_sensitive_classes.size() +
+                        classes_with_sort_num.size() +
+                        remaining_classes.size() ==
+                    classes.size());
 
-      TRACE(IDEX, 2, "Skipping %zu perf sensitive, ordering %zu by method profiles, and sorting %zu classes",
-            perf_sensitive_classes.size(), classes_with_sort_num.size(), remaining_classes.size());
-      std::stable_sort(classes_with_sort_num.begin(), classes_with_sort_num.end(), [](const DexClassWithSortNum& a, const DexClassWithSortNum& b) {
-        return a.second < b.second;
-      });
-      std::sort(remaining_classes.begin(), remaining_classes.end(), compare_dexclasses_for_compressed_size);
+      TRACE(IDEX, 2,
+            "Skipping %zu perf sensitive, ordering %zu by method profiles, and "
+            "sorting %zu classes",
+            perf_sensitive_classes.size(), classes_with_sort_num.size(),
+            remaining_classes.size());
+      std::stable_sort(
+          classes_with_sort_num.begin(), classes_with_sort_num.end(),
+          [](const DexClassWithSortNum& a, const DexClassWithSortNum& b) {
+            return a.second < b.second;
+          });
+      std::sort(remaining_classes.begin(), remaining_classes.end(),
+                compare_dexclasses_for_compressed_size);
       // Rearrange classes so that...
       // - perf_sensitive_classes go first, then
-      // - classes_with_sort_num that got ordered by the method profiles, and finally
+      // - classes_with_sort_num that got ordered by the method profiles, and
+      // finally
       // - remaining_classes
       classes.clear();
-      classes.insert(classes.end(), perf_sensitive_classes.begin(), perf_sensitive_classes.end());
+      classes.insert(classes.end(), perf_sensitive_classes.begin(),
+                     perf_sensitive_classes.end());
       for (auto& p : classes_with_sort_num) {
         classes.push_back(p.first);
       }
-      classes.insert(classes.end(), remaining_classes.begin(), remaining_classes.end());
+      classes.insert(classes.end(), remaining_classes.begin(),
+                     remaining_classes.end());
     }
     m_outdex.emplace_back(std::move(classes));
   }
