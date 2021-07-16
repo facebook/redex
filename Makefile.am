@@ -350,6 +350,7 @@ libopt_la_SOURCES = \
 	opt/test_cfg/TestCFG.cpp \
 	opt/track_resources/TrackResources.cpp \
 	opt/throw-propagation/ThrowPropagationPass.cpp \
+	opt/type-analysis/CallGraphFileGenerationPass.cpp \
 	opt/type-analysis/GlobalTypeAnalysisPass.cpp \
 	opt/type-analysis/TypeAnalysisCallGraphGenerationPass.cpp \
 	opt/unreferenced_interfaces/UnreferencedInterfaces.cpp \
