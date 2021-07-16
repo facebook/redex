@@ -645,6 +645,13 @@ class MultiMethodInliner {
 
   shrinker::Shrinker m_shrinker;
 
+  AccumulatingTimer m_inline_callees_timer;
+  AccumulatingTimer m_inline_callees_should_inline_timer;
+  AccumulatingTimer m_inline_callees_init_timer;
+  AccumulatingTimer m_inline_inlinables_timer;
+  AccumulatingTimer m_inline_with_cfg_timer;
+  AccumulatingTimer m_call_site_inlined_cost_timer;
+
   const DexFieldRef* m_sdk_int_field =
       DexField::get_field("Landroid/os/Build$VERSION;.SDK_INT:I");
 
@@ -654,4 +661,26 @@ class MultiMethodInliner {
   size_t get_callers() { return caller_callee.size(); }
 
   size_t get_x_dex_callees() { return m_x_dex_callees.size(); }
+
+  double get_call_site_inlined_cost_seconds() const {
+    return m_call_site_inlined_cost_timer.get_seconds();
+  }
+  double get_inline_callees_seconds() const {
+    return m_inline_callees_timer.get_seconds() -
+           m_inline_callees_should_inline_timer.get_seconds() -
+           m_inline_callees_init_timer.get_seconds();
+  }
+  double get_inline_callees_should_inline_seconds() const {
+    return m_inline_callees_should_inline_timer.get_seconds();
+  }
+  double get_inline_callees_init_seconds() const {
+    return m_inline_callees_init_timer.get_seconds();
+  }
+  double get_inline_inlinables_seconds() const {
+    return m_inline_inlinables_timer.get_seconds() -
+           m_inline_with_cfg_timer.get_seconds();
+  }
+  double get_inline_with_cfg_seconds() const {
+    return m_inline_with_cfg_timer.get_seconds();
+  }
 };

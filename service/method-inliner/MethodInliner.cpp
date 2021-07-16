@@ -530,5 +530,17 @@ void run_inliner(DexStoresVector& stores,
                    shrinker.get_dedup_blocks_seconds());
   Timer::add_timer("Inliner.Shrinking.RegAlloc",
                    shrinker.get_reg_alloc_seconds());
+  Timer::add_timer("Inliner.Inlining.inline_callees",
+                   inliner.get_inline_callees_seconds());
+  Timer::add_timer("Inliner.Inlining.inline_callees_should_inline",
+                   inliner.get_inline_callees_should_inline_seconds());
+  Timer::add_timer("Inliner.Inlining.inline_callees_init",
+                   inliner.get_inline_callees_init_seconds());
+  Timer::add_timer("Inliner.Inlining.inline_inlinables",
+                   inliner.get_inline_inlinables_seconds());
+  Timer::add_timer("Inliner.Inlining.inline_with_cfg",
+                   inliner.get_inline_with_cfg_seconds());
+  Timer::add_timer("Inliner.Inlining.call_site_inlined_cost",
+                   inliner.get_call_site_inlined_cost_seconds());
 }
 } // namespace inliner

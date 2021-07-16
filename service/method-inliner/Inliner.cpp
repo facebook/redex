@@ -650,63 +650,66 @@ void MultiMethodInliner::inline_callees(
     const std::unordered_set<DexMethod*>& callees,
     bool filter_via_should_inline) {
   TraceContext context{caller};
-  size_t found = 0;
-
-  // walk the caller opcodes collecting all candidates to inline
-  // Build a callee to opcode map
   std::vector<Inlinable> inlinables;
-  editable_cfg_adapter::iterate_with_iterator(
-      caller->get_code(), [&](const IRList::iterator& it) {
-        auto insn = it->insn;
-        auto callee = get_callee(caller, insn);
-        if (!callee || !callees.count(callee)) {
-          return editable_cfg_adapter::LOOP_CONTINUE;
-        }
-        const std::unordered_set<cfg::Block*>* dead_blocks{nullptr};
-        bool no_return{false};
-        size_t insn_size{0};
-        if (filter_via_should_inline) {
-          // Cost model is based on fully inlining callee everywhere; let's
-          // see if we can get more detailed call-site specific information
-          if (should_inline_at_call_site(caller, insn, callee, &no_return,
-                                         &dead_blocks, &insn_size)) {
-            always_assert(!no_return);
-            // Yes, we know might have dead_blocks and a refined insn_size
-          } else if (should_inline_always(callee)) {
-            // We'll fully inline the callee without any adjustments
-            no_return = false;
-            insn_size = get_callee_insn_size(callee);
-          } else if (no_return) {
-            always_assert(insn_size == 0);
-            always_assert(!dead_blocks);
-          } else {
+  {
+    auto timer = m_inline_callees_timer.scope();
+
+    // walk the caller opcodes collecting all candidates to inline
+    // Build a callee to opcode map
+    editable_cfg_adapter::iterate_with_iterator(
+        caller->get_code(), [&](const IRList::iterator& it) {
+          auto insn = it->insn;
+          auto callee = get_callee(caller, insn);
+          if (!callee || !callees.count(callee)) {
             return editable_cfg_adapter::LOOP_CONTINUE;
           }
-        } else {
-          insn_size = get_callee_insn_size(callee);
-        }
-        always_assert(callee->is_concrete());
-        if (m_analyze_and_prune_inits && method::is_init(callee) &&
-            !no_return) {
-          if (!callee->get_code()->editable_cfg_built()) {
-            return editable_cfg_adapter::LOOP_CONTINUE;
-          }
-          if (!can_inline_init(callee)) {
-            if (!method::is_init(caller) ||
-                caller->get_class() != callee->get_class() ||
-                !caller->get_code()->editable_cfg_built() ||
-                !constructor_analysis::can_inline_inits_in_same_class(
-                    caller, callee, insn)) {
+          const std::unordered_set<cfg::Block*>* dead_blocks{nullptr};
+          bool no_return{false};
+          size_t insn_size{0};
+          if (filter_via_should_inline) {
+            auto timer2 = m_inline_callees_should_inline_timer.scope();
+            // Cost model is based on fully inlining callee everywhere; let's
+            // see if we can get more detailed call-site specific information
+            if (should_inline_at_call_site(caller, insn, callee, &no_return,
+                                           &dead_blocks, &insn_size)) {
+              always_assert(!no_return);
+              // Yes, we know might have dead_blocks and a refined insn_size
+            } else if (should_inline_always(callee)) {
+              // We'll fully inline the callee without any adjustments
+              no_return = false;
+              insn_size = get_callee_insn_size(callee);
+            } else if (no_return) {
+              always_assert(insn_size == 0);
+              always_assert(!dead_blocks);
+            } else {
               return editable_cfg_adapter::LOOP_CONTINUE;
             }
+          } else {
+            insn_size = get_callee_insn_size(callee);
           }
-        }
+          always_assert(callee->is_concrete());
+          if (m_analyze_and_prune_inits && method::is_init(callee) &&
+              !no_return) {
+            auto timer2 = m_inline_callees_init_timer.scope();
+            if (!callee->get_code()->editable_cfg_built()) {
+              return editable_cfg_adapter::LOOP_CONTINUE;
+            }
+            if (!can_inline_init(callee)) {
+              if (!method::is_init(caller) ||
+                  caller->get_class() != callee->get_class() ||
+                  !caller->get_code()->editable_cfg_built() ||
+                  !constructor_analysis::can_inline_inits_in_same_class(
+                      caller, callee, insn)) {
+                return editable_cfg_adapter::LOOP_CONTINUE;
+              }
+            }
+          }
 
-        inlinables.push_back(
-            (Inlinable){callee, it, insn, no_return, dead_blocks, insn_size});
-        return editable_cfg_adapter::LOOP_CONTINUE;
-      });
-
+          inlinables.push_back(
+              (Inlinable){callee, it, insn, no_return, dead_blocks, insn_size});
+          return editable_cfg_adapter::LOOP_CONTINUE;
+        });
+  }
   if (!inlinables.empty()) {
     inline_inlinables(caller, inlinables);
   }
@@ -795,7 +798,7 @@ std::string create_inlining_trace_msg(const DexMethod* caller,
 
 void MultiMethodInliner::inline_inlinables(
     DexMethod* caller_method, const std::vector<Inlinable>& inlinables) {
-
+  auto timer = m_inline_inlinables_timer.scope();
   auto caller = caller_method->get_code();
   std::unordered_set<IRCode*> need_deconstruct;
   if (inline_inlinables_need_deconstruct(caller_method)) {
@@ -999,6 +1002,7 @@ void MultiMethodInliner::inline_inlinables(
     if (m_config.unique_inlined_registers) {
       cfg_next_caller_reg = caller->cfg().get_registers_size();
     }
+    auto timer2 = m_inline_with_cfg_timer.scope();
     bool success =
         inliner::inline_with_cfg(caller_method, callee_method, callsite_insn,
                                  *cfg_next_caller_reg, inlinable.dead_blocks);
@@ -1088,6 +1092,7 @@ void MultiMethodInliner::compute_callee_costs(DexMethod* method) {
           method, [this, call_site_summary = p.first, method]() {
             TraceContext context(method);
             // Populate cache
+            auto timer = m_call_site_inlined_cost_timer.scope();
             get_call_site_inlined_cost(call_site_summary, method);
           });
     }
