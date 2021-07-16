@@ -107,6 +107,31 @@ public fun useBig(elem: Big): Int =
       else -> throw IllegalArgumentException()
     }
 
+public fun useBigNullable(elem: Big?): Int =
+    when (elem) {
+      Big.BIG01 -> 1
+      Big.BIG02 -> 2
+      Big.BIG03 -> 3
+      Big.BIG04 -> 4
+      Big.BIG05 -> 5
+      Big.BIG06 -> 6
+      Big.BIG07 -> 7
+      Big.BIG08 -> 8
+      Big.BIG09 -> 9
+      Big.BIG10 -> 10
+      Big.BIG11 -> 11
+      Big.BIG12 -> 12
+      Big.BIG13 -> 13
+      Big.BIG14 -> 14
+      Big.BIG15 -> 15
+      Big.BIG16 -> 16
+      Big.BIG17 -> 17
+      Big.BIG18 -> 18
+      Big.BIG19 -> 19
+      null -> 0
+      else -> -1
+    }
+
 class OptimizeEnumsTest {
   @Test
   fun testA() {
@@ -156,5 +181,11 @@ class OptimizeEnumsTest {
     assertThat(useBig(Big.BIG18)).isEqualTo(18)
     assertThat(useBig(Big.BIG19)).isEqualTo(19)
     assertThat(useBig(Big.BIG20)).isEqualTo(20)
+  }
+  @Test
+  fun testBigNullable() {
+    assertThat(useBigNullable(Big.BIG01)).isEqualTo(1)
+    assertThat(useBigNullable(Big.BIG20)).isEqualTo(-1)
+    assertThat(useBigNullable(null)).isEqualTo(0)
   }
 }
