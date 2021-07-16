@@ -517,6 +517,11 @@ class MultiMethodInliner {
 
   std::unordered_set<const DexMethod*> m_recursive_callees;
 
+  // If mode == IntraDex, then this is the set of callees that is reachable via
+  // an (otherwise ignored) invocation from a caller in a different dex. If mode
+  // != IntraDex, then the set is empty.
+  std::unordered_set<const DexMethod*> m_x_dex_callees;
+
   // Cache of the inlined costs of fully inlining a calle without using any
   // summaries for pruning.
   mutable ConcurrentMap<const DexMethod*, std::shared_ptr<InlinedCost>>
@@ -647,4 +652,6 @@ class MultiMethodInliner {
   const InliningInfo& get_info() { return info; }
 
   size_t get_callers() { return caller_callee.size(); }
+
+  size_t get_x_dex_callees() { return m_x_dex_callees.size(); }
 };

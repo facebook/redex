@@ -34,6 +34,7 @@
 #include "OutlinedMethods.h"
 #include "Purity.h"
 #include "Resolver.h"
+#include "StlUtil.h"
 #include "Timer.h"
 #include "Transform.h"
 #include "UnknownVirtuals.h"
@@ -124,103 +125,79 @@ MultiMethodInliner::MultiMethodInliner(
   }
   // Walk every opcode in scope looking for calls to inlinable candidates and
   // build a map of callers to callees and the reverse callees to callers. If
-  // intra_dex is false, we build the map for all the candidates. If intra_dex
-  // is true, we properly exclude methods who have callers being located in
-  // another dex from the candidates.
+  // mode != IntraDex, we build the map for all the candidates. If mode ==
+  // IntraDex, we properly exclude invocations where the caller is located in
+  // another dex from the callee, and remember all such x-dex callees.
+  ConcurrentSet<DexMethod*> concurrent_x_dex_callees;
+  ConcurrentMap<const DexMethod*, std::unordered_map<DexMethod*, size_t>>
+      concurrent_callee_caller;
+  ConcurrentMap<DexMethod*, std::unordered_map<DexMethod*, size_t>>
+      concurrent_caller_callee;
+  std::unique_ptr<XDexRefs> x_dex;
   if (mode == IntraDex) {
-    std::unordered_set<DexMethod*> candidate_callees(candidates.begin(),
-                                                     candidates.end());
-    ConcurrentSet<DexMethod*> concurrent_candidate_callees_to_erase;
-    ConcurrentMap<const DexMethod*, std::unordered_map<DexMethod*, size_t>>
-        concurrent_callee_caller;
-    XDexRefs x_dex(stores);
-    walk::parallel::opcodes(
-        scope, [](DexMethod* caller) { return true; },
-        [&](DexMethod* caller, IRInstruction* insn) {
-          if (opcode::is_an_invoke(insn->opcode())) {
-            auto callee = m_concurrent_resolver(insn->get_method(),
-                                                opcode_to_search(insn));
-            if (callee != nullptr && callee->is_concrete() &&
-                candidate_callees.count(callee) &&
-                true_virtual_callers.count(callee) == 0) {
-              if (x_dex.cross_dex_ref(caller, callee)) {
-                if (concurrent_candidate_callees_to_erase.insert(callee)) {
-                  concurrent_callee_caller.erase(callee);
-                }
-              } else if (!concurrent_candidate_callees_to_erase.count(callee)) {
-                concurrent_callee_caller.update(
-                    callee,
-                    [caller](const DexMethod*,
-                             std::unordered_map<DexMethod*, size_t>& v,
-                             bool) { ++v[caller]; });
-              }
-            }
-          }
-        });
-    callee_caller.insert(concurrent_callee_caller.begin(),
-                         concurrent_callee_caller.end());
-    // While we already tried to do some cleanup during the parallel walk above,
-    // here we do a final sweep for correctness
-    for (auto callee : concurrent_candidate_callees_to_erase) {
-      candidate_callees.erase(callee);
+    x_dex = std::make_unique<XDexRefs>(stores);
+  }
+
+  walk::parallel::opcodes(
+      scope, [](DexMethod*) { return true; },
+      [&](DexMethod* caller, IRInstruction* insn) {
+        if (!opcode::is_an_invoke(insn->opcode())) {
+          return;
+        }
+        auto callee =
+            m_concurrent_resolver(insn->get_method(), opcode_to_search(insn));
+        if (callee == nullptr || !callee->is_concrete() ||
+            !candidates.count(callee) || true_virtual_callers.count(callee)) {
+          return;
+        }
+        if (x_dex && x_dex->cross_dex_ref(caller, callee)) {
+          concurrent_x_dex_callees.insert(callee);
+          return;
+        }
+        concurrent_callee_caller.update(
+            callee,
+            [caller](const DexMethod*,
+                     std::unordered_map<DexMethod*, size_t>& v,
+                     bool) { ++v[caller]; });
+        concurrent_caller_callee.update(
+            caller,
+            [callee](const DexMethod*,
+                     std::unordered_map<DexMethod*, size_t>& v,
+                     bool) { ++v[callee]; });
+      });
+  m_x_dex_callees.insert(concurrent_x_dex_callees.begin(),
+                         concurrent_x_dex_callees.end());
+  callee_caller.insert(concurrent_callee_caller.begin(),
+                       concurrent_callee_caller.end());
+  caller_callee.insert(concurrent_caller_callee.begin(),
+                       concurrent_caller_callee.end());
+  for (const auto& callee_callers : true_virtual_callers) {
+    auto callee = callee_callers.first;
+    for (const auto& caller_insns : callee_callers.second) {
+      auto caller = caller_insns.first;
+      if (x_dex && x_dex->cross_dex_ref(caller, callee)) {
+        m_x_dex_callees.insert(callee);
+        continue;
+      }
+      ++callee_caller[callee][caller];
+      ++caller_callee[caller][callee];
+    }
+  }
+  if (inline_for_speed && !m_x_dex_callees.empty()) {
+    // pruning of any (caller, callee) pair if callee is involved in any x-dex
+    // caller/callee relationship
+    // TODO: This is to maintain the old IntraDex behavior for the
+    // PerfMethodInlinePass; evaluate if this is the best behavior for the
+    // PerfMethodInlinePass.
+    for (auto callee : m_x_dex_callees) {
       callee_caller.erase(callee);
     }
-    for (const auto& callee_callers : true_virtual_callers) {
-      auto callee = callee_callers.first;
-      for (const auto& caller_insns : callee_callers.second) {
-        auto caller = caller_insns.first;
-        if (x_dex.cross_dex_ref(callee, caller)) {
-          callee_caller.erase(callee);
-          break;
-        }
-        ++callee_caller[callee][caller];
-      }
+    for (auto& p : caller_callee) {
+      std20::erase_if(
+          p.second, [&](auto& it) { return m_x_dex_callees.count(it->first); });
     }
-    for (auto& pair : callee_caller) {
-      DexMethod* callee = const_cast<DexMethod*>(pair.first);
-      const auto& callers = pair.second;
-      for (auto& p : callers) {
-        caller_callee[p.first][callee] += p.second;
-      }
-    }
-  } else if (mode == InterDex) {
-    ConcurrentMap<const DexMethod*, std::unordered_map<DexMethod*, size_t>>
-        concurrent_callee_caller;
-    ConcurrentMap<DexMethod*, std::unordered_map<DexMethod*, size_t>>
-        concurrent_caller_callee;
-    walk::parallel::opcodes(
-        scope, [](DexMethod* caller) { return true; },
-        [&](DexMethod* caller, IRInstruction* insn) {
-          if (opcode::is_an_invoke(insn->opcode())) {
-            auto callee = m_concurrent_resolver(insn->get_method(),
-                                                opcode_to_search(insn));
-            if (true_virtual_callers.count(callee) == 0 && callee != nullptr &&
-                callee->is_concrete() && candidates.count(callee)) {
-              concurrent_callee_caller.update(
-                  callee,
-                  [caller](const DexMethod*,
-                           std::unordered_map<DexMethod*, size_t>& v,
-                           bool) { ++v[caller]; });
-              concurrent_caller_callee.update(
-                  caller,
-                  [callee](const DexMethod*,
-                           std::unordered_map<DexMethod*, size_t>& v,
-                           bool) { ++v[callee]; });
-            }
-          }
-        });
-    callee_caller.insert(concurrent_callee_caller.begin(),
-                         concurrent_callee_caller.end());
-    caller_callee.insert(concurrent_caller_callee.begin(),
-                         concurrent_caller_callee.end());
-    for (const auto& callee_callers : true_virtual_callers) {
-      auto callee = callee_callers.first;
-      for (const auto& caller_insns : callee_callers.second) {
-        auto caller = caller_insns.first;
-        ++callee_caller[callee][caller];
-        ++caller_callee[caller][callee];
-      }
-    }
+    std20::erase_if(caller_callee,
+                    [&](auto& it) { return it->second.empty(); });
   }
 }
 
@@ -331,7 +308,7 @@ void MultiMethodInliner::compute_call_site_summaries() {
       [&](DexMethod* callee) -> std::unordered_map<DexMethod*, size_t>* {
     auto it = callee_caller.find(callee);
     if (it == callee_caller.end() || m_recursive_callees.count(callee) ||
-        root(callee) || !can_rename(callee) ||
+        m_x_dex_callees.count(callee) || root(callee) || !can_rename(callee) ||
         true_virtual_callees.count(callee)) {
       return nullptr;
     }
@@ -1299,7 +1276,7 @@ bool MultiMethodInliner::should_inline_fast(const DexMethod* callee) {
   // as the method can be removed afterwards
   const auto& callers = callee_caller.at(callee);
   if (callers.size() == 1 && callers.begin()->second == 1 && !root(callee) &&
-      !m_recursive_callees.count(callee)) {
+      !m_recursive_callees.count(callee) && !m_x_dex_callees.count(callee)) {
     return true;
   }
 
@@ -1868,7 +1845,8 @@ bool MultiMethodInliner::can_inline_init(const DexMethod* init_method) {
 
 bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
   if (root(callee) || m_recursive_callees.count(callee) ||
-      true_virtual_callees.count(callee) || !m_config.multiple_callers) {
+      m_x_dex_callees.count(callee) || true_virtual_callees.count(callee) ||
+      !m_config.multiple_callers) {
     return true;
   }
 

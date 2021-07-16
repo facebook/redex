@@ -487,6 +487,9 @@ void run_inliner(DexStoresVector& stores,
                   inliner.get_info().critical_path_length);
   mgr.incr_metric("methods_shrunk", shrinker.get_methods_shrunk());
   mgr.incr_metric("callers", inliner.get_callers());
+  if (intra_dex) {
+    mgr.incr_metric("x-dex-callees", inliner.get_x_dex_callees());
+  }
   mgr.incr_metric("instructions_eliminated_const_prop",
                   shrinker.get_const_prop_stats().branches_removed +
                       shrinker.get_const_prop_stats().branches_forwarded +
