@@ -84,10 +84,13 @@ MultiMethodInliner::MultiMethodInliner(
     : m_concurrent_resolver(std::move(concurrent_resolve_fn)),
       m_scheduler(
           [this](DexMethod* method) {
-            auto it = m_caller_nonrecursive_callee.find(method);
-            if (it != m_caller_nonrecursive_callee.end()) {
+            auto it = caller_callee.find(method);
+            if (it != caller_callee.end()) {
               always_assert(!inline_inlinables_need_deconstruct(method));
-              auto& callees = it->second;
+              std::unordered_set<DexMethod*> callees;
+              for (auto& p : it->second) {
+                callees.insert(p.first);
+              }
               inline_callees(method, callees,
                              /* filter_via_should_inline */ true);
               // We schedule the post-processing, to allow other unlocked
@@ -403,7 +406,7 @@ void MultiMethodInliner::compute_call_site_summaries() {
 
   std::vector<DexMethod*> callers;
   for (auto& p : caller_callee) {
-    auto method = p.first;
+    auto method = const_cast<DexMethod*>(p.first);
     callers.push_back(method);
     auto dependencies = get_dependencies(method);
     if (dependencies) {
@@ -483,15 +486,13 @@ void MultiMethodInliner::inline_methods(bool methods_need_deconstruct) {
     std::vector<DexMethod*> ordered_callers;
     ordered_callers.reserve(caller_callee.size());
     for (auto& p : caller_callee) {
-      ordered_callers.push_back(p.first);
+      ordered_callers.push_back(const_cast<DexMethod*>(p.first));
     }
     std::sort(ordered_callers.begin(), ordered_callers.end(),
               compare_dexmethods);
     for (const auto caller : ordered_callers) {
       TraceContext context(caller);
-      const auto& callees = caller_callee.at(caller);
-      auto stack_depth =
-          compute_caller_nonrecursive_callees(caller, callees, &visited);
+      auto stack_depth = prune_caller_nonrecursive_callees(caller, &visited);
       info.max_call_stack_depth =
           std::max(info.max_call_stack_depth, stack_depth);
     }
@@ -502,11 +503,11 @@ void MultiMethodInliner::inline_methods(bool methods_need_deconstruct) {
   // Second, compute caller priorities --- the callers get a priority assigned
   // that reflects how many other callers will be waiting for them.
   std::unordered_set<DexMethod*> methods_to_schedule;
-  for (auto& p : m_caller_nonrecursive_callee) {
+  for (auto& p : caller_callee) {
     auto caller = p.first;
-    for (auto callee : p.second) {
-      m_scheduler.add_dependency(caller, callee);
-      m_nonrecursive_callees.insert(callee);
+    for (auto& q : p.second) {
+      auto callee = q.first;
+      m_scheduler.add_dependency(const_cast<DexMethod*>(caller), callee);
     }
   }
 
@@ -516,11 +517,12 @@ void MultiMethodInliner::inline_methods(bool methods_need_deconstruct) {
       methods_to_schedule.insert(method);
     });
   } else {
-    for (auto& p : m_caller_nonrecursive_callee) {
-      methods_to_schedule.insert(p.first);
+    for (auto& p : caller_callee) {
+      methods_to_schedule.insert(const_cast<DexMethod*>(p.first));
     }
-    methods_to_schedule.insert(m_nonrecursive_callees.begin(),
-                               m_nonrecursive_callees.end());
+    for (auto& p : callee_caller) {
+      methods_to_schedule.insert(const_cast<DexMethod*>(p.first));
+    }
   }
 
   info.critical_path_length =
@@ -534,10 +536,13 @@ void MultiMethodInliner::inline_methods(bool methods_need_deconstruct) {
   }
 }
 
-size_t MultiMethodInliner::compute_caller_nonrecursive_callees(
-    DexMethod* caller,
-    const std::unordered_map<DexMethod*, size_t>& callees,
-    std::unordered_map<DexMethod*, size_t>* visited) {
+size_t MultiMethodInliner::prune_caller_nonrecursive_callees(
+    DexMethod* caller, std::unordered_map<DexMethod*, size_t>* visited) {
+  auto caller_it = caller_callee.find(caller);
+  if (caller_it == caller_callee.end()) {
+    return 0;
+  }
+  auto& callees = caller_it->second;
   always_assert(!callees.empty());
 
   auto visited_it = visited->find(caller);
@@ -548,8 +553,6 @@ size_t MultiMethodInliner::compute_caller_nonrecursive_callees(
   // We'll only know the exact call stack depth at the end.
   visited->emplace(caller, std::numeric_limits<size_t>::max());
 
-  std::unordered_set<DexMethod*> nonrecursive_callees;
-  nonrecursive_callees.reserve(callees.size());
   std::vector<DexMethod*> ordered_callees;
   ordered_callees.reserve(callees.size());
   for (auto& p : callees) {
@@ -561,35 +564,34 @@ size_t MultiMethodInliner::compute_caller_nonrecursive_callees(
   // their own. We want to inline bottom up so that a callee is
   // completely resolved by the time it is inlined.
   for (auto callee : ordered_callees) {
-    size_t callee_stack_depth = 0;
-    auto maybe_caller = caller_callee.find(callee);
-    if (maybe_caller != caller_callee.end()) {
-      callee_stack_depth = compute_caller_nonrecursive_callees(
-          callee, maybe_caller->second, visited);
-    }
+    size_t callee_stack_depth =
+        prune_caller_nonrecursive_callees(callee, visited);
     if (callee_stack_depth == std::numeric_limits<size_t>::max()) {
       // we've found recursion in the current call stack
       info.recursive += callees.at(callee);
       m_recursive_callees.insert(callee);
-      continue;
+    } else {
+      stack_depth = std::max(stack_depth, callee_stack_depth + 1);
+
+      if (!for_speed() ||
+          m_inline_for_speed->should_inline_generic(caller, callee)) {
+        continue;
+      }
     }
 
-    stack_depth = std::max(stack_depth, callee_stack_depth + 1);
-
-    if (for_speed() &&
-        !m_inline_for_speed->should_inline_generic(caller, callee)) {
-      continue;
+    // If we get here, we shall prune the (caller, callee) pair.
+    callees.erase(callee);
+    if (callees.empty()) {
+      caller_callee.erase(caller);
     }
-
-    nonrecursive_callees.insert(callee);
+    auto& callers = callee_caller.at(callee);
+    callers.erase(caller);
+    if (callers.empty()) {
+      callee_caller.erase(callee);
+    }
   }
 
   (*visited)[caller] = stack_depth;
-  if (!nonrecursive_callees.empty()) {
-    always_assert(!m_caller_nonrecursive_callee.count(caller));
-    m_caller_nonrecursive_callee.emplace(caller,
-                                         std::move(nonrecursive_callees));
-  }
   return stack_depth;
 }
 
@@ -1084,7 +1086,7 @@ void MultiMethodInliner::postprocess_method(DexMethod* method) {
     m_shrinker.shrink_method(method);
   }
 
-  bool is_callee = !!m_nonrecursive_callees.count(method);
+  bool is_callee = !!callee_caller.count(method);
   if (!is_callee) {
     // This method isn't the callee of another caller, so we can stop here.
     return;

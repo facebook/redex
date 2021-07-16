@@ -244,10 +244,8 @@ class MultiMethodInliner {
    * Recurse in a callee if that has inlinable candidates of its own.
    * Inlining is bottom up.
    */
-  size_t compute_caller_nonrecursive_callees(
-      DexMethod* caller,
-      const std::unordered_map<DexMethod*, size_t>& callees,
-      std::unordered_map<DexMethod*, size_t>* visited);
+  size_t prune_caller_nonrecursive_callees(
+      DexMethod* caller, std::unordered_map<DexMethod*, size_t>* visited);
 
   DexMethod* get_callee(DexMethod* caller, IRInstruction* insn);
 
@@ -509,13 +507,8 @@ class MultiMethodInliner {
   std::unordered_map<const DexMethod*, std::unordered_map<DexMethod*, size_t>>
       callee_caller;
 
-  std::unordered_map<DexMethod*, std::unordered_map<DexMethod*, size_t>>
+  std::unordered_map<const DexMethod*, std::unordered_map<DexMethod*, size_t>>
       caller_callee;
-
-  std::unordered_map<DexMethod*, std::unordered_set<DexMethod*>>
-      m_caller_nonrecursive_callee;
-
-  std::unordered_set<DexMethod*> m_nonrecursive_callees;
 
   std::unordered_map<DexMethod*, std::unordered_map<IRInstruction*, DexMethod*>>
       caller_virtual_callee;
@@ -653,5 +646,5 @@ class MultiMethodInliner {
  public:
   const InliningInfo& get_info() { return info; }
 
-  size_t get_callers() { return m_caller_nonrecursive_callee.size(); }
+  size_t get_callers() { return caller_callee.size(); }
 };
