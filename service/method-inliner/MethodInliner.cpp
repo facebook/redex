@@ -236,6 +236,14 @@ void gather_true_virtual_methods(const mog::Graph& method_override_graph,
         // Not true virtual, no need to continue;
         continue;
       }
+      // Why can_rename? To mirror what VirtualRenamer looks at.
+      if (is_interface(type_class(method->get_class())) &&
+          (root(method) || !can_rename(method))) {
+        // We cannot rule out that there are dynamically added classes, possibly
+        // even created at runtime via Proxy.newProxyInstance, that override
+        // this method. So we assume the worst.
+        continue;
+      }
       always_assert_log(callee->is_def(), "Resolved method not def %s",
                         SHOW(callee));
       auto it = same_implementation_map.find(callee);
