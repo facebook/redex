@@ -231,6 +231,7 @@ void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
   jw.get("run_copy_prop", false, shrinker_config.run_copy_prop);
   jw.get("run_local_dce", false, shrinker_config.run_local_dce);
   jw.get("run_reg_alloc", false, shrinker_config.run_reg_alloc);
+  jw.get("run_fast_reg_alloc", false, shrinker_config.run_fast_reg_alloc);
   jw.get("run_dedup_blocks", false, shrinker_config.run_dedup_blocks);
   jw.get("debug", false, inliner_config->debug);
   jw.get("blocklist", {}, inliner_config->m_blocklist);

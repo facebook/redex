@@ -20,6 +20,7 @@ struct ShrinkerConfig {
   bool run_copy_prop{false};
   bool run_local_dce{false};
   bool run_reg_alloc{false};
+  bool run_fast_reg_alloc{false};
   bool run_dedup_blocks{false};
 
   // Internally used option that decides whether to compute pure methods with a

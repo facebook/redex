@@ -8,6 +8,7 @@
 #include "Shrinker.h"
 
 #include "ConstructorParams.h"
+#include "LinearScan.h"
 #include "RandomForest.h"
 #include "RegisterAllocation.h"
 #include "ScopedMetrics.h"
@@ -80,7 +81,8 @@ Shrinker::Shrinker(
       m_config(config),
       m_enabled(config.run_const_prop || config.run_cse ||
                 config.run_copy_prop || config.run_local_dce ||
-                config.run_reg_alloc || config.run_dedup_blocks),
+                config.run_reg_alloc || config.run_fast_reg_alloc ||
+                config.run_dedup_blocks),
       m_pure_methods(configured_pure_methods),
       m_finalish_field_names(configured_finalish_field_names) {
   if (config.run_cse || config.run_local_dce) {
@@ -242,6 +244,12 @@ void Shrinker::shrink_method(DexMethod* method) {
 
       reg_alloc_inc = 1;
     }
+  }
+
+  if (m_config.run_fast_reg_alloc) {
+    auto timer = m_fast_reg_alloc_timer.scope();
+    auto allocator = fastregalloc::LinearScanAllocator(method);
+    allocator.allocate();
   }
 
   if (m_config.run_dedup_blocks) {
