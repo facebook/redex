@@ -464,6 +464,7 @@ TESTS = \
     evaluate_type_checks_test \
     exception_test \
     extract_native_test \
+    fast_reg_alloc_test \
     final_inline_test \
     final_inline_v2_test \
     fp_ev_test \
