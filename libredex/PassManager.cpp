@@ -752,6 +752,8 @@ struct SourceBlocksStats {
   size_t source_blocks_total;
   size_t flow_violation_idom;
   size_t flow_violation_direct_predecessors;
+  size_t flow_violation_cold_direct_predecessors;
+  size_t methods_with_cold_direct_predecessor_violations;
 
   SourceBlocksStats& operator+=(const SourceBlocksStats& that) {
     total_blocks += that.total_blocks;
@@ -760,7 +762,10 @@ struct SourceBlocksStats {
     flow_violation_idom += that.flow_violation_idom;
     flow_violation_direct_predecessors +=
         that.flow_violation_direct_predecessors;
-
+    flow_violation_cold_direct_predecessors +=
+        that.flow_violation_cold_direct_predecessors;
+    methods_with_cold_direct_predecessor_violations +=
+        that.methods_with_cold_direct_predecessor_violations;
     return *this;
   }
 };
@@ -781,7 +786,7 @@ void track_source_block_coverage(PassManager& mgr,
   Timer opt_timer("Calculate SourceBlock Coverage");
   auto stats = walk::parallel::methods<SourceBlocksStats>(
       build_class_scope(stores), [](DexMethod* m) -> SourceBlocksStats {
-        SourceBlocksStats ret{0, 0, 0, 0, 0};
+        SourceBlocksStats ret{0, 0, 0, 0, 0, 0, 0};
         auto code = m->get_code();
         if (!code) {
           return ret;
@@ -792,6 +797,7 @@ void track_source_block_coverage(PassManager& mgr,
         auto dominators =
             dominators::SimpleFastDominators<cfg::GraphInterface>(cfg);
 
+        bool seen_dir_cold_dir_pred = false;
         for (auto block : cfg.blocks()) {
           ret.total_blocks++;
           if (source_blocks::has_source_blocks(block)) {
@@ -819,7 +825,8 @@ void track_source_block_coverage(PassManager& mgr,
             }
 
             // If current block is hot, one of its predecessors must also be
-            // hot.
+            // hot. If all predecessors of a block are cold, the block must also
+            // be cold
             if (is_curr_block_hot) {
               auto found_hot_pred = [&]() {
                 for (auto predecessor : block->preds()) {
@@ -834,8 +841,25 @@ void track_source_block_coverage(PassManager& mgr,
               if (!found_hot_pred) {
                 ret.flow_violation_direct_predecessors++;
               }
+
+              bool all_predecessors_cold = [&]() {
+                for (auto predecessor : block->preds()) {
+                  auto* first_sb_pred =
+                      source_blocks::get_first_source_block(predecessor->src());
+                  if (is_source_block_hot(first_sb_pred)) {
+                    return false;
+                  }
+                }
+                return true;
+              }();
+              if (all_predecessors_cold) {
+                ret.flow_violation_cold_direct_predecessors++;
+              }
             }
           }
+        }
+        if (seen_dir_cold_dir_pred) {
+          ret.methods_with_cold_direct_predecessor_violations++;
         }
 
         code->clear_cfg();
@@ -848,20 +872,30 @@ void track_source_block_coverage(PassManager& mgr,
   mgr.set_metric("~flow~violation~idom", stats.flow_violation_idom);
   mgr.set_metric("~flow~violation~direct~predecessors",
                  stats.flow_violation_direct_predecessors);
+  mgr.set_metric("~flow~violation~cold~direct~predecessors",
+                 stats.flow_violation_cold_direct_predecessors);
+  mgr.set_metric("~flow~violation~methods~direct~cold~predecessors",
+                 stats.methods_with_cold_direct_predecessor_violations);
 
   TRACE(
       INSTRUMENT, 4,
       "Total Basic Blocks = %zu, Basic Blocks with SourceBlock = %zu (%.1f%%), "
       "Total SourceBlocks = %zu"
       "Total flow idom violations = %zu (%.1f%%), "
-      "Total flow direct predecessor violations = %zu (%.1f%%)",
+      "Total flow direct predecessor violations = %zu (%.1f%%)"
+      "Total flow cold direct predecessor violations = %zu (%.1f%%)"
+      "Total flow cold direct predecessor violations - methods = %zu ",
       stats.total_blocks, stats.source_blocks_present,
       ((double)stats.source_blocks_present) * 100 / stats.total_blocks,
       stats.source_blocks_total, stats.flow_violation_idom,
       ((double)stats.flow_violation_idom) * 100 / stats.source_blocks_present,
       stats.flow_violation_direct_predecessors,
       ((double)stats.flow_violation_direct_predecessors) * 100 /
-          stats.source_blocks_present);
+          stats.source_blocks_present,
+      stats.flow_violation_cold_direct_predecessors,
+      ((double)stats.flow_violation_cold_direct_predecessors) * 100 /
+          stats.source_blocks_present,
+      stats.methods_with_cold_direct_predecessor_violations);
 }
 
 void run_assessor(PassManager& pm, const Scope& scope, bool initially = false) {
