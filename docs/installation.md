@@ -76,10 +76,13 @@ cd redex
 
 Now, build ReDex using autoconf and make.
 ```
-autoreconf -ivf && ./configure && make -j
+autoreconf -ivf && ./configure && make
 sudo make install
 ```
-If you experience out-of-memory errors, reduce Make parallelism, e.g., to `-j4`.
+*If your build machine has lots of RAM (on the order of 2-4GB per core), using
+Make parallelism can speed up the build (e.g., `make -j4`). However, the C++
+compilers are very memory hungry and this needs to be finely tuned on many
+systems.*
 
 ### Experimental: Windows (64-bit) with MSYS2
 
@@ -92,9 +95,12 @@ cd redex
 mkdir build-cmake
 cd build-cmake
 cmake -G "MSYS Makefiles" ..
-make -j
+make
 ```
-If you experience out-of-memory errors, reduce Make parallelism, e.g., to `-j4`.
+*If your build machine has lots of RAM (on the order of 2-4GB per core), using
+Make parallelism can speed up the build (e.g., `make -j4`). However, the C++
+compilers are very memory hungry and this needs to be finely tuned on many
+systems.*
 
 You may check whether the produced binary seems in a working condition:
 ```
@@ -171,4 +177,7 @@ Run tests with
 ```
 make -j check
 ```
-If you experience out-of-memory errors, reduce Make parallelism, e.g., to `-j4`.
+*If your build machine has lots of RAM (on the order of 2-4GB per core), using
+Make parallelism can speed up the build and testing (e.g., `make -j4`). However,
+the C++ compilers are very memory hungry and this needs to be finely tuned on
+many systems.*
