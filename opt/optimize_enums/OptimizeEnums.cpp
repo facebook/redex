@@ -69,8 +69,6 @@ constexpr const char* METRIC_NUM_SYNTHETIC_CLASSES = "num_synthetic_classes";
 constexpr const char* METRIC_NUM_LOOKUP_TABLES = "num_lookup_tables";
 constexpr const char* METRIC_NUM_LOOKUP_TABLES_REMOVED =
     "num_lookup_tables_replaced";
-constexpr const char* METRIC_NUM_DEAD_NULL_HANDLE_BRANCHES =
-    "num_dead_null_handle_branches";
 constexpr const char* METRIC_NUM_ENUM_CLASSES = "num_candidate_enum_classes";
 constexpr const char* METRIC_NUM_ENUM_OBJS = "num_erased_enum_objs";
 constexpr const char* METRIC_NUM_INT_OBJS = "num_generated_int_objs";
@@ -350,8 +348,6 @@ class OptimizeEnums {
     report(METRIC_NUM_SYNTHETIC_CLASSES, m_stats.num_synthetic_classes);
     report(METRIC_NUM_LOOKUP_TABLES, m_stats.num_lookup_tables);
     report(METRIC_NUM_LOOKUP_TABLES_REMOVED, m_lookup_tables_replaced.size());
-    report(METRIC_NUM_DEAD_NULL_HANDLE_BRANCHES,
-           m_stats.num_dead_null_handle_branches);
     report(METRIC_NUM_ENUM_CLASSES, m_stats.num_enum_classes);
     report(METRIC_NUM_ENUM_OBJS, m_stats.num_enum_objs);
     report(METRIC_NUM_INT_OBJS, m_stats.num_int_objs);
@@ -687,6 +683,7 @@ class OptimizeEnums {
       const EnumFieldToOrdinal& enum_field_to_ordinal,
       const GeneratedSwitchCases& generated_switch_cases) {
 
+    namespace cp = constant_propagation;
     walk::parallel::code(m_scope, [&](DexMethod*, IRCode& code) {
       cfg::ScopedCFG cfg(&code);
       cfg->calculate_exit_block();
@@ -694,9 +691,8 @@ class OptimizeEnums {
       optimize_enums::Iterator fixpoint(cfg.get());
       fixpoint.run(optimize_enums::Environment());
       std::unordered_set<IRInstruction*> switches;
-      auto switchkeys = fixpoint.collect();
-      for (const auto& keys : switchkeys) {
-        const auto pair = switches.insert((*keys.first.branch)->insn);
+      for (const auto& info : fixpoint.collect()) {
+        const auto pair = switches.insert((*info.branch)->insn);
         bool insert_occurred = pair.second;
         if (!insert_occurred) {
           // Make sure we don't have any duplicate switch opcodes. We can't
@@ -704,11 +700,11 @@ class OptimizeEnums {
           continue;
         }
         if (!check_lookup_table_usage(lookup_table_to_enum,
-                                      generated_switch_cases, keys.first)) {
+                                      generated_switch_cases, info)) {
           continue;
         }
         remove_lookup_table_usage(enum_field_to_ordinal, generated_switch_cases,
-                                  keys);
+                                  info);
       }
     });
   }
@@ -747,31 +743,17 @@ class OptimizeEnums {
   /**
    * Replaces the usage of the lookup table, by converting
    *
-   * IF_NEZ <v_enum> :LABEL-LOOKUP  // The null checking can be missing.
-   * CONST <v_dest> -1
-   * GOTO :LABEL-SWITCH
-   *
-   * :LABEL-LOOKUP
    * INVOKE_VIRTUAL <v_enum> Enum;.ordinal:()
    * MOVE_RESULT <v_ordinal>
    * AGET <v_field>, <v_ordinal>
    * MOVE_RESULT_PSEUDO <v_dest>
-   *
-   * :LABEL-SWITCH
    * *_SWITCH <v_dest>              ; or IF_EQZ <v_dest> <v_some_constant>
    *
    * to
    *
-   * IF_NEZ <v_enum> :LABEL-LOOKUP
-   * CONST <v_dest> -1
-   * GOTO :LABEL-SWITCH
-   *
-   * :LABEL-LOOKUP
    * INVOKE_VIRTUAL <v_enum> Enum;.ordinal:()
    * MOVE_RESULT <v_ordinal>
    * MOVE <v_dest>, <v_ordinal>
-   *
-   * :LABEL-SWITCH
    * SPARSE_SWITCH <v_dest>
    *
    * if <v_field> was fetched using SGET_OBJECT <lookup_table_holder>
@@ -785,8 +767,7 @@ class OptimizeEnums {
   void remove_lookup_table_usage(
       const EnumFieldToOrdinal& enum_field_to_ordinal,
       const GeneratedSwitchCases& generated_switch_cases,
-      const optimize_enums::EnumSwitchKey& keys) {
-    auto& info = keys.first;
+      const optimize_enums::Info& info) {
     auto& cfg = info.branch->cfg();
     auto branch_block = info.branch->block();
 
@@ -831,41 +812,19 @@ class OptimizeEnums {
       }
 
       if (old_case_key == boost::none) {
-        always_assert_log(fallthrough == nullptr || fallthrough == leaf,
-                          "only 1 fallthrough allowed");
+        always_assert_log(fallthrough == nullptr, "only 1 fallthrough allowed");
         fallthrough = leaf;
         continue;
       }
 
       auto search = field_enum_map.find(*old_case_key);
-      if (search != field_enum_map.end()) {
-        // Replace the case keys that are not equal to known constant key
-        // (keys.second).
-        always_assert_log(old_case_key != keys.second,
-                          "Overlapped key %d and %s in block %s", *old_case_key,
-                          SHOW(keys.first), SHOW(branch_block));
-        auto field_enum = search->second;
-        auto new_case_key = enum_field_to_ordinal.at(field_enum);
-        cases.emplace_back(new_case_key, leaf);
-      } else if (old_case_key == keys.second) {
-        // Keep old case key if we know some constant uses as the switch key.
-        cases.emplace_back(*old_case_key, leaf);
-      } else if (*old_case_key == 0) {
-        // When the switch has case key "-1", the compiler may fill a case key
-        // "0" to the packed-switch and associates the fallthrough block with
-        // it.
-        always_assert_log(fallthrough == nullptr || fallthrough == leaf,
-                          "block for case 0 should be fallthrough");
-        fallthrough = leaf;
-        continue;
-      } else {
-        // Kotlin 1.5 combines null branch with EnumSwitchMapping. The case key
-        // is -1. When the null checking is deleted, the switch case is dead and
-        // we ignore it.
-        always_assert_log(*old_case_key == -1, "Found unknown case key %d",
-                          *old_case_key);
-        m_stats.num_dead_null_handle_branches++;
-      }
+      always_assert_log(search != field_enum_map.end(),
+                        "can't find case key %d leaving block %zu\n%s\nin %s\n",
+                        *old_case_key, branch_block->id(), info.str().c_str(),
+                        SHOW(cfg));
+      auto field_enum = search->second;
+      auto new_case_key = enum_field_to_ordinal.at(field_enum);
+      cases.emplace_back(new_case_key, leaf);
     }
 
     // Add a new register to hold the ordinal and then use it to
@@ -879,10 +838,8 @@ class OptimizeEnums {
     //  ...
     //  AGET <v_field>, <v_ordinal>
     //  MOVE_RESULT_PSEUDO <v_dest>
-    //  MOVE <v_dest> <v_new_reg> // Newly added
     //  ...
-    //  ...
-    //  SPARSE_SWITCH <v_dest>
+    //  SPARSE_SWITCH <v_new_reg> // will use <v_new_reg> instead of <v_dest>
     //
     // NOTE: We leave CopyPropagation to clean up the extra moves and
     //       LDCE the array access.
@@ -890,22 +847,14 @@ class OptimizeEnums {
     if (move_ordinal_it.is_end()) {
       return;
     }
-    auto move_aget_result_it = cfg.move_result_of(*info.aget);
-    if (move_aget_result_it.is_end()) {
-      return;
-    }
 
+    auto move_ordinal = move_ordinal_it->insn;
+    auto reg_ordinal = move_ordinal->dest();
     auto new_ordinal_reg = cfg.allocate_temp();
-    auto move_ordinal_result = (new IRInstruction(OPCODE_MOVE))
-                                   ->set_src(0, move_ordinal_it->insn->dest())
-                                   ->set_dest(new_ordinal_reg);
+    auto move_ordinal_result = new IRInstruction(OPCODE_MOVE);
+    move_ordinal_result->set_src(0, reg_ordinal);
+    move_ordinal_result->set_dest(new_ordinal_reg);
     cfg.insert_after(move_ordinal_it, move_ordinal_result);
-
-    auto branch_reg = *info.reg;
-    auto move_ordinal_result_insn2 = (new IRInstruction(OPCODE_MOVE))
-                                         ->set_src(0, new_ordinal_reg)
-                                         ->set_dest(branch_reg);
-    cfg.insert_after(move_aget_result_it, move_ordinal_result_insn2);
 
     // TODO?: Would it be possible to keep the original if-else tree form that
     // D8 made?  It would probably be better to build a more general purpose
@@ -913,7 +862,7 @@ class OptimizeEnums {
     if (cases.size() > 1) {
       // Dex Lowering will decide if packed or sparse would be better
       IRInstruction* new_switch = new IRInstruction(OPCODE_SWITCH);
-      new_switch->set_src(0, branch_reg);
+      new_switch->set_src(0, new_ordinal_reg);
       cfg.create_branch(branch_block, new_switch, fallthrough, cases);
     } else if (cases.size() == 1) {
       // Only one non-fallthrough case, we can use an if statement.
@@ -928,7 +877,7 @@ class OptimizeEnums {
       branch_block->push_back(const_load);
 
       IRInstruction* new_if = new IRInstruction(OPCODE_IF_EQ);
-      new_if->set_src(0, branch_reg);
+      new_if->set_src(0, new_ordinal_reg);
       new_if->set_src(1, key_reg);
       cfg.create_branch(branch_block, new_if, fallthrough, target);
     } else {
@@ -938,7 +887,7 @@ class OptimizeEnums {
         auto existing_goto =
             cfg.get_succ_edge_of_type(branch_block, cfg::EDGE_GOTO);
         always_assert(existing_goto != nullptr);
-        always_assert(existing_goto->target() == fallthrough);
+        cfg.set_edge_target(existing_goto, fallthrough);
       }
     }
 
@@ -1013,7 +962,6 @@ class OptimizeEnums {
   struct Stats {
     size_t num_synthetic_classes{0};
     size_t num_lookup_tables{0};
-    size_t num_dead_null_handle_branches{0};
     size_t num_enum_classes{0};
     size_t num_enum_objs{0};
     size_t num_int_objs{0};

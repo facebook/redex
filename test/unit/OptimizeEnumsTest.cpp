@@ -26,8 +26,7 @@ void setup() {
   cc.create();
 }
 
-std::vector<optimize_enums::EnumSwitchKey> find_enums(
-    cfg::ControlFlowGraph* cfg) {
+std::vector<optimize_enums::Info> find_enums(cfg::ControlFlowGraph* cfg) {
   cfg->calculate_exit_block();
   optimize_enums::Iterator fixpoint(cfg);
   fixpoint.run(optimize_enums::Environment());
@@ -167,7 +166,7 @@ TEST_F(OptimizeEnumsTest, if_chain) {
   code->build_cfg();
   const auto& results = find_enums(&code->cfg());
   EXPECT_EQ(1, results.size());
-  const auto& info = results[0].first;
+  const auto& info = results[0];
   SwitchEquivFinder finder(&info.branch->cfg(), *info.branch, *info.reg);
   ASSERT_TRUE(finder.success());
   bool checked_one = false;
@@ -243,7 +242,7 @@ TEST_F(OptimizeEnumsTest, extra_loads_intersect) {
   code->build_cfg();
   const auto& results = find_enums(&code->cfg());
   EXPECT_EQ(1, results.size());
-  const auto& info = results[0].first;
+  const auto& info = results[0];
   SwitchEquivFinder finder(&info.branch->cfg(), *info.branch, *info.reg);
   ASSERT_FALSE(finder.success());
 }
@@ -290,7 +289,7 @@ TEST_F(OptimizeEnumsTest, extra_loads_wide) {
   code->build_cfg();
   const auto& results = find_enums(&code->cfg());
   EXPECT_EQ(1, results.size());
-  const auto& info = results[0].first;
+  const auto& info = results[0];
   SwitchEquivFinder finder(&info.branch->cfg(), *info.branch, *info.reg);
   ASSERT_FALSE(finder.success());
 }
@@ -328,7 +327,7 @@ TEST_F(OptimizeEnumsTest, extra_loads_wide2) {
   code->build_cfg();
   const auto& results = find_enums(&code->cfg());
   EXPECT_EQ(1, results.size());
-  const auto& info = results[0].first;
+  const auto& info = results[0];
   SwitchEquivFinder finder(&info.branch->cfg(), *info.branch, *info.reg);
   ASSERT_FALSE(finder.success());
   code->clear_cfg();
@@ -364,7 +363,7 @@ TEST_F(OptimizeEnumsTest, overwrite) {
   code->build_cfg();
   const auto& results = find_enums(&code->cfg());
   EXPECT_EQ(1, results.size());
-  const auto& info = results[0].first;
+  const auto& info = results[0];
   SwitchEquivFinder finder(&info.branch->cfg(), *info.branch, *info.reg);
   ASSERT_FALSE(finder.success());
   code->clear_cfg();
@@ -401,7 +400,7 @@ TEST_F(OptimizeEnumsTest, overwrite_wide) {
   code->build_cfg();
   const auto& results = find_enums(&code->cfg());
   EXPECT_EQ(1, results.size());
-  const auto& info = results[0].first;
+  const auto& info = results[0];
   SwitchEquivFinder finder(&info.branch->cfg(), *info.branch, *info.reg);
   ASSERT_FALSE(finder.success());
   code->clear_cfg();
@@ -434,7 +433,7 @@ TEST_F(OptimizeEnumsTest, loop) {
   code->build_cfg();
   const auto& results = find_enums(&code->cfg());
   EXPECT_EQ(1, results.size());
-  const auto& info = results[0].first;
+  const auto& info = results[0];
   SwitchEquivFinder finder(&info.branch->cfg(), *info.branch, *info.reg);
   ASSERT_FALSE(finder.success());
   code->clear_cfg();
@@ -473,7 +472,7 @@ TEST_F(OptimizeEnumsTest, other_entry_points) {
   code->build_cfg();
   const auto& results = find_enums(&code->cfg());
   EXPECT_EQ(1, results.size());
-  const auto& info = results[0].first;
+  const auto& info = results[0];
   SwitchEquivFinder finder(&info.branch->cfg(), *info.branch, *info.reg);
   ASSERT_FALSE(finder.success());
   code->clear_cfg();
@@ -513,7 +512,7 @@ TEST_F(OptimizeEnumsTest, other_entry_points2) {
   code->build_cfg();
   const auto& results = find_enums(&code->cfg());
   EXPECT_EQ(1, results.size());
-  const auto& info = results[0].first;
+  const auto& info = results[0];
   SwitchEquivFinder finder(&info.branch->cfg(), *info.branch, *info.reg);
   ASSERT_FALSE(finder.success());
   code->clear_cfg();
@@ -549,7 +548,7 @@ TEST_F(OptimizeEnumsTest, goto_default) {
   code->build_cfg();
   const auto& results = find_enums(&code->cfg());
   EXPECT_EQ(1, results.size());
-  const auto& info = results[0].first;
+  const auto& info = results[0];
   SwitchEquivFinder finder(&info.branch->cfg(), *info.branch, *info.reg);
   ASSERT_TRUE(finder.success());
   code->clear_cfg();
@@ -584,97 +583,9 @@ TEST_F(OptimizeEnumsTest, divergent_leaf_entry_state) {
   code->build_cfg();
   const auto& results = find_enums(&code->cfg());
   EXPECT_EQ(1, results.size());
-  const auto& info = results[0].first;
+  const auto& info = results[0];
   SwitchEquivFinder finder(&info.branch->cfg(), *info.branch, *info.reg);
   ASSERT_FALSE(finder.success());
-  code->clear_cfg();
-}
-
-TEST_F(OptimizeEnumsTest, with_null_handling) {
-  setup();
-
-  auto code = assembler::ircode_from_string(R"(
-    (
-      (load-param-object v1)
-
-      (if-nez v1 :non-null-label)
-      (const v0 -1)
-      (goto :switch-label)
-
-      (:non-null-label)
-      (sget-object "LFoo;.table:[LBar;")
-      (move-result-pseudo v0)
-      (invoke-virtual (v1) "LEnum;.ordinal:()I")
-      (move-result v1)
-      (aget v0 v1)
-      (move-result-pseudo v0)
-
-      (:switch-label)
-      (switch v0 (:case_null :case_0 :case_1))
-
-      ; Null handling
-      (:case_null -1)
-      (const v2 -1)
-      (return v2)
-
-      (:case_0 0)
-      (const v2 0)
-      (return v2)
-
-      (:case_1 1)
-      (const v2 1)
-      (return v2)
-    )
-)");
-
-  code->build_cfg();
-  auto results = find_enums(&code->cfg());
-  EXPECT_EQ(1, results.size());
-  EXPECT_EQ(results[0].second, -1);
-  code->clear_cfg();
-}
-
-TEST_F(OptimizeEnumsTest, with_dead_null_handling) {
-  setup();
-
-  auto code = assembler::ircode_from_string(R"(
-    (
-      (load-param-object v1)
-
-      ; (if-nez v1 :non-null-label)
-      ; (const v0 -1)
-      ; (goto :switch-label)
-
-      (:non-null-label)
-      (sget-object "LFoo;.table:[LBar;")
-      (move-result-pseudo v0)
-      (invoke-virtual (v1) "LEnum;.ordinal:()I")
-      (move-result v1)
-      (aget v0 v1)
-      (move-result-pseudo v0)
-
-      (:switch-label)
-      (switch v0 (:case_null :case_0 :case_1))
-
-      ; Null handling
-      (:case_null -1)
-      (const v2 -1)
-      (return v2)
-
-      (:case_0 0)
-      (const v2 0)
-      (return v2)
-
-      (:case_1 1)
-      (const v2 1)
-      (return v2)
-    )
-)");
-
-  code->build_cfg();
-  auto results = find_enums(&code->cfg());
-  EXPECT_EQ(1, results.size());
-  EXPECT_EQ(results[0].second, boost::none);
   code->clear_cfg();
 }
 

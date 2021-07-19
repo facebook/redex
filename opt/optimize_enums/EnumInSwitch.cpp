@@ -7,30 +7,24 @@
 
 #include "EnumInSwitch.h"
 #include "Resolver.h"
-#include "Trace.h"
 
 namespace optimize_enums {
 
-bool has_all_but_branch(const Domain& domain) {
-  if (domain.is_top() || domain.is_bottom()) {
-    return false;
-  }
-  auto info = domain.get_info();
+bool has_all_but_branch(boost::optional<Info> info) {
   return info && info->array_field && info->invoke && info->aget;
 }
 
-// If exactly one of the input registers is holding the case key for an enum or
-// a known constant, return the domain with that register filled in. Otherwise,
-// return none.
-boost::optional<Domain> get_enum_reg(const Environment& env,
-                                     IRInstruction* insn) {
+// If exactly one of the input registers is holding the case key for an enum,
+// return an info struct with that register filled in. Otherwise, return none.
+boost::optional<Info> get_enum_reg(const Environment& env,
+                                   IRInstruction* insn) {
   if (insn->srcs_size() == 1) {
     // *-switch or if-*z
     auto reg = insn->src(0);
-    auto& domain = env.get(reg);
-    TRACE(ENUM, 9, "insn %s\n\t%s", SHOW(insn), SHOW(env.get(reg)));
-    if (has_all_but_branch(domain)) {
-      return domain.combine_with_reg(reg);
+    auto info = env.get(reg).get_constant();
+    if (has_all_but_branch(info)) {
+      info->reg = reg;
+      return info;
     }
   } else {
     // if-* v1 v2
@@ -39,14 +33,16 @@ boost::optional<Domain> get_enum_reg(const Environment& env,
     always_assert(insn->srcs_size() == 2);
     reg_t l_reg = insn->src(0);
     reg_t r_reg = insn->src(1);
-    auto& l_domain = env.get(l_reg);
-    auto& r_domain = env.get(r_reg);
-    bool l_has = has_all_but_branch(l_domain);
-    bool r_has = has_all_but_branch(r_domain);
+    boost::optional<Info> left = env.get(l_reg).get_constant();
+    boost::optional<Info> right = env.get(r_reg).get_constant();
+    bool l_has = has_all_but_branch(left);
+    bool r_has = has_all_but_branch(right);
     if (l_has && !r_has) {
-      return l_domain.combine_with_reg(l_reg);
+      left->reg = l_reg;
+      return left;
     } else if (!l_has && r_has) {
-      return r_domain.combine_with_reg(r_reg);
+      right->reg = r_reg;
+      return right;
     }
   }
   return boost::none;
@@ -96,9 +92,10 @@ void analyze_invoke(cfg::InstructionIterator it, Environment* env) {
 
 void analyze_branch(cfg::InstructionIterator it, Environment* env) {
   auto insn = it->insn;
-  auto domain = get_enum_reg(*env, insn);
-  if (domain && has_all_but_branch(*domain)) {
-    env->set(*domain->get_info()->reg, domain->combine_with_branch(it));
+  auto info = get_enum_reg(*env, insn);
+  if (has_all_but_branch(info)) {
+    info->branch = it;
+    env->set(*info->reg, Domain(*info));
   } else {
     analyze_default(it, env);
   }
@@ -106,9 +103,8 @@ void analyze_branch(cfg::InstructionIterator it, Environment* env) {
 
 void analyze_aget(cfg::InstructionIterator it, Environment* env) {
   auto insn = it->insn;
-  TRACE(ENUM, 9, "insn %s\n\t%s", SHOW(insn), SHOW(env->get(insn->src(0))));
-  auto info = env->get(insn->src(0)).get_info();
-  const auto& invoke_info = env->get(insn->src(1)).get_info();
+  auto info = env->get(insn->src(0)).get_constant();
+  const auto& invoke_info = env->get(insn->src(1)).get_constant();
   if (info && invoke_info && info->array_field != nullptr &&
       invoke_info->invoke != boost::none) {
     // Combine the information from each register.
@@ -148,9 +144,8 @@ void Iterator::analyze_node(cfg::Block* const& block, Environment* env) const {
   }
 }
 
-std::vector<EnumSwitchKey> Iterator::collect() const {
-  std::vector<EnumSwitchKey> result;
-
+std::vector<Info> Iterator::collect() const {
+  std::vector<Info> result;
   for (cfg::Block* b : m_cfg->blocks()) {
     Environment env = get_entry_state_at(b);
     auto ii = ir_list::InstructionIterable(*b);
@@ -159,35 +154,12 @@ std::vector<EnumSwitchKey> Iterator::collect() const {
       auto op = insn->opcode();
       const auto& cfg_it = b->to_cfg_instruction_iterator(it);
       if (opcode::is_branch(op)) {
-        if (auto domain = get_enum_reg(env, insn)) {
-          auto info = domain->get_info();
-          if (info->branch == boost::none) {
-            // We check to make sure info.branch is none because we want to only
-            // get the first branch of the if-else chain.
-            info->branch = cfg_it;
-            // Check the other possible constant.
-            auto another_constant_key = domain->get<1>();
-            if (another_constant_key.is_top()) {
-              TRACE(ENUM,
-                    9,
-                    "Unknown value flows into EnumSwitch in %s",
-                    SHOW(*m_cfg));
-              return {};
-            } else {
-              auto key2 = domain->get_constant();
-              if (key2 && *key2 >= 0) {
-                TRACE(ENUM,
-                      9,
-                      "key %d may be conflict with EnumSwitch keys in %s",
-                      *key2,
-                      SHOW(*m_cfg));
-                return {};
-              } else {
-                TRACE(ENUM, 9, "%s", SHOW(*info));
-                result.emplace_back(std::make_pair(*info, key2));
-              }
-            }
-          }
+        auto info = get_enum_reg(env, insn);
+        if (info && info->branch == boost::none) {
+          // We check to make sure info.branch is none because we want to only
+          // get the first branch of the if-else chain.
+          info->branch = cfg_it;
+          result.emplace_back(*info);
         }
       }
       analyze_insn(cfg_it, &env);
@@ -252,9 +224,6 @@ void Iterator::analyze_insn(const cfg::InstructionIterator& it,
   case OPCODE_INVOKE_STATIC:
   case OPCODE_INVOKE_INTERFACE:
     analyze_invoke(it, env);
-    break;
-  case OPCODE_CONST:
-    env->set(it->insn->dest(), Domain(it->insn->get_literal()));
     break;
   default:
     analyze_default(it, env);
