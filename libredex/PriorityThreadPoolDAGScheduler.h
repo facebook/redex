@@ -9,6 +9,7 @@
 
 #include "ConcurrentContainers.h"
 #include "PriorityThreadPool.h"
+#include <cinttypes>
 #include <unordered_set>
 
 template <class Task>
@@ -19,11 +20,11 @@ class PriorityThreadPoolDAGScheduler {
   PriorityThreadPool m_priority_thread_pool;
   Executor m_executor;
   std::unordered_map<Task, std::unordered_set<Task>> m_waiting_for;
-  std::unordered_map<Task, uint> m_wait_counts;
+  std::unordered_map<Task, uint32_t> m_wait_counts;
   std::unique_ptr<std::unordered_map<Task, int>> m_priorities;
   int m_max_priority{-1};
   struct ConcurrentState {
-    uint wait_count{0};
+    uint32_t wait_count{0};
     std::vector<std::function<void()>> continuations{};
   };
   std::unique_ptr<ConcurrentMap<Task, ConcurrentState>> m_concurrent_states;
@@ -45,8 +46,8 @@ class PriorityThreadPoolDAGScheduler {
     return value;
   }
 
-  uint increment_wait_count(Task task, uint count = 1) {
-    uint res = 0;
+  uint32_t increment_wait_count(Task task, uint32_t count = 1) {
+    uint32_t res = 0;
     m_concurrent_states->update(
         task, [&res, count](Task, ConcurrentState& state, bool) {
           res = state.wait_count;
@@ -55,8 +56,8 @@ class PriorityThreadPoolDAGScheduler {
     return res;
   }
 
-  uint push_back_continuation(Task task, std::function<void()> f) {
-    uint res = 0;
+  uint32_t push_back_continuation(Task task, std::function<void()> f) {
+    uint32_t res = 0;
     m_concurrent_states->update(task,
                                 [f, &res](Task, ConcurrentState& state, bool) {
                                   state.continuations.push_back(f);
@@ -156,7 +157,7 @@ class PriorityThreadPoolDAGScheduler {
   }
 
   template <class ForwardIt>
-  uint run(const ForwardIt& begin, const ForwardIt& end) {
+  uint32_t run(const ForwardIt& begin, const ForwardIt& end) {
     always_assert(!m_concurrent_states);
     m_priorities = std::make_unique<std::unordered_map<Task, int>>();
     for (auto it = begin; it != end; it++) {
