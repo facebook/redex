@@ -35,11 +35,13 @@ class DedupStrings {
 
   DedupStrings(size_t max_factory_methods,
                float method_profiles_appear_percent_threshold,
-               const method_profiles::MethodProfiles& method_profiles)
+               const method_profiles::MethodProfiles& method_profiles,
+               std::unordered_set<DexString*> ignore_strings = {})
       : m_max_factory_methods(max_factory_methods),
         m_method_profiles_appear_percent_threshold(
             method_profiles_appear_percent_threshold),
-        m_method_profiles(method_profiles) {}
+        m_method_profiles(method_profiles),
+        m_ignore_strings(std::move(ignore_strings)) {}
 
   const Stats& get_stats() const { return m_stats; }
 
@@ -87,6 +89,7 @@ class DedupStrings {
   size_t m_max_factory_methods;
   float m_method_profiles_appear_percent_threshold;
   const method_profiles::MethodProfiles& m_method_profiles;
+  std::unordered_set<DexString*> m_ignore_strings;
 };
 
 /**

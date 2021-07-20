@@ -249,6 +249,7 @@ void DedupStrings::gather_non_load_strings(
                     /* exclude_loads */ true);
 
   strings->insert(lstring.begin(), lstring.end());
+  strings->insert(m_ignore_strings.begin(), m_ignore_strings.end());
 }
 
 ConcurrentMap<DexString*, std::unordered_map<size_t, size_t>>
@@ -688,9 +689,21 @@ void DedupStringsPass::run_pass(DexStoresVector& stores,
     return;
   }
 
+  // TODO(T94561083): move the functionality in ABExperimentContext
+  std::unordered_map<std::string, std::string> exp_states;
+  conf.get_json_config().get("ab_experiments_states", {}, exp_states);
+
+  std::unordered_set<DexString*> exp_strings_to_ignore;
+  for (const auto& exp_state : exp_states) {
+    if (exp_state.second == "branch_or_test" ||
+        exp_state.second == "branch_or_control") {
+      exp_strings_to_ignore.insert(DexString::make_string(exp_state.first));
+    }
+  }
+
   DedupStrings ds(m_max_factory_methods,
                   m_method_profiles_appear_percent_threshold,
-                  conf.get_method_profiles());
+                  conf.get_method_profiles(), std::move(exp_strings_to_ignore));
   ds.run(stores, ab_experiment_context);
   const auto stats = ds.get_stats();
   mgr.incr_metric(METRIC_PERF_SENSITIVE_STRINGS, stats.perf_sensitive_strings);
