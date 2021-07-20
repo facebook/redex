@@ -2748,23 +2748,6 @@ void inline_tail_call(DexMethod* caller,
   }
 }
 
-namespace impl {
-
-struct BlockAccessor {
-  static void push_dex_pos(cfg::Block* b,
-                           std::unique_ptr<DexPosition> dex_pos) {
-    auto it = b->get_first_non_param_loading_insn();
-    auto mie = new MethodItemEntry(std::move(dex_pos));
-    if (it == b->end()) {
-      b->m_entries.push_back(*mie);
-    } else {
-      b->m_entries.insert_before(it, *mie);
-    }
-  }
-};
-
-} // namespace impl
-
 // return true on successful inlining, false otherwise
 bool inline_with_cfg(DexMethod* caller_method,
                      DexMethod* callee_method,
@@ -2790,8 +2773,9 @@ bool inline_with_cfg(DexMethod* caller_method,
     // Create an empty item so that debug info of inlinee does not get lost.
     caller_code->set_debug_item(std::make_unique<DexDebugItem>());
     // Create a fake position.
-    impl::BlockAccessor::push_dex_pos(
+    caller_cfg.insert_before(
         caller_cfg.entry_block(),
+        caller_cfg.entry_block()->get_first_non_param_loading_insn(),
         DexPosition::make_synthetic_entry_position(caller_method));
   }
 
