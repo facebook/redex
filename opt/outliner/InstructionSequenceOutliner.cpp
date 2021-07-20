@@ -2016,6 +2016,22 @@ static void rewrite_at_location(DexMethod* outlined_method,
     // occurrences after processing a candidate.
     not_reached();
   }
+
+  auto code = method->get_code();
+  if (code->get_debug_item() == nullptr) {
+    // Create an empty item so that debug info of method we are outlining from
+    // does not get lost.
+    code->set_debug_item(std::make_unique<DexDebugItem>());
+    // Create a synthetic initial position.
+    cfg.insert_before(cfg.entry_block(),
+                      cfg.entry_block()->get_first_non_param_loading_insn(),
+                      DexPosition::make_synthetic_entry_position(method));
+    TRACE(ISO, 6,
+          "[instruction sequence outliner] setting debug item and synthetic "
+          "entry position in %s",
+          SHOW(method));
+  }
+
   auto last_dbg_pos = skip_fileless(cfg.get_dbg_pos(first_insn_it));
   cfg::CFGMutation cfg_mutation(cfg);
   const auto first_arg_reg = c.temp_regs;
