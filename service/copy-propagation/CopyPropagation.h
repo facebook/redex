@@ -24,7 +24,7 @@ struct Config {
   bool debug{false};
 
   // this is set by PassManager, not by JsonWrapper
-  bool regalloc_has_run{false};
+  bool regalloc_will_fix{false};
 };
 
 struct Stats {
