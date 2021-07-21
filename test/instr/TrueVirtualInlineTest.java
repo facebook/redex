@@ -111,6 +111,25 @@ class SameImplementation2 extends SameImplementation {
   }
 }
 
+abstract class AAA {
+  public abstract int return_BBB_field();
+  public abstract BBB return_BBB_self();
+}
+
+class BBB extends AAA {
+  int field = 42;
+
+  @Override
+  public int return_BBB_field() {
+    return field;
+  }
+
+  @Override
+  public BBB return_BBB_self() {
+    return this;
+  }
+}
+
 public class TrueVirtualInlineTest {
 
   // CHECK: method: virtual redex.TrueVirtualInlineTest.test_do_something
@@ -149,8 +168,28 @@ public class TrueVirtualInlineTest {
   public void test_return_self() {
     CC c = new CC();
     // PRECHECK: invoke-virtual {{.*}} redex.CC.return_self
-    // POSTCHECK: invoke-virtual {{.*}} redex.CC.return_self
+    // POSTCHECK-NOT: invoke-virtual {{.*}} redex.CC.return_self
     assertThat(c.return_self() instanceof CC).isTrue();
+    // CHECK: return-void
+  }
+
+  // CHECK: method: virtual redex.TrueVirtualInlineTest.test_return_BBB_field
+  @Test
+  public void test_return_BBB_field() {
+    AAA a = new BBB();
+    // PRECHECK: invoke-virtual {{.*}} redex.AAA.return_BBB_field
+    // POSTCHECK: invoke-virtual {{.*}} redex.AAA.return_BBB_field
+    assertThat(a.return_BBB_field() == 42).isTrue();
+    // CHECK: return-void
+  }
+
+  // CHECK: method: virtual redex.TrueVirtualInlineTest.test_return_BBB_self
+  @Test
+  public void test_return_BBB_self() {
+    AAA a = new BBB();
+    // PRECHECK: invoke-virtual {{.*}} redex.AAA.return_BBB_self
+    // POSTCHECK: invoke-virtual {{.*}} redex.AAA.return_BBB_self
+    assertThat(a.return_BBB_self() instanceof BBB).isTrue();
     // CHECK: return-void
   }
 

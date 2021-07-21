@@ -37,6 +37,69 @@ namespace mog = method_override_graph;
 
 namespace {
 
+static DexType* get_receiver_type_demand(DexType* callee_rtype,
+                                         const live_range::Use& use) {
+  switch (use.insn->opcode()) {
+  case OPCODE_RETURN_OBJECT:
+    always_assert(use.src_index == 0);
+    return callee_rtype;
+  case OPCODE_MONITOR_ENTER:
+  case OPCODE_MONITOR_EXIT:
+  case OPCODE_CHECK_CAST:
+  case OPCODE_INSTANCE_OF:
+    always_assert(use.src_index == 0);
+    return type::java_lang_Object();
+  case OPCODE_THROW:
+    always_assert(use.src_index == 0);
+    return type::java_lang_Throwable();
+  case OPCODE_FILLED_NEW_ARRAY:
+    return type::get_array_component_type(use.insn->get_type());
+  case OPCODE_INVOKE_VIRTUAL:
+  case OPCODE_INVOKE_DIRECT:
+  case OPCODE_INVOKE_STATIC:
+  case OPCODE_INVOKE_INTERFACE: {
+    DexMethodRef* dex_method = use.insn->get_method();
+    auto src_index = use.src_index;
+    if (use.insn->opcode() != OPCODE_INVOKE_STATIC) {
+      // The first argument is a reference to the object instance on which the
+      // method is invoked.
+      if (src_index-- == 0) {
+        return dex_method->get_class();
+      }
+    }
+    const auto& arg_types =
+        dex_method->get_proto()->get_args()->get_type_list();
+    return arg_types.at(src_index);
+  }
+  default:
+    if (opcode::is_a_conditional_branch(use.insn->opcode())) {
+      return type::java_lang_Object();
+    }
+    if (opcode::is_an_iget(use.insn->opcode())) {
+      always_assert(use.src_index == 0);
+      return use.insn->get_field()->get_class();
+    }
+    if (opcode::is_an_iput(use.insn->opcode()) ||
+        opcode::is_an_sput(use.insn->opcode())) {
+      if (use.src_index == 0) {
+        return use.insn->get_field()->get_type();
+      } else {
+        always_assert(use.src_index == 1);
+        return use.insn->get_field()->get_class();
+      }
+    }
+    if (opcode::is_an_aput(use.insn->opcode())) {
+      always_assert(use.src_index == 0);
+      // TODO: Use type inference to figure out required array (component) type.
+      // For now, we just play it save and give up.
+      return nullptr;
+    }
+    not_reached_log(
+        "Unsupported instruction {%s} in get_receiver_type_demand\n",
+        SHOW(use.insn));
+  }
+}
+
 /**
  * Collect all non virtual methods and make all small methods candidates
  * for inlining.
@@ -187,8 +250,8 @@ std::unordered_map<const DexMethod*, DexMethod*> get_same_implementation_map(
  * call site in true_virtual_callers.
  * A true virtual method can be inlined to its callsite if the callsite can
  * be resolved to only one method implementation deterministically.
- * We are currently ruling out candidates that access field/methods or
- * return an object type.
+ * We are currently ruling out candidates that use the receiver in ways that
+ * would require additional casts.
  */
 void gather_true_virtual_methods(const mog::Graph& method_override_graph,
                                  const Scope& scope,
@@ -332,28 +395,66 @@ void gather_true_virtual_methods(const mog::Graph& method_override_graph,
           return;
         }
         auto code = const_cast<DexMethod*>(callee)->get_code();
-        if (!code || !compute_caller_insns) {
+        if (!code || !compute_caller_insns ||
+            !method::no_invoke_super(callee)) {
           if (!caller_to_invocations.caller_insns.empty()) {
             caller_to_invocations.caller_insns.clear();
             caller_to_invocations.other_call_sites = true;
           }
           return;
         }
-        // Not considering candidates that use the receiver.
+        // Not considering candidates that use the receiver in a way that does
+        // not meet known call site method types.
         // TODO: Instead, insert casts as necessary during inlining, and
         // account for them in cost functions.
-        code->build_cfg(/* editable */ true);
-        live_range::Chains chains(code->cfg());
-        auto du_chains = chains.get_def_use_chains();
-        auto first_load_param =
-            InstructionIterable(code->cfg().get_param_instructions())
-                .begin()
-                ->insn;
-        code->clear_cfg();
-        if (du_chains.count(first_load_param)) {
-          caller_to_invocations.caller_insns.clear();
-          caller_to_invocations.other_call_sites = true;
+        std::unordered_set<live_range::Use> first_load_param_uses;
+        {
+          code->build_cfg(/* editable */ true);
+          live_range::MoveAwareChains chains(code->cfg());
+          auto ii = InstructionIterable(code->cfg().get_param_instructions());
+          auto first_load_param = ii.begin()->insn;
+          first_load_param_uses =
+              std::move(chains.get_def_use_chains()[first_load_param]);
+          code->clear_cfg();
         }
+        std::unordered_set<DexType*> formal_callee_types;
+        for (auto& p : caller_to_invocations.caller_insns) {
+          for (auto insn : p.second) {
+            formal_callee_types.insert(insn->get_method()->get_class());
+          }
+        }
+        std::unordered_set<DexType*> type_demands;
+        // Note that the callee-rtype is the same for all methods in a
+        // same-implementations cluster.
+        auto callee_rtype = callee->get_proto()->get_rtype();
+        for (auto use : first_load_param_uses) {
+          if (opcode::is_a_move(use.insn->opcode())) {
+            continue;
+          }
+          auto type_demand = get_receiver_type_demand(callee_rtype, use);
+          always_assert(type::check_cast(callee->get_class(), type_demand));
+          if (type_demand == nullptr) {
+            formal_callee_types.clear();
+            break;
+          }
+          if (type_demands.insert(type_demand).second) {
+            std20::erase_if(formal_callee_types, [&](auto it) {
+              return !type::check_cast(*it, type_demand);
+            });
+          }
+        }
+        for (auto& p : caller_to_invocations.caller_insns) {
+          for (auto it = p.second.begin(); it != p.second.end();) {
+            if (formal_callee_types.count((*it)->get_method()->get_class())) {
+              it++;
+            } else {
+              it = p.second.erase(it);
+              caller_to_invocations.other_call_sites = true;
+            }
+          }
+        }
+        std20::erase_if(caller_to_invocations.caller_insns,
+                        [&](auto it) { return it->second.empty(); });
       },
       true_virtual_callees);
   for (auto& pair : concurrent_true_virtual_callers) {
