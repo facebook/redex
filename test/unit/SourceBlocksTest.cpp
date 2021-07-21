@@ -472,7 +472,8 @@ TEST_F(SourceBlocksTest, inline_normalization) {
     }
   }
   ASSERT_NE(invoke_insn, nullptr);
-  inliner::inline_with_cfg(foo_method, bar_method, invoke_insn, 1);
+  inliner::inline_with_cfg(foo_method, bar_method, invoke_insn,
+                           /* needs_receiver_cast */ false, 1);
 
   // Values of LBar; should be halved.
 

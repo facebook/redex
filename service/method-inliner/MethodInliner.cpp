@@ -266,6 +266,7 @@ void gather_true_virtual_methods(const mog::Graph& method_override_graph,
         get_same_implementation_map(scope, method_override_graph);
   }
   ConcurrentMap<const DexMethod*, CallerInsns> concurrent_true_virtual_callers;
+  ConcurrentSet<IRInstruction*> same_implementation_invokes;
   // Add mapping from callee to monomorphic callsites.
   auto add_monomorphic_call_site = [&](const DexMethod* caller,
                                        IRInstruction* callsite,
@@ -288,6 +289,7 @@ void gather_true_virtual_methods(const mog::Graph& method_override_graph,
   walk::parallel::methods(scope, [&non_virtual, &method_override_graph,
                                   &add_monomorphic_call_site,
                                   &add_other_call_site, &add_candidate,
+                                  &same_implementation_invokes,
                                   &same_implementation_map](DexMethod* method) {
     if (method->is_virtual() && !non_virtual.count(method)) {
       add_candidate(method);
@@ -358,6 +360,7 @@ void gather_true_virtual_methods(const mog::Graph& method_override_graph,
         // just use that piece of info because we know the implementors are all
         // the same
         add_monomorphic_call_site(method, insn, it->second);
+        same_implementation_invokes.insert(insn);
         continue;
       }
       auto overriding_methods =
@@ -403,10 +406,8 @@ void gather_true_virtual_methods(const mog::Graph& method_override_graph,
           }
           return;
         }
-        // Not considering candidates that use the receiver in a way that does
-        // not meet known call site method types.
-        // TODO: Instead, insert casts as necessary during inlining, and
-        // account for them in cost functions.
+        // Figure out if candidates use the receiver in a way that does require
+        // a cast.
         std::unordered_set<live_range::Use> first_load_param_uses;
         {
           code->build_cfg(/* editable */ true);
@@ -437,6 +438,7 @@ void gather_true_virtual_methods(const mog::Graph& method_override_graph,
             formal_callee_types.clear();
             break;
           }
+          always_assert(type::check_cast(callee->get_class(), type_demand));
           if (type_demands.insert(type_demand).second) {
             std20::erase_if(formal_callee_types, [&](auto it) {
               return !type::check_cast(*it, type_demand);
@@ -445,12 +447,22 @@ void gather_true_virtual_methods(const mog::Graph& method_override_graph,
         }
         for (auto& p : caller_to_invocations.caller_insns) {
           for (auto it = p.second.begin(); it != p.second.end();) {
-            if (formal_callee_types.count((*it)->get_method()->get_class())) {
-              it++;
-            } else {
-              it = p.second.erase(it);
-              caller_to_invocations.other_call_sites = true;
+            auto insn = *it;
+            if (!formal_callee_types.count(insn->get_method()->get_class())) {
+              if (same_implementation_invokes.count(insn)) {
+                // We can't just cast to the type of the representative. And
+                // it's not trivial to find the right common base type of the
+                // representatives, it might not even exist. (Imagine all
+                // subtypes happen the implement the same interface, but the
+                // base type didn't.) TODO: Try to analyze instead of giving up.
+                caller_to_invocations.other_call_sites = true;
+                it = p.second.erase(it);
+                continue;
+              } else {
+                caller_to_invocations.inlined_invokes_need_cast.insert(insn);
+              }
             }
+            it++;
           }
         }
         std20::erase_if(caller_to_invocations.caller_insns,

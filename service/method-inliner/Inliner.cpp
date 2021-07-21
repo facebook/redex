@@ -122,6 +122,9 @@ MultiMethodInliner::MultiMethodInliner(
     for (const auto& caller_insns : callee_callers.second.caller_insns) {
       for (auto insn : caller_insns.second) {
         caller_virtual_callee[caller_insns.first][insn] = callee;
+        if (callee_callers.second.inlined_invokes_need_cast.count(insn)) {
+          m_inlined_invokes_need_cast.insert(insn);
+        }
       }
     }
   }
@@ -1005,9 +1008,10 @@ void MultiMethodInliner::inline_inlinables(
       cfg_next_caller_reg = caller->cfg().get_registers_size();
     }
     auto timer2 = m_inline_with_cfg_timer.scope();
-    bool success =
-        inliner::inline_with_cfg(caller_method, callee_method, callsite_insn,
-                                 *cfg_next_caller_reg, inlinable.dead_blocks);
+    bool success = inliner::inline_with_cfg(
+        caller_method, callee_method, callsite_insn,
+        m_inlined_invokes_need_cast.count(callsite_insn), *cfg_next_caller_reg,
+        inlinable.dead_blocks);
     if (!success) {
       calls_not_inlined++;
       continue;
@@ -2756,6 +2760,7 @@ void inline_tail_call(DexMethod* caller,
 bool inline_with_cfg(DexMethod* caller_method,
                      DexMethod* callee_method,
                      IRInstruction* callsite,
+                     bool needs_receiver_cast,
                      size_t next_caller_reg,
                      const std::unordered_set<cfg::Block*>* dead_blocks) {
 
@@ -2790,8 +2795,10 @@ bool inline_with_cfg(DexMethod* caller_method,
 
   auto callee_code = callee_method->get_code();
   always_assert(callee_code->editable_cfg_built());
-  cfg::CFGInliner::inline_cfg(&caller_cfg, callsite_it, callee_code->cfg(),
-                              next_caller_reg, dead_blocks);
+  cfg::CFGInliner::inline_cfg(&caller_cfg, callsite_it,
+                              needs_receiver_cast ? callee_method->get_class()
+                                                  : nullptr,
+                              callee_code->cfg(), next_caller_reg, dead_blocks);
 
   return true;
 }

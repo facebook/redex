@@ -27,12 +27,13 @@ namespace cfg {
 void CFGInliner::inline_cfg(
     ControlFlowGraph* caller,
     const InstructionIterator& callsite,
+    DexType* needs_receiver_cast,
     const ControlFlowGraph& callee_orig,
     size_t next_caller_reg,
     const std::unordered_set<cfg::Block*>* dead_blocks) {
   CFGInlinerPlugin base_plugin;
-  inline_cfg(caller, callsite, callee_orig, next_caller_reg, base_plugin,
-             dead_blocks);
+  inline_cfg(caller, callsite, needs_receiver_cast, callee_orig,
+             next_caller_reg, base_plugin, dead_blocks);
 }
 
 namespace {
@@ -171,6 +172,7 @@ static void normalize_dead_blocks(
 void CFGInliner::inline_cfg(
     ControlFlowGraph* caller,
     const InstructionIterator& inline_site,
+    DexType* needs_receiver_cast,
     const ControlFlowGraph& callee_orig,
     size_t next_caller_reg,
     CFGInlinerPlugin& plugin,
@@ -198,6 +200,21 @@ void CFGInliner::inline_cfg(
   }
 
   cleanup_callee_debug(&callee);
+  if (needs_receiver_cast) {
+    auto param_insns = callee.get_param_instructions();
+    auto first_load_param_insn = param_insns.front().insn;
+    auto first_param_reg = first_load_param_insn->dest();
+    auto last_param_insn_it =
+        callee.find_insn(param_insns.back().insn, callee.entry_block());
+    auto check_cast_insn = (new IRInstruction(OPCODE_CHECK_CAST))
+                               ->set_type(needs_receiver_cast)
+                               ->set_src(0, first_param_reg);
+    auto move_result_insn =
+        (new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT))
+            ->set_dest(first_param_reg);
+    callee.insert_after(last_param_insn_it,
+                        {check_cast_insn, move_result_insn});
+  }
 
   TRACE(CFG, 3, "caller %s", SHOW(*caller));
   TRACE(CFG, 3, "callee %s", SHOW(callee));
