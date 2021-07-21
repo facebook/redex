@@ -28,6 +28,7 @@
 #include "Resolver.h"
 #include "ScopedMetrics.h"
 #include "Shrinker.h"
+#include "StlUtil.h"
 #include "Timer.h"
 #include "Walkers.h"
 #include "WorkQueue.h"
@@ -133,13 +134,24 @@ std::unordered_map<const DexMethod*, DexMethod*> get_same_implementation_map(
       // method. So we assume the worst.
       return;
     }
-    const auto& overriding_methods =
+    auto overriding_methods =
         mog::get_overriding_methods(method_override_graph, method);
-    if (overriding_methods.empty()) {
-      return;
-    }
-    // Filter out methods without IRCode.
-    std::set<const DexMethod*, dexmethods_comparator> filtered_methods;
+    DexMethod* representative_method{nullptr};
+    size_t considered_methods{0};
+    auto consider_method = [&](DexMethod* method) {
+      always_assert(method->get_code());
+      if (representative_method != nullptr &&
+          !method->get_code()->structural_equals(
+              *representative_method->get_code())) {
+        return false;
+      }
+      if (representative_method == nullptr ||
+          compare_dexmethods(method, representative_method)) {
+        representative_method = method;
+      }
+      considered_methods++;
+      return true;
+    };
     for (auto overriding_method : overriding_methods) {
       if (is_abstract(overriding_method)) {
         continue;
@@ -149,33 +161,22 @@ std::unordered_map<const DexMethod*, DexMethod*> get_same_implementation_map(
         // implementation, we bail out.
         return;
       }
-      filtered_methods.emplace(overriding_method);
+      if (!consider_method(const_cast<DexMethod*>(overriding_method))) {
+        return;
+      }
     }
-    if (filtered_methods.empty()) {
+    if (method->get_code() && !consider_method(method)) {
       return;
     }
-    if (method->get_code()) {
-      filtered_methods.emplace(method);
+    if (considered_methods <= 1) {
+      return;
     }
 
-    // If all methods have the same implementation we create mapping between
+    // All methods have the same implementation, so we create mapping between
     // methods and their representative implementation.
-    auto* comparing_method = const_cast<DexMethod*>(*filtered_methods.begin());
-    auto compare_method_ir = [&](const DexMethod* current) -> bool {
-      return const_cast<DexMethod*>(current)->get_code()->structural_equals(
-          *(comparing_method->get_code()));
-    };
-    if (std::all_of(std::next(filtered_methods.begin()), filtered_methods.end(),
-                    compare_method_ir)) {
-      auto update_method_to_implementations =
-          [&](const DexMethod* method_to_update,
-              DexMethod* representative_method) {
-            method_to_implementations[method_to_update] = representative_method;
-          };
-      update_method_to_implementations(method, comparing_method);
-      for (auto overriding_method : overriding_methods) {
-        update_method_to_implementations(overriding_method, comparing_method);
-      }
+    method_to_implementations[method] = representative_method;
+    for (auto overriding_method : overriding_methods) {
+      method_to_implementations[overriding_method] = representative_method;
     }
   });
   return method_to_implementations;
@@ -298,6 +299,8 @@ void gather_true_virtual_methods(const mog::Graph& method_override_graph,
       }
       auto overriding_methods =
           mog::get_overriding_methods(method_override_graph, callee);
+      std20::erase_if(overriding_methods,
+                      [&](auto& it) { return is_abstract(*it); });
       if (overriding_methods.empty()) {
         // There is no override for this method
         add_monomorphic_call_site(method, insn, callee);
