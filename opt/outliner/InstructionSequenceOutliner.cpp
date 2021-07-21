@@ -1822,26 +1822,8 @@ class OutlinedMethodCreator {
   // Gets the set of unique dbg-position patterns.
   std::set<uint32_t> get_outlined_dbg_positions_patterns(
       const Candidate& c, const CandidateInfo& ci) {
-    std::vector<DexMethod*> ordered_methods;
-    for (auto& p : ci.methods) {
-      ordered_methods.push_back(p.first);
-    }
-    // Sort methods to make sure we get deterministic pattern-ids.
-    std::sort(ordered_methods.begin(), ordered_methods.end(),
-              compare_dexmethods);
     std::set<uint32_t> pattern_ids;
-    auto manager = g_redex->get_position_pattern_switch_manager();
-    for (auto method : ordered_methods) {
-      auto& cmls = ci.methods.at(method);
-      for (auto& cml : cmls) {
-        auto positions = get_outlined_dbg_positions(c, cml, method);
-        auto pattern_id = manager->make_pattern(positions);
-        if (m_config.full_dbg_positions) {
-          m_call_site_pattern_ids.emplace(cml.first_insn, pattern_id);
-        }
-        pattern_ids.insert(pattern_id);
-      }
-    }
+    add_outlined_dbg_position_patterns(c, ci, &pattern_ids);
     always_assert(!pattern_ids.empty());
     if (!m_config.full_dbg_positions) {
       // Find the "best" representative set of debug position, that is the one
@@ -1849,6 +1831,7 @@ class OutlinedMethodCreator {
       // positions
       uint32_t best_pattern_id = *pattern_ids.begin();
       size_t best_unique_positions{0};
+      auto manager = g_redex->get_position_pattern_switch_manager();
       const auto& all_managed_patterns = manager->get_patterns();
       for (auto pattern_id : pattern_ids) {
         std::unordered_set<DexPosition*> unique_positions;
@@ -1875,6 +1858,33 @@ class OutlinedMethodCreator {
       : m_config(config),
         m_mgr(mgr),
         m_method_name_generator(method_name_generator) {}
+
+  // Infers outlined pattern ids.
+  void add_outlined_dbg_position_patterns(const Candidate& c,
+                                          const CandidateInfo& ci,
+                                          std::set<uint32_t>* pattern_ids) {
+    auto manager = g_redex->get_position_pattern_switch_manager();
+    // Order methods to make sure we get deterministic pattern-ids.
+    std::vector<DexMethod*> ordered_methods;
+    for (auto& p : ci.methods) {
+      ordered_methods.push_back(p.first);
+    }
+    std::sort(ordered_methods.begin(), ordered_methods.end(),
+              compare_dexmethods);
+    for (auto method : ordered_methods) {
+      auto& cmls = ci.methods.at(method);
+      for (auto& cml : cmls) {
+        // if the current method is reused then the call site
+        // didn't have the pattern id. Need to create and add pattern_id
+        auto positions = get_outlined_dbg_positions(c, cml, method);
+        auto pattern_id = manager->make_pattern(positions);
+        if (m_config.full_dbg_positions) {
+          m_call_site_pattern_ids.emplace(cml.first_insn, pattern_id);
+        }
+        pattern_ids->insert(pattern_id);
+      }
+    }
+  }
 
   // Obtain outlined method for a candidate.
   DexMethod* create_outlined_method(const Candidate& c,
@@ -2425,6 +2435,7 @@ using NewlyOutlinedMethods =
 
 // Outlining all occurrences of a particular candidate.
 bool outline_candidate(
+    const Config& config,
     const Candidate& c,
     const CandidateInfo& ci,
     ReusableOutlinedMethods* outlined_methods,
@@ -2444,9 +2455,6 @@ bool outline_candidate(
   }
   auto rtype = c.res_type ? c.res_type : type::_void();
   type_refs_to_insert.insert(const_cast<DexType*>(rtype));
-  auto call_site_pattern_ids =
-      outlined_method_creator->get_call_site_pattern_ids();
-  auto manager = g_redex->get_position_pattern_switch_manager();
 
   DexMethod* outlined_method{find_reusable_method(
       c, ci, *outlined_methods, reuse_outlined_methods_across_dexes)};
@@ -2456,28 +2464,19 @@ bool outline_candidate(
       return false;
     }
 
-    auto& pairs = outlined_methods->map.at(c);
-    auto it = std::find_if(
-        pairs.begin(), pairs.end(),
-        [&outlined_method](
-            const std::pair<DexMethod*, std::set<uint32_t>>& pair) {
-          return pair.first == outlined_method;
-        });
-    auto& pattern_ids = it->second;
-
-    (*num_reused_methods)++;
-    for (auto& p : ci.methods) {
-      auto method = p.first;
-      for (auto& cml : p.second) {
-        // if the current method is reused then the call site
-        // didn't have the pattern id. Need to create and add pattern_id
-        auto positions =
-            outlined_method_creator->get_outlined_dbg_positions(c, cml, method);
-        auto pattern_id = manager->make_pattern(positions);
-        call_site_pattern_ids->emplace(cml.first_insn, pattern_id);
-        pattern_ids.insert(pattern_id);
-      }
+    if (config.full_dbg_positions) {
+      auto& pairs = outlined_methods->map.at(c);
+      auto it = std::find_if(
+          pairs.begin(), pairs.end(),
+          [&outlined_method](
+              const std::pair<DexMethod*, std::set<uint32_t>>& pair) {
+            return pair.first == outlined_method;
+          });
+      auto& pattern_ids = it->second;
+      outlined_method_creator->add_outlined_dbg_position_patterns(c, ci,
+                                                                  &pattern_ids);
     }
+    (*num_reused_methods)++;
 
     TRACE(ISO, 5, "[invoke sequence outliner] reused %s",
           SHOW(outlined_method));
@@ -2514,6 +2513,8 @@ bool outline_candidate(
     }
   }
   dex_state->insert_type_refs(type_refs_to_insert);
+  auto call_site_pattern_ids =
+      outlined_method_creator->get_call_site_pattern_ids();
   for (auto& p : ci.methods) {
     auto method = p.first;
     auto& cfg = method->get_code()->cfg();
@@ -2607,7 +2608,7 @@ static NewlyOutlinedMethods outline(
           "[invoke sequence outliner] %4zx(%3zu) [%zu]: %zu byte savings",
           cwi.info.count, cwi.info.methods.size(), cwi.candidate.size,
           2 * savings);
-    if (outline_candidate(cwi.candidate, cwi.info, outlined_methods,
+    if (outline_candidate(config, cwi.candidate, cwi.info, outlined_methods,
                           &newly_outlined_methods, &dex_state,
                           &host_class_selector, &outlined_method_creator,
                           ab_experiment_context, num_reused_methods,
@@ -3168,7 +3169,6 @@ class OutlinedMethodBodySetter {
 
   // set body for each method stored in ReusableOutlinedMethod
   void set_method_body(ReusableOutlinedMethods& outlined_methods) {
-
     for (auto& c : outlined_methods.order) {
       auto& method_pattern_pairs = outlined_methods.map[c];
       auto& outlined_method = method_pattern_pairs.front().first;
