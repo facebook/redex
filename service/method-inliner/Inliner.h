@@ -86,9 +86,16 @@ enum MultiMethodInlinerMode {
   IntraDex,
 };
 
-using CalleeCallerInsns = std::unordered_map<
-    DexMethod*,
-    std::unordered_map<DexMethod*, std::unordered_set<IRInstruction*>>>;
+// All call-sites of a callee.
+struct CallerInsns {
+  std::unordered_map<const DexMethod*, std::unordered_set<IRInstruction*>>
+      caller_insns;
+  // Whether there may be any other unknown call-sites.
+  bool other_call_sites{false};
+  bool empty() const { return caller_insns.empty() && !other_call_sites; }
+};
+
+using CalleeCallerInsns = std::unordered_map<DexMethod*, CallerInsns>;
 
 using CallSiteArguments = constant_propagation::interprocedural::ArgumentDomain;
 
@@ -510,10 +517,12 @@ class MultiMethodInliner {
   std::unordered_map<const DexMethod*, std::unordered_map<DexMethod*, size_t>>
       caller_callee;
 
-  std::unordered_map<DexMethod*, std::unordered_map<IRInstruction*, DexMethod*>>
+  std::unordered_map<const DexMethod*,
+                     std::unordered_map<IRInstruction*, DexMethod*>>
       caller_virtual_callee;
 
-  std::unordered_set<const DexMethod*> true_virtual_callees;
+  std::unordered_set<const DexMethod*>
+      m_true_virtual_callees_with_other_call_sites;
 
   std::unordered_set<const DexMethod*> m_recursive_callees;
 

@@ -116,8 +116,10 @@ MultiMethodInliner::MultiMethodInliner(
   Timer t("MultiMethodInliner construction");
   for (const auto& callee_callers : true_virtual_callers) {
     auto callee = callee_callers.first;
-    true_virtual_callees.insert(callee);
-    for (const auto& caller_insns : callee_callers.second) {
+    if (callee_callers.second.other_call_sites) {
+      m_true_virtual_callees_with_other_call_sites.insert(callee);
+    }
+    for (const auto& caller_insns : callee_callers.second.caller_insns) {
       for (auto insn : caller_insns.second) {
         caller_virtual_callee[caller_insns.first][insn] = callee;
       }
@@ -173,8 +175,8 @@ MultiMethodInliner::MultiMethodInliner(
                        concurrent_caller_callee.end());
   for (const auto& callee_callers : true_virtual_callers) {
     auto callee = callee_callers.first;
-    for (const auto& caller_insns : callee_callers.second) {
-      auto caller = caller_insns.first;
+    for (const auto& caller_insns : callee_callers.second.caller_insns) {
+      auto caller = const_cast<DexMethod*>(caller_insns.first);
       if (x_dex && x_dex->cross_dex_ref(caller, callee)) {
         m_x_dex_callees.insert(callee);
         continue;
@@ -309,7 +311,7 @@ void MultiMethodInliner::compute_call_site_summaries() {
     auto it = callee_caller.find(callee);
     if (it == callee_caller.end() || m_recursive_callees.count(callee) ||
         m_x_dex_callees.count(callee) || root(callee) || !can_rename(callee) ||
-        true_virtual_callees.count(callee)) {
+        m_true_virtual_callees_with_other_call_sites.count(callee)) {
       return nullptr;
     }
     // If we get here, then we know all possible call-sites to the callee, and
@@ -1281,7 +1283,8 @@ bool MultiMethodInliner::should_inline_fast(const DexMethod* callee) {
   // as the method can be removed afterwards
   const auto& callers = callee_caller.at(callee);
   if (callers.size() == 1 && callers.begin()->second == 1 && !root(callee) &&
-      !m_recursive_callees.count(callee) && !m_x_dex_callees.count(callee)) {
+      !m_recursive_callees.count(callee) && !m_x_dex_callees.count(callee) &&
+      !m_true_virtual_callees_with_other_call_sites.count(callee)) {
     return true;
   }
 
@@ -1850,7 +1853,8 @@ bool MultiMethodInliner::can_inline_init(const DexMethod* init_method) {
 
 bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
   if (root(callee) || m_recursive_callees.count(callee) ||
-      m_x_dex_callees.count(callee) || true_virtual_callees.count(callee) ||
+      m_x_dex_callees.count(callee) ||
+      m_true_virtual_callees_with_other_call_sites.count(callee) ||
       !m_config.multiple_callers) {
     return true;
   }

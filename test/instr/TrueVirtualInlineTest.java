@@ -12,6 +12,14 @@ import static org.fest.assertions.api.Assertions.assertThat;
 import org.junit.Test;
 
 interface IA {
+  // PRECHECK: method: virtual redex.IA.do_something
+  // POSTCHECK: method: virtual redex.IA.do_something
+  public int do_something();
+}
+
+interface IE {
+  // PRECHECK: method: virtual redex.IE.do_something
+  // POSTCHECK-NOT: method: virtual redex.IE.do_something
   public int do_something();
 }
 
@@ -36,11 +44,11 @@ class D extends BB {
   public int do_something() { return 2; }
 }
 
-interface IE {
-  public int do_something();
+abstract class F implements IE {
+  // PRECHECK: method: virtual redex.F.do_something
+  // POSTCHECK-NOT: method: virtual redex.F.do_something
+  public abstract int do_something();
 }
-
-abstract class F implements IE {}
 
 class G extends F {
   // PRECHECK: method: virtual redex.G.do_something

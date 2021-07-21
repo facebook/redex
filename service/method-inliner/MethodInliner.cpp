@@ -121,7 +121,7 @@ std::unordered_map<const DexMethod*, DexMethod*> get_same_implementation_map(
     const Scope& scope, const mog::Graph& method_override_graph) {
   std::unordered_map<const DexMethod*, DexMethod*> method_to_implementations;
   walk::methods(scope, [&](DexMethod* method) {
-    if (method->is_external() || root(method) || !method->is_virtual() ||
+    if (method->is_external() || !method->is_virtual() ||
         (!method->get_code() && !is_abstract(method))) {
       return;
     }
@@ -144,9 +144,9 @@ std::unordered_map<const DexMethod*, DexMethod*> get_same_implementation_map(
       if (is_abstract(overriding_method)) {
         continue;
       }
-      if (!overriding_method->get_code() || root(overriding_method)) {
+      if (!overriding_method->get_code()) {
         // If the method is not abstract method and it doesn't have
-        // implementation or is root, we bail out.
+        // implementation, we bail out.
         return;
       }
       filtered_methods.emplace(overriding_method);
@@ -181,8 +181,6 @@ std::unordered_map<const DexMethod*, DexMethod*> get_same_implementation_map(
   return method_to_implementations;
 }
 
-using CallerInsns =
-    std::unordered_map<DexMethod*, std::unordered_set<IRInstruction*>>;
 /**
  * Gather candidates of true virtual methods that can be inlined and their
  * call site in true_virtual_callers.
@@ -193,37 +191,68 @@ using CallerInsns =
  */
 void gather_true_virtual_methods(const mog::Graph& method_override_graph,
                                  const Scope& scope,
+                                 bool compute_caller_insns,
+                                 bool include_empty,
                                  CalleeCallerInsns* true_virtual_callers) {
   Timer t("gather_true_virtual_methods");
   auto non_virtual = mog::get_non_true_virtuals(method_override_graph, scope);
-  auto same_implementation_map =
-      get_same_implementation_map(scope, method_override_graph);
+  std::unordered_map<const DexMethod*, DexMethod*> same_implementation_map;
+  if (compute_caller_insns) {
+    same_implementation_map =
+        get_same_implementation_map(scope, method_override_graph);
+  }
+  ConcurrentMap<const DexMethod*, CallerInsns> concurrent_true_virtual_callers;
   // Add mapping from callee to monomorphic callsites.
-  auto update_monomorphic_callsite =
-      [](DexMethod* caller, IRInstruction* callsite, DexMethod* callee,
-         ConcurrentMap<DexMethod*, CallerInsns>* meth_caller) {
-        if (!callee->get_code()) {
-          return;
-        }
-        meth_caller->update(
-            callee, [&](const DexMethod*, CallerInsns& m, bool /* exists */) {
-              m[caller].emplace(callsite);
-            });
-      };
+  auto add_monomorphic_call_site = [&](const DexMethod* caller,
+                                       IRInstruction* callsite,
+                                       const DexMethod* callee) {
+    concurrent_true_virtual_callers.update(
+        callee, [&](const DexMethod*, CallerInsns& m, bool) {
+          m.caller_insns[caller].emplace(callsite);
+        });
+  };
+  auto add_other_call_site = [&](const DexMethod* callee) {
+    concurrent_true_virtual_callers.update(
+        callee, [&](const DexMethod*, CallerInsns& m, bool) {
+          m.other_call_sites = true;
+        });
+  };
+  auto add_candidate = [&](const DexMethod* callee) {
+    concurrent_true_virtual_callers.emplace(callee, CallerInsns());
+  };
 
-  ConcurrentMap<DexMethod*, CallerInsns> meth_caller;
-  walk::parallel::code(scope, [&non_virtual, &method_override_graph,
-                               &meth_caller, &update_monomorphic_callsite,
-                               &same_implementation_map](DexMethod* method,
-                                                         IRCode& code) {
+  walk::parallel::methods(scope, [&non_virtual, &method_override_graph,
+                                  &add_monomorphic_call_site,
+                                  &add_other_call_site, &add_candidate,
+                                  &same_implementation_map](DexMethod* method) {
+    if (method->is_virtual() && !non_virtual.count(method)) {
+      add_candidate(method);
+      if (root(method)) {
+        add_other_call_site(method);
+      } else {
+        const auto& overridden_methods = mog::get_overridden_methods(
+            method_override_graph, method, /* include_interfaces */ true);
+        for (auto overridden_method : overridden_methods) {
+          if (root(overridden_method) || overridden_method->is_external()) {
+            add_other_call_site(method);
+            break;
+          }
+        }
+      }
+    }
+    auto code = method->get_code();
+    if (!code) {
+      return;
+    }
     for (auto& mie : InstructionIterable(code)) {
       auto insn = mie.insn;
       if (insn->opcode() != OPCODE_INVOKE_VIRTUAL &&
-          insn->opcode() != OPCODE_INVOKE_INTERFACE) {
+          insn->opcode() != OPCODE_INVOKE_INTERFACE &&
+          insn->opcode() != OPCODE_INVOKE_SUPER) {
         continue;
       }
       auto insn_method = insn->get_method();
-      auto callee = resolve_method(insn_method, opcode_to_search(insn));
+      auto callee = resolve_method(insn_method, opcode_to_search(insn), method);
       if (callee == nullptr) {
         // There are some invoke-virtual call on methods whose def are
         // actually in interface.
@@ -237,56 +266,79 @@ void gather_true_virtual_methods(const mog::Graph& method_override_graph,
         continue;
       }
       // Why can_rename? To mirror what VirtualRenamer looks at.
-      if (is_interface(type_class(method->get_class())) &&
-          (root(method) || !can_rename(method))) {
+      if (callee->is_external() ||
+          (is_interface(type_class(method->get_class())) &&
+           (root(method) || !can_rename(method)))) {
         // We cannot rule out that there are dynamically added classes, possibly
         // even created at runtime via Proxy.newProxyInstance, that override
         // this method. So we assume the worst.
+        add_other_call_site(callee);
+        if (insn->opcode() != OPCODE_INVOKE_SUPER) {
+          auto overriding_methods =
+              mog::get_overriding_methods(method_override_graph, callee);
+          for (auto overriding_method : overriding_methods) {
+            add_other_call_site(overriding_method);
+          }
+        }
         continue;
       }
       always_assert_log(callee->is_def(), "Resolved method not def %s",
                         SHOW(callee));
+      if (insn->opcode() == OPCODE_INVOKE_SUPER) {
+        add_monomorphic_call_site(method, insn, callee);
+        continue;
+      }
       auto it = same_implementation_map.find(callee);
       if (it != same_implementation_map.end()) {
         // We can find the resolved callee in same_implementation_map,
         // just use that piece of info because we know the implementors are all
         // the same
-        update_monomorphic_callsite(method, insn, it->second, &meth_caller);
+        add_monomorphic_call_site(method, insn, it->second);
         continue;
       }
-      if (callee->is_external()) {
-        continue;
-      }
-      const auto& overriding_methods =
+      auto overriding_methods =
           mog::get_overriding_methods(method_override_graph, callee);
       if (overriding_methods.empty()) {
         // There is no override for this method
-        update_monomorphic_callsite(
-            method, insn, static_cast<DexMethod*>(callee), &meth_caller);
+        add_monomorphic_call_site(method, insn, callee);
       } else if (is_abstract(callee) && overriding_methods.size() == 1) {
         // The method is an abstract method, the only override is its
         // implementation.
-        auto implementing_method =
-            const_cast<DexMethod*>(*(overriding_methods.begin()));
-
-        update_monomorphic_callsite(method, insn, implementing_method,
-                                    &meth_caller);
+        auto implementing_method = *overriding_methods.begin();
+        add_monomorphic_call_site(method, insn, implementing_method);
+      } else {
+        add_other_call_site(callee);
+        for (auto overriding_method : overriding_methods) {
+          add_other_call_site(overriding_method);
+        }
       }
     }
   });
 
   // Post processing candidates.
-  std::mutex mutex;
-  using WorkItem = std::pair<DexMethod*, CallerInsns>;
-  workqueue_run<WorkItem>(
-      [&](sparta::SpartaWorkerState<WorkItem>*, const WorkItem& pair) {
-        DexMethod* callee = pair.first;
-        auto& caller_to_invocations = pair.second;
-        auto code = callee->get_code();
-        always_assert(code);
+  std::vector<const DexMethod*> true_virtual_callees;
+  for (auto& p : concurrent_true_virtual_callers) {
+    true_virtual_callees.push_back(p.first);
+  }
+  workqueue_run<const DexMethod*>(
+      [&](sparta::SpartaWorkerState<const DexMethod*>*,
+          const DexMethod* callee) {
+        auto& caller_to_invocations =
+            concurrent_true_virtual_callers.at_unsafe(callee);
+        if (caller_to_invocations.caller_insns.empty()) {
+          return;
+        }
+        auto code = const_cast<DexMethod*>(callee)->get_code();
+        if (!code || !compute_caller_insns) {
+          if (!caller_to_invocations.caller_insns.empty()) {
+            caller_to_invocations.caller_insns.clear();
+            caller_to_invocations.other_call_sites = true;
+          }
+          return;
+        }
         // Not considering candidates that use the receiver.
-        // TODO: Instead, insert casts as necessary during inlining, and account
-        // for them in cost functions.
+        // TODO: Instead, insert casts as necessary during inlining, and
+        // account for them in cost functions.
         code->build_cfg(/* editable */ true);
         live_range::Chains chains(code->cfg());
         auto du_chains = chains.get_def_use_chains();
@@ -296,13 +348,17 @@ void gather_true_virtual_methods(const mog::Graph& method_override_graph,
                 ->insn;
         code->clear_cfg();
         if (du_chains.count(first_load_param)) {
-          return;
+          caller_to_invocations.caller_insns.clear();
+          caller_to_invocations.other_call_sites = true;
         }
-
-        std::lock_guard<std::mutex> lock_guard(mutex);
-        (*true_virtual_callers)[callee] = caller_to_invocations;
       },
-      meth_caller);
+      true_virtual_callees);
+  for (auto& pair : concurrent_true_virtual_callers) {
+    if (include_empty || !pair.second.empty()) {
+      DexMethod* callee = const_cast<DexMethod*>(pair.first);
+      true_virtual_callers->emplace(callee, std::move(pair.second));
+    }
+  }
 }
 
 } // namespace
@@ -348,6 +404,8 @@ void run_inliner(DexStoresVector& stores,
 
   if (inliner_config.virtual_inline && inliner_config.true_virtual_inline) {
     gather_true_virtual_methods(*method_override_graph, scope,
+                                /* compute_caller_insns */ true,
+                                /* include_empty */ true,
                                 &true_virtual_callers);
     for (auto& p : true_virtual_callers) {
       candidates.insert(p.first);
@@ -388,14 +446,27 @@ void run_inliner(DexStoresVector& stores,
 
   std::unordered_set<DexMethod*> delete_candidates =
       inliner_config.delete_any_candidate ? candidates : inlined;
-  // Do not erase true virtual methods that are inlined because we are only
-  // inlining callsites that are monomorphic, for polymorphic callsite we
-  // didn't inline, but in run time the callsite may still be resolved to
-  // those methods that are inlined. We are relying on RMU to clean up
-  // true virtual methods that are not referenced.
-  for (const auto& pair : true_virtual_callers) {
-    delete_candidates.erase(pair.first);
+
+  if (!true_virtual_callers.empty()) {
+    if (inliner_config.delete_any_candidate) {
+      // We are not going to erase true virtual methods if some call-sites have
+      // not been fully inlined.
+      CalleeCallerInsns remaining_true_virtual_callers;
+      gather_true_virtual_methods(*method_override_graph, scope,
+                                  /* compute_caller_insns */ false,
+                                  /* include_empty */ false,
+                                  &remaining_true_virtual_callers);
+      for (const auto& p : remaining_true_virtual_callers) {
+        delete_candidates.erase(p.first);
+      }
+    } else {
+      // We are not going to erase any true virtual methods
+      for (const auto& p : true_virtual_callers) {
+        delete_candidates.erase(p.first);
+      }
+    }
   }
+
   // Do not erase the parameterless constructor, in case it's constructed via
   // .class or Class.forName(). Also see RMU.
   for (auto it = delete_candidates.begin(); it != delete_candidates.end();) {
