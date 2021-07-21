@@ -4,17 +4,22 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+
+# pyre-strict
+
+
 import os
 import sys
+import typing
 
 
-trace = None
-trace_fp = None
+trace: typing.Optional[typing.Dict[str, int]] = None
+trace_fp: typing.Optional[typing.TextIO] = None
 
 ALL = "__ALL__"
 
 
-def parse_trace_string(trace):
+def parse_trace_string(trace: typing.Optional[str]) -> typing.Dict[str, int]:
     """
     The trace string is of the form KEY1:VALUE1,KEY2:VALUE2,...
 
@@ -32,23 +37,25 @@ def parse_trace_string(trace):
     return rv
 
 
-def get_trace():
+def get_trace() -> typing.Dict[str, int]:
     global trace
-    if trace is not None:
-        return trace
+    local_trace = trace
+    if local_trace is not None:
+        return local_trace
     if "TRACE" in os.environ:
-        trace = parse_trace_string(os.environ["TRACE"])
+        local_trace = parse_trace_string(os.environ["TRACE"])
     else:
-        trace = {}
-    return trace
+        local_trace = {}
+    trace = local_trace
+    return local_trace
 
 
-def get_log_level():
+def get_log_level() -> int:
     trace = get_trace()
     return max(trace.get("REDEX", 0), trace.get(ALL, 0))
 
 
-def strip_trace_tag(env):
+def strip_trace_tag(env: typing.Dict[str, str]) -> None:
     """
     Remove the "REDEX:N" component from the trace string
     """
@@ -66,21 +73,23 @@ def strip_trace_tag(env):
         pass
 
 
-def get_trace_file():
+def get_trace_file() -> typing.TextIO:
     global trace_fp
-    if trace_fp is not None:
-        return trace_fp
+    local_trace_fp = trace_fp
+    if local_trace_fp is not None:
+        return local_trace_fp
 
     trace_file = os.environ.get("TRACEFILE")
     if trace_file:
         sys.stderr.write("Trace output will go to %s\n" % trace_file)
-        trace_fp = open(trace_file, "w")  # noqa: P201
+        local_trace_fp = open(trace_file, "w")  # noqa: P201
     else:
-        trace_fp = sys.stderr
-    return trace_fp
+        local_trace_fp = sys.stderr
+    trace_fp = local_trace_fp
+    return local_trace_fp
 
 
-def update_trace_file(env):
+def update_trace_file(env: typing.Dict[str, str]) -> None:
     """
     If TRACEFILE is specified, update it to point to the file descriptor
     instead of the filename. (redex-all will treat integer TRACEFILE values as
@@ -97,7 +106,7 @@ def update_trace_file(env):
         env["TRACEFILE"] = str(trace_fp.fileno())
 
 
-def setup_trace_for_child(env):
+def setup_trace_for_child(env: typing.Dict[str, str]) -> typing.Dict[str, str]:
     """
     Change relevant environment variables so that tracing in the redex-all
     subprocess works
@@ -108,10 +117,10 @@ def setup_trace_for_child(env):
     return env
 
 
-def flush():
+def flush() -> None:
     get_trace_file().flush()
 
 
-def log(*stuff):
+def log(*stuff: typing.Any) -> None:
     if get_log_level() > 0:
         print(*stuff, file=get_trace_file())

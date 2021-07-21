@@ -4,37 +4,37 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+# pyre-strict
+
 import argparse
-import enum
 import errno
 import glob
 import hashlib
-import itertools
 import json
 import logging
 import os
-import platform
 import re
 import shlex
 import shutil
-import signal
-import struct
 import subprocess
 import sys
 import tempfile
 import timeit
+import typing
 import zipfile
 from os.path import abspath, dirname, getsize, isdir, isfile, join
 from pipes import quote
 
 import pyredex.bintools as bintools
 import pyredex.logger as logger
-from pyredex.unpacker import unpack_tar_xz
-from pyredex.utils import (
+from pyredex.unpacker import (
     LibraryManager,
     UnpackManager,
     ZipManager,
     ZipReset,
+    unpack_tar_xz,
+)
+from pyredex.utils import (
     add_android_sdk_path,
     argparse_yes_no_flag,
     dex_glob,
@@ -49,32 +49,26 @@ from pyredex.utils import (
 )
 
 
-IS_WINDOWS = os.name == "nt"
+IS_WINDOWS: bool = os.name == "nt"
 
 
-def patch_zip_file():
-    # See http://bugs.python.org/issue14315
-    old_decode_extra = zipfile.ZipInfo._decodeExtra
-
-    def decodeExtra(self):
-        try:
-            old_decode_extra(self)
-        except struct.error:
-            pass
-
-    zipfile.ZipInfo._decodeExtra = decodeExtra
+timer: typing.Callable[[], float] = timeit.default_timer
 
 
-patch_zip_file()
+# Pyre helper.
+T = typing.TypeVar("T")
 
-timer = timeit.default_timer
+
+def _assert_val(input: typing.Optional[T]) -> T:
+    assert input is not None
+    return input
 
 
-def pgize(name):
+def pgize(name: str) -> str:
     return name.strip()[1:][:-1].replace("/", ".")
 
 
-def dbg_prefix(dbg, src_root=None):
+def dbg_prefix(dbg: str, src_root: typing.Optional[str] = None) -> typing.List[str]:
     """Return a debugger command prefix.
 
     `dbg` is either "gdb" or "lldb", indicating which debugger to invoke.
@@ -99,7 +93,9 @@ def dbg_prefix(dbg, src_root=None):
     return cmd
 
 
-def write_debugger_command(dbg, src_root, args):
+def write_debugger_command(
+    dbg: str, src_root: typing.Optional[str], args: typing.Iterable[str]
+) -> str:
     """Write out a shell script that allows us to rerun redex-all under a debugger.
 
     The choice of debugger is governed by `dbg` which can be either "gdb" or "lldb".
@@ -125,7 +121,7 @@ def write_debugger_command(dbg, src_root, args):
     return script_name
 
 
-def add_extra_environment_args(env):
+def add_extra_environment_args(env: typing.Dict[str, str]) -> None:
     # If we haven't set MALLOC_CONF but we have requested to profile the memory
     # of a specific pass, set some reasonable defaults
     if "MALLOC_PROFILE_PASS" in env and "MALLOC_CONF" not in env:
@@ -138,7 +134,7 @@ def add_extra_environment_args(env):
         env["MALLOC_CONF"] = "background_thread:true,metadata_thp:always,thp:always"
 
 
-def get_stop_pass_idx(passes_list, pass_name_and_num):
+def get_stop_pass_idx(passes_list: typing.Iterable[str], pass_name_and_num: str) -> int:
     # Get the stop position
     # pass_name_and num may be "MyPass#0", "MyPass#3" or "MyPass"
     pass_name = pass_name_and_num
@@ -166,21 +162,57 @@ def get_stop_pass_idx(passes_list, pass_name_and_num):
 
 
 class ExceptionMessageFormatter:
-    def format_rerun_message(self, gdb_script_name, lldb_script_name):
+    def format_rerun_message(self, gdb_script_name: str, lldb_script_name: str) -> str:
         return "You can re-run it under gdb by running {} or under lldb by running {}".format(
             gdb_script_name, lldb_script_name
         )
 
     def format_message(
-        self, err_out, default_error_msg, gdb_script_name, lldb_script_name
-    ):
+        self,
+        err_out: typing.List[str],
+        default_error_msg: str,
+        gdb_script_name: str,
+        lldb_script_name: str,
+    ) -> str:
         return "{} {}".format(
             default_error_msg,
             self.format_rerun_message(gdb_script_name, lldb_script_name),
         )
 
 
-def run_redex_binary(state, exception_formatter, output_line_handler):
+class State(object):
+    # This structure is only used for passing arguments between prepare_redex,
+    # launch_redex_binary, finalize_redex
+    def __init__(
+        self,
+        args: argparse.Namespace,
+        config_dict: typing.Dict[str, typing.Any],
+        debugger: typing.Optional[str],
+        dex_dir: str,
+        dexen: typing.List[str],
+        extracted_apk_dir: typing.Optional[str],
+        stop_pass_idx: int,
+        lib_manager: typing.Optional[LibraryManager],
+        unpack_manager: typing.Optional[UnpackManager],
+        zip_manager: typing.Optional[ZipManager],
+    ) -> None:
+        self.args = args
+        self.config_dict = config_dict
+        self.debugger = debugger
+        self.dex_dir = dex_dir
+        self.dexen = dexen
+        self.extracted_apk_dir = extracted_apk_dir
+        self.stop_pass_idx = stop_pass_idx
+        self.lib_manager = lib_manager
+        self.unpack_manager = unpack_manager
+        self.zip_manager = zip_manager
+
+
+def run_redex_binary(
+    state: State,
+    exception_formatter: ExceptionMessageFormatter,
+    output_line_handler: typing.Optional[typing.Callable[[str], str]],
+) -> None:
     if state.args.redex_binary is None:
         state.args.redex_binary = shutil.which("redex-all")
 
@@ -198,12 +230,12 @@ def run_redex_binary(state, exception_formatter, output_line_handler):
         )
     logging.debug("Running redex binary at %s", state.args.redex_binary)
 
-    args = [state.args.redex_binary]
+    args: typing.List[str] = [state.args.redex_binary]
 
     args += (
         (["--dex-files"] + state.args.dex_files)
         if state.args.dex_files
-        else ["--apkdir", state.extracted_apk_dir]
+        else ["--apkdir", _assert_val(state.extracted_apk_dir)]
     )
     args += ["--outdir", state.dex_dir]
 
@@ -257,9 +289,10 @@ def run_redex_binary(state, exception_formatter, output_line_handler):
             state.args.output_ir,
         ]
 
-    prefix = (
-        dbg_prefix(state.debugger, state.args.debug_source_root)
-        if state.debugger is not None
+    debugger = state.debugger
+    prefix: typing.List[str] = (
+        dbg_prefix(debugger, state.args.debug_source_root)
+        if debugger is not None
         else []
     )
     start = timer()
@@ -268,7 +301,7 @@ def run_redex_binary(state, exception_formatter, output_line_handler):
         print("cd %s && %s" % (os.getcwd(), " ".join(prefix + list(map(quote, args)))))
         sys.exit()
 
-    env = os.environ.copy()
+    env: typing.Dict[str, str] = os.environ.copy()
     if state.args.quiet:
         # Remove TRACE if it exists.
         env.pop("TRACE", None)
@@ -282,11 +315,12 @@ def run_redex_binary(state, exception_formatter, output_line_handler):
 
     add_extra_environment_args(env)
 
-    def run():
+    def run() -> None:
         with bintools.SigIntHandler() as sigint_handler:
-            proc, handler = bintools.run_and_stream_stderr(
-                prefix + args, env, (logger.trace_fp.fileno(),)
-            )
+            trace_fp = logger.get_trace_file()
+            pass_fds = [trace_fp.fileno()] if trace_fp is not sys.stderr else []
+
+            proc, handler = bintools.run_and_stream_stderr(prefix + args, env, pass_fds)
             sigint_handler.set_started(proc)
 
             returncode, err_out = handler(output_line_handler)
@@ -336,7 +370,12 @@ def run_redex_binary(state, exception_formatter, output_line_handler):
     logging.debug("Dex processing finished in {:.2f} seconds".format(timer() - start))
 
 
-def zipalign(unaligned_apk_path, output_apk_path, ignore_zipalign, page_align):
+def zipalign(
+    unaligned_apk_path: str,
+    output_apk_path: str,
+    ignore_zipalign: bool,
+    page_align: bool,
+) -> None:
     # Align zip and optionally perform good compression.
     try:
         zipalign = [
@@ -369,16 +408,16 @@ def zipalign(unaligned_apk_path, output_apk_path, ignore_zipalign, page_align):
 
 
 def align_and_sign_output_apk(
-    unaligned_apk_path,
-    output_apk_path,
-    reset_timestamps,
-    sign,
-    keystore,
-    key_alias,
-    key_password,
-    ignore_zipalign,
-    page_align,
-):
+    unaligned_apk_path: str,
+    output_apk_path: str,
+    reset_timestamps: bool,
+    sign: bool,
+    keystore: str,
+    key_alias: str,
+    key_password: str,
+    ignore_zipalign: bool,
+    page_align: bool,
+) -> None:
     if isfile(output_apk_path):
         os.remove(output_apk_path)
 
@@ -398,7 +437,9 @@ def align_and_sign_output_apk(
         sign_apk(keystore, key_password, key_alias, output_apk_path)
 
 
-def copy_file_to_out_dir(tmp, apk_output_path, name, human_name, out_name):
+def copy_file_to_out_dir(
+    tmp: str, apk_output_path: str, name: str, human_name: str, out_name: str
+) -> None:
     output_dir = os.path.dirname(apk_output_path)
     output_path = os.path.join(output_dir, out_name)
     tmp_path = tmp + "/" + name
@@ -409,7 +450,9 @@ def copy_file_to_out_dir(tmp, apk_output_path, name, human_name, out_name):
         logging.warning("Skipping " + human_name + " copy, since no file found to copy")
 
 
-def copy_all_file_to_out_dir(tmp, apk_output_path, ext, human_name):
+def copy_all_file_to_out_dir(
+    tmp: str, apk_output_path: str, ext: str, human_name: str
+) -> None:
     tmp_path = tmp + "/" + ext
     for file in glob.glob(tmp_path):
         filename = os.path.basename(file)
@@ -418,7 +461,7 @@ def copy_all_file_to_out_dir(tmp, apk_output_path, ext, human_name):
         )
 
 
-def validate_args(args):
+def validate_args(args: argparse.Namespace) -> None:
     if args.sign:
         for arg_name in ["keystore", "keyalias", "keypass"]:
             if getattr(args, arg_name) is None:
@@ -429,7 +472,13 @@ def validate_args(args):
                 )
 
 
-def arg_parser(binary=None, config=None, keystore=None, keyalias=None, keypass=None):
+def arg_parser(
+    binary: typing.Optional[str] = None,
+    config: typing.Optional[str] = None,
+    keystore: typing.Optional[str] = None,
+    keyalias: typing.Optional[str] = None,
+    keypass: typing.Optional[str] = None,
+) -> argparse.ArgumentParser:
     description = """
 Given an APK, produce a better APK!
 
@@ -656,37 +705,9 @@ Given an APK, produce a better APK!
     return parser
 
 
-class State(object):
-    # This structure is only used for passing arguments between prepare_redex,
-    # launch_redex_binary, finalize_redex
-    def __init__(
-        self,
-        args,
-        config_dict,
-        debugger,
-        dex_dir,
-        dexen,
-        extracted_apk_dir,
-        stop_pass_idx,
-        lib_manager,
-        unpack_manager,
-        zip_manager,
-    ):
-        self.args = args
-        self.config_dict = config_dict
-        self.debugger = debugger
-        self.dex_dir = dex_dir
-        self.dexen = dexen
-        self.extracted_apk_dir = extracted_apk_dir
-        self.stop_pass_idx = stop_pass_idx
-        self.lib_manager = lib_manager
-        self.unpack_manager = unpack_manager
-        self.zip_manager = zip_manager
-
-
-def _has_android_library_jars(pg_file):
+def _has_android_library_jars(pg_file: str) -> bool:
     # We do not tokenize properly here. Minimum effort.
-    def _gen():
+    def _gen() -> typing.Generator[str, None, None]:
         with open(pg_file, "r") as f:
             for line in f:
                 yield line.strip()
@@ -702,7 +723,7 @@ def _has_android_library_jars(pg_file):
     return False
 
 
-def _check_android_sdk(args):
+def _check_android_sdk(args: argparse.Namespace) -> None:
     if args.suppress_android_jar_check:
         logging.debug("No SDK jar check done")
         return
@@ -731,6 +752,7 @@ def _check_android_sdk(args):
         VERSION_REGEXP = r"android-(\d+)"
         version = max(
             (
+                # pyre-fixme[6]
                 -1,
                 *[
                     int(m.group(1))
@@ -751,7 +773,7 @@ def _check_android_sdk(args):
         logging.warning("Could not find an SDK jar: %s", e)
 
 
-def _has_config_val(args, path):
+def _has_config_val(args: argparse.Namespace, path: typing.Iterable[str]) -> bool:
     try:
         with open(args.config, "r") as f:
             json_obj = json.load(f)
@@ -766,7 +788,7 @@ def _has_config_val(args, path):
         return False
 
 
-def _check_shrinker_heuristics(args):
+def _check_shrinker_heuristics(args: argparse.Namespace) -> None:
     arg_template = "inliner.reg_alloc_random_forest="
     for arg in args.passthru:
         if arg.startswith(arg_template):
@@ -778,6 +800,7 @@ def _check_shrinker_heuristics(args):
     # Nothing found, check whether we have files embedded
     logging.info("No shrinking heuristic found, searching for default.")
     try:
+        # pyre-ignore[21]
         from generated_shrinker_regalloc_heuristics import SHRINKER_HEURISTICS_FILE
 
         logging.info("Found embedded shrinker heuristics")
@@ -792,7 +815,7 @@ def _check_shrinker_heuristics(args):
         logging.info("No embedded files, please add manually!")
 
 
-def _check_android_sdk_api(args):
+def _check_android_sdk_api(args: argparse.Namespace) -> None:
     arg_template = "android_sdk_api_{level}_file="
     arg_re = re.compile("^" + arg_template.format(level="(\\d+)"))
     for arg in args.passthru:
@@ -802,6 +825,7 @@ def _check_android_sdk_api(args):
     # Nothing found, check whether we have files embedded
     logging.info("No android_sdk_api_XX_file parameters found.")
     try:
+        # pyre-ignore[21]
         import generated_apilevels as ga
 
         levels = ga.get_api_levels()
@@ -819,7 +843,7 @@ def _check_android_sdk_api(args):
         logging.warning("No embedded files, please add manually!")
 
 
-def _handle_profiles(args, debug_mode):
+def _handle_profiles(args: argparse.Namespace) -> None:
     if not args.packed_profiles:
         return
 
@@ -856,7 +880,7 @@ def _handle_profiles(args, debug_mode):
         logging.info("No block profiles found in %s", args.packed_profiles)
 
 
-def prepare_redex(args):
+def prepare_redex(args: argparse.Namespace) -> State:
     logging.debug("Preparing...")
     debug_mode = args.unpack_only or args.debug
 
@@ -964,7 +988,7 @@ def prepare_redex(args):
         sys.exit()
 
     # Unpack profiles, if they exist.
-    _handle_profiles(args, debug_mode)
+    _handle_profiles(args)
 
     logging.debug("Moving contents to expected structure...")
     # Move each dex to a separate temporary directory to be operated by
@@ -1038,16 +1062,16 @@ def prepare_redex(args):
     )
 
 
-def finalize_redex(state):
-    state.lib_manager.__exit__(*sys.exc_info())
+def finalize_redex(state: State) -> None:
+    _assert_val(state.lib_manager).__exit__(*sys.exc_info())
 
     repack_start_time = timer()
 
-    state.unpack_manager.__exit__(*sys.exc_info())
-    state.zip_manager.__exit__(*sys.exc_info())
+    _assert_val(state.unpack_manager).__exit__(*sys.exc_info())
+    _assert_val(state.zip_manager).__exit__(*sys.exc_info())
 
     align_and_sign_output_apk(
-        state.zip_manager.output_apk,
+        _assert_val(state.zip_manager).output_apk,
         state.args.out,
         # In dev mode, reset timestamps.
         state.args.reset_zip_timestamps or state.args.dev,
@@ -1128,7 +1152,7 @@ def finalize_redex(state):
     )
 
 
-def _init_logging(level_str):
+def _init_logging(level_str: str) -> None:
     levels = {
         "critical": logging.CRITICAL,
         "error": logging.ERROR,
@@ -1141,7 +1165,11 @@ def _init_logging(level_str):
     logging.basicConfig(level=level)
 
 
-def run_redex_passthrough(args, exception_formatter, output_line_handler):
+def run_redex_passthrough(
+    args: argparse.Namespace,
+    exception_formatter: ExceptionMessageFormatter,
+    output_line_handler: typing.Optional[typing.Callable[[str], str]],
+) -> None:
     assert args.outdir
     assert args.dex_files
 
@@ -1160,9 +1188,16 @@ def run_redex_passthrough(args, exception_formatter, output_line_handler):
     run_redex_binary(state, exception_formatter, output_line_handler)
 
 
-def run_redex(args, exception_formatter=None, output_line_handler=None):
+def run_redex(
+    args: argparse.Namespace,
+    exception_formatter: typing.Optional[ExceptionMessageFormatter] = None,
+    output_line_handler: typing.Optional[typing.Callable[[str], str]] = None,
+) -> None:
     # This is late, but hopefully early enough.
     _init_logging(args.log_level)
+
+    if exception_formatter is None:
+        exception_formatter = ExceptionMessageFormatter()
 
     if args.outdir or args.dex_files:
         run_redex_passthrough(args, exception_formatter, output_line_handler)
@@ -1171,8 +1206,6 @@ def run_redex(args, exception_formatter=None, output_line_handler=None):
         assert args.input_apk
 
     state = prepare_redex(args)
-    if exception_formatter is None:
-        exception_formatter = ExceptionMessageFormatter()
     run_redex_binary(state, exception_formatter, output_line_handler)
 
     if args.stop_pass:
@@ -1183,15 +1216,15 @@ def run_redex(args, exception_formatter=None, output_line_handler=None):
 
 
 if __name__ == "__main__":
-    keys = {}
+    keys: typing.Dict[str, str] = {}
     try:
-        keystore = join(os.environ["HOME"], ".android", "debug.keystore")
+        keystore: str = join(os.environ["HOME"], ".android", "debug.keystore")
         if isfile(keystore):
             keys["keystore"] = keystore
             keys["keyalias"] = "androiddebugkey"
             keys["keypass"] = "android"
     except Exception:
         pass
-    args = arg_parser(**keys).parse_args()
+    args: argparse.Namespace = arg_parser(**keys).parse_args()
     validate_args(args)
     with_temp_cleanup(lambda: run_redex(args), args.always_clean_up)
