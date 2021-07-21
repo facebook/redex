@@ -119,6 +119,7 @@ InlineForSpeedData = namedtuple(
         "callee_num_loops",
         "callee_deepest_loop",
         "interaction",
+        "confidence",
     ],
 )
 
@@ -126,12 +127,14 @@ InlineForSpeedData = namedtuple(
 # Parse PGI inlining decisions from the given stream. Other elements are
 # yielded.
 def _gen_profile_decisions(iterator):
+    header = "[InlineForSpeedDecisionTrees]"
+
     for line in iterator:
         if not isinstance(line, Line):
             yield line
             continue
 
-        if not line.data.startswith("[InlineForSpeedDecisionTrees]"):
+        if not line.data.startswith(header):
             yield line
             continue
 
@@ -139,6 +142,8 @@ def _gen_profile_decisions(iterator):
         data_parts = data.split("!")
         if len(data_parts) != 2 * 8 + 1:
             raise ValueError(f"{line}: {data_parts}")
+
+        conf_str = line.data[len(header) : line.data.index(":")].strip()
 
         try:
             yield InlineForSpeedData(
@@ -159,6 +164,7 @@ def _gen_profile_decisions(iterator):
                 int(data_parts[14].strip()),
                 int(data_parts[15].strip()),
                 data_parts[16].strip(),
+                int(conf_str),
             )
         except BaseException as e:
             raise ValueError(f"{line}: {e}")
@@ -352,6 +358,7 @@ class MethodInlinerPassHandler:
                         0,
                         inline_data.count,
                         inline_data.max_loop_depth,
+                        0,
                     )
 
                     csv_writer.writerow(row)
@@ -432,33 +439,39 @@ class PGIHandler:
         printer = MaybePrintDot(1000, "!")
         with open(f"pgi-{self._run}.csv", "w", newline="") as out_file:
             csv_writer = csv.writer(out_file, delimiter=",")
-            header_extra = None if self._aggregate_ifs else ["interaction"]
+            header_extra = ([] if self._aggregate_ifs else ["interaction"]) + [
+                "confidence"
+            ]
             _write_csv_header(csv_writer, extra=header_extra)
 
             for ifs in ifs_inlined:
                 caller_data = self._caller_map[ifs.caller]
                 callee_data = self._callee_map[ifs.callee]
                 inline_data = self._inline_data_map[ifs.caller][ifs.callee]
-                row = [
-                    ifs.caller,
-                    ifs.callee,
-                    caller_data.insns,
-                    caller_data.regs,
-                    caller_data.blocks,
-                    caller_data.edges,
-                    caller_data.num_loops,
-                    caller_data.deepest_loop,
-                    callee_data.insns,
-                    callee_data.regs,
-                    callee_data.blocks,
-                    callee_data.edges,
-                    callee_data.num_loops,
-                    callee_data.deepest_loop,
-                    ifs.caller_hits,
-                    ifs.callee_hits,
-                    inline_data.count,
-                    inline_data.max_loop_depth,
-                ] + ([] if self._aggregate_ifs else [ifs.interaction])
+                row = (
+                    [
+                        ifs.caller,
+                        ifs.callee,
+                        caller_data.insns,
+                        caller_data.regs,
+                        caller_data.blocks,
+                        caller_data.edges,
+                        caller_data.num_loops,
+                        caller_data.deepest_loop,
+                        callee_data.insns,
+                        callee_data.regs,
+                        callee_data.blocks,
+                        callee_data.edges,
+                        callee_data.num_loops,
+                        callee_data.deepest_loop,
+                        ifs.caller_hits,
+                        ifs.callee_hits,
+                        inline_data.count,
+                        inline_data.max_loop_depth,
+                    ]
+                    + ([] if self._aggregate_ifs else [ifs.interaction])
+                    + ([ifs.confidence])
+                )
 
                 csv_writer.writerow(row)
                 printer.maybe_print(1)
