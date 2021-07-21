@@ -72,7 +72,7 @@ bool inline_with_cfg(
     DexMethod* caller_method,
     DexMethod* callee_method,
     IRInstruction* callsite,
-    bool needs_receiver_cast,
+    DexType* needs_receiver_cast,
     size_t next_caller_reg,
     const std::unordered_set<cfg::Block*>* dead_blocks = nullptr);
 
@@ -93,7 +93,7 @@ struct CallerInsns {
   std::unordered_map<const DexMethod*, std::unordered_set<IRInstruction*>>
       caller_insns;
   // Invoke instructions that need a cast
-  std::unordered_set<IRInstruction*> inlined_invokes_need_cast;
+  std::unordered_map<IRInstruction*, DexType*> inlined_invokes_need_cast;
   // Whether there may be any other unknown call-sites.
   bool other_call_sites{false};
   bool empty() const { return caller_insns.empty() && !other_call_sites; }
@@ -525,7 +525,7 @@ class MultiMethodInliner {
                      std::unordered_map<IRInstruction*, DexMethod*>>
       caller_virtual_callee;
 
-  std::unordered_set<IRInstruction*> m_inlined_invokes_need_cast;
+  std::unordered_map<IRInstruction*, DexType*> m_inlined_invokes_need_cast;
 
   std::unordered_set<const DexMethod*>
       m_true_virtual_callees_with_other_call_sites;

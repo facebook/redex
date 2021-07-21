@@ -174,6 +174,11 @@ std::unordered_set<DexMethod*> gather_non_virtual_methods(
   return methods;
 }
 
+struct SameImplementation {
+  DexMethod* representative;
+  std::vector<DexMethod*> methods;
+};
+
 /**
  * Get a map of method -> implementation method that hold the same
  * implementation as the method would perform at run time.
@@ -181,9 +186,11 @@ std::unordered_set<DexMethod*> gather_non_virtual_methods(
  * implementation, we can have a mapping between the abstract method and
  * one of its implementor.
  */
-std::unordered_map<const DexMethod*, DexMethod*> get_same_implementation_map(
-    const Scope& scope, const mog::Graph& method_override_graph) {
-  std::unordered_map<const DexMethod*, DexMethod*> method_to_implementations;
+std::unordered_map<const DexMethod*, std::shared_ptr<SameImplementation>>
+get_same_implementation_map(const Scope& scope,
+                            const mog::Graph& method_override_graph) {
+  std::unordered_map<const DexMethod*, std::shared_ptr<SameImplementation>>
+      method_to_implementations;
   walk::methods(scope, [&](DexMethod* method) {
     if (method->is_external() || !method->is_virtual() ||
         (!method->get_code() && !is_abstract(method))) {
@@ -199,20 +206,19 @@ std::unordered_map<const DexMethod*, DexMethod*> get_same_implementation_map(
     }
     auto overriding_methods =
         mog::get_overriding_methods(method_override_graph, method);
-    DexMethod* representative_method{nullptr};
-    size_t considered_methods{0};
+    SameImplementation same_implementation{nullptr, {}};
     auto consider_method = [&](DexMethod* method) {
       always_assert(method->get_code());
-      if (representative_method != nullptr &&
+      if (same_implementation.representative != nullptr &&
           !method->get_code()->structural_equals(
-              *representative_method->get_code())) {
+              *same_implementation.representative->get_code())) {
         return false;
       }
-      if (representative_method == nullptr ||
-          compare_dexmethods(method, representative_method)) {
-        representative_method = method;
+      if (same_implementation.representative == nullptr ||
+          compare_dexmethods(method, same_implementation.representative)) {
+        same_implementation.representative = method;
       }
-      considered_methods++;
+      same_implementation.methods.push_back(method);
       return true;
     };
     for (auto overriding_method : overriding_methods) {
@@ -231,18 +237,34 @@ std::unordered_map<const DexMethod*, DexMethod*> get_same_implementation_map(
     if (method->get_code() && !consider_method(method)) {
       return;
     }
-    if (considered_methods <= 1) {
+    if (same_implementation.methods.size() <= 1) {
       return;
     }
 
     // All methods have the same implementation, so we create mapping between
     // methods and their representative implementation.
-    method_to_implementations[method] = representative_method;
+    auto sp = std::make_shared<SameImplementation>(same_implementation);
+    method_to_implementations.emplace(method, sp);
     for (auto overriding_method : overriding_methods) {
-      method_to_implementations[overriding_method] = representative_method;
+      method_to_implementations.emplace(overriding_method, sp);
     }
   });
   return method_to_implementations;
+}
+
+static DexType* reduce_type_demands(
+    std::unique_ptr<std::unordered_set<DexType*>>& type_demands) {
+  if (!type_demands) {
+    return nullptr;
+  }
+  // remove less specific object types
+  std20::erase_if(*type_demands, [&type_demands](auto it) {
+    return std::find_if(type_demands->begin(), type_demands->end(),
+                        [&it](const DexType* t) {
+                          return t != *it && type::check_cast(t, *it);
+                        }) != type_demands->end();
+  });
+  return type_demands->size() == 1 ? *type_demands->begin() : nullptr;
 }
 
 /**
@@ -260,13 +282,15 @@ void gather_true_virtual_methods(const mog::Graph& method_override_graph,
                                  CalleeCallerInsns* true_virtual_callers) {
   Timer t("gather_true_virtual_methods");
   auto non_virtual = mog::get_non_true_virtuals(method_override_graph, scope);
-  std::unordered_map<const DexMethod*, DexMethod*> same_implementation_map;
+  std::unordered_map<const DexMethod*, std::shared_ptr<SameImplementation>>
+      same_implementation_map;
   if (compute_caller_insns) {
     same_implementation_map =
         get_same_implementation_map(scope, method_override_graph);
   }
   ConcurrentMap<const DexMethod*, CallerInsns> concurrent_true_virtual_callers;
-  ConcurrentSet<IRInstruction*> same_implementation_invokes;
+  ConcurrentMap<IRInstruction*, SameImplementation*>
+      same_implementation_invokes;
   // Add mapping from callee to monomorphic callsites.
   auto add_monomorphic_call_site = [&](const DexMethod* caller,
                                        IRInstruction* callsite,
@@ -359,8 +383,8 @@ void gather_true_virtual_methods(const mog::Graph& method_override_graph,
         // We can find the resolved callee in same_implementation_map,
         // just use that piece of info because we know the implementors are all
         // the same
-        add_monomorphic_call_site(method, insn, it->second);
-        same_implementation_invokes.insert(insn);
+        add_monomorphic_call_site(method, insn, it->second->representative);
+        same_implementation_invokes.emplace(insn, it->second.get());
         continue;
       }
       auto overriding_methods =
@@ -419,12 +443,16 @@ void gather_true_virtual_methods(const mog::Graph& method_override_graph,
           code->clear_cfg();
         }
         std::unordered_set<DexType*> formal_callee_types;
+        bool any_same_implementation_invokes{false};
         for (auto& p : caller_to_invocations.caller_insns) {
           for (auto insn : p.second) {
             formal_callee_types.insert(insn->get_method()->get_class());
+            if (same_implementation_invokes.count_unsafe(insn)) {
+              any_same_implementation_invokes = true;
+            }
           }
         }
-        std::unordered_set<DexType*> type_demands;
+        auto type_demands = std::make_unique<std::unordered_set<DexType*>>();
         // Note that the callee-rtype is the same for all methods in a
         // same-implementations cluster.
         auto callee_rtype = callee->get_proto()->get_rtype();
@@ -436,10 +464,14 @@ void gather_true_virtual_methods(const mog::Graph& method_override_graph,
           always_assert(type::check_cast(callee->get_class(), type_demand));
           if (type_demand == nullptr) {
             formal_callee_types.clear();
+            type_demands = nullptr;
             break;
           }
-          always_assert(type::check_cast(callee->get_class(), type_demand));
-          if (type_demands.insert(type_demand).second) {
+          always_assert_log(type::check_cast(callee->get_class(), type_demand),
+                            "For the incoming code to be type correct, %s must "
+                            "be castable to %s.",
+                            SHOW(callee->get_class()), SHOW(type_demand));
+          if (type_demands->insert(type_demand).second) {
             std20::erase_if(formal_callee_types, [&](auto it) {
               return !type::check_cast(*it, type_demand);
             });
@@ -449,17 +481,36 @@ void gather_true_virtual_methods(const mog::Graph& method_override_graph,
           for (auto it = p.second.begin(); it != p.second.end();) {
             auto insn = *it;
             if (!formal_callee_types.count(insn->get_method()->get_class())) {
-              if (same_implementation_invokes.count(insn)) {
-                // We can't just cast to the type of the representative. And
-                // it's not trivial to find the right common base type of the
-                // representatives, it might not even exist. (Imagine all
-                // subtypes happen the implement the same interface, but the
-                // base type didn't.) TODO: Try to analyze instead of giving up.
-                caller_to_invocations.other_call_sites = true;
-                it = p.second.erase(it);
-                continue;
+              auto it2 = same_implementation_invokes.find(insn);
+              if (it2 != same_implementation_invokes.end()) {
+                always_assert(any_same_implementation_invokes);
+                auto combined_type_demand = reduce_type_demands(type_demands);
+                if (combined_type_demand) {
+                  for (auto same_implementation_callee : it2->second->methods) {
+                    always_assert_log(
+                        type::check_cast(
+                            same_implementation_callee->get_class(),
+                            combined_type_demand),
+                        "For the incoming code to be type correct, %s must "
+                        "be castable to %s.",
+                        SHOW(same_implementation_callee->get_class()),
+                        SHOW(combined_type_demand));
+                  }
+                  caller_to_invocations.inlined_invokes_need_cast.emplace(
+                      insn, combined_type_demand);
+                } else {
+                  // We can't just cast to the type of the representative. And
+                  // it's not trivial to find the right common base type of the
+                  // representatives, it might not even exist. (Imagine all
+                  // subtypes happen the implement a set of interfaces.)
+                  // TODO: Try harder.
+                  caller_to_invocations.other_call_sites = true;
+                  it = p.second.erase(it);
+                  continue;
+                }
               } else {
-                caller_to_invocations.inlined_invokes_need_cast.insert(insn);
+                caller_to_invocations.inlined_invokes_need_cast.emplace(
+                    insn, callee->get_class());
               }
             }
             it++;

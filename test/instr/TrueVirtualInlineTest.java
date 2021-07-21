@@ -62,17 +62,23 @@ class H extends F {
   public int do_something() { return 4; }
 }
 
-interface J {}
+interface J {
+  int getInt();
+}
+interface K {
+  int getAnotherInt();
+}
 
 interface IGetInt {
   public int getInt();
   public int getAnotherInt();
   public J getJ();
+  public int add();
 }
 
 abstract class GetInt implements IGetInt {}
 
-class GetInt1 extends GetInt implements J {
+class GetInt1 extends GetInt implements J, K {
   // CHECK: method: virtual redex.GetInt1.getAnotherInt
   public int getAnotherInt() { return 2; }
 
@@ -81,11 +87,15 @@ class GetInt1 extends GetInt implements J {
   public int getInt() { return 1; }
 
   // PRECHECK: method: virtual redex.GetInt1.getJ
-  // POSTCHECK: method: virtual redex.GetInt1.getJ
+  // POSTCHECK-NOT: method: virtual redex.GetInt1.getJ
   public J getJ() { return this; }
+
+  // PRECHECK: method: virtual redex.GetInt1.add
+  // POSTCHECK: method: virtual redex.GetInt1.add
+  public int add() { J j = this; K k = this; return j.getInt() + k.getAnotherInt(); }
 }
 
-class GetInt2 extends GetInt implements J {
+class GetInt2 extends GetInt implements J, K {
   // CHECK: method: virtual redex.GetInt2.getAnotherInt
   public int getAnotherInt() { return 3; }
 
@@ -94,11 +104,15 @@ class GetInt2 extends GetInt implements J {
   public int getInt() { return 1; }
 
   // PRECHECK: method: virtual redex.GetInt2.getJ
-  // POSTCHECK: method: virtual redex.GetInt2.getJ
+  // POSTCHECK-NOT: method: virtual redex.GetInt2.getJ
   public J getJ() { return this; }
+
+  // PRECHECK: method: virtual redex.GetInt2.add
+  // POSTCHECK: method: virtual redex.GetInt2.add
+  public int add() { J j = this; K k = this; return j.getInt() + k.getAnotherInt(); }
 }
 
-class GetInt3 extends GetInt implements J {
+class GetInt3 extends GetInt implements J, K {
   // CHECK: method: virtual redex.GetInt3.getAnotherInt
   public int getAnotherInt() { return 4; }
 
@@ -107,8 +121,12 @@ class GetInt3 extends GetInt implements J {
   public int getInt() { return 1; }
 
   // PRECHECK: method: virtual redex.GetInt3.getJ
-  // POSTCHECK: method: virtual redex.GetInt3.getJ
+  // POSTCHECK-NOT: method: virtual redex.GetInt3.getJ
   public J getJ() { return this; }
+
+  // PRECHECK: method: virtual redex.GetInt3.add
+  // POSTCHECK: method: virtual redex.GetInt3.add
+  public int add() { J j = this; K k = this; return j.getInt() + k.getAnotherInt(); }
 }
 
 class SameImplementation {
@@ -260,7 +278,24 @@ public class TrueVirtualInlineTest {
     }
 
     // PRECHECK: invoke-virtual {{.*}} redex.GetInt.getJ
-    // POSTCHECK: invoke-virtual {{.*}} redex.GetInt.getJ
+    // POSTCHECK: check-cast {{.*}} redex.J
     assertThat(get_int.getJ() instanceof GetInt).isTrue();
+  }
+
+  // CHECK: method: virtual redex.TrueVirtualInlineTest.test_same_implementation4
+  @Test
+  public void test_same_implementation4() {
+    GetInt get_int;
+    if (Math.random() > 1) {
+      get_int = new GetInt1();
+    } else if (Math.random() < 0) {
+      get_int = new GetInt3();
+    } else {
+      get_int = new GetInt2();
+    }
+
+    // PRECHECK: invoke-virtual {{.*}} redex.GetInt.add
+    // POSTCHECK: invoke-virtual {{.*}} redex.GetInt.add
+    assertThat(get_int.add() > 0).isTrue();
   }
 }
