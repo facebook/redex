@@ -746,3 +746,61 @@ TEST_F(BranchPrefixHoistingTest, positions_may_throw) {
   )";
   test(code_str, expected_str, 7, /* full_validation */ true);
 }
+
+TEST_F(BranchPrefixHoistingTest, try_catch_in_succ_block) {
+  const auto& code_str = R"(
+    (
+      (load-param v0)
+      (if-eqz v0 :true)
+      (.try_start foo)
+      (const v1 1)
+      (const v2 2)
+      (new-instance "Ljava/lang/Exception;")
+      (move-result-pseudo-object v3)
+      (throw v3)
+      (.try_end foo)
+      (goto :end)
+      (:true)
+      (.try_start foo)
+      (const v1 1)
+      (const v2 2)
+      (new-instance "Ljava/lang/Exception;")
+      (move-result-pseudo-object v3)
+      (throw v3)
+      (.try_end foo)
+      (goto :end)
+      (.catch (foo))
+      (return-void)
+      (:end)
+      (return-void)
+    )
+  )";
+  const auto& expected_str = R"(
+    (
+      (load-param v0)
+      (if-eqz v0 :true)
+      (.try_start foo)
+      (const v1 1)
+      (const v2 2)
+      (new-instance "Ljava/lang/Exception;")
+      (move-result-pseudo-object v3)
+      (throw v3)
+      (.try_end foo)
+      (goto :end)
+      (:true)
+      (.try_start foo)
+      (const v1 1)
+      (const v2 2)
+      (new-instance "Ljava/lang/Exception;")
+      (move-result-pseudo-object v3)
+      (throw v3)
+      (.try_end foo)
+      (goto :end)
+      (.catch (foo))
+      (return-void)
+      (:end)
+      (return-void)
+    )
+  )";
+  test(code_str, expected_str, 0, /* full_validation */ true);
+}
