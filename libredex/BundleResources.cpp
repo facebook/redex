@@ -840,13 +840,6 @@ void ResourcesPbFile::delete_resource(uint32_t res_id) {
   // Keep track of res_id and delete later in remap_res_ids_and_serialize.
   m_ids_to_remove.emplace(res_id);
 }
-std::vector<uint32_t> ResourcesPbFile::get_res_ids_by_name(
-    const std::string& name) {
-  if (name_to_ids.count(name)) {
-    return name_to_ids.at(name);
-  }
-  return std::vector<uint32_t>{};
-}
 
 std::unique_ptr<ResourceTableFile> BundleResources::load_res_table() {
   const auto& res_pb_file_paths = find_resources_files();

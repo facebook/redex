@@ -808,11 +808,6 @@ void ResourcesArscFile::delete_resource(uint32_t res_id) {
   res_table.deleteResource(res_id);
 }
 
-std::vector<uint32_t> ResourcesArscFile::get_res_ids_by_name(
-    const std::string& name) {
-  return name_to_ids[name];
-}
-
 void ResourcesArscFile::collect_resid_values_and_hashes(
     const std::vector<uint32_t>& ids,
     std::map<size_t, std::vector<uint32_t>>* res_by_hash) {

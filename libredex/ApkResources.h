@@ -58,7 +58,6 @@ class ResourcesArscFile : public ResourceTableFile {
   std::unordered_set<uint32_t> get_types_by_name(
       const std::unordered_set<std::string>& type_names) override;
   void delete_resource(uint32_t res_id) override;
-  std::vector<uint32_t> get_res_ids_by_name(const std::string& name) override;
   void remap_res_ids_and_serialize(
       const std::vector<std::string>& resource_files,
       const std::map<uint32_t, uint32_t>& old_to_new) override;

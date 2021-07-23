@@ -84,8 +84,6 @@ class ResourceTableFile {
  public:
   virtual ~ResourceTableFile() {}
 
-  virtual std::vector<uint32_t> get_res_ids_by_name(
-      const std::string& name) = 0;
   virtual void collect_resid_values_and_hashes(
       const std::vector<uint32_t>& ids,
       std::map<size_t, std::vector<uint32_t>>* res_by_hash) = 0;
@@ -97,6 +95,14 @@ class ResourceTableFile {
   virtual void remap_res_ids_and_serialize(
       const std::vector<std::string>& resource_files,
       const std::map<uint32_t, uint32_t>& old_to_new) = 0;
+
+  // Return the resource ids based on the given resource name.
+  std::vector<uint32_t> get_res_ids_by_name(const std::string& name) const {
+    if (name_to_ids.count(name)) {
+      return name_to_ids.at(name);
+    }
+    return std::vector<uint32_t>{};
+  }
 
   android::SortedVector<uint32_t> sorted_res_ids;
   std::map<uint32_t, std::string> id_to_name;
