@@ -7,7 +7,9 @@
 
 #pragma once
 
+#include "ControlFlow.h"
 #include "DexClass.h"
+#include "IROpcode.h"
 
 namespace method {
 /**
@@ -114,4 +116,31 @@ DexMethod* kotlin_jvm_internal_Intrinsics_checkNotNullParameter();
 DexMethod* kotlin_jvm_internal_Intrinsics_checExpressionValueIsNotNull();
 
 DexMethod* kotlin_jvm_internal_Intrinsics_checkNotNullExpressionValue();
+
+inline unsigned count_opcode_of_types(
+    const cfg::ControlFlowGraph& cfg,
+    const std::unordered_set<IROpcode>& opcodes) {
+  unsigned ret = 0;
+  for (auto&& mie : cfg::ConstInstructionIterable(cfg)) {
+    auto op = mie.insn->opcode();
+    if (opcodes.count(op)) {
+      ret++;
+    }
+  }
+  return ret;
+}
+
+template <typename IRCodeContainer>
+inline unsigned count_opcode_of_types(
+    const IRCodeContainer& code, const std::unordered_set<IROpcode>& opcodes) {
+  unsigned ret = 0;
+  for (auto&& mie : ::InstructionIterable(code)) {
+    auto op = mie.insn->opcode();
+    if (opcodes.count(op)) {
+      ret++;
+    }
+  }
+  return ret;
+}
+
 }; // namespace method
