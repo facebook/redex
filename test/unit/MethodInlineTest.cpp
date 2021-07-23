@@ -15,6 +15,7 @@
 #include "IRCode.h"
 #include "Inliner.h"
 #include "InlinerConfig.h"
+#include "LegacyInliner.h"
 #include "RedexTest.h"
 
 struct MethodInlineTest : public RedexTest {
@@ -45,7 +46,7 @@ void test_inliner(const std::string& caller_str,
         return mie.type == MFLOW_OPCODE &&
                opcode::is_an_invoke(mie.insn->opcode());
       });
-  inliner::inline_method_unsafe(
+  legacy_inliner::inline_method_unsafe(
       /*caller_method=*/nullptr, caller.get(), callee.get(), callsite);
 
   auto expected = assembler::ircode_from_string(expected_str);
@@ -307,7 +308,7 @@ TEST_F(MethodInlineTest, insertMoves) {
   callee_code->push_back(dasm(OPCODE_CONST, {1_v, 1_L}));
   callee_code->push_back(dasm(OPCODE_RETURN_VOID));
 
-  inliner::inline_method_unsafe(
+  legacy_inliner::inline_method_unsafe(
       /*caller_method=*/nullptr,
       caller->get_code(),
       callee->get_code(),

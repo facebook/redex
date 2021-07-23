@@ -198,6 +198,7 @@ libredex_la_SOURCES = \
 	service/method-inliner/ConstructorAnalysis.cpp \
 	service/method-inliner/Deleter.cpp \
 	service/method-inliner/Inliner.cpp \
+	service/method-inliner/LegacyInliner.cpp \
 	service/method-inliner/MethodInliner.cpp \
 	service/method-inliner/ObjectInlinePlugin.cpp \
 	service/method-merger/MethodMerger.cpp \

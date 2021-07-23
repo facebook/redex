@@ -13,12 +13,13 @@
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
-#include "Inliner.h"
+#include "LegacyInliner.h"
 #include "MethodDedup.h"
 #include "MethodMerger.h"
 #include "MethodReference.h"
 #include "Mutators.h"
 #include "Resolver.h"
+#include "Show.h"
 #include "SwitchDispatch.h"
 #include "TypeReference.h"
 #include "Walkers.h"
@@ -549,7 +550,7 @@ void ModelMethodMerger::inline_dispatch_entries(DexMethod* dispatch) {
   for (auto& pair : callsites) {
     auto callee_code = pair.first;
     auto& call_pos = pair.second;
-    inliner::inline_method(dispatch, callee_code, call_pos);
+    legacy_inliner::inline_method(dispatch, callee_code, call_pos);
   }
   TRACE(CLMG,
         9,
