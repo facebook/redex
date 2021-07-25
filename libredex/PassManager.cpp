@@ -895,7 +895,7 @@ void track_source_block_coverage(PassManager& mgr,
   mgr.set_metric("~assessment~source~blocks~total", stats.source_blocks_total);
   mgr.set_metric("~assessment~methods~with~sbs", stats.methods_with_sbs);
   mgr.set_metric("~flow~violation~idom", stats.flow_violation_idom);
-  mgr.set_metric("~~flow~violation~methods~idom",
+  mgr.set_metric("~flow~violation~methods~idom",
                  stats.methods_with_idom_violations);
   mgr.set_metric("~flow~violation~direct~predecessors",
                  stats.flow_violation_direct_predecessors);
