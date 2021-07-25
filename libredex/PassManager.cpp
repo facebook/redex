@@ -747,16 +747,16 @@ class AfterPassSizes {
 };
 
 struct SourceBlocksStats {
-  size_t total_blocks;
-  size_t source_blocks_present;
-  size_t source_blocks_total;
-  size_t methods_with_sbs;
-  size_t flow_violation_idom;
-  size_t flow_violation_direct_predecessors;
-  size_t flow_violation_cold_direct_predecessors;
-  size_t methods_with_cold_direct_predecessor_violations;
-  size_t methods_with_idom_violations;
-  size_t methods_with_direct_predecessor_violations;
+  size_t total_blocks{0};
+  size_t source_blocks_present{0};
+  size_t source_blocks_total{0};
+  size_t methods_with_sbs{0};
+  size_t flow_violation_idom{0};
+  size_t flow_violation_direct_predecessors{0};
+  size_t flow_violation_cold_direct_predecessors{0};
+  size_t methods_with_cold_direct_predecessor_violations{0};
+  size_t methods_with_idom_violations{0};
+  size_t methods_with_direct_predecessor_violations{0};
 
   SourceBlocksStats& operator+=(const SourceBlocksStats& that) {
     total_blocks += that.total_blocks;
@@ -793,12 +793,11 @@ void track_source_block_coverage(PassManager& mgr,
   Timer opt_timer("Calculate SourceBlock Coverage");
   auto stats = walk::parallel::methods<SourceBlocksStats>(
       build_class_scope(stores), [](DexMethod* m) -> SourceBlocksStats {
-        SourceBlocksStats ret{0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+        SourceBlocksStats ret;
         auto code = m->get_code();
         if (!code) {
           return ret;
         }
-
         code->build_cfg(/* editable */ true);
         auto& cfg = code->cfg();
         auto dominators =
