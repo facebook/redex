@@ -905,30 +905,6 @@ void track_source_block_coverage(PassManager& mgr,
                  stats.flow_violation_cold_direct_predecessors);
   mgr.set_metric("~flow~violation~methods~direct~cold~predecessors",
                  stats.methods_with_cold_direct_predecessor_violations);
-
-  TRACE(
-      INSTRUMENT, 4,
-      "Total Basic Blocks = %zu, Basic Blocks with SourceBlock = %zu (%.1f%%), "
-      "Total SourceBlocks = %zu"
-      "Total flow idom violations = %zu (%.1f%%), "
-      "Total flow direct predecessor violations = %zu (%.1f%%)"
-      "Total flow cold direct predecessor violations = %zu (%.1f%%)"
-      "Total flow cold direct predecessor violations - methods = %zu "
-      "Total methods with flow idom violations = %zu"
-      "Total methods with direct predecessor violations = %zu",
-      stats.total_blocks, stats.source_blocks_present,
-      ((double)stats.source_blocks_present) * 100 / stats.total_blocks,
-      stats.source_blocks_total, stats.flow_violation_idom,
-      ((double)stats.flow_violation_idom) * 100 / stats.source_blocks_present,
-      stats.flow_violation_direct_predecessors,
-      ((double)stats.flow_violation_direct_predecessors) * 100 /
-          stats.source_blocks_present,
-      stats.flow_violation_cold_direct_predecessors,
-      ((double)stats.flow_violation_cold_direct_predecessors) * 100 /
-          stats.source_blocks_present,
-      stats.methods_with_cold_direct_predecessor_violations,
-      stats.methods_with_idom_violations,
-      stats.methods_with_direct_predecessor_violations);
 }
 
 void run_assessor(PassManager& pm, const Scope& scope, bool initially = false) {
