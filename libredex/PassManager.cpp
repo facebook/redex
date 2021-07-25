@@ -757,6 +757,7 @@ struct SourceBlocksStats {
   size_t methods_with_cold_direct_predecessor_violations{0};
   size_t methods_with_idom_violations{0};
   size_t methods_with_direct_predecessor_violations{0};
+  size_t methods_with_code{0};
 
   SourceBlocksStats& operator+=(const SourceBlocksStats& that) {
     total_blocks += that.total_blocks;
@@ -773,6 +774,7 @@ struct SourceBlocksStats {
     methods_with_idom_violations += that.methods_with_idom_violations;
     methods_with_direct_predecessor_violations +=
         that.methods_with_direct_predecessor_violations;
+    methods_with_code += that.methods_with_code;
     return *this;
   }
 };
@@ -798,6 +800,7 @@ void track_source_block_coverage(PassManager& mgr,
         if (!code) {
           return ret;
         }
+        ret.methods_with_code++;
         code->build_cfg(/* editable */ true);
         auto& cfg = code->cfg();
         auto dominators =
@@ -889,6 +892,7 @@ void track_source_block_coverage(PassManager& mgr,
         return ret;
       });
 
+  mgr.set_metric("~assessment~methods~with~code", stats.methods_with_code);
   mgr.set_metric("~blocks~count", stats.total_blocks);
   mgr.set_metric("~blocks~with~source~blocks", stats.source_blocks_present);
   mgr.set_metric("~assessment~source~blocks~total", stats.source_blocks_total);
