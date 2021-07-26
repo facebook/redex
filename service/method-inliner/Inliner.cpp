@@ -29,6 +29,7 @@
 #include "LoopInfo.h"
 #include "Macros.h"
 #include "MethodProfiles.h"
+#include "MonitorCount.h"
 #include "Mutators.h"
 #include "OptData.h"
 #include "OutlinedMethods.h"
@@ -1160,7 +1161,8 @@ bool MultiMethodInliner::is_inlinable(const DexMethod* caller,
     }
     return false;
   }
-  if (cannot_inline_opcodes(caller, callee, insn, make_static)) {
+  std::vector<DexMethod*> make_static_tmp;
+  if (cannot_inline_opcodes(caller, callee, insn, &make_static_tmp)) {
     return false;
   }
   if (!callee->rstate.force_inline()) {
@@ -1202,6 +1204,10 @@ bool MultiMethodInliner::is_inlinable(const DexMethod* caller,
     }
   }
 
+  if (make_static) {
+    make_static->insert(make_static->end(), make_static_tmp.begin(),
+                        make_static_tmp.end());
+  }
   return true;
 }
 
@@ -2077,7 +2083,17 @@ bool MultiMethodInliner::cannot_inline_opcodes(
         }
         return editable_cfg_adapter::LOOP_CONTINUE;
       });
-  return !can_inline;
+  if (!can_inline) {
+    return true;
+  }
+  if (m_config.respect_sketchy_methods) {
+    auto timer = m_cannot_inline_sketchy_code_timer.scope();
+    if (monitor_count::cannot_inline_sketchy_code(
+            *caller->get_code(), *callee->get_code(), invk_insn)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /**
@@ -2113,9 +2129,7 @@ bool MultiMethodInliner::create_vmethod(IRInstruction* insn,
       return false;
     }
     if (can_rename(method)) {
-      if (make_static) {
-        make_static->push_back(method);
-      }
+      make_static->push_back(method);
     } else {
       info.need_vmethod++;
       return true;

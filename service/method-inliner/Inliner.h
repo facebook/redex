@@ -245,9 +245,6 @@ class MultiMethodInliner {
                              const IRInstruction* invk_insn,
                              std::vector<DexMethod*>* make_static);
 
-  bool noninlinable_same_class_init_invoke(IRInstruction* insn,
-                                           const DexMethod* callee,
-                                           const DexMethod* caller);
   /**
    * Return true if inlining would require a method called from the callee
    * (candidate) to turn into a virtual method (e.g. private to public).
@@ -622,6 +619,7 @@ class MultiMethodInliner {
   AccumulatingTimer m_inline_inlinables_timer;
   AccumulatingTimer m_inline_with_cfg_timer;
   AccumulatingTimer m_call_site_inlined_cost_timer;
+  AccumulatingTimer m_cannot_inline_sketchy_code_timer;
 
   const DexFieldRef* m_sdk_int_field =
       DexField::get_field("Landroid/os/Build$VERSION;.SDK_INT:I");
@@ -653,5 +651,8 @@ class MultiMethodInliner {
   }
   double get_inline_with_cfg_seconds() const {
     return m_inline_with_cfg_timer.get_seconds();
+  }
+  double get_cannot_inline_sketchy_code_timer_seconds() const {
+    return m_cannot_inline_sketchy_code_timer.get_seconds();
   }
 };

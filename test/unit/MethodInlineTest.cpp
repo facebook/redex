@@ -1579,3 +1579,168 @@ TEST_F(MethodInlineTest, caller_caller_callee_call_site) {
       assembler::ircode_from_string(outer_caller_expected_str);
   EXPECT_CODE_EQ(outer_caller_actual, outer_caller_expected.get());
 }
+
+TEST_F(MethodInlineTest,
+       dont_inline_callee_with_tries_and_no_catch_all_at_sketchy_call_site) {
+  auto foo_cls = create_a_class("LFoo;");
+
+  DexMethod* caller = static_cast<DexMethod*>(
+      DexMethod::make_method("LFoo;.sketchyCaller:()V"));
+  caller->make_concrete(ACC_PRIVATE, /* is_virtual */ false);
+
+  DexMethod* callee =
+      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.callee:()V"));
+  callee->make_concrete(ACC_PRIVATE, /* is_virtual */ false);
+
+  foo_cls->add_method(caller);
+  foo_cls->add_method(callee);
+
+  const auto& caller_str = R"(
+    (
+      (load-param v0)
+      (monitor-enter v0)
+
+      (.try_start a)
+      (invoke-static () "LBar;.canThrowInsideTry:()V")
+      (.try_end a)
+      (invoke-direct (v0) "LFoo;.callee:()V")
+
+      (.catch (a))
+      (monitor-exit v0)
+      (return-void)
+    )
+  )";
+
+  caller->set_code(assembler::ircode_from_string(caller_str));
+
+  const auto& callee_str = R"(
+    (
+      (load-param-object v0)
+
+      (.try_start a)
+      (invoke-static () "LBar;.canThrowNotImportant:()V")
+      (.try_end a)
+
+      (.catch (a) "LSomeSpecificType;")
+      (return-void)
+    )
+  )";
+
+  callee->set_code(assembler::ircode_from_string(callee_str));
+
+  ConcurrentMethodRefCache concurrent_resolve_cache;
+  auto concurrent_resolver = [&concurrent_resolve_cache](DexMethodRef* method,
+                                                         MethodSearch search) {
+    return resolve_method(method, search, concurrent_resolve_cache);
+  };
+
+  DexStoresVector stores;
+  {
+    DexStore store("root");
+    store.add_classes({});
+    store.add_classes({foo_cls});
+    stores.push_back(std::move(store));
+  }
+  std::unordered_set<DexMethod*> candidates{callee};
+  auto scope = build_class_scope(stores);
+  api::LevelChecker::init(0, scope);
+  inliner::InlinerConfig inliner_config;
+  inliner_config.populate(scope);
+
+  caller->get_code()->build_cfg(true);
+  callee->get_code()->build_cfg(true);
+
+  {
+    MultiMethodInliner inliner(scope, stores, candidates, concurrent_resolver,
+                               inliner_config, IntraDex,
+                               /* true_virtual_callers */ {},
+                               /* inline_for_speed */ nullptr,
+                               /* analyze_and_prune_inits */ false, {});
+    inliner.inline_methods();
+
+    auto inlined = inliner.get_inlined();
+    EXPECT_EQ(inlined.size(), 0);
+  }
+}
+
+TEST_F(MethodInlineTest, dont_inline_sketchy_callee_into_into_try) {
+  auto foo_cls = create_a_class("LFoo;");
+
+  DexMethod* caller =
+      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.caller:()V"));
+  caller->make_concrete(ACC_PRIVATE, /* is_virtual */ false);
+
+  DexMethod* callee = static_cast<DexMethod*>(
+      DexMethod::make_method("LFoo;.sketchy_callee:()V"));
+  callee->make_concrete(ACC_PRIVATE, /* is_virtual */ false);
+
+  foo_cls->add_method(caller);
+  foo_cls->add_method(callee);
+
+  const auto& caller_str = R"(
+    (
+      (load-param-object v0)
+
+      (.try_start a)
+      (invoke-direct (v0) "LFoo;.sketchy_callee:()V")
+      (.try_end a)
+
+      (.catch (a) "LWhatEver;")
+      (return-void)
+    )
+  )";
+
+  caller->set_code(assembler::ircode_from_string(caller_str));
+
+  const auto& callee_str = R"(
+    (
+      (load-param v0)
+      (monitor-enter v0)
+
+      (.try_start a)
+      (invoke-static () "LBar;.canThrowNotImportant:()V")
+      (.try_end a)
+      (invoke-static () "LBar;.canThrowOutsideTry:()V")
+
+      (.catch (a))
+      (monitor-exit v0)
+      (return-void)
+    )
+  )";
+
+  callee->set_code(assembler::ircode_from_string(callee_str));
+
+  ConcurrentMethodRefCache concurrent_resolve_cache;
+  auto concurrent_resolver = [&concurrent_resolve_cache](DexMethodRef* method,
+                                                         MethodSearch search) {
+    return resolve_method(method, search, concurrent_resolve_cache);
+  };
+
+  DexStoresVector stores;
+  {
+    DexStore store("root");
+    store.add_classes({});
+    store.add_classes({foo_cls});
+    stores.push_back(std::move(store));
+  }
+  std::unordered_set<DexMethod*> candidates{callee};
+  auto scope = build_class_scope(stores);
+  api::LevelChecker::init(0, scope);
+  inliner::InlinerConfig inliner_config;
+  inliner_config.populate(scope);
+
+  caller->get_code()->build_cfg(true);
+  callee->get_code()->build_cfg(true);
+
+  {
+    MultiMethodInliner inliner(scope, stores, candidates, concurrent_resolver,
+                               inliner_config, IntraDex,
+                               /* true_virtual_callers */ {},
+                               /* inline_for_speed */ nullptr,
+                               /* analyze_and_prune_inits */ false, {});
+    inliner.inline_methods();
+
+    auto inlined = inliner.get_inlined();
+    EXPECT_EQ(inlined.size(), 0);
+  }
+}

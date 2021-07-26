@@ -12,8 +12,10 @@
 #include "DexPosition.h"
 #include "DexUtil.h"
 #include "Match.h"
+#include "MonitorCount.h"
 #include "Resolver.h"
 #include "Show.h"
+#include "StlUtil.h"
 #include "Trace.h"
 
 using namespace sparta;
@@ -613,6 +615,65 @@ Result check_positions(const DexMethod* method) {
   return Result::Ok();
 }
 
+/*
+ * For now, we only check if there are...
+ * - mismatches in the monitor stack depth
+ * - instructions that may throw in a synchronized region in a try-block without
+ *   a catch-all.
+ */
+Result check_monitors(const DexMethod* method) {
+  auto code = method->get_code();
+  monitor_count::Analyzer monitor_analyzer(code->cfg());
+  auto blocks = monitor_analyzer.get_monitor_mismatches();
+  if (!blocks.empty()) {
+    std::ostringstream out;
+    out << "Monitor-stack mismatch (unverifiable code) in "
+        << method->get_deobfuscated_name() << " at blocks ";
+    for (auto b : blocks) {
+      out << "(";
+      for (auto e : b->preds()) {
+        auto count = monitor_analyzer.get_exit_state_at(e->src());
+        out << "B" << e->src()->id() << ":" << show(count) << " | ";
+      }
+      auto count = monitor_analyzer.get_exit_state_at(b);
+      out << ") ==> B" << b->id() << ":" << show(count) << ", ";
+    }
+    out << " in\n" + show(code->cfg());
+    return Result::make_error(out.str());
+  }
+
+  auto sketchy_insns = monitor_analyzer.get_sketchy_instructions();
+  std::unordered_set<cfg::Block*> sketchy_blocks;
+  for (auto& it : sketchy_insns) {
+    sketchy_blocks.insert(it.block());
+  }
+  std20::erase_if(sketchy_blocks, [&](auto it) {
+    return !code->cfg().get_succ_edge_of_type(*it, cfg::EDGE_THROW);
+  });
+  if (!sketchy_blocks.empty()) {
+    std::ostringstream out;
+    out << "Throwing instructions in a synchronized region in a try-block "
+           "without a catch-all in "
+        << method->get_deobfuscated_name();
+    bool first = true;
+    for (auto& it : sketchy_insns) {
+      if (!sketchy_blocks.count(it.block())) {
+        continue;
+      }
+      if (first) {
+        first = false;
+      } else {
+        out << " and ";
+      }
+      out << " at instruction B" << it.block()->id() << " '" << SHOW(it->insn)
+          << "' @ " << std::hex << static_cast<const void*>(&*it.unwrap());
+    }
+    out << " in\n" + show(code->cfg());
+    return Result::make_error(out.str());
+  }
+  return Result::Ok();
+}
+
 /**
  * Validate if the caller has the permit to call a method or access a field.
  *
@@ -742,6 +803,14 @@ void IRTypeChecker::run() {
     m_complete = true;
     m_good = false;
     m_what = positions_result.error_message();
+    return;
+  }
+
+  auto monitors_result = check_monitors(m_dex_method);
+  if (monitors_result != Result::Ok()) {
+    m_complete = true;
+    m_good = false;
+    m_what = monitors_result.error_message();
     return;
   }
 

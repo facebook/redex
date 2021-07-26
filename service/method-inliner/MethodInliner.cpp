@@ -780,6 +780,8 @@ void run_inliner(DexStoresVector& stores,
                    inliner.get_inline_with_cfg_seconds());
   Timer::add_timer("Inliner.Inlining.call_site_inlined_cost",
                    inliner.get_call_site_inlined_cost_seconds());
+  Timer::add_timer("Inliner.Inlining.cannot_inline_sketchy_code",
+                   inliner.get_cannot_inline_sketchy_code_timer_seconds());
   Timer::add_timer("Inliner.Shrinking.FastRegAlloc",
                    shrinker.get_fast_reg_alloc_seconds());
 }

@@ -29,6 +29,7 @@ struct InlinerConfig {
   shrinker::ShrinkerConfig shrinker;
   bool shrink_other_methods{true};
   bool unique_inlined_registers{true};
+  bool respect_sketchy_methods{true};
   bool debug{false};
 
   /*

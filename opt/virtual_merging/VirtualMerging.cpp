@@ -1218,7 +1218,10 @@ void VirtualMergingPass::run_pass(DexStoresVector& stores,
 
   auto dedupped = dedup_vmethods::dedup(stores);
 
-  const auto& inliner_config = conf.get_inliner_config();
+  auto inliner_config = conf.get_inliner_config();
+  // We don't need to worry about inlining synchronized code, as we always
+  // inline at the top-level outside of other try-catch regions.
+  inliner_config.respect_sketchy_methods = false;
   VirtualMerging vm(stores, inliner_config,
                     m_max_overriding_method_instructions);
   vm.run(m_use_profiles ? conf.get_method_profiles()
