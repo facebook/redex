@@ -991,7 +991,6 @@ void redex_frontend(ConfigFiles& conf, /* input */
     // this will change rstate of methods
     keep_rules::process_no_optimizations_rules(
         conf.get_no_optimizations_annos(), scope);
-    monitor_count::mark_sketchy_methods_with_no_optimize(scope);
   }
   {
     Timer t("Initializing reachable classes");

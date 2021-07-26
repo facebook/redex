@@ -24,14 +24,11 @@ namespace monitor_count {
  * non-wrapped throwing opcodes in a synchronized block will verify. However,
  * if such a method is inlined, and its callsite was wrapped in a try region
  * that does not have a catch-all, then we have a VerifyError! More generally,
- * any code-relocating optimizations could trigger this issue. Therefore, to be
- * safe, we mark all methods with these non-wrapped throwing opcodes in monitor
- * regions as don't-inline as well as no-optimize.
+ * any code-relocating optimizations could trigger this issue.
  *
  * [1]:
  * http://androidxref.com/9.0.0_r3/xref/art/runtime/verifier/method_verifier.cc#3553
  */
-void mark_sketchy_methods_with_no_optimize(const Scope&);
 
 using MonitorCountDomain = sparta::ConstantAbstractDomain<uint32_t>;
 

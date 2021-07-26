@@ -95,21 +95,6 @@ static bool contains_invoke_insn(
 
 namespace monitor_count {
 
-void mark_sketchy_methods_with_no_optimize(const Scope& scope) {
-  walk::parallel::code(scope, [](DexMethod* method, IRCode& code) {
-    code.build_cfg();
-    auto bad_insn = find_synchronized_throw_outside_catch_all(code);
-    if (bad_insn != nullptr) {
-      TRACE(MONITOR, 3,
-            "%s has a synchronized may-throw outside a catch-all: %s\n",
-            SHOW(method), SHOW(bad_insn));
-      method->rstate.set_no_optimizations();
-      method->rstate.set_dont_inline();
-    }
-    code.clear_cfg();
-  });
-}
-
 std::vector<cfg::Block*> Analyzer::get_monitor_mismatches() {
   std::vector<cfg::Block*> blocks;
   for (auto* block : m_cfg.blocks()) {
