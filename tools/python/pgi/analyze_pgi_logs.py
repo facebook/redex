@@ -99,28 +99,30 @@ def _gen_raw_inline_pairs(iterator):
 
 
 # The caller/callee statistics of a PGI decision.
+def _identity(input):
+    return input
+
+
+SingleMetrics = [
+    ("blocks", int),
+    ("edges", int),
+    ("hits", float),
+    ("insns", int),
+    ("regs", int),
+    ("num_loops", int),
+    ("deepest_loop", int),
+]
+InlineForSpeedDataTyping = [
+    ("caller", _identity),
+    *[("caller_" + name, fn) for name, fn in SingleMetrics],
+    ("callee", _identity),
+    *[("callee_" + name, fn) for name, fn in SingleMetrics],
+    ("interaction", _identity),
+    ("confidence", int),
+]
 InlineForSpeedData = namedtuple(
     "InlineForSpeedData",
-    [
-        "caller",
-        "caller_blocks",
-        "caller_edges",
-        "caller_hits",
-        "caller_insns",
-        "caller_regs",
-        "caller_num_loops",
-        "caller_deepest_loop",
-        "callee",
-        "callee_blocks",
-        "callee_edges",
-        "callee_hits",
-        "callee_insns",
-        "callee_regs",
-        "callee_num_loops",
-        "callee_deepest_loop",
-        "interaction",
-        "confidence",
-    ],
+    [name for name, _type in InlineForSpeedDataTyping],
 )
 
 
@@ -140,31 +142,18 @@ def _gen_profile_decisions(iterator):
 
         data = line.data[line.data.index(":") + 1 :]
         data_parts = data.split("!")
-        if len(data_parts) != 2 * 8 + 1:
+        conf_str = line.data[len(header) : line.data.index(":")].strip()
+        data_parts.append(conf_str)
+
+        if len(data_parts) != len(InlineForSpeedDataTyping):
             raise ValueError(f"{line}: {data_parts}")
 
-        conf_str = line.data[len(header) : line.data.index(":")].strip()
-
         try:
-            yield InlineForSpeedData(
-                data_parts[0].strip(),
-                int(data_parts[1].strip()),
-                int(data_parts[2].strip()),
-                float(data_parts[3].strip()),
-                int(data_parts[4].strip()),
-                int(data_parts[5].strip()),
-                int(data_parts[6].strip()),
-                int(data_parts[7].strip()),
-                data_parts[8].strip(),
-                int(data_parts[9].strip()),
-                int(data_parts[10].strip()),
-                float(data_parts[11].strip()),
-                int(data_parts[12].strip()),
-                int(data_parts[13].strip()),
-                int(data_parts[14].strip()),
-                int(data_parts[15].strip()),
-                data_parts[16].strip(),
-                int(conf_str),
+            yield InlineForSpeedData._make(
+                (
+                    fn(data_parts[i].strip())
+                    for i, (_name, fn) in enumerate(InlineForSpeedDataTyping)
+                )
             )
         except BaseException as e:
             raise ValueError(f"{line}: {e}")
@@ -235,31 +224,61 @@ def _fill_inline_maps(data, caller_map, callee_map, inline_data_map):
     return None
 
 
+ColumnOrder = [
+    "caller",
+    "callee",
+    *["caller_" + name for name, _type in SingleMetrics],
+    *["callee_" + name for name, _type in SingleMetrics],
+    "inline_count",
+    "inline_max_loop_depth",
+    "interaction",
+    "confidence",
+]
+
+
+for name, _type in InlineForSpeedDataTyping:
+    assert name in ColumnOrder
+
+
 # Common column description for CSV files.
-def _write_csv_header(csv_writer, extra=None):
-    header = [
-        "caller",
-        "callee",
-        "caller_insns",
-        "caller_regs",
-        "caller_blocks",
-        "caller_edges",
-        "caller_num_loops",
-        "caller_deepest_loop",
-        "callee_insns",
-        "callee_regs",
-        "callee_blocks",
-        "callee_edges",
-        "callee_num_loops",
-        "callee_deepest_loop",
-        "caller_hits",
-        "callee_hits",
-        "inline_count",
-        "inline_max_loop_depth",
-    ]
-    if extra is not None:
-        header = header + list(extra)
-    csv_writer.writerow(header)
+def _write_csv_header(csv_writer):
+    csv_writer.writerow(ColumnOrder)
+
+
+def _make_row(
+    caller,
+    caller_data,
+    callee,
+    callee_data,
+    inline_data,
+    interaction,
+    confidence,
+    ifs=None,
+):
+    tmp = {
+        "caller": caller,
+        "callee": callee,
+        "inline_count": inline_data.count,
+        "inline_max_loop_depth": inline_data.max_loop_depth,
+        "interaction": interaction,
+        "confidence": confidence,
+    }
+
+    for name, _type in SingleMetrics:
+
+        def get_val(name, full_name, data):
+            if hasattr(data, name):
+                return getattr(data, name)
+            if ifs is None:
+                return -1
+            return getattr(ifs, full_name)
+
+        tmp["caller_" + name] = get_val(name, "caller_" + name, caller_data)
+        tmp["callee_" + name] = get_val(name, "callee_" + name, callee_data)
+
+    row = [tmp[name] for name in ColumnOrder]
+
+    return row
 
 
 class MaybePrintDot:
@@ -337,30 +356,16 @@ class MethodInlinerPassHandler:
                 for callee, inline_data in sorted(
                     caller_callee_map.items(), key=lambda x: x[0]
                 ):
-                    caller_data = self._caller_map[caller]
-                    callee_data = self._callee_map[callee]
-                    row = (
-                        caller,
-                        callee,
-                        caller_data.insns,
-                        caller_data.regs,
-                        caller_data.blocks,
-                        caller_data.edges,
-                        caller_data.num_loops,
-                        caller_data.deepest_loop,
-                        callee_data.insns,
-                        callee_data.regs,
-                        callee_data.blocks,
-                        callee_data.edges,
-                        callee_data.num_loops,
-                        callee_data.deepest_loop,
-                        0,
-                        0,
-                        inline_data.count,
-                        inline_data.max_loop_depth,
-                        0,
+                    row = _make_row(
+                        caller=caller,
+                        caller_data=self._caller_map[caller],
+                        callee=callee,
+                        callee_data=self._callee_map[callee],
+                        inline_data=inline_data,
+                        interaction="n/a",
+                        confidence=-1,
+                        ifs=None,
                     )
-
                     csv_writer.writerow(row)
 
                     lines += 1
@@ -439,40 +444,19 @@ class PGIHandler:
         printer = MaybePrintDot(1000, "!")
         with open(f"pgi-{self._run}.csv", "w", newline="") as out_file:
             csv_writer = csv.writer(out_file, delimiter=",")
-            header_extra = ([] if self._aggregate_ifs else ["interaction"]) + [
-                "confidence"
-            ]
-            _write_csv_header(csv_writer, extra=header_extra)
+            _write_csv_header(csv_writer)
 
             for ifs in ifs_inlined:
-                caller_data = self._caller_map[ifs.caller]
-                callee_data = self._callee_map[ifs.callee]
-                inline_data = self._inline_data_map[ifs.caller][ifs.callee]
-                row = (
-                    [
-                        ifs.caller,
-                        ifs.callee,
-                        caller_data.insns,
-                        caller_data.regs,
-                        caller_data.blocks,
-                        caller_data.edges,
-                        caller_data.num_loops,
-                        caller_data.deepest_loop,
-                        callee_data.insns,
-                        callee_data.regs,
-                        callee_data.blocks,
-                        callee_data.edges,
-                        callee_data.num_loops,
-                        callee_data.deepest_loop,
-                        ifs.caller_hits,
-                        ifs.callee_hits,
-                        inline_data.count,
-                        inline_data.max_loop_depth,
-                    ]
-                    + ([] if self._aggregate_ifs else [ifs.interaction])
-                    + ([ifs.confidence])
+                row = _make_row(
+                    caller=ifs.caller,
+                    caller_data=self._caller_map[ifs.caller],
+                    callee=ifs.callee,
+                    callee_data=self._callee_map[ifs.callee],
+                    inline_data=self._inline_data_map[ifs.caller][ifs.callee],
+                    interaction="aggregate" if self._aggregate_ifs else ifs.interaction,
+                    confidence=ifs.confidence,
+                    ifs=ifs,
                 )
-
                 csv_writer.writerow(row)
                 printer.maybe_print(1)
 
