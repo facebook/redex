@@ -54,8 +54,10 @@ class MethodContextContext {
     };
     const boost::optional<Vals> m_vals;
 
+    uint32_t m_params{0};
     uint32_t m_regs{0};
     uint32_t m_insns{0};
+    uint32_t m_opcodes{0};
     uint32_t m_blocks{0};
     uint32_t m_edges{0};
     uint32_t m_num_loops{0};
@@ -96,13 +98,19 @@ class MethodContextContext {
 
     MethodContext res{*this, std::move(vals)};
 
+    res.m_params = m->get_proto()->get_args()->size();
+
     using namespace cfg;
 
     auto code = const_cast<DexMethod*>(m)->get_code();
+
+    // Do this early. If no CFG is built, this is a better estimate.
+    res.m_opcodes = code->sum_opcode_sizes();
+    res.m_insns = code->count_opcodes();
+
     ScopedCFG cfg(code);
 
     res.m_regs = cfg->get_registers_size();
-    res.m_insns = code->count_opcodes();
     res.m_blocks = cfg->num_blocks();
     res.m_edges = cfg->num_edges();
 
@@ -162,12 +170,16 @@ inline float get_max_hits_or_zero(const MethodContext& context) {
 inline PGIForest::FeatureFunctionMap get_default_feature_function_map() {
   return {
       // Caller.
+      {"caller_params", [](const MethodContext& caller,
+                           const MethodContext&) { return caller.m_params; }},
       {"caller_hits",
        [](const MethodContext& caller, const MethodContext&) {
          return get_max_hits_or_zero(caller);
        }},
       {"caller_insns", [](const MethodContext& caller,
                           const MethodContext&) { return caller.m_insns; }},
+      {"caller_opcodes", [](const MethodContext& caller,
+                            const MethodContext&) { return caller.m_opcodes; }},
       {"caller_regs", [](const MethodContext& caller,
                          const MethodContext&) { return caller.m_regs; }},
       {"caller_blocks", [](const MethodContext& caller,
@@ -183,6 +195,10 @@ inline PGIForest::FeatureFunctionMap get_default_feature_function_map() {
          return caller.m_deepest_loop;
        }},
       // Callee.
+      {"callee_params",
+       [](const MethodContext&, const MethodContext& callee) {
+         return callee.m_params;
+       }},
       {"callee_hits",
        [](const MethodContext&, const MethodContext& callee) {
          return get_max_hits_or_zero(callee);
@@ -190,6 +206,10 @@ inline PGIForest::FeatureFunctionMap get_default_feature_function_map() {
       {"callee_insns",
        [](const MethodContext&, const MethodContext& callee) {
          return callee.m_insns;
+       }},
+      {"callee_opcodes",
+       [](const MethodContext&, const MethodContext& callee) {
+         return callee.m_opcodes;
        }},
       {"callee_regs",
        [](const MethodContext&, const MethodContext& callee) {

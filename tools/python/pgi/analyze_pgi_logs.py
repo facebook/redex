@@ -104,10 +104,12 @@ def _identity(input):
 
 
 SingleMetrics = [
+    ("params", int),
     ("blocks", int),
     ("edges", int),
     ("hits", float),
     ("insns", int),
+    ("opcodes", int),
     ("regs", int),
     ("num_loops", int),
     ("deepest_loop", int),
