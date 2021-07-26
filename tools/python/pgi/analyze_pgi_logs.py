@@ -108,6 +108,7 @@ SingleMetrics = [
     ("blocks", int),
     ("edges", int),
     ("hits", float),
+    ("appear100", float),
     ("insns", int),
     ("opcodes", int),
     ("regs", int),
