@@ -104,7 +104,7 @@ class MethodContextContext {
     res.m_regs = cfg->get_registers_size();
     res.m_insns = code->count_opcodes();
     res.m_blocks = cfg->num_blocks();
-    res.m_edges = 0; // cfg->num_edges();
+    res.m_edges = cfg->num_edges();
 
     // Somewhat expensive.
     loop_impl::LoopInfo info(*cfg);
