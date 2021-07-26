@@ -309,24 +309,29 @@ class InlineForSpeedDecisionTrees final : public InlineForSpeedBase {
 
         TRACE(METH_PROF,
               5,
-              "[InlineForSpeedDecisionTrees] "
-              "%zu: %s!%u!%u!%1.5f!%u!%u!%u!%u!%s!%u!%u!%1.5f!%u!%u!%u!%u!%s",
+              "[InlineForSpeedDecisionTrees] %zu: "
+              "%s!%u!%u!%u!%1.5f!%u!%u!%u!%u!%u!%s!%u!%u!%u!%1.5f!%u!%u!%u!%u!%"
+              "u!%s",
               accepted,
               // Caller
               SHOW(caller_method),
+              caller_context.m_params,
               caller_context.m_blocks,
               caller_context.m_edges,
               caller_val,
               caller_context.m_insns,
+              caller_context.m_opcodes,
               caller_context.m_regs,
               caller_context.m_num_loops,
               caller_context.m_deepest_loop,
               // Callee
               SHOW(callee_method),
+              callee_context.m_params,
               callee_context.m_blocks,
               callee_context.m_edges,
               callee_val,
               callee_context.m_insns,
+              callee_context.m_opcodes,
               callee_context.m_regs,
               callee_context.m_num_loops,
               callee_context.m_deepest_loop,
