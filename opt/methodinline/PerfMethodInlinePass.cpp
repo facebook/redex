@@ -307,11 +307,23 @@ class InlineForSpeedDecisionTrees final : public InlineForSpeedBase {
         auto caller_val = get_val(caller_context.m_vals, i);
         auto callee_val = get_val(callee_context.m_vals, i);
 
+        auto get_appear_val = [](const auto& vals, size_t i) {
+          if (!vals) {
+            return -1.0f;
+          }
+          if (!vals->appear100[i]) {
+            return -1.0f;
+          }
+          return *vals->appear100[i];
+        };
+        auto caller_appear_val = get_appear_val(caller_context.m_vals, i);
+        auto callee_appear_val = get_appear_val(callee_context.m_vals, i);
+
         TRACE(METH_PROF,
               5,
               "[InlineForSpeedDecisionTrees] %zu: "
-              "%s!%u!%u!%u!%1.5f!%u!%u!%u!%u!%u!%s!%u!%u!%u!%1.5f!%u!%u!%u!%u!%"
-              "u!%s",
+              "%s!%u!%u!%u!%1.5f!%1.5f!%u!%u!%u!%u!%u!%s!%u!%u!%u!%1.5f!%1.5f!%"
+              "u!%u!%u!%u!%u!%s",
               accepted,
               // Caller
               SHOW(caller_method),
@@ -319,6 +331,7 @@ class InlineForSpeedDecisionTrees final : public InlineForSpeedBase {
               caller_context.m_blocks,
               caller_context.m_edges,
               caller_val,
+              caller_appear_val,
               caller_context.m_insns,
               caller_context.m_opcodes,
               caller_context.m_regs,
@@ -330,6 +343,7 @@ class InlineForSpeedDecisionTrees final : public InlineForSpeedBase {
               callee_context.m_blocks,
               callee_context.m_edges,
               callee_val,
+              callee_appear_val,
               callee_context.m_insns,
               callee_context.m_opcodes,
               callee_context.m_regs,
