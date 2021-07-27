@@ -82,6 +82,8 @@ constexpr const char* METRIC_VIRTUAL_SCOPES_WITH_MERGEABLE_PAIRS =
 constexpr const char* METRIC_UNABSTRACTED_METHODS = "num_unabstracted_methods";
 constexpr const char* METRIC_UNINLINABLE_METHODS = "num_uninlinable_methods";
 constexpr const char* METRIC_HUGE_METHODS = "num_huge_methods";
+constexpr const char* METRIC_CALLER_SIZE_REMOVED_METHODS =
+    "num_caller_size_removed_methods";
 constexpr const char* METRIC_REMOVED_VIRTUAL_METHODS =
     "num_removed_virtual_methods";
 
@@ -432,8 +434,10 @@ class MergePairsBuilder {
 // Part 3: For each virtual scope, identify all pairs of methods where
 //         one can be merged with another. The list of pairs is ordered in
 //         way that it can be later processed sequentially.
-void VirtualMerging::compute_mergeable_pairs_by_virtual_scopes(
-    const method_profiles::MethodProfiles& profiles) {
+VirtualMerging::MergablePairsByVirtualScope
+VirtualMerging::compute_mergeable_pairs_by_virtual_scopes(
+    const method_profiles::MethodProfiles& profiles,
+    VirtualMergingStats& stats) const {
   ConcurrentMap<const VirtualScope*, LocalStats> local_stats;
   std::vector<const VirtualScope*> virtual_scopes;
   for (auto& p : m_mergeable_scope_methods) {
@@ -457,269 +461,463 @@ void VirtualMerging::compute_mergeable_pairs_by_virtual_scopes(
         }
       });
 
-  m_stats.virtual_scopes_with_mergeable_pairs +=
+  stats.virtual_scopes_with_mergeable_pairs +=
       mergeable_pairs_by_virtual_scopes.size();
 
   size_t overriding_methods = 0;
   for (auto& p : local_stats) {
     overriding_methods += p.second.overriding_methods;
-    m_stats.cross_store_refs += p.second.cross_store_refs;
-    m_stats.cross_dex_refs += p.second.cross_dex_refs;
-    m_stats.inconcrete_overridden_methods +=
+    stats.cross_store_refs += p.second.cross_store_refs;
+    stats.cross_dex_refs += p.second.cross_dex_refs;
+    stats.inconcrete_overridden_methods +=
         p.second.inconcrete_overridden_methods;
   }
 
-  always_assert(overriding_methods <= m_stats.mergeable_virtual_methods);
-  m_stats.annotated_methods =
-      m_stats.mergeable_virtual_methods - overriding_methods;
+  always_assert(overriding_methods <= stats.mergeable_virtual_methods);
+  stats.annotated_methods =
+      stats.mergeable_virtual_methods - overriding_methods;
+
+  MergablePairsByVirtualScope out;
   for (auto& p : mergeable_pairs_by_virtual_scopes) {
     const auto& mergeable_pairs = p.second;
-    m_stats.mergeable_pairs += mergeable_pairs.size();
-    m_mergeable_pairs_by_virtual_scopes.insert(p);
+    stats.mergeable_pairs += mergeable_pairs.size();
+    out.insert(p);
   }
-  always_assert(mergeable_pairs_by_virtual_scopes.size() ==
-                m_mergeable_pairs_by_virtual_scopes.size());
-  always_assert(m_stats.mergeable_pairs ==
-                m_stats.mergeable_virtual_methods - m_stats.annotated_methods -
-                    m_stats.cross_store_refs - m_stats.cross_dex_refs -
-                    m_stats.inconcrete_overridden_methods);
+  always_assert(mergeable_pairs_by_virtual_scopes.size() == out.size());
+  always_assert(stats.mergeable_pairs ==
+                stats.mergeable_virtual_methods - stats.annotated_methods -
+                    stats.cross_store_refs - stats.cross_dex_refs -
+                    stats.inconcrete_overridden_methods);
+
+  return out;
 }
 
 // Part 4: For each virtual scope, merge all pairs in order, unless inlining
 //         is for some reason not possible, e.g. because of code size
 //         constraints. Record set of methods in each class which can be
 //         removed.
-void VirtualMerging::merge_methods() {
-  for (auto& p : m_mergeable_pairs_by_virtual_scopes) {
-    auto virtual_scope = p.first;
-    const auto& mergeable_pairs = p.second;
-    for (auto& q : mergeable_pairs) {
-      auto overridden_method = const_cast<DexMethod*>(q.first);
-      auto overriding_method = const_cast<DexMethod*>(q.second);
+void VirtualMerging::merge_methods(
+    const MergablePairsByVirtualScope& mergable_pairs) {
+  using MethodData =
+      std::pair<const DexMethod*,
+                std::vector<std::pair<const VirtualScope*,
+                                      std::vector<const DexMethod*>>>>;
+  std::vector<MethodData> ordering;
+  // Fill the ordering.
+  {
+    std::unordered_map<const DexMethod*, size_t> method_idx;
 
-      if (overriding_method->get_code()->sum_opcode_sizes() >
-          m_max_overriding_method_instructions) {
-        TRACE(VM,
-              5,
-              "[VM] %s is too large to be merged into %s",
-              SHOW(overriding_method),
-              SHOW(overridden_method));
-        m_stats.huge_methods++;
-        continue;
-      }
-      size_t estimated_insn_size =
-          is_abstract(overridden_method)
-              ? 64 // we'll need some extra instruction; 64 is conservative
-              : overridden_method->get_code()->sum_opcode_sizes();
-      std::vector<DexMethod*> make_static;
-      if (!m_inliner->is_inlinable(overridden_method, overriding_method,
-                                   nullptr /* invoke_virtual_insn */,
-                                   estimated_insn_size, &make_static)) {
-        TRACE(VM,
-              3,
-              "[VM] Cannot inline %s into %s",
-              SHOW(overriding_method),
-              SHOW(overridden_method));
-        m_stats.uninlinable_methods++;
-        continue;
-      }
-      m_inliner->make_static_inlinable(make_static);
-      TRACE(VM,
-            4,
-            "[VM] Merging %s into %s",
-            SHOW(overriding_method),
-            SHOW(overridden_method));
+    for (auto& p : mergable_pairs) {
+      auto virtual_scope = p.first;
+      const auto& mergeable_pairs = p.second;
+      for (auto& q : mergeable_pairs) {
+        auto overridden_method = q.first;
+        auto overriding_method = q.second;
 
-      auto proto = overriding_method->get_proto();
-      always_assert(overridden_method->get_proto() == proto);
-      std::vector<uint32_t> param_regs;
-      std::function<void(IRInstruction*)> push_insn;
-      std::function<uint32_t()> allocate_temp;
-      std::function<uint32_t()> allocate_wide_temp;
-      std::function<void()> cleanup;
-      IRCode* overridden_code;
-      // We make the method public to avoid visibility issues. We could be more
-      // conservative (i.e. taking the strongest visibility control that
-      // encompasses the original pair) but I'm not sure it's worth the effort.
-      set_public(overridden_method);
-      if (is_abstract(overridden_method)) {
-        // We'll make the abstract method be not abstract, and give it a new
-        // method body.
-        // It starts out with just load-param instructions as needed, and then
-        // we'll add an invoke-virtual instruction that will get inlined.
-        m_stats.unabstracted_methods++;
-        overridden_method->make_concrete(
-            (DexAccessFlags)(overridden_method->get_access() & ~ACC_ABSTRACT),
-            std::make_unique<IRCode>(),
-            true /* is_virtual */);
-        overridden_code = overridden_method->get_code();
-        auto load_param_insn = new IRInstruction(IOPCODE_LOAD_PARAM_OBJECT);
-        load_param_insn->set_dest(overridden_code->allocate_temp());
-        overridden_code->push_back(load_param_insn);
-        param_regs.push_back(load_param_insn->dest());
-        for (auto t : proto->get_args()->get_type_list()) {
-          if (type::is_wide_type(t)) {
-            load_param_insn = new IRInstruction(IOPCODE_LOAD_PARAM_WIDE);
-            load_param_insn->set_dest(overridden_code->allocate_wide_temp());
-          } else {
-            load_param_insn =
-                new IRInstruction(type::is_object(t) ? IOPCODE_LOAD_PARAM_OBJECT
-                                                     : IOPCODE_LOAD_PARAM);
-            load_param_insn->set_dest(overridden_code->allocate_temp());
-          }
-          overridden_code->push_back(load_param_insn);
-          param_regs.push_back(load_param_insn->dest());
-        }
-        // we'll define helper functions in a way that lets them mutate the new
-        // IRCode
-        push_insn = [=](IRInstruction* insn) {
-          overridden_code->push_back(insn);
-        };
-        allocate_temp = [=]() { return overridden_code->allocate_temp(); };
-        allocate_wide_temp = [=]() {
-          return overridden_code->allocate_wide_temp();
-        };
-        cleanup = [=]() { overridden_code->build_cfg(/* editable */ true); };
-      } else {
-        // We are dealing with a non-abstract method. In this case, we'll first
-        // insert an if-instruction to decide whether to run the overriding
-        // method that we'll inline, or whether to jump to the old method body.
-        overridden_code = overridden_method->get_code();
-        always_assert(overridden_code);
-        overridden_code->build_cfg(/* editable */ true);
-        auto& overridden_cfg = overridden_code->cfg();
-
-        // Find block with load-param instructions
-        cfg::Block* block = overridden_cfg.entry_block();
-        while (block->get_first_insn() == block->end()) {
-          const auto& succs = block->succs();
-          always_assert(succs.size() == 1);
-          const auto& out = succs[0];
-          always_assert(out->type() == cfg::EDGE_GOTO);
-          block = out->target();
-        }
-
-        // Scan load-param instructions
-        std::unordered_set<uint32_t> param_regs_set;
-        auto last_it = block->end();
-        for (auto it = block->begin(); it != block->end(); it++) {
-          auto& mie = *it;
-          if (!opcode::is_a_load_param(mie.insn->opcode())) {
-            break;
-          }
-          param_regs.push_back(mie.insn->dest());
-          param_regs_set.insert(mie.insn->dest());
-          last_it = it;
-        }
-        always_assert(param_regs.size() == param_regs_set.size());
-        always_assert(1 + proto->get_args()->get_type_list().size() ==
-                      param_regs_set.size());
-        always_assert(last_it != block->end());
-
-        // We'll split the block right after the last load-param instruction ---
-        // that's where we'll insert the new if-statement.
-        overridden_cfg.split_block(block->to_cfg_instruction_iterator(last_it));
-        auto new_block = overridden_cfg.create_block();
+        MethodData* method_data;
         {
-          // instance-of param0, DeclaringTypeOfOverridingMethod
-          auto instance_of_insn = new IRInstruction(OPCODE_INSTANCE_OF);
-          instance_of_insn->set_type(overriding_method->get_class());
-          instance_of_insn->set_src(0, param_regs.at(0));
-          block->push_back(instance_of_insn);
-          // move-result-pseudo if_temp
-          auto if_temp_reg = overridden_cfg.allocate_temp();
-          auto move_result_pseudo_insn =
-              new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO);
-          move_result_pseudo_insn->set_dest(if_temp_reg);
-          block->push_back(move_result_pseudo_insn);
-          auto if_insn = new IRInstruction(OPCODE_IF_NEZ);
-          if_insn->set_src(0, if_temp_reg);
-          // if-nez if_temp, new_code
-          // (fall through to old code)
-          overridden_cfg.create_branch(
-              block, if_insn, block->goes_to() /* false */, new_block
-              /* true */);
+          auto it = method_idx.find(overridden_method);
+          if (it == method_idx.end()) {
+            ordering.emplace_back(
+                overridden_method,
+                std::vector<std::pair<const VirtualScope*,
+                                      std::vector<const DexMethod*>>>{});
+            method_idx.emplace(overridden_method, ordering.size() - 1);
+            method_data = &ordering.back();
+          } else {
+            method_data = &ordering.at(it->second);
+          }
         }
-        // we'll define helper functions in a way that lets them mutate the cfg
-        push_insn = [=](IRInstruction* insn) { new_block->push_back(insn); };
-        auto* cfg_ptr = &overridden_cfg;
-        allocate_temp = [=]() { return cfg_ptr->allocate_temp(); };
-        allocate_wide_temp = [=]() { return cfg_ptr->allocate_wide_temp(); };
-        cleanup = []() {};
-      }
-      always_assert(1 + proto->get_args()->get_type_list().size() ==
-                    param_regs.size());
 
-      // invoke-virtual temp, param1, ..., paramN, OverridingMethod
-      auto invoke_virtual_insn = new IRInstruction(OPCODE_INVOKE_VIRTUAL);
-      invoke_virtual_insn->set_method(overriding_method);
-      invoke_virtual_insn->set_srcs_size(param_regs.size());
-      for (size_t i = 0; i < param_regs.size(); i++) {
-        uint32_t reg = param_regs[i];
-        if (i == 0) {
-          uint32_t temp_reg = allocate_temp();
-          auto check_cast_insn = new IRInstruction(OPCODE_CHECK_CAST);
-          check_cast_insn->set_type(overriding_method->get_class());
-          check_cast_insn->set_src(0, reg);
-          push_insn(check_cast_insn);
-          auto move_result_pseudo_insn =
-              new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
-          move_result_pseudo_insn->set_dest(temp_reg);
-          push_insn(move_result_pseudo_insn);
-          reg = temp_reg;
+        if (method_data->second.empty() ||
+            method_data->second.back().first != virtual_scope) {
+          method_data->second.emplace_back(virtual_scope,
+                                           std::vector<const DexMethod*>{});
         }
-        invoke_virtual_insn->set_src(i, reg);
+        std::vector<const DexMethod*>& v_data =
+            method_data->second.back().second;
+        v_data.push_back(overriding_method);
       }
-      push_insn(invoke_virtual_insn);
-      if (proto->is_void()) {
-        // return-void
-        auto return_insn = new IRInstruction(OPCODE_RETURN_VOID);
-        push_insn(return_insn);
-      } else {
-        // move-result result_temp
-        auto rtype = proto->get_rtype();
-        auto op = opcode::move_result_for_invoke(overriding_method);
-        auto move_result_insn = new IRInstruction(op);
-        auto result_temp = op == OPCODE_MOVE_RESULT_WIDE ? allocate_wide_temp()
-                                                         : allocate_temp();
-        move_result_insn->set_dest(result_temp);
-        push_insn(move_result_insn);
-        // return result_temp
-        op = opcode::return_opcode(rtype);
-        auto return_insn = new IRInstruction(op);
-        return_insn->set_src(0, result_temp);
-        push_insn(return_insn);
+    }
+
+    for (const auto& p : ordering) {
+      std::unordered_set<const VirtualScope*> scopes_seen;
+      for (const auto& q : p.second) {
+        redex_assert(scopes_seen.count(q.first) == 0);
+        scopes_seen.insert(q.first);
       }
-
-      cleanup();
-
-      overriding_method->get_code()->build_cfg(/* editable */ true);
-      inliner::inline_with_cfg(
-          overridden_method, overriding_method, invoke_virtual_insn,
-          overridden_method->get_code()->cfg().get_registers_size());
-      change_visibility(overriding_method, overridden_method->get_class());
-      overriding_method->get_code()->clear_cfg();
-
-      // Check if everything was inlined.
-      for (const auto& mie : cfg::InstructionIterable(overridden_code->cfg())) {
-        redex_assert(invoke_virtual_insn != mie.insn);
-      }
-
-      overridden_code->clear_cfg();
-
-      m_virtual_methods_to_remove[type_class(overriding_method->get_class())]
-          .push_back(overriding_method);
-      auto virtual_scope_root = virtual_scope->methods.front();
-      always_assert(overriding_method != virtual_scope_root.first);
-      m_virtual_methods_to_remap.emplace(overriding_method,
-                                         virtual_scope_root.first);
-      m_stats.removed_virtual_methods++;
     }
   }
 
-  always_assert(m_stats.mergeable_pairs == m_stats.huge_methods +
-                                               m_stats.uninlinable_methods +
-                                               m_stats.removed_virtual_methods);
+  // Sort out large methods already.
+  for (auto& p : ordering) {
+    auto overridden_method = const_cast<DexMethod*>(p.first);
+    for (auto& q : p.second) {
+      q.second.erase(
+          std::remove_if(
+              q.second.begin(),
+              q.second.end(),
+              [&](const auto* m) {
+                if (m->get_code()->sum_opcode_sizes() >
+                    m_max_overriding_method_instructions) {
+                  TRACE(VM,
+                        5,
+                        "[VM] %s is too large to be merged into %s",
+                        SHOW(m),
+                        SHOW(overridden_method));
+                  m_stats.huge_methods++;
+                  return true;
+                }
+
+                size_t estimated_caller_size =
+                    is_abstract(overridden_method)
+                        ? 64 // we'll need some extra instruction; 64
+                             // is conservative
+                        : overridden_method->get_code()->sum_opcode_sizes();
+                std::vector<DexMethod*> make_static;
+                if (!m_inliner->is_inlinable(
+                        overridden_method, m, nullptr /* invoke_virtual_insn */,
+                        estimated_caller_size, &make_static)) {
+                  TRACE(VM,
+                        3,
+                        "[VM] Cannot inline %s into %s",
+                        SHOW(m),
+                        SHOW(overridden_method));
+                  m_stats.uninlinable_methods++;
+                  return true;
+                }
+
+                return false;
+              }),
+          q.second.end());
+    }
+
+    // Check whether it is likely that we'll be able to inline everything.
+    {
+      size_t sum = is_abstract(overridden_method)
+                       ? 64 // we'll need some extra instruction; 64
+                            // is conservative
+                       : overridden_method->get_code()->sum_opcode_sizes();
+
+      auto method_inline_estimate = [](const DexMethod* m) {
+        return 20 // if + invoke + return ~= 20.
+               + m->get_code()->sum_opcode_sizes();
+      };
+
+      size_t num_methods = 0;
+      for (auto& q : p.second) {
+        num_methods += q.second.size();
+        for (auto* m : q.second) {
+          sum += method_inline_estimate(m);
+        }
+      }
+
+      // The inliner uses a limit of 1<<15 - 1<<12. Let's use 1<<14, which
+      // is hopefully conservative.
+      constexpr size_t kLimit = (1u << 15) - (1u << 13);
+      if (kLimit < sum) {
+        TRACE(VM,
+              3,
+              "[VM] Estimated sum of inlines too large for %s: %zu",
+              SHOW(overridden_method),
+              sum);
+
+        // To be consistent with other orderings, we need to be
+        // any-order-deterministic when removing candidates. It would probably
+        // be good to do this well, e.g., work towards being able to remove
+        // the most methods. But let's be simple for now.
+        std::unordered_map<const VirtualScope*, std::vector<const DexMethod*>*>
+            data_map;
+        data_map.reserve(p.second.size());
+        std::vector<const VirtualScope*> scopes;
+        scopes.reserve(p.second.size());
+
+        for (auto& q : p.second) {
+          scopes.push_back(q.first);
+          data_map.emplace(q.first, &q.second);
+        }
+        // Sort scopes by root methods. This is somewhat arbitrary but stable.
+        std::sort(scopes.begin(), scopes.end(),
+                  [](const auto* lhs, const auto* rhs) {
+                    if (lhs == rhs) {
+                      return false;
+                    }
+                    return compare_dexmethods(lhs->methods.front().first,
+                                              rhs->methods.front().first);
+                  });
+
+        size_t removals = 0;
+        for (const auto* scope : scopes) {
+          auto m_tmp = *data_map.at(scope);
+          // Sort methods lexicographically. Arbitrary but stable. Could include
+          // size.
+          std::sort(m_tmp.begin(), m_tmp.end(), compare_dexmethods);
+
+          // Fetch methods to get under limit.
+          std::unordered_set<const DexMethod*> to_remove;
+          for (auto* m : m_tmp) {
+            sum -= method_inline_estimate(m);
+            to_remove.insert(m);
+            if (sum <= kLimit) {
+              break;
+            }
+          }
+
+          // Remove those methods.
+          auto* m_orig = data_map.at(scope);
+          m_orig->erase(std::remove_if(m_orig->begin(), m_orig->end(),
+                                       [&to_remove](const auto* m) {
+                                         return to_remove.count(m) != 0;
+                                       }),
+                        m_orig->end());
+          removals += to_remove.size();
+
+          if (sum <= kLimit) {
+            break;
+          }
+        }
+        TRACE(VM,
+              3,
+              "[VM] Removed %zu of %zu methods to reduce estimate for %s",
+              removals,
+              num_methods,
+              SHOW(overridden_method));
+        m_stats.caller_size_removed_methods += removals;
+      }
+    }
+  }
+
+  for (auto& p : ordering) {
+    auto overridden_method = const_cast<DexMethod*>(p.first);
+    for (auto& q : p.second) {
+      if (q.second.empty()) {
+        continue;
+      }
+
+      auto* virtual_scope = q.first;
+
+      for (auto* overriding_method_const : q.second) {
+        auto overriding_method =
+            const_cast<DexMethod*>(overriding_method_const);
+
+        size_t estimated_insn_size =
+            is_abstract(overridden_method)
+                ? 64 // we'll need some extra instruction; 64 is conservative
+                : overridden_method->get_code()->sum_opcode_sizes();
+        std::vector<DexMethod*> make_static;
+        bool is_inlineable = m_inliner->is_inlinable(
+            overridden_method, overriding_method,
+            nullptr /* invoke_virtual_insn */, estimated_insn_size,
+            &make_static);
+        always_assert_log(is_inlineable, "[VM] Cannot inline %s into %s",
+                          SHOW(overriding_method), SHOW(overridden_method));
+
+        m_inliner->make_static_inlinable(make_static);
+        TRACE(VM,
+              4,
+              "[VM] Merging %s into %s",
+              SHOW(overriding_method),
+              SHOW(overridden_method));
+
+        auto proto = overriding_method->get_proto();
+        always_assert(overridden_method->get_proto() == proto);
+        std::vector<uint32_t> param_regs;
+        std::function<void(IRInstruction*)> push_insn;
+        std::function<uint32_t()> allocate_temp;
+        std::function<uint32_t()> allocate_wide_temp;
+        std::function<void()> cleanup;
+        IRCode* overridden_code;
+        // We make the method public to avoid visibility issues. We could be
+        // more conservative (i.e. taking the strongest visibility control
+        // that encompasses the original pair) but I'm not sure it's worth the
+        // effort.
+        set_public(overridden_method);
+        if (is_abstract(overridden_method)) {
+          // We'll make the abstract method be not abstract, and give it a new
+          // method body.
+          // It starts out with just load-param instructions as needed, and
+          // then we'll add an invoke-virtual instruction that will get
+          // inlined.
+          m_stats.unabstracted_methods++;
+          overridden_method->make_concrete(
+              (DexAccessFlags)(overridden_method->get_access() & ~ACC_ABSTRACT),
+              std::make_unique<IRCode>(),
+              true /* is_virtual */);
+          overridden_code = overridden_method->get_code();
+          auto load_param_insn = new IRInstruction(IOPCODE_LOAD_PARAM_OBJECT);
+          load_param_insn->set_dest(overridden_code->allocate_temp());
+          overridden_code->push_back(load_param_insn);
+          param_regs.push_back(load_param_insn->dest());
+          for (auto t : proto->get_args()->get_type_list()) {
+            if (type::is_wide_type(t)) {
+              load_param_insn = new IRInstruction(IOPCODE_LOAD_PARAM_WIDE);
+              load_param_insn->set_dest(overridden_code->allocate_wide_temp());
+            } else {
+              load_param_insn = new IRInstruction(
+                  type::is_object(t) ? IOPCODE_LOAD_PARAM_OBJECT
+                                     : IOPCODE_LOAD_PARAM);
+              load_param_insn->set_dest(overridden_code->allocate_temp());
+            }
+            overridden_code->push_back(load_param_insn);
+            param_regs.push_back(load_param_insn->dest());
+          }
+          // we'll define helper functions in a way that lets them mutate the
+          // new IRCode
+          push_insn = [=](IRInstruction* insn) {
+            overridden_code->push_back(insn);
+          };
+          allocate_temp = [=]() { return overridden_code->allocate_temp(); };
+          allocate_wide_temp = [=]() {
+            return overridden_code->allocate_wide_temp();
+          };
+          cleanup = [=]() { overridden_code->build_cfg(/* editable */ true); };
+        } else {
+          // We are dealing with a non-abstract method. In this case, we'll
+          // first insert an if-instruction to decide whether to run the
+          // overriding method that we'll inline, or whether to jump to the
+          // old method body.
+          overridden_code = overridden_method->get_code();
+          always_assert(overridden_code);
+          overridden_code->build_cfg(/* editable */ true);
+          auto& overridden_cfg = overridden_code->cfg();
+
+          // Find block with load-param instructions
+          cfg::Block* block = overridden_cfg.entry_block();
+          while (block->get_first_insn() == block->end()) {
+            const auto& succs = block->succs();
+            always_assert(succs.size() == 1);
+            const auto& out = succs[0];
+            always_assert(out->type() == cfg::EDGE_GOTO);
+            block = out->target();
+          }
+
+          // Scan load-param instructions
+          std::unordered_set<uint32_t> param_regs_set;
+          auto last_it = block->end();
+          for (auto it = block->begin(); it != block->end(); it++) {
+            auto& mie = *it;
+            if (!opcode::is_a_load_param(mie.insn->opcode())) {
+              break;
+            }
+            param_regs.push_back(mie.insn->dest());
+            param_regs_set.insert(mie.insn->dest());
+            last_it = it;
+          }
+          always_assert(param_regs.size() == param_regs_set.size());
+          always_assert(1 + proto->get_args()->get_type_list().size() ==
+                        param_regs_set.size());
+          always_assert(last_it != block->end());
+
+          // We'll split the block right after the last load-param instruction
+          // --- that's where we'll insert the new if-statement.
+          overridden_cfg.split_block(
+              block->to_cfg_instruction_iterator(last_it));
+          auto new_block = overridden_cfg.create_block();
+          {
+            // instance-of param0, DeclaringTypeOfOverridingMethod
+            auto instance_of_insn = new IRInstruction(OPCODE_INSTANCE_OF);
+            instance_of_insn->set_type(overriding_method->get_class());
+            instance_of_insn->set_src(0, param_regs.at(0));
+            block->push_back(instance_of_insn);
+            // move-result-pseudo if_temp
+            auto if_temp_reg = overridden_cfg.allocate_temp();
+            auto move_result_pseudo_insn =
+                new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO);
+            move_result_pseudo_insn->set_dest(if_temp_reg);
+            block->push_back(move_result_pseudo_insn);
+            auto if_insn = new IRInstruction(OPCODE_IF_NEZ);
+            if_insn->set_src(0, if_temp_reg);
+            // if-nez if_temp, new_code
+            // (fall through to old code)
+            overridden_cfg.create_branch(
+                block, if_insn, block->goes_to() /* false */, new_block
+                /* true */);
+          }
+          // we'll define helper functions in a way that lets them mutate the
+          // cfg
+          push_insn = [=](IRInstruction* insn) { new_block->push_back(insn); };
+          auto* cfg_ptr = &overridden_cfg;
+          allocate_temp = [=]() { return cfg_ptr->allocate_temp(); };
+          allocate_wide_temp = [=]() { return cfg_ptr->allocate_wide_temp(); };
+          cleanup = []() {};
+        }
+        always_assert(1 + proto->get_args()->get_type_list().size() ==
+                      param_regs.size());
+
+        // invoke-virtual temp, param1, ..., paramN, OverridingMethod
+        auto invoke_virtual_insn = new IRInstruction(OPCODE_INVOKE_VIRTUAL);
+        invoke_virtual_insn->set_method(overriding_method);
+        invoke_virtual_insn->set_srcs_size(param_regs.size());
+        for (size_t i = 0; i < param_regs.size(); i++) {
+          uint32_t reg = param_regs[i];
+          if (i == 0) {
+            uint32_t temp_reg = allocate_temp();
+            auto check_cast_insn = new IRInstruction(OPCODE_CHECK_CAST);
+            check_cast_insn->set_type(overriding_method->get_class());
+            check_cast_insn->set_src(0, reg);
+            push_insn(check_cast_insn);
+            auto move_result_pseudo_insn =
+                new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
+            move_result_pseudo_insn->set_dest(temp_reg);
+            push_insn(move_result_pseudo_insn);
+            reg = temp_reg;
+          }
+          invoke_virtual_insn->set_src(i, reg);
+        }
+        push_insn(invoke_virtual_insn);
+        if (proto->is_void()) {
+          // return-void
+          auto return_insn = new IRInstruction(OPCODE_RETURN_VOID);
+          push_insn(return_insn);
+        } else {
+          // move-result result_temp
+          auto rtype = proto->get_rtype();
+          auto op = opcode::move_result_for_invoke(overriding_method);
+          auto move_result_insn = new IRInstruction(op);
+          auto result_temp = op == OPCODE_MOVE_RESULT_WIDE
+                                 ? allocate_wide_temp()
+                                 : allocate_temp();
+          move_result_insn->set_dest(result_temp);
+          push_insn(move_result_insn);
+          // return result_temp
+          op = opcode::return_opcode(rtype);
+          auto return_insn = new IRInstruction(op);
+          return_insn->set_src(0, result_temp);
+          push_insn(return_insn);
+        }
+
+        cleanup();
+
+        overriding_method->get_code()->build_cfg(/* editable */ true);
+        inliner::inline_with_cfg(
+            overridden_method, overriding_method, invoke_virtual_insn,
+            overridden_method->get_code()->cfg().get_registers_size());
+        change_visibility(overriding_method, overridden_method->get_class());
+        overriding_method->get_code()->clear_cfg();
+
+        // Check if everything was inlined.
+        for (const auto& mie :
+             cfg::InstructionIterable(overridden_code->cfg())) {
+          redex_assert(invoke_virtual_insn != mie.insn);
+        }
+
+        overridden_code->clear_cfg();
+
+        m_virtual_methods_to_remove[type_class(overriding_method->get_class())]
+            .push_back(overriding_method);
+        auto virtual_scope_root = virtual_scope->methods.front();
+        always_assert(overriding_method != virtual_scope_root.first);
+        m_virtual_methods_to_remap.emplace(overriding_method,
+                                           virtual_scope_root.first);
+        m_stats.removed_virtual_methods++;
+      }
+    }
+  }
+
+  always_assert(m_stats.mergeable_pairs ==
+                m_stats.huge_methods + m_stats.uninlinable_methods +
+                    m_stats.caller_size_removed_methods +
+                    m_stats.removed_virtual_methods);
 }
 
 // Part 5: Remove methods within classes.
@@ -761,9 +959,9 @@ void VirtualMerging::run(const method_profiles::MethodProfiles& profiles) {
   TRACE(VM, 1, "[VM] Computing mergeable scope methods");
   compute_mergeable_scope_methods();
   TRACE(VM, 1, "[VM] Computing mergeable pairs by virtual scopes");
-  compute_mergeable_pairs_by_virtual_scopes(profiles);
+  auto scopes = compute_mergeable_pairs_by_virtual_scopes(profiles, m_stats);
   TRACE(VM, 1, "[VM] Merging methods");
-  merge_methods();
+  merge_methods(scopes);
   TRACE(VM, 1, "[VM] Removing methods");
   remove_methods();
   TRACE(VM, 1, "[VM] Remapping invoke-virtual instructions");
@@ -828,6 +1026,8 @@ void VirtualMergingPass::run_pass(DexStoresVector& stores,
   mgr.incr_metric(METRIC_UNABSTRACTED_METHODS, stats.unabstracted_methods);
   mgr.incr_metric(METRIC_UNINLINABLE_METHODS, stats.uninlinable_methods);
   mgr.incr_metric(METRIC_HUGE_METHODS, stats.huge_methods);
+  mgr.incr_metric(METRIC_CALLER_SIZE_REMOVED_METHODS,
+                  stats.caller_size_removed_methods);
   mgr.incr_metric(METRIC_REMOVED_VIRTUAL_METHODS,
                   stats.removed_virtual_methods);
 }
