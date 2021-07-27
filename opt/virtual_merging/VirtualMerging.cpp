@@ -786,10 +786,10 @@ VirtualMergingStats apply_ordering(
                 ? 64 // we'll need some extra instruction; 64 is conservative
                 : overridden_method->get_code()->sum_opcode_sizes();
         std::vector<DexMethod*> make_static;
-        bool is_inlineable = inliner.is_inlinable(
-            overridden_method, overriding_method,
-            nullptr /* invoke_virtual_insn */, estimated_insn_size,
-            &make_static);
+        bool is_inlineable =
+            inliner.is_inlinable(overridden_method, overriding_method,
+                                 nullptr /* invoke_virtual_insn */,
+                                 estimated_insn_size, &make_static);
         always_assert_log(is_inlineable, "[VM] Cannot inline %s into %s",
                           SHOW(overriding_method), SHOW(overridden_method));
 
@@ -1006,7 +1006,8 @@ VirtualMergingStats apply_ordering(
 //         removed.
 void VirtualMerging::merge_methods(
     const MergablePairsByVirtualScope& mergable_pairs,
-    const MergablePairsByVirtualScope& exp_mergable_pairs) {
+    const MergablePairsByVirtualScope& exp_mergable_pairs,
+    ab_test::ABExperimentContext* ab_experiment_context) {
   auto ordering_pair = create_ordering(
       mergable_pairs, m_max_overriding_method_instructions, *m_inliner);
   m_stats += ordering_pair.second;
@@ -1093,9 +1094,6 @@ void VirtualMerging::merge_methods(
                 clones);
 
     // Go and process things with an experiment now.
-    auto ab_experiment_context =
-        ab_test::ABExperimentContext::create("virtual_merging");
-
     std::unordered_set<const DexMethod*> all_methods;
     std::transform(ordering_pair.first.begin(), ordering_pair.first.end(),
                    std::inserter(all_methods, all_methods.end()),
@@ -1108,6 +1106,9 @@ void VirtualMerging::merge_methods(
     TRACE(VM, 3, "[VM] Registering %zu methods for experiments",
           all_methods.size());
     m_stats.experiment_methods = all_methods.size();
+
+    redex_assert(ab_experiment_context != nullptr);
+
     for (auto* m_const : all_methods) {
       auto* m = const_cast<DexMethod*>(m_const);
       redex_assert(!m->get_code()->cfg_built());
@@ -1161,7 +1162,7 @@ void VirtualMerging::remap_invoke_virtuals() {
 }
 
 void VirtualMerging::run(const method_profiles::MethodProfiles& profiles,
-                         bool experiment) {
+                         ab_test::ABExperimentContext* ab_experiment_context) {
   TRACE(VM, 1, "[VM] Finding unsupported virtual scopes");
   find_unsupported_virtual_scopes();
   TRACE(VM, 1, "[VM] Computing mergeable scope methods");
@@ -1171,14 +1172,15 @@ void VirtualMerging::run(const method_profiles::MethodProfiles& profiles,
   auto scopes = compute_mergeable_pairs_by_virtual_scopes(profiles, m_stats);
 
   MergablePairsByVirtualScope exp_scopes;
-  if (experiment) {
+  if (ab_experiment_context != nullptr &&
+      !ab_experiment_context->use_control()) {
     exp_scopes = compute_mergeable_pairs_by_virtual_scopes(
         method_profiles::MethodProfiles(), stats_copy);
     redex_assert(m_stats == stats_copy);
   }
 
   TRACE(VM, 1, "[VM] Merging methods");
-  merge_methods(scopes, exp_scopes);
+  merge_methods(scopes, exp_scopes, ab_experiment_context);
   TRACE(VM, 1, "[VM] Removing methods");
   remove_methods();
   TRACE(VM, 1, "[VM] Remapping invoke-virtual instructions");
@@ -1214,11 +1216,14 @@ void VirtualMergingPass::run_pass(DexStoresVector& stores,
   auto dedupped = dedup_vmethods::dedup(stores);
 
   const auto& inliner_config = conf.get_inliner_config();
+
+  auto ab_experiment_context =
+      ab_test::ABExperimentContext::create("virtual_merging");
   VirtualMerging vm(stores, inliner_config,
                     m_max_overriding_method_instructions);
   vm.run(m_use_profiles ? conf.get_method_profiles()
                         : method_profiles::MethodProfiles(),
-         true);
+         ab_experiment_context.get());
   auto stats = vm.get_stats();
 
   mgr.incr_metric(METRIC_DEDUPPED_VIRTUAL_METHODS, dedupped);

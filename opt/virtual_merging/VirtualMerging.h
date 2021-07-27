@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "ABExperimentContext.h"
 #include "DexStore.h"
 #include "InlinerConfig.h"
 #include "Pass.h"
@@ -95,7 +96,8 @@ class VirtualMerging {
  public:
   VirtualMerging(DexStoresVector&, const inliner::InlinerConfig&, size_t);
   ~VirtualMerging();
-  void run(const method_profiles::MethodProfiles&, bool experiment = false);
+  void run(const method_profiles::MethodProfiles&,
+           ab_test::ABExperimentContext* ab_experiment_context = nullptr);
   const VirtualMergingStats& get_stats() { return m_stats; }
 
  private:
@@ -128,8 +130,10 @@ class VirtualMerging {
   MergablePairsByVirtualScope compute_mergeable_pairs_by_virtual_scopes(
       const method_profiles::MethodProfiles&, VirtualMergingStats&) const;
 
-  void merge_methods(const MergablePairsByVirtualScope& mergable_pairs,
-                     const MergablePairsByVirtualScope& exp_mergable_pairs);
+  void merge_methods(
+      const MergablePairsByVirtualScope& mergable_pairs,
+      const MergablePairsByVirtualScope& exp_mergable_pairs,
+      ab_test::ABExperimentContext* ab_experiment_context = nullptr);
   std::unordered_map<DexClass*, std::vector<const DexMethod*>>
       m_virtual_methods_to_remove;
   std::unordered_map<DexMethod*, DexMethod*> m_virtual_methods_to_remap;
