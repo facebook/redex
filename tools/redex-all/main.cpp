@@ -1052,10 +1052,13 @@ void redex_backend(ConfigFiles& conf,
   std::unordered_map<DexMethod*, uint64_t> method_to_id;
   std::unordered_map<DexCode*, std::vector<DebugLineItem>> code_debug_lines;
 
-  bool iodi_disable_min_sdk_opt;
-  conf.get_json_config().get("iodi_disable_min_sdk_opt", false,
-                             iodi_disable_min_sdk_opt);
-  IODIMetadata iodi_metadata(redex_options.min_sdk, iodi_disable_min_sdk_opt);
+  auto iodi_metadata = [&]() {
+    auto val = conf.get_json_config().get("iodi_layer_mode", Json::Value());
+    return IODIMetadata(redex_options.min_sdk,
+                        val.isNull()
+                            ? IODIMetadata::IODILayerMode::kFull
+                            : IODIMetadata::parseLayerMode(val.asString()));
+  }();
 
   std::set<uint32_t> signatures;
   std::unique_ptr<PostLowering> post_lowering =

@@ -32,16 +32,27 @@ class IODIMetadata {
  public:
   uint32_t min_sdk{0};
 
-  /// Emit debug info regardless of min_sdk
-  bool disable_min_sdk_opt;
+  enum class IODILayerMode : uint8_t {
+    // Write all IODI programs.
+    kFull,
+    // For API level 26 and above, ART defaults to printing PCs
+    // in place of line numbers so IODI debug programs aren't needed.
+    kSkipLayer0AtApi26,
+    // Always skip the layer 0 programs. Mostly for testing.
+    kAlwaysSkipLayer0,
+  };
+  IODILayerMode layer_mode{IODILayerMode::kFull};
+
+  static IODILayerMode parseLayerMode(const std::string& v);
 
   // We can initialize this guy for free. If this feature is enabled then
   // invoke the methods below.
   IODIMetadata() {}
 
   // Android builds with min_sdk >= 26 don't need IODI to emit debug info
-  explicit IODIMetadata(uint32_t min_sdk, bool disable_min_sdk_opt = false)
-      : min_sdk{min_sdk}, disable_min_sdk_opt{disable_min_sdk_opt} {}
+  explicit IODIMetadata(uint32_t min_sdk,
+                        IODILayerMode layer_mode = IODILayerMode::kFull)
+      : min_sdk{min_sdk}, layer_mode{layer_mode} {}
 
   // This fills the internal map of stack trace name -> method. This must be
   // called after the last pass and before anything starts to get lowered.
