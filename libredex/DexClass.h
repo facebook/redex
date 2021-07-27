@@ -895,11 +895,15 @@ class DexMethod : public DexMethodRef {
   }
 
   /**
-   * Create a copy of method `that`
+   * Create a copy of method `that`. This excludes `rstate`.
    */
   static DexMethod* make_method_from(DexMethod* that,
                                      DexType* target_cls,
                                      DexString* name);
+  // Make a copy of method `that`, including the `rstate`.
+  static DexMethod* make_full_method_from(DexMethod* that,
+                                          DexType* target_cls,
+                                          DexString* name);
 
   /**
    * This creates everything along the chain of Dex<Member>, so it should

@@ -641,7 +641,12 @@ DexMethod* DexMethod::make_method_from(DexMethod* that,
     m->m_anno = new DexAnnotationSet(*that->m_anno);
   }
 
-  m->set_code(std::make_unique<IRCode>(*that->get_code()));
+  if (!is_abstract(that)) {
+    always_assert_log(that->get_code() != nullptr, "%s", vshow(that).c_str());
+    m->set_code(std::make_unique<IRCode>(*that->get_code()));
+  } else {
+    redex_assert(that->get_code() == nullptr);
+  }
 
   m->m_access = that->m_access;
   m->m_concrete = that->m_concrete;
@@ -652,6 +657,14 @@ DexMethod* DexMethod::make_method_from(DexMethod* that,
     m->m_param_anno.emplace(pair.first, new DexAnnotationSet(*pair.second));
   }
 
+  return m;
+}
+
+DexMethod* DexMethod::make_full_method_from(DexMethod* that,
+                                            DexType* target_cls,
+                                            DexString* name) {
+  auto m = make_method_from(that, target_cls, name);
+  m->rstate = that->rstate;
   return m;
 }
 
