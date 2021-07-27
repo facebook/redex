@@ -714,7 +714,7 @@ std::vector<std::string> BundleResources::find_resources_files() {
            boost::filesystem::directory_iterator(dir), {})) {
     auto resources_file = entry.path() / "resources.pb";
     if (boost::filesystem::exists(resources_file)) {
-      paths.emplace_back(resources_file);
+      paths.emplace_back(resources_file.string());
     }
   }
   return paths;
@@ -727,9 +727,10 @@ std::unordered_set<std::string> BundleResources::find_all_xml_files() {
            boost::filesystem::directory_iterator(dir), {})) {
     auto manifest = entry.path() / "manifest/AndroidManifest.xml";
     if (boost::filesystem::exists(manifest)) {
-      all_xml_files.emplace(manifest);
+      all_xml_files.emplace(manifest.string());
     }
-    for (const std::string& path : get_xml_files(entry.path() / "/res")) {
+    auto res_path = entry.path() / "/res";
+    for (const std::string& path : get_xml_files(res_path.string())) {
       all_xml_files.emplace(path);
     }
   }
