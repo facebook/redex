@@ -54,8 +54,8 @@ TEST_F(FastRegAllocTest, RegAlloc) {
 
 /*
  * Check allocation behavior when there is dead code (vreg defined but no use).
- * If a vreg is defined but never used, we assume its live interval to be 1
- * insn.
+ * If a vreg is defined but never used, we assume its live interval lasts until
+ * end of code.
  */
 TEST_F(FastRegAllocTest, NoUseVReg) {
   auto method = assembler::method_from_string(R"(
@@ -74,8 +74,8 @@ TEST_F(FastRegAllocTest, NoUseVReg) {
   auto expected_code = assembler::ircode_from_string(R"(
     (
       (const v0 1)
-      (const v0 2)
-      (return v0)
+      (const v1 2)
+      (return v1)
     )
 )");
   EXPECT_CODE_EQ(method->get_code(), expected_code.get());

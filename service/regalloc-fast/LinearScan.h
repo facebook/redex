@@ -20,18 +20,18 @@ namespace fastregalloc {
 using vreg_t = uint16_t;
 
 /*
- * Record the live interval (first def, last use) of a vreg. Also include the
- * vreg that owns each live interval, and the reg allocated to the vreg
- * (std::nullopt if not yet allocated).
+ * Record the live interval (first def/use, last def/use) of a vreg. Also
+ * include the vreg that owns each live interval, and the reg allocated to the
+ * vreg (std::nullopt if not yet allocated).
  */
 struct VRegLiveInterval {
-  uint32_t first_def_idx;
-  uint32_t last_use_idx;
+  uint32_t start_point;
+  uint32_t end_point;
   vreg_t vreg;
   std::optional<reg_t> reg;
   bool operator<(const VRegLiveInterval& vreg_live_interval) const {
     // at most one def per insn, first def idx all different
-    return first_def_idx < vreg_live_interval.first_def_idx;
+    return start_point < vreg_live_interval.start_point;
   }
 };
 /*
@@ -58,7 +58,7 @@ struct CmpActiveIntervalEndPoint {
   }
 };
 /*
- * Order active intervals by their last use insn idx, desc.
+ * Order active intervals by their last use insn idx, asc.
  */
 using ActiveIntervals =
     std::priority_queue<std::pair<size_t, uint32_t>,
@@ -115,11 +115,9 @@ class LinearScanAllocator final {
   uint32_t reg_count = 0;
 
   /*
-   * Set live_intervals and vreg_defs_uses recorded from ircode.
-   * Forward traverse to get the first def of each vreg and all defs & uses,
-   * then backward traverse to record the last use.
+   * Find all defs and uses of each vreg by traversing the irlist.
    */
-  void init_vreg_info(IRCode* code);
+  void init_vreg_occurences(IRCode* code);
 
   /*
    * Update free_regs and active_intervals: Check last use of each active
