@@ -48,6 +48,8 @@ using Use = live_range::Use;
 using VRegDefsUses =
     std::unordered_map<vreg_t, std::pair<std::vector<Def>, std::vector<Use>>>;
 
+using WideVReg = std::unordered_set<vreg_t>;
+
 /*
  * Comparator for ActiveIntervals
  */
@@ -95,6 +97,11 @@ class LinearScanAllocator final {
    * Group all defs and uses of the same vreg.
    */
   VRegDefsUses vreg_defs_uses;
+
+  /*
+   * Record all wide vregs for allocation reference.
+   */
+  WideVReg wide_vregs;
 
   FreeRegPool free_regs;
 

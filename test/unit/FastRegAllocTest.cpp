@@ -22,12 +22,12 @@ TEST_F(FastRegAllocTest, RegAlloc) {
       (
         (const v0 1)
         (const v2 0)
-        (cmp-long v1 v0 v2)
+        (add-int v1 v0 v2)
         (const v3 -1)
         (add-int v3 v0 v3)
-        (cmp-long v1 v0 v3)
+        (add-int v1 v0 v3)
         (const v4 2)
-        (cmp-long v1 v0 v4)
+        (add-int v1 v0 v4)
         (return v1)
       )
     )
@@ -40,12 +40,12 @@ TEST_F(FastRegAllocTest, RegAlloc) {
     (
       (const v0 1)
       (const v1 0)
-      (cmp-long v2 v0 v1)
+      (add-int v2 v0 v1)
       (const v1 -1)
       (add-int v1 v0 v1)
-      (cmp-long v2 v0 v1)
+      (add-int v2 v0 v1)
       (const v1 2)
-      (cmp-long v2 v0 v1)
+      (add-int v2 v0 v1)
       (return v2)
     )
 )");
@@ -188,6 +188,35 @@ TEST_F(FastRegAllocTest, CheckVRegInLoop) {
       (:Loop)
       (add-int/lit8 v0 v0 -1)
       (goto :LHead)
+    )
+)");
+  EXPECT_CODE_EQ(method->get_code(), expected_code.get());
+}
+
+/*
+ * Test behavior when there is wide arguments.
+ */
+TEST_F(FastRegAllocTest, WideVReg) {
+  auto method = assembler::method_from_string(R"(
+    (method (public static) "LFoo;.bar:()J"
+      (
+        (const v2 1)
+        (add-int/lit8 v3 v2 1)
+        (const-wide v2 9223372036854775807)
+        (return v3)
+      )
+    )
+)");
+
+  fastregalloc::LinearScanAllocator allocator(method);
+  allocator.allocate();
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+        (const v0 1)
+        (add-int/lit8 v2 v0 1)
+        (const-wide v0 9223372036854775807)
+        (return v2)
     )
 )");
   EXPECT_CODE_EQ(method->get_code(), expected_code.get());

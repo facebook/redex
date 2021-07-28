@@ -59,17 +59,22 @@ void LinearScanAllocator::allocate() {
   for (size_t idx = 0; idx < live_intervals.size(); ++idx) {
     expire_old_intervals(live_intervals[idx].start_point);
     reg_t alloc_reg;
-    // TODO: (milestone 3) add spill here given dex constraints
-    if (free_regs.empty()) {
+    // TODO: (in the future) add spill here given dex constraints
+    vreg_t cur_vreg = live_intervals[idx].vreg;
+    if (wide_vregs.count(cur_vreg)) {
       alloc_reg = reg_count;
-      reg_count++;
+      reg_count += 2;
     } else {
-      alloc_reg = free_regs.front();
-      free_regs.pop();
+      if (free_regs.empty()) {
+        alloc_reg = reg_count;
+        reg_count++;
+      } else {
+        alloc_reg = free_regs.front();
+        free_regs.pop();
+      }
     }
     live_intervals[idx].reg = alloc_reg;
     active_intervals.push(std::make_pair(idx, live_intervals[idx].end_point));
-    vreg_t cur_vreg = live_intervals[idx].vreg;
     for (auto def : vreg_defs_uses[cur_vreg].first) {
       def->set_dest(alloc_reg);
     }
@@ -86,6 +91,9 @@ void LinearScanAllocator::init_vreg_occurences(IRCode* code) {
     auto insn = mie.insn;
     if (insn->has_dest()) {
       vreg_t dest_reg = insn->dest();
+      if (insn->dest_is_wide()) {
+        wide_vregs.insert(dest_reg);
+      }
       if (!vreg_defs_uses.count(dest_reg)) {
         vreg_defs_uses[dest_reg] =
             std::make_pair(std::vector<Def>({insn}), std::vector<Use>());
@@ -96,6 +104,9 @@ void LinearScanAllocator::init_vreg_occurences(IRCode* code) {
     auto srcs = insn->srcs_vec();
     for (src_index_t i = 0; i < srcs.size(); ++i) {
       vreg_t src_reg = srcs[i];
+      if (insn->src_is_wide(i)) {
+        wide_vregs.insert(src_reg);
+      }
       if (!vreg_defs_uses.count(src_reg)) {
         vreg_defs_uses[src_reg] = std::make_pair(
             std::vector<Def>(), std::vector<Use>({live_range::Use{insn, i}}));
@@ -114,6 +125,9 @@ void LinearScanAllocator::expire_old_intervals(uint32_t cur_def_idx) {
     try {
       reg_t freed_reg = interval_to_free.reg.value();
       free_regs.push(freed_reg);
+      if (wide_vregs.count(interval_to_free.vreg)) {
+        free_regs.push(freed_reg + 1);
+      }
     } catch (const std::bad_optional_access& e) {
       std::cerr << "Active interval ends with no register allocated: "
                 << e.what() << std::endl;
