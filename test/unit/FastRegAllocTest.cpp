@@ -117,3 +117,78 @@ TEST_F(FastRegAllocTest, ControlFlow) {
 )");
   EXPECT_CODE_EQ(method->get_code(), expected_code.get());
 }
+
+/*
+ * Check if input code is linearized.
+ * Note : code may not be able to fully linearize, especially when there're
+ * loops. See the next testcase.
+ */
+TEST_F(FastRegAllocTest, CheckCodeFlow) {
+  auto method = assembler::method_from_string(R"(
+    (method (public static) "LFoo;.bar:()Z"
+      (
+        (goto :def)
+
+        (:use)
+        (return v2)
+
+        (:def)
+        (const v2 3)
+        (goto :use)
+      )
+    )
+)");
+
+  fastregalloc::LinearScanAllocator allocator(method);
+  allocator.allocate();
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (const v0 3)
+      (return v0)
+    )
+)");
+  EXPECT_CODE_EQ(method->get_code(), expected_code.get());
+}
+
+/*
+ * Check allocation behavior when there're loops. Live interval endpoint of a
+ * vreg in loop header can be neither a Use or a Def of the vreg.
+ */
+TEST_F(FastRegAllocTest, CheckVRegInLoop) {
+  auto method = assembler::method_from_string(R"(
+    (method (public static) "LFoo;.bar:()Z"
+      (
+        (const v1 10)
+        (const v2 1)
+        (:LHead)
+        (if-gt v1 v2 :Loop)
+        (add-int/lit8 v3 v1 1)
+        (move v0 v3)
+        (return v0)
+        (:Loop)
+        (add-int/lit8 v1 v1 -1)
+        (goto :LHead)
+      )
+    )
+)");
+
+  fastregalloc::LinearScanAllocator allocator(method);
+  allocator.allocate();
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (const v0 10)
+      (const v1 1)
+      (:LHead)
+      (if-gt v0 v1 :Loop)
+      (add-int/lit8 v2 v0 1)
+      (move v3 v2)
+      (return v3)
+      (:Loop)
+      (add-int/lit8 v0 v0 -1)
+      (goto :LHead)
+    )
+)");
+  EXPECT_CODE_EQ(method->get_code(), expected_code.get());
+}
