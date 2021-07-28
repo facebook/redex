@@ -221,3 +221,79 @@ TEST_F(FastRegAllocTest, WideVReg) {
 )");
   EXPECT_CODE_EQ(method->get_code(), expected_code.get());
 }
+
+/*
+ * Check live analysis behavior when a vreg has multiple definitions in a basic
+ * block. Later Def in the same block should not overwrite the first one. In one
+ * block, any Def except the first one should not be recorded as a start/end
+ * point anyway.
+ */
+TEST_F(FastRegAllocTest, ParamAlloc) {
+  auto method = assembler::method_from_string(R"(
+    (method (public static) "LUnexplainedConfig$3;.create:(LLacrimaConfig;)Ljava/lang/Object;"
+      (
+        (load-param-object v0)
+        (load-param-object v1)
+        (invoke-virtual (v1) "LLacrimaConfig;.getSessionManager:()LSessionManager;")
+        (move-result-object v2)
+        (invoke-virtual (v1) "LLacrimaConfig;.getSessionManager:()LSessionManager;")
+        (move-result-object v3)
+        (iget-object v3 "LSessionManager;.mProcessName:Ljava/lang/String;")
+        (move-result-pseudo-object v5)
+        (invoke-virtual (v2 v5) "LSessionManager;.getPreviousSessionDir:(Ljava/lang/String;)Ljava/io/File;")
+        (move-result-object v2)
+        (if-nez v2 :B2)
+        (const v1 0)
+        (return-object v1)
+        (:B2)
+        (invoke-virtual (v1) "LLacrimaConfig;.getSessionManager:()LSessionManager;")
+        (move-result-object v4)
+        (invoke-virtual (v1) "LLacrimaConfig;.getForegroundEntityMapperProvider:()LProvider;")
+        (move-result-object v1)
+        (invoke-interface (v1) "LProvider;.get:()Ljava/lang/Object;")
+        (move-result-object v1)
+        (check-cast v1 "LForegroundEntityMapper;")
+        (move-result-pseudo-object v1)
+        (new-instance "LAppStateCollector;")
+        (move-result-pseudo-object v3)
+        (invoke-direct (v3 v2 v4 v1) "LAppStateCollector;.<init>:(Ljava/io/File;LSessionManager;LForegroundEntityMapper;)V")
+        (return-object v3)
+      )
+    )
+)");
+
+  fastregalloc::LinearScanAllocator allocator(method);
+  allocator.allocate();
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+      (load-param-object v1)
+      (invoke-virtual (v1) "LLacrimaConfig;.getSessionManager:()LSessionManager;")
+      (move-result-object v2)
+      (invoke-virtual (v1) "LLacrimaConfig;.getSessionManager:()LSessionManager;")
+      (move-result-object v3)
+      (iget-object v3 "LSessionManager;.mProcessName:Ljava/lang/String;")
+      (move-result-pseudo-object v4)
+      (invoke-virtual (v2 v4) "LSessionManager;.getPreviousSessionDir:(Ljava/lang/String;)Ljava/io/File;")
+      (move-result-object v2)
+      (if-nez v2 :B2)
+      (const v1 0)
+      (return-object v1)
+      (:B2)
+      (invoke-virtual (v1) "LLacrimaConfig;.getSessionManager:()LSessionManager;")
+      (move-result-object v4)
+      (invoke-virtual (v1) "LLacrimaConfig;.getForegroundEntityMapperProvider:()LProvider;")
+      (move-result-object v1)
+      (invoke-interface (v1) "LProvider;.get:()Ljava/lang/Object;")
+      (move-result-object v1)
+      (check-cast v1 "LForegroundEntityMapper;")
+      (move-result-pseudo-object v1)
+      (new-instance "LAppStateCollector;")
+      (move-result-pseudo-object v3)
+      (invoke-direct (v3 v2 v4 v1) "LAppStateCollector;.<init>:(Ljava/io/File;LSessionManager;LForegroundEntityMapper;)V")
+      (return-object v3)
+    )
+)");
+  EXPECT_CODE_EQ(method->get_code(), expected_code.get());
+}
