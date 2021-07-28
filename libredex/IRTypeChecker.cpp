@@ -9,6 +9,7 @@
 
 #include <boost/optional/optional.hpp>
 
+#include "Debug.h"
 #include "DexPosition.h"
 #include "DexUtil.h"
 #include "Match.h"
@@ -1248,7 +1249,7 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
     if (m_validate_access) {
       auto resolved =
           resolve_method(dex_method, opcode_to_search(insn), m_dex_method);
-      validate_access(m_dex_method, resolved);
+      ::validate_access(m_dex_method, resolved);
     }
     break;
   }
@@ -1415,7 +1416,7 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
                       ? FieldSearch::Static
                       : FieldSearch::Instance;
     auto resolved = resolve_field(insn->get_field(), search);
-    validate_access(m_dex_method, resolved);
+    ::validate_access(m_dex_method, resolved);
   }
 }
 
@@ -1447,4 +1448,10 @@ boost::optional<const DexType*> IRTypeChecker::get_dex_type(IRInstruction* insn,
 std::ostream& operator<<(std::ostream& output, const IRTypeChecker& checker) {
   checker.m_type_inference->print(output);
   return output;
+}
+
+void IRTypeChecker::check_completion() const {
+  always_assert_log(m_complete,
+                    "The type checker did not run on method %s.\n",
+                    m_dex_method->get_deobfuscated_name().c_str());
 }

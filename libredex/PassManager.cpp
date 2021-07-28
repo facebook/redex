@@ -12,6 +12,7 @@
 #include <cinttypes>
 #include <cstdio>
 #include <cstdlib>
+#include <limits>
 #include <list>
 #include <thread>
 #include <typeinfo>
@@ -206,9 +207,29 @@ struct CheckerConfig {
                                                    bool exit_on_fail = true) {
     TRACE(PM, 1, "Running IRTypeChecker...");
     Timer t("IRTypeChecker");
-    std::atomic<size_t> errors{0};
-    boost::optional<std::string> first_error_msg;
-    walk::parallel::methods(scope, [&](DexMethod* dex_method) {
+
+    struct Result {
+      size_t errors{0};
+      DexMethod* smallest_error_method{nullptr};
+      size_t smallest_size{std::numeric_limits<size_t>::max()};
+
+      Result() = default;
+      explicit Result(DexMethod* m)
+          : errors(1),
+            smallest_error_method(m),
+            smallest_size(m->get_code()->count_opcodes()) {}
+
+      Result& operator+=(const Result& other) {
+        errors += other.errors;
+        if (smallest_size > other.smallest_size) {
+          smallest_size = other.smallest_size;
+          smallest_error_method = other.smallest_error_method;
+        }
+        return *this;
+      }
+    };
+
+    auto run_checker = [&](DexMethod* dex_method) {
       IRTypeChecker checker(dex_method, validate_access);
       if (verify_moves) {
         checker.verify_moves();
@@ -217,26 +238,39 @@ struct CheckerConfig {
         checker.check_no_overwrite_this();
       }
       checker.run();
-      if (checker.fail()) {
-        bool first = errors.fetch_add(1) == 0;
-        if (first) {
-          std::ostringstream oss;
-          oss << "Inconsistency found in Dex code for " << show(dex_method)
-              << std::endl
-              << " " << checker.what() << std::endl
-              << "Code:" << std::endl
-              << show(dex_method->get_code());
-          first_error_msg = oss.str();
-        }
-      }
-    });
+      return checker;
+    };
 
-    if (errors.load() > 0 && exit_on_fail) {
-      redex_assert(first_error_msg);
-      fail_error(*first_error_msg, errors.load());
+    auto res =
+        walk::parallel::methods<Result>(scope, [&](DexMethod* dex_method) {
+          auto checker = run_checker(dex_method);
+          if (!checker.fail()) {
+            return Result();
+          }
+          return Result(dex_method);
+        });
+
+    if (res.errors == 0) {
+      return boost::none;
     }
 
-    return first_error_msg;
+    // Re-run the smallest method to produce error message.
+    auto checker = run_checker(res.smallest_error_method);
+    redex_assert(checker.fail());
+
+    std::ostringstream oss;
+    oss << "Inconsistency found in Dex code for "
+        << show(res.smallest_error_method) << std::endl
+        << " " << checker.what() << std::endl
+        << "Code:" << std::endl
+        << show(res.smallest_error_method->get_code());
+
+    if (res.errors > 1) {
+      oss << "\n(" << (res.errors - 1) << " more issues!)";
+    }
+
+    always_assert_log(!exit_on_fail, "%s", oss.str().c_str());
+    return oss.str();
   }
 
   static void fail_error(const std::string& error_msg, size_t errors = 1) {
