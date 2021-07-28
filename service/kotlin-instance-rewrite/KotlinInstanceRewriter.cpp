@@ -106,9 +106,7 @@ KotlinInstanceRewriter::Stats KotlinInstanceRewriter::remove_escaping_instance(
                   [&](DexFieldRef*,
                       std::set<std::pair<IRInstruction*, DexMethod*>>& s,
                       bool /* exists */) {
-                    if (s.size() <= max_no_of_instance) {
-                      s.insert(std::make_pair(insn, method));
-                    }
+                    s.insert(std::make_pair(insn, method));
                   });
             }
             return stats;
@@ -126,7 +124,7 @@ KotlinInstanceRewriter::Stats KotlinInstanceRewriter::transform(
   // Among the Kotlin classes which sets INSTANCE and whose use is cleary
   // defined, select singles use INSTANCEs. Remove the INSTANCE initialization
   // in <clinit> and replace the SGET INSTANCE with a new INSTANCE.
-
+  std::vector<DexFieldRef*> fields_to_rewrite;
   KotlinInstanceRewriter::Stats stats = {};
   for (const auto& it : concurrent_instance_map) {
     if (it.second.size() > max_no_of_instance) {
@@ -136,9 +134,15 @@ KotlinInstanceRewriter::Stats KotlinInstanceRewriter::transform(
     if (insns.empty()) {
       continue;
     }
+    auto field = it.first;
+    fields_to_rewrite.push_back(field);
+  }
+  std::sort(fields_to_rewrite.begin(), fields_to_rewrite.end(),
+            compare_dexfields);
+
+  for (auto* field : fields_to_rewrite) {
     stats.kotlin_instances_with_single_use++;
     // Remove instance from cls
-    auto field = it.first;
     auto* cls = type_class(field->get_class());
     auto dmethods = cls->get_dmethods();
     for (auto* meth : dmethods) {
@@ -167,7 +171,7 @@ KotlinInstanceRewriter::Stats KotlinInstanceRewriter::transform(
     }
 
     // Convert INSTANCE read to new instance creation
-    for (auto& method_it : insns) {
+    for (auto& method_it : concurrent_instance_map.find(field)->second) {
       auto* meth = method_it.second;
       cfg::ScopedCFG cfg(meth->get_code());
       cfg::CFGMutation m(*cfg);
