@@ -10,11 +10,12 @@ import static org.fest.assertions.api.Assertions.assertThat;
 import com.facebook.litho.Column;
 import com.facebook.litho.Component;
 import com.facebook.litho.ComponentContext;
+import com.facebook.litho.SpecGeneratedComponent;
 import com.facebook.litho.annotations.Prop;
 import com.facebook.litho.annotations.ResType;
 import com.facebook.litho.sections.SectionContext;
 
-class LithoComponent extends Component implements Cloneable {
+class LithoComponent extends SpecGeneratedComponent implements Cloneable {
 
   @Prop(
     resType = ResType.NONE,
@@ -80,7 +81,7 @@ class LithoComponent extends Component implements Cloneable {
   }
 }
 
-class LithoComponentWithStaticFields extends Component implements Cloneable {
+class LithoComponentWithStaticFields extends SpecGeneratedComponent implements Cloneable {
 
   @Prop(
     resType = ResType.NONE,
@@ -147,7 +148,7 @@ class LithoComponentWithStaticFields extends Component implements Cloneable {
   }
 }
 
-class TestingComponentA extends Component implements Cloneable {
+class TestingComponentA extends SpecGeneratedComponent implements Cloneable {
 
   @Prop(
     resType = ResType.NONE,
@@ -213,7 +214,7 @@ class TestingComponentA extends Component implements Cloneable {
   }
 }
 
-class TestingComponentB extends Component implements Cloneable {
+class TestingComponentB extends SpecGeneratedComponent implements Cloneable {
 
   @Prop(
     resType = ResType.NONE,
@@ -279,7 +280,7 @@ class TestingComponentB extends Component implements Cloneable {
   }
 }
 
-class TestingComponentC extends Component implements Cloneable {
+class TestingComponentC extends SpecGeneratedComponent implements Cloneable {
 
   @Prop(
     resType = ResType.NONE,
@@ -345,7 +346,7 @@ class TestingComponentC extends Component implements Cloneable {
   }
 }
 
-class TestingComponentD extends Component implements Cloneable {
+class TestingComponentD extends SpecGeneratedComponent implements Cloneable {
 
   @Prop(
     resType = ResType.NONE,
