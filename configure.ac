@@ -34,6 +34,77 @@ AX_BOOST_THREAD
 AC_CHECK_LIB([z], [adler32], [], [AC_MSG_ERROR([Please install zlib])])
 AC_CHECK_LIB([jsoncpp], [main], [], [AC_MSG_ERROR([Please install jsoncpp])])
 
+AC_DEFINE(HAS_PROTOBUF)
+
+# proto compiler
+# allow users to specify the path to protobuf compiler
+# --with-protoc
+
+AC_ARG_WITH([protoc],
+    [AS_HELP_STRING([--with-protoc=/path/to/protoc],
+        [Location of the protobuf compiler.])],
+    [PROTOC="$withval"],
+    [ AS_IF([test "x${PROTOC}" == "x"],
+        [AC_PATH_PROG([PROTOC], [protoc], [no])])
+    ]
+)
+AS_IF([test "${PROTOC}" == "no"], [AC_MSG_ERROR([Protobuf compiler protoc not found.])])
+
+# protobuf libraries
+# allow users to specify the path to the protobuf libs
+# --with-protolib
+
+AC_ARG_WITH([protolib],
+    [AS_HELP_STRING([--with-protolib=/path/to/protolibs],
+        [Location of the protobuf lib dir.])],
+    [ # protobuf lib path set by user
+        LDFLAGS_ORIG=$LDFLAGS
+
+        # test protobuf
+        LDFLAGS="${LDFLAGS_ORIG} -L${withval}"
+        AC_LANG_PUSH([C++])
+        AC_CHECK_LIB([protobuf], [main], [
+            # library found
+            AC_SUBST([LIBPROTOBUF_LIBS], "-L${withval} -lprotobuf")],
+            [AC_MSG_ERROR([Protobuf libraries not found for user specified path.])]
+        )
+        AC_LANG_POP([C++])
+        # restore original LDFLAGS
+        LDFLAGS=$LDFLAGS_ORIG
+    ],
+    [ # check default search path
+        AC_CHECK_LIB([protobuf], [main], [
+            AC_SUBST([LIBPROTOBUF_LIBS], "-lprotobuf")],
+            [AC_MSG_ERROR([Protobuf libraries not found.])]
+        )
+    ]
+)
+
+# protobuf headers
+# allow users to specify the path to the protobuf headers
+# --with-protoheader
+
+AC_ARG_WITH([protoheader],
+    [AS_HELP_STRING([--with-protoheader=/path/to/protoheaders],
+        [Location of the protobuf include dir.])],
+    [ # protobuf header path set by user
+        CXXFLAGS_ORIG=$CXXFLAGS
+
+        # test protobuf header
+        CXXFLAGS="-std=gnu++17 ${CXXFLAGS_ORIG} -I${withval}"
+        AC_LANG_PUSH([C++])
+        AC_CHECK_HEADER([google/protobuf/io/coded_stream.h], [
+            # library found
+            AC_SUBST([PROTOBUF_CXXFLAGS], "-I${withval}")],
+            [AC_MSG_ERROR([Protobuf headers not found for user specified path.])]
+        )
+        AC_LANG_POP([C++])
+        # restore original CXXFLAGS
+        CXXFLAGS=$CXXFLAGS_ORIG
+    ],
+    []
+)
+
 # Checks for header files.
 AC_CHECK_HEADERS([arpa/inet.h fcntl.h inttypes.h memory.h netinet/in.h stddef.h stdint.h stdlib.h string.h sys/time.h unistd.h])
 

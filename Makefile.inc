@@ -124,4 +124,6 @@ COMMON_INCLUDES = \
 	-I$(top_srcdir)/tools/common \
 	-I$(top_srcdir)/tools/redexdump \
 	-I$(top_srcdir)/util \
-	-I/usr/include/jsoncpp
+	-I$(top_srcdir)/protores \
+	-I/usr/include/jsoncpp \
+	$(PROTOBUF_CXXFLAGS)
