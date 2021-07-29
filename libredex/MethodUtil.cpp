@@ -21,9 +21,9 @@ bool is_clinit(const DexMethodRef* method) {
   return strcmp(method->get_name()->c_str(), "<clinit>") == 0;
 }
 
-bool is_trivial_clinit(const DexMethod* method) {
-  always_assert(is_clinit(method));
-  auto ii = InstructionIterable(method->get_code());
+bool is_trivial_clinit(const IRCode& code) {
+  always_assert(!code.editable_cfg_built());
+  auto ii = InstructionIterable(code);
   return std::none_of(ii.begin(), ii.end(), [](const MethodItemEntry& mie) {
     return mie.insn->opcode() != OPCODE_RETURN_VOID;
   });
@@ -56,10 +56,8 @@ bool clinit_may_have_side_effects(const DexClass* cls) {
   return !super_cls || clinit_may_have_side_effects(super_cls);
 }
 
-bool no_invoke_super(const DexMethod* method) {
-  auto code = method->get_code();
-  always_assert(code);
-
+bool no_invoke_super(const IRCode& code) {
+  always_assert(!code.editable_cfg_built());
   for (const auto& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
     if (insn->opcode() == OPCODE_INVOKE_SUPER) {

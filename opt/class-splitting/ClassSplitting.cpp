@@ -647,7 +647,7 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
       }
       return false;
     }
-    if (!method::no_invoke_super(m)) {
+    if (!method::no_invoke_super(*m->get_code())) {
       if (log) {
         m_mgr.incr_metric("num_class_splitting_limitation_invoke_super", 1);
       }

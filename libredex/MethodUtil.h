@@ -33,7 +33,7 @@ inline bool is_any_init(const DexMethodRef* method) {
  * Return true if the clinit is Trivial.
  * A trivial clinit should only contain a return-void instruction.
  */
-bool is_trivial_clinit(const DexMethod* method);
+bool is_trivial_clinit(const IRCode& code);
 
 /**
  * Return true if change the exeution time of the <clinit> of the cls may change
@@ -48,7 +48,7 @@ bool clinit_may_have_side_effects(const DexClass* cls);
  * requirement to relocate a method outside of its original inheritance
  * hierarchy.
  */
-bool no_invoke_super(const DexMethod* method);
+bool no_invoke_super(const IRCode& code);
 
 /**
  * Determine if the method is a constructor.

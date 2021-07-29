@@ -460,7 +460,7 @@ cp::WholeProgramState analyze_and_simplify_clinits(
       // Delete the instructions rendered dead by the removal of those sputs.
       LocalDce(pure_methods).dce(code);
       // If the clinit is empty now, delete it.
-      if (method::is_trivial_clinit(clinit)) {
+      if (method::is_trivial_clinit(*code)) {
         cls->remove_method(clinit);
       }
     }

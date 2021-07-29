@@ -422,8 +422,7 @@ void gather_true_virtual_methods(const mog::Graph& method_override_graph,
           return;
         }
         auto code = const_cast<DexMethod*>(callee)->get_code();
-        if (!code || !compute_caller_insns ||
-            !method::no_invoke_super(callee)) {
+        if (!code || !compute_caller_insns || !method::no_invoke_super(*code)) {
           if (!caller_to_invocations.caller_insns.empty()) {
             caller_to_invocations.caller_insns.clear();
             caller_to_invocations.other_call_sites = true;
