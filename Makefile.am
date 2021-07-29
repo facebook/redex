@@ -15,6 +15,27 @@ AM_CPPFLAGS = $(COMMON_INCLUDES)
 noinst_LTLIBRARIES = libredex.la libopt.la
 
 #
+# build protobuf
+#
+
+proto_res_in = \
+	proto/Resources.proto \
+	proto/Configuration.proto
+
+protores/%.pb.cc protores/%.pb.h: proto/%.proto | mdir
+	$(PROTOC) --proto_path=$(dir $^) --cpp_out=$(top_srcdir)/protores $^
+
+# create a directory for compiled proto files
+
+mdir:
+	mkdir -p $(top_srcdir)/protores
+
+proto_res_header_out = $(addprefix protores/, $(notdir ${proto_res_in:.proto=.pb.h}))
+proto_res_body_out = $(addprefix protores/, $(notdir ${proto_res_in:.proto=.pb.cc}))
+
+BUILT_SOURCES = $(proto_res_header_out)
+
+#
 # libredex: the optimizer's guts
 #
 
@@ -228,7 +249,9 @@ libredex_la_SOURCES = \
 	shared/file-utils.cpp \
 	util/CommandProfiling.cpp \
 	util/JemallocUtil.cpp \
-	util/Sha1.cpp
+	util/Sha1.cpp \
+	protores/Resources.pb.cc \
+	protores/Configuration.pb.cc
 
 libredex_la_LIBADD = \
 	$(BOOST_FILESYSTEM_LIB) \
@@ -236,7 +259,8 @@ libredex_la_LIBADD = \
 	$(BOOST_REGEX_LIB) \
 	$(BOOST_IOSTREAMS_LIB) \
 	$(BOOST_THREAD_LIB) \
-	-lpthread
+	-lpthread \
+	$(LIBPROTOBUF_LIBS)
 
 #
 # libopt: the optimization passes
@@ -395,10 +419,12 @@ redex_all_LDADD = \
 	$(BOOST_FILESYSTEM_LIB) \
 	$(BOOST_SYSTEM_LIB) \
 	$(BOOST_REGEX_LIB) \
+	$(BOOST_IOSTREAMS_LIB) \
 	$(BOOST_PROGRAM_OPTIONS_LIB) \
 	$(BOOST_THREAD_LIB) \
 	-lpthread \
-	-ldl
+	-ldl \
+	$(LIBPROTOBUF_LIBS)
 
 redex_all_LDFLAGS = \
 	-rdynamic # function names in stack traces
