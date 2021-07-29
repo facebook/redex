@@ -15,19 +15,13 @@
 #include <boost/optional.hpp>
 
 #include "CFGMutation.h"
-#include "ConstantPropagationAnalysis.h"
-#include "ConstantPropagationTransform.h"
-#include "ConstantPropagationWholeProgramState.h"
-#include "CopyPropagation.h"
 #include "CppUtil.h"
 #include "DexClass.h"
 #include "DexStore.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "LiveRange.h"
-#include "LocalDce.h"
 #include "PassManager.h"
-#include "ReachingDefinitions.h"
 #include "ScopedCFG.h"
 #include "StlUtil.h"
 #include "Trace.h"
@@ -442,72 +436,27 @@ RemoveResult analyze_and_evaluate(DexMethod* method) {
 
 size_t post_process(DexMethod* method,
                     size_t overrides,
-                    const XStoreRefs& xstores) {
+                    shrinker::Shrinker& shrinker) {
   auto code = method->get_code();
   size_t num_insns_before = code->count_opcodes() - overrides;
 
-  // Run ConstProp, CopyProp and DCE.
-  {
-    code->build_cfg(/*editable=*/false);
-
-    {
-      constant_propagation::intraprocedural::FixpointIterator fp_iter(
-          code->cfg(), constant_propagation::ConstantPrimitiveAnalyzer());
-      fp_iter.run(ConstantEnvironment());
-      constant_propagation::Transform::Config config;
-      constant_propagation::Transform tf(config);
-      tf.apply_on_uneditable_cfg(fp_iter,
-                                 constant_propagation::WholeProgramState(),
-                                 code, &xstores, method->get_class());
-    }
-
-    {
-      copy_propagation_impl::Config copy_prop_config;
-      copy_prop_config.eliminate_const_classes = false;
-      copy_prop_config.eliminate_const_strings = false;
-      copy_prop_config.static_finals = false;
-      copy_propagation_impl::CopyPropagation copy_propagation(copy_prop_config);
-      copy_propagation.run(code, method);
-    }
-
-    code->clear_cfg();
-  }
-
-  {
-    ScopedCFG cfg(code);
-    cfg->calculate_exit_block();
-    {
-      constant_propagation::intraprocedural::FixpointIterator fp_iter(
-          *cfg, constant_propagation::ConstantPrimitiveAnalyzer());
-      fp_iter.run(ConstantEnvironment());
-      constant_propagation::Transform::Config config;
-      constant_propagation::Transform tf(config);
-      tf.apply(fp_iter, code->cfg(), method, &xstores);
-    }
-
-    {
-      std::unordered_set<DexMethodRef*> pure; // Don't assume anything;
-      LocalDce dce(pure, /* no mog */ nullptr,
-                   /*may_allocate_registers=*/false);
-      dce.dce(method->get_code());
-    }
-  }
+  shrinker.shrink_method(method);
 
   size_t num_insns_after = code->count_opcodes();
   return num_insns_before - num_insns_after;
 }
 
 RemoveResult optimize_impl(DexMethod* method,
-                           XStoreRefs& xstores,
                            bool has_instance_of,
-                           bool has_check_cast) {
+                           bool has_check_cast,
+                           shrinker::Shrinker& shrinker) {
   RemoveResult instance_of_res;
   if (has_instance_of) {
     instance_of_res = instance_of::analyze_and_evaluate_instance_of(method);
 
     if (instance_of_res.overrides != 0) {
       instance_of_res.insn_delta =
-          post_process(method, instance_of_res.overrides, xstores);
+          post_process(method, instance_of_res.overrides, shrinker);
     }
   }
 
@@ -517,7 +466,7 @@ RemoveResult optimize_impl(DexMethod* method,
 
     if (check_cast_res.overrides != 0) {
       check_cast_res.insn_delta =
-          post_process(method, check_cast_res.overrides, xstores);
+          post_process(method, check_cast_res.overrides, shrinker);
     }
   }
 
@@ -532,18 +481,25 @@ boost::optional<int32_t> EvaluateTypeChecksPass::evaluate(
   return type::evaluate_type_check(src_type, test_type);
 }
 
-void EvaluateTypeChecksPass::optimize(DexMethod* method, XStoreRefs& xstores) {
-  optimize_impl(method, xstores, true, true);
+void EvaluateTypeChecksPass::optimize(DexMethod* method,
+                                      shrinker::Shrinker& shrinker) {
+  optimize_impl(method, true, true, shrinker);
 }
 
 void EvaluateTypeChecksPass::run_pass(DexStoresVector& stores,
                                       ConfigFiles&,
                                       PassManager& mgr) {
   auto scope = build_class_scope(stores);
-  XStoreRefs xstores(stores);
+
+  shrinker::ShrinkerConfig shrinker_config;
+  shrinker_config.run_const_prop = true;
+  shrinker_config.run_copy_prop = true;
+  shrinker_config.run_local_dce = true;
+  shrinker_config.compute_pure_methods = false;
+  shrinker::Shrinker shrinker(stores, scope, shrinker_config);
 
   auto stats = walk::parallel::methods<RemoveResult>(
-      scope, [&xstores](DexMethod* method) {
+      scope, [&shrinker](DexMethod* method) {
         auto code = method->get_code();
         if (code == nullptr || method->rstate.no_optimizations()) {
           return RemoveResult{};
@@ -571,7 +527,7 @@ void EvaluateTypeChecksPass::run_pass(DexStoresVector& stores,
         }
 
         auto res =
-            optimize_impl(method, xstores, has_insns.first, has_insns.second);
+            optimize_impl(method, has_insns.first, has_insns.second, shrinker);
         res.methods_w_instanceof = 1;
         return res;
       });

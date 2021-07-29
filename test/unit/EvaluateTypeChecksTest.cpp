@@ -55,12 +55,19 @@ class EvaluateTypeChecksTest : public RedexTest {
         {type_class(m_foo), type_class(m_bar), type_class(m_baz)});
     DexStoresVector stores{store};
     auto scope = build_class_scope(stores);
-    XStoreRefs xstores(stores);
+
+    using namespace shrinker;
+    ShrinkerConfig shrinker_config;
+    shrinker_config.run_const_prop = true;
+    shrinker_config.run_copy_prop = true;
+    shrinker_config.run_local_dce = true;
+    shrinker_config.compute_pure_methods = false;
+    Shrinker shrinker(stores, scope, shrinker_config);
 
     auto method_str = std::string("(") + method_line + " " + in + " )";
     auto method = assembler::class_with_method(type, method_str);
 
-    check_casts::EvaluateTypeChecksPass::optimize(method, xstores);
+    check_casts::EvaluateTypeChecksPass::optimize(method, shrinker);
 
     auto expected_str = regularize(out);
     auto actual_str = assembler::to_string(method->get_code());
