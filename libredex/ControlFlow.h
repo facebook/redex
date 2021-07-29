@@ -488,6 +488,7 @@ class ControlFlowGraph {
   Block* exit_block() const { return m_exit_block; }
   void set_entry_block(Block* b) { m_entry_block = b; }
   void set_exit_block(Block* b) { m_exit_block = b; }
+  void reset_exit_block();
 
   /*
    * If there is a single method exit point, this returns a vector holding the
@@ -762,6 +763,7 @@ class ControlFlowGraph {
 
   // delete old blocks and reroute its predecessors to new blocks
   // Returns number of removed instructions.
+  // May reset exit_block if it is replaced.
   uint32_t replace_blocks(
       const std::vector<std::pair<Block*, Block*>>& old_new_blocks);
 
@@ -769,6 +771,7 @@ class ControlFlowGraph {
   // Note that replacing blocks is relatively expensive as it scans and fixes up
   // dangling parent positions in all other blocks; consider calling
   // remove_blocks to remove multiple blocks at once.
+  // May reset exit_block if it is replaced.
   // Returns number of removed instructions.
   uint32_t replace_block(Block* old_block, Block* new_block) {
     return replace_blocks({{old_block, new_block}});
@@ -776,6 +779,7 @@ class ControlFlowGraph {
 
   // Remove blocks from the graph and release associated memory.
   // Remove all incoming and outgoing edges.
+  // May reset exit_block if it is removed.
   // Returns number of removed instructions.
   uint32_t remove_blocks(const std::vector<Block*>& blocks);
 
@@ -784,6 +788,7 @@ class ControlFlowGraph {
   // Note that removing blocks is relatively expensive as it scans and fixes up
   // dangling parent positions in all other blocks; consider calling
   // remove_blocks to remove multiple blocks at once.
+  // May reset exit_block if it is removed.
   // Returns number of removed instructions.
   uint32_t remove_block(Block* block) { return remove_blocks({block}); }
 

@@ -919,6 +919,9 @@ std::pair<uint32_t, bool> ControlFlowGraph::remove_unreachable_blocks() {
     Block* b = it->second;
     const auto& preds = b->preds();
     if (preds.empty() && b != entry_block()) {
+      if (b == exit_block()) {
+        set_exit_block(nullptr);
+      }
       for (auto& mie : *b) {
         if (mie.type == MFLOW_POSITION) {
           dangling.push_back(std::move(mie.pos));
@@ -2093,18 +2096,13 @@ std::vector<Block*> ControlFlowGraph::return_blocks() const {
  * picks the head of the SCC.
  */
 void ControlFlowGraph::calculate_exit_block() {
-  if (m_exit_block != nullptr) {
-    if (!m_editable) {
-      return;
-    }
-    if (get_pred_edge_of_type(m_exit_block, EDGE_GHOST) != nullptr) {
-      // Need to clear old exit block before recomputing the exit of a CFG
-      // with multiple exit points
-      remove_block(m_exit_block);
-      m_exit_block = nullptr;
-    }
+  if (m_editable) {
+    reset_exit_block();
+  } else if (m_exit_block != nullptr) {
+    // nothing to do, as nothing can ever change in non-editable cfg
+    return;
   }
-
+  always_assert(m_exit_block == nullptr);
   ExitBlocks eb;
   eb.visit(entry_block());
   if (eb.exit_blocks.size() == 1) {
@@ -2115,6 +2113,21 @@ void ControlFlowGraph::calculate_exit_block() {
       add_edge(b, m_exit_block, EDGE_GHOST);
     }
   }
+}
+
+void ControlFlowGraph::reset_exit_block() {
+  if (m_exit_block == nullptr) {
+    return;
+  }
+  if (get_pred_edge_of_type(m_exit_block, EDGE_GHOST) == nullptr) {
+    m_exit_block = nullptr;
+    return;
+  }
+  // If we get here, we have a "ghost" exit block, that was created to represent
+  // multiple exist blocks. We need to remove that "ghost" exit block before
+  // recomputing the exit of a CFG with multiple exit points.
+  remove_block(m_exit_block);
+  always_assert(m_exit_block == nullptr);
 }
 
 // public API edge removal functions
@@ -2596,6 +2609,9 @@ uint32_t ControlFlowGraph::remove_blocks(const std::vector<Block*>& blocks) {
     if (block == entry_block()) {
       always_assert(block->succs().size() == 1);
       set_entry_block(block->succs()[0]->target());
+    }
+    if (block == exit_block()) {
+      set_exit_block(nullptr);
     }
     delete_pred_edges(block);
     delete_succ_edges(block);

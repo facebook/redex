@@ -979,6 +979,53 @@ TEST_F(ControlFlowTest, exit_blocks_change) {
   code->clear_cfg();
 }
 
+TEST_F(ControlFlowTest, remove_ghost_exit_block) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (if-eqz v0 :thr)
+      (return-void)
+      (:thr)
+      (throw v0)
+    )
+)");
+
+  code->build_cfg(/* editable */ true);
+  auto& cfg = code->cfg();
+  EXPECT_EQ(cfg.blocks().size(), 3);
+  EXPECT_EQ(cfg.exit_block(), nullptr);
+  cfg.calculate_exit_block();
+  EXPECT_EQ(cfg.blocks().size(), 4);
+  EXPECT_NE(cfg.exit_block(), nullptr);
+  cfg.remove_block(cfg.exit_block());
+  EXPECT_EQ(cfg.blocks().size(), 3);
+  EXPECT_EQ(cfg.exit_block(), nullptr);
+  code->clear_cfg();
+}
+
+TEST_F(ControlFlowTest, remove_real_exit_block) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (goto :next)
+      (:next)
+      (return-void)
+    )
+)");
+
+  code->build_cfg(/* editable */ true);
+  auto& cfg = code->cfg();
+  EXPECT_EQ(cfg.blocks().size(), 2);
+  EXPECT_EQ(cfg.exit_block(), nullptr);
+  cfg.calculate_exit_block();
+  EXPECT_EQ(cfg.blocks().size(), 2);
+  EXPECT_NE(cfg.exit_block(), nullptr);
+  cfg.remove_block(cfg.exit_block());
+  EXPECT_EQ(cfg.blocks().size(), 1);
+  EXPECT_EQ(cfg.exit_block(), nullptr);
+  code->clear_cfg();
+}
+
 TEST_F(ControlFlowTest, deep_copy1) {
   auto code = assembler::ircode_from_string(R"(
     (
