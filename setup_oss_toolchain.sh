@@ -40,6 +40,16 @@ function install_boost_from_source {
     "$ROOT"/get_boost.sh
 }
 
+function install_protobuf3_from_source {
+    pushd "$TMP"
+    wget https://github.com/protocolbuffers/protobuf/releases/download/v3.17.3/protobuf-cpp-3.17.3.tar.gz
+    tar -xvf protobuf-cpp-3.17.3.tar.gz --no-same-owner
+
+    pushd protobuf-3.17.3
+    ./configure
+    make V=0 && make install V=0
+}
+
 function install_from_apt {
   PKGS="autoconf
         autoconf-archive
@@ -70,9 +80,11 @@ function handle_debian {
         10)
             install_from_apt python3
             install_boost_from_source
+            install_protobuf3_from_source
             ;;
         *)
             install_from_apt ${BOOST_DEB_UBUNTU_PKGS} python3
+            install_protobuf3_from_source
             ;;
     esac
 }
@@ -83,13 +95,16 @@ function handle_ubuntu {
             install_from_apt
             install_python36_from_source
             install_boost_from_source
+            install_protobuf3_from_source
             ;;
         1[7-9]*)
             install_from_apt python3
             install_boost_from_source
+            install_protobuf3_from_source
             ;;
         2*)
             install_from_apt ${BOOST_DEB_UBUNTU_PKGS} python3
+            install_protobuf3_from_source
             ;;
         *)
             echo "Unsupported Ubuntu version $1"
