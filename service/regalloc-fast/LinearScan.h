@@ -90,20 +90,20 @@ class LinearScanAllocator final {
   /*
    * interval -> vreg, reg
    */
-  LiveIntervals live_intervals;
+  LiveIntervals m_live_intervals;
 
   /*
    * vreg -> all defs 7 uses
    * Group all defs and uses of the same vreg.
    */
-  VRegDefsUses vreg_defs_uses;
+  VRegDefsUses m_vreg_defs_uses;
 
   /*
    * Record all wide vregs for allocation reference.
    */
-  WideVReg wide_vregs;
+  WideVReg m_wide_vregs;
 
-  FreeRegPool free_regs;
+  FreeRegPool m_free_regs;
 
   /*
    * { pair(interval_idx, last_use_idx) }
@@ -114,12 +114,12 @@ class LinearScanAllocator final {
    * sorting intervals by last use idx can save work when checking for interval
    * expiration.
    */
-  ActiveIntervals active_intervals;
+  ActiveIntervals m_active_intervals;
 
   /*
    * Record the #reg allocated.
    */
-  uint32_t reg_count = 0;
+  uint32_t m_reg_count = 0;
 
   /*
    * Find all defs and uses of each vreg by traversing the irlist.

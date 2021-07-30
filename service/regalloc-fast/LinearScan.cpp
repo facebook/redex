@@ -50,35 +50,36 @@ LinearScanAllocator::LinearScanAllocator(DexMethod* method) {
     // instructions in the code
     cfg::ScopedCFG cfg_for_linearize = cfg::ScopedCFG(&code);
   }
-  live_intervals = init_live_intervals(&code);
+  m_live_intervals = init_live_intervals(&code);
   init_vreg_occurences(&code);
-  TRACE_live_intervals(live_intervals);
+  TRACE_live_intervals(m_live_intervals);
 }
 
 void LinearScanAllocator::allocate() {
-  for (size_t idx = 0; idx < live_intervals.size(); ++idx) {
-    expire_old_intervals(live_intervals[idx].start_point);
+  for (size_t idx = 0; idx < m_live_intervals.size(); ++idx) {
+    expire_old_intervals(m_live_intervals[idx].start_point);
     reg_t alloc_reg;
     // TODO: (in the future) add spill here given dex constraints
-    vreg_t cur_vreg = live_intervals[idx].vreg;
-    if (wide_vregs.count(cur_vreg)) {
-      alloc_reg = reg_count;
-      reg_count += 2;
+    vreg_t cur_vreg = m_live_intervals[idx].vreg;
+    if (m_wide_vregs.count(cur_vreg)) {
+      alloc_reg = m_reg_count;
+      m_reg_count += 2;
     } else {
-      if (free_regs.empty()) {
-        alloc_reg = reg_count;
-        reg_count++;
+      if (m_free_regs.empty()) {
+        alloc_reg = m_reg_count;
+        m_reg_count++;
       } else {
-        alloc_reg = free_regs.front();
-        free_regs.pop();
+        alloc_reg = m_free_regs.front();
+        m_free_regs.pop();
       }
     }
-    live_intervals[idx].reg = alloc_reg;
-    active_intervals.push(std::make_pair(idx, live_intervals[idx].end_point));
-    for (auto def : vreg_defs_uses[cur_vreg].first) {
+    m_live_intervals[idx].reg = alloc_reg;
+    m_active_intervals.push(
+        std::make_pair(idx, m_live_intervals[idx].end_point));
+    for (auto def : m_vreg_defs_uses[cur_vreg].first) {
       def->set_dest(alloc_reg);
     }
-    for (auto use : vreg_defs_uses[cur_vreg].second) {
+    for (auto use : m_vreg_defs_uses[cur_vreg].second) {
       use.insn->set_src(use.src_index, alloc_reg);
     }
   }
@@ -92,41 +93,41 @@ void LinearScanAllocator::init_vreg_occurences(IRCode* code) {
     if (insn->has_dest()) {
       vreg_t dest_reg = insn->dest();
       if (insn->dest_is_wide()) {
-        wide_vregs.insert(dest_reg);
+        m_wide_vregs.insert(dest_reg);
       }
-      if (!vreg_defs_uses.count(dest_reg)) {
-        vreg_defs_uses[dest_reg] =
+      if (!m_vreg_defs_uses.count(dest_reg)) {
+        m_vreg_defs_uses[dest_reg] =
             std::make_pair(std::vector<Def>({insn}), std::vector<Use>());
       } else {
-        vreg_defs_uses[dest_reg].first.push_back(insn);
+        m_vreg_defs_uses[dest_reg].first.push_back(insn);
       }
     }
     auto srcs = insn->srcs_vec();
     for (src_index_t i = 0; i < srcs.size(); ++i) {
       vreg_t src_reg = srcs[i];
       if (insn->src_is_wide(i)) {
-        wide_vregs.insert(src_reg);
+        m_wide_vregs.insert(src_reg);
       }
-      if (!vreg_defs_uses.count(src_reg)) {
-        vreg_defs_uses[src_reg] = std::make_pair(
+      if (!m_vreg_defs_uses.count(src_reg)) {
+        m_vreg_defs_uses[src_reg] = std::make_pair(
             std::vector<Def>(), std::vector<Use>({live_range::Use{insn, i}}));
       } else {
-        vreg_defs_uses[src_reg].second.push_back(live_range::Use{insn, i});
+        m_vreg_defs_uses[src_reg].second.push_back(live_range::Use{insn, i});
       }
     }
   }
 }
 
 void LinearScanAllocator::expire_old_intervals(uint32_t cur_def_idx) {
-  while (!active_intervals.empty() &&
-         active_intervals.top().second < cur_def_idx) {
-    auto interval_to_free = live_intervals[active_intervals.top().first];
-    active_intervals.pop();
+  while (!m_active_intervals.empty() &&
+         m_active_intervals.top().second < cur_def_idx) {
+    auto interval_to_free = m_live_intervals[m_active_intervals.top().first];
+    m_active_intervals.pop();
     try {
       reg_t freed_reg = interval_to_free.reg.value();
-      free_regs.push(freed_reg);
-      if (wide_vregs.count(interval_to_free.vreg)) {
-        free_regs.push(freed_reg + 1);
+      m_free_regs.push(freed_reg);
+      if (m_wide_vregs.count(interval_to_free.vreg)) {
+        m_free_regs.push(freed_reg + 1);
       }
     } catch (const std::bad_optional_access& e) {
       std::cerr << "Active interval ends with no register allocated: "
