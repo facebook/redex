@@ -797,6 +797,8 @@ std::vector<std::string> ApkResources::find_resources_files() {
   return {m_directory + std::string("/resources.arsc")};
 }
 
+ApkResources::~ApkResources() {}
+
 void ResourcesArscFile::remap_res_ids_and_serialize(
     const std::vector<std::string>& /* resource_files */,
     const std::map<uint32_t, uint32_t>& old_to_new) {

@@ -25,6 +25,7 @@ using ConfigValues = google::protobuf::RepeatedPtrField<aapt::pb::ConfigValue>;
 
 class ResourcesPbFile : public ResourceTableFile {
  public:
+  ~ResourcesPbFile() override;
   void collect_resid_values_and_hashes(
       const std::vector<uint32_t>& ids,
       std::map<size_t, std::vector<uint32_t>>* res_by_hash) override;
@@ -55,6 +56,7 @@ class BundleResources : public AndroidResources {
  public:
   explicit BundleResources(const std::string& directory)
       : AndroidResources(directory) {}
+  ~BundleResources() override;
   boost::optional<int32_t> get_min_sdk() override;
   ManifestClassInfo get_manifest_class_info() override;
   void collect_layout_classes_and_attributes_for_file(

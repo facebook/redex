@@ -851,6 +851,8 @@ std::unique_ptr<ResourceTableFile> BundleResources::load_res_table() {
   return to_return;
 }
 
+BundleResources::~BundleResources() {}
+
 size_t ResourcesPbFile::get_hash_from_values(
     const ConfigValues& config_values) {
   size_t hash = 0;
@@ -927,5 +929,7 @@ bool ResourcesPbFile::resource_value_identical(uint32_t a_id, uint32_t b_id) {
   }
   return true;
 }
+
+ResourcesPbFile::~ResourcesPbFile() {}
 
 #endif // HAS_PROTOBUF
