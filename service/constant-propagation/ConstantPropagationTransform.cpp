@@ -246,41 +246,23 @@ void Transform::remove_dead_switch(
   auto* insn = insn_it->insn;
   always_assert(opcode::is_switch(insn->opcode()));
 
-  auto is_switch_label = [=](MethodItemEntry& mie) {
-    return (mie.type == MFLOW_TARGET && mie.target->type == BRANCH_MULTI &&
-            mie.target->src->insn == insn);
-  };
-
   // Prune infeasible or unnecessary branches
   cfg::Edge* goto_edge = cfg.get_succ_edge_of_type(block, cfg::EDGE_GOTO);
   std::unordered_set<cfg::Block*> remaining_branch_targets;
-  size_t remaining_branch_edges = 0;
+  std::vector<cfg::Edge*> remaining_branch_edges;
   bool goto_is_feasible = !intra_cp.analyze_edge(goto_edge, env).is_bottom();
   for (auto branch_edge : cfg.get_succ_edges_of_type(block, cfg::EDGE_BRANCH)) {
     auto branch_is_feasible =
         !intra_cp.analyze_edge(branch_edge, env).is_bottom();
     if (branch_is_feasible && branch_edge->target() != goto_edge->target()) {
-      remaining_branch_edges++;
+      remaining_branch_edges.push_back(branch_edge);
       remaining_branch_targets.insert(branch_edge->target());
       continue;
     }
     if (branch_is_feasible && branch_edge->target() == goto_edge->target()) {
       goto_is_feasible = true;
     }
-    // Remove edge
-    bool has_changed = false;
-    for (auto& mie : *branch_edge->target()) {
-      if (is_switch_label(mie) &&
-          mie.target->case_key == *branch_edge->case_key()) {
-        // Unreachable label or any switch targeted label in default block is
-        // simply removed.
-        mie.type = MFLOW_FALLTHROUGH;
-        delete mie.target;
-        has_changed = true;
-        break;
-      }
-    }
-    always_assert(has_changed);
+    m_edge_deletes.emplace_back(insn_it, branch_edge);
   }
 
   // When all remaining branches are infeasible, simply remove the switch.
@@ -299,23 +281,10 @@ void Transform::remove_dead_switch(
   always_assert(!goto_is_feasible);
   ++m_stats.branches_removed;
   // Replace the switch by a goto to the uniquely reachable block
-  m_replacements.push_back({insn, {new IRInstruction(OPCODE_GOTO)}});
-  // Change the first label for the goto.
-  size_t has_changed = 0;
-  auto remaining_branch_target = *remaining_branch_targets.begin();
-  for (auto& mie : *remaining_branch_target) {
-    if (is_switch_label(mie)) {
-      if (has_changed == 0) {
-        mie.target->type = BRANCH_SIMPLE;
-      } else {
-        // From the second targets, just become a nop, if any.
-        mie.type = MFLOW_FALLTHROUGH;
-        delete mie.target;
-      }
-      has_changed++;
-    }
+  m_replace_with_gotos.emplace_back(insn_it, *remaining_branch_targets.begin());
+  for (auto branch_edge : remaining_branch_edges) {
+    m_edge_deletes.emplace_back(insn_it, branch_edge);
   }
-  always_assert(has_changed == remaining_branch_edges);
 }
 
 /*
@@ -342,8 +311,7 @@ void Transform::eliminate_dead_branch(
     return;
   }
 
-  const auto& succs = cfg.get_succ_edges_if(
-      block, [](const cfg::Edge* e) { return e->type() != cfg::EDGE_GHOST; });
+  const auto& succs = block->succs();
   always_assert_log(succs.size() == 2, "actually %zu\n%s", succs.size(),
                     SHOW(InstructionIterable(*block)));
   for (auto& edge : succs) {
@@ -355,7 +323,7 @@ void Transform::eliminate_dead_branch(
             SHOW(insn), is_fallthrough ? "true" : "false");
       ++m_stats.branches_removed;
       if (is_fallthrough) {
-        m_replacements.push_back({insn, {new IRInstruction(OPCODE_GOTO)}});
+        m_replace_with_gotos.emplace_back(insn_it, nullptr);
       } else {
         m_deletes.emplace_back(insn_it);
       }
@@ -400,15 +368,40 @@ bool Transform::replace_with_throw(
 }
 
 void Transform::apply_changes(IRCode* code) {
-  for (auto const& p : m_replacements) {
-    IRInstruction* old_op = p.first;
-    std::vector<IRInstruction*> new_ops = p.second;
-    if (opcode::is_branch(old_op->opcode())) {
-      always_assert(new_ops.size() == 1);
-      code->replace_branch(old_op, new_ops.at(0));
-    } else {
-      code->replace_opcode(old_op, new_ops);
+  for (auto& p : m_edge_deletes) {
+    auto branch_insn = p.first->insn;
+    auto branch_edge = p.second;
+    auto end = branch_edge->target()->end();
+    for (auto it = branch_edge->target()->begin();; it++) {
+      always_assert(it != end);
+      if (it->type != MFLOW_TARGET || it->target->src->insn != branch_insn) {
+        continue;
+      }
+      always_assert((it->target->type == BRANCH_MULTI) ==
+                    !!branch_edge->case_key());
+      if (it->target->type == BRANCH_MULTI &&
+          it->target->case_key != *branch_edge->case_key()) {
+        continue;
+      }
+      it->type = MFLOW_FALLTHROUGH;
+      delete it->target;
+      break;
     }
+  }
+  for (auto& p : m_replace_with_gotos) {
+    auto& mie = *p.first;
+    auto target = p.second;
+    code->replace_branch(mie.insn, new IRInstruction(OPCODE_GOTO));
+    if (target != nullptr) {
+      code->insert_before(target->begin(),
+                          *new MethodItemEntry(new BranchTarget(&mie)));
+    }
+  }
+  for (auto& p : m_replacements) {
+    IRInstruction* old_op = p.first;
+    std::vector<IRInstruction*>& new_ops = p.second;
+    always_assert(!opcode::is_branch(old_op->opcode()));
+    code->replace_opcode(old_op, new_ops);
   }
   for (const auto& it : m_deletes) {
     TRACE(CONSTP, 4, "Removing instruction %s", SHOW(it->insn));

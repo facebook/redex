@@ -143,6 +143,8 @@ class Transform final {
   std::vector<IRInstruction*> m_added_param_values;
   std::vector<IRList::iterator> m_deletes;
   std::unordered_set<IRInstruction*> m_redundant_move_results;
+  std::vector<std::pair<IRList::iterator, cfg::Edge*>> m_edge_deletes;
+  std::vector<std::pair<IRList::iterator, cfg::Block*>> m_replace_with_gotos;
   bool m_rebuild_cfg{0};
   Stats m_stats;
   const std::unordered_set<DexMethodRef*> m_kotlin_null_check_assertions;
