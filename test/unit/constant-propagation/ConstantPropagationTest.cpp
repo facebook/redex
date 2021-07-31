@@ -582,6 +582,69 @@ TEST_F(ConstantPropagationTest, Switch9) {
             assembler::to_s_expr(expected_code.get()));
 }
 
+// Constant-propagation recognizes and propagates information about infeasible
+// switch non-default cases
+TEST_F(ConstantPropagationTest, SwitchInfeasibleNonDefault) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (const v0 1)
+      (switch v0 (:a))
+      (const v0 0)
+      (goto :b)
+      (:a 0) ; unreachable
+      (:b)
+      (move v1 v0)
+      (return v1)
+    )
+  )");
+  do_const_prop(code.get());
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (const v0 1)
+      (const v0 0)
+      (goto :b)
+      (:b)
+      (const v1 0)
+      (return v1)
+    )
+  )");
+
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
+}
+
+// Constant-propagation recognizes and propagates information about infeasible
+// switch default cases
+TEST_F(ConstantPropagationTest, SwitchInfeasibleDefault) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (switch v0 (:a))
+      ; unreachable
+      (const v0 1)
+      (:a 0) ; reachable
+      (move v1 v0)
+      (return v1)
+    )
+  )");
+  do_const_prop(code.get());
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (goto :a)
+      (const v0 1)
+      (:a)
+      (const v1 0) ; this replacement happened because we know the other const is unreachable
+      (return v1)
+    )
+  )");
+
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
+}
+
 TEST_F(ConstantPropagationTest, WhiteBox1) {
   auto code = assembler::ircode_from_string(R"( (
      (load-param v0)

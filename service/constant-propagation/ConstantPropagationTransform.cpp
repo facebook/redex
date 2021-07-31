@@ -224,9 +224,11 @@ void Transform::simplify_instruction(const ConstantEnvironment& env,
   }
 }
 
-void Transform::remove_dead_switch(const ConstantEnvironment& env,
-                                   cfg::ControlFlowGraph& cfg,
-                                   cfg::Block* block) {
+void Transform::remove_dead_switch(
+    const intraprocedural::FixpointIterator& intra_cp,
+    const ConstantEnvironment& env,
+    cfg::ControlFlowGraph& cfg,
+    cfg::Block* block) {
 
   if (!m_config.remove_dead_switch) {
     return;
@@ -244,83 +246,76 @@ void Transform::remove_dead_switch(const ConstantEnvironment& env,
   auto* insn = insn_it->insn;
   always_assert(opcode::is_switch(insn->opcode()));
 
-  // Find successor blocks and a default block for switch
-  std::unordered_set<cfg::Block*> succs;
-  cfg::Block* def_block = nullptr;
-  for (auto& edge : block->succs()) {
-    auto type = edge->type();
-    auto target = edge->target();
-    if (type == cfg::EDGE_GOTO) {
-      always_assert(def_block == nullptr);
-      def_block = target;
-    } else {
-      always_assert(type == cfg::EDGE_BRANCH);
-    }
-    succs.insert(edge->target());
-  }
-  always_assert(def_block != nullptr);
-
   auto is_switch_label = [=](MethodItemEntry& mie) {
     return (mie.type == MFLOW_TARGET && mie.target->type == BRANCH_MULTI &&
             mie.target->src->insn == insn);
   };
 
-  // Find a non-default block which is uniquely reachable with a constant.
-  cfg::Block* reachable = nullptr;
-  auto eval_switch = env.get<SignedConstantDomain>(insn->src(0));
-  // If switch value is not an exact constant, do not replace the switch by a
-  // goto.
-  bool should_goto = eval_switch.constant_domain().is_value();
-  for (auto succ : succs) {
-    for (auto& mie : *succ) {
-      if (is_switch_label(mie)) {
-        auto eval_case =
-            eval_switch.meet(SignedConstantDomain(mie.target->case_key));
-        if (eval_case.is_bottom() || def_block == succ) {
-          // Unreachable label or any switch targeted label in default block is
-          // simply removed.
-          mie.type = MFLOW_FALLTHROUGH;
-          delete mie.target;
-        } else {
-          if (reachable != nullptr) {
-            should_goto = false;
-          } else {
-            reachable = succ;
-          }
-        }
+  // Prune infeasible or unnecessary branches
+  cfg::Edge* goto_edge = cfg.get_succ_edge_of_type(block, cfg::EDGE_GOTO);
+  std::unordered_set<cfg::Block*> remaining_branch_targets;
+  size_t remaining_branch_edges = 0;
+  bool goto_is_feasible = !intra_cp.analyze_edge(goto_edge, env).is_bottom();
+  for (auto branch_edge : cfg.get_succ_edges_of_type(block, cfg::EDGE_BRANCH)) {
+    auto branch_is_feasible =
+        !intra_cp.analyze_edge(branch_edge, env).is_bottom();
+    if (branch_is_feasible && branch_edge->target() != goto_edge->target()) {
+      remaining_branch_edges++;
+      remaining_branch_targets.insert(branch_edge->target());
+      continue;
+    }
+    if (branch_is_feasible && branch_edge->target() == goto_edge->target()) {
+      goto_is_feasible = true;
+    }
+    // Remove edge
+    bool has_changed = false;
+    for (auto& mie : *branch_edge->target()) {
+      if (is_switch_label(mie) &&
+          mie.target->case_key == *branch_edge->case_key()) {
+        // Unreachable label or any switch targeted label in default block is
+        // simply removed.
+        mie.type = MFLOW_FALLTHROUGH;
+        delete mie.target;
+        has_changed = true;
+        break;
       }
     }
+    always_assert(has_changed);
   }
 
-  // When non-default blocks are unreachable, simply remove the switch.
-  if (reachable == nullptr) {
+  // When all remaining branches are infeasible, simply remove the switch.
+  if (remaining_branch_targets.empty()) {
     m_deletes.emplace_back(insn_it);
     ++m_stats.branches_removed;
     return;
   }
 
-  if (!should_goto) {
+  if (remaining_branch_targets.size() > 1 || goto_is_feasible) {
+    // TODO: When !goto_is_feasible, cut off the goto edge...
     return;
   }
-  ++m_stats.branches_removed;
 
+  always_assert(remaining_branch_targets.size() == 1);
+  always_assert(!goto_is_feasible);
+  ++m_stats.branches_removed;
   // Replace the switch by a goto to the uniquely reachable block
   m_replacements.push_back({insn, {new IRInstruction(OPCODE_GOTO)}});
   // Change the first label for the goto.
-  bool has_changed = false;
-  for (auto& mie : *reachable) {
+  size_t has_changed = 0;
+  auto remaining_branch_target = *remaining_branch_targets.begin();
+  for (auto& mie : *remaining_branch_target) {
     if (is_switch_label(mie)) {
-      if (!has_changed) {
+      if (has_changed == 0) {
         mie.target->type = BRANCH_SIMPLE;
-        has_changed = true;
       } else {
         // From the second targets, just become a nop, if any.
         mie.type = MFLOW_FALLTHROUGH;
         delete mie.target;
       }
+      has_changed++;
     }
   }
-  always_assert(has_changed);
+  always_assert(has_changed == remaining_branch_edges);
 }
 
 /*
@@ -339,7 +334,7 @@ void Transform::eliminate_dead_branch(
   }
   auto* insn = insn_it->insn;
   if (opcode::is_switch(insn->opcode())) {
-    remove_dead_switch(env, cfg, block);
+    remove_dead_switch(intra_cp, env, cfg, block);
     return;
   }
 

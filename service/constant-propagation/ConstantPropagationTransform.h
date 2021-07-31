@@ -113,7 +113,8 @@ class Transform final {
                           const IRList::iterator&,
                           npe::NullPointerExceptionCreator* npe_creator);
 
-  void remove_dead_switch(const ConstantEnvironment&,
+  void remove_dead_switch(const intraprocedural::FixpointIterator& intra_cp,
+                          const ConstantEnvironment&,
                           cfg::ControlFlowGraph&,
                           cfg::Block*);
 

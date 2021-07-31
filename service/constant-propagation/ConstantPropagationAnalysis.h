@@ -36,7 +36,8 @@ class FixpointIterator final
    * it will use to determine the static field values and method return values.
    */
   FixpointIterator(const cfg::ControlFlowGraph& cfg,
-                   InstructionAnalyzer<ConstantEnvironment> insn_analyzer);
+                   InstructionAnalyzer<ConstantEnvironment> insn_analyzer,
+                   bool imprecise_switches = false);
 
   ConstantEnvironment analyze_edge(
       const EdgeId&,
@@ -55,7 +56,7 @@ class FixpointIterator final
  private:
   InstructionAnalyzer<ConstantEnvironment> m_insn_analyzer;
   const std::unordered_set<DexMethodRef*>& m_kotlin_null_check_assertions;
-  const bool m_editable_cfg;
+  const bool m_imprecise_switches;
 };
 
 } // namespace intraprocedural
