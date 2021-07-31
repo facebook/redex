@@ -62,7 +62,7 @@ class CallGraphStrategy final : public call_graph::BuildStrategy {
         if (callee == nullptr || may_be_overridden(callee)) {
           continue;
         }
-        callsites.emplace_back(callee, code->iterator_to(mie));
+        callsites.emplace_back(callee, insn);
       }
     }
     return callsites;
@@ -104,7 +104,7 @@ static side_effects::InvokeToSummaryMap build_summary_map(
     for (const auto& edge : callee_edges) {
       auto* callee = edge->callee()->method();
       if (effect_summaries.count(callee) != 0) {
-        invoke_to_summary_map.emplace(edge->invoke_iterator()->insn,
+        invoke_to_summary_map.emplace(edge->invoke_insn(),
                                       effect_summaries.at(callee));
       }
     }

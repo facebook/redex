@@ -86,7 +86,7 @@ class TypeAnalysisBasedStrategy : public MultipleCalleeBaseStrategy {
             opcode::is_invoke_super(insn->opcode())) {
           // Not true virtual call
           if (resolved_callee->is_concrete()) {
-            callsites.emplace_back(resolved_callee, code->iterator_to(mie));
+            callsites.emplace_back(resolved_callee, insn);
           }
         } else {
           get_callsites_for_true_virtual_call(code, resolved_callee, env, mie,
@@ -126,13 +126,13 @@ class TypeAnalysisBasedStrategy : public MultipleCalleeBaseStrategy {
 
     // Add callees to callsites
     if (resolved_callee->is_concrete()) {
-      callsites.emplace_back(resolved_callee, code->iterator_to(invoke));
+      callsites.emplace_back(resolved_callee, insn);
     }
     always_assert(!opcode::is_invoke_super(insn->opcode()));
     const auto& overriding_methods =
         mog::get_overriding_methods(m_method_override_graph, resolved_callee);
     for (auto overriding_method : overriding_methods) {
-      callsites.emplace_back(overriding_method, code->iterator_to(invoke));
+      callsites.emplace_back(overriding_method, insn);
     }
   }
 

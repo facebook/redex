@@ -66,13 +66,12 @@ class Transform final {
         m_kotlin_null_check_assertions(
             kotlin_nullcheck_wrapper::get_kotlin_null_assertions()) {}
 
-  // Apply transformations on uneditable cfg
-  // TODO: Migrate all to use editable cfg via `apply` method
-  Stats apply_on_uneditable_cfg(const intraprocedural::FixpointIterator&,
-                                const WholeProgramState&,
-                                IRCode*,
-                                const XStoreRefs*,
-                                const DexType*);
+  // Apply transformations on editable cfg
+  Stats apply_legacy(const intraprocedural::FixpointIterator&,
+                     const WholeProgramState&,
+                     cfg::ControlFlowGraph&,
+                     const XStoreRefs*,
+                     const DexType*);
 
   // Apply (new) transformations on editable cfg
   Stats apply(const intraprocedural::FixpointIterator&,
@@ -83,13 +82,14 @@ class Transform final {
  private:
   /*
    * The methods in this class queue up their transformations. After they are
-   * all done, the apply_changes() method does the actual modification of the
-   * IRCode.
+   * all done, the apply_changes() method does the actual modifications.
    */
-  void apply_changes(IRCode*);
+  void apply_changes(cfg::ControlFlowGraph&);
 
-  void simplify_instruction(const ConstantEnvironment&,
+  void simplify_instruction(cfg::ControlFlowGraph&,
+                            const ConstantEnvironment&,
                             const WholeProgramState& wps,
+                            cfg::Block* block,
                             const IRList::iterator&,
                             const XStoreRefs*,
                             const DexType*);
@@ -109,7 +109,9 @@ class Transform final {
   bool eliminate_redundant_null_check(const ConstantEnvironment&,
                                       const WholeProgramState& wps,
                                       const IRList::iterator&);
-  bool replace_with_throw(const ConstantEnvironment&,
+  bool replace_with_throw(cfg::ControlFlowGraph&,
+                          const ConstantEnvironment&,
+                          cfg::Block* block,
                           const IRList::iterator&,
                           npe::NullPointerExceptionCreator* npe_creator);
 
@@ -138,14 +140,12 @@ class Transform final {
                               const XStoreRefs*);
 
   const Config m_config;
-  std::vector<std::pair<IRInstruction*, std::vector<IRInstruction*>>>
+  std::unordered_map<IRInstruction*, std::vector<IRInstruction*>>
       m_replacements;
   std::vector<IRInstruction*> m_added_param_values;
-  std::vector<IRList::iterator> m_deletes;
+  std::unordered_set<IRInstruction*> m_deletes;
   std::unordered_set<IRInstruction*> m_redundant_move_results;
   std::vector<std::pair<IRList::iterator, cfg::Edge*>> m_edge_deletes;
-  std::vector<std::pair<IRList::iterator, cfg::Block*>> m_replace_with_gotos;
-  bool m_rebuild_cfg{0};
   Stats m_stats;
   const std::unordered_set<DexMethodRef*> m_kotlin_null_check_assertions;
 };

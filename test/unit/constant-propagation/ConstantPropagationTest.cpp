@@ -83,7 +83,6 @@ TEST_F(ConstantPropagationTest, DereferenceWithThrowBlock) {
       (return-void)
     )
   )");
-
   do_const_prop(code.get());
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -92,8 +91,8 @@ TEST_F(ConstantPropagationTest, DereferenceWithThrowBlock) {
       (.try_start a)
       (array-length v0)
       (move-result-pseudo v1)
-      (.try_end a)
       (return-void)
+      (.try_end a)
       (.catch (a))
       (if-eqz v0 :next2)
       (:next2)
@@ -127,12 +126,7 @@ TEST_F(ConstantPropagationTest, NullCheckCastYieldsNull) {
     (
       (const v0 0)
       (const v1 0)
-      (goto :next)
-      (const v2 1)
-      (goto :end)
-      (:next)
       (const v2 2)
-      (:end)
       (return-void)
     )
   )");
@@ -193,12 +187,7 @@ TEST_F(ConstantPropagationTest, InstanceOfNull) {
     (
       (const v0 0)
       (const v1 0)
-      (goto :next)
-      (const v2 1)
-      (goto :end)
-      (:next)
       (const v2 2)
-      (:end)
       (return-void)
     )
   )");
@@ -229,16 +218,7 @@ TEST_F(ConstantPropagationTest, Switch1) {
   auto expected_code = assembler::ircode_from_string(R"(
     (
      (const v0 1)
-     (goto :b)
-
-     (const v1 100)
-     (return v1)
-
-     (:b) ; reachable
      (const v1 200)
-     (return v1)
-
-     (const v1 300)
      (return v1)
     )
   )");
@@ -273,16 +253,7 @@ TEST_F(ConstantPropagationTest, Switch2) {
   auto expected_code = assembler::ircode_from_string(R"(
     (
      (const v0 1)
-     (goto :b)
-
-     (const v1 100)
-     (return v1)
-
-     (:b) ; reachable
      (const v1 200)
-     (return v1)
-
-     (const v1 300)
      (return v1)
     )
   )");
@@ -316,16 +287,7 @@ TEST_F(ConstantPropagationTest, Switch3) {
   auto expected_code = assembler::ircode_from_string(R"(
     (
      (const v0 1)
-     (goto :b)
-
-     (const v1 100)
-     (return v1)
-
-     (:b) ; reachable
      (const v1 200)
-     (return v1)
-
-     (const v1 300)
      (return v1)
     )
   )");
@@ -359,16 +321,7 @@ TEST_F(ConstantPropagationTest, Switch4) {
   auto expected_code = assembler::ircode_from_string(R"(
     (
      (const v0 1)
-     (goto :b)
-
-     (const v1 100)
-     (return v1)
-
-     (:b) ; reachable
      (const v1 200)
-     (return v1)
-
-     (const v1 300)
      (return v1)
     )
   )");
@@ -404,12 +357,6 @@ TEST_F(ConstantPropagationTest, Switch5) {
      (const v0 3)
 
      (const v1 100)
-     (return v1)
-
-     (const v1 200)
-     (return v1)
-
-     (const v1 300)
      (return v1)
     )
   )");
@@ -447,12 +394,6 @@ TEST_F(ConstantPropagationTest, Switch6) {
 
      (const v1 100)
      (return v1)
-
-     (const v1 200)
-     (return v1)
-
-     (const v1 300)
-     (return v1)
     )
   )");
 
@@ -480,12 +421,6 @@ TEST_F(ConstantPropagationTest, SwitchOnExactConstant) {
   auto expected_code = assembler::ircode_from_string(R"(
     (
       (const v0 1)
-      (goto :b)
-      ; unreachable
-      (const v1 100)
-      (return v1)
-
-      (:b) ; reachable
       (const v1 200)
       (return v1)
     )
@@ -603,9 +538,7 @@ TEST_F(ConstantPropagationTest, SwitchInfeasibleNonDefault) {
     (
       (const v0 1)
       (const v0 0)
-      (goto :b)
-      (:b)
-      (const v1 0)
+      (const v1 0) ; replacement from move
       (return v1)
     )
   )");
@@ -633,10 +566,7 @@ TEST_F(ConstantPropagationTest, SwitchInfeasibleDefault) {
   auto expected_code = assembler::ircode_from_string(R"(
     (
       (const v0 0)
-      (goto :a)
-      (const v0 1)
-      (:a)
-      (const v1 0) ; this replacement happened because we know the other const is unreachable
+      (const v1 0) ; replacement from move, as we know the other const is unreachable
       (return v1)
     )
   )");

@@ -66,6 +66,16 @@ void create_runtime_exception_init() {
   init_method->set_external();
 }
 
+static void remove_position(IRCode* code) {
+  for (auto it = code->begin(); it != code->end();) {
+    if (it->type == MFLOW_POSITION) {
+      it = code->erase_and_dispose(it);
+    } else {
+      it++;
+    }
+  }
+}
+
 /**
  * Create a method like
  * void {{name}}() {
@@ -1569,12 +1579,16 @@ TEST_F(MethodInlineTest, caller_caller_callee_call_site) {
 
   const auto& outer_caller_expected_str = R"(
     (
-      (.pos:dbg_0 "LFoo;.outer_caller:()V" UnknownSource 0)
       (return-void)
     )
   )";
 
   auto outer_caller_actual = outer_caller->get_code();
+
+  // Let's filter out all positions.
+  // TODO: Enhance position filtering so that we don't get redundant positions.
+  remove_position(outer_caller_actual);
+
   auto outer_caller_expected =
       assembler::ircode_from_string(outer_caller_expected_str);
   EXPECT_CODE_EQ(outer_caller_actual, outer_caller_expected.get());

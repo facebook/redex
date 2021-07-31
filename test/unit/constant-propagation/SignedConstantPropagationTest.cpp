@@ -111,6 +111,8 @@ TEST_F(ConstantNezTest, DeterminableNezTrue) {
 
      (:if-true-label)
      (const v0 2)
+
+     (return-void)
     )
 )");
   do_const_prop(code.get());
@@ -121,11 +123,9 @@ TEST_F(ConstantNezTest, DeterminableNezTrue) {
      (move-result-pseudo-object v0)
      (invoke-direct (v0) "LFoo;.<init>:()V")
 
-     (goto :if-true-label)
-     (const v0 1)
-
-     (:if-true-label)
      (const v0 2)
+
+     (return-void)
     )
 )");
 
@@ -144,6 +144,8 @@ TEST_F(ConstantNezTest, DeterminableNezFalse) {
 
      (:if-true-label)
      (const v0 2)
+
+     (return-void)
     )
 )");
   do_const_prop(code.get());
@@ -158,6 +160,8 @@ TEST_F(ConstantNezTest, DeterminableNezFalse) {
 
      (:if-true-label)
      (const v0 2)
+
+     (return-void)
     )
 )");
 
@@ -175,6 +179,8 @@ TEST_F(ConstantNezTest, DeterminableEZFalse) {
 
      (:if-true-label)
      (const v0 2)
+
+     (return-void)
     )
 )");
   do_const_prop(code.get());
@@ -187,6 +193,8 @@ TEST_F(ConstantNezTest, DeterminableEZFalse) {
      (const v0 1)
 
      (const v0 2)
+
+     (return-void)
     )
 )");
 
@@ -207,6 +215,8 @@ TEST_F(ConstantNezTest, NonDeterminableNEZ) {
 
      (:if-true-label)
      (const v0 2)
+
+     (return-void)
     )
 )");
   do_const_prop(code.get());
@@ -224,6 +234,8 @@ TEST_F(ConstantNezTest, NonDeterminableNEZ) {
 
      (:if-true-label)
      (const v0 2)
+
+     (return-void)
     )
 )");
 
@@ -240,6 +252,8 @@ TEST_F(ConstantPropagationTest, IfToGoto) {
 
      (:if-true-label)
      (const v0 2)
+
+     (return-void)
     )
 )");
 
@@ -249,11 +263,9 @@ TEST_F(ConstantPropagationTest, IfToGoto) {
     (
      (const v0 0)
 
-     (goto :if-true-label)
-     (const v0 1)
-
-     (:if-true-label)
      (const v0 2)
+
+     (return-void)
     )
 )");
   EXPECT_CODE_EQ(code.get(), expected_code.get());
@@ -281,10 +293,6 @@ TEST_F(ConstantPropagationTest, FoldArithmeticAddLit) {
      (const v0 2147483646)
      (const v0 2147483647)
      (const v1 2147483647)
-     (goto :end)
-     (const v0 2147483647)
-     (add-int/lit8 v0 v0 1)
-     (:end)
      (return-void)
     )
 )");
@@ -337,14 +345,9 @@ TEST_F(ConstantPropagationTest, AnalyzeCmp) {
       (const-wide v1 1)
       (cmp-long v2 v0 v1)
       (const v3 -1)
-      (goto :end)
 
-      (:b1)
-      (const-wide v0 1)
-      (const-wide v1 1)
-      (cmp-long v2 v0 v1)
-      (const v3 0)
-      (goto :end)
+      (:end)
+      (return v2)
 
       (:b2)
       (const-wide v0 1)
@@ -353,8 +356,12 @@ TEST_F(ConstantPropagationTest, AnalyzeCmp) {
       (const v3 1)
       (goto :end)
 
-      (:end)
-      (return v2)
+      (:b1)
+      (const-wide v0 1)
+      (const-wide v1 1)
+      (cmp-long v2 v0 v1)
+      (const v3 0)
+      (goto :end)
     )
 )");
   EXPECT_CODE_EQ(code.get(), expected_code.get());
@@ -385,14 +392,6 @@ TEST_F(ConstantPropagationTest, ConditionalConstant_EqualsAlwaysTrue) {
      (const v0 0)
      (const v1 0)
 
-     (goto :if-true-label-1)
-     (const v1 1)
-
-     (:if-true-label-1)
-     (goto :if-true-label-2)
-     (const v1 2)
-
-     (:if-true-label-2)
      (return-void)
     )
 )");
@@ -426,10 +425,6 @@ TEST_F(ConstantPropagationTest, ConditionalConstant_EqualsAlwaysFalse) {
 
      (const v1 0)
 
-     (goto :if-true-label-2)
-     (const v1 2)
-
-     (:if-true-label-2)
      (return-void)
     )
 )");
@@ -461,10 +456,6 @@ TEST_F(ConstantPropagationTest, ConditionalConstant_LessThanAlwaysTrue) {
      (const v0 0)
      (const v1 1)
 
-     (goto :if-true-label-1)
-     (const v1 0)
-
-     (:if-true-label-1)
      (const v1 2)
 
      (return-void)
@@ -500,10 +491,6 @@ TEST_F(ConstantPropagationTest, ConditionalConstant_LessThanAlwaysFalse) {
 
      (const v0 0)
 
-     (goto :if-true-label-2)
-     (const v1 2)
-
-     (:if-true-label-2)
      (return-void)
     )
 )");
@@ -532,9 +519,6 @@ TEST_F(ConstantPropagationTest, ConditionalConstantInferZero) {
      (load-param v0)
 
      (if-nez v0 :exit)
-     (goto :exit)
-
-     (const v0 1)
 
      (:exit)
      (return-void)
@@ -565,9 +549,6 @@ TEST_F(ConstantPropagationTest, ConditionalConstantInferInterval) {
      (load-param v0)
 
      (if-lez v0 :exit)
-     (goto :exit)
-
-     (const v0 1)
 
      (:exit)
      (return-void)
@@ -606,15 +587,15 @@ TEST_F(ConstantPropagationTest, ConditionalConstantCompareIntervals) {
        ; here v0 is <= 0
        (if-ltz v1 :if-ltz-label)
        ; here v1 is >= 0
-       (goto :exit)
 
-       (const v3 0)
+       (:exit)
+       (return-void)
+
        (:if-gtz-label)
        (const v4 0)
        (:if-ltz-label)
        (const v5 0)
-       (:exit)
-       (return-void)
+       (goto :exit)
       )
   )");
 

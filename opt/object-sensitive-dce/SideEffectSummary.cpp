@@ -240,7 +240,7 @@ void analyze_method_recursive(const DexMethod* method,
       analyze_method_recursive(callee, call_graph, ptrs_fp_iter_map, visiting,
                                summary_cmap);
       if (summary_cmap->count(callee) != 0) {
-        invoke_to_summary_cmap.emplace(edge->invoke_iterator()->insn,
+        invoke_to_summary_cmap.emplace(edge->invoke_insn(),
                                        summary_cmap->at(callee));
       }
     }

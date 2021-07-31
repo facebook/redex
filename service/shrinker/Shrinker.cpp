@@ -123,6 +123,9 @@ Shrinker::Shrinker(
 void Shrinker::shrink_method(DexMethod* method) {
   auto code = method->get_code();
   bool editable_cfg_built = code->editable_cfg_built();
+  // force simplification/linearization of any existing editable cfg once, and
+  // forget existing cfg for a clean start
+  code->clear_cfg();
 
   constant_propagation::Transform::Stats const_prop_stats;
   cse_impl::Stats cse_stats;
@@ -132,11 +135,8 @@ void Shrinker::shrink_method(DexMethod* method) {
 
   if (m_config.run_const_prop) {
     auto timer = m_const_prop_timer.scope();
-    if (editable_cfg_built) {
-      code->clear_cfg();
-    }
-    if (!code->cfg_built()) {
-      code->build_cfg(/* editable */ false);
+    if (!code->editable_cfg_built()) {
+      code->build_cfg(/* editable */ true);
     }
     {
       constant_propagation::intraprocedural::FixpointIterator fp_iter(
@@ -149,12 +149,10 @@ void Shrinker::shrink_method(DexMethod* method) {
       fp_iter.run({});
       constant_propagation::Transform::Config config;
       constant_propagation::Transform tf(config);
-      const_prop_stats = tf.apply_on_uneditable_cfg(
-          fp_iter, constant_propagation::WholeProgramState(), code, &m_xstores,
-          method->get_class());
+      const_prop_stats =
+          tf.apply_legacy(fp_iter, constant_propagation::WholeProgramState(),
+                          code->cfg(), &m_xstores, method->get_class());
     }
-    always_assert(!code->editable_cfg_built());
-    code->build_cfg(/* editable */ true);
     code->cfg().calculate_exit_block();
     {
       constant_propagation::intraprocedural::FixpointIterator fp_iter(

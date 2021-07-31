@@ -7,6 +7,7 @@
 
 #include "ConstantPropagationTransform.h"
 
+#include "CFGMutation.h"
 #include "ReachingDefinitions.h"
 #include "ScopedMetrics.h"
 #include "Trace.h"
@@ -33,9 +34,9 @@ void Transform::replace_with_const(const ConstantEnvironment& env,
     return;
   }
   if (opcode::is_a_move_result_pseudo(insn->opcode())) {
-    m_replacements.emplace_back(std::prev(it)->insn, replacement);
+    m_replacements.emplace(std::prev(it)->insn, replacement);
   } else {
-    m_replacements.emplace_back(insn, replacement);
+    m_replacements.emplace(insn, replacement);
   }
   ++m_stats.materialized_consts;
 }
@@ -72,7 +73,7 @@ bool Transform::eliminate_redundant_null_check(
       ++m_stats.null_checks_method_calls;
       auto val = env.get(insn->src(*index)).maybe_get<SignedConstantDomain>();
       if (val && val->interval() == sign_domain::Interval::NEZ) {
-        m_deletes.push_back(it);
+        m_deletes.insert(insn);
         ++m_stats.null_checks;
         return true;
       }
@@ -121,7 +122,7 @@ bool Transform::eliminate_redundant_put(const ConstantEnvironment& env,
       TRACE(FINALINLINE, 2, "%s has %s", SHOW(field), SHOW(existing_val));
       // This field must already hold this value. We don't need to write to it
       // again.
-      m_deletes.push_back(it);
+      m_deletes.insert(insn);
       return true;
     }
     break;
@@ -133,8 +134,10 @@ bool Transform::eliminate_redundant_put(const ConstantEnvironment& env,
   return false;
 }
 
-void Transform::simplify_instruction(const ConstantEnvironment& env,
+void Transform::simplify_instruction(cfg::ControlFlowGraph& cfg,
+                                     const ConstantEnvironment& env,
                                      const WholeProgramState& wps,
+                                     cfg::Block* block,
                                      const IRList::iterator& it,
                                      const XStoreRefs* xstores,
                                      const DexType* declaring_type) {
@@ -155,7 +158,9 @@ void Transform::simplify_instruction(const ConstantEnvironment& env,
   case IOPCODE_MOVE_RESULT_PSEUDO:
   case IOPCODE_MOVE_RESULT_PSEUDO_WIDE:
   case IOPCODE_MOVE_RESULT_PSEUDO_OBJECT: {
-    auto* primary_insn = ir_list::primary_instruction_of_move_result_pseudo(it);
+    auto primary_insn = cfg.primary_instruction_of_move_result(
+                               block->to_cfg_instruction_iterator(it))
+                            ->insn;
     auto op = primary_insn->opcode();
     if (opcode::is_an_sget(op) || opcode::is_an_iget(op) ||
         opcode::is_an_aget(op) || opcode::is_div_int_lit(op) ||
@@ -177,7 +182,9 @@ void Transform::simplify_instruction(const ConstantEnvironment& env,
     if (m_config.replace_move_result_with_consts) {
       replace_with_const(env, it, xstores, declaring_type);
     } else if (m_config.getter_methods_for_immutable_fields) {
-      auto primary_insn = ir_list::primary_instruction_of_move_result(it);
+      auto primary_insn = cfg.primary_instruction_of_move_result(
+                                 block->to_cfg_instruction_iterator(it))
+                              ->insn;
       if (opcode::is_invoke_virtual(primary_insn->opcode())) {
         auto invoked =
             resolve_method(primary_insn->get_method(), MethodSearch::Virtual);
@@ -234,13 +241,6 @@ void Transform::remove_dead_switch(
     return;
   }
 
-  // TODO: The cfg for constant propagation is assumed to be non-editable.
-  // Once the editable cfg is used, the following optimization logic should be
-  // simpler.
-  if (cfg.editable()) {
-    return;
-  }
-
   auto insn_it = block->get_last_insn();
   always_assert(insn_it != block->end());
   auto* insn = insn_it->insn;
@@ -265,9 +265,9 @@ void Transform::remove_dead_switch(
     m_edge_deletes.emplace_back(insn_it, branch_edge);
   }
 
-  // When all remaining branches are infeasible, simply remove the switch.
+  // When all remaining branches are infeasible, the cfg will remove the switch
+  // instruction.
   if (remaining_branch_targets.empty()) {
-    m_deletes.emplace_back(insn_it);
     ++m_stats.branches_removed;
     return;
   }
@@ -281,9 +281,14 @@ void Transform::remove_dead_switch(
   always_assert(!goto_is_feasible);
   ++m_stats.branches_removed;
   // Replace the switch by a goto to the uniquely reachable block
-  m_replace_with_gotos.emplace_back(insn_it, *remaining_branch_targets.begin());
-  for (auto branch_edge : remaining_branch_edges) {
-    m_edge_deletes.emplace_back(insn_it, branch_edge);
+  // We do that by deleting all but one of the remaining branch edges, and then
+  // the cfg will rewrite the remaining branch into a goto and remove the switch
+  // instruction.
+  m_edge_deletes.emplace_back(insn_it, goto_edge);
+  for (auto it = std::next(remaining_branch_edges.begin());
+       it != remaining_branch_edges.end();
+       it++) {
+    m_edge_deletes.emplace_back(insn_it, *it);
   }
 }
 
@@ -318,15 +323,11 @@ void Transform::eliminate_dead_branch(
     // Check if the fixpoint analysis has determined the successors to be
     // unreachable
     if (intra_cp.analyze_edge(edge, env).is_bottom()) {
-      auto is_fallthrough = edge->type() == cfg::EDGE_GOTO;
-      TRACE(CONSTP, 2, "Changed conditional branch %s as it is always %s",
-            SHOW(insn), is_fallthrough ? "true" : "false");
+      TRACE(CONSTP, 2, "Removing conditional branch %s", SHOW(insn));
       ++m_stats.branches_removed;
-      if (is_fallthrough) {
-        m_replace_with_gotos.emplace_back(insn_it, nullptr);
-      } else {
-        m_deletes.emplace_back(insn_it);
-      }
+      // We delete the infeasible edge, and then the cfg will rewrite the
+      // remaining branch into a goto and remove the if- instruction.
+      m_edge_deletes.emplace_back(insn_it, edge);
       // Assuming :block is reachable, then at least one of its successors must
       // be reachable, so we can break after finding one that's unreachable
       break;
@@ -335,7 +336,9 @@ void Transform::eliminate_dead_branch(
 }
 
 bool Transform::replace_with_throw(
+    cfg::ControlFlowGraph& cfg,
     const ConstantEnvironment& env,
+    cfg::Block* block,
     const IRList::iterator& it,
     npe::NullPointerExceptionCreator* npe_creator) {
   auto* insn = it->insn;
@@ -354,76 +357,54 @@ bool Transform::replace_with_throw(
   // We'll replace this instruction with a different instruction sequence that
   // unconditionally throws a null pointer exception.
 
-  m_replacements.emplace_back(insn, npe_creator->get_insns(insn));
-  m_rebuild_cfg = true;
+  m_replacements.emplace(insn, npe_creator->get_insns(insn));
   ++m_stats.throws;
 
   if (insn->has_move_result_any()) {
-    auto move_result_it = std::next(it);
-    if (opcode::is_move_result_any(move_result_it->insn->opcode())) {
+    auto move_result_it =
+        cfg.move_result_of(block->to_cfg_instruction_iterator(it));
+    if (!move_result_it.is_end()) {
       m_redundant_move_results.insert(move_result_it->insn);
     }
   }
   return true;
 }
 
-void Transform::apply_changes(IRCode* code) {
+void Transform::apply_changes(cfg::ControlFlowGraph& cfg) {
   for (auto& p : m_edge_deletes) {
-    auto branch_insn = p.first->insn;
     auto branch_edge = p.second;
-    auto end = branch_edge->target()->end();
-    for (auto it = branch_edge->target()->begin();; it++) {
-      always_assert(it != end);
-      if (it->type != MFLOW_TARGET || it->target->src->insn != branch_insn) {
-        continue;
-      }
-      always_assert((it->target->type == BRANCH_MULTI) ==
-                    !!branch_edge->case_key());
-      if (it->target->type == BRANCH_MULTI &&
-          it->target->case_key != *branch_edge->case_key()) {
-        continue;
-      }
-      it->type = MFLOW_FALLTHROUGH;
-      delete it->target;
-      break;
+    cfg.delete_edge(branch_edge);
+  }
+  cfg::CFGMutation mutation(cfg);
+  auto iterable = InstructionIterable(cfg);
+  for (auto it = iterable.begin(); it != iterable.end(); it++) {
+    if (m_deletes.count(it->insn)) {
+      always_assert(!m_replacements.count(it->insn));
+      mutation.remove(it);
+      continue;
     }
-  }
-  for (auto& p : m_replace_with_gotos) {
-    auto& mie = *p.first;
-    auto target = p.second;
-    code->replace_branch(mie.insn, new IRInstruction(OPCODE_GOTO));
-    if (target != nullptr) {
-      code->insert_before(target->begin(),
-                          *new MethodItemEntry(new BranchTarget(&mie)));
+    auto it2 = m_replacements.find(it->insn);
+    if (it2 == m_replacements.end()) {
+      continue;
     }
+    mutation.replace(it, std::move(it2->second));
   }
-  for (auto& p : m_replacements) {
-    IRInstruction* old_op = p.first;
-    std::vector<IRInstruction*>& new_ops = p.second;
-    always_assert(!opcode::is_branch(old_op->opcode()));
-    code->replace_opcode(old_op, new_ops);
-  }
-  for (const auto& it : m_deletes) {
-    TRACE(CONSTP, 4, "Removing instruction %s", SHOW(it->insn));
-    code->remove_opcode(it);
-  }
-  auto params = code->get_param_instructions();
+  mutation.flush();
+
+  auto after_params_it = cfg.entry_block()->to_cfg_instruction_iterator(
+      cfg.entry_block()->get_first_non_param_loading_insn());
   for (auto insn : m_added_param_values) {
-    code->insert_before(params.end(), insn);
-  }
-  if (m_rebuild_cfg) {
-    code->build_cfg(/* editable */);
-    code->clear_cfg();
+    cfg.insert_before(after_params_it, insn);
   }
 }
 
-Transform::Stats Transform::apply_on_uneditable_cfg(
+Transform::Stats Transform::apply_legacy(
     const intraprocedural::FixpointIterator& intra_cp,
     const WholeProgramState& wps,
-    IRCode* code,
+    cfg::ControlFlowGraph& cfg,
     const XStoreRefs* xstores,
     const DexType* declaring_type) {
-  auto& cfg = code->cfg();
+  always_assert(cfg.editable());
   npe::NullPointerExceptionCreator npe_creator(&cfg);
   for (const auto& block : cfg.blocks()) {
     auto env = intra_cp.get_entry_state_at(block);
@@ -433,21 +414,23 @@ Transform::Stats Transform::apply_on_uneditable_cfg(
       continue;
     }
     auto last_insn = block->get_last_insn();
-    for (auto& mie : InstructionIterable(block)) {
-      auto it = code->iterator_to(mie);
+    for (auto it = block->begin(); it != block->end(); it++) {
+      if (it->type != MFLOW_OPCODE) {
+        continue;
+      }
       bool any_changes = eliminate_redundant_put(env, wps, it) ||
                          eliminate_redundant_null_check(env, wps, it) ||
-                         replace_with_throw(env, it, &npe_creator);
-      auto* insn = mie.insn;
+                         replace_with_throw(cfg, env, block, it, &npe_creator);
+      auto* insn = it->insn;
       intra_cp.analyze_instruction(insn, &env, insn == last_insn->insn);
       if (!any_changes && !m_redundant_move_results.count(insn)) {
-        simplify_instruction(env, wps, code->iterator_to(mie), xstores,
-                             declaring_type);
+        simplify_instruction(cfg, env, wps, block, it, xstores, declaring_type);
       }
     }
     eliminate_dead_branch(intra_cp, env, cfg, block);
   }
-  apply_changes(code);
+  apply_changes(cfg);
+  cfg.simplify();
   return m_stats;
 }
 

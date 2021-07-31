@@ -50,7 +50,7 @@ struct ImmutableTest : public ConstantPropagationTest {
   static ObjectWithImmutAttrDomain create_integer_abstract_value(long value,
                                                                  bool cached) {
     return create_object(R"((
-    "Ljava/lang/Integer;" 
+    "Ljava/lang/Integer;"
     (
       ("intValue:()I" )" + std::to_string(value) +
                              R"()
@@ -61,7 +61,7 @@ struct ImmutableTest : public ConstantPropagationTest {
 
   static ObjectWithImmutAttrDomain create_char_100() {
     return create_object(R"((
-    "Ljava/lang/Character;" 
+    "Ljava/lang/Character;"
     (
       ("charValue:()C" 100)
     )
@@ -273,6 +273,7 @@ TEST_F(ImmutableTest, integer) {
       (move-result v0)
       (invoke-virtual (v0) "Ljava/lang/Integer;.intValue:()I")
       (move-result v0)
+      (return-void)
     )
   )");
 
@@ -284,6 +285,7 @@ TEST_F(ImmutableTest, integer) {
       (move-result v0)
       (invoke-virtual (v0) "Ljava/lang/Integer;.intValue:()I")
       (const v0 100)
+      (return-void)
     )
   )");
   EXPECT_CODE_EQ(code.get(), expected_code.get());
@@ -303,6 +305,7 @@ TEST_F(ImmutableTest, cached_identity) {
       (:target)
       (const v0 23)
       (:end)
+      (return-void)
     )
   )");
 
@@ -314,12 +317,8 @@ TEST_F(ImmutableTest, cached_identity) {
       (move-result-object v1)
       (invoke-static (v0) "Ljava/lang/Integer;.valueOf:(I)Ljava/lang/Integer;")
       (move-result-object v2)
-      (goto :target)
-      (const v0 42)
-      (goto :end)
-      (:target)
       (const v0 23)
-      (:end)
+      (return-void)
     )
   )");
   EXPECT_CODE_EQ(code.get(), expected_code.get());
@@ -335,10 +334,11 @@ TEST_F(ImmutableTest, not_cached_identity) {
       (move-result-object v2)
       (if-eq v1 v2 :target)
       (const v0 42)
-      (goto :end)
+      (:end)
+      (return-void)
       (:target)
       (const v0 23)
-      (:end)
+      (goto :end)
     )
   )";
   auto code = assembler::ircode_from_string(code_str);
@@ -358,15 +358,16 @@ TEST_F(ImmutableTest, integer_join) {
       (const v1 100)
       (invoke-static (v1) "Ljava/lang/Integer;.valueOf:(I)Ljava/lang/Integer;")
       (move-result v0)
-      (goto :end)
-
-      (:if-true-label)
-      (invoke-static (v2) "Ljava/lang/Integer;.valueOf:(I)Ljava/lang/Integer;")
-      (move-result v0)
 
       (:end)
       (invoke-virtual (v0) "Ljava/lang/Integer;.intValue:()I")
       (move-result v0)
+      (return-void)
+
+      (:if-true-label)
+      (invoke-static (v2) "Ljava/lang/Integer;.valueOf:(I)Ljava/lang/Integer;")
+      (move-result v0)
+      (goto :end)
     )
   )";
   auto code = assembler::ircode_from_string(code_str);
@@ -393,6 +394,7 @@ TEST_F(ImmutableTest, object) {
       (move-result-pseudo-object v3)
       (invoke-virtual (v0) "LData;.toString:()Ljava/lang/String;")
       (move-result v4)
+      (return-void)
     )
   )");
 
@@ -433,6 +435,7 @@ TEST_F(ImmutableTest, object) {
       (invoke-virtual (v0) "LData;.toString:()Ljava/lang/String;")
       (const-string "ValueA")
       (move-result-pseudo-object v4)
+      (return-void)
     )
   )");
   EXPECT_CODE_EQ(code.get(), expected_code.get());
@@ -473,6 +476,7 @@ TEST_F(ImmutableTest, enum_constructor) {
     (move-result-object v3)
     (invoke-virtual (v2) "LFoo;.ordinal:()I")
     (move-result-object v4)
+      (return-void)
   )
   )");
   do_const_prop(code.get(),
@@ -492,6 +496,7 @@ TEST_F(ImmutableTest, enum_constructor) {
     (move-result-pseudo-object v3)
     (invoke-virtual (v2) "LFoo;.ordinal:()I")
     (const v4 0)
+    (return-void)
   )
   )");
   EXPECT_CODE_EQ(code.get(), expected_code.get());

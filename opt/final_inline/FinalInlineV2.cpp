@@ -11,18 +11,17 @@
 #include <unordered_set>
 #include <vector>
 
-#include "ConstantPropagationAnalysis.h"
-#include "ConstantPropagationTransform.h"
 #include "Debug.h"
 #include "DexAccess.h"
 #include "DexClass.h"
 #include "DexUtil.h"
-#include "IPConstantPropagationAnalysis.h"
+#include "EditableCfgAdapter.h"
 #include "IRCode.h"
 #include "LocalDce.h"
 #include "PassManager.h"
 #include "Purity.h"
 #include "Resolver.h"
+#include "ScopedCFG.h"
 #include "Shrinker.h"
 #include "Timer.h"
 #include "Trace.h"
@@ -77,16 +76,18 @@ Scope reverse_tsort_by_clinit_deps(const Scope& scope) {
     visiting.emplace(cls);
     auto clinit = cls->get_clinit();
     if (clinit != nullptr && clinit->get_code() != nullptr) {
-      for (auto& mie : InstructionIterable(clinit->get_code())) {
-        auto insn = mie.insn;
-        if (opcode::is_an_sget(insn->opcode())) {
-          auto dependee_cls = type_class(insn->get_field()->get_class());
-          if (dependee_cls == nullptr || dependee_cls == cls) {
-            continue;
-          }
-          visit(dependee_cls);
-        }
-      }
+      editable_cfg_adapter::iterate_with_iterator(
+          clinit->get_code(), [&](const IRList::iterator& it) {
+            auto insn = it->insn;
+            if (opcode::is_an_sget(insn->opcode())) {
+              auto dependee_cls = type_class(insn->get_field()->get_class());
+              if (dependee_cls == nullptr || dependee_cls == cls) {
+                return editable_cfg_adapter::LOOP_CONTINUE;
+              }
+              visit(dependee_cls);
+            }
+            return editable_cfg_adapter::LOOP_CONTINUE;
+          });
     }
     visiting.erase(cls);
     result.emplace_back(cls);
@@ -130,16 +131,18 @@ Scope reverse_tsort_by_init_deps(const Scope& scope) {
     if (ctors.size() == 1) {
       auto ctor = ctors[0];
       if (ctor != nullptr && ctor->get_code() != nullptr) {
-        for (auto& mie : InstructionIterable(ctor->get_code())) {
-          auto insn = mie.insn;
-          if (opcode::is_an_iget(insn->opcode())) {
-            auto dependee_cls = type_class(insn->get_field()->get_class());
-            if (dependee_cls == nullptr || dependee_cls == cls) {
-              continue;
-            }
-            visit(dependee_cls);
-          }
-        }
+        editable_cfg_adapter::iterate_with_iterator(
+            ctor->get_code(), [&](const IRList::iterator& it) {
+              auto insn = it->insn;
+              if (opcode::is_an_iget(insn->opcode())) {
+                auto dependee_cls = type_class(insn->get_field()->get_class());
+                if (dependee_cls == nullptr || dependee_cls == cls) {
+                  return editable_cfg_adapter::LOOP_CONTINUE;
+                }
+                visit(dependee_cls);
+              }
+              return editable_cfg_adapter::LOOP_CONTINUE;
+            });
       }
     }
     visiting.erase(cls);
@@ -337,64 +340,66 @@ StaticFieldReadAnalysis::Result StaticFieldReadAnalysis::analyze(
     return m_summaries.at(method);
   }
 
-  auto code = method->get_code();
+  auto code = const_cast<IRCode*>(method->get_code());
   if (!code) {
     return {};
   }
 
   Result ret{};
-  for (auto& mie : InstructionIterable(code)) {
-    auto insn = mie.insn;
-    if (opcode::is_an_sget(insn->opcode())) {
-      ret.add(insn->get_field());
-    }
-  }
+  editable_cfg_adapter::iterate_with_iterator(
+      code, [&](const IRList::iterator& it) {
+        auto insn = it->insn;
+        if (opcode::is_an_sget(insn->opcode())) {
+          ret.add(insn->get_field());
+        }
+        return editable_cfg_adapter::LOOP_CONTINUE;
+      });
 
   pending_methods.emplace(method);
   m_summaries[method] = ret;
 
   bool callee_pending = false;
 
-  for (auto& mie : InstructionIterable(code)) {
-    auto insn = mie.insn;
-    if (opcode::is_an_invoke(insn->opcode())) {
-      auto callee_method_def =
-          resolve_method(insn->get_method(), opcode_to_search(insn), method);
-      if (!callee_method_def || callee_method_def->is_external() ||
-          !callee_method_def->is_concrete() ||
-          m_allowed_opaque_callees.count(callee_method_def)) {
-        continue;
-      }
-      auto callees = resolve_callees_in_graph(m_graph, method, insn);
-      if (callees.empty()) {
-        TRACE(FINALINLINE, 2, "%s has opaque callees %s", SHOW(method),
-              SHOW(insn->get_method()));
-        pending_methods.erase(method);
-        ret = Result::top();
-        m_summaries[method] = ret;
-        return ret;
-      }
+  editable_cfg_adapter::iterate_with_iterator(
+      code, [&](const IRList::iterator& it) {
+        auto insn = it->insn;
+        if (opcode::is_an_invoke(insn->opcode())) {
+          auto callee_method_def = resolve_method(
+              insn->get_method(), opcode_to_search(insn), method);
+          if (!callee_method_def || callee_method_def->is_external() ||
+              !callee_method_def->is_concrete() ||
+              m_allowed_opaque_callees.count(callee_method_def)) {
+            return editable_cfg_adapter::LOOP_CONTINUE;
+          }
+          auto callees = resolve_callees_in_graph(m_graph, method, insn);
+          if (callees.empty()) {
+            TRACE(FINALINLINE, 2, "%s has opaque callees %s", SHOW(method),
+                  SHOW(insn->get_method()));
+            ret = Result::top();
+            callee_pending = false;
+            return editable_cfg_adapter::LOOP_BREAK;
+          }
 
-      for (const DexMethod* callee : callees) {
-        Result callee_result;
-        if (pending_methods.count(callee)) {
-          callee_pending = true;
-          callee_result = m_summaries.at(callee);
-        } else {
-          callee_result = analyze(callee, pending_methods);
+          for (const DexMethod* callee : callees) {
+            Result callee_result;
+            if (pending_methods.count(callee)) {
+              callee_pending = true;
+              callee_result = m_summaries.at(callee);
+            } else {
+              callee_result = analyze(callee, pending_methods);
+            }
+            ret.join_with(callee_result);
+            if (ret.is_top()) {
+              callee_pending = false;
+              return editable_cfg_adapter::LOOP_BREAK;
+            }
+            if (pending_methods.count(callee)) {
+              callee_pending = true;
+            }
+          }
         }
-        ret.join_with(callee_result);
-        if (ret.is_top()) {
-          pending_methods.erase(method);
-          m_summaries[method] = ret;
-          return ret;
-        }
-        if (pending_methods.count(callee)) {
-          callee_pending = true;
-        }
-      }
-    }
-  }
+        return editable_cfg_adapter::LOOP_CONTINUE;
+      });
   if (!callee_pending) {
     pending_methods.erase(method);
   }
@@ -428,37 +433,37 @@ cp::WholeProgramState analyze_and_simplify_clinits(
     auto clinit = cls->get_clinit();
     if (clinit != nullptr && clinit->get_code() != nullptr) {
       auto* code = clinit->get_code();
-      code->build_cfg(/* editable */ false);
-      auto& cfg = code->cfg();
-      cfg.calculate_exit_block();
-      cp::intraprocedural::FixpointIterator intra_cp(
-          cfg,
-          CombinedAnalyzer(cls->get_type(), &wps, nullptr, nullptr, nullptr));
-      intra_cp.run(env);
-      env = intra_cp.get_exit_state_at(cfg.exit_block());
+      {
+        cfg::ScopedCFG cfg(code);
+        cfg->calculate_exit_block();
+        cp::intraprocedural::FixpointIterator intra_cp(
+            *cfg,
+            CombinedAnalyzer(cls->get_type(), &wps, nullptr, nullptr, nullptr));
+        intra_cp.run(env);
+        env = intra_cp.get_exit_state_at(cfg->exit_block());
 
-      // Generate the new encoded_values and re-run the analysis.
-      StaticFieldReadAnalysis::Result res = analysis.analyze(clinit);
+        // Generate the new encoded_values and re-run the analysis.
+        StaticFieldReadAnalysis::Result res = analysis.analyze(clinit);
 
-      if (res.is_bottom() || res.is_top()) {
-        TRACE(FINALINLINE, 1, "Skipped encoding for class %s.", SHOW(cls));
-      } else {
-        encode_values(cls, env.get_field_environment(), res.elements(),
-                      xstores);
+        if (res.is_bottom() || res.is_top()) {
+          TRACE(FINALINLINE, 1, "Skipped encoding for class %s.", SHOW(cls));
+        } else {
+          encode_values(cls, env.get_field_environment(), res.elements(),
+                        xstores);
+        }
+        auto fresh_env = ConstantEnvironment();
+        cp::set_encoded_values(cls, &fresh_env);
+        intra_cp.run(fresh_env);
+
+        // Detect any field writes made redundant by the new encoded_values and
+        // remove those sputs.
+        cp::Transform::Config transform_config;
+        transform_config.class_under_init = cls->get_type();
+        cp::Transform(transform_config)
+            .apply_legacy(intra_cp, wps, *cfg, xstores, cls->get_type());
+        // Delete the instructions rendered dead by the removal of those sputs.
+        LocalDce(pure_methods).dce(*cfg);
       }
-      auto fresh_env = ConstantEnvironment();
-      cp::set_encoded_values(cls, &fresh_env);
-      intra_cp.run(fresh_env);
-
-      // Detect any field writes made redundant by the new encoded_values and
-      // remove those sputs.
-      cp::Transform::Config transform_config;
-      transform_config.class_under_init = cls->get_type();
-      cp::Transform(transform_config)
-          .apply_on_uneditable_cfg(intra_cp, wps, code, xstores,
-                                   cls->get_type());
-      // Delete the instructions rendered dead by the removal of those sputs.
-      LocalDce(pure_methods).dce(code);
       // If the clinit is empty now, delete it.
       if (method::is_trivial_clinit(*code)) {
         cls->remove_method(clinit);
@@ -501,21 +506,19 @@ cp::WholeProgramState analyze_and_simplify_inits(
       auto ctor = ctors[0];
       if (ctor->get_code() != nullptr) {
         auto* code = ctor->get_code();
-        code->build_cfg(/* editable */ false);
-        auto& cfg = code->cfg();
-        cfg.calculate_exit_block();
+        cfg::ScopedCFG cfg(code);
+        cfg->calculate_exit_block();
         cp::intraprocedural::FixpointIterator intra_cp(
-            cfg, CombinedInitAnalyzer(cls->get_type(), &wps, nullptr, nullptr,
-                                      nullptr));
+            *cfg, CombinedInitAnalyzer(cls->get_type(), &wps, nullptr, nullptr,
+                                       nullptr));
         intra_cp.run(env);
-        env = intra_cp.get_exit_state_at(cfg.exit_block());
+        env = intra_cp.get_exit_state_at(cfg->exit_block());
 
         // Remove redundant iputs in inits
         cp::Transform::Config transform_config;
         transform_config.class_under_init = cls->get_type();
         cp::Transform(transform_config)
-            .apply_on_uneditable_cfg(intra_cp, wps, code, xstores,
-                                     cls->get_type());
+            .apply_legacy(intra_cp, wps, *cfg, xstores, cls->get_type());
         // Delete the instructions rendered dead by the removal of those iputs.
         LocalDce(pure_methods).dce(code);
       }
@@ -551,7 +554,7 @@ class ThisObjectAnalysis final
         m_method(method),
         m_this_param_reg(this_param_reg) {}
   void analyze_node(const NodeId& node, ThisEnvironment* env) const override {
-    for (const auto& mie : InstructionIterable(*node)) {
+    for (auto& mie : InstructionIterable(*node)) {
       analyze_instruction(mie.insn, env);
     }
   }
@@ -694,63 +697,70 @@ bool get_ifields_read(
     }
     return false;
   }
-  for (auto& mie : InstructionIterable(method->get_code())) {
-    auto insn = mie.insn;
-    if (opcode::is_an_iget(insn->opcode())) {
-      // Meet accessing of a ifield in a method called from <init>, add
-      // to blocklist.
-      auto field = resolve_field(insn->get_field(), FieldSearch::Instance);
-      if (field != nullptr && field->get_class() == ifield_cls->get_type()) {
-        blocklist_ifields->emplace(field);
-      }
-    } else if (opcode::is_an_invoke(insn->opcode())) {
-      auto insn_method = insn->get_method();
-      auto callee = resolve_method(insn_method, opcode_to_search(insn), method);
-      if (insn->opcode() == OPCODE_INVOKE_DIRECT ||
-          insn->opcode() == OPCODE_INVOKE_STATIC) {
-        // For invoke on a direct/static method, if we can't resolve them or
-        // there is no code after resolved, those must be methods not
-        // not implemented by us, so they won't access our instance fields
-        // as well.
-        if (!callee || !callee->get_code()) {
-          continue;
-        }
-      } else {
-        bool no_current_type = true;
-        // No need to check on methods whose class/argumetns are not superclass
-        // or interface of ifield_cls.
-        if (callee != nullptr && !parent_intf_set.count(callee->get_class())) {
-          for (const auto& type :
-               callee->get_proto()->get_args()->get_type_list()) {
-            if (parent_intf_set.count(type)) {
+  bool res = true;
+  editable_cfg_adapter::iterate_with_iterator(
+      const_cast<IRCode*>(method->get_code()), [&](const IRList::iterator& it) {
+        auto insn = it->insn;
+        if (opcode::is_an_iget(insn->opcode())) {
+          // Meet accessing of a ifield in a method called from <init>, add
+          // to blocklist.
+          auto field = resolve_field(insn->get_field(), FieldSearch::Instance);
+          if (field != nullptr &&
+              field->get_class() == ifield_cls->get_type()) {
+            blocklist_ifields->emplace(field);
+          }
+        } else if (opcode::is_an_invoke(insn->opcode())) {
+          auto insn_method = insn->get_method();
+          auto callee =
+              resolve_method(insn_method, opcode_to_search(insn), method);
+          if (insn->opcode() == OPCODE_INVOKE_DIRECT ||
+              insn->opcode() == OPCODE_INVOKE_STATIC) {
+            // For invoke on a direct/static method, if we can't resolve them or
+            // there is no code after resolved, those must be methods not
+            // not implemented by us, so they won't access our instance fields
+            // as well.
+            if (!callee || !callee->get_code()) {
+              return editable_cfg_adapter::LOOP_CONTINUE;
+            }
+          } else {
+            bool no_current_type = true;
+            // No need to check on methods whose class/argumetns are not
+            // superclass or interface of ifield_cls.
+            if (callee != nullptr &&
+                !parent_intf_set.count(callee->get_class())) {
+              for (const auto& type :
+                   callee->get_proto()->get_args()->get_type_list()) {
+                if (parent_intf_set.count(type)) {
+                  no_current_type = false;
+                }
+              }
+            } else if (callee == nullptr &&
+                       !parent_intf_set.count(insn_method->get_class())) {
+              for (const auto& type :
+                   insn_method->get_proto()->get_args()->get_type_list()) {
+                if (parent_intf_set.count(type)) {
+                  no_current_type = false;
+                }
+              }
+            } else {
               no_current_type = false;
             }
-          }
-        } else if (callee == nullptr &&
-                   !parent_intf_set.count(insn_method->get_class())) {
-          for (const auto& type :
-               insn_method->get_proto()->get_args()->get_type_list()) {
-            if (parent_intf_set.count(type)) {
-              no_current_type = false;
+            if (no_current_type) {
+              return editable_cfg_adapter::LOOP_CONTINUE;
             }
           }
-        } else {
-          no_current_type = false;
+          // Recusive check every methods accessed from <init>.
+          bool keep_going =
+              get_ifields_read(allowlist_method_names, parent_intf_set,
+                               ifield_cls, callee, blocklist_ifields, visited);
+          if (!keep_going) {
+            res = false;
+            return editable_cfg_adapter::LOOP_BREAK;
+          }
         }
-        if (no_current_type) {
-          continue;
-        }
-      }
-      // Recusive check every methods accessed from <init>.
-      bool keep_going =
-          get_ifields_read(allowlist_method_names, parent_intf_set, ifield_cls,
-                           callee, blocklist_ifields, visited);
-      if (!keep_going) {
-        return false;
-      }
-    }
-  }
-  return true;
+        return editable_cfg_adapter::LOOP_CONTINUE;
+      });
+  return res;
 }
 
 /**
@@ -773,53 +783,70 @@ ConcurrentSet<DexField*> get_ifields_read_in_callees(
     const std::unordered_set<std::string>& allowlist_method_names) {
   ConcurrentSet<DexField*> return_ifields;
   TypeSystem ts(scope);
-  walk::parallel::classes(scope, [&return_ifields, &ts,
-                                  &allowlist_method_names](DexClass* cls) {
+  std::vector<DexClass*> relevant_classes;
+  for (auto cls : scope) {
     if (cls->is_external()) {
-      return;
+      continue;
     }
     auto ctors = cls->get_ctors();
     if (ctors.size() != 1 || cls->get_ifields().empty()) {
       // We are not inlining ifields in multi-ctors class so can also ignore
       // them here.
       // Also no need to proceed if there is no ifields for a class.
-      return;
+      continue;
     }
-    auto ctor = ctors[0];
+    auto ctor = ctors.front();
     auto code = ctor->get_code();
     if (code != nullptr) {
-      code->build_cfg(/* editable */ false);
-      auto& cfg = code->cfg();
-      cfg.calculate_exit_block();
-      check_this::ThisObjectAnalysis fixpoint(
-          &cfg, ctor, code->get_param_instructions().begin()->insn->dest());
-      fixpoint.run(check_this::ThisEnvironment());
-      // Only check on methods called with this object as arguments.
-      auto check_methods = fixpoint.collect_method_called_on_this();
-      if (!check_methods) {
-        // This object escaped to heap, blocklist all.
-        for (const auto& field : cls->get_ifields()) {
-          return_ifields.emplace(field);
+      relevant_classes.push_back(cls);
+    }
+  }
+  walk::parallel::classes(relevant_classes, [](DexClass* cls) {
+    auto ctor = cls->get_ctors().front();
+    auto code = ctor->get_code();
+    code->build_cfg(/* editable */ true);
+    code->cfg().calculate_exit_block();
+  });
+  walk::parallel::classes(
+      relevant_classes,
+      [&return_ifields, &ts, &allowlist_method_names](DexClass* cls) {
+        auto ctor = cls->get_ctors().front();
+        auto code = ctor->get_code();
+        always_assert(code != nullptr);
+        auto& cfg = code->cfg();
+        check_this::ThisObjectAnalysis fixpoint(
+            &cfg, ctor, cfg.get_param_instructions().begin()->insn->dest());
+        fixpoint.run(check_this::ThisEnvironment());
+        // Only check on methods called with this object as arguments.
+        auto check_methods = fixpoint.collect_method_called_on_this();
+        if (!check_methods) {
+          // This object escaped to heap, blocklist all.
+          for (const auto& field : cls->get_ifields()) {
+            return_ifields.emplace(field);
+          }
+          return;
         }
-        return;
-      }
-      if (!check_methods->empty()) {
-        std::unordered_set<const DexMethod*> visited;
-        const auto& parent_chain = ts.parent_chain(cls->get_type());
-        std::unordered_set<const DexType*> parent_intf_set{parent_chain.begin(),
-                                                           parent_chain.end()};
-        const auto& intf_set = ts.get_implemented_interfaces(cls->get_type());
-        parent_intf_set.insert(intf_set.begin(), intf_set.end());
-        for (const auto method : *check_methods) {
-          bool keep_going =
-              get_ifields_read(allowlist_method_names, parent_intf_set, cls,
-                               method, &return_ifields, &visited);
-          if (!keep_going) {
-            break;
+        if (!check_methods->empty()) {
+          std::unordered_set<const DexMethod*> visited;
+          const auto& parent_chain = ts.parent_chain(cls->get_type());
+          std::unordered_set<const DexType*> parent_intf_set{
+              parent_chain.begin(), parent_chain.end()};
+          const auto& intf_set = ts.get_implemented_interfaces(cls->get_type());
+          parent_intf_set.insert(intf_set.begin(), intf_set.end());
+          for (const auto method : *check_methods) {
+            bool keep_going =
+                get_ifields_read(allowlist_method_names, parent_intf_set, cls,
+                                 method, &return_ifields, &visited);
+            if (!keep_going) {
+              break;
+            }
           }
         }
-      }
-    }
+      });
+  walk::parallel::classes(relevant_classes, [](DexClass* cls) {
+    auto ctor = cls->get_ctors().front();
+    auto code = ctor->get_code();
+    code->clear_cfg();
   });
   return return_ifields;
 }
@@ -851,32 +878,37 @@ cp::EligibleIfields gather_ifield_candidates(
   walk::code(scope, [&](DexMethod* method, IRCode& code) {
     // Remove candidate field if it was written in code other than its class'
     // init function.
-    for (auto& mie : InstructionIterable(code)) {
-      auto insn = mie.insn;
-      auto op = insn->opcode();
-      if (opcode::is_an_iput(op)) {
-        auto field = resolve_field(insn->get_field(), FieldSearch::Instance);
-        if (field == nullptr || (method::is_init(method) &&
-                                 method->get_class() == field->get_class())) {
-          // If couldn't resolve the field, or this method is this field's
-          // class's init function, move on.
-          continue;
-        }
-        // We assert that final fields are not modified outside of <init>
-        // methods. javac seems to enforce this, but it's unclear if the JVM
-        // spec actually forbids that. Doing the check here simplifies the
-        // constant propagation analysis later -- we can determine the values
-        // of these fields without analyzing any methods invoked from the
-        // <init> methods.
-        always_assert_log(!is_final(field),
-                          "FinalInlinePassV2: encountered one final instance "
-                          "field been changed outside of its class's <init> "
-                          "file, for temporary solution set "
-                          "\"inline_instance_field\" in \"FinalInlinePassV2\" "
-                          "to be false.");
-        ifields_candidates.erase(field);
-      }
-    }
+    editable_cfg_adapter::iterate_with_iterator(
+        &code, [&](const IRList::iterator& it) {
+          auto insn = it->insn;
+          auto op = insn->opcode();
+          if (opcode::is_an_iput(op)) {
+            auto field =
+                resolve_field(insn->get_field(), FieldSearch::Instance);
+            if (field == nullptr ||
+                (method::is_init(method) &&
+                 method->get_class() == field->get_class())) {
+              // If couldn't resolve the field, or this method is this field's
+              // class's init function, move on.
+              return editable_cfg_adapter::LOOP_CONTINUE;
+            }
+            // We assert that final fields are not modified outside of <init>
+            // methods. javac seems to enforce this, but it's unclear if the JVM
+            // spec actually forbids that. Doing the check here simplifies the
+            // constant propagation analysis later -- we can determine the
+            // values of these fields without analyzing any methods invoked from
+            // the <init> methods.
+            always_assert_log(
+                !is_final(field),
+                "FinalInlinePassV2: encountered one final instance "
+                "field been changed outside of its class's <init> "
+                "file, for temporary solution set "
+                "\"inline_instance_field\" in \"FinalInlinePassV2\" "
+                "to be false.");
+            ifields_candidates.erase(field);
+          }
+          return editable_cfg_adapter::LOOP_CONTINUE;
+        });
   });
   for (DexField* field : ifields_candidates) {
     eligible_ifields.emplace(field);
@@ -916,32 +948,35 @@ size_t inline_final_gets(
     }
     std::vector<std::pair<IRInstruction*, std::vector<IRInstruction*>>>
         replacements;
-    for (auto& mie : InstructionIterable(code)) {
-      auto it = code.iterator_to(mie);
-      auto insn = mie.insn;
-      auto op = insn->opcode();
-      if (opcode::is_an_iget(op) || opcode::is_an_sget(op)) {
-        auto field = resolve_field(insn->get_field());
-        if (field == nullptr || blocklist_types.count(field->get_class())) {
-          continue;
-        }
-        if (field_type == cp::FieldType::INSTANCE && method::is_init(method) &&
-            method->get_class() == field->get_class()) {
-          // Don't propagate a field's value in ctors of its class with value
-          // after ctor finished.
-          continue;
-        }
-        auto replacement = ConstantValue::apply_visitor(
-            cp::value_to_instruction_visitor(ir_list::move_result_pseudo_of(it),
-                                             xstores,
-                                             method->get_class()),
-            wps.get_field_value(field));
-        if (replacement.empty()) {
-          continue;
-        }
-        replacements.emplace_back(insn, replacement);
-      }
-    }
+    editable_cfg_adapter::iterate_with_iterator(
+        &code, [&](const IRList::iterator& it) {
+          auto insn = it->insn;
+          auto op = insn->opcode();
+          if (opcode::is_an_iget(op) || opcode::is_an_sget(op)) {
+            auto field = resolve_field(insn->get_field());
+            if (field == nullptr || blocklist_types.count(field->get_class())) {
+              return editable_cfg_adapter::LOOP_CONTINUE;
+            }
+            if (field_type == cp::FieldType::INSTANCE &&
+                method::is_init(method) &&
+                method->get_class() == field->get_class()) {
+              // Don't propagate a field's value in ctors of its class with
+              // value after ctor finished.
+              return editable_cfg_adapter::LOOP_CONTINUE;
+            }
+            auto replacement = ConstantValue::apply_visitor(
+                cp::value_to_instruction_visitor(
+                    ir_list::move_result_pseudo_of(it),
+                    xstores,
+                    method->get_class()),
+                wps.get_field_value(field));
+            if (replacement.empty()) {
+              return editable_cfg_adapter::LOOP_CONTINUE;
+            }
+            replacements.emplace_back(insn, replacement);
+          }
+          return editable_cfg_adapter::LOOP_CONTINUE;
+        });
     for (auto const& p : replacements) {
       code.replace_opcode(p.first, p.second);
     }
