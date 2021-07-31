@@ -160,7 +160,8 @@ void Shrinker::shrink_method(DexMethod* method) {
           constant_propagation::ConstantPrimitiveAndBoxedAnalyzer(
               &m_immut_analyzer_state, &m_immut_analyzer_state,
               constant_propagation::EnumFieldAnalyzerState::get(),
-              constant_propagation::BoxedBooleanAnalyzerState::get(), nullptr));
+              constant_propagation::BoxedBooleanAnalyzerState::get(), nullptr),
+          /* imprecise_switches */ true);
       fp_iter.run({});
       constant_propagation::Transform::Config config;
       constant_propagation::Transform tf(config);
