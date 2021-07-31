@@ -460,7 +460,8 @@ cp::WholeProgramState analyze_and_simplify_clinits(
         cp::Transform::Config transform_config;
         transform_config.class_under_init = cls->get_type();
         cp::Transform(transform_config)
-            .apply_legacy(intra_cp, wps, *cfg, xstores, cls->get_type());
+            .legacy_apply_constants_and_prune_unreachable(
+                intra_cp, wps, *cfg, xstores, cls->get_type());
         // Delete the instructions rendered dead by the removal of those sputs.
         LocalDce(pure_methods).dce(*cfg);
       }
@@ -518,7 +519,8 @@ cp::WholeProgramState analyze_and_simplify_inits(
         cp::Transform::Config transform_config;
         transform_config.class_under_init = cls->get_type();
         cp::Transform(transform_config)
-            .apply_legacy(intra_cp, wps, *cfg, xstores, cls->get_type());
+            .legacy_apply_constants_and_prune_unreachable(
+                intra_cp, wps, *cfg, xstores, cls->get_type());
         // Delete the instructions rendered dead by the removal of those iputs.
         LocalDce(pure_methods).dce(code);
       }

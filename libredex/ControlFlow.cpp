@@ -881,8 +881,9 @@ void chain_consecutive_source_blocks(IRList& list) {
 
 } // namespace
 
-void ControlFlowGraph::simplify() {
-  auto registers_size_possibly_reduced = remove_unreachable_blocks().second;
+uint32_t ControlFlowGraph::simplify() {
+  auto [num_insns_removed, registers_size_possibly_reduced] =
+      remove_unreachable_blocks();
   if (registers_size_possibly_reduced) {
     recompute_registers_size();
   }
@@ -895,6 +896,8 @@ void ControlFlowGraph::simplify() {
   for (auto& p : m_blocks) {
     chain_consecutive_source_blocks(p.second->m_entries);
   }
+
+  return num_insns_removed;
 }
 
 // remove blocks with no predecessors

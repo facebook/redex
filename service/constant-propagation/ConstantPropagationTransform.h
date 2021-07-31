@@ -46,6 +46,7 @@ class Transform final {
     size_t throws{0};
     size_t null_checks{0};
     size_t null_checks_method_calls{0};
+    size_t unreachable_instructions_removed{0};
 
     Stats& operator+=(const Stats& that) {
       branches_removed += that.branches_removed;
@@ -55,6 +56,7 @@ class Transform final {
       throws += that.throws;
       null_checks += that.null_checks;
       null_checks_method_calls += that.null_checks_method_calls;
+      unreachable_instructions_removed += that.unreachable_instructions_removed;
       return *this;
     }
 
@@ -66,18 +68,32 @@ class Transform final {
         m_kotlin_null_check_assertions(
             kotlin_nullcheck_wrapper::get_kotlin_null_assertions()) {}
 
-  // Apply transformations on editable cfg
-  Stats apply_legacy(const intraprocedural::FixpointIterator&,
-                     const WholeProgramState&,
-                     cfg::ControlFlowGraph&,
-                     const XStoreRefs*,
-                     const DexType*);
+  // Apply all available transformations on editable cfg
+  // May run cfg.calculate_exit_block as a side-effect.
+  void apply(const intraprocedural::FixpointIterator& fp_iter,
+             const WholeProgramState& wps,
+             cfg::ControlFlowGraph& cfg,
+             const XStoreRefs* xstores,
+             DexMethod* method);
 
-  // Apply (new) transformations on editable cfg
-  Stats apply(const intraprocedural::FixpointIterator&,
-              cfg::ControlFlowGraph&,
-              DexMethod*,
-              const XStoreRefs*);
+  // Apply transformations on editable cfg; don't call directly, prefer calling
+  // `apply` instead.
+  void legacy_apply_constants_and_prune_unreachable(
+      const intraprocedural::FixpointIterator&,
+      const WholeProgramState&,
+      cfg::ControlFlowGraph&,
+      const XStoreRefs*,
+      const DexType*);
+
+  // Apply targets-forwarding transformations on editable cfg; don't call
+  // directly, prefer calling `apply` instead.
+  // Runs cfg.calculate_exit_block as a side-effect.
+  void legacy_apply_forward_targets(const intraprocedural::FixpointIterator&,
+                                    cfg::ControlFlowGraph&,
+                                    DexMethod*,
+                                    const XStoreRefs*);
+
+  const Stats& get_stats() const { return m_stats; }
 
  private:
   /*

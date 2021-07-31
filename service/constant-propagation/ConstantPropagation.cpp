@@ -32,19 +32,8 @@ Transform::Stats ConstantPropagation::run(DexMethod* method,
                                               ConstantPrimitiveAnalyzer());
     fp_iter.run({});
     constant_propagation::Transform tf(m_config.transform);
-    local_stats = tf.apply_legacy(
-        fp_iter, WholeProgramState(), *cfg, xstores, method->get_class());
-  }
-
-  if (xstores) {
-    cfg->calculate_exit_block();
-    {
-      intraprocedural::FixpointIterator fp_iter(code->cfg(),
-                                                ConstantPrimitiveAnalyzer());
-      fp_iter.run({});
-      constant_propagation::Transform tf(m_config.transform);
-      local_stats += tf.apply(fp_iter, code->cfg(), method, xstores);
-    }
+    tf.apply(fp_iter, WholeProgramState(), code->cfg(), xstores, method);
+    local_stats = tf.get_stats();
   }
   return local_stats;
 }

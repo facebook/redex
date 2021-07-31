@@ -202,11 +202,13 @@ void PassImpl::optimize(
           config.getter_methods_for_immutable_fields =
               &immut_analyzer_state->attribute_methods;
           Transform tf(config);
-          return tf.apply_legacy(*intra_cp,
-                                 fp_iter.get_whole_program_state(),
-                                 code.cfg(),
-                                 &xstores,
-                                 method->get_class());
+          tf.legacy_apply_constants_and_prune_unreachable(
+              *intra_cp,
+              fp_iter.get_whole_program_state(),
+              code.cfg(),
+              &xstores,
+              method->get_class());
+          return tf.get_stats();
         }
       });
 }

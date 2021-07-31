@@ -149,23 +149,9 @@ void Shrinker::shrink_method(DexMethod* method) {
       fp_iter.run({});
       constant_propagation::Transform::Config config;
       constant_propagation::Transform tf(config);
-      const_prop_stats =
-          tf.apply_legacy(fp_iter, constant_propagation::WholeProgramState(),
-                          code->cfg(), &m_xstores, method->get_class());
-    }
-    code->cfg().calculate_exit_block();
-    {
-      constant_propagation::intraprocedural::FixpointIterator fp_iter(
-          code->cfg(),
-          constant_propagation::ConstantPrimitiveAndBoxedAnalyzer(
-              &m_immut_analyzer_state, &m_immut_analyzer_state,
-              constant_propagation::EnumFieldAnalyzerState::get(),
-              constant_propagation::BoxedBooleanAnalyzerState::get(), nullptr),
-          /* imprecise_switches */ true);
-      fp_iter.run({});
-      constant_propagation::Transform::Config config;
-      constant_propagation::Transform tf(config);
-      const_prop_stats += tf.apply(fp_iter, code->cfg(), method, &m_xstores);
+      tf.apply(fp_iter, constant_propagation::WholeProgramState(), code->cfg(),
+               &m_xstores, method);
+      const_prop_stats = tf.get_stats();
     }
   }
 

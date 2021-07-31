@@ -19,16 +19,15 @@ inline void do_const_prop(
     const std::function<void(const IRInstruction*, ConstantEnvironment*)>&
         insn_analyzer = cp::ConstantPrimitiveAnalyzer(),
     const cp::Transform::Config& transform_config = cp::Transform::Config(),
-    bool not_legacy = false) {
+    bool forward_targets = false) {
   code->build_cfg(true);
-  code->cfg().calculate_exit_block();
   cp::intraprocedural::FixpointIterator intra_cp(code->cfg(), insn_analyzer);
   intra_cp.run(ConstantEnvironment());
   cp::Transform tf(transform_config);
-  if (not_legacy) {
-    tf.apply(intra_cp, code->cfg(), nullptr, nullptr);
+  if (forward_targets) {
+    tf.legacy_apply_forward_targets(intra_cp, code->cfg(), nullptr, nullptr);
   } else {
-    tf.apply_legacy(
+    tf.legacy_apply_constants_and_prune_unreachable(
         intra_cp, cp::WholeProgramState(), code->cfg(), nullptr, nullptr);
   }
   code->clear_cfg();

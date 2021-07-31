@@ -398,7 +398,25 @@ void Transform::apply_changes(cfg::ControlFlowGraph& cfg) {
   }
 }
 
-Transform::Stats Transform::apply_legacy(
+void Transform::apply(const intraprocedural::FixpointIterator& fp_iter,
+                      const WholeProgramState& wps,
+                      cfg::ControlFlowGraph& cfg,
+                      const XStoreRefs* xstores,
+                      DexMethod* method) {
+  legacy_apply_constants_and_prune_unreachable(fp_iter, wps, cfg, xstores,
+                                               method->get_class());
+  if (xstores) {
+    m_stats.unreachable_instructions_removed += cfg.simplify();
+    // legacy_apply_constants_and_prune_unreachable creates some new blocks that
+    // fp_iter isn't aware of. As turns out, legacy_apply_forward_targets
+    // doesn't care, and will still do the right thing.
+    legacy_apply_forward_targets(fp_iter, cfg, method, xstores);
+    m_stats.unreachable_instructions_removed +=
+        cfg.remove_unreachable_blocks().first;
+  }
+}
+
+void Transform::legacy_apply_constants_and_prune_unreachable(
     const intraprocedural::FixpointIterator& intra_cp,
     const WholeProgramState& wps,
     cfg::ControlFlowGraph& cfg,
@@ -431,7 +449,6 @@ Transform::Stats Transform::apply_legacy(
   }
   apply_changes(cfg);
   cfg.simplify();
-  return m_stats;
 }
 
 void Transform::forward_targets(
@@ -440,11 +457,7 @@ void Transform::forward_targets(
     cfg::ControlFlowGraph& cfg,
     cfg::Block* block,
     std::unique_ptr<LivenessFixpointIterator>& liveness_fixpoint_iter) {
-  if (env.is_bottom()) {
-    // we found an unreachable block; ignore it
-    return;
-  }
-
+  always_assert(!env.is_bottom());
   // normal edges are of type goto or branch, not throw or ghost
   auto is_normal = [](const cfg::Edge* e) {
     return e->type() == cfg::EDGE_GOTO || e->type() == cfg::EDGE_BRANCH;
@@ -692,11 +705,13 @@ bool Transform::has_problematic_return(cfg::ControlFlowGraph& cfg,
   return false;
 }
 
-Transform::Stats Transform::apply(
+void Transform::legacy_apply_forward_targets(
     const intraprocedural::FixpointIterator& intra_cp,
     cfg::ControlFlowGraph& cfg,
     DexMethod* method,
     const XStoreRefs* xstores) {
+  cfg.calculate_exit_block();
+
   // The following is an attempt to avoid creating a control-flow structure that
   // triggers the Android bug described in T55782799, related to a return
   // statement in a try region when a type is unavailable/external, possibly
@@ -704,15 +719,21 @@ Transform::Stats Transform::apply(
   // Besides that Android bug, it really shouldn't be necessary to do anything
   // special about unavailable types or cross-store references here.
   if (has_problematic_return(cfg, method, xstores)) {
-    return m_stats;
+    return;
   }
 
+  // Note that the given intra_cp might not be aware of all blocks that exist in
+  // the cfg.
   std::unique_ptr<LivenessFixpointIterator> liveness_fixpoint_iter;
   for (auto block : cfg.blocks()) {
     auto env = intra_cp.get_exit_state_at(block);
+    if (env.is_bottom()) {
+      // We found an unreachable block, or one that was added the cfg after
+      // intra_cp has run; just ignore it.
+      continue;
+    }
     forward_targets(intra_cp, env, cfg, block, liveness_fixpoint_iter);
   }
-  return m_stats;
 }
 
 void Transform::Stats::log_metrics(ScopedMetrics& sm, bool with_scope) const {
@@ -724,6 +745,8 @@ void Transform::Stats::log_metrics(ScopedMetrics& sm, bool with_scope) const {
   sm.set_metric("throws", throws);
   sm.set_metric("null_checks", null_checks);
   sm.set_metric("null_checks_method_calls", null_checks_method_calls);
+  sm.set_metric("unreachable_instructions_removed",
+                unreachable_instructions_removed);
   TRACE(CONSTP, 3, "Null checks removed: %zu(%zu)", null_checks,
         null_checks_method_calls);
   sm.set_metric("added_param_const", added_param_const);

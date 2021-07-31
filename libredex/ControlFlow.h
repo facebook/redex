@@ -815,7 +815,8 @@ class ControlFlowGraph {
 
   // transform the CFG to an equivalent but more canonical state
   // Assumes m_editable is true
-  void simplify();
+  // returns the number of instructions removed
+  uint32_t simplify();
 
   // SIGABORT if the internal state of the CFG is invalid
   void sanity_check() const;
