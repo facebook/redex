@@ -1152,7 +1152,8 @@ FixpointIterator::FixpointIterator(
     InstructionAnalyzer<ConstantEnvironment> insn_analyzer)
     : MonotonicFixpointIterator(cfg),
       m_insn_analyzer(std::move(insn_analyzer)),
-      m_kotlin_null_check_assertions(get_kotlin_null_assertions()) {}
+      m_kotlin_null_check_assertions(get_kotlin_null_assertions()),
+      m_editable_cfg(cfg.editable()) {}
 
 void FixpointIterator::analyze_instruction(const IRInstruction* insn,
                                            ConstantEnvironment* env,
@@ -1316,15 +1317,24 @@ ConstantEnvironment FixpointIterator::analyze_edge(
     analyze_if(insn, &env, edge->type() == cfg::EDGE_BRANCH);
   } else if (opcode::is_switch(op)) {
     auto selector_val = env.get(insn->src(0));
-    const auto& case_key = edge->case_key();
+    cfg::Edge::MaybeCaseKey case_key = edge->case_key();
+    if (!m_editable_cfg) {
+      // TODO: Use available case_key in non-editable cfg.
+      case_key = boost::none;
+    }
     if (case_key) {
+      always_assert(edge->type() == cfg::EDGE_BRANCH);
       env.set(insn->src(0), selector_val.meet(SignedConstantDomain(*case_key)));
-    } else if (edge->type() == cfg::EDGE_GOTO) {
+    } else {
       // We are looking at the fallthrough case. Set env to bottom in case there
       // is a non-fallthrough edge with a case-key that is equal to the actual
       // selector value.
       for (auto succ : edge->src()->succs()) {
-        const auto& succ_case_key = succ->case_key();
+        cfg::Edge::MaybeCaseKey succ_case_key = succ->case_key();
+        if (!m_editable_cfg) {
+          // TODO: Use available case_key in non-editable cfg.
+          succ_case_key = boost::none;
+        }
         if (succ_case_key && ConstantValue::apply_visitor(
                                  runtime_equals_visitor(), selector_val,
                                  SignedConstantDomain(*succ_case_key))) {

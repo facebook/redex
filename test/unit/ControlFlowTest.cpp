@@ -2562,3 +2562,43 @@ OPCODE: ADD_INT_LIT8 v0, v0, 1
 OPCODE: GOTO
 )");
 }
+
+TEST_F(ControlFlowTest, non_editable_cfg_case_keys) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (switch v0 (:a :b))
+
+      (:exit)
+      (return-void)
+
+      (:a 0)
+      (const v0 0)
+      (goto :exit)
+
+      (:b 1)
+      (const v1 1)
+      (goto :exit)
+    )
+)");
+
+  code->build_cfg(/* editable */ false);
+  auto& cfg = code->cfg();
+  std::vector<int32_t> case_keys;
+  auto switch_block = cfg.entry_block();
+  auto switch_insn = switch_block->get_first_insn();
+  EXPECT_NE(switch_insn, switch_block->end());
+  EXPECT_EQ(switch_insn->insn->opcode(), OPCODE_SWITCH);
+  for (auto edge : switch_block->succs()) {
+    if (edge->type() == cfg::EDGE_GOTO) {
+      continue;
+    }
+    EXPECT_EQ((uint8_t)edge->type(), (uint8_t)cfg::EDGE_BRANCH);
+    EXPECT_TRUE(edge->case_key());
+    case_keys.push_back(*edge->case_key());
+  }
+  code->clear_cfg();
+  EXPECT_EQ(case_keys.size(), 2);
+  std::sort(case_keys.begin(), case_keys.end());
+  EXPECT_EQ(case_keys.at(0), 0);
+  EXPECT_EQ(case_keys.at(1), 1);
+}

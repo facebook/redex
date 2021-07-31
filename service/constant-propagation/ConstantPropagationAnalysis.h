@@ -55,6 +55,7 @@ class FixpointIterator final
  private:
   InstructionAnalyzer<ConstantEnvironment> m_insn_analyzer;
   const std::unordered_set<DexMethodRef*>& m_kotlin_null_check_assertions;
+  const bool m_editable_cfg;
 };
 
 } // namespace intraprocedural

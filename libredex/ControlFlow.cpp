@@ -460,32 +460,6 @@ std::vector<Edge*> Block::get_outgoing_throws_in_order() const {
   return result;
 }
 
-// We remove the first matching target because multiple switch cases can point
-// to the same block. We use this function to move information from the target
-// entries to the CFG edges. The two edges are identical, save the case key, so
-// it doesn't matter which target is taken. We arbitrarily choose to process the
-// targets in forward order.
-boost::optional<Edge::CaseKey> Block::remove_first_matching_target(
-    MethodItemEntry* branch) {
-  for (auto it = m_entries.begin(); it != m_entries.end(); ++it) {
-    auto& mie = *it;
-    if (mie.type == MFLOW_TARGET && mie.target->src == branch) {
-      boost::optional<Edge::CaseKey> result;
-      if (mie.target->type == BRANCH_MULTI) {
-        always_assert_log(opcode::is_switch(branch->insn->opcode()),
-                          "block %zu in %s\n", id(), SHOW(*m_parent));
-        result = mie.target->case_key;
-      }
-      m_entries.erase_and_dispose(it);
-      return result;
-    }
-  }
-  not_reached_log("block %zu has no targets matching %s:\n%s",
-                  id(),
-                  SHOW(branch->insn),
-                  SHOW(&m_entries));
-}
-
 // These assume that the iterator is inside this block
 cfg::InstructionIterator Block::to_cfg_instruction_iterator(
     const ir_list::InstructionIterator& list_it) {
@@ -663,7 +637,7 @@ void ControlFlowGraph::find_block_boundaries(IRList* ir,
     } else if (it->type == MFLOW_CATCH) {
       try_catches[it->centry] = block;
     } else if (it->type == MFLOW_TARGET) {
-      branch_to_targets[it->target->src].push_back(block);
+      branch_to_targets[it->target->src].emplace_back(block, &*it);
     } else if (it->type == MFLOW_POSITION) {
       current_position = it->pos.get();
     }
@@ -729,16 +703,30 @@ void ControlFlowGraph::connect_blocks(BranchToTargets& branch_to_targets) {
         fallthrough = !opcode::is_goto(last_op);
         auto const& target_blocks = branch_to_targets[&last_mie];
 
-        for (auto target_block : target_blocks) {
+        for (auto& p : target_blocks) {
+          auto target_block = p.first;
+          auto& target_mie = *p.second;
+          always_assert(target_mie.type == MFLOW_TARGET);
+          always_assert(target_mie.target->src == &last_mie);
+          Edge::MaybeCaseKey case_key;
+          if (target_mie.target->type == BRANCH_MULTI) {
+            always_assert_log(opcode::is_switch(last_mie.insn->opcode()),
+                              "block %zu in %s\n", target_block->id(),
+                              SHOW(*this));
+            case_key = target_mie.target->case_key;
+          } else {
+            always_assert(target_mie.target->type == BRANCH_SIMPLE);
+          }
           if (m_editable) {
             // The the branch information is stored in the edges, we don't need
             // the targets inside the blocks anymore
-            auto case_key =
-                target_block->remove_first_matching_target(&last_mie);
-            if (case_key != boost::none) {
-              add_edge(b, target_block, *case_key);
-              continue;
-            }
+            target_block->m_entries.erase_and_dispose(
+                target_block->m_entries.iterator_to(target_mie));
+          }
+
+          if (case_key) {
+            add_edge(b, target_block, *case_key);
+            continue;
           }
           auto edge_type = opcode::is_goto(last_op) ? EDGE_GOTO : EDGE_BRANCH;
           add_edge(b, target_block, edge_type);

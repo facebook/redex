@@ -344,11 +344,6 @@ class Block final {
   // TODO?: Should we just always store the throws in index order?
   std::vector<Edge*> get_outgoing_throws_in_order() const;
 
-  // Remove the first target in this block that corresponds to `branch`.
-  // Returns a not-none CaseKey for multi targets, boost::none otherwise.
-  boost::optional<Edge::CaseKey> remove_first_matching_target(
-      MethodItemEntry* branch);
-
   // These assume that the iterator is inside this block
   InstructionIterator to_cfg_instruction_iterator(
       const ir_list::InstructionIterator& list_it);
@@ -891,7 +886,8 @@ class ControlFlowGraph {
 
  private:
   using BranchToTargets =
-      std::unordered_map<MethodItemEntry*, std::vector<Block*>>;
+      std::unordered_map<MethodItemEntry*,
+                         std::vector<std::pair<Block*, MethodItemEntry*>>>;
   using TryEnds = std::vector<std::pair<TryEntry*, Block*>>;
   using TryCatches = std::unordered_map<CatchEntry*, Block*>;
   using Blocks = std::map<BlockId, Block*>;
