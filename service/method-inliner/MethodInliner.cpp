@@ -727,13 +727,15 @@ void run_inliner(DexStoresVector& stores,
   if (intra_dex) {
     mgr.incr_metric("x-dex-callees", inliner.get_x_dex_callees());
   }
-  mgr.incr_metric("instructions_eliminated_const_prop",
-                  shrinker.get_const_prop_stats().branches_removed +
-                      shrinker.get_const_prop_stats().branches_forwarded +
-                      shrinker.get_const_prop_stats().materialized_consts +
-                      shrinker.get_const_prop_stats().added_param_const +
-                      shrinker.get_const_prop_stats().throws +
-                      shrinker.get_const_prop_stats().null_checks);
+  mgr.incr_metric(
+      "instructions_eliminated_const_prop",
+      shrinker.get_const_prop_stats().branches_removed +
+          shrinker.get_const_prop_stats().unreachable_instructions_removed +
+          shrinker.get_const_prop_stats().branches_forwarded +
+          shrinker.get_const_prop_stats().materialized_consts +
+          shrinker.get_const_prop_stats().added_param_const +
+          shrinker.get_const_prop_stats().throws +
+          shrinker.get_const_prop_stats().null_checks);
   {
     ScopedMetrics sm(mgr);
     auto sm_scope = sm.scope("inliner");
