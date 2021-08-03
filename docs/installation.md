@@ -19,10 +19,11 @@ Install dependencies using homebrew:
 brew install autoconf automake libtool python3
 brew install boost jsoncpp
 ```
+For App Bundle support `brew install protobuf` is also required.
 
 ### Ubuntu/Debian (64-bit)
 Base requirements are automake & libtool, GCC >= 7, Python >= 3.6 and Boost >= 1.71.0, as well as
-development versions of `iberty`, `jemalloc`, `jsoncpp`, `lz4`, `lzma`, and `zlib`.
+development versions of `iberty`, `jemalloc`, `jsoncpp`, `lz4`, `lzma`, and `zlib`. `Protobuf` >= 3.0 is required if optimizing an App Bundle.
 #### Ubuntu 18.04+, Debian 10(Buster)+
 The minimum supported Ubuntu version is 18.04. The minimum supported Debian version is 10.
 
@@ -32,6 +33,7 @@ on older OS versions.
 ```
 sudo ./setup_oss_toolchain.sh
 ```
+After the script, please run `sudo ldconfig` if it throws an error about loading shared libraries for running protoc.
 
 ### Experimental: Windows (64-bit) with MSYS2
 
@@ -79,6 +81,22 @@ Now, build ReDex using autoconf and make.
 autoreconf -ivf && ./configure && make
 sudo make install
 ```
+
+Alternatively, to enable protobuf to support App Bundles, please use:
+```
+autoreconf -ivf && ./configure --enable-protobuf
+make
+sudo make install
+```
+
+For protobuf installed in the default system (Homebrew) search path (e.g /usr/local/bin), `--enable-protobuf` is sufficient to trigger the build. Otherwise, specify the protobuf installation path for the autoconf:
+```
+autoreconf -ivf
+./configure --with-protoc=/path/to/protoc --with-protolib=/path/to/protobuf_libs --with-protoheader=/path/to/protobuf_headers --enable-protobuf
+make
+sudo make install
+```
+
 *If your build machine has lots of RAM (on the order of 2-4GB per core), using
 Make parallelism can speed up the build (e.g., `make -j4`). However, the C++
 compilers are very memory hungry and this needs to be finely tuned on many
