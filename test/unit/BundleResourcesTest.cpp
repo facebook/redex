@@ -131,6 +131,16 @@ TEST(BundleResources, TestReadManifestClasses) {
   });
 }
 
+// Test collecting resource ids from xml attributes.
+TEST(BundleResources, TestCollectRidsFromXmlAttrs) {
+  setup_resources_and_run(
+      [&](const std::string& path, BundleResources* resources) {
+        auto rids = resources->get_xml_reference_attributes(
+            path + "/base/manifest/AndroidManifest.xml");
+        EXPECT_EQ(rids.size(), 2);
+      });
+}
+
 TEST(BundleResources, ReadLayout) {
   setup_resources_and_run(
       [&](const std::string& extract_dir, BundleResources* resources) {

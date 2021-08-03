@@ -78,14 +78,19 @@ class ApkResources : public AndroidResources {
       : AndroidResources(directory),
         m_manifest(directory + "/AndroidManifest.xml") {}
   ~ApkResources() override;
+
   boost::optional<int32_t> get_min_sdk() override;
   ManifestClassInfo get_manifest_class_info() override;
+  std::unordered_set<uint32_t> get_xml_reference_attributes(
+      const std::string& filename) override;
+
   void collect_layout_classes_and_attributes_for_file(
       const std::string& file_path,
       const std::unordered_set<std::string>& attributes_to_read,
       std::unordered_set<std::string>* out_classes,
       std::unordered_multimap<std::string, std::string>* out_attributes)
       override;
+
   // Given the bytes of a binary XML file, replace the entries (if any) in the
   // ResStringPool. Writes result to the given Vector output param.
   // Returns android::NO_ERROR (0) on success, or one of the corresponding

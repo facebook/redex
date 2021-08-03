@@ -26,6 +26,8 @@
 
 const char* const ONCLICK_ATTRIBUTE = "android:onClick";
 
+const uint32_t PACKAGE_RESID_START = 0x7f000000;
+
 /*
  * These are all the components which may contain references to Java classes in
  * their attributes.
@@ -115,7 +117,14 @@ class ResourceTableFile {
 class AndroidResources {
  public:
   virtual boost::optional<int32_t> get_min_sdk() = 0;
+
   virtual ManifestClassInfo get_manifest_class_info() = 0;
+
+  // Given the xml file name, return the list of resource ids referred in xml
+  // attributes.
+  virtual std::unordered_set<uint32_t> get_xml_reference_attributes(
+      const std::string& filename) = 0;
+
   // Rewrites all tag names/attribute values that are in the given map, for
   // every non-raw XML file in the directory.
   void rename_classes_in_layouts(

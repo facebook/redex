@@ -59,6 +59,8 @@ class BundleResources : public AndroidResources {
   ~BundleResources() override;
   boost::optional<int32_t> get_min_sdk() override;
   ManifestClassInfo get_manifest_class_info() override;
+  std::unordered_set<uint32_t> get_xml_reference_attributes(
+      const std::string& filename) override;
   void collect_layout_classes_and_attributes_for_file(
       const std::string& file_path,
       const std::unordered_set<std::string>& attributes_to_read,

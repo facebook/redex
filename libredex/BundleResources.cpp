@@ -333,10 +333,11 @@ namespace {
 void apply_rename_map(const std::map<std::string, std::string>& rename_map,
                       aapt::pb::XmlNode* node,
                       size_t* out_num_renamed) {
-  // NOTE: The implementation that follows is not at all similar to ApkResources
-  // though this is likely sufficient. ApkResources, when renaming will simply
-  // iterate through a string pool, picking up anything wherever it might be in
-  // the document. This is simply checking tag names, attribute values and text.
+  // NOTE: The implementation that follows is not at all similar to
+  // ApkResources though this is likely sufficient. ApkResources, when
+  // renaming will simply iterate through a string pool, picking up anything
+  // wherever it might be in the document. This is simply checking tag
+  // names, attribute values and text.
   if (node->has_element()) {
     auto element = node->mutable_element();
     {
@@ -432,6 +433,24 @@ const std::vector<std::string> CLASS_XML_ATTRIBUTES = {
     "targetClass",
 };
 
+// Collect all resource ids referred in an given xml element.
+// attr->compiled_item->ref->id
+void collect_rids_for_element(const aapt::pb::XmlElement& element,
+                              std::unordered_set<uint32_t>& result) {
+  for (const aapt::pb::XmlAttribute& pb_attr : element.attribute()) {
+    if (!pb_attr.has_compiled_item()) {
+      continue;
+    }
+    const auto& pb_item = pb_attr.compiled_item();
+    if (pb_item.has_ref()) {
+      auto rid = pb_item.ref().id();
+      if (rid > PACKAGE_RESID_START) {
+        result.emplace(rid);
+      }
+    }
+  }
+}
+
 void collect_layout_classes_and_attributes_for_element(
     const aapt::pb::XmlElement& element,
     const std::unordered_map<std::string, std::string>& ns_uri_to_prefix,
@@ -453,7 +472,8 @@ void collect_layout_classes_and_attributes_for_element(
       }
     }
   } else if (element_name.find('.') != std::string::npos) {
-    // Consider the element name itself as a possible class in the application
+    // Consider the element name itself as a possible class in the
+    // application
     auto internal = java_names::external_to_internal(element_name);
     TRACE(RES, 9, "Considering %s as possible class in XML resource",
           internal.c_str());
@@ -586,7 +606,8 @@ void remove_or_change_resource_ids(
     if (old_to_new.count(res_id)) {
       uint32_t new_res_id = old_to_new.at(res_id);
       uint32_t new_entry_id = ENTRY_MASK_BIT & new_res_id;
-      always_assert_log(copy_entry->has_entry_id(), "Entry don't have id %s",
+      always_assert_log(copy_entry->has_entry_id(),
+                        "Entry don't have id %s",
                         copy_entry->DebugString().c_str());
       auto entry_id = copy_entry->mutable_entry_id();
       entry_id->set_id(new_entry_id);
@@ -737,6 +758,32 @@ std::unordered_set<std::string> BundleResources::find_all_xml_files() {
   return all_xml_files;
 }
 
+std::unordered_set<uint32_t> BundleResources::get_xml_reference_attributes(
+    const std::string& filename) {
+  std::unordered_set<uint32_t> result;
+  if (is_raw_resource(filename)) {
+    return result;
+  }
+
+  read_protobuf_file_contents(
+      filename,
+      [&](google::protobuf::io::CodedInputStream& input, size_t size) {
+        aapt::pb::XmlNode pb_node;
+        bool read_finish = pb_node.ParseFromCodedStream(&input);
+        always_assert_log(read_finish, "BundleResource failed to read %s",
+                          filename.c_str());
+        if (pb_node.has_element()) {
+          const auto& start = pb_node.element();
+          traverse_element_and_children(
+              start, [&](const aapt::pb::XmlElement& element) {
+                collect_rids_for_element(element, result);
+                return true;
+              });
+        }
+      });
+  return result;
+}
+
 void ResourcesPbFile::remap_res_ids_and_serialize(
     const std::vector<std::string>& resource_files,
     const std::map<uint32_t, uint32_t>& old_to_new) {
@@ -751,7 +798,8 @@ void ResourcesPbFile::remap_res_ids_and_serialize(
             size_t /* unused */) {
           aapt::pb::ResourceTable pb_restable;
           bool read_finish = pb_restable.ParseFromCodedStream(&input);
-          always_assert_log(read_finish, "BundleResoource failed to read %s",
+          always_assert_log(read_finish,
+                            "BundleResoource failed to read %s",
                             resources_pb_path.c_str());
           int package_size = pb_restable.package_size();
           for (int i = 0; i < package_size; i++) {
@@ -888,9 +936,10 @@ bool ResourcesPbFile::resource_value_identical(uint32_t a_id, uint32_t b_id) {
   if (config_values_a.size() != config_values_b.size()) {
     return false;
   }
-  // For ResTable in arsc there seems to be assumption that configuration will
-  // be in same order for list of configvalues. https://fburl.com/code/optgs5k3
-  // Not sure if this will hold for protobuf representation as well.
+  // For ResTable in arsc there seems to be assumption that configuration
+  // will be in same order for list of configvalues.
+  // https://fburl.com/code/optgs5k3 Not sure if this will hold for protobuf
+  // representation as well.
   for (int i = 0; i < config_values_a.size(); ++i) {
     const auto& config_value_a = config_values_a[i];
     const auto& config_value_b = config_values_b[i];
