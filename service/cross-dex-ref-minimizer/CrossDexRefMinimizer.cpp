@@ -334,7 +334,7 @@ DexClass* CrossDexRefMinimizer::worst() {
   return cls;
 }
 
-void CrossDexRefMinimizer::erase(DexClass* cls, bool emitted, bool reset) {
+size_t CrossDexRefMinimizer::erase(DexClass* cls, bool emitted, bool reset) {
   m_prioritized_classes.erase(cls);
   auto class_info_it = m_class_infos.find(cls);
   always_assert(class_info_it != m_class_infos.end());
@@ -418,6 +418,7 @@ void CrossDexRefMinimizer::erase(DexClass* cls, bool emitted, bool reset) {
           m_applied_refs.size());
   }
   reprioritize(affected_classes);
+  return m_applied_refs.size() - old_applied_refs;
 }
 
 size_t CrossDexRefMinimizer::get_unapplied_refs(DexClass* cls) {

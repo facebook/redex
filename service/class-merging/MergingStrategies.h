@@ -7,14 +7,12 @@
 
 #pragma once
 
-#include <set>
-#include <vector>
-
 #include <boost/optional.hpp>
 
 #include "ClassHierarchy.h"
 #include "CrossDexRefMinimizer.h"
 #include "NormalizeConstructor.h"
+#include "Show.h"
 #include "Trace.h"
 
 class DexType;
@@ -106,6 +104,32 @@ void group_by_code_size(const TypeSet& mergeable_types, WalkerFn walker) {
   }
 }
 
+struct GroupStats {
+  size_t cls_count{0};
+  size_t ref_count{0};
+  size_t estimated_code_size{0};
+  std::map<size_t, size_t> refs_stats{};
+
+  void count(size_t cls_ref, size_t code_size) {
+    if (!traceEnabled(CLMG, 5)) {
+      return;
+    }
+    cls_count++;
+    ref_count += cls_ref;
+    estimated_code_size += code_size;
+    refs_stats[cls_ref]++;
+  }
+
+  void reset() {
+    cls_count = 0;
+    ref_count = 0;
+    estimated_code_size = 0;
+    refs_stats.clear();
+  }
+};
+
+void trace_refs_stats(const GroupStats& group_stats);
+
 template <typename WalkerFn>
 void group_by_refs(const TypeSet& mergeable_types, WalkerFn walker) {
   constexpr size_t max_instruction_size = 1 << 15;
@@ -113,6 +137,7 @@ void group_by_refs(const TypeSet& mergeable_types, WalkerFn walker) {
   // of non-trivial references (fields, methods, etc.) a group can have before
   // being closed.
   constexpr size_t max_applied_refs = 75;
+  constexpr size_t max_refs_per_cls = 50;
 
   std::vector<const DexType*> current_group;
 
@@ -124,37 +149,57 @@ void group_by_refs(const TypeSet& mergeable_types, WalkerFn walker) {
     cross_dex_ref_minimizer.insert(type_class(type));
   }
   size_t estimated_merged_code_size = 0;
+  size_t current_cls_refs = 0;
+  GroupStats group_stats;
   while (!cross_dex_ref_minimizer.empty()) {
-    auto cls = current_group.empty() ? cross_dex_ref_minimizer.worst()
-                                     : cross_dex_ref_minimizer.front();
+    auto curr_cls = current_group.empty() ? cross_dex_ref_minimizer.worst()
+                                          : cross_dex_ref_minimizer.front();
     // Only check the code size of vmethods because these vmethods will be
     // merged into a large dispatch, dmethods will be relocated.
-    auto vmethod_code_size = estimate_vmethods_code_size(cls);
-    if (vmethod_code_size > max_instruction_size) {
+    auto vmethod_code_size = estimate_vmethods_code_size(curr_cls);
+    auto unapplied_refs_cls =
+        cross_dex_ref_minimizer.get_unapplied_refs(curr_cls);
+    if (vmethod_code_size > max_instruction_size ||
+        unapplied_refs_cls >= max_refs_per_cls) {
       // This class will never make it into any group; skip it
-      cross_dex_ref_minimizer.erase(cls, /* emitted */ false,
+      cross_dex_ref_minimizer.erase(curr_cls, /* emitted */ false,
                                     /* reset */ false);
       continue;
     }
     bool reset = false;
+    // If the total code size or total ref count is going to exceed the limit by
+    // including the current class, we emit the current group. We also push the
+    // current class to the next group.
     if (estimated_merged_code_size + vmethod_code_size > max_instruction_size ||
-        cross_dex_ref_minimizer.get_applied_refs() > max_applied_refs) {
-      TRACE(CLMG, 9, "\tgroup_by_refs %zu classes", current_group.size());
+        cross_dex_ref_minimizer.get_applied_refs() + unapplied_refs_cls >
+            max_applied_refs) {
       if (current_group.size() > 1) {
         walker(current_group);
+        TRACE(CLMG, 9, "\tgroup_by_refs %zu classes", current_group.size());
+        trace_refs_stats(group_stats);
+        group_stats.reset();
       }
       current_group.clear();
       estimated_merged_code_size = 0;
       reset = true;
     }
-    current_group.push_back(cls->get_type());
+    current_group.push_back(curr_cls->get_type());
     estimated_merged_code_size += vmethod_code_size;
-    cross_dex_ref_minimizer.erase(cls, /* emitted */ true, reset);
+    current_cls_refs =
+        cross_dex_ref_minimizer.erase(curr_cls, /* emitted */ true, reset);
+    TRACE(CLMG, 5, " curr cls refs %zu %s", current_cls_refs, SHOW(curr_cls));
+    group_stats.count(current_cls_refs, vmethod_code_size);
   }
-  if (current_group.size() > 1) {
+  // Emit what is left in the current group if more than one class, total code
+  // size is within limit and total ref count is within limit.
+  if (current_group.size() > 1 &&
+      estimated_merged_code_size <= max_instruction_size &&
+      cross_dex_ref_minimizer.get_applied_refs() <= max_applied_refs) {
+    walker(current_group);
     TRACE(CLMG, 9, "\tgroup_by_refs %zu classes at the end",
           current_group.size());
-    walker(current_group);
+    trace_refs_stats(group_stats);
+    group_stats.reset();
   }
 }
 
