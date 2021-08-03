@@ -136,7 +136,7 @@ void group_by_refs(const TypeSet& mergeable_types, WalkerFn walker) {
   // TODO: Consider making this configurable. It represents the maximum number
   // of non-trivial references (fields, methods, etc.) a group can have before
   // being closed.
-  constexpr size_t max_applied_refs = 75;
+  constexpr size_t max_applied_refs = 100;
   constexpr size_t max_refs_per_cls = 50;
 
   std::vector<const DexType*> current_group;
