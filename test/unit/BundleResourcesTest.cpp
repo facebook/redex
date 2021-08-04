@@ -137,7 +137,8 @@ TEST(BundleResources, TestCollectRidsFromXmlAttrs) {
       [&](const std::string& path, BundleResources* resources) {
         auto rids = resources->get_xml_reference_attributes(
             path + "/base/manifest/AndroidManifest.xml");
-        EXPECT_EQ(rids.size(), 2);
+        // @string/app_name, @drawable/icon and @style/ThemeA
+        EXPECT_EQ(rids.size(), 3);
       });
 }
 
