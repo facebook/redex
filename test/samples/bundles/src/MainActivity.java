@@ -7,11 +7,6 @@
 
 package com.fb.bundles;
 
-import static java.util.Locale.ENGLISH;
-
-import android.content.Intent;
-import android.content.res.Resources;
-import android.widget.TextView;
 import com.facebook.R;
 
 import android.app.Activity;
@@ -24,29 +19,10 @@ public class MainActivity extends Activity {
   protected void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
     setContentView(R.layout.activity_main);
-    TextView view = (TextView) findViewById(R.id.welcome_view);
-    String textColor = String.format(ENGLISH, "%06X", (0xFFFFFF & view.getCurrentTextColor()));
-    if (!"8A9E46".equals(textColor)) {
-      throw new AssertionError("Unexpected value: " + textColor);
-    }
-    Resources resources = getResources();
-    String[] fruits = resources.getStringArray(R.array.some_fruits);
-    if (fruits == null || fruits.length != 3) {
-      throw new AssertionError("Not enough fruit");
-    }
-    for (String fruit : fruits) {
-      android.util.Log.w("BNDL", fruit);
-    }
-    String sentence = resources.getQuantityString(R.plurals.a_sentence_with_geese, fruits.length);
-    if (!sentence.contains("geese")) {
-      throw new AssertionError("Unexpected value: " + sentence);
-    }
-    android.util.Log.w("BNDL", sentence);
   }
 
   public void performFoo(View v) {
     android.util.Log.w("BNDL", "performFoo!!");
-    startActivity(new Intent(this, com.fb.bundles.ThemeActivity.class));
   }
 
   public void performBar(View v) {

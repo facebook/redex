@@ -1,21 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout
-    xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:custom="http://schemas.android.com/apk/res/com.fb.bundles"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:background="@color/bg_grey"
     >
     <TextView
-        android:id="@+id/welcome_view"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="@dimen/margin_top"
         android:paddingStart="@dimen/padding_left"
         android:paddingEnd="@dimen/padding_right"
+        android:textSize="@dimen/welcome_text_size"
         android:text="@string/welcome"
-        style="@style/CustomText.Prickly"
         />
     <com.fb.bundles.NiftyViewGroup
         android:layout_width="match_parent"
@@ -38,8 +35,5 @@
         android:layout_marginEnd="@dimen/padding_right"
         android:text="@string/button_txt"
         android:onClick="performFoo"
-        custom:a_boolean="true"
-        custom:fancy_effects="distortion|reverb"
-        custom:reverb_type="spring"
         />
 </LinearLayout>

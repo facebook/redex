@@ -43,11 +43,6 @@
         android:name=".PublicActivity"
         android:exported="true" />
 
-    <activity
-        android:name=".ThemeActivity"
-        android:theme="@style/ThemeA"
-        android:exported="false" />
-
     <activity-alias
         android:name="com.fb.FooActivity"
         android:targetActivity=".PublicActivity" />

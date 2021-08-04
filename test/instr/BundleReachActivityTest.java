@@ -60,7 +60,7 @@ public class BundleReachActivityTest {
       android.util.Log.w("BNDL", "FOUND: " + result.toString());
     }
     {
-      View result = findViewWithText(decor, "Launch Theme Activity");
+      View result = findViewWithText(decor, "That's cool");
       android.util.Log.w("BNDL", "FOUND: " + result.toString());
     }
   }
