@@ -312,7 +312,8 @@ void MultiMethodInliner::compute_call_site_summaries() {
     auto it = callee_caller.find(callee);
     if (it == callee_caller.end() || m_recursive_callees.count(callee) ||
         m_x_dex_callees.count(callee) || root(callee) || !can_rename(callee) ||
-        m_true_virtual_callees_with_other_call_sites.count(callee)) {
+        m_true_virtual_callees_with_other_call_sites.count(callee) ||
+        m_speed_excluded_callees.count(callee)) {
       return nullptr;
     }
     // If we get here, then we know all possible call-sites to the callee, and
@@ -557,6 +558,7 @@ size_t MultiMethodInliner::prune_caller_nonrecursive_callees(
           m_inline_for_speed->should_inline_generic(caller, callee)) {
         continue;
       }
+      m_speed_excluded_callees.insert(callee);
     }
 
     // If we get here, we shall prune the (caller, callee) pair.

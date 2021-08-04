@@ -484,6 +484,7 @@ class MultiMethodInliner {
       m_true_virtual_callees_with_other_call_sites;
 
   std::unordered_set<const DexMethod*> m_recursive_callees;
+  std::unordered_set<const DexMethod*> m_speed_excluded_callees;
 
   // If mode == IntraDex, then this is the set of callees that is reachable via
   // an (otherwise ignored) invocation from a caller in a different dex. If mode
