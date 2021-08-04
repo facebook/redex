@@ -141,6 +141,31 @@ TEST(BundleResources, TestCollectRidsFromXmlAttrs) {
       });
 }
 
+// Test collecting resource ids from xml attributes.
+TEST(BundleResources, TestCollectResFilesByRid) {
+  setup_resources_and_run([&](const std::string& /* extract_dir */,
+                              BundleResources* resources) {
+    auto res_table = resources->load_res_table();
+
+    auto icon_ids = res_table->get_res_ids_by_name("icon");
+    EXPECT_EQ(icon_ids.size(), 1);
+    auto files = res_table->get_files_by_rid(icon_ids[0]);
+    EXPECT_EQ(files.size(), 1);
+    EXPECT_EQ(*files.begin(), "res/drawable-mdpi-v4/icon.png");
+
+    auto prickly_ids = res_table->get_res_ids_by_name("prickly");
+    EXPECT_EQ(prickly_ids.size(), 1);
+    files = res_table->get_files_by_rid(prickly_ids[0]);
+    EXPECT_EQ(files.size(), 1);
+    EXPECT_EQ(*files.begin(), "res/drawable-mdpi-v4/prickly.png");
+
+    auto padding_right_ids = res_table->get_res_ids_by_name("padding_right");
+    EXPECT_EQ(padding_right_ids.size(), 1);
+    files = res_table->get_files_by_rid(prickly_ids[0]);
+    EXPECT_EQ(files.size(), 1);
+  });
+}
+
 TEST(BundleResources, ReadLayout) {
   setup_resources_and_run(
       [&](const std::string& extract_dir, BundleResources* resources) {

@@ -171,6 +171,37 @@ inline std::string fully_qualified_external(const std::string& package_name,
   return java_names::external_to_internal(value);
 }
 
+std::vector<aapt::pb::Item> get_items_from_CV(
+    const aapt::pb::CompoundValue& comp_value) {
+  std::vector<aapt::pb::Item> ret;
+  if (comp_value.has_style()) {
+    // Style style -> Entry entry -> Item item.
+    const auto& entries = comp_value.style().entry();
+    for (int n = 0; n < entries.size(); ++n) {
+      if (entries[n].has_item()) {
+        ret.push_back(entries[n].item());
+      }
+    }
+  } else if (comp_value.has_array()) {
+    // Array array -> Element element -> Item item.
+    const auto& elements = comp_value.array().element();
+    for (int n = 0; n < elements.size(); ++n) {
+      if (elements[n].has_item()) {
+        ret.push_back(elements[n].item());
+      }
+    }
+  } else if (comp_value.has_plural()) {
+    // Plural plural -> Entry entry -> Item item.
+    const auto& entries = comp_value.plural().entry();
+    for (int n = 0; n < entries.size(); ++n) {
+      if (entries[n].has_item()) {
+        ret.push_back(entries[n].item());
+      }
+    }
+  }
+  return ret;
+}
+
 void read_single_manifest(const std::string& manifest,
                           ManifestClassInfo* manifest_classes) {
   TRACE(RES, 1, "Reading proto manifest at %s", manifest.c_str());
@@ -888,6 +919,37 @@ std::unordered_set<uint32_t> ResourcesPbFile::get_types_by_name(
 void ResourcesPbFile::delete_resource(uint32_t res_id) {
   // Keep track of res_id and delete later in remap_res_ids_and_serialize.
   m_ids_to_remove.emplace(res_id);
+}
+
+std::unordered_set<std::string> ResourcesPbFile::get_files_by_rid(
+    uint32_t res_id) {
+  std::unordered_set<std::string> ret;
+  if (m_res_id_to_configvalue.count(res_id) == 0) {
+    return ret;
+  }
+  const auto& out_values = m_res_id_to_configvalue.at(res_id);
+  for (auto i = 0; i < out_values.size(); i++) {
+    const auto& value = out_values[i].value();
+    if (value.has_item() && value.item().has_file()) {
+      // Item
+      auto file_path = value.item().file().path();
+      if (is_resource_file(file_path)) {
+        ret.emplace(file_path);
+      }
+    } else if (value.has_compound_value()) {
+      // For coumpound value, we flatten it and check all its item messages.
+      const auto& items = get_items_from_CV(value.compound_value());
+      for (size_t n = 0; n < items.size(); n++) {
+        if (items[n].has_file()) {
+          auto file_path = items[n].file().path();
+          if (is_resource_file(file_path)) {
+            ret.emplace(file_path);
+          }
+        }
+      }
+    }
+  }
+  return ret;
 }
 
 std::unique_ptr<ResourceTableFile> BundleResources::load_res_table() {

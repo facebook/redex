@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <boost/algorithm/string/predicate.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/operations.hpp>
 #include <boost/noncopyable.hpp>
@@ -98,6 +99,10 @@ class ResourceTableFile {
       const std::vector<std::string>& resource_files,
       const std::map<uint32_t, uint32_t>& old_to_new) = 0;
 
+  // Return the set of files' name(include the path) represented by res_id if
+  // there is. Otherwise, return NULL.
+  virtual std::unordered_set<std::string> get_files_by_rid(uint32_t res_id) = 0;
+
   // Return the resource ids based on the given resource name.
   std::vector<uint32_t> get_res_ids_by_name(const std::string& name) const {
     if (name_to_ids.count(name)) {
@@ -174,6 +179,17 @@ class AndroidResources {
 
 std::unique_ptr<AndroidResources> create_resource_reader(
     const std::string& directory);
+
+// Return true if a file str is in res folder.
+inline bool is_resource_file(const std::string& str) {
+  return boost::algorithm::starts_with(str, "res/") ||
+         str.find("/res/") != std::string::npos;
+}
+
+// Return true if a file str is in res folder and also a xml file.
+inline bool is_resource_xml(const std::string& str) {
+  return is_resource_file(str) && boost::algorithm::ends_with(str, ".xml");
+}
 
 // For testing only!
 std::unordered_set<std::string> extract_classes_from_native_lib(

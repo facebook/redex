@@ -841,6 +841,28 @@ void ResourcesArscFile::remap_res_ids_and_serialize(
   serialize();
 }
 
+std::unordered_set<std::string> ResourcesArscFile::get_files_by_rid(
+    uint32_t res_id) {
+  std::unordered_set<std::string> ret;
+  android::Vector<android::Res_value> out_values;
+  res_table.getAllValuesForResource(res_id, out_values);
+  for (size_t i = 0; i < out_values.size(); i++) {
+    auto val = out_values[i];
+    if (val.dataType == android::Res_value::TYPE_STRING) {
+      // data is an index into string pool.
+      auto file_path = res_table.getString8FromIndex(0, val.data);
+      auto file_chars = file_path.string();
+      if (file_chars != nullptr) {
+        auto file_str = std::string(file_chars);
+        if (is_resource_file(file_str)) {
+          ret.emplace(file_str);
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 void ResourcesArscFile::delete_resource(uint32_t res_id) {
   res_table.deleteResource(res_id);
 }
