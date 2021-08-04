@@ -171,6 +171,8 @@ inline std::string fully_qualified_external(const std::string& package_name,
   return java_names::external_to_internal(value);
 }
 
+// Traverse a compound value message, and return a list of Item defined in
+// this message.
 std::vector<aapt::pb::Item> get_items_from_CV(
     const aapt::pb::CompoundValue& comp_value) {
   std::vector<aapt::pb::Item> ret;
@@ -196,6 +198,51 @@ std::vector<aapt::pb::Item> get_items_from_CV(
     for (int n = 0; n < entries.size(); ++n) {
       if (entries[n].has_item()) {
         ret.push_back(entries[n].item());
+      }
+    }
+  }
+  return ret;
+}
+
+// Traverse a compound value message, and return a list of Reference messages
+// used in this message.
+std::vector<aapt::pb::Reference> get_references(
+    const aapt::pb::CompoundValue& comp_value) {
+  std::vector<aapt::pb::Reference> ret;
+  // Find refs from Item message.
+  const auto& items = get_items_from_CV(comp_value);
+  for (size_t i = 0; i < items.size(); i++) {
+    if (items[i].has_ref()) {
+      ret.push_back(items[i].ref());
+    }
+  }
+  // Find refs from other types of messages.
+  if (comp_value.has_attr()) {
+    // Attribute attr -> Symbol symbol -> Reference name.
+    const auto& symbols = comp_value.attr().symbol();
+    for (int i = 0; i < symbols.size(); i++) {
+      if (symbols[i].has_name()) {
+        ret.push_back(symbols[i].name());
+      }
+    }
+  } else if (comp_value.has_style()) {
+    // Style style -> Entry entry -> Reference key.
+    const auto& entries = comp_value.style().entry();
+    for (int i = 0; i < entries.size(); i++) {
+      if (entries[i].has_key()) {
+        ret.push_back(entries[i].key());
+      }
+    }
+    // Style style -> Reference parent.
+    if (comp_value.style().has_parent()) {
+      ret.push_back(comp_value.style().parent());
+    }
+  } else if (comp_value.has_styleable()) {
+    // Styleable styleable -> Entry entry -> Reference attr.
+    const auto& entries = comp_value.styleable().entry();
+    for (int i = 0; i < entries.size(); i++) {
+      if (entries[i].has_attr()) {
+        ret.push_back(entries[i].attr());
       }
     }
   }
@@ -950,6 +997,80 @@ std::unordered_set<std::string> ResourcesPbFile::get_files_by_rid(
     }
   }
   return ret;
+}
+
+void ResourcesPbFile::walk_references_for_resource(
+    uint32_t resID,
+    std::unordered_set<uint32_t>* nodes_visited,
+    std::unordered_set<std::string>* leaf_string_values) {
+  if (nodes_visited->find(resID) != nodes_visited->end()) {
+    // Return directly if a node is visited.
+    return;
+  }
+  nodes_visited->emplace(resID);
+
+  const auto& initial_values = get_res_id_to_configvalue().at(resID);
+
+  std::stack<aapt::pb::ConfigValue> nodes_to_explore;
+  for (int index = 0; index < initial_values.size(); ++index) {
+    nodes_to_explore.push(initial_values[index]);
+  }
+
+  while (!nodes_to_explore.empty()) {
+    const auto& r = nodes_to_explore.top();
+    nodes_to_explore.pop();
+
+    const auto& value = r.value();
+
+    std::vector<aapt::pb::Item> items;
+    std::vector<aapt::pb::Reference> refs;
+
+    if (value.has_compound_value()) {
+      items = get_items_from_CV(value.compound_value());
+      refs = get_references(value.compound_value());
+    } else {
+      items.push_back(value.item());
+      if (value.item().has_ref()) {
+        refs.push_back(value.item().ref());
+      }
+    }
+
+    // For each Item, store the path of FileReference into string values.
+    for (size_t i = 0; i < items.size(); i++) {
+      const auto& item = items[i];
+      if (item.has_file()) {
+        leaf_string_values->insert(item.file().path());
+        continue;
+      }
+    }
+
+    // For each Reference, follow its id to traverse the resources.
+    for (size_t i = 0; i < refs.size(); i++) {
+      std::vector<uint32_t> ref_ids;
+      if (refs[i].id() != 0) {
+        ref_ids.push_back(refs[i].id());
+      } else if (!refs[i].name().empty()) {
+        // Since id of a Reference message is optional, once ref_id =0, it is
+        // possible that the resource is refered by name. If we can make sure it
+        // won't happen, this branch can be removed.
+        ref_ids = get_res_ids_by_name(refs[i].name());
+      }
+
+      for (size_t n = 0; n < ref_ids.size(); n++) {
+        // Skip if the node has been visited.
+        const auto ref_id = ref_ids[n];
+        if (ref_id <= PACKAGE_RESID_START ||
+            nodes_visited->find(ref_id) != nodes_visited->end()) {
+          continue;
+        }
+        nodes_visited->insert(ref_id);
+        const auto& inner_values = (get_res_id_to_configvalue()).at(ref_id);
+        for (auto index = 0; index < inner_values.size(); ++index) {
+          nodes_to_explore.push(inner_values[index]);
+        }
+      }
+    }
+  }
 }
 
 std::unique_ptr<ResourceTableFile> BundleResources::load_res_table() {

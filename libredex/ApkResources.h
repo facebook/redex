@@ -62,6 +62,11 @@ class ResourcesArscFile : public ResourceTableFile {
       const std::vector<std::string>& resource_files,
       const std::map<uint32_t, uint32_t>& old_to_new) override;
   std::unordered_set<std::string> get_files_by_rid(uint32_t res_id) override;
+  void walk_references_for_resource(
+      uint32_t resID,
+      std::unordered_set<uint32_t>* nodes_visited,
+      std::unordered_set<std::string>* leaf_string_values) override;
+
   ~ResourcesArscFile() override;
 
   size_t get_length() const;

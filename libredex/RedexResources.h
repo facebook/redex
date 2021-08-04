@@ -103,6 +103,13 @@ class ResourceTableFile {
   // there is. Otherwise, return NULL.
   virtual std::unordered_set<std::string> get_files_by_rid(uint32_t res_id) = 0;
 
+  // Follows the reference links for a resource for all configurations. Outputs
+  // all the nodes visited, as well as all the string values seen.
+  virtual void walk_references_for_resource(
+      uint32_t resID,
+      std::unordered_set<uint32_t>* nodes_visited,
+      std::unordered_set<std::string>* leaf_string_values) = 0;
+
   // Return the resource ids based on the given resource name.
   std::vector<uint32_t> get_res_ids_by_name(const std::string& name) const {
     if (name_to_ids.count(name)) {

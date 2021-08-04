@@ -863,6 +863,51 @@ std::unordered_set<std::string> ResourcesArscFile::get_files_by_rid(
   return ret;
 }
 
+void ResourcesArscFile::walk_references_for_resource(
+    uint32_t resID,
+    std::unordered_set<uint32_t>* nodes_visited,
+    std::unordered_set<std::string>* leaf_string_values) {
+  if (nodes_visited->find(resID) != nodes_visited->end()) {
+    return;
+  }
+  nodes_visited->emplace(resID);
+
+  ssize_t pkg_index = res_table.getResourcePackageIndex(resID);
+
+  android::Vector<android::Res_value> initial_values;
+  res_table.getAllValuesForResource(resID, initial_values);
+
+  std::stack<android::Res_value> nodes_to_explore;
+  for (size_t index = 0; index < initial_values.size(); ++index) {
+    nodes_to_explore.push(initial_values[index]);
+  }
+
+  while (!nodes_to_explore.empty()) {
+    android::Res_value r = nodes_to_explore.top();
+    nodes_to_explore.pop();
+    if (r.dataType == android::Res_value::TYPE_STRING) {
+      android::String8 str = res_table.getString8FromIndex(pkg_index, r.data);
+      leaf_string_values->insert(std::string(str.string()));
+      continue;
+    }
+
+    // Skip any non-references or already visited nodes
+    if ((r.dataType != android::Res_value::TYPE_REFERENCE &&
+         r.dataType != android::Res_value::TYPE_ATTRIBUTE) ||
+        r.data <= PACKAGE_RESID_START ||
+        nodes_visited->find(r.data) != nodes_visited->end()) {
+      continue;
+    }
+
+    nodes_visited->insert(r.data);
+    android::Vector<android::Res_value> inner_values;
+    res_table.getAllValuesForResource(r.data, inner_values);
+    for (size_t index = 0; index < inner_values.size(); ++index) {
+      nodes_to_explore.push(inner_values[index]);
+    }
+  }
+}
+
 void ResourcesArscFile::delete_resource(uint32_t res_id) {
   res_table.deleteResource(res_id);
 }

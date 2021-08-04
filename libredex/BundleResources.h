@@ -36,6 +36,10 @@ class ResourcesPbFile : public ResourceTableFile {
   std::unordered_set<uint32_t> get_types_by_name(
       const std::unordered_set<std::string>& type_names) override;
   std::unordered_set<std::string> get_files_by_rid(uint32_t res_id) override;
+  void walk_references_for_resource(
+      uint32_t resID,
+      std::unordered_set<uint32_t>* nodes_visited,
+      std::unordered_set<std::string>* leaf_string_values) override;
   void delete_resource(uint32_t res_id) override;
   void collect_resource_data_for_file(const std::string& resources_pb_path);
   size_t get_hash_from_values(const ConfigValues& config_values);
