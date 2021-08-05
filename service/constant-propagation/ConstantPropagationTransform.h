@@ -74,7 +74,9 @@ class Transform final {
              const WholeProgramState& wps,
              cfg::ControlFlowGraph& cfg,
              const XStoreRefs* xstores,
-             DexMethod* method);
+             bool is_static,
+             DexType* declaring_type,
+             DexProto*);
 
   // Apply transformations on editable cfg; don't call directly, prefer calling
   // `apply` instead.
@@ -90,7 +92,9 @@ class Transform final {
   // Runs cfg.calculate_exit_block as a side-effect.
   void legacy_apply_forward_targets(const intraprocedural::FixpointIterator&,
                                     cfg::ControlFlowGraph&,
-                                    DexMethod*,
+                                    bool is_static,
+                                    DexType* declaring_type,
+                                    DexProto*,
                                     const XStoreRefs*);
 
   const Stats& get_stats() const { return m_stats; }
@@ -152,7 +156,9 @@ class Transform final {
   // or a type defined in a store different from the one where the method is
   // defined in.
   bool has_problematic_return(cfg::ControlFlowGraph&,
-                              DexMethod*,
+                              bool is_static,
+                              DexType* declaring_type,
+                              DexProto* proto,
                               const XStoreRefs*);
 
   const Config m_config;

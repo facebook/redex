@@ -25,7 +25,8 @@ inline void do_const_prop(
   intra_cp.run(ConstantEnvironment());
   cp::Transform tf(transform_config);
   if (forward_targets) {
-    tf.legacy_apply_forward_targets(intra_cp, code->cfg(), nullptr, nullptr);
+    tf.legacy_apply_forward_targets(
+        intra_cp, code->cfg(), false, nullptr, nullptr, nullptr);
   } else {
     tf.legacy_apply_constants_and_prune_unreachable(
         intra_cp, cp::WholeProgramState(), code->cfg(), nullptr, nullptr);

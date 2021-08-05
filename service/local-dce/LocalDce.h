@@ -76,8 +76,8 @@ class LocalDce {
 
   const Stats& get_stats() const { return m_stats; }
 
-  void dce(IRCode*);
-  void dce(cfg::ControlFlowGraph&);
+  void dce(IRCode*, bool normalize_new_instances = true);
+  void dce(cfg::ControlFlowGraph&, bool normalize_new_instances = true);
   std::vector<std::pair<cfg::Block*, IRList::iterator>> get_dead_instructions(
       const cfg::ControlFlowGraph& cfg,
       const std::vector<cfg::Block*>& blocks,

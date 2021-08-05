@@ -32,7 +32,8 @@ Transform::Stats ConstantPropagation::run(DexMethod* method,
                                               ConstantPrimitiveAnalyzer());
     fp_iter.run({});
     constant_propagation::Transform tf(m_config.transform);
-    tf.apply(fp_iter, WholeProgramState(), code->cfg(), xstores, method);
+    tf.apply(fp_iter, WholeProgramState(), code->cfg(), xstores,
+             is_static(method), method->get_class(), method->get_proto());
     local_stats = tf.get_stats();
   }
   return local_stats;

@@ -138,8 +138,10 @@ LocalDce::get_dead_instructions(
   return dead_instructions;
 }
 
-void LocalDce::dce(cfg::ControlFlowGraph& cfg) {
-  normalize_new_instances(cfg);
+void LocalDce::dce(cfg::ControlFlowGraph& cfg, bool normalize_new_instances) {
+  if (normalize_new_instances) {
+    this->normalize_new_instances(cfg);
+  }
   TRACE(DCE, 5, "%s", SHOW(cfg));
   const auto& blocks = graph::postorder_sort<cfg::GraphInterface>(cfg);
   std::vector<std::pair<cfg::Block*, IRList::iterator>> dead_instructions =
@@ -200,9 +202,9 @@ void LocalDce::dce(cfg::ControlFlowGraph& cfg) {
   TRACE(DCE, 5, "%s", SHOW(cfg));
 }
 
-void LocalDce::dce(IRCode* code) {
+void LocalDce::dce(IRCode* code, bool normalize_new_instances) {
   cfg::ScopedCFG cfg(code);
-  dce(*cfg);
+  dce(*cfg, normalize_new_instances);
 }
 
 /*

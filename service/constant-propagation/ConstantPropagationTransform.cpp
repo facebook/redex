@@ -402,15 +402,18 @@ void Transform::apply(const intraprocedural::FixpointIterator& fp_iter,
                       const WholeProgramState& wps,
                       cfg::ControlFlowGraph& cfg,
                       const XStoreRefs* xstores,
-                      DexMethod* method) {
+                      bool is_static,
+                      DexType* declaring_type,
+                      DexProto* proto) {
   legacy_apply_constants_and_prune_unreachable(fp_iter, wps, cfg, xstores,
-                                               method->get_class());
+                                               declaring_type);
   if (xstores) {
     m_stats.unreachable_instructions_removed += cfg.simplify();
     // legacy_apply_constants_and_prune_unreachable creates some new blocks that
     // fp_iter isn't aware of. As turns out, legacy_apply_forward_targets
     // doesn't care, and will still do the right thing.
-    legacy_apply_forward_targets(fp_iter, cfg, method, xstores);
+    legacy_apply_forward_targets(fp_iter, cfg, is_static, declaring_type, proto,
+                                 xstores);
     m_stats.unreachable_instructions_removed +=
         cfg.remove_unreachable_blocks().first;
   }
@@ -606,15 +609,17 @@ void Transform::forward_targets(
 }
 
 bool Transform::has_problematic_return(cfg::ControlFlowGraph& cfg,
-                                       DexMethod* method,
+                                       bool is_static,
+                                       DexType* declaring_type,
+                                       DexProto* proto,
                                        const XStoreRefs* xstores) {
   // Nothing to check without method information
-  if (!method) {
+  if (!declaring_type || !proto) {
     return false;
   }
 
   // No return issues when rtype is primitive
-  auto rtype = method->get_proto()->get_rtype();
+  auto rtype = proto->get_rtype();
   if (type::is_primitive(rtype)) {
     return false;
   }
@@ -631,14 +636,14 @@ bool Transform::has_problematic_return(cfg::ControlFlowGraph& cfg,
 
   // For all return instructions, check whether the reaching definitions are of
   // a type that's unavailable/external, or defined in a different store.
-  auto declaring_class_idx = xstores->get_store_idx(method->get_class());
+  auto declaring_class_idx = xstores->get_store_idx(declaring_type);
   auto is_problematic_return_type = [&](const DexType* t, IRInstruction* insn) {
     t = type::get_element_type_if_array(t);
     if (!type_class_internal(t)) {
       // An unavailable or external class
       TRACE(CONSTP, 2,
-            "Skipping {%s} because {%s} is unavailable/external in {%s}",
-            SHOW(method), SHOW(t), SHOW(insn));
+            "Skipping {%s::%s} because {%s} is unavailable/external in {%s}",
+            SHOW(declaring_type), SHOW(proto), SHOW(t), SHOW(insn));
       return true;
     }
     if (!xstores) {
@@ -649,9 +654,11 @@ bool Transform::has_problematic_return(cfg::ControlFlowGraph& cfg,
       return false;
     }
     TRACE(CONSTP, 2,
-          "Skipping {%s} because {%s} is from different store (%zu vs %zu) in "
+          "Skipping {%s::%s} because {%s} is from different store (%zu vs %zu) "
+          "in "
           "{%s}",
-          SHOW(method), SHOW(t), declaring_class_idx, t_idx, SHOW(insn));
+          SHOW(declaring_type), SHOW(proto), SHOW(t), declaring_class_idx,
+          t_idx, SHOW(insn));
     return true;
   };
   reaching_defs::MoveAwareFixpointIterator fp_iter(cfg);
@@ -686,7 +693,7 @@ bool Transform::has_problematic_return(cfg::ControlFlowGraph& cfg,
           } else if (op == OPCODE_AGET_OBJECT) {
             if (!ti) {
               ti.reset(new type_inference::TypeInference(cfg));
-              ti->run(method);
+              ti->run(is_static, declaring_type, proto->get_args());
             }
             auto& type_environments = ti->get_type_environments();
             auto& type_environment = type_environments.at(def);
@@ -708,7 +715,9 @@ bool Transform::has_problematic_return(cfg::ControlFlowGraph& cfg,
 void Transform::legacy_apply_forward_targets(
     const intraprocedural::FixpointIterator& intra_cp,
     cfg::ControlFlowGraph& cfg,
-    DexMethod* method,
+    bool is_static,
+    DexType* declaring_type,
+    DexProto* proto,
     const XStoreRefs* xstores) {
   cfg.calculate_exit_block();
 
@@ -718,7 +727,7 @@ void Transform::legacy_apply_forward_targets(
   // from a different store.
   // Besides that Android bug, it really shouldn't be necessary to do anything
   // special about unavailable types or cross-store references here.
-  if (has_problematic_return(cfg, method, xstores)) {
+  if (has_problematic_return(cfg, is_static, declaring_type, proto, xstores)) {
     return;
   }
 
