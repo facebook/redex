@@ -132,6 +132,15 @@ class LinearScanAllocator final {
    * free queue; otherwise, do nothing.
    */
   void expire_old_intervals(uint32_t cur_def_idx);
+
+  /*
+   * Reverse the linearly allocated registers to help DedupBlock pass figure out
+   * more duplicated code. This is an optimization designed for following case:
+   * if (condition) then { y = 0; x = x + 1; } else { x = x + 1; }
+   * Duplicate code "x = x + 1" will only be figured out when allocating
+   * registers reversely.
+   */
+  void reverse_registers();
 };
 
 } // namespace fastregalloc

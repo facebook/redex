@@ -38,15 +38,15 @@ TEST_F(FastRegAllocTest, RegAlloc) {
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
-      (const v0 1)
+      (const v2 1)
       (const v1 0)
-      (add-int v2 v0 v1)
+      (add-int v0 v2 v1)
       (const v1 -1)
-      (add-int v1 v0 v1)
-      (add-int v2 v0 v1)
+      (add-int v1 v2 v1)
+      (add-int v0 v2 v1)
       (const v1 2)
-      (add-int v2 v0 v1)
-      (return v2)
+      (add-int v0 v2 v1)
+      (return v0)
     )
 )");
   EXPECT_CODE_EQ(method->get_code(), expected_code.get());
@@ -73,9 +73,9 @@ TEST_F(FastRegAllocTest, NoUseVReg) {
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
-      (const v0 1)
-      (const v1 2)
-      (return v1)
+      (const v1 1)
+      (const v0 2)
+      (return v0)
     )
 )");
   EXPECT_CODE_EQ(method->get_code(), expected_code.get());
@@ -105,14 +105,14 @@ TEST_F(FastRegAllocTest, ControlFlow) {
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
-      (const v0 1)
       (const v1 1)
-      (if-eqz v0 :branch)
-      (return v0)
+      (const v0 1)
+      (if-eqz v1 :branch)
+      (return v1)
 
       (:branch)
-      (add-int v0 v0 v1)
-      (return v0)
+      (add-int v1 v1 v0)
+      (return v1)
     )
 )");
   EXPECT_CODE_EQ(method->get_code(), expected_code.get());
@@ -178,15 +178,15 @@ TEST_F(FastRegAllocTest, CheckVRegInLoop) {
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
-      (const v0 10)
-      (const v1 1)
+      (const v3 10)
+      (const v2 1)
       (:LHead)
-      (if-gt v0 v1 :Loop)
-      (add-int/lit8 v2 v0 1)
-      (move v3 v2)
-      (return v3)
+      (if-gt v3 v2 :Loop)
+      (add-int/lit8 v1 v3 1)
+      (move v0 v1)
+      (return v0)
       (:Loop)
-      (add-int/lit8 v0 v0 -1)
+      (add-int/lit8 v3 v3 -1)
       (goto :LHead)
     )
 )");
@@ -213,10 +213,10 @@ TEST_F(FastRegAllocTest, WideVReg) {
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
-        (const v0 1)
-        (add-int/lit8 v2 v0 1)
-        (const-wide v0 9223372036854775807)
-        (return v2)
+        (const v1 1)
+        (add-int/lit8 v0 v1 1)
+        (const-wide v1 9223372036854775807)
+        (return v0)
     )
 )");
   EXPECT_CODE_EQ(method->get_code(), expected_code.get());
@@ -267,32 +267,32 @@ TEST_F(FastRegAllocTest, ParamAlloc) {
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
-      (load-param-object v0)
-      (load-param-object v1)
-      (invoke-virtual (v1) "LLacrimaConfig;.getSessionManager:()LSessionManager;")
+      (load-param-object v4)
+      (load-param-object v3)
+      (invoke-virtual (v3) "LLacrimaConfig;.getSessionManager:()LSessionManager;")
       (move-result-object v2)
-      (invoke-virtual (v1) "LLacrimaConfig;.getSessionManager:()LSessionManager;")
-      (move-result-object v3)
-      (iget-object v3 "LSessionManager;.mProcessName:Ljava/lang/String;")
-      (move-result-pseudo-object v4)
-      (invoke-virtual (v2 v4) "LSessionManager;.getPreviousSessionDir:(Ljava/lang/String;)Ljava/io/File;")
+      (invoke-virtual (v3) "LLacrimaConfig;.getSessionManager:()LSessionManager;")
+      (move-result-object v1)
+      (iget-object v1 "LSessionManager;.mProcessName:Ljava/lang/String;")
+      (move-result-pseudo-object v0)
+      (invoke-virtual (v2 v0) "LSessionManager;.getPreviousSessionDir:(Ljava/lang/String;)Ljava/io/File;")
       (move-result-object v2)
       (if-nez v2 :B2)
-      (const v1 0)
-      (return-object v1)
-      (:B2)
-      (invoke-virtual (v1) "LLacrimaConfig;.getSessionManager:()LSessionManager;")
-      (move-result-object v4)
-      (invoke-virtual (v1) "LLacrimaConfig;.getForegroundEntityMapperProvider:()LProvider;")
-      (move-result-object v1)
-      (invoke-interface (v1) "LProvider;.get:()Ljava/lang/Object;")
-      (move-result-object v1)
-      (check-cast v1 "LForegroundEntityMapper;")
-      (move-result-pseudo-object v1)
-      (new-instance "LAppStateCollector;")
-      (move-result-pseudo-object v3)
-      (invoke-direct (v3 v2 v4 v1) "LAppStateCollector;.<init>:(Ljava/io/File;LSessionManager;LForegroundEntityMapper;)V")
+      (const v3 0)
       (return-object v3)
+      (:B2)
+      (invoke-virtual (v3) "LLacrimaConfig;.getSessionManager:()LSessionManager;")
+      (move-result-object v0)
+      (invoke-virtual (v3) "LLacrimaConfig;.getForegroundEntityMapperProvider:()LProvider;")
+      (move-result-object v3)
+      (invoke-interface (v3) "LProvider;.get:()Ljava/lang/Object;")
+      (move-result-object v3)
+      (check-cast v3 "LForegroundEntityMapper;")
+      (move-result-pseudo-object v3)
+      (new-instance "LAppStateCollector;")
+      (move-result-pseudo-object v1)
+      (invoke-direct (v1 v2 v0 v3) "LAppStateCollector;.<init>:(Ljava/io/File;LSessionManager;LForegroundEntityMapper;)V")
+      (return-object v1)
     )
 )");
   EXPECT_CODE_EQ(method->get_code(), expected_code.get());

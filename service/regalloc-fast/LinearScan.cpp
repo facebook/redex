@@ -76,11 +76,14 @@ void LinearScanAllocator::allocate() {
     m_live_intervals[idx].reg = alloc_reg;
     m_active_intervals.push(
         std::make_pair(idx, m_live_intervals[idx].end_point));
-    for (auto def : m_vreg_defs_uses[cur_vreg].first) {
-      def->set_dest(alloc_reg);
+  }
+  reverse_registers();
+  for (auto& interval : m_live_intervals) {
+    for (auto def : m_vreg_defs_uses[interval.vreg].first) {
+      def->set_dest(interval.reg.value());
     }
-    for (auto use : m_vreg_defs_uses[cur_vreg].second) {
-      use.insn->set_src(use.src_index, alloc_reg);
+    for (auto use : m_vreg_defs_uses[interval.vreg].second) {
+      use.insn->set_src(use.src_index, interval.reg.value());
     }
   }
   TRACE(FREG, 9, "FastRegAlloc pass complete!");
@@ -132,6 +135,16 @@ void LinearScanAllocator::expire_old_intervals(uint32_t cur_def_idx) {
     } catch (const std::bad_optional_access& e) {
       std::cerr << "Active interval ends with no register allocated: "
                 << e.what() << std::endl;
+    }
+  }
+}
+
+void LinearScanAllocator::reverse_registers() {
+  for (auto& interval : m_live_intervals) {
+    if (m_wide_vregs.count(interval.vreg)) {
+      interval.reg = m_reg_count - 2 - interval.reg.value();
+    } else {
+      interval.reg = m_reg_count - 1 - interval.reg.value();
     }
   }
 }
