@@ -281,6 +281,28 @@ static std::string get_key(const CallSiteSummary& call_site_summary) {
   return oss.str();
 }
 
+CallSiteSummary* MultiMethodInliner::internalize_call_site_summary(
+    const CallSiteSummary& call_site_summary) {
+  auto key = get_key(call_site_summary);
+  CallSiteSummary* res;
+  m_call_site_summaries.update(key, [&](const std::string&,
+                                        std::unique_ptr<CallSiteSummary>& p,
+                                        bool exist) {
+    if (exist) {
+      always_assert_log(p->result_used == call_site_summary.result_used,
+                        "same key %s for\n    %d\nvs. %d", key.c_str(),
+                        p->result_used, call_site_summary.result_used);
+      always_assert_log(p->arguments.equals(call_site_summary.arguments),
+                        "same key %s for\n    %s\nvs. %s", key.c_str(),
+                        SHOW(p->arguments), SHOW(call_site_summary.arguments));
+    } else {
+      p = std::make_unique<CallSiteSummary>(call_site_summary);
+    }
+    res = p.get();
+  });
+  return res;
+}
+
 void MultiMethodInliner::compute_call_site_summaries() {
   if (!m_config.use_call_site_summaries) {
     return;
@@ -288,8 +310,8 @@ void MultiMethodInliner::compute_call_site_summaries() {
 
   Timer t("compute_call_site_summaries");
   struct CalleeInfo {
-    std::unordered_map<std::string, CallSiteSummary> call_site_summaries;
-    std::unordered_map<std::string, size_t> occurrences;
+    std::unordered_map<CallSiteSummary*, size_t> occurrences;
+    std::vector<IRInstruction*> invokes;
   };
 
   // We'll do a top-down traversal of all call-sites, in order to propagate
@@ -335,11 +357,11 @@ void MultiMethodInliner::compute_call_site_summaries() {
       } else {
         // The only way to call this method is by going through a set of known
         // call-sites. We join together all those incoming constant arguments.
-        always_assert(!ci->call_site_summaries.empty());
-        auto it = ci->call_site_summaries.begin();
-        arguments = it->second.arguments;
-        for (it++; it != ci->call_site_summaries.end(); it++) {
-          arguments.join_with(it->second.arguments);
+        always_assert(!ci->occurrences.empty());
+        auto it = ci->occurrences.begin();
+        arguments = it->first->arguments;
+        for (it++; it != ci->occurrences.end(); it++) {
+          arguments.join_with(it->first->arguments);
         }
       }
     }
@@ -355,31 +377,19 @@ void MultiMethodInliner::compute_call_site_summaries() {
             is_static(method), method->get_code(), arguments);
     auto res = get_invoke_call_site_summaries(method, callees, initial_env);
     for (auto& p : res.invoke_call_site_summaries) {
-      auto insn = p.first->insn;
+      auto insn = p.first;
       auto callee = get_callee(method, insn);
-      auto call_site_summary = std::move(p.second);
-      auto key = get_key(call_site_summary);
+      auto call_site_summary = p.second;
       concurrent_callee_infos.update(
           callee, [&](const DexMethod*, std::shared_ptr<CalleeInfo>& ci,
                       bool /* exists */) {
             if (!ci) {
               ci = std::make_shared<CalleeInfo>();
             }
-            auto q = ci->call_site_summaries.emplace(key, call_site_summary);
-            if (!q.second) {
-              always_assert_log(
-                  q.first->second.result_used == call_site_summary.result_used,
-                  "same key %s for\n    %d\nvs. %d", key.c_str(),
-                  q.first->second.result_used, call_site_summary.result_used);
-              always_assert_log(
-                  q.first->second.arguments.equals(call_site_summary.arguments),
-                  "same key %s for\n    %s\nvs. %s", key.c_str(),
-                  SHOW(q.first->second.arguments),
-                  SHOW(call_site_summary.arguments));
-            }
-            ++ci->occurrences[key];
+            ci->occurrences[call_site_summary]++;
+            ci->invokes.push_back(insn);
           });
-      m_invoke_call_site_summaries.emplace(insn, std::move(call_site_summary));
+      m_invoke_call_site_summaries.emplace(insn, call_site_summary);
     }
     info.constant_invoke_callers_analyzed++;
     info.constant_invoke_callers_unreachable_blocks += res.dead_blocks;
@@ -400,13 +410,16 @@ void MultiMethodInliner::compute_call_site_summaries() {
       summaries_scheduler.run(callers.begin(), callers.end());
 
   for (auto& p : concurrent_callee_infos) {
-    auto& v = m_callee_call_site_summary_occurrences[p.first];
-    auto ci = p.second;
+    auto callee = p.first;
+    auto& v = m_callee_call_site_summary_occurrences[callee];
+    auto& ci = p.second;
     for (const auto& q : ci->occurrences) {
-      const auto& key = q.first;
-      const auto& count = q.second;
-      v.emplace_back(ci->call_site_summaries.at(key), count);
+      const auto call_site_summary = q.first;
+      const auto count = q.second;
+      v.emplace_back(call_site_summary, count);
     }
+    auto& invokes = m_callee_call_site_invokes[callee];
+    invokes.insert(invokes.end(), ci->invokes.begin(), ci->invokes.end());
   }
 }
 
@@ -619,7 +632,7 @@ MultiMethodInliner::get_invoke_call_site_summaries(
             !cfg.move_result_of(block->to_cfg_instruction_iterator(it))
                  .is_end();
         res.invoke_call_site_summaries.emplace_back(
-            it.unwrap(), std::move(call_site_summary));
+            insn, internalize_call_site_summary(call_site_summary));
       }
       intra_cp.analyze_instruction(insn, &env, insn == last_insn->insn);
       if (env.is_bottom()) {
@@ -1088,21 +1101,24 @@ void MultiMethodInliner::compute_callee_costs(DexMethod* method) {
   auto fully_inlined_cost = get_fully_inlined_cost(method);
   always_assert(fully_inlined_cost);
 
-  auto callee_call_site_summary_occurrences_it =
-      m_callee_call_site_summary_occurrences.find(method);
-  if (callee_call_site_summary_occurrences_it !=
-          m_callee_call_site_summary_occurrences.end() &&
-      fully_inlined_cost->full_code <= MAX_COST_FOR_CONSTANT_PROPAGATION) {
-    const auto& callee_call_site_summary_occurrences =
-        callee_call_site_summary_occurrences_it->second;
-    for (auto& p : callee_call_site_summary_occurrences) {
-      m_scheduler.augment(
-          method, [this, call_site_summary = p.first, method]() {
-            TraceContext context(method);
-            // Populate cache
-            auto timer = m_call_site_inlined_cost_timer.scope();
-            get_call_site_inlined_cost(call_site_summary, method);
-          });
+  auto callee_call_site_invokes_it = m_callee_call_site_invokes.find(method);
+  if (callee_call_site_invokes_it != m_callee_call_site_invokes.end()) {
+    std::unordered_map<const CallSiteSummary*,
+                       std::vector<const IRInstruction*>>
+        invokes;
+    for (auto invoke_insn : callee_call_site_invokes_it->second) {
+      auto* call_site_summary = m_invoke_call_site_summaries.at(invoke_insn);
+      invokes[call_site_summary].push_back(invoke_insn);
+    }
+    for (auto& p : invokes) {
+      m_scheduler.augment(method, [this, insns = p.second, method]() {
+        TraceContext context(method);
+        // Populate cache
+        auto timer = m_call_site_inlined_cost_timer.scope();
+        for (auto insn : insns) {
+          get_call_site_inlined_cost(insn, method);
+        }
+      });
     }
   }
 
@@ -1693,29 +1709,33 @@ const InlinedCost* MultiMethodInliner::get_fully_inlined_cost(
 
 const InlinedCost* MultiMethodInliner::get_call_site_inlined_cost(
     const IRInstruction* invoke_insn, const DexMethod* callee) {
+  auto res = m_invoke_call_site_inlined_costs.get(invoke_insn, boost::none);
+  if (res) {
+    return *res;
+  }
+
   auto it = m_invoke_call_site_summaries.find(invoke_insn);
   if (it == m_invoke_call_site_summaries.end()) {
-    return nullptr;
+    res = nullptr;
+  } else {
+    auto call_site_summary = it->second;
+    res = get_call_site_inlined_cost(call_site_summary, callee);
   }
-  auto& call_site_summary = it->second;
-  return get_call_site_inlined_cost(call_site_summary, callee);
+
+  always_assert(res);
+  m_invoke_call_site_inlined_costs.emplace(invoke_insn, res);
+  return *res;
 }
 
 const InlinedCost* MultiMethodInliner::get_call_site_inlined_cost(
-    const CallSiteSummary& call_site_summary, const DexMethod* callee) {
-  auto callee_call_site_summary_occurrences_it =
-      m_callee_call_site_summary_occurrences.find(callee);
-  if (callee_call_site_summary_occurrences_it ==
-      m_callee_call_site_summary_occurrences.end()) {
-    return nullptr;
-  }
+    const CallSiteSummary* call_site_summary, const DexMethod* callee) {
   auto fully_inlined_cost = get_fully_inlined_cost(callee);
   always_assert(fully_inlined_cost);
   if (fully_inlined_cost->full_code > MAX_COST_FOR_CONSTANT_PROPAGATION) {
     return nullptr;
   }
 
-  auto key = show(callee) + " ** " + get_key(call_site_summary);
+  CalleeCallSiteSummary key{callee, call_site_summary};
   auto inlined_cost = m_call_site_inlined_costs.get(key, nullptr);
   if (inlined_cost) {
     return inlined_cost.get();
@@ -1725,17 +1745,17 @@ const InlinedCost* MultiMethodInliner::get_call_site_inlined_cost(
   bool callee_has_result = !callee->get_proto()->is_void();
   inlined_cost = std::make_shared<InlinedCost>(
       get_inlined_cost(callee_is_static, callee_has_result, callee->get_code(),
-                       &call_site_summary, &m_shrinker.get_pure_methods(),
+                       call_site_summary, &m_shrinker.get_pure_methods(),
                        m_shrinker.get_immut_analyzer_state()));
   TRACE(INLINE, 4,
         "get_call_site_inlined_cost(%s) = {%zu,%f,%f,%f,%s,%f,%zu,%zu}",
-        key.c_str(), inlined_cost->full_code, inlined_cost->code,
-        inlined_cost->method_refs, inlined_cost->other_refs,
+        get_key(*call_site_summary).c_str(), inlined_cost->full_code,
+        inlined_cost->code, inlined_cost->method_refs, inlined_cost->other_refs,
         inlined_cost->no_return ? "no_return" : "return",
         inlined_cost->result_used, inlined_cost->dead_blocks.size(),
         inlined_cost->insn_size);
   m_call_site_inlined_costs.update(key,
-                                   [&](const std::string&,
+                                   [&](const CalleeCallSiteSummary&,
                                        std::shared_ptr<InlinedCost>& value,
                                        bool exists) {
                                      if (exists) {
@@ -1779,14 +1799,14 @@ const InlinedCost* MultiMethodInliner::get_average_inlined_cost(
     const auto& callee_call_site_summary_occurrences =
         callee_call_site_summary_occurrences_it->second;
     for (auto& p : callee_call_site_summary_occurrences) {
-      const auto& call_site_summary = p.first;
+      const auto call_site_summary = p.first;
       const auto count = p.second;
       auto call_site_inlined_cost =
           get_call_site_inlined_cost(call_site_summary, callee);
       always_assert(call_site_inlined_cost);
       callees_unreachable_blocks +=
           call_site_inlined_cost->dead_blocks.size() * count;
-      if (callee_has_result && !call_site_summary.result_used) {
+      if (callee_has_result && !call_site_summary->result_used) {
         callees_unused_results += count;
       }
       inlined_cost->code += call_site_inlined_cost->code * count;

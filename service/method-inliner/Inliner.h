@@ -64,15 +64,29 @@ struct CallSiteSummary {
   bool result_used;
 };
 
+struct CalleeCallSiteSummary {
+  const DexMethod* method;
+  const CallSiteSummary* call_site_summary;
+};
+
+inline size_t hash_value(CalleeCallSiteSummary ccss) {
+  return ((size_t)ccss.method) ^ (size_t)(ccss.call_site_summary);
+}
+
+inline bool operator==(const CalleeCallSiteSummary& a,
+                       const CalleeCallSiteSummary& b) {
+  return a.method == b.method && a.call_site_summary == b.call_site_summary;
+}
+
 using InvokeCallSiteSummaries =
-    std::vector<std::pair<IRList::iterator, CallSiteSummary>>;
+    std::vector<std::pair<IRInstruction*, CallSiteSummary*>>;
 
 struct InvokeCallSiteSummariesAndDeadBlocks {
   InvokeCallSiteSummaries invoke_call_site_summaries;
   size_t dead_blocks{0};
 };
 
-using CallSiteSummaryOccurrences = std::pair<CallSiteSummary, size_t>;
+using CallSiteSummaryOccurrences = std::pair<CallSiteSummary*, size_t>;
 
 struct Inlinable {
   DexMethod* callee;
@@ -215,6 +229,9 @@ class MultiMethodInliner {
       DexMethod* caller, std::unordered_map<DexMethod*, size_t>* visited);
 
   DexMethod* get_callee(DexMethod* caller, IRInstruction* insn);
+
+  CallSiteSummary* internalize_call_site_summary(
+      const CallSiteSummary& call_site_summary);
 
   void inline_inlinables(DexMethod* caller,
                          const std::vector<Inlinable>& inlinables);
@@ -390,7 +407,7 @@ class MultiMethodInliner {
    * Estimate inlined cost for a particular call-site summary, if available.
    */
   const InlinedCost* get_call_site_inlined_cost(
-      const CallSiteSummary& call_site_summary, const DexMethod* callee);
+      const CallSiteSummary* call_site_summary, const DexMethod* callee);
 
   /**
    * Change visibilities of methods, assuming that`m_change_visibility` is
@@ -500,23 +517,42 @@ class MultiMethodInliner {
   mutable ConcurrentMap<const DexMethod*, std::shared_ptr<InlinedCost>>
       m_average_inlined_costs;
 
-  // Cache of the inlined costs of each method and each constant-arguments key
-  // after pruning.
-  mutable ConcurrentMap<std::string, std::shared_ptr<InlinedCost>>
+  // Cache of the inlined costs of each call-site summary after pruning.
+  mutable ConcurrentMap<CalleeCallSiteSummary,
+                        std::shared_ptr<InlinedCost>,
+                        boost::hash<CalleeCallSiteSummary>>
       m_call_site_inlined_costs;
 
+  // Cache of the inlined costs of each call-site after pruning.
+  mutable ConcurrentMap<const IRInstruction*,
+                        boost::optional<const InlinedCost*>>
+      m_invoke_call_site_inlined_costs;
+
   /**
-   * For all (reachable) invoked methods, list of constant arguments
+   * For all (reachable) invoked methods, list of call-site summaries
    */
   mutable std::unordered_map<const DexMethod*,
                              std::vector<CallSiteSummaryOccurrences>>
       m_callee_call_site_summary_occurrences;
 
   /**
+   * For all (reachable) invoked methods, list of vinoke instructions
+   */
+  mutable std::unordered_map<const DexMethod*,
+                             std::vector<const IRInstruction*>>
+      m_callee_call_site_invokes;
+
+  /**
    * For all (reachable) invoke instructions, constant arguments
    */
-  mutable ConcurrentMap<const IRInstruction*, CallSiteSummary>
+  mutable ConcurrentMap<const IRInstruction*, CallSiteSummary*>
       m_invoke_call_site_summaries;
+
+  /**
+   * Internalized call-site summaries.
+   */
+  mutable ConcurrentMap<std::string, std::unique_ptr<CallSiteSummary>>
+      m_call_site_summaries;
 
   // Priority thread pool to handle parallel processing of methods, either
   // shrinking initially / after inlining into them, or even to inline in
