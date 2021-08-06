@@ -204,7 +204,7 @@ void Model::build_hierarchy(const TypeSet& roots) {
     }
     const auto cls = type_class(type);
     const auto super = cls->get_super_class();
-    redex_assert(super != nullptr && super != type::java_lang_Object());
+    redex_assert(super != nullptr);
     m_hierarchy[super].insert(type);
     m_parents[type] = super;
   }
@@ -359,8 +359,8 @@ MergerType& Model::create_merger_helper(
     const InterdexSubgroupIdx subgroup_idx) {
   size_t group_count = m_shape_to_count[shape]++;
   std::string name = shape.build_type_name(
-      m_spec.class_name_prefix, merger_type, std::string("Shape"),
-      m_spec.dex_id, group_count, interdex_subgroup_idx, subgroup_idx);
+      m_spec.class_name_prefix, merger_type, intf_set, m_spec.dex_id,
+      group_count, interdex_subgroup_idx, subgroup_idx);
   const auto& shape_type = DexType::make_type(name.c_str());
   TRACE(CLMG, 7, "Build shape type %s", SHOW(shape_type));
   auto& merger_shape = create_merger_shape(shape_type, shape, merger_type,

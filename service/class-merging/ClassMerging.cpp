@@ -9,7 +9,6 @@
 
 #include <iostream>
 
-#include "ClassAssemblingUtils.h"
 #include "ConfigFiles.h"
 #include "ModelMerger.h"
 #include "NormalizeConstructor.h"
@@ -66,12 +65,8 @@ void merge_model(Scope& scope,
                  ModelSpec& spec) {
   set_up(conf);
   always_assert(s_is_initialized);
-  handle_interface_as_root(spec, scope, stores);
   TRACE(CLMG, 2, "[ClassMerging] merging %s model", spec.name.c_str());
   Timer t("erase_model");
-  for (const auto root : spec.roots) {
-    always_assert(!is_interface(type_class(root)));
-  }
   TypeSystem type_system(scope);
   int32_t min_sdk = mgr.get_redex_options().min_sdk;
   XStoreRefs xstores(stores);

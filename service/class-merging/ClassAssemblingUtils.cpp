@@ -381,7 +381,7 @@ void handle_interface_as_root(ModelSpec& spec,
   for (const auto interface_root : interface_roots) {
     const auto all_implementors =
         get_all_implementors(intf_map, interface_root);
-    auto type_name_tag = get_root_type_name_tag(interface_root);
+    auto type_name_tag = get_type_name_tag(interface_root);
     auto base_type_name =
         prefix + std::to_string(idx) +
         (type_name_tag == spec.class_name_prefix ? "" : type_name_tag) + ";";

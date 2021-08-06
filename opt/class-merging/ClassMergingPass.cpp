@@ -7,6 +7,7 @@
 
 #include "ClassMergingPass.h"
 
+#include "ClassAssemblingUtils.h"
 #include "ClassMerging.h"
 #include "ConfigFiles.h"
 #include "DexUtil.h"
@@ -287,6 +288,12 @@ void ClassMergingPass::run_pass(DexStoresVector& stores,
             "Change include_primary_dex to true because the apk will be single "
             "dex");
       model_spec.include_primary_dex = true;
+    }
+    // TODO: We will move the logic of collecting mergeables outside of Model
+    // building. Then this step can be removed.
+    handle_interface_as_root(model_spec, scope, stores);
+    for (const auto root : model_spec.roots) {
+      always_assert(!is_interface(type_class(root)));
     }
     class_merging::merge_model(scope, conf, mgr, stores, model_spec);
   }

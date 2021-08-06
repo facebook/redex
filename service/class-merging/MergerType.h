@@ -14,7 +14,7 @@
 
 namespace class_merging {
 
-std::string get_root_type_name_tag(const DexType* root_type);
+std::string get_type_name_tag(const DexType* root_type);
 
 using FieldsMap = std::unordered_map<const DexType*, std::vector<DexField*>>;
 
@@ -95,7 +95,7 @@ struct MergerType {
     std::string build_type_name(
         const std::string& prefix,
         const DexType* root_type,
-        const std::string& name,
+        const TypeSet& intf_set,
         const boost::optional<size_t>& dex_id,
         size_t count,
         const boost::optional<InterdexSubgroupIdx>& interdex_subgroup_idx,
