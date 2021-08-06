@@ -556,7 +556,7 @@ std::vector<DexClass*> ModelMerger::merge_model(Scope& scope,
     cls->rstate.set_interdex_subgroup(merger.interdex_subgroup);
     cls->rstate.set_generated();
 
-    add_class(cls, scope, stores);
+    add_class(cls, scope, stores, model_spec.dex_id);
     merger_classes.push_back(cls);
 
     if (!merger.has_mergeables()) {

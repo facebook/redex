@@ -10,6 +10,7 @@
 #include <boost/algorithm/string.hpp>
 
 #include "Creators.h"
+#include "DexStore.h"
 #include "DexUtil.h"
 #include "Model.h"
 #include "Show.h"
@@ -331,22 +332,16 @@ void patch_iget(DexMethod* meth,
   }
 };
 
-void add_class(DexClass* new_cls, Scope& scope, DexStoresVector& stores) {
+void add_class(DexClass* new_cls,
+               Scope& scope,
+               DexStoresVector& stores,
+               boost::optional<size_t> dex_id) {
   always_assert(new_cls != nullptr);
-
-  scope.push_back(new_cls);
-  TRACE(CLMG,
-        4,
-        " ClassMerging Adding class %s to scope %zu ",
-        SHOW(new_cls),
+  TRACE(CLMG, 4, " ClassMerging Adding class %s to dex(%s) scope[%zu]",
+        SHOW(new_cls), dex_id ? std::to_string(*dex_id).c_str() : "last",
         scope.size());
-
-  // TODO(emmasevastian): Handle this case in a better way.
-  if (!stores.empty()) {
-    DexClassesVector& root_store = stores.front().get_dexen();
-    // Add the class to the last dex.
-    root_store.back().emplace_back(new_cls);
-  }
+  scope.push_back(new_cls);
+  DexStore::add_class(new_cls, stores, dex_id);
 }
 
 /**
@@ -396,7 +391,7 @@ void handle_interface_as_root(ModelSpec& spec,
       TRACE(CLMG, 3, "Changing the root from %s to %s.", SHOW(interface_root),
             SHOW(empty_base));
       spec.roots.insert(empty_base);
-      add_class(type_class(empty_base), scope, stores);
+      add_class(type_class(empty_base), scope, stores, boost::none);
     }
     // Remove interface roots regardless of whether an empty base was added.
     spec.roots.erase(interface_root);

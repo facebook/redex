@@ -157,6 +157,8 @@ struct ModelSpec {
   bool dedup_throw_blocks{true};
   // Replace string literals matching a merged type.
   bool replace_type_like_const_strings{true};
+  // Suggested dex to store the merger classes.
+  boost::optional<size_t> dex_id;
 
   bool generate_type_tag() const {
     return type_tag_config == TypeTagConfig::GENERATE;

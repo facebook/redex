@@ -96,6 +96,7 @@ struct MergerType {
         const std::string& prefix,
         const DexType* root_type,
         const std::string& name,
+        const boost::optional<size_t>& dex_id,
         size_t count,
         const boost::optional<InterdexSubgroupIdx>& interdex_subgroup_idx,
         const InterdexSubgroupIdx subgroup_idx) const;
