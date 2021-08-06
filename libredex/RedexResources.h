@@ -162,6 +162,7 @@ class AndroidResources {
       const std::map<uint32_t, uint32_t>& kept_to_remapped_ids) = 0;
   virtual std::unordered_set<std::string> find_all_xml_files() = 0;
   virtual std::vector<std::string> find_resources_files() = 0;
+  virtual std::string get_base_assets_dir() = 0;
   // Classnames present in native libraries (lib/*/*.so)
   std::unordered_set<std::string> get_native_classes();
 

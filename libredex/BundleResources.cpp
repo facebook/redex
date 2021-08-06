@@ -501,6 +501,10 @@ std::vector<std::string> BundleResources::find_lib_directories() {
   return find_subdir_in_modules(m_directory, "lib");
 }
 
+std::string BundleResources::get_base_assets_dir() {
+  return m_directory + "/base/assets";
+}
+
 namespace {
 const std::unordered_set<std::string> NON_CLASS_ELEMENTS = {
     "fragment", "view", "dialog", "activity", "intent",

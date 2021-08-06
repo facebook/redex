@@ -80,6 +80,8 @@ class BundleResources : public AndroidResources {
 
   std::unordered_set<std::string> find_all_xml_files() override;
 
+  std::string get_base_assets_dir() override;
+
  protected:
   std::vector<std::string> find_res_directories() override;
   std::vector<std::string> find_lib_directories() override;

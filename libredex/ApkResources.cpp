@@ -335,6 +335,10 @@ std::vector<std::string> ApkResources::find_lib_directories() {
   return {m_directory + "/lib"};
 }
 
+std::string ApkResources::get_base_assets_dir() {
+  return m_directory + "/assets";
+}
+
 namespace {
 bool is_binary_xml(const void* data, size_t size) {
   if (size < sizeof(android::ResChunk_header)) {

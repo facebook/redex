@@ -117,6 +117,7 @@ class ApkResources : public AndroidResources {
   std::unique_ptr<ResourceTableFile> load_res_table() override;
   std::unordered_set<std::string> find_all_xml_files() override;
   std::vector<std::string> find_resources_files() override;
+  std::string get_base_assets_dir() override;
 
  protected:
   std::vector<std::string> find_res_directories() override;
