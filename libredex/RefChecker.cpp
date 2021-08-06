@@ -86,22 +86,36 @@ bool RefChecker::check_method_and_code(const DexMethod* method) const {
               return editable_cfg_adapter::LOOP_BREAK;
             }
           } else if (insn->has_field()) {
-            auto field = resolve_field(insn->get_field());
-            if (!field || !check_field(field)) {
+            auto field_ref = insn->get_field();
+            auto field = resolve_field(field_ref);
+            if (!field || !check_field(field) ||
+                (field != field_ref && !check_type(field_ref->get_class()))) {
               all_refs_valid = false;
               return editable_cfg_adapter::LOOP_BREAK;
             }
           } else if (insn->has_method()) {
-            auto callee = resolve_method(
-                insn->get_method(), opcode_to_search(insn), method);
-            if (!callee || !check_method(callee)) {
+            auto callee_ref = insn->get_method();
+            auto callee =
+                resolve_method(callee_ref, opcode_to_search(insn), method);
+            if (!callee || !check_method(callee) ||
+                (callee != callee_ref &&
+                 !check_type(callee_ref->get_class()))) {
               all_refs_valid = false;
               return editable_cfg_adapter::LOOP_BREAK;
             }
           }
           return editable_cfg_adapter::LOOP_CONTINUE;
         });
-    return all_refs_valid;
+    if (!all_refs_valid) {
+      return false;
+    }
+    std::vector<DexType*> catch_types;
+    method->get_code()->gather_catch_types(catch_types);
+    for (auto type : catch_types) {
+      if (type && !check_type(type)) {
+        return false;
+      }
+    }
   }
   return true;
 }
