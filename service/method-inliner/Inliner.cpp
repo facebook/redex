@@ -2029,13 +2029,8 @@ bool MultiMethodInliner::caller_is_blocklisted(const DexMethod* caller) {
  * in which case we cannot inline.
  */
 bool MultiMethodInliner::has_external_catch(const DexMethod* callee) {
-  const IRCode* code = callee->get_code();
   std::vector<DexType*> types;
-  if (code->editable_cfg_built()) {
-    code->cfg().gather_catch_types(types);
-  } else {
-    code->gather_catch_types(types);
-  }
+  callee->get_code()->gather_catch_types(types);
   for (auto type : types) {
     auto cls = type_class(type);
     if (cls != nullptr && cls->is_external() && !is_public(cls)) {
