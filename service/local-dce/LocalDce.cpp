@@ -72,12 +72,8 @@ void update_liveness(const IRInstruction* inst,
 ////////////////////////////////////////////////////////////////////////////////
 
 std::vector<std::pair<cfg::Block*, IRList::iterator>>
-LocalDce::get_dead_instructions(
-    const cfg::ControlFlowGraph& cfg,
-    const std::vector<cfg::Block*>& blocks,
-    const std::function<const std::vector<cfg::Edge*>&(cfg::Block*)>& succs_fn,
-    const std::function<bool(cfg::Block*, IRInstruction*)>&
-        may_be_required_fn) {
+LocalDce::get_dead_instructions(const cfg::ControlFlowGraph& cfg,
+                                const std::vector<cfg::Block*>& blocks) {
   auto regs = cfg.get_registers_size();
   std::unordered_map<cfg::BlockId, boost::dynamic_bitset<>> liveness;
   for (cfg::Block* b : cfg.blocks()) {
@@ -97,7 +93,7 @@ LocalDce::get_dead_instructions(
       TRACE(DCE, 5, "B%lu: %s", b->id(), show(bliveness).c_str());
 
       // Compute live-out for this block from its successors.
-      for (auto& s : succs_fn(b)) {
+      for (auto& s : b->succs()) {
         if (s->target()->id() == b->id()) {
           bliveness |= prev_liveness;
         }
@@ -115,8 +111,7 @@ LocalDce::get_dead_instructions(
         if (it->type != MFLOW_OPCODE) {
           continue;
         }
-        bool required = may_be_required_fn(b, it->insn) &&
-                        is_required(cfg, b, it->insn, bliveness);
+        bool required = is_required(cfg, b, it->insn, bliveness);
         if (required) {
           update_liveness(it->insn, bliveness);
         } else {
@@ -145,13 +140,7 @@ void LocalDce::dce(cfg::ControlFlowGraph& cfg, bool normalize_new_instances) {
   TRACE(DCE, 5, "%s", SHOW(cfg));
   const auto& blocks = graph::postorder_sort<cfg::GraphInterface>(cfg);
   std::vector<std::pair<cfg::Block*, IRList::iterator>> dead_instructions =
-      get_dead_instructions(
-          cfg, blocks, /* succs_fn */
-          [](cfg::Block* block) -> const std::vector<cfg::Edge*>& {
-            return block->succs();
-          },
-          /* may_be_required_fn */
-          [](cfg::Block*, IRInstruction*) -> bool { return true; });
+      get_dead_instructions(cfg, blocks);
 
   // Remove dead instructions.
   std::unordered_set<IRInstruction*> seen;

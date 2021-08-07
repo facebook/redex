@@ -21,27 +21,22 @@ class CFGInliner {
    * Expects callsite to be a method call from caller.
    * Registers starting with next_caller_reg must be available.
    */
-  static void inline_cfg(
-      ControlFlowGraph* caller,
-      const cfg::InstructionIterator& callsite,
-      DexType* needs_receiver_cast,
-      const ControlFlowGraph& callee,
-      size_t next_caller_reg,
-      const std::unordered_set<cfg::Block*>* dead_blocks = nullptr);
+  static void inline_cfg(ControlFlowGraph* caller,
+                         const cfg::InstructionIterator& callsite,
+                         DexType* needs_receiver_cast,
+                         const ControlFlowGraph& callee,
+                         size_t next_caller_reg);
 
   /*
    * Copy callee's blocks into caller:
    * Uses provided plugin to update caller and/or copy of callee
    */
-  static void inline_cfg(
-      ControlFlowGraph* caller,
-      const cfg::InstructionIterator& inline_site,
-      DexType* needs_receiver_cast,
-      const ControlFlowGraph& callee,
-
-      size_t next_caller_reg,
-      CFGInlinerPlugin& plugin,
-      const std::unordered_set<cfg::Block*>* dead_blocks = nullptr);
+  static void inline_cfg(ControlFlowGraph* caller,
+                         const cfg::InstructionIterator& inline_site,
+                         DexType* needs_receiver_cast,
+                         const ControlFlowGraph& callee,
+                         size_t next_caller_reg,
+                         CFGInlinerPlugin& plugin);
 
  private:
   /*
@@ -55,8 +50,7 @@ class CFGInliner {
    * EDGE_GHOST edges are added from all exit points to this one (empty) ghost
    * block. This block gets in the way while inlining. Remove if it's there.
    */
-  static boost::optional<BlockId> remove_ghost_exit_block(
-      ControlFlowGraph* cfg);
+  static void remove_ghost_exit_block(ControlFlowGraph* cfg);
 
   /*
    * If `it` isn't already, make it the last instruction of its block
