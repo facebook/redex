@@ -859,7 +859,7 @@ void MultiMethodInliner::inline_inlinables(
     cfg_next_caller_reg = caller->cfg().get_registers_size();
   }
   size_t calls_not_inlinable{0}, calls_not_inlined{0}, no_returns{0},
-      unreachable_insns{0};
+      unreachable_insns{0}, caller_too_large{0};
 
   size_t intermediate_shrinkings{0};
   size_t intermediate_remove_unreachable_blocks{0};
@@ -964,11 +964,11 @@ void MultiMethodInliner::inline_inlinables(
     }
 
     std::vector<DexMethod*> make_static;
-    bool caller_too_large;
+    bool caller_too_large_;
     auto not_inlinable = !is_inlinable(
         caller_method, callee_method, callsite_insn, estimated_caller_size,
-        inlinable.insn_size, &make_static, &caller_too_large);
-    if (not_inlinable && caller_too_large &&
+        inlinable.insn_size, &make_static, &caller_too_large_);
+    if (not_inlinable && caller_too_large_ &&
         inlined_callees.size() > last_intermediate_inlined_callees) {
       intermediate_remove_unreachable_blocks++;
       last_intermediate_inlined_callees = inlined_callees.size();
@@ -988,7 +988,7 @@ void MultiMethodInliner::inline_inlinables(
       }
       not_inlinable = !is_inlinable(caller_method, callee_method, callsite_insn,
                                     estimated_caller_size, inlinable.insn_size,
-                                    &make_static, &caller_too_large);
+                                    &make_static, &caller_too_large_);
       if (!not_inlinable && m_config.intermediate_shrinking &&
           m_shrinker.enabled()) {
         intermediate_shrinkings++;
@@ -1002,11 +1002,15 @@ void MultiMethodInliner::inline_inlinables(
         }
         not_inlinable = !is_inlinable(
             caller_method, callee_method, callsite_insn, estimated_caller_size,
-            inlinable.insn_size, &make_static, &caller_too_large);
+            inlinable.insn_size, &make_static, &caller_too_large_);
       }
     }
     if (not_inlinable) {
-      calls_not_inlinable++;
+      if (caller_too_large_) {
+        caller_too_large++;
+      } else {
+        calls_not_inlinable++;
+      }
       continue;
     }
     // Only now, when are about actually inline the method, we'll record
@@ -1079,6 +1083,9 @@ void MultiMethodInliner::inline_inlinables(
   if (intermediate_remove_unreachable_blocks) {
     info.intermediate_remove_unreachable_blocks +=
         intermediate_remove_unreachable_blocks;
+  }
+  if (caller_too_large) {
+    info.caller_too_large += caller_too_large;
   }
 }
 
@@ -1276,7 +1283,6 @@ bool MultiMethodInliner::is_estimate_over_max(uint64_t estimated_caller_size,
   // branch opcodes to encode large jumps.
   if (estimated_caller_size + estimated_callee_size >
       max - std::min(m_config.instruction_size_buffer, max)) {
-    info.caller_too_large++;
     return true;
   }
   return false;
