@@ -30,7 +30,7 @@ bool inline_with_cfg(
     IRInstruction* callsite,
     DexType* needs_receiver_cast,
     size_t next_caller_reg,
-    const std::unordered_set<cfg::Block*>* dead_blocks = nullptr);
+    const std::shared_ptr<cfg::ControlFlowGraph>& reduced_cfg = nullptr);
 
 } // namespace inliner
 
@@ -98,8 +98,9 @@ struct Inlinable {
   // return normally, and instead of inlining, a throw statement should be
   // inserted afterwards.
   bool no_return{false};
-  // Dead-blocks in the callee at a particular call-site
-  const std::unordered_set<cfg::Block*>* dead_blocks;
+  // For a specific call-site, reduced cfg template after applying call-site
+  // summary
+  std::shared_ptr<cfg::ControlFlowGraph> reduced_cfg;
   // Estimated size of callee, possibly reduced by call-site specific knowledge
   size_t insn_size;
 };
@@ -124,16 +125,18 @@ struct InlinedCost {
   bool no_return;
   // Average or call-site specific value indicating whether result is used
   float result_used;
-  // For a specific call-site, a set of known dead blocks in the callee
-  std::unordered_set<cfg::Block*> dead_blocks;
+  // For a specific call-site, reduced cfg template after applying call-site
+  // summary
+  std::shared_ptr<cfg::ControlFlowGraph> reduced_cfg;
   // Maximum or call-site specific estimated callee size after pruning
   size_t insn_size;
 
   bool operator==(const InlinedCost& other) {
+    // TODO: Also check that reduced_cfg's are equivalent
     return full_code == other.full_code && code == other.code &&
            method_refs == other.method_refs && other_refs == other.other_refs &&
            no_return == other.no_return && result_used == other.result_used &&
-           dead_blocks == other.dead_blocks && insn_size == other.insn_size;
+           insn_size == other.insn_size;
   }
 };
 
@@ -347,15 +350,15 @@ class MultiMethodInliner {
   /**
    * Whether it's beneficial to inline the callee at a particular callsite.
    * no_return may be set to true when the return value is false.
-   * dead_blocks and insn_size are set when the return value is true.
+   * reduced_cfg and insn_size are set when the return value is true.
    */
   bool should_inline_at_call_site(
       DexMethod* caller,
       const IRInstruction* invoke_insn,
       DexMethod* callee,
-      bool* no_return,
-      const std::unordered_set<cfg::Block*>** dead_blocks,
-      size_t* insn_size);
+      bool* no_return = nullptr,
+      std::shared_ptr<cfg::ControlFlowGraph>* reduced_cfg = nullptr,
+      size_t* insn_size = nullptr);
 
   /**
    * should_inline_fast will return true for a subset of methods compared to
@@ -384,6 +387,26 @@ class MultiMethodInliner {
    * bloat the bytecode.
    */
   bool too_many_callers(const DexMethod* callee);
+
+  // Reduce a cfg with a call-site summary, if given.
+  std::shared_ptr<cfg::ControlFlowGraph> apply_call_site_summary(
+      bool is_static,
+      DexType* declaring_type,
+      DexProto* proto,
+      const cfg::ControlFlowGraph& original_cfg,
+      const CallSiteSummary* call_site_summary);
+
+  /*
+   * Try to estimate number of code units (2 bytes each) of code. Also take
+   * into account costs arising from control-flow overhead and constant
+   * arguments, if any
+   */
+  InlinedCost get_inlined_cost(
+      bool is_static,
+      DexType* declaring_type,
+      DexProto* proto,
+      const IRCode* code,
+      const CallSiteSummary* call_site_summary = nullptr);
 
   /**
    * Estimate inlined cost for fully inlining a callee without using any
@@ -628,7 +651,6 @@ class MultiMethodInliner {
     std::atomic<size_t> constant_invoke_callers_incomplete{0};
     std::atomic<size_t> constant_invoke_callers_unreachable_blocks{0};
     std::atomic<size_t> constant_invoke_callees_analyzed{0};
-    std::atomic<size_t> constant_invoke_callees_unreachable_blocks{0};
     std::atomic<size_t> constant_invoke_callees_unused_results{0};
     std::atomic<size_t> constant_invoke_callees_no_return{0};
     std::atomic<size_t> constant_invoke_callers_critical_path_length{0};

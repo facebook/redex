@@ -146,7 +146,9 @@ void Transform::simplify_instruction(cfg::ControlFlowGraph& cfg,
   case IOPCODE_LOAD_PARAM:
   case IOPCODE_LOAD_PARAM_OBJECT:
   case IOPCODE_LOAD_PARAM_WIDE: {
-    generate_const_param(env, it, xstores, declaring_type);
+    if (m_config.add_param_const) {
+      generate_const_param(env, it, xstores, declaring_type);
+    }
     break;
   }
   case OPCODE_MOVE:

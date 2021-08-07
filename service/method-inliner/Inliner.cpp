@@ -681,7 +681,7 @@ void MultiMethodInliner::inline_callees(
           if (!callee || !callees.count(callee)) {
             return editable_cfg_adapter::LOOP_CONTINUE;
           }
-          const std::unordered_set<cfg::Block*>* dead_blocks{nullptr};
+          std::shared_ptr<cfg::ControlFlowGraph> reduced_cfg;
           bool no_return{false};
           size_t insn_size{0};
           if (filter_via_should_inline) {
@@ -689,7 +689,7 @@ void MultiMethodInliner::inline_callees(
             // Cost model is based on fully inlining callee everywhere; let's
             // see if we can get more detailed call-site specific information
             if (should_inline_at_call_site(caller, insn, callee, &no_return,
-                                           &dead_blocks, &insn_size)) {
+                                           &reduced_cfg, &insn_size)) {
               always_assert(!no_return);
               // Yes, we know might have dead_blocks and a refined insn_size
             } else if (should_inline_always(callee)) {
@@ -698,7 +698,7 @@ void MultiMethodInliner::inline_callees(
               insn_size = get_callee_insn_size(callee);
             } else if (no_return) {
               always_assert(insn_size == 0);
-              always_assert(!dead_blocks);
+              always_assert(!reduced_cfg);
             } else {
               return editable_cfg_adapter::LOOP_CONTINUE;
             }
@@ -723,8 +723,8 @@ void MultiMethodInliner::inline_callees(
             }
           }
 
-          inlinables.push_back(
-              (Inlinable){callee, it, insn, no_return, dead_blocks, insn_size});
+          inlinables.push_back((Inlinable){callee, it, insn, no_return,
+                                           std::move(reduced_cfg), insn_size});
           return editable_cfg_adapter::LOOP_CONTINUE;
         });
   }
@@ -1026,7 +1026,7 @@ void MultiMethodInliner::inline_inlinables(
         it == m_inlined_invokes_need_cast.end() ? nullptr : it->second;
     bool success = inliner::inline_with_cfg(
         caller_method, callee_method, callsite_insn, needs_receiver_cast,
-        *cfg_next_caller_reg, inlinable.dead_blocks);
+        *cfg_next_caller_reg, inlinable.reduced_cfg);
     if (!success) {
       calls_not_inlined++;
       continue;
@@ -1111,12 +1111,23 @@ void MultiMethodInliner::compute_callee_costs(DexMethod* method) {
       invokes[call_site_summary].push_back(invoke_insn);
     }
     for (auto& p : invokes) {
-      m_scheduler.augment(method, [this, insns = p.second, method]() {
+      m_scheduler.augment(method, [this, call_site_summary = p.first,
+                                   insns = p.second, method]() {
         TraceContext context(method);
-        // Populate cache
+        // Populate caches
         auto timer = m_call_site_inlined_cost_timer.scope();
+        bool keep_reduced_cfg = false;
         for (auto insn : insns) {
-          get_call_site_inlined_cost(insn, method);
+          if (should_inline_at_call_site(nullptr, insn, method)) {
+            keep_reduced_cfg = true;
+          }
+        }
+        if (!keep_reduced_cfg) {
+          CalleeCallSiteSummary key{method, call_site_summary};
+          auto inlined_cost = m_call_site_inlined_costs.get(key, nullptr);
+          if (inlined_cost) {
+            inlined_cost->reduced_cfg.reset();
+          }
         }
       });
     }
@@ -1427,28 +1438,27 @@ static size_t get_inlined_cost(IRInstruction* insn) {
  * metadata) that exists for this block; this doesn't include the cost of
  * the instructions in the block, which are accounted for elsewhere.
  */
-static size_t get_inlined_cost(const std::vector<cfg::Block*>& reachable_blocks,
+static size_t get_inlined_cost(const std::vector<cfg::Block*>& blocks,
                                size_t index,
-                               const std::vector<cfg::Edge*>& feasible_succs) {
-  auto block = reachable_blocks.at(index);
+                               const std::vector<cfg::Edge*>& succs) {
+  auto block = blocks.at(index);
   switch (block->branchingness()) {
   case opcode::Branchingness::BRANCH_GOTO:
   case opcode::Branchingness::BRANCH_IF:
   case opcode::Branchingness::BRANCH_SWITCH: {
-    if (feasible_succs.empty()) {
+    if (succs.empty()) {
       return 0;
     }
-    if (feasible_succs.size() > 2) {
+    if (succs.size() > 2) {
       // a switch
-      return 4 + 3 * feasible_succs.size();
+      return 4 + 3 * succs.size();
     }
     // a (possibly conditional) branch; each feasible non-fallthrough edge has a
     // cost
     size_t cost{0};
-    auto next_block = index == reachable_blocks.size() - 1
-                          ? nullptr
-                          : reachable_blocks.at(index + 1);
-    for (auto succ : feasible_succs) {
+    auto next_block =
+        index == blocks.size() - 1 ? nullptr : blocks.at(index + 1);
+    for (auto succ : succs) {
       always_assert(succ->target() != nullptr);
       if (next_block != succ->target()) {
         // we have a non-fallthrough edge
@@ -1462,129 +1472,70 @@ static size_t get_inlined_cost(const std::vector<cfg::Block*>& reachable_blocks,
   }
 }
 
-namespace {
-// Characterization of what remains of a cfg after applying constant propagation
-// and local-dce.
-struct ResidualCfgInfo {
-  std::vector<cfg::Block*> reachable_blocks;
-  std::unordered_map<cfg::Block*, std::vector<cfg::Edge*>> feasible_succs;
-  std::unordered_set<IRInstruction*> dead_instructions;
-};
-} // namespace
-
-static boost::optional<ResidualCfgInfo> get_residual_cfg_info(
+std::shared_ptr<cfg::ControlFlowGraph>
+MultiMethodInliner::apply_call_site_summary(
     bool is_static,
-    bool has_result,
-    const IRCode* code,
-    const CallSiteSummary* call_site_summary,
-    const std::unordered_set<DexMethodRef*>* pure_methods,
-    constant_propagation::ImmutableAttributeAnalyzerState*
-        immut_analyzer_state) {
+    DexType* declaring_type,
+    DexProto* proto,
+    const cfg::ControlFlowGraph& original_cfg,
+    const CallSiteSummary* call_site_summary) {
   if (!call_site_summary) {
-    return boost::none;
+    return nullptr;
   }
 
-  auto& cfg = code->cfg();
   if (call_site_summary->arguments.is_top()) {
-    if (!has_result || call_site_summary->result_used) {
-      return boost::none;
+    if (proto->is_void() || call_site_summary->result_used) {
+      return nullptr;
     }
   }
 
-  ResidualCfgInfo res;
-  if (call_site_summary->arguments.is_top()) {
-    res.reachable_blocks = cfg.blocks();
-    for (auto block : res.reachable_blocks) {
-      res.feasible_succs.emplace(block, block->succs());
-    }
-  } else {
-    constant_propagation::intraprocedural::FixpointIterator intra_cp(
-        cfg,
-        constant_propagation::ConstantPrimitiveAndBoxedAnalyzer(
-            immut_analyzer_state, immut_analyzer_state,
-            constant_propagation::EnumFieldAnalyzerState::get(),
-            constant_propagation::BoxedBooleanAnalyzerState::get(), nullptr));
-    ConstantEnvironment initial_env =
-        constant_propagation::interprocedural::env_with_params(
-            is_static, code, call_site_summary->arguments);
-    intra_cp.run(initial_env);
+  // Clone original cfg
+  IRCode cloned_code(std::make_unique<cfg::ControlFlowGraph>());
+  original_cfg.deep_copy(&cloned_code.cfg());
 
-    res.reachable_blocks = graph::postorder_sort<cfg::GraphInterface>(cfg);
-    bool found_unreachable_block_or_infeasible_edge{false};
-    for (auto it = res.reachable_blocks.begin();
-         it != res.reachable_blocks.end();) {
-      cfg::Block* block = *it;
-      if (intra_cp.get_entry_state_at(block).is_bottom()) {
-        // we found an unreachable block
-        found_unreachable_block_or_infeasible_edge = true;
-        it = res.reachable_blocks.erase(it);
-      } else {
-        auto env = intra_cp.get_exit_state_at(block);
-        std::vector<cfg::Edge*>& block_feasible_succs =
-            res.feasible_succs[block];
-        for (auto succ : block->succs()) {
-          if (succ->type() == cfg::EDGE_GHOST) {
-            continue;
-          }
-          if (intra_cp.analyze_edge(succ, env).is_bottom()) {
-            // we found an infeasible edge
-            found_unreachable_block_or_infeasible_edge = true;
-            continue;
-          }
-          block_feasible_succs.push_back(succ);
-        }
-        ++it;
+  // If result is not used, change all return-* instructions to return-void (and
+  // let local-dce remove the code that leads to it).
+  if (!proto->is_void() && !call_site_summary->result_used) {
+    proto = DexProto::make_proto(type::_void(), proto->get_args());
+    for (auto& mie : InstructionIterable(cloned_code.cfg())) {
+      if (opcode::is_a_return(mie.insn->opcode())) {
+        mie.insn->set_opcode(OPCODE_RETURN_VOID);
+        mie.insn->set_srcs_size(0);
       }
     }
-    if (!found_unreachable_block_or_infeasible_edge &&
-        (!has_result || call_site_summary->result_used)) {
-      return boost::none;
-    }
   }
 
-  static std::unordered_set<DexMethodRef*> no_pure_methods;
-  LocalDce dce(pure_methods ? *pure_methods : no_pure_methods);
-  for (auto &p : dce.get_dead_instructions(
-           cfg, res.reachable_blocks,
-           /* succs_fn */
-           [&](cfg::Block*block) -> const std::vector<cfg::Edge*>& {
-             return res.feasible_succs.at(block);
-           },
-           /* may_be_required_fn */
-           [&](cfg::Block*block, IRInstruction*insn) -> bool {
-             if (opcode::is_switch(insn->opcode()) ||
-                 opcode::is_a_conditional_branch(insn->opcode())) {
-               return res.feasible_succs.at(block).size() > 1;
-             }
-             if (opcode::is_a_return(insn->opcode()) &&
-                 !call_site_summary->result_used) {
-               return false;
-             }
-             return true;
-           })) {
-    res.dead_instructions.insert(p.second->insn);
-  }
-  // put reachable blocks back in ascending order
-  std::sort(res.reachable_blocks.begin(), res.reachable_blocks.end(),
-            [](cfg::Block* a, cfg::Block* b) { return a->id() < b->id(); });
+  // Run constant-propagation with call-site specific arguments, and then run
+  // local-dce
+  ConstantEnvironment initial_env =
+      constant_propagation::interprocedural::env_with_params(
+          is_static, &cloned_code, call_site_summary->arguments);
+  constant_propagation::Transform::Config config;
+  // No need to add extra instructions to load constant params, we'll pass those
+  // in anyway
+  config.add_param_const = false;
+  m_shrinker.constant_propagation(is_static, declaring_type, proto,
+                                  &cloned_code, initial_env, config);
+  m_shrinker.local_dce(&cloned_code, /* normalize_new_instances */ false);
+
+  // Re-build cfg once more to get linearized representation, good for
+  // predicting fallthrough branches
+  cloned_code.build_cfg(/* editable */ true);
+
+  // And a final clone to move the cfg into a long-lived shared-ptr.
+  auto res = std::make_shared<cfg::ControlFlowGraph>();
+  cloned_code.cfg().deep_copy(res.get());
   return res;
 }
 
-/*
- * Try to estimate number of code units (2 bytes each) of code. Also take
- * into account costs arising from control-flow overhead and constant
- * arguments, if any
- */
-static InlinedCost get_inlined_cost(
+InlinedCost MultiMethodInliner::get_inlined_cost(
     bool is_static,
-    bool has_result,
+    DexType* declaring_type,
+    DexProto* proto,
     const IRCode* code,
-    const CallSiteSummary* call_site_summary = nullptr,
-    const std::unordered_set<DexMethodRef*>* pure_methods = nullptr,
-    constant_propagation::ImmutableAttributeAnalyzerState*
-        immut_analyzer_state = nullptr) {
+    const CallSiteSummary* call_site_summary) {
   size_t cost{0};
-  std::unordered_set<cfg::Block*> dead_blocks;
+  std::shared_ptr<cfg::ControlFlowGraph> reduced_cfg;
   size_t returns{0};
   std::unordered_set<DexMethodRef*> method_refs_set;
   std::unordered_set<const void*> other_refs_set;
@@ -1609,46 +1560,29 @@ static InlinedCost get_inlined_cost(
       }
     }
   };
-  size_t insn_size{0};
+  size_t insn_size;
   if (code->editable_cfg_built()) {
-    auto rcfg =
-        get_residual_cfg_info(is_static, has_result, code, call_site_summary,
-                              pure_methods, immut_analyzer_state);
-    const auto& reachable_blocks =
-        rcfg ? rcfg->reachable_blocks : code->cfg().blocks();
-    auto cfg_blocks = code->cfg().blocks();
-    if (reachable_blocks.size() < cfg_blocks.size()) {
-      std::unordered_set<cfg::Block*> reachable_block_set(
-          reachable_blocks.begin(), reachable_blocks.end());
-      for (auto block : cfg_blocks) {
-        if (!reachable_block_set.count(block)) {
-          dead_blocks.insert(block);
-        }
-      }
-    }
-
-    for (size_t i = 0; i < reachable_blocks.size(); ++i) {
-      auto block = reachable_blocks.at(i);
+    reduced_cfg = apply_call_site_summary(is_static, declaring_type, proto,
+                                          code->cfg(), call_site_summary);
+    auto cfg = reduced_cfg ? reduced_cfg.get() : &code->cfg();
+    auto blocks = cfg->blocks();
+    for (size_t i = 0; i < blocks.size(); ++i) {
+      auto block = blocks.at(i);
       for (auto& mie : InstructionIterable(block)) {
         auto insn = mie.insn;
-        if (rcfg && rcfg->dead_instructions.count(insn)) {
-          continue;
-        }
-        cost += get_inlined_cost(insn);
+        cost += ::get_inlined_cost(insn);
         analyze_refs(insn);
-        insn_size += insn->size();
       }
-      const auto& feasible_succs =
-          rcfg ? rcfg->feasible_succs.at(block) : block->succs();
-      cost += get_inlined_cost(reachable_blocks, i, feasible_succs);
+      cost += ::get_inlined_cost(blocks, i, block->succs());
       if (block->branchingness() == opcode::Branchingness::BRANCH_RETURN) {
         returns++;
       }
     }
+    insn_size = cfg->sum_opcode_sizes();
   } else {
     editable_cfg_adapter::iterate(code, [&](const MethodItemEntry& mie) {
       auto insn = mie.insn;
-      cost += get_inlined_cost(insn);
+      cost += ::get_inlined_cost(insn);
       if (opcode::is_a_return(insn->opcode())) {
         returns++;
       }
@@ -1664,7 +1598,7 @@ static InlinedCost get_inlined_cost(
   }
 
   auto result_used =
-      call_site_summary ? call_site_summary->result_used : has_result;
+      call_site_summary ? call_site_summary->result_used : !proto->is_void();
 
   return (InlinedCost){cost,
                        (float)cost,
@@ -1672,7 +1606,7 @@ static InlinedCost get_inlined_cost(
                        (float)other_refs_set.size(),
                        !returns,
                        (float)result_used,
-                       std::move(dead_blocks),
+                       std::move(reduced_cfg),
                        insn_size};
 }
 
@@ -1682,15 +1616,14 @@ const InlinedCost* MultiMethodInliner::get_fully_inlined_cost(
   if (inlined_cost) {
     return inlined_cost.get();
   }
-  bool callee_is_static = is_static(callee);
-  bool callee_has_result = !callee->get_proto()->is_void();
-  inlined_cost = std::make_shared<InlinedCost>(get_inlined_cost(
-      callee_is_static, callee_has_result, callee->get_code()));
-  TRACE(INLINE, 4, "get_fully_inlined_cost(%s) = {%zu,%f,%f,%f,%s,%f,%zu,%zu}",
+  inlined_cost = std::make_shared<InlinedCost>(
+      get_inlined_cost(is_static(callee), callee->get_class(),
+                       callee->get_proto(), callee->get_code()));
+  TRACE(INLINE, 4, "get_fully_inlined_cost(%s) = {%zu,%f,%f,%f,%s,%f,%d,%zu}",
         SHOW(callee), inlined_cost->full_code, inlined_cost->code,
         inlined_cost->method_refs, inlined_cost->other_refs,
         inlined_cost->no_return ? "no_return" : "return",
-        inlined_cost->result_used, inlined_cost->dead_blocks.size(),
+        inlined_cost->result_used, !!inlined_cost->reduced_cfg,
         inlined_cost->insn_size);
   m_fully_inlined_costs.update(
       callee,
@@ -1741,19 +1674,19 @@ const InlinedCost* MultiMethodInliner::get_call_site_inlined_cost(
     return inlined_cost.get();
   }
 
-  bool callee_is_static = is_static(callee);
-  bool callee_has_result = !callee->get_proto()->is_void();
-  inlined_cost = std::make_shared<InlinedCost>(
-      get_inlined_cost(callee_is_static, callee_has_result, callee->get_code(),
-                       call_site_summary, &m_shrinker.get_pure_methods(),
-                       m_shrinker.get_immut_analyzer_state()));
+  inlined_cost = std::make_shared<InlinedCost>(get_inlined_cost(
+      is_static(callee), callee->get_class(), callee->get_proto(),
+      callee->get_code(), call_site_summary));
   TRACE(INLINE, 4,
-        "get_call_site_inlined_cost(%s) = {%zu,%f,%f,%f,%s,%f,%zu,%zu}",
+        "get_call_site_inlined_cost(%s) = {%zu,%f,%f,%f,%s,%f,%d,%zu}",
         get_key(*call_site_summary).c_str(), inlined_cost->full_code,
         inlined_cost->code, inlined_cost->method_refs, inlined_cost->other_refs,
         inlined_cost->no_return ? "no_return" : "return",
-        inlined_cost->result_used, inlined_cost->dead_blocks.size(),
+        inlined_cost->result_used, !!inlined_cost->reduced_cfg,
         inlined_cost->insn_size);
+  if (inlined_cost->insn_size >= fully_inlined_cost->insn_size) {
+    inlined_cost->reduced_cfg.reset();
+  }
   m_call_site_inlined_costs.update(key,
                                    [&](const CalleeCallSiteSummary&,
                                        std::shared_ptr<InlinedCost>& value,
@@ -1782,7 +1715,6 @@ const InlinedCost* MultiMethodInliner::get_average_inlined_cost(
   always_assert(fully_inlined_cost);
 
   size_t callees_analyzed{0};
-  size_t callees_unreachable_blocks{0};
   size_t callees_unused_results{0};
   size_t callees_no_return{0};
 
@@ -1804,8 +1736,6 @@ const InlinedCost* MultiMethodInliner::get_average_inlined_cost(
       auto call_site_inlined_cost =
           get_call_site_inlined_cost(call_site_summary, callee);
       always_assert(call_site_inlined_cost);
-      callees_unreachable_blocks +=
-          call_site_inlined_cost->dead_blocks.size() * count;
       if (callee_has_result && !call_site_summary->result_used) {
         callees_unused_results += count;
       }
@@ -1831,13 +1761,11 @@ const InlinedCost* MultiMethodInliner::get_average_inlined_cost(
     inlined_cost->other_refs /= callees_analyzed;
     inlined_cost->result_used /= callees_analyzed;
   }
-  TRACE(INLINE, 4,
-        "get_average_inlined_cost(%s) = {%zu,%f,%f,%f,%s,%f,%zu,%zu}",
+  TRACE(INLINE, 4, "get_average_inlined_cost(%s) = {%zu,%f,%f,%f,%s,%f,%zu}",
         SHOW(callee), inlined_cost->full_code, inlined_cost->code,
         inlined_cost->method_refs, inlined_cost->other_refs,
         inlined_cost->no_return ? "no_return" : "return",
-        inlined_cost->result_used, inlined_cost->dead_blocks.size(),
-        inlined_cost->insn_size);
+        inlined_cost->result_used, inlined_cost->insn_size);
   m_average_inlined_costs.update(
       callee,
       [&](const DexMethod*, std::shared_ptr<InlinedCost>& value, bool exists) {
@@ -1852,8 +1780,6 @@ const InlinedCost* MultiMethodInliner::get_average_inlined_cost(
           return;
         }
         info.constant_invoke_callees_analyzed += callees_analyzed;
-        info.constant_invoke_callees_unreachable_blocks +=
-            callees_unreachable_blocks;
         info.constant_invoke_callees_unused_results += callees_unused_results;
         info.constant_invoke_callees_no_return += callees_no_return;
       });
@@ -1986,7 +1912,7 @@ bool MultiMethodInliner::should_inline_at_call_site(
     const IRInstruction* invoke_insn,
     DexMethod* callee,
     bool* no_return,
-    const std::unordered_set<cfg::Block*>** dead_blocks,
+    std::shared_ptr<cfg::ControlFlowGraph>* reduced_cfg,
     size_t* insn_size) {
   auto inlined_cost = get_call_site_inlined_cost(invoke_insn, callee);
   if (!inlined_cost) {
@@ -1995,7 +1921,7 @@ bool MultiMethodInliner::should_inline_at_call_site(
 
   float cross_dex_penalty{0};
   if (m_mode != IntraDex && !is_private(callee) &&
-      caller->get_class() != callee->get_class()) {
+      (caller == nullptr || caller->get_class() != callee->get_class())) {
     // Inlining methods into different classes might lead to worse
     // cross-dex-ref minimization results.
     cross_dex_penalty = inlined_cost->method_refs;
@@ -2006,12 +1932,18 @@ bool MultiMethodInliner::should_inline_at_call_site(
 
   float invoke_cost = get_invoke_cost(callee, inlined_cost->result_used);
   if (inlined_cost->code + cross_dex_penalty > invoke_cost) {
-    *no_return = inlined_cost->no_return;
+    if (no_return) {
+      *no_return = inlined_cost->no_return;
+    }
     return false;
   }
 
-  *dead_blocks = &inlined_cost->dead_blocks;
-  *insn_size = inlined_cost->insn_size;
+  if (reduced_cfg) {
+    *reduced_cfg = inlined_cost->reduced_cfg;
+  }
+  if (insn_size) {
+    *insn_size = inlined_cost->insn_size;
+  }
   return true;
 }
 
@@ -2411,12 +2343,13 @@ void MultiMethodInliner::delayed_invoke_direct_to_static() {
 namespace inliner {
 
 // return true on successful inlining, false otherwise
-bool inline_with_cfg(DexMethod* caller_method,
-                     DexMethod* callee_method,
-                     IRInstruction* callsite,
-                     DexType* needs_receiver_cast,
-                     size_t next_caller_reg,
-                     const std::unordered_set<cfg::Block*>* dead_blocks) {
+bool inline_with_cfg(
+    DexMethod* caller_method,
+    DexMethod* callee_method,
+    IRInstruction* callsite,
+    DexType* needs_receiver_cast,
+    size_t next_caller_reg,
+    const std::shared_ptr<cfg::ControlFlowGraph>& reduced_cfg) {
 
   auto caller_code = caller_method->get_code();
   always_assert(caller_code->editable_cfg_built());
@@ -2430,6 +2363,25 @@ bool inline_with_cfg(DexMethod* caller_method,
     // This could have happened if a previous inlining caused a block to be
     // unreachable, and that block was deleted when the CFG was simplified.
     return false;
+  }
+
+  auto callee_code = callee_method->get_code();
+  always_assert(callee_code->editable_cfg_built());
+  auto& callee_cfg = reduced_cfg ? *reduced_cfg : callee_code->cfg();
+
+  bool is_trivial = true;
+  for (auto& mie : InstructionIterable(callee_cfg)) {
+    if (mie.insn->opcode() != OPCODE_RETURN_VOID &&
+        !opcode::is_load_param(mie.insn->opcode())) {
+      is_trivial = false;
+      break;
+    }
+  }
+  if (is_trivial) {
+    // no need to go through expensive general inlining, which would also add
+    // unnecessary or even dubious positions
+    caller_cfg.remove_insn(callsite_it);
+    return true;
   }
 
   if (caller_code->get_debug_item() == nullptr) {
@@ -2447,10 +2399,8 @@ bool inline_with_cfg(DexMethod* caller_method,
   // inline_cfg does not fail to inline.
   log_opt(INLINED, caller_method, callsite);
 
-  auto callee_code = callee_method->get_code();
-  always_assert(callee_code->editable_cfg_built());
   cfg::CFGInliner::inline_cfg(&caller_cfg, callsite_it, needs_receiver_cast,
-                              callee_code->cfg(), next_caller_reg, dead_blocks);
+                              callee_cfg, next_caller_reg);
 
   return true;
 }

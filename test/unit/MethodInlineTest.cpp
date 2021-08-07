@@ -669,7 +669,6 @@ TEST_F(MethodInlineTest, inline_beneficial_on_average_after_constant_prop) {
 
   const auto& expected_str = R"(
     (
-      (.pos:dbg_0 "Lfoo;.foo_main:()V" UnknownSource 0)
       (return-void)
     )
   )";
@@ -741,7 +740,6 @@ TEST_F(MethodInlineTest,
 
   const auto& expected_str = R"(
     (
-      (.pos:dbg_0 "Lfoo;.foo_main:()V" UnknownSource 0)
       (const v0 0)
       (invoke-static (v0) "Lfoo;.check:(I)V")
       (const v0 0)
@@ -824,7 +822,6 @@ TEST_F(
 
   const auto& expected_str = R"(
     (
-      (.pos:dbg_0 "Lfoo;.foo_main:()V" UnknownSource 0)
       (const v0 0)
       (invoke-static (v0) "Lfoo;.check:(I)V")
       (const v0 0)
@@ -1071,16 +1068,10 @@ TEST_F(MethodInlineTest, boxed_boolean_without_shrinking) {
       (sget-object "Ljava/lang/Boolean;.TRUE:Ljava/lang/Boolean;")
       (move-result-pseudo-object v0)
       (move-object v1 v0)
-      (invoke-virtual (v1) "Ljava/lang/Boolean;.booleanValue:()Z")
-      (move-result v1)
-      (if-eqz v1 :THROW)
       (sget-object "Ljava/lang/Boolean;.FALSE:Ljava/lang/Boolean;")
       (move-result-pseudo-object v0)
       (invoke-static (v0) "Lfoo;.check:(Ljava/lang/Boolean;)V")
       (return-void)
-      (:THROW)
-      (const v1 0)
-      (throw v1)
     )
   )";
 
@@ -1430,7 +1421,6 @@ TEST_F(MethodInlineTest, unused_result) {
 
   const auto& caller_expected_str = R"(
     (
-      (.pos:dbg_0 "LBar;.caller:()V" UnknownSource 0)
       (return-void)
     )
   )";

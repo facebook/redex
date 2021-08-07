@@ -604,6 +604,14 @@ IRCode::IRCode(const IRCode& code) {
   }
 }
 
+IRCode::IRCode(std::unique_ptr<cfg::ControlFlowGraph> cfg) {
+  always_assert(cfg);
+  always_assert(cfg->editable());
+  m_ir_list = new IRList(); // Empty.
+  m_cfg = std::move(cfg);
+  m_registers_size = m_cfg->get_registers_size();
+}
+
 void IRCode::cleanup_debug() { m_ir_list->cleanup_debug(); }
 
 void IRCode::build_cfg(bool editable) {
