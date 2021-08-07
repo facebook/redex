@@ -1525,6 +1525,12 @@ MultiMethodInliner::apply_call_site_summary(
   // And a final clone to move the cfg into a long-lived shared-ptr.
   auto res = std::make_shared<cfg::ControlFlowGraph>();
   cloned_code.cfg().deep_copy(res.get());
+  res->set_insn_ownership(true);
+
+  cloned_code.cfg().set_insn_ownership(true);
+  // Note that we are not clearing the cloned_code.cfg(). It will get destroyed
+  // now, and delete all instruction copies that it now owns.
+
   return res;
 }
 

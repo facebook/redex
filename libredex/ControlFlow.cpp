@@ -2155,9 +2155,21 @@ void ControlFlowGraph::remove_edge(Edge* edge, bool cleanup) {
 }
 
 void ControlFlowGraph::free_all_blocks_and_edges() {
-  for (const auto& entry : m_blocks) {
-    Block* b = entry.second;
-    delete b;
+  if (m_owns_insns) {
+    for (const auto& entry : m_blocks) {
+      Block* b = entry.second;
+      for (auto it = b->begin(); it != b->end(); it++) {
+        if (it->type == MFLOW_OPCODE) {
+          delete it->insn;
+        }
+      }
+      delete b;
+    }
+  } else {
+    for (const auto& entry : m_blocks) {
+      Block* b = entry.second;
+      delete b;
+    }
   }
 
   for (Edge* e : m_edges) {

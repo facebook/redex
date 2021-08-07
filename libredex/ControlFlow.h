@@ -864,9 +864,18 @@ class ControlFlowGraph {
   cfg::InstructionIterator move_result_of(const cfg::InstructionIterator& it);
 
   /*
-   * clear and fill `new_cfg` with a copy of `this`.
+   * clear and fill `new_cfg` with a copy of `this`. Copies of all instructions
+   * will be made, and are owned by the caller. Consider calling
+   * set_insn_ownership on the new cfg to have it own the instructions.
    */
   void deep_copy(ControlFlowGraph* new_cfg) const;
+
+  /*
+   * Set whether this cfg holds the memory ownership of the contained
+   * instructions, deleting them when the cfg is destroyed. (The default is
+   * false.)
+   */
+  void set_insn_ownership(bool owns_insns) { m_owns_insns = owns_insns; }
 
   // Search all the instructions in this CFG for the given one. Return an
   // iterator to it, or end, if it isn't in the graph.
@@ -1139,6 +1148,7 @@ class ControlFlowGraph {
   Block* m_exit_block{nullptr};
   reg_t m_registers_size{0};
   bool m_editable{true};
+  bool m_owns_insns{false};
 };
 
 // A static-method-only API for use with the monotonic fixpoint iterator.
