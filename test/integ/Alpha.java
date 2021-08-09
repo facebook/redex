@@ -78,3 +78,24 @@ class SyntheticConstructor {
     }
   }
 }
+
+class Delta {
+  public void foo() {
+    Epsilon.wrapper();
+ }
+}
+
+class Epsilon {
+  public static void wrapper() {
+    try {
+      target();
+    } catch (Throwable t) {
+
+    }
+  }
+
+  public static void target() {
+    // some code...
+    java.lang.Integer.parseInt("CrashMe");
+  }
+}

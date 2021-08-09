@@ -201,14 +201,15 @@ DexMethod* trivial_method_wrapper(DexMethod* m, const ClassHierarchy& ch) {
     if (!opcode::is_a_return_value(it->insn->opcode())) return nullptr;
     ++it;
     if (it != end) return nullptr; // exception handling code
-    return method_def;
-  }
-  if (it->insn->opcode() == OPCODE_RETURN_VOID) {
+  } else if (it->insn->opcode() == OPCODE_RETURN_VOID) {
     ++it;
     if (it != end) return nullptr; // exception handling code
-    return method_def;
+  } else {
+    return nullptr;
   }
-  return nullptr;
+  // The wrapper method may have a trivial exception handler.
+  if (code->has_try_blocks()) return nullptr;
+  return method_def;
 }
 
 /*
