@@ -645,6 +645,7 @@ class MultiMethodInliner {
     std::atomic<size_t> non_pub_field{0};
     std::atomic<size_t> non_pub_ctor{0};
     std::atomic<size_t> cross_store{0};
+    std::atomic<size_t> api_level_mismatch{0};
     std::atomic<size_t> caller_too_large{0};
     std::atomic<size_t> constant_invoke_callers_analyzed{0};
     std::atomic<size_t> constant_invoke_callers_unreachable{0};

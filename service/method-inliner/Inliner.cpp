@@ -1218,6 +1218,7 @@ bool MultiMethodInliner::is_inlinable(const DexMethod* caller,
             "              into %s\n because of API boundaries.",
             show_deobfuscated(callee).c_str(),
             show_deobfuscated(caller).c_str());
+      info.api_level_mismatch++;
       return false;
     }
 

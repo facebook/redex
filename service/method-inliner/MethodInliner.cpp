@@ -672,6 +672,8 @@ void run_inliner(DexStoresVector& stores,
         (size_t)inliner.get_info().multi_ret);
   TRACE(INLINE, 3, "references cross stores %ld",
         (size_t)inliner.get_info().cross_store);
+  TRACE(INLINE, 3, "api level mismatches %ld",
+        (size_t)inliner.get_info().api_level_mismatch);
   TRACE(INLINE, 3, "not found %ld", (size_t)inliner.get_info().not_found);
   TRACE(INLINE, 3, "caller too large %ld",
         (size_t)inliner.get_info().caller_too_large);
@@ -683,6 +685,8 @@ void run_inliner(DexStoresVector& stores,
   mgr.incr_metric("recursive", inliner.get_info().recursive);
   mgr.incr_metric("max_call_stack_depth",
                   inliner.get_info().max_call_stack_depth);
+  mgr.incr_metric("cross_store", inliner.get_info().cross_store);
+  mgr.incr_metric("api_level_mismatch", inliner.get_info().api_level_mismatch);
   mgr.incr_metric("caller_too_large", inliner.get_info().caller_too_large);
   mgr.incr_metric("inlined_init_count", inlined_init_count);
   mgr.incr_metric("calls_inlined", inliner.get_info().calls_inlined);
