@@ -15,6 +15,15 @@
 #include "FrameworkApi.h"
 #include "TypeUtil.h"
 
+// All references occurring in some method.
+struct CodeRefs {
+  std::vector<const DexType*> types;
+  std::vector<const DexMethod*> methods;
+  std::vector<const DexField*> fields;
+  bool invalid_refs{false};
+  explicit CodeRefs(const DexMethod* method);
+};
+
 // Helper class that checks if it's safe to use a type/method/field in
 // - the context of a particular store, and
 // - any context where we can only assume a particular min-sdk.
@@ -54,7 +63,11 @@ class RefChecker {
    * No cache for the :method because it's common to only check a definition
    * once.
    */
-  bool check_method_and_code(const DexMethod* method) const;
+  bool check_method_and_code(const DexMethod* method) const {
+    return check_method(method) && check_code_refs(CodeRefs(method));
+  }
+
+  bool check_code_refs(const CodeRefs& code_refs) const;
 
   bool is_in_primary_dex(const DexType* type) const;
 
