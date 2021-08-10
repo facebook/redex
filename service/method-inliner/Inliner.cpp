@@ -80,6 +80,7 @@ MultiMethodInliner::MultiMethodInliner(
     InlineForSpeed* inline_for_speed,
     bool analyze_and_prune_inits,
     const std::unordered_set<DexMethodRef*>& configured_pure_methods,
+    const api::AndroidSDK* min_sdk_api,
     const std::unordered_set<DexString*>& configured_finalish_field_names)
     : m_concurrent_resolver(std::move(concurrent_resolve_fn)),
       m_scheduler(
@@ -139,6 +140,15 @@ MultiMethodInliner::MultiMethodInliner(
   std::unique_ptr<XDexRefs> x_dex;
   if (mode == IntraDex) {
     x_dex = std::make_unique<XDexRefs>(stores);
+  }
+  if (min_sdk_api) {
+    const auto& xstores = m_shrinker.get_xstores();
+    m_ref_checkers =
+        std::make_unique<std::vector<std::unique_ptr<RefChecker>>>();
+    for (size_t store_idx = 0; store_idx < xstores.size(); store_idx++) {
+      m_ref_checkers->emplace_back(
+          std::make_unique<RefChecker>(&xstores, store_idx, min_sdk_api));
+    }
   }
 
   walk::parallel::opcodes(
@@ -460,8 +470,13 @@ void MultiMethodInliner::inline_methods(bool methods_need_deconstruct) {
   //   classes
   m_callee_insn_sizes =
       std::make_unique<ConcurrentMap<const DexMethod*, size_t>>();
-  m_callee_type_refs = std::make_unique<
-      ConcurrentMap<const DexMethod*, std::vector<DexType*>>>();
+  m_callee_type_refs =
+      std::make_unique<ConcurrentMap<const DexMethod*,
+                                     std::shared_ptr<std::vector<DexType*>>>>();
+  if (m_ref_checkers) {
+    m_callee_code_refs = std::make_unique<
+        ConcurrentMap<const DexMethod*, std::shared_ptr<CodeRefs>>>();
+  }
   m_callee_caller_refs =
       std::make_unique<ConcurrentMap<const DexMethod*, CalleeCallerRefs>>();
 
@@ -1144,6 +1159,9 @@ void MultiMethodInliner::compute_callee_costs(DexMethod* method) {
     // Populate caches
     get_callee_insn_size(method);
     get_callee_type_refs(method);
+    if (m_ref_checkers) {
+      get_callee_code_refs(method);
+    }
   });
 
   // The should_inline_always caching depends on all other caches, so we augment
@@ -1237,6 +1255,11 @@ bool MultiMethodInliner::is_inlinable(const DexMethod* caller,
       if (caller_too_large_) {
         *caller_too_large_ = true;
       }
+      return false;
+    }
+
+    if (caller->get_class() != callee->get_class() && m_ref_checkers &&
+        problematic_refs(caller, callee)) {
       return false;
     }
   }
@@ -2208,12 +2231,27 @@ bool MultiMethodInliner::check_android_os_version(IRInstruction* insn) {
   return false;
 }
 
-std::vector<DexType*> MultiMethodInliner::get_callee_type_refs(
+std::shared_ptr<CodeRefs> MultiMethodInliner::get_callee_code_refs(
+    const DexMethod* callee) {
+  if (m_callee_code_refs) {
+    auto cached = m_callee_code_refs->get(callee, nullptr);
+    if (cached) {
+      return cached;
+    }
+  }
+
+  auto code_refs = std::make_shared<CodeRefs>(callee);
+  if (m_callee_code_refs) {
+    m_callee_code_refs->emplace(callee, code_refs);
+  }
+  return code_refs;
+}
+
+std::shared_ptr<std::vector<DexType*>> MultiMethodInliner::get_callee_type_refs(
     const DexMethod* callee) {
   if (m_callee_type_refs) {
-    auto absent = std::vector<DexType*>{nullptr};
-    auto cached = m_callee_type_refs->get(callee, absent);
-    if (cached != absent) {
+    auto cached = m_callee_type_refs->get(callee, nullptr);
+    if (cached) {
       return cached;
     }
   }
@@ -2243,13 +2281,13 @@ std::vector<DexType*> MultiMethodInliner::get_callee_type_refs(
         return editable_cfg_adapter::LOOP_CONTINUE;
       });
 
-  std::vector<DexType*> type_refs;
+  auto type_refs = std::make_shared<std::vector<DexType*>>();
   for (auto type : type_refs_set) {
     // filter out what xstores.illegal_ref(...) doesn't care about
     if (type_class_internal(type) == nullptr) {
       continue;
     }
-    type_refs.push_back(type);
+    type_refs->push_back(type);
   }
 
   if (m_callee_type_refs) {
@@ -2286,12 +2324,28 @@ CalleeCallerRefs MultiMethodInliner::get_callee_caller_refs(
   return callee_caller_refs;
 }
 
+bool MultiMethodInliner::problematic_refs(const DexMethod* caller,
+                                          const DexMethod* callee) {
+  always_assert(m_ref_checkers);
+  auto callee_code_refs = get_callee_code_refs(callee);
+  always_assert(callee_code_refs);
+  const auto& xstores = m_shrinker.get_xstores();
+  size_t store_idx = xstores.get_store_idx(caller->get_class());
+  auto& ref_checker = m_ref_checkers->at(store_idx);
+  if (!ref_checker->check_code_refs(*callee_code_refs)) {
+    info.problematic_refs++;
+    return true;
+  }
+  return false;
+}
+
 bool MultiMethodInliner::cross_store_reference(const DexMethod* caller,
                                                const DexMethod* callee) {
   auto callee_type_refs = get_callee_type_refs(callee);
+  always_assert(callee_type_refs);
   const auto& xstores = m_shrinker.get_xstores();
   size_t store_idx = xstores.get_store_idx(caller->get_class());
-  for (auto type : callee_type_refs) {
+  for (auto type : *callee_type_refs) {
     if (xstores.illegal_ref(store_idx, type)) {
       info.cross_store++;
       return true;

@@ -39,7 +39,7 @@ class RefChecker {
   RefChecker() = delete;
   RefChecker(const RefChecker&) = delete;
   RefChecker& operator=(const RefChecker&) = delete;
-  explicit RefChecker(XStoreRefs* xstores,
+  explicit RefChecker(const XStoreRefs* xstores,
                       size_t store_idx,
                       const api::AndroidSDK* min_sdk_api)
       : m_xstores(xstores),
@@ -72,7 +72,7 @@ class RefChecker {
   bool is_in_primary_dex(const DexType* type) const;
 
  private:
-  XStoreRefs* m_xstores;
+  const XStoreRefs* m_xstores;
   size_t m_store_idx;
   const api::AndroidSDK* m_min_sdk_api;
 

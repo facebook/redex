@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "PriorityThreadPoolDAGScheduler.h"
+#include "RefChecker.h"
 #include "Resolver.h"
 #include "Shrinker.h"
 
@@ -167,6 +168,7 @@ class MultiMethodInliner {
       InlineForSpeed* inline_for_speed = nullptr,
       bool analyze_and_prune_inits = false,
       const std::unordered_set<DexMethodRef*>& configured_pure_methods = {},
+      const api::AndroidSDK* min_sdk_api = nullptr,
       const std::unordered_set<DexString*>& configured_finalish_field_names =
           {});
 
@@ -316,6 +318,13 @@ class MultiMethodInliner {
    */
   bool cross_store_reference(const DexMethod* caller, const DexMethod* callee);
 
+  /**
+   * Return true if a caller is in a DEX in a store and any opcode in callee
+   * refers to a problematic ref, i.e. one that directly or indirectly refers to
+   * another store, or a non-min-sdk API.
+   */
+  bool problematic_refs(const DexMethod* caller, const DexMethod* callee);
+
   bool is_estimate_over_max(uint64_t estimated_caller_size,
                             uint64_t estimated_callee_size,
                             uint64_t max);
@@ -375,7 +384,13 @@ class MultiMethodInliner {
   /**
    * Gets the set of referenced types in a callee.
    */
-  std::vector<DexType*> get_callee_type_refs(const DexMethod* callee);
+  std::shared_ptr<std::vector<DexType*>> get_callee_type_refs(
+      const DexMethod* callee);
+
+  /**
+   * Gets the set of references in a callee's code.
+   */
+  std::shared_ptr<CodeRefs> get_callee_code_refs(const DexMethod* callee);
 
   /**
    * Computes information about callers of a method.
@@ -493,6 +508,8 @@ class MultiMethodInliner {
   bool can_inline_init(const DexMethod* init_method);
 
  private:
+  std::unique_ptr<std::vector<std::unique_ptr<RefChecker>>> m_ref_checkers;
+
   /**
    * Resolver function to map a method reference to a method definition. Must be
    * thread-safe.
@@ -601,8 +618,13 @@ class MultiMethodInliner {
   std::unique_ptr<ConcurrentMap<const DexMethod*, size_t>> m_callee_insn_sizes;
 
   // Optional cache for get_callee_type_refs function
-  std::unique_ptr<ConcurrentMap<const DexMethod*, std::vector<DexType*>>>
+  std::unique_ptr<
+      ConcurrentMap<const DexMethod*, std::shared_ptr<std::vector<DexType*>>>>
       m_callee_type_refs;
+
+  // Optional cache for get_callee_code_refs function
+  std::unique_ptr<ConcurrentMap<const DexMethod*, std::shared_ptr<CodeRefs>>>
+      m_callee_code_refs;
 
   // Optional cache for get_callee_caller_res function
   std::unique_ptr<ConcurrentMap<const DexMethod*, CalleeCallerRefs>>
@@ -646,6 +668,7 @@ class MultiMethodInliner {
     std::atomic<size_t> non_pub_ctor{0};
     std::atomic<size_t> cross_store{0};
     std::atomic<size_t> api_level_mismatch{0};
+    std::atomic<size_t> problematic_refs{0};
     std::atomic<size_t> caller_too_large{0};
     std::atomic<size_t> constant_invoke_callers_analyzed{0};
     std::atomic<size_t> constant_invoke_callers_unreachable{0};

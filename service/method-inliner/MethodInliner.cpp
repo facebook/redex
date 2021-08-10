@@ -541,10 +541,26 @@ void run_inliner(DexStoresVector& stores,
           "provided.");
     return;
   }
+
   auto scope = build_class_scope(stores);
+
+  auto inliner_config = conf.get_inliner_config();
+  const api::AndroidSDK* min_sdk_api{nullptr};
+  if (inliner_config.check_min_sdk_refs) {
+    int32_t min_sdk = mgr.get_redex_options().min_sdk;
+    mgr.incr_metric("min_sdk", min_sdk);
+    TRACE(INLINE, 2, "min_sdk: %d", min_sdk);
+    auto min_sdk_api_file = conf.get_android_sdk_api_file(min_sdk);
+    if (!min_sdk_api_file) {
+      mgr.incr_metric("min_sdk_no_file", 1);
+      TRACE(INLINE, 2, "Android SDK API %d file cannot be found.", min_sdk);
+    } else {
+      min_sdk_api = &conf.get_android_sdk_api(min_sdk);
+    }
+  }
+
   CalleeCallerInsns true_virtual_callers;
   // Gather all inlinable candidates.
-  auto inliner_config = conf.get_inliner_config();
   if (intra_dex) {
     inliner_config.apply_intradex_allowlist();
   }
@@ -591,10 +607,10 @@ void run_inliner(DexStoresVector& stores,
       inliner_config.shrinker.run_const_prop;
 
   // inline candidates
-  MultiMethodInliner inliner(scope, stores, candidates, concurrent_resolver,
-                             inliner_config, intra_dex ? IntraDex : InterDex,
-                             true_virtual_callers, inline_for_speed,
-                             analyze_and_prune_inits, conf.get_pure_methods());
+  MultiMethodInliner inliner(
+      scope, stores, candidates, concurrent_resolver, inliner_config,
+      intra_dex ? IntraDex : InterDex, true_virtual_callers, inline_for_speed,
+      analyze_and_prune_inits, conf.get_pure_methods(), min_sdk_api);
   inliner.inline_methods(/* need_deconstruct */ false);
 
   walk::parallel::code(scope,
@@ -674,6 +690,8 @@ void run_inliner(DexStoresVector& stores,
         (size_t)inliner.get_info().cross_store);
   TRACE(INLINE, 3, "api level mismatches %ld",
         (size_t)inliner.get_info().api_level_mismatch);
+  TRACE(INLINE, 3, "illegal references %ld",
+        (size_t)inliner.get_info().problematic_refs);
   TRACE(INLINE, 3, "not found %ld", (size_t)inliner.get_info().not_found);
   TRACE(INLINE, 3, "caller too large %ld",
         (size_t)inliner.get_info().caller_too_large);
@@ -687,6 +705,7 @@ void run_inliner(DexStoresVector& stores,
                   inliner.get_info().max_call_stack_depth);
   mgr.incr_metric("cross_store", inliner.get_info().cross_store);
   mgr.incr_metric("api_level_mismatch", inliner.get_info().api_level_mismatch);
+  mgr.incr_metric("problematic_refs", inliner.get_info().problematic_refs);
   mgr.incr_metric("caller_too_large", inliner.get_info().caller_too_large);
   mgr.incr_metric("inlined_init_count", inlined_init_count);
   mgr.incr_metric("calls_inlined", inliner.get_info().calls_inlined);
