@@ -11,6 +11,8 @@
 #include <boost/optional.hpp>
 #include <boost/range/adaptor/filtered.hpp>
 #include <boost/range/algorithm/transform.hpp>
+#include <fstream>
+#include <iostream>
 #include <limits>
 #include <queue>
 
@@ -550,6 +552,158 @@ class InlineForSpeedDecisionTrees final : public InlineForSpeedBase {
   std::vector<std::unordered_set<const DexMethodRef*>> top_n_entries;
 };
 
+class InlineForSpeedCallerList final : public InlineForSpeedBase {
+ public:
+  explicit InlineForSpeedCallerList(const std::vector<std::string>& caller_list,
+                                    const MethodProfiles* method_profiles,
+                                    float callee_min_hits,
+                                    float callee_min_appear)
+      : m_caller_methods(gather_methods(caller_list)),
+        m_method_profiles(method_profiles),
+        m_callee_min_hits(callee_min_hits),
+        m_callee_min_appear(callee_min_appear),
+        m_method_context_context(method_profiles) {}
+
+ protected:
+  bool should_inline_impl(const DexMethod* caller_method,
+                          const DexMethod* callee_method) final {
+    if (m_caller_methods.count(caller_method) == 0) {
+      return false;
+    }
+
+    // If the pair is hot under any interaction, inline it.
+    auto do_inline = [&]() {
+      for (const auto& pair : m_method_profiles->all_interactions()) {
+        auto it = pair.second.find(callee_method);
+        if (it == pair.second.end()) {
+          continue;
+        }
+
+        if (it->second.call_count >= m_callee_min_hits &&
+            it->second.appear_percent >= m_callee_min_appear) {
+          return true;
+        }
+      }
+      return false;
+    }();
+
+    if (!do_inline) {
+      return false;
+    }
+
+    if (traceEnabled(METH_PROF, 5)) {
+      const auto& caller_context = get_or_create(caller_method);
+      const auto& callee_context = get_or_create(callee_method);
+
+      for (size_t i = 0;
+           i != m_method_context_context.m_interaction_list.size();
+           ++i) {
+
+        auto get_val = [](const auto& vals, size_t i) {
+          if (!vals) {
+            return -1.0f;
+          }
+          if (!vals->hits[i]) {
+            return -1.0f;
+          }
+          return *vals->hits[i];
+        };
+        auto caller_val = get_val(caller_context.m_vals, i);
+        auto callee_val = get_val(callee_context.m_vals, i);
+
+        auto get_appear_val = [](const auto& vals, size_t i) {
+          if (!vals) {
+            return -1.0f;
+          }
+          if (!vals->appear100[i]) {
+            return -1.0f;
+          }
+          return *vals->appear100[i];
+        };
+        auto caller_appear_val = get_appear_val(caller_context.m_vals, i);
+        auto callee_appear_val = get_appear_val(callee_context.m_vals, i);
+
+        TRACE(METH_PROF,
+              5,
+              "[InlineForSpeedDecisionTrees] %zu: "
+              "%s!%u!%u!%u!%1.5f!%1.5f!%u!%u!%u!%u!%u!%s!%u!%u!%u!%1.5f!%1.5f!%"
+              "u!%u!%u!%u!%u!%s",
+              (size_t)0,
+              // Caller
+              SHOW(caller_method),
+              caller_context.m_params,
+              caller_context.m_blocks,
+              caller_context.m_edges,
+              caller_val,
+              caller_appear_val,
+              caller_context.m_insns,
+              caller_context.m_opcodes,
+              caller_context.m_regs,
+              caller_context.m_num_loops,
+              caller_context.m_deepest_loop,
+              // Callee
+              SHOW(callee_method),
+              callee_context.m_params,
+              callee_context.m_blocks,
+              callee_context.m_edges,
+              callee_val,
+              callee_appear_val,
+              callee_context.m_insns,
+              callee_context.m_opcodes,
+              callee_context.m_regs,
+              callee_context.m_num_loops,
+              callee_context.m_deepest_loop,
+              m_method_context_context.m_interaction_list[i].c_str());
+      }
+    }
+
+    return true;
+  }
+
+  bool should_inline_callsite_impl(
+      const DexMethod* caller_method ATTRIBUTE_UNUSED,
+      const DexMethod* callee_method ATTRIBUTE_UNUSED,
+      const cfg::Block* caller_block ATTRIBUTE_UNUSED) final {
+    // TODO: Maybe do this?
+    return true;
+  }
+
+ private:
+  // Binding late to support methods synthesized before PGI time.
+  static std::unordered_set<const DexMethodRef*> gather_methods(
+      const std::vector<std::string>& caller_list) {
+    std::unordered_set<const DexMethodRef*> ret;
+    for (const auto& str_mref : caller_list) {
+      auto* mref = DexMethod::get_method(str_mref);
+      if (mref != nullptr) {
+        ret.insert(mref);
+      } else {
+        std::cerr << "Warning: Could not find " << str_mref << std::endl;
+      }
+    }
+    return ret;
+  }
+
+  const MethodContext& get_or_create(const DexMethod* m) {
+    auto it = m_cache.find(m);
+    if (it != m_cache.end()) {
+      return it->second;
+    }
+
+    auto insert_it = m_cache.emplace(m, m_method_context_context.create(m));
+    return insert_it.first->second;
+  }
+
+  const std::unordered_set<const DexMethodRef*> m_caller_methods;
+  const MethodProfiles* m_method_profiles;
+  const float m_callee_min_hits;
+  const float m_callee_min_appear;
+
+  // For TRACE.
+  MethodContextContext m_method_context_context;
+  std::unordered_map<const DexMethod*, MethodContext> m_cache;
+};
+
 } // namespace
 
 PerfMethodInlinePass::~PerfMethodInlinePass() {}
@@ -558,6 +712,9 @@ struct PerfMethodInlinePass::Config {
   boost::optional<random_forest::PGIForest> forest = boost::none;
   InlineForSpeedDecisionTrees::DecisionTreesConfig dec_trees_config;
   std::string interactions_str;
+  boost::optional<std::vector<std::string>> caller_list = boost::none;
+  float caller_list_callee_min_hits{0};
+  float caller_list_callee_min_appear{0};
 
   boost::optional<std::vector<size_t>> get_interactions(
       const RedexContext& ctx) {
@@ -622,11 +779,19 @@ void PerfMethodInlinePass::bind_config() {
        "For experiments: If non-negative, restrict always-accept caller/callee "
        "pairs from exp_force_top_x_entries to callers and callees that appear "
        "at least this amount.");
+  std::string caller_list_file;
+  bind("caller_list_file", "", caller_list_file);
+  float caller_list_callee_min_hits;
+  bind("caller_list_callee_min_hits", 1.0f, caller_list_callee_min_hits);
+  float caller_list_callee_min_appear;
+  bind("caller_list_callee_min_appear", 1.0f, caller_list_callee_min_appear);
   after_configuration([this, random_forest_file, accept_threshold, min_hits,
                        min_appear, min_block_hits, min_block_appear,
                        interactions_str, exp_force_top_x_entries,
                        exp_force_top_x_entries_min_callee_size,
-                       exp_force_top_x_entries_min_appear100]() {
+                       exp_force_top_x_entries_min_appear100, caller_list_file,
+                       caller_list_callee_min_hits,
+                       caller_list_callee_min_appear]() {
     this->m_config = std::make_unique<PerfMethodInlinePass::Config>();
     if (!random_forest_file.empty()) {
       std::stringstream buffer;
@@ -664,6 +829,21 @@ void PerfMethodInlinePass::bind_config() {
         assign_opt_size_t(exp_force_top_x_entries_min_callee_size);
     dec_trees_config.exp_force_top_x_entries_min_appear100 =
         assign_opt(exp_force_top_x_entries_min_appear100);
+
+    if (!caller_list_file.empty()) {
+      std::ifstream ifs(caller_list_file);
+      always_assert(ifs);
+      std::string tmp;
+      std::vector<std::string> str_vec;
+      while (std::getline(ifs, tmp)) {
+        str_vec.emplace_back(std::move(tmp));
+      }
+      always_assert(!ifs.bad());
+      this->m_config->caller_list = std::move(str_vec);
+    }
+    this->m_config->caller_list_callee_min_hits = caller_list_callee_min_hits;
+    this->m_config->caller_list_callee_min_appear =
+        caller_list_callee_min_appear;
   });
 }
 
@@ -689,25 +869,40 @@ void PerfMethodInlinePass::run_pass(DexStoresVector& stores,
 
   // Unique pointer for indirection and single path.
   std::unique_ptr<InlineForSpeedBase> ifs{[&]() -> InlineForSpeedBase* {
-    if (!m_config->forest) {
-      return new InlineForSpeedMethodProfiles(&method_profiles);
-    }
-
-    if (m_config->dec_trees_config.exp_force_top_x_entries) {
-      mgr.set_metric("exp_force_top_x_entries",
-                     *m_config->dec_trees_config.exp_force_top_x_entries);
-      if (m_config->dec_trees_config.exp_force_top_x_entries_min_callee_size) {
-        mgr.set_metric("exp_force_top_x_entries_min_callee_size",
-                       *m_config->dec_trees_config
-                            .exp_force_top_x_entries_min_callee_size);
+    // Prefer forest.
+    if (m_config->forest) {
+      if (m_config->dec_trees_config.exp_force_top_x_entries) {
+        mgr.set_metric("exp_force_top_x_entries",
+                       *m_config->dec_trees_config.exp_force_top_x_entries);
+        if (m_config->dec_trees_config
+                .exp_force_top_x_entries_min_callee_size) {
+          mgr.set_metric("exp_force_top_x_entries_min_callee_size",
+                         *m_config->dec_trees_config
+                              .exp_force_top_x_entries_min_callee_size);
+        }
       }
+
+      m_config->dec_trees_config.interaction_indices =
+          m_config->get_interactions(*g_redex);
+      return new InlineForSpeedDecisionTrees(&method_profiles,
+                                             m_config->forest->clone(),
+                                             m_config->dec_trees_config);
     }
 
-    m_config->dec_trees_config.interaction_indices =
-        m_config->get_interactions(*g_redex);
-    return new InlineForSpeedDecisionTrees(&method_profiles,
-                                           m_config->forest->clone(),
-                                           m_config->dec_trees_config);
+    if (m_config->caller_list) {
+      mgr.set_metric("caller_list_size", m_config->caller_list->size());
+      mgr.set_metric("caller_list_callee_min_hits_100",
+                     m_config->caller_list_callee_min_hits * 100);
+      mgr.set_metric("caller_list_callee_min_appear_100",
+                     m_config->caller_list_callee_min_appear * 100);
+      return new InlineForSpeedCallerList(
+          *m_config->caller_list,
+          &method_profiles,
+          m_config->caller_list_callee_min_hits,
+          m_config->caller_list_callee_min_appear);
+    }
+
+    return new InlineForSpeedMethodProfiles(&method_profiles);
   }()};
 
   inliner::run_inliner(stores, mgr, conf, /* intra_dex */ true,
@@ -722,6 +917,9 @@ void PerfMethodInlinePass::run_pass(DexStoresVector& stores,
   mgr.set_metric("pgi_inline_callsite_choices_accepted",
                  ifs->get_num_callsite_accepted());
   mgr.set_metric("pgi_use_random_forest", m_config->forest ? 1 : 0);
+  mgr.set_metric("pgi_use_caller_list", m_config->forest        ? 0
+                                        : m_config->caller_list ? 1
+                                                                : 0);
   if (m_config->forest) {
     auto opt = m_config->get_interactions(*g_redex);
     mgr.set_metric("pgi_interactions",
