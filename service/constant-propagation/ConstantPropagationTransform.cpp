@@ -23,10 +23,10 @@ namespace constant_propagation {
  * register.
  */
 void Transform::replace_with_const(const ConstantEnvironment& env,
-                                   const IRList::iterator& it,
+                                   const cfg::InstructionIterator& cfg_it,
                                    const XStoreRefs* xstores,
                                    const DexType* declaring_type) {
-  auto* insn = it->insn;
+  auto* insn = cfg_it->insn;
   auto value = env.get(insn->dest());
   auto replacement = ConstantValue::apply_visitor(
       value_to_instruction_visitor(insn, xstores, declaring_type), value);
@@ -34,7 +34,8 @@ void Transform::replace_with_const(const ConstantEnvironment& env,
     return;
   }
   if (opcode::is_a_move_result_pseudo(insn->opcode())) {
-    m_replacements.emplace(std::prev(it)->insn, replacement);
+    auto primary_it = cfg_it.cfg().primary_instruction_of_move_result(cfg_it);
+    m_replacements.emplace(primary_it->insn, replacement);
   } else {
     m_replacements.emplace(insn, replacement);
   }
@@ -47,10 +48,10 @@ void Transform::replace_with_const(const ConstantEnvironment& env,
  * removing not used arguments.
  */
 void Transform::generate_const_param(const ConstantEnvironment& env,
-                                     const IRList::iterator& it,
+                                     const cfg::InstructionIterator& cfg_it,
                                      const XStoreRefs* xstores,
                                      const DexType* declaring_type) {
-  auto* insn = it->insn;
+  auto* insn = cfg_it->insn;
   auto value = env.get(insn->dest());
   auto replacement = ConstantValue::apply_visitor(
       value_to_instruction_visitor(insn, xstores, declaring_type), value);
@@ -61,11 +62,12 @@ void Transform::generate_const_param(const ConstantEnvironment& env,
                               replacement.end());
   ++m_stats.added_param_const;
 }
+
 bool Transform::eliminate_redundant_null_check(
     const ConstantEnvironment& env,
     const WholeProgramState& /* unused */,
-    const IRList::iterator& it) {
-  auto* insn = it->insn;
+    const cfg::InstructionIterator& cfg_it) {
+  auto* insn = cfg_it->insn;
   switch (insn->opcode()) {
   case OPCODE_INVOKE_STATIC: {
     if (auto index =
@@ -86,10 +88,11 @@ bool Transform::eliminate_redundant_null_check(
   return false;
 }
 
-bool Transform::eliminate_redundant_put(const ConstantEnvironment& env,
-                                        const WholeProgramState& wps,
-                                        const IRList::iterator& it) {
-  auto* insn = it->insn;
+bool Transform::eliminate_redundant_put(
+    const ConstantEnvironment& env,
+    const WholeProgramState& wps,
+    const cfg::InstructionIterator& cfg_it) {
+  auto* insn = cfg_it->insn;
   switch (insn->opcode()) {
   case OPCODE_SPUT:
   case OPCODE_SPUT_BOOLEAN:
@@ -134,42 +137,39 @@ bool Transform::eliminate_redundant_put(const ConstantEnvironment& env,
   return false;
 }
 
-void Transform::simplify_instruction(cfg::ControlFlowGraph& cfg,
-                                     const ConstantEnvironment& env,
+void Transform::simplify_instruction(const ConstantEnvironment& env,
                                      const WholeProgramState& wps,
-                                     cfg::Block* block,
-                                     const IRList::iterator& it,
+                                     const cfg::InstructionIterator& cfg_it,
                                      const XStoreRefs* xstores,
                                      const DexType* declaring_type) {
-  auto* insn = it->insn;
+  auto* insn = cfg_it->insn;
   switch (insn->opcode()) {
   case IOPCODE_LOAD_PARAM:
   case IOPCODE_LOAD_PARAM_OBJECT:
   case IOPCODE_LOAD_PARAM_WIDE: {
     if (m_config.add_param_const) {
-      generate_const_param(env, it, xstores, declaring_type);
+      generate_const_param(env, cfg_it, xstores, declaring_type);
     }
     break;
   }
   case OPCODE_MOVE:
   case OPCODE_MOVE_WIDE:
     if (m_config.replace_moves_with_consts) {
-      replace_with_const(env, it, xstores, declaring_type);
+      replace_with_const(env, cfg_it, xstores, declaring_type);
     }
     break;
   case IOPCODE_MOVE_RESULT_PSEUDO:
   case IOPCODE_MOVE_RESULT_PSEUDO_WIDE:
   case IOPCODE_MOVE_RESULT_PSEUDO_OBJECT: {
-    auto primary_insn = cfg.primary_instruction_of_move_result(
-                               block->to_cfg_instruction_iterator(it))
-                            ->insn;
+    auto& cfg = cfg_it.cfg();
+    auto primary_insn = cfg.primary_instruction_of_move_result(cfg_it)->insn;
     auto op = primary_insn->opcode();
     if (opcode::is_an_sget(op) || opcode::is_an_iget(op) ||
         opcode::is_an_aget(op) || opcode::is_div_int_lit(op) ||
         opcode::is_rem_int_lit(op) || opcode::is_instance_of(op) ||
         opcode::is_rem_int_or_long(op) || opcode::is_div_int_or_long(op) ||
         opcode::is_check_cast(op)) {
-      replace_with_const(env, it, xstores, declaring_type);
+      replace_with_const(env, cfg_it, xstores, declaring_type);
     }
     break;
   }
@@ -182,16 +182,15 @@ void Transform::simplify_instruction(cfg::ControlFlowGraph& cfg,
   case OPCODE_MOVE_RESULT_WIDE:
   case OPCODE_MOVE_RESULT_OBJECT: {
     if (m_config.replace_move_result_with_consts) {
-      replace_with_const(env, it, xstores, declaring_type);
+      replace_with_const(env, cfg_it, xstores, declaring_type);
     } else if (m_config.getter_methods_for_immutable_fields) {
-      auto primary_insn = cfg.primary_instruction_of_move_result(
-                                 block->to_cfg_instruction_iterator(it))
-                              ->insn;
+      auto& cfg = cfg_it.cfg();
+      auto primary_insn = cfg.primary_instruction_of_move_result(cfg_it)->insn;
       if (opcode::is_invoke_virtual(primary_insn->opcode())) {
         auto invoked =
             resolve_method(primary_insn->get_method(), MethodSearch::Virtual);
         if (m_config.getter_methods_for_immutable_fields->count(invoked)) {
-          replace_with_const(env, it, xstores, declaring_type);
+          replace_with_const(env, cfg_it, xstores, declaring_type);
         }
       }
     }
@@ -224,7 +223,7 @@ void Transform::simplify_instruction(cfg::ControlFlowGraph& cfg,
   case OPCODE_AND_LONG:
   case OPCODE_OR_LONG:
   case OPCODE_XOR_LONG: {
-    replace_with_const(env, it, xstores, declaring_type);
+    replace_with_const(env, cfg_it, xstores, declaring_type);
     break;
   }
 
@@ -264,7 +263,7 @@ void Transform::remove_dead_switch(
     if (branch_is_feasible && branch_edge->target() == goto_edge->target()) {
       goto_is_feasible = true;
     }
-    m_edge_deletes.emplace_back(insn_it, branch_edge);
+    m_edge_deletes.push_back(branch_edge);
   }
 
   // When all remaining branches are infeasible, the cfg will remove the switch
@@ -286,11 +285,11 @@ void Transform::remove_dead_switch(
   // We do that by deleting all but one of the remaining branch edges, and then
   // the cfg will rewrite the remaining branch into a goto and remove the switch
   // instruction.
-  m_edge_deletes.emplace_back(insn_it, goto_edge);
+  m_edge_deletes.push_back(goto_edge);
   for (auto it = std::next(remaining_branch_edges.begin());
        it != remaining_branch_edges.end();
        it++) {
-    m_edge_deletes.emplace_back(insn_it, *it);
+    m_edge_deletes.push_back(*it);
   }
 }
 
@@ -329,7 +328,7 @@ void Transform::eliminate_dead_branch(
       ++m_stats.branches_removed;
       // We delete the infeasible edge, and then the cfg will rewrite the
       // remaining branch into a goto and remove the if- instruction.
-      m_edge_deletes.emplace_back(insn_it, edge);
+      m_edge_deletes.push_back(edge);
       // Assuming :block is reachable, then at least one of its successors must
       // be reachable, so we can break after finding one that's unreachable
       break;
@@ -338,12 +337,10 @@ void Transform::eliminate_dead_branch(
 }
 
 bool Transform::replace_with_throw(
-    cfg::ControlFlowGraph& cfg,
     const ConstantEnvironment& env,
-    cfg::Block* block,
-    const IRList::iterator& it,
+    const cfg::InstructionIterator& cfg_it,
     npe::NullPointerExceptionCreator* npe_creator) {
-  auto* insn = it->insn;
+  auto* insn = cfg_it->insn;
   auto dereferenced_object_src_index = get_dereferenced_object_src_index(insn);
   if (!dereferenced_object_src_index) {
     return false;
@@ -363,8 +360,8 @@ bool Transform::replace_with_throw(
   ++m_stats.throws;
 
   if (insn->has_move_result_any()) {
-    auto move_result_it =
-        cfg.move_result_of(block->to_cfg_instruction_iterator(it));
+    auto& cfg = cfg_it.cfg();
+    auto move_result_it = cfg.move_result_of(cfg_it);
     if (!move_result_it.is_end()) {
       m_redundant_move_results.insert(move_result_it->insn);
     }
@@ -373,8 +370,7 @@ bool Transform::replace_with_throw(
 }
 
 void Transform::apply_changes(cfg::ControlFlowGraph& cfg) {
-  for (auto& p : m_edge_deletes) {
-    auto branch_edge = p.second;
+  for (auto branch_edge : m_edge_deletes) {
     cfg.delete_edge(branch_edge);
   }
   cfg::CFGMutation mutation(cfg);
@@ -437,17 +433,16 @@ void Transform::legacy_apply_constants_and_prune_unreachable(
       continue;
     }
     auto last_insn = block->get_last_insn();
-    for (auto it = block->begin(); it != block->end(); it++) {
-      if (it->type != MFLOW_OPCODE) {
-        continue;
-      }
-      bool any_changes = eliminate_redundant_put(env, wps, it) ||
-                         eliminate_redundant_null_check(env, wps, it) ||
-                         replace_with_throw(cfg, env, block, it, &npe_creator);
-      auto* insn = it->insn;
+    auto ii = InstructionIterable(block);
+    for (auto it = ii.begin(); it != ii.end(); it++) {
+      auto cfg_it = block->to_cfg_instruction_iterator(it);
+      bool any_changes = eliminate_redundant_put(env, wps, cfg_it) ||
+                         eliminate_redundant_null_check(env, wps, cfg_it) ||
+                         replace_with_throw(env, cfg_it, &npe_creator);
+      auto* insn = cfg_it->insn;
       intra_cp.analyze_instruction(insn, &env, insn == last_insn->insn);
       if (!any_changes && !m_redundant_move_results.count(insn)) {
-        simplify_instruction(cfg, env, wps, block, it, xstores, declaring_type);
+        simplify_instruction(env, wps, cfg_it, xstores, declaring_type);
       }
     }
     eliminate_dead_branch(intra_cp, env, cfg, block);

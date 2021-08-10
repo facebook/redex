@@ -107,33 +107,29 @@ class Transform final {
    */
   void apply_changes(cfg::ControlFlowGraph&);
 
-  void simplify_instruction(cfg::ControlFlowGraph&,
-                            const ConstantEnvironment&,
+  void simplify_instruction(const ConstantEnvironment&,
                             const WholeProgramState& wps,
-                            cfg::Block* block,
-                            const IRList::iterator&,
+                            const cfg::InstructionIterator& cfg_it,
                             const XStoreRefs*,
                             const DexType*);
 
   void replace_with_const(const ConstantEnvironment&,
-                          const IRList::iterator&,
+                          const cfg::InstructionIterator& cfg_it,
                           const XStoreRefs*,
                           const DexType*);
   void generate_const_param(const ConstantEnvironment&,
-                            const IRList::iterator&,
+                            const cfg::InstructionIterator& cfg_it,
                             const XStoreRefs*,
                             const DexType*);
 
   bool eliminate_redundant_put(const ConstantEnvironment&,
                                const WholeProgramState& wps,
-                               const IRList::iterator&);
+                               const cfg::InstructionIterator& cfg_it);
   bool eliminate_redundant_null_check(const ConstantEnvironment&,
                                       const WholeProgramState& wps,
-                                      const IRList::iterator&);
-  bool replace_with_throw(cfg::ControlFlowGraph&,
-                          const ConstantEnvironment&,
-                          cfg::Block* block,
-                          const IRList::iterator&,
+                                      const cfg::InstructionIterator& cfg_it);
+  bool replace_with_throw(const ConstantEnvironment&,
+                          const cfg::InstructionIterator& cfg_it,
                           npe::NullPointerExceptionCreator* npe_creator);
 
   void remove_dead_switch(const intraprocedural::FixpointIterator& intra_cp,
@@ -168,7 +164,7 @@ class Transform final {
   std::vector<IRInstruction*> m_added_param_values;
   std::unordered_set<IRInstruction*> m_deletes;
   std::unordered_set<IRInstruction*> m_redundant_move_results;
-  std::vector<std::pair<IRList::iterator, cfg::Edge*>> m_edge_deletes;
+  std::vector<cfg::Edge*> m_edge_deletes;
   Stats m_stats;
   const std::unordered_set<DexMethodRef*> m_kotlin_null_check_assertions;
 };
