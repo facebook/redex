@@ -95,7 +95,8 @@ constexpr const char* METRIC_EXPERIMENT_METHODS = "num_experiment_methods";
 
 VirtualMerging::VirtualMerging(DexStoresVector& stores,
                                const inliner::InlinerConfig& inliner_config,
-                               size_t max_overriding_method_instructions)
+                               size_t max_overriding_method_instructions,
+                               const api::AndroidSDK* min_sdk_api)
     : m_scope(build_class_scope(stores)),
       m_xstores(stores),
       m_xdexes(stores),
@@ -109,9 +110,14 @@ VirtualMerging::VirtualMerging(DexStoresVector& stores,
   std::unordered_set<DexMethod*> no_default_inlinables;
   // disable shrinking options, minimizing initialization time
   m_inliner_config.shrinker = shrinker::ShrinkerConfig();
-  m_inliner.reset(new MultiMethodInliner(m_scope, stores, no_default_inlinables,
-                                         concurrent_resolver, m_inliner_config,
-                                         MultiMethodInlinerMode::None));
+  m_inliner.reset(new MultiMethodInliner(
+      m_scope, stores, no_default_inlinables, concurrent_resolver,
+      m_inliner_config, MultiMethodInlinerMode::None,
+      /* true_virtual_callers */ {},
+      /* inline_for_speed */ nullptr,
+      /* bool analyze_and_prune_inits */ false,
+      /* const std::unordered_set<DexMethodRef*>& configured_pure_methods */ {},
+      min_sdk_api));
 }
 VirtualMerging::~VirtualMerging() {}
 
@@ -1220,6 +1226,18 @@ void VirtualMergingPass::run_pass(DexStoresVector& stores,
 
   auto dedupped = dedup_vmethods::dedup(stores);
 
+  const api::AndroidSDK* min_sdk_api{nullptr};
+  int32_t min_sdk = mgr.get_redex_options().min_sdk;
+  mgr.incr_metric("min_sdk", min_sdk);
+  TRACE(INLINE, 2, "min_sdk: %d", min_sdk);
+  auto min_sdk_api_file = conf.get_android_sdk_api_file(min_sdk);
+  if (!min_sdk_api_file) {
+    mgr.incr_metric("min_sdk_no_file", 1);
+    TRACE(INLINE, 2, "Android SDK API %d file cannot be found.", min_sdk);
+  } else {
+    min_sdk_api = &conf.get_android_sdk_api(min_sdk);
+  }
+
   auto inliner_config = conf.get_inliner_config();
   // We don't need to worry about inlining synchronized code, as we always
   // inline at the top-level outside of other try-catch regions.
@@ -1227,7 +1245,7 @@ void VirtualMergingPass::run_pass(DexStoresVector& stores,
   auto ab_experiment_context =
       ab_test::ABExperimentContext::create("virtual_merging");
   VirtualMerging vm(stores, inliner_config,
-                    m_max_overriding_method_instructions);
+                    m_max_overriding_method_instructions, min_sdk_api);
   vm.run(m_use_profiles ? conf.get_method_profiles()
                         : method_profiles::MethodProfiles(),
          ab_experiment_context.get());

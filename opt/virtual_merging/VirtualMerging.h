@@ -9,6 +9,7 @@
 
 #include "ABExperimentContext.h"
 #include "DexStore.h"
+#include "FrameworkApi.h"
 #include "InlinerConfig.h"
 #include "Pass.h"
 #include "Resolver.h"
@@ -94,7 +95,10 @@ struct VirtualMergingStats {
 
 class VirtualMerging {
  public:
-  VirtualMerging(DexStoresVector&, const inliner::InlinerConfig&, size_t);
+  VirtualMerging(DexStoresVector&,
+                 const inliner::InlinerConfig&,
+                 size_t,
+                 const api::AndroidSDK* min_sdk_api = nullptr);
   ~VirtualMerging();
   void run(const method_profiles::MethodProfiles&,
            ab_test::ABExperimentContext* ab_experiment_context = nullptr);
