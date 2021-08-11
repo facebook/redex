@@ -239,6 +239,9 @@ void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
   jw.get("intradex_allowlist", {}, inliner_config->m_intradex_allowlist);
   jw.get("reg_alloc_random_forest", "",
          shrinker_config.reg_alloc_random_forest);
+  jw.get("respect_sketchy_methods", true,
+         inliner_config->respect_sketchy_methods);
+  jw.get("check_min_sdk_refs", true, inliner_config->check_min_sdk_refs);
 
   std::vector<std::string> no_inline_annos;
   jw.get("no_inline_annos", {}, no_inline_annos);
