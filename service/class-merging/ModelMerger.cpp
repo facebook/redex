@@ -61,7 +61,7 @@ DexField* scan_type_tag_field(const char* type_tag_field_name,
   DexField* field = nullptr;
   while (field == nullptr && type != type::java_lang_Object()) {
     auto cls = type_class(type);
-    field = cls->find_field(type_tag_field_name, type::_int());
+    field = cls->find_ifield(type_tag_field_name, type::_int());
     type = cls->get_super_class();
   }
 
