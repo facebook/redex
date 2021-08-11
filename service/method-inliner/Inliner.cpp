@@ -28,6 +28,7 @@
 #include "Mutators.h"
 #include "OptData.h"
 #include "OutlinedMethods.h"
+#include "RecursionPruner.h"
 #include "StlUtil.h"
 #include "Timer.h"
 #include "UnknownVirtuals.h"
@@ -264,22 +265,18 @@ void MultiMethodInliner::inline_methods(bool methods_need_deconstruct) {
   // recurse into all inlinable callees until we hit a leaf and we start
   // inlining from there. First, we just gather data on
   // caller/non-recursive-callees pairs for each stack depth.
-  std::unordered_map<DexMethod*, size_t> visited;
   {
-    Timer t("compute_caller_nonrecursive_callees_by_stack_depth");
-    std::vector<DexMethod*> ordered_callers;
-    ordered_callers.reserve(caller_callee.size());
-    for (auto& p : caller_callee) {
-      ordered_callers.push_back(const_cast<DexMethod*>(p.first));
-    }
-    std::sort(ordered_callers.begin(), ordered_callers.end(),
-              compare_dexmethods);
-    for (const auto caller : ordered_callers) {
-      TraceContext context(caller);
-      auto stack_depth = prune_caller_nonrecursive_callees(caller, &visited);
-      info.max_call_stack_depth =
-          std::max(info.max_call_stack_depth, stack_depth);
-    }
+    auto exclude_fn = [this](DexMethod* caller, DexMethod* callee) {
+      return for_speed() &&
+             !m_inline_for_speed->should_inline_generic(caller, callee);
+    };
+    inliner::RecursionPruner recursion_pruner(callee_caller, caller_callee,
+                                              std::move(exclude_fn));
+    recursion_pruner.run();
+    info.recursive = recursion_pruner.recursive_call_sites();
+    info.max_call_stack_depth = recursion_pruner.max_call_stack_depth();
+    m_recursive_callees = std::move(recursion_pruner.recursive_callees());
+    m_speed_excluded_callees = std::move(recursion_pruner.excluded_callees());
   }
 
   if (m_config.use_call_site_summaries) {
@@ -332,66 +329,6 @@ void MultiMethodInliner::inline_methods(bool methods_need_deconstruct) {
     workqueue_run<IRCode*>([](IRCode* code) { code->clear_cfg(); },
                            need_deconstruct);
   }
-}
-
-size_t MultiMethodInliner::prune_caller_nonrecursive_callees(
-    DexMethod* caller, std::unordered_map<DexMethod*, size_t>* visited) {
-  auto caller_it = caller_callee.find(caller);
-  if (caller_it == caller_callee.end()) {
-    return 0;
-  }
-  auto& callees = caller_it->second;
-  always_assert(!callees.empty());
-
-  auto visited_it = visited->find(caller);
-  if (visited_it != visited->end()) {
-    return visited_it->second;
-  }
-
-  // We'll only know the exact call stack depth at the end.
-  visited->emplace(caller, std::numeric_limits<size_t>::max());
-
-  std::vector<DexMethod*> ordered_callees;
-  ordered_callees.reserve(callees.size());
-  for (auto& p : callees) {
-    ordered_callees.push_back(p.first);
-  }
-  std::sort(ordered_callees.begin(), ordered_callees.end(), compare_dexmethods);
-  size_t stack_depth = 0;
-  // recurse into the callees in case they have something to inline on
-  // their own. We want to inline bottom up so that a callee is
-  // completely resolved by the time it is inlined.
-  for (auto callee : ordered_callees) {
-    size_t callee_stack_depth =
-        prune_caller_nonrecursive_callees(callee, visited);
-    if (callee_stack_depth == std::numeric_limits<size_t>::max()) {
-      // we've found recursion in the current call stack
-      info.recursive += callees.at(callee);
-      m_recursive_callees.insert(callee);
-    } else {
-      stack_depth = std::max(stack_depth, callee_stack_depth + 1);
-
-      if (!for_speed() ||
-          m_inline_for_speed->should_inline_generic(caller, callee)) {
-        continue;
-      }
-      m_speed_excluded_callees.insert(callee);
-    }
-
-    // If we get here, we shall prune the (caller, callee) pair.
-    callees.erase(callee);
-    if (callees.empty()) {
-      caller_callee.erase(caller);
-    }
-    auto& callers = callee_caller.at(callee);
-    callers.erase(caller);
-    if (callers.empty()) {
-      callee_caller.erase(callee);
-    }
-  }
-
-  (*visited)[caller] = stack_depth;
-  return stack_depth;
 }
 
 DexMethod* MultiMethodInliner::get_callee(DexMethod* caller,

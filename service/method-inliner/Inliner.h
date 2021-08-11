@@ -195,14 +195,6 @@ class MultiMethodInliner {
   shrinker::Shrinker& get_shrinker() { return m_shrinker; }
 
  private:
-  /**
-   * Determine order in which to inline.
-   * Recurse in a callee if that has inlinable candidates of its own.
-   * Inlining is bottom up.
-   */
-  size_t prune_caller_nonrecursive_callees(
-      DexMethod* caller, std::unordered_map<DexMethod*, size_t>* visited);
-
   DexMethod* get_callee(DexMethod* caller, IRInstruction* insn);
 
   void inline_inlinables(DexMethod* caller,
