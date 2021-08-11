@@ -149,15 +149,6 @@ void ClassMergingPass::bind_config() {
   bind("process_method_meta", false, process_method_meta);
   int64_t max_num_dispatch_target;
   bind("max_num_dispatch_target", 0, max_num_dispatch_target);
-  bool merge_static_methods_within_shape;
-  bind("merge_static_methods_within_shape", false,
-       merge_static_methods_within_shape);
-  bool merge_direct_methods_within_shape;
-  bind("merge_direct_methods_within_shape", false,
-       merge_direct_methods_within_shape);
-  bool merge_nonvirt_methods_within_shape;
-  bind("merge_nonvirt_methods_within_shape", false,
-       merge_nonvirt_methods_within_shape);
   trait(Traits::Pass::unique, true);
 
   // load model specifications
@@ -251,12 +242,6 @@ void ClassMergingPass::bind_config() {
         model.max_count = boost::optional<size_t>(max_count);
       }
       model.process_method_meta = process_method_meta;
-      model.merge_static_methods_within_shape =
-          merge_static_methods_within_shape;
-      model.merge_direct_methods_within_shape =
-          merge_direct_methods_within_shape;
-      model.merge_nonvirt_methods_within_shape =
-          merge_nonvirt_methods_within_shape;
       model.max_num_dispatch_target = m_max_num_dispatch_target;
 
       if (!verify_model_spec(model)) {

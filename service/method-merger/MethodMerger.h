@@ -28,13 +28,4 @@ using MethodGroups = std::vector<std::vector<DexMethod*>>;
  */
 Stats merge_methods(const MethodGroups& method_groups, const DexClasses& scope);
 
-/**
- * Merge methods within each class from classes, then update all the invocations
- * in the scope. Return the method mapping.
- */
-Stats merge_methods_within_class(const DexClasses& classes,
-                                 const DexClasses& scope,
-                                 bool merge_static = true,
-                                 bool merge_non_virtual = true,
-                                 bool merge_direct = true);
 } // namespace method_merger

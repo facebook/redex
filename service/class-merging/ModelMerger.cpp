@@ -668,12 +668,6 @@ void ModelMerger::update_redex_stats(const std::string& prefix,
                   m_stats.m_num_vmethods_dedupped);
   mgr.set_metric(prefix + "_const_lifted_methods",
                  m_stats.m_num_const_lifted_methods);
-  mgr.incr_metric(prefix + "_merged_static_methods",
-                  m_stats.m_num_merged_static_methods);
-  mgr.incr_metric(prefix + "_merged_direct_methods",
-                  m_stats.m_num_merged_direct_methods);
-  mgr.incr_metric(prefix + "_merged_nonvirt_methods",
-                  m_stats.m_num_merged_nonvirt_methods);
 }
 
 } // namespace class_merging

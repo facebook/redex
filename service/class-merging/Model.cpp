@@ -1241,9 +1241,6 @@ ModelStats& ModelStats::operator+=(const ModelStats& stats) {
   m_num_static_non_virt_dedupped += stats.m_num_static_non_virt_dedupped;
   m_num_vmethods_dedupped += stats.m_num_vmethods_dedupped;
   m_num_const_lifted_methods += stats.m_num_const_lifted_methods;
-  m_num_merged_static_methods += stats.m_num_merged_static_methods;
-  m_num_merged_direct_methods += stats.m_num_merged_direct_methods;
-  m_num_merged_nonvirt_methods += stats.m_num_merged_nonvirt_methods;
   return *this;
 }
 
