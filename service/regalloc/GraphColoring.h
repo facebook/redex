@@ -117,11 +117,6 @@ class Allocator {
               RegisterTransform*,
               SpillPlan*);
 
-  void choose_range_promotions(const IRCode*,
-                               const interference::Graph&,
-                               const SpillPlan&,
-                               RangeSet*);
-
   void select_ranges(const IRCode*,
                      const interference::Graph&,
                      const RangeSet&,
