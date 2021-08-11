@@ -102,32 +102,34 @@ CallSiteSummarizer::CallSiteSummarizer(
           std::move(has_callee_other_call_sites_fn)),
       m_stats(stats) {}
 
-CallSiteSummary* CallSiteSummarizer::internalize_call_site_summary(
+const CallSiteSummary* CallSiteSummarizer::internalize_call_site_summary(
     const CallSiteSummary& call_site_summary) {
   auto key = call_site_summary.get_key();
-  CallSiteSummary* res;
-  m_call_site_summaries.update(key, [&](const std::string&,
-                                        std::unique_ptr<CallSiteSummary>& p,
-                                        bool exist) {
-    if (exist) {
-      always_assert_log(p->result_used == call_site_summary.result_used,
-                        "same key %s for\n    %d\nvs. %d", key.c_str(),
-                        p->result_used, call_site_summary.result_used);
-      always_assert_log(p->arguments.equals(call_site_summary.arguments),
-                        "same key %s for\n    %s\nvs. %s", key.c_str(),
-                        SHOW(p->arguments), SHOW(call_site_summary.arguments));
-    } else {
-      p = std::make_unique<CallSiteSummary>(call_site_summary);
-    }
-    res = p.get();
-  });
+  const CallSiteSummary* res;
+  m_call_site_summaries.update(
+      key, [&](const std::string&,
+               std::unique_ptr<const CallSiteSummary>& p,
+               bool exist) {
+        if (exist) {
+          always_assert_log(p->result_used == call_site_summary.result_used,
+                            "same key %s for\n    %d\nvs. %d", key.c_str(),
+                            p->result_used, call_site_summary.result_used);
+          always_assert_log(p->arguments.equals(call_site_summary.arguments),
+                            "same key %s for\n    %s\nvs. %s", key.c_str(),
+                            SHOW(p->arguments),
+                            SHOW(call_site_summary.arguments));
+        } else {
+          p = std::make_unique<const CallSiteSummary>(call_site_summary);
+        }
+        res = p.get();
+      });
   return res;
 }
 
 void CallSiteSummarizer::summarize() {
   Timer t("compute_call_site_summaries");
   struct CalleeInfo {
-    std::unordered_map<CallSiteSummary*, size_t> occurrences;
+    std::unordered_map<const CallSiteSummary*, size_t> occurrences;
     std::vector<IRInstruction*> invokes;
   };
 

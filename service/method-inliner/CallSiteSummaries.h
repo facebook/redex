@@ -38,14 +38,14 @@ inline bool operator==(const CalleeCallSiteSummary& a,
 }
 
 using InvokeCallSiteSummaries =
-    std::vector<std::pair<IRInstruction*, CallSiteSummary*>>;
+    std::vector<std::pair<IRInstruction*, const CallSiteSummary*>>;
 
 struct InvokeCallSiteSummariesAndDeadBlocks {
   InvokeCallSiteSummaries invoke_call_site_summaries;
   size_t dead_blocks{0};
 };
 
-using CallSiteSummaryOccurrences = std::pair<CallSiteSummary*, size_t>;
+using CallSiteSummaryOccurrences = std::pair<const CallSiteSummary*, size_t>;
 
 using MethodToMethodOccurrences =
     std::unordered_map<const DexMethod*,
@@ -85,16 +85,16 @@ class CallSiteSummarizer {
   /**
    * For all (reachable) invoke instructions, constant arguments
    */
-  ConcurrentMap<const IRInstruction*, CallSiteSummary*>
+  ConcurrentMap<const IRInstruction*, const CallSiteSummary*>
       m_invoke_call_site_summaries;
 
   /**
    * Internalized call-site summaries.
    */
-  ConcurrentMap<std::string, std::unique_ptr<CallSiteSummary>>
+  ConcurrentMap<std::string, std::unique_ptr<const CallSiteSummary>>
       m_call_site_summaries;
 
-  CallSiteSummary* internalize_call_site_summary(
+  const CallSiteSummary* internalize_call_site_summary(
       const CallSiteSummary& call_site_summary);
 
   /**
