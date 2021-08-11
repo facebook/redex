@@ -704,6 +704,12 @@ class InlineForSpeedCallerList final : public InlineForSpeedBase {
   std::unordered_map<const DexMethod*, MethodContext> m_cache;
 };
 
+enum class IFSMode {
+  kMethodProfiles,
+  kForest,
+  kCallerList,
+};
+
 } // namespace
 
 PerfMethodInlinePass::~PerfMethodInlinePass() {}
@@ -715,6 +721,7 @@ struct PerfMethodInlinePass::Config {
   boost::optional<std::vector<std::string>> caller_list = boost::none;
   float caller_list_callee_min_hits{0};
   float caller_list_callee_min_appear{0};
+  IFSMode ifs{IFSMode::kMethodProfiles};
 
   boost::optional<std::vector<size_t>> get_interactions(
       const RedexContext& ctx) {
@@ -785,13 +792,15 @@ void PerfMethodInlinePass::bind_config() {
   bind("caller_list_callee_min_hits", 1.0f, caller_list_callee_min_hits);
   float caller_list_callee_min_appear;
   bind("caller_list_callee_min_appear", 1.0f, caller_list_callee_min_appear);
+  std::string which_ifs;
+  bind("decision_mode", "", which_ifs);
   after_configuration([this, random_forest_file, accept_threshold, min_hits,
                        min_appear, min_block_hits, min_block_appear,
                        interactions_str, exp_force_top_x_entries,
                        exp_force_top_x_entries_min_callee_size,
                        exp_force_top_x_entries_min_appear100, caller_list_file,
                        caller_list_callee_min_hits,
-                       caller_list_callee_min_appear]() {
+                       caller_list_callee_min_appear, which_ifs]() {
     this->m_config = std::make_unique<PerfMethodInlinePass::Config>();
     if (!random_forest_file.empty()) {
       std::stringstream buffer;
@@ -844,6 +853,28 @@ void PerfMethodInlinePass::bind_config() {
     this->m_config->caller_list_callee_min_hits = caller_list_callee_min_hits;
     this->m_config->caller_list_callee_min_appear =
         caller_list_callee_min_appear;
+
+    if (!which_ifs.empty()) {
+      if (which_ifs == "caller-list") {
+        redex_assert(this->m_config->caller_list);
+        this->m_config->ifs = IFSMode::kCallerList;
+      } else if (which_ifs == "forest") {
+        redex_assert(this->m_config->forest);
+        this->m_config->ifs = IFSMode::kForest;
+      } else {
+        redex_assert(which_ifs == "method-profiles");
+        this->m_config->ifs = IFSMode::kMethodProfiles;
+      }
+    } else {
+      // Prefer forest.
+      if (this->m_config->forest) {
+        this->m_config->ifs = IFSMode::kForest;
+      } else if (this->m_config->caller_list) {
+        this->m_config->ifs = IFSMode::kCallerList;
+      } else {
+        this->m_config->ifs = IFSMode::kMethodProfiles;
+      }
+    }
   });
 }
 
@@ -869,8 +900,9 @@ void PerfMethodInlinePass::run_pass(DexStoresVector& stores,
 
   // Unique pointer for indirection and single path.
   std::unique_ptr<InlineForSpeedBase> ifs{[&]() -> InlineForSpeedBase* {
-    // Prefer forest.
-    if (m_config->forest) {
+    switch (m_config->ifs) {
+    case IFSMode::kForest: {
+      redex_assert(m_config->forest);
       if (m_config->dec_trees_config.exp_force_top_x_entries) {
         mgr.set_metric("exp_force_top_x_entries",
                        *m_config->dec_trees_config.exp_force_top_x_entries);
@@ -889,7 +921,8 @@ void PerfMethodInlinePass::run_pass(DexStoresVector& stores,
                                              m_config->dec_trees_config);
     }
 
-    if (m_config->caller_list) {
+    case IFSMode::kCallerList: {
+      redex_assert(m_config->caller_list);
       mgr.set_metric("caller_list_size", m_config->caller_list->size());
       mgr.set_metric("caller_list_callee_min_hits_100",
                      m_config->caller_list_callee_min_hits * 100);
@@ -902,7 +935,10 @@ void PerfMethodInlinePass::run_pass(DexStoresVector& stores,
           m_config->caller_list_callee_min_appear);
     }
 
-    return new InlineForSpeedMethodProfiles(&method_profiles);
+    case IFSMode::kMethodProfiles:
+      return new InlineForSpeedMethodProfiles(&method_profiles);
+    }
+    not_reached();
   }()};
 
   inliner::run_inliner(stores, mgr, conf, /* intra_dex */ true,
