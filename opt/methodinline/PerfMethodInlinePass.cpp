@@ -18,6 +18,8 @@
 
 #include "ConfigFiles.h"
 #include "ControlFlow.h"
+#include "DexClass.h"
+#include "DexUtil.h"
 #include "IRCode.h"
 #include "InlineForSpeed.h"
 #include "Macros.h"
@@ -555,10 +557,11 @@ class InlineForSpeedDecisionTrees final : public InlineForSpeedBase {
 class InlineForSpeedCallerList final : public InlineForSpeedBase {
  public:
   explicit InlineForSpeedCallerList(const std::vector<std::string>& caller_list,
+                                    bool by_prefix,
                                     const MethodProfiles* method_profiles,
                                     float callee_min_hits,
                                     float callee_min_appear)
-      : m_caller_methods(gather_methods(caller_list)),
+      : m_caller_methods(gather_methods(caller_list, by_prefix)),
         m_method_profiles(method_profiles),
         m_callee_min_hits(callee_min_hits),
         m_callee_min_appear(callee_min_appear),
@@ -671,16 +674,76 @@ class InlineForSpeedCallerList final : public InlineForSpeedBase {
  private:
   // Binding late to support methods synthesized before PGI time.
   static std::unordered_set<const DexMethodRef*> gather_methods(
-      const std::vector<std::string>& caller_list) {
+      const std::vector<std::string>& caller_list, bool by_prefix) {
     std::unordered_set<const DexMethodRef*> ret;
-    for (const auto& str_mref : caller_list) {
-      auto* mref = DexMethod::get_method(str_mref);
-      if (mref != nullptr) {
-        ret.insert(mref);
-      } else {
-        std::cerr << "Warning: Could not find " << str_mref << std::endl;
+    auto collect = [&](auto fn) {
+      for (const auto& str_mref : caller_list) {
+        auto* mref = fn(str_mref);
+        if (mref != nullptr) {
+          ret.insert(mref);
+        } else {
+          std::cerr << "Warning: Could not find " << str_mref << std::endl;
+        }
       }
+    };
+
+    if (by_prefix) {
+      auto prefix_fn = [](auto& str) -> const DexMethodRef* {
+        // Array class?
+        {
+          auto bracket_pos = str.find('[');
+          if (bracket_pos != std::string::npos) {
+            return nullptr;
+          }
+        }
+
+        auto pos = str.rfind('.');
+        if (pos == std::string::npos || pos == 0 || pos == str.size() - 1) {
+          return nullptr;
+        }
+
+        DexClass* cls;
+        {
+          auto external_class_name = str.substr(0, pos);
+          auto internal_class_name =
+              java_names::external_to_internal(external_class_name);
+
+          auto type = DexType::get_type(internal_class_name);
+          if (type == nullptr) {
+            return nullptr;
+          }
+          cls = type_class(type);
+          if (cls == nullptr) {
+            return nullptr;
+          }
+          if (cls->is_external()) {
+            return nullptr;
+          }
+        }
+
+        // OK, seem to have a good class, now look for the method.
+        auto method_name = str.substr(pos + 1);
+        boost::optional<const DexMethod*> found{boost::none};
+        for (auto* m : cls->get_all_methods()) {
+          if (m->get_name()->str() == method_name) {
+            if (found) {
+              std::cerr << "Ambiguous method " << method_name << std::endl;
+              found = boost::none;
+              break;
+            }
+            found = m;
+          }
+        }
+        if (found) {
+          return *found;
+        }
+        return nullptr;
+      };
+      collect(prefix_fn);
+    } else {
+      collect([](auto& str) { return DexMethod::get_method(str); });
     }
+
     return ret;
   }
 
@@ -719,6 +782,7 @@ struct PerfMethodInlinePass::Config {
   InlineForSpeedDecisionTrees::DecisionTreesConfig dec_trees_config;
   std::string interactions_str;
   boost::optional<std::vector<std::string>> caller_list = boost::none;
+  bool caller_list_prefix{false};
   float caller_list_callee_min_hits{0};
   float caller_list_callee_min_appear{0};
   IFSMode ifs{IFSMode::kMethodProfiles};
@@ -788,6 +852,8 @@ void PerfMethodInlinePass::bind_config() {
        "at least this amount.");
   std::string caller_list_file;
   bind("caller_list_file", "", caller_list_file);
+  bool caller_list_prefix;
+  bind("caller_list_prefix", false, caller_list_prefix);
   float caller_list_callee_min_hits;
   bind("caller_list_callee_min_hits", 1.0f, caller_list_callee_min_hits);
   float caller_list_callee_min_appear;
@@ -799,7 +865,7 @@ void PerfMethodInlinePass::bind_config() {
                        interactions_str, exp_force_top_x_entries,
                        exp_force_top_x_entries_min_callee_size,
                        exp_force_top_x_entries_min_appear100, caller_list_file,
-                       caller_list_callee_min_hits,
+                       caller_list_prefix, caller_list_callee_min_hits,
                        caller_list_callee_min_appear, which_ifs]() {
     this->m_config = std::make_unique<PerfMethodInlinePass::Config>();
     if (!random_forest_file.empty()) {
@@ -853,6 +919,7 @@ void PerfMethodInlinePass::bind_config() {
     this->m_config->caller_list_callee_min_hits = caller_list_callee_min_hits;
     this->m_config->caller_list_callee_min_appear =
         caller_list_callee_min_appear;
+    this->m_config->caller_list_prefix = caller_list_prefix;
 
     if (!which_ifs.empty()) {
       if (which_ifs == "caller-list") {
@@ -930,6 +997,7 @@ void PerfMethodInlinePass::run_pass(DexStoresVector& stores,
                      m_config->caller_list_callee_min_appear * 100);
       return new InlineForSpeedCallerList(
           *m_config->caller_list,
+          m_config->caller_list_prefix,
           &method_profiles,
           m_config->caller_list_callee_min_hits,
           m_config->caller_list_callee_min_appear);
