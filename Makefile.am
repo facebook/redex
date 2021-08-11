@@ -212,6 +212,7 @@ libredex_la_SOURCES = \
 	service/method-dedup/MethodDedup.cpp \
 	service/method-dedup/NormalizeConstructor.cpp \
 	service/method-dedup/TypeTags.cpp \
+	service/method-inliner/CallSiteSummaries.cpp \
 	service/method-inliner/CFGInliner.cpp \
 	service/method-inliner/ConstructorAnalysis.cpp \
 	service/method-inliner/Deleter.cpp \

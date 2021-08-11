@@ -10,6 +10,7 @@
 #include <functional>
 #include <vector>
 
+#include "CallSiteSummaries.h"
 #include "PriorityThreadPoolDAGScheduler.h"
 #include "RefChecker.h"
 #include "Resolver.h"
@@ -57,37 +58,6 @@ struct CallerInsns {
 };
 
 using CalleeCallerInsns = std::unordered_map<DexMethod*, CallerInsns>;
-
-using CallSiteArguments = constant_propagation::interprocedural::ArgumentDomain;
-
-struct CallSiteSummary {
-  CallSiteArguments arguments;
-  bool result_used;
-};
-
-struct CalleeCallSiteSummary {
-  const DexMethod* method;
-  const CallSiteSummary* call_site_summary;
-};
-
-inline size_t hash_value(CalleeCallSiteSummary ccss) {
-  return ((size_t)ccss.method) ^ (size_t)(ccss.call_site_summary);
-}
-
-inline bool operator==(const CalleeCallSiteSummary& a,
-                       const CalleeCallSiteSummary& b) {
-  return a.method == b.method && a.call_site_summary == b.call_site_summary;
-}
-
-using InvokeCallSiteSummaries =
-    std::vector<std::pair<IRInstruction*, CallSiteSummary*>>;
-
-struct InvokeCallSiteSummariesAndDeadBlocks {
-  InvokeCallSiteSummaries invoke_call_site_summaries;
-  size_t dead_blocks{0};
-};
-
-using CallSiteSummaryOccurrences = std::pair<CallSiteSummary*, size_t>;
 
 struct Inlinable {
   DexMethod* callee;
@@ -234,9 +204,6 @@ class MultiMethodInliner {
       DexMethod* caller, std::unordered_map<DexMethod*, size_t>* visited);
 
   DexMethod* get_callee(DexMethod* caller, IRInstruction* insn);
-
-  CallSiteSummary* internalize_call_site_summary(
-      const CallSiteSummary& call_site_summary);
 
   void inline_inlinables(DexMethod* caller,
                          const std::vector<Inlinable>& inlinables);
@@ -463,21 +430,6 @@ class MultiMethodInliner {
   void delayed_invoke_direct_to_static();
 
   /**
-   * For all (reachable) invoke instructions in a given method, collect
-   * information about their arguments, i.e. whether particular arguments
-   * are constants.
-   */
-  InvokeCallSiteSummariesAndDeadBlocks get_invoke_call_site_summaries(
-      DexMethod* caller,
-      const std::unordered_map<DexMethod*, size_t>& callees,
-      const ConstantEnvironment& initial_env);
-
-  /**
-   * Build up constant-arguments information for all invoked methods.
-   */
-  void compute_call_site_summaries();
-
-  /**
    * Initiate computation of various callee costs asynchronously.
    */
   void compute_callee_costs(DexMethod* method);
@@ -525,11 +477,9 @@ class MultiMethodInliner {
   // Maps from callee to callers and reverse map from caller to callees.
   // Those are used to perform bottom up inlining.
   //
-  std::unordered_map<const DexMethod*, std::unordered_map<DexMethod*, size_t>>
-      callee_caller;
+  MethodToMethodOccurrences callee_caller;
 
-  std::unordered_map<const DexMethod*, std::unordered_map<DexMethod*, size_t>>
-      caller_callee;
+  MethodToMethodOccurrences caller_callee;
 
   std::unordered_map<const DexMethod*,
                      std::unordered_map<IRInstruction*, DexMethod*>>
@@ -567,32 +517,6 @@ class MultiMethodInliner {
   mutable ConcurrentMap<const IRInstruction*,
                         boost::optional<const InlinedCost*>>
       m_invoke_call_site_inlined_costs;
-
-  /**
-   * For all (reachable) invoked methods, list of call-site summaries
-   */
-  mutable std::unordered_map<const DexMethod*,
-                             std::vector<CallSiteSummaryOccurrences>>
-      m_callee_call_site_summary_occurrences;
-
-  /**
-   * For all (reachable) invoked methods, list of vinoke instructions
-   */
-  mutable std::unordered_map<const DexMethod*,
-                             std::vector<const IRInstruction*>>
-      m_callee_call_site_invokes;
-
-  /**
-   * For all (reachable) invoke instructions, constant arguments
-   */
-  mutable ConcurrentMap<const IRInstruction*, CallSiteSummary*>
-      m_invoke_call_site_summaries;
-
-  /**
-   * Internalized call-site summaries.
-   */
-  mutable ConcurrentMap<std::string, std::unique_ptr<CallSiteSummary>>
-      m_call_site_summaries;
 
   // Priority thread pool to handle parallel processing of methods, either
   // shrinking initially / after inlining into them, or even to inline in
@@ -635,6 +559,8 @@ class MultiMethodInliner {
       m_can_inline_init;
 
  private:
+  std::unique_ptr<inliner::CallSiteSummarizer> m_call_site_summarizer;
+
   /**
    * Info about inlining.
    */
@@ -670,14 +596,10 @@ class MultiMethodInliner {
     std::atomic<size_t> api_level_mismatch{0};
     std::atomic<size_t> problematic_refs{0};
     std::atomic<size_t> caller_too_large{0};
-    std::atomic<size_t> constant_invoke_callers_analyzed{0};
-    std::atomic<size_t> constant_invoke_callers_unreachable{0};
-    std::atomic<size_t> constant_invoke_callers_incomplete{0};
-    std::atomic<size_t> constant_invoke_callers_unreachable_blocks{0};
     std::atomic<size_t> constant_invoke_callees_analyzed{0};
     std::atomic<size_t> constant_invoke_callees_unused_results{0};
     std::atomic<size_t> constant_invoke_callees_no_return{0};
-    std::atomic<size_t> constant_invoke_callers_critical_path_length{0};
+    inliner::CallSiteSummaryStats call_site_summary_stats;
   };
   InliningInfo info;
 

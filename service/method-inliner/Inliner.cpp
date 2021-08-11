@@ -12,17 +12,12 @@
 
 #include "ApiLevelChecker.h"
 #include "CFGInliner.h"
-#include "ConcurrentContainers.h"
 #include "ConstantPropagationAnalysis.h"
 #include "ConstantPropagationWholeProgramState.h"
 #include "ConstructorAnalysis.h"
-#include "ControlFlow.h"
 #include "DexInstruction.h"
-#include "DexPosition.h"
-#include "DexUtil.h"
 #include "EditableCfgAdapter.h"
 #include "GraphUtil.h"
-#include "IRInstruction.h"
 #include "InlineForSpeed.h"
 #include "InlinerConfig.h"
 #include "LocalDce.h"
@@ -33,7 +28,6 @@
 #include "Mutators.h"
 #include "OptData.h"
 #include "OutlinedMethods.h"
-#include "Purity.h"
 #include "StlUtil.h"
 #include "Timer.h"
 #include "UnknownVirtuals.h"
@@ -214,225 +208,6 @@ MultiMethodInliner::MultiMethodInliner(
   }
 }
 
-/*
- * The key of a call-site-summary is a canonical string representation of the
- * constant arguments. Usually, the string is quite small, it only rarely
- * contains fields or methods.
- */
-static std::string get_key(const CallSiteSummary& call_site_summary) {
-  always_assert(!call_site_summary.arguments.is_bottom());
-  static std::array<std::string, 2> result_used_strs = {"-", "+"};
-  if (call_site_summary.arguments.is_top()) {
-    return result_used_strs[call_site_summary.result_used];
-  }
-  const auto& bindings = call_site_summary.arguments.bindings();
-  std::vector<reg_t> ordered_arg_idxes;
-  for (auto& p : bindings) {
-    ordered_arg_idxes.push_back(p.first);
-  }
-  always_assert(!ordered_arg_idxes.empty());
-  std::sort(ordered_arg_idxes.begin(), ordered_arg_idxes.end());
-  std::ostringstream oss;
-  oss << result_used_strs[call_site_summary.result_used];
-  for (auto arg_idx : ordered_arg_idxes) {
-    if (arg_idx != ordered_arg_idxes.front()) {
-      oss << ",";
-    }
-    oss << arg_idx << ":";
-    const auto& value = bindings.at(arg_idx);
-    if (const auto& signed_value = value.maybe_get<SignedConstantDomain>()) {
-      auto c = signed_value->get_constant();
-      if (c) {
-        oss << *c;
-      } else {
-        oss << show(*signed_value);
-      }
-    } else if (const auto& singleton_value =
-                   value.maybe_get<SingletonObjectDomain>()) {
-      auto field = *singleton_value->get_constant();
-      oss << show(field);
-    } else if (const auto& obj_or_none =
-                   value.maybe_get<ObjectWithImmutAttrDomain>()) {
-      auto object = obj_or_none->get_constant();
-      if (object->jvm_cached_singleton) {
-        oss << "(cached)";
-      }
-      oss << show(object->type);
-      oss << "{";
-      bool first{true};
-      for (auto& attr : object->attributes) {
-        if (first) {
-          first = false;
-        } else {
-          oss << ",";
-        }
-        if (attr.attr.is_field()) {
-          oss << show(attr.attr.field);
-        } else {
-          always_assert(attr.attr.is_method());
-          oss << show(attr.attr.method);
-        }
-        oss << "=";
-        if (const auto& signed_value2 =
-                attr.value.maybe_get<SignedConstantDomain>()) {
-          auto c = signed_value2->get_constant();
-          if (c) {
-            oss << *c;
-          } else {
-            oss << show(*signed_value2);
-          }
-        }
-      }
-      oss << "}";
-    } else {
-      not_reached_log("unexpected value: %s", SHOW(value));
-    }
-  }
-  return oss.str();
-}
-
-CallSiteSummary* MultiMethodInliner::internalize_call_site_summary(
-    const CallSiteSummary& call_site_summary) {
-  auto key = get_key(call_site_summary);
-  CallSiteSummary* res;
-  m_call_site_summaries.update(key, [&](const std::string&,
-                                        std::unique_ptr<CallSiteSummary>& p,
-                                        bool exist) {
-    if (exist) {
-      always_assert_log(p->result_used == call_site_summary.result_used,
-                        "same key %s for\n    %d\nvs. %d", key.c_str(),
-                        p->result_used, call_site_summary.result_used);
-      always_assert_log(p->arguments.equals(call_site_summary.arguments),
-                        "same key %s for\n    %s\nvs. %s", key.c_str(),
-                        SHOW(p->arguments), SHOW(call_site_summary.arguments));
-    } else {
-      p = std::make_unique<CallSiteSummary>(call_site_summary);
-    }
-    res = p.get();
-  });
-  return res;
-}
-
-void MultiMethodInliner::compute_call_site_summaries() {
-  if (!m_config.use_call_site_summaries) {
-    return;
-  }
-
-  Timer t("compute_call_site_summaries");
-  struct CalleeInfo {
-    std::unordered_map<CallSiteSummary*, size_t> occurrences;
-    std::vector<IRInstruction*> invokes;
-  };
-
-  // We'll do a top-down traversal of all call-sites, in order to propagate
-  // call-site information from outer call-sites to nested call-sites, improving
-  // the precision of the analysis. This is effectively an inter-procedural
-  // constant-propagation analysis, but we are operating on a reduced call-graph
-  // as recursion has been broken by eliminating some call-sites from
-  // consideration, and we are only considering those methods that are involved
-  // in an inlinable caller-callee relationship, which excludes much of true
-  // virtual methods.
-  PriorityThreadPoolDAGScheduler<DexMethod*> summaries_scheduler;
-
-  ConcurrentMap<DexMethod*, std::shared_ptr<CalleeInfo>>
-      concurrent_callee_infos;
-
-  // Helper function to retrieve a list of callers of a callee such that all
-  // possible call-sites to the callee are in the returned callers.
-  auto get_dependencies =
-      [&](DexMethod* callee) -> std::unordered_map<DexMethod*, size_t>* {
-    auto it = callee_caller.find(callee);
-    if (it == callee_caller.end() || m_recursive_callees.count(callee) ||
-        m_x_dex_callees.count(callee) || root(callee) || !can_rename(callee) ||
-        m_true_virtual_callees_with_other_call_sites.count(callee) ||
-        m_speed_excluded_callees.count(callee)) {
-      return nullptr;
-    }
-    // If we get here, then we know all possible call-sites to the callee, and
-    // they reside in the known list of callers.
-    return &it->second;
-  };
-
-  summaries_scheduler.set_executor([&](DexMethod* method) {
-    CallSiteArguments arguments;
-    if (!get_dependencies(method)) {
-      // There are no relevant callers from which we could gather incoming
-      // constant arguments.
-      arguments = CallSiteArguments::top();
-    } else {
-      auto ci = concurrent_callee_infos.get(method, nullptr);
-      if (!ci) {
-        // All callers were unreachable
-        arguments = CallSiteArguments::bottom();
-      } else {
-        // The only way to call this method is by going through a set of known
-        // call-sites. We join together all those incoming constant arguments.
-        always_assert(!ci->occurrences.empty());
-        auto it = ci->occurrences.begin();
-        arguments = it->first->arguments;
-        for (it++; it != ci->occurrences.end(); it++) {
-          arguments.join_with(it->first->arguments);
-        }
-      }
-    }
-
-    if (arguments.is_bottom()) {
-      // unreachable
-      info.constant_invoke_callers_unreachable++;
-      return;
-    }
-    auto& callees = caller_callee.at(method);
-    ConstantEnvironment initial_env =
-        constant_propagation::interprocedural::env_with_params(
-            is_static(method), method->get_code(), arguments);
-    auto res = get_invoke_call_site_summaries(method, callees, initial_env);
-    for (auto& p : res.invoke_call_site_summaries) {
-      auto insn = p.first;
-      auto callee = get_callee(method, insn);
-      auto call_site_summary = p.second;
-      concurrent_callee_infos.update(
-          callee, [&](const DexMethod*, std::shared_ptr<CalleeInfo>& ci,
-                      bool /* exists */) {
-            if (!ci) {
-              ci = std::make_shared<CalleeInfo>();
-            }
-            ci->occurrences[call_site_summary]++;
-            ci->invokes.push_back(insn);
-          });
-      m_invoke_call_site_summaries.emplace(insn, call_site_summary);
-    }
-    info.constant_invoke_callers_analyzed++;
-    info.constant_invoke_callers_unreachable_blocks += res.dead_blocks;
-  });
-
-  std::vector<DexMethod*> callers;
-  for (auto& p : caller_callee) {
-    auto method = const_cast<DexMethod*>(p.first);
-    callers.push_back(method);
-    auto dependencies = get_dependencies(method);
-    if (dependencies) {
-      for (auto& q : *dependencies) {
-        summaries_scheduler.add_dependency(method, q.first);
-      }
-    }
-  }
-  info.constant_invoke_callers_critical_path_length =
-      summaries_scheduler.run(callers.begin(), callers.end());
-
-  for (auto& p : concurrent_callee_infos) {
-    auto callee = p.first;
-    auto& v = m_callee_call_site_summary_occurrences[callee];
-    auto& ci = p.second;
-    for (const auto& q : ci->occurrences) {
-      const auto call_site_summary = q.first;
-      const auto count = q.second;
-      v.emplace_back(call_site_summary, count);
-    }
-    auto& invokes = m_callee_call_site_invokes[callee];
-    invokes.insert(invokes.end(), ci->invokes.begin(), ci->invokes.end());
-  }
-}
-
 void MultiMethodInliner::inline_methods(bool methods_need_deconstruct) {
   std::unordered_set<IRCode*> need_deconstruct;
   if (methods_need_deconstruct) {
@@ -507,7 +282,21 @@ void MultiMethodInliner::inline_methods(bool methods_need_deconstruct) {
     }
   }
 
-  compute_call_site_summaries();
+  if (m_config.use_call_site_summaries) {
+    m_call_site_summarizer = std::make_unique<inliner::CallSiteSummarizer>(
+        m_shrinker, callee_caller, caller_callee,
+        [this](DexMethod* caller, IRInstruction* insn) -> DexMethod* {
+          return this->get_callee(caller, insn);
+        },
+        [this](DexMethod* callee) -> bool {
+          return m_recursive_callees.count(callee) || root(callee) ||
+                 m_x_dex_callees.count(callee) || !can_rename(callee) ||
+                 m_true_virtual_callees_with_other_call_sites.count(callee) ||
+                 m_speed_excluded_callees.count(callee);
+        },
+        &info.call_site_summary_stats);
+    m_call_site_summarizer->summarize();
+  }
 
   // Second, compute caller priorities --- the callers get a priority assigned
   // that reflects how many other callers will be waiting for them.
@@ -603,61 +392,6 @@ size_t MultiMethodInliner::prune_caller_nonrecursive_callees(
 
   (*visited)[caller] = stack_depth;
   return stack_depth;
-}
-
-InvokeCallSiteSummariesAndDeadBlocks
-MultiMethodInliner::get_invoke_call_site_summaries(
-    DexMethod* caller,
-    const std::unordered_map<DexMethod*, size_t>& callees,
-    const ConstantEnvironment& initial_env) {
-  IRCode* code = caller->get_code();
-
-  InvokeCallSiteSummariesAndDeadBlocks res;
-  auto& cfg = code->cfg();
-  constant_propagation::intraprocedural::FixpointIterator intra_cp(
-      cfg,
-      constant_propagation::ConstantPrimitiveAndBoxedAnalyzer(
-          m_shrinker.get_immut_analyzer_state(),
-          m_shrinker.get_immut_analyzer_state(),
-          constant_propagation::EnumFieldAnalyzerState::get(),
-          constant_propagation::BoxedBooleanAnalyzerState::get(), nullptr));
-  intra_cp.run(initial_env);
-  for (const auto& block : cfg.blocks()) {
-    auto env = intra_cp.get_entry_state_at(block);
-    if (env.is_bottom()) {
-      res.dead_blocks++;
-      // we found an unreachable block; ignore invoke instructions in it
-      continue;
-    }
-    auto last_insn = block->get_last_insn();
-    auto iterable = InstructionIterable(block);
-    for (auto it = iterable.begin(); it != iterable.end(); it++) {
-      auto insn = it->insn;
-      auto callee = get_callee(caller, insn);
-      if (callee && callees.count(callee)) {
-        CallSiteSummary call_site_summary;
-        const auto& srcs = insn->srcs();
-        for (size_t i = is_static(callee) ? 0 : 1; i < srcs.size(); ++i) {
-          auto val = env.get(srcs[i]);
-          always_assert(!val.is_bottom());
-          call_site_summary.arguments.set(i, val);
-        }
-        call_site_summary.result_used =
-            !callee->get_proto()->is_void() &&
-            !cfg.move_result_of(block->to_cfg_instruction_iterator(it))
-                 .is_end();
-        res.invoke_call_site_summaries.emplace_back(
-            insn, internalize_call_site_summary(call_site_summary));
-      }
-      intra_cp.analyze_instruction(insn, &env, insn == last_insn->insn);
-      if (env.is_bottom()) {
-        // Can happen in the absence of throw edges when dereferencing null
-        break;
-      }
-    }
-  }
-
-  return res;
 }
 
 DexMethod* MultiMethodInliner::get_callee(DexMethod* caller,
@@ -1123,13 +857,19 @@ void MultiMethodInliner::compute_callee_costs(DexMethod* method) {
   auto fully_inlined_cost = get_fully_inlined_cost(method);
   always_assert(fully_inlined_cost);
 
-  auto callee_call_site_invokes_it = m_callee_call_site_invokes.find(method);
-  if (callee_call_site_invokes_it != m_callee_call_site_invokes.end()) {
+  auto callee_call_site_invokes =
+      m_call_site_summarizer
+          ? m_call_site_summarizer->get_callee_call_site_invokes(method)
+          : nullptr;
+  if (callee_call_site_invokes != nullptr) {
     std::unordered_map<const CallSiteSummary*,
                        std::vector<const IRInstruction*>>
         invokes;
-    for (auto invoke_insn : callee_call_site_invokes_it->second) {
-      auto* call_site_summary = m_invoke_call_site_summaries.at(invoke_insn);
+    for (auto invoke_insn : *callee_call_site_invokes) {
+      const auto* call_site_summary =
+          m_call_site_summarizer->get_instruction_call_site_summary(
+              invoke_insn);
+      always_assert(call_site_summary != nullptr);
       invokes[call_site_summary].push_back(invoke_insn);
     }
     for (auto& p : invokes) {
@@ -1683,11 +1423,14 @@ const InlinedCost* MultiMethodInliner::get_call_site_inlined_cost(
     return *res;
   }
 
-  auto it = m_invoke_call_site_summaries.find(invoke_insn);
-  if (it == m_invoke_call_site_summaries.end()) {
+  auto call_site_summary =
+      m_call_site_summarizer
+          ? m_call_site_summarizer->get_instruction_call_site_summary(
+                invoke_insn)
+          : nullptr;
+  if (call_site_summary == nullptr) {
     res = nullptr;
   } else {
-    auto call_site_summary = it->second;
     res = get_call_site_inlined_cost(call_site_summary, callee);
   }
 
@@ -1715,7 +1458,7 @@ const InlinedCost* MultiMethodInliner::get_call_site_inlined_cost(
       callee->get_code(), call_site_summary));
   TRACE(INLINE, 4,
         "get_call_site_inlined_cost(%s) = {%zu,%f,%f,%f,%s,%f,%d,%zu}",
-        get_key(*call_site_summary).c_str(), inlined_cost->full_code,
+        call_site_summary->get_key().c_str(), inlined_cost->full_code,
         inlined_cost->code, inlined_cost->method_refs, inlined_cost->other_refs,
         inlined_cost->no_return ? "no_return" : "return",
         inlined_cost->result_used, !!inlined_cost->reduced_cfg,
@@ -1754,19 +1497,20 @@ const InlinedCost* MultiMethodInliner::get_average_inlined_cost(
   size_t callees_unused_results{0};
   size_t callees_no_return{0};
 
-  auto callee_call_site_summary_occurrences_it =
-      m_callee_call_site_summary_occurrences.find(callee);
-  if (callee_call_site_summary_occurrences_it ==
-          m_callee_call_site_summary_occurrences.end() ||
-      fully_inlined_cost->full_code > MAX_COST_FOR_CONSTANT_PROPAGATION) {
+  const std::vector<CallSiteSummaryOccurrences>*
+      callee_call_site_summary_occurrences;
+  if (fully_inlined_cost->full_code > MAX_COST_FOR_CONSTANT_PROPAGATION ||
+      !(callee_call_site_summary_occurrences =
+            m_call_site_summarizer
+                ? m_call_site_summarizer
+                      ->get_callee_call_site_summary_occurrences(callee)
+                : nullptr)) {
     inlined_cost = std::make_shared<InlinedCost>(*fully_inlined_cost);
   } else {
     inlined_cost = std::make_shared<InlinedCost>((InlinedCost){
         fully_inlined_cost->full_code, 0.0f, 0.0f, 0.0f, true, 0.0f, {}, 0});
     bool callee_has_result = !callee->get_proto()->is_void();
-    const auto& callee_call_site_summary_occurrences =
-        callee_call_site_summary_occurrences_it->second;
-    for (auto& p : callee_call_site_summary_occurrences) {
+    for (auto& p : *callee_call_site_summary_occurrences) {
       const auto call_site_summary = p.first;
       const auto count = p.second;
       auto call_site_inlined_cost =
