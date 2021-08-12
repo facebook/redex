@@ -74,7 +74,6 @@ check_PROGRAMS = \
     match_flow_test \
     match_test \
     method_inline_test \
-    method_merger_test \
     method_util_test \
     monitor_count_test \
     mutf8_compare_test \
@@ -275,8 +274,6 @@ match_flow_test_SOURCES = MatchFlowTest.cpp
 match_flow_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
 method_inline_test_SOURCES = MethodInlineTest.cpp
-
-method_merger_test_SOURCES = MethodMergerTest.cpp
 
 method_util_test_SOURCES = MethodUtilTest.cpp
 
@@ -492,7 +489,6 @@ TESTS = \
     match_flow_test \
     match_test \
     method_inline_test \
-    method_merger_test \
     monitor_count_test \
     mutf8_compare_test \
     leb_test \
