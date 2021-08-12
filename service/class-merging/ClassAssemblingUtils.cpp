@@ -12,6 +12,7 @@
 #include "Creators.h"
 #include "DexUtil.h"
 #include "Model.h"
+#include "ReachableClasses.h"
 #include "Show.h"
 #include "Trace.h"
 
@@ -115,7 +116,7 @@ DexType* create_empty_base_cls_for_intf_root(
 
   for (auto impl_type : all_implementors) {
     auto impl_cls = type_class(impl_type);
-    if (impl_cls->is_external()) {
+    if (impl_cls->is_external() || !can_delete(impl_cls)) {
       continue;
     }
     auto* ifcs = impl_cls->get_interfaces();
