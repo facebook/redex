@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "CFGMutation.h"
 #include "ConstantEnvironment.h"
 #include "ConstantPropagationAnalysis.h"
 #include "ConstantPropagationWholeProgramState.h"
@@ -159,10 +160,8 @@ class Transform final {
                               const XStoreRefs*);
 
   const Config m_config;
-  std::unordered_map<IRInstruction*, std::vector<IRInstruction*>>
-      m_replacements;
+  std::unique_ptr<cfg::CFGMutation> m_mutation;
   std::vector<IRInstruction*> m_added_param_values;
-  std::unordered_set<IRInstruction*> m_deletes;
   std::unordered_set<IRInstruction*> m_redundant_move_results;
   std::vector<cfg::Edge*> m_edge_deletes;
   Stats m_stats;

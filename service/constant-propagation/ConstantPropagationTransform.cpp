@@ -7,7 +7,6 @@
 
 #include "ConstantPropagationTransform.h"
 
-#include "CFGMutation.h"
 #include "ReachingDefinitions.h"
 #include "ScopedMetrics.h"
 #include "Trace.h"
@@ -35,9 +34,9 @@ void Transform::replace_with_const(const ConstantEnvironment& env,
   }
   if (opcode::is_a_move_result_pseudo(insn->opcode())) {
     auto primary_it = cfg_it.cfg().primary_instruction_of_move_result(cfg_it);
-    m_replacements.emplace(primary_it->insn, replacement);
+    m_mutation->replace(primary_it, replacement);
   } else {
-    m_replacements.emplace(insn, replacement);
+    m_mutation->replace(cfg_it, replacement);
   }
   ++m_stats.materialized_consts;
 }
@@ -75,7 +74,7 @@ bool Transform::eliminate_redundant_null_check(
       ++m_stats.null_checks_method_calls;
       auto val = env.get(insn->src(*index)).maybe_get<SignedConstantDomain>();
       if (val && val->interval() == sign_domain::Interval::NEZ) {
-        m_deletes.insert(insn);
+        m_mutation->remove(cfg_it);
         ++m_stats.null_checks;
         return true;
       }
@@ -125,7 +124,7 @@ bool Transform::eliminate_redundant_put(
       TRACE(FINALINLINE, 2, "%s has %s", SHOW(field), SHOW(existing_val));
       // This field must already hold this value. We don't need to write to it
       // again.
-      m_deletes.insert(insn);
+      m_mutation->remove(cfg_it);
       return true;
     }
     break;
@@ -356,7 +355,7 @@ bool Transform::replace_with_throw(
   // We'll replace this instruction with a different instruction sequence that
   // unconditionally throws a null pointer exception.
 
-  m_replacements.emplace(insn, npe_creator->get_insns(insn));
+  m_mutation->replace(cfg_it, npe_creator->get_insns(insn));
   ++m_stats.throws;
 
   if (insn->has_move_result_any()) {
@@ -373,26 +372,14 @@ void Transform::apply_changes(cfg::ControlFlowGraph& cfg) {
   for (auto branch_edge : m_edge_deletes) {
     cfg.delete_edge(branch_edge);
   }
-  cfg::CFGMutation mutation(cfg);
-  auto iterable = InstructionIterable(cfg);
-  for (auto it = iterable.begin(); it != iterable.end(); it++) {
-    if (m_deletes.count(it->insn)) {
-      always_assert(!m_replacements.count(it->insn));
-      mutation.remove(it);
-      continue;
-    }
-    auto it2 = m_replacements.find(it->insn);
-    if (it2 == m_replacements.end()) {
-      continue;
-    }
-    mutation.replace(it, std::move(it2->second));
-  }
-  mutation.flush();
 
-  auto after_params_it = cfg.entry_block()->to_cfg_instruction_iterator(
-      cfg.entry_block()->get_first_non_param_loading_insn());
-  for (auto insn : m_added_param_values) {
-    cfg.insert_before(after_params_it, insn);
+  always_assert(m_mutation != nullptr);
+  m_mutation->flush();
+
+  if (!m_added_param_values.empty()) {
+    auto after_params_it = cfg.entry_block()->to_cfg_instruction_iterator(
+        cfg.entry_block()->get_first_non_param_loading_insn());
+    cfg.insert_before(after_params_it, m_added_param_values);
   }
 }
 
@@ -424,6 +411,8 @@ void Transform::legacy_apply_constants_and_prune_unreachable(
     const XStoreRefs* xstores,
     const DexType* declaring_type) {
   always_assert(cfg.editable());
+  always_assert(m_mutation == nullptr);
+  m_mutation = std::make_unique<cfg::CFGMutation>(cfg);
   npe::NullPointerExceptionCreator npe_creator(&cfg);
   for (const auto& block : cfg.blocks()) {
     auto env = intra_cp.get_entry_state_at(block);
@@ -448,6 +437,7 @@ void Transform::legacy_apply_constants_and_prune_unreachable(
     eliminate_dead_branch(intra_cp, env, cfg, block);
   }
   apply_changes(cfg);
+  m_mutation = nullptr;
   cfg.simplify();
 }
 
