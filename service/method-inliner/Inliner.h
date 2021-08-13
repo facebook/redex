@@ -10,6 +10,7 @@
 #include <functional>
 #include <vector>
 
+#include "ABExperimentContext.h"
 #include "CallSiteSummaries.h"
 #include "PriorityThreadPoolDAGScheduler.h"
 #include "RefChecker.h"
@@ -617,6 +618,11 @@ class MultiMethodInliner {
   AccumulatingTimer m_inline_with_cfg_timer;
   AccumulatingTimer m_call_site_inlined_cost_timer;
   AccumulatingTimer m_cannot_inline_sketchy_code_timer;
+
+  std::unique_ptr<ab_test::ABExperimentContext> m_ab_experiment_context{
+      nullptr};
+  std::unordered_set<DexMethod*> m_experimental_methods;
+  std::mutex ab_exp_mutex;
 
   const DexFieldRef* m_sdk_int_field =
       DexField::get_field("Landroid/os/Build$VERSION;.SDK_INT:I");

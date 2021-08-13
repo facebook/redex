@@ -61,6 +61,22 @@ const size_t MAX_COST_FOR_CONSTANT_PROPAGATION = 1000;
  */
 constexpr uint64_t HARD_MAX_INSTRUCTION_SIZE = UINT64_C(1) << 32;
 
+void fix_static_invokes(DexMethod* m) {
+  m->get_code()->build_cfg();
+  auto ii = cfg::InstructionIterable(m->get_code()->cfg());
+  for (auto it = ii.begin(); it != ii.end(); it++) {
+    auto* ins = it->insn;
+    if (!ins->has_method() || !ins->get_method()->is_def()) {
+      continue;
+    }
+    auto res_method = ins->get_method()->as_def();
+    if (ins->opcode() == OPCODE_INVOKE_DIRECT && is_public(res_method) &&
+        !is_constructor(res_method)) {
+      ins->set_opcode(OPCODE_INVOKE_STATIC);
+    }
+  }
+  m->get_code()->clear_cfg();
+}
 } // namespace
 
 MultiMethodInliner::MultiMethodInliner(
@@ -232,6 +248,8 @@ void MultiMethodInliner::inline_methods(bool methods_need_deconstruct) {
     }
   }
 
+  m_ab_experiment_context = ab_test::ABExperimentContext::create("pgi_v1");
+
   // Inlining and shrinking initiated from within this method will be done
   // in parallel.
   m_scheduler.get_thread_pool().set_num_threads(
@@ -324,6 +342,13 @@ void MultiMethodInliner::inline_methods(bool methods_need_deconstruct) {
       m_scheduler.run(methods_to_schedule.begin(), methods_to_schedule.end());
   delayed_change_visibilities();
   info.waited_seconds = m_scheduler.get_thread_pool().get_waited_seconds();
+
+  m_ab_experiment_context->flush();
+  m_ab_experiment_context = nullptr;
+
+  for (auto* m : m_experimental_methods) {
+    fix_static_invokes(m);
+  }
 
   if (!need_deconstruct.empty()) {
     workqueue_run<IRCode*>([](IRCode* code) { code->clear_cfg(); },
@@ -503,6 +528,10 @@ std::string create_inlining_trace_msg(const DexMethod* caller,
 void MultiMethodInliner::inline_inlinables(
     DexMethod* caller_method, const std::vector<Inlinable>& inlinables) {
   auto timer = m_inline_inlinables_timer.scope();
+  if (for_speed() && m_ab_experiment_context->use_control()) {
+    return;
+  }
+
   auto caller = caller_method->get_code();
   std::unordered_set<IRCode*> need_deconstruct;
   if (inline_inlinables_need_deconstruct(caller_method)) {
@@ -527,7 +556,8 @@ void MultiMethodInliner::inline_inlinables(
   std::vector<Inlinable> ordered_inlinables(inlinables.begin(),
                                             inlinables.end());
 
-  std::stable_sort(ordered_inlinables.begin(), ordered_inlinables.end(),
+  std::stable_sort(ordered_inlinables.begin(),
+                   ordered_inlinables.end(),
                    [&](const Inlinable& a, const Inlinable& b) {
                      // First, prefer no-return inlinable, as they cut off
                      // control-flow and thus other inlinables.
@@ -707,6 +737,12 @@ void MultiMethodInliner::inline_inlinables(
           create_inlining_trace_msg(caller_method, callee_method, callsite_insn)
               .c_str());
 
+    if (for_speed()) {
+      std::lock_guard<std::mutex> lock(ab_exp_mutex);
+      m_ab_experiment_context->try_register_method(caller_method);
+      m_experimental_methods.insert(caller_method);
+    }
+
     if (m_config.unique_inlined_registers) {
       cfg_next_caller_reg = caller->cfg().get_registers_size();
     }
@@ -733,9 +769,10 @@ void MultiMethodInliner::inline_inlinables(
     for (auto callee_method : inlined_callees) {
       if (m_delayed_change_visibilities) {
         m_delayed_change_visibilities->update(
-            callee_method, [caller_method](const DexMethod*,
-                                           std::unordered_set<DexType*>& value,
-                                           bool /*exists*/) {
+            callee_method,
+            [caller_method](const DexMethod*,
+                            std::unordered_set<DexType*>& value,
+                            bool /*exists*/) {
               value.insert(caller_method->get_class());
             });
       } else {
