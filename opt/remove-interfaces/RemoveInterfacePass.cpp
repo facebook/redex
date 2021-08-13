@@ -24,6 +24,10 @@ using MethodOrderedSet = std::set<DexMethod*, dexmethods_comparator>;
 
 namespace {
 
+// The max num of implementors a removable interface can have.
+// If an interface has more implementors, we do not remove it.
+constexpr size_t MAX_IMPLS_SIZE = 10;
+
 std::vector<Location> get_args_for(DexProto* proto, MethodCreator* mc) {
   std::vector<Location> args;
   size_t args_size = proto->get_args()->size();
@@ -285,7 +289,7 @@ size_t exclude_unremovables(const Scope& scope,
   std::vector<const DexType*> intf_list(candidates.begin(), candidates.end());
   for (auto intf : intf_list) {
     const auto& impls = type_system.get_implementors(intf);
-    if (impls.size() <= 1) {
+    if (impls.size() <= 1 || impls.size() > MAX_IMPLS_SIZE) {
       TRACE(RM_INTF, 5, "Excluding %s with impls of size %zu", SHOW(intf),
             impls.size());
       candidates.erase(intf);
