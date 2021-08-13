@@ -20,6 +20,12 @@ import android.view.View;
 
 public class MainActivity extends Activity {
 
+  private static final String[] EXPECTED_STRINGS = {
+    "Fig",
+    "Cara cara navel",
+    "Mango"
+  };
+
   @Override
   protected void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
@@ -31,11 +37,15 @@ public class MainActivity extends Activity {
     }
     Resources resources = getResources();
     String[] fruits = resources.getStringArray(R.array.some_fruits);
-    if (fruits == null || fruits.length != 3) {
+    if (fruits == null || fruits.length != EXPECTED_STRINGS.length) {
       throw new AssertionError("Not enough fruit");
     }
-    for (String fruit : fruits) {
+    for (int i = 0; i < fruits.length; i++) {
+      String fruit = fruits[i];
       android.util.Log.w("BNDL", fruit);
+      if (!fruit.equals(EXPECTED_STRINGS[i])) {
+        throw new AssertionError("Wrong value: " + fruit);
+      }
     }
     String sentence = resources.getQuantityString(R.plurals.a_sentence_with_geese, fruits.length);
     if (!sentence.contains("geese")) {

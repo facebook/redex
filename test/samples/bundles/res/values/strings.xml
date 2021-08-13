@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+  <string name="_an_unused_string">Nope</string>
   <string name="app_name">Much app, wow</string>
   <string name="toast_fmt" translatable="false">TOAST: %1$s</string>
   <string name="log_msg">Hello from MyApplication!!</string>
@@ -8,6 +9,7 @@
   <string name="button_txt">Launch Theme Activity</string>
   <string name="yummy_orange">Cara cara navel</string>
   <string name="unused_durian">Durian</string>
+  <string name="keep_me_unused_str">This should be kept</string>
   <string name="unused_pineapple">Pineapple</string>
   <string-array name="some_fruits">
     <item>Fig</item>
