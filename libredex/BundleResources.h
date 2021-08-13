@@ -48,12 +48,14 @@ class ResourcesPbFile : public ResourceTableFile {
       const {
     return m_res_id_to_configvalue;
   }
+  std::string resolve_module_name_for_resource_id(uint32_t res_id);
 
  private:
   uint32_t m_package_id = 0xFFFFFFFF;
   std::map<uint32_t, std::string> m_type_id_to_names;
   std::unordered_set<uint32_t> m_existed_res_ids;
   std::map<uint32_t, const ConfigValues> m_res_id_to_configvalue;
+  std::map<uint32_t, std::string> m_package_id_to_module_name;
   std::set<uint32_t> m_ids_to_remove;
 };
 

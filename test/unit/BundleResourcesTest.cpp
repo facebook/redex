@@ -222,6 +222,10 @@ TEST(BundleResources, ReadResource) {
     auto res_table = resources->load_res_table();
     auto padding_left_ids = res_table->get_res_ids_by_name("padding_left");
     EXPECT_EQ(padding_left_ids.size(), 1);
+    auto module_name =
+        reinterpret_cast<ResourcesPbFile*>(res_table.get())
+            ->resolve_module_name_for_resource_id(padding_left_ids[0]);
+    EXPECT_STREQ("base", module_name.c_str());
     const auto& id_to_name = res_table->id_to_name;
     auto obtain_resource_name_back = id_to_name.at(padding_left_ids[0]);
     EXPECT_EQ(obtain_resource_name_back, "padding_left");

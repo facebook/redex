@@ -900,6 +900,23 @@ void ResourcesPbFile::remap_res_ids_and_serialize(
   }
 }
 
+namespace {
+
+std::string module_name_from_pb_path(const std::string& resources_pb_path) {
+  auto p = boost::filesystem::path(resources_pb_path);
+  return p.parent_path().filename().string();
+}
+
+} // namespace
+
+std::string ResourcesPbFile::resolve_module_name_for_resource_id(
+    uint32_t res_id) {
+  auto package_id = res_id >> 24;
+  always_assert_log(m_package_id_to_module_name.count(package_id) > 0,
+                    "Unknown package for resource id %X", res_id);
+  return m_package_id_to_module_name.at(package_id);
+}
+
 void ResourcesPbFile::collect_resource_data_for_file(
     const std::string& resources_pb_path) {
   TRACE(RES,
@@ -917,6 +934,8 @@ void ResourcesPbFile::collect_resource_data_for_file(
           auto current_package_id = pb_package.package_id().id();
           TRACE(RES, 9, "Package: %s %X", pb_package.package_name().c_str(),
                 current_package_id);
+          m_package_id_to_module_name.emplace(
+              current_package_id, module_name_from_pb_path(resources_pb_path));
           for (const aapt::pb::Type& pb_type : pb_package.type()) {
             auto current_type_id = pb_type.type_id().id();
             const auto& current_type_name = pb_type.name();
@@ -1012,19 +1031,19 @@ void ResourcesPbFile::walk_references_for_resource(
     return;
   }
   nodes_visited->emplace(resID);
+  auto module_name = resolve_module_name_for_resource_id(resID);
 
-  const auto& initial_values = get_res_id_to_configvalue().at(resID);
-
-  std::stack<aapt::pb::ConfigValue> nodes_to_explore;
-  for (int index = 0; index < initial_values.size(); ++index) {
-    nodes_to_explore.push(initial_values[index]);
-  }
+  auto& initial_values = m_res_id_to_configvalue.at(resID);
+  std::stack<const aapt::pb::ConfigValue*> nodes_to_explore;
+  auto push_to_stack = [&nodes_to_explore](const aapt::pb::ConfigValue& cv) {
+    nodes_to_explore.push(&cv);
+  };
+  std::for_each(initial_values.begin(), initial_values.end(), push_to_stack);
 
   while (!nodes_to_explore.empty()) {
     const auto& r = nodes_to_explore.top();
+    const auto& value = r->value();
     nodes_to_explore.pop();
-
-    const auto& value = r.value();
 
     std::vector<aapt::pb::Item> items;
     std::vector<aapt::pb::Reference> refs;
@@ -1043,7 +1062,12 @@ void ResourcesPbFile::walk_references_for_resource(
     for (size_t i = 0; i < items.size(); i++) {
       const auto& item = items[i];
       if (item.has_file()) {
-        leaf_string_values->insert(item.file().path());
+        // NOTE: We are mapping original given resource ID to a module name,
+        // when in reality resource ID for current item from the stack could be
+        // several references away. This should work for all our expected inputs
+        // but is shaky nonetheless.
+        auto item_path = module_name + "/" + item.file().path();
+        leaf_string_values->insert(item_path);
         continue;
       }
     }
@@ -1068,10 +1092,8 @@ void ResourcesPbFile::walk_references_for_resource(
           continue;
         }
         nodes_visited->insert(ref_id);
-        const auto& inner_values = (get_res_id_to_configvalue()).at(ref_id);
-        for (auto index = 0; index < inner_values.size(); ++index) {
-          nodes_to_explore.push(inner_values[index]);
-        }
+        const auto& inner_values = m_res_id_to_configvalue.at(ref_id);
+        std::for_each(inner_values.begin(), inner_values.end(), push_to_stack);
       }
     }
   }
