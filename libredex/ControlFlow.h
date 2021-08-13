@@ -316,6 +316,9 @@ class Block final {
   // return an iterator to the first non-param-loading MFLOW_OPCODE, or end() if
   // there are none.
   IRList::iterator get_first_non_param_loading_insn();
+  // return an iterator to the last param-loading MFLOW_OPCODE, or end() if
+  // there are none.
+  IRList::iterator get_last_param_loading_insn();
   // return an iterator to the first instruction (except move-result* and goto)
   // if it occurs before the first position, or end() if there are none.
   IRList::iterator get_first_insn_before_position();
