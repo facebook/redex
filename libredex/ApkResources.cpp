@@ -870,7 +870,7 @@ std::unordered_set<std::string> ResourcesArscFile::get_files_by_rid(
 void ResourcesArscFile::walk_references_for_resource(
     uint32_t resID,
     std::unordered_set<uint32_t>* nodes_visited,
-    std::unordered_set<std::string>* leaf_string_values) {
+    std::unordered_set<std::string>* potential_file_paths) {
   if (nodes_visited->find(resID) != nodes_visited->end()) {
     return;
   }
@@ -891,7 +891,7 @@ void ResourcesArscFile::walk_references_for_resource(
     nodes_to_explore.pop();
     if (r.dataType == android::Res_value::TYPE_STRING) {
       android::String8 str = res_table.getString8FromIndex(pkg_index, r.data);
-      leaf_string_values->insert(std::string(str.string()));
+      potential_file_paths->insert(std::string(str.string()));
       continue;
     }
 

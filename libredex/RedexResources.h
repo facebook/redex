@@ -104,11 +104,12 @@ class ResourceTableFile {
   virtual std::unordered_set<std::string> get_files_by_rid(uint32_t res_id) = 0;
 
   // Follows the reference links for a resource for all configurations. Outputs
-  // all the nodes visited, as well as all the string values seen.
+  // all the nodes visited, as well as strings that may be additional resource
+  // file paths.
   virtual void walk_references_for_resource(
       uint32_t resID,
       std::unordered_set<uint32_t>* nodes_visited,
-      std::unordered_set<std::string>* leaf_string_values) = 0;
+      std::unordered_set<std::string>* potential_file_paths) = 0;
 
   // Return the resource ids based on the given resource name.
   std::vector<uint32_t> get_res_ids_by_name(const std::string& name) const {

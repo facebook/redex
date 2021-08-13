@@ -1025,7 +1025,7 @@ std::unordered_set<std::string> ResourcesPbFile::get_files_by_rid(
 void ResourcesPbFile::walk_references_for_resource(
     uint32_t resID,
     std::unordered_set<uint32_t>* nodes_visited,
-    std::unordered_set<std::string>* leaf_string_values) {
+    std::unordered_set<std::string>* potential_file_paths) {
   if (nodes_visited->find(resID) != nodes_visited->end()) {
     // Return directly if a node is visited.
     return;
@@ -1067,7 +1067,7 @@ void ResourcesPbFile::walk_references_for_resource(
         // several references away. This should work for all our expected inputs
         // but is shaky nonetheless.
         auto item_path = module_name + "/" + item.file().path();
-        leaf_string_values->insert(item_path);
+        potential_file_paths->insert(item_path);
         continue;
       }
     }

@@ -65,7 +65,7 @@ class ResourcesArscFile : public ResourceTableFile {
   void walk_references_for_resource(
       uint32_t resID,
       std::unordered_set<uint32_t>* nodes_visited,
-      std::unordered_set<std::string>* leaf_string_values) override;
+      std::unordered_set<std::string>* potential_file_paths) override;
 
   ~ResourcesArscFile() override;
 
