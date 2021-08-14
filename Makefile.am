@@ -222,6 +222,7 @@ libredex_la_SOURCES = \
 	service/method-inliner/ObjectInlinePlugin.cpp \
 	service/method-inliner/RecursionPruner.cpp \
 	service/method-merger/MethodMerger.cpp \
+	service/method-outliner/OutliningProfileGuidanceImpl.cpp \
 	service/reduce-boolean-branches/ReduceBooleanBranches.cpp \
 	service/reference-update/MethodReference.cpp \
 	service/reference-update/TypeReference.cpp \

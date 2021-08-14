@@ -36,7 +36,7 @@
 #include "WorkQueue.h"
 
 using namespace opt_metadata;
-using namespace instruction_sequence_outliner;
+using namespace outliner;
 
 namespace {
 

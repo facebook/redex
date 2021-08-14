@@ -9,7 +9,7 @@
 
 #include "DexClass.h"
 
-namespace instruction_sequence_outliner {
+namespace outliner {
 
 constexpr const char* OUTLINED_METHOD_NAME_PREFIX = "$outlined$";
 
@@ -18,4 +18,4 @@ inline bool is_outlined_method(const DexMethodRef* method) {
                  strlen(OUTLINED_METHOD_NAME_PREFIX)) == 0;
 }
 
-} // namespace instruction_sequence_outliner
+} // namespace outliner
