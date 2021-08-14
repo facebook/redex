@@ -304,8 +304,6 @@ class Model {
 
   // the roots (base types) for the model
   std::vector<MergerType*> m_roots;
-  // all types in this model
-  TypeSet m_types;
   // the new generated class hierarchy during analysis.
   // Types are not changed during analysis and m_hierarchy represents
   // the class hierarchy as known to the analysis and what the final

@@ -42,7 +42,7 @@ std::string to_string(const ModelSpec& spec) {
 void load_generated_types(const ModelSpec& spec,
                           const Scope& scope,
                           const TypeSystem& type_system,
-                          const TypeSet& models,
+                          const ConstTypeHashSet& models,
                           TypeSet& generated) {
   generated.insert(models.begin(), models.end());
   for (const auto& type : spec.gen_types) {
@@ -78,7 +78,7 @@ bool is_subset(const Set& left, const Set& right) {
 }
 
 void print_interface_maps(const TypeToTypeSet& intf_to_classes,
-                          const TypeSet& types) {
+                          const ConstTypeHashSet& types) {
   std::vector<const DexType*> intfs;
   for (const auto& intf_to_classes_it : intf_to_classes) {
     intfs.emplace_back(intf_to_classes_it.first);
@@ -163,7 +163,6 @@ Model::Model(const Scope& scope,
              const TypeSystem& type_system,
              const RefChecker& refchecker)
     : m_spec(spec),
-      m_types(spec.merging_targets.begin(), spec.merging_targets.end()),
       m_type_system(type_system),
       m_ref_checker(refchecker),
       m_scope(scope),
@@ -178,7 +177,7 @@ void Model::init(const Scope& scope,
   for (const auto root : spec.roots) {
     build_interface_map(root, {});
   }
-  print_interface_maps(m_intf_to_classes, m_types);
+  print_interface_maps(m_intf_to_classes, m_spec.merging_targets);
 
   for (const auto root : spec.roots) {
     MergerType* root_merger = build_mergers(root);
@@ -187,18 +186,19 @@ void Model::init(const Scope& scope,
 
   // load all generated types and find non mergeables
   TypeSet generated;
-  load_generated_types(spec, scope, type_system, m_types, generated);
+  load_generated_types(spec, scope, type_system, m_spec.merging_targets,
+                       generated);
   TRACE(CLMG, 4, "Generated types %ld", generated.size());
   exclude_types(spec.exclude_types);
-  MergeabilityChecker checker(scope, spec, m_ref_checker, generated, m_types);
+  MergeabilityChecker checker(scope, spec, m_ref_checker, generated);
   m_non_mergeables = checker.get_non_mergeables();
   TRACE(CLMG, 3, "Non mergeables %ld", m_non_mergeables.size());
   m_metric.non_mergeables = m_non_mergeables.size();
-  m_metric.all_types = m_types.size();
+  m_metric.all_types = m_spec.merging_targets.size();
 }
 
 void Model::build_hierarchy(const TypeSet& roots) {
-  for (const auto& type : m_types) {
+  for (const auto& type : m_spec.merging_targets) {
     if (roots.count(type) > 0) {
       continue;
     }
@@ -1045,7 +1045,7 @@ std::string Model::print() const {
     count += merger.second.mergeables.size();
   }
   std::ostringstream ss;
-  ss << m_spec.name << " Model: all types " << m_types.size()
+  ss << m_spec.name << " Model: all types " << m_spec.merging_targets.size()
      << ", merge types " << m_mergers.size() << ", mergeables " << count
      << "\n";
   for (const auto root_merger : m_roots) {
