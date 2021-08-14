@@ -16,6 +16,7 @@
 #include "Trace.h"
 
 class DexType;
+using ConstTypeVector = std::vector<const DexType*>;
 
 /**
  * We can have multiple merging strategies for classes that have the same shape

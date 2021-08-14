@@ -61,7 +61,7 @@ std::string MergerType::Shape::build_type_name(
     const std::string& prefix,
     const DexType* root_type,
     const TypeSet& intf_set,
-    const boost::optional<size_t>& dex_id,
+    const boost::optional<size_t>& opt_dex_id,
     size_t count,
     const boost::optional<InterdexSubgroupIdx>& interdex_subgroup_idx,
     const InterdexSubgroupIdx subgroup_idx) const {
@@ -75,8 +75,8 @@ std::string MergerType::Shape::build_type_name(
   ss << count << "S" << string_fields << reference_fields << bool_fields
      << int_fields << long_fields << double_fields << float_fields;
 
-  if (dex_id && *dex_id > 0) {
-    ss << "_" << *dex_id;
+  if (opt_dex_id && *opt_dex_id > 0) {
+    ss << "_" << *opt_dex_id;
   }
 
   if (interdex_subgroup_idx != boost::none) {

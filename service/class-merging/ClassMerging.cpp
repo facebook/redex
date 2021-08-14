@@ -35,9 +35,17 @@ void set_up(ConfigFiles& conf) {
   s_is_initialized = true;
 }
 
-std::unique_ptr<RefChecker> ref_checker_for_root_store(XStoreRefs* xstores,
-                                                       ConfigFiles& conf,
-                                                       int min_sdk) {
+/**
+ * Create a ref checker for checking cross-store references and Android SDK api
+ * usages. When the per_dex_grouping is false, the create ref checker will check
+ * cross-store references. When the per_dex_grouping is true, the checker
+ * doesn't check cross-store reference and will let the class merging grouping
+ * do the correct grouping for each dex.
+ */
+std::unique_ptr<RefChecker> create_ref_checker(const bool per_dex_grouping,
+                                               XStoreRefs* xstores,
+                                               ConfigFiles& conf,
+                                               int min_sdk) {
   auto min_sdk_api_file = conf.get_android_sdk_api_file(min_sdk);
   const api::AndroidSDK* min_sdk_api{nullptr};
   if (!min_sdk_api_file) {
@@ -47,11 +55,18 @@ std::unique_ptr<RefChecker> ref_checker_for_root_store(XStoreRefs* xstores,
   } else {
     min_sdk_api = &conf.get_android_sdk_api(min_sdk);
   }
-  // RefChecker store_idx is initialized with `largest_root_store_id()`, so that
-  // it rejects all the references from stores with id larger than the largest
-  // root_store id.
-  return std::make_unique<RefChecker>(xstores, xstores->largest_root_store_id(),
-                                      min_sdk_api);
+  size_t store_id;
+  if (per_dex_grouping) {
+    xstores = nullptr;
+    store_id = 0;
+  } else {
+    always_assert(xstores);
+    // RefChecker store_idx is initialized with `largest_root_store_id()`, so
+    // that it rejects all the references from stores with id larger than the
+    // largest root_store id.
+    store_id = xstores->largest_root_store_id();
+  }
+  return std::make_unique<RefChecker>(xstores, store_id, min_sdk_api);
 }
 
 } // namespace
@@ -70,7 +85,8 @@ void merge_model(Scope& scope,
   TypeSystem type_system(scope);
   int32_t min_sdk = mgr.get_redex_options().min_sdk;
   XStoreRefs xstores(stores);
-  auto refchecker = ref_checker_for_root_store(&xstores, conf, min_sdk);
+  auto refchecker =
+      create_ref_checker(spec.per_dex_grouping, &xstores, conf, min_sdk);
   if (spec.merging_targets.empty()) {
     // TODO: change to unordered set.
     TypeSet merging_targets_set;
@@ -80,7 +96,8 @@ void merge_model(Scope& scope,
     spec.merging_targets.insert(merging_targets_set.begin(),
                                 merging_targets_set.end());
   }
-  auto model = Model::build_model(scope, conf, spec, type_system, *refchecker);
+  auto model =
+      Model::build_model(scope, stores, conf, spec, type_system, *refchecker);
   model.update_redex_stats(mgr);
 
   ModelMerger mm;

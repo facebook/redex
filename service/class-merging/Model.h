@@ -26,6 +26,7 @@ using ConstTypeHashSet = std::unordered_set<const DexType*>;
 namespace class_merging {
 
 using TypeToTypeSet = std::unordered_map<const DexType*, TypeSet>;
+using TypeGroupByDex = std::vector<std::pair<boost::optional<size_t>, TypeSet>>;
 
 enum InterDexGroupingType {
   DISABLED = 0, // No interdex grouping.
@@ -151,8 +152,8 @@ struct ModelSpec {
   bool dedup_throw_blocks{true};
   // Replace string literals matching a merged type.
   bool replace_type_like_const_strings{true};
-  // Suggested dex to store the merger classes.
-  boost::optional<size_t> dex_id;
+  // Indicates if the merging should be performed per dex.
+  bool per_dex_grouping{false};
 
   bool generate_type_tag() const {
     return type_tag_config == TypeTagConfig::GENERATE;
@@ -202,6 +203,7 @@ class Model {
    * Build a Model given a scope and a specification.
    */
   static Model build_model(const Scope& scope,
+                           const DexStoresVector& stores,
                            const ConfigFiles& conf,
                            const ModelSpec& spec,
                            const TypeSystem& type_system,
@@ -333,6 +335,7 @@ class Model {
 
   const Scope& m_scope;
   const ConfigFiles& m_conf;
+  const XDexRefs m_x_dex;
 
   static std::unordered_map<DexType*, size_t> s_cls_to_interdex_group;
   static size_t s_num_interdex_groups;
@@ -343,6 +346,7 @@ class Model {
    * roots.
    */
   Model(const Scope& scope,
+        const DexStoresVector& stores,
         const ConfigFiles& conf,
         const ModelSpec& spec,
         const TypeSystem& type_system,
@@ -370,13 +374,15 @@ class Model {
       const DexType* merger_type,
       const MergerType::Shape& shape,
       const TypeSet& intf_set,
-      const std::vector<const DexType*>& group_values,
+      const boost::optional<size_t>& dex_id,
+      const ConstTypeVector& group_values,
       const boost::optional<InterdexSubgroupIdx>& interdex_subgroup_idx,
       const InterdexSubgroupIdx subgroup_idx);
   void create_mergers_helper(
       const DexType* merger_type,
       const MergerType::Shape& shape,
       const TypeSet& intf_set,
+      const boost::optional<size_t>& dex_id,
       const TypeSet& group_values,
       const strategy::Strategy strategy,
       const boost::optional<InterdexSubgroupIdx>& interdex_subgroup_idx,
@@ -392,6 +398,7 @@ class Model {
                           MergerType::ShapeHierarchy& hier);
   void flatten_shapes(const MergerType& merger,
                       MergerType::ShapeCollector& shapes);
+  TypeGroupByDex group_per_dex(bool per_dex_grouping, const TypeSet& types);
   std::vector<TypeSet> group_per_interdex_set(const TypeSet& types);
   void map_fields(MergerType& merger,
                   const std::vector<const DexType*>& classes);
