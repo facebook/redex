@@ -1343,12 +1343,11 @@ ConstantEnvironment FixpointIterator::analyze_edge(
       if (!selector_const) {
         return env;
       }
-      for (auto succ : edge->src()->succs()) {
+      auto succ = get_switch_succ(edge->src(), *selector_const);
+      if (succ != nullptr) {
         const auto& succ_case_key = succ->case_key();
-        if (succ_case_key && *selector_const == *succ_case_key) {
-          env.set_to_bottom();
-          break;
-        }
+        always_assert(succ_case_key && *selector_const == *succ_case_key);
+        env.set_to_bottom();
       }
     }
   } else if (edge->type() != cfg::EDGE_THROW) {

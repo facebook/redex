@@ -54,9 +54,27 @@ class FixpointIterator final
                     ConstantEnvironment* state_at_entry) const override;
 
  private:
+  using SwitchSuccs = std::unordered_map<int32_t, cfg::Edge*>;
+  mutable std::unordered_map<cfg::Block*, SwitchSuccs> m_switch_succs;
   InstructionAnalyzer<ConstantEnvironment> m_insn_analyzer;
   const std::unordered_set<DexMethodRef*>& m_kotlin_null_check_assertions;
   const bool m_imprecise_switches;
+
+  cfg::Edge* get_switch_succ(cfg::Block* block, int case_key) const {
+    auto it = m_switch_succs.find(block);
+    if (it == m_switch_succs.end()) {
+      SwitchSuccs switch_succs;
+      for (auto succ : block->succs()) {
+        if (succ->type() == cfg::EDGE_BRANCH) {
+          switch_succs.emplace(*succ->case_key(), succ);
+        }
+      }
+      it = m_switch_succs.emplace(block, std::move(switch_succs)).first;
+    }
+    auto& switch_succs = it->second;
+    auto it2 = switch_succs.find(case_key);
+    return it2 == switch_succs.end() ? nullptr : it2->second;
+  }
 };
 
 } // namespace intraprocedural
