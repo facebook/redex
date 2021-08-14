@@ -278,14 +278,19 @@ class Block final {
 
   bool same_try(const Block* other) const;
 
+  // Any removed instruction will be freed when the cfg is destroyed.
   void remove_insn(const InstructionIterator& it);
+
+  // Any removed instruction will be freed when the cfg is destroyed.
   void remove_insn(const ir_list::InstructionIterator& it);
 
   // Will remove the first entry after it containing an MFLOW_OPCODE,
   // leaving the intervening instructions unmodified. If a non-MFLOW_OPCODE
   // instruction is to be removed, remove_mie should be used instead.
+  // Any removed instruction will be freed when the cfg is destroyed.
   void remove_insn(const IRList::iterator& it);
 
+  // Any removed instruction will be freed when the cfg is destroyed.
   void remove_mie(const IRList::iterator& it);
 
   // Removes a subset of MFLOW_DEBUG instructions from the block. valid_regs
@@ -648,6 +653,8 @@ class ControlFlowGraph {
   //
   // If `it` points to a branch instruction, remove the corresponding outgoing
   // edges.
+  //
+  // Any removed instruction will be freed when the cfg is destroyed.
   void remove_insn(const InstructionIterator& it);
 
   void insert_before(const InstructionIterator& it,
@@ -732,6 +739,7 @@ class ControlFlowGraph {
   // * If the old instruction has a move-result(-pseudo) it will also be
   //   removed. When adding instructions that may-throw, you should include
   //   move-result(-pseudo)s for them.
+  // Any removed instruction will be freed when the cfg is destroyed.
   bool replace_insn(const InstructionIterator& it, IRInstruction* insn);
   template <class ForwardIt>
   bool replace_insns(const InstructionIterator& it,
@@ -880,6 +888,14 @@ class ControlFlowGraph {
    */
   void set_insn_ownership(bool owns_insns) { m_owns_insns = owns_insns; }
 
+  /*
+   * Set whether this cfg holds the memory ownership of instructions that are
+   * removed. (The default is true.)
+   */
+  void set_removed_insn_ownerhsip(bool owns_removed_insns) {
+    m_owns_removed_insns = owns_removed_insns;
+  }
+
   // Search all the instructions in this CFG for the given one. Return an
   // iterator to it, or end, if it isn't in the graph.
   InstructionIterator find_insn(IRInstruction* insn, Block* hint = nullptr);
@@ -898,6 +914,8 @@ class ControlFlowGraph {
   std::size_t opcode_hash() const;
 
  private:
+  friend class Block;
+
   using BranchToTargets =
       std::unordered_map<MethodItemEntry*,
                          std::vector<std::pair<Block*, MethodItemEntry*>>>;
@@ -1127,8 +1145,8 @@ class ControlFlowGraph {
   //      outgoing edge instructions.
   void cleanup_deleted_edges(const EdgeSet& edges);
 
-  // free all allocated memory of the CFG
-  void free_all_blocks_and_edges();
+  // free all allocated and owned memory of the CFG
+  void free_all_blocks_and_edges_and_removed_insns();
 
   // Move edge between new_source and new_target.
   // If either new_source or new_target is null, don't change that field of the
@@ -1152,6 +1170,8 @@ class ControlFlowGraph {
   reg_t m_registers_size{0};
   bool m_editable{true};
   bool m_owns_insns{false};
+  bool m_owns_removed_insns{true};
+  std::vector<IRInstruction*> m_removed_insns;
 };
 
 // A static-method-only API for use with the monotonic fixpoint iterator.

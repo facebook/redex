@@ -43,7 +43,10 @@ std::unordered_set<const IRInstruction*>
 BuilderTransform::get_not_inlined_insns(
     DexMethod* caller, const std::unordered_set<IRInstruction*>& insns) {
   always_assert(caller && caller->get_code());
-  m_inliner->inline_callees(caller, insns);
+  // TODO: We are going to leak instructions when we are successful. Change this
+  // to true after making the pass aware of memory ownership.
+  bool delete_removed_insns = false;
+  m_inliner->inline_callees(caller, insns, delete_removed_insns);
   std::unordered_set<const IRInstruction*> not_inlined_insns;
   // Check if everything was inlined.
   auto* code = caller->get_code();

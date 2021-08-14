@@ -108,6 +108,7 @@ class CFGMutation {
   /// Mutation restrictions:
   ///  - It's not possible to have two replacing instructions for a single
   ///    anchor.
+  /// Any removed instruction will be freed when the cfg is destroyed.
   void replace(const cfg::InstructionIterator& anchor,
                std::vector<IRInstruction*> instructions);
 
@@ -115,6 +116,7 @@ class CFGMutation {
   /// \p anchor is the instruction that is removed. If at the time the change
   ///     is applied, the anchor does not exist, the change will be ignored.
   ///  - It's not possible to have two remove instructions for a single anchor.
+  /// Any removed instruction will be freed when the cfg is destroyed.
   void remove(const cfg::InstructionIterator& anchor);
 
   /// Remove all pending changes without applying them.

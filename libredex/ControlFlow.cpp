@@ -230,6 +230,10 @@ void Block::remove_insn(const IRList::iterator& it) {
 }
 
 void Block::remove_mie(const IRList::iterator& it) {
+  if (it->type == MFLOW_OPCODE) {
+    m_parent->m_removed_insns.push_back(it->insn);
+  }
+
   m_entries.erase_and_dispose(it);
 }
 
@@ -1979,7 +1983,9 @@ std::vector<Block*> ControlFlowGraph::blocks_reverse_post_deprecated() const {
   return postorder;
 }
 
-ControlFlowGraph::~ControlFlowGraph() { free_all_blocks_and_edges(); }
+ControlFlowGraph::~ControlFlowGraph() {
+  free_all_blocks_and_edges_and_removed_insns();
+}
 
 Block* ControlFlowGraph::create_block() {
   size_t id = next_block_id();
@@ -2170,15 +2176,11 @@ void ControlFlowGraph::remove_edge(Edge* edge, bool cleanup) {
       cleanup);
 }
 
-void ControlFlowGraph::free_all_blocks_and_edges() {
+void ControlFlowGraph::free_all_blocks_and_edges_and_removed_insns() {
   if (m_owns_insns) {
     for (const auto& entry : m_blocks) {
       Block* b = entry.second;
-      for (auto it = b->begin(); it != b->end(); it++) {
-        if (it->type == MFLOW_OPCODE) {
-          delete it->insn;
-        }
-      }
+      b->free();
       delete b;
     }
   } else {
@@ -2191,10 +2193,16 @@ void ControlFlowGraph::free_all_blocks_and_edges() {
   for (Edge* e : m_edges) {
     delete e;
   }
+
+  if (m_owns_removed_insns) {
+    for (auto* insn : m_removed_insns) {
+      delete insn;
+    }
+  }
 }
 
 void ControlFlowGraph::clear() {
-  free_all_blocks_and_edges();
+  free_all_blocks_and_edges_and_removed_insns();
 
   m_blocks.clear();
   m_edges.clear();
@@ -2219,6 +2227,7 @@ void ControlFlowGraph::cleanup_deleted_edges(const EdgeSet& edges) {
       auto remaining_forward_edges = pred_block->succs();
       if ((opcode::is_a_conditional_branch(op) || opcode::is_switch(op)) &&
           remaining_forward_edges.size() == 1) {
+        m_removed_insns.push_back(last_insn);
         pred_block->m_entries.erase_and_dispose(last_it);
         Edge* fwd_edge = remaining_forward_edges[0];
         fwd_edge->set_type(EDGE_GOTO);
@@ -2439,6 +2448,7 @@ void ControlFlowGraph::remove_insn(const InstructionIterator& it) {
           always_assert_log(move_result_block->preds().size() == 1,
                             "Multiple edges to a move-result-pseudo in %zu. %s",
                             move_result_block->id(), SHOW(*this));
+          m_removed_insns.push_back(first_it->insn);
           move_result_block->m_entries.erase_and_dispose(first_it);
         }
       }
@@ -2448,12 +2458,14 @@ void ControlFlowGraph::remove_insn(const InstructionIterator& it) {
       auto mrp_it = std::next(it);
       always_assert(mrp_it.block() == block);
       if (opcode::is_move_result_any(mrp_it->insn->opcode())) {
+        m_removed_insns.push_back(mrp_it->insn);
         block->m_entries.erase_and_dispose(mrp_it.unwrap());
       }
     }
   }
 
   // delete the requested instruction
+  m_removed_insns.push_back(it->insn);
   block->m_entries.erase_and_dispose(it.unwrap());
 }
 
@@ -2637,6 +2649,7 @@ uint32_t ControlFlowGraph::remove_blocks(const std::vector<Block*>& blocks) {
 
     for (auto& mie : *block) {
       if (mie.type == MFLOW_OPCODE) {
+        m_removed_insns.push_back(mie.insn);
         insns_removed++;
       } else if (mie.type == MFLOW_POSITION) {
         dangling.push_back(std::move(mie.pos));
