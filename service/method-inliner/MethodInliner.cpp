@@ -626,43 +626,18 @@ void run_inliner(DexStoresVector& stores,
     }
   }
 
-  std::unordered_set<DexMethod*> delete_candidates =
-      inliner_config.delete_any_candidate ? candidates : inlined;
-
-  if (!true_virtual_callers.empty()) {
-    if (inliner_config.delete_any_candidate) {
-      // We are not going to erase true virtual methods if some call-sites have
-      // not been fully inlined.
-      CalleeCallerInsns remaining_true_virtual_callers;
-      gather_true_virtual_methods(*method_override_graph, scope,
-                                  /* compute_caller_insns */ false,
-                                  /* include_empty */ false,
-                                  &remaining_true_virtual_callers);
-      for (const auto& p : remaining_true_virtual_callers) {
-        delete_candidates.erase(p.first);
-      }
-    } else {
-      // We are not going to erase any true virtual methods
-      for (const auto& p : true_virtual_callers) {
-        delete_candidates.erase(p.first);
-      }
-    }
-  }
-
-  // Do not erase the parameterless constructor, in case it's constructed via
-  // .class or Class.forName(). Also see RMU.
-  for (auto it = delete_candidates.begin(); it != delete_candidates.end();) {
-    if (method::is_init(*it) &&
-        (*it)->get_proto()->get_args()->get_type_list().empty()) {
-      it = delete_candidates.erase(it);
-    } else {
-      it++;
-    }
+  // Do not erase true virtual methods that are inlined because we are only
+  // inlining callsites that are monomorphic, for polymorphic callsite we
+  // didn't inline, but in run time the callsite may still be resolved to
+  // those methods that are inlined. We are relying on RMU to clean up
+  // true virtual methods that are not referenced.
+  for (const auto& pair : true_virtual_callers) {
+    inlined.erase(pair.first);
   }
   ConcurrentSet<DexMethod*>& delayed_make_static =
       inliner.get_delayed_make_static();
-  size_t deleted = delete_methods(scope, delete_candidates, delayed_make_static,
-                                  concurrent_resolver);
+  size_t deleted =
+      delete_methods(scope, inlined, delayed_make_static, concurrent_resolver);
 
   TRACE(INLINE, 3, "recursive %ld", inliner.get_info().recursive);
   TRACE(INLINE, 3, "max_call_stack_depth %ld",

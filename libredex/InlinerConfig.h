@@ -23,7 +23,6 @@ struct InlinerConfig {
   bool throw_after_no_return{false};
   bool enforce_method_size_limit{true};
   bool multiple_callers{false};
-  bool delete_any_candidate{false};
   bool use_call_site_summaries{true};
   bool intermediate_shrinking{false};
   shrinker::ShrinkerConfig shrinker;

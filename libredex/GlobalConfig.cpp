@@ -16,7 +16,6 @@ void InlinerConfig::bind_config() {
   bind("throws", throws_inline, throws_inline);
   bind("throw_after_no_return", throw_after_no_return, throw_after_no_return);
   bind("multiple_callers", multiple_callers, multiple_callers);
-  bind("delete_any_candidate", delete_any_candidate, delete_any_candidate);
   bind("run_const_prop", shrinker.run_const_prop, shrinker.run_const_prop);
   bind("run_cse", shrinker.run_cse, shrinker.run_cse);
   bind("run_dedup_blocks", shrinker.run_dedup_blocks,
