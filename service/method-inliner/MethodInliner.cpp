@@ -277,17 +277,11 @@ static DexType* reduce_type_demands(
  */
 void gather_true_virtual_methods(const mog::Graph& method_override_graph,
                                  const Scope& scope,
-                                 bool compute_caller_insns,
-                                 bool include_empty,
                                  CalleeCallerInsns* true_virtual_callers) {
   Timer t("gather_true_virtual_methods");
   auto non_virtual = mog::get_non_true_virtuals(method_override_graph, scope);
-  std::unordered_map<const DexMethod*, std::shared_ptr<SameImplementation>>
-      same_implementation_map;
-  if (compute_caller_insns) {
-    same_implementation_map =
-        get_same_implementation_map(scope, method_override_graph);
-  }
+  auto same_implementation_map =
+      get_same_implementation_map(scope, method_override_graph);
   ConcurrentMap<const DexMethod*, CallerInsns> concurrent_true_virtual_callers;
   ConcurrentMap<IRInstruction*, SameImplementation*>
       same_implementation_invokes;
@@ -422,7 +416,7 @@ void gather_true_virtual_methods(const mog::Graph& method_override_graph,
           return;
         }
         auto code = const_cast<DexMethod*>(callee)->get_code();
-        if (!code || !compute_caller_insns || !method::no_invoke_super(*code)) {
+        if (!code || !method::no_invoke_super(*code)) {
           if (!caller_to_invocations.caller_insns.empty()) {
             caller_to_invocations.caller_insns.clear();
             caller_to_invocations.other_call_sites = true;
@@ -520,10 +514,8 @@ void gather_true_virtual_methods(const mog::Graph& method_override_graph,
       },
       true_virtual_callees);
   for (auto& pair : concurrent_true_virtual_callers) {
-    if (include_empty || !pair.second.empty()) {
-      DexMethod* callee = const_cast<DexMethod*>(pair.first);
-      true_virtual_callers->emplace(callee, std::move(pair.second));
-    }
+    DexMethod* callee = const_cast<DexMethod*>(pair.first);
+    true_virtual_callers->emplace(callee, std::move(pair.second));
   }
 }
 
@@ -586,8 +578,6 @@ void run_inliner(DexStoresVector& stores,
 
   if (inliner_config.virtual_inline && inliner_config.true_virtual_inline) {
     gather_true_virtual_methods(*method_override_graph, scope,
-                                /* compute_caller_insns */ true,
-                                /* include_empty */ true,
                                 &true_virtual_callers);
     for (auto& p : true_virtual_callers) {
       candidates.insert(p.first);
