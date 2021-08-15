@@ -212,6 +212,7 @@ void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
     return;
   }
   JsonWrapper jw(config);
+  jw.get("delete_non_virtuals", true, inliner_config->delete_non_virtuals);
   jw.get("virtual", true, inliner_config->virtual_inline);
   jw.get("true_virtual_inline", false, inliner_config->true_virtual_inline);
   jw.get("throws", false, inliner_config->throws_inline);

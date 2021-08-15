@@ -616,18 +616,21 @@ void run_inliner(DexStoresVector& stores,
     }
   }
 
-  // Do not erase true virtual methods that are inlined because we are only
-  // inlining callsites that are monomorphic, for polymorphic callsite we
-  // didn't inline, but in run time the callsite may still be resolved to
-  // those methods that are inlined. We are relying on RMU to clean up
-  // true virtual methods that are not referenced.
-  for (const auto& pair : true_virtual_callers) {
-    inlined.erase(pair.first);
+  size_t deleted = 0;
+  if (inliner_config.delete_non_virtuals) {
+    // Do not erase true virtual methods that are inlined because we are only
+    // inlining callsites that are monomorphic, for polymorphic callsite we
+    // didn't inline, but in run time the callsite may still be resolved to
+    // those methods that are inlined. We are relying on RMU to clean up
+    // true virtual methods that are not referenced.
+    for (const auto& pair : true_virtual_callers) {
+      inlined.erase(pair.first);
+    }
+    ConcurrentSet<DexMethod*>& delayed_make_static =
+        inliner.get_delayed_make_static();
+    deleted = delete_methods(scope, inlined, delayed_make_static,
+                             concurrent_resolver);
   }
-  ConcurrentSet<DexMethod*>& delayed_make_static =
-      inliner.get_delayed_make_static();
-  size_t deleted =
-      delete_methods(scope, inlined, delayed_make_static, concurrent_resolver);
 
   TRACE(INLINE, 3, "recursive %ld", inliner.get_info().recursive);
   TRACE(INLINE, 3, "max_call_stack_depth %ld",

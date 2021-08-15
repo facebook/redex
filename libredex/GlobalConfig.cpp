@@ -8,6 +8,7 @@
 #include "GlobalConfig.h"
 
 void InlinerConfig::bind_config() {
+  bind("delete_non_virtuals", delete_non_virtuals, delete_non_virtuals);
   bind("true_virtual_inline", true_virtual_inline, true_virtual_inline);
   bind("intermediate_shrinking", intermediate_shrinking,
        intermediate_shrinking);

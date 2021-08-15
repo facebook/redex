@@ -16,6 +16,7 @@ namespace inliner {
  * The global inliner config.
  */
 struct InlinerConfig {
+  bool delete_non_virtuals{true};
   // inline virtual methods
   bool virtual_inline{true};
   bool true_virtual_inline{false};
