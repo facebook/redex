@@ -192,8 +192,6 @@ TEST_F(SourceBlocksTest, source_blocks) {
               "String;)V\" 0 ()) (iput-object v3 v2 "
               "\"Lcom/facebook/redextest/SourceBlocksTest;.mHello:Ljava/lang/"
               "String;\") (.pos:dbg_2 "
-              "\"Lcom/facebook/redextest/SourceBlocksTest;.baz:(Ljava/lang/"
-              "String;)V\" SourceBlocksTest.java 23 dbg_0) (.pos:dbg_3 "
               "\"Lcom/facebook/redextest/SourceBlocksTest;.bar:()V\" "
               "SourceBlocksTest.java 19) (return-void))");
 

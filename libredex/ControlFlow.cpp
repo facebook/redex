@@ -77,29 +77,61 @@ bool ends_with_may_throw(cfg::Block* p) {
 }
 
 /*
- * Given an output ordering, Find adjacent positions that are exact duplicates
- * and delete the extras. Make sure not to delete any positions that are
- * referenced by a parent pointer.
+ * Given an method-item-entry ordering, delete positions that are...
+ * - duplicates with the previous position, even across block boundaries
+ *   (they will get reconstituted when the cfg is rebuild)
+ * - adjacent to an immediately following position, as the last position wins.
+ * Parent positions are kept as needed.
  */
-void remove_duplicate_positions(IRList* ir) {
-  std::unordered_set<DexPosition*> keep;
-  for (auto& mie : *ir) {
-    if (mie.type == MFLOW_POSITION && mie.pos->parent != nullptr) {
-      keep.insert(mie.pos->parent);
-    }
-  }
+void remove_redundant_positions(IRList* ir) {
+  // We build a set of duplicate positions.
+  std::unordered_set<DexPosition*> duplicate_positions;
+  std::unordered_map<DexPosition*, IRList::iterator> positions_to_remove;
   DexPosition* prev = nullptr;
-  for (auto it = ir->begin(); it != ir->end();) {
+  for (auto it = ir->begin(); it != ir->end(); it++) {
     if (it->type == MFLOW_POSITION) {
       DexPosition* curr = it->pos.get();
-      if (prev != nullptr && *curr == *prev && keep.count(curr) == 0) {
-        it = ir->erase_and_dispose(it);
-        continue;
-      } else {
-        prev = curr;
+      positions_to_remove.emplace(curr, it);
+      if (prev != nullptr && *curr == *prev) {
+        duplicate_positions.insert(curr);
       }
+      prev = curr;
     }
-    ++it;
+  }
+
+  // Backward pass to find positions that are not adjacent to an immediately
+  // following position and must be kept (including their parents).
+  bool keep_prev = false;
+  for (auto it = ir->rbegin(); it != ir->rend(); it++) {
+    switch (it->type) {
+    case MFLOW_OPCODE:
+    case MFLOW_DEX_OPCODE:
+    case MFLOW_TARGET:
+    case MFLOW_TRY:
+    case MFLOW_CATCH:
+      keep_prev = true;
+      break;
+    case MFLOW_POSITION: {
+      DexPosition* curr = it->pos.get();
+      if (keep_prev && !duplicate_positions.count(curr)) {
+        for (auto pos = curr; pos && positions_to_remove.erase(pos);
+             pos = pos->parent) {
+        }
+        keep_prev = false;
+      }
+      break;
+    }
+    case MFLOW_SOURCE_BLOCK:
+    case MFLOW_DEBUG:
+    case MFLOW_FALLTHROUGH:
+      // ignore
+      break;
+    }
+  }
+
+  // Final pass to do the actual deletion.
+  for (auto& p : positions_to_remove) {
+    ir->erase_and_dispose(p.second);
   }
 }
 
@@ -1801,7 +1833,7 @@ IRList* ControlFlowGraph::linearize(
   for (Block* b : ordering) {
     result->splice(result->end(), b->m_entries);
   }
-  remove_duplicate_positions(result);
+  remove_redundant_positions(result);
 
   return result;
 }
