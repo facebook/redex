@@ -1291,6 +1291,14 @@ int main(int argc, char* argv[]) {
 
     std::unordered_map<std::string, std::string> exp_states;
     conf.get_json_config().get("ab_experiments_states", {}, exp_states);
+    {
+      std::unordered_map<std::string, std::string> exp_states_override;
+      conf.get_json_config().get("ab_experiments_states_override", {},
+                                 exp_states_override);
+      for (auto& p : exp_states_override) {
+        exp_states[p.first] = std::move(p.second);
+      }
+    }
     ab_test::ABExperimentContext::parse_experiments_states(
         exp_states, !manager.get_redex_options().redacted);
 
