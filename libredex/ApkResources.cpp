@@ -846,7 +846,7 @@ void ResourcesArscFile::remap_res_ids_and_serialize(
 }
 
 std::unordered_set<std::string> ResourcesArscFile::get_files_by_rid(
-    uint32_t res_id) {
+    uint32_t res_id, ResourcePathType /* unused */) {
   std::unordered_set<std::string> ret;
   android::Vector<android::Res_value> out_values;
   res_table.getAllValuesForResource(res_id, out_values);

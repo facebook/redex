@@ -992,29 +992,35 @@ void ResourcesPbFile::delete_resource(uint32_t res_id) {
 }
 
 std::unordered_set<std::string> ResourcesPbFile::get_files_by_rid(
-    uint32_t res_id) {
+    uint32_t res_id, ResourcePathType path_type) {
   std::unordered_set<std::string> ret;
   if (m_res_id_to_configvalue.count(res_id) == 0) {
     return ret;
   }
+  const std::string& module_name = resolve_module_name_for_resource_id(res_id);
+  auto handle_path = [&](const std::string& file_path) {
+    if (is_resource_file(file_path)) {
+      if (path_type == ResourcePathType::ZipPath) {
+        ret.emplace(module_name + "/" + file_path);
+      } else {
+        ret.emplace(file_path);
+      }
+    }
+  };
   const auto& out_values = m_res_id_to_configvalue.at(res_id);
   for (auto i = 0; i < out_values.size(); i++) {
     const auto& value = out_values[i].value();
     if (value.has_item() && value.item().has_file()) {
       // Item
-      auto file_path = value.item().file().path();
-      if (is_resource_file(file_path)) {
-        ret.emplace(file_path);
-      }
+      const auto& file_path = value.item().file().path();
+      handle_path(file_path);
     } else if (value.has_compound_value()) {
       // For coumpound value, we flatten it and check all its item messages.
       const auto& items = get_items_from_CV(value.compound_value());
       for (size_t n = 0; n < items.size(); n++) {
         if (items[n].has_file()) {
-          auto file_path = items[n].file().path();
-          if (is_resource_file(file_path)) {
-            ret.emplace(file_path);
-          }
+          const auto& file_path = items[n].file().path();
+          handle_path(file_path);
         }
       }
     }

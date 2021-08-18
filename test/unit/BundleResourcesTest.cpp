@@ -153,6 +153,10 @@ TEST(BundleResources, TestCollectResFilesByRid) {
     auto files = res_table->get_files_by_rid(icon_ids[0]);
     EXPECT_EQ(files.size(), 1);
     EXPECT_EQ(*files.begin(), "res/drawable-mdpi-v4/icon.png");
+    files = res_table->get_files_by_rid(icon_ids[0], ResourcePathType::ZipPath);
+    EXPECT_EQ(files.size(), 1);
+    EXPECT_EQ(*files.begin(), "base/res/drawable-mdpi-v4/icon.png")
+        << "file path incorrect or base module not appended";
 
     auto prickly_ids = res_table->get_res_ids_by_name("prickly");
     EXPECT_EQ(prickly_ids.size(), 1);

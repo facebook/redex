@@ -83,6 +83,15 @@ struct ManifestClassInfo {
   std::vector<ComponentTagInfo> component_tags;
 };
 
+/**
+ * Indicates whether or not a file path is from the perspective of the zip file
+ * input to Redex, or the file path as meant to be read on device.
+ */
+enum class ResourcePathType {
+  ZipPath,
+  DevicePath,
+};
+
 class ResourceTableFile {
  public:
   virtual ~ResourceTableFile() {}
@@ -101,7 +110,9 @@ class ResourceTableFile {
 
   // Return the set of files' name(include the path) represented by res_id if
   // there is. Otherwise, return NULL.
-  virtual std::unordered_set<std::string> get_files_by_rid(uint32_t res_id) = 0;
+  virtual std::unordered_set<std::string> get_files_by_rid(
+      uint32_t res_id,
+      ResourcePathType path_type = ResourcePathType::DevicePath) = 0;
 
   // Follows the reference links for a resource for all configurations. Outputs
   // all the nodes visited, as well as strings that may be additional resource
