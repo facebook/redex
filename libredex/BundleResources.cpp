@@ -721,6 +721,14 @@ void change_resource_id_in_xml_references(
   auto attr_size = element->attribute_size();
   for (int i = 0; i < attr_size; i++) {
     auto pb_attr = element->mutable_attribute(i);
+    auto attr_id = pb_attr->resource_id();
+    if (attr_id > 0 && kept_to_remapped_ids.count(attr_id)) {
+      auto new_id = kept_to_remapped_ids.at(attr_id);
+      if (new_id != attr_id) {
+        (*num_resource_id_changed)++;
+        pb_attr->set_resource_id(new_id);
+      }
+    }
     if (pb_attr->has_compiled_item()) {
       auto pb_item = pb_attr->mutable_compiled_item();
       if (pb_item->has_ref()) {
