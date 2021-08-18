@@ -17,6 +17,7 @@
 
 #include "Creators.h"
 #include "Debug.h"
+#include "DexAsm.h"
 #include "DexClass.h"
 #include "DexLoader.h"
 #include "DexOutput.h"
@@ -974,6 +975,33 @@ void InterDex::add_dexes_from_store(const DexStore& store) {
   flush_out_dex(EMPTY_DEX_INFO);
 }
 
+void InterDex::set_clinit_method_if_needed(DexClass* cls) {
+  using namespace dex_asm;
+  if (m_method_for_canary_clinit_reference.empty()) {
+    return;
+  }
+  DexMethodRef* method =
+      DexMethod::get_method(m_method_for_canary_clinit_reference);
+  if (!method) {
+    // No need to do anything if this method isn't present in the build.
+    return;
+  }
+  auto proto =
+      DexProto::make_proto(type::_void(), DexTypeList::make_type_list({}));
+  DexMethod* clinit =
+      DexMethod::make_method(cls->get_type(),
+                             DexString::make_string("<clinit>"), proto)
+          ->make_concrete(ACC_STATIC | ACC_CONSTRUCTOR, false);
+  clinit->set_code(std::make_unique<IRCode>());
+  cls->add_method(clinit);
+  clinit->set_deobfuscated_name(show_deobfuscated(clinit));
+  auto code = clinit->get_code();
+  code->push_back(dasm(OPCODE_CONST_WIDE, {0_v, 0_L}));
+  code->push_back(dasm(OPCODE_INVOKE_STATIC, method, {0_v}));
+  code->push_back(dasm(OPCODE_RETURN_VOID));
+  code->set_registers_size(1);
+}
+
 /**
  * This needs to be called before getting to the next dex.
  */
@@ -1009,12 +1037,13 @@ void InterDex::flush_out_dex(DexInfo& dex_info) {
     auto canary_cls = type_class(canary_type);
     if (!canary_cls) {
       ClassCreator cc(canary_type);
-      cc.set_access(ACC_PUBLIC | ACC_INTERFACE | ACC_ABSTRACT);
+      cc.set_access(ACC_PUBLIC | ACC_ABSTRACT);
       cc.set_super(type::java_lang_Object());
       canary_cls = cc.create();
       // Don't rename the Canary we've created
       canary_cls->rstate.set_keepnames();
     }
+    set_clinit_method_if_needed(canary_cls);
     m_dexes_structure.add_class_no_checks(canary_cls);
     m_dex_infos.emplace_back(std::make_tuple(canary_name, dex_info));
   }
