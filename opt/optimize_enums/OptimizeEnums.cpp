@@ -285,6 +285,8 @@ void collect_generated_switch_cases(
 
     always_assert(lookup_table);
     always_assert(enum_field && is_enum(enum_field));
+    always_assert_log(switch_case > 0,
+                      "The generated SwitchMap should have positive keys");
 
     generated_switch_cases[lookup_table].emplace(switch_case, enum_field);
   }
@@ -780,11 +782,6 @@ class OptimizeEnums {
       return;
     }
 
-    // Remove the switch statement so we can rebuild it with the correct case
-    // keys. This removes all edges to the if-else blocks and the blocks will
-    // eventually be removed by cfg.simplify()
-    cfg.remove_insn(*info.branch);
-
     cfg::Block* fallthrough = nullptr;
     std::vector<std::pair<int32_t, cfg::Block*>> cases;
     const auto& field_enum_map = generated_switch_cases.at(info.array_field);
@@ -818,13 +815,17 @@ class OptimizeEnums {
       }
 
       auto search = field_enum_map.find(*old_case_key);
-      always_assert_log(search != field_enum_map.end(),
-                        "can't find case key %d leaving block %zu\n%s\nin %s\n",
-                        *old_case_key, branch_block->id(), info.str().c_str(),
-                        SHOW(cfg));
-      auto field_enum = search->second;
-      auto new_case_key = enum_field_to_ordinal.at(field_enum);
-      cases.emplace_back(new_case_key, leaf);
+      if (search != field_enum_map.end()) {
+        auto field_enum = search->second;
+        auto new_case_key = enum_field_to_ordinal.at(field_enum);
+        cases.emplace_back(new_case_key, leaf);
+      } else {
+        // Ignore blocks with negative case key, which should be dead code.
+        always_assert_log(
+            *old_case_key < 0,
+            "can't find case key %d leaving block %zu\n%s\nin %s\n",
+            *old_case_key, branch_block->id(), info.str().c_str(), SHOW(cfg));
+      }
     }
 
     // Add a new register to hold the ordinal and then use it to
@@ -847,6 +848,11 @@ class OptimizeEnums {
     if (move_ordinal_it.is_end()) {
       return;
     }
+
+    // Remove the switch statement so we can rebuild it with the correct case
+    // keys. This removes all edges to the if-else blocks and the blocks will
+    // eventually be removed by cfg.simplify()
+    cfg.remove_insn(*info.branch);
 
     auto move_ordinal = move_ordinal_it->insn;
     auto reg_ordinal = move_ordinal->dest();

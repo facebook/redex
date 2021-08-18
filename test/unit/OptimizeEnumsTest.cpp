@@ -589,6 +589,92 @@ TEST_F(OptimizeEnumsTest, divergent_leaf_entry_state) {
   code->clear_cfg();
 }
 
+TEST_F(OptimizeEnumsTest, with_null_handling) {
+  setup();
+
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v1)
+
+      (if-nez v1 :non-null-label)
+      (const v0 -1)
+      (goto :switch-label)
+
+      (:non-null-label)
+      (sget-object "LFoo;.table:[LBar;")
+      (move-result-pseudo v0)
+      (invoke-virtual (v1) "LEnum;.ordinal:()I")
+      (move-result v1)
+      (aget v0 v1)
+      (move-result-pseudo v0)
+
+      (:switch-label)
+      (switch v0 (:case_null :case_0 :case_1))
+
+      ; Null handling
+      (:case_null -1)
+      (const v2 -1)
+      (return v2)
+
+      (:case_0 0)
+      (const v2 0)
+      (return v2)
+
+      (:case_1 1)
+      (const v2 1)
+      (return v2)
+    )
+)");
+
+  code->build_cfg();
+  auto results = find_enums(&code->cfg());
+  ASSERT_EQ(0, results.size());
+  code->clear_cfg();
+}
+
+TEST_F(OptimizeEnumsTest, with_dead_null_handling) {
+  setup();
+
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v1)
+
+      ; (if-nez v1 :non-null-label)
+      ; (const v0 -1)
+      ; (goto :switch-label)
+
+      (:non-null-label)
+      (sget-object "LFoo;.table:[LBar;")
+      (move-result-pseudo v0)
+      (invoke-virtual (v1) "LEnum;.ordinal:()I")
+      (move-result v1)
+      (aget v0 v1)
+      (move-result-pseudo v0)
+
+      (:switch-label)
+      (switch v0 (:case_null :case_0 :case_1))
+
+      ; Null handling
+      (:case_null -1)
+      (const v2 -1)
+      (return v2)
+
+      (:case_0 0)
+      (const v2 0)
+      (return v2)
+
+      (:case_1 1)
+      (const v2 1)
+      (return v2)
+    )
+)");
+
+  code->build_cfg();
+  auto results = find_enums(&code->cfg());
+  EXPECT_EQ(1, results.size());
+  code->clear_cfg();
+}
+
 optimize_enums::ParamSummary get_summary(const std::string& s_expr) {
   auto method = assembler::method_from_string(s_expr);
   return optimize_enums::calculate_param_summary(method,
