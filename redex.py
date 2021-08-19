@@ -27,6 +27,7 @@ from pipes import quote
 
 import pyredex.bintools as bintools
 import pyredex.logger as logger
+from pyredex.buck import BuckConnectionScope, BuckPartScope
 from pyredex.unpacker import (
     LibraryManager,
     UnpackManager,
@@ -953,39 +954,40 @@ def prepare_redex(args: argparse.Namespace) -> State:
             if e.errno != errno.EEXIST:
                 raise e
 
-    logging.debug("Unpacking...")
-    unpack_start_time = timer()
-    if not extracted_apk_dir:
-        extracted_apk_dir = make_temp_dir(".redex_extracted_apk", debug_mode)
+    with BuckPartScope("Unpacking", "Unpacking Redex input"):
+        logging.debug("Unpacking...")
+        unpack_start_time = timer()
+        if not extracted_apk_dir:
+            extracted_apk_dir = make_temp_dir(".redex_extracted_apk", debug_mode)
 
-    directory = make_temp_dir(".redex_unaligned", False)
-    unaligned_apk_path = join(directory, "redex-unaligned." + file_ext)
-    zip_manager = ZipManager(args.input_apk, extracted_apk_dir, unaligned_apk_path)
-    zip_manager.__enter__()
+        directory = make_temp_dir(".redex_unaligned", False)
+        unaligned_apk_path = join(directory, "redex-unaligned." + file_ext)
+        zip_manager = ZipManager(args.input_apk, extracted_apk_dir, unaligned_apk_path)
+        zip_manager.__enter__()
 
-    if not dex_dir:
-        dex_dir = make_temp_dir(".redex_dexen", debug_mode)
+        if not dex_dir:
+            dex_dir = make_temp_dir(".redex_dexen", debug_mode)
 
-    is_bundle = isfile(join(extracted_apk_dir, "BundleConfig.pb"))
-    unpack_manager = UnpackManager(
-        args.input_apk,
-        extracted_apk_dir,
-        dex_dir,
-        have_locators=config_dict.get("emit_locator_strings"),
-        debug_mode=debug_mode,
-        fast_repackage=args.dev,
-        reset_timestamps=args.reset_zip_timestamps or args.dev,
-        is_bundle=is_bundle,
-    )
-    store_files = unpack_manager.__enter__()
+        is_bundle = isfile(join(extracted_apk_dir, "BundleConfig.pb"))
+        unpack_manager = UnpackManager(
+            args.input_apk,
+            extracted_apk_dir,
+            dex_dir,
+            have_locators=config_dict.get("emit_locator_strings"),
+            debug_mode=debug_mode,
+            fast_repackage=args.dev,
+            reset_timestamps=args.reset_zip_timestamps or args.dev,
+            is_bundle=is_bundle,
+        )
+        store_files = unpack_manager.__enter__()
 
-    lib_manager = LibraryManager(extracted_apk_dir, is_bundle=is_bundle)
-    lib_manager.__enter__()
+        lib_manager = LibraryManager(extracted_apk_dir, is_bundle=is_bundle)
+        lib_manager.__enter__()
 
-    if args.unpack_only:
-        print("APK: " + extracted_apk_dir)
-        print("DEX: " + dex_dir)
-        sys.exit()
+        if args.unpack_only:
+            print("APK: " + extracted_apk_dir)
+            print("DEX: " + dex_dir)
+            sys.exit()
 
     # Unpack profiles, if they exist.
     _handle_profiles(args)
@@ -1196,23 +1198,27 @@ def run_redex(
     # This is late, but hopefully early enough.
     _init_logging(args.log_level)
 
-    if exception_formatter is None:
-        exception_formatter = ExceptionMessageFormatter()
+    with BuckConnectionScope():
+        if exception_formatter is None:
+            exception_formatter = ExceptionMessageFormatter()
 
-    if args.outdir or args.dex_files:
-        run_redex_passthrough(args, exception_formatter, output_line_handler)
-        return
-    else:
-        assert args.input_apk
+        if args.outdir or args.dex_files:
+            run_redex_passthrough(args, exception_formatter, output_line_handler)
+            return
+        else:
+            assert args.input_apk
 
-    state = prepare_redex(args)
-    run_redex_binary(state, exception_formatter, output_line_handler)
+        with BuckPartScope("Preparing", "Prepare to run redex"):
+            state = prepare_redex(args)
 
-    if args.stop_pass:
-        # Do not remove temp dirs
-        sys.exit()
+        with BuckPartScope("Run redex-all", "Actually run redex binary"):
+            run_redex_binary(state, exception_formatter, output_line_handler)
 
-    finalize_redex(state)
+        if args.stop_pass:
+            # Do not remove temp dirs
+            sys.exit()
+
+        finalize_redex(state)
 
 
 if __name__ == "__main__":
