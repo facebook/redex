@@ -12,6 +12,7 @@
 #include "DexPosition.h"
 #include "DexUtil.h"
 #include "Show.h"
+#include "Trace.h"
 
 DexPosition::DexPosition(uint32_t line) : line(line) {}
 
@@ -306,13 +307,16 @@ void RealPositionMapper::write_map_v2() {
     return it->second;
   };
 
+  size_t unregistered_parent_positions{0};
+
   for (auto pos : m_positions) {
     uint32_t parent_line = 0;
     try {
       parent_line = pos->parent == nullptr ? 0 : get_line(pos->parent);
     } catch (std::out_of_range& e) {
-      std::cerr << "Parent position " << show(pos->parent) << " of "
-                << show(pos) << " was not registered" << std::endl;
+      ++unregistered_parent_positions;
+      TRACE(OPUT, 1, "Parent position %s of %s was not registered",
+            SHOW(pos->parent), SHOW(pos));
     }
     // of the form "class_name.method_name:(arg_types)return_type"
     const auto& full_method_name = pos->method->str();
@@ -331,6 +335,13 @@ void RealPositionMapper::write_map_v2() {
     pos_out.write((const char*)&file_id, sizeof(file_id));
     pos_out.write((const char*)&pos->line, sizeof(pos->line));
     pos_out.write((const char*)&parent_line, sizeof(parent_line));
+  }
+
+  if (unregistered_parent_positions > 0 && !traceEnabled(OPUT, 1)) {
+    TRACE(OPUT, 0,
+          "%zu parent positions had not been registered. Run with TRACE=OPUT:1 "
+          "to list them.",
+          unregistered_parent_positions);
   }
 
   std::ofstream ofs(m_filename_v2.c_str(),
