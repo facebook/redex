@@ -174,6 +174,7 @@ libredex_la_SOURCES = \
 	service/class-merging/ApproximateShapeMerging.cpp \
 	service/class-merging/ClassAssemblingUtils.cpp \
 	service/class-merging/ClassMerging.cpp \
+	service/class-merging/ConfigUtils.cpp \
 	service/class-merging/AnonymousModelGenerator.cpp \
 	service/class-merging/MergeabilityCheck.cpp \
 	service/class-merging/MergerType.cpp \

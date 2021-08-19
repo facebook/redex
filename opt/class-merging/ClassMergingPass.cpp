@@ -10,6 +10,7 @@
 #include "ClassAssemblingUtils.h"
 #include "ClassMerging.h"
 #include "ConfigFiles.h"
+#include "ConfigUtils.h"
 #include "DexUtil.h"
 #include "MergingStrategies.h"
 #include "Show.h"
@@ -19,41 +20,9 @@ using namespace class_merging;
 
 namespace {
 
-DexType* get_type(const std::string& type_s) {
-  auto type = DexType::get_type(type_s.c_str());
-  if (type == nullptr) {
-    TRACE(CLMG, 2, "[ClassMerging] Warning: No type found for target type %s",
-          type_s.c_str());
-  }
-  return type;
-}
-
-std::vector<DexType*> get_types(const std::vector<std::string>& target_types) {
-  std::vector<DexType*> types;
-  for (const auto& type_s : target_types) {
-    auto target_type = get_type(type_s);
-    if (target_type == nullptr) continue;
-    types.push_back(target_type);
-  }
-  return types;
-}
-
-void load_types_and_prefixes(const std::vector<std::string>& type_names,
-                             std::unordered_set<const DexType*>& types,
-                             std::unordered_set<std::string>& prefixes) {
-  for (const auto& type_s : type_names) {
-    auto target_type = get_type(type_s);
-    if (target_type == nullptr) {
-      prefixes.insert(type_s);
-    } else {
-      types.insert(target_type);
-    }
-  }
-}
-
 template <typename Types>
 void load_types(const std::vector<std::string>& type_names, Types& types) {
-  std::vector<DexType*> ts = get_types(type_names);
+  std::vector<DexType*> ts = utils::get_types(type_names);
   for (const auto& t : ts) {
     const auto& cls = type_class(t);
     if (cls == nullptr) {
@@ -184,8 +153,8 @@ void ClassMergingPass::bind_config() {
       load_types(root_names, model.roots);
       std::vector<std::string> excl_names;
       model_spec.get("exclude", {}, excl_names);
-      load_types_and_prefixes(excl_names, model.exclude_types,
-                              model.exclude_prefixes);
+      utils::load_types_and_prefixes(excl_names, model.exclude_types,
+                                     model.exclude_prefixes);
       model_spec.get("class_name_prefix", "", model.class_name_prefix);
       Json::Value generated;
       model_spec.get("generated", Json::Value(), generated);
