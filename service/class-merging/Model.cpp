@@ -607,9 +607,8 @@ DexType* check_current_instance(const ConstTypeHashSet& types,
   return type;
 }
 
-ConcurrentMap<DexType*, TypeHashSet> get_type_usages(const TypeSet& type_vector,
-                                                     const Scope& scope) {
-  ConstTypeHashSet types{type_vector.begin(), type_vector.end()};
+ConcurrentMap<DexType*, TypeHashSet> get_type_usages(
+    const ConstTypeHashSet& types, const Scope& scope) {
   ConcurrentMap<DexType*, TypeHashSet> res;
 
   walk::parallel::opcodes(scope, [&](DexMethod* method, IRInstruction* insn) {
@@ -690,9 +689,33 @@ TypeGroupByDex Model::group_per_dex(bool per_dex_grouping,
   }
 }
 
-std::vector<TypeSet> Model::group_per_interdex_set(const TypeSet& types) {
+TypeSet Model::get_types_in_current_interdex_group(
+    const TypeSet& types, const ConstTypeHashSet& interdex_group_types) {
+  TypeSet group;
+  for (auto* type : types) {
+    if (interdex_group_types.count(type)) {
+      group.insert(type);
+    }
+  }
+  return group;
+}
+
+/**
+ * Split the types into groups according to the interdex grouping information.
+ * Note that types may be dropped if they are not allowed be merged.
+ */
+std::vector<ConstTypeHashSet> Model::group_by_interdex_set(
+    const ConstTypeHashSet& types) {
+  size_t num_group = 1;
+  if (is_merge_per_interdex_set_enabled() && s_num_interdex_groups > 1) {
+    num_group = s_num_interdex_groups;
+  }
+  std::vector<ConstTypeHashSet> new_groups(num_group);
+  if (num_group == 1) {
+    new_groups[0].insert(types.begin(), types.end());
+    return new_groups;
+  }
   const auto& type_to_usages = get_type_usages(types, m_scope);
-  std::vector<TypeSet> new_groups(s_num_interdex_groups);
   for (const auto& pair : type_to_usages) {
     auto index = get_interdex_group(pair.second, s_cls_to_interdex_group,
                                     s_num_interdex_groups);
@@ -719,6 +742,8 @@ void Model::flatten_shapes(const MergerType& merger,
                            MergerType::ShapeCollector& shapes) {
   size_t num_trimmed_types = trim_groups(shapes, m_spec.min_count);
   m_metric.dropped += num_trimmed_types;
+  // Group all merging targets according to interdex grouping.
+  auto all_interdex_groups = group_by_interdex_set(m_spec.merging_targets);
   // sort shapes by mergeables count
   std::vector<const MergerType::Shape*> keys;
   for (auto& shape_it : shapes) {
@@ -756,27 +781,25 @@ void Model::flatten_shapes(const MergerType& merger,
                 return left_group.size() > right_group.size();
               });
 
-    bool merge_per_interdex_set = is_merge_per_interdex_set_enabled();
-
     for (const TypeSet* intf_set : intf_sets) {
       const TypeSet& implementors = shape_hierarchy.groups.at(*intf_set);
       for (auto& pair : group_per_dex(m_spec.per_dex_grouping, implementors)) {
         auto dex_id = pair.first;
         auto group_values = pair.second;
-        if (merge_per_interdex_set && s_num_interdex_groups > 1) {
-          auto new_groups = group_per_interdex_set(group_values);
-
-          redex_assert(new_groups.size() <
-                       std::numeric_limits<InterdexSubgroupIdx>::max());
-          for (InterdexSubgroupIdx gindex = 0; gindex < new_groups.size();
-               gindex++) {
-            if (new_groups[gindex].empty() ||
-                new_groups[gindex].size() < m_spec.min_count) {
+        if (all_interdex_groups.size() > 1) {
+          for (InterdexSubgroupIdx interdex_gid = 0;
+               interdex_gid < all_interdex_groups.size();
+               interdex_gid++) {
+            if (all_interdex_groups[interdex_gid].empty()) {
               continue;
             }
-
+            auto new_group = get_types_in_current_interdex_group(
+                group_values, all_interdex_groups[interdex_gid]);
+            if (new_group.size() < m_spec.min_count) {
+              continue;
+            }
             create_mergers_helper(merger.type, *shape, *intf_set, dex_id,
-                                  new_groups[gindex], m_spec.strategy, gindex,
+                                  new_group, m_spec.strategy, interdex_gid,
                                   m_spec.max_count, m_spec.min_count);
           }
         } else {

@@ -399,7 +399,11 @@ class Model {
   void flatten_shapes(const MergerType& merger,
                       MergerType::ShapeCollector& shapes);
   TypeGroupByDex group_per_dex(bool per_dex_grouping, const TypeSet& types);
-  std::vector<TypeSet> group_per_interdex_set(const TypeSet& types);
+  TypeSet get_types_in_current_interdex_group(
+      const TypeSet& types, const ConstTypeHashSet& interdex_group_types);
+
+  std::vector<ConstTypeHashSet> group_by_interdex_set(
+      const ConstTypeHashSet& types);
   void map_fields(MergerType& merger,
                   const std::vector<const DexType*>& classes);
 
