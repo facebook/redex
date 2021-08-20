@@ -951,8 +951,14 @@ void Model::add_interface_scope(MergerType& merger,
     intf_meths.interfaces.insert(intf_scope.interfaces.begin(),
                                  intf_scope.interfaces.end());
     for (const auto& vmeth : intf_scope.methods) {
-      if (!vmeth.first->is_def()) continue;
-      if (merger.mergeables.count(vmeth.first->get_class()) == 0) continue;
+      // Only insert method defs
+      if (!vmeth.first->is_def()) {
+        continue;
+      }
+      // Only collect intf methods on mergeable types
+      if (merger.mergeables.count(vmeth.first->get_class()) == 0) {
+        continue;
+      }
       TRACE(CLMG,
             8,
             "add interface method %s (%s)",
@@ -970,8 +976,14 @@ void Model::add_interface_scope(MergerType& merger,
       return;
     }
   }
-  merger.intfs_methods.push_back(MergerType::InterfaceMethod());
-  insert(merger.intfs_methods.back());
+
+  // No match for existing InterfaceMethods. Now create a new InterfaceMethod
+  // and insert the current VirtualScope. But we only do so if the VirtualScope
+  // has at least one method def.
+  if (intf_scope.has_def()) {
+    merger.intfs_methods.push_back(MergerType::InterfaceMethod());
+    insert(merger.intfs_methods.back());
+  }
 }
 
 void Model::distribute_virtual_methods(
