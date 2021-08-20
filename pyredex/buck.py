@@ -91,14 +91,19 @@ class BuckConnection:
     def __send_step(self, event: _RunningPart, status: str) -> None:
         message = self.__create_step_message(event, status)
         local = self.event_pipe
-        assert local
-        local.write(str(len(BuckConnection.EVENT_TYPE_STEP)))
-        local.write(os.linesep)
-        local.write(BuckConnection.EVENT_TYPE_STEP)
-        local.write(str(len(message)))
-        local.write(os.linesep)
-        local.write(message)
-        local.flush()
+        if not local:
+            return
+        try:
+            local.write(str(len(BuckConnection.EVENT_TYPE_STEP)))
+            local.write(os.linesep)
+            local.write(BuckConnection.EVENT_TYPE_STEP)
+            local.write(str(len(message)))
+            local.write(os.linesep)
+            local.write(message)
+            local.flush()
+        except BrokenPipeError:
+            self.has_buck = False
+            self.event_pipe = None
 
     def start(self, name: str, desc: str) -> None:
         if not self.has_buck:
