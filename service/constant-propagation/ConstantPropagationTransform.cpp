@@ -285,11 +285,9 @@ void Transform::remove_dead_switch(
   // the cfg will rewrite the remaining branch into a goto and remove the switch
   // instruction.
   m_edge_deletes.push_back(goto_edge);
-  for (auto it = std::next(remaining_branch_edges.begin());
-       it != remaining_branch_edges.end();
-       it++) {
-    m_edge_deletes.push_back(*it);
-  }
+  m_edge_deletes.insert(m_edge_deletes.end(),
+                        std::next(remaining_branch_edges.begin()),
+                        remaining_branch_edges.end());
 }
 
 /*
@@ -369,8 +367,9 @@ bool Transform::replace_with_throw(
 }
 
 void Transform::apply_changes(cfg::ControlFlowGraph& cfg) {
-  for (auto branch_edge : m_edge_deletes) {
-    cfg.delete_edge(branch_edge);
+  if (!m_edge_deletes.empty()) {
+    cfg.delete_edges(m_edge_deletes.begin(), m_edge_deletes.end());
+    m_edge_deletes.clear();
   }
 
   always_assert(m_mutation != nullptr);
@@ -388,6 +387,7 @@ void Transform::apply_changes(cfg::ControlFlowGraph& cfg) {
       cfg.insert_after(block->to_cfg_instruction_iterator(last_load_params_it),
                        m_added_param_values);
     }
+    m_added_param_values.clear();
   }
 }
 

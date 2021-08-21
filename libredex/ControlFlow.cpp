@@ -2456,8 +2456,10 @@ void ControlFlowGraph::remove_insn(const InstructionIterator& it) {
     //
     // Don't cleanup because we're deleting the instruction at the end of this
     // function
+    singleton_iterable<Block*> iterable(block);
     free_edges(remove_succ_edge_if(
-        block, [](const Edge* e) { return e->type() == EDGE_BRANCH; },
+        iterable.begin(), iterable.end(),
+        [](const Edge* e) { return e->type() == EDGE_BRANCH; },
         /* cleanup */ false));
   } else if (insn->has_move_result_any()) {
     // delete the move-result(-pseudo) too
@@ -2617,7 +2619,7 @@ template <typename EdgePredicate>
 void ControlFlowGraph::copy_succ_edges_if(Block* from,
                                           Block* to,
                                           EdgePredicate edge_predicate) {
-  const auto& edges = get_succ_edges_if(from, edge_predicate);
+  const auto& edges = get_succ_edges_if(from, std::move(edge_predicate));
 
   for (auto e : edges) {
     Edge* copy = new Edge(*e);
@@ -2729,14 +2731,18 @@ std::ostream& ControlFlowGraph::write_dot_format(std::ostream& o) const {
 
 ControlFlowGraph::EdgeSet ControlFlowGraph::remove_succ_edges(Block* b,
                                                               bool cleanup) {
+  singleton_iterable<Block*> iterable(b);
   return remove_succ_edge_if(
-      b, [](const Edge*) { return true; }, cleanup);
+      iterable.begin(), iterable.end(), [](const Edge*) { return true; },
+      cleanup);
 }
 
 ControlFlowGraph::EdgeSet ControlFlowGraph::remove_pred_edges(Block* b,
                                                               bool cleanup) {
+  singleton_iterable<Block*> iterable(b);
   return remove_pred_edge_if(
-      b, [](const Edge*) { return true; }, cleanup);
+      iterable.begin(), iterable.end(), [](const Edge*) { return true; },
+      cleanup);
 }
 
 DexPosition* ControlFlowGraph::get_dbg_pos(const cfg::InstructionIterator& it) {

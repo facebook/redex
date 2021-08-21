@@ -17,6 +17,7 @@
 
 #include "DexPosition.h"
 #include "IRCode.h"
+#include "SingletonIterable.h"
 #include "WeakTopologicalOrdering.h"
 
 /**
@@ -615,19 +616,48 @@ class ControlFlowGraph {
   void delete_pred_edges(Block* b);
   void delete_edges_between(Block* p, Block* s);
 
+  template <class ForwardIt>
+  void delete_edges(const ForwardIt& begin, const ForwardIt& end) {
+    std::unordered_set<cfg::Edge*> edges;
+    std::unordered_set<cfg::Block*> srcs;
+    for (auto it = begin; it != end; it++) {
+      auto e = *it;
+      edges.insert(e);
+      srcs.insert(e->src());
+    }
+    delete_succ_edge_if(srcs.begin(), srcs.end(),
+                        [&](Edge* e) { return edges.count(e); });
+  }
+
   template <typename EdgePredicate>
   void delete_edge_if(Block* source, Block* target, EdgePredicate predicate) {
-    free_edges(remove_edge_if(source, target, predicate));
+    free_edges(remove_edge_if(source, target, std::move(predicate)));
   }
 
   template <typename EdgePredicate>
-  void delete_succ_edge_if(Block* block, EdgePredicate predicate) {
-    free_edges(remove_succ_edge_if(block, predicate));
+  void delete_succ_edge_if(cfg::Block* b, EdgePredicate predicate) {
+    singleton_iterable<Block*> iterable(b);
+    delete_succ_edge_if(iterable.begin(), iterable.end(), std::move(predicate));
+  }
+
+  template <class ForwardIt, typename EdgePredicate>
+  void delete_succ_edge_if(const ForwardIt& begin,
+                           const ForwardIt& end,
+                           EdgePredicate predicate) {
+    free_edges(remove_succ_edge_if(begin, end, std::move(predicate)));
   }
 
   template <typename EdgePredicate>
-  void delete_pred_edge_if(Block* block, EdgePredicate predicate) {
-    free_edges(remove_pred_edge_if(block, predicate));
+  void delete_pred_edge_if(cfg::Block* b, EdgePredicate predicate) {
+    singleton_iterable<Block*> iterable(b);
+    delete_pred_edge_if(iterable.begin(), iterable.end(), std::move(predicate));
+  }
+
+  template <class ForwardIt, typename EdgePredicate>
+  void delete_pred_edge_if(const ForwardIt& begin,
+                           const ForwardIt& end,
+                           EdgePredicate predicate) {
+    free_edges(remove_pred_edge_if(begin, end, std::move(predicate)));
   }
 
   bool blocks_are_in_same_try(const Block* b1, const Block* b2) const;
@@ -1059,26 +1089,28 @@ class ControlFlowGraph {
     return to_remove;
   }
 
-  template <typename EdgePredicate>
-  EdgeSet remove_pred_edge_if(Block* block,
+  template <class ForwardIt, typename EdgePredicate>
+  EdgeSet remove_pred_edge_if(const ForwardIt& begin,
+                              const ForwardIt& end,
                               EdgePredicate predicate,
                               bool cleanup = true) {
-    auto& reverse_edges = block->m_preds;
-
-    std::vector<Block*> source_blocks;
+    std::unordered_set<Block*> source_blocks;
     EdgeSet to_remove;
-    reverse_edges.erase(
-        std::remove_if(reverse_edges.begin(),
-                       reverse_edges.end(),
-                       [&source_blocks, &to_remove, &predicate](Edge* e) {
-                         if (predicate(e)) {
-                           source_blocks.push_back(e->src());
-                           to_remove.insert(e);
-                           return true;
-                         }
-                         return false;
-                       }),
-        reverse_edges.end());
+    for (auto it = begin; it != end; it++) {
+      auto& reverse_edges = (*it)->m_preds;
+      reverse_edges.erase(
+          std::remove_if(reverse_edges.begin(),
+                         reverse_edges.end(),
+                         [&source_blocks, &to_remove, &predicate](Edge* e) {
+                           if (predicate(e)) {
+                             source_blocks.insert(e->src());
+                             to_remove.insert(e);
+                             return true;
+                           }
+                           return false;
+                         }),
+          reverse_edges.end());
+    }
 
     for (Block* source_block : source_blocks) {
       auto& forward_edges = source_block->m_succs;
@@ -1095,26 +1127,28 @@ class ControlFlowGraph {
     return to_remove;
   }
 
-  template <typename EdgePredicate>
-  EdgeSet remove_succ_edge_if(Block* block,
+  template <class ForwardIt, typename EdgePredicate>
+  EdgeSet remove_succ_edge_if(const ForwardIt& begin,
+                              const ForwardIt& end,
                               EdgePredicate predicate,
                               bool cleanup = true) {
-    auto& forward_edges = block->m_succs;
-
-    std::vector<Block*> target_blocks;
+    std::unordered_set<Block*> target_blocks;
     std::unordered_set<Edge*> to_remove;
-    forward_edges.erase(
-        std::remove_if(forward_edges.begin(),
-                       forward_edges.end(),
-                       [&target_blocks, &to_remove, &predicate](Edge* e) {
-                         if (predicate(e)) {
-                           target_blocks.push_back(e->target());
-                           to_remove.insert(e);
-                           return true;
-                         }
-                         return false;
-                       }),
-        forward_edges.end());
+    for (auto it = begin; it != end; it++) {
+      auto& forward_edges = (*it)->m_succs;
+      forward_edges.erase(
+          std::remove_if(forward_edges.begin(),
+                         forward_edges.end(),
+                         [&target_blocks, &to_remove, &predicate](Edge* e) {
+                           if (predicate(e)) {
+                             target_blocks.insert(e->target());
+                             to_remove.insert(e);
+                             return true;
+                           }
+                           return false;
+                         }),
+          forward_edges.end());
+    }
 
     for (Block* target_block : target_blocks) {
       auto& reverse_edges = target_block->m_preds;
