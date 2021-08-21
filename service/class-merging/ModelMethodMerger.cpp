@@ -686,8 +686,8 @@ void ModelMethodMerger::merge_ctors() {
         ctor_signatures[ctor->get_class()] =
             type_reference::get_method_signature(ctor);
         mutators::make_static(ctor, mutators::KeepThis::Yes);
-        replace_method_args_head(ctor, target_type);
         TRACE(CLMG, 9, "  converting ctor %s", SHOW(ctor));
+        replace_method_args_head(ctor, target_type);
       }
 
       // Create dispatch.

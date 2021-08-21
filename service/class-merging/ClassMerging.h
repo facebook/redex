@@ -17,4 +17,11 @@ void merge_model(Scope& scope,
                  DexStoresVector& stores,
                  ModelSpec& spec);
 
+void merge_model(const TypeSystem&,
+                 Scope& scope,
+                 ConfigFiles& conf,
+                 PassManager& mgr,
+                 DexStoresVector& stores,
+                 ModelSpec& spec);
+
 } // namespace class_merging

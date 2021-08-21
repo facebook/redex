@@ -78,15 +78,7 @@ void merge_model(Scope& scope,
                  PassManager& mgr,
                  DexStoresVector& stores,
                  ModelSpec& spec) {
-  set_up(conf);
-  always_assert(s_is_initialized);
-  TRACE(CLMG, 2, "[ClassMerging] merging %s model", spec.name.c_str());
-  Timer t("erase_model");
   TypeSystem type_system(scope);
-  int32_t min_sdk = mgr.get_redex_options().min_sdk;
-  XStoreRefs xstores(stores);
-  auto refchecker =
-      create_ref_checker(spec.per_dex_grouping, &xstores, conf, min_sdk);
   if (spec.merging_targets.empty()) {
     // TODO: change to unordered set.
     TypeSet merging_targets_set;
@@ -96,6 +88,23 @@ void merge_model(Scope& scope,
     spec.merging_targets.insert(merging_targets_set.begin(),
                                 merging_targets_set.end());
   }
+  merge_model(type_system, scope, conf, mgr, stores, spec);
+}
+
+void merge_model(const TypeSystem& type_system,
+                 Scope& scope,
+                 ConfigFiles& conf,
+                 PassManager& mgr,
+                 DexStoresVector& stores,
+                 ModelSpec& spec) {
+  set_up(conf);
+  always_assert(s_is_initialized);
+  TRACE(CLMG, 2, "[ClassMerging] merging %s model", spec.name.c_str());
+  Timer t("erase_model");
+  int32_t min_sdk = mgr.get_redex_options().min_sdk;
+  XStoreRefs xstores(stores);
+  auto refchecker =
+      create_ref_checker(spec.per_dex_grouping, &xstores, conf, min_sdk);
   auto model =
       Model::build_model(scope, stores, conf, spec, type_system, *refchecker);
   model.update_redex_stats(mgr);

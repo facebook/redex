@@ -175,7 +175,6 @@ libredex_la_SOURCES = \
 	service/class-merging/ClassAssemblingUtils.cpp \
 	service/class-merging/ClassMerging.cpp \
 	service/class-merging/ConfigUtils.cpp \
-	service/class-merging/AnonymousModelGenerator.cpp \
 	service/class-merging/MergeabilityCheck.cpp \
 	service/class-merging/MergerType.cpp \
 	service/class-merging/MergingStrategies.cpp \
@@ -293,6 +292,8 @@ libopt_la_SOURCES = \
 	opt/check-recursion/CheckRecursion.cpp \
 	opt/class-merging/AnonymousClassMergingPass.cpp \
 	opt/class-merging/ClassMergingPass.cpp \
+	opt/class-merging/IntraDexClassMergingPass.cpp \
+	opt/class-merging/ModelSpecGenerator.cpp \
 	opt/class-splitting/ClassSplitting.cpp \
 	opt/constant-propagation/ConstantPropagationPass.cpp \
 	opt/constant-propagation/ConstantPropagationRuntimeAssert.cpp \

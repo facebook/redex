@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "AnonymousModelGenerator.h"
+#include "ModelSpecGenerator.h"
 #include "Model.h"
 #include "PassManager.h"
 #include "Show.h"
@@ -45,9 +45,8 @@ bool can_delete_class_or_nonctor_methods(const DexClass* cls) {
     return false;
   }
   auto& vmethods = cls->get_vmethods();
-  if (std::any_of(vmethods.begin(), vmethods.end(), [](const DexMethod* m) {
-        return !can_delete(m);
-      })) {
+  if (std::any_of(vmethods.begin(), vmethods.end(),
+                  [](const DexMethod* m) { return !can_delete(m); })) {
     return false;
   }
   auto& dmethods = cls->get_dmethods();
@@ -77,6 +76,73 @@ bool is_from_allowed_packages(
 } // namespace
 
 namespace class_merging {
+
+void find_all_mergeables_and_roots(const TypeSystem& type_system,
+                                   const Scope& scope,
+                                   size_t global_min_count,
+                                   ModelSpec* merging_spec) {
+  std::unordered_map<const DexTypeList*, std::vector<const DexType*>>
+      intfs_implementors;
+  std::unordered_map<const DexType*, std::vector<const DexType*>>
+      parent_children;
+  TypeSet throwable;
+  type_system.get_all_children(type::java_lang_Throwable(), throwable);
+  for (const auto* cls : scope) {
+    auto cur_type = cls->get_type();
+    if (is_interface(cls) || is_abstract(cls) || cls->rstate.is_generated() ||
+        cls->get_clinit() || throwable.count(cur_type)) {
+      continue;
+    }
+    TypeSet children;
+    type_system.get_all_children(cur_type, children);
+    if (!children.empty()) {
+      continue;
+    }
+    if (!can_delete_class_or_nonctor_methods(cls)) {
+      continue;
+    }
+    auto* intfs = cls->get_interfaces();
+    auto super_cls = cls->get_super_class();
+    if (super_cls != type::java_lang_Object()) {
+      parent_children[super_cls].push_back(cur_type);
+    } else if (intfs->size()) {
+      intfs_implementors[intfs].push_back(cur_type);
+    } else {
+      // TODO: Investigate error P444184021 when merging simple classes without
+      // interfaces.
+    }
+  }
+  for (const auto& pair : parent_children) {
+    auto parent = pair.first;
+    auto& children = pair.second;
+    if (children.size() >= global_min_count) {
+      TRACE(CLMG,
+            9,
+            "Discover root %s with %zu child classes",
+            SHOW(parent),
+            children.size());
+      merging_spec->roots.insert(parent);
+      merging_spec->merging_targets.insert(children.begin(), children.end());
+    }
+  }
+  for (const auto& pair : intfs_implementors) {
+    auto intfs = pair.first;
+    auto& implementors = pair.second;
+    if (implementors.size() >= global_min_count) {
+      TRACE(CLMG,
+            9,
+            "Discover interface root %s with %zu implementors",
+            SHOW(intfs),
+            pair.second.size());
+      auto first_implementor = type_class(implementors[0]);
+      merging_spec->roots.insert(first_implementor->get_super_class());
+      merging_spec->merging_targets.insert(implementors.begin(),
+                                           implementors.end());
+    }
+  }
+  TRACE(CLMG, 9, "Discover %zu mergeables from %zu roots",
+        merging_spec->merging_targets.size(), merging_spec->roots.size());
+}
 
 void discover_mergeable_anonymous_classes(
     const DexStoresVector& stores,

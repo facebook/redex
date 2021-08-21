@@ -9,11 +9,11 @@
 
 #include "AnonymousClassMergingPass.h"
 
-#include "AnonymousModelGenerator.h"
 #include "ClassMerging.h"
 #include "ConfigFiles.h"
 #include "ConfigUtils.h"
 #include "MergingStrategies.h"
+#include "ModelSpecGenerator.h"
 #include "PassManager.h"
 
 namespace class_merging {
