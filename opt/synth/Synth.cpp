@@ -17,17 +17,20 @@
 #include <utility>
 #include <vector>
 
+#include "ApiLevelChecker.h"
 #include "ClassHierarchy.h"
 #include "Debug.h"
 #include "DexClass.h"
 #include "DexLoader.h"
 #include "DexOutput.h"
+#include "DexStore.h"
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "Mutators.h"
 #include "PassManager.h"
 #include "ReachableClasses.h"
+#include "RefChecker.h"
 #include "Resolver.h"
 #include "Show.h"
 #include "SynthConfig.h"
@@ -39,6 +42,7 @@ constexpr const char* METRIC_CTORS_REMOVED = "constructors_removed_count";
 constexpr const char* METRIC_PASSES = "passes_count";
 constexpr const char* METRIC_METHODS_STATICIZED = "methods_staticized_count";
 constexpr const char* METRIC_PATCHED_INVOKES = "patched_invokes_count";
+constexpr const char* METRIC_ILLEGAL_REFS = "illegal_refs";
 
 namespace {
 struct SynthMetrics {
@@ -294,22 +298,49 @@ void purge_wrapped_wrappers(WrapperMethods& ssms) {
   ssms.next_pass = ssms.next_pass || !remove.empty();
 }
 
-WrapperMethods analyze(const ClassHierarchy& ch,
+WrapperMethods analyze(const api::AndroidSDK* min_sdk_api,
+                       XStoreRefs& xstores,
+                       const ClassHierarchy& ch,
                        const std::vector<DexClass*>& classes,
-                       const SynthConfig& synthConfig) {
+                       const SynthConfig& synthConfig,
+                       std::atomic<size_t>& illegal_refs) {
   Timer timer("analyze");
   WrapperMethods ssms;
+  // RefChecker store_idx is initialized with `largest_root_store_id()`, so that
+  // it rejects all the references from stores with id larger than the largest
+  // root_store id.
+  RefChecker ref_checker(&xstores, xstores.largest_root_store_id(),
+                         min_sdk_api);
+  auto check_api_level_and_refs = [&](DexMethod* method) {
+    // We are conservative, and don't consider "inlining" a method invocation if
+    // it's marked with a non-min-api-level.
+    int32_t api_level = api::LevelChecker::get_method_level(method);
+    if (api_level != api::LevelChecker::get_min_level()) {
+      return false;
+    }
+    return ref_checker.check_method(method);
+  };
   walk::parallel::classes(classes, [&](DexClass* cls) {
     if (synthConfig.blocklist_types.count(cls->get_type())) {
       return;
     }
     for (auto dmethod : cls->get_dmethods()) {
       if (dmethod->rstate.dont_inline()) continue;
+      if (!check_api_level_and_refs(dmethod)) {
+        illegal_refs++;
+        continue;
+      }
+
       // constructors are special and all we can remove are synthetic ones
       if (synthConfig.remove_constructors && is_synthetic(dmethod) &&
           method::is_constructor(dmethod)) {
         auto ctor = trivial_ctor_wrapper(dmethod);
         if (ctor) {
+          if (!check_api_level_and_refs(ctor)) {
+            illegal_refs++;
+            continue;
+          }
+
           TRACE(SYNT, 2, "Trivial constructor wrapper: %s", SHOW(dmethod));
           TRACE(SYNT, 2, "  Calls constructor: %s", SHOW(ctor));
           ssms.ctors.emplace(dmethod, ctor);
@@ -321,6 +352,11 @@ WrapperMethods analyze(const ClassHierarchy& ch,
       if (is_static_synthetic(dmethod)) {
         auto field = trivial_get_field_wrapper(dmethod);
         if (field) {
+          if (!ref_checker.check_field(field)) {
+            illegal_refs++;
+            continue;
+          }
+
           TRACE(SYNT, 2, "Static trivial getter: %s", SHOW(dmethod));
           TRACE(SYNT, 2, "  Gets field: %s", SHOW(field));
           ssms.getters.emplace(dmethod, field);
@@ -328,6 +364,11 @@ WrapperMethods analyze(const ClassHierarchy& ch,
         }
         auto sfield = trivial_get_static_field_wrapper(dmethod);
         if (sfield) {
+          if (!ref_checker.check_field(sfield)) {
+            illegal_refs++;
+            continue;
+          }
+
           TRACE(SYNT, 2, "Static trivial static field getter: %s",
                 SHOW(dmethod));
           TRACE(SYNT, 2, "  Gets static field: %s", SHOW(sfield));
@@ -344,6 +385,10 @@ WrapperMethods analyze(const ClassHierarchy& ch,
           // Incidentally we have no single method falling in that bucket
           // at this time
           if (method->is_virtual()) continue;
+          if (!check_api_level_and_refs(method)) {
+            illegal_refs++;
+            continue;
+          }
 
           TRACE(SYNT, 2, "Static trivial method wrapper: %s", SHOW(dmethod));
           TRACE(SYNT, 2, "  Calls method: %s", SHOW(method));
@@ -910,31 +955,51 @@ bool trace_analysis(WrapperMethods& ssms) {
   return true;
 }
 
-bool optimize(const ClassHierarchy& ch,
+bool optimize(const api::AndroidSDK* min_sdk_api,
+              XStoreRefs& xstores,
+              const ClassHierarchy& ch,
               const std::vector<DexClass*>& classes,
               const SynthConfig& synthConfig,
-              SynthMetrics& metrics) {
-  auto ssms = analyze(ch, classes, synthConfig);
+              SynthMetrics& metrics,
+              std::atomic<size_t>& illegal_refs) {
+  auto ssms =
+      analyze(min_sdk_api, xstores, ch, classes, synthConfig, illegal_refs);
   redex_assert(trace_analysis(ssms));
   do_transform(ch, classes, ssms, synthConfig, metrics);
   return ssms.next_pass;
 }
 
 void SynthPass::run_pass(DexStoresVector& stores,
-                         ConfigFiles& /* conf */,
+                         ConfigFiles& conf,
                          PassManager& mgr) {
   if (mgr.no_proguard_rules()) {
     TRACE(SYNT, 1,
           "SynthPass not run because no ProGuard configuration was provided.");
     return;
   }
+
+  int32_t min_sdk = mgr.get_redex_options().min_sdk;
+  mgr.incr_metric("min_sdk", min_sdk);
+  TRACE(SYNT, 2, "min_sdk: %d", min_sdk);
+  auto min_sdk_api_file = conf.get_android_sdk_api_file(min_sdk);
+  const api::AndroidSDK* min_sdk_api{nullptr};
+  if (!min_sdk_api_file) {
+    mgr.incr_metric("min_sdk_no_file", 1);
+    TRACE(SYNT, 2, "Android SDK API %d file cannot be found.", min_sdk);
+  } else {
+    min_sdk_api = &conf.get_android_sdk_api(min_sdk);
+  }
+
+  XStoreRefs xstores(stores);
   Scope scope = build_class_scope(stores);
   ClassHierarchy ch = build_type_hierarchy(scope);
   SynthMetrics metrics;
   int passes = 0;
+  std::atomic<size_t> illegal_refs{0};
   do {
     TRACE(SYNT, 1, "Synth removal, pass %d", passes);
-    bool more_opt_needed = optimize(ch, scope, m_pass_config, metrics);
+    bool more_opt_needed = optimize(min_sdk_api, xstores, ch, scope,
+                                    m_pass_config, metrics, illegal_refs);
     if (!more_opt_needed) break;
   } while (++passes < m_pass_config.max_passes);
 
@@ -943,6 +1008,7 @@ void SynthPass::run_pass(DexStoresVector& stores,
   mgr.incr_metric(METRIC_CTORS_REMOVED, metrics.ctors_removed_count);
   mgr.incr_metric(METRIC_METHODS_STATICIZED, metrics.methods_staticized_count);
   mgr.incr_metric(METRIC_PATCHED_INVOKES, metrics.patched_invokes_count);
+  mgr.incr_metric(METRIC_ILLEGAL_REFS, illegal_refs);
   mgr.incr_metric(METRIC_PASSES, passes);
 }
 
