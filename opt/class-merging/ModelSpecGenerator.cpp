@@ -93,6 +93,10 @@ void find_all_mergeables_and_roots(const TypeSystem& type_system,
         cls->get_clinit() || throwable.count(cur_type)) {
       continue;
     }
+    // TODO: Can merge named classes.
+    if (!maybe_anonymous_class(cls)) {
+      continue;
+    }
     TypeSet children;
     type_system.get_all_children(cur_type, children);
     if (!children.empty()) {
