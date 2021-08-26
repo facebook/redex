@@ -30,6 +30,7 @@ check_PROGRAMS = \
     max_depth_test \
     method_override_graph_test \
     monotonic_fixpoint_test \
+    partial_application_test \
     peephole_test \
     points_to_semantics_test \
     propagation_test \
@@ -102,6 +103,9 @@ EXTRA_method_override_graph_test_DEPENDENCIES = method_override_graph_test-class
 
 monotonic_fixpoint_test_SOURCES = MonotonicFixpointTest.cpp
 EXTRA_monotonic_fixpoint_test_DEPENDENCIES = monotonic_fixpoint_test-class.dex
+
+partial_application_test_SOURCES = PartialApplicationTest.cpp
+EXTRA_partial_application_test_DEPENDENCIES = partial_application_test-class.dex
 
 peephole_test_SOURCES = PeepholeTest.cpp
 EXTRA_peephole_test_DEPENDENCIES = peephole_test-class.dex
@@ -208,6 +212,9 @@ method_override_graph_test-class.jar: MethodOverrideGraphTest.java
 	$(create_jar)
 
 monotonic_fixpoint_test-class.jar: MonotonicFixpoint.java
+	$(create_jar)
+
+partial_application_test-class.jar: PartialApplication.java
 	$(create_jar)
 
 peephole_test-class.jar: Peephole.java

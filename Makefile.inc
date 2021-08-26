@@ -46,6 +46,7 @@ COMMON_INCLUDES = \
 	-I$(top_srcdir)/opt/optimize_enums \
 	-I$(top_srcdir)/opt/original_name \
 	-I$(top_srcdir)/opt/outliner \
+	-I$(top_srcdir)/opt/partial-application \
 	-I$(top_srcdir)/opt/peephole \
 	-I$(top_srcdir)/opt/print-members \
 	-I$(top_srcdir)/opt/print-kotlin-stats \
