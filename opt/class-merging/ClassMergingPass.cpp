@@ -212,6 +212,8 @@ void ClassMergingPass::bind_config() {
       }
       model.process_method_meta = process_method_meta;
       model.max_num_dispatch_target = m_max_num_dispatch_target;
+      // Assume config based models are all generated code.
+      model.is_generated_code = true;
 
       if (!verify_model_spec(model)) {
         continue;

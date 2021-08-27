@@ -57,7 +57,7 @@ void MergeabilityChecker::exclude_cannot_delete(TypeSet& non_mergeables) {
   }
 }
 
-TypeSet MergeabilityChecker::exclude_unsupported_bytecode_for(
+TypeSet MergeabilityChecker::exclude_unsupported_bytecode_refs_for(
     DexMethod* method) {
   TypeSet non_mergeables;
   auto code = method->get_code();
@@ -70,6 +70,26 @@ TypeSet MergeabilityChecker::exclude_unsupported_bytecode_for(
       const_classes_to_verify;
   for (const auto& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
+
+    // If we have a pure method ref on a mergeable type (the class component is
+    // mergeable), we do not merge the type.
+    // 1. We cannot properly update type references on pure method refs.
+    // 2. We rely the ResolveRefsPass to resolve all pure method refs before
+    // running Class Merging. However, there are rare exceptions where resolving
+    // method refs to external cannot be done. In this case, it's safer not to
+    // merge types with existing pure method refs on the type.
+    if (insn->has_method() && !insn->get_method()->is_def()) {
+      auto meth_ref = insn->get_method();
+      auto type = meth_ref->get_class();
+      if (m_spec.merging_targets.count(type) > 0) {
+        TRACE(CLMG,
+              5,
+              "[non mergeable] referenced by pure ref %s",
+              SHOW(meth_ref));
+        non_mergeables.insert(type);
+      }
+      continue;
+    }
 
     // Java language level enforcement recommended!
     //
@@ -159,7 +179,7 @@ void MergeabilityChecker::exclude_unsupported_bytecode(
   TypeSet non_mergeables_opcode =
       walk::parallel::methods<TypeSet, MergeContainers<TypeSet>>(
           m_scope, [this](DexMethod* meth) {
-            return exclude_unsupported_bytecode_for(meth);
+            return exclude_unsupported_bytecode_refs_for(meth);
           });
 
   non_mergeables.insert(non_mergeables_opcode.begin(),
