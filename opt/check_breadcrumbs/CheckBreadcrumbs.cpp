@@ -52,7 +52,7 @@ constexpr const char* METRIC_TYPES_WITH_ALLOWED_VIOLATIONS =
     "allowed_types_with_violations";
 
 bool class_contains(const DexField* field) {
-  const auto& cls = type_class(field->get_class());
+  const auto* cls = type_class(field->get_class());
   if (cls == nullptr) return true;
   for (const auto& cls_field : cls->get_ifields()) {
     if (field == cls_field) return true;
@@ -64,7 +64,7 @@ bool class_contains(const DexField* field) {
 }
 
 bool class_contains(const DexMethod* method) {
-  const auto& cls = type_class(method->get_class());
+  const auto* cls = type_class(method->get_class());
   if (cls == nullptr) return true;
   for (const auto& cls_meth : cls->get_vmethods()) {
     if (method == cls_meth) return true;
