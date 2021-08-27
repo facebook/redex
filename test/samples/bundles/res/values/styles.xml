@@ -21,4 +21,10 @@
     <item name="themePadding">40dp</item>
     <item name="themeColor">#00FF00</item>
   </style>
+
+  <style name="DupTheme1">
+  </style>
+
+  <style name="DupTheme2">
+  </style>
 </resources>

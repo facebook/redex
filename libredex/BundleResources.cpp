@@ -22,7 +22,9 @@
 #include <stdexcept>
 #include <string>
 
+#include <google/protobuf/descriptor.h>
 #include <google/protobuf/io/coded_stream.h>
+#include <google/protobuf/message.h>
 
 #include "Debug.h"
 #include "DexUtil.h"
@@ -925,6 +927,43 @@ std::string ResourcesPbFile::resolve_module_name_for_resource_id(
   return m_package_id_to_module_name.at(package_id);
 }
 
+namespace {
+void reset_pb_source(google::protobuf::Message* message) {
+  if (message == nullptr) {
+    return;
+  }
+  const google::protobuf::Descriptor* desc = message->GetDescriptor();
+  const google::protobuf::Reflection* refl = message->GetReflection();
+  for (int i = 0; i < desc->field_count(); i++) {
+    const google::protobuf::FieldDescriptor* field_desc = desc->field(i);
+    auto repeated = field_desc->is_repeated();
+    auto cpp_type = field_desc->cpp_type();
+    if (cpp_type == google::protobuf::FieldDescriptor::CPPTYPE_UINT32 &&
+        refl->HasField(*message, field_desc) && !repeated) {
+      auto name = field_desc->name();
+      if (name == "path_idx" || name == "line_number" ||
+          name == "column_number") {
+        TRACE(RES, 9, "resetting uint32 field: %s", name.c_str());
+        refl->SetUInt32(message, field_desc, 0);
+      }
+    } else if (cpp_type == google::protobuf::FieldDescriptor::CPPTYPE_MESSAGE) {
+      if (repeated) {
+        // Note: HasField not relevant for repeated fields.
+        auto size = refl->FieldSize(*message, field_desc);
+        for (int j = 0; j < size; j++) {
+          auto sub_message =
+              refl->MutableRepeatedMessage(message, field_desc, j);
+          reset_pb_source(sub_message);
+        }
+      } else if (refl->HasField(*message, field_desc)) {
+        auto sub_message = refl->MutableMessage(message, field_desc);
+        reset_pb_source(sub_message);
+      }
+    }
+  }
+}
+} // namespace
+
 void ResourcesPbFile::collect_resource_data_for_file(
     const std::string& resources_pb_path) {
   TRACE(RES,
@@ -938,6 +977,14 @@ void ResourcesPbFile::collect_resource_data_for_file(
         bool read_finish = pb_restable.ParseFromCodedStream(&input);
         always_assert_log(read_finish, "BundleResoource failed to read %s",
                           resources_pb_path.c_str());
+        if (pb_restable.has_source_pool()) {
+          // Source positions refer to ResStringPool entries which are file
+          // paths from the perspective of the build machine. Not relevant for
+          // further operations, set them to a predictable value.
+          // NOTE: Not all input .aab files will have this data; release style
+          // bundles should omit this data.
+          reset_pb_source(&pb_restable);
+        }
         for (const aapt::pb::Package& pb_package : pb_restable.package()) {
           auto current_package_id = pb_package.package_id().id();
           TRACE(RES, 9, "Package: %s %X", pb_package.package_name().c_str(),

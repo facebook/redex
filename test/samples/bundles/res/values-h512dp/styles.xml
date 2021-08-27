@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <style name="DupTheme1">
+    <item name="android:layout_weight">1</item>
+  </style>
+
+  <style name="DupTheme2">
+    <item name="android:layout_weight">1</item>
+  </style>
+</resources>
