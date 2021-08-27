@@ -64,7 +64,11 @@ void update_call_refs(
   }
 }
 
-void replace_method_args_head(DexMethod* meth, DexType* new_head) {
+/**
+ * Staticize the method and replace its first parameter with a new type.
+ */
+void staticize_with_new_arg_head(DexMethod* meth, DexType* new_head) {
+  mutators::make_static(meth, mutators::KeepThis::Yes);
   DexMethodSpec spec;
   auto args = meth->get_proto()->get_args();
   always_assert(args->size());
@@ -72,6 +76,10 @@ void replace_method_args_head(DexMethod* meth, DexType* new_head) {
   auto new_proto =
       DexProto::make_proto(meth->get_proto()->get_rtype(), new_type_list);
   spec.proto = new_proto;
+  if (method::is_init(meth)) {
+    // <init> can not be renamed on collision, change it to a plain name.
+    spec.name = DexString::make_string("_init_");
+  }
   meth->change(spec, true /* rename on collision */);
 }
 
@@ -592,8 +600,7 @@ void ModelMethodMerger::merge_virtual_methods(
     std::unordered_map<const DexType*, std::string> meth_signatures;
     for (auto m : meth_lst) {
       meth_signatures[m->get_class()] = get_method_signature_string(m);
-      mutators::make_static(m, mutators::KeepThis::Yes);
-      replace_method_args_head(m, target_type);
+      staticize_with_new_arg_head(m, target_type);
       type_tags[m] = m_type_tags->get_type_tag(m->get_class());
     }
     auto name = front_meth->get_name()->str();
@@ -685,8 +692,7 @@ void ModelMethodMerger::merge_ctors() {
       for (const auto ctor : ctors) {
         ctor_signatures[ctor->get_class()] =
             type_reference::get_method_signature(ctor);
-        mutators::make_static(ctor, mutators::KeepThis::Yes);
-        replace_method_args_head(ctor, target_type);
+        staticize_with_new_arg_head(ctor, target_type);
         TRACE(CLMG, 9, "  converting ctor %s", SHOW(ctor));
       }
 
