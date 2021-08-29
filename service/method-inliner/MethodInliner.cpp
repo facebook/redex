@@ -267,6 +267,31 @@ static DexType* reduce_type_demands(
   return type_demands->size() == 1 ? *type_demands->begin() : nullptr;
 }
 
+bool can_have_unknown_implementations(const mog::Graph& method_override_graph,
+                                      const DexMethod* method,
+                                      bool consider_overridden_methods = true) {
+  // Why can_rename? To mirror what VirtualRenamer looks at.
+  if (method->is_external() || (is_interface(type_class(method->get_class())) &&
+                                (root(method) || !can_rename(method)))) {
+    // We cannot rule out that there are dynamically added classes, possibly
+    // even created at runtime via Proxy.newProxyInstance, that override
+    // this method. So we assume the worst.
+    return true;
+  }
+  if (consider_overridden_methods) {
+    const auto& overridden_methods = mog::get_overridden_methods(
+        method_override_graph, method, /* include_interfaces */ true);
+    for (auto overridden_method : overridden_methods) {
+      if (can_have_unknown_implementations(
+              method_override_graph, overridden_method,
+              /* consider_overridden_methods */ false)) {
+        return true;
+      }
+    }
+  }
+  return false;
+};
+
 /**
  * Gather candidates of true virtual methods that can be inlined and their
  * call site in true_virtual_callers.
@@ -349,13 +374,7 @@ void gather_true_virtual_methods(const mog::Graph& method_override_graph,
         // Not true virtual, no need to continue;
         continue;
       }
-      // Why can_rename? To mirror what VirtualRenamer looks at.
-      if (callee->is_external() ||
-          (is_interface(type_class(method->get_class())) &&
-           (root(method) || !can_rename(method)))) {
-        // We cannot rule out that there are dynamically added classes, possibly
-        // even created at runtime via Proxy.newProxyInstance, that override
-        // this method. So we assume the worst.
+      if (can_have_unknown_implementations(method_override_graph, callee)) {
         add_other_call_site(callee);
         if (insn->opcode() != OPCODE_INVOKE_SUPER) {
           auto overriding_methods =
