@@ -1025,12 +1025,19 @@ void push_callee_arg(EnumUtilsCache& enum_utils_cache,
 void create_partial_application_methods(EnumUtilsCache& enum_utils_cache,
                                         PaMethodRefs& pa_method_refs) {
   Timer t("create_partial_application_methods");
+  std::map<DexMethodRef*, const CalleeCallSiteSummary*, dexmethods_comparator>
+      inverse_ordered_pa_method_refs;
   for (auto& p : pa_method_refs) {
-    auto callee = p.first.method;
+    bool success =
+        inverse_ordered_pa_method_refs.emplace(p.second, &p.first).second;
+    always_assert(success);
+  }
+  for (auto& p : inverse_ordered_pa_method_refs) {
+    auto pa_method_ref = p.first;
+    auto callee = p.second->method;
     auto cls = type_class(callee->get_class());
     always_assert(cls);
-    auto css = p.first.call_site_summary;
-    auto pa_method_ref = p.second;
+    auto css = p.second->call_site_summary;
     auto access = callee->get_access() & ~(ACC_ABSTRACT | ACC_NATIVE);
     if (callee->is_virtual()) {
       access |= ACC_FINAL;
