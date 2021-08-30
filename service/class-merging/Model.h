@@ -154,8 +154,8 @@ struct ModelSpec {
   bool replace_type_like_const_strings{true};
   // Indicates if the merging should be performed per dex.
   bool per_dex_grouping{false};
-  // The Model targets are generated code. If so, we consider merging_targets as a
-  // part of the generated set.
+  // The Model targets are generated code. If so, we consider merging_targets as
+  // a part of the generated set.
   bool is_generated_code{false};
 
   bool generate_type_tag() const {
