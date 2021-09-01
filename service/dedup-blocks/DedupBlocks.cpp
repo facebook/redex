@@ -553,8 +553,8 @@ class DedupBlocksImpl {
         auto& majority_count_group = insn_count[majority_insn];
 
         // Remove the iterators
-        std20::erase_if(block_iterator_map, [&](auto it) {
-          return majority_count_group.blocks.find(it->first) ==
+        std20::erase_if(block_iterator_map, [&](auto& p) {
+          return majority_count_group.blocks.find(p.first) ==
                  majority_count_group.blocks.end();
         });
 
@@ -833,7 +833,7 @@ class DedupBlocksImpl {
       std::unordered_map<TKey, TValue, THash, TPred>& duplicates,
       NeedToRemove need_to_remove) {
     std20::erase_if(duplicates,
-                    [&](auto it) { return need_to_remove(it->second); });
+                    [&](auto& p) { return need_to_remove(p.second); });
   }
 
   static bool is_singleton_or_inconsistent(

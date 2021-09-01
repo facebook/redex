@@ -48,8 +48,8 @@ const BlockValue* BlockValues::get_block_value(cfg::Block* block) const {
   auto live_out_vars = m_liveness_fixpoint_iter.get_live_out_vars_at(block);
   always_assert(!live_out_vars.is_top());
   always_assert(!live_out_vars.is_bottom());
-  std20::erase_if(regs, [&live_out_vars](auto it) {
-    return !live_out_vars.elements().contains(it->first);
+  std20::erase_if(regs, [&live_out_vars](auto& p) {
+    return !live_out_vars.elements().contains(p.first);
   });
   for (auto reg : live_out_vars.elements()) {
     prepare_and_get_reg(regs, reg);

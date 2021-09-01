@@ -76,9 +76,9 @@ size_t hash_value(const KeepSpec& spec) {
 
 void KeepSpecSet::erase_if(const std::function<bool(const KeepSpec&)>& pred) {
   std::unordered_set<const KeepSpec*> erased;
-  std20::erase_if(m_unordered_set, [&](auto it) {
-    if (pred(**it)) {
-      erased.emplace(it->get());
+  std20::erase_if(m_unordered_set, [&](auto& v) {
+    if (pred(*v)) {
+      erased.emplace(v.get());
       return true;
     }
     return false;

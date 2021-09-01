@@ -133,12 +133,12 @@ const DexType* OutlinerTypeAnalysis::narrow_type_demands(
     }
 
     // remove less specific object types
-    std20::erase_if(type_demands, [&type_demands](auto it) {
-      return type::is_object(*it) &&
+    std20::erase_if(type_demands, [&type_demands](auto* u) {
+      return type::is_object(u) &&
              std::find_if(type_demands.begin(), type_demands.end(),
-                          [&it](const DexType* t) {
-                            return t != *it && type::is_object(t) &&
-                                   type::check_cast(t, *it);
+                          [u](const DexType* t) {
+                            return t != u && type::is_object(t) &&
+                                   type::check_cast(t, u);
                           }) != type_demands.end();
     });
 
@@ -1075,10 +1075,10 @@ const DexType* OutlinerTypeAnalysis::get_type_of_defs(
   }
 
   // remove more specific object types
-  std20::erase_if(types, [&types](auto it) {
-    return type::is_object(*it) &&
-           std::find_if(types.begin(), types.end(), [&it](const DexType* t) {
-             return t != *it && type::is_object(t) && type::check_cast(*it, t);
+  std20::erase_if(types, [&types](auto* u) {
+    return type::is_object(u) &&
+           std::find_if(types.begin(), types.end(), [u](const DexType* t) {
+             return t != u && type::is_object(t) && type::check_cast(u, t);
            }) != types.end();
   });
 

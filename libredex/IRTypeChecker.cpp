@@ -648,8 +648,8 @@ Result check_monitors(const DexMethod* method) {
   for (auto& it : sketchy_insns) {
     sketchy_blocks.insert(it.block());
   }
-  std20::erase_if(sketchy_blocks, [&](auto it) {
-    return !code->cfg().get_succ_edge_of_type(*it, cfg::EDGE_THROW);
+  std20::erase_if(sketchy_blocks, [&](auto* b) {
+    return !code->cfg().get_succ_edge_of_type(b, cfg::EDGE_THROW);
   });
   if (!sketchy_blocks.empty()) {
     std::ostringstream out;

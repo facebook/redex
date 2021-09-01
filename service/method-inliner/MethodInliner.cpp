@@ -258,10 +258,10 @@ static DexType* reduce_type_demands(
     return nullptr;
   }
   // remove less specific object types
-  std20::erase_if(*type_demands, [&type_demands](auto it) {
+  std20::erase_if(*type_demands, [&type_demands](auto u) {
     return std::find_if(type_demands->begin(), type_demands->end(),
-                        [&it](const DexType* t) {
-                          return t != *it && type::check_cast(t, *it);
+                        [u](const DexType* t) {
+                          return t != u && type::check_cast(t, u);
                         }) != type_demands->end();
   });
   return type_demands->size() == 1 ? *type_demands->begin() : nullptr;
@@ -403,7 +403,7 @@ void gather_true_virtual_methods(const mog::Graph& method_override_graph,
       auto overriding_methods =
           mog::get_overriding_methods(method_override_graph, callee);
       std20::erase_if(overriding_methods,
-                      [&](auto& it) { return is_abstract(*it); });
+                      [&](auto* m) { return is_abstract(m); });
       if (overriding_methods.empty()) {
         // There is no override for this method
         add_monomorphic_call_site(method, insn, callee);
@@ -484,8 +484,8 @@ void gather_true_virtual_methods(const mog::Graph& method_override_graph,
                             "be castable to %s.",
                             SHOW(callee->get_class()), SHOW(type_demand));
           if (type_demands->insert(type_demand).second) {
-            std20::erase_if(formal_callee_types, [&](auto it) {
-              return !type::check_cast(*it, type_demand);
+            std20::erase_if(formal_callee_types, [&](auto* t) {
+              return !type::check_cast(t, type_demand);
             });
           }
         }
@@ -529,7 +529,7 @@ void gather_true_virtual_methods(const mog::Graph& method_override_graph,
           }
         }
         std20::erase_if(caller_to_invocations.caller_insns,
-                        [&](auto it) { return it->second.empty(); });
+                        [&](auto& p) { return p.second.empty(); });
       },
       true_virtual_callees);
   for (auto& pair : concurrent_true_virtual_callers) {

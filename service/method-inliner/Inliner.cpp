@@ -217,11 +217,10 @@ MultiMethodInliner::MultiMethodInliner(
       callee_caller.erase(callee);
     }
     for (auto& p : caller_callee) {
-      std20::erase_if(
-          p.second, [&](auto& it) { return m_x_dex_callees.count(it->first); });
+      std20::erase_if(p.second,
+                      [&](auto& q) { return m_x_dex_callees.count(q.first); });
     }
-    std20::erase_if(caller_callee,
-                    [&](auto& it) { return it->second.empty(); });
+    std20::erase_if(caller_callee, [&](auto& p) { return p.second.empty(); });
   }
 }
 
