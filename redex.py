@@ -446,9 +446,9 @@ def copy_file_to_out_dir(
     tmp_path = tmp + "/" + name
     if os.path.isfile(tmp_path):
         shutil.copy2(tmp_path, output_path)
-        logging.warning("Copying " + human_name + " map to output_dir: " + output_path)
+        logging.debug("Copying " + human_name + " map to output_dir: " + output_path)
     else:
-        logging.warning("Skipping " + human_name + " copy, since no file found to copy")
+        logging.debug("Skipping " + human_name + " copy, since no file found to copy")
 
 
 def copy_all_file_to_out_dir(
