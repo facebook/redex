@@ -32,10 +32,8 @@ class LithoComponent extends SpecGeneratedComponent implements Cloneable {
   }
 
   public static Builder create(ComponentContext context, int defStyleAttr, int defStyleRes) {
-    final Builder builder = new Builder();
     LithoComponent instance = new LithoComponent(context);
-    builder.init(context, defStyleAttr, defStyleRes, instance);
-    return builder;
+    return new Builder(context, defStyleAttr, defStyleRes, instance);
   }
 
   public static class Builder extends Component.Builder<Builder> {
@@ -46,12 +44,12 @@ class LithoComponent extends SpecGeneratedComponent implements Cloneable {
     private final int REQUIRED_PROPS_COUNT = 1;
     private final BitSet mRequired = new BitSet(REQUIRED_PROPS_COUNT);
 
-    private void init(
+    private Builder(
         ComponentContext context,
         int defStyleAttr,
         int defStyleRes,
         LithoComponent lithoComponentRef) {
-      super.init(context, defStyleAttr, defStyleRes, lithoComponentRef);
+      super(context, defStyleAttr, defStyleRes, lithoComponentRef);
       mLithoComponent = lithoComponentRef;
       mContext = context;
       mRequired.clear();
@@ -98,10 +96,8 @@ class LithoComponentWithStaticFields extends SpecGeneratedComponent implements C
   }
 
   public static Builder create(ComponentContext context, int defStyleAttr, int defStyleRes) {
-    final Builder builder = new Builder();
     LithoComponentWithStaticFields instance = new LithoComponentWithStaticFields(context);
-    builder.init(context, defStyleAttr, defStyleRes, instance);
-    return builder;
+    return new Builder(context, defStyleAttr, defStyleRes, instance);
   }
 
   public static class Builder extends Component.Builder<Builder> {
@@ -113,12 +109,12 @@ class LithoComponentWithStaticFields extends SpecGeneratedComponent implements C
     private final BitSet mRequired = new BitSet(REQUIRED_PROPS_COUNT);
     public static boolean RANDOM_INPUT;
 
-    private void init(
+    private Builder(
         ComponentContext context,
         int defStyleAttr,
         int defStyleRes,
         LithoComponentWithStaticFields lithoComponentRef) {
-      super.init(context, defStyleAttr, defStyleRes, lithoComponentRef);
+      super(context, defStyleAttr, defStyleRes, lithoComponentRef);
       mLithoComponent = lithoComponentRef;
       mContext = context;
       mRequired.clear();
@@ -165,10 +161,8 @@ class TestingComponentA extends SpecGeneratedComponent implements Cloneable {
   }
 
   public static Builder create(ComponentContext context, int defStyleAttr, int defStyleRes) {
-    final Builder builder = new Builder();
     TestingComponentA instance = new TestingComponentA(context);
-    builder.init(context, defStyleAttr, defStyleRes, instance);
-    return builder;
+    return new Builder(context, defStyleAttr, defStyleRes, instance);
   }
 
   public static class Builder extends Component.Builder<Builder> {
@@ -179,12 +173,12 @@ class TestingComponentA extends SpecGeneratedComponent implements Cloneable {
     private final int REQUIRED_PROPS_COUNT = 1;
     private final BitSet mRequired = new BitSet(REQUIRED_PROPS_COUNT);
 
-    private void init(
+    private Builder(
         ComponentContext context,
         int defStyleAttr,
         int defStyleRes,
         TestingComponentA lithoComponentRef) {
-      super.init(context, defStyleAttr, defStyleRes, lithoComponentRef);
+      super(context, defStyleAttr, defStyleRes, lithoComponentRef);
       mLithoComponent = lithoComponentRef;
       mContext = context;
       mRequired.clear();
@@ -231,10 +225,8 @@ class TestingComponentB extends SpecGeneratedComponent implements Cloneable {
   }
 
   public static Builder create(ComponentContext context, int defStyleAttr, int defStyleRes) {
-    final Builder builder = new Builder();
     TestingComponentB instance = new TestingComponentB(context);
-    builder.init(context, defStyleAttr, defStyleRes, instance);
-    return builder;
+    return new Builder(context, defStyleAttr, defStyleRes, instance);
   }
 
   public static class Builder extends Component.Builder<Builder> {
@@ -245,12 +237,12 @@ class TestingComponentB extends SpecGeneratedComponent implements Cloneable {
     private final int REQUIRED_PROPS_COUNT = 1;
     private final BitSet mRequired = new BitSet(REQUIRED_PROPS_COUNT);
 
-    private void init(
+    private Builder(
         ComponentContext context,
         int defStyleAttr,
         int defStyleRes,
         TestingComponentB lithoComponentRef) {
-      super.init(context, defStyleAttr, defStyleRes, lithoComponentRef);
+      super(context, defStyleAttr, defStyleRes, lithoComponentRef);
       mLithoComponent = lithoComponentRef;
       mContext = context;
       mRequired.clear();
@@ -297,10 +289,8 @@ class TestingComponentC extends SpecGeneratedComponent implements Cloneable {
   }
 
   public static Builder create(ComponentContext context, int defStyleAttr, int defStyleRes) {
-    final Builder builder = new Builder();
     TestingComponentC instance = new TestingComponentC(context);
-    builder.init(context, defStyleAttr, defStyleRes, instance);
-    return builder;
+    return new Builder(context, defStyleAttr, defStyleRes, instance);
   }
 
   public static class Builder extends Component.Builder<Builder> {
@@ -311,12 +301,12 @@ class TestingComponentC extends SpecGeneratedComponent implements Cloneable {
     private final int REQUIRED_PROPS_COUNT = 1;
     private final BitSet mRequired = new BitSet(REQUIRED_PROPS_COUNT);
 
-    private void init(
+    private Builder(
         ComponentContext context,
         int defStyleAttr,
         int defStyleRes,
         TestingComponentC lithoComponentRef) {
-      super.init(context, defStyleAttr, defStyleRes, lithoComponentRef);
+      super(context, defStyleAttr, defStyleRes, lithoComponentRef);
       mLithoComponent = lithoComponentRef;
       mContext = context;
       mRequired.clear();
@@ -363,10 +353,8 @@ class TestingComponentD extends SpecGeneratedComponent implements Cloneable {
   }
 
   public static Builder create(ComponentContext context, int defStyleAttr, int defStyleRes) {
-    final Builder builder = new Builder();
     TestingComponentD instance = new TestingComponentD(context);
-    builder.init(context, defStyleAttr, defStyleRes, instance);
-    return builder;
+    return new Builder(context, defStyleAttr, defStyleRes, instance);
   }
 
   public static class Builder extends Component.Builder<Builder> {
@@ -377,12 +365,12 @@ class TestingComponentD extends SpecGeneratedComponent implements Cloneable {
     private final int REQUIRED_PROPS_COUNT = 1;
     private final BitSet mRequired = new BitSet(REQUIRED_PROPS_COUNT);
 
-    private void init(
+    private Builder(
         ComponentContext context,
         int defStyleAttr,
         int defStyleRes,
         TestingComponentD lithoComponentRef) {
-      super.init(context, defStyleAttr, defStyleRes, lithoComponentRef);
+      super(context, defStyleAttr, defStyleRes, lithoComponentRef);
       mLithoComponent = lithoComponentRef;
       mContext = context;
       mRequired.clear();
