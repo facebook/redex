@@ -115,23 +115,23 @@ TEST_F(DexOutputTest, testPerfSensitive) {
   }
 
   std::vector<std::string> expected_order = {
-      "LDexOutputTest$NonPerfSensitiveClass;.<init>:(LDexOutputTest;)V",
-      "LDexOutputTest$NonPerfSensitiveClass;.EjustReturnFive:()I",
-      "LDexOutputTest;.AjustReturnFive:()I",
-      "LDexOutputTest;.EjustReturnFive:()I",
-      "LDexOutputTest$NonPerfSensitiveClass;.FsomeLogic:(I)I",
       "LDexOutputTest$PerfSensitiveClass;.<init>:(LDexOutputTest;)V",
       "LDexOutputTest$PerfSensitiveClass;.EjustReturnFive:()I",
       "LDexOutputTest$PerfSensitiveClass;.FsomeLogic:(I)I",
       "LDexOutputTest$SecondPerfSensitiveClass;.<init>:(LDexOutputTest;)V",
       "LDexOutputTest$SecondPerfSensitiveClass;.EjustReturnFive:()I",
       "LDexOutputTest$SecondPerfSensitiveClass;.FsomeLogic:(I)I",
-      "LDexOutputTest;.<init>:()V",
-      "LDexOutputTest;.BjustCallSixpublic:()I",
-      "LDexOutputTest;.GjustCallSixpublic:()I",
+      "LDexOutputTest$NonPerfSensitiveClass;.<init>:(LDexOutputTest;)V",
+      "LDexOutputTest$NonPerfSensitiveClass;.EjustReturnFive:()I",
+      "LDexOutputTest;.AjustReturnFive:()I",
+      "LDexOutputTest;.EjustReturnFive:()I",
+      "LDexOutputTest$NonPerfSensitiveClass;.FsomeLogic:(I)I",
       "LDexOutputTest;.CsomeLogic:(I)I",
       "LDexOutputTest;.FsomeLogic:(I)I",
       "LDexOutputTest;.HsomeLogic:(I)I",
+      "LDexOutputTest;.<init>:()V",
+      "LDexOutputTest;.BjustCallSixpublic:()I",
+      "LDexOutputTest;.GjustCallSixpublic:()I",
       "LDexOutputTest;.DgetSixpublic:()I"};
 
   EXPECT_TRUE(std::equal(method_names.begin(), method_names.end(),
