@@ -812,11 +812,14 @@ void select_invokes_and_callers(
     std::unordered_set<DexMethod*>* selected_callers) {
   Timer t("select_invokes_and_callers");
   std::vector<const DexMethod*> callees;
+  std::unordered_map<const DexType*, std::vector<const DexMethod*>>
+      callees_by_classes;
   std::unordered_map<const DexMethod*, InvokeCallSiteSummaries>
       selected_invokes_by_callees;
   for (auto& p : callee_caller) {
     auto callee = p.first;
     callees.push_back(callee);
+    callees_by_classes[callee->get_class()].push_back(callee);
     selected_invokes_by_callees[callee];
   }
 
@@ -832,58 +835,73 @@ void select_invokes_and_callers(
       },
       callees);
 
-  std::sort(callees.begin(), callees.end(), compare_dexmethods);
-  std::unordered_map<uint64_t, uint32_t> stable_hash_indices;
-  for (auto callee : callees) {
-    auto& callee_selected_invokes = selected_invokes_by_callees.at(callee);
-    if (callee_selected_invokes.empty()) {
-      continue;
-    }
-    auto callee_stable_hash = get_stable_hash(show(callee));
-    std::map<const DexTypeList*, std::vector<const CallSiteSummary*>,
-             dextypelists_comparator>
-        ordered_pa_args_csses;
-    auto callee_is_static = is_static(callee);
-    auto callee_proto = callee->get_proto();
-    for (auto& p : callee_selected_invokes) {
-      auto css = p.second;
-      auto pa_args =
-          get_partial_application_args(callee_is_static, callee_proto, css);
-      ordered_pa_args_csses[pa_args].push_back(css);
-    }
-    for (auto& p : ordered_pa_args_csses) {
-      auto pa_args = p.first;
-      auto& csses = p.second;
-      std::sort(csses.begin(), csses.end(),
-                [](const CallSiteSummary* a, const CallSiteSummary* b) {
-                  return a->get_key() < b->get_key();
-                });
-      for (auto css : csses) {
-        auto css_stable_hash = get_stable_hash(css->get_key());
-        auto stable_hash = get_stable_hash(callee_stable_hash, css_stable_hash);
-        auto stable_hash_index = stable_hash_indices[stable_hash]++;
-        std::ostringstream oss;
-        oss << callee->get_name()->str()
-            << (is_static(callee) ? "$spa$" : "$ipa$") << iteration << "$"
-            << ((boost::format("%08x") % stable_hash).str()) << "$"
-            << stable_hash_index;
-        auto pa_name = DexString::make_string(oss.str());
-        auto pa_rtype =
-            css->result_used ? callee_proto->get_rtype() : type::_void();
-        auto pa_proto = DexProto::make_proto(pa_rtype, pa_args);
-        auto pa_type = callee->get_class();
-        auto pa_method_ref = DexMethod::make_method(pa_type, pa_name, pa_proto);
-        CalleeCallSiteSummary ccss{callee, css};
-        pa_method_refs->emplace(ccss, pa_method_ref);
-      }
-    }
-
-    selected_invokes->insert(callee_selected_invokes.begin(),
-                             callee_selected_invokes.end());
-    for (auto& p : callee_caller.at(callee)) {
-      selected_callers->insert(p.first);
-    }
+  std::vector<const DexType*> callee_classes;
+  callee_classes.reserve(callees_by_classes.size());
+  for (auto& p : callees_by_classes) {
+    callee_classes.push_back(p.first);
   }
+  std::mutex mutex;
+  workqueue_run<const DexType*>(
+      [&](const DexType* callee_class) {
+        auto& class_callees = callees_by_classes.at(callee_class);
+        std::sort(class_callees.begin(), class_callees.end(),
+                  compare_dexmethods);
+        std::unordered_map<uint64_t, uint32_t> stable_hash_indices;
+        for (auto callee : class_callees) {
+          auto& callee_selected_invokes =
+              selected_invokes_by_callees.at(callee);
+          if (callee_selected_invokes.empty()) {
+            continue;
+          }
+          auto callee_stable_hash = get_stable_hash(show(callee));
+          std::map<const DexTypeList*, std::vector<const CallSiteSummary*>,
+                   dextypelists_comparator>
+              ordered_pa_args_csses;
+          auto callee_is_static = is_static(callee);
+          auto callee_proto = callee->get_proto();
+          for (auto& p : callee_selected_invokes) {
+            auto css = p.second;
+            auto pa_args = get_partial_application_args(callee_is_static,
+                                                        callee_proto, css);
+            ordered_pa_args_csses[pa_args].push_back(css);
+          }
+          for (auto& p : ordered_pa_args_csses) {
+            auto pa_args = p.first;
+            auto& csses = p.second;
+            std::sort(csses.begin(), csses.end(),
+                      [](const CallSiteSummary* a, const CallSiteSummary* b) {
+                        return a->get_key() < b->get_key();
+                      });
+            for (auto css : csses) {
+              auto css_stable_hash = get_stable_hash(css->get_key());
+              auto stable_hash =
+                  get_stable_hash(callee_stable_hash, css_stable_hash);
+              auto stable_hash_index = stable_hash_indices[stable_hash]++;
+              std::ostringstream oss;
+              oss << callee->get_name()->str()
+                  << (is_static(callee) ? "$spa$" : "$ipa$") << iteration << "$"
+                  << ((boost::format("%08x") % stable_hash).str()) << "$"
+                  << stable_hash_index;
+              auto pa_name = DexString::make_string(oss.str());
+              auto pa_rtype =
+                  css->result_used ? callee_proto->get_rtype() : type::_void();
+              auto pa_proto = DexProto::make_proto(pa_rtype, pa_args);
+              auto pa_type = callee->get_class();
+              auto pa_method_ref =
+                  DexMethod::make_method(pa_type, pa_name, pa_proto);
+              CalleeCallSiteSummary ccss{callee, css};
+              pa_method_refs->emplace(ccss, pa_method_ref);
+            }
+          }
+          std::lock_guard<std::mutex> lock_guard(mutex);
+          selected_invokes->insert(callee_selected_invokes.begin(),
+                                   callee_selected_invokes.end());
+          for (auto& p : callee_caller.at(callee)) {
+            selected_callers->insert(p.first);
+          }
+        }
+      },
+      callee_classes);
 }
 
 IROpcode get_invoke_opcode(const DexMethod* callee) {
