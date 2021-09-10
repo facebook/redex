@@ -161,9 +161,9 @@ struct RedexContext {
     m_pointers_cache_loaded = true;
   }
   const FrequentlyUsedPointers& pointers_cache() {
-    std::lock_guard<std::mutex> lock(s_field_lock);
     if (!m_pointers_cache_loaded) {
       redex_assert(!kDebugPointersCacheLoad);
+      std::lock_guard<std::mutex> lock(m_pointers_cache_lock);
       load_pointers_cache();
     }
     return m_pointers_cache;
@@ -334,6 +334,7 @@ struct RedexContext {
   bool m_allow_class_duplicates;
 
   bool m_pointers_cache_loaded{false};
+  std::mutex m_pointers_cache_lock;
   FrequentlyUsedPointers m_pointers_cache;
 
   // Field values map specified by Proguard assume value
