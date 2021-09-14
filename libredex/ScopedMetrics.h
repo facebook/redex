@@ -50,7 +50,7 @@ class ScopedMetrics {
   }
 
   // In cpp to avoid `PassManager.h` include.
-  void set_metric(const std::string& key, int64_t value);
+  void set_metric(const std::string_view& key, int64_t value);
 
  private:
   void pop() {

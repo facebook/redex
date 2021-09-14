@@ -404,39 +404,6 @@ InsertResult insert_source_blocks(DexMethod* method,
 
 namespace {
 
-struct SourceBlocksStats {
-  size_t total_blocks{0};
-  size_t source_blocks_present{0};
-  size_t source_blocks_total{0};
-  size_t methods_with_sbs{0};
-  size_t flow_violation_idom{0};
-  size_t flow_violation_direct_predecessors{0};
-  size_t flow_violation_cold_direct_predecessors{0};
-  size_t methods_with_cold_direct_predecessor_violations{0};
-  size_t methods_with_idom_violations{0};
-  size_t methods_with_direct_predecessor_violations{0};
-  size_t methods_with_code{0};
-
-  SourceBlocksStats& operator+=(const SourceBlocksStats& that) {
-    total_blocks += that.total_blocks;
-    source_blocks_present += that.source_blocks_present;
-    source_blocks_total += that.source_blocks_total;
-    methods_with_sbs += that.methods_with_sbs;
-    flow_violation_idom += that.flow_violation_idom;
-    flow_violation_direct_predecessors +=
-        that.flow_violation_direct_predecessors;
-    flow_violation_cold_direct_predecessors +=
-        that.flow_violation_cold_direct_predecessors;
-    methods_with_cold_direct_predecessor_violations +=
-        that.methods_with_cold_direct_predecessor_violations;
-    methods_with_idom_violations += that.methods_with_idom_violations;
-    methods_with_direct_predecessor_violations +=
-        that.methods_with_direct_predecessor_violations;
-    methods_with_code += that.methods_with_code;
-    return *this;
-  }
-};
-
 bool is_source_block_hot(SourceBlock* sb) {
   bool is_hot = false;
   if (sb != nullptr) {
@@ -447,6 +414,147 @@ bool is_source_block_hot(SourceBlock* sb) {
   }
   return is_hot;
 }
+
+size_t count_blocks(
+    Block*, const dominators::SimpleFastDominators<cfg::GraphInterface>&) {
+  return 1;
+}
+size_t count_block_has_sbs(
+    Block* b, const dominators::SimpleFastDominators<cfg::GraphInterface>&) {
+  return source_blocks::has_source_blocks(b) ? 1 : 0;
+}
+size_t count_all_sbs(
+    Block* b, const dominators::SimpleFastDominators<cfg::GraphInterface>&) {
+  size_t ret{0};
+  source_blocks::foreach_source_block(
+      b, [&](auto* sb ATTRIBUTE_UNUSED) { ++ret; });
+  return ret;
+}
+
+// TODO: Per-interaction stats.
+
+size_t hot_immediate_dom_not_hot(
+    Block* block,
+    const dominators::SimpleFastDominators<cfg::GraphInterface>& dominators) {
+  auto* first_sb_current_b = source_blocks::get_first_source_block(block);
+  if (!is_source_block_hot(first_sb_current_b)) {
+    return 0;
+  }
+
+  auto immediate_dominator = dominators.get_idom(block);
+  if (!immediate_dominator) {
+    return 0;
+  }
+  auto* first_sb_immediate_dominator =
+      source_blocks::get_first_source_block(immediate_dominator);
+  bool is_idom_hot = is_source_block_hot(first_sb_immediate_dominator);
+  return is_idom_hot ? 0 : 1;
+}
+
+// TODO: This needs to be adapted to sum up the predecessors.
+size_t hot_no_hot_pred(
+    Block* block,
+    const dominators::SimpleFastDominators<cfg::GraphInterface>&) {
+  auto* first_sb_current_b = source_blocks::get_first_source_block(block);
+  if (!is_source_block_hot(first_sb_current_b)) {
+    return 0;
+  }
+
+  for (auto predecessor : block->preds()) {
+    auto* first_sb_pred =
+        source_blocks::get_first_source_block(predecessor->src());
+    if (is_source_block_hot(first_sb_pred)) {
+      return 0;
+    }
+  }
+  return 1;
+}
+
+// TODO: Isn't that the same as before, just this time correct w/ counting?
+size_t hot_all_pred_cold(
+    Block* block,
+    const dominators::SimpleFastDominators<cfg::GraphInterface>&) {
+  auto* first_sb_current_b = source_blocks::get_first_source_block(block);
+  if (!is_source_block_hot(first_sb_current_b)) {
+    return 0;
+  }
+
+  for (auto predecessor : block->preds()) {
+    auto* first_sb_pred =
+        source_blocks::get_first_source_block(predecessor->src());
+    if (is_source_block_hot(first_sb_pred)) {
+      return 0;
+    }
+  }
+  return 1;
+}
+
+// Ugly but necessary for constexpr below.
+using CounterFnPtr = size_t (*)(
+    Block*, const dominators::SimpleFastDominators<cfg::GraphInterface>&);
+
+constexpr std::array<std::pair<std::string_view, CounterFnPtr>, 3> gCounters = {
+    {
+        {"~blocks~count", &count_blocks},
+        {"~blocks~with~source~blocks", &count_block_has_sbs},
+        {"~assessment~source~blocks~total", &count_all_sbs},
+    }};
+
+constexpr std::array<std::pair<std::string_view, CounterFnPtr>, 3>
+    gCountersNonEntry = {{
+        {"~flow~violation~idom", &hot_immediate_dom_not_hot},
+        {"~flow~violation~direct~predecessors", &hot_no_hot_pred},
+        {"~flow~violation~cold~direct~predecessors", &hot_all_pred_cold},
+    }};
+
+struct SourceBlocksStats {
+  size_t methods_with_code{0};
+  size_t methods_with_sbs{0};
+
+  std::array<size_t, gCounters.size()> global{};
+
+  std::array<size_t, gCountersNonEntry.size()> non_entry{};
+  std::array<size_t, gCountersNonEntry.size()> non_entry_methods{};
+  std::array<std::pair<size_t, size_t>, gCountersNonEntry.size()>
+      non_entry_min_max{};
+
+  SourceBlocksStats& operator+=(const SourceBlocksStats& that) {
+    methods_with_code += that.methods_with_code;
+    methods_with_sbs += that.methods_with_sbs;
+
+    for (size_t i = 0; i != global.size(); ++i) {
+      global[i] += that.global[i];
+    }
+
+    for (size_t i = 0; i != non_entry.size(); ++i) {
+      non_entry[i] += that.non_entry[i];
+    }
+    for (size_t i = 0; i != non_entry_methods.size(); ++i) {
+      non_entry_methods[i] += that.non_entry_methods[i];
+    }
+    for (size_t i = 0; i != non_entry_min_max.size(); ++i) {
+      non_entry_min_max[i].first =
+          std::min(non_entry_min_max[i].first, that.non_entry_min_max[i].first);
+      non_entry_min_max[i].second = std::max(non_entry_min_max[i].second,
+                                             that.non_entry_min_max[i].second);
+    }
+
+    return *this;
+  }
+
+  void fill_derived() {
+    methods_with_code = 1;
+
+    static_assert(gCounters[1].first == "~blocks~with~source~blocks");
+    methods_with_sbs = global[1] > 0 ? 1 : 0;
+
+    for (size_t i = 0; i != non_entry.size(); ++i) {
+      non_entry_methods[i] = non_entry[i] > 0 ? 1 : 0;
+      non_entry_min_max[i].first = non_entry[i];
+      non_entry_min_max[i].second = non_entry[i];
+    }
+  }
+};
 
 } // namespace
 
@@ -460,7 +568,6 @@ void track_source_block_coverage(ScopedMetrics& sm,
         if (!code) {
           return ret;
         }
-        ret.methods_with_code++;
         code->build_cfg(/* editable */ true);
         auto& cfg = code->cfg();
         auto dominators =
@@ -471,103 +578,38 @@ void track_source_block_coverage(ScopedMetrics& sm,
         bool seen_direct_pred_viol = false;
         bool seen_sb = false;
         for (auto block : cfg.blocks()) {
-          ret.total_blocks++;
-          if (source_blocks::has_source_blocks(block)) {
-            ret.source_blocks_present++;
-            seen_sb = true;
-            source_blocks::foreach_source_block(
-                block,
-                [&](auto* sb ATTRIBUTE_UNUSED) { ret.source_blocks_total++; });
+          for (size_t i = 0; i != gCounters.size(); ++i) {
+            ret.global[i] += (*gCounters[i].second)(block, dominators);
           }
           if (block != cfg.entry_block()) {
-            auto immediate_dominator = dominators.get_idom(block);
-            if (!immediate_dominator) {
-              continue;
-            }
-            auto* first_sb_immediate_dominator =
-                source_blocks::get_first_source_block(immediate_dominator);
-            auto* first_sb_current_b =
-                source_blocks::get_first_source_block(block);
-
-            bool is_idom_hot =
-                is_source_block_hot(first_sb_immediate_dominator);
-            bool is_curr_block_hot = is_source_block_hot(first_sb_current_b);
-
-            if (!is_idom_hot && is_curr_block_hot) {
-              ret.flow_violation_idom++;
-              seen_idom_viol = true;
-            }
-
-            // If current block is hot, one of its predecessors must also be
-            // hot. If all predecessors of a block are cold, the block must also
-            // be cold
-            if (is_curr_block_hot) {
-              auto found_hot_pred = [&]() {
-                for (auto predecessor : block->preds()) {
-                  auto* first_sb_pred =
-                      source_blocks::get_first_source_block(predecessor->src());
-                  if (is_source_block_hot(first_sb_pred)) {
-                    return true;
-                  }
-                }
-                return false;
-              }();
-              if (!found_hot_pred) {
-                ret.flow_violation_direct_predecessors++;
-                seen_direct_pred_viol = true;
-              }
-
-              bool all_predecessors_cold = [&]() {
-                for (auto predecessor : block->preds()) {
-                  auto* first_sb_pred =
-                      source_blocks::get_first_source_block(predecessor->src());
-                  if (is_source_block_hot(first_sb_pred)) {
-                    return false;
-                  }
-                }
-                return true;
-              }();
-              if (all_predecessors_cold) {
-                ret.flow_violation_cold_direct_predecessors++;
-                seen_dir_cold_dir_pred = true;
-              }
+            for (size_t i = 0; i != gCountersNonEntry.size(); ++i) {
+              ret.non_entry[i] +=
+                  (*gCountersNonEntry[i].second)(block, dominators);
             }
           }
         }
-        if (seen_dir_cold_dir_pred) {
-          ret.methods_with_cold_direct_predecessor_violations++;
-        }
-        if (seen_idom_viol) {
-          ret.methods_with_idom_violations++;
-        }
-        if (seen_direct_pred_viol) {
-          ret.methods_with_direct_predecessor_violations++;
-        }
 
-        if (seen_sb) {
-          ret.methods_with_sbs++;
-        }
+        ret.fill_derived();
 
         code->clear_cfg();
         return ret;
       });
 
   sm.set_metric("~assessment~methods~with~code", stats.methods_with_code);
-  sm.set_metric("~blocks~count", stats.total_blocks);
-  sm.set_metric("~blocks~with~source~blocks", stats.source_blocks_present);
-  sm.set_metric("~assessment~source~blocks~total", stats.source_blocks_total);
   sm.set_metric("~assessment~methods~with~sbs", stats.methods_with_sbs);
-  sm.set_metric("~flow~violation~idom", stats.flow_violation_idom);
-  sm.set_metric("~flow~violation~methods~idom",
-                stats.methods_with_idom_violations);
-  sm.set_metric("~flow~violation~direct~predecessors",
-                stats.flow_violation_direct_predecessors);
-  sm.set_metric("~flow~violation~methods~direct~predecessors",
-                stats.methods_with_direct_predecessor_violations);
-  sm.set_metric("~flow~violation~cold~direct~predecessors",
-                stats.flow_violation_cold_direct_predecessors);
-  sm.set_metric("~flow~violation~methods~direct~cold~predecessors",
-                stats.methods_with_cold_direct_predecessor_violations);
+
+  for (size_t i = 0; i != gCounters.size(); ++i) {
+    sm.set_metric(gCounters[i].first, stats.global[i]);
+  }
+
+  for (size_t i = 0; i != gCountersNonEntry.size(); ++i) {
+    sm.set_metric(gCountersNonEntry[i].first, stats.non_entry[i]);
+
+    auto scope = sm.scope(std::string(gCountersNonEntry[i].first));
+    sm.set_metric("methods", stats.non_entry_methods[i]);
+    sm.set_metric("min", stats.non_entry_min_max[i].first);
+    sm.set_metric("max", stats.non_entry_min_max[i].second);
+  }
 }
 
 } // namespace source_blocks

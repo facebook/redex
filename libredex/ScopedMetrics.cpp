@@ -24,7 +24,7 @@ std::string cur_path(const std::vector<std::string>& segments) {
 
 } // namespace
 
-void ScopedMetrics::set_metric(const std::string& key, int64_t value) {
+void ScopedMetrics::set_metric(const std::string_view& key, int64_t value) {
   auto full_key = cur_path(m_segments);
   if (!full_key.empty()) {
     full_key.append(".");
