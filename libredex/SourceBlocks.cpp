@@ -15,10 +15,15 @@
 #include "ControlFlow.h"
 #include "Debug.h"
 #include "DexClass.h"
+#include "Dominators.h"
 #include "IROpcode.h"
+#include "Macros.h"
 #include "S_Expression.h"
+#include "ScopedMetrics.h"
 #include "Show.h"
+#include "Timer.h"
 #include "Trace.h"
+#include "Walkers.h"
 
 namespace source_blocks {
 
@@ -395,6 +400,174 @@ InsertResult insert_source_blocks(DexMethod* method,
   bool had_failures = helper.wipe_profile_failures(*cfg);
 
   return {helper.id, helper.oss.str(), !had_failures};
+}
+
+namespace {
+
+struct SourceBlocksStats {
+  size_t total_blocks{0};
+  size_t source_blocks_present{0};
+  size_t source_blocks_total{0};
+  size_t methods_with_sbs{0};
+  size_t flow_violation_idom{0};
+  size_t flow_violation_direct_predecessors{0};
+  size_t flow_violation_cold_direct_predecessors{0};
+  size_t methods_with_cold_direct_predecessor_violations{0};
+  size_t methods_with_idom_violations{0};
+  size_t methods_with_direct_predecessor_violations{0};
+  size_t methods_with_code{0};
+
+  SourceBlocksStats& operator+=(const SourceBlocksStats& that) {
+    total_blocks += that.total_blocks;
+    source_blocks_present += that.source_blocks_present;
+    source_blocks_total += that.source_blocks_total;
+    methods_with_sbs += that.methods_with_sbs;
+    flow_violation_idom += that.flow_violation_idom;
+    flow_violation_direct_predecessors +=
+        that.flow_violation_direct_predecessors;
+    flow_violation_cold_direct_predecessors +=
+        that.flow_violation_cold_direct_predecessors;
+    methods_with_cold_direct_predecessor_violations +=
+        that.methods_with_cold_direct_predecessor_violations;
+    methods_with_idom_violations += that.methods_with_idom_violations;
+    methods_with_direct_predecessor_violations +=
+        that.methods_with_direct_predecessor_violations;
+    methods_with_code += that.methods_with_code;
+    return *this;
+  }
+};
+
+bool is_source_block_hot(SourceBlock* sb) {
+  bool is_hot = false;
+  if (sb != nullptr) {
+    sb->foreach_val_early([&is_hot](const auto& val) {
+      is_hot = val && val->val > 0.0f;
+      return is_hot;
+    });
+  }
+  return is_hot;
+}
+
+} // namespace
+
+void track_source_block_coverage(ScopedMetrics& sm,
+                                 const DexStoresVector& stores) {
+  Timer opt_timer("Calculate SourceBlock Coverage");
+  auto stats = walk::parallel::methods<SourceBlocksStats>(
+      build_class_scope(stores), [](DexMethod* m) -> SourceBlocksStats {
+        SourceBlocksStats ret;
+        auto code = m->get_code();
+        if (!code) {
+          return ret;
+        }
+        ret.methods_with_code++;
+        code->build_cfg(/* editable */ true);
+        auto& cfg = code->cfg();
+        auto dominators =
+            dominators::SimpleFastDominators<cfg::GraphInterface>(cfg);
+
+        bool seen_dir_cold_dir_pred = false;
+        bool seen_idom_viol = false;
+        bool seen_direct_pred_viol = false;
+        bool seen_sb = false;
+        for (auto block : cfg.blocks()) {
+          ret.total_blocks++;
+          if (source_blocks::has_source_blocks(block)) {
+            ret.source_blocks_present++;
+            seen_sb = true;
+            source_blocks::foreach_source_block(
+                block,
+                [&](auto* sb ATTRIBUTE_UNUSED) { ret.source_blocks_total++; });
+          }
+          if (block != cfg.entry_block()) {
+            auto immediate_dominator = dominators.get_idom(block);
+            if (!immediate_dominator) {
+              continue;
+            }
+            auto* first_sb_immediate_dominator =
+                source_blocks::get_first_source_block(immediate_dominator);
+            auto* first_sb_current_b =
+                source_blocks::get_first_source_block(block);
+
+            bool is_idom_hot =
+                is_source_block_hot(first_sb_immediate_dominator);
+            bool is_curr_block_hot = is_source_block_hot(first_sb_current_b);
+
+            if (!is_idom_hot && is_curr_block_hot) {
+              ret.flow_violation_idom++;
+              seen_idom_viol = true;
+            }
+
+            // If current block is hot, one of its predecessors must also be
+            // hot. If all predecessors of a block are cold, the block must also
+            // be cold
+            if (is_curr_block_hot) {
+              auto found_hot_pred = [&]() {
+                for (auto predecessor : block->preds()) {
+                  auto* first_sb_pred =
+                      source_blocks::get_first_source_block(predecessor->src());
+                  if (is_source_block_hot(first_sb_pred)) {
+                    return true;
+                  }
+                }
+                return false;
+              }();
+              if (!found_hot_pred) {
+                ret.flow_violation_direct_predecessors++;
+                seen_direct_pred_viol = true;
+              }
+
+              bool all_predecessors_cold = [&]() {
+                for (auto predecessor : block->preds()) {
+                  auto* first_sb_pred =
+                      source_blocks::get_first_source_block(predecessor->src());
+                  if (is_source_block_hot(first_sb_pred)) {
+                    return false;
+                  }
+                }
+                return true;
+              }();
+              if (all_predecessors_cold) {
+                ret.flow_violation_cold_direct_predecessors++;
+                seen_dir_cold_dir_pred = true;
+              }
+            }
+          }
+        }
+        if (seen_dir_cold_dir_pred) {
+          ret.methods_with_cold_direct_predecessor_violations++;
+        }
+        if (seen_idom_viol) {
+          ret.methods_with_idom_violations++;
+        }
+        if (seen_direct_pred_viol) {
+          ret.methods_with_direct_predecessor_violations++;
+        }
+
+        if (seen_sb) {
+          ret.methods_with_sbs++;
+        }
+
+        code->clear_cfg();
+        return ret;
+      });
+
+  sm.set_metric("~assessment~methods~with~code", stats.methods_with_code);
+  sm.set_metric("~blocks~count", stats.total_blocks);
+  sm.set_metric("~blocks~with~source~blocks", stats.source_blocks_present);
+  sm.set_metric("~assessment~source~blocks~total", stats.source_blocks_total);
+  sm.set_metric("~assessment~methods~with~sbs", stats.methods_with_sbs);
+  sm.set_metric("~flow~violation~idom", stats.flow_violation_idom);
+  sm.set_metric("~flow~violation~methods~idom",
+                stats.methods_with_idom_violations);
+  sm.set_metric("~flow~violation~direct~predecessors",
+                stats.flow_violation_direct_predecessors);
+  sm.set_metric("~flow~violation~methods~direct~predecessors",
+                stats.methods_with_direct_predecessor_violations);
+  sm.set_metric("~flow~violation~cold~direct~predecessors",
+                stats.flow_violation_cold_direct_predecessors);
+  sm.set_metric("~flow~violation~methods~direct~cold~predecessors",
+                stats.methods_with_cold_direct_predecessor_violations);
 }
 
 } // namespace source_blocks

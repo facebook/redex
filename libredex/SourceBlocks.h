@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <memory>
 #include <unordered_set>
+#include <vector>
 
 #include "ControlFlow.h"
 #include "CppUtil.h"
@@ -17,6 +18,11 @@
 #include "IRList.h"
 
 class DexMethod;
+class DexStore;
+class ScopedMetrics;
+
+// Must match DexStore.
+using DexStoresVector = std::vector<DexStore>;
 
 namespace source_blocks {
 
@@ -234,5 +240,8 @@ inline const SourceBlock* get_first_source_block(const cfg::Block* b) {
   }
   return nullptr;
 }
+
+void track_source_block_coverage(ScopedMetrics& sm,
+                                 const DexStoresVector& stores);
 
 } // namespace source_blocks
