@@ -28,7 +28,8 @@ class ABExperimentContextImpl : public ABExperimentContext {
   ~ABExperimentContextImpl() override {}
 
   static void parse_experiments_states(
-      const std::unordered_map<std::string, std::string>& states);
+      const std::unordered_map<std::string, std::string>& states,
+      const boost::optional<std::string>& default_state);
 
  private:
   ABExperimentState m_state;

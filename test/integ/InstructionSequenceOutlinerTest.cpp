@@ -91,7 +91,8 @@ class InstructionSequenceOutlinerTest : public RedexIntegrationTest {
 
     std::unordered_map<std::string, std::string> states;
     states["outliner_v1"] = "test";
-    ab_test::ABExperimentContext::parse_experiments_states(states, false);
+    ab_test::ABExperimentContext::parse_experiments_states(
+        states, /*default_state=*/boost::none, false);
   }
 
  private:
