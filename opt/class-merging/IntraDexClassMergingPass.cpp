@@ -27,7 +27,7 @@ void IntraDexClassMergingPass::bind_config() {
        m_merging_spec.min_count,
        "Minimal number of mergeables to be merged together");
   bind("global_min_count",
-       200,
+       50,
        m_global_min_count,
        "Minimal number of subclasses or implementors for each filtered root");
 }

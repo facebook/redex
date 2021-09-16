@@ -25,6 +25,14 @@ std::unordered_map<DexType*, size_t> Model::s_cls_to_interdex_group;
 
 namespace {
 
+std::string show(const TypeSet& types) {
+  std::ostringstream ss;
+  for (auto type : types) {
+    ss << show(type);
+  }
+  return ss.str();
+}
+
 constexpr const char* CLASS_MARKER_DELIMITER = "DexEndMarker";
 
 std::string to_string(const ModelSpec& spec) {
@@ -310,9 +318,9 @@ MergerType& Model::create_merger_shape(
     const DexType* parent,
     const TypeSet& intfs,
     const std::vector<const DexType*>& classes) {
-  TRACE(CLMG, 7, "Create Shape %s - %s, parent %s, intfs %ld, classes %ld",
+  TRACE(CLMG, 7, "Create Shape %s - %s, parent %s, intfs %zu (%s), classes %zu",
         SHOW(shape_type), shape.to_string().c_str(), SHOW(parent), intfs.size(),
-        classes.size());
+        SHOW(intfs), classes.size());
   auto& merger = m_mergers[shape_type];
   merger.type = shape_type;
   merger.shape = shape;
