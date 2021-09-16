@@ -62,7 +62,33 @@ TEST_F(ABExperimentContextTest, testCFGConstructorBasicFunctionality) {
 
 TEST_F(ABExperimentContextTest, testTestingMode) {
   ab_test::ABExperimentContextImpl::parse_experiments_states(
-      {{"ab_experiment", "test"}});
+      {{"ab_experiment", "test"}}, /*default_state=*/boost::none);
+
+  ASSERT_TRUE(classes);
+  DexMethod* m =
+      (*classes)[0]->find_method_from_simple_deobfuscated_name("getNum");
+  ASSERT_TRUE(m != nullptr);
+
+  change_called_method("ab_experiment", m, "getSixPrivate",
+                       "amazingDirectMethod");
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v1)
+      (.dbg DBG_SET_PROLOGUE_END)
+      (.pos:dbg_0 "LABExperimentContextTest;.getNum:()I" ABExperimentContextTest.java 14)
+      (invoke-direct (v1) "LABExperimentContextTest;.amazingDirectMethod:()I")
+      (move-result v0)
+      (return v0)
+    )
+  )");
+
+  EXPECT_CODE_EQ(m->get_code(), expected_code.get());
+}
+
+TEST_F(ABExperimentContextTest, testTestingModeDefault) {
+  ab_test::ABExperimentContextImpl::parse_experiments_states(
+      {}, /*default_state=*/std::string("test"));
 
   ASSERT_TRUE(classes);
   DexMethod* m =
@@ -88,7 +114,32 @@ TEST_F(ABExperimentContextTest, testTestingMode) {
 
 TEST_F(ABExperimentContextTest, testControlMode) {
   ab_test::ABExperimentContextImpl::parse_experiments_states(
-      {{"ab_experiment", "control"}});
+      {{"ab_experiment", "control"}}, /*default_state=*/boost::none);
+  ASSERT_TRUE(classes);
+  DexMethod* m =
+      (*classes)[0]->find_method_from_simple_deobfuscated_name("getNum");
+  ASSERT_TRUE(m != nullptr);
+
+  change_called_method("ab_experiment", m, "getSixPrivate",
+                       "amazingDirectMethod");
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v1)
+      (.dbg DBG_SET_PROLOGUE_END)
+      (.pos:dbg_0 "LABExperimentContextTest;.getNum:()I" ABExperimentContextTest.java 14)
+      (invoke-direct (v1) "LABExperimentContextTest;.getSixPrivate:()I")
+      (move-result v0)
+      (return v0)
+    )
+  )");
+
+  EXPECT_CODE_EQ(m->get_code(), expected_code.get());
+}
+
+TEST_F(ABExperimentContextTest, testControlModeDefault) {
+  ab_test::ABExperimentContextImpl::parse_experiments_states(
+      {}, /*default_state=*/std::string("control"));
   ASSERT_TRUE(classes);
   DexMethod* m =
       (*classes)[0]->find_method_from_simple_deobfuscated_name("getNum");

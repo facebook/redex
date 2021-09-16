@@ -103,6 +103,7 @@ void GlobalConfig::bind_config() {
   bind("symbolicate_detached_methods", false, bool_param);
   bind("ab_experiments_states", {}, string_map_param);
   bind("ab_experiments_states_override", {}, string_map_param);
+  bind("ab_experiments_default", "", string_param);
   bind("force_single_dex", false, bool_param);
   bind("instruction_size_bitwidth_limit", 0u, uint32_param);
   bind("json_serde_supercls", {}, string_vector_param);

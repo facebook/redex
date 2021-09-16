@@ -1301,8 +1301,15 @@ int main(int argc, char* argv[]) {
         exp_states[p.first] = std::move(p.second);
       }
     }
+    auto exp_state_default = [&]() -> boost::optional<std::string> {
+      if (!conf.get_json_config().contains("ab_experiments_default")) {
+        return boost::none;
+      }
+      return conf.get_json_config().get("ab_experiments_default",
+                                        std::string(""));
+    }();
     ab_test::ABExperimentContext::parse_experiments_states(
-        exp_states, !manager.get_redex_options().redacted);
+        exp_states, exp_state_default, !manager.get_redex_options().redacted);
 
     {
       Timer t("Running optimization passes");

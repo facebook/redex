@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include <boost/optional.hpp>
+
 #include "ControlFlow.h"
 
 struct RedexTest;
@@ -40,7 +42,9 @@ class ABExperimentContext {
   virtual ~ABExperimentContext() {}
 
   static void parse_experiments_states(
-      const std::unordered_map<std::string, std::string>& states, bool);
+      const std::unordered_map<std::string, std::string>& states,
+      const boost::optional<std::string>& default_state,
+      bool);
 
  private:
   static void reset_global_state();

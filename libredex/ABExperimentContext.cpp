@@ -18,8 +18,9 @@ std::unique_ptr<ABExperimentContext> ABExperimentContext::create(
 
 void ABExperimentContext::parse_experiments_states(
     const std::unordered_map<std::string, std::string>& states,
+    const boost::optional<std::string>& default_state,
     bool /* unused */) {
-  ABExperimentContextImpl::parse_experiments_states(states);
+  ABExperimentContextImpl::parse_experiments_states(states, default_state);
 }
 
 void ABExperimentContext::reset_global_state() {

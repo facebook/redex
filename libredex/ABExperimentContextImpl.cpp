@@ -19,6 +19,7 @@ namespace {
 uint16_t INST_CNT{0};
 
 std::unordered_map<std::string, ABExperimentState> s_experiments_states;
+boost::optional<ABExperimentState> s_default_state;
 } // namespace
 
 void ABExperimentContextImpl::flush() {
@@ -30,15 +31,17 @@ void ABExperimentContextImpl::flush() {
 }
 
 ABExperimentContextImpl::ABExperimentContextImpl(const std::string& exp_name) {
-  m_state = s_experiments_states.count(exp_name) == 0
-                ? ABExperimentState::TEST
-                : s_experiments_states[exp_name];
+  m_state = s_experiments_states.count(exp_name) != 0
+                ? s_experiments_states[exp_name]
+            : s_default_state ? *s_default_state
+                              : ABExperimentState::TEST;
 
   ++INST_CNT;
 }
 
 void ABExperimentContextImpl::parse_experiments_states(
-    const std::unordered_map<std::string, std::string>& states) {
+    const std::unordered_map<std::string, std::string>& states,
+    const boost::optional<std::string>& default_state) {
   always_assert(INST_CNT == 0);
   always_assert_log(s_experiments_states.empty(),
                     "Cannot set the experiments states map more than once");
@@ -57,6 +60,11 @@ void ABExperimentContextImpl::parse_experiments_states(
   for (auto& it : states) {
     s_experiments_states[it.first] = transform_state(it.first, it.second);
   }
+
+  s_default_state = default_state
+                        ? boost::optional<ABExperimentState>(
+                              transform_state("default", *default_state))
+                        : boost::none;
 }
 
 bool ABExperimentContextImpl::use_test() {
