@@ -63,6 +63,12 @@ class DexStructure {
                            unsigned laclazz,
                            DexClass* clazz);
 
+  void add_refs_no_checks(const MethodRefs& clazz_mrefs,
+                          const FieldRefs& clazz_frefs,
+                          const TypeRefs& clazz_trefs);
+
+  bool has_tref(DexType* type) const { return m_trefs.count(type); }
+
   void check_refs_count();
 
   void squash_empty_last_class(DexClass* clazz);
@@ -84,6 +90,10 @@ class DexesStructure {
 
   const DexClasses& get_current_dex_squashed_classes() const {
     return m_current_dex.get_squashed_classes();
+  }
+
+  bool current_dex_has_tref(DexType* type) const {
+    return m_current_dex.has_tref(type);
   }
 
   size_t get_num_coldstart_dexes() const { return m_info.num_coldstart_dexes; }
@@ -148,6 +158,9 @@ class DexesStructure {
   void add_class_no_checks(DexClass* clazz) {
     add_class_no_checks(MethodRefs(), FieldRefs(), TypeRefs(), clazz);
   }
+  void add_refs_no_checks(const MethodRefs& clazz_mrefs,
+                          const FieldRefs& clazz_frefs,
+                          const TypeRefs& clazz_trefs);
 
   void squash_empty_last_class(DexClass* clazz) {
     m_current_dex.squash_empty_last_class(clazz);
