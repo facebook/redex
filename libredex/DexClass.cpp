@@ -734,12 +734,10 @@ void DexClass::set_deobfuscated_name(const std::string& name) {
   }
   auto existing_type = g_redex->get_type(new_name);
   if (existing_type != nullptr) {
-    fprintf(stderr,
-            "Unable to alias type '%s' to deobfuscated name '%s' because type "
-            "'%s' already exists.\n",
-            m_self->c_str(),
-            new_name->c_str(),
-            existing_type->c_str());
+    TRACE(DC, 0,
+          "Unable to alias type '%s' to deobfuscated name '%s' because type "
+          "'%s' already exists.\n",
+          m_self->c_str(), new_name->c_str(), existing_type->c_str());
     return;
   }
   g_redex->alias_type_name(m_self, new_name);
@@ -804,6 +802,33 @@ void DexMethod::make_non_concrete() {
   m_code.reset();
   m_virtual = false;
   m_param_anno.clear();
+}
+
+void DexMethod::set_deobfuscated_name(const std::string& name) {
+  // If the method has an old deobfuscated_name which is not equal to the name,
+  // erase the mapping using the old (and now invalid) deobfuscated_name from
+  // the global type map.
+  if (!m_deobfuscated_name.empty()) {
+    auto old_name = DexString::make_string(m_deobfuscated_name);
+    if (old_name != this->get_name()) {
+      g_redex->erase_method(this->get_class(), old_name, this->get_proto());
+    }
+  }
+  m_deobfuscated_name = name;
+  auto new_name = DexString::make_string(m_deobfuscated_name);
+  if (new_name == this->get_name()) {
+    return;
+  }
+  auto existing_method =
+      g_redex->get_method(this->get_class(), new_name, this->get_proto());
+  if (existing_method != nullptr) {
+    TRACE(DC, 0,
+          "Unable to alias method '%s' to deobfuscated name '%s' because "
+          "field '%s' already exists.\n ",
+          this->c_str(), new_name->c_str(), existing_method->c_str());
+    return;
+  }
+  g_redex->alias_method_name(this, new_name);
 }
 
 std::string DexMethod::get_simple_deobfuscated_name() const {
@@ -1512,6 +1537,33 @@ void DexField::gather_methods(C& lmethod) const {
   c_append_all(lmethod, method_vec.begin(), method_vec.end());
 }
 INSTANTIATE(DexField::gather_methods, DexMethodRef*)
+
+void DexField::set_deobfuscated_name(const std::string& name) {
+  // If the field has an old deobfuscated_name which is not equal to the name,
+  // erase the mapping using the old (and now invalid) deobfuscated_name from
+  // the global type map.
+  if (!m_deobfuscated_name.empty()) {
+    auto old_name = DexString::make_string(m_deobfuscated_name);
+    if (old_name != this->get_name()) {
+      g_redex->erase_field(this->get_class(), old_name, this->get_type());
+    }
+  }
+  m_deobfuscated_name = name;
+  auto new_name = DexString::make_string(m_deobfuscated_name);
+  if (new_name == this->get_name()) {
+    return;
+  }
+  auto existing_field =
+      g_redex->get_field(this->get_class(), new_name, this->get_type());
+  if (existing_field != nullptr) {
+    TRACE(DC, 0,
+          "Unable to alias field '%s' to deobfuscated name '%s' because "
+          "field '%s' already exists.\n ",
+          this->c_str(), new_name->c_str(), existing_field->c_str());
+    return;
+  }
+  g_redex->alias_field_name(this, new_name);
+}
 
 std::string DexField::get_simple_deobfuscated_name() const {
   return get_simple_deobf_name(this);

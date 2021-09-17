@@ -398,9 +398,7 @@ class DexField : public DexFieldRef {
     m_external = true;
   }
 
-  void set_deobfuscated_name(const std::string& name) {
-    m_deobfuscated_name = name;
-  }
+  void set_deobfuscated_name(const std::string& name);
 
   const std::string& get_deobfuscated_name() const {
     return m_deobfuscated_name;
@@ -994,9 +992,7 @@ class DexMethod : public DexMethodRef {
     return &m_param_anno;
   }
 
-  void set_deobfuscated_name(const std::string& name) {
-    m_deobfuscated_name = name;
-  }
+  void set_deobfuscated_name(const std::string& name);
 
   const std::string& get_deobfuscated_name() const {
     return m_deobfuscated_name;

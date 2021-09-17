@@ -82,7 +82,16 @@ struct RedexContext {
                          const DexString* name,
                          const DexType* type);
 
+  /**
+   * Add an additional name to refer to a field (a deobfuscated name for
+   * example)
+   */
+  void alias_field_name(DexFieldRef* field, DexString* new_name);
+
   void erase_field(DexFieldRef*);
+  void erase_field(const DexType* container,
+                   const DexString* name,
+                   const DexType* type);
   void mutate_field(DexFieldRef* field,
                     const DexFieldSpec& ref,
                     bool rename_on_collision);
@@ -102,10 +111,19 @@ struct RedexContext {
                            const DexString* name,
                            const DexProto* proto);
 
+  /**
+   * Add an additional name to refer to a method (a deobfuscated name for
+   * example)
+   */
+  void alias_method_name(DexMethodRef* method, DexString* new_name);
+
   DexMethodHandle* make_methodhandle();
   DexMethodHandle* get_methodhandle();
 
   void erase_method(DexMethodRef*);
+  void erase_method(const DexType* type,
+                    const DexString* name,
+                    const DexProto* proto);
   void mutate_method(DexMethodRef* method,
                      const DexMethodSpec& new_spec,
                      bool rename_on_collision);
