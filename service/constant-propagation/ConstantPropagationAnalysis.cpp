@@ -1339,7 +1339,7 @@ ConstantEnvironment FixpointIterator::analyze_edge(
       // is a non-fallthrough edge with a case-key that is equal to the actual
       // selector value.
       auto scd = selector_val.maybe_get<SignedConstantDomain>();
-      auto selector_const = scd->get_constant();
+      auto selector_const = scd ? scd->get_constant() : boost::none;
       if (!selector_const) {
         return env;
       }
