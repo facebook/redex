@@ -327,8 +327,6 @@ void change_visibility(IRCode* code,
           if (field != nullptr && field->is_concrete()) {
             set_public(field);
             set_public(type_class(field->get_class()));
-            // FIXME no point in rewriting opcodes in the method
-            insn->set_field(field);
           }
         } else if (insn->has_method()) {
           auto cls = type_class(insn->get_method()->get_class());
@@ -345,8 +343,6 @@ void change_visibility(IRCode* code,
             if (cls != nullptr && !cls->is_external()) {
               set_public(cls);
             }
-            // FIXME no point in rewriting opcodes in the method
-            insn->set_method(current_method);
           }
         } else if (insn->has_type()) {
           auto type = insn->get_type();
