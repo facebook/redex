@@ -745,7 +745,12 @@ void MultiMethodInliner::inline_inlinables(
           caller->cfg_built() ? SHOW(caller->cfg()) : SHOW(caller),
           SHOW(callee));
     estimated_caller_size += inlinable.insn_size;
-    visibility_changes_for.insert(callee_method);
+    if (inlinable.reduced_cfg) {
+      visibility_changes.insert(get_visibility_changes(
+          *inlinable.reduced_cfg, caller_method->get_class(), callee_method));
+    } else {
+      visibility_changes_for.insert(callee_method);
+    }
 
     inlined_callees.push_back(callee_method);
   }
