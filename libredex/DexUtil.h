@@ -29,7 +29,7 @@ struct VisibilityChanges {
   std::unordered_set<DexField*> fields;
   std::unordered_set<DexMethod*> methods;
   void insert(const VisibilityChanges& other);
-  void apply();
+  void apply() const;
   bool empty() const;
 };
 

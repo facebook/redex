@@ -224,7 +224,7 @@ void VisibilityChanges::insert(const VisibilityChanges& other) {
   methods.insert(other.methods.begin(), other.methods.end());
 }
 
-void VisibilityChanges::apply() {
+void VisibilityChanges::apply() const {
   for (auto cls : classes) {
     set_public(cls);
   }

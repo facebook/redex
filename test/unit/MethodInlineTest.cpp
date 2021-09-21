@@ -1094,16 +1094,16 @@ TEST_F(MethodInlineTest, visibility_change_static_invoke) {
   callee->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
   DexMethod* nested_callee = static_cast<DexMethod*>(
       DexMethod::make_method("LFoo;.nested_callee:()V"));
-  nested_callee->make_concrete(ACC_PRIVATE, /* is_virtual */ true);
+  nested_callee->make_concrete(ACC_PRIVATE, /* is_virtual */ false);
 
   DexMethod* caller_inside = static_cast<DexMethod*>(
       DexMethod::make_method("LFoo;.caller_inside:()V"));
   caller_inside->make_concrete(ACC_PRIVATE,
-                               /* is_virtual */ true);
+                               /* is_virtual */ false);
 
   DexMethod* nested_callee_2 = static_cast<DexMethod*>(
       DexMethod::make_method("LFoo;.nested_callee_2:()V"));
-  nested_callee_2->make_concrete(ACC_PRIVATE, /* is_virtual */ true);
+  nested_callee_2->make_concrete(ACC_PRIVATE, /* is_virtual */ false);
 
   DexMethod* init =
       static_cast<DexMethod*>(DexMethod::make_method("LFoo;.<init>:()V"));

@@ -23,5 +23,4 @@
 size_t delete_methods(
     std::vector<DexClass*>& scope,
     std::unordered_set<DexMethod*>& removable,
-    ConcurrentSet<DexMethod*>& delayed_make_static,
     std::function<DexMethod*(DexMethodRef*, MethodSearch)> concurrent_resolver);

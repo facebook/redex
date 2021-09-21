@@ -103,6 +103,15 @@ class ConcurrentContainer {
     return s;
   }
 
+  bool empty() const {
+    for (size_t slot = 0; slot < n_slots; ++slot) {
+      if (!m_slots[slot].empty()) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   void reserve(size_t capacity) {
     size_t slot_capacity = capacity / n_slots;
     if (slot_capacity > 0) {
