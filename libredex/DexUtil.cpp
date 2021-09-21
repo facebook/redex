@@ -213,159 +213,130 @@ void relocate_method(DexMethod* method, DexType* to_type) {
   to_cls->add_method(method);
 }
 
-bool can_change_visibility_for_relocation(const DexMethod* method) {
-  return can_change_visibility_for_relocation(method->get_code(), method);
+VisibilityChanges get_visibility_changes(const DexMethod* method,
+                                         DexType* scope) {
+  return get_visibility_changes(method->get_code(), scope, method);
 }
 
-bool can_change_visibility_for_relocation(
-    const IRCode* code, const DexMethod* effective_caller_resolved_from) {
-  // NODE: Keep in sync with change_visibility
-  always_assert(code != nullptr);
+void VisibilityChanges::insert(const VisibilityChanges& other) {
+  classes.insert(other.classes.begin(), other.classes.end());
+  fields.insert(other.fields.begin(), other.fields.end());
+  methods.insert(other.methods.begin(), other.methods.end());
+}
 
-  bool res{true};
-  editable_cfg_adapter::iterate(
-      const_cast<IRCode*>(code),
-      [&res, effective_caller_resolved_from](MethodItemEntry& mie) {
-        auto insn = mie.insn;
+void VisibilityChanges::apply() {
+  for (auto cls : classes) {
+    set_public(cls);
+  }
+  for (auto field : fields) {
+    set_public(field);
+  }
+  for (auto method : methods) {
+    set_public(method);
+  }
+}
 
-        if (insn->has_field()) {
-          auto cls = type_class(insn->get_field()->get_class());
-          if (cls == nullptr || (cls->is_external() && !is_public(cls))) {
-            res = false;
-            return editable_cfg_adapter::LOOP_BREAK;
-          }
-          auto field = resolve_field(insn->get_field(),
-                                     opcode::is_an_sfield_op(insn->opcode())
-                                         ? FieldSearch::Static
-                                         : FieldSearch::Instance);
-          if (field == nullptr || (field->is_external() && !is_public(field))) {
-            res = false;
-            return editable_cfg_adapter::LOOP_BREAK;
-          }
-          cls = type_class(field->get_class());
-          if (cls->is_external() && !is_public(cls)) {
-            res = false;
-            return editable_cfg_adapter::LOOP_BREAK;
-          }
-        } else if (insn->has_method()) {
-          auto cls = type_class(insn->get_method()->get_class());
-          if (cls == nullptr || (cls->is_external() && !is_public(cls))) {
-            res = false;
-            return editable_cfg_adapter::LOOP_BREAK;
-          }
-          auto current_method =
-              resolve_method(insn->get_method(), opcode_to_search(insn),
-                             effective_caller_resolved_from);
-          if (current_method == nullptr &&
-              insn->opcode() == OPCODE_INVOKE_VIRTUAL &&
-              unknown_virtuals::is_method_known_to_be_public(
-                  insn->get_method())) {
-            return editable_cfg_adapter::LOOP_CONTINUE;
-          }
-          if (current_method == nullptr ||
-              (current_method->is_external() && !is_public(current_method))) {
-            res = false;
-            return editable_cfg_adapter::LOOP_BREAK;
-          }
-          cls = type_class(current_method->get_class());
-          if (cls == nullptr || (cls->is_external() && !is_public(cls))) {
-            res = false;
-            return editable_cfg_adapter::LOOP_BREAK;
-          }
-        } else if (insn->has_type()) {
-          auto type = insn->get_type();
-          auto cls = type_class(type);
-          if (cls != nullptr && cls->is_external() && !is_public(cls)) {
-            res = false;
-            return editable_cfg_adapter::LOOP_BREAK;
-          }
+bool VisibilityChanges::empty() const {
+  return classes.empty() && fields.empty() && methods.empty();
+}
+
+namespace {
+
+struct VisibilityChangeGetter {
+  VisibilityChanges& changes;
+  DexType* scope;
+  const DexMethod* effective_caller_resolved_from;
+  void process_insn(IRInstruction* insn) {
+    if (insn->has_field()) {
+      auto cls = type_class(insn->get_field()->get_class());
+      if (cls != nullptr && !cls->is_external() && !is_public(cls)) {
+        changes.classes.insert(cls);
+      }
+      auto field = resolve_field(insn->get_field(),
+                                 opcode::is_an_sfield_op(insn->opcode())
+                                     ? FieldSearch::Static
+                                     : FieldSearch::Instance);
+      if (field != nullptr && field->is_concrete()) {
+        if (!is_public(field)) {
+          changes.fields.insert(field);
         }
-        return editable_cfg_adapter::LOOP_CONTINUE;
-      });
-  if (!res) {
-    return false;
-  }
-
-  std::vector<DexType*> types;
-  if (code->editable_cfg_built()) {
-    code->cfg().gather_catch_types(types);
-  } else {
-    code->gather_catch_types(types);
-  }
-  for (auto type : types) {
-    auto cls = type_class(type);
-    if (cls != nullptr && (cls->is_external() && !is_public(cls))) {
-      return false;
+        cls = type_class(field->get_class());
+        if (!is_public(cls)) {
+          changes.classes.insert(cls);
+        }
+      }
+    } else if (insn->has_method()) {
+      auto cls = type_class(insn->get_method()->get_class());
+      if (cls != nullptr && !cls->is_external() && !is_public(cls)) {
+        changes.classes.insert(cls);
+      }
+      auto current_method =
+          resolve_method(insn->get_method(), opcode_to_search(insn),
+                         effective_caller_resolved_from);
+      if (current_method != nullptr && current_method->is_concrete() &&
+          (scope == nullptr || current_method->get_class() != scope)) {
+        if (!is_public(current_method)) {
+          changes.methods.insert(current_method);
+        }
+        cls = type_class(current_method->get_class());
+        if (cls != nullptr && !cls->is_external() && !is_public(cls)) {
+          changes.classes.insert(cls);
+        }
+      }
+    } else if (insn->has_type()) {
+      auto type = insn->get_type();
+      auto cls = type_class(type);
+      if (cls != nullptr && !cls->is_external() && !is_public(cls)) {
+        changes.classes.insert(cls);
+      }
     }
   }
-  return true;
-}
 
-void change_visibility(DexMethod* method, DexType* scope) {
-  change_visibility(method->get_code(), scope, method);
-}
-
-void change_visibility(IRCode* code,
-                       DexType* scope,
-                       DexMethod* effective_caller_resolved_from) {
-  // NOTE: Keep in sync with can_change_visibility_for_relocation
-  always_assert(code != nullptr);
-
-  editable_cfg_adapter::iterate(
-      code, [scope, effective_caller_resolved_from](MethodItemEntry& mie) {
-        auto insn = mie.insn;
-
-        if (insn->has_field()) {
-          auto cls = type_class(insn->get_field()->get_class());
-          if (cls != nullptr && !cls->is_external()) {
-            set_public(cls);
-          }
-          auto field = resolve_field(insn->get_field(),
-                                     opcode::is_an_sfield_op(insn->opcode())
-                                         ? FieldSearch::Static
-                                         : FieldSearch::Instance);
-          if (field != nullptr && field->is_concrete()) {
-            set_public(field);
-            set_public(type_class(field->get_class()));
-          }
-        } else if (insn->has_method()) {
-          auto cls = type_class(insn->get_method()->get_class());
-          if (cls != nullptr && !cls->is_external()) {
-            set_public(cls);
-          }
-          auto current_method =
-              resolve_method(insn->get_method(), opcode_to_search(insn),
-                             effective_caller_resolved_from);
-          if (current_method != nullptr && current_method->is_concrete() &&
-              (scope == nullptr || current_method->get_class() != scope)) {
-            set_public(current_method);
-            cls = type_class(current_method->get_class());
-            if (cls != nullptr && !cls->is_external()) {
-              set_public(cls);
-            }
-          }
-        } else if (insn->has_type()) {
-          auto type = insn->get_type();
-          auto cls = type_class(type);
-          if (cls != nullptr && !cls->is_external()) {
-            set_public(cls);
-          }
-        }
-        return editable_cfg_adapter::LOOP_CONTINUE;
-      });
-
-  std::vector<DexType*> types;
-  if (code->editable_cfg_built()) {
-    code->cfg().gather_catch_types(types);
-  } else {
-    code->gather_catch_types(types);
-  }
-  for (auto type : types) {
-    auto cls = type_class(type);
-    if (cls != nullptr && !cls->is_external()) {
-      set_public(cls);
+  void process_catch_types(const std::vector<DexType*>& types) {
+    for (auto type : types) {
+      auto cls = type_class(type);
+      if (cls != nullptr && !cls->is_external() && !is_public(cls)) {
+        changes.classes.insert(cls);
+      }
     }
   }
+};
+
+} // namespace
+
+VisibilityChanges get_visibility_changes(
+    const IRCode* code,
+    DexType* scope,
+    const DexMethod* effective_caller_resolved_from) {
+  always_assert(code != nullptr);
+  VisibilityChanges changes;
+  VisibilityChangeGetter getter{changes, scope, effective_caller_resolved_from};
+  editable_cfg_adapter::iterate(const_cast<IRCode*>(code),
+                                [&getter](MethodItemEntry& mie) {
+                                  getter.process_insn(mie.insn);
+                                  return editable_cfg_adapter::LOOP_CONTINUE;
+                                });
+
+  std::vector<DexType*> types;
+  code->gather_catch_types(types);
+  getter.process_catch_types(types);
+  return changes;
+}
+
+VisibilityChanges get_visibility_changes(
+    const cfg::ControlFlowGraph& cfg,
+    DexType* scope,
+    const DexMethod* effective_caller_resolved_from) {
+  VisibilityChanges changes;
+  VisibilityChangeGetter getter{changes, scope, effective_caller_resolved_from};
+  for (auto& mie :
+       cfg::InstructionIterable(const_cast<cfg::ControlFlowGraph&>(cfg))) {
+    getter.process_insn(mie.insn);
+  }
+  std::vector<DexType*> types;
+  cfg.gather_catch_types(types);
+  getter.process_catch_types(types);
+  return changes;
 }
 
 // Check that visibility / accessibility changes to the current method
