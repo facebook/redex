@@ -98,6 +98,7 @@ void GlobalConfig::bind_config() {
   bind("emit_locator_strings", {}, bool_param);
   bind("iodi_disable_min_sdk_opt", false, bool_param);
   bind("symbolicate_detached_methods", false, bool_param);
+  bind("enable_quickening", false, bool_param);
   bind("ab_experiments_states", {}, string_map_param);
   bind("ab_experiments_states_override", {}, string_map_param);
   bind("ab_experiments_default", "", string_param);
