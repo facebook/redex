@@ -290,7 +290,19 @@ class CodeVisualizer : public TaggedBase {
   }
 
   void source_block(const SourceBlock& sb) {
-    m_output << MFLOW_SOURCE_BLOCK << " \"" << show(sb.src) << "\"@" << sb.id;
+    m_output << MFLOW_SOURCE_BLOCK;
+
+    for (auto cur = &sb; cur != nullptr; cur = cur->next.get()) {
+      m_output << " \"" << show(cur->src) << "\"@" << cur->id;
+      for (const auto& val : cur->vals) {
+        m_output << " ";
+        if (val) {
+          m_output << val->val << "/" << val->appear100;
+        } else {
+          m_output << "N/A";
+        }
+      }
+    }
   }
 
   template <typename... Args>
