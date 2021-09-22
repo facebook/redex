@@ -101,6 +101,7 @@ void GlobalConfig::bind_config() {
        "IODI layer mode. One of \"full\", \"skip-layer-0-at-api-26\" or "
        "\"always-skip-layer-0\"");
   bind("symbolicate_detached_methods", false, bool_param);
+  bind("enable_quickening", false, bool_param);
   bind("ab_experiments_states", {}, string_map_param);
   bind("ab_experiments_states_override", {}, string_map_param);
   bind("ab_experiments_default", "", string_param);

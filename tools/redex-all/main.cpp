@@ -1080,6 +1080,13 @@ void redex_backend(ConfigFiles& conf,
     Timer t("Writing optimized dexes");
     for (size_t i = 0; i < store.get_dexen().size(); i++) {
       auto gtypes = std::make_shared<GatheredTypes>(&store.get_dexen()[i]);
+
+      if (post_lowering) {
+        post_lowering->load_dex_indexes(
+            conf, manager.get_redex_options().min_sdk, &store.get_dexen()[i],
+            *gtypes, store.get_name(), i);
+      }
+
       auto this_dex_stats = write_classes_to_dex(
           redex_options,
           redex::get_dex_output_name(output_dir, store, i),

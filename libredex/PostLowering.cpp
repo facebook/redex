@@ -6,6 +6,7 @@
  */
 
 #include "PostLowering.h"
+#include "DexOutput.h"
 
 class NoopPostLowering : public PostLowering {
  public:
@@ -24,7 +25,14 @@ class NoopPostLowering : public PostLowering {
           code_debug_lines,
       IODIMetadata* iodi_metadata,
       std::vector<DexMethod*>& needs_debug_line_mapping,
-      std::set<uint32_t>& signatures) override{};
+      std::set<uint32_t>& signatures) override {}
+
+  void load_dex_indexes(ConfigFiles&,
+                        int32_t,
+                        DexClasses*,
+                        GatheredTypes&,
+                        const std::string&,
+                        size_t) override {}
 };
 
 std::unique_ptr<PostLowering> PostLowering::create() {
