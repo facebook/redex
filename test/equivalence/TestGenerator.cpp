@@ -98,9 +98,12 @@ int main(int argc, char* argv[]) {
   instruction_lowering::run(stores);
 
   RedexOptions redex_options;
+  auto gtypes = std::make_shared<GatheredTypes>(&classes);
+
   write_classes_to_dex(redex_options,
                        dex,
                        &classes,
+                       std::move(gtypes),
                        nullptr /* LocatorIndex* */,
                        0,
                        0,

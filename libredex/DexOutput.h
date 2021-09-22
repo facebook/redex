@@ -127,11 +127,13 @@ class DexOutputIdx {
 };
 
 class IODIMetadata;
+class GatheredTypes;
 
 dex_stats_t write_classes_to_dex(
     const RedexOptions&,
     const std::string& filename,
     DexClasses* classes,
+    std::shared_ptr<GatheredTypes> gtypes,
     LocatorIndex* locator_index /* nullable */,
     size_t store_number,
     size_t dex_number,
@@ -311,8 +313,8 @@ class DexOutput {
 
  private:
   DexClasses* m_classes;
-  DexOutputIdx* dodx;
-  GatheredTypes* m_gtypes;
+  std::unique_ptr<DexOutputIdx> m_dodx;
+  std::shared_ptr<GatheredTypes> m_gtypes;
   const size_t m_output_size;
   std::unique_ptr<uint8_t[]> m_output;
   uint32_t m_offset;
@@ -395,6 +397,7 @@ class DexOutput {
  public:
   DexOutput(const char* path,
             DexClasses* classes,
+            std::shared_ptr<GatheredTypes> gtypes,
             LocatorIndex* locator_index,
             bool normal_primary_dex,
             size_t store_number,
@@ -408,7 +411,6 @@ class DexOutput {
                 code_debug_lines,
             PostLowering* post_lowering = nullptr,
             int min_sdk = 0);
-  ~DexOutput();
   void prepare(SortMode string_mode,
                const std::vector<SortMode>& code_mode,
                ConfigFiles& conf,

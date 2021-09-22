@@ -168,9 +168,11 @@ void InjectDebug::write_dex() {
     for (size_t i = 0; i < store.get_dexen().size(); ++i) {
       std::string filename =
           redex::get_dex_output_name(m_conf.get_outdir(), store, i);
+      auto gtypes = std::make_shared<GatheredTypes>(&store.get_dexen()[i]);
       DexOutput dout{
           filename.c_str(), // filename
           &store.get_dexen()[i], // classes
+          std::move(gtypes),
           nullptr, // locator_index
           false, // normal_primary_dex
           store_num,
