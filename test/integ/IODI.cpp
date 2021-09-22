@@ -74,8 +74,11 @@ class IODITest : public ::testing::Test {
     auto& dexen = store.get_dexen();
     auto store_name = store.get_name();
     always_assert(dexen.size() == 1);
+
+    auto gtypes = std::make_shared<GatheredTypes>(dexen.data());
     DexOutput output("tmp.dex", /* filename */
                      dexen.data(),
+                     std::move(gtypes),
                      nullptr, /* locator_index */
                      false, /* normal_primary_dex */
                      0,

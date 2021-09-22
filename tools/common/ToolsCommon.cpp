@@ -116,9 +116,11 @@ void write_intermediate_dex(const RedexOptions& redex_options,
       }
       std::string filename =
           redex::get_dex_output_name(output_ir_dir, store, i);
+      auto gtypes = std::make_shared<GatheredTypes>(&store.get_dexen()[i]);
       write_classes_to_dex(redex_options,
                            filename,
                            &store.get_dexen()[i],
+                           std::move(gtypes),
                            /* locator_index= */ nullptr,
                            store_number,
                            i,

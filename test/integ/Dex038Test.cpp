@@ -350,9 +350,12 @@ TEST(Dex038Test, ReadWriteDex038) {
   instruction_lowering::run(stores, true);
 
   std::string output_dex = tmpdir.path + "/output.dex";
+  auto gtypes = std::make_shared<GatheredTypes>(&classes);
+
   write_classes_to_dex(dummy_options,
                        output_dex,
                        &classes,
+                       std::move(gtypes),
                        nullptr,
                        0,
                        0,
