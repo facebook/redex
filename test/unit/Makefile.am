@@ -34,6 +34,7 @@ check_PROGRAMS = \
     debug_info_test \
     debug_test \
     dedup_blocks_test \
+    deobfuscated_alias_test \
     dex_class_test \
     dex_instruction_test \
     dex_loader_test \
@@ -54,7 +55,6 @@ check_PROGRAMS = \
     final_inline_v2_test \
     fp_ev_test \
     global_type_analysis_test \
-    get_deobfuscated_test \
     graph_util_test \
     hierarchy_util_test \
     instruction_sequence_outliner_test \
@@ -188,6 +188,8 @@ debug_test_SOURCES = DebugTest.cpp
 
 dedup_blocks_test_SOURCES = DedupBlocksTest.cpp VirtScopeHelper.cpp ScopeHelper.cpp
 
+deobfuscated_alias_test_SOURCES = DeobfuscatedAliasTest.cpp
+
 dex_class_test_SOURCES = DexClassTest.cpp
 
 dex_instruction_test_SOURCES = DexInstructionTest.cpp
@@ -227,8 +229,6 @@ final_inline_v2_test_SOURCES = FinalInlineV2Test.cpp
 fp_ev_test_SOURCES = FpEvTest.cpp
 
 global_type_analysis_test_SOURCES = type-analysis/GlobalTypeAnalysisTest.cpp
-
-get_deobfuscated_test_SOURCES = GetDeobfuscatedTest.cpp
 
 graph_util_test_SOURCES = GraphUtilTest.cpp
 
@@ -453,6 +453,7 @@ TESTS = \
     debug_info_test \
     debug_test \
     dedup_blocks_test \
+    deobfuscated_alias_test \
     dex_class_test \
     dex_instruction_test \
     dex_loader_test \
@@ -472,7 +473,6 @@ TESTS = \
     final_inline_v2_test \
     fp_ev_test \
     global_type_analysis_test \
-    get_deobfuscated_test \
     graph_util_test \
     hierarchy_util_test \
     instruction_sequence_outliner_test \

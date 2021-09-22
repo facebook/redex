@@ -734,7 +734,7 @@ void DexClass::set_deobfuscated_name(const std::string& name) {
   }
   auto existing_type = g_redex->get_type(new_name);
   if (existing_type != nullptr) {
-    TRACE(DC, 0,
+    TRACE(DC, 5,
           "Unable to alias type '%s' to deobfuscated name '%s' because type "
           "'%s' already exists.\n",
           m_self->c_str(), new_name->c_str(), existing_type->c_str());
@@ -822,7 +822,7 @@ void DexMethod::set_deobfuscated_name(const std::string& name) {
   auto existing_method =
       g_redex->get_method(this->get_class(), new_name, this->get_proto());
   if (existing_method != nullptr) {
-    TRACE(DC, 0,
+    TRACE(DC, 5,
           "Unable to alias method '%s' to deobfuscated name '%s' because "
           "field '%s' already exists.\n ",
           this->c_str(), new_name->c_str(), existing_method->c_str());
@@ -1556,7 +1556,7 @@ void DexField::set_deobfuscated_name(const std::string& name) {
   auto existing_field =
       g_redex->get_field(this->get_class(), new_name, this->get_type());
   if (existing_field != nullptr) {
-    TRACE(DC, 0,
+    TRACE(DC, 5,
           "Unable to alias field '%s' to deobfuscated name '%s' because "
           "field '%s' already exists.\n ",
           this->c_str(), new_name->c_str(), existing_field->c_str());
