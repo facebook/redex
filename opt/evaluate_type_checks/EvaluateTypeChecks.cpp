@@ -542,7 +542,7 @@ void EvaluateTypeChecksPass::run_pass(DexStoresVector& stores,
   mgr.set_metric("num_class_always_fail", stats.class_always_fail);
   mgr.set_metric("num_def_use_loop", stats.def_use_loop);
   mgr.set_metric("num_multi_use", stats.multi_use);
-  mgr.set_metric("num_multi_use", stats.multi_def);
+  mgr.set_metric("num_multi_def", stats.multi_def);
   mgr.set_metric("num_non_branch", stats.non_branch);
   mgr.set_metric("num_not_supported_branch", stats.non_supported_branch);
 }
