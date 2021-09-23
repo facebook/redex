@@ -1,0 +1,217 @@
+/*
+ * Copyright (c) Facebook, Inc. and its affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+syntax = "proto3";
+
+package android.bundle;
+
+option java_package = "com.android.bundle";
+
+message BundleConfig {
+  Bundletool bundletool = 1;
+  Optimizations optimizations = 2;
+  Compression compression = 3;
+  // Resources to be always kept in the master split.
+  MasterResources master_resources = 4;
+  ApexConfig apex_config = 5;
+  // APKs to be signed with the same key as generated APKs.
+  repeated UnsignedEmbeddedApkConfig unsigned_embedded_apk_config = 6;
+  AssetModulesConfig asset_modules_config = 7;
+
+  enum BundleType {
+    REGULAR = 0;
+    APEX = 1;
+    ASSET_ONLY = 2;
+  }
+  BundleType type = 8;
+}
+
+message Bundletool {
+  reserved 1;
+  // Version of BundleTool used to build the Bundle.
+  string version = 2;
+}
+
+message Compression {
+  // Glob matching the list of files to leave uncompressed in the APKs.
+  // The matching is done against the path of files in the APK, thus excluding
+  // the name of the modules, and using forward slash ("/") as a name separator.
+  // Examples: "res/raw/**", "assets/**/*.uncompressed", etc.
+  repeated string uncompressed_glob = 1;
+
+  enum AssetModuleCompression {
+    UNSPECIFIED = 0;
+    // Assets are left uncompressed in the generated asset module.
+    UNCOMPRESSED = 1;
+    // Assets are compressed in the generated asset module.
+    // This option can be overridden at a finer granularity by specifying
+    // files or folders to keep uncompressed in `uncompressed_glob`.
+    // This option should only be used if the app is able to handle compressed
+    // asset module content at runtime (some runtime APIs may misbehave).
+    COMPRESSED = 2;
+  }
+
+  // Default compression strategy for install-time asset modules.
+  // If the compression strategy indicates to compress a file and the same file
+  // matches one of the `uncompressed_glob` values, the `uncompressed_glob`
+  // takes precedence (the file is left uncompressed in the generated APK).
+  //
+  // If unspecified, asset module content is left uncompressed in the
+  // generated asset modules.
+  //
+  // Note: this flag only configures the compression strategy for install-time
+  // asset modules; the content of on-demand and fast-follow asset modules is
+  // always kept uncompressed.
+  AssetModuleCompression install_time_asset_module_default_compression = 2;
+}
+
+// Resources to keep in the master split.
+message MasterResources {
+  // Resource IDs to be kept in master split.
+  repeated int32 resource_ids = 1;
+  // Resource names to be kept in master split.
+  repeated string resource_names = 2;
+}
+
+message Optimizations {
+  SplitsConfig splits_config = 1;
+  // This is for uncompressing native libraries on M+ devices (L+ devices on
+  // instant apps).
+  UncompressNativeLibraries uncompress_native_libraries = 2;
+  // This is for uncompressing dex files on P+ devices.
+  UncompressDexFiles uncompress_dex_files = 3;
+  // Configuration for the generation of standalone APKs.
+  // If no StandaloneConfig is set, the configuration is inherited from
+  // splits_config.
+  StandaloneConfig standalone_config = 4;
+
+  // Optimizations that are applied to resources.
+  ResourceOptimizations resource_optimizations = 5;
+}
+
+message ResourceOptimizations {
+  // Whether to use sparse encoding for resource tables.
+  // Resources in sparse resource table are accessed using a binary search tree.
+  // This decreases APK size at the cost of resource retrieval performance.
+  SparseEncoding sparse_encoding = 1;
+
+  enum SparseEncoding {
+    // Disables sparse encoding.
+    UNSPECIFIED = 0;
+    // Forces sparse resourse tables in all produced variants. This mode is
+    // available only for applications with minSdk >= 26 because sparse
+    // resource table support was added in Android O.
+    ENFORCED = 1;
+  }
+}
+
+message UncompressNativeLibraries { bool enabled = 1; }
+
+message UncompressDexFiles { bool enabled = 1; }
+
+// Optimization configuration used to generate Split APKs.
+message SplitsConfig { repeated SplitDimension split_dimension = 1; }
+
+// Optimization configuration used to generate Standalone APKs.
+message StandaloneConfig {
+  // Device targeting dimensions to shard.
+  repeated SplitDimension split_dimension = 1;
+  // Whether 64 bit libraries should be stripped from Standalone APKs.
+  bool strip_64_bit_libraries = 2;
+  // Dex merging strategy that should be applied to produce Standalone APKs.
+  DexMergingStrategy dex_merging_strategy = 3;
+
+  enum DexMergingStrategy {
+    // Strategy that does dex merging for applications that have minimum SDK
+    // below 21 to ensure dex files from all modules are merged into one or
+    // mainDexList is applied when merging into one dex is not possible. For
+    // applications with minSdk >= 21 dex files from all modules are copied into
+    // standalone APK as is because Android supports multiple dex files natively
+    // starting from Android 5.0.
+    MERGE_IF_NEEDED = 0;
+    // Requires to copy dex files from all modules into standalone APK as is.
+    // If an application supports SDKs below 21 this strategy puts
+    // responsibility of providing dex files compatible with legacy multidex on
+    // application developers.
+    NEVER_MERGE = 1;
+  }
+}
+
+message SplitDimension {
+  enum Value {
+    UNSPECIFIED_VALUE = 0;
+    ABI = 1;
+    SCREEN_DENSITY = 2;
+    LANGUAGE = 3;
+    TEXTURE_COMPRESSION_FORMAT = 4;
+    DEVICE_TIER = 6;
+  }
+  Value value = 1;
+
+  // If set to 'true', indicates that APKs should *not* be split by this
+  // dimension.
+  bool negate = 2;
+
+  // Optional transformation to be applied to asset directories where
+  // the targeting is encoded in the directory name (e.g: assets/foo#tcf_etc1)
+  SuffixStripping suffix_stripping = 3;
+}
+
+message SuffixStripping {
+  // If set to 'true', indicates that the targeting suffix should be removed
+  // from assets paths for this dimension when splits (e.g: "asset packs") or
+  // standalone/universal APKs are generated.
+  // This only applies to assets.
+  // For example a folder with path "assets/level1_textures#tcf_etc1"
+  // would be outputted to "assets/level1_textures". File contents are
+  // unchanged.
+  bool enabled = 1;
+
+  // The default suffix to be used for the cases where separate slices can't
+  // be generated for this dimension - typically for standalone or universal
+  // APKs.
+  // This default suffix defines the directories to retain. The others are
+  // discarded: standalone/universal APKs will contain only directories
+  // targeted at this value for the dimension.
+  //
+  // If not set or empty, the fallback directory in each directory group will be
+  // used (for example, if both "assets/level1_textures#tcf_etc1" and
+  // "assets/level1_textures" are present and the default suffix is empty,
+  // then only "assets/level1_textures" will be used).
+  string default_suffix = 2;
+}
+
+// Configuration for processing APEX bundles.
+// https://source.android.com/devices/tech/ota/apex
+message ApexConfig {
+  // Configuration for processing of APKs embedded in an APEX image.
+  repeated ApexEmbeddedApkConfig apex_embedded_apk_config = 1;
+}
+
+message ApexEmbeddedApkConfig {
+  // Android package name of the APK.
+  string package_name = 1;
+
+  // Path to the APK within the APEX system image.
+  string path = 2;
+}
+
+message UnsignedEmbeddedApkConfig {
+  // Path to the APK inside the module (e.g. if the path inside the bundle
+  // is split/assets/example.apk, this will be assets/example.apk).
+  string path = 1;
+}
+
+message AssetModulesConfig {
+  // App versionCodes that will be updated with these asset modules.
+  // Only relevant for asset-only bundles.
+  repeated int64 app_version = 1;
+
+  // Version tag for the asset upload.
+  // Only relevant for asset-only bundles.
+  string asset_version_tag = 2;
+}
