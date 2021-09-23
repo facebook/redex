@@ -65,6 +65,95 @@ inline BlockType operator&(BlockType a, BlockType b) {
   return static_cast<BlockType>(static_cast<int>(a) & static_cast<int>(b));
 }
 
+inline BlockType operator^(BlockType a, BlockType b) {
+  return static_cast<BlockType>(static_cast<int>(a) ^ static_cast<int>(b));
+}
+
+std::ostream& operator<<(std::ostream& os, const BlockType& bt) {
+  if (bt == BlockType::Unspecified) {
+    os << "Unspecified";
+    return os;
+  }
+
+  bool written{false};
+  auto type = bt;
+
+  if ((type & BlockType::Instrumentable) == BlockType::Instrumentable) {
+    os << "Instrumentable";
+    written = true;
+    type = type ^ BlockType::Instrumentable;
+  }
+
+  if ((type & BlockType::Empty) == BlockType::Empty) {
+    if (written) {
+      os << ",";
+    }
+    os << "Empty";
+    written = true;
+    type = type ^ BlockType::Empty;
+  }
+
+  if ((type & BlockType::Useless) == BlockType::Useless) {
+    if (written) {
+      os << ",";
+    }
+    os << "Useless";
+    written = true;
+    type = type ^ BlockType::Useless;
+  }
+
+  if ((type & BlockType::Normal) == BlockType::Normal) {
+    if (written) {
+      os << ",";
+    }
+    os << "Normal";
+    written = true;
+    type = type ^ BlockType::Normal;
+  }
+
+  if ((type & BlockType::Catch) == BlockType::Catch) {
+    if (written) {
+      os << ",";
+    }
+    os << "Catch";
+    written = true;
+    type = type ^ BlockType::Catch;
+  }
+
+  if ((type & BlockType::MoveException) == BlockType::MoveException) {
+    if (written) {
+      os << ",";
+    }
+    os << "MoveException";
+    written = true;
+    type = type ^ BlockType::MoveException;
+  }
+
+  if ((type & BlockType::NoSourceBlock) == BlockType::NoSourceBlock) {
+    if (written) {
+      os << ",";
+    }
+    os << "NoSourceBlock";
+    written = true;
+    type = type ^ BlockType::NoSourceBlock;
+  }
+
+  if (type != BlockType::Unspecified) {
+    if (written) {
+      os << ",";
+    }
+    os << "Unknown";
+  }
+
+  return os;
+}
+
+std::string block_type_str(const BlockType& type) {
+  std::ostringstream oss;
+  oss << type;
+  return oss.str();
+}
+
 using BitId = size_t;
 
 struct BlockInfo {
@@ -468,49 +557,87 @@ size_t insert_onMethodExit_calls(
   return exit_blocks.size();
 }
 
-BlockInfo create_block_info(cfg::Block* block,
+BlockInfo create_block_info(const DexMethod* method,
+                            cfg::Block* block,
                             const InstrumentPass::Options& options) {
-  if (block->num_opcodes() == 0) {
-    return {block, BlockType::Empty, {}};
-  }
+  // TODO(agampe): Implement optimizations for empty/useless blocks. Probably
+  //               by having a list of `Block`s in `BlockInfo` for source blocks
+  //               to virtually merge.
+  //               For now, we will emit instrumentation into more blocks.
 
-  // TODO: There is a potential register allocation issue when we instrument
-  // extremely large number of basic blocks. We've found a case. So, for now,
-  // we don't instrument catch blocks with the hope these blocks are cold.
-  if (block->is_catch() && !options.instrument_catches) {
-    return {block, BlockType::Catch, {}};
-  }
+  auto ret = [&]() -> BlockInfo {
+    // `Block.num_opcodes` skips internal opcodes, but we need the source
+    // blocks.
+    auto has_opcodes = [&]() {
+      for (auto& mie : *block) {
+        if (mie.type == MFLOW_OPCODE) {
+          return true;
+        }
+      }
+      return false;
+    }();
+    if (!has_opcodes) {
+      if (!source_blocks::has_source_blocks(block)) {
+        return {block, BlockType::Empty, {}};
+      }
+      TRACE(INSTRUMENT, 9,
+            "%s Block B%zu has no opcodes but source blocks!\n%s", SHOW(method),
+            block->id(), SHOW(block->cfg()));
+    }
 
-  IRList::iterator insert_pos;
-  BlockType type = block->is_catch() ? BlockType::Catch : BlockType::Normal;
-  if (block->starts_with_move_result()) {
-    insert_pos = get_first_non_move_result_insn(block);
-  } else if (block->starts_with_move_exception()) {
-    // move-exception must only ever occur as the first instruction of an
-    // exception handler; anywhere else is invalid. So, take the next
-    // instruction of the move-exception.
-    insert_pos = get_first_next_of_move_except(block);
-    type = type | BlockType::MoveException;
-  } else {
-    insert_pos = block->get_first_non_param_loading_insn();
-  }
+    // TODO: There is a potential register allocation issue when we instrument
+    // extremely large number of basic blocks. We've found a case. So, for now,
+    // we don't instrument catch blocks with the hope these blocks are cold.
+    if (block->is_catch() && !options.instrument_catches) {
+      return {block, BlockType::Catch, {}};
+    }
 
-  if (insert_pos == block->end()) {
-    return {block, BlockType::Useless | type, {}};
-  }
+    IRList::iterator insert_pos;
+    BlockType type = block->is_catch() ? BlockType::Catch : BlockType::Normal;
+    bool useless = true;
+    if (block->starts_with_move_result()) {
+      insert_pos = get_first_non_move_result_insn(block);
+      useless = false;
+    } else if (block->starts_with_move_exception()) {
+      // move-exception must only ever occur as the first instruction of an
+      // exception handler; anywhere else is invalid. So, take the next
+      // instruction of the move-exception.
+      insert_pos = get_first_next_of_move_except(block);
+      type = type | BlockType::MoveException;
+      useless = false;
+    } else {
+      insert_pos = block->get_first_non_param_loading_insn();
+      useless = useless && !source_blocks::has_source_blocks(block);
+    }
 
-  // No source block? Then we can't map back block coverage data to source
-  // block. No need to instrument unless this block is exit block (no succs).
-  // Exit blocks will have onMethodEnd. We still need to instrument anyhow.
-  if (!options.instrument_blocks_without_source_block &&
-      !source_blocks::has_source_blocks(block) && !block->succs().empty()) {
-    return {block, BlockType::NoSourceBlock | type, {}};
-  }
+    // This remains here to eventually skip blocks again, see to-do at top of
+    // method.
+    if (insert_pos == block->end() && useless) {
+      TRACE(INSTRUMENT, 9, "Not instrumenting useless block B%zu\n%s",
+            block->id(), SHOW(block));
+      return {block, BlockType::Useless | type, {}};
+    }
 
-  return {block, BlockType::Instrumentable | type, insert_pos};
+    // No source block? Then we can't map back block coverage data to source
+    // block. No need to instrument unless this block is exit block (no succs).
+    // Exit blocks will have onMethodEnd. We still need to instrument anyhow.
+    if (!options.instrument_blocks_without_source_block &&
+        !source_blocks::has_source_blocks(block) && !block->succs().empty()) {
+      return {block, BlockType::NoSourceBlock | type, {}};
+    }
+
+    return {block, BlockType::Instrumentable | type, insert_pos};
+  }();
+
+  TRACE(INSTRUMENT, 9, "Checking block B%zu for %s: %x=%s\n%s", block->id(),
+        SHOW(method), (uint32_t)ret.type, block_type_str(ret.type).c_str(),
+        SHOW(block));
+
+  return ret;
 }
 
-auto get_blocks_to_instrument(const cfg::ControlFlowGraph& cfg,
+auto get_blocks_to_instrument(const DexMethod* m,
+                              const cfg::ControlFlowGraph& cfg,
                               const size_t max_num_blocks,
                               const InstrumentPass::Options& options) {
   // Collect basic blocks in the order of the source blocks (DFS).
@@ -541,7 +668,7 @@ auto get_blocks_to_instrument(const cfg::ControlFlowGraph& cfg,
   block_info_list.reserve(blocks.size());
   BitId id = 0;
   for (cfg::Block* b : blocks) {
-    block_info_list.emplace_back(create_block_info(b, options));
+    block_info_list.emplace_back(create_block_info(m, b, options));
     auto& info = block_info_list.back();
     if ((info.type & BlockType::Instrumentable) == BlockType::Instrumentable) {
       if (id >= max_num_blocks) {
@@ -599,13 +726,10 @@ MethodInfo instrument_basic_blocks(IRCode& code,
   size_t num_to_instrument;
   bool too_many_blocks;
   std::tie(blocks, num_to_instrument, too_many_blocks) =
-      get_blocks_to_instrument(cfg, max_num_blocks, options);
+      get_blocks_to_instrument(method, cfg, max_num_blocks, options);
 
-  if (DEBUG_CFG) {
-    TRACE(INSTRUMENT, 9, "BEFORE: %s, %s", show_deobfuscated(method).c_str(),
-          SHOW(method));
-    TRACE(INSTRUMENT, 9, "%s", SHOW(cfg));
-  }
+  TRACE(INSTRUMENT, DEBUG_CFG ? 0 : 10, "BEFORE: %s, %s\n%s",
+        show_deobfuscated(method).c_str(), SHOW(method), SHOW(cfg));
 
   // Step 2: Insert onMethodBegin to track method execution, and bit-vector
   //         allocation code in its method entry point.
@@ -677,11 +801,8 @@ MethodInfo instrument_basic_blocks(IRCode& code,
   always_assert(too_many_blocks ||
                 info.rejected_blocks.size() == num_rejected_blocks);
 
-  if (DEBUG_CFG) {
-    TRACE(INSTRUMENT, 9, "AFTER: %s, %s", show_deobfuscated(method).c_str(),
-          SHOW(method));
-    TRACE(INSTRUMENT, 9, "%s", SHOW(cfg));
-  }
+  TRACE(INSTRUMENT, DEBUG_CFG ? 0 : 10, "AFTER: %s, %s\n%s",
+        show_deobfuscated(method).c_str(), SHOW(method), SHOW(cfg));
 
   // Check the post condition:
   //   num_instrumented_blocks == num_non_entry_blocks - num_rejected_blocks
@@ -1088,6 +1209,8 @@ void BlockInstrumentHelper::do_basic_block_tracing(
   }
 
   walk::code(scope, [&](DexMethod* method, IRCode& code) {
+    TraceContext trace_context(method);
+
     all_methods++;
     if (method == analysis_cls->get_clinit() || method == onMethodBegin) {
       specials++;
