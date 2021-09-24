@@ -774,7 +774,8 @@ MethodInfo instrument_basic_blocks(IRCode& code,
   info.num_useless_blocks = count(BlockType::Useless);
   info.num_no_source_blocks = count(BlockType::NoSourceBlock);
   info.num_blocks_too_large = too_many_blocks ? info.num_non_entry_blocks : 0;
-  info.num_catches = count(BlockType::Catch);
+  info.num_catches =
+      count(BlockType::Catch) - count(BlockType::Catch | BlockType::Useless);
   info.num_instrumented_catches =
       count(BlockType::Catch | BlockType::Instrumentable);
   info.num_instrumented_blocks = num_to_instrument;
