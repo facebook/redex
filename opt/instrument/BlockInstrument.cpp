@@ -161,12 +161,21 @@ struct BlockInfo {
   BlockType type;
   IRList::iterator it;
   BitId bit_id;
+  std::vector<cfg::Block*> merge_in;
 
   BlockInfo(cfg::Block* b, BlockType t, const IRList::iterator& i)
       : block(b), type(t), it(i), bit_id(std::numeric_limits<BitId>::max()) {}
 
   bool is_instrumentable() const {
     return (type & BlockType::Instrumentable) == BlockType::Instrumentable;
+  }
+
+  void update_merge(const BlockInfo& rhs) {
+    block = rhs.block;
+    type = rhs.type;
+    it = rhs.it;
+    bit_id = rhs.bit_id;
+    merge_in.insert(merge_in.end(), rhs.merge_in.begin(), rhs.merge_in.end());
   }
 };
 
@@ -190,10 +199,32 @@ struct MethodInfo {
   size_t num_catches = 0;
   size_t num_instrumented_catches = 0;
   size_t num_instrumented_blocks = 0;
+  size_t num_merged{0};
+  size_t num_merged_not_instrumented{0};
 
   std::vector<cfg::BlockId> bit_id_2_block_id;
   std::vector<std::vector<SourceBlock*>> bit_id_2_source_blocks;
   std::map<cfg::BlockId, BlockType> rejected_blocks;
+
+  // For stats.
+  size_t num_too_many_blocks{0};
+  MethodInfo& operator+=(const MethodInfo& rhs) {
+    num_non_entry_blocks += rhs.num_non_entry_blocks;
+    num_vectors += rhs.num_vectors;
+    num_exit_calls += rhs.num_exit_calls;
+    num_empty_blocks += rhs.num_empty_blocks;
+    num_useless_blocks += rhs.num_useless_blocks;
+    num_no_source_blocks += rhs.num_no_source_blocks;
+    num_blocks_too_large += rhs.num_blocks_too_large;
+    num_catches += rhs.num_catches;
+    num_instrumented_catches += rhs.num_instrumented_catches;
+    num_instrumented_blocks += rhs.num_instrumented_blocks;
+    num_merged += rhs.num_merged;
+    num_merged_not_instrumented += rhs.num_merged_not_instrumented;
+    num_too_many_blocks += rhs.num_too_many_blocks;
+
+    return *this;
+  }
 };
 
 InstrumentedType get_instrumented_type(const MethodInfo& i) {
@@ -557,83 +588,126 @@ size_t insert_onMethodExit_calls(
   return exit_blocks.size();
 }
 
-BlockInfo create_block_info(const DexMethod* method,
-                            cfg::Block* block,
-                            const InstrumentPass::Options& options) {
-  // TODO(agampe): Implement optimizations for empty/useless blocks. Probably
-  //               by having a list of `Block`s in `BlockInfo` for source blocks
-  //               to virtually merge.
-  //               For now, we will emit instrumentation into more blocks.
+// Very simplistic setup: if we think we can elide putting instrumentation into
+// a block by pushing the source blocks into the next, we will do it - under the
+// strong assumption that two "empty/useless" blocks do not usually follow each
+// other.
+void create_block_info(
+    const DexMethod* method,
+    cfg::Block* block,
+    const InstrumentPass::Options& options,
+    const std::unordered_map<const cfg::Block*, BlockInfo*>& block_mapping) {
+  auto* trg_block_info = block_mapping.at(block);
 
-  auto ret = [&]() -> BlockInfo {
-    // `Block.num_opcodes` skips internal opcodes, but we need the source
-    // blocks.
-    auto has_opcodes = [&]() {
-      for (auto& mie : *block) {
-        if (mie.type == MFLOW_OPCODE) {
-          return true;
-        }
+  auto trace_at_exit = at_scope_exit([&]() {
+    TRACE(INSTRUMENT, 9, "Checking block B%zu for %s: %x=%s\n%s", block->id(),
+          SHOW(method), (uint32_t)trg_block_info->type,
+          block_type_str(trg_block_info->type).c_str(), SHOW(block));
+  });
+
+  // `Block.num_opcodes` skips internal opcodes, but we need the source
+  // blocks.
+  auto has_opcodes = [&]() {
+    for (auto& mie : *block) {
+      if (mie.type == MFLOW_OPCODE) {
+        return true;
       }
-      return false;
-    }();
-    if (!has_opcodes) {
-      if (!source_blocks::has_source_blocks(block)) {
-        return {block, BlockType::Empty, {}};
-      }
-      TRACE(INSTRUMENT, 9,
-            "%s Block B%zu has no opcodes but source blocks!\n%s", SHOW(method),
-            block->id(), SHOW(block->cfg()));
     }
-
-    // TODO: There is a potential register allocation issue when we instrument
-    // extremely large number of basic blocks. We've found a case. So, for now,
-    // we don't instrument catch blocks with the hope these blocks are cold.
-    if (block->is_catch() && !options.instrument_catches) {
-      return {block, BlockType::Catch, {}};
-    }
-
-    IRList::iterator insert_pos;
-    BlockType type = block->is_catch() ? BlockType::Catch : BlockType::Normal;
-    bool useless = true;
-    if (block->starts_with_move_result()) {
-      insert_pos = get_first_non_move_result_insn(block);
-      useless = false;
-    } else if (block->starts_with_move_exception()) {
-      // move-exception must only ever occur as the first instruction of an
-      // exception handler; anywhere else is invalid. So, take the next
-      // instruction of the move-exception.
-      insert_pos = get_first_next_of_move_except(block);
-      type = type | BlockType::MoveException;
-      useless = false;
-    } else {
-      insert_pos = block->get_first_non_param_loading_insn();
-      useless = useless && !source_blocks::has_source_blocks(block);
-    }
-
-    // This remains here to eventually skip blocks again, see to-do at top of
-    // method.
-    if (insert_pos == block->end() && useless) {
-      TRACE(INSTRUMENT, 9, "Not instrumenting useless block B%zu\n%s",
-            block->id(), SHOW(block));
-      return {block, BlockType::Useless | type, {}};
-    }
-
-    // No source block? Then we can't map back block coverage data to source
-    // block. No need to instrument unless this block is exit block (no succs).
-    // Exit blocks will have onMethodEnd. We still need to instrument anyhow.
-    if (!options.instrument_blocks_without_source_block &&
-        !source_blocks::has_source_blocks(block) && !block->succs().empty()) {
-      return {block, BlockType::NoSourceBlock | type, {}};
-    }
-
-    return {block, BlockType::Instrumentable | type, insert_pos};
+    return false;
   }();
 
-  TRACE(INSTRUMENT, 9, "Checking block B%zu for %s: %x=%s\n%s", block->id(),
-        SHOW(method), (uint32_t)ret.type, block_type_str(ret.type).c_str(),
-        SHOW(block));
+  // See if this is a simple chain. For that the current block must have only
+  // one out edge of type GOTO, and the target must have only when in edge.
+  // Otherwise pushing the source blocks over would lose precision.
+  auto single_next_ok = [&]() -> std::optional<const cfg::Block*> {
+    // Find the target block, if any.
+    const auto& succs = block->succs();
+    if (succs.empty()) {
+      return std::nullopt;
+    }
 
-  return ret;
+    // Check forward direction.
+    if (succs.size() != 1 || succs[0]->type() != cfg::EDGE_GOTO ||
+        succs[0]->target() == block->cfg().entry_block() ||
+        succs[0]->target() == block) {
+      return std::nullopt;
+    }
+
+    const auto* trg_block = succs[0]->target();
+    const auto& preds = trg_block->preds();
+    redex_assert(!preds.empty());
+    if (preds.size() != 1) {
+      return std::nullopt;
+    }
+    // Really assume the integrity of the CFG here...
+
+    return trg_block;
+  };
+
+  if (!has_opcodes) {
+    if (!source_blocks::has_source_blocks(block)) {
+      trg_block_info->update_merge({block, BlockType::Empty, {}});
+      return;
+    }
+
+    TRACE(INSTRUMENT, 9, "%s Block B%zu has no opcodes but source blocks!\n%s",
+          SHOW(method), block->id(), SHOW(block->cfg()));
+    // Find the target block, if any.
+    if (auto next_opt = single_next_ok()) {
+      // OK, we can virtually merge the source blocks into the following one.
+      TRACE(INSTRUMENT, 9, "Not instrumenting empty block B%zu", block->id());
+      block_mapping.at(*next_opt)->merge_in.push_back(block);
+      trg_block_info->update_merge({block, BlockType::Empty, {}});
+      return;
+    }
+  }
+
+  // TODO: There is a potential register allocation issue when we instrument
+  // extremely large number of basic blocks. We've found a case. So, for now,
+  // we don't instrument catch blocks with the hope these blocks are cold.
+  if (block->is_catch() && !options.instrument_catches) {
+    trg_block_info->update_merge({block, BlockType::Catch, {}});
+    return;
+  }
+
+  IRList::iterator insert_pos;
+  BlockType type = block->is_catch() ? BlockType::Catch : BlockType::Normal;
+  if (block->starts_with_move_result()) {
+    insert_pos = get_first_non_move_result_insn(block);
+  } else if (block->starts_with_move_exception()) {
+    // move-exception must only ever occur as the first instruction of an
+    // exception handler; anywhere else is invalid. So, take the next
+    // instruction of the move-exception.
+    insert_pos = get_first_next_of_move_except(block);
+    type = type | BlockType::MoveException;
+  } else {
+    insert_pos = block->get_first_non_param_loading_insn();
+  }
+
+  if (insert_pos == block->end()) {
+    if (source_blocks::has_source_blocks(block)) {
+      if (auto next_opt = single_next_ok()) {
+        // OK, we can virtually merge the source blocks into the following one.
+        TRACE(INSTRUMENT, 9, "Not instrumenting useless block B%zu\n%s",
+              block->id(), SHOW(block));
+        block_mapping.at(*next_opt)->merge_in.push_back(block);
+        trg_block_info->update_merge({block, BlockType::Useless, {}});
+        return;
+      }
+    }
+  }
+
+  // No source block? Then we can't map back block coverage data to source
+  // block. No need to instrument unless this block is exit block (no succs).
+  // Exit blocks will have onMethodEnd. We still need to instrument anyhow.
+  if (!options.instrument_blocks_without_source_block &&
+      !source_blocks::has_source_blocks(block) && !block->succs().empty()) {
+    trg_block_info->update_merge({block, BlockType::NoSourceBlock | type, {}});
+    return;
+  }
+
+  trg_block_info->update_merge(
+      {block, BlockType::Instrumentable | type, insert_pos});
 }
 
 auto get_blocks_to_instrument(const DexMethod* m,
@@ -666,19 +740,29 @@ auto get_blocks_to_instrument(const DexMethod* m,
   // Future work: Pick minimal instrumentation candidates.
   std::vector<BlockInfo> block_info_list;
   block_info_list.reserve(blocks.size());
+  std::unordered_map<const cfg::Block*, BlockInfo*> block_mapping;
+  for (cfg::Block* b : blocks) {
+    block_info_list.emplace_back(b, BlockType::Unspecified, b->end());
+    block_mapping[b] = &block_info_list.back();
+  }
+
   BitId id = 0;
   for (cfg::Block* b : blocks) {
-    block_info_list.emplace_back(create_block_info(m, b, options));
-    auto& info = block_info_list.back();
-    if ((info.type & BlockType::Instrumentable) == BlockType::Instrumentable) {
+    create_block_info(m, b, options, block_mapping);
+    auto* info = block_mapping[b];
+    if ((info->type & BlockType::Instrumentable) == BlockType::Instrumentable) {
       if (id >= max_num_blocks) {
         // This is effectively rejecting all blocks.
         return std::make_tuple(std::vector<BlockInfo>{}, BitId(0),
                                true /* too many block */);
       }
-      info.bit_id = id++;
+      info->bit_id = id++;
     }
   }
+  redex_assert(std::all_of(
+      block_info_list.begin(), block_info_list.end(),
+      [](const auto& bi) { return bi.type != BlockType::Unspecified; }));
+
   return std::make_tuple(block_info_list, id, false);
 }
 
@@ -766,6 +850,7 @@ MethodInfo instrument_basic_blocks(IRCode& code,
   MethodInfo info;
   info.method = method;
   info.too_many_blocks = too_many_blocks;
+  info.num_too_many_blocks = too_many_blocks ? 1 : 0;
   info.offset = method_offset;
   info.num_non_entry_blocks = cfg.blocks().size() - 1;
   info.num_vectors = num_vectors;
@@ -781,6 +866,21 @@ MethodInfo instrument_basic_blocks(IRCode& code,
   info.num_instrumented_blocks = num_to_instrument;
   always_assert(count(BlockType::Instrumentable) == num_to_instrument);
 
+  redex_assert(std::none_of(blocks.begin(), blocks.end(), [](const auto& b) {
+    return std::find(b.merge_in.begin(), b.merge_in.end(), b.block) !=
+           b.merge_in.end();
+  }));
+  info.num_merged = std::accumulate(
+      blocks.begin(), blocks.end(), 0,
+      [](auto lhs, const auto& rhs) { return lhs + rhs.merge_in.size(); });
+  info.num_merged_not_instrumented = std::accumulate(
+      blocks.begin(), blocks.end(), 0, [](auto lhs, const auto& rhs) {
+        return lhs + ((rhs.type & BlockType::Instrumentable) !=
+                              BlockType::Instrumentable
+                          ? rhs.merge_in.size()
+                          : 0);
+      });
+
   info.bit_id_2_block_id.reserve(num_to_instrument);
   info.bit_id_2_source_blocks.reserve(num_to_instrument);
   for (const auto& i : blocks) {
@@ -788,6 +888,11 @@ MethodInfo instrument_basic_blocks(IRCode& code,
       info.bit_id_2_block_id.push_back(i.block->id());
       info.bit_id_2_source_blocks.emplace_back(
           source_blocks::gather_source_blocks(i.block));
+      for (auto* merged_block : i.merge_in) {
+        auto& vec = info.bit_id_2_source_blocks.back();
+        auto sb_vec = source_blocks::gather_source_blocks(merged_block);
+        vec.insert(vec.end(), sb_vec.begin(), sb_vec.end());
+      }
     } else {
       info.rejected_blocks[i.block->id()] = i.type;
     }
@@ -846,12 +951,15 @@ std::unordered_set<std::string> get_cold_start_classes(ConfigFiles& cfg) {
 void print_stats(ScopedMetrics& sm,
                  const std::vector<MethodInfo>& instrumented_methods,
                  const size_t max_num_blocks) {
+  MethodInfo total{};
+  for (const auto& i : instrumented_methods) {
+    total += i;
+  }
+
   const size_t total_instrumented = instrumented_methods.size();
+  const size_t only_method_instrumented = total.num_too_many_blocks;
   const size_t total_block_instrumented =
-      std::count_if(instrumented_methods.begin(), instrumented_methods.end(),
-                    [](const MethodInfo& i) { return !i.too_many_blocks; });
-  const size_t only_method_instrumented =
-      total_instrumented - total_block_instrumented;
+      total_instrumented - only_method_instrumented;
 
   auto print = [](size_t num, size_t total, size_t& accumulate) {
     std::stringstream ss;
@@ -922,8 +1030,7 @@ void print_stats(ScopedMetrics& sm,
 
   // ----- Instrumented block stats
   TRACE(INSTRUMENT, 4, "Instrumented / actual non-entry block stats:");
-  size_t total_instrumented_blocks = 0;
-  size_t total_non_entry_blocks = 0;
+
   {
     std::map<int, std::pair<size_t /*instrumented*/, size_t /*block*/>> dist;
     for (const auto& i : instrumented_methods) {
@@ -931,10 +1038,8 @@ void print_stats(ScopedMetrics& sm,
         ++dist[-1].first;
       } else {
         ++dist[i.num_instrumented_blocks].first;
-        total_instrumented_blocks += i.num_instrumented_blocks;
       }
       ++dist[i.num_non_entry_blocks].second;
-      total_non_entry_blocks += i.num_non_entry_blocks;
     }
     std::array<size_t, 2> accs = {0, 0};
     for (const auto& p : dist) {
@@ -942,15 +1047,16 @@ void print_stats(ScopedMetrics& sm,
             SHOW(print(p.second.first, total_instrumented, accs[0])),
             SHOW(print(p.second.second, total_instrumented, accs[1])));
     }
-    TRACE(INSTRUMENT, 4, "Total/average instrumented blocks: %zu, %s",
-          total_instrumented_blocks,
-          SHOW(divide(total_instrumented_blocks, total_block_instrumented)));
-    scope_total_avg("instrumented_blocks", total_instrumented_blocks,
+    TRACE(
+        INSTRUMENT, 4, "Total/average instrumented blocks: %zu, %s",
+        total.num_instrumented_blocks,
+        SHOW(divide(total.num_instrumented_blocks, total_block_instrumented)));
+    scope_total_avg("instrumented_blocks", total.num_instrumented_blocks,
                     total_block_instrumented);
     TRACE(INSTRUMENT, 4, "Total/average non-entry blocks: %zu, %s",
-          total_non_entry_blocks,
-          SHOW(divide(total_non_entry_blocks, total_instrumented)));
-    scope_total_avg("non_entry_blocks", total_non_entry_blocks,
+          total.num_non_entry_blocks,
+          SHOW(divide(total.num_non_entry_blocks, total_instrumented)));
+    scope_total_avg("non_entry_blocks", total.num_non_entry_blocks,
                     total_block_instrumented);
   }
 
@@ -962,29 +1068,36 @@ void print_stats(ScopedMetrics& sm,
       [](int a, auto&& i) { return a + i.num_instrumented_catches; });
 
   // ----- Instrumented/skipped block stats
-  auto print_ratio = [total_non_entry_blocks](size_t num) {
+  auto print_ratio = [&total](size_t num) {
     std::stringstream ss;
     ss << num << std::fixed << std::setprecision(2) << " ("
-       << (num * 100. / total_non_entry_blocks) << "%)";
+       << (num * 100. / total.num_non_entry_blocks) << "%)";
     return ss.str();
   };
-  auto metric_ratio = [&sm, total_non_entry_blocks](const std::string& sub_key,
-                                                    size_t num) {
-    if (total_non_entry_blocks == 0) {
+  auto metric_ratio = [&sm, &total](const std::string& sub_key, size_t num) {
+    if (total.num_non_entry_blocks == 0) {
       return;
     }
     sm.set_metric(sub_key, num);
     sm.set_metric(sub_key + ".ratio100.00",
-                  10000 * num / total_non_entry_blocks);
+                  10000 * num / total.num_non_entry_blocks);
   };
 
   {
     auto non_entry_scope = sm.scope("non_entry_blocks_stats");
-    TRACE(INSTRUMENT, 4, "Total non-entry blocks: %zu", total_non_entry_blocks);
-    sm.set_metric("total", total_non_entry_blocks);
+    TRACE(INSTRUMENT, 4, "Total non-entry blocks: %zu",
+          total.num_non_entry_blocks);
+    sm.set_metric("total", total.num_non_entry_blocks);
     TRACE(INSTRUMENT, 4, "- Instrumented blocks: %s",
-          SHOW(print_ratio(total_instrumented_blocks)));
-    metric_ratio("total_instrumented_blocks", total_instrumented_blocks);
+          SHOW(print_ratio(total.num_instrumented_blocks)));
+    metric_ratio("total_instrumented_blocks", total.num_instrumented_blocks);
+    TRACE(INSTRUMENT, 4, "- Merged blocks: %s",
+          print_ratio(total.num_merged).c_str());
+    sm.set_metric("merged", total.num_merged);
+    TRACE(INSTRUMENT, 4, "- Merged blocks (into non-instrumentable): %s",
+          print_ratio(total.num_merged_not_instrumented).c_str());
+    sm.set_metric("merged_not_instrumentable",
+                  total.num_merged_not_instrumented);
     TRACE(INSTRUMENT, 4, "- Skipped catch blocks: %s",
           SHOW(print_ratio(total_catches - total_instrumented_catches)));
     {
@@ -1051,19 +1164,18 @@ void print_stats(ScopedMetrics& sm,
   TRACE(INSTRUMENT, 4, "Catch block stats:");
   {
     size_t acc = 0;
-    size_t total = 0;
     std::map<int, size_t> dist;
     for (const auto& i : instrumented_methods) {
       ++dist[i.num_catches];
-      total += i.num_catches;
     }
     for (const auto& p : dist) {
       TRACE(INSTRUMENT, 4, " %4d catches: %s", p.first,
             SHOW(print(p.second, total_instrumented, acc)));
     }
-    TRACE(INSTRUMENT, 4, "Total/average catch blocks: %zu, %s", total,
-          SHOW(divide(total, total_instrumented)));
-    scope_total_avg("catch_blocks", total, total_instrumented);
+    TRACE(INSTRUMENT, 4, "Total/average catch blocks: %zu, %s",
+          total.num_catches,
+          SHOW(divide(total.num_catches, total_instrumented)));
+    scope_total_avg("catch_blocks", total.num_catches, total_instrumented);
   }
 
   auto print_two_dists = [&divide, &print, &instrumented_methods,
