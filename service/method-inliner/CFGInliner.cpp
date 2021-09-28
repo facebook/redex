@@ -56,20 +56,19 @@ size_t num_interactions(const InstructionIterator& inline_site,
   return 0;
 }
 
-boost::optional<float> get_source_blocks_factor(
-    const InstructionIterator& inline_site,
-    const ControlFlowGraph& callee_cfg,
-    size_t idx) {
+float get_source_blocks_factor(const InstructionIterator& inline_site,
+                               const ControlFlowGraph& callee_cfg,
+                               size_t idx) {
   auto caller_block = inline_site.block();
   float caller_val;
   {
     auto* sb = source_blocks::get_first_source_block(caller_block);
     if (sb == nullptr) {
-      return boost::none;
+      return NAN;
     }
     auto val = sb->get_val(idx);
     if (!val) {
-      return boost::none;
+      return NAN;
     }
     caller_val = *val;
   }
@@ -83,11 +82,11 @@ boost::optional<float> get_source_blocks_factor(
   {
     auto sb = source_blocks::get_first_source_block(callee_cfg.entry_block());
     if (sb == nullptr) {
-      return boost::none;
+      return NAN;
     }
     auto val = sb->get_val(idx);
     if (!val) {
-      return boost::none;
+      return NAN;
     }
     callee_val = *val;
   }
@@ -131,9 +130,7 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
     auto num = num_interactions(inline_site, callee_orig);
     for (size_t i = 0; i < num; ++i) {
       auto sb_factor = get_source_blocks_factor(inline_site, callee_orig, i);
-      if (sb_factor) {
-        normalize_source_blocks(callee, *sb_factor, i);
-      }
+      normalize_source_blocks(callee, sb_factor, i);
     }
   }
 

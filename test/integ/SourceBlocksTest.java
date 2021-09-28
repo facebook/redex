@@ -25,4 +25,30 @@ public class SourceBlocksTest {
   public void bazz() {
     bar();
   }
+
+  static class Scaling {
+    public void no_source_blocks() {
+      hot_source_blocks_inlined(true);
+    }
+
+    public void nan_source_blocks() {
+      hot_source_blocks_inlined(true);
+    }
+
+    public void zero_source_blocks() {
+      hot_source_blocks_inlined(true);
+    }
+
+    public void hot_source_blocks() {
+      hot_source_blocks_inlined(true);
+    }
+
+    public void hot_source_blocks_inlined(boolean b) {
+      if (!b) {
+        System.out.println("A");
+      } else {
+        System.out.println("B");
+      }
+    }
+  }
 }

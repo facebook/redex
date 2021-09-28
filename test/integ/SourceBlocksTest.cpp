@@ -74,6 +74,37 @@ class SourceBlocksTest : public RedexIntegrationTest {
     }
     return oss.str();
   }
+
+  void insert_source_block_vals(DexMethod* method,
+                                const SourceBlock::Val& val) {
+    cfg::ScopedCFG cfg{method->get_code()};
+    uint32_t id = 0;
+    for (auto* b : cfg->blocks()) {
+      std::vector<SourceBlock::Val> vals{val};
+      source_blocks::impl::BlockAccessor::push_source_block(
+          b, std::make_unique<SourceBlock>(method, id++, std::move(vals)));
+    }
+  }
+
+  bool any_hot_source_blocks(DexMethod* method) {
+    for (auto& mie : *method->get_code()) {
+      if (mie.type == MFLOW_SOURCE_BLOCK &&
+          source_blocks::is_source_block_hot(mie.src_block.get())) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool all_hot_source_blocks(DexMethod* method) {
+    for (auto& mie : *method->get_code()) {
+      if (mie.type == MFLOW_SOURCE_BLOCK &&
+          !source_blocks::is_source_block_hot(mie.src_block.get())) {
+        return false;
+      }
+    }
+    return true;
+  }
 };
 
 TEST_F(SourceBlocksTest, source_blocks) {
@@ -143,7 +174,8 @@ TEST_F(SourceBlocksTest, source_blocks) {
     };
 
     auto baz_ref = DexMethod::get_method(
-        "Lcom/facebook/redextest/SourceBlocksTest;.baz:(Ljava/lang/String;)V");
+        "Lcom/facebook/redextest/SourceBlocksTest;.baz:(Ljava/lang/"
+        "String;)V");
     ASSERT_NE(baz_ref, nullptr);
     auto baz = baz_ref->as_def();
     ASSERT_NE(baz, nullptr);
@@ -273,6 +305,111 @@ TEST_F(SourceBlocksTest, source_blocks_insert_after_exc) {
       continue;
     }
     EXPECT_EQ(max_seen, it->second);
+  }
+}
+
+TEST_F(SourceBlocksTest, scaling) {
+  auto type =
+      DexType::get_type("Lcom/facebook/redextest/SourceBlocksTest$Scaling;");
+  ASSERT_NE(type, nullptr);
+  auto cls = type_class(type);
+  ASSERT_NE(cls, nullptr);
+
+  // Check that no code has source blocks so far.
+  {
+    for (const auto* m : cls->get_all_methods()) {
+      if (m->get_code() == nullptr) {
+        continue;
+      }
+      for (const auto& mie : *m->get_code()) {
+        ASSERT_NE(mie.type, MFLOW_SOURCE_BLOCK);
+      }
+    }
+  }
+
+  // The incoming profile doesn't actually matter, we tweak here what matters:
+
+  auto no_source_blocks_method_ref = DexMethod::get_method(
+      "Lcom/facebook/redextest/SourceBlocksTest$Scaling;.no_source_blocks:()V");
+  ASSERT_NE(no_source_blocks_method_ref, nullptr);
+  auto no_source_blocks_method = no_source_blocks_method_ref->as_def();
+  ASSERT_NE(no_source_blocks_method, nullptr);
+  ASSERT_FALSE(any_hot_source_blocks(no_source_blocks_method));
+
+  auto nan_source_blocks_method_ref = DexMethod::get_method(
+      "Lcom/facebook/redextest/"
+      "SourceBlocksTest$Scaling;.nan_source_blocks:()V");
+  ASSERT_NE(nan_source_blocks_method_ref, nullptr);
+  auto nan_source_blocks_method = nan_source_blocks_method_ref->as_def();
+  ASSERT_NE(nan_source_blocks_method, nullptr);
+  insert_source_block_vals(
+      nan_source_blocks_method,
+      SourceBlock::Val(/* value */ NAN, /* appear100 */ 0.0f));
+  ASSERT_FALSE(any_hot_source_blocks(nan_source_blocks_method));
+
+  auto zero_source_blocks_method_ref = DexMethod::get_method(
+      "Lcom/facebook/redextest/"
+      "SourceBlocksTest$Scaling;.zero_source_blocks:()V");
+  ASSERT_NE(zero_source_blocks_method_ref, nullptr);
+  auto zero_source_blocks_method = zero_source_blocks_method_ref->as_def();
+  ASSERT_NE(zero_source_blocks_method, nullptr);
+  insert_source_block_vals(
+      zero_source_blocks_method,
+      SourceBlock::Val(/* value */ 0.0f, /* appear100 */ 0.0f));
+  ASSERT_FALSE(any_hot_source_blocks(zero_source_blocks_method));
+
+  auto hot_source_blocks_method_ref = DexMethod::get_method(
+      "Lcom/facebook/redextest/"
+      "SourceBlocksTest$Scaling;.hot_source_blocks:()V");
+  ASSERT_NE(hot_source_blocks_method_ref, nullptr);
+  auto hot_source_blocks_method = hot_source_blocks_method_ref->as_def();
+  ASSERT_NE(hot_source_blocks_method, nullptr);
+  insert_source_block_vals(
+      hot_source_blocks_method,
+      SourceBlock::Val(/* value */ 1.0f, /* appear100 */ 0.0f));
+  ASSERT_TRUE(any_hot_source_blocks(hot_source_blocks_method));
+  ASSERT_TRUE(all_hot_source_blocks(hot_source_blocks_method));
+
+  auto hot_source_blocks_inlined_method_ref = DexMethod::get_method(
+      "Lcom/facebook/redextest/"
+      "SourceBlocksTest$Scaling;.hot_source_blocks_inlined:(Z)V");
+  ASSERT_NE(hot_source_blocks_inlined_method_ref, nullptr);
+  auto hot_source_blocks_inlined_method =
+      hot_source_blocks_inlined_method_ref->as_def();
+  ASSERT_NE(hot_source_blocks_inlined_method, nullptr);
+  insert_source_block_vals(
+      hot_source_blocks_inlined_method,
+      SourceBlock::Val(/* value */ 1.0f, /* appear100 */ 0.0f));
+  ASSERT_TRUE(any_hot_source_blocks(hot_source_blocks_inlined_method));
+  ASSERT_TRUE(all_hot_source_blocks(hot_source_blocks_inlined_method));
+  hot_source_blocks_inlined_method->rstate.set_force_inline();
+
+  // Run inliner, check that we have mix now.
+  {
+    inliner::InlinerConfig conf{};
+    auto scope = build_class_scope(stores);
+    conf.populate(scope);
+
+    ConcurrentMethodRefCache m_concurrent_resolved_refs;
+    auto concurrent_resolver = [&](DexMethodRef* method, MethodSearch search) {
+      return resolve_method(method, search, m_concurrent_resolved_refs);
+    };
+
+    std::unordered_set<DexMethod*> def_inlinables{
+        hot_source_blocks_inlined_method};
+
+    MultiMethodInliner inliner(scope, stores, def_inlinables,
+                               concurrent_resolver, conf,
+                               MultiMethodInlinerMode::IntraDex);
+    inliner.inline_methods();
+    ASSERT_EQ(inliner.get_inlined().size(), 1u);
+    ASSERT_EQ(inliner.get_info().calls_inlined, 4u);
+
+    ASSERT_FALSE(any_hot_source_blocks(no_source_blocks_method));
+    ASSERT_FALSE(any_hot_source_blocks(nan_source_blocks_method));
+    ASSERT_FALSE(any_hot_source_blocks(zero_source_blocks_method));
+    ASSERT_TRUE(any_hot_source_blocks(hot_source_blocks_method));
+    ASSERT_TRUE(all_hot_source_blocks(hot_source_blocks_method));
   }
 }
 

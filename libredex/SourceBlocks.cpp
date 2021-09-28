@@ -402,9 +402,7 @@ InsertResult insert_source_blocks(DexMethod* method,
   return {helper.id, helper.oss.str(), !had_failures};
 }
 
-namespace {
-
-bool is_source_block_hot(SourceBlock* sb) {
+bool is_source_block_hot(const SourceBlock* sb) {
   bool is_hot = false;
   if (sb != nullptr) {
     sb->foreach_val_early([&is_hot](const auto& val) {
@@ -414,6 +412,8 @@ bool is_source_block_hot(SourceBlock* sb) {
   }
   return is_hot;
 }
+
+namespace {
 
 size_t count_blocks(
     Block*, const dominators::SimpleFastDominators<cfg::GraphInterface>&) {
