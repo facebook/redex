@@ -144,15 +144,17 @@ void LocalDce::dce(cfg::ControlFlowGraph& cfg, bool normalize_new_instances) {
 
   // Remove dead instructions.
   std::unordered_set<IRInstruction*> seen;
-  std::vector<std::pair<IRInstruction*, cfg::Block*>> npe_instructions;
+  cfg::CFGMutation mutation(cfg);
+  std::unique_ptr<npe::NullPointerExceptionCreator> npe_creator;
+  size_t npe_instructions = 0;
   for (const auto& pair : dead_instructions) {
     cfg::Block* b = pair.first;
-    IRList::iterator it = pair.second;
+    const IRList::iterator& it = pair.second;
     auto insn = it->insn;
-    if (seen.count(insn)) {
+    if (!seen.emplace(insn).second) {
       continue;
     }
-    seen.emplace(insn);
+    auto cfg_it = b->to_cfg_instruction_iterator(it);
     DexMethod* method;
     if (m_may_allocate_registers && m_method_override_graph &&
         (insn->opcode() == OPCODE_INVOKE_VIRTUAL ||
@@ -161,29 +163,21 @@ void LocalDce::dce(cfg::ControlFlowGraph& cfg, bool normalize_new_instances) {
             nullptr &&
         !has_implementor(m_method_override_graph, method)) {
       TRACE(DCE, 2, "DEAD NPE: %s", SHOW(insn));
-      npe_instructions.emplace_back(insn, b);
+      if (!npe_creator) {
+        npe_creator = std::make_unique<npe::NullPointerExceptionCreator>(&cfg);
+      }
+      cfg.replace_insns(cfg_it, npe_creator->get_insns(insn));
+      npe_instructions++;
     } else {
       TRACE(DCE, 2, "DEAD: %s", SHOW(insn));
-      b->remove_insn(it);
+      mutation.remove(cfg_it);
     }
   }
-  if (!npe_instructions.empty()) {
-    npe::NullPointerExceptionCreator npe_creator(&cfg);
-    for (auto pair : npe_instructions) {
-      auto invoke_insn = pair.first;
-      auto block = pair.second;
-      auto it = cfg.find_insn(invoke_insn, block);
-      if (it.is_end()) {
-        // can happen if we removed an earlier invocation.
-        continue;
-      }
-      cfg.replace_insns(it, npe_creator.get_insns(invoke_insn));
-    }
-  }
+  mutation.flush();
   auto unreachable_insn_count = cfg.remove_unreachable_blocks().first;
   cfg.recompute_registers_size();
 
-  m_stats.npe_instruction_count += npe_instructions.size();
+  m_stats.npe_instruction_count += npe_instructions;
   m_stats.dead_instruction_count += dead_instructions.size();
   m_stats.unreachable_instruction_count += unreachable_insn_count;
 
