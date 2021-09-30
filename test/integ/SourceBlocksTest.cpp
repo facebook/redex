@@ -86,20 +86,20 @@ class SourceBlocksTest : public RedexIntegrationTest {
     }
   }
 
-  bool any_hot_source_blocks(DexMethod* method) {
+  bool has_any_source_block_positive_val(DexMethod* method) {
     for (auto& mie : *method->get_code()) {
       if (mie.type == MFLOW_SOURCE_BLOCK &&
-          source_blocks::is_source_block_hot(mie.src_block.get())) {
+          source_blocks::has_source_block_positive_val(mie.src_block.get())) {
         return true;
       }
     }
     return false;
   }
 
-  bool all_hot_source_blocks(DexMethod* method) {
+  bool have_all_source_block_positive_val(DexMethod* method) {
     for (auto& mie : *method->get_code()) {
       if (mie.type == MFLOW_SOURCE_BLOCK &&
-          !source_blocks::is_source_block_hot(mie.src_block.get())) {
+          !source_blocks::has_source_block_positive_val(mie.src_block.get())) {
         return false;
       }
     }
@@ -334,7 +334,7 @@ TEST_F(SourceBlocksTest, scaling) {
   ASSERT_NE(no_source_blocks_method_ref, nullptr);
   auto no_source_blocks_method = no_source_blocks_method_ref->as_def();
   ASSERT_NE(no_source_blocks_method, nullptr);
-  ASSERT_FALSE(any_hot_source_blocks(no_source_blocks_method));
+  ASSERT_FALSE(has_any_source_block_positive_val(no_source_blocks_method));
 
   auto nan_source_blocks_method_ref = DexMethod::get_method(
       "Lcom/facebook/redextest/"
@@ -345,7 +345,7 @@ TEST_F(SourceBlocksTest, scaling) {
   insert_source_block_vals(
       nan_source_blocks_method,
       SourceBlock::Val(/* value */ NAN, /* appear100 */ 0.0f));
-  ASSERT_FALSE(any_hot_source_blocks(nan_source_blocks_method));
+  ASSERT_FALSE(has_any_source_block_positive_val(nan_source_blocks_method));
 
   auto zero_source_blocks_method_ref = DexMethod::get_method(
       "Lcom/facebook/redextest/"
@@ -356,7 +356,7 @@ TEST_F(SourceBlocksTest, scaling) {
   insert_source_block_vals(
       zero_source_blocks_method,
       SourceBlock::Val(/* value */ 0.0f, /* appear100 */ 0.0f));
-  ASSERT_FALSE(any_hot_source_blocks(zero_source_blocks_method));
+  ASSERT_FALSE(has_any_source_block_positive_val(zero_source_blocks_method));
 
   auto hot_source_blocks_method_ref = DexMethod::get_method(
       "Lcom/facebook/redextest/"
@@ -367,8 +367,8 @@ TEST_F(SourceBlocksTest, scaling) {
   insert_source_block_vals(
       hot_source_blocks_method,
       SourceBlock::Val(/* value */ 1.0f, /* appear100 */ 0.0f));
-  ASSERT_TRUE(any_hot_source_blocks(hot_source_blocks_method));
-  ASSERT_TRUE(all_hot_source_blocks(hot_source_blocks_method));
+  ASSERT_TRUE(has_any_source_block_positive_val(hot_source_blocks_method));
+  ASSERT_TRUE(have_all_source_block_positive_val(hot_source_blocks_method));
 
   auto hot_source_blocks_inlined_method_ref = DexMethod::get_method(
       "Lcom/facebook/redextest/"
@@ -380,8 +380,10 @@ TEST_F(SourceBlocksTest, scaling) {
   insert_source_block_vals(
       hot_source_blocks_inlined_method,
       SourceBlock::Val(/* value */ 1.0f, /* appear100 */ 0.0f));
-  ASSERT_TRUE(any_hot_source_blocks(hot_source_blocks_inlined_method));
-  ASSERT_TRUE(all_hot_source_blocks(hot_source_blocks_inlined_method));
+  ASSERT_TRUE(
+      has_any_source_block_positive_val(hot_source_blocks_inlined_method));
+  ASSERT_TRUE(
+      have_all_source_block_positive_val(hot_source_blocks_inlined_method));
   hot_source_blocks_inlined_method->rstate.set_force_inline();
 
   // Run inliner, check that we have mix now.
@@ -405,11 +407,11 @@ TEST_F(SourceBlocksTest, scaling) {
     ASSERT_EQ(inliner.get_inlined().size(), 1u);
     ASSERT_EQ(inliner.get_info().calls_inlined, 4u);
 
-    ASSERT_FALSE(any_hot_source_blocks(no_source_blocks_method));
-    ASSERT_FALSE(any_hot_source_blocks(nan_source_blocks_method));
-    ASSERT_FALSE(any_hot_source_blocks(zero_source_blocks_method));
-    ASSERT_TRUE(any_hot_source_blocks(hot_source_blocks_method));
-    ASSERT_TRUE(all_hot_source_blocks(hot_source_blocks_method));
+    ASSERT_FALSE(has_any_source_block_positive_val(no_source_blocks_method));
+    ASSERT_FALSE(has_any_source_block_positive_val(nan_source_blocks_method));
+    ASSERT_FALSE(has_any_source_block_positive_val(zero_source_blocks_method));
+    ASSERT_TRUE(has_any_source_block_positive_val(hot_source_blocks_method));
+    ASSERT_TRUE(have_all_source_block_positive_val(hot_source_blocks_method));
   }
 }
 

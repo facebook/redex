@@ -163,8 +163,7 @@ InsertResult insert_source_blocks(DexMethod* method,
                                   bool serialize = true,
                                   bool insert_after_excs = false);
 
-// A source block is considered "hot" if it has any positive value.
-bool is_source_block_hot(const SourceBlock* sb);
+bool has_source_block_positive_val(const SourceBlock* sb);
 
 inline bool has_source_blocks(const cfg::Block* b) {
   for (const auto& mie : *b) {

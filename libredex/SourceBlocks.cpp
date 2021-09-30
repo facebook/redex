@@ -402,15 +402,15 @@ InsertResult insert_source_blocks(DexMethod* method,
   return {helper.id, helper.oss.str(), !had_failures};
 }
 
-bool is_source_block_hot(const SourceBlock* sb) {
-  bool is_hot = false;
+bool has_source_block_positive_val(const SourceBlock* sb) {
+  bool any_positive_val = false;
   if (sb != nullptr) {
-    sb->foreach_val_early([&is_hot](const auto& val) {
-      is_hot = val && val->val > 0.0f;
-      return is_hot;
+    sb->foreach_val_early([&any_positive_val](const auto& val) {
+      any_positive_val = val && val->val > 0.0f;
+      return any_positive_val;
     });
   }
-  return is_hot;
+  return any_positive_val;
 }
 
 namespace {
@@ -437,7 +437,7 @@ size_t hot_immediate_dom_not_hot(
     Block* block,
     const dominators::SimpleFastDominators<cfg::GraphInterface>& dominators) {
   auto* first_sb_current_b = source_blocks::get_first_source_block(block);
-  if (!is_source_block_hot(first_sb_current_b)) {
+  if (!has_source_block_positive_val(first_sb_current_b)) {
     return 0;
   }
 
@@ -447,7 +447,8 @@ size_t hot_immediate_dom_not_hot(
   }
   auto* first_sb_immediate_dominator =
       source_blocks::get_first_source_block(immediate_dominator);
-  bool is_idom_hot = is_source_block_hot(first_sb_immediate_dominator);
+  bool is_idom_hot =
+      has_source_block_positive_val(first_sb_immediate_dominator);
   return is_idom_hot ? 0 : 1;
 }
 
@@ -456,14 +457,14 @@ size_t hot_no_hot_pred(
     Block* block,
     const dominators::SimpleFastDominators<cfg::GraphInterface>&) {
   auto* first_sb_current_b = source_blocks::get_first_source_block(block);
-  if (!is_source_block_hot(first_sb_current_b)) {
+  if (!has_source_block_positive_val(first_sb_current_b)) {
     return 0;
   }
 
   for (auto predecessor : block->preds()) {
     auto* first_sb_pred =
         source_blocks::get_first_source_block(predecessor->src());
-    if (is_source_block_hot(first_sb_pred)) {
+    if (has_source_block_positive_val(first_sb_pred)) {
       return 0;
     }
   }
@@ -475,14 +476,14 @@ size_t hot_all_pred_cold(
     Block* block,
     const dominators::SimpleFastDominators<cfg::GraphInterface>&) {
   auto* first_sb_current_b = source_blocks::get_first_source_block(block);
-  if (!is_source_block_hot(first_sb_current_b)) {
+  if (!has_source_block_positive_val(first_sb_current_b)) {
     return 0;
   }
 
   for (auto predecessor : block->preds()) {
     auto* first_sb_pred =
         source_blocks::get_first_source_block(predecessor->src());
-    if (is_source_block_hot(first_sb_pred)) {
+    if (has_source_block_positive_val(first_sb_pred)) {
       return 0;
     }
   }
