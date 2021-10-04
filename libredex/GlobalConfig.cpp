@@ -130,6 +130,7 @@ void GlobalConfig::bind_config() {
   bind("slow_invariants_debug", false, bool_param);
   // Enabled for ease of testing, apps expected to opt-out
   bind("enable_bleeding_edge_app_bundle_support", true, bool_param);
+  bind("no_devirtualize_annos", {}, string_vector_param);
 
   for (const auto& entry : m_registry) {
     m_global_configs.emplace(entry.name,

@@ -13,6 +13,7 @@
 #include <string>
 #include <vector>
 
+#include "AnnoUtils.h"
 #include "ClassHierarchy.h"
 #include "ConfigFiles.h"
 #include "Deleter.h"
@@ -105,7 +106,9 @@ static DexType* get_receiver_type_demand(DexType* callee_rtype,
  * for inlining.
  */
 std::unordered_set<DexMethod*> gather_non_virtual_methods(
-    Scope& scope, const mog::Graph* method_override_graph) {
+    Scope& scope,
+    const mog::Graph* method_override_graph,
+    const std::unordered_set<DexType*>& no_devirtualize_anno) {
   // trace counter
   size_t all_methods = 0;
   size_t direct_methods = 0;
@@ -118,7 +121,6 @@ std::unordered_set<DexMethod*> gather_non_virtual_methods(
   size_t dont_strip = 0;
   size_t non_virt_dont_strip = 0;
   size_t non_virt_methods = 0;
-
   // collect all non virtual methods (dmethods and vmethods)
   std::unordered_set<DexMethod*> methods;
   walk::methods(scope, [&](DexMethod* method) {
@@ -151,6 +153,9 @@ std::unordered_set<DexMethod*> gather_non_virtual_methods(
       auto code = vmeth->get_code();
       if (code == nullptr) {
         non_virtual_no_code++;
+        continue;
+      }
+      if (has_any_annotation(vmeth, no_devirtualize_anno)) {
         continue;
       }
       methods.insert(vmeth);
@@ -587,8 +592,8 @@ void run_inliner(DexStoresVector& stores,
     method_override_graph = mog::build_graph(scope);
   }
 
-  auto candidates =
-      gather_non_virtual_methods(scope, method_override_graph.get());
+  auto candidates = gather_non_virtual_methods(
+      scope, method_override_graph.get(), conf.get_do_not_devirt_anon());
 
   // The candidates list computed above includes all constructors, regardless of
   // whether it's safe to inline them or not. We'll let the inliner decide

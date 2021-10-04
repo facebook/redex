@@ -10,11 +10,27 @@
 #include "Pass.h"
 
 struct DevirtualizerConfigs {
+  DevirtualizerConfigs(bool vmethods_not_using_this,
+                       bool vmethods_using_this,
+                       bool dmethods_not_using_this,
+                       bool dmethods_using_this,
+                       bool ignore_keep,
+                       const std::unordered_set<DexType*>& do_not_devirt_anno)
+      : vmethods_not_using_this(vmethods_not_using_this),
+        vmethods_using_this(vmethods_using_this),
+        dmethods_not_using_this(dmethods_not_using_this),
+        dmethods_using_this(dmethods_using_this),
+        ignore_keep(ignore_keep),
+        do_not_devirt_anno(do_not_devirt_anno)
+
+  {}
+
   bool vmethods_not_using_this = true;
   bool vmethods_using_this = false;
   bool dmethods_not_using_this = true;
   bool dmethods_using_this = false;
   bool ignore_keep = false;
+  const std::unordered_set<DexType*>& do_not_devirt_anno;
 };
 
 struct DevirtualizerMetrics {
@@ -33,10 +49,15 @@ class MethodDevirtualizer {
                       bool vmethods_using_this,
                       bool dmethods_not_using_this,
                       bool dmethods_using_this,
-                      bool ignore_keep) {
-    m_config = {vmethods_not_using_this, vmethods_using_this,
-                dmethods_not_using_this, dmethods_using_this, ignore_keep};
-  }
+                      bool ignore_keep,
+                      const std::unordered_set<DexType*>& do_not_devirt_anno)
+
+      : m_config(vmethods_not_using_this,
+                 vmethods_using_this,
+                 dmethods_not_using_this,
+                 dmethods_using_this,
+                 ignore_keep,
+                 do_not_devirt_anno) {}
 
   DevirtualizerMetrics devirtualize_methods(const Scope& scope) {
     return devirtualize_methods(scope, scope);
