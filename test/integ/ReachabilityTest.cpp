@@ -161,6 +161,42 @@ TEST_F(ReachabilityTest, MethodReachabilityProguardTest) {
   EXPECT_EQ(reachable_method_names.count("LD;.bor:()V"), 0);
 }
 
+TEST_F(ReachabilityTest, FieldReachabilityProguardTest) {
+  const auto& dexen = stores[0].get_dexen();
+  auto pg_config = process_and_get_proguard_config(dexen, R"(
+    -keepclasseswithmembers public class RemoveUnreachableTest {
+      public void testMethod();
+    }
+    -keepclasseswithmembers class A {
+      int foo;
+      <init>();
+      int bar();
+    }
+  )");
+
+  EXPECT_TRUE(pg_config->ok);
+  EXPECT_EQ(pg_config->keep_rules.size(), 2);
+
+  int num_ignore_check_strings = 0;
+  reachability::IgnoreSets ig_sets;
+  auto reachable_objects = reachability::compute_reachable_objects(
+      stores, ig_sets, &num_ignore_check_strings, false, false, nullptr);
+
+  auto reachable_fields =
+      reachability::compute_reachable_fields(stores, *reachable_objects);
+
+  std::unordered_set<std::string> reachable_fields_names;
+  for (const auto* f : reachable_fields) {
+    reachable_fields_names.insert(f->get_deobfuscated_name());
+  }
+
+  EXPECT_EQ(reachable_fields.size(), 2);
+
+  // Reachable from LA.<init>
+  EXPECT_EQ(reachable_fields_names.count("LA;.arr:[LOnlyInArray;"), 1);
+  EXPECT_EQ(reachable_fields_names.count("LA;.foo:I"), 1);
+}
+
 TEST_F(ReachabilityTest, MethodReachabilityFromSeedsTest) {
   // Make sure some unreachable things exist before we start.
   auto* m1 = find_vmethod(*classes, "LA;", "V", "bor", {});

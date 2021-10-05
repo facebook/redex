@@ -379,6 +379,12 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects(
 std::unordered_set<DexMethod*> compute_reachable_methods(
     DexStoresVector& stores, const ReachableObjects& reachables);
 
+/*
+ * Compute all reachable fields from the set of reachable objects.
+ */
+std::unordered_set<DexField*> compute_reachable_fields(
+    DexStoresVector& stores, const ReachableObjects& reachables);
+
 void sweep(DexStoresVector& stores,
            const ReachableObjects& reachables,
            ConcurrentSet<std::string>* removed_symbols);
