@@ -205,6 +205,7 @@ struct MethodInfo {
   std::vector<cfg::BlockId> bit_id_2_block_id;
   std::vector<std::vector<SourceBlock*>> bit_id_2_source_blocks;
   std::map<cfg::BlockId, BlockType> rejected_blocks;
+  std::vector<SourceBlock*> entry_source_blocks;
 
   // For stats.
   size_t num_too_many_blocks{0};
@@ -258,6 +259,9 @@ MethodDictionary create_method_dictionary(
       for (const auto* sb : sb_vec) {
         methods_set.insert(sb->src);
       }
+    }
+    for (const auto* sb : info.entry_source_blocks) {
+      methods_set.insert(sb->src);
     }
   }
   std::vector<const DexMethodRef*> methods(methods_set.begin(),
@@ -323,10 +327,11 @@ void write_metadata(const ConfigFiles& cfg,
     return ss.str();
   };
 
-  auto source_blocks = [&method_dict](const auto& bit_id_2_source_blocks) {
+  auto source_blocks = [&method_dict](const auto& entry_source_blocks,
+                                      const auto& bit_id_2_source_blocks) {
     std::stringstream ss;
     bool first1 = true;
-    for (const auto& v : bit_id_2_source_blocks) {
+    auto handle_source_blocks = [&first1, &ss, &method_dict](const auto& v) {
       if (first1) {
         first1 = false;
       } else {
@@ -342,7 +347,14 @@ void write_metadata(const ConfigFiles& cfg,
         }
         ss << method_dict.at(sb->src) << "#" << sb->id;
       }
+    };
+
+    // Entry block.
+    handle_source_blocks(entry_source_blocks);
+    for (const auto& v : bit_id_2_source_blocks) {
+      handle_source_blocks(v);
     }
+
     return ss.str();
   };
 
@@ -355,7 +367,7 @@ void write_metadata(const ConfigFiles& cfg,
         std::to_string(info.num_vectors),
         write_block_id_map(info.bit_id_2_block_id),
         rejected_blocks(info.rejected_blocks),
-        source_blocks(info.bit_id_2_source_blocks),
+        source_blocks(info.entry_source_blocks, info.bit_id_2_source_blocks),
     };
     ofs << boost::algorithm::join(fields, ",") << "\n";
   }
@@ -849,6 +861,8 @@ MethodInfo instrument_basic_blocks(IRCode& code,
 
   MethodInfo info;
   info.method = method;
+  info.entry_source_blocks =
+      source_blocks::gather_source_blocks(cfg.entry_block());
   info.too_many_blocks = too_many_blocks;
   info.num_too_many_blocks = too_many_blocks ? 1 : 0;
   info.offset = method_offset;
