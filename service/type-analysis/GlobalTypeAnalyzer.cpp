@@ -119,7 +119,10 @@ DexTypeEnvironment env_with_params(const IRCode* code,
 
   size_t idx = 0;
   DexTypeEnvironment env;
-  for (auto& mie : InstructionIterable(code->get_param_instructions())) {
+  boost::sub_range<IRList> param_instructions =
+      code->editable_cfg_built() ? code->cfg().get_param_instructions()
+                                 : code->get_param_instructions();
+  for (auto& mie : InstructionIterable(param_instructions)) {
     env.set(mie.insn->dest(), args.get(idx++));
   }
   return env;
