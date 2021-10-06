@@ -12,7 +12,9 @@
 #include <unordered_map>
 #include <vector>
 
+#include "AnnoUtils.h"
 #include "CallGraph.h"
+#include "ConfigFiles.h"
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "IRCode.h"
@@ -58,12 +60,13 @@ static LocalDce::Stats add_dce_stats(LocalDce::Stats a, LocalDce::Stats b) {
  * run() removes unused params from method signatures and param loads, then
  * updates all affected callsites accordingly.
  */
-RemoveArgs::PassStats RemoveArgs::run() {
+RemoveArgs::PassStats RemoveArgs::run(ConfigFiles& config) {
   RemoveArgs::PassStats pass_stats;
   gather_results_used();
   auto override_graph = mog::build_graph(m_scope);
   compute_reordered_protos(*override_graph);
-  auto method_stats = update_method_protos(*override_graph);
+  auto method_stats =
+      update_method_protos(*override_graph, config.get_do_not_devirt_anon());
   pass_stats.method_params_removed_count =
       method_stats.method_params_removed_count;
   pass_stats.methods_updated_count = method_stats.methods_updated_count;
@@ -517,7 +520,8 @@ static std::deque<uint16_t> update_method_body_for_reordered_proto(
  * For methods that have unused arguments, record live argument registers.
  */
 RemoveArgs::MethodStats RemoveArgs::update_method_protos(
-    const mog::Graph& override_graph) {
+    const mog::Graph& override_graph,
+    const std::unordered_set<DexType*>& no_devirtualize_annos) {
   // Phase 1: Find (in parallel) all methods that we can potentially update
 
   struct Entry {
@@ -545,6 +549,12 @@ RemoveArgs::MethodStats RemoveArgs::update_method_protos(
       if (dead_insns.empty() && !remove_result) {
         return;
       }
+    }
+    // If method is annotated with @DoNotVirtualize, careful about removing this
+    // param that might make the method static. For now do not remove any unused
+    // arguments for this.
+    if (has_any_annotation(method, no_devirtualize_annos)) {
+      return;
     }
 
     // Remember entry
@@ -696,7 +706,7 @@ size_t RemoveArgs::update_callsites() {
 }
 
 void RemoveUnusedArgsPass::run_pass(DexStoresVector& stores,
-                                    ConfigFiles& /* conf */,
+                                    ConfigFiles& conf,
                                     PassManager& mgr) {
   auto scope = build_class_scope(stores);
 
@@ -710,7 +720,7 @@ void RemoveUnusedArgsPass::run_pass(DexStoresVector& stores,
   while (true) {
     num_iterations++;
     RemoveArgs rm_args(scope, m_blocklist, m_total_iterations++);
-    auto pass_stats = rm_args.run();
+    auto pass_stats = rm_args.run(conf);
     if (pass_stats.methods_updated_count == 0) {
       break;
     }

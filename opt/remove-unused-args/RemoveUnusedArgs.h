@@ -44,7 +44,7 @@ class RemoveArgs {
              const std::vector<std::string>& blocklist,
              size_t iteration = 0)
       : m_scope(scope), m_blocklist(blocklist), m_iteration(iteration){};
-  RemoveArgs::PassStats run();
+  RemoveArgs::PassStats run(ConfigFiles& conf);
 
  private:
   const Scope& m_scope;
@@ -69,7 +69,9 @@ class RemoveArgs {
                                const std::deque<uint16_t>& live_arg_idxs,
                                bool remove_result,
                                DexProto* reordered_proto);
-  MethodStats update_method_protos(const mog::Graph& override_graph);
+  MethodStats update_method_protos(
+      const mog::Graph& override_graph,
+      const std::unordered_set<DexType*>& no_devirtualize_anno);
   size_t update_callsite(IRInstruction* instr);
   size_t update_callsites();
   void gather_results_used();

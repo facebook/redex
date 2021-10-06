@@ -93,6 +93,7 @@ struct ConfigFiles {
   const std::unordered_set<DexType*>& get_no_optimizations_annos();
   const std::unordered_set<DexMethodRef*>& get_pure_methods();
   const std::unordered_set<DexString*>& get_finalish_field_names();
+  const std::unordered_set<DexType*>& get_do_not_devirt_anon();
 
   const std::unordered_set<std::string>&
   get_method_sorting_allowlisted_substrings() const {
@@ -175,6 +176,7 @@ struct ConfigFiles {
   // 0 when limit is not present
   uint32_t m_instruction_size_bitwidth_limit;
 
+  std::unordered_set<DexType*> m_no_devirtualize_annos;
   // global no optimizations annotations
   std::unordered_set<DexType*> m_no_optimizations_annos;
   // global pure methods

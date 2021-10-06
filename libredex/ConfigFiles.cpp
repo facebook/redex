@@ -108,6 +108,26 @@ const std::unordered_set<DexString*>& ConfigFiles::get_finalish_field_names() {
 }
 
 /**
+ * This function relies on the g_redex.
+ */
+
+const std::unordered_set<DexType*>& ConfigFiles::get_do_not_devirt_anon() {
+  if (m_no_devirtualize_annos.empty()) {
+    std::vector<std::string> no_devirtualize_anno_names;
+    m_json.get("no_devirtualize_annos", {}, no_devirtualize_anno_names);
+    if (!no_devirtualize_anno_names.empty()) {
+      for (auto& name : no_devirtualize_anno_names) {
+        auto* typ = DexType::get_type(name);
+        if (typ) {
+          m_no_devirtualize_annos.insert(typ);
+        }
+      }
+    }
+  }
+  return m_no_devirtualize_annos;
+}
+
+/**
  * Read an interdex list file and return as a vector of appropriately-formatted
  * classname strings.
  */

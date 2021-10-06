@@ -13,6 +13,7 @@
 #include <string>
 #include <vector>
 
+#include "AnnoUtils.h"
 #include "ClassHierarchy.h"
 #include "ConfigFiles.h"
 #include "Deleter.h"
@@ -39,7 +40,7 @@ namespace {
  * for inlining.
  */
 std::unordered_set<DexMethod*> gather_non_virtual_methods(
-    Scope& scope, const mog::Graph* method_override_graph) {
+    Scope& scope, const mog::Graph* method_override_graph, const std::unordered_set<DexType*>& no_devirtualize_anno) {
   // trace counter
   size_t all_methods = 0;
   size_t direct_methods = 0;
@@ -87,6 +88,9 @@ std::unordered_set<DexMethod*> gather_non_virtual_methods(
         non_virtual_no_code++;
         continue;
       }
+       if (has_any_annotation(vmeth, no_devirtualize_anno)) {
+                 continue;
+                       }
       methods.insert(vmeth);
     }
   }
@@ -330,7 +334,7 @@ void run_inliner(DexStoresVector& stores,
     method_override_graph = mog::build_graph(scope);
   }
 
-  auto methods = gather_non_virtual_methods(scope, method_override_graph.get());
+  auto methods = gather_non_virtual_methods(scope, method_override_graph.get(), conf.get_do_not_devirt_anon());
 
   // The methods list computed above includes all constructors, regardless of
   // whether it's safe to inline them or not. We'll let the inliner decide

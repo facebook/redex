@@ -7,6 +7,7 @@
 
 #include "MethodDevirtualizer.h"
 
+#include "AnnoUtils.h"
 #include "MethodOverrideGraph.h"
 #include "Mutators.h"
 #include "Resolver.h"
@@ -136,15 +137,18 @@ bool uses_this(const DexMethod* method) {
 
 std::vector<DexMethod*> get_devirtualizable_vmethods(
     const std::vector<DexClass*>& scope,
-    const std::vector<DexClass*>& targets) {
+    const std::vector<DexClass*>& targets,
+    const std::unordered_set<DexType*>& do_not_devirt_anno) {
   std::vector<DexMethod*> ret;
   const auto& override_graph = mog::build_graph(scope);
   auto vmethods = mog::get_non_true_virtuals(*override_graph, scope);
   auto targets_set =
       std::unordered_set<DexClass*>(targets.begin(), targets.end());
+
   for (auto m : vmethods) {
     auto cls = type_class(m->get_class());
-    if (targets_set.count(cls) > 0) {
+    if (!has_any_annotation(m, do_not_devirt_anno) &&
+        targets_set.count(cls) > 0) {
       ret.push_back(m);
     }
   }
@@ -153,7 +157,8 @@ std::vector<DexMethod*> get_devirtualizable_vmethods(
 
 std::vector<DexMethod*> get_devirtualizable_dmethods(
     const std::vector<DexClass*>& scope,
-    const std::vector<DexClass*>& targets) {
+    const std::vector<DexClass*>& targets,
+    const std::unordered_set<DexType*>& do_not_devirt_anno) {
   std::vector<DexMethod*> ret;
   auto targets_set =
       std::unordered_set<DexClass*>(targets.begin(), targets.end());
@@ -165,7 +170,9 @@ std::vector<DexMethod*> get_devirtualizable_dmethods(
       if (method::is_any_init(m) || is_static(m)) {
         continue;
       }
-      ret.push_back(m);
+      if (!has_any_annotation(m, do_not_devirt_anno)) {
+        ret.push_back(m);
+      }
     }
   }
   return ret;
@@ -221,7 +228,8 @@ void MethodDevirtualizer::staticize_methods_using_this(
 DevirtualizerMetrics MethodDevirtualizer::devirtualize_methods(
     const Scope& scope, const std::vector<DexClass*>& target_classes) {
   reset_metrics();
-  auto vmethods = get_devirtualizable_vmethods(scope, target_classes);
+  auto vmethods = get_devirtualizable_vmethods(
+      scope, target_classes, m_config.do_not_devirt_anno);
   std::unordered_set<DexMethod*> using_this, not_using_this;
   verify_and_split(vmethods, using_this, not_using_this);
   TRACE(VIRT,
@@ -238,7 +246,8 @@ DevirtualizerMetrics MethodDevirtualizer::devirtualize_methods(
     staticize_methods_using_this(scope, using_this);
   }
 
-  auto dmethods = get_devirtualizable_dmethods(scope, target_classes);
+  auto dmethods = get_devirtualizable_dmethods(
+      scope, target_classes, {m_config.do_not_devirt_anno});
   using_this.clear();
   not_using_this.clear();
   verify_and_split(dmethods, using_this, not_using_this);
