@@ -335,11 +335,15 @@ DexClass* CrossDexRefMinimizer::worst() {
 }
 
 size_t CrossDexRefMinimizer::erase(DexClass* cls, bool emitted, bool reset) {
-  m_prioritized_classes.erase(cls);
-  auto class_info_it = m_class_infos.find(cls);
-  always_assert(class_info_it != m_class_infos.end());
-  const CrossDexRefMinimizer::ClassInfo& class_info = class_info_it->second;
-  TRACE(IDEX, 3,
+  std::unordered_map<DexClass*, ClassInfo>::const_iterator class_info_it =
+      m_class_infos.end();
+  if (cls) {
+    m_prioritized_classes.erase(cls);
+    class_info_it = m_class_infos.find(cls);
+    always_assert(class_info_it != m_class_infos.end());
+    const auto& class_info = class_info_it->second;
+    TRACE(
+        IDEX, 3,
         "[dex ordering] Processing class {%s} with priority %016" PRIu64
         "; index %u; %" PRIu64
         " applied refs weight, %s infrequent refs weights, %zu total refs; "
@@ -348,6 +352,9 @@ size_t CrossDexRefMinimizer::erase(DexClass* cls, bool emitted, bool reset) {
         class_info.applied_refs_weight,
         format_infrequent_refs_array(class_info.infrequent_refs_weight).c_str(),
         class_info.refs.size(), emitted);
+  } else {
+    always_assert(!emitted);
+  }
 
   // Updating m_applied_refs and m_ref_classes,
   // and gathering information on how this affects other classes
@@ -360,46 +367,49 @@ size_t CrossDexRefMinimizer::erase(DexClass* cls, bool emitted, bool reset) {
 
   std::unordered_map<DexClass*, CrossDexRefMinimizer::ClassInfoDelta>
       affected_classes;
-  const auto& refs = class_info.refs;
   size_t old_applied_refs = m_applied_refs.size();
-  for (const std::pair<void*, uint32_t>& p : refs) {
-    void* ref = p.first;
-    uint32_t weight = p.second;
-    auto& classes = m_ref_classes.at(ref);
-    size_t frequency = classes.size();
-    always_assert(frequency > 0);
-    const auto erased = classes.erase(cls);
-    always_assert(erased);
-    if (frequency <= INFREQUENT_REFS_COUNT) {
-      for (DexClass* affected_class : classes) {
-        affected_classes[affected_class]
-            .infrequent_refs_weight[frequency - 1] -= weight;
+  if (class_info_it != m_class_infos.end()) {
+    const auto& class_info = class_info_it->second;
+    const auto& refs = class_info.refs;
+    for (const std::pair<void*, uint32_t>& p : refs) {
+      void* ref = p.first;
+      uint32_t weight = p.second;
+      auto& classes = m_ref_classes.at(ref);
+      size_t frequency = classes.size();
+      always_assert(frequency > 0);
+      const auto erased = classes.erase(cls);
+      always_assert(erased);
+      if (frequency <= INFREQUENT_REFS_COUNT) {
+        for (DexClass* affected_class : classes) {
+          affected_classes[affected_class]
+              .infrequent_refs_weight[frequency - 1] -= weight;
+        }
       }
-    }
-    --frequency;
-    if (frequency > 0 && frequency <= INFREQUENT_REFS_COUNT) {
+      --frequency;
+      if (frequency > 0 && frequency <= INFREQUENT_REFS_COUNT) {
+        for (DexClass* affected_class : classes) {
+          affected_classes[affected_class]
+              .infrequent_refs_weight[frequency - 1] += weight;
+        }
+      }
+
+      if (!emitted) {
+        continue;
+      }
+      if (m_applied_refs.count(ref) != 0) {
+        continue;
+      }
+      m_applied_refs.emplace(ref);
       for (DexClass* affected_class : classes) {
-        affected_classes[affected_class]
-            .infrequent_refs_weight[frequency - 1] += weight;
+        affected_classes[affected_class].applied_refs_weight += weight;
       }
     }
 
-    if (!emitted) {
-      continue;
-    }
-    if (m_applied_refs.count(ref) != 0) {
-      continue;
-    }
-    m_applied_refs.emplace(ref);
-    for (DexClass* affected_class : classes) {
-      affected_classes[affected_class].applied_refs_weight += weight;
-    }
+    // Updating m_class_infos and m_prioritized_classes
+
+    m_class_infos.erase(class_info_it);
+    always_assert(m_class_infos.count(cls) == 0);
   }
-
-  // Updating m_class_infos and m_prioritized_classes
-
-  m_class_infos.erase(class_info_it);
-  always_assert(m_class_infos.count(cls) == 0);
 
   if (reset) {
     m_prioritized_classes.clear();

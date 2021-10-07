@@ -139,6 +139,7 @@ class CrossDexRefMinimizer {
   // class is in fact applied to a new dex.
   // This function returns the number of applied refs.
   size_t erase(DexClass* cls, bool emitted, bool reset);
+  void reset() { erase(nullptr, /* emitted */ false, /* reset */ true); }
   const CrossDexRefMinimizerConfig& get_config() const { return m_config; }
   const CrossDexRefMinimizerStats& stats() const { return m_stats; }
   size_t get_applied_refs() const { return m_applied_refs.size(); }

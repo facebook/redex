@@ -129,7 +129,8 @@ class InterDex {
                   DexClass* clazz,
                   bool check_if_skip,
                   bool perf_sensitive,
-                  DexClass** canary_cls);
+                  DexClass** canary_cls,
+                  bool* overflowed = nullptr);
   void emit_primary_dex(
       const DexClasses& primary_dex,
       const std::vector<DexType*>& interdex_order,

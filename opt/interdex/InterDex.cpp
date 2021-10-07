@@ -309,7 +309,8 @@ bool InterDex::emit_class(DexInfo& dex_info,
                           DexClass* clazz,
                           bool check_if_skip,
                           bool perf_sensitive,
-                          DexClass** canary_cls) {
+                          DexClass** canary_cls,
+                          bool* overflowed) {
   if (is_canary(clazz)) {
     // Nothing to do here.
     return false;
@@ -341,6 +342,11 @@ bool InterDex::emit_class(DexInfo& dex_info,
   if (!fits_current_dex) {
     flush_out_dex(dex_info, *canary_cls);
     *canary_cls = get_canary_cls(dex_info);
+
+    if (overflowed) {
+      *overflowed = true;
+      return false;
+    }
 
     // Plugins may maintain internal state after gathering refs, and
     // then they tend to forget that state after flushing out (class
@@ -769,7 +775,6 @@ void InterDex::emit_remaining_classes(DexInfo& dex_info,
 
   init_cross_dex_ref_minimizer_and_relocate_methods();
 
-  int dexnum = m_dexes_structure.get_num_dexes();
   // Strategy for picking the next class to emit:
   // - at the beginning of a new dex, pick the "worst" class, i.e. the class
   //   with the most (adjusted) unapplied refs
@@ -794,22 +799,28 @@ void InterDex::emit_remaining_classes(DexInfo& dex_info,
       cls = m_cross_dex_ref_minimizer.front();
     }
 
-    bool emitted = emit_class(dex_info, cls, /* check_if_skip */ false,
-                              /* perf_sensitive */ false, canary_cls);
-    int new_dexnum = m_dexes_structure.get_num_dexes();
-    bool overflowed = dexnum != new_dexnum;
+    bool overflowed = false;
+    bool emitted =
+        emit_class(dex_info, cls, /* check_if_skip */ false,
+                   /* perf_sensitive */ false, canary_cls, &overflowed);
+    if (overflowed) {
+      always_assert(!emitted);
+      m_cross_dex_ref_minimizer.reset();
+      pick_worst = true;
+      if (m_cross_dex_relocator != nullptr) {
+        m_cross_dex_relocator->current_dex_overflowed();
+      }
+      continue;
+    }
+
     m_cross_dex_ref_minimizer.erase(cls, emitted, overflowed);
 
     if (m_cross_dex_relocator != nullptr) {
       // Let's merge relocated helper classes
-      if (overflowed) {
-        m_cross_dex_relocator->current_dex_overflowed();
-      }
       m_cross_dex_relocator->add_to_current_dex(cls);
     }
 
-    pick_worst = (pick_worst && !emitted) || overflowed;
-    dexnum = new_dexnum;
+    pick_worst = pick_worst && !emitted;
   }
 }
 
