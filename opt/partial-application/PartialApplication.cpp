@@ -371,6 +371,17 @@ bool filter(const RefChecker& ref_checker,
   }
 }
 
+using CallSiteSummarySet = std::unordered_set<const CallSiteSummary*>;
+using CallSiteSummaryVector = std::vector<const CallSiteSummary*>;
+CallSiteSummaryVector order_csses(const CallSiteSummarySet& csses) {
+  CallSiteSummaryVector ordered_csses(csses.begin(), csses.end());
+  std::sort(ordered_csses.begin(), ordered_csses.end(),
+            [](const CallSiteSummary* a, const CallSiteSummary* b) {
+              return a->get_key() < b->get_key();
+            });
+  return ordered_csses;
+}
+
 // Priority-queue based algorithm to select which invocations and which constant
 // arguments are beneficial to transform.
 class CalleeInvocationSelector {
@@ -399,7 +410,6 @@ class CalleeInvocationSelector {
   Parent m_parent;
   CallSiteSummarySets m_css_sets;
 
-  using CallSiteSummarySet = std::unordered_set<const CallSiteSummary*>;
   CallSiteSummarySet m_call_site_summaries;
   using ArgumentCosts = std::unordered_map<src_index_t, int32_t>;
   std::unordered_map<const CallSiteSummary*, ArgumentCosts>
@@ -620,16 +630,8 @@ class CalleeInvocationSelector {
 
   // Fill priority queue with raw data.
   void fill_pq() {
-    std::vector<const CallSiteSummary*> ordered_call_site_summaries(
-        m_call_site_summaries.begin(), m_call_site_summaries.end());
-    std::sort(ordered_call_site_summaries.begin(),
-              ordered_call_site_summaries.end(),
-              [](const CallSiteSummary* a, const CallSiteSummary* b) {
-                return a->get_key() < b->get_key();
-              });
-
     // Populate priority queue
-    for (auto css : ordered_call_site_summaries) {
+    for (auto css : order_csses(m_call_site_summaries)) {
       auto priority = make_priority(css);
       TRACE(PA, 4,
             "[PartialApplication] Considering %s(%s): net savings %d, priority "
@@ -700,7 +702,8 @@ class CalleeInvocationSelector {
               reduced_css->get_key().c_str(), least_cost, src_idx,
               get_net_savings(reduced_css));
       }
-      for (auto dependent_css : m_dependencies.at(src_idx).at(key)) {
+      const auto& csses = m_dependencies.at(src_idx).at(key);
+      for (auto dependent_css : order_csses(csses)) {
         TRACE(PA, 4, "[PartialApplication] Reprioritizing %s(%s)",
               SHOW(m_callee), dependent_css->get_key().c_str());
         m_pq.update_priority(dependent_css, make_priority(dependent_css));
@@ -854,7 +857,8 @@ void select_invokes_and_callers(
             continue;
           }
           auto callee_stable_hash = get_stable_hash(show(callee));
-          std::map<const DexTypeList*, std::vector<const CallSiteSummary*>,
+          std::map<const DexTypeList*,
+                   std::unordered_set<const CallSiteSummary*>,
                    dextypelists_comparator>
               ordered_pa_args_csses;
           auto callee_is_static = is_static(callee);
@@ -863,16 +867,13 @@ void select_invokes_and_callers(
             auto css = p.second;
             auto pa_args = get_partial_application_args(callee_is_static,
                                                         callee_proto, css);
-            ordered_pa_args_csses[pa_args].push_back(css);
+            auto inserted = ordered_pa_args_csses[pa_args].insert(css).second;
+            always_assert(true);
           }
           for (auto& p : ordered_pa_args_csses) {
             auto pa_args = p.first;
             auto& csses = p.second;
-            std::sort(csses.begin(), csses.end(),
-                      [](const CallSiteSummary* a, const CallSiteSummary* b) {
-                        return a->get_key() < b->get_key();
-                      });
-            for (auto css : csses) {
+            for (auto css : order_csses(csses)) {
               auto css_stable_hash = get_stable_hash(css->get_key());
               auto stable_hash =
                   get_stable_hash(callee_stable_hash, css_stable_hash);
