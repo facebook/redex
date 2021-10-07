@@ -138,9 +138,7 @@ void gather_refs(
     const DexClass* cls,
     interdex::MethodRefs* mrefs,
     interdex::FieldRefs* frefs,
-    interdex::TypeRefs* trefs,
-    std::vector<DexClass*>* erased_classes,
-    bool should_not_relocate_methods_of_class) {
+    interdex::TypeRefs* trefs) {
   std::vector<DexMethodRef*> method_refs;
   std::vector<DexFieldRef*> field_refs;
   std::vector<DexType*> type_refs;
@@ -149,8 +147,7 @@ void gather_refs(
   cls->gather_types(type_refs);
 
   for (const auto& plugin : plugins) {
-    plugin->gather_refs(dex_info, cls, method_refs, field_refs, type_refs,
-                        erased_classes, should_not_relocate_methods_of_class);
+    plugin->gather_refs(dex_info, cls, method_refs, field_refs, type_refs);
   }
 
   mrefs->insert(method_refs.begin(), method_refs.end());
@@ -312,8 +309,7 @@ bool InterDex::emit_class(DexInfo& dex_info,
                           DexClass* clazz,
                           bool check_if_skip,
                           bool perf_sensitive,
-                          DexClass** canary_cls,
-                          std::vector<DexClass*>* erased_classes) {
+                          DexClass** canary_cls) {
   if (is_canary(clazz)) {
     // Nothing to do here.
     return false;
@@ -338,8 +334,7 @@ bool InterDex::emit_class(DexInfo& dex_info,
   FieldRefs clazz_frefs;
   TypeRefs clazz_trefs;
   gather_refs(m_plugins, dex_info, clazz, &clazz_mrefs, &clazz_frefs,
-              &clazz_trefs, erased_classes,
-              should_not_relocate_methods_of_class(clazz));
+              &clazz_trefs);
 
   bool fits_current_dex = m_dexes_structure.add_class_to_current_dex(
       clazz_mrefs, clazz_frefs, clazz_trefs, clazz);
@@ -354,10 +349,8 @@ bool InterDex::emit_class(DexInfo& dex_info,
     clazz_mrefs.clear();
     clazz_frefs.clear();
     clazz_trefs.clear();
-    if (erased_classes) erased_classes->clear();
     gather_refs(m_plugins, dex_info, clazz, &clazz_mrefs, &clazz_frefs,
-                &clazz_trefs, erased_classes,
-                should_not_relocate_methods_of_class(clazz));
+                &clazz_trefs);
 
     m_dexes_structure.add_class_no_checks(clazz_mrefs, clazz_frefs, clazz_trefs,
                                           clazz);
@@ -730,9 +723,8 @@ void InterDex::init_cross_dex_ref_minimizer_and_relocate_methods() {
     // Don't bother with classes that emit_class will skip anyway
     if (should_skip_class_due_to_plugin(cls)) {
       // Skipping a class due to a plugin might mean that (members of) of the
-      // class will get emitted later via the additional-class mechanism,
-      // which is accounted for via the erased_classes reported through the
-      // plugin's gather_refs callback. So we'll also sample those classes here.
+      // class will get emitted later via the additional-class mechanism.
+      // So we'll also sample those classes here.
       m_cross_dex_ref_minimizer.sample(cls);
       continue;
     }
@@ -802,10 +794,8 @@ void InterDex::emit_remaining_classes(DexInfo& dex_info,
       cls = m_cross_dex_ref_minimizer.front();
     }
 
-    std::vector<DexClass*> erased_classes;
-    bool emitted =
-        emit_class(dex_info, cls, /* check_if_skip */ false,
-                   /* perf_sensitive */ false, canary_cls, &erased_classes);
+    bool emitted = emit_class(dex_info, cls, /* check_if_skip */ false,
+                              /* perf_sensitive */ false, canary_cls);
     int new_dexnum = m_dexes_structure.get_num_dexes();
     bool overflowed = dexnum != new_dexnum;
     m_cross_dex_ref_minimizer.erase(cls, emitted, overflowed);
@@ -816,16 +806,6 @@ void InterDex::emit_remaining_classes(DexInfo& dex_info,
         m_cross_dex_relocator->current_dex_overflowed();
       }
       m_cross_dex_relocator->add_to_current_dex(cls);
-    }
-
-    // We can treat *refs owned by "erased classes" as effectively being emitted
-    for (DexClass* erased_cls : erased_classes) {
-      TRACE(IDEX, 3, "[dex ordering] Applying erased class {%s}",
-            SHOW(erased_cls));
-      always_assert(should_skip_class_due_to_plugin(erased_cls));
-      m_cross_dex_ref_minimizer.insert(erased_cls);
-      m_cross_dex_ref_minimizer.erase(erased_cls, /* emitted */ true,
-                                      /* overflowed */ false);
     }
 
     pick_worst = (pick_worst && !emitted) || overflowed;
@@ -860,11 +840,8 @@ void InterDex::run_in_force_single_dex_mode() {
     MethodRefs clazz_mrefs;
     FieldRefs clazz_frefs;
     TypeRefs clazz_trefs;
-    std::vector<DexClass*> erased_classes;
-
     gather_refs(m_plugins, dex_info, cls, &clazz_mrefs, &clazz_frefs,
-                &clazz_trefs, &erased_classes,
-                should_not_relocate_methods_of_class(cls));
+                &clazz_trefs);
 
     m_dexes_structure.add_class_no_checks(clazz_mrefs, clazz_frefs, clazz_trefs,
                                           cls);

@@ -19,7 +19,6 @@ struct ClassSplittingConfig {
   bool relocate_non_static_direct_methods{true};
   bool relocate_non_true_virtual_methods{true};
   bool relocate_true_virtual_methods{true};
-  bool run_before_interdex{true};
   bool trampolines{true};
   unsigned int trampoline_size_threshold{100};
   std::vector<std::string> blocklist_types;
@@ -53,9 +52,6 @@ class ClassSplittingPass : public Pass {
     bind("relocate_true_virtual_methods",
          m_config.relocate_true_virtual_methods,
          m_config.relocate_true_virtual_methods);
-    bind("run_before_interdex",
-         m_config.run_before_interdex,
-         m_config.run_before_interdex);
     bind("trampolines", m_config.trampolines, m_config.trampolines);
     bind("trampoline_size_threshold", m_config.trampoline_size_threshold,
          m_config.trampoline_size_threshold);
@@ -73,6 +69,5 @@ class ClassSplittingPass : public Pass {
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
-  void run_before_interdex(DexStoresVector&, ConfigFiles&, PassManager&);
   ClassSplittingConfig m_config;
 };

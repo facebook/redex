@@ -52,18 +52,6 @@ class InstrumentInterDexPlugin : public interdex::InterDexPassPlugin {
   explicit InstrumentInterDexPlugin(size_t max_analysis_methods)
       : m_max_analysis_methods(max_analysis_methods) {}
 
-  void configure(const Scope& scope, ConfigFiles& cfg) override{};
-
-  bool should_skip_class(const DexClass* clazz) override { return false; }
-
-  void gather_refs(const interdex::DexInfo& dex_info,
-                   const DexClass* cls,
-                   std::vector<DexMethodRef*>& mrefs,
-                   std::vector<DexFieldRef*>& frefs,
-                   std::vector<DexType*>& trefs,
-                   std::vector<DexClass*>* erased_classes,
-                   bool should_not_relocate_methods_of_class) override {}
-
   size_t reserve_frefs() override {
     // We may introduce a new field
     return 1;
@@ -79,13 +67,6 @@ class InstrumentInterDexPlugin : public interdex::InterDexPassPlugin {
     // This makes sure that the inter-dex pass keeps space for new method refs.
     return m_max_analysis_methods;
   }
-
-  DexClasses additional_classes(const DexClassesVector& outdex,
-                                const DexClasses& classes) override {
-    return {};
-  }
-
-  void cleanup(const std::vector<DexClass*>& scope) override {}
 
  private:
   const size_t m_max_analysis_methods;
