@@ -57,6 +57,9 @@
 
 namespace {
 
+constexpr const char* INCOMING_HASHES = "incoming_hashes.txt";
+constexpr const char* OUTGOING_HASHES = "outgoing_hashes.txt";
+
 constexpr const char* JNI_OUTPUT_DIR = "/tmp/JNI_OUTPUT/";
 constexpr const char* REMOVABLE_NATIVES = "redex-removable-natives.txt";
 const std::string PASS_ORDER_KEY = "pass_order";
@@ -516,6 +519,24 @@ void process_method_profiles(PassManager& mgr, ConfigFiles& conf) {
                  conf.get_method_profiles().unresolved_size());
 }
 
+void maybe_write_hashes_incoming(const ConfigFiles& conf, const Scope& scope) {
+  if (conf.emit_incoming_hashes()) {
+    TRACE(PM, 1, "Writing incoming hashes...");
+    Timer t("Writing incoming hashes");
+    std::ofstream hashes_file(conf.metafile(INCOMING_HASHES));
+    hashing::print_classes(hashes_file, scope);
+  }
+}
+
+void maybe_write_hashes_outgoing(const ConfigFiles& conf, const Scope& scope) {
+  if (conf.emit_outgoing_hashes()) {
+    TRACE(PM, 1, "Writing outgoing hashes...");
+    Timer t("Writing outgoing hashes");
+    std::ofstream hashes_file(conf.metafile(OUTGOING_HASHES));
+    hashing::print_classes(hashes_file, scope);
+  }
+}
+
 void maybe_write_env_seeds_file(const ConfigFiles& conf, const Scope& scope) {
   char* seeds_output_file = std::getenv("REDEX_SEEDS_FILE");
   if (seeds_output_file) {
@@ -958,6 +979,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
 
   maybe_write_env_seeds_file(conf, scope);
   maybe_print_seeds_incoming(conf, scope, m_pg_config);
+  maybe_write_hashes_incoming(conf, scope);
 
   maybe_enable_opt_data(conf);
 
@@ -1123,6 +1145,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   graph_visualizer.finalize();
 
   maybe_print_seeds_outgoing(conf, it);
+  maybe_write_hashes_outgoing(conf, scope);
 
   sanitizers::lsan_do_recoverable_leak_check();
 

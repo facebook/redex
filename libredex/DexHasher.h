@@ -49,8 +49,11 @@ class DexClassHasher final {
  public:
   explicit DexClassHasher(DexClass* cls) : m_cls(cls) {}
   DexHash run();
+  void print(std::ostream&);
 
  private:
+  DexHash get_hash() const;
+  void hash_metadata();
   void hash(const std::string& str);
   void hash(int value);
   void hash(uint64_t value);
@@ -103,4 +106,8 @@ class DexClassHasher final {
   size_t m_positions_hash{0};
 };
 
+void print_classes(std::ostream& output, const Scope& classes);
+
 } // namespace hashing
+
+std::ostream& operator<<(std::ostream&, const hashing::DexHash&);

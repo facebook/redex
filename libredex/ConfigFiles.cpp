@@ -329,6 +329,14 @@ bool ConfigFiles::force_single_dex() const {
   return m_json.get("force_single_dex", false);
 }
 
+bool ConfigFiles::emit_incoming_hashes() const {
+  return m_json.get("emit_incoming_hashes", false);
+}
+
+bool ConfigFiles::emit_outgoing_hashes() const {
+  return m_json.get("emit_outgoing_hashes", false);
+}
+
 void ConfigFiles::set_outdir(const std::string& new_outdir) {
   // Gotta ensure "meta" exists.
   auto meta_path = boost::filesystem::path(new_outdir) / "meta";

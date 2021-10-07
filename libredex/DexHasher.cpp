@@ -360,9 +360,7 @@ void DexClassHasher::hash(const DexField* f) {
   hash(f->get_deobfuscated_name());
 }
 
-DexHash DexClassHasher::run() {
-  TRACE(HASHER, 2, "[hasher] ==== hashing class %s", SHOW(m_cls->get_type()));
-
+void DexClassHasher::hash_metadata() {
   hash(m_cls->get_access());
   hash(m_cls->get_type());
   if (m_cls->get_super_class()) {
@@ -370,6 +368,16 @@ DexHash DexClassHasher::run() {
   }
   hash(m_cls->get_interfaces());
   hash(m_cls->get_anno_set());
+}
+
+DexHash DexClassHasher::get_hash() const {
+  return DexHash{m_positions_hash, m_registers_hash, m_code_hash, m_hash};
+}
+
+DexHash DexClassHasher::run() {
+  TRACE(HASHER, 2, "[hasher] ==== hashing class %s", SHOW(m_cls->get_type()));
+
+  hash_metadata();
 
   TRACE(HASHER, 3, "[hasher] === dmethods: %zu", m_cls->get_dmethods().size());
   hash(m_cls->get_dmethods());
@@ -383,7 +391,55 @@ DexHash DexClassHasher::run() {
   TRACE(HASHER, 3, "[hasher] === ifields: %zu", m_cls->get_ifields().size());
   hash(m_cls->get_ifields());
 
-  return DexHash{m_positions_hash, m_registers_hash, m_code_hash, m_hash};
+  return get_hash();
+}
+
+void DexClassHasher::print(std::ostream& ofs) {
+  hash_metadata();
+  ofs << "type " << show(m_cls) << " #" << hash_to_string(m_hash) << std::endl;
+  for (auto field : m_cls->get_ifields()) {
+    m_hash = 0;
+    hash(field);
+    ofs << "ifield " << show(field) << " #" << hash_to_string(m_hash)
+        << std::endl;
+  }
+  for (auto field : m_cls->get_sfields()) {
+    m_hash = 0;
+    hash(field);
+    ofs << "sfield " << show(field) << " #" << hash_to_string(m_hash)
+        << std::endl;
+  }
+
+  for (auto method : m_cls->get_dmethods()) {
+    m_hash = 0;
+    hash(method);
+    ofs << "dmethod " << show(method) << " " << get_hash() << std::endl;
+  }
+  for (auto method : m_cls->get_vmethods()) {
+    m_hash = 0;
+    hash(method);
+    ofs << "vmethod " << show(method) << " " << get_hash() << std::endl;
+  }
+}
+
+void print_classes(std::ostream& output, const Scope& classes) {
+  std::unordered_map<DexClass*, std::stringstream> class_strs;
+  walk::classes(classes, [&](DexClass* cls) {
+    class_strs.emplace(cls, std::stringstream());
+  });
+  walk::parallel::classes(classes, [&](DexClass* cls) {
+    DexClassHasher(cls).print(class_strs.at(cls));
+  });
+  walk::classes(classes,
+                [&](DexClass* cls) { output << class_strs.at(cls).rdbuf(); });
 }
 
 } // namespace hashing
+
+std::ostream& operator<<(std::ostream& os, const hashing::DexHash& hash) {
+  os << "(P#" << hashing::hash_to_string(hash.positions_hash) << ", R#"
+     << hashing::hash_to_string(hash.registers_hash) << ", C#"
+     << hashing::hash_to_string(hash.code_hash) << ", S#"
+     << hashing::hash_to_string(hash.signature_hash) << ")";
+  return os;
+}

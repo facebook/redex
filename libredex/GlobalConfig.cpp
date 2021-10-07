@@ -106,6 +106,8 @@ void GlobalConfig::bind_config() {
   bind("ab_experiments_states_override", {}, string_map_param);
   bind("ab_experiments_default", "", string_param);
   bind("force_single_dex", false, bool_param);
+  bind("emit_incoming_hashes", false, bool_param);
+  bind("emit_outgoing_hashes", false, bool_param);
   bind("instruction_size_bitwidth_limit", 0u, uint32_param);
   bind("json_serde_supercls", {}, string_vector_param);
   bind("keep_all_annotation_classes", true, bool_param);

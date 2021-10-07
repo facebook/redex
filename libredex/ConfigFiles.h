@@ -152,6 +152,10 @@ struct ConfigFiles {
 
   bool force_single_dex() const;
 
+  bool emit_incoming_hashes() const;
+
+  bool emit_outgoing_hashes() const;
+
  private:
   JsonWrapper m_json;
   std::string outdir;
