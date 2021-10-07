@@ -43,6 +43,7 @@
 #include "PluginRegistry.h"
 #include "Resolver.h"
 #include "Show.h"
+#include "SourceBlocks.h"
 #include "Walkers.h"
 
 namespace {
@@ -65,6 +66,8 @@ constexpr const char* METRIC_NON_RELOCATED_METHODS =
     "num_class_splitting_non_relocated_methods";
 constexpr const char* METRIC_POPULAR_METHODS =
     "num_class_splitting_popular_methods";
+constexpr const char* METRIC_SOURCE_BLOCKS_POSITIVE_VALS =
+    "num_class_splitting_source_block_positive_vals";
 constexpr const char* METRIC_RELOCATED_METHODS =
     "num_class_splitting_relocated_methods";
 constexpr const char* METRIC_TRAMPOLINES = "num_class_splitting_trampolines";
@@ -79,6 +82,7 @@ struct ClassSplittingStats {
   size_t relocated_true_virtual_methods{0};
   size_t non_relocated_methods{0};
   size_t popular_methods{0};
+  size_t source_block_positive_vals{0};
 };
 
 class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
@@ -182,6 +186,16 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
     return trampoline_target_method;
   }
 
+  bool has_source_block_positive_val(DexMethod* method) {
+    for (auto& mie : *method->get_code()) {
+      if (mie.type == MFLOW_SOURCE_BLOCK &&
+          source_blocks::has_source_block_positive_val(mie.src_block.get())) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   void prepare(const DexClass* cls,
                std::vector<DexMethodRef*>* mrefs,
                std::vector<DexType*>* trefs,
@@ -195,11 +209,17 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
     SplitClass& sc = m_split_classes[cls];
     always_assert(sc.relocatable_methods.empty());
     auto process_method = [&](DexMethod* method) {
+      if (!method->get_code()) {
+        return;
+      }
       if (m_sufficiently_popular_methods.count(method)) {
         return;
       }
       if (m_config.profile_only &&
           !m_insufficiently_popular_methods.count(method)) {
+        return;
+      }
+      if (m_config.source_blocks && has_source_block_positive_val(method)) {
         return;
       }
 
@@ -302,14 +322,20 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
       // (other InterDex plug-ins might have added or removed or relocated
       // methods).
       auto process_method = [&](DexMethod* method) {
+        if (!method->get_code()) {
+          return;
+        }
         if (m_sufficiently_popular_methods.count(method)) {
           m_stats.popular_methods++;
           return;
         }
-
         if (m_config.profile_only &&
             !m_insufficiently_popular_methods.count(method)) {
           m_stats.non_relocated_methods++;
+          return;
+        }
+        if (m_config.source_blocks && has_source_block_positive_val(method)) {
+          m_stats.source_block_positive_vals++;
           return;
         }
 
@@ -543,6 +569,8 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
     m_mgr.incr_metric(METRIC_NON_RELOCATED_METHODS,
                       m_stats.non_relocated_methods);
     m_mgr.incr_metric(METRIC_POPULAR_METHODS, m_stats.popular_methods);
+    m_mgr.incr_metric(METRIC_SOURCE_BLOCKS_POSITIVE_VALS,
+                      m_stats.source_block_positive_vals);
     m_mgr.incr_metric(METRIC_RELOCATED_METHODS, m_methods_to_relocate.size());
     m_mgr.incr_metric(METRIC_TRAMPOLINES, m_methods_to_trampoline.size());
 

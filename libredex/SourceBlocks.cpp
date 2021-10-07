@@ -369,4 +369,14 @@ InsertResult insert_source_blocks(
   return {helper.id, helper.oss.str(), !had_failures};
 }
 
+bool has_source_block_positive_val(const SourceBlock* sb) {
+  bool any_positive_val = false;
+  if (sb != nullptr) {
+    sb->foreach_val_early([&any_positive_val](const auto& val) {
+      any_positive_val = val && val->val > 0.0f;
+      return any_positive_val;
+    });
+  }
+  return any_positive_val;
+}
 } // namespace source_blocks

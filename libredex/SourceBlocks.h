@@ -148,6 +148,8 @@ InsertResult insert_source_blocks(
     bool serialize = true,
     bool insert_after_excs = false);
 
+bool has_source_block_positive_val(const SourceBlock* sb);
+
 inline bool has_source_blocks(const cfg::Block* b) {
   for (const auto& mie : *b) {
     if (mie.type == MFLOW_SOURCE_BLOCK) {
