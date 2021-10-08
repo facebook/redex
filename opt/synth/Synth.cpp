@@ -302,45 +302,21 @@ WrapperMethods analyze(const api::AndroidSDK* min_sdk_api,
                        XStoreRefs& xstores,
                        const ClassHierarchy& ch,
                        const std::vector<DexClass*>& classes,
-                       const SynthConfig& synthConfig,
-                       std::atomic<size_t>& illegal_refs) {
+                       const SynthConfig& synthConfig) {
   Timer timer("analyze");
   WrapperMethods ssms;
-  // RefChecker store_idx is initialized with `largest_root_store_id()`, so that
-  // it rejects all the references from stores with id larger than the largest
-  // root_store id.
-  RefChecker ref_checker(&xstores, xstores.largest_root_store_id(),
-                         min_sdk_api);
-  auto check_api_level_and_refs = [&](DexMethod* method) {
-    // We are conservative, and don't consider "inlining" a method invocation if
-    // it's marked with a non-min-api-level.
-    int32_t api_level = api::LevelChecker::get_method_level(method);
-    if (api_level != api::LevelChecker::get_min_level()) {
-      return false;
-    }
-    return ref_checker.check_method(method);
-  };
   walk::parallel::classes(classes, [&](DexClass* cls) {
     if (synthConfig.blocklist_types.count(cls->get_type())) {
       return;
     }
     for (auto dmethod : cls->get_dmethods()) {
       if (dmethod->rstate.dont_inline()) continue;
-      if (!check_api_level_and_refs(dmethod)) {
-        illegal_refs++;
-        continue;
-      }
 
       // constructors are special and all we can remove are synthetic ones
       if (synthConfig.remove_constructors && is_synthetic(dmethod) &&
           method::is_constructor(dmethod)) {
         auto ctor = trivial_ctor_wrapper(dmethod);
         if (ctor) {
-          if (!check_api_level_and_refs(ctor)) {
-            illegal_refs++;
-            continue;
-          }
-
           TRACE(SYNT, 2, "Trivial constructor wrapper: %s", SHOW(dmethod));
           TRACE(SYNT, 2, "  Calls constructor: %s", SHOW(ctor));
           ssms.ctors.emplace(dmethod, ctor);
@@ -352,11 +328,6 @@ WrapperMethods analyze(const api::AndroidSDK* min_sdk_api,
       if (is_static_synthetic(dmethod)) {
         auto field = trivial_get_field_wrapper(dmethod);
         if (field) {
-          if (!ref_checker.check_field(field)) {
-            illegal_refs++;
-            continue;
-          }
-
           TRACE(SYNT, 2, "Static trivial getter: %s", SHOW(dmethod));
           TRACE(SYNT, 2, "  Gets field: %s", SHOW(field));
           ssms.getters.emplace(dmethod, field);
@@ -364,11 +335,6 @@ WrapperMethods analyze(const api::AndroidSDK* min_sdk_api,
         }
         auto sfield = trivial_get_static_field_wrapper(dmethod);
         if (sfield) {
-          if (!ref_checker.check_field(sfield)) {
-            illegal_refs++;
-            continue;
-          }
-
           TRACE(SYNT, 2, "Static trivial static field getter: %s",
                 SHOW(dmethod));
           TRACE(SYNT, 2, "  Gets static field: %s", SHOW(sfield));
@@ -385,11 +351,6 @@ WrapperMethods analyze(const api::AndroidSDK* min_sdk_api,
           // Incidentally we have no single method falling in that bucket
           // at this time
           if (method->is_virtual()) continue;
-          if (!check_api_level_and_refs(method)) {
-            illegal_refs++;
-            continue;
-          }
-
           TRACE(SYNT, 2, "Static trivial method wrapper: %s", SHOW(dmethod));
           TRACE(SYNT, 2, "  Calls method: %s", SHOW(method));
           ssms.wrappers.emplace(dmethod, method);
@@ -593,10 +554,33 @@ struct MethodAnalysisResult {
 };
 
 std::unique_ptr<MethodAnalysisResult> analyze_method_concurrent(
-    DexMethod* caller_method, WrapperMethods& ssms) {
+    RefChecker& ref_checker,
+    DexMethod* caller_method,
+    WrapperMethods& ssms,
+    std::atomic<size_t>& illegal_refs) {
   auto mar = std::make_unique<MethodAnalysisResult>();
   TRACE(SYNT, 4, "Analyzing %s", SHOW(caller_method));
   auto ii = InstructionIterable(caller_method->get_code());
+  int32_t caller_api_level = api::LevelChecker::get_method_level(caller_method);
+  auto check_callee = [&](DexMethod* callee) {
+    int32_t callee_api_level = api::LevelChecker::get_method_level(callee);
+    if (callee_api_level != api::LevelChecker::get_min_level() &&
+        callee_api_level > caller_api_level) {
+      return false;
+    }
+    if (ref_checker.check_method(callee)) {
+      return true;
+    }
+    illegal_refs++;
+    return false;
+  };
+  auto check_field = [&](DexField* field) {
+    if (ref_checker.check_field(field)) {
+      return true;
+    }
+    illegal_refs++;
+    return false;
+  };
   for (auto it = ii.begin(); it != ii.end(); ++it) {
     auto insn = it->insn;
     if (insn->opcode() == OPCODE_INVOKE_STATIC) {
@@ -609,11 +593,12 @@ std::unique_ptr<MethodAnalysisResult> analyze_method_concurrent(
       if (found_get != ssms.getters.end()) {
         auto next_it = std::next(it);
         auto const move_result = next_it->insn;
-        if (!opcode::is_a_move_result(move_result->opcode())) {
+        auto field = found_get->second;
+        if (!opcode::is_a_move_result(move_result->opcode()) ||
+            !check_field(field)) {
           ssms.keepers.emplace(callee);
           continue;
         }
-        auto field = found_get->second;
         mar->getter_calls.emplace_back(insn, move_result, field);
         continue;
       }
@@ -621,7 +606,12 @@ std::unique_ptr<MethodAnalysisResult> analyze_method_concurrent(
       auto const found_wrap = ssms.wrappers.find(callee);
       if (found_wrap != ssms.wrappers.end()) {
         auto method = found_wrap->second;
-        mar->wrapper_calls.emplace_back(insn, callee, method);
+        if (check_callee(method)) {
+          mar->wrapper_calls.emplace_back(insn, callee, method);
+        } else {
+          ssms.keepers.emplace(callee);
+          ssms.keepers.emplace(method);
+        }
         continue;
       }
       always_assert_log(ssms.wrapped.find(callee) == ssms.wrapped.end(),
@@ -638,11 +628,12 @@ std::unique_ptr<MethodAnalysisResult> analyze_method_concurrent(
       if (found_get != ssms.getters.end()) {
         auto next_it = std::next(it);
         auto const move_result = next_it->insn;
-        if (!opcode::is_a_move_result(move_result->opcode())) {
+        auto field = found_get->second;
+        if (!opcode::is_a_move_result(move_result->opcode()) ||
+            !check_field(field)) {
           ssms.keepers.emplace(callee);
           continue;
         }
-        auto field = found_get->second;
         mar->getter_calls.emplace_back(insn, move_result, field);
         continue;
       }
@@ -650,21 +641,36 @@ std::unique_ptr<MethodAnalysisResult> analyze_method_concurrent(
       auto const found_wrap = ssms.wrappers.find(callee);
       if (found_wrap != ssms.wrappers.end()) {
         auto method = found_wrap->second;
-        mar->wrapper_calls.emplace_back(insn, callee, method);
+        if (check_callee(method)) {
+          mar->wrapper_calls.emplace_back(insn, callee, method);
+        } else {
+          ssms.keepers.emplace(callee);
+          ssms.keepers.emplace(method);
+        }
         continue;
       }
 
       auto const found_wrappee = ssms.wrapped.find(callee);
       if (found_wrappee != ssms.wrapped.end()) {
         auto wrapper = found_wrappee->second.first;
-        mar->wrapped_calls.emplace_back(insn, callee, wrapper);
+        if (check_callee(wrapper)) {
+          mar->wrapped_calls.emplace_back(insn, callee, wrapper);
+        } else {
+          ssms.keepers.emplace(callee);
+          ssms.keepers.emplace(wrapper);
+        }
         continue;
       }
 
       auto const found_ctor = ssms.ctors.find(callee);
       if (found_ctor != ssms.ctors.end()) {
         auto ctor = found_ctor->second;
-        mar->ctor_calls.emplace_back(insn, ctor);
+        if (check_callee(ctor)) {
+          mar->ctor_calls.emplace_back(insn, ctor);
+        } else {
+          ssms.keepers.emplace(callee);
+          ssms.keepers.emplace(ctor);
+        }
         continue;
       }
     }
@@ -864,11 +870,14 @@ void remove_dead_methods(WrapperMethods& ssms,
   });
 }
 
-void do_transform(const ClassHierarchy& ch,
+void do_transform(const api::AndroidSDK* min_sdk_api,
+                  XStoreRefs& xstores,
+                  const ClassHierarchy& ch,
                   const std::vector<DexClass*>& classes,
                   WrapperMethods& ssms,
                   const SynthConfig& synthConfig,
-                  SynthMetrics& metrics) {
+                  SynthMetrics& metrics,
+                  std::atomic<size_t>& illegal_refs) {
   Timer timer("do_transform");
   // remove wrappers.  build a vector ahead of time to ensure we only visit each
   // method once, even if we mutate the class method lists such that we'd hit
@@ -882,9 +891,18 @@ void do_transform(const ClassHierarchy& ch,
                                     std::unique_ptr<MethodAnalysisResult>());
   });
 
+  std::vector<std::unique_ptr<RefChecker>> ref_checkers;
+  ref_checkers.reserve(xstores.size());
+  for (size_t store_idx = 0; store_idx < xstores.size(); store_idx++) {
+    ref_checkers.emplace_back(
+        std::make_unique<RefChecker>(&xstores, store_idx, min_sdk_api));
+  }
   // Analyze methods in parallel (no mutation)
   walk::parallel::code(classes, [&](DexMethod* meth, IRCode&) {
-    method_analysis_results.at(meth) = analyze_method_concurrent(meth, ssms);
+    auto store_idx = xstores.get_store_idx(meth->get_class());
+    auto& ref_checker = ref_checkers.at(store_idx);
+    method_analysis_results.at(meth) =
+        analyze_method_concurrent(*ref_checker, meth, ssms, illegal_refs);
   });
 
   // Mutate method signatures (sequentially, as they are subtle dependencies)
@@ -962,10 +980,10 @@ bool optimize(const api::AndroidSDK* min_sdk_api,
               const SynthConfig& synthConfig,
               SynthMetrics& metrics,
               std::atomic<size_t>& illegal_refs) {
-  auto ssms =
-      analyze(min_sdk_api, xstores, ch, classes, synthConfig, illegal_refs);
+  auto ssms = analyze(min_sdk_api, xstores, ch, classes, synthConfig);
   redex_assert(trace_analysis(ssms));
-  do_transform(ch, classes, ssms, synthConfig, metrics);
+  do_transform(min_sdk_api, xstores, ch, classes, ssms, synthConfig, metrics,
+               illegal_refs);
   return ssms.next_pass;
 }
 
