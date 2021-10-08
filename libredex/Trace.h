@@ -150,6 +150,7 @@ class DexType;
   TM(VIRT)            \
   TM(VM)              \
   TM(VMERGE)          \
+  TM(V_USE)           \
   TM(KOTLIN_INSTANCE) \
   TM(KOTLIN_STATS)    \
   /* End of list */
