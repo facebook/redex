@@ -812,7 +812,7 @@ void remove_dead_methods(WrapperMethods& ssms,
     TRACE(SYNT, 1, "Public getters removed %ld", pub_meth);
   }
 
-  metrics.getters_removed_count += (synth_removed + other_removed + pub_meth);
+  metrics.getters_removed_count += synth_removed + other_removed;
 
   synth_removed = 0;
   other_removed = 0;
@@ -831,7 +831,7 @@ void remove_dead_methods(WrapperMethods& ssms,
     TRACE(SYNT, 1, "Public wrappers removed %ld", pub_meth);
   }
 
-  metrics.wrappers_removed_count += (synth_removed + other_removed + pub_meth);
+  metrics.wrappers_removed_count += synth_removed + other_removed;
 
   synth_removed = 0;
   other_removed = 0;
@@ -847,7 +847,7 @@ void remove_dead_methods(WrapperMethods& ssms,
     TRACE(SYNT, 1, "Public constructor removed %ld", pub_meth);
   }
 
-  metrics.ctors_removed_count += (synth_removed + pub_meth);
+  metrics.ctors_removed_count += synth_removed;
 
   redex_assert(other_removed == 0);
   ssms.next_pass = ssms.next_pass && any_remove;
