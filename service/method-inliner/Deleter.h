@@ -20,7 +20,7 @@
  * A resolver must be provided to map a method reference to a method definition.
  * The resolver must be thread-safe.
  */
-size_t delete_methods(
+std::vector<DexMethod*> delete_methods(
     std::vector<DexClass*>& scope,
     std::unordered_set<DexMethod*>& removable,
     std::function<DexMethod*(DexMethodRef*, MethodSearch)> concurrent_resolver);

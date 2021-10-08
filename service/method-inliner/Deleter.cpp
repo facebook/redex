@@ -13,7 +13,7 @@
 #include "Trace.h"
 #include "Walkers.h"
 
-size_t delete_methods(
+std::vector<DexMethod*> delete_methods(
     std::vector<DexClass*>& scope,
     std::unordered_set<DexMethod*>& removable,
     std::function<DexMethod*(DexMethodRef*, MethodSearch search)>
@@ -49,7 +49,7 @@ size_t delete_methods(
     }
   });
 
-  size_t deleted = 0;
+  std::vector<DexMethod*> deleted;
   for (auto callee : removable) {
     if (!callee->is_concrete()) continue;
     if (!can_delete(callee)) continue;
@@ -59,7 +59,7 @@ size_t delete_methods(
                       SHOW(callee));
     cls->remove_method(callee);
     DexMethod::erase_method(callee);
-    deleted++;
+    deleted.push_back(callee);
     TRACE(DELMET, 4, "removing %s", SHOW(callee));
   }
   return deleted;

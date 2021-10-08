@@ -20,5 +20,6 @@ void run_inliner(DexStoresVector& stores,
                  PassManager& mgr,
                  ConfigFiles& conf,
                  bool intra_dex = false,
-                 InlineForSpeed* inline_for_speed = nullptr);
+                 InlineForSpeed* inline_for_speed = nullptr,
+                 bool inline_bridge_synth_only = false);
 } // namespace inliner

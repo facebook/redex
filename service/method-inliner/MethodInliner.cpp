@@ -27,6 +27,7 @@
 #include "MethodProfiles.h"
 #include "ReachableClasses.h"
 #include "Resolver.h"
+#include "ScopedCFG.h"
 #include "ScopedMetrics.h"
 #include "Shrinker.h"
 #include "StlUtil.h"
@@ -99,6 +100,91 @@ static DexType* get_receiver_type_demand(DexType* callee_rtype,
         "Unsupported instruction {%s} in get_receiver_type_demand\n",
         SHOW(use.insn));
   }
+}
+
+static bool has_bridgelike_access(DexMethod* m) {
+  return m->is_virtual() &&
+         (is_bridge(m) || (is_synthetic(m) && !method::is_constructor(m)));
+}
+
+static void filter_candidates_bridge_synth_only(
+    PassManager& mgr,
+    Scope& scope,
+    std::unordered_set<DexMethod*>& candidates,
+    const std::string& prefix) {
+  ConcurrentSet<DexMethod*> bridgees;
+  ConcurrentSet<DexMethod*> getters;
+  ConcurrentSet<DexMethod*> ctors;
+  ConcurrentSet<DexMethod*> wrappers;
+  walk::parallel::code(scope, [&bridgees, &getters, &ctors,
+                               &wrappers](DexMethod* method, IRCode& code) {
+    cfg::ScopedCFG cfg(&code);
+    std::unordered_set<DexFieldRef*> field_refs;
+    std::unordered_set<DexMethod*> invoked_methods;
+    size_t other = 0;
+    for (auto& mie : InstructionIterable(*cfg)) {
+      auto insn = mie.insn;
+      auto op = insn->opcode();
+      if (insn->has_field()) {
+        if (opcode::is_an_iget(op) || opcode::is_an_sget(op)) {
+          field_refs.insert(insn->get_field());
+          continue;
+        }
+      } else if (insn->has_method()) {
+        if (opcode::is_invoke_static(op) || opcode::is_invoke_direct(op)) {
+          auto callee = resolve_method(insn->get_method(),
+                                       opcode_to_search(insn), method);
+          if (callee) {
+            invoked_methods.insert(callee);
+            continue;
+          }
+        }
+      }
+      if (opcode::is_a_load_param(op) || opcode::is_check_cast(op) ||
+          opcode::is_move_result_any(op) || opcode::is_a_move(op) ||
+          opcode::is_a_return(op)) {
+        continue;
+      }
+      other++;
+    }
+
+    // Looks for similar patterns as the legacy BridgePass
+    if (field_refs.size() + other == 0 && invoked_methods.size() == 1 &&
+        has_bridgelike_access(method)) {
+      auto bridgee = (*invoked_methods.begin());
+      if (method->get_class() == bridgee->get_class()) {
+        bridgees.insert(bridgee);
+      }
+    }
+
+    // Looks for similar patterns as the legacy SynthPass
+    if (is_synthetic(method)) {
+      if (is_static(method)) {
+        if (invoked_methods.size() + other == 0 && field_refs.size() == 1) {
+          // trivial_get_field_wrapper / trivial_get_static_field_wrapper
+          getters.insert(method);
+        }
+      } else if (method::is_init(method)) {
+        if (field_refs.size() + other == 0 && invoked_methods.size() == 1) {
+          // trivial_ctor_wrapper
+          ctors.insert(method);
+        }
+      }
+    }
+    if (!method->is_virtual() && !method::is_init(method) &&
+        field_refs.size() + other == 0 && invoked_methods.size() == 1) {
+      // trivial_method_wrapper
+      wrappers.insert(method);
+    }
+  });
+  std20::erase_if(candidates, [&](auto method) {
+    return !bridgees.count_unsafe(method) && !wrappers.count_unsafe(method) &&
+           !getters.count_unsafe(method) && !ctors.count_unsafe(method);
+  });
+  mgr.incr_metric(prefix + "bridgees", bridgees.size());
+  mgr.incr_metric(prefix + "wrappers", wrappers.size());
+  mgr.incr_metric(prefix + "getters", getters.size());
+  mgr.incr_metric(prefix + "ctors", ctors.size());
 }
 
 /**
@@ -550,7 +636,8 @@ void run_inliner(DexStoresVector& stores,
                  PassManager& mgr,
                  ConfigFiles& conf,
                  bool intra_dex /* false */,
-                 InlineForSpeed* inline_for_speed) {
+                 InlineForSpeed* inline_for_speed /* nullptr */,
+                 bool inline_bridge_synth_only /* false */) {
   if (mgr.no_proguard_rules()) {
     TRACE(INLINE, 1,
           "MethodInlinePass not run because no ProGuard configuration was "
@@ -576,13 +663,29 @@ void run_inliner(DexStoresVector& stores,
   }
 
   CalleeCallerInsns true_virtual_callers;
+  bool cross_dex_penalty = true;
   // Gather all inlinable candidates.
   if (intra_dex) {
     inliner_config.apply_intradex_allowlist();
+    cross_dex_penalty = false;
   }
 
   if (inline_for_speed != nullptr) {
     inliner_config.shrink_other_methods = false;
+  }
+
+  if (inline_bridge_synth_only) {
+    inliner_config.true_virtual_inline = false;
+    inliner_config.virtual_inline = false;
+    inliner_config.use_call_site_summaries = false;
+    inliner_config.shrink_other_methods = false;
+    inliner_config.intermediate_shrinking = false;
+    inliner_config.multiple_callers = true;
+    inliner_config.delete_non_virtuals = true;
+    inliner_config.shrinker = shrinker::ShrinkerConfig();
+    inliner_config.shrinker.compute_pure_methods = false;
+    inliner_config.shrinker.run_const_prop = true;
+    cross_dex_penalty = false;
   }
 
   inliner_config.unique_inlined_registers = false;
@@ -617,14 +720,20 @@ void run_inliner(DexStoresVector& stores,
   walk::parallel::code(scope, [](DexMethod*, IRCode& code) {
     code.build_cfg(/* editable */ true);
   });
+
+  if (inline_bridge_synth_only) {
+    filter_candidates_bridge_synth_only(mgr, scope, candidates, "initial_");
+  }
+
   inliner_config.shrinker.analyze_constructors =
       inliner_config.shrinker.run_const_prop;
 
   // inline candidates
-  MultiMethodInliner inliner(
-      scope, stores, candidates, concurrent_resolver, inliner_config,
-      intra_dex ? IntraDex : InterDex, true_virtual_callers, inline_for_speed,
-      analyze_and_prune_inits, conf.get_pure_methods(), min_sdk_api);
+  MultiMethodInliner inliner(scope, stores, candidates, concurrent_resolver,
+                             inliner_config, intra_dex ? IntraDex : InterDex,
+                             true_virtual_callers, inline_for_speed,
+                             analyze_and_prune_inits, conf.get_pure_methods(),
+                             min_sdk_api, cross_dex_penalty);
   inliner.inline_methods(/* need_deconstruct */ false);
 
   walk::parallel::code(scope,
@@ -640,7 +749,7 @@ void run_inliner(DexStoresVector& stores,
     }
   }
 
-  size_t deleted = 0;
+  std::vector<DexMethod*> deleted;
   if (inliner_config.delete_non_virtuals) {
     // Do not erase true virtual methods that are inlined because we are only
     // inlining callsites that are monomorphic, for polymorphic callsite we
@@ -651,6 +760,13 @@ void run_inliner(DexStoresVector& stores,
       inlined.erase(pair.first);
     }
     deleted = delete_methods(scope, inlined, concurrent_resolver);
+  }
+
+  if (inline_bridge_synth_only) {
+    std::unordered_set<DexMethod*> deleted_set(deleted.begin(), deleted.end());
+    std20::erase_if(candidates,
+                    [&](auto method) { return deleted_set.count(method); });
+    filter_candidates_bridge_synth_only(mgr, scope, candidates, "remaining_");
   }
 
   TRACE(INLINE, 3, "recursive %ld", inliner.get_info().recursive);
@@ -686,7 +802,8 @@ void run_inliner(DexStoresVector& stores,
         (size_t)inliner.get_info().caller_too_large);
   TRACE(INLINE, 3, "inlined ctors %zu", inlined_init_count);
   TRACE(INLINE, 1, "%ld inlined calls over %ld methods and %ld methods removed",
-        (size_t)inliner.get_info().calls_inlined, inlined_count, deleted);
+        (size_t)inliner.get_info().calls_inlined, inlined_count,
+        deleted.size());
 
   const auto& shrinker = inliner.get_shrinker();
   mgr.incr_metric("recursive", inliner.get_info().recursive);
@@ -706,7 +823,7 @@ void run_inliner(DexStoresVector& stores,
   mgr.incr_metric("intermediate_remove_unreachable_blocks",
                   inliner.get_info().intermediate_remove_unreachable_blocks);
   mgr.incr_metric("calls_not_inlined", inliner.get_info().calls_not_inlined);
-  mgr.incr_metric("methods_removed", deleted);
+  mgr.incr_metric("methods_removed", deleted.size());
   mgr.incr_metric("escaped_virtual", inliner.get_info().escaped_virtual);
   mgr.incr_metric("unresolved_methods", inliner.get_info().unresolved_methods);
   mgr.incr_metric("known_public_methods",

@@ -76,6 +76,7 @@ MultiMethodInliner::MultiMethodInliner(
     bool analyze_and_prune_inits,
     const std::unordered_set<DexMethodRef*>& configured_pure_methods,
     const api::AndroidSDK* min_sdk_api,
+    bool cross_dex_penalty,
     const std::unordered_set<DexString*>& configured_finalish_field_names)
     : m_concurrent_resolver(std::move(concurrent_resolve_fn)),
       m_scheduler(
@@ -103,6 +104,7 @@ MultiMethodInliner::MultiMethodInliner(
       m_mode(mode),
       m_inline_for_speed(inline_for_speed),
       m_analyze_and_prune_inits(analyze_and_prune_inits),
+      m_cross_dex_penalty(cross_dex_penalty),
       m_shrinker(stores,
                  scope,
                  config.shrinker,
@@ -1538,11 +1540,15 @@ bool MultiMethodInliner::can_inline_init(const DexMethod* init_method) {
 }
 
 bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
+  bool can_delete_callee = true;
   if (root(callee) || m_recursive_callees.count(callee) ||
       m_x_dex_callees.count(callee) ||
       m_true_virtual_callees_with_other_call_sites.count(callee) ||
       !m_config.multiple_callers) {
-    return true;
+    if (m_config.use_call_site_summaries) {
+      return true;
+    }
+    can_delete_callee = false;
   }
 
   const auto& callers = callee_caller.at(callee);
@@ -1576,7 +1582,7 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
 
   boost::optional<CalleeCallerRefs> callee_caller_refs;
   float cross_dex_penalty{0};
-  if (m_mode != IntraDex && !is_private(callee)) {
+  if (m_cross_dex_penalty && !is_private(callee)) {
     callee_caller_refs = get_callee_caller_refs(callee);
     if (callee_caller_refs->same_class) {
       callee_caller_refs = boost::none;
@@ -1605,30 +1611,34 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
 
   size_t classes = callee_caller_refs ? callee_caller_refs->classes : 0;
 
-  // The cost of keeping a method amounts of somewhat fixed metadata overhead,
-  // plus the method body, which we approximate with the inlined cost.
-  size_t method_cost = COST_METHOD + inlined_cost->full_code;
-  auto methods_cost = method_cost;
+  size_t method_cost = 0;
+  if (can_delete_callee) {
+    // The cost of keeping a method amounts of somewhat fixed metadata overhead,
+    // plus the method body, which we approximate with the inlined cost.
+    method_cost = COST_METHOD + inlined_cost->full_code;
+  }
 
   // If we inline invocations to this method everywhere, we could delete the
   // method. Is this worth it, given the number of callsites and costs
   // involved?
   if (inlined_cost->code * caller_count + classes * cross_dex_penalty >
-      invoke_cost * caller_count + methods_cost) {
+      invoke_cost * caller_count + method_cost) {
     return true;
   }
 
-  // We can't eliminate the method entirely if it's not inlinable
-  for (auto& p : callers) {
-    auto caller = p.first;
-    // We can't account here in detail for the caller and callee size. We hope
-    // for the best, and assume that the caller is empty, and we'll use the
-    // (maximum) insn_size for all inlined-costs. We'll check later again at
-    // each individual call-site whether the size limits hold.
-    if (!is_inlinable(caller, callee, /* insn */ nullptr,
-                      /* estimated_caller_size */ 0,
-                      /* estimated_callee_size */ inlined_cost->insn_size)) {
-      return true;
+  if (can_delete_callee) {
+    // We can't eliminate the method entirely if it's not inlinable
+    for (auto& p : callers) {
+      auto caller = p.first;
+      // We can't account here in detail for the caller and callee size. We hope
+      // for the best, and assume that the caller is empty, and we'll use the
+      // (maximum) insn_size for all inlined-costs. We'll check later again at
+      // each individual call-site whether the size limits hold.
+      if (!is_inlinable(caller, callee, /* insn */ nullptr,
+                        /* estimated_caller_size */ 0,
+                        /* estimated_callee_size */ inlined_cost->insn_size)) {
+        return true;
+      }
     }
   }
 
@@ -1648,7 +1658,7 @@ bool MultiMethodInliner::should_inline_at_call_site(
   }
 
   float cross_dex_penalty{0};
-  if (m_mode != IntraDex && !is_private(callee) &&
+  if (m_cross_dex_penalty && !is_private(callee) &&
       (caller == nullptr || caller->get_class() != callee->get_class())) {
     // Inlining methods into different classes might lead to worse
     // cross-dex-ref minimization results.

@@ -140,6 +140,7 @@ class MultiMethodInliner {
       bool analyze_and_prune_inits = false,
       const std::unordered_set<DexMethodRef*>& configured_pure_methods = {},
       const api::AndroidSDK* min_sdk_api = nullptr,
+      bool cross_dex_penalty = false,
       const std::unordered_set<DexString*>& configured_finalish_field_names =
           {});
 
@@ -602,6 +603,8 @@ class MultiMethodInliner {
   // Whether to do some deep analysis to determine if constructor candidates
   // can be safely inlined, and don't inline them otherwise.
   bool m_analyze_and_prune_inits;
+
+  bool m_cross_dex_penalty;
 
   shrinker::Shrinker m_shrinker;
 
