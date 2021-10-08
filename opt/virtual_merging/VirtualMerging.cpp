@@ -580,10 +580,9 @@ std::pair<std::vector<MethodData>, VirtualMergingStats> create_ordering(
                         ? 64 // we'll need some extra instruction; 64
                              // is conservative
                         : overridden_method->get_code()->sum_opcode_sizes();
-                std::vector<DexMethod*> make_static;
-                if (!inliner.is_inlinable(
-                        overridden_method, m, nullptr /* invoke_virtual_insn */,
-                        estimated_caller_size, &make_static)) {
+                if (!inliner.is_inlinable(overridden_method, m,
+                                          nullptr /* invoke_virtual_insn */,
+                                          estimated_caller_size)) {
                   TRACE(VM,
                         3,
                         "[VM] Cannot inline %s into %s",
@@ -785,15 +784,12 @@ VirtualMergingStats apply_ordering(
             is_abstract(overridden_method)
                 ? 64 // we'll need some extra instruction; 64 is conservative
                 : overridden_method->get_code()->sum_opcode_sizes();
-        std::vector<DexMethod*> make_static;
-        bool is_inlineable =
-            inliner.is_inlinable(overridden_method, overriding_method,
-                                 nullptr /* invoke_virtual_insn */,
-                                 estimated_insn_size, &make_static);
+        bool is_inlineable = inliner.is_inlinable(
+            overridden_method, overriding_method,
+            nullptr /* invoke_virtual_insn */, estimated_insn_size);
         always_assert_log(is_inlineable, "[VM] Cannot inline %s into %s",
                           SHOW(overriding_method), SHOW(overridden_method));
 
-        inliner.make_static_inlinable(make_static);
         TRACE(VM,
               4,
               "[VM] Merging %s into %s",
@@ -973,7 +969,9 @@ VirtualMergingStats apply_ordering(
         inliner::inline_with_cfg(
             overridden_method, overriding_method, invoke_virtual_insn,
             overridden_method->get_code()->cfg().get_registers_size());
-        change_visibility(overriding_method, overridden_method->get_class());
+        inliner.visibility_changes_apply_and_record_make_static(
+            get_visibility_changes(overriding_method,
+                                   overridden_method->get_class()));
         overriding_method->get_code()->clear_cfg();
 
         // Check if everything was inlined.

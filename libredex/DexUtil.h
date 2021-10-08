@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "ClassUtil.h"
+#include "ControlFlow.h"
 #include "Debug.h"
 #include "DexClass.h"
 #include "DexStore.h"
@@ -22,16 +23,45 @@
 #include "TypeUtil.h"
 
 /**
+ * Data structure to represent requested but unapplied visibility changes.
+ */
+struct VisibilityChanges {
+  std::unordered_set<DexClass*> classes;
+  std::unordered_set<DexField*> fields;
+  std::unordered_set<DexMethod*> methods;
+  void insert(const VisibilityChanges& other);
+  void apply() const;
+  bool empty() const;
+};
+
+/**
  * Change the visibility of members accessed in a method.
  * We make everything public, except if a scope argument is given; then accessed
  * members in the same scope will not be made public (We could be more precise
  * and walk the inheritance hierarchy as needed.)
  */
-void change_visibility(DexMethod* method, DexType* scope = nullptr);
+VisibilityChanges get_visibility_changes(const DexMethod* method,
+                                         DexType* scope = nullptr);
+inline void change_visibility(const DexMethod* method,
+                              DexType* scope = nullptr) {
+  get_visibility_changes(method, scope).apply();
+}
 
-void change_visibility(IRCode* code,
-                       DexType* scope,
-                       DexMethod* effective_caller_resolved_from);
+// The given code can be in cfg form.
+VisibilityChanges get_visibility_changes(
+    const IRCode* code,
+    DexType* scope,
+    const DexMethod* effective_caller_resolved_from);
+inline void change_visibility(const IRCode* code,
+                              DexType* scope,
+                              const DexMethod* effective_caller_resolved_from) {
+  get_visibility_changes(code, scope, effective_caller_resolved_from).apply();
+}
+
+VisibilityChanges get_visibility_changes(
+    const cfg::ControlFlowGraph& cfg,
+    DexType* scope,
+    const DexMethod* effective_caller_resolved_from);
 
 /**
  * NOTE: Only relocates the method. Doesn't check the correctness here,
@@ -54,20 +84,11 @@ bool gather_invoked_methods_that_prevent_relocation(
  * Relocates the method only if
  * gather_invoked_methods_that_prevent_relocation returns true.
  * It also updates the visibility of the accessed members.
- * NOTE: Does not check can_change_visibility_for_relocation.
+ * NOTE: Does not check if get_visibility_changes(...) is empty.
  * TODO: Consider integrating the full visibility check in
  * gather_invoked_methods_that_prevent_relocation.
  */
 bool relocate_method_if_no_changes(DexMethod* method, DexType* to_type);
-
-/**
- * Checks if visibility can be changed via change_visibility in a way that is
- * suitable for relocate_method.
- */
-bool can_change_visibility_for_relocation(const DexMethod* method);
-
-bool can_change_visibility_for_relocation(
-    const IRCode* code, const DexMethod* effective_caller_resolved_from);
 
 /**
  * Merge the 2 visibility access flags. Return the most permissive visibility.

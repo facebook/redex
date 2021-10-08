@@ -392,10 +392,7 @@ void run_inliner(DexStoresVector& stores,
   for (const auto& pair : true_virtual_callers) {
     inlined.erase(pair.first);
   }
-  ConcurrentSet<DexMethod*>& delayed_make_static =
-      inliner.get_delayed_make_static();
-  size_t deleted =
-      delete_methods(scope, inlined, delayed_make_static, concurrent_resolver);
+  size_t deleted = delete_methods(scope, inlined, concurrent_resolver);
 
   TRACE(INLINE, 3, "recursive %ld", inliner.get_info().recursive);
   TRACE(INLINE, 3, "max_call_stack_depth %ld",

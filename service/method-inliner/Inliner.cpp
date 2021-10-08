@@ -352,6 +352,8 @@ void MultiMethodInliner::compute_callee_constant_arguments() {
 }
 
 void MultiMethodInliner::inline_methods() {
+  m_ab_experiment_context = ab_test::ABExperimentContext::create("pgi_v1");
+
   compute_callee_constant_arguments();
 
   // Inlining and shrinking initiated from within this method will be done
@@ -375,8 +377,7 @@ void MultiMethodInliner::inline_methods() {
 
   // Instead of changing visibility as we inline, blocking other work on the
   // critical path, we do it all in parallel at the end.
-  m_delayed_change_visibilities = std::make_unique<
-      ConcurrentMap<DexMethod*, std::unordered_set<DexType*>>>();
+  m_delayed_visibility_changes = std::make_unique<VisibilityChanges>();
 
   // we want to inline bottom up, so as a first step we identify all the
   // top level callers, then we recurse into all inlinable callees until we
@@ -478,7 +479,12 @@ void MultiMethodInliner::inline_methods() {
   }
 
   m_async_method_executor.join();
-  delayed_change_visibilities();
+
+  m_ab_experiment_context->flush();
+  m_ab_experiment_context = nullptr;
+
+  delayed_visibility_changes_apply();
+  delayed_invoke_direct_to_static();
   info.waited_seconds = m_async_method_executor.get_waited_seconds();
 }
 
@@ -788,6 +794,9 @@ std::string create_inlining_trace_msg(const DexMethod* caller,
 
 void MultiMethodInliner::inline_inlinables(
     DexMethod* caller_method, const std::vector<Inlinable>& inlinables) {
+  if (for_speed() && m_ab_experiment_context->use_control()) {
+    return;
+  }
 
   auto caller = caller_method->get_code();
   std::unordered_set<IRCode*> need_deconstruct;
@@ -843,6 +852,9 @@ void MultiMethodInliner::inline_inlinables(
       (m_config.use_cfg_inliner && m_config.intermediate_shrinking)
           ? 0
           : std::numeric_limits<size_t>::max()};
+
+  VisibilityChanges visibility_changes;
+  std::unordered_set<DexMethod*> visibility_changes_for;
   for (const auto& inlinable : ordered_inlinables) {
     auto callee_method = inlinable.callee;
     auto callee = callee_method->get_code();
@@ -863,11 +875,10 @@ void MultiMethodInliner::inline_inlinables(
       }
     }
 
-    std::vector<DexMethod*> make_static;
     bool caller_too_large;
     auto not_inlinable =
         !is_inlinable(caller_method, callee_method, callsite_insn,
-                      estimated_insn_size, &make_static, &caller_too_large);
+                      estimated_insn_size, &caller_too_large);
     if (not_inlinable && caller_too_large && m_shrinker.enabled() &&
         inlined_callees.size() > last_intermediate_shrinking_inlined_callees) {
       always_assert(m_config.use_cfg_inliner);
@@ -877,21 +888,22 @@ void MultiMethodInliner::inline_inlinables(
       m_shrinker.shrink_method(caller_method);
       cfg_next_caller_reg = caller->cfg().get_registers_size();
       estimated_insn_size = caller->cfg().sum_opcode_sizes();
-      not_inlinable =
-          !is_inlinable(caller_method, callee_method, callsite_insn,
-                        estimated_insn_size, &make_static, &caller_too_large);
+      not_inlinable = !is_inlinable(caller_method, callee_method, callsite_insn,
+                                    estimated_insn_size, &caller_too_large);
     }
     if (not_inlinable) {
       calls_not_inlinable++;
       continue;
     }
-    // Only now, when are about actually inline the method, we'll record
-    // the fact that we'll have to make some methods static.
-    make_static_inlinable(make_static);
 
     TRACE(MMINL, 4, "%s",
           create_inlining_trace_msg(caller_method, callee_method, callsite_insn)
               .c_str());
+
+    if (for_speed()) {
+      std::lock_guard<std::mutex> lock(ab_exp_mutex);
+      m_ab_experiment_context->try_register_method(caller_method);
+    }
 
     if (m_config.use_cfg_inliner) {
       if (m_config.unique_inlined_registers) {
@@ -917,25 +929,25 @@ void MultiMethodInliner::inline_inlinables(
           caller->cfg_built() ? SHOW(caller->cfg()) : SHOW(caller),
           SHOW(callee));
     estimated_insn_size += get_callee_insn_size(callee_method);
+    visibility_changes_for.insert(callee_method);
 
     inlined_callees.push_back(callee_method);
   }
 
   if (!inlined_callees.empty()) {
-    for (auto callee_method : inlined_callees) {
-      if (m_delayed_change_visibilities) {
-        m_delayed_change_visibilities->update(
-            callee_method, [caller_method](const DexMethod*,
-                                           std::unordered_set<DexType*>& value,
-                                           bool /*exists*/) {
-              value.insert(caller_method->get_class());
-            });
-      } else {
-        std::lock_guard<std::mutex> guard(m_change_visibility_mutex);
-        change_visibility(callee_method, caller_method->get_class());
-      }
-      m_inlined.insert(callee_method);
+    for (auto callee_method : visibility_changes_for) {
+      visibility_changes.insert(
+          get_visibility_changes(callee_method, caller_method->get_class()));
     }
+    if (!visibility_changes.empty()) {
+      std::lock_guard<std::mutex> guard(m_visibility_changes_mutex);
+      if (m_delayed_visibility_changes) {
+        m_delayed_visibility_changes->insert(visibility_changes);
+      } else {
+        visibility_changes_apply_and_record_make_static(visibility_changes);
+      }
+    }
+    m_inlined.insert(inlined_callees.begin(), inlined_callees.end());
   }
 
   for (IRCode* code : need_deconstruct) {
@@ -1072,7 +1084,6 @@ bool MultiMethodInliner::is_inlinable(const DexMethod* caller,
                                       const DexMethod* callee,
                                       const IRInstruction* insn,
                                       size_t estimated_insn_size,
-                                      std::vector<DexMethod*>* make_static,
                                       bool* caller_too_large_) {
   TraceContext context{caller};
   if (caller_too_large_) {
@@ -1103,7 +1114,7 @@ bool MultiMethodInliner::is_inlinable(const DexMethod* caller,
     }
     return false;
   }
-  if (cannot_inline_opcodes(caller, callee, insn, make_static)) {
+  if (cannot_inline_opcodes(caller, callee, insn)) {
     return false;
   }
   if (!callee->rstate.force_inline()) {
@@ -1145,13 +1156,6 @@ bool MultiMethodInliner::is_inlinable(const DexMethod* caller,
   }
 
   return true;
-}
-
-void MultiMethodInliner::make_static_inlinable(
-    std::vector<DexMethod*>& make_static) {
-  for (auto method : make_static) {
-    m_delayed_make_static.insert(method);
-  }
 }
 
 /**
@@ -1786,8 +1790,7 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
     // We can't eliminate the method entirely if it's not inlinable
     for (auto caller : callers_set) {
       if (!is_inlinable(caller, callee, /* insn */ nullptr,
-                        /* estimated_insn_size */ 0,
-                        /* make_static */ nullptr)) {
+                        /* estimated_insn_size */ 0)) {
         return true;
       }
     }
@@ -1868,17 +1871,15 @@ bool MultiMethodInliner::has_external_catch(const DexMethod* callee) {
 /**
  * Analyze opcodes in the callee to see if they are problematic for inlining.
  */
-bool MultiMethodInliner::cannot_inline_opcodes(
-    const DexMethod* caller,
-    const DexMethod* callee,
-    const IRInstruction* invk_insn,
-    std::vector<DexMethod*>* make_static) {
+bool MultiMethodInliner::cannot_inline_opcodes(const DexMethod* caller,
+                                               const DexMethod* callee,
+                                               const IRInstruction* invk_insn) {
   int ret_count = 0;
   bool can_inline = true;
   editable_cfg_adapter::iterate(
       callee->get_code(), [&](const MethodItemEntry& mie) {
         auto insn = mie.insn;
-        if (create_vmethod(insn, callee, caller, make_static)) {
+        if (create_vmethod(insn, callee, caller)) {
           if (invk_insn) {
             log_nopt(INL_CREATE_VMETH, caller, invk_insn);
           }
@@ -1955,8 +1956,7 @@ bool MultiMethodInliner::cannot_inline_opcodes(
  */
 bool MultiMethodInliner::create_vmethod(IRInstruction* insn,
                                         const DexMethod* callee,
-                                        const DexMethod* caller,
-                                        std::vector<DexMethod*>* make_static) {
+                                        const DexMethod* caller) {
   auto opcode = insn->opcode();
   if (opcode == OPCODE_INVOKE_DIRECT) {
     auto method =
@@ -1978,11 +1978,7 @@ bool MultiMethodInliner::create_vmethod(IRInstruction* insn,
       // concrete ctors we can handle because they stay invoke_direct
       return false;
     }
-    if (can_rename(method)) {
-      if (make_static) {
-        make_static->push_back(method);
-      }
-    } else {
+    if (!can_rename(method)) {
       info.need_vmethod++;
       return true;
     }
@@ -2190,22 +2186,31 @@ bool MultiMethodInliner::cross_store_reference(const DexMethod* caller,
   return false;
 }
 
-void MultiMethodInliner::delayed_change_visibilities() {
-  walk::parallel::code(m_scope, [&](DexMethod* method, IRCode& code) {
-    auto it = m_delayed_change_visibilities->find(method);
-    if (it == m_delayed_change_visibilities->end()) {
-      return;
+void MultiMethodInliner::delayed_visibility_changes_apply() {
+  visibility_changes_apply_and_record_make_static(
+      *m_delayed_visibility_changes);
+}
+
+void MultiMethodInliner::visibility_changes_apply_and_record_make_static(
+    const VisibilityChanges& visibility_changes) {
+  visibility_changes.apply();
+  // any method that was just made public and isn't virtual or a constructor or
+  // static must be made static
+  for (auto method : visibility_changes.methods) {
+    always_assert(is_public(method));
+    if (!method->is_virtual() && !method::is_init(method) &&
+        !is_static(method)) {
+      always_assert(can_rename(method));
+      always_assert(method->is_concrete());
+      m_delayed_make_static.insert(method);
     }
-    auto& scopes = it->second;
-    for (auto scope : scopes) {
-      TRACE(MMINL, 6, "checking visibility usage of members in %s",
-            SHOW(method));
-      change_visibility(method, scope);
-    }
-  });
+  }
 }
 
 void MultiMethodInliner::delayed_invoke_direct_to_static() {
+  if (m_delayed_make_static.empty()) {
+    return;
+  }
   // We sort the methods here because make_static renames methods on
   // collision, and which collisions occur is order-dependent. E.g. if we have
   // the following methods in m_delayed_make_static:
@@ -2240,6 +2245,7 @@ void MultiMethodInliner::delayed_invoke_direct_to_static() {
           }
         }
       });
+  m_delayed_make_static.clear();
 }
 
 namespace {

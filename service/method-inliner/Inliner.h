@@ -11,6 +11,7 @@
 #include <functional>
 #include <vector>
 
+#include "ABExperimentContext.h"
 #include "DexClass.h"
 #include "IRCode.h"
 #include "MethodProfiles.h"
@@ -190,10 +191,10 @@ class MultiMethodInliner {
                     const DexMethod* callee,
                     const IRInstruction* insn,
                     size_t estimated_insn_size,
-                    std::vector<DexMethod*>* make_static,
                     bool* caller_too_large_ = nullptr);
 
-  void make_static_inlinable(std::vector<DexMethod*>& make_static);
+  void visibility_changes_apply_and_record_make_static(
+      const VisibilityChanges& visibility_changes);
 
   ConcurrentSet<DexMethod*>& get_delayed_make_static() {
     return m_delayed_make_static;
@@ -244,12 +245,10 @@ class MultiMethodInliner {
    * Return true if the callee contains certain opcodes that are difficult
    * or impossible to inline.
    * Some of the opcodes are defined by the methods below.
-   * When returning false, some methods might have been added to make_static.
    */
   bool cannot_inline_opcodes(const DexMethod* caller,
                              const DexMethod* callee,
-                             const IRInstruction* invk_insn,
-                             std::vector<DexMethod*>* make_static);
+                             const IRInstruction* invk_insn);
 
   bool noninlinable_same_class_init_invoke(IRInstruction* insn,
                                            const DexMethod* callee,
@@ -257,12 +256,10 @@ class MultiMethodInliner {
   /**
    * Return true if inlining would require a method called from the callee
    * (candidate) to turn into a virtual method (e.g. private to public).
-   * When returning false, a method might have been added to make_static.
    */
   bool create_vmethod(IRInstruction* insn,
                       const DexMethod* callee,
-                      const DexMethod* caller,
-                      std::vector<DexMethod*>* make_static);
+                      const DexMethod* caller);
 
   /**
    * Return true if we would create an invocation within an outlined method to
@@ -377,10 +374,10 @@ class MultiMethodInliner {
   InlinedCost get_inlined_cost(const DexMethod* callee);
 
   /**
-   * Change visibilities of methods, assuming that`m_change_visibility` is
+   * Change visibilities of methods, assuming that`m_visibility_changes` is
    * non-null.
    */
-  void delayed_change_visibilities();
+  void delayed_visibility_changes_apply();
 
   /**
    * Staticize required methods (stored in `m_delayed_make_static`) and update
@@ -536,13 +533,13 @@ class MultiMethodInliner {
   // of this class will do the necessary delayed work.
   ConcurrentSet<DexMethod*> m_delayed_make_static;
 
-  // Set of methods (and associated scope types) for which change_visibility
-  // needs to get called eventually. This happens locally within inline_methods.
-  std::unique_ptr<ConcurrentMap<DexMethod*, std::unordered_set<DexType*>>>
-      m_delayed_change_visibilities;
+  // Accumulated visibility changes that must be applied eventually.
+  // This happens locally within inline_methods.
+  std::unique_ptr<VisibilityChanges> m_delayed_visibility_changes;
 
-  // When calling change_visibility eagerly
-  std::mutex m_change_visibility_mutex;
+  // When mutating m_delayed_visibility_changes or applying visibility changes
+  // eagerly
+  std::mutex m_visibility_changes_mutex;
 
   // Cache for should_inline function
   ConcurrentMap<const DexMethod*, boost::optional<bool>> m_should_inline;
@@ -619,6 +616,10 @@ class MultiMethodInliner {
   bool m_analyze_and_prune_inits;
 
   shrinker::Shrinker m_shrinker;
+
+  std::unique_ptr<ab_test::ABExperimentContext> m_ab_experiment_context{
+      nullptr};
+  std::mutex ab_exp_mutex;
 
   const DexFieldRef* m_sdk_int_field =
       DexField::get_field("Landroid/os/Build$VERSION;.SDK_INT:I");

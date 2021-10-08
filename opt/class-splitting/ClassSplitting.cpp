@@ -668,7 +668,7 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
       }
       return false;
     }
-    if (!can_change_visibility_for_relocation(m)) {
+    if (!get_visibility_changes(m).empty()) {
       if (log) {
         m_mgr.incr_metric(
             "num_class_splitting_limitation_cannot_change_visibility", 1);
