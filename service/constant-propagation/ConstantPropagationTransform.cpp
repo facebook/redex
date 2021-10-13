@@ -726,6 +726,10 @@ Transform::Stats Transform::apply(
     cfg::ControlFlowGraph& cfg,
     DexMethod* method,
     const XStoreRefs* xstores) {
+  if (g_redex->instrument_mode) {
+    return m_stats;
+  }
+
   // The following is an attempt to avoid creating a control-flow structure that
   // triggers the Android bug described in T55782799, related to a return
   // statement in a try region when a type is unavailable/external, possibly

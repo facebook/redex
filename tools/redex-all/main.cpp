@@ -1263,6 +1263,9 @@ int main(int argc, char* argv[]) {
     RedexContext::set_record_keep_reasons(
         args.config.get("record_keep_reasons", false).asBool());
 
+    // For convenience.
+    g_redex->instrument_mode = args.redex_options.instrument_pass_enabled;
+
     slow_invariants_debug =
         args.config.get("slow_invariants_debug", false).asBool();
     cfg::ControlFlowGraph::DEBUG =

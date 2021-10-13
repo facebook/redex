@@ -197,6 +197,9 @@ struct RedexContext {
   void set_sb_interaction_index(
       const std::unordered_map<std::string, size_t>& input);
 
+  // This is for convenience.
+  bool instrument_mode{false};
+
  private:
   struct Strcmp;
   struct TruncatedStringHash;
